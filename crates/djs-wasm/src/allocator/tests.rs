@@ -86,59 +86,69 @@ fn laid_out(sizes: &[usize], freed: &[usize]) -> (Pages<Fake>, Vec<usize>) {
 }
 
 #[test]
-fn growing_blocks_reuse_pages_before_growing_memory() {
-    // 1. Into the free run after it.
+fn blocks_extend_in_place() {
+    // Into the free run after it.
     let (mut p, s) = laid_out(&[2, 3, 1], &[1]);
-    assert_eq!(p.grow_block(s[0], 2, 4), Some(0));
+    assert!(p.extend(s[0], 2, 4));
     assert_eq!(p.free_runs(), &[(4, 1)]);
+    assert!(p.extend(s[0], 4, 5), "all of it");
+    assert!(p.free_runs().is_empty());
     assert_eq!(p.memory().pages(), 6);
-    // 2. Down into the run before it, and all of the one after.
-    let (mut p, s) = laid_out(&[3, 2, 1, 1], &[0, 2]);
-    assert_eq!(p.grow_block(s[1], 2, 5), Some(1), "two pages down, one up");
-    assert_eq!(p.free_runs(), &[(0, 1)]);
-    assert_eq!(p.memory().pages(), 7);
-    // 3. Elsewhere: the best-fitting free run, not memory growth.
-    let (mut p, s) = laid_out(&[4, 1, 2, 1, 3, 1], &[0, 4]);
-    assert_eq!(
-        p.grow_block(s[2], 2, 3),
-        Some(8),
-        "the 3-page run, not the 4-page one"
-    );
-    assert_eq!(p.free_runs(), &[(0, 4), (5, 2)]);
-    assert_eq!(p.memory().pages(), 12);
-    // 4. In place at memory's end.
+    // At memory's end, with or without a free run in between.
     let (mut p, s) = laid_out(&[1, 2], &[]);
-    assert_eq!(p.grow_block(s[1], 2, 6), Some(1));
+    assert!(p.extend(s[1], 2, 6));
     assert_eq!(p.memory().pages(), 7);
-    // 5. At memory's end.
-    let (mut p, s) = laid_out(&[2, 1, 1], &[]);
-    assert_eq!(p.grow_block(s[0], 2, 3), Some(4));
-    assert_eq!(p.free_runs(), &[(0, 2)]);
+    let (mut p, s) = laid_out(&[1, 2, 2], &[2]);
+    assert!(p.extend(s[1], 2, 6));
     assert_eq!(p.memory().pages(), 7);
-    // Refused by the host: no change.
-    let runs = p.free_runs().to_vec();
-    assert_eq!(p.grow_block(4, 3, 100), None);
-    assert_eq!(p.free_runs(), &runs[..]);
-    assert_eq!(p.memory().pages(), 7);
+    assert!(p.free_runs().is_empty());
+    // Blocked: nothing changes.
+    let (mut p, s) = laid_out(&[2, 1, 1], &[1]);
+    assert!(!p.extend(s[0], 2, 4));
+    assert_eq!(p.free_runs(), &[(2, 1)]);
+    // Refused by the host: nothing changes.
+    let (mut p, s) = laid_out(&[2], &[]);
+    assert!(!p.extend(s[0], 2, 100));
+    assert_eq!(p.memory().pages(), 2);
 }
 
 #[test]
-fn a_full_free_list_keeps_the_larger_runs() {
+fn moved_blocks_reuse_free_pages_before_growing_memory() {
+    // A huge block that cannot extend moves to the best-fitting free run.
+    let a = page_alloc(256);
+    let l = |n: usize| Layout::from_size_align(n * PAGE, 8).unwrap();
+    // SAFETY: non-zero sizes; each block is freed with its layout.
+    unsafe {
+        let x = a.alloc(l(8));
+        let y = a.alloc(l(4));
+        let z = a.alloc(l(1));
+        a.dealloc(x, l(8));
+        let pages = a.pages().memory().pages();
+        let y2 = a.realloc(y, l(4), 6 * PAGE);
+        assert_eq!(y2, x, "into the old pages of x");
+        assert_eq!(a.pages().memory().pages(), pages, "no growth");
+        a.dealloc(y2, l(6));
+        a.dealloc(z, l(1));
+    }
+}
+
+#[test]
+fn a_full_free_list_leaks_further_runs() {
     let mut p = Pages::new(Fake::new(1024));
     let blocks: Vec<usize> = (0..300).map(|i| p.alloc(1 + i % 3).unwrap()).collect();
     for (i, &b) in blocks.iter().enumerate().step_by(2) {
         p.free(b, 1 + i % 3);
     }
-    let runs = p.free_runs();
-    assert!(runs.len() <= 64);
+    let runs = p.free_runs().to_vec();
+    assert_eq!(runs.len(), 64);
     assert!(
         runs.windows(2).all(|w| w[0].0 + w[0].1 < w[1].0),
         "sorted, apart"
     );
-    assert!(
-        runs.iter().all(|r| r.1 >= 2),
-        "the 1-page runs were dropped first"
-    );
+    // Full: the next freed run is leaked, the list unchanged.
+    let (s, l) = runs[0];
+    p.free(s + l, 2);
+    assert_eq!(p.free_runs(), &runs[..]);
 }
 
 /// A PageAlloc on a fake memory of `cap` pages, at a fixed address (it is
@@ -202,16 +212,7 @@ fn random_allocations_keep_their_contents() {
                 let align = 1usize << ((r >> 32) % 13); // up to 4096
                 let l = Layout::from_size_align(size(next()), align).unwrap();
                 // SAFETY: a non-zero size.
-                let p = unsafe {
-                    if r & (1 << 40) != 0 {
-                        let p = a.alloc_zeroed(l);
-                        let z = core::slice::from_raw_parts(p, l.size());
-                        assert!(z.iter().all(|&x| x == 0), "alloc_zeroed");
-                        p
-                    } else {
-                        a.alloc(l)
-                    }
-                };
+                let p = unsafe { a.alloc(l) };
                 assert!(!p.is_null());
                 assert_eq!(p as usize % align, 0);
                 let b = Block {

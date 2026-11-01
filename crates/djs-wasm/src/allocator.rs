@@ -16,13 +16,14 @@
 //! costs.
 //!
 //! So the linear memory is managed in 64 KiB pages ([`Pages`]):
-//! - **Huge blocks** (at least [`HUGE`] bytes: in practice the arena, big strings and
-//!   side tables) are runs of whole pages. A huge block grows in place when the pages
-//!   after it are free or when it ends at the end of memory, where `memory.grow` extends
-//!   it. Freed pages go back to a coalescing free list.
+//! - **Huge blocks** (at least `HUGE` bytes: in practice the arena and big strings) are
+//!   runs of whole pages. A huge block grows in place when the pages after it are free or
+//!   when it ends at the end of memory, where `memory.grow` extends it. Otherwise it moves
+//!   to the best-fitting free run, and only if there is none, to memory's end. Freed pages
+//!   go back to a coalescing free list.
 //! - **Everything smaller** is dlmalloc's, as before, but dlmalloc gets its memory from
-//!   the same pages instead of growing memory itself. Pages a huge block freed serve
-//!   dlmalloc too, and dlmalloc's released segments serve huge blocks.
+//!   the same pages instead of growing memory itself, so the pages a huge block freed
+//!   serve it too. It keeps its segments, as it did before.
 //!
 //! (Not named `alloc`: that is the `alloc` crate inside this crate.)
 
@@ -42,8 +43,8 @@ pub(crate) mod pages {
     pub(crate) const HUGE: usize = 256 * 1024;
 
     /// Free page ranges kept: the allocator cannot allocate for itself, so the list is a
-    /// fixed array. Past it, the smallest range is dropped (leaked); in practice a VM has a
-    /// handful of free ranges.
+    /// fixed array. A run freed while it is full is leaked; in practice a VM has a handful
+    /// of free ranges.
     const FREE_CAP: usize = 64;
 
     /// Linear memory: a run of pages that can only grow.
@@ -85,16 +86,7 @@ pub(crate) mod pages {
         /// `n` pages: the best-fitting free run (from its start), else memory's end (taking
         /// a free run that ends there and growing the rest).
         pub(crate) fn alloc(&mut self, n: usize) -> Option<usize> {
-            let best = (0..self.n)
-                .filter(|&i| self.free[i].1 >= n)
-                .min_by_key(|&i| self.free[i].1);
-            if let Some(i) = best {
-                let (start, len) = self.free[i];
-                if len == n {
-                    self.remove(i);
-                } else {
-                    self.free[i] = (start + n, len - n);
-                }
+            if let Some(start) = self.take_best(n) {
                 return Some(start);
             }
             let end = self.mem.pages();
@@ -112,109 +104,69 @@ pub(crate) mod pages {
             Some(tail)
         }
 
-        /// Grows the block of `len` pages at `start` to `want` pages and returns where it
-        /// is now; the caller moves the contents if that is not `start` (the ranges may
-        /// overlap). Memory grows only if the block fits nowhere in the pages it has:
-        /// 1. into the free run after it, in place;
-        /// 2. down into the free run before it (and all of the one after);
-        /// 3. into the best-fitting free run elsewhere;
-        /// 4. in place at memory's end, growing memory;
-        /// 5. at memory's end.
-        ///
-        /// `None` if memory cannot grow; then nothing changed.
-        pub(crate) fn grow_block(
-            &mut self,
-            start: usize,
-            len: usize,
-            want: usize,
-        ) -> Option<usize> {
+        /// `n` pages from the start of the best-fitting free run.
+        fn take_best(&mut self, n: usize) -> Option<usize> {
+            let (mut best, mut at) = (usize::MAX, 0);
+            for i in 0..self.n {
+                let len = self.free[i].1;
+                if len >= n && len < best {
+                    (best, at) = (len, i);
+                }
+            }
+            if best == usize::MAX {
+                return None;
+            }
+            let start = self.free[at].0;
+            self.free[at] = (start + n, best - n);
+            if best == n {
+                self.remove(at);
+            }
+            Some(start)
+        }
+
+        /// Grows the block of `len` pages at `start` to `want` pages without moving it:
+        /// into the free run after it, and at memory's end by growing memory. False if it
+        /// cannot; then nothing changed.
+        pub(crate) fn extend(&mut self, start: usize, len: usize, want: usize) -> bool {
             let need = want - len;
             let after = (0..self.n).find(|&i| self.free[i].0 == start + len);
             let after_len = after.map_or(0, |i| self.free[i].1);
             if let Some(i) = after
-                && after_len >= need
+                && after_len > need
             {
-                if after_len == need {
-                    self.remove(i);
-                } else {
-                    self.free[i] = (start + len + need, after_len - need);
-                }
-                return Some(start);
+                self.free[i] = (start + len + need, after_len - need);
+                return true;
             }
-            let before = (0..self.n).find(|&i| self.free[i].0 + self.free[i].1 == start);
-            let before_len = before.map_or(0, |i| self.free[i].1);
-            if let Some(b) = before
-                && before_len + after_len >= need
-            {
-                let down = need - after_len;
-                // The run after goes first (it sits above the one before in the list).
-                if let Some(i) = after {
-                    self.remove(i);
-                }
-                if down == before_len {
-                    self.remove(b);
-                } else {
-                    self.free[b].1 -= down;
-                }
-                return Some(start - down);
+            let fits = after_len == need
+                || (start + len + after_len == self.mem.pages()
+                    && self.mem.grow(need - after_len).is_some());
+            if fits && let Some(i) = after {
+                self.remove(i);
             }
-            let best = (0..self.n)
-                .filter(|&i| self.free[i].1 >= want)
-                .min_by_key(|&i| self.free[i].1);
-            if let Some(i) = best {
-                let (fs, fl) = self.free[i];
-                if fl == want {
-                    self.remove(i);
-                } else {
-                    self.free[i] = (fs + want, fl - want);
-                }
-                self.free(start, len);
-                return Some(fs);
-            }
-            let end = self.mem.pages();
-            if start + len + after_len == end {
-                self.mem.grow(need - after_len)?;
-                if let Some(i) = after {
-                    self.remove(i);
-                }
-                return Some(start);
-            }
-            let ns = self.alloc(want)?;
-            self.free(start, len);
-            Some(ns)
+            fits
         }
 
         /// Returns `len` pages at `start` to the free list.
         pub(crate) fn free(&mut self, start: usize, len: usize) {
-            if len == 0 {
+            if len == 0 || self.n == FREE_CAP {
+                // A full list leaks the run (never seen in practice).
                 return;
             }
-            let i = (0..self.n)
-                .find(|&i| self.free[i].0 > start)
-                .unwrap_or(self.n);
-            let joins_prev = i > 0 && self.free[i - 1].0 + self.free[i - 1].1 == start;
-            let joins_next = i < self.n && start + len == self.free[i].0;
-            match (joins_prev, joins_next) {
-                (true, true) => {
-                    self.free[i - 1].1 += len + self.free[i].1;
-                    self.remove(i);
-                }
-                (true, false) => self.free[i - 1].1 += len,
-                (false, true) => self.free[i] = (start, len + self.free[i].1),
-                (false, false) => {
-                    if self.n == FREE_CAP {
-                        // Full: keep the larger runs. Dropped pages are leaked.
-                        let small = (0..self.n).min_by_key(|&j| self.free[j].1).unwrap();
-                        if self.free[small].1 >= len {
-                            return;
-                        }
-                        self.remove(small);
-                        return self.free(start, len);
-                    }
-                    self.free.copy_within(i..self.n, i + 1);
-                    self.free[i] = (start, len);
-                    self.n += 1;
-                }
+            let mut i = 0;
+            while i < self.n && self.free[i].0 < start {
+                i += 1;
+            }
+            self.free.copy_within(i..self.n, i + 1);
+            self.free[i] = (start, len);
+            self.n += 1;
+            // Coalesce with the next run, then with the previous one.
+            if i + 1 < self.n && start + len == self.free[i + 1].0 {
+                self.free[i].1 += self.free[i + 1].1;
+                self.remove(i + 1);
+            }
+            if i > 0 && self.free[i - 1].0 + self.free[i - 1].1 == start {
+                self.free[i - 1].1 += self.free[i].1;
+                self.remove(i);
             }
         }
 
@@ -262,30 +214,18 @@ pub(crate) mod pages {
             ptr::null_mut()
         }
 
-        fn free_part(&self, ptr: *mut u8, old: usize, new: usize) -> bool {
-            // Only whole pages go back.
-            if !old.is_multiple_of(PAGE) || !new.is_multiple_of(PAGE) {
-                return false;
-            }
-            // SAFETY: as in `alloc`.
-            let pages = unsafe { &mut *self.pages };
-            let start = pages.page(ptr as usize);
-            pages.free(start + new / PAGE, (old - new) / PAGE);
-            true
+        fn free_part(&self, _ptr: *mut u8, _old: usize, _new: usize) -> bool {
+            false
         }
 
-        fn free(&self, ptr: *mut u8, size: usize) -> bool {
-            if !size.is_multiple_of(PAGE) {
-                return false;
-            }
-            // SAFETY: as in `alloc`.
-            let pages = unsafe { &mut *self.pages };
-            pages.free(pages.page(ptr as usize), size / PAGE);
-            true
+        fn free(&self, _ptr: *mut u8, _size: usize) -> bool {
+            false
         }
 
         fn can_release_part(&self, _flags: u32) -> bool {
-            true
+            // dlmalloc keeps its segments, as it did over memory.grow alone: releasing
+            // them was measured to save no memory and cost code (D2053).
+            false
         }
 
         fn allocates_zeros(&self) -> bool {
@@ -348,25 +288,6 @@ pub(crate) mod pages {
 
         /// # Safety
         ///
-        /// The contract of `GlobalAlloc::alloc_zeroed`; `init` has run.
-        pub(crate) unsafe fn alloc_zeroed(&mut self, l: Layout) -> *mut u8 {
-            if huge(l.size(), l.align()) {
-                // SAFETY: the caller's contract; the block holds `l.size()` bytes.
-                unsafe {
-                    let p = self.alloc(l);
-                    if !p.is_null() {
-                        ptr::write_bytes(p, 0, l.size());
-                    }
-                    p
-                }
-            } else {
-                // SAFETY: the caller's contract.
-                unsafe { self.dl.calloc(l.size(), l.align()) }
-            }
-        }
-
-        /// # Safety
-        ///
         /// The contract of `GlobalAlloc::dealloc`; `init` has run.
         pub(crate) unsafe fn dealloc(&mut self, p: *mut u8, l: Layout) {
             if huge(l.size(), l.align()) {
@@ -394,17 +315,9 @@ pub(crate) mod pages {
                     self.pages.free(start + want, len - want);
                     return p;
                 }
-                let Some(ns) = self.pages.grow_block(start, len, want) else {
-                    return ptr::null_mut();
-                };
-                let q = self.pages.addr(ns) as *mut u8;
-                if q != p {
-                    // SAFETY: both ranges lie in memory the manager owns; the old one was
-                    // the caller's block, the new one is ours now; `ptr::copy` allows the
-                    // overlap of a move down.
-                    unsafe { ptr::copy(p, q, l.size()) };
+                if self.pages.extend(start, len, want) {
+                    return p;
                 }
-                return q;
             }
             // Moves (between dlmalloc and pages, or a huge block that cannot extend).
             // SAFETY: the caller's contract: `new` is a valid size for `l.align()`; both
@@ -508,10 +421,6 @@ mod wasm {
         unsafe fn alloc(&self, l: Layout) -> *mut u8 {
             // SAFETY: the caller's contract.
             unsafe { get().alloc(l) }
-        }
-        unsafe fn alloc_zeroed(&self, l: Layout) -> *mut u8 {
-            // SAFETY: the caller's contract.
-            unsafe { get().alloc_zeroed(l) }
         }
         unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
             // SAFETY: the caller's contract.
