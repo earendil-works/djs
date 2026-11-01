@@ -143,7 +143,6 @@ mod fast {
     pub const PUSH_CONST: u8 = Op::PushConst as u8;
     pub const SPECIAL_OBJECT: u8 = Op::SpecialObject as u8;
     pub const SWAP: u8 = Op::Swap as u8;
-    pub const DUP2: u8 = Op::Dup2 as u8;
     pub const NIP: u8 = Op::Nip as u8;
     pub const INSERT2: u8 = Op::Insert2 as u8;
     pub const GET_CAP: u8 = Op::GetCap as u8;
@@ -1424,12 +1423,6 @@ impl<'h> Exec<'h> {
                 self.set(self.sp - 2, b);
                 self.set(self.sp - 1, a);
                 self.advance(Op::Swap, sp0);
-            }
-            fast::DUP2 => {
-                let (a, b) = (self.top(1), self.top(0));
-                self.push(a);
-                self.push(b);
-                self.advance(Op::Dup2, sp0);
             }
             fast::NIP => {
                 let b = self.pop();

@@ -3763,7 +3763,7 @@ date: 2026-11-05 · by: lexer · issue: 0086
   `i += 1`, which concatenates on a string. An object local takes `%ToNumeric` into the
   local and re-executes (D1861); the conversion either completes or leaves the local
   alone.
-- More simple ops (constants, `push_const`, `special_object` this, swap/dup2/nip/insert2,
+- More simple ops (constants, `push_const`, `special_object` this, swap/nip/insert2,
   captures and Boxes, `not`, `strict_eq`/`strict_ne`, `is_undefined`/`is_nullish`, int
   `%` and bitops) run on `fast_more`, an out-of-line function the run loop tries after
   `fast_step`. As arms of `fast_step` itself they made the hottest ops slower in wasm

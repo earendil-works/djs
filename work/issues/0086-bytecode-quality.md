@@ -39,7 +39,7 @@ br_tables. Fix the cheap parts.
   valueOf in the first instruction of a `try` escaped it. New `Continuation::Retry`
   (D1861) for the re-executing slow paths.
 - `fast_more` (out of line, after `fast_step`): constants, push_const, special_object
-  this, swap/dup2/nip/insert2, get/put_cap, get/put_box, not, strict_eq/ne,
+  this, swap/nip/insert2, get/put_cap, get/put_box, not, strict_eq/ne,
   is_undefined/is_nullish, int mod and bitops. As arms inside `fast_step` they cost the
   hot loop 3-6% in wasm (A/B: tight +6.4%, prop1 +5.4%), so they live behind it.
 - `a.length` of an Array / string in `fast_field` (arrays -11%).
