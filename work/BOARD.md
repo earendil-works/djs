@@ -12,7 +12,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
 | 0065 | accessor + decorators (TC39, then TS legacy) | lexer | .worktrees/lexer |
 | 0062 | Property access performance (shapes/ICs: design first) | heap | .worktrees/heap |
-| 0072 | Determinism checks in the gate (part 1) | determinism | .worktrees/determinism |
+| 0068 | Deterministic mode for VM and Sandbox | determinism | .worktrees/determinism |
 
 ## Open (ready)
 
@@ -24,10 +24,9 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | depends-on |
 | --- | --- | --- |
 | 0078 | Leaf quick wins from 0077 (ASCII check, UTF-8 in transcode, short_decimal) | num, after 0075 |
-| 0068 | Deterministic mode for VM and Sandbox | 0067 (done) |
 | 0069 | Running out of host memory is not a JS out-of-memory error | - |
 | 0070 | Collect and retry at a failing allocation | 0069 |
-| 0072 | Determinism checks in the gate | part 2: 0067, 0071 |
+| 0072 | Determinism checks in the gate, part 2 (part 1 done: 6ab3968) | 0071 |
 | 0073 | Replay journal and image hash | 0067 (done) |
 | 0074 | Carry fuel overshoot across runs | - |
 
