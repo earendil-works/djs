@@ -1,6 +1,6 @@
 # 0038: Builtins wave 3: Map, Set, WeakMap, WeakSet, Reflect, Date; promote finished features to active
 
-status: in-progress
+status: done
 agent: infra
 branch: issue/0038-builtins-wave3
 depends-on: 0034
@@ -87,6 +87,44 @@ counts them.
 - test262: Map 167/167, Set 305/379 (the rest: classes, generators, BigInt syntax),
   WeakMap 101/101, WeakSet 84/84, Map/Set iterator prototypes 11/11 each.
 
+### Part 3: Date
+- Part 2 merged: main ..be7b0f4.
+- Date (D1383): the constructor, Date.now/parse/UTC, every prototype method (plus
+  toGMTString and getYear; no setYear), [Symbol.toPrimitive], toJSON. Leaves in
+  builtins/date.rs port qjs's arithmetic, formats and parser. `Vm::set_now` and
+  `Vm::set_time_zone_offset` (vm/, the clock hook only); djs-cli, difftest and test262
+  set the wall clock; difftest's qjs engine and gen-expected.sh run with TZ=UTC.
+- behavior.js compares the Date builtins with qjs's natives (constructor forms,
+  Date.UTC, every getter/setter/formatter over 8 time values and 9 argument lists,
+  parse formats, toPrimitive hints, toJSON): clean. difftest builtins/date.js, e2e
+  date.js, a vm test of the host clock and a UTC+2 offset against qjs with
+  TZ=Etc/GMT-2.
+- test262: Date 576/583 (the rest: regex literals, split). Reflect 142/142 now.
+
+### Totals (start → end of 0038)
+- test262 active: 11,773 / 20,124 (58.5%) before the move; the move itself → 12,187 /
+  22,142 (55.0%); after the implementations 13,773 / 22,142 (62.2%). later: 518 /
+  17,445 → 126 / 15,427.
+- difftest 86 → 93 / 180.
+
 ## Follow-ups
+- djs-wasm / pi host: expose `set_now` (and the offset) to the JS host so codemode gets
+  the real time (djs-wasm is outside this issue's touches).
+- The collector rehashes every Map/Set per collection (D1381): watch map-heavy stress
+  cases; a smarter post-pass could skip tables without object keys.
+- Set: 74 failures are class/generator/BigInt syntax; Map `upsert` (getOrInsert) is a
+  later feature.
+- Date: no daylight saving (fixed offset); setYear (Annex B) not added.
 
 ## Result
+Landed in three merged parts (D1380-D1383):
+- tests/test262.toml: Reflect, Map, Set, WeakMap, WeakSet, their iterator prototypes,
+  Symbol and Date, plus the listed features, moved from later to active.
+- Reflect (all 13 functions) with `construct_with` (an explicit new.target).
+- Map, Set (+ the 7 ES2025 methods), Map.groupBy, WeakMap, WeakSet, Map/Set iterators,
+  on ordered hash tables in heap/collection.rs; the collector rehashes them and treats
+  WeakMap/WeakSet entries as ephemerons (real weakness).
+- Date with the host clock and a fixed local offset (`Vm::set_now`,
+  `Vm::set_time_zone_offset`).
+test262 active 11,773 / 20,124 → 13,773 / 22,142 (62.2%); per dir Reflect 142/142,
+Map 167/167, Set 305/379, WeakMap 101/101, WeakSet 84/84, Date 576/583, Symbol 65/68.

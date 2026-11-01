@@ -1491,3 +1491,18 @@ returns (and forgets) the reasons. Embedders check it when `run` returns
 `Done`/`Threw`/`Idle` (the queue is empty then), which is when qjs prints `Possibly
 unhandled promise rejection: <reason>` and exits with 1; `djs run` does the same, and the
 e2e harness reports the first one like gen-expected.sh (qjs's first stderr line).
+
+## D1383: Date reads the host's clock and a fixed local offset
+date: 2026-11-01 · by: infra · issue: 0038
+The VM never reads a system clock (ARCH "Nondeterminism"). `Vm::set_now(ms)` stores the
+current time in the realm (heap data: a restored or replayed VM sees what the host
+set); `Date.now()` and `new Date()` read it, and it is 0 until the host sets it. Hosts
+set it when they create a VM (djs-cli, difftest and test262 use the wall clock); a
+host that wants time to advance during a run sets it again between run slices. Local
+time is a fixed offset, `Vm::set_time_zone_offset(minutes east of UTC)`, default 0
+(UTC), without daylight saving rules: real time zones need tz data, which djs does not
+carry; a host that cares updates the offset. The algorithms are QuickJS's
+(`get_date_fields`, `set_date_fields`, `get_date_string`, `js_Date_parse`), ported to
+builtins/date.rs, so formatting (toString's `GMT+hhmm` without a zone name, the
+toLocale* formats without Intl) and the accepted parse formats match qjs. The difftest
+and e2e oracles run qjs with `TZ=UTC` to match the default offset.
