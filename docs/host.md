@@ -299,7 +299,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_promise_state(vm, h) -> state` | 0 not a promise, 1 pending, 2 fulfilled, 3 rejected; settled: out = a handle (u32) to the result, and the promise counts as handled |
 | `vm_take_unhandled_rejections(vm) -> n` | out = handles (u32) to the reasons of promises rejected with no handler, oldest first (D1423) |
 | `djs_build_hash() -> u32` | the build hash of VM images: identifies the engine build (0049), including its sources, cargo features and libm version (D1750) |
-| `djs_base_ptr()`, `djs_base_len()` | the base snapshot in the module's memory (read-only): the reference image of compact snapshots (D2260). The module ships it coded (D2252): the first call (or `vm_new`) decodes it, unless the host injected it |
+| `djs_base_ptr()`, `djs_base_len()` | the base snapshot in the module's memory (read-only): the reference image of compact snapshots (D2260). The module ships it coded (D2252): the first call (or `vm_new`) decodes it, unless the host injected it. The pointer is valid until the next `vm_new`: the instance's first VM takes the bytes as its arena (D2060), and a later call decodes them again |
 | `djs_base_inject_ptr(len) -> ptr` | room for the base snapshot that another instance of the same module decoded (its `djs_base_ptr` bytes), so that this one need not decode (D2252); 0 if the instance has its base already or `len` is not the base's length |
 | `djs_base_inject() -> 1/0` | takes the bytes written at `djs_base_inject_ptr` as the base if their length and hash match the coded base's; 0: refused, the instance decodes its own |
 | `djs_panic_ptr()`, `djs_panic_len()` | the last panic message, after a trap |
@@ -389,10 +389,20 @@ Since the base snapshot, instantiating the module is most of a sandbox's startup
 at its first VM: about 5 ms, once. Every sandbox is its own instance, so the host decodes
 once per compiled module instead: `js/src/snapshot.ts`'s `provideBase` (right after
 instantiating) copies the base an earlier instance of the module decoded into the new
-one, which checks its length and hash, and `rememberBase` (after the first `vm_new`) keeps
-it, per `WebAssembly.Module`. Both the Sandbox and pi's engine do this. A later instance
-then costs about 0.15 ms more than with the uncoded base (the copy and its check), and a
-host that never injects still works (each instance decodes its own).
+one, which checks its length and hash, and `rememberBase` keeps it, per
+`WebAssembly.Module`. Both the Sandbox and pi's engine do this. A later instance then costs
+about 0.15 ms more than with the uncoded base (the copy and its check), and a host that
+never injects still works (each instance decodes its own).
+
+**The base becomes the arena (D2060).** The first `vm_new` of an instance takes the
+decoded or injected base as its arena and grows it in place (it ends where memory ends,
+D2053); the instance keeps no copy. Hosts therefore call `rememberBase` before `vm_new`
+(a host that reads `djs_base_ptr` after it makes the instance decode again), and inject
+only into instances that create a VM, not into ones that restore an image. An instance
+that creates a second VM decodes the base once more and keeps it for its further VMs.
+Measured: every sandbox and pi session uses 0.31 MiB less wasm memory (an empty Sandbox
+1.50 → 1.19 MiB, pi warm `return 1` 1.81 → 1.50 MiB), and later `Sandbox.create` is
+about 20 µs faster (no copy).
 | 1000-item tool result in, a loop over it, an object out | 0.6 ms |
 
 **The boundary in wasm** (`node js/bench/wasm.bench.ts <dir>`, datasets from

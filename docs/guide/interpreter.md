@@ -277,7 +277,7 @@ Decisions on this page:
 - D1931: Calls and returns in the tier-0 loop: the same frames, block access
 - D1631: Native frames are ordinary frame records with a header bit
 - D1632: The bgen Rust backend: states are basic blocks, calls go through call_intrinsic
-- D2060: Natives call plain closures by writing the frame in place
+- D2060: The base is decoded or injected straight into the first VM's arena
 - D1620: Inline caches: verified table indexes in a per-template array
 - D1621: Prototype property caches: a receiver-prototype offset, an epoch, and GC clearing
 - D1800: iter_next: iteration steps without result objects

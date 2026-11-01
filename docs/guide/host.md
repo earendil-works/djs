@@ -32,7 +32,10 @@ keep the download small (D2252). An instance decodes it when it creates its firs
 which takes a few milliseconds. Because every sandbox is its own instance, the host
 decodes it only once per compiled module: it keeps the first instance's decoded copy and
 writes it into each new instance, which checks its length and hash before using it. A
-host that skips this still works; each instance then decodes its own copy.
+host that skips this still works; each instance then decodes its own copy. The decoded or
+written bytes then become the first VM's arena as they are: the instance keeps no copy of
+its own, 0.31 MiB less wasm memory per sandbox (D2060). Only an instance that makes a
+second VM decodes the base again, and keeps that copy for any further VMs.
 
 A panic in the engine (a bug, never something a script can cause: the heap is bounds
 checked and every limit is a thrown error) records a message and traps. The host reads
@@ -222,7 +225,8 @@ that expects QuickJS's fingerprint.
 
 Decisions on this page:
 
-<!-- gen:decisions D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 -->
+<!-- gen:decisions D2060 D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 -->
+- D2060: The base is decoded or injected straight into the first VM's arena
 - D1180: Inbound wire format, version 1
 - D1210: Exported heap layout drives the host-side reader
 - D1321: The base snapshot (djs-prelude)

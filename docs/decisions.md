@@ -6044,3 +6044,41 @@ tests/scores/size.tsv.
   11 KB smaller raw images of every VM from the base.
 - **Not found:** no cheaper encoding. The relocation was already cut from +2.1 KB raw to
   +1.4 KB (header walk instead of the cell iterator, one push site).
+
+## D2060: The base is decoded or injected straight into the first VM's arena
+date: 2026-11-03 · by: heap · issue: 0139
+Before, a wasm instance decoded the base, or received it from the host, into a buffer it
+kept for its lifetime (D2252), and every `vm_new` copied that buffer into a new arena.
+With one VM per instance (every Sandbox and pi session), the kept copy (322 KB, 5 pages)
+was used once.
+- **The first VM takes the bytes.** `vm_new` and `vm_new_reserved` take the instance's
+  decoded or injected base as their arena (`Vm::from_base_vec`,
+  `djs_prelude::new_vm_owned`). The buffer grows in place to the arena's capacity: the
+  page allocator extends a huge block at memory's end (D2053).
+  - Without a base, `vm_new` decodes straight into a buffer with the arena's capacity
+    (`djs_lzrc::decode_into`).
+  - Injected and `djs_base_ptr`-decoded buffers are exactly the base's size, so an
+    instance that only reads the base (restoring a snapshot against it) holds no arena
+    room.
+- **Later VMs.** After the first VM has taken the base, the next `vm_new` or
+  `djs_base_ptr` decodes it again and the instance keeps it; further VMs copy it, as
+  before. A multi-VM instance decodes twice instead of once; `vm_new` in such an instance
+  stays a 3.8–3.9 µs copy.
+- **The ABI is additive; one lifetime changes.** `djs_base_ptr`'s pointer is valid until
+  the next `vm_new`, no longer for the instance's lifetime. A host that reads it after
+  `vm_new` gets a fresh decode, which still works but costs 5 ms and the memory again.
+  js/src/sandbox.ts and js/pi/engine.ts call `rememberBase` before `vm_new`, and inject
+  only into instances that create a VM; pi's restore instances no longer receive a
+  base they never use.
+- **Verification is unchanged:** the length and hash of injected bytes. Tested natively
+  (decode, inject and corrupted injection into the arena; second and third VMs) and in
+  wasm (js/test/base.test.ts: the arena's address is the base's).
+- **Measured** (release module, main → branch):
+  - empty Sandbox 1.50 → 1.19 MiB, first or later instance;
+  - pi warm `return 1` 1.81 → 1.50 MiB, cold 2.00 → 1.69, tool-heavy warm 1.94 → 1.63,
+    cold 2.00 → 1.69;
+  - all 22 perf workloads −0.3 MiB in their 24-run means (D2048), e.g. pi-like
+    2.98 → 2.66, json 6.61 → 6.30;
+  - first `Sandbox.create` 12.5–12.9 ms both; later ones ~20 µs faster (no copy);
+  - pi warm start 0.52 → 0.43 ms (no injection into restore instances);
+  - code +157 B gzip.

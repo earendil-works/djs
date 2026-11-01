@@ -297,6 +297,6 @@ Decisions on this page:
 - D1910: Dense-array loops, fromCharCode and the URI functions as `@fast`; entries decline at the heap cap
 - D2000: Typed locals of native builtins live in Rust variables, written through
 - D2020: `@fast` builtins are not also `@native`, except Array.prototype.push
-- D2060: Natives call plain closures by writing the frame in place
+- D2060: The base is decoded or injected straight into the first VM's arena
 - D2090: Fused dense HasProperty + Get in natives; one-pass string search and in-arena joins
 <!-- /gen -->
