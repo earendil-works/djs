@@ -20,6 +20,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| 0030 | P1-5 runtime (for-in ops, array iterators, symbol installs) | 0028, 0029 (heap, next) |
 | 0007 | test262 on djs + ratchet in gate | 0014, 0015, P1-8 (script mode) |
 
 ## Done
