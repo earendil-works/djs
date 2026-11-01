@@ -111,6 +111,10 @@ pub enum ObjectClass {
     /// resume at, slot 3 the frame's `hp - bp`, slot 4 the result promise (async), slot
     /// 5 the kind (0 generator, 1 async function).
     Generator = 21,
+    /// An ArrayBuffer, a typed array, a DataView (0039, `heap/typed.rs`).
+    ArrayBuffer = 22,
+    TypedArray = 23,
+    DataView = 24,
 }
 
 impl ObjectClass {
@@ -138,6 +142,9 @@ impl ObjectClass {
             19 => Some(ObjectClass::Record),
             20 => Some(ObjectClass::Date),
             21 => Some(ObjectClass::Generator),
+            22 => Some(ObjectClass::ArrayBuffer),
+            23 => Some(ObjectClass::TypedArray),
+            24 => Some(ObjectClass::DataView),
             _ => None,
         }
     }
@@ -162,6 +169,9 @@ impl ObjectClass {
             ObjectClass::CollectionIterator => 6,
             ObjectClass::Date => 1,
             ObjectClass::Generator => 6,
+            ObjectClass::ArrayBuffer => 2,
+            ObjectClass::TypedArray => 4,
+            ObjectClass::DataView => 3,
         }
     }
 
@@ -544,7 +554,15 @@ impl Heap {
     #[inline]
     pub fn get_element_fast(&self, o: Obj, i: u32) -> Option<Value> {
         let el = self.elements(o);
-        if el == 0 || i >= self.value_array_len(el) {
+        if el == 0 {
+            // Typed arrays have no elements store: their elements live in the buffer.
+            return if self.object_class(o) == ObjectClass::TypedArray {
+                self.ta_get(o, i)
+            } else {
+                None
+            };
+        }
+        if i >= self.value_array_len(el) {
             return None;
         }
         let v = self.value_array_get(el, i);
@@ -626,6 +644,17 @@ impl Heap {
             return Ok(true);
         }
         if i > len || i > atom_int_max() || self.object_class(o) != ObjectClass::Array {
+            // A typed array element: [[Set]] with the array as receiver always succeeds
+            // (an invalid index writes nothing), once the value is a primitive.
+            if el == 0 && self.object_class(o) == ObjectClass::TypedArray {
+                return Ok(match self.primitive_number(v) {
+                    Some(x) => {
+                        self.ta_set(o, i, x);
+                        true
+                    }
+                    None => false,
+                });
+            }
             return Ok(false);
         }
         let f = self.obj_flags(o);
@@ -897,6 +926,17 @@ impl Heap {
     /// nothing changed, for anything else (absent, an accessor, read-only, an array's
     /// `length`), which needs the full algorithm. The interpreter's hot path (0035).
     pub fn set_own_data_value(&mut self, o: Obj, key: Atom, v: Value) -> bool {
+        if self.object_class(o) == ObjectClass::TypedArray
+            && self.canonical_numeric_index(key).is_some()
+        {
+            // [[Set]] on a typed array: true even for an invalid index (nothing written),
+            // once the value is a primitive.
+            if v.as_object().is_none() && v.as_symbol().is_none() {
+                self.ta_numeric_set(o, key, v);
+                return true;
+            }
+            return false;
+        }
         match self.find_own(o, key) {
             Loc::Dense(i) => {
                 let el = self.elements(o);
@@ -918,10 +958,20 @@ impl Heap {
 
     /// `[[GetOwnProperty]]`.
     pub fn get_own_property(&self, o: Obj, key: Atom) -> Option<Property> {
+        if self.object_class(o) == ObjectClass::TypedArray
+            && let Some(r) = self.ta_numeric_get(o, key)
+        {
+            return r.map(|v| Property::data(v, PropFlags::ALL));
+        }
         self.read_loc(o, self.find_own(o, key))
     }
 
     pub fn has_own_property(&self, o: Obj, key: Atom) -> bool {
+        if self.object_class(o) == ObjectClass::TypedArray
+            && let Some(r) = self.ta_numeric_get(o, key)
+        {
+            return r.is_some();
+        }
         self.find_own(o, key) != Loc::None
     }
 
@@ -932,6 +982,12 @@ impl Heap {
         while let Some(c) = cur {
             if let Some(p) = self.get_own_property(c, key) {
                 return Some((c, p));
+            }
+            // A typed array answers numeric keys itself: no prototype lookup.
+            if self.object_class(c) == ObjectClass::TypedArray
+                && self.canonical_numeric_index(key).is_some()
+            {
+                return None;
             }
             cur = self.get_prototype_of(c);
         }
@@ -944,6 +1000,11 @@ impl Heap {
         while let Some(c) = cur {
             if self.has_own_property(c, key) {
                 return true;
+            }
+            if self.object_class(c) == ObjectClass::TypedArray
+                && self.canonical_numeric_index(key).is_some()
+            {
+                return false;
             }
             cur = self.get_prototype_of(c);
         }
@@ -1117,6 +1178,24 @@ impl Heap {
         key: Atom,
         d: &PropertyDescriptor,
     ) -> Result<bool, HeapError> {
+        if self.object_class(o) == ObjectClass::TypedArray
+            && let Some(n) = self.canonical_numeric_index(key)
+        {
+            // IntegerIndexedDefineOwnProperty (10.4.5.3).
+            let valid = self.ta_get_valid(o, n);
+            if !valid
+                || d.configurable == Some(false)
+                || d.enumerable == Some(false)
+                || d.is_accessor()
+                || d.writable == Some(false)
+            {
+                return Ok(false);
+            }
+            if let Some(v) = d.value {
+                return Ok(self.ta_numeric_set(o, key, v) == Some(true));
+            }
+            return Ok(true);
+        }
         if self.object_class(o) == ObjectClass::Array {
             if key == atoms::LENGTH {
                 return self.array_set_length(o, d);
@@ -1148,8 +1227,10 @@ impl Heap {
     ) -> Result<bool, HeapError> {
         // A new key on an extensible ordinary object (object literals, the common case):
         // what ordinary_define would do, without building and validating a descriptor.
-        if self.object_class(o) != ObjectClass::Array
-            && key.as_int().is_none()
+        if !matches!(
+            self.object_class(o),
+            ObjectClass::Array | ObjectClass::TypedArray
+        ) && key.as_int().is_none()
             && self.find_own(o, key) == Loc::None
             && self.is_extensible(o)
         {
@@ -1260,6 +1341,11 @@ impl Heap {
 
     /// `[[Delete]]`: `false` if the property is non-configurable.
     pub fn delete_own_property(&mut self, o: Obj, key: Atom) -> bool {
+        if self.object_class(o) == ObjectClass::TypedArray
+            && let Some(r) = self.ta_numeric_get(o, key)
+        {
+            return r.is_none();
+        }
         match self.find_own(o, key) {
             Loc::None => true,
             Loc::Dense(i) => {
@@ -1319,6 +1405,16 @@ impl Heap {
     /// `[[OwnPropertyKeys]]` in spec order: array indexes ascending, then string keys in
     /// creation order, then symbols in creation order.
     pub fn own_keys(&self, o: Obj) -> Vec<Atom> {
+        if self.object_class(o) == ObjectClass::TypedArray {
+            // The element indexes, then the ordinary keys (never numeric).
+            let mut keys = self.ta_keys(o);
+            keys.extend(self.ordinary_own_keys(o));
+            return keys;
+        }
+        self.ordinary_own_keys(o)
+    }
+
+    fn ordinary_own_keys(&self, o: Obj) -> Vec<Atom> {
         let mut indexes: Vec<(u32, Atom)> = Vec::new();
         let mut strings = Vec::new();
         let mut symbols = Vec::new();

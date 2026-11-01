@@ -7,7 +7,7 @@
 //! push exactly one call frame whose result completes them.
 
 use super::*;
-use crate::builtins::{array, collection, date, function, number, object, string};
+use crate::builtins::{array, collection, date, function, number, object, string, typed};
 use crate::bytecode::intrinsics::{INTRINSICS, IntrinsicKind, intrinsic, intrinsic_id};
 use crate::heap::cells::flags::{OBJ_BUILTIN, OBJ_BUILTIN_CTOR};
 use crate::heap::{ObjectClass, atoms};
@@ -67,6 +67,7 @@ const ARRAY_CREATE: u16 = id("ArrayCreate");
 const NEW_TYPE_ERROR: u16 = id("NewTypeError");
 const NEW_NOT_CONSTRUCTOR_ERROR: u16 = id("NewNotConstructorError");
 const NEW_RANGE_ERROR: u16 = id("NewRangeError");
+const NEW_SYNTAX_ERROR: u16 = id("NewSyntaxError");
 const WELL_KNOWN_SYMBOL: u16 = id("WellKnownSymbol");
 const REALM_INTRINSIC: u16 = id("RealmIntrinsic");
 const ERROR_CREATE: u16 = id("ErrorCreate");
@@ -78,6 +79,26 @@ const HAS_OWN_PROPERTY: u16 = id("HasOwnProperty");
 const OWN_PROPERTY_ATTRIBUTES: u16 = id("OwnPropertyAttributes");
 const OWN_PROPERTY_KEYS: u16 = id("OwnPropertyKeys");
 const CALL_WITH_ARRAY: u16 = id("CallWithArray");
+const ARRAY_BUFFER_CREATE: u16 = id("ArrayBufferCreate");
+const BUFFER_INFO: u16 = id("BufferInfo");
+const BUFFER_DETACH: u16 = id("BufferDetach");
+const BUFFER_RESIZE: u16 = id("BufferResize");
+const BUFFER_TRANSFER: u16 = id("BufferTransfer");
+const BUFFER_COPY: u16 = id("BufferCopy");
+const IS_TYPED_ARRAY: u16 = id("IsTypedArray");
+const IS_DATA_VIEW: u16 = id("IsDataView");
+const REALM_CONSTRUCTOR: u16 = id("RealmConstructor");
+const TYPED_ARRAY_CREATE: u16 = id("TypedArrayCreate");
+const TYPED_ARRAY_FIELD: u16 = id("TypedArrayField");
+const TYPED_ARRAY_GET: u16 = id("TypedArrayGet");
+const TYPED_ARRAY_SET: u16 = id("TypedArraySet");
+const TYPED_ARRAY_COPY: u16 = id("TypedArrayCopy");
+const TYPED_ARRAY_KIND_PROTO: u16 = id("TypedArrayKindProto");
+const BASE64_ENCODE: u16 = id("Base64Encode");
+const HEX_ENCODE: u16 = id("HexEncode");
+const BASE64_DECODE: u16 = id("Base64Decode");
+const HEX_DECODE: u16 = id("HexDecode");
+
 const DATE_NOW: u16 = id("DateNow");
 const DATE_CREATE: u16 = id("DateCreate");
 const DATE_VALUE: u16 = id("DateValue");
@@ -201,6 +222,8 @@ const INSTALL_METHOD: u16 = id("InstallMethod");
 const INSTALL_INTRINSIC: u16 = id("InstallIntrinsic");
 /// The installed `%ToPrimitive`, used by the interpreter's slow paths.
 pub(super) const TO_PRIMITIVE: u16 = id("ToPrimitive");
+/// The installed `%ToNumber`, for typed array element writes (0039).
+pub(super) const TO_NUMBER: u16 = id("ToNumber");
 /// The installed `%InstanceofOperator`, for `instanceof` with a custom Symbol.hasInstance.
 pub(super) const INSTANCEOF_OPERATOR: u16 = id("InstanceofOperator");
 /// The installed `%ArraySpread`, for `array_spread` over a general iterable.
@@ -516,15 +539,15 @@ impl Exec<'_> {
                 self.heap.define_own_property(a, atoms::LENGTH, &d)?;
                 Value::object(a)
             }
-            NEW_TYPE_ERROR | NEW_RANGE_ERROR => {
+            NEW_TYPE_ERROR | NEW_RANGE_ERROR | NEW_SYNTAX_ERROR => {
                 let msg = match a0.as_string() {
                     Some(s) => self.heap.str_to_string(s),
                     None => return bad_argument(info.name),
                 };
-                let kind = if id == NEW_TYPE_ERROR {
-                    ErrorKind::TypeError
-                } else {
-                    ErrorKind::RangeError
+                let kind = match id {
+                    NEW_TYPE_ERROR => ErrorKind::TypeError,
+                    NEW_SYNTAX_ERROR => ErrorKind::SyntaxError,
+                    _ => ErrorKind::RangeError,
                 };
                 self.new_error_here(kind, &msg)?
             }
@@ -1120,6 +1143,171 @@ impl Exec<'_> {
                     conv::number(0.0 - self.time_zone_offset() as f64)
                 }
             }
+            ARRAY_BUFFER_CREATE => {
+                let Some(proto) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                let len = arg(self, 1).as_number().unwrap_or(f64::NAN);
+                let max = arg(self, 2).as_number();
+                Value::object(typed::buffer_create(self.heap, proto, len, max)?)
+            }
+            BUFFER_INFO => {
+                let b = typed::as_buffer(self.heap, a0)?;
+                typed::buffer_info(self.heap, b, arg(self, 1).as_int().unwrap_or(0))
+            }
+            BUFFER_DETACH | BUFFER_RESIZE | BUFFER_TRANSFER => {
+                let b = typed::as_buffer(self.heap, a0)?;
+                let n = arg(self, 1).as_number().unwrap_or(0.0);
+                match id {
+                    BUFFER_DETACH => {
+                        typed::buffer_detach(self.heap, b);
+                        Value::UNDEFINED
+                    }
+                    BUFFER_RESIZE => {
+                        typed::buffer_resize(self.heap, b, n as u32)?;
+                        Value::UNDEFINED
+                    }
+                    _ => Value::object(typed::buffer_transfer(
+                        self.heap,
+                        b,
+                        n,
+                        arg(self, 2).as_number(),
+                    )?),
+                }
+            }
+            BUFFER_COPY => {
+                let src = typed::as_buffer(self.heap, a0)?;
+                let dst = typed::as_buffer(self.heap, arg(self, 2))?;
+                let num = |v: Value| v.as_number().unwrap_or(0.0) as u32;
+                let (from, to, count) = (num(arg(self, 1)), num(arg(self, 3)), num(arg(self, 4)));
+                if from as u64 + count as u64 > self.heap.buffer_len(src) as u64
+                    || to as u64 + count as u64 > self.heap.buffer_len(dst) as u64
+                {
+                    return bad_argument(info.name);
+                }
+                typed::buffer_copy(self.heap, src, from, dst, to, count);
+                Value::UNDEFINED
+            }
+            IS_DATA_VIEW => Value::bool(
+                a0.as_object()
+                    .is_some_and(|o| self.heap.object_class(o) == ObjectClass::DataView),
+            ),
+            REALM_CONSTRUCTOR => {
+                let Some(k) = a0.as_string() else {
+                    return bad_argument(info.name);
+                };
+                let ctors = intrinsic_obj(self.heap, Intrinsic::Constructors);
+                let key = self.heap.intern(k)?;
+                match self
+                    .heap
+                    .get_own_property(ctors, key)
+                    .and_then(|p| p.value())
+                {
+                    Some(f) => f,
+                    None => return bad_argument(info.name),
+                }
+            }
+            IS_TYPED_ARRAY => {
+                Value::bool(a0.as_object().is_some_and(|o| self.heap.is_typed_array(o)))
+            }
+            TYPED_ARRAY_CREATE => {
+                let (Some(proto), Some(kind), Some(buffer)) = (
+                    a0.as_object(),
+                    arg(self, 1)
+                        .as_int()
+                        .and_then(crate::heap::typed::Kind::from_i32),
+                    arg(self, 2).as_object(),
+                ) else {
+                    return bad_argument(info.name);
+                };
+                let off = arg(self, 3).as_number().unwrap_or(0.0);
+                let len = arg(self, 4).as_number().unwrap_or(-1.0);
+                Value::object(typed::typed_array_create(
+                    self.heap, proto, kind, buffer, off, len,
+                )?)
+            }
+            TYPED_ARRAY_FIELD => {
+                let o = typed::as_typed_array(self.heap, a0)?;
+                typed::typed_array_field(self.heap, o, arg(self, 1).as_int().unwrap_or(0))
+            }
+            TYPED_ARRAY_GET | TYPED_ARRAY_SET => {
+                let o = typed::as_typed_array(self.heap, a0)?;
+                let i = arg(self, 1).as_number().unwrap_or(-1.0);
+                let index =
+                    (i >= 0.0 && i <= u32::MAX as f64 && i == libm::trunc(i)).then_some(i as u32);
+                if id == TYPED_ARRAY_GET {
+                    index
+                        .and_then(|i| self.heap.ta_get(o, i))
+                        .unwrap_or(Value::UNDEFINED)
+                } else {
+                    if let Some(i) = index {
+                        let n = arg(self, 2).as_number().unwrap_or(f64::NAN);
+                        self.heap.ta_set(o, i, n);
+                    }
+                    Value::UNDEFINED
+                }
+            }
+            TYPED_ARRAY_COPY => {
+                let src = typed::as_typed_array(self.heap, a0)?;
+                let dst = typed::as_typed_array(self.heap, arg(self, 2))?;
+                let num = |v: Value| v.as_number().unwrap_or(0.0) as u32;
+                let (from, to, count) = (num(arg(self, 1)), num(arg(self, 3)), num(arg(self, 4)));
+                let (ls, ld) = (
+                    self.heap.ta_length(src).unwrap_or(0),
+                    self.heap.ta_length(dst).unwrap_or(0),
+                );
+                if from as u64 + count as u64 > ls as u64 || to as u64 + count as u64 > ld as u64 {
+                    return bad_argument(info.name);
+                }
+                typed::typed_array_copy(self.heap, src, from, dst, to, count);
+                Value::UNDEFINED
+            }
+            TYPED_ARRAY_KIND_PROTO => {
+                let Some(kind) = a0.as_int().and_then(crate::heap::typed::Kind::from_i32) else {
+                    return bad_argument(info.name);
+                };
+                realm::intrinsic(self.heap, typed::kind_proto(kind))
+            }
+            BASE64_ENCODE | HEX_ENCODE => {
+                let o = typed::as_typed_array(self.heap, a0)?;
+                let Some(bytes) = typed::uint8_bytes(self.heap, o) else {
+                    return type_error("ArrayBuffer is detached");
+                };
+                let s = if id == HEX_ENCODE {
+                    typed::to_hex(bytes)
+                } else {
+                    typed::to_base64(
+                        bytes,
+                        arg(self, 1).as_bool() == Some(true),
+                        arg(self, 2).as_bool() == Some(true),
+                    )
+                };
+                Value::string(self.heap.alloc_latin1(s.as_bytes())?)
+            }
+            BASE64_DECODE | HEX_DECODE => {
+                let Some(s) = a0.as_string() else {
+                    return bad_argument(info.name);
+                };
+                let units: alloc::vec::Vec<u16> = self.heap.str_units(s).collect();
+                let max_arg = if id == HEX_DECODE {
+                    arg(self, 1)
+                } else {
+                    arg(self, 3)
+                };
+                let max = max_arg.as_number().unwrap_or(f64::INFINITY);
+                let max = if max >= usize::MAX as f64 {
+                    usize::MAX
+                } else {
+                    max as usize
+                };
+                let d = if id == HEX_DECODE {
+                    typed::from_hex(&units, max)
+                } else {
+                    let last = arg(self, 2).as_int().unwrap_or(0) as u8;
+                    typed::from_base64(&units, arg(self, 1).as_bool() == Some(true), last, max)
+                };
+                typed::decoded_record(self.heap, d)?
+            }
             CONSTRUCT_WITH_ARRAY => {
                 // `f args newTarget` becomes `f a1 .. an`.
                 let Some(args) = arg(self, 1).as_object() else {
@@ -1543,12 +1731,25 @@ impl Exec<'_> {
         if let Some(p) = parent {
             self.heap.set_prototype_of(fo, Some(p));
         }
-        let key = self.heap.intern(k)?;
-        realm::define_hidden(self.heap, holder, key, f)?;
+        let ctors = intrinsic_obj(self.heap, Intrinsic::Constructors);
+        let ckey = self.heap.intern(k)?;
+        realm::define_hidden(self.heap, ctors, ckey, f)?;
+        if name == "%TypedArray%" {
+            // A constructor that is a realm intrinsic, not a global (D1391).
+            realm::set_intrinsic(self.heap, Intrinsic::TypedArrayCtor, f);
+        } else {
+            let key = self.heap.intern(k)?;
+            realm::define_hidden(self.heap, holder, key, f)?;
+        }
         let d = PropertyDescriptor::data(Value::object(proto), PropFlags::NONE);
         self.heap.define_own_property(fo, atoms::PROTOTYPE, &d)?;
         realm::define_hidden(self.heap, proto, atoms::CONSTRUCTOR, f)?;
-        self.name_and_length(fo, Value::string(k), length.as_number().unwrap_or(0.0))?;
+        let fname = if name.starts_with('%') {
+            Value::string(self.heap.alloc_str(name.trim_matches('%'))?)
+        } else {
+            Value::string(k)
+        };
+        self.name_and_length(fo, fname, length.as_number().unwrap_or(0.0))?;
         self.mark_builtin(fo, OBJ_BUILTIN | OBJ_BUILTIN_CTOR);
         Ok(())
     }
@@ -1619,6 +1820,7 @@ impl Exec<'_> {
             "%GeneratorPrototype%" => Some(Intrinsic::GeneratorProto),
             "%MapIteratorPrototype%" => Some(Intrinsic::MapIteratorProto),
             "%SetIteratorPrototype%" => Some(Intrinsic::SetIteratorProto),
+            "%TypedArray%" => Some(Intrinsic::TypedArrayCtor),
             // `X.prototype` of a constructor the prelude has not installed yet.
             _ => Intrinsic::prototype_of(name.strip_suffix(".prototype")?),
         };

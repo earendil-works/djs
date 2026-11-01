@@ -41,6 +41,7 @@ pub mod handle;
 pub mod layout;
 pub mod object;
 pub mod string;
+pub mod typed;
 pub mod walk;
 
 use core::fmt;

@@ -2176,8 +2176,7 @@ impl<'h> Exec<'h> {
             | Op::Ge => &[(1, NUMBER), (0, NUMBER)],
             Op::Neg | Op::Plus | Op::BNot | Op::Inc | Op::Dec | Op::ToNumeric => &[(0, NUMBER)],
             Op::ToString | Op::GetElem | Op::GetElemMethod | Op::Delete => &[(0, STRING)],
-            Op::PutElem
-            | Op::DefineElem
+            Op::DefineElem
             | Op::DefineMethodElem
             | Op::DefineGetterElem
             | Op::DefineSetterElem
@@ -2195,6 +2194,31 @@ impl<'h> Exec<'h> {
                     return None;
                 };
                 return Some(self.call_to_primitive(self.sp - 1 - k, DEFAULT));
+            }
+            Op::PutElem | Op::PutField => {
+                // A typed array element takes ToNumber of the value, which may run user
+                // code (or throw for a symbol): convert it first (0039).
+                let key_slot = if op == Op::PutElem {
+                    Some(self.sp - 2)
+                } else {
+                    None
+                };
+                let (o, v) = (
+                    self.get(self.sp - 1 - (op == Op::PutElem) as u32 - 1),
+                    self.top(0),
+                );
+                if let Some(k) = key_slot
+                    && self.get(k).as_object().is_some()
+                {
+                    return Some(self.call_to_primitive(k, STRING));
+                }
+                if (v.as_object().is_some() || v.as_symbol().is_some())
+                    && o.as_object().is_some_and(|t| self.heap.is_typed_array(t))
+                    && self.typed_array_key(op)
+                {
+                    return Some(self.call_to_number(self.sp - 1));
+                }
+                return None;
             }
             Op::Concat => {
                 let n = self.imm_u16(1);
@@ -2231,6 +2255,38 @@ impl<'h> Exec<'h> {
         self.push(hint);
         let pc = self.pc;
         self.call(base, 2, Continuation::Replace(slot), pc)
+            .inspect_err(|_| self.sp = base)
+    }
+
+    /// Whether the key of a PutElem/PutField (already a primitive) is a canonical
+    /// numeric string, so a typed array target treats it as an element.
+    fn typed_array_key(&mut self, op: Op) -> bool {
+        let key = if op == Op::PutElem {
+            match conv::to_property_key(self.heap, self.top(1)) {
+                Ok(k) => k,
+                Err(_) => return false,
+            }
+        } else {
+            self.imm_atom()
+        };
+        self.heap.canonical_numeric_index(key).is_some()
+    }
+
+    /// Calls the prelude's `%ToNumber(stack[slot])`; its result replaces `stack[slot]`
+    /// and the current instruction runs again.
+    fn call_to_number(&mut self, slot: u32) -> Step {
+        let f = realm::installed_intrinsic(self.heap, intrinsics::TO_NUMBER);
+        if f.is_undefined() {
+            return type_error("cannot convert an object to a number (no prelude)");
+        }
+        let v = self.get(slot);
+        let base = self.sp;
+        self.ensure(base + 3)?;
+        self.push(f);
+        self.push(Value::UNDEFINED);
+        self.push(v);
+        let pc = self.pc;
+        self.call(base, 1, Continuation::Replace(slot), pc)
             .inspect_err(|_| self.sp = base)
     }
 

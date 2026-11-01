@@ -12,3 +12,4 @@ pub(crate) mod function;
 pub(crate) mod number;
 pub(crate) mod object;
 pub(crate) mod string;
+pub(crate) mod typed;

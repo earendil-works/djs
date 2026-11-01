@@ -287,6 +287,15 @@ fn split_path(path: &str) -> Option<(String, String)> {
         }
         return Some((target.into(), key.into()));
     }
+    // A bare `%Name%` (only for `@constructor %TypedArray%`): a constructor that is a
+    // realm intrinsic instead of a global (D1391).
+    if path.len() > 2
+        && path.starts_with('%')
+        && path.ends_with('%')
+        && ident(&path[1..path.len() - 1])
+    {
+        return Some(("globalThis".into(), path.into()));
+    }
     let (t, k) = path.rsplit_once('.').unwrap_or(("", path));
     if !ident(k) || (!t.is_empty() && !target_ok(t)) {
         return None;

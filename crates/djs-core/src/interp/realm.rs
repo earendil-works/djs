@@ -65,9 +65,31 @@ pub enum Intrinsic {
     /// %GeneratorPrototype% (%GeneratorFunction.prototype.prototype%, [[Prototype]]
     /// %IteratorPrototype%): the default prototype of generator objects (D1375).
     GeneratorProto,
+    ArrayBufferProto,
+    /// %TypedArray% (the constructor, installed by the prelude, D1391) and
+    /// %TypedArray.prototype%.
+    TypedArrayCtor,
+    TypedArrayProto,
+    Int8ArrayProto,
+    Uint8ArrayProto,
+    Uint8ClampedArrayProto,
+    Int16ArrayProto,
+    Uint16ArrayProto,
+    Int32ArrayProto,
+    Uint32ArrayProto,
+    Float16ArrayProto,
+    Float32ArrayProto,
+    Float64ArrayProto,
+    BigInt64ArrayProto,
+    BigUint64ArrayProto,
+    DataViewProto,
+    /// The constructors as installed (a prototype-less object from names to functions),
+    /// for the spec's %Name% defaults (SpeciesConstructor and friends): user code can
+    /// replace the globals but not these.
+    Constructors,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::GeneratorProto as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::Constructors as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -96,6 +118,21 @@ impl Intrinsic {
             "WeakSet" => Intrinsic::WeakSetProto,
             "Promise" => Intrinsic::PromiseProto,
             "Date" => Intrinsic::DateProto,
+            "ArrayBuffer" => Intrinsic::ArrayBufferProto,
+            "%TypedArray%" => Intrinsic::TypedArrayProto,
+            "Int8Array" => Intrinsic::Int8ArrayProto,
+            "Uint8Array" => Intrinsic::Uint8ArrayProto,
+            "Uint8ClampedArray" => Intrinsic::Uint8ClampedArrayProto,
+            "Int16Array" => Intrinsic::Int16ArrayProto,
+            "Uint16Array" => Intrinsic::Uint16ArrayProto,
+            "Int32Array" => Intrinsic::Int32ArrayProto,
+            "Uint32Array" => Intrinsic::Uint32ArrayProto,
+            "Float16Array" => Intrinsic::Float16ArrayProto,
+            "Float32Array" => Intrinsic::Float32ArrayProto,
+            "Float64Array" => Intrinsic::Float64ArrayProto,
+            "BigInt64Array" => Intrinsic::BigInt64ArrayProto,
+            "BigUint64Array" => Intrinsic::BigUint64ArrayProto,
+            "DataView" => Intrinsic::DataViewProto,
             _ => return None,
         })
     }
@@ -212,6 +249,35 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     );
     for i in [Intrinsic::MapIteratorProto, Intrinsic::SetIteratorProto] {
         let p = heap.new_object(Some(iterator_proto))?;
+        set(heap, i, Value::object(p));
+    }
+    for i in [
+        Intrinsic::ArrayBufferProto,
+        Intrinsic::DataViewProto,
+        Intrinsic::TypedArrayProto,
+    ] {
+        let p = heap.new_object(Some(object_proto))?;
+        set(heap, i, Value::object(p));
+    }
+    set(heap, Intrinsic::TypedArrayCtor, Value::UNDEFINED);
+    let ctors = heap.new_object(None)?;
+    set(heap, Intrinsic::Constructors, Value::object(ctors));
+    let typed_array_proto = intrinsic_obj(heap, Intrinsic::TypedArrayProto);
+    for i in [
+        Intrinsic::Int8ArrayProto,
+        Intrinsic::Uint8ArrayProto,
+        Intrinsic::Uint8ClampedArrayProto,
+        Intrinsic::Int16ArrayProto,
+        Intrinsic::Uint16ArrayProto,
+        Intrinsic::Int32ArrayProto,
+        Intrinsic::Uint32ArrayProto,
+        Intrinsic::Float16ArrayProto,
+        Intrinsic::Float32ArrayProto,
+        Intrinsic::Float64ArrayProto,
+        Intrinsic::BigInt64ArrayProto,
+        Intrinsic::BigUint64ArrayProto,
+    ] {
+        let p = heap.new_object(Some(typed_array_proto))?;
         set(heap, i, Value::object(p));
     }
     set(heap, Intrinsic::Clock, Value::int(0));

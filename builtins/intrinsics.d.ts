@@ -116,6 +116,8 @@ declare function ArrayCreate(length: f64): Obj;
 declare function NewTypeError(message: Str): Obj;
 /** A TypeError "<name> is not a constructor" with f's internal name, as QuickJS words it. @leaf */
 declare function NewNotConstructorError(f: Value): Obj;
+/** A new SyntaxError of the current realm (0039). @leaf */
+declare function NewSyntaxError(message: Str): Obj;
 /** A new RangeError of the current realm. @leaf */
 declare function NewRangeError(message: Str): Obj;
 /** The well-known symbol Symbol.<name>. @leaf */
@@ -269,6 +271,60 @@ declare function DateFormat(t: f64, fmt: i32, part: i32): Str;
 declare function DateParse(s: Str): f64;
 /** getTimezoneOffset of t: minutes (UTC - local), NaN for an invalid date. @leaf */
 declare function DateTimezoneOffset(t: f64): f64;
+
+// ---- ArrayBuffer, typed arrays, DataView (0039, heap/typed.rs) ----------------------------
+
+/**
+ * AllocateArrayBuffer: byteLength zeroed bytes; max is the maxByteLength of a resizable
+ * buffer or undefined. RangeError "invalid array buffer length" (or "... max length"). @leaf
+ */
+declare function ArrayBufferCreate(proto: Obj, byteLength: f64, max: Value): Obj;
+/**
+ * A field of an ArrayBuffer: 0 byteLength, 1 maxByteLength, 2 resizable, 3 detached.
+ * TypeError "ArrayBuffer object expected" for anything else. @leaf
+ */
+declare function BufferInfo(b: Value, field: i32): Value;
+/** DetachArrayBuffer. @leaf */
+declare function BufferDetach(b: Obj): void;
+/** Resizes a resizable buffer in place (new bytes are 0). @leaf */
+declare function BufferResize(b: Obj, byteLength: f64): void;
+/** A new buffer with the first bytes of b (max: resizable), b detached. @leaf */
+declare function BufferTransfer(b: Obj, byteLength: f64, max: Value): Obj;
+/** Copies count bytes from src at from to dst at to (memmove). @leaf */
+declare function BufferCopy(src: Obj, from: f64, dst: Obj, to: f64, count: f64): void;
+/** Whether v is a DataView. @leaf */
+declare function IsDataView(v: Value): boolean;
+/** The constructor installed as `name` (the realm's %Name%, whatever the global is now). @leaf */
+declare function RealmConstructor(name: Str): Obj;
+/** Whether v is a typed array. @leaf */
+declare function IsTypedArray(v: Value): boolean;
+/** A typed array of `kind` over buffer (length -1: length-tracking). @leaf */
+declare function TypedArrayCreate(proto: Obj, kind: i32, buffer: Obj, byteOffset: f64, length: f64): Obj;
+/**
+ * A field of a typed array: 0 kind, 1 buffer, 2 byteOffset, 3 length, 4 byteLength
+ * (2-4 are 0 when out of bounds), 5 out of bounds or detached, 6 length-tracking.
+ * TypeError "not a TypedArray" for anything else. @leaf
+ */
+declare function TypedArrayField(o: Value, field: i32): Value;
+/** Element i (undefined if not a valid index). @leaf */
+declare function TypedArrayGet(o: Obj, i: f64): Value;
+/** Writes Number n to element i (nothing if not a valid index). @leaf */
+declare function TypedArraySet(o: Obj, i: f64, n: f64): void;
+/** Copies count elements from src (at from) to dst (at to), converting; overlaps ok. @leaf */
+declare function TypedArrayCopy(src: Obj, from: f64, dst: Obj, to: f64, count: f64): void;
+/** The prototype of the typed array constructor for kind (the realm's). @leaf */
+declare function TypedArrayKindProto(kind: i32): Obj;
+/** The bytes of a Uint8Array as base64 (TypeError if detached or out of bounds). @leaf */
+declare function Base64Encode(o: Obj, url: boolean, omitPadding: boolean): Str;
+/** The bytes of a Uint8Array as lowercase hex (TypeError if detached). @leaf */
+declare function HexEncode(o: Obj): Str;
+/**
+ * FromBase64 ( string, alphabet, lastChunkHandling, maxLength ): a record object
+ * { read, bytes (an ArrayBuffer), error } (last: 0 loose, 1 strict, 2 stop-before-partial). @leaf
+ */
+declare function Base64Decode(s: Str, url: boolean, last: i32, max: f64): Obj;
+/** FromHex ( string, maxLength ): the same record. @leaf */
+declare function HexDecode(s: Str, max: f64): Obj;
 
 // ---- Functions (0031) -----------------------------------------------------------------
 

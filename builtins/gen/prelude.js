@@ -943,6 +943,172 @@ function ArrayPrototypeUnscopables() {
   return u;
 }
 
+// builtins/arraybuffer.ts:4
+function ToIndex(v) {
+  const i = ToIntegerOrInfinity(v);
+  if (!(i >= 0 && i <= 9007199254740991)) {
+    throw %NewRangeError("invalid array index");
+  }
+  return i;
+}
+
+// builtins/arraybuffer.ts:13
+function ThisArrayBuffer(v) {
+  %BufferInfo(v, 0);
+  return %AsObj(v);
+}
+
+// builtins/arraybuffer.ts:19
+function AllocateArrayBuffer(newTarget, byteLength, max) {
+  if (max !== undefined && byteLength > %AsNumber(max)) {
+    throw %NewRangeError("invalid array buffer max length");
+  }
+  const proto = GetPrototypeFromConstructor(newTarget, "ArrayBufferPrototype");
+  return %ArrayBufferCreate(proto, byteLength, max);
+}
+
+// builtins/arraybuffer.ts:32 constructor ArrayBuffer
+function ArrayBufferConstructor(length, options) {
+  if (new.target === undefined) {
+    throw %NewTypeError("must be called with new");
+  }
+  const byteLength = ToIndex(length);
+  let max = undefined;
+  if (%IsObject(options)) {
+    const m = %Get(%AsObj(options), "maxByteLength");
+    if (m !== undefined) {
+      max = ToIndex(m);
+    }
+  }
+  return AllocateArrayBuffer(new.target, byteLength, max);
+}
+
+// builtins/arraybuffer.ts:51 ArrayBuffer.isView
+function ArrayBufferIsView(arg) {
+  return %IsTypedArray(arg) || %IsDataView(arg);
+}
+
+// builtins/arraybuffer.ts:59 get ArrayBuffer[Symbol.species]
+function ArrayBufferSpecies() {
+  return this;
+}
+
+// builtins/arraybuffer.ts:67 get ArrayBuffer.prototype.byteLength
+function ArrayBufferPrototypeByteLength() {
+  return %BufferInfo(this, 0);
+}
+
+// builtins/arraybuffer.ts:75 get ArrayBuffer.prototype.maxByteLength
+function ArrayBufferPrototypeMaxByteLength() {
+  return %BufferInfo(this, 1);
+}
+
+// builtins/arraybuffer.ts:83 get ArrayBuffer.prototype.resizable
+function ArrayBufferPrototypeResizable() {
+  return %BufferInfo(this, 2);
+}
+
+// builtins/arraybuffer.ts:91 get ArrayBuffer.prototype.detached
+function ArrayBufferPrototypeDetached() {
+  return %BufferInfo(this, 3);
+}
+
+// builtins/arraybuffer.ts:96
+function IsDetached(b) {
+  return %AsBool(%BufferInfo(b, 3));
+}
+
+// builtins/arraybuffer.ts:101
+function BufferLength(b) {
+  return %AsNumber(%BufferInfo(b, 0));
+}
+
+// builtins/arraybuffer.ts:109 ArrayBuffer.prototype.resize
+function ArrayBufferPrototypeResize(newLength) {
+  const o = ThisArrayBuffer(this);
+  if (!%AsBool(%BufferInfo(o, 2))) {
+    throw %NewTypeError("array buffer is not resizable");
+  }
+  const newByteLength = ToIndex(newLength);
+  if (IsDetached(o)) {
+    throw %NewTypeError("ArrayBuffer is detached");
+  }
+  if (newByteLength > %AsNumber(%BufferInfo(o, 1))) {
+    throw %NewRangeError("invalid array buffer length");
+  }
+  %BufferResize(o, newByteLength);
+}
+
+// builtins/arraybuffer.ts:128 ArrayBuffer.prototype.slice
+function ArrayBufferPrototypeSlice(start, end) {
+  const o = ThisArrayBuffer(this);
+  if (IsDetached(o)) {
+    throw %NewTypeError("ArrayBuffer is detached");
+  }
+  const len = BufferLength(o);
+  const first = RelativeIndex(start, len, 0);
+  const fin = RelativeIndex(end, len, len);
+  const newLen = fin > first ? fin - first : 0;
+  const ctor = SpeciesConstructor(o, %RealmConstructor("ArrayBuffer"));
+  const created = %Construct(ctor, newLen);
+  %BufferInfo(created, 0);
+  if (IsDetached(created)) {
+    throw %NewTypeError("ArrayBuffer is detached");
+  }
+  if (created === o) {
+    throw %NewTypeError("cannot use identical ArrayBuffer");
+  }
+  if (BufferLength(created) < newLen) {
+    throw %NewTypeError("new ArrayBuffer is too small");
+  }
+  if (IsDetached(o)) {
+    throw %NewTypeError("ArrayBuffer is detached");
+  }
+  const currentLen = BufferLength(o);
+  if (first < currentLen) {
+    const count = newLen < currentLen - first ? newLen : currentLen - first;
+    %BufferCopy(o, first, created, 0, count);
+  }
+  return created;
+}
+
+// builtins/arraybuffer.ts:161
+function ArrayBufferCopyAndDetach(thisValue, newLength, preserve) {
+  const o = ThisArrayBuffer(thisValue);
+  let newByteLength = 0;
+  if (newLength === undefined) {
+    newByteLength = BufferLength(o);
+  } else {
+    newByteLength = ToIndex(newLength);
+  }
+  if (IsDetached(o)) {
+    throw %NewTypeError("ArrayBuffer is detached");
+  }
+  let max = undefined;
+  if (preserve && %AsBool(%BufferInfo(o, 2))) {
+    max = %BufferInfo(o, 1);
+  }
+  if (max !== undefined && newByteLength > %AsNumber(max)) {
+    throw %NewRangeError("invalid array buffer length");
+  }
+  return %BufferTransfer(o, newByteLength, max);
+}
+
+// builtins/arraybuffer.ts:186 ArrayBuffer.prototype.transfer
+function ArrayBufferPrototypeTransfer(newLength) {
+  return ArrayBufferCopyAndDetach(this, newLength, true);
+}
+
+// builtins/arraybuffer.ts:194 ArrayBuffer.prototype.transferToFixedLength
+function ArrayBufferPrototypeTransferToFixedLength(newLength) {
+  return ArrayBufferCopyAndDetach(this, newLength, false);
+}
+
+// builtins/arraybuffer.ts:203 value ArrayBuffer.prototype[Symbol.toStringTag]
+function ArrayBufferPrototypeToStringTag() {
+  return "ArrayBuffer";
+}
+
 // builtins/boolean.ts:7 constructor Boolean
 function BooleanConstructor(value) {
   const b = %ToBoolean(value);
@@ -4489,6 +4655,721 @@ function SymbolUnscopables() {
   return %WellKnownSymbol("unscopables");
 }
 
+// builtins/typedarray.ts:7
+function ElementSize(kind) {
+  if (kind <= 2) {
+    return 1;
+  }
+  if (kind <= 4 || kind === 7) {
+    return 2;
+  }
+  if (kind <= 6 || kind === 8) {
+    return 4;
+  }
+  return 8;
+}
+
+// builtins/typedarray.ts:21
+function KindName(kind) {
+  if (kind === 0) {
+    return "Int8Array";
+  }
+  if (kind === 1) {
+    return "Uint8Array";
+  }
+  if (kind === 2) {
+    return "Uint8ClampedArray";
+  }
+  if (kind === 3) {
+    return "Int16Array";
+  }
+  if (kind === 4) {
+    return "Uint16Array";
+  }
+  if (kind === 5) {
+    return "Int32Array";
+  }
+  if (kind === 6) {
+    return "Uint32Array";
+  }
+  if (kind === 7) {
+    return "Float16Array";
+  }
+  if (kind === 8) {
+    return "Float32Array";
+  }
+  if (kind === 9) {
+    return "Float64Array";
+  }
+  if (kind === 10) {
+    return "BigInt64Array";
+  }
+  return "BigUint64Array";
+}
+
+// builtins/typedarray.ts:59
+function KindOf(o) {
+  return %F64ToI32(%AsNumber(%TypedArrayField(o, 0)));
+}
+
+// builtins/typedarray.ts:64
+function TALength(o) {
+  return %AsNumber(%TypedArrayField(o, 3));
+}
+
+// builtins/typedarray.ts:69
+function TAOutOfBounds(o) {
+  return %AsBool(%TypedArrayField(o, 5));
+}
+
+// builtins/typedarray.ts:77
+function ValidateTypedArray(v) {
+  %TypedArrayField(v, 0);
+  const o = %AsObj(v);
+  if (TAOutOfBounds(o)) {
+    throw %NewTypeError("ArrayBuffer is detached");
+  }
+  return o;
+}
+
+// builtins/typedarray.ts:87
+function RequireNumberKind(kind) {
+  if (kind >= 10) {
+    throw %NewTypeError("not supported yet: BigInt typed arrays");
+  }
+}
+
+// builtins/typedarray.ts:94
+function AllocateTypedArrayOfLength(kind, proto, length) {
+  const size = ElementSize(kind);
+  if (length * size > 2147483648) {
+    throw %NewRangeError("invalid array buffer length");
+  }
+  const buffer = %ArrayBufferCreate(%RealmIntrinsic("ArrayBufferPrototype"), length * size, undefined);
+  return %TypedArrayCreate(proto, kind, buffer, 0, length);
+}
+
+// builtins/typedarray.ts:104
+function TypedArrayFromBuffer(kind, proto, buffer, byteOffset, length) {
+  const size = ElementSize(kind);
+  const offset = ToIndex(byteOffset);
+  if (offset % size !== 0) {
+    throw %NewRangeError("invalid offset");
+  }
+  let newLength = 0;
+  if (length !== undefined) {
+    newLength = ToIndex(length);
+  }
+  if (IsDetached(buffer)) {
+    throw %NewTypeError("ArrayBuffer is detached");
+  }
+  const bufferByteLength = BufferLength(buffer);
+  if (length === undefined && %AsBool(%BufferInfo(buffer, 2))) {
+    if (offset > bufferByteLength) {
+      throw %NewRangeError("invalid offset");
+    }
+    return %TypedArrayCreate(proto, kind, buffer, offset, -1);
+  }
+  if (length === undefined) {
+    if (bufferByteLength % size !== 0) {
+      throw %NewRangeError("invalid length");
+    }
+    if (bufferByteLength - offset < 0) {
+      throw %NewRangeError("invalid offset");
+    }
+    return %TypedArrayCreate(proto, kind, buffer, offset, (bufferByteLength - offset) / size);
+  }
+  if (offset + newLength * size > bufferByteLength) {
+    throw %NewRangeError("invalid length");
+  }
+  return %TypedArrayCreate(proto, kind, buffer, offset, newLength);
+}
+
+// builtins/typedarray.ts:140
+function TypedArrayFromValues(kind, proto, values) {
+  const len = LengthOfArrayLike(values);
+  const o = AllocateTypedArrayOfLength(kind, proto, len);
+  for (let k = 0; k < len; k++) {
+    %TypedArraySet(o, k, ToNumber(%Get(values, k)));
+  }
+  return o;
+}
+
+// builtins/typedarray.ts:150
+function TypedArrayConstruct(newTarget, kind, args) {
+  if (newTarget === undefined) {
+    throw %NewTypeError("must be called with new");
+  }
+  RequireNumberKind(kind);
+  const proto = GetPrototypeFromConstructor(newTarget, KindName(kind) + "Prototype");
+  const n = LengthOfArrayLike(args);
+  const first = n > 0 ? %Get(args, 0) : undefined;
+  if (!%IsObject(first)) {
+    return AllocateTypedArrayOfLength(kind, proto, ToIndex(first));
+  }
+  const src = %AsObj(first);
+  if (%IsTypedArray(src)) {
+    if (TAOutOfBounds(src)) {
+      throw %NewTypeError("ArrayBuffer is detached");
+    }
+    if ((KindOf(src) >= 10) !== (kind >= 10)) {
+      throw %NewTypeError("cannot mix BigInt and other types");
+    }
+    const len = TALength(src);
+    const o = AllocateTypedArrayOfLength(kind, proto, len);
+    %TypedArrayCopy(src, 0, o, 0, len);
+    return o;
+  }
+  if (BufferInfoOrUndefined(src)) {
+    return TypedArrayFromBuffer(kind, proto, src, n > 1 ? %Get(args, 1) : undefined, n > 2 ? %Get(args, 2) : undefined);
+  }
+  const usingIterator = GetMethod(src, %WellKnownSymbol("iterator"));
+  if (usingIterator !== undefined) {
+    const list = %ArrayCreate(0);
+    const target = ArrayFromIterator(list, src, usingIterator, undefined, undefined);
+    return TypedArrayFromValues(kind, proto, target);
+  }
+  return TypedArrayFromValues(kind, proto, src);
+}
+
+// builtins/typedarray.ts:187
+function BufferInfoOrUndefined(o) {
+  try {
+    %BufferInfo(o, 0);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// builtins/typedarray.ts:200 constructor %TypedArray%
+function TypedArrayAbstract() {
+  throw %NewTypeError("cannot be called");
+}
+
+// builtins/typedarray.ts:208 get %TypedArray%[Symbol.species]
+function TypedArraySpecies() {
+  return this;
+}
+
+// builtins/typedarray.ts:213
+function TypedArrayCreateWithLength(c, length) {
+  const created = %Construct(c, length);
+  ValidateTypedArray(created);
+  if (KindOf(created) >= 10) {
+    throw %NewTypeError("not supported yet: BigInt typed arrays");
+  }
+  if (TALength(created) < length) {
+    throw %NewTypeError("TypedArray length is too small");
+  }
+  return created;
+}
+
+// builtins/typedarray.ts:226
+function TypedArraySpeciesCreate(exemplar, length) {
+  const c = SpeciesConstructor(exemplar, %RealmConstructor(KindName(KindOf(exemplar))));
+  return TypedArrayCreateWithLength(c, length);
+}
+
+// builtins/typedarray.ts:235 %TypedArray%.from
+function TypedArrayFrom(source, mapfn, thisArg) {
+  if (!%IsConstructor(this)) {
+    throw %NewTypeError("not a constructor");
+  }
+  const mapping = mapfn !== undefined;
+  if (mapping && !%IsCallable(mapfn)) {
+    throw %NewTypeError("not a function");
+  }
+  const usingIterator = GetMethod(source, %WellKnownSymbol("iterator"));
+  let values = %ArrayCreate(0);
+  if (usingIterator !== undefined) {
+    values = ArrayFromIterator(values, source, usingIterator, undefined, undefined);
+  } else {
+    values = %ToObject(source);
+  }
+  const len = LengthOfArrayLike(values);
+  const target = TypedArrayCreateWithLength(this, len);
+  for (let k = 0; k < len; k++) {
+    const kValue = %Get(values, k);
+    const mapped = mapping ? %Call(mapfn, thisArg, kValue, k) : kValue;
+    %Set(target, k, mapped);
+  }
+  return target;
+}
+
+// builtins/typedarray.ts:264 %TypedArray%.of
+function TypedArrayOf(...items) {
+  if (!%IsConstructor(this)) {
+    throw %NewTypeError("not a constructor");
+  }
+  const len = LengthOfArrayLike(items);
+  const target = TypedArrayCreateWithLength(this, len);
+  for (let k = 0; k < len; k++) {
+    %Set(target, k, %Get(items, k));
+  }
+  return target;
+}
+
+// builtins/typedarray.ts:280 get %TypedArray%.prototype.buffer
+function TypedArrayPrototypeBuffer() {
+  return %TypedArrayField(this, 1);
+}
+
+// builtins/typedarray.ts:288 get %TypedArray%.prototype.byteLength
+function TypedArrayPrototypeByteLength() {
+  return %TypedArrayField(this, 4);
+}
+
+// builtins/typedarray.ts:296 get %TypedArray%.prototype.byteOffset
+function TypedArrayPrototypeByteOffset() {
+  return %TypedArrayField(this, 2);
+}
+
+// builtins/typedarray.ts:304 get %TypedArray%.prototype.length
+function TypedArrayPrototypeLength() {
+  return %TypedArrayField(this, 3);
+}
+
+// builtins/typedarray.ts:312 get %TypedArray%.prototype[Symbol.toStringTag]
+function TypedArrayPrototypeToStringTag() {
+  if (!%IsTypedArray(this)) {
+    return undefined;
+  }
+  return KindName(KindOf(%AsObj(this)));
+}
+
+// builtins/typedarray.ts:323 %TypedArray%.prototype.set
+function TypedArrayPrototypeSet(source, offset) {
+  %TypedArrayField(this, 0);
+  const target = %AsObj(this);
+  const targetOffset = ToIntegerOrInfinity(offset);
+  if (targetOffset < 0) {
+    throw %NewRangeError("invalid array length");
+  }
+  if (TAOutOfBounds(target)) {
+    throw %NewTypeError("ArrayBuffer is detached");
+  }
+  const targetLength = TALength(target);
+  if (%IsTypedArray(source)) {
+    const src = %AsObj(source);
+    if (TAOutOfBounds(src)) {
+      throw %NewTypeError("ArrayBuffer is detached");
+    }
+    const srcLength = TALength(src);
+    if (targetOffset === 1 / 0 || srcLength + targetOffset > targetLength) {
+      throw %NewRangeError("invalid array length");
+    }
+    if ((KindOf(src) >= 10) !== (KindOf(target) >= 10)) {
+      throw %NewTypeError("cannot mix BigInt and other types");
+    }
+    %TypedArrayCopy(src, 0, target, targetOffset, srcLength);
+    return;
+  }
+  const src = %ToObject(source);
+  const srcLength = LengthOfArrayLike(src);
+  if (targetOffset === 1 / 0 || srcLength + targetOffset > targetLength) {
+    throw %NewRangeError("invalid array length");
+  }
+  for (let k = 0; k < srcLength; k++) {
+    const value = ToNumber(%Get(src, k));
+    %TypedArraySet(target, targetOffset + k, value);
+  }
+}
+
+// builtins/typedarray.ts:364 %TypedArray%.prototype.subarray
+function TypedArrayPrototypeSubarray(start, end) {
+  %TypedArrayField(this, 0);
+  const o = %AsObj(this);
+  const buffer = %AsObj(%TypedArrayField(o, 1));
+  const srcLength = TALength(o);
+  const kind = KindOf(o);
+  const size = ElementSize(kind);
+  const beginIndex = RelativeIndex(start, srcLength, 0);
+  const tracking = %AsBool(%TypedArrayField(o, 6));
+  const beginByteOffset = %AsNumber(%TypedArrayField(o, 2)) + beginIndex * size;
+  const c = SpeciesConstructor(o, %RealmConstructor(KindName(kind)));
+  let created = undefined;
+  if (tracking && end === undefined) {
+    created = %Construct(c, buffer, beginByteOffset);
+  } else {
+    const endIndex = RelativeIndex(end, srcLength, srcLength);
+    const newLength = endIndex > beginIndex ? endIndex - beginIndex : 0;
+    created = %Construct(c, buffer, beginByteOffset, newLength);
+  }
+  ValidateTypedArray(created);
+  return %AsObj(created);
+}
+
+// builtins/typedarray.ts:391 %TypedArray%.prototype.slice
+function TypedArrayPrototypeSlice(start, end) {
+  const o = ValidateTypedArray(this);
+  const srcLength = TALength(o);
+  const startIndex = RelativeIndex(start, srcLength, 0);
+  const endIndex = RelativeIndex(end, srcLength, srcLength);
+  const count = endIndex > startIndex ? endIndex - startIndex : 0;
+  const a = TypedArraySpeciesCreate(o, count);
+  if (count > 0) {
+    if (TAOutOfBounds(o)) {
+      throw %NewTypeError("ArrayBuffer is detached");
+    }
+    const len = TALength(o);
+    const fin = endIndex < len ? endIndex : len;
+    const n = fin > startIndex ? fin - startIndex : 0;
+    if (KindOf(a) === KindOf(o)) {
+      %TypedArrayCopy(o, startIndex, a, 0, n);
+    } else {
+      for (let k = 0; k < n; k++) {
+        %Set(a, k, %TypedArrayGet(o, startIndex + k));
+      }
+    }
+  }
+  return a;
+}
+
+// builtins/typedarray.ts:420 %TypedArray%.prototype.fill
+function TypedArrayPrototypeFill(value, start, end) {
+  const o = ValidateTypedArray(this);
+  const len = TALength(o);
+  const n = ToNumber(value);
+  const k = RelativeIndex(start, len, 0);
+  const fin = RelativeIndex(end, len, len);
+  if (TAOutOfBounds(o)) {
+    throw %NewTypeError("ArrayBuffer is detached");
+  }
+  const len2 = TALength(o);
+  const last = fin < len2 ? fin : len2;
+  for (let i = k; i < last; i++) {
+    %TypedArraySet(o, i, n);
+  }
+  return o;
+}
+
+// builtins/typedarray.ts:440
+function ValidateUint8Array(v) {
+  if (!%IsTypedArray(v) || KindOf(%AsObj(v)) !== 1) {
+    throw %NewTypeError("not a Uint8Array");
+  }
+  return %AsObj(v);
+}
+
+// builtins/typedarray.ts:448
+function GetOptionsObject(options) {
+  if (options === undefined) {
+    return undefined;
+  }
+  if (!%IsObject(options)) {
+    throw %NewTypeError("options must be an object");
+  }
+  return options;
+}
+
+// builtins/typedarray.ts:459
+function Base64Alphabet(opts) {
+  if (opts === undefined) {
+    return false;
+  }
+  const alphabet = %Get(%AsObj(opts), "alphabet");
+  if (alphabet === undefined || alphabet === "base64") {
+    return false;
+  }
+  if (alphabet === "base64url") {
+    return true;
+  }
+  throw %NewTypeError("invalid alphabet");
+}
+
+// builtins/typedarray.ts:474
+function LastChunkHandling(opts) {
+  if (opts === undefined) {
+    return 0;
+  }
+  const h = %Get(%AsObj(opts), "lastChunkHandling");
+  if (h === undefined || h === "loose") {
+    return 0;
+  }
+  if (h === "strict") {
+    return 1;
+  }
+  if (h === "stop-before-partial") {
+    return 2;
+  }
+  throw %NewTypeError("invalid lastChunkHandling");
+}
+
+// builtins/typedarray.ts:492
+function Uint8ArrayFromRecord(rec) {
+  const bytes = %AsObj(%Get(rec, "bytes"));
+  const len = BufferLength(bytes);
+  return %TypedArrayCreate(%RealmIntrinsic("Uint8ArrayPrototype"), 1, bytes, 0, len);
+}
+
+// builtins/typedarray.ts:502 Uint8Array.fromBase64
+function Uint8ArrayFromBase64(string, options) {
+  if (!%IsString(string)) {
+    throw %NewTypeError("expected string");
+  }
+  const opts = GetOptionsObject(options);
+  const url = Base64Alphabet(opts);
+  const last = LastChunkHandling(opts);
+  const rec = %Base64Decode(%AsStr(string), url, last, 9007199254740991);
+  if (%AsBool(%Get(rec, "error"))) {
+    throw %NewSyntaxError("invalid base64 string");
+  }
+  return Uint8ArrayFromRecord(rec);
+}
+
+// builtins/typedarray.ts:520 Uint8Array.fromHex
+function Uint8ArrayFromHex(string) {
+  if (!%IsString(string)) {
+    throw %NewTypeError("expected string");
+  }
+  const rec = %HexDecode(%AsStr(string), 9007199254740991);
+  if (%AsBool(%Get(rec, "error"))) {
+    throw %NewSyntaxError("invalid hex string");
+  }
+  return Uint8ArrayFromRecord(rec);
+}
+
+// builtins/typedarray.ts:535 Uint8Array.prototype.toBase64
+function Uint8ArrayPrototypeToBase64(options) {
+  const o = ValidateUint8Array(this);
+  const opts = GetOptionsObject(options);
+  const url = Base64Alphabet(opts);
+  let omit = false;
+  if (opts !== undefined) {
+    omit = %ToBoolean(%Get(%AsObj(opts), "omitPadding"));
+  }
+  return %Base64Encode(o, url, omit);
+}
+
+// builtins/typedarray.ts:550 Uint8Array.prototype.toHex
+function Uint8ArrayPrototypeToHex() {
+  return %HexEncode(ValidateUint8Array(this));
+}
+
+// builtins/typedarray.ts:555
+function WriteDecoded(into, rec, isHex) {
+  const bytes = %AsObj(%Get(rec, "bytes"));
+  const written = BufferLength(bytes);
+  %BufferCopy(bytes, 0, %AsObj(%TypedArrayField(into, 1)), %AsNumber(%TypedArrayField(into, 2)), written);
+  if (%AsBool(%Get(rec, "error"))) {
+    throw %NewSyntaxError(isHex ? "invalid hex string" : "invalid base64 string");
+  }
+  const result = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+  %CreateDataPropertyOrThrow(result, "read", %Get(rec, "read"));
+  %CreateDataPropertyOrThrow(result, "written", written);
+  return result;
+}
+
+// builtins/typedarray.ts:572 Uint8Array.prototype.setFromBase64
+function Uint8ArrayPrototypeSetFromBase64(string, options) {
+  const into = ValidateUint8Array(this);
+  if (!%IsString(string)) {
+    throw %NewTypeError("expected string");
+  }
+  const opts = GetOptionsObject(options);
+  const url = Base64Alphabet(opts);
+  const last = LastChunkHandling(opts);
+  if (TAOutOfBounds(into)) {
+    throw %NewTypeError("ArrayBuffer is detached");
+  }
+  const rec = %Base64Decode(%AsStr(string), url, last, TALength(into));
+  return WriteDecoded(into, rec, false);
+}
+
+// builtins/typedarray.ts:591 Uint8Array.prototype.setFromHex
+function Uint8ArrayPrototypeSetFromHex(string) {
+  const into = ValidateUint8Array(this);
+  if (!%IsString(string)) {
+    throw %NewTypeError("expected string");
+  }
+  if (TAOutOfBounds(into)) {
+    throw %NewTypeError("ArrayBuffer is detached");
+  }
+  const rec = %HexDecode(%AsStr(string), TALength(into));
+  return WriteDecoded(into, rec, true);
+}
+
+// builtins/typedarray.ts:609 constructor Int8Array
+function Int8ArrayConstructor(...args) {
+  return TypedArrayConstruct(new.target, 0, args);
+}
+
+// builtins/typedarray.ts:617 value Int8Array.BYTES_PER_ELEMENT
+function Int8ArrayBytesPerElement() {
+  return 1;
+}
+
+// builtins/typedarray.ts:625 value Int8Array.prototype.BYTES_PER_ELEMENT
+function Int8ArrayPrototypeBytesPerElement() {
+  return 1;
+}
+
+// builtins/typedarray.ts:635 constructor Uint8Array
+function Uint8ArrayConstructor(...args) {
+  return TypedArrayConstruct(new.target, 1, args);
+}
+
+// builtins/typedarray.ts:643 value Uint8Array.BYTES_PER_ELEMENT
+function Uint8ArrayBytesPerElement() {
+  return 1;
+}
+
+// builtins/typedarray.ts:651 value Uint8Array.prototype.BYTES_PER_ELEMENT
+function Uint8ArrayPrototypeBytesPerElement() {
+  return 1;
+}
+
+// builtins/typedarray.ts:661 constructor Uint8ClampedArray
+function Uint8ClampedArrayConstructor(...args) {
+  return TypedArrayConstruct(new.target, 2, args);
+}
+
+// builtins/typedarray.ts:669 value Uint8ClampedArray.BYTES_PER_ELEMENT
+function Uint8ClampedArrayBytesPerElement() {
+  return 1;
+}
+
+// builtins/typedarray.ts:677 value Uint8ClampedArray.prototype.BYTES_PER_ELEMENT
+function Uint8ClampedArrayPrototypeBytesPerElement() {
+  return 1;
+}
+
+// builtins/typedarray.ts:687 constructor Int16Array
+function Int16ArrayConstructor(...args) {
+  return TypedArrayConstruct(new.target, 3, args);
+}
+
+// builtins/typedarray.ts:695 value Int16Array.BYTES_PER_ELEMENT
+function Int16ArrayBytesPerElement() {
+  return 2;
+}
+
+// builtins/typedarray.ts:703 value Int16Array.prototype.BYTES_PER_ELEMENT
+function Int16ArrayPrototypeBytesPerElement() {
+  return 2;
+}
+
+// builtins/typedarray.ts:713 constructor Uint16Array
+function Uint16ArrayConstructor(...args) {
+  return TypedArrayConstruct(new.target, 4, args);
+}
+
+// builtins/typedarray.ts:721 value Uint16Array.BYTES_PER_ELEMENT
+function Uint16ArrayBytesPerElement() {
+  return 2;
+}
+
+// builtins/typedarray.ts:729 value Uint16Array.prototype.BYTES_PER_ELEMENT
+function Uint16ArrayPrototypeBytesPerElement() {
+  return 2;
+}
+
+// builtins/typedarray.ts:739 constructor Int32Array
+function Int32ArrayConstructor(...args) {
+  return TypedArrayConstruct(new.target, 5, args);
+}
+
+// builtins/typedarray.ts:747 value Int32Array.BYTES_PER_ELEMENT
+function Int32ArrayBytesPerElement() {
+  return 4;
+}
+
+// builtins/typedarray.ts:755 value Int32Array.prototype.BYTES_PER_ELEMENT
+function Int32ArrayPrototypeBytesPerElement() {
+  return 4;
+}
+
+// builtins/typedarray.ts:765 constructor Uint32Array
+function Uint32ArrayConstructor(...args) {
+  return TypedArrayConstruct(new.target, 6, args);
+}
+
+// builtins/typedarray.ts:773 value Uint32Array.BYTES_PER_ELEMENT
+function Uint32ArrayBytesPerElement() {
+  return 4;
+}
+
+// builtins/typedarray.ts:781 value Uint32Array.prototype.BYTES_PER_ELEMENT
+function Uint32ArrayPrototypeBytesPerElement() {
+  return 4;
+}
+
+// builtins/typedarray.ts:791 constructor Float16Array
+function Float16ArrayConstructor(...args) {
+  return TypedArrayConstruct(new.target, 7, args);
+}
+
+// builtins/typedarray.ts:799 value Float16Array.BYTES_PER_ELEMENT
+function Float16ArrayBytesPerElement() {
+  return 2;
+}
+
+// builtins/typedarray.ts:807 value Float16Array.prototype.BYTES_PER_ELEMENT
+function Float16ArrayPrototypeBytesPerElement() {
+  return 2;
+}
+
+// builtins/typedarray.ts:817 constructor Float32Array
+function Float32ArrayConstructor(...args) {
+  return TypedArrayConstruct(new.target, 8, args);
+}
+
+// builtins/typedarray.ts:825 value Float32Array.BYTES_PER_ELEMENT
+function Float32ArrayBytesPerElement() {
+  return 4;
+}
+
+// builtins/typedarray.ts:833 value Float32Array.prototype.BYTES_PER_ELEMENT
+function Float32ArrayPrototypeBytesPerElement() {
+  return 4;
+}
+
+// builtins/typedarray.ts:843 constructor Float64Array
+function Float64ArrayConstructor(...args) {
+  return TypedArrayConstruct(new.target, 9, args);
+}
+
+// builtins/typedarray.ts:851 value Float64Array.BYTES_PER_ELEMENT
+function Float64ArrayBytesPerElement() {
+  return 8;
+}
+
+// builtins/typedarray.ts:859 value Float64Array.prototype.BYTES_PER_ELEMENT
+function Float64ArrayPrototypeBytesPerElement() {
+  return 8;
+}
+
+// builtins/typedarray.ts:869 constructor BigInt64Array
+function BigInt64ArrayConstructor(...args) {
+  return TypedArrayConstruct(new.target, 10, args);
+}
+
+// builtins/typedarray.ts:877 value BigInt64Array.BYTES_PER_ELEMENT
+function BigInt64ArrayBytesPerElement() {
+  return 8;
+}
+
+// builtins/typedarray.ts:885 value BigInt64Array.prototype.BYTES_PER_ELEMENT
+function BigInt64ArrayPrototypeBytesPerElement() {
+  return 8;
+}
+
+// builtins/typedarray.ts:895 constructor BigUint64Array
+function BigUint64ArrayConstructor(...args) {
+  return TypedArrayConstruct(new.target, 11, args);
+}
+
+// builtins/typedarray.ts:903 value BigUint64Array.BYTES_PER_ELEMENT
+function BigUint64ArrayBytesPerElement() {
+  return 8;
+}
+
+// builtins/typedarray.ts:911 value BigUint64Array.prototype.BYTES_PER_ELEMENT
+function BigUint64ArrayPrototypeBytesPerElement() {
+  return 8;
+}
+
 // builtins/weak.ts:5
 function ThisWeakMap(v) {
   if (%CollectionClass(v) !== 2) {
@@ -4616,6 +5497,7 @@ function WeakSetPrototypeToStringTag() {
 }
 
 %InstallConstructor("globalThis", "Array", ArrayConstructor, 1, undefined);
+%InstallConstructor("globalThis", "ArrayBuffer", ArrayBufferConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Boolean", BooleanConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Date", DateConstructor, 7, undefined);
 %InstallConstructor("globalThis", "Error", ErrorConstructor, 1, undefined);
@@ -4641,6 +5523,19 @@ function WeakSetPrototypeToStringTag() {
 %InstallConstructor("globalThis", "Set", SetConstructor, 0, undefined);
 %InstallConstructor("globalThis", "String", StringConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Symbol", SymbolConstructor, 0, undefined);
+%InstallConstructor("globalThis", "%TypedArray%", TypedArrayAbstract, 0, undefined);
+%InstallConstructor("globalThis", "Int8Array", Int8ArrayConstructor, 3, "%TypedArray%");
+%InstallConstructor("globalThis", "Uint8Array", Uint8ArrayConstructor, 3, "%TypedArray%");
+%InstallConstructor("globalThis", "Uint8ClampedArray", Uint8ClampedArrayConstructor, 3, "%TypedArray%");
+%InstallConstructor("globalThis", "Int16Array", Int16ArrayConstructor, 3, "%TypedArray%");
+%InstallConstructor("globalThis", "Uint16Array", Uint16ArrayConstructor, 3, "%TypedArray%");
+%InstallConstructor("globalThis", "Int32Array", Int32ArrayConstructor, 3, "%TypedArray%");
+%InstallConstructor("globalThis", "Uint32Array", Uint32ArrayConstructor, 3, "%TypedArray%");
+%InstallConstructor("globalThis", "Float16Array", Float16ArrayConstructor, 3, "%TypedArray%");
+%InstallConstructor("globalThis", "Float32Array", Float32ArrayConstructor, 3, "%TypedArray%");
+%InstallConstructor("globalThis", "Float64Array", Float64ArrayConstructor, 3, "%TypedArray%");
+%InstallConstructor("globalThis", "BigInt64Array", BigInt64ArrayConstructor, 3, "%TypedArray%");
+%InstallConstructor("globalThis", "BigUint64Array", BigUint64ArrayConstructor, 3, "%TypedArray%");
 %InstallConstructor("globalThis", "WeakMap", WeakMapConstructor, 0, undefined);
 %InstallConstructor("globalThis", "WeakSet", WeakSetConstructor, 0, undefined);
 %InstallMethod("Array.prototype", "forEach", ArrayPrototypeForEach, 1);
@@ -4683,6 +5578,17 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("Array.prototype", "toString", ArrayPrototypeToString, 0);
 %InstallMethod("Array.prototype", "toLocaleString", ArrayPrototypeToLocaleString, 0);
 %InstallValue("Array.prototype", %WellKnownSymbol("unscopables"), ArrayPrototypeUnscopables(), 4);
+%InstallMethod("ArrayBuffer", "isView", ArrayBufferIsView, 1);
+%InstallAccessor("ArrayBuffer", %WellKnownSymbol("species"), ArrayBufferSpecies, false);
+%InstallAccessor("ArrayBuffer.prototype", "byteLength", ArrayBufferPrototypeByteLength, false);
+%InstallAccessor("ArrayBuffer.prototype", "maxByteLength", ArrayBufferPrototypeMaxByteLength, false);
+%InstallAccessor("ArrayBuffer.prototype", "resizable", ArrayBufferPrototypeResizable, false);
+%InstallAccessor("ArrayBuffer.prototype", "detached", ArrayBufferPrototypeDetached, false);
+%InstallMethod("ArrayBuffer.prototype", "resize", ArrayBufferPrototypeResize, 1);
+%InstallMethod("ArrayBuffer.prototype", "slice", ArrayBufferPrototypeSlice, 2);
+%InstallMethod("ArrayBuffer.prototype", "transfer", ArrayBufferPrototypeTransfer, 0);
+%InstallMethod("ArrayBuffer.prototype", "transferToFixedLength", ArrayBufferPrototypeTransferToFixedLength, 0);
+%InstallValue("ArrayBuffer.prototype", %WellKnownSymbol("toStringTag"), ArrayBufferPrototypeToStringTag(), 4);
 %InstallMethod("Boolean.prototype", "toString", BooleanPrototypeToString, 0);
 %InstallMethod("Boolean.prototype", "valueOf", BooleanPrototypeValueOf, 0);
 %InstallMethod("Date", "now", DateNowBuiltin, 0);
@@ -4972,6 +5878,48 @@ function WeakSetPrototypeToStringTag() {
 %InstallValue("Symbol", "toPrimitive", SymbolToPrimitive(), 0);
 %InstallValue("Symbol", "toStringTag", SymbolToStringTag(), 0);
 %InstallValue("Symbol", "unscopables", SymbolUnscopables(), 0);
+%InstallAccessor("%TypedArray%", %WellKnownSymbol("species"), TypedArraySpecies, false);
+%InstallMethod("%TypedArray%", "from", TypedArrayFrom, 1);
+%InstallMethod("%TypedArray%", "of", TypedArrayOf, 0);
+%InstallAccessor("%TypedArray%.prototype", "buffer", TypedArrayPrototypeBuffer, false);
+%InstallAccessor("%TypedArray%.prototype", "byteLength", TypedArrayPrototypeByteLength, false);
+%InstallAccessor("%TypedArray%.prototype", "byteOffset", TypedArrayPrototypeByteOffset, false);
+%InstallAccessor("%TypedArray%.prototype", "length", TypedArrayPrototypeLength, false);
+%InstallAccessor("%TypedArray%.prototype", %WellKnownSymbol("toStringTag"), TypedArrayPrototypeToStringTag, false);
+%InstallMethod("%TypedArray%.prototype", "set", TypedArrayPrototypeSet, 1);
+%InstallMethod("%TypedArray%.prototype", "subarray", TypedArrayPrototypeSubarray, 2);
+%InstallMethod("%TypedArray%.prototype", "slice", TypedArrayPrototypeSlice, 2);
+%InstallMethod("%TypedArray%.prototype", "fill", TypedArrayPrototypeFill, 1);
+%InstallMethod("Uint8Array", "fromBase64", Uint8ArrayFromBase64, 1);
+%InstallMethod("Uint8Array", "fromHex", Uint8ArrayFromHex, 1);
+%InstallMethod("Uint8Array.prototype", "toBase64", Uint8ArrayPrototypeToBase64, 0);
+%InstallMethod("Uint8Array.prototype", "toHex", Uint8ArrayPrototypeToHex, 0);
+%InstallMethod("Uint8Array.prototype", "setFromBase64", Uint8ArrayPrototypeSetFromBase64, 1);
+%InstallMethod("Uint8Array.prototype", "setFromHex", Uint8ArrayPrototypeSetFromHex, 1);
+%InstallValue("Int8Array", "BYTES_PER_ELEMENT", Int8ArrayBytesPerElement(), 0);
+%InstallValue("Int8Array.prototype", "BYTES_PER_ELEMENT", Int8ArrayPrototypeBytesPerElement(), 0);
+%InstallValue("Uint8Array", "BYTES_PER_ELEMENT", Uint8ArrayBytesPerElement(), 0);
+%InstallValue("Uint8Array.prototype", "BYTES_PER_ELEMENT", Uint8ArrayPrototypeBytesPerElement(), 0);
+%InstallValue("Uint8ClampedArray", "BYTES_PER_ELEMENT", Uint8ClampedArrayBytesPerElement(), 0);
+%InstallValue("Uint8ClampedArray.prototype", "BYTES_PER_ELEMENT", Uint8ClampedArrayPrototypeBytesPerElement(), 0);
+%InstallValue("Int16Array", "BYTES_PER_ELEMENT", Int16ArrayBytesPerElement(), 0);
+%InstallValue("Int16Array.prototype", "BYTES_PER_ELEMENT", Int16ArrayPrototypeBytesPerElement(), 0);
+%InstallValue("Uint16Array", "BYTES_PER_ELEMENT", Uint16ArrayBytesPerElement(), 0);
+%InstallValue("Uint16Array.prototype", "BYTES_PER_ELEMENT", Uint16ArrayPrototypeBytesPerElement(), 0);
+%InstallValue("Int32Array", "BYTES_PER_ELEMENT", Int32ArrayBytesPerElement(), 0);
+%InstallValue("Int32Array.prototype", "BYTES_PER_ELEMENT", Int32ArrayPrototypeBytesPerElement(), 0);
+%InstallValue("Uint32Array", "BYTES_PER_ELEMENT", Uint32ArrayBytesPerElement(), 0);
+%InstallValue("Uint32Array.prototype", "BYTES_PER_ELEMENT", Uint32ArrayPrototypeBytesPerElement(), 0);
+%InstallValue("Float16Array", "BYTES_PER_ELEMENT", Float16ArrayBytesPerElement(), 0);
+%InstallValue("Float16Array.prototype", "BYTES_PER_ELEMENT", Float16ArrayPrototypeBytesPerElement(), 0);
+%InstallValue("Float32Array", "BYTES_PER_ELEMENT", Float32ArrayBytesPerElement(), 0);
+%InstallValue("Float32Array.prototype", "BYTES_PER_ELEMENT", Float32ArrayPrototypeBytesPerElement(), 0);
+%InstallValue("Float64Array", "BYTES_PER_ELEMENT", Float64ArrayBytesPerElement(), 0);
+%InstallValue("Float64Array.prototype", "BYTES_PER_ELEMENT", Float64ArrayPrototypeBytesPerElement(), 0);
+%InstallValue("BigInt64Array", "BYTES_PER_ELEMENT", BigInt64ArrayBytesPerElement(), 0);
+%InstallValue("BigInt64Array.prototype", "BYTES_PER_ELEMENT", BigInt64ArrayPrototypeBytesPerElement(), 0);
+%InstallValue("BigUint64Array", "BYTES_PER_ELEMENT", BigUint64ArrayBytesPerElement(), 0);
+%InstallValue("BigUint64Array.prototype", "BYTES_PER_ELEMENT", BigUint64ArrayPrototypeBytesPerElement(), 0);
 %InstallMethod("WeakMap.prototype", "delete", WeakMapPrototypeDelete, 1);
 %InstallMethod("WeakMap.prototype", "get", WeakMapPrototypeGet, 1);
 %InstallMethod("WeakMap.prototype", "has", WeakMapPrototypeHas, 1);
