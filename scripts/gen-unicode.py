@@ -622,6 +622,8 @@ def generate_norm(vendor):
                 decomp[cp] = (compat, [int(p, 16) for p in parts])
     props = parse_props(fetch(vendor, "DerivedNormalizationProps.txt"))
     excl = props["Full_Composition_Exclusion"]
+    # Not used here: the conformance file read by normalize.rs's unit test.
+    fetch(vendor, "NormalizationTest.txt")
 
     # QC values: a range list of code points with NO, and one with MAYBE.
     qc = {}

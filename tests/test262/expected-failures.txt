@@ -54,10 +54,6 @@ built-ins/Object/prototype/setPrototypeOf-with-non-circular-values-__proto__.js:
 built-ins/Object/prototype/setPrototypeOf-with-non-circular-values.js: Test262Error: Object.setPrototypeOf(ObjProto, Object.create(null)) throws a TypeError Expected a TypeError to be thrown but no exception was thrown at all
 built-ins/Object/subclass-object-arg.js: Test262Error: Expected SameValue(«1», «undefined») to be true
 built-ins/Promise/prototype/finally/rejected-observable-then-calls-argument.js: async: Test262Error: Test262Error: `then` invoked with one argument Expected SameValue(«2», «1») to be true
-built-ins/String/prototype/localeCompare/15.5.4.9_CE.js: Test262Error: String.prototype.localeCompare considers ö (\u006f\u0308) ≠ ö (\u00f6).
-built-ins/String/prototype/normalize/return-normalized-string-from-coerced-form.js: TypeError: not supported yet: normalize of this string (no Unicode normalization tables)
-built-ins/String/prototype/normalize/return-normalized-string-using-default-parameter.js: TypeError: not supported yet: normalize of this string (no Unicode normalization tables)
-built-ins/String/prototype/normalize/return-normalized-string.js: TypeError: not supported yet: normalize of this string (no Unicode normalization tables)
 built-ins/ThrowTypeError/extensible.js: TypeError: cannot read property 'get' of undefined
 built-ins/ThrowTypeError/forbidden-arguments.js: TypeError: cannot read property 'get' of undefined
 built-ins/ThrowTypeError/forbidden-caller.js: TypeError: cannot read property 'get' of undefined
