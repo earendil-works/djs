@@ -1783,24 +1783,20 @@ impl<'h> Exec<'h> {
                 self.sp -= 2;
             }
             Op::ForInStart => {
-                let v = self.top(0);
-                if v.as_object().is_some_and(|o| self.chain_has_proxy(o)) {
-                    // Traps decide the keys: %ForInKeys gives a Record of them, which
-                    // replaces the operand, and this instruction runs again.
-                    let slot = self.sp - 1;
-                    return self.call_prelude(
-                        proxy::FOR_IN_KEYS,
-                        &[v],
-                        Continuation::Replace(slot),
-                    );
-                }
-                self.sp -= 1;
-                let it = self.for_in_start(v)?;
+                let v = self.pop();
+                let it = match v.as_object() {
+                    // Traps decide the keys: a Record that %ForInStep walks.
+                    Some(o) if self.chain_has_proxy(o) => self.for_in_proxy_start(o)?,
+                    _ => self.for_in_start(v)?,
+                };
                 self.push(it);
             }
             Op::ForInNext => {
                 // `it -> it key done`
                 let it = self.top(0);
+                if let Some(rec) = it.as_object() {
+                    return self.for_in_proxy_next(rec, next);
+                }
                 let (key, done) = self.for_in_next(it)?;
                 self.push(key);
                 self.push(Value::bool(done));
@@ -2786,20 +2782,6 @@ impl<'h> Exec<'h> {
             for i in 0..self.heap.str_len(s) {
                 keys.push(self.heap.atom_to_value(Atom::int(i).unwrap())?);
             }
-        } else if let Some(r) = v
-            .as_object()
-            .filter(|&r| self.heap.object_class(r) == ObjectClass::Record)
-        {
-            // %ForInKeys's Record (a proxy on the chain): its array of keys, visited
-            // without the deleted-key check (that would be a `has` trap per key).
-            let a = self
-                .heap
-                .object_slot(r, 0)
-                .as_object()
-                .expect("for-in keys");
-            for i in 0..self.heap.array_length(a) {
-                keys.push(self.heap.get_element_fast(a, i).unwrap_or(Value::UNDEFINED));
-            }
         } else if let Some(o) = v.as_object() {
             // Objects already visited: their keys (enumerable or not) shadow the same
             // keys further up. Checked by lookup rather than kept in a set (0043: a set
@@ -2825,10 +2807,7 @@ impl<'h> Exec<'h> {
         }
         let n = keys.len() as u32;
         let arr = self.heap.alloc_value_array(n + 2)?;
-        let target = if v
-            .as_object()
-            .is_some_and(|o| self.heap.object_class(o) != ObjectClass::Record)
-        {
+        let target = if v.as_object().is_some() {
             v
         } else {
             Value::UNDEFINED

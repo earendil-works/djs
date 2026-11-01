@@ -344,7 +344,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("OrdinaryConstructSlow", B, 3, false),
     i("ProxySetIntegrityLevel", B, 2, false),
     i("ProxyTestIntegrityLevel", B, 2, false),
-    i("ForInKeys", B, 1, false),
+    i("ForInStep", B, 1, false),
     i("ArraySpread", B, 2, false),
     i("CopyDataProperties", B, 2, false),
     i("CopyDataPropertiesExcluding", B, 2, false),

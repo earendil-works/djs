@@ -18,7 +18,8 @@ toString "[object T]" | p.get:Symbol(Symbol.toStringTag)
 json "{\"5\":1,\"a\":1,\"b\":[1,2],\"d\":4}" | p.get:toJSON p.ownKeys p.getOwnPropertyDescriptor:5 p.getOwnPropertyDescriptor:a p.getOwnPropertyDescriptor:b p.getOwnPropertyDescriptor:d p.get:5 p.get:a p.get:b p.get:d
 spread {"5":1,"a":1,"b":[1,2],"d":4} | p.ownKeys p.getOwnPropertyDescriptor:5 p.get:5 p.getOwnPropertyDescriptor:a p.get:a p.getOwnPropertyDescriptor:b p.get:b p.getOwnPropertyDescriptor:d p.get:d p.getOwnPropertyDescriptor:Symbol(Symbol.toStringTag) p.get:Symbol(Symbol.toStringTag)
 assign {"5":1,"a":1,"b":[1,2],"d":4} | p.ownKeys p.getOwnPropertyDescriptor:5 p.get:5 p.getOwnPropertyDescriptor:a p.get:a p.getOwnPropertyDescriptor:b p.get:b p.getOwnPropertyDescriptor:d p.get:d p.getOwnPropertyDescriptor:Symbol(Symbol.toStringTag) p.get:Symbol(Symbol.toStringTag)
-for-in ["5","a","b","d"]
+for-in ["5","a","b","d"] | p.ownKeys p.getOwnPropertyDescriptor:5 p.getOwnPropertyDescriptor:a p.getOwnPropertyDescriptor:b p.getOwnPropertyDescriptor:d p.getOwnPropertyDescriptor:5 p.getOwnPropertyDescriptor:a p.getOwnPropertyDescriptor:b p.getOwnPropertyDescriptor:d p.getPrototypeOf
+for-in delete "TypeError: could not delete property" | p.ownKeys p.getOwnPropertyDescriptor:5 p.getOwnPropertyDescriptor:a p.getOwnPropertyDescriptor:b p.getOwnPropertyDescriptor:d p.getOwnPropertyDescriptor:5 p.getOwnPropertyDescriptor:a
 hasOwn [true,false] | p.getOwnPropertyDescriptor:a p.get:hasOwnProperty p.getOwnPropertyDescriptor:zz
 freeze true | q.preventExtensions q.ownKeys q.getOwnPropertyDescriptor:x q.defineProperty:x
 isFrozen [true,true,false]

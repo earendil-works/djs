@@ -813,34 +813,60 @@ function ProxyTestIntegrityLevel(o: Obj, frozen: boolean): boolean {
 }
 
 /**
- * The keys a for-in over o visits when its prototype chain has a proxy
- * (EnumerateObjectProperties, 14.7.5.9, as its informative implementation does it):
- * a Record whose slot 0 is a dense array of the string keys.
+ * One step of a for-in whose object has a proxy on its prototype chain
+ * (EnumerateObjectProperties, 14.7.5.9, lazily, as qjs does it): the Record `it` made by
+ * the interpreter holds 0 the object being walked (null when done), 1 its enumerable
+ * string keys (undefined until read), 2 the next index, 3 the keys seen so far, 4 the
+ * result, 5 whether there is one. Each object's keys are read when the walk reaches it
+ * ([[OwnPropertyKeys]], then [[GetOwnProperty]] for each), and each key is checked
+ * again ([[GetOwnProperty]]) just before it is visited, so a key deleted on the way is
+ * skipped. The result is the next key, or null at the end.
  * @intrinsic
  */
-function ForInKeys(o: Obj): Obj {
-  const visited: Obj = ArrayCreate(0);
-  const result: Obj = ArrayCreate(0);
-  let cur: Value = o;
-  while (cur !== null) {
-    const c: Obj = AsObj(cur);
-    const keys: Obj = OwnPropertyKeys(c, 0);
-    const n: f64 = LengthOfArrayLike(keys);
-    for (let i: f64 = 0; i < n; i++) {
-      const key: Value = Get(keys, i);
-      if (!ListIncludes(visited, key)) {
-        const attrs: i32 = OwnPropertyAttributes(c, key);
-        if (attrs >= 0) {
-          CreateDataPropertyOrThrow(visited, LengthOfArrayLike(visited), key);
-          if ((attrs & 2) !== 0) {
-            CreateDataPropertyOrThrow(result, LengthOfArrayLike(result), key);
+function ForInStep(it: Obj): void {
+  while (true) {
+    const cur: Value = RecordGet(it, 0);
+    if (cur === null) {
+      RecordSet(it, 4, null);
+      RecordSet(it, 5, true);
+      return;
+    }
+    const o: Obj = AsObj(cur);
+    const pending: Value = RecordGet(it, 1);
+    if (pending === undefined) {
+      const visited: Obj = AsObj(RecordGet(it, 3));
+      const own: Obj = OwnPropertyKeys(o, 0);
+      const n: f64 = LengthOfArrayLike(own);
+      const keys: Obj = ArrayCreate(0);
+      for (let i: f64 = 0; i < n; i++) {
+        const key: Value = Get(own, i);
+        if (!ListIncludes(visited, key)) {
+          const attrs: i32 = OwnPropertyAttributes(o, key);
+          if (attrs >= 0) {
+            CreateDataPropertyOrThrow(visited, LengthOfArrayLike(visited), key);
+            if ((attrs & 2) !== 0) {
+              CreateDataPropertyOrThrow(keys, LengthOfArrayLike(keys), key);
+            }
           }
         }
       }
+      RecordSet(it, 1, keys);
+      RecordSet(it, 2, 0);
+    } else {
+      const keys: Obj = AsObj(pending);
+      const i: f64 = AsNumber(RecordGet(it, 2));
+      if (i < LengthOfArrayLike(keys)) {
+        RecordSet(it, 2, i + 1);
+        const key: Value = Get(keys, i);
+        if (OwnPropertyAttributes(o, key) >= 0) {
+          RecordSet(it, 4, key);
+          RecordSet(it, 5, true);
+          return;
+        }
+      } else {
+        RecordSet(it, 0, GetPrototypeOf(o));
+        RecordSet(it, 1, undefined);
+      }
     }
-    cur = GetPrototypeOf(c);
   }
-  const r: Obj = NewRecord(1);
-  RecordSet(r, 0, result);
-  return r;
 }

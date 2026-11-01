@@ -15,7 +15,7 @@ pub(super) const PROXY_SET_OR_THROW: u16 = id("ProxySetOrThrow");
 pub(super) const PROXY_SET_ON_RECEIVER: u16 = id("ProxySetOnReceiver");
 pub(super) const PROXY_HAS: u16 = id("ProxyHas");
 pub(super) const PROXY_DELETE_OR_THROW: u16 = id("ProxyDeletePropertyOrThrow");
-pub(super) const FOR_IN_KEYS: u16 = id("ForInKeys");
+const FOR_IN_STEP: u16 = id("ForInStep");
 pub(super) const PROXY_CONSTRUCT: u16 = id("ProxyConstruct");
 pub(super) const ORDINARY_CONSTRUCT_SLOW: u16 = id("OrdinaryConstructSlow");
 const PROXY_CALL: u16 = id("ProxyCall");
@@ -224,6 +224,50 @@ impl Exec<'_> {
         }
         self.sp = base + 2 + n;
         self.construct_call(base, n, Some(nt), next)
+    }
+
+    /// The for-in iterator of an object with a proxy on its prototype chain: the Record
+    /// that %ForInStep (builtins/proxy.ts) walks.
+    pub(super) fn for_in_proxy_start(&mut self, o: Obj) -> Result<Value, Fault> {
+        let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
+        let visited = self.heap.new_array(Some(proto), 0)?;
+        let rec = self.heap.alloc_object(ObjectClass::Record, None, 6)?;
+        let slots = [
+            Value::object(o),
+            Value::UNDEFINED,
+            Value::int(0),
+            Value::object(visited),
+            Value::UNDEFINED,
+            Value::FALSE,
+        ];
+        for (i, v) in slots.into_iter().enumerate() {
+            self.heap.set_object_slot(rec, i as u32, v);
+        }
+        Ok(Value::object(rec))
+    }
+
+    /// `for_in_next` on such a Record: the step's result if %ForInStep left one, else
+    /// a call of %ForInStep, after which this instruction runs again.
+    pub(super) fn for_in_proxy_next(&mut self, rec: Obj, next: u32) -> Step {
+        if self.heap.object_slot(rec, 5) == Value::TRUE {
+            let key = self.heap.object_slot(rec, 4);
+            self.heap.set_object_slot(rec, 5, Value::FALSE);
+            self.heap.set_object_slot(rec, 4, Value::UNDEFINED);
+            self.pc = next;
+            if key.is_null() {
+                self.push(Value::UNDEFINED);
+                self.push(Value::TRUE);
+            } else {
+                self.push(key);
+                self.push(Value::FALSE);
+            }
+            return Ok(None);
+        }
+        self.call_prelude(
+            FOR_IN_STEP,
+            &[Value::object(rec)],
+            Continuation::DiscardResult,
+        )
     }
 
     /// A new Array of the `n` stack values from `from`.

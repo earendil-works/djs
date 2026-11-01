@@ -44,9 +44,8 @@ L("toString", () => Object.prototype.toString.call(p));
 L("json", () => JSON.stringify(p));
 L("spread", () => ({ ...p }));
 L("assign", () => Object.assign({}, p));
-// for-in: the keys only (when the traps run is implementation-defined; qjs rechecks
-// each key lazily, djs collects them first).
-t("for-in", () => { const ks = []; for (const k in p) ks.push(k); return ks; });
+L("for-in", () => { const ks = []; for (const k in p) ks.push(k); return ks; });
+L("for-in delete", () => { const ks = []; for (const k in p) { ks.push(k); if (k === "a") delete target.d; } target.d = 4; return ks; });
 L("hasOwn", () => [Object.hasOwn(p, "a"), p.hasOwnProperty("zz")]);
 // (Object.isFrozen/isSealed: qjs asks isExtensible after the keys, the spec first.)
 const fq = new Proxy({ x: 1 }, logger("q"));
@@ -82,6 +81,7 @@ const chained = Object.create(new Proxy({ inherited: 1 }, logger("proto")));
 L("proto get", () => [chained.inherited, chained.missing]);
 L("proto set", () => { chained.z = 1; return Object.keys(chained); });
 L("proto has", () => "inherited" in chained);
+// (The keys only: for a proxy further up the chain qjs reads its keys twice.)
 t("proto for-in", () => { const ks = []; for (const k in chained) ks.push(k); return ks; });
 L("handler proxy", () => { const hp = new Proxy({}, logger("handler")); const q = new Proxy({ v: 1 }, hp); return [q.v, "v" in q]; });
 L("nested", () => { const inner = new Proxy({ n: 1 }, logger("inner")); const outer = new Proxy(inner, logger("outer")); return [outer.n, Object.keys(outer)]; });

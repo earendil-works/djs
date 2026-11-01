@@ -5156,32 +5156,53 @@ function ProxyTestIntegrityLevel(o, frozen) {
   return true;
 }
 
-// builtins/proxy.ts:821 %ForInKeys
-function ForInKeys(o) {
-  const visited = %ArrayCreate(0);
-  const result = %ArrayCreate(0);
-  let cur = o;
-  while (cur !== null) {
-    const c = %AsObj(cur);
-    const keys = %OwnPropertyKeys(c, 0);
-    const n = LengthOfArrayLike(keys);
-    for (let i = 0; i < n; i++) {
-      const key = %Get(keys, i);
-      if (!ListIncludes(visited, key)) {
-        const attrs = %OwnPropertyAttributes(c, key);
-        if (attrs >= 0) {
-          %CreateDataPropertyOrThrow(visited, LengthOfArrayLike(visited), key);
-          if ((attrs & 2) !== 0) {
-            %CreateDataPropertyOrThrow(result, LengthOfArrayLike(result), key);
+// builtins/proxy.ts:826 %ForInStep
+function ForInStep(it) {
+  while (true) {
+    const cur = %RecordGet(it, 0);
+    if (cur === null) {
+      %RecordSet(it, 4, null);
+      %RecordSet(it, 5, true);
+      return;
+    }
+    const o = %AsObj(cur);
+    const pending = %RecordGet(it, 1);
+    if (pending === undefined) {
+      const visited = %AsObj(%RecordGet(it, 3));
+      const own = %OwnPropertyKeys(o, 0);
+      const n = LengthOfArrayLike(own);
+      const keys = %ArrayCreate(0);
+      for (let i = 0; i < n; i++) {
+        const key = %Get(own, i);
+        if (!ListIncludes(visited, key)) {
+          const attrs = %OwnPropertyAttributes(o, key);
+          if (attrs >= 0) {
+            %CreateDataPropertyOrThrow(visited, LengthOfArrayLike(visited), key);
+            if ((attrs & 2) !== 0) {
+              %CreateDataPropertyOrThrow(keys, LengthOfArrayLike(keys), key);
+            }
           }
         }
       }
+      %RecordSet(it, 1, keys);
+      %RecordSet(it, 2, 0);
+    } else {
+      const keys = %AsObj(pending);
+      const i = %AsNumber(%RecordGet(it, 2));
+      if (i < LengthOfArrayLike(keys)) {
+        %RecordSet(it, 2, i + 1);
+        const key = %Get(keys, i);
+        if (%OwnPropertyAttributes(o, key) >= 0) {
+          %RecordSet(it, 4, key);
+          %RecordSet(it, 5, true);
+          return;
+        }
+      } else {
+        %RecordSet(it, 0, %GetPrototypeOf(o));
+        %RecordSet(it, 1, undefined);
+      }
     }
-    cur = %GetPrototypeOf(c);
   }
-  const r = %NewRecord(1);
-  %RecordSet(r, 0, result);
-  return r;
 }
 
 // builtins/reflect.ts:9 value Reflect
@@ -8038,7 +8059,7 @@ function WeakSetPrototypeToStringTag() {
 %InstallIntrinsic("OrdinaryConstructSlow", OrdinaryConstructSlow);
 %InstallIntrinsic("ProxySetIntegrityLevel", ProxySetIntegrityLevel);
 %InstallIntrinsic("ProxyTestIntegrityLevel", ProxyTestIntegrityLevel);
-%InstallIntrinsic("ForInKeys", ForInKeys);
+%InstallIntrinsic("ForInStep", ForInStep);
 %InstallIntrinsic("ArraySpread", ArraySpread);
 %InstallIntrinsic("CopyDataProperties", CopyDataProperties);
 %InstallIntrinsic("CopyDataPropertiesExcluding", CopyDataPropertiesExcluding);

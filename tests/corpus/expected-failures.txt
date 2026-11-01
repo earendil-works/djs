@@ -23,7 +23,6 @@ dquickts/language/test_class.js: throws SyntaxError: classes are not supported y
 dquickts/language/test_delete.js: throws SyntaxError: super is not supported yet
 dquickts/language/test_optional_chaining.js: throws TypeError: cannot read property '_b' of undefined
 dquickts/language/test_regexp_skip.js: throws SyntaxError: regular expressions are not supported yet
-dquickts/loop/test_for_in_proxy.js: throws ReferenceError: 'Proxy' is not defined
 dquickts/typescript/test_asi_contextual_keywords.ts: throws SyntaxError: expecting ';'
 dquickts/typescript/test_classes.ts: throws SyntaxError: expecting ';'
 dquickts/typescript/test_const_enums.ts: throws SyntaxError: variable name expected
