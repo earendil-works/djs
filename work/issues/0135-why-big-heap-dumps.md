@@ -1,7 +1,7 @@
 # 0135: Why are REPL heap dumps ~450 KB and the docs' heaps ~6000 cells?
 
-status: open
-agent: -
+status: in-progress
+agent: bloat
 branch: issue/0135-heap-dump-size
 depends-on: 0117, 0127
 guide: docs/guide/snapshots.md, gc.md, the live example Heap tab text
