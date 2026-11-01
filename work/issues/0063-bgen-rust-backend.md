@@ -1,7 +1,7 @@
 # 0063: Sloppy `this` for Function-constructor functions (D015) + the bgen Rust backend v1
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0063-bgen-rust-backend
 depends-on: 0059
 touches: builtins/function.ts + crates/djs-core/src/compiler/dynamic.rs (D015: a template flag only), crates/djs-core/src/interp/ (the this-binding for that flag, isolated), crates/djs-bgen/ (the Rust backend), crates/djs-core/src/builtins/gen/ (new: checked-in generated Rust), crates/djs-core/src/interp/ (native frames: coordinate with heap's 0062 via the coordinator), crates/djs-bench/, ARCH.md "Builtins" (corrections only)
