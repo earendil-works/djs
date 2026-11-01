@@ -19,7 +19,9 @@
 //! D1310 adds `%InstallConstructor(target, key, fn, length, parent)` (`@constructor`),
 //! `%InstallAccessor(target, key, fn, isSetter)` (`@getter`/`@setter`) and
 //! `%InstallValue(target, key, fn(), attrs)` (`@value`). Installs onto the global object
-//! come first.
+//! come first. A constructor's own statics follow it right away, then
+//! `%InstallPrototype(target, key, parent)` defines its `prototype` last, as qjs orders a
+//! constructor's own properties (D2052).
 
 use crate::ast::*;
 use crate::check::{Builtin, Callee, Install, InstallKind, Program};
@@ -53,11 +55,40 @@ pub fn emit(p: &Program, sources: &Sources) -> String {
     out.push('\n');
     // Installs onto the global object (constructors, namespaces, global functions)
     // first, so that the paths of the others resolve; then the rest, in source order.
-    for global in [true, false] {
-        for b in &p.builtins {
-            for i in b.installs.iter().filter(|i| i.on_global() == global) {
-                out.push_str(&install(b, i));
+    // A constructor's statics (installs onto the constructor itself) come right after
+    // it, then its `prototype` (D2052).
+    let ctor_keys: Vec<&str> = p
+        .builtins
+        .iter()
+        .flat_map(|b| &b.installs)
+        .filter(|i| i.on_global() && matches!(i.kind, InstallKind::Constructor { .. }))
+        .map(|i| i.key.as_str())
+        .collect();
+    for b in &p.builtins {
+        for i in b.installs.iter().filter(|i| i.on_global()) {
+            out.push_str(&install(b, i));
+            if let InstallKind::Constructor { parent } = &i.kind {
+                for sb in &p.builtins {
+                    for si in sb.installs.iter().filter(|si| si.target == i.key) {
+                        out.push_str(&install(sb, si));
+                    }
+                }
+                out.push_str(&format!(
+                    "%InstallPrototype({}, {}, {});\n",
+                    js_str(&i.target),
+                    js_str(&i.key),
+                    parent.as_deref().map(js_str).unwrap_or("undefined".into())
+                ));
             }
+        }
+    }
+    for b in &p.builtins {
+        for i in b
+            .installs
+            .iter()
+            .filter(|i| !i.on_global() && !ctor_keys.contains(&i.target.as_str()))
+        {
+            out.push_str(&install(b, i));
         }
     }
     for b in p.builtins.iter().filter(|b| b.intrinsic) {

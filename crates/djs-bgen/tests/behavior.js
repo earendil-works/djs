@@ -278,6 +278,8 @@ const I = {
     Object.defineProperty(f, "prototype", { value: native.prototype });
     installed[target + "." + key] = { f, length };
   },
+  // The prototype is set by InstallConstructor already.
+  InstallPrototype: () => {},
   InstallAccessor: (target, key, f, isSetter) => {
     installed[(isSetter ? "set " : "get ") + target + "." + String(key)] = { f };
   },

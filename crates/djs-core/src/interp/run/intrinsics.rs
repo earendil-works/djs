@@ -247,6 +247,7 @@ const ENUMERABLE_OWN_DATA_PROPERTIES: u16 = id("EnumerableOwnDataProperties");
 const TYPED_ARRAY_SET_FROM_DENSE: u16 = id("TypedArraySetFromDense");
 const ITERATOR_FAST_VALUE: u16 = id("IteratorFastValue");
 const INSTALL_CONSTRUCTOR: u16 = id("InstallConstructor");
+const INSTALL_PROTOTYPE: u16 = id("InstallPrototype");
 const INSTALL_ACCESSOR: u16 = id("InstallAccessor");
 const INSTALL_VALUE: u16 = id("InstallValue");
 const INSTALL_METHOD: u16 = id("InstallMethod");
@@ -1798,6 +1799,10 @@ impl Exec<'_> {
                 )?;
                 Value::UNDEFINED
             }
+            INSTALL_PROTOTYPE => {
+                self.install_prototype(a0, arg(self, 1), arg(self, 2))?;
+                Value::UNDEFINED
+            }
             INSTALL_ACCESSOR => {
                 self.install_accessor(a0, arg(self, 1), arg(self, 2), arg(self, 3))?;
                 Value::UNDEFINED
@@ -2273,23 +2278,27 @@ impl Exec<'_> {
         Ok(())
     }
 
-    /// `%InstallConstructor(target, key, f, length, parent)` (D1310): `f` becomes the
-    /// constructor `key` with its prototype object (the realm's, or a new one).
-    fn install_constructor(
-        &mut self,
-        target: Value,
-        key: Value,
-        f: Value,
-        length: Value,
-        parent: Value,
-    ) -> Result<(), Fault> {
-        let (Some(t), Some(k), Some(fo)) = (target.as_string(), key.as_string(), f.as_object())
-        else {
-            return bad_argument("InstallConstructor");
+    /// `%InstallPrototype(target, key, parent)` (D2052): the `prototype` of the
+    /// constructor `key`, after its statics (qjs's order): the realm's intrinsic
+    /// prototype, or a new object inheriting from the parent's prototype.
+    fn install_prototype(&mut self, target: Value, key: Value, parent: Value) -> Result<(), Fault> {
+        let (Some(_), Some(k)) = (target.as_string(), key.as_string()) else {
+            return bad_argument("InstallPrototype");
         };
-        let path = self.heap.str_to_string(t);
-        let holder = self.resolve_path(&path)?;
         let name = self.heap.str_to_string(k);
+        // The Proxy constructor has no `prototype` (28.2.2): proxies take theirs from
+        // the target.
+        if name == "Proxy" {
+            return Ok(());
+        }
+        let ctors = intrinsic_obj(self.heap, Intrinsic::Constructors);
+        let ckey = self.heap.intern(k)?;
+        let Some(f) = self.heap.get_own_property(ctors, ckey).and_then(|p| p.value()) else {
+            return bad_argument("InstallPrototype");
+        };
+        let Some(fo) = f.as_object() else {
+            return bad_argument("InstallPrototype");
+        };
         let parent = match parent.as_string() {
             Some(p) => {
                 let p = self.heap.str_to_string(p);
@@ -2311,6 +2320,36 @@ impl Exec<'_> {
                 let base = base.unwrap_or_else(|| intrinsic_obj(self.heap, Intrinsic::ObjectProto));
                 self.heap.new_object(Some(base))?
             }
+        };
+        let d = PropertyDescriptor::data(Value::object(proto), PropFlags::NONE);
+        self.heap.define_own_property(fo, atoms::PROTOTYPE, &d)?;
+        realm::define_hidden(self.heap, proto, atoms::CONSTRUCTOR, f)?;
+        Ok(())
+    }
+
+    /// `%InstallConstructor(target, key, f, length, parent)` (D1310): `f` becomes the
+    /// constructor `key`; `%InstallPrototype` adds its prototype after its statics.
+    fn install_constructor(
+        &mut self,
+        target: Value,
+        key: Value,
+        f: Value,
+        length: Value,
+        parent: Value,
+    ) -> Result<(), Fault> {
+        let (Some(t), Some(k), Some(fo)) = (target.as_string(), key.as_string(), f.as_object())
+        else {
+            return bad_argument("InstallConstructor");
+        };
+        let path = self.heap.str_to_string(t);
+        let holder = self.resolve_path(&path)?;
+        let name = self.heap.str_to_string(k);
+        let parent = match parent.as_string() {
+            Some(p) => {
+                let p = self.heap.str_to_string(p);
+                Some(self.resolve_path(&p)?)
+            }
+            None => None,
         };
         // WebIDL: DOMException.prototype inherits from Error.prototype, but the
         // constructor itself from Function.prototype.
@@ -2335,13 +2374,6 @@ impl Exec<'_> {
             Value::string(k)
         };
         self.name_and_length(fo, fname, length.as_number().unwrap_or(0.0))?;
-        // The Proxy constructor has no `prototype` (28.2.2): proxies take theirs from
-        // the target.
-        if name != "Proxy" {
-            let d = PropertyDescriptor::data(Value::object(proto), PropFlags::NONE);
-            self.heap.define_own_property(fo, atoms::PROTOTYPE, &d)?;
-            realm::define_hidden(self.heap, proto, atoms::CONSTRUCTOR, f)?;
-        }
         self.mark_builtin(fo, OBJ_BUILTIN | OBJ_BUILTIN_CTOR)?;
         Ok(())
     }

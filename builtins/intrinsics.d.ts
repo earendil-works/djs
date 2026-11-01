@@ -996,13 +996,19 @@ declare function AllCodePoints(list: Obj): boolean;
 declare function InstallMethod(target: Str, key: Value, f: Value, length: u32): void;
 /**
  * `@constructor`: defines f as the global constructor `key` (writable, configurable, not
- * enumerable) with its prototype object: the realm's intrinsic prototype for that name
- * if there is one, else a new object inheriting from the parent's prototype (or
- * Object.prototype). Sets `f.prototype`, `prototype.constructor`, `name` and `length`;
- * with a parent (a dotted path), f's [[Prototype]] is the parent constructor.
+ * enumerable) and sets its `name` and `length`; with a parent (a dotted path), f's
+ * [[Prototype]] is the parent constructor. Its statics follow, then InstallPrototype.
  * @leaf
  */
 declare function InstallConstructor(target: Str, key: Str, f: Value, length: u32, parent: Value): void;
+/**
+ * The `prototype` of the constructor `key`, installed after its statics (D2052, qjs's
+ * order): the realm's intrinsic prototype for that name if there is one, else a new
+ * object inheriting from the parent's prototype (or Object.prototype). Sets
+ * `f.prototype` and `prototype.constructor`.
+ * @leaf
+ */
+declare function InstallPrototype(target: Str, key: Str, parent: Value): void;
 /** `@getter`/`@setter`: one half of an accessor (configurable, not enumerable). @leaf */
 declare function InstallAccessor(target: Str, key: Value, f: Value, isSetter: boolean): void;
 /** `@value`: a data property with `attrs` (writable 1, enumerable 2, configurable 4). @leaf */

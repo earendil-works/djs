@@ -47,6 +47,18 @@ function ErrorPrototypeSetStack(this: Value, v: Value): Value {
 }
 
 /**
+ * Error.isError ( arg ) (proposal-is-error): whether arg has an [[ErrorData]] slot
+ * (a proxy has none).
+ * @builtin Error.isError
+ */
+function ErrorIsError(arg: Value): boolean {
+  if (!IsObject(arg) || IsProxy(arg)) {
+    return false;
+  }
+  return ObjectClassTag(AsObj(arg)) === "Error";
+}
+
+/**
  * Error.captureStackTrace ( object [ , constructorOpt ] ) (V8, qjs; D2010): an own
  * non-enumerable `stack` with the current trace, from below the topmost call of
  * constructorOpt if given.
@@ -157,18 +169,6 @@ function TypeErrorConstructor(message?: Value, options?: Value): Obj {
  */
 function URIErrorConstructor(message?: Value, options?: Value): Obj {
   return ErrorConstruct(new.target, "URIErrorPrototype", message, options);
-}
-
-/**
- * Error.isError ( arg ) (proposal-is-error): whether arg has an [[ErrorData]] slot
- * (a proxy has none).
- * @builtin Error.isError
- */
-function ErrorIsError(arg: Value): boolean {
-  if (!IsObject(arg) || IsProxy(arg)) {
-    return false;
-  }
-  return ObjectClassTag(AsObj(arg)) === "Error";
 }
 
 /**

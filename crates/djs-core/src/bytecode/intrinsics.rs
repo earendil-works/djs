@@ -347,6 +347,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("AllCodePoints", L, 1, false),
     i("InstallMethod", L, 4, false),
     i("InstallConstructor", L, 5, false),
+    i("InstallPrototype", L, 3, false),
     i("InstallAccessor", L, 4, false),
     i("InstallValue", L, 4, false),
     i("InstallIntrinsic", L, 2, false),
