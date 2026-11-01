@@ -72,7 +72,7 @@ table, so the embedder and Rust code can hold values across collections.
   collect. Plus focused tests for garbage freed, handles, flattened-rope short-circuit,
   atoms/symbols surviving, the `gc_pending` threshold, failed reservation, and collection
   under a tight cap with retry.
-- Numbers (native release, M-series laptop,
+- Numbers (native release, Apple M5 Max,
   `cargo test -p djs-core --release gc_throughput -- --ignored --nocapture`):
   - records (200k objects × 5 properties, half strings): 60 MiB live in 800k cells,
     12.9 ms per collection, about 0.21 ms per MiB;
