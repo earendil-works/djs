@@ -67,6 +67,10 @@ pub fn emit(p: &Program, sources: &Sources) -> String {
             b.name
         ));
     }
+    // The Rust backend's builtins, in the order of its table (0063).
+    for (i, b) in p.builtins.iter().filter(|b| b.native).enumerate() {
+        out.push_str(&format!("%MarkNative({}, {i});\n", b.name));
+    }
     out.push_str("})();\n");
     out
 }

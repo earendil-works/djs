@@ -35,6 +35,8 @@ list options:
 
 run options:
   --engine NAME       qjs (default) or djs (in-process)
+  --backend B         djs only: run the @native builtins as `native` code (default)
+                      or as `bytecode` (0063)
   --qjs PATH          qjs binary (default: $DJS_QJS, else ~/Development/dquickts/qjs)
   --timeout SECS      wall-clock limit per test (default 20)
   --memory-limit N    memory limit per test in bytes, K/M/G suffixes allowed
@@ -58,6 +60,7 @@ struct Args {
     test262: Option<PathBuf>,
     config: PathBuf,
     paths: bool,
+    bytecode_builtins: bool,
     engine: String,
     qjs: PathBuf,
     timeout: Duration,
@@ -96,6 +99,7 @@ fn parse_args() -> Result<Args, String> {
         test262: None,
         config: suite::workspace_root().join("tests/test262.toml"),
         paths: false,
+        bytecode_builtins: false,
         engine: "qjs".into(),
         qjs: Qjs::default_binary(),
         timeout: Duration::from_secs(20),
@@ -126,6 +130,11 @@ fn parse_args() -> Result<Args, String> {
             "--config" => args.config = value(&a)?.into(),
             "--paths" => args.paths = true,
             "--engine" => args.engine = value(&a)?,
+            "--backend" => match value(&a)?.as_str() {
+                "native" => args.bytecode_builtins = false,
+                "bytecode" => args.bytecode_builtins = true,
+                other => return Err(format!("--backend: native or bytecode, not `{other}`")),
+            },
             "--qjs" => args.qjs = value(&a)?.into(),
             "--timeout" => {
                 let v = value(&a)?;
@@ -260,7 +269,10 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
                 binary: args.qjs.clone(),
             })
         }
-        "djs" => Box::new(djs_test262::djs::Djs::default()),
+        "djs" => Box::new(djs_test262::djs::Djs {
+            bytecode_builtins: args.bytecode_builtins,
+            ..Default::default()
+        }),
         e => return Err(format!("unknown engine `{e}`")),
     };
     let (run_tests, other): (Vec<TestCase>, Vec<TestCase>) =

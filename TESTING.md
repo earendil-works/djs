@@ -107,8 +107,9 @@ Outputs:
   tests that now pass but are still listed (a stale entry; run `--update`).
 - `tests/test262/oracle-failures.txt`: tests that dquickts fails under our runner. These
   are reviewed by hand and are not automatic targets.
-- `--suspend-every N` and `--backend bytecode|native` for the stress modes, once those
-  exist.
+- `--backend bytecode|native` (djs, 0063): run the `@native` builtins as their
+  generated Rust state machines (the default) or as bytecode. Both backends must give
+  the same results; see "Builtin backends" below.
 
 The runner is parallel (one test per worker) and fast enough to run the full active set
 in the gate.
@@ -221,6 +222,7 @@ scripts/difftest-import-dquickts.py  # re-split the dquickts tests (then --updat
 
 $D --engine djs --clusters           # djs in-process; failures grouped by error
 $D --engine djs --ratchet --suspend-every 97 --gc-stress --determinism   # what the gate runs
+$D --engine djs --backend bytecode --ratchet               # the gate, too (0063)
 $D --engine djs --update-ratchet     # after fixing cases: rewrite expected-failures.txt
 ```
 
@@ -243,6 +245,27 @@ in the codemode model (listed with reasons in the script), turns each one-line
 the cases that need direct eval (a hand-kept list in the script) with `skip-djs`. The full corpus runs in well under a
 second with qjs. `cargo test -p djs-difftest` checks the runner itself on a scratch
 corpus.
+
+## Builtin backends (0063)
+
+Builtins in the builtin language compile to bytecode (the prelude) and, if tagged
+`@native`, also to Rust state machines (`crates/djs-core/src/builtins/gen/natives.rs`,
+ARCH "Generated state machines"). `ExecOptions::native_builtins` picks the backend per
+call (default on); `--backend bytecode|native` selects it in `djs run`, djs-difftest
+and djs-test262, and the engine track runs both (`engine/djs` and
+`engine/djs-bytecode`, with their ratio `engine/bytecode÷native/*`). The two must
+behave the same in every mode; only the fuel spent differs (D1633).
+
+- The gate runs the corpus with the native backend in all stress modes (suspension
+  through heap images, GC stress) and once more, plainly, with the bytecode backend.
+- The test262 active group with the bytecode backend is a periodic check, not in the
+  gate: `djs-test262 run --engine djs --backend bytecode --group active --expected
+  tests/test262/expected-failures.txt` (run it when changing a `@native` builtin, bgen's
+  Rust backend or `interp/run/native.rs`). At 0063 both backends pass 37,504/37,722.
+- Unit tests: `interp::run::native::tests` (both backends in plain, suspension and GC
+  stress modes, a backend switch between runs, fuel), bgen's golden fixture
+  `tests/golden/native.ts` → `native.rs.txt`, and `scripts/native-sizes.sh` for the wasm
+  code size per native function.
 
 ## TypeScript
 

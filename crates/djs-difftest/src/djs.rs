@@ -40,16 +40,23 @@ pub struct Djs {
     pub gc_stress: bool,
     /// Report a hash of the heap image after a final collection (`--determinism`).
     pub image: bool,
+    /// Run the `@native` builtins as bytecode (`--backend bytecode`, 0063).
+    pub bytecode_builtins: bool,
 }
 
 impl Djs {
     pub fn label(&self) -> String {
-        match (self.suspend_every, self.gc_stress) {
-            (None, false) => "djs".into(),
-            (Some(n), false) => format!("djs --suspend-every {n}"),
-            (None, true) => "djs --gc-stress".into(),
-            (Some(n), true) => format!("djs --suspend-every {n} --gc-stress"),
+        let mut s = String::from("djs");
+        if let Some(n) = self.suspend_every {
+            s += &format!(" --suspend-every {n}");
         }
+        if self.gc_stress {
+            s += " --gc-stress";
+        }
+        if self.bytecode_builtins {
+            s += " --backend bytecode";
+        }
+        s
     }
 }
 
@@ -139,6 +146,7 @@ impl Djs {
                 .unwrap_or(DEFAULT_LIMIT),
             exec: ExecOptions {
                 gc_stress: self.gc_stress,
+                native_builtins: !self.bytecode_builtins,
                 ..ExecOptions::default()
             },
             ..VmOptions::default()

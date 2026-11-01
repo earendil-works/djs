@@ -47,6 +47,11 @@ echo "== difftest on djs: ratchet, plus suspension and GC stress (0016), heap im
 cargo run --quiet -p djs-difftest -- --engine djs --ratchet --suspend-every 97 --gc-stress --determinism --quiet --no-diff > target/difftest-djs.log \
   || { cat target/difftest-djs.log; exit 1; }
 grep -E '^(stress|ratchet):' target/difftest-djs.log
+# 0063: the same corpus with the @native builtins as bytecode; both backends must pass.
+echo "== difftest on djs, bytecode backend (0063)"
+cargo run --quiet -p djs-difftest -- --engine djs --backend bytecode --ratchet --quiet --no-diff > target/difftest-djs-bytecode.log \
+  || { cat target/difftest-djs-bytecode.log; exit 1; }
+grep -E '^ratchet:' target/difftest-djs-bytecode.log
 echo "== test262 on djs: the active group against the ratchet (0007)"
 ./scripts/fetch-test262.sh > /dev/null
 cargo run --quiet -p djs-test262 -- run --engine djs --group active --quiet \

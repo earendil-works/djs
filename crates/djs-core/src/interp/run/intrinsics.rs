@@ -242,6 +242,7 @@ const INSTALL_ACCESSOR: u16 = id("InstallAccessor");
 const INSTALL_VALUE: u16 = id("InstallValue");
 const INSTALL_METHOD: u16 = id("InstallMethod");
 const INSTALL_INTRINSIC: u16 = id("InstallIntrinsic");
+const MARK_NATIVE: u16 = id("MarkNative");
 /// The installed `%ToPrimitive`, used by the interpreter's slow paths.
 pub(super) const TO_PRIMITIVE: u16 = id("ToPrimitive");
 /// The installed `%ToNumber`, for typed array element writes (0039).
@@ -1801,6 +1802,10 @@ impl Exec<'_> {
                 self.heap.define_own_property(f, atoms::NAME, &d)?;
                 Value::object(f)
             }
+            MARK_NATIVE => {
+                self.mark_native(a0, arg(self, 1))?;
+                Value::UNDEFINED
+            }
             INSTALL_INTRINSIC => {
                 let name = a0
                     .as_string()
@@ -1836,7 +1841,7 @@ impl Exec<'_> {
         Ok(None)
     }
 
-    fn is_callable(&self, v: Value) -> bool {
+    pub(super) fn is_callable(&self, v: Value) -> bool {
         v.as_object().is_some_and(|o| self.heap.is_callable(o))
     }
 

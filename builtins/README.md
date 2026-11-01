@@ -100,7 +100,14 @@ On builtin functions (JSDoc):
   optional or rest one).
 - `@intrinsic`: register it so that privileged code and the interpreter can call it
   as `%Name(...)` (for example `%ToPrimitive`).
-- `@native`: also compile it with the Rust backend (once that exists).
+- `@native`: also compile it with the Rust backend (0063): a resumable Rust state
+  machine in `crates/djs-core/src/builtins/gen/natives.rs`, which `scripts/bgen.sh`
+  writes too. A reentrant builtin it calls must be `@intrinsic`, unless it is a small
+  internal helper that bgen inlines (D1632); leaf builtins it calls become Rust
+  functions. Not yet: `try`/`finally`, `@constructor`. Each one adds wasm size
+  (`scripts/native-sizes.sh`): tag a builtin only when a benchmark shows it is hot.
+  `--backend bytecode` (djs run, djs-difftest, djs-test262) runs the bytecode instead;
+  both must behave the same.
 
 On intrinsics in `intrinsics.d.ts`, exactly one of:
 

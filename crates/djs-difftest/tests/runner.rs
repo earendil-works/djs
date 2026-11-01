@@ -289,16 +289,15 @@ fn djs_stress_variants_agree() {
             "suspend".into(),
             Box::new(Djs {
                 suspend_every: Some(7),
-                gc_stress: false,
                 image: true,
+                ..Djs::default()
             }),
         ),
         (
             "gc".into(),
             Box::new(Djs {
-                suspend_every: None,
                 gc_stress: true,
-                image: false,
+                ..Djs::default()
             }),
         ),
     ];

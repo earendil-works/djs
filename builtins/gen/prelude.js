@@ -2,7 +2,7 @@
 "use strict";
 (function () {
 
-// builtins/array.ts:4
+// builtins/array.ts:7 %ArraySpeciesCreate
 function ArraySpeciesCreate(original, length) {
   if (!%IsArray(original)) {
     return %ArrayCreate(length);
@@ -26,7 +26,7 @@ function ArraySpeciesCreate(original, length) {
   return %Construct(c, length);
 }
 
-// builtins/array.ts:33 Array.prototype.forEach
+// builtins/array.ts:36 Array.prototype.forEach
 function ArrayPrototypeForEach(callbackfn, thisArg) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -40,7 +40,7 @@ function ArrayPrototypeForEach(callbackfn, thisArg) {
   }
 }
 
-// builtins/array.ts:51 Array.prototype.map
+// builtins/array.ts:54 Array.prototype.map
 function ArrayPrototypeMap(callbackfn, thisArg) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -58,7 +58,7 @@ function ArrayPrototypeMap(callbackfn, thisArg) {
   return a;
 }
 
-// builtins/array.ts:72 Array.prototype.indexOf
+// builtins/array.ts:76 Array.prototype.indexOf
 function ArrayPrototypeIndexOf(searchElement, fromIndex) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -85,7 +85,7 @@ function ArrayPrototypeIndexOf(searchElement, fromIndex) {
   return -1;
 }
 
-// builtins/array.ts:103 Array.prototype.join
+// builtins/array.ts:107 Array.prototype.join
 function ArrayPrototypeJoin(separator) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -106,7 +106,7 @@ function ArrayPrototypeJoin(separator) {
   return r;
 }
 
-// builtins/array.ts:124
+// builtins/array.ts:128
 function SameValueZero(x, y) {
   if (%IsNumber(x) && %IsNumber(y)) {
     const a = %AsNumber(x);
@@ -116,7 +116,7 @@ function SameValueZero(x, y) {
   return x === y;
 }
 
-// builtins/array.ts:138 Array.prototype.includes
+// builtins/array.ts:143 Array.prototype.includes
 function ArrayPrototypeIncludes(searchElement, fromIndex) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -138,7 +138,7 @@ function ArrayPrototypeIncludes(searchElement, fromIndex) {
   return false;
 }
 
-// builtins/array.ts:164 constructor Array
+// builtins/array.ts:169 constructor Array
 function ArrayConstructor(...values) {
   let a = values;
   if (LengthOfArrayLike(values) === 1) {
@@ -160,12 +160,12 @@ function ArrayConstructor(...values) {
   return a;
 }
 
-// builtins/array.ts:191 Array.isArray
+// builtins/array.ts:196 Array.isArray
 function ArrayIsArray(arg) {
   return %IsArray(arg);
 }
 
-// builtins/array.ts:200 Array.prototype.push
+// builtins/array.ts:206 Array.prototype.push
 function ArrayPrototypePush(...items) {
   const o = %ToObject(this);
   let len = LengthOfArrayLike(o);
@@ -181,7 +181,7 @@ function ArrayPrototypePush(...items) {
   return len;
 }
 
-// builtins/array.ts:221
+// builtins/array.ts:227
 function RelativeIndex(v, len, dflt) {
   if (v === undefined) {
     return dflt;
@@ -194,7 +194,7 @@ function RelativeIndex(v, len, dflt) {
   return rel < len ? rel : len;
 }
 
-// builtins/array.ts:234
+// builtins/array.ts:240
 function RequireCallable(f) {
   if (!%IsCallable(f)) {
     throw %NewTypeError("not a function");
@@ -202,14 +202,14 @@ function RequireCallable(f) {
   return %AsFn(f);
 }
 
-// builtins/array.ts:242
+// builtins/array.ts:248
 function CheckLength(len) {
   if (len > 9007199254740991) {
     throw %NewTypeError("Array loo long");
   }
 }
 
-// builtins/array.ts:249
+// builtins/array.ts:255
 function ArrayCreateChecked(len) {
   if (len > 4294967295) {
     throw %NewRangeError("invalid array length");
@@ -217,7 +217,7 @@ function ArrayCreateChecked(len) {
   return %ArrayCreate(len);
 }
 
-// builtins/array.ts:262 Array.of
+// builtins/array.ts:268 Array.of
 function ArrayOf(...items) {
   const len = LengthOfArrayLike(items);
   const a = %IsConstructor(this) ? %Construct(this, len) : %ArrayCreate(len);
@@ -228,7 +228,7 @@ function ArrayOf(...items) {
   return a;
 }
 
-// builtins/array.ts:276 Array.from
+// builtins/array.ts:282 Array.from
 function ArrayFrom(items, mapfn, thisArg) {
   const mapping = mapfn !== undefined;
   if (mapping && !%IsCallable(mapfn)) {
@@ -256,12 +256,12 @@ function ArrayFrom(items, mapfn, thisArg) {
   return a;
 }
 
-// builtins/array.ts:312 get Array[Symbol.species]
+// builtins/array.ts:318 get Array[Symbol.species]
 function ArraySpecies() {
   return this;
 }
 
-// builtins/array.ts:322 Array.prototype.at
+// builtins/array.ts:328 Array.prototype.at
 function ArrayPrototypeAt(index) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -273,7 +273,7 @@ function ArrayPrototypeAt(index) {
   return %Get(o, k);
 }
 
-// builtins/array.ts:337 Array.prototype.lastIndexOf
+// builtins/array.ts:343 Array.prototype.lastIndexOf
 function ArrayPrototypeLastIndexOf(searchElement, ...rest) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -303,7 +303,7 @@ function ArrayPrototypeLastIndexOf(searchElement, ...rest) {
   return -1;
 }
 
-// builtins/array.ts:370
+// builtins/array.ts:378 %FindViaPredicate
 function FindViaPredicate(o, len, fromEnd, predicate, thisArg, wantIndex) {
   RequireCallable(predicate);
   for (let i = 0; i < len; i++) {
@@ -319,31 +319,31 @@ function FindViaPredicate(o, len, fromEnd, predicate, thisArg, wantIndex) {
   return undefined;
 }
 
-// builtins/array.ts:389 Array.prototype.find
+// builtins/array.ts:398 Array.prototype.find
 function ArrayPrototypeFind(predicate, thisArg) {
   const o = %ToObject(this);
   return FindViaPredicate(o, LengthOfArrayLike(o), false, predicate, thisArg, false);
 }
 
-// builtins/array.ts:398 Array.prototype.findIndex
+// builtins/array.ts:408 Array.prototype.findIndex
 function ArrayPrototypeFindIndex(predicate, thisArg) {
   const o = %ToObject(this);
   return FindViaPredicate(o, LengthOfArrayLike(o), false, predicate, thisArg, true);
 }
 
-// builtins/array.ts:407 Array.prototype.findLast
+// builtins/array.ts:417 Array.prototype.findLast
 function ArrayPrototypeFindLast(predicate, thisArg) {
   const o = %ToObject(this);
   return FindViaPredicate(o, LengthOfArrayLike(o), true, predicate, thisArg, false);
 }
 
-// builtins/array.ts:416 Array.prototype.findLastIndex
+// builtins/array.ts:426 Array.prototype.findLastIndex
 function ArrayPrototypeFindLastIndex(predicate, thisArg) {
   const o = %ToObject(this);
   return FindViaPredicate(o, LengthOfArrayLike(o), true, predicate, thisArg, true);
 }
 
-// builtins/array.ts:422
+// builtins/array.ts:436 %EveryOrSome
 function EveryOrSome(o, callbackfn, thisArg, wantAll) {
   const len = LengthOfArrayLike(o);
   RequireCallable(callbackfn);
@@ -358,17 +358,17 @@ function EveryOrSome(o, callbackfn, thisArg, wantAll) {
   return wantAll;
 }
 
-// builtins/array.ts:440 Array.prototype.every
+// builtins/array.ts:455 Array.prototype.every
 function ArrayPrototypeEvery(callbackfn, thisArg) {
   return EveryOrSome(%ToObject(this), callbackfn, thisArg, true);
 }
 
-// builtins/array.ts:448 Array.prototype.some
+// builtins/array.ts:464 Array.prototype.some
 function ArrayPrototypeSome(callbackfn, thisArg) {
   return EveryOrSome(%ToObject(this), callbackfn, thisArg, false);
 }
 
-// builtins/array.ts:456 Array.prototype.filter
+// builtins/array.ts:473 Array.prototype.filter
 function ArrayPrototypeFilter(callbackfn, thisArg) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -387,7 +387,7 @@ function ArrayPrototypeFilter(callbackfn, thisArg) {
   return a;
 }
 
-// builtins/array.ts:475
+// builtins/array.ts:496 %Reduce
 function Reduce(o, callbackfn, rest, fromEnd) {
   const len = LengthOfArrayLike(o);
   RequireCallable(callbackfn);
@@ -418,17 +418,17 @@ function Reduce(o, callbackfn, rest, fromEnd) {
   return accumulator;
 }
 
-// builtins/array.ts:510 Array.prototype.reduce
+// builtins/array.ts:532 Array.prototype.reduce
 function ArrayPrototypeReduce(callbackfn, ...rest) {
   return Reduce(%ToObject(this), callbackfn, rest, false);
 }
 
-// builtins/array.ts:519 Array.prototype.reduceRight
+// builtins/array.ts:542 Array.prototype.reduceRight
 function ArrayPrototypeReduceRight(callbackfn, ...rest) {
   return Reduce(%ToObject(this), callbackfn, rest, true);
 }
 
-// builtins/array.ts:526
+// builtins/array.ts:549
 function IsConcatSpreadable(o) {
   if (!%IsObject(o)) {
     return false;
@@ -440,7 +440,7 @@ function IsConcatSpreadable(o) {
   return %IsArray(o);
 }
 
-// builtins/array.ts:542 Array.prototype.concat
+// builtins/array.ts:565 Array.prototype.concat
 function ArrayPrototypeConcat(...items) {
   const o = %ToObject(this);
   const a = ArraySpeciesCreate(o, 0);
@@ -468,7 +468,7 @@ function ArrayPrototypeConcat(...items) {
   return a;
 }
 
-// builtins/array.ts:573 Array.prototype.slice
+// builtins/array.ts:597 Array.prototype.slice
 function ArrayPrototypeSlice(start, end) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -487,7 +487,7 @@ function ArrayPrototypeSlice(start, end) {
   return a;
 }
 
-// builtins/array.ts:597 Array.prototype.splice
+// builtins/array.ts:621 Array.prototype.splice
 function ArrayPrototypeSplice(...args) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -521,7 +521,7 @@ function ArrayPrototypeSplice(...args) {
   return a;
 }
 
-// builtins/array.ts:635
+// builtins/array.ts:659
 function MoveElements(o, len, start, deleteCount, itemCount) {
   if (deleteCount !== itemCount && %ArraySpliceDense(o, start, deleteCount, itemCount)) {
     return;
@@ -552,7 +552,7 @@ function MoveElements(o, len, start, deleteCount, itemCount) {
   }
 }
 
-// builtins/array.ts:670 Array.prototype.copyWithin
+// builtins/array.ts:694 Array.prototype.copyWithin
 function ArrayPrototypeCopyWithin(target, start, end) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -579,7 +579,7 @@ function ArrayPrototypeCopyWithin(target, start, end) {
   return o;
 }
 
-// builtins/array.ts:700 Array.prototype.fill
+// builtins/array.ts:724 Array.prototype.fill
 function ArrayPrototypeFill(value, start, end) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -591,7 +591,7 @@ function ArrayPrototypeFill(value, start, end) {
   return o;
 }
 
-// builtins/array.ts:715 Array.prototype.reverse
+// builtins/array.ts:739 Array.prototype.reverse
 function ArrayPrototypeReverse() {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -622,7 +622,7 @@ function ArrayPrototypeReverse() {
   return o;
 }
 
-// builtins/array.ts:749 Array.prototype.pop
+// builtins/array.ts:774 Array.prototype.pop
 function ArrayPrototypePop() {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -637,7 +637,7 @@ function ArrayPrototypePop() {
   return element;
 }
 
-// builtins/array.ts:767 Array.prototype.shift
+// builtins/array.ts:792 Array.prototype.shift
 function ArrayPrototypeShift() {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -651,7 +651,7 @@ function ArrayPrototypeShift() {
   return first;
 }
 
-// builtins/array.ts:785 Array.prototype.unshift
+// builtins/array.ts:810 Array.prototype.unshift
 function ArrayPrototypeUnshift(...items) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -667,7 +667,7 @@ function ArrayPrototypeUnshift(...items) {
   return len + argCount;
 }
 
-// builtins/array.ts:801
+// builtins/array.ts:826
 function FlattenIntoArray(target, source, sourceLen, start, depth, mapper, thisArg) {
   let targetIndex = start;
   for (let sourceIndex = 0; sourceIndex < sourceLen; sourceIndex++) {
@@ -689,7 +689,7 @@ function FlattenIntoArray(target, source, sourceLen, start, depth, mapper, thisA
   return targetIndex;
 }
 
-// builtins/array.ts:826 Array.prototype.flat
+// builtins/array.ts:851 Array.prototype.flat
 function ArrayPrototypeFlat(depth) {
   const o = %ToObject(this);
   const sourceLen = LengthOfArrayLike(o);
@@ -705,7 +705,7 @@ function ArrayPrototypeFlat(depth) {
   return a;
 }
 
-// builtins/array.ts:845 Array.prototype.flatMap
+// builtins/array.ts:870 Array.prototype.flatMap
 function ArrayPrototypeFlatMap(mapperFunction, thisArg) {
   const o = %ToObject(this);
   const sourceLen = LengthOfArrayLike(o);
@@ -715,7 +715,7 @@ function ArrayPrototypeFlatMap(mapperFunction, thisArg) {
   return a;
 }
 
-// builtins/array.ts:860
+// builtins/array.ts:887 %SortList
 function SortList(list, n, comparefn) {
   if (comparefn === undefined && %SortPrimitives(list)) {
     return;
@@ -776,7 +776,7 @@ function SortList(list, n, comparefn) {
   }
 }
 
-// builtins/array.ts:922
+// builtins/array.ts:949
 function SortCompareDefined(x, y, comparefn) {
   if (comparefn !== undefined) {
     const r = %Call(comparefn, undefined, x, y);
@@ -787,7 +787,7 @@ function SortCompareDefined(x, y, comparefn) {
   return %CompareStrings(xs, ToString(y));
 }
 
-// builtins/array.ts:933
+// builtins/array.ts:964 %CollectPresent
 function CollectPresent(o, len, skipHoles) {
   const items = %ArrayCreate(0);
   let n = 0;
@@ -800,7 +800,7 @@ function CollectPresent(o, len, skipHoles) {
   return items;
 }
 
-// builtins/array.ts:949 Array.prototype.sort
+// builtins/array.ts:981 Array.prototype.sort
 function ArrayPrototypeSort(comparefn) {
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
@@ -819,7 +819,7 @@ function ArrayPrototypeSort(comparefn) {
   return o;
 }
 
-// builtins/array.ts:972 Array.prototype.toSorted
+// builtins/array.ts:1005 Array.prototype.toSorted
 function ArrayPrototypeToSorted(comparefn) {
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
@@ -832,7 +832,7 @@ function ArrayPrototypeToSorted(comparefn) {
   return items;
 }
 
-// builtins/array.ts:990 Array.prototype.toReversed
+// builtins/array.ts:1023 Array.prototype.toReversed
 function ArrayPrototypeToReversed() {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -843,7 +843,7 @@ function ArrayPrototypeToReversed() {
   return a;
 }
 
-// builtins/array.ts:1005 Array.prototype.toSpliced
+// builtins/array.ts:1038 Array.prototype.toSpliced
 function ArrayPrototypeToSpliced(...args) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -878,7 +878,7 @@ function ArrayPrototypeToSpliced(...args) {
   return a;
 }
 
-// builtins/array.ts:1043 Array.prototype.with
+// builtins/array.ts:1076 Array.prototype.with
 function ArrayPrototypeWith(index, value) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -894,7 +894,7 @@ function ArrayPrototypeWith(index, value) {
   return a;
 }
 
-// builtins/array.ts:1065 Array.prototype.toString %TypedArray%.prototype.toString
+// builtins/array.ts:1098 Array.prototype.toString %TypedArray%.prototype.toString
 function ArrayPrototypeToString() {
   const array = %ToObject(this);
   const func = %Get(array, "join");
@@ -904,7 +904,7 @@ function ArrayPrototypeToString() {
   return ObjectToString(array);
 }
 
-// builtins/array.ts:1078 Array.prototype.toLocaleString
+// builtins/array.ts:1111 Array.prototype.toLocaleString
 function ArrayPrototypeToLocaleString() {
   const array = %ToObject(this);
   const len = LengthOfArrayLike(array);
@@ -921,7 +921,7 @@ function ArrayPrototypeToLocaleString() {
   return r;
 }
 
-// builtins/array.ts:1099 value Array.prototype[Symbol.unscopables]
+// builtins/array.ts:1132 value Array.prototype[Symbol.unscopables]
 function ArrayPrototypeUnscopables() {
   const u = %ObjectCreate(null);
   %CreateDataPropertyOrThrow(u, "at", true);
@@ -1583,12 +1583,12 @@ function ToLength(v) {
   return len;
 }
 
-// builtins/conversion.ts:92
+// builtins/conversion.ts:95 %LengthOfArrayLike
 function LengthOfArrayLike(o) {
   return ToLength(%Get(o, "length"));
 }
 
-// builtins/conversion.ts:100 %ToPropertyKey
+// builtins/conversion.ts:103 %ToPropertyKey
 function ToPropertyKey(v) {
   const key = ToPrimitive(v, "string");
   if (%IsSymbol(key) || %IsNumber(key)) {
@@ -1597,7 +1597,7 @@ function ToPropertyKey(v) {
   return %ToStringPrimitive(key);
 }
 
-// builtins/conversion.ts:114
+// builtins/conversion.ts:117
 function GetPrototypeFromConstructor(newTarget, fallback) {
   if (newTarget === undefined) {
     return %RealmIntrinsic(fallback);
@@ -3605,7 +3605,7 @@ function DynamicImport(specifier, options) {
   return promise;
 }
 
-// builtins/iter.ts:10 %GetIterator
+// builtins/iter.ts:11 %GetIterator
 function GetIterator(obj) {
   const method = %GetV(obj, %WellKnownSymbol("iterator"));
   if (!%IsCallable(method)) {
@@ -3618,7 +3618,7 @@ function GetIterator(obj) {
   return %AsObj(iterator);
 }
 
-// builtins/iter.ts:27 %IteratorClose
+// builtins/iter.ts:28 %IteratorClose
 function IteratorClose(iterator) {
   const method = %Get(iterator, "return");
   if (method === undefined || method === null) {
@@ -3630,7 +3630,7 @@ function IteratorClose(iterator) {
   }
 }
 
-// builtins/iter.ts:43 %IteratorCloseThrow
+// builtins/iter.ts:44 %IteratorCloseThrow
 function IteratorCloseThrow(iterator) {
   try {
     const method = %Get(iterator, "return");
@@ -3643,7 +3643,7 @@ function IteratorCloseThrow(iterator) {
   }
 }
 
-// builtins/iter.ts:61 %IteratorRest
+// builtins/iter.ts:62 %IteratorRest
 function IteratorRest(iterator, next) {
   const arr = %ArrayCreate(0);
   let n = 0;
@@ -3660,22 +3660,22 @@ function IteratorRest(iterator, next) {
   }
 }
 
-// builtins/iter.ts:83 Array.prototype.values Array.prototype[Symbol.iterator] %ArrayPrototypeValues
+// builtins/iter.ts:84 Array.prototype.values Array.prototype[Symbol.iterator] %ArrayPrototypeValues
 function ArrayPrototypeValues() {
   return %CreateArrayIterator(%ToObject(this), 1);
 }
 
-// builtins/iter.ts:91 Array.prototype.keys
+// builtins/iter.ts:92 Array.prototype.keys
 function ArrayPrototypeKeys() {
   return %CreateArrayIterator(%ToObject(this), 0);
 }
 
-// builtins/iter.ts:99 Array.prototype.entries
+// builtins/iter.ts:100 Array.prototype.entries
 function ArrayPrototypeEntries() {
   return %CreateArrayIterator(%ToObject(this), 2);
 }
 
-// builtins/iter.ts:108 %ArrayIteratorPrototype%.next %ArrayIteratorPrototypeNext
+// builtins/iter.ts:110 %ArrayIteratorPrototype%.next %ArrayIteratorPrototypeNext
 function ArrayIteratorPrototypeNext() {
   const target = %ArrayIteratorTarget(this);
   if (target === undefined) {
@@ -3700,12 +3700,12 @@ function ArrayIteratorPrototypeNext() {
   return %CreateIterResultObject(%CreateArrayFromPair(index, value), false);
 }
 
-// builtins/iter.ts:138 %IteratorPrototype%[Symbol.iterator]
+// builtins/iter.ts:140 %IteratorPrototype%[Symbol.iterator]
 function IteratorPrototypeIterator() {
   return this;
 }
 
-// builtins/iter.ts:147 value %ArrayIteratorPrototype%[Symbol.toStringTag]
+// builtins/iter.ts:149 value %ArrayIteratorPrototype%[Symbol.toStringTag]
 function ArrayIteratorPrototypeToStringTag() {
   return "Array Iterator";
 }
@@ -6226,7 +6226,7 @@ function ObjectPrototypeIsPrototypeOf(v) {
   return false;
 }
 
-// builtins/promise.ts:19
+// builtins/promise.ts:20 %ResolvePromise
 function ResolvePromise(promise, resolution) {
   if (resolution === promise) {
     %RejectPromise(promise, %NewTypeError("promise self resolution"));
@@ -6250,7 +6250,7 @@ function ResolvePromise(promise, resolution) {
   %EnqueuePromiseResolveThenableJob(promise, %AsObj(resolution), then);
 }
 
-// builtins/promise.ts:46
+// builtins/promise.ts:47
 function ClaimResolution(data) {
   if (%IsPromise(data)) {
     return %PromiseClaimResolve(%AsObj(data)) ? data : undefined;
@@ -6263,12 +6263,12 @@ function ClaimResolution(data) {
   return %RecordGet(r, 0);
 }
 
-// builtins/promise.ts:62 %PromiseResolveFunction
+// builtins/promise.ts:63 %PromiseResolveFunction
 function PromiseResolveFunction(resolution) {
   ResolveWithData(this, resolution);
 }
 
-// builtins/promise.ts:67
+// builtins/promise.ts:68
 function ResolveWithData(data, resolution) {
   const promise = ClaimResolution(data);
   if (promise !== undefined) {
@@ -6276,7 +6276,7 @@ function ResolveWithData(data, resolution) {
   }
 }
 
-// builtins/promise.ts:75
+// builtins/promise.ts:76
 function RejectWithData(data, reason) {
   const promise = ClaimResolution(data);
   if (promise !== undefined) {
@@ -6284,12 +6284,12 @@ function RejectWithData(data, reason) {
   }
 }
 
-// builtins/promise.ts:86 %PromiseRejectFunction
+// builtins/promise.ts:87 %PromiseRejectFunction
 function PromiseRejectFunction(reason) {
   RejectWithData(this, reason);
 }
 
-// builtins/promise.ts:91
+// builtins/promise.ts:92
 function CapabilityPromise(capability) {
   if (%IsPromise(capability)) {
     return capability;
@@ -6297,7 +6297,7 @@ function CapabilityPromise(capability) {
   return %RecordGet(%AsObj(capability), 0);
 }
 
-// builtins/promise.ts:99
+// builtins/promise.ts:100
 function ResolveCapability(capability, v) {
   if (%IsPromise(capability)) {
     ResolveWithData(capability, v);
@@ -6306,7 +6306,7 @@ function ResolveCapability(capability, v) {
   %Call(%RecordGet(%AsObj(capability), 1), undefined, v);
 }
 
-// builtins/promise.ts:108
+// builtins/promise.ts:109
 function RejectCapability(capability, reason) {
   if (%IsPromise(capability)) {
     RejectWithData(capability, reason);
@@ -6315,7 +6315,7 @@ function RejectCapability(capability, reason) {
   %Call(%RecordGet(%AsObj(capability), 2), undefined, reason);
 }
 
-// builtins/promise.ts:117
+// builtins/promise.ts:118
 function CapabilityResolveFunction(capability) {
   if (%IsPromise(capability)) {
     return %NewBuiltinClosure(0, capability, 1);
@@ -6323,7 +6323,7 @@ function CapabilityResolveFunction(capability) {
   return %RecordGet(%AsObj(capability), 1);
 }
 
-// builtins/promise.ts:125
+// builtins/promise.ts:126
 function CapabilityRejectFunction(capability) {
   if (%IsPromise(capability)) {
     return %NewBuiltinClosure(1, capability, 1);
@@ -6331,7 +6331,7 @@ function CapabilityRejectFunction(capability) {
   return %RecordGet(%AsObj(capability), 2);
 }
 
-// builtins/promise.ts:136 %GetCapabilitiesExecutor
+// builtins/promise.ts:137 %GetCapabilitiesExecutor
 function GetCapabilitiesExecutor(resolve, reject) {
   const r = %AsObj(this);
   if (%RecordGet(r, 1) !== undefined || %RecordGet(r, 2) !== undefined) {
@@ -6341,7 +6341,7 @@ function GetCapabilitiesExecutor(resolve, reject) {
   %RecordSet(r, 2, reject);
 }
 
-// builtins/promise.ts:146
+// builtins/promise.ts:147
 function NewPromiseCapability(c) {
   if (c === %IntrinsicPromise()) {
     return %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
@@ -6359,7 +6359,7 @@ function NewPromiseCapability(c) {
   return r;
 }
 
-// builtins/promise.ts:165
+// builtins/promise.ts:166
 function PromiseResolve(c, x) {
   if (%IsPromise(x)) {
     const xConstructor = %Get(%AsObj(x), "constructor");
@@ -6372,7 +6372,7 @@ function PromiseResolve(c, x) {
   return CapabilityPromise(capability);
 }
 
-// builtins/promise.ts:178
+// builtins/promise.ts:179
 function SpeciesConstructor(o, defaultConstructor) {
   const c = %Get(o, "constructor");
   if (c === undefined) {
@@ -6391,12 +6391,12 @@ function SpeciesConstructor(o, defaultConstructor) {
   throw %NewTypeError("not a constructor");
 }
 
-// builtins/promise.ts:197
+// builtins/promise.ts:198
 function InvokeThen(v, onFulfilled, onRejected) {
   return %Call(%GetV(v, "then"), v, onFulfilled, onRejected);
 }
 
-// builtins/promise.ts:208 %PromiseReactionJob
+// builtins/promise.ts:210 %PromiseReactionJob
 function PromiseReactionJob(capability, handler, argument, fulfilled) {
   if (%IsAsyncFunctionState(handler)) {
     %GeneratorResume(%AsObj(handler), argument, fulfilled ? 0 : 1);
@@ -6427,7 +6427,7 @@ function PromiseReactionJob(capability, handler, argument, fulfilled) {
   }
 }
 
-// builtins/promise.ts:244 %PromiseResolveThenableJob
+// builtins/promise.ts:246 %PromiseResolveThenableJob
 function PromiseResolveThenableJob(promise, thenable, then) {
   const r = %NewRecord(2);
   %RecordSet(r, 0, promise);
@@ -6441,7 +6441,7 @@ function PromiseResolveThenableJob(promise, thenable, then) {
   }
 }
 
-// builtins/promise.ts:264 constructor Promise %PromiseConstructor
+// builtins/promise.ts:266 constructor Promise %PromiseConstructor
 function PromiseConstructor(executor) {
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
@@ -6460,12 +6460,12 @@ function PromiseConstructor(executor) {
   return promise;
 }
 
-// builtins/promise.ts:286 get Promise[Symbol.species]
+// builtins/promise.ts:288 get Promise[Symbol.species]
 function PromiseSpecies() {
   return this;
 }
 
-// builtins/promise.ts:291
+// builtins/promise.ts:293
 function PromiseThisConstructor(c) {
   if (!%IsObject(c)) {
     throw %NewTypeError("not an object");
@@ -6473,19 +6473,19 @@ function PromiseThisConstructor(c) {
   return c;
 }
 
-// builtins/promise.ts:302 Promise.resolve
+// builtins/promise.ts:304 Promise.resolve
 function PromiseStaticResolve(x) {
   return PromiseResolve(PromiseThisConstructor(this), x);
 }
 
-// builtins/promise.ts:310 Promise.reject
+// builtins/promise.ts:312 Promise.reject
 function PromiseStaticReject(r) {
   const capability = NewPromiseCapability(PromiseThisConstructor(this));
   RejectCapability(capability, r);
   return CapabilityPromise(capability);
 }
 
-// builtins/promise.ts:322
+// builtins/promise.ts:324
 function GetPromiseResolve(c) {
   const promiseResolve = %Get(%AsObj(c), "resolve");
   if (!%IsCallable(promiseResolve)) {
@@ -6494,14 +6494,14 @@ function GetPromiseResolve(c) {
   return promiseResolve;
 }
 
-// builtins/promise.ts:331
+// builtins/promise.ts:333
 function DecrementRemaining(remaining) {
   const n = %AsNumber(%RecordGet(remaining, 0)) - 1;
   %RecordSet(remaining, 0, n);
   return n;
 }
 
-// builtins/promise.ts:338
+// builtins/promise.ts:340
 function NewElementRecord(index, values, capability, remaining) {
   const r = %NewRecord(5);
   %RecordSet(r, 0, false);
@@ -6512,7 +6512,7 @@ function NewElementRecord(index, values, capability, remaining) {
   return r;
 }
 
-// builtins/promise.ts:353
+// builtins/promise.ts:355
 function SettleElement(data, x, reject) {
   const r = %AsObj(data);
   if (%RecordGet(r, 0) === true) {
@@ -6531,12 +6531,12 @@ function SettleElement(data, x, reject) {
   }
 }
 
-// builtins/promise.ts:375 %PromiseAllResolveElement
+// builtins/promise.ts:377 %PromiseAllResolveElement
 function PromiseAllResolveElement(x) {
   SettleElement(this, x, false);
 }
 
-// builtins/promise.ts:380
+// builtins/promise.ts:382
 function SettledRecord(fulfilled, x) {
   const o = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
   %CreateDataPropertyOrThrow(o, "status", fulfilled ? "fulfilled" : "rejected");
@@ -6544,7 +6544,7 @@ function SettledRecord(fulfilled, x) {
   return o;
 }
 
-// builtins/promise.ts:391 %PromiseAllSettledResolveElement
+// builtins/promise.ts:393 %PromiseAllSettledResolveElement
 function PromiseAllSettledResolveElement(x) {
   if (%RecordGet(%AsObj(this), 0) === true) {
     return;
@@ -6552,7 +6552,7 @@ function PromiseAllSettledResolveElement(x) {
   SettleElement(this, SettledRecord(true, x), false);
 }
 
-// builtins/promise.ts:402 %PromiseAllSettledRejectElement
+// builtins/promise.ts:404 %PromiseAllSettledRejectElement
 function PromiseAllSettledRejectElement(x) {
   if (%RecordGet(%AsObj(this), 0) === true) {
     return;
@@ -6560,12 +6560,12 @@ function PromiseAllSettledRejectElement(x) {
   SettleElement(this, SettledRecord(false, x), false);
 }
 
-// builtins/promise.ts:413 %PromiseAnyRejectElement
+// builtins/promise.ts:415 %PromiseAnyRejectElement
 function PromiseAnyRejectElement(x) {
   SettleElement(this, x, true);
 }
 
-// builtins/promise.ts:418
+// builtins/promise.ts:420
 function NewAggregateError(errors) {
   const e = %ErrorCreate(%RealmIntrinsic("AggregateErrorPrototype"));
   %DefineDataPropertyOrThrow(e, "errors", CreateArrayFromList(errors), 5);
@@ -6573,7 +6573,7 @@ function NewAggregateError(errors) {
   return e;
 }
 
-// builtins/promise.ts:426
+// builtins/promise.ts:428
 function CreateArrayFromList(list) {
   const len = LengthOfArrayLike(list);
   const a = %ArrayCreate(0);
@@ -6583,7 +6583,7 @@ function CreateArrayFromList(list) {
   return a;
 }
 
-// builtins/promise.ts:441
+// builtins/promise.ts:443
 function PerformPromiseCombinator(thisValue, iterable, kind) {
   const c = PromiseThisConstructor(thisValue);
   const capability = NewPromiseCapability(c);
@@ -6656,22 +6656,22 @@ function PerformPromiseCombinator(thisValue, iterable, kind) {
   }
 }
 
-// builtins/promise.ts:520 Promise.all
+// builtins/promise.ts:522 Promise.all
 function PromiseAll(iterable) {
   return PerformPromiseCombinator(this, iterable, 0);
 }
 
-// builtins/promise.ts:528 Promise.allSettled
+// builtins/promise.ts:530 Promise.allSettled
 function PromiseAllSettled(iterable) {
   return PerformPromiseCombinator(this, iterable, 1);
 }
 
-// builtins/promise.ts:536 Promise.any
+// builtins/promise.ts:538 Promise.any
 function PromiseAny(iterable) {
   return PerformPromiseCombinator(this, iterable, 2);
 }
 
-// builtins/promise.ts:545 Promise.try
+// builtins/promise.ts:547 Promise.try
 function PromiseTry(callback, ...args) {
   const c = PromiseThisConstructor(this);
   let result = undefined;
@@ -6685,12 +6685,12 @@ function PromiseTry(callback, ...args) {
   return PromiseResolve(c, result);
 }
 
-// builtins/promise.ts:562 Promise.race
+// builtins/promise.ts:564 Promise.race
 function PromiseRace(iterable) {
   return PerformPromiseCombinator(this, iterable, 3);
 }
 
-// builtins/promise.ts:570 Promise.withResolvers
+// builtins/promise.ts:572 Promise.withResolvers
 function PromiseWithResolvers() {
   const capability = NewPromiseCapability(PromiseThisConstructor(this));
   const o = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
@@ -6700,7 +6700,7 @@ function PromiseWithResolvers() {
   return o;
 }
 
-// builtins/promise.ts:585 Promise.prototype.then
+// builtins/promise.ts:587 Promise.prototype.then
 function PromisePrototypeThen(onFulfilled, onRejected) {
   if (!%IsPromise(this)) {
     throw %NewTypeError("Promise object expected");
@@ -6712,12 +6712,12 @@ function PromisePrototypeThen(onFulfilled, onRejected) {
   return CapabilityPromise(capability);
 }
 
-// builtins/promise.ts:600 Promise.prototype.catch
+// builtins/promise.ts:602 Promise.prototype.catch
 function PromisePrototypeCatch(onRejected) {
   return InvokeThen(this, undefined, onRejected);
 }
 
-// builtins/promise.ts:608 Promise.prototype.finally
+// builtins/promise.ts:610 Promise.prototype.finally
 function PromisePrototypeFinally(onFinally) {
   if (!%IsObject(this)) {
     throw %NewTypeError("not an object");
@@ -6732,7 +6732,7 @@ function PromisePrototypeFinally(onFinally) {
   return InvokeThen(this, %NewBuiltinClosure(7, data, 1), %NewBuiltinClosure(8, data, 1));
 }
 
-// builtins/promise.ts:626 %PromiseThenFinally
+// builtins/promise.ts:628 %PromiseThenFinally
 function PromiseThenFinally(value) {
   const data = %AsObj(this);
   const result = %Call(%RecordGet(data, 0), undefined);
@@ -6740,7 +6740,7 @@ function PromiseThenFinally(value) {
   return InvokeThen(p, %NewBuiltinClosure(9, value, 0), undefined);
 }
 
-// builtins/promise.ts:637 %PromiseCatchFinally
+// builtins/promise.ts:639 %PromiseCatchFinally
 function PromiseCatchFinally(reason) {
   const data = %AsObj(this);
   const result = %Call(%RecordGet(data, 0), undefined);
@@ -6748,22 +6748,22 @@ function PromiseCatchFinally(reason) {
   return InvokeThen(p, %NewBuiltinClosure(10, reason, 0), undefined);
 }
 
-// builtins/promise.ts:648 %PromiseValueThunk
+// builtins/promise.ts:650 %PromiseValueThunk
 function PromiseValueThunk() {
   return this;
 }
 
-// builtins/promise.ts:656 %PromiseThrower
+// builtins/promise.ts:658 %PromiseThrower
 function PromiseThrower() {
   throw this;
 }
 
-// builtins/promise.ts:665 value Promise.prototype[Symbol.toStringTag]
+// builtins/promise.ts:667 value Promise.prototype[Symbol.toStringTag]
 function PromisePrototypeToStringTag() {
   return "Promise";
 }
 
-// builtins/promise.ts:677 %HostCallSettle
+// builtins/promise.ts:679 %HostCallSettle
 function HostCallSettle(promise, ok, value) {
   if (!%PromiseClaimResolve(promise)) {
     return;
@@ -8876,7 +8876,7 @@ function ClampPosition(v, len) {
   return p > len ? len : p;
 }
 
-// builtins/string.ts:90 String.prototype.at
+// builtins/string.ts:91 String.prototype.at
 function StringPrototypeAt(index) {
   const s = ThisToString(this);
   const len = StrLen(s);
@@ -8888,7 +8888,7 @@ function StringPrototypeAt(index) {
   return %StrSubstring(s, k, k + 1);
 }
 
-// builtins/string.ts:105 String.prototype.charAt
+// builtins/string.ts:107 String.prototype.charAt
 function StringPrototypeCharAt(pos) {
   const s = ThisToString(this);
   const p = ToIntegerOrInfinity(pos);
@@ -8898,19 +8898,19 @@ function StringPrototypeCharAt(pos) {
   return %StrSubstring(s, p, p + 1);
 }
 
-// builtins/string.ts:118 String.prototype.charCodeAt
+// builtins/string.ts:121 String.prototype.charCodeAt
 function StringPrototypeCharCodeAt(pos) {
   const s = ThisToString(this);
   return %StrCharCodeAt(s, ToIntegerOrInfinity(pos));
 }
 
-// builtins/string.ts:127 String.prototype.codePointAt
+// builtins/string.ts:131 String.prototype.codePointAt
 function StringPrototypeCodePointAt(pos) {
   const s = ThisToString(this);
   return %StrCodePointAt(s, ToIntegerOrInfinity(pos));
 }
 
-// builtins/string.ts:138 String.prototype.indexOf
+// builtins/string.ts:143 String.prototype.indexOf
 function StringPrototypeIndexOf(searchString, position) {
   const s = ThisToString(this);
   const search = ToString(searchString);
@@ -8918,7 +8918,7 @@ function StringPrototypeIndexOf(searchString, position) {
   return %StrIndexOf(s, search, start);
 }
 
-// builtins/string.ts:149 String.prototype.lastIndexOf
+// builtins/string.ts:154 String.prototype.lastIndexOf
 function StringPrototypeLastIndexOf(searchString, position) {
   const s = ThisToString(this);
   const search = ToString(searchString);
@@ -8932,7 +8932,7 @@ function StringPrototypeLastIndexOf(searchString, position) {
   return %StrLastIndexOf(s, search, pos < len - searchLen ? pos : len - searchLen);
 }
 
-// builtins/string.ts:167 String.prototype.includes
+// builtins/string.ts:172 String.prototype.includes
 function StringPrototypeIncludes(searchString, position) {
   const s = ThisToString(this);
   if (IsRegExp(searchString)) {
@@ -8943,7 +8943,7 @@ function StringPrototypeIncludes(searchString, position) {
   return %StrIndexOf(s, search, start) >= 0;
 }
 
-// builtins/string.ts:181 String.prototype.startsWith
+// builtins/string.ts:187 String.prototype.startsWith
 function StringPrototypeStartsWith(searchString, position) {
   const s = ThisToString(this);
   if (IsRegExp(searchString)) {
@@ -8959,7 +8959,7 @@ function StringPrototypeStartsWith(searchString, position) {
   return %StrSubstring(s, start, start + searchLength) === search;
 }
 
-// builtins/string.ts:200 String.prototype.endsWith
+// builtins/string.ts:206 String.prototype.endsWith
 function StringPrototypeEndsWith(searchString, endPosition) {
   const s = ThisToString(this);
   if (IsRegExp(searchString)) {
@@ -8975,13 +8975,13 @@ function StringPrototypeEndsWith(searchString, endPosition) {
   return %StrSubstring(s, end - searchLength, end) === search;
 }
 
-// builtins/string.ts:219 String.prototype.localeCompare
+// builtins/string.ts:225 String.prototype.localeCompare
 function StringPrototypeLocaleCompare(that) {
   const s = ThisToString(this);
   return %StrLocaleCompare(s, ToString(that));
 }
 
-// builtins/string.ts:230 String.prototype.slice
+// builtins/string.ts:237 String.prototype.slice
 function StringPrototypeSlice(start, end) {
   const s = ThisToString(this);
   const len = StrLen(s);
@@ -8993,7 +8993,7 @@ function StringPrototypeSlice(start, end) {
   return %StrSubstring(s, from, to);
 }
 
-// builtins/string.ts:245 String.prototype.substring
+// builtins/string.ts:253 String.prototype.substring
 function StringPrototypeSubstring(start, end) {
   const s = ThisToString(this);
   const len = StrLen(s);
@@ -9002,7 +9002,7 @@ function StringPrototypeSubstring(start, end) {
   return a < b ? %StrSubstring(s, a, b) : %StrSubstring(s, b, a);
 }
 
-// builtins/string.ts:257 String.prototype.substr
+// builtins/string.ts:265 String.prototype.substr
 function StringPrototypeSubstr(start, length) {
   const s = ThisToString(this);
   const size = StrLen(s);
@@ -9021,7 +9021,7 @@ function StringPrototypeSubstr(start, length) {
   return %StrSubstring(s, intStart, intEnd);
 }
 
-// builtins/string.ts:280 String.prototype.concat
+// builtins/string.ts:288 String.prototype.concat
 function StringPrototypeConcat(...args) {
   let r = ThisToString(this);
   const n = LengthOfArrayLike(args);
@@ -9031,7 +9031,7 @@ function StringPrototypeConcat(...args) {
   return r;
 }
 
-// builtins/string.ts:293 String.prototype.repeat
+// builtins/string.ts:301 String.prototype.repeat
 function StringPrototypeRepeat(count) {
   const s = ThisToString(this);
   const n = ToIntegerOrInfinity(count);
@@ -9044,7 +9044,7 @@ function StringPrototypeRepeat(count) {
   return %StrRepeat(s, n);
 }
 
-// builtins/string.ts:306
+// builtins/string.ts:314
 function StringPad(s, maxLength, fillString, atStart) {
   const intMaxLength = ToLength(maxLength);
   const stringLength = StrLen(s);
@@ -9061,62 +9061,62 @@ function StringPad(s, maxLength, fillString, atStart) {
   return atStart ? truncated + s : s + truncated;
 }
 
-// builtins/string.ts:326 String.prototype.padEnd
+// builtins/string.ts:334 String.prototype.padEnd
 function StringPrototypePadEnd(maxLength, fillString) {
   return StringPad(ThisToString(this), maxLength, fillString, false);
 }
 
-// builtins/string.ts:334 String.prototype.padStart
+// builtins/string.ts:342 String.prototype.padStart
 function StringPrototypePadStart(maxLength, fillString) {
   return StringPad(ThisToString(this), maxLength, fillString, true);
 }
 
-// builtins/string.ts:344 String.prototype.toLowerCase
+// builtins/string.ts:352 String.prototype.toLowerCase
 function StringPrototypeToLowerCase() {
   return %StrToCase(ThisToString(this), false);
 }
 
-// builtins/string.ts:352 String.prototype.toUpperCase
+// builtins/string.ts:360 String.prototype.toUpperCase
 function StringPrototypeToUpperCase() {
   return %StrToCase(ThisToString(this), true);
 }
 
-// builtins/string.ts:360 String.prototype.toLocaleLowerCase
+// builtins/string.ts:368 String.prototype.toLocaleLowerCase
 function StringPrototypeToLocaleLowerCase() {
   return %StrToCase(ThisToString(this), false);
 }
 
-// builtins/string.ts:368 String.prototype.toLocaleUpperCase
+// builtins/string.ts:376 String.prototype.toLocaleUpperCase
 function StringPrototypeToLocaleUpperCase() {
   return %StrToCase(ThisToString(this), true);
 }
 
-// builtins/string.ts:376 String.prototype.trim
+// builtins/string.ts:384 String.prototype.trim
 function StringPrototypeTrim() {
   return %StrTrim(ThisToString(this), 0);
 }
 
-// builtins/string.ts:385 String.prototype.trimStart String.prototype.trimLeft
+// builtins/string.ts:393 String.prototype.trimStart String.prototype.trimLeft
 function StringPrototypeTrimStart() {
   return %StrTrim(ThisToString(this), 1);
 }
 
-// builtins/string.ts:394 String.prototype.trimEnd String.prototype.trimRight
+// builtins/string.ts:402 String.prototype.trimEnd String.prototype.trimRight
 function StringPrototypeTrimEnd() {
   return %StrTrim(ThisToString(this), 2);
 }
 
-// builtins/string.ts:402 String.prototype.isWellFormed
+// builtins/string.ts:410 String.prototype.isWellFormed
 function StringPrototypeIsWellFormed() {
   return %StrIsWellFormed(ThisToString(this));
 }
 
-// builtins/string.ts:410 String.prototype.toWellFormed
+// builtins/string.ts:418 String.prototype.toWellFormed
 function StringPrototypeToWellFormed() {
   return %StrToWellFormed(ThisToString(this));
 }
 
-// builtins/string.ts:419 String.prototype.normalize
+// builtins/string.ts:427 String.prototype.normalize
 function StringPrototypeNormalize(form) {
   const s = ThisToString(this);
   let f = "NFC";
@@ -9142,13 +9142,13 @@ function StringPrototypeNormalize(form) {
   return %AsStr(r);
 }
 
-// builtins/string.ts:451 String.fromCharCode
+// builtins/string.ts:459 String.fromCharCode
 function StringFromCharCode(...codeUnits) {
   CoerceNumbers(codeUnits);
   return %StrFromCodeUnits(codeUnits);
 }
 
-// builtins/string.ts:461 String.fromCodePoint
+// builtins/string.ts:469 String.fromCodePoint
 function StringFromCodePoint(...codePoints) {
   if (%AllCodePoints(codePoints)) {
     return %StrFromCodePoints(codePoints);
@@ -9165,7 +9165,7 @@ function StringFromCodePoint(...codePoints) {
   return %StrFromCodePoints(codePoints);
 }
 
-// builtins/string.ts:482 String.raw
+// builtins/string.ts:490 String.raw
 function StringRaw(template, ...substitutions) {
   const cooked = %ToObject(template);
   const literals = %ToObject(%Get(cooked, "raw"));
@@ -11333,6 +11333,12 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallMethod("FinalizationRegistry.prototype", "register", FinalizationRegistryPrototypeRegister, 2);
 %InstallMethod("FinalizationRegistry.prototype", "unregister", FinalizationRegistryPrototypeUnregister, 1);
 %InstallValue("FinalizationRegistry.prototype", %WellKnownSymbol("toStringTag"), FinalizationRegistryPrototypeToStringTag(), 4);
+%InstallIntrinsic("ArraySpeciesCreate", ArraySpeciesCreate);
+%InstallIntrinsic("FindViaPredicate", FindViaPredicate);
+%InstallIntrinsic("EveryOrSome", EveryOrSome);
+%InstallIntrinsic("Reduce", Reduce);
+%InstallIntrinsic("SortList", SortList);
+%InstallIntrinsic("CollectPresent", CollectPresent);
 %InstallIntrinsic("AsyncGeneratorStep", AsyncGeneratorStep);
 %InstallIntrinsic("AsyncGeneratorAwaitReturnFulfilled", AsyncGeneratorAwaitReturnFulfilled);
 %InstallIntrinsic("AsyncGeneratorAwaitReturnRejected", AsyncGeneratorAwaitReturnRejected);
@@ -11346,6 +11352,7 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallIntrinsic("ToPrimitive", ToPrimitive);
 %InstallIntrinsic("ToNumber", ToNumber);
 %InstallIntrinsic("ToString", ToString);
+%InstallIntrinsic("LengthOfArrayLike", LengthOfArrayLike);
 %InstallIntrinsic("ToPropertyKey", ToPropertyKey);
 %InstallIntrinsic("DecoratorStart", DecoratorStart);
 %InstallIntrinsic("ApplyDecorators", ApplyDecorators);
@@ -11384,6 +11391,7 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallIntrinsic("ArrayIteratorPrototypeNext", ArrayIteratorPrototypeNext);
 %InstallIntrinsic("StringPrototypeIterator", StringPrototypeIterator);
 %InstallIntrinsic("StringIteratorPrototypeNext", StringIteratorPrototypeNext);
+%InstallIntrinsic("ResolvePromise", ResolvePromise);
 %InstallIntrinsic("PromiseResolveFunction", PromiseResolveFunction);
 %InstallIntrinsic("PromiseRejectFunction", PromiseRejectFunction);
 %InstallIntrinsic("GetCapabilitiesExecutor", GetCapabilitiesExecutor);
@@ -11441,4 +11449,37 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallIntrinsic("CopyDataProperties", CopyDataProperties);
 %InstallIntrinsic("CopyDataPropertiesExcluding", CopyDataPropertiesExcluding);
 %InstallIntrinsic("FinalizationRegistryCleanupJob", FinalizationRegistryCleanupJob);
+%MarkNative(ArrayPrototypeForEach, 0);
+%MarkNative(ArrayPrototypeMap, 1);
+%MarkNative(ArrayPrototypeIndexOf, 2);
+%MarkNative(ArrayPrototypeJoin, 3);
+%MarkNative(ArrayPrototypeIncludes, 4);
+%MarkNative(ArrayPrototypePush, 5);
+%MarkNative(FindViaPredicate, 6);
+%MarkNative(ArrayPrototypeFind, 7);
+%MarkNative(ArrayPrototypeFindIndex, 8);
+%MarkNative(EveryOrSome, 9);
+%MarkNative(ArrayPrototypeEvery, 10);
+%MarkNative(ArrayPrototypeSome, 11);
+%MarkNative(ArrayPrototypeFilter, 12);
+%MarkNative(Reduce, 13);
+%MarkNative(ArrayPrototypeReduce, 14);
+%MarkNative(ArrayPrototypeReduceRight, 15);
+%MarkNative(ArrayPrototypeSlice, 16);
+%MarkNative(ArrayPrototypePop, 17);
+%MarkNative(SortList, 18);
+%MarkNative(CollectPresent, 19);
+%MarkNative(ArrayPrototypeSort, 20);
+%MarkNative(ArrayPrototypeToSorted, 21);
+%MarkNative(GetIterator, 22);
+%MarkNative(ArrayIteratorPrototypeNext, 23);
+%MarkNative(PromiseReactionJob, 24);
+%MarkNative(StringPrototypeAt, 25);
+%MarkNative(StringPrototypeCharAt, 26);
+%MarkNative(StringPrototypeCharCodeAt, 27);
+%MarkNative(StringPrototypeCodePointAt, 28);
+%MarkNative(StringPrototypeIndexOf, 29);
+%MarkNative(StringPrototypeStartsWith, 30);
+%MarkNative(StringPrototypeSlice, 31);
+%MarkNative(StringPrototypeSubstring, 32);
 })();

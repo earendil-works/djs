@@ -318,8 +318,9 @@ cells! {
         /// [`U32Array`] of atom ids: local names, then capture names (TDZ messages,
         /// disassembler). Null if not recorded.
         NAMES: Ref = 64,
-        /// Reserved, 0.
-        RESERVED2: u32 = 68,
+        /// A `@native` builtin's index into the generated table (with
+        /// `func_flags::NATIVE`), else 0.
+        NATIVE: u32 = 68,
         /// [`U32Array`] of `IC_COUNT` inline cache slots (`interp::run::ic`), allocated
         /// the first time one is filled; null before.
         IC: Ref = 72,

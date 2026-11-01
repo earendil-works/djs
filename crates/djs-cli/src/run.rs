@@ -1,4 +1,4 @@
-//! `djs run [--body] [--ts] [--gc-stress] [--suspend-every N] <file.js>`: run a script,
+//! `djs run [--body] [--ts] [--gc-stress] [--suspend-every N] [--backend B] <file.js>`: run a script,
 //! serving `console.log` as a sync host call.
 //!
 //! Exit codes: 0 ok, 1 uncaught exception (printed as `Uncaught Name: message`), 2 usage
@@ -10,12 +10,13 @@ use djs_core::compiler::{CompileErrorKind, CompileOptions};
 use djs_core::value::Value;
 use djs_core::vm::{ExecOptions, Status, Vm, VmOptions};
 
-const USAGE: &str = "usage: djs run [--body] [--ts] [--gc-stress] [--suspend-every N] <file.js>\n\
+const USAGE: &str = "usage: djs run [--body] [--ts] [--gc-stress] [--suspend-every N] [--backend B] <file.js>\n\
   --body             run as a codemode async body with parameters (tools, console)\n\
   --ts               parse as TypeScript (the default for .ts files)\n\
   --gc-stress        collect garbage at every safepoint\n\
   --suspend-every N  run N fuel at a time; at every stop, continue in a fresh VM\n\
-                     restored from the heap image";
+                     restored from the heap image\n\
+  --backend B        run the @native builtins as `native` code (default) or `bytecode`";
 
 pub fn main(args: &[String]) -> i32 {
     let mut opts = RunOptions::default();
@@ -26,6 +27,14 @@ pub fn main(args: &[String]) -> i32 {
             "--body" => opts.body = true,
             "--ts" => opts.typescript = true,
             "--gc-stress" => opts.gc_stress = true,
+            "--backend" => match it.next().map(|s| s.as_str()) {
+                Some("native") => opts.bytecode_builtins = false,
+                Some("bytecode") => opts.bytecode_builtins = true,
+                _ => {
+                    eprintln!("{USAGE}");
+                    return 2;
+                }
+            },
             "--suspend-every" => match it.next().and_then(|n| n.parse().ok()) {
                 Some(n) if n > 0 => opts.suspend_every = Some(n),
                 _ => {
@@ -130,6 +139,8 @@ pub struct RunOptions {
     pub suspend_every: Option<u64>,
     /// Parse as TypeScript.
     pub typescript: bool,
+    /// Run the `@native` builtins as bytecode (`--backend bytecode`, 0063).
+    pub bytecode_builtins: bool,
 }
 
 impl RunOptions {
@@ -137,6 +148,7 @@ impl RunOptions {
         VmOptions {
             exec: ExecOptions {
                 gc_stress: self.gc_stress,
+                native_builtins: !self.bytecode_builtins,
                 ..Default::default()
             },
             ..Default::default()

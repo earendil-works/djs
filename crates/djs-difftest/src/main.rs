@@ -29,6 +29,8 @@ options:
                       without --suspend-every) through heap images, and require the
                       suspended runs to leave the same heap image as the plain run after
                       a final collection (hard failure; GC stress is not compared, D1720)
+  --backend B         djs only: run the @native builtins as `native` code (default)
+                      or as `bytecode` (both must behave the same, 0063)
   --clusters          group the failures by the first line of what went wrong
   --qjs PATH          qjs binary (default: $DJS_QJS, else ~/Development/dquickts/qjs)
   --update            rewrite .expected files from qjs (never from djs)
@@ -61,6 +63,7 @@ struct Args {
     suspend_every: Option<u64>,
     gc_stress: bool,
     determinism: bool,
+    bytecode_builtins: bool,
     clusters: bool,
 }
 
@@ -101,6 +104,7 @@ fn parse_args() -> Result<Args, String> {
         suspend_every: None,
         gc_stress: false,
         determinism: false,
+        bytecode_builtins: false,
         clusters: false,
     };
     let mut it = std::env::args().skip(1);
@@ -151,6 +155,11 @@ fn parse_args() -> Result<Args, String> {
             }
             "--gc-stress" => args.gc_stress = true,
             "--determinism" => args.determinism = true,
+            "--backend" => match value("--backend")?.as_str() {
+                "native" => args.bytecode_builtins = false,
+                "bytecode" => args.bytecode_builtins = true,
+                other => return Err(format!("--backend: native or bytecode, not `{other}`")),
+            },
             "--clusters" => args.clusters = true,
             "-q" | "--quiet" => args.quiet = true,
             // `run` is accepted for symmetry with djs-test262.
@@ -210,6 +219,7 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         }
         "djs" => Box::new(Djs {
             image: args.determinism,
+            bytecode_builtins: args.bytecode_builtins,
             ..Djs::default()
         }),
         e => return Err(format!("unknown engine `{e}`")),
@@ -503,6 +513,7 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
             suspend_every: Some(n),
             gc_stress: false,
             image: args.determinism,
+            bytecode_builtins: args.bytecode_builtins,
         };
         v.push((e.label(), Box::new(e)));
     }
@@ -511,6 +522,7 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
             suspend_every: None,
             gc_stress: true,
             image: false,
+            bytecode_builtins: args.bytecode_builtins,
         };
         v.push((e.label(), Box::new(e)));
     }

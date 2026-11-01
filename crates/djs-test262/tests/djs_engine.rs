@@ -44,7 +44,10 @@ fn djs_engine_fixture_suite() {
     let config = Config::parse("").unwrap();
     let tests = suite.load(&config, suite.discover(&[]).unwrap(), 4);
     // A small fuel budget keeps the infinite loop short; 4 MiB keeps the oom test quick.
-    let engine = Djs { fuel: 2_000_000 };
+    let engine = Djs {
+        fuel: 2_000_000,
+        ..Djs::default()
+    };
     let opts = Options {
         jobs: 4,
         timeout: Duration::from_secs(60),

@@ -6,6 +6,7 @@ pub mod ast;
 pub mod check;
 pub mod diag;
 pub mod emit_js;
+pub mod emit_rust;
 pub mod lexer;
 pub mod parser;
 
@@ -20,10 +21,14 @@ pub struct Output {
     pub prelude: String,
     /// `gen/resume-points.txt`
     pub report: String,
+    /// `crates/djs-core/src/builtins/gen/natives.rs`: the Rust backend (0063).
+    pub natives: String,
 }
 
 pub const PRELUDE_PATH: &str = "gen/prelude.js";
 pub const REPORT_PATH: &str = "gen/resume-points.txt";
+/// Relative to the builtins directory.
+pub const NATIVES_PATH: &str = "../crates/djs-core/src/builtins/gen/natives.rs";
 
 /// Compiles in-memory sources: `intrinsics` is intrinsics.d.ts, `modules` are
 /// (name, text) pairs of builtin files in output order. Errors are rendered.
@@ -61,9 +66,12 @@ pub fn compile(intrinsics: (&str, &str), modules: &[(String, String)]) -> Result
     let program =
         check::check(decls.unwrap(), parsed).map_err(|errors| render(&errors, &sources))?;
     let analysis = analysis::analyze(&program);
+    let natives = emit_rust::emit(&program, &analysis, &sources)
+        .map_err(|errors| render(&errors, &sources))?;
     Ok(Output {
         prelude: emit_js::emit(&program, &sources),
         report: analysis::report(&program, &analysis, &sources),
+        natives,
     })
 }
 

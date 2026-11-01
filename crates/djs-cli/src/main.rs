@@ -4,7 +4,7 @@ mod run;
 mod strip;
 
 const USAGE: &str = "usage: djs <command> ...\n\
-  djs run [--body] [--ts] [--gc-stress] [--suspend-every N] <file.js>\n\
+  djs run [--body] [--ts] [--gc-stress] [--suspend-every N] [--backend B] <file.js>\n\
   djs disasm [--body] <file.js>\n\
   djs repl [--ts] [--gc-stress] [--no-history]\n\
   djs strip-types <file.ts>";

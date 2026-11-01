@@ -31,6 +31,12 @@ pub const NEW_TARGET: u32 = 5;
 /// `flags` bit: the frame was entered by `construct`.
 pub const FLAG_CONSTRUCT: i32 = 1 << 4;
 
+/// `flags` bit: a native frame (a `@native` builtin's generated state machine, 0063):
+/// `pc` is the state, the locals are the generated slots. Set when the frame is pushed,
+/// so a frame stays native (or bytecode) for its whole activation whatever the options
+/// say later.
+pub const FLAG_NATIVE: i32 = 1 << 5;
+
 /// What happens with a frame's return value (docs/compiler.md 7.3, D1085, D1280).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Continuation {

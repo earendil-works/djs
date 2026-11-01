@@ -63,6 +63,10 @@ pub struct ExecOptions {
     /// Queue FinalizationRegistry cleanup jobs right after every collection (the
     /// default). Off, the host decides when: `Vm::schedule_finalization_cleanup` (D1513).
     pub finalization_after_gc: bool,
+    /// Run `@native` builtins as their generated Rust state machines (0063, the
+    /// default); off runs every builtin as bytecode (`--backend bytecode`). The choice
+    /// is made per call: frames already running keep their kind.
+    pub native_builtins: bool,
 }
 
 impl Default for ExecOptions {
@@ -71,6 +75,7 @@ impl Default for ExecOptions {
             gc_stress: false,
             max_stack: 1 << 20,
             finalization_after_gc: true,
+            native_builtins: true,
         }
     }
 }
@@ -81,6 +86,7 @@ mod ic;
 mod intrinsics;
 mod json_regexp;
 pub(crate) mod late;
+pub(crate) mod native;
 pub(crate) mod promise;
 mod proxy;
 pub(crate) mod suspend;
@@ -122,7 +128,7 @@ mod fast {
     pub const PUT_FIELD: u8 = Op::PutField as u8;
 }
 
-type Step = Result<Option<Status>, Fault>;
+pub(crate) type Step = Result<Option<Status>, Fault>;
 
 /// What a property lookup found (`Exec::lookup`).
 enum Got {
@@ -152,6 +158,13 @@ pub(crate) struct Exec<'h> {
     code_len: u32,
     consts: u32,
     lp: u32,
+    /// The current frame's native function (index + 1 into `builtins::gen::NATIVES`), or
+    /// 0 for a bytecode frame. Native frames have `code_len` 0, so `fast_step` declines
+    /// them and `step` hands them to `native_step`.
+    native: u32,
+    /// Template flags that make `fast_call_at` decline: SLOPPY_THIS, and NATIVE when
+    /// native builtins are on.
+    slow_call_flags: u32,
 }
 
 impl<'h> Exec<'h> {
@@ -180,6 +193,13 @@ impl<'h> Exec<'h> {
             code_len: 0,
             consts: 0,
             lp: 0,
+            native: 0,
+            slow_call_flags: func_flags::SLOPPY_THIS
+                | if opts.native_builtins {
+                    func_flags::NATIVE
+                } else {
+                    0
+                },
         }
     }
 
@@ -302,6 +322,9 @@ impl<'h> Exec<'h> {
         let f = self.get(self.bp).as_object().expect("frame callee");
         let t = self.template_of(f);
         self.enter_template(t);
+        if self.header_int(frame::FLAGS) as i32 & frame::FLAG_NATIVE != 0 {
+            self.enter_native(t);
+        }
     }
 
     /// Sets the cached frame data for template `t` (with `hp` already set).
@@ -315,6 +338,7 @@ impl<'h> Exec<'h> {
         self.code_len = code.get().map_or(0, |c| a.get(c, Bytes::LEN));
         self.consts = a.get(t, FuncTemplate::CONSTS).0;
         self.lp = self.hp + HEADER;
+        self.native = 0;
     }
 
     /// The stack top a frame for template `t` called with `argc` arguments at `base`
@@ -403,7 +427,11 @@ impl<'h> Exec<'h> {
         match self.heap.object_class(o) {
             ObjectClass::Function => {
                 let t = self.template_of(o);
-                if self.heap.arena().get(t, FuncTemplate::FLAGS) & func_flags::SLOPPY_THIS != 0 {
+                let flags = self.heap.arena().get(t, FuncTemplate::FLAGS);
+                if flags & self.slow_call_flags & func_flags::NATIVE != 0 {
+                    return self.push_native_frame(t, base, argc, cont, ret_pc);
+                }
+                if flags & func_flags::SLOPPY_THIS != 0 {
                     self.bind_sloppy_this(base + 1)?;
                 }
                 self.ensure(self.frame_top(t, base, argc))?;
@@ -654,20 +682,32 @@ impl<'h> Exec<'h> {
     /// whose try regions apply in the current frame.
     fn throw_value(&mut self, exc: Value, mut key: u32) -> Option<Status> {
         loop {
-            let handlers = self.heap.arena().get(self.template, FuncTemplate::HANDLERS);
-            let found = HandlerTable::new(bytes_of(self.heap, handlers))
-                .ok()
-                .and_then(|t| t.find(key));
-            if let Some(h) = found {
-                self.sp = self.lp + self.locals() + h.depth;
-                self.push(exc);
-                self.pc = h.target;
-                if exc == intrinsic(self.heap, Intrinsic::OutOfMemoryError) {
-                    // The frames that held the data are gone: collect before the
-                    // handler allocates (D1600).
-                    self.safepoint_collect();
+            if self.native != 0 {
+                if let Some((target, slot)) = self.native_handler(key) {
+                    self.sp = self.lp + self.native_locals();
+                    self.set(self.lp + slot, exc);
+                    self.pc = target;
+                    if exc == intrinsic(self.heap, Intrinsic::OutOfMemoryError) {
+                        self.safepoint_collect();
+                    }
+                    return None;
                 }
-                return None;
+            } else {
+                let handlers = self.heap.arena().get(self.template, FuncTemplate::HANDLERS);
+                let found = HandlerTable::new(bytes_of(self.heap, handlers))
+                    .ok()
+                    .and_then(|t| t.find(key));
+                if let Some(h) = found {
+                    self.sp = self.lp + self.locals() + h.depth;
+                    self.push(exc);
+                    self.pc = h.target;
+                    if exc == intrinsic(self.heap, Intrinsic::OutOfMemoryError) {
+                        // The frames that held the data are gone: collect before the
+                        // handler allocates (D1600).
+                        self.safepoint_collect();
+                    }
+                    return None;
+                }
             }
             let cont = Continuation::from_flags(self.header_int(frame::FLAGS) as i32);
             if cont.is_bottom() {
@@ -678,7 +718,7 @@ impl<'h> Exec<'h> {
             self.bp = self.header_int(frame::PREV_BP);
             self.hp = self.header_int(frame::PREV_HP);
             self.load_frame();
-            key = ret_pc - 1;
+            key = self.call_site_key(ret_pc);
         }
     }
 
@@ -865,7 +905,7 @@ impl<'h> Exec<'h> {
             state::set_state(self.heap, RunState::Running);
             let exc = state::pending_throw(self.heap);
             state::set_pending_throw(self.heap, Value::UNDEFINED);
-            if let Some(st) = self.throw_value(exc, self.pc.saturating_sub(1)) {
+            if let Some(st) = self.throw_value(exc, self.call_site_key(self.pc)) {
                 return st;
             }
         }
@@ -1166,7 +1206,7 @@ impl<'h> Exec<'h> {
         }
         let t = self.template_of(o);
         if self.frame_top(t, base, argc) > self.heap.value_array_capacity(self.stack)
-            || self.heap.arena().get(t, FuncTemplate::FLAGS) & func_flags::SLOPPY_THIS != 0
+            || self.heap.arena().get(t, FuncTemplate::FLAGS) & self.slow_call_flags != 0
         {
             return false;
         }
@@ -1199,6 +1239,9 @@ impl<'h> Exec<'h> {
     #[inline(always)]
     fn step(&mut self) -> Step {
         if self.pc >= self.code_len {
+            if self.native != 0 {
+                return self.native_step();
+            }
             return Err(Fault::error(
                 ErrorKind::InternalError,
                 String::from("bad bytecode: pc out of range"),

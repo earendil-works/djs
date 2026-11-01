@@ -290,8 +290,10 @@ Intrinsics themselves (leaf ones) stay hand-written Rust over the heap accessors
 #### Generated state machines
 
 A `@native` builtin runs in a **native frame** in the arena, next to JS frames. The frame
-record holds `(native_fn_index, state, locals…)`. bgen knows every local and its type, so
-it lays them out as slots. Every reference-typed local lives in a frame slot, which makes
+record is a JS frame's (callee, `this`, arguments, header) with a native bit in the
+header; the callee's template holds the native function's index, `pc` holds the state,
+and the locals are bgen's slots (D1631). bgen knows every local and its type, so
+it lays them out as slots. Every local lives in a frame slot (as a Value), which makes
 it a GC root. Because the frame holds no pointers, native frames suspend, snapshot and
 restore like JS frames.
 
@@ -384,6 +386,10 @@ pub(crate) fn array_map(vm: &mut Vm, fr: NativeFrame) -> Step {
 }
 ```
 
+As implemented (0063, D1632; `crates/djs-core/src/builtins/gen/natives.rs`), the arms
+call `ex.n_*` helpers of `interp/run/native.rs` instead of a `fr` handle, every intrinsic
+call goes through the interpreter's `call_intrinsic` (with inline fast paths that mirror
+it), and small internal helpers such as `ToString` are inlined into the caller's states.
 `fr.call*` and `fr.ret` return a `Step` to the interpreter loop. The loop pushes the callee
 frame (JS or native) and later re-enters `array_map` at the saved state. `?` on a throw
 unwinds through the frame's handler table. `fr.goto` returns early (with the state already

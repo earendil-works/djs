@@ -107,6 +107,14 @@ pub fn engine(r: &mut Runner) {
     // djs in-process (the difftest djs engine, D1160). Scripts it cannot run yet are
     // skipped with the reason.
     engines.push(("djs", Box::new(Djs::default())));
+    // The same with every builtin as bytecode (0063): what the @native builtins buy.
+    engines.push((
+        "djs-bytecode",
+        Box::new(Djs {
+            bytecode_builtins: true,
+            ..Djs::default()
+        }),
+    ));
     let scripts = match load_scripts(&root.join("tests/bench")) {
         Ok(s) => s,
         Err(e) => return r.skip("engine", e),
@@ -133,16 +141,27 @@ pub fn engine(r: &mut Runner) {
             }
         }
     }
-    // djs time / qjs time per script that ran on both (lower is better; 1.0 is parity).
+    // djs time / qjs time per script that ran on both (lower is better; 1.0 is parity),
+    // and the bytecode backend's time / the native backend's (0063).
     for s in scripts.iter().filter(|s| s.name != "empty") {
         let value = |engine: &str| {
             let name = format!("engine/{engine}/{}", s.name);
             r.results.iter().find(|m| m.name == name).map(|m| m.value)
         };
-        if let (Some(d), Some(q)) = (value("djs"), value("qjs"))
+        let (d, q, b) = (value("djs"), value("qjs"), value("djs-bytecode"));
+        if let (Some(d), Some(q)) = (d, q)
             && q > 0.0
         {
             r.value(&format!("engine/djs÷qjs/{}", s.name), Unit::Ratio, d / q);
+        }
+        if let (Some(b), Some(d)) = (b, d)
+            && d > 0.0
+        {
+            r.value(
+                &format!("engine/bytecode÷native/{}", s.name),
+                Unit::Ratio,
+                b / d,
+            );
         }
     }
 }

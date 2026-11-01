@@ -33,11 +33,16 @@ const SETUP: &str = "$262.evalScript = function evalScript(src) { return $262.__
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Djs {
     pub fuel: u64,
+    /// Run the `@native` builtins as bytecode (`--backend bytecode`, 0063).
+    pub bytecode_builtins: bool,
 }
 
 impl Default for Djs {
     fn default() -> Djs {
-        Djs { fuel: DEFAULT_FUEL }
+        Djs {
+            fuel: DEFAULT_FUEL,
+            bytecode_builtins: false,
+        }
     }
 }
 
@@ -79,6 +84,10 @@ impl Djs {
                 .memory_limit
                 .map(|n| n as usize)
                 .unwrap_or(DEFAULT_LIMIT),
+            exec: djs_core::vm::ExecOptions {
+                native_builtins: !self.bytecode_builtins,
+                ..Default::default()
+            },
             ..VmOptions::default()
         };
         let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;

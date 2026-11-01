@@ -903,3 +903,8 @@ declare function InstallAccessor(target: Str, key: Value, f: Value, isSetter: bo
 declare function InstallValue(target: Str, key: Value, v: Value, attrs: i32): void;
 /** Registers f so that privileged code can call it as %name(...). @leaf */
 declare function InstallIntrinsic(name: Str, f: Value): void;
+/**
+ * Makes the builtin f native builtin `index` of the generated table (0063): with
+ * native builtins on, its calls run the Rust state machine. @leaf
+ */
+declare function MarkNative(f: Value, index: i32): void;

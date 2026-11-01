@@ -86,6 +86,7 @@ function ClampPosition(v: Value, len: f64): f64 {
 /**
  * String.prototype.at ( index ), 22.1.3.1.
  * @builtin String.prototype.at
+ * @native
  */
 function StringPrototypeAt(this: Value, index: Value): Value {
   const s: Str = ThisToString(this);
@@ -101,6 +102,7 @@ function StringPrototypeAt(this: Value, index: Value): Value {
 /**
  * String.prototype.charAt ( pos ), 22.1.3.2.
  * @builtin String.prototype.charAt
+ * @native
  */
 function StringPrototypeCharAt(this: Value, pos: Value): Str {
   const s: Str = ThisToString(this);
@@ -114,6 +116,7 @@ function StringPrototypeCharAt(this: Value, pos: Value): Str {
 /**
  * String.prototype.charCodeAt ( pos ), 22.1.3.3.
  * @builtin String.prototype.charCodeAt
+ * @native
  */
 function StringPrototypeCharCodeAt(this: Value, pos: Value): f64 {
   const s: Str = ThisToString(this);
@@ -123,6 +126,7 @@ function StringPrototypeCharCodeAt(this: Value, pos: Value): f64 {
 /**
  * String.prototype.codePointAt ( pos ), 22.1.3.4.
  * @builtin String.prototype.codePointAt
+ * @native
  */
 function StringPrototypeCodePointAt(this: Value, pos: Value): Value {
   const s: Str = ThisToString(this);
@@ -134,6 +138,7 @@ function StringPrototypeCodePointAt(this: Value, pos: Value): Value {
 /**
  * String.prototype.indexOf ( searchString [ , position ] ), 22.1.3.9.
  * @builtin String.prototype.indexOf
+ * @native
  */
 function StringPrototypeIndexOf(this: Value, searchString: Value, position?: Value): f64 {
   const s: Str = ThisToString(this);
@@ -177,6 +182,7 @@ function StringPrototypeIncludes(this: Value, searchString: Value, position?: Va
 /**
  * String.prototype.startsWith ( searchString [ , position ] ), 22.1.3.24.
  * @builtin String.prototype.startsWith
+ * @native
  */
 function StringPrototypeStartsWith(this: Value, searchString: Value, position?: Value): boolean {
   const s: Str = ThisToString(this);
@@ -226,6 +232,7 @@ function StringPrototypeLocaleCompare(this: Value, that: Value): f64 {
 /**
  * String.prototype.slice ( start, end ), 22.1.3.22.
  * @builtin String.prototype.slice
+ * @native
  */
 function StringPrototypeSlice(this: Value, start: Value, end: Value): Str {
   const s: Str = ThisToString(this);
@@ -241,6 +248,7 @@ function StringPrototypeSlice(this: Value, start: Value, end: Value): Str {
 /**
  * String.prototype.substring ( start, end ), 22.1.3.25.
  * @builtin String.prototype.substring
+ * @native
  */
 function StringPrototypeSubstring(this: Value, start: Value, end: Value): Str {
   const s: Str = ThisToString(this);

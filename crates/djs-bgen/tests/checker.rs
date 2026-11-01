@@ -416,3 +416,39 @@ fn installation_forms() {
         %InstallMethod(\"%IP%\", %WellKnownSymbol(\"iterator\"), N, 0);\n";
     assert!(p.contains(expected), "{p}");
 }
+
+/// What the Rust backend (0063) does not support in a `@native` builtin yet.
+#[test]
+fn rust_backend_rejects() {
+    reject(
+        "/** @native */\nfunction F(x: Value): void { try { Call(x, x); } finally { Opt(x); } }",
+        "does not support try/finally",
+    );
+    // A reentrant builtin that is neither inlined (it is installed) nor @intrinsic.
+    reject(
+        "/** @builtin G */\nfunction G(x: Value): Value { return Call(x, x); }\n\
+         /** @native */\nfunction F(x: Value): Value { return G(x); }",
+        "only if it is `@intrinsic`",
+    );
+    reject(
+        "/** @constructor C\n * @native */\nfunction C(x: Value): Value { return x; }",
+        "`@native` constructors",
+    );
+    // The same callee as an @intrinsic is fine, and a small internal one is inlined.
+    accept(
+        "/** @builtin G\n * @intrinsic */\nfunction G(x: Value): Value { return Call(x, x); }\n\
+         function H(x: Value): Value { return Call(x, x); }\n\
+         /** @native */\nfunction F(x: Value): Value { return G(H(x)); }",
+    );
+    let out = compile(
+        "function H(x: Value): Value { return Call(x, x); }\n\
+         /** @native */\nfunction F(x: Value): Value { return H(x); }",
+    )
+    .unwrap();
+    assert!(out.natives.contains("// inlined: H"), "{}", out.natives);
+    assert!(
+        out.prelude.contains("%MarkNative(F, 0);"),
+        "{}",
+        out.prelude
+    );
+}

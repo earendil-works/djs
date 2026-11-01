@@ -15,6 +15,7 @@
 /**
  * The resolve steps of a promise resolve function, 27.2.1.3.2 steps 7-16, after the
  * [[AlreadyResolved]] check.
+ * @intrinsic
  */
 function ResolvePromise(promise: Obj, resolution: Value): void {
   if (resolution === promise) {
@@ -204,6 +205,7 @@ function InvokeThen(v: Value, onFulfilled: Value, onRejected: Value): Value {
  * NewPromiseReactionJob ( reaction, argument ), 27.2.2.1: the job. `handler` undefined is
  * an empty handler; an async function state is an await to resume.
  * @intrinsic
+ * @native
  */
 function PromiseReactionJob(capability: Value, handler: Value, argument: Value, fulfilled: boolean): void {
   // An await (D1375): the handler is the async function's state; resume it.

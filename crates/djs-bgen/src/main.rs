@@ -6,7 +6,8 @@ const USAGE: &str = "\
 usage: djs-bgen [--check] [--report] [--dir DIR]
 
 Compiles the builtins (builtins/intrinsics.d.ts and builtins/*.ts) and writes
-builtins/gen/prelude.js and builtins/gen/resume-points.txt.
+builtins/gen/prelude.js, builtins/gen/resume-points.txt and the Rust backend's
+crates/djs-core/src/builtins/gen/natives.rs.
 
   --check     do not write; exit 1 if the generated files are out of date
   --report    print the resume-point report instead of writing files
@@ -48,6 +49,7 @@ fn main() -> ExitCode {
     let files = [
         (djs_bgen::PRELUDE_PATH, &out.prelude),
         (djs_bgen::REPORT_PATH, &out.report),
+        (djs_bgen::NATIVES_PATH, &out.natives),
     ];
     if check {
         let stale: Vec<&str> = files

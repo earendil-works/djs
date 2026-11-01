@@ -2,7 +2,6 @@
 
 /**
  * @builtin Example.prototype.all
- * @native
  */
 function AllForms(this: Value, a: Value, b?: Value): Value {
   const self: Value = this;

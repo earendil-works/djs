@@ -3102,3 +3102,79 @@ holder's by the key check. These are the only slots with arena offsets (word 0 b
 `IC_OFFSET_SLOT`): the collector empties them when it copies a template, rather than
 bumping the epoch, so a collection of a collected heap stays byte-identical (D1090). Only
 data properties are cached; getters take the slow path.
+
+## D1631: Native frames are ordinary frame records with a header bit
+date: 2026-11-03 · by: infra · issue: 0063
+A `@native` builtin runs in a frame with the layout of a bytecode frame (frame.rs):
+callee (the builtin's own Function object), `this`, arguments padded to the parameter
+count, the 6-slot header with `FLAG_NATIVE` (bit 5 of `flags`), then the slots bgen
+assigned (locals and temporaries, all Values; i32/u32/f64/bool as number/bool Values)
+and an operand area for outgoing calls. `pc` is the state; a callee's `ret_pc` is the
+resume state. Nothing in the frame is a pointer, so the GC (which traces the stack
+array), heap images, the suspension stress mode, stack traces and `Vm::backtrace`
+(`at map (native)`, as for bytecode builtins) need no change. The prelude marks the
+builtins with `%MarkNative(fn, index)` (bgen emits it): `func_flags::NATIVE` plus the
+index in `FuncTemplate::NATIVE` (the former RESERVED2); a name that does not match the
+generated table fails the prelude, so the base image build fails. Dispatch:
+`Exec::call` pushes a native frame when the template is NATIVE and
+`ExecOptions::native_builtins` is on (the default); `fast_call_at` declines those
+templates through the flags word it already reads, so JS→JS calls cost nothing more.
+`load_frame` reads the header bit and sets `code_len` to 0, so `fast_step` falls through
+and `step`'s cold out-of-range branch calls `native_step`. The header bit, not the
+option, decides what a running frame is: changing the option between runs only affects
+new calls. Exceptions: `native_step` turns faults into thrown values in its own frame;
+`throw_value` asks the generated handler table (state → catch state, exception slot);
+the key of a native caller after unwinding is its resume state (`call_site_key`), since
+a resume state is in the same `try` region as its call.
+
+## D1632: The bgen Rust backend: states are basic blocks, calls go through call_intrinsic
+date: 2026-11-03 · by: infra · issue: 0063
+`crates/djs-bgen/src/emit_rust.rs` writes `crates/djs-core/src/builtins/gen/natives.rs`
+(checked in, `scripts/bgen.sh --check` covers it). A builtin is lowered to basic blocks,
+one match arm (state) each; blocks end at branches, back-edges and resume points.
+Within an expression containing a resume point, call results are spilled to temporary
+slots in evaluation order and `&&`/`||`/`?:` around resume points become branches, so
+Rust locals never live across a state boundary. Every intrinsic call goes through the
+interpreter's `call_intrinsic` on the operand area (one implementation for both
+backends); a reentrant one either completes inline (continue at the resume state in the
+same Rust loop) or pushes a frame and returns to the run loop. Inline fast paths
+(`interp/run/native.rs`) mirror `call_intrinsic`'s and `fast_intrinsic`'s exactly: dense
+Array elements for Get/HasProperty/CreateDataPropertyOrThrow/Set, an Array's length for
+LengthOfArrayLike, `length` set to itself, a handful of leaf type tests. Callees that
+are builtins: leaf ones become plain Rust functions; reentrant ones are inlined when they
+are small internal helpers (at most 8 statements, no installs, so never in a stack
+trace, no `this`, rest parameter, `try` or `new.target`, depth ≤ 3, not recursive),
+otherwise they must be `@intrinsic` (bgen says so) and are called through
+`call_installed` (a native callee gets its own native frame). A rest parameter only read
+by `LengthOfArrayLike(rest)` and `Get(rest, i)` is not materialized (push). Numbers:
+i32/u32 `+ - *` and unary minus are checked (D1171: an overflow is an InternalError);
+values are made with `conv::number`, so both backends produce the same Values. Known
+gaps: `try`/`finally` and `@constructor` in `@native` builtins are bgen errors; an i32
+`-0` (JS `-x` for x = 0) is 0 in Rust (only observable if passed to user code).
+
+## D1633: Fuel per transition; the backend is part of the engine's identity
+date: 2026-11-03 · by: infra · issue: 0063
+Native code charges 4 fuel per loop back-edge and 2 per call it makes (bytecode charges
+per instruction), and back-edges are safepoints, so a long `map` suspends and collects
+mid-loop like bytecode. Fuel counts therefore differ between the backends (results do
+not), so the backend choice is part of what determines a run: the wasm ABI has no switch
+(always native), and `BUILD_HASH` covers the generated code (it is a djs-core source)
+and the prelude's `%MarkNative` list, so `djs_build_hash` identifies it. An embedder
+that turns `native_builtins` off must include that in its own fingerprint.
+
+## D1634: Code size: the native API is out of line in wasm
+date: 2026-11-03 · by: infra · issue: 0063
+The generated code calls small `Exec::n_*` helpers for every slot access and call.
+Inlined (as on hosts) they cost 180 KB of wasm for the first 35 natives; with
+`#[cfg_attr(target_arch = "wasm32", inline(never))]` on the hot helpers it is 71 KB of
+generated code plus 7 KB of runtime: the code section grows by 80 KB (+9%) over the
+merge base. `scripts/native-sizes.sh` prints the size per native function; a new
+`@native` needs a benchmark that justifies its size (ARCH "Rust backend").
+
+## D1635: Both backends are tested
+date: 2026-11-03 · by: infra · issue: 0063
+`--backend bytecode|native` in `djs run`, djs-difftest and djs-test262; the engine
+track runs `djs` and `djs-bytecode`. The gate runs the corpus natively in all stress
+modes and once more with the bytecode backend (plain); the test262 active group with the
+bytecode backend is a periodic check (TESTING.md "Builtin backends"), at 0063 both pass
+37,711/37,912.

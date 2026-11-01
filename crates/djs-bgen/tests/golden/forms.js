@@ -2,7 +2,7 @@
 "use strict";
 (function () {
 
-// golden/forms.ts:7 Example.prototype.all
+// golden/forms.ts:6 Example.prototype.all
 function AllForms(a, b) {
   const self = this;
   let n = 0.5;
@@ -65,12 +65,12 @@ function AllForms(a, b) {
   return neg === 0 ? %Make() : s;
 }
 
-// golden/forms.ts:68
+// golden/forms.ts:67
 function Helper(a, b) {
   return a === b;
 }
 
-// golden/forms.ts:76 %Callback
+// golden/forms.ts:75 %Callback
 function Callback(f) {
   return %User(f);
 }

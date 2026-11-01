@@ -41,6 +41,10 @@ pub mod func_flags {
     /// OrdinaryCallBindThis is sloppy (undefined/null become the global object,
     /// primitives their wrappers). Nothing else of sloppy mode.
     pub const SLOPPY_THIS: u32 = 1 << 9;
+    /// 0063: a `@native` builtin; `FuncTemplate::NATIVE` holds its index into the
+    /// generated table (`builtins::gen`), set by `%MarkNative`. With
+    /// `ExecOptions::native_builtins` its calls get native frames.
+    pub const NATIVE: u32 = 1 << 10;
 
     pub const fn kind(flags: u32) -> u32 {
         flags & KIND_MASK

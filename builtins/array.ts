@@ -1,6 +1,9 @@
 // Array.prototype methods (ECMA-262 23.1.3).
 
-/** ArraySpeciesCreate ( originalArray, length ), 10.4.2.3 (one realm). */
+/**
+ * ArraySpeciesCreate ( originalArray, length ), 10.4.2.3 (one realm).
+ * @intrinsic
+ */
 function ArraySpeciesCreate(original: Obj, length: f64): Obj {
   if (!IsArray(original)) {
     return ArrayCreate(length);
@@ -68,6 +71,7 @@ function ArrayPrototypeMap(this: Value, callbackfn: Value, thisArg?: Value): Obj
 /**
  * Array.prototype.indexOf ( searchElement [ , fromIndex ] ), 23.1.3.17.
  * @builtin Array.prototype.indexOf
+ * @native
  */
 function ArrayPrototypeIndexOf(this: Value, searchElement: Value, fromIndex?: Value): f64 {
   const o: Obj = ToObject(this);
@@ -134,6 +138,7 @@ function SameValueZero(x: Value, y: Value): boolean {
 /**
  * Array.prototype.includes ( searchElement [ , fromIndex ] ), 23.1.3.16.
  * @builtin Array.prototype.includes
+ * @native
  */
 function ArrayPrototypeIncludes(this: Value, searchElement: Value, fromIndex?: Value): boolean {
   const o: Obj = ToObject(this);
@@ -196,6 +201,7 @@ function ArrayIsArray(arg: Value): boolean {
  * Array.prototype.push ( ...items ), 23.1.3.23.
  * @builtin Array.prototype.push
  * @length 1
+ * @native
  */
 function ArrayPrototypePush(this: Value, ...items: Value[]): f64 {
   const o: Obj = ToObject(this);
@@ -366,6 +372,8 @@ function ArrayPrototypeLastIndexOf(this: Value, searchElement: Value, ...rest: V
 /**
  * The find family: `fromEnd` searches backwards, `wantIndex` returns the index (-1)
  * instead of the element (undefined). 23.1.3.9-12.
+ * @intrinsic
+ * @native
  */
 function FindViaPredicate(o: Obj, len: f64, fromEnd: boolean, predicate: Value, thisArg: Value, wantIndex: boolean): Value {
   RequireCallable(predicate);
@@ -385,6 +393,7 @@ function FindViaPredicate(o: Obj, len: f64, fromEnd: boolean, predicate: Value, 
 /**
  * Array.prototype.find ( predicate [ , thisArg ] ), 23.1.3.9.
  * @builtin Array.prototype.find
+ * @native
  */
 function ArrayPrototypeFind(this: Value, predicate: Value, thisArg?: Value): Value {
   const o: Obj = ToObject(this);
@@ -394,6 +403,7 @@ function ArrayPrototypeFind(this: Value, predicate: Value, thisArg?: Value): Val
 /**
  * Array.prototype.findIndex ( predicate [ , thisArg ] ), 23.1.3.10.
  * @builtin Array.prototype.findIndex
+ * @native
  */
 function ArrayPrototypeFindIndex(this: Value, predicate: Value, thisArg?: Value): Value {
   const o: Obj = ToObject(this);
@@ -418,7 +428,11 @@ function ArrayPrototypeFindLastIndex(this: Value, predicate: Value, thisArg?: Va
   return FindViaPredicate(o, LengthOfArrayLike(o), true, predicate, thisArg, true);
 }
 
-/** every (`wantAll`) and some, 23.1.3.6 and 23.1.3.29. */
+/**
+ * every (`wantAll`) and some, 23.1.3.6 and 23.1.3.29.
+ * @intrinsic
+ * @native
+ */
 function EveryOrSome(o: Obj, callbackfn: Value, thisArg: Value, wantAll: boolean): boolean {
   const len: f64 = LengthOfArrayLike(o);
   RequireCallable(callbackfn);
@@ -436,6 +450,7 @@ function EveryOrSome(o: Obj, callbackfn: Value, thisArg: Value, wantAll: boolean
 /**
  * Array.prototype.every ( callbackfn [ , thisArg ] ), 23.1.3.6.
  * @builtin Array.prototype.every
+ * @native
  */
 function ArrayPrototypeEvery(this: Value, callbackfn: Value, thisArg?: Value): boolean {
   return EveryOrSome(ToObject(this), callbackfn, thisArg, true);
@@ -444,6 +459,7 @@ function ArrayPrototypeEvery(this: Value, callbackfn: Value, thisArg?: Value): b
 /**
  * Array.prototype.some ( callbackfn [ , thisArg ] ), 23.1.3.29.
  * @builtin Array.prototype.some
+ * @native
  */
 function ArrayPrototypeSome(this: Value, callbackfn: Value, thisArg?: Value): boolean {
   return EveryOrSome(ToObject(this), callbackfn, thisArg, false);
@@ -452,6 +468,7 @@ function ArrayPrototypeSome(this: Value, callbackfn: Value, thisArg?: Value): bo
 /**
  * Array.prototype.filter ( callbackfn [ , thisArg ] ), 23.1.3.8.
  * @builtin Array.prototype.filter
+ * @native
  */
 function ArrayPrototypeFilter(this: Value, callbackfn: Value, thisArg?: Value): Obj {
   const o: Obj = ToObject(this);
@@ -471,7 +488,11 @@ function ArrayPrototypeFilter(this: Value, callbackfn: Value, thisArg?: Value): 
   return a;
 }
 
-/** reduce and reduceRight (`fromEnd`), 23.1.3.24-25. */
+/**
+ * reduce and reduceRight (`fromEnd`), 23.1.3.24-25.
+ * @intrinsic
+ * @native
+ */
 function Reduce(o: Obj, callbackfn: Value, rest: Obj, fromEnd: boolean): Value {
   const len: f64 = LengthOfArrayLike(o);
   RequireCallable(callbackfn);
@@ -506,6 +527,7 @@ function Reduce(o: Obj, callbackfn: Value, rest: Obj, fromEnd: boolean): Value {
  * Array.prototype.reduce ( callbackfn [ , initialValue ] ), 23.1.3.24.
  * @builtin Array.prototype.reduce
  * @length 1
+ * @native
  */
 function ArrayPrototypeReduce(this: Value, callbackfn: Value, ...rest: Value[]): Value {
   return Reduce(ToObject(this), callbackfn, rest, false);
@@ -515,6 +537,7 @@ function ArrayPrototypeReduce(this: Value, callbackfn: Value, ...rest: Value[]):
  * Array.prototype.reduceRight ( callbackfn [ , initialValue ] ), 23.1.3.25.
  * @builtin Array.prototype.reduceRight
  * @length 1
+ * @native
  */
 function ArrayPrototypeReduceRight(this: Value, callbackfn: Value, ...rest: Value[]): Value {
   return Reduce(ToObject(this), callbackfn, rest, true);
@@ -569,6 +592,7 @@ function ArrayPrototypeConcat(this: Value, ...items: Value[]): Obj {
 /**
  * Array.prototype.slice ( start, end ), 23.1.3.28.
  * @builtin Array.prototype.slice
+ * @native
  */
 function ArrayPrototypeSlice(this: Value, start: Value, end: Value): Obj {
   const o: Obj = ToObject(this);
@@ -745,6 +769,7 @@ function ArrayPrototypeReverse(this: Value): Obj {
 /**
  * Array.prototype.pop ( ), 23.1.3.22.
  * @builtin Array.prototype.pop
+ * @native
  */
 function ArrayPrototypePop(this: Value): Value {
   const o: Obj = ToObject(this);
@@ -856,6 +881,8 @@ function ArrayPrototypeFlatMap(this: Value, mapperFunction: Value, thisArg?: Val
 /**
  * Sorts the dense array `list` (length n) in place: stable, a bottom-up merge sort with
  * comparefn or ToString order. Lists of primitives without comparefn go to a leaf.
+ * @intrinsic
+ * @native
  */
 function SortList(list: Obj, n: f64, comparefn: Value): void {
   if (comparefn === undefined && SortPrimitives(list)) {
@@ -929,7 +956,11 @@ function SortCompareDefined(x: Value, y: Value, comparefn: Value): f64 {
   return CompareStrings(xs, ToString(y));
 }
 
-/** The present elements of o[0 .. len) as a dense list (SortIndexedProperties' read). */
+/**
+ * The present elements of o[0 .. len) as a dense list (SortIndexedProperties' read).
+ * @intrinsic
+ * @native
+ */
 function CollectPresent(o: Obj, len: f64, skipHoles: boolean): Obj {
   const items: Obj = ArrayCreate(0);
   let n: f64 = 0;
@@ -945,6 +976,7 @@ function CollectPresent(o: Obj, len: f64, skipHoles: boolean): Obj {
 /**
  * Array.prototype.sort ( comparefn ), 23.1.3.30.
  * @builtin Array.prototype.sort
+ * @native
  */
 function ArrayPrototypeSort(this: Value, comparefn: Value): Obj {
   if (comparefn !== undefined && !IsCallable(comparefn)) {
@@ -968,6 +1000,7 @@ function ArrayPrototypeSort(this: Value, comparefn: Value): Obj {
 /**
  * Array.prototype.toSorted ( comparefn ), 23.1.3.33.
  * @builtin Array.prototype.toSorted
+ * @native
  */
 function ArrayPrototypeToSorted(this: Value, comparefn: Value): Obj {
   if (comparefn !== undefined && !IsCallable(comparefn)) {

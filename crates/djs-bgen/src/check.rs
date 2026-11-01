@@ -477,7 +477,7 @@ pub fn assignable(from: Type, to: Type) -> bool {
     }
 }
 
-fn literal_type(v: f64) -> Type {
+pub fn literal_type(v: f64) -> Type {
     if v.fract() == 0.0 && v.abs() <= 9007199254740991.0 {
         Type::IntLit(v)
     } else {
@@ -1055,7 +1055,7 @@ impl<'a> FnChecker<'a> {
 }
 
 /// The common numeric type of two operands, if any.
-fn unify_numeric(l: Type, r: Type) -> Option<Type> {
+pub fn unify_numeric(l: Type, r: Type) -> Option<Type> {
     if !l.is_numeric() || !r.is_numeric() {
         return None;
     }
