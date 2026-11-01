@@ -1,7 +1,7 @@
 # 0067: Async host results as macrotasks (the host inbox)
 
-status: open
-agent: -
+status: in-progress
+agent: determinism
 branch: issue/0067-host-inbox
 depends-on: -
 touches: crates/djs-core/src/vm/, crates/djs-core/src/interp/ (job queue / run loop), crates/djs-core/src/heap/ (an inbox root, additive), crates/djs-wasm/, js/src/sandbox.ts, docs/host.md, docs/compiler.md 7.5

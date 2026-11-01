@@ -2852,6 +2852,7 @@ rawJSON string".
 **JSON.isRawJSON** checks the class. **JSON.stringify** emits a RawJSON object's text
 verbatim. The leaf fast path sees an unknown class and falls back to the full
 algorithm, which does it.
+
 ## D1660: pi adapter: the prelude is not polled; the fingerprint hashes the host globals
 date: 2026-11-03 · by: determinism · issue: 0066
 pi's launchers count `shouldInterrupt` polls over a whole execution, and a start that
