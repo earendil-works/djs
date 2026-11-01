@@ -53,3 +53,8 @@ Notes for the coordinator (the main agent), learned the hard way.
 - The owner added `origin` (github.com/earendil-works/djs). The coordinator may push
   `main` (optional; e.g. after a batch of merges): `git push origin main`, under the merge
   lock. Sub-agents never push (AGENTS.md).
+
+## Docs
+- The owner chose djs-docs (0103, option A). When writing an issue, name the guide pages
+  (docs/guide/) it affects, and check at merge time that the agent updated them and that
+  `djs-docs check` passes in the gate.
