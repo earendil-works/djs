@@ -113,6 +113,38 @@ Outputs:
 The runner is parallel (one test per worker) and fast enough to run the full active set
 in the gate.
 
+### How to run
+
+```sh
+scripts/fetch-test262.sh                 # once: vendor/test262 at the pinned commit
+cargo build --release -p djs-test262
+T=target/release/djs-test262
+
+$T list                                  # counts per group and top-level dir
+$T list --depth 2 --features             # finer dirs, plus the per-feature table
+$T list --paths --group scan-eval        # each test with the rule that grouped it
+
+$T run                                   # active + later with qjs (the default engine)
+$T run built-ins/Array --failures        # a path prefix, with one-line failure reasons
+$T run 'language/**/S11*.js' -j 4        # globs: * within a segment, ** across
+$T run --group skip language/statements/with  # run a skipped group explicitly
+
+# the ratchet: exit 1 on failures not in the file; --update rewrites the entries of
+# the tests that ran (entries outside the selection are kept)
+$T run --expected tests/test262/oracle-failures.txt
+$T run --expected tests/test262/oracle-failures.txt --update
+```
+
+The summary is printed as Markdown tables. `--timeout SECS` (default 20) and
+`--memory-limit N` (default 512M) bound each test; `--slowest N` lists the slowest
+tests. `--qjs PATH` / `$DJS_QJS` select the qjs binary and `--test262 DIR` /
+`$DJS_TEST262` the checkout. With qjs, the full active + later run (about 37,600
+tests) takes about 10 s on an 18-core machine.
+
+`cargo test -p djs-test262` includes a fixture suite run with qjs that checks failures
+are detected (skipped if qjs is missing). `cargo test -p djs-test262 --test
+frontmatter_all -- --ignored` parses the frontmatter of every test in the checkout.
+
 ### Milestones
 
 1. **The harness loads.** `assert.js`, `sta.js`, `compareArray.js` and

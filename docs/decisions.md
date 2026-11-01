@@ -151,3 +151,53 @@ kind), kind invariants (counts fit, ref fields point to the right kinds, rope le
 strictly decrease towards the leaves) and acyclic prototype chains. `verify` never panics.
 After it passes, heap code may still panic on semantically odd data, but cannot loop forever:
 hash probes are bounded, and ropes and prototype chains are known to be acyclic.
+
+## D1020: test262 runner execution model
+date: 2026-11-01 · by: infra · issue: 0002
+`djs-test262` judges every engine with the same code (`engine::judge`); an engine only
+reports what happened (completed / harness error / parse error / runtime error / timeout /
+oom / crash, plus printed lines). Harness files and the test are evaluated as separate
+Scripts in one realm, in the order assert.js, sta.js, doneprintHandle.js (async), includes.
+A negative test passes when the phase matches and the thrown value's `constructor.name`
+equals `type` (INTERPRETING.md wording). An async test passes when it completes and prints
+`Test262:AsyncTestComplete` exactly once and no `Test262:AsyncTestFailure`. The job queue
+is drained for every test, but unhandled rejections do not fail non-async tests. `strict`
+is set on the job for everything except `raw` (and explicitly selected `noStrict`) tests;
+djs ignores it (always strict), qjs prepends `"use strict";` to the harness, the test and
+`$262.evalScript` sources so the oracle runs djs' model.
+
+## D1021: qjs engine details
+date: 2026-11-01 · by: infra · issue: 0002
+One `qjs -m -e <driver> <spec>` process per test. The driver compiles the test with
+`std.evalScript(src, {compile_only: true})` and runs it separately, so parse errors are
+told apart from runtime errors exactly. `$262.evalScript` uses `std.evalScript` (a real
+Script in the global scope, with global lexical declarations) instead of indirect eval,
+which the issue suggested but which has different var/let semantics.
+`$262.detachArrayBuffer` uses `ArrayBuffer.prototype.transfer` and is a no-op on an
+already detached buffer. qjs runs without `--experimental`, so there is no Intl (as in
+djs); dquickts' `run-test262` is built with Intl.
+
+## D1022: test262 grouping rules
+date: 2026-11-01 · by: infra · issue: 0002
+`tests/test262.toml` lists `[[group]]`s checked in order, first match wins, unmatched tests
+are active. Order: skip, scan-eval, later, so tests that need dynamic code count in
+scan-eval even if they are also later. Features implied by includes
+(`harness/features.yml`, e.g. isConstructor.js → Reflect.construct) count for matching.
+The scan covers the test and its includes, ignores comments and needs a non-identifier
+character before the pattern; scan-eval holds direct and indirect eval, the Function /
+GeneratorFunction / AsyncFunction / AsyncGeneratorFunction constructors, and the
+`language/eval-code` and `built-ins/eval` dirs. Additions to the TESTING.md skip set:
+`CanBlockIsTrue/False` flags, `__getter__`/`__setter__`, `import.meta`,
+`intl-normative-optional`, `built-ins/AbstractModuleSource`, tests calling
+`$262.createRealm(` without the cross-realm tag, and the sloppy-only raw test
+`language/comments/hashbang/use-strict.js`. `later` additionally holds `built-ins/Date`
+(not in the P0-P2 builtin list) and `__proto__`; `Symbol` and `Symbol.iterator` stay active
+because for-of, spread and destructuring (P1) need them.
+
+## D1023: Ratchet file semantics
+date: 2026-11-01 · by: infra · issue: 0002
+A failures file (`path: reason`, sorted) covers whatever tests ran: `--expected` fails on
+failing tests that are not listed, reports listed tests that passed (stale) without
+failing, and ignores entries for tests outside the run. `--update` replaces the entries of
+the tests that ran and keeps the rest, so filtered runs can update it. Reasons are
+informational and are not compared.
