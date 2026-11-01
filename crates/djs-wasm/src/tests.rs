@@ -192,3 +192,21 @@ fn out_of_memory_is_a_thrown_error() {
     // A cap too small for the realm.
     assert_eq!(vm_new(1024), 0);
 }
+
+#[test]
+fn json_in_and_out() {
+    let vm = vm_new(0);
+    let text = r#"{"a": [1, "ü", null], "b": {"c": true}}"#;
+    stage(text.as_bytes());
+    let v = vm_parse_json(vm, text.len());
+    assert_ne!(v, 0, "{}", out_text());
+    let s = vm_json_stringify(vm, v);
+    assert_ne!(s, 0, "{}", out_text());
+    assert_eq!(display(vm, s), r#"{"a":[1,"ü",null],"b":{"c":true}}"#);
+    stage(b"{\"a\": }");
+    assert_eq!(vm_parse_json(vm, 7), 0);
+    assert!(out_text().starts_with("SyntaxError"), "{}", out_text());
+    assert_eq!(vm_json_stringify(vm, 0), 0);
+    assert_eq!(out_text(), "undefined");
+    vm_free(vm);
+}

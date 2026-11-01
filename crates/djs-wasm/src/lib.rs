@@ -21,6 +21,7 @@ use std::cell::RefCell;
 use djs_core::compiler::{CompileOptions, Goal, compile};
 use djs_core::heap::Handle;
 use djs_core::interp::{ErrorKind, Intrinsic, intrinsic};
+use djs_core::json;
 use djs_core::value::Value;
 use djs_core::vm::{Status, Vm, VmOptions};
 use djs_core::wire::{self, DecodeOptions};
@@ -243,7 +244,10 @@ pub extern "C" fn vm_new(memory_limit: u32) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_from_bytes(len: usize, memory_limit: u32) -> u32 {
     with(|s| {
-        let bytes = staged(&s.staging, 0, len).to_vec();
+        staged(&s.staging, 0, len);
+        // The image becomes the arena: hand over the staging buffer instead of copying.
+        let mut bytes = std::mem::take(&mut s.staging);
+        bytes.truncate(len);
         match Vm::from_bytes(bytes, options(memory_limit)) {
             Ok(vm) => s.add_vm(vm),
             Err(e) => {
@@ -394,27 +398,73 @@ pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32) -> i
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_decode_wire(vm: u32, len: usize) -> u32 {
     with(|s| {
+        // Decodes straight from staging (no copy); `out` is written after the borrow ends.
         let (slot, staging) = s.vm_and_staging(vm);
-        let input = staged(staging, 0, len).to_vec();
+        let input = staged(staging, 0, len);
         let heap = slot.vm.heap_mut();
         let opts = DecodeOptions {
             object_proto: intrinsic(heap, Intrinsic::ObjectProto).as_object(),
             array_proto: intrinsic(heap, Intrinsic::ArrayProto).as_object(),
             ..DecodeOptions::default()
         };
-        match wire::decode(heap, &input, &opts) {
-            Ok(v) => {
-                let h = slot.handle(v);
-                if h == 0 {
-                    s.set_out(b"out of memory");
-                }
-                h
-            }
-            Err(e) => {
-                s.set_out(e.to_string().as_bytes());
-                0
-            }
-        }
+        let msg = match wire::decode(heap, input, &opts) {
+            Ok(v) => match slot.handle(v) {
+                0 => "out of memory".to_string(),
+                h => return h,
+            },
+            Err(e) => e.to_string(),
+        };
+        s.set_out(msg.as_bytes());
+        0
+    })
+}
+
+/// A handle to the value of the JSON text (UTF-8) in staging[0..len], parsed like
+/// `JSON.parse` (objects and arrays get the realm's prototypes); 0 on failure (the
+/// SyntaxError or "out of memory" in `out`). For hosts that already hold JSON text.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_parse_json(vm: u32, len: usize) -> u32 {
+    with(|s| {
+        let (slot, staging) = s.vm_and_staging(vm);
+        let input = staged(staging, 0, len);
+        let heap = slot.vm.heap_mut();
+        let opts = json::ParseOptions {
+            object_proto: intrinsic(heap, Intrinsic::ObjectProto).as_object(),
+            array_proto: intrinsic(heap, Intrinsic::ArrayProto).as_object(),
+            ..json::ParseOptions::default()
+        };
+        let msg = match json::parse_utf8(heap, input, &opts) {
+            Ok(v) => match slot.handle(v) {
+                0 => "out of memory".to_string(),
+                h => return h,
+            },
+            Err(json::ParseError::Syntax(e)) => e.to_string(),
+            Err(json::ParseError::Heap(_)) => "out of memory".to_string(),
+        };
+        s.set_out(msg.as_bytes());
+        0
+    })
+}
+
+/// A handle to `JSON.stringify(value)` as a heap string, for plain data (objects, arrays,
+/// primitives without getters, proxies or toJSON); 0 on failure with the reason in `out`
+/// ("not plain data" for anything else, "undefined" when the result is undefined).
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_json_stringify(vm: u32, h: u32) -> u32 {
+    with(|s| {
+        let slot = s.slot(vm);
+        let v = slot.value(h);
+        let msg = match json::stringify_fast(slot.vm.heap_mut(), v, &[]) {
+            Ok(Some(str)) => match slot.handle(Value::string(str)) {
+                0 => "out of memory",
+                h => return h,
+            },
+            Ok(None) => "undefined",
+            Err(json::StringifyError::Slow) => "not plain data",
+            Err(e) => e.js_error().map_or("error", |(_, m)| m),
+        };
+        s.set_out(msg.as_bytes());
+        0
     })
 }
 
