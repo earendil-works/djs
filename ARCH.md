@@ -482,6 +482,11 @@ similarly shaped objects; base64 images).
 | interpreter speed | within 1.5x of QuickJS-wasm on microbenchmarks (stretch: parity) |
 | host string out, 1 MiB | ~memcpy speed |
 
+Measured wasm size (0057, without wasm-opt): 1,209 KB (code 687 KB, data 519 KB of which
+the base snapshot is 387 KB), 416 KB gzip -9, 336 KB brotli. The base snapshot is most of
+the gap to the budget; work/issues/0052-bloat-investigation.md has the breakdown and the
+remaining options.
+
 The wasm `Module` is compiled once by the host and cached. Each script gets a fresh instance
 or a reset arena.
 
