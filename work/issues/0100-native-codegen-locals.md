@@ -1,7 +1,7 @@
 # 0100: Generated native builtins keep values in Rust locals (0081 P8) + more run_hot ops
 
-status: open
-agent: -
+status: in-progress
+agent: perf
 branch: issue/0100-native-codegen-locals
 depends-on: 0093
 touches: crates/djs-bgen/src/emit_rust.rs (codegen), crates/djs-core/src/builtins/gen/natives.rs (regenerated), crates/djs-core/src/interp/run/native.rs, crates/djs-core/src/interp/run/hot.rs
