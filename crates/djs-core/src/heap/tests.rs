@@ -1250,3 +1250,37 @@ fn float_nan_encoding_is_canonical() {
     assert_eq!(f64_to_f32_bits(1e300), 0x7F80_0000);
     assert_eq!(f32_bits_to_f64(0x3EAA_AAAB), (1.0f32 / 3.0) as f64);
 }
+
+/// D1710: a suspension record is allocated past the cap without making a collection
+/// pending, and freeing it from the top restores the arena byte for byte.
+#[test]
+fn unbudgeted_records_and_release_top() {
+    let base = heap().arena().len() as usize;
+    let mut h = Heap::with_limit((base + 4096) * 32 / 31 + 64).unwrap();
+    // Fill up to the cap.
+    while h.alloc_value_array(16).is_ok() {}
+    assert!(h.gc_pending());
+    h.collect().unwrap();
+    while h.alloc_value_array(16).is_ok() {}
+    let before = h.bytes().to_vec();
+    let pending = h.gc_pending();
+    assert!(h.alloc_u32_array(64).is_err());
+    let saved = h.begin_unbudgeted();
+    let a = h.alloc_u32_array(64).unwrap();
+    h.u32_array_set(a, 3, 0xDEAD_BEEF);
+    let b = h.alloc_value_array(8).unwrap();
+    h.end_unbudgeted(saved);
+    assert_eq!(h.gc_pending(), pending);
+    // Still capped for everything else.
+    assert!(h.alloc_u32_array(64).is_err());
+    // Not the top: nothing happens.
+    h.release_top(a, b);
+    assert!(h.bytes().len() > before.len());
+    h.release_top(a, b + h.cell_size(b));
+    assert_eq!(h.bytes(), &before[..]);
+    // The freed bytes are zeros again for the next allocation.
+    let c = h.begin_unbudgeted();
+    let a2 = h.alloc_u32_array(64).unwrap();
+    h.end_unbudgeted(c);
+    assert_eq!((a2, h.u32_array_get(a2, 3)), (a, 0));
+}
