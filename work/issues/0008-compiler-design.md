@@ -1,7 +1,7 @@
 # 0008: Compiler and bytecode design note
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0008-compiler-design
 depends-on: 0003
 touches: docs/compiler.md
