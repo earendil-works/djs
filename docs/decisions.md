@@ -1246,3 +1246,10 @@ accessor) it calls the prelude's `%InstanceofOperator(v, target)` (builtins/func
 %ThrowTypeError% (Function.prototype's `caller`/`arguments` accessors) is set up by
 `%InstallAccessor` as the spec has it: name "", length 0, both non-configurable, and not
 extensible.
+
+## D1344: djs-bgen's behavior test has a timeout
+date: 2026-11-01 · by: infra · issue: 0034
+Following D1200, `crates/djs-bgen/tests/behavior.rs` kills qjs after 60 s (hang
+protection only; a run takes well under a second) and fails with `timeout: no result
+within 60s`. Its output pipes are drained on threads, so a large output cannot block qjs.
+A builtin that loops forever in the qjs stand-ins had hung the test for almost two hours.
