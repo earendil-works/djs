@@ -7,7 +7,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
-| 0105 | Stack trace details (stackTraceLimit, call-site columns) | infra | .worktrees/infra |
+| 0106 | Stack trace follow-ups (prepareStackTrace, eval frames) | infra | .worktrees/infra |
 | 0103 | Human-facing documentation: option A (own generator + live examples, owner's choice), implementing | docs | .worktrees/docs |
 | 0101 | Mark-compact collection (design first) | heap | .worktrees/heap |
 | 0100 | Native codegen: values in Rust locals (0081 P8) + more run_hot ops | perf | .worktrees/perf |
@@ -78,6 +78,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0105 | Stack trace details | 5c512a7d (agent infra; stackTraceLimit; qjs call positions; difftest stacks directive) |
 | 0102 | pi polish | 1d5336a7 (agent infra; pi suite 221/226 unchanged; captureStackTrace; REPL completion and .step) |
 | 0097 | Finish the later group | 443e5933 (agent infra; later group empty; active 38,069 / 38,109 = 99.9%) |
 | 0095 | Docs coherence + README | 7a4780bb (agent infra; README, ARCH reviewed, decisions-index) |
