@@ -1,7 +1,7 @@
 # 0009: Copying GC and handle table
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0009-copying-gc
 depends-on: 0005
 touches: crates/djs-core/src/heap/
