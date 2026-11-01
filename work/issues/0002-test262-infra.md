@@ -1,7 +1,7 @@
 # 0002: test262 infrastructure and oracle baseline
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0002-test262-infra
 depends-on: 0001
 touches: crates/djs-test262/, scripts/fetch-test262.sh, tests/test262.toml, tests/test262/
