@@ -22,3 +22,62 @@ function ArraySpread(arr: Obj, src: Value): Obj {
     n = n + 1;
   }
 }
+
+/**
+ * CopyDataProperties ( target, source, excludedItems ), 7.3.25, without excluded
+ * items: object spread (`{...src}`). The interpreter's `copy_data_props` copies plain
+ * data properties itself and calls this for sources with accessors. Returns target.
+ * @intrinsic
+ */
+function CopyDataProperties(target: Obj, src: Value): Obj {
+  if (src === undefined || src === null) {
+    return target;
+  }
+  const from: Obj = ToObject(src);
+  const keys: Obj = OwnPropertyKeys(from, 2);
+  const count: f64 = LengthOfArrayLike(keys);
+  for (let i: f64 = 0; i < count; i++) {
+    const key: Value = Get(keys, i);
+    const attrs: i32 = OwnPropertyAttributes(from, key);
+    if (attrs >= 0 && (attrs & 2) !== 0) {
+      CreateDataPropertyOrThrow(target, key, Get(from, key));
+    }
+  }
+  return target;
+}
+
+/**
+ * Object rest in destructuring (`{a, ...rest} = src`): a new object with the
+ * enumerable own properties of src except the keys in the array excluded (strings,
+ * symbols or numbers, as ToPropertyKey returns them). The caller did
+ * RequireObjectCoercible(src).
+ * @intrinsic
+ */
+function CopyDataPropertiesExcluding(src: Value, excluded: Obj): Obj {
+  const target: Obj = ObjectCreate(RealmIntrinsic("ObjectPrototype"));
+  const from: Obj = ToObject(src);
+  const keys: Obj = OwnPropertyKeys(from, 2);
+  const count: f64 = LengthOfArrayLike(keys);
+  const n: f64 = LengthOfArrayLike(excluded);
+  for (let i: f64 = 0; i < count; i++) {
+    const key: Value = Get(keys, i);
+    let skip: boolean = false;
+    for (let j: f64 = 0; j < n; j++) {
+      let e: Value = Get(excluded, j);
+      if (IsNumber(e)) {
+        e = ToStringPrimitive(e);
+      }
+      if (SameValue(e, key)) {
+        skip = true;
+        break;
+      }
+    }
+    if (!skip) {
+      const attrs: i32 = OwnPropertyAttributes(from, key);
+      if (attrs >= 0 && (attrs & 2) !== 0) {
+        CreateDataPropertyOrThrow(target, key, Get(from, key));
+      }
+    }
+  }
+  return target;
+}

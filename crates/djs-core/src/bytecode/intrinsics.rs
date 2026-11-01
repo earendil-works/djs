@@ -235,10 +235,12 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("ToPrimitive", B, 2, false),
     i("ToNumber", B, 1, false),
     i("ToString", B, 1, false),
+    i("ToPropertyKey", B, 1, false),
     i("InstanceofOperator", B, 2, false),
     i("GetIterator", B, 1, false),
     i("IteratorClose", B, 1, false),
     i("IteratorCloseThrow", B, 1, false),
+    i("IteratorRest", B, 2, false),
     i("ArrayPrototypeValues", B, 0, false),
     i("ArrayIteratorPrototypeNext", B, 0, false),
     i("StringPrototypeIterator", B, 0, false),
@@ -259,6 +261,8 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("PromiseThrower", B, 0, false),
     i("HostCallSettle", B, 3, false),
     i("ArraySpread", B, 2, false),
+    i("CopyDataProperties", B, 2, false),
+    i("CopyDataPropertiesExcluding", B, 2, false),
 ];
 
 /// The id of the intrinsic `name`.

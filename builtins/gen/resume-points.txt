@@ -405,11 +405,11 @@ LengthOfArrayLike: reentrant
   builtins/conversion.ts:93:19  Get (intrinsic)
   builtins/conversion.ts:93:10  ToLength (builtin)
 
-ToPropertyKey: reentrant
-  builtins/conversion.ts:98:22  ToPrimitive (builtin)
+ToPropertyKey: reentrant (%ToPropertyKey)
+  builtins/conversion.ts:101:22  ToPrimitive (builtin)
 
 GetPrototypeFromConstructor: reentrant
-  builtins/conversion.ts:115:24  Get (intrinsic)
+  builtins/conversion.ts:118:24  Get (intrinsic)
 
 DateValueFromArgs: reentrant
   builtins/date.ts:7:18  LengthOfArrayLike (builtin)
@@ -646,6 +646,12 @@ IteratorCloseThrow: reentrant (%IteratorCloseThrow)
   builtins/iter.ts:45:27  Get (intrinsic)
   builtins/iter.ts:49:5  Call (intrinsic)
 
+IteratorRest: reentrant (%IteratorRest)
+  builtins/iter.ts:65:27  Call (intrinsic)
+  builtins/iter.ts:69:19  Get (intrinsic)
+  builtins/iter.ts:72:39  Get (intrinsic)
+  builtins/iter.ts:72:5  CreateDataPropertyOrThrow (intrinsic)
+
 ArrayPrototypeValues: leaf (Array.prototype.values, Array.prototype[Symbol.iterator], %ArrayPrototypeValues)
 
 ArrayPrototypeKeys: leaf (Array.prototype.keys)
@@ -653,8 +659,8 @@ ArrayPrototypeKeys: leaf (Array.prototype.keys)
 ArrayPrototypeEntries: leaf (Array.prototype.entries)
 
 ArrayIteratorPrototypeNext: reentrant (%ArrayIteratorPrototype%.next, %ArrayIteratorPrototypeNext)
-  builtins/iter.ts:93:20  LengthOfArrayLike (builtin)
-  builtins/iter.ts:103:24  Get (intrinsic)
+  builtins/iter.ts:115:20  LengthOfArrayLike (builtin)
+  builtins/iter.ts:125:24  Get (intrinsic)
 
 IteratorPrototypeIterator: leaf (%IteratorPrototype%[Symbol.iterator])
 
@@ -1486,6 +1492,20 @@ ArraySpread: reentrant (%ArraySpread)
   builtins/spread.ts:18:19  Get (intrinsic)
   builtins/spread.ts:21:39  Get (intrinsic)
   builtins/spread.ts:21:5  CreateDataPropertyOrThrow (intrinsic)
+
+CopyDataProperties: reentrant (%CopyDataProperties)
+  builtins/spread.ts:38:22  LengthOfArrayLike (builtin)
+  builtins/spread.ts:40:24  Get (intrinsic)
+  builtins/spread.ts:43:46  Get (intrinsic)
+  builtins/spread.ts:43:7  CreateDataPropertyOrThrow (intrinsic)
+
+CopyDataPropertiesExcluding: reentrant (%CopyDataPropertiesExcluding)
+  builtins/spread.ts:60:22  LengthOfArrayLike (builtin)
+  builtins/spread.ts:61:18  LengthOfArrayLike (builtin)
+  builtins/spread.ts:63:24  Get (intrinsic)
+  builtins/spread.ts:66:22  Get (intrinsic)
+  builtins/spread.ts:78:48  Get (intrinsic)
+  builtins/spread.ts:78:9  CreateDataPropertyOrThrow (intrinsic)
 
 StringConstructor: reentrant (constructor String)
   builtins/string.ts:10:7  LengthOfArrayLike (builtin)

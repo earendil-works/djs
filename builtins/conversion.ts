@@ -93,7 +93,10 @@ function LengthOfArrayLike(o: Obj): f64 {
   return ToLength(Get(o, "length"));
 }
 
-/** ToPropertyKey ( argument ), 7.1.19: a string, a symbol, or a number key. */
+/**
+ * ToPropertyKey ( argument ), 7.1.19: a string, a symbol, or a number key.
+ * @intrinsic
+ */
 function ToPropertyKey(v: Value): Value {
   const key: Value = ToPrimitive(v, "string");
   if (IsSymbol(key) || IsNumber(key)) {

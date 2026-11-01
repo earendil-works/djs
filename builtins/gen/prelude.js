@@ -1054,7 +1054,7 @@ function LengthOfArrayLike(o) {
   return ToLength(%Get(o, "length"));
 }
 
-// builtins/conversion.ts:97
+// builtins/conversion.ts:100 %ToPropertyKey
 function ToPropertyKey(v) {
   const key = ToPrimitive(v, "string");
   if (%IsSymbol(key) || %IsNumber(key)) {
@@ -1063,7 +1063,7 @@ function ToPropertyKey(v) {
   return %ToStringPrimitive(key);
 }
 
-// builtins/conversion.ts:111
+// builtins/conversion.ts:114
 function GetPrototypeFromConstructor(newTarget, fallback) {
   if (newTarget === undefined) {
     return %RealmIntrinsic(fallback);
@@ -1654,22 +1654,39 @@ function IteratorCloseThrow(iterator) {
   }
 }
 
-// builtins/iter.ts:61 Array.prototype.values Array.prototype[Symbol.iterator] %ArrayPrototypeValues
+// builtins/iter.ts:61 %IteratorRest
+function IteratorRest(iterator, next) {
+  const arr = %ArrayCreate(0);
+  let n = 0;
+  while (true) {
+    const result = %Call(next, iterator);
+    if (!%IsObject(result)) {
+      throw %NewTypeError("iterator must return an object");
+    }
+    if (%ToBoolean(%Get(%AsObj(result), "done"))) {
+      return arr;
+    }
+    %CreateDataPropertyOrThrow(arr, n, %Get(%AsObj(result), "value"));
+    n = n + 1;
+  }
+}
+
+// builtins/iter.ts:83 Array.prototype.values Array.prototype[Symbol.iterator] %ArrayPrototypeValues
 function ArrayPrototypeValues() {
   return %CreateArrayIterator(%ToObject(this), 1);
 }
 
-// builtins/iter.ts:69 Array.prototype.keys
+// builtins/iter.ts:91 Array.prototype.keys
 function ArrayPrototypeKeys() {
   return %CreateArrayIterator(%ToObject(this), 0);
 }
 
-// builtins/iter.ts:77 Array.prototype.entries
+// builtins/iter.ts:99 Array.prototype.entries
 function ArrayPrototypeEntries() {
   return %CreateArrayIterator(%ToObject(this), 2);
 }
 
-// builtins/iter.ts:86 %ArrayIteratorPrototype%.next %ArrayIteratorPrototypeNext
+// builtins/iter.ts:108 %ArrayIteratorPrototype%.next %ArrayIteratorPrototypeNext
 function ArrayIteratorPrototypeNext() {
   const target = %ArrayIteratorTarget(this);
   if (target === undefined) {
@@ -1694,12 +1711,12 @@ function ArrayIteratorPrototypeNext() {
   return %CreateIterResultObject(%CreateArrayFromPair(index, value), false);
 }
 
-// builtins/iter.ts:114 %IteratorPrototype%[Symbol.iterator]
+// builtins/iter.ts:136 %IteratorPrototype%[Symbol.iterator]
 function IteratorPrototypeIterator() {
   return this;
 }
 
-// builtins/iter.ts:123 value %ArrayIteratorPrototype%[Symbol.toStringTag]
+// builtins/iter.ts:145 value %ArrayIteratorPrototype%[Symbol.toStringTag]
 function ArrayIteratorPrototypeToStringTag() {
   return "Array Iterator";
 }
@@ -3834,6 +3851,54 @@ function ArraySpread(arr, src) {
   }
 }
 
+// builtins/spread.ts:32 %CopyDataProperties
+function CopyDataProperties(target, src) {
+  if (src === undefined || src === null) {
+    return target;
+  }
+  const from = %ToObject(src);
+  const keys = %OwnPropertyKeys(from, 2);
+  const count = LengthOfArrayLike(keys);
+  for (let i = 0; i < count; i++) {
+    const key = %Get(keys, i);
+    const attrs = %OwnPropertyAttributes(from, key);
+    if (attrs >= 0 && (attrs & 2) !== 0) {
+      %CreateDataPropertyOrThrow(target, key, %Get(from, key));
+    }
+  }
+  return target;
+}
+
+// builtins/spread.ts:56 %CopyDataPropertiesExcluding
+function CopyDataPropertiesExcluding(src, excluded) {
+  const target = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+  const from = %ToObject(src);
+  const keys = %OwnPropertyKeys(from, 2);
+  const count = LengthOfArrayLike(keys);
+  const n = LengthOfArrayLike(excluded);
+  for (let i = 0; i < count; i++) {
+    const key = %Get(keys, i);
+    let skip = false;
+    for (let j = 0; j < n; j++) {
+      let e = %Get(excluded, j);
+      if (%IsNumber(e)) {
+        e = %ToStringPrimitive(e);
+      }
+      if (%SameValue(e, key)) {
+        skip = true;
+        break;
+      }
+    }
+    if (!skip) {
+      const attrs = %OwnPropertyAttributes(from, key);
+      if (attrs >= 0 && (attrs & 2) !== 0) {
+        %CreateDataPropertyOrThrow(target, key, %Get(from, key));
+      }
+    }
+  }
+  return target;
+}
+
 // builtins/string.ts:8 constructor String
 function StringConstructor(...args) {
   let s = "";
@@ -4821,10 +4886,12 @@ function WeakSetPrototypeToStringTag() {
 %InstallIntrinsic("ToPrimitive", ToPrimitive);
 %InstallIntrinsic("ToNumber", ToNumber);
 %InstallIntrinsic("ToString", ToString);
+%InstallIntrinsic("ToPropertyKey", ToPropertyKey);
 %InstallIntrinsic("InstanceofOperator", InstanceofOperator);
 %InstallIntrinsic("GetIterator", GetIterator);
 %InstallIntrinsic("IteratorClose", IteratorClose);
 %InstallIntrinsic("IteratorCloseThrow", IteratorCloseThrow);
+%InstallIntrinsic("IteratorRest", IteratorRest);
 %InstallIntrinsic("ArrayPrototypeValues", ArrayPrototypeValues);
 %InstallIntrinsic("ArrayIteratorPrototypeNext", ArrayIteratorPrototypeNext);
 %InstallIntrinsic("StringPrototypeIterator", StringPrototypeIterator);
@@ -4845,4 +4912,6 @@ function WeakSetPrototypeToStringTag() {
 %InstallIntrinsic("PromiseThrower", PromiseThrower);
 %InstallIntrinsic("HostCallSettle", HostCallSettle);
 %InstallIntrinsic("ArraySpread", ArraySpread);
+%InstallIntrinsic("CopyDataProperties", CopyDataProperties);
+%InstallIntrinsic("CopyDataPropertiesExcluding", CopyDataPropertiesExcluding);
 })();

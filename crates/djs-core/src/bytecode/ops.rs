@@ -14,10 +14,11 @@
 //! # Table syntax
 //!
 //! ```text
-//! Name method(imm: Kind, ...) pop N [+ imm K] push M cost Class [flags A | B];
+//! Name method(imm: Kind, ...) pop N [+ imm K] push M [+ imm K] cost Class [flags A | B];
 //! ```
 //!
-//! `pop N + imm K` means "N plus the value of immediate K" (calls pop their arguments).
+//! `pop N + imm K` means "N plus the value of immediate K" (calls pop their arguments);
+//! `push M + imm K` likewise.
 //! Stack notation in the docs: `a b -> c` pops `b` then `a` and pushes `c`.
 
 use super::imm::ImmKind;
@@ -180,8 +181,9 @@ pub struct OpInfo {
     /// Values popped (plus the value of immediate `pop_imm`, if set).
     pub pop: u8,
     pub pop_imm: Option<u8>,
-    /// Values pushed.
+    /// Values pushed (plus the value of immediate `push_imm`, if set).
     pub push: u8,
+    pub push_imm: Option<u8>,
     pub cost: CostClass,
     /// [`flags`] bits.
     pub flags: u16,
@@ -203,7 +205,7 @@ macro_rules! ops {
         $(#[$doc:meta])*
         $name:ident $method:ident ( $( $iname:ident : $ikind:ident ),* )
             pop $pop:literal $( + imm $pidx:literal )?
-            push $push:literal
+            push $push:literal $( + imm $qidx:literal )?
             cost $cost:ident
             $( flags $( $flag:ident )|+ )? ;
     )*) => {
@@ -226,6 +228,7 @@ macro_rules! ops {
                 pop: $pop,
                 pop_imm: opt_u8!($( $pidx )?),
                 push: $push,
+                push_imm: opt_u8!($( $qidx )?),
                 cost: CostClass::$cost,
                 flags: 0 $( $( | flags::$flag )+ )?,
             },
@@ -363,6 +366,11 @@ ops! {
     Rot3L rot3l() pop 3 push 3 cost Basic;
     /// `a b x -> x a b`
     Rot3R rot3r() pop 3 push 3 cost Basic;
+    /// `x a1 .. an -> x a1 .. an x`: copy the value under the top `n` (`pick 0` is
+    /// `dup`). Destructuring reaches its iterator under assignment-target references.
+    Pick pick(n: U8) pop 1 + imm 0 push 2 + imm 0 cost Basic;
+    /// `x a1 .. an v -> v a1 .. an`: overwrite the value under the top `n` + 1.
+    Poke poke(n: U8) pop 2 + imm 0 push 1 + imm 0 cost Basic;
 
     // ---- Phase 1: scope-generic names and markers (docs/compiler.md 5.2) -------------
 
@@ -661,6 +669,9 @@ const _: () = {
         if let Some(k) = info.pop_imm {
             assert!((k as usize) < info.imms.len(), "pop_imm out of range");
         }
+        if let Some(k) = info.push_imm {
+            assert!((k as usize) < info.imms.len(), "push_imm out of range");
+        }
         i += 1;
     }
 };
@@ -702,6 +713,13 @@ pub const fn hash_ops(ops: &[OpInfo]) -> u32 {
             },
         );
         h = mix(h, op.push);
+        h = mix(
+            h,
+            match op.push_imm {
+                Some(k) => k + 1,
+                None => 0,
+            },
+        );
         h = mix(h, op.cost as u8);
         h = mix(h, op.flags as u8);
         h = mix(h, (op.flags >> 8) as u8);

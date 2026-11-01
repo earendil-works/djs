@@ -53,6 +53,28 @@ function IteratorCloseThrow(iterator: Obj): void {
 }
 
 /**
+ * The rest element of array destructuring (`[a, ...rest] = it`): the remaining values
+ * of the iterator, in a new array. Errors come from the iterator itself, so the caller
+ * does not close it.
+ * @intrinsic
+ */
+function IteratorRest(iterator: Obj, next: Value): Obj {
+  const arr: Obj = ArrayCreate(0);
+  let n: f64 = 0;
+  while (true) {
+    const result: Value = Call(next, iterator);
+    if (!IsObject(result)) {
+      throw NewTypeError("iterator must return an object");
+    }
+    if (ToBoolean(Get(AsObj(result), "done"))) {
+      return arr;
+    }
+    CreateDataPropertyOrThrow(arr, n, Get(AsObj(result), "value"));
+    n = n + 1;
+  }
+}
+
+/**
  * Array.prototype.values ( ), 23.1.3.38; also Array.prototype [ %Symbol.iterator% ].
  * @builtin Array.prototype.values
  * @builtin Array.prototype[Symbol.iterator]

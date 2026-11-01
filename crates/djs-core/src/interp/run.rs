@@ -1394,6 +1394,18 @@ impl<'h> Exec<'h> {
                 self.set(self.sp - 2, a);
                 self.set(self.sp - 1, b);
             }
+            Op::Pick => {
+                // x a1 .. an -> x a1 .. an x (the stack checker keeps n in range)
+                let n = u32::from(self.heap.arena().bytes()[(self.code + self.pc + 1) as usize]);
+                let v = self.top(n);
+                self.push(v);
+            }
+            Op::Poke => {
+                // x a1 .. an v -> v a1 .. an
+                let n = u32::from(self.heap.arena().bytes()[(self.code + self.pc + 1) as usize]);
+                let v = self.pop();
+                self.set(self.sp - 1 - n, v);
+            }
 
             // ---- locals, arguments, Boxes, captures ----
             Op::GetLoc => {

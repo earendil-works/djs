@@ -76,7 +76,8 @@ impl Insn {
     }
 
     pub fn pushes(&self) -> u32 {
-        self.info().push as u32
+        let info = self.info();
+        info.push as u32 + info.push_imm.map_or(0, |k| self.imms[k as usize])
     }
 
     fn target_index(&self) -> Option<usize> {

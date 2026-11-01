@@ -485,6 +485,26 @@ fn stack_bad() {
         Err(StackError::Underflow { pops: 5, .. })
     ));
 
+    // `pick n` and `poke n` reach n values down: their effects grow with the immediate.
+    let c = final_code(|b| {
+        b.undefined();
+        b.undefined();
+        b.pick(1);
+        b.poke(1);
+        b.drop();
+        b.return_();
+    });
+    assert_eq!(check_stack(&c, &[]), Ok(3));
+    let c = final_code(|b| {
+        b.undefined();
+        b.pick(1);
+        b.return_();
+    });
+    assert!(matches!(
+        check_stack(&c, &[]),
+        Err(StackError::Underflow { pops: 2, .. })
+    ));
+
     // Branches joining at different depths.
     let c = final_code(|b| {
         let l = b.new_label();
@@ -603,6 +623,13 @@ fn ops_hash_tracks_the_table() {
             &[ImmKind::U8]
         } else {
             &[]
+        };
+        variants.push(t);
+        let mut t = base.clone();
+        t[i].push_imm = if t[i].push_imm.is_some() {
+            None
+        } else {
+            Some(0)
         };
         variants.push(t);
         let mut t = base.clone();
