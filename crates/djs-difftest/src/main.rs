@@ -1,0 +1,363 @@
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
+use std::time::{Duration, Instant};
+
+use djs_difftest::case::{self, Case};
+use djs_difftest::engine::{Done, Engine};
+use djs_difftest::qjs::Qjs;
+use djs_difftest::runner::{self, Outcome, Verdict};
+use djs_test262::ratchet;
+use djs_test262::report::table;
+
+const USAGE: &str = "\
+usage: djs-difftest [options] [filter...]
+
+Runs the differential corpus (tests/corpus/<area>/<name>.{js,ts}) in the codemode
+model and compares each transcript with <name>.expected. Filters select cases by path
+relative to the corpus: a prefix (console) or a glob (dquickts/*/test_op*.js).
+
+options:
+  --engine NAME       qjs (default) or djs (not available yet)
+  --qjs PATH          qjs binary (default: $DJS_QJS, else ~/Development/dquickts/qjs)
+  --update            rewrite .expected files from qjs (never from djs)
+  --ratchet           compare failures with tests/corpus/expected-failures.txt;
+                      exit 1 on failures not listed there
+  --ratchet-file FILE use another failures file (implies --ratchet)
+  --update-ratchet    rewrite the failures file from this run
+  --no-diff           list failures without diffs
+  --timeout SECS      wall-clock limit per case (default 10)
+  --memory-limit N    memory limit per case in bytes, K/M/G suffixes (default 256M,
+                      as in pi's codemode; 0 means no limit)
+  -j, --jobs N        worker threads (default: number of CPUs)
+  --corpus DIR        corpus root (default: tests/corpus)
+  -q, --quiet         no progress line
+";
+
+struct Args {
+    filters: Vec<String>,
+    engine: String,
+    qjs: PathBuf,
+    update: bool,
+    ratchet: Option<PathBuf>,
+    update_ratchet: bool,
+    diff: bool,
+    timeout: Duration,
+    memory_limit: Option<u64>,
+    jobs: usize,
+    corpus: PathBuf,
+    quiet: bool,
+}
+
+fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn parse_size(s: &str) -> Result<u64, String> {
+    let (num, mul) = match s.as_bytes().last() {
+        Some(b'K' | b'k') => (&s[..s.len() - 1], 1u64 << 10),
+        Some(b'M' | b'm') => (&s[..s.len() - 1], 1 << 20),
+        Some(b'G' | b'g') => (&s[..s.len() - 1], 1 << 30),
+        _ => (s, 1),
+    };
+    num.parse::<u64>()
+        .map(|n| n * mul)
+        .map_err(|_| format!("bad size `{s}`"))
+}
+
+fn parse_args() -> Result<Args, String> {
+    let corpus = workspace_root().join("tests/corpus");
+    let mut args = Args {
+        filters: Vec::new(),
+        engine: "qjs".into(),
+        qjs: Qjs::default_binary(),
+        update: false,
+        ratchet: None,
+        update_ratchet: false,
+        diff: true,
+        timeout: Duration::from_secs(10),
+        memory_limit: Some(256 << 20),
+        jobs: std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4),
+        corpus,
+        quiet: false,
+    };
+    let mut it = std::env::args().skip(1);
+    while let Some(a) = it.next() {
+        let mut value = |name: &str| it.next().ok_or_else(|| format!("{name} needs a value"));
+        match a.as_str() {
+            "-h" | "--help" => {
+                print!("{USAGE}");
+                std::process::exit(0);
+            }
+            "--engine" => args.engine = value(&a)?,
+            "--qjs" => args.qjs = value(&a)?.into(),
+            "--update" => args.update = true,
+            "--ratchet" => {
+                args.ratchet
+                    .get_or_insert_with(|| PathBuf::from("expected-failures.txt"));
+            }
+            "--ratchet-file" => args.ratchet = Some(value(&a)?.into()),
+            "--update-ratchet" => args.update_ratchet = true,
+            "--no-diff" => args.diff = false,
+            "--timeout" => {
+                let v = value(&a)?;
+                let secs: f64 = v
+                    .parse()
+                    .map_err(|_| format!("--timeout: bad number `{v}`"))?;
+                args.timeout = Duration::from_secs_f64(secs);
+            }
+            "--memory-limit" => {
+                let n = parse_size(&value(&a)?)?;
+                args.memory_limit = (n > 0).then_some(n);
+            }
+            "-j" | "--jobs" => {
+                let v = value(&a)?;
+                args.jobs = v
+                    .parse::<usize>()
+                    .map_err(|_| format!("-j: bad number `{v}`"))?
+                    .max(1);
+            }
+            "--corpus" => args.corpus = value(&a)?.into(),
+            "-q" | "--quiet" => args.quiet = true,
+            // `run` is accepted for symmetry with djs-test262.
+            "run" if args.filters.is_empty() => {}
+            _ if a.starts_with('-') => return Err(format!("unknown option {a}")),
+            _ => args.filters.push(a),
+        }
+    }
+    if let Some(r) = &args.ratchet
+        && r.is_relative()
+        && r == Path::new("expected-failures.txt")
+    {
+        args.ratchet = Some(args.corpus.join(r));
+    }
+    if args.update_ratchet && args.ratchet.is_none() {
+        args.ratchet = Some(args.corpus.join("expected-failures.txt"));
+    }
+    if args.update && args.engine != "qjs" {
+        return Err("--update records the oracle; it only works with --engine qjs".into());
+    }
+    Ok(args)
+}
+
+fn main() -> ExitCode {
+    let args = match parse_args() {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("djs-difftest: {e}\n\n{USAGE}");
+            return ExitCode::from(2);
+        }
+    };
+    match real_main(&args) {
+        Ok(code) => code,
+        Err(e) => {
+            eprintln!("djs-difftest: {e}");
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn real_main(args: &Args) -> Result<ExitCode, String> {
+    let engine: Box<dyn Engine> = match args.engine.as_str() {
+        "qjs" => {
+            if !args.qjs.is_file() {
+                return Err(format!(
+                    "qjs binary not found at {} (use --qjs or DJS_QJS)",
+                    args.qjs.display()
+                ));
+            }
+            Box::new(Qjs {
+                binary: args.qjs.clone(),
+            })
+        }
+        "djs" => return Err("the djs engine is not available yet (issue 0006)".into()),
+        e => return Err(format!("unknown engine `{e}`")),
+    };
+    let cases = case::discover(&args.corpus, &args.filters)?;
+    if cases.is_empty() {
+        return Err("no cases match the filters".into());
+    }
+    let opts = runner::Options {
+        jobs: args.jobs,
+        timeout: args.timeout,
+        memory_limit: args.memory_limit,
+        progress: !args.quiet,
+        is_djs: args.engine == "djs",
+    };
+    let prelude = args.corpus.join("prelude.js");
+    let start = Instant::now();
+    let outcomes = runner::run_all(engine.as_ref(), &cases, &prelude, &opts)?;
+    let elapsed = start.elapsed();
+
+    if args.update {
+        return update_expected(&cases, &outcomes);
+    }
+
+    println!(
+        "difftest · engine {} · {} cases in {:.1}s\n",
+        engine.name(),
+        cases.len(),
+        elapsed.as_secs_f64()
+    );
+    print!("{}", summary(&cases, &outcomes));
+
+    let failures: Vec<(&Case, &str, &str)> = cases
+        .iter()
+        .zip(&outcomes)
+        .filter_map(|(c, o)| match &o.verdict {
+            Verdict::Fail { reason, diff } => Some((c, reason.as_str(), diff.as_str())),
+            _ => None,
+        })
+        .collect();
+    if !failures.is_empty() {
+        println!("\nfailures ({}):", failures.len());
+        for (c, reason, diff) in &failures {
+            if args.diff && !diff.is_empty() {
+                println!(
+                    "\n--- {} (- expected, + actual)\n{}",
+                    c.name,
+                    diff.trim_end()
+                );
+            } else {
+                println!("{}: {reason}", c.name);
+            }
+        }
+    }
+
+    let Some(ratchet_file) = &args.ratchet else {
+        return Ok(if failures.is_empty() {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::from(1)
+        });
+    };
+    // Skipped cases did not run: their entries are neither stale nor replaced.
+    let results: Vec<(&str, Option<&str>)> = cases
+        .iter()
+        .zip(&outcomes)
+        .filter_map(|(c, o)| match &o.verdict {
+            Verdict::Pass => Some((c.name.as_str(), None)),
+            Verdict::Fail { reason, .. } => Some((c.name.as_str(), Some(reason.as_str()))),
+            Verdict::Skipped(_) => None,
+        })
+        .collect();
+    let expected = ratchet::load(ratchet_file)?;
+    if args.update_ratchet {
+        let updated = ratchet::update(&expected, &results);
+        save_ratchet(ratchet_file, &updated)?;
+        println!(
+            "\nratchet: wrote {} entries to {}",
+            updated.len(),
+            ratchet_file.display()
+        );
+        return Ok(ExitCode::SUCCESS);
+    }
+    let cmp = ratchet::compare(&expected, &results);
+    println!();
+    if !cmp.stale.is_empty() {
+        println!(
+            "ratchet: {} stale entries (these pass now; run with --update-ratchet):",
+            cmp.stale.len()
+        );
+        for p in &cmp.stale {
+            println!("  {p}");
+        }
+    }
+    if cmp.new_failures.is_empty() {
+        println!("ratchet: OK, no new failures ({} expected)", failures.len());
+        Ok(ExitCode::SUCCESS)
+    } else {
+        println!(
+            "ratchet: {} new failures (not in {}):",
+            cmp.new_failures.len(),
+            ratchet_file.display()
+        );
+        for (p, r) in &cmp.new_failures {
+            println!("  {p}: {r}");
+        }
+        Ok(ExitCode::from(1))
+    }
+}
+
+fn save_ratchet(path: &Path, map: &ratchet::Expected) -> Result<(), String> {
+    let mut text = String::from(
+        "# difftest cases known to fail, one `case: reason` line each (paths relative to tests/corpus/).\n\
+         # Generated by `djs-difftest --engine <engine> --update-ratchet`; do not edit by hand.\n",
+    );
+    for (name, reason) in map {
+        text.push_str(&format!("{name}: {reason}\n"));
+    }
+    fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Writes the transcripts as `.expected`. Timeouts and crashes are never recorded: they
+/// mean the case or the runner is broken.
+fn update_expected(cases: &[Case], outcomes: &[Outcome]) -> Result<ExitCode, String> {
+    let (mut added, mut changed, mut same) = (0, 0, 0);
+    let mut errors = Vec::new();
+    for (c, o) in cases.iter().zip(outcomes) {
+        match &o.done {
+            Some(Done::Timeout) => errors.push(format!("{}: timeout", c.name)),
+            Some(Done::Crash(msg)) => errors.push(format!("{}: crash: {msg}", c.name)),
+            None => {}
+            Some(_) => {
+                let old = fs::read_to_string(&c.expected_file).ok();
+                match old {
+                    Some(old) if old == o.transcript => same += 1,
+                    old => {
+                        fs::write(&c.expected_file, &o.transcript)
+                            .map_err(|e| format!("{}: {e}", c.expected_file.display()))?;
+                        if old.is_some() {
+                            changed += 1;
+                            println!("changed: {}", c.name);
+                        } else {
+                            added += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    println!("update: {added} new, {changed} changed, {same} unchanged .expected files");
+    if errors.is_empty() {
+        Ok(ExitCode::SUCCESS)
+    } else {
+        println!("not recorded ({}):", errors.len());
+        for e in &errors {
+            println!("  {e}");
+        }
+        Ok(ExitCode::from(1))
+    }
+}
+
+fn summary(cases: &[Case], outcomes: &[Outcome]) -> String {
+    let mut by_area: BTreeMap<&str, [usize; 4]> = BTreeMap::new();
+    for (c, o) in cases.iter().zip(outcomes) {
+        let row = by_area.entry(c.area()).or_default();
+        row[0] += 1;
+        match o.verdict {
+            Verdict::Pass => row[1] += 1,
+            Verdict::Fail { .. } => row[2] += 1,
+            Verdict::Skipped(_) => row[3] += 1,
+        }
+    }
+    let mut total = [0; 4];
+    let mut rows = Vec::new();
+    for (area, r) in &by_area {
+        for i in 0..4 {
+            total[i] += r[i];
+        }
+        rows.push(row(area, r));
+    }
+    rows.push(row("total", &total));
+    table(&["area", "cases", "pass", "fail", "skip"], &rows)
+}
+
+fn row(name: &str, r: &[usize; 4]) -> Vec<String> {
+    let mut v = vec![name.to_string()];
+    v.extend(r.iter().map(|n| n.to_string()));
+    v
+}

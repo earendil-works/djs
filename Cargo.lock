@@ -14,5 +14,12 @@ name = "djs-core"
 version = "0.0.0"
 
 [[package]]
+name = "djs-difftest"
+version = "0.0.0"
+dependencies = [
+ "djs-test262",
+]
+
+[[package]]
 name = "djs-test262"
 version = "0.0.0"

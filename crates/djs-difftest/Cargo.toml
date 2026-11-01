@@ -1,0 +1,14 @@
+[package]
+name = "djs-difftest"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "djs-difftest"
+path = "src/main.rs"
+
+[dependencies]
+# Shared runner utilities (parallel map, ratchet file, globs, tables); see D1101.
+djs-test262 = { path = "../djs-test262" }
