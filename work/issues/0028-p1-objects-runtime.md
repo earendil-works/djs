@@ -1,7 +1,7 @@
 # 0028: P1-2 runtime: call_intrinsic, prelude installation, ToPrimitive slow paths, Error stack
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0028-p1-objects-runtime
 depends-on: 0022, 0027 (intrinsic id table format)
 touches: crates/djs-core/src/interp/, crates/djs-core/src/vm/, builtins/ (intrinsics needed by the slow paths; coordinate with bgen's rules), crates/djs-core/src/heap/ (additive)
