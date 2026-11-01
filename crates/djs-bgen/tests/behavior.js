@@ -411,7 +411,7 @@ same("Function.prototype.bind", FP.bind, (f) => {
   return [o.ab, o instanceof C, o instanceof B];
 });
 
-for (const C of ["Error", "TypeError", "RangeError", "ReferenceError", "SyntaxError", "EvalError", "URIError"]) {
+for (const C of ["Error", "TypeError", "RangeError", "ReferenceError", "SyntaxError", "EvalError", "URIError", "InternalError"]) {
   const native = globalThis[C];
   const full = "globalThis." + C;
   for (const args of [[], ["m"], [undefined], [5, { cause: 1 }], ["m", { x: 1 }], ["m", logged({ cause: 2 }, [])], [toPrim("t")]]) {

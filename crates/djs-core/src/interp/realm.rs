@@ -52,6 +52,7 @@ impl Intrinsic {
             "EvalError" => Intrinsic::EvalErrorProto,
             "URIError" => Intrinsic::UriErrorProto,
             "AggregateError" => Intrinsic::AggregateErrorProto,
+            "InternalError" => Intrinsic::InternalErrorProto,
             _ => return None,
         })
     }

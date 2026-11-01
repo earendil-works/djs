@@ -114,3 +114,13 @@ function ErrorPrototypeToString(this: Value): Str {
   }
   return nameStr + ": " + msgStr;
 }
+
+/**
+ * InternalError (QuickJS's, for stack overflow and out of memory).
+ * @constructor InternalError
+ * @extends Error
+ * @length 1
+ */
+function InternalErrorConstructor(message?: Value, options?: Value): Obj {
+  return ErrorConstruct(new.target, "InternalErrorPrototype", message, options);
+}

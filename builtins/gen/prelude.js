@@ -354,6 +354,11 @@ function ErrorPrototypeToString() {
   return nameStr + ": " + msgStr;
 }
 
+// builtins/error.ts:124 constructor InternalError
+function InternalErrorConstructor(message, options) {
+  return ErrorConstruct(new.target, "InternalErrorPrototype", message, options);
+}
+
 // builtins/function.ts:9 Function.prototype.call
 function FunctionPrototypeCall(thisArg, ...args) {
   if (!%IsCallable(this)) {
@@ -572,6 +577,7 @@ function StringConstructor(...args) {
 %InstallConstructor("globalThis", "SyntaxError", SyntaxErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "TypeError", TypeErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "URIError", URIErrorConstructor, 1, "Error");
+%InstallConstructor("globalThis", "InternalError", InternalErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "Function", FunctionConstructor, 1, undefined);
 %InstallValue("globalThis", "Math", MathObject(), 5);
 %InstallConstructor("globalThis", "Object", ObjectConstructor, 1, undefined);

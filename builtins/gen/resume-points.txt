@@ -121,6 +121,9 @@ ErrorPrototypeToString: reentrant (Error.prototype.toString)
   builtins/error.ts:107:22  Get (intrinsic)
   builtins/error.ts:108:48  ToString (builtin)
 
+InternalErrorConstructor: reentrant (constructor InternalError)
+  builtins/error.ts:125:10  ErrorConstruct (builtin)
+
 FunctionPrototypeCall: reentrant (Function.prototype.call)
   builtins/function.ts:13:10  CallWithArray (intrinsic)
 
