@@ -659,7 +659,8 @@ declare function RecordSet(r: Obj, i: i32, v: Value): void;
  * AsyncGeneratorAwaitReturnFulfilled, 12 AsyncGeneratorAwaitReturnRejected, 13
  * AsyncFromSyncIteratorUnwrap, 14 AsyncFromSyncIteratorCloseThrow, 15
  * ProxyRevokeFunction, 16 FromAsyncFulfilled, 17 FromAsyncRejected, 18
- * AsyncDisposeFulfilled, 19 AsyncDisposeRejected) with `this` = data and its own
+ * AsyncDisposeFulfilled, 19 AsyncDisposeRejected, 20 DecoratorAddInitializer, 21
+ * DecoratorAccessGet, 22 DecoratorAccessSet, 23 DecoratorAccessHas) with `this` = data and its own
  * arguments.
  * @leaf
  */

@@ -818,6 +818,93 @@ DatePrototypeToPrimitive: reentrant (Date.prototype[Symbol.toPrimitive])
   builtins/date.ts:498:12  OrdinaryToPrimitive (builtin)
   builtins/date.ts:501:12  OrdinaryToPrimitive (builtin)
 
+DecoratorKindName: leaf
+
+DecoratorPush: reentrant
+  builtins/decorators.ts:35:35  LengthOfArrayLike (builtin)
+  builtins/decorators.ts:35:3  CreateDataPropertyOrThrow (intrinsic)
+
+DecoratorStart: reentrant (%DecoratorStart)
+  builtins/decorators.ts:46:31  GetPrototypeOf (intrinsic)
+  builtins/decorators.ts:48:16  Get (intrinsic)
+
+DecoratorNewAccess: reentrant
+  builtins/decorators.ts:71:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:74:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:76:3  CreateDataPropertyOrThrow (intrinsic)
+
+DecoratorNewContext: reentrant
+  builtins/decorators.ts:87:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:89:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:90:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:91:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:93:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:94:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:95:3  CreateDataPropertyOrThrow (intrinsic)
+
+DecoratorCheckResult: leaf
+
+DecoratorAccessorFn: reentrant
+  builtins/decorators.ts:108:20  Get (intrinsic)
+
+ApplyDecorators: reentrant (%ApplyDecorators)
+  builtins/decorators.ts:137:14  Get (intrinsic)
+  builtins/decorators.ts:145:13  Get (intrinsic)
+  builtins/decorators.ts:146:16  Get (intrinsic)
+  builtins/decorators.ts:154:14  DecoratorNewAccess (builtin)
+  builtins/decorators.ts:156:27  GetOwnPropertyDescriptorObject (intrinsic)
+  builtins/decorators.ts:159:17  Get (intrinsic)
+  builtins/decorators.ts:161:17  Get (intrinsic)
+  builtins/decorators.ts:163:17  Get (intrinsic)
+  builtins/decorators.ts:165:22  Get (intrinsic)
+  builtins/decorators.ts:189:9  LengthOfArrayLike (builtin)
+  builtins/decorators.ts:193:24  Get (intrinsic)
+  builtins/decorators.ts:194:25  Get (intrinsic)
+  builtins/decorators.ts:198:22  DecoratorNewContext (builtin)
+  builtins/decorators.ts:202:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:203:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:208:13  Call (intrinsic)
+  builtins/decorators.ts:216:9  DecoratorPush (builtin)
+  builtins/decorators.ts:220:26  DecoratorAccessorFn (builtin)
+  builtins/decorators.ts:221:26  DecoratorAccessorFn (builtin)
+  builtins/decorators.ts:222:29  DecoratorAccessorFn (builtin)
+  builtins/decorators.ts:230:11  DecoratorPush (builtin)
+  builtins/decorators.ts:243:5  DefineDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:252:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:253:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:254:7  DecoratorDefine (builtin)
+  builtins/decorators.ts:265:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:267:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:269:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:271:3  DecoratorDefine (builtin)
+
+DecoratorDefine: reentrant
+  builtins/decorators.ts:277:8  DefineOwnPropertyFromRecord (intrinsic)
+
+DecoratorRunInits: reentrant (%DecoratorRunInits)
+  builtins/decorators.ts:290:16  LengthOfArrayLike (builtin)
+  builtins/decorators.ts:293:14  Get (intrinsic)
+  builtins/decorators.ts:293:9  Call (intrinsic)
+
+DecoratorRunExtras: reentrant (%DecoratorRunExtras)
+  builtins/decorators.ts:305:18  LengthOfArrayLike (builtin)
+  builtins/decorators.ts:307:10  Get (intrinsic)
+  builtins/decorators.ts:307:5  Call (intrinsic)
+
+DecoratorAddInitializer: reentrant (%DecoratorAddInitializer)
+  builtins/decorators.ts:323:3  DecoratorPush (builtin)
+
+DecoratorAccessGet: reentrant (%DecoratorAccessGet)
+  builtins/decorators.ts:334:10  Get (intrinsic)
+
+DecoratorAccessSet: reentrant (%DecoratorAccessSet)
+  builtins/decorators.ts:345:3  Set (intrinsic)
+
+DecoratorAccessHas: reentrant (%DecoratorAccessHas)
+  builtins/decorators.ts:356:10  HasProperty (intrinsic)
+
+SymbolMetadata: leaf (value Symbol.metadata)
+
 NewSuppressedError: reentrant
   builtins/disposable.ts:17:3  DefineDataPropertyOrThrow (intrinsic)
   builtins/disposable.ts:18:3  DefineDataPropertyOrThrow (intrinsic)

@@ -2190,6 +2190,316 @@ function DatePrototypeToPrimitive(hint) {
   throw %NewTypeError("invalid hint");
 }
 
+// builtins/decorators.ts:14
+function DecoratorKindName(kind) {
+  if (kind === 0) {
+    return "class";
+  }
+  if (kind === 1) {
+    return "method";
+  }
+  if (kind === 2) {
+    return "getter";
+  }
+  if (kind === 3) {
+    return "setter";
+  }
+  if (kind === 4) {
+    return "accessor";
+  }
+  return "field";
+}
+
+// builtins/decorators.ts:34
+function DecoratorPush(list, v) {
+  %CreateDataPropertyOrThrow(list, LengthOfArrayLike(list), v);
+}
+
+// builtins/decorators.ts:43 %DecoratorStart
+function DecoratorStart(cls, heritage) {
+  let parent = null;
+  if (heritage) {
+    const superClass = %GetPrototypeOf(%AsObj(cls));
+    if (%IsObject(superClass) && superClass !== %RealmIntrinsic("FunctionPrototype")) {
+      parent = %Get(%AsObj(superClass), %WellKnownSymbol("metadata"));
+      if (parent === undefined) {
+        parent = null;
+      } else if (!%IsObject(parent) && parent !== null) {
+        throw %NewTypeError("invalid parent class metadata");
+      }
+    }
+  }
+  const state = %NewRecord(4);
+  %RecordSet(state, 0, %ObjectCreate(parent));
+  %RecordSet(state, 1, %ArrayCreate(0));
+  %RecordSet(state, 2, %ArrayCreate(0));
+  %RecordSet(state, 3, %ArrayCreate(0));
+  return state;
+}
+
+// builtins/decorators.ts:68
+function DecoratorNewAccess(kind, key) {
+  const access = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+  if (kind !== 3) {
+    %CreateDataPropertyOrThrow(access, "get", %NewBuiltinClosure(21, key, 1));
+  }
+  if (kind === 3 || kind === 4 || kind === 5) {
+    %CreateDataPropertyOrThrow(access, "set", %NewBuiltinClosure(22, key, 2));
+  }
+  %CreateDataPropertyOrThrow(access, "has", %NewBuiltinClosure(23, key, 1));
+  return access;
+}
+
+// builtins/decorators.ts:84
+function DecoratorNewContext(flags, name, access, metadata, adder) {
+  const kind = flags & 7;
+  const ctx = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+  %CreateDataPropertyOrThrow(ctx, "kind", DecoratorKindName(kind));
+  if (kind !== 0) {
+    %CreateDataPropertyOrThrow(ctx, "access", access);
+    %CreateDataPropertyOrThrow(ctx, "static", (flags & 8) !== 0);
+    %CreateDataPropertyOrThrow(ctx, "private", (flags & 16) !== 0);
+  }
+  %CreateDataPropertyOrThrow(ctx, "name", name);
+  %CreateDataPropertyOrThrow(ctx, "addInitializer", %NewBuiltinClosure(20, adder, 1));
+  %CreateDataPropertyOrThrow(ctx, "metadata", metadata);
+  return ctx;
+}
+
+// builtins/decorators.ts:100
+function DecoratorCheckResult(v, kind) {
+  if (v !== undefined && !%IsCallable(v)) {
+    throw %NewTypeError(DecoratorKindName(kind) + " decorator must return a function or undefined");
+  }
+}
+
+// builtins/decorators.ts:107
+function DecoratorAccessorFn(o, name) {
+  const f = %Get(o, name);
+  if (f !== undefined && !%IsCallable(f)) {
+    throw %NewTypeError("accessor decorator: '" + name + "' must be a function");
+  }
+  return f;
+}
+
+// builtins/decorators.ts:126 %ApplyDecorators
+function ApplyDecorators(target, key, value, decs, stateV, flags) {
+  const kind = flags & 7;
+  const isPrivate = (flags & 16) !== 0;
+  const state = %AsObj(stateV);
+  let name = key;
+  let access = undefined;
+  let cur = undefined;
+  let curSet = undefined;
+  if (kind === 0) {
+    cur = target;
+    if (!%IsString(key)) {
+      name = %Get(%AsObj(target), "name");
+      if (!%IsString(name)) {
+        name = "";
+      }
+    }
+  } else if (isPrivate) {
+    access = target;
+    if (kind === 4) {
+      cur = %Get(%AsObj(value), "get");
+      curSet = %Get(%AsObj(value), "set");
+    } else {
+      cur = value;
+    }
+  } else {
+    if (%IsNumber(key)) {
+      name = %ToStringPrimitive(key);
+    }
+    access = DecoratorNewAccess(kind, key);
+    if (kind !== 5) {
+      const desc = %GetOwnPropertyDescriptorObject(%AsObj(target), key);
+      if (desc !== undefined) {
+        if (kind === 1) {
+          cur = %Get(%AsObj(desc), "value");
+        } else if (kind === 3) {
+          cur = %Get(%AsObj(desc), "set");
+        } else {
+          cur = %Get(%AsObj(desc), "get");
+          if (kind === 4) {
+            curSet = %Get(%AsObj(desc), "set");
+          }
+        }
+      }
+    }
+  }
+  const metadata = %RecordGet(state, 0);
+  let rec = undefined;
+  let extras = undefined;
+  if (kind === 4 || kind === 5) {
+    const r = %NewRecord(4);
+    %RecordSet(r, 0, %ArrayCreate(0));
+    %RecordSet(r, 1, %ArrayCreate(0));
+    rec = r;
+    extras = %RecordGet(r, 1);
+  } else if (kind === 0) {
+    extras = %RecordGet(state, 3);
+  } else if ((flags & 8) !== 0) {
+    extras = %RecordGet(state, 1);
+  } else {
+    extras = %RecordGet(state, 2);
+  }
+  let i = 0;
+  if (decs !== undefined) {
+    i = LengthOfArrayLike(%AsObj(decs)) / 2;
+  }
+  while (i > 0) {
+    i -= 1;
+    const dec = %Get(%AsObj(decs), 2 * i);
+    const recv = %Get(%AsObj(decs), 2 * i + 1);
+    const adder = %NewRecord(2);
+    %RecordSet(adder, 0, extras);
+    %RecordSet(adder, 1, false);
+    const ctx = DecoratorNewContext(flags, name, access, metadata, adder);
+    let arg = cur;
+    if (kind === 4) {
+      const pair = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+      %CreateDataPropertyOrThrow(pair, "get", cur);
+      %CreateDataPropertyOrThrow(pair, "set", curSet);
+      arg = pair;
+    }
+    let ret = undefined;
+    try {
+      ret = %Call(dec, recv, arg, ctx);
+    } finally {
+      %RecordSet(adder, 1, true);
+    }
+    if (kind === 5) {
+      DecoratorCheckResult(ret, kind);
+      if (ret !== undefined) {
+        DecoratorPush(%AsObj(%RecordGet(%AsObj(rec), 0)), ret);
+      }
+    } else if (kind === 4) {
+      if (%IsObject(ret)) {
+        const g = DecoratorAccessorFn(%AsObj(ret), "get");
+        const s = DecoratorAccessorFn(%AsObj(ret), "set");
+        const init = DecoratorAccessorFn(%AsObj(ret), "init");
+        if (g !== undefined) {
+          cur = g;
+        }
+        if (s !== undefined) {
+          curSet = s;
+        }
+        if (init !== undefined) {
+          DecoratorPush(%AsObj(%RecordGet(%AsObj(rec), 0)), init);
+        }
+      } else if (ret !== undefined) {
+        throw %NewTypeError("accessor decorator must return an object or undefined");
+      }
+    } else {
+      DecoratorCheckResult(ret, kind);
+      if (ret !== undefined) {
+        cur = ret;
+      }
+    }
+  }
+  if (kind === 0) {
+    %DefineDataPropertyOrThrow(%AsObj(cur), %WellKnownSymbol("metadata"), metadata, 7);
+    return cur;
+  }
+  if (kind === 5) {
+    return rec;
+  }
+  if (kind === 4) {
+    if (!isPrivate) {
+      const d = %ObjectCreate(null);
+      %CreateDataPropertyOrThrow(d, "get", cur);
+      %CreateDataPropertyOrThrow(d, "set", curSet);
+      DecoratorDefine(%AsObj(target), key, d);
+    }
+    %RecordSet(%AsObj(rec), 2, cur);
+    %RecordSet(%AsObj(rec), 3, curSet);
+    return rec;
+  }
+  if (isPrivate) {
+    return cur;
+  }
+  const d = %ObjectCreate(null);
+  if (kind === 1) {
+    %CreateDataPropertyOrThrow(d, "value", cur);
+  } else if (kind === 2) {
+    %CreateDataPropertyOrThrow(d, "get", cur);
+  } else {
+    %CreateDataPropertyOrThrow(d, "set", cur);
+  }
+  DecoratorDefine(%AsObj(target), key, d);
+  return undefined;
+}
+
+// builtins/decorators.ts:276
+function DecoratorDefine(o, key, desc) {
+  if (!%DefineOwnPropertyFromRecord(o, key, desc)) {
+    throw %NewTypeError("cannot redefine property");
+  }
+}
+
+// builtins/decorators.ts:287 %DecoratorRunInits
+function DecoratorRunInits(value, rec, thisValue) {
+  const inits = %AsObj(%RecordGet(%AsObj(rec), 0));
+  let v = value;
+  let i = LengthOfArrayLike(inits);
+  while (i > 0) {
+    i -= 1;
+    v = %Call(%Get(inits, i), thisValue, v);
+  }
+  return v;
+}
+
+// builtins/decorators.ts:303 %DecoratorRunExtras
+function DecoratorRunExtras(r, i, thisValue) {
+  const list = %AsObj(%RecordGet(%AsObj(r), i));
+  const n = LengthOfArrayLike(list);
+  for (let j = 0; j < n; j++) {
+    %Call(%Get(list, j), thisValue);
+  }
+}
+
+// builtins/decorators.ts:315 %DecoratorAddInitializer
+function DecoratorAddInitializer(initializer) {
+  const adder = %AsObj(this);
+  if (%AsBool(%RecordGet(adder, 1))) {
+    throw %NewTypeError("addInitializer() called after the decoration");
+  }
+  if (!%IsCallable(initializer)) {
+    throw %NewTypeError("initializer must be a function");
+  }
+  DecoratorPush(%AsObj(%RecordGet(adder, 0)), initializer);
+}
+
+// builtins/decorators.ts:330 %DecoratorAccessGet
+function DecoratorAccessGet(o) {
+  if (!%IsObject(o)) {
+    throw %NewTypeError("not an object");
+  }
+  return %Get(%AsObj(o), this);
+}
+
+// builtins/decorators.ts:341 %DecoratorAccessSet
+function DecoratorAccessSet(o, value) {
+  if (!%IsObject(o)) {
+    throw %NewTypeError("not an object");
+  }
+  %Set(%AsObj(o), this, value);
+}
+
+// builtins/decorators.ts:352 %DecoratorAccessHas
+function DecoratorAccessHas(o) {
+  if (!%IsObject(o)) {
+    throw %NewTypeError("not an object");
+  }
+  return %HasProperty(%AsObj(o), this);
+}
+
+// builtins/decorators.ts:363 value Symbol.metadata
+function SymbolMetadata() {
+  return %WellKnownSymbol("metadata");
+}
+
 // builtins/disposable.ts:15
 function NewSuppressedError(error, suppressed) {
   const o = %ErrorCreate(%RealmIntrinsic("SuppressedErrorPrototype"));
@@ -10611,6 +10921,7 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallMethod("Date.prototype", "toJSON", DatePrototypeToJSON, 1);
 %InstallMethod("Date.prototype", %WellKnownSymbol("toPrimitive"), DatePrototypeToPrimitive, 1);
 %InstallValue("Date.prototype", %WellKnownSymbol("toPrimitive"), DatePrototypeToPrimitive, 4);
+%InstallValue("Symbol", "metadata", SymbolMetadata(), 0);
 %InstallAccessor("DisposableStack.prototype", "disposed", DisposableStackPrototypeDisposed, false);
 %InstallMethod("DisposableStack.prototype", "dispose", DisposableStackPrototypeDispose, 0);
 %InstallMethod("DisposableStack.prototype", %WellKnownSymbol("dispose"), DisposableStackPrototypeDispose, 0);
@@ -11036,6 +11347,14 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallIntrinsic("ToNumber", ToNumber);
 %InstallIntrinsic("ToString", ToString);
 %InstallIntrinsic("ToPropertyKey", ToPropertyKey);
+%InstallIntrinsic("DecoratorStart", DecoratorStart);
+%InstallIntrinsic("ApplyDecorators", ApplyDecorators);
+%InstallIntrinsic("DecoratorRunInits", DecoratorRunInits);
+%InstallIntrinsic("DecoratorRunExtras", DecoratorRunExtras);
+%InstallIntrinsic("DecoratorAddInitializer", DecoratorAddInitializer);
+%InstallIntrinsic("DecoratorAccessGet", DecoratorAccessGet);
+%InstallIntrinsic("DecoratorAccessSet", DecoratorAccessSet);
+%InstallIntrinsic("DecoratorAccessHas", DecoratorAccessHas);
 %InstallIntrinsic("AsyncDisposeFulfilled", AsyncDisposeFulfilled);
 %InstallIntrinsic("AsyncDisposeRejected", AsyncDisposeRejected);
 %InstallIntrinsic("UsingCreate", UsingCreate);

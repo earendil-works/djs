@@ -246,6 +246,7 @@ well_known! {
         SYM_SPLIT = "Symbol.split",
         SYM_DISPOSE = "Symbol.dispose",
         SYM_ASYNC_DISPOSE = "Symbol.asyncDispose",
+        SYM_METADATA = "Symbol.metadata",
     }
 }
 
