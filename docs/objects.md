@@ -359,24 +359,31 @@ reader section is updated; the wire format itself doesn't change.
 
 ### 7.7 Inline caches (D1620/D1621) on shapes
 
-Part 2 already caches own reads and writes on shape-mode receivers by a shape compare
-(the 3-word slot holds `IC_OFFSET_SLOT | slot + 1` with depth 0, the shape, and the
-writable bit); dictionary receivers keep the verified index. The rest is part 3.
-
-`IC_WORDS` goes from 3 to 4.
-- **Own read/write (shape mode):** the slot holds the shape's offset and the slot index.
-  A hit compares `values.SHAPE` with the cached shape, then reads or writes `VALUES[slot]`
-  (a write also checks the cached writable bit). This replaces the key check at the
-  index.
+As built (parts 2 and 3, D1832). `IC_WORDS` went from 3 to 5; the slot layouts are
+documented in `interp/run/ic.rs`, and the hit checks are two shared functions,
+`cached_get` and `cached_put`, so the run loops have one implementation.
+- **Own read/write (shape mode, part 2):** word 0 = `IC_OFFSET_SLOT | slot + 1` (kind 0),
+  word 1 = the shape, word 2 = writable. A hit compares the object's shape and reads or
+  writes `VALUES[slot]`.
 - **Own read/write (dictionary mode):** unchanged, a verified table index. The global
   object and the lexical record are dictionaries, so the global caches don't change.
-- **Additions:** `put_field` and `define_field` cache a transition (old shape, new shape,
-  slot, whether the values block must grow). A hit when the block has room writes the
-  value and the new `SHAPE` without any lookup. This is the constructor case that 0062
-  could not cache.
-- **Prototypes:** the slot also stores the receiver's shape (the 4th word). Equal shapes
-  prove the receiver has no own `key`, which replaces the per-hit `has_own_property`.
-  Dictionary receivers keep the per-hit check.
+- **Additions:** `put_field` and `define_field` (which got a `Cache` immediate) cache
+  the transition: kind `KIND_ADD`, the receiver's shape word before and the shape
+  after. A hit writes the value, `LEN` and the new `SHAPE`, growing a full values block,
+  and doesn't search anything. This is the constructor and object-literal case that 0062
+  could not cache. A `put_field` addition is [[Set]], so it also depends on the
+  prototype chain: the cache is filled only when no object on the chain has the key and
+  none is a proxy or a typed array. The slot keeps the receiver's prototype (word 3) and
+  the prototype epoch (word 4), and every object of the chain is marked `OBJ_IS_PROTO`,
+  so a key added anywhere on it, or a prototype change, misses. `define_field` is
+  CreateDataProperty and needs neither. Objects marked as prototypes don't take cached
+  additions, since theirs must bump the epoch. Proxies are dictionaries, so no shape
+  compare ever matches one.
+- **Prototypes:** word 3 is the receiver's shape word. When the receiver's shape word
+  matches it, the receiver has no own `key`, which replaces the per-hit
+  `has_own_property`. Any other receiver (another shape, a dictionary) still looks it
+  up, so polymorphic sites keep hitting. An array's `length` and typed arrays never use
+  the proof.
 - **Offsets and the GC:** shape offsets in a slot set `IC_OFFSET_SLOT`, so the collector
   empties them (D1621), and warm and cold caches still behave the same. The rest of
   D1620/D1621 stays.
@@ -452,3 +459,23 @@ per script, pi-like 16, and the difftest corpus 3 per case at the median, 59 at 
 No case reached 32 properties on a shape-mode object or the budget. Dictionaries made
 while running come from index keys (arguments objects, String wrappers), a few attribute
 changes and deletes.
+
+### 7.12 Results of part 3 (0083, D1832)
+
+Timing at load 7–15: only relative, interleaved, min of 7–15 runs; native = LTO builds.
+
+| | native | wasm (node) |
+| --- | ---: | ---: |
+| object literals `{x, y}` + 3 assignments, 1M (`p-new2`) | −64% | −71% |
+| constructors (2 classes, 3 fields), 1M (`p-ctor`) | −65% | −69% |
+| `props.js` | −15% | −14% |
+| `strings.js` | −7% | −12% |
+| pi-like | −1% | −12% |
+| the rest of the engine track | −4..−1% | −1..+2% |
+| own writes only (`p-w`, 5M) | ±0% | +7..+13% |
+
+The one regression is pure own-property writes in wasm, while the same code is
+unchanged natively. Moving the define arm out of `fast_step` and reading the slot head
+with one bounds check helped a little. It looks like V8 codegen around the larger fast
+path; 0093's `run_hot` restructures that loop anyway. Memory: an IC slot is 20 bytes
+instead of 12, and only for functions that ran.

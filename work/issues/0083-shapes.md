@@ -78,12 +78,24 @@ re-check).
     cross tests, clippy (native and wasm32 release).
   - Also merged separately: issue/0083-test-time (slow vm tests sampled, main 2b91a3f).
 
+- Part 3 (D1832): addition caches for put_field/define_field (define_field got a
+  Cache immediate), receiver-shape proofs for prototype reads, IC_WORDS 3 -> 5, and
+  the hit checks shared as `cached_get`/`cached_put`.
+  - The first fill hook (after `set_property`) was wrong: a setter frame could be pushed
+    and its code could collect before the fill read `obj`. Now the slow path takes an
+    explicit `plain_addition` route (CreateDataProperty when nothing on the chain has
+    the key) and only that fills.
+  - Tests: tests/corpus/language/shape-caches.js (qjs-expected, stress and determinism
+    green), vm `warm_and_cold_addition_caches_behave_the_same`.
+  - Numbers in objects.md 7.12. Literals and constructors are about 3x faster natively
+    and in wasm, and props.js is 14–15% faster. Pure own writes in wasm are +7..13%
+    while native is unchanged; it looks like V8 codegen in the bigger fast path, and
+    0093's run_hot reworks that loop.
+
 ## Follow-ups
 
-- Part 3: transition caches for `put_field`/`define_field` additions. A hit must also
-  prove that the receiver's prototype chain has no setter or read-only `key` (the
-  prototype isn't in the shape), so it needs the receiver's prototype and the proto epoch:
-  5 words, or a separate slot kind. Receiver-shape proofs for prototype caches.
+- The wasm own-write regression (+7..13% on a write-only microbenchmark): revisit with
+  0093's run_hot.
 - compact_for_image could shrink descriptor and transition arrays (about 1 KB of the
   base image).
 - Linear memory in wasm is about 2.7× the arena for allocation-heavy runs (to-space plus

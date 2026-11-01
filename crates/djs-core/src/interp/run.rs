@@ -137,8 +137,8 @@ mod fast {
     pub const GET_FIELD: u8 = Op::GetField as u8;
     pub const GET_METHOD: u8 = Op::GetMethod as u8;
     pub const PUT_FIELD: u8 = Op::PutField as u8;
-    pub const DEFINE_FIELD: u8 = Op::DefineField as u8;
     // `fast_more` (0086)
+    pub const DEFINE_FIELD: u8 = Op::DefineField as u8;
     pub const NULL: u8 = Op::Null as u8;
     pub const PUSH_TRUE: u8 = Op::PushTrue as u8;
     pub const PUSH_FALSE: u8 = Op::PushFalse as u8;
@@ -1299,9 +1299,7 @@ impl<'h> Exec<'h> {
             fast::RETURN_UNDEF => return self.fast_return(Op::ReturnUndef),
             fast::CALL_INTRINSIC => return self.fast_intrinsic(),
             fast::GET_ELEM | fast::GET_ELEM2 | fast::PUT_ELEM => return self.fast_elem(sp0),
-            fast::GET_FIELD | fast::GET_METHOD | fast::PUT_FIELD | fast::DEFINE_FIELD => {
-                return self.fast_field(sp0);
-            }
+            fast::GET_FIELD | fast::GET_METHOD | fast::PUT_FIELD => return self.fast_field(sp0),
             _ => return false,
         }
         true
@@ -1411,6 +1409,7 @@ impl<'h> Exec<'h> {
         }
         let sp0 = self.sp;
         match self.byte(self.pc) {
+            fast::DEFINE_FIELD => return self.fast_define(sp0),
             fast::NULL => {
                 self.push(Value::NULL);
                 self.advance(Op::Null, sp0);

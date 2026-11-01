@@ -2668,6 +2668,50 @@ fn warm_and_cold_inline_caches_behave_the_same() {
     assert_eq!(warm_out.log.len(), 10, "{:?}", warm_out.log);
 }
 
+#[test]
+fn warm_and_cold_addition_caches_behave_the_same() {
+    // 0083: addition caches (constructors, literals) and receiver-shape prototype reads,
+    // warmed, imaged, then run against a prototype chain that changes under them.
+    let warmup = "\
+        function P(i) { this.x = i; this.y = i; }\n\
+        globalThis.mk = (i) => new P(i);\n\
+        globalThis.lit = (i) => ({ a: i, b: i });\n\
+        globalThis.addZ = (o, v) => { o.z = v; return o; };\n\
+        globalThis.Base = { m() { return 'base'; } };\n\
+        globalThis.callM = (o) => o.m();\n\
+        for (let i = 0; i < 3; i++) { mk(i); lit(i); addZ({ w: i }, i); callM(Object.create(Base)); }\n";
+    let after = "\
+        console.log(JSON.stringify(mk(1)), JSON.stringify(lit(2)), JSON.stringify(addZ({ w: 0 }, 3)));\n\
+        let seen = [];\n\
+        Object.defineProperty(P.prototype, 'y', { set(v) { seen.push(v); }, configurable: true });\n\
+        Object.defineProperty(Object.prototype, 'b', { set(v) { seen.push('b' + v); }, configurable: true });\n\
+        Object.defineProperty(Object.prototype, 'z', { value: 'ro', writable: false, configurable: true });\n\
+        let r; try { addZ({ w: 0 }, 4); r = 'added'; } catch (e) { r = String(e); }\n\
+        console.log(JSON.stringify(mk(5)), JSON.stringify(lit(6)), r, seen.join());\n\
+        const shadow = Object.create(Base); shadow.m = () => 'own';\n\
+        console.log(callM(Object.create(Base)), callM(shadow));\n\
+        const ne = Object.preventExtensions({ w: 1 });\n\
+        delete Object.prototype.z;\n\
+        try { addZ(ne, 1); } catch (e) { console.log(String(e)); }\n";
+    let (vm, _) = run_script(vm(), warmup);
+    let image = vm.bytes().to_vec();
+    let warm = Vm::from_bytes(image.clone(), VmOptions::default()).unwrap();
+    let mut cold = Vm::from_bytes(image, VmOptions::default()).unwrap();
+    assert!(clear_inline_caches(&mut cold) > 0, "no warm caches");
+    let (_, warm_out) = run_script(warm, after);
+    let (_, cold_out) = run_script(cold, after);
+    assert_eq!(warm_out, cold_out);
+    assert_eq!(
+        warm_out.log,
+        [
+            "{\"x\":1,\"y\":1} {\"a\":2,\"b\":2} {\"w\":0,\"z\":3}",
+            "{\"x\":5} {\"a\":6,\"b\":6} TypeError: 'z' is read-only 5",
+            "base own",
+            "TypeError: object is not extensible"
+        ]
+    );
+}
+
 // ---- The host inbox (D1670) --------------------------------------------------------------
 
 /// When the "embedder" of [`run_inbox`] delivers async results.

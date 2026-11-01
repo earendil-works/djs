@@ -100,10 +100,40 @@ fn proto_start(heap: &Heap, o: Value, key: Atom, shape: u32) -> Option<Obj> {
     }
 }
 
-/// A get site's cache hit: the value of `o[key]` if slot `w` still applies, else `None`.
+/// The arena offset of cache slot `ic` of `template`, or 0 when the function has no
+/// cache array yet (or the site has no slot): what [`cached_get`] and [`cached_put`]
+/// take.
 #[inline(always)]
-pub(crate) fn cached_get(heap: &Heap, w: &Slot, o: Value, key: Atom) -> Option<Value> {
-    let w0 = w[0];
+pub(crate) fn slot_at(heap: &Heap, template: u32, ic: u32) -> u32 {
+    match heap.arena().get::<Ref>(template, FuncTemplate::IC).get() {
+        Some(a) if ic != NO_CACHE as u32 => U32Array::DATA.at(a, ic * WORDS),
+        _ => 0,
+    }
+}
+
+/// Word `k` of the slot at `at` (see [`slot_at`]).
+#[inline(always)]
+fn word(heap: &Heap, at: u32, k: u32) -> u32 {
+    heap.arena().read(at + 4 * k)
+}
+
+/// The first three words of the slot at `at`, with one bounds check: every hit needs
+/// them (words 3 and 4 only prototype reads and [[Set]] additions).
+#[inline(always)]
+fn head(heap: &Heap, at: u32) -> [u32; 3] {
+    let b = heap.arena().slice(at, 12);
+    let w = |i: usize| u32::from_le_bytes([b[i], b[i + 1], b[i + 2], b[i + 3]]);
+    [w(0), w(4), w(8)]
+}
+
+/// A get site's cache hit: the value of `o[key]` if the slot at `at` (0: none) still
+/// applies, else `None`.
+#[inline(always)]
+pub(crate) fn cached_get(heap: &Heap, at: u32, o: Value, key: Atom) -> Option<Value> {
+    if at == 0 {
+        return None;
+    }
+    let [w0, w1, w2] = head(heap, at);
     if w0 & IC_OFFSET_SLOT == 0 {
         // Empty, or a verified index into a dictionary.
         return match (w0, o.as_object()) {
@@ -112,14 +142,14 @@ pub(crate) fn cached_get(heap: &Heap, w: &Slot, o: Value, key: Atom) -> Option<V
         };
     }
     match kind(w0) {
-        0 => heap.shaped_get(o.as_object()?, w[1], (w0 & INDEX_MASK) - 1),
+        0 => heap.shaped_get(o.as_object()?, w1, (w0 & INDEX_MASK) - 1),
         KIND_ADD => None,
         depth => {
-            if w[2] != heap.proto_epoch() {
+            if w2 != heap.proto_epoch() {
                 return None;
             }
-            let proto = proto_start(heap, o, key, w[3])?;
-            if proto.offset() != w[1] {
+            let proto = proto_start(heap, o, key, word(heap, at, 3))?;
+            if proto.offset() != w1 {
                 return None;
             }
             let mut h = proto;
@@ -131,48 +161,48 @@ pub(crate) fn cached_get(heap: &Heap, w: &Slot, o: Value, key: Atom) -> Option<V
     }
 }
 
-/// A put or define site's cache hit: true if slot `w` still applies to `obj[key] = v` and
-/// `v` was stored (an own writable data property, or a cached addition).
+/// A put or define site's cache hit: true if the slot at `at` (0: none) still applies to
+/// `obj[key] = v` and `v` was stored (an own writable data property, or a cached
+/// addition).
 #[inline(always)]
-pub(crate) fn cached_put(heap: &mut Heap, w: &Slot, obj: Obj, key: Atom, v: Value) -> bool {
-    let w0 = w[0];
+pub(crate) fn cached_put(heap: &mut Heap, at: u32, obj: Obj, key: Atom, v: Value) -> bool {
+    if at == 0 {
+        return false;
+    }
+    let [w0, w1, w2] = head(heap, at);
     if w0 & IC_OFFSET_SLOT == 0 {
         return w0 != 0 && heap.set_data_at(obj, w0 - 1, key, v);
     }
     match kind(w0) {
-        0 => w[2] & 1 != 0 && heap.shaped_set(obj, w[1], (w0 & INDEX_MASK) - 1, v),
-        KIND_ADD => {
-            if w0 & ADD_SET != 0
-                && (w[4] != heap.proto_epoch()
-                    || heap.get_prototype_of(obj).map_or(0, |p| p.offset()) != w[3])
-            {
-                return false;
-            }
-            heap.shaped_add(obj, w[1], w[2], v)
-        }
+        0 => w2 & 1 != 0 && heap.shaped_set(obj, w1, (w0 & INDEX_MASK) - 1, v),
+        KIND_ADD => cached_add(heap, at, w0, obj, v),
         _ => false,
     }
 }
 
+/// The addition half of [`cached_put`], out of line: it may allocate, and keeping it out
+/// of the hot own-property path keeps that path small.
+#[inline(never)]
+fn cached_add(heap: &mut Heap, at: u32, w0: u32, obj: Obj, v: Value) -> bool {
+    if w0 & ADD_SET != 0
+        && (word(heap, at, 4) != heap.proto_epoch()
+            || heap.get_prototype_of(obj).map_or(0, |p| p.offset()) != word(heap, at, 3))
+    {
+        return false;
+    }
+    let (old, new) = (word(heap, at, 1), word(heap, at, 2));
+    heap.shaped_add(obj, old, new, v)
+}
+
 impl Exec<'_> {
-    /// The words of cache slot `ic` of the current function (zeros if empty).
+    /// The first words of cache slot `ic` of the current function (zeros if empty), for
+    /// the global caches.
     #[inline(always)]
-    fn ic_read(&self, ic: u32) -> Slot {
-        let t: Ref = self.heap.arena().get(self.template, FuncTemplate::IC);
-        let mut w = [0; WORDS as usize];
-        if let Some(a) = t.get()
-            && ic != NO_CACHE as u32
-        {
-            // One bounds check for the slot.
-            let bytes = self
-                .heap
-                .arena()
-                .slice(U32Array::DATA.at(a, ic * WORDS), 4 * WORDS);
-            for (w, b) in w.iter_mut().zip(bytes.as_chunks::<4>().0) {
-                *w = u32::from_le_bytes(*b);
-            }
+    fn ic_read(&self, ic: u32) -> [u32; 2] {
+        match slot_at(self.heap, self.template, ic) {
+            0 => [0; 2],
+            at => [word(self.heap, at, 0), word(self.heap, at, 1)],
         }
-        w
     }
 
     /// Fills cache slot `ic`, allocating the function's cache array on first use. Out of
@@ -219,7 +249,7 @@ impl Exec<'_> {
     /// lexical binding is a miss (the slow path throws).
     #[inline(never)]
     pub(super) fn ic_global_get(&self, key: Atom, ic: u32) -> Option<Value> {
-        let [w0, w1, ..] = self.ic_read(ic);
+        let [w0, w1] = self.ic_read(ic);
         if w0 == 0 {
             return None;
         }
@@ -240,7 +270,7 @@ impl Exec<'_> {
     /// `v` was written.
     #[inline(never)]
     pub(super) fn ic_global_put(&mut self, key: Atom, ic: u32, v: Value) -> bool {
-        let [w0, w1, ..] = self.ic_read(ic);
+        let [w0, w1] = self.ic_read(ic);
         if w0 == 0 {
             return false;
         }
@@ -282,14 +312,14 @@ impl Exec<'_> {
     /// A cached read: `o[key]` if slot `ic` applies.
     #[inline(always)]
     pub(super) fn ic_get(&self, o: Value, key: Atom, ic: u32) -> Option<Value> {
-        cached_get(self.heap, &self.ic_read(ic), o, key)
+        cached_get(self.heap, slot_at(self.heap, self.template, ic), o, key)
     }
 
     /// A cached store: true if slot `ic` applies to `obj[key] = v` and `v` was stored.
     #[inline(always)]
     pub(super) fn ic_put(&mut self, obj: Obj, key: Atom, ic: u32, v: Value) -> bool {
-        let w = self.ic_read(ic);
-        cached_put(self.heap, &w, obj, key, v)
+        let at = slot_at(self.heap, self.template, ic);
+        cached_put(self.heap, at, obj, key, v)
     }
 
     /// After a slow lookup found data property `key` on `holder`, on the prototype chain
@@ -420,14 +450,33 @@ impl Exec<'_> {
         self.ic_write(ic, [w0, old, new, p, epoch]);
     }
 
-    /// `fast_step` for `get_field`, `get_method`, `put_field` and `define_field` when the
-    /// site's cache applies; false, with nothing changed, otherwise.
+    /// `fast_step` for `define_field` (object literals) when the site's addition cache
+    /// applies (0083).
+    #[inline(never)]
+    pub(super) fn fast_define(&mut self, sp0: u32) -> bool {
+        let key = Atom::from_id(self.imm_u32(1));
+        let ic = self.imm_u16(5);
+        let (o, v) = (self.top(1), self.top(0));
+        let Some(obj) = o.as_object() else {
+            return false;
+        };
+        if !self.ic_put(obj, key, ic, v) {
+            return false;
+        }
+        // `obj v -> obj`
+        self.sp -= 1;
+        self.advance(Op::DefineField, sp0);
+        true
+    }
+
+    /// `fast_step` for `get_field`, `get_method` and `put_field` when the site's cache
+    /// applies; false, with nothing changed, otherwise.
     #[inline(always)]
     pub(super) fn fast_field(&mut self, sp0: u32) -> bool {
         let op = self.byte(self.pc);
         let key = Atom::from_id(self.imm_u32(1));
         let ic = self.imm_u16(5);
-        if op == fast::PUT_FIELD || op == fast::DEFINE_FIELD {
+        if op == fast::PUT_FIELD {
             let (o, v) = (self.top(1), self.top(0));
             let Some(obj) = o.as_object() else {
                 return false;
@@ -435,14 +484,8 @@ impl Exec<'_> {
             if !self.ic_put(obj, key, ic, v) {
                 return false;
             }
-            if op == fast::PUT_FIELD {
-                self.sp -= 2;
-                self.advance(Op::PutField, sp0);
-            } else {
-                // `obj v -> obj`
-                self.sp -= 1;
-                self.advance(Op::DefineField, sp0);
-            }
+            self.sp -= 2;
+            self.advance(Op::PutField, sp0);
             return true;
         }
         let o = self.top(0);

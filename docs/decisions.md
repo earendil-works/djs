@@ -4121,3 +4121,20 @@ codemode script 23.2M → 20.2M (17.5M). Steady-state wasm MB/s: typescript.js 2
 (qjs 40), highlight.js 42 → 54 (75), codemode 20 → 27 (35). Code: compiler 159.8 → 150.1
 KB, compiler/ts 33.2 → 31.4 KB, lexer 17.8 → 14.2 KB; the shipped module 1,485,742 →
 1,472,377 bytes, gzip 517,652 → 514,990.
+
+## D1832: Addition caches and receiver-shape proofs; 5-word cache slots
+date: 2026-11-03 · by: heap · issue: 0083
+Part 3 of the shapes design (docs/objects.md 7.7). `IC_WORDS` is 5. Offset slots carry a
+kind in bits 24..30 of word 0: 0 own (shape mode), 1..62 prototype depth, 63 addition.
+- Additions: `put_field` and `define_field` (now with a `Cache` immediate, so
+  `OPS_HASH` and the build hash change) cache old shape word → new shape. A [[Set]]
+  addition also stores the receiver's prototype and the prototype epoch. It is filled
+  only when the chain has no `key`, no proxy and no typed array, and the whole chain is
+  marked `OBJ_IS_PROTO`. The slow path takes it only through `Exec::plain_addition`, a
+  CreateDataProperty that no user code can interleave with.
+- Prototype reads store the receiver's shape word; an equal word stands in for the
+  per-hit `has_own_property`.
+- The receiver shape word is 0 for dictionaries (never matches) and `EMPTY_SHAPE` (1)
+  for shape-mode objects without a values block. Proxies are created as dictionaries.
+- The hit checks are `ic::cached_get`/`cached_put` (plus `slot_at`), shared by every
+  fast path, including 0093's tier-0 loop.
