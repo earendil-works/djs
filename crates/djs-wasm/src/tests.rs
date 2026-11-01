@@ -320,6 +320,29 @@ fn host_results_with_a_clock() {
     vm_free(vm);
 }
 
+/// D1730: the canonical hash, unchanged by a collection, and the VM untouched by it.
+#[test]
+fn canonical_hash() {
+    let vm = vm_new(0);
+    let f = compile_body(
+        vm,
+        "",
+        "globalThis.a = []; for (let i = 0; i < 1000; i++) a.push({ i }); return 1",
+    );
+    call(vm, f, &[]);
+    assert_eq!(vm_run(vm, 1_000_000), status::DONE);
+    vm_handle_free(vm, vm_result(vm));
+    let bytes = |vm| with(|s| s.slot(vm).vm.bytes().to_vec());
+    let before = bytes(vm);
+    assert_eq!(vm_canonical_hash(vm), 0);
+    let h = out_words();
+    assert!(before == bytes(vm));
+    assert_eq!(vm_collect(vm), 0);
+    assert_eq!(vm_canonical_hash(vm), 0);
+    assert_eq!(out_words(), h);
+    vm_free(vm);
+}
+
 /// D1680: the weak-reference modes.
 #[test]
 fn weak_ref_modes() {

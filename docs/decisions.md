@@ -3269,3 +3269,26 @@ exact). The runtime is three builtins (`%ApplyLegacyDecorators`, `%DecoratorPara
 `%DecoratorMetadata`) and closure kind 24 (`__param`'s function). Known divergence: qjs
 ignores a parenthesized class decorator (`@(expr) class C {}`) in legacy mode; djs
 applies it, as tsc.
+
+## D1730: Canonical hash and run journals
+date: 2026-11-03 · by: determinism · issue: 0073
+`Vm::canonical_hash` (`vm_canonical_hash`, `Sandbox.canonicalHash`): FNV-1a 64 over the
+image a collection leaves (popped stack slots cleared, as `Vm::collect`, without
+finalization scheduling), computed on a copy made with `Heap::from_bytes_trusted`, so it
+never perturbs the VM. Equal graphs give equal hashes whatever the fuel slices,
+snapshots or collection points (D1090, D1601). The copy and its to-space cost about three
+times the arena, briefly.
+
+Journals live in the Sandbox (js/src/sandbox.ts) rather than in the core, since the host
+values and the host function table are there. `runAsync/run(code, params, { journal })`
+records, `replay(journal)` replays; both need `deterministic` (otherwise the clock follows
+fuel slices and cannot be replayed). Entries: run (engine build, code, params, hash before),
+sync (fn, args, outcome), async (callId, fn, args, outcome, clock) in delivery order,
+check (delivered, issued, hash) at every idle point of the recording, and end. Replay
+delivers one result per idle point, so it passes through every "quiescent after k
+results" state. With the inbox (D1670) that state does not depend on how results were
+batched, so each recorded check (taken at whatever k the recording happened to idle at)
+has a matching point in the replay. Host calls are counted without the console, as pi's
+`issued` is, and console output is not journaled (it is output, not input). A mismatch is
+a SandboxError of the new kind `diverged`, saying where. pi keeps its own protocol (seq,
+now), which maps onto the async entries one to one.

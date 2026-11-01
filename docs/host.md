@@ -118,6 +118,43 @@ sb.dispose();
   the cap: at most about **1 GiB** in a 4 GiB wasm32 memory, less if the embedder runs
   several VMs in one instance.
 
+### Journals: record and replay (D1730)
+
+A deterministic sandbox can record a run and replay it later, for durability (restart a
+run after a crash), debugging, or to check a build against another.
+
+```ts
+const journal: JournalEntry[] = [];
+const result = await sb.runAsync(code, params, { journal });   // or sb.run(...)
+// later, in a sandbox in the same state (a fresh one made the same way, or one restored
+// from a snapshot taken right before the run), with any fuel slice:
+await sb2.replay(journal);   // the same result; a mismatch is a `diverged` SandboxError
+```
+
+A journal is an array of plain entries (JSON-serializable when the host's values are):
+
+| entry | records |
+| --- | --- |
+| `{ type: "run", engine, code, params, hash }` | the start: the engine build (`djs_build_hash`), the code and parameters, the VM's canonical hash before the run |
+| `{ type: "sync", fn, args, ok, value }` | a sync host function's call and outcome (`value` of an error: `{ name, message }`). Console output is not journaled |
+| `{ type: "async", callId, fn, args, ok, value, now }` | an async host function's result, in delivery order, with the clock it carried |
+| `{ type: "check", delivered, issued, hash }` | the VM was idle after `delivered` results, having made `issued` host calls, with this canonical hash |
+| `{ type: "end", ok, value, delivered, issued, hash }` | the outcome (`ok` false: the error's display text) and the final counts and hash |
+
+Replay answers every sync call from the journal (checking the function and arguments),
+delivers the async results one per idle point in the recorded order with their clocks
+(checking that the script has made that call with those arguments), and compares the
+canonical hashes at the start, at the recorded idle points and at the end. It never calls
+the host functions. Results are macrotasks (D1670), so only their order matters, not
+when they arrived. That is why a replay at another fuel slice, after a snapshot, or
+delivering one result at a time where the recording got several at once, reaches the
+same states. Raw value bits and offsets are never journaled: they depend on collection
+points.
+
+`sb.canonicalHash()` (`vm_canonical_hash`, `Vm::canonical_hash`) is FNV-1a (64 bits) of
+the image a collection would leave, computed on a copy: the VM itself is unchanged, and
+the hash does not depend on fuel slices, snapshots or when the VM last collected.
+
 ## The ABI
 
 Exports take and return only `i32`s, except the `f64` clock of `vm_set_now` and `vm_resolve_host_call_at`. There are no imports: the module needs nothing from
@@ -164,6 +201,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_run(vm, fuel) -> status` | 0 DONE, 1 THREW, 2 OUT_OF_FUEL, 3 HOST_CALL, 4 IDLE, 5 HOST_OUT_OF_MEMORY (the host could not back the heap below its cap; the call is abandoned and the VM is idle, D1690) |
 | `vm_set_now(vm, ms: f64)` | the clock `Date` reads, ms since the epoch (D1383); set it before every `vm_run` |
 | `vm_set_time_zone_offset(vm, minutes)` | the local time zone, minutes east of UTC (default 0) |
+| `vm_canonical_hash(vm) -> 0/-1` | out = the canonical hash (u32 lo, hi) of the VM's state, computed on a collected copy (D1730) |
 | `vm_set_weak_refs(vm, mode) -> 0/-1` | WeakRef and FinalizationRegistry (D1680): 0 collected (weak), 1 strong (no collection is observable), 2 absent (the globals are deleted); set it on a new VM |
 | `vm_set_random_seed(vm, lo, hi)` | reseed `Math.random` (xorshift64*, as QuickJS) with `hi << 32 \| lo`; a new VM has a fixed default seed (0049) |
 | `vm_abort(vm)` | abandon the current call (out of fuel or parked): the VM is idle and usable again |

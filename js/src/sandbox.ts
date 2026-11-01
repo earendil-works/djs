@@ -94,7 +94,34 @@ export interface SandboxOptions {
   emitDecoratorMetadata?: boolean;
 }
 
-export type SandboxErrorKind = "threw" | "syntax" | "fuel" | "trap" | "memory" | "misuse";
+export type SandboxErrorKind = "threw" | "syntax" | "fuel" | "trap" | "memory" | "misuse" | "diverged";
+
+/**
+ * One entry of a run's journal (D1730, docs/host.md "Journals"): everything a
+ * deterministic run took from outside, in order, plus checks. Values are host values
+ * (JSON-serializable when the host's values are); a host error is `{ name, message }`.
+ * - `run`: the start: the engine build, the code, the parameters and the canonical hash
+ *   of the VM before the run.
+ * - `sync`: a sync host function's call and outcome (console output is not journaled).
+ * - `async`: an async host function's result, in delivery order, with the clock it
+ *   carried.
+ * - `check`: the VM was idle (quiescent) after `delivered` results, with `issued` host
+ *   calls made and this canonical hash.
+ * - `end`: the outcome (`ok` false: the error's display text), with the final counts and
+ *   hash.
+ */
+export type JournalEntry =
+  | { type: "run"; engine: string; code: string; params: Record<string, unknown>; hash: string }
+  | { type: "sync"; fn: string; args: unknown[]; ok: boolean; value: unknown }
+  | { type: "async"; callId: number; fn: string; args: unknown[]; ok: boolean; value: unknown; now: number }
+  | { type: "check"; delivered: number; issued: number; hash: string }
+  | { type: "end"; ok: boolean; value: unknown; delivered: number; issued: number; hash: string };
+
+/** Options of one run. */
+export interface RunOptions {
+  /** Record the run (deterministic sandboxes only): entries are appended to this array. */
+  journal?: JournalEntry[];
+}
 
 /** Why a sandbox operation failed. `value` is the thrown VM value (kind "threw"). */
 export class SandboxError extends Error {
@@ -158,6 +185,8 @@ interface Exports {
   vm_set_random_seed(vm: number, lo: number, hi: number): void;
   vm_set_weak_refs(vm: number, mode: number): number;
   vm_resolve_host_call_at(vm: number, callId: number, ok: number, value: number, now: number): number;
+  vm_canonical_hash(vm: number): number;
+  djs_build_hash(): number;
 }
 
 const modules = new Map<string, Promise<WebAssembly.Module>>();
@@ -219,6 +248,8 @@ export class Sandbox {
   private dead: string | null = null;
   /** Deterministic mode: the VM's clock, moved only by async results (never backwards). */
   private clock: number | undefined;
+  /** The journal of the current run, being recorded or replayed (D1730). */
+  private journal: Journal | null = null;
 
   /** A new sandbox; loads (and caches) the default module unless `opts.module` is given. */
   static async create(opts: SandboxOptions = {}): Promise<Sandbox> {
@@ -353,7 +384,8 @@ export class Sandbox {
    * functions must return synchronously; use `runAsync` for ones that return promises. A
    * promise as the result is unwrapped (fulfilled: its value; rejected: thrown).
    */
-  run(code: string, params: Record<string, unknown> = {}): unknown {
+  run(code: string, params: Record<string, unknown> = {}, opts: RunOptions = {}): unknown {
+    this.beginJournal(code, params, opts);
     this.start(code, params);
     try {
       // In sync mode the loop never yields: a promise from a host function is an error.
@@ -368,7 +400,8 @@ export class Sandbox {
    * Like `run`, but awaits host functions that return promises: a sync one keeps the VM
    * parked meanwhile, async ones run concurrently while the script goes on.
    */
-  async runAsync(code: string, params: Record<string, unknown> = {}): Promise<unknown> {
+  async runAsync(code: string, params: Record<string, unknown> = {}, opts: RunOptions = {}): Promise<unknown> {
+    this.beginJournal(code, params, opts);
     this.start(code, params);
     try {
       const it = this.drive(true);
@@ -379,6 +412,61 @@ export class Sandbox {
       this.abandon(e);
       throw e;
     }
+  }
+
+  /**
+   * Replays a recorded run (D1730): runs the journal's code and parameters, answers every
+   * host call from the journal instead of calling the host functions (console output
+   * still goes to the console), delivers the async results in the recorded order with
+   * their clocks, and checks the calls the script makes and the canonical hashes at the
+   * start, at every recorded idle point and at the end. The sandbox must be deterministic
+   * and in the state the recording one was in (a fresh one created the same way, or one
+   * restored from a snapshot taken right before the run); the fuel slice may differ.
+   * Returns the run's result; a mismatch is a `diverged` SandboxError.
+   */
+  async replay(journal: JournalEntry[]): Promise<unknown> {
+    const head = journal[0];
+    if (head?.type !== "run") throw new SandboxError("misuse", "a journal starts with a run entry");
+    if (this.opts.deterministic === undefined) throw new SandboxError("misuse", "replay needs a deterministic sandbox");
+    const j = new Journal("replay", journal);
+    j.expect(head.engine === this.buildHash(), () => `engine ${this.buildHash()}, the journal was made by ${head.engine}`);
+    j.expect(head.hash === this.canonicalHash(), () => "the sandbox's state before the run differs from the recording's");
+    j.next = 1;
+    this.journal = j;
+    this.start(head.code, head.params);
+    try {
+      const it = this.drive(true);
+      let r = it.next();
+      while (!r.done) r = it.next(await r.value);
+      return r.value;
+    } catch (e) {
+      this.abandon(e);
+      throw e;
+    } finally {
+      this.journal = null;
+    }
+  }
+
+  /** The VM's canonical hash (D1730) as 16 hex digits: its state, independent of collections. */
+  canonicalHash(): string {
+    return this.guard(() => {
+      if (this.x.vm_canonical_hash(this.vm) !== 0) throw new SandboxError("memory", "no memory for the canonical hash");
+      const [lo, hi] = outWords(this.x, 2);
+      return hi.toString(16).padStart(8, "0") + lo.toString(16).padStart(8, "0");
+    });
+  }
+
+  private buildHash(): string {
+    return (this.x.djs_build_hash() >>> 0).toString(16).padStart(8, "0");
+  }
+
+  /** Starts recording a run into `opts.journal`, if given. */
+  private beginJournal(code: string, params: Record<string, unknown>, opts: RunOptions): void {
+    this.journal = null;
+    if (opts.journal === undefined) return;
+    if (this.opts.deterministic === undefined) throw new SandboxError("misuse", "recording needs a deterministic sandbox");
+    opts.journal.push({ type: "run", engine: this.buildHash(), code, params, hash: this.canonicalHash() });
+    this.journal = new Journal("record", opts.journal);
   }
 
   /**
@@ -564,10 +652,17 @@ export class Sandbox {
     // Async host calls being served, and those that finished but are not passed back yet.
     const inflight = new Map<number, Promise<void>>();
     const finished: { callId: number; ok: boolean; value: unknown }[] = [];
+    const j = this.journal;
+    // Async calls made and not resolved yet, for the journal.
+    const calls = new Map<number, { fn: string; args: unknown[] }>();
     for (;;) {
       for (const { callId, ok, value } of finished.splice(0)) {
         inflight.delete(callId);
-        this.complete(callId, ok, value, true);
+        const call = calls.get(callId);
+        calls.delete(callId);
+        const now = this.complete(callId, ok, value, true);
+        if (j) j.delivered++;
+        if (j && call) j.push({ type: "async", callId, fn: call.fn, args: call.args, ok, value: errorJson(ok, value), now: now! });
       }
       const st = this.guard(() => {
         this.setClock();
@@ -575,6 +670,13 @@ export class Sandbox {
       });
       for (const callId of this.newHostCalls()) {
         const { fnId, args } = this.callInfo(callId);
+        const fn = this.fnNames[fnId - 1];
+        if (j) {
+          j.issued++;
+          calls.set(callId, { fn, args });
+          // Replay: the result comes from the journal, at an idle point.
+          if (j.mode === "replay") continue;
+        }
         let p: Promise<unknown>;
         try {
           const r = this.invoke(fnId, args);
@@ -597,7 +699,7 @@ export class Sandbox {
         );
       }
       if (st === STATUS_DONE || st === STATUS_THREW) {
-        const { value, message, threw } = this.guard(() => {
+        const outcome = this.guard(() => {
           let h = x.vm_result(vm);
           let threw = st === STATUS_THREW;
           // A promise result (an async body): its outcome.
@@ -617,6 +719,11 @@ export class Sandbox {
           x.vm_handle_free(vm, h);
           return { value, message, threw };
         });
+        const { value, message, threw } = outcome;
+        if (j) {
+          const end = { type: "end" as const, ok: !threw, value: threw ? message : value };
+          j.finish(end, this.canonicalHash());
+        }
         if (threw) throw new SandboxError("threw", message, value);
         this.checkRejections();
         return value;
@@ -636,6 +743,20 @@ export class Sandbox {
       }
       if (st === STATUS_IDLE) {
         this.checkRejections();
+        if (j?.mode === "record") {
+          j.push({ type: "check", delivered: j.delivered, issued: j.issued, hash: this.canonicalHash() });
+        } else if (j && calls.size > 0) {
+          // Replay: the checks recorded at this point, then the next result.
+          j.checkIdle(this.canonicalHash());
+          const e = j.take("async");
+          const call = calls.get(e.callId);
+          j.expect(call !== undefined, () => `result ${j.delivered + 1} is for call ${e.callId}, which the script has not made`);
+          j.expectCall(e.fn, e.args, call!.fn, call!.args);
+          calls.delete(e.callId);
+          this.complete(e.callId, e.ok, e.ok ? e.value : errorFromJson(e.value), true, e.now);
+          j.delivered++;
+          continue;
+        }
         if (finished.length > 0) continue;
         if (inflight.size === 0) return undefined; // nothing was called
         // Only async host calls are left: wait for one of them.
@@ -649,16 +770,30 @@ export class Sandbox {
       });
       let ok = true;
       let result: unknown;
+      const fn = this.fnNames[fnId - 1];
+      const journaled = j !== null && !fn?.startsWith("console.");
       try {
-        result = this.invoke(fnId, args);
-        if (result instanceof Promise) {
-          if (!async) throw new TypeError(`host function ${this.fnNames[fnId - 1]} returned a promise; use runAsync`);
-          result = yield result;
+        if (journaled && j.mode === "replay") {
+          j.issued++;
+          const e = j.take("sync");
+          j.expectCall(e.fn, e.args, fn, args);
+          if (!e.ok) throw errorFromJson(e.value);
+          result = e.value;
+        } else {
+          result = this.invoke(fnId, args);
+          if (result instanceof Promise) {
+            if (!async) throw new TypeError(`host function ${fn} returned a promise; use runAsync`);
+            result = yield result;
+          }
         }
       } catch (e) {
-        if (e instanceof SandboxError && e.kind === "trap") throw e;
+        if (e instanceof SandboxError && (e.kind === "trap" || e.kind === "diverged")) throw e;
         ok = false;
         result = e;
+      }
+      if (journaled && j.mode === "record") {
+        j.issued++;
+        j.push({ type: "sync", fn, args, ok, value: errorJson(ok, result) });
       }
       this.complete(callId, ok, result, false);
     }
@@ -745,7 +880,7 @@ export class Sandbox {
    * kind with the host error's message. A value the wire format cannot carry becomes
    * such an error too.
    */
-  private complete(callId: number, ok: boolean, value: unknown, async: boolean): void {
+  private complete(callId: number, ok: boolean, value: unknown, async: boolean, at?: number): number | undefined {
     const x = this.x;
     const vm = this.vm;
     let h = 0;
@@ -766,21 +901,108 @@ export class Sandbox {
         return this.check(x.vm_new_error(vm, kind, msg), "memory");
       });
     }
-    this.guard(() => {
+    return this.guard(() => {
+      let clock: number | undefined;
       if (async && this.clock !== undefined) {
-        // Deterministic mode: the result's time, applied when the VM takes it (D1670).
+        // Deterministic mode: the result's time (a replay's: the recorded one), applied
+        // when the VM takes the result (D1670).
         const { now } = this.opts;
-        this.clock = Math.max(this.clock, typeof now === "number" ? now : (now ?? Date.now)());
+        this.clock = at ?? Math.max(this.clock, typeof now === "number" ? now : (now ?? Date.now)());
+        clock = this.clock;
         x.vm_resolve_host_call_at(vm, callId, ok ? 1 : 0, h, this.clock);
       } else {
         x.vm_resolve_host_call(vm, callId, ok ? 1 : 0, h);
       }
       if (h !== 0) x.vm_handle_free(vm, h);
+      return clock;
     });
   }
 }
 
 const WEAK_REF_MODES = { collected: 0, strong: 1, absent: 2 } as const;
+
+/** The journal of a run being recorded or replayed (D1730). */
+class Journal {
+  /** Replay: the index of the next entry. */
+  next = 0;
+  /** Async results delivered, non-console host calls made. */
+  delivered = 0;
+  issued = 0;
+  readonly mode: "record" | "replay";
+  readonly entries: JournalEntry[];
+  constructor(mode: "record" | "replay", entries: JournalEntry[]) {
+    this.mode = mode;
+    this.entries = entries;
+  }
+
+  push(e: JournalEntry): void {
+    this.entries.push(e);
+  }
+
+  expect(ok: boolean, why: () => string): void {
+    if (!ok) throw new SandboxError("diverged", `replay diverged: ${why()}`);
+  }
+
+  /** Replay: takes the next entry, which must be of `type`. */
+  take<T extends JournalEntry["type"]>(type: T): Extract<JournalEntry, { type: T }> {
+    const e = this.entries[this.next];
+    this.expect(e?.type === type, () => `the script needs ${type === "sync" ? "a host call" : "a result"} here, the journal has ${e ? `a ${e.type} entry` : "nothing more"} (entry ${this.next})`);
+    this.next++;
+    return e as Extract<JournalEntry, { type: T }>;
+  }
+
+  expectCall(fn: string, args: unknown[], gotFn: string, gotArgs: unknown[]): void {
+    this.expect(fn === gotFn && sameValue(args, gotArgs), () => `the script called ${gotFn}(${stable(gotArgs)}), the recording ${fn}(${stable(args)})`);
+  }
+
+  /** Replay at an idle point: the recorded checks for this many delivered results. */
+  checkIdle(hash: string): void {
+    for (let e = this.entries[this.next]; e?.type === "check"; e = this.entries[this.next]) {
+      this.expect(e.delivered === this.delivered, () => `the recording was idle after ${e.delivered} results, the replay after ${this.delivered}`);
+      this.expect(e.issued === this.issued, () => `${this.issued} host calls made, the recording made ${e.issued} (after ${e.delivered} results)`);
+      this.expect(e.hash === hash, () => `the state after ${e.delivered} results differs`);
+      this.next++;
+    }
+  }
+
+  /** At the end: records or checks the `end` entry. */
+  finish(end: { type: "end"; ok: boolean; value: unknown }, hash: string): void {
+    const full: JournalEntry = { ...end, delivered: this.delivered, issued: this.issued, hash };
+    if (this.mode === "record") {
+      this.push(full);
+      return;
+    }
+    while (this.entries[this.next]?.type === "check") this.next++;
+    const e = this.take("end");
+    this.expect(e.ok === full.ok && sameValue(e.value, full.value), () => `the run ended ${full.ok ? "with" : "throwing"} ${stable(full.value)}, the recording ${e.ok ? "with" : "throwing"} ${stable(e.value)}`);
+    this.expect(e.issued === full.issued && e.delivered === full.delivered, () => "a different number of host calls or results");
+    this.expect(e.hash === full.hash, () => "the final state differs");
+  }
+}
+
+/** A host value as a journal records it: errors as `{ name, message }`. */
+function errorJson(ok: boolean, v: unknown): unknown {
+  if (ok) return v;
+  return v instanceof Error ? { name: v.name, message: v.message } : { name: "Error", message: String(v) };
+}
+
+/** The host error a journal entry stands for, of the same kind. */
+function errorFromJson(v: unknown): Error {
+  const { name, message } = (v ?? {}) as { name?: string; message?: string };
+  const E = name === "TypeError" ? TypeError : name === "RangeError" ? RangeError : Error;
+  return new E(message ?? "");
+}
+
+/** A stable text form of a host value, for comparing and messages. */
+function stable(v: unknown): string {
+  return JSON.stringify(v, (_k, x) =>
+    typeof x === "bigint" ? `${x}n` : x === undefined ? "<undefined>" : x instanceof Uint8Array ? Array.from(x) : x,
+  ) ?? "<undefined>";
+}
+
+function sameValue(a: unknown, b: unknown): boolean {
+  return stable(a) === stable(b);
+}
 
 /** A 64-bit seed as the two u32 words `vm_set_random_seed` takes. */
 function seedWords(seed: number | bigint): [number, number] {

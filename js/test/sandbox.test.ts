@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { Sandbox, SandboxError, defaultWasmPath, loadModule } from "../src/sandbox.ts";
+import { Sandbox, SandboxError, defaultWasmPath, loadModule, type JournalEntry } from "../src/sandbox.ts";
 
 const path = defaultWasmPath();
 assert.ok(
@@ -220,6 +220,65 @@ test("deterministic mode and random seeds (D1680)", async () => {
   const sb = await Sandbox.create({ weakRefs: "absent" });
   assert.equal(sb.run("return typeof WeakRef + typeof FinalizationRegistry"), "undefinedundefined");
   sb.dispose();
+});
+
+test("journals: record, replay, divergence (D1730)", async () => {
+  const code = `
+    const a = tool("a", 30), b = tool("b", 10);
+    const r = [await b, sync(1)];
+    let x = 0;
+    for (let i = 0; i < 20000; i++) x += i;
+    r.push(await a, Date.now(), Math.random());
+    try { await tool("bad", 1); } catch (e) { r.push(e.name + ": " + e.message); }
+    globalThis.state = (globalThis.state ?? 0) + r.length;
+    return r;
+  `;
+  let t = 1_000_000;
+  const options = (fuelSlice: number) => ({
+    fuelSlice,
+    console: collect().console,
+    deterministic: { startedAt: 1000, seed: 3 },
+    now: () => (t += 1000),
+    functions: { sync: (n: unknown) => (n as number) + 1 },
+    asyncFunctions: {
+      tool: async (name: unknown, ms: unknown) => {
+        await new Promise((r) => setTimeout(r, ms as number));
+        if (name === "bad") throw new RangeError("bad tool");
+        return name;
+      },
+    },
+  });
+  // A first run, then a snapshot, then the recorded run.
+  const sb = await Sandbox.create(options(1_000_000));
+  await sb.runAsync(code);
+  const snap = sb.bytes();
+  const journal: JournalEntry[] = [];
+  const result = await sb.runAsync(code, {}, { journal });
+  assert.deepEqual(journal[0].type, "run");
+  assert.deepEqual(journal.at(-1)!.type, "end");
+  assert.ok(journal.some((e) => e.type === "check"));
+  assert.ok(journal.some((e) => e.type === "sync"));
+  // Replayed in a sandbox restored from the snapshot, at another fuel slice: the same
+  // result, calls and states, without calling the host functions.
+  const neverCalled = () => {
+    throw new Error("replay called a host function");
+  };
+  const replayOptions = { ...options(97), functions: { sync: neverCalled }, asyncFunctions: { tool: neverCalled } };
+  const restored = await Sandbox.fromBytes(snap, replayOptions);
+  assert.deepEqual(await restored.replay(journal), result);
+  // A different state before the run, a changed result, or other calls diverge.
+  const fresh = await Sandbox.create(replayOptions);
+  await assert.rejects(fresh.replay(journal), (e: unknown) => e instanceof SandboxError && e.kind === "diverged");
+  const changed = journal.map((e) => (e.type === "async" && e.value === "a" ? { ...e, value: "A" } : e));
+  await assert.rejects((await Sandbox.fromBytes(snap, replayOptions)).replay(changed), /diverged/);
+  const otherCall = journal.map((e) => (e.type === "sync" ? { ...e, args: [2] } : e));
+  await assert.rejects(
+    (await Sandbox.fromBytes(snap, replayOptions)).replay(otherCall),
+    /the script called sync\(\[1\]\), the recording sync\(\[2\]\)/,
+  );
+  // Recording needs a deterministic sandbox.
+  const plain = await Sandbox.create();
+  assert.throws(() => plain.run("return 1", {}, { journal: [] }), /deterministic/);
 });
 
 test("the clock and time zone come from the host", async () => {
