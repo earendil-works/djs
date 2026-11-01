@@ -2330,7 +2330,10 @@ fn out_of_memory_is_a_catchable_error_at_every_limit() {
                 continue;
             };
             assert!(
-                o.result == "undefined" && o.log.len() == 1 && o.log[0].contains("out of memory"),
+                // (The result is the Script's completion value: a promise for some.)
+                !o.result.starts_with("throw")
+                    && o.log.len() == 1
+                    && o.log[0].contains("out of memory"),
                 "{kb} KiB, {name}: {} {:?}",
                 o.result,
                 o.log
