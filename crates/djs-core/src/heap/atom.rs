@@ -423,7 +423,7 @@ impl Heap {
         {
             return Ok(a);
         }
-        let hash = if t.is_ascii() {
+        let hash = if super::string::is_ascii(t.as_bytes()) {
             let mut h = StrHasher::new();
             for b in t.bytes() {
                 h.write(b as u16);

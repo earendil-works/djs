@@ -1284,3 +1284,24 @@ fn unbudgeted_records_and_release_top() {
     h.end_unbudgeted(c);
     assert_eq!((a2, h.u32_array_get(a2, 3)), (a, 0));
 }
+
+/// D1780: the block ASCII check (wasm32's) agrees with `<[u8]>::is_ascii` for every
+/// length up to a few blocks and a non-ASCII byte at every position (and alignment).
+#[test]
+fn block_ascii_check() {
+    use super::string::is_ascii_blocks as is_ascii;
+    let base: Vec<u8> = (0..200u32).map(|i| (i % 128) as u8).collect();
+    for start in 0..8 {
+        for len in 0..base.len() - start {
+            let s = &base[start..start + len];
+            assert!(is_ascii(s));
+            for at in 0..len {
+                for high in [0x80u8, 0xC3, 0xFF] {
+                    let mut t = s.to_vec();
+                    t[at] = high;
+                    assert_eq!(is_ascii(&t), t.is_ascii(), "len {len} at {at}");
+                }
+            }
+        }
+    }
+}

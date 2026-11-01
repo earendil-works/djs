@@ -163,6 +163,43 @@ impl Default for StrHasher {
     }
 }
 
+/// Whether every byte is ASCII. In wasm32, `<[u8]>::is_ascii` runs at 8–9 GB/s in node,
+/// [`is_ascii_blocks`] at ~40 (0077, D1780); natively the standard one is faster (SIMD).
+#[inline]
+pub fn is_ascii(bytes: &[u8]) -> bool {
+    #[cfg(target_arch = "wasm32")]
+    return is_ascii_blocks(bytes);
+    #[cfg(not(target_arch = "wasm32"))]
+    return bytes.is_ascii();
+}
+
+/// The ASCII check for wasm32: 32-byte blocks OR-ed as u64 words and tested once per
+/// block, so the loop has one branch per 32 bytes.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn is_ascii_blocks(bytes: &[u8]) -> bool {
+    const HIGH: u64 = 0x8080_8080_8080_8080;
+    let (blocks, rest) = bytes.as_chunks::<32>();
+    for b in blocks {
+        let w = b.as_chunks::<8>().0;
+        let acc = u64::from_ne_bytes(w[0])
+            | u64::from_ne_bytes(w[1])
+            | u64::from_ne_bytes(w[2])
+            | u64::from_ne_bytes(w[3]);
+        if acc & HIGH != 0 {
+            return false;
+        }
+    }
+    let (words, tail) = rest.as_chunks::<8>();
+    let mut acc = 0;
+    for w in words {
+        acc |= u64::from_ne_bytes(*w);
+    }
+    for &b in tail {
+        acc |= b as u64;
+    }
+    acc & HIGH == 0
+}
+
 /// Hashes a sequence of code units.
 pub fn hash_units(units: impl Iterator<Item = u16>) -> u32 {
     let mut h = StrHasher::new();
@@ -321,7 +358,7 @@ impl Heap {
 
     /// A string from UTF-8, transcoded to Latin-1 or UTF-16.
     pub fn alloc_str(&mut self, s: &str) -> Result<Str, HeapError> {
-        if s.is_ascii() {
+        if is_ascii(s.as_bytes()) {
             return self.alloc_latin1(s.as_bytes());
         }
         let mut len: usize = 0;
@@ -794,7 +831,7 @@ impl Heap {
     /// Whether `s` has the same code units as the Rust string `t`.
     pub fn str_eq_str(&self, s: Str, t: &str) -> bool {
         if let Some(StrView::Latin1(b)) = self.str_view(s)
-            && t.is_ascii()
+            && is_ascii(t.as_bytes())
         {
             return b == t.as_bytes();
         }

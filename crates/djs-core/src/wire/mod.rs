@@ -369,10 +369,12 @@ impl<'a> Decoder<'a, '_> {
         // Valid UTF-8 has as many bytes as UTF-16 units only if it is ASCII, which is much
         // cheaper to check than full UTF-8 validation (most strings are short).
         let ascii = units == nbytes;
+        // Keys are short, and validated here; other non-ASCII strings are validated
+        // while they are transcoded (D1781).
         let valid = if ascii {
-            bytes.is_ascii()
+            crate::heap::string::is_ascii(bytes)
         } else {
-            core::str::from_utf8(bytes).is_ok()
+            !as_key || core::str::from_utf8(bytes).is_ok()
         };
         if !valid {
             self.pos = start;
@@ -408,11 +410,17 @@ impl<'a> Decoder<'a, '_> {
             let dst = self.heap.arena_mut().slice_mut(data, units);
             transcode(bytes, dst, |d, u| *d = u as u8)
         };
-        if !ok {
-            self.pos = start;
-            return self.invalid("string lengths do not match");
+        match ok {
+            Transcoded::Ok => Ok((Value::string(s), Atom::NULL)),
+            Transcoded::InvalidUtf8 => {
+                self.pos = start;
+                self.invalid("invalid UTF-8")
+            }
+            Transcoded::WrongLength => {
+                self.pos = start;
+                self.invalid("string lengths do not match")
+            }
         }
-        Ok((Value::string(s), Atom::NULL))
     }
 
     fn empty_string(&mut self) -> Result<Value, WireError> {
@@ -430,10 +438,30 @@ fn number_value(n: f64) -> Value {
     }
 }
 
-/// Transcodes valid UTF-8 into exactly `dst.len()` UTF-16 code units, written with `put`.
-/// Returns false if the unit count does not match. ASCII runs go eight bytes at a time.
-fn transcode<D>(src: &[u8], dst: &mut [D], put: impl Fn(&mut D, u16)) -> bool {
+/// What [`transcode`] found.
+#[derive(PartialEq, Debug)]
+enum Transcoded {
+    Ok,
+    InvalidUtf8,
+    /// Valid UTF-8, but not exactly `dst.len()` UTF-16 units.
+    WrongLength,
+}
+
+/// Validates UTF-8 strictly (as `str::from_utf8`) and transcodes it into exactly
+/// `dst.len()` UTF-16 code units, written with `put`, in one pass (D1781): a separate
+/// `from_utf8` pass cost ~40% of decoding a large non-ASCII string in wasm. ASCII runs go
+/// eight bytes at a time. Invalid UTF-8 anywhere is reported as such even when the length
+/// is also wrong, as the two-pass version did.
+fn transcode<D>(src: &[u8], dst: &mut [D], put: impl Fn(&mut D, u16)) -> Transcoded {
     let (mut i, mut n) = (0, 0);
+    // The rest from `at` on decides between the two errors (cold).
+    let length_or_invalid = |at: usize| {
+        if core::str::from_utf8(&src[at..]).is_ok() {
+            Transcoded::WrongLength
+        } else {
+            Transcoded::InvalidUtf8
+        }
+    };
     while i < src.len() {
         if i + 8 <= src.len() && n + 8 <= dst.len() {
             let w = u64::from_le_bytes(src[i..i + 8].try_into().unwrap());
@@ -447,28 +475,51 @@ fn transcode<D>(src: &[u8], dst: &mut [D], put: impl Fn(&mut D, u16)) -> bool {
             }
         }
         let b = src[i];
-        let (cp, len) = match b {
-            0x00..=0x7F => (b as u32, 1),
-            0xC0..=0xDF => (((b as u32 & 0x1F) << 6) | (src[i + 1] as u32 & 0x3F), 2),
-            0xE0..=0xEF => (
-                ((b as u32 & 0x0F) << 12)
-                    | ((src[i + 1] as u32 & 0x3F) << 6)
-                    | (src[i + 2] as u32 & 0x3F),
-                3,
-            ),
-            _ => (
-                ((b as u32 & 0x07) << 18)
-                    | ((src[i + 1] as u32 & 0x3F) << 12)
-                    | ((src[i + 2] as u32 & 0x3F) << 6)
-                    | (src[i + 3] as u32 & 0x3F),
-                4,
-            ),
+        // Continuation byte `k` of the sequence at `i`, within `lo..=hi` (0x80..=0xBF
+        // except for the second byte after E0, ED, F0 and F4, which exclude overlong
+        // forms, surrogates and code points above U+10FFFF).
+        let cont = |k: usize, lo: u8, hi: u8| {
+            src.get(i + k)
+                .copied()
+                .filter(|c| (lo..=hi).contains(c))
+                .map(|c| (c & 0x3F) as u32)
         };
-        i += len;
+        let decoded = match b {
+            0x00..=0x7F => Some((b as u32, 1)),
+            0xC2..=0xDF => cont(1, 0x80, 0xBF).map(|c1| (((b as u32 & 0x1F) << 6) | c1, 2)),
+            0xE0..=0xEF => {
+                let (lo, hi) = match b {
+                    0xE0 => (0xA0, 0xBF),
+                    0xED => (0x80, 0x9F),
+                    _ => (0x80, 0xBF),
+                };
+                match (cont(1, lo, hi), cont(2, 0x80, 0xBF)) {
+                    (Some(c1), Some(c2)) => Some((((b as u32 & 0x0F) << 12) | (c1 << 6) | c2, 3)),
+                    _ => None,
+                }
+            }
+            0xF0..=0xF4 => {
+                let (lo, hi) = match b {
+                    0xF0 => (0x90, 0xBF),
+                    0xF4 => (0x80, 0x8F),
+                    _ => (0x80, 0xBF),
+                };
+                match (cont(1, lo, hi), cont(2, 0x80, 0xBF), cont(3, 0x80, 0xBF)) {
+                    (Some(c1), Some(c2), Some(c3)) => {
+                        Some((((b as u32 & 0x07) << 18) | (c1 << 12) | (c2 << 6) | c3, 4))
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        let Some((cp, len)) = decoded else {
+            return Transcoded::InvalidUtf8;
+        };
         if cp > 0xFFFF {
             let v = cp - 0x10000;
             if n + 2 > dst.len() {
-                return false;
+                return length_or_invalid(i);
             }
             put(&mut dst[n], 0xD800 | (v >> 10) as u16);
             put(&mut dst[n + 1], 0xDC00 | (v & 0x3FF) as u16);
@@ -476,10 +527,15 @@ fn transcode<D>(src: &[u8], dst: &mut [D], put: impl Fn(&mut D, u16)) -> bool {
         } else {
             match dst.get_mut(n) {
                 Some(d) => put(d, cp as u16),
-                None => return false,
+                None => return length_or_invalid(i),
             }
             n += 1;
         }
+        i += len;
     }
-    n == dst.len()
+    if n == dst.len() {
+        Transcoded::Ok
+    } else {
+        Transcoded::WrongLength
+    }
 }

@@ -215,6 +215,21 @@ fn short_decimal(a: f64) -> Option<(u64, i32)> {
     const P10: [f64; 9] = [1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8];
     const MAX: f64 = 9007199254740992.0; // 2^53
     let ulp = f64::from_bits(a.to_bits() + 1) - a;
+    // Early exit for full-precision numbers (D1782), which otherwise try all eight `k`:
+    // if some `m / 10^k` (k <= 8) round-trips, then `M = m * 10^(8-k)` is within
+    // `ulp * 1e8 / 2` of `a * 1e8`, and the product's rounding adds less than
+    // `ulp(a * 1e8) / 2 < ulp * 1e8`. So `a * 1e8` is within 1.5 `tol8` of the integer
+    // `M`, which is then its nearest integer while `tol8 < 1/4`; a distance over 2 `tol8`
+    // rules every `k` out. (With `tol8` that large, or a product at 2^53, the loop
+    // decides.) A wrong exit would only cost speed: Ryu gives the same digits.
+    let tol8 = ulp * 1e8;
+    let y8 = a * 1e8;
+    if tol8 < 0.25 && y8 < MAX {
+        let d = (y8 + 0.5) as u64 as f64;
+        if (y8 - d).abs() > 2.0 * tol8 {
+            return None;
+        }
+    }
     for (k, &p) in P10.iter().enumerate().skip(1) {
         let tol = ulp * p;
         if tol >= 1.0 {
@@ -509,6 +524,71 @@ mod tests {
             let (ryu_digits, ryu_e) = shortest(a, &mut tmp2);
             assert_eq!((digits, e), (ryu_digits, ryu_e), "{a:e}");
         }
+    }
+
+    /// [`short_decimal`] without the early exit of D1782: the reference for it.
+    fn short_decimal_loop_only(a: f64) -> Option<(u64, i32)> {
+        const P10: [f64; 9] = [1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8];
+        const MAX: f64 = 9007199254740992.0; // 2^53
+        let ulp = f64::from_bits(a.to_bits() + 1) - a;
+        for (k, &p) in P10.iter().enumerate().skip(1) {
+            let tol = ulp * p;
+            if tol >= 1.0 {
+                return None;
+            }
+            let y = a * p;
+            if y >= MAX {
+                return None;
+            }
+            let m = (y + 0.5) as u64;
+            let d = m as f64;
+            // Cheap filter before the division: the candidate is within ulp(a) * 10^k / 2 of
+            // the exact product, and `y` within half an ulp of that.
+            if y - d > 2.0 * tol || d - y > 2.0 * tol {
+                continue;
+            }
+            if d / p == a {
+                // Not a multiple of 10, or a smaller k would have matched.
+                return if m.is_multiple_of(10) {
+                    None
+                } else {
+                    Some((m, k as i32))
+                };
+            }
+        }
+        None
+    }
+
+    /// D1782: the early exit never gives up on a number the loop would have answered.
+    #[test]
+    fn short_decimal_early_exit_loses_nothing() {
+        let mut x = 0x0078_5eed_dead_beefu64;
+        let mut next = || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x
+        };
+        let mut hits = 0;
+        for i in 0..3_000_000u64 {
+            let r = next();
+            let a = match i % 4 {
+                0 => f64::from_bits(r >> 1),
+                1 => (r % 1_000_000_000_000) as f64 / [1e0, 1e2, 1e5, 1e8][(r >> 60) as usize % 4],
+                2 => {
+                    let b = ((r % 100_000_000) as f64 / 1e8).to_bits();
+                    f64::from_bits(b.wrapping_add((r >> 62) as u64).wrapping_sub(2))
+                }
+                _ => (r % 10_000) as f64 * [1e-8, 1e-3, 1e3, 1e9][(r >> 60) as usize % 4],
+            };
+            if !a.is_finite() || a <= 0.0 {
+                continue;
+            }
+            let want = short_decimal_loop_only(a);
+            hits += want.is_some() as usize;
+            assert_eq!(short_decimal(a), want, "{a:e}");
+        }
+        assert!(hits > 1_000_000, "{hits}");
     }
 
     /// The short-decimal fast path agrees with Ryu wherever it answers.

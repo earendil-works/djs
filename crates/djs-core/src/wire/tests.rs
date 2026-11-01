@@ -1097,3 +1097,57 @@ fn reader_bench_images() {
     }
     std::fs::write(format!("{out}/index.tsv"), index).unwrap();
 }
+
+/// D1781: the one-pass validating `transcode` agrees with `str::from_utf8` plus UTF-16
+/// counting on every input: the same verdict (valid, invalid UTF-8, wrong length) and the
+/// same units, also for overlong forms, surrogates, truncated sequences and code points
+/// above U+10FFFF, and for every length around the right one.
+#[test]
+fn transcode_matches_from_utf8() {
+    let mut r = Rng(0x5eed_0f78);
+    let pieces: [&[u8]; 16] = [
+        b"a",
+        b"hello wo",
+        "é".as_bytes(),
+        "€".as_bytes(),
+        "😀".as_bytes(),
+        "\u{FFFF}".as_bytes(),
+        &[0xC0, 0x80],
+        &[0xED, 0xA0, 0x80],
+        &[0xE0, 0x9F, 0xBF],
+        &[0xF0, 0x8F, 0xBF, 0xBF],
+        &[0xF4, 0x90, 0x80, 0x80],
+        &[0xF5, 0x80],
+        &[0x80],
+        &[0xE2, 0x82],
+        &[0xFF],
+        b"12345678",
+    ];
+    for _ in 0..200_000 {
+        let mut src = Vec::new();
+        for _ in 0..r.below(8) {
+            if r.below(4) == 0 {
+                src.push(r.next() as u8);
+            } else {
+                src.extend_from_slice(pieces[r.below(16) as usize]);
+            }
+        }
+        let want_units: Option<Vec<u16>> = core::str::from_utf8(&src)
+            .ok()
+            .map(|t| t.encode_utf16().collect());
+        let n = want_units.as_ref().map_or(src.len(), |u| u.len());
+        for len in [n.saturating_sub(1), n, n + 1] {
+            let mut dst = vec![0u16; len];
+            let got = transcode(&src, &mut dst, |d, u| *d = u);
+            let want = match &want_units {
+                None => Transcoded::InvalidUtf8,
+                Some(u) if u.len() != len => Transcoded::WrongLength,
+                Some(_) => Transcoded::Ok,
+            };
+            assert_eq!(got, want, "{src:x?} into {len}");
+            if got == Transcoded::Ok {
+                assert_eq!(&dst, want_units.as_ref().unwrap(), "{src:x?}");
+            }
+        }
+    }
+}
