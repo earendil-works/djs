@@ -1,7 +1,7 @@
 # 0019: Benchmark harness and tracked numbers
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0019-bench-harness
 depends-on: 0001
 touches: crates/djs-bench/, tests/bench/, scripts/bench.sh, tests/scores/
