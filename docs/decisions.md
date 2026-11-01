@@ -777,3 +777,16 @@ about 2.9x faster. Speed is part of G2. Follow-up: `#[inline(always)]` on the ho
 accessors, then re-measure at `z` and `s`; if `z` gets close in speed, `z` may come back.
 The 400 KB size budget is meant after `wasm-opt -Oz`, which is not installed here yet.
 Until it is, the size track reports the size without custom sections and the gzip size.
+
+## D1250: try/catch/finally compilation
+date: 2026-11-01 · by: lexer · issue: 0025
+`try` compiles per compiler.md 7.4 (D1084). Before the try block, a token scan decides
+whether a `finally` follows (emission-free lookahead, D1080), so `break`/`continue`/
+`return` inside know to `gosub` it. Handler entries are appended as each region closes:
+try region → catch (or the rethrow stub), catch region → the rethrow stub when there is a
+finally. That gives innermost-first order. The finally block runs at depth base + 2
+(value slot and return address) on every path. The parser tracks the statement-boundary
+operand depth (`stmt_depth`) for handler depths and for unwinding jumps. The catch
+parameter shares its scope with the catch block (redeclaring it with `let`/`const`/
+function is an error). `var` of the same name is allowed and assigns the parameter, as in
+qjs, which implements Annex B.3.4 here.

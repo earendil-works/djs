@@ -1049,6 +1049,15 @@ snapshot replaces compile-at-startup.
 
   The return address is an int32 Value on the operand stack, so it suspends and
   snapshots like any value.
+- As implemented (0025): whether a `try` has a `finally` is found by a token scan
+  before the try block is parsed (`scan::try_has_finally`), because `break`, `continue`
+  and `return` inside it must emit the `gosub`s (D1080). A `Finally` entry on the
+  `BlockEnv` stack records the finally label and the try's base depth. The parser
+  tracks the operand depth at statement boundaries (`stmt_depth`, 2 inside a finally
+  block), and jumps out of a finally block drop the value slot and the return address.
+  The catch parameter and the catch block's declarations share one `Catch` scope, so
+  `catch (e) { let e }` is a redefinition. A `var e` there is allowed (as in qjs, Annex
+  B.3.4 behavior) and assigns the parameter.
 - Iterator close on abrupt exit from for-of: `break`/`return` emit `iterator_close`
   before leaving; a throw goes through a handler entry around the loop body that
   calls `iterator_close` (ignoring errors from `return()` per spec) and rethrows.
