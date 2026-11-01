@@ -1,7 +1,7 @@
 # 0116: JSON output written in place; flat_fast inline; next pi-like hot spots
 
-status: open
-agent: -
+status: in-progress
+agent: perf
 branch: issue/0116-json-output-flat-fast
 depends-on: 0110
 guide: docs/guide/builtins.md (if the JSON or string paths it describes change)
