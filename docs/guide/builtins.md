@@ -151,16 +151,16 @@ k)) { ... } }`:
 <!-- gen:excerpt crates/djs-core/src/builtins/gen/natives.rs "fn native_ArrayPrototypeMap(" "5 => {" 11 -->
 ```rust
 5 => {
-    if (l3f < l1f) { st = 6; continue; } else { st = 8; continue; }
+    if (l3f < l1f) { st = 8; continue; } else { st = 7; continue; }
 }
 6 => {
-    // resume point: HasProperty
-    match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(3); ex.n_has_property(&[a0, a1], 9) }? { Flow::Inline => { st = 9; continue } Flow::Leave(s) => return Ok(s) }
-}
-7 => {
     let rv = (l3f + 1.0_f64); l3f = rv; ex.n_set_slot(3, num(rv));
     if ex.n_backedge(5) { return Ok(None); } st = 5; continue;
 }
+7 => {
+    let v = ex.n_slot(2); return ex.n_ret(v);
+}
+8 => {
 ```
 <!-- /gen -->
 
