@@ -9,6 +9,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0120 | Old generation phase 1 (sticky base prefix) | heap | .worktrees/heap |
 | 0122 | wasm size toward the D020 budget | perf | .worktrees/perf |
+| 0123 | Why djs is bigger than QuickJS (research) | bloat | .worktrees/bloat |
 
 ## Open (ready)
 
