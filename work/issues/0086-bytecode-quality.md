@@ -1,7 +1,7 @@
 # 0086: Bytecode quality and dispatch (0081 proposal 4)
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0086-bytecode-quality
 depends-on: 0081, 0084
 touches: crates/djs-core/src/compiler/ (peepholes, loop layout), crates/djs-core/src/bytecode/ (new ops, renumbering), crates/djs-core/src/interp/ (fast_step arms for the new/common ops; coordinate with heap/infra), docs/compiler.md
