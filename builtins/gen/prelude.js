@@ -4604,39 +4604,56 @@ function JSONToStringTag() {
 // builtins/json.ts:26 JSON.parse
 function JSONParse(text, reviver) {
   const jsonString = ToString(text);
-  const unfiltered = %JsonParse(jsonString);
   if (!%IsCallable(reviver)) {
-    return unfiltered;
+    return %JsonParse(jsonString, false);
   }
+  const pair = %AsObj(%JsonParse(jsonString, true));
   const root = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
-  %CreateDataPropertyOrThrow(root, "", unfiltered);
-  return InternalizeJSONProperty(root, "", reviver);
+  %CreateDataPropertyOrThrow(root, "", %Get(pair, 0));
+  return InternalizeJSONProperty(root, "", reviver, %Get(pair, 1));
 }
 
-// builtins/json.ts:38
-function InternalizeJSONProperty(holder, name, reviver) {
+// builtins/json.ts:44
+function InternalizeJSONProperty(holder, name, reviver, rec) {
   const val = %Get(holder, name);
+  const context = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+  let elements = undefined;
+  let entries = undefined;
+  if (rec !== undefined && %SameValue(%Get(%AsObj(rec), 0), val)) {
+    if (!%IsObject(val)) {
+      %CreateDataPropertyOrThrow(context, "source", %Get(%AsObj(rec), 1));
+    }
+    elements = %Get(%AsObj(rec), 2);
+    entries = %Get(%AsObj(rec), 3);
+  }
   if (%IsObject(val)) {
     const o = %AsObj(val);
     if (%IsArray(o)) {
       const len = LengthOfArrayLike(o);
+      const known = elements === undefined ? 0 : LengthOfArrayLike(%AsObj(elements));
       for (let i = 0; i < len; i++) {
-        InternalizeJSONMember(o, %ToStringPrimitive(i), reviver);
+        const elementRec = i < known ? %Get(%AsObj(elements), i) : undefined;
+        InternalizeJSONMember(o, %ToStringPrimitive(i), reviver, elementRec);
       }
     } else {
       const keys = %OwnPropertyKeys(o, 3);
       const n = LengthOfArrayLike(keys);
       for (let k = 0; k < n; k++) {
-        InternalizeJSONMember(o, %AsStr(%Get(keys, k)), reviver);
+        const p = %AsStr(%Get(keys, k));
+        let entryRec = undefined;
+        if (entries !== undefined && %HasOwnProperty(%AsObj(entries), p)) {
+          entryRec = %Get(%AsObj(entries), p);
+        }
+        InternalizeJSONMember(o, p, reviver, entryRec);
       }
     }
   }
-  return %Call(reviver, holder, name, val);
+  return %Call(reviver, holder, name, val, context);
 }
 
-// builtins/json.ts:59
-function InternalizeJSONMember(o, p, reviver) {
-  const newElement = InternalizeJSONProperty(o, p, reviver);
+// builtins/json.ts:82
+function InternalizeJSONMember(o, p, reviver, rec) {
+  const newElement = InternalizeJSONProperty(o, p, reviver, rec);
   if (newElement === undefined) {
     %DeleteProperty(o, p);
   } else {
@@ -4644,7 +4661,17 @@ function InternalizeJSONMember(o, p, reviver) {
   }
 }
 
-// builtins/json.ts:73 JSON.stringify
+// builtins/json.ts:95 JSON.rawJSON
+function JSONRawJSON(text) {
+  return %JsonRawJSON(ToString(text));
+}
+
+// builtins/json.ts:103 JSON.isRawJSON
+function JSONIsRawJSON(o) {
+  return %IsRawJSON(o);
+}
+
+// builtins/json.ts:112 JSON.stringify
 function JSONStringify(value, replacer, space) {
   let replacerFunction = undefined;
   let propertyList = undefined;
@@ -4685,7 +4712,7 @@ function JSONStringify(value, replacer, space) {
   return SerializeJSONProperty(replacerFunction, propertyList, gap, %ArrayCreate(0), "", "", wrapper);
 }
 
-// builtins/json.ts:114
+// builtins/json.ts:153
 function JSONPropertyList(r) {
   const list = %ArrayCreate(0);
   let n = 0;
@@ -4711,7 +4738,7 @@ function JSONPropertyList(r) {
   return list;
 }
 
-// builtins/json.ts:140
+// builtins/json.ts:179
 function JSONListIncludes(list, n, v) {
   for (let i = 0; i < n; i++) {
     if (%Get(list, i) === v) {
@@ -4721,7 +4748,7 @@ function JSONListIncludes(list, n, v) {
   return false;
 }
 
-// builtins/json.ts:153
+// builtins/json.ts:192
 function SerializeJSONProperty(replacer, propertyList, gap, stack, indent, key, holder) {
   let value = %Get(holder, key);
   if (%IsObject(value) || %IsBigInt(value)) {
@@ -4732,6 +4759,9 @@ function SerializeJSONProperty(replacer, propertyList, gap, stack, indent, key, 
   }
   if (replacer !== undefined) {
     value = %Call(replacer, holder, key, value);
+  }
+  if (%IsRawJSON(value)) {
+    return %Get(%AsObj(value), "rawJSON");
   }
   if (%IsObject(value)) {
     const p = %PrimitiveValue(value);
@@ -4776,7 +4806,7 @@ function SerializeJSONProperty(replacer, propertyList, gap, stack, indent, key, 
   return undefined;
 }
 
-// builtins/json.ts:219
+// builtins/json.ts:262
 function JSONStackIncludes(stack, o) {
   const n = LengthOfArrayLike(stack);
   for (let i = 0; i < n; i++) {
@@ -4787,7 +4817,7 @@ function JSONStackIncludes(stack, o) {
   return false;
 }
 
-// builtins/json.ts:230
+// builtins/json.ts:273
 function JSONJoin(open, close, partial, n, gap, stepback, indent) {
   if (n === 0) {
     return open + close;
@@ -4803,7 +4833,7 @@ function JSONJoin(open, close, partial, n, gap, stepback, indent) {
   return gap === "" ? r + close : r + "\n" + stepback + close;
 }
 
-// builtins/json.ts:246
+// builtins/json.ts:289
 function SerializeJSONObject(replacer, propertyList, gap, stack, stepback, value) {
   const indent = stepback + gap;
   const keys = propertyList === undefined ? %OwnPropertyKeys(value, 3) : %AsObj(propertyList);
@@ -4822,7 +4852,7 @@ function SerializeJSONObject(replacer, propertyList, gap, stack, stepback, value
   return JSONJoin("{", "}", partial, n, gap, stepback, indent);
 }
 
-// builtins/json.ts:272
+// builtins/json.ts:315
 function SerializeJSONArray(replacer, propertyList, gap, stack, stepback, value) {
   const indent = stepback + gap;
   const len = LengthOfArrayLike(value);
@@ -10661,6 +10691,8 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallMethod("Iterator", "zipKeyed", IteratorZipKeyed, 1);
 %InstallValue("JSON", %WellKnownSymbol("toStringTag"), JSONToStringTag(), 4);
 %InstallMethod("JSON", "parse", JSONParse, 2);
+%InstallMethod("JSON", "rawJSON", JSONRawJSON, 1);
+%InstallMethod("JSON", "isRawJSON", JSONIsRawJSON, 1);
 %InstallMethod("JSON", "stringify", JSONStringify, 3);
 %InstallMethod("Map", "groupBy", MapGroupBy, 2);
 %InstallAccessor("Map", %WellKnownSymbol("species"), MapSpecies, false);

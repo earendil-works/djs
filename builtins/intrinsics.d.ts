@@ -761,8 +761,20 @@ declare function DisposableStackCreate(proto: Obj, isAsync: boolean): Obj;
 declare function ThisDisposableStack(v: Value, isAsync: boolean): Obj;
 // ---- JSON (0033, builtins/json.rs over crate::json) -------------------------------------
 
-/** JSON.parse of text without a reviver; qjs's SyntaxError for invalid JSON. @leaf */
-declare function JsonParse(text: Str): Value;
+/**
+ * JSON.parse of text without a reviver; qjs's SyntaxError for invalid JSON. With
+ * withSource, an Array [value, record] where record is the JSON Parse Record tree for the
+ * reviver's source text access: [value, source, elements, entries] (D1611). @leaf
+ */
+declare function JsonParse(text: Str, withSource: boolean): Value;
+/**
+ * JSON.rawJSON's work after ToString: a frozen, null-prototype RawJSON object with the
+ * own property rawJSON = text; SyntaxError "invalid rawJSON string" unless text is a JSON
+ * primitive without leading or trailing whitespace. @leaf
+ */
+declare function JsonRawJSON(text: Str): Obj;
+/** Whether v has [[IsRawJSON]] (a JSON.rawJSON object). @leaf */
+declare function IsRawJSON(v: Value): boolean;
 /**
  * JSON.stringify(v, undefined, space) with gap already computed, for plain data: the
  * string, undefined for an undefined result, or null when the value needs the full

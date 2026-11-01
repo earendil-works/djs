@@ -12,6 +12,8 @@ use crate::value::Str;
 const JSON_PARSE: u16 = id("JsonParse");
 const JSON_STRINGIFY_FAST: u16 = id("JsonStringifyFast");
 const JSON_QUOTE: u16 = id("JsonQuote");
+const JSON_RAW_JSON: u16 = id("JsonRawJSON");
+const IS_RAW_JSON: u16 = id("IsRawJSON");
 const CREATE_DATA_PROPERTY: u16 = id("CreateDataProperty");
 const IS_REGEXP_OBJECT: u16 = id("IsRegExpObject");
 const REGEXP_CREATE: u16 = id("RegExpCreate");
@@ -80,6 +82,13 @@ impl Exec<'_> {
                 };
                 self.fuel -= length_fuel(self.heap.str_len(s));
                 match json::parse(self.heap, s)? {
+                    // With the second argument: `[value, record]` for the reviver (D1611).
+                    Ok(v) if arg(self, 1).as_bool() == Some(true) => {
+                        let rec = json::source_records(self.heap, s, v)?;
+                        let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
+                        let pair = self.heap.new_array_from_values(Some(proto), &[v, rec])?;
+                        Value::object(pair)
+                    }
                     Ok(v) => v,
                     Err(e) => {
                         // qjs puts the position in the stack, as a first `<input>` frame.
@@ -113,6 +122,16 @@ impl Exec<'_> {
                 }
                 r
             }
+            JSON_RAW_JSON => {
+                let Some(s) = a0.as_string() else {
+                    return bad_argument(name);
+                };
+                json::raw_json(self.heap, s)?
+            }
+            IS_RAW_JSON => Value::bool(
+                a0.as_object()
+                    .is_some_and(|o| self.heap.object_class(o) == crate::heap::ObjectClass::RawJSON),
+            ),
             JSON_QUOTE => {
                 let Some(s) = a0.as_string() else {
                     return bad_argument(name);

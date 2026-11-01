@@ -228,6 +228,7 @@ well_known! {
         STICKY = "sticky",
         HAS_INDICES = "hasIndices",
         REG_EXP = "RegExp",
+        RAW_JSON = "rawJSON",
     }
     symbols {
         SYM_ITERATOR = "Symbol.iterator",

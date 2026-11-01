@@ -81,6 +81,7 @@ scan = [
 name = "later"
 kind = "later"
 description = "Phases P3 to P5 of ARCH.md: on the roadmap, not in the current milestone."
+# Moved to active in 0061: the feature json-parse-with-source.
 # Moved to active in 0050 (RegExp completion): built-ins/RegExp,
 # RegExpStringIteratorPrototype, language/literals/regexp, and the features regexp-*,
 # RegExp.escape, String.prototype.matchAll and Symbol.match/matchAll/replace/search/split.
@@ -111,6 +112,5 @@ features = [
   "Symbol.unscopables",         # Symbol-heavy (mostly `with`)
   "decorators",                 # decorators come after P5
   "error-stack-accessor",       # error stack traces (P5)
-  "json-parse-with-source",     # JSON.parse source text access
   "await-dictionary",           # proposal
 ]

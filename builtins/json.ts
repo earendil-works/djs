@@ -25,44 +25,83 @@ function JSONToStringTag(): Str {
  */
 function JSONParse(text: Value, reviver: Value): Value {
   const jsonString: Str = ToString(text);
-  const unfiltered: Value = JsonParse(jsonString);
   if (!IsCallable(reviver)) {
-    return unfiltered;
+    return JsonParse(jsonString, false);
   }
+  // [value, JSON Parse Record] for source text access (D1611).
+  const pair: Obj = AsObj(JsonParse(jsonString, true));
   const root: Obj = ObjectCreate(RealmIntrinsic("ObjectPrototype"));
-  CreateDataPropertyOrThrow(root, "", unfiltered);
-  return InternalizeJSONProperty(root, "", reviver);
+  CreateDataPropertyOrThrow(root, "", Get(pair, 0));
+  return InternalizeJSONProperty(root, "", reviver, Get(pair, 1));
 }
 
-/** InternalizeJSONProperty ( holder, name, reviver ), 25.5.1.1. */
-function InternalizeJSONProperty(holder: Obj, name: Str, reviver: Value): Value {
+/**
+ * InternalizeJSONProperty ( holder, name, reviver, valRecord ), 25.5.1.1 with JSON.parse
+ * source text access: `rec` is the JSON Parse Record of the parsed value at this place
+ * (an internal [value, source, elements, entries] array) or undefined. It applies only
+ * while the value there is still the parsed one.
+ */
+function InternalizeJSONProperty(holder: Obj, name: Str, reviver: Value, rec: Value): Value {
   const val: Value = Get(holder, name);
+  const context: Obj = ObjectCreate(RealmIntrinsic("ObjectPrototype"));
+  let elements: Value = undefined;
+  let entries: Value = undefined;
+  if (rec !== undefined && SameValue(Get(AsObj(rec), 0), val)) {
+    if (!IsObject(val)) {
+      CreateDataPropertyOrThrow(context, "source", Get(AsObj(rec), 1));
+    }
+    elements = Get(AsObj(rec), 2);
+    entries = Get(AsObj(rec), 3);
+  }
   if (IsObject(val)) {
     const o: Obj = AsObj(val);
     if (IsArray(o)) {
       const len: f64 = LengthOfArrayLike(o);
+      const known: f64 = elements === undefined ? 0 : LengthOfArrayLike(AsObj(elements));
       for (let i: f64 = 0; i < len; i++) {
-        InternalizeJSONMember(o, ToStringPrimitive(i), reviver);
+        const elementRec: Value = i < known ? Get(AsObj(elements), i) : undefined;
+        InternalizeJSONMember(o, ToStringPrimitive(i), reviver, elementRec);
       }
     } else {
       const keys: Obj = OwnPropertyKeys(o, 3);
       const n: f64 = LengthOfArrayLike(keys);
       for (let k: f64 = 0; k < n; k++) {
-        InternalizeJSONMember(o, AsStr(Get(keys, k)), reviver);
+        const p: Str = AsStr(Get(keys, k));
+        let entryRec: Value = undefined;
+        if (entries !== undefined && HasOwnProperty(AsObj(entries), p)) {
+          entryRec = Get(AsObj(entries), p);
+        }
+        InternalizeJSONMember(o, p, reviver, entryRec);
       }
     }
   }
-  return Call(reviver, holder, name, val);
+  return Call(reviver, holder, name, val, context);
 }
 
 /** The loop body of InternalizeJSONProperty: revive o[p], delete it if undefined. */
-function InternalizeJSONMember(o: Obj, p: Str, reviver: Value): void {
-  const newElement: Value = InternalizeJSONProperty(o, p, reviver);
+function InternalizeJSONMember(o: Obj, p: Str, reviver: Value, rec: Value): void {
+  const newElement: Value = InternalizeJSONProperty(o, p, reviver, rec);
   if (newElement === undefined) {
     DeleteProperty(o, p);
   } else {
     CreateDataProperty(o, p, newElement);
   }
+}
+
+/**
+ * JSON.rawJSON ( text ), JSON.parse source text access.
+ * @builtin JSON.rawJSON
+ */
+function JSONRawJSON(text: Value): Obj {
+  return JsonRawJSON(ToString(text));
+}
+
+/**
+ * JSON.isRawJSON ( O ), JSON.parse source text access.
+ * @builtin JSON.isRawJSON
+ */
+function JSONIsRawJSON(o: Value): boolean {
+  return IsRawJSON(o);
 }
 
 /**
@@ -168,6 +207,10 @@ function SerializeJSONProperty(
   }
   if (replacer !== undefined) {
     value = Call(replacer, holder, key, value);
+  }
+  if (IsRawJSON(value)) {
+    // Its text, verbatim (source text access).
+    return Get(AsObj(value), "rawJSON");
   }
   if (IsObject(value)) {
     const p: Value = PrimitiveValue(value);

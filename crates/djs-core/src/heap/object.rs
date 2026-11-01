@@ -143,6 +143,9 @@ pub enum ObjectClass {
     /// A BigInt wrapper (`[[BigIntData]]`, 0046): slot 0 is the BigInt, like the other
     /// primitive wrappers.
     BigInt = 30,
+    /// A raw JSON object (`[[IsRawJSON]]`, JSON.rawJSON, D1611): frozen, null prototype,
+    /// one own `rawJSON` string property, no slots.
+    RawJSON = 29,
 }
 
 impl ObjectClass {
@@ -181,6 +184,7 @@ impl ObjectClass {
             32 => Some(ObjectClass::FinalizationRegistry),
             33 => Some(ObjectClass::DisposableStack),
             30 => Some(ObjectClass::BigInt),
+            29 => Some(ObjectClass::RawJSON),
             _ => None,
         }
     }
@@ -191,7 +195,8 @@ impl ObjectClass {
             ObjectClass::Ordinary
             | ObjectClass::Error
             | ObjectClass::Arguments
-            | ObjectClass::Record => 0,
+            | ObjectClass::Record
+            | ObjectClass::RawJSON => 0,
             ObjectClass::Promise => 4,
             ObjectClass::BuiltinClosure => 2,
             ObjectClass::Array | ObjectClass::Function | ObjectClass::HostFunction => 1,
