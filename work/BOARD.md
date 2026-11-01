@@ -11,6 +11,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0039 | Binary data: ArrayBuffer, typed arrays, DataView, base64 | infra | .worktrees/0039-binary-data |
 | 0041 | Async functions, await, generators (compiler) | lexer | .worktrees/0041-async-generators-compiler |
 | 0040 | P1-7 Classes (paused for 0041) | lexer (parked) | .worktrees/0040-p1-classes |
+| 0042 | Async generator runtime, function-kind intrinsics, host rejections | heap | .worktrees/0042-async-gen-runtime |
 
 ## Open (ready)
 
