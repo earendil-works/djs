@@ -82,7 +82,7 @@ djs-test262).
   detection; V8 prints ""). It is its own case, `console/cyclic-array.js`, so djs can
   decide whether to match.
 - `scripts/difftest-import-dquickts.py` (Python stdlib only): splits the five dquickts
-  files into 94 cases: 76 test functions plus `closure/toplevel.js`, and 18 parse-error
+  files into 94 cases: 75 test functions plus `closure/toplevel.js`, and 18 parse-error
   cases from `assertSyntaxError` lines. 17 test functions are excluded with reasons
   (sloppy mode 8, qjs std/os 5, eval'd stack positions 1, modules 1, evalTS-only 1, and
   one assertSyntaxError that is valid in a function body). 11 cases use eval/Function and
