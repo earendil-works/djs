@@ -647,3 +647,29 @@ setters, or `Done(v)` for an entry call. `Err(e)` throws `e` at the call instruc
 so resuming re-executes nothing. Safepoints are back jumps, frame entry and return, and
 the start of `run`. There the stack above `sp` is cleared, the heap is collected if it
 asks (or always with `gc_stress`), and the cached code and stack offsets are re-derived.
+
+## D1210: Exported heap layout drives the host-side reader
+date: 2026-11-01 · by: num · issue: 0021
+`heap::layout::layout_json()` serializes `LAYOUTS` (cells by name: kind, min size, fields,
+tail), the header, the roots magic, `LAYOUT_HASH`, the value tags, atom id bits, header flags,
+object classes (from `ObjectClass::from_u32`) and the stored property flag bits (including
+the accessor bit). The private constants this needs (`atom::INT_BIT`/`SYM_BIT`/`INDEX_MASK`,
+`object::STORE_ACCESSOR`) are now `pub(crate)`. `js/src/layout.generated.ts` holds that JSON.
+`layout_generated_ts_is_current` keeps it fresh; regenerate it with
+`DJS_UPDATE_LAYOUT=1 cargo test -p djs-core layout_generated` after changing cells, tags or
+classes. A drift test fails if a valid value tag is missing from the export.
+`js/src/reader.ts` takes every offset and constant from that file and checks the magic and
+layout hash before reading.
+
+## D1211: Outbound reads are trees; strings via node's Buffer
+date: 2026-11-01 · by: num · issue: 0021
+`readValue(arena, bits)` decodes like JSON does. Shared objects are read per reference and a
+cycle is a TypeError with its path. A value budget (`maxValues`) stops exponential expansion of
+sharing. Memoizing objects to keep sharing cost 30%. Holes stay holes. Ropes are walked, so
+the VM need not flatten. Only own enumerable string-keyed data properties are read.
+Accessors, which cannot be run from the host, are left out. Symbols, functions and other
+classes, BigInt and host refs become `Opaque` placeholders. On node, strings are decoded with
+`Buffer.latin1Slice` / `ucs2Slice`, which are exact and run at memcpy speed. A portable path
+uses only `TextDecoder` and `String.fromCharCode`: windows-1252 only when there are no bytes
+in 0x80..0x9F, and a fatal UTF-16 decoder with a fallback for lone surrogates. The gate runs
+the reader's cross-language test (extends D1181).
