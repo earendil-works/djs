@@ -56,6 +56,22 @@ flag enables the TS grammar.
   properties, then the strip-types oracle.
 
 ## Log
+- Part 1 (type skipper): compiler/ts.rs ports dquickts' `ts_*` skipper and
+  disambiguation (D1480): annotations everywhere, type params/args, generic calls vs
+  comparisons, arrows with return types (incl. the `a ? (b) : c => d` rule), generic
+  arrows, `as`/`satisfies` precedence, `<T>x`, `x!`, `type`, `interface`, `declare`,
+  overload signatures, `abstract`, class member modifiers, index signatures, `this`
+  parameters. `Lexer::rescan_less`. Erased ranges recorded for `compiler::strip_types`
+  / `djs strip-types` (D1481, simple blanking for now). `djs run --ts` (default for
+  .ts files); the difftest djs engine passes `job.ts`. Tests: compiler/ts_tests.rs (37
+  e2e cases checked with dquickts' qjs, errors, strip). difftest: 10 TS cases pass now.
+  JS fix on the way: `function f(a b)` says `expecting ','` like qjs.
+- ts-blank-space's details (read from 0.9.0's source) that strip-types must emulate
+  later: `;` in place of the first blanked char of a type-only statement when the last
+  visited JS node did not end with `;` (reset at function bodies), `;` for an `as`
+  that ends its statement without `;`, `(`/`)` moves for generics / arrow return types
+  that span lines, `this` params blanked with their trailing comma. The corpus files
+  are modules, so strip mode must also parse `import`/`export` declarations.
 
 ## Follow-ups
 
