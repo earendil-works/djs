@@ -6,10 +6,162 @@ use alloc::vec::Vec;
 use core::fmt::Write;
 
 use super::disasm::{DisasmContext, disasm};
-use super::handlers::HandlerTable;
-use crate::heap::cells::{Bytes, CellKind, FuncTemplate, RefArray, U32Array, ValueArray};
+use super::handlers::{Handler, HandlerTable, encode_handlers};
+use super::stack::{StackError, check_stack};
+use crate::heap::cells::{Bytes, CellKind, FuncTemplate, RefArray, Script, U32Array, ValueArray};
 use crate::heap::{Atom, Heap, HeapError, Ref};
-use crate::value::Value;
+use crate::value::{Str, Value};
+
+/// The parts of a function template, for [`alloc_template`].
+#[derive(Clone, Copy, Debug)]
+pub struct TemplateParts<'a> {
+    pub flags: u32,
+    pub name: Atom,
+    pub params: u16,
+    pub length: u16,
+    pub locals: u16,
+    /// Capture descriptors (`FuncTemplate::CAPTURE_DESC`), one per capture.
+    pub captures: &'a [u32],
+    /// Final code (labels resolved).
+    pub code: &'a [u8],
+    pub consts: &'a [Value],
+    /// Child templates.
+    pub children: &'a [Ref],
+    pub handlers: &'a [Handler],
+    /// An encoded line table (`LineTableBuilder::finish`).
+    pub lines: &'a [u8],
+    /// Local names, then capture names; may be empty.
+    pub names: &'a [Atom],
+    pub script: Ref,
+    pub src_start: u32,
+    pub src_end: u32,
+}
+
+impl Default for TemplateParts<'_> {
+    fn default() -> Self {
+        TemplateParts {
+            flags: 0,
+            name: Atom::NULL,
+            params: 0,
+            length: 0,
+            locals: 0,
+            captures: &[],
+            code: &[],
+            consts: &[],
+            children: &[],
+            handlers: &[],
+            lines: &[],
+            names: &[],
+            script: Ref::NULL,
+            src_start: 0,
+            src_end: 0,
+        }
+    }
+}
+
+/// Why [`alloc_template`] failed.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum TemplateError {
+    Heap(HeapError),
+    /// The code fails the stack checker (a compiler bug).
+    Stack(StackError),
+    /// More than `u16::MAX` captures.
+    TooManyCaptures,
+}
+
+impl From<HeapError> for TemplateError {
+    fn from(e: HeapError) -> Self {
+        TemplateError::Heap(e)
+    }
+}
+
+/// Checks the code with the stack checker (which also computes `STACK`) and writes a
+/// `FuncTemplate` cell with its `Bytes`, `ValueArray`, `RefArray` and `U32Array` parts.
+/// Empty parts are stored as null.
+pub fn alloc_template(heap: &mut Heap, p: &TemplateParts<'_>) -> Result<Ref, TemplateError> {
+    let stack = check_stack(p.code, p.handlers).map_err(TemplateError::Stack)?;
+    let captures = u16::try_from(p.captures.len()).map_err(|_| TemplateError::TooManyCaptures)?;
+    let code = alloc_bytes(heap, p.code)?;
+    let consts = nonempty(p.consts, |v| alloc_value_array(heap, v))?;
+    let children = nonempty(p.children, |c| alloc_ref_array(heap, c))?;
+    let capture_desc = nonempty(p.captures, |c| alloc_u32_array(heap, c))?;
+    let handlers = nonempty(p.handlers, |h| alloc_bytes(heap, &encode_handlers(h)))?;
+    let lines = nonempty(p.lines, |l| alloc_bytes(heap, l))?;
+    let ids: Vec<u32> = p.names.iter().map(|a| a.id()).collect();
+    let names = nonempty(&ids, |n| alloc_u32_array(heap, n))?;
+    let off = heap.alloc_cell(CellKind::FuncTemplate, FuncTemplate::LAYOUT.min_size)?;
+    let a = heap.arena_mut();
+    a.set(off, FuncTemplate::FLAGS, p.flags);
+    a.set(off, FuncTemplate::NAME, p.name.id());
+    a.set(off, FuncTemplate::PARAMS, p.params);
+    a.set(off, FuncTemplate::LENGTH, p.length);
+    a.set(off, FuncTemplate::LOCALS, p.locals);
+    a.set(off, FuncTemplate::STACK, stack);
+    a.set(off, FuncTemplate::CAPTURES, captures);
+    a.set(off, FuncTemplate::CODE, code);
+    a.set(off, FuncTemplate::CONSTS, consts);
+    a.set(off, FuncTemplate::CHILDREN, children);
+    a.set(off, FuncTemplate::CAPTURE_DESC, capture_desc);
+    a.set(off, FuncTemplate::HANDLERS, handlers);
+    a.set(off, FuncTemplate::LINES, lines);
+    a.set(off, FuncTemplate::SCRIPT, p.script);
+    a.set(off, FuncTemplate::SRC_START, p.src_start);
+    a.set(off, FuncTemplate::SRC_END, p.src_end);
+    a.set(off, FuncTemplate::NAMES, names);
+    Ok(Ref(off))
+}
+
+fn nonempty<T>(
+    items: &[T],
+    f: impl FnOnce(&[T]) -> Result<Ref, HeapError>,
+) -> Result<Ref, HeapError> {
+    if items.is_empty() {
+        Ok(Ref::NULL)
+    } else {
+        f(items)
+    }
+}
+
+/// Allocates a `Script` cell.
+pub fn alloc_script(heap: &mut Heap, name: Str, source: Option<Str>) -> Result<Ref, HeapError> {
+    let off = heap.alloc_cell(CellKind::Script, Script::LAYOUT.min_size)?;
+    let a = heap.arena_mut();
+    a.set(off, Script::NAME, Ref(name.offset()));
+    a.set(
+        off,
+        Script::SOURCE,
+        source.map_or(Ref::NULL, |s| Ref(s.offset())),
+    );
+    Ok(Ref(off))
+}
+
+fn alloc_value_array(heap: &mut Heap, values: &[Value]) -> Result<Ref, HeapError> {
+    let len = u32::try_from(values.len()).map_err(|_| HeapError::OutOfMemory)?;
+    let size = ValueArray::VALUES
+        .cell_size(len)
+        .ok_or(HeapError::OutOfMemory)?;
+    let off = heap.alloc_cell(CellKind::ValueArray, size)?;
+    let a = heap.arena_mut();
+    a.set(off, ValueArray::LEN, len);
+    for (i, &v) in values.iter().enumerate() {
+        a.write(ValueArray::VALUES.at(off, i as u32), v);
+    }
+    Ok(Ref(off))
+}
+
+fn alloc_u32_array(heap: &mut Heap, words: &[u32]) -> Result<Ref, HeapError> {
+    let len = u32::try_from(words.len()).map_err(|_| HeapError::OutOfMemory)?;
+    let size = U32Array::DATA
+        .cell_size(len)
+        .ok_or(HeapError::OutOfMemory)?;
+    let off = heap.alloc_cell(CellKind::U32Array, size)?;
+    let a = heap.arena_mut();
+    a.set(off, U32Array::LEN, len);
+    for (i, &w) in words.iter().enumerate() {
+        a.write(U32Array::DATA.at(off, i as u32), w);
+    }
+    Ok(Ref(off))
+}
 
 /// Allocates a `Bytes` cell holding `data`.
 pub fn alloc_bytes(heap: &mut Heap, data: &[u8]) -> Result<Ref, HeapError> {

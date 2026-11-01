@@ -9,9 +9,12 @@ use alloc::vec::Vec;
 use std::collections::HashSet;
 
 use super::ops::hash_ops;
-use super::template::{alloc_bytes, alloc_ref_array, bytes_of, disasm_template, ref_array_get};
+use super::template::{
+    TemplateError, TemplateParts, alloc_script, alloc_template, bytes_of, disasm_template,
+    ref_array_get,
+};
 use super::*;
-use crate::heap::cells::{FuncTemplate, U32Array, ValueArray};
+use crate::heap::cells::FuncTemplate;
 use crate::heap::{Atom, Heap, Ref};
 use crate::value::Value;
 
@@ -714,7 +717,15 @@ fn template_cells() {
     b.push_i8(7);
     b.return_();
     let child_code = b.finish().unwrap().code;
-    let child = template(&mut heap, a_f, &child_code, &[], Ref::NULL, &[], &[]);
+    let child = alloc_template(
+        &mut heap,
+        &TemplateParts {
+            name: a_f,
+            code: &child_code,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     // parent: x = "hi"; return x.length + 1.5
     let mut b = CodeBuf::new();
@@ -730,23 +741,39 @@ fn template_cells() {
     let code = b.finish().unwrap().code;
     let hi = heap.alloc_str("hi").unwrap();
     let consts = [Value::string(hi), Value::number(1.5)];
-    let children = alloc_ref_array(&mut heap, &[child]).unwrap();
-    let handlers = encode_handlers(&[Handler {
+    let handlers = [Handler {
         start: 0,
         end: 5,
         // The exception lands where the stack holds one value: the `return`.
         target: 28,
         depth: 0,
-    }]);
-    let parent = template(
+    }];
+    let name = heap.alloc_str("test.js").unwrap();
+    let script = alloc_script(&mut heap, name, None).unwrap();
+    let mut lines = LineTableBuilder::new();
+    lines.add(0, 1, 1);
+    lines.add(11, 1, 9);
+    let lines = lines.finish();
+    let parent = alloc_template(
         &mut heap,
-        Atom::NULL,
-        &code,
-        &consts,
-        children,
-        &[a_x],
-        &handlers,
-    );
+        &TemplateParts {
+            locals: 1,
+            code: &code,
+            consts: &consts,
+            children: &[child],
+            handlers: &handlers,
+            lines: &lines,
+            names: &[a_x],
+            script,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let a = heap.arena();
+    let children = a.get(parent.0, FuncTemplate::CHILDREN);
+    let line_bytes = bytes_of(&heap, a.get(parent.0, FuncTemplate::LINES));
+    assert_eq!(lookup_line(line_bytes, 12), Some((1, 9)));
+    assert_eq!(a.get(parent.0, FuncTemplate::SCRIPT), script);
 
     assert_eq!(bytes_of(&heap, Ref::NULL), &[] as &[u8]);
     assert_eq!(ref_array_get(&heap, children, 0), Some(child));
@@ -772,80 +799,32 @@ fn template_cells() {
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines, expect, "{text}");
 
+    // Bad code is rejected.
+    assert!(matches!(
+        alloc_template(
+            &mut heap,
+            &TemplateParts {
+                code: &[Op::Add as u8],
+                ..Default::default()
+            }
+        ),
+        Err(TemplateError::Stack(StackError::Underflow { .. }))
+    ));
+
+    // Bad code is rejected.
+    let bad = TemplateParts {
+        code: &[Op::Add as u8],
+        ..Default::default()
+    };
+    assert!(matches!(
+        alloc_template(&mut heap, &bad),
+        Err(TemplateError::Stack(StackError::Underflow { .. }))
+    ));
+
     // The new cell kinds walk and verify, and survive a byte copy of the heap.
     heap.verify().unwrap();
     let copy = Heap::from_bytes(heap.bytes().to_vec(), crate::heap::DEFAULT_LIMIT).unwrap();
     assert_eq!(disasm_template(&copy, parent), text);
-}
-
-fn template(
-    heap: &mut Heap,
-    name: Atom,
-    code: &[u8],
-    consts: &[Value],
-    children: Ref,
-    names: &[Atom],
-    handlers: &[u8],
-) -> Ref {
-    let stack = check_stack(
-        code,
-        &HandlerTable::new(handlers)
-            .unwrap()
-            .iter()
-            .collect::<Vec<_>>(),
-    )
-    .unwrap();
-    let code = alloc_bytes(heap, code).unwrap();
-    let handlers = if handlers.is_empty() {
-        Ref::NULL
-    } else {
-        alloc_bytes(heap, handlers).unwrap()
-    };
-    let consts_ref = if consts.is_empty() {
-        Ref::NULL
-    } else {
-        let size = ValueArray::VALUES.cell_size(consts.len() as u32).unwrap();
-        let off = heap
-            .alloc_cell(crate::heap::CellKind::ValueArray, size)
-            .unwrap();
-        heap.arena_mut()
-            .set(off, ValueArray::LEN, consts.len() as u32);
-        for (i, &v) in consts.iter().enumerate() {
-            heap.arena_mut()
-                .write(ValueArray::VALUES.at(off, i as u32), v);
-        }
-        Ref(off)
-    };
-    let names_ref = if names.is_empty() {
-        Ref::NULL
-    } else {
-        let size = U32Array::DATA.cell_size(names.len() as u32).unwrap();
-        let off = heap
-            .alloc_cell(crate::heap::CellKind::U32Array, size)
-            .unwrap();
-        heap.arena_mut().set(off, U32Array::LEN, names.len() as u32);
-        for (i, a) in names.iter().enumerate() {
-            heap.arena_mut()
-                .write(U32Array::DATA.at(off, i as u32), a.id());
-        }
-        Ref(off)
-    };
-    let off = heap
-        .alloc_cell(
-            crate::heap::CellKind::FuncTemplate,
-            FuncTemplate::LAYOUT.min_size,
-        )
-        .unwrap();
-    let a = heap.arena_mut();
-    a.set(off, FuncTemplate::NAME, name.id());
-    a.set(off, FuncTemplate::LOCALS, names.len() as u16);
-    a.set(off, FuncTemplate::STACK, stack);
-    a.set(off, FuncTemplate::CODE, code);
-    a.set(off, FuncTemplate::CONSTS, consts_ref);
-    a.set(off, FuncTemplate::CHILDREN, children);
-    a.set(off, FuncTemplate::HANDLERS, handlers);
-    a.set(off, FuncTemplate::NAMES, names_ref);
-    Ref(off)
 }
 
 #[test]
