@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" width="760" height="300" role="img" aria-label="How a host drives a run: vm_run returns a status, the host acts on it and runs again">
+<title>How a host drives a run: vm_run returns a status, the host acts on it and runs again</title>
+<style>
+  text { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; fill: #1f2328; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; }
+  .small { font-size: 10.5px; fill: #59636e; }
+  .title { font-weight: 600; font-size: 13px; }
+  .host { fill: #f6f8fa; stroke: #8c959f; }
+  .engine { fill: #ddf4ff; stroke: #54aeff; }
+  .arena { fill: #fff1e5; stroke: #fb8f44; }
+  .cell { fill: #ffffff; stroke: #fb8f44; }
+  .arrow { stroke: #59636e; fill: none; stroke-width: 1.3; marker-end: url(#a); }
+  .head { fill: #59636e; }
+  @media (prefers-color-scheme: dark) {
+    text { fill: #e6edf3; }
+    .small { fill: #9198a1; }
+    .host { fill: #161b22; stroke: #6e7681; }
+    .engine { fill: #0c2d6b; stroke: #388bfd; }
+    .arena { fill: #2b1a0a; stroke: #db6d28; }
+    .cell { fill: #0d1117; stroke: #db6d28; }
+    .arrow { stroke: #9198a1; }
+    .head { fill: #9198a1; }
+  }
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+
+<!-- Start -->
+<rect class="host" x="10" y="120" width="140" height="60" rx="6"/>
+<text x="80" y="140" text-anchor="middle">compile, call</text>
+<text class="mono" x="80" y="157" text-anchor="middle">vm_compile</text>
+<text class="mono" x="80" y="171" text-anchor="middle">vm_call</text>
+<path class="arrow" d="M150 150 L218 150"/>
+
+<!-- vm_run -->
+<rect class="engine" x="220" y="110" width="150" height="80" rx="8"/>
+<text class="title" x="295" y="138" text-anchor="middle">vm_run(slice)</text>
+<text class="small" x="295" y="156" text-anchor="middle">runs until fuel, a host</text>
+<text class="small" x="295" y="170" text-anchor="middle">call or the end</text>
+
+<!-- Outcomes -->
+<rect class="host" x="440" y="10" width="310" height="54" rx="6"/>
+<text x="452" y="30"><tspan class="mono">OUT_OF_FUEL</tspan>: the host gets control back</text>
+<text class="small" x="452" y="48">poll for cancellation, snapshot if waiting is long, run again</text>
+
+<rect class="host" x="440" y="76" width="310" height="66" rx="6"/>
+<text x="452" y="96"><tspan class="mono">HOST_CALL</tspan>: a sync host function, VM parked</text>
+<text class="small" x="452" y="114">read the arguments with the reader, call it,</text>
+<text class="small" x="452" y="128">send the result in (wire), resolve the call</text>
+
+<rect class="host" x="440" y="154" width="310" height="66" rx="6"/>
+<text x="452" y="174"><tspan class="mono">IDLE</tspan>: only async host calls are pending</text>
+<text class="small" x="452" y="192">await one, resolve it: the result goes into the</text>
+<text class="small" x="452" y="206">VM's inbox, applied when its job queue is empty</text>
+
+<rect class="host" x="440" y="232" width="310" height="58" rx="6"/>
+<text x="452" y="252"><tspan class="mono">DONE</tspan> / <tspan class="mono">THREW</tspan>: the run is over</text>
+<text class="small" x="452" y="270">read the result or the error with the reader</text>
+
+<path class="arrow" d="M370 125 L438 40"/>
+<path class="arrow" d="M370 140 L438 108"/>
+<path class="arrow" d="M370 160 L438 186"/>
+<path class="arrow" d="M370 175 L438 258"/>
+
+<!-- Back edges -->
+<path class="arrow" d="M440 52 C400 70 380 95 360 110"/>
+<path class="arrow" d="M440 130 C415 140 395 140 372 146"/>
+<path class="arrow" d="M440 210 C405 210 390 200 360 190"/>
+</svg>

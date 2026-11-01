@@ -29,6 +29,14 @@ following docs/guide/README.md (the authoring guide: "In short" box, trade-off n
 - [ ] `djs-docs check` green.
 
 ## Log
+- Wrote docs/guide/builtins.md, host.md and testing.md (with img/run-loop.svg) and
+  linked them in SUMMARY.md. Facts were checked against the code, ARCH.md, TESTING.md,
+  docs/host.md, docs/wire.md and the decisions; numbers are taken from those documents or
+  counted in the sources (builtins, intrinsics, @native, @fast).
+- Generated material: gen:ops call_intrinsic, two live examples with gen:run (builtins:
+  a getter in the includes slow path and a stack trace through `map (native)`; testing: a
+  codemode case), and gen:decisions on each page. `djs-docs check` is green.
+- Waiting for the docs agent's review (voice, terms, structure) before merge.
 
 ## Follow-ups
 

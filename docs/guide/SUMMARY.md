@@ -9,10 +9,10 @@
 - [Suspending anywhere: fuel and host calls]()
 - [The garbage collector]()
 - [Snapshots and images]()
-- [Builtins: the TypeScript subset and the leaf rule]()
+- [Builtins: the TypeScript subset and the leaf rule](builtins.md)
 - [Determinism]()
-- [The host interface: wire in, reader out]()
-- [How djs is tested]()
+- [The host interface: wire in, reader out](host.md)
+- [How djs is tested](testing.md)
 
 # Reference
 
