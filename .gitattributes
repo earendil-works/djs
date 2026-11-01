@@ -1,3 +1,16 @@
 # docs/decisions.md is append-only and every issue adds to its end: merge both sides
 # instead of conflicting (0079).
 docs/decisions.md merge=union
+
+# Generated files: a merge keeps one side and scripts/regen.sh rewrites them from the
+# merged sources (D1791; the drivers are registered by scripts/setup-merge-drivers.sh).
+builtins/gen/prelude.js merge=djs-generated
+builtins/gen/resume-points.txt merge=djs-generated
+js/src/layout.generated.ts merge=djs-generated
+crates/djs-core/src/bytecode/intrinsics.rs merge=djs-intrinsics
+# Line lists where both sides usually add different lines: keep both. A duplicate or
+# stale ratchet entry is harmless (the gate reports stale entries; the next --update
+# rewrites the file), and a bad intrinsics.d.ts union fails the gate's bgen check.
+builtins/intrinsics.d.ts merge=union
+tests/test262/expected-failures.txt merge=union
+tests/corpus/expected-failures.txt merge=union

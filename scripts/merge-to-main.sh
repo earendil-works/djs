@@ -36,7 +36,25 @@ echo "$branch $(date)" > "$lock/owner"
 trap 'rm -rf "$lock"' EXIT
 
 echo "== rebase onto main"
+# Generated files merge through drivers and are regenerated below (D1791).
+./scripts/setup-merge-drivers.sh
+old_base=$(git merge-base main HEAD)
 git rebase main
+
+# Regenerate what both main and the branch changed the sources of, plus every file a
+# merge driver kept one side of, and commit it, so the gate sees a consistent tree.
+both=$(comm -12 <(git diff --name-only "$old_base" main | sort) \
+                <(git diff --name-only main HEAD | sort))
+regen=()
+if echo "$both" | grep -qE '^builtins/'; then regen+=(--intrinsics); fi
+if echo "$both" | grep -qE '^crates/djs-core/src/heap/'; then regen+=(--layout); fi
+echo "== regenerate generated files ${regen[*]:-}"
+./scripts/regen.sh ${regen[@]+"${regen[@]}"}
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  id=${branch#issue/}
+  git commit -qam "${id%%-*}: regenerate generated files after the rebase onto main"
+  echo "merge-to-main: committed regenerated files"
+fi
 
 echo "== gate"
 ./scripts/gate.sh
