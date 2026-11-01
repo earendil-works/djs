@@ -1,7 +1,7 @@
 # 0134: GC cost in pi-like: faster old-region walk, young-sized threshold
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0134-gc-cost
 depends-on: 0132
 guide: docs/guide/gc.md
