@@ -33,17 +33,17 @@ silently accepted.
 
 ## test262
 
-test262 is the conformance suite of ECMAScript, about 53,000 tests. djs runs it at the
+test262 is the conformance suite of ECMAScript, more than 50,000 tests. djs runs it at the
 commit dquickts uses, with its own runner (`djs-test262`, in-process, in parallel).
 Every test is assigned to a group in `tests/test262.toml` (D1022):
 
 - **skip**: features djs will never have (sloppy-mode tests, modules, `Intl`, Temporal,
   `SharedArrayBuffer`, direct `eval`, ...). They are left out of the count, so the
   score stays honest.
-- **active**: everything else, about 38,100 tests. (A *later* group held features on
+- **active**: everything else, about 38,000 tests. (A *later* group held features on
   the roadmap; it is empty now.)
 
-djs passes all but 40 active tests. Those 40 are listed with a reason in
+djs passes all but a few dozen active tests. Those are listed with a reason in
 `tests/test262/expected-failures.txt`, the **ratchet** (D1023): a test that fails and is
 not in the file fails the gate, and a listed test that starts passing is reported, so
 the entry gets removed and the list can only shrink. Every remaining entry is a
@@ -69,7 +69,7 @@ machine slows a test down but cannot turn a pass into a failure.
 
 test262 checks pass or fail. It does not check what `console.log` prints, the text of
 an error, or how a script that reads tool results behaves. The difftest corpus
-(`tests/corpus/`, about 240 cases) checks exactly that.
+(`tests/corpus/`, a few hundred cases) checks exactly that.
 
 A case is a codemode script: the body of a strict async function, as in pi (D008). Both
 engines run it in the same model: the same JavaScript prelude (`tests/corpus/prelude.js`,
@@ -88,12 +88,13 @@ try {
 } catch (e) {
   console.log(e.name + ": " + e.message);
 }
-return { ok: r[0].value, err: String(r[1].reason) };
+console.log({ ok: r[0].value, err: String(r[1].reason) });
 ```
 <!-- gen:run -->
 ```text
 fulfilled, rejected
 TypeError: cannot read property 'x' of null
+{"ok":1,"err":"TypeError: no"}
 ```
 <!-- /gen -->
 

@@ -50,10 +50,15 @@ slice. `vm_run` returns a status, the host acts on it and runs again:
 
 ![How a host drives a run](img/run-loop.svg)
 
-The fuel slice is how the host keeps control: with a slice of a million, `vm_run` returns
-every few milliseconds at most, and the host can check a deadline, cancel the run with
-`vm_abort`, or take a snapshot of a run that waits for a slow tool (G5). `vm_run` also runs the promise job queue to empty (D1370), so DONE means the script
-and everything it started have finished.
+The fuel slice is how the host keeps control. A slice of a million fuel takes a few
+milliseconds of work (about 3 ms on a tight loop, measured for the pi adapter in
+docs/host.md); a long leaf operation can overshoot its slice, and the overshoot is
+charged to the next one (D1740). Between slices the host can check a deadline, cancel
+the run with `vm_abort`, or take a snapshot of a run that waits for a slow tool (G5).
+`vm_run` also runs the promise job queue to empty (D1370), so DONE means the script and
+everything it started have finished. One more status ends a run without an error from
+the script: HOST_OUT_OF_MEMORY, when the host cannot back the heap below its cap (D1690).
+The call is abandoned and the VM stays usable.
 
 `js/src/sandbox.ts` (the `@djs/host` package) wraps this loop:
 
@@ -78,10 +83,10 @@ objects, base64 images. Converting them into VM values is on the hot path (G1). 
 way, `JSON.stringify` on the host and `JSON.parse` in the VM, parses text that the host
 has just produced, and has to escape and copy every string twice.
 
-djs uses its own binary format instead (docs/wire.md, D1180). `js/src/wire.ts` encodes a host
-value in one pass: tagged numbers (`int8`, `int32`, `float64`), strings as UTF-8 written
-with `TextEncoder.encodeInto`, arrays, objects whose repeated keys are interned in a key
-table, and `Uint8Array`s as raw bytes. The VM's decoder (`vm_decode_wire`) allocates
+djs uses its own binary format instead (docs/wire.md, D1180). `js/src/wire.ts` encodes a
+host value in one pass: tagged numbers (`int8`, `int32`, `float64`), strings as UTF-8
+written with `TextEncoder.encodeInto`, arrays, objects whose repeated keys are interned in
+a key table, and `Uint8Array`s as raw bytes. The VM's decoder (`vm_decode_wire`) allocates
 every cell at its final size in one pass and transcodes UTF-8 to the VM's one-byte or
 two-byte strings natively. The format is validated as it is decoded: malformed input is
 an error, never a corrupt heap.
@@ -177,8 +182,9 @@ What the adapter adds over QuickJS:
   a start. The adapter keeps the image taken right after it, collected first (D1890),
   keyed by everything the prelude saw, and restores it on the next start with the same
   inputs (D1495). The prelude's own work is not counted against the script's interrupt
-  budget, so cold and warm starts behave the same (D1660). A restore is a copy plus a check: a script starts in about 1 ms
-  instead of 7 ms, against about 4 ms on quickjs-wasi.
+  budget, so cold and warm starts behave the same (D1660). A restore is a copy plus a
+  check: a script starts in about 1 ms instead of 7 ms, against about 4 ms on
+  quickjs-wasi.
 - **Snapshots of a waiting session.** `snapshot()` and `resumeVm()` save and restore a
   session while it waits for a tool, which QuickJS cannot do. pi uses deterministic
   replay for durability today; images would be an alternative.
@@ -207,7 +213,7 @@ that expects QuickJS's fingerprint (docs/host.md "pi's own tests on djs").
 
 Decisions on this page:
 
-<!-- gen:decisions D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1730 D1890 -->
+<!-- gen:decisions D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 -->
 - D1180: Inbound wire format, version 1
 - D1210: Exported heap layout drives the host-side reader
 - D1321: The base snapshot (djs-prelude)
@@ -218,6 +224,8 @@ Decisions on this page:
 - D1660: pi adapter: the prelude is not polled; the fingerprint hashes the host globals
 - D1670: Async host results are macrotasks: the host inbox
 - D1680: Deterministic mode: weak references collected, strong or absent; the Sandbox's deterministic option
+- D1690: Running out of host memory is not a JS out-of-memory error
 - D1730: Canonical hash and run journals
+- D1740: Fuel overshoot carries to the next run; a suspended intrinsic is charged once
 - D1890: pi adapter: snapshot() and the prelude image collect first
 <!-- /gen -->

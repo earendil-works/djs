@@ -31,9 +31,9 @@ and that state cannot be saved.
 So djs has one rule:
 
 > **The leaf rule.** Hand-written Rust never calls back into JS. Hand-written Rust is
-> limited to leaf intrinsics (`%ArrayPush`, `%StringIndexOf`, `%DefineOwnPropertyFromRecord`,
-> ...), which never run user code. Every builtin that may run user code is written in the
-> builtin language.
+> limited to leaf intrinsics (`%ArrayPush`, `%StringIndexOf`,
+> `%DefineOwnPropertyFromRecord`, ...), which never run user code. Every builtin that
+> may run user code is written in the builtin language.
 
 ARCH.md ("The leaf rule") has the full statement.
 
@@ -169,20 +169,20 @@ frame's slots (D1631). A typed local such as the counter `k` (`l3f` above) also 
 a Rust variable, but every write goes to the slot too (D2000), so the frame always holds
 the whole state. When the common case completes inline (`Flow::Inline`, for example
 `HasProperty` on a dense element), the arm continues in the same Rust loop. When a call
-needs a JavaScript frame (the callback, a getter), the function returns to the
-interpreter (`Flow::Leave`), which pushes that frame and later re-enters the state
-machine at the resume state. A loop back-edge (`n_backedge`) charges fuel and is a
-safepoint, so a `map` over a million elements can stop and be saved in the middle, like
-bytecode.
+needs a JavaScript frame (the callback, a getter), the native writes the callee's frame
+(for a plain closure in place, D2060) and returns to the interpreter (`Flow::Leave`),
+which runs it and later re-enters the state machine at the resume state. A loop
+back-edge (`n_backedge`) charges fuel and is a safepoint, so a `map` over a million
+elements can stop and be saved in the middle, like bytecode.
 
 Two rules keep this safe (ARCH.md "Generated state machines"):
 
 - **No collection inside a state arm.** An allocation never collects; it only sets a
   pending flag. The collector runs at state transitions (back-edges, and calls that
-  return to the interpreter), where every value the builtin holds is in a frame slot. The one exception is collect-and-retry at the heap
-  cap (D1900): a native operation that hits the cap collects and runs again, but only at
-  points where bgen knows that the generated code holds no other heap value in a Rust
-  local.
+  return to the interpreter), where every value the builtin holds is in a frame slot.
+  The one exception is collect-and-retry at the heap cap (D1900): a native operation
+  that hits the cap collects and runs again, but only at points where bgen knows that
+  the generated code holds no other heap value in a Rust local.
 - **Fuel per transition.** A native frame charges 4 fuel per back-edge and 2 per call
   (D1633). Bytecode charges per instruction, so the fuel a run uses depends on the
   backend. Results do not.
@@ -193,9 +193,10 @@ runs the corpus with both (D1635, [How djs is tested](testing.md)).
 
 > **Trade-off.** An opt-in Rust backend over making every builtin native. Generated Rust
 > runs much faster than the same builtin as bytecode (when it landed, 3.4 times for `map`
-> and 5.3 times on the higher-order benchmark), but every native function adds wasm code, and wasm size is part of startup (G2). The native API is
-> kept out of line in wasm to limit that cost (D1634), and `scripts/native-sizes.sh`
-> prints the size per function. A builtin becomes `@native` only when a benchmark shows
+> and 5.3 times on the higher-order benchmark), but every native function adds wasm
+> code, and wasm size is part of startup (G2). The native API is kept out of line in
+> wasm to limit that cost (D1634), and `scripts/native-sizes.sh` prints the size per
+> function. A builtin becomes `@native` only when a benchmark shows
 > that it is hot. The cost of having the option: two implementations of every native
 > builtin's semantics to keep equal, which is why both are tested in the gate.
 
@@ -226,7 +227,7 @@ const arr = [1, 2, 3];
 Object.defineProperty(arr, 1, { get() { console.log("getter ran"); return 2; } });
 console.log(arr.includes(2));
 const doubled = [1, 2, 3].map((x) => {
-  if (x === 2) console.log(new Error("in the callback").stack);
+  if (x === 2) console.log(new Error("in the callback").stack.trimEnd());
   return x * 2;
 });
 console.log(doubled);
@@ -238,7 +239,6 @@ true
     at <anonymous> (example.js:5:37)
     at map (native)
     at <eval> (example.js:4:30)
-
 [2,4,6]
 ```
 <!-- /gen -->
@@ -267,7 +267,7 @@ true
 
 Decisions on this page:
 
-<!-- gen:decisions D1170 D1171 D1172 D1270 D1310 D1321 D1430 D1631 D1632 D1633 D1634 D1635 D1801 D1850 D1900 D1910 D2000 D2020 -->
+<!-- gen:decisions D1170 D1171 D1172 D1270 D1310 D1321 D1430 D1631 D1632 D1633 D1634 D1635 D1801 D1850 D1900 D1910 D2000 D2020 D2060 -->
 - D1170: djs-bgen is Rust with its own parser for the subset
 - D1171: Builtin subset rules
 - D1172: Generated prelude format and installation
@@ -286,4 +286,5 @@ Decisions on this page:
 - D1910: Dense-array loops, fromCharCode and the URI functions as `@fast`; entries decline at the heap cap
 - D2000: Typed locals of native builtins live in Rust variables, written through
 - D2020: `@fast` builtins are not also `@native`, except Array.prototype.push
+- D2060: Natives call plain closures by writing the frame in place
 <!-- /gen -->

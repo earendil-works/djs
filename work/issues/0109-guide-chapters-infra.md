@@ -1,6 +1,6 @@
 # 0109: Guide chapters: builtins, host interface, testing
 
-status: in-progress
+status: done
 agent: infra
 branch: issue/0109-guide-chapters-infra
 depends-on: 0103 (part 1: djs-docs and the authoring guide)
@@ -22,11 +22,11 @@ following docs/guide/README.md (the authoring guide: "In short" box, trade-off n
   backends), the gate and merge flow, and why each exists.
 
 ## Acceptance criteria
-- [ ] Three chapters, accurate against the code and decisions, readable for a human new to
+- [x] Three chapters, accurate against the code and decisions, readable for a human new to
       the project, with generated regions where data exists (via djs-docs).
-- [ ] The docs agent reviews them for consistency of voice, terms and structure before
+- [x] The docs agent reviews them for consistency of voice, terms and structure before
       merge (coordinate through the coordinator).
-- [ ] `djs-docs check` green.
+- [x] `djs-docs check` green.
 
 ## Log
 - Wrote docs/guide/builtins.md, host.md and testing.md (with img/run-loop.svg) and
@@ -36,8 +36,24 @@ following docs/guide/README.md (the authoring guide: "In short" box, trade-off n
 - Generated material: gen:ops call_intrinsic, two live examples with gen:run (builtins:
   a getter in the includes slow path and a stack trace through `map (native)`; testing: a
   codemode case), and gen:decisions on each page. `djs-docs check` is green.
-- Waiting for the docs agent's review (voice, terms, structure) before merge.
+- The docs agent's review (relayed by the coordinator) approved voice, terms, structure
+  and run-loop.svg. Its fixes are applied:
+  - builtins.md: native calls write the callee's frame (D2060);
+  - host.md: the fuel-slice timing is softened with its source and D1740, and
+    HOST_OUT_OF_MEMORY is now mentioned (D1690);
+  - testing.md: the example logs its value instead of returning it, and exact counts are
+    rounded;
+  - wraps and the trailing empty line of a stack in the live example.
+  The Rust excerpt stays (the docs agent will add a `gen:excerpt` region). References
+  to unwritten chapters are plain text; whoever merges second makes them links.
 
 ## Follow-ups
+- testing.md says the copying collector lays the heap out as a function of the object
+  graph. Revisit it if 0101 (mark-compact) lands; the coordinator adds testing.md to that
+  issue's `guide:` field.
+- host.md mentions the determinism chapter in plain text; link it once the chapter exists.
 
 ## Result
+Three tour chapters: docs/guide/builtins.md, host.md and testing.md (plus
+img/run-loop.svg), linked from SUMMARY.md, with generated opcode tables, live examples
+and decision lists. `djs-docs check` is green.
