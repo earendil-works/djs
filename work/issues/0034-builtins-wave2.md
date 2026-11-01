@@ -48,6 +48,40 @@ the 0031 leftovers.
 
 ## Log
 
+### Baseline (main 7ebc262)
+- difftest 74 / 171. test262 active: built-ins 3,617, language 4,027, harness 43.
+  Array 809 / 2,680, String 156 / 1,040, Object 1,838 / 3,197, AggregateError 0 / 19.
+- Gate 1:43 wall; e2e test 49.7 s (debug).
+
+### Part 1: prelude source, Array
+- Prelude source (D1340): privileged compiles keep no source; base 174 → 127 KB,
+  `new_vm` 2.3 → 1.4 µs. e2e only 49.7 → 48.1 s: the cost is the verified
+  `Vm::from_bytes` per suspension stop (1.1 ms in debug, 49 µs in release) and gc-stress
+  copying all cells, both per cell. Reported; the coordinator set djs-core to
+  opt-level 1 in dev (D010): e2e 3.4 s, gate ~46 s.
+- Array (D1341): all of Array.prototype except keys/values/entries/[Symbol.iterator]
+  (need 0029's iterator intrinsics), Array.of, Array.from (array-likes, arrays and
+  strings; other iterables throw "not supported yet" until %GetIterator), get
+  Array[Symbol.species], Array.prototype[Symbol.unscopables]. Leaves: SortPrimitives,
+  CompareStrings, StringCodePoints, ArraySpliceDense (heap: `array_splice_dense`,
+  additive in heap/object.rs). Element fast paths in %Get / %CreateDataPropertyOrThrow.
+  bgen: a conditional of two integer literals types as a literal.
+- behavior.js compares every Array method with qjs on the subject matrix (results only
+  for the methods where qjs probes with HasProperty, see D1341): no mismatches.
+- difftest builtins/array-methods.js (with stress).
+- Results: difftest 79 / 172. test262 Array 2,429 / 2,680 (from 809); built-ins 5,264,
+  language 4,033, harness 43. Remaining Array failures: propertyHelper's for-in (133),
+  RegExp/Date/JSON globals (61), iterators (keys/values/entries, Array.from iterables),
+  and `arr.length = true` (the interpreter's length assignment does not convert).
+- Perf: correct but builtin-language speed. 200k-element `sort` with a comparator 1.8 s
+  (qjs 0.04 s); the interpreter's call path dominates (3.4M plain calls 0.6 s vs qjs
+  0.06 s). shift on a dense 3,000-element queue went from 1.1 s to instant.
+
 ## Follow-ups
+- Interpreter: `arr.length = v` with a non-Number v (ToNumber/ToUint32 in the set path),
+  3 test262 tests.
+- Interpreter call speed (3.4M calls 0.6 s vs qjs 0.06 s) bounds every builtin-language
+  loop; candidates for `@native` once the Rust backend exists: sort with comparator,
+  map/filter/forEach.
 
 ## Result

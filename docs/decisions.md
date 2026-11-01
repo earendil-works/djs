@@ -1182,3 +1182,35 @@ Debug test runs exercise the engine heavily: the e2e suspension mode reloads and
 the heap image at every stop, and gc-stress copies all live cells at every safepoint. At
 opt-level 0 the e2e test took ~48 s; at opt-level 1 it takes ~3.4 s (measured by infra).
 Debug assertions and overflow checks stay on. The whole gate now runs in ~46 s.
+
+## D1340: The prelude keeps no source text
+date: 2026-11-01 · by: infra · issue: 0034
+A privileged compile (`CompileOptions::privileged`, only the prelude) stores no source
+text in its Script (D009 keeps it for everything else). Installed builtins print as
+`[native code]` and the other prelude functions are unreachable, so nothing reads it.
+The base image went from 174 to 127 KB and `djs_prelude::new_vm` from 2.3 to 1.4 µs.
+It is the existing flag rather than a new field, so the compiler change is two lines
+(the lexer agent works there). The e2e suite barely changed (49.7 to 48.1 s in debug):
+its cost was the verified image load per suspension stop, which D010 (djs-core at
+opt-level 1 in dev) addressed.
+
+## D1341: Array builtins follow the spec's Get, with leaf fast paths
+date: 2026-11-01 · by: infra · issue: 0034
+builtins/array.ts implements Array.prototype step by step. Where qjs reads elements with
+a HasProperty probe first (`at`, `with`, `toReversed`, `toSorted`, `toSpliced`) or writes
+back only the moved elements (`sort`), djs follows the spec; that is visible only through
+proxies, and behavior.js compares results there instead of trap logs. Fast paths that
+cannot be observed:
+- `%Get` and `%CreateDataPropertyOrThrow` try the dense element store first (an own dense
+  element is a plain data property; for an Array, defining one is the same as [[Set]]).
+- `%ArraySpliceDense` does splice's element moves (shift, unshift, splice) in one step on
+  a plain dense Array: no holes, every element dense, extensible, writable length, no
+  index properties on the prototype chain. Otherwise the generic moves run.
+- `sort`: the present elements are collected, undefined set aside, and a stable
+  bottom-up merge sort runs in the builtin language with the comparator; without one,
+  `%SortPrimitives` sorts lists of non-symbol primitives in Rust (by ToString, code
+  units, stable). Objects without a comparator take the generic path (their ToString
+  may run user code).
+Builtin-language loops run at interpreter speed: 200k elements sorted with a comparator
+take 1.8 s (qjs 0.04 s); a user loop of 3.4M calls is 0.6 s vs 0.06 s, so the call path
+is the bottleneck, not the sort.
