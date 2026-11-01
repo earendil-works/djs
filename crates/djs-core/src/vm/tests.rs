@@ -2759,7 +2759,7 @@ fn base_region_scan_cost() {
     use crate::heap::walk::{self, Slot};
     use std::time::Instant;
     let mut base = vm();
-    base.collect().unwrap();
+    base.seal().unwrap();
     let base_len = base.heap().bytes().len() as u32;
     let (vm, _) = run_script(
         base,
