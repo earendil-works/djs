@@ -10,7 +10,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0090 | Natives: collect-and-retry, resizable TA, JSON slow path | infra | .worktrees/infra |
 | 0092 | Compiler code size + compile throughput in wasm | lexer | .worktrees/lexer |
-| 0083 | Shapes + leaner object/image layout (design first) | heap | .worktrees/heap |
+| 0083 | Shapes: parts 1-2 merged (641984c5, D1831); part 3 (addition caches, proto caches) next | heap | .worktrees/heap |
 | 0093 | Run-loop state in locals + compact call protocol (design first) | perf | .worktrees/perf |
 
 ## Open (ready)
