@@ -2472,3 +2472,69 @@ pi's suite expects `eval`/`Function` to exist, and the compiler ships in the VM 
 implements indirect (global) eval and the four dynamic function constructors. A call
 `eval(x)` behaves as indirect eval. Direct eval (access to the caller's scope) stays a
 non-goal (ARCH non-goals), and test262 tests that need it stay skipped.
+
+
+## D1560: RegExp exec and test without protocol overhead
+date: 2026-11-01 · by: num · issue: 0056
+- `RegExp.prototype.exec` no longer calls `ToString` for a string argument, and it
+  inlines RegExpBuiltinExec.
+- RegExpExec (used by test, the @@ methods and matchAll) calls RegExpBuiltinExec directly
+  when `exec` is the original builtin (`%IsOriginalRegExpExec`) and the receiver is a
+  RegExp. That saves a call frame and the result check.
+- `test` uses `%RegExpTestRaw`, which updates `lastIndex` but builds no match array.
+- The leaves no longer intern names: the RegExp property and protocol names are
+  well-known atoms (`index`, `input`, `groups`, `lastIndex`, `exec`, the flag names,
+  `RegExp`).
+- The program is copied out of its cell in one bulk read, and the backtrack stack starts
+  with room for 64 words.
+
+`%WellKnownSymbol` compares the name's bytes in place instead of building a String.
+
+2M evaluations of a regex literal:
+
+| | before | after |
+| --- | ---: | ---: |
+| `exec` | 1.91 s | 1.33 s |
+| `test` | 2.33 s | 1.12 s |
+
+## D1561: Bulk paths for apply, fromCodePoint and Math.max
+date: 2026-11-01 · by: num · issue: 0056
+- `Function.prototype.apply` passes a dense, hole-free Array straight to
+  `%CallWithArray` (`%IsDenseArray`). Get on its elements runs no user code, so the
+  copy in CreateListFromArrayLike is unobservable.
+- `String.fromCodePoint` checks every argument in one leaf (`%AllCodePoints`): integral
+  Numbers in range.
+- CoerceNumbers (fromCharCode, Math.max/min) skips its loop when all arguments are
+  Numbers (`%AllNumbers`).
+
+Anything else takes the old per-element path, with its exceptions and order.
+
+## D1562: A tight forward loop for STAR
+date: 2026-11-01 · by: num · issue: 0056
+A forward, case-sensitive STAR (D1501) consumes its run in one loop specialized per
+input encoding. Classes start with the range that matched the previous character
+(consecutive characters usually share a range), then fall back to the binary search.
+Fuel accounting is unchanged: one unit per character after the first, stopping exactly
+where the general loop would.
+
+## D1563: Follow sets that accept the end of the input; disjoint loops
+date: 2026-11-01 · by: num · issue: 0056
+The follow set of a STAR (D1501) now records whether the continuation can also start at
+the end of the input. A non-multiline `$` matches empty only there, and `start_cond`
+tracks that, so `\s+$` and `[^=]+={0,2}$` get follow sets: before, the nullable tail
+gave them none.
+
+A greedy STAR whose matched characters can never start its continuation (body ∩ follow
+= ∅, flag F_DISJOINT) tries the continuation only after the whole run, and fails without
+giving characters back. pi's base64 check on non-matching data drops from O(n) retries
+to one.
+
+On the active test262 group (release, -j 6, two runs each):
+
+| | before | after |
+| --- | ---: | ---: |
+| CPU (user) | 250–257 s | 90–91 s |
+| wall | 61–66 s | 17–18 s |
+
+The property-escape tests went from about 0.65 s to 0.2 s each. What remains in them is
+the harness loop in the interpreter.
