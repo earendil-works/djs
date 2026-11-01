@@ -14,6 +14,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0065 | accessor + decorators (TC39, then TS legacy) | lexer | .worktrees/lexer |
 | 0069 | Host OOM is not a JS OOM (then 0070 GC-and-retry) | heap | .worktrees/heap |
 | 0073 | Replay journal and canonical image hash | determinism | .worktrees/determinism |
+| 0081 | Perf anatomy: disassembly-level investigation (report only) | perf | .worktrees/perf |
 
 ## Open (ready)
 
