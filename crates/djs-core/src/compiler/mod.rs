@@ -51,7 +51,7 @@ pub struct CompileOptions<'a> {
     pub params: &'a [&'a str],
     /// Privileged mode (docs/compiler.md 7.3): enables `%Name(args)` intrinsic calls
     /// (`bytecode::intrinsics`). Only the embedder sets it, for the prelude; it is never
-    /// reachable from user code.
+    /// reachable from user code. Privileged scripts also keep no source text (D1340).
     pub privileged: bool,
 }
 

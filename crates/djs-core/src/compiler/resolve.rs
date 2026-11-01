@@ -97,9 +97,11 @@ pub(super) fn finish(
     // 3. Templates, children first.
     let script = {
         let name = heap.alloc_str(opts.filename)?;
+        // Privileged code (the prelude) keeps no source text: its functions print as
+        // native code, and the text would be a quarter of the base image (D1340).
         let source = match core::str::from_utf8(src) {
-            Ok(s) => Some(heap.alloc_str(s)?),
-            Err(_) => None,
+            Ok(s) if !opts.privileged => Some(heap.alloc_str(s)?),
+            _ => None,
         };
         alloc_script(heap, name, source)?
     };
