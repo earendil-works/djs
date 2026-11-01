@@ -154,7 +154,9 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | ObjectClass BigInt wrapper | 30 | heap / 0046 (merged) |
 | CellKind BigInt | 24 | heap / 0046 (merged) |
 | ObjectClass IteratorHelper, WeakRef, FinalizationRegistry, DisposableStack | 28, 31, 32, 33 | heap / 0051 (merged) |
-| ObjectClass RawJSON | 29 | num / 0061 |
+| ObjectClass RawJSON | 29 | num / 0061 (merged) |
+| CellKind AccessorPair, Shape, PropValues | 25, 26, 27 | heap / 0083 |
+| object header flag OBJ_DICTIONARY | 128 | heap / 0083 |
 | next free ObjectClass | 34 | |
 | func_flags PRIVILEGED | 1 << 8 | heap / 0043 (merged) |
 | func_flags HOME | 1 << 6 (check) | lexer / 0040 |
