@@ -2200,7 +2200,7 @@ fn function_kinds_have_their_prototypes() {
           Object.getOwnPropertyNames(GF).sort().join("/"), Object.getOwnPropertyNames(AF).join("/"),
           Object.entries(Object.getOwnPropertyDescriptor(GF, "prototype")).filter((e) => e[0] !== "value").join("/"),
         ];
-        try { new GF.constructor("yield 1") } catch (e) { r.push(e.name + ": " + e.message) }
+        r.push([...new GF.constructor("yield 1")()].join());
         console.log(r.join(", "));
         "#,
     );
@@ -2211,8 +2211,7 @@ fn function_kinds_have_their_prototypes() {
             "true, true, true, true, true, true, true, true, ok, false, false, GeneratorFunction, \
           AsyncFunction, AsyncGeneratorFunction, AsyncGenerator, GeneratorFunction, \
           AsyncFunction, AsyncGeneratorFunction, 1, true, true, constructor/prototype, \
-          constructor, writable,false/enumerable,false/configurable,true, \
-          TypeError: not supported yet: the GeneratorFunction constructor"
+          constructor, writable,false/enumerable,false/configurable,true, 1"
         ]
     );
 }
