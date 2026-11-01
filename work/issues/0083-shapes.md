@@ -54,6 +54,39 @@ re-check).
 
   No timing: the machine is at load ~10, and part 1 only changes the storage layout.
 
+- Part 2 (D1831): shapes for ordinary objects.
+  - Weak transitions broke D1730 (canonical hash independent of collection points), so
+    transitions are strong, bounded by SHAPE_MAX 32 and a per-heap budget of 4096 shapes
+    (coordinator agreed). There is no per-shape limit on children: with 32, the root's first
+    32 keys would have been the only shapes ever. Children are sorted and binary searched.
+  - Dictionaries: install targets (resolve_path), the global object, the lexical record,
+    the constructor and symbol registries, attribute changes, index keys, more than 32
+    keys, the budget.
+  - Delete: the last key goes back to the parent; another key re-walks if at most one
+    shape is new, else dictionary. `delete_own_property` returns a Result now.
+  - Own-property ICs on shape-mode receivers compare the shape (pulled forward from
+    part 3), because verified-index hits in shape mode made props.js +17%.
+  - Tests: heap/shape_tests.rs (sharing, bulk creation, delete, attributes, index keys,
+    limits, the budget's overflow, collections at any points give the same image, image
+    round trip); vm/tests.rs `shapes_do_not_depend_on_collection_points` (canonical
+    hash with no collections, collections every 997/5000 fuel, restores; budget overflow
+    included).
+  - Numbers in docs/objects.md 7.11: per object −26..−33% in the arena (wasm build); base
+    image −8.9 KB; wasm code +12.2 KB; timing within ±3% natively and in wasm.
+  - Checks green: lib, e2e ×3, filtered test262, difftest ratchet, stress difftest over
+    object/json/array/language/codemode, native-vs-wasm, node tests, wire and reader
+    cross tests, clippy (native and wasm32 release).
+  - Also merged separately: issue/0083-test-time (slow vm tests sampled, main 2b91a3f).
+
 ## Follow-ups
+
+- Part 3: transition caches for `put_field`/`define_field` additions. A hit must also
+  prove that the receiver's prototype chain has no setter or read-only `key` (the
+  prototype isn't in the shape), so it needs the receiver's prototype and the proto epoch:
+  5 words, or a separate slot kind. Receiver-shape proofs for prototype caches.
+- compact_for_image could shrink descriptor and transition arrays (about 1 KB of the
+  base image).
+- Linear memory in wasm is about 2.7× the arena for allocation-heavy runs (to-space plus
+  arena doubling): that's 0087's area.
 
 ## Result

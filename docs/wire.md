@@ -206,8 +206,8 @@ generated file and throws `LayoutMismatch` on a difference.
 | --- | --- |
 | undefined, null, booleans, numbers (int32 or f64) | themselves |
 | string: one-byte, two-byte, or a rope | a string. Ropes are walked iteratively, flattened ones through `LEFT`; an append rope (`ROPE_APPEND`, D1610) is the first `LEN` code units of the flat buffer in `LEFT`; the VM does not need to flatten first |
-| Array | an array of the same `length`; holes stay holes, and elements kept in the property table (far beyond the dense part) are included |
-| ordinary object | a plain object with the own enumerable string-keyed data properties, in property order (index keys ascending, then insertion order); `__proto__` becomes an own property |
+| Array | an array of the same `length`; holes stay holes, and elements kept in the property table (far beyond the dense part; such arrays are always in dictionary mode) are included |
+| ordinary object | a plain object with the own enumerable string-keyed data properties, in property order (index keys ascending, then insertion order); `__proto__` becomes an own property. Both storage modes are read (0083): a dictionary's table entries (`OBJ_DICTIONARY`), or a values block whose shape's descriptors give each slot's key and flags |
 | accessors, non-enumerable properties, symbol keys | left out |
 | symbol | `Opaque { type: "symbol", ref, description }` |
 | typed array | a copy of its elements as the host typed array of the same kind (`Uint8Array`, `Float64Array`, ...; `Float16Array` where the host has it, else `Uint16Array` bit patterns); detached or out of bounds: empty (0039, D1392) |

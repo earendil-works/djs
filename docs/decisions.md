@@ -3926,3 +3926,38 @@ retry only at the outermost level, so one failure costs at most one collection. 
 D1700 the retry point is a function of the program and the cap, so sliced and restored
 runs agree (vm/tests.rs `native_builtins_collect_and_retry`,
 scripts/determinism/js/oom_native.js).
+
+## D1831: Shapes with strong transitions and a per-heap shape budget
+date: 2026-11-03 · by: heap · issue: 0083
+Ordinary objects keep their named properties in shape mode (a `PropValues` block, CellKind
+27, plus a shared `Shape`, CellKind 26) or in dictionary mode (header flag
+`OBJ_DICTIONARY` = 128, the `PropTable`), docs/objects.md 7. Transitions are **strong**:
+a shape keeps its children (a `RefArray`, sorted by the key and flags of each child's
+last descriptor, binary searched), so shapes never die. The approved design had weak
+(ephemeron) transitions, but those make the tree depend on when collections ran:
+- recreated shapes land elsewhere in the parent's list;
+- a dead descriptor owner forces copies instead of sharing;
+- limits count dead children.
+The canonical hash (D1730) and replay would then see collection points. Growth is bounded
+instead by `SHAPE_MAX` = 32 properties per shape and `SHAPE_BUDGET` = 4096 shapes per heap.
+`Roots::SHAPES` counts them and is part of the image. Past either bound, an object whose
+key set has no shape becomes a dictionary; existing shapes keep being shared.
+
+Memory bound at the budget: a shape is a 24-byte cell plus 4–8 bytes of its parent's
+transition array plus its share of the descriptors (8 bytes per property, shared along a
+chain), about 40 bytes typically, so about 160 KB for 4096 shapes. The worst case is
+every shape a second child copying a 32-property prefix (16 + 8 × 32 bytes), about
+2.3 MB. There is no per-shape limit on children: with one, the root's 32 first keys would
+be the only shapes ever made. Measured: the engine track and pi-like scripts create 0–16
+shapes, and the difftest corpus at most 59 per case (median 3). Neither limit was hit.
+
+Other rules:
+- dictionary on attribute changes, array-index keys, more than 32 keys, the budget, and
+  for the builtin namespaces, prototypes and constructors that `%Install*` targets, the
+  global object, the lexical record, the constructor and symbol registries;
+- deleting the last key goes back to the parent shape; deleting another key walks the
+  tree again from that key's parent if at most one shape is new, else dictionary;
+- own-property inline caches compare the receiver's shape (`IC_OFFSET_SLOT` slots with
+  depth 0, emptied by the collector) and keep the verified index for dictionaries;
+- `Heap::delete_own_property` and `remove_own_property_unchecked` return a `Result`,
+  since a dictionary conversion allocates.

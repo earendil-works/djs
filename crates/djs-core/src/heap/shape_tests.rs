@@ -232,9 +232,9 @@ fn shape_limits() {
         .map(|i| obj(&mut h, &[&format!("c{}", (i * 37) % 100)]))
         .collect();
     assert!(firsts.iter().all(|&o| !is_dict(&h, o)));
-    for i in 0..100 {
+    for (i, &first) in firsts.iter().enumerate() {
         let again = obj(&mut h, &[&format!("c{}", (i * 37) % 100)]);
-        assert_eq!(shape_of(&h, again), shape_of(&h, firsts[i]));
+        assert_eq!(shape_of(&h, again), shape_of(&h, first));
     }
     h.verify().unwrap();
 }

@@ -249,7 +249,8 @@ A **shape** (new cell kind `Shape`, 24 B) has:
 - `DESCS: Ref`: a `U32Array` of `[key atom, flags]` pairs (8 B per property) in insertion
   order;
 - `COUNT: u32`: the number of properties = the slots used;
-- `TRANSITIONS: Ref`.
+- `TRANSITIONS: Ref`: a `RefArray` of the child shapes, sorted by the key and flags of
+  their last descriptor (part 2, D1831).
 
 `DESCS` is shared along a chain:
 - a child that extends the descriptor array's current owner appends in place, if there
@@ -277,13 +278,24 @@ pair). That is 0052 S2's first item.
 Adding a key (or a key with non-default flags) to a shape-mode object goes from shape `S`
 to the child for `(key, flags)`. The child is found in `S.TRANSITIONS`, or created and
 added there.
-- **Weak transitions:** `TRANSITIONS` is an `EphemeronArray` (D1382) of pairs `[child
-  shape, key | flags << 32 as an int]`, keyed by the child. A child shape dies with the
-  last object or descendant that uses it, and the GC clears its pair. Without this, a
-  program creating many distinct key sets would keep every shape alive forever. This
-  needs the ephemeron key check in walk.rs/gc.rs to accept internal refs, not only
-  objects and symbols.
-- **Lookup:** a linear scan; parents rarely have more than a few children.
+- **Strong transitions (D1831; part 2 changed this from the first proposal):** a parent
+  keeps its children alive, so shapes never die. Weak (ephemeron) transitions would make
+  the tree depend on when collections ran: a recreated shape lands elsewhere in its
+  parent's list, a dead owner leaves its descriptor array marked as used so the new shape
+  copies instead of sharing, and any per-shape limit would count dead children. All of
+  that changes the image and so the canonical hash (D1730), and could change whether an
+  object becomes a dictionary. With strong transitions the tree is a function of the
+  program's history alone.
+- **Bounded growth instead:** at most 32 properties per shape (`SHAPE_MAX`), and a
+  per-heap **shape budget** of 4096 shapes (`SHAPE_BUDGET`, counted in `Roots::SHAPES`,
+  part of the image). Once the budget is spent, key sets without a shape go to dictionary
+  mode; existing shapes are still used. A shape costs about 40 bytes (the cell, its slot
+  in the parent's transitions, its share of the descriptors), so the tree stays below
+  about 160 KB typically and 2.3 MB at worst (every shape copying a 32-property prefix).
+- **Lookup:** a binary search over the children, which are sorted by key and flags. There
+  is no limit on children per shape: the root has a child for every first key, and the
+  first proposal's limit of 32 made every object a dictionary once 32 distinct first keys
+  had been seen.
 - **Bulk creation:** `new_object_from_entries` (JSON.parse, wire decode, object literals
   with a known count) walks the transitions once per key and allocates the values block
   at its exact size. JSON records with the same keys share one shape chain.
@@ -295,13 +307,15 @@ added there.
 Shapes stay small and shared. An object switches to dictionary mode (a 16-byte-entry
 `PropTable` in insertion order, keeping enumeration order) when:
 - it gets more than **32** properties;
-- a key is deleted, unless it is the last one added: then the object goes back to the
-  parent shape and the slot is cleared;
+- a key is deleted, unless it is the last one added (the object goes back to the parent
+  shape) or the shape without it needs at most one new shape (part 2: the tree is walked
+  again from the deleted key's parent and the values move down, so `delete t.x` on small
+  records stays in shape mode without spending the budget on every subset of a map-like
+  object's keys);
 - an existing property changes its attributes (`defineProperty` on an existing key,
   freeze/seal);
 - it gets an array-index key in the table (`OBJ_INDEXED_PROPS`);
-- its shape already has **32** transitions (dynamic keys like `o[id] = v` must not grow
-  shape trees without bound);
+- the shape budget is spent and its key set has no shape yet;
 - it is a builtin namespace or prototype object of the realm (`InstallMethod`,
   `InstallValue` and `InstallAccessor` targets, and the global object). These are
   one-off objects, so a private table is smaller than a chain of unshared shapes. Their
@@ -311,20 +325,23 @@ Dictionary mode is one-way, as in V8: objects never go back to shapes.
 
 ### 7.5 GC, determinism, snapshots
 
-- **Ordinary cells:** shapes, descriptor arrays and values blocks are traced like any
-  other cell; the root shape is a `Roots` field. Nothing is keyed by an offset, so no
-  rehash is needed.
-- **Deterministic trees (D1090):** the shape tree is built in program order and is a
-  function of the history. The GC clears dead transitions deterministically, and Cheney
-  BFS gives the same collected image whatever the schedule. A transition that died and is
-  later needed again just creates a new shape cell, which is invisible to JS.
+- **Ordinary cells:** shapes, descriptor arrays, transition arrays and values blocks are
+  traced like any other cell; the root shape is a `Roots` field, created on the first
+  shape-mode addition. Nothing is keyed by an offset, so no rehash is needed.
+- **Deterministic trees (D1090, D1730):** the shape tree is built in program order and
+  only grows (strong transitions, 7.3), so a collection only moves it. The canonical hash
+  is the same whatever the collection points, the budget's overflow included (vm/tests.rs
+  `shapes_do_not_depend_on_collection_points`).
 - **Snapshots:** shapes are part of the image; the layout hash changes as for any layout
   change. The base image's shape tree is built by the prelude, so it is identical on
   every build of the same source (0032, 0072's native-vs-wasm check).
-- **Out-of-memory (D1600/D1700):** a transition allocates a shape and maybe a values
-  block or a descriptor array. As today, all allocations come before the commit
-  (`PROPS`/`SHAPE` written last), so 0070's retry stays valid for `put_field`,
-  `define_field`, `Set` and `CreateDataPropertyOrThrow`.
+- **Out-of-memory (D1600/D1700):** a transition allocates a shape and maybe a descriptor
+  array and a transition array, then the values block and an accessor pair. All
+  allocations come before the commit (`PROPS`/`SHAPE` written last; the tree links a new
+  shape only after its cells exist), so 0070's retry stays valid for `put_field`,
+  `define_field`, `Set` and `CreateDataPropertyOrThrow`. A retry finds the shape the
+  failed attempt created. Deleting a property can now allocate (a dictionary conversion),
+  so `Heap::delete_own_property` returns a `Result`.
 
 ### 7.6 The JS reader (reader.ts)
 
@@ -338,6 +355,10 @@ always in dictionary mode. `checkHeap` gets the new kinds. docs/wire.md's
 reader section is updated; the wire format itself doesn't change.
 
 ### 7.7 Inline caches (D1620/D1621) on shapes
+
+Part 2 already caches own reads and writes on shape-mode receivers by a shape compare
+(the 3-word slot holds `IC_OFFSET_SLOT | slot + 1` with depth 0, the shape, and the
+writable bit); dictionary receivers keep the verified index. The rest is part 3.
 
 `IC_WORDS` goes from 3 to 4.
 - **Own read/write (shape mode):** the slot holds the shape's offset and the slot index.
@@ -395,3 +416,36 @@ current special cases above the storage layer.
   offset. I propose out-of-line blocks only.
 - The 32/32 limits are guesses; part 2 measures them on the engine track and the pi
   bench.
+
+### 7.11 Results of part 2 (0083, D1831)
+
+Byte counts (deterministic; arena bytes are the same natively and in wasm, which the
+native-vs-wasm check confirms):
+
+| | main | shapes |
+| --- | ---: | ---: |
+| base image | 406,784 B | 397,864 B (−8.9 KB) |
+| `{a,b,c,d}` literal, per object in the arena | 122.5 B | 82.5 B (−33%) |
+| JSON.parse 5-key record | 178.5 B | 130.5 B (−27%) |
+| class instance, 3 fields | 122.5 B | 82.5 B (−33%) |
+| closure | 154.5 B | 114.5 B (−26%) |
+| wasm module (`wasm` profile) | 1,485,742 B | 1,489,314 B (code +12.2 KB, data −8.6 KB) |
+
+The per-object numbers are from the wasm build (100,000 objects kept in an array, after a
+collection, `work/scratch/0083/wasm-mem.ts`). Part 1's 16-byte entries are in both
+columns. Linear memory grows about 2.7× the arena bytes for these runs (the to-space and
+the arena's doubling). That ratio is the collector's business (0087), not the layout's.
+
+Base image: 501 values blocks (16.4 KB), 80 dictionaries (14.4 KB), 38 shapes (0.9 KB, plus
+0.8 KB of descriptors and 0.7 KB of transition arrays).
+
+Time (load 10–15, so only relative, interleaved): the engine track and pi-like are
+unchanged within ±3% natively (LTO builds) and in wasm (node). Before the delete
+re-walk and the shape-compare own caches, `props.js` was +22%: verified-index hits load
+more in shape mode, and `delete t.x` converted every record to a dictionary.
+
+The limits on realistic code (`shape_stats_report`): the engine track creates 0–6 shapes
+per script, pi-like 16, and the difftest corpus 3 per case at the median, 59 at most.
+No case reached 32 properties on a shape-mode object or the budget. Dictionaries made
+while running come from index keys (arguments objects, String wrappers), a few attribute
+changes and deletes.

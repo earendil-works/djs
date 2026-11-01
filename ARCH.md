@@ -125,9 +125,14 @@ scaled by the 8-byte alignment.
   flattened lazily. Append chains (`s += piece` once `s` is a few hundred units long) use
   **append ropes** over a growable flat buffer that is written in place, so the live
   string is one buffer instead of a rope node per append (D1610). Atoms (interned strings used as property keys) live in a heap hash table.
-- **Objects:** start simple, with a small inline property list (atom → slot, plus flags)
-  that switches to a heap hash table above N entries. Shapes / hidden classes come later,
-  when benchmarks justify them. Arrays get a dense elements fast path.
+- **Objects:** named properties are in one of two modes (0083, docs/objects.md 7). In
+  **shape mode** an object holds only a values block, and a shared **shape** (hidden
+  class) lists the keys and attributes in insertion order. Shapes form a tree by property
+  additions; transitions are strong and the tree is bounded by a per-heap shape budget,
+  so it never depends on when collections ran (D1831). In **dictionary mode** (more than
+  32 keys, attribute changes, index keys, builtin namespaces and prototypes, the budget
+  spent) an object owns a property table: linear up to 8 entries, hashed above. Arrays
+  get a dense elements fast path.
 - **Code:** function templates (bytecode, constants, line table, scope info) are heap cells.
   That way compiled code is part of snapshots and can be cached as a snapshot.
 - **GC:** start with a **copying (Cheney) collector**. It compacts for free, which snapshots
