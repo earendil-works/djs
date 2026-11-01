@@ -261,7 +261,11 @@ fn async_host_calls() {
         assert_eq!(vm_resolve_host_call(vm, id, 1, v), 0);
         vm_handle_free(vm, v);
     }
-    assert_eq!(vm_resolve_host_call(vm, ids[0], 1, 0), -1, "already resolved");
+    assert_eq!(
+        vm_resolve_host_call(vm, ids[0], 1, 0),
+        -1,
+        "already resolved"
+    );
     assert_eq!(vm_run(vm, 1_000_000), status::DONE);
     let p = vm_result(vm);
     assert_eq!(vm_promise_state(vm, p), 2);
