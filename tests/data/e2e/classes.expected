@@ -1,0 +1,31 @@
+5 (3, 4) true
+6 8
+function Point 2 ["length","name","prototype","origin"]
+["constructor","len","add","toString"]
+false false false
+true false true true
+function function false get len set len
+["x","y"] {"x":6,"y":8}
+TypeError: class constructors must be invoked with 'new'
+TypeError: origin is not a constructor
+TypeError: add is not a constructor
+E 1 2 3 num q
+dynamic get [sym]
+Inner Inner undefined
+C  class A { m() {} }
+TypeError: 'B' is read-only
+ReferenceError: C0 is not initialized
+ReferenceError: C1 is not initialized
+C2
+key b, key st, static s, block S, defined, a, b, ctor 1
+1 2 undefined true ST 5 1 ["a","b","c","arrow"]
+true true true
+fn arrow sfn computed
+{"x":1,"y":2}
+3
+[1,2] [3,4]
+object undefined
+sg 9 ig 1 2
+0 1 false
+async method 5
+async gen 6

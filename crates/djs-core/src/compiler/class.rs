@@ -326,8 +326,10 @@ impl Parser<'_, '_> {
             self.next()?;
             is_gen = true;
         }
-        if is_static {
-            // Static elements work on the constructor: `ctor proto` -> `proto ctor`.
+        // Static methods and computed keys work on the constructor: `ctor proto` ->
+        // `proto ctor` (a computed key goes on top of it).
+        let early_swap = is_static && self.is(TokenKind::LBracket);
+        if early_swap {
             self.code().swap();
         }
         let key_tok = self.tok;
@@ -342,6 +344,10 @@ impl Parser<'_, '_> {
             }
         };
         let is_method = self.is(TokenKind::LParen);
+        let swapped = early_swap || (is_static && is_method);
+        if swapped && !early_swap {
+            self.code().swap();
+        }
         let plain = !is_async && !is_gen && accessor.is_none();
         let ident_like =
             matches!(key_tok.kind, TokenKind::String) || key_tok.kind.is_identifier_name();
@@ -380,12 +386,12 @@ impl Parser<'_, '_> {
         if is_method {
             self.parse_class_method(b, key, start, is_static, accessor, (is_async, is_gen))?;
         } else {
-            if !plain {
-                return syntax(self.tok.start, "expecting '('");
+            if !plain || self.is(TokenKind::LBrace) {
+                return syntax(self.tok.start, "invalid property name");
             }
             self.parse_field(b, key, is_static)?;
         }
-        if is_static {
+        if swapped {
             self.code().swap();
         }
         Ok(())

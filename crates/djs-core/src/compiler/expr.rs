@@ -1168,6 +1168,9 @@ impl Parser<'_, '_> {
                 self.code().get_super();
                 self.next()?;
                 if tok.kind == TokenKind::Dot {
+                    if self.is(TokenKind::PrivateName) {
+                        return syntax(self.tok.start, "private class field forbidden after super");
+                    }
                     if !self.tok.kind.is_identifier_name() {
                         return syntax(self.tok.start, "expecting field name");
                     }
