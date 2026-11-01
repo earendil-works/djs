@@ -70,6 +70,12 @@ pub struct ExecOptions {
     /// default); off runs every builtin as bytecode (`--backend bytecode`). The choice
     /// is made per call: frames already running keep their kind.
     pub native_builtins: bool,
+    /// Run the hottest simple instructions in the tier-0 loop (D1930, the default).
+    /// Results, fuel and heap images are identical either way; off is for tests.
+    pub hot_loop: bool,
+    /// Backward jumps after which the tier-0 loop returns to the run loop
+    /// (`hot::HOT_BACKEDGES`; tests lower it to force those exits).
+    pub hot_backedges: u32,
 }
 
 impl Default for ExecOptions {
@@ -79,6 +85,8 @@ impl Default for ExecOptions {
             max_stack: 1 << 20,
             finalization_after_gc: true,
             native_builtins: true,
+            hot_loop: true,
+            hot_backedges: hot::HOT_BACKEDGES,
         }
     }
 }
@@ -87,6 +95,9 @@ mod bigint;
 mod class;
 mod dense;
 mod fastpath;
+mod hot;
+#[cfg(test)]
+pub(crate) use hot::HOT_BACKEDGES;
 mod ic;
 mod intrinsics;
 mod iter;
@@ -1064,30 +1075,49 @@ impl<'h> Exec<'h> {
                 }
                 return Status::OutOfFuel;
             }
-            if self.fast_step() || self.fast_more() {
+            // The tier-0 loop (D1930) runs everything, `step` included, until fuel runs
+            // out, the run stops, or it returns for V8's tier-up. Off is for tests.
+            if self.opts.hot_loop {
+                if let Some(st) = self.run_hot() {
+                    return st;
+                }
                 continue;
             }
-            // A call of a `@fast` builtin (D1850), outside `fast_step`: its register
-            // allocation is sensitive to every addition (D1352).
-            if self.pc < self.code_len && self.byte(self.pc) == fast::CALL && self.fast_leaf_call()
+            // Tests only: the fast paths before the tier-0 loop, the reference it must
+            // equal (`hot_loop_is_invisible`).
+            #[cfg(test)]
+            if self.fast_step()
+                || self.fast_more()
+                // A call of a `@fast` builtin (D1850), outside `fast_step`: its register
+                // allocation is sensitive to every addition (D1352).
+                || (self.pc < self.code_len
+                    && self.byte(self.pc) == fast::CALL
+                    && self.fast_leaf_call())
             {
                 continue;
             }
-            let pc0 = self.pc;
-            let sp0 = self.sp;
-            let retry = self.retry_operands();
-            match self.step() {
-                Ok(None) => {}
-                Ok(Some(st)) => return st,
-                Err(f) => {
-                    if retry && f.is_out_of_memory() && self.retry_after_collect(pc0, sp0) {
-                        continue;
-                    }
-                    let exc = self.fault_value(f, Some(pc0));
-                    if let Some(st) = self.throw_value(exc, pc0) {
-                        return st;
-                    }
+            if let Some(st) = self.step_once() {
+                return st;
+            }
+        }
+    }
+
+    /// One instruction through `step`, with the out-of-memory retry (D1700) and the
+    /// throw of a fault: `Some` when the run stops.
+    #[inline(never)]
+    pub(super) fn step_once(&mut self) -> Option<Status> {
+        let pc0 = self.pc;
+        let sp0 = self.sp;
+        let retry = self.retry_operands();
+        match self.step() {
+            Ok(None) => None,
+            Ok(Some(st)) => Some(st),
+            Err(f) => {
+                if retry && f.is_out_of_memory() && self.retry_after_collect(pc0, sp0) {
+                    return None;
                 }
+                let exc = self.fault_value(f, Some(pc0));
+                self.throw_value(exc, pc0)
             }
         }
     }
@@ -1182,6 +1212,7 @@ impl<'h> Exec<'h> {
     /// which costs more than these ops themselves. Returns false, with nothing changed,
     /// when the next instruction is not one of them or needs the general path (a slow
     /// operand, an overflow); `step` then executes it with the full semantics.
+    #[cfg(test)]
     #[inline(always)]
     fn fast_step(&mut self) -> bool {
         let pc = self.pc;
@@ -1305,6 +1336,7 @@ impl<'h> Exec<'h> {
         true
     }
 
+    #[cfg(test)]
     /// Charges `op` (a constant at each call site, so this folds) and falls through.
     #[inline(always)]
     fn advance(&mut self, op: Op, sp0: u32) {
@@ -1320,6 +1352,7 @@ impl<'h> Exec<'h> {
         self.pc += info.size as u32;
     }
 
+    #[cfg(test)]
     #[inline(always)]
     fn fast_jump(&mut self, op: Op, taken: bool) {
         let info = &OPS[op as usize];
@@ -1335,45 +1368,7 @@ impl<'h> Exec<'h> {
         }
     }
 
-    #[inline(always)]
-    fn fast_inc(&mut self, op: Op, d: i32, sp0: u32) -> bool {
-        match self.top(0).as_int().and_then(|i| i.checked_add(d)) {
-            Some(i) => {
-                self.set(self.sp - 1, Value::int(i));
-                self.advance(op, sp0);
-                true
-            }
-            None => false,
-        }
-    }
-
-    #[inline(always)]
-    fn fast_inc_loc(&mut self, op: Op, d: i32, sp0: u32) -> bool {
-        let slot = self.lp + self.imm_u16(1);
-        match self.get(slot).as_int().and_then(|i| i.checked_add(d)) {
-            Some(i) => {
-                self.set(slot, Value::int(i));
-                self.advance(op, sp0);
-                true
-            }
-            None => false,
-        }
-    }
-
-    /// A binary op on two int32 operands; `f` returns `None` when the result needs the
-    /// general path (an overflow).
-    #[inline(always)]
-    fn fast_int(&mut self, op: Op, sp0: u32, f: impl Fn(i32, i32) -> Option<Value>) -> bool {
-        let (Some(x), Some(y)) = (self.top(1).as_int(), self.top(0).as_int()) else {
-            return false;
-        };
-        let Some(v) = f(x, y) else { return false };
-        self.sp -= 1;
-        self.set(self.sp - 1, v);
-        self.advance(op, sp0);
-        true
-    }
-
+    #[cfg(test)]
     /// The arithmetic and relational ops on two Numbers, as `binary_num` and `compare`
     /// compute them (NaN compares false). Out of line: the int32 case stays the short one.
     #[inline(never)]
@@ -1398,10 +1393,53 @@ impl<'h> Exec<'h> {
         true
     }
 
+    #[cfg(test)]
+    /// A binary op on two int32 operands; `f` returns `None` when the result needs the
+    /// general path (an overflow).
+    #[inline(always)]
+    fn fast_int(&mut self, op: Op, sp0: u32, f: impl Fn(i32, i32) -> Option<Value>) -> bool {
+        let (Some(x), Some(y)) = (self.top(1).as_int(), self.top(0).as_int()) else {
+            return false;
+        };
+        let Some(v) = f(x, y) else { return false };
+        self.sp -= 1;
+        self.set(self.sp - 1, v);
+        self.advance(op, sp0);
+        true
+    }
+
+    #[cfg(test)]
+    #[inline(always)]
+    fn fast_inc_loc(&mut self, op: Op, d: i32, sp0: u32) -> bool {
+        let slot = self.lp + self.imm_u16(1);
+        match self.get(slot).as_int().and_then(|i| i.checked_add(d)) {
+            Some(i) => {
+                self.set(slot, Value::int(i));
+                self.advance(op, sp0);
+                true
+            }
+            None => false,
+        }
+    }
+
+    #[cfg(test)]
+    #[inline(always)]
+    fn fast_inc(&mut self, op: Op, d: i32, sp0: u32) -> bool {
+        match self.top(0).as_int().and_then(|i| i.checked_add(d)) {
+            Some(i) => {
+                self.set(self.sp - 1, Value::int(i));
+                self.advance(op, sp0);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// More simple ops (0086), tried after `fast_step` and out of line: as arms of
     /// `fast_step` they cost the hottest ops more than they saved (D1352's register
     /// allocation). Same contract: false, with nothing changed, when the general path
     /// is needed.
+    #[cfg(test)]
     #[inline(never)]
     fn fast_more(&mut self) -> bool {
         if self.pc >= self.code_len {
@@ -1526,6 +1564,7 @@ impl<'h> Exec<'h> {
         true
     }
 
+    #[cfg(test)]
     /// `get_elem` / `put_elem` on an existing dense element with an int key: no key
     /// conversion (D1280), no getter or setter, no growth.
     #[inline(never)]
@@ -1565,6 +1604,7 @@ impl<'h> Exec<'h> {
         true
     }
 
+    #[cfg(test)]
     /// `fast_step` for `call`: a JS closure with the stack already big enough.
     #[inline(always)]
     fn fast_call(&mut self) -> bool {
@@ -1572,6 +1612,7 @@ impl<'h> Exec<'h> {
         self.fast_call_at(Op::Call, self.sp - 2 - argc, argc)
     }
 
+    #[cfg(test)]
     /// Calls the JS closure at `stack[base]` with `argc` arguments for instruction `op`
     /// (charged here) if the stack has room; false, with nothing changed, otherwise.
     #[inline(always)]
@@ -1595,6 +1636,7 @@ impl<'h> Exec<'h> {
         true
     }
 
+    #[cfg(test)]
     /// `fast_step` for `return` / `return_undef` into a frame that pushes the result.
     #[inline(always)]
     fn fast_return(&mut self, op: Op) -> bool {

@@ -452,6 +452,7 @@ impl Exec<'_> {
 
     /// `fast_step` for `define_field` (object literals) when the site's addition cache
     /// applies (0083).
+    #[cfg(test)]
     #[inline(never)]
     pub(super) fn fast_define(&mut self, sp0: u32) -> bool {
         let key = Atom::from_id(self.imm_u32(1));
@@ -471,6 +472,7 @@ impl Exec<'_> {
 
     /// `fast_step` for `get_field`, `get_method` and `put_field` when the site's cache
     /// applies; false, with nothing changed, otherwise.
+    #[cfg(test)]
     #[inline(always)]
     pub(super) fn fast_field(&mut self, sp0: u32) -> bool {
         let op = self.byte(self.pc);

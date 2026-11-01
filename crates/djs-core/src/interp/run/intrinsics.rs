@@ -2443,6 +2443,7 @@ impl Exec<'_> {
 }
 
 impl Exec<'_> {
+    #[cfg(test)]
     /// `fast_step` for `call_intrinsic`: the cheap leaves the builtins call most (type
     /// checks, dense element access) and `%Call` of a JS closure, with the same results
     /// as `call_intrinsic`. False, with nothing changed, for anything else.

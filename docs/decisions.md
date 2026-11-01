@@ -4231,3 +4231,57 @@ Results:
 
 Images, collection points and determinism are unchanged: capacity is never part of
 the image.
+## D1930: The tier-0 loop keeps the interpreter state in locals
+date: 2026-11-01 · by: perf · issue: 0093
+`Exec::run_hot` (interp/run/hot.rs) is the interpreter's main loop when
+`ExecOptions::hot_loop` is on (the default). It loads `pc`, `sp`, `fuel` and the frame
+data (code, its length, bp/hp/lp, consts, the stack's value base and capacity) into
+locals, takes the arena as a local `&mut [u8]` (`Arena::hot_bytes`), and runs the fast
+cases of the hottest instructions itself: locals, arguments, captures and boxes,
+constants, the stack ops, int and float arithmetic and comparisons, `strict_eq`, `not`,
+jumps, `iter_next` on Arrays, the leaf `call_intrinsic` cases, calls of plain closures
+and returns into PushResult frames (D1931), and the inline-cache hits of fields and
+globals (D1620/D1621, and 0083's shared `ic_get`/`ic_put`, additions included) and
+dense elements. Everything else, and every declined case, goes to `step` (`step_once`,
+with D1700's retry), called from inside `run_hot` with the state written back to
+`Exec` first and read again after. It replaces D1350/D1352's `fast_step`/`fast_more`
+(kept only in tests, as the reference).
+- Why locals are safe: nothing `run_hot` itself does can collect or run user code.
+  The leaf heap calls it makes (cache hits, an iterator step; a cached addition and
+  `set_element_fast`'s append may allocate) end the slice borrow and re-take it after,
+  and re-read `gc_pending`;
+  no cell moves (no collection) and the stack cell never grows there. The borrow
+  checker enforces that no `Exec` method runs while the slice is live.
+- Exactness: the same fuel per instruction (checked at every boundary: it returns with
+  fuel ≤ 0 and the run loop stops there), the same arena writes, and the same
+  safepoints: frame entry, return and backward jumps complete, then, with a collection
+  wanted, `safepoint()` runs at that point. Suspension points, collections and heap
+  images are those of the old fast paths: vm/tests.rs `hot_loop_is_invisible` compares
+  image hashes at every stop (fuel slices 1–97 with and without restoring the image, GC
+  stress, collections pending at back-edges, frame entries and returns, the periodic
+  exit forced at every backward jump) against `hot_loop` off (the D1350 paths), and
+  fails when a fuel charge or a safepoint is changed.
+- V8 tier-up: `run_hot` returns to the run loop after `hot_backedges` (2^14) backward
+  jumps or general-path instructions, so a long slice still re-enters it and V8 (no OSR
+  for wasm) runs TurboFan code: a single 10^12-fuel slice of engine/tight now runs
+  8.6G instructions (main 16.8G, stuck in Liftoff). `--trace-wasm-compilation-times`
+  shows `run_hot` (16 KB of wasm) and `step_once` (35 KB, `step` and `exec` inlined)
+  compiled by TurboFan with pi's 10k and the Sandbox's 1M fuel slices.
+Measured (0093 Log): wasm instructions −19 to −27% on plain bytecode (tight, loop,
+call1, calls, prop1), −5 to −26% on arrays/strings/forof/pushpop/indexof, the rest within
+±1%; native −19 to −29% on plain bytecode. The wasm code size is unchanged (−1.2 KB).
+
+## D1931: Calls and returns in the tier-0 loop: the same frames, block access
+date: 2026-11-01 · by: perf · issue: 0093
+A `call` of a plain closure (no SLOPPY_THIS, NATIVE or FAST flag; the frame fits the
+stack capacity) and `%Call` from `call_intrinsic`, and a `return`/`return_undef` into a
+PushResult frame (bytecode or native caller), run in `run_hot`. The frame layout is
+unchanged (docs/compiler.md 7.1: images, `Vm::backtrace`, native frames and the GC's
+stack tracing do not change). The template's call data is read from one 28-byte window
+(FLAGS .. CONSTS), the argument padding, the 6-word header and the locals are written as
+checked blocks, and a return reads the header as one block and re-derives the caller
+from stack[prev_bp] (a native caller is entered as `load_frame` enters it). Considered
+and rejected: a seventh header word with the caller's template (a store per call, 8 B
+per frame, an image format change); packing the header (its words are int32 Values so
+that the GC traces the stack without frame knowledge). Native call+return
+631 → 458 instructions (micro.py `call+return f(i)`).

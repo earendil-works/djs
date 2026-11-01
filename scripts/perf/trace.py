@@ -28,8 +28,13 @@ def trace_run(debugger, command, result, internal_dict):
     target.BreakpointDelete(bp.GetID())
     f = open(out, "w")
     def rd(addr, size):
+        if addr < 0 or addr >= 1 << 64:
+            return -1
         e = lldb.SBError()
-        b = process.ReadMemory(addr, size, e)
+        try:
+            b = process.ReadMemory(addr, size, e)
+        except Exception:
+            return -1
         return int.from_bytes(b, "little") if e.Success() else -1
     for i in range(n):
         frame = thread.GetFrameAtIndex(0)

@@ -291,6 +291,14 @@ impl Arena {
         T::write(&mut self.bytes, off as usize, v)
     }
 
+    /// The backing store up to the zeroed frontier, the range `read`/`write` check against,
+    /// for a loop that keeps the arena in a local while it cannot allocate
+    /// (interp/run/hot.rs, D1930).
+    #[inline(always)]
+    pub(crate) fn hot_bytes(&mut self) -> &mut [u8] {
+        &mut self.bytes
+    }
+
     /// Reads field `f` of the cell (or record) at `base`.
     #[inline(always)]
     pub fn get<T: FieldType>(&self, base: u32, f: Field<T>) -> T {

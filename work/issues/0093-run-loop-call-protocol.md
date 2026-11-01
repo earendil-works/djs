@@ -1,6 +1,6 @@
 # 0093: Run-loop state in locals and a compact call protocol (0081 P6 + P9)
 
-status: in-progress
+status: done
 agent: perf
 branch: issue/0093-run-loop-call-protocol
 depends-on: 0085
@@ -15,14 +15,14 @@ with the run-loop state in locals (safe Rust); P9 estimated call+return from ~42
 ~150–200 instructions.
 
 ## Acceptance criteria
-- [ ] **Design first** (a short note): what lives in locals (pc, sp, fuel, lp, the code and
+- [x] **Design first** (a short note): what lives in locals (pc, sp, fuel, lp, the code and
       stack slices or their base offsets), when it is written back (calls, allocation,
       GC safepoints, suspension: the "suspend anywhere" and image guarantees must hold
       exactly), how the 0062 ICs, native frames (0063, D1631) and @fast entries (0085)
       interact, the frame header layout for a compact call protocol, and the expected
       gains. **Send it to the coordinator before implementing** (heap's 0083 shapes and
       infra's 0090 touch interp at the same time; we'll sequence the merges).
-- [ ] Implementation in parts with wasm instruction counts (primary) and native, the run
+- [x] Implementation in parts with wasm instruction counts (primary) and native, the run
       loop's wasm function size (it must still tier up: 0081's caveat about one huge
       vm_run slice), and identical ratchets, stress modes, and determinism checks.
 
@@ -153,6 +153,87 @@ with the parts that land them.
 
 ## Log
 
+- Design reviewed by the coordinator (above). Part 1 alone (stack/arith/jump ops in
+  `run_hot`, exiting to `fast_step` for the rest) measured *worse* on mixed code: every
+  exit/entry cost ~60 native instructions (write-back, an outlined `fast_step`, reload),
+  a tier-0 op saved ~25 (wasm: tight −20%, props +32%, arrays +20%). With the
+  coordinator's agreement parts 1–3 were combined: `run_hot` now runs everything
+  `fast_step`/`fast_more` did (calls, returns, IC hits through ic.rs's hit functions,
+  global caches, dense elements, the Array Iterator step, the leaf `call_intrinsic`
+  cases) and calls `step` in place (`step_once`) instead of returning, so leaving the
+  loop costs only a write-back and a reload around an instruction that costs hundreds
+  anyway. The leaf heap calls end the slice borrow and re-take it (`heap_call!`); none
+  collects. The old fast paths are `#[cfg(test)]`: the reference of
+  `hot_loop_is_invisible` (step alone is not: its slow paths refill IC slots on every
+  execution and grow elements differently, so images differ in caches).
+- Outside `touches:` (small): heap/arena.rs `Arena::hot_bytes`; iter.rs
+  `iter_next_hit`; `#[cfg(test)]` on `fast_field` (ic.rs, heap's 0083 part 3 is there:
+  whoever lands second ports) and `fast_intrinsic`.
+- Condition (a): `hot_loop_is_invisible` compares image hashes and output at every stop
+  against the old fast paths: fuel slices 1/3/13/61/97 with and without restoring the
+  image, GC stress (every frame entry, return and back-edge collects), garbage that makes
+  a collection pending at tier-0 back-edges, the periodic exit at every backward jump. It
+  fails when a fuel charge, the back-edge, frame-entry or return safepoint is removed
+  (checked by mutation).
+- Rebased onto main after heap's 0083 part 3 (shared IC hit checks `ic_get`/`ic_put`,
+  addition caches, `fast_define`): `run_hot` calls `ic_get`/`ic_put` and runs
+  `define_field` hits too; a cached addition may allocate (never collect), handled like
+  `set_element_fast`'s append (the slice and `gc_pending` are re-read); `fast_define` is
+  test-only with the other old fast paths.
+- Condition (b): wasm (`wasm` profile): `run_hot` 16,463 bytes, `step_once` 35,543
+  (`step` + `exec` inlined; main's `run_loop` 52,982), `Exec::run` 926; code section
+  924,028 → 922,840 bytes. `--trace-wasm-compilation-times` on pi-like: `run_hot`
+  (#1135) and `step_once` (#1141) are TurboFan-compiled with FUEL=10000 (pi) and
+  1000000 (Sandbox). A single 10^12-fuel slice of tight: 8.6G instructions (main 16.8G,
+  stuck in Liftoff): the periodic exit fixes 0081 F0's caveat.
+- Measurements, against main bf7eb626, wmeasure n=3, wasm instructions; native:
+  measure.py exact:
+
+  | workload | wasm | native |
+  | --- | ---: | ---: |
+  | tight | −21.3% | −28.0% |
+  | loop | −22.2% | −27.7% |
+  | call1 | −27.1% | −28.6% |
+  | calls | −23.4% | −25.8% |
+  | prop1 | −19.3% | −19.3% |
+  | indexof | −25.8% | −0.6% |
+  | forof | −13.7% | −18.6% |
+  | pushpop | −10.1% | −8.7% |
+  | arrays | −9.4% | −15.4% |
+  | strings | −5.6% | −4.8% |
+  | props | −4.6% | −7.7% |
+  | push-pop | −4.2% | |
+  | strbuild | −2.6% | −4.9% |
+  | higher-order | −1.4% | −3.5% |
+  | pi-like | −1.0% | −1.0% |
+  | jsonh / json | 0.0 / +1.0% (spreads 0.8–1.4%) | – / −0.2% |
+
+  Native per op (micro.py, before the rebase): `get_loc`+`drop` 77 → 61, call+return
+  631 → 458, `o.c` 214 → 185, `a[i & 7]` 392 → 299, `o.m(i)` 741 → 556; step-path ops
+  pay ~+30 (object literal 457 → 492).
+- Checks: lib tests, e2e plain/suspend/gc, difftest ratchet on both backends, difftest
+  stress and `--determinism` on builtins/codemode/language/dquickts subsets, test262
+  active group (no new failures), clippy native and wasm32.
+
 ## Follow-ups
 
+- heap: port the IC hit decoding to its shared function once 0083 part 3 lands
+  (`run_hot` calls `ic_own_get`/`ic_proto_get`/`ic_own_put`/`ic_global_*`, so it follows
+  automatically; `fast_field` is test-only now).
+- Step-path instructions pay ~30 native instructions for the write-back and reload; the
+  next candidates for `run_hot` by frequency: `define_field` of a new key (needs
+  shapes' transition cache), `object`, `get_global` misses, `concat`.
+- D1862's dense opcode range could be re-measured for `run_hot`'s own dispatch (two
+  `br_table`s in wasm now).
+- `run_hot` could take the IC slot array once per frame instead of per access.
+
 ## Result
+
+Landed: the tier-0 loop (D1930) and its call protocol (D1931). `Exec::run_hot` runs the
+interpreter with `pc`, `sp`, `fuel` and the frame data in locals and the arena as a
+local slice, executing the fast cases of the common instructions (calls and returns
+included) and calling `step` in place for the rest; nothing in it collects, and fuel,
+safepoints, suspension points and images are those of the old fast paths
+(`hot_loop_is_invisible`). wasm instructions −19 to −27% on plain bytecode and calls,
+−5 to −26% on arrays/strings/for-of/push-pop/indexOf, everything else within ±1%; native
+−19 to −29% on plain bytecode. wasm code size unchanged (−1.2 KB). V8 tiers `run_hot` up within a slice, including one huge slice.

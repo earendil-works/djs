@@ -3395,3 +3395,108 @@ fn fast_entries_decline_at_the_cap() {
         assert_eq!(plain, restored, "{limit}");
     }
 }
+
+/// The stops of a run of `src` (a Script) with `opts` and slices of `fuel`, restoring the
+/// image at every stop with `suspend`: a hash of the heap image at each stop and at the
+/// end, and the console output (0093, D1930).
+fn image_trace(src: &str, exec: ExecOptions, fuel: u64, suspend: bool) -> Vec<String> {
+    let opts = VmOptions {
+        exec,
+        ..Default::default()
+    };
+    let mut vm = vm_with(opts);
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("t.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    let hash = |b: &[u8]| {
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for &x in b {
+            h = (h ^ x as u64).wrapping_mul(0x100_0000_01b3);
+        }
+        h
+    };
+    let mut trace = Vec::new();
+    loop {
+        // Fine slices for the first stops, then coarser ones (every stop hashes the image).
+        let fuel = if trace.len() > 600 {
+            fuel.max(997)
+        } else {
+            fuel
+        };
+        let st = vm.run(fuel);
+        trace.push(format!("{:?} {:x}", st, hash(vm.bytes())));
+        match st {
+            Status::OutOfFuel => {}
+            Status::HostCall { call_id, .. } => {
+                let info = vm.host_call(call_id).unwrap();
+                let line: Vec<String> = info.args.iter().map(|&a| vm.display(a)).collect();
+                trace.push(line.join(" "));
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            _ => return trace,
+        }
+        if suspend {
+            let opts = vm.options();
+            vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();
+        }
+    }
+}
+
+/// The tier-0 loop (D1930) changes nothing observable: at every stop (fuel boundaries
+/// inside it, with and without restoring the image), with collections wanted at its
+/// back-edges (GC stress, and garbage that makes a collection pending), and with its
+/// periodic exit forced at every backward jump, the heap images, the fuel at which the
+/// run stops, and the output equal those of the run without it.
+#[test]
+fn hot_loop_is_invisible() {
+    let src = "let sum = 0, s = '', o = { a: 1 }, xs = [];\n\
+        function f(n) { let t = 0; for (let i = 0; i < n; i++) { t = (t + i * 3) | 0; if (t % 7 === 3) t--; } return t; }\n\
+        for (let r = 0; r < 40; r++) {\n\
+          for (let j = 0; j < 25; j++) { sum += j & 5; sum = sum ^ 1; }\n\
+          s = 'x' + r; xs.push(s); o.a += f(r);\n\
+          let k = 1.5; while (k < 100) { k = k * 2 + 0.25; }\n\
+          sum += k > 50 ? 1 : 0; sum += (r === 3) + !s + (s !== 'x3');\n\
+        }\n\
+        let big = []; for (let i = 0; i < 3000; i++) { big = [big, 'garbage ' + i]; for (let q = 0; q < 3; q++) sum++; }\n\
+        class P { constructor(x) { this.x = x; } get g() { return this.x + 1; } m(y) { return this.x * y; } }\n\
+        const ps = []; for (let i = 0; i < 200; i++) ps.push(new P(i));\n\
+        const add = (a, b) => a + b; let acc = 0;\n\
+        for (const p of ps) { acc = add(acc, p.m(2)) + p.x; if (p.x % 50 === 0) acc += p.g; }\n\
+        const arr = [1, 2, 3, 4, 5, 6, 7, 8]; for (let i = 0; i < 400; i++) { arr[i & 7] = arr[(i + 1) & 7] + 1; }\n\
+        function fib(n) { return n < 2 ? n : fib(n - 1) + fib(n - 2); } acc += fib(12);\n\
+        acc += ps.map((p) => p.x).filter((x) => x & 1).length + [3, 1, 2].sort((a, b) => a - b)[0];\n\
+        console.log(acc, arr.join(), 'abc' === 'ab' + 'c', !'');\n\
+        console.log(sum, o.a, xs.length, s);\n";
+    const HOT: u32 = crate::interp::run::HOT_BACKEDGES;
+    let cases: &[(u64, bool, u32, bool)] = &[
+        // (fuel slice, gc stress, backward jumps per run_hot, suspend through images)
+        (1 << 40, false, HOT, false),
+        (1, false, HOT, false),
+        (3, false, HOT, true),
+        (97, false, HOT, true),
+        (1 << 40, false, 1, false),
+        (13, false, 2, true),
+        (1 << 40, true, HOT, false),
+        (61, true, 1, true),
+    ];
+    for &(fuel, gc_stress, backedges, suspend) in cases {
+        let exec = |hot_loop| ExecOptions {
+            gc_stress,
+            hot_loop,
+            hot_backedges: backedges,
+            ..Default::default()
+        };
+        let with = image_trace(src, exec(true), fuel, suspend);
+        let without = image_trace(src, exec(false), fuel, suspend);
+        assert!(with.len() > 2, "the program ran: {with:?}");
+        assert_eq!(
+            with, without,
+            "fuel {fuel}, gc stress {gc_stress}, back-edges {backedges}"
+        );
+    }
+}

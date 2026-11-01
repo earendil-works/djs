@@ -1230,11 +1230,16 @@ sb      operand stack (≤ STACK)    sb = lp + L
 
 - Header fields are int32 Values, so the GC traces the whole stack array from 0 to
   `sp` with no frame knowledge. Snapshots need no frame serializer.
-- Interpreter registers (`bp`, `hp`, `sp`, `pc`, cached code offset) are Rust locals
-  in the dispatch loop. They are flushed to an `Interp` state cell (in the roots)
-  whenever `run` returns. The cached code offset is re-derived from
-  `stack[bp] → SLOTS[0] → CODE` after every safepoint, because a copying GC may move
-  the code cell.
+- Interpreter registers (`bp`, `hp`, `sp`, `pc`, cached code offset) are `Exec`
+  fields, flushed to an `Interp` state cell (in the roots) whenever `run` returns.
+  The cached code offset is re-derived from `stack[bp] → SLOTS[0] → CODE` after every
+  safepoint, because a copying GC may move the code cell. The tier-0 loop
+  (`interp/run/hot.rs`, D1930) keeps `pc`, `sp`, `fuel` and the frame data in Rust
+  locals and the arena as a local slice while it runs the fast cases (stack, locals,
+  arithmetic, jumps, calls and returns of closures, inline-cache hits, dense
+  elements); it writes them back whenever it calls the general path (`step`) or
+  returns, and nothing in it can collect. Calls and returns there use the same frame
+  layout, with the header and the locals written as checked blocks (D1931).
 - A call reserves `5 + LOCALS + STACK` slots once, at frame entry, and checks the
   stack limit there (qjs: InternalError `stack overflow`). Pushes within the frame
   need no capacity check.
