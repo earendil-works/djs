@@ -1,7 +1,7 @@
 # 0121: Codemode corpus expansion; shorter ratchet reasons
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0121-corpus-expansion
 depends-on: 0118
 guide: docs/guide/testing.md (if the corpus description changes)
