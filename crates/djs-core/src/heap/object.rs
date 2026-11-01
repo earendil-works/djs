@@ -67,6 +67,9 @@ pub enum ObjectClass {
     /// An unmapped (strict) arguments object: ordinary storage, its own class for
     /// `Object.prototype.toString`.
     Arguments = 5,
+    /// An Array Iterator: slot 0 the target (undefined once exhausted), slot 1 the next
+    /// index, slot 2 the kind (0 keys, 1 values, 2 entries).
+    ArrayIterator = 6,
     /// A bound function exotic object: slot 0 the target function, slot 1 the bound
     /// `this`, slot 2 an Array of the bound arguments.
     BoundFunction = 7,
@@ -88,6 +91,7 @@ impl ObjectClass {
             3 => Some(ObjectClass::HostFunction),
             4 => Some(ObjectClass::Error),
             5 => Some(ObjectClass::Arguments),
+            6 => Some(ObjectClass::ArrayIterator),
             7 => Some(ObjectClass::BoundFunction),
             8 => Some(ObjectClass::Boolean),
             9 => Some(ObjectClass::Number),
@@ -102,6 +106,7 @@ impl ObjectClass {
         match self {
             ObjectClass::Ordinary | ObjectClass::Error | ObjectClass::Arguments => 0,
             ObjectClass::Array | ObjectClass::Function | ObjectClass::HostFunction => 1,
+            ObjectClass::ArrayIterator => 3,
             ObjectClass::BoundFunction => 3,
             ObjectClass::Boolean
             | ObjectClass::Number

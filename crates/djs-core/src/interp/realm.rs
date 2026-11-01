@@ -40,9 +40,13 @@ pub enum Intrinsic {
     SymbolRegistry,
     /// `Math.random`'s state: an internal ValueArray of two int32 halves.
     RandomState,
+    /// %IteratorPrototype%.
+    IteratorProto,
+    /// %ArrayIteratorPrototype% ([[Prototype]] = %IteratorPrototype%).
+    ArrayIteratorProto,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::RandomState as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::ArrayIteratorProto as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -155,6 +159,18 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     );
     let array_proto = heap.new_array(Some(object_proto), 0)?;
     set(heap, Intrinsic::ArrayProto, Value::object(array_proto));
+    let iterator_proto = heap.new_object(Some(object_proto))?;
+    set(
+        heap,
+        Intrinsic::IteratorProto,
+        Value::object(iterator_proto),
+    );
+    let array_iterator_proto = heap.new_object(Some(iterator_proto))?;
+    set(
+        heap,
+        Intrinsic::ArrayIteratorProto,
+        Value::object(array_iterator_proto),
+    );
     let error_proto = heap.new_object(Some(object_proto))?;
     set(heap, Intrinsic::ErrorProto, Value::object(error_proto));
     let empty = Value::string(heap.atom_string(atoms::EMPTY)?);

@@ -1192,6 +1192,23 @@ impl<'h> Exec<'h> {
                 self.define_literal_member(obj, key, f, op)?;
                 self.sp -= 2;
             }
+            Op::ForInStart => {
+                let v = self.pop();
+                let it = self.for_in_start(v)?;
+                self.push(it);
+            }
+            Op::ForInNext => {
+                // `it -> it key done`
+                let it = self.top(0);
+                let (key, done) = self.for_in_next(it)?;
+                self.push(key);
+                self.push(Value::bool(done));
+            }
+            Op::IterCheckObject => {
+                if self.top(0).as_object().is_none() {
+                    return type_error("iterator must return an object");
+                }
+            }
             Op::ArraySpread => {
                 let (a, src) = (self.top(1), self.top(0));
                 let arr = a.as_object().expect("array literal");
@@ -1890,6 +1907,79 @@ impl<'h> Exec<'h> {
             return type_error("could not delete property");
         }
         Ok(true)
+    }
+
+    /// `for_in_start`: a snapshot of the keys a for-in visits, in an internal
+    /// `ValueArray` `[object, next index, key0, key1, ...]` (only ever on the operand
+    /// stack). Keys: the enumerable string keys of the object and then its prototypes, in
+    /// [[OwnPropertyKeys]] order per object; a key seen once (enumerable or not) shadows
+    /// the same key further up the chain. Symbols are skipped. `null`/`undefined` give
+    /// no keys; a string, its indexes.
+    fn for_in_start(&mut self, v: Value) -> Result<Value, Fault> {
+        let mut keys: alloc::vec::Vec<Value> = alloc::vec::Vec::new();
+        if let Some(s) = v.as_string() {
+            for i in 0..self.heap.str_len(s) {
+                keys.push(self.heap.atom_to_value(Atom::int(i).unwrap())?);
+            }
+        } else if let Some(o) = v.as_object() {
+            let mut seen = alloc::collections::BTreeSet::new();
+            let mut cur = Some(o);
+            while let Some(c) = cur {
+                for k in self.heap.own_keys(c) {
+                    if k.is_symbol() || !seen.insert(k.id()) {
+                        continue;
+                    }
+                    if self
+                        .heap
+                        .get_own_property(c, k)
+                        .is_some_and(|p| p.flags().enumerable())
+                    {
+                        keys.push(self.heap.atom_to_value(k)?);
+                    }
+                }
+                cur = self.heap.get_prototype_of(c);
+            }
+        }
+        let n = keys.len() as u32;
+        let arr = self.heap.alloc_value_array(n + 2)?;
+        let target = if v.as_object().is_some() {
+            v
+        } else {
+            Value::UNDEFINED
+        };
+        self.heap.value_array_set(arr, 0, target);
+        self.heap.value_array_set(arr, 1, Value::int(0));
+        for (i, k) in keys.into_iter().enumerate() {
+            self.heap.value_array_set(arr, 2 + i as u32, k);
+        }
+        self.heap
+            .arena_mut()
+            .set(arr, crate::heap::cells::ValueArray::LEN, n + 2);
+        Ok(Value::internal(arr))
+    }
+
+    /// `for_in_next`: the next snapshot key that is still present on the object or its
+    /// prototype chain (deleted keys are skipped), or `(undefined, true)` at the end.
+    fn for_in_next(&mut self, it: Value) -> Result<(Value, bool), Fault> {
+        let arr = it.as_internal().expect("for-in iterator");
+        let len = self.heap.value_array_len(arr);
+        let target = self.heap.value_array_get(arr, 0).as_object();
+        loop {
+            let idx = self.heap.value_array_get(arr, 1).as_int().unwrap_or(0) as u32;
+            if 2 + idx >= len {
+                return Ok((Value::UNDEFINED, true));
+            }
+            self.heap
+                .value_array_set(arr, 1, Value::int(idx as i32 + 1));
+            let key = self.heap.value_array_get(arr, 2 + idx);
+            let Some(o) = target else {
+                return Ok((key, false));
+            };
+            let atom = self.heap.intern(key.as_string().expect("string key"))?;
+            if self.heap.has_property(o, atom) {
+                return Ok((key, false));
+            }
+        }
     }
 
     /// A method, getter or setter of an object literal: DefinePropertyOrThrow with

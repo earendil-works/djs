@@ -1150,4 +1150,107 @@ fn math_random_is_seeded_per_vm_and_survives_snapshots() {
     assert_eq!(eval(&mut a, draw), eval(&mut e, draw));
     let r = eval(&mut e, "const r = Math.random(); return r >= 0 && r < 1");
     assert_eq!(r, "true");
+
+/// `acc = ""; for (k in <global name>) { acc += k + ","; [delete obj.<del> on the first
+/// step] } return acc`, hand-assembled (the compiler side is 0029).
+fn for_in_keys(vm: &mut Vm, target: &str, delete_on_first: Option<&str>) -> Value {
+    let t = vm.heap_mut().atom_str(target).unwrap();
+    let mut f = F::new();
+    f.locals = 2;
+    let comma = f.string(vm, ",");
+    let empty = f.string(vm, "");
+    let (top, end, skip) = (f.b.new_label(), f.b.new_label(), f.b.new_label());
+    f.b.push_const(empty);
+    f.b.put_loc(0);
+    f.b.push_i8(0);
+    f.b.put_loc(1);
+    f.b.get_global(t);
+    f.b.for_in_start();
+    f.b.place_label(top);
+    f.b.for_in_next();
+    f.b.jump_if_true(end);
+    f.b.get_loc(0);
+    f.b.swap();
+    f.b.add();
+    f.b.push_const(comma);
+    f.b.add();
+    f.b.put_loc(0);
+    if let Some(d) = delete_on_first {
+        let d = vm.heap_mut().atom_str(d).unwrap();
+        f.b.get_loc(1);
+        f.b.jump_if_true(skip);
+        f.b.get_global(t);
+        f.b.push_atom(d);
+        f.b.delete();
+        f.b.drop();
+        f.b.push_true();
+        f.b.put_loc(1);
+        f.b.place_label(skip);
+    }
+    f.b.jump(top);
+    f.b.place_label(end);
+    f.b.drop();
+    f.b.drop();
+    f.b.get_loc(0);
+    f.b.return_();
+    let tpl = f.build(vm);
+    let main = vm.instantiate(tpl).unwrap();
+    vm.call(main, Value::UNDEFINED, &[]).unwrap();
+    let Status::Done(v) = vm.run(1 << 30) else {
+        panic!()
+    };
+    v
+}
+
+#[test]
+fn for_in_order_shadowing_and_deletion() {
+    let mut vm = vm();
+    let src = "var proto = { inherited: 1, shadowed: 2, gone: 3 };\n\
+               var obj = { __proto__: proto, b: 1, 2: 0, a: 1, 1: 0 };";
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("fi.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    assert!(matches!(vm.run(1 << 30), Status::Done(_)));
+    // A non-enumerable own `shadowed` hides the prototype's, and a symbol key is skipped.
+    let g = vm.global();
+    let obj_key = vm.heap_mut().atom_str("obj").unwrap();
+    let obj = vm
+        .heap()
+        .get_own_property(g, obj_key)
+        .unwrap()
+        .value()
+        .unwrap()
+        .as_object()
+        .unwrap();
+    let sh = vm.heap_mut().atom_str("shadowed").unwrap();
+    vm.heap_mut()
+        .define_own_property(
+            obj,
+            sh,
+            &PropertyDescriptor::data(Value::NULL, PropFlags::WRITABLE),
+        )
+        .unwrap();
+    let sym = vm.heap_mut().new_symbol(Value::UNDEFINED).unwrap();
+    let sk = vm.heap().symbol_atom(sym);
+    vm.heap_mut()
+        .create_data_property(obj, sk, Value::NULL)
+        .unwrap();
+    let v = for_in_keys(&mut vm, "obj", None);
+    assert_eq!(vm.display(v), "1,2,b,a,inherited,gone,");
+    // A key deleted during the loop is not visited.
+    let v = for_in_keys(&mut vm, "obj", Some("a"));
+    assert_eq!(vm.display(v), "1,2,b,inherited,gone,");
+    // Strings give their indexes; null and numbers give nothing.
+    let xyz = Value::string(vm.heap_mut().alloc_str("xyz").unwrap());
+    vm.define_global("s", xyz).unwrap();
+    vm.define_global("n", Value::NULL).unwrap();
+    let v = for_in_keys(&mut vm, "s", None);
+    assert_eq!(vm.display(v), "0,1,2,");
+    let v = for_in_keys(&mut vm, "n", None);
+    assert_eq!(vm.display(v), "");
 }

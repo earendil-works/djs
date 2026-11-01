@@ -881,8 +881,20 @@ impl Exec<'_> {
             "Function.prototype" => Some(Intrinsic::FunctionProto),
             "Array.prototype" => Some(Intrinsic::ArrayProto),
             "Error.prototype" => Some(Intrinsic::ErrorProto),
+            "%IteratorPrototype%" => Some(Intrinsic::IteratorProto),
+            "%ArrayIteratorPrototype%" => Some(Intrinsic::ArrayIteratorProto),
             _ => None,
         };
+        // `%Name%` paths name realm intrinsics directly.
+        if path.starts_with('%') {
+            return match intrinsic_path {
+                Some(i) => Ok(intrinsic_obj(self.heap, i)),
+                None => Err(Fault::Error(
+                    ErrorKind::InternalError,
+                    format!("%InstallMethod: unknown intrinsic object {path}"),
+                )),
+            };
+        }
         let mut o = intrinsic_obj(self.heap, Intrinsic::Global);
         for part in path.split('.') {
             let key = self.heap.atom_str(part)?;
