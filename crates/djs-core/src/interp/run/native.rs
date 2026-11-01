@@ -468,7 +468,7 @@ impl Exec<'_> {
         if v.as_object().is_some() {
             return Ok(v);
         }
-        self.n_leaf(iid("ToObject"), &[v])
+        self.n_leaf(const { iid("ToObject") }, &[v])
     }
 
     /// `Str + Str`.
@@ -514,7 +514,7 @@ impl Exec<'_> {
         {
             return self.n_inline(v, next);
         }
-        self.n_call(iid("Get"), args, next)
+        self.n_call(const { iid("Get") }, args, next)
     }
 
     /// `%HasProperty(o, k)`: true for a dense element of an Array (an own property).
@@ -527,7 +527,7 @@ impl Exec<'_> {
         {
             return self.n_inline(Value::TRUE, next);
         }
-        self.n_call(iid("HasProperty"), args, next)
+        self.n_call(const { iid("HasProperty") }, args, next)
     }
 
     /// `%CreateDataPropertyOrThrow(a, k, v)`: an Array's dense element or the next one
@@ -545,7 +545,7 @@ impl Exec<'_> {
         {
             return self.n_inline(Value::UNDEFINED, next);
         }
-        self.n_call(iid("CreateDataPropertyOrThrow"), args, next)
+        self.n_call(const { iid("CreateDataPropertyOrThrow") }, args, next)
     }
 
     /// `%Set(o, k, v)` on an Array: an index through the heap's [[Set]] fast path, and
@@ -567,7 +567,7 @@ impl Exec<'_> {
                 return self.n_inline(Value::UNDEFINED, next);
             }
         }
-        self.n_call(iid("Set"), args, next)
+        self.n_call(const { iid("Set") }, args, next)
     }
 
     /// The length of a virtual rest parameter (the arguments from `index` on, never
@@ -599,7 +599,7 @@ impl Exec<'_> {
             let n = self.heap.array_length(o);
             return self.n_inline(u32_value(n), next);
         }
-        self.n_call(iid("LengthOfArrayLike"), args, next)
+        self.n_call(const { iid("LengthOfArrayLike") }, args, next)
     }
 }
 
