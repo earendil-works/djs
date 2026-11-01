@@ -9,6 +9,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0099 | Cold-start wasm memory + verify bitmap | num | .worktrees/num |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0102 | pi polish: pi suite rerun, captureStackTrace, REPL follow-ups | infra | .worktrees/infra |
+| 0103 | Human-facing documentation (format proposal first) | docs | .worktrees/docs |
 | 0098 | Base image + shapes code size (0083 part 4) | heap | .worktrees/heap |
 | 0100 | Native codegen: values in Rust locals (0081 P8) + more run_hot ops | perf | .worktrees/perf |
 
