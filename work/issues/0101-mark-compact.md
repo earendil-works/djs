@@ -4,7 +4,7 @@ status: open
 agent: -
 branch: issue/0101-mark-compact
 depends-on: 0098, 0099
-guide: docs/guide/gc.md, docs/guide/testing.md (the collected-image layout), docs/guide/snapshots.md
+guide: docs/guide/gc.md, docs/guide/testing.md (the collected-image layout), docs/guide/snapshots.md, docs/guide/determinism.md (the layout bullet, the gate section)
 touches: docs/ (a design note first), crates/djs-core/src/heap/gc.rs (+ a new compactor module), crates/djs-core/src/heap/ (marking bitmaps), ARCH.md "Heap" (after approval)
 
 ## Goal
