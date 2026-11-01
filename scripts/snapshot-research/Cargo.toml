@@ -1,0 +1,19 @@
+[package]
+name = "snaplab"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Not part of the workspace or the gate (as scripts/determinism/probe).
+[workspace]
+
+[dependencies]
+djs-core = { path = "../../crates/djs-core" }
+djs-prelude = { path = "../../crates/djs-prelude" }
+
+[profile.dev.package.djs-core]
+opt-level = 1
+
+[[bin]]
+name = "snaplab"
+path = "src/main.rs"

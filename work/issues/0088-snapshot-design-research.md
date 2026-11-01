@@ -4,7 +4,7 @@ status: done
 agent: snapshot
 branch: issue/0088-snapshot-research
 depends-on: -
-touches: work/issues/0088-snapshot-design-research.md (the report), docs/ (an optional design note draft, not adopted), work/scratch/0088/ (prototypes and measurements). No changes to engine code on main.
+touches: work/issues/0088-snapshot-design-research.md (the report), docs/ (an optional design note draft, not adopted), work/scratch/0088/ (prototypes and measurements), scripts/snapshot-research/ (the harness, kept at the coordinator's request). No changes to engine code on main.
 
 ## Goal
 Today a snapshot is a raw heap image (ARCH "Snapshots", D1320/D1321/D1330/D1750): compact
@@ -74,8 +74,9 @@ space and what each option would cost.
 - Read ARCH (Core Idea, Heap, Snapshots, Deltas, Host Interface), docs/host.md, docs/compiler.md 6–7,
   docs/objects.md, D1320–D1330, D1431, D1495, D1600/D1601, D1670, D1680, D1720, D1730, D1740,
   D1750, pi's `vm.ts`/`execution.ts` (read-only) and js/pi/.
-- Built a measurement harness, **snaplab** (work/scratch/0088/snaplab, a scratch crate outside the
-  workspace over djs-core + djs-prelude; not committed, scratch is gitignored). It is a Rust copy
+- Built a measurement harness, **snaplab** (scripts/snapshot-research, committed with a README;
+  a standalone crate over djs-core + djs-prelude outside the workspace and the gate, like
+  scripts/determinism/probe). It is a Rust copy
   of js/pi/vm.ts's session logic in deterministic mode: the base image, pi's host globals and
   prelude (tests/pi/prelude-source.ts), a codemode script, fake tools answered in call order with
   `settle` + `stalled` exactly as the adapter does. At **every idle point** (the VM waits on tool
@@ -93,7 +94,7 @@ space and what each option would cost.
   - restore times: `Vm::from_bytes` (verified) vs replaying the journal from scratch / from the
     prelude image;
   - suspended activations (frames, resume op, operand stacks) and builtin-internal objects.
-- Six scripts (work/scratch/0088/scripts): `ask` (human in the loop), `tool-heavy` (pi.bench's
+- Six cases (scripts/snapshot-research/cases): `ask` (human in the loop), `tool-heavy` (pi.bench's
   TOOL_HEAVY), `sequential` (await in a for-of), `big-log` (a 1.5 MB tool result kept in a
   variable), `records` (1500 issue records, a class, Maps, `Promise.all` of async helpers),
   `agent-loop` (retry wrapper with try/catch/finally, an async generator, `for await`, awaits
@@ -101,8 +102,8 @@ space and what each option would cost.
   compression ratios are realistic (a first run with synthetic repetitive text gave 60x journal
   compression; real text gives 4–5x).
 - Numbers: native, djs-core at opt-level 1 (dev), shared machine: use restore times as ratios.
-  Reproduce: `cd work/scratch/0088/snaplab && cargo build && scripts/timeout.sh 900
-  target/debug/snaplab ../out ../scripts/*.js` (report.txt, points.csv).
+  Reproduce: `scripts/snapshot-research/run.sh` (about a minute; report.txt and points.csv in
+  work/scratch/snapshot-research).
 
 ## Findings
 
@@ -165,6 +166,33 @@ decompression 0.6 ms (ask).
 ³ The prototype encoder against the post-prelude world (named by paths, recomputed on restore).
 ⁴ The same against the engine's base only: pi's prelude state is then in every snapshot.
 ⁵ `Vm::from_bytes` (verified) / replaying the journal from the prelude image – from scratch.
+
+All 144 idle points (from points.csv), median / max in KB:
+
+| case | idle points | raw image (pi today) | collected | old-gen delta vs post-prelude | logical vs post-prelude | logical vs base | journal | activations / max operands |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ask | 2 | 944 / 945 | 504 / 504 | 80 / 80 | 1.4 / 1.5 | 50 / 50 | 0.6 / 0.6 | 1 / 1 |
+| tool-heavy | 62 | 853 / 1085 | 686 / 891 | 262 / 482 | 156 / 341 | 205 / 389 | 161 / 331 | 1 / 1 |
+| sequential | 42 | 801 / 1067 | 521 / 527 | 97 / 103 | 10 / 15 | 59 / 63 | 108 / 217 | 1 / 3 |
+| big-log | 6 | 4701 / 4706 | 2204 / 2205 | 1780 / 1781 | 1659 / 1660 | 1707 / 1707 | 1518 / 1518 | 1 / 3 |
+| records | 21 | 3737 / 3768 | 1896 / 1907 | 1472 / 1483 | 653 / 654 | 709 / 710 | 781 / 789 | 5 / 5 |
+| agent-loop | 11 | 627 / 1004 | 516 / 519 | 92 / 95 | 4.4 / 4.8 | 53 / 53 | 6.3 / 11 | 3 / 8 |
+
+(Raw and journal sizes are uncompressed here; "max operands" counts the operand slots of a
+suspended frame, the resumption slot included.)
+
+Headline numbers from report.txt:
+- Base image 402 KB (zstd -19 90 KB). Post-prelude image 939 KB raw, 500 KB collected (zstd -19
+  108 KB; 44 KB as a zstd patch against the base).
+- A session waiting on a human: 943 KB as pi snapshots it today → 504 KB collected → 108 KB
+  zstd -19 (97–101 KB with xz/brotli) → **22 KB** zstd against the post-prelude image → **0.9 KB**
+  as a logical snapshot (zstd) → 0.3 KB of journal.
+- node's built-in zstd with the reference as dictionary: 27 KB at level 19 (120 ms), 36 KB at
+  level 3 (1.5 ms); decompression 0.6 ms.
+- Restore: 0.5–2.7 ms for a verified image; 1.3–38 ms to replay from the prelude image, 5.9–43 ms
+  from scratch; 5.5–9 ms to recompute the post-prelude image, 0.5 ms to restore a cached one.
+- pi's prelude as a logical snapshot against the bare base: 49 KB raw, 19 KB zstd, in every
+  snapshot unless the restore recomputes the prelude.
 
 The reference images: base 402 KB (zstd 90 KB; 198 KB of it is the prelude's compiled code);
 post-prelude 939 KB raw, 500 KB collected (zstd 108 KB; 44 KB as a zstd patch against the
@@ -403,9 +431,13 @@ determinism across two spaces). Dictionary compression gets 22–30 KB with no e
 
 Report only, no engine changes. The issue file holds the inventory (§1), measurements on six
 realistic pi codemode scripts at all 144 of their idle points (§2), the candidate designs A, B,
-C (+ C0, C'), the measured ARCH delta D, the comparison and the recommendation. The
-measurement harness is in work/scratch/0088 (gitignored, not committed): snaplab, the scripts,
-the extracted pi prelude and the last report (`out/report.txt`, `out/points.csv`).
+C (+ C0, C'), the measured ARCH delta D, the comparison and the recommendation (keep raw images
+for same-build use and make them small with a reference-image dictionary; journal replay with
+pinned engines for durability across versions; no logical format for now).
+
+The harness is in scripts/snapshot-research: `run.sh` extracts pi's prelude, builds snaplab
+into the repo's target dir and writes report.txt and points.csv to
+work/scratch/snapshot-research. The README lists what it measures and the cases.
 
 Known gaps: the logical encoder has no decoder (sizes only; path indexes and patch records are
 approximate: patches store the whole changed object, not a property diff); restore and replay
