@@ -1,7 +1,7 @@
 # 0080: for-of / iteration fast paths, natives wave 2
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0080-natives-wave2
 depends-on: 0063
 touches: crates/djs-core/src/interp/ (an unobservable for-of fast path for unmodified Array/String/TypedArray iteration, D1351-style checks; isolated), builtins/ (@native tags), crates/djs-bgen/ (try/finally and constructors in @native), crates/djs-core/src/builtins/gen/ (regenerated), crates/djs-core/src/heap/ (a dense truncate entry point for pop/length shrink: small, additive, coordinate with heap), crates/djs-bench/
