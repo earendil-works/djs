@@ -1,7 +1,7 @@
 # 0036: P1-6 Destructuring, tagged templates, remaining spread/rest
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0036-p1-destructuring-templates
 depends-on: 0029
 touches: crates/djs-core/src/compiler/, crates/djs-core/src/bytecode/ (additive), builtins/ (only if a helper is needed, e.g. %CopyDataProperties for object rest), docs/compiler.md
