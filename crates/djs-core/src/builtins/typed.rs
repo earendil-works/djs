@@ -69,7 +69,8 @@ pub(crate) fn as_buffer(heap: &Heap, v: Value) -> Result<Obj, Fault> {
     }
 }
 
-/// `%BufferInfo(b, field)`: 0 byteLength, 1 maxByteLength, 2 resizable, 3 detached.
+/// `%BufferInfo(b, field)`: 0 byteLength, 1 maxByteLength, 2 resizable, 3 detached,
+/// 4 immutable.
 pub(crate) fn buffer_info(heap: &Heap, b: Obj, field: i32) -> Value {
     let detached = heap.buffer_bytes(b).is_none();
     let max = heap.object_slot(b, 1);
@@ -78,20 +79,26 @@ pub(crate) fn buffer_info(heap: &Heap, b: Obj, field: i32) -> Value {
         1 => {
             if detached {
                 Value::int(0)
-            } else if max.is_undefined() {
-                Value::int(heap.buffer_len(b) as i32)
-            } else {
+            } else if max.is_number() {
                 max
+            } else {
+                Value::int(heap.buffer_len(b) as i32)
             }
         }
-        2 => Value::bool(!max.is_undefined()),
-        _ => Value::bool(detached),
+        2 => Value::bool(heap.buffer_resizable(b)),
+        3 => Value::bool(detached),
+        _ => Value::bool(heap.buffer_immutable(b)),
     }
 }
 
-/// DetachArrayBuffer: the data goes away; views see length 0.
-pub(crate) fn buffer_detach(heap: &mut Heap, b: Obj) {
+/// DetachArrayBuffer: the data goes away; views see length 0. An immutable buffer is a
+/// TypeError (D1970).
+pub(crate) fn buffer_detach(heap: &mut Heap, b: Obj) -> Result<(), Fault> {
+    if heap.buffer_immutable(b) {
+        return type_error("ArrayBuffer is immutable");
+    }
     heap.detach_buffer(b);
+    Ok(())
 }
 
 /// Resizes a resizable buffer in place (its capacity is maxByteLength); new bytes are 0.
@@ -116,13 +123,17 @@ pub(crate) fn buffer_transfer(
     b: Obj,
     len: f64,
     max: Option<f64>,
+    immutable: bool,
 ) -> Result<Obj, Fault> {
     let data: Vec<u8> = heap.buffer_data(b).to_vec();
     let proto = realm::intrinsic_obj(heap, Intrinsic::ArrayBufferProto);
     let new = buffer_create(heap, proto, len, max)?;
     let n = data.len().min(len as usize);
     heap.buffer_data_mut(new)[..n].copy_from_slice(&data[..n]);
-    buffer_detach(heap, b);
+    if immutable {
+        heap.set_buffer_immutable(new);
+    }
+    buffer_detach(heap, b)?;
     Ok(new)
 }
 

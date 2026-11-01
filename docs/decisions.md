@@ -4313,3 +4313,22 @@ state in one Sandbox: highlight.js 29.1M → 26.1M (21.3M), codemode 8.13M → 7
 dquickts tests 140M → 129M, typescript.js 4,479M → 4,058M (4,595M); a fresh Sandbox per
 compile: highlight.js 50.4M → 47.5M, codemode 20.8M → 20.0M, typescript.js 5,234M →
 5,044M. Disassembly of all inputs identical.
+## D1970: Immutable ArrayBuffers
+date: 2026-11-03 · by: infra · issue: 0097
+The immutable ArrayBuffer proposal at the pinned test262 commit, as qjs has it:
+`ArrayBuffer.prototype.immutable`, `transferToImmutable` and `sliceToImmutable` (no
+species). An immutable buffer is a fixed-length ArrayBuffer whose slot 1 (the resizable
+buffer's maximum) is `true` (heap/typed.rs `buffer_immutable`; no layout change). It
+cannot be detached (`detach_buffer` refuses, `%BufferDetach` throws), resized or
+transferred. Its typed arrays' elements are `{writable: false, enumerable: true,
+configurable: false}`: [[DefineOwnProperty]] accepts only matching attributes and the
+same value (SameValue, unconverted), [[Set]] of any numeric key fails before the value is
+converted (`set_property`, `ordinary_set`, `set_own_data_value`, `set_element_fast`, the
+put_elem conversion, Reflect.set, Object.defineProperty all check it), and `ta_set` never
+writes one. Writing builtins check before reading their arguments
+(`RequireMutableTypedArray`: fill, set, copyWithin, reverse, sort, setFromHex,
+setFromBase64; DataView setters), and TypedArrayCreateFromConstructor rejects an
+immutable result (from, of, map, filter, slice); subarray and the copying methods do not.
+dquickts' test_immutable_array_buffer.js also needs SharedArrayBuffer and Atomics (a
+non-goal) and sloppy `Function` code, so it stays in the corpus ratchet;
+tests/corpus/builtins/immutable-arraybuffer.js is the same test without those lines.

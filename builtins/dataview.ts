@@ -143,7 +143,10 @@ function GetViewElement(view: Value, requestIndex: Value, isLittleEndian: Value,
 
 /** SetViewValue ( view, requestIndex, isLittleEndian, type, value ), 25.3.1.6. */
 function SetViewValue(view: Value, requestIndex: Value, isLittleEndian: Value, kind: i32, value: Value): void {
-  DataViewField(view, 0);
+  // An immutable buffer is a TypeError before anything is converted (D1970).
+  if (IsImmutableBuffer(AsObj(DataViewField(view, 0)))) {
+    throw NewTypeError("ArrayBuffer is immutable");
+  }
   const getIndex: f64 = ToIndex(requestIndex);
   let n: Value = undefined;
   if (kind >= 10) {

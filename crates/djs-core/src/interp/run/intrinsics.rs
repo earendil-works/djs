@@ -1439,7 +1439,12 @@ impl Exec<'_> {
                 };
                 let len = arg(self, 1).as_number().unwrap_or(f64::NAN);
                 let max = arg(self, 2).as_number();
-                Value::object(typed::buffer_create(self.heap, proto, len, max)?)
+                let b = typed::buffer_create(self.heap, proto, len, max)?;
+                // `max` true: an immutable buffer (D1970).
+                if arg(self, 2) == Value::TRUE {
+                    self.heap.set_buffer_immutable(b);
+                }
+                Value::object(b)
             }
             BUFFER_INFO => {
                 let b = typed::as_buffer(self.heap, a0)?;
@@ -1450,7 +1455,7 @@ impl Exec<'_> {
                 let n = arg(self, 1).as_number().unwrap_or(0.0);
                 match id {
                     BUFFER_DETACH => {
-                        typed::buffer_detach(self.heap, b);
+                        typed::buffer_detach(self.heap, b)?;
                         Value::UNDEFINED
                     }
                     BUFFER_RESIZE => {
@@ -1462,6 +1467,7 @@ impl Exec<'_> {
                         b,
                         n,
                         arg(self, 2).as_number(),
+                        arg(self, 2) == Value::TRUE,
                     )?),
                 }
             }
@@ -2125,6 +2131,10 @@ impl Exec<'_> {
             && receiver.as_object() == Some(o)
             && self.heap.canonical_numeric_index(key).is_some()
         {
+            // An immutable buffer's elements: false, whatever the index (D1970).
+            if self.heap.ta_immutable(o) {
+                return Ok(SetStep::Done(false));
+            }
             self.heap.ta_numeric_set(o, key, v);
             return Ok(SetStep::Done(true));
         }

@@ -161,7 +161,8 @@ function ReflectSet(target: Value, propertyKey: Value, v: Value, ...rest: Value[
   const receiver: Value = LengthOfArrayLike(rest) > 0 ? Get(rest, 0) : o;
   // A typed array's own element: TypedArraySetElement converts the value first (10.4.5.5),
   // which may run user code; the leaf only writes element values.
-  if (IsTypedArray(receiver) && !IsElementValue(AsObj(receiver), v) && IsCanonicalNumericKey(key) && ReachesReceiver(o, key, AsObj(receiver))) {
+  // (Not for an immutable buffer, whose [[Set]] fails before converting, D1970.)
+  if (IsTypedArray(receiver) && !IsElementValue(AsObj(receiver), v) && IsCanonicalNumericKey(key) && !IsImmutableBuffer(AsObj(TypedArrayField(receiver, 1))) && ReachesReceiver(o, key, AsObj(receiver))) {
     return SetWithReceiver(o, key, ToElementValue(AsObj(receiver), v), receiver);
   }
   return SetWithReceiver(o, key, v, receiver);

@@ -246,10 +246,22 @@ function TypedArraySpecies(this: Value): Value {
   return this;
 }
 
+/**
+ * ValidateTypedArray's write mode (the immutable ArrayBuffer proposal, D1970): a
+ * typed array over an immutable buffer cannot be written.
+ */
+function RequireMutableTypedArray(o: Obj): void {
+  if (IsImmutableBuffer(AsObj(TypedArrayField(o, 1)))) {
+    throw NewTypeError("ArrayBuffer is immutable");
+  }
+}
+
 /** TypedArrayCreateFromConstructor with a length argument, validated (23.2.4.2). */
 function TypedArrayCreateWithLength(c: Value, length: f64): Obj {
   const created: Obj = Construct(c, length);
   ValidateTypedArray(created);
+  // The result is written: it must be mutable (D1970).
+  RequireMutableTypedArray(created);
   if (TALength(created) < length) {
     throw NewTypeError("TypedArray length is too small");
   }
@@ -361,6 +373,7 @@ function TypedArrayPrototypeToStringTag(this: Value): Value {
 function TypedArrayPrototypeSet(this: Value, source: Value, offset?: Value): void {
   TypedArrayField(this, 0);
   const target: Obj = AsObj(this);
+  RequireMutableTypedArray(target);
   const targetOffset: f64 = ToIntegerOrInfinity(offset);
   if (targetOffset < 0) {
     throw NewRangeError("invalid array length");
@@ -470,6 +483,7 @@ function TypedArrayPrototypeSlice(this: Value, start: Value, end: Value): Obj {
  */
 function TypedArrayPrototypeFill(this: Value, value: Value, start?: Value, end?: Value): Obj {
   const o: Obj = ValidateTypedArray(this);
+  RequireMutableTypedArray(o);
   const len: f64 = TALength(o);
   const n: Value = ToElementValue(o, value);
   const k: f64 = RelativeIndex(start, len, 0);
@@ -622,6 +636,7 @@ function WriteDecoded(into: Obj, rec: Obj, isHex: boolean): Obj {
  */
 function Uint8ArrayPrototypeSetFromBase64(this: Value, string: Value, options?: Value): Obj {
   const into: Obj = ValidateUint8Array(this);
+  RequireMutableTypedArray(into);
   if (!IsString(string)) {
     throw NewTypeError("expected string");
   }
@@ -641,6 +656,7 @@ function Uint8ArrayPrototypeSetFromBase64(this: Value, string: Value, options?: 
  */
 function Uint8ArrayPrototypeSetFromHex(this: Value, string: Value): Obj {
   const into: Obj = ValidateUint8Array(this);
+  RequireMutableTypedArray(into);
   if (!IsString(string)) {
     throw NewTypeError("expected string");
   }
@@ -987,6 +1003,7 @@ function TypedArrayPrototypeAt(this: Value, index: Value): Value {
  */
 function TypedArrayPrototypeCopyWithin(this: Value, target: Value, start: Value, end?: Value): Obj {
   const o: Obj = ValidateTypedArray(this);
+  RequireMutableTypedArray(o);
   const len: f64 = TALength(o);
   const to: f64 = RelativeIndex(target, len, 0);
   const from: f64 = RelativeIndex(start, len, 0);
@@ -1323,6 +1340,7 @@ function TypedArrayPrototypeReduceRight(this: Value, callbackfn: Value, ...rest:
  */
 function TypedArrayPrototypeReverse(this: Value): Obj {
   const o: Obj = ValidateTypedArray(this);
+  RequireMutableTypedArray(o);
   const len: f64 = TALength(o);
   for (let lower: f64 = 0; lower < F64Floor(len / 2); lower++) {
     const upper: f64 = len - lower - 1;
@@ -1357,6 +1375,7 @@ function TypedArrayPrototypeSort(this: Value, comparefn: Value): Obj {
     throw NewTypeError("not a function");
   }
   const o: Obj = ValidateTypedArray(this);
+  RequireMutableTypedArray(o);
   const len: f64 = TALength(o);
   const list: Obj = TASortedList(o, len, comparefn);
   for (let k: f64 = 0; k < len; k++) {

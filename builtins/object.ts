@@ -70,7 +70,8 @@ function DefineOwnProperty(o: Obj, key: Value, desc: Obj): boolean {
   // A typed array element converts its value with ToNumber or ToBigInt (user code)
   // after the descriptor checks (IntegerIndexedDefineOwnProperty, 10.4.5.3); the leaf
   // only takes element values.
-  if (IsTypedArray(o) && HasOwnProperty(desc, "value") && IsCanonicalNumericKey(key)) {
+  // (An immutable buffer's element compares the value unconverted, D1970.)
+  if (IsTypedArray(o) && HasOwnProperty(desc, "value") && IsCanonicalNumericKey(key) && !IsImmutableBuffer(AsObj(TypedArrayField(o, 1)))) {
     const value: Value = Get(desc, "value");
     if (!IsElementValue(o, value)) {
       DeleteProperty(desc, "value");

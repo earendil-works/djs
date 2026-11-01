@@ -92,6 +92,19 @@ function ArrayBufferPrototypeDetached(this: Value): Value {
   return BufferInfo(this, 3);
 }
 
+/**
+ * get ArrayBuffer.prototype.immutable (the immutable ArrayBuffer proposal, D1970).
+ * @getter ArrayBuffer.prototype.immutable
+ */
+function ArrayBufferPrototypeImmutable(this: Value): Value {
+  return BufferInfo(this, 4);
+}
+
+/** IsImmutableBuffer ( buffer ): a buffer whose bytes never change (D1970). */
+function IsImmutableBuffer(b: Obj): boolean {
+  return AsBool(BufferInfo(b, 4));
+}
+
 /** Whether a buffer is detached. */
 function IsDetached(b: Obj): boolean {
   return AsBool(BufferInfo(b, 3));
@@ -140,6 +153,9 @@ function ArrayBufferPrototypeSlice(this: Value, start: Value, end: Value): Obj {
   if (IsDetached(created)) {
     throw NewTypeError("ArrayBuffer is detached");
   }
+  if (IsImmutableBuffer(created)) {
+    throw NewTypeError("ArrayBuffer is immutable");
+  }
   if (created === o) {
     throw NewTypeError("cannot use identical ArrayBuffer");
   }
@@ -157,8 +173,11 @@ function ArrayBufferPrototypeSlice(this: Value, start: Value, end: Value): Obj {
   return created;
 }
 
-/** ArrayBufferCopyAndDetach ( O, newLength, preserveResizability ), 25.1.3.3. */
-function ArrayBufferCopyAndDetach(thisValue: Value, newLength: Value, preserve: boolean): Obj {
+/**
+ * ArrayBufferCopyAndDetach ( O, newLength, preserveResizability ), 25.1.3.3; mode 0
+ * fixed length, 1 preserve resizability, 2 immutable (D1970).
+ */
+function ArrayBufferCopyAndDetach(thisValue: Value, newLength: Value, mode: i32): Obj {
   const o: Obj = ThisArrayBuffer(thisValue);
   let newByteLength: f64 = 0;
   if (newLength === undefined) {
@@ -169,9 +188,16 @@ function ArrayBufferCopyAndDetach(thisValue: Value, newLength: Value, preserve: 
   if (IsDetached(o)) {
     throw NewTypeError("ArrayBuffer is detached");
   }
+  if (IsImmutableBuffer(o)) {
+    throw NewTypeError("ArrayBuffer is immutable");
+  }
   let max: Value = undefined;
-  if (preserve && AsBool(BufferInfo(o, 2))) {
+  if (mode === 1 && AsBool(BufferInfo(o, 2))) {
     max = BufferInfo(o, 1);
+  }
+  if (mode === 2) {
+    // BufferTransfer's `max` true: an immutable buffer.
+    return BufferTransfer(o, newByteLength, true);
   }
   if (max !== undefined && newByteLength > AsNumber(max)) {
     throw NewRangeError("invalid array buffer length");
@@ -184,7 +210,7 @@ function ArrayBufferCopyAndDetach(thisValue: Value, newLength: Value, preserve: 
  * @builtin ArrayBuffer.prototype.transfer
  */
 function ArrayBufferPrototypeTransfer(this: Value, newLength?: Value): Obj {
-  return ArrayBufferCopyAndDetach(this, newLength, true);
+  return ArrayBufferCopyAndDetach(this, newLength, 1);
 }
 
 /**
@@ -192,7 +218,40 @@ function ArrayBufferPrototypeTransfer(this: Value, newLength?: Value): Obj {
  * @builtin ArrayBuffer.prototype.transferToFixedLength
  */
 function ArrayBufferPrototypeTransferToFixedLength(this: Value, newLength?: Value): Obj {
-  return ArrayBufferCopyAndDetach(this, newLength, false);
+  return ArrayBufferCopyAndDetach(this, newLength, 0);
+}
+
+/**
+ * ArrayBuffer.prototype.transferToImmutable ( [ newLength ] ) (D1970).
+ * @builtin ArrayBuffer.prototype.transferToImmutable
+ */
+function ArrayBufferPrototypeTransferToImmutable(this: Value, newLength?: Value): Obj {
+  return ArrayBufferCopyAndDetach(this, newLength, 2);
+}
+
+/**
+ * ArrayBuffer.prototype.sliceToImmutable ( start, end ) (D1970): a new immutable
+ * buffer with a copy of the bytes; the species constructor is not used.
+ * @builtin ArrayBuffer.prototype.sliceToImmutable
+ */
+function ArrayBufferPrototypeSliceToImmutable(this: Value, start: Value, end: Value): Obj {
+  const o: Obj = ThisArrayBuffer(this);
+  if (IsDetached(o)) {
+    throw NewTypeError("ArrayBuffer is detached");
+  }
+  const len: f64 = BufferLength(o);
+  const first: f64 = RelativeIndex(start, len, 0);
+  const fin: f64 = RelativeIndex(end, len, len);
+  const newLen: f64 = fin > first ? fin - first : 0;
+  if (IsDetached(o)) {
+    throw NewTypeError("ArrayBuffer is detached");
+  }
+  if (BufferLength(o) < fin) {
+    throw NewRangeError("invalid array buffer length");
+  }
+  const created: Obj = ArrayBufferCreate(RealmIntrinsic("ArrayBufferPrototype"), newLen, true);
+  BufferCopy(o, first, created, 0, newLen);
+  return created;
 }
 
 /**

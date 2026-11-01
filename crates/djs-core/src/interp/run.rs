@@ -3023,7 +3023,9 @@ impl<'h> Exec<'h> {
                 }
                 // A BigInt typed array takes ToBigInt instead (0046): anything but a
                 // BigInt, which also makes a BigInt into a Number array throw.
-                if let Some(t) = o.as_object().filter(|&t| self.heap.is_typed_array(t))
+                if let Some(t) = o
+                    .as_object()
+                    .filter(|&t| self.heap.is_typed_array(t) && !self.heap.ta_immutable(t))
                     && self.heap.element_of(self.heap.ta_kind(t), v).is_none()
                     && self.typed_array_key(op)
                 {
@@ -3302,6 +3304,17 @@ impl<'h> Exec<'h> {
         if self.heap.set_own_data_value(o, key, v) {
             self.sp -= n;
             return Ok(None);
+        }
+        // A typed array over an immutable buffer: [[Set]] of any numeric key fails before
+        // the value is converted (D1970).
+        if self.heap.is_typed_array(o)
+            && self.heap.ta_immutable(o)
+            && self.heap.canonical_numeric_index(key).is_some()
+        {
+            return Err(Fault::error(
+                ErrorKind::TypeError,
+                format!("'{}' is read-only", conv::describe_key(self.heap, key)),
+            ));
         }
         // A typed array element whose value needs ToNumber / ToBigInt (user code): the
         // conversion and the store in the builtin language (0090).

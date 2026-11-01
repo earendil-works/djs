@@ -317,11 +317,13 @@ declare function DateTimezoneOffset(t: f64): f64;
 
 /**
  * AllocateArrayBuffer: byteLength zeroed bytes; max is the maxByteLength of a resizable
- * buffer or undefined. RangeError "invalid array buffer length" (or "... max length"). @leaf
+ * buffer, true for an immutable one (D1970), or undefined. RangeError "invalid array
+ * buffer length" (or "... max length"). @leaf
  */
 declare function ArrayBufferCreate(proto: Obj, byteLength: f64, max: Value): Obj;
 /**
- * A field of an ArrayBuffer: 0 byteLength, 1 maxByteLength, 2 resizable, 3 detached.
+ * A field of an ArrayBuffer: 0 byteLength, 1 maxByteLength, 2 resizable, 3 detached,
+ * 4 immutable (D1970).
  * TypeError "ArrayBuffer object expected" for anything else. @leaf
  */
 declare function BufferInfo(b: Value, field: i32): Value;
@@ -329,7 +331,10 @@ declare function BufferInfo(b: Value, field: i32): Value;
 declare function BufferDetach(b: Obj): void;
 /** Resizes a resizable buffer in place (new bytes are 0). @leaf */
 declare function BufferResize(b: Obj, byteLength: f64): void;
-/** A new buffer with the first bytes of b (max: resizable), b detached. @leaf */
+/**
+ * A new buffer with the first bytes of b (max: a Number for resizable, true for
+ * immutable), b detached; an immutable b is a TypeError. @leaf
+ */
 declare function BufferTransfer(b: Obj, byteLength: f64, max: Value): Obj;
 /** Copies count bytes from src at from to dst at to (memmove). @leaf */
 declare function BufferCopy(src: Obj, from: f64, dst: Obj, to: f64, count: f64): void;

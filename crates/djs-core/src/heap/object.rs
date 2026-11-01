@@ -834,6 +834,10 @@ impl Heap {
             // A typed array element: [[Set]] with the array as receiver always succeeds
             // (an invalid index writes nothing), once the value is a primitive.
             if el == 0 && self.object_class(o) == ObjectClass::TypedArray {
+                // An immutable one: the generic [[Set]] fails (D1970).
+                if self.ta_immutable(o) {
+                    return Ok(false);
+                }
                 return Ok(match self.element_of(self.ta_kind(o), v) {
                     Some(x) => {
                         self.ta_set(o, i, x);
@@ -1612,8 +1616,8 @@ impl Heap {
             && self.canonical_numeric_index(key).is_some()
         {
             // [[Set]] on a typed array: true even for an invalid index (nothing written),
-            // once the value is a primitive.
-            if self.element_of(self.ta_kind(o), v).is_some() {
+            // once the value is a primitive. An immutable one fails (the caller's error).
+            if !self.ta_immutable(o) && self.element_of(self.ta_kind(o), v).is_some() {
                 self.ta_numeric_set(o, key, v);
                 return true;
             }
@@ -1635,7 +1639,13 @@ impl Heap {
         if self.object_class(o) == ObjectClass::TypedArray
             && let Some(r) = self.ta_numeric_get(o, key)
         {
-            return r.map(|v| Property::data(v, PropFlags::ALL));
+            // An immutable buffer's elements are read-only and non-configurable (D1970).
+            let flags = if self.ta_immutable(o) {
+                PropFlags::new(false, true, false)
+            } else {
+                PropFlags::ALL
+            };
+            return r.map(|v| Property::data(v, flags));
         }
         self.read_loc(o, self.find_own(o, key))
     }
@@ -1879,17 +1889,27 @@ impl Heap {
         if self.object_class(o) == ObjectClass::TypedArray
             && let Some(n) = self.canonical_numeric_index(key)
         {
-            // IntegerIndexedDefineOwnProperty (10.4.5.3).
+            // IntegerIndexedDefineOwnProperty (10.4.5.3); an immutable buffer's elements
+            // are non-writable and non-configurable, and keep their value (D1970).
             let valid = self.ta_get_valid(o, n);
+            let mutable = !self.ta_immutable(o);
             if !valid
-                || d.configurable == Some(false)
+                || d.configurable.is_some_and(|c| c != mutable)
                 || d.enumerable == Some(false)
                 || d.is_accessor()
-                || d.writable == Some(false)
+                || d.writable.is_some_and(|w| w != mutable)
             {
                 return Ok(false);
             }
             if let Some(v) = d.value {
+                if !mutable {
+                    let current = self.ta_numeric_get(o, key).flatten();
+                    let current = match current {
+                        Some(c) => self.materialize_value(o, key, c)?,
+                        None => return Ok(false),
+                    };
+                    return Ok(self.same_value(v, current));
+                }
                 return Ok(self.ta_numeric_set(o, key, v) == Some(true));
             }
             return Ok(true);

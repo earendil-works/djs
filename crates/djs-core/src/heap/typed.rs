@@ -3,8 +3,8 @@
 //! An ArrayBuffer (`ObjectClass::ArrayBuffer`) keeps its bytes in a [`Bytes`] cell
 //! (slot 0, an internal reference; `undefined` once detached), with `LEN` the current
 //! byte length and the cell's capacity at least the maximum byte length of a resizable
-//! buffer (slot 1: a Number, or `undefined` for a fixed-length buffer), so resizing
-//! never moves the data.
+//! buffer (slot 1: a Number, `undefined` for a fixed-length buffer, or `true` for an
+//! immutable one, which is fixed-length too: D1970), so resizing never moves the data.
 //!
 //! A typed array (`ObjectClass::TypedArray`) has slots: 0 the buffer object, 1 the
 //! element kind ([`Kind`]), 2 the byte offset, 3 the length in elements or -1 for a
@@ -339,7 +339,8 @@ impl Heap {
     /// DetachArrayBuffer (also `$262.detachArrayBuffer`): the data goes away and every
     /// view sees length 0. False if `b` is not an ArrayBuffer.
     pub fn detach_buffer(&mut self, b: Obj) -> bool {
-        if self.object_class(b) != ObjectClass::ArrayBuffer {
+        // An immutable buffer cannot be detached (the caller's TypeError).
+        if self.object_class(b) != ObjectClass::ArrayBuffer || self.buffer_immutable(b) {
             return false;
         }
         self.set_object_slot(b, 0, Value::UNDEFINED);
@@ -351,7 +352,28 @@ impl Heap {
     pub fn ta_fixed_length(&self, o: Obj) -> bool {
         let buffer = self.ta_buffer(o);
         self.object_slot(o, 3).as_number().is_some_and(|n| n >= 0.0)
-            && self.object_slot(buffer, 1).is_undefined()
+            && !self.buffer_resizable(buffer)
+    }
+
+    /// Whether an ArrayBuffer is resizable (its slot 1 holds the maximum byte length).
+    pub fn buffer_resizable(&self, b: Obj) -> bool {
+        self.object_slot(b, 1).is_number()
+    }
+
+    /// IsImmutableBuffer (the immutable ArrayBuffer proposal, D1970).
+    pub fn buffer_immutable(&self, b: Obj) -> bool {
+        self.object_slot(b, 1) == Value::TRUE
+    }
+
+    /// Makes a fixed-length ArrayBuffer immutable (it was just created for that).
+    pub fn set_buffer_immutable(&mut self, b: Obj) {
+        debug_assert!(!self.buffer_resizable(b));
+        self.set_object_slot(b, 1, Value::TRUE);
+    }
+
+    /// Whether a typed array views an immutable buffer: its elements are read-only.
+    pub fn ta_immutable(&self, o: Obj) -> bool {
+        self.buffer_immutable(self.ta_buffer(o))
     }
 
     pub fn is_typed_array(&self, o: Obj) -> bool {
@@ -541,6 +563,10 @@ impl Heap {
 
     /// Writes element `i`; false (nothing written) if it is not a valid index.
     pub fn ta_set(&mut self, o: Obj, i: u32, e: Elem) -> bool {
+        // An immutable buffer is never written (the builtins throw before).
+        if self.ta_immutable(o) {
+            return false;
+        }
         let Some(len) = self.ta_length(o) else {
             return false;
         };
