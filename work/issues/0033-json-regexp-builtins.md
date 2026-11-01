@@ -1,7 +1,7 @@
 # 0033: JSON and RegExp builtins (+ regex literals end to end)
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0033-json-regexp-builtins
 depends-on: 0011, 0012, 0031 (part 1: bgen forms)
 touches: builtins/json.ts, builtins/regexp.ts, builtins/string-regexp.ts (new files), builtins/intrinsics.d.ts (additions), builtins/gen/, crates/djs-core/src/builtins/ (new modules json/regexp), crates/djs-core/src/regexp/ (VM hookup), crates/djs-core/src/bytecode/intrinsics.rs (regenerated), crates/djs-core/src/compiler/ (regex literal emission only, minimal), crates/djs-core/src/interp/ (a `regexp` op if needed, minimal and additive), ratchets
