@@ -11,7 +11,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0080 | for-of/iteration fast paths + natives wave 2 | infra | .worktrees/infra |
 | 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
 | 0079 | Integration and test efficiency (investigate first) | devflow, after 0053 | .worktrees/devflow |
-| 0065 | accessor + decorators (TC39, then TS legacy) | lexer | .worktrees/lexer |
+| 0082 | The long tail: remaining test262/difftest failures | lexer | .worktrees/lexer |
 | 0069 | Host OOM is not a JS OOM (then 0070 GC-and-retry) | heap | .worktrees/heap |
 | 0073 | Replay journal and canonical image hash | determinism | .worktrees/determinism |
 | 0081 | Perf anatomy: disassembly-level investigation (report only) | perf | .worktrees/perf |
@@ -53,6 +53,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0046 | BigInt | 63d8468 (agent heap; BigInt 1135/1142; active 98.8%) |
 | 0033 | JSON + RegExp builtins, regex literals | 8b5ccfb (agent num; active 32,303 / 32,718) |
 | 0040 | P1-7 Classes | 2d08a6c (agent lexer; test262 active 97.1%) |
+| 0065 | Decorators (TC39 + accessor + TS legacy) | f4894f5 (agent lexer; strip-types 4,316/4,802, 0 differ) |
 | 0058 | Compiler: using, completion values + Goal::Eval, import() | 8bc39dd (agent lexer; strip-types 4,085/4,802, 0 differ) |
 | 0075 | Build identity + Float32 NaN | df34400 (agent num; D1750; libm pinned =0.2.16) |
 | 0076 | Unicode normalization | 9825c90 (agent num; +20.5 KB gz, feature on by default D1760; 400,680/400,680 conformance) |
