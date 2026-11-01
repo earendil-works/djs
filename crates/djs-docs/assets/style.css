@@ -120,7 +120,7 @@ header.top {
 
 nav.book {
   position: sticky; inset-block-start: var(--semantic-dimension-size-top-navigation); align-self: start;
-  max-block-size: calc(100dvh - var(--semantic-dimension-size-top-navigation)); overflow: auto; overscroll-behavior: contain;
+  block-size: calc(100dvh - var(--semantic-dimension-size-top-navigation)); overflow: auto; overscroll-behavior: contain;
   padding: var(--semantic-dimension-space-padding-xxx-large) var(--semantic-dimension-space-padding-x-large);
   border-inline-end: var(--semantic-dimension-border-width-small) solid var(--semantic-color-border-secondary);
 }
@@ -174,7 +174,7 @@ aside.toc a[aria-current]::before {
 article { min-inline-size: 0; font: var(--semantic-typography-prose-primary); overflow-wrap: break-word; }
 article > *, article :where(li, blockquote) > * { margin-block: 0; }
 article > * + *, article :where(li, blockquote) > * + * { margin-block-start: var(--semantic-dimension-space-flow-small); }
-article > * + :where(pre, .live, table, figure, blockquote), article > :where(pre, .live, table, figure, blockquote) + * { margin-block-start: var(--semantic-dimension-space-flow-medium); }
+article > * + :where(pre, .live, .table-scroll, figure, blockquote), article > :where(pre, .live, .table-scroll, figure, blockquote) + * { margin-block-start: var(--semantic-dimension-space-flow-medium); }
 article > * + h2 { margin-block-start: var(--semantic-dimension-space-flow-x-large); }
 article > * + h3 { margin-block-start: var(--semantic-dimension-space-flow-large); }
 article > * + :where(h4, h5, h6) { margin-block-start: var(--semantic-dimension-space-flow-medium); }
@@ -198,6 +198,12 @@ article img { max-inline-size: 100%; }
 
 a { color: var(--semantic-color-text-link); text-decoration: underline; text-decoration-thickness: from-font; text-underline-position: from-font; }
 a:hover { text-decoration-thickness: 10%; }
+/* A link to a repository file on GitHub (render.rs: class="source"). */
+a.source::after {
+  display: inline-block; inline-size: 0.8em; block-size: 0.8em; margin-inline-start: 0.15em;
+  background: currentColor; content: "";
+  mask: url(elanor/icons/open-in-new.svg) center / contain no-repeat;
+}
 
 /* Inline code: wraps anywhere, so a long identifier never widens its column. */
 code {
@@ -234,13 +240,18 @@ pre code { padding: 0; border-radius: 0; background: none; font: inherit; color:
 .tok-number { color: var(--semantic-color-text-code-number); }
 .tok-type { color: var(--semantic-color-text-code-type); }
 
-/* Tables: Elanor's Table. A table wider than the column scrolls inside its own box. */
+/* Tables: Elanor's Table. A table wider than the column scrolls inside its wrapper
+   (site.rs wraps each Markdown table in .table-scroll). */
+.table-scroll { max-inline-size: 100%; overflow-x: auto; }
 article table, .bars {
-  display: block; max-inline-size: 100%; overflow-x: auto;
+  inline-size: 100%;
   border-spacing: 0; border-collapse: collapse;
   font: var(--semantic-typography-ui-secondary);
 }
 article table code { font-size: 0.93em; }
+/* A table's first column names things (opcodes, cells, intrinsics): keep the names whole.
+   The column sizes to them, and a table that gets too wide scrolls in its wrapper. */
+article td:first-child code { overflow-wrap: normal; }
 th, td {
   padding: var(--semantic-dimension-space-padding-small) var(--semantic-dimension-space-padding-large);
   text-align: start; vertical-align: top;
@@ -294,7 +305,7 @@ figure.diagram figcaption { margin-block-start: var(--semantic-dimension-space-g
   border-radius: var(--semantic-dimension-radius-medium);
   font: var(--semantic-typography-ui-secondary);
 }
-.live pre { border-radius: 0; }
+.live pre { margin: 0; border-radius: 0; }
 .live-bar, .live-tabs {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--semantic-dimension-space-control-gap-medium);
   padding: var(--semantic-dimension-space-padding-small) var(--semantic-dimension-space-padding-medium);
@@ -331,6 +342,7 @@ div.live-pane { padding: var(--semantic-dimension-space-padding-small) var(--sem
 div.live-pane p { margin-block: var(--semantic-dimension-space-flow-x-small); }
 pre.live-pane { max-block-size: 22rem; }
 .muted { color: var(--semantic-color-text-secondary); }
+div.live-pane:has(table.bars) { overflow-x: auto; }
 table.bars { margin-block: var(--semantic-dimension-space-flow-x-small); }
 table.bars tr { border: 0; }
 table.bars td { padding: var(--semantic-dimension-space-padding-xxx-small) var(--semantic-dimension-space-padding-small); }
@@ -374,7 +386,7 @@ footer.foot a { color: inherit; }
   nav.book {
     display: none; position: fixed; z-index: var(--semantic-number-layer-floating);
     inset: var(--semantic-dimension-size-top-navigation) 0 0 0; max-block-size: none;
-    border: 0; background: var(--semantic-color-background-canvas);
+    block-size: auto; border: 0; background: var(--semantic-color-background-canvas);
   }
   body.nav-open nav.book { display: block; }
   body.nav-open { overflow: hidden; }

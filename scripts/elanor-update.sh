@@ -85,7 +85,7 @@ cp "$f/licenses/mallos-serif.txt" "$f/licenses/commit-mono.txt" "$out/fonts/lice
 
 # Icons (Material Symbols, Apache-2.0) used by the page template.
 i=$nm/elanor-icons
-for icon in search dark-mode light-mode menu; do cp "$i/dist/svg/$icon.svg" "$out/icons/"; done
+for icon in search dark-mode light-mode menu open-in-new; do cp "$i/dist/svg/$icon.svg" "$out/icons/"; done
 cp "$i/LICENSE" "$i/NOTICE" "$out/icons/"
 
 # The Earendil symbol for the header and the favicon (BRAND-GUIDELINES.md: unmodified,

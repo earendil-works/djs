@@ -292,7 +292,11 @@ fn template(
 </html>
 "##,
         title = esc(&page.title),
-        body = page.html,
+        // Wide tables scroll inside their wrapper instead of widening the column.
+        body = page
+            .html
+            .replace("<table>", "<div class=\"table-scroll\"><table>")
+            .replace("</table>", "</table></div>"),
         repo = render::REPO_URL,
         menu = icon(ICON_MENU, "menu-icon"),
         search_icon = icon(ICON_SEARCH, "search-icon"),
