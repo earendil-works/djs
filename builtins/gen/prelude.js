@@ -5093,7 +5093,7 @@ function LastChunkHandling(opts) {
   if (h === "stop-before-partial") {
     return 2;
   }
-  throw %NewTypeError("invalid lastChunkHandling");
+  throw %NewTypeError("invalid lastChunkHandling option");
 }
 
 // builtins/typedarray.ts:492

@@ -4,6 +4,30 @@
 "use strict";
 
 const installed = {};
+const TA_CTORS = [Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, Float16Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array];
+const TA_PROTO = Object.getPrototypeOf(Int8Array.prototype);
+function taKind(v) {
+  const tag = Object.getOwnPropertyDescriptor(TA_PROTO, Symbol.toStringTag).get.call(v);
+  return tag === undefined ? -1 : TA_CTORS.findIndex((C) => C.name === tag);
+}
+// The native setFromBase64/setFromHex throw at an error after writing what they could;
+// the intrinsics return { read, bytes, error } instead. (The stand-in cannot recover the
+// bytes written before an error, so the comparisons avoid partial-error cases.)
+function decodeRecord(run) {
+  const rec = Object.create(null);
+  try {
+    const [read, bytes] = run();
+    rec.read = read;
+    rec.bytes = bytes.buffer;
+    rec.error = false;
+  } catch (e) {
+    if (!(e instanceof SyntaxError)) throw e;
+    rec.read = 0;
+    rec.bytes = new ArrayBuffer(0);
+    rec.error = true;
+  }
+  return rec;
+}
 const iterState = new WeakMap();
 const MapIterNext = Object.getPrototypeOf(new Map().keys()).next;
 const SetIterNext = Object.getPrototypeOf(new Set().keys()).next;
@@ -144,7 +168,8 @@ const I = {
   },
   // The constructor gets the native one's prototype, so instances compare equal.
   InstallConstructor: (target, key, f, length, parent) => {
-    Object.defineProperty(f, "prototype", { value: globalThis[key].prototype });
+    const native = key === "%TypedArray%" ? Object.getPrototypeOf(Int8Array) : globalThis[key];
+    Object.defineProperty(f, "prototype", { value: native.prototype });
     installed[target + "." + key] = { f, length };
   },
   InstallAccessor: (target, key, f, isSetter) => {
@@ -321,6 +346,58 @@ const I = {
   },
   DateParse: (s) => (check(typeof s === "string", "DateParse"), Date.parse(s)),
   DateTimezoneOffset: (t) => new Date(t).getTimezoneOffset(),
+  ArrayBufferCreate: (proto, len, max) => Object.setPrototypeOf(max === undefined ? new ArrayBuffer(len) : new ArrayBuffer(len, { maxByteLength: max }), proto),
+  BufferInfo: (b, f) => {
+    const g = (n) => Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, n).get.call(b);
+    return [g("byteLength"), g("maxByteLength"), g("resizable"), g("detached")][f];
+  },
+  BufferDetach: (b) => void b.transfer(),
+  BufferResize: (b, n) => b.resize(n),
+  BufferTransfer: (b, len, max) => (max === undefined ? ArrayBuffer.prototype.transferToFixedLength.call(b, len) : ArrayBuffer.prototype.transfer.call(b, len)),
+  BufferCopy: (src, from, dst, to, count) => new Uint8Array(dst, to, count).set(new Uint8Array(src, from, count)),
+  IsTypedArray: (v) => taKind(v) >= 0,
+  IsDataView: (v) => {
+    try {
+      Object.getOwnPropertyDescriptor(DataView.prototype, "buffer").get.call(v);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  RealmConstructor: (name) => (name === "%TypedArray%" ? Object.getPrototypeOf(Int8Array) : globalThis[name]),
+  TypedArrayCreate: (proto, kind, buffer, off, len) => {
+    const C = TA_CTORS[kind];
+    return Object.setPrototypeOf(len < 0 ? new C(buffer, off) : new C(buffer, off, len), proto);
+  },
+  TypedArrayField: (o, f) => {
+    const kind = taKind(o);
+    if (kind < 0) throw new TypeError("not a TypedArray");
+    const g = (n) => Object.getOwnPropertyDescriptor(TA_PROTO, n).get.call(o);
+    const buffer = g("buffer");
+    const oob = buffer.detached || (g("length") === 0 && g("byteOffset") === 0 && false);
+    return [kind, buffer, g("byteOffset"), g("length"), g("byteLength"), oob, false][f];
+  },
+  TypedArrayGet: (o, i) => (taKind(o) >= 0 ? o[i] : undefined),
+  TypedArraySet: (o, i, n) => (check(typeof n === "number", "TypedArraySet"), void (Number.isInteger(i) && i >= 0 && (o[i] = n))),
+  TypedArrayCopy: (src, from, dst, to, count) => {
+    const vals = [];
+    for (let i = 0; i < count; i++) vals.push(src[from + i]);
+    for (let i = 0; i < count; i++) dst[to + i] = vals[i];
+  },
+  TypedArrayKindProto: (k) => TA_CTORS[k].prototype,
+  Base64Encode: (o, url, omit) => Uint8Array.prototype.toBase64.call(o, { alphabet: url ? "base64url" : "base64", omitPadding: omit }),
+  HexEncode: (o) => Uint8Array.prototype.toHex.call(o),
+  Base64Decode: (s, url, last, max) => decodeRecord(() => {
+    const t = new Uint8Array(Math.min(max, s.length));
+    const r = t.setFromBase64(s, { alphabet: url ? "base64url" : "base64", lastChunkHandling: ["loose", "strict", "stop-before-partial"][last] });
+    return [r.read, t.slice(0, r.written)];
+  }, s, url, last),
+  HexDecode: (s, max) => decodeRecord(() => {
+    const t = new Uint8Array(Math.min(max, s.length));
+    const r = t.setFromHex(s);
+    return [r.read, t.slice(0, r.written)];
+  }),
+  NewSyntaxError: (m) => new SyntaxError(m),
   StrLocaleCompare: (a, b) => a.localeCompare(b),
   StrCharCodeAt: (s, i) => (check(typeof s === "string" && Number.isInteger(i) || !isFinite(i), "StrCharCodeAt"), i >= 0 && i < s.length ? s.charCodeAt(i) : NaN),
   StrCodePointAt: (s, i) => (i >= 0 && i < s.length ? s.codePointAt(i) : undefined),
@@ -1227,5 +1304,57 @@ same("Date.prototype.toJSON", DP.toJSON, (f) => f.call({ valueOf: () => 1, toISO
 for (const name of Object.getOwnPropertyNames(DP).filter((n) => typeof DP[n] === "function" && n !== "constructor" && installed["Date.prototype." + n])) {
   same("Date.prototype." + name, DP[name], () => installed["Date.prototype." + name].length === DP[name].length);
 }
+
+// ---- 0039: ArrayBuffer, typed arrays, base64/hex ----------------------------------------
+
+for (const args of [[8], [0], [-1], [2 ** 53], ["4"], [4, { maxByteLength: 8 }], [4, { maxByteLength: 2 }], [undefined], [toPrim(3)]]) {
+  same("globalThis.ArrayBuffer", ArrayBuffer, (f) => { const b = Reflect.construct(f, args); return [b.byteLength, b.maxByteLength, b.resizable]; });
+}
+same("globalThis.ArrayBuffer", ArrayBuffer, (f) => f(1));
+const ABP = ArrayBuffer.prototype;
+for (const [s0, e0] of [[undefined, undefined], [1, 3], [-2, undefined], [5, 1], [0, 100]]) {
+  same("ArrayBuffer.prototype.slice", ABP.slice, (f) => { const b = new Uint8Array([1, 2, 3, 4]).buffer; return Array.from(new Uint8Array(f.call(b, s0, e0))); });
+}
+same("ArrayBuffer.prototype.slice", ABP.slice, (f) => f.call({}));
+for (const n of [undefined, 2, 8, -1]) {
+  same("ArrayBuffer.prototype.transfer", ABP.transfer, (f) => { const b = new Uint8Array([1, 2, 3, 4]).buffer; const r = f.call(b, n); return [b.detached, r.byteLength, Array.from(new Uint8Array(r))]; });
+  same("ArrayBuffer.prototype.resize", ABP.resize, (f) => { const b = new ArrayBuffer(4, { maxByteLength: 6 }); f.call(b, n); return b.byteLength; });
+}
+same("ArrayBuffer.prototype.resize", ABP.resize, (f) => f.call(new ArrayBuffer(4), 2));
+same("ArrayBuffer.isView", ArrayBuffer.isView, (f) => [f(new Uint8Array(1)), f(new DataView(new ArrayBuffer(1))), f(new ArrayBuffer(1)), f([])]);
+for (let k = 0; k < 10; k++) {
+  const name = TA_CTORS[k].name;
+  for (const args of [[3], [[1, -1, 2.5, 300, NaN, Infinity]], [new Float64Array([1.5, -2.5, 70000])], [{ length: 2, 0: "7", 1: toPrim(5) }], [new ArrayBuffer(16), 8], [new ArrayBuffer(16), 0, 1], [new ArrayBuffer(16), 1], [new ArrayBuffer(15)], [-1], [new Set([5, 6])]]) {
+    same("globalThis." + name, TA_CTORS[k], (f) => { const t = Reflect.construct(f, args); return [t.length, t.byteOffset, Array.from(t)]; });
+  }
+  same("globalThis." + name, TA_CTORS[k], (f) => f(1));
+}
+const TAP = TA_PROTO;
+for (const name of ["set", "subarray", "slice", "fill"]) {
+  for (const args of [[], [[9, 8]], [[9, 8], 2], [new Uint8Array([7])], [1, 3], [-2], [5, 1], [[1, 2, 3, 4, 5]], [0, 1, 2]]) {
+    same("%TypedArray%.prototype." + name, TAP[name], (f) => { const t = new Uint8Array([1, 2, 3, 4]); const r = f.call(t, ...args); return [r === undefined ? "u" : Array.from(r), Array.from(t)]; });
+  }
+  same("%TypedArray%.prototype." + name, TAP[name], (f) => f.call([1, 2]));
+}
+same("%TypedArray%.from", Object.getPrototypeOf(Int8Array).from, (f) => Array.from(f.call(Int16Array, [1, 2, 70000], (v) => v * 2)));
+same("%TypedArray%.of", Object.getPrototypeOf(Int8Array).of, (f) => Array.from(f.call(Uint8Array, 1, 2, 300)));
+const blob = new Uint8Array(256).map((_, i) => i);
+for (const opts of [undefined, { alphabet: "base64url" }, { omitPadding: true }, { alphabet: "nope" }, 5]) {
+  for (const t of [blob, new Uint8Array([]), new Uint8Array([1]), new Uint8Array([1, 2]), new Uint8Array([1, 2, 3])]) {
+    same("Uint8Array.prototype.toBase64", Uint8Array.prototype.toBase64, (f) => f.call(t, opts));
+  }
+}
+same("Uint8Array.prototype.toHex", Uint8Array.prototype.toHex, (f) => f.call(blob));
+same("Uint8Array.prototype.toHex", Uint8Array.prototype.toHex, (f) => f.call(new Int8Array(1)));
+for (const s of ["", "aGk=", "aGk", "aG", "a", "aGkh", " a G k h ", "aGk=x", "aG==", "aGk==", "-_-_", "+/+/", "AA==", "AB==", "AAA=", "AAB="]) {
+  for (const opts of [undefined, { alphabet: "base64url" }, { lastChunkHandling: "strict" }, { lastChunkHandling: "stop-before-partial" }, { lastChunkHandling: "bogus" }]) {
+    same("Uint8Array.fromBase64", Uint8Array.fromBase64, (f) => Array.from(f(s, opts)));
+  }
+}
+same("Uint8Array.fromBase64", Uint8Array.fromBase64, (f) => f(5));
+for (const s of ["", "00ff", "0", "zz", "ABcd", "a b"]) {
+  same("Uint8Array.fromHex", Uint8Array.fromHex, (f) => Array.from(f(s)));
+}
+same("Uint8Array.fromBase64", Uint8Array.fromBase64, (f) => Array.from(f(blob.toBase64())).join() === Array.from(blob).join());
 
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));

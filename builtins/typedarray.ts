@@ -485,7 +485,7 @@ function LastChunkHandling(opts: Value): i32 {
   if (h === "stop-before-partial") {
     return 2;
   }
-  throw NewTypeError("invalid lastChunkHandling");
+  throw NewTypeError("invalid lastChunkHandling option");
 }
 
 /** A Uint8Array holding the bytes of a decode record. */

@@ -99,7 +99,8 @@ fn intrinsic_calls_to_js(src: &str) -> String {
     let mut out = String::with_capacity(src.len());
     let mut in_string = false;
     let mut escaped = false;
-    for c in src.chars() {
+    let chars: Vec<char> = src.chars().collect();
+    for (i, &c) in chars.iter().enumerate() {
         if in_string {
             out.push(c);
             if escaped {
@@ -112,7 +113,8 @@ fn intrinsic_calls_to_js(src: &str) -> String {
         } else if c == '"' {
             in_string = true;
             out.push(c);
-        } else if c == '%' {
+        } else if c == '%' && chars.get(i + 1).is_some_and(|n| n.is_ascii_alphabetic()) {
+            // `%Name(`; a `%` followed by a space is the remainder operator.
             out.push_str("I.");
         } else {
             out.push(c);

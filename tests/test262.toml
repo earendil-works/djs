@@ -92,14 +92,14 @@ description = "Phases P3 to P5 of ARCH.md: on the roadmap, not in the current mi
 # Reflect.*, Map, Set, set-methods, array-grouping, WeakMap, WeakSet,
 # symbols-as-weakmap-keys, Symbol.species, Symbol.toPrimitive, Symbol.toStringTag,
 # Symbol.isConcatSpreadable, Symbol.hasInstance and Symbol.prototype.description.
+# Moved to active in 0039: built-ins/ArrayBuffer, DataView, TypedArray,
+# TypedArrayConstructors, Uint8Array and the features TypedArray, TypedArray.*, *Array,
+# ArrayBuffer, DataView, DataView.*, resizable-arraybuffer, arraybuffer-transfer,
+# align-detached-buffer-semantics-with-web-reality, uint8array-base64 and
+# stable-typedarray-sort (immutable-arraybuffer stays later: a proposal).
 paths = [
   "built-ins/BigInt",                         # BigInt
   "built-ins/Proxy",                          # Proxy
-  "built-ins/ArrayBuffer",                    # binary data
-  "built-ins/DataView",                       # binary data
-  "built-ins/TypedArray",                     # binary data
-  "built-ins/TypedArrayConstructors",         # binary data
-  "built-ins/Uint8Array",                     # binary data (base64/hex methods)
   "built-ins/RegExp",                         # our own regex engine comes in P5
   "built-ins/RegExpStringIteratorPrototype",  # regex
   "language/literals/regexp",                 # regex
@@ -120,18 +120,7 @@ features = [
   "BigInt",                     # BigInt
   "Proxy",                      # Proxy
   "proxy-missing-checks",       # Proxy
-  "TypedArray",                 # binary data
-  "TypedArray.*",               # binary data
-  "*Array",                     # typed array constructors (Int8Array, ..., Float16Array)
-  "ArrayBuffer",                # binary data
-  "DataView",                   # binary data
-  "DataView.*",                 # binary data
-  "resizable-arraybuffer",      # binary data
-  "arraybuffer-transfer",       # binary data
   "immutable-arraybuffer",      # binary data
-  "align-detached-buffer-semantics-with-web-reality", # binary data
-  "uint8array-base64",          # binary data
-  "stable-typedarray-sort",     # binary data
   "generators",                 # generators
   "async-iteration",            # async generators, for await
   "Symbol.asyncIterator",       # async iteration
