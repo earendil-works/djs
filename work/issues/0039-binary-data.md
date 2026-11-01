@@ -1,7 +1,7 @@
 # 0039: Binary data: ArrayBuffer, typed arrays, DataView, Uint8Array base64/hex
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0039-binary-data
 depends-on: 0038
 touches: builtins/ (arraybuffer.ts, typedarray.ts, dataview.ts …), builtins/gen/, crates/djs-core/src/builtins/, crates/djs-core/src/heap/ (new cell kinds: byte buffers, additive), crates/djs-core/src/interp/ (only the integer-indexed exotic object element paths: get/set/has/define/delete/ownKeys for typed arrays, isolated), crates/djs-core/src/wire/ (decode bytes to a real Uint8Array: the 0018 follow-up), js/src/reader.ts (read typed arrays out: the 0021 follow-up), tests/test262.toml (promote binary data to active), ratchets
