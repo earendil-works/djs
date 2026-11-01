@@ -1,0 +1,8 @@
+/target/
+# git worktrees for sub-agents (one per issue)
+/.worktrees/
+# scratch space: logs, large outputs, locks. Never committed.
+/work/scratch/
+# external checkouts (test262 etc.), fetched by scripts/
+/vendor/
+.DS_Store

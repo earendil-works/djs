@@ -1,0 +1,13 @@
+[package]
+name = "djs-cli"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "djs"
+path = "src/main.rs"
+
+[dependencies]
+djs-core = { path = "../djs-core" }
