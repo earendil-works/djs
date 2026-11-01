@@ -265,7 +265,13 @@ pub extern "C" fn vm_new(memory_limit: u32) -> u32 {
 #[cfg(feature = "compiled-prelude")]
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_new_compiled(memory_limit: u32) -> u32 {
-    add_new_vm(Vm::new(options(memory_limit)))
+    // Compacted like djs-prelude's build compacts the base (D1431), so that after a
+    // collection the two images can be compared byte for byte.
+    let vm = Vm::new(options(memory_limit)).and_then(|mut vm| {
+        vm.heap_mut().compact_for_image()?;
+        Ok(vm)
+    });
+    add_new_vm(vm)
 }
 
 fn add_new_vm(vm: Result<Vm, djs_core::heap::HeapError>) -> u32 {
