@@ -1,7 +1,7 @@
 # 0042: Async generator runtime, function-kind intrinsics, rejections in the host
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0042-async-gen-runtime
 depends-on: 0037
 touches: crates/djs-core/src/interp/, crates/djs-core/src/vm/, builtins/ (generator.ts, asyncgen.ts, async-iteration helpers), crates/djs-wasm/, js/src/sandbox.ts, docs/compiler.md 7.7 (contract additions), docs/host.md
