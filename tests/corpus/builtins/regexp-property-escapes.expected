@@ -1,0 +1,64 @@
+L ["a","Z","é","Ω","ж","中","あ","ア"] ["5_ ","²٣ "," 😀👍🏽🇩🇪 ‍\t "]
+Lu ["Z","Ω"] ["a","5_ é²٣ ","ж中あア 😀👍🏽🇩🇪 ‍\t "]
+Ll ["a","é","ж"] ["Z5_ ","²٣ Ω","中あア 😀👍🏽🇩🇪 ‍\t "]
+Letter ["a","Z","é","Ω","ж","中","あ","ア"] ["5_ ","²٣ "," 😀👍🏽🇩🇪 ‍\t "]
+gc=Lo ["中","あ","ア"] ["aZ5_ é²٣ Ωж"," 😀👍🏽🇩🇪 ‍\t "]
+General_Category=Decimal_Number ["5","٣"] ["aZ","_ é²"," Ωж中あア 😀👍🏽🇩🇪 ‍\t "]
+N ["5","²","٣"] ["aZ","_ é"," Ωж中あア 😀👍🏽🇩🇪 ‍\t "]
+Nd ["5","٣"] ["aZ","_ é²"," Ωж中あア 😀👍🏽🇩🇪 ‍\t "]
+digit ["5","٣"] ["aZ","_ é²"," Ωж中あア 😀👍🏽🇩🇪 ‍\t "]
+P ["_"] ["aZ5"," é²٣ Ωж中あア 😀👍🏽🇩🇪 ‍\t "]
+punct ["_"] ["aZ5"," é²٣ Ωж中あア 😀👍🏽🇩🇪 ‍\t "]
+S ["😀","👍","🏽","🇩","🇪"] ["aZ5_ é²٣ Ωж中あア "," ‍\t "]
+So ["😀","👍","🇩","🇪"] ["aZ5_ é²٣ Ωж中あア ","🏽"," ‍\t "]
+Z [" "," "," "," "," "] ["aZ5_","é²٣","Ωж中あア","😀👍🏽🇩🇪","‍\t"]
+Zs [" "," "," "," "] ["aZ5_","é²٣","Ωж中あア","😀👍🏽🇩🇪","‍\t "]
+C ["‍","\t"] ["aZ5_ é²٣ Ωж中あア 😀👍🏽🇩🇪 "," "]
+Cc ["\t"] ["aZ5_ é²٣ Ωж中あア 😀👍🏽🇩🇪 ‍"," "]
+Cf ["‍"] ["aZ5_ é²٣ Ωж中あア 😀👍🏽🇩🇪 ","\t "]
+LC ["a","Z","é","Ω","ж"] ["5_ ","²٣ ","中あア 😀👍🏽🇩🇪 ‍\t "]
+Script=Greek ["Ω"] ["aZ5_ é²٣ ","ж中あア 😀👍🏽🇩🇪 ‍\t "]
+sc=Cyrl ["ж"] ["aZ5_ é²٣ Ω","中あア 😀👍🏽🇩🇪 ‍\t "]
+scx=Hira ["あ"] ["aZ5_ é²٣ Ωж中","ア 😀👍🏽🇩🇪 ‍\t "]
+Script_Extensions=Kana ["ア"] ["aZ5_ é²٣ Ωж中あ"," 😀👍🏽🇩🇪 ‍\t "]
+Script=Han ["中"] ["aZ5_ é²٣ Ωж","あア 😀👍🏽🇩🇪 ‍\t "]
+sc=Zyyy ["5","_"," ","²"," "," ","😀","👍","🏽","🇩","🇪"," ","\t"," "] ["aZ","é","٣","Ωж中あア","‍"]
+Alphabetic ["a","Z","é","Ω","ж","中","あ","ア"] ["5_ ","²٣ "," 😀👍🏽🇩🇪 ‍\t "]
+Alpha ["a","Z","é","Ω","ж","中","あ","ア"] ["5_ ","²٣ "," 😀👍🏽🇩🇪 ‍\t "]
+White_Space [" "," "," "," ","\t"," "] ["aZ5_","é²٣","Ωж中あア","😀👍🏽🇩🇪","‍"]
+space [" "," "," "," ","\t"," "] ["aZ5_","é²٣","Ωж中あア","😀👍🏽🇩🇪","‍"]
+Emoji ["5","😀","👍","🏽","🇩","🇪"] ["aZ","_ é²٣ Ωж中あア "," ‍\t "]
+Emoji_Presentation ["😀","👍","🏽","🇩","🇪"] ["aZ5_ é²٣ Ωж中あア "," ‍\t "]
+Extended_Pictographic ["😀","👍"] ["aZ5_ é²٣ Ωж中あア ","🏽🇩🇪 ‍\t "]
+ASCII ["a","Z","5","_"," "," "," "," ","\t"] ["é²٣","Ωж中あア","😀👍🏽🇩🇪","‍"," "]
+ASCII_Hex_Digit ["a","5"] ["Z","_ é²٣ Ωж中あア 😀👍🏽🇩🇪 ‍\t "]
+Any ["a","Z","5","_"," ","é","²","٣"," ","Ω","ж","中","あ","ア"," ","😀","👍","🏽","🇩","🇪"," ","‍","\t"," "] null
+Assigned ["a","Z","5","_"," ","é","²","٣"," ","Ω","ж","中","あ","ア"," ","😀","👍","🏽","🇩","🇪"," ","‍","\t"," "] null
+ID_Start ["a","Z","é","Ω","ж","中","あ","ア"] ["5_ ","²٣ "," 😀👍🏽🇩🇪 ‍\t "]
+ID_Continue ["a","Z","5","_","é","٣","Ω","ж","中","あ","ア","‍"] [" ","²"," "," 😀👍🏽🇩🇪 ","\t "]
+Uppercase ["Z","Ω"] ["a","5_ é²٣ ","ж中あア 😀👍🏽🇩🇪 ‍\t "]
+Lowercase ["a","é","ж"] ["Z5_ ","²٣ Ω","中あア 😀👍🏽🇩🇪 ‍\t "]
+Join_Control ["‍"] ["aZ5_ é²٣ Ωж中あア 😀👍🏽🇩🇪 ","\t "]
+Regional_Indicator ["🇩","🇪"] ["aZ5_ é²٣ Ωж中あア 😀👍🏽"," ‍\t "]
+Emoji_Modifier ["🏽"] ["aZ5_ é²٣ Ωж中あア 😀👍","🇩🇪 ‍\t "]
+true true false false true false
+true true true true true false
+["👨‍👩‍👧","🇩🇪"] ["Привет","мир"]
+café naïve ___ 4 true
+\p{Foo} u SyntaxError unknown unicode property name
+\p{Script=Foo} u SyntaxError unknown unicode script
+\p{Script} u SyntaxError unknown unicode script
+\p{General_Category} u SyntaxError unknown unicode general category
+\p{Foo=Latin} u SyntaxError unknown unicode property name
+\p{RGI_Emoji} u SyntaxError unknown unicode property name
+\P{RGI_Emoji} v SyntaxError unknown unicode property name
+[^\p{RGI_Emoji}] v SyntaxError negated character class with strings in regular expression debu
+\p{ASCII=Y} u SyntaxError unknown unicode property name
+\p{lu} u SyntaxError unknown unicode property name
+\p{WSpace} u SyntaxError unknown unicode property name
+\p{Lu u SyntaxError expecting '}'
+\p u SyntaxError expecting '{' after \p
+\p{gc=} u SyntaxError unknown unicode general category
+ok \p{L=} u
+false true 2
+=== completed

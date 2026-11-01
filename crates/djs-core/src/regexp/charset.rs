@@ -27,6 +27,7 @@ impl CharSet {
     }
 
     /// A set from ranges that are already sorted, disjoint and non-adjacent.
+    #[cfg_attr(not(feature = "regexp-unicode-props"), allow(dead_code))]
     pub(crate) fn from_sorted(ranges: Vec<(u32, u32)>) -> CharSet {
         debug_assert!(ranges.windows(2).all(|w| w[0].1 + 1 < w[1].0));
         CharSet { ranges }

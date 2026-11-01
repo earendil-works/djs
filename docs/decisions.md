@@ -2193,3 +2193,137 @@ stack size exceeded`, as V8 does, and pi's tests expect it. dquickts (our oracle
 `InternalError: stack overflow`. djs follows pi and V8, since replacing pi's engine is the
 goal. Difftest cases that hit stack overflow are marked as expected differences from the
 oracle.
+
+## D1500: Unicode property escapes, on by default
+date: 2026-11-01 · by: num · issue: 0050
+Supersedes D1112. `\p{..}` and `\P{..}` in `u` and `v` mode support:
+- General_Category values and groups;
+- Script and Script_Extensions;
+- the 53 binary properties of ECMA-262's table, with exactly that table's aliases;
+- the properties of strings in `v` mode.
+
+`scripts/gen-unicode.py` generates `unicode/props.rs` from UCD 17 and the emoji 17 files.
+Sets are varint ranges (gap, length); sequences are sorted and front-coded with zigzag
+deltas; names are comma-separated alias lists. The tables:
+
+| part | bytes |
+| --- | ---: |
+| General_Category leaves | 9.0K |
+| Script + Script_Extensions | 5.8K |
+| binary properties | 25.1K |
+| properties of strings | 17.9K |
+
+Total DATA is 57.8 KB. Derived sets are computed at lookup time (in
+`unicode/property.rs`):
+- Any and ASCII;
+- Assigned, the complement of Cn;
+- the gc groups;
+- scx, which is sc minus the code points listed in ScriptExtensions.txt plus the
+  script's own explicit list;
+- RGI_Emoji, the union of the string properties.
+
+Semantics follow qjs: the same error messages, `\p{Script}` is an unknown script, and
+`\p{Lu=}` is `\p{Lu}`. For case-insensitive matching, `v` mode folds the set before
+negating it and `u` mode after.
+
+djs-wasm, release, stripped of custom sections:
+
+| | bytes | gzip -9 |
+| --- | ---: | ---: |
+| without | 1,153,656 | 369,318 |
+| with | 1,226,297 | 396,360 |
+| difference | +72.6K (+6.3%) | +27K (+7.3%) |
+
+Of the 72.6K, about 66K is data and 6.5K is code.
+
+The `regexp-unicode-props` feature is **on by default**. Code written by models uses
+`\p{L}`, `\p{Emoji}` and `\u` patterns, and qjs supports them, so a SyntaxError there
+breaks real programs. 27 KB of gzip is small next to the base image and the interpreter.
+Embedders that need the bytes turn the feature off and get D1112's SyntaxError. If size
+gets tight, the properties of strings (18 KB, `v` mode only) are the obvious part to put
+behind a second feature.
+
+## D1501: Compact loops over one character (STAR)
+date: 2026-11-01 · by: num · issue: 0050
+A quantifier whose body matches exactly one character (CHAR, a class without strings,
+`.`) compiles to a single `STAR` instruction:
+- two registers hold the count and the start position;
+- the greedy loop consumes as much as it can in one instruction (resumable, one fuel
+  unit per character) and leaves one backtrack frame of kind `K_STAR`;
+- each retry of that frame gives back one character (greedy) or takes one more (lazy).
+
+So the backtrack stack stays flat. Before, there was one 4-word frame per iteration:
+`/^\D+$/` on 2M units overflowed the 1M-word limit, and suspension copied the whole
+stack at every stop.
+
+Two refinements:
+- **Follow set.** The compiler passes down the characters that can start what follows a
+  node, in forward concatenations, when that cannot match empty (first_chars). `STAR`
+  skips counts whose next character is not in that set without trying the
+  continuation.
+- **SKIP.** A pattern that starts with a greedy unbounded STAR, and has no
+  backreferences, records the end of the run the loop consumed in a register written
+  outside the undo log. When the attempt fails, the search loop skips to that end:
+  every start inside the run would retry the same continuation positions.
+
+The 0011 benchmark (release, utf16, best of two):
+
+| pattern | before | after |
+| --- | ---: | ---: |
+| `[\w.+-]+@[\w-]+\.[\w.]+` | 6.4 ms | 1.5 ms |
+| `\d+` | 1.0 ms | 0.6 ms |
+| `\s+` | 3.0 ms | 2.1 ms |
+
+Results:
+- test262 built-ins/RegExp now passes completely: the three
+  CharacterClassEscapes overflows are gone, and so are the 440 property-escape tests
+  that overflowed on `^\p{..}+$`.
+- A suspension now copies a small state.
+
+## D1502: Regex literals compile once
+date: 2026-11-01 · by: num · issue: 0050
+The compiler already compiled every regex literal for its early errors. It now keeps the
+program, in a U32Array cell held by an internal reference in the function's constant
+pool, and emits `push_const program; push_const pattern; push_const flags;
+call_intrinsic %RegExpCreate 3`. `%RegExpCreate` accepts the program in place of the
+prototype argument, and RegExp objects share the immutable cell.
+
+Every evaluation still creates a fresh RegExp object, as the spec requires. 100k
+evaluations of `/a(b+)c/.exec(..)` went from 110 to 80 ms; qjs takes 10 ms, and the rest
+is object creation and the exec protocol.
+
+## D1503: Fast paths for unmodified RegExps
+date: 2026-11-01 · by: num · issue: 0050
+`%IsPristineRegExp(rx)` is true when nothing the RegExp protocol looks up can run user
+code or differ from the original:
+- rx is a RegExp whose only own property is a writable Number `lastIndex`, and its
+  prototype is %RegExp.prototype%;
+- that prototype still has the original `exec`, `flags` and eight flag getters,
+  `constructor` and @@match (identity checks against the installed `@intrinsic`
+  builtins, like D1351);
+- %RegExp%'s @@species getter is the original.
+
+With that:
+- **`RegExp.prototype[@@split]`**, when the limit is undefined or a Number and the string
+  is not empty, runs as the leaf `%RegExpSplitRaw`. The spec's sticky splitter, tried at
+  every position, is equivalent to a search from that position (`regexp::exec_at` with
+  `sticky` false).
+- **`RegExp.prototype[@@replace]`** with a global pristine RegExp and a string
+  replacement runs as `%RegExpReplaceRaw`: every match, GetSubstitution in Rust, and
+  `lastIndex` 0 at the end.
+
+Both are suspendable, like `%RegExpExecRaw` (D1332). Their progress record (an internal
+ValueArray: the result array or the output so far, the positions, the matcher state) sits
+in the `state` argument slot. Everything else takes the spec path in the builtin
+language, and tests/corpus/builtins/regexp-fast-paths.js checks that every modification
+is still observed like in qjs.
+
+`exec` also passes a Number `lastIndex` straight to the leaf, which does ToLength itself.
+
+Release build, 20k lines of text, 5 runs each:
+
+| case | djs before | djs after | qjs |
+| --- | ---: | ---: | ---: |
+| `split(/[,;\s]+/)` | 3130 ms | 120 ms | 120 ms |
+| `replace(/\s+/g, " ")` | 900 ms | 60 ms | 30 ms |
+| `replace(/(\w+),/g, "$1;")` | 1110 ms | 160 ms | 80 ms |
