@@ -75,7 +75,7 @@ const sb = await Sandbox.create({
 });
 sb.run("return readFile(path).length", { path: "README.md" });
 await sb.runAsync("return await fetchJson(url)", { url });
-const snap = sb.bytes(); // the VM image plus the names of the host functions
+const snap = sb.bytes(); // the VM image, compressed, plus the names of the host functions
 ```
 
 ## Values in: the wire format
@@ -188,8 +188,11 @@ What the adapter adds over QuickJS:
   check: a script starts in about 1 ms instead of 7 ms, against about 4 ms on
   quickjs-wasi.
 - **Snapshots of a waiting session.** `snapshot()` and `resumeVm()` save and restore a
-  session while it waits for a tool, which QuickJS cannot do. pi uses deterministic
-  replay for durability today; images would be an alternative.
+  session while it waits for a tool, which QuickJS cannot do. The image is compressed
+  against the prelude image the session started from, so a waiting session takes about
+  45 KB; another process can rebuild that prelude image from the session's inputs to
+  restore it ([snapshots](snapshots.md), D2262). pi uses deterministic replay for
+  durability today; snapshots would be an alternative.
 
 pi's own test suite runs against djs through this adapter (`node js/pi/pi-tests.ts`):
 221 of its 226 tests pass. The rest come from djs being always strict and from a test
@@ -212,7 +215,7 @@ that expects QuickJS's fingerprint.
 
 Decisions on this page:
 
-<!-- gen:decisions D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 -->
+<!-- gen:decisions D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 -->
 - D1180: Inbound wire format, version 1
 - D1210: Exported heap layout drives the host-side reader
 - D1321: The base snapshot (djs-prelude)
@@ -227,4 +230,5 @@ Decisions on this page:
 - D1730: Canonical hash and run journals
 - D1740: Fuel overshoot carries to the next run; a suspended intrinsic is charged once
 - D1890: pi adapter: snapshot() and the prelude image collect first
+- D2262: pi's prelude image is the reference of the adapter's snapshots and is recomputable
 <!-- /gen -->

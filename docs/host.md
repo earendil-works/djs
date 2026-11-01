@@ -35,7 +35,7 @@ const sb = await Sandbox.create({
 });
 sb.run("return readFile(path).length", { path: "README.md" });   // codemode function body
 await sb.runAsync("return await fetchJson(url)", { url });       // host functions may return promises
-const snap = sb.bytes();                                         // VM image + host function names
+const snap = sb.bytes();                                         // compact snapshot (see "Snapshots")
 const sb2 = await Sandbox.fromBytes(snap, { functions: { readFile } });
 sb.dispose();
 ```
@@ -105,10 +105,11 @@ sb.dispose();
   After a `trap` the sandbox is unusable. Every other error leaves it usable. A failed
   run that left the VM mid-call (`fuel`, or a host-side error escaping the run loop) is
   abandoned with `vm_abort`, and globals set earlier stay intact.
-- Snapshots: `bytes()` is `"DJSS"`, version 1 (u32 LE), the length of a JSON header,
-  `{"functions": [names by fn_id]}`, then the VM image. `fromBytes` binds the host function
-  ids to the implementations by name. It refuses a snapshot whose functions are not all
-  provided. The image is the arena itself and is validated on load (`Vm::from_bytes`).
+- Snapshots: `bytes()` collects, then writes the container below ("Snapshots") with the
+  host function names and the clock as its metadata, compressed against the module's base
+  image. `fromBytes` binds the host function ids to the implementations by name. It refuses
+  a snapshot whose functions are not all provided, and one of another engine build or
+  reference. The image is the arena itself and is validated on load (`Vm::from_bytes`).
 - **Choosing `memoryLimit` (D1690).** A JS `InternalError: out of memory` means the heap
   reached its cap, which depends only on the program and the cap. If the host cannot back
   the heap below the cap, the run ends with `memory` / `out of host memory` instead, and
@@ -158,6 +159,67 @@ points.
 `sb.canonicalHash()` (`vm_canonical_hash`, `Vm::canonical_hash`) is FNV-1a (64 bits) of
 the image a collection would leave, computed on a copy: the VM itself is unchanged, and
 the hash does not depend on fuel slices, snapshots or when the VM last collected.
+
+### Snapshots (D2260)
+
+`Sandbox.bytes()` and the pi adapter's `snapshot()` write one container; `Sandbox.fromBytes()`
+and `resumeVm()` read it (js/src/snapshot.ts). The VM collects first, so the image holds
+only live cells (D1890, D2263). The image is compressed with zstd against a *reference
+image* that the writer and the reader can both produce without storing it: the module's
+base snapshot (`djs_base_ptr`, `djs_base_len`), or for the pi adapter the prelude image
+the session started from (D2262). Little-endian:
+
+| offset | size | field |
+| ---: | ---: | --- |
+| 0 | 4 | magic `"DJSN"` (`0x4e534a44`) |
+| 4 | 2 | format version, 1 |
+| 6 | 1 | app, which says what the metadata is: 1 Sandbox, 2 pi session |
+| 7 | 1 | compression: 0 none, 1 zstd |
+| 8 | 4 | the engine build hash (`djs_build_hash`) |
+| 12 | 1 | the reference: 0 none, 1 the base image, 2 pi's prelude image |
+| 13 | 3 | reserved, 0 |
+| 16 | 8 | the reference's FNV-1a 64, low word first; 0 without one |
+| 24 | 4 | the reference's length in bytes |
+| 28 | 4 | the image's length |
+| 32 | 4 | the metadata's length |
+| 36 | 4 | the payload's length |
+| 40 | | the metadata (UTF-8 JSON), then the payload: the image as is, or one zstd frame with a content checksum, compressed with the reference as a raw-content dictionary |
+
+A reader checks, in this order, and stops at the first problem with a clear message (a
+`misuse` SandboxError; a `SnapshotError` from `resumeVm`):
+1. the container: magic, format version, lengths ("truncated snapshot");
+2. the app ("a pi session snapshot, not a sandbox snapshot");
+3. the engine build: "snapshot from djs build 1a2b3c4d; this module is build 5e6f7a8b: an
+   image restores only into the engine build that wrote it". A host that must restore
+   snapshots of older builds has to keep those builds (an engine registry: not built);
+4. the reference: kind, hash and length ("compressed against the base image X; this
+   host's is Y");
+5. zstd's checksum ("corrupt snapshot"), then the image's verification (`Vm::from_bytes`).
+
+Compression runs in the host (D2261): `nodeZstd()` uses node's built-in zstd
+(`node:zlib`, node 22.15 and 23.8 on), found through `process.getBuiltinModule`, so the
+package still loads in a browser. Level 3 (`DEFAULT_ZSTD_LEVEL`), a window covering the
+reference and the image. Without it (a browser, an older node) snapshots are written
+uncompressed, and a compressed one cannot be read. `snapshotCodec` (SandboxOptions,
+VmHooks) plugs in any zstd that takes raw-content dictionaries (a wasm build such as
+zstd-rs interoperates with node's), `null` never compresses, and
+`bytes({ compression: "none" })` skips it for one snapshot.
+
+The formats before the container still load: the Sandbox's `"DJSS"` and the adapter's
+`"DJPI"`, version 1 (u32 LE magic, version, metadata length, the metadata, the raw image).
+
+Measured on the `wasm` profile with node 25 (`scripts/snapshot-research/wasm.ts`: six pi
+codemode cases, a snapshot and a resume at each of their 144 idle points; medians):
+
+| | image (collected) | container | `snapshot()` | `resumeVm()` | uncompressed resume |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| pi session waiting on a tool (ask, agent-loop, sequential) | 546–560 KB | 42–47 KB | 1.8–1.9 ms | 0.80–0.86 ms | 0.55–0.60 ms |
+| pi session holding 60 files (tool-heavy) | 718 KB | 96 KB | 2.3 ms | 0.96 ms | 0.57 ms |
+| pi session holding 1500 records / a 1.5 MB log | 1.8 / 2.2 MB | 335 / 445 KB | 5.1 / 5.7 ms | 2.4 / 2.2 ms | 1.3 / 0.75 ms |
+| a new Sandbox / one holding 1000 records | 395 / 560 KB | 33 / 47 KB | 1.4 / 1.7 ms | 0.72 / 1.0 ms | 0.49 / 0.60 ms |
+
+Against the base image instead of the prelude image, a waiting pi session is 70 KB; at
+level 19, 30 KB in 106 ms; without a dictionary, 137 KB.
 
 ## The ABI
 
@@ -221,6 +283,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_promise_state(vm, h) -> state` | 0 not a promise, 1 pending, 2 fulfilled, 3 rejected; settled: out = a handle (u32) to the result, and the promise counts as handled |
 | `vm_take_unhandled_rejections(vm) -> n` | out = handles (u32) to the reasons of promises rejected with no handler, oldest first (D1423) |
 | `djs_build_hash() -> u32` | the build hash of VM images: identifies the engine build (0049), including its sources, cargo features and libm version (D1750) |
+| `djs_base_ptr()`, `djs_base_len()` | the base snapshot in the module's memory (read-only): the reference image of compact snapshots (D2260) |
 | `djs_panic_ptr()`, `djs_panic_len()` | the last panic message, after a trap |
 | `djs_debug_panic()` | trap on purpose (tests) |
 
@@ -338,8 +401,9 @@ host code and runs at the same speed.
 
 - **Host refs** (ARCH "Data passing") are not built: pass-through data such as images is
   copied in and out.
-- **Snapshots** are whole images that load only into the same build (ARCH "Snapshots").
-  Smaller and longer-lived snapshots are 0088's research, pending the owner's decision.
+- **Snapshots** load only into the build that wrote them (D2260). Restoring old snapshots
+  after an upgrade needs the old builds (an engine registry, not built); durability across
+  engine versions (journal replay) is undecided.
 - **Sync host functions** run one at a time (the VM parks); use `asyncFunctions` for
   concurrent calls.
 
@@ -359,7 +423,7 @@ import { startVm, resumeVm } from "@djs/host/pi";          // js/pi/vm.ts
 const session = await startVm({ data, wasm: await loadModule(), prelude: PRELUDE_SOURCE, post, shouldInterrupt });
 session.deliver({ type: "result", id, ok: true, payload: "42" });
 const bytes = session.snapshot();                        // djs only: the whole session
-const again = resumeVm(bytes, { wasm, post, shouldInterrupt });
+const again = resumeVm(bytes, { wasm, post, shouldInterrupt, prelude: PRELUDE_SOURCE, data });
 ```
 
 `js/pi/engine.ts` is a handle-level client of the exports (the Sandbox runs whole bodies,
@@ -380,15 +444,17 @@ but pi keeps the prelude's `settle`/`run`/`stalled` alive across calls).
 | `Math.random` seeded by QuickJS from its first clock read (seed + 1), one draw used up while creating the context | djs's `Math.random` is the same xorshift64*, so the adapter seeds it one step after seed + 1. **The same seed gives the same numbers on both engines**; pi's pinned values pass |
 | fingerprint `quickjs-wasi X, quickjs Y, prelude H, deterministic 1, stack S, heap M, budget B` | `djs <build hash>, prelude H, host G, deterministic 2, fuel per poll F, heap M, budget B` (`djs_build_hash`; G hashes the adapter's own globals, D1660; the adapter's version is 2 since it collects after the prelude, D1890) |
 | quickjs-wasi's host global `performance` (`queueMicrotask` is native since 0059, `atob`, `btoa` and `DOMException` since 0084) | defined by the adapter in JS before the prelude, so the lockdown freezes it too. `performance.now()` counts from the run's start on the VM clock (deterministic: from `startedAt`, as on quickjs) |
-| no snapshots: durability by deterministic replay | `snapshot()` / `resumeVm()` in addition: the VM image plus the adapter's few numbers, taken while the script waits. The session collects first (D1890), so the image holds only live data: 498 KB for a session waiting on its first call (936 KB uncollected before 0089). A resumed session continues with no replay (tested against an uninterrupted run, with the same messages and interrupt polls) |
+| no snapshots: durability by deterministic replay | `snapshot()` / `resumeVm()` in addition: the session's state and its VM image in the snapshot container ("Snapshots"), taken while the script waits. The session collects first (D1890), and the image is compressed against the prelude image the session started from (D2262): 42–47 KB for a session waiting on a tool (546 KB as an image). `resumeVm` finds that prelude image in the process, or recomputes it from `prelude` and `data` (the session's start data); a session started with `reuseImages: false` is compressed against the base image. A resumed session continues with no replay (tested against an uninterrupted run, with the same messages and interrupt polls) |
 
 **Prelude images.** Running pi's prelude is most of a start: its lockdown walks and freezes
 about 700 objects, and builtin-heavy code like it still runs 1.5-4x more instructions on
 djs than on quickjs-wasi (README.md "Status"). The adapter keeps the VM image taken right after the prelude,
 keyed by everything the prelude saw (prelude, tools, globals, store, heap limit, deterministic mode; at most
-16 images per module, 496 KB each: every cold start collects after the prelude, D1890; they
-were 933 KB of mostly garbage before 0089). A start with the same inputs restores the image
-(0.6 ms) instead. Only `performance`'s origin and the seed are set per run, after the
+16 images per module, 540 KB each at 0117: every cold start collects after the prelude,
+D1890; they were 933 KB of mostly garbage before 0089). A start with the same inputs
+restores the image (0.6 ms) instead. The prelude runs with the clock at 0 in UTC, so its
+image depends only on those inputs and the build, and another process can recompute it to
+restore a snapshot compressed against it (D2262). Only `performance`'s origin and the seed are set per run, after the
 restore. `reuseImages: false` turns it off. pi's worker launcher creates a worker per
 execution, so it would need to keep the image in the parent (or keep workers warm) to
 benefit. The in-thread and remote launchers benefit as they are.

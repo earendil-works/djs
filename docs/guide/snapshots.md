@@ -12,7 +12,9 @@ cost.
 > check and a copy, with no fixups. An image loads only into the exact build that wrote
 > it, and is verified cell by cell before it is used. Every VM starts as a copy of the
 > **base snapshot**, an image of the initialized realm with all builtins compiled, made
-> at build time, which is why creating a VM takes microseconds.
+> at build time, which is why creating a VM takes microseconds. A stored snapshot is the
+> collected image compressed against an image both sides can rebuild, such as the base
+> snapshot: a session waiting on a tool takes about 45 KB instead of half a megabyte.
 
 ## An image is the arena
 
@@ -81,10 +83,10 @@ wrong result, never undefined behavior, because every access is bounds-checked.
 > **Trade-off.** Raw images over a versioned serialization format. Images cost no code
 > to write or read and restore in a copy, and they capture everything, including frames
 > in the middle of a builtin. The cost: they are tied to one build. A VM saved before a
-> deploy cannot resume on the new engine. The durable record across versions is a
-> different mechanism: a journal of the run's external inputs, replayed on the new
-> engine and checked against canonical hashes (D1730, see [the host
-> interface](host.md)).
+> deploy cannot resume on the new engine, unless the host keeps the old engine around to
+> finish it. What could survive an upgrade instead is a journal of the run's external
+> inputs, which a new engine replays (D1730, see [the host interface](host.md)); djs
+> records such journals, but has not made them its durable format.
 
 ## The base snapshot
 
@@ -129,24 +131,67 @@ pi's adapter uses images in two places (D1495, D1890):
   collected, keyed by everything the prelude saw, and restores it for the next script
   with the same inputs. A start then takes about a millisecond instead of several.
 - **Waiting sessions.** `snapshot()` collects the session and takes its image while it
-  waits for a tool; `resumeVm()` continues it, possibly in another process.
+  waits for a tool; `resumeVm()` continues it, possibly in another process. The `Sandbox`
+  does the same with `bytes()` and `fromBytes()`.
 
-How large are such images, and how should they be stored? A study measured six realistic
-pi scripts at all 144 of their idle points. A collected image of a light session is
-about 500 KB, nearly all of it the base realm and pi's prelude, which are a
-deterministic function of the engine build and the prelude's inputs. Compressed with
-that reference image as a dictionary, the same snapshot is 22 to 30 KB. The
-recommendation: keep raw images for same-build use, store them compressed against the
-reference, and rely on journal replay for durability across engine versions. The
-original plan of page-level deltas against a non-moving old generation was measured too
-and lost to the dictionary by a factor of four; it is superseded. The owner's decision
-on the rest is pending, so none of it is built yet.
+## Compact snapshots
 
-> **Trade-off.** Whole images over deltas. A delta against the base or a previous
-> snapshot would be smaller, but a collection moves everything above the first garbage it
-> frees, so byte-level deltas of a compacted heap are fragile, and a non-moving old
-> generation would need its own write tracking. Compressing a whole image against a
-> recomputable reference gets most of the size back with no engine change.
+A collected image of a session waiting on a tool is about 550 KB. Nearly all of it is
+the base realm and pi's prelude, which neither the script nor its tools touched. Storing
+it as it is wastes space; general-purpose compression gets it to about 135 KB, still
+mostly the realm.
+
+The realm does not have to be stored at all, because both sides can rebuild it. The base
+snapshot is fixed by the engine build, and ships inside the module. pi's prelude image is
+fixed by the build and the prelude's inputs: the prelude source, the tool list, the
+globals, the store, the memory limit. So a snapshot is compressed with zstd using such a
+**reference image** as its dictionary, and stores only a description of the reference.
+Matches against the reference are cheap to encode, and what remains is mostly what the
+script did (D2260):
+
+| a snapshot of | image | compressed against the reference |
+| --- | ---: | ---: |
+| a pi session waiting on a tool | 546–560 KB | 42–47 KB |
+| a pi session holding 60 files it read | 718 KB | 96 KB |
+| a pi session holding a 1.5 MB log | 2.2 MB | 445 KB |
+| a new sandbox | 395 KB | 33 KB |
+
+Against the base image instead of pi's prelude image, the waiting session is 70 KB.
+Compressing costs about 1.4 ms and restoring about 0.3 ms more than an uncompressed image.
+
+A snapshot is a small container: a 40-byte header, the host's own metadata (the
+`Sandbox`'s host function names, the adapter's session state) as JSON, and the image,
+compressed or not. The header names everything a restore depends on: the engine build,
+which reference (the base, or pi's prelude image) with its hash and length, and the
+compression. A restore checks them in that order before it touches the image, and stops
+with a message that says what is wrong: a snapshot of another engine build ("snapshot
+from djs build X; this module is build Y"), a reference this host does not have or that
+differs, a damaged frame (zstd's checksum). A host that has to restore snapshots of an
+older build has to keep that build.
+
+For pi's prelude image to be a reference, it has to come out the same in every process
+that computes it. Only one input was not under control: the clock, which the adapter sets
+before every slice of work. So the prelude runs with the clock at zero, in UTC; nothing
+in it reads the time, and each run sets its own clock before the script starts (D2262).
+Two processes then build the same image byte for byte. `resumeVm` finds the reference
+among the prelude images of its process, or recomputes it from the session's prelude and
+start data, refusing data that make a different image.
+
+> **Trade-off.** Compressing in the host, not in the engine. node has zstd built in, so
+> the adapter and the `Sandbox` use it, at level 3 (D2261): level 19 saves a quarter more
+> but takes 100 ms, which is too long while a script waits. A pure-Rust zstd compiled
+> into the module was measured too: about the same sizes, up to twice as slow, and 57 KB
+> more of gzipped module. The cost of keeping it out: a browser has no zstd that takes a
+> dictionary, so there snapshots are written uncompressed unless the page brings its own
+> codec.
+
+> **Trade-off.** Whole images over deltas. A delta against the reference or a previous
+> snapshot would be smaller still: the actual changes of a waiting session are a few KB.
+> But a moving collector changes the offsets of everything after the first change, so
+> only about one word in eight of a session's image sits where it sat in the reference,
+> and byte-level deltas are fragile. A non-moving region for the reference's cells would
+> fix that, at the price of a second collector mode. Compressing a whole image against
+> the reference gets most of the size back with no engine change.
 
 ## Where to look
 
@@ -157,11 +202,13 @@ on the rest is pending, so none of it is built yet.
   for the base image.
 - [`crates/djs-prelude/build.rs`](../../crates/djs-prelude/build.rs): how the base
   snapshot is made.
+- [`js/src/snapshot.ts`](../../js/src/snapshot.ts): the snapshot container, its checks and
+  the zstd codec; [`js/pi/vm.ts`](../../js/pi/vm.ts): the adapter's prelude images,
+  `snapshot()` and `resumeVm()`.
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 -->
-- D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
+<!-- gen:decisions D2040 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 -->
 - D1091: Handle table
 - D1890: pi adapter: snapshot() and the prelude image collect first
 - D1725: The determinism checks compare raw images too
@@ -179,4 +226,7 @@ Decisions on this page:
 - D1831: Shapes with strong transitions and a per-heap shape budget
 - D1990: A restored arena reserves its GC threshold plus a slack
 - D1495: pi adapter: reuse the VM image taken after the prelude
+- D2260: Snapshots are compact containers: collected, zstd against a reference, pinned to the build
+- D2261: Snapshot compression runs in the host: node's zstd at level 3; none without it
+- D2262: pi's prelude image is the reference of the adapter's snapshots and is recomputable
 <!-- /gen -->
