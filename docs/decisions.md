@@ -570,3 +570,28 @@ djs-core's main entry points, for wasm32-unknown-unknown with the `wasm` profile
 its own Cargo workspace (with a copy of `[profile.wasm]`), so workspace builds and the
 gate never build it. Reported: file size, size without custom sections, gzip -9, and
 `wasm-opt -Oz` when available.
+
+## D1180: Inbound wire format, version 1
+date: 2026-11-01 · by: num · issue: 0018
+docs/wire.md is the specification. It is a tagged, little-endian, one-value format with a
+4-byte header (`DJW` + version). Numbers are int8, int32 or float64. Strings carry their
+UTF-16 length up front so the VM allocates them at their final size. They are UTF-8 (ASCII
+when bytes == units, copied as is), or UTF-16 for strings with lone surrogates. Lengths are
+LEB128 varints, which may be zero-padded so the encoder can reserve space before
+`encodeInto` reports the byte count. The key table is inline: the first use of a key carries
+the string and later uses an index, so encoder and decoder are both one pass. Arrays may hold
+holes. `Uint8Array` decodes to an ordinary array of numbers until typed arrays exist. Tag
+`0x3F` (host ref) is reserved and rejected. The encoder takes plain data only (plain or
+null-prototype objects, arrays, `Uint8Array`, primitives). It never calls `toJSON`. Other
+objects, functions, symbols, BigInt and cycles are a TypeError that names the path. Shared
+references are copied. Benchmarks (in the spec) show it beating `JSON.stringify` +
+`encodeInto` + `json::parse_utf8` on every dataset tried, so it replaces JSON as the inbound
+path.
+
+## D1181: The gate runs node
+date: 2026-11-01 · by: num · issue: 0018
+`scripts/gate.sh` runs the `js/` package's tests (`node --test js/test/*.test.ts`) and the
+wire cross-language test (node writes a corpus into a temporary directory, then
+`cargo test -p djs-core wire_cross -- --ignored` decodes it). It needs node >= 22.6 for
+TypeScript type stripping. The `js/` package has no dependencies and no build step; its
+`tsconfig.json` is for editors and `tsc --noEmit` only.

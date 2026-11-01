@@ -122,8 +122,45 @@ with an offset; it never panics. Heap exhaustion is reported separately. The dec
 allocates but never collects (the GC contract); everything it builds is reachable from the
 result only.
 
-## Performance
-
-See "Benchmarks" below; the numbers are also in issue 0018's log.
-
 ## Benchmarks
+
+Host side: node 25 (V8), `js/bench/wire.bench.ts`: `encode` against `JSON.stringify` and
+against `JSON.stringify` + `TextEncoder.encodeInto`. The latter is the real baseline, because a
+wasm host has to copy the JSON text into linear memory as UTF-8. VM side: native release
+build (Apple M-series), `bench_wire` in `crates/djs-core/src/wire/tests.rs`: `wire::decode`
+against `json::parse_utf8` on the same data. Both decode into a fresh heap each time. Times
+are medians in milliseconds. The datasets go through `JSON.parse` first, like real tool
+results, which gives V8 flat strings. String-building code would give cons strings, which slow
+both encoders down.
+
+| dataset | encode | stringify + encodeInto | decode | parse_utf8 | wire total | JSON total | wire KB | JSON KB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10k similar objects (9 fields) | 2.66 | 1.79 | 2.97 | 5.00 | **5.6** | 6.8 | 1222 | 1850 |
+| one 1 MiB ASCII string | 0.02 | 0.36 | 0.03 | 0.51 | **0.05** | 0.87 | 1024 | 1024 |
+| 1 MiB source text with some non-ASCII | 0.19 | 1.12 | 0.54 | 1.39 | **0.73** | 2.51 | 1062 | 1079 |
+| tool results (2000 hits + 200 KB file) | 0.65 | 0.65 | 0.63 | 1.19 | **1.28** | 1.84 | 496 | 614 |
+| 500k numbers (half floats) | 2.84 | 5.18 | 1.10 | 6.59 | **3.9** | 11.8 | 3418 | 4335 |
+
+The wire format wins end to end on every dataset: 1.2x for many small objects, 1.4x for
+mixed tool results, 3x for numbers and non-ASCII text, and 17x for one big string, which is
+two memcpys instead of an escape-scanning serializer plus a parser. The one loss is the
+encoder on many small objects: V8's native `JSON.stringify` is 1.5x faster than the JS
+encoder there (about 24 ns per value). The decoder more than makes up for it. Most of the
+decoder's remaining time on objects is heap allocation, which both paths share. The
+buffers are 20-35% smaller than JSON for structured data.
+
+In wasm, the decode columns will be slower than native. This can be measured once djs-wasm
+exists: export a `decode` and a `parse_json` entry point, have the host `encode` into a view
+of linear memory (`encode(value, new Uint8Array(memory.buffer, ptr, cap))`; if the
+result is not in that buffer, it grew and must be copied in), and time both pipelines from
+node with the same datasets (`node js/bench/wire.bench.ts <dir>` writes them).
+
+## Code and tests
+
+- Encoder: `js/src/wire.ts` (`encode(value, buffer?)`), tests `node --test js/test/*.test.ts`
+  (node >= 22.6 runs the TypeScript directly).
+- Decoder: `crates/djs-core/src/wire/` (`wire::decode(heap, bytes, &DecodeOptions)`), with unit
+  tests, a fuzz test (`fuzz_long` is the longer ignored run) and `wire_cross`: node writes a corpus
+  (`node js/test/gen-cross.ts <dir>`) and the Rust test decodes it and compares it with the node
+  side's dump and with `json::parse_utf8` of the same value. The gate runs the node tests and
+  `wire_cross`.
