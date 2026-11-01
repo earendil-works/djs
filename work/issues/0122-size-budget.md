@@ -88,7 +88,9 @@ analysis (twiggy/attribution scripts), wasm-opt rejected (hurts gzip).
    - gate.sh builds the shipped module in target/size beside the other steps, and the
      last step runs `scripts/size/budget.py` against tests/scores/size.tsv;
    - quickjs-wasi 286,655 is recorded there, and `ceiling_gzip` is a ratchet, now
-     508,383;
+     510,525: the merged tree's 509,501 plus the slack. The first value, 508,383, was
+     measured before the rebase onto heap's 0120 (old generation, +2.2 KB gzip), and the
+     gate's first run caught it;
    - `--update` lowers the ceiling, and raising it is a recorded decision. Once the
      module is within 1.5x, the budget itself is the limit.
 - Speed (wasm, min of 3, vs main; work/scratch/0122/wm-o5.txt): every workload within
@@ -123,7 +125,7 @@ take cutting features or more drastic size-for-speed trades in the interpreter i
   the other steps: watch the gate's wall time (target/gate-steps.tsv).
 
 ## Result
-Shipped module 529.9 → **507.3 KB gzip** (1.85x → 1.77x quickjs-wasi), with workload
+Shipped module 529.9 → **507.3 KB gzip** (1.85x → 1.77x quickjs-wasi; 509.5 KB on main after heap's 0120), with workload
 speed unchanged:
 - the base image is ordered by kind (D2251);
 - it is shipped coded with djs-lzrc and decoded once per module by the host (D2252);
