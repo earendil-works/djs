@@ -2,7 +2,7 @@
 
 Status: design note for issue 0008. It refines ARCH.md "Compiler (no AST)" and
 "Interpreter" so that 0006 (P0) and the P1 issues can be implemented without
-re-deciding the fundamentals. Decisions D1080 to D1087 in `docs/decisions.md` record the
+re-deciding the fundamentals. Decisions D1080 to D1086 in `docs/decisions.md` record the
 load-bearing choices. Places that deviate from or sharpen ARCH.md are marked
 **[ARCH]**; section 11 lists them all with the proposed ARCH edits.
 
@@ -430,6 +430,8 @@ All TS disambiguation is emission-free speculation over the type skipper:
 ## 4. Bytecode
 
 ### 4.1 Encoding
+
+D1082 summarizes 4.1 to 4.3.
 
 - An instruction is a `u8` opcode followed by its immediates, little-endian,
   **unaligned**, read with bounds-checked `from_le_bytes` on subslices.
@@ -912,6 +914,8 @@ dedicated tag is simpler and is also useful for frames (7.1) and generator state
 ## 7. Frames and the interpreter contract
 
 ### 7.1 The value stack and frame records
+
+D1086 summarizes this section.
 
 The value stack is a growable `ValueArray` in the arena (`Roots::STACK`), addressed by
 **index**, so growing it (allocate and copy) moves nothing the interpreter holds.

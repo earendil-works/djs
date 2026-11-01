@@ -250,3 +250,69 @@ date: 2026-11-01 · by: heap · issue: 0009
 collections and snapshots. `new_handle` / `get_handle` / `set_handle` / `drop_handle`;
 using a dropped handle panics. Handles (and the arena roots) are the only references
 that survive `collect`; raw `Obj`/`Str`/`Sym`/`Value`s held in Rust are stale afterwards.
+
+## D1080: Speculative parsing never emits bytecode
+date: 2026-11-01 · by: lexer · issue: 0008
+Every parse ambiguity is resolved before emitting code: by a token-level scan (arrow
+heads with an early bailout, destructuring assignment with a memoized bracket scan,
+`for` heads), or by speculation that only moves the lexer (TypeScript type skipping). A
+checkpoint is `(Lexer, Token, prev_end)`. The only rewrite of emitted code is removing
+the last instruction for lvalue conversion. This replaces ARCH technique 2's
+"emit and truncate", because every future piece of compiler state would otherwise have to
+be part of the checkpoint. See `docs/compiler.md` §3.
+
+## D1081: Name resolution runs once per compilation unit, children first
+date: 2026-11-01 · by: lexer · issue: 0008
+A free name in an inner function can only be classified (outer binding or global) once
+every enclosing function has seen all of its declarations (hoisting), so a function
+cannot be resolved "when it ends" (ARCH technique 3). Resolution runs after the whole
+unit is parsed, over the functions in reverse creation order (children before parents,
+as QuickJS's `js_create_function`), with no recursion. Resolving a child marks
+ancestor bindings captured and adds capture entries to the functions in between.
+§5.3.
+
+## D1082: Bytecode encoding and the instruction table
+date: 2026-11-01 · by: lexer · issue: 0008
+`u8` opcode plus little-endian, unaligned immediates (`u16` slots and argc, `u32`
+constants and atoms, `i32` jumps relative to the next instruction). P0/P1 jumps are
+fixed-width (no short forms until benchmarks justify a relaxation pass). One `ops!`
+macro declares name, immediates, stack effect, fuel cost and flags. Encoders, the
+decoder, the disassembler, the stack-depth checker and `OPS_HASH` (snapshot build hash)
+are generated from it; the interpreter's agreement with it is checked in debug builds.
+Phase-1 code uses pseudo-ops (`name_*` with a side table of name refs, `label`,
+`enter_scope`/`leave_scope`) that one linear re-emit removes. §4.
+
+## D1083: Captured bindings live in heap Box cells
+date: 2026-11-01 · by: lexer · issue: 0008
+The resolver turns every captured binding into a local slot holding a Box cell, created
+when its scope is entered. Closures copy Box references. Frames never hold anything a
+closure points into, so there is no `close_loc` (unlike QuickJS), and frames can be
+suspended and snapshotted freely. Per-iteration bindings come from a new Box per
+iteration (`rebox` for C-style `for`). §5.4.
+
+## D1084: Exception handler tables and gosub/ret for finally
+date: 2026-11-01 · by: lexer · issue: 0008
+Each function template has a table of `(start, end, handler, depth)` try regions,
+innermost first. Unwinding searches it per frame (callers with `ret_pc - 1`), so the
+value stack holds no catch markers (unlike QuickJS). `finally` blocks are compiled once
+and entered with `gosub` at a fixed depth (one value slot plus the return address, an
+int32 Value). §7.4.
+
+## D1085: Re-entrant ops finish immediately, slow paths call privileged JS
+date: 2026-11-01 · by: lexer · issue: 0008
+An op never resumes mid-way. Its fast path is leaf Rust. If user code is needed
+(getter, setter, ToPrimitive, iterator protocol), it pushes a call frame whose header
+records one of a few fixed continuations (`PushResult`, `DiscardResult`,
+`ConstructResult`, `Entry`) and completes when the callee returns. Multi-step slow paths
+are privileged JS builtins (`%ToPrimitive`, `%GetIterator`, ...). That needs a minimal
+privileged compile mode (`%Name(...)` intrinsic calls) and a hand-written `prelude.js` in
+P1, before bgen exists (P2). This replaces ARCH's "small numbered resume state" for
+multi-step ops. §7.3.
+
+## D1086: Frame records in the index-addressed value stack
+date: 2026-11-01 · by: lexer · issue: 0008
+The value stack is a growable arena `ValueArray` addressed by index. A frame is
+`callee, this, args (padded to the formal count), a 5-slot header (prev_bp, ret_pc,
+argc, flags/continuation, new_target, as int32 Values), locals, operand stack`. Calls do
+not copy arguments. The GC traces the stack as plain values, and interpreter registers
+are flushed to an arena `Interp` cell whenever `run` returns. §7.1.
