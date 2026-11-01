@@ -1,7 +1,7 @@
 # 0025: P1-3 Exceptions (compiler side) + P1-4 leftovers
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0025-p1-exceptions
 depends-on: 0024
 touches: crates/djs-core/src/compiler/, docs/compiler.md (corrections), crates/djs-core/src/bytecode/ (additive only)
