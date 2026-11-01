@@ -129,6 +129,8 @@ def executions(path):
                     "isError": bool(m.get("isError")),
                     "decls": {k: v for k, v in decls.items() if k in called},
                     "loads": loads,
+                    # When the run finished (the result entry's time), for usage over time.
+                    "timestamp": entry.get("timestamp") or m.get("timestamp"),
                 }
 
 
