@@ -9,7 +9,9 @@
 use alloc::vec::Vec;
 
 use super::Flags;
+use super::charset::{self, CharSet, canonicalize};
 use super::parser::{Node, Parsed};
+use crate::unicode::case;
 
 // Header words.
 pub(crate) const H_FLAGS: usize = 0;
@@ -75,6 +77,11 @@ pub(crate) const F_UICASE: u32 = 1 << 14;
 
 pub(crate) const OP_MASK: u32 = 0xFF;
 
+/// `SCAN n (lo hi){n}`: advances to the next position whose character is in the set (without
+/// consuming it); fails if there is none. Charges one unit of fuel per character examined
+/// and can stop in the middle of a scan.
+pub(crate) const SCAN: u32 = 21;
+
 /// Quantifier infinity.
 const INF: u32 = u32::MAX;
 
@@ -102,9 +109,15 @@ pub(crate) fn compile(parsed: &Parsed, flags: Flags) -> super::Program {
         reg_top: 0,
         reg_max: 0,
     };
-    // search: try a match here; on failure advance one character and retry.
+    // search: skip to a possible first character, try a match there; on failure advance
+    // one character and retry.
     let search = c.here();
     c.code[H_SEARCH] = search;
+    if let Some((first, false)) = first_chars(&parsed.node, flags.unicode_mode())
+        && first.ranges() != [(0, charset::MAX_CP)]
+    {
+        c.class_op(SCAN, &first);
+    }
     let split = c.emit2(SPLIT_GOTO, 0);
     c.emit(ANY);
     c.emit2(GOTO, search);
@@ -134,6 +147,91 @@ pub(crate) fn group_name(words: &[u32], index: usize) -> Option<&[u32]> {
         p += 1 + len;
     }
     None
+}
+
+/// The input characters that can start a match of `node`, and whether it can match empty.
+/// `None` if unknown (a backreference can start with anything). Assertions and lookarounds
+/// are treated as matching empty, which over-approximates.
+fn first_chars(node: &Node, unicode: bool) -> Option<(CharSet, bool)> {
+    Some(match node {
+        Node::Empty
+        | Node::LineStart { .. }
+        | Node::LineEnd { .. }
+        | Node::WordBoundary { .. }
+        | Node::Look { .. } => (CharSet::new(), true),
+        Node::Char { c, icase } => {
+            let mut s = CharSet::new();
+            s.add(*c);
+            (case_closure(s, *icase, unicode), false)
+        }
+        Node::Class {
+            set,
+            strings,
+            icase,
+        } => {
+            let mut s = set.clone();
+            for st in strings.iter().filter(|st| !st.is_empty()) {
+                s.add_range(st[0], st[0]);
+            }
+            let nullable = strings.iter().any(|st| st.is_empty());
+            (case_closure(s, *icase, unicode), nullable)
+        }
+        Node::Dot { all } => {
+            let all_chars = CharSet::from_ranges(&[(0, charset::MAX_CP)]);
+            if *all {
+                (all_chars, false)
+            } else {
+                let lt = CharSet::from_ranges(&[(0x0A, 0x0A), (0x0D, 0x0D), (0x2028, 0x2029)]);
+                (all_chars.subtract(&lt), false)
+            }
+        }
+        Node::Backref { .. } => return None,
+        Node::Group { body, .. } => first_chars(body, unicode)?,
+        Node::Repeat { min, body, .. } => {
+            let (f, n) = first_chars(body, unicode)?;
+            (f, n || *min == 0)
+        }
+        Node::Concat(v) => {
+            let mut acc = CharSet::new();
+            for n in v {
+                let (f, nullable) = first_chars(n, unicode)?;
+                acc = acc.union(&f);
+                if !nullable {
+                    return Some((acc, false));
+                }
+            }
+            (acc, true)
+        }
+        Node::Alt(v) => {
+            let mut acc = CharSet::new();
+            let mut nullable = false;
+            for n in v {
+                let (f, nn) = first_chars(n, unicode)?;
+                acc = acc.union(&f);
+                nullable |= nn;
+            }
+            (acc, nullable)
+        }
+    })
+}
+
+/// With `icase`, the input characters `c` with `canonicalize(c)` in `set`.
+fn case_closure(set: CharSet, icase: bool, unicode: bool) -> CharSet {
+    if !icase {
+        return set;
+    }
+    let mut extra = CharSet::new();
+    let mut visit = |c: u32| {
+        if set.contains(canonicalize(c, unicode)) {
+            extra.add(c);
+        }
+    };
+    if unicode {
+        case::for_each_fold(|c, _| visit(c));
+    } else {
+        case::for_each_upper(|c, _| visit(c));
+    }
+    set.union(&extra)
 }
 
 /// The minimum number of characters `node` consumes (0 if it can match empty).
@@ -260,9 +358,13 @@ impl Compiler {
         }
     }
 
-    fn class(&mut self, set: &super::charset::CharSet, flags: u32) {
+    fn class(&mut self, set: &CharSet, flags: u32) {
+        self.class_op(CLASS | flags, set);
+    }
+
+    fn class_op(&mut self, op: u32, set: &CharSet) {
         let ranges = set.ranges();
-        self.emit2(CLASS | flags, ranges.len() as u32);
+        self.emit2(op, ranges.len() as u32);
         for &(lo, hi) in ranges {
             self.code.push(lo);
             self.code.push(hi);
@@ -291,13 +393,7 @@ impl Compiler {
 
     /// A `v` class with strings: the strings longest first, then the single characters,
     /// then the empty string.
-    fn class_with_strings(
-        &mut self,
-        set: &super::charset::CharSet,
-        strings: &[Vec<u32>],
-        icase: bool,
-        back: bool,
-    ) {
+    fn class_with_strings(&mut self, set: &CharSet, strings: &[Vec<u32>], icase: bool, back: bool) {
         let mut sorted: Vec<&Vec<u32>> = strings.iter().filter(|s| !s.is_empty()).collect();
         sorted.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
         let mut alts: Vec<Node> = sorted

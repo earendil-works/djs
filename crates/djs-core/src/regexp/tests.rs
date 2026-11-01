@@ -439,3 +439,83 @@ fn latin1_input() {
         _ => panic!(),
     }
 }
+
+/// Rough timings. Run with
+/// `cargo test -p djs-core --release bench_regexp -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn bench_regexp() {
+    use std::println;
+    use std::time::Instant;
+    let patterns = [
+        ("\\d+", ""),
+        ("[\\w.+-]+@[\\w-]+\\.[\\w.]+", ""),
+        ("https?://([^/\\s]+)(/[^\\s?#]*)?", ""),
+        ("(?<y>\\d{4})-(?<m>\\d{2})-(?<d>\\d{2})", ""),
+        ("\\bfox\\b", "i"),
+        ("^\\s+|\\s+$", "g"),
+        ("[\\p{ASCII}]", "v"),
+    ];
+    for (p, f) in patterns {
+        let pat = u16s(p);
+        let flags = Flags::parse(&u16s(f)).unwrap();
+        if compile(&pat, flags).is_err() {
+            continue;
+        }
+        let n = 20_000;
+        let t = Instant::now();
+        for _ in 0..n {
+            core::hint::black_box(compile(&pat, flags).unwrap());
+        }
+        println!(
+            "compile /{p}/{f:4} {:8.0} ns",
+            t.elapsed().as_nanos() as f64 / n as f64
+        );
+    }
+    let text: String = "The quick brown fox jumps over the lazy dog. Contact john.doe@example.com or visit https://example.com/a/b on 2024-01-15. "
+        .repeat(1000);
+    let input = u16s(&text);
+    let latin1: Vec<u8> = text.bytes().collect();
+    for (p, f) in [
+        ("[\\w.+-]+@[\\w-]+\\.[\\w.]+", "g"),
+        ("\\d+", "g"),
+        ("(?<y>\\d{4})-(?<m>\\d{2})-(?<d>\\d{2})", "g"),
+        ("\\bfox\\b", "gi"),
+        ("lazy dog", "g"),
+        ("zebra", "g"),
+        ("\\s+", "g"),
+    ] {
+        let prog = re(p, f);
+        for (name, inp) in [
+            ("utf16", Input::Utf16(&input)),
+            ("latin1", Input::Latin1(&latin1)),
+        ] {
+            let t = Instant::now();
+            let mut start = 0;
+            let mut count = 0;
+            let mut steps = 0u64;
+            loop {
+                let mut fuel = u64::MAX;
+                match exec(&prog, inp, start, &mut fuel, ExecLimits::default()) {
+                    ExecResult::Match(c) => {
+                        let (s, e) = c.get(0).unwrap();
+                        start = if e == s { e + 1 } else { e };
+                        count += 1;
+                    }
+                    _ => {
+                        steps += u64::MAX - fuel;
+                        break;
+                    }
+                }
+                steps += u64::MAX - fuel;
+            }
+            let el = t.elapsed();
+            println!(
+                "scan /{p}/{f} {name}: {count} matches in {:.2} ms ({:.1} MB/s, {:.1} ns/step)",
+                el.as_secs_f64() * 1e3,
+                text.len() as f64 / el.as_secs_f64() / 1e6,
+                el.as_nanos() as f64 / steps as f64
+            );
+        }
+    }
+}

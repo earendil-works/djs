@@ -23,6 +23,22 @@ const K_LOOK: u32 = 1;
 const K_NEG_LOOK: u32 = 2;
 const FRAME: usize = 4;
 
+/// Binary search in sorted inclusive `(lo, hi)` pairs.
+fn in_ranges(ranges: &[u32], c: u32) -> bool {
+    let (mut lo, mut hi) = (0, ranges.len() / 2);
+    while lo < hi {
+        let mid = (lo + hi) / 2;
+        if c < ranges[2 * mid] {
+            hi = mid;
+        } else if c > ranges[2 * mid + 1] {
+            lo = mid + 1;
+        } else {
+            return true;
+        }
+    }
+    false
+}
+
 /// The string being matched.
 #[derive(Clone, Copy, Debug)]
 pub enum Input<'a> {
@@ -439,22 +455,7 @@ impl Machine<'_> {
                 if icase {
                     c = canonicalize(c, self.unicode);
                 }
-                let ranges = &code[pc + 2..pc + 2 + 2 * n];
-                // Binary search over (lo, hi) pairs.
-                let (mut lo, mut hi) = (0, n);
-                let mut found = false;
-                while lo < hi {
-                    let mid = (lo + hi) / 2;
-                    if c < ranges[2 * mid] {
-                        hi = mid;
-                    } else if c > ranges[2 * mid + 1] {
-                        lo = mid + 1;
-                    } else {
-                        found = true;
-                        break;
-                    }
-                }
-                if !found {
+                if !in_ranges(&code[pc + 2..pc + 2 + 2 * n], c) {
                     return fail;
                 }
                 self.s.pc += 2 + 2 * n as u32;
@@ -511,6 +512,26 @@ impl Machine<'_> {
                     return fail;
                 }
                 self.s.pc += 1;
+            }
+            SCAN => {
+                let n = code[pc + 1] as usize;
+                let ranges = &code[pc + 2..pc + 2 + 2 * n];
+                loop {
+                    let pos = self.s.pos as usize;
+                    let Some((c, next)) = self.next_char(pos) else {
+                        return fail;
+                    };
+                    if in_ranges(ranges, c) {
+                        self.s.pc += 2 + 2 * n as u32;
+                        break;
+                    }
+                    self.s.pos = next as u32;
+                    if *fuel == 0 {
+                        // Out of fuel mid-scan: resume at this instruction.
+                        break;
+                    }
+                    *fuel -= 1;
+                }
             }
             GOTO => self.s.pc = code[pc + 1],
             SPLIT_NEXT => {
