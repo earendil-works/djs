@@ -148,7 +148,7 @@ pi's adapter uses images in two places (D1495, D1890):
 
 ## Compact snapshots
 
-A collected image of a session waiting on a tool is about 550 KB. Nearly all of it is
+A collected image of a session waiting on a tool is about 490 KB. Nearly all of it is
 the base realm and pi's prelude, which neither the script nor its tools touched. Storing
 it as it is wastes space; general-purpose compression gets it to about 135 KB, still
 mostly the realm.
@@ -163,23 +163,26 @@ globals, the store, the memory limit. So a snapshot is compressed with zstd usin
 That works far better than one might expect, because of how the heap is collected. A
 collection slides the live cells down in their allocation order ([the garbage
 collector](gc.md)), so the cells a session inherited from its reference stay exactly where
-they were: in a session waiting on a tool, 99.9% of the image's words sit at the same
+they were: in a session waiting on a tool, 99% of the image's words sit at the same
 offset as in the prelude image. zstd encodes all of that as one long match, and what is
 left is what the script did:
 
 | a snapshot of | image | compressed against the reference |
 | --- | ---: | ---: |
-| a pi session waiting on a tool | 546–560 KB | 2–9 KB |
-| a pi session holding 60 files it read | 748 KB | 63 KB |
-| a pi session holding a 1.5 MB log | 2.2 MB | 403 KB |
-| a new sandbox | 395 KB | 33 KB |
+| a pi session waiting on a tool | 489–503 KB | 2–9 KB |
+| a pi session holding 60 files it read | 671–854 KB | 58–111 KB |
+| a pi session holding a 1.5 MB log | 2.2 MB | 404 KB |
+| a new sandbox | 333 KB | 16 KB |
 
-Against the base image instead of pi's prelude image, the waiting session is 66 KB, and
-with the copying collector the heap used before, it was 40 KB: one word in eight stayed
-in place. A new sandbox shows the same effect: its first definitions grow two cells near
-the start of the base image, the root shape's list of transitions and the atom table,
-and everything after their old places moves down. Compressing a waiting session takes
-about 1.2 ms, and restoring costs 0.1 to 0.3 ms more than an uncompressed image.
+Against the base image instead of pi's prelude image, the waiting session is about 51
+KB, and with the copying collector the heap used before, it was 40 KB: one word in eight
+stayed in place. A new sandbox shows the same effect on a smaller scale. Defining its
+`console` grows the global object's property table, which is exactly full in the base;
+the grown table goes to the young end, and the collection slides everything after the
+old table's place down by its size. Only a fifth of the image then lines up with the
+base, and the cells that moved cost the compressor the references they hold to other
+moved cells, about 40 KB of them. Compressing a waiting session takes about 1.2 ms, and
+restoring costs 0.1 to 0.3 ms more than an uncompressed image.
 
 A snapshot is a small container: a 40-byte header, the host's own metadata (the
 `Sandbox`'s host function names, the adapter's session state) as JSON, and the image,
@@ -216,6 +219,70 @@ start data, refusing data that make a different image.
 > A change that grows a cell near the start of the reference moves everything after it,
 > and the snapshot grows from a few KB to tens of KB.
 
+## Inspecting a heap
+
+What is in an image, and why is a snapshot the size it is? `djs heap` answers both
+(D2264). It reads a raw image (what the REPL's `.snapshot` writes), a snapshot container
+or an older snapshot, decompressing a container with its reference: this build's base
+when the hashes match, or a reference given as a file, which
+[`scripts/heap/reference.ts`](../../scripts/heap/reference.ts) writes for a module's base
+or for pi's prelude image of a session's start data.
+
+It reads the image through the engine's own heap code, never its own parser: the image is
+verified as a restore would verify it, the walker and the layout table say which fields
+are references and what they are called, and liveness follows the collector's rules.
+From that it reports:
+
+- a summary: live and garbage bytes, the old region and the young one;
+- cells and bytes per cell kind and per object class;
+- a diff against the reference image;
+- the largest cells, and the largest *retained* sizes: what a cell keeps alive on its
+  own, from the dominator tree of the object graph;
+- strings (duplicated contents, the largest), shapes (the most common key lists),
+  templates and bytecode per script, closures;
+- what a waiting VM holds: queued jobs, pending host calls, promises, and the suspended
+  async functions and generators with their locals by name.
+
+Every cell gets a path from the roots that reads like JavaScript where the heap allows,
+built from the shapes' keys, the elements' indexes, the templates' recorded names of
+captured variables and locals, and the layout's field names for everything internal:
+`globalThis.cache[3].body`, `handle[1]~pending`, `<atoms><entries>`.
+
+The diff is what explains a snapshot's size. Cells have no identity but their offset,
+and a collection moves them, so the tool matches the two images structurally: a
+breadth-first walk from both roots pairs the targets of the same field. Immutable cells
+(strings, bytecode) pair only with the same content, and a shape's list of transitions
+pairs its children by the key they add, since one inserted transition shifts the rest.
+Then every cell of the image is the reference's own, in place or moved, a changed one,
+or new, and the new ones are grouped into the subtrees that keep them alive. For a pi
+session waiting on its second tool call:
+
+```text
+== diff against pi's prelude image
+  against pi's prelude image (484.3 KB): 98.9% of the image's 8-byte words are the
+  reference's at the same offset; cells line up for the first 484.2 KB (99.0%)
+  cells                             count     KB  differing KB
+  unchanged, in place                8415  443.9
+  unchanged, moved                      0    0.0           0.0
+  changed                              21   40.3           0.5
+  new                                  78    4.7           4.7
+  gone (the reference's, not here)      1    0.1
+
+  largest new subtrees (new cells and the new cells only they keep alive):
+  KB   cells             kind  path
+  3.2     47  Object/Ordinary  handle[1]~pending<entries>[5]
+```
+
+The 4.7 KB of new cells are nearly all the script itself, kept alive through the promise
+of the call it waits on, and the container is 2.1 KB.
+
+> **Trade-off.** Structural matching over offsets. Comparing the two images offset by
+> offset would be simpler, but it would call every cell after the first one that moved
+> a change, which is exactly the case a size question is about. Matching through the
+> object graph names what moved and what it cost; it can pair the wrong cells where two
+> siblings are equally plausible, which shows up as a changed cell where there was a
+> new one.
+
 ## Where to look
 
 - [`crates/djs-core/src/vm/mod.rs`](../../crates/djs-core/src/vm/mod.rs): `bytes`,
@@ -228,10 +295,13 @@ start data, refusing data that make a different image.
 - [`js/src/snapshot.ts`](../../js/src/snapshot.ts): the snapshot container, its checks and
   the zstd codec; [`js/pi/vm.ts`](../../js/pi/vm.ts): the adapter's prelude images,
   `snapshot()` and `resumeVm()`.
+- [`crates/djs-cli/src/heap/`](../../crates/djs-cli/src/heap/): `djs heap`, the analyzer;
+  [`crates/djs-cli/src/container.rs`](../../crates/djs-cli/src/container.rs): the
+  container in Rust.
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2043 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 -->
+<!-- gen:decisions D2040 D2041 D2043 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2043: pi's later cold starts size the arena for the sealed prelude heap
@@ -255,4 +325,5 @@ Decisions on this page:
 - D2260: Snapshots are compact containers: collected, zstd against a reference, pinned to the build
 - D2261: Snapshot compression runs in the host: node's zstd at level 3; none without it
 - D2262: pi's prelude image is the reference of the adapter's snapshots and is recomputable
+- D2264: `djs heap` analyzes dumps through djs-core's heap code; djs-cli reads and writes snapshot containers
 <!-- /gen -->

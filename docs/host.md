@@ -209,22 +209,33 @@ The formats before the container still load: the Sandbox's `"DJSS"` and the adap
 `"DJPI"`, version 1 (u32 LE magic, version, metadata length, the metadata, the raw image).
 
 Measured on the `wasm` profile with node 25 (`scripts/snapshot-research/wasm.ts`: six pi
-codemode cases, a snapshot and a resume at each of their 144 idle points; medians, times
-rough at a machine load of about 10):
+codemode cases, a snapshot and a resume at each of their 144 idle points; medians, max
+where given; re-measured at 0133; times rough at a machine load of about 30):
 
 | | image (collected) | container | `snapshot()` | `resumeVm()` | uncompressed resume |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| pi session waiting on a tool (ask; agent-loop, sequential) | 546; 558–560 KB | 2.0; 6.9–7.3 KB | 1.9–2.8 ms | 0.7–1.2 ms | 0.6–1.0 ms |
-| pi session holding 60 files (tool-heavy) | 748 KB | 63 KB | 2.5–2.8 ms | 0.9–1.1 ms | 0.6–0.75 ms |
-| pi session holding 1500 records / a 1.5 MB log | 1.8 / 2.2 MB | 325 / 403 KB | 5–8 ms | 2–3.3 ms | 0.7–1.9 ms |
-| a new Sandbox / one holding 1000 records | 395 / 560 KB | 33 / 48 KB | 1.7–2.5 ms | 0.7–1.2 ms | 0.5–0.95 ms |
+| pi session waiting on a tool (ask; agent-loop, sequential) | 489; 501–503 KB | 2.1; 7.0–7.4 KB | 2.8–3.1 ms | 1.0–1.3 ms | 0.9–1.0 ms |
+| pi session holding 60 files (tool-heavy), median / max | 671 / 854 KB | 58 / 111 KB | 4.2 ms | 1.5 ms | 1.0 ms |
+| pi session holding 1500 records / a 1.5 MB log | 1.7 / 2.2 MB | 335 / 404 KB | 9.4 / 9.8 ms | 4.1 / 3.6 ms | 2.2 / 1.2 ms |
+| a new Sandbox / one holding 1000 records | 333 / 498 KB | 15.7 / 31.2 KB | 3.3 / 4.0 ms | 1.4 / 2.4 ms | 1.3 / 2.2 ms |
 
 A waiting session compresses to what it changed because in-VM collections slide cells in
 allocation order (D2040): the cells it inherited from the prelude image stay at their
-offsets (99.9% of its words), and zstd encodes them as one long match. Against the base
-image instead, the same session is 66 KB; without a dictionary 134 KB. A Sandbox's first
-changes grow cells near the start of the base image (the root shape's transition list,
-the atom table), and the compaction shifts everything after them, hence 33 KB.
+offsets (99% of its words), and zstd encodes them as one long match. Against the base
+image instead, the same session is 51 KB; without a dictionary 134 KB. A Sandbox's
+`console` grows the global object's property table, exactly full in the base image; the
+collection then slides everything after its old place down by 1.1 KB, so only the first
+68 KB line up with the base, and the moved cells' references to other moved cells (43 KB)
+are what the 15.7 KB encode. `djs heap` (docs/cli.md, D2264) shows all of this for any
+snapshot: `djs heap --only diff session.djsn`.
+
+Since 0117, images are about 57 KB smaller (the base image went from 376 to 314 KB:
+internal names dropped and cells ordered by kind, D2251, D2253), and waiting sessions'
+containers are unchanged. A new Sandbox's went 33 → 15.7 KB with the kind-ordered base:
+the first of the cells its first definitions grow (the atom table's entries, the global
+object's property table) used to sit 3 KB into the base; now it is the global object's
+table, 68 KB in, so less of the image moves. tool-heavy and records changed with their corpus (this repository's sources
+and docs, which grew).
 
 ## The ABI
 
@@ -465,7 +476,7 @@ but pi keeps the prelude's `settle`/`run`/`stalled` alive across calls).
 | `Math.random` seeded by QuickJS from its first clock read (seed + 1), one draw used up while creating the context | djs's `Math.random` is the same xorshift64*, so the adapter seeds it one step after seed + 1. **The same seed gives the same numbers on both engines**; pi's pinned values pass |
 | fingerprint `quickjs-wasi X, quickjs Y, prelude H, deterministic 1, stack S, heap M, budget B` | `djs <build hash>, prelude H, host G, deterministic 2, fuel per poll F, heap M, budget B` (`djs_build_hash`; G hashes the adapter's own globals, D1660; the adapter's version is 2 since it collects after the prelude, D1890) |
 | quickjs-wasi's host global `performance` (`queueMicrotask` is native since 0059, `atob`, `btoa` and `DOMException` since 0084) | defined by the adapter in JS before the prelude, so the lockdown freezes it too. `performance.now()` counts from the run's start on the VM clock (deterministic: from `startedAt`, as on quickjs) |
-| no snapshots: durability by deterministic replay | `snapshot()` / `resumeVm()` in addition: the session's state and its VM image in the snapshot container ("Snapshots"), taken while the script waits. The session collects first (D1890), and the image is compressed against the prelude image the session started from (D2262): 2–9 KB for a session waiting on a tool (546 KB as an image). `resumeVm` finds that prelude image in the process, or recomputes it from `prelude` and `data` (the session's start data); a session started with `reuseImages: false` is compressed against the base image. A resumed session continues with no replay (tested against an uninterrupted run, with the same messages and interrupt polls) |
+| no snapshots: durability by deterministic replay | `snapshot()` / `resumeVm()` in addition: the session's state and its VM image in the snapshot container ("Snapshots"), taken while the script waits. The session collects first (D1890), and the image is compressed against the prelude image the session started from (D2262): 2–9 KB for a session waiting on a tool (489–503 KB as an image). `resumeVm` finds that prelude image in the process, or recomputes it from `prelude` and `data` (the session's start data); a session started with `reuseImages: false` is compressed against the base image. A resumed session continues with no replay (tested against an uninterrupted run, with the same messages and interrupt polls) |
 
 **Prelude images.** Running pi's prelude is most of a start: its lockdown walks and freezes
 about 700 objects, and builtin-heavy code like it still runs 1.5-4x more instructions on
