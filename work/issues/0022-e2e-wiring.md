@@ -4,7 +4,7 @@ status: open
 agent: -
 branch: issue/0022-e2e-wiring
 depends-on: 0014, 0015
-touches: crates/djs-core/src/vm/, crates/djs-cli/, crates/djs-core/tests/ (or an e2e test module)
+touches: crates/djs-core/src/vm/, crates/djs-core/src/interp/ (ops the compiler emits: special_object THIS, global_decls, init_global_lex + global lexical record cell, construct, define_elem, copy_data_props, delete), crates/djs-cli/, crates/djs-core/tests/ (or an e2e test module)
 
 ## Goal
 The 0015 follow-ups: connect the compiler (0014) to the interpreter (0015) so that JS
