@@ -89,7 +89,7 @@ copy into a byte cell; 0039, D1392), with the realm's prototypes. In a heap with
 
 ### Host refs
 
-Reserved for opaque handles to host objects (ARCH "Host refs (later)"). A decoder rejects
+Reserved for opaque handles to host objects (ARCH "Host refs", not built). A decoder rejects
 it until host refs exist.
 
 ## What the encoder accepts
@@ -149,11 +149,11 @@ encoder there (about 24 ns per value). The decoder more than makes up for it. Mo
 decoder's remaining time on objects is heap allocation, which both paths share. The
 buffers are 20-35% smaller than JSON for structured data.
 
-In wasm, the decode columns will be slower than native. This can be measured once djs-wasm
-exists: export a `decode` and a `parse_json` entry point, have the host `encode` into a view
-of linear memory (`encode(value, new Uint8Array(memory.buffer, ptr, cap))`; if the
-result is not in that buffer, it grew and must be copied in), and time both pipelines from
-node with the same datasets (`node js/bench/wire.bench.ts <dir>` writes them).
+In wasm the decode columns are slower than native (1.8x on objects to 2.7x on one string),
+and the wire format still wins, by more: docs/host.md "The boundary in wasm" has the numbers
+from `node js/bench/wasm.bench.ts <dir>` (`vm_decode_wire` against `vm_parse_json` on the
+same datasets, which `node js/bench/wire.bench.ts <dir>` writes). The decoder validates
+UTF-8 while transcoding (D1781).
 
 ## Code and tests
 

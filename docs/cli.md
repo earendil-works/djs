@@ -2,7 +2,7 @@
 
 ```sh
 cargo run -p djs-cli -- run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
-    [--gc-stress] [--suspend-every N] file.js
+    [--gc-stress] [--suspend-every N] [--backend bytecode|native] file.js
 cargo run -p djs-cli -- disasm [--body] file.js
 cargo run -p djs-cli -- strip-types file.ts
 cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history]
@@ -10,7 +10,8 @@ cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history]
 
 `run` runs a Script (or, with `--body`, a codemode async body) and serves `console.log`;
 `--experimental-decorators` and `--emit-decorator-metadata` (which implies it) select
-TypeScript's legacy decorators (D1651).
+TypeScript's legacy decorators (D1651). `--backend` runs the `@native` builtins as their
+generated Rust state machines (`native`, the default) or as bytecode (D1635).
 `disasm` prints the bytecode. `strip-types` erases TypeScript types like ts-blank-space
 (TESTING.md). This file documents the REPL.
 

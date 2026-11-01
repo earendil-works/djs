@@ -1,10 +1,14 @@
 # djs: Compiler and Bytecode Design
 
-Status: design note for issue 0008. It refines ARCH.md "Compiler (no AST)" and
-"Interpreter" so that 0006 (P0) and the P1 issues can be implemented without
-re-deciding the fundamentals. Decisions D1080 to D1086 in `docs/decisions.md` record the
-load-bearing choices. Places that deviate from or sharpen ARCH.md are marked
-**[ARCH]**; section 11 lists them all with the proposed ARCH edits.
+Status: design note for issue 0008, written before P0 to settle ARCH.md "Compiler (no
+AST)" and "Interpreter". It was implemented, and later work refined it; where the code
+now differs, the text says so or names the decision. Decisions D1080 to D1086 in
+`docs/decisions.md` record the load-bearing choices; docs/decisions-index.md lists the
+later compiler and interpreter decisions by topic (for example `iter_next` for for-of and
+array patterns, D1800; loop rotation, peepholes and `inc_loc`/`dec_loc`, D1860; the
+Retry continuation, D1861; reference evaluation order, D1820). Places that deviated from
+or sharpened ARCH.md are marked **[ARCH]**; section 11 lists them (ARCH.md has since been
+reviewed against the code, 0095). Section 10's issue split is historical.
 
 QuickJS (`quickjs.c`, `quickjs-opcode.h`) is the main reference. Where we do the same
 thing, the note says so briefly. Where we differ, it says why.
@@ -101,7 +105,7 @@ struct Parser<'a, 'h> {
 | `primary_slash()` | in primary position, `Slash`/`SlashAssign` → `tok = lx.rescan_as_regex(tok)?` |
 | `template_continue()` | after a substitution expression, requires `RBrace` and calls `lx.rescan_template_continuation(tok)?` |
 | `ident_atom(tok)` | `lx.ident_value` → atom (no escapes: borrowed bytes, interned directly) |
-| `number_value(tok)` | `lx.number_literal(&tok)` → `crate::num::literal_digits_value(radix, digits)` (separators allowed); BigInt later |
+| `number_value(tok)` | `lx.number_literal(&tok)` → `crate::num::literal_digits_value(radix, digits)` (separators allowed); BigInt literals are BigInt constants (D1460) |
 
 Lookahead never crosses a position whose meaning depends on parser context without
 applying the same rule the parser would (regex after an operand, `>` merging,
@@ -543,13 +547,18 @@ reference, Get, default, store). With a rest property (found by a scan,
 `pick`:
 
 ```
-first step:  pick r+1; pick r+1; call 0; ...
-later steps: pick r; dup; is_undefined; jump_if_true L_end; pick r+2; swap; call 0
-             iter_check_object; dup; get_field done; jump_if_true L_done
-             get_field value; jump L_end
+first step:  pick r; pick r+2; iter_next L_value; ...
+later steps: pick r; dup; is_undefined; jump_if_true L_end; pick r+2
+             iter_next L_value; iter_check_object; dup; get_field done
+             jump_if_true L_done; get_field value
+L_value:     jump L_end
 L_done:      drop; undefined; poke r; undefined      ; it := undefined (done)
 L_end:       <default>; <store or nested pattern>
 ```
+
+`iter_next L` (`it next -> r`) calls `next` like `call 0`, except that for the original
+`next` of an Array, String, Map or Set Iterator it produces the value itself and jumps to
+`L` (D1800).
 
 A done iterator is `undefined` in its slot: later steps produce `undefined` without
 calling `next`, and nothing closes it. A rest element calls `%IteratorRest(it, next)`.
@@ -809,10 +818,12 @@ Control flow:
 
 For-of has no dedicated loop opcodes. Setup is `call_intrinsic %GetIterator 1; dup;
 get_field next` (→ `iter next`; as implemented, the builtin-language `%GetIterator`
-replaces the `get_iterator` op, D1290). Each step is ordinary ops: `dup2; swap; call 0; iter_check_object;
-dup; get_field done; jump_if_true L; get_field value`. That reuses
-the reentrancy of `call` and `get_field`, so nothing in for-of needs a resume state.
-An array-iterator superinstruction is a later optimization.
+replaces the `get_iterator` op, D1290). Each step was ordinary ops: `dup2; swap; call 0;
+iter_check_object; dup; get_field done; jump_if_true L; get_field value`, reusing the
+reentrancy of `call` and `get_field`, so nothing in for-of needs a resume state. As
+implemented now (0080, D1800) `swap; call 0` is `iter_next L_value`, which skips the
+result object for the original iterators of arrays, strings, Maps and Sets (the
+"array-iterator superinstruction" this note deferred); everything else is unchanged.
 
 P2 adds `await`, async function return/throw and promise ops. P5 adds `yield`,
 `yield_star`, `initial_yield`, `regexp`.
@@ -1136,7 +1147,7 @@ cells! {
         HANDLERS: Ref = 44,    // Bytes: 16-byte (start, end, handler, depth) records; or null
         LINES: Ref = 48,       // Bytes: line table (6.2)
         SCRIPT: Ref = 52,      // Script
-        SRC_START: u32 = 56,   // source span of the function (Function.prototype.toString, later)
+        SRC_START: u32 = 56,   // source span of the function (Function.prototype.toString, D009)
         SRC_END: u32 = 60,
         NAMES: Ref = 64,       // U32Array of atoms: locals, then captures (TDZ messages,
                                // disassembler, debugger)

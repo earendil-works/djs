@@ -1,9 +1,12 @@
 # Property access: measurements and design (0062)
 
-Status: part 1 (B, inline caches) landed in 0062: D1620 (globals and own properties),
-D1621 (prototype properties). Option A (cheaper misses) was not needed for the hot
-sites and is left for the builtin language's `%Get` path, which 0063 mostly replaces.
-Shapes (C) are their own issue, merged with 0052 S2.
+Status: both parts are built. Part 1 (B, inline caches) landed in 0062: D1620 (globals
+and own properties), D1621 (prototype properties). Option A (cheaper misses) was not
+needed for the hot sites and is left for the builtin language's `%Get` path, which 0063
+mostly replaces. Part 2, shapes and dictionaries (C, merged with 0052 S2), landed in 0083:
+16-byte property entries and AccessorPair cells (D1830), shapes with strong transitions and
+a per-heap budget (D1831); §7 is its design and §7.11 its results. Sections 1-5 are the
+original analysis, kept for the reasoning.
 
 ## 1. Measurements
 
