@@ -349,6 +349,9 @@ fn slow_decimal(digits: &mut dyn Iterator<Item = (u32, bool)>, exp: i64) -> f64 
         }
     }
     let n = acc.n as i64;
+    if n == 0 {
+        return 0.0;
+    }
     let big = acc.finish();
     // The value is in [10^(n - 1 + e10), 10^(n + e10)).
     if n + e10 <= -324 {
@@ -580,5 +583,67 @@ pub fn literal_value(s: &[u8]) -> f64 {
     match scan_decimal(s, 0, true, false) {
         Some(d) if d.end == s.len() => decimal_value(s, &d),
         _ => f64::NAN,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+    use super::*;
+    use std::string::{String, ToString};
+
+    /// Exercises the rarely taken paths directly: the slow path for every input, and
+    /// Eisel-Lemire whenever it claims an answer.
+    #[test]
+    fn slow_path_and_lemire_match_std() {
+        let mut x = 0x0bad_cafe_dead_beefu64;
+        let mut next = move || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x
+        };
+        let mut text = String::new();
+        let mut lemire_none = 0;
+        for i in 0..200_000 {
+            text.clear();
+            let n_int = next() % 30;
+            let n_frac = next() % 30;
+            for _ in 0..n_int {
+                text.push((b'0' + (next() % 10) as u8) as char);
+            }
+            text.push('.');
+            for _ in 0..n_frac {
+                text.push((b'0' + (next() % 10) as u8) as char);
+            }
+            if n_int + n_frac == 0 {
+                text.push('3');
+            }
+            let e = (next() % 760) as i64 - 380;
+            text.push('e');
+            text.push_str(&e.to_string());
+            if i % 3 == 0 {
+                // Doubles printed with 17 to 25 digits sit close to halfway points.
+                let v = f64::from_bits(next() >> 1);
+                if !v.is_finite() {
+                    continue;
+                }
+                text = std::format!("{:.*e}", 16 + (next() % 9) as usize, v);
+            }
+            let expect: f64 = text.parse().unwrap();
+            let d = scan_decimal(text.as_bytes(), 0, false, false).unwrap();
+            assert_eq!(d.end, text.len());
+            let slow = slow_decimal(&mut decimal_digits(text.as_bytes(), &d), d.exp);
+            assert_eq!(slow.to_bits(), expect.to_bits(), "slow path: {text}");
+            match lemire(d.w, d.q) {
+                Some(v) if !d.truncated => {
+                    assert_eq!(v.to_bits(), expect.to_bits(), "lemire: {text}")
+                }
+                Some(_) => {}
+                None => lemire_none += 1,
+            }
+        }
+        // The fallback is genuinely rare.
+        assert!(lemire_none < 100, "{lemire_none}");
     }
 }

@@ -431,6 +431,34 @@ mod tests {
         }
     }
 
+    /// The radix search (qjs' algorithm) and Ryu are independent; in radix 10 they must agree.
+    #[test]
+    fn radix_search_matches_ryu_in_base_10() {
+        let mut x = 0x5eed_1234_abcd_ef01u64;
+        for i in 0..100_000 {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            let a = if i % 4 == 0 {
+                // Powers of two have asymmetric rounding intervals.
+                f64::from_bits(x & 0x7ff0_0000_0000_0000)
+            } else {
+                f64::from_bits(x >> 1)
+            };
+            if !a.is_finite() || a == 0.0 {
+                continue;
+            }
+            let (m, e2) = decompose(a);
+            let (mant, p, e) = shortest_radix(a, m, e2, 10);
+            let mut tmp = [0u8; 20];
+            let digits = u64_digits(mant, 10, &mut tmp);
+            assert_eq!(digits.len() as i32, p);
+            let mut tmp2 = [0u8; 20];
+            let (ryu_digits, ryu_e) = shortest(a, &mut tmp2);
+            assert_eq!((digits, e), (ryu_digits, ryu_e), "{a:e}");
+        }
+    }
+
     #[test]
     fn digits_tables() {
         for radix in 2..=36u32 {
