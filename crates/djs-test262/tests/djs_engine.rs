@@ -17,10 +17,7 @@ const FAILURES: &[(&str, &str)] = &[
     ("fail/assert.js", "Test262Error: one is two"),
     ("fail/async-failure.js", "async: bad"),
     ("fail/async-never.js", "async: $DONE was not called"),
-    (
-        "fail/detach.js",
-        "TypeError: $262.detachArrayBuffer is not supported by djs yet",
-    ),
+    ("fail/detach.js", "TypeError: not an ArrayBuffer"),
     (
         "fail/harness-throws.js",
         "harness broken.js: TypeError: cannot read property 'x' of null",

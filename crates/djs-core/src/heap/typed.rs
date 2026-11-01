@@ -234,6 +234,44 @@ fn number(n: f64) -> Value {
 }
 
 impl Heap {
+    /// A new ArrayBuffer of `data` (prototype `buffer_proto`) and a Uint8Array over all
+    /// of it (prototype `proto`): what wire bytes decode to.
+    pub fn new_uint8_array(
+        &mut self,
+        data: &[u8],
+        buffer_proto: Option<Obj>,
+        proto: Option<Obj>,
+    ) -> Result<Obj, super::HeapError> {
+        let len = u32::try_from(data.len()).map_err(|_| super::HeapError::OutOfMemory)?;
+        let size = Bytes::DATA
+            .cell_size(len)
+            .ok_or(super::HeapError::OutOfMemory)?;
+        let bytes = self.alloc_cell(super::CellKind::Bytes, size)?;
+        self.arena_mut().set(bytes, Bytes::LEN, len);
+        self.arena_mut()
+            .slice_mut(Bytes::DATA.at(bytes, 0), len)
+            .copy_from_slice(data);
+        let buffer = self.alloc_object(ObjectClass::ArrayBuffer, buffer_proto, 2)?;
+        self.set_object_slot(buffer, 0, Value::internal(bytes));
+        self.set_object_slot(buffer, 1, Value::UNDEFINED);
+        let o = self.alloc_object(ObjectClass::TypedArray, proto, 4)?;
+        self.set_object_slot(o, 0, Value::object(buffer));
+        self.set_object_slot(o, 1, Value::int(Kind::Uint8 as i32));
+        self.set_object_slot(o, 2, Value::int(0));
+        self.set_object_slot(o, 3, Value::number(len as f64));
+        Ok(o)
+    }
+
+    /// DetachArrayBuffer (also `$262.detachArrayBuffer`): the data goes away and every
+    /// view sees length 0. False if `b` is not an ArrayBuffer.
+    pub fn detach_buffer(&mut self, b: Obj) -> bool {
+        if self.object_class(b) != ObjectClass::ArrayBuffer {
+            return false;
+        }
+        self.set_object_slot(b, 0, Value::UNDEFINED);
+        true
+    }
+
     pub fn is_typed_array(&self, o: Obj) -> bool {
         self.object_class(o) == ObjectClass::TypedArray
     }

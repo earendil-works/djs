@@ -154,6 +154,14 @@ pub(super) fn dump(h: &mut Heap, v: Value) -> String {
         Kind::String => format!("s:{}", quote(&h.str_to_utf16(v.as_string().unwrap()))),
         Kind::Object => {
             let o = v.as_object().unwrap();
+            if h.is_typed_array(o) {
+                let n = h.ta_length(o).unwrap();
+                // As js/test/dump.ts prints a Uint8Array.
+                let items: Vec<String> = (0..n)
+                    .map(|i| format!("n:{}", h.ta_get(o, i).unwrap().as_int().unwrap()))
+                    .collect();
+                return format!("[{}]", items.join(","));
+            }
             if h.object_class(o) == ObjectClass::Array {
                 let mut items: Vec<String> = Vec::new();
                 for i in 0..h.array_length(o) {
@@ -426,7 +434,10 @@ fn protos_are_used() {
             .unwrap()
     };
     assert_eq!(h.get_prototype_of(el(0).as_object().unwrap()), Some(op));
-    assert_eq!(h.get_prototype_of(el(1).as_object().unwrap()), Some(ap));
+    // Bytes are a Uint8Array: without a realm (a bare heap) it has no prototype.
+    let bytes = el(1).as_object().unwrap();
+    assert!(h.is_typed_array(bytes));
+    assert_eq!(h.get_prototype_of(bytes), None);
 }
 
 #[test]
@@ -924,6 +935,31 @@ fn reader_images() {
     };
     h.define_own_property(sparse, len, &d).unwrap();
     add(&mut h, "sparse", Value::object(sparse), false);
+
+    // Typed arrays (0039): a Uint8Array, a Float64Array view at an offset into its
+    // buffer, a detached one, and the buffer itself.
+    let mut data = vec![0u8; 24];
+    data[0] = 7;
+    data[8..16].copy_from_slice(&1.5f64.to_le_bytes());
+    data[16..24].copy_from_slice(&(-2.0f64).to_le_bytes());
+    let u8a = h.new_uint8_array(&data, None, None).unwrap();
+    add(&mut h, "uint8array", Value::object(u8a), false);
+    let buffer = h.object_slot(u8a, 0);
+    let f64a = h
+        .alloc_object(crate::heap::ObjectClass::TypedArray, None, 4)
+        .unwrap();
+    for (i, v) in [buffer, Value::int(9), Value::int(8), Value::int(2)]
+        .into_iter()
+        .enumerate()
+    {
+        h.set_object_slot(f64a, i as u32, v);
+    }
+    add(&mut h, "float64array", Value::object(f64a), false);
+    add(&mut h, "arraybuffer", buffer, false);
+    let gone = h.new_uint8_array(&[1, 2, 3], None, None).unwrap();
+    let gone_buffer = h.object_slot(gone, 0).as_object().unwrap();
+    h.set_object_slot(gone_buffer, 0, Value::UNDEFINED);
+    add(&mut h, "detached", Value::object(gone), false);
 
     // Numbers in both forms, and the other primitives.
     for (name, v) in [

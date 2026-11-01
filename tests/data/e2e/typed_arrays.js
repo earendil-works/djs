@@ -1,0 +1,24 @@
+// 0039: ArrayBuffer, typed arrays and base64 across suspension and GC.
+const b = new ArrayBuffer(16);
+const u = new Uint8Array(b);
+for (let i = 0; i < u.length; i++) u[i] = i * 17;
+const f = new Float64Array(b, 8, 1);
+console.log(u.length, Array.from(u.subarray(0, 4)), f.length, f.byteOffset);
+const big = new Uint8Array(512);
+for (let i = 0; i < big.length; i++) big[i] = (i * 31) & 255;
+let sum = 0;
+for (let i = 0; i < big.length; i++) sum += big[i];
+console.log(sum, big.toBase64().length, Uint8Array.fromBase64(big.toBase64()).length);
+const parts = [];
+for (let i = 0; i < 20; i++) parts.push(new Int16Array([i, -i]));
+let s2 = 0;
+for (const p of parts) s2 += p[0] - p[1];
+console.log(s2, new Uint8Array([1, 2, 3]).toHex(), Array.from(Uint8Array.fromHex("ff00")));
+const r = new ArrayBuffer(4, { maxByteLength: 8 });
+const view = new Uint8Array(r);
+r.resize(8);
+view[7] = 9;
+console.log(view.length, view[7], r.transfer().byteLength, r.detached, view.length);
+const clamped = new Uint8ClampedArray([-1, 300, 1.5]);
+const f16 = new Float16Array([0.1]);
+console.log(Array.from(clamped), f16[0], new Float32Array([0.1])[0]);

@@ -5,7 +5,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::heap::cells::Bytes;
-use crate::heap::typed::{self, Kind};
+use crate::heap::typed::Kind;
 use crate::heap::{CellKind, Heap, ObjectClass};
 use crate::interp::conv::{Fault, type_error};
 use crate::interp::{ErrorKind, Intrinsic, realm};
@@ -91,7 +91,7 @@ pub(crate) fn buffer_info(heap: &Heap, b: Obj, field: i32) -> Value {
 
 /// DetachArrayBuffer: the data goes away; views see length 0.
 pub(crate) fn buffer_detach(heap: &mut Heap, b: Obj) {
-    heap.set_object_slot(b, 0, Value::UNDEFINED);
+    heap.detach_buffer(b);
 }
 
 /// Resizes a resizable buffer in place (its capacity is maxByteLength); new bytes are 0.
@@ -408,7 +408,7 @@ pub(crate) fn from_hex(s: &[u16], max: usize) -> Decoded {
         bytes: Vec::new(),
         error: false,
     };
-    if s.len() % 2 != 0 {
+    if !s.len().is_multiple_of(2) {
         d.error = true;
         return d;
     }
@@ -459,33 +459,4 @@ pub(crate) fn kind_proto(kind: Kind) -> Intrinsic {
         Kind::BigInt64 => Intrinsic::BigInt64ArrayProto,
         Kind::BigUint64 => Intrinsic::BigUint64ArrayProto,
     }
-}
-
-/// A new Uint8Array over a fresh buffer holding `data`.
-pub(crate) fn uint8_array_from(heap: &mut Heap, data: &[u8]) -> Result<Obj, Fault> {
-    let buffer = buffer_from(heap, data)?;
-    let proto = realm::intrinsic_obj(heap, Intrinsic::Uint8ArrayProto);
-    typed_array_create(heap, proto, Kind::Uint8, buffer, 0.0, data.len() as f64)
-}
-
-/// The element kind of a value written to an array, for the DataView getters/setters:
-/// bytes at `at` of the buffer, `little` endian or not.
-pub(crate) fn view_get(heap: &Heap, buffer: Obj, at: usize, kind: Kind, little: bool) -> f64 {
-    let size = kind.size() as usize;
-    let mut b = [0u8; 8];
-    b[..size].copy_from_slice(&heap.buffer_data(buffer)[at..at + size]);
-    if !little {
-        b[..size].reverse();
-    }
-    typed::decode(kind, &b)
-}
-
-pub(crate) fn view_set(heap: &mut Heap, buffer: Obj, at: usize, kind: Kind, n: f64, little: bool) {
-    let size = kind.size() as usize;
-    let mut b = [0u8; 8];
-    typed::encode(kind, n, &mut b);
-    if !little {
-        b[..size].reverse();
-    }
-    heap.buffer_data_mut(buffer)[at..at + size].copy_from_slice(&b[..size]);
 }

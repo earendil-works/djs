@@ -46,9 +46,23 @@ const A_SYMBOL = LAYOUT.atom.symbolBit;
 const A_INDEX = LAYOUT.atom.indexMask;
 const C_ORDINARY = LAYOUT.objectClasses.Ordinary;
 const C_ARRAY = LAYOUT.objectClasses.Array;
+const C_ARRAY_BUFFER = LAYOUT.objectClasses.ArrayBuffer;
+const C_TYPED_ARRAY = LAYOUT.objectClasses.TypedArray;
+const BYTES_LEN = cells.Bytes.fields.LEN.offset;
+const BYTES_DATA = cells.Bytes.tail.offset;
+// Typed array kinds (heap/typed.rs `Kind`) as host constructors. Float16Array needs a
+// recent engine; without it the 16-bit patterns are read as a Uint16Array.
+type TypedArrayCtor = new (buffer: ArrayBuffer) => ArrayBufferView;
+const F16 = (globalThis as { Float16Array?: TypedArrayCtor }).Float16Array ?? Uint16Array;
+const TA_CTORS: [TypedArrayCtor, number][] = [
+  [Int8Array, 1], [Uint8Array, 1], [Uint8ClampedArray, 1], [Int16Array, 2], [Uint16Array, 2],
+  [Int32Array, 4], [Uint32Array, 4], [F16, 2], [Float32Array, 4], [Float64Array, 8],
+  [BigInt64Array, 8], [BigUint64Array, 8],
+];
 const TAG_PREFIX = LAYOUT.value.tagPrefix;
 const HI_HOLE = ((TAG_PREFIX << 16) | tags.HOLE) >>> 0;
 const HI_INT = ((TAG_PREFIX << 16) | tags.INT) >>> 0;
+const HI_UNDEFINED = ((TAG_PREFIX << 16) | tags.UNDEFINED) >>> 0;
 
 const tagNames: string[] = [];
 for (const [name, t] of Object.entries(tags)) tagNames[t] = name;
@@ -354,6 +368,8 @@ class Reader {
 
   object(off: number): unknown {
     const cls = this.view.getUint32(off + OBJ_CLASS, true);
+    if (cls === C_TYPED_ARRAY) return this.typedArray(off);
+    if (cls === C_ARRAY_BUFFER) return this.arrayBuffer(off);
     if (cls !== C_ARRAY && cls !== C_ORDINARY) {
       return new Opaque("object", off, classNames[cls] ?? `class ${cls}`);
     }
@@ -370,6 +386,47 @@ class Reader {
     const v = cls === C_ARRAY ? this.array(off) : this.plain(off);
     this.depth = depth;
     return v;
+  }
+
+  /**
+   * The bytes of an ArrayBuffer object: the arena offset of its Bytes cell and its
+   * length, or null once detached.
+   */
+  bufferBytes(buffer: number): [number, number] | null {
+    const slot = buffer + OBJ_SLOTS;
+    if (this.view.getUint32(slot + 4, true) === HI_UNDEFINED) return null;
+    const cell = this.view.getUint32(slot, true);
+    return [cell + BYTES_DATA, this.view.getUint32(cell + BYTES_LEN, true)];
+  }
+
+  /** An ArrayBuffer: a copy of its bytes (docs/wire.md, "Typed arrays"). */
+  arrayBuffer(off: number): ArrayBuffer {
+    const bytes = this.bufferBytes(off);
+    if (bytes === null) return new ArrayBuffer(0);
+    this.spend(1);
+    return this.mem.slice(bytes[0], bytes[0] + bytes[1]).buffer;
+  }
+
+  /**
+   * A typed array: a copy of its elements as the host's typed array of the same kind
+   * (detached or out of bounds: empty). Copies, not views: the arena moves with every
+   * collection and may be replaced when wasm memory grows.
+   */
+  typedArray(off: number): ArrayBufferView {
+    const slots = off + OBJ_SLOTS;
+    const kind = this.slot(slots + 8) as number;
+    const [Ctor, size] = TA_CTORS[kind] ?? TA_CTORS[1];
+    const byteOffset = this.slot(slots + 16) as number;
+    const length = this.slot(slots + 24) as number;
+    const bytes = this.bufferBytes(this.view.getUint32(slots, true));
+    let n = 0;
+    if (bytes !== null && byteOffset <= bytes[1]) {
+      n = length >= 0 ? length : Math.floor((bytes[1] - byteOffset) / size);
+      if (byteOffset + n * size > bytes[1]) n = 0;
+    }
+    this.spend(1);
+    const start = bytes === null ? 0 : bytes[0] + byteOffset;
+    return new Ctor(this.mem.slice(start, start + n * size).buffer);
   }
 
   spend(n: number): void {

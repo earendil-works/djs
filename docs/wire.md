@@ -83,9 +83,9 @@ are not encoded (as with JSON).
 ### Bytes
 
 A `Uint8Array` (only that type; other typed arrays and `ArrayBuffer`s are not encodable).
-Until the VM has typed arrays, the decoder turns bytes into an ordinary array of numbers
-(0..255), which has the same `[i]` and `length` behavior but costs 8 bytes of heap per byte.
-This changes to a real `Uint8Array` when typed arrays exist.
+The decoder makes a real `Uint8Array` over a fresh `ArrayBuffer` holding the bytes (one
+copy into a byte cell; 0039, D1392), with the realm's prototypes. In a heap without a realm
+(the decoder's unit tests) the two objects have no prototype.
 
 ### Host refs
 
@@ -210,8 +210,14 @@ generated file and throws `LayoutMismatch` on a difference.
 | ordinary object | a plain object with the own enumerable string-keyed data properties, in property order (index keys ascending, then insertion order); `__proto__` becomes an own property |
 | accessors, non-enumerable properties, symbol keys | left out |
 | symbol | `Opaque { type: "symbol", ref, description }` |
-| function, Error, other object classes | `Opaque { type: "object", ref, className }` |
+| typed array | a copy of its elements as the host typed array of the same kind (`Uint8Array`, `Float64Array`, ...; `Float16Array` where the host has it, else `Uint16Array` bit patterns); detached or out of bounds: empty (0039, D1392) |
+| ArrayBuffer | an `ArrayBuffer` copy of its bytes (detached: empty) |
+| function, Error, DataView, other object classes | `Opaque { type: "object", ref, className }` |
 | BigInt, host ref, other reference tags | `Opaque { type: <tag name>, ref }` |
+
+Typed arrays and buffers are copies, not views of the arena: every collection moves cells,
+and wasm memory growth replaces the host's `ArrayBuffer`, so a view would go stale or
+detach. A copy of 1 MiB costs about 0.02 ms (see the benchmark below).
 
 The result is a tree, as with JSON. A shared object is read once per reference. A cycle is a
 `TypeError` naming its path (`cyclic value at $.list[1]`). Preserving sharing would need a
@@ -254,3 +260,15 @@ A 1 MiB string reads at memcpy speed (a 1 MiB `slice` takes 0.02 ms). Structured
 1.9x (objects) to 5.9x (numbers) faster than the JSON path, and the VM does no work at all. For
 objects the reader is close to `JSON.parse` alone; its cost is creating the JS objects
 (keyed stores) and strings.
+
+### A 1 MiB image (0039)
+
+`node js/bench/wasm.bench.ts` (release `wasm` profile, node 25), median ms: an image as
+bytes (`Uint8Array` on the wire, a `Uint8Array` in the VM, read back as a copy) against the
+same image as a base64 string, both ways.
+
+| 1 MiB image | encode | vm_decode_wire | readValue |
+| --- | ---: | ---: | ---: |
+| bytes | 0.012 | 0.017 | 0.022 |
+| base64 string (1.33 MiB) | 0.028 | 0.100 | 0.018 |
+

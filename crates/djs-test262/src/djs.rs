@@ -247,10 +247,15 @@ impl Session<'_> {
                         .new_error(ErrorKind::InternalError, "out of memory")?)),
                 }
             }
-            DETACH => Ok(Err(self.vm.new_error(
-                ErrorKind::TypeError,
-                "$262.detachArrayBuffer is not supported by djs yet",
-            )?)),
+            DETACH => {
+                // DetachArrayBuffer: the buffer drops its data (heap/typed.rs, D1390).
+                match args.first().and_then(|v| v.as_object()) {
+                    Some(b) if self.vm.heap_mut().detach_buffer(b) => Ok(Ok(Value::NULL)),
+                    _ => Ok(Err(self
+                        .vm
+                        .new_error(ErrorKind::TypeError, "not an ArrayBuffer")?)),
+                }
+            }
             // A collection here would be safe, but nothing needs it yet.
             GC => Ok(Ok(Value::UNDEFINED)),
             _ => Ok(Err(self

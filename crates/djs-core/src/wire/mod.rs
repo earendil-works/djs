@@ -291,12 +291,18 @@ impl<'a> Decoder<'a, '_> {
             tag::BYTES => {
                 let n = self.varint()? as usize;
                 let bytes = self.take(n)?;
-                // Until typed arrays exist: an array of numbers (docs/wire.md).
-                let vals: Vec<Value> = bytes.iter().map(|&b| Value::int(b as i32)).collect();
-                Value::object(
-                    self.heap
-                        .new_array_from_values(self.opts.array_proto, &vals)?,
-                )
+                // A Uint8Array over a fresh ArrayBuffer (docs/wire.md), with the realm's
+                // prototypes when the heap has a realm.
+                let (bp, p) = if self.heap.realm().is_undefined() {
+                    (None, None)
+                } else {
+                    use crate::interp::{Intrinsic, realm};
+                    (
+                        Some(realm::intrinsic_obj(self.heap, Intrinsic::ArrayBufferProto)),
+                        Some(realm::intrinsic_obj(self.heap, Intrinsic::Uint8ArrayProto)),
+                    )
+                };
+                Value::object(self.heap.new_uint8_array(bytes, bp, p)?)
             }
             tag::HOST_REF => {
                 self.pos = at;

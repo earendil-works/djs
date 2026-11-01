@@ -98,6 +98,16 @@ assert.equal(sparse.length, 1000);
 assert.deepEqual(Object.keys(sparse), ["0", "2", "500"]);
 assert.deepEqual([sparse[0], sparse[2], sparse[500]], [1, 3, 500]);
 
+// Typed arrays and buffers come out as copies of their kind.
+const u8 = read("uint8array") as Uint8Array;
+assert.ok(u8 instanceof Uint8Array && u8.length === 24 && u8[0] === 7);
+const f64 = read("float64array") as Float64Array;
+assert.ok(f64 instanceof Float64Array);
+assert.deepEqual(Array.from(f64), [1.5, -2]);
+const ab = read("arraybuffer") as ArrayBuffer;
+assert.ok(ab instanceof ArrayBuffer && ab.byteLength === 24 && new Uint8Array(ab)[0] === 7);
+assert.equal((read("detached") as Uint8Array).length, 0);
+
 // Other value forms.
 assert.equal(readValue(extra, [0, 0]), 0);
 assert.equal(readValue(extra, [0, 0x40040000]), 2.5);

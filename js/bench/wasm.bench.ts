@@ -172,6 +172,32 @@ for (const name of names) {
   );
   x.vm_free(vm);
 }
+// A 1 MiB image (0039): bytes as a Uint8Array on the wire (decoded to a Uint8Array in the
+// VM, read back as a copy) against the same image as a base64 string, both ways.
+const image = new Uint8Array(1 << 20);
+for (let i = 0, v = 1; i < image.length; i++) {
+  v = (v * 1103515245 + 12345) >>> 0;
+  image[i] = v >>> 24;
+}
+const imageB64 = image.toBase64();
+const images: [string, unknown][] = [["image 1mib bytes", image], ["image 1mib base64", imageB64]];
+const imageRows: string[] = [];
+for (const [name, value] of images) {
+  const tEnc = time(() => 0, () => void encodeIn(value));
+  const len = encodeIn(value);
+  const tDecode = time(() => x.vm_new(0), (vm) => {
+    if (x.vm_decode_wire(vm, len) === 0) throw new Error("decode failed");
+  }, (vm) => x.vm_free(vm));
+  const vm = x.vm_new(0);
+  encodeIn(value);
+  const vb = bits(vm, x.vm_decode_wire(vm, len));
+  const tRead = time(() => 0, () => void readValue(arena(vm), vb));
+  x.vm_free(vm);
+  row(`encode ${name}`, tEnc);
+  row(`decode ${name}`, tDecode);
+  row(`readValue ${name}`, tRead);
+  imageRows.push(`| ${name} | ${tEnc.toFixed(3)} | ${tDecode.toFixed(3)} | ${tRead.toFixed(3)} |`);
+}
 if (tsv) {
   console.log(rows.join("\n"));
   process.exit(0);
@@ -183,3 +209,7 @@ console.log();
 console.log("| dataset | readValue | vm_json_stringify | read JSON + JSON.parse | JSON total |");
 console.log("| --- | ---: | ---: | ---: | ---: |");
 console.log(outbound.join("\n"));
+console.log();
+console.log("| 1 MiB image | encode | vm_decode_wire | readValue |");
+console.log("| --- | ---: | ---: | ---: |");
+console.log(imageRows.join("\n"));
