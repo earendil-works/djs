@@ -7,7 +7,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0023 | djs-wasm + JS host package | num | .worktrees/0023-djs-wasm-host |
-| 0014 | P0 compiler | lexer | .worktrees/0014-p0-compiler |
+| 0022 | E2E wiring: Vm::compile, djs run, missing P0 interp ops | heap | .worktrees/0022-e2e-wiring |
+| 0024 | P1-1 Functions and closures (compiler) | lexer | .worktrees/0024-p1-functions-closures |
 
 ## Open (ready)
 
@@ -18,7 +19,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0022 | E2E wiring: Vm::compile, djs run | 0014 (heap, next) |
 | 0016 | djs in difftest + gate | 0014, 0022 (infra, next) |
 | 0007 | test262 on djs + ratchet in gate | 0014, 0015, P1-8 (script mode) |
 
@@ -29,6 +29,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0001 | Workspace skeleton and process | initial commit |
 | 0003 | Lexer | e4a42c3 (agent lexer; parser follow-ups listed in the issue) |
 | 0005 | Values, arena heap, strings, atoms, objects | dc751e2 (agent heap; follow-ups in the issue) |
+| 0014 | P0 compiler | 5c5ce95 (agent lexer; 31 e2e programs match qjs; test262 sweep no panics) |
 | 0021 | Outbound direct heap reader | 91b5ae5 (agent num; 1 MiB string at memcpy speed; 1.9-5.9x faster than JSON path) |
 | 0015 | P0 interpreter and embedding | 2373382 (agent heap; P0 + most builtin-free P1 ops; e2e left to 0022) |
 | 0020 | Flaky difftest timeout | 6818440 (agent infra; D1200 timeout convention) |
