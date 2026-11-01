@@ -2502,7 +2502,119 @@ function AsyncDisposeRejected(reason) {
   AsyncDisposeContinue(s);
 }
 
-// builtins/disposable.ts:404 Iterator.prototype[Symbol.dispose]
+// builtins/disposable.ts:414 %UsingCreate
+function UsingCreate() {
+  const s = %NewRecord(11);
+  %RecordSet(s, 2, %ArrayCreate(0));
+  return s;
+}
+
+// builtins/disposable.ts:424 %UsingAdd
+function UsingAdd(s, v) {
+  AddDisposableValue(s, v, false);
+  return v;
+}
+
+// builtins/disposable.ts:433 %AwaitUsingAdd
+function AwaitUsingAdd(s, v) {
+  AddDisposableValue(s, v, true);
+  const resources = %AsObj(%RecordGet(s, 2));
+  const k = LengthOfArrayLike(resources) - 1;
+  if (%F64ToI32(%AsNumber(%Get(resources, k))) === 0) {
+    %CreateDataPropertyOrThrow(resources, k, 4);
+  }
+  return v;
+}
+
+// builtins/disposable.ts:450 %UsingDisposeError
+function UsingDisposeError(s, e) {
+  AsyncDisposeError(s, e);
+}
+
+// builtins/disposable.ts:459 %UsingDispose
+function UsingDispose(s) {
+  const resources = %AsObj(%RecordGet(s, 2));
+  for (let i = LengthOfArrayLike(resources) - 3; i >= 0; i = i - 3) {
+    try {
+      CallDisposeMethod(resources, i);
+    } catch (e) {
+      AsyncDisposeError(s, e);
+    }
+  }
+  if (%RecordGet(s, 4) === true) {
+    throw %RecordGet(s, 3);
+  }
+}
+
+// builtins/disposable.ts:479 %UsingDisposeStep
+function UsingDisposeStep(s) {
+  if (%RecordGet(s, 10) === true) {
+    %RecordSet(s, 10, false);
+    AsyncDisposeError(s, %RecordGet(s, 9));
+  }
+  const resources = %AsObj(%RecordGet(s, 2));
+  let i = 0;
+  if (%RecordGet(s, 7) === undefined) {
+    i = LengthOfArrayLike(resources) - 3;
+  } else {
+    i = %AsNumber(%RecordGet(s, 7));
+  }
+  while (i >= 0) {
+    const kind = %F64ToI32(%AsNumber(%Get(resources, i + 2)));
+    if (kind === 0 && %RecordGet(s, 5) === true && %RecordGet(s, 6) !== true) {
+      %RecordSet(s, 5, false);
+      %RecordSet(s, 7, i);
+      %RecordSet(s, 8, undefined);
+      return true;
+    }
+    %RecordSet(s, 7, i - 3);
+    if (kind === 3) {
+      %RecordSet(s, 5, true);
+    } else if (kind === 0) {
+      try {
+        CallDisposeMethod(resources, i);
+      } catch (e) {
+        AsyncDisposeError(s, e);
+      }
+    } else {
+      let result = undefined;
+      let threw = false;
+      try {
+        result = CallDisposeMethod(resources, i);
+      } catch (e) {
+        threw = true;
+        if (kind === 2) {
+          %RecordSet(s, 9, e);
+          %RecordSet(s, 10, true);
+        } else {
+          AsyncDisposeError(s, e);
+        }
+      }
+      if (kind === 2 || !threw) {
+        %RecordSet(s, 6, true);
+        %RecordSet(s, 8, kind === 2 ? undefined : result);
+        return true;
+      }
+    }
+    i = i - 3;
+  }
+  if (%RecordGet(s, 5) === true && %RecordGet(s, 6) !== true) {
+    %RecordSet(s, 5, false);
+    %RecordSet(s, 8, undefined);
+    return true;
+  }
+  if (%RecordGet(s, 4) === true) {
+    throw %RecordGet(s, 3);
+  }
+  return false;
+}
+
+// builtins/disposable.ts:547 %UsingAwaitValue
+function UsingAwaitValue(s) {
+  return %RecordGet(s, 8);
+}
+
+// builtins/disposable.ts:555 Iterator.prototype[Symbol.dispose]
 function IteratorPrototypeDispose() {
   const method = GetMethod(this, "return");
   if (method !== undefined) {
@@ -2510,7 +2622,7 @@ function IteratorPrototypeDispose() {
   }
 }
 
-// builtins/disposable.ts:415 %AsyncIteratorPrototype%[Symbol.asyncDispose]
+// builtins/disposable.ts:566 %AsyncIteratorPrototype%[Symbol.asyncDispose]
 function AsyncIteratorPrototypeAsyncDispose() {
   const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
   let wrapper = undefined;
@@ -2529,12 +2641,12 @@ function AsyncIteratorPrototypeAsyncDispose() {
   return promise;
 }
 
-// builtins/disposable.ts:438 value Symbol.dispose
+// builtins/disposable.ts:589 value Symbol.dispose
 function SymbolDispose() {
   return %WellKnownSymbol("dispose");
 }
 
-// builtins/disposable.ts:446 value Symbol.asyncDispose
+// builtins/disposable.ts:597 value Symbol.asyncDispose
 function SymbolAsyncDispose() {
   return %WellKnownSymbol("asyncDispose");
 }
@@ -10862,6 +10974,13 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallIntrinsic("ToPropertyKey", ToPropertyKey);
 %InstallIntrinsic("AsyncDisposeFulfilled", AsyncDisposeFulfilled);
 %InstallIntrinsic("AsyncDisposeRejected", AsyncDisposeRejected);
+%InstallIntrinsic("UsingCreate", UsingCreate);
+%InstallIntrinsic("UsingAdd", UsingAdd);
+%InstallIntrinsic("AwaitUsingAdd", AwaitUsingAdd);
+%InstallIntrinsic("UsingDisposeError", UsingDisposeError);
+%InstallIntrinsic("UsingDispose", UsingDispose);
+%InstallIntrinsic("UsingDisposeStep", UsingDisposeStep);
+%InstallIntrinsic("UsingAwaitValue", UsingAwaitValue);
 %InstallIntrinsic("MicrotaskJob", MicrotaskJob);
 %InstallIntrinsic("FromAsyncFulfilled", FromAsyncFulfilled);
 %InstallIntrinsic("FromAsyncRejected", FromAsyncRejected);

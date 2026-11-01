@@ -56,6 +56,7 @@ pub(super) struct Suspended {
     pub blocks: Vec<BlockEnv>,
     pub stmt_depth: u32,
     pub open_iters: Vec<OpenIter>,
+    pub using: super::using::UsingList,
 }
 
 /// An iterator that a `return` from inside an expression must close (a resumed
@@ -142,6 +143,8 @@ pub(super) struct Parser<'a, 'h> {
     /// strip-types: where the last formal parameter list's contents ended (tsc's
     /// `parameters.end`).
     pub ts_params_end: u32,
+    /// The `using` declarations of the statement list being parsed (compiler/using.rs).
+    pub using: super::using::UsingList,
 }
 
 /// Erased TypeScript ranges: `start..end` byte offsets and the kind (`ts::ER_*`).
@@ -223,6 +226,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             ts_semi: false,
             strip: false,
             ts_params_end: 0,
+            using: Default::default(),
         };
         p.f.src_end = src.len() as u32;
         if kind == FuncKind::AsyncBody {
@@ -243,9 +247,13 @@ impl<'a, 'h> Parser<'a, 'h> {
             self.start_flavor((true, false))?;
         }
         self.code().enter_scope(BODY_SCOPE as u16);
+        // `using` is not allowed at the top level of a Script, but in a codemode body
+        // (an async function's) and a module (strip-types).
+        let using = self.begin_using_list(self.f.kind == FuncKind::AsyncBody || self.strip);
         while self.tok.kind != TokenKind::Eof {
             self.parse_statement_list_item()?;
         }
+        self.end_using_list(using);
         self.code().leave_scope(BODY_SCOPE as u16);
         self.emit_return_undef();
         self.finish_unit()
@@ -287,6 +295,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             blocks: core::mem::take(&mut self.blocks),
             stmt_depth: core::mem::take(&mut self.stmt_depth),
             open_iters: core::mem::take(&mut self.open_iters),
+            using: core::mem::take(&mut self.using),
         });
         self.scope = BODY_SCOPE;
         Ok(())
@@ -311,6 +320,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         self.blocks = s.blocks;
         self.stmt_depth = s.stmt_depth;
         self.open_iters = s.open_iters;
+        self.using = s.using;
         let id = child.id;
         self.done[id as usize] = Some(child);
         if let Some(i) = reserved {
@@ -334,6 +344,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         self.blocks = s.blocks;
         self.stmt_depth = s.stmt_depth;
         self.open_iters = s.open_iters;
+        self.using = s.using;
         let id = child.id;
         self.done[id as usize] = Some(child);
         Ok(())
@@ -355,6 +366,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             blocks: core::mem::take(&mut self.blocks),
             stmt_depth: core::mem::take(&mut self.stmt_depth),
             open_iters: core::mem::take(&mut self.open_iters),
+            using: core::mem::take(&mut self.using),
         });
         self.scope = BODY_SCOPE;
     }
@@ -371,6 +383,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         self.blocks = s.blocks;
         self.stmt_depth = s.stmt_depth;
         self.open_iters = s.open_iters;
+        self.using = s.using;
         Ok(f)
     }
 

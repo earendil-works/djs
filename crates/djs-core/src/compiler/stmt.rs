@@ -31,6 +31,8 @@ impl Parser<'_, '_> {
                 self.parse_function_declaration(start, true)?
             }
             TokenKind::Class => self.parse_class(true, Atom::NULL)?,
+            TokenKind::Ident if self.at_using(false) => self.parse_using_declaration(false)?,
+            TokenKind::Ident if self.at_await_using() => self.parse_using_declaration(true)?,
             TokenKind::Import | TokenKind::Export if self.strip && self.strip_at_module_item() => {
                 return self.strip_module_item();
             }
@@ -102,10 +104,14 @@ impl Parser<'_, '_> {
                 tok.start,
                 "lexical declarations can't appear in single-statement context",
             ),
-            TokenKind::Ident if tok.is_contextual(Kw::Let) => syntax(
-                tok.start,
-                "lexical declarations can't appear in single-statement context",
-            ),
+            TokenKind::Ident
+                if tok.is_contextual(Kw::Let) || self.at_using(false) || self.at_await_using() =>
+            {
+                syntax(
+                    tok.start,
+                    "lexical declarations can't appear in single-statement context",
+                )
+            }
             TokenKind::Function => syntax(
                 tok.start,
                 "function declarations can't appear in single-statement context",
@@ -135,6 +141,7 @@ impl Parser<'_, '_> {
     fn parse_block(&mut self) -> PResult<()> {
         self.next()?;
         self.push_scope(ScopeKind::Block)?;
+        let using = self.begin_using_list(true);
         while !self.is(TokenKind::RBrace) {
             if self.is(TokenKind::Eof) {
                 return syntax(self.tok.start, "expecting '}'");
@@ -142,6 +149,7 @@ impl Parser<'_, '_> {
             self.parse_statement_list_item()?;
         }
         self.next()?;
+        self.end_using_list(using);
         self.pop_scope();
         Ok(())
     }
@@ -362,8 +370,23 @@ impl Parser<'_, '_> {
         self.expect(TokenKind::LParen, "(")?;
         let outer = self.scope;
         let mut scoped = false;
+        let mut using = None;
         match self.tok.kind {
             TokenKind::Semicolon => {}
+            TokenKind::Ident if self.at_using(false) || self.at_await_using() => {
+                // The resources are disposed when the whole loop ends.
+                let is_await = self.tok.kw == Kw::Await;
+                if is_await {
+                    self.next()?;
+                }
+                self.next()?;
+                self.push_scope(ScopeKind::For)?;
+                scoped = true;
+                let r = self.using_region_start(self.stmt_depth, is_await);
+                self.using_env(&r);
+                using = Some(r);
+                self.parse_using_bindings(is_await, true)?;
+            }
             TokenKind::Var => {
                 self.next()?;
                 self.parse_var_declarations(true)?;
@@ -434,6 +457,9 @@ impl Parser<'_, '_> {
         }
         self.place(l_break);
         self.blocks.pop();
+        if let Some(r) = using {
+            self.close_using(r);
+        }
         if scoped {
             self.pop_scope();
         }
@@ -686,6 +712,7 @@ impl Parser<'_, '_> {
             // The catch block's declarations share the clause's scope, so they
             // conflict with the parameter (`catch (e) { let e }`).
             self.expect(TokenKind::LBrace, "{")?;
+            let using = self.begin_using_list(true);
             while !self.is(TokenKind::RBrace) {
                 if self.is(TokenKind::Eof) {
                     return syntax(self.tok.start, "expecting '}'");
@@ -693,6 +720,7 @@ impl Parser<'_, '_> {
                 self.parse_statement_list_item()?;
             }
             self.next()?;
+            self.end_using_list(using);
             self.pop_scope();
             let l_catch_end = self.new_label();
             self.place(l_catch_end);
@@ -747,6 +775,8 @@ impl Parser<'_, '_> {
         self.parse_paren_expr()?;
         self.expect(TokenKind::LBrace, "{")?;
         self.push_scope(ScopeKind::Switch)?;
+        // Not in the statement lists of the clauses (a block in one is fine).
+        let using = self.begin_using_list(false);
         let l_break = self.new_label();
         self.blocks.push(BlockEnv {
             labels,
@@ -810,6 +840,7 @@ impl Parser<'_, '_> {
         }
         self.place(l_break);
         self.blocks.pop();
+        self.end_using_list(using);
         self.pop_scope();
         Ok(())
     }

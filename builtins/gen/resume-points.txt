@@ -914,15 +914,45 @@ AsyncDisposeRejected: reentrant (%AsyncDisposeRejected)
   builtins/disposable.ts:396:3  AsyncDisposeError (builtin)
   builtins/disposable.ts:397:3  AsyncDisposeContinue (builtin)
 
+UsingCreate: leaf (%UsingCreate)
+
+UsingAdd: reentrant (%UsingAdd)
+  builtins/disposable.ts:425:3  AddDisposableValue (builtin)
+
+AwaitUsingAdd: reentrant (%AwaitUsingAdd)
+  builtins/disposable.ts:434:3  AddDisposableValue (builtin)
+  builtins/disposable.ts:438:18  LengthOfArrayLike (builtin)
+  builtins/disposable.ts:439:25  Get (intrinsic)
+  builtins/disposable.ts:440:5  CreateDataPropertyOrThrow (intrinsic)
+
+UsingDisposeError: reentrant (%UsingDisposeError)
+  builtins/disposable.ts:451:3  AsyncDisposeError (builtin)
+
+UsingDispose: reentrant (%UsingDispose)
+  builtins/disposable.ts:461:21  LengthOfArrayLike (builtin)
+  builtins/disposable.ts:463:7  CallDisposeMethod (builtin)
+  builtins/disposable.ts:465:7  AsyncDisposeError (builtin)
+
+UsingDisposeStep: reentrant (%UsingDisposeStep)
+  builtins/disposable.ts:482:5  AsyncDisposeError (builtin)
+  builtins/disposable.ts:487:9  LengthOfArrayLike (builtin)
+  builtins/disposable.ts:492:41  Get (intrinsic)
+  builtins/disposable.ts:505:9  CallDisposeMethod (builtin)
+  builtins/disposable.ts:507:9  AsyncDisposeError (builtin)
+  builtins/disposable.ts:513:18  CallDisposeMethod (builtin)
+  builtins/disposable.ts:521:11  AsyncDisposeError (builtin)
+
+UsingAwaitValue: leaf (%UsingAwaitValue)
+
 IteratorPrototypeDispose: reentrant (Iterator.prototype[Symbol.dispose])
-  builtins/disposable.ts:405:25  GetMethod (builtin)
-  builtins/disposable.ts:407:5  Call (intrinsic)
+  builtins/disposable.ts:556:25  GetMethod (builtin)
+  builtins/disposable.ts:558:5  Call (intrinsic)
 
 AsyncIteratorPrototypeAsyncDispose: reentrant (%AsyncIteratorPrototype%[Symbol.asyncDispose])
-  builtins/disposable.ts:419:27  GetMethod (builtin)
-  builtins/disposable.ts:421:7  ResolvePromise (builtin)
-  builtins/disposable.ts:424:50  Call (intrinsic)
-  builtins/disposable.ts:424:15  PromiseResolve (builtin)
+  builtins/disposable.ts:570:27  GetMethod (builtin)
+  builtins/disposable.ts:572:7  ResolvePromise (builtin)
+  builtins/disposable.ts:575:50  Call (intrinsic)
+  builtins/disposable.ts:575:15  PromiseResolve (builtin)
 
 SymbolDispose: leaf (value Symbol.dispose)
 

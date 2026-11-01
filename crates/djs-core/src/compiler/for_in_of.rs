@@ -81,7 +81,32 @@ impl<'a> Parser<'a, '_> {
         let l_body = self.new_label();
         // Handler regions of the for-of close handler: [start, end) pairs.
         let mut regions: Vec<(Label, Label)> = Vec::new();
+        // `for (using x of xs)`: Some(is_await).
+        let mut using_head = None;
         let target = match self.tok.kind {
+            TokenKind::Ident if self.at_using(true) || self.at_await_using() => {
+                let is_await = self.tok.kw == Kw::Await;
+                if is_await {
+                    self.next()?;
+                }
+                self.next()?;
+                self.push_scope(ScopeKind::For)?;
+                scoped = true;
+                if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
+                    return syntax(
+                        self.tok.start,
+                        "binding patterns are not allowed in using declarations",
+                    );
+                }
+                using_head = Some(is_await);
+                let (name, pos) = self.for_binding()?;
+                self.declare_lexical(name, VarKind::Const, pos)?;
+                Target::Decl {
+                    name,
+                    pos,
+                    lexical: true,
+                }
+            }
             TokenKind::Var => {
                 self.next()?;
                 if let Some(t) = self.for_pattern(Binding::Var)? {
@@ -181,6 +206,12 @@ impl<'a> Parser<'a, '_> {
             return self.for_initializer_error();
         }
         let is_of = self.tok.is_contextual(Kw::Of);
+        if using_head.is_some() && self.is(TokenKind::In) {
+            return syntax(
+                self.tok.start,
+                "using declaration not allowed in for-in loop",
+            );
+        }
         if is_await && !is_of {
             return syntax(self.tok.start, "'for await' loop should be used with 'of'");
         }
@@ -246,6 +277,7 @@ impl<'a> Parser<'a, '_> {
             self.code().throw();
         }
         let state = if is_of { 2 } else { 1 };
+        let mut using = None;
         match target {
             Target::Decl { name, pos, lexical } => {
                 self.place(l_assign);
@@ -254,6 +286,13 @@ impl<'a> Parser<'a, '_> {
                 }
                 let start = self.new_label();
                 self.place(start);
+                if let Some(is_await) = using_head {
+                    // Each iteration's resource is disposed at its end (compiler/using.rs).
+                    using = Some(self.using_region_start(base + state, is_await));
+                    self.code().swap();
+                    self.mark(pos);
+                    self.emit_using_add(is_await);
+                }
                 if lexical {
                     // A fresh binding (Box) per iteration.
                     let s = self.scope as u16;
@@ -327,10 +366,16 @@ impl<'a> Parser<'a, '_> {
             used: false,
         });
         self.stmt_depth = base + state;
+        if let Some(r) = &using {
+            self.using_env(r);
+        }
         self.ts_semi = true;
         // On an error the parser state is abandoned (a nested function's may not be
         // restored), so only pop on success.
         self.parse_statement()?;
+        if let Some(r) = using {
+            self.close_using(r);
+        }
         self.stmt_depth = base;
         let loop_env = self.blocks.pop().expect("loop env");
         let iter_env = if is_of { self.blocks.pop() } else { None };

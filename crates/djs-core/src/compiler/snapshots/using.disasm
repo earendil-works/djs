@@ -1,0 +1,128 @@
+function 0 <anonymous>: params=0 locals=0 stack=1 captures=0
+    0  global_decls #0 function "f" "g"
+    5  fclosure child0
+   10  put_global "f"
+   15  fclosure child1
+   20  put_global "g"
+   25  return_undef
+function 0.0 f: params=1 locals=3 stack=7 captures=0
+  handler [60, 95) -> 108 depth 4
+  handler [52, 131) -> 38 depth 3
+  handler [5, 172) -> 185 depth 1
+    0  call_intrinsic %UsingCreate 0
+    5  get_arg arg0  ; 4:13
+    8  pick 1  ; 4:9
+   10  swap
+   11  call_intrinsic %UsingAdd 2
+   16  put_loc loc0 (x)
+   19  get_arg arg0  ; 5:19
+   22  call_intrinsic %GetIterator 1  ; 5:3
+   27  dup
+   28  get_field "next"
+   33  jump -> 131
+   38  nip
+   39  swap
+   40  call_intrinsic %IteratorCloseThrow 1
+   45  drop
+   46  throw
+   47  get_field "value"
+   52  put_loc loc1 (y)  ; 5:14
+   55  call_intrinsic %UsingCreate 0
+   60  get_loc loc1 (y)  ; 6:15
+   63  pick 1  ; 6:11
+   65  swap
+   66  call_intrinsic %UsingAdd 2
+   71  put_loc loc2 (z)
+   74  get_loc loc2 (z)  ; 7:9
+   77  jump_if_false -> 95
+   82  undefined
+   83  gosub -> 122
+   88  drop
+   89  drop
+   90  jump -> 156
+   95  undefined
+   96  gosub -> 122
+  101  drop
+  102  drop
+  103  jump -> 131
+  108  pick 1
+  110  swap
+  111  call_intrinsic %UsingDisposeError 2
+  116  gosub -> 122
+  121  throw
+  122  pick 2
+  124  call_intrinsic %UsingDispose 1
+  129  drop
+  130  ret
+  131  dup2  ; 5:3
+  132  swap
+  133  call 0
+  136  iter_check_object
+  137  dup
+  138  get_field "done"
+  143  jump_if_false -> 47
+  148  drop
+  149  drop
+  150  drop
+  151  jump -> 163
+  156  drop
+  157  call_intrinsic %IteratorClose 1
+  162  drop
+  163  get_loc loc0 (x)  ; 9:10
+  166  gosub -> 199
+  171  return
+  172  undefined
+  173  gosub -> 199
+  178  drop
+  179  drop
+  180  jump -> 208
+  185  pick 1
+  187  swap
+  188  call_intrinsic %UsingDisposeError 2
+  193  gosub -> 199
+  198  throw
+  199  pick 2
+  201  call_intrinsic %UsingDispose 1
+  206  drop
+  207  ret
+  208  return_undef
+function 0.1 g: params=1 locals=2 stack=6 captures=0
+  handler [8, 22) -> 35 depth 1
+  handler [68, 71) -> 77 depth 4
+  handler [3, 97) -> 97 depth 0
+    0  async_start loc0 (<state>)
+    3  call_intrinsic %UsingCreate 0
+    8  get_arg arg0  ; 12:19
+   11  pick 1  ; 12:15
+   13  swap
+   14  call_intrinsic %AwaitUsingAdd 2
+   19  put_loc loc1 (x)
+   22  undefined
+   23  gosub -> 49
+   28  drop
+   29  drop
+   30  jump -> 93
+   35  pick 1
+   37  swap
+   38  call_intrinsic %UsingDisposeError 2
+   43  gosub -> 49
+   48  throw
+   49  pick 2
+   51  dup
+   52  call_intrinsic %UsingDisposeStep 1
+   57  jump_if_false -> 91
+   62  dup
+   63  call_intrinsic %UsingAwaitValue 1
+   68  await loc0 (<state>)
+   71  drop
+   72  jump -> 51
+   77  pick 1
+   79  swap
+   80  call_intrinsic %UsingDisposeError 2
+   85  drop
+   86  jump -> 51
+   91  drop
+   92  ret
+   93  undefined
+   94  async_return loc0 (<state>)
+   97  async_reject loc0 (<state>)

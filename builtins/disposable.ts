@@ -397,6 +397,157 @@ function AsyncDisposeRejected(this: Value, reason: Value): void {
   AsyncDisposeContinue(s);
 }
 
+// ---- `using` and `await using` declarations (0058, docs/compiler.md 7.10) ---------------
+//
+// A scope with `using` declarations keeps a Record on the operand stack: 2 the resources
+// (triples as in a DisposableStack, kinds 0, 2 and 3, plus kind 4: an `await using`
+// resource with a Symbol.asyncDispose method, whose result is awaited), 3 the error, 4
+// whether there is one, 5 needsAwait, 6 hasAwaited, 7 the index of the next triple to
+// dispose (undefined before the first step), 8 the value to await, 9 a kind-2 call's
+// exception to merge once the await is over, 10 whether there is one. Slots 0 and 1 are
+// unused, so AddDisposableValue and AsyncDisposeError work on it unchanged.
+
+/**
+ * The resource Record of a scope's `using` declarations.
+ * @intrinsic
+ */
+function UsingCreate(): Obj {
+  const s: Obj = NewRecord(11);
+  RecordSet(s, 2, ArrayCreate(0));
+  return s;
+}
+
+/**
+ * `using x = v`: AddDisposableResource ( s, v, sync-dispose ), 27.3.3.1. Returns v.
+ * @intrinsic
+ */
+function UsingAdd(s: Obj, v: Value): Value {
+  AddDisposableValue(s, v, false);
+  return v;
+}
+
+/**
+ * `await using x = v`: AddDisposableResource ( s, v, async-dispose ). Returns v.
+ * @intrinsic
+ */
+function AwaitUsingAdd(s: Obj, v: Value): Value {
+  AddDisposableValue(s, v, true);
+  // An async add always appends one triple (kind 3 for null and undefined); kind 0
+  // there is a Symbol.asyncDispose method, awaited unlike a `using` resource's.
+  const resources: Obj = AsObj(RecordGet(s, 2));
+  const k: f64 = LengthOfArrayLike(resources) - 1;
+  if (F64ToI32(AsNumber(Get(resources, k))) === 0) {
+    CreateDataPropertyOrThrow(resources, k, 4);
+  }
+  return v;
+}
+
+/**
+ * Records an exception: the one the scope exits with (first), or one of a disposal
+ * (as a SuppressedError over the earlier ones).
+ * @intrinsic
+ */
+function UsingDisposeError(s: Obj, e: Value): void {
+  AsyncDisposeError(s, e);
+}
+
+/**
+ * DisposeResources ( s, completion ), 27.3.3.4, of a scope without `await using`: the
+ * completion is the error recorded by UsingDisposeError, if any; throws the result.
+ * @intrinsic
+ */
+function UsingDispose(s: Obj): void {
+  const resources: Obj = AsObj(RecordGet(s, 2));
+  for (let i: f64 = LengthOfArrayLike(resources) - 3; i >= 0; i = i - 3) {
+    try {
+      CallDisposeMethod(resources, i);
+    } catch (e) {
+      AsyncDisposeError(s, e);
+    }
+  }
+  if (RecordGet(s, 4) === true) {
+    throw RecordGet(s, 3);
+  }
+}
+
+/**
+ * DisposeResources of a scope with `await using`, up to its next Await: true when the
+ * code must await UsingAwaitValue(s) (an exception from it goes to UsingDisposeError)
+ * and step again, false when done; throws the result.
+ * @intrinsic
+ */
+function UsingDisposeStep(s: Obj): boolean {
+  if (RecordGet(s, 10) === true) {
+    RecordSet(s, 10, false);
+    AsyncDisposeError(s, RecordGet(s, 9));
+  }
+  const resources: Obj = AsObj(RecordGet(s, 2));
+  let i: f64 = 0;
+  if (RecordGet(s, 7) === undefined) {
+    i = LengthOfArrayLike(resources) - 3;
+  } else {
+    i = AsNumber(RecordGet(s, 7));
+  }
+  while (i >= 0) {
+    const kind: i32 = F64ToI32(AsNumber(Get(resources, i + 2)));
+    if (kind === 0 && RecordGet(s, 5) === true && RecordGet(s, 6) !== true) {
+      // A sync disposal after a null `await using`: the pending Await comes first.
+      RecordSet(s, 5, false);
+      RecordSet(s, 7, i);
+      RecordSet(s, 8, undefined);
+      return true;
+    }
+    RecordSet(s, 7, i - 3);
+    if (kind === 3) {
+      RecordSet(s, 5, true);
+    } else if (kind === 0) {
+      try {
+        CallDisposeMethod(resources, i);
+      } catch (e) {
+        AsyncDisposeError(s, e);
+      }
+    } else {
+      let result: Value = undefined;
+      let threw: boolean = false;
+      try {
+        result = CallDisposeMethod(resources, i);
+      } catch (e) {
+        threw = true;
+        if (kind === 2) {
+          // GetDisposeMethod's closure returns a rejected promise: awaited, then thrown.
+          RecordSet(s, 9, e);
+          RecordSet(s, 10, true);
+        } else {
+          AsyncDisposeError(s, e);
+        }
+      }
+      if (kind === 2 || !threw) {
+        RecordSet(s, 6, true);
+        RecordSet(s, 8, kind === 2 ? undefined : result);
+        return true;
+      }
+    }
+    i = i - 3;
+  }
+  if (RecordGet(s, 5) === true && RecordGet(s, 6) !== true) {
+    RecordSet(s, 5, false);
+    RecordSet(s, 8, undefined);
+    return true;
+  }
+  if (RecordGet(s, 4) === true) {
+    throw RecordGet(s, 3);
+  }
+  return false;
+}
+
+/**
+ * The value UsingDisposeStep asks to await.
+ * @intrinsic
+ */
+function UsingAwaitValue(s: Obj): Value {
+  return RecordGet(s, 8);
+}
+
 /**
  * %IteratorPrototype% [ %Symbol.dispose% ] ( ), 27.1.4.15.
  * @builtin Iterator.prototype[Symbol.dispose]

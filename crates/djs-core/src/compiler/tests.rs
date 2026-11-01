@@ -1129,6 +1129,46 @@ fn errors() {
             7,
         ),
         ("// goal: body\nvar await", "variable name expected", 2, 5),
+        // `using` declarations (0058).
+        ("using x = null;", "using declaration not allowed here", 1, 7),
+        (
+            "switch (1) { case 1: using x = null; }",
+            "using declaration not allowed here",
+            1,
+            28,
+        ),
+        ("{ using x; }", "missing initializer for using declaration", 1, 10),
+        (
+            "{ using x = null, [y] = null; }",
+            "binding patterns are not allowed in using declarations",
+            1,
+            19,
+        ),
+        (
+            "for (using x in {}) {}",
+            "using declaration not allowed in for-in loop",
+            1,
+            14,
+        ),
+        (
+            "if (1) using x = null;",
+            "lexical declarations can't appear in single-statement context",
+            1,
+            8,
+        ),
+        (
+            "async function f() { for (await using x in {}) {} }",
+            "using declaration not allowed in for-in loop",
+            1,
+            41,
+        ),
+        ("{ using let = null; }", "expecting ';'", 1, 9),
+        (
+            "async function f() { await using await = null; }",
+            "expecting ';'",
+            1,
+            34,
+        ),
     ];
     let mut bad = Vec::new();
     for &(src, msg, line, col) in cases {

@@ -1447,6 +1447,34 @@ What the compiler emits:
   get_super_field x` (MakeSuperPropertyReference order: `this`, then the base, then the
   key); `super.m()` reads `this` again for the call.
 
+### 7.10 `using` declarations (0058, compiler/using.rs)
+
+- **Where.** `Parser::using` says whether the current statement list may have `using`
+  declarations (`UsingList::Forbidden` at a Script's top level, in `switch` clauses and
+  in functions until a body starts; `Allowed` in blocks, function bodies, catch blocks
+  and a codemode body) and holds its region once open. `using x` is a declaration when a
+  non-reserved identifier follows on the same line (in a for-in/of head not `of`: `for
+  (using of of xs)` iterates `using`); `await using x` only in async functions. Patterns
+  and missing initializers are errors; the bindings are `const`.
+- **Code.** The region opens at the first declaration of the list:
+  `call_intrinsic %UsingCreate 0` pushes the resource Record, which stays on the operand
+  stack under the rest of the list (`stmt_depth` + 1). Each initializer is followed by
+  `pick 1; swap; call_intrinsic %UsingAdd 2` (`%AwaitUsingAdd`) before the binding's
+  `name_init`. At the end of the list, the region is a `try`/`finally` whose finally
+  block is the disposal subroutine: a `BlockKind::Finally` env at depth base + 1 makes
+  jumps out of it `gosub` the subroutine (7.4), the normal exit is `undefined; gosub;
+  drop; drop`, and the handler records the exception (`%UsingDisposeError`) and then
+  `gosub`s, so the subroutine throws the final error. The subroutine (`s v ret`) is
+  `pick 2; call_intrinsic %UsingDispose 1; drop; ret`, or with an `await using` in the
+  list a loop of `%UsingDisposeStep` (one step per Await: returns whether to await
+  `%UsingAwaitValue`) around a real `await`, whose rejection goes to
+  `%UsingDisposeError` (a handler at depth base + 4).
+- **For heads.** `for (using x = ...; ...)` opens a region (env below the loop's) around
+  the whole loop. `for (using x of xs)` opens one per iteration: at `L_assign`,
+  `%UsingCreate; swap; <add>; <binding>`, the env above the loop's (so `continue`
+  disposes), closed after the body, inside the for-of close handler (a disposal error
+  closes the iterator).
+
 ## 8. Error reporting and early errors
 
 ### 8.1 Compile errors

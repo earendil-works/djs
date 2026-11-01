@@ -1,0 +1,19 @@
+body, dispose d, dispose a -> 1
+dispose b, dispose a -> threw SE(a, SE(b, body))
+dispose b, dispose a -> threw a
+i0, dispose r0, dispose r1, dispose r2, dispose y, dispose x -> loops
+of false, dispose o1, of true, of false, dispose o2, head, head, head, head, head, head, head, dispose h2, dispose h1 -> heads
+of, dispose bad1 -> threw using: value is not an object
+got 1, dispose gen, dispose gen -> threw thrown in
+dispose in try, caught x, dispose in catch, dispose in finally, dispose case block, dispose static -> blocks
+using: value is not an object, using: value has no Symbol.dispose method, using: dispose method is not a function, dispose v, TypeError, ReferenceError -> f
+ -> 7 7
+order: body, sdispose c, sdispose b, adispose a -> 1 (ticks 4)
+errors: sdispose c, sdispose b, adispose a -> threw SE(a, SE(b, SE(c, body))) (ticks 3)
+null only: in -> after (ticks 2)
+null then sync: sdispose s -> x (ticks 2)
+not evaluated:  -> early (ticks 1)
+for await: of, adispose x1, of, sdispose x2, of, of2, sdispose y, head, adispose h -> loops (ticks 9)
+thenable: thenable dispose, then -> undefined (ticks 3)
+sync throws: body -> threw sync throw (ticks 1)
+async generator: got 1, adispose ag -> done (ticks 6)

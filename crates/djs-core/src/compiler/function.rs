@@ -301,6 +301,7 @@ impl Parser<'_, '_> {
         // Directive prologue: everything is strict already, but `"use strict"` with
         // non-simple parameters is an error.
         let mut directives = true;
+        let using = self.begin_using_list(true);
         while !self.is(TokenKind::RBrace) {
             if self.is(TokenKind::Eof) {
                 return syntax(self.tok.start, "expecting '}'");
@@ -332,6 +333,7 @@ impl Parser<'_, '_> {
             self.parse_statement_list_item()?;
         }
         self.next()?;
+        self.end_using_list(using);
         self.ts_semi = outer_semi;
         self.code().leave_scope(BODY_SCOPE as u16);
         self.emit_return_undef();

@@ -29,6 +29,7 @@ mod scan;
 mod stmt;
 mod ts;
 mod ts_decl;
+mod using;
 
 #[cfg(test)]
 mod tests;

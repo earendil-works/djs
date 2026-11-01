@@ -12,6 +12,4 @@ dquickts/language/test_parse_arrow_function.js: throws Error: assertion failed: 
 dquickts/typescript/test_enums.ts: throws Error: assertion failed: got |undefined|, expected |undefined| (block scoped enum)
 dquickts/typescript/test_rejected_syntax_5.ts: throws SyntaxError: missing formal parameter
 dquickts/typescript/test_rejected_syntax_6.ts: throws SyntaxError: unexpected token in expression: '@'
-dquickts/typescript/test_using.ts: throws SyntaxError: expecting ';'
-dquickts/typescript/test_using_syntax_2.ts: throws SyntaxError: expecting ';'
 errors/type-errors.js: line 16: expected `getter only -> TypeError: no setter for property`, got `getter only -> TypeError: no setter for property 'g'`

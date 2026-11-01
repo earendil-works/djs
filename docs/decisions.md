@@ -2707,3 +2707,21 @@ djs-bench) gets the shipping module. `scripts/build-wasm.sh --keep-names` sets
 `CARGO_PROFILE_WASM_STRIP=false` for profiling and scripts/wasm-funcs.py (a rebuild
 when switching; `--strip` is accepted as a no-op). The size track adds `brotli -q 11`;
 its `names` value is 0 from now on.
+
+## D1580: `using` declarations keep a resource Record on the operand stack
+date: 2026-11-03 · by: lexer · issue: 0058
+A statement list (block, function body, catch block, codemode body) or a `for` head with
+`using`/`await using` declarations compiles to a try/finally region that starts at the
+first declaration: `%UsingCreate` pushes a Record (builtins/disposable.ts) that stays on
+the operand stack under the statements, `%UsingAdd`/`%AwaitUsingAdd` append each value
+(the 0051 AddDisposableValue checks and messages), and the region's finally subroutine
+disposes, entered with `gosub` from the normal exit, the exception handler (which first
+records the exception in the Record, so the subroutine rethrows it, wrapped in
+SuppressedErrors) and every `break`/`continue`/`return`/generator return leaving it (a
+`BlockKind::Finally` env). Sync disposal is one call (`%UsingDispose`); with an `await
+using` in the list, the subroutine loops `%UsingDisposeStep` and a real `await` per
+resource, so the awaits (needsAwait/hasAwaited, a sync disposal after a null `await
+using`) tick exactly like qjs's. Alternatives: qjs's hidden (value, method) locals per
+declaration with unrolled disposal (needs per-entry resets of the locals for loops, and
+inlines the disposal at every jump), or one `await` of a disposeAsync-style promise
+(extra ticks).
