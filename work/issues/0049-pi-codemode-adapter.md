@@ -44,7 +44,59 @@ that it works:
 - Missing engine features found here become follow-ups for the coordinator.
 
 ## Log
+- Read pi-private (d65de9db942d, read-only) packages/codemode: vm.ts, execution.ts,
+  host.ts, inline.ts, worker.ts, protocol.ts, prelude-source.ts, the tests. All
+  engine-specific code is in vm.ts (`startVm`), so the adapter implements that contract.
+  The launchers, host and prelude stay pi's.
+- Blocker found right away: pi's prelude uses regex literals and `split`, which main lacks
+  (0033). Developed against a scratch build of the 0033 branch (git archive into
+  work/scratch/0049/djs-0033, own target dir). The merge waits for 0033.
+- djs-wasm: added `vm_compile_file` (file names in stacks: pi checks `codemode.js:2`),
+  `vm_set_random_seed` and `djs_build_hash` (D1491), with a native test.
+- js/pi/engine.ts (a handle-level client of the exports) and js/pi/vm.ts (the contract,
+  D1490). First run of pi's suite: 200/226.
+- Fixes from pi's tests: `performance`/`queueMicrotask`/`atob`/`btoa` as JS host globals
+  (D1494); `Math.random` seeded like quickjs-wasi, so pi's pinned values match (D1493).
+- Fuel per poll: 10k vs 100k measured against quickjs-wasi's poll rate (D1492). At 100k,
+  `while (true) {}` with pi's budget ran 6 s instead of 0.6 s.
+- Start time: 10 ms vs quickjs-wasi's 3.2 ms, about 90% of it pi's lockdown in the djs
+  interpreter. Prelude image reuse (D1495) brings it to 0.5 ms.
+- js/pi/pi-tests.ts: generates target/pi-codemode (pi's src + tests, vm.ts and wasm.ts
+  swapped, node_modules symlinked, vite cache in the copy), runs pi's vitest and writes
+  report.md. Checked that nothing under pi-private changed (find -newer). Result:
+  204/226; the 22 failures are 8 tests across backends, all engine gaps or inherent
+  (docs/host.md table).
+- js/test/pi-vm.test.ts: 12 node tests (output, concurrent calls, tool errors, globals,
+  store/load, errors and line numbers, exit, interrupts, memory limit, host globals,
+  determinism incl. the pinned QuickJS values, snapshot → resume in a new instance equal to
+  an uninterrupted run). Pass on the 0033 build, release and debug wasm.
+- js/bench/pi.bench.ts: djs vs quickjs-wasi through the same contract (pi's vm.ts imported
+  read-only). docs/host.md "pi codemode" has the comparison, gaps, what pi would change,
+  numbers.
 
 ## Follow-ups
+- Engine (regexp, 0033/num): `/^[A-Za-z0-9+/]+={0,2}$/.test(s)` on 1 MB fails with
+  `InternalError: out of memory in regexp execution`. pi's `image()` runs exactly this on
+  every image, so large images fail. A greedy loop over a single class should not need a
+  backtrack entry per iteration (or the limit is too low). qjs handles it.
+- Engine: stack overflow is `InternalError: stack overflow` (dquickts), quickjs-wasi
+  (quickjs-ng) throws `RangeError`. pi's test expects RangeError. Decide whether to follow
+  quickjs-ng.
+- Engine: indirect `eval`, the `Function`/`AsyncFunction` constructors (pi's test expects
+  them to work inside the VM).
+- Engine: `import()` should compile and reject at run time, not be a SyntaxError for the
+  whole script.
+- Engine: WeakRef and FinalizationRegistry (pi's `execute()` has them).
+- Engine: missing globals quickjs-wasi has: `Iterator` (+ helpers), `encodeURI`/
+  `decodeURI`(+`Component`), `escape`/`unescape`, `DisposableStack`/
+  `AsyncDisposableStack`/`SuppressedError`.
+- Engine: `vm_display` / the CLI's "Uncaught" line shows an empty name for errors after
+  pi's lockdown (`TypeError.prototype.name` becomes an accessor): `Uncaught : cannot read
+  property 'x' of null`. Display should read the name through the getter.
+- Perf: pi's lockdown takes about 8 ms in wasm (QuickJS: the whole start is 3 ms). The
+  tool-heavy bench script runs about 4x slower than on quickjs-wasi, all in the interpreter.
+  Natively, Set has/add of objects costs about 0.7 µs. This belongs to the interpreter perf track.
+- pi side (owner's decision, not this repo): an engine flag, the fingerprint test, and
+  prelude images in the worker launcher (docs/host.md "What pi would change").
 
 ## Result
