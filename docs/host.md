@@ -272,14 +272,18 @@ memory. A freed VM's memory is reused but not returned: wasm memory cannot shrin
 
 Node 25, Apple M-series, the `wasm` profile at opt-level `s` (D1232), medians.
 
-**Size.** 1,241 KB (0057, after 0059): code 709 KB, data 528 KB of which the base snapshot
-is 395 KB; 428 KB gzip -9, 345 KB brotli -q 11. The `wasm` profile strips the name section
+**Size.** 1,515 KB at 0095 (after 0091): code 935 KB, data 576 KB of which the base
+snapshot is 398 KB; 531 KB gzip -9, 426 KB brotli -q 11. (At 0057 it was 1,241 KB; the
+growth since is mostly the generated `@native` builtins, `@fast` entries and Unicode
+tables, each justified by measurements in its decision.) The `wasm` profile strips the name section
 (D1575) and links with `--compress-relocations` (D1570). Where the bytes go and what could
 shrink them: work/issues/0052-bloat-investigation.md. The size track (`scripts/bench.sh
 size`) records `size/djs-wasm ...` (file, code, data, names, gzip, brotli) next to the old
 probe. The ARCH budget (400 KB) is meant after `wasm-opt`, which is not installed here.
 
-**Startup** (`node js/bench/sandbox.bench.ts`):
+**Startup** (`node js/bench/sandbox.bench.ts`; measured at 0057 on a quiet machine. At
+0095, under load 12: compile 1.5 ms, instantiate 66 µs, `vm_new` 4.8 µs,
+`Sandbox.create` 142 µs, `run("return 1")` 9.7 µs):
 
 | step | time |
 | --- | ---: |
@@ -329,12 +333,12 @@ host code and runs at the same speed.
 
 ## Gaps
 
-- **Builtins and statements.** What JS runs depends on the compiler and the builtins on
-  main. When this was written, `try`, functions and most builtins (`Array.prototype.push`,
-  …) were not there yet. The tests stick to what works.
-- **Async.** Concurrent host calls need `asyncFunctions` (sync `functions` still run one
-  at a time). Until the compiler supports `async`/`await` (0037 defines the runtime), code
-  chains with `.then`.
+- **Host refs** (ARCH "Data passing") are not built: pass-through data such as images is
+  copied in and out.
+- **Snapshots** are whole images that load only into the same build (ARCH "Snapshots").
+  Smaller and longer-lived snapshots are 0088's research, pending the owner's decision.
+- **Sync host functions** run one at a time (the VM parks); use `asyncFunctions` for
+  concurrent calls.
 
 ## pi codemode
 
@@ -376,8 +380,8 @@ but pi keeps the prelude's `settle`/`run`/`stalled` alive across calls).
 | no snapshots: durability by deterministic replay | `snapshot()` / `resumeVm()` in addition: the VM image plus the adapter's few numbers, taken while the script waits. The session collects first (D1890), so the image holds only live data: 498 KB for a session waiting on its first call (936 KB uncollected before 0089). A resumed session continues with no replay (tested against an uninterrupted run, with the same messages and interrupt polls) |
 
 **Prelude images.** Running pi's prelude is most of a start: its lockdown walks and freezes
-about 700 objects, and the djs interpreter is still several times slower than QuickJS
-(the board's perf track). The adapter keeps the VM image taken right after the prelude,
+about 700 objects, and builtin-heavy code like it still runs 1.5-4x more instructions on
+djs than on quickjs-wasi (README.md "Status"). The adapter keeps the VM image taken right after the prelude,
 keyed by everything the prelude saw (prelude, tools, globals, store, heap limit, deterministic mode; at most
 16 images per module, 496 KB each: every cold start collects after the prelude, D1890; they
 were 933 KB of mostly garbage before 0089). A start with the same inputs restores the image
@@ -444,27 +448,28 @@ Besides the failures above:
 4. Optionally, for fast starts in the worker launcher: keep prelude images in the parent
    thread, or keep warm workers. Splitting the lockdown out of the argument-dependent part of
    the prelude would let one image serve every tool table and store.
-5. Before the flag is the default, close these engine gaps: eval's completion value
-   (0058) and `import()` as a runtime rejection. Stack overflow is a `RangeError` since
-   0054 (D013).
-   Interpreter speed matters for heavier scripts (see below).
+5. The engine gaps found earlier are closed: eval's completion value and `import()` as a
+   runtime rejection (0058), stack overflow as a `RangeError` (0054, D013). Interpreter
+   speed still matters for builtin-heavy scripts (see below).
 
 ### Numbers
 
 `node js/bench/pi.bench.ts`: djs through js/pi/vm.ts and quickjs-wasi 3.6.2 through pi's vm.ts,
 both on the calling thread with pi's prelude, tools answered in a microtask. Medians on
-an Apple M-series machine, node 25, djs-wasm `wasm` profile (opt-level s), on 0033's
-branch:
+an Apple M-series machine, node 25, djs-wasm `wasm` profile (opt-level s). At 0095
+(main after 0091, load about 7, so ±20%):
 
 | case | quickjs-wasi | djs, prelude image reused | djs, prelude run each time |
 | --- | ---: | ---: | ---: |
-| script start (`return 1`) | 3.2 ms | 0.49 ms | 9.8 ms |
-| tool-heavy script (61 calls, 120 KB of results) | 5.0 ms | 7.1 ms | 16.1 ms |
+| script start (`return 1`) | 3.9 ms | 1.0 ms | 7.0 ms |
+| tool-heavy script (61 calls, 120 KB of results) | 5.3 ms | 4.2 ms | 9.1 ms |
+
+On 0033's branch the tool-heavy row was 5.0 / 7.1 / 16.1 ms and the start 3.2 / 0.49 /
+9.8 ms; the interpreter and builtin work since (0063, 0080-0091) made the script part
+faster than quickjs-wasi.
 
 The tool-heavy script searches, reads 60 files in batches of 10 concurrent calls, splits
-and filters the lines, prints a table and stores a summary. With an image, djs starts 6x
-faster than quickjs-wasi, because restoring an image is a copy plus a check. The script
-part is about 4x slower, all in the interpreter (`Exec::run` and builtins in a profile; the
-adapter's own work does not show). opt-level 3 for djs-wasm brings that row to 6.6 ms and
-the cold start to 8.6 ms. pi's whole test suite on djs takes 29 s (100 s without prelude
-images).
+and filters the lines, prints a table and stores a summary. With an image, djs starts
+several times faster than quickjs-wasi, because restoring an image is a copy plus a check.
+(At 0033: the script part was about 4x slower, opt-level 3 brought that row to 6.6 ms,
+and pi's whole test suite on djs took 29 s, 100 s without prelude images.)
