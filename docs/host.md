@@ -328,7 +328,8 @@ Besides the failures above:
 - **Strict mode.** pi evaluates scripts sloppy on QuickJS. On djs they are strict: an
   assignment to an undeclared variable is a ReferenceError instead of creating a global,
   and writes to read-only properties throw. Model-written code rarely relies on either.
-- **Globals djs lacks** (quickjs-wasi has them): `Iterator`, `WeakRef`,
+- **Globals djs lacks** (quickjs-wasi has them; `Iterator` arrived with D1510 after this
+  was measured): `WeakRef`,
   `FinalizationRegistry`, `DisposableStack`, `AsyncDisposableStack`, `SuppressedError`,
   `DOMException`, `encodeURI`/`decodeURI` (+`Component`), `escape`/`unescape`, `eval`, and
   `SharedArrayBuffer` (an ARCH non-goal). The adapter supplies `performance`,

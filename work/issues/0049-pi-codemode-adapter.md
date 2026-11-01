@@ -89,7 +89,7 @@ that it works:
 - Engine: `import()` should compile and reject at run time, not be a SyntaxError for the
   whole script.
 - Engine: WeakRef and FinalizationRegistry (pi's `execute()` has them).
-- Engine: missing globals quickjs-wasi has: `Iterator` (+ helpers), `encodeURI`/
+- Engine: missing globals quickjs-wasi has (`Iterator` landed meanwhile, D1510): `encodeURI`/
   `decodeURI`(+`Component`), `escape`/`unescape`, `DisposableStack`/
   `AsyncDisposableStack`/`SuppressedError`.
 - Engine: `vm_display` / the CLI's "Uncaught" line shows an empty name for errors after
