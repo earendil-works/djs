@@ -3575,3 +3575,21 @@ there. `regexp::tests::chunked_fuel_is_additive` checks total fuel against chunk
 checks the same at the vm level, together with append-buffer, JSON and Array.from
 workloads. The wasm build of `regexp-scan` runs about 0.7% more instructions (node,
 3 runs each; within about 2x the noise).
+
+## D1712: A suspended intrinsic's refund carries to the next run as a credit
+date: 2026-11-03 · by: num · issue: 0071 (follow-up)
+Background: `suspend_in` gives back the dispatch charge of a builtin that stops mid-work
+(D1740), because the resume dispatches it again. When the matcher had used up the slice,
+that refund left the run stopping out of fuel with fuel left over. `run` stored only
+positive debt, so the remainder was lost, and every suspension cost the dispatch charge
+once more. That moved budget stop points for regexp-heavy code: 0074's budget-form test
+failed at slice 30030 for `/abc|bab?x|q/`, `/(?:ab){3}x/` and `/(?:a|b)*c/`.
+
+Rule: `Interp::FUEL_DEBT` may now be negative, a credit. A run that stops out of fuel
+stores `-fuel` whatever its sign. A run parked on a host call still stores only an
+overshoot: fuel left over there was never owed.
+
+Test: `vm::tests::budgets_with_collections_and_suspended_regexps` runs the D1740 budget
+form (budgets of k·B fuel given as one run or as slices of 30030, 4620 with restores, 143
+and 13; the state is compared after each budget) on those three regexps. It also covers
+0074's append-buffer and JSON/Array.from loops, which pass since D1710.

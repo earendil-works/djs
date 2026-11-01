@@ -3018,9 +3018,7 @@ fn a_fuel_budget_stops_at_the_same_point_for_any_slice() {
     // Ordinary code and expensive leaf ops (long string searches, splits). A budget of
     // k * B fuel, given as one run or as B/s runs of s fuel, must stop at the same
     // instruction with the same state: the overshoot of each slice carries to the next
-    // (before D1740 it was forgiven, so small slices got further). Known exceptions
-    // (0074's log): code whose fuel depends on collection points (append buffers) until
-    // 0071 removes the collection at the start of `run`, and regexp scans.
+    // (before D1740 it was forgiven, so small slices got further).
     let src = "globalThis.s = 'xy'.repeat(20000);\n\
                globalThis.k = 0;\n\
                for (let i = 0; ; i++) {\n\
@@ -3029,6 +3027,13 @@ fn a_fuel_budget_stops_at_the_same_point_for_any_slice() {
                  a.sort((p, q) => p - q);\n\
                  k += a[2];\n\
                }\n";
+    budget_stops_at_the_same_point(src).unwrap();
+}
+
+/// Runs `src` (an endless loop) with a budget of k * B fuel for k = 1..8, given as one run
+/// or as B/s runs of s fuel (some with an image restore at every stop), and compares the
+/// state (canonical hash and backtrace) after each budget.
+fn budget_stops_at_the_same_point(src: &str) -> Result<(), alloc::string::String> {
     const B: u64 = 60_060;
     let states = |slice: u64, suspend: bool| {
         let mut vm = vm();
@@ -3055,10 +3060,30 @@ fn a_fuel_budget_stops_at_the_same_point_for_any_slice() {
     };
     let reference = states(B, false);
     for (slice, suspend) in [(30_030, false), (4620, true), (143, false), (13, false)] {
-        assert_eq!(
-            states(slice, suspend),
-            reference,
-            "slice {slice}, suspend {suspend}"
-        );
+        if states(slice, suspend) != reference {
+            return Err(alloc::format!("slice {slice}, suspend {suspend}"));
+        }
     }
+    Ok(())
+}
+
+/// The exceptions 0074 found: append buffers and JSON/Array.from depended on the
+/// collection at the start of `run` (removed, D1710), and suspended regexps lost their
+/// dispatch refund at the end of a slice (now a credit, D1712).
+#[test]
+fn budgets_with_collections_and_suspended_regexps() {
+    let srcs = [
+        "globalThis.t = ''; const s = 'ab'.repeat(200); for (let i = 0; ; i++) { t += s.slice(i % 300, i % 300 + 50); }",
+        "for (;;) { globalThis.j = JSON.stringify(Array.from({ length: 500 }, (_, i) => ({ i, s: 'x' + i }))); }",
+        "globalThis.s = 'ab'.repeat(5000); for (;;) { globalThis.m = /abc|bab?x|q/.exec(s); }",
+        "globalThis.s = 'ab'.repeat(5000); for (;;) { globalThis.m = /(?:ab){3}x/.exec(s); }",
+        "globalThis.s = 'ab'.repeat(2000); for (;;) { globalThis.m = /(?:a|b)*c/.exec(s); }",
+    ];
+    let mut errs = alloc::vec::Vec::new();
+    for (n, src) in srcs.iter().enumerate() {
+        if let Err(e) = budget_stops_at_the_same_point(src) {
+            errs.push(alloc::format!("{n}: {e}"));
+        }
+    }
+    assert!(errs.is_empty(), "{errs:?}");
 }

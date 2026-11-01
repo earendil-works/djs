@@ -117,6 +117,10 @@ sb.dispose();
   the heap) and the heap's buffer grows by doubling, so the address space needs about 3x
   the cap: at most about **1 GiB** in a 4 GiB wasm32 memory, less if the embedder runs
   several VMs in one instance.
+  A VM stopped out of fuel inside a regexp match may hold a progress record allocated past
+  the cap (it does not count toward the cap, D1710, and is freed when the match resumes).
+  A host `collect()` at exactly that point can then fail for lack of to-space; collect
+  when the VM is idle or done instead.
 
 ### Journals: record and replay (D1730)
 

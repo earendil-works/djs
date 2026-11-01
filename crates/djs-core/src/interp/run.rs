@@ -953,9 +953,18 @@ impl<'h> Exec<'h> {
         // VM is quiescent (done, threw, idle) nothing is owed: the next run starts a fresh
         // slice anyway, and the state at those points does not depend on the slicing.
         match st {
-            Status::OutOfFuel | Status::HostCall { .. } => {
+            // Out of fuel with fuel left can only be an intrinsic suspended mid-work
+            // (`suspend_in`): it gave back its dispatch charge, which the resume charges
+            // again, so the remainder is a credit for the next run (D1712).
+            Status::OutOfFuel => {
                 if self.fuel_start.is_some() {
                     state::set_fuel_debt(self.heap, -self.fuel);
+                }
+            }
+            // Parked on a host call: fuel left over is the host's to forgo.
+            Status::HostCall { .. } => {
+                if self.fuel_start.is_some() {
+                    state::set_fuel_debt(self.heap, (-self.fuel).max(0));
                 }
             }
             _ => state::set_fuel_debt(self.heap, 0),
