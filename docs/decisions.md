@@ -3843,3 +3843,60 @@ only the `fast_step` ops measured the same. TurboFan's code for the single table
 cheaper than the compare tree, and the move perturbs the run loop (D1352). The `ops!`
 order stays semantic; work/scratch/0086/renumber.py (not committed) redoes the reorder
 for a later measurement, e.g. after the run-loop restructuring (0081 P6).
+## D1783: Fast paths for array appends, strict equality and insert2/insert3
+date: 2026-11-03 · by: num · issue: gate time (coordinator)
+test262's 613 RegExp property-escape tests were about 60% of the gate's test262 CPU. Each
+one builds its strings with the harness's `buildString`, a JS loop of
+`codePoints[length++] = codePoint; if (length === CHUNK_SIZE) …` over about 1.1M code
+points, and it runs twice (strict and sloppy). Three of that loop's ops took the slow
+path:
+- `put_elem`: `fast_elem` required an existing element, so every append went through
+  generic [[Set]]. `set_element_fast` already appends and fills holes where that is
+  unobservable (an extensible Array, writable length, no index properties on the
+  prototype chain), so `put_elem` now calls it directly.
+- `strict_eq` / `strict_ne` now have `fast_step` arms for two int32s or two Numbers.
+  Everything else goes through `strict_equals` as before.
+- `insert2` / `insert3`, the stack shuffles of assignment expressions, now have
+  `fast_step` arms.
+
+`tests/corpus/language/elem-append-strict-eq.js` matches qjs, also under stress. It
+covers appends, holes, frozen, non-extensible and length-readonly arrays, a setter on
+Array.prototype, out-of-range typed-array writes, and `===` with NaN, -0 and mixed types.
+
+## D1784: Bulk reads of dense arrays (fromCodePoint, apply)
+date: 2026-11-03 · by: num · issue: gate time (coordinator)
+`String.fromCodePoint.apply(null, list)` with 10,000 code points read every element
+three times through `get_element_fast`, which checks the class and the bounds per
+element:
+1. `IsDenseArray`;
+2. `AllCodePoints`;
+3. `from_codes`.
+
+`apply` (`CallWithArray`) read the list once more the same way.
+`Heap::dense_array_values` now yields the first `length` slots of a dense Array straight
+from one slice of its store. `AllNumbers`/`AllCodePoints` validate in one pass, testing
+int32 values first, and `from_codes` and `CallWithArray` read the list in one pass.
+Result: 270 → 135 native instructions per code point (release) for
+`fromCodePoint.apply`.
+
+## D1785: Dependencies at opt-level 1 in the dev profile
+date: 2026-11-03 · by: num · issue: gate time (coordinator)
+djs-core builds at opt-level 1 in dev (D010). At opt-level 0 and 1, rustc reuses generic
+instantiations that an upstream crate already has. So djs-core's hottest paths called
+libm's copies, which were built at opt-level 0, not inlinable, and full of debug
+precondition checks: `Range::contains`, range iteration and `unchecked_add`.
+`[profile.dev.package."*"] opt-level = 1` compiles libm, the only third-party dependency,
+at opt-level 1 too. That alone cut a debug test262 property-escape run by 22% of its
+instructions. Debug assertions and overflow checks stay on, as D010 wants.
+
+Result for the 613 property-escape tests, `djs-test262` built in dev, `-j 6`:
+
+| | before | after |
+| --- | ---: | ---: |
+| instructions | 3.31 T | 1.66 T (−50%) |
+| CPU | 152–157 s | 69–83 s |
+| per test | 0.25 s | 0.12 s |
+
+On `buildString` + checks (one Alphabetic test, 15 runs) the instructions went from
+103 G to 54 G in dev and from 42 G to 32 G in release. The rest is the interpreter's
+per-op cost on that loop, about 70 native instructions per op (0081 F2, 0086).

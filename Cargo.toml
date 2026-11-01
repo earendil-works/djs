@@ -29,3 +29,10 @@ strip = true
 # opt-level 1 keeps debug assertions and overflow checks but makes those runs ~14x faster.
 [profile.dev.package.djs-core]
 opt-level = 1
+
+# Dependencies (libm) at opt-level 1 too: at opt-level 0/1 rustc shares generic
+# instantiations with upstream crates, so djs-core called libm's unoptimized, non-inlinable
+# copies of `Range::contains`, range iterators and `unchecked_add`'s precondition checks
+# in its hottest paths: 22% of the instructions of a debug test262 run (D1785).
+[profile.dev.package."*"]
+opt-level = 1

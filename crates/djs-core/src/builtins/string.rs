@@ -345,15 +345,37 @@ pub(crate) fn repeat(heap: &mut Heap, s: Str, n: u32) -> Result<Str, Fault> {
 pub(crate) fn from_codes(heap: &mut Heap, list: Obj, points: bool) -> Result<Str, Fault> {
     let n = heap.array_length(list);
     let mut out = Vec::with_capacity(n as usize);
-    for i in 0..n {
-        let v = heap
-            .get_element_fast(list, i)
-            .and_then(|v| v.as_number())
-            .unwrap_or(0.0);
-        if points {
-            push_code_point(&mut out, v as u32);
-        } else {
-            out.push(crate::interp::conv::to_int32(v) as u16);
+    let code = |v: Value| match v.as_int() {
+        Some(i) => i as u32,
+        None => {
+            let x = v.as_number().unwrap_or(0.0);
+            if points {
+                x as u32
+            } else {
+                crate::interp::conv::to_int32(x) as u32
+            }
+        }
+    };
+    match heap.dense_array_values(list) {
+        // One pass over the dense store (D1784).
+        Some(vs) => {
+            for v in vs {
+                if points {
+                    push_code_point(&mut out, code(v));
+                } else {
+                    out.push(code(v) as u16);
+                }
+            }
+        }
+        None => {
+            for i in 0..n {
+                let v = heap.get_element_fast(list, i).unwrap_or(Value::int(0));
+                if points {
+                    push_code_point(&mut out, code(v));
+                } else {
+                    out.push(code(v) as u16);
+                }
+            }
         }
     }
     Ok(heap.alloc_utf16(&out)?)

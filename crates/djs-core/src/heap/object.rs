@@ -634,6 +634,33 @@ impl Heap {
         }
     }
 
+    /// The first `length` slots of an Array's dense store, if they cover its length
+    /// (holes included: callers check `is_hole`), read straight from one slice. For bulk
+    /// readers (`String.fromCodePoint`, `apply`): no per-element class or bounds checks.
+    /// `None` for anything else.
+    pub(crate) fn dense_array_values(&self, o: Obj) -> Option<impl Iterator<Item = Value> + '_> {
+        if self.object_class(o) != ObjectClass::Array {
+            return None;
+        }
+        let n = self.array_length(o);
+        let el = self.elements(o);
+        let bytes: &[u8] = if n == 0 {
+            &[]
+        } else if el != 0 && self.value_array_len(el) >= n {
+            self.arena()
+                .slice(ValueArray::VALUES.at(el, 0), n.checked_mul(8)?)
+        } else {
+            return None;
+        };
+        Some(
+            bytes
+                .as_chunks::<8>()
+                .0
+                .iter()
+                .map(|b| Value::from_raw(u64::from_le_bytes(*b))),
+        )
+    }
+
     /// Fast path for reading element `i`: `Some` if it is a dense, non-hole element.
     /// `None` means "take the generic path" (property table, prototype chain).
     #[inline]

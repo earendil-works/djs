@@ -1268,12 +1268,28 @@ impl Exec<'_> {
                 };
                 let n = self.heap.array_length(args);
                 self.ensure(base + 2 + n)?;
-                for i in 0..n {
-                    let v = self
-                        .heap
-                        .get_element_fast(args, i)
-                        .unwrap_or(Value::UNDEFINED);
-                    self.set(base + 2 + i, v);
+                // A dense array (the usual `apply` argument) in one pass over its store
+                // (D1784); holes are undefined.
+                let dense: Option<alloc::vec::Vec<Value>> =
+                    self.heap.dense_array_values(args).map(|vs| {
+                        vs.map(|v| if v.is_hole() { Value::UNDEFINED } else { v })
+                            .collect()
+                    });
+                match dense {
+                    Some(vs) => {
+                        for (i, v) in (0..).zip(vs) {
+                            self.set(base + 2 + i, v);
+                        }
+                    }
+                    None => {
+                        for i in 0..n {
+                            let v = self
+                                .heap
+                                .get_element_fast(args, i)
+                                .unwrap_or(Value::UNDEFINED);
+                            self.set(base + 2 + i, v);
+                        }
+                    }
                 }
                 self.sp = base + 2 + n;
                 return self.call(base, n, Continuation::PushResult, next);

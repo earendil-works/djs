@@ -194,19 +194,17 @@ impl Exec<'_> {
                     return bad_argument(name);
                 };
                 let points = id == ALL_CODE_POINTS;
-                let ok = self.dense_values(list).is_some_and(|n| {
-                    (0..n).all(|i| {
-                        let v = self
-                            .heap
-                            .get_element_fast(list, i)
-                            .unwrap_or(Value::UNDEFINED);
-                        match v.as_number() {
+                // One pass over the dense store (holes are not Numbers), ints first.
+                let ok = self.heap.dense_array_values(list).is_some_and(|mut vs| {
+                    vs.all(|v| match v.as_int() {
+                        Some(i) => !points || (0..=0x10FFFF).contains(&i),
+                        None => match v.as_number() {
                             Some(x) if points => {
                                 (0.0..=1114111.0).contains(&x) && libm::trunc(x) == x
                             }
                             Some(_) => true,
                             None => false,
-                        }
+                        },
                     })
                 });
                 Value::bool(ok)
@@ -268,11 +266,13 @@ impl Exec<'_> {
     /// The length of an Array whose elements are all in its dense store (no holes), so
     /// that Get on them runs no user code; `None` for anything else.
     fn dense_values(&self, a: Obj) -> Option<u32> {
-        if self.heap.object_class(a) != crate::heap::ObjectClass::Array {
-            return None;
-        }
-        let n = self.heap.array_length(a);
-        (self.heap.dense_len(a) >= n && (0..n).all(|i| self.heap.get_element_fast(a, i).is_some()))
+        let mut n = 0;
+        self.heap
+            .dense_array_values(a)?
+            .all(|v| {
+                n += 1;
+                !v.is_hole()
+            })
             .then_some(n)
     }
 
