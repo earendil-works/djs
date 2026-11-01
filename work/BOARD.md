@@ -13,7 +13,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0065 | accessor + decorators (TC39, then TS legacy) | lexer | .worktrees/lexer |
 | 0062 | Property access performance (shapes/ICs: design first) | heap | .worktrees/heap |
 | 0067 | Host inbox (async host results as macrotasks) | determinism | .worktrees/determinism |
-| 0064 | Interactive REPL in djs-cli | repl | .worktrees/repl |
 
 ## Open (ready)
 
@@ -59,6 +58,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0058 | Compiler: using, completion values + Goal::Eval, import() | 8bc39dd (agent lexer; strip-types 4,085/4,802, 0 differ) |
 | 0061 | String append + JSON source text | dbd2e8d (agent num; 10M appends 574 -> 150 MB RSS; JSON 142/142) |
 | 0059 | Indirect eval, Function ctors, queueMicrotask | 4435b3b (agent infra; active 37,464 / 37,722 = 99.3%; pi 215/226) |
+| 0064 | djs repl | 31797b6 (agent repl, archived; docs/cli.md; follow-ups: tab completion, interactive .step) |
 | 0066 | pi adapter determinism fixes | 6c523da (agent determinism; equal polls cold/warm; pi suite 221/226) |
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0060 | Out-of-memory recovery | b7c83a8 (agent heap; D1600 reserve, D1601 GC threshold in image) |
