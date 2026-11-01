@@ -2185,3 +2185,11 @@ issues instead of a fresh worktree (and a cold target/) per issue. The test-side
 unit tests, the qjs result cache, runners honouring DJS_JOBS) are issue 0053. Rejected:
 a shared CARGO_TARGET_DIR (artifact clobbering across branches), gate tiers, and release
 builds in the gate.
+
+## D013: Stack overflow is a RangeError
+date: 2026-11-01 · by: coordinator · issue: 0049
+pi's codemode runs on quickjs-wasi (quickjs-ng), which throws `RangeError: Maximum call
+stack size exceeded`, as V8 does, and pi's tests expect it. dquickts (our oracle) throws
+`InternalError: stack overflow`. djs follows pi and V8, since replacing pi's engine is the
+goal. Difftest cases that hit stack overflow are marked as expected differences from the
+oracle.

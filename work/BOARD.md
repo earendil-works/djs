@@ -8,10 +8,10 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0050 | RegExp completion (\p{}, compact loops, caching, promotion) | num | .worktrees/0050-regexp-completion |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
-| 0049 | pi codemode adapter + pi's tests on djs (read-only pi-private) | infra | .worktrees/0049-pi-codemode-adapter |
+| 0054 | pi codemode follow-ups (RangeError, URI functions, lockdown error name) | infra | .worktrees/infra |
+| 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
 | 0048 | P3 TypeScript (type skipper, enums/namespaces, strip-types oracle) | lexer | .worktrees/0048-typescript |
 | 0051 | Remaining builtins (iterator helpers, WeakRef/FR, disposables, fromAsync, upsert) | heap | .worktrees/0051-remaining-builtins |
-| 0047 | Dev-flow efficiency investigation (report only) | devflow | .worktrees/0047-devflow |
 | 0052 | Code bloat investigation (report only) | bloat | .worktrees/0052-bloat-investigation |
 
 ## Open (ready)
@@ -43,6 +43,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0046 | BigInt | 63d8468 (agent heap; BigInt 1135/1142; active 98.8%) |
 | 0033 | JSON + RegExp builtins, regex literals | 8b5ccfb (agent num; active 32,303 / 32,718) |
 | 0040 | P1-7 Classes | 2d08a6c (agent lexer; test262 active 97.1%) |
+| 0049 | pi codemode adapter | e39a47e (agent infra; pi's suite 204/226 on djs; start 0.49 ms vs 3.2 ms) |
+| 0047 | Dev-flow investigation | report in issue file (D012 adopted) |
 | 0044 | djs runs the shared difftest prelude | a214890 (agent infra; difftest ratchet 52 -> 38) |
 | 0045 | Proxy | 7427f4f (agent infra; Proxy 352/375; ~5,000 behavior cases vs qjs) |
 | 0039 | Binary data | c8aefb6 (agent infra; DataView 445/449, TypedArray 841/849) |
