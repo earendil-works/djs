@@ -593,5 +593,6 @@ date: 2026-11-01 · by: num · issue: 0018
 `scripts/gate.sh` runs the `js/` package's tests (`node --test js/test/*.test.ts`) and the
 wire cross-language test (node writes a corpus into a temporary directory, then
 `cargo test -p djs-core wire_cross -- --ignored` decodes it). It needs node >= 22.6 for
-TypeScript type stripping. The `js/` package has no dependencies and no build step; its
-`tsconfig.json` is for editors and `tsc --noEmit` only.
+TypeScript type stripping. The `js/` package has no dependencies and no build step. Its
+`tsconfig.json` type-checks `src/` (`tsc -p js`); the tests and benchmarks use node's APIs
+and are only type-stripped, since there is no `@types/node` without dependencies.
