@@ -7,7 +7,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
-| 0111 | Prototype property order (qjs) | infra | .worktrees/infra |
+| 0112 | Guide chapter: determinism | infra | .worktrees/infra |
 | 0113 | Docs follow-ups (stale refs, generated status numbers, search, live disasm) | docs | .worktrees/docs |
 | 0101 | Mark-compact collection (design first) | heap | .worktrees/heap |
 | 0110 | pi-like's library hot spots + dense element access in natives | perf | .worktrees/perf |
@@ -21,7 +21,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0112 | Guide chapter: determinism | infra, after 0111 |
 
 ## Done
 
@@ -82,6 +81,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
 | 0103 | Human-facing guide (djs-docs + 10 chapters) | 46667f42 (agent docs; Pages workflow) |
+| 0111 | Prototype property order | d5e74b9a (agent infra; D2150) |
 | 0109 | Guide chapters: builtins, host, testing | 667f8efa (agent infra; reviewed by docs) |
 | 0108 | Name inference, syntax messages, statics order | 392ec528 (agent infra; D2070-D2072) |
 | 0106 | Stack follow-ups | e9887a60 (agent infra; prepareStackTrace D2050; <input> frames D2051; prototype-last order D2052) |
