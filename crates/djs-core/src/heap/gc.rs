@@ -71,8 +71,21 @@ pub struct GcStats {
 /// frequent instead of running into `OutOfMemory`.
 pub fn next_threshold(live: u32, limit: u32) -> u32 {
     let headroom = limit.saturating_sub(live);
-    live + live.max(MIN_GROWTH).min(headroom / 2)
+    let growth = live.max(MIN_GROWTH);
+    if growth > headroom / 2 {
+        return live + headroom / 2;
+    }
+    // Whole 64 KiB wasm pages when that stays within the headroom rule (D1870).
+    let t = (live as u64 + growth as u64).next_multiple_of(PAGE);
+    if t <= live as u64 + headroom as u64 / 2 {
+        t as u32
+    } else {
+        live + growth
+    }
 }
+
+/// A wasm page.
+const PAGE: u64 = 64 * 1024;
 
 /// Forwards one traced slot of a to-space cell, rewriting it with the new offset.
 fn trace(from: &mut Arena, to: &mut Arena, slot: Slot) {
@@ -245,12 +258,20 @@ impl Heap {
             }
         }
         let after = to.len();
+        // The old from-space goes back to the allocator. Keeping it as the next to-space
+        // was measured and rejected (D1870): in wasm a freed from-space also serves the
+        // Rust allocations between collections, and pinning it raised peak memory.
         self.arena = to;
         self.set_gc_threshold(next_threshold(after, self.arena.limit()));
         self.gc_pending = false;
         self.maybe_close_reserve();
-        let keep = self.gc_threshold as usize;
-        self.arena.shrink_capacity(keep);
+        // A to-space sized for a mostly-garbage heap gives the excess back (in wasm to the
+        // allocator, for the Rust side); close to the threshold it is kept, so the arena
+        // does not regrow (and copy) right away.
+        let t = self.gc_threshold as usize;
+        if self.arena.capacity() > 2 * t {
+            self.arena.shrink_capacity(t);
+        }
         for o in collections {
             self.collection_rehash(crate::value::Obj(o));
         }
@@ -268,6 +289,8 @@ mod tests {
         let big = arena::MAX_ARENA;
         assert_eq!(next_threshold(0, big), MIN_GROWTH);
         assert_eq!(next_threshold(1 << 20, big), 2 << 20);
+        // Rounded up to whole 64 KiB pages (D1870).
+        assert_eq!(next_threshold(300_000, big), 655_360);
         // Near the cap: half the headroom.
         assert_eq!(next_threshold(900, 1000), 950);
         assert_eq!(next_threshold(1000, 1000), 1000);

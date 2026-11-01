@@ -22,6 +22,10 @@ pub struct Arena {
     bytes: Vec<u8>,
     len: u32,
     limit: u32,
+    /// While the arena is below this size, growing never reserves past it (0: no target).
+    /// The heap sets it to the GC threshold, so the Vec's doubling does not overshoot the
+    /// size the next collection starts at (D1870).
+    target: u32,
 }
 
 #[cfg(test)]
@@ -45,6 +49,7 @@ impl Arena {
             bytes: Vec::new(),
             len: 0,
             limit: clamp_limit(limit),
+            target: 0,
         }
     }
 
@@ -59,7 +64,13 @@ impl Arena {
             bytes,
             len: 0,
             limit: clamp_limit(limit),
+            target: 0,
         })
+    }
+
+    /// See the `target` field.
+    pub(crate) fn set_target(&mut self, target: u32) {
+        self.target = target;
     }
 
     /// Bytes reserved from the host.
@@ -81,6 +92,7 @@ impl Arena {
             len: bytes.len() as u32,
             bytes,
             limit: clamp_limit(limit),
+            target: 0,
         }
     }
 
@@ -218,10 +230,22 @@ impl Arena {
     fn reserve(&mut self, end: u32) -> Result<(), HeapError> {
         let end = end as usize;
         if end > self.bytes.capacity() {
-            let want = (self.bytes.capacity() * 2)
-                .max(end)
-                .max(4096)
-                .min(self.limit as usize);
+            let cap = self.bytes.capacity();
+            let mut want = if self.target == 0 || end <= self.target as usize {
+                // Doubling, but not past the target (D1870).
+                let w = (cap * 2).max(end).max(4096);
+                if self.target == 0 {
+                    w
+                } else {
+                    w.min(self.target as usize)
+                }
+            } else {
+                // Past the target a collection is pending: grow by a quarter, not double,
+                // so the from-space (the next spare) stays close to the threshold.
+                (cap + cap / 4).max(end)
+            };
+            want = want.max(end);
+            let want = want.min(self.limit as usize);
             #[cfg(test)]
             if FAIL_NEXT_RESERVE.with(|f| f.replace(false)) {
                 return Err(HeapError::HostOutOfMemory);
