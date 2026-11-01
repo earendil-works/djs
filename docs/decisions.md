@@ -4091,3 +4091,33 @@ date: 2026-11-03 · by: infra · issue: 0091
   1,043 → 731 (578); arrays wasm 18,172 → 13,382 (16,853); strings wasm 6,036 → 3,334
   (5,982). Per call natively: push+pop 6.1k → 3.9k, indexOf(len 8) 4.5k → 2.6k,
   fromCharCode(2) 8.6k → 2.8k, decodeURI 4.7k → 3.6k instructions. wasm +5 KB.
+
+## D1920: Compiler throughput and size in wasm (0092)
+date: 2026-11-05 · by: lexer · issue: 0092
+Measured with scripts/perf/wasm-compile.ts / wcompile.py (compile-only in node, against
+quickjs-wasi's COMPILE_ONLY) and the djs-bench `compile/` group. Changes, none of them
+visible in the output (the disasm of typescript.js, highlight.js and the dquickts tests is
+identical up to which of two equivalent `return` copies a jump takes):
+- Bindings get a hash index by `(scope, name)` once a function has 32 of them
+  (`FuncState::index`). Name lookup was a linear scan of the scope, quadratic in
+  typescript.js's top-level closure (15% of its compile).
+- The line table of a function maps positions with a cursor (`LineTable::line_col_from`)
+  instead of counting each column from the line start, and an ASCII source counts bytes;
+  `LineTable::new` scans eight bytes at a time.
+- The stack check decodes each instruction once and returns the IC sites, so
+  `alloc_template` no longer decodes the code again; `decode` reads a per-opcode layout
+  table; the generated emitters all call one out-of-line `CodeBuf::encode(op, a, b)`,
+  which builds the instruction in a local buffer and appends it once.
+- The peepholes (D1860) run as one pass that backs up after a match, and thread jumps
+  from the end until nothing changes; a second round only follows a rule that consumed a
+  jump. Loop rotation finds the moved line entries by binary search.
+- Keyword lookup is a perfect hash (a searched multiplier over the first two bytes, the
+  last byte and the length) into a 256-entry table plus one compare, instead of a
+  4.5 KB decision tree; the table's construction asserts there is no collision.
+- Syntax errors and the TypeScript type error are built out of line.
+Results (wasm, instructions per compile; base f166a25 → now; quickjs-wasi):
+typescript.js 8,273M → 5,174M (4,561M), highlight.js core 55.4M → 48.2M (37.5M), a 7 KB
+codemode script 23.2M → 20.2M (17.5M). Steady-state wasm MB/s: typescript.js 24 → 35
+(qjs 40), highlight.js 42 → 54 (75), codemode 20 → 27 (35). Code: compiler 159.8 → 150.1
+KB, compiler/ts 33.2 → 31.4 KB, lexer 17.8 → 14.2 KB; the shipped module 1,485,742 →
+1,472,377 bytes, gzip 517,652 → 514,990.
