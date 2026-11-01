@@ -20,7 +20,7 @@ use super::conv::{self, Fault, type_error};
 use super::frame::{self, Continuation, HEADER};
 use super::realm::{self, ErrorKind, Intrinsic, intrinsic, intrinsic_obj};
 use super::state::{self, PARK_ENTRY, RunState, park_flags};
-use crate::bytecode::decode::{read_i8, read_i32, read_u16, read_u32};
+use crate::bytecode::decode::read_i8;
 use crate::bytecode::global_decls::GlobalDecls;
 use crate::bytecode::template::func_flags;
 use crate::bytecode::template::{bytes_of, ref_array_get};
@@ -138,49 +138,57 @@ impl<'h> Exec<'h> {
         self.sp = sp;
     }
 
-    #[inline]
+    #[inline(always)]
     fn get(&self, i: u32) -> Value {
         self.heap.arena().read(ValueArray::VALUES.at(self.stack, i))
     }
 
-    #[inline]
+    #[inline(always)]
     fn set(&mut self, i: u32, v: Value) {
         let at = ValueArray::VALUES.at(self.stack, i);
         self.heap.arena_mut().write(at, v)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn push(&mut self, v: Value) {
         self.set(self.sp, v);
         self.sp += 1;
     }
 
-    #[inline]
+    #[inline(always)]
     fn pop(&mut self) -> Value {
         self.sp -= 1;
         self.get(self.sp)
     }
 
-    #[inline]
+    #[inline(always)]
     fn top(&self, k: u32) -> Value {
         self.get(self.sp - 1 - k)
     }
 
-    #[inline]
+    #[inline(always)]
     fn header(&self, f: u32) -> Value {
         self.get(self.hp + f)
     }
 
+    #[inline(always)]
     fn header_int(&self, f: u32) -> u32 {
         self.header(f).as_int().unwrap_or(0) as u32
     }
 
     /// Makes room for `top` slots, growing the stack by copying.
+    #[inline(always)]
     pub(crate) fn ensure(&mut self, top: u32) -> Result<(), Fault> {
-        let cap = self.heap.value_array_capacity(self.stack);
-        if top <= cap {
+        if top <= self.heap.value_array_capacity(self.stack) {
             return Ok(());
         }
+        self.grow_stack(top)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn grow_stack(&mut self, top: u32) -> Result<(), Fault> {
+        let cap = self.heap.value_array_capacity(self.stack);
         if top > self.opts.max_stack {
             return Err(Fault::Error(
                 ErrorKind::InternalError,
@@ -591,37 +599,35 @@ impl<'h> Exec<'h> {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn byte(&self, at: u32) -> u8 {
-        self.heap.arena().bytes()[(self.code + at) as usize]
+        // `Arena::read` checks against the backing Vec only (one compare); `pc` is
+        // checked against the code length by `step`.
+        self.heap.arena().read::<u8>(self.code + at)
     }
 
+    #[inline(always)]
     fn imm_u16(&self, off: u32) -> u32 {
-        read_u16(
-            self.heap.arena().bytes(),
-            (self.code + self.pc + off) as usize,
-        ) as u32
+        self.heap.arena().read::<u16>(self.code + self.pc + off) as u32
     }
 
+    #[inline(always)]
     fn imm_u32(&self, off: u32) -> u32 {
-        read_u32(
-            self.heap.arena().bytes(),
-            (self.code + self.pc + off) as usize,
-        )
+        self.heap.arena().read::<u32>(self.code + self.pc + off)
     }
 
+    #[inline(always)]
     fn imm_i32(&self, off: u32) -> i32 {
-        read_i32(
-            self.heap.arena().bytes(),
-            (self.code + self.pc + off) as usize,
-        )
+        self.heap.arena().read::<i32>(self.code + self.pc + off)
     }
 
+    #[inline(always)]
     fn imm_atom(&self) -> Atom {
         Atom::from_id(self.imm_u32(1))
     }
 
     /// Executes one instruction.
+    #[inline(always)]
     fn step(&mut self) -> Step {
         if self.pc >= self.code_len {
             return Err(Fault::Error(
@@ -655,8 +661,7 @@ impl<'h> Exec<'h> {
                         .iter()
                         .map(|i| i.width() as u32)
                         .sum();
-                    let at = (self.code + pc0 + 1 + skip) as usize;
-                    read_u16(self.heap.arena().bytes(), at) as u32
+                    self.heap.arena().read::<u16>(self.code + pc0 + 1 + skip) as u32
                 });
             if info.flags & (opflags::JUMP | opflags::BRANCH | opflags::TERM | opflags::GOSUB) == 0
             {
@@ -728,29 +733,61 @@ impl<'h> Exec<'h> {
         self.heap.value_array_get(self.consts, i)
     }
 
-    fn binary_num(&mut self, f: impl Fn(f64, f64) -> f64) -> Result<(), Fault> {
-        let b = self.pop();
-        let a = self.pop();
-        let x = conv::to_number(self.heap, a)?;
-        let y = conv::to_number(self.heap, b)?;
-        self.push(conv::number(f(x, y)));
+    /// A numeric binary operator: `int` on two int32 operands (`None` on overflow or
+    /// when the result is not an int32), `f` on f64 otherwise.
+    #[inline(always)]
+    fn binary_num(
+        &mut self,
+        int: impl Fn(i32, i32) -> Option<i32>,
+        f: impl Fn(f64, f64) -> f64,
+    ) -> Result<(), Fault> {
+        let (a, b) = (self.top(1), self.top(0));
+        if let (Some(x), Some(y)) = (a.as_int(), b.as_int())
+            && let Some(r) = int(x, y)
+        {
+            self.sp -= 1;
+            self.set(self.sp - 1, Value::int(r));
+            return Ok(());
+        }
+        let v = match (a.as_number(), b.as_number()) {
+            (Some(x), Some(y)) => conv::number(f(x, y)),
+            _ => {
+                let x = conv::to_number(self.heap, a)?;
+                let y = conv::to_number(self.heap, b)?;
+                conv::number(f(x, y))
+            }
+        };
+        self.sp -= 1;
+        self.set(self.sp - 1, v);
         Ok(())
     }
 
+    #[inline(always)]
     fn binary_int(&mut self, f: impl Fn(i32, i32) -> Value) -> Result<(), Fault> {
-        let b = self.pop();
-        let a = self.pop();
-        let x = conv::to_int32(conv::to_number(self.heap, a)?);
-        let y = conv::to_int32(conv::to_number(self.heap, b)?);
-        self.push(f(x, y));
+        let (a, b) = (self.top(1), self.top(0));
+        let (x, y) = match (a.as_int(), b.as_int()) {
+            (Some(x), Some(y)) => (x, y),
+            _ => (
+                conv::to_int32(conv::to_number(self.heap, a)?),
+                conv::to_int32(conv::to_number(self.heap, b)?),
+            ),
+        };
+        self.sp -= 1;
+        self.set(self.sp - 1, f(x, y));
         Ok(())
     }
 
+    #[inline(always)]
     fn compare(&mut self, swap: bool, invert: bool) -> Result<(), Fault> {
         // lt: a < b; gt: b < a; le: !(b < a); ge: !(a < b). Undefined (NaN) is false.
-        let b = self.pop();
-        let a = self.pop();
+        let (a, b) = (self.top(1), self.top(0));
         let (x, y) = if swap { (b, a) } else { (a, b) };
+        if let (Some(i), Some(j)) = (x.as_int(), y.as_int()) {
+            self.sp -= 1;
+            self.set(self.sp - 1, Value::bool((i < j) != invert));
+            return Ok(());
+        }
+        self.sp -= 2;
         let r = conv::less_than(self.heap, x, y)?;
         let v = match r {
             None => false,
@@ -760,6 +797,7 @@ impl<'h> Exec<'h> {
         Ok(())
     }
 
+    #[inline(always)]
     fn exec(&mut self, op: Op, next: u32) -> Step {
         if let Some(step) = self.primitive_operands(op) {
             return step;
@@ -1315,9 +1353,12 @@ impl<'h> Exec<'h> {
                 self.push(v);
             }
             Op::Plus | Op::ToNumeric => {
-                let a = self.pop();
-                let n = conv::to_number(self.heap, a)?;
-                self.push(conv::number(n));
+                // A Number stays as it is (both forms are Numbers).
+                if !self.top(0).is_number() {
+                    let a = self.pop();
+                    let n = conv::to_number(self.heap, a)?;
+                    self.push(conv::number(n));
+                }
             }
             Op::BNot => {
                 let a = self.pop();
@@ -1354,11 +1395,16 @@ impl<'h> Exec<'h> {
                 self.sp -= 2;
                 self.push(v);
             }
-            Op::Sub => self.binary_num(|x, y| x - y)?,
-            Op::Mul => self.binary_num(|x, y| x * y)?,
-            Op::Div => self.binary_num(|x, y| x / y)?,
-            Op::Mod => self.binary_num(|x, y| x % y)?,
-            Op::Pow => self.binary_num(conv::pow)?,
+            Op::Sub => self.binary_num(i32::checked_sub, |x, y| x - y)?,
+            // An int32 product of 0 may be -0 (`-1 * 0`), which only the f64 path gets right.
+            Op::Mul => {
+                self.binary_num(|x, y| x.checked_mul(y).filter(|&r| r != 0), |x, y| x * y)?
+            }
+            Op::Div => self.binary_num(|_, _| None, |x, y| x / y)?,
+            // x % y for int32: the sign of x, and 0 % y or a zero result from a negative x
+            // is -0 for x < 0, so only non-negative x with nonzero y stays int32.
+            Op::Mod => self.binary_num(|x, y| (x >= 0 && y != 0).then(|| x % y), |x, y| x % y)?,
+            Op::Pow => self.binary_num(|_, _| None, conv::pow)?,
             Op::Shl => self.binary_int(|x, y| Value::int(x.wrapping_shl(y as u32 & 31)))?,
             Op::Sar => self.binary_int(|x, y| Value::int(x >> (y as u32 & 31)))?,
             Op::Shr => {
