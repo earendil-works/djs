@@ -5,7 +5,7 @@
 //! - [`CodeBuf<Phase1>`]: what the parser emits. Labels stay symbolic: `place_label`
 //!   emits the `label` pseudo-op and jump targets hold label ids.
 //! - [`CodeBuf<Final>`] (the default): final code. `place_label` records the position;
-//!   jumps are patched to relative offsets by [`CodeBuf::finish`]. The resolution
+//!   jumps are patched to relative offsets by `finish`. The resolution
 //!   re-emit uses this mode with the phase-1 label ids
 //!   ([`CodeBuf::with_labels`]), and so do hand-assembled tests.
 //!
@@ -103,18 +103,32 @@ pub struct CodeBuf<M: LabelMode = Final> {
 
 impl<M: LabelMode> Default for CodeBuf<M> {
     fn default() -> Self {
-        Self::with_labels(0)
+        Self::make(0)
+    }
+}
+
+impl CodeBuf<Final> {
+    /// An empty buffer for final code.
+    pub fn new() -> Self {
+        Self::make(0)
+    }
+
+    /// A final-code buffer with labels `0..count` already created: the re-emit reuses
+    /// the label ids of the phase-1 code.
+    pub fn with_labels(count: u32) -> Self {
+        Self::make(count)
+    }
+}
+
+impl CodeBuf<Phase1> {
+    /// An empty buffer for phase-1 code.
+    pub fn phase1() -> Self {
+        Self::make(0)
     }
 }
 
 impl<M: LabelMode> CodeBuf<M> {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// A buffer with labels `0..count` already created (the re-emit reuses the label ids
-    /// of the phase-1 code).
-    pub fn with_labels(count: u32) -> Self {
+    fn make(count: u32) -> Self {
         let init = if M::SYMBOLIC { 0 } else { UNPLACED };
         CodeBuf {
             code: Vec::new(),
