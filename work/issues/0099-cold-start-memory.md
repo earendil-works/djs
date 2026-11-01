@@ -1,7 +1,7 @@
 # 0099: Cold-start wasm memory (the post-prelude collection) and verify memory
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0099-cold-start-memory
 depends-on: 0094
 touches: crates/djs-core/src/heap/ (gc, verify), crates/djs-wasm/, js/pi/engine.ts (only if the cold-start sequence changes), docs/host.md
