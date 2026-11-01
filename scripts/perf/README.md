@@ -17,7 +17,7 @@ from `~/Development/pi-private/node_modules/quickjs-wasi`.
 | `wmeasure.py [--wasm X]... [--node-flag=--no-liftoff] names` | djs-wasm vs quickjs-wasi in node, minus an empty run |
 | `micro.py` / `wmicro.py [--wasm A --wasm B]` | instructions per JS-level operation (loop body x10 minus x0), natively vs qjs and in wasm vs quickjs-wasi; the cases are in `cases.py`; several `--wasm` builds compare side by side (A/B) |
 | `wasm-compile.ts`, `wcompile.py [--qjs] --wasm X... files` | compile-only time (MB/s) and instructions per compile and per source byte in the wasm build, vs quickjs-wasi (0092) |
-| `perelem.py` | instructions per array element of the iteration builtins |
+| `perelem.py [--djs B].. [--wasm W].. [--noqjs] [-r R] [names]` | instructions per array element of the iteration builtins, for native and wasm builds side by side (0100) |
 | `wasm-run.ts`, `qjs-wasm-run.mjs` | run a workload in the wasm engines (`ONCE=1`, `FUEL`, `REPS`); `node --cpu-prof` on them profiles |
 | `cpuprof.py file.cpuprofile` | self time by function of a node CPU profile (wasm function names) |
 | `prof.py name` | samply profile of the native build: self time by inlined function and line, buckets, malloc/memcpy by caller |

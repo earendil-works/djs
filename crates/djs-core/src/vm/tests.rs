@@ -3416,6 +3416,25 @@ fn native_builtins_collect_and_retry() {
 }
 
 #[test]
+fn native_registers_survive_collect_and_retry() {
+    // Typed locals of native builtins live in Rust variables (D2000) while their
+    // allocations collect and retry at the cap (D1900): the checksums of every round must
+    // match the run without a cap, however the run is sliced or restored.
+    let src = include_str!("../../../../scripts/determinism/js/oom_native_regs.js");
+    let free = run_limited(src, 1 << 30, 1 << 40, false).unwrap();
+    assert!(!free.log[0].contains('E'), "{:?}", free.log);
+    // At these caps rounds failed ("E") with the retry disabled.
+    for limit in [2_700_000usize, 2_800_000] {
+        let plain = run_limited(src, limit, 1 << 40, false).unwrap();
+        assert_eq!(plain.log, free.log, "{limit}");
+        let sliced = run_limited(src, limit, 7919, false).unwrap();
+        let restored = run_limited(src, limit, 300_000, true).unwrap();
+        assert_eq!(plain, sliced, "{limit}");
+        assert_eq!(plain, restored, "{limit}");
+    }
+}
+
+#[test]
 fn fast_entries_decline_at_the_cap() {
     // @fast entries (D1910): slice and join of a large array after garbage. An entry
     // that reaches the cap declines and the builtin's own allocations collect and retry;

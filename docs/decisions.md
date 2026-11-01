@@ -4573,3 +4573,42 @@ examples that run on djs-wasm through `@djs/host` (`Sandbox.heapView`/`collect` 
 added for its heap view). New dependency: pulldown-cmark (with memchr, unicase, bitflags,
 pulldown-cmark-escape) in the djs-docs tool crate only; no tool needs installing.
 Keeping the prose true is a process rule (AGENTS.md "Keeping the guide current").
+## D2000: Typed locals of native builtins live in Rust variables, written through
+date: 2026-11-03 · by: perf · issue: 0100
+Generated natives (D1631) kept every local in a frame slot: each typed read was
+`f64_of(ex.n_slot(i))`, two out-of-line calls in wasm (D1634). Now a local whose type
+is bool, i32, u32 or f64 (`Storage::Reg` in emit_rust.rs) is also a Rust variable
+`l<slot><b|i|u|f>`:
+- typed reads use the variable; reads as a Value still read the slot, so the Values that
+  natives pass on are unchanged bit for bit;
+- every write goes to both (`let rv = ..; l3f = rv; ex.n_set_slot(3, num(rv));`), so the
+  slots and the heap image are exactly what they were;
+- a run of the function that starts at state S loads the registers live into S from
+  their slots. bgen computes that per state with a liveness pass over the blocks (it
+  scans the emitted code for the register names; writes are emitted only as `<reg> = `).
+
+Why write-through and no spills:
+- a run ends at every resume point that leaves the native, and at faults and backedge
+  yields;
+- with spills before those exits, the frame could already be another one (after
+  `n_ret` or a pushed frame), and `?` exits are everywhere;
+- write-through needs none of that, and the writes were there before anyway.
+
+D1900 is unaffected: registers hold numbers and booleans, never heap references, so a
+collection inside `n_retry` cannot leave one stale. Heap-typed locals stay in slots. The
+test `native_registers_survive_collect_and_retry` checks this, with
+scripts/determinism/js/oom_native_regs.js at caps where rounds fail without the retry.
+
+Also in 0100:
+- the state is a Rust local `st`, which `ex.pc` follows at the top of each round;
+- a reentrant call that completes inline (`n_inline`) hands its result to the resume
+  state through `Exec::n_res` rather than the operand stack. It is set only between
+  `n_inline` and the next `n_result`, with nothing in between; debug builds assert this.
+  A `Flow::Value` variant carrying the result instead cost 11 KB of wasm.
+
+Effect, wasm instructions per element vs main:
+- forEach −34%, sort −15%, reduce −18%, find −15%, map −13%;
+- workloads: higher-order −10%, calls −12%, push-pop −6%, foreach −6%, pi-like −2%.
+
+Cost: generated natives are 2.7 KB larger in wasm. The extra code is register copies
+(phis) across the state loop; it buys back far fewer slot calls.

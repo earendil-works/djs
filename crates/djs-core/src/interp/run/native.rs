@@ -170,9 +170,6 @@ impl Exec<'_> {
         let hp = base + 2 + n;
         let lp = hp + HEADER;
         self.ensure(lp + nf.locals + NATIVE_STACK)?;
-        for i in argc..n {
-            self.set(base + 2 + i, Value::UNDEFINED);
-        }
         let bottom = cont.is_bottom();
         let header = [
             Value::int(if bottom { 0 } else { self.bp as i32 }),
@@ -182,12 +179,13 @@ impl Exec<'_> {
             Value::int(cont.to_flags() | frame::FLAG_NATIVE),
             Value::UNDEFINED,
         ];
-        for (k, v) in header.into_iter().enumerate() {
-            self.set(hp + k as u32, v);
-        }
-        for i in 0..nf.locals {
-            self.set(lp + i, Value::UNDEFINED);
-        }
+        let vals = crate::heap::cells::ValueArray::VALUES.at(self.stack, 0);
+        super::hot::write_frame(
+            self.heap.arena_mut().hot_bytes(),
+            vals,
+            (base, argc, n, hp, nf.locals),
+            header,
+        );
         self.bp = base;
         self.hp = hp;
         self.sp = lp + nf.locals;
@@ -236,6 +234,7 @@ impl Exec<'_> {
     /// reaches a back-edge without fuel. Its faults are thrown here, in its own frame.
     #[inline(never)]
     pub(super) fn native_step(&mut self) -> Step {
+        debug_assert!(self.n_res.is_none(), "an inline result outlived its run");
         let run = self.native_fn().run;
         match run(self) {
             Ok(st) => Ok(st),
@@ -367,7 +366,10 @@ impl Exec<'_> {
     #[cfg_attr(target_arch = "wasm32", inline(never))]
     #[cfg_attr(not(target_arch = "wasm32"), inline(always))]
     pub(crate) fn n_result(&mut self) -> Value {
-        self.pop()
+        match self.n_res.take() {
+            Some(v) => v,
+            None => self.pop(),
+        }
     }
 
     /// A leaf intrinsic through `call_intrinsic`.
@@ -453,7 +455,7 @@ impl Exec<'_> {
     /// A reentrant intrinsic or an `@intrinsic` builtin through `call_intrinsic`,
     /// resuming at state `next`. The intrinsics D1700 retries are retried here too.
     pub(crate) fn n_call(&mut self, id: u16, args: &[Value], next: u32) -> Result<Flow, Fault> {
-        if super::retry::INTRINSICS.contains(&id) {
+        if super::retry::retries(id) {
             return self.n_retry(args, |ex, a| ex.n_call_once(id, a, next));
         }
         self.n_call_once(id, args, next)
@@ -468,7 +470,14 @@ impl Exec<'_> {
             self.push(a);
         }
         let bp = self.bp;
-        match self.call_intrinsic(id, n, next) {
+        // `%Call(f, this, ..)`, the callback calls, skips the intrinsic dispatch: its
+        // arguments are already a call's stack layout (as in `call_intrinsic`).
+        let r = if id == const { iid("Call") } && n >= 2 {
+            self.call(base, n - 2, super::frame::Continuation::PushResult, next)
+        } else {
+            self.call_intrinsic(id, n, next)
+        };
+        match r {
             Ok(Some(st)) => Ok(Flow::Leave(Some(st))),
             Ok(None) if self.bp == bp && self.native != 0 => {
                 self.pc = next;
@@ -488,7 +497,8 @@ impl Exec<'_> {
     #[cfg_attr(target_arch = "wasm32", inline(never))]
     #[cfg_attr(not(target_arch = "wasm32"), inline(always))]
     fn n_inline(&mut self, v: Value, next: u32) -> Result<Flow, Fault> {
-        self.push(v);
+        debug_assert!(self.n_res.is_none(), "an inline result was not taken");
+        self.n_res = Some(v);
         self.pc = next;
         Ok(Flow::Inline)
     }

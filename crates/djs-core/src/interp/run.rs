@@ -163,6 +163,14 @@ mod fast {
     pub const PUT_CAP: u8 = Op::PutCap as u8;
     pub const GET_BOX: u8 = Op::GetBox as u8;
     pub const PUT_BOX: u8 = Op::PutBox as u8;
+    // (0100)
+    pub const PUT_CAP_CHK: u8 = Op::PutCapChk as u8;
+    pub const SET_CAP: u8 = Op::SetCap as u8;
+    pub const SET_CAP_CHK: u8 = Op::SetCapChk as u8;
+    pub const GET_BOX_CHK: u8 = Op::GetBoxChk as u8;
+    pub const PUT_BOX_CHK: u8 = Op::PutBoxChk as u8;
+    pub const SET_BOX: u8 = Op::SetBox as u8;
+    pub const SET_BOX_CHK: u8 = Op::SetBoxChk as u8;
     pub const NOT: u8 = Op::Not as u8;
     pub const STRICT_EQ: u8 = Op::StrictEq as u8;
     pub const STRICT_NE: u8 = Op::StrictNe as u8;
@@ -196,6 +204,24 @@ mod retry {
         id("CreateIterResultObject"),
         id("CreateArrayFromPair"),
     ];
+
+    /// `INTRINSICS` as a table by id (`contains` on the hot native call path was ~55
+    /// instructions, 0100).
+    pub const IS_RETRY: [bool; crate::bytecode::intrinsics::INTRINSICS.len()] = {
+        let mut t = [false; crate::bytecode::intrinsics::INTRINSICS.len()];
+        let mut i = 0;
+        while i < INTRINSICS.len() {
+            t[INTRINSICS[i] as usize] = true;
+            i += 1;
+        }
+        t
+    };
+
+    /// Whether intrinsic `id` is one of `INTRINSICS`.
+    #[inline(always)]
+    pub fn retries(id: u16) -> bool {
+        IS_RETRY.get(id as usize).copied().unwrap_or(false)
+    }
 }
 
 pub(crate) type Step = Result<Option<Status>, Fault>;
@@ -245,6 +271,10 @@ pub(crate) struct Exec<'h> {
     /// A native builtin's operation is being retried after a collection (D1900): an
     /// operation inside it does not retry again.
     n_retrying: bool,
+    /// The result of a reentrant call a native completed inline (`n_inline`), taken by
+    /// the resume state's `n_result` right after: it skips the operand stack (D2000).
+    /// Never set across anything that allocates, suspends or leaves the native.
+    n_res: Option<Value>,
     /// The fuel the run started its instructions with (after paying the debt, D1740);
     /// `None` while it has not executed any (it returned a status right away).
     fuel_start: Option<i64>,
@@ -290,6 +320,7 @@ impl<'h> Exec<'h> {
             retry_len: NO_RETRY,
             retry_ops: [Value::UNDEFINED; 4],
             n_retrying: false,
+            n_res: None,
             fuel_start: None,
         }
     }
@@ -444,6 +475,7 @@ impl<'h> Exec<'h> {
 
     /// The stack top a frame for template `t` called with `argc` arguments at `base`
     /// needs: arguments padded to the parameter count, header, locals, operand stack.
+    #[cfg(test)]
     #[inline(always)]
     fn frame_top(&self, t: u32, base: u32, argc: u32) -> u32 {
         let a = self.heap.arena();
@@ -474,17 +506,28 @@ impl<'h> Exec<'h> {
 
     /// Pushes the frame for closure template `t` (room checked by the caller with
     /// `frame_top`) and enters it at pc 0.
+    #[cfg(test)]
     #[inline(always)]
     fn push_frame(&mut self, t: u32, base: u32, argc: u32, cont: Continuation, ret_pc: u32) {
-        let a = self.heap.arena();
-        let params = a.get(t, FuncTemplate::PARAMS) as u32;
-        let locals = a.get(t, FuncTemplate::LOCALS) as u32;
+        let th = hot::template_head(self.heap.arena().bytes(), t);
+        self.push_frame_head(t, &th, base, argc, cont, ret_pc);
+    }
+
+    /// `push_frame` with the template's fields already read.
+    #[inline(always)]
+    fn push_frame_head(
+        &mut self,
+        t: u32,
+        th: &hot::TemplateHead,
+        base: u32,
+        argc: u32,
+        cont: Continuation,
+        ret_pc: u32,
+    ) {
+        let (params, locals) = (th.params, th.locals);
         let n = argc.max(params);
         let hp = base + 2 + n;
         let lp = hp + HEADER;
-        for i in argc..n {
-            self.set(base + 2 + i, Value::UNDEFINED);
-        }
         let entry = cont == Continuation::Entry;
         let bottom = cont.is_bottom();
         let header = [
@@ -495,17 +538,23 @@ impl<'h> Exec<'h> {
             Value::int(cont.to_flags()),
             Value::UNDEFINED,
         ];
-        for (k, v) in header.into_iter().enumerate() {
-            self.set(hp + k as u32, v);
-        }
-        for i in 0..locals {
-            self.set(lp + i, Value::UNDEFINED);
-        }
+        let vals = ValueArray::VALUES.at(self.stack, 0);
+        hot::write_frame(
+            self.heap.arena_mut().hot_bytes(),
+            vals,
+            (base, argc, n, hp, locals),
+            header,
+        );
         self.bp = base;
         self.hp = hp;
+        self.lp = lp;
         self.sp = lp + locals;
         self.pc = 0;
-        self.enter_template(t);
+        self.template = t;
+        self.code = crate::heap::cells::Bytes::DATA.at(th.code_ref, 0);
+        self.code_len = hot::code_len(self.heap.arena().bytes(), th.code_ref);
+        self.consts = th.consts_ref;
+        self.native = 0;
         // Frame entry is a safepoint, except for the entry call: `Vm::call` must
         // not collect, so the embedder's raw values stay valid until `run`.
         if !entry {
@@ -539,8 +588,10 @@ impl<'h> Exec<'h> {
                 if flags & func_flags::SLOPPY_THIS != 0 {
                     self.bind_sloppy_this(base + 1)?;
                 }
-                self.ensure(self.frame_top(t, base, argc))?;
-                self.push_frame(t, base, argc, cont, ret_pc);
+                let th = hot::template_head(self.heap.arena().bytes(), t);
+                let top = base + 2 + argc.max(th.params) + HEADER + th.locals + th.stack;
+                self.ensure(top)?;
+                self.push_frame_head(t, &th, base, argc, cont, ret_pc);
                 Ok(None)
             }
             ObjectClass::HostFunction => {
@@ -1164,7 +1215,7 @@ impl<'h> Exec<'h> {
             retry::OBJECT => 0,
             fast::CALL_INTRINSIC => {
                 let (id, argc) = (self.imm_u16(1) as u16, self.imm_u16(3));
-                if !retry::INTRINSICS.contains(&id) || argc > 4 {
+                if !retry::retries(id) || argc > 4 {
                     return false;
                 }
                 argc

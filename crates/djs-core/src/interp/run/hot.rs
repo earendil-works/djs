@@ -98,6 +98,75 @@ fn fill(b: &mut [u8], off: u32, n: u32, v: Value) {
     }
 }
 
+/// Writes a new frame at stack index `base` (D1931): the argument padding from `argc` to
+/// `n`, the 6-word header at `hp`, and `locals` undefined locals after it, each as one
+/// checked block. `vals` is the stack's value base.
+#[inline(always)]
+pub(super) fn write_frame(
+    b: &mut [u8],
+    vals: u32,
+    (base, argc, n, hp, locals): (u32, u32, u32, u32, u32),
+    header: [Value; HEADER as usize],
+) {
+    let slot = |i: u32| vals + 8 * i;
+    fill(b, slot(base + 2 + argc), n - argc, Value::UNDEFINED);
+    let o = slot(hp) as usize;
+    let Some(h) = b.get_mut(o..o + 8 * HEADER as usize) else {
+        out_of_bounds()
+    };
+    for (c, v) in h.as_chunks_mut::<8>().0.iter_mut().zip(header) {
+        *c = v.to_bits().to_le_bytes();
+    }
+    fill(b, slot(hp + HEADER), locals, Value::UNDEFINED);
+}
+
+/// The fields of a function template a call reads (FLAGS .. CONSTS, in one read).
+pub(super) struct TemplateHead {
+    pub flags: u32,
+    pub params: u32,
+    pub locals: u32,
+    pub stack: u32,
+    pub code_ref: u32,
+    pub consts_ref: u32,
+}
+
+#[inline(always)]
+pub(super) fn template_head(b: &[u8], t: u32) -> TemplateHead {
+    const W0: u32 = FuncTemplate::FLAGS.offset;
+    // The fields must lie in the window (a layout change shows up here).
+    const fn inside(o: u32, n: u32) -> bool {
+        o >= W0 && o + n <= W0 + 28
+    }
+    const _: () = assert!(
+        inside(FuncTemplate::FLAGS.offset, 4)
+            && inside(FuncTemplate::PARAMS.offset, 2)
+            && inside(FuncTemplate::LOCALS.offset, 2)
+            && inside(FuncTemplate::STACK.offset, 2)
+            && inside(FuncTemplate::CODE.offset, 4)
+            && inside(FuncTemplate::CONSTS.offset, 4)
+    );
+    let tw: [u8; 28] = window(b, t + W0);
+    let tf = |f: u32| (f - W0) as usize;
+    TemplateHead {
+        flags: u32_at(&tw, tf(FuncTemplate::FLAGS.offset)),
+        params: u16_at(&tw, tf(FuncTemplate::PARAMS.offset)),
+        locals: u16_at(&tw, tf(FuncTemplate::LOCALS.offset)),
+        stack: u16_at(&tw, tf(FuncTemplate::STACK.offset)),
+        code_ref: u32_at(&tw, tf(FuncTemplate::CODE.offset)),
+        consts_ref: u32_at(&tw, tf(FuncTemplate::CONSTS.offset)),
+    }
+}
+
+/// The length of the code `Bytes` at `code_ref` (0 for none).
+#[inline(always)]
+pub(super) fn code_len(b: &[u8], code_ref: u32) -> u32 {
+    if code_ref == 0 {
+        0
+    } else {
+        ld32(b, code_ref + Bytes::LEN.offset)
+    }
+}
+
 /// `N` bytes at `off`, with one range check.
 #[inline(always)]
 fn window<const N: usize>(b: &[u8], off: u32) -> [u8; N] {
@@ -376,47 +445,37 @@ impl Exec<'_> {
                             let Some(t) = ld(b, object_slot(b, f.offset(), 0)).as_internal() else {
                                 break Exit::Decline(op);
                             };
-                            // FLAGS .. CONSTS of the template in one read.
-                            const W0: u32 = FuncTemplate::FLAGS.offset;
-                            let tw: [u8; 28] = window(b, t + W0);
-                            let tf = |f: u32| (f - W0) as usize;
-                            let flags = u32_at(&tw, tf(FuncTemplate::FLAGS.offset));
-                            let params = u16_at(&tw, tf(FuncTemplate::PARAMS.offset));
-                            let locals = u16_at(&tw, tf(FuncTemplate::LOCALS.offset));
-                            let stack = u16_at(&tw, tf(FuncTemplate::STACK.offset));
-                            let code_ref = u32_at(&tw, tf(FuncTemplate::CODE.offset));
-                            let consts_ref = u32_at(&tw, tf(FuncTemplate::CONSTS.offset));
+                            let TemplateHead {
+                                flags,
+                                params,
+                                locals,
+                                stack,
+                                code_ref,
+                                consts_ref,
+                            } = template_head(b, t);
                             let n = argc.max(params);
                             let new_hp = base + 2 + n;
                             let new_lp = new_hp + HEADER;
                             if flags & slow_call_flags != 0 || new_lp + locals + stack > cap {
                                 break Exit::Decline(op);
                             }
-                            let code_len = if code_ref == 0 {
-                                0
-                            } else {
-                                ld32(b, code_ref + Bytes::LEN.offset)
-                            };
+                            let code_len = code_len(b, code_ref);
                             let info = &OPS[$op as usize];
                             fuel -= info.cost.fuel() as i64;
                             let ret_pc = ip + info.size as u32 - code;
-                            fill(b, slot!(base + 2 + argc), n - argc, Value::UNDEFINED);
-                            let header = [
-                                Value::int(bp as i32),
-                                Value::int(hp as i32),
-                                Value::int(ret_pc as i32),
-                                Value::int(argc as i32),
-                                Value::int(PUSH_RESULT),
-                                Value::UNDEFINED,
-                            ];
-                            let o = slot!(new_hp) as usize;
-                            let Some(h) = b.get_mut(o..o + 48) else {
-                                out_of_bounds()
-                            };
-                            for (c, v) in h.as_chunks_mut::<8>().0.iter_mut().zip(header) {
-                                *c = v.to_bits().to_le_bytes();
-                            }
-                            fill(b, slot!(new_lp), locals, Value::UNDEFINED);
+                            write_frame(
+                                b,
+                                vals,
+                                (base, argc, n, new_hp, locals),
+                                [
+                                    Value::int(bp as i32),
+                                    Value::int(hp as i32),
+                                    Value::int(ret_pc as i32),
+                                    Value::int(argc as i32),
+                                    Value::int(PUSH_RESULT),
+                                    Value::UNDEFINED,
+                                ],
+                            );
                             self.bp = base;
                             self.hp = new_hp;
                             self.lp = new_lp;
@@ -457,43 +516,71 @@ impl Exec<'_> {
                             push!(ld(b, slot!(bp + 2 + imm16)));
                             next!(Op::GetArg);
                         }
-                        fast::GET_CAP | fast::GET_CAP_CHK | fast::PUT_CAP => {
-                            // The Box in slot 1 + i of the closure (stack[bp]).
-                            let Some(f) = ld(b, slot!(bp)).as_object() else {
-                                break Exit::Decline(op);
-                            };
-                            let bx = ld(b, object_slot(b, f.offset(), 1 + imm16));
-                            let at = bx.as_internal().expect("a Box")
-                                + crate::heap::cells::BoxCell::VALUE.offset;
-                            if op == fast::PUT_CAP {
-                                sp -= 1;
-                                let v = ld(b, slot!(sp));
-                                st(b, at, v);
-                                next!(Op::PutCap);
+                        fast::GET_CAP
+                        | fast::GET_CAP_CHK
+                        | fast::PUT_CAP
+                        | fast::PUT_CAP_CHK
+                        | fast::SET_CAP
+                        | fast::SET_CAP_CHK
+                        | fast::GET_BOX
+                        | fast::GET_BOX_CHK
+                        | fast::PUT_BOX
+                        | fast::PUT_BOX_CHK
+                        | fast::SET_BOX
+                        | fast::SET_BOX_CHK => {
+                            let bx = if matches!(
+                                op,
+                                fast::GET_BOX
+                                    | fast::GET_BOX_CHK
+                                    | fast::PUT_BOX
+                                    | fast::PUT_BOX_CHK
+                                    | fast::SET_BOX
+                                    | fast::SET_BOX_CHK
+                            ) {
+                                ld(b, slot!(lp + imm16))
                             } else {
-                                let v = ld(b, at);
-                                if v.is_uninitialized() {
-                                    // `get_cap_chk` throws; `get_cap` never sees the marker.
+                                // The Box in slot 1 + i of the closure (stack[bp]).
+                                let Some(f) = ld(b, slot!(bp)).as_object() else {
                                     break Exit::Decline(op);
-                                }
-                                push!(v);
-                                // (`get_cap_chk` has the same size and cost.)
-                                next!(Op::GetCap);
-                            }
-                        }
-                        fast::GET_BOX | fast::PUT_BOX => {
-                            let bx = ld(b, slot!(lp + imm16));
+                                };
+                                ld(b, object_slot(b, f.offset(), 1 + imm16))
+                            };
                             let at = bx.as_internal().expect("a Box")
                                 + crate::heap::cells::BoxCell::VALUE.offset;
-                            if op == fast::PUT_BOX {
-                                sp -= 1;
-                                let v = ld(b, slot!(sp));
-                                st(b, at, v);
-                                next!(Op::PutBox);
-                            } else {
-                                push!(ld(b, at));
-                                next!(Op::GetBox);
+                            let chk = matches!(
+                                op,
+                                fast::GET_CAP_CHK
+                                    | fast::PUT_CAP_CHK
+                                    | fast::SET_CAP_CHK
+                                    | fast::GET_BOX_CHK
+                                    | fast::PUT_BOX_CHK
+                                    | fast::SET_BOX_CHK
+                            );
+                            // The checked forms throw on the TDZ marker: `step` does that.
+                            // (The unchecked ones never see it.)
+                            let old = ld(b, at);
+                            if chk && old.is_uninitialized() {
+                                break Exit::Decline(op);
                             }
+                            match op {
+                                fast::PUT_CAP
+                                | fast::PUT_CAP_CHK
+                                | fast::PUT_BOX
+                                | fast::PUT_BOX_CHK => {
+                                    sp -= 1;
+                                    let v = ld(b, slot!(sp));
+                                    st(b, at, v);
+                                }
+                                fast::SET_CAP
+                                | fast::SET_CAP_CHK
+                                | fast::SET_BOX
+                                | fast::SET_BOX_CHK => {
+                                    let v = top!(0);
+                                    st(b, at, v);
+                                }
+                                _ => push!(old),
+                            }
+                            next!(op);
                         }
                         fast::PUSH_I8 => {
                             push!(Value::int(imm32 as u8 as i8 as i32));
@@ -870,11 +957,7 @@ impl Exec<'_> {
                                 .expect("closure template");
                             let code_ref = ld32(b, t + FuncTemplate::CODE.offset);
                             let consts_ref = ld32(b, t + FuncTemplate::CONSTS.offset);
-                            let code_len = if code_ref == 0 {
-                                0
-                            } else {
-                                ld32(b, code_ref + Bytes::LEN.offset)
-                            };
+                            let code_len = code_len(b, code_ref);
                             let v = if op == fast::RETURN {
                                 top!(0)
                             } else {

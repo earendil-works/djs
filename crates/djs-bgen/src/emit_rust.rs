@@ -33,7 +33,7 @@ pub const HEADER: &str = "\
 ";
 
 /// The Rust representation of a subset type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Rep {
     Val,
     Bool,
@@ -100,7 +100,65 @@ fn coerce(s: String, from: Rep, want: Rep) -> String {
 
 /// Decodes a Value (`s`) as type `t`.
 fn decode(s: String, t: Type) -> String {
-    match rep(t) {
+    decode_rep(s, rep(t))
+}
+
+/// The Rust variable of a `Storage::Reg` local (D2000): `l<slot><b|i|u|f>`.
+fn reg_name(slot: u32, r: Rep) -> String {
+    let c = match r {
+        Rep::Bool => 'b',
+        Rep::I32 => 'i',
+        Rep::U32 => 'u',
+        Rep::F64 => 'f',
+        Rep::Val => unreachable!("a Value local is not a register"),
+    };
+    format!("l{slot}{c}")
+}
+
+/// The register reads and writes in `code`, in order: (slot, rep, is a write). Writes
+/// are emitted as `<reg> = ` and nothing else is.
+fn reg_uses(code: &str) -> Vec<(u32, Rep, bool)> {
+    let b = code.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        let starts = b[i] == b'l'
+            && (i == 0 || !(b[i - 1].is_ascii_alphanumeric() || b[i - 1] == b'_'))
+            && b.get(i + 1).is_some_and(u8::is_ascii_digit);
+        if !starts {
+            i += 1;
+            continue;
+        }
+        let mut j = i + 1;
+        while b.get(j).is_some_and(u8::is_ascii_digit) {
+            j += 1;
+        }
+        let r = match b.get(j) {
+            Some(b'b') => Rep::Bool,
+            Some(b'i') => Rep::I32,
+            Some(b'u') => Rep::U32,
+            Some(b'f') => Rep::F64,
+            _ => {
+                i = j;
+                continue;
+            }
+        };
+        if b.get(j + 1)
+            .is_some_and(|&c| c.is_ascii_alphanumeric() || c == b'_')
+        {
+            i = j + 1;
+            continue;
+        }
+        let slot: u32 = code[i + 1..j].parse().unwrap();
+        let write = code[j + 1..].starts_with(" = ");
+        out.push((slot, r, write));
+        i = j + 1;
+    }
+    out
+}
+
+fn decode_rep(s: String, r: Rep) -> String {
+    match r {
         Rep::Val => s,
         Rep::Bool => format!("bool_of({s})"),
         Rep::I32 => format!("i32_of({s})"),
@@ -373,6 +431,9 @@ impl Cx<'_> {
 #[derive(Debug, Clone)]
 enum Storage {
     Slot(u32),
+    /// A typed (non-heap) local of a native: a Rust variable that its slot mirrors
+    /// (D2000). Writes go to both; typed reads come from the variable.
+    Reg(u32, Rep),
     Arg(u32),
     /// A Rust variable (leaf functions).
     Var(String),
@@ -478,6 +539,7 @@ impl Env<'_> {
     fn read(&self, l: &Local) -> String {
         match &l.at {
             Storage::Slot(i) => decode(format!("ex.n_slot({i})"), l.ty),
+            Storage::Reg(i, r) => reg_name(*i, *r),
             Storage::Arg(i) => decode(format!("ex.n_arg({i})"), l.ty),
             Storage::Var(v) => v.clone(),
         }
@@ -529,7 +591,9 @@ trait Pure<'a> {
                 let l = self.env().lookup(n).clone();
                 // Slots hold canonical Values: read them as they are.
                 match (&l.at, want) {
-                    (Storage::Slot(i), Rep::Val) => Code::pure(format!("ex.n_slot({i})")),
+                    (Storage::Slot(i) | Storage::Reg(i, _), Rep::Val) => {
+                        Code::pure(format!("ex.n_slot({i})"))
+                    }
                     (Storage::Arg(i), Rep::Val) => Code::pure(format!("ex.n_arg({i})")),
                     _ => Code::pure(coerce(self.env().read(&l), rep(l.ty), want)),
                 }
@@ -1323,6 +1387,11 @@ impl<'a, 'c> Fsm<'a, 'c> {
             Some(Storage::Slot(s)) => {
                 self.push(format!("let r = ex.n_result(); ex.n_set_slot({s}, r);"))
             }
+            Some(Storage::Reg(s, r)) => self.push(format!(
+                "let r = ex.n_result(); ex.n_set_slot({s}, r); {} = {};",
+                reg_name(s, r),
+                decode_rep("r".into(), r)
+            )),
             Some(Storage::Arg(a)) => {
                 self.push(format!("let r = ex.n_result(); ex.n_set_arg({a}, r);"))
             }
@@ -1332,9 +1401,15 @@ impl<'a, 'c> Fsm<'a, 'c> {
     }
 
     fn store(&mut self, at: &Storage, ty: Type, c: Code) {
-        let v = coerce(c.s, rep(ty), Rep::Val);
+        let v = coerce(c.s.clone(), rep(ty), Rep::Val);
         match at {
             Storage::Slot(s) => self.push(format!("let v = {v}; ex.n_set_slot({s}, v);")),
+            Storage::Reg(s, r) => self.push(format!(
+                "let rv = {}; {} = rv; ex.n_set_slot({s}, {});",
+                c.s,
+                reg_name(*s, *r),
+                coerce("rv".into(), *r, Rep::Val)
+            )),
             Storage::Arg(a) => self.push(format!("let v = {v}; ex.n_set_arg({a}, v);")),
             Storage::Var(_) => unreachable!(),
         }
@@ -1377,8 +1452,12 @@ impl<'a, 'c> Fsm<'a, 'c> {
         match s {
             Stmt::Decl { name, ty, init, .. } => {
                 let slot = self.local_slot();
-                self.assign(Storage::Slot(slot), ty.ty, init);
-                self.env.declare(name, ty.ty, Storage::Slot(slot));
+                let at = match rep(ty.ty) {
+                    Rep::Val => Storage::Slot(slot),
+                    r => Storage::Reg(slot, r),
+                };
+                self.assign(at.clone(), ty.ty, init);
+                self.env.declare(name, ty.ty, at);
             }
             Stmt::Assign {
                 target,
@@ -1733,18 +1812,127 @@ impl<'a, 'c> Fsm<'a, 'c> {
             let (t, back) = thread(target);
             if back {
                 format!(
-                    "if ex.n_backedge({}) {{ return Ok(None); }} continue;",
-                    state[t]
+                    "if ex.n_backedge({s}) {{ return Ok(None); }} st = {s}; continue;",
+                    s = state[t]
                 )
             } else {
-                format!("ex.n_goto({}); continue;", state[t])
+                format!("st = {}; continue;", state[t])
             }
         };
+        // Registers (D2000): the typed locals live in Rust variables within one run of
+        // the function; their slots are written through, so a run that starts at state S
+        // loads the registers live into S from the slots and nothing else is needed.
+        let term_text = |t: &Option<Term>| -> String {
+            match t {
+                Some(Term::If(c, _, _)) => c.clone(),
+                Some(Term::Call(c, _)) => c.clone(),
+                Some(Term::Return(v) | Term::Throw(v)) => v.clone(),
+                _ => String::new(),
+            }
+        };
+        type Regs = BTreeSet<(u32, Rep)>;
+        let mut all_regs: Regs = BTreeSet::new();
+        // Per block: registers read before written, and registers written.
+        let mut gen_kill: Vec<(Regs, Regs)> = Vec::with_capacity(n);
+        for bb in &self.bbs {
+            let (mut used, mut written) = (Regs::new(), Regs::new());
+            let t = term_text(&bb.term);
+            for line in bb.code.iter().chain(core::iter::once(&t)) {
+                for (slot, r, w) in reg_uses(line) {
+                    all_regs.insert((slot, r));
+                    if w {
+                        written.insert((slot, r));
+                    } else if !written.contains(&(slot, r)) {
+                        used.insert((slot, r));
+                    }
+                }
+            }
+            gen_kill.push((used, written));
+        }
+        let succs = |b: usize| -> Vec<usize> {
+            match &self.bbs[b].term {
+                Some(Term::Goto(t, _)) => vec![*t],
+                Some(Term::If(_, t, e)) => vec![t.0, e.0],
+                Some(Term::Call(_, t)) => vec![*t],
+                _ => Vec::new(),
+            }
+        };
+        let mut live_in: Vec<Regs> = gen_kill.iter().map(|g| g.0.clone()).collect();
+        loop {
+            let mut changed = false;
+            for b in (0..n).rev() {
+                let mut l = gen_kill[b].0.clone();
+                for s in succs(b) {
+                    for x in &live_in[s] {
+                        if !gen_kill[b].1.contains(x) {
+                            l.insert(*x);
+                        }
+                    }
+                }
+                if l != live_in[b] {
+                    live_in[b] = l;
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
         let name = &f.name;
         let mut text = String::new();
         let _ = writeln!(text, "// {origin}");
+        if !all_regs.is_empty() {
+            // (A register written in a state that ends the run is not read again.)
+            text.push_str("#[allow(unused_assignments)]\n");
+        }
         let _ = writeln!(text, "fn {}(ex: &mut Exec<'_>) -> Step {{", native_fn(name));
-        text.push_str("    loop {\n        match ex.n_state() {\n");
+        // The state in a Rust local (`ex.pc` follows it for faults and calls), so that
+        // LLVM threads `st = N; continue` into a direct jump (D2000).
+        text.push_str("    let mut st = ex.n_state();\n");
+        for &(slot, r) in &all_regs {
+            let (ty, zero) = match r {
+                Rep::Bool => ("bool", "false"),
+                Rep::I32 => ("i32", "0"),
+                Rep::U32 => ("u32", "0"),
+                _ => ("f64", "0.0"),
+            };
+            let _ = writeln!(text, "    let mut {}: {ty} = {zero};", reg_name(slot, r));
+        }
+        // The entry loads, by state (states with the same live registers share an arm).
+        let mut arms: Vec<(Regs, Vec<u32>)> = Vec::new();
+        for b in 0..n {
+            if !reach[b] || live_in[b].is_empty() {
+                continue;
+            }
+            match arms.iter_mut().find(|a| a.0 == live_in[b]) {
+                Some(a) => a.1.push(state[b]),
+                None => arms.push((live_in[b].clone(), vec![state[b]])),
+            }
+        }
+        if !arms.is_empty() {
+            text.push_str("    match st {\n");
+            for (regs, states) in &arms {
+                let pats: Vec<String> = states.iter().map(|s| s.to_string()).collect();
+                let loads: Vec<String> = regs
+                    .iter()
+                    .map(|&(slot, r)| {
+                        format!(
+                            "{} = {};",
+                            reg_name(slot, r),
+                            decode_rep(format!("ex.n_slot({slot})"), r)
+                        )
+                    })
+                    .collect();
+                let _ = writeln!(
+                    text,
+                    "        {} => {{ {} }}",
+                    pats.join(" | "),
+                    loads.join(" ")
+                );
+            }
+            text.push_str("        _ => {}\n    }\n");
+        }
+        text.push_str("    loop {\n        ex.n_goto(st);\n        match st {\n");
         for b in 0..n {
             if !reach[b] {
                 continue;
@@ -1760,8 +1948,9 @@ impl<'a, 'c> Fsm<'a, 'c> {
                     format!("if {c} {{ {} }} else {{ {} }}", goto(*t), goto(*e))
                 }
                 Some(Term::Call(code, next)) => format!(
-                    "match {}? {{ Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }}",
-                    code.replace(&format!("__BB{next}__"), &state[*next].to_string())
+                    "match {}? {{ Flow::Inline => {{ st = {n}; continue }} Flow::Leave(s) => return Ok(s) }}",
+                    code.replace(&format!("__BB{next}__"), &state[*next].to_string()),
+                    n = state[*next]
                 ),
                 Some(Term::Return(v)) => format!("let v = {v}; return ex.n_ret(v);"),
                 Some(Term::Throw(v)) => format!("let v = {v}; return Err(Fault::throw(v));"),
