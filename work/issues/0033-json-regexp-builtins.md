@@ -1,6 +1,6 @@
 # 0033: JSON and RegExp builtins (+ regex literals end to end)
 
-status: in-progress
+status: done
 agent: num
 branch: issue/0033-json-regexp-builtins
 depends-on: 0011, 0012, 0031 (part 1: bgen forms)
@@ -108,7 +108,18 @@ following 0031's pattern (builtin-language wrappers around leaf intrinsics):
   217/217. String.prototype active: match 39/39, replace 43/43, replaceAll 25/25,
   search 32/32, split 110/110 (later: 9/11, 6/8, 17/20, 8/11, 7/8; BigInt and
   Symbol.* features). built-ins/JSON active 119/119.
-- difftest: dquickts test_regexp_skip.js and test_json.js pass now.
+- difftest: dquickts test_regexp_skip.js and test_json.js pass now. Removed the split
+  workaround from tests/corpus/prelude.js (D1440 asked for that once split existed).
+- After rebasing onto f12699f (Proxy, BigInt and more are in, and the active group grew to
+  32,718): active 32,303 passing, with 515 ratchet entries gone. Per directory:
+  - built-ins/RegExp (later group) 1,335/1,859;
+  - RegExpStringIteratorPrototype 17/17;
+  - language/literals/regexp 217/217;
+  - String.prototype active: match 39/39, replace 43/43, replaceAll 25/25,
+    search 32/32, split 110/110; later: 10/11, 7/8, 20/20, 9/11, 8/8 (matchAll 24/25);
+  - built-ins/JSON active 137/137, later 5/26.
+- Base snapshot (debug): 313,192 → 337,576 bytes (+24.4 KB for part 2, measured against
+  main f12699f).
 
 ## Follow-ups
 - Host console glue (djs-difftest `format`/`output_text`, and the Sandbox in js/) formats
@@ -125,3 +136,12 @@ following 0031's pattern (builtin-language wrappers around leaf intrinsics):
   "later" (json-parse-with-source), qjs has it.
 
 ## Result
+- JSON (part 1, merged at 8430055): JSON.parse (leaf, reviver in the builtin language,
+  qjs error positions) and JSON.stringify (leaf fast path, full algorithm otherwise).
+- RegExp (part 2): RegExp objects and every RegExp.prototype method, accessor and
+  Symbol.* method; RegExp.escape and the RegExp String Iterator; regex literals with
+  early errors; String.prototype match/matchAll/replace/replaceAll/search/split.
+- Matching is fuel-metered and suspendable through heap images (D1332).
+- Build hash covers djs-core's sources (D1330).
+- Known gaps: `\p{...}` property escapes; JSON.parse source text access; a deep
+  backtrack stack is slow under tiny fuel slices; see Follow-ups.
