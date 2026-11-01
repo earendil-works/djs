@@ -1,0 +1,115 @@
+function 0 <anonymous>: params=2 locals=6 stack=4 captures=0
+    0  undefined
+    1  new_box_init loc4 (isEven)
+    4  undefined
+    5  new_box_init loc5 (isOdd)
+    8  fclosure child0
+   13  put_loc loc0 (counter)
+   16  fclosure child2
+   21  put_loc loc3 (outer)
+   24  fclosure child3
+   29  put_box loc4 (isEven)
+   32  fclosure child4
+   37  put_box loc5 (isOdd)
+   40  array_from 0
+   43  put_loc loc1 (fns)
+   46  new_box loc2 (i)
+   49  push_i8 0
+   51  put_box loc2 (i)
+   54  rebox loc2 (i)
+   57  get_box loc2 (i)  ; 8:17
+   60  push_i8 3
+   62  lt  ; 8:19
+   63  jump_if_false -> 110
+   68  jump -> 91
+   73  rebox loc2 (i)
+   76  get_box loc2 (i)  ; 8:24
+   79  to_numeric
+   80  dup
+   81  inc  ; 8:25
+   82  put_box loc2 (i)  ; 8:24
+   85  drop
+   86  jump -> 57
+   91  get_loc loc1 (fns)  ; 8:29
+   94  get_box loc2 (i)  ; 8:33
+   97  fclosure child1  ; 8:32
+  102  insert3
+  103  put_elem
+  104  drop
+  105  jump -> 73
+  110  get_box loc4 (isEven)  ; 15:1
+  113  undefined
+  114  push_i8 4
+  116  call 1  ; 15:7
+  119  drop
+  120  return_undef
+function 0.0 counter: params=0 locals=1 stack=1 captures=0
+    0  new_box loc0 (n)
+    3  push_i8 0
+    5  put_box loc0 (n)
+    8  fclosure child0
+   13  return
+   14  return_undef
+function 0.0.0 <anonymous>: params=0 locals=0 stack=1 captures=1
+    0  get_cap_chk cap0 (n)  ; 5:18
+    3  inc  ; 5:16
+    4  set_cap_chk cap0 (n)  ; 5:18
+    7  return
+function 0.1 <anonymous>: params=0 locals=0 stack=1 captures=1
+    0  get_cap_chk cap0 (i)  ; 8:44
+    3  return
+function 0.2 outer: params=1 locals=2 stack=1 captures=0
+    0  get_arg arg0
+    3  new_box_init loc0 (a)
+    6  new_box loc1 (b)
+    9  push_i8 1
+   11  put_box loc1 (b)
+   14  fclosure child0
+   19  return
+   20  return_undef
+function 0.2.0 middle: params=0 locals=1 stack=1 captures=2
+    0  special_object 3
+    2  new_box_init loc0 (middle)
+    5  fclosure child0
+   10  return
+   11  return_undef
+function 0.2.0.0 <anonymous>: params=1 locals=0 stack=2 captures=3
+    0  get_cap cap0 (a)  ; 12:19
+    3  get_cap_chk cap1 (b)  ; 12:23
+    6  add  ; 12:21
+    7  get_arg arg0  ; 12:27
+   10  add  ; 12:25
+   11  get_cap cap2 (middle)  ; 12:31
+   14  get_field "length"  ; 12:37
+   19  add  ; 12:29
+   20  return
+function 0.3 isEven: params=1 locals=0 stack=4 captures=1
+    0  get_arg arg0  ; 16:29
+    3  push_i8 0
+    5  eq  ; 16:31
+    6  jump_if_false -> 17
+   11  push_true
+   12  jump -> 30
+   17  get_cap cap0 (isOdd)  ; 16:45
+   20  undefined
+   21  get_arg arg0  ; 16:51
+   24  push_i8 1
+   26  sub  ; 16:53
+   27  call 1  ; 16:50
+   30  return
+   31  return_undef
+function 0.4 isOdd: params=1 locals=0 stack=4 captures=1
+    0  get_arg arg0  ; 17:28
+    3  push_i8 0
+    5  eq  ; 17:30
+    6  jump_if_false -> 17
+   11  push_false
+   12  jump -> 30
+   17  get_cap cap0 (isEven)  ; 17:45
+   20  undefined
+   21  get_arg arg0  ; 17:52
+   24  push_i8 1
+   26  sub  ; 17:54
+   27  call 1  ; 17:51
+   30  return
+   31  return_undef
