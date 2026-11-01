@@ -9,7 +9,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0033 | JSON + RegExp builtins, regex literals | num | .worktrees/0033-json-regexp-builtins |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0044 | djs runs the shared difftest prelude (+ small 0045 items) | infra | .worktrees/0044-difftest-shared-prelude |
-| 0040 | P1-7 Classes | lexer | .worktrees/0040-p1-classes |
+| 0048 | P3 TypeScript (type skipper, enums/namespaces, strip-types oracle) | lexer | .worktrees/0048-typescript |
 | 0046 | BigInt | heap | .worktrees/0046-bigint |
 | 0047 | Dev-flow efficiency investigation (report only) | devflow | .worktrees/0047-devflow |
 
@@ -39,6 +39,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0042 | Async generator runtime, function kinds, host rejections | 6e3c965 (agent heap) |
 | 0037 | P2 Promises, jobs, async host calls, suspendable frames | bd6f974 (agent heap; 3 parts) |
 | 0036 | P1-6 Destructuring + tagged templates | 234fd3c (agent lexer; +~1,940 test262) |
+| 0040 | P1-7 Classes | 2d08a6c (agent lexer; test262 active 97.1%) |
 | 0045 | Proxy | 7427f4f (agent infra; Proxy 352/375; ~5,000 behavior cases vs qjs) |
 | 0039 | Binary data | c8aefb6 (agent infra; DataView 445/449, TypedArray 841/849) |
 | 0038 | Builtins wave 3 | e43d075 (agent infra; Map/Set/Weak*/Reflect/Date; test262 active 64.8%) |
@@ -99,6 +100,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 2026-11-01 (0039 done; binary data promoted, +1,978 tests) | | 18,484 / 24,120 (76.6%) |
 | 2026-11-01 (0041 done) | 62 expected failures | 18,833 / 24,120 (78.1%) |
 | 2026-11-01 (D011: generators + async iteration promoted, +8,213 tests) | | 22,605 / 32,333 (69.9%) |
+| 2026-11-01 (0040 classes done) | 52 expected failures | 31,791 / 32,718 (97.1%) |
 
 ## Id reservations (in flight; check main for the authoritative list)
 
