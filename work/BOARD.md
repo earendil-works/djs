@@ -7,7 +7,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0017 | djs-bgen v0 (checker + JS emitter) | infra | .worktrees/0017-bgen-v0 |
-| 0011 | Regex engine core | num | .worktrees/0011-regex-engine |
+| 0018 | Inbound wire format | num | .worktrees/0018-wire-inbound |
 | 0015 | P0 interpreter and embedding | heap | .worktrees/0015-p0-interpreter |
 | 0014 | P0 compiler | lexer | .worktrees/0014-p0-compiler |
 
@@ -30,6 +30,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0001 | Workspace skeleton and process | initial commit |
 | 0003 | Lexer | e4a42c3 (agent lexer; parser follow-ups listed in the issue) |
 | 0005 | Values, arena heap, strings, atoms, objects | dc751e2 (agent heap; follow-ups in the issue) |
+| 0011 | Regex engine core | d57c4a9 (agent num; 13.6k qjs cases; \p{} deferred, D1112) |
 | 0013 | Bytecode table and tools | 96c4a0a (agent lexer; 147 opcodes) |
 | 0012 | Native JSON (leaf) | 9f437fa (agent heap; parse ~80% of node, stringify ~50%) |
 | 0010 | Differential corpus and difftest runner | c5039b3 (agent infra; 165 cases, all pass on qjs) |
