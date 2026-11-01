@@ -66,9 +66,19 @@ thread_local! {
             out: Vec::new(),
         })
     };
+    /// The base snapshot, decoded from djs-prelude's coded image at the first use (D2252)
+    /// and kept for the instance's lifetime.
+    static BASE: std::cell::OnceCell<&'static [u8]> = const { std::cell::OnceCell::new() };
+    /// A copy of the base the host is writing (`djs_base_inject_ptr`), until checked.
+    static INJECTED: RefCell<Option<Box<[u8]>>> = const { RefCell::new(None) };
     /// The message of the last panic. Separate from `STATE`, which may be left borrowed by
     /// the call that trapped.
     static PANIC: RefCell<String> = const { RefCell::new(String::new()) };
+}
+
+/// The base snapshot (D1321), decoded once per instance (D2252).
+fn base() -> &'static [u8] {
+    BASE.with(|b| *b.get_or_init(|| Box::leak(djs_prelude::unpack_base().into_boxed_slice())))
 }
 
 fn init() {
@@ -284,18 +294,47 @@ pub extern "C" fn djs_build_hash() -> u32 {
     djs_core::vm::BUILD_HASH
 }
 
-/// The address of the base snapshot (`djs_prelude::BASE`, D1321) in this module's memory,
+/// The address of the base snapshot (D1321, decoded at the first use, D2252) in this module's memory,
 /// read-only and valid for the instance's lifetime. Hosts compress snapshots against it
 /// (D2260): it is the image every `vm_new` starts from, and the build hash fixes its bytes.
 #[unsafe(no_mangle)]
 pub extern "C" fn djs_base_ptr() -> usize {
-    djs_prelude::BASE.as_ptr() as usize
+    base().as_ptr() as usize
+}
+
+/// Room for the base snapshot a host decoded before (in another instance of this
+/// module): the host writes its bytes there and calls `djs_base_inject`, and the instance
+/// never decodes its own (D2252). 0 if this instance already has its base or `len` is not
+/// the base's length.
+#[unsafe(no_mangle)]
+pub extern "C" fn djs_base_inject_ptr(len: usize) -> usize {
+    if BASE.with(|b| b.get().is_some()) || len != djs_prelude::base_len() {
+        return 0;
+    }
+    let mut buf = vec![0u8; len].into_boxed_slice();
+    let p = buf.as_mut_ptr() as usize;
+    INJECTED.with(|i| *i.borrow_mut() = Some(buf));
+    p
+}
+
+/// Takes the bytes written at `djs_base_inject_ptr` as this instance's base if they are
+/// the base (its length and FNV-1a hash): 1, or 0 (refused: the instance decodes its own
+/// at the first use).
+#[unsafe(no_mangle)]
+pub extern "C" fn djs_base_inject() -> u32 {
+    let Some(buf) = INJECTED.with(|i| i.borrow_mut().take()) else {
+        return 0;
+    };
+    if !djs_prelude::is_base(&buf) {
+        return 0;
+    }
+    BASE.with(|b| b.set(Box::leak(buf)).is_ok() as u32)
 }
 
 /// The length of the base snapshot in bytes (see `djs_base_ptr`).
 #[unsafe(no_mangle)]
 pub extern "C" fn djs_base_len() -> usize {
-    djs_prelude::BASE.len()
+    base().len()
 }
 
 /// Like `djs_staging`, for a VM image about to be restored with `vm_from_bytes` with a heap
@@ -375,7 +414,7 @@ fn options(memory_limit: u32) -> VmOptions {
 /// the realm.
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_new(memory_limit: u32) -> u32 {
-    add_new_vm(djs_prelude::new_vm(options(memory_limit)))
+    add_new_vm(djs_prelude::new_vm_from(base(), options(memory_limit)))
 }
 
 /// Like `vm_new`, with the arena capacity a heap of `live` bytes gets (its next GC
@@ -384,7 +423,8 @@ pub extern "C" fn vm_new(memory_limit: u32) -> u32 {
 /// arena and leave its old block behind as a hole in wasm memory.
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_new_reserved(memory_limit: u32, live: u32) -> u32 {
-    add_new_vm(djs_prelude::new_vm_reserved(
+    add_new_vm(djs_prelude::new_vm_from_reserved(
+        base(),
         options(memory_limit),
         live as usize,
     ))
@@ -396,11 +436,10 @@ pub extern "C" fn vm_new_reserved(memory_limit: u32, live: u32) -> u32 {
 #[cfg(feature = "compiled-prelude")]
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_new_compiled(memory_limit: u32) -> u32 {
-    // Compacted and collected like djs-prelude's build makes the base (D1431; by copying,
-    // 0101), so that the two images can be compared byte for byte.
+    // Made into an image like djs-prelude's build makes the base, so that the two can be
+    // compared byte for byte.
     let vm = Vm::new(options(memory_limit)).and_then(|mut vm| {
-        vm.heap_mut().compact_for_image()?;
-        vm.collect_canonical()?;
+        vm.prepare_base_image()?;
         Ok(vm)
     });
     add_new_vm(vm)

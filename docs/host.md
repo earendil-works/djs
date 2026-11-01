@@ -288,7 +288,9 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_promise_state(vm, h) -> state` | 0 not a promise, 1 pending, 2 fulfilled, 3 rejected; settled: out = a handle (u32) to the result, and the promise counts as handled |
 | `vm_take_unhandled_rejections(vm) -> n` | out = handles (u32) to the reasons of promises rejected with no handler, oldest first (D1423) |
 | `djs_build_hash() -> u32` | the build hash of VM images: identifies the engine build (0049), including its sources, cargo features and libm version (D1750) |
-| `djs_base_ptr()`, `djs_base_len()` | the base snapshot in the module's memory (read-only): the reference image of compact snapshots (D2260) |
+| `djs_base_ptr()`, `djs_base_len()` | the base snapshot in the module's memory (read-only): the reference image of compact snapshots (D2260). The module ships it coded (D2252): the first call (or `vm_new`) decodes it, unless the host injected it |
+| `djs_base_inject_ptr(len) -> ptr` | room for the base snapshot that another instance of the same module decoded (its `djs_base_ptr` bytes), so that this one need not decode (D2252); 0 if the instance has its base already or `len` is not the base's length |
+| `djs_base_inject() -> 1/0` | takes the bytes written at `djs_base_inject_ptr` as the base if their length and hash match the coded base's; 0: refused, the instance decodes its own |
 | `djs_panic_ptr()`, `djs_panic_len()` | the last panic message, after a trap |
 | `djs_debug_panic()` | trap on purpose (tests) |
 
@@ -366,6 +368,16 @@ probe. The ARCH budget (400 KB) is meant after `wasm-opt`, which is not installe
 | `Sandbox.create` + first run | 80 µs |
 
 Since the base snapshot, instantiating the module is most of a sandbox's startup.
+
+**The coded base (D2252).** Since 0122 the module carries the base snapshot coded
+(djs-lzrc: 79 KB instead of 385 KB, for the size budget D020), and an instance decodes it
+at its first VM: about 5 ms, once. Every sandbox is its own instance, so the host decodes
+once per compiled module instead: `js/src/snapshot.ts`'s `provideBase` (right after
+instantiating) copies the base an earlier instance of the module decoded into the new
+one, which checks its length and hash, and `rememberBase` (after the first `vm_new`) keeps
+it, per `WebAssembly.Module`. Both the Sandbox and pi's engine do this. A later instance
+then costs about 0.15 ms more than with the uncoded base (the copy and its check), and a
+host that never injects still works (each instance decodes its own).
 | 1000-item tool result in, a loop over it, an object out | 0.6 ms |
 
 **The boundary in wasm** (`node js/bench/wasm.bench.ts <dir>`, datasets from

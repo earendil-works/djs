@@ -6,7 +6,7 @@
 
 import { encode } from "../src/wire.ts";
 import { readValue } from "../src/reader.ts";
-import { baseReference, type Reference } from "../src/snapshot.ts";
+import { baseReference, provideBase, type Reference, rememberBase } from "../src/snapshot.ts";
 
 export const STATUS_DONE = 0;
 export const STATUS_THREW = 1;
@@ -56,6 +56,8 @@ interface Exports {
   /** Since 0117 (D2260); older modules lack them and write uncompressed snapshots. */
   djs_base_ptr?(): number;
   djs_base_len?(): number;
+  djs_base_inject_ptr?(len: number): number;
+  djs_base_inject?(): number;
 }
 
 /** An instance of the module, before a VM is created in it (`Engine.restore`). */
@@ -102,6 +104,7 @@ export class Engine {
     const x = instantiate(module);
     const vm = x.vm_new_reserved ? x.vm_new_reserved(memoryLimit ?? 0, live) : x.vm_new(memoryLimit ?? 0);
     if (vm === 0) throw new Error(`Cannot create a djs VM: ${outText(x) || "memory limit too small"}`);
+    rememberBase(module, x);
     return new Engine(module, x, vm);
   }
 
@@ -332,6 +335,8 @@ function instantiate(module: WebAssembly.Module): Exports {
   if (typeof x.vm_compile_file !== "function" || typeof x.vm_set_weak_refs !== "function") {
     throw new Error("The djs-wasm module is too old for pi codemode (no vm_compile_file / vm_set_weak_refs)");
   }
+  // The module's base, decoded once by its first instance, not by each (D2252).
+  provideBase(module, x);
   return x;
 }
 

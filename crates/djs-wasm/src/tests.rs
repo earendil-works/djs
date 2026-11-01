@@ -476,3 +476,43 @@ fn file_names_seeds_and_build_hash() {
     vm_free(vm);
     vm_free(other);
 }
+
+/// The base snapshot of an instance (D2252): decoded at its first use, or injected by a
+/// host that decoded it in another instance. Each test thread is a fresh "instance"
+/// (the state is thread-local).
+fn in_instance<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
+    std::thread::spawn(f).join().unwrap()
+}
+
+#[test]
+fn base_is_decoded_or_injected() {
+    let decoded: Vec<u8> = in_instance(|| base().to_vec());
+    assert_eq!(decoded.len(), djs_prelude::base_len());
+    // A second instance takes the host's copy and never decodes.
+    let copy = decoded.clone();
+    let (ok, same, vm) = in_instance(move || {
+        let p = djs_base_inject_ptr(copy.len());
+        assert_ne!(p, 0);
+        unsafe { std::ptr::copy_nonoverlapping(copy.as_ptr(), p as *mut u8, copy.len()) };
+        let ok = djs_base_inject();
+        let same = BASE.with(|b| b.get().map(|b| b.as_ptr() as usize)) == Some(p);
+        (ok, same, vm_new(0))
+    });
+    assert_eq!((ok, same), (1, true));
+    assert_ne!(vm, 0);
+    // A wrong length gets no room; a corrupted copy is refused and the instance decodes.
+    let mut bad = decoded.clone();
+    let mid = bad.len() / 2;
+    bad[mid] ^= 1;
+    let expect = decoded.clone();
+    in_instance(move || {
+        assert_eq!(djs_base_inject_ptr(bad.len() - 1), 0);
+        let p = djs_base_inject_ptr(bad.len());
+        unsafe { std::ptr::copy_nonoverlapping(bad.as_ptr(), p as *mut u8, bad.len()) };
+        assert_eq!(djs_base_inject(), 0);
+        assert_eq!(djs_base_inject(), 0, "nothing left to take");
+        assert_eq!(base(), &expect[..]);
+        // The base is set now: no more injection.
+        assert_eq!(djs_base_inject_ptr(expect.len()), 0);
+    });
+}

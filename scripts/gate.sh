@@ -30,6 +30,15 @@ step() {
   [ "$1" = END ] || echo "== $1"
 }
 
+# D020: the shipped module for the size budget (last step). Its build (LTO, one codegen
+# unit: mostly one core for a few minutes) runs in its own target directory beside the
+# other steps.
+size_log=target/size-build.log
+( CARGO_TARGET_DIR=target/size cargo build -p djs-wasm --target wasm32-unknown-unknown \
+    --profile wasm --quiet > "$size_log" 2>&1 ) &
+size_pid=$!
+trap 'kill "$size_pid" 2>/dev/null || true' EXIT
+
 step "fmt";   cargo fmt --all --check
 step "clippy"; cargo clippy --workspace --all-targets --quiet -- -D warnings
 step "test"
@@ -97,6 +106,9 @@ grep -E '^ratchet:|^\| active' target/test262-djs.log
 echo "slowest test262 tests:"
 sed -n '/^slowest:/,/^$/p' target/test262-djs.log | { grep -E '^ +[0-9]' || true; } |
   tee target/gate-slowest-test262.txt
+step "size budget (D020)"
+wait "$size_pid" || { cat "$size_log"; exit 1; }
+python3 scripts/size/budget.py target/size/wasm32-unknown-unknown/wasm/djs_wasm.wasm
 step END
 cpu; printf 'total\t%s\t%s\n' $(($(date +%s) - gate_start)) "$cpu_s" >> "$step_log"
 echo "gate: OK"

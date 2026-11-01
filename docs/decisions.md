@@ -5314,3 +5314,66 @@ raw stack writes included. Not worth it at today's base size. Revisit when the o
 gets much bigger, e.g. sealed pi images of several MB, since the walk is linear in B.
 Aging/promotion (D2042) would help the young-dominated workloads (arrays, higher-order,
 json), where a minor collection still costs about a full one.
+## D2251: The base image is ordered by cell kind
+date: 2026-11-03 · by: perf · issue: 0122
+The base image (djs-prelude's build, now `Vm::prepare_base_image`) is compacted and
+collected canonically as before. Then `Heap::order_for_image` (heap/compact.rs) reorders
+its cells:
+- the roots cell stays first;
+- the rest are grouped by `CellKind` in its order;
+- strings sort by content, and every other kind keeps its breadth-first order.
+
+Every traced reference is rewritten, and as after a collection, the templates' offset
+caches are cleared and Map/Set indexes are rehashed. The order is a function of the
+canonical image, so the image stays canonical and deterministic, and the native and wasm
+builds agree (checked by the gate).
+
+Why: gzip finds far more repeats among like cells (templates next to templates, bytecode
+next to bytecode) than in a breadth-first walk's mix. The image's gzip went from 105.3 to
+96.2 KB, and the module's from 529.9 to 520.6 KB.
+
+Snapshot containers (scripts/snapshot-research) are unchanged; an empty sandbox's
+`bytes()` went from 33 to 15 KB. Nothing in the in-VM collectors or `canonical_hash`
+changed.
+
+## D2252: The wasm module ships the base image coded; hosts decode it once per module
+date: 2026-11-03 · by: perf · issue: 0122
+**The codec.** djs-wasm embeds the base image coded with djs-lzrc
+(`djs-prelude/packed`; native builds keep the raw image, `raw`). djs-lzrc is our own
+code, with no dependency:
+- LZ77 with an adaptive binary range coder in the LZMA manner: four repeat distances,
+  literals coded against the byte at the last distance after a match, distances as a
+  slot plus extra bits;
+- the encoder (djs-prelude's build.rs only) parses by a price-based search over the whole
+  input;
+- the decoder checks every read, then the output against the header's length and hash
+  (FNV-1a over 8-byte words). It never panics on bad input, which a fuzz test of flipped
+  bits, truncations and garbage checks.
+
+The coded image is 79.0 KB, against 96.2 KB for gzip of the ordered image (D2251). The
+module's gzip went from 520.6 to 507.3 KB; the decoder costs 7 KB raw (2.9 KB gzip) of
+code.
+
+**Decoding once per module.** An instance decodes the base at its first VM (or first
+`djs_base_ptr`), which takes about 5 ms in node. Every sandbox and every pi engine VM is
+its own instance, so the host decodes once per compiled module:
+- `provideBase`, right after instantiating, writes the base an earlier instance decoded
+  into the new one, through the additive exports `djs_base_inject_ptr` and
+  `djs_base_inject`;
+- the instance checks the length and hash, and on a mismatch refuses the copy and decodes
+  its own;
+- `rememberBase`, after the first `vm_new`, keeps the base per `WebAssembly.Module`
+  (js/src/snapshot.ts, used by the Sandbox and pi's engine).
+
+The ABI version is unchanged: old hosts never inject and still work.
+
+Measured in node (`Sandbox.create`, ms):
+
+| instance | before | after |
+| --- | ---: | ---: |
+| first | 7.9 | 13.2 |
+| later | 0.18–0.22 | 0.33–0.38 |
+
+The extra time on later instances is the 385 KB copy, its zeroing and the hash check.
+Memory per instance is +64 KB (the coded segment stays in the data section beside the
+decoded copy).

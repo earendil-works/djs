@@ -394,5 +394,25 @@ djs-wasm build and the JS host package's tests (`node --test js/test/*.test.ts`)
 versus wasm heap images (`scripts/determinism/native-vs-wasm.sh`); the wire and reader
 cross-language checks; difftest on djs with the ratchet, suspension, GC stress and
 heap-image determinism; difftest with the bytecode backend; and the test262 active group
-against its ratchet. It prints the slowest unit and test262 tests. Issues that add a test
+against its ratchet; and the size budget (below). It prints the slowest unit and test262
+tests. Issues that add a test
 suite also add it to the gate; agents do not run the gate's steps by hand (AGENTS.md).
+
+### Size budget (D020)
+
+The shipped module (`scripts/build-wasm.sh`: profile `wasm`, stripped) must stay within
+1.5x quickjs-wasi's size, gzip -9. The gate builds it beside its other steps (in
+`target/size`) and its last step runs `scripts/size/budget.py` on it, which compares its
+gzip with `tests/scores/size.tsv`:
+
+- `quickjs_wasi_gzip`: quickjs-wasi's module (3.6.2, pi's engine), recorded so that the
+  gate needs no copy of it. Re-record it when pi moves to a new version.
+- `ceiling_gzip`: a ratchet while the module is above the budget. The gate fails when the
+  module's gzip exceeds it. Once the module is within 1.5x, the budget itself is the
+  limit as well.
+
+An issue that makes the module smaller lowers the ceiling on its branch
+(`scripts/size/budget.py MODULE --update`: this gzip plus 1 KB of slack, never higher).
+Raising it is a trade, recorded as a decision with the size and what it buys. The
+attribution tools are in `scripts/size/` (README there).
+

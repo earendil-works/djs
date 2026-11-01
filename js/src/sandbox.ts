@@ -8,8 +8,10 @@ import {
   baseReference,
   checkSnapshot,
   encodeSnapshot,
+  provideBase,
   readSnapshotHeader,
   REFERENCE_BASE,
+  rememberBase,
   type SnapshotCodec,
   SnapshotError,
   snapshotImage,
@@ -222,6 +224,8 @@ interface Exports {
   /** Since 0117 (D2260); older modules lack them and write uncompressed snapshots. */
   djs_base_ptr?(): number;
   djs_base_len?(): number;
+  djs_base_inject_ptr?(len: number): number;
+  djs_base_inject?(): number;
 }
 
 const modules = new Map<string, Promise<WebAssembly.Module>>();
@@ -342,11 +346,14 @@ export class Sandbox {
     if (x.djs_abi_version() !== ABI_VERSION) {
       throw new SandboxError("misuse", `djs-wasm ABI ${x.djs_abi_version()}, expected ${ABI_VERSION}`);
     }
+    // The module's base, decoded once by its first instance, not by each (D2252).
+    provideBase(module, x);
     let vm: number;
     let restoredFns: string[] = [];
     if (snapshot === undefined) {
       vm = x.vm_new(opts.memoryLimit ?? 0);
       if (vm === 0) throw new SandboxError("memory", "memory limit too small for the realm");
+      rememberBase(module, x);
     } else {
       const { meta, image } = unpackSnapshot(snapshot, module, x, opts.snapshotCodec);
       restoredFns = meta.functions;

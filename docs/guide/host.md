@@ -27,7 +27,12 @@ export that consumes it, and exports that return data fill an *out* buffer. VMs 
 values the host keeps across calls are small integers: a value is a *handle*, an index
 into a table of GC roots, freed with `vm_handle_free`. A VM created with `vm_new` is a
 copy of the base snapshot (D1321), so creating one is a memory copy, not an
-initialization.
+initialization. The module carries that snapshot compressed with its own small codec, to
+keep the download small (D2252). An instance decodes it when it creates its first VM,
+which takes a few milliseconds. Because every sandbox is its own instance, the host
+decodes it only once per compiled module: it keeps the first instance's decoded copy and
+writes it into each new instance, which checks its length and hash before using it. A
+host that skips this still works; each instance then decodes its own copy.
 
 A panic in the engine (a bug, never something a script can cause: the heap is bounds
 checked and every limit is a thrown error) records its message and traps. The host reads

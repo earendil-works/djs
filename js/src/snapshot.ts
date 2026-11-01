@@ -142,11 +142,48 @@ export function baseReference(
   let ref = references.get(module);
   if (ref === undefined) {
     if (exports.djs_base_ptr === undefined || exports.djs_base_len === undefined) return undefined;
-    const bytes = new Uint8Array(exports.memory.buffer, exports.djs_base_ptr(), exports.djs_base_len()).slice();
+    // The pointer first: an instance decodes its base at the first use (D2252), which may
+    // grow (and detach) its memory buffer.
+    const at = exports.djs_base_ptr();
+    const bytes = new Uint8Array(exports.memory.buffer, at, exports.djs_base_len()).slice();
     ref = { kind: REFERENCE_BASE, bytes, hash: fnv1a64(bytes) };
     references.set(module, ref);
   }
   return ref;
+}
+
+/** The exports of an instance that `provideBase` and `rememberBase` use. */
+export interface BaseExports {
+  memory: WebAssembly.Memory;
+  djs_base_ptr?(): number;
+  djs_base_len?(): number;
+  djs_base_inject_ptr?(len: number): number;
+  djs_base_inject?(): number;
+}
+
+/**
+ * Gives a fresh instance of `module` the base snapshot an earlier instance of it decoded
+ * (D2252): the module ships the base coded, and an instance decodes it at its first use
+ * (a few ms) unless the host provides it. Call right after instantiating, before anything
+ * that creates a VM or reads the base; and `rememberBase` once a VM exists, so that later
+ * instances get it. The instance checks the bytes (length and hash) and decodes its own if
+ * they are refused. Returns whether the instance took them; false for a module without the
+ * exports (older, or with the base uncoded) or before an instance remembered the base.
+ */
+export function provideBase(module: object, exports: BaseExports): boolean {
+  const ref = references.get(module);
+  if (ref === undefined || exports.djs_base_inject_ptr === undefined || exports.djs_base_inject === undefined) {
+    return false;
+  }
+  const at = exports.djs_base_inject_ptr(ref.bytes.length);
+  if (at === 0) return false;
+  new Uint8Array(exports.memory.buffer, at, ref.bytes.length).set(ref.bytes);
+  return exports.djs_base_inject() === 1;
+}
+
+/** Keeps the base of `module` (from this instance, once per module) for `provideBase`. */
+export function rememberBase(module: object, exports: BaseExports): void {
+  baseReference(module, exports);
 }
 
 export interface EncodeOptions {

@@ -8,18 +8,24 @@ use djs_core::vm::{Vm, VmOptions};
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     let mut vm = Vm::new(VmOptions::default()).expect("out of memory making the base");
-    // Without growth slack: the image is copied into every VM (0043).
-    vm.heap_mut()
-        .compact_for_image()
-        .expect("out of memory compacting the base");
-    // Cheney: the base image is laid out by its graph, not the prelude's history (0101).
-    vm.collect_canonical()
-        .expect("out of memory collecting the base");
+    // Without growth slack (0043), canonical (0101), like cells together (D2251).
+    vm.prepare_base_image()
+        .expect("out of memory making the base image");
     let image = vm.bytes().to_vec();
     // Full verification (cell structure, references, build hash) at build time.
     if let Err(e) = Vm::from_bytes(image.clone(), VmOptions::default()) {
         panic!("the base image does not load: {e}");
     }
-    let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("base.img");
-    std::fs::write(&out, &image).expect("cannot write the base image");
+    let dir = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+    std::fs::write(dir.join("base.img"), &image).expect("cannot write the base image");
+    // The coded image of the `packed` feature (D2252), checked by decoding it.
+    if std::env::var_os("CARGO_FEATURE_PACKED").is_some() {
+        let packed = djs_lzrc::encode(&image);
+        assert_eq!(
+            djs_lzrc::decode(&packed, image.len()).as_deref(),
+            Ok(&image[..]),
+            "the coded base image does not decode"
+        );
+        std::fs::write(dir.join("base.lzr"), &packed).expect("cannot write the coded image");
+    }
 }

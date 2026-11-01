@@ -786,6 +786,15 @@ impl Vm {
         Ok(())
     }
 
+    /// Makes this (idle) VM's heap the base image, as djs-prelude's build does: tables
+    /// shrunk to their use (0043), collected by copying so that the image depends on its
+    /// graph alone (0101), then its cells ordered by kind for the module's gzip (D2251).
+    pub fn prepare_base_image(&mut self) -> Result<(), HeapError> {
+        self.heap.compact_for_image()?;
+        self.collect_canonical()?;
+        self.heap.order_for_image()
+    }
+
     /// A collection of `heap` alone (no finalization scheduling).
     fn collect_heap(heap: &mut Heap, how: Collection) -> Result<(), HeapError> {
         // Popped values above `sp` must not keep garbage alive (as at the interpreter's

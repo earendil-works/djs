@@ -17,18 +17,58 @@ use djs_core::heap::{HeapError, LoadError};
 use djs_core::vm::{Vm, VmOptions};
 
 /// The base image (`Vm::bytes` of a fresh, collected VM of this build).
+#[cfg(feature = "raw")]
 pub static BASE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/base.img"));
+
+/// The base image coded with djs-lzrc (D2252): for the wasm module, which decodes it once
+/// with [`unpack_base`].
+#[cfg(feature = "packed")]
+pub static BASE_PACKED: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/base.lzr"));
+
+/// The base image, decoded from [`BASE_PACKED`].
+#[cfg(feature = "packed")]
+pub fn unpack_base() -> alloc::vec::Vec<u8> {
+    // Coded and decoded by this build's build.rs: a failure is a build bug.
+    djs_lzrc::decode(BASE_PACKED, usize::MAX)
+        .unwrap_or_else(|e| panic!("the embedded base snapshot does not decode: {e:?}"))
+}
+
+/// The length of the base image (decoded from [`BASE_PACKED`]).
+#[cfg(feature = "packed")]
+pub fn base_len() -> usize {
+    djs_lzrc::decoded_len(BASE_PACKED).expect("the coded base has a header")
+}
+
+/// Whether `bytes` are the base image, by the coded image's length and FNV-1a hash: for a
+/// copy a host decoded once for many instances (D2252).
+#[cfg(feature = "packed")]
+pub fn is_base(bytes: &[u8]) -> bool {
+    djs_lzrc::matches(BASE_PACKED, bytes)
+}
 
 /// A new VM from [`BASE`]. `opts.prelude` is ignored: the base has the prelude.
 /// Fails only if the memory limit is smaller than the base.
+#[cfg(feature = "raw")]
 pub fn new_vm(opts: VmOptions) -> Result<Vm, HeapError> {
     new_vm_reserved(opts, 0)
 }
 
 /// [`new_vm`] with the arena capacity of a heap of `live` bytes
 /// ([`Vm::from_base_reserved`]).
+#[cfg(feature = "raw")]
 pub fn new_vm_reserved(opts: VmOptions, live: usize) -> Result<Vm, HeapError> {
-    match Vm::from_base_reserved(BASE, opts, live) {
+    new_vm_from_reserved(BASE, opts, live)
+}
+
+/// A new VM from `base`, which is this build's base image ([`BASE`] or
+/// [`unpack_base`]'s).
+pub fn new_vm_from(base: &[u8], opts: VmOptions) -> Result<Vm, HeapError> {
+    new_vm_from_reserved(base, opts, 0)
+}
+
+/// [`new_vm_from`] with the arena capacity of a heap of `live` bytes.
+pub fn new_vm_from_reserved(base: &[u8], opts: VmOptions, live: usize) -> Result<Vm, HeapError> {
+    match Vm::from_base_reserved(base, opts, live) {
         Ok(vm) => Ok(vm),
         Err(LoadError::TooLarge) => Err(HeapError::OutOfMemory),
         // Made by this build's build.rs and verified there: anything else is a build bug.
@@ -36,15 +76,14 @@ pub fn new_vm_reserved(opts: VmOptions, live: usize) -> Result<Vm, HeapError> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "raw"))]
 mod tests {
     use super::*;
     use alloc::vec::Vec;
 
     fn fresh_image() -> Vec<u8> {
         let mut vm = Vm::new(VmOptions::default()).unwrap();
-        vm.heap_mut().compact_for_image().unwrap();
-        vm.collect_canonical().unwrap();
+        vm.prepare_base_image().unwrap();
         vm.bytes().to_vec()
     }
 
@@ -75,5 +114,13 @@ mod tests {
             ..VmOptions::default()
         };
         assert_eq!(new_vm(small).err(), Some(HeapError::OutOfMemory));
+    }
+
+    /// The coded image decodes to the image.
+    #[cfg(feature = "packed")]
+    #[test]
+    fn packed_is_the_base() {
+        assert_eq!(unpack_base(), BASE);
+        assert!(BASE_PACKED.len() < BASE.len() / 3);
     }
 }

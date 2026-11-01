@@ -54,6 +54,104 @@ impl Heap {
         Ok(())
     }
 
+    /// Reorders the cells of a collected image by kind (in `CellKind` order, the roots
+    /// cell first), strings by their content and every other kind in its current order
+    /// (0122, D2251). An image ships in the module, where gzip finds far more repeats
+    /// in runs of like cells (templates next to templates, bytecode next to bytecode)
+    /// than in a breadth-first walk's mix. The order is a function of the input image,
+    /// so a canonical image stays canonical. Only for the base image's build: offsets
+    /// change, so it updates every traced reference and, as a collection does, clears the
+    /// templates' offset caches and rehashes Map/Set indexes.
+    pub fn order_for_image(&mut self) -> Result<(), HeapError> {
+        use super::cells::{Header, Str8};
+        use super::walk::{Slot, for_each_slot};
+        use crate::value::{Obj, Value};
+        let cells: Vec<super::walk::CellInfo> = self.cells().collect();
+        assert!(
+            cells
+                .first()
+                .is_some_and(|c| c.offset == 0 && c.kind == CellKind::Roots),
+            "order_for_image: no roots cell at 0"
+        );
+        let a = self.arena();
+        let data = |c: &super::walk::CellInfo| -> &[u8] {
+            a.slice(c.offset + Str8::DATA.offset, c.size - Str8::DATA.offset)
+        };
+        let is_str = |k: CellKind| matches!(k, CellKind::Str8 | CellKind::Str16);
+        let mut order: Vec<usize> = (1..cells.len()).collect();
+        order.sort_by(|&x, &y| {
+            let (cx, cy) = (&cells[x], &cells[y]);
+            (cx.kind as u8).cmp(&(cy.kind as u8)).then_with(|| {
+                if is_str(cx.kind) {
+                    data(cx).cmp(data(cy)).then(cx.offset.cmp(&cy.offset))
+                } else {
+                    cx.offset.cmp(&cy.offset)
+                }
+            })
+        });
+        order.insert(0, 0);
+        // New offsets, by old cell index (cells are in address order: binary search).
+        let mut new_at = alloc::vec![0u32; cells.len()];
+        let mut bytes = alloc::vec![0u8; a.len() as usize];
+        let mut at = 0u32;
+        for &i in &order {
+            let c = &cells[i];
+            new_at[i] = at;
+            bytes[at as usize..(at + c.size) as usize].copy_from_slice(a.slice(c.offset, c.size));
+            at += c.size;
+        }
+        assert_eq!(at, a.len(), "order_for_image: cells do not cover the arena");
+        let moved = |old: u32| -> u32 {
+            match cells.binary_search_by_key(&old, |c| c.offset) {
+                Ok(i) => new_at[i],
+                Err(_) => panic!("order_for_image: a reference to {old} is not a cell"),
+            }
+        };
+        let limit = a.limit() as usize;
+        let mut arena = super::Arena::from_bytes(bytes, limit);
+        let mut collections = Vec::new();
+        for &i in &order {
+            let (c, off) = (&cells[i], new_at[i]);
+            if c.kind == CellKind::FuncTemplate {
+                // (Before its IC ref is updated: the slots are cleared where they are.)
+                super::gc::clear_offset_caches(&mut arena, off);
+            } else if c.kind == CellKind::Object
+                && super::ObjectClass::from_u32(arena.get(off, Object::CLASS)).is_some_and(|k| {
+                    matches!(
+                        k,
+                        super::ObjectClass::Map
+                            | super::ObjectClass::Set
+                            | super::ObjectClass::WeakMap
+                            | super::ObjectClass::WeakSet
+                    )
+                })
+            {
+                // Their indexes hash object keys by offset (D1381).
+                collections.push(off);
+            }
+            for_each_slot(c.kind, off, c.size, |slot| match slot {
+                Slot::Value(s) => {
+                    let v: Value = arena.read(s);
+                    if let Some(t) = v.ref_offset() {
+                        let bits = (v.to_bits() & !0xFFFF_FFFF) | moved(t) as u64;
+                        arena.write(s, Value::from_raw(bits));
+                    }
+                }
+                Slot::Ref(s) => {
+                    if let Some(t) = arena.read::<Ref>(s).get() {
+                        arena.write(s, Ref(moved(t)));
+                    }
+                }
+            });
+            debug_assert_eq!(arena.get(off, Header::SIZE), c.size);
+        }
+        self.arena = arena;
+        for o in collections {
+            self.collection_rehash(Obj(o));
+        }
+        Ok(())
+    }
+
     /// A new ValueArray with room for `cap` values holding the first `len` of `arr`.
     fn copy_value_array(&mut self, arr: u32, len: u32, cap: u32) -> Result<u32, HeapError> {
         let new = self.alloc_value_array(cap.max(1))?;
