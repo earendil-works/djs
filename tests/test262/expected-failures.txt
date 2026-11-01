@@ -88,9 +88,6 @@ language/eval-code/indirect/var-env-var-init-global-exstng.js: Test262Error: x d
 language/eval-code/indirect/var-env-var-init-global-new.js: Test262Error: x should be an own property
 language/eval-code/indirect/var-env-var-non-strict.js: ReferenceError: 'x' is not defined
 language/expressions/arrow-function/scope-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/expressions/bitwise-and/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
-language/expressions/bitwise-or/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
-language/expressions/bitwise-xor/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/expressions/class/elements/private-getter-is-not-a-own-property.js: TypeError: not a function
 language/expressions/class/elements/private-setter-is-not-a-own-property.js: TypeError: not a function
 language/expressions/class/scope-gen-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
@@ -99,83 +96,17 @@ language/expressions/class/scope-setter-paramsbody-var-open.js: Test262Error: Ex
 language/expressions/class/scope-static-gen-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/class/scope-static-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/class/scope-static-setter-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/expressions/compound-assignment/S11.13.2_A7.10_T1.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.10_T2.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.10_T4.js: Test262Error: Expected true but got false
-language/expressions/compound-assignment/S11.13.2_A7.11_T1.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.11_T2.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.11_T4.js: Test262Error: Expected true but got false
-language/expressions/compound-assignment/S11.13.2_A7.1_T1.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.1_T2.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.1_T4.js: Test262Error: Expected true but got false
-language/expressions/compound-assignment/S11.13.2_A7.2_T1.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.2_T2.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.2_T4.js: Test262Error: Expected true but got false
-language/expressions/compound-assignment/S11.13.2_A7.3_T1.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.3_T2.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.3_T4.js: Test262Error: Expected true but got false
-language/expressions/compound-assignment/S11.13.2_A7.4_T1.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.4_T2.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.4_T4.js: Test262Error: Expected true but got false
-language/expressions/compound-assignment/S11.13.2_A7.5_T1.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.5_T2.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.5_T4.js: Test262Error: Expected true but got false
-language/expressions/compound-assignment/S11.13.2_A7.6_T1.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.6_T2.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.6_T4.js: Test262Error: Expected true but got false
-language/expressions/compound-assignment/S11.13.2_A7.7_T1.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.7_T2.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.7_T4.js: Test262Error: Expected true but got false
-language/expressions/compound-assignment/S11.13.2_A7.8_T1.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.8_T2.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.8_T4.js: Test262Error: Expected true but got false
-language/expressions/compound-assignment/S11.13.2_A7.9_T1.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.9_T2.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/compound-assignment/S11.13.2_A7.9_T4.js: Test262Error: Expected true but got false
-language/expressions/division/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
-language/expressions/exponentiation/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/expressions/function/scope-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/generators/scope-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/instanceof/primitive-prototype-with-primitive.js: TypeError: invalid 'instanceof' right operand
 language/expressions/instanceof/prototype-getter-with-object-throws.js: Test262Error: Expected a DummyError to be thrown but no exception was thrown at all
 language/expressions/instanceof/prototype-getter-with-object.js: Test262Error: [] should be instance of Function.prototype
-language/expressions/left-shift/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
-language/expressions/logical-assignment/lgcl-and-assignment-operator-lhs-before-rhs.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/logical-assignment/lgcl-and-assignment-operator-namedevaluation-arrow-function.js: Test262Error: value Expected SameValue(«""», «"value"») to be true
-language/expressions/logical-assignment/lgcl-and-assignment-operator-namedevaluation-class-expression.js: Test262Error: value Expected SameValue(«""», «"value"») to be true
-language/expressions/logical-assignment/lgcl-and-assignment-operator-namedevaluation-function.js: Test262Error: value Expected SameValue(«""», «"value"») to be true
-language/expressions/logical-assignment/lgcl-nullish-assignment-operator-lhs-before-rhs.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/logical-assignment/lgcl-nullish-assignment-operator-namedevaluation-arrow-function.js: Test262Error: value Expected SameValue(«""», «"value"») to be true
-language/expressions/logical-assignment/lgcl-nullish-assignment-operator-namedevaluation-class-expression.js: Test262Error: value Expected SameValue(«""», «"value"») to be true
-language/expressions/logical-assignment/lgcl-nullish-assignment-operator-namedevaluation-function.js: Test262Error: value Expected SameValue(«""», «"value"») to be true
-language/expressions/logical-assignment/lgcl-or-assignment-operator-lhs-before-rhs.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/logical-assignment/lgcl-or-assignment-operator-namedevaluation-arrow-function.js: Test262Error: value Expected SameValue(«""», «"value"») to be true
-language/expressions/logical-assignment/lgcl-or-assignment-operator-namedevaluation-class-expression.js: Test262Error: value Expected SameValue(«""», «"value"») to be true
-language/expressions/logical-assignment/lgcl-or-assignment-operator-namedevaluation-function.js: Test262Error: value Expected SameValue(«""», «"value"») to be true
-language/expressions/member-expression/computed-reference-null-or-undefined.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/modulus/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
-language/expressions/multiplication/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/expressions/object/computed-property-name-topropertykey-before-value-evaluation.js: Test262Error: Expected SameValue(«"bad"», «"ok"») to be true
 language/expressions/object/scope-gen-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/object/scope-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/object/scope-setter-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/optional-chaining/optional-call-preserves-this.js: TypeError: cannot read property '_b' of undefined
-language/expressions/postfix-decrement/S11.3.2_A6_T1.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/postfix-decrement/S11.3.2_A6_T2.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/postfix-decrement/S11.3.2_A6_T3.js: Test262Error: Expected true but got false
-language/expressions/postfix-increment/S11.3.1_A6_T1.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/postfix-increment/S11.3.1_A6_T2.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/postfix-increment/S11.3.1_A6_T3.js: Test262Error: Expected true but got false
-language/expressions/prefix-decrement/S11.4.5_A6_T1.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/prefix-decrement/S11.4.5_A6_T2.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/prefix-decrement/S11.4.5_A6_T3.js: Test262Error: Expected true but got false
-language/expressions/prefix-increment/S11.4.4_A6_T1.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/prefix-increment/S11.4.4_A6_T2.js: Test262Error: Expected a TypeError but got a Test262Error
-language/expressions/prefix-increment/S11.4.4_A6_T3.js: Test262Error: Expected true but got false
 language/expressions/property-accessors/S11.2.1_A4_T3.js: Test262Error: #1: typeof Function.prototype === "function". Actual: object
-language/expressions/right-shift/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
-language/expressions/subtraction/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
-language/expressions/unsigned-right-shift/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/global-code/script-decl-func-err-non-configurable.js: Test262Error: writable, non-enumerable data property Expected a TypeError to be thrown but no exception was thrown at all
 language/global-code/script-decl-func.js: TypeError: 'configurable' is read-only
 language/identifier-resolution/assign-to-global-undefined.js: expected runtime ReferenceError, but no error was thrown

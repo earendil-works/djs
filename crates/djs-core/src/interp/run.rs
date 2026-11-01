@@ -125,6 +125,7 @@ mod fast {
     pub const RETURN_UNDEF: u8 = Op::ReturnUndef as u8;
     pub const CALL_INTRINSIC: u8 = Op::CallIntrinsic as u8;
     pub const GET_ELEM: u8 = Op::GetElem as u8;
+    pub const GET_ELEM2: u8 = Op::GetElem2 as u8;
     pub const PUT_ELEM: u8 = Op::PutElem as u8;
     pub const GET_FIELD: u8 = Op::GetField as u8;
     pub const GET_METHOD: u8 = Op::GetMethod as u8;
@@ -1200,7 +1201,7 @@ impl<'h> Exec<'h> {
             fast::RETURN => return self.fast_return(Op::Return),
             fast::RETURN_UNDEF => return self.fast_return(Op::ReturnUndef),
             fast::CALL_INTRINSIC => return self.fast_intrinsic(),
-            fast::GET_ELEM | fast::PUT_ELEM => return self.fast_elem(sp0),
+            fast::GET_ELEM | fast::GET_ELEM2 | fast::PUT_ELEM => return self.fast_elem(sp0),
             fast::GET_FIELD | fast::GET_METHOD | fast::PUT_FIELD => return self.fast_field(sp0),
             _ => return false,
         }
@@ -1292,6 +1293,7 @@ impl<'h> Exec<'h> {
     #[inline(never)]
     fn fast_elem(&mut self, sp0: u32) -> bool {
         let put = self.byte(self.pc) == fast::PUT_ELEM;
+        let keep = self.byte(self.pc) == fast::GET_ELEM2;
         let k = if put { 1 } else { 0 };
         let (o, key) = (self.top(k + 1), self.top(k));
         let Some((obj, i)) = o
@@ -1309,6 +1311,9 @@ impl<'h> Exec<'h> {
             }
             self.sp -= 3;
             self.advance(Op::PutElem, sp0);
+        } else if keep {
+            self.push(old);
+            self.advance(Op::GetElem2, sp0);
         } else {
             self.sp -= 1;
             self.set(self.sp - 1, old);
@@ -1997,6 +2002,13 @@ impl<'h> Exec<'h> {
                     return self.get_property(o, key);
                 }
             }
+            Op::GetElem2 => {
+                let (o, k) = (self.top(1), self.top(0));
+                let key = self.property_key(o, k)?;
+                self.push(Value::UNDEFINED);
+                self.pc = next;
+                return self.get_property(o, key);
+            }
             Op::GetElemMethod => {
                 let (o, k) = (self.top(1), self.top(0));
                 let key = self.property_key(o, k)?;
@@ -2602,9 +2614,24 @@ impl<'h> Exec<'h> {
             | Op::Le
             | Op::Ge => &[(1, NUMBER), (0, NUMBER)],
             Op::Neg | Op::Plus | Op::BNot | Op::Inc | Op::Dec | Op::ToNumeric => &[(0, NUMBER)],
-            Op::ToString | Op::GetElem | Op::GetElemMethod | Op::Delete | Op::GetSuperElem => {
-                &[(0, STRING)]
+            Op::GetElem | Op::GetElem2 | Op::GetElemMethod | Op::Delete
+                if self.top(1).is_nullish() && self.top(0).as_object().is_some() =>
+            {
+                // RequireObjectCoercible(base) comes before ToPropertyKey(key) (qjs's
+                // message: the key is not converted).
+                let msg = if self.top(1).is_undefined() {
+                    "cannot read property of undefined"
+                } else {
+                    "cannot read property of null"
+                };
+                return Some(type_error(msg));
             }
+            Op::ToString
+            | Op::GetElem
+            | Op::GetElem2
+            | Op::GetElemMethod
+            | Op::Delete
+            | Op::GetSuperElem => &[(0, STRING)],
             Op::DefineElem
             | Op::DefineClassMethodElem
             | Op::DefineClassField
@@ -2671,10 +2698,23 @@ impl<'h> Exec<'h> {
         for &(k, hint) in checks {
             let slot = self.sp - 1 - k;
             if self.get(slot).as_object().is_some() {
+                if k == 0 && checks.len() == 2 && hint == NUMBER && !self.is_relational(op) {
+                    // ApplyStringOrNumericBinaryOperator: ToNumeric(lhs) completes, and
+                    // throws for a Symbol, before the rhs is converted.
+                    let lhs = self.top(1);
+                    if lhs.as_symbol().is_some() {
+                        return Some(conv::to_number(self.heap, lhs).map(|_| None));
+                    }
+                }
                 return Some(self.call_to_primitive(slot, hint));
             }
         }
         None
+    }
+
+    /// `<`, `>`, `<=`, `>=`: both operands become primitives before either is a number.
+    fn is_relational(&self, op: Op) -> bool {
+        matches!(op, Op::Lt | Op::Gt | Op::Le | Op::Ge)
     }
 
     /// Calls `%ToPrimitive(stack[slot], hint)`; its result replaces `stack[slot]` and the

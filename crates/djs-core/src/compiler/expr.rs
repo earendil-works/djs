@@ -268,6 +268,12 @@ impl Parser<'_, '_> {
                 }
             }
             self.code().drop();
+            if let LValue::Name { r, .. } = lv
+                && !parenthesized
+            {
+                // NamedEvaluation, as for `=`.
+                self.name_hint = Some((self.f.refs[r as usize].atom, self.tok.start));
+            }
             self.parse_assign(no_in)?;
             self.emit_store(lv, true);
             self.code().jump(l_end);
@@ -391,9 +397,8 @@ impl Parser<'_, '_> {
                 self.code().get_field(atom, 0);
             }
             LValue::Elem { pos } => {
-                self.code().dup2();
                 self.mark(pos);
-                self.code().get_elem();
+                self.code().get_elem2();
             }
             LValue::Private { pos } => {
                 self.code().dup2();
