@@ -479,7 +479,6 @@ fn emit_function(
         script,
         src_start: f.src_start,
         src_end: f.src_end,
-        ..TemplateParts::default()
     };
     alloc_template(heap, &parts).map_err(|e| match e {
         TemplateError::Heap(_) => PErr::Oom,

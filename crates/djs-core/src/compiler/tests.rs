@@ -321,6 +321,65 @@ fn errors() {
             2,
             1,
         ),
+        // Exceptions and lexical scoping (0025).
+        ("try {}", "expecting catch or finally", 1, 7),
+        ("try { throw 1 }", "expecting catch or finally", 1, 16),
+        ("try {} catch () {}", "identifier expected", 1, 15),
+        (
+            "try {} catch (eval) {}",
+            "invalid variable name in strict mode",
+            1,
+            15,
+        ),
+        ("try {} catch (e, f) {}", "expecting ')'", 1, 16),
+        (
+            "try {} catch (e) { let e }",
+            "invalid redefinition of lexical identifier",
+            1,
+            26,
+        ),
+        (
+            "try {} catch (e) { function e(){} }",
+            "invalid redefinition of lexical identifier",
+            1,
+            29,
+        ),
+        (
+            "try {} catch ([e]) {}",
+            "destructuring catch parameters are not supported yet",
+            1,
+            15,
+        ),
+        (
+            "switch (1) { case 1: let a; case 2: let a; }",
+            "invalid redefinition of lexical identifier",
+            1,
+            42,
+        ),
+        (
+            "function f(){} let f",
+            "invalid redefinition of global identifier",
+            1,
+            21,
+        ),
+        (
+            "{ function f(){} function f(){} }",
+            "invalid redefinition of lexical identifier",
+            1,
+            27,
+        ),
+        (
+            "for (let i;;) { var i }",
+            "invalid redefinition of lexical identifier",
+            1,
+            23,
+        ),
+        (
+            "try { break } finally {}",
+            "break must be inside loop or switch",
+            1,
+            7,
+        ),
         // Not supported yet.
         (
             "async function f() {}",
@@ -351,12 +410,6 @@ fn errors() {
         (
             "for (x in y) {}",
             "for-in and for-of loops are not supported yet",
-            1,
-            1,
-        ),
-        (
-            "try {} catch {}",
-            "try statements are not supported yet",
             1,
             1,
         ),
@@ -937,5 +990,47 @@ fn end_to_end_exceptions() {
             "f\n=> ok",
         ),
         ("throw 'top'", "throw top"),
+    ]);
+}
+
+/// Lexical scoping edge cases (P1-4). Outputs checked against qjs.
+#[test]
+fn end_to_end_lexical() {
+    run_cases(&[
+        (
+            "typeof x; let x = 1",
+            "throw ReferenceError: x is not initialized",
+        ),
+        (
+            "let x = 1; { x; let x = 2 }",
+            "throw ReferenceError: x is not initialized",
+        ),
+        ("let x = 1; { let x = 2; return x }", "=> 2"),
+        (
+            "switch (1) { case 0: let y = 1; case 1: return y }",
+            "throw ReferenceError: y is not initialized",
+        ),
+        ("switch (0) { case 0: let y = 1; case 1: return y }", "=> 1"),
+        ("const f = () => z; let z = 3; return f()", "=> 3"),
+        (
+            "function g() { return w } g(); let w",
+            "throw ReferenceError: w is not initialized",
+        ),
+        (
+            "let a = 1; { function a2() { return a } let a = 2; return a2() }",
+            "=> 2",
+        ),
+        ("let x = 'outer'; { let x = 'inner' } return x", "=> outer"),
+        ("const c = 1; { const c = 2 } return c", "=> 1"),
+        (
+            "let s = 0; for (let i = 0; i < 3; i++) { let i = 10; s += i } return s",
+            "=> 30",
+        ),
+        (
+            "let r = []; for (let i = 0; i < 3; i++) { r[i] = () => i; i += 0 } return r[0]() + r[2]()",
+            "=> 2",
+        ),
+        ("{ let q = 1 } return typeof q", "=> undefined"),
+        ("let fn; { let k = 5; fn = () => k } return fn()", "=> 5"),
     ]);
 }

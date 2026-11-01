@@ -492,7 +492,9 @@ impl<'a, 'h> Parser<'a, 'h> {
     pub fn declare_lexical(&mut self, name: Atom, kind: VarKind, pos: u32) -> PResult<VarId> {
         if let Some(v) = self.f.find_in_scope(self.scope, name) {
             let msg = match self.f.vars[v as usize].kind {
+                // Function declarations at the function level behave like `var`.
                 VarKind::Var => self.var_conflict_message(),
+                VarKind::Func if self.scope == BODY_SCOPE => self.var_conflict_message(),
                 VarKind::Param => "invalid redefinition of parameter name",
                 _ => "invalid redefinition of lexical identifier",
             };
