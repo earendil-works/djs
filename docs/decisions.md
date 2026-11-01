@@ -3395,3 +3395,22 @@ date: 2026-11-04 · by: lexer · issue: 0082
   property" drops the key, as qjs.
 - The remaining failures are classified in TESTING.md "Known differences".
 
+## D1791: Generated files are regenerated after a rebase, not merged; line lists union
+date: 2026-11-01 · by: devflow · issue: 0079
+In 6 h on main, docs/decisions.md changed in 73 commits, builtins/gen/prelude.js in 43,
+resume-points.txt in 40, bytecode/intrinsics.rs in 32, intrinsics.d.ts in 29, the
+ratchets in 23 and 19, and js/src/layout.generated.ts in 21; agents resolved the same
+conflicts on every retry while main moved, and some squashed their branches to cope.
+Now (see work/README.md "Merging and generated files"): append-style line files merge
+with git's built-in `union` driver; generated files merge through
+`scripts/merge-driver.py` (keep one side; for intrinsics.rs only when every conflict lies
+in the `INTRINSICS` table) and merge-to-main regenerates them after the rebase
+(`scripts/regen.sh`: bgen, `scripts/gen-intrinsics.py`, the layout test) and commits the
+result before the gate. gen-intrinsics.py repeats the `table_matches_sources` rules in
+Python, because when the table is stale djs-prelude's build script fails before that
+test can print the replacement; the test stays the check.
+The ratchets are not regenerated with `--update` after a rebase: that would accept any
+new failure the merged code has, i.e. hide exactly the regressions the gate is for. A
+union keeps both sides' lines; the cost is that a line one side removed in a conflicting
+hunk comes back as a stale entry (reported, not failing) and could hide a regression of
+that one test until the next `--update`.

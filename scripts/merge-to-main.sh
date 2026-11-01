@@ -35,6 +35,14 @@ done
 echo "$branch $(date)" > "$lock/owner"
 trap 'rm -rf "$lock"' EXIT
 
+# The fast-forward at the end needs a clean primary checkout: check now, not after a
+# full gate (0079).
+if ! git -C "$main_root" diff --quiet || ! git -C "$main_root" diff --cached --quiet; then
+  echo "merge-to-main: the primary checkout ($main_root) has uncommitted changes;" \
+       "the coordinator commits there under the lock (scripts/with-merge-lock.sh)" >&2
+  exit 1
+fi
+
 echo "== rebase onto main"
 # Generated files merge through drivers and are regenerated below (D1791).
 ./scripts/setup-merge-drivers.sh
