@@ -103,6 +103,18 @@ structural changes.
     primary checkout: start, branch, lock wait, rebase+regen, gate, total seconds,
     outcome (merged / failed-rebase / failed-gate / failed-ff). That is the data for 5/6.
 
+- After 1–4 (14:50–15:43, from merge-log.tsv / gate-steps.tsv): 10 merges in 53 min, all
+  first try; gates 88–198 s (median ~130) in the gate worktree at load 20–35; lock wait 0
+  for 8 of 10 (50 s for 2); lock held ~47 % (89 % before). Warm gate, three runs:
+  test step 58–80 s / 222–287 CPU-s, test262 18–30 / 235–261, difftest 8–13 / 94–106,
+  rest ~10 s; total 94–192 s / 564–739 CPU-s. Recommendation: hold 5 and 6.
+- Remaining big items in the gate: test262 `built-ins/RegExp/property-escapes` (613
+  tests, ~190 of ~250 CPU-s at ~1.7 s each); new slow djs-core unit tests
+  (`out_of_memory_is_a_catchable_error_at_every_limit` 21.5 s,
+  `backends_agree_in_every_mode` 18.3 s, `strong_weak_refs_never_lose_their_targets`
+  6.1 s, `a_failing_allocation_collects_and_retries` 4.1 s; the lib test binary is back to
+  25 s wall / 102 CPU-s); decodeURI A2.5_T1 11 s and copyWithin "detached" 7 s in debug.
+
 ## Findings
 
 ## Proposals
