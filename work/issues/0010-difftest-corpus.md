@@ -1,7 +1,7 @@
 # 0010: Differential corpus and difftest runner (oracle side)
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0010-difftest-corpus
 depends-on: 0002
 touches: crates/djs-difftest/, tests/corpus/, scripts/difftest-*, TESTING.md (difftest how-to section only)
