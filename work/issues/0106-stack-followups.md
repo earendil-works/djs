@@ -1,7 +1,7 @@
 # 0106: Stack trace follow-ups: Error.prepareStackTrace, eval/Function SyntaxError frames
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0106-stack-followups
 depends-on: 0105
 touches: builtins/error.ts + crates/djs-core/src/builtins/, crates/djs-core/src/interp/ (stack capture), tests/corpus/
