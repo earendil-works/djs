@@ -7,7 +7,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
-| 0108 | Name-inference bug, syntax messages, statics order | infra | .worktrees/infra |
+| 0109 | Guide chapters: builtins, host interface, testing | infra | .worktrees/infra |
 | 0103 | Human-facing documentation: option A (own generator + live examples, owner's choice), implementing | docs | .worktrees/docs |
 | 0101 | Mark-compact collection (design first) | heap | .worktrees/heap |
 | 0107 | Direct native-to-closure calls; cold arms out of line | perf | .worktrees/perf |
@@ -79,6 +79,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0108 | Name inference, syntax messages, statics order | 392ec528 (agent infra; D2070-D2072) |
 | 0106 | Stack follow-ups | e9887a60 (agent infra; prepareStackTrace D2050; <input> frames D2051; prototype-last order D2052) |
 | 0105 | Stack trace details | 5c512a7d (agent infra; stackTraceLimit; qjs call positions; difftest stacks directive) |
 | 0102 | pi polish | 1d5336a7 (agent infra; pi suite 221/226 unchanged; captureStackTrace; REPL completion and .step) |
