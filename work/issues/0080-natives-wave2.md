@@ -1,6 +1,6 @@
 # 0080: for-of / iteration fast paths, natives wave 2
 
-status: in-progress
+status: done
 agent: infra
 branch: issue/0080-natives-wave2
 depends-on: 0063
@@ -106,3 +106,6 @@ per 10k elements in debug), and the next hot builtins are still bytecode.
   that shrink during `fill`/`freeze`/`subarray` (length-tracking views).
 
 ## Result
+
+## Result (coordinator)
+Merged in four steps (491db8e, 03c79ff, ffc1811, fd5a6d1); see the Log. The remaining items moved to new issues: the @fast move and the fromCharCode/URI entries -> 0091 (after 0085); native collect-and-retry, resizable TA, the JSON.stringify slow path -> 0090.
