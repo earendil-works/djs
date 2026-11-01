@@ -205,3 +205,193 @@ Workloads:
 - test262 decodeURI (Script-mode globals): −13%.
 - The pi-like script and float: within noise, as predicted; their time is in the builtin
   language.
+
+## 7. Part 2 design: shapes and the leaner layout (0083)
+
+Status: proposal (0083), for review before implementing. Decision ids D1830+.
+
+### 7.1 What we have and what we want
+
+Today every object with properties owns a `PropTable`: a 24-byte header plus 24-byte
+entries (key, flags, value, setter), with capacity doubling and a minimum of 4. So
+`{a, b, c, d}` takes 24 B (object) + 120 B (table) = 144 B, and each of the 424 builtin
+functions of the base image carries its own 72-byte `length`/`name` table (0052 S2). The
+0062 caches verify a key at a table index on every hit.
+
+Goals:
+- **Memory and image size:**
+  - ~2x less memory per small object;
+  - the builtins' `length`/`name` tables become one shared structure;
+  - 16-byte entries where tables remain.
+- **Speed:** IC hits by one identity compare, cached property *additions* (constructors'
+  `this.x = v`), and receiver own-miss proofs for prototype caches.
+- **Stable contracts:** no change to elements: `get_element_fast`, `set_element_fast`
+  and `array_length` (infra's 0080) keep their contracts. The `Heap` property API
+  (`get_own_property`, `define_own_property`, `lookup_property`, …) keeps its signatures.
+
+### 7.2 Layout
+
+An object's `PROPS` field points to one of three things:
+- nothing (null): no named properties;
+- a **property value block** `PropValues` (new cell kind): `SHAPE: Ref`, `LEN: u32`
+  (slots in use), then `VALUES: [Value]` with capacity. Shape mode;
+- a **dictionary** `PropTable` (as today, but with 16-byte entries, below). Dictionary
+  mode, marked by the object header flag `OBJ_DICTIONARY` (so the mode needs no load of
+  the target cell's kind).
+
+The `Object` cell stays 24 bytes. The prototype stays in the object, not in the shape:
+- changing a prototype touches no shape;
+- objects with the same keys share a shape whatever their prototype;
+- 0062's prototype caches already check the prototype separately.
+
+A **shape** (new cell kind `Shape`, 24 B) has:
+- `PARENT: Ref`: the shape without the last property;
+- `DESCS: Ref`: a `U32Array` of `[key atom, flags]` pairs (8 B per property) in insertion
+  order;
+- `COUNT: u32`: the number of properties = the slots used;
+- `TRANSITIONS: Ref`.
+
+`DESCS` is shared along a chain:
+- a child that extends the descriptor array's current owner appends in place, if there
+  is capacity, and becomes the owner (V8's descriptor sharing);
+- a second child of the same parent copies the prefix.
+
+So a chain of n shapes costs O(n) descriptor bytes, not O(n²). A property's slot is its
+descriptor index.
+
+**Accessors:** an accessor's value slot holds an internal ref to an `AccessorPair` cell
+(new kind: `GETTER`, `SETTER`). Its flags mark it as an accessor. This is what lets
+dictionary entries shrink to 16 bytes: key u32, flags u32, value (a data value or the
+pair). That is 0052 S2's first item.
+
+**Sizes:**
+
+| object | today | shapes |
+| --- | ---: | ---: |
+| `{a, b, c, d}` | 144 B | 72 B (object 24 + values 16 + 4 × 8) |
+| a builtin function's `length`/`name` | 72 B table | 32 B values block + one shared shape |
+| a 5-key JSON record | 240 B (capacity 8) | 80 B |
+
+### 7.3 Transitions
+
+Adding a key (or a key with non-default flags) to a shape-mode object goes from shape `S`
+to the child for `(key, flags)`. The child is found in `S.TRANSITIONS`, or created and
+added there.
+- **Weak transitions:** `TRANSITIONS` is an `EphemeronArray` (D1382) of pairs `[child
+  shape, key | flags << 32 as an int]`, keyed by the child. A child shape dies with the
+  last object or descendant that uses it, and the GC clears its pair. Without this, a
+  program creating many distinct key sets would keep every shape alive forever. This
+  needs the ephemeron key check in walk.rs/gc.rs to accept internal refs, not only
+  objects and symbols.
+- **Lookup:** a linear scan; parents rarely have more than a few children.
+- **Bulk creation:** `new_object_from_entries` (JSON.parse, wire decode, object literals
+  with a known count) walks the transitions once per key and allocates the values block
+  at its exact size. JSON records with the same keys share one shape chain.
+- **Values growth:** the block doubles (minimum 4) when a key is added through property
+  definition, like tables today. `compact_for_image` shrinks blocks to their size.
+
+### 7.4 Dictionary mode
+
+Shapes stay small and shared. An object switches to dictionary mode (a 16-byte-entry
+`PropTable` in insertion order, keeping enumeration order) when:
+- it gets more than **32** properties;
+- a key is deleted, unless it is the last one added: then the object goes back to the
+  parent shape and the slot is cleared;
+- an existing property changes its attributes (`defineProperty` on an existing key,
+  freeze/seal);
+- it gets an array-index key in the table (`OBJ_INDEXED_PROPS`);
+- its shape already has **32** transitions (dynamic keys like `o[id] = v` must not grow
+  shape trees without bound);
+- it is a builtin namespace or prototype object of the realm (`InstallMethod`,
+  `InstallValue` and `InstallAccessor` targets, and the global object). These are
+  one-off objects, so a private table is smaller than a chain of unshared shapes. Their
+  dictionaries also shrink with the 16-byte entries.
+
+Dictionary mode is one-way, as in V8: objects never go back to shapes.
+
+### 7.5 GC, determinism, snapshots
+
+- **Ordinary cells:** shapes, descriptor arrays and values blocks are traced like any
+  other cell; the root shape is a `Roots` field. Nothing is keyed by an offset, so no
+  rehash is needed.
+- **Deterministic trees (D1090):** the shape tree is built in program order and is a
+  function of the history. The GC clears dead transitions deterministically, and Cheney
+  BFS gives the same collected image whatever the schedule. A transition that died and is
+  later needed again just creates a new shape cell, which is invisible to JS.
+- **Snapshots:** shapes are part of the image; the layout hash changes as for any layout
+  change. The base image's shape tree is built by the prelude, so it is identical on
+  every build of the same source (0032, 0072's native-vs-wasm check).
+- **Out-of-memory (D1600/D1700):** a transition allocates a shape and maybe a values
+  block or a descriptor array. As today, all allocations come before the commit
+  (`PROPS`/`SHAPE` written last), so 0070's retry stays valid for `put_field`,
+  `define_field`, `Set` and `CreateDataPropertyOrThrow`.
+
+### 7.6 The JS reader (reader.ts)
+
+`plain()` reads either mode, using `layout.generated.ts`:
+- `OBJ_DICTIONARY` set: the table with 16-byte entries;
+- otherwise: `PROPS` is a values block; its `SHAPE` gives `DESCS` and `COUNT`; entry i is
+  `DESCS[2i]`, `DESCS[2i+1]` and `VALUES[i]`. Accessors are skipped, as today.
+
+`array()` reads index keys from the table: arrays with sparse or attributed elements are
+always in dictionary mode. `checkHeap` gets the new kinds. docs/wire.md's
+reader section is updated; the wire format itself doesn't change.
+
+### 7.7 Inline caches (D1620/D1621) on shapes
+
+`IC_WORDS` goes from 3 to 4.
+- **Own read/write (shape mode):** the slot holds the shape's offset and the slot index.
+  A hit compares `values.SHAPE` with the cached shape, then reads or writes `VALUES[slot]`
+  (a write also checks the cached writable bit). This replaces the key check at the
+  index.
+- **Own read/write (dictionary mode):** unchanged, a verified table index. The global
+  object and the lexical record are dictionaries, so the global caches don't change.
+- **Additions:** `put_field` and `define_field` cache a transition (old shape, new shape,
+  slot, whether the values block must grow). A hit when the block has room writes the
+  value and the new `SHAPE` without any lookup. This is the constructor case that 0062
+  could not cache.
+- **Prototypes:** the slot also stores the receiver's shape (the 4th word). Equal shapes
+  prove the receiver has no own `key`, which replaces the per-hit `has_own_property`.
+  Dictionary receivers keep the per-hit check.
+- **Offsets and the GC:** shape offsets in a slot set `IC_OFFSET_SLOT`, so the collector
+  empties them (D1621), and warm and cold caches still behave the same. The rest of
+  D1620/D1621 stays.
+
+### 7.8 What else of 0052 S2
+
+- 16-byte entries: part of this design.
+- Shared `length`/`name`: shapes.
+- A slimmer template for privileged (prelude) functions: no `NAMES`, `LINES`, `SRC_*` or
+  `IC` fields, so about 48 B instead of 80 B. Independent of shapes.
+- The atom index at ~75% load: independent.
+
+I'd do the last two as their own small parts at the end, since they don't depend on
+shapes.
+
+### 7.9 Plan, in parts (each merged separately, with numbers)
+
+1. `AccessorPair` and 16-byte dictionary entries; reader update.
+2. Shapes for ordinary objects: `Shape`/`PropValues` cells, transitions, dictionary
+   fallbacks, bulk creation, namespaces and prototypes as dictionaries,
+   `compact_for_image`, walk/verify, reader.
+3. ICs on shapes: shape compare, transition caches, receiver-shape proofs.
+4. Optional: slim privileged templates; atom index load factor.
+
+**Expected:**
+- 2–3x less memory for small objects;
+- the base image shrinks by about 25 KB from parts 1–2 (about 6%), and parts 4 add the
+  rest of S2's estimate (70–90 KB in total);
+- faster property additions;
+- unchanged or slightly faster accesses.
+
+**Risk:** part 2 rewrites `heap/object.rs`'s storage layer (~1,500 lines). Every exotic
+class (arrays, String wrappers, typed arrays, functions, arguments, proxies) keeps its
+current special cases above the storage layer.
+
+### 7.10 Open questions
+
+- Values inline in the object (V8's in-object slack) would save the 16-byte block header
+  and one load, but objects can't grow in place under a copying GC with identity by
+  offset. I propose out-of-line blocks only.
+- The 32/32 limits are guesses; part 2 measures them on the engine track and the pi
+  bench.
