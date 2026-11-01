@@ -42,6 +42,25 @@ impl Insn {
         Insn { op, ..self }
     }
 
+    /// An instruction without immediates (`return` in place of a jump to one).
+    pub fn bare(op: Op, pc: u32) -> Insn {
+        debug_assert!(op.info().imms.is_empty());
+        Insn {
+            op,
+            pc,
+            imms: [0; 2],
+        }
+    }
+
+    /// A phase-1 `label` (placed before the instruction at `pc`).
+    pub fn label_at(id: u32, pc: u32) -> Insn {
+        Insn {
+            op: Op::Label,
+            pc,
+            imms: [id, 0],
+        }
+    }
+
     /// A phase-1 jump retargeted to label `l`.
     pub fn with_label(self, l: Label) -> Insn {
         let mut insn = self;

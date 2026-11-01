@@ -72,10 +72,9 @@ function 0.2 gen: params=1 locals=3 stack=3 captures=0
    32  throw
    33  return
    34  add  ; 15:15
-   35  put_loc loc2 (r)
-   38  get_loc loc2 (r)  ; 16:10
-   41  return
-   42  return_undef
+   35  set_loc loc2 (r)  ; 16:10
+   38  return
+   39  return_undef
 function 0.3 deleg: params=1 locals=1 stack=5 captures=0
   handler [101, 102) -> 102 depth 0
   handler [96, 97) -> 97 depth 0

@@ -16,12 +16,13 @@ use alloc::vec::Vec;
 
 use crate::bytecode::{Insn, Label, Op};
 
-/// Applies the rules until none matches.
-pub(super) fn simplify(mut code: Vec<Insn>) -> Vec<Insn> {
+/// Applies the rules until none matches. `label_count` grows by the labels the rules
+/// create.
+pub(super) fn simplify(mut code: Vec<Insn>, label_count: &mut u32) -> Vec<Insn> {
     // Cycles of jumps could retarget each other forever: a few passes are enough for
     // everything else.
     for _ in 0..16 {
-        let mut changed = thread_jumps(&mut code);
+        let mut changed = thread_jumps(&mut code, label_count);
         let mut out = Vec::with_capacity(code.len());
         let mut i = 0;
         while i < code.len() {
@@ -44,45 +45,93 @@ pub(super) fn simplify(mut code: Vec<Insn>) -> Vec<Insn> {
     code
 }
 
-/// Jumps to a `jump` go to its target instead (`if (x) break;` in a loop, `continue`
-/// to the update of a loop).
-fn thread_jumps(code: &mut [Insn]) -> bool {
-    let mut changed = false;
-    // For each label id: the target of the `jump` right after it, if there is one.
-    const NONE: u32 = u32::MAX;
-    let labels = code.iter().filter(|i| i.op == Op::Label).map(|i| i.imm(0));
-    let mut next_jump = vec![NONE; labels.max().map_or(0, |m| m as usize + 1)];
+/// Jump threading: a jump to a `jump` goes to its target instead (`if (x) break;` in a
+/// loop, `continue` to the update of a loop), a `jump` to a `return` returns, and the
+/// value a `&&` / `||` keeps for a condition is not tested twice (`if (a || b)` is `a;
+/// dup; jump_if_true L; drop; b; L: jump_if_false Else`: when `a` is true, the second
+/// test falls through, so the first one jumps past it).
+fn thread_jumps(code: &mut Vec<Insn>, label_count: &mut u32) -> bool {
+    const NONE: usize = usize::MAX;
+    // For each label id: the index of the first instruction after it that is no label.
+    let mut at = vec![NONE; *label_count as usize];
     let mut pending = 0;
     for (k, insn) in code.iter().enumerate() {
         if insn.op == Op::Label {
             pending += 1;
             continue;
         }
-        if insn.op == Op::Jump
-            && let Some(t) = insn.label()
-        {
-            for l in &code[k - pending..k] {
-                next_jump[l.imm(0) as usize] = t.0;
-            }
+        for l in &code[k - pending..k] {
+            at[l.imm(0) as usize] = k;
         }
         pending = 0;
     }
-    for insn in code.iter_mut() {
+    let target = |insn: &Insn| -> Option<usize> {
+        let k = *at.get(insn.label()?.0 as usize)?;
+        (k != NONE).then_some(k)
+    };
+    let cond = |op: Op| matches!(op, Op::JumpIfFalse | Op::JumpIfTrue);
+    let mut changed = false;
+    let mut label_after = vec![false; code.len()];
+    for k in 0..code.len() {
+        let insn = code[k];
         if !matches!(insn.op, Op::Jump | Op::JumpIfFalse | Op::JumpIfTrue) {
             continue;
         }
-        let Some(mut t) = insn.label() else { continue };
+        let Some(mut t) = target(&insn) else { continue };
         // A cycle of jumps (`for (;;) {}` after rotation) stops after a few steps.
+        let mut new = insn;
         for _ in 0..8 {
-            match next_jump.get(t.0 as usize) {
-                Some(&n) if n != NONE && n != t.0 => t = Label(n),
+            match (code[t].op, target(&code[t])) {
+                (Op::Jump, Some(n)) if n != t => {
+                    new = new.with_label(code[t].label().unwrap_or(Label(0)));
+                    t = n;
+                }
                 _ => break,
             }
         }
-        if insn.label() != Some(t) {
-            *insn = insn.with_label(t);
+        if insn.op == Op::Jump && matches!(code[t].op, Op::Return | Op::ReturnUndef) {
+            new = Insn::bare(code[t].op, insn.pc);
+        } else if k > 0
+            && code[k - 1].op == Op::Dup
+            && code.get(k + 1).is_some_and(|i| i.op == Op::Drop)
+            && cond(insn.op)
+            && cond(code[t].op)
+        {
+            // `dup; jump_if_x L; drop` with `L: jump_if_y M`.
+            let next = if insn.op == code[t].op {
+                code[t].label()
+            } else if code.get(t + 1).is_some_and(|i| i.op == Op::Label) {
+                Some(Label(code[t + 1].imm(0)))
+            } else {
+                label_after[t] = true;
+                None
+            };
+            if let Some(l) = next {
+                code[k - 1] = Insn::bare(Op::Nop, code[k - 1].pc);
+                code[k + 1] = Insn::bare(Op::Nop, code[k + 1].pc);
+                new = insn.with_label(l);
+            }
+        }
+        if new != insn {
+            code[k] = new;
             changed = true;
         }
+    }
+    if changed || label_after.contains(&true) {
+        // Without the removed `dup`s, with the new labels.
+        let mut out = Vec::with_capacity(code.len() + 4);
+        for (k, insn) in code.iter().enumerate() {
+            if insn.op != Op::Nop {
+                out.push(*insn);
+            }
+            if label_after[k] {
+                let pc = code.get(k + 1).map_or(insn.next_pc(), |i| i.pc);
+                out.push(Insn::label_at(*label_count, pc));
+                *label_count += 1;
+                changed = true;
+            }
+        }
+        *code = out;
     }
     changed
 }

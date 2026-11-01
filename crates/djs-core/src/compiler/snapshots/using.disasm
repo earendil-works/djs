@@ -9,9 +9,9 @@ function 0 <anonymous>: params=0 locals=1 stack=1 captures=0
    33  get_loc loc0 (<completion>)
    36  return
 function 0.0 f: params=1 locals=3 stack=7 captures=0
-  handler [64, 99) -> 112 depth 4
-  handler [56, 135) -> 40 depth 3
-  handler [5, 179) -> 192 depth 1
+  handler [64, 96) -> 109 depth 4
+  handler [56, 132) -> 40 depth 3
+  handler [5, 176) -> 189 depth 1
     0  call_intrinsic %UsingCreate 0
     5  get_arg arg0  ; 4:13
     8  pick 1  ; 4:9
@@ -22,7 +22,7 @@ function 0.0 f: params=1 locals=3 stack=7 captures=0
    22  call_intrinsic %GetIterator 1  ; 5:3
    27  dup
    28  get_field "next" ic0
-   35  jump -> 135
+   35  jump -> 132
    40  nip
    41  swap
    42  call_intrinsic %IteratorCloseThrow 1
@@ -35,59 +35,58 @@ function 0.0 f: params=1 locals=3 stack=7 captures=0
    67  pick 1  ; 6:11
    69  swap
    70  call_intrinsic %UsingAdd 2
-   75  put_loc loc2 (z)
-   78  get_loc loc2 (z)  ; 7:9
-   81  jump_if_false -> 99
-   86  undefined
-   87  gosub -> 126
-   92  drop
-   93  drop
-   94  jump -> 163
-   99  undefined
-  100  gosub -> 126
-  105  drop
-  106  drop
-  107  jump -> 135
-  112  pick 1
-  114  swap
-  115  call_intrinsic %UsingDisposeError 2
-  120  gosub -> 126
-  125  throw
-  126  pick 2
-  128  call_intrinsic %UsingDispose 1
-  133  drop
-  134  ret
-  135  dup2  ; 5:3
-  136  iter_next -> 56
-  141  iter_check_object
-  142  dup
-  143  get_field "done" ic2
-  150  jump_if_false -> 49
-  155  drop
-  156  drop
-  157  drop
-  158  jump -> 170
-  163  drop
-  164  call_intrinsic %IteratorClose 1
-  169  drop
-  170  get_loc loc0 (x)  ; 9:10
-  173  gosub -> 206
-  178  return
-  179  undefined
-  180  gosub -> 206
-  185  drop
-  186  drop
-  187  jump -> 215
-  192  pick 1
-  194  swap
-  195  call_intrinsic %UsingDisposeError 2
-  200  gosub -> 206
-  205  throw
-  206  pick 2
-  208  call_intrinsic %UsingDispose 1
-  213  drop
-  214  ret
-  215  return_undef
+   75  set_loc loc2 (z)  ; 7:9
+   78  jump_if_false -> 96
+   83  undefined
+   84  gosub -> 123
+   89  drop
+   90  drop
+   91  jump -> 160
+   96  undefined
+   97  gosub -> 123
+  102  drop
+  103  drop
+  104  jump -> 132
+  109  pick 1
+  111  swap
+  112  call_intrinsic %UsingDisposeError 2
+  117  gosub -> 123
+  122  throw
+  123  pick 2
+  125  call_intrinsic %UsingDispose 1
+  130  drop
+  131  ret
+  132  dup2  ; 5:3
+  133  iter_next -> 56
+  138  iter_check_object
+  139  dup
+  140  get_field "done" ic2
+  147  jump_if_false -> 49
+  152  drop
+  153  drop
+  154  drop
+  155  jump -> 167
+  160  drop
+  161  call_intrinsic %IteratorClose 1
+  166  drop
+  167  get_loc loc0 (x)  ; 9:10
+  170  gosub -> 203
+  175  return
+  176  undefined
+  177  gosub -> 203
+  182  drop
+  183  drop
+  184  jump -> 212
+  189  pick 1
+  191  swap
+  192  call_intrinsic %UsingDisposeError 2
+  197  gosub -> 203
+  202  throw
+  203  pick 2
+  205  call_intrinsic %UsingDispose 1
+  210  drop
+  211  ret
+  212  return_undef
 function 0.1 g: params=1 locals=2 stack=6 captures=0
   handler [8, 22) -> 35 depth 1
   handler [68, 71) -> 77 depth 4

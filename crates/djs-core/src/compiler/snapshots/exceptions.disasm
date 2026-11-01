@@ -1,117 +1,115 @@
 function 0 <anonymous>: params=2 locals=6 stack=5 captures=0
   handler [21, 53) -> 65 depth 0
-  handler [65, 72) -> 84 depth 0
-  handler [120, 139) -> 151 depth 0
-  handler [120, 170) -> 182 depth 0
-  handler [206, 218) -> 223 depth 0
-  handler [236, 248) -> 260 depth 0
-  handler [260, 269) -> 281 depth 0
-  handler [3, 304) -> 304 depth 0
+  handler [65, 69) -> 81 depth 0
+  handler [117, 136) -> 148 depth 0
+  handler [117, 167) -> 179 depth 0
+  handler [203, 215) -> 220 depth 0
+  handler [233, 245) -> 257 depth 0
+  handler [257, 263) -> 275 depth 0
+  handler [3, 298) -> 298 depth 0
     0  async_start loc0 (<state>)
     3  fclosure child0
     8  put_loc loc1 (f)
    11  push_i8 0
    13  put_loc loc2 (i)
-   16  jump -> 109
+   16  jump -> 106
    21  get_loc loc2 (i)  ; 8:9
    24  jump_if_false -> 41
    29  undefined
-   30  gosub -> 90
+   30  gosub -> 87
    35  drop
-   36  jump -> 106
+   36  jump -> 103
    41  undefined
-   42  gosub -> 90
+   42  gosub -> 87
    47  drop
-   48  jump -> 120
+   48  jump -> 117
    53  undefined
-   54  gosub -> 90
+   54  gosub -> 87
    59  drop
-   60  jump -> 106
-   65  put_loc loc3 (e)
-   68  get_loc loc3 (e)  ; 11:11
-   71  throw  ; 11:5
-   72  undefined
-   73  gosub -> 90
-   78  drop
-   79  jump -> 106
-   84  gosub -> 90
-   89  throw
-   90  get_global "log" ic0  ; 13:5
-   97  undefined
-   98  get_loc loc2 (i)  ; 13:9
-  101  call 1  ; 13:8
-  104  drop
-  105  ret
-  106  inc_loc loc2 (i)  ; 6:25
-  109  get_loc loc2 (i)  ; 6:17
-  112  push_i8 3
-  114  lt  ; 6:19
-  115  jump_if_true -> 21  ; 13:8
-  120  undefined
-  121  gosub -> 157
-  126  drop
-  127  undefined
-  128  gosub -> 188
-  133  drop
-  134  jump -> 206
-  139  undefined
-  140  gosub -> 157
-  145  drop
-  146  jump -> 170
-  151  gosub -> 157
-  156  throw
-  157  get_global "a" ic1  ; 17:40
-  164  undefined
-  165  call 0  ; 17:41
-  168  drop
-  169  ret
-  170  undefined
-  171  gosub -> 188
-  176  drop
-  177  jump -> 201
-  182  gosub -> 188
-  187  throw
-  188  get_global "b" ic2  ; 17:59
-  195  undefined
-  196  call 0  ; 17:60
-  199  drop
-  200  ret
-  201  jump -> 120
-  206  get_global "x" ic3  ; 19:7
-  213  undefined
-  214  call 0  ; 19:8
-  217  drop
-  218  jump -> 236
-  223  drop
-  224  get_global "y" ic4  ; 19:22
-  231  undefined
-  232  call 0  ; 19:23
-  235  drop
-  236  get_global "x" ic5  ; 20:7
-  243  undefined
-  244  call 0  ; 20:8
-  247  drop
-  248  undefined
-  249  gosub -> 287
-  254  drop
-  255  jump -> 300
-  260  put_loc loc4 (err)
-  263  get_loc loc4 (err)  ; 20:40
-  266  put_loc loc5 (inner)
-  269  undefined
-  270  gosub -> 287
-  275  drop
-  276  jump -> 300
-  281  gosub -> 287
-  286  throw
-  287  get_global "z" ic6  ; 20:57
+   60  jump -> 103
+   65  set_loc loc3 (e)  ; 11:11
+   68  throw  ; 11:5
+   69  undefined
+   70  gosub -> 87
+   75  drop
+   76  jump -> 103
+   81  gosub -> 87
+   86  throw
+   87  get_global "log" ic0  ; 13:5
+   94  undefined
+   95  get_loc loc2 (i)  ; 13:9
+   98  call 1  ; 13:8
+  101  drop
+  102  ret
+  103  inc_loc loc2 (i)  ; 6:25
+  106  get_loc loc2 (i)  ; 6:17
+  109  push_i8 3
+  111  lt  ; 6:19
+  112  jump_if_true -> 21  ; 13:8
+  117  undefined
+  118  gosub -> 154
+  123  drop
+  124  undefined
+  125  gosub -> 185
+  130  drop
+  131  jump -> 203
+  136  undefined
+  137  gosub -> 154
+  142  drop
+  143  jump -> 167
+  148  gosub -> 154
+  153  throw
+  154  get_global "a" ic1  ; 17:40
+  161  undefined
+  162  call 0  ; 17:41
+  165  drop
+  166  ret
+  167  undefined
+  168  gosub -> 185
+  173  drop
+  174  jump -> 198
+  179  gosub -> 185
+  184  throw
+  185  get_global "b" ic2  ; 17:59
+  192  undefined
+  193  call 0  ; 17:60
+  196  drop
+  197  ret
+  198  jump -> 117
+  203  get_global "x" ic3  ; 19:7
+  210  undefined
+  211  call 0  ; 19:8
+  214  drop
+  215  jump -> 233
+  220  drop
+  221  get_global "y" ic4  ; 19:22
+  228  undefined
+  229  call 0  ; 19:23
+  232  drop
+  233  get_global "x" ic5  ; 20:7
+  240  undefined
+  241  call 0  ; 20:8
+  244  drop
+  245  undefined
+  246  gosub -> 281
+  251  drop
+  252  jump -> 294
+  257  set_loc loc4 (err)  ; 20:40
+  260  put_loc loc5 (inner)
+  263  undefined
+  264  gosub -> 281
+  269  drop
+  270  jump -> 294
+  275  gosub -> 281
+  280  throw
+  281  get_global "z" ic6  ; 20:57
+  288  undefined
+  289  call 0  ; 20:58
+  292  drop
+  293  ret
   294  undefined
-  295  call 0  ; 20:58
-  298  drop
-  299  ret
-  300  undefined
-  301  async_return loc0 (<state>)
-  304  async_reject loc0 (<state>)
+  295  async_return loc0 (<state>)
+  298  async_reject loc0 (<state>)
 function 0.0 f: params=0 locals=0 stack=4 captures=0
   handler [0, 17) -> 29 depth 0
     0  get_global "g" ic0  ; 4:16

@@ -84,29 +84,29 @@ function 0.3 isEven: params=1 locals=0 stack=4 captures=1
     0  get_arg arg0  ; 16:29
     3  push_i8 0
     5  eq  ; 16:31
-    6  jump_if_false -> 17
+    6  jump_if_false -> 13
    11  push_true
-   12  jump -> 30
-   17  get_cap cap0 (isOdd)  ; 16:45
-   20  undefined
-   21  get_arg arg0  ; 16:51
-   24  push_i8 1
-   26  sub  ; 16:53
-   27  call 1  ; 16:50
-   30  return
-   31  return_undef
+   12  return
+   13  get_cap cap0 (isOdd)  ; 16:45
+   16  undefined
+   17  get_arg arg0  ; 16:51
+   20  push_i8 1
+   22  sub  ; 16:53
+   23  call 1  ; 16:50
+   26  return
+   27  return_undef
 function 0.4 isOdd: params=1 locals=0 stack=4 captures=1
     0  get_arg arg0  ; 17:28
     3  push_i8 0
     5  eq  ; 17:30
-    6  jump_if_false -> 17
+    6  jump_if_false -> 13
    11  push_false
-   12  jump -> 30
-   17  get_cap cap0 (isEven)  ; 17:45
-   20  undefined
-   21  get_arg arg0  ; 17:52
-   24  push_i8 1
-   26  sub  ; 17:54
-   27  call 1  ; 17:51
-   30  return
-   31  return_undef
+   12  return
+   13  get_cap cap0 (isEven)  ; 17:45
+   16  undefined
+   17  get_arg arg0  ; 17:52
+   20  push_i8 1
+   22  sub  ; 17:54
+   23  call 1  ; 17:51
+   26  return
+   27  return_undef

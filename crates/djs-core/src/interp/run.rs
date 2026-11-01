@@ -160,6 +160,8 @@ mod fast {
     pub const BXOR: u8 = Op::BXor as u8;
     pub const SHL: u8 = Op::Shl as u8;
     pub const SAR: u8 = Op::Sar as u8;
+    pub const IS_UNDEFINED: u8 = Op::IsUndefined as u8;
+    pub const IS_NULLISH: u8 = Op::IsNullish as u8;
 }
 
 /// The instructions `Exec::retry_operands` retries after a collection (D1700), besides
@@ -1465,6 +1467,16 @@ impl<'h> Exec<'h> {
                 let b = conv::to_boolean(self.heap, a);
                 self.set(self.sp - 1, Value::bool(!b));
                 self.advance(Op::Not, sp0);
+            }
+            fast::IS_UNDEFINED => {
+                let v = Value::bool(self.top(0).is_undefined());
+                self.set(self.sp - 1, v);
+                self.advance(Op::IsUndefined, sp0);
+            }
+            fast::IS_NULLISH => {
+                let v = Value::bool(self.top(0).is_nullish());
+                self.set(self.sp - 1, v);
+                self.advance(Op::IsNullish, sp0);
             }
             fast::STRICT_EQ | fast::STRICT_NE => {
                 let eq = self.byte(self.pc) == fast::STRICT_EQ;

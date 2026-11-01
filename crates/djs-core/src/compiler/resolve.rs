@@ -360,7 +360,12 @@ fn emit_function(
         }
     }
 
-    let mut out = CodeBuf::with_labels(phase1.label_count);
+    let all: Vec<crate::bytecode::Insn> = insns(&phase1.code)
+        .collect::<Result<_, _>>()
+        .map_err(|e| internal(&format!("{e:?}")))?;
+    let mut label_count = phase1.label_count;
+    let all = super::peephole::simplify(all, &mut label_count);
+    let mut out = CodeBuf::with_labels(label_count);
 
     // ---- Prologue (docs/compiler.md 5.5, 5.7).
     if f.kind == FuncKind::Script {
@@ -429,10 +434,6 @@ fn emit_function(
     // ---- Re-emit.
     let mut lines: Vec<(u32, u32)> = Vec::new();
     let mut li = 0;
-    let all: Vec<crate::bytecode::Insn> = insns(&phase1.code)
-        .collect::<Result<_, _>>()
-        .map_err(|e| internal(&format!("{e:?}")))?;
-    let all = super::peephole::simplify(all);
     // The line table entries of phase-1 instructions up to `pc` start at the current
     // position of `out` (the last one wins).
     let flush = |out: &CodeBuf, li: &mut usize, lines: &mut Vec<(u32, u32)>, pc: u32| {
@@ -475,6 +476,46 @@ fn emit_function(
                     }
                     i += 2;
                     continue;
+                }
+                // `x = v; ... x`, `const p = f(); if (p ...)`: keep the stored value.
+                if matches!(insn.op, Op::NamePut | Op::NameInit)
+                    && let Some(get) = all.get(i)
+                    && get.op == Op::NameGet
+                    && (!resolved[r].immutable || insn.op == Op::NameInit)
+                    && let Some(s) = unchecked_local(storage, resolved[r])
+                    && unchecked_local(storage, resolved[get.imm(0) as usize]) == Some(s)
+                {
+                    flush(&out, &mut li, &mut lines, get.pc);
+                    out.set_loc(s);
+                    i += 1;
+                    continue;
+                }
+                // `v === undefined`
+                if insn.op == Op::NameGet
+                    && atom == atom_undefined
+                    && matches!(resolved[r].target, Target::Global)
+                    && let Some(cmp) = all.get(i)
+                    && matches!(cmp.op, Op::StrictEq | Op::StrictNe)
+                {
+                    let jump = all.get(i + 1).filter(|j| {
+                        matches!(j.op, Op::JumpIfFalse | Op::JumpIfTrue) && cmp.op == Op::StrictNe
+                    });
+                    if cmp.op == Op::StrictEq || jump.is_some() {
+                        flush(&out, &mut li, &mut lines, cmp.pc);
+                        out.is_undefined();
+                        i += 1;
+                        if let Some(j) = jump {
+                            // `!==`: the inverted jump.
+                            let inv = if j.op == Op::JumpIfFalse {
+                                Op::JumpIfTrue
+                            } else {
+                                Op::JumpIfFalse
+                            };
+                            out.emit_insn(&j.with_op(inv));
+                            i += 1;
+                        }
+                        continue;
+                    }
                 }
                 if insn.op == Op::NameGet
                     && let Some(d) = resolved[r].decl
