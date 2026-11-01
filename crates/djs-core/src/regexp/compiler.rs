@@ -9,9 +9,8 @@
 use alloc::vec::Vec;
 
 use super::Flags;
-use super::charset::{self, CharSet, canonicalize};
+use super::charset::{self, CharSet};
 use super::parser::{Node, Parsed};
-use crate::unicode::case;
 
 // Header words.
 pub(crate) const H_FLAGS: usize = 0;
@@ -217,21 +216,11 @@ fn first_chars(node: &Node, unicode: bool) -> Option<(CharSet, bool)> {
 
 /// With `icase`, the input characters `c` with `canonicalize(c)` in `set`.
 fn case_closure(set: CharSet, icase: bool, unicode: bool) -> CharSet {
-    if !icase {
-        return set;
-    }
-    let mut extra = CharSet::new();
-    let mut visit = |c: u32| {
-        if set.contains(canonicalize(c, unicode)) {
-            extra.add(c);
-        }
-    };
-    if unicode {
-        case::for_each_fold(|c, _| visit(c));
+    if icase {
+        set.case_closure(unicode)
     } else {
-        case::for_each_upper(|c, _| visit(c));
+        set
     }
-    set.union(&extra)
 }
 
 /// The minimum number of characters `node` consumes (0 if it can match empty).
@@ -394,8 +383,14 @@ impl Compiler {
     /// A `v` class with strings: the strings longest first, then the single characters,
     /// then the empty string.
     fn class_with_strings(&mut self, set: &CharSet, strings: &[Vec<u32>], icase: bool, back: bool) {
-        let mut sorted: Vec<&Vec<u32>> = strings.iter().filter(|s| !s.is_empty()).collect();
-        sorted.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
+        // Longest first (insertion sort: these lists are short, and it keeps the
+        // standard library's sort code out of the binary).
+        let mut sorted: Vec<&Vec<u32>> = Vec::new();
+        for s in strings.iter().filter(|s| !s.is_empty()) {
+            let at =
+                sorted.partition_point(|t| t.len() > s.len() || (t.len() == s.len() && *t < s));
+            sorted.insert(at, s);
+        }
         let mut alts: Vec<Node> = sorted
             .iter()
             .map(|s| Node::Concat(s.iter().map(|&c| Node::Char { c, icase }).collect()))

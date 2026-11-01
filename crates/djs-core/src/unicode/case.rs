@@ -140,21 +140,33 @@ pub fn is_case_ignorable(c: u32) -> bool {
     in_table(&t::CASE_IGNORABLE, c)
 }
 
-/// Calls `f(c, m)` for every code point `c` whose simple mapping in `runs` is `m != c`,
-/// in increasing order of `c`. ASCII is included.
-fn for_each_run(runs: &[u32], deltas: &[i32], mut f: impl FnMut(u32, u32)) {
-    for (&r, &d) in runs.iter().zip(deltas) {
+/// The code points covered by a run table, in increasing order (runs have disjoint spans).
+struct RunCodePoints<'a> {
+    runs: &'a [u32],
+    run: usize,
+    k: u32,
+}
+
+impl Iterator for RunCodePoints<'_> {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<u32> {
+        let &r = self.runs.get(self.run)?;
         let start = r >> t::RUN_START_SHIFT;
         let stride = ((r >> t::RUN_LEN_BITS) & 1) + 1;
         let len = (r & ((1 << t::RUN_LEN_BITS) - 1)) + 1;
-        for k in 0..len {
-            let c = start + k * stride;
-            let m = c.wrapping_add_signed(d);
-            if m != c {
-                f(c, m);
-            }
+        let c = start + self.k * stride;
+        self.k += 1;
+        if self.k == len {
+            self.k = 0;
+            self.run += 1;
         }
+        Some(c)
     }
+}
+
+fn run_code_points(runs: &[u32]) -> core::iter::Peekable<RunCodePoints<'_>> {
+    RunCodePoints { runs, run: 0, k: 0 }.peekable()
 }
 
 /// Calls `f(c, to_upper_simple(c))` for every code point that has a simple uppercase
@@ -163,7 +175,12 @@ pub fn for_each_upper(mut f: impl FnMut(u32, u32)) {
     for c in b'a' as u32..=b'z' as u32 {
         f(c, c - 0x20);
     }
-    for_each_run(&t::UPPER_RUNS, &t::UPPER_DELTAS, f);
+    for c in run_code_points(&t::UPPER_RUNS) {
+        let m = to_upper_simple(c);
+        if m != c {
+            f(c, m);
+        }
+    }
 }
 
 /// Calls `f(c, simple_fold(c))` for every code point with `simple_fold(c) != c`, in
@@ -172,17 +189,20 @@ pub fn for_each_fold(mut f: impl FnMut(u32, u32)) {
     for c in b'A' as u32..=b'Z' as u32 {
         f(c, c + 0x20);
     }
-    // Lowercase mappings and the fold exceptions, merged in code point order.
-    let mut items: alloc::vec::Vec<u32> = alloc::vec::Vec::new();
-    for_each_run(&t::LOWER_RUNS, &t::LOWER_DELTAS, |c, _| items.push(c));
-    for_each_run(
-        &t::FOLD_EXCEPTIONS_RUNS,
-        &t::FOLD_EXCEPTIONS_DELTAS,
-        |c, _| items.push(c),
-    );
-    items.sort_unstable();
-    items.dedup();
-    for c in items {
+    // Merge the lowercase mappings with the fold exceptions (both sorted).
+    let mut a = run_code_points(&t::LOWER_RUNS);
+    let mut b = run_code_points(&t::FOLD_EXCEPTIONS_RUNS);
+    loop {
+        let c = match (a.peek(), b.peek()) {
+            (None, None) => return,
+            (Some(&x), Some(&y)) if x == y => {
+                b.next();
+                a.next().unwrap()
+            }
+            (Some(&x), Some(&y)) if x < y => a.next().unwrap(),
+            (Some(_), None) => a.next().unwrap(),
+            _ => b.next().unwrap(),
+        };
         let m = simple_fold(c);
         if m != c {
             f(c, m);

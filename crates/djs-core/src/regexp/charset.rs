@@ -45,24 +45,19 @@ impl CharSet {
 
     pub(crate) fn add_range(&mut self, lo: u32, hi: u32) {
         debug_assert!(lo <= hi);
-        // Fast path: appending in order, as the parser and the canonicalizer mostly do.
-        if let Some(last) = self.ranges.last_mut() {
-            if lo > last.1.saturating_add(1) {
-                self.ranges.push((lo, hi));
-                return;
-            }
-            if lo >= last.0 {
-                last.1 = last.1.max(hi);
-                return;
-            }
-        } else {
-            self.ranges.push((lo, hi));
-            return;
+        // The ranges that touch or overlap [lo, hi] are merged into one.
+        let first = self
+            .ranges
+            .partition_point(|&(_, h)| h.saturating_add(1) < lo);
+        let mut last = first;
+        let (mut nlo, mut nhi) = (lo, hi);
+        while last < self.ranges.len() && self.ranges[last].0 <= hi.saturating_add(1) {
+            nlo = nlo.min(self.ranges[last].0);
+            nhi = nhi.max(self.ranges[last].1);
+            last += 1;
         }
-        let other = CharSet {
-            ranges: alloc::vec![(lo, hi)],
-        };
-        *self = self.union(&other);
+        self.ranges
+            .splice(first..last, core::iter::once((nlo, nhi)));
     }
 
     pub(crate) fn union(&self, other: &CharSet) -> CharSet {
@@ -128,31 +123,84 @@ impl CharSet {
 
     /// `{ canonicalize(c) | c in self }`.
     pub(crate) fn canonicalize(&self, unicode: bool) -> CharSet {
-        // Only code points whose canonical form differs from themselves move; walk those
-        // (about 1500) instead of the set, which can be huge.
-        let mut moved = CharSet::new();
-        let mut images: Vec<u32> = Vec::new();
-        let mut visit = |c: u32| {
-            let m = canonicalize(c, unicode);
-            if m != c && self.contains(c) {
-                moved.add(c);
-                images.push(m);
+        if self.ranges.last().is_none_or(|&(_, hi)| hi < 0x80) {
+            // ASCII only: canonical forms stay ASCII.
+            let mut out = CharSet::new();
+            for &(lo, hi) in &self.ranges {
+                for c in lo..=hi {
+                    out.add(canonicalize(c, unicode));
+                }
             }
-        };
-        if unicode {
-            case::for_each_fold(|c, _| visit(c));
-        } else {
-            case::for_each_upper(|c, _| visit(c));
+            return out;
         }
+        // Only code points whose canonical form differs from themselves move; walk those
+        // (about 1500, in order) next to the set's ranges instead of the set, which can be
+        // huge.
+        let mut moved = CharSet::new();
+        let mut img = CharSet::new();
+        let mut i = 0;
+        let ranges = &self.ranges;
+        for_each_moved(unicode, |c, m| {
+            while i < ranges.len() && ranges[i].1 < c {
+                i += 1;
+            }
+            if i < ranges.len() && ranges[i].0 <= c {
+                moved.add(c);
+                img.add(m);
+            }
+        });
         if moved.is_empty() {
             return self.clone();
         }
-        images.sort_unstable();
-        let mut img = CharSet::new();
-        for c in images {
-            img.add(c);
-        }
         self.subtract(&moved).union(&img)
+    }
+
+    /// `{ c | canonicalize(c) in self }`: the input characters that match `self` in a
+    /// case-insensitive test.
+    pub(crate) fn case_closure(&self, unicode: bool) -> CharSet {
+        let mut out = self.clone();
+        if self.ranges.last().is_none_or(|&(_, hi)| hi < 0x80) {
+            // ASCII only: the other case, and in unicode mode U+017F and U+212A (the only
+            // non-ASCII code points that fold to ASCII).
+            for &(lo, hi) in &self.ranges {
+                for c in lo..=hi {
+                    if (c as u8).is_ascii_alphabetic() {
+                        out.add(c ^ 0x20);
+                    }
+                }
+            }
+            if unicode {
+                if self.contains('s' as u32) {
+                    out.add(0x17F);
+                }
+                if self.contains('k' as u32) {
+                    out.add(0x212A);
+                }
+            }
+            return out;
+        }
+        for_each_moved(unicode, |c, m| {
+            if self.contains(m) {
+                out.add(c);
+            }
+        });
+        out
+    }
+}
+
+/// Calls `f(c, canonicalize(c, unicode))` for every `c` that canonicalizes to something
+/// else, in increasing order of `c`.
+pub(crate) fn for_each_moved(unicode: bool, mut f: impl FnMut(u32, u32)) {
+    if unicode {
+        case::for_each_fold(f);
+    } else {
+        case::for_each_upper(|c, m| {
+            // Non-unicode Canonicalize: keep characters whose uppercase is several
+            // characters or maps non-ASCII to ASCII.
+            if c < 0x80 || (m >= 0x80 && case::to_upper_full(c).single().is_some()) {
+                f(c, m);
+            }
+        });
     }
 }
 
@@ -255,6 +303,32 @@ mod tests {
         assert_eq!(canonicalize(0xE9, false), 0xC9);
         assert_eq!(canonicalize(0x1F80, false), 0x1F80); // multi-char upper
         assert_eq!(canonicalize(0x3C2, true), 0x3C3);
+    }
+
+    #[test]
+    fn moved_matches_canonicalize() {
+        for unicode in [false, true] {
+            let mut moved = Vec::new();
+            for_each_moved(unicode, |c, m| {
+                assert_eq!(canonicalize(c, unicode), m, "{c:#x}");
+                assert_ne!(c, m);
+                moved.push(c);
+            });
+            for c in 0..0x11000 {
+                let changes = canonicalize(c, unicode) != c;
+                assert_eq!(changes, moved.binary_search(&c).is_ok(), "{c:#x} {unicode}");
+            }
+        }
+        // The ASCII fast path of case_closure relies on this.
+        let mut to_ascii = Vec::new();
+        for_each_moved(true, |c, m| {
+            if c >= 0x80 && m < 0x80 {
+                to_ascii.push(c);
+            }
+        });
+        assert_eq!(to_ascii, [0x17F, 0x212A]);
+        let s = set(&[('k' as u32, 'k' as u32)]).case_closure(true);
+        assert_eq!(s.ranges(), &[(0x4B, 0x4B), (0x6B, 0x6B), (0x212A, 0x212A)]);
     }
 
     #[test]
