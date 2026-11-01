@@ -5902,3 +5902,85 @@ image. `.restore` reads containers of any app (decompressed with this build's ba
 raw images. `.heap` runs `djs heap`'s analyzer over the live VM against the base image:
 by default the summary and the diff, which lists the session's new cells and the base
 cells it changed apart from the base realm.
+
+## D2300: JSON strings: quoting jumps to the first byte to escape; parsing skips plain words after an escape
+date: 2026-11-08 · by: perf · issue: 0129
+Codemode JSON carries texts: file contents with an escaped newline every line or so.
+- Stringify's `quote` already skipped words with no byte to escape (0116). On a word that
+  has one, it now jumps straight to the first such byte, the lowest flag of the SWAR
+  mask, instead of going byte by byte up to it. The mask (`json::escape_mask8`) is
+  shared with the parser.
+- Parse's `scan_string` keeps 0116's byte loop for strings without escapes (keys, short
+  values). At the first escape (or UTF-8 multi-byte sequence) the rest of the string
+  goes to an out-of-line `scan_rest`. After each escape it skips plain bytes 8 at a time
+  (`plain_run`).
+  - A word test inside the loop itself, or a `plain_run` call in its escape arm, cost
+    short-string parsing 1–2% (wasm json +1.3%), which is why the split exists.
+  - One-byte and UTF-8 input share one `scan_rest` instance (a runtime `utf8` flag).
+    Two-byte input, which is rare, takes `scan_rest` from the start: one loop, a
+    smaller module.
+
+Tried and dropped: decoding escaped one-byte strings into a scratch buffer during the
+scan, then copying them once (the one-pass idea from 0116). Natively json-text was +2.6%:
+the scratch copy plus the cell copy is the same traffic as the second pass, plus a Vec.
+
+wasm (with D2301): json-text −12%, others ±1%.
+
+## D2301: slice, join, split and CreateDataPropertyOrThrow on plain arrays in one step
+date: 2026-11-08 · by: perf · issue: 0129
+pi-like's `LINES.slice(0, n).join("\n")`, `text.split("\n").filter(..)` and map/filter
+results, profiled in wasm:
+- `slice` (@fast): when ArraySpeciesCreate would be a plain ArrayCreate (`plain_species`:
+  no own `constructor`, untouched %Array% and @@species), the result is
+  `Heap::new_array_from_dense`. That is one allocation and one copy of the dense range;
+  a hole declines. Before, it was a Vec of the values plus a [[Set]] per element, each
+  walking the prototype chain and growing the store. Anything else declines to the
+  builtin, whose path (ArraySpeciesCreate, `%ArraySliceDense`) is what the fast path did
+  after that check.
+- `join` of flat one-byte strings, `undefined`/`null` and a flat one-byte separator:
+  `Heap::join_flat_latin1` sizes the result in one pass with one kind read per element,
+  then copies from the cells. There is no list of pieces and no per-piece view. Ropes and
+  two-byte strings keep the pieces path. A leaner variant (a kind check inside
+  `string::join`) saved 232 B gzip but cost pi-like 2.3%.
+- CreateDataPropertyOrThrow into an Array (`Heap::create_element_fast`: native
+  `%CreateDataPropertyOrThrow` and the intrinsic, and `%ArraySliceDense`) defines the
+  element without the prototype walk [[Set]] needs. An Array.prototype index setter is
+  never called, as the spec says. Non-extensible arrays, index properties and a fixed
+  `length` decline.
+- `split` with a one-byte separator copies each piece with `alloc_latin1_pieces`
+  directly. Empty pieces share the empty atom, the vectors are sized, and the whole
+  string is returned as itself.
+
+Natively, `LINES.slice(0, 20 + n).join("\n")` went 453 → 189 Minstr. wasm results with
+D2300 are in D2302.
+
+## D2302: Size trade: +1.4 KB gzip for pi-like −12.7%
+date: 2026-11-08 · by: perf · issue: 0129
+D2300 and D2301 add 1,359 bytes to the shipped module's gzip (455,584 → 456,943 on main
+1954f0dc; +0.3%). The coordinator accepted the trade. `tests/scores/size.tsv`'s
+ceiling is raised under this decision to 457,967 (the new size plus the usual 1,024
+slack).
+
+wasm instructions (n=3, spread ≤0.7%) against the main they were measured on:
+
+| workload | before | after | change |
+| --- | ---: | ---: | ---: |
+| pi-like | 7815 | 6825 | −12.7% (0.94x quickjs-wasi, was 1.08x) |
+| json-text | 1810 | 1599 | −11.7% |
+| higher-order | 12715 | 12352 | −2.9% |
+| strings, strbuild | | | −2% |
+
+The other workloads stayed within ±1%. pushpop moves between ~4205 and ~4305 from run to
+run, main included.
+
+Already removed before the trade:
+- shared `scan_rest`/`plain_run` instances;
+- slice declining to the builtin instead of keeping its own species fallback.
+
+Not taken for this trade: pruning more @fast entries (toFixed, lastIndexOf,
+fromCharCode, startsWith/endsWith).
+
+Measured for the owner, not done: inlining the native API in wasm (D1634).
+- `n_slot` and `n_arg`: +4.6 KB gzip, for higher-order −10.5%, foreach −5.7%, pi-like
+  −2.1%.
+- The full accessor set: +10.7 KB, for −17%, −9%, −2.6%.

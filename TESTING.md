@@ -384,6 +384,25 @@ Fixed since 0082 (0084, D1840): Function.prototype is a function (9 tests), [[Se
 an array's `length` converts non-Number values (4), and `atob`/`btoa` and
 `DOMException` are native globals as in qjs (2 difftest cases).
 
+## Instruction ratios to quickjs-wasi (0129)
+
+`scripts/perf/wmeasure.py` reports wasm instructions for djs-wasm and quickjs-wasi in
+node, minus an empty run of each. That subtraction removes startup but not V8's tier-up.
+Once a script runs long enough, V8 recompiles the hot functions of the module with
+TurboFan, and those instructions count too.
+
+A nearly trivial script (one `Array.from` of 120 template strings) measures about 525 M
+for djs and 322 M for quickjs-wasi. Nearly all of that is compilation, and every longer
+workload carries it.
+
+So when reading a ratio:
+- for small workloads it is mostly the two modules' compile cost;
+- for the larger ones (pi-like ~7 G) the engine-only ratio is a little better for djs
+  than the printed one (0129: pi-like 0.94x printed, ≈0.91x without the compile).
+
+Compare djs builds with each other (same baseline) for decisions. Use the quickjs-wasi
+ratio as the user-visible figure, a process that runs one script.
+
 ## Peak memory claims (D2048)
 
 Peak wasm memory (`wasm memory` in `scripts/perf/wasm-run.ts`) is deterministic for one

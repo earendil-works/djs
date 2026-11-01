@@ -286,10 +286,63 @@ fn word(b: &[u8], e: u8, start: usize, end: usize) -> Option<Tok> {
 
 /// Scans a string body starting after the opening quote at `quote`.
 fn scan_string<const E: u8>(b: &[u8], mut p: usize, quote: usize) -> Result<(StrTok, usize), Fail> {
+    // (Two-byte input is rare: its strings take the one general loop, a smaller module.)
+    if E == UTF16 {
+        return scan_rest::<E>(b, p, quote, p, 0, false, false);
+    }
     let n = units_len::<E>(b);
     let start = p;
     let mut len: u64 = 0;
     let mut two_byte = false;
+    loop {
+        if p >= n {
+            return fail(Msg::EndOfInput, quote);
+        }
+        let c = peek::<E>(b, p);
+        p += 1;
+        match c {
+            0x22 => break,
+            0x00..=0x1F => return fail(Msg::BadControl, p - 1),
+            // The first escape or (UTF-8) multi-byte sequence: the rest of the string
+            // out of line (0129), so that this loop stays as short strings want it.
+            0x5C => return scan_rest::<LATIN1>(b, p - 1, quote, start, len, two_byte, E == UTF8),
+            _ if E == UTF8 && c >= 0x80 => {
+                return scan_rest::<LATIN1>(b, p - 1, quote, start, len, two_byte, true);
+            }
+            _ => {
+                two_byte |= c > 0xFF;
+                len += 1;
+            }
+        }
+    }
+    if len > MAX_LEN as u64 {
+        return Err(Fail::Heap(HeapError::StringTooLong));
+    }
+    let tok = StrTok {
+        start,
+        end: p - 1,
+        len: len as u32,
+        two_byte,
+        escaped: false,
+    };
+    Ok((tok, p))
+}
+
+/// `scan_string` from `p` on, `start` .. `p` scanned already (`len` units, `two_byte`):
+/// from the first escape or multi-byte sequence at `p` (or, two-byte input, from the
+/// start). One-byte input is `LATIN1` with `utf8` telling UTF-8 apart: one instance for
+/// both (a smaller module).
+#[inline(never)]
+fn scan_rest<const E: u8>(
+    b: &[u8],
+    mut p: usize,
+    quote: usize,
+    start: usize,
+    mut len: u64,
+    mut two_byte: bool,
+    utf8: bool,
+) -> Result<(StrTok, usize), Fail> {
+    let n = units_len::<E>(b);
     let mut escaped = false;
     loop {
         if p >= n {
@@ -323,8 +376,16 @@ fn scan_string<const E: u8>(b: &[u8], mut p: usize, quote: usize) -> Result<(Str
                     _ => return fail(Msg::BadEscape, p - 1),
                 }
                 len += 1;
+                // A string with escapes is likely a long text: its plain bytes up to the
+                // next one this loop must see, 8 at a time (0129). Out of line, and only
+                // here: the loop itself stays as short strings (keys) want it (0116).
+                if E != UTF16 {
+                    let k = plain_run(b, p, utf8);
+                    p += k;
+                    len += k as u64;
+                }
             }
-            _ if E == UTF8 && c >= 0x80 => {
+            _ if utf8 && c >= 0x80 => {
                 let Some((cp, l)) = utf8_char(b, p - 1) else {
                     return fail(Msg::BadUtf8, p - 1);
                 };
@@ -350,6 +411,23 @@ fn scan_string<const E: u8>(b: &[u8], mut p: usize, quote: usize) -> Result<(Str
         escaped,
     };
     Ok((tok, p))
+}
+
+/// The number of bytes from `p` before the first one `scan_string` must look at (a
+/// control, `"`, `\\`, or in UTF-8 any non-ASCII byte), counted 8 at a time: only whole
+/// words, so it may stop a few plain bytes early.
+#[inline(never)]
+fn plain_run(b: &[u8], p: usize, utf8: bool) -> usize {
+    let mut at = p;
+    while let Some(w) = b.get(at..at + 8) {
+        let w = u64::from_le_bytes(w.try_into().unwrap());
+        let m = super::escape_mask8(w) | if utf8 { w & 0x8080_8080_8080_8080 } else { 0 };
+        if m != 0 {
+            return at - p + (m.trailing_zeros() / 8) as usize;
+        }
+        at += 8;
+    }
+    at - p
 }
 
 /// Calls `f` with every decoded code unit of a (validated) string token.

@@ -711,7 +711,7 @@ impl Exec<'_> {
     }
 
     /// `%CreateDataPropertyOrThrow(a, k, v)`: an Array's dense element or the next one
-    /// (as `call_intrinsic`).
+    /// (as `call_intrinsic`), whatever its prototypes hold.
     pub(crate) fn n_create_data_property_or_throw(
         &mut self,
         args: &[Value; 3],
@@ -725,7 +725,7 @@ impl Exec<'_> {
             .as_object()
             .filter(|&o| self.is_class(o, ObjectClass::Array))
             && let Some(i) = index_of(args[1])
-            && self.heap.set_element_fast(o, i, args[2])?
+            && self.heap.create_element_fast(o, i, args[2])?
         {
             return self.n_inline(Value::UNDEFINED, next);
         }

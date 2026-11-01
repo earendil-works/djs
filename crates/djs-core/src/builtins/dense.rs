@@ -124,10 +124,10 @@ pub(crate) fn slice(heap: &mut Heap, o: Obj, k: u32, fin: u32, a: Obj) -> Result
     };
     for (n, v) in values.into_iter().enumerate() {
         let n = n as u32;
-        // The first store checks what makes all of them plain appends (an extensible
-        // Array, no index properties on it or its prototypes) and declines with
-        // nothing changed; those do not change in between.
-        if !heap.set_element_fast(a, n, v)? {
+        // CreateDataPropertyOrThrow: the first store checks what makes all of them plain
+        // appends (an extensible Array without index properties) and declines with
+        // nothing changed; that does not change in between.
+        if !heap.create_element_fast(a, n, v)? {
             if n == 0 {
                 return Ok(false);
             }
@@ -153,6 +153,10 @@ pub(crate) fn push(heap: &mut Heap, o: Obj, v: Value) -> Result<Option<u32>, Fau
 /// join over o[0 .. len) when every element is present in dense storage and a
 /// primitive other than a symbol: the string, or `None`.
 pub(crate) fn join(heap: &mut Heap, o: Obj, len: u32, sep: Str) -> Result<Option<Str>, Fault> {
+    // Flat one-byte strings (lines, words): straight from the cells.
+    if let Some(s) = heap.join_flat_latin1(o, len, sep)? {
+        return Ok(Some(s));
+    }
     let Some(values) = dense_range(heap, o, 0, len) else {
         return Ok(None);
     };

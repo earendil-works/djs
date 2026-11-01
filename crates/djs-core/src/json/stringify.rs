@@ -280,12 +280,15 @@ impl Out {
                 let mut run = 0;
                 let mut i = 0;
                 while i < b.len() {
-                    // Skip 8 bytes at a time while none needs escaping.
-                    if let Some(w) = b.get(i..i + 8)
-                        && !needs_escape8(u64::from_le_bytes(w.try_into().unwrap()))
-                    {
-                        i += 8;
-                        continue;
+                    // 8 bytes at a time: skip a word with no byte to escape, else go
+                    // straight to its first such byte (0129: not byte by byte up to it).
+                    if let Some(w) = b.get(i..i + 8) {
+                        let m = super::escape_mask8(u64::from_le_bytes(w.try_into().unwrap()));
+                        if m == 0 {
+                            i += 8;
+                            continue;
+                        }
+                        i += (m.trailing_zeros() / 8) as usize;
                     }
                     let c = b[i];
                     if c < 0x20 || c == b'"' || c == b'\\' {
@@ -337,13 +340,9 @@ impl Out {
 
 /// Whether any of the 8 bytes in `w` is below 0x20, `"` or `\\` (SWAR: a byte is zero
 /// after the subtraction or xor exactly when it matched).
-#[inline]
+#[cfg(test)]
 fn needs_escape8(w: u64) -> bool {
-    const ONES: u64 = 0x0101_0101_0101_0101;
-    const HIGH: u64 = 0x8080_8080_8080_8080;
-    let lt = |x: u64, n: u64| x.wrapping_sub(ONES * n) & !x & HIGH;
-    let zero = |x: u64| x.wrapping_sub(ONES) & !x & HIGH;
-    (lt(w, 0x20) | zero(w ^ (ONES * 0x22)) | zero(w ^ (ONES * 0x5C))) != 0
+    super::escape_mask8(w) != 0
 }
 
 /// Writes `n` in decimal.
@@ -904,6 +903,33 @@ impl Ser<'_, '_> {
 #[cfg(test)]
 mod tests {
     use super::needs_escape8;
+    use crate::json::escape_mask8;
+
+    /// The lowest flag of the mask is the first byte that needs escaping, whatever the
+    /// other bytes are (random words over bytes near the edges: 0x1F/0x20, `"`, `\\`).
+    #[test]
+    fn escape_mask_lowest_flag_is_exact() {
+        let mut seed = 0x2545_F491_4F6C_DD1Du64;
+        let pool = [
+            0x00, 0x1F, 0x20, 0x21, b'"', b'#', b'\\', b']', b'a', 0x80, 0xFF, 0x5B,
+        ];
+        for _ in 0..100_000 {
+            let mut w = [0u8; 8];
+            for b in &mut w {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                *b = pool[(seed % pool.len() as u64) as usize];
+            }
+            let first = w.iter().position(|&b| b < 0x20 || b == b'"' || b == b'\\');
+            let m = escape_mask8(u64::from_le_bytes(w));
+            assert_eq!(
+                (m != 0).then(|| (m.trailing_zeros() / 8) as usize),
+                first,
+                "{w:?}"
+            );
+        }
+    }
 
     #[test]
     fn swar_escape_scan_is_exact() {

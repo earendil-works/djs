@@ -147,8 +147,13 @@ patch(H, "        let size = align8(size.max(kind.layout().min_size));\n",
       "        crate::interp::run::prof::inc(&crate::interp::run::prof::ALLOC_N[kind as usize & 63], 1);\n"
       "        crate::interp::run::prof::inc(&crate::interp::run::prof::ALLOC_B[kind as usize & 63], size as u64);\n", count=3)
 G = "crates/djs-core/src/heap/gc.rs"
-patch(G, "        let (before, after) = self.mark_compact()?;\n",
-      "        let (before, after) = self.mark_compact()?;\n"
+# Full and minor collections (the generational GC, 0120).
+patch(G, "        let (before, after, old) = self.mark_compact(0)?;\n",
+      "        let (before, after, old) = self.mark_compact(0)?;\n"
+      "        crate::interp::run::prof::inc(&crate::interp::run::prof::GCS, 1);\n"
+      "        crate::interp::run::prof::inc(&crate::interp::run::prof::GC_BYTES, after as u64);\n")
+patch(G, "        let (before, after, _) = self.mark_compact(old)?;\n",
+      "        let (before, after, _) = self.mark_compact(old)?;\n"
       "        crate::interp::run::prof::inc(&crate::interp::run::prof::GCS, 1);\n"
       "        crate::interp::run::prof::inc(&crate::interp::run::prof::GC_BYTES, after as u64);\n")
 patch("crates/djs-core/src/interp/mod.rs", "pub(crate) mod run;", "pub mod run;")

@@ -1,0 +1,10 @@
+3 2 6 2 2 4 true 
+0 false setter set;
+non-extensible TypeError
+non-extensible TypeError
+fixed length TypeError
+fixed length TypeError
+frozen element TypeError
+frozen element TypeError
+3 false true
+=== completed

@@ -14,7 +14,7 @@ from `~/Development/pi-private/node_modules/quickjs-wasi`.
 | tool | what |
 | --- | --- |
 | `measure.py [--djs BIN]... names` | native djs vs qjs per workload (instructions, cycles, peak memory) |
-| `wmeasure.py [--wasm X]... [--node-flag=--no-liftoff] names` | djs-wasm vs quickjs-wasi in node, minus an empty run |
+| `wmeasure.py [--wasm X]... [--node-flag=--no-liftoff] names` | djs-wasm vs quickjs-wasi in node, minus an empty run; the counts include V8's TurboFan tier-up of each module (~0.5 G for djs, ~0.3 G for quickjs-wasi; TESTING.md "Instruction ratios to quickjs-wasi") |
 | `micro.py` / `wmicro.py [--wasm A --wasm B]` | instructions per JS-level operation (loop body x10 minus x0), natively vs qjs and in wasm vs quickjs-wasi; the cases are in `cases.py`; several `--wasm` builds compare side by side (A/B) |
 | `wasm-compile.ts`, `wcompile.py [--qjs] --wasm X... files` | compile-only time (MB/s) and instructions per compile and per source byte in the wasm build, vs quickjs-wasi (0092) |
 | `perelem.py [--djs B].. [--wasm W].. [--noqjs] [-r R] [names]` | instructions per array element of the iteration builtins, for native and wasm builds side by side (0100) |

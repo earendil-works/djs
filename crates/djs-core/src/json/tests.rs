@@ -270,6 +270,36 @@ fn parse_depth_limit() {
     assert!(h.str_eq_str(out, &text));
 }
 
+/// Strings with long plain runs between escapes (0129: after the first escape the scan
+/// skips plain bytes 8 at a time, then one by one): every run length up to 19 around each
+/// kind of escape and raw non-ASCII character, in all three input encodings.
+#[test]
+fn parse_long_runs_between_escapes() {
+    let escapes = [
+        ("\\n", "\n"),
+        ("\\\"", "\""),
+        ("\\\\", "\\"),
+        ("\\u00e9", "é"),
+        ("\\u20AC", "€"),
+        ("é", "é"),
+        ("€", "€"),
+    ];
+    for run in 0..20u8 {
+        let plain: String = (0..run).map(|i| (b'a' + i % 26) as char).collect();
+        for (esc, ch) in escapes {
+            let text = format!("[\"{plain}{esc}{plain}{esc}{plain}\", \"{plain}\"]");
+            let want = format!("{plain}{ch}{plain}{ch}{plain}");
+            let want: Vec<u16> = want.encode_utf16().collect();
+            let plain16: Vec<u16> = plain.encode_utf16().collect();
+            assert_eq!(
+                parse_all(&text),
+                format!("[s:{},s:{}]", quote_units(&want), quote_units(&plain16)),
+                "{text:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn parse_strings_representation() {
     let mut h = Heap::new().unwrap();

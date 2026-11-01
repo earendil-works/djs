@@ -1,0 +1,16 @@
+[["alpha","beta","gamma","delta","epsilon"],["beta","gamma"],["delta","epsilon"],[],[]]
+5 5 beta|gamma|delta|epsilon|z
+3 false [1,null,3]
+1-P-3 1-P-3
+true beta,gamma
+species alpha beta 2
+true ++x ab
+84 éßü €-x
+1/a/2.5/true x€y x,o
+239 30 line 10
+line 11
+line
+[["","a","","b",""],["",""],["x"],["a"],[],["a","b"]]
+12 r0 r2r3r4r5r6r7r8r9 9r20r21r22r23r24r25r26r27r28r29 1 0
+true ["é","ü"] ["a","b"]
+=== completed

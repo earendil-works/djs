@@ -29,7 +29,7 @@ use core::cmp::Ordering;
 use super::cells::{Header, Rope, Str8, Str16, flags};
 use super::layout::Ref;
 use super::{CellKind, Heap, HeapError};
-use crate::value::Str;
+use crate::value::{Obj, Str};
 
 /// Maximum string length in code units (the same as QuickJS).
 pub const MAX_LEN: u32 = (1 << 30) - 1;
@@ -365,6 +365,58 @@ impl Heap {
             at += b - a;
         }
         Ok(Str(dst))
+    }
+
+    /// `Array.prototype.join` over the first `len` slots of an Array's dense store when
+    /// each is a flat one-byte string, `undefined` or `null`, and `sep` is a flat one-byte
+    /// string: the result written once, straight from the cells (0129: no list of
+    /// pieces, one kind read per element). `None` (nothing allocated) for anything else,
+    /// holes included.
+    pub(crate) fn join_flat_latin1(
+        &mut self,
+        o: Obj,
+        len: u32,
+        sep: Str,
+    ) -> Result<Option<Str>, HeapError> {
+        let str8 = |h: &Self, s: Str| h.arena().get(s.0, Header::KIND) == CellKind::Str8 as u8;
+        if !str8(self, sep) {
+            return Ok(None);
+        }
+        let sep_len = self.str_len(sep);
+        // (Checks the class before `array_length`.)
+        let Some(values) = self.dense_array_values(o) else {
+            return Ok(None);
+        };
+        if self.array_length(o) != len {
+            return Ok(None);
+        }
+        let mut total = u64::from(sep_len) * u64::from(len.saturating_sub(1));
+        for v in values {
+            match v.as_string() {
+                Some(s) if str8(self, s) => total += u64::from(self.str_len(s)),
+                None if v.is_nullish() => {}
+                _ => return Ok(None),
+            }
+        }
+        if total > u64::from(MAX_LEN) {
+            return Err(HeapError::StringTooLong);
+        }
+        let dst = self.alloc_flat(total as u32, false)?;
+        let mut at = dst + Str8::DATA.offset;
+        for i in 0..len {
+            if i > 0 {
+                self.arena_mut()
+                    .copy_within(sep.0 + Str8::DATA.offset, sep_len, at);
+                at += sep_len;
+            }
+            if let Some(s) = self.get_element_fast(o, i).and_then(|v| v.as_string()) {
+                let n = self.str_len(s);
+                self.arena_mut().copy_within(s.0 + Str8::DATA.offset, n, at);
+                at += n;
+            }
+        }
+        debug_assert_eq!(at, dst + Str8::DATA.offset + total as u32);
+        Ok(Some(Str(dst)))
     }
 
     /// A string from UTF-16 code units (lone surrogates allowed). Stored one-byte if every

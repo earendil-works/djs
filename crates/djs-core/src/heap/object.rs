@@ -591,6 +591,41 @@ impl Heap {
         Ok(o)
     }
 
+    /// A new array of `src[from .. to)`, copied in one step from `src`'s dense store
+    /// (slice's fast path, 0129), or `None` (nothing allocated) unless `src` is an Array
+    /// whose slots there are all dense, non-hole elements.
+    pub(crate) fn new_array_from_dense(
+        &mut self,
+        proto: Option<Obj>,
+        src: Obj,
+        from: u32,
+        to: u32,
+    ) -> Result<Option<Obj>, HeapError> {
+        if self.object_class(src) != ObjectClass::Array || from > to || to > self.dense_len(src) {
+            return Ok(None);
+        }
+        let n = to - from;
+        if n == 0 {
+            return Ok(Some(self.new_array(proto, 0)?));
+        }
+        let el = self.elements(src);
+        if (from..to).any(|i| self.value_array_get(el, i).is_hole()) {
+            return Ok(None);
+        }
+        // (Allocating moves no cell: `el` stays valid.)
+        let o = self.new_array(proto, n)?;
+        let dst = self.elements(o);
+        let a = self.arena_mut();
+        a.copy_within(
+            ValueArray::VALUES.at(el, from),
+            n * 8,
+            ValueArray::VALUES.at(dst, 0),
+        );
+        a.set(dst, ValueArray::LEN, n);
+        self.set_array_length_raw(o, n);
+        Ok(Some(o))
+    }
+
     pub fn object_class(&self, o: Obj) -> ObjectClass {
         let c = self.arena().get(o.0, Object::CLASS);
         ObjectClass::from_u32(c).unwrap_or_else(|| super::fail::bad_object_class(c))
@@ -878,6 +913,44 @@ impl Heap {
                 return Ok(false);
             }
             p = self.get_prototype_of(q);
+        }
+        self.dense_put(o, i, v)?;
+        if i >= length {
+            self.set_array_length_raw(o, i + 1);
+        }
+        Ok(true)
+    }
+
+    /// CreateDataProperty(o, i, v) on an Array as a dense store: an existing dense element
+    /// (default attributes) is overwritten, a hole filled or the next element appended
+    /// when `o` is extensible, has no index properties outside the dense store and, past
+    /// `length`, a writable `length`. Unlike [[Set]] (`set_element_fast`) the prototype
+    /// chain plays no part: the property is defined on `o` itself (0129: map's and
+    /// filter's results walked it per element). `Ok(false)`: the generic path; nothing
+    /// changed.
+    pub(crate) fn create_element_fast(
+        &mut self,
+        o: Obj,
+        i: u32,
+        v: Value,
+    ) -> Result<bool, HeapError> {
+        debug_assert_eq!(self.object_class(o), ObjectClass::Array);
+        let el = self.elements(o);
+        let len = if el == 0 { 0 } else { self.value_array_len(el) };
+        if i < len && !self.value_array_get(el, i).is_hole() {
+            self.value_array_set(el, i, v);
+            return Ok(true);
+        }
+        if i > len || i > atom_int_max() {
+            return Ok(false);
+        }
+        let f = self.obj_flags(o);
+        if f & OBJ_EXTENSIBLE == 0 || f & OBJ_INDEXED_PROPS != 0 {
+            return Ok(false);
+        }
+        let length = self.array_length(o);
+        if i >= length && f & OBJ_LENGTH_READONLY != 0 {
+            return Ok(false);
         }
         self.dense_put(o, i, v)?;
         if i >= length {

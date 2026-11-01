@@ -84,3 +84,15 @@ impl From<HeapError> for ParseError {
         ParseError::Heap(e)
     }
 }
+
+/// The high bit of each byte of `w` that a JSON string can't hold as it is: a control
+/// character, `"` or `\\` (stringify escapes them, parse stops at them). The tests can
+/// flag bytes above a real one, never below, so the lowest flag is exact (0129).
+#[inline]
+pub(crate) fn escape_mask8(w: u64) -> u64 {
+    const ONES: u64 = 0x0101_0101_0101_0101;
+    const HIGH: u64 = 0x8080_8080_8080_8080;
+    let lt = |x: u64, n: u64| x.wrapping_sub(ONES * n) & !x & HIGH;
+    let zero = |x: u64| x.wrapping_sub(ONES) & !x & HIGH;
+    lt(w, 0x20) | zero(w ^ (ONES * 0x22)) | zero(w ^ (ONES * 0x5C))
+}

@@ -620,11 +620,10 @@ impl Exec<'_> {
                 let Some(o) = a0.as_object() else {
                     return bad_argument(info.name);
                 };
-                // An Array's dense element (or the next one) takes the fast store: for
-                // those, defining a default data property and [[Set]] are the same.
+                // An Array's dense element (or the next one) takes the dense store.
                 if let Some(i) = index_key(arg(self, 1))
                     && self.heap.object_class(o) == ObjectClass::Array
-                    && self.heap.set_element_fast(o, i, arg(self, 2))?
+                    && self.heap.create_element_fast(o, i, arg(self, 2))?
                 {
                     self.sp = base;
                     self.push(Value::UNDEFINED);

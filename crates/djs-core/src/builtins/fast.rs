@@ -692,7 +692,7 @@ fn split(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
     if let (Some(StrView::Latin1(h)), Some(StrView::Latin1(t))) =
         (heap.str_view(s), heap.str_view(r))
     {
-        let mut cuts: Vec<(u32, u32)> = Vec::new();
+        let mut cuts: Vec<(u32, u32)> = Vec::with_capacity(16);
         let mut p = 0;
         while let Some(q) = string::find_latin1(h, t, p) {
             cuts.push((p as u32, q as u32));
@@ -704,8 +704,18 @@ fn split(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
         if (cuts.len() as u32) < lim {
             cuts.push((p as u32, n));
         }
+        // Each piece copied straight from `s` (flat, one-byte), the empty ones shared
+        // (0129: through `substring` and `join` each paid their checks again).
+        let empty = Value::string(heap.atom_string(atoms::EMPTY)?);
+        parts.reserve_exact(cuts.len());
         for (a, b) in cuts {
-            parts.push(Value::string(string::substring(heap, s, a, b)?));
+            parts.push(if a == b {
+                empty
+            } else if a == 0 && b == n {
+                Value::string(s)
+            } else {
+                Value::string(heap.alloc_latin1_pieces(&[(s, a, b)], b - a)?)
+            });
         }
         return new_array(heap, &parts);
     }
@@ -957,30 +967,10 @@ fn array_species_create(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
     let (Some(o), Some(n)) = (arg(args, 0).as_object(), arg(args, 1).as_number()) else {
         return Ok(None);
     };
-    if !(n >= 0.0 && n <= u32::MAX as f64 && (n as u32) as f64 == n) || heap.is_proxy(o) {
+    if !(n >= 0.0 && n <= u32::MAX as f64 && (n as u32) as f64 == n) || !plain_species(heap, o) {
         return Ok(None);
     }
     let array_proto = realm::intrinsic_obj(heap, Intrinsic::ArrayProto);
-    if heap.object_class(o) == ObjectClass::Array {
-        if heap.has_own_property(o, atoms::CONSTRUCTOR)
-            || heap.get_prototype_of(o) != Some(array_proto)
-        {
-            return Ok(None);
-        }
-        let array = realm::installed_intrinsic(heap, ARRAY_CONSTRUCTOR);
-        match heap.get_own_property(array_proto, atoms::CONSTRUCTOR) {
-            Some(Property::Data { value, .. }) if value == array => {}
-            _ => return Ok(None),
-        }
-        let Some(array) = array.as_object() else {
-            return Ok(None);
-        };
-        let species = realm::installed_intrinsic(heap, ARRAY_SPECIES);
-        match heap.get_own_property(array, atoms::SYM_SPECIES) {
-            Some(Property::Accessor { getter, .. }) if getter == species => {}
-            _ => return Ok(None),
-        }
-    }
     let a = heap.new_array(Some(array_proto), 0)?;
     let d = PropertyDescriptor {
         value: Some(conv::number(n)),
@@ -988,6 +978,34 @@ fn array_species_create(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
     };
     heap.define_own_property(a, atoms::LENGTH, &d)?;
     Ok(Some(Value::object(a)))
+}
+
+/// Whether ArraySpeciesCreate(o, n) is ArrayCreate(n) with %Array.prototype%, found
+/// without running user code: `o` is no Array, or an Array whose `constructor` is the
+/// untouched %Array% with the original @@species getter.
+fn plain_species(heap: &Heap, o: Obj) -> bool {
+    if heap.is_proxy(o) {
+        return false;
+    }
+    if heap.object_class(o) != ObjectClass::Array {
+        return true;
+    }
+    let array_proto = realm::intrinsic_obj(heap, Intrinsic::ArrayProto);
+    if heap.has_own_property(o, atoms::CONSTRUCTOR) || heap.get_prototype_of(o) != Some(array_proto)
+    {
+        return false;
+    }
+    let array = realm::installed_intrinsic(heap, ARRAY_CONSTRUCTOR);
+    match heap.get_own_property(array_proto, atoms::CONSTRUCTOR) {
+        Some(Property::Data { value, .. }) if value == array => {}
+        _ => return false,
+    }
+    let Some(array) = array.as_object() else {
+        return false;
+    };
+    let species = realm::installed_intrinsic(heap, ARRAY_SPECIES);
+    matches!(heap.get_own_property(array, atoms::SYM_SPECIES),
+        Some(Property::Accessor { getter, .. }) if getter == species)
 }
 
 // ---- Array element loops (0091) ------------------------------------------------------
@@ -1108,17 +1126,17 @@ fn array_slice(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
     ) else {
         return Ok(None);
     };
-    let count = (fin - k).max(0.0);
-    let Some(a) = array_species_create(heap, Value::UNDEFINED, &[this, conv::number(count)])?
-        .and_then(|a| a.as_object())
-    else {
-        return Ok(None);
-    };
-    // A fresh `a` of length `count`: slice's final Set of `length` changes nothing.
-    if fin > k && !dense::slice(heap, o, k as u32, fin as u32, a)? {
+    // A plain result, copied from dense elements in one step (0129). Anything else
+    // declines: the builtin's own path (ArraySpeciesCreate, then `%ArraySliceDense`)
+    // is what this did after it.
+    if !plain_species(heap, o) {
         return Ok(None);
     }
-    Ok(Some(Value::object(a)))
+    let proto = realm::intrinsic_obj(heap, Intrinsic::ArrayProto);
+    let (k, fin) = (k as u32, fin.max(k) as u32);
+    Ok(heap
+        .new_array_from_dense(Some(proto), o, k, fin)?
+        .map(Value::object))
 }
 
 /// Array.prototype.join ( separator ) with a primitive separator.
