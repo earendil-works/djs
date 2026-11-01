@@ -971,3 +971,67 @@ today (0.5 s for active + later in release). The slowest test takes 0.84 s in de
 against a 20 s wall-clock limit. Most tests stop early today, so the time will grow as
 djs passes more. Above about 30 s, switch the gate step to a release build. A
 deterministic subset is the fallback. The `later` group is not in the gate.
+
+## D1260: Inlined fixed-size arena accessors; the wasm profile stays at opt-level "s"
+date: 2026-11-01 · by: num · issue: 0026
+The field accessors (`layout::read_array`/`write_array`, `FieldType::read/write`,
+`Arena::read/write/get/set/len`) are `#[inline(always)]` and use `first_chunk` for
+fixed-size loads and stores; the out-of-bounds panic is a cold function. At opt-level z,
+`copy_from_slice` used to stay a call (sometimes a `memcpy` call for 4 bytes). That
+alone brought z's interpreter loop from 132 to 83 ms (s: 79 ms).
+
+Re-measured at z and s after all of 0026 (djs-wasm in node 25, medians of 3, with the
+0022 builtins):
+
+| | z | s |
+| --- | ---: | ---: |
+| stripped / gzip | 404 / 152 KB | 461 / 168 KB |
+| interp loop | 118 ms | 83 ms |
+| wire decode 10k objects | 7.2 ms | 4.3 ms |
+| parse_json 10k objects | 13.7 ms | 8.0 ms |
+| parse_json 1 MiB text | 6.0 ms | 2.1 ms |
+| json_stringify 10k objects | 9.8 ms | 5.8 ms |
+
+z is still 1.4x to 2.8x slower, far from the ~10% bar: the JSON lexer, the decoder and
+`resize` zero fills are loops that z leaves unoptimized. As D1232, the wasm profile stays
+at "s" (+16 KB gzip). The 400 KB budget is meant after `wasm-opt -Oz` (not installed
+here).
+
+## D1261: The arena keeps a zeroed frontier; data is written once
+date: 2026-11-01 · by: num · issue: 0026
+`Arena` tracks its own `len`. `bytes.len()` (the Vec's length) is a *zeroed frontier* up
+to 16 KiB ahead of it, and everything in `bytes[len..]` is zero:
+- `alloc` below the frontier is a bounds check and a bump;
+- moving the frontier is a cold path (`resize`, a memset at opt-level s and up);
+- `alloc_init(size, at, data)` (strings, GC copies) and `alloc_from_iter` (UTF-16 units
+  converted on the way in) append their data at the frontier instead of zeroing and then
+  copying, so those bytes are written once. The GC's to-space never zero-fills.
+
+`bytes()`, `slice`, `slice_mut`, `copy_within` and `split_mut` stay strict against
+`len`. The hot field accessors check only against the Vec (one compare less), which is
+still memory safe (an access between `len` and the frontier reads zeros). Debug builds
+also assert `len`, so tests catch stray accesses. `shrink_capacity` truncates the
+frontier, so images and restored arenas behave as before. Natively, GC is 11-19% faster
+and object decode 7% faster; in wasm, decode is 15% and JSON parse 10% faster.
+Measured: a static zero block or doubling `extend_from_within` instead of `resize`
+avoids z's byte loop but costs 15% natively, and only `slice::fill` becomes
+`memory.fill` at z, so `resize` stays.
+
+## D1262: Short decimals format without Ryu
+date: 2026-11-01 · by: num · issue: 0026
+`num::format::shortest` first tries `short_decimal`: for k = 1..8, `m = round(a * 10^k)`
+is accepted when `m as f64 / 10^k == a`. The search stops once `ulp(a) * 10^k >= 1`, and
+`None` falls back to Ryu. It gives exactly Ryu's digits:
+- the division is correctly rounded with exact operands, so the test is exactly "the
+  decimal round-trips";
+- below that ulp bound, at most one multiple of 10^-k lies in the round-trip interval
+  (also for the asymmetric intervals of powers of two), so the first k is the unique
+  shortest form;
+- a candidate near a half-way point cannot round-trip, so rounding in `a * 10^k` never
+  hides the right candidate.
+
+Checked against Ryu on 2M random, short-decimal, power-of-two and near-2^53 values, and on
+a 525k-case qjs corpus. Effects:
+- `num/to_string(short decimal)`: 32 to 11 ns;
+- stringify of 500k numbers: 12.3 to 8.4 ms natively, 24.9 to 13.3 ms in wasm;
+- random doubles pay about 1 ns for the failed tries.
