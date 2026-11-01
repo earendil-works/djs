@@ -1,7 +1,7 @@
 # 0138: Design study: builtin code in a shared read-only segment (no build)
 
-status: open
-agent: -
+status: done
+agent: heap
 branch: issue/0138-shared-segment-design
 depends-on: 0135, 0136
 guide: -
@@ -35,7 +35,28 @@ per VM and roughly halve the vm_new copy. Before the owner decides: what would i
 docs/shared-segment.md with a recommendation (do / don't / phased), for the owner.
 
 ## Log
+- Measured the split on the base: 2,849 template-owned cells, 177,616 B (templates,
+  bytecode, capture descriptors, constant pools, handler tables). The pools reference
+  367 strings (13 KB) and nothing else; privileged templates have no children.
+- Prototyped the access dispatch (work/scratch/0138, not landed):
+  - eager, every code/template/constant read checks `RO_BASE`: loop +2.4%, calls +1.4%,
+    arrays +1.3%, props +1.0%, pi-like +0.3%;
+  - lazy copy, frame entry and caches only: loop +0.5%, call1 +0.9%, the rest ≤ 0.6%.
+- Wrote docs/shared-segment.md:
+  - encoding, the per-VM parts (caches out of templates, a pinned string prefix), GC,
+    snapshots, determinism, lazy builtins, pi;
+  - estimates and phases (6–7 weeks, medium-high risk);
+  - a cheaper alternative: decode the base straight into the arena, −0.31 MiB per
+    instance.
 
 ## Follow-ups
+- Candidate issue: decode/inject the base directly into the first VM's arena instead of
+  keeping a decoded copy per instance (docs/shared-segment.md §8): est. −0.31 MiB wasm
+  memory per instance, djs-wasm + js/src/snapshot.ts.
 
 ## Result
+docs/shared-segment.md. Recommendation: don't build now. For pi it saves 0.18–0.43 MiB
+per instance and costs +1–2.4% instructions (eager) or a lazy-copy mechanism, plus an
+image-format change and an audit of every template read. Do §8's base-into-arena change
+first. Revisit with several VMs per instance; if built, the lazy-copy variant in four
+phases.
