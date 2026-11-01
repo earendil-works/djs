@@ -1,7 +1,7 @@
 # 0123: Why is djs so much bigger than QuickJS? (research)
 
-status: open
-agent: -
+status: in-progress
+agent: bloat
 branch: issue/0123-why-bigger
 depends-on: 0122 (its attribution; runs in parallel)
 guide: - (a guide page may follow)
