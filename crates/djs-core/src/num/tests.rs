@@ -750,3 +750,84 @@ fn radix_round_trips() {
     assert_eq!(longest.len(), MAX_RADIX_LEN);
     assert_eq!(to_string_radix(f64::MAX, 2).unwrap().len(), 1024);
 }
+
+/// Rough timings. Run with
+/// `cargo test -p djs-core --release bench_conversions -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn bench_conversions() {
+    use core::hint::black_box;
+    use std::fmt::Write;
+    use std::println;
+    use std::time::Instant;
+
+    fn time<T>(name: &str, inputs: &[T], mut f: impl FnMut(&T)) {
+        let rounds = (2_000_000 / inputs.len()).max(1);
+        let start = Instant::now();
+        for _ in 0..rounds {
+            for x in inputs {
+                f(x);
+            }
+        }
+        let ns = start.elapsed().as_nanos() as f64 / (rounds * inputs.len()) as f64;
+        println!("{name:40} {ns:8.1} ns/op");
+    }
+
+    let mut rng = Rng(42);
+    let ints: Vec<f64> = (0..1000).map(|_| rng.below(1_000_000) as f64).collect();
+    let short: Vec<f64> = (0..1000)
+        .map(|_| rng.below(100_000) as f64 / 100.0)
+        .collect();
+    let random: Vec<f64> = (0..1000)
+        .map(|_| f64::from_bits(rng.next() >> 2).abs())
+        .filter(|x| x.is_finite())
+        .collect();
+    let mut buf = String::new();
+    time("to_string(int)", &ints, |&x| {
+        black_box(to_string(black_box(x)));
+    });
+    time("to_string(short decimal)", &short, |&x| {
+        black_box(to_string(black_box(x)));
+    });
+    time("to_string(random bits)", &random, |&x| {
+        black_box(to_string(black_box(x)));
+    });
+    time("std format {} (random bits)", &random, |&x| {
+        buf.clear();
+        write!(buf, "{}", black_box(x)).unwrap();
+        black_box(&buf);
+    });
+    time("to_fixed(short decimal, 2)", &short, |&x| {
+        black_box(to_fixed(black_box(x), 2).unwrap());
+    });
+    time("to_precision(random bits, 6)", &random, |&x| {
+        black_box(to_precision(black_box(x), Some(6)).unwrap());
+    });
+    time("to_string_radix(random bits, 16)", &random, |&x| {
+        black_box(to_string_radix(black_box(x), 16).unwrap());
+    });
+
+    let int_strs: Vec<String> = ints.iter().map(|&x| s(x)).collect();
+    let short_strs: Vec<String> = short.iter().map(|&x| s(x)).collect();
+    let random_strs: Vec<String> = random.iter().map(|&x| s(x)).collect();
+    let long_strs: Vec<String> = random.iter().map(|&x| format!("{x:.30e}")).collect();
+    time("string_to_number(int)", &int_strs, |t| {
+        black_box(string_to_number(black_box(t.as_bytes())));
+    });
+    time("string_to_number(short decimal)", &short_strs, |t| {
+        black_box(string_to_number(black_box(t.as_bytes())));
+    });
+    time("string_to_number(shortest of random)", &random_strs, |t| {
+        black_box(string_to_number(black_box(t.as_bytes())));
+    });
+    time("std parse (shortest of random)", &random_strs, |t| {
+        black_box(black_box(t.as_str()).parse::<f64>().unwrap());
+    });
+    time("string_to_number(31 digits)", &long_strs, |t| {
+        black_box(string_to_number(black_box(t.as_bytes())));
+    });
+    let wide: Vec<Vec<u16>> = random_strs.iter().map(|t| utf16(t)).collect();
+    time("string_to_number(u16, shortest)", &wide, |t| {
+        black_box(string_to_number(black_box(&t[..])));
+    });
+}

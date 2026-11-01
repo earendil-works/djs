@@ -110,70 +110,45 @@ struct Decimal {
 /// inside digit runs (numeric literals, already validated by the lexer); `int_only` stops
 /// before a dot or exponent (parseInt). Returns `None` if there are no digits.
 fn scan_decimal<T: CodeUnit>(s: &[T], start: usize, sep: bool, int_only: bool) -> Option<Decimal> {
-    let mut d = Decimal {
-        end: start,
-        int: (start, start),
-        frac: (start, start),
-        exp: 0,
-        w: 0,
-        q: 0,
-        truncated: false,
-    };
-    let mut n_sig = 0u32;
-    // Exponent adjustments: frac digits consumed into w (or leading zeros after the dot)
-    // decrease it, integer digits dropped from w increase it.
-    let mut shift = 0i64;
+    // Accumulate every digit with wrapping arithmetic; that is exact when there are at most
+    // 19 of them, and the rare longer inputs are re-scanned below.
+    let mut w = 0u64;
     let mut i = start;
-    let mut digits = 0usize;
-    let mut take = |c: u32, in_frac: bool, n_sig: &mut u32, d: &mut Decimal| {
-        if *n_sig == 0 && c == 0 {
-            if in_frac {
-                shift -= 1;
-            }
-        } else if *n_sig < 19 {
-            *n_sig += 1;
-            d.w = d.w * 10 + c as u64;
-            if in_frac {
-                shift -= 1;
-            }
-        } else {
-            d.truncated |= c != 0;
-            if !in_frac {
-                shift += 1;
-            }
-        }
-    };
-    loop {
-        let c = at(s, i);
-        if c.wrapping_sub(0x30) < 10 {
-            take(c - 0x30, false, &mut n_sig, &mut d);
-            digits += 1;
+    while i < s.len() {
+        let c: u32 = s[i].into();
+        let d = c.wrapping_sub(0x30);
+        if d < 10 {
+            w = w.wrapping_mul(10).wrapping_add(d as u64);
         } else if !(sep && c == 0x5F) {
             break;
         }
         i += 1;
     }
-    d.int = (start, i);
-    if !int_only && at(s, i) == 0x2E && (digits > 0 || at(s, i + 1).wrapping_sub(0x30) < 10) {
+    let int = (start, i);
+    let mut frac = (i, i);
+    let mut n_frac = 0i64;
+    if !int_only && at(s, i) == 0x2E && (i > start || at(s, i + 1).wrapping_sub(0x30) < 10) {
         i += 1;
         let frac_start = i;
-        loop {
-            let c = at(s, i);
-            if c.wrapping_sub(0x30) < 10 {
-                take(c - 0x30, true, &mut n_sig, &mut d);
-                digits += 1;
+        while i < s.len() {
+            let c: u32 = s[i].into();
+            let d = c.wrapping_sub(0x30);
+            if d < 10 {
+                w = w.wrapping_mul(10).wrapping_add(d as u64);
+                n_frac += 1;
             } else if !(sep && c == 0x5F) {
                 break;
             }
             i += 1;
         }
-        d.frac = (frac_start, i);
-    } else {
-        d.frac = (i, i);
+        frac = (frac_start, i);
     }
-    if digits == 0 {
+    // Digits, counting separators too (which can only make this an overestimate).
+    let n_digits = (int.1 - int.0) + (frac.1 - frac.0);
+    if n_digits == 0 {
         return None;
     }
+    let mut exp = 0i64;
     if !int_only && at(s, i) | 0x20 == 0x65 {
         let (neg, mut j) = match at(s, i + 1) {
             0x2B => (false, i + 2),
@@ -182,24 +157,72 @@ fn scan_decimal<T: CodeUnit>(s: &[T], start: usize, sep: bool, int_only: bool) -
         };
         if at(s, j).wrapping_sub(0x30) < 10 {
             let mut e = 0i64;
-            loop {
-                let c = at(s, j);
-                if c.wrapping_sub(0x30) < 10 {
+            while j < s.len() {
+                let c: u32 = s[j].into();
+                let d = c.wrapping_sub(0x30);
+                if d < 10 {
+                    // Saturate far outside the double range.
                     if e < 1_000_000_000_000 {
-                        e = e * 10 + (c - 0x30) as i64;
+                        e = e * 10 + d as i64;
                     }
                 } else if !(sep && c == 0x5F) {
                     break;
                 }
                 j += 1;
             }
-            d.exp = if neg { -e } else { e };
+            exp = if neg { -e } else { e };
             i = j;
         }
     }
-    d.end = i;
-    d.q = d.exp + shift;
+    let mut d = Decimal {
+        end: i,
+        int,
+        frac,
+        exp,
+        w,
+        q: exp - n_frac,
+        truncated: false,
+    };
+    if n_digits > 19 {
+        first_19_digits(&mut decimal_digits(s, &d), &mut d);
+    }
     Some(d)
+}
+
+/// The digits of a scanned decimal as (value, after the point), without separators.
+///
+/// The rare paths that re-read digits take this as a `dyn Iterator`, so that they are not
+/// instantiated once per code unit type.
+fn decimal_digits<'a, T: CodeUnit>(
+    s: &'a [T],
+    d: &Decimal,
+) -> impl Iterator<Item = (u32, bool)> + 'a {
+    let (int, frac) = (d.int, d.frac);
+    (int.0..int.1)
+        .map(move |i| (at(s, i).wrapping_sub(0x30), false))
+        .chain((frac.0..frac.1).map(move |i| (at(s, i).wrapping_sub(0x30), true)))
+        .filter(|&(c, _)| c < 10)
+}
+
+/// Recomputes `w` from the first 19 significant digits, with `q` and `truncated` to match.
+fn first_19_digits(digits: &mut dyn Iterator<Item = (u32, bool)>, d: &mut Decimal) {
+    let mut w = 0u64;
+    let mut n_sig = 0u32;
+    let mut truncated = false;
+    let mut shift = 0i64;
+    for (c, in_frac) in digits {
+        if n_sig < 19 {
+            w = w * 10 + c as u64;
+            n_sig += (w != 0) as u32;
+            shift -= in_frac as i64;
+        } else {
+            truncated |= c != 0;
+            shift += !in_frac as i64;
+        }
+    }
+    d.w = w;
+    d.q = d.exp + shift;
+    d.truncated = truncated;
 }
 
 /// The value of a scanned decimal (without sign).
@@ -232,7 +255,7 @@ fn decimal_value<T: CodeUnit>(s: &[T], d: &Decimal) -> f64 {
     {
         return v;
     }
-    slow_decimal(s, d)
+    slow_decimal(&mut decimal_digits(s, d), d.exp)
 }
 
 /// Eisel-Lemire: `w * 10^q` correctly rounded, or `None` when the 128-bit approximation
@@ -308,35 +331,21 @@ fn product_approx(q: i32, w: u64) -> (u64, u64) {
     (first_lo, first_hi)
 }
 
-/// Exact conversion of a scanned decimal with big integers.
-fn slow_decimal<T: CodeUnit>(s: &[T], d: &Decimal) -> f64 {
+/// Exact conversion with big integers: the decimal with these digits and explicit exponent.
+fn slow_decimal(digits: &mut dyn Iterator<Item = (u32, bool)>, exp: i64) -> f64 {
     let mut acc = DigitAcc::new(10);
     let mut sticky = false;
-    let mut e10 = d.exp;
-    for i in d.int.0..d.int.1 {
-        let c = at(s, i).wrapping_sub(0x30);
-        if c >= 10 || (acc.n == 0 && c == 0) {
-            continue;
-        }
-        if acc.n < MAX_SIG_DIGITS {
-            acc.push(c);
-        } else {
-            sticky |= c != 0;
-            e10 += 1;
-        }
-    }
-    for i in d.frac.0..d.frac.1 {
-        let c = at(s, i).wrapping_sub(0x30);
-        if c >= 10 {
-            continue;
-        }
+    let mut e10 = exp;
+    for (c, in_frac) in digits {
         if acc.n == 0 && c == 0 {
-            e10 -= 1;
+            // A leading zero; after the point it still moves the point.
+            e10 -= in_frac as i64;
         } else if acc.n < MAX_SIG_DIGITS {
             acc.push(c);
-            e10 -= 1;
+            e10 -= in_frac as i64;
         } else {
             sticky |= c != 0;
+            e10 += !in_frac as i64;
         }
     }
     let n = acc.n as i64;
@@ -397,10 +406,15 @@ impl DigitAcc {
 
 /// The value of the radix-`radix` digits in `s[start..end]` (skipping `_`), `radix != 10`.
 fn radix_int_value<T: CodeUnit>(s: &[T], start: usize, end: usize, radix: u32) -> f64 {
-    let digits = (start..end)
+    let mut digits = (start..end)
         .map(|i| digit(at(s, i)))
         .filter(|&c| c < radix)
         .skip_while(|&c| c == 0);
+    radix_digits_value(&mut digits, radix)
+}
+
+/// The value of radix-`radix` digits without leading zeros.
+fn radix_digits_value(digits: &mut dyn Iterator<Item = u32>, radix: u32) -> f64 {
     if radix.is_power_of_two() {
         // Exact: keep at least 59 significant bits, the rest only matters as a sticky bit.
         let bits = radix.trailing_zeros();
