@@ -2272,8 +2272,14 @@ fn end_to_end_iteration_messages() {
 #[test]
 fn end_to_end_async_generators() {
     run_cases(&[
-        ("async function f() { return 1 } return await f() + 1", "=> 2"),
-        ("const p = Promise.resolve(3); return (await p) * (await 2)", "=> 6"),
+        (
+            "async function f() { return 1 } return await f() + 1",
+            "=> 2",
+        ),
+        (
+            "const p = Promise.resolve(3); return (await p) * (await 2)",
+            "=> 6",
+        ),
         ("throw new TypeError('x')", "throw TypeError: x"),
         (
             "async function f() { await null; throw 'late' } try { await f() } catch (e) { return 'caught ' + e }",

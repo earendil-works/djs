@@ -1728,6 +1728,7 @@ on newTarget that ran user code too early (or threw "not supported yet: getter f
 `ToIndex`, DataView's checks) came in the wrong order. For an `OBJ_BUILTIN` callee the
 interpreter now skips the lookup and passes a plain object; bytecode constructors are
 unchanged.
+
 ## D1410: The codemode body is an async function
 date: 2026-11-01 · by: lexer · issue: 0041
 `Goal::AsyncBody` compiles like an async arrow (D008): `async_start`, `async_return` for

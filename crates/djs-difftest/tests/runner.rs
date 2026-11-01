@@ -223,9 +223,9 @@ fn glue_corpus(name: &str) -> (PathBuf, Vec<case::Case>) {
     write(
         &dir,
         "area/tools.js",
-        "console.log(tools.echo({p: \"x\", n: [1, true]}), ALL_TOOLS.length);",
+        "console.log(await tools.echo({p: \"x\", n: [1, true]}), ALL_TOOLS.length);",
     );
-    write(&dir, "area/fail.js", "tools.fail({message: \"denied\"});");
+    write(&dir, "area/fail.js", "await tools.fail({message: \"denied\"});");
     write(
         &dir,
         "area/fuel.js",
