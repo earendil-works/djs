@@ -47,14 +47,17 @@ impl Parser<'_, '_> {
         self.next()?;
         let is_gen = self.eat(TokenKind::Star)?;
         let (name, own) = if self.is(TokenKind::Ident) {
-            // The name of an async or generator expression is bound inside it, where
-            // `await`/`yield` are operators.
-            if (is_async && self.tok.is_contextual(Kw::Await))
-                || (is_gen && self.tok.kw == Kw::Yield)
-            {
-                return syntax(self.tok.start, "function name expected");
-            }
-            let n = self.function_binding_name("invalid function name in strict code")?;
+            // The name of an expression is bound inside it: `await` is an operator in
+            // an async one, an identifier in a plain one (even inside an async
+            // function).
+            let n = if self.tok.is_contextual(Kw::Await) {
+                if is_async {
+                    return syntax(self.tok.start, "expecting '('");
+                }
+                self.ident_atom()?
+            } else {
+                self.function_binding_name("invalid function name in strict code")?
+            };
             self.next()?;
             (n, true)
         } else {

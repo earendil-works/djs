@@ -245,6 +245,19 @@ impl Parser<'_, '_> {
             _ => Atom::NULL,
         };
         match tok.kind {
+            // In async functions `await` is an operator, never an arrow parameter.
+            // The parameters of an arrow in an async function cannot await (the arrow
+            // itself is not async; qjs's message).
+            TokenKind::Ident
+                if tok.is_contextual(Kw::Await)
+                    && !self.f.is_async
+                    && self.f.in_params
+                    && self.f.kind == FuncKind::Arrow
+                    && self.stack.last().is_some_and(|s| s.f.is_async) =>
+            {
+                return syntax(tok.start, "unexpected 'await' keyword");
+            }
+            TokenKind::Ident if tok.is_contextual(Kw::Await) && self.f.is_async => {}
             TokenKind::Ident => {
                 let next = self.peek();
                 if next.kind == TokenKind::Arrow && !next.newline_before() {
@@ -254,6 +267,9 @@ impl Parser<'_, '_> {
                 if tok.is_contextual(Kw::Async) && !next.newline_before() {
                     let arrow = match next.kind {
                         // `async x => ...`
+                        TokenKind::Ident if next.is_contextual(Kw::Await) => {
+                            return syntax(next.start, "expecting '('");
+                        }
                         TokenKind::Ident => true,
                         TokenKind::LParen => {
                             let mut lx = self.lx;
@@ -529,6 +545,17 @@ impl Parser<'_, '_> {
                 self.emit_store(lv, true);
                 // An UpdateExpression, not a UnaryExpression: `++a ** 2` is valid.
                 return Ok((Expr::Value, false));
+            }
+            // The parameters of an arrow in an async function cannot await (the arrow
+            // itself is not async; qjs's message).
+            TokenKind::Ident
+                if tok.is_contextual(Kw::Await)
+                    && !self.f.is_async
+                    && self.f.in_params
+                    && self.f.kind == FuncKind::Arrow
+                    && self.stack.last().is_some_and(|s| s.f.is_async) =>
+            {
+                return syntax(tok.start, "unexpected 'await' keyword");
             }
             TokenKind::Ident if tok.is_contextual(Kw::Await) && self.f.is_async => {
                 if self.f.in_params {
@@ -1000,7 +1027,10 @@ impl Parser<'_, '_> {
         if tok.kw == Kw::Yield {
             return syntax(tok.start, "unexpected 'yield' keyword");
         }
-        if tok.is_escaped_reserved() || tok.kw.is_strict_reserved() {
+        if tok.is_escaped_reserved()
+            || tok.kw.is_strict_reserved()
+            || (tok.is_contextual(Kw::Await) && self.f.is_async)
+        {
             return self.unexpected();
         }
         let atom = self.ident_atom()?;

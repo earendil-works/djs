@@ -85,7 +85,12 @@ impl Parser<'_, '_> {
                 tok.start,
                 "class declarations can't appear in single-statement context",
             ),
-            TokenKind::Ident if self.peek().kind == TokenKind::Colon => self.parse_labeled(),
+            TokenKind::Ident
+                if self.peek().kind == TokenKind::Colon
+                    && !(tok.is_contextual(Kw::Await) && self.f.is_async) =>
+            {
+                self.parse_labeled()
+            }
             _ => {
                 self.parse_expr(false)?;
                 self.code().drop();
