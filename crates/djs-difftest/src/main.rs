@@ -41,7 +41,10 @@ options:
   --ratchet-file FILE use another failures file (implies --ratchet)
   --update-ratchet    rewrite the failures file from this run
   --no-diff           list failures without diffs
-  --timeout SECS      wall-clock limit per case (default 10)
+  --fuel N            djs only: fuel budget per case without a `difftest: fuel`
+                      directive, the deterministic limit (default 1e9)
+  --timeout SECS      wall-clock limit per case (default 10 for qjs; for djs only a hang
+                      guard, 120, since fuel decides, D1790)
   --memory-limit N    memory limit per case in bytes, K/M/G suffixes (default 256M,
                       as in pi's codemode; 0 means no limit)
   -j, --jobs N        worker threads (default: $DJS_JOBS, else the number of CPUs)
@@ -57,7 +60,8 @@ struct Args {
     ratchet: Option<PathBuf>,
     update_ratchet: bool,
     diff: bool,
-    timeout: Duration,
+    timeout: Option<Duration>,
+    fuel: Option<u64>,
     memory_limit: Option<u64>,
     jobs: usize,
     corpus: PathBuf,
@@ -96,7 +100,8 @@ fn parse_args() -> Result<Args, String> {
         ratchet: None,
         update_ratchet: false,
         diff: true,
-        timeout: Duration::from_secs(10),
+        timeout: None,
+        fuel: None,
         memory_limit: Some(256 << 20),
         jobs: djs_test262::par::default_jobs(),
         corpus,
@@ -130,7 +135,12 @@ fn parse_args() -> Result<Args, String> {
                 let secs: f64 = v
                     .parse()
                     .map_err(|_| format!("--timeout: bad number `{v}`"))?;
-                args.timeout = Duration::from_secs_f64(secs);
+                args.timeout = Some(Duration::from_secs_f64(secs));
+            }
+            "--fuel" => {
+                let v = value(&a)?;
+                let n: f64 = v.parse().map_err(|_| format!("--fuel: bad number `{v}`"))?;
+                args.fuel = Some(n as u64);
             }
             "--memory-limit" => {
                 let n = parse_size(&value(&a)?)?;
@@ -230,7 +240,16 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
     }
     let opts = runner::Options {
         jobs: args.jobs,
-        timeout: args.timeout,
+        // djs is limited by fuel, which does not depend on machine load; the wall clock
+        // only guards against a hang outside the interpreter (D1790).
+        timeout: args
+            .timeout
+            .unwrap_or(Duration::from_secs(if args.engine == "djs" {
+                120
+            } else {
+                10
+            })),
+        fuel: args.fuel,
         memory_limit: args.memory_limit,
         progress: !args.quiet,
         is_djs: args.engine == "djs",

@@ -20,9 +20,11 @@ use djs_core::vm::{ExecOptions, Status, Vm, VmOptions};
 
 use crate::engine::{Done, Engine, Job, RunResult};
 
-/// Fuel when the case has no `// difftest: fuel` directive: generous, but it bounds an
-/// in-process infinite loop, which a wall-clock timeout alone cannot interrupt.
-pub const DEFAULT_FUEL: u64 = 20_000_000_000;
+/// Fuel when the case has no `// difftest: fuel` directive. This is the limit that decides
+/// a timeout, since it does not depend on machine load (D1790): every corpus case needs
+/// less than 1e8, and a debug build runs ~1e8 fuel/s, so a runaway case stops after ~10 s.
+/// The wall-clock timeout is only a hang guard.
+pub const DEFAULT_FUEL: u64 = 1_000_000_000;
 /// Fuel per `run` in the plain mode; the wall-clock timeout is checked between slices.
 const SLICE: u64 = 10_000_000;
 /// Fuel per `run` under `--gc-stress`.

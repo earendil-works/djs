@@ -43,7 +43,10 @@ run options:
   --no-cache          qjs: run every test instead of reusing cached results (the
                       cache sits next to the test262 checkout, keyed by the qjs
                       binary, the test262 commit and the driver; D1531)
-  --timeout SECS      wall-clock limit per test (default 20)
+  --fuel N            djs only: fuel budget per test, the deterministic limit (default
+                      2e9)
+  --timeout SECS      wall-clock limit per test (default 20 for qjs; for djs only a hang
+                      guard, 120, since fuel decides, D1790)
   --memory-limit N    memory limit per test in bytes, K/M/G suffixes allowed
                       (default 512M; 0 means no limit)
   --failures          list failing tests with a one-line reason
@@ -68,7 +71,8 @@ struct Args {
     bytecode_builtins: bool,
     engine: String,
     qjs: PathBuf,
-    timeout: Duration,
+    timeout: Option<Duration>,
+    fuel: Option<u64>,
     memory_limit: Option<u64>,
     failures: bool,
     no_cache: bool,
@@ -106,7 +110,8 @@ fn parse_args() -> Result<Args, String> {
         bytecode_builtins: false,
         engine: "qjs".into(),
         qjs: Qjs::default_binary(),
-        timeout: Duration::from_secs(20),
+        timeout: None,
+        fuel: None,
         memory_limit: Some(512 << 20),
         failures: false,
         no_cache: false,
@@ -135,6 +140,11 @@ fn parse_args() -> Result<Args, String> {
             "--config" => args.config = value(&a)?.into(),
             "--paths" => args.paths = true,
             "--engine" => args.engine = value(&a)?,
+            "--fuel" => {
+                let v = value(&a)?;
+                let n: f64 = v.parse().map_err(|_| format!("--fuel: bad number `{v}`"))?;
+                args.fuel = Some(n as u64);
+            }
             "--backend" => match value(&a)?.as_str() {
                 "native" => args.bytecode_builtins = false,
                 "bytecode" => args.bytecode_builtins = true,
@@ -146,7 +156,7 @@ fn parse_args() -> Result<Args, String> {
                 let secs: f64 = v
                     .parse()
                     .map_err(|_| format!("--timeout: bad number `{v}`"))?;
-                args.timeout = Duration::from_secs_f64(secs);
+                args.timeout = Some(Duration::from_secs_f64(secs));
             }
             "--memory-limit" => {
                 let n = parse_size(&value(&a)?)?;
@@ -277,7 +287,7 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         }
         "djs" => Box::new(djs_test262::djs::Djs {
             bytecode_builtins: args.bytecode_builtins,
-            ..Default::default()
+            fuel: args.fuel.unwrap_or(djs_test262::djs::DEFAULT_FUEL),
         }),
         e => return Err(format!("unknown engine `{e}`")),
     };
@@ -313,7 +323,15 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
     }
     let opts = runner::Options {
         jobs: args.jobs,
-        timeout: args.timeout,
+        // djs is limited by fuel, which does not depend on machine load; the wall clock
+        // only guards against a hang outside the interpreter (D1790).
+        timeout: args
+            .timeout
+            .unwrap_or(Duration::from_secs(if args.engine == "djs" {
+                120
+            } else {
+                20
+            })),
         memory_limit: args.memory_limit,
         progress: !args.quiet,
     };

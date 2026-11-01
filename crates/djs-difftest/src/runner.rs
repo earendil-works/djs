@@ -12,6 +12,9 @@ use crate::engine::{Done, Engine, Job, RunResult, transcript};
 pub struct Options {
     pub jobs: usize,
     pub timeout: Duration,
+    /// djs fuel for cases without a `difftest: fuel` directive (the engine's default if
+    /// `None`).
+    pub fuel: Option<u64>,
     pub memory_limit: Option<u64>,
     pub progress: bool,
     /// Engine is djs: honor `skip-djs`.
@@ -191,7 +194,7 @@ fn execute(
                 prelude_file,
                 prelude,
                 timeout,
-                fuel: case.meta.fuel,
+                fuel: case.meta.fuel.or(opts.fuel),
                 memory_limit: opts.memory_limit,
                 now,
             };

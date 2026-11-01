@@ -17,9 +17,11 @@ use djs_core::vm::{ErrorKind, Status as VmStatus, Vm, VmOptions};
 
 use crate::engine::{Engine, ErrorInfo, Job, RunResult, Status};
 
-/// Fuel for one test (harness included): generous, since it is only hang protection;
-/// the wall-clock timeout is checked between slices.
-pub const DEFAULT_FUEL: u64 = 5_000_000_000;
+/// Fuel for one test (harness included). This is the limit that decides a timeout, since
+/// it does not depend on machine load (D1790): the heaviest active tests (decodeURI's
+/// A2.5_T1) need 2-4e8, and a debug build runs ~1e8 fuel/s, so a runaway test stops after
+/// ~20 s. The wall-clock timeout, checked between slices, is only a hang guard.
+pub const DEFAULT_FUEL: u64 = 2_000_000_000;
 const SLICE: u64 = 10_000_000;
 
 const PRINT: u32 = 0;

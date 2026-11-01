@@ -34,6 +34,7 @@ fn opts(is_djs: bool) -> Options {
     Options {
         jobs: 4,
         timeout: Duration::from_secs(60),
+        fuel: None,
         memory_limit: None,
         progress: false,
         is_djs,

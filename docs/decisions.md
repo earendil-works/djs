@@ -3343,3 +3343,16 @@ development convenience. In practice:
   SIMD unless explicitly decided (0077: `+simd128` is cheap but drops SIMD-less
   embedders);
 - code size counts (ARCH G2), so prefer table-driven or out-of-line code on cold paths.
+
+## D1790: The gate's runners decide timeouts by fuel, not by the wall clock
+date: 2026-11-01 · by: devflow · issue: 0079
+Under load (load average 30–245 while several agents work) wall-clock limits failed the
+gate spuriously: two test262 decodeURI tests that need ~3 s hit the 20 s limit, and each
+such failure cost a full gate and a retry. Fuel does not depend on load, so it now
+decides: djs-test262's djs engine stops a test at 2e9 fuel (`DEFAULT_FUEL`; the heaviest
+active tests need 2–4e8, and a debug build runs ~1e8 fuel/s), djs-difftest's djs engine
+a case at 1e9 (every corpus case needs < 1e8), and the e2e test a run at 20M (D1530's
+0053 budget). The wall clock stays as a hang guard for time spent outside the
+interpreter: 120 s per test/case for djs (stressed difftest runs 3x), unchanged for the
+qjs subprocess engines (20 s test262, 10 s difftest), where it is the only limit.
+`--fuel N` overrides the budget in both runners.
