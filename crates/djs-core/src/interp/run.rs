@@ -68,6 +68,7 @@ impl Default for ExecOptions {
 
 mod intrinsics;
 pub(crate) mod promise;
+pub(crate) mod suspend;
 
 /// The opcodes `Exec::fast_step` handles, as bytes for its `match`.
 mod fast {
@@ -2021,6 +2022,12 @@ impl<'h> Exec<'h> {
                 return self.call(base, argc, Continuation::PushResult, next);
             }
             Op::Debugger | Op::Nop => {}
+            Op::GeneratorStart => return self.generator_start(next),
+            Op::Yield => return self.yield_value(next),
+            Op::AsyncStart => self.async_start()?,
+            Op::Await => return self.await_value(next),
+            Op::AsyncReturn => return self.async_finish(false),
+            Op::AsyncReject => return self.async_finish(true),
             Op::NameGet
             | Op::NamePut
             | Op::NameSet
@@ -2124,6 +2131,13 @@ impl<'h> Exec<'h> {
             let op = intrinsic_obj(self.heap, Intrinsic::ObjectProto);
             let proto = self.heap.new_object(Some(op))?;
             realm::define_hidden(self.heap, proto, atoms::CONSTRUCTOR, Value::object(f))?;
+            let d = PropertyDescriptor::data(Value::object(proto), PropFlags::WRITABLE);
+            self.heap.define_own_property(f, atoms::PROTOTYPE, &d)?;
+        } else if flags & (func_flags::ASYNC | func_flags::GENERATOR) == func_flags::GENERATOR {
+            // A generator function's `prototype` is the prototype of its generator
+            // objects (no `constructor`), D1375.
+            let gp = intrinsic_obj(self.heap, Intrinsic::GeneratorProto);
+            let proto = self.heap.new_object(Some(gp))?;
             let d = PropertyDescriptor::data(Value::object(proto), PropFlags::WRITABLE);
             self.heap.define_own_property(f, atoms::PROTOTYPE, &d)?;
         }

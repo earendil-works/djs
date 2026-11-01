@@ -529,6 +529,30 @@ declare function RecordSet(r: Obj, i: i32, v: Value): void;
  */
 declare function NewBuiltinClosure(kind: i32, data: Value, length: i32): Fn;
 
+// ---- Generators and async functions (0037, D1375) ---------------------------------------
+//
+// A Generator object is a suspendable activation: a generator, or an async function's
+// state. States: 0 suspended at the start, 1 suspended at a yield/await, 2 executing,
+// 3 completed.
+
+/** The state of a generator object (not an async state), or -1 for anything else. @leaf */
+declare function GeneratorState(v: Value): i32;
+/** @leaf */
+declare function GeneratorSetState(g: Obj, state: i32): void;
+/**
+ * Resumes a suspended generator or async function (state 0 or 1) in a frame of its own:
+ * mode 0 continues with value (a generator at a yield gets `value false`, an async
+ * function the value), 1 throws value at the suspension point, 2 (generators at a
+ * yield) returns value from there (`value true`). The result is what the activation
+ * hands back when it next suspends or completes.
+ * @reentrant
+ */
+declare function GeneratorResume(g: Obj, value: Value, mode: i32): Value;
+/** Whether v is the state of an async function call. @leaf */
+declare function IsAsyncFunctionState(v: Value): boolean;
+/** The result promise of an async function call. @leaf */
+declare function AsyncFunctionPromise(a: Obj): Obj;
+
 // ---- Used by the generated code (crates/djs-bgen/src/emit_js.rs) ------------------------
 
 /**

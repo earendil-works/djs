@@ -62,9 +62,12 @@ pub enum Intrinsic {
     Clock,
     /// The local time zone offset in minutes east of UTC (an int; D1383).
     TimeZoneOffset,
+    /// %GeneratorPrototype% (%GeneratorFunction.prototype.prototype%, [[Prototype]]
+    /// %IteratorPrototype%): the default prototype of generator objects (D1375).
+    GeneratorProto,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::TimeZoneOffset as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::GeneratorProto as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -271,6 +274,13 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     set(heap, Intrinsic::SymbolProto, Value::object(symbol_proto));
     let promise_proto = heap.new_object(Some(object_proto))?;
     set(heap, Intrinsic::PromiseProto, Value::object(promise_proto));
+    let iterator_proto = intrinsic_obj(heap, Intrinsic::IteratorProto);
+    let generator_proto = heap.new_object(Some(iterator_proto))?;
+    set(
+        heap,
+        Intrinsic::GeneratorProto,
+        Value::object(generator_proto),
+    );
     let registry = heap.new_object(None)?;
     set(heap, Intrinsic::SymbolRegistry, Value::object(registry));
     let random = heap.alloc_value_array(2)?;

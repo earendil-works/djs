@@ -624,6 +624,29 @@ ops! {
     SuperCall super_call(argc: Argc) pop 0 + imm 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
     /// `a1 .. an -> r`: privileged code only (docs/compiler.md 7.3).
     CallIntrinsic call_intrinsic(id: Intrinsic, argc: Argc) pop 0 + imm 1 push 1 cost Call flags THROWS | CALLS | ALLOC;
+    // ---- Generators and async functions (D1375; docs/compiler.md 7.7) ------------------
+
+    /// Generator function entry: creates the generator object, stores it in local
+    /// `generator`, suspends the frame (to resume at the next instruction) and returns the
+    /// object to the caller.
+    GeneratorStart generator_start(generator: Loc) pop 0 push 0 cost Alloc flags ALLOC;
+    /// `v -> received isReturn`: suspends the generator in local `generator`, handing `v` to
+    /// the resumer. Resumed by `next(x)`: `x false`; by `return(x)`: `x true` (the code
+    /// returns `x`, running finally blocks); `throw(e)` throws `e` here.
+    Yield yield_(generator: Loc) pop 1 push 2 cost Alloc flags THROWS | CALLS | ALLOC;
+    /// Async function entry: creates the async state (with the result promise) in local
+    /// `state`. The function runs on synchronously.
+    AsyncStart async_start(state: Loc) pop 0 push 0 cost Alloc flags ALLOC;
+    /// `v -> result`: suspends the async function of local `state` until `v` settles,
+    /// then pushes its value or throws its reason here. The first await returns the
+    /// result promise to the caller.
+    Await await_(state: Loc) pop 1 push 1 cost Alloc flags THROWS | CALLS | ALLOC;
+    /// `v ->`: return from an async function: resolves the result promise with `v` and
+    /// returns the promise.
+    AsyncReturn async_return(state: Loc) pop 1 push 0 cost Call flags THROWS | CALLS | TERM;
+    /// `e ->`: an exception leaves an async function: rejects the result promise with
+    /// `e` and returns the promise (the target of the body's catch-all handler).
+    AsyncReject async_reject(state: Loc) pop 1 push 0 cost Call flags THROWS | CALLS | TERM;
     /// `obj -> iterator`
     GetIterator get_iterator() pop 1 push 1 cost Access flags THROWS | CALLS | ALLOC;
     /// `v -> v`: TypeError if `v` is not an object (iterator results).

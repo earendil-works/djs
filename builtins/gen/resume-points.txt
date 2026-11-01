@@ -634,6 +634,31 @@ FunctionPrototypeHasInstance: reentrant (Function.prototype[Symbol.hasInstance])
 
 ThrowTypeError: leaf (get Function.prototype.caller, set Function.prototype.caller, get Function.prototype.arguments, set Function.prototype.arguments)
 
+GeneratorValidate: leaf
+
+GeneratorStep: reentrant
+  builtins/generator.ts:26:14  GeneratorResume (intrinsic)
+
+GeneratorPrototypeNext: reentrant (%GeneratorPrototype%.next)
+  builtins/generator.ts:47:10  GeneratorStep (builtin)
+
+GeneratorPrototypeReturn: reentrant (%GeneratorPrototype%.return)
+  builtins/generator.ts:60:10  GeneratorStep (builtin)
+
+GeneratorPrototypeThrow: reentrant (%GeneratorPrototype%.throw)
+  builtins/generator.ts:73:10  GeneratorStep (builtin)
+
+GeneratorPrototypeToStringTag: leaf (value %GeneratorPrototype%[Symbol.toStringTag])
+
+AsyncAwait: reentrant (%AsyncAwait)
+  builtins/generator.ts:95:15  PromiseResolve (builtin)
+  builtins/generator.ts:97:12  GeneratorResume (intrinsic)
+
+AsyncFunctionReturn: reentrant (%AsyncFunctionReturn)
+  builtins/generator.ts:110:3  ResolvePromise (builtin)
+
+AsyncFunctionThrow: leaf (%AsyncFunctionThrow)
+
 GetIterator: reentrant (%GetIterator)
   builtins/iter.ts:11:25  GetV (intrinsic)
   builtins/iter.ts:15:27  Call (intrinsic)
@@ -1165,135 +1190,136 @@ InvokeThen: reentrant
   builtins/promise.ts:198:10  Call (intrinsic)
 
 PromiseReactionJob: reentrant (%PromiseReactionJob)
-  builtins/promise.ts:213:16  Call (intrinsic)
-  builtins/promise.ts:224:5  ResolveCapability (builtin)
-  builtins/promise.ts:226:5  RejectCapability (builtin)
+  builtins/promise.ts:211:5  GeneratorResume (intrinsic)
+  builtins/promise.ts:218:16  Call (intrinsic)
+  builtins/promise.ts:229:5  ResolveCapability (builtin)
+  builtins/promise.ts:231:5  RejectCapability (builtin)
 
 PromiseResolveThenableJob: reentrant (%PromiseResolveThenableJob)
-  builtins/promise.ts:242:5  Call (intrinsic)
-  builtins/promise.ts:244:5  Call (intrinsic)
+  builtins/promise.ts:247:5  Call (intrinsic)
+  builtins/promise.ts:249:5  Call (intrinsic)
 
 PromiseConstructor: reentrant (constructor Promise, %PromiseConstructor)
-  builtins/promise.ts:262:38  GetPrototypeFromConstructor (builtin)
-  builtins/promise.ts:266:5  Call (intrinsic)
-  builtins/promise.ts:268:5  Call (intrinsic)
+  builtins/promise.ts:267:38  GetPrototypeFromConstructor (builtin)
+  builtins/promise.ts:271:5  Call (intrinsic)
+  builtins/promise.ts:273:5  Call (intrinsic)
 
 PromiseSpecies: leaf (get Promise[Symbol.species])
 
 PromiseThisConstructor: leaf
 
 PromiseStaticResolve: reentrant (Promise.resolve)
-  builtins/promise.ts:294:10  PromiseResolve (builtin)
+  builtins/promise.ts:299:10  PromiseResolve (builtin)
 
 PromiseStaticReject: reentrant (Promise.reject)
-  builtins/promise.ts:302:29  NewPromiseCapability (builtin)
-  builtins/promise.ts:303:3  RejectCapability (builtin)
+  builtins/promise.ts:307:29  NewPromiseCapability (builtin)
+  builtins/promise.ts:308:3  RejectCapability (builtin)
 
 GetPromiseResolve: reentrant
-  builtins/promise.ts:314:33  Get (intrinsic)
+  builtins/promise.ts:319:33  Get (intrinsic)
 
 DecrementRemaining: leaf
 
 NewElementRecord: leaf
 
 SettleElement: reentrant
-  builtins/promise.ts:351:3  CreateDataPropertyOrThrow (intrinsic)
-  builtins/promise.ts:355:36  NewAggregateError (builtin)
-  builtins/promise.ts:355:7  RejectCapability (builtin)
-  builtins/promise.ts:357:7  ResolveCapability (builtin)
+  builtins/promise.ts:356:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/promise.ts:360:36  NewAggregateError (builtin)
+  builtins/promise.ts:360:7  RejectCapability (builtin)
+  builtins/promise.ts:362:7  ResolveCapability (builtin)
 
 PromiseAllResolveElement: reentrant (%PromiseAllResolveElement)
-  builtins/promise.ts:367:3  SettleElement (builtin)
+  builtins/promise.ts:372:3  SettleElement (builtin)
 
 SettledRecord: reentrant
-  builtins/promise.ts:373:3  CreateDataPropertyOrThrow (intrinsic)
-  builtins/promise.ts:374:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/promise.ts:378:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/promise.ts:379:3  CreateDataPropertyOrThrow (intrinsic)
 
 PromiseAllSettledResolveElement: reentrant (%PromiseAllSettledResolveElement)
-  builtins/promise.ts:386:23  SettledRecord (builtin)
-  builtins/promise.ts:386:3  SettleElement (builtin)
+  builtins/promise.ts:391:23  SettledRecord (builtin)
+  builtins/promise.ts:391:3  SettleElement (builtin)
 
 PromiseAllSettledRejectElement: reentrant (%PromiseAllSettledRejectElement)
-  builtins/promise.ts:397:23  SettledRecord (builtin)
-  builtins/promise.ts:397:3  SettleElement (builtin)
+  builtins/promise.ts:402:23  SettledRecord (builtin)
+  builtins/promise.ts:402:3  SettleElement (builtin)
 
 PromiseAnyRejectElement: reentrant (%PromiseAnyRejectElement)
-  builtins/promise.ts:405:3  SettleElement (builtin)
+  builtins/promise.ts:410:3  SettleElement (builtin)
 
 NewAggregateError: reentrant
-  builtins/promise.ts:411:42  CreateArrayFromList (builtin)
+  builtins/promise.ts:416:42  CreateArrayFromList (builtin)
 
 CreateArrayFromList: reentrant
-  builtins/promise.ts:418:20  LengthOfArrayLike (builtin)
-  builtins/promise.ts:421:37  Get (intrinsic)
-  builtins/promise.ts:421:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/promise.ts:423:20  LengthOfArrayLike (builtin)
+  builtins/promise.ts:426:37  Get (intrinsic)
+  builtins/promise.ts:426:5  CreateDataPropertyOrThrow (intrinsic)
 
 PerformPromiseCombinator: reentrant
-  builtins/promise.ts:434:29  NewPromiseCapability (builtin)
-  builtins/promise.ts:439:22  GetPromiseResolve (builtin)
-  builtins/promise.ts:440:16  GetIterator (builtin)
-  builtins/promise.ts:441:12  Get (intrinsic)
-  builtins/promise.ts:443:5  RejectCapability (builtin)
-  builtins/promise.ts:466:27  IteratorNextResult (builtin)
-  builtins/promise.ts:467:21  Get (intrinsic)
-  builtins/promise.ts:470:42  NewAggregateError (builtin)
-  builtins/promise.ts:470:13  RejectCapability (builtin)
-  builtins/promise.ts:472:13  ResolveCapability (builtin)
-  builtins/promise.ts:477:32  Get (intrinsic)
-  builtins/promise.ts:480:9  CreateDataPropertyOrThrow (intrinsic)
-  builtins/promise.ts:482:34  Call (intrinsic)
-  builtins/promise.ts:484:9  InvokeThen (builtin)
-  builtins/promise.ts:489:11  InvokeThen (builtin)
-  builtins/promise.ts:491:11  InvokeThen (builtin)
-  builtins/promise.ts:493:11  InvokeThen (builtin)
-  builtins/promise.ts:500:7  IteratorCloseThrow (builtin)
-  builtins/promise.ts:502:5  RejectCapability (builtin)
+  builtins/promise.ts:439:29  NewPromiseCapability (builtin)
+  builtins/promise.ts:444:22  GetPromiseResolve (builtin)
+  builtins/promise.ts:445:16  GetIterator (builtin)
+  builtins/promise.ts:446:12  Get (intrinsic)
+  builtins/promise.ts:448:5  RejectCapability (builtin)
+  builtins/promise.ts:471:27  IteratorNextResult (builtin)
+  builtins/promise.ts:472:21  Get (intrinsic)
+  builtins/promise.ts:475:42  NewAggregateError (builtin)
+  builtins/promise.ts:475:13  RejectCapability (builtin)
+  builtins/promise.ts:477:13  ResolveCapability (builtin)
+  builtins/promise.ts:482:32  Get (intrinsic)
+  builtins/promise.ts:485:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/promise.ts:487:34  Call (intrinsic)
+  builtins/promise.ts:489:9  InvokeThen (builtin)
+  builtins/promise.ts:494:11  InvokeThen (builtin)
+  builtins/promise.ts:496:11  InvokeThen (builtin)
+  builtins/promise.ts:498:11  InvokeThen (builtin)
+  builtins/promise.ts:505:7  IteratorCloseThrow (builtin)
+  builtins/promise.ts:507:5  RejectCapability (builtin)
 
 PromiseAll: reentrant (Promise.all)
-  builtins/promise.ts:512:10  PerformPromiseCombinator (builtin)
+  builtins/promise.ts:517:10  PerformPromiseCombinator (builtin)
 
 PromiseAllSettled: reentrant (Promise.allSettled)
-  builtins/promise.ts:520:10  PerformPromiseCombinator (builtin)
+  builtins/promise.ts:525:10  PerformPromiseCombinator (builtin)
 
 PromiseAny: reentrant (Promise.any)
-  builtins/promise.ts:528:10  PerformPromiseCombinator (builtin)
+  builtins/promise.ts:533:10  PerformPromiseCombinator (builtin)
 
 PromiseTry: reentrant (Promise.try)
-  builtins/promise.ts:540:14  CallWithArray (intrinsic)
-  builtins/promise.ts:542:31  NewPromiseCapability (builtin)
-  builtins/promise.ts:543:5  RejectCapability (builtin)
-  builtins/promise.ts:546:10  PromiseResolve (builtin)
+  builtins/promise.ts:545:14  CallWithArray (intrinsic)
+  builtins/promise.ts:547:31  NewPromiseCapability (builtin)
+  builtins/promise.ts:548:5  RejectCapability (builtin)
+  builtins/promise.ts:551:10  PromiseResolve (builtin)
 
 PromiseRace: reentrant (Promise.race)
-  builtins/promise.ts:554:10  PerformPromiseCombinator (builtin)
+  builtins/promise.ts:559:10  PerformPromiseCombinator (builtin)
 
 PromiseWithResolvers: reentrant (Promise.withResolvers)
-  builtins/promise.ts:562:29  NewPromiseCapability (builtin)
-  builtins/promise.ts:564:3  CreateDataPropertyOrThrow (intrinsic)
-  builtins/promise.ts:565:3  CreateDataPropertyOrThrow (intrinsic)
-  builtins/promise.ts:566:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/promise.ts:567:29  NewPromiseCapability (builtin)
+  builtins/promise.ts:569:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/promise.ts:570:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/promise.ts:571:3  CreateDataPropertyOrThrow (intrinsic)
 
 PromisePrototypeThen: reentrant (Promise.prototype.then)
-  builtins/promise.ts:581:20  SpeciesConstructor (builtin)
-  builtins/promise.ts:582:29  NewPromiseCapability (builtin)
+  builtins/promise.ts:586:20  SpeciesConstructor (builtin)
+  builtins/promise.ts:587:29  NewPromiseCapability (builtin)
 
 PromisePrototypeCatch: reentrant (Promise.prototype.catch)
-  builtins/promise.ts:592:10  InvokeThen (builtin)
+  builtins/promise.ts:597:10  InvokeThen (builtin)
 
 PromisePrototypeFinally: reentrant (Promise.prototype.finally)
-  builtins/promise.ts:603:20  SpeciesConstructor (builtin)
-  builtins/promise.ts:605:12  InvokeThen (builtin)
-  builtins/promise.ts:610:10  InvokeThen (builtin)
+  builtins/promise.ts:608:20  SpeciesConstructor (builtin)
+  builtins/promise.ts:610:12  InvokeThen (builtin)
+  builtins/promise.ts:615:10  InvokeThen (builtin)
 
 PromiseThenFinally: reentrant (%PromiseThenFinally)
-  builtins/promise.ts:619:25  Call (intrinsic)
-  builtins/promise.ts:620:20  PromiseResolve (builtin)
-  builtins/promise.ts:621:10  InvokeThen (builtin)
+  builtins/promise.ts:624:25  Call (intrinsic)
+  builtins/promise.ts:625:20  PromiseResolve (builtin)
+  builtins/promise.ts:626:10  InvokeThen (builtin)
 
 PromiseCatchFinally: reentrant (%PromiseCatchFinally)
-  builtins/promise.ts:630:25  Call (intrinsic)
-  builtins/promise.ts:631:20  PromiseResolve (builtin)
-  builtins/promise.ts:632:10  InvokeThen (builtin)
+  builtins/promise.ts:635:25  Call (intrinsic)
+  builtins/promise.ts:636:20  PromiseResolve (builtin)
+  builtins/promise.ts:637:10  InvokeThen (builtin)
 
 PromiseValueThunk: leaf (%PromiseValueThunk)
 
@@ -1302,7 +1328,7 @@ PromiseThrower: leaf (%PromiseThrower)
 PromisePrototypeToStringTag: leaf (value Promise.prototype[Symbol.toStringTag])
 
 HostCallSettle: reentrant (%HostCallSettle)
-  builtins/promise.ts:673:5  ResolvePromise (builtin)
+  builtins/promise.ts:678:5  ResolvePromise (builtin)
 
 ReflectObject: leaf (value Reflect)
 

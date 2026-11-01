@@ -202,10 +202,15 @@ function InvokeThen(v: Value, onFulfilled: Value, onRejected: Value): Value {
 
 /**
  * NewPromiseReactionJob ( reaction, argument ), 27.2.2.1: the job. `handler` undefined is
- * an empty handler.
+ * an empty handler; an async function state is an await to resume.
  * @intrinsic
  */
 function PromiseReactionJob(capability: Value, handler: Value, argument: Value, fulfilled: boolean): void {
+  // An await (D1375): the handler is the async function's state; resume it.
+  if (IsAsyncFunctionState(handler)) {
+    GeneratorResume(AsObj(handler), argument, fulfilled ? 0 : 1);
+    return;
+  }
   let ok: boolean = fulfilled;
   let result: Value = argument;
   if (handler !== undefined) {

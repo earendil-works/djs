@@ -231,6 +231,11 @@ const NEW_RECORD: u16 = id("NewRecord");
 const RECORD_GET: u16 = id("RecordGet");
 const RECORD_SET: u16 = id("RecordSet");
 const NEW_BUILTIN_CLOSURE: u16 = id("NewBuiltinClosure");
+const GENERATOR_STATE: u16 = id("GeneratorState");
+const GENERATOR_SET_STATE: u16 = id("GeneratorSetState");
+const GENERATOR_RESUME: u16 = id("GeneratorResume");
+const IS_ASYNC_FUNCTION_STATE: u16 = id("IsAsyncFunctionState");
+const ASYNC_FUNCTION_PROMISE: u16 = id("AsyncFunctionPromise");
 pub(super) const PROMISE_CONSTRUCTOR: u16 = id("PromiseConstructor");
 const PROMISE_RESOLVE_THENABLE_JOB: u16 = id("PromiseResolveThenableJob");
 
@@ -302,7 +307,7 @@ fn index_key(k: Value) -> Option<u32> {
         .map(|n| n as u32)
 }
 
-fn bad_argument<T>(name: &str) -> Result<T, Fault> {
+pub(super) fn bad_argument<T>(name: &str) -> Result<T, Fault> {
     Err(Fault::Error(
         ErrorKind::InternalError,
         format!("bad argument to %{name}"),
@@ -1264,6 +1269,33 @@ impl Exec<'_> {
                     }
                 }
             }
+            GENERATOR_STATE => match suspend::as_generator(self.heap, a0, suspend::GENERATOR) {
+                Some(g) => Value::int(suspend::state_of(self.heap, g)),
+                None => Value::int(-1),
+            },
+            GENERATOR_SET_STATE => {
+                let g = a0
+                    .as_object()
+                    .filter(|&o| self.heap.object_class(o) == ObjectClass::Generator);
+                let s = arg(self, 1).as_int().filter(|s| (0..=3).contains(s));
+                let (Some(g), Some(s)) = (g, s) else {
+                    return bad_argument(info.name);
+                };
+                suspend::set_state(self.heap, g, s);
+                Value::UNDEFINED
+            }
+            GENERATOR_RESUME => {
+                let (value, mode) = (arg(self, 1), arg(self, 2));
+                self.sp = base;
+                return self.generator_resume(a0, value, mode, next);
+            }
+            IS_ASYNC_FUNCTION_STATE => {
+                Value::bool(suspend::as_generator(self.heap, a0, suspend::ASYNC).is_some())
+            }
+            ASYNC_FUNCTION_PROMISE => match suspend::as_generator(self.heap, a0, suspend::ASYNC) {
+                Some(a) => suspend::promise_of(self.heap, a),
+                None => return bad_argument(info.name),
+            },
             NEW_RECORD => {
                 let n = a0.as_int().and_then(|n| u32::try_from(n).ok());
                 let Some(n) = n.filter(|&n| n <= 16) else {
@@ -1584,6 +1616,7 @@ impl Exec<'_> {
             "%IteratorPrototype%" => Some(Intrinsic::IteratorProto),
             "%ArrayIteratorPrototype%" => Some(Intrinsic::ArrayIteratorProto),
             "%StringIteratorPrototype%" => Some(Intrinsic::StringIteratorProto),
+            "%GeneratorPrototype%" => Some(Intrinsic::GeneratorProto),
             "%MapIteratorPrototype%" => Some(Intrinsic::MapIteratorProto),
             "%SetIteratorPrototype%" => Some(Intrinsic::SetIteratorProto),
             // `X.prototype` of a constructor the prelude has not installed yet.

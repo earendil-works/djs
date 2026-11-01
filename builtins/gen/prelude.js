@@ -1616,6 +1616,96 @@ function ThrowTypeError(v) {
   throw %NewTypeError("invalid property access");
 }
 
+// builtins/generator.ts:7
+function GeneratorValidate(generator) {
+  const state = %GeneratorState(generator);
+  if (state < 0) {
+    throw %NewTypeError("not a generator");
+  }
+  if (state === 2) {
+    throw %NewTypeError("cannot invoke a running generator");
+  }
+  return state;
+}
+
+// builtins/generator.ts:23
+function GeneratorStep(g, value, mode) {
+  let result = undefined;
+  try {
+    result = %GeneratorResume(g, value, mode);
+  } catch (e) {
+    %GeneratorSetState(g, 3);
+    throw e;
+  }
+  if (%GeneratorState(g) === 1) {
+    return %CreateIterResultObject(result, false);
+  }
+  %GeneratorSetState(g, 3);
+  return %CreateIterResultObject(result, true);
+}
+
+// builtins/generator.ts:42 %GeneratorPrototype%.next
+function GeneratorPrototypeNext(value) {
+  const state = GeneratorValidate(this);
+  if (state === 3) {
+    return %CreateIterResultObject(undefined, true);
+  }
+  return GeneratorStep(%AsObj(this), value, 0);
+}
+
+// builtins/generator.ts:54 %GeneratorPrototype%.return
+function GeneratorPrototypeReturn(value) {
+  const state = GeneratorValidate(this);
+  if (state === 0 || state === 3) {
+    %GeneratorSetState(%AsObj(this), 3);
+    return %CreateIterResultObject(value, true);
+  }
+  return GeneratorStep(%AsObj(this), value, 2);
+}
+
+// builtins/generator.ts:67 %GeneratorPrototype%.throw
+function GeneratorPrototypeThrow(exception) {
+  const state = GeneratorValidate(this);
+  if (state === 0 || state === 3) {
+    %GeneratorSetState(%AsObj(this), 3);
+    throw exception;
+  }
+  return GeneratorStep(%AsObj(this), exception, 1);
+}
+
+// builtins/generator.ts:81 value %GeneratorPrototype%[Symbol.toStringTag]
+function GeneratorPrototypeToStringTag() {
+  return "Generator";
+}
+
+// builtins/generator.ts:92 %AsyncAwait
+function AsyncAwait(a, v) {
+  let promise = undefined;
+  try {
+    promise = PromiseResolve(%IntrinsicPromise(), v);
+  } catch (e) {
+    return %GeneratorResume(a, e, 1);
+  }
+  %PerformPromiseThen(%AsObj(promise), a, a, undefined);
+  return %AsyncFunctionPromise(a);
+}
+
+// builtins/generator.ts:107 %AsyncFunctionReturn
+function AsyncFunctionReturn(a, v) {
+  %GeneratorSetState(a, 3);
+  const promise = %AsyncFunctionPromise(a);
+  ResolvePromise(promise, v);
+  return promise;
+}
+
+// builtins/generator.ts:118 %AsyncFunctionThrow
+function AsyncFunctionThrow(a, e) {
+  %GeneratorSetState(a, 3);
+  const promise = %AsyncFunctionPromise(a);
+  %RejectPromise(promise, e);
+  return promise;
+}
+
 // builtins/iter.ts:10 %GetIterator
 function GetIterator(obj) {
   const method = %GetV(obj, %WellKnownSymbol("iterator"));
@@ -3017,6 +3107,10 @@ function InvokeThen(v, onFulfilled, onRejected) {
 
 // builtins/promise.ts:208 %PromiseReactionJob
 function PromiseReactionJob(capability, handler, argument, fulfilled) {
+  if (%IsAsyncFunctionState(handler)) {
+    %GeneratorResume(%AsObj(handler), argument, fulfilled ? 0 : 1);
+    return;
+  }
   let ok = fulfilled;
   let result = argument;
   if (handler !== undefined) {
@@ -3038,7 +3132,7 @@ function PromiseReactionJob(capability, handler, argument, fulfilled) {
   }
 }
 
-// builtins/promise.ts:235 %PromiseResolveThenableJob
+// builtins/promise.ts:240 %PromiseResolveThenableJob
 function PromiseResolveThenableJob(promise, thenable, then) {
   const r = %NewRecord(2);
   %RecordSet(r, 0, promise);
@@ -3052,7 +3146,7 @@ function PromiseResolveThenableJob(promise, thenable, then) {
   }
 }
 
-// builtins/promise.ts:255 constructor Promise %PromiseConstructor
+// builtins/promise.ts:260 constructor Promise %PromiseConstructor
 function PromiseConstructor(executor) {
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
@@ -3071,12 +3165,12 @@ function PromiseConstructor(executor) {
   return promise;
 }
 
-// builtins/promise.ts:277 get Promise[Symbol.species]
+// builtins/promise.ts:282 get Promise[Symbol.species]
 function PromiseSpecies() {
   return this;
 }
 
-// builtins/promise.ts:282
+// builtins/promise.ts:287
 function PromiseThisConstructor(c) {
   if (!%IsObject(c)) {
     throw %NewTypeError("not an object");
@@ -3084,19 +3178,19 @@ function PromiseThisConstructor(c) {
   return c;
 }
 
-// builtins/promise.ts:293 Promise.resolve
+// builtins/promise.ts:298 Promise.resolve
 function PromiseStaticResolve(x) {
   return PromiseResolve(PromiseThisConstructor(this), x);
 }
 
-// builtins/promise.ts:301 Promise.reject
+// builtins/promise.ts:306 Promise.reject
 function PromiseStaticReject(r) {
   const capability = NewPromiseCapability(PromiseThisConstructor(this));
   RejectCapability(capability, r);
   return CapabilityPromise(capability);
 }
 
-// builtins/promise.ts:313
+// builtins/promise.ts:318
 function GetPromiseResolve(c) {
   const promiseResolve = %Get(%AsObj(c), "resolve");
   if (!%IsCallable(promiseResolve)) {
@@ -3105,14 +3199,14 @@ function GetPromiseResolve(c) {
   return promiseResolve;
 }
 
-// builtins/promise.ts:322
+// builtins/promise.ts:327
 function DecrementRemaining(remaining) {
   const n = %AsNumber(%RecordGet(remaining, 0)) - 1;
   %RecordSet(remaining, 0, n);
   return n;
 }
 
-// builtins/promise.ts:329
+// builtins/promise.ts:334
 function NewElementRecord(index, values, capability, remaining) {
   const r = %NewRecord(5);
   %RecordSet(r, 0, false);
@@ -3123,7 +3217,7 @@ function NewElementRecord(index, values, capability, remaining) {
   return r;
 }
 
-// builtins/promise.ts:344
+// builtins/promise.ts:349
 function SettleElement(data, x, reject) {
   const r = %AsObj(data);
   if (%RecordGet(r, 0) === true) {
@@ -3142,12 +3236,12 @@ function SettleElement(data, x, reject) {
   }
 }
 
-// builtins/promise.ts:366 %PromiseAllResolveElement
+// builtins/promise.ts:371 %PromiseAllResolveElement
 function PromiseAllResolveElement(x) {
   SettleElement(this, x, false);
 }
 
-// builtins/promise.ts:371
+// builtins/promise.ts:376
 function SettledRecord(fulfilled, x) {
   const o = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
   %CreateDataPropertyOrThrow(o, "status", fulfilled ? "fulfilled" : "rejected");
@@ -3155,7 +3249,7 @@ function SettledRecord(fulfilled, x) {
   return o;
 }
 
-// builtins/promise.ts:382 %PromiseAllSettledResolveElement
+// builtins/promise.ts:387 %PromiseAllSettledResolveElement
 function PromiseAllSettledResolveElement(x) {
   if (%RecordGet(%AsObj(this), 0) === true) {
     return;
@@ -3163,7 +3257,7 @@ function PromiseAllSettledResolveElement(x) {
   SettleElement(this, SettledRecord(true, x), false);
 }
 
-// builtins/promise.ts:393 %PromiseAllSettledRejectElement
+// builtins/promise.ts:398 %PromiseAllSettledRejectElement
 function PromiseAllSettledRejectElement(x) {
   if (%RecordGet(%AsObj(this), 0) === true) {
     return;
@@ -3171,12 +3265,12 @@ function PromiseAllSettledRejectElement(x) {
   SettleElement(this, SettledRecord(false, x), false);
 }
 
-// builtins/promise.ts:404 %PromiseAnyRejectElement
+// builtins/promise.ts:409 %PromiseAnyRejectElement
 function PromiseAnyRejectElement(x) {
   SettleElement(this, x, true);
 }
 
-// builtins/promise.ts:409
+// builtins/promise.ts:414
 function NewAggregateError(errors) {
   const e = %ErrorCreate(%RealmIntrinsic("AggregateErrorPrototype"));
   %DefineDataPropertyOrThrow(e, "errors", CreateArrayFromList(errors), 5);
@@ -3184,7 +3278,7 @@ function NewAggregateError(errors) {
   return e;
 }
 
-// builtins/promise.ts:417
+// builtins/promise.ts:422
 function CreateArrayFromList(list) {
   const len = LengthOfArrayLike(list);
   const a = %ArrayCreate(0);
@@ -3194,7 +3288,7 @@ function CreateArrayFromList(list) {
   return a;
 }
 
-// builtins/promise.ts:432
+// builtins/promise.ts:437
 function PerformPromiseCombinator(thisValue, iterable, kind) {
   const c = PromiseThisConstructor(thisValue);
   const capability = NewPromiseCapability(c);
@@ -3267,22 +3361,22 @@ function PerformPromiseCombinator(thisValue, iterable, kind) {
   }
 }
 
-// builtins/promise.ts:511 Promise.all
+// builtins/promise.ts:516 Promise.all
 function PromiseAll(iterable) {
   return PerformPromiseCombinator(this, iterable, 0);
 }
 
-// builtins/promise.ts:519 Promise.allSettled
+// builtins/promise.ts:524 Promise.allSettled
 function PromiseAllSettled(iterable) {
   return PerformPromiseCombinator(this, iterable, 1);
 }
 
-// builtins/promise.ts:527 Promise.any
+// builtins/promise.ts:532 Promise.any
 function PromiseAny(iterable) {
   return PerformPromiseCombinator(this, iterable, 2);
 }
 
-// builtins/promise.ts:536 Promise.try
+// builtins/promise.ts:541 Promise.try
 function PromiseTry(callback, ...args) {
   const c = PromiseThisConstructor(this);
   let result = undefined;
@@ -3296,12 +3390,12 @@ function PromiseTry(callback, ...args) {
   return PromiseResolve(c, result);
 }
 
-// builtins/promise.ts:553 Promise.race
+// builtins/promise.ts:558 Promise.race
 function PromiseRace(iterable) {
   return PerformPromiseCombinator(this, iterable, 3);
 }
 
-// builtins/promise.ts:561 Promise.withResolvers
+// builtins/promise.ts:566 Promise.withResolvers
 function PromiseWithResolvers() {
   const capability = NewPromiseCapability(PromiseThisConstructor(this));
   const o = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
@@ -3311,7 +3405,7 @@ function PromiseWithResolvers() {
   return o;
 }
 
-// builtins/promise.ts:576 Promise.prototype.then
+// builtins/promise.ts:581 Promise.prototype.then
 function PromisePrototypeThen(onFulfilled, onRejected) {
   if (!%IsPromise(this)) {
     throw %NewTypeError("Promise object expected");
@@ -3323,12 +3417,12 @@ function PromisePrototypeThen(onFulfilled, onRejected) {
   return CapabilityPromise(capability);
 }
 
-// builtins/promise.ts:591 Promise.prototype.catch
+// builtins/promise.ts:596 Promise.prototype.catch
 function PromisePrototypeCatch(onRejected) {
   return InvokeThen(this, undefined, onRejected);
 }
 
-// builtins/promise.ts:599 Promise.prototype.finally
+// builtins/promise.ts:604 Promise.prototype.finally
 function PromisePrototypeFinally(onFinally) {
   if (!%IsObject(this)) {
     throw %NewTypeError("not an object");
@@ -3343,7 +3437,7 @@ function PromisePrototypeFinally(onFinally) {
   return InvokeThen(this, %NewBuiltinClosure(7, data, 1), %NewBuiltinClosure(8, data, 1));
 }
 
-// builtins/promise.ts:617 %PromiseThenFinally
+// builtins/promise.ts:622 %PromiseThenFinally
 function PromiseThenFinally(value) {
   const data = %AsObj(this);
   const result = %Call(%RecordGet(data, 0), undefined);
@@ -3351,7 +3445,7 @@ function PromiseThenFinally(value) {
   return InvokeThen(p, %NewBuiltinClosure(9, value, 0), undefined);
 }
 
-// builtins/promise.ts:628 %PromiseCatchFinally
+// builtins/promise.ts:633 %PromiseCatchFinally
 function PromiseCatchFinally(reason) {
   const data = %AsObj(this);
   const result = %Call(%RecordGet(data, 0), undefined);
@@ -3359,22 +3453,22 @@ function PromiseCatchFinally(reason) {
   return InvokeThen(p, %NewBuiltinClosure(10, reason, 0), undefined);
 }
 
-// builtins/promise.ts:639 %PromiseValueThunk
+// builtins/promise.ts:644 %PromiseValueThunk
 function PromiseValueThunk() {
   return this;
 }
 
-// builtins/promise.ts:647 %PromiseThrower
+// builtins/promise.ts:652 %PromiseThrower
 function PromiseThrower() {
   throw this;
 }
 
-// builtins/promise.ts:656 value Promise.prototype[Symbol.toStringTag]
+// builtins/promise.ts:661 value Promise.prototype[Symbol.toStringTag]
 function PromisePrototypeToStringTag() {
   return "Promise";
 }
 
-// builtins/promise.ts:668 %HostCallSettle
+// builtins/promise.ts:673 %HostCallSettle
 function HostCallSettle(promise, ok, value) {
   if (!%PromiseClaimResolve(promise)) {
     return;
@@ -4652,6 +4746,10 @@ function WeakSetPrototypeToStringTag() {
 %InstallAccessor("Function.prototype", "caller", ThrowTypeError, true);
 %InstallAccessor("Function.prototype", "arguments", ThrowTypeError, false);
 %InstallAccessor("Function.prototype", "arguments", ThrowTypeError, true);
+%InstallMethod("%GeneratorPrototype%", "next", GeneratorPrototypeNext, 1);
+%InstallMethod("%GeneratorPrototype%", "return", GeneratorPrototypeReturn, 1);
+%InstallMethod("%GeneratorPrototype%", "throw", GeneratorPrototypeThrow, 1);
+%InstallValue("%GeneratorPrototype%", %WellKnownSymbol("toStringTag"), GeneratorPrototypeToStringTag(), 4);
 %InstallMethod("Array.prototype", "values", ArrayPrototypeValues, 0);
 %InstallMethod("Array.prototype", %WellKnownSymbol("iterator"), ArrayPrototypeValues, 0);
 %InstallMethod("Array.prototype", "keys", ArrayPrototypeKeys, 0);
@@ -4888,6 +4986,9 @@ function WeakSetPrototypeToStringTag() {
 %InstallIntrinsic("ToString", ToString);
 %InstallIntrinsic("ToPropertyKey", ToPropertyKey);
 %InstallIntrinsic("InstanceofOperator", InstanceofOperator);
+%InstallIntrinsic("AsyncAwait", AsyncAwait);
+%InstallIntrinsic("AsyncFunctionReturn", AsyncFunctionReturn);
+%InstallIntrinsic("AsyncFunctionThrow", AsyncFunctionThrow);
 %InstallIntrinsic("GetIterator", GetIterator);
 %InstallIntrinsic("IteratorClose", IteratorClose);
 %InstallIntrinsic("IteratorCloseThrow", IteratorCloseThrow);

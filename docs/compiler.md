@@ -1196,6 +1196,58 @@ park: the call goes into the same table with its promise, the embedder reads it 
   stack or in heap cells, so the collector needs no interpreter cooperation beyond
   the register flush and the code-offset refresh.
 
+### 7.7 Generators and async functions (0037, D1375)
+
+The runtime side is in `interp/run/suspend.rs` and `builtins/generator.ts`; the tests on
+hand-assembled bytecode in `vm/tests.rs` show complete functions. A suspension copies
+the frame's slice `stack[bp..sp)` into a heap Generator object (with the resume pc and
+`hp - bp`) and resuming copies it back on top of the resumer, so frames need nothing
+special: locals, arguments, `finally` return addresses and for-of iterators survive as
+they are. Every op names the hidden local that holds the Generator object (a `Loc`
+immediate); the compiler reserves it (call it `%gen` / `%async`).
+
+| op | stack | does |
+| --- | --- | --- |
+| `generator_start loc` | `->` | first instruction of a generator function: creates the generator object (prototype: the function's own `prototype` if an object, else %GeneratorPrototype%), stores it in `loc`, suspends, and returns it to the caller. `next()` resumes at the following instruction. |
+| `yield loc` | `v -> received isReturn` | suspends; `next()`/`return()`/`throw()` get `v`. Resumed by `next(x)`: `x false`; by `return(x)`: `x true`; by `throw(e)`: `e` is thrown at the `yield` (handler lookup with the yield's pc). |
+| `async_start loc` | `->` | first instruction of an async function (and of an async codemode body): creates the async state with its result promise in `loc`. The body runs on synchronously. |
+| `await loc` | `v -> value` | suspends until `v` settles (PromiseResolve, then a reaction): pushes the value, or throws the reason at the `await`. The first `await` returns the result promise to the caller. |
+| `async_return loc` | `v ->` | resolves the result promise with `v` (thenables adopted) and returns the promise. TERM. |
+| `async_reject loc` | `e ->` | rejects the result promise with `e` and returns the promise. TERM. |
+
+What the compiler emits:
+
+- **Generator functions** (`func_flags::GENERATOR`; their `prototype` property is made by
+  `fclosure`, inheriting from %GeneratorPrototype%):
+  ```
+  generator_start %gen          ; after the parameters' initialization (spec order:
+                                ; FunctionDeclarationInstantiation runs before the
+                                ; generator object exists, so default-parameter errors
+                                ; throw at the call)
+  ...
+  <v> yield %gen                ; yield v
+  jump_if_true L_ret            ; return(x) was called: x is on the stack
+  ...                           ; the received value is the yield expression's value
+  L_ret: <return the value: the ordinary `return` sequence with its finally gosubs>
+  ```
+  `return v` in a generator is the ordinary `return`; the value becomes `{value: v, done:
+  true}` (the builtins tell a yield from a return by the generator's state). An
+  exception leaving the body completes the generator. `yield*` is left to the compiler
+  (a loop over `next`/`throw`/`return` of the inner iterator around `yield`).
+- **Async functions and arrows** (`func_flags::ASYNC`, also `KIND_ASYNC_BODY`): the whole
+  body sits in a catch-all handler region whose handler (depth 0) is `async_reject`:
+  ```
+  async_start %async
+  L_s: ... <v> await %async ...      ; await v
+       <v> async_return %async       ; every return (after its finally gosubs), and
+                                     ; `undefined; async_return` at the end
+  L_e:
+  L_h: async_reject %async           ; handler (L_s, L_e, L_h, depth 0)
+  ```
+  Parameter initialization goes inside the region (errors there reject the promise). The
+  caller always gets the promise, whatever the body does.
+- Async generators are not covered yet (they need a queue of requests; later).
+
 ## 8. Error reporting and early errors
 
 ### 8.1 Compile errors

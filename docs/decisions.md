@@ -1562,3 +1562,26 @@ enumerable accessor, or is a non-empty string, it copies nothing and calls the b
 `%CopyDataProperties(target, src)` (builtins/spread.ts) with a continuation, as
 `array_spread` calls `%ArraySpread`. `{..."hi"}` gives `{0: "h", 1: "i"}` as the spec
 and V8 do; qjs (dquickts) gives `{}`.
+
+## D1375: Suspendable frames: frame slices in Generator objects, tail calls for await
+date: 2026-11-01 · by: heap · issue: 0037
+Generators and async functions share `ObjectClass::Generator` (21): state, the saved
+frame (an internal `ValueArray` copy of `stack[bp..sp)`), resume pc, `hp - bp`, the
+result promise (async) and the kind. A frame has no absolute stack positions except its
+header's caller links, so resuming copies the slice to the top of the stack and rewrites
+`PREV_BP`/`PREV_HP`/`RET_PC`/`FLAGS` for the resumer (`PushResult`). Ops (docs/compiler.md
+7.7): `generator_start`, `yield`, `async_start`, `await`, `async_return`,
+`async_reject`, each naming the hidden local holding the object. `yield` returns the
+value to the resumer (`%GeneratorPrototype%.next` etc. in builtins/generator.ts, through
+the reentrant `%GeneratorResume`); a resumed `yield` pushes `value isReturn`, so the
+compiler runs `return(x)` through its ordinary return sequence (finally blocks). `await`
+saves the frame and then replaces it with a call of `%AsyncAwait(state, v)` that keeps
+the frame's continuation (a tail call): `%AsyncAwait` does PromiseResolve (user code) and
+PerformPromiseThen with the async state itself as the reaction handler, and returns the
+result promise. So the first await hands the promise to the caller, and later awaits
+hand it to the job that resumed the frame, with nothing special in either.
+`%PromiseReactionJob` resumes an async state handler instead of calling it.
+`async_return`/`async_reject` tail-call `%AsyncFunctionReturn`/`%AsyncFunctionThrow`,
+which settle and return the promise. A throw resumed into a frame with no handler at the
+suspension point is thrown by `%GeneratorResume` itself, without restoring the frame.
+Fuel: the copies charge one unit per 8 slots.

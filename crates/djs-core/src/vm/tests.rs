@@ -24,6 +24,7 @@ struct F {
     names: Vec<Atom>,
     params: u16,
     locals: u16,
+    flags: u32,
 }
 
 impl F {
@@ -44,6 +45,7 @@ impl F {
             })
             .collect();
         let parts = TemplateParts {
+            flags: self.flags,
             params: self.params,
             locals: self.locals,
             captures: &self.captures,
@@ -1527,4 +1529,232 @@ fn image_with_pending_host_calls_and_jobs() {
     assert_eq!(out.log, ["one 10,two 20"]);
     assert!(moved.pending_host_calls().is_empty());
     moved.heap().verify().unwrap();
+}
+
+// ---- Suspendable frames (D1375), on hand-assembled bytecode -----------------------------
+
+/// `function* g(a) { const x = yield a; const y = yield x + 1; return y * 2 }`
+fn generator_template(vm: &mut Vm) -> Ref {
+    let mut f = F::new();
+    f.params = 1;
+    f.locals = 1;
+    f.flags = crate::bytecode::template::func_flags::KIND_NORMAL
+        | crate::bytecode::template::func_flags::GENERATOR;
+    let ret = f.b.new_label();
+    f.b.generator_start(0);
+    f.b.get_arg(0);
+    f.b.yield_(0);
+    f.b.jump_if_true(ret);
+    f.b.push_i8(1);
+    f.b.add();
+    f.b.yield_(0);
+    f.b.jump_if_true(ret);
+    f.b.push_i8(2);
+    f.b.mul();
+    f.b.return_();
+    f.b.place_label(ret);
+    f.b.return_();
+    f.build(vm)
+}
+
+/// `async function f(x) { return await x + 1 }` (`with_catch`: `async function h(p) {
+/// try { return await p } catch (e) { return "caught " + e } }`).
+fn async_template(vm: &mut Vm, with_catch: bool) -> Ref {
+    let mut f = F::new();
+    f.params = 1;
+    f.locals = 1;
+    f.flags = crate::bytecode::template::func_flags::KIND_NORMAL
+        | crate::bytecode::template::func_flags::ASYNC;
+    let caught = f.string(vm, "caught ");
+    let (s, e, h) = (f.b.new_label(), f.b.new_label(), f.b.new_label());
+    f.b.async_start(0);
+    f.b.place_label(s);
+    f.b.get_arg(0);
+    f.b.await_(0);
+    if !with_catch {
+        f.b.push_i8(1);
+        f.b.add();
+    }
+    f.b.async_return(0);
+    f.b.place_label(e);
+    f.b.place_label(h);
+    if with_catch {
+        f.b.push_const(caught);
+        f.b.swap();
+        f.b.add();
+        f.b.async_return(0);
+    } else {
+        f.b.async_reject(0);
+    }
+    f.handlers.push((s, e, h, 0));
+    f.build(vm)
+}
+
+/// Runs `src` (a Script) with the hand-assembled `g`, `f` and `h` as globals, in the
+/// three modes of `run_main`.
+fn run_with_suspendables(src: &str) -> Outcome {
+    let mut outcomes = Vec::new();
+    for (fuel, suspend, gc_stress) in [(1 << 40, false, false), (1, true, false), (7, false, true)]
+    {
+        let mut vm = vm_with(VmOptions {
+            exec: ExecOptions {
+                gc_stress,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        for (name, t) in [
+            ("g", generator_template(&mut vm)),
+            ("f", async_template(&mut vm, false)),
+            ("h", async_template(&mut vm, true)),
+        ] {
+            let v = vm.instantiate(t).unwrap();
+            vm.define_global(name, v).unwrap();
+        }
+        let main = vm
+            .compile(
+                src.as_bytes(),
+                &crate::compiler::CompileOptions::script("t.js"),
+            )
+            .unwrap();
+        let this = Value::object(vm.global());
+        vm.call(main, this, &[]).unwrap();
+        let (vm, out) = finish(vm, fuel, suspend);
+        vm.heap().verify().unwrap();
+        outcomes.push(out);
+    }
+    assert_eq!(outcomes[0], outcomes[1], "suspension changed the outcome");
+    assert_eq!(outcomes[0], outcomes[2], "gc stress changed the outcome");
+    outcomes.remove(0)
+}
+
+#[test]
+fn generators_suspend_and_resume_frames() {
+    let out = run_with_suspendables(
+        r#"
+        const r = [];
+        const it = g(5);
+        r.push(Object.prototype.toString.call(it));
+        let s = it.next("ignored"); r.push(s.value + ":" + s.done);
+        s = it.next(10); r.push(s.value + ":" + s.done);
+        s = it.next(7); r.push(s.value + ":" + s.done);
+        s = it.next(); r.push(s.value + ":" + s.done);
+        const it2 = g(1); it2.next(); s = it2.return(42); r.push(s.value + ":" + s.done);
+        const it3 = g(1); it3.next(); try { it3.throw(new Error("boom")) } catch (e) { r.push("threw " + e.message) }; s = it3.next(); r.push(s.done);
+        const it4 = g(1); try { it4.throw(1) } catch (e) { r.push("start throw " + e) }; r.push(it4.next().done);
+        for (const v of g(3)) r.push("of " + v);
+        console.log(r.join(", "));
+        "#,
+    );
+    // Checked against qjs with the source functions.
+    assert_eq!(
+        out.log,
+        [
+            "[object Generator], 5:false, 11:false, 14:true, undefined:true, 42:true, threw boom, \
+          true, start throw 1, true, of 3, of NaN"
+        ]
+    );
+}
+
+#[test]
+fn async_functions_await_through_jobs() {
+    let out = run_with_suspendables(
+        r#"
+        const log = [];
+        f(41).then(v => log.push("f41 " + v));
+        f(Promise.resolve(1)).then(v => log.push("fp " + v));
+        f(Promise.reject(new Error("x"))).catch(e => log.push("frej " + e.message));
+        h(Promise.reject("bad")).then(v => log.push("h " + v));
+        h(5).then(v => log.push("h5 " + v));
+        h({ then(r) { log.push("then called"); r("thenable") } }).then(v => log.push("h " + v));
+        Promise.resolve().then(() => log.push("t1")).then(() => log.push("t2")).then(() => log.push("t3"));
+        log.push("sync " + Object.prototype.toString.call(f(0)));
+        Promise.resolve().then(()=>0).then(()=>0).then(()=>0).then(()=>0).then(() => console.log(log.join(", ")));
+        "#,
+    );
+    // The order qjs gives for the source functions.
+    assert_eq!(
+        out.log,
+        [
+            "sync [object Promise], then called, t1, f41 42, fp 2, frej x, h caught bad, h5 5, t2, \
+          h thenable, t3"
+        ]
+    );
+}
+
+#[test]
+fn async_entry_awaits_async_host_calls() {
+    // async () => { return (await tool("a")) + "!" + (await tool("b")) }, as the entry
+    // call (a codemode body), through images and GC stress.
+    let build = |vm: &mut Vm| {
+        let tool = vm.heap_mut().atom_str("tool").unwrap();
+        let mut f = F::new();
+        f.locals = 1;
+        f.flags = crate::bytecode::template::func_flags::KIND_ASYNC_BODY
+            | crate::bytecode::template::func_flags::ASYNC;
+        let a = f.string(vm, "a");
+        let b = f.string(vm, "b");
+        let bang = f.string(vm, "!");
+        let (s, e, h) = (f.b.new_label(), f.b.new_label(), f.b.new_label());
+        f.b.async_start(0);
+        f.b.place_label(s);
+        for (k, arg) in [a, b].into_iter().enumerate() {
+            f.b.get_global(tool);
+            f.b.undefined();
+            f.b.push_const(arg);
+            f.b.call(1);
+            f.b.await_(0);
+            if k == 0 {
+                f.b.push_const(bang);
+                f.b.add();
+            } else {
+                f.b.add();
+            }
+        }
+        f.b.async_return(0);
+        f.b.place_label(e);
+        f.b.place_label(h);
+        f.b.async_reject(0);
+        f.handlers.push((s, e, h, 0));
+        f.build(vm)
+    };
+    for (fuel, suspend, gc_stress) in [(1 << 40, false, false), (1, true, false), (5, true, true)] {
+        let mut vm = vm_with(VmOptions {
+            exec: ExecOptions {
+                gc_stress,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let tool = vm.new_async_host_function(TOOL, "tool").unwrap();
+        vm.define_global("tool", tool).unwrap();
+        let t = build(&mut vm);
+        let main = vm.instantiate(t).unwrap();
+        vm.call(main, Value::UNDEFINED, &[]).unwrap();
+        let result = loop {
+            match vm.run(fuel) {
+                Status::Done(p) => break p,
+                Status::OutOfFuel => {}
+                Status::Idle => {
+                    let [id] = vm.new_host_calls()[..] else {
+                        panic!("one call at a time")
+                    };
+                    let arg = vm.host_call(id).unwrap().args[0];
+                    let s = vm.display(arg).to_uppercase();
+                    let v = Value::string(vm.heap_mut().alloc_str(&s).unwrap());
+                    vm.resolve_host_call(id, Ok(v)).unwrap();
+                }
+                s => panic!("{s:?}"),
+            }
+            if suspend {
+                let o = vm.options();
+                vm = Vm::from_bytes(vm.bytes().to_vec(), o).unwrap();
+            }
+        };
+        let Some(Some(Ok(v))) = vm.promise_state(result) else {
+            panic!("not fulfilled")
+        };
+        assert_eq!(vm.display(v), "A!B");
+        vm.heap().verify().unwrap();
+    }
 }

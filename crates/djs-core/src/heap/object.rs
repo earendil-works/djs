@@ -105,6 +105,12 @@ pub enum ObjectClass {
     Record = 19,
     /// A Date: slot 0 the time value (a Number, NaN for an invalid date).
     Date = 20,
+    /// A suspendable function activation (D1375): a generator object, or the internal
+    /// state of an async function call. Slot 0 the state (`interp::run::suspend`), slot
+    /// 1 the saved frame (an internal ValueArray) while suspended, slot 2 the pc to
+    /// resume at, slot 3 the frame's `hp - bp`, slot 4 the result promise (async), slot
+    /// 5 the kind (0 generator, 1 async function).
+    Generator = 21,
 }
 
 impl ObjectClass {
@@ -131,6 +137,7 @@ impl ObjectClass {
             18 => Some(ObjectClass::BuiltinClosure),
             19 => Some(ObjectClass::Record),
             20 => Some(ObjectClass::Date),
+            21 => Some(ObjectClass::Generator),
             _ => None,
         }
     }
@@ -154,6 +161,7 @@ impl ObjectClass {
             ObjectClass::Map | ObjectClass::Set | ObjectClass::WeakMap | ObjectClass::WeakSet => 3,
             ObjectClass::CollectionIterator => 6,
             ObjectClass::Date => 1,
+            ObjectClass::Generator => 6,
         }
     }
 
