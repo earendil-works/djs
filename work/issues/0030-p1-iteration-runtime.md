@@ -72,7 +72,9 @@ dup; get_field done; jump_if_true; get_field value`. for-in uses
     cases `object_literals`, `spreads`, in the three modes.
   - The home object (`define_method` "also sets the home object") is only needed for
     `super` (P1-7 classes); not stored yet (Follow-ups).
-- Part 1 merged (the commits up to this entry); status stays in-progress for the P1-5 list.
+- Part 1 merged: 23a66f5..2c11128 (main 2c11128). Status stays in-progress for the P1-5
+  list. The difftest ratchet reported 1 stale entry (a case that passes now); left for
+  the coordinator to `--update-ratchet`.
 
 ## Follow-ups
 - Home object for methods (`super`), with classes (P1-7).
