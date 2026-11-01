@@ -225,6 +225,11 @@ Open questions for the owner:
 
 ## Follow-ups
 
+- Stale reference docs found while writing the guide (coordinator): ARCH "Interpreter"
+  still describes `fast_step`/`fast_more` as the fast path (D1930 replaced them with
+  `run_hot`); docs/compiler.md 7.1 lists a 5-word frame header (it is 6, with
+  `prev_hp`, D1151/frame.rs); ARCH's performance table says `vm_new` takes "a few us"
+  (D1990 measured 39-40 us).
 - Live bytecode for edited examples: a `djs_disasm` export behind a docs-only feature
   of djs-wasm (the Bytecode tab now shows the build-time listing of the original).
 - Search on the site (a JSON index and a little JS), if wanted.
