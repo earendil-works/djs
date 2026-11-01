@@ -91,6 +91,39 @@ hand-assembled bytecode from 0013's emitter.
   9. *Tests*: hand-assembled bytecode via `CodeBuf` until 0014 lands, then end-to-end
      through the compiler.
 
+- D007 tag implemented: tag 13, `Value::internal` / `as_internal`, `Kind::Internal`. The
+  GC forwards it like every ref tag (test: an internal ref in an object slot moves with
+  its cell). `verify` accepts it for non-JS cells only. JSON stringify treats it as `Slow`.
+- Rebased onto 0013 (96c4a0a). The cells conflict was additive.
+- `libm` added with the coordinator's approval (D1150); `pow` handles the JS special
+  cases first.
+- Dispatch loop (`interp/run.rs`) done for:
+  - every P0 op;
+  - most P1 ops that need no builtins: args, Boxes, captures, `fclosure`,
+    `define_field`, `array_push`/`array_hole`, `concat`, `gosub`/`ret`, `throw` with
+    handler tables;
+  - getters and setters through `PushResult` / `DiscardResult` continuations, including
+    host functions as accessors.
+  Ops still missing (`construct`, `special_object`, spreads, iterators, classes, ...)
+  throw `InternalError: not supported yet: <op>`. ToPrimitive on objects throws
+  `TypeError: not supported yet: ...` until P1-2.
+- Debug check: after each instruction that completes in the same frame, `sp` must have
+  moved by the table's stack effect (and `pc` by the size for non-jumps). Verified that it
+  fires by breaking `nip` on purpose.
+- Tests (`vm/tests.rs`, hand-assembled with `CodeBuf`): arithmetic, an operator table,
+  strings and ropes, loops with fuel slices, console.log host calls, host call results
+  and errors (Ok, Err caught by a handler, the entry host call), qjs-worded runtime
+  errors, objects and globals, JS calls with argument padding, closures sharing Boxes
+  across collections, accessors as JS closures, exceptions unwinding frames,
+  `finally` via gosub, stack overflow, garbage collection while running, an image taken
+  while parked and resolved in a restored VM. Every `run_main` case runs three ways and
+  must agree: plenty of fuel; fuel 1 with a heap-image round trip at every suspension and
+  host call; GC stress.
+- Decisions D1150 (libm), D1151 (interpreter state in the arena, 6-slot frame header),
+  D1152 (host call protocol, fuel and safepoints).
+- `djs-cli/src/run.rs`: the `djs run` driver (`--gc-stress`, `--suspend-every N`). Wiring
+  it into `main.rs` (and `Vm::compile`) waits for 0014.
+
 ## Follow-ups
 
 ## Result
