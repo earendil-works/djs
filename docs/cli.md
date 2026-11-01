@@ -56,14 +56,16 @@ suspending every 300 fuel
 - **Persistence.** Inputs are Scripts (D004): top-level `let`/`const`/`class` live in the
   global lexical scope and `var`/functions on the global object, so later inputs see
   them. Redeclaring a `let` is a SyntaxError, as between two Scripts.
-- **Results.** Until Script completion values arrive (issue 0058), only expression inputs
-  print a value. An input that parses as an expression (and does not start with
-  `function`, `async function` or `class`) runs as the async body `return [(input\n)];`:
-  it may `await`, and a promise value prints as a promise (the array keeps the body from
-  adopting it). Statement inputs (`a; b`, `if`, declarations) print nothing, and runtime
-  errors in an expression input are 9 columns off on its first line. When 0058 lands,
-  `SCRIPT_COMPLETION_VALUES` in `repl/input.rs` switches to printing the Script's own
-  value (unless it is `undefined`), and only `await` expressions keep the wrapper.
+- **Results.** A Script prints its completion value (issue 0058, D1581), except the
+  `undefined` of an input that starts with a declaration (`let`, `function`, `class`,
+  TypeScript's `enum`/`type`/..., ...). Two kinds of input run as the async body
+  `return [(input\n)];` instead: an expression a Script cannot run (`await f()`), and an
+  input that starts with `{`, which prints as an object literal as in node (`{a: 1}` →
+  `{ a: 1 }`; a block that is not an expression still runs as a Script). The array keeps
+  the body from adopting a promise value, so `Promise.resolve(1)` prints as a promise.
+  Runtime errors in those inputs are 9 columns off on their first line.
+  `SCRIPT_COMPLETION_VALUES` in `repl/input.rs` was the switch from the interim
+  (expressions only) to completion values.
 - **Top-level `await`** (D1641). An input that is not a valid Script but contains `await`
   is rewritten into an async body whose declarations are globals:
   - `let`/`const`/`var` → `0,` padded to the keyword's width: `let {a} = await f()`
@@ -76,7 +78,7 @@ suspending every 300 fuel
   namespaces are rewritten as they are.
 
   Gaps: `const` becomes `let` (assignable later). A statement with `await` prints no
-  value. A name declared before the input throws stays declared (`undefined`). The scan
+  value (an async body has no completion value). A name declared before the input throws stays declared (`undefined`). The scan
   that finds top-level declarations is token based (a regex is told from a division by
   the previous token), so exotic ASI cases can mislead it.
 - **Ctrl-C** while an input runs stops it at the end of the current fuel slice (1M fuel,

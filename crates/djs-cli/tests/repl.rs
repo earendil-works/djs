@@ -49,8 +49,11 @@ fn expressions_print_their_value() {
         "1 + 1\n'a' + 'b'\n-0\n10n ** 20n\n[1, , 'x']\nnull\nundefined\nSymbol('s')\n",
         "2\n'ab'\n-0\n100000000000000000000n\n[ 1, <1 empty item>, 'x' ]\nnull\nundefined\nSymbol(s)\n",
     );
-    // A statement prints nothing (until Script completion values, issue 0058).
-    check("if (true) { 1 }\n", "");
+    // Statements print their completion value (D1581), declarations nothing.
+    check(
+        "if (true) { 1 }\nlet a = 1; a + 1\nlet b = 2\nfunction f() {}\nclass C {}\nvoid 0\n{a: 1}\n{ let c = 3; c }\n",
+        "1\n2\nundefined\n{ a: 1 }\n3\n",
+    );
 }
 
 #[test]
@@ -84,13 +87,13 @@ fn errors() {
     check(
         "throw new TypeError('bad')\nnull.x\nlet 5\n1\n",
         "Uncaught TypeError: bad\n    at <eval> (repl:1:7)\n\
-         Uncaught TypeError: cannot read property 'x' of null\n    at <eval> (repl:1:14)\n\
+         Uncaught TypeError: cannot read property 'x' of null\n    at <eval> (repl:1:5)\n\
          SyntaxError: variable name expected at repl:1:5\n1\n",
     );
     check(
         "Promise.reject(new Error('no'))\n",
         "Promise { <rejected> [Error: no] }\n\
-         Possibly unhandled promise rejection: Error: no\n    at <eval> (repl:1:25)\n",
+         Possibly unhandled promise rejection: Error: no\n    at <eval> (repl:1:16)\n",
     );
 }
 
@@ -115,8 +118,8 @@ fn top_level_await() {
 #[test]
 fn printer() {
     check(
-        "let o = {a: 1, 'b-c': [1, {d: {e: {f: {}}}}], [Symbol.iterator]: 2}; o.self = o\no\n",
-        "<ref *1> {\n  a: 1,\n  'b-c': [ 1, { d: { e: [Object] } } ],\n  self: [Circular *1],\n  [Symbol(Symbol.iterator)]: 2\n}\n",
+        "let o = {a: 1, 'b-c': [1, {d: {e: {f: {}}}}], [Symbol.iterator]: 2}; o.self = o; 0\no\n",
+        "0\n<ref *1> {\n  a: 1,\n  'b-c': [ 1, { d: { e: [Object] } } ],\n  self: [Circular *1],\n  [Symbol(Symbol.iterator)]: 2\n}\n",
     );
     check(
         "new Map([[1, {a: 1}]])\nnew Set(['x'])\nnew WeakMap()\nnew Uint8Array([1, 2])\nnew BigInt64Array([5n])\nnew ArrayBuffer(3)\n",
@@ -159,11 +162,11 @@ fn fuel_and_suspension() {
     assert_eq!(*lines.last().unwrap(), "435", "{out}");
     // The state survives the image round trips.
     let out = repl(
-        ".suspend-every 50\nlet acc = []; for (let i = 0; i < 3; i++) acc.push({i})\n.suspend-every off\nacc\n",
+        ".suspend-every 50\nlet acc = []; for (let i = 0; i < 3; i++) acc.push({i}); 0\n.suspend-every off\nacc\n",
     );
     assert!(out.contains("\n[suspended, "), "{out}");
     assert!(
-        out.ends_with("suspending: off\n[ { i: 0 }, { i: 1 }, { i: 2 } ]\n"),
+        out.ends_with("0\nsuspending: off\n[ { i: 0 }, { i: 1 }, { i: 2 } ]\n"),
         "{out}"
     );
 }

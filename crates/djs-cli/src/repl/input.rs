@@ -4,10 +4,44 @@
 use djs_core::compiler::CompileError;
 use djs_core::lexer::{Kw, Lexer, Token, TokenKind};
 
-/// Whether a Script's `Status::Done` value is its completion value (issue 0058). While it
-/// is not, expression inputs are wrapped to get their value. This is the one switch for
-/// when 0058 lands.
-pub const SCRIPT_COMPLETION_VALUES: bool = false;
+/// Whether a Script's `Status::Done` value is its completion value (issue 0058, D1581).
+/// While it was not, every expression input was wrapped to get its value; now only the
+/// ones a Script cannot run (`await`) and object literals are.
+pub const SCRIPT_COMPLETION_VALUES: bool = true;
+
+/// The input starts with `{`: node prints `{a: 1}` as an object, not as a block with a
+/// label, so it is tried as an expression first.
+pub fn starts_with_brace(src: &str) -> bool {
+    tokens(src)
+        .ok()
+        .and_then(|t| t.first().map(|t| t.kind == TokenKind::LBrace))
+        .unwrap_or(false)
+}
+
+/// The input starts with a declaration (`let`, `const`, `var`, `function`, `class`,
+/// `using`, and TypeScript's `enum`, `type`, `interface`, `namespace`, `declare`,
+/// `abstract class`): its `undefined` completion value is not printed.
+pub fn starts_with_declaration(src: &str) -> bool {
+    let Ok(toks) = tokens(src) else { return false };
+    let (Some(t), next) = (toks.first(), toks.get(1).map(|n| n.kind)) else {
+        return false;
+    };
+    use TokenKind::*;
+    if matches!(t.kind, Const | Var | Function | Class | Enum) {
+        return true;
+    }
+    if t.kind != Ident || t.escaped {
+        return false;
+    }
+    match t.kw {
+        Kw::Let | Kw::Using => matches!(next, Some(Ident | LBracket | LBrace)),
+        Kw::Async => next == Some(Function),
+        Kw::Type | Kw::Interface | Kw::Namespace | Kw::Declare | Kw::Abstract | Kw::Module => {
+            matches!(next, Some(Ident | Class | Enum | Const | Var | Function))
+        }
+        _ => false,
+    }
+}
 
 /// The source of an expression input, compiled as an async body: its value comes back
 /// in a one-element array, so a promise value is not adopted by the body's promise.

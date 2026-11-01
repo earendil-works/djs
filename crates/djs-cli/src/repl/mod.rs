@@ -236,7 +236,7 @@ impl Repl {
     /// Compiles an input. `last`: no more lines come, so an incomplete input is an
     /// error. `expr`: try it as an expression first.
     fn plan(&mut self, src: &str, last: bool, expr: bool, filename: &str) -> Plan {
-        let expr_first = expr && !SCRIPT_COMPLETION_VALUES;
+        let expr_first = expr && (!SCRIPT_COMPLETION_VALUES || input::starts_with_brace(src));
         let try_expr = |r: &mut Repl| {
             let body = input::expression_body(src)?;
             r.compile(&body, true, filename).ok()
@@ -334,7 +334,7 @@ impl Repl {
                 // Declarations complete with `undefined`: not worth a line each.
                 if let Outcome::Done(v) = self.report(f)
                     && SCRIPT_COMPLETION_VALUES
-                    && !v.is_undefined()
+                    && !(v.is_undefined() && input::starts_with_declaration(src))
                 {
                     println!("{}", inspect::inspect(self.vm.heap(), v));
                 }

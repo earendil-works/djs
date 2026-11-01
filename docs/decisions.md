@@ -2873,12 +2873,13 @@ a terminal, or without `stty`, the REPL reads plain lines (line mode, used by th
 ## D1641: REPL inputs: expressions, Scripts, and a rewrite for top-level await
 date: 2026-11-01 · by: repl · issue: 0064
 Each input is compiled in this order (crates/djs-cli/src/repl/input.rs, docs/cli.md):
-1. As an expression, unless it starts with `function`/`async function`/`class`: the async
+1. As an expression, if it starts with `{` (node prints `{a: 1}` as an object): the async
    body `return [(input\n)];`, whose value is printed. The one-element array keeps a
-   promise value from being adopted. This stands in for Script completion values until
-   0058; `SCRIPT_COMPLETION_VALUES` switches the REPL to the Script's value then, and the
-   wrapper remains only for `await` expressions.
-2. As a Script (D004), so declarations persist as globals. No value is printed.
+   promise value from being adopted.
+2. As a Script (D004), so declarations persist as globals. Its completion value (0058,
+   D1581) is printed, except `undefined` from an input that starts with a declaration.
+   Then as an expression (step 1's wrapper), for `await` expressions. Before 0058 landed
+   every expression took step 1 (`SCRIPT_COMPLETION_VALUES` in input.rs was the switch).
 3. If it contains `await`: rewritten into an async body whose top-level declarations
    assign globals, which a Script declares first: `let`/`const`/`var` keywords become
    `0,` padded to the same width (so `let {a} = o` is the destructuring assignment
