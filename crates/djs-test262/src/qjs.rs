@@ -100,10 +100,8 @@ impl Engine for Qjs {
         let err = err_thread.join().unwrap_or_default();
         let diagnostics = String::from_utf8_lossy(&err).into_owned();
         if timed_out {
-            return RunResult {
-                diagnostics,
-                ..RunResult::new(Status::Timeout)
-            };
+            // The runner words the reason (the wall-clock limit).
+            return RunResult::new(Status::Timeout);
         }
 
         let mut printed = Vec::new();

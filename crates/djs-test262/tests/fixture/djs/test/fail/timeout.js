@@ -1,0 +1,4 @@
+/*---
+description: fail/timeout
+---*/
+for (;;) {}

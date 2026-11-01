@@ -3,6 +3,7 @@
 //! See TESTING.md.
 
 pub mod config;
+pub mod djs;
 pub mod engine;
 pub mod frontmatter;
 pub mod glob;

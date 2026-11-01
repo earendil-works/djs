@@ -39,6 +39,9 @@ dependencies = [
 [[package]]
 name = "djs-test262"
 version = "0.0.0"
+dependencies = [
+ "djs-core",
+]
 
 [[package]]
 name = "djs-wasm"

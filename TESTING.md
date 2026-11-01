@@ -126,6 +126,8 @@ $T list --paths --group scan-eval        # each test with the rule that grouped 
 
 $T run                                   # active + later with qjs (the default engine)
 $T run built-ins/Array --failures        # a path prefix, with one-line failure reasons
+$T run --engine djs --clusters           # djs in-process; failures grouped by reason
+$T run --engine djs --group active --expected tests/test262/expected-failures.txt  # the gate
 $T run 'language/**/S11*.js' -j 4        # globs: * within a segment, ** across
 $T run --group skip language/statements/with  # run a skipped group explicitly
 

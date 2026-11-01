@@ -10,3 +10,4 @@ name = "djs-test262"
 path = "src/main.rs"
 
 [dependencies]
+djs-core = { path = "../djs-core" }

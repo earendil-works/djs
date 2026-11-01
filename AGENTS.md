@@ -57,6 +57,11 @@ the branch `issue/NNNN-slug`. The coordinator creates the worktree for you.
 6. When the acceptance criteria are met:
    - set `status: done` in the issue header and fill in `## Result` (what landed, how to
      use it, known gaps),
+   - if your change makes djs pass tests that were expected to fail, update the ratchets
+     on your branch: `cargo run -p djs-difftest -- --engine djs --update-ratchet` and
+     `cargo run -p djs-test262 -- run --engine djs --group active --expected
+     tests/test262/expected-failures.txt --update`. The gate reports stale entries but
+     does not fail on them, and a stale ratchet hides later regressions of those tests,
    - commit,
    - run `scripts/merge-to-main.sh` from your worktree. It takes the merge lock, rebases
      onto `main`, runs `scripts/gate.sh` and fast-forwards `main`. If the rebase conflicts,

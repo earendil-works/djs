@@ -196,9 +196,73 @@ pub fn summary(
     out
 }
 
+/// A cluster key for a failure reason: the values in it (`«...»` and numbers) replaced,
+/// so that the same failure in different tests groups together.
+pub fn cluster_key(reason: &str) -> String {
+    let mut out = String::new();
+    let mut in_value = false;
+    let mut chars = reason.chars().peekable();
+    let mut prev: Option<char> = None;
+    while let Some(c) = chars.next() {
+        match c {
+            '«' => {
+                in_value = true;
+                out.push_str("«…»");
+            }
+            '»' => in_value = false,
+            _ if in_value => {}
+            // A number on its own (not part of a word like `Test262Error`).
+            c if c.is_ascii_digit() && !prev.is_some_and(|p| p.is_alphanumeric() || p == '_') => {
+                while chars.peek().is_some_and(|d| d.is_ascii_digit() || *d == '.') {
+                    chars.next();
+                }
+                out.push('N');
+            }
+            c => out.push(c),
+        }
+        prev = Some(c);
+    }
+    out
+}
+
+/// The `top` largest clusters of `(test, reason)` failures as a table with examples.
+pub fn clusters(failures: &[(&str, &str)], top: usize) -> String {
+    let mut groups: BTreeMap<String, Vec<&str>> = BTreeMap::new();
+    for (test, reason) in failures {
+        groups.entry(cluster_key(reason)).or_default().push(test);
+    }
+    let mut groups: Vec<(String, Vec<&str>)> = groups.into_iter().collect();
+    groups.sort_by(|a, b| b.1.len().cmp(&a.1.len()).then(a.0.cmp(&b.0)));
+    let rows: Vec<Vec<String>> = groups
+        .iter()
+        .take(top)
+        .map(|(k, tests)| {
+            let mut ex = tests.iter().take(2).copied().collect::<Vec<_>>().join(", ");
+            if tests.len() > 2 {
+                ex.push_str(", ...");
+            }
+            vec![tests.len().to_string(), k.clone(), ex]
+        })
+        .collect();
+    let mut out = table(&["tests", "cluster", "examples"], &rows);
+    if groups.len() > top {
+        out.push_str(&format!("({} smaller clusters not shown)\n", groups.len() - top));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cluster_keys() {
+        assert_eq!(cluster_key("Test262Error: Expected SameValue(«1», «\"a\"») to be true"), "Test262Error: Expected SameValue(«…», «…») to be true");
+        assert_eq!(cluster_key("expected 10 got 200"), "expected N got N");
+        let t = clusters(&[("a.js", "x 1"), ("b.js", "x 2"), ("c.js", "y")], 1);
+        assert!(t.contains("| 2     | x N     | a.js, b.js |"), "{t}");
+        assert!(t.contains("(1 smaller clusters not shown)"));
+    }
 
     #[test]
     fn dir_keys() {

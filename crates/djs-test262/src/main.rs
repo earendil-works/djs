@@ -34,12 +34,13 @@ list options:
   --paths             print every selected test with its group and matching rule
 
 run options:
-  --engine NAME       qjs (default) or djs (not available yet)
+  --engine NAME       qjs (default) or djs (in-process)
   --qjs PATH          qjs binary (default: $DJS_QJS, else ~/Development/dquickts/qjs)
   --timeout SECS      wall-clock limit per test (default 20)
   --memory-limit N    memory limit per test in bytes, K/M/G suffixes allowed
                       (default 512M; 0 means no limit)
   --failures          list failing tests with a one-line reason
+  --clusters          group the failures by reason (values normalized), largest first
   --slowest N         list the N slowest tests
   --expected FILE     compare against a failures file (`path: reason` lines);
                       exit 1 on failures not listed there, report stale entries
@@ -62,6 +63,7 @@ struct Args {
     timeout: Duration,
     memory_limit: Option<u64>,
     failures: bool,
+    clusters: bool,
     slowest: usize,
     expected: Option<PathBuf>,
     update: bool,
@@ -99,6 +101,7 @@ fn parse_args() -> Result<Args, String> {
         timeout: Duration::from_secs(20),
         memory_limit: Some(512 << 20),
         failures: false,
+        clusters: false,
         slowest: 0,
         expected: None,
         update: false,
@@ -136,6 +139,7 @@ fn parse_args() -> Result<Args, String> {
                 args.memory_limit = (n > 0).then_some(n);
             }
             "--failures" => args.failures = true,
+            "--clusters" => args.clusters = true,
             "--slowest" => args.slowest = number(value(&a)?, &a)?,
             "--expected" => args.expected = Some(value(&a)?.into()),
             "--update" => args.update = true,
@@ -256,7 +260,7 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
                 binary: args.qjs.clone(),
             })
         }
-        "djs" => return Err("the djs engine is not available yet (issue 0007)".into()),
+        "djs" => Box::new(djs_test262::djs::Djs::default()),
         e => return Err(format!("unknown engine `{e}`")),
     };
     let (run_tests, other): (Vec<TestCase>, Vec<TestCase>) =
@@ -315,6 +319,11 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         for (p, r) in failed {
             println!("{p}: {r}");
         }
+    }
+    if args.clusters {
+        let failed: Vec<(&str, &str)> = results.iter().filter_map(|(p, r)| r.map(|r| (*p, r))).collect();
+        println!("\nfailure clusters ({} failures):", failed.len());
+        print!("{}", djs_test262::report::clusters(&failed, 40));
     }
     if args.slowest > 0 {
         let mut by_time: Vec<(&TestCase, &Outcome)> = tests[..ran].iter().zip(&outcomes).collect();

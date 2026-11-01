@@ -40,4 +40,10 @@ echo "== difftest on djs: ratchet, plus suspension and GC stress (0016)"
 cargo run --quiet -p djs-difftest -- --engine djs --ratchet --suspend-every 97 --gc-stress --quiet --no-diff > target/difftest-djs.log \
   || { cat target/difftest-djs.log; exit 1; }
 grep -E '^(stress|ratchet):' target/difftest-djs.log
+echo "== test262 on djs: the active group against the ratchet (0007)"
+./scripts/fetch-test262.sh > /dev/null
+cargo run --quiet -p djs-test262 -- run --engine djs --group active --quiet \
+  --expected tests/test262/expected-failures.txt > target/test262-djs.log \
+  || { cat target/test262-djs.log; exit 1; }
+grep -E '^ratchet:|^\| active' target/test262-djs.log
 echo "gate: OK"

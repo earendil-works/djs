@@ -24,10 +24,13 @@ pub struct Outcome {
 pub fn run_one(engine: &dyn Engine, suite: &Suite, test: &TestCase, opts: &Options) -> Outcome {
     let start = Instant::now();
     let verdict = match prepare_and_run(engine, suite, test, opts) {
-        Ok(result) if result.status == Status::Timeout => Verdict::Fail(format!(
-            "timeout: no result within {:.1}s",
-            opts.timeout.as_secs_f64()
-        )),
+        // Engines that meter fuel say which limit it was; subprocess engines only have
+        // the wall clock.
+        Ok(result) if result.status == Status::Timeout => Verdict::Fail(if result.diagnostics.is_empty() {
+            format!("timeout: no result within {:.1}s", opts.timeout.as_secs_f64())
+        } else {
+            format!("timeout: {}", result.diagnostics)
+        }),
         Ok(result) => judge(&test.meta, &result),
         Err(e) => Verdict::Fail(e),
     };

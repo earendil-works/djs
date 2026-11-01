@@ -932,3 +932,42 @@ Prelude frames are hidden, except functions installed by `%InstallMethod`, which
 `    at map (native)` like qjs's C builtins. qjs exposes `stack` through an accessor; an
 own data property is simpler and prints the same. `djs run` prints the stack after
 `Uncaught Name: message`.
+
+## D1070: The djs engine in djs-test262
+date: 2026-11-01 · by: infra · issue: 0007
+djs-test262's `djs` engine runs in-process with a fresh `Vm` per test. A setup Script
+defines `$262.evalScript`, then the harness files and the test run as Scripts in the
+same realm (`this` = the global object), each compiled separately so that a parse error
+names its file. `print`, `$262.global`, `$262.gc` (a no-op for now) and
+`$262.detachArrayBuffer` (throws a TypeError until ArrayBuffer exists) are host
+functions or values. `$262.evalScript(src)` is
+`function (src) { return $262.__compileScript(src)(); }`: the host function compiles
+`src` as a Script in the same VM while the call is parked (compiling only allocates)
+and returns the function, which the wrapper calls. So declarations land in the global
+object and the global lexical scope, the completion value is whatever the compiled
+Script returns, and a syntax error is a catchable SyntaxError. One difference: the
+Script's top-level `this` is undefined instead of the global object, because the
+wrapper calls it plainly. The thrown value's constructor name is read from data
+properties only (`constructor.name` through the prototype chain, else `name`); the host
+never runs JS. Limits: 5e9 fuel per test (the slice loop also checks the runner's
+wall-clock limit), and the runner's memory limit (512 MiB by default) as the heap cap.
+`InternalError: out of memory` is reported as `oom`, and the reason of a timeout says
+which limit hit.
+
+## D1071: Unimplemented syntax is not a SyntaxError for test262
+date: 2026-11-01 · by: infra · issue: 0007
+The compiler rejects constructs it does not implement yet with a SyntaxError whose
+message ends in "not supported yet". The djs engine reports those parse errors as
+`Unsupported`, not `SyntaxError`, so negative parse tests that expect a SyntaxError do
+not pass for the wrong reason. Measured: active passes went from 3,945 to 2,687 and
+later from 1,455 to 83. When a feature lands without its early errors, its negative
+tests show up as new failures in the ratchet, as they should.
+
+## D1072: test262 in the gate
+date: 2026-11-01 · by: infra · issue: 0007
+The gate runs the whole active group on djs (20,124 tests) in the debug build that
+`cargo test` already produced, against `tests/test262/expected-failures.txt`: 4.2 s
+today (0.5 s for active + later in release). The slowest test takes 0.84 s in debug,
+against a 20 s wall-clock limit. Most tests stop early today, so the time will grow as
+djs passes more. Above about 30 s, switch the gate step to a release build. A
+deterministic subset is the fallback. The `later` group is not in the gate.
