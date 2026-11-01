@@ -870,6 +870,28 @@ fn run_js(src: &str) -> Outcome {
     finish(vm, 1 << 40, false).1
 }
 
+/// 0054: a frozen realm whose prototype `name`s are accessors (pi's lockdown) still shows
+/// the error's name in host output, from the nearest native error prototype; own names
+/// (set through the accessor's setter) win.
+#[test]
+fn error_display_with_accessor_names() {
+    let out = run_js(
+        "for (const C of [Error, TypeError]) {\n\
+           const v = C.prototype.name;\n\
+           Object.defineProperty(C.prototype, 'name', { get() { return v; }, set(x) {\n\
+             Object.defineProperty(this, 'name', { value: x, writable: true, configurable: true }); } });\n\
+         }\n\
+         class MyError extends Error { constructor(m) { super(m); this.name = 'MyError'; } }\n\
+         console.log(new TypeError('a'), new MyError('b'), new Error('c'));\n\
+         null.x;\n",
+    );
+    assert_eq!(out.log[0], "TypeError: a MyError: b Error: c");
+    assert_eq!(
+        out.result,
+        "throw TypeError: cannot read property 'x' of null"
+    );
+}
+
 #[test]
 fn error_stack_traces() {
     // Positions checked against qjs.

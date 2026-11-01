@@ -7,7 +7,7 @@
 //! push exactly one call frame whose result completes them.
 
 use super::*;
-use crate::builtins::{array, collection, date, function, number, object, string, typed};
+use crate::builtins::{array, collection, date, function, number, object, string, typed, uri};
 use crate::bytecode::intrinsics::{INTRINSICS, IntrinsicKind, intrinsic, intrinsic_id};
 use crate::heap::cells::flags::{OBJ_BUILTIN, OBJ_BUILTIN_CTOR};
 use crate::heap::{ObjectClass, atoms};
@@ -160,6 +160,10 @@ const NUMBER_TO_EXPONENTIAL: u16 = id("NumberToExponential");
 const NUMBER_TO_PRECISION: u16 = id("NumberToPrecision");
 const STRING_PARSE_FLOAT: u16 = id("StringParseFloat");
 const STRING_PARSE_INT: u16 = id("StringParseInt");
+const URI_ENCODE: u16 = id("UriEncode");
+const URI_DECODE: u16 = id("UriDecode");
+const STR_ESCAPE: u16 = id("StrEscape");
+const STR_UNESCAPE: u16 = id("StrUnescape");
 const NUMBER_TO_INT32: u16 = id("NumberToInt32");
 const NUMBER_TO_UINT32: u16 = id("NumberToUint32");
 const MATH_RANDOM: u16 = id("MathRandom");
@@ -784,6 +788,20 @@ impl Exec<'_> {
                 };
                 let radix = (id == STRING_PARSE_INT).then(|| arg(self, 1).as_int().unwrap_or(0));
                 conv::number(number::parse(self.heap, s, radix)?)
+            }
+            URI_ENCODE | URI_DECODE | STR_ESCAPE | STR_UNESCAPE => {
+                let Some(s) = a0.as_string() else {
+                    return bad_argument(info.name);
+                };
+                // Linear work: charge for it like the other string scans.
+                self.fuel -= i64::from(self.heap.str_len(s) / 8);
+                let component = arg(self, 1).as_bool() == Some(true);
+                Value::string(match id {
+                    URI_ENCODE => uri::encode(self.heap, s, component)?,
+                    URI_DECODE => uri::decode(self.heap, s, component)?,
+                    STR_ESCAPE => uri::escape(self.heap, s)?,
+                    _ => uri::unescape(self.heap, s)?,
+                })
             }
             NUMBER_TO_INT32 => Value::int(conv::to_int32(a0.as_number().unwrap_or(f64::NAN))),
             NUMBER_TO_UINT32 => {

@@ -188,3 +188,21 @@ function FunctionPrototypeHasInstance(this: Value, v: Value): boolean {
 function ThrowTypeError(this: Value, v?: Value): void {
   throw NewTypeError("invalid property access");
 }
+
+/**
+ * Function.prototype.length, 20.2.3: Function.prototype is a function of no parameters.
+ * @value Function.prototype.length
+ * @attributes configurable
+ */
+function FunctionPrototypeLength(): f64 {
+  return 0;
+}
+
+/**
+ * Function.prototype.name, 20.2.3: the empty string.
+ * @value Function.prototype.name
+ * @attributes configurable
+ */
+function FunctionPrototypeName(): Str {
+  return "";
+}

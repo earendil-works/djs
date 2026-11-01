@@ -465,6 +465,22 @@ declare function NumberToPrecision(x: f64, precision: Value): Str;
 declare function StringParseFloat(s: Str): f64;
 /** The global parseInt after ToString; radix is ToInt32(radix). @leaf */
 declare function StringParseInt(s: Str, radix: i32): f64;
+/**
+ * Encode ( string, extraUnescaped ), 19.2.6.5, after ToString: encodeURI keeps the
+ * reserved characters (`component` false), encodeURIComponent escapes them. URIError for
+ * a lone surrogate. @leaf
+ */
+declare function UriEncode(s: Str, component: boolean): Str;
+/**
+ * Decode ( string, preserveEscapeSet ), 19.2.6.6, after ToString: decodeURI keeps the
+ * escapes of reserved characters (`component` false). URIError for a malformed escape or
+ * UTF-8 sequence. @leaf
+ */
+declare function UriDecode(s: Str, component: boolean): Str;
+/** escape ( string ), B.2.1.1, after ToString. @leaf */
+declare function StrEscape(s: Str): Str;
+/** unescape ( string ), B.2.1.2, after ToString. @leaf */
+declare function StrUnescape(s: Str): Str;
 /** ToInt32 of a number. @leaf */
 declare function NumberToInt32(n: f64): i32;
 /** ToUint32 of a number, as an f64. @leaf */

@@ -15,3 +15,4 @@ pub(crate) mod object;
 pub(crate) mod regexp;
 pub(crate) mod string;
 pub(crate) mod typed;
+pub(crate) mod uri;

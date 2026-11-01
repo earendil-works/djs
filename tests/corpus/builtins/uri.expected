@@ -1,0 +1,143 @@
+encodeURI("a b") = "a%20b"
+encodeURIComponent("a b") = "a%20b"
+decodeURI("a b") = "a b"
+decodeURIComponent("a b") = "a b"
+escape("a b") = "a%20b"
+unescape("a b") = "a b"
+encodeURI("é") = "%C3%A9"
+encodeURIComponent("é") = "%C3%A9"
+decodeURI("é") = "é"
+decodeURIComponent("é") = "é"
+escape("é") = "%E9"
+unescape("é") = "é"
+encodeURI("\ud800") -> URIError: expecting surrogate pair
+encodeURIComponent("\ud800") -> URIError: expecting surrogate pair
+decodeURI("\ud800") = "\ud800"
+decodeURIComponent("\ud800") = "\ud800"
+escape("\ud800") = "%uD800"
+unescape("\ud800") = "\ud800"
+encodeURI("\udc00x") -> URIError: invalid character
+encodeURIComponent("\udc00x") -> URIError: invalid character
+decodeURI("\udc00x") = "\udc00x"
+decodeURIComponent("\udc00x") = "\udc00x"
+escape("\udc00x") = "%uDC00x"
+unescape("\udc00x") = "\udc00x"
+encodeURI("𐀀") = "%F0%90%80%80"
+encodeURIComponent("𐀀") = "%F0%90%80%80"
+decodeURI("𐀀") = "𐀀"
+decodeURIComponent("𐀀") = "𐀀"
+escape("𐀀") = "%uD800%uDC00"
+unescape("𐀀") = "𐀀"
+encodeURI("%E9") = "%25E9"
+encodeURIComponent("%E9") = "%25E9"
+decodeURI("%E9") -> URIError: expecting %
+decodeURIComponent("%E9") -> URIError: expecting %
+escape("%E9") = "%25E9"
+unescape("%E9") = "é"
+encodeURI("%") = "%25"
+encodeURIComponent("%") = "%25"
+decodeURI("%") -> URIError: expecting hex digit
+decodeURIComponent("%") -> URIError: expecting hex digit
+escape("%") = "%25"
+unescape("%") = "%"
+encodeURI("%4") = "%254"
+encodeURIComponent("%4") = "%254"
+decodeURI("%4") -> URIError: expecting hex digit
+decodeURIComponent("%4") -> URIError: expecting hex digit
+escape("%4") = "%254"
+unescape("%4") = "%4"
+encodeURI("%zz") = "%25zz"
+encodeURIComponent("%zz") = "%25zz"
+decodeURI("%zz") -> URIError: expecting hex digit
+decodeURIComponent("%zz") -> URIError: expecting hex digit
+escape("%zz") = "%25zz"
+unescape("%zz") = "%zz"
+encodeURI("%C3%A9") = "%25C3%25A9"
+encodeURIComponent("%C3%A9") = "%25C3%25A9"
+decodeURI("%C3%A9") = "é"
+decodeURIComponent("%C3%A9") = "é"
+escape("%C3%A9") = "%25C3%25A9"
+unescape("%C3%A9") = "Ã©"
+encodeURI(";/?:@&=+$,#") = ";/?:@&=+$,#"
+encodeURIComponent(";/?:@&=+$,#") = "%3B%2F%3F%3A%40%26%3D%2B%24%2C%23"
+decodeURI(";/?:@&=+$,#") = ";/?:@&=+$,#"
+decodeURIComponent(";/?:@&=+$,#") = ";/?:@&=+$,#"
+escape(";/?:@&=+$,#") = "%3B/%3F%3A@%26%3D+%24%2C%23"
+unescape(";/?:@&=+$,#") = ";/?:@&=+$,#"
+encodeURI("-_.!~*'()") = "-_.!~*'()"
+encodeURIComponent("-_.!~*'()") = "-_.!~*'()"
+decodeURI("-_.!~*'()") = "-_.!~*'()"
+decodeURIComponent("-_.!~*'()") = "-_.!~*'()"
+escape("-_.!~*'()") = "-_.%21%7E*%27%28%29"
+unescape("-_.!~*'()") = "-_.!~*'()"
+encodeURI("􏿿") = "%F4%8F%BF%BF"
+encodeURIComponent("􏿿") = "%F4%8F%BF%BF"
+decodeURI("􏿿") = "􏿿"
+decodeURIComponent("􏿿") = "􏿿"
+escape("􏿿") = "%uDBFF%uDFFF"
+unescape("􏿿") = "􏿿"
+encodeURI("%F0%9F%98%80") = "%25F0%259F%2598%2580"
+encodeURIComponent("%F0%9F%98%80") = "%25F0%259F%2598%2580"
+decodeURI("%F0%9F%98%80") = "😀"
+decodeURIComponent("%F0%9F%98%80") = "😀"
+escape("%F0%9F%98%80") = "%25F0%259F%2598%2580"
+unescape("%F0%9F%98%80") = "ð"
+encodeURI("%C0%80") = "%25C0%2580"
+encodeURIComponent("%C0%80") = "%25C0%2580"
+decodeURI("%C0%80") -> URIError: malformed UTF-8
+decodeURIComponent("%C0%80") -> URIError: malformed UTF-8
+escape("%C0%80") = "%25C0%2580"
+unescape("%C0%80") = "À"
+encodeURI("%ED%A0%80") = "%25ED%25A0%2580"
+encodeURIComponent("%ED%A0%80") = "%25ED%25A0%2580"
+decodeURI("%ED%A0%80") -> URIError: malformed UTF-8
+decodeURIComponent("%ED%A0%80") -> URIError: malformed UTF-8
+escape("%ED%A0%80") = "%25ED%25A0%2580"
+unescape("%ED%A0%80") = "í "
+encodeURI("%F8%80") = "%25F8%2580"
+encodeURIComponent("%F8%80") = "%25F8%2580"
+decodeURI("%F8%80") -> URIError: malformed UTF-8
+decodeURIComponent("%F8%80") -> URIError: malformed UTF-8
+escape("%F8%80") = "%25F8%2580"
+unescape("%F8%80") = "ø"
+encodeURI("%E0%A4") = "%25E0%25A4"
+encodeURIComponent("%E0%A4") = "%25E0%25A4"
+decodeURI("%E0%A4") -> URIError: expecting %
+decodeURIComponent("%E0%A4") -> URIError: expecting %
+escape("%E0%A4") = "%25E0%25A4"
+unescape("%E0%A4") = "à¤"
+encodeURI("%E0%A4%A") = "%25E0%25A4%25A"
+encodeURIComponent("%E0%A4%A") = "%25E0%25A4%25A"
+decodeURI("%E0%A4%A") -> URIError: expecting hex digit
+decodeURIComponent("%E0%A4%A") -> URIError: expecting hex digit
+escape("%E0%A4%A") = "%25E0%25A4%25A"
+unescape("%E0%A4%A") = "à¤%A"
+encodeURI("%25%23%3b") = "%2525%2523%253b"
+encodeURIComponent("%25%23%3b") = "%2525%2523%253b"
+decodeURI("%25%23%3b") = "%%23%3b"
+decodeURIComponent("%25%23%3b") = "%#;"
+escape("%25%23%3b") = "%2525%2523%253b"
+unescape("%25%23%3b") = "%#;"
+encodeURI("%u0041%41%zz%u12") = "%25u0041%2541%25zz%25u12"
+encodeURIComponent("%u0041%41%zz%u12") = "%25u0041%2541%25zz%25u12"
+decodeURI("%u0041%41%zz%u12") -> URIError: expecting hex digit
+decodeURIComponent("%u0041%41%zz%u12") -> URIError: expecting hex digit
+escape("%u0041%41%zz%u12") = "%25u0041%2541%25zz%25u12"
+unescape("%u0041%41%zz%u12") = "AA%zz%u12"
+encodeURI("@*_+-./~äሴ") = "@*_+-./~%C3%A4%E1%88%B4"
+encodeURIComponent("@*_+-./~äሴ") = "%40*_%2B-.%2F~%C3%A4%E1%88%B4"
+decodeURI("@*_+-./~äሴ") = "@*_+-./~äሴ"
+decodeURIComponent("@*_+-./~äሴ") = "@*_+-./~äሴ"
+escape("@*_+-./~äሴ") = "@*_+-./%7E%E4%u1234"
+unescape("@*_+-./~äሴ") = "@*_+-./~äሴ"
+encodeURI("") = ""
+encodeURIComponent("") = ""
+decodeURI("") = ""
+decodeURIComponent("") = ""
+escape("") = ""
+unescape("") = ""
+ToString = "x%20y"
+undefined = ["undefined","undefined","undefined","undefined"]
+lengths = ["encodeURI/1","encodeURIComponent/1","decodeURI/1","decodeURIComponent/1","escape/1","unescape/1"]
+long = 3000
+=== completed

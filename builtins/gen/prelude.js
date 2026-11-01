@@ -2979,6 +2979,16 @@ function ThrowTypeError(v) {
   throw %NewTypeError("invalid property access");
 }
 
+// builtins/function.ts:197 value Function.prototype.length
+function FunctionPrototypeLength() {
+  return 0;
+}
+
+// builtins/function.ts:206 value Function.prototype.name
+function FunctionPrototypeName() {
+  return "";
+}
+
 // builtins/generator.ts:10
 function GeneratorValidate(generator) {
   const state = %GeneratorState(generator);
@@ -9891,6 +9901,36 @@ function TASet(o, k, v) {
   %TypedArraySet(o, k, ToElementValue(o, v));
 }
 
+// builtins/uri.ts:8 decodeURI
+function GlobalDecodeURI(encodedURI) {
+  return %UriDecode(ToString(encodedURI), false);
+}
+
+// builtins/uri.ts:16 decodeURIComponent
+function GlobalDecodeURIComponent(encodedURIComponent) {
+  return %UriDecode(ToString(encodedURIComponent), true);
+}
+
+// builtins/uri.ts:24 encodeURI
+function GlobalEncodeURI(uri) {
+  return %UriEncode(ToString(uri), false);
+}
+
+// builtins/uri.ts:32 encodeURIComponent
+function GlobalEncodeURIComponent(uriComponent) {
+  return %UriEncode(ToString(uriComponent), true);
+}
+
+// builtins/uri.ts:40 escape
+function GlobalEscape(string) {
+  return %StrEscape(ToString(string));
+}
+
+// builtins/uri.ts:48 unescape
+function GlobalUnescape(string) {
+  return %StrUnescape(ToString(string));
+}
+
 // builtins/weak.ts:5
 function ThisWeakMap(v) {
   if (%CollectionClass(v) !== 2) {
@@ -10096,6 +10136,12 @@ function WeakSetPrototypeToStringTag() {
 %InstallConstructor("globalThis", "Float64Array", Float64ArrayConstructor, 3, "%TypedArray%");
 %InstallConstructor("globalThis", "BigInt64Array", BigInt64ArrayConstructor, 3, "%TypedArray%");
 %InstallConstructor("globalThis", "BigUint64Array", BigUint64ArrayConstructor, 3, "%TypedArray%");
+%InstallMethod("globalThis", "decodeURI", GlobalDecodeURI, 1);
+%InstallMethod("globalThis", "decodeURIComponent", GlobalDecodeURIComponent, 1);
+%InstallMethod("globalThis", "encodeURI", GlobalEncodeURI, 1);
+%InstallMethod("globalThis", "encodeURIComponent", GlobalEncodeURIComponent, 1);
+%InstallMethod("globalThis", "escape", GlobalEscape, 1);
+%InstallMethod("globalThis", "unescape", GlobalUnescape, 1);
 %InstallConstructor("globalThis", "WeakMap", WeakMapConstructor, 0, undefined);
 %InstallConstructor("globalThis", "WeakSet", WeakSetConstructor, 0, undefined);
 %InstallMethod("Array.prototype", "forEach", ArrayPrototypeForEach, 1);
@@ -10273,6 +10319,8 @@ function WeakSetPrototypeToStringTag() {
 %InstallAccessor("Function.prototype", "caller", ThrowTypeError, true);
 %InstallAccessor("Function.prototype", "arguments", ThrowTypeError, false);
 %InstallAccessor("Function.prototype", "arguments", ThrowTypeError, true);
+%InstallValue("Function.prototype", "length", FunctionPrototypeLength(), 4);
+%InstallValue("Function.prototype", "name", FunctionPrototypeName(), 4);
 %InstallMethod("%GeneratorPrototype%", "next", GeneratorPrototypeNext, 1);
 %InstallMethod("%GeneratorPrototype%", "return", GeneratorPrototypeReturn, 1);
 %InstallMethod("%GeneratorPrototype%", "throw", GeneratorPrototypeThrow, 1);

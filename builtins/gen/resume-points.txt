@@ -1095,6 +1095,10 @@ FunctionPrototypeHasInstance: reentrant (Function.prototype[Symbol.hasInstance])
 
 ThrowTypeError: leaf (get Function.prototype.caller, set Function.prototype.caller, get Function.prototype.arguments, set Function.prototype.arguments)
 
+FunctionPrototypeLength: leaf (value Function.prototype.length)
+
+FunctionPrototypeName: leaf (value Function.prototype.name)
+
 GeneratorValidate: leaf
 
 GeneratorStep: reentrant
@@ -3592,6 +3596,24 @@ IsCanonicalNumericKey: reentrant
 
 TASet: reentrant
   builtins/typedarray.ts:1438:23  ToElementValue (builtin)
+
+GlobalDecodeURI: reentrant (decodeURI)
+  builtins/uri.ts:9:20  ToString (builtin)
+
+GlobalDecodeURIComponent: reentrant (decodeURIComponent)
+  builtins/uri.ts:17:20  ToString (builtin)
+
+GlobalEncodeURI: reentrant (encodeURI)
+  builtins/uri.ts:25:20  ToString (builtin)
+
+GlobalEncodeURIComponent: reentrant (encodeURIComponent)
+  builtins/uri.ts:33:20  ToString (builtin)
+
+GlobalEscape: reentrant (escape)
+  builtins/uri.ts:41:20  ToString (builtin)
+
+GlobalUnescape: reentrant (unescape)
+  builtins/uri.ts:49:22  ToString (builtin)
 
 ThisWeakMap: leaf
 

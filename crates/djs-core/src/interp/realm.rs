@@ -185,6 +185,7 @@ pub enum ErrorKind {
     ReferenceError,
     SyntaxError,
     InternalError,
+    UriError,
 }
 
 impl ErrorKind {
@@ -196,6 +197,7 @@ impl ErrorKind {
             ErrorKind::ReferenceError => "ReferenceError",
             ErrorKind::SyntaxError => "SyntaxError",
             ErrorKind::InternalError => "InternalError",
+            ErrorKind::UriError => "URIError",
         }
     }
 
@@ -207,6 +209,7 @@ impl ErrorKind {
             ErrorKind::ReferenceError => Intrinsic::ReferenceErrorProto,
             ErrorKind::SyntaxError => Intrinsic::SyntaxErrorProto,
             ErrorKind::InternalError => Intrinsic::InternalErrorProto,
+            ErrorKind::UriError => Intrinsic::UriErrorProto,
         }
     }
 }
@@ -585,6 +588,34 @@ pub fn new_error(heap: &mut Heap, kind: ErrorKind, message: &str) -> Result<Valu
     Ok(Value::object(e))
 }
 
+/// The name of the first native error prototype on `o`'s prototype chain.
+fn native_error_name(heap: &Heap, o: Obj) -> Option<&'static str> {
+    const PROTOS: [(Intrinsic, &str); 9] = [
+        (Intrinsic::TypeErrorProto, "TypeError"),
+        (Intrinsic::RangeErrorProto, "RangeError"),
+        (Intrinsic::ReferenceErrorProto, "ReferenceError"),
+        (Intrinsic::SyntaxErrorProto, "SyntaxError"),
+        (Intrinsic::InternalErrorProto, "InternalError"),
+        (Intrinsic::EvalErrorProto, "EvalError"),
+        (Intrinsic::UriErrorProto, "URIError"),
+        (Intrinsic::AggregateErrorProto, "AggregateError"),
+        (Intrinsic::ErrorProto, "Error"),
+    ];
+    let mut p = heap.get_prototype_of(o);
+    // Prototype chains are acyclic; the bound only guards against a corrupt heap.
+    for _ in 0..10_000 {
+        let q = p?;
+        if let Some((_, name)) = PROTOS
+            .iter()
+            .find(|(i, _)| intrinsic(heap, *i).as_object() == Some(q))
+        {
+            return Some(name);
+        }
+        p = heap.get_prototype_of(q);
+    }
+    None
+}
+
 /// `name: message` of an Error object (via its prototype chain), for host output. `None`
 /// if `v` is not an Error.
 pub fn error_summary(heap: &Heap, v: Value) -> Option<String> {
@@ -592,15 +623,19 @@ pub fn error_summary(heap: &Heap, v: Value) -> Option<String> {
     if heap.object_class(o) != ObjectClass::Error {
         return None;
     }
+    // Data properties only: reading an accessor would run JS. A `name` that is an
+    // accessor (a frozen realm, such as after pi's lockdown, which turns prototype
+    // `name`s into getters) falls back to the nearest native error prototype's name.
     let get = |k: Atom| {
         heap.find_property(o, k)
             .and_then(|(_, p)| p.value())
             .and_then(|v| v.as_string())
             .map(|s| heap.str_to_string(s))
-            .unwrap_or_default()
     };
-    let name = get(atoms::NAME);
-    let message = get(atoms::MESSAGE);
+    let name = get(atoms::NAME)
+        .or_else(|| native_error_name(heap, o).map(String::from))
+        .unwrap_or_default();
+    let message = get(atoms::MESSAGE).unwrap_or_default();
     Some(if message.is_empty() {
         name
     } else {
