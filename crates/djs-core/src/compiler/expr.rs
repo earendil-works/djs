@@ -912,6 +912,12 @@ impl Parser<'_, '_> {
                 if self.is(TokenKind::RParen) {
                     return self.unexpected();
                 }
+                // NamedEvaluation sees through parentheses: `x = (function () {})`.
+                if let Some((a, p)) = self.name_hint
+                    && p == tok.start
+                {
+                    self.name_hint = Some((a, self.tok.start));
+                }
                 let e = self.parse_expr(false)?;
                 self.expect(TokenKind::RParen, ")")?;
                 // Parentheses keep references (`(a.b)()`, `(x) = 1`) but not
