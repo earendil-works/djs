@@ -1,7 +1,7 @@
 # 0076: Unicode normalization (String.prototype.normalize, localeCompare NFC)
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0076-unicode-normalization
 depends-on: 0061
 touches: crates/djs-core/src/unicode/ + scripts/gen-unicode.py (normalization tables), crates/djs-core/src/builtins/ (string leaves), builtins/string.ts, Cargo.toml features (only if the tables go behind a feature), ratchets
