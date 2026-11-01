@@ -100,7 +100,7 @@ Three rules make the collection points a function of the program alone:
 
 So a program run in one go, in slices of 97 fuel, or with a snapshot and restore at
 every slice collects at the same instructions and leaves the same bytes. The gate checks
-exactly that ([determinism](determinism.md), D1720).
+exactly that (D1720).
 
 ```js live
 let kept = [];

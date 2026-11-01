@@ -178,8 +178,8 @@ is what keeps data entries at 16 bytes (D1830).
 > unused shapes die. In djs a parent keeps its children alive, so shapes never die, and
 > the tree is capped at 4096 shapes per heap instead (about 160 KB typically, 2.3 MB at
 > worst). Weak transitions would make the tree, and so the heap image, depend on when
-> collections ran, and [determinism](determinism.md) needs images to be a function of
-> the program alone. The cost: a script that creates thousands of distinct key sequences
+> collections ran, and deterministic runs need images to be a function of the
+> program alone. The cost: a script that creates thousands of distinct key sequences
 > gets dictionaries after the budget. Measured: real scripts create 0 to 16 shapes, the
 > difftest corpus at most 59 per case.
 
@@ -219,7 +219,7 @@ not trace normally (D1382). A pair survives a collection only if its key is reac
 some other way, including through the values of other weak tables. WeakRef and
 FinalizationRegistry are built from the same tables (D1513). Weak references make
 collection timing observable, so the host can make them strong or absent
-([determinism](determinism.md), D1680).
+(D1680).
 
 ```js live
 const m = new Map([["b", 1], ["a", 2]]);

@@ -148,20 +148,21 @@ ends a block. Here is the loop of `Array.prototype.map`, excerpted from the gene
 file. The source is the plain loop `for (let k = 0; k < len; k++) { if (HasProperty(o,
 k)) { ... } }`:
 
+<!-- gen:excerpt crates/djs-core/src/builtins/gen/natives.rs "fn native_ArrayPrototypeMap(" "5 => {" 11 -->
 ```rust
 5 => {
     if (l3f < l1f) { st = 6; continue; } else { st = 8; continue; }
 }
 6 => {
     // resume point: HasProperty
-    match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(3); ex.n_has_property(&[a0, a1], 9) }? {
-        Flow::Inline => { st = 9; continue } Flow::Leave(s) => return Ok(s) }
+    match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(3); ex.n_has_property(&[a0, a1], 9) }? { Flow::Inline => { st = 9; continue } Flow::Leave(s) => return Ok(s) }
 }
 7 => {
     let rv = (l3f + 1.0_f64); l3f = rv; ex.n_set_slot(3, num(rv));
     if ex.n_backedge(5) { return Ok(None); } st = 5; continue;
 }
 ```
+<!-- /gen -->
 
 A native builtin runs in a **native frame**: an ordinary frame record in the arena with
 a header bit set, its state in place of the program counter and its locals in the

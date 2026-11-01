@@ -100,7 +100,7 @@ code keep heap values in local variables.
 Collection points depend only on the program, not on how it was sliced: the threshold
 is in the heap and the arena's growth does not depend on fuel (D1710). That is why the
 images of two runs with different slicing are byte for byte the same, which the gate
-checks ([determinism](determinism.md)).
+checks (D1720).
 
 ## Host calls
 
@@ -242,7 +242,7 @@ are bounded by their input and charge fuel for it.
 
 Decisions on this page:
 
-<!-- gen:decisions D1151 D1152 D1690 D1711 D1633 D1740 D1712 D1492 D1710 D1374 D1670 D1370 D1375 D1083 D1631 D1632 D1332 -->
+<!-- gen:decisions D1151 D1152 D1690 D1711 D1633 D1740 D1712 D1492 D1710 D1720 D1374 D1670 D1370 D1375 D1083 D1631 D1632 D1332 -->
 - D1151: Interpreter state in the arena
 - D1152: Host call protocol and fuel semantics
 - D1690: Running out of host memory is not a JS out-of-memory error
@@ -252,6 +252,7 @@ Decisions on this page:
 - D1712: A suspended intrinsic's refund carries to the next run as a credit
 - D1492: pi adapter: 10,000 fuel per interrupt poll
 - D1710: GC points and raw images do not depend on the fuel slice
+- D1720: Determinism checks in the gate: heap images across schedules and builds
 - D1374: Async host functions: a promise plus an entry in the pending host call table
 - D1670: Async host results are macrotasks: the host inbox
 - D1370: The job queue, and when `run` reports Done

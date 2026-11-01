@@ -136,7 +136,7 @@ When the *host* refuses memory below the cap (the `Vec` cannot grow), that is no
 program's doing, so it is not a JavaScript error: the run stops with
 `Status::HostOutOfMemory` and the VM stays valid and idle (D1690). Keeping the two
 apart keeps the out-of-memory point a function of the program and the cap, which
-[determinism](determinism.md) relies on.
+deterministic runs rely on.
 
 Because the arena can be reallocated, nothing outside it may keep a pointer into it
 across a VM call. The host's reader re-derives its view of wasm memory after every call,
