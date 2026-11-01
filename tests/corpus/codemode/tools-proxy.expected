@@ -1,0 +1,12 @@
+true false ["echo","fail"] function function
+TypeError: tools.Echo does not exist. Did you mean tools.echo? ALL_TOOLS lists every tool. Check for a member with "Echo" in tools.
+TypeError: tools.ech does not exist. Did you mean tools.echo? ALL_TOOLS lists every tool. Check for a member with "ech" in tools.
+TypeError: tools.readFile does not exist. Available: echo, fail. ALL_TOOLS lists every tool. Check for a member with "readFile" in tools.
+undefined undefined undefined {}
+read a.txt wrote 3 to b.txt
+fs.remove does not exist. Available: read, write. Check for a member with "remove" in fs.
+function ["write"]
+true ["read","write"]
+echo {"hello":"world"}
+=== return
+[1,"two"]

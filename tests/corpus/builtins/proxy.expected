@@ -1,0 +1,60 @@
+get 1 | p.get:a
+get elem 2 | p.get:b
+set 3 | p.set:c p.getOwnPropertyDescriptor:c p.defineProperty:c
+set index 1 | p.set:5 p.getOwnPropertyDescriptor:5 p.defineProperty:5
+has [true,false,false] | p.has:a p.has:zz p.has:0
+delete [true,false] | p.deleteProperty:c
+keys ["5","a","b"] | p.ownKeys p.getOwnPropertyDescriptor:5 p.getOwnPropertyDescriptor:a p.getOwnPropertyDescriptor:b
+values [1,1,[1,2]] | p.ownKeys p.getOwnPropertyDescriptor:5 p.get:5 p.getOwnPropertyDescriptor:a p.get:a p.getOwnPropertyDescriptor:b p.get:b
+entries [["5",1],["a",1],["b",[1,2]]] | p.ownKeys p.getOwnPropertyDescriptor:5 p.get:5 p.getOwnPropertyDescriptor:a p.get:a p.getOwnPropertyDescriptor:b p.get:b
+ownKeys ["5","a","b","Symbol(Symbol.toStringTag)"] | p.ownKeys
+names ["5","a","b"] | p.ownKeys
+gopd {"value":1,"writable":true,"enumerable":true,"configurable":true} | p.getOwnPropertyDescriptor:a
+define true | p.defineProperty:d
+proto true | p.getPrototypeOf
+setproto true | p.setPrototypeOf
+isext true | p.isExtensible
+toString "[object T]" | p.get:Symbol(Symbol.toStringTag)
+json "{\"5\":1,\"a\":1,\"b\":[1,2],\"d\":4}" | p.get:toJSON p.ownKeys p.getOwnPropertyDescriptor:5 p.getOwnPropertyDescriptor:a p.getOwnPropertyDescriptor:b p.getOwnPropertyDescriptor:d p.get:5 p.get:a p.get:b p.get:d
+spread {"5":1,"a":1,"b":[1,2],"d":4} | p.ownKeys p.getOwnPropertyDescriptor:5 p.get:5 p.getOwnPropertyDescriptor:a p.get:a p.getOwnPropertyDescriptor:b p.get:b p.getOwnPropertyDescriptor:d p.get:d p.getOwnPropertyDescriptor:Symbol(Symbol.toStringTag) p.get:Symbol(Symbol.toStringTag)
+assign {"5":1,"a":1,"b":[1,2],"d":4} | p.ownKeys p.getOwnPropertyDescriptor:5 p.get:5 p.getOwnPropertyDescriptor:a p.get:a p.getOwnPropertyDescriptor:b p.get:b p.getOwnPropertyDescriptor:d p.get:d p.getOwnPropertyDescriptor:Symbol(Symbol.toStringTag) p.get:Symbol(Symbol.toStringTag)
+for-in ["5","a","b","d"]
+hasOwn [true,false] | p.getOwnPropertyDescriptor:a p.get:hasOwnProperty p.getOwnPropertyDescriptor:zz
+freeze true | q.preventExtensions q.ownKeys q.getOwnPropertyDescriptor:x q.defineProperty:x
+isFrozen [true,true,false]
+seal true | q.preventExtensions q.ownKeys q.defineProperty:x
+isSealed [false,true]
+prevent [true,false] | q.preventExtensions q.isExtensible
+call "function" | 
+construct "hi 7" | f.construct f.get:prototype
+apply trap [true,[1,2]] | 
+construct trap {"args":[5],"same":true} | 
+method call true | 
+bind ["bound F",0,1] | f.getPrototypeOf f.getOwnPropertyDescriptor:length f.get:length f.get:name f.construct f.get:prototype
+instanceof [true,false] | f.get:Symbol(Symbol.hasInstance) f.get:prototype f.get:Symbol(Symbol.hasInstance) f.get:prototype
+instanceof chain false | c.getPrototypeOf
+isArray [true,false,true] | 
+array ops [3,[1,2],3] | a.get:length a.get:slice a.get:length a.get:constructor a.has:1 a.get:1 a.has:2 a.get:2 a.get:Symbol(Symbol.isConcatSpreadable) a.get:length a.has:0 a.get:0 a.has:1 a.get:1 a.has:2 a.get:2
+array push [1,2] | a.get:push a.get:length a.set:1 a.getOwnPropertyDescriptor:1 a.defineProperty:1 a.set:length a.getOwnPropertyDescriptor:length a.defineProperty:length
+not ctor "TypeError: not a constructor" | 
+not callable "TypeError: not a function" | 
+new.target true | 
+ctor proto via get true | h.get:prototype
+proto get [1,null] | proto.get:inherited proto.get:missing
+proto set ["z"] | proto.set:z
+proto has true | proto.has:inherited
+proto for-in ["z","inherited"]
+handler proxy [1,true] | handler.get:get handler.get:has
+nested [1,["n"]] | outer.get:n inner.get:n inner.getOwnPropertyDescriptor:n outer.ownKeys inner.ownKeys inner.isExtensible inner.ownKeys inner.getOwnPropertyDescriptor:n outer.getOwnPropertyDescriptor:n inner.getOwnPropertyDescriptor:n inner.getOwnPropertyDescriptor:n inner.isExtensible
+primitive proto "TypeError: proxy: cannot set property" | num.get:foo num.set:bar
+revocable [1,["proxy","revoke"],"function",0,""] | 
+revoked get "TypeError: revoked proxy" | 
+revoked set "TypeError: revoked proxy" | 
+revoked has "TypeError: revoked proxy" | 
+revoked keys "TypeError: revoked proxy" | 
+revoked typeof "object" | 
+revoked toString "TypeError: revoked proxy" | 
+revoked isArray "TypeError: revoked proxy" | 
+revoked proto "TypeError: revoked proxy" | 
+=== throw
+TypeError: revoked proxy

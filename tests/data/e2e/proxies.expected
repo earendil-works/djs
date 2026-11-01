@@ -1,0 +1,8 @@
+1275 6 true true false
+154 set k0,get k0,get a,set k1 has k3,delete k3,has k3
+1 1 true ["own"]
+900 5 function
+7
+TypeError revoked proxy
+{"x":[1,2],"y":"s"} true [object Array]
+1560 3
