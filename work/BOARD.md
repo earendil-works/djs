@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0056 | String/regex hot-path performance (test262 gate cost) | num | .worktrees/num |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
-| 0054 | pi codemode follow-ups (RangeError, URI functions, lockdown error name) | infra | .worktrees/infra |
+| 0059 | Indirect eval, Function constructors, queueMicrotask (D014) | infra | .worktrees/infra |
 | 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
 | 0058 | Compiler: using, completion values, import(), accessor/decorators | lexer | .worktrees/lexer |
 | 0051 | Remaining builtins (iterator helpers, WeakRef/FR, disposables, fromAsync, upsert) | heap | .worktrees/0051-remaining-builtins |
@@ -47,6 +47,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0046 | BigInt | 63d8468 (agent heap; BigInt 1135/1142; active 98.8%) |
 | 0033 | JSON + RegExp builtins, regex literals | 8b5ccfb (agent num; active 32,303 / 32,718) |
 | 0040 | P1-7 Classes | 2d08a6c (agent lexer; test262 active 97.1%) |
+| 0054 | pi follow-ups | 69ee33c (agent infra; pi suite 213/226; OOM recovery bug -> heap) |
 | 0049 | pi codemode adapter | e39a47e (agent infra; pi's suite 204/226 on djs; start 0.49 ms vs 3.2 ms) |
 | 0047 | Dev-flow investigation | report in issue file (D012 adopted) |
 | 0044 | djs runs the shared difftest prelude | a214890 (agent infra; difftest ratchet 52 -> 38) |

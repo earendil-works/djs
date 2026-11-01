@@ -2465,3 +2465,10 @@ Everything iterates in index order, so collections stay deterministic (D1090), b
 timing is observable through these objects: `--gc-stress` runs differ from plain runs
 for scripts that let targets die. Tests keep targets reachable (e2e weakref.js) or
 collect explicitly (vm/tests.rs).
+
+## D014: Indirect eval and the Function constructors, no direct eval
+date: 2026-11-01 · by: coordinator · issue: 0059
+pi's suite expects `eval`/`Function` to exist, and the compiler ships in the VM anyway. djs
+implements indirect (global) eval and the four dynamic function constructors. A call
+`eval(x)` behaves as indirect eval. Direct eval (access to the caller's scope) stays a
+non-goal (ARCH non-goals), and test262 tests that need it stay skipped.
