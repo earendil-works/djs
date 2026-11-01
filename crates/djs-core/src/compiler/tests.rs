@@ -414,7 +414,6 @@ fn errors() {
             1,
         ),
         ("x = /a/", "regular expressions are not supported yet", 1, 5),
-        ("f(...a)", "spread arguments are not supported yet", 1, 3),
         ("f`x`", "tagged templates are not supported yet", 1, 2),
         ("({ m() {} })", "methods are not supported yet", 1, 4),
         (
@@ -1032,4 +1031,52 @@ fn end_to_end_lexical() {
         ("{ let q = 1 } return typeof q", "=> undefined"),
         ("let fn; { let k = 5; fn = () => k } return fn()", "=> 5"),
     ]);
+}
+
+/// The generated prelude (D1172) compiles in privileged mode.
+#[test]
+fn prelude_compiles() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../builtins/gen/prelude.js");
+    let src = std::fs::read(&path).unwrap();
+    let mut heap = Heap::new().unwrap();
+    let opts = CompileOptions::privileged_script("prelude.js");
+    let t = compile(&mut heap, &src, &opts).unwrap_or_else(|e| panic!("{e}"));
+    let text = disasm_template(&heap, t);
+    assert!(text.contains("call_intrinsic %"), "{text}");
+    // Without the flag, `%` is just an operator.
+    let e = compile(&mut heap, &src, &CompileOptions::script("prelude.js")).unwrap_err();
+    assert_eq!(e.kind, CompileErrorKind::Syntax);
+}
+
+#[test]
+fn privileged_errors() {
+    let cases: &[(&str, &str)] = &[
+        ("%Nope(1)", "unknown intrinsic %Nope"),
+        ("%IsObject()", "wrong number of arguments for %IsObject"),
+        ("%IsObject(1, 2)", "wrong number of arguments for %IsObject"),
+        ("%Call()", "wrong number of arguments for %Call"),
+        ("%IsObject(...a)", "spread arguments in an intrinsic call"),
+        ("% 1", "intrinsic name expected"),
+    ];
+    for &(src, msg) in cases {
+        let mut heap = Heap::new().unwrap();
+        let e = compile(
+            &mut heap,
+            src.as_bytes(),
+            &CompileOptions::privileged_script("p.js"),
+        )
+        .unwrap_err();
+        assert_eq!(e.message, msg, "{src}");
+    }
+    let mut heap = Heap::new().unwrap();
+    let ok = "%Call(f, undefined); %Call(f, undefined, 1, 2); %IsObject(1)";
+    let t = compile(
+        &mut heap,
+        ok.as_bytes(),
+        &CompileOptions::privileged_script("p.js"),
+    );
+    let text = disasm_template(&heap, t.unwrap());
+    assert!(text.contains("call_intrinsic %Call 4"), "{text}");
+    let e = compile(&mut heap, b"%IsObject(1)", &CompileOptions::script("p.js")).unwrap_err();
+    assert_eq!(e.message, "unexpected token in expression: '%'");
 }

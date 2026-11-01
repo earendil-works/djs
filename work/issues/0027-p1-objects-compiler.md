@@ -60,6 +60,18 @@ agent.
     allow an arity check in debug builds; the compiler checks the arity at compile time
     (wrong argc is a SyntaxError in privileged code).
 
+- Part 1, merged early so that 0028 builds against main:
+  - the intrinsic table;
+  - `CompileOptions { privileged: bool }` (constructor `CompileOptions::privileged_script`),
+    which enables `%Name(args)` → `call_intrinsic id argc` with compile-time name and
+    arity checks; the disassembler prints `%Name`;
+  - `builtins/gen/prelude.js` compiles in privileged mode (`prelude_compiles`);
+  - spread arguments (`f(...a)`, `o.m(...a)`, `f?.(...a)`, `new F(...a)` →
+    `array_from k; array_spread/array_push; call_spread/construct_spread`);
+  - new ops `set_proto` and `set_function_name prefix`, whose emitters come in part 2.
+  Touched `crates/djs-wasm/src/lib.rs` (outside `touches:`) by one line: its
+  `CompileOptions` literal needs `privileged: false`.
+
 ## Follow-ups
 
 ## Result

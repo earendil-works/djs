@@ -484,6 +484,12 @@ ops! {
     DefineMethod define_method(atom: Atom) pop 2 push 1 cost Access flags THROWS | ALLOC;
     /// `obj key f -> obj`
     DefineMethodElem define_method_elem() pop 3 push 1 cost Access flags THROWS | CALLS | ALLOC;
+    /// `obj v -> obj`: a literal `__proto__: v` sets the prototype when `v` is an object
+    /// or null (other values are ignored).
+    SetProto set_proto() pop 2 push 1 cost Basic flags THROWS;
+    /// `key f -> key f`: SetFunctionName(f, ToPropertyKey(key), prefix) for an anonymous
+    /// function under a computed key (`prefix`: 0 none, 1 "get", 2 "set").
+    SetFunctionName set_function_name(prefix: U8) pop 2 push 2 cost Basic flags THROWS | CALLS;
     /// `obj src -> obj`: object spread / rest (flags select the variant).
     CopyDataProps copy_data_props(mode: U8) pop 2 push 1 cost Access flags THROWS | CALLS | ALLOC;
     /// `obj key -> bool`

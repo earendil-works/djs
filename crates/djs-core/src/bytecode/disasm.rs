@@ -96,7 +96,10 @@ fn operand(out: &mut String, insn: &Insn, i: usize, kind: ImmKind, cx: &DisasmCo
             name(out, cx, cx.locals + raw as usize, true)
         }
         ImmKind::Scope => write!(out, "s{raw}"),
-        ImmKind::Intrinsic => write!(out, "%{raw}"),
+        ImmKind::Intrinsic => match super::intrinsics::intrinsic(raw as u16) {
+            Some(i) => write!(out, "%{}", i.name),
+            None => write!(out, "%{raw}"),
+        },
         ImmKind::Const if insn.op == super::Op::GlobalDecls => {
             let _ = write!(out, "#{raw}");
             if let Some(d) = super::global_decls::GlobalDecls::decode(cx.consts, raw as usize) {

@@ -40,6 +40,14 @@ pub(super) enum Expr {
     OptChain,
 }
 
+/// How call arguments ended up on the stack.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum Args {
+    Count(u16),
+    /// One array (there was a spread).
+    Array,
+}
+
 /// An assignment target, after lvalue conversion removed the load.
 #[derive(Clone, Copy, Debug)]
 pub(super) enum LValue {
@@ -571,9 +579,9 @@ impl Parser<'_, '_> {
                 }
                 TokenKind::LParen => {
                     self.prepare_call(e);
-                    let argc = self.parse_args()?;
+                    let args = self.parse_args()?;
                     self.mark(tok.start);
-                    self.code().call(argc);
+                    self.emit_call(args);
                     e = Expr::Value;
                 }
                 TokenKind::QuestionDot => {
@@ -589,9 +597,9 @@ impl Parser<'_, '_> {
                             self.code().jump_if_true(pad);
                             self.code().swap();
                             let paren = self.tok.start;
-                            let argc = self.parse_args()?;
+                            let args = self.parse_args()?;
                             self.mark(paren);
-                            self.code().call(argc);
+                            self.emit_call(args);
                             e = Expr::Value;
                         }
                         _ => {
@@ -690,25 +698,50 @@ impl Parser<'_, '_> {
         Ok(Expr::Elem { pos })
     }
 
-    /// `( args )`, returning the count.
-    fn parse_args(&mut self) -> PResult<u16> {
+    /// `( args )`: the arguments are pushed one by one, or, from the first spread
+    /// on, collected into an array (`f(a, ...b)` -> `array_from 1; array_spread`).
+    fn parse_args(&mut self) -> PResult<Args> {
         self.expect(TokenKind::LParen, "(")?;
         let mut argc: u32 = 0;
+        let mut array = false;
         while !self.is(TokenKind::RParen) {
             if self.is(TokenKind::Ellipsis) {
-                return self.unsupported(self.tok.start, "spread arguments are");
-            }
-            self.parse_assign(false)?;
-            argc += 1;
-            if argc > u16::MAX as u32 {
-                return syntax(self.tok.start, "Too many call arguments");
+                if !array {
+                    self.code().array_from(argc as u16);
+                    array = true;
+                }
+                self.next()?;
+                self.parse_assign(false)?;
+                self.code().array_spread();
+            } else {
+                self.parse_assign(false)?;
+                if array {
+                    self.code().array_push();
+                } else {
+                    argc += 1;
+                    if argc > u16::MAX as u32 {
+                        return syntax(self.tok.start, "Too many call arguments");
+                    }
+                }
             }
             if !self.eat(TokenKind::Comma)? {
                 break;
             }
         }
         self.expect(TokenKind::RParen, ")")?;
-        Ok(argc as u16)
+        Ok(if array {
+            Args::Array
+        } else {
+            Args::Count(argc as u16)
+        })
+    }
+
+    /// The call after `prepare_call`.
+    fn emit_call(&mut self, args: Args) {
+        match args {
+            Args::Count(n) => self.code().call(n),
+            Args::Array => self.code().call_spread(),
+        }
     }
 
     /// `new X(args)` / `new X`.
@@ -758,13 +791,16 @@ impl Parser<'_, '_> {
                 _ => break,
             }
         }
-        let argc = if self.is(TokenKind::LParen) {
+        let args = if self.is(TokenKind::LParen) {
             self.parse_args()?
         } else {
-            0
+            Args::Count(0)
         };
         self.mark(pos);
-        self.code().construct(argc);
+        match args {
+            Args::Count(n) => self.code().construct(n),
+            Args::Array => self.code().construct_spread(),
+        }
         Ok(Expr::Value)
     }
 
@@ -843,8 +879,44 @@ impl Parser<'_, '_> {
             TokenKind::PrivateName => self.unsupported(tok.start, "private names are"),
             TokenKind::Super => syntax(tok.start, "'super' is only valid in a method"),
             TokenKind::Import => self.unsupported(tok.start, "import() is"),
+            TokenKind::Percent if self.opts.privileged => self.parse_intrinsic_call(),
             _ => self.unexpected(),
         }
+    }
+
+    /// `%Name(args)` in privileged code: `call_intrinsic id, argc` (D1270).
+    fn parse_intrinsic_call(&mut self) -> PResult<Expr> {
+        let pos = self.tok.start;
+        self.next()?;
+        if !self.is(TokenKind::Ident) {
+            return syntax(self.tok.start, "intrinsic name expected");
+        }
+        let name = self.lx.text(&self.tok);
+        let name = core::str::from_utf8(name).unwrap_or("");
+        let Some(id) = crate::bytecode::intrinsics::intrinsic_id(name) else {
+            return syntax(self.tok.start, alloc::format!("unknown intrinsic %{name}"));
+        };
+        let info = crate::bytecode::intrinsics::intrinsic(id).expect("intrinsic id");
+        self.next()?;
+        let paren = self.tok.start;
+        let argc = match self.parse_args()? {
+            Args::Count(n) => n,
+            Args::Array => return syntax(paren, "spread arguments in an intrinsic call"),
+        };
+        let ok = if info.variadic {
+            argc >= u16::from(info.params)
+        } else {
+            argc == u16::from(info.params)
+        };
+        if !ok {
+            return syntax(
+                paren,
+                alloc::format!("wrong number of arguments for %{}", info.name),
+            );
+        }
+        self.mark(pos);
+        self.code().call_intrinsic(id, argc);
+        Ok(Expr::Value)
     }
 
     /// An identifier reference.

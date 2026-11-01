@@ -49,6 +49,10 @@ pub struct CompileOptions<'a> {
     pub filename: &'a str,
     /// Parameter names in [`Goal::AsyncBody`] mode (ignored for scripts).
     pub params: &'a [&'a str],
+    /// Privileged mode (docs/compiler.md 7.3): enables `%Name(args)` intrinsic calls
+    /// (`bytecode::intrinsics`). Only the embedder sets it, for the prelude; it is never
+    /// reachable from user code.
+    pub privileged: bool,
 }
 
 impl<'a> CompileOptions<'a> {
@@ -57,6 +61,7 @@ impl<'a> CompileOptions<'a> {
             goal: Goal::Script,
             filename,
             params: &[],
+            privileged: false,
         }
     }
 
@@ -65,6 +70,15 @@ impl<'a> CompileOptions<'a> {
             goal: Goal::AsyncBody,
             filename,
             params,
+            privileged: false,
+        }
+    }
+
+    /// A privileged Script (the prelude, D1172).
+    pub fn privileged_script(filename: &'a str) -> Self {
+        CompileOptions {
+            privileged: true,
+            ..Self::script(filename)
         }
     }
 }
