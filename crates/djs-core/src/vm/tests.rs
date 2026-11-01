@@ -1054,20 +1054,43 @@ fn weak_refs_and_finalization_after_collect() {
     assert_eq!(out.log, ["done"]);
 }
 
-const WEAK_SCRIPT: &str = "globalThis.kept = {};\n\
-     globalThis.w1 = new WeakRef(kept);\n\
-     globalThis.w2 = new WeakRef({ dies: true });\n\
-     globalThis.r = new FinalizationRegistry((h) => console.log('cleanup', h));\n\
-     r.register({}, 'a');\n\
-     r.register(kept, 'kept');\n\
-     for (let i = 0; i < 3000; i++) r.register({ i }, i);\n";
+/// WeakRefs and a registry with `n` registered objects.
+fn weak_script(n: u32) -> String {
+    format!(
+        "globalThis.kept = {{}};\n\
+         globalThis.w1 = new WeakRef(kept);\n\
+         globalThis.w2 = new WeakRef({{ dies: true }});\n\
+         globalThis.r = new FinalizationRegistry((h) => console.log('cleanup', h));\n\
+         r.register({{}}, 'a');\n\
+         r.register(kept, 'kept');\n\
+         for (let i = 0; i < {n}; i++) r.register({{ i }}, i);\n"
+    )
+}
 
 #[test]
 fn strong_weak_refs_never_lose_their_targets() {
+    // GC stress collects at every allocation: fewer registrations there.
+    strong_weak_refs(300);
+}
+
+/// [`strong_weak_refs_never_lose_their_targets`] with the full registry under GC stress
+/// (about 6 s): `cargo test -p djs-core --lib -- --ignored strong_weak_refs_full`.
+#[test]
+#[ignore]
+fn strong_weak_refs_full() {
+    strong_weak_refs(3000);
+}
+
+fn strong_weak_refs(stress_registrations: u32) {
     // D1680: in strong mode no collection is observable: deref keeps finding targets
     // nobody else references, and no cleanup callback runs, after explicit collections
     // and under GC stress.
     for gc_stress in [false, true] {
+        let n = if gc_stress {
+            stress_registrations
+        } else {
+            3000
+        };
         let vm = vm_with(VmOptions {
             weak_refs: WeakRefs::Strong,
             exec: ExecOptions {
@@ -1077,7 +1100,7 @@ fn strong_weak_refs_never_lose_their_targets() {
             ..Default::default()
         });
         assert!(vm.heap().weak_refs_strong());
-        let (mut vm, _) = run_script(vm, WEAK_SCRIPT);
+        let (mut vm, _) = run_script(vm, &weak_script(n));
         vm.collect().unwrap();
         vm.collect().unwrap();
         vm.heap().verify().unwrap();
@@ -1097,7 +1120,7 @@ fn strong_weak_refs_never_lose_their_targets() {
         assert_eq!(out.log, ["1 true"]);
     }
     // The same script with collected weak refs: the targets die and callbacks run.
-    let (mut vm, _) = run_script(vm(), WEAK_SCRIPT);
+    let (mut vm, _) = run_script(vm(), &weak_script(3000));
     vm.collect().unwrap();
     let (_, out) = run_script(vm, "console.log(w1.deref() === kept, w2.deref());\n");
     assert_eq!(out.log[0], "true undefined");
@@ -2422,9 +2445,30 @@ const OOM_CASES: [(&str, &str); 5] = [
     ),
 ];
 
-#[test]
-fn out_of_memory_is_a_catchable_error_at_every_limit() {
-    for kb in (1024..12 * 1024).step_by(352) {
+/// A fixed sample of `all` for the default test run: the first and the last element plus
+/// `n` more picked by a fixed pseudo-random sequence (the same every run). The exhaustive
+/// sweeps are `#[ignore]`d tests, run before merging changes to what they cover.
+fn sample<T: Copy>(all: &[T], n: usize) -> Vec<T> {
+    let mut picked = alloc::vec![false; all.len()];
+    picked[0] = true;
+    picked[all.len() - 1] = true;
+    let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+    for _ in 0..n {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        picked[(x % all.len() as u64) as usize] = true;
+    }
+    all.iter()
+        .zip(picked)
+        .filter(|p| p.1)
+        .map(|p| *p.0)
+        .collect()
+}
+
+/// Out-of-memory handling at the limits from 1 MiB to 12 MiB in 352 KiB steps.
+fn out_of_memory_at(limits: &[usize]) {
+    for &kb in limits {
         for (name, src) in OOM_CASES {
             let Some(o) = run_limited(src, kb << 10, 1 << 40, false) else {
                 continue;
@@ -2440,6 +2484,23 @@ fn out_of_memory_is_a_catchable_error_at_every_limit() {
             );
         }
     }
+}
+
+fn oom_limits() -> Vec<usize> {
+    (1024..12 * 1024).step_by(352).collect()
+}
+
+#[test]
+fn out_of_memory_is_a_catchable_error_at_sampled_limits() {
+    out_of_memory_at(&sample(&oom_limits(), 3));
+}
+
+/// The full sweep (about 20 s): `cargo test -p djs-core --lib -- --ignored
+/// out_of_memory_is_a_catchable_error_at_every_limit`.
+#[test]
+#[ignore]
+fn out_of_memory_is_a_catchable_error_at_every_limit() {
+    out_of_memory_at(&oom_limits());
 }
 
 #[test]
@@ -2957,11 +3018,23 @@ fn canonical_hash_ignores_collection_points() {
 
 #[test]
 fn a_failing_allocation_collects_and_retries() {
+    failing_allocation_retries(&[2_000_000]);
+}
+
+/// Both limits (about 4 s): `cargo test -p djs-core --lib -- --ignored
+/// a_failing_allocation_retries_at_both_limits`.
+#[test]
+#[ignore]
+fn a_failing_allocation_retries_at_both_limits() {
+    failing_allocation_retries(&[2_000_000, 2_500_000]);
+}
+
+fn failing_allocation_retries(limits: &[usize]) {
     // Garbage, then a big array near the cap: the allocation that fails collects and
     // runs again instead of throwing (D1700), at every slice and with restores.
     let src = include_str!("../../../../scripts/determinism/js/oom.js");
     let dots = ".".repeat(40);
-    for limit in [2_000_000usize, 2_500_000] {
+    for &limit in limits {
         let plain = run_limited(src, limit, 1 << 40, false).unwrap();
         assert_eq!(plain.log, [dots.as_str()], "{limit}");
         let sliced = run_limited(src, limit, 7919, false).unwrap();
