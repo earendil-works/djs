@@ -1,6 +1,6 @@
 # 0022: End-to-end wiring: Vm::compile, `djs run`, e2e tests
 
-status: in-progress
+status: done
 agent: heap
 branch: issue/0022-e2e-wiring
 depends-on: 0014, 0015
@@ -11,17 +11,17 @@ The 0015 follow-ups: connect the compiler (0014) to the interpreter (0015) so th
 source runs end to end.
 
 ## Acceptance criteria
-- [ ] `Vm::compile(source, mode)` on top of `compiler::compile`, for Script mode and
+- [x] `Vm::compile(source, mode)` on top of `compiler::compile`, for Script mode and
       the async-body mode (D008; the parameters `tools` and `console`. Until async
       exists, run the body as a plain function body and document the gap).
-- [ ] `djs run file.js` in djs-cli main.rs, with `--gc-stress` and `--suspend-every N`,
+- [x] `djs run file.js` in djs-cli main.rs, with `--gc-stress` and `--suspend-every N`,
       printing `console.log` output through the host call. Exit codes: 0 ok, 1 uncaught
       error (printed as `Name: message`), 2 usage or compile error.
-- [ ] End-to-end tests: a set of small JS programs covering P0 (and whatever P1 the
+- [x] End-to-end tests: a set of small JS programs covering P0 (and whatever P1 the
       interpreter already supports through the compiler), each run in the three modes
       (normal, fuel 1 with a heap-image round trip at every stop, GC stress), with
       identical output required.
-- [ ] Fix whatever mismatches show up between compiler output and interpreter
+- [x] Fix whatever mismatches show up between compiler output and interpreter
       expectations, and log them.
 
 ## Log
@@ -66,7 +66,60 @@ source runs end to end.
   first 5000 stops, then slices of 997. After that, four mismatches: the missing global
   `NaN`/`Infinity`, cases using `for-of` / `String` (not available yet; removed from the
   cases), and the string `length` assignment message.
+- Rebased onto 0024 (functions and closures). Implemented `rest` (an Array of
+  args[index..argc]). Un-ignored `compiler::tests::end_to_end_functions_0022`; all 11
+  programs pass. Added function cases to the e2e corpus: `functions`, `closures`,
+  `constructors`, `this_binding`, `recursion_deep`. qjs overflows its C stack near depth
+  2000, so the recursion case uses 500. Methods (`{ f() {} }`) and the `Object` global
+  aren't available yet, so those parts were dropped from the cases. 29 cases, all three
+  modes green.
+- Additions from 0023 (coordinator):
+  1. djs-wasm's `vm_compile` now uses `Vm::compile` (djs-wasm is outside `touches:`, as
+     requested). Error text is unchanged: `CompileError`'s Display.
+  2. The wasm-only warning: `flags as opflags` was used only in the
+     `cfg(debug_assertions)` table check, so it warned in release builds (any target,
+     not only wasm). Moved the `use` into that block. The gate's new step is
+     `cargo clippy -p djs-core -p djs-wasm --target wasm32-unknown-unknown --release --
+     -D warnings`. The suggested debug variant would not have caught this case, since in
+     debug the import is used; the native debug clippy already covers the debug
+     configuration.
+  3. `Vm::abort()` was cheap: it resets the registers, clears the stack slots and the
+     pending host call table, and returns to `Idle` with the realm intact. Also exported
+     as `vm_abort(vm)` from djs-wasm (documented in docs/host.md, tested in both crates).
+     The JS host package (js/) still marks a sandbox unusable after maxFuel; switching it
+     to `vm_abort` is a follow-up for num.
 
 ## Follow-ups
+- js/ host package: use `vm_abort` instead of discarding a sandbox after maxFuel
+  (0023 owner).
+- Builtins (`Object`, `String`, `JSON`, ...) do not exist yet. `djs run` scripts and the
+  e2e corpus avoid them.
+- Methods in object literals, `for-in`/`for-of`, classes, `try`/`catch`: compiler P1
+  issues. When they land, add e2e cases; `gen-expected.sh` regenerates the expectations.
+- `copy_data_props` modes other than 0 (rest with excluded keys, P1-6); getters in
+  spreads.
+- `djs run` passes `tools` as undefined in `--body` mode; a fake `tools` belongs with the
+  difftest work (0006d / D1100).
+- The GC stress mode of the e2e corpus takes ~7 s in debug builds; fine for now, but
+  watch the gate time as the corpus grows.
 
 ## Result
+- `Vm::compile(src, &CompileOptions)` returns the instantiated top-level function. Call
+  it with `this` = the global object, plus the params in body mode. `Vm::abort()` drops
+  the current call and makes the VM `Idle` again.
+- `djs run [--body] [--gc-stress] [--suspend-every N] file.js`. Exit codes 0 / 1
+  (`Uncaught Name: message`) / 2 (usage, or a SyntaxError with `file:line:col`).
+- Interpreter ops the compiler emits:
+  - `special_object` THIS / ARGUMENTS / NEW_TARGET / ACTIVE_FUNCTION;
+  - `global_decls`, `init_global_lex` and the global lexical record (D1220);
+  - `define_elem`, `copy_data_props 0`, `delete`, `construct`, `rest`;
+  - closure `length` / `name` / `prototype` (D1240);
+  - the `NaN` / `Infinity` / `undefined` globals.
+- E2E corpus (D1221): `tests/data/e2e/*.js` with qjs-generated `.expected` files
+  (`gen-expected.sh`), run by `crates/djs-core/tests/e2e.rs` plain, with heap-image
+  suspension, and under GC stress (`DJS_E2E_MODE` selects one). 29 cases.
+  `compiler::tests::end_to_end_functions_0022` is un-ignored.
+- Fixes: `define_elem`'s stack effect in the table (push 1), the release-only unused
+  import. The gate now runs wasm32 release clippy. djs-wasm compiles through
+  `Vm::compile` and exports `vm_abort`.
+- Known gaps: see Follow-ups (builtins, compiler P1 features, the js/ side of abort).
