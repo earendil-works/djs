@@ -79,6 +79,11 @@ pub(super) struct Parser<'a, 'h> {
     /// The name for an anonymous function or arrow that starts at the given offset
     /// (NamedEvaluation: `let f = () => 1` names it `f`).
     pub name_hint: Option<(Atom, u32)>,
+    /// The span of the last anonymous function or arrow expression, so a computed
+    /// property can tell whether its value is one (runtime naming).
+    pub last_anon_fn: Option<(u32, u32)>,
+    /// The next unary operand is the operand of `delete`.
+    pub delete_operand: bool,
 }
 
 pub(super) fn syntax<T>(pos: u32, msg: impl Into<Cow<'static, str>>) -> PResult<T> {
@@ -125,6 +130,8 @@ impl<'a, 'h> Parser<'a, 'h> {
             atom_arguments,
             atom_new_target,
             name_hint: None,
+            last_anon_fn: None,
+            delete_operand: false,
         };
         p.f.src_end = src.len() as u32;
         if kind == FuncKind::AsyncBody {

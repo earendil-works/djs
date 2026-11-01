@@ -415,13 +415,47 @@ fn errors() {
         ),
         ("x = /a/", "regular expressions are not supported yet", 1, 5),
         ("f`x`", "tagged templates are not supported yet", 1, 2),
-        ("({ m() {} })", "methods are not supported yet", 1, 4),
+        // Objects (0027).
         (
-            "({ get x() {} })",
-            "getters, setters and methods are not supported yet",
+            "({ get x(a) {} })",
+            "invalid number of arguments for getter or setter",
+            1,
+            11,
+        ),
+        (
+            "({ set x() {} })",
+            "invalid number of arguments for getter or setter",
+            1,
+            10,
+        ),
+        (
+            "({ set x(...a) {} })",
+            "invalid number of arguments for getter or setter",
+            1,
+            14,
+        ),
+        (
+            "({ __proto__: 1, __proto__: 2 })",
+            "duplicate __proto__ property name",
+            1,
+            31,
+        ),
+        (
+            "({ '__proto__': 1, __proto__: 2 })",
+            "duplicate __proto__ property name",
+            1,
+            33,
+        ),
+        ("({ m() { super.x } })", "super is not supported yet", 1, 10),
+        (
+            "({ async m() {} })",
+            "async methods are not supported yet",
             1,
             4,
         ),
+        ("({ *g() {} })", "generators are not supported yet", 1, 4),
+        ("({ #x: 1 })", "invalid property name", 1, 4),
+        ("({ get #x() {} })", "invalid property name", 1, 8),
         ("1n", "BigInt literals are not supported yet", 1, 1),
         ("// goal: body\nawait x", "await is not supported yet", 2, 1),
     ];
@@ -1079,4 +1113,103 @@ fn privileged_errors() {
     assert!(text.contains("call_intrinsic %Call 4"), "{text}");
     let e = compile(&mut heap, b"%IsObject(1)", &CompileOptions::script("p.js")).unwrap_err();
     assert_eq!(e.message, "unexpected token in expression: '%'");
+}
+
+/// Objects end to end (P1-2). Outputs checked against qjs
+/// (`work/scratch/0027/qjs_check.py end_to_end_objects`).
+#[test]
+fn end_to_end_objects() {
+    run_cases(&[
+        (
+            "const o = { a: 1, 'b c': 2, 3: 3 }; return o.a + o['b c'] + o[3]",
+            "=> 6",
+        ),
+        (
+            "const k = 'x'; const o = { [k + 'y']: 5 }; return o.xy",
+            "=> 5",
+        ),
+        (
+            "const a = 1, b = 2; const o = { a, b }; return o.a + o.b",
+            "=> 3",
+        ),
+        ("const o = { a: 1 }; delete o.a; return o.a", "=> undefined"),
+        ("const o = { a: 1 }; return delete o.a", "=> true"),
+        (
+            "const o = { a: 1 }; const k = 'a'; delete o[k]; return 'a' in o",
+            "=> false",
+        ),
+        ("let o = null; return delete o?.a", "=> true"),
+        (
+            "let o = { a: { b: 1 } }; delete o?.a.b; return o.a.b",
+            "=> undefined",
+        ),
+        (
+            "const o = { a: 1 }; return 'a' in o && !('b' in o)",
+            "=> true",
+        ),
+        (
+            "function F() {} const f = new F(); return f instanceof F",
+            "=> true",
+        ),
+        ("const o = { f: () => 1 }; return o.f.name", "=> f"),
+    ]);
+}
+
+/// Object cases that need 0028 (method/accessor definitions, `set_proto`,
+/// `set_function_name`, spread calls). Un-ignore when 0028 lands. Checked against qjs.
+#[test]
+#[ignore = "un-ignore when 0028 lands (define_method/getter/setter, set_proto, set_function_name, call_spread)"]
+fn end_to_end_objects_0028() {
+    run_cases(&[
+        (
+            "const o = { v: 2, m(x) { return this.v * x } }; return o.m(5)",
+            "=> 10",
+        ),
+        ("const o = { get g() { return 7 } }; return o.g", "=> 7"),
+        (
+            "let s = 0; const o = { set v(x) { s = x } }; o.v = 9; return s",
+            "=> 9",
+        ),
+        (
+            "const o = { _v: 1, get v() { return this._v }, set v(x) { this._v = x * 2 } }; o.v = 4; return o.v",
+            "=> 8",
+        ),
+        (
+            "const k = 'dyn'; const o = { [k]() {} }; return o.dyn.name",
+            "=> dyn",
+        ),
+        (
+            "const k = 'p'; const o = { get [k]() { return 1 } }; return o.p",
+            "=> 1",
+        ),
+        (
+            "const k = 'nm'; const o = { [k]: () => 1 }; return o.nm.name",
+            "=> nm",
+        ),
+        ("const o = { m() {} }; return o.m.name", "=> m"),
+        (
+            "const p = { x: 1 }; const o = { __proto__: p }; return o.x",
+            "=> 1",
+        ),
+        (
+            "const o = { __proto__: null }; return 'toString' in o",
+            "=> false",
+        ),
+        (
+            "const o = { ...{ a: 1, b: 2 }, c: 3 }; return o.a + o.b + o.c",
+            "=> 6",
+        ),
+        (
+            "function f(a, b, c) { return a + b + c } const args = [1, 2]; return f(...args, 3)",
+            "=> 6",
+        ),
+        (
+            "const o = { m(...r) { return r.length } }; return o.m(...[1, 2], ...[3])",
+            "=> 3",
+        ),
+        (
+            "function P(a, b) { this.s = a + b } return new P(...[1, 2]).s",
+            "=> 3",
+        ),
+    ]);
 }

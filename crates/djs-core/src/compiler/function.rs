@@ -52,7 +52,41 @@ impl Parser<'_, '_> {
         };
         let child = self.parse_function_rest(FuncKind::Normal, name, start, own)?;
         self.code().fclosure(child);
+        if !own {
+            self.last_anon_fn = Some((start, self.prev_end));
+        }
         Ok(Expr::Value)
+    }
+
+    /// A method, getter or setter of an object literal: parameters and body after the
+    /// key. Getters take no parameters, setters exactly one.
+    pub(super) fn parse_method_function(
+        &mut self,
+        kind: FuncKind,
+        name: Atom,
+        start: u32,
+    ) -> PResult<u32> {
+        self.enter()?;
+        self.begin_function(kind)?;
+        self.f.name = name;
+        self.f.src_start = start;
+        self.expect(TokenKind::LParen, "(")?;
+        self.parse_params()?;
+        // qjs reports a wrong accessor arity at the `)`.
+        let paren = self.prev_end - 1;
+        let ok = match kind {
+            FuncKind::Getter => self.f.param_count == 0,
+            FuncKind::Setter => self.f.param_count == 1 && self.f.rest.is_none(),
+            _ => true,
+        };
+        if !ok {
+            return syntax(paren, "invalid number of arguments for getter or setter");
+        }
+        self.parse_function_body()?;
+        self.f.src_end = self.prev_end;
+        let child = self.end_function()?;
+        self.leave();
+        Ok(child)
     }
 
     /// Parameters and body after the name. With `self_binding`, the name is bound
@@ -237,6 +271,7 @@ impl Parser<'_, '_> {
         let child = self.end_function()?;
         self.leave();
         self.code().fclosure(child);
+        self.last_anon_fn = Some((start, self.prev_end));
         Ok(Expr::Value)
     }
 }

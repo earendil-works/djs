@@ -107,12 +107,20 @@ pub(super) enum FuncKind {
     /// A function declaration or expression.
     Normal,
     Arrow,
+    /// Object literal methods and accessors (no `prototype`, not constructors).
+    Method,
+    Getter,
+    Setter,
 }
 
 impl FuncKind {
     /// Has its own `this`/`arguments`/`new.target` (arrows inherit them).
     pub fn has_own_this(self) -> bool {
         !matches!(self, FuncKind::Arrow)
+    }
+
+    pub fn is_method(self) -> bool {
+        matches!(self, FuncKind::Method | FuncKind::Getter | FuncKind::Setter)
     }
 
     pub fn is_top_level(self) -> bool {

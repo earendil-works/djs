@@ -461,6 +461,9 @@ fn emit_function(
         FuncKind::AsyncBody => func_flags::KIND_ASYNC_BODY | func_flags::ASYNC,
         FuncKind::Normal => func_flags::KIND_NORMAL,
         FuncKind::Arrow => func_flags::KIND_ARROW,
+        FuncKind::Method => func_flags::KIND_METHOD,
+        FuncKind::Getter => func_flags::KIND_GETTER,
+        FuncKind::Setter => func_flags::KIND_SETTER,
     };
     let params = f.param_count - u16::from(f.rest.is_some());
     let parts = TemplateParts {

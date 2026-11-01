@@ -38,6 +38,8 @@ pub(super) enum Expr {
     ArrayLit,
     /// An optional chain: never an assignment target.
     OptChain,
+    /// An optional chain under `delete` that already did the delete.
+    Deleted,
 }
 
 /// How call arguments ended up on the stack.
@@ -447,10 +449,14 @@ impl Parser<'_, '_> {
 
     fn parse_unary_inner(&mut self) -> PResult<(Expr, bool)> {
         let tok = self.tok;
+        // Set by `delete` for its operand: an optional chain ends in a delete.
+        let delete_operand = core::mem::take(&mut self.delete_operand);
         match tok.kind {
             TokenKind::Delete => {
                 self.next()?;
+                self.delete_operand = true;
                 let (e, _) = self.parse_unary()?;
+                self.delete_operand = false;
                 match e {
                     Expr::Name { .. } => {
                         return syntax(
@@ -469,9 +475,8 @@ impl Parser<'_, '_> {
                         self.mark(pos);
                         self.code().delete();
                     }
-                    Expr::OptChain => {
-                        return self.unsupported(tok.start, "delete of an optional chain is");
-                    }
+                    // `delete a?.b`: the chain did the delete.
+                    Expr::Deleted => {}
                     _ => {
                         self.code().drop();
                         self.code().push_true();
@@ -525,13 +530,13 @@ impl Parser<'_, '_> {
             {
                 return self.unsupported(tok.start, "await is");
             }
-            _ => return Ok((self.parse_postfix()?, false)),
+            _ => return Ok((self.parse_postfix(delete_operand)?, false)),
         }
         Ok((Expr::Value, true))
     }
 
-    fn parse_postfix(&mut self) -> PResult<Expr> {
-        let e = self.parse_lhs()?;
+    fn parse_postfix(&mut self, delete_operand: bool) -> PResult<Expr> {
+        let e = self.parse_lhs(delete_operand)?;
         let tok = self.tok;
         if !matches!(tok.kind, TokenKind::PlusPlus | TokenKind::MinusMinus) || tok.newline_before()
         {
@@ -558,7 +563,7 @@ impl Parser<'_, '_> {
     }
 
     /// LeftHandSideExpression: `new`, member access, calls, optional chains.
-    fn parse_lhs(&mut self) -> PResult<Expr> {
+    fn parse_lhs(&mut self, delete_operand: bool) -> PResult<Expr> {
         let mut e = if self.is(TokenKind::New) {
             self.parse_new()?
         } else {
@@ -630,7 +635,28 @@ impl Parser<'_, '_> {
             }
         }
         if pads.iter().any(|p| p.is_some()) {
-            // Short-circuited: drop what the chain had pushed and produce `undefined`.
+            if delete_operand {
+                // `delete a?.b.c`: delete the chain's last reference.
+                match e {
+                    Expr::Field { atom, pos } => {
+                        self.truncate_last();
+                        self.code().push_atom(atom);
+                        self.mark(pos);
+                        self.code().delete();
+                    }
+                    Expr::Elem { pos } => {
+                        self.truncate_last();
+                        self.mark(pos);
+                        self.code().delete();
+                    }
+                    _ => {
+                        self.code().drop();
+                        self.code().push_true();
+                    }
+                }
+            }
+            // Short-circuited: drop what the chain had pushed and produce `undefined`
+            // (`true` for a delete).
             let l_end = self.new_label();
             self.code().jump(l_end);
             if let Some(p2) = pads[1] {
@@ -640,9 +666,17 @@ impl Parser<'_, '_> {
             let p1 = pads[0].unwrap_or_else(|| self.f.code.new_label());
             self.place(p1);
             self.code().drop();
-            self.code().undefined();
+            if delete_operand {
+                self.code().push_true();
+            } else {
+                self.code().undefined();
+            }
             self.place(l_end);
-            return Ok(Expr::OptChain);
+            return Ok(if delete_operand {
+                Expr::Deleted
+            } else {
+                Expr::OptChain
+            });
         }
         Ok(e)
     }
@@ -877,7 +911,19 @@ impl Parser<'_, '_> {
             }
             TokenKind::Class => self.unsupported(tok.start, "classes are"),
             TokenKind::PrivateName => self.unsupported(tok.start, "private names are"),
-            TokenKind::Super => syntax(tok.start, "'super' is only valid in a method"),
+            TokenKind::Super => {
+                // Object literal methods may use `super`, which needs home objects
+                // (classes, P1-7).
+                let in_method = core::iter::once(self.f.kind)
+                    .chain(self.stack.iter().rev().map(|s| s.f.kind))
+                    .find(|k| *k != FuncKind::Arrow)
+                    .is_some_and(|k| k.is_method());
+                if in_method {
+                    self.unsupported(tok.start, "super is")
+                } else {
+                    syntax(tok.start, "'super' is only valid in a method")
+                }
+            }
             TokenKind::Import => self.unsupported(tok.start, "import() is"),
             TokenKind::Percent if self.opts.privileged => self.parse_intrinsic_call(),
             _ => self.unexpected(),
@@ -1047,10 +1093,11 @@ impl Parser<'_, '_> {
         }
     }
 
-    /// `{ a: 1, b, [k]: v, ...o }`. Methods and accessors need functions (P1).
+    /// `{ a: 1, b, [k]: v, m() {}, get x() {}, set x(v) {}, __proto__: p, ...o }`.
     fn parse_object(&mut self) -> PResult<Expr> {
         self.next()?;
         self.code().object();
+        let mut seen_proto = false;
         while !self.is(TokenKind::RBrace) {
             let tok = self.tok;
             if tok.kind == TokenKind::Ellipsis {
@@ -1058,103 +1105,7 @@ impl Parser<'_, '_> {
                 self.parse_assign(false)?;
                 self.code().copy_data_props(0);
             } else {
-                let mut computed = false;
-                let mut shorthand_ok = false;
-                let atom = match tok.kind {
-                    TokenKind::LBracket => {
-                        self.next()?;
-                        self.parse_assign(false)?;
-                        self.expect(TokenKind::RBracket, "]")?;
-                        computed = true;
-                        None
-                    }
-                    TokenKind::String => {
-                        let units = self.cooked_string();
-                        let a = self.atom_of_units(&units)?;
-                        self.next()?;
-                        Some(a)
-                    }
-                    TokenKind::Number => {
-                        let lit = self.lx.number_literal(&tok);
-                        let n = crate::num::literal_digits_value(lit.base.radix(), lit.digits);
-                        let a = self.atom_of_number(n)?;
-                        self.next()?;
-                        Some(a)
-                    }
-                    TokenKind::Star => {
-                        return self.unsupported(tok.start, "methods are");
-                    }
-                    TokenKind::BigInt => {
-                        return self.unsupported(tok.start, "BigInt literals are");
-                    }
-                    k if k.is_identifier_name() => {
-                        let a = self.ident_atom()?;
-                        self.next()?;
-                        if matches!(tok.kw, Kw::Get | Kw::Set | Kw::Async)
-                            && !tok.has_escape()
-                            && !matches!(
-                                self.tok.kind,
-                                TokenKind::Colon
-                                    | TokenKind::Comma
-                                    | TokenKind::RBrace
-                                    | TokenKind::LParen
-                                    | TokenKind::Assign
-                            )
-                        {
-                            return self.unsupported(tok.start, "getters, setters and methods are");
-                        }
-                        shorthand_ok = tok.kind == TokenKind::Ident;
-                        Some(a)
-                    }
-                    TokenKind::PrivateName => return syntax(tok.start, "invalid property name"),
-                    _ => return syntax(tok.start, "invalid property name"),
-                };
-                match self.tok.kind {
-                    TokenKind::Colon => {
-                        if !computed && self.lx.text(&tok) == b"__proto__" {
-                            return self.unsupported(tok.start, "__proto__ in object literals is");
-                        }
-                        self.next()?;
-                        if let Some(a) = atom {
-                            self.name_hint = Some((a, self.tok.start));
-                        }
-                        self.parse_assign(false)?;
-                        match atom {
-                            Some(a) => self.code().define_field(a),
-                            None => self.code().define_elem(),
-                        }
-                    }
-                    TokenKind::LParen => {
-                        return self.unsupported(tok.start, "methods are");
-                    }
-                    TokenKind::Comma | TokenKind::RBrace if shorthand_ok => {
-                        if tok.kw == Kw::Yield {
-                            return syntax(tok.start, "unexpected 'yield' keyword");
-                        }
-                        if tok.is_escaped_reserved() || tok.kw.is_strict_reserved() {
-                            return syntax(tok.start, "invalid property name");
-                        }
-                        if tok.is_contextual(Kw::Await) && self.f.kind == FuncKind::AsyncBody {
-                            return self.unsupported(tok.start, "await is");
-                        }
-                        let a = atom.unwrap_or(Atom::NULL);
-                        if tok.kw == Kw::Arguments {
-                            self.note_arguments();
-                        }
-                        let r = self.name_ref(a, tok.start);
-                        self.mark(tok.start);
-                        self.code().name_get(r);
-                        self.code().define_field(a);
-                    }
-                    TokenKind::Assign if shorthand_ok => {
-                        // `{ a = 1 }` is only valid as a destructuring pattern.
-                        if super::scan::closes_before_assign(self.lx, b'{') {
-                            return self.unsupported(tok.start, "destructuring assignment is");
-                        }
-                        return syntax(self.tok.start, "expecting '}'");
-                    }
-                    _ => return syntax(self.tok.start, "expecting '}'"),
-                }
+                self.parse_property(tok, &mut seen_proto)?;
             }
             if !self.eat(TokenKind::Comma)? {
                 break;
@@ -1162,5 +1113,196 @@ impl Parser<'_, '_> {
         }
         self.expect(TokenKind::RBrace, "}")?;
         Ok(Expr::ObjectLit)
+    }
+
+    /// A property name: `Some(atom)` for a static one, `None` for a computed one (the
+    /// key is then on the stack).
+    fn parse_property_key(&mut self) -> PResult<Option<Atom>> {
+        let tok = self.tok;
+        match tok.kind {
+            TokenKind::LBracket => {
+                self.next()?;
+                self.parse_assign(false)?;
+                self.expect(TokenKind::RBracket, "]")?;
+                Ok(None)
+            }
+            TokenKind::String => {
+                let units = self.cooked_string();
+                let a = self.atom_of_units(&units)?;
+                self.next()?;
+                Ok(Some(a))
+            }
+            TokenKind::Number => {
+                let lit = self.lx.number_literal(&tok);
+                let n = crate::num::literal_digits_value(lit.base.radix(), lit.digits);
+                let a = self.atom_of_number(n)?;
+                self.next()?;
+                Ok(Some(a))
+            }
+            TokenKind::BigInt => self.unsupported(tok.start, "BigInt literals are"),
+            k if k.is_identifier_name() => {
+                let a = self.ident_atom()?;
+                self.next()?;
+                Ok(Some(a))
+            }
+            _ => syntax(tok.start, "invalid property name"),
+        }
+    }
+
+    fn parse_property(&mut self, tok: crate::lexer::Token, seen_proto: &mut bool) -> PResult<()> {
+        // `get`/`set`/`async` are prefixes only when a property name follows.
+        let prefix = if matches!(tok.kw, Kw::Get | Kw::Set | Kw::Async)
+            && tok.kind == TokenKind::Ident
+            && !tok.has_escape()
+        {
+            let next = self.peek().kind;
+            let starts = next.is_identifier_name()
+                || matches!(
+                    next,
+                    TokenKind::String
+                        | TokenKind::Number
+                        | TokenKind::BigInt
+                        | TokenKind::LBracket
+                        | TokenKind::PrivateName
+                        | TokenKind::Star
+                );
+            if starts {
+                self.next()?;
+                Some(tok.kw)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if prefix == Some(Kw::Async) {
+            return self.unsupported(tok.start, "async methods are");
+        }
+        if self.is(TokenKind::Star) {
+            return self.unsupported(self.tok.start, "generators are");
+        }
+        if self.is(TokenKind::PrivateName) {
+            return syntax(self.tok.start, "invalid property name");
+        }
+        let key_tok = self.tok;
+        let key = self.parse_property_key()?;
+        if let Some(p) = prefix {
+            // An accessor.
+            let (kind, prefix_id, word) = if p == Kw::Get {
+                (FuncKind::Getter, 1, "get ")
+            } else {
+                (FuncKind::Setter, 2, "set ")
+            };
+            let name = match key {
+                Some(a) => {
+                    let mut n = alloc::string::String::from(word);
+                    n.push_str(&self.heap.atom_name(a));
+                    self.heap.atom_str(&n)?
+                }
+                None => Atom::NULL,
+            };
+            let child = self.parse_method_function(kind, name, tok.start)?;
+            self.code().fclosure(child);
+            match (key, kind) {
+                (Some(a), FuncKind::Getter) => self.code().define_getter(a),
+                (Some(a), _) => self.code().define_setter(a),
+                (None, FuncKind::Getter) => {
+                    self.code().set_function_name(prefix_id);
+                    self.code().define_getter_elem()
+                }
+                (None, _) => {
+                    self.code().set_function_name(prefix_id);
+                    self.code().define_setter_elem()
+                }
+            }
+            return Ok(());
+        }
+        match self.tok.kind {
+            TokenKind::LParen => {
+                let child = self.parse_method_function(
+                    FuncKind::Method,
+                    key.unwrap_or(Atom::NULL),
+                    key_tok.start,
+                )?;
+                self.code().fclosure(child);
+                match key {
+                    Some(a) => self.code().define_method(a),
+                    None => {
+                        self.code().set_function_name(0);
+                        self.code().define_method_elem()
+                    }
+                }
+            }
+            TokenKind::Colon => {
+                self.next()?;
+                // A literal `__proto__: v` sets the prototype (not for computed or
+                // shorthand keys).
+                let is_proto = key.is_some()
+                    && matches!(key_tok.kind, TokenKind::Ident | TokenKind::String)
+                    && self.lx_text_is(key_tok, "__proto__");
+                if is_proto {
+                    self.parse_assign(false)?;
+                    if *seen_proto {
+                        return syntax(self.tok.start, "duplicate __proto__ property name");
+                    }
+                    *seen_proto = true;
+                    self.code().set_proto();
+                    return Ok(());
+                }
+                let value_start = self.tok.start;
+                if let Some(a) = key {
+                    self.name_hint = Some((a, value_start));
+                }
+                self.parse_assign(false)?;
+                match key {
+                    Some(a) => self.code().define_field(a),
+                    None => {
+                        // NamedEvaluation with a computed key happens at run time.
+                        if self.last_anon_fn == Some((value_start, self.prev_end)) {
+                            self.code().set_function_name(0);
+                        }
+                        self.code().define_elem()
+                    }
+                }
+            }
+            TokenKind::Comma | TokenKind::RBrace if key_tok.kind == TokenKind::Ident => {
+                if key_tok.kw == Kw::Yield {
+                    return syntax(key_tok.start, "unexpected 'yield' keyword");
+                }
+                if key_tok.is_escaped_reserved() || key_tok.kw.is_strict_reserved() {
+                    return syntax(key_tok.start, "invalid property name");
+                }
+                if key_tok.is_contextual(Kw::Await) && self.f.kind == FuncKind::AsyncBody {
+                    return self.unsupported(key_tok.start, "await is");
+                }
+                let a = key.unwrap_or(Atom::NULL);
+                if key_tok.kw == Kw::Arguments {
+                    self.note_arguments();
+                }
+                let r = self.name_ref(a, key_tok.start);
+                self.mark(key_tok.start);
+                self.code().name_get(r);
+                self.code().define_field(a);
+            }
+            TokenKind::Assign if key_tok.kind == TokenKind::Ident => {
+                // `{ a = 1 }` is only valid as a destructuring pattern.
+                if super::scan::closes_before_assign(self.lx, b'{') {
+                    return self.unsupported(key_tok.start, "destructuring assignment is");
+                }
+                return syntax(self.tok.start, "expecting '}'");
+            }
+            _ => return syntax(self.tok.start, "expecting '}'"),
+        }
+        Ok(())
+    }
+
+    /// The source text of a token (identifiers cooked).
+    fn lx_text_is(&mut self, tok: crate::lexer::Token, s: &str) -> bool {
+        if tok.kind == TokenKind::String {
+            let mut units = alloc::vec::Vec::new();
+            self.lx.cook_string(&tok, &mut units);
+            return units.iter().copied().eq(s.encode_utf16());
+        }
+        self.lx.ident_value(&tok, &mut self.buf8) == s.as_bytes()
     }
 }

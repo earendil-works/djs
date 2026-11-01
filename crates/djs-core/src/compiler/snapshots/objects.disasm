@@ -1,0 +1,115 @@
+function 0 <anonymous>: params=0 locals=0 stack=4 captures=0
+    0  global_decls #2 const "k" "o"
+    5  push_const #0 ("dyn")
+   10  init_global_lex "k"
+   15  object
+   16  push_i8 1
+   18  define_field "a"
+   23  fclosure child0
+   28  define_method "m"
+   33  fclosure child1
+   38  define_getter "g"
+   43  fclosure child2
+   48  define_setter "s"
+   53  get_global "k"  ; 8:4
+   58  fclosure child3
+   63  set_function_name 0
+   65  define_elem
+   66  get_global "k"  ; 9:4
+   71  push_const #1 ("m")
+   76  add  ; 9:6
+   77  fclosure child4
+   82  set_function_name 0
+   84  define_method_elem
+   85  get_global "k"  ; 10:8
+   90  fclosure child5
+   95  set_function_name 1
+   97  define_getter_elem
+   98  null
+   99  set_proto
+  100  push_i8 1
+  102  define_field "__proto__x"
+  107  get_global "k"  ; 13:6
+  112  copy_data_props 0
+  114  init_global_lex "o"
+  119  get_global "f"  ; 15:1
+  124  undefined
+  125  array_from 0
+  128  get_global "o"  ; 15:6
+  133  array_spread
+  134  push_i8 1
+  136  array_push
+  137  get_global "o"  ; 15:15
+  142  array_spread
+  143  call_spread  ; 15:2
+  144  drop
+  145  get_global "o"  ; 16:1
+  150  get_method "m"  ; 16:2
+  155  array_from 0
+  158  push_i8 1
+  160  array_from 1
+  163  array_spread
+  164  call_spread  ; 16:4
+  165  drop
+  166  get_global "F"  ; 17:5
+  171  array_from 0
+  174  get_global "o"  ; 17:10
+  179  array_spread
+  180  construct_spread  ; 17:1
+  181  drop
+  182  get_global "o"  ; 18:8
+  187  dup
+  188  is_nullish
+  189  jump_if_true -> 205
+  194  push_atom "a"  ; 18:9
+  199  delete
+  200  jump -> 207
+  205  drop
+  206  push_true
+  207  drop
+  208  get_global "o"  ; 19:8
+  213  dup
+  214  is_nullish
+  215  jump_if_true -> 236
+  220  get_field "b"  ; 19:9
+  225  push_atom "c"  ; 19:12
+  230  delete
+  231  jump -> 238
+  236  drop
+  237  push_true
+  238  drop
+  239  get_global "o"  ; 20:8
+  244  dup
+  245  is_nullish
+  246  jump_if_true -> 262
+  251  get_global "k"  ; 20:12
+  256  delete  ; 20:11
+  257  jump -> 264
+  262  drop
+  263  push_true
+  264  drop
+  265  return_undef
+function 0.0 m: params=1 locals=1 stack=2 captures=0
+    0  special_object 4
+    2  put_loc loc0 (this)
+    5  get_loc loc0 (this)
+    8  get_field "a"  ; 5:21
+   13  get_arg arg0  ; 5:26
+   16  add  ; 5:24
+   17  return
+   18  return_undef
+function 0.1 get g: params=0 locals=0 stack=1 captures=0
+    0  push_i8 1
+    2  return
+    3  return_undef
+function 0.2 set s: params=1 locals=0 stack=0 captures=0
+    0  return_undef
+function 0.3 <anonymous>: params=0 locals=0 stack=1 captures=0
+    0  push_i8 2
+    2  return
+function 0.4 <anonymous>: params=0 locals=0 stack=0 captures=0
+    0  return_undef
+function 0.5 <anonymous>: params=0 locals=0 stack=1 captures=0
+    0  push_i8 3
+    2  return
+    3  return_undef
