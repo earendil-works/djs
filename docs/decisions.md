@@ -3961,3 +3961,88 @@ Other rules:
   depth 0, emptied by the collector) and keep the verified index for dictionaries;
 - `Heap::delete_own_property` and `remove_own_property_unchecked` return a `Result`,
   since a dictionary conversion allocates.
+
+## D1870: Arena growth stops at the GC threshold; thresholds in 64 KiB pages; no to-space reuse
+date: 2026-11-03 · by: num · issue: 0087
+Source: 0081 F6. wasm linear memory never shrinks, so peak memory is what a run
+costs. Before this change, the arena's Vec doubled past the GC threshold, and every
+collection allocated a fresh to-space, shrank it and let it double again. The result was
+strbuild at 57.8 MiB of wasm memory with a 15 MiB threshold.
+
+- **Growth stops at the threshold.** `Arena` has a `target`, set to the GC threshold
+  whenever the threshold changes. Below the target, growth doubles but never reserves
+  past it. Past the target a collection is pending, so growth is by a quarter, not by
+  doubling. After a collection, the to-space keeps its capacity unless that is more than
+  twice the new threshold.
+- **Thresholds are whole 64 KiB pages.** `next_threshold` rounds `live + growth` up to a
+  64 KiB multiple when that stays within D1600's headroom rule. **This moves GC points**
+  relative to before. They are still a pure function of the image state (D1601): the
+  rounding uses only `live` and the limit, never allocator capacities, so slicing,
+  restore and native-vs-wasm determinism are unchanged. All of these pass:
+  - e2e image equality across modes;
+  - `tests/slices.rs`, including the all-e2e sweep;
+  - `native-vs-wasm.sh`;
+  - difftest `--determinism`.
+- **The to-space is not reused.** Keeping the from-space as the next to-space (0087's
+  first plan) was built and measured, and it raised wasm memory: strings 15.3 → 19.2 MiB,
+  arrays 30.6 → 37.1, strbuild 57.8 → 59.9. In dlmalloc a freed from-space also serves
+  the Rust allocations made between collections (join buffers, JSON output); pinning it
+  makes those take new memory. It saved no measurable instructions either.
+
+wasm memory after a run (`scripts/perf/wasm-run.ts`, ONCE), before → after:
+
+| workload | before | after |
+| --- | ---: | ---: |
+| strbuild | 57.8 MiB | 35.5 MiB |
+| higher-order | 49.4 | 38.8 |
+| arrays | 30.6 | 29.3 |
+| json | 21.1 | 14.3 |
+| jsonh | 21.8 | 13.9 |
+| forof | 11.3 | 10.4 |
+| pi-like | 7.2 | 6.4 |
+| props | 5.2 | 4.8 |
+| strings | 15.3 | 15.3 |
+| loop | 2.8 | 2.8 |
+
+pi bench (`js/bench/pi.bench.ts` with the instances' memory recorded), peak wasm memory:
+
+| case | before | after |
+| --- | ---: | ---: |
+| script start, prelude image reused | 5.2 MiB | 3.9 MiB |
+| tool-heavy, prelude image reused | 5.3 MiB | 4.4 MiB |
+| tool-heavy, prelude run each time | 7.1 MiB | 4.9 MiB |
+
+quickjs-wasi uses 1.6–1.7 MiB on the same cases.
+
+Native peak RSS (`djs run --body`, steady over 3 runs) is mixed:
+
+| workload | change |
+| --- | ---: |
+| higher-order | −11% |
+| jsonh | −17% |
+| strings | −13% |
+| strbuild | +2–10% |
+| forof | +13% |
+| json | +2% |
+
+wasm is the primary target (D016). wasm instructions are unchanged within ±1%, apart
+from D1871's gains.
+
+## D1871: No Rust allocations in short concatenation and fromCharCode
+date: 2026-11-03 · by: num · issue: 0087
+Source: 0081 F6. A short `'a' + i` spent more in malloc than in the concatenation.
+`Heap::concat`'s path for results under `ROPE_MIN_LEN` (32 units) collected leaves into
+up to three Vecs. It now walks the two operands with fixed arrays of 32 entries: every
+pending subtree and every leaf holds at least one unit, so they cannot overflow. Before
+the change, Vec churn was about 28% of strbuild's native time.
+`String.fromCharCode`/`fromCodePoint` of up to 32 values (`from_codes`) now collects the
+units in a 64-unit stack buffer and spills to a Vec only beyond that.
+
+Effect, before → after:
+
+| | before | after |
+| --- | ---: | ---: |
+| strbuild, native instructions | 3.00 G | 1.99 G (−34%) |
+| strbuild, Rust allocations | 2.8 M | 100 k |
+| strings, native instructions | | −4% |
+| strbuild, wasm instructions | | −10% |
