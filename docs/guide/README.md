@@ -26,6 +26,11 @@ pages work but the examples show only their build-time output.
 The site has a search box (`/` focuses it): `build` writes `search.json`, one entry per
 section of every page and the decision log, which the browser loads on first use.
 
+The site's look is Elanor, Earendil's design system (D2200): its tokens, fonts, icons and
+logo are vendored in `crates/djs-docs/assets/elanor/` by `scripts/elanor-update.sh`
+(which needs an Earendil npm login; nothing else does), and `assets/style.css` uses only
+its tokens.
+
 `.github/workflows/docs.yml` publishes the site to GitHub Pages on every push to main:
 it builds djs-wasm, runs `build --out _site` with node 24, and deploys that directory.
 
@@ -79,4 +84,8 @@ diagram in `gen/` that nothing generates.
 - End with "Where to look" (files) and the page's decisions (`gen:decisions`).
 - Plain, direct sentences. Cite decisions by ID instead of retelling their history.
 - Diagrams: generated from data where the data exists; otherwise hand-drawn SVG in
-  `img/` with the same embedded stylesheet as the generated ones (light and dark).
+  `img/`, drawn with the classes of the generated ones (`text`, `.small`, `.mono`,
+  `.box`, `.host`, `.engine`, `.arena`, `.cell`, `.arrow`, ...: `RULES` in
+  crates/djs-docs/src/svg.rs). Give a new file any `<style></style><defs></defs>` block:
+  `regen` replaces it with the shared stylesheet in Elanor's colors, light and dark
+  (D2200).

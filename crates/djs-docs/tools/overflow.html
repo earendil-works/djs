@@ -1,0 +1,36 @@
+<!doctype html><meta charset="utf-8"><body><pre id="out">running</pre><script type="module">
+// scripts/docs-overflow.sh (0114): does anything on a page of the guide stick out of its
+// column? Loads every page (from search.json) in an iframe of width ?w= and lists the
+// elements past the article's edges that are not inside a scroll container; ?v also lists
+// the blocks that scroll (code, wide tables), which is fine.
+const q = new URLSearchParams(location.search);
+const width = +(q.get("w") || 1440), verbose = q.has("v");
+const pages = await fetch("search.json").then(r => r.json()).then(rows => [...new Set(rows.map(r => r[0]))]);
+const lines = [];
+for (const p of pages) {
+  const f = document.createElement("iframe");
+  f.style.width = width + "px"; f.style.height = "900px";
+  document.body.append(f);
+  await new Promise(r => { f.onload = r; f.src = p; });
+  await f.contentDocument.fonts.ready;
+  const d = f.contentDocument, w = f.contentWindow;
+  const art = d.querySelector("article");
+  const col = art.getBoundingClientRect();
+  if (d.documentElement.scrollWidth > w.innerWidth) lines.push(`${p}: page scrolls sideways (${d.documentElement.scrollWidth} > ${w.innerWidth})`);
+  const scrolls = (el) => { for (let e = el.parentElement; e && e !== art; e = e.parentElement) { const s = w.getComputedStyle(e); if (/(auto|scroll)/.test(s.overflowX) ) return true; } return false; };
+  for (const el of art.querySelectorAll("*")) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0) continue;
+    if (r.right > col.right + 1 || r.left < col.left - 1) {
+      if (scrolls(el)) continue;
+      lines.push(`${p}: <${el.tagName.toLowerCase()} class="${el.className.baseVal ?? el.className}"> ${Math.round(r.right - col.right)}px past: ${(el.textContent || "").slice(0, 60).replace(/\s+/g, " ")}`);
+    }
+  }
+  // Scroll containers that actually scroll (fine, but worth knowing).
+  if (verbose) for (const el of art.querySelectorAll("pre, .table-scroll, figure, .live, div.live-pane")) {
+    if (el.scrollWidth > el.clientWidth + 1) lines.push(`  (scrolls) ${p}: <${el.tagName.toLowerCase()}> ${el.scrollWidth - el.clientWidth}px: ${(el.textContent || "").slice(0, 50).replace(/\s+/g, " ")}`);
+  }
+  f.remove();
+}
+document.getElementById("out").textContent = lines.join("\n") || "no overflow";
+</script>

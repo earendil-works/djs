@@ -4838,3 +4838,42 @@ The golden fixture `NativeHasGet` has one fused and one unfused case.
 **Tried and dropped:** running small blocks in place at forward jumps (tail
 duplication, "fewer states per element"). It cost +13 KB of wasm for 0–1% on most
 iteration builtins (find −6%); state transitions in the wasm loop are cheap.
+
+## D2200: The guide's site uses Elanor, vendored from its published packages
+date: 2026-11-01 · by: design · issue: 0114
+The site (djs-docs `build`) looks like Elanor, Earendil's design system. It uses
+Elanor's published packages from pkg.earendil.com, pinned to one elanor commit in
+`crates/djs-docs/elanor/package.json` and its lockfile. `scripts/elanor-update.sh
+[SHA|main] [BRAND]` installs them and copies the files the site uses, unchanged, into
+`crates/djs-docs/assets/elanor/` (VERSION records the commit and brand). djs-docs embeds
+that copy, and the build copies it into the site.
+- **Vendored, not installed at build time.** Builds on pkg.earendil.com expire 30 days
+  after upload even when pinned, and installing needs an Earendil login, which agents,
+  forks and the offline gate do not have. With the copy, `check`, `build` and the Pages
+  workflow stay hermetic and secret-free, and an Elanor update is a reviewed diff
+  (about 500 KB of files). Alternative, not built: docs.yml can get a one-hour install
+  token for any earendil-works workflow through GitHub OIDC
+  (`POST https://pkg.earendil.com/-/v1/login/github-actions`, `id-token: write`, no secret)
+  and install `@main` at build time. That is always current but unpinned, and an
+  upstream token rename would silently unstyle the site.
+- **Used:** design-tokens (the `earendil` brand's tokens.css; `elanor` differs only in a
+  warmer canvas, a one-word switch in the script), elanor-fonts (Mallos Serif, Commit
+  Mono, SIL OFL 1.1), elanor-icons (a few Material Symbols, Apache-2.0), elanor-logos
+  (the Earendil symbol in the header and the favicon, unmodified, per its brand
+  guidelines). The licenses ship next to the files and the footer names them.
+  **Not used:** elanor-react. Its CSS is CSS Modules with hashed class names and needs
+  React. style.css ports the relevant rules (Prose spacing, CodeSnippet, Table,
+  SideNavigation, TableOfContents, the docs app's layout) and refers only to tokens; a
+  unit test fails if it uses a token that tokens.css does not define.
+- **Highlighting:** our Rust highlighter marks the roles of `elanor-shiki-theme`
+  (comment, punctuation, keyword, function, variable, string, number, type), and the CSS
+  colors them with the theme's tokens. Running Shiki would add node and npm to every
+  build for little visible difference.
+- **Diagrams:** one stylesheet (svg.rs) for the generated diagrams and the hand-drawn ones
+  in docs/guide/img (regen rewrites their `<style>` and `<defs>`), with every selector
+  scoped to the diagram's root (`svg.dg-NAME`), because an inline `<style>` applies to
+  the whole page. Colors are `var(--semantic-color-…, #fallback)`: inline on the site they
+  follow the tokens and the light/dark toggle; as an `<img>` on GitHub they fall back to
+  the token's resolved value from `assets/elanor/colors.tsv`, which the update script
+  writes from the tokens catalog. After an Elanor update, `regen` refreshes the fallbacks
+  and `check` flags any it missed.
