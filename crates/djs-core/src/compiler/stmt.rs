@@ -24,7 +24,7 @@ impl Parser<'_, '_> {
                 self.next()?;
                 self.parse_function_declaration(start, true)
             }
-            TokenKind::Class => self.unsupported(self.tok.start, "classes are"),
+            TokenKind::Class => self.parse_class(true, Atom::NULL),
             _ => self.parse_statement(),
         }
     }
@@ -524,6 +524,9 @@ impl Parser<'_, '_> {
         let pos = self.tok.start;
         if self.f.kind == FuncKind::Script {
             return syntax(pos, "return not in a function");
+        }
+        if self.f.kind == FuncKind::StaticBlock {
+            return syntax(pos, "return in a static initializer block");
         }
         self.next()?;
         let bare = self.is(TokenKind::Semicolon)

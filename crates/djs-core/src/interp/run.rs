@@ -2122,6 +2122,7 @@ impl<'h> Exec<'h> {
             | Op::DefineClassMethodElem
             | Op::DefineClassField
             | Op::SuperCall
+            | Op::SuperCallSpread
             | Op::CheckCtor
             | Op::CheckThis
             | Op::CheckThisUninit
@@ -3128,9 +3129,6 @@ impl<'h> Exec<'h> {
             return type_error("not a function");
         };
         if !self.is_constructor(fo) {
-            if !self.heap.is_callable(fo) {
-                return type_error("not a function");
-            }
             return type_error(&self.not_a_constructor_message(f));
         }
         // A bound function constructs its target (new.target is the target too, as

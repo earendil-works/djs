@@ -25,6 +25,9 @@ pub(super) enum ScopeKind {
     Switch,
     /// A `catch` clause: the parameter and the declarations of the catch block.
     Catch,
+    /// A class: the inner class binding (around the heritage), then a nested one for
+    /// the private names and the hidden bindings of the class body (compiler/class.rs).
+    Class,
 }
 
 pub(super) struct Scope {
@@ -58,6 +61,21 @@ pub(super) enum VarKind {
     /// A compiler-internal local that no source name can reach (the generator or async
     /// state object of `generator_start`/`async_start`, docs/compiler.md 7.7).
     Internal,
+    /// The home object of a method (`special_object HOME_OBJECT`), for `super.x`.
+    HomeObject,
+    /// The running function (`special_object ACTIVE_FUNCTION`): a derived
+    /// constructor's, for `super()`.
+    ActiveFunc,
+    /// A private name `#x` of a class (D1400): its private symbol, created at the class
+    /// scope's entry. `PrivateMethod` for methods and getters, `PrivateAccessor` for
+    /// accessors with a setter.
+    PrivateName,
+    PrivateMethod,
+    PrivateAccessor,
+    /// A hidden class binding (a method closure for a private method, a computed field
+    /// key, the field initializer): written once while the class is defined, before
+    /// anything can read it, so never TDZ-checked.
+    Hidden,
 }
 
 impl VarKind {
@@ -68,6 +86,20 @@ impl VarKind {
     /// Assignment throws a TypeError.
     pub fn is_immutable(self) -> bool {
         matches!(self, VarKind::Const | VarKind::FuncName)
+    }
+
+    /// Set up by the prologue from `special_object` (docs/compiler.md 5.7); no storage
+    /// unless referenced.
+    pub fn is_pseudo(self) -> bool {
+        matches!(
+            self,
+            VarKind::This
+                | VarKind::Arguments
+                | VarKind::NewTarget
+                | VarKind::FuncName
+                | VarKind::HomeObject
+                | VarKind::ActiveFunc
+        )
     }
 }
 
@@ -113,6 +145,13 @@ pub(super) enum FuncKind {
     Method,
     Getter,
     Setter,
+    /// Class constructors (base and derived).
+    ClassCtor,
+    DerivedCtor,
+    /// A class's instance or static field initializer function (compiler/class.rs).
+    FieldInit,
+    /// A class static block, called by the static initializer.
+    StaticBlock,
 }
 
 impl FuncKind {
@@ -121,8 +160,23 @@ impl FuncKind {
         !matches!(self, FuncKind::Arrow)
     }
 
+    /// Has a home object: `super.x` is allowed.
     pub fn is_method(self) -> bool {
-        matches!(self, FuncKind::Method | FuncKind::Getter | FuncKind::Setter)
+        matches!(
+            self,
+            FuncKind::Method
+                | FuncKind::Getter
+                | FuncKind::Setter
+                | FuncKind::ClassCtor
+                | FuncKind::DerivedCtor
+                | FuncKind::FieldInit
+                | FuncKind::StaticBlock
+        )
+    }
+
+    /// Class field initializers and static blocks: `arguments` is an error there.
+    pub fn is_class_init(self) -> bool {
+        matches!(self, FuncKind::FieldInit | FuncKind::StaticBlock)
     }
 
     pub fn is_top_level(self) -> bool {
@@ -194,6 +248,11 @@ pub(super) struct FuncState {
     pub arguments_var: Option<VarId>,
     pub new_target_var: Option<VarId>,
     pub func_name_var: Option<VarId>,
+    pub home_var: Option<VarId>,
+    pub active_var: Option<VarId>,
+    /// Class constructors: the hidden binding of their class's instance field
+    /// initializer (compiler/class.rs).
+    pub fields_atom: Atom,
     /// `async` function (or the codemode body): `await` is an operator.
     pub is_async: bool,
     /// Generator function: `yield` is an operator.
@@ -245,6 +304,9 @@ impl FuncState {
             arguments_var: None,
             new_target_var: None,
             func_name_var: None,
+            home_var: None,
+            active_var: None,
+            fields_atom: Atom::NULL,
             is_async: false,
             is_generator: false,
             state_var: None,

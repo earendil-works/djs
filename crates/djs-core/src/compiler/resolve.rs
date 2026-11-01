@@ -230,10 +230,7 @@ fn assign_storage(f: &FuncState) -> (Vec<Storage>, Vec<Atom>) {
     let mut storage = Vec::with_capacity(f.vars.len());
     let mut names = Vec::new();
     for v in &f.vars {
-        let pseudo = matches!(
-            v.kind,
-            VarKind::This | VarKind::Arguments | VarKind::NewTarget | VarKind::FuncName
-        );
+        let pseudo = v.kind.is_pseudo();
         storage.push(if v.global {
             Storage::Global
         } else if pseudo && !v.used {
@@ -359,6 +356,8 @@ fn emit_function(
         (f.arguments_var, special::ARGUMENTS),
         (f.new_target_var, special::NEW_TARGET),
         (f.func_name_var, special::ACTIVE_FUNCTION),
+        (f.home_var, special::HOME_OBJECT),
+        (f.active_var, special::ACTIVE_FUNCTION),
     ];
     for (var, kind) in pseudo {
         if let Some(v) = var {
@@ -417,6 +416,36 @@ fn emit_function(
                 let scope = &f.scopes[s];
                 for &v in &scope.vars {
                     let var = &f.vars[v as usize];
+                    if matches!(
+                        var.kind,
+                        VarKind::PrivateName | VarKind::PrivateMethod | VarKind::PrivateAccessor
+                    ) {
+                        // A new private symbol per class evaluation (D1400).
+                        use crate::heap::cells::flags::{SYM_PRIVATE_METHOD, SYM_PRIVATE_READONLY};
+                        let method = match var.kind {
+                            VarKind::PrivateName => 0,
+                            VarKind::PrivateMethod => SYM_PRIVATE_METHOD | SYM_PRIVATE_READONLY,
+                            _ => SYM_PRIVATE_METHOD,
+                        } as u8;
+                        match storage[v as usize] {
+                            Storage::Box(slot) => {
+                                out.private_symbol(var.name, method);
+                                out.new_box_init(slot);
+                            }
+                            Storage::Local(slot) => {
+                                out.private_symbol(var.name, method);
+                                out.put_loc(slot);
+                            }
+                            _ => {}
+                        }
+                        continue;
+                    }
+                    if var.kind == VarKind::Hidden {
+                        if let Storage::Box(slot) = storage[v as usize] {
+                            out.new_box(slot);
+                        }
+                        continue;
+                    }
                     // Parameters, `var`s and the pseudo-bindings are set up in the prologue.
                     if !matches!(
                         var.kind,
@@ -536,6 +565,9 @@ fn emit_function(
         FuncKind::Method => func_flags::KIND_METHOD,
         FuncKind::Getter => func_flags::KIND_GETTER,
         FuncKind::Setter => func_flags::KIND_SETTER,
+        FuncKind::ClassCtor => func_flags::KIND_CLASS_CTOR,
+        FuncKind::DerivedCtor => func_flags::KIND_DERIVED_CTOR,
+        FuncKind::FieldInit | FuncKind::StaticBlock => func_flags::KIND_FIELD_INIT,
     };
     let mut flags = kind;
     if privileged {
@@ -546,6 +578,10 @@ fn emit_function(
     }
     if f.is_generator {
         flags |= func_flags::GENERATOR;
+    }
+    // Functions that use `super.x` (themselves or in arrows) get a home object slot.
+    if f.home_var.is_some() {
+        flags |= func_flags::HOME;
     }
     let params = f.param_count - u16::from(f.rest.is_some());
     let parts = TemplateParts {

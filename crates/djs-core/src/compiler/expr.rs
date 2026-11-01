@@ -36,6 +36,24 @@ pub(super) enum Expr {
     Str {
         idx: u32,
     },
+    /// `obj.#x`: `get_private_field` was the last instruction (`obj sym` under it).
+    Private {
+        pos: u32,
+    },
+    /// `super.x`: `get_super_field atom` was the last instruction (`this base`).
+    SuperField {
+        atom: Atom,
+        pos: u32,
+    },
+    /// `super[k]`: `get_super_elem` was the last instruction (`this base key`).
+    SuperElem {
+        pos: u32,
+    },
+    /// A bare private name, only valid as the left operand of `in` (`name_get r` of
+    /// its symbol was the last instruction).
+    PrivateName {
+        pos: u32,
+    },
     ObjectLit,
     ArrayLit,
     /// An optional chain: never an assignment target.
@@ -68,6 +86,31 @@ pub(super) enum LValue {
     Elem {
         pos: u32,
     },
+    /// The object and the private symbol are on the stack.
+    Private {
+        pos: u32,
+    },
+    /// `this` and the super base are on the stack.
+    SuperField {
+        atom: Atom,
+        pos: u32,
+    },
+    /// `this`, the super base and the key are on the stack.
+    SuperElem {
+        pos: u32,
+    },
+}
+
+impl LValue {
+    /// Values the target keeps on the stack until its store.
+    pub fn refs(self) -> u8 {
+        match self {
+            LValue::Name { .. } => 0,
+            LValue::Field { .. } => 1,
+            LValue::Elem { .. } | LValue::Private { .. } | LValue::SuperField { .. } => 2,
+            LValue::SuperElem { .. } => 3,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -224,14 +267,9 @@ impl Parser<'_, '_> {
             self.emit_store(lv, true);
             self.code().jump(l_end);
             self.place(l_keep);
-            // Keep the current value; drop the object (and key) under it.
-            match lv {
-                LValue::Name { .. } => {}
-                LValue::Field { .. } => self.code().nip(),
-                LValue::Elem { .. } => {
-                    self.code().nip();
-                    self.code().nip();
-                }
+            // Keep the current value; drop the references under it.
+            for _ in 0..lv.refs() {
+                self.code().nip();
             }
             self.place(l_end);
             return Ok(Expr::Value);
@@ -307,6 +345,9 @@ impl Parser<'_, '_> {
             }
             Expr::Field { atom, pos } => LValue::Field { atom, pos },
             Expr::Elem { pos } => LValue::Elem { pos },
+            Expr::Private { pos } => LValue::Private { pos },
+            Expr::SuperField { atom, pos } => LValue::SuperField { atom, pos },
+            Expr::SuperElem { pos } => LValue::SuperElem { pos },
             _ => return syntax(pos, msg),
         };
         self.truncate_last();
@@ -331,6 +372,33 @@ impl Parser<'_, '_> {
                 self.mark(pos);
                 self.code().get_elem();
             }
+            LValue::Private { pos } => {
+                self.code().dup2();
+                self.mark(pos);
+                self.code().get_private_field();
+            }
+            LValue::SuperField { atom, pos } => {
+                self.code().dup2();
+                self.mark(pos);
+                self.code().get_super_field(atom);
+            }
+            LValue::SuperElem { pos } => {
+                for _ in 0..3 {
+                    self.code().pick(2);
+                }
+                self.mark(pos);
+                self.code().get_super_elem();
+            }
+        }
+    }
+
+    /// Before a stored value that stays on the stack: a copy under the references.
+    fn emit_keep(&mut self, lv: LValue) {
+        match lv.refs() {
+            0 => self.code().dup(),
+            1 => self.code().insert2(),
+            2 => self.code().insert3(),
+            _ => self.code().insert4(),
         }
     }
 
@@ -360,6 +428,27 @@ impl Parser<'_, '_> {
                 self.mark(pos);
                 self.code().put_elem();
             }
+            LValue::Private { pos } => {
+                if keep {
+                    self.code().insert3();
+                }
+                self.mark(pos);
+                self.code().put_private_field();
+            }
+            LValue::SuperField { atom, pos } => {
+                if keep {
+                    self.code().insert3();
+                }
+                self.mark(pos);
+                self.code().put_super_field(atom);
+            }
+            LValue::SuperElem { pos } => {
+                if keep {
+                    self.code().insert4();
+                }
+                self.mark(pos);
+                self.code().put_super_elem();
+            }
         }
     }
 
@@ -384,7 +473,20 @@ impl Parser<'_, '_> {
     /// Precedence climbing over the binary operators (docs/compiler.md 2.3). Returns
     /// the expression and which logical operators its unparenthesized chain contains.
     fn parse_binary(&mut self, min: u8, no_in: bool) -> PResult<(Expr, u8)> {
-        let (mut lhs, mut lhs_unary) = self.parse_unary()?;
+        // `#x in obj`: a private name only as the left operand of a relational `in`.
+        let (mut lhs, mut lhs_unary) = if self.is(TokenKind::PrivateName)
+            && min <= 8
+            && !no_in
+            && self.peek().kind == TokenKind::In
+        {
+            let pos = self.tok.start;
+            let r = self.private_ref(pos)?;
+            self.next()?;
+            self.code().name_get(r);
+            (Expr::PrivateName { pos }, false)
+        } else {
+            self.parse_unary()?
+        };
         let mut mix = 0u8;
         loop {
             self.operator_tok();
@@ -449,7 +551,11 @@ impl Parser<'_, '_> {
                 }
                 BinOp::In => {
                     self.mark(op_tok.start);
-                    self.code().in_();
+                    if matches!(lhs, Expr::PrivateName { .. }) {
+                        self.code().private_in();
+                    } else {
+                        self.code().in_();
+                    }
                 }
                 BinOp::Simple(emit) => {
                     self.mark(op_tok.start);
@@ -498,6 +604,25 @@ impl Parser<'_, '_> {
                         self.truncate_last();
                         self.mark(pos);
                         self.code().delete();
+                    }
+                    Expr::Private { .. } => {
+                        return syntax(self.tok.start, "cannot delete a private class field");
+                    }
+                    Expr::SuperField { pos, .. } | Expr::SuperElem { pos } => {
+                        // The references are evaluated, then it is a ReferenceError.
+                        self.truncate_last();
+                        let n = if matches!(e, Expr::SuperField { .. }) {
+                            2
+                        } else {
+                            3
+                        };
+                        for _ in 0..n {
+                            self.code().drop();
+                        }
+                        let msg = self.heap.atom_str("unsupported reference to 'super'")?;
+                        self.mark(pos);
+                        self.code().throw_error(msg, 1);
+                        self.code().push_true();
                     }
                     // `delete a?.b`: the chain did the delete.
                     Expr::Deleted => {}
@@ -586,11 +711,7 @@ impl Parser<'_, '_> {
         // Leaves the old (numeric) value: `x++` is `old = +x; x = old + 1; old`.
         self.emit_load(lv);
         self.code().to_numeric();
-        match lv {
-            LValue::Name { .. } => self.code().dup(),
-            LValue::Field { .. } => self.code().insert2(),
-            LValue::Elem { .. } => self.code().insert3(),
-        }
+        self.emit_keep(lv);
         self.mark(tok.start);
         if tok.kind == TokenKind::PlusPlus {
             self.code().inc();
@@ -692,6 +813,9 @@ impl Parser<'_, '_> {
                         self.mark(pos);
                         self.code().delete();
                     }
+                    Expr::Private { .. } => {
+                        return syntax(self.tok.start, "cannot delete a private class field");
+                    }
                     _ => {
                         self.code().drop();
                         self.code().push_true();
@@ -737,6 +861,17 @@ impl Parser<'_, '_> {
                 self.mark(pos);
                 self.code().get_elem_method();
             }
+            Expr::Private { pos } => {
+                // `obj sym` -> `f obj`.
+                self.truncate_last();
+                self.code().pick(1);
+                self.code().rot3r();
+                self.mark(pos);
+                self.code().get_private_field();
+                self.code().swap();
+            }
+            // `super.m()` calls with `this` (read again: nothing can change it).
+            Expr::SuperField { pos, .. } | Expr::SuperElem { pos } => self.emit_this(pos),
             _ => self.code().undefined(),
         }
     }
@@ -744,7 +879,13 @@ impl Parser<'_, '_> {
     /// The property name after `.` (or `?.`).
     fn parse_dot_name(&mut self, pos: u32) -> PResult<Expr> {
         if self.is(TokenKind::PrivateName) {
-            return self.unsupported(self.tok.start, "private names are");
+            let tok = self.tok;
+            let r = self.private_ref(tok.start)?;
+            self.next()?;
+            self.code().name_get(r);
+            self.mark(pos);
+            self.code().get_private_field();
+            return Ok(Expr::Private { pos });
         }
         if !self.tok.kind.is_identifier_name() {
             return syntax(self.tok.start, "expecting field name");
@@ -926,9 +1067,8 @@ impl Parser<'_, '_> {
             }
             TokenKind::Ident => self.parse_ident_ref(),
             TokenKind::This => {
-                let r = self.this_ref(tok.start);
                 self.next()?;
-                self.code().name_get(r);
+                self.emit_this(tok.start);
                 Ok(Expr::Value)
             }
             TokenKind::Null => {
@@ -972,25 +1112,130 @@ impl Parser<'_, '_> {
                 let hint = self.take_name_hint(tok.start);
                 self.parse_function_expression(hint, tok.start, false)
             }
-            TokenKind::Class => self.unsupported(tok.start, "classes are"),
-            TokenKind::PrivateName => self.unsupported(tok.start, "private names are"),
-            TokenKind::Super => {
-                // Object literal methods may use `super`, which needs home objects
-                // (classes, P1-7).
-                let in_method = core::iter::once(self.f.kind)
-                    .chain(self.stack.iter().rev().map(|s| s.f.kind))
-                    .find(|k| *k != FuncKind::Arrow)
-                    .is_some_and(|k| k.is_method());
-                if in_method {
-                    self.unsupported(tok.start, "super is")
-                } else {
-                    syntax(tok.start, "'super' is only valid in a method")
-                }
+            TokenKind::Class => {
+                let hint = self.take_name_hint(tok.start);
+                self.parse_class(false, hint)?;
+                Ok(Expr::Value)
             }
+            TokenKind::Super => self.parse_super(),
             TokenKind::Import => self.unsupported(tok.start, "import() is"),
             TokenKind::Percent if self.opts.privileged => self.parse_intrinsic_call(),
             _ => self.unexpected(),
         }
+    }
+
+    /// `super(args)`, `super.x`, `super[k]` (docs/compiler.md 7.9).
+    fn parse_super(&mut self) -> PResult<Expr> {
+        let pos = self.tok.start;
+        self.next()?;
+        let tok = self.tok;
+        let kind = self.own_this_kind();
+        match tok.kind {
+            TokenKind::LParen => {
+                if kind != Some(FuncKind::DerivedCtor) {
+                    return syntax(
+                        tok.start,
+                        "super() is only valid in a derived class constructor",
+                    );
+                }
+                self.parse_super_call(pos)?;
+                Ok(Expr::Value)
+            }
+            TokenKind::Dot | TokenKind::LBracket => {
+                if !kind.is_some_and(FuncKind::is_method) {
+                    return syntax(tok.start, "'super' is only valid in a method");
+                }
+                // MakeSuperPropertyReference: `this`, then the base from the home object,
+                // then the key (converted at the access).
+                self.emit_this(pos);
+                self.declare_pseudo(super::func::VarKind::HomeObject);
+                let home = self.atom_home;
+                let r = self.name_ref(home, pos);
+                self.code().name_get(r);
+                self.code().get_super();
+                self.next()?;
+                if tok.kind == TokenKind::Dot {
+                    if !self.tok.kind.is_identifier_name() {
+                        return syntax(self.tok.start, "expecting field name");
+                    }
+                    let atom = self.ident_atom()?;
+                    self.next()?;
+                    self.mark(tok.start);
+                    self.code().get_super_field(atom);
+                    Ok(Expr::SuperField {
+                        atom,
+                        pos: tok.start,
+                    })
+                } else {
+                    self.parse_expr(false)?;
+                    self.expect(TokenKind::RBracket, "]")?;
+                    self.mark(tok.start);
+                    self.code().get_super_elem();
+                    Ok(Expr::SuperElem { pos: tok.start })
+                }
+            }
+            _ => syntax(tok.start, "invalid use of 'super'"),
+        }
+    }
+
+    /// `super(args)` in a derived constructor (or an arrow in one): constructs the
+    /// parent with this new.target, binds `this` (once) and runs the field
+    /// initializers.
+    fn parse_super_call(&mut self, pos: u32) -> PResult<()> {
+        use super::func::VarKind;
+        self.declare_pseudo(VarKind::ActiveFunc);
+        let active = self.atom_active;
+        let r = self.name_ref(active, pos);
+        self.code().name_get(r);
+        self.code().get_super();
+        let paren = self.tok.start;
+        let args = self.parse_args()?;
+        let Some(nt) = self.new_target_ref(pos) else {
+            return Err(super::resolve::internal("super() without new.target"));
+        };
+        self.code().name_get(nt);
+        self.mark(paren);
+        match args {
+            Args::Count(n) => self.code().super_call(n),
+            Args::Array => self.code().super_call_spread(),
+        }
+        self.emit_bind_this(pos);
+        Ok(())
+    }
+
+    /// After `super(...)` constructed `this` (on the stack, where it stays): binds it
+    /// (BindThisValue: a ReferenceError if it is bound already) and runs the field
+    /// initializers of the constructor's class (InitializeInstanceElements).
+    pub(super) fn emit_bind_this(&mut self, pos: u32) {
+        let this = self.this_ref(pos);
+        self.mark(pos);
+        self.code().name_get(this);
+        self.code().check_this_uninit();
+        self.code().dup();
+        let this = self.this_ref(pos);
+        self.code().name_put(this);
+        let fields = match self.own_this_function() {
+            Ok(None) => self.f.fields_atom,
+            Ok(Some(i)) => self.stack[i].f.fields_atom,
+            Err(()) => Atom::NULL,
+        };
+        self.emit_init_fields(fields, pos);
+    }
+
+    /// `this` on the stack: calls the class's instance field initializer (its hidden
+    /// binding `fields`, `undefined` without fields) with it; `this` stays.
+    pub(super) fn emit_init_fields(&mut self, fields: Atom, pos: u32) {
+        let r = self.name_ref(fields, pos);
+        let skip = self.new_label();
+        self.code().name_get(r);
+        self.code().dup();
+        self.code().is_undefined();
+        self.code().jump_if_true(skip);
+        self.code().pick(1);
+        self.mark(pos);
+        self.code().call(0);
+        self.place(skip);
+        self.code().drop();
     }
 
     /// `%Name(args)` in privileged code: `call_intrinsic id, argc` (D1270).
@@ -1034,6 +1279,9 @@ impl Parser<'_, '_> {
         if tok.kw == Kw::Yield {
             return syntax(tok.start, "unexpected 'yield' keyword");
         }
+        if tok.kw == Kw::Await && self.f.kind == FuncKind::StaticBlock && !tok.has_escape() {
+            return syntax(tok.start, "unexpected 'await' keyword");
+        }
         if tok.is_escaped_reserved()
             || tok.kw.is_strict_reserved()
             || (tok.kw == Kw::Await && self.await_reserved())
@@ -1041,10 +1289,10 @@ impl Parser<'_, '_> {
             return self.unexpected();
         }
         let atom = self.ident_atom()?;
-        self.next()?;
         if tok.kw == Kw::Arguments {
-            self.note_arguments();
+            self.note_arguments(tok.start)?;
         }
+        self.next()?;
         let r = self.name_ref(atom, tok.start);
         self.mark(tok.start);
         self.code().name_get(r);
@@ -1419,7 +1667,7 @@ impl Parser<'_, '_> {
                 }
                 let a = key.unwrap_or(Atom::NULL);
                 if key_tok.kw == Kw::Arguments {
-                    self.note_arguments();
+                    self.note_arguments(key_tok.start)?;
                 }
                 let r = self.name_ref(a, key_tok.start);
                 self.mark(key_tok.start);

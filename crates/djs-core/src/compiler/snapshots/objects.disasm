@@ -92,7 +92,7 @@ function 0 <anonymous>: params=0 locals=0 stack=4 captures=0
 function 0.0 m: params=1 locals=1 stack=2 captures=0
     0  special_object 4
     2  put_loc loc0 (this)
-    5  get_loc loc0 (this)
+    5  get_loc loc0 (this)  ; 5:17
     8  get_field "a"  ; 5:21
    13  get_arg arg0  ; 5:26
    16  add  ; 5:24

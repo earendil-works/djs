@@ -507,7 +507,8 @@ ops! {
     /// `key obj -> bool`
     In in_() pop 2 push 1 cost Access flags THROWS | CALLS;
     /// `-> sym`: a new private name (a private symbol described `#x`, docs/compiler.md
-    /// 7.9). `flags` bit 0: a private method or accessor (brand check messages).
+    /// 7.9). `flags`: `heap::cells::flags::SYM_PRIVATE_METHOD` (a method or accessor)
+    /// and `SYM_PRIVATE_READONLY` (no setter).
     PrivateSymbol private_symbol(atom: Atom, flags: U8) pop 0 push 1 cost Alloc flags ALLOC;
     /// `obj sym -> v`: `obj.#x` (own properties only, never a proxy trap; a getter is
     /// called).
@@ -647,6 +648,8 @@ ops! {
     /// `f a1 .. an newTarget -> r`: `super(...)` in a derived constructor: constructs
     /// `f` (the super constructor) with that new.target.
     SuperCall super_call(argc: Argc) pop 2 + imm 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
+    /// `f args newTarget -> r`: `super(...args)` with an argument array (spread).
+    SuperCallSpread super_call_spread() pop 3 push 1 cost Call flags THROWS | CALLS | ALLOC;
     /// `a1 .. an -> r`: privileged code only (docs/compiler.md 7.3).
     CallIntrinsic call_intrinsic(id: Intrinsic, argc: Argc) pop 0 + imm 1 push 1 cost Call flags THROWS | CALLS | ALLOC;
     // ---- Generators and async functions (D1375; docs/compiler.md 7.7) ------------------

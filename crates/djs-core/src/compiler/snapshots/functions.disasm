@@ -48,7 +48,7 @@ function 0.0 f: params=2 locals=3 stack=2 captures=0
 function 0.1 g: params=0 locals=1 stack=1 captures=0
     0  special_object 4
     2  put_loc loc0 (this)
-    5  get_loc loc0 (this)
+    5  get_loc loc0 (this)  ; 3:32
     8  return
     9  return_undef
 function 0.2 h: params=1 locals=0 stack=1 captures=0
@@ -70,7 +70,7 @@ function 0.3 k: params=0 locals=4 stack=2 captures=0
    30  return
    31  return_undef
 function 0.3.0 arrow: params=0 locals=0 stack=3 captures=3
-    0  get_cap cap0 (this)
+    0  get_cap cap0 (this)  ; 5:37
     3  get_cap cap1 (arguments)  ; 5:43
     6  get_cap cap2 (new.target)
     9  array_from 3
@@ -105,7 +105,7 @@ function 0.5 self: params=1 locals=1 stack=4 captures=0
 function 0.6 m: params=0 locals=1 stack=1 captures=0
     0  special_object 4
     2  put_loc loc0 (this)
-    5  get_loc loc0 (this)
+    5  get_loc loc0 (this)  ; 8:37
     8  get_field "v"  ; 8:41
    13  return
    14  return_undef

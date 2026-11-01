@@ -96,6 +96,10 @@ pub(super) struct Parser<'a, 'h> {
     pub atom_this: Atom,
     pub atom_arguments: Atom,
     pub atom_new_target: Atom,
+    pub atom_home: Atom,
+    pub atom_active: Atom,
+    /// The classes being parsed, innermost last (compiler/class.rs).
+    pub classes: Vec<super::class::ClassCtx>,
     /// The name for an anonymous function or arrow that starts at the given offset
     /// (NamedEvaluation: `let f = () => 1` names it `f`).
     pub name_hint: Option<(Atom, u32)>,
@@ -156,6 +160,8 @@ impl<'a, 'h> Parser<'a, 'h> {
         let atom_arguments = heap.atom_str("arguments")?;
         // Not an identifier, so it cannot collide with a user binding.
         let atom_new_target = heap.atom_str("new.target")?;
+        let atom_home = heap.atom_str("<home>")?;
+        let atom_active = heap.atom_str("<active>")?;
         let mut p = Parser {
             lx,
             tok,
@@ -175,6 +181,9 @@ impl<'a, 'h> Parser<'a, 'h> {
             atom_this,
             atom_arguments,
             atom_new_target,
+            atom_home,
+            atom_active,
+            classes: Vec::new(),
             name_hint: None,
             last_anon_fn: None,
             delete_operand: false,
@@ -238,6 +247,12 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// Finishes the current function and returns to its parent. Returns the child
     /// index for `fclosure`.
     pub fn end_function(&mut self) -> PResult<u32> {
+        self.end_function_at(None)
+    }
+
+    /// [`Parser::end_function`] into a child index reserved earlier with
+    /// [`Parser::reserve_child`] (a class constructor, whose `fclosure` comes first).
+    pub fn end_function_at(&mut self, reserved: Option<u32>) -> PResult<u32> {
         self.end_async_region();
         let s = self
             .stack
@@ -250,8 +265,47 @@ impl<'a, 'h> Parser<'a, 'h> {
         self.open_iters = s.open_iters;
         let id = child.id;
         self.done[id as usize] = Some(child);
+        if let Some(i) = reserved {
+            self.f.children[i as usize] = id;
+            return Ok(i);
+        }
         self.f.children.push(id);
         Ok((self.f.children.len() - 1) as u32)
+    }
+
+    /// Reserves the child index of a function that is parsed later.
+    pub fn reserve_child(&mut self) -> u32 {
+        self.f.children.push(u32::MAX);
+        (self.f.children.len() - 1) as u32
+    }
+
+    /// Makes a parked function (a class's field initializer, compiler/class.rs) the
+    /// current one again, with the current function suspended as its parent.
+    pub fn resume_function(&mut self, f: FuncState) {
+        let parent = core::mem::replace(&mut self.f, f);
+        self.stack.push(Suspended {
+            f: parent,
+            scope: self.scope,
+            blocks: core::mem::take(&mut self.blocks),
+            stmt_depth: core::mem::take(&mut self.stmt_depth),
+            open_iters: core::mem::take(&mut self.open_iters),
+        });
+        self.scope = BODY_SCOPE;
+    }
+
+    /// Parks the current function (resumed with [`Parser::resume_function`]) and
+    /// returns to its parent.
+    pub fn park_function(&mut self) -> PResult<FuncState> {
+        let s = self
+            .stack
+            .pop()
+            .ok_or_else(|| super::resolve::internal("no parent function"))?;
+        let f = core::mem::replace(&mut self.f, s.f);
+        self.scope = s.scope;
+        self.blocks = s.blocks;
+        self.stmt_depth = s.stmt_depth;
+        self.open_iters = s.open_iters;
+        Ok(f)
     }
 
     /// Declares the next parameter of the current function. Its `init_end` is set by
@@ -687,7 +741,7 @@ impl<'a, 'h> Parser<'a, 'h> {
 
     /// The innermost function with its own `this`/`arguments`/`new.target` (not an
     /// arrow): `None` = the current one, `Some(i)` = `stack[i]`. `Err` if none.
-    fn own_this_function(&self) -> Result<Option<usize>, ()> {
+    pub fn own_this_function(&self) -> Result<Option<usize>, ()> {
         if self.f.kind.has_own_this() {
             return Ok(None);
         }
@@ -699,16 +753,27 @@ impl<'a, 'h> Parser<'a, 'h> {
         Err(())
     }
 
-    /// Declares a pseudo-binding (`this`, `arguments`, `new.target`) in the function
-    /// that owns it. Returns false if there is none (top-level code has a `this` but no
-    /// `arguments` or `new.target`).
-    fn declare_pseudo(&mut self, kind: VarKind) -> bool {
+    /// The kind of the innermost function with its own `this` (not an arrow).
+    pub fn own_this_kind(&self) -> Option<FuncKind> {
+        match self.own_this_function() {
+            Ok(None) => Some(self.f.kind),
+            Ok(Some(i)) => Some(self.stack[i].f.kind),
+            Err(()) => None,
+        }
+    }
+
+    /// Declares a pseudo-binding (`this`, `arguments`, `new.target`, the home object, the
+    /// active function) in the function that owns it. Returns false if there is none
+    /// (top-level code has a `this` but none of the others).
+    pub fn declare_pseudo(&mut self, kind: VarKind) -> bool {
         let Ok(owner) = self.own_this_function() else {
             return false;
         };
         let atom = match kind {
             VarKind::This => self.atom_this,
             VarKind::Arguments => self.atom_arguments,
+            VarKind::HomeObject => self.atom_home,
+            VarKind::ActiveFunc => self.atom_active,
             _ => self.atom_new_target,
         };
         let f = match owner {
@@ -718,18 +783,16 @@ impl<'a, 'h> Parser<'a, 'h> {
         if f.kind.is_top_level() && kind != VarKind::This {
             return false;
         }
-        let existing = match kind {
-            VarKind::This => f.this_var,
-            VarKind::Arguments => f.arguments_var,
-            _ => f.new_target_var,
+        let slot = match kind {
+            VarKind::This => &mut f.this_var,
+            VarKind::Arguments => &mut f.arguments_var,
+            VarKind::HomeObject => &mut f.home_var,
+            VarKind::ActiveFunc => &mut f.active_var,
+            _ => &mut f.new_target_var,
         };
-        if existing.is_none() {
-            let v = f.add_var(atom, kind, BODY_SCOPE);
-            match kind {
-                VarKind::This => f.this_var = Some(v),
-                VarKind::Arguments => f.arguments_var = Some(v),
-                _ => f.new_target_var = Some(v),
-            }
+        if slot.is_none() {
+            *slot = Some(f.vars.len() as VarId);
+            f.add_var(atom, kind, BODY_SCOPE);
         }
         true
     }
@@ -738,14 +801,14 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// nested in their parameters or bodies (arrow parameters see the enclosing
     /// context, ECMA-262 15.3).
     pub fn await_reserved(&self) -> bool {
-        if self.f.is_async {
+        if self.f.is_async || self.f.kind == FuncKind::StaticBlock {
             return true;
         }
         if !(self.f.kind == FuncKind::Arrow && self.f.in_params) {
             return false;
         }
         for s in self.stack.iter().rev() {
-            if s.f.is_async {
+            if s.f.is_async || s.f.kind == FuncKind::StaticBlock {
                 return true;
             }
             if !(s.f.kind == FuncKind::Arrow && s.f.in_params) {
@@ -771,10 +834,29 @@ impl<'a, 'h> Parser<'a, 'h> {
         self.name_ref(atom, pos)
     }
 
+    /// Reads `this`. In a derived constructor (or an arrow in one) it is checked: it is
+    /// uninitialized until `super()` returns.
+    pub fn emit_this(&mut self, pos: u32) {
+        let r = self.this_ref(pos);
+        self.mark(pos);
+        self.code().name_get(r);
+        if self.own_this_kind() == Some(FuncKind::DerivedCtor) {
+            self.code().check_this();
+        }
+    }
+
     /// Before a reference to the name `arguments`: makes sure the owning function has
-    /// the binding. In top-level code `arguments` is an ordinary (global) name.
-    pub fn note_arguments(&mut self) {
+    /// the binding. In top-level code `arguments` is an ordinary (global) name. Class
+    /// field initializers and static blocks have none (an early error).
+    pub fn note_arguments(&mut self, pos: u32) -> PResult<()> {
+        if self.own_this_kind().is_some_and(FuncKind::is_class_init) {
+            return syntax(
+                pos,
+                "'arguments' identifier is not allowed in class field initializer",
+            );
+        }
         self.declare_pseudo(VarKind::Arguments);
+        Ok(())
     }
 
     /// A reference to `new.target`, or `None` outside functions.

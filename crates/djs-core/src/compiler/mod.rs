@@ -14,6 +14,7 @@
 //! closure and calls it with `this` = the global object (D008) and, in async-body mode,
 //! the parameters.
 
+mod class;
 mod expr;
 mod for_in_of;
 mod func;

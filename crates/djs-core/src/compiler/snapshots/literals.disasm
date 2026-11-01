@@ -53,7 +53,7 @@ function 0 <anonymous>: params=0 locals=1 stack=17 captures=0
   184  push_true
   185  push_false
   186  undefined  ; 5:29
-  187  get_loc loc0 (this)
+  187  get_loc loc0 (this)  ; 5:40
   190  array_from 5
   193  init_global_lex "k"
   198  array_from 0

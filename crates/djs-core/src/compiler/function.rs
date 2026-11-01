@@ -363,6 +363,20 @@ impl Parser<'_, '_> {
 
     /// Returns the value on top of the stack (after any finally blocks ran).
     pub(super) fn emit_return_value(&mut self) {
+        if self.f.kind == FuncKind::DerivedCtor {
+            // [[Construct]] of a derived constructor: an object, or `undefined` for
+            // the (checked) `this`.
+            let l = self.new_label();
+            self.code().check_ctor_return();
+            self.code().dup();
+            self.code().is_undefined();
+            self.code().jump_if_false(l);
+            self.code().drop();
+            self.emit_this(self.prev_end);
+            self.place(l);
+            self.code().return_();
+            return;
+        }
         if self.f.is_async && !self.f.is_generator {
             self.code().async_return(0);
         } else {
@@ -372,6 +386,11 @@ impl Parser<'_, '_> {
 
     /// Returns `undefined`.
     pub(super) fn emit_return_undef(&mut self) {
+        if self.f.kind == FuncKind::DerivedCtor {
+            self.emit_this(self.prev_end);
+            self.code().return_();
+            return;
+        }
         if self.f.is_async && !self.f.is_generator {
             self.code().undefined();
             self.code().async_return(0);

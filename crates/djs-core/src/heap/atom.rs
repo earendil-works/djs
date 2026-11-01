@@ -548,20 +548,15 @@ impl Heap {
         Ok(Sym(cell))
     }
 
-    /// Creates a private name (D1400): a symbol flagged [`SYM_PRIVATE`], plus
-    /// [`SYM_PRIVATE_METHOD`] for methods and accessors.
+    /// Creates a private name (D1400): a symbol flagged [`SYM_PRIVATE`] and `flags`
+    /// ([`SYM_PRIVATE_METHOD`], [`SYM_PRIVATE_READONLY`]).
     ///
     /// [`SYM_PRIVATE`]: super::cells::flags::SYM_PRIVATE
     /// [`SYM_PRIVATE_METHOD`]: super::cells::flags::SYM_PRIVATE_METHOD
-    pub fn new_private_symbol(&mut self, description: Str, method: bool) -> Result<Sym, HeapError> {
-        use super::cells::flags::{SYM_PRIVATE, SYM_PRIVATE_METHOD};
+    /// [`SYM_PRIVATE_READONLY`]: super::cells::flags::SYM_PRIVATE_READONLY
+    pub fn new_private_symbol(&mut self, description: Str, flags: u16) -> Result<Sym, HeapError> {
         let s = self.new_symbol(Value::string(description))?;
-        let flags = if method {
-            SYM_PRIVATE | SYM_PRIVATE_METHOD
-        } else {
-            SYM_PRIVATE
-        };
-        self.set_cell_flags(s.0, flags);
+        self.set_cell_flags(s.0, super::cells::flags::SYM_PRIVATE | flags);
         Ok(s)
     }
 

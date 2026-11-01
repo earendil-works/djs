@@ -83,6 +83,9 @@ pub mod flags {
     pub const SYM_PRIVATE: u16 = 1;
     /// Symbol: a private method or accessor name (only for the brand check message).
     pub const SYM_PRIVATE_METHOD: u16 = 2;
+    /// Symbol: a private method or getter-only accessor: assignment always throws
+    /// (before the brand check, like qjs).
+    pub const SYM_PRIVATE_READONLY: u16 = 4;
 }
 
 /// `"DJS\0"` little-endian, in [`Roots::MAGIC`].

@@ -35,6 +35,6 @@ function 0 <anonymous>: params=0 locals=4 stack=2 captures=0
    99  dup  ; 13:1
   100  put_global "v"
   105  drop
-  106  get_loc loc3 (this)
+  106  get_loc loc3 (this)  ; 14:1
   109  drop
   110  return_undef

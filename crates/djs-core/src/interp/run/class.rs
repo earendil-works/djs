@@ -14,7 +14,7 @@ use crate::bytecode::Op;
 use crate::bytecode::template::func_flags;
 use crate::heap::Lookup;
 use crate::heap::cells::FuncTemplate;
-use crate::heap::cells::flags::SYM_PRIVATE_METHOD;
+use crate::heap::cells::flags::{SYM_PRIVATE_METHOD, SYM_PRIVATE_READONLY};
 use crate::heap::{Atom, ObjectClass, PropFlags, Property, PropertyDescriptor, atoms};
 use crate::interp::conv::{self, Fault, type_error};
 use crate::interp::frame;
@@ -33,9 +33,10 @@ impl Exec<'_> {
         match op {
             Op::PrivateSymbol => {
                 let atom = self.imm_atom();
-                let method = self.byte(self.pc + 5) & 1 != 0;
+                let flags =
+                    self.byte(self.pc + 5) as u16 & (SYM_PRIVATE_METHOD | SYM_PRIVATE_READONLY);
                 let desc = self.heap.atom_string(atom)?;
-                let sym = self.heap.new_private_symbol(desc, method)?;
+                let sym = self.heap.new_private_symbol(desc, flags)?;
                 self.push(Value::symbol(sym));
             }
             Op::GetPrivateField => {
@@ -59,6 +60,10 @@ impl Exec<'_> {
             Op::PutPrivateField => {
                 let (o, key, v) = (self.top(2), self.private_key(self.top(1)), self.top(0));
                 let obj = self.private_target(o)?;
+                let sym = self.heap.atom_symbol(key).expect("private name");
+                if self.heap.symbol_private_flags(sym) & SYM_PRIVATE_READONLY != 0 {
+                    return self.private_read_only(key);
+                }
                 match self.private_own(obj, key)? {
                     Property::Data { flags, .. } if flags.writable() => {
                         self.heap.set_own_data_value(obj, key, v);
@@ -222,15 +227,18 @@ impl Exec<'_> {
                 }
                 self.sp -= 2;
             }
-            Op::SuperCall => {
-                let argc = self.imm_u16(1);
+            Op::SuperCall | Op::SuperCallSpread => {
                 let nt = self.pop();
+                let argc = if op == Op::SuperCall {
+                    self.imm_u16(1)
+                } else {
+                    let args = self.top(0);
+                    self.spread_args(args)?
+                };
+                // qjs's messages: the super constructor is the class's [[Prototype]].
                 let f = self.top(argc);
                 match f.as_object() {
                     None => return type_error("not a function"),
-                    Some(fo) if !self.heap.object_class(fo).is_callable() => {
-                        return type_error("not a constructor");
-                    }
                     Some(fo) if !self.is_constructor(fo) => {
                         return type_error(&self.not_a_constructor_message(f));
                     }

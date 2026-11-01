@@ -153,12 +153,17 @@ impl<'a> Parser<'a, '_> {
                         return self.for_initializer_error();
                     }
                     let lv = self.lvalue(e, "invalid for in/of left hand-side")?;
-                    match lv {
-                        super::expr::LValue::Name { .. } => {}
-                        super::expr::LValue::Field { .. } => self.code().swap(),
-                        super::expr::LValue::Elem { .. } => self.code().rot3l(),
+                    match lv.refs() {
+                        0 => {}
+                        1 => self.code().swap(),
+                        2 => self.code().rot3l(),
+                        // `v this base key`: store a copy, then drop the value.
+                        _ => self.code().pick(3),
                     }
                     self.emit_store(lv, false);
+                    if lv.refs() == 3 {
+                        self.code().drop();
+                    }
                 }
                 if is_of {
                     self.open_iters.pop();

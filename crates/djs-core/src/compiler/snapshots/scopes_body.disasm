@@ -53,7 +53,7 @@ function 0 <anonymous>: params=2 locals=8 stack=4 captures=0
   129  push_i8 1  ; 13:1
   131  throw_const_assign "items"
   136  drop
-  137  get_loc loc7 (this)
+  137  get_loc loc7 (this)  ; 15:12
   140  put_loc loc6 (v2)  ; 15:7
   143  get_loc loc1 (total)  ; 16:8
   146  async_return loc0 (<state>)

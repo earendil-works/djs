@@ -193,7 +193,6 @@ fn errors() {
             23,
         ),
         ("x\n=>1", "unexpected token in expression: '=>'", 2, 1),
-        ("a.#x", "private names are not supported yet", 1, 3),
         ("`${`", "unexpected end of string", 1, 4),
         ("`\\x`", "malformed escape sequence in string literal", 1, 2),
         ("let x = 1 2", "expecting ';'", 1, 11),
@@ -373,8 +372,6 @@ fn errors() {
             1,
             7,
         ),
-        // Not supported yet.
-        ("class A {}", "classes are not supported yet", 1, 1),
         // Destructuring (0036); messages and positions as qjs.
         (
             "let [a, ...b,] = c",
@@ -558,7 +555,6 @@ fn errors() {
             1,
             33,
         ),
-        ("({ m() { super.x } })", "super is not supported yet", 1, 10),
         ("({ #x: 1 })", "invalid property name", 1, 4),
         ("({ get #x() {} })", "invalid property name", 1, 8),
         // Async functions and generators (0041); messages and positions as qjs.

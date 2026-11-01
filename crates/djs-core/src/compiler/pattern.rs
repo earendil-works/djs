@@ -65,8 +65,7 @@ impl Target<'_> {
     /// Values the target keeps on the stack until its store.
     fn refs(&self) -> u8 {
         match self {
-            Target::Ref(LValue::Field { .. }) => 1,
-            Target::Ref(LValue::Elem { .. }) => 2,
+            Target::Ref(lv) => lv.refs(),
             _ => 0,
         }
     }
