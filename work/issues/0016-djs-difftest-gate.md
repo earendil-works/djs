@@ -1,7 +1,7 @@
 # 0016: djs in the difftest runner and the gate
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0016-djs-difftest-gate
 depends-on: 0010, 0022
 touches: crates/djs-difftest/, crates/djs-bench/ (engine track: register djs), tests/corpus/expected-failures.txt, scripts/gate.sh
