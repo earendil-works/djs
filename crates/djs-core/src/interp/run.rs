@@ -136,6 +136,30 @@ mod fast {
     pub const GET_FIELD: u8 = Op::GetField as u8;
     pub const GET_METHOD: u8 = Op::GetMethod as u8;
     pub const PUT_FIELD: u8 = Op::PutField as u8;
+    // `fast_more` (0086)
+    pub const NULL: u8 = Op::Null as u8;
+    pub const PUSH_TRUE: u8 = Op::PushTrue as u8;
+    pub const PUSH_FALSE: u8 = Op::PushFalse as u8;
+    pub const PUSH_CONST: u8 = Op::PushConst as u8;
+    pub const SPECIAL_OBJECT: u8 = Op::SpecialObject as u8;
+    pub const SWAP: u8 = Op::Swap as u8;
+    pub const DUP2: u8 = Op::Dup2 as u8;
+    pub const NIP: u8 = Op::Nip as u8;
+    pub const INSERT2: u8 = Op::Insert2 as u8;
+    pub const GET_CAP: u8 = Op::GetCap as u8;
+    pub const GET_CAP_CHK: u8 = Op::GetCapChk as u8;
+    pub const PUT_CAP: u8 = Op::PutCap as u8;
+    pub const GET_BOX: u8 = Op::GetBox as u8;
+    pub const PUT_BOX: u8 = Op::PutBox as u8;
+    pub const NOT: u8 = Op::Not as u8;
+    pub const STRICT_EQ: u8 = Op::StrictEq as u8;
+    pub const STRICT_NE: u8 = Op::StrictNe as u8;
+    pub const MOD: u8 = Op::Mod as u8;
+    pub const BAND: u8 = Op::BAnd as u8;
+    pub const BOR: u8 = Op::BOr as u8;
+    pub const BXOR: u8 = Op::BXor as u8;
+    pub const SHL: u8 = Op::Shl as u8;
+    pub const SAR: u8 = Op::Sar as u8;
 }
 
 /// The instructions `Exec::retry_operands` retries after a collection (D1700), besides
@@ -1250,6 +1274,29 @@ impl<'h> Exec<'h> {
             fast::CALL_INTRINSIC => return self.fast_intrinsic(),
             fast::GET_ELEM | fast::GET_ELEM2 | fast::PUT_ELEM => return self.fast_elem(sp0),
             fast::GET_FIELD | fast::GET_METHOD | fast::PUT_FIELD => return self.fast_field(sp0),
+            fast::NULL
+            | fast::PUSH_TRUE
+            | fast::PUSH_FALSE
+            | fast::PUSH_CONST
+            | fast::SPECIAL_OBJECT
+            | fast::SWAP
+            | fast::DUP2
+            | fast::NIP
+            | fast::INSERT2
+            | fast::GET_CAP
+            | fast::GET_CAP_CHK
+            | fast::PUT_CAP
+            | fast::GET_BOX
+            | fast::PUT_BOX
+            | fast::NOT
+            | fast::STRICT_EQ
+            | fast::STRICT_NE
+            | fast::MOD
+            | fast::BAND
+            | fast::BOR
+            | fast::BXOR
+            | fast::SHL
+            | fast::SAR => return self.fast_more(sp0),
             _ => return false,
         }
         true
@@ -1345,6 +1392,124 @@ impl<'h> Exec<'h> {
         self.sp -= 1;
         self.set(self.sp - 1, v);
         self.advance(op, sp0);
+        true
+    }
+
+    /// The less frequent simple ops of `fast_step` (0086), out of line so that they leave
+    /// the register allocation of the hot loop alone (D1352). Same contract: false, with
+    /// nothing changed, when the general path is needed.
+    #[inline(never)]
+    fn fast_more(&mut self, sp0: u32) -> bool {
+        match self.byte(self.pc) {
+            fast::NULL => {
+                self.push(Value::NULL);
+                self.advance(Op::Null, sp0);
+            }
+            fast::PUSH_TRUE => {
+                self.push(Value::TRUE);
+                self.advance(Op::PushTrue, sp0);
+            }
+            fast::PUSH_FALSE => {
+                self.push(Value::FALSE);
+                self.advance(Op::PushFalse, sp0);
+            }
+            fast::PUSH_CONST => {
+                let v = self.constant(self.imm_u32(1));
+                self.push(v);
+                self.advance(Op::PushConst, sp0);
+            }
+            fast::SPECIAL_OBJECT => {
+                let kind = self.heap.arena().read::<u8>(self.code + self.pc + 1);
+                if kind != special::THIS {
+                    return false;
+                }
+                let v = self.get(self.bp + 1);
+                self.push(v);
+                self.advance(Op::SpecialObject, sp0);
+            }
+            fast::SWAP => {
+                let (a, b) = (self.top(1), self.top(0));
+                self.set(self.sp - 2, b);
+                self.set(self.sp - 1, a);
+                self.advance(Op::Swap, sp0);
+            }
+            fast::DUP2 => {
+                let (a, b) = (self.top(1), self.top(0));
+                self.push(a);
+                self.push(b);
+                self.advance(Op::Dup2, sp0);
+            }
+            fast::NIP => {
+                let b = self.pop();
+                self.set(self.sp - 1, b);
+                self.advance(Op::Nip, sp0);
+            }
+            fast::INSERT2 => {
+                let (a, b) = (self.top(1), self.top(0));
+                self.set(self.sp - 2, b);
+                self.set(self.sp - 1, a);
+                self.push(b);
+                self.advance(Op::Insert2, sp0);
+            }
+            fast::GET_CAP | fast::GET_CAP_CHK => {
+                let v = self.box_value(self.capture(self.imm_u16(1)));
+                if v.is_uninitialized() {
+                    // `get_cap_chk` throws; `get_cap` never sees the marker.
+                    return false;
+                }
+                self.push(v);
+                // (`get_cap_chk` has the same size and cost.)
+                self.advance(Op::GetCap, sp0);
+            }
+            fast::PUT_CAP => {
+                let b = self.capture(self.imm_u16(1));
+                let v = self.pop();
+                self.set_box_value(b, v);
+                self.advance(Op::PutCap, sp0);
+            }
+            fast::GET_BOX => {
+                let v = self.box_value(self.get(self.lp + self.imm_u16(1)));
+                self.push(v);
+                self.advance(Op::GetBox, sp0);
+            }
+            fast::PUT_BOX => {
+                let b = self.get(self.lp + self.imm_u16(1));
+                let v = self.pop();
+                self.set_box_value(b, v);
+                self.advance(Op::PutBox, sp0);
+            }
+            fast::NOT => {
+                let a = self.top(0);
+                let b = conv::to_boolean(self.heap, a);
+                self.set(self.sp - 1, Value::bool(!b));
+                self.advance(Op::Not, sp0);
+            }
+            fast::STRICT_EQ | fast::STRICT_NE => {
+                let eq = self.byte(self.pc) == fast::STRICT_EQ;
+                let r = conv::strict_equals(self.heap, self.top(1), self.top(0));
+                self.sp -= 1;
+                self.set(self.sp - 1, Value::bool(r == eq));
+                // (`strict_ne` has the same size and cost.)
+                self.advance(Op::StrictEq, sp0);
+            }
+            fast::MOD => {
+                return self.fast_int(Op::Mod, sp0, |x, y| {
+                    (x >= 0 && y != 0).then(|| Value::int(x % y))
+                });
+            }
+            fast::BAND => return self.fast_int(Op::BAnd, sp0, |x, y| Some(Value::int(x & y))),
+            fast::BOR => return self.fast_int(Op::BOr, sp0, |x, y| Some(Value::int(x | y))),
+            fast::BXOR => return self.fast_int(Op::BXor, sp0, |x, y| Some(Value::int(x ^ y))),
+            fast::SHL => {
+                return self.fast_int(Op::Shl, sp0, |x, y| {
+                    Some(Value::int(x.wrapping_shl(y as u32 & 31)))
+                });
+            }
+            fast::SAR => {
+                return self.fast_int(Op::Sar, sp0, |x, y| Some(Value::int(x >> (y as u32 & 31))));
+            }
+            _ => return false,
+        }
         true
     }
 
