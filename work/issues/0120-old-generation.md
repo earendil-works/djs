@@ -1,7 +1,7 @@
 # 0120: Old generation, phase 1 (sticky non-moving base prefix)
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0120-old-generation
 depends-on: 0101
 guide: docs/guide/gc.md, docs/guide/determinism.md, docs/guide/snapshots.md (if images change)
