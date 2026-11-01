@@ -83,6 +83,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 2026-11-01 (0031 part 1) | 55 / 168 | 5,108 / 20,124 (25.4%) |
 | 2026-11-01 (0031 part 2) | 74 / 171 | 7,687 / 20,124 (38.2%) |
 | 2026-11-01 (0029 done) | ~95 / 175 | 11,773 / 20,124 (58.5%) |
+| 2026-11-01 (0038 p1: promotion to active, +2,018 tests) | | 12,354 / 22,142 (55.8%) |
+| 2026-11-01 (0038 p2: Map/Set/Weak*) | | 13,049 / 22,142 (58.9%) |
 
 ## Parallelism notes
 
