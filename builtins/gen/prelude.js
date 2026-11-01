@@ -2982,12 +2982,12 @@ function ThrowTypeError(v) {
   throw %NewTypeError("invalid property access");
 }
 
-// builtins/function.ts:197 value Function.prototype.length
+// builtins/function.ts:201 value Function.prototype.length
 function FunctionPrototypeLength() {
   return 0;
 }
 
-// builtins/function.ts:206 value Function.prototype.name
+// builtins/function.ts:210 value Function.prototype.name
 function FunctionPrototypeName() {
   return "";
 }
