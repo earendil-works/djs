@@ -1289,3 +1289,23 @@ closes it). RequireObjectCoercible is GetIterator's own TypeError, which gives q
 message. Until the Array and String iterators exist (0030 part 4), Array.from reads
 arrays and strings directly, which is what their default iterators do; it switches to
 the iterator path when they land.
+## D1351: array spread: original iteration in Rust, everything else via %ArraySpread
+date: 2026-11-01 · by: heap · issue: 0030
+`array_spread` (used for `[...x]`, `f(...x)` and `new F(...x)`) handles two cases in Rust:
+- a string, by code points;
+- an array without holes, but only while its @@iterator (found as a data property
+  along the chain) is the installed `%ArrayPrototypeValues` and
+  `%ArrayIteratorPrototype%.next` is the installed `%ArrayIteratorPrototypeNext`.
+
+In those cases the iterator protocol is not observable, which is the shortcut qjs takes.
+In every other case the instruction becomes a call of the prelude's `%ArraySpread(arr,
+src)` (builtins/spread.ts), whose result is pushed. Both checks happen before anything is
+mutated. `ArrayPrototypeValues` and `ArrayIteratorPrototypeNext` are tagged `@intrinsic`
+as well as `@builtin` only so that their identity can be checked. Once a String iterator
+exists, the string case needs the same identity check. Array Iterator objects use slots
+target / index / kind. The leaves accept any kind, so the String iterator can reuse the
+class with kind 3 (infra).
+
+Error messages show a symbol key by its bare description, as qjs does (`cannot read
+property 'Symbol.iterator' of null`, `'q' is read-only`). This is `conv::describe_key`;
+function names keep `[desc]`.

@@ -291,9 +291,17 @@ pub(crate) fn add(heap: &mut Heap, a: Value, b: Value) -> Result<Value, Fault> {
     Ok(number(x + y))
 }
 
-/// A short description of a value for error messages.
+/// A property key in an error message: a symbol is its bare description, as qjs
+/// prints it (`'Symbol.iterator'`, `''` without one), not the `[desc]` of a function
+/// name.
 pub(crate) fn describe_key(heap: &Heap, key: Atom) -> String {
-    heap.atom_name(key)
+    let name = heap.atom_name(key);
+    if key.is_symbol() {
+        // `atom_name` gives `[desc]` for a symbol.
+        let inner = name.strip_prefix('[').and_then(|n| n.strip_suffix(']'));
+        return String::from(inner.unwrap_or(&name));
+    }
+    name
 }
 
 #[cfg(test)]

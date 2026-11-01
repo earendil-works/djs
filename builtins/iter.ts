@@ -56,6 +56,7 @@ function IteratorCloseThrow(iterator: Obj): void {
  * Array.prototype.values ( ), 23.1.3.38; also Array.prototype [ %Symbol.iterator% ].
  * @builtin Array.prototype.values
  * @builtin Array.prototype[Symbol.iterator]
+ * @intrinsic
  */
 function ArrayPrototypeValues(this: Value): Obj {
   return CreateArrayIterator(ToObject(this), 1);
@@ -80,6 +81,7 @@ function ArrayPrototypeEntries(this: Value): Obj {
 /**
  * %ArrayIteratorPrototype%.next ( ), 23.1.5.2.1 (no typed arrays yet).
  * @builtin %ArrayIteratorPrototype%.next
+ * @intrinsic
  */
 function ArrayIteratorPrototypeNext(this: Value): Obj {
   const target: Value = ArrayIteratorTarget(this);

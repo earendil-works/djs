@@ -1010,7 +1010,15 @@ fn to_primitive_through_a_host_valueof() {
     loop {
         match vm.run(1 << 30) {
             Status::HostCall { call_id, fn_id: 5 } => {
-                assert_eq!(vm.host_call(call_id).unwrap().this, Value::object(o));
+                // `o` re-read from the global: the round trips below may move it, so a
+                // raw value from before goes stale (embedders hold handles instead).
+                let key = vm.heap_mut().atom_str("o").unwrap();
+                let g = vm.global();
+                let o_now = match vm.heap().get_own_property(g, key) {
+                    Some(crate::heap::Property::Data { value, .. }) => value,
+                    _ => panic!("global o"),
+                };
+                assert_eq!(vm.host_call(call_id).unwrap().this, o_now);
                 // Through an image round trip, for good measure.
                 let opts = vm.options();
                 vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();

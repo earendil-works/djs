@@ -1316,22 +1316,22 @@ function IteratorCloseThrow(iterator) {
   }
 }
 
-// builtins/iter.ts:60 Array.prototype.values Array.prototype[Symbol.iterator]
+// builtins/iter.ts:61 Array.prototype.values Array.prototype[Symbol.iterator] %ArrayPrototypeValues
 function ArrayPrototypeValues() {
   return %CreateArrayIterator(%ToObject(this), 1);
 }
 
-// builtins/iter.ts:68 Array.prototype.keys
+// builtins/iter.ts:69 Array.prototype.keys
 function ArrayPrototypeKeys() {
   return %CreateArrayIterator(%ToObject(this), 0);
 }
 
-// builtins/iter.ts:76 Array.prototype.entries
+// builtins/iter.ts:77 Array.prototype.entries
 function ArrayPrototypeEntries() {
   return %CreateArrayIterator(%ToObject(this), 2);
 }
 
-// builtins/iter.ts:84 %ArrayIteratorPrototype%.next
+// builtins/iter.ts:86 %ArrayIteratorPrototype%.next %ArrayIteratorPrototypeNext
 function ArrayIteratorPrototypeNext() {
   const target = %ArrayIteratorTarget(this);
   if (target === undefined) {
@@ -1356,7 +1356,7 @@ function ArrayIteratorPrototypeNext() {
   return %CreateIterResultObject(%CreateArrayFromPair(index, value), false);
 }
 
-// builtins/iter.ts:112 %IteratorPrototype%[Symbol.iterator]
+// builtins/iter.ts:114 %IteratorPrototype%[Symbol.iterator]
 function IteratorPrototypeIterator() {
   return this;
 }
@@ -2292,6 +2292,24 @@ function ObjectPrototypeIsPrototypeOf(v) {
   return false;
 }
 
+// builtins/spread.ts:9 %ArraySpread
+function ArraySpread(arr, src) {
+  const iterator = GetIterator(src);
+  const next = %Get(iterator, "next");
+  let n = LengthOfArrayLike(arr);
+  while (true) {
+    const result = %Call(next, iterator);
+    if (!%IsObject(result)) {
+      throw %NewTypeError("iterator must return an object");
+    }
+    if (%ToBoolean(%Get(%AsObj(result), "done"))) {
+      return arr;
+    }
+    %CreateDataPropertyOrThrow(arr, n, %Get(%AsObj(result), "value"));
+    n = n + 1;
+  }
+}
+
 // builtins/string.ts:8 constructor String
 function StringConstructor(...args) {
   let s = "";
@@ -3023,4 +3041,7 @@ function SymbolUnscopables() {
 %InstallIntrinsic("GetIterator", GetIterator);
 %InstallIntrinsic("IteratorClose", IteratorClose);
 %InstallIntrinsic("IteratorCloseThrow", IteratorCloseThrow);
+%InstallIntrinsic("ArrayPrototypeValues", ArrayPrototypeValues);
+%InstallIntrinsic("ArrayIteratorPrototypeNext", ArrayIteratorPrototypeNext);
+%InstallIntrinsic("ArraySpread", ArraySpread);
 })();

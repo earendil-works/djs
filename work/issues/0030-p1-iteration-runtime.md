@@ -91,8 +91,33 @@ dup; get_field done; jump_if_true; get_field value`. for-in uses
   - The array iterator leaf intrinsics are drafted in
     `work/scratch/0030/iter_intrinsics.rs`; they need 0029's ids, so they wait for it.
 
+- Part 4 (after 0029 part 1):
+  - The leaves `CreateArrayIterator`, `ArrayIteratorTarget`, `ArrayIteratorIndex`,
+    `ArrayIteratorSetIndex`, `ArrayIteratorFinish`, `ArrayIteratorKind`,
+    `CreateIterResultObject` and `CreateArrayFromPair`. Any kind is accepted (infra's
+    String iterator will be kind 3).
+  - Spread over general iterables (D1351): `builtins/spread.ts` `%ArraySpread` runs the
+    iterator protocol. The Rust path keeps strings and arrays with original iteration
+    and no holes. Additive edit to 0029's `iter.ts`: `@intrinsic` on
+    ArrayPrototypeValues and ArrayIteratorPrototypeNext, for the identity check.
+  - qjs messages for symbol keys in TypeErrors (`describe_key`).
+  - New e2e case `iteration_runtime` (iterators, holes through prototype getters,
+    custom and patched iterators, the next/done/value order, call and new spread, 2000
+    values across safepoints, errors). Passes in all three modes.
+  - Fixed `vm::tests::to_primitive_through_a_host_valueof`: it compared a raw `o`
+    across image round trips, which the bigger prelude now moves. It re-reads the
+    global now.
+  - test262: 46 more pass (spread in `new`/calls/arrays, Array keys/values/entries).
+    The ratchet was updated.
+  - `end_to_end_iteration_rt` is not on main yet; it comes with 0029 part 2.
+
 - Home object for methods (`super`), with classes (P1-7).
 - `return f()` stack positions: qjs reports the `return` keyword; ours, the `(`. A compiler
   question for the lexer agent (from 0028).
+- `%ArrayIteratorPrototype%[@@toStringTag]` = "Array Iterator" is missing (iter.ts,
+  0029; test262 `ArrayIteratorPrototype/Symbol.toStringTag`).
+- Once a String iterator exists, `array_spread`'s string path needs D1351's identity
+  check (String.prototype[@@iterator] and %StringIteratorPrototype%.next).
+- djs has no global `JSON` yet (noticed while testing; probably 0031's).
 
 ## Result

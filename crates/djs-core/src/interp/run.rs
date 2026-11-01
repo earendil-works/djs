@@ -1033,7 +1033,7 @@ impl<'h> Exec<'h> {
                     if !flags.writable() {
                         return Err(Fault::Error(
                             ErrorKind::TypeError,
-                            format!("'{}' is read-only", self.heap.atom_name(key)),
+                            format!("'{}' is read-only", conv::describe_key(self.heap, key)),
                         ));
                     }
                     let v = self.pop();
@@ -1080,7 +1080,10 @@ impl<'h> Exec<'h> {
             Op::ThrowConstAssign => {
                 return Err(Fault::Error(
                     ErrorKind::TypeError,
-                    format!("'{}' is read-only", self.heap.atom_name(self.imm_atom())),
+                    format!(
+                        "'{}' is read-only",
+                        conv::describe_key(self.heap, self.imm_atom())
+                    ),
                 ));
             }
 
@@ -1217,7 +1220,22 @@ impl<'h> Exec<'h> {
             Op::ArraySpread => {
                 let (a, src) = (self.top(1), self.top(0));
                 let arr = a.as_object().expect("array literal");
-                self.array_spread(arr, src)?;
+                if !self.array_spread(arr, src)? {
+                    // The iterator protocol, in the builtin language (builtins/spread.ts):
+                    // `arr src` becomes `%ArraySpread undefined arr src`, which pushes arr.
+                    let g = realm::installed_intrinsic(self.heap, intrinsics::ARRAY_SPREAD);
+                    if g.is_undefined() {
+                        return type_error("spreading an iterable needs the prelude");
+                    }
+                    let base = self.sp - 2;
+                    self.ensure(base + 4)?;
+                    self.set(base + 2, a);
+                    self.set(base + 3, src);
+                    self.set(base, g);
+                    self.set(base + 1, Value::UNDEFINED);
+                    self.sp = base + 4;
+                    return self.call(base, 2, Continuation::PushResult, next);
+                }
                 self.sp -= 1;
             }
             Op::DefineElem => {
@@ -1731,7 +1749,7 @@ impl<'h> Exec<'h> {
         let readonly = |heap: &Heap| {
             Err(Fault::Error(
                 ErrorKind::TypeError,
-                format!("'{}' is read-only", heap.atom_name(key)),
+                format!("'{}' is read-only", conv::describe_key(heap, key)),
             ))
         };
         match found {
@@ -1781,7 +1799,10 @@ impl<'h> Exec<'h> {
             && (key == crate::heap::atoms::LENGTH
                 || key.as_int().is_some_and(|i| i < self.heap.str_len(s)))
         {
-            return type_error(&format!("'{}' is read-only", self.heap.atom_name(key)));
+            return type_error(&format!(
+                "'{}' is read-only",
+                conv::describe_key(self.heap, key)
+            ));
         }
         type_error("not an object")
     }
@@ -2027,11 +2048,16 @@ impl<'h> Exec<'h> {
         Ok(())
     }
 
-    /// `[...src]`: appends the elements of an iterable. Arrays (holes read as undefined)
-    /// and strings (by code points) are done here; other iterables need the iterator
-    /// protocol (0029's %GetIterator).
-    fn array_spread(&mut self, arr: Obj, src: Value) -> Result<(), Fault> {
+    /// `[...src]` without the iterator protocol where that is not observable: a string
+    /// (by code points; there is no String iterator to replace yet) or an array without
+    /// holes whose iteration is the original Array.prototype[@@iterator] and
+    /// %ArrayIteratorPrototype%.next. Returns false, with nothing changed, otherwise;
+    /// the caller then runs %ArraySpread. Without a prelude every array is spread here
+    /// (holes as undefined) and other values are a TypeError.
+    fn array_spread(&mut self, arr: Obj, src: Value) -> Result<bool, Fault> {
         let mut vals = alloc::vec::Vec::new();
+        let has_prelude =
+            !realm::installed_intrinsic(self.heap, intrinsics::ARRAY_SPREAD).is_undefined();
         if let Some(s) = src.as_string() {
             let units = self.heap.str_to_utf16(s);
             let mut i = 0;
@@ -2047,25 +2073,17 @@ impl<'h> Exec<'h> {
         } else if let Some(a) = src
             .as_object()
             .filter(|&a| self.heap.object_class(a) == ObjectClass::Array)
+            .filter(|&a| !has_prelude || self.array_iteration_unmodified(a))
         {
             for i in 0..self.heap.array_length(a) {
-                let v = match self.heap.get_element_fast(a, i) {
-                    Some(v) => v,
-                    None => {
-                        let key = self.heap.atom_from_index(i)?;
-                        match self.heap.find_property(a, key) {
-                            None => Value::UNDEFINED,
-                            Some((_, Property::Data { value, .. })) => value,
-                            Some(_) => {
-                                return type_error("not supported yet: getter in an array spread");
-                            }
-                        }
-                    }
-                };
-                vals.push(v);
+                match self.heap.get_element_fast(a, i) {
+                    Some(v) => vals.push(v),
+                    None if has_prelude => return Ok(false),
+                    None => vals.push(Value::UNDEFINED),
+                }
             }
-        } else if src.as_object().is_some() {
-            return type_error("not supported yet: spreading a non-array iterable");
+        } else if has_prelude {
+            return Ok(false);
         } else {
             return type_error("value is not iterable");
         }
@@ -2076,7 +2094,22 @@ impl<'h> Exec<'h> {
                 self.heap.create_data_property(arr, k, v)?;
             }
         }
-        Ok(())
+        Ok(true)
+    }
+
+    /// Whether iterating the array `a` would run the original Array.prototype.values
+    /// and %ArrayIteratorPrototype%.next, as found without side effects (data
+    /// properties only).
+    fn array_iteration_unmodified(&self, a: Obj) -> bool {
+        let data = |o: Obj, key: Atom| match self.heap.find_property(o, key) {
+            Some((_, Property::Data { value, .. })) => Some(value),
+            _ => None,
+        };
+        let values = realm::installed_intrinsic(self.heap, intrinsics::ARRAY_PROTOTYPE_VALUES);
+        let next = realm::installed_intrinsic(self.heap, intrinsics::ARRAY_ITERATOR_NEXT);
+        let proto = realm::intrinsic_obj(self.heap, Intrinsic::ArrayIteratorProto);
+        use crate::heap::atoms::{NEXT, SYM_ITERATOR};
+        data(a, SYM_ITERATOR) == Some(values) && data(proto, NEXT) == Some(next)
     }
 
     /// Replaces the array at the top of the stack by its elements; returns their count.

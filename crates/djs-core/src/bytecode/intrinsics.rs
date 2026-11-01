@@ -193,6 +193,9 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("GetIterator", B, 1, false),
     i("IteratorClose", B, 1, false),
     i("IteratorCloseThrow", B, 1, false),
+    i("ArrayPrototypeValues", B, 0, false),
+    i("ArrayIteratorPrototypeNext", B, 0, false),
+    i("ArraySpread", B, 2, false),
 ];
 
 /// The id of the intrinsic `name`.

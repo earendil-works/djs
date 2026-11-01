@@ -1,0 +1,19 @@
+value=1,done=false value=2,done=false value=undefined,done=true value=undefined,done=true
+true true
+[0,"x"] [0,1] [null,1]
+TypeError: Array Iterator object expected
+3 3
+[0,null,null,"p3",null] ["get3"]
+[3,2,1] [0,3,2,1,7,8]
+[10,20,30]
+[1,2,3]
+7:1-2-3-2-1-h-é 9
+3
+[0,1,2] iter next done value done value done value done
+2000 0 1999
+TypeError: cannot read property 'Symbol.iterator' of null
+TypeError: value is not iterable
+TypeError: value is not iterable
+TypeError: not an object
+TypeError: iterator must return an object
+TypeError: cannot read property 'Symbol.iterator' of undefined

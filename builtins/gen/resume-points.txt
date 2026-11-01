@@ -501,15 +501,15 @@ IteratorCloseThrow: reentrant (%IteratorCloseThrow)
   builtins/iter.ts:45:27  Get (intrinsic)
   builtins/iter.ts:49:5  Call (intrinsic)
 
-ArrayPrototypeValues: leaf (Array.prototype.values, Array.prototype[Symbol.iterator])
+ArrayPrototypeValues: leaf (Array.prototype.values, Array.prototype[Symbol.iterator], %ArrayPrototypeValues)
 
 ArrayPrototypeKeys: leaf (Array.prototype.keys)
 
 ArrayPrototypeEntries: leaf (Array.prototype.entries)
 
-ArrayIteratorPrototypeNext: reentrant (%ArrayIteratorPrototype%.next)
-  builtins/iter.ts:91:20  LengthOfArrayLike (builtin)
-  builtins/iter.ts:101:24  Get (intrinsic)
+ArrayIteratorPrototypeNext: reentrant (%ArrayIteratorPrototype%.next, %ArrayIteratorPrototypeNext)
+  builtins/iter.ts:93:20  LengthOfArrayLike (builtin)
+  builtins/iter.ts:103:24  Get (intrinsic)
 
 IteratorPrototypeIterator: leaf (%IteratorPrototype%[Symbol.iterator])
 
@@ -896,6 +896,15 @@ ObjectPrototypeToLocaleString: reentrant (Object.prototype.toLocaleString)
 ObjectPrototypeValueOf: leaf (Object.prototype.valueOf)
 
 ObjectPrototypeIsPrototypeOf: leaf (Object.prototype.isPrototypeOf)
+
+ArraySpread: reentrant (%ArraySpread)
+  builtins/spread.ts:10:25  GetIterator (builtin)
+  builtins/spread.ts:11:23  Get (intrinsic)
+  builtins/spread.ts:12:16  LengthOfArrayLike (builtin)
+  builtins/spread.ts:14:27  Call (intrinsic)
+  builtins/spread.ts:18:19  Get (intrinsic)
+  builtins/spread.ts:21:39  Get (intrinsic)
+  builtins/spread.ts:21:5  CreateDataPropertyOrThrow (intrinsic)
 
 StringConstructor: reentrant (constructor String)
   builtins/string.ts:10:7  LengthOfArrayLike (builtin)

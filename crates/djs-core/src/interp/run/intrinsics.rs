@@ -106,6 +106,14 @@ const STRING_PARSE_INT: u16 = id("StringParseInt");
 const NUMBER_TO_INT32: u16 = id("NumberToInt32");
 const NUMBER_TO_UINT32: u16 = id("NumberToUint32");
 const MATH_RANDOM: u16 = id("MathRandom");
+const CREATE_ARRAY_ITERATOR: u16 = id("CreateArrayIterator");
+const ARRAY_ITERATOR_TARGET: u16 = id("ArrayIteratorTarget");
+const ARRAY_ITERATOR_INDEX: u16 = id("ArrayIteratorIndex");
+const ARRAY_ITERATOR_SET_INDEX: u16 = id("ArrayIteratorSetIndex");
+const ARRAY_ITERATOR_FINISH: u16 = id("ArrayIteratorFinish");
+const ARRAY_ITERATOR_KIND: u16 = id("ArrayIteratorKind");
+const CREATE_ITER_RESULT_OBJECT: u16 = id("CreateIterResultObject");
+const CREATE_ARRAY_FROM_PAIR: u16 = id("CreateArrayFromPair");
 const F64_ABS: u16 = id("F64Abs");
 const F64_ACOS: u16 = id("F64Acos");
 const F64_ACOSH: u16 = id("F64Acosh");
@@ -165,6 +173,12 @@ const INSTALL_INTRINSIC: u16 = id("InstallIntrinsic");
 pub(super) const TO_PRIMITIVE: u16 = id("ToPrimitive");
 /// The installed `%InstanceofOperator`, for `instanceof` with a custom Symbol.hasInstance.
 pub(super) const INSTANCEOF_OPERATOR: u16 = id("InstanceofOperator");
+/// The installed `%ArraySpread`, for `array_spread` over a general iterable.
+pub(super) const ARRAY_SPREAD: u16 = id("ArraySpread");
+/// The original Array.prototype.values and %ArrayIteratorPrototype%.next: an array
+/// spread skips the iterator protocol while they are in place.
+pub(super) const ARRAY_PROTOTYPE_VALUES: u16 = id("ArrayPrototypeValues");
+pub(super) const ARRAY_ITERATOR_NEXT: u16 = id("ArrayIteratorPrototypeNext");
 
 /// The libm intrinsics (D1150): `F64Sin(x)` and friends.
 fn math_leaf(id: u16, x: f64, y: f64) -> Option<f64> {
@@ -599,6 +613,56 @@ impl Exec<'_> {
                 conv::number(number::to_uint32(a0.as_number().unwrap_or(f64::NAN)) as f64)
             }
             MATH_RANDOM => Value::number(number::random(self.heap)),
+            // An Array Iterator's slots: 0 the target (undefined once exhausted), 1 the
+            // next index (a Number), 2 the kind (0 keys, 1 values, 2 entries).
+            CREATE_ARRAY_ITERATOR => {
+                let (Some(o), Some(kind)) = (a0.as_object(), arg(self, 1).as_int()) else {
+                    return bad_argument(info.name);
+                };
+                let proto = realm::intrinsic_obj(self.heap, Intrinsic::ArrayIteratorProto);
+                let it = self.heap.alloc_object(
+                    ObjectClass::ArrayIterator,
+                    Some(proto),
+                    ObjectClass::ArrayIterator.slots(),
+                )?;
+                self.heap.set_object_slot(it, 0, Value::object(o));
+                self.heap.set_object_slot(it, 1, Value::int(0));
+                self.heap.set_object_slot(it, 2, Value::int(kind));
+                Value::object(it)
+            }
+            ARRAY_ITERATOR_TARGET => self.heap.object_slot(self.array_iterator(a0)?, 0),
+            ARRAY_ITERATOR_INDEX => self.heap.object_slot(self.array_iterator(a0)?, 1),
+            ARRAY_ITERATOR_SET_INDEX => {
+                let it = self.array_iterator(a0)?;
+                let Some(i) = arg(self, 1).as_number() else {
+                    return bad_argument(info.name);
+                };
+                self.heap.set_object_slot(it, 1, conv::number(i));
+                Value::UNDEFINED
+            }
+            ARRAY_ITERATOR_FINISH => {
+                let it = self.array_iterator(a0)?;
+                self.heap.set_object_slot(it, 0, Value::UNDEFINED);
+                Value::UNDEFINED
+            }
+            ARRAY_ITERATOR_KIND => self.heap.object_slot(self.array_iterator(a0)?, 2),
+            CREATE_ITER_RESULT_OBJECT => {
+                let Some(done) = arg(self, 1).as_bool() else {
+                    return bad_argument(info.name);
+                };
+                let proto = realm::intrinsic_obj(self.heap, Intrinsic::ObjectProto);
+                let o = self.heap.new_object_from_entries(
+                    Some(proto),
+                    &[atoms::VALUE, atoms::DONE],
+                    &[a0, Value::bool(done)],
+                )?;
+                Value::object(o)
+            }
+            CREATE_ARRAY_FROM_PAIR => {
+                let proto = realm::intrinsic_obj(self.heap, Intrinsic::ArrayProto);
+                let pair = [a0, arg(self, 1)];
+                Value::object(self.heap.new_array_from_values(Some(proto), &pair)?)
+            }
             COMPARE_STRINGS => match (a0.as_string(), arg(self, 1).as_string()) {
                 (Some(a), Some(b)) => conv::number(string::compare(self.heap, a, b)),
                 _ => return bad_argument(info.name),
@@ -1082,5 +1146,15 @@ impl Exec<'_> {
             }
         }
         Ok(o)
+    }
+}
+
+impl Exec<'_> {
+    /// `v` as an Array Iterator, for the `ArrayIterator*` leaves.
+    fn array_iterator(&self, v: Value) -> Result<Obj, Fault> {
+        match v.as_object() {
+            Some(o) if self.heap.object_class(o) == ObjectClass::ArrayIterator => Ok(o),
+            _ => type_error("Array Iterator object expected"),
+        }
     }
 }
