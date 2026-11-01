@@ -51,7 +51,8 @@ struct Args {
 }
 
 fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    fs::canonicalize(&root).unwrap_or(root)
 }
 
 fn parse_size(s: &str) -> Result<u64, String> {
@@ -197,7 +198,7 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
     }
 
     println!(
-        "difftest · engine {} · {} cases in {:.1}s\n",
+        "difftest · engine {} · {} cases in {:.2}s\n",
         engine.name(),
         cases.len(),
         elapsed.as_secs_f64()

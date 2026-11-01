@@ -37,12 +37,12 @@ pub fn line_diff(expected: &str, actual: &str, context: usize) -> String {
             ops.push((' ', a[i]));
             i += 1;
             j += 1;
-        } else if j < b.len() && (i == a.len() || lcs[i][j + 1] >= lcs[i + 1][j]) {
-            ops.push(('+', b[j]));
-            j += 1;
-        } else {
+        } else if i < a.len() && (j == b.len() || lcs[i + 1][j] >= lcs[i][j + 1]) {
             ops.push(('-', a[i]));
             i += 1;
+        } else {
+            ops.push(('+', b[j]));
+            j += 1;
         }
     }
     let mut out = String::new();
@@ -108,13 +108,13 @@ mod tests {
     #[test]
     fn diffs() {
         let d = line_diff("a\nb\nc\n", "a\nx\nc\n", 3);
-        assert_eq!(d, " a\n+x\n-b\n c\n");
+        assert_eq!(d, " a\n-b\n+x\n c\n");
         let exp: String = (0..20).map(|i| format!("{i}\n")).collect();
         let act = exp.replace("10\n", "ten\n");
         let d = line_diff(&exp, &act, 2);
         assert!(
             d.starts_with(
-                "  ... 8 unchanged lines\n 8\n 9\n+ten\n-10\n 11\n 12\n  ... 7 unchanged lines\n"
+                "  ... 8 unchanged lines\n 8\n 9\n-10\n+ten\n 11\n 12\n  ... 7 unchanged lines\n"
             ),
             "{d}"
         );

@@ -376,6 +376,11 @@ def main():
             with open(case_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(header) + "\n\n" + text)
             written.add(os.path.normpath(case_path))
+    # The tests are QuickJS's (MIT): keep its notice next to the copies.
+    with open(os.path.join(args.dquickts, "LICENSE"), encoding="utf-8") as f:
+        notice = f.read()
+    with open(os.path.join(out_root, "LICENSE"), "w", encoding="utf-8") as f:
+        f.write(notice)
     # Remove cases (and expectations) that are no longer generated.
     removed = 0
     for dirpath, _, files in os.walk(out_root):
