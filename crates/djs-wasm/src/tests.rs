@@ -210,3 +210,18 @@ fn json_in_and_out() {
     assert_eq!(out_text(), "undefined");
     vm_free(vm);
 }
+
+#[test]
+fn abort_after_out_of_fuel() {
+    let vm = vm_new(0);
+    let f = compile_body(vm, "", "for (;;) {}");
+    assert_ne!(f, 0);
+    call(vm, f, &[]);
+    assert_eq!(vm_run(vm, 1000), status::OUT_OF_FUEL);
+    vm_abort(vm);
+    assert_eq!(vm_run(vm, 1000), status::IDLE);
+    let g = compile_body(vm, "", "return 6 * 7");
+    call(vm, g, &[]);
+    assert_eq!(vm_run(vm, 1_000_000), status::DONE);
+    vm_free(vm);
+}

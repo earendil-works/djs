@@ -572,6 +572,17 @@ pub extern "C" fn vm_run(vm: u32, fuel: u32) -> u32 {
     })
 }
 
+/// Abandons the current call (after OUT_OF_FUEL, or while parked on a host call): the VM
+/// is idle and usable again, its globals intact (`Vm::abort`).
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_abort(vm: u32) {
+    with(|s| {
+        let slot = s.slot(vm);
+        slot.vm.abort();
+        slot.call_id = 0;
+    })
+}
+
 /// The handle of the last DONE/THREW value (the host frees it). 0 if there is none.
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_result(vm: u32) -> u32 {

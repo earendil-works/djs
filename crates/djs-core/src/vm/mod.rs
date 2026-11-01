@@ -230,6 +230,39 @@ impl Vm {
         Ok(())
     }
 
+    /// Abandons the current call, if any (running, out of fuel, or parked on a host
+    /// call): its frames and pending host calls are dropped and the VM is `Idle` again,
+    /// with its realm and globals intact. For hosts that stop a run that used up its fuel
+    /// budget.
+    pub fn abort(&mut self) {
+        let i = state::interp(&self.heap);
+        let stack = state::stack(&self.heap);
+        let sp = self.heap.arena().get(i, Interp::SP);
+        // Popped frames must not keep garbage alive.
+        for k in 0..sp.min(self.heap.value_array_capacity(stack)) {
+            self.heap.value_array_set(stack, k, Value::UNDEFINED);
+        }
+        let a = self.heap.arena_mut();
+        for f in [
+            Interp::BP,
+            Interp::HP,
+            Interp::SP,
+            Interp::PC,
+            Interp::HOST_CALL,
+            Interp::FLAGS,
+        ] {
+            a.set(i, f, 0);
+        }
+        let calls = state::host_calls(&self.heap);
+        let n = self.heap.value_array_len(calls);
+        for k in 0..n {
+            self.heap.value_array_set(calls, k, Value::ZERO);
+        }
+        self.heap.arena_mut().set(calls, ValueArray::LEN, 0);
+        state::set_result(&mut self.heap, Value::UNDEFINED);
+        state::set_state(&mut self.heap, RunState::Idle);
+    }
+
     /// Runs with `fuel` (instruction cost units).
     pub fn run(&mut self, fuel: u64) -> Status {
         Exec::new(&mut self.heap, self.opts.exec).run(fuel)

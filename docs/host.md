@@ -108,6 +108,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_display(vm, h) -> len` | out = the value as `djs run`'s console.log shows it |
 | `vm_call(vm, f, this, argc) -> 0/-1` | start a call; argument handles as u32 LE in staging |
 | `vm_run(vm, fuel) -> status` | 0 DONE, 1 THREW, 2 OUT_OF_FUEL, 3 HOST_CALL, 4 IDLE |
+| `vm_abort(vm)` | abandon the current call (out of fuel or parked): the VM is idle and usable again |
 | `vm_result(vm) -> h` | the DONE/THREW value, once |
 | `vm_host_call(vm) -> argc` | out = `[call_id, fn_id, this lo, hi, (arg lo, hi)*]` |
 | `vm_resolve_host_call(vm, call_id, ok, value) -> 0/-1` | return (`ok` 1) or throw (`ok` 0) `value` |

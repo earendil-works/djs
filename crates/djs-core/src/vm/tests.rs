@@ -804,3 +804,49 @@ fn image_while_parked() {
         .unwrap();
     assert_eq!(moved.run(100), Status::Done(Value::int(42)));
 }
+
+#[test]
+fn abort_returns_to_idle() {
+    // An endless loop, aborted after running out of fuel.
+    let mut vm = vm();
+    let mut f = F::new();
+    let top = f.b.new_label();
+    f.b.place_label(top);
+    f.b.push_i8(1);
+    f.b.drop();
+    f.b.jump(top);
+    let t = f.build(&mut vm);
+    let spin = vm.instantiate(t).unwrap();
+    let hs = vm.heap_mut().new_handle(spin).unwrap();
+    vm.call(spin, Value::UNDEFINED, &[]).unwrap();
+    assert_eq!(vm.run(100), Status::OutOfFuel);
+    assert_eq!(vm.call(spin, Value::UNDEFINED, &[]), Err(VmError::Busy));
+    vm.abort();
+    assert_eq!(vm.state(), RunState::Idle);
+    assert_eq!(vm.run(100), Status::Idle);
+    // Usable again.
+    let t = mul_template(&mut vm);
+    let m = vm.instantiate(t).unwrap();
+    vm.call(m, Value::UNDEFINED, &[Value::int(6), Value::int(7)])
+        .unwrap();
+    assert_eq!(vm.run(100), Status::Done(Value::int(42)));
+
+    // Aborting while parked on a host call drops the call.
+    let host = vm.new_host_function(9, "h").unwrap();
+    vm.call(host, Value::UNDEFINED, &[]).unwrap();
+    let Status::HostCall { call_id, .. } = vm.run(10) else {
+        panic!()
+    };
+    vm.abort();
+    assert!(vm.host_call(call_id).is_none());
+    assert_eq!(
+        vm.resolve_host_call(call_id, Ok(Value::NULL)),
+        Err(VmError::UnknownHostCall)
+    );
+    vm.collect().unwrap();
+    vm.heap().verify().unwrap();
+    // The aborted closure is still usable through its handle.
+    let spin = vm.heap().get_handle(hs);
+    vm.call(spin, Value::UNDEFINED, &[]).unwrap();
+    assert_eq!(vm.run(10), Status::OutOfFuel);
+}
