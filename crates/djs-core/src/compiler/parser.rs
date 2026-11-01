@@ -177,7 +177,16 @@ impl Checkpoint<'_> {
 }
 
 pub(super) fn syntax<T>(pos: u32, msg: impl Into<Cow<'static, str>>) -> PResult<T> {
-    Err(PErr::syntax(pos, msg.into()))
+    Err(syntax_error(pos, msg))
+}
+
+/// Out of line, and generic only over the message type: an error site is one call with
+/// the position and the message (0092: inlined, the `Cow` construction at every site
+/// was ~8 KB of wasm).
+#[cold]
+#[inline(never)]
+fn syntax_error(pos: u32, msg: impl Into<Cow<'static, str>>) -> PErr {
+    PErr::syntax(pos, msg.into())
 }
 
 impl<'a, 'h> Parser<'a, 'h> {
