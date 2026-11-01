@@ -19,6 +19,10 @@
 //! `(o) => o.#x`, `(o, v) => { o.#x = v; }` and `(o) => #x in o`; an auto-accessor
 //! `accessor x` is a private storage name and a synthesized getter and setter
 //! `get x() { return this.<storage>; }` (`emit_synth_fn`).
+//!
+//! TypeScript legacy decorators (`experimentalDecorators`, D1651) are the second half:
+//! thunks evaluated after the class (`Thunk`), parameter decorators (`DecParams`) and
+//! tsc's `__decorate` (`emit_legacy_apply`); the metadata types are in ts_meta.rs.
 
 use alloc::format;
 use alloc::vec::Vec;

@@ -3253,3 +3253,19 @@ cannot grow, or the collector's to-space cannot be reserved), the result is the 
 Hosts should pick a cap they can always back (wasm32: about 1 GiB at most, docs/host.md),
 so that out-of-memory stays deterministic. Test hooks: `Heap::fail_next_gc_reserve` (the
 to-space) and `arena::FAIL_NEXT_RESERVE` (growth).
+
+## D1651: TypeScript legacy decorators behind a compile flag, as thunks
+date: 2026-11-03 · by: lexer · issue: 0065
+`experimentalDecorators` / `emitDecoratorMetadata` are two `CompileOptions` booleans
+(TypeScript only; strip-types ignores them), `djs run --experimental-decorators` /
+`--emit-decorator-metadata` (implies the first, as qjs's CLI), djs-wasm `vm_compile` goal
+bits 4 and 8, Sandbox options of the same names, and difftest directives
+`experimental-decorators` / `emit-decorator-metadata`. The compilation follows qjs
+(docs/compiler.md 7.11): each element's decorators are a parked arrow function (thunk)
+called after the class, so they are evaluated in tsc's order and scope; parameter
+decorators are compiled into the method's thunk by stepping out of the method while its
+parameter list is parsed (a parameter list has no blocks, so parking and resuming it is
+exact). The runtime is three builtins (`%ApplyLegacyDecorators`, `%DecoratorParam`,
+`%DecoratorMetadata`) and closure kind 24 (`__param`'s function). Known divergence: qjs
+ignores a parenthesized class decorator (`@(expr) class C {}`) in legacy mode; djs
+applies it, as tsc.

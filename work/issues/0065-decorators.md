@@ -1,6 +1,6 @@
 # 0065: `accessor` auto-accessors and decorators (TC39, then TS legacy)
 
-status: in-progress
+status: done
 agent: lexer
 branch: issue/0065-decorators
 depends-on: 0058
@@ -16,10 +16,10 @@ accessor decorators. Part 2 (optional, after part 1): TypeScript legacy
 dquickts' `--experimental-decorators` and tests/test_decorators_legacy.ts.
 
 ## Acceptance criteria
-- [ ] Part 1, with qjs messages, early errors, e2e checked against qjs, difftest cases,
+- [x] Part 1, with qjs messages, early errors, e2e checked against qjs, difftest cases,
       and the `decorators` feature promoted to active (report the numbers).
-- [ ] strip-types: the ~134 decorator files now match too (report the new rate).
-- [ ] Part 2 behind a flag (`CompileOptions`, `djs run --experimental-decorators`, a Sandbox
+- [x] strip-types: the ~134 decorator files now match too (report the new rate).
+- [x] Part 2 behind a flag (`CompileOptions`, `djs run --experimental-decorators`, a Sandbox
       option), the dquickts legacy test passing in difftest.
 
 ## Log
@@ -43,7 +43,41 @@ dquickts' `--experimental-decorators` and tests/test_decorators_legacy.ts.
   without code are erased with the member (as ts-blank-space). The remaining decorator
   errors are deliberate TypeScript errors, and parameter decorators (part 2).
 - qjs divergence: qjs rejects `@dec abstract class C {}` (TypeScript), djs accepts it.
+- Part 2 (legacy `experimentalDecorators` + `emitDecoratorMetadata`), D1651 /
+  docs/compiler.md 7.11, after qjs: thunks (parked arrows returning the decorator array,
+  called after the class), parameter decorators compiled into the method's thunk by
+  parking the method during its parameter list, `%ApplyLegacyDecorators` /
+  `%DecoratorParam` / `%DecoratorMetadata` (builtins/decorators.ts, closure kind 24),
+  the type serialization in compiler/ts_meta.rs (qjs's ts_meta_*). Flags:
+  `CompileOptions::{experimental_decorators, emit_decorator_metadata}`, `djs run
+  --experimental-decorators / --emit-decorator-metadata`, djs-wasm goal bits 4/8,
+  Sandbox `experimentalDecorators` / `emitDecoratorMetadata`, difftest directives.
+  Outside `touches`: crates/djs-difftest (directives, driver options) and one line in
+  crates/djs-bench (the new Job fields); docs/cli.md, docs/host.md, TESTING.md.
+- difftest: ts/decorators-legacy.ts is dquickts' test_decorators_legacy.ts (its two
+  std.evalScript parts are compiler unit tests `legacy_decorators` /
+  `legacy_decorator_errors`), plus ts/decorators-legacy-{plain,types,params}.ts (the
+  semantics, the type serialization of ~40 annotations, parameters and return types);
+  all match qjs, plain, `--suspend-every 97` and `--gc-stress`. Error messages and
+  positions match qjs for the cases tried.
+- strip-types: parameter decorators stay unerased (as ts-blank-space): 4307 → 4316/4802
+  match, 0 differ, 486 errors (the remaining decorator ones are deliberate TS errors).
+- qjs bug found: with legacy decorators qjs ignores a parenthesized class decorator
+  (`@((c) => ...) class C {}` is never called); djs applies it (as tsc). The corpus
+  avoids it.
 
 ## Follow-ups
 
+- The REPL has no switch for legacy decorators (`.ts` only).
+- Decorator expressions with type arguments (`@dec<T>()`) are not parsed (as qjs).
+
 ## Result
+
+Part 1: TC39 decorators (2023-11) and `accessor` auto-accessors; test262's `decorators`
+feature is active (18/18). Part 2: TypeScript legacy decorators with
+`experimental_decorators` (+ `emit_decorator_metadata`), on every surface: CompileOptions,
+`djs run --experimental-decorators` / `--emit-decorator-metadata`, djs-wasm goal bits 4/8,
+Sandbox `experimentalDecorators` / `emitDecoratorMetadata`, difftest
+`// difftest: experimental-decorators` / `emit-decorator-metadata`. dquickts'
+test_decorators_legacy.ts passes in difftest. Known gaps: the qjs divergences above
+(`@dec abstract class` accepted; parenthesized legacy class decorators applied).

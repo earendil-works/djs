@@ -201,7 +201,9 @@ transcript in `<name>.expected` is:
 Stack frame lines (`    at ...`) are dropped on both sides before comparing; stack
 formats are a separate topic. Leading comment lines can carry directives:
 `// difftest: skip-djs <reason>` (a djs non-goal, such as direct eval), `// difftest: ts` (a
-`.js` file parsed as TypeScript), `// difftest: fuel <n>`, `// difftest: timeout <secs>`,
+`.js` file parsed as TypeScript), `// difftest: experimental-decorators` and
+`// difftest: emit-decorator-metadata` (TypeScript legacy decorators, D1651),
+`// difftest: fuel <n>`, `// difftest: timeout <secs>`,
 `// difftest: djs-expect <oracle line> => <djs line>` (a deliberate difference from qjs, such
 as D013's RangeError for stack overflow: with djs, that `.expected` line must read the
 second text; D1540), `// difftest: no-stress <reason>` (the stress variants skip a

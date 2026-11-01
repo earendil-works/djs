@@ -1524,6 +1524,31 @@ What the compiler emits:
   `Symbol.metadata`), the inner binding, the static extra initializers, the static
   initializer with `this` = the new class (`swap`: the home object stays the class),
   `nip`, the class extra initializers.
+- **TypeScript legacy decorators** (`CompileOptions::experimental_decorators`, D1651).
+  tsc's semantics, after qjs's: the decorators of an element (or the class) compile
+  into a *thunk*, an arrow function parked while the class is parsed (`Thunk`; a
+  child of the class's function in the body scope, the class's thunk moved into the
+  class scope so the name is visible) that returns their array. Parameter decorators
+  (`@d x` in a class method or constructor; elsewhere an error) go into the method's
+  thunk (the class's for the constructor) as `%DecoratorParam(dec, index)`, tsc's
+  `__param`: `parse_param_decorators` parks the method, resumes the thunk, parses, and
+  switches back (`DecParams`). After the class is complete (static initializer
+  included), a declaration's outer binding is initialized, then
+  `%ApplyLegacyDecorators(target, key, decs, kind)` (tsc's `__decorate`, through
+  `Reflect.decorate` if it exists) runs per element: instance ones on the prototype,
+  then static ones, in source order, then the class's, whose result rebinds the inner
+  and outer names. A decorated computed method key is kept in a `<dec>N` binding (in
+  legacy mode every computed method key, as qjs). Private elements cannot be decorated;
+  members without code drop their (unevaluated) thunk. With `emit_decorator_metadata`,
+  `%DecoratorMetadata(key, value)` (tsc's `__metadata`, `Reflect.metadata` if it exists)
+  decorators follow: a field's `design:type`, a method's `design:type`,
+  `design:paramtypes` and `design:returntype`, an accessor's, the class's
+  `design:paramtypes` (with an explicit constructor). The types are read
+  speculatively from the annotations (compiler/ts_meta.rs, tsc's `serializeTypeNode`):
+  primitives, `undefined`, `Object`, `Function`, `Array`, enums declared before, folded
+  unions, and references as `typeof (v = typeof A !== "undefined" && A.B) ===
+  "function" ? v : Object`. In strip-types, parameter decorators stay unerased (as
+  ts-blank-space).
 
 ## 8. Error reporting and early errors
 

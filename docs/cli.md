@@ -1,13 +1,16 @@
 # djs-cli: the `djs` command
 
 ```sh
-cargo run -p djs-cli -- run [--body] [--ts] [--gc-stress] [--suspend-every N] file.js
+cargo run -p djs-cli -- run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
+    [--gc-stress] [--suspend-every N] file.js
 cargo run -p djs-cli -- disasm [--body] file.js
 cargo run -p djs-cli -- strip-types file.ts
 cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history]
 ```
 
-`run` runs a Script (or, with `--body`, a codemode async body) and serves `console.log`.
+`run` runs a Script (or, with `--body`, a codemode async body) and serves `console.log`;
+`--experimental-decorators` and `--emit-decorator-metadata` (which implies it) select
+TypeScript's legacy decorators (D1651).
 `disasm` prints the bytecode. `strip-types` erases TypeScript types like ts-blank-space
 (TESTING.md). This file documents the REPL.
 
