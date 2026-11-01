@@ -1,7 +1,7 @@
 # 0032: Base snapshot (prelude precompiled at build time)
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0032-base-snapshot
 depends-on: 0028
 touches: crates/djs-prelude/ (new), crates/djs-core/src/vm/ (additive: create from a base image, build hash checks), crates/djs-wasm/, crates/djs-cli/ (use the base), crates/djs-bench/ (startup benchmarks), Cargo.toml (workspace member), docs/host.md
