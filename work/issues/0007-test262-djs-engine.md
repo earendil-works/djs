@@ -3,7 +3,7 @@
 status: open
 agent: -
 branch: issue/0007-test262-djs-engine
-depends-on: 0002, 0006
+depends-on: 0002, 0014, 0015, P1-8
 touches: crates/djs-test262/, tests/test262/, scripts/gate.sh
 
 ## Goal

@@ -1,15 +1,15 @@
-# 0006: P0 compiler + interpreter: expressions, statements, fuel, console.log
+# 0006: P0 compiler + interpreter (umbrella)
 
-status: open
+status: done
 agent: -
-branch: issue/0006-p0-compiler-interpreter
-depends-on: 0003, 0004, 0005
-touches: crates/djs-core/src/{compiler,bytecode,interp,vm}/, crates/djs-cli/, tests/corpus/
+branch: -
+depends-on: -
+touches: -
 
 ## Goal
-ARCH.md phase P0: the single-pass compiler emitting bytecode for expressions and
-statements, a stackless interpreter loop with fuel, `console.log` as a sync host call,
-the embedding API, `djs run`, and the first differential corpus with its runner in the
-gate.
+Superseded by the split in docs/compiler.md section 10 (decision D006):
+0013 (bytecode table), 0014 (P0 compiler), 0015 (P0 interpreter and embedding), 0016
+(djs in difftest and in the gate).
 
-(Detailed acceptance criteria are written by the coordinator once 0003–0005 have landed.)
+## Result
+Split; see 0013 to 0016.

@@ -9,7 +9,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0010 | Differential corpus and difftest runner | infra | .worktrees/0010-difftest-corpus |
 | 0011 | Regex engine core | num | .worktrees/0011-regex-engine |
 | 0012 | Native JSON (leaf) | heap | .worktrees/0012-json-leaf |
-| 0008 | Compiler and bytecode design note | lexer | .worktrees/0008-compiler-design |
+| 0013 | Bytecode table and tools | lexer | .worktrees/0013-bytecode-table |
 
 ## Open (ready)
 
@@ -20,8 +20,10 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0006 | P0 compiler + interpreter | 0008 |
-| 0007 | test262 on djs + ratchet in gate | 0002, 0006 |
+| 0014 | P0 compiler | 0013 |
+| 0015 | P0 interpreter and embedding | 0013 (parallel with 0014) |
+| 0016 | djs in difftest + gate | 0010, 0014, 0015 |
+| 0007 | test262 on djs + ratchet in gate | 0014, 0015, P1-8 (script mode) |
 
 ## Done
 
@@ -30,13 +32,15 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0001 | Workspace skeleton and process | initial commit |
 | 0003 | Lexer | e4a42c3 (agent lexer; parser follow-ups listed in the issue) |
 | 0005 | Values, arena heap, strings, atoms, objects | dc751e2 (agent heap; follow-ups in the issue) |
+| 0008 | Compiler and bytecode design note | 977acdd (agent lexer; docs/compiler.md; D006 accepts it) |
+| 0006 | P0 umbrella | split into 0013-0016 |
 | 0009 | Copying GC and handle table | 6030aff (agent heap; ~15 ns/cell; LOS designed, not built) |
 | 0004 | Number <-> string conversion | 9b0a654 (agent num; matches qjs on 2.1M cases; D1041 differs on >38-digit inputs) |
 | 0002 | test262 infrastructure and oracle baseline | 5087390 (agent infra; qjs: 37,569 tests in ~10s, 4 oracle failures) |
 
 ## Backlog (not yet written up)
 
-- P1: functions + closures + the resolution pass, objects/arrays literals, exceptions,
+- P1 (split in docs/compiler.md section 10, P1-1..P1-10): functions + closures + the resolution pass, objects/arrays literals, exceptions,
   let/const/TDZ, template literals, destructuring, spread, arrows, classes. The Cheney GC.
 - P2: promises, async/await, job queue, async host calls, djs-bgen (checker + JS emitter),
   builtins in the builtin language, base snapshot, JSON, core builtins, djs-wasm, JS host
