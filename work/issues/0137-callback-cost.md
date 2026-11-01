@@ -1,7 +1,7 @@
 # 0137: Per-element cost of callbacks from natives (map/filter/forEach) without size growth
 
-status: open
-agent: -
+status: in-progress
+agent: perf
 branch: issue/0137-callback-cost
 depends-on: 0129
 guide: docs/guide/builtins.md / interpreter.md if the call mechanism changes
