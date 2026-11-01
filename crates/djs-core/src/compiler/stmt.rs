@@ -86,6 +86,14 @@ impl Parser<'_, '_> {
                 self.expect_semicolon()
             }
             TokenKind::With => syntax(tok.start, "invalid keyword: with"),
+            TokenKind::Import | TokenKind::Export if self.strip => {
+                if self.strip_at_module_item() {
+                    return self.strip_module_item();
+                }
+                self.parse_expr(false)?;
+                self.code().drop();
+                self.expect_semicolon()
+            }
             TokenKind::Import | TokenKind::Export | TokenKind::Enum => {
                 let text = self.tok_text();
                 syntax(tok.start, alloc::format!("unsupported keyword: {text}"))

@@ -447,7 +447,9 @@ impl Parser<'_, '_> {
     /// An arrow function, with the current token at its parameters (an identifier or
     /// `(`) or at `async`. The caller checked that `=>` follows (for `async x`, that an
     /// identifier follows).
-    pub(super) fn parse_arrow(&mut self, no_in: bool, hint: Atom) -> PResult<Expr> {
+    /// `after_q`: the arrow is the `b` of `a ? b : c` (TypeScript: its expression body
+    /// is too, as in tsc's `allowReturnTypeInArrowFunction`).
+    pub(super) fn parse_arrow(&mut self, no_in: bool, hint: Atom, after_q: bool) -> PResult<Expr> {
         let start = self.tok.start;
         let is_async =
             self.tok.is_contextual(Kw::Async) && !matches!(self.peek().kind, TokenKind::Arrow);
@@ -484,6 +486,7 @@ impl Parser<'_, '_> {
             self.parse_function_body()?;
         } else {
             self.code().enter_scope(BODY_SCOPE as u16);
+            self.after_q = after_q;
             self.parse_assign(no_in)?;
             self.emit_return_value();
             self.code().leave_scope(BODY_SCOPE as u16);

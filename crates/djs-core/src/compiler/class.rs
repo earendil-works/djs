@@ -191,8 +191,9 @@ impl Parser<'_, '_> {
             keys: 0,
         };
         self.expect(TokenKind::LBrace, "{")?;
-        if !name.is_null() || derived {
-            // strip-types: the name or heritage was the last JS before the members.
+        if derived {
+            // strip-types: the heritage was the last JS visited before the members
+            // (ts-blank-space does not visit the class name).
             self.ts_semi = true;
         }
         while !self.is(TokenKind::RBrace) {

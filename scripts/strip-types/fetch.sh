@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fetch the strip-types oracle (TESTING.md "TypeScript") into vendor/strip-types of the
 # primary checkout: ts-blank-space and its TypeScript (npm, pinned) and a TS corpus
-# (TypeScript's own src/ at a pinned tag).
+# (TypeScript's own src/ and tests/cases/conformance at a pinned tag).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -25,8 +25,9 @@ if [ ! -d "$vendor/corpus/typescript-$TS_VERSION" ]; then
   curl -fsSL "https://codeload.github.com/microsoft/TypeScript/tar.gz/refs/tags/v$TS_VERSION" \
     -o "$tmp/ts.tgz"
   mkdir -p "$vendor/corpus/typescript-$TS_VERSION"
+  # The compiler's sources, and its conformance tests (all kinds of TypeScript syntax).
   tar -xzf "$tmp/ts.tgz" -C "$vendor/corpus/typescript-$TS_VERSION" --strip-components=1 \
-    "TypeScript-$TS_VERSION/src"
+    "TypeScript-$TS_VERSION/src" "TypeScript-$TS_VERSION/tests/cases/conformance"
   rm -rf "$tmp"
 fi
 echo "$vendor"

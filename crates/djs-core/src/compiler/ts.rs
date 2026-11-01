@@ -1226,8 +1226,20 @@ impl<'a> Parser<'a, '_> {
             }
             self.ts_skip_type_params(TP_IN_OUT | TP_CONST)?;
             if self.is(TokenKind::Extends) {
+                // The heritage is an expression (`extends Mixin(Base)`), with type
+                // arguments.
                 self.next()?;
-                self.ts_skip_type()?;
+                loop {
+                    match self.tok.kind {
+                        _ if self.ts_at(Kw::Implements) => break,
+                        TokenKind::Ident | TokenKind::Dot => self.next()?,
+                        TokenKind::LParen => self.ts_skip_balanced()?,
+                        TokenKind::Lt => {
+                            self.ts_skip_type_args(false)?;
+                        }
+                        _ => break,
+                    }
+                }
             }
             if self.ts_at(Kw::Implements) {
                 loop {

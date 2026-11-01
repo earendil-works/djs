@@ -430,3 +430,34 @@ fn ts_strip() {
     }
     assert!(bad.is_empty(), "\n{}", bad.join("\n"));
 }
+
+/// tests/strip-types: `strip_types` matches ts-blank-space byte for byte (the fast part
+/// of the strip-types oracle; the full one is scripts/strip-types/oracle.sh).
+#[test]
+fn ts_strip_corpus() {
+    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/strip-types");
+    let mut cases: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|e| e == "ts"))
+        .collect();
+    cases.sort();
+    assert!(!cases.is_empty());
+    let mut bad = Vec::new();
+    for ts in cases {
+        let src = std::fs::read(&ts).unwrap();
+        let want = std::fs::read(ts.with_extension("js")).unwrap();
+        let mut heap = Heap::new().unwrap();
+        match strip_types(&mut heap, &src, &CompileOptions::async_body("t.ts", &[])) {
+            Ok(got) if got == want => {}
+            Ok(got) => bad.push(alloc::format!(
+                "{}:\n--- ts-blank-space\n{}\n--- djs\n{}",
+                ts.display(),
+                String::from_utf8_lossy(&want),
+                String::from_utf8_lossy(&got)
+            )),
+            Err(e) => bad.push(alloc::format!("{}: {e}", ts.display())),
+        }
+    }
+    assert!(bad.is_empty(), "\n{}", bad.join("\n"));
+}

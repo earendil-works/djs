@@ -223,7 +223,7 @@ impl Parser<'_, '_> {
         }
         // `(f) = function () {}` names nothing: the target is not an identifier.
         let parenthesized = self.is(TokenKind::LParen);
-        let lhs = self.parse_conditional(no_in)?;
+        let lhs = self.parse_conditional(no_in, after_q)?;
         let op = self.tok;
         if op.kind == TokenKind::Assign {
             let lv = self.lvalue(lhs, "invalid assignment left-hand side")?;
@@ -308,7 +308,7 @@ impl Parser<'_, '_> {
                 let next = self.peek();
                 if next.kind == TokenKind::Arrow && !next.newline_before() {
                     self.name_hint = None;
-                    return self.parse_arrow(no_in, hint).map(Some);
+                    return self.parse_arrow(no_in, hint, after_q).map(Some);
                 }
                 if tok.is_contextual(Kw::Async) && !next.newline_before() {
                     let arrow = match next.kind {
@@ -335,7 +335,7 @@ impl Parser<'_, '_> {
                     };
                     if arrow {
                         self.name_hint = None;
-                        return self.parse_arrow(no_in, hint).map(Some);
+                        return self.parse_arrow(no_in, hint, after_q).map(Some);
                     }
                 }
             }
@@ -344,12 +344,12 @@ impl Parser<'_, '_> {
                     || (self.ts && self.ts_is_arrow_paren(after_q)) =>
             {
                 self.name_hint = None;
-                return self.parse_arrow(no_in, hint).map(Some);
+                return self.parse_arrow(no_in, hint, after_q).map(Some);
             }
             // A generic arrow `<T>(x: T) => x`.
             TokenKind::Lt if self.ts && self.ts_is_generic_arrow() => {
                 self.name_hint = None;
-                return self.parse_arrow(no_in, hint).map(Some);
+                return self.parse_arrow(no_in, hint, after_q).map(Some);
             }
             _ => {}
         }
@@ -475,7 +475,9 @@ impl Parser<'_, '_> {
         }
     }
 
-    fn parse_conditional(&mut self, no_in: bool) -> PResult<Expr> {
+    /// `after_q`: the expression is itself the `b` of an enclosing `a ? b : c`, which the
+    /// `c` here inherits (tsc's `allowReturnTypeInArrowFunction`, compiler/ts.rs).
+    fn parse_conditional(&mut self, no_in: bool, after_q: bool) -> PResult<Expr> {
         let (e, _) = self.parse_binary(1, no_in)?;
         if !self.is(TokenKind::Question) {
             return Ok(e);
@@ -489,6 +491,7 @@ impl Parser<'_, '_> {
         self.expect(TokenKind::Colon, ":")?;
         self.code().jump(l_end);
         self.place(l_else);
+        self.after_q = after_q;
         self.parse_assign(no_in)?;
         self.place(l_end);
         Ok(Expr::Value)
@@ -1237,8 +1240,14 @@ impl Parser<'_, '_> {
             TokenKind::Import if self.strip => {
                 self.next()?;
                 if self.eat(TokenKind::Dot)? {
+                    // `import.meta`, `import.defer(...)`
                     self.next()?;
                     self.code().undefined();
+                    if self.is(TokenKind::LParen) {
+                        self.code().undefined();
+                        let args = self.parse_args()?;
+                        self.emit_call(args);
+                    }
                 } else {
                     self.code().undefined();
                     self.prepare_call(Expr::Value);

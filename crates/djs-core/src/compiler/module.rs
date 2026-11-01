@@ -72,10 +72,19 @@ impl Parser<'_, '_> {
         self.expect(TokenKind::LBrace, "{")?;
         while !self.is(TokenKind::RBrace) {
             let start = self.tok.start;
+            // `type` is a modifier before a name, also before one named `as`
+            // (`{ type as }`), but not in `{ type as x }`.
             let is_type = self.tok.is_contextual(Kw::Type) && {
-                let n = self.peek();
-                (n.kind.is_identifier_name() || n.kind == TokenKind::String)
-                    && !n.is_contextual(Kw::As)
+                let mut lx = self.lx;
+                let n = lx.next_token().ok();
+                let n2 = lx.next_token().ok();
+                match n {
+                    Some(n) if n.is_contextual(Kw::As) => {
+                        n2.is_some_and(|t| matches!(t.kind, TokenKind::Comma | TokenKind::RBrace))
+                    }
+                    Some(n) => n.kind.is_identifier_name() || n.kind == TokenKind::String,
+                    None => false,
+                }
             };
             if is_type {
                 self.next()?;
@@ -104,12 +113,23 @@ impl Parser<'_, '_> {
             self.expect_semicolon()?;
             return Ok(false);
         }
-        let type_only = self.tok.is_contextual(Kw::Type) && {
-            let n = self.peek();
-            matches!(n.kind, TokenKind::LBrace | TokenKind::Star)
-                || (n.kind == TokenKind::Ident && !n.is_contextual(Kw::From))
+        // `import type X from` (not `import type from "m"`, the default import `type`);
+        // `import defer * as ns from` likewise.
+        let modifier = |p: &Self| {
+            let mut lx = p.lx;
+            let n = lx.next_token().ok();
+            let n2 = lx.next_token().ok();
+            match n {
+                Some(n) if matches!(n.kind, TokenKind::LBrace | TokenKind::Star) => true,
+                Some(n) if n.is_contextual(Kw::From) => {
+                    n2.is_some_and(|t| t.is_contextual(Kw::From))
+                }
+                Some(n) => n.kind == TokenKind::Ident,
+                None => false,
+            }
         };
-        if type_only {
+        let type_only = self.tok.is_contextual(Kw::Type) && modifier(self);
+        if type_only || (self.lx.text(&self.tok) == b"defer" && modifier(self)) {
             self.next()?;
         }
         if self.is(TokenKind::Ident) {
