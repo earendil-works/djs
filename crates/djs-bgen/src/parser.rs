@@ -217,6 +217,9 @@ impl Parser<'_> {
                 }
                 self.expect(":")?;
                 let ty = self.type_ref_in(rest)?;
+                if self.is("=") {
+                    return self.err(self.peek().span, "default parameter values are not in the subset");
+                }
                 let mut end = ty.span;
                 if rest {
                     self.expect("[")?;
