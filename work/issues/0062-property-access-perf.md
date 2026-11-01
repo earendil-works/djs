@@ -32,6 +32,14 @@ and implement it.
 
 ## Log
 
+- Measurements and design note: docs/objects.md (tools in work/scratch/0062: micro.py,
+  classify.py, leaf.py, opcount.patch). Property access costs 10-30 ns vs ~1 ns in qjs,
+  globals up to ~100 ns; but in a pi-like codemode script 97% of executed bytecodes are
+  the builtin language and property lookup is 3.5% of the time. Proposal: cheaper lookups
+  plus verified-index inline caches (globals, own properties, prototype methods with an
+  epoch) now; shapes later as their own issue merged with 0052 S2 (memory/image), after
+  0063. Sent to the coordinator for approval before implementing.
+
 ## Follow-ups
 
 ## Result
