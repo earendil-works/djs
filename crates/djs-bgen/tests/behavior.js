@@ -271,6 +271,7 @@ const I = {
   },
   // The Rust backend's table (0063): nothing to do in JS.
   MarkNative: () => {},
+  MarkFast: () => {},
   // The constructor gets the native one's prototype, so instances compare equal.
   InstallConstructor: (target, key, f, length, parent) => {
     const native = key === "%TypedArray%" ? Object.getPrototypeOf(Int8Array) : globalThis[key];
