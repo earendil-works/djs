@@ -44,6 +44,7 @@ interface Exports {
   vm_set_now(vm: number, ms: number): void;
   vm_set_time_zone_offset(vm: number, minutes: number): void;
   vm_set_random_seed(vm: number, lo: number, hi: number): void;
+  vm_set_weak_refs(vm: number, mode: number): number;
 }
 
 const textEncoder = new TextEncoder();
@@ -99,6 +100,11 @@ export class Engine {
   setClock(ms: number, timeZoneOffset: number): void {
     this.x.vm_set_now(this.vm, ms);
     this.x.vm_set_time_zone_offset(this.vm, timeZoneOffset);
+  }
+
+  /** What WeakRef and FinalizationRegistry do (D1680): 0 collected, 1 strong, 2 absent. */
+  setWeakRefs(mode: 0 | 1 | 2): void {
+    if (this.trap(() => this.x.vm_set_weak_refs(this.vm, mode)) !== 0) throw new Error("vm_set_weak_refs failed");
   }
 
   setRandomSeed(lo: number, hi: number): void {
@@ -252,8 +258,8 @@ function instantiate(module: WebAssembly.Module): Exports {
   if (typeof x.djs_abi_version !== "function" || x.djs_abi_version() !== ABI_VERSION) {
     throw new Error("The module is not djs-wasm of ABI version 1");
   }
-  if (typeof x.vm_compile_file !== "function" || typeof x.vm_set_random_seed !== "function") {
-    throw new Error("The djs-wasm module is too old for pi codemode (no vm_compile_file / vm_set_random_seed)");
+  if (typeof x.vm_compile_file !== "function" || typeof x.vm_set_weak_refs !== "function") {
+    throw new Error("The djs-wasm module is too old for pi codemode (no vm_compile_file / vm_set_weak_refs)");
   }
   return x;
 }

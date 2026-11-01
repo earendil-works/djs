@@ -60,6 +60,27 @@ export interface SandboxOptions {
    * Default false.
    */
   typescript?: boolean;
+  /**
+   * The 64-bit seed of `Math.random` for a new sandbox (a restored one continues its
+   * sequence). Default: from `crypto.getRandomValues`. Ignored with `deterministic`.
+   */
+  randomSeed?: number | bigint;
+  /**
+   * What `WeakRef` and `FinalizationRegistry` do (D1680): `"collected"` (weak, as the
+   * spec intends), `"strong"` (targets never die and cleanup callbacks never run, so no
+   * collection is observable) or `"absent"` (the globals are deleted). Default
+   * `"collected"`, with `deterministic` `"strong"`.
+   */
+  weakRefs?: "collected" | "strong" | "absent";
+  /**
+   * Run deterministically (D1680): with the same code, parameters and results in the same
+   * order, a run does the same thing every time. `Math.random` is seeded from `seed`, the
+   * time zone is UTC, weak references are strong (unless `weakRefs` says otherwise), and
+   * the clock starts at `startedAt` and moves only when an async host function's result
+   * is delivered: to `now` at that moment (never backwards). Sync host functions and
+   * fuel slices do not move it. A fixed `now` makes the clock fully reproducible.
+   */
+  deterministic?: { startedAt: number; seed: number | bigint };
 }
 
 export type SandboxErrorKind = "threw" | "syntax" | "fuel" | "trap" | "memory" | "misuse";
@@ -122,6 +143,9 @@ interface Exports {
   vm_abort(vm: number): void;
   vm_set_now(vm: number, ms: number): void;
   vm_set_time_zone_offset(vm: number, minutes: number): void;
+  vm_set_random_seed(vm: number, lo: number, hi: number): void;
+  vm_set_weak_refs(vm: number, mode: number): number;
+  vm_resolve_host_call_at(vm: number, callId: number, ok: number, value: number, now: number): number;
 }
 
 const modules = new Map<string, Promise<WebAssembly.Module>>();
@@ -181,6 +205,8 @@ export class Sandbox {
   private readonly rejections: unknown[] = [];
   private readonly cons: ConsoleLike;
   private dead: string | null = null;
+  /** Deterministic mode: the VM's clock, moved only by async results (never backwards). */
+  private clock: number | undefined;
 
   /** A new sandbox; loads (and caches) the default module unless `opts.module` is given. */
   static async create(opts: SandboxOptions = {}): Promise<Sandbox> {
@@ -220,8 +246,12 @@ export class Sandbox {
         throw new SandboxError("misuse", "not a sandbox snapshot");
       }
       const metaLen = view.getUint32(8, true);
-      restoredFns = (JSON.parse(textDecoder.decode(snapshot.subarray(12, 12 + metaLen))) as { functions: string[] })
-        .functions;
+      const meta = JSON.parse(textDecoder.decode(snapshot.subarray(12, 12 + metaLen))) as {
+        functions: string[];
+        clock?: number;
+      };
+      restoredFns = meta.functions;
+      if (opts.deterministic) this.clock = meta.clock ?? opts.deterministic.startedAt;
       const image = snapshot.subarray(12 + metaLen);
       const at = x.djs_staging(image.length); // may grow memory: take the buffer afterwards
       new Uint8Array(x.memory.buffer).set(image, at);
@@ -258,6 +288,19 @@ export class Sandbox {
       });
       for (const [name, f] of Object.entries(opts.functions ?? {})) this.defineFunction(name, f);
       for (const [name, f] of Object.entries(opts.asyncFunctions ?? {})) this.defineAsyncFunction(name, f);
+      // What a new VM starts with; an image keeps its own (D1680).
+      const det = opts.deterministic;
+      const [lo, hi] = det ? seedWords(det.seed) : opts.randomSeed !== undefined ? seedWords(opts.randomSeed) : entropy();
+      x.vm_set_random_seed(vm, lo, hi);
+      const weak = opts.weakRefs ?? (det ? "strong" : "collected");
+      if (this.guard(() => x.vm_set_weak_refs(vm, WEAK_REF_MODES[weak])) !== 0) {
+        throw new SandboxError("misuse", `bad weakRefs mode ${String(weak)}`);
+      }
+      if (det) {
+        this.clock = det.startedAt;
+        x.vm_set_now(vm, det.startedAt);
+        x.vm_set_time_zone_offset(vm, 0);
+      }
     }
   }
 
@@ -340,7 +383,7 @@ export class Sandbox {
   /** The VM image plus the host function table, for `Sandbox.fromBytes`. */
   bytes(): Uint8Array {
     this.alive();
-    const meta = textEncoder.encode(JSON.stringify({ functions: this.fnNames }));
+    const meta = textEncoder.encode(JSON.stringify({ functions: this.fnNames, clock: this.clock }));
     const image = this.arena();
     const out = new Uint8Array(12 + meta.length + image.length);
     const view = new DataView(out.buffer);
@@ -507,7 +550,7 @@ export class Sandbox {
     for (;;) {
       for (const { callId, ok, value } of finished.splice(0)) {
         inflight.delete(callId);
-        this.complete(callId, ok, value);
+        this.complete(callId, ok, value, true);
       }
       const st = this.guard(() => {
         this.setClock();
@@ -595,7 +638,7 @@ export class Sandbox {
         ok = false;
         result = e;
       }
-      this.complete(callId, ok, result);
+      this.complete(callId, ok, result, false);
     }
   }
 
@@ -632,8 +675,12 @@ export class Sandbox {
     }
   }
 
-  /** Passes the host clock and time zone to the VM (before every slice). */
+  /**
+   * Passes the host clock and time zone to the VM (before every slice). Not in
+   * deterministic mode: there the clock moves only with async results (`complete`).
+   */
   private setClock(): void {
+    if (this.clock !== undefined) return;
     const { now, timeZoneOffset } = this.opts;
     const ms = typeof now === "number" ? now : (now ?? Date.now)();
     this.x.vm_set_now(this.vm, ms);
@@ -676,7 +723,7 @@ export class Sandbox {
    * kind with the host error's message. A value the wire format cannot carry becomes
    * such an error too.
    */
-  private complete(callId: number, ok: boolean, value: unknown): void {
+  private complete(callId: number, ok: boolean, value: unknown, async: boolean): void {
     const x = this.x;
     const vm = this.vm;
     let h = 0;
@@ -698,10 +745,32 @@ export class Sandbox {
       });
     }
     this.guard(() => {
-      x.vm_resolve_host_call(vm, callId, ok ? 1 : 0, h);
+      if (async && this.clock !== undefined) {
+        // Deterministic mode: the result's time, applied when the VM takes it (D1670).
+        const { now } = this.opts;
+        this.clock = Math.max(this.clock, typeof now === "number" ? now : (now ?? Date.now)());
+        x.vm_resolve_host_call_at(vm, callId, ok ? 1 : 0, h, this.clock);
+      } else {
+        x.vm_resolve_host_call(vm, callId, ok ? 1 : 0, h);
+      }
       if (h !== 0) x.vm_handle_free(vm, h);
     });
   }
+}
+
+const WEAK_REF_MODES = { collected: 0, strong: 1, absent: 2 } as const;
+
+/** A 64-bit seed as the two u32 words `vm_set_random_seed` takes. */
+function seedWords(seed: number | bigint): [number, number] {
+  const s = BigInt.asUintN(64, BigInt(seed));
+  return [Number(s & 0xffffffffn), Number(s >> 32n)];
+}
+
+/** A seed from the host's entropy (never 0, which would mean the VM's fixed default). */
+function entropy(): [number, number] {
+  const words = new Uint32Array(2);
+  globalThis.crypto.getRandomValues(words);
+  return [words[0], words[1] | 1];
 }
 
 /** Console arguments: values without a host form are shown by their class. */

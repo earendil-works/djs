@@ -3178,3 +3178,33 @@ track runs `djs` and `djs-bytecode`. The gate runs the corpus natively in all st
 modes and once more with the bytecode backend (plain); the test262 active group with the
 bytecode backend is a periodic check (TESTING.md "Builtin backends"), at 0063 both pass
 37,711/37,912.
+
+## D1680: Deterministic mode: weak references collected, strong or absent; the Sandbox's deterministic option
+date: 2026-11-03 · by: determinism · issue: 0068
+`VmOptions::weak_refs` / `Vm::set_weak_refs` / `vm_set_weak_refs`:
+- `Collected` (default): D1513.
+- `Strong`: no collection is observable. A WeakRef's pair and a FinalizationRegistry's
+  targets table are allocated as ValueArrays instead of EphemeronArrays. The layout is the
+  same (LEN, then the values) and every accessor works unchanged, but the collector traces
+  them like any array. `deref` always finds its target, no cell ever dies, so cleanup is
+  never due, and neither `Vm::collect`, the GC policy, gc-stress nor the cap changes
+  anything a script sees. A table keeps its kind when it grows. Unregister tokens and the
+  realm's list of registries stay weak (unobservable). The mode is a `Roots::FLAGS` bit
+  (`ROOT_WEAK_STRONG`), so images keep it, and it applies to the weak references created
+  after it was set. Memory: a target lives as long as its WeakRef or registry. The spec
+  allows an implementation that never collects.
+- `Absent`: the globals `WeakRef` and `FinalizationRegistry` are deleted (pi's
+  deterministic contract, as quickjs-wasi leaves them out). Not reversible.
+`Vm::new` and `from_base` apply the option, and `from_bytes` keeps the image's state. The pi
+adapter now calls `vm_set_weak_refs(absent)` before the host globals instead of deleting
+the globals in JS (0059's version).
+
+Sandbox: `randomSeed` (default entropy: until now every Sandbox had the VM's fixed
+default seed), `weakRefs`, and `deterministic: {startedAt, seed}`. In deterministic mode:
+the seed, time zone 0, strong weak refs unless `weakRefs` says otherwise, and the clock
+at `startedAt`. It moves only when an async result is delivered, to `opts.now` at that
+moment (max with the current clock), through `vm_resolve_host_call_at` (D1670). The
+Sandbox no longer sets the clock per fuel slice in this mode. The clock is in the
+snapshot meta. Sync host functions don't move the clock: their position is deterministic,
+but their time would be another input. A test shows the same results at fuel slices
+1e6/1000/97.

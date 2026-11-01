@@ -19,8 +19,9 @@
  * Deterministic mode (`data.deterministic`): djs reads no clock and no entropy itself
  * (ARCH "Nondeterminism"), so the host sets them: `Date` reads `startedAt`, then the `now` of
  * the result being processed (never backwards); `Math.random` is seeded from `seed`; the time
- * zone is UTC; results apply in `seq` order. djs has no `WeakRef` or `FinalizationRegistry`
- * at all, and its GC is not observable.
+ * zone is UTC; results apply in `seq` order. The VM deletes `WeakRef` and
+ * `FinalizationRegistry` (`vm_set_weak_refs`, D1680), as pi's quickjs VM leaves them out, so
+ * its GC is not observable.
  *
  * Beyond pi's contract: `snapshot()` returns the whole session (the VM image plus the
  * adapter's state) while the VM waits for results, and `resumeVm` continues it in a new
@@ -92,12 +93,6 @@ const SCRIPT_PREFIX = "return (async (tools, console) => {";
  * start on the VM clock (deterministic mode: from `startedAt`, as pi's quickjs VM does).
  */
 const HOST_GLOBALS = `
-// Deterministic runs have no WeakRef or FinalizationRegistry: collection timing is not
-// deterministic (as pi's quickjs VM leaves them out).
-if (deterministic) {
-  delete globalThis.WeakRef;
-  delete globalThis.FinalizationRegistry;
-}
 const define = (name, value) =>
   Object.defineProperty(globalThis, name, { value, writable: true, enumerable: false, configurable: true });
 const now = Date.now;
@@ -462,10 +457,11 @@ function prepareUnpolled(session: Session, engine: Engine, prelude: string, data
   // Handles live as long as the VM, which the caller disposes as a whole.
   const bridge = engine.hostFunction(BRIDGE_FN, "bridge");
   const getter = compileOrThrow(engine, "codemode-prelude.js", ["o", "k"], "return o[k]");
-  const host = compileOrThrow(engine, "codemode-prelude.js", ["deterministic"], HOST_GLOBALS);
-  const flag = engine.value(data.deterministic !== undefined);
-  const setOrigin = evaluate(session, engine, host, [flag]);
-  engine.free(flag);
+  // Deterministic runs have no WeakRef or FinalizationRegistry, as pi's quickjs VM leaves
+  // them out: the VM deletes the globals before the prelude's lockdown (D1680).
+  if (data.deterministic !== undefined) engine.setWeakRefs(2);
+  const host = compileOrThrow(engine, "codemode-prelude.js", [], HOST_GLOBALS);
+  const setOrigin = evaluate(session, engine, host);
   engine.free(host);
   const preludeFn = compileOrThrow(engine, "codemode-prelude.js", [], `return ${prelude}`);
   const factory = evaluate(session, engine, preludeFn);

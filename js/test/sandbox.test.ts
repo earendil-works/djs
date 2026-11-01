@@ -175,6 +175,53 @@ test("async results land at the same point for any fuel slice (D1670)", async ()
   }
 });
 
+test("deterministic mode and random seeds (D1680)", async () => {
+  const code = `
+    const out = [Date.now(), new Date(0).getHours(), Math.random()];
+    let x = 0;
+    for (let i = 0; i < 20000; i++) x += i;
+    out.push(Date.now());
+    const r = await tool(1);
+    out.push(Date.now(), r);
+    const w = new WeakRef({ a: 1 });
+    await tool(2);
+    out.push(Date.now(), typeof w.deref(), Math.random());
+    return out;
+  `;
+  const once = async (fuelSlice: number) => {
+    let t = 5000;
+    const sb = await Sandbox.create({
+      fuelSlice,
+      timeZoneOffset: 120,
+      now: () => (t += 1000),
+      asyncFunctions: { tool: async (x: unknown) => x },
+      deterministic: { startedAt: 1000, seed: 42 },
+    });
+    const r = (await sb.runAsync(code)) as unknown[];
+    sb.dispose();
+    return r;
+  };
+  const a = await once(1_000_000);
+  // The clock starts at startedAt, does not move with fuel slices or sync code, and moves
+  // to `now` when a result is delivered; the time zone is UTC; weak refs are strong.
+  assert.deepEqual([a[0], a[1], a[3], a[4], a[5], a[6], a[7]], [1000, 0, 1000, 6000, 1, 7000, "object"]);
+  assert.deepEqual(await once(1000), a);
+  assert.deepEqual(await once(97), a);
+  // Random seeds: given ones repeat, the default comes from entropy.
+  const random = async (opts: { randomSeed?: number | bigint }) => {
+    const sb = await Sandbox.create(opts);
+    const r = sb.run("return [Math.random(), Math.random()]");
+    sb.dispose();
+    return r;
+  };
+  assert.deepEqual(await random({ randomSeed: 7n }), await random({ randomSeed: 7 }));
+  assert.notDeepEqual(await random({}), await random({}));
+  // Weak refs can also be absent.
+  const sb = await Sandbox.create({ weakRefs: "absent" });
+  assert.equal(sb.run("return typeof WeakRef + typeof FinalizationRegistry"), "undefinedundefined");
+  sb.dispose();
+});
+
 test("the clock and time zone come from the host", async () => {
   const sb = await Sandbox.create();
   const t = sb.run("return Date.now()") as number;

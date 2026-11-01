@@ -29,6 +29,9 @@ const sb = await Sandbox.create({
   now: Date.now,                 // the VM's clock (ms), a function or a fixed time; default Date.now
   timeZoneOffset: 0,             // minutes east of UTC; default: the host's current offset
   unhandledRejections: "warn",   // or "throw", or "collect" (sb.takeUnhandledRejections())
+  randomSeed: 42n,               // Math.random's 64-bit seed; default: from crypto.getRandomValues
+  weakRefs: "collected",         // or "strong", or "absent" (D1680)
+  deterministic: { startedAt, seed }, // repeatable runs (D1680): see below
 });
 sb.run("return readFile(path).length", { path: "README.md" });   // codemode function body
 await sb.runAsync("return await fetchJson(url)", { url });       // host functions may return promises
@@ -68,6 +71,15 @@ sb.dispose();
   Sandbox sets `Date.now()` from `opts.now` (default `Date.now`; a number fixes it, for
   replays) and the local time zone from `opts.timeZoneOffset` (minutes east of UTC, no
   DST; default the host's offset at that time). Without a host clock `Date.now()` is 0.
+- Deterministic mode (`deterministic: { startedAt, seed }`, D1680): the same code,
+  parameters and results in the same order do the same thing on every run. `Math.random`
+  is seeded from `seed`, the time zone is UTC, weak references are strong (`weakRefs`
+  overrides it), and the clock starts at `startedAt`. It moves only when an async
+  function's result is delivered: to `opts.now` at that moment (never backwards), applied
+  when the VM takes the result from its inbox (D1670). Fuel slices and sync host
+  functions do not move it. With a fixed `now` the clock is fully reproducible; a
+  snapshot keeps it. Without `deterministic`, `randomSeed` (default: entropy) seeds a new
+  sandbox and `weakRefs` defaults to `"collected"`.
 - Unhandled rejections (D1423): promises rejected with no handler once the VM's job queue
   is empty (after the run, after each async result, and whenever it waits on async host
   calls), as qjs reports them. `unhandledRejections: "warn"` (default) calls `console.warn("Possibly unhandled
@@ -141,6 +153,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_run(vm, fuel) -> status` | 0 DONE, 1 THREW, 2 OUT_OF_FUEL, 3 HOST_CALL, 4 IDLE |
 | `vm_set_now(vm, ms: f64)` | the clock `Date` reads, ms since the epoch (D1383); set it before every `vm_run` |
 | `vm_set_time_zone_offset(vm, minutes)` | the local time zone, minutes east of UTC (default 0) |
+| `vm_set_weak_refs(vm, mode) -> 0/-1` | WeakRef and FinalizationRegistry (D1680): 0 collected (weak), 1 strong (no collection is observable), 2 absent (the globals are deleted); set it on a new VM |
 | `vm_set_random_seed(vm, lo, hi)` | reseed `Math.random` (xorshift64*, as QuickJS) with `hi << 32 \| lo`; a new VM has a fixed default seed (0049) |
 | `vm_abort(vm)` | abandon the current call (out of fuel or parked): the VM is idle and usable again |
 | `vm_result(vm) -> h` | the DONE/THREW value, once |
@@ -303,10 +316,10 @@ but pi keeps the prelude's `settle`/`run`/`stalled` alive across calls).
 | `(async (tools, console) => {code\n})` as `codemode.js` | the same text after `return `, so line numbers match. Compile errors become pi's script-error JSON with a `codemode.js:line:col` frame |
 | `drain()`: run jobs one by one, poll `shouldInterrupt` every 50 jobs, then `stalled()` | `vm_run` runs the job queue to empty itself (D1370). `stalled()` is called after it |
 | QuickJS polls `interruptHandler` while it runs; true throws an uncatchable error | `shouldInterrupt` is polled after every fuel slice (`fuelPerPoll`, default 10,000) of the script's work, not while the host globals and the prelude run (D1660: a start that reuses a prelude image skips that work, so a budget means the same on cold and warm starts). True → `vm_abort` and a `crash`, which pi's launchers turn into `timeout` or `aborted` as before |
-| deterministic: WASI clocks read virtual time, `random_get` a PRNG, UTC, no WeakRef | `vm_set_now(clock.now)` before every slice, time zone 0, `vm_set_random_seed`. djs reads no clock or entropy of its own (ARCH "Nondeterminism"). The adapter deletes `WeakRef` and `FinalizationRegistry` in deterministic runs (0059) |
+| deterministic: WASI clocks read virtual time, `random_get` a PRNG, UTC, no WeakRef | `vm_set_now(clock.now)` before every slice, time zone 0, `vm_set_random_seed`. djs reads no clock or entropy of its own (ARCH "Nondeterminism"). In deterministic runs the VM deletes `WeakRef` and `FinalizationRegistry` (`vm_set_weak_refs`, D1680) before the prelude's lockdown |
 | `Math.random` seeded by QuickJS from its first clock read (seed + 1), one draw used up while creating the context | djs's `Math.random` is the same xorshift64*, so the adapter seeds it one step after seed + 1. **The same seed gives the same numbers on both engines**; pi's pinned values pass |
 | fingerprint `quickjs-wasi X, quickjs Y, prelude H, deterministic 1, stack S, heap M, budget B` | `djs <build hash>, prelude H, host G, deterministic 1, fuel per poll F, heap M, budget B` (`djs_build_hash`; G hashes the adapter's own globals, D1660) |
-| quickjs-wasi's host globals `performance`, `atob`, `btoa` (`queueMicrotask` is native since 0059) | defined by the adapter in JS before the prelude, so the lockdown freezes them too. `performance.now()` counts from the run's start on the VM clock (deterministic: from `startedAt`, as on quickjs). Deterministic runs also lose `WeakRef` and `FinalizationRegistry` there, as on quickjs |
+| quickjs-wasi's host globals `performance`, `atob`, `btoa` (`queueMicrotask` is native since 0059) | defined by the adapter in JS before the prelude, so the lockdown freezes them too. `performance.now()` counts from the run's start on the VM clock (deterministic: from `startedAt`, as on quickjs) |
 | no snapshots: durability by deterministic replay | `snapshot()` / `resumeVm()` in addition: the VM image plus the adapter's few numbers, taken while the script waits. A resumed session continues with no replay (tested against an uninterrupted run) |
 
 **Prelude images.** Running pi's prelude is most of a start: its lockdown walks and freezes
