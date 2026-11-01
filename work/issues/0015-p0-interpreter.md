@@ -1,6 +1,6 @@
 # 0015: P0 interpreter and embedding API
 
-status: in-progress
+status: done
 agent: heap
 branch: issue/0015-p0-interpreter
 depends-on: 0013
@@ -14,26 +14,26 @@ ARCH "Execution API"), plus `djs run file.js`. Can start in parallel with 0014 u
 hand-assembled bytecode from 0013's emitter.
 
 ## Acceptance criteria
-- [ ] Every P0 opcode is executed. Operators follow spec semantics for primitives (ToNumber
+- [x] Every P0 opcode is executed. Operators follow spec semantics for primitives (ToNumber
       and ToString via `num`; string concatenation producing ropes; equality and
       relational comparisons, typeof, …). Objects as operands of operators that would need
       ToPrimitive throw a clear internal "not supported yet" TypeError for now (P1-2
       adds the privileged slow paths).
-- [ ] Fuel per instruction (cost classes from the table). `run(fuel)` returns `Done`,
+- [x] Fuel per instruction (cost classes from the table). `run(fuel)` returns `Done`,
       `Threw`, `OutOfFuel` or `HostCall`. Resuming after `OutOfFuel` continues exactly
       where it stopped.
-- [ ] `console.log(...)` is a sync host call: the frame is parked, the host formats the
+- [x] `console.log(...)` is a sync host call: the frame is parked, the host formats the
       arguments (simple formatting, D1100-ish: strings raw, others in a basic form;
       `djs run` prints), then `vm_resolve_host_call` and `run` continue.
-- [ ] Safepoints: `collect()` is called at safepoints when `gc_pending` is set, and all live
+- [x] Safepoints: `collect()` is called at safepoints when `gc_pending` is set, and all live
       values are in the arena (value stack, frames, roots). A `--gc-stress` option (collect
       at every safepoint) runs the tests too.
-- [ ] Suspension stress mode, trivial version: `djs run --suspend-every N` runs with fuel
+- [x] Suspension stress mode, trivial version: `djs run --suspend-every N` runs with fuel
       N, and on `OutOfFuel` it copies the heap into a fresh `Heap::from_bytes` and
       continues there. Output is identical. (This exercises the "no host pointers"
       property for real.)
-- [ ] D007's internal-ref tag, if the frame or template design needs it here.
-- [ ] Tests: interpreter tests on hand-assembled bytecode, and end-to-end tests through
+- [x] D007's internal-ref tag, if the frame or template design needs it here.
+- [ ] Tests: interpreter tests on hand-assembled bytecode (done), and end-to-end tests through
       the compiler once 0014 has landed (rebase onto it then).
 
 ## Log
@@ -125,5 +125,49 @@ hand-assembled bytecode from 0013's emitter.
   it into `main.rs` (and `Vm::compile`) waits for 0014.
 
 ## Follow-ups
+Open parts of this issue, moved to a new issue by the coordinator (to do right after
+0014 lands):
+- `Vm::compile(src, opts)` on top of 0014's `compiler::compile` (+ `instantiate`).
+- Wire `djs run file.js` (`--gc-stress`, `--suspend-every N`) into djs-cli `main.rs`;
+  the driver is in `crates/djs-cli/src/run.rs`, not yet a module of the binary.
+- End-to-end tests through the compiler, in the same three modes as the hand-assembled
+  tests (plain, fuel 1 + image round trip, GC stress), and `djs run` on them.
+
+Other follow-ups:
+- `construct`, `special_object`, spreads, iterators, classes, `call_intrinsic`: P1
+  issues (they throw `not supported yet` now).
+- ToPrimitive on objects (`%ToPrimitive` slow paths) and `get_method` through a getter:
+  P1-2.
+- JSON stringify should treat callable objects (`Function`, `HostFunction`) as
+  `undefined` (Skip) instead of `Slow` now that those classes exist.
+- Function objects have no `name`/`length`/`prototype` properties yet (P1-1). Error
+  objects have no `stack` (P1-3).
+- The pending host call table is a linear list; fine for sync calls, revisit for async
+  host calls (P2).
 
 ## Result
+Landed (everything in the arena, so a VM is fully described by its heap image):
+- **D007 tag** (`value.rs`): `Value::internal(cell)`, `as_internal`, `Kind::Internal`,
+  traced by the GC, checked by `verify`.
+- **Cells** (`heap/cells.rs`, additive): `Interp` (17), `Realm` (18), `HostCall` (19);
+  `Roots::INTERP`. Object classes `Function`, `HostFunction`, `Error` (`heap/object.rs`).
+- **`interp/`**: frame layout (6-slot header, D1151), realm with global object, Object,
+  Function, Array and Error prototypes, Error creation with qjs messages, primitive
+  conversions and operators (`conv.rs`, `**` via libm, D1150), and the dispatch loop
+  (`run.rs`). The loop covers every P0 op plus closures, Boxes, captures, accessors
+  through continuations, throw with handler tables and gosub/ret. It also has fuel per
+  cost class, GC safepoints and the debug table-agreement check.
+- **`vm/`**: the embedding API.
+  - `Vm::new`, `Vm::from_bytes` / `bytes` (resume anywhere, including while parked).
+  - `instantiate(template)`, `call`, `run(fuel) -> Status` (Done / Threw / OutOfFuel /
+    HostCall / Idle).
+  - `host_call(id)`, `resolve_host_call(id, Ok | Err)`.
+  - `new_host_function`, `define_global`, `define`, `new_object`, `new_error`,
+    `display`.
+- **Tests**: 16 interpreter tests on hand-assembled bytecode, each `run_main` case
+  checked in three modes (plain, fuel 1 with an image round trip at every suspension and
+  host call, GC stress), plus conversion unit tests.
+- **`djs run` driver**: `crates/djs-cli/src/run.rs`, not yet wired into the binary.
+
+Still open (see Follow-ups): `Vm::compile`, wiring `djs run` into `main.rs`, and the
+end-to-end tests through the compiler.
