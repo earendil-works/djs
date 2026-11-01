@@ -1,7 +1,7 @@
 # 0058: Compiler: `using`, decorators, `accessor`, Script completion values, `import()`
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0058-compiler-remaining
 depends-on: 0048, 0051 (disposables runtime, SYM_DISPOSE/SYM_ASYNC_DISPOSE)
 touches: crates/djs-core/src/compiler/, crates/djs-core/src/bytecode/ (additive), crates/djs-core/src/interp/ (small additive ops, logged), builtins/ (decorator helpers), tests/test262.toml (promotion), tests/corpus/ (prelude/engine workarounds removal), ratchets
