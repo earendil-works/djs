@@ -219,6 +219,7 @@ impl Parser<'_, '_> {
             break_label: l_break,
             continue_label: Some(l_cont),
             depth: self.stmt_depth,
+            used: false,
         });
         (l_break, l_cont)
     }
@@ -264,6 +265,13 @@ impl Parser<'_, '_> {
         if self.tok.is_contextual(Kw::Await) {
             return self.unsupported(self.tok.start, "for await loops are");
         }
+        if !self.is(TokenKind::LParen) {
+            return syntax(self.tok.start, "expecting '('");
+        }
+        if !super::scan::for_head_is_c_style(self.lx, self.tok) {
+            self.next()?;
+            return self.parse_for_in_of(labels, for_pos);
+        }
         self.expect(TokenKind::LParen, "(")?;
         let outer = self.scope;
         let mut scoped = false;
@@ -287,14 +295,8 @@ impl Parser<'_, '_> {
             }
             _ => {
                 self.parse_expr(true)?;
-                if self.is(TokenKind::In) || self.tok.is_contextual(Kw::Of) {
-                    return self.unsupported(for_pos, "for-in and for-of loops are");
-                }
                 self.code().drop();
             }
-        }
-        if self.is(TokenKind::In) || self.tok.is_contextual(Kw::Of) {
-            return self.unsupported(for_pos, "for-in and for-of loops are");
         }
         self.expect(TokenKind::Semicolon, ";")?;
         // Per-iteration copies of `let` bindings (CreatePerIterationEnvironment) only
@@ -364,7 +366,7 @@ impl Parser<'_, '_> {
         };
         let mut found = None;
         for (i, b) in self.blocks.iter().enumerate().rev() {
-            if b.kind == BlockKind::Finally {
+            if matches!(b.kind, BlockKind::Finally | BlockKind::Iter) {
                 continue;
             }
             let target = match label {
@@ -392,23 +394,12 @@ impl Parser<'_, '_> {
             };
             return syntax(pos, msg);
         };
-        // Run the finally blocks being left, innermost first (docs/compiler.md 7.4).
-        let mut cur = self.stmt_depth;
-        let finallies: Vec<(crate::bytecode::Label, u32)> = self.blocks[index + 1..]
-            .iter()
-            .rev()
-            .filter(|b| b.kind == BlockKind::Finally)
-            .map(|b| (b.break_label, b.depth))
-            .collect();
-        for (l_fin, base) in finallies {
-            while cur > base {
-                self.code().drop();
-                cur -= 1;
-            }
-            self.code().undefined();
-            self.code().gosub(l_fin);
-            self.code().drop();
+        if is_break {
+            self.blocks[index].used = true;
         }
+        // Run the finally blocks and close the iterators being left, innermost first
+        // (docs/compiler.md 7.4).
+        let mut cur = self.emit_unwind(index + 1, false);
         while cur > depth {
             self.code().drop();
             cur -= 1;
@@ -417,28 +408,65 @@ impl Parser<'_, '_> {
         self.expect_semicolon()
     }
 
-    /// Before a `return`: with the value on the stack, runs every enclosing finally
-    /// block, innermost first, cutting the stack to each try's base under the value.
-    fn emit_finally_for_return(&mut self) {
+    /// Leaves the finally blocks and for-of loops of `self.blocks[from..]`, innermost
+    /// first: each finally block runs (`gosub`) and each iterator is closed (`gosub`
+    /// to its close subroutine). With `keep_value` the value on top of the stack (a
+    /// `return` value) stays on top and is the finally blocks' value slot; otherwise
+    /// `undefined` is. Returns the operand depth left, not counting a kept value.
+    fn emit_unwind(&mut self, from: usize, keep_value: bool) -> u32 {
         let mut cur = self.stmt_depth;
-        let finallies: Vec<(crate::bytecode::Label, u32)> = self
-            .blocks
+        let exits: Vec<(BlockKind, crate::bytecode::Label, u32)> = self.blocks[from..]
             .iter()
             .rev()
-            .filter(|b| b.kind == BlockKind::Finally)
-            .map(|b| (b.break_label, b.depth))
+            .filter(|b| matches!(b.kind, BlockKind::Finally | BlockKind::Iter))
+            .map(|b| (b.kind, b.break_label, b.depth))
             .collect();
-        for (l_fin, base) in finallies {
-            while cur > base {
-                self.code().nip();
+        for b in &mut self.blocks[from..] {
+            if b.kind == BlockKind::Iter {
+                b.used = true;
+            }
+        }
+        for (kind, l_sub, base) in exits {
+            // A finally block runs at its try's base; an iterator closes with the
+            // iterator and `next` still on the stack.
+            let keep = if kind == BlockKind::Iter {
+                base + 2
+            } else {
+                base
+            };
+            while cur > keep {
+                if keep_value {
+                    self.code().nip();
+                } else {
+                    self.code().drop();
+                }
                 cur -= 1;
             }
-            self.code().gosub(l_fin);
+            if !keep_value {
+                self.code().undefined();
+            }
+            if kind == BlockKind::Iter {
+                // `it next v` -> `v it next`, which the subroutine consumes.
+                self.code().rot3r();
+            }
+            self.code().gosub(l_sub);
+            if kind == BlockKind::Iter {
+                // The subroutine leaves `v it undefined` (a `gosub` keeps the depth).
+                self.code().drop();
+                self.code().drop();
+            }
+            if !keep_value {
+                self.code().drop();
+            }
+            cur = base;
         }
+        cur
     }
 
-    fn has_finally(&self) -> bool {
-        self.blocks.iter().any(|b| b.kind == BlockKind::Finally)
+    fn has_unwind(&self) -> bool {
+        self.blocks
+            .iter()
+            .any(|b| matches!(b.kind, BlockKind::Finally | BlockKind::Iter))
     }
 
     fn parse_return(&mut self) -> PResult<()> {
@@ -451,7 +479,7 @@ impl Parser<'_, '_> {
             || self.is(TokenKind::RBrace)
             || self.is(TokenKind::Eof)
             || self.tok.newline_before();
-        if bare && !self.has_finally() {
+        if bare && !self.has_unwind() {
             self.code().return_undef();
         } else {
             if bare {
@@ -459,7 +487,7 @@ impl Parser<'_, '_> {
             } else {
                 self.parse_expr(false)?;
             }
-            self.emit_finally_for_return();
+            self.emit_unwind(0, true);
             self.code().return_();
         }
         self.expect_semicolon()
@@ -495,6 +523,7 @@ impl Parser<'_, '_> {
                 break_label: l_fin,
                 continue_label: None,
                 depth: base,
+                used: false,
             });
         }
         let normal_exit = |p: &mut Self| {
@@ -611,6 +640,7 @@ impl Parser<'_, '_> {
             break_label: l_break,
             continue_label: None,
             depth: self.stmt_depth,
+            used: false,
         });
         let mut next_test = self.new_label();
         let mut next_body: Option<crate::bytecode::Label> = None;
@@ -696,6 +726,7 @@ impl Parser<'_, '_> {
                     break_label: l_break,
                     continue_label: None,
                     depth: self.stmt_depth,
+                    used: false,
                 });
                 if self.is(TokenKind::Function) {
                     return syntax(

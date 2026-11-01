@@ -401,17 +401,111 @@ fn errors() {
             1,
             8,
         ),
+        // for-in/of (0029); messages and positions as qjs.
         (
-            "for (const x of y) {}",
-            "for-in and for-of loops are not supported yet",
+            "for (x) ;",
+            "expected 'of' or 'in' in for control expression",
             1,
-            1,
+            7,
         ),
         (
-            "for (x in y) {}",
-            "for-in and for-of loops are not supported yet",
+            "for (a + 1 in {}) ;",
+            "expected 'of' or 'in' in for control expression",
             1,
+            8,
+        ),
+        (
+            "for (x++ of []) ;",
+            "expected 'of' or 'in' in for control expression",
             1,
+            7,
+        ),
+        (
+            "for (let x, y of []) ;",
+            "expected 'of' or 'in' in for control expression",
+            1,
+            11,
+        ),
+        (
+            "for (let x = 1 in {}) ;",
+            "a declaration in the head of a for-in loop can't have an initializer",
+            1,
+            16,
+        ),
+        (
+            "for (var x = 1 of []) ;",
+            "a declaration in the head of a for-of loop can't have an initializer",
+            1,
+            16,
+        ),
+        (
+            "for (a = 1 of []) ;",
+            "a declaration in the head of a for-of loop can't have an initializer",
+            1,
+            12,
+        ),
+        ("for (x of a, b) ;", "expecting ')'", 1, 12),
+        ("for (x of y", "expecting ')'", 1, 12),
+        ("for (x of ;", "expecting ';'", 1, 8),
+        (
+            "for (async of []) ;",
+            "'for of' expression cannot start with 'async'",
+            1,
+            6,
+        ),
+        (
+            "for (a?.b of []) ;",
+            "invalid for in/of left hand-side",
+            1,
+            11,
+        ),
+        (
+            "for (this of []) ;",
+            "invalid for in/of left hand-side",
+            1,
+            11,
+        ),
+        (
+            "for (new A of []) ;",
+            "invalid for in/of left hand-side",
+            1,
+            12,
+        ),
+        (
+            "for (const x of []) const y = 1;",
+            "lexical declarations can't appear in single-statement context",
+            1,
+            21,
+        ),
+        (
+            "for (let x of []) { var x; }",
+            "invalid redefinition of lexical identifier",
+            1,
+            26,
+        ),
+        (
+            "let x; for (var x of []) ;",
+            "invalid redefinition of lexical identifier",
+            1,
+            19,
+        ),
+        (
+            "for (let [a] of []) ;",
+            "destructuring is not supported yet",
+            1,
+            10,
+        ),
+        (
+            "for ([a] of []) ;",
+            "destructuring assignment is not supported yet",
+            1,
+            10,
+        ),
+        (
+            "for await (x of y) ;",
+            "for await loops are not supported yet",
+            1,
+            5,
         ),
         ("x = /a/", "regular expressions are not supported yet", 1, 5),
         ("f`x`", "tagged templates are not supported yet", 1, 2),
@@ -1211,4 +1305,348 @@ fn end_to_end_objects_0028() {
             "=> 3",
         ),
     ]);
+}
+
+/// The helper of the iteration cases: `it(vals, ret)` is an iterable over `vals` that
+/// logs `n` for each `next` call and `r` for each `return` call (`ret` replaces
+/// `return`; `null` removes it).
+const ITER_PREFIX: &str = "const log = []; function it(vals, ret) { return { [Symbol.iterator]() { let i = 0; return { next() { log.push('n'); return i < vals.length ? { value: vals[i++], done: false } : { value: undefined, done: true }; }, return: ret === undefined ? function () { log.push('r'); return {}; } : ret }; } }; }\n";
+
+fn run_cases_with(prefix: &str, cases: &[(&str, &str)]) {
+    let mut bad = Vec::new();
+    for &(src, want) in cases {
+        let got = run_body(&alloc::format!("{prefix}{src}"));
+        if got != want {
+            bad.push(alloc::format!("{src}\n  got:  {got:?}\n  want: {want:?}"));
+        }
+    }
+    assert!(bad.is_empty(), "\n{}", bad.join("\n"));
+}
+
+/// for-of and for-in end to end (docs/compiler.md 3.8, 7.4; D1290, D1292). Outputs
+/// checked against qjs (`work/scratch/0029/qjs_check.py`).
+#[test]
+fn end_to_end_iteration() {
+    run_cases_with(
+        ITER_PREFIX,
+        &[
+            (
+                "let s = 0; for (const x of it([1, 2, 3])) s += x; return s + ' ' + log.join('')",
+                "=> 6 nnnn",
+            ),
+            ("for (var v of it([4, 5])) ; return v", "=> 5"),
+            ("let a; for (a of it([1, 2])) ; return a", "=> 2"),
+            ("const o = {}; for (o.p of it([7, 8])) ; return o.p", "=> 8"),
+            (
+                "const o = {}; let k = 0; for (o[k++] of it(['a', 'b'])) ; return o[0] + o[1] + k",
+                "=> ab2",
+            ),
+            (
+                "for (const x of it([1, 2, 3])) { if (x == 2) break; } return log.join('')",
+                "=> nnr",
+            ),
+            (
+                "for (const x of it([1, 2, 3])) { if (x < 3) continue; console.log(x); } return log.join('')",
+                "3\n=> nnnn",
+            ),
+            (
+                "outer: for (const x of it([1, 2])) { for (const y of it([1, 2])) { continue outer; } } return log.join('')",
+                "=> nnrnnrn",
+            ),
+            (
+                "outer: for (const x of it([1, 2])) { for (const y of it([1, 2])) { break outer; } } return log.join('')",
+                "=> nnrr",
+            ),
+            (
+                "L: { for (const x of it([1, 2])) break L; } return log.join('')",
+                "=> nr",
+            ),
+            (
+                "function f() { for (const x of it([1, 2])) { return x + 10; } } return f() + ' ' + log.join('')",
+                "=> 11 nr",
+            ),
+            (
+                "function f() { for (const x of it([1])) { for (const y of it([2])) return x + y; } } return f() + ' ' + log.join('')",
+                "=> 3 nnrr",
+            ),
+            (
+                "function f() { for (const x of it([1])) { return; } } return f() + ' ' + log.join('')",
+                "=> undefined nr",
+            ),
+            (
+                "try { for (const x of it([1, 2])) throw new Error('boom'); } catch (e) { return e.message + ' ' + log.join(''); }",
+                "=> boom nr",
+            ),
+            (
+                "try { for (const x of it([1, 2], function () { throw new Error('ret'); })) throw new Error('body'); } catch (e) { return e.message; }",
+                "=> body",
+            ),
+            (
+                "try { for (const x of it([1, 2], function () { throw new Error('ret'); })) break; } catch (e) { return e.message; }",
+                "=> ret",
+            ),
+            (
+                "try { for (const x of it([1, 2], function () { return 5; })) break; } catch (e) { return String(e); }",
+                "=> TypeError: not an object",
+            ),
+            (
+                "try { for (const x of it([1, 2], function () { return 5; })) throw 'body'; } catch (e) { return String(e); }",
+                "=> body",
+            ),
+            (
+                "for (const x of it([1, 2], null)) break; return log.join('')",
+                "=> n",
+            ),
+            (
+                "function f() { for (const x of it([1, 2], function () { throw 'r'; })) return 1; } try { f(); } catch (e) { return e; }",
+                "=> r",
+            ),
+            (
+                "for (const x of it([1, 2])) { switch (x) { case 1: break; } } return log.join('')",
+                "=> nnn",
+            ),
+            (
+                "for (const x of it([1, 2])) { try { break; } finally { log.push('f'); } } return log.join('')",
+                "=> nfr",
+            ),
+            (
+                "function f() { try { for (const x of it([1])) return 'v'; } finally { log.push('f'); } } return f() + log.join('')",
+                "=> vnrf",
+            ),
+            (
+                "for (const x of it([1, 2])) { try { throw 1; } catch (e) { log.push('c'); } } return log.join('')",
+                "=> ncncn",
+            ),
+            (
+                "try { for (const x of it([1, 2], function () { log.push('r'); throw 'r'; })) { try { break; } finally { log.push('f'); } } } catch (e) { log.push('c' + e); } return log.join('')",
+                "=> nfrcr",
+            ),
+            (
+                "const o = {}; Object.defineProperty(o, 'p', { set(v) { if (v == 2) throw 'set'; } }); try { for (o.p of it([1, 2, 3])) ; } catch (e) { return e + log.join(''); }",
+                "=> setnnr",
+            ),
+            (
+                "try { for (const x of { [Symbol.iterator]() { return { next() { return 1; }, return() { log.push('r'); } }; } }) ; } catch (e) { return String(e) + log.join(''); }",
+                "=> TypeError: iterator must return an object",
+            ),
+            (
+                "try { for (const x of { [Symbol.iterator]() { return { next() { throw 'next'; }, return() { log.push('r'); } }; } }) ; } catch (e) { return e + log.join(''); }",
+                "=> next",
+            ),
+            (
+                "try { for (const x of { [Symbol.iterator]() { return { next() { return { get done() { throw 'done'; } }; }, return() { log.push('r'); } }; } }) ; } catch (e) { return e + log.join(''); }",
+                "=> done",
+            ),
+            (
+                "try { for (const x of { [Symbol.iterator]() { return { next() { return { done: false, get value() { throw 'value'; } }; }, return() { log.push('r'); } }; } }) ; } catch (e) { return e + log.join(''); }",
+                "=> value",
+            ),
+            (
+                "try { for (const x of 1) ; } catch (e) { return String(e); }",
+                "=> TypeError: value is not iterable",
+            ),
+            (
+                "try { for (const x of {}) ; } catch (e) { return String(e); }",
+                "=> TypeError: value is not iterable",
+            ),
+            (
+                "try { for (const x of { [Symbol.iterator]: 5 }) ; } catch (e) { return String(e); }",
+                "=> TypeError: value is not iterable",
+            ),
+            (
+                "try { for (const x of { [Symbol.iterator]() { return 1; } }) ; } catch (e) { return String(e); }",
+                "=> TypeError: not an object",
+            ),
+            (
+                "try { for (const x of { [Symbol.iterator]() { return {}; } }) ; } catch (e) { return String(e); }",
+                "=> TypeError: not a function",
+            ),
+            (
+                "let n = 0; const iter = { [Symbol.iterator]() { return this; }, next() { n++; this.next = null; return { done: n > 2, value: n }; } }; let s = ''; for (const x of iter) s += x; return s",
+                "=> 12",
+            ),
+            (
+                "const fs = []; for (const x of it([1, 2, 3])) fs.push(() => x); return fs.map((f) => f()).join()",
+                "=> 1,2,3",
+            ),
+            (
+                "const fs = []; for (let x of it([1, 2, 3])) { fs.push(() => x); x *= 10; } return fs.map((f) => f()).join()",
+                "=> 10,20,30",
+            ),
+            (
+                "const fs = []; for (var x of it([1, 2, 3])) fs.push(() => x); return fs.map((f) => f()).join()",
+                "=> 3,3,3",
+            ),
+            (
+                "try { for (let x of x) ; } catch (e) { return String(e); }",
+                "=> ReferenceError: x is not initialized",
+            ),
+            (
+                "try { for (const x of it([1])) x = 2; } catch (e) { return String(e) + log.join(''); }",
+                "=> TypeError: 'x' is read-onlynr",
+            ),
+            (
+                "let x = 'outer'; for (let x of it(['inner'])) { } return x",
+                "=> outer",
+            ),
+            (
+                "let r = ''; for (const x of it(['a'])) { let x2 = x + 'b'; { let x = 'c'; r += x2 + x; } } return r",
+                "=> abc",
+            ),
+            (
+                "const ks = []; const o = { b: 1, a: 2, 2: 3, 1: 4 }; for (const k in o) ks.push(k); return ks.join()",
+                "=> 1,2,b,a",
+            ),
+            (
+                "const ks = []; const p = { x: 1, y: 2 }; const o = Object.create(p); o.z = 3; o.x = 4; for (const k in o) ks.push(k); return ks.join()",
+                "=> z,x,y",
+            ),
+            (
+                "const ks = []; const o = { a: 1 }; Object.defineProperty(o, 'h', { value: 1, enumerable: false }); for (const k in o) ks.push(k); return ks.join()",
+                "=> a",
+            ),
+            (
+                "const ks = []; const p = { s: 1 }; const o = Object.create(p); Object.defineProperty(o, 's', { value: 1, enumerable: false }); for (const k in o) ks.push(k); return ks.length",
+                "=> 0",
+            ),
+            (
+                "const ks = []; const o = { a: 1, b: 2, c: 3 }; for (const k in o) { ks.push(k); delete o.b; o.d = 4; } return ks.join()",
+                "=> a,c",
+            ),
+            (
+                "const ks = []; const o = { [Symbol('s')]: 1, a: 1 }; for (const k in o) ks.push(typeof k); return ks.join()",
+                "=> string",
+            ),
+            (
+                "let n = 0; for (const k in null) n++; for (const k in undefined) n++; return n",
+                "=> 0",
+            ),
+            (
+                "const ks = []; for (const k in 'ab') ks.push(k); return ks.join()",
+                "=> 0,1",
+            ),
+            (
+                "const ks = []; for (const k in 5) ks.push(k); return ks.length",
+                "=> 0",
+            ),
+            (
+                "const ks = []; for (const k in [7, 8]) ks.push(typeof k + k); return ks.join()",
+                "=> string0,string1",
+            ),
+            (
+                "const o = {}; for (o.k in { a: 1, b: 2 }) ; return o.k",
+                "=> b",
+            ),
+            ("var k; for (k in { a: 1 }) ; return k", "=> a"),
+            (
+                "let s = ''; for (const k in { a: 1, b: 2, c: 3 }) { if (k == 'b') continue; if (k == 'c') break; s += k; } return s",
+                "=> a",
+            ),
+            (
+                "let s = ''; outer: for (const k in { a: 1, b: 1 }) { for (const j in { x: 1, y: 1 }) { s += k + j; continue outer; } } return s",
+                "=> axbx",
+            ),
+            (
+                "function f() { for (const k in { a: 1 }) { for (const x of it([1])) return k + x; } } return f() + log.join('')",
+                "=> a1nr",
+            ),
+            (
+                "const fs = []; for (const k in { a: 1, b: 2 }) fs.push(() => k); return fs.map((f) => f()).join()",
+                "=> a,b",
+            ),
+            (
+                "try { for (let k in k) ; } catch (e) { return String(e); }",
+                "=> ReferenceError: k is not initialized",
+            ),
+            (
+                "let s = ''; for (const k in { a: 1 }) for (const j in { b: 1 }) s += k + j; return s",
+                "=> ab",
+            ),
+            (
+                "let i = 0; for (const x of it([1, 2, 3])) { i++; } return i + log.join('')",
+                "=> 3nnnn",
+            ),
+        ],
+    );
+}
+
+/// Iteration over arrays: needs the Array Iterator leaves (CreateArrayIterator & co.,
+/// D1290) in the interpreter. Outputs checked against qjs.
+#[test]
+#[ignore = "un-ignore when 0030's Array Iterator leaf intrinsics land"]
+fn end_to_end_iteration_rt() {
+    run_cases(&[
+        (
+            "let s = 0; for (const x of [1, 2, 3]) s += x; return s",
+            "=> 6",
+        ),
+        (
+            "let s = ''; for (const x of [1, , 3]) s += x; return s",
+            "=> 1undefined3",
+        ),
+        (
+            "const a = [1, 2]; let s = ''; for (const x of a) { s += x; if (a.length < 4) a.push(a.length + 1); } return s",
+            "=> 1234",
+        ),
+        (
+            "const a = [1, 2, 3]; let s = ''; for (const x of a) { s += x; a.length = 1; } return s",
+            "=> 1",
+        ),
+        (
+            "let s = ''; for (const e of ['a', 'b'].entries()) s += e[0] + e[1]; return s",
+            "=> 0a1b",
+        ),
+        (
+            "let s = ''; for (const k of ['a', 'b'].keys()) s += k; return s",
+            "=> 01",
+        ),
+        (
+            "let s = ''; for (const v of ['a', 'b'].values()) s += v; return s",
+            "=> ab",
+        ),
+        (
+            "const it = [1, 2][Symbol.iterator](); return it[Symbol.iterator]() === it",
+            "=> true",
+        ),
+        (
+            "const it = [1][Symbol.iterator](); const r1 = it.next(); const r2 = it.next(); return r1.value + ' ' + r1.done + ' ' + r2.value + ' ' + r2.done",
+            "=> 1 false undefined true",
+        ),
+        (
+            "try { [].values().next.call({}); } catch (e) { return String(e); }",
+            "=> TypeError: Array Iterator object expected",
+        ),
+        (
+            "let s = ''; for (const x of { length: 2, 0: 'a', 1: 'b', [Symbol.iterator]: Array.prototype.values }) s += x; return s",
+            "=> ab",
+        ),
+        (
+            "const p = Array.prototype[Symbol.iterator]; let n = 0; Array.prototype[Symbol.iterator] = function () { n++; return p.call(this); }; for (const x of [1]) ; Array.prototype[Symbol.iterator] = p; return n",
+            "=> 1",
+        ),
+        (
+            "let s = ''; for (const x of [1, 2, 3]) { if (x == 2) break; s += x; } return s",
+            "=> 1",
+        ),
+        (
+            "const fs = []; for (const x of [1, 2]) fs.push(() => x); return fs[0]() + fs[1]()",
+            "=> 3",
+        ),
+        (
+            "return Object.getPrototypeOf(Object.getPrototypeOf([].values())) === Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]()))",
+            "=> true",
+        ),
+        ("return [].values === [][Symbol.iterator]", "=> true"),
+    ]);
+}
+
+/// qjs names a symbol key `Symbol.iterator` in "cannot read property" messages; djs
+/// says `[Symbol.iterator]` (`conv::describe_key`).
+#[test]
+#[ignore = "un-ignore when nullish-base messages describe symbol keys as qjs does"]
+fn end_to_end_iteration_messages() {
+    run_cases(&[(
+        "try { for (const x of undefined) ; } catch (e) { return String(e); }",
+        "=> TypeError: cannot read property 'Symbol.iterator' of undefined",
+    )]);
 }

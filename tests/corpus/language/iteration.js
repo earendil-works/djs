@@ -1,0 +1,73 @@
+// for-of and for-in (0029): iterator protocol, close on abrupt exits, for-in order.
+// One function per case; each logs its result.
+const log = []; function it(vals, ret) { return { [Symbol.iterator]() { let i = 0; return { next() { log.push('n'); return i < vals.length ? { value: vals[i++], done: false } : { value: undefined, done: true }; }, return: ret === undefined ? function () { log.push('r'); return {}; } : ret }; } }; }
+function run(i, f) {
+  log.length = 0;
+  try {
+    console.log(i, f());
+  } catch (e) {
+    console.log(i, 'uncaught', String(e));
+  }
+}
+run(0, () => { let s = 0; for (const x of it([1, 2, 3])) s += x; return s + ' ' + log.join('') });
+run(1, () => { for (var v of it([4, 5])) ; return v });
+run(2, () => { let a; for (a of it([1, 2])) ; return a });
+run(3, () => { const o = {}; for (o.p of it([7, 8])) ; return o.p });
+run(4, () => { const o = {}; let k = 0; for (o[k++] of it(['a', 'b'])) ; return o[0] + o[1] + k });
+run(5, () => { for (const x of it([1, 2, 3])) { if (x == 2) break; } return log.join('') });
+run(6, () => { for (const x of it([1, 2, 3])) { if (x < 3) continue; console.log(x); } return log.join('') });
+run(7, () => { outer: for (const x of it([1, 2])) { for (const y of it([1, 2])) { continue outer; } } return log.join('') });
+run(8, () => { outer: for (const x of it([1, 2])) { for (const y of it([1, 2])) { break outer; } } return log.join('') });
+run(9, () => { L: { for (const x of it([1, 2])) break L; } return log.join('') });
+run(10, () => { function f() { for (const x of it([1, 2])) { return x + 10; } } return f() + ' ' + log.join('') });
+run(11, () => { function f() { for (const x of it([1])) { for (const y of it([2])) return x + y; } } return f() + ' ' + log.join('') });
+run(12, () => { function f() { for (const x of it([1])) { return; } } return f() + ' ' + log.join('') });
+run(13, () => { try { for (const x of it([1, 2])) throw new Error('boom'); } catch (e) { return e.message + ' ' + log.join(''); } });
+run(14, () => { try { for (const x of it([1, 2], function () { throw new Error('ret'); })) throw new Error('body'); } catch (e) { return e.message; } });
+run(15, () => { try { for (const x of it([1, 2], function () { throw new Error('ret'); })) break; } catch (e) { return e.message; } });
+run(16, () => { try { for (const x of it([1, 2], function () { return 5; })) break; } catch (e) { return String(e); } });
+run(17, () => { try { for (const x of it([1, 2], function () { return 5; })) throw 'body'; } catch (e) { return String(e); } });
+run(18, () => { for (const x of it([1, 2], null)) break; return log.join('') });
+run(19, () => { function f() { for (const x of it([1, 2], function () { throw 'r'; })) return 1; } try { f(); } catch (e) { return e; } });
+run(20, () => { for (const x of it([1, 2])) { switch (x) { case 1: break; } } return log.join('') });
+run(21, () => { for (const x of it([1, 2])) { try { break; } finally { log.push('f'); } } return log.join('') });
+run(22, () => { function f() { try { for (const x of it([1])) return 'v'; } finally { log.push('f'); } } return f() + log.join('') });
+run(23, () => { for (const x of it([1, 2])) { try { throw 1; } catch (e) { log.push('c'); } } return log.join('') });
+run(24, () => { try { for (const x of it([1, 2], function () { log.push('r'); throw 'r'; })) { try { break; } finally { log.push('f'); } } } catch (e) { log.push('c' + e); } return log.join('') });
+run(25, () => { const o = {}; Object.defineProperty(o, 'p', { set(v) { if (v == 2) throw 'set'; } }); try { for (o.p of it([1, 2, 3])) ; } catch (e) { return e + log.join(''); } });
+run(26, () => { try { for (const x of { [Symbol.iterator]() { return { next() { return 1; }, return() { log.push('r'); } }; } }) ; } catch (e) { return String(e) + log.join(''); } });
+run(27, () => { try { for (const x of { [Symbol.iterator]() { return { next() { throw 'next'; }, return() { log.push('r'); } }; } }) ; } catch (e) { return e + log.join(''); } });
+run(28, () => { try { for (const x of { [Symbol.iterator]() { return { next() { return { get done() { throw 'done'; } }; }, return() { log.push('r'); } }; } }) ; } catch (e) { return e + log.join(''); } });
+run(29, () => { try { for (const x of { [Symbol.iterator]() { return { next() { return { done: false, get value() { throw 'value'; } }; }, return() { log.push('r'); } }; } }) ; } catch (e) { return e + log.join(''); } });
+run(30, () => { try { for (const x of 1) ; } catch (e) { return String(e); } });
+run(31, () => { try { for (const x of {}) ; } catch (e) { return String(e); } });
+run(32, () => { try { for (const x of { [Symbol.iterator]: 5 }) ; } catch (e) { return String(e); } });
+run(33, () => { try { for (const x of { [Symbol.iterator]() { return 1; } }) ; } catch (e) { return String(e); } });
+run(34, () => { try { for (const x of { [Symbol.iterator]() { return {}; } }) ; } catch (e) { return String(e); } });
+run(35, () => { let n = 0; const iter = { [Symbol.iterator]() { return this; }, next() { n++; this.next = null; return { done: n > 2, value: n }; } }; let s = ''; for (const x of iter) s += x; return s });
+run(36, () => { const fs = []; for (const x of it([1, 2, 3])) fs.push(() => x); return fs.map((f) => f()).join() });
+run(37, () => { const fs = []; for (let x of it([1, 2, 3])) { fs.push(() => x); x *= 10; } return fs.map((f) => f()).join() });
+run(38, () => { const fs = []; for (var x of it([1, 2, 3])) fs.push(() => x); return fs.map((f) => f()).join() });
+run(39, () => { try { for (let x of x) ; } catch (e) { return String(e); } });
+run(40, () => { try { for (const x of it([1])) x = 2; } catch (e) { return String(e) + log.join(''); } });
+run(41, () => { let x = 'outer'; for (let x of it(['inner'])) { } return x });
+run(42, () => { let r = ''; for (const x of it(['a'])) { let x2 = x + 'b'; { let x = 'c'; r += x2 + x; } } return r });
+run(43, () => { const ks = []; const o = { b: 1, a: 2, 2: 3, 1: 4 }; for (const k in o) ks.push(k); return ks.join() });
+run(44, () => { const ks = []; const p = { x: 1, y: 2 }; const o = Object.create(p); o.z = 3; o.x = 4; for (const k in o) ks.push(k); return ks.join() });
+run(45, () => { const ks = []; const o = { a: 1 }; Object.defineProperty(o, 'h', { value: 1, enumerable: false }); for (const k in o) ks.push(k); return ks.join() });
+run(46, () => { const ks = []; const p = { s: 1 }; const o = Object.create(p); Object.defineProperty(o, 's', { value: 1, enumerable: false }); for (const k in o) ks.push(k); return ks.length });
+run(47, () => { const ks = []; const o = { a: 1, b: 2, c: 3 }; for (const k in o) { ks.push(k); delete o.b; o.d = 4; } return ks.join() });
+run(48, () => { const ks = []; const o = { [Symbol('s')]: 1, a: 1 }; for (const k in o) ks.push(typeof k); return ks.join() });
+run(49, () => { let n = 0; for (const k in null) n++; for (const k in undefined) n++; return n });
+run(50, () => { const ks = []; for (const k in 'ab') ks.push(k); return ks.join() });
+run(51, () => { const ks = []; for (const k in 5) ks.push(k); return ks.length });
+run(52, () => { const ks = []; for (const k in [7, 8]) ks.push(typeof k + k); return ks.join() });
+run(53, () => { const o = {}; for (o.k in { a: 1, b: 2 }) ; return o.k });
+run(54, () => { var k; for (k in { a: 1 }) ; return k });
+run(55, () => { let s = ''; for (const k in { a: 1, b: 2, c: 3 }) { if (k == 'b') continue; if (k == 'c') break; s += k; } return s });
+run(56, () => { let s = ''; outer: for (const k in { a: 1, b: 1 }) { for (const j in { x: 1, y: 1 }) { s += k + j; continue outer; } } return s });
+run(57, () => { function f() { for (const k in { a: 1 }) { for (const x of it([1])) return k + x; } } return f() + log.join('') });
+run(58, () => { const fs = []; for (const k in { a: 1, b: 2 }) fs.push(() => k); return fs.map((f) => f()).join() });
+run(59, () => { try { for (let k in k) ; } catch (e) { return String(e); } });
+run(60, () => { let s = ''; for (const k in { a: 1 }) for (const j in { b: 1 }) s += k + j; return s });
+run(61, () => { let i = 0; for (const x of it([1, 2, 3])) { i++; } return i + log.join('') });

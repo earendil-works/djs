@@ -312,7 +312,7 @@ impl Parser<'_, '_> {
 
     /// Stores the value on top of the stack into the target. With `keep`, the value
     /// stays on the stack.
-    fn emit_store(&mut self, lv: LValue, keep: bool) {
+    pub(super) fn emit_store(&mut self, lv: LValue, keep: bool) {
         match lv {
             LValue::Name { r, pos } => {
                 self.mark(pos);
@@ -563,7 +563,7 @@ impl Parser<'_, '_> {
     }
 
     /// LeftHandSideExpression: `new`, member access, calls, optional chains.
-    fn parse_lhs(&mut self, delete_operand: bool) -> PResult<Expr> {
+    pub(super) fn parse_lhs(&mut self, delete_operand: bool) -> PResult<Expr> {
         let mut e = if self.is(TokenKind::New) {
             self.parse_new()?
         } else {

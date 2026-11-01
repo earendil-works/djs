@@ -14,6 +14,7 @@
 //! the parameters.
 
 mod expr;
+mod for_in_of;
 mod func;
 mod function;
 mod parser;

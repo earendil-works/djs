@@ -27,8 +27,11 @@ pub(super) struct BlockEnv {
     pub break_label: Label,
     pub continue_label: Option<Label>,
     /// Operand stack depth at the statement: what a jump to this env's targets
-    /// unwinds to (for `Finally`: the try statement's base depth).
+    /// unwinds to (for `Finally`: the try statement's base depth; for `Iter`: the
+    /// depth under the iterator and its `next`).
     pub depth: u32,
+    /// Whether a jump used `break_label`: for-of emits its close code only then.
+    pub used: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -40,6 +43,10 @@ pub(super) enum BlockKind {
     /// A `try` with a `finally` block: `break`, `continue` and `return` that leave it
     /// run the finally block first (docs/compiler.md 7.4).
     Finally,
+    /// The iterator of a for-of: `break`, `continue` and `return` that leave the loop
+    /// close it first, through the subroutine at `break_label` (entered with `gosub`
+    /// on `value iterator next`, see compiler/for_in_of.rs).
+    Iter,
 }
 
 /// The state of an enclosing function while a nested one is parsed.

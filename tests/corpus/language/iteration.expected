@@ -1,0 +1,64 @@
+0 6 nnnn
+1 5
+2 2
+3 8
+4 ab2
+5 nnr
+3
+6 nnnn
+7 nnrnnrn
+8 nnrr
+9 nr
+10 11 nr
+11 3 nnrr
+12 undefined nr
+13 boom nr
+14 body
+15 ret
+16 TypeError: not an object
+17 body
+18 n
+19 r
+20 nnn
+21 nfr
+22 vnrf
+23 ncncn
+24 nfrcr
+25 setnnr
+26 TypeError: iterator must return an object
+27 next
+28 done
+29 value
+30 TypeError: value is not iterable
+31 TypeError: value is not iterable
+32 TypeError: value is not iterable
+33 TypeError: not an object
+34 TypeError: not a function
+35 12
+36 1,2,3
+37 10,20,30
+38 3,3,3
+39 ReferenceError: x is not initialized
+40 TypeError: 'x' is read-onlynr
+41 outer
+42 abc
+43 1,2,b,a
+44 z,x,y
+45 a
+46 0
+47 a,c
+48 string
+49 0
+50 0,1
+51 0
+52 string0,string1
+53 b
+54 a
+55 a
+56 axbx
+57 a1nr
+58 a,b
+59 ReferenceError: k is not initialized
+60 ab
+61 3nnnn
+=== completed

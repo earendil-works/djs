@@ -230,3 +230,59 @@ mod tests {
         }
     }
 }
+
+/// With `open` the `(` after `for` and `lx` positioned after it: is this a C-style
+/// `for` head, with a `;` directly inside the parentheses (docs/compiler.md 3.8,
+/// QuickJS does the same)? Otherwise it is for-in/of, also for a head that does not
+/// scan (unbalanced, end of input): its parser reports the error, as in QuickJS.
+pub(super) fn for_head_is_c_style(lx: Lexer<'_>, open: Token) -> bool {
+    let mut s = Scanner {
+        lx,
+        prev: open,
+        stack: alloc::vec![b'('],
+    };
+    loop {
+        let Some(t) = s.next() else { return false };
+        if s.stack.is_empty() {
+            return false;
+        }
+        if t.kind == TokenKind::Semicolon && s.stack.len() == 1 {
+            return true;
+        }
+    }
+}
+
+/// With `first` the first token of an expression for-in/of head and `lx` after it:
+/// does the left side end at `of` (rather than `in`)? Looks for the first `of` or `in`
+/// directly inside the head's parentheses; an `of` after `.` or `?.` is a property
+/// name.
+pub(super) fn for_lhs_ends_with_of(lx: Lexer<'_>, first: Token) -> bool {
+    let mut s = Scanner {
+        lx,
+        prev: first,
+        stack: alloc::vec![b'('],
+    };
+    match first.kind {
+        TokenKind::LParen => s.stack.push(b'('),
+        TokenKind::LBracket => s.stack.push(b'['),
+        TokenKind::LBrace => s.stack.push(b'{'),
+        TokenKind::TemplateHead => s.stack.push(b'`'),
+        _ => {}
+    }
+    loop {
+        let prev = s.prev.kind;
+        let Some(t) = s.next() else { return false };
+        if s.stack.len() != 1 {
+            if s.stack.is_empty() {
+                return false;
+            }
+            continue;
+        }
+        if t.kind == TokenKind::In {
+            return false;
+        }
+        if t.is_contextual(Kw::Of) && !matches!(prev, TokenKind::Dot | TokenKind::QuestionDot) {
+            return true;
+        }
+    }
+}
