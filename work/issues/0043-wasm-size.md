@@ -82,6 +82,11 @@ Date, typed arrays, …), and the code is about 590 KB.
   905,901. Builtins' own keys are now `length, name, prototype, ...` (qjs: prototype
   after the methods).
 - R5 (D1434) string constants shared per compilation unit: base 268,480 -> 260,472.
+- Size track: `size/<module> code|data|names` recorded separately (djs-bench size.rs,
+  `section_sizes`). djs-wasm's `STATE` thread-local is `const` (-400 bytes code only:
+  the `with` instantiations are mostly the export bodies).
+- Code: no big remaining generic sink; the largest items are inherent (`Exec::run` 45 KB,
+  `call_intrinsic` 36 KB, the parser 82 KB). core::fmt is ~6 KB in total, panics ~2 KB.
 
 ## Follow-ups
 - `Vm::collect` (vm_collect) does not clear the value stack above `sp` the way the

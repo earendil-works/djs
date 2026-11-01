@@ -55,7 +55,15 @@ struct State {
 }
 
 thread_local! {
-    static STATE: RefCell<State> = RefCell::new(State::default());
+    // `const`: no lazy-initialization code in each of the ~40 `with` instantiations
+    // (0043: 10 KB of wasm).
+    static STATE: RefCell<State> = const {
+        RefCell::new(State {
+            vms: Vec::new(),
+            staging: Vec::new(),
+            out: Vec::new(),
+        })
+    };
     /// The message of the last panic. Separate from `STATE`, which may be left borrowed by
     /// the call that trapped.
     static PANIC: RefCell<String> = const { RefCell::new(String::new()) };

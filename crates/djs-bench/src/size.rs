@@ -68,6 +68,18 @@ fn measure(r: &mut Runner, prefix: &str, what: &[&str], target_dir: &Path, file:
             "could not parse the wasm file",
         ),
     }
+    // The sections that matter separately (0043): code, data (mostly the base image) and
+    // the name section (stripped for shipping).
+    if let Some(sections) = section_sizes(&bytes) {
+        for (what, id, custom) in [("code", 10, ""), ("data", 11, ""), ("names", 0, "name")] {
+            let n: usize = sections
+                .iter()
+                .filter(|s| s.0 == id && s.1 == custom)
+                .map(|s| s.2)
+                .sum();
+            r.value(&name(what), Unit::Bytes, n as f64);
+        }
+    }
     match gzip_size(&bytes) {
         Some(n) => r.value(&name("gzip -9"), Unit::Bytes, n as f64),
         None => r.skip(&name("gzip -9"), "gzip not available"),
@@ -104,6 +116,33 @@ pub fn without_custom_sections(wasm: &[u8]) -> Option<usize> {
         pos += total;
     }
     Some(wasm.len() - custom)
+}
+
+/// `(id, custom section name, payload size)` of every section.
+pub fn section_sizes(wasm: &[u8]) -> Option<Vec<(u8, String, usize)>> {
+    if wasm.len() < 8 || &wasm[..4] != b"\0asm" {
+        return None;
+    }
+    let mut out = Vec::new();
+    let mut pos = 8;
+    while pos < wasm.len() {
+        let id = wasm[pos];
+        let (len, n) = leb128(&wasm[pos + 1..])?;
+        let start = pos + 1 + n;
+        let end = start
+            .checked_add(len as usize)
+            .filter(|&e| e <= wasm.len())?;
+        let name = if id == 0 {
+            let (nlen, k) = leb128(&wasm[start..end])?;
+            let s = wasm.get(start + k..start + k + nlen as usize)?;
+            String::from_utf8_lossy(s).into_owned()
+        } else {
+            String::new()
+        };
+        out.push((id, name, len as usize));
+        pos = end;
+    }
+    Some(out)
 }
 
 fn leb128(b: &[u8]) -> Option<(u32, usize)> {
@@ -159,6 +198,10 @@ mod tests {
         m.extend_from_slice(&[1, 3, 1, 2, 3]);
         m.extend_from_slice(&[0, 5, 1, b'n', 0, 0, 0]);
         assert_eq!(without_custom_sections(&m), Some(m.len() - 7));
+        assert_eq!(
+            section_sizes(&m),
+            Some(vec![(1, String::new(), 3), (0, "n".into(), 5)])
+        );
         assert_eq!(without_custom_sections(b"nope"), None);
         assert_eq!(leb128(&[0xe5, 0x8e, 0x26]), Some((624485, 3)));
     }
