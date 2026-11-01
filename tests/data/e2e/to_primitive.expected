@@ -1,0 +1,6 @@
+43 84 -42 true true true false str str! 1 two
+1 true true false
+6
+3 true true ababba
+TypeError toPrimitive
+caught inside

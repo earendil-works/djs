@@ -29,12 +29,18 @@ use crate::interp::{Continuation, state};
 pub use crate::interp::{ErrorKind, ExecOptions, RunState, Status};
 use crate::value::{Obj, Value};
 
+/// The generated prelude (`builtins/gen/prelude.js`, D1172).
+const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude.js");
+
 /// VM configuration.
 #[derive(Clone, Copy, Debug)]
 pub struct VmOptions {
     /// The heap's memory cap in bytes.
     pub memory_limit: usize,
     pub exec: ExecOptions,
+    /// Install the builtins of `builtins/gen/prelude.js` at creation (default). Off gives
+    /// a bare realm (interpreter tests, measuring the prelude's cost).
+    pub prelude: bool,
 }
 
 impl Default for VmOptions {
@@ -42,6 +48,7 @@ impl Default for VmOptions {
         VmOptions {
             memory_limit: crate::heap::DEFAULT_LIMIT,
             exec: ExecOptions::default(),
+            prelude: true,
         }
     }
 }
@@ -82,7 +89,56 @@ impl Vm {
         let mut heap = Heap::with_limit(opts.memory_limit)?;
         state::init(&mut heap)?;
         realm::init(&mut heap)?;
-        Ok(Vm { heap, opts })
+        let mut vm = Vm { heap, opts };
+        if opts.prelude {
+            vm.install_prelude()?;
+        }
+        Ok(vm)
+    }
+
+    /// Compiles the generated prelude in privileged mode and runs it (D1172, D1281): it
+    /// installs the builtin methods and registers the `@intrinsic` builtins. Compiled at
+    /// every VM creation until there is a base snapshot (ARCH G2).
+    fn install_prelude(&mut self) -> Result<(), HeapError> {
+        use crate::compiler::{CompileErrorKind, CompileOptions};
+        let opts = CompileOptions::privileged_script("<prelude>");
+        let template = match crate::compiler::compile(&mut self.heap, PRELUDE.as_bytes(), &opts) {
+            Ok(t) => t,
+            Err(e) if e.kind == CompileErrorKind::OutOfMemory => {
+                return Err(HeapError::OutOfMemory);
+            }
+            Err(e) => panic!("the prelude does not compile: {e}"),
+        };
+        let script: Ref = self
+            .heap
+            .arena()
+            .get(template.0, crate::heap::cells::FuncTemplate::SCRIPT);
+        let r = realm::realm(&self.heap);
+        self.heap.arena_mut().write(
+            crate::heap::cells::Realm::INTRINSICS.at(r, Intrinsic::PreludeScript as u32),
+            Value::internal(script.0),
+        );
+        let f = self.instantiate(template)?;
+        let this = Value::object(self.global());
+        self.call(f, this, &[])
+            .map_err(|_| HeapError::OutOfMemory)?;
+        match self.run(u64::MAX) {
+            Status::Done(_) => {}
+            Status::Threw(e)
+                if e == crate::interp::intrinsic(&self.heap, Intrinsic::OutOfMemoryError) =>
+            {
+                return Err(HeapError::OutOfMemory);
+            }
+            s => {
+                let shown = match s {
+                    Status::Threw(e) => self.display(e),
+                    _ => alloc::format!("{s:?}"),
+                };
+                panic!("the prelude failed: {shown}");
+            }
+        }
+        state::set_state(&mut self.heap, RunState::Idle);
+        Ok(())
     }
 
     /// Restores a VM from [`Vm::bytes`] of the same build, in any state (including
@@ -310,11 +366,13 @@ impl Vm {
         }
         match result {
             Ok(v) => {
-                if cont == Continuation::PushResult {
-                    let mut ex = Exec::new(&mut self.heap, self.opts.exec);
-                    ex.push(v);
-                    ex.flush();
+                let mut ex = Exec::new(&mut self.heap, self.opts.exec);
+                match cont {
+                    Continuation::PushResult => ex.push(v),
+                    Continuation::Replace(slot) => ex.set_slot(slot, v),
+                    _ => {}
                 }
+                ex.flush();
                 state::set_state(&mut self.heap, RunState::Running);
             }
             Err(e) => {

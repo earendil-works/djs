@@ -2,6 +2,7 @@
 
 use alloc::string::String;
 
+use crate::bytecode::intrinsics::INTRINSICS;
 use crate::heap::cells::{Realm, Roots};
 use crate::heap::{
     Atom, CellKind, Heap, HeapError, ObjectClass, PropFlags, PropertyDescriptor, atoms,
@@ -145,6 +146,17 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     // The global lexical record: a hidden object, never visible to JS. Bindings are
     // configurable data properties (so `init_global_lex` can always overwrite them);
     // `writable` is false for `const` (D1220).
+    let installed = heap.alloc_value_array(INTRINSICS.len() as u32)?;
+    for i in 0..INTRINSICS.len() as u32 {
+        heap.value_array_set(installed, i, Value::UNDEFINED);
+    }
+    heap.arena_mut().set(
+        installed,
+        crate::heap::cells::ValueArray::LEN,
+        INTRINSICS.len() as u32,
+    );
+    heap.arena_mut()
+        .set(r, Realm::INSTALLED, crate::heap::Ref(installed));
     let lex = heap.new_object(None)?;
     heap.arena_mut()
         .set(r, Realm::GLOBAL_LEX, crate::heap::Ref(lex.offset()));
@@ -152,6 +164,21 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     set(heap, Intrinsic::OutOfMemoryError, oom);
     debug_assert_eq!(heap.arena().get(0, Roots::REALM).as_internal(), Some(r));
     Ok(())
+}
+
+/// The JS function installed for intrinsic `id`, or `undefined`.
+pub(crate) fn installed_intrinsic(heap: &Heap, id: u16) -> Value {
+    let t: crate::heap::Ref = heap.arena().get(realm(heap), Realm::INSTALLED);
+    if (id as u32) < heap.value_array_len(t.0) {
+        heap.value_array_get(t.0, id as u32)
+    } else {
+        Value::UNDEFINED
+    }
+}
+
+pub(crate) fn install_intrinsic(heap: &mut Heap, id: u16, f: Value) {
+    let t: crate::heap::Ref = heap.arena().get(realm(heap), Realm::INSTALLED);
+    heap.value_array_set(t.0, id as u32, f);
 }
 
 /// The global lexical record (Script-mode `let`/`const`, D1220).

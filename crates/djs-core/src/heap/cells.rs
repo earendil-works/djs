@@ -327,8 +327,11 @@ cells! {
     /// A realm record: the global object and the intrinsics, indexed by
     /// `interp::Intrinsic`.
     18 => Realm {
-        /// The global lexical record (P1, Script mode); null for now.
+        /// The global lexical record (D1220): a hidden ordinary object.
         GLOBAL_LEX: Ref = 8,
+        /// [`ValueArray`] indexed by intrinsic id: the JS functions registered by
+        /// `%InstallIntrinsic` (D1172), `undefined` for the others.
+        INSTALLED: Ref = 12,
     } tail INTRINSICS: [Value] = 16;
 
     /// A pending host call (docs/compiler.md 7.5).

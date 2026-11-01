@@ -475,7 +475,8 @@ fn runtime_errors() {
     });
     assert_eq!(
         r,
-        "throw TypeError: not supported yet: conversion of an object to a primitive"
+        // %ToPrimitive finds no valueOf/toString (Object.prototype has none yet).
+        "throw TypeError: toPrimitive"
     );
     let r = error_of(|_, f| {
         f.b.push_i8(1);
@@ -891,4 +892,118 @@ fn error_stack_traces() {
     );
     let deep = &out.log[3];
     assert_eq!(deep.lines().count(), STACK_TRACE_LIMIT as usize, "{deep}");
+}
+
+/// `Vm::new` with and without the prelude. Run with
+/// `cargo test -p djs-core --release vm_new_cost -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn vm_new_cost() {
+    extern crate std;
+    use std::time::Instant;
+    for prelude in [false, true] {
+        let opts = VmOptions {
+            prelude,
+            ..Default::default()
+        };
+        let n = 200;
+        let t = Instant::now();
+        let mut size = 0;
+        for _ in 0..n {
+            let vm = Vm::new(opts).unwrap();
+            size = vm.bytes().len();
+        }
+        let per = t.elapsed().as_secs_f64() / n as f64;
+        std::println!(
+            "Vm::new prelude={prelude}: {:.1} µs, heap {size} bytes",
+            per * 1e6
+        );
+    }
+}
+
+#[test]
+fn method_call_through_a_getter() {
+    // o.m is an accessor whose getter returns a function; `o.m()` calls that function
+    // with this = o (get_method through the Replace continuation).
+    let mut vm = vm();
+    let src = "function getter() { return function () { return this.n + 1; }; }\n\
+               function make() { return { n: 41 }; }";
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("g.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    assert!(matches!(vm.run(1 << 30), Status::Done(_)));
+    let g = vm.global();
+    let k = vm.heap_mut().atom_str("getter").unwrap();
+    let getter = vm.heap().get_own_property(g, k).unwrap().value().unwrap();
+    let o = vm.new_object().unwrap();
+    let n = vm.heap_mut().atom_str("n").unwrap();
+    vm.heap_mut()
+        .create_data_property(o, n, Value::int(41))
+        .unwrap();
+    let m = vm.heap_mut().atom_str("m").unwrap();
+    vm.heap_mut()
+        .define_own_property(
+            o,
+            m,
+            &PropertyDescriptor::accessor(getter, Value::UNDEFINED, PropFlags::ALL),
+        )
+        .unwrap();
+    vm.define_global("obj", Value::object(o)).unwrap();
+    let out = {
+        let f = vm
+            .compile(
+                b"console.log(obj.m(), obj['m'](), typeof obj.m)",
+                &crate::compiler::CompileOptions::script("g2.js"),
+            )
+            .unwrap();
+        let this = Value::object(vm.global());
+        vm.call(f, this, &[]).unwrap();
+        finish(vm, 1 << 30, true).1
+    };
+    assert_eq!(out.log, ["42 42 function"]);
+}
+
+#[test]
+fn to_primitive_through_a_host_valueof() {
+    // valueOf is a host function: the slow path parks on it and the resolved value
+    // replaces the operand.
+    let mut vm = vm();
+    let host = vm.new_host_function(5, "valueOf").unwrap();
+    let o = vm.new_object().unwrap();
+    vm.define(o, "valueOf", host).unwrap();
+    vm.define_global("o", Value::object(o)).unwrap();
+    let f = vm
+        .compile(
+            b"console.log(o + 1, o * 3)",
+            &crate::compiler::CompileOptions::script("h.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    let mut log = Vec::new();
+    loop {
+        match vm.run(1 << 30) {
+            Status::HostCall { call_id, fn_id: 5 } => {
+                assert_eq!(vm.host_call(call_id).unwrap().this, Value::object(o));
+                // Through an image round trip, for good measure.
+                let opts = vm.options();
+                vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();
+                vm.resolve_host_call(call_id, Ok(Value::int(10))).unwrap();
+            }
+            Status::HostCall { call_id, .. } => {
+                let info = vm.host_call(call_id).unwrap();
+                let parts: Vec<String> = info.args.iter().map(|&a| vm.display(a)).collect();
+                log.push(parts.join(" "));
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::Done(_) => break,
+            s => panic!("{s:?}"),
+        }
+    }
+    assert_eq!(log, ["11 30"]);
 }

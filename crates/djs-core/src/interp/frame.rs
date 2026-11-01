@@ -31,27 +31,46 @@ pub const NEW_TARGET: u32 = 5;
 /// `flags` bit: the frame was entered by `construct`.
 pub const FLAG_CONSTRUCT: i32 = 1 << 4;
 
-/// What happens with a frame's return value (docs/compiler.md 7.3, D1085).
+/// What happens with a frame's return value (docs/compiler.md 7.3, D1085, D1280).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[repr(u8)]
 pub enum Continuation {
     /// Push it on the caller's operand stack (calls, getters, slow paths).
-    PushResult = 0,
+    PushResult,
     /// Drop it (setters).
-    DiscardResult = 1,
+    DiscardResult,
     /// If it is not an object, use the frame's `this` (constructors).
-    ConstructResult = 2,
+    ConstructResult,
     /// The bottom frame of a `Vm::call`: `run` returns `Done(value)`.
-    Entry = 3,
+    Entry,
+    /// Store it in the caller's stack slot (an absolute index) and resume at `ret_pc`.
+    /// Slow paths use it to replace an operand with its primitive value and re-execute
+    /// the instruction, or to fill a placeholder (`get_method` through a getter).
+    Replace(u32),
 }
+
+/// Continuation kind bits of `flags` (bits 0-3); the `Replace` slot is in bits 8-30.
+const KIND_MASK: i32 = 0xF;
+const SLOT_SHIFT: u32 = 8;
 
 impl Continuation {
     pub const fn from_flags(flags: i32) -> Continuation {
-        match flags & 0xF {
+        match flags & KIND_MASK {
             0 => Continuation::PushResult,
             1 => Continuation::DiscardResult,
             2 => Continuation::ConstructResult,
+            4 => Continuation::Replace((flags as u32 & 0x7FFF_FFFF) >> SLOT_SHIFT),
             _ => Continuation::Entry,
+        }
+    }
+
+    /// The `flags` encoding (a non-negative int32).
+    pub const fn to_flags(self) -> i32 {
+        match self {
+            Continuation::PushResult => 0,
+            Continuation::DiscardResult => 1,
+            Continuation::ConstructResult => 2,
+            Continuation::Entry => 3,
+            Continuation::Replace(slot) => 4 | ((slot << SLOT_SHIFT) & 0x7FFF_FFFF) as i32,
         }
     }
 }

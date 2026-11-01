@@ -39,10 +39,10 @@ impl RunState {
 
 /// `Interp::FLAGS`: the parked host call's continuation in the low bits, and whether it
 /// was the entry callee (no JS frame to return to).
-pub const PARK_ENTRY: u32 = 1 << 8;
+pub const PARK_ENTRY: u32 = 1 << 31;
 
 pub(crate) fn park_flags(cont: Continuation, entry: bool) -> u32 {
-    cont as u32 | if entry { PARK_ENTRY } else { 0 }
+    cont.to_flags() as u32 | if entry { PARK_ENTRY } else { 0 }
 }
 
 /// Initial value stack capacity, in slots.

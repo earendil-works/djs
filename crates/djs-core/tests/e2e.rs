@@ -15,6 +15,20 @@ use djs_core::vm::{ExecOptions, Status, Vm, VmOptions};
 
 const LOG: u32 = 1;
 
+/// The image of a VM with the prelude and `console.log`, and its console object (the
+/// same offset in every copy).
+fn base() -> &'static (Vec<u8>, djs_core::value::Obj) {
+    static BASE: std::sync::OnceLock<(Vec<u8>, djs_core::value::Obj)> = std::sync::OnceLock::new();
+    BASE.get_or_init(|| {
+        let mut vm = Vm::new(VmOptions::default()).unwrap();
+        let console = vm.new_object().unwrap();
+        let log = vm.new_host_function(LOG, "log").unwrap();
+        vm.define(console, "log", log).unwrap();
+        vm.define_global("console", Value::object(console)).unwrap();
+        (vm.bytes().to_vec(), console)
+    })
+}
+
 #[derive(Clone, Copy, Debug)]
 enum Mode {
     Plain,
@@ -37,11 +51,10 @@ fn run_case(src: &str, name: &str, mode: Mode) -> String {
         exec,
         ..Default::default()
     };
-    let mut vm = Vm::new(opts).unwrap();
-    let console = vm.new_object().unwrap();
-    let log = vm.new_host_function(LOG, "log").unwrap();
-    vm.define(console, "log", log).unwrap();
-    vm.define_global("console", Value::object(console)).unwrap();
+    // Every case starts from one base image (prelude + console), as a base snapshot
+    // would: building the prelude per case dominated the run time.
+    let (image, console) = base();
+    let mut vm = Vm::from_bytes(image.clone(), opts).unwrap();
     let body = src.starts_with("// mode: body");
     let params = ["tools", "console"];
     let copts = if body {
@@ -57,7 +70,7 @@ fn run_case(src: &str, name: &str, mode: Mode) -> String {
         }
     };
     let args = if body {
-        vec![Value::UNDEFINED, Value::object(console)]
+        vec![Value::UNDEFINED, Value::object(*console)]
     } else {
         vec![]
     };

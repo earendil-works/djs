@@ -64,6 +64,8 @@ impl Default for ExecOptions {
     }
 }
 
+mod intrinsics;
+
 type Step = Result<Option<Status>, Fault>;
 
 /// Frames in a stack trace (QuickJS's default `Error.stackTraceLimit`).
@@ -127,6 +129,10 @@ impl<'h> Exec<'h> {
     }
 
     // ---------------------------------------------------------------- stack
+
+    pub(crate) fn set_slot(&mut self, i: u32, v: Value) {
+        self.set(i, v);
+    }
 
     pub(crate) fn set_sp(&mut self, sp: u32) {
         self.sp = sp;
@@ -250,7 +256,7 @@ impl<'h> Exec<'h> {
                     Value::int(if entry { 0 } else { self.hp as i32 }),
                     Value::int(ret_pc as i32),
                     Value::int(argc as i32),
-                    Value::int(cont as i32),
+                    Value::int(cont.to_flags()),
                     Value::UNDEFINED,
                 ];
                 for (k, v) in header.into_iter().enumerate() {
@@ -322,6 +328,7 @@ impl<'h> Exec<'h> {
             Continuation::ConstructResult => {
                 self.push(if v.as_object().is_some() { v } else { this })
             }
+            Continuation::Replace(slot) => self.set(slot, v),
             Continuation::Entry => unreachable!(),
         }
         self.safepoint();
@@ -711,6 +718,9 @@ impl<'h> Exec<'h> {
     }
 
     fn exec(&mut self, op: Op, next: u32) -> Step {
+        if let Some(step) = self.primitive_operands(op) {
+            return step;
+        }
         match op {
             // ---- constants ----
             Op::Undefined => self.push(Value::UNDEFINED),
@@ -1041,9 +1051,19 @@ impl<'h> Exec<'h> {
             Op::GetMethod => {
                 let key = self.imm_atom();
                 let o = self.top(0);
-                let f = self.get_plain(o, key)?;
-                self.set(self.sp - 1, f);
-                self.push(o);
+                match self.lookup(o, key)? {
+                    Ok(f) => {
+                        self.set(self.sp - 1, f);
+                        self.push(o);
+                    }
+                    Err(getter) => {
+                        // `o -> f o`: the getter's result fills the placeholder.
+                        self.set(self.sp - 1, Value::UNDEFINED);
+                        self.push(o);
+                        self.pc = next;
+                        return self.call_getter_into(getter, o, self.sp - 2);
+                    }
+                }
             }
             Op::PutField => {
                 let key = self.imm_atom();
@@ -1072,9 +1092,18 @@ impl<'h> Exec<'h> {
             Op::GetElemMethod => {
                 let (o, k) = (self.top(1), self.top(0));
                 let key = self.property_key(o, k)?;
-                let f = self.get_plain(o, key)?;
-                self.set(self.sp - 2, f);
-                self.set(self.sp - 1, o);
+                match self.lookup(o, key)? {
+                    Ok(f) => {
+                        self.set(self.sp - 2, f);
+                        self.set(self.sp - 1, o);
+                    }
+                    Err(getter) => {
+                        self.set(self.sp - 2, Value::UNDEFINED);
+                        self.set(self.sp - 1, o);
+                        self.pc = next;
+                        return self.call_getter_into(getter, o, self.sp - 2);
+                    }
+                }
             }
             Op::PutElem => {
                 let (o, k, v) = (self.top(2), self.top(1), self.top(0));
@@ -1140,6 +1169,38 @@ impl<'h> Exec<'h> {
             Op::Construct => {
                 let argc = self.imm_u16(1);
                 return self.construct(argc, next);
+            }
+            Op::SetProto => {
+                let v = self.pop();
+                let o = self.top(0).as_object().expect("object literal");
+                if v.is_null() || v.as_object().is_some() {
+                    // A fresh literal is extensible and cannot be on v's chain.
+                    self.heap.set_prototype_of(o, v.as_object());
+                }
+            }
+            Op::SetFunctionName => {
+                let prefix = self.heap.arena().bytes()[(self.code + self.pc + 1) as usize];
+                let (k, f) = (self.top(1), self.top(0));
+                let key = self.property_key(f, k)?;
+                self.set_function_name(f, key, prefix)?;
+            }
+            Op::CallSpread => {
+                // `f this args -> r`
+                let args = self.top(0);
+                let argc = self.spread_args(args)?;
+                let base = self.sp - 2 - argc;
+                return self.call(base, argc, Continuation::PushResult, next);
+            }
+            Op::ConstructSpread => {
+                // `f args -> r`
+                let args = self.top(0);
+                let argc = self.spread_args(args)?;
+                return self.construct(argc, next);
+            }
+            Op::CallIntrinsic => {
+                let id = self.imm_u16(1) as u16;
+                let argc = self.imm_u16(3);
+                return self.call_intrinsic(id, argc, next);
             }
             Op::RequireObjectCoercible => {
                 if self.top(0).is_nullish() {
@@ -1377,11 +1438,99 @@ impl<'h> Exec<'h> {
         Ok(())
     }
 
+    /// ToPropertyKey of a primitive key. Object keys never get here: the
+    /// `primitive_operands` slow path converts them first.
     fn property_key(&mut self, _o: Value, k: Value) -> Result<Atom, Fault> {
-        if k.as_object().is_some() {
-            return type_error("not supported yet: conversion of an object to a property key");
-        }
+        debug_assert!(k.as_object().is_none());
         conv::to_property_key(self.heap, k)
+    }
+
+    /// The slow path for object operands (D1280): if an operand of `op` that must be a
+    /// primitive is an object, call `%ToPrimitive(operand, hint)` with a `Replace`
+    /// continuation that writes the result into the operand's slot and re-executes this
+    /// instruction. Operands are converted left to right, as the spec evaluates them.
+    fn primitive_operands(&mut self, op: Op) -> Option<Step> {
+        use crate::heap::atoms::{DEFAULT, NUMBER, STRING};
+        let checks: &[(u32, Atom)] = match op {
+            Op::Add => &[(1, DEFAULT), (0, DEFAULT)],
+            Op::Sub
+            | Op::Mul
+            | Op::Div
+            | Op::Mod
+            | Op::Pow
+            | Op::Shl
+            | Op::Sar
+            | Op::Shr
+            | Op::BAnd
+            | Op::BOr
+            | Op::BXor
+            | Op::Lt
+            | Op::Gt
+            | Op::Le
+            | Op::Ge => &[(1, NUMBER), (0, NUMBER)],
+            Op::Neg | Op::Plus | Op::BNot | Op::Inc | Op::Dec | Op::ToNumeric => &[(0, NUMBER)],
+            Op::ToString | Op::GetElem | Op::GetElemMethod | Op::Delete => &[(0, STRING)],
+            Op::PutElem | Op::DefineElem | Op::In | Op::SetFunctionName => &[(1, STRING)],
+            Op::Eq | Op::Ne => {
+                // Only an object compared with a non-nullish primitive is converted.
+                let (a, b) = (self.top(1), self.top(0));
+                let prim = |v: Value| v.as_object().is_none() && !v.is_nullish();
+                let k = if a.as_object().is_some() && prim(b) {
+                    1
+                } else if b.as_object().is_some() && prim(a) {
+                    0
+                } else {
+                    return None;
+                };
+                return Some(self.call_to_primitive(self.sp - 1 - k, DEFAULT));
+            }
+            Op::Concat => {
+                let n = self.imm_u16(1);
+                return (0..n)
+                    .map(|i| self.sp - n + i)
+                    .find(|&slot| self.get(slot).as_object().is_some())
+                    .map(|slot| self.call_to_primitive(slot, STRING));
+            }
+            _ => return None,
+        };
+        for &(k, hint) in checks {
+            let slot = self.sp - 1 - k;
+            if self.get(slot).as_object().is_some() {
+                return Some(self.call_to_primitive(slot, hint));
+            }
+        }
+        None
+    }
+
+    /// Calls `%ToPrimitive(stack[slot], hint)`; its result replaces `stack[slot]` and the
+    /// current instruction runs again.
+    fn call_to_primitive(&mut self, slot: u32, hint: Atom) -> Step {
+        let f = realm::installed_intrinsic(self.heap, intrinsics::TO_PRIMITIVE);
+        if f.is_undefined() {
+            return type_error("cannot convert an object to a primitive (no prelude)");
+        }
+        let v = self.get(slot);
+        let hint = Value::string(self.heap.atom_string(hint)?);
+        let base = self.sp;
+        self.ensure(base + 4)?;
+        self.push(f);
+        self.push(Value::UNDEFINED);
+        self.push(v);
+        self.push(hint);
+        let pc = self.pc;
+        self.call(base, 2, Continuation::Replace(slot), pc)
+            .inspect_err(|_| self.sp = base)
+    }
+
+    /// Calls a getter whose result goes into `stack[slot]`; resumes at `self.pc`.
+    fn call_getter_into(&mut self, getter: Value, this: Value, slot: u32) -> Step {
+        let base = self.sp;
+        self.ensure(base + 2)?;
+        self.push(getter);
+        self.push(this);
+        let pc = self.pc;
+        self.call(base, 0, Continuation::Replace(slot), pc)
+            .inspect_err(|_| self.sp = base)
     }
 
     fn nullish_base<T>(&self, o: Value, key: Atom, verb: &str) -> Result<T, Fault> {
@@ -1390,14 +1539,6 @@ impl<'h> Exec<'h> {
             "cannot {verb} property '{}' of {what}",
             conv::describe_key(self.heap, key)
         ))
-    }
-
-    /// [[Get]] for primitives and data properties (no getter calls).
-    fn get_plain(&mut self, o: Value, key: Atom) -> Result<Value, Fault> {
-        match self.lookup(o, key)? {
-            Ok(v) => Ok(v),
-            Err(_) => type_error("not supported yet: getter in a method call"),
-        }
     }
 
     /// The value of `o[key]`, or `Err(getter)` if a getter must be called.
@@ -1673,14 +1814,60 @@ impl<'h> Exec<'h> {
         Ok(true)
     }
 
-    /// `new f(args)`: `f a1 .. an` on the stack.
-    fn construct(&mut self, argc: u32, next: u32) -> Step {
-        let base = self.sp - 1 - argc;
-        let f = self.get(base);
+    /// Replaces the array at the top of the stack by its elements; returns their count.
+    /// The compiler builds the array, so it is a plain array (holes read as undefined).
+    fn spread_args(&mut self, args: Value) -> Result<u32, Fault> {
+        let a = args.as_object().expect("spread arguments array");
+        let n = self.heap.array_length(a);
+        self.sp -= 1;
+        self.ensure(self.sp + n)?;
+        for i in 0..n {
+            let v = match self.heap.get_element_fast(a, i) {
+                Some(v) => v,
+                None => {
+                    let key = self.heap.atom_from_index(i)?;
+                    self.heap
+                        .find_property(a, key)
+                        .and_then(|(_, p)| p.value())
+                        .unwrap_or(Value::UNDEFINED)
+                }
+            };
+            self.push(v);
+        }
+        Ok(n)
+    }
+
+    /// SetFunctionName(f, key, prefix): `name` is the key (`[description]` for symbols),
+    /// after `get ` / `set ` for accessors.
+    fn set_function_name(&mut self, f: Value, key: Atom, prefix: u8) -> Result<(), Fault> {
         let Some(fo) = f.as_object() else {
-            return type_error("not a function");
+            return Ok(());
         };
-        let constructible = self.heap.object_class(fo) == ObjectClass::Function && {
+        let base = if key.is_symbol() {
+            let sym = self.heap.atom_symbol(key).unwrap();
+            match self.heap.symbol_description(sym).as_string() {
+                Some(d) => format!("[{}]", self.heap.str_to_string(d)),
+                None => String::new(),
+            }
+        } else {
+            self.heap.atom_name(key)
+        };
+        let name = match prefix {
+            1 => format!("get {base}"),
+            2 => format!("set {base}"),
+            _ => base,
+        };
+        let s = self.heap.alloc_str(&name)?;
+        let d = PropertyDescriptor::data(Value::string(s), PropFlags::CONFIGURABLE);
+        self.heap
+            .define_own_property(fo, crate::heap::atoms::NAME, &d)?;
+        Ok(())
+    }
+
+    /// IsConstructor: ordinary (non-async, non-generator) functions and class
+    /// constructors.
+    fn is_constructor(&self, fo: Obj) -> bool {
+        self.heap.object_class(fo) == ObjectClass::Function && {
             let t = self
                 .heap
                 .object_slot(fo, 0)
@@ -1692,22 +1879,36 @@ impl<'h> Exec<'h> {
                     func_flags::kind(flags),
                     func_flags::KIND_NORMAL | func_flags::KIND_CLASS_CTOR
                 )
+        }
+    }
+
+    /// QuickJS's `<name> is not a constructor` (just `not a constructor` without a name).
+    fn not_a_constructor_message(&self, f: Value) -> String {
+        let name = f
+            .as_object()
+            .and_then(|fo| self.heap.get_own_property(fo, crate::heap::atoms::NAME))
+            .and_then(|p| p.value())
+            .and_then(|v| v.as_string())
+            .map(|s| self.heap.str_to_string(s))
+            .filter(|s| !s.is_empty());
+        match name {
+            Some(n) => format!("{n} is not a constructor"),
+            None => String::from("not a constructor"),
+        }
+    }
+
+    /// `new f(args)`: `f a1 .. an` on the stack.
+    fn construct(&mut self, argc: u32, next: u32) -> Step {
+        let base = self.sp - 1 - argc;
+        let f = self.get(base);
+        let Some(fo) = f.as_object() else {
+            return type_error("not a function");
         };
-        if !constructible {
+        if !self.is_constructor(fo) {
             if !self.heap.object_class(fo).is_callable() {
                 return type_error("not a function");
             }
-            let name = self
-                .heap
-                .get_own_property(fo, crate::heap::atoms::NAME)
-                .and_then(|p| p.value())
-                .and_then(|v| v.as_string())
-                .map(|s| self.heap.str_to_string(s))
-                .filter(|s| !s.is_empty());
-            return type_error(&match name {
-                Some(n) => format!("{n} is not a constructor"),
-                None => String::from("not a constructor"),
-            });
+            return type_error(&self.not_a_constructor_message(f));
         }
         let proto = match self.heap.find_property(fo, crate::heap::atoms::PROTOTYPE) {
             Some((_, Property::Data { value, .. })) => value.as_object(),
@@ -1811,5 +2012,8 @@ pub(crate) fn remove_host_call(heap: &mut Heap, id: u32) {
 /// The parked call's continuation and whether it was the entry callee.
 pub(crate) fn parked(heap: &Heap) -> (Continuation, bool) {
     let f = heap.arena().get(state::interp(heap), Interp::FLAGS);
-    (Continuation::from_flags(f as i32), f & PARK_ENTRY != 0)
+    (
+        Continuation::from_flags((f & !PARK_ENTRY) as i32),
+        f & PARK_ENTRY != 0,
+    )
 }
