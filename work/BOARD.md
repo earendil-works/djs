@@ -12,7 +12,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
 | 0048 | P3 TypeScript (type skipper, enums/namespaces, strip-types oracle) | lexer | .worktrees/0048-typescript |
 | 0051 | Remaining builtins (iterator helpers, WeakRef/FR, disposables, fromAsync, upsert) | heap | .worktrees/0051-remaining-builtins |
-| 0052 | Code bloat investigation (report only) | bloat | .worktrees/0052-bloat-investigation |
+| 0057 | Size quick wins Q1-Q6 (after merging the 0052 report) | bloat | .worktrees/0052-bloat-investigation |
 | 0055 | Determinism investigation (report only; proposes issues) | determinism | .worktrees/determinism |
 
 ## Open (ready)
@@ -41,6 +41,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0042 | Async generator runtime, function kinds, host rejections | 6e3c965 (agent heap) |
 | 0037 | P2 Promises, jobs, async host calls, suspendable frames | bd6f974 (agent heap; 3 parts) |
 | 0036 | P1-6 Destructuring + tagged templates | 234fd3c (agent lexer; +~1,940 test262) |
+| 0052 | Bloat investigation | report on issue/0052 branch, merging with 0057 |
 | 0050 | RegExp completion | e214e54 (agent num; \p{} on by default +27 KB gz; RegExp promoted; pi image regex fixed) |
 | 0046 | BigInt | 63d8468 (agent heap; BigInt 1135/1142; active 98.8%) |
 | 0033 | JSON + RegExp builtins, regex literals | 8b5ccfb (agent num; active 32,303 / 32,718) |
