@@ -1,0 +1,10 @@
+a.ts:4, bb.ts:5
+attempt 0 failed: flaky 0
+attempt 1 failed: flaky 1
+third time
+attempt 0 failed: always
+attempt 1 failed: always
+gave up: always
+["10+20","30+40","50"]
+=== return
+["fulfilled","rejected"]

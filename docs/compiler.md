@@ -76,7 +76,7 @@ struct Parser<'a, 'h> {
 
 | field | contents |
 | --- | --- |
-| `kind` | `Script`, `AsyncBody`, `Normal`, `Arrow`, `Method`, `Getter`, `Setter`, `ClassCtor`, `DerivedCtor`, `ClassFieldInit`; plus `is_async`, `is_generator` |
+| `kind` | `Script`, `AsyncBody`, `Normal`, `Arrow`, `Method`, `Getter`, `Setter`, `ClassCtor`, `DerivedCtor`, `ClassFieldInit`; plus `is_async`, `is_generator`, the state local `state_var`, `in_params` and the async catch-all region start (7.8) |
 | `parent`, `parent_scope` | the enclosing function and the scope in it where this function was created |
 | `code: Vec<u8>` | phase-1 bytecode |
 | `scopes: Vec<Scope>` | the scope tree (5.1) |
@@ -204,7 +204,8 @@ nested parentheses).
 | `let` in a destructuring binding (`let [let] = x`) | pattern parsing | `invalid destructuring target` |
 | `eval` / `arguments` as a binding name | binding helpers | `invalid variable name in strict mode` (vars), `invalid argument name in strict code` (params), `invalid function name in strict code` |
 | `eval` / `arguments` as an assignment target | lvalue conversion (3.7) | `invalid lvalue in strict mode` |
-| `await` as an identifier in async functions and the async body, `yield` in generators | identifier helpers, with the function kind | `unexpected 'await' keyword` |
+| `await` as an identifier in async functions and the async body, `yield` in generators | identifier helpers, with `FuncState::is_async`/`is_generator` and `Parser::await_reserved` (also arrow parameters nested in an async context); escaped `aw\u0061it` too (0041) | references: `unexpected token in expression: 'await'`; bindings: `variable name expected`; parameters: `missing formal parameter`; in non-async arrow parameters inside an async function: `unexpected 'await' keyword` |
+| `await`/`yield` expressions in formal parameters | `FuncState::in_params` | `await in default expression`, `yield in default expression` |
 | `#constructor` | class element names | `invalid method name` |
 | untagged template with `INVALID_ESCAPE` | template parsing; the error comes from `cook_template` | `malformed escape sequence in string literal` |
 | a token directly after a regex literal (`/a/g\u0069`) | nothing special: an identifier after an operand is an ordinary syntax error | `expecting ';'` |
@@ -285,7 +286,10 @@ whole balanced group.
 
 A newline between `async` and `function`/the parameter makes `async` an identifier
 (ASI may follow). Inside an async arrow's parameters, `await` is reserved (an early
-error).
+error). As implemented (0041): `try_arrow` handles both arrow forms (`parse_arrow`
+consumes the `async`), `parse_primary` the function expression and
+`parse_statement_list_item` the declaration (`at_async_function`). Object literal methods
+take `async`, `*` and `async *` prefixes (`async` only without a newline after it).
 
 ### 3.3 Destructuring assignment vs literal
 
@@ -1289,6 +1293,42 @@ What the compiler emits:
   intrinsic gives a promise that always fulfills: errors from `return()` are ignored).
   qjs's message for a non-iterable is `not a function`.
 
+### 7.8 What the compiler emits for async functions and generators (0041)
+
+- **Flags and the state local.** `FuncState::is_async`/`is_generator` become the template's
+  `ASYNC`/`GENERATOR` bits on top of the kind (D1420). An async or generator function
+  gets a `VarKind::Internal` local (`<state>`, never captured); phase-1 code emits the
+  state ops with a placeholder `Loc` and resolution rewrites it to the local's slot
+  (D1412). The codemode body is an async function too (D1410).
+- **Async functions** (`start_flavor`, `end_async_region` in compiler/function.rs):
+  `async_start` before the parameters, every `return` and the end of the body
+  `async_return` (`emit_return_value`/`emit_return_undef`), the catch-all region pushed
+  last (outermost) by `end_function`.
+- **Generators**: `generator_start` at the start of `parse_function_body`, after the
+  parameters. `yield` (compiler/generator.rs) is parsed at the AssignmentExpression level;
+  it has no operand before `) ] } , ; :`, the end of input or a line break.
+- **Return from a resumed `yield`** (D1411). The operand stack at a `yield` holds the
+  enclosing expression's operands, which the parser does not count, and the finally
+  blocks of the return sequence run at statement depth. So the return path throws the
+  value in a one-instruction handler region whose handler has the statement depth
+  (`stmt_depth`) and runs the ordinary return sequence (`emit_unwind` + return). Before
+  that, each open iterator (`Parser::open_iters`: array patterns being destructured,
+  for-of heads being stored) gets the same treatment with its own depth (relative to the
+  pattern's base label, or absolute for for-of), and closes its iterator (IteratorClose,
+  or AsyncIteratorClose for `for await`). These regions are inserted at the front of the
+  handler list, as they are the innermost. Async generators `await` a `return(x)` value
+  first.
+- **`yield*`** keeps `it next` on the stack: `received` → `next.call(it, received)` →
+  (await) → `iter_check_object` → `done`? the `value` is the result : `yield_star` (sync)
+  or `get_field value; yield` (async). A `return(x)` resumption calls `it.return`, a
+  `throw(e)` (thrown at the yield, caught by a region around it whose depth is relative
+  to the `it next` label) calls `it.throw`, or closes the iterator and throws `iterator
+  does not have a throw method`.
+- **`for await`** is the for-of layout (compiler/for_in_of.rs) with `%GetAsyncIterator`,
+  an `await` after each `next()` call, `%AsyncIteratorCloseThrow` + `await` in the throw
+  close handler and AsyncIteratorClose (`emit_async_close_normal`) in the break/return
+  paths.
+
 ## 8. Error reporting and early errors
 
 ### 8.1 Compile errors
@@ -1334,6 +1374,9 @@ enum CompileError {
 | `#constructor` | `invalid method name` |
 | `label: label:` | `duplicate label name` |
 | `yield` as identifier | `unexpected 'yield' keyword` |
+| `await`/`yield` in parameters | `await in default expression`, `yield in default expression` |
+| `for await (x in y)` | `'for await' loop should be used with 'of'` |
+| runtime: `yield*` with a `throw()` call and no `throw` method | TypeError `iterator does not have a throw method` |
 | `if (x) let y` | `lexical declarations can't appear in single-statement context` |
 | getter/setter arity | `invalid number of arguments for getter or setter` |
 | `((a)) => 1` | `missing formal parameter` |

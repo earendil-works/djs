@@ -1728,3 +1728,36 @@ on newTarget that ran user code too early (or threw "not supported yet: getter f
 `ToIndex`, DataView's checks) came in the wrong order. For an `OBJ_BUILTIN` callee the
 interpreter now skips the lookup and passes a plain object; bytecode constructors are
 unchanged.
+## D1410: The codemode body is an async function
+date: 2026-11-01 · by: lexer · issue: 0041
+`Goal::AsyncBody` compiles like an async arrow (D008): `async_start`, `async_return` for
+every `return`, and a catch-all region that rejects the promise, whether or not the body
+uses `await`. So the result of running a body is always a promise: a thrown error
+rejects it instead of ending the run with `Threw`. Embedders read the outcome with
+`promise_state` (the wasm sandbox already did; the test harnesses in djs-core, djs-wasm
+and tests/e2e.rs now do, and e2e prints a rejected body promise as `Uncaught <reason>`,
+which is what gen-expected.sh prints for qjs). `djs run --body` reports a rejected body
+as an unhandled rejection.
+
+## D1411: A return from a resumed `yield` goes through a throw region
+date: 2026-11-01 · by: lexer · issue: 0041
+`return(x)` can resume a `yield` deep inside an expression, with operands the parser does
+not count on the stack, while finally blocks (`gosub`) and the for-of close subroutines
+must run at statement depth. Instead of tracking expression depth, the return path is
+`throw` inside a one-instruction handler region whose handler depth is the statement
+depth; the handler runs the ordinary return sequence. Iterators opened inside the
+statement (array patterns, for-of heads) are closed on the way by a chain of such
+regions, one per iterator, with the pattern's relative depth (0036's `depth_from`) or the
+for-of's absolute depth. The same throw region carries `yield*`'s returns. The cost is
+an exception dispatch per generator `return()` that hits a yield, which is rare. This
+also fixes the 0036 follow-up (a pattern's iterator closes when a yield in a default
+returns).
+
+## D1412: Generator/async state as an internal local, placeholders in phase 1
+date: 2026-11-01 · by: lexer · issue: 0041
+The state object of `generator_start`/`async_start` lives in a `VarKind::Internal` local
+(`<state>`) of the function, never captured (the ops need a plain `Loc`). Phase-1 code
+emits the state ops with `Loc` 0 and resolution rewrites them to the local's slot, like
+the name ops. Async arrows have their own state; `await` in a nested arrow body is an
+identifier (qjs, ECMA-262 ExpressionBody[~Await]) and in nested arrow parameters a
+SyntaxError.

@@ -2266,3 +2266,50 @@ fn end_to_end_iteration_messages() {
         "=> TypeError: cannot read property 'Symbol.iterator' of undefined",
     )]);
 }
+
+/// Async functions, generators and async generators end to end (0041), in async-body
+/// mode: the body's promise gives the result. Checked against qjs.
+#[test]
+fn end_to_end_async_generators() {
+    run_cases(&[
+        ("async function f() { return 1 } return await f() + 1", "=> 2"),
+        ("const p = Promise.resolve(3); return (await p) * (await 2)", "=> 6"),
+        ("throw new TypeError('x')", "throw TypeError: x"),
+        (
+            "async function f() { await null; throw 'late' } try { await f() } catch (e) { return 'caught ' + e }",
+            "=> caught late",
+        ),
+        (
+            "const log = []; const f = async () => { log.push(1); await 0; log.push(3) }; const p = f(); log.push(2); await p; return log.join()",
+            "=> 1,2,3",
+        ),
+        (
+            "function* g() { yield 1; yield 2 } return [...g()].join()",
+            "=> 1,2",
+        ),
+        (
+            "function* g() { try { yield 1 } finally { console.log('fin') } } const it = g(); it.next(); return it.return(5).value",
+            "fin\n=> 5",
+        ),
+        (
+            "function* g() { const x = yield 1; return x * 2 } const it = g(); it.next(); return it.next(21).value",
+            "=> 42",
+        ),
+        (
+            "function* g() { return yield* [1, 2] } const it = g(); it.next(); it.next(); return it.next().done",
+            "=> true",
+        ),
+        (
+            "let s = 0; for await (const x of [1, Promise.resolve(2)]) s += x; return s",
+            "=> 3",
+        ),
+        (
+            "async function* a() { yield 1; yield await Promise.resolve(2) } const r = []; for await (const x of a()) r.push(x); return r.join()",
+            "=> 1,2",
+        ),
+        (
+            "const o = { async m() { return this.v }, *n() { yield this.v }, v: 7 }; return (await o.m()) + [...o.n()][0]",
+            "=> 14",
+        ),
+    ]);
+}
