@@ -331,3 +331,57 @@ fn unhandled_rejections() {
     assert_eq!(vm_take_unhandled_rejections(vm), 0);
     vm_free(vm);
 }
+
+/// 0049: `vm_compile_file` names the code in stack traces; `vm_set_random_seed` reseeds
+/// `Math.random` reproducibly; `djs_build_hash` is the image build hash.
+#[test]
+fn file_names_seeds_and_build_hash() {
+    let vm = vm_new(0);
+    let (name, src) = ("codemode.js", "\nreturn new Error('x').stack");
+    let mut b = name.as_bytes().to_vec();
+    b.extend_from_slice(src.as_bytes());
+    stage(&b);
+    let f = vm_compile_file(vm, 1, name.len(), 0, src.len());
+    assert_ne!(f, 0, "{}", out_text());
+    call(vm, f, &[]);
+    let st = vm_run(vm, 1_000_000);
+    let (ok, h) = outcome(vm, st);
+    assert!(ok);
+    assert!(
+        display(vm, h).contains("codemode.js:2"),
+        "{}",
+        display(vm, h)
+    );
+    vm_handle_free(vm, h);
+    vm_handle_free(vm, f);
+
+    stage(name.as_bytes());
+    assert!(vm_compile_file(vm, 1, name.len(), 0, 0) > 0);
+    let bad = "a b";
+    let mut b = name.as_bytes().to_vec();
+    b.extend_from_slice(bad.as_bytes());
+    stage(&b);
+    assert_eq!(vm_compile_file(vm, 1, name.len(), 0, bad.len()), 0);
+    assert!(out_text().starts_with("SyntaxError"), "{}", out_text());
+
+    let draw = |vm: u32| {
+        let f = compile_body(vm, "", "return Math.random()");
+        call(vm, f, &[]);
+        let st = vm_run(vm, 1_000_000);
+        let (_, h) = outcome(vm, st);
+        let text = display(vm, h);
+        vm_handle_free(vm, h);
+        vm_handle_free(vm, f);
+        text
+    };
+    vm_set_random_seed(vm, 7, 1);
+    let first = draw(vm);
+    let other = vm_new(0);
+    vm_set_random_seed(other, 7, 1);
+    assert_eq!(draw(other), first);
+    vm_set_random_seed(other, 8, 1);
+    assert_ne!(draw(other), first);
+    assert_eq!(djs_build_hash(), djs_core::vm::BUILD_HASH);
+    vm_free(vm);
+    vm_free(other);
+}

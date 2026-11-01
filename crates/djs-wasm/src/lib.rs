@@ -198,6 +198,13 @@ pub extern "C" fn djs_abi_version() -> u32 {
     ABI_VERSION
 }
 
+/// The build hash of VM images (`djs_core::vm::BUILD_HASH`): it changes with the engine's
+/// sources, so a host can tell builds apart (pi's deterministic fingerprint, 0049).
+#[unsafe(no_mangle)]
+pub extern "C" fn djs_build_hash() -> u32 {
+    djs_core::vm::BUILD_HASH
+}
+
 /// Makes the staging buffer at least `len` bytes and returns its address. Valid until the
 /// next call.
 #[unsafe(no_mangle)]
@@ -343,13 +350,37 @@ pub extern "C" fn vm_collect(vm: u32) -> i32 {
 /// Compiles staging[params_len..params_len + src_len] (UTF-8 source). `goal` 0 is a
 /// Script; 1 is a codemode async function body whose parameter names are
 /// staging[0..params_len], separated by `\n`. Returns a handle to the closure, or 0 with
-/// the error (`SyntaxError: ... at line:col`) in the out buffer.
+/// the error (`SyntaxError: ... at line:col`) in the out buffer. Stack traces name the
+/// code `sandbox.js`; `vm_compile_file` names it.
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_compile(vm: u32, goal: u32, params_len: usize, src_len: usize) -> u32 {
+    compile(vm, goal, 0, params_len, src_len)
+}
+
+/// `vm_compile` with a file name for stack traces (0049: pi's codemode reports
+/// `codemode.js:2`): staging holds the name (`name_len` bytes, UTF-8), then the parameter
+/// names, then the source.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_compile_file(
+    vm: u32,
+    goal: u32,
+    name_len: usize,
+    params_len: usize,
+    src_len: usize,
+) -> u32 {
+    compile(vm, goal, name_len, params_len, src_len)
+}
+
+fn compile(vm: u32, goal: u32, name_len: usize, params_len: usize, src_len: usize) -> u32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
-        let params_text = staged_str(staging, 0, params_len).to_owned();
-        let src = staged(staging, params_len, src_len).to_vec();
+        let name = if name_len == 0 {
+            String::from("sandbox.js")
+        } else {
+            staged_str(staging, 0, name_len).to_owned()
+        };
+        let params_text = staged_str(staging, name_len, params_len).to_owned();
+        let src = staged(staging, name_len + params_len, src_len).to_vec();
         let params: Vec<&str> = params_text.split('\n').filter(|p| !p.is_empty()).collect();
         let opts = CompileOptions {
             goal: if goal == 0 {
@@ -357,7 +388,7 @@ pub extern "C" fn vm_compile(vm: u32, goal: u32, params_len: usize, src_len: usi
             } else {
                 Goal::AsyncBody
             },
-            filename: "sandbox.js",
+            filename: &name,
             params: &params,
             privileged: false,
             typescript: false,
@@ -639,6 +670,18 @@ pub extern "C" fn vm_run(vm: u32, fuel: u32) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_set_now(vm: u32, ms: f64) {
     with(|s| s.slot(vm).vm.set_now(ms))
+}
+
+/// Reseeds `Math.random` with the 64-bit seed `hi << 32 | lo` (`Vm::set_random_seed`; 0
+/// is the fixed default). A new VM starts with the default seed, so a host that wants
+/// real randomness passes one from its own source; a replay passes a fixed one (0049).
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_set_random_seed(vm: u32, lo: u32, hi: u32) {
+    with(|s| {
+        s.slot(vm)
+            .vm
+            .set_random_seed((u64::from(hi) << 32) | u64::from(lo))
+    })
 }
 
 /// Sets the local time zone as a fixed offset in minutes east of UTC
