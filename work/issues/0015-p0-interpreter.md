@@ -37,6 +37,59 @@ hand-assembled bytecode from 0013's emitter.
       the compiler once 0014 has landed (rebase onto it then).
 
 ## Log
+- 2026-11-01: Read docs/compiler.md (4, 6, 7, 10), D1080-D1086, D006-D009, D1100, and the
+  0013 branch (read-only). 0013 defines cell kinds 12-16 (`FuncTemplate`, `Script`,
+  `BoxCell`, `Bytes`, `RefArray`), the `ops!` table with `Op`, `OPS` (cost classes,
+  flags), `CodeBuf` and raw `read_*` helpers.
+
+  **Plan.**
+  1. *D007 tag* (before 0013): tag 13 `INTERNAL` in `value.rs`, a reference to a non-JS
+     cell (templates, Boxes, realm, host calls). The GC already forwards every ref tag.
+     `verify` accepts it for any cell kind except the JS value kinds and the roots.
+     JSON stringify treats it as `Slow` (never visible to JS).
+  2. *Arena state* (additive cells in `cells.rs`, kind ids after 0013's):
+     - `Roots::STACK`: the value stack, a `ValueArray` addressed by index. It grows by
+       copying, so registers are indexes.
+     - `Roots::RESERVED` becomes `INTERP`, an `Interp` cell: state (idle / running /
+       parked on a host call / done / threw), `BP`, `SP`, `PC`, the pending host call,
+       the completion value.
+     - `Roots::REALM` holds an internal ref to a `Realm` cell: the global object, and the
+       Object, Array, Function and Error prototypes.
+     - `Roots::HOST_CALLS`: a `ValueArray` of pending host calls, each a `HostCall` cell
+       (id, fn id, args).
+  3. *Frames* exactly as docs/compiler.md 7.1 (D1086). Header fields are int32 Values.
+     `flags` holds the continuation (`PushResult`, `DiscardResult`, `ConstructResult`,
+     `Entry`). `vm.call(f, this, args)` pushes an `Entry` frame and returns; `run`
+     executes.
+  4. *Function objects*: two new `ObjectClass`es in `heap/object.rs`, which is outside
+     `touches:` but a minimal additive change:
+     - `Function`: slot 0 = internal ref to the template, slots 1.. = Box refs;
+     - `HostFunction`: slot 0 = int32 `fn_id`.
+  5. *Host calls* (7.5): `call` on a `HostFunction` creates a `HostCall` entry, parks
+     the frame with `pc` after the call, and `run` returns `HostCall { call_id, fn_id }`.
+     The embedder reads `host_call_args(call_id)` and calls
+     `resolve_host_call(call_id, Ok(v) | Err(e))`; then `run` continues (push or
+     throw). `console.log` is just a host function registered by the embedder
+     (`djs run`).
+  6. *Embedding API* (`vm/`): `Vm::new(opts)`, `Vm::from_bytes(bytes)` (restore),
+     `vm.bytes()` (image), `vm.instantiate(template) -> Handle` (top-level closure),
+     `vm.compile(src, opts)` once 0014 lands, `vm.call`, `vm.run(fuel) -> Status`
+     (`Done(Value)` / `Threw(Value)` / `OutOfFuel` / `HostCall{..}`),
+     `vm.resolve_host_call`, `define_global` and `new_host_function` for the embedder,
+     and basic value formatting for `djs run`.
+  7. *Dispatch loop* (after 0013): registers in Rust locals; `match Op`; fuel charged
+     from `OPS[op].cost`, stop when exhausted at an instruction boundary; safepoints
+     (back jumps, calls, returns) collect when `gc_pending` (or always with
+     `gc_stress`), then re-derive the code from `stack[bp]`. Runtime errors (TypeError,
+     ReferenceError, RangeError) are Error objects from the realm prototypes, thrown
+     through the handler table (P0 has no `try`, so they unwind to `Threw`). Operators
+     on objects that need ToPrimitive throw `TypeError: not supported yet` until P1-2.
+     A debug check after every non-jump instruction: `pc` advanced by `size`, `sp` moved
+     by `push - pop`.
+  8. *`djs run`*: `--fuel-per-slice`, `--gc-stress`, `--suspend-every N` (on
+     `OutOfFuel`, rebuild the VM with `Vm::from_bytes(vm.bytes())` and continue).
+  9. *Tests*: hand-assembled bytecode via `CodeBuf` until 0014 lands, then end-to-end
+     through the compiler.
 
 ## Follow-ups
 
