@@ -546,7 +546,12 @@ fn errors() {
             5,
         ),
         ("x = /a/", "regular expressions are not supported yet", 1, 5),
-        ("f`x`", "tagged templates are not supported yet", 1, 2),
+        (
+            "a?.b`x`",
+            "template literal cannot appear in an optional chain",
+            1,
+            5,
+        ),
         // Objects (0027).
         (
             "({ get x(a) {} })",

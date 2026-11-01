@@ -638,7 +638,11 @@ impl Parser<'_, '_> {
                             "template literal cannot appear in an optional chain",
                         );
                     }
-                    return self.unsupported(tok.start, "tagged templates are");
+                    self.prepare_call(e);
+                    let argc = self.parse_tagged_template()?;
+                    self.mark(tok.start);
+                    self.code().call(argc);
+                    e = Expr::Value;
                 }
                 _ => break,
             }
@@ -804,11 +808,11 @@ impl Parser<'_, '_> {
             return Ok(Expr::Value);
         }
         self.enter()?;
-        if self.is(TokenKind::New) {
-            self.parse_new()?;
+        let mut e = if self.is(TokenKind::New) {
+            self.parse_new()?
         } else {
-            self.parse_primary()?;
-        }
+            self.parse_primary()?
+        };
         self.leave();
         // MemberExpression: no calls before the arguments of `new`.
         loop {
@@ -816,11 +820,11 @@ impl Parser<'_, '_> {
             match tok.kind {
                 TokenKind::Dot => {
                     self.next()?;
-                    self.parse_dot_name(tok.start)?;
+                    e = self.parse_dot_name(tok.start)?;
                 }
                 TokenKind::LBracket => {
                     self.next()?;
-                    self.parse_index(tok.start)?;
+                    e = self.parse_index(tok.start)?;
                 }
                 TokenKind::QuestionDot => {
                     return syntax(
@@ -829,7 +833,12 @@ impl Parser<'_, '_> {
                     );
                 }
                 TokenKind::NoSubstTemplate | TokenKind::TemplateHead => {
-                    return self.unsupported(tok.start, "tagged templates are");
+                    // `new tag`x`` constructs the result of the tagged call.
+                    self.prepare_call(e);
+                    let argc = self.parse_tagged_template()?;
+                    self.mark(tok.start);
+                    self.code().call(argc);
+                    e = Expr::Value;
                 }
                 _ => break,
             }
@@ -1038,6 +1047,61 @@ impl Parser<'_, '_> {
             n => self.code().concat(n as u16),
         }
         Ok(Expr::Value)
+    }
+
+    /// The template of a tagged template, after the tag and `this`: pushes the
+    /// template object and the substitutions, returns the argument count. The object is
+    /// described by constants (cooked strings, `undefined` for an invalid escape, and
+    /// raw strings) and created once per site by `get_template_object` (D1362).
+    fn parse_tagged_template(&mut self) -> PResult<u16> {
+        let site = self.add_const(crate::value::Value::UNDEFINED);
+        self.code().get_template_object(site);
+        let mut cooked: alloc::vec::Vec<crate::value::Value> = alloc::vec::Vec::new();
+        let mut raw: alloc::vec::Vec<crate::value::Value> = alloc::vec::Vec::new();
+        let mut units = alloc::vec::Vec::new();
+        let mut argc: u32 = 1;
+        loop {
+            let tok = self.tok;
+            units.clear();
+            let c = match self.lx.cook_template(&tok, &mut units) {
+                Ok(_) => crate::value::Value::string(self.template_string(&units)?),
+                Err(_) => crate::value::Value::UNDEFINED,
+            };
+            cooked.push(c);
+            units.clear();
+            self.lx.template_raw(&tok, &mut units);
+            raw.push(crate::value::Value::string(self.template_string(&units)?));
+            if matches!(
+                tok.kind,
+                TokenKind::NoSubstTemplate | TokenKind::TemplateTail
+            ) {
+                self.next()?;
+                break;
+            }
+            self.next()?;
+            self.parse_expr(false)?;
+            argc += 1;
+            if argc > u16::MAX as u32 {
+                return syntax(self.tok.start, "Too many call arguments");
+            }
+            if !self.is(TokenKind::RBrace) {
+                return syntax(self.tok.start, "expected '}' after template expression");
+            }
+            self.tok = self.lx.rescan_template_continuation(self.tok)?;
+        }
+        // CONSTS[site] = start of `n, cooked x n, raw x n`.
+        let start = self.f.consts.len() as u32;
+        let n = cooked.len();
+        self.f.consts.push(crate::value::Value::int(n as i32));
+        self.f.consts.extend(cooked);
+        self.f.consts.extend(raw);
+        self.f.consts[site as usize] = crate::value::Value::int(start as i32);
+        Ok(argc as u16)
+    }
+
+    /// A string for a template object.
+    fn template_string(&mut self, units: &[u16]) -> PResult<crate::value::Str> {
+        self.alloc_units(units)
     }
 
     /// Counts a pushed template part, joining early when the count would not fit.

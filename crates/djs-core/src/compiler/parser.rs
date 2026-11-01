@@ -448,15 +448,20 @@ impl<'a, 'h> Parser<'a, 'h> {
         if let Some(&i) = self.f.str_consts.get(units) {
             return Ok(i);
         }
-        let s = if units.iter().all(|&u| u <= 0xFF) {
+        let s = self.alloc_units(units)?;
+        let i = self.add_const(Value::string(s));
+        self.f.str_consts.insert(units.to_vec(), i);
+        Ok(i)
+    }
+
+    /// A heap string from UTF-16 units (one byte per unit when they are Latin-1).
+    pub fn alloc_units(&mut self, units: &[u16]) -> PResult<crate::value::Str> {
+        Ok(if units.iter().all(|&u| u <= 0xFF) {
             let bytes: Vec<u8> = units.iter().map(|&u| u as u8).collect();
             self.heap.alloc_latin1(&bytes)?
         } else {
             self.heap.alloc_utf16(units)?
-        };
-        let i = self.add_const(Value::string(s));
-        self.f.str_consts.insert(units.to_vec(), i);
-        Ok(i)
+        })
     }
 
     /// The cooked value of the current `String` token as UTF-16.

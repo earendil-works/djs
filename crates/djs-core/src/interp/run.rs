@@ -1595,6 +1595,11 @@ impl<'h> Exec<'h> {
                 let a = self.heap.new_array_from_values(Some(proto), &vals)?;
                 self.push(Value::object(a));
             }
+            Op::GetTemplateObject => {
+                let site = self.imm_u32(1);
+                let v = self.template_object(site)?;
+                self.push(v);
+            }
             Op::SpecialObject => {
                 let kind = self.heap.arena().bytes()[(self.code + self.pc + 1) as usize];
                 let v = self.special_object(kind)?;
@@ -1777,7 +1782,22 @@ impl<'h> Exec<'h> {
                     ));
                 }
                 let (o, src) = (self.top(1), self.top(0));
-                self.copy_data_props(o.as_object().expect("object literal"), src)?;
+                if !self.copy_data_props(o.as_object().expect("object literal"), src)? {
+                    // Getters run user code: in the builtin language (builtins/spread.ts),
+                    // `o src` becomes `%CopyDataProperties undefined o src`, pushing o.
+                    let g = realm::installed_intrinsic(self.heap, intrinsics::COPY_DATA_PROPERTIES);
+                    if g.is_undefined() {
+                        return type_error("spreading an object with getters needs the prelude");
+                    }
+                    let base = self.sp - 2;
+                    self.ensure(base + 4)?;
+                    self.set(base + 2, o);
+                    self.set(base + 3, src);
+                    self.set(base, g);
+                    self.set(base + 1, Value::UNDEFINED);
+                    self.sp = base + 4;
+                    return self.call(base, 2, Continuation::PushResult, next);
+                }
                 self.sp -= 1;
             }
             Op::Delete => {
@@ -1824,7 +1844,7 @@ impl<'h> Exec<'h> {
             }
             Op::RequireObjectCoercible => {
                 if self.top(0).is_nullish() {
-                    return type_error("cannot convert undefined or null to object");
+                    return type_error("cannot convert to object");
                 }
             }
 
@@ -2026,6 +2046,35 @@ impl<'h> Exec<'h> {
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /// `get_template_object site` (GetTemplateObject, 13.2.8.4): `CONSTS[site]` is the
+    /// site's template object once created; before that, the index of `n`, then `n`
+    /// cooked strings (`undefined` for an invalid escape) and `n` raw strings. The
+    /// first evaluation builds the frozen array with its frozen `raw` array and
+    /// stores it in the slot, so each site has one object (D1362).
+    fn template_object(&mut self, site: u32) -> Result<Value, Fault> {
+        let c = self.constant(site);
+        if c.as_object().is_some() {
+            return Ok(c);
+        }
+        let bad = || Fault::Error(ErrorKind::InternalError, String::from("bad template site"));
+        let start = c.as_int().ok_or_else(bad)? as u32;
+        let n = self.constant(start).as_int().ok_or_else(bad)? as u32;
+        let cooked: alloc::vec::Vec<Value> = (0..n).map(|i| self.constant(start + 1 + i)).collect();
+        let raw: alloc::vec::Vec<Value> =
+            (0..n).map(|i| self.constant(start + 1 + n + i)).collect();
+        let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
+        let raw_obj = self.heap.new_array_from_values(Some(proto), &raw)?;
+        crate::builtins::object::set_integrity_level(self.heap, raw_obj, true)?;
+        let t = self.heap.new_array_from_values(Some(proto), &cooked)?;
+        let d = PropertyDescriptor::data(Value::object(raw_obj), PropFlags::NONE);
+        self.heap
+            .define_own_property(t, crate::heap::atoms::RAW, &d)?;
+        crate::builtins::object::set_integrity_level(self.heap, t, true)?;
+        let v = Value::object(t);
+        self.heap.value_array_set(self.consts, site, v);
+        Ok(v)
+    }
 
     /// Creates the closure for child template `child` of the current function.
     fn closure(&mut self, child: u32) -> Result<Value, Fault> {
@@ -2446,22 +2495,32 @@ impl<'h> Exec<'h> {
 
     /// `{...src}` (CopyDataProperties without excluded keys). Like QuickJS, primitive
     /// sources contribute nothing.
-    fn copy_data_props(&mut self, o: Obj, src: Value) -> Result<(), Fault> {
+    /// Object spread of plain data properties. Returns false, having copied nothing,
+    /// when the source needs the general CopyDataProperties (an enumerable getter, a
+    /// string's indexes).
+    fn copy_data_props(&mut self, o: Obj, src: Value) -> Result<bool, Fault> {
+        if src.as_string().is_some_and(|s| self.heap.str_len(s) > 0) {
+            return Ok(false);
+        }
         let Some(s) = src.as_object() else {
-            return Ok(());
+            return Ok(true);
         };
-        for k in self.heap.own_keys(s) {
-            match self.heap.get_own_property(s, k) {
-                Some(Property::Data { value, flags }) if flags.enumerable() => {
-                    self.heap.create_data_property(o, k, value)?;
-                }
-                Some(Property::Accessor { flags, .. }) if flags.enumerable() => {
-                    return type_error("not supported yet: getter in an object spread");
-                }
-                _ => {}
+        let keys = self.heap.own_keys(s);
+        let getter = keys.iter().any(|&k| {
+            matches!(self.heap.get_own_property(s, k),
+                Some(Property::Accessor { flags, .. }) if flags.enumerable())
+        });
+        if getter {
+            return Ok(false);
+        }
+        for k in keys {
+            if let Some(Property::Data { value, flags }) = self.heap.get_own_property(s, k)
+                && flags.enumerable()
+            {
+                self.heap.create_data_property(o, k, value)?;
             }
         }
-        Ok(())
+        Ok(true)
     }
 
     /// The `delete` operator (strict: failure is a TypeError).

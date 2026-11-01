@@ -205,6 +205,8 @@ pub(super) const TO_PRIMITIVE: u16 = id("ToPrimitive");
 pub(super) const INSTANCEOF_OPERATOR: u16 = id("InstanceofOperator");
 /// The installed `%ArraySpread`, for `array_spread` over a general iterable.
 pub(super) const ARRAY_SPREAD: u16 = id("ArraySpread");
+/// The installed `%CopyDataProperties`, for `copy_data_props` with getters or a string.
+pub(super) const COPY_DATA_PROPERTIES: u16 = id("CopyDataProperties");
 /// The original Array.prototype.values and %ArrayIteratorPrototype%.next: an array
 /// spread skips the iterator protocol while they are in place.
 pub(super) const ARRAY_PROTOTYPE_VALUES: u16 = id("ArrayPrototypeValues");
