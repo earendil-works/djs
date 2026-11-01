@@ -152,8 +152,8 @@ The determinism claims are checked on every merge (D1720, D1725;
 
 - **Across schedules.** The end-to-end tests and the difftest corpus run each case in
   one go and again in slices (1 and 997 fuel in the end-to-end tests, 97 and 1009 in
-  the corpus), restoring a fresh VM from its image at every stop. The raw image at the end, and the image after a final collection, must
-  equal the plain run's.
+  the corpus), restoring a fresh VM from its image at every stop. The raw image at the
+  end, and the image after a final collection, must equal the plain run's.
 - **Across builds.** The same programs run in a native build and in djs-wasm, driven
   through the same export calls. The build hash, the raw and collected images at every
   slice, the number of stops and the results must all match. This is why djs avoids
