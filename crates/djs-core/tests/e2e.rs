@@ -7,12 +7,13 @@
 //!    continues in a fresh one restored from its heap image;
 //! 3. GC stress: a collection at every safepoint.
 //!
-//! The plain and suspension modes must also leave identical heap images after a final
-//! collection (0072, D1720): the copying GC lays the heap out as a function of the object
-//! graph (D1090) and collects at the same points under any slicing and restore (D1601), so
-//! a stop or an image round trip that changes the graph shows. GC stress is a different
-//! collection policy: weak tables lose their dead entries at other times (and compact
-//! differently), so its image is not compared.
+//! The plain and suspension modes must also leave identical heap images, both as they are
+//! at the end and after a final collection (0072, D1720, D1725): collections happen at the
+//! same instructions under any slicing and restore (D1601, D1710), and the copying GC lays
+//! the heap out as a function of the object graph (D1090), so a stop or an image round
+//! trip that changes anything shows. GC stress is a different collection policy: weak
+//! tables lose their dead entries at other times (and compact differently), so its images
+//! are not compared.
 //!
 //! Cases run in parallel (`DJS_JOBS` threads, else one per CPU). Each run has a fuel
 //! budget and a time limit: a case that loops forever fails its plain run within seconds
@@ -78,10 +79,13 @@ fn fnv64(bytes: &[u8]) -> u64 {
     h
 }
 
+/// The hashes of a run's final heap image: as it is, and after a collection.
+type Images = (u64, u64);
+
 /// Runs one case and returns its output (console.log lines, then `Uncaught ...` or a
-/// compile error if there is one) and the hash of the heap image after a final collection
-/// (`None` for a compile error or a run over budget).
-fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<u64>) {
+/// compile error if there is one) and its final images (`None` for a compile error or a
+/// run over budget).
+fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
     let exec = ExecOptions {
         gc_stress: matches!(mode, Mode::GcStress),
         ..Default::default()
@@ -178,8 +182,9 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<u64>) {
         }
     }
     vm.heap().verify().unwrap();
+    let raw = fnv64(vm.bytes());
     vm.collect().unwrap();
-    (out, Some(fnv64(vm.bytes())))
+    (out, Some((raw, fnv64(vm.bytes()))))
 }
 
 #[test]
@@ -202,7 +207,7 @@ fn e2e_cases() {
     };
     let mut failures = Vec::new();
     // The image hash of each case's plain and suspension runs (D1720).
-    let mut images: Vec<Vec<(Mode, Option<u64>)>> = vec![Vec::new(); paths.len()];
+    let mut images: Vec<Vec<(Mode, Option<Images>)>> = vec![Vec::new(); paths.len()];
     let index = |p: &Path| paths.iter().position(|q| q == p).unwrap();
     // The plain runs first (all of them take well under a second): a case that runs over
     // its budget there is not run again in the much slower stress modes.
@@ -236,7 +241,7 @@ fn e2e_cases() {
         if images.iter().any(|(_, h)| *h != images[0].1) {
             let name = path.file_name().unwrap().to_string_lossy();
             failures.push(format!(
-                "{name}: the heap images after a collection differ between the plain and suspension modes: {images:x?}"
+                "{name}: the heap images (as left, and after a collection) differ between the plain and suspension modes: {images:x?}"
             ));
         }
     }
@@ -250,14 +255,14 @@ fn e2e_cases() {
 
 /// Runs `jobs` on `DJS_JOBS` threads (else one per CPU); the failure and image hash of
 /// each, in order.
-fn run_parallel(jobs: &[(&Path, Mode)]) -> Vec<(Option<String>, Option<u64>)> {
+fn run_parallel(jobs: &[(&Path, Mode)]) -> Vec<(Option<String>, Option<Images>)> {
     let threads = std::env::var("DJS_JOBS")
         .ok()
         .and_then(|v| v.parse::<usize>().ok())
         .filter(|&n| n > 0)
         .unwrap_or_else(|| std::thread::available_parallelism().map_or(4, |n| n.get()));
     let next = AtomicUsize::new(0);
-    let results: Vec<Mutex<(Option<String>, Option<u64>)>> =
+    let results: Vec<Mutex<(Option<String>, Option<Images>)>> =
         jobs.iter().map(|_| Mutex::new((None, None))).collect();
     std::thread::scope(|s| {
         for _ in 0..threads.min(jobs.len()) {
@@ -286,7 +291,7 @@ fn run_parallel(jobs: &[(&Path, Mode)]) -> Vec<(Option<String>, Option<u64>)> {
 /// Runs one case in one mode: a failure description if its output is not the expected
 /// one (an engine panic counts as a failure of that case, not of the whole run), and the
 /// image hash.
-fn check_case(path: &Path, mode: Mode) -> (Option<String>, Option<u64>) {
+fn check_case(path: &Path, mode: Mode) -> (Option<String>, Option<Images>) {
     let name = path.file_name().unwrap().to_string_lossy().into_owned();
     let src = std::fs::read_to_string(path).unwrap();
     let Ok(want) = std::fs::read_to_string(path.with_extension("expected")) else {
