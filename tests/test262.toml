@@ -97,6 +97,7 @@ description = "Phases P3 to P5 of ARCH.md: on the roadmap, not in the current mi
 # ArrayBuffer, DataView, DataView.*, resizable-arraybuffer, arraybuffer-transfer,
 # align-detached-buffer-semantics-with-web-reality, uint8array-base64 and
 # stable-typedarray-sort (immutable-arraybuffer stays later: a proposal).
+# Moved to active in 0045: built-ins/Proxy and the features Proxy, proxy-missing-checks.
 paths = [
   "built-ins/BigInt",                         # BigInt
   "built-ins/RegExp",                         # our own regex engine comes in P5

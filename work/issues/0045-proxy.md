@@ -36,6 +36,11 @@ in every builtin that reaches internal methods.
   coordinator if they get large.
 
 ## Log
+- test262 before the move (main 23be57f): active 18,484 / 24,120 (76.6%), later 252 /
+  13,449. The move alone (same engine): active 18,484 / 24,497 (75.4%), later 252 /
+  13,072: +377 active tests (built-ins/Proxy 258, Proxy feature 375 in total,
+  proxy-missing-checks 3), none passing.
+- ObjectClass::Proxy = 27 (told the coordinator).
 
 ## Follow-ups
 
