@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0061 | In-place string append + JSON source text access | num | .worktrees/num |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
-| 0059 | Indirect eval, Function constructors, queueMicrotask (D014) | infra | .worktrees/infra |
+| 0063 | D015 sloppy this + bgen Rust backend v1 | infra | .worktrees/infra |
 | 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
 | 0058 | Compiler: using, completion values, import(), accessor/decorators | lexer | .worktrees/lexer |
 | 0062 | Property access performance (shapes/ICs: design first) | heap | .worktrees/heap |
@@ -47,6 +47,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0046 | BigInt | 63d8468 (agent heap; BigInt 1135/1142; active 98.8%) |
 | 0033 | JSON + RegExp builtins, regex literals | 8b5ccfb (agent num; active 32,303 / 32,718) |
 | 0040 | P1-7 Classes | 2d08a6c (agent lexer; test262 active 97.1%) |
+| 0059 | Indirect eval, Function ctors, queueMicrotask | 4435b3b (agent infra; active 37,464 / 37,722 = 99.3%; pi 215/226) |
 | 0060 | Out-of-memory recovery | b7c83a8 (agent heap; D1600 reserve, D1601 GC threshold in image) |
 | 0056 | String/regex hot paths | 6d24f26 (agent num; test262 active run 250 -> 90 CPU-s, 61 -> 17 s wall) |
 | 0051 | Remaining builtins | df48233 (agent heap; all promoted features 100%) |
@@ -120,6 +121,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 2026-11-01 (0051 p1: iterator helpers promoted) | | 33,879 / 34,283 (98.8%) |
 | 2026-11-01 (0050: RegExp promoted, +2,186 tests) | | 36,285 / 36,689 (98.9%) |
 | 2026-11-01 (0051 done) | | 36,778 / 37,182 (98.9%) |
+| 2026-11-01 (0059: indirect eval + Function, +540 tests) | | 37,464 / 37,722 (99.3%) |
 
 ## Id reservations (in flight; check main for the authoritative list)
 

@@ -2635,3 +2635,12 @@ Function constructors. 461 of them pass. The 79 failures are in the ratchet:
 In the difftest corpus, the dquickts cases that use dynamic code run now. Four that read
 the caller's locals through eval are `skip-djs` (direct eval). The rest pass or are in the
 ratchet, waiting for completion values.
+
+## D015: Sloppy `this` binding for Function-constructor functions
+date: 2026-11-01 · by: coordinator · issue: 0059
+Bundled libraries find the global object with `Function("return this")()`, which in an
+always-strict engine returns undefined (and djs has no `global`/`self`). Functions created
+by the four `Function` constructors whose body has no `"use strict"` directive therefore
+get sloppy `this` binding (OrdinaryCallBindThis: undefined/null → the global object,
+primitives → wrapper objects). Nothing else of sloppy mode: no implicit globals, no
+mapped arguments, no `with`. Everything else stays strict.

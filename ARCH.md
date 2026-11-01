@@ -185,8 +185,10 @@ allocator.
 **Semantics stance:** always strict. Codemode scripts compile as the body of an async
 function. A Script mode (global `var`/function bindings on the global object, a global
 lexical scope) exists as well, for test262 and `$262.evalScript` (decision D004). Modules
-come later and only if needed. There is no direct `eval`; indirect
-eval and `Function` may come later.
+come later and only if needed. There is no direct `eval`. Indirect eval and the
+`Function` constructors exist (D014): a call `eval(x)` behaves as indirect eval. Functions
+created by the `Function` constructors without a `"use strict"` directive get sloppy
+`this` binding only (D015), nothing else of sloppy mode.
 
 ## Interpreter
 
