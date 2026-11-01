@@ -9,6 +9,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0002 | test262 infrastructure and oracle baseline | infra | .worktrees/0002-test262-infra |
 | 0004 | Number <-> string conversion | num | .worktrees/0004-number-conversion |
 | 0005 | Values, arena heap, strings, atoms, objects | heap | .worktrees/0005-values-heap |
+| 0008 | Compiler and bytecode design note | lexer | .worktrees/0008-compiler-design |
 
 ## Open (ready)
 
