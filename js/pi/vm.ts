@@ -467,6 +467,11 @@ interface Prepared {
 const imageCache = new WeakMap<object, Map<string, PreludeImage>>();
 const IMAGE_CACHE_ENTRIES = 16;
 const MAX_CACHE_KEY = 64 * 1024;
+/**
+ * The heap size the last cold start sealed after its prelude: the next one starts with the
+ * room for it (0120). A hint only: 0 before the first.
+ */
+let sealedSize = 0;
 
 /** A prelude image: the collected VM right after the prelude, and its handles. */
 interface PreludeImage {
@@ -554,7 +559,7 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
   const cached = options.reuseImages === false ? undefined : imageCache.get(module)?.get(key);
   const engine = cached
     ? Engine.restore(module, cached.image, data.memoryLimitBytes)
-    : Engine.create(module, data.memoryLimitBytes);
+    : Engine.create(module, data.memoryLimitBytes, sealedSize);
   const state: SessionState = {
     api: 0,
     settle: 0,
@@ -574,7 +579,12 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
       prepared = prepare(session, engine, prelude, data);
       // Every cold start collects after the prelude (D1890), cached or not: the prelude
       // image then holds only live cells, and cold and warm starts go on from the same heap.
-      engine.collect();
+      // Sealed (D2041): the prelude's state is old, so the collections while scripts run
+      // only trace and move what they made.
+      engine.seal();
+      // The next cold start reserves for this size up front (0120): growing the heap
+      // while the prelude runs moved it, and the old block stayed behind as a hole.
+      sealedSize = engine.heapSize;
       if (options.reuseImages !== false && key.length <= MAX_CACHE_KEY) {
         const entry = { image: engine.image(), prepared };
         cachePreludeImage(module, key, entry);

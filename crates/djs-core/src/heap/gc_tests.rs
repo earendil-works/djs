@@ -1073,7 +1073,7 @@ fn iterators_survive_deletes_compaction_and_clear() {
 fn old_and_young(seed: u64, ops: usize, more: usize) -> (Heap, Vec<Handle>) {
     let mut h = Heap::new().unwrap();
     let mut hs = build_random(&mut h, seed, ops, None);
-    h.collect().unwrap();
+    h.seal().unwrap();
     assert_eq!(h.old_end(), h.arena().len());
     grow_random(&mut h, seed ^ 0x55, more, &mut hs, None, |_| {});
     (h, hs)
@@ -1129,8 +1129,8 @@ fn scheduled_collections_do_not_change_compacted_images() {
         let mut b = Heap::new().unwrap();
         let mut ha = build_random(&mut a, seed, 300, None);
         let mut hb = build_random(&mut b, seed, 300, None);
-        a.collect().unwrap();
-        b.collect().unwrap();
+        a.seal().unwrap();
+        b.seal().unwrap();
         grow_random(&mut a, seed, 900, &mut ha, None, |_| {});
         let mut minors = 0;
         grow_random(&mut b, seed, 900, &mut hb, Some(7), |h| {
@@ -1174,7 +1174,7 @@ fn dead_old_cells_keep_young_cells_until_a_full_collection() {
     let mut h = Heap::new().unwrap();
     let holder = h.new_object(None).unwrap();
     let hh = h.new_handle(Value::object(holder)).unwrap();
-    h.collect().unwrap();
+    h.seal().unwrap();
     // A young string, referenced only by the old holder; then the holder dies.
     let s = Value::string(h.alloc_str(&"young".repeat(100)).unwrap());
     let holder = h.get_handle(hh).as_object().unwrap();
@@ -1189,6 +1189,13 @@ fn dead_old_cells_keep_young_cells_until_a_full_collection() {
     // made: they never die).
     let full = h.collect().unwrap();
     assert!(full.after + 500 < minor.after, "{full:?} {minor:?}");
+    // The old region shrinks to its live cells (the holder died); the rest stays young.
+    assert!(
+        h.old_end() < old && h.old_end() < full.after,
+        "{} {old}",
+        h.old_end()
+    );
+    h.verify().unwrap();
 }
 
 #[test]
@@ -1200,7 +1207,7 @@ fn old_collections_with_young_keys() {
     let hw = weak(&mut h, ObjectClass::WeakMap);
     let old_key = h.new_object(None).unwrap();
     let hok = h.new_handle(Value::object(old_key)).unwrap();
-    h.collect().unwrap();
+    h.seal().unwrap();
     let mut keep = Vec::new();
     for i in 0..30 {
         h.new_object(None).unwrap(); // garbage, so the keys move
@@ -1250,7 +1257,7 @@ fn old_ropes_flattened_later() {
     let b = h.alloc_str(&"b".repeat(40)).unwrap();
     let r = h.concat(a, b).unwrap();
     let hr = h.new_handle(Value::string(r)).unwrap();
-    h.collect().unwrap();
+    h.seal().unwrap();
     let r = h.get_handle(hr).as_string().unwrap();
     h.flatten(r).unwrap();
     // A young reference to the old rope too.

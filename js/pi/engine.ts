@@ -34,6 +34,8 @@ interface Exports {
   vm_arena_ptr(vm: number): number;
   vm_arena_len(vm: number): number;
   vm_collect(vm: number): number;
+  vm_seal(vm: number): number;
+  vm_new_reserved?(memoryLimit: number, live: number): number;
   vm_compile_file(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
   vm_new_host_function(vm: number, fnId: number, nameLen: number): number;
   vm_decode_wire(vm: number, len: number): number;
@@ -90,10 +92,15 @@ export class Engine {
   readonly vm: number;
   private readonly atomCache: (string | undefined)[] = [];
 
-  /** A new VM; throws if the module is not djs-wasm or `memoryLimit` is too small. */
-  static create(module: WebAssembly.Module, memoryLimit: number | undefined): Engine {
+  /**
+   * A new VM; throws if the module is not djs-wasm or `memoryLimit` is too small. With
+   * `live`, the heap starts with the room a heap of that size gets (its next collection
+   * threshold): growing later would move it and leave the old block behind as a hole in
+   * wasm memory.
+   */
+  static create(module: WebAssembly.Module, memoryLimit: number | undefined, live = 0): Engine {
     const x = instantiate(module);
-    const vm = x.vm_new(memoryLimit ?? 0);
+    const vm = x.vm_new_reserved ? x.vm_new_reserved(memoryLimit ?? 0, live) : x.vm_new(memoryLimit ?? 0);
     if (vm === 0) throw new Error(`Cannot create a djs VM: ${outText(x) || "memory limit too small"}`);
     return new Engine(module, x, vm);
   }
@@ -147,6 +154,14 @@ export class Engine {
    */
   collect(): boolean {
     return this.trap(() => this.x.vm_collect(this.vm)) === 0;
+  }
+
+  /**
+   * Collects garbage and makes everything live old (D2041): the collections while scripts
+   * run leave it alone. False as for `collect`.
+   */
+  seal(): boolean {
+    return this.trap(() => this.x.vm_seal(this.vm)) === 0;
   }
 
   get heapSize(): number {

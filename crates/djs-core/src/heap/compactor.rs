@@ -58,6 +58,22 @@ fn stack_cap(len: u32) -> usize {
     (len as usize / 64).max(STACK_CAP)
 }
 
+/// Entries of the remembered list of a minor collection (16 KiB). Old regions point to
+/// few young cells (the interpreter's stack and registers, the handles, globals); past
+/// that, the update pass walks the old region instead.
+const REMEMBERED_CAP: usize = 4096;
+
+fn remembered_cap() -> usize {
+    #[cfg(test)]
+    {
+        let c = TEST_STACK_CAP.with(|c| c.get());
+        if c != 0 {
+            return c;
+        }
+    }
+    REMEMBERED_CAP
+}
+
 /// Bytes per block of the forwarding table: one `u64` of the bitmap.
 const BLOCK: u32 = 512;
 
@@ -78,7 +94,17 @@ struct Marker<'a> {
     ephemerons: u32,
     /// Ephemeron tables in the old region (found by the old walk).
     old_ephemerons: u32,
+    /// The old walk's finds for the update pass: slots holding a young reference (a
+    /// `Value` slot, or a `Ref` slot with [`REMEMBER_REF`]) and old collections to
+    /// rehash ([`REMEMBER_REHASH`]). Valid only while `remembered_ok`.
+    remembered: Vec<u32>,
+    remembered_ok: bool,
 }
+
+/// A remembered `Ref` slot (slots are 4-aligned, so the low bits are free).
+const REMEMBER_REF: u32 = 1;
+/// A remembered old collection object to rehash.
+const REMEMBER_REHASH: u32 = 2;
 
 impl Marker<'_> {
     /// Whether the cell at `off` is live: old, or marked.
@@ -195,9 +221,13 @@ impl Marker<'_> {
     /// for the young cells it references (no write barrier: the walk reads them all). Old
     /// ephemeron tables are counted for the fixpoint instead, and old collections with
     /// young keys are flagged for a rehash.
+    ///
+    /// The slots it finds are remembered for the update pass, which then does not walk
+    /// the old region again (unless there were more than the list holds).
     fn mark_old(&mut self) {
+        let old = self.old;
         let mut c = 0;
-        while c < self.old {
+        while c < old {
             let h: u64 = self.arena.read(c);
             let (kb, size) = (h as u8, (h >> 32) as u32);
             if kb == CellKind::EphemeronArray as u8 {
@@ -205,18 +235,46 @@ impl Marker<'_> {
             } else if !is_leaf(kb) {
                 let kind =
                     CellKind::from_u8(kb).unwrap_or_else(|| super::fail::bad_cell_kind(kb, c));
-                if kind == CellKind::Object
+                if kind == CellKind::FuncTemplate {
+                    // Offsets of young shapes and prototypes may move (D1621). Emptied
+                    // now: nothing reads them during the collection.
+                    super::gc::clear_offset_caches(self.arena, c);
+                } else if kind == CellKind::Object
                     && is_collection(self.arena, c)
-                    && super::collection::has_young_keys(self.arena, c, self.old)
+                    && super::collection::has_young_keys(self.arena, c, old)
                 {
                     let gc = (h >> 8) as u8;
                     self.arena.set(c, Header::GC, gc | gc_bits::REHASH);
+                    self.remember(c | REMEMBER_REHASH);
                 }
-                walk::for_each_slot(kind, c, size, |slot| self.mark_slot(slot));
+                walk::for_each_slot(kind, c, size, |slot| {
+                    let (t, entry) = match slot {
+                        Slot::Value(s) => (self.arena.read::<Value>(s).ref_offset(), s),
+                        Slot::Ref(s) => (self.arena.read::<Ref>(s).get(), s | REMEMBER_REF),
+                    };
+                    if t.is_some_and(|t| t >= old) {
+                        self.mark_slot(slot);
+                        self.remember(entry);
+                    }
+                });
                 self.drain();
             }
             c += size;
         }
+    }
+
+    /// Adds an entry to the remembered list (a slot, or a collection to rehash); when it
+    /// is full or cannot grow, the update pass walks the old region instead.
+    #[inline]
+    fn remember(&mut self, entry: u32) {
+        if !self.remembered_ok {
+            return;
+        }
+        if self.remembered.len() == self.remembered.capacity() {
+            self.remembered_ok = false;
+            return;
+        }
+        self.remembered.push(entry);
     }
 
     /// The first ephemeron table to resolve at or after `from`, in address order: old
@@ -434,15 +492,24 @@ impl Heap {
     /// The in-place collection (see the module docs and [`Heap::collect`]) of the cells
     /// from `old` on: 0 for a full collection, the old region's end for a minor one, where
     /// the cells below `old` count as live and stay where they are.
-    pub(super) fn mark_compact(&mut self, old: u32) -> Result<(u32, u32), HeapError> {
+    ///
+    /// Returns the arena sizes before and after, and where the old region ends now: the
+    /// live bytes below its old end (in a minor collection, its end).
+    pub(super) fn mark_compact(&mut self, old: u32) -> Result<(u32, u32, u32), HeapError> {
         let before = self.arena.len();
+        let old_end = self.arena.get(0, super::cells::Roots::OLD_END);
         debug_assert!(old <= before);
         let blocks = (before - old).div_ceil(BLOCK) as usize;
         let mut live: Vec<u64> = Vec::new();
         let mut table: Vec<u32> = Vec::new();
         let mut stack: Vec<u32> = Vec::new();
+        let mut remembered: Vec<u32> = Vec::new();
         live.try_reserve_exact(blocks)
             .and_then(|()| table.try_reserve_exact(blocks))
+            .and_then(|()| match old {
+                0 => Ok(()),
+                _ => remembered.try_reserve_exact(remembered_cap()),
+            })
             .and_then(|()| stack.try_reserve_exact(STACK_CAP.min(stack_cap(before))))
             .map_err(|_| HeapError::HostOutOfMemory)?;
         live.resize(blocks, 0);
@@ -460,6 +527,8 @@ impl Heap {
             cap: stack_cap(before),
             ephemerons: 0,
             old_ephemerons: 0,
+            remembered,
+            remembered_ok: true,
         };
         if old == 0 {
             m.mark(0);
@@ -470,7 +539,8 @@ impl Heap {
         if m.ephemerons + m.old_ephemerons > 0 {
             m.clear_dead_pairs();
         }
-        let live = m.live;
+        let (live, remembered, remembered_ok, old_ephemerons) =
+            (m.live, m.remembered, m.remembered_ok, m.old_ephemerons);
         // Reused to remember the Map/Set objects (new offsets) for the rehash.
         let mut collections = m.stack;
         let mut all_collections = true;
@@ -481,54 +551,81 @@ impl Heap {
             sum += 8 * w.count_ones();
         }
         let after = sum;
+        // The live bytes below the old region's end (a cell boundary, maybe of a dead
+        // cell): its end after the slide.
+        let old_end = if old_end >= before {
+            after
+        } else {
+            live.forward(&table, old_end.max(old))
+        };
         // Nothing below the first dead word moves (usually the base image's cells).
         let dense = live.next_dead(old).min(before);
         // 3. Update every traced slot of the old and the marked cells.
         let arena = &mut self.arena;
-        let update = |arena: &mut Arena, kind: CellKind, c: u32, size: u32| {
-            walk::for_each_slot(kind, c, size, |slot| match slot {
-                Slot::Value(s) => {
-                    let v: Value = arena.read(s);
-                    if let Some(t) = v.ref_offset()
-                        && t >= dense
-                    {
-                        let n = live.forward(&table, t);
-                        arena.write(s, Value::from_raw((v.to_bits() & !0xFFFF_FFFF) | n as u64));
-                    }
+        let update_slot = |arena: &mut Arena, slot: Slot| match slot {
+            Slot::Value(s) => {
+                let v: Value = arena.read(s);
+                if let Some(t) = v.ref_offset()
+                    && t >= dense
+                {
+                    let n = live.forward(&table, t);
+                    arena.write(s, Value::from_raw((v.to_bits() & !0xFFFF_FFFF) | n as u64));
                 }
-                Slot::Ref(s) => {
-                    if let Some(t) = arena.read::<Ref>(s).get()
-                        && t >= dense
-                    {
-                        arena.write(s, Ref(live.forward(&table, t)));
-                    }
-                }
-            });
-        };
-        // The old region: references to young cells (any of its cells may hold one).
-        let mut c = 0;
-        while c < old {
-            let h: u64 = arena.read(c);
-            let (kb, size) = (h as u8, (h >> 32) as u32);
-            if !is_leaf(kb) {
-                let kind =
-                    CellKind::from_u8(kb).unwrap_or_else(|| super::fail::bad_cell_kind(kb, c));
-                if kind == CellKind::FuncTemplate {
-                    // Offsets of young shapes and prototypes may move (D1621).
-                    super::gc::clear_offset_caches(arena, c);
-                }
-                let gc = (h >> 8) as u8;
-                if gc & gc_bits::REHASH != 0 {
-                    arena.set(c, Header::GC, gc & !gc_bits::REHASH);
-                    if collections.len() < collections.capacity() {
-                        collections.push(c);
-                    } else {
-                        all_collections = false;
-                    }
-                }
-                update(arena, kind, c, size);
             }
-            c += size;
+            Slot::Ref(s) => {
+                if let Some(t) = arena.read::<Ref>(s).get()
+                    && t >= dense
+                {
+                    arena.write(s, Ref(live.forward(&table, t)));
+                }
+            }
+        };
+        let update = |arena: &mut Arena, kind: CellKind, c: u32, size: u32| {
+            walk::for_each_slot(kind, c, size, |slot| update_slot(arena, slot));
+        };
+        // The old region's references to young cells: the remembered slots and the old
+        // ephemeron tables (not traced, so not remembered), or a walk over all of it.
+        let mut remember_collection = |arena: &mut Arena, c: u32| {
+            let gc = arena.get(c, Header::GC);
+            arena.set(c, Header::GC, gc & !gc_bits::REHASH);
+            if collections.len() < collections.capacity() {
+                collections.push(c);
+            } else {
+                all_collections = false;
+            }
+        };
+        if remembered_ok {
+            for &e in &remembered {
+                let s = e & !(REMEMBER_REF | REMEMBER_REHASH);
+                match e & (REMEMBER_REF | REMEMBER_REHASH) {
+                    0 => update_slot(arena, Slot::Value(s)),
+                    REMEMBER_REF => update_slot(arena, Slot::Ref(s)),
+                    _ => remember_collection(arena, s),
+                }
+            }
+            let mut c = 0;
+            while old_ephemerons > 0 && c < old {
+                let h: u64 = arena.read(c);
+                if h as u8 == CellKind::EphemeronArray as u8 {
+                    update(arena, CellKind::EphemeronArray, c, (h >> 32) as u32);
+                }
+                c += (h >> 32) as u32;
+            }
+        } else {
+            let mut c = 0;
+            while c < old {
+                let h: u64 = arena.read(c);
+                let (kb, size) = (h as u8, (h >> 32) as u32);
+                if !is_leaf(kb) {
+                    let kind =
+                        CellKind::from_u8(kb).unwrap_or_else(|| super::fail::bad_cell_kind(kb, c));
+                    if (h >> 8) as u8 & gc_bits::REHASH != 0 {
+                        remember_collection(arena, c);
+                    }
+                    update(arena, kind, c, size);
+                }
+                c += size;
+            }
         }
         let mut at = live.next_live(old);
         while let Some(c) = at {
@@ -582,6 +679,6 @@ impl Heap {
                 c += size;
             }
         }
-        Ok((before, after))
+        Ok((before, after, old_end))
     }
 }

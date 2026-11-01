@@ -2758,9 +2758,11 @@ fn base_region_scan_cost() {
     extern crate std;
     use crate::heap::walk::{self, Slot};
     use std::time::Instant;
-    let base_len = vm().heap().bytes().len() as u32;
+    let mut base = vm();
+    base.collect().unwrap();
+    let base_len = base.heap().bytes().len() as u32;
     let (vm, _) = run_script(
-        vm(),
+        base,
         "globalThis.keep = []; for (let i = 0; i < 2000; i++) { const t = { x: i, y: [i] }; if (i % 10 == 0) keep.push(t); }",
     );
     let image = vm.heap().bytes().to_vec();
@@ -2782,6 +2784,16 @@ fn base_region_scan_cost() {
         h.collect_canonical().unwrap();
     }
     let cheney = t.elapsed().as_secs_f64() / n as f64;
+    // A minor collection (0120): the base is the old region.
+    let mut copies: Vec<Heap> = (0..n)
+        .map(|_| Heap::from_bytes_trusted(image.clone(), 1 << 30).unwrap())
+        .collect();
+    assert_eq!(copies[0].old_end(), base_len);
+    let t = Instant::now();
+    for h in &mut copies {
+        h.collect_minor().unwrap();
+    }
+    let minor = t.elapsed().as_secs_f64() / n as f64;
     let h = Heap::from_bytes_trusted(image.clone(), 1 << 30).unwrap();
     let t = Instant::now();
     let mut out = 0u32;
@@ -2805,10 +2817,11 @@ fn base_region_scan_cost() {
     }
     let scan = t.elapsed().as_secs_f64() / n as f64;
     std::println!(
-        "base {base_len} B, arena {} B: cheney {:.3} ms, mark-compact {:.3} ms, linear scan of the base {:.3} ms ({:.1}x less than mark-compact), {} refs out per scan",
+        "base {base_len} B, arena {} B: cheney {:.3} ms, mark-compact {:.3} ms, minor {:.3} ms, linear scan of the base {:.3} ms ({:.1}x less than mark-compact), {} refs out per scan",
         image.len(),
         cheney * 1e3,
         mc * 1e3,
+        minor * 1e3,
         scan * 1e3,
         mc / scan,
         out / n
@@ -3632,4 +3645,73 @@ fn hot_loop_is_invisible() {
             "fuel {fuel}, gc stress {gc_stress}, back-edges {backedges}"
         );
     }
+}
+
+/// 0120: a sealed VM's collections while scripts run are mostly minor (the sealed state is
+/// old): the same output under suspension and GC stress, the same canonical hash under
+/// suspension, and an old region the script's collections keep (minor) or shrink to its
+/// live cells (full).
+#[test]
+fn sealed_vms_collect_minor_and_stay_deterministic() {
+    use crate::heap::cells::Roots;
+    let setup = "globalThis.wm = new WeakMap(); globalThis.m = new Map(); \
+                 globalThis.held = { list: [] }; Array.prototype.extra = function () { return this.length; };";
+    let src = r#"
+        const keep = [];
+        let sum = 0;
+        for (let i = 0; i < 3000; i++) {
+            const k = { i };
+            wm.set(k, { v: i });              // old table, young keys
+            if (i % 50 == 0) { m.set(k, i); keep.push(k); }
+            if (i % 1000 == 0) held.list.push([i, "s" + i]);   // old object, young values
+            sum += [i, i + 1].extra() + ("x" + i).length;
+        }
+        Object.prototype.late = { n: keep.length };   // an old prototype gets a young value
+        let found = 0;
+        for (const k of keep) found += m.get(k) === k.i && wm.get(k).v === k.i ? 1 : 0;
+        console.log(sum, found, held.list.length, ({}).late.n, m.size);
+    "#;
+    let mut base = vm();
+    eval(&mut base, setup);
+    base.seal().unwrap();
+    let sealed = base.heap().old_end();
+    assert_eq!(sealed as usize, base.bytes().len());
+    let image = base.bytes().to_vec();
+    let mut results = Vec::new();
+    for (fuel, suspend, gc_stress) in [(1 << 40, false, false), (1, true, false), (7, false, true)]
+    {
+        let opts = VmOptions {
+            exec: ExecOptions {
+                gc_stress,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let vm = Vm::from_bytes(image.clone(), opts).unwrap();
+        let (vm, out) = finish_script(vm, src, fuel, suspend);
+        vm.heap().verify().unwrap();
+        let a = vm.heap().arena();
+        let minors = a.get(0, Roots::MINORS);
+        let old = vm.heap().old_end();
+        assert!(old <= sealed, "{old} {sealed}");
+        if !gc_stress {
+            // The run collected, at least once in a minor collection.
+            assert!(minors > 0 || old < sealed, "{minors} {old}");
+        }
+        results.push((out, vm.canonical_hash().unwrap()));
+    }
+    assert_eq!(results[0].0.log, ["19890 60 3 60 60"]);
+    assert_eq!(results[0], results[1], "suspension changed the run");
+    // GC stress clears dead WeakMap entries at other times: its graph differs.
+    assert_eq!(results[0].0, results[2].0, "gc stress changed the run");
+}
+
+#[test]
+fn reserved_bases_start_with_room() {
+    let base = base_image();
+    let plain = Vm::from_base(&base, VmOptions::default()).unwrap();
+    let big = Vm::from_base_reserved(&base, VmOptions::default(), 4 << 20).unwrap();
+    assert!(plain.heap().arena().capacity() < 4 << 20);
+    assert!(big.heap().arena().capacity() >= 8 << 20);
+    assert_eq!(plain.bytes(), big.bytes());
 }

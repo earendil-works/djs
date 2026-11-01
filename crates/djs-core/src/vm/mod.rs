@@ -130,6 +130,14 @@ pub struct HostCallInfo {
     pub is_async: bool,
 }
 
+/// The collections an embedder can ask for.
+#[derive(Clone, Copy)]
+enum Collection {
+    Full,
+    Seal,
+    Canonical,
+}
+
 /// A VM: a heap with a realm and interpreter state. Everything is in the heap; the
 /// struct only holds options.
 pub struct Vm {
@@ -219,12 +227,23 @@ impl Vm {
     /// and the compiled prelude. Nothing per VM: no handles, no host functions, no
     /// pending calls. Per-VM state is set up after the copy (see `after_copy`).
     pub fn from_base(base: &[u8], opts: VmOptions) -> Result<Vm, LoadError> {
+        Vm::from_base_reserved(base, opts, 0)
+    }
+
+    /// [`Vm::from_base`] with the arena capacity a heap of `live` bytes would get (its
+    /// next GC threshold plus the slack): for an embedder that knows how big the heap
+    /// gets, such as pi's cold start, which runs its prelude next (0120). Growing later
+    /// would reallocate the arena, and in wasm the old block stays behind as a hole.
+    pub fn from_base_reserved(base: &[u8], opts: VmOptions, live: usize) -> Result<Vm, LoadError> {
         Vm::check_image(base)?;
         // Copied into a buffer with the arena's capacity, so the heap does not reallocate
         // it right away (D1942).
         let mut bytes = Vec::new();
         bytes
-            .try_reserve_exact(Heap::restore_capacity(base.len(), opts.memory_limit))
+            .try_reserve_exact(Heap::restore_capacity(
+                base.len().max(live),
+                opts.memory_limit,
+            ))
             .map_err(|_| LoadError::TooLarge)?;
         bytes.extend_from_slice(base);
         let heap = Heap::from_bytes_trusted(bytes, opts.memory_limit)?;
@@ -739,29 +758,36 @@ impl Vm {
         Some(self.heap.str_to_string(s))
     }
 
-    /// Collects garbage now. Raw values held outside the heap are invalid afterwards.
+    /// Collects garbage now (a full collection). Raw values held outside the heap are
+    /// invalid afterwards.
     pub fn collect(&mut self) -> Result<(), HeapError> {
-        Self::collect_heap(&mut self.heap, false)?;
-        if self.opts.exec.finalization_after_gc {
-            self.schedule_finalization_cleanup()?;
-        }
-        Ok(())
+        self.collect_as(Collection::Full)
+    }
+
+    /// [`Vm::collect`], then everything live is old (`Heap::seal`, D2041): the
+    /// collections while scripts run leave it alone. For the end of the embedder's setup
+    /// (pi calls it after its prelude).
+    pub fn seal(&mut self) -> Result<(), HeapError> {
+        self.collect_as(Collection::Seal)
     }
 
     /// [`Vm::collect`] by copying (Cheney, `Heap::collect_canonical`): the heap comes out
     /// as a function of its object graph alone. For images that should not depend on how
     /// they were built (the base image, 0101).
     pub fn collect_canonical(&mut self) -> Result<(), HeapError> {
-        Self::collect_heap(&mut self.heap, true)?;
+        self.collect_as(Collection::Canonical)
+    }
+
+    fn collect_as(&mut self, how: Collection) -> Result<(), HeapError> {
+        Self::collect_heap(&mut self.heap, how)?;
         if self.opts.exec.finalization_after_gc {
             self.schedule_finalization_cleanup()?;
         }
         Ok(())
     }
 
-    /// A collection of `heap` alone (no finalization scheduling): in place, or by copying
-    /// with `canonical`.
-    fn collect_heap(heap: &mut Heap, canonical: bool) -> Result<(), HeapError> {
+    /// A collection of `heap` alone (no finalization scheduling).
+    fn collect_heap(heap: &mut Heap, how: Collection) -> Result<(), HeapError> {
         // Popped values above `sp` must not keep garbage alive (as at the interpreter's
         // safepoints): the stack is traced to its full capacity.
         let i = state::interp(heap);
@@ -770,11 +796,12 @@ impl Vm {
         for k in sp..heap.value_array_capacity(stack) {
             heap.value_array_set(stack, k, Value::UNDEFINED);
         }
-        if canonical {
-            heap.collect_canonical().map(|_| ())
-        } else {
-            heap.collect().map(|_| ())
+        match how {
+            Collection::Full => heap.collect(),
+            Collection::Seal => heap.seal(),
+            Collection::Canonical => heap.collect_canonical(),
         }
+        .map(|_| ())
     }
 
     /// A hash of the VM's state that does not depend on when it last collected (D1730):
@@ -787,7 +814,7 @@ impl Vm {
         let limit = (self.heap.bytes().len()).max(self.opts.memory_limit);
         let mut copy = Heap::from_bytes_trusted(self.heap.bytes().to_vec(), limit)
             .map_err(|_| HeapError::OutOfMemory)?;
-        Self::collect_heap(&mut copy, true)?;
+        Self::collect_heap(&mut copy, Collection::Canonical)?;
         Ok(fnv64(copy.bytes()))
     }
 

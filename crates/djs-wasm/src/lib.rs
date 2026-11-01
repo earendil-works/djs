@@ -378,6 +378,18 @@ pub extern "C" fn vm_new(memory_limit: u32) -> u32 {
     add_new_vm(djs_prelude::new_vm(options(memory_limit)))
 }
 
+/// Like `vm_new`, with the arena capacity a heap of `live` bytes gets (its next GC
+/// threshold and slack) from the start: for a host that knows how big the heap will be
+/// after its setup (pi's cold start runs its prelude next). Growing later would move the
+/// arena and leave its old block behind as a hole in wasm memory.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_new_reserved(memory_limit: u32, live: u32) -> u32 {
+    add_new_vm(djs_prelude::new_vm_reserved(
+        options(memory_limit),
+        live as usize,
+    ))
+}
+
 /// Like `vm_new`, but builds the realm and compiles the prelude instead of copying the
 /// base (about 150x slower). For checking the base against the realm built in wasm; only
 /// with the `compiled-prelude` feature.
@@ -456,6 +468,14 @@ pub extern "C" fn vm_collect(vm: u32) -> i32 {
             -1
         }
     })
+}
+
+/// Collects garbage and makes everything live old (D2041): later collections while
+/// scripts run neither trace nor move it. For the end of the embedder's setup (pi's
+/// prelude). Returns 0, or -1 if the heap could not reserve the side tables.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_seal(vm: u32) -> i32 {
+    with(|s| if s.slot(vm).vm.seal().is_ok() { 0 } else { -1 })
 }
 
 // ---- Code ----------------------------------------------------------------------------

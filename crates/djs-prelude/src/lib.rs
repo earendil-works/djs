@@ -22,7 +22,13 @@ pub static BASE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/base.img"));
 /// A new VM from [`BASE`]. `opts.prelude` is ignored: the base has the prelude.
 /// Fails only if the memory limit is smaller than the base.
 pub fn new_vm(opts: VmOptions) -> Result<Vm, HeapError> {
-    match Vm::from_base(BASE, opts) {
+    new_vm_reserved(opts, 0)
+}
+
+/// [`new_vm`] with the arena capacity of a heap of `live` bytes
+/// ([`Vm::from_base_reserved`]).
+pub fn new_vm_reserved(opts: VmOptions, live: usize) -> Result<Vm, HeapError> {
+    match Vm::from_base_reserved(BASE, opts, live) {
         Ok(vm) => Ok(vm),
         Err(LoadError::TooLarge) => Err(HeapError::OutOfMemory),
         // Made by this build's build.rs and verified there: anything else is a build bug.

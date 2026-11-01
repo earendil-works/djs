@@ -173,10 +173,9 @@ impl Heap {
     /// of the whole heap. Must only be called at a safepoint: every `Obj`, `Str`, `Sym`
     /// and `Value` held outside the heap is invalid afterwards; keep [`Handle`]s instead.
     ///
-    /// The surviving cells keep their address order, and all of them become the old
-    /// region (`Roots::OLD_END`, 0120): later minor collections ([`Heap::collect_auto`])
-    /// leave them alone. On `Err(HostOutOfMemory)` (the host could not provide the side
-    /// tables) the heap is unchanged.
+    /// The surviving cells keep their address order; the old region (`Roots::OLD_END`,
+    /// 0120) shrinks to its live cells. On `Err(HostOutOfMemory)` (the host could not
+    /// provide the side tables) the heap is unchanged.
     ///
     /// [`Handle`]: super::Handle
     pub fn collect(&mut self) -> Result<GcStats, HeapError> {
@@ -184,25 +183,34 @@ impl Heap {
         if core::mem::take(&mut self.fail_next_gc_reserve) {
             return Err(HeapError::HostOutOfMemory);
         }
-        let (before, after) = self.mark_compact(0)?;
-        self.set_old_region(after, 0);
+        let (before, after, old) = self.mark_compact(0)?;
+        self.set_old_region(old, 0);
         self.after_collect(after);
         Ok(GcStats { before, after })
     }
 
+    /// A full collection that makes everything live old (D2041): later minor
+    /// collections neither trace nor move it. For the end of a setup phase whose
+    /// state lives on, such as pi's prelude: everything after it is young.
+    pub fn seal(&mut self) -> Result<GcStats, HeapError> {
+        let stats = self.collect()?;
+        self.set_old_region(stats.after, 0);
+        Ok(stats)
+    }
+
     /// The collection the heap's schedule asks for (the interpreter's safepoints): minor,
-    /// or full every [`FULL_EVERY`] collections and after a minor one whose young
-    /// survivors outgrew the old region or that left less headroom than live data. The
-    /// schedule is in the image (`Roots::MINORS`), so whether a collection is minor or
-    /// full is a function of the image alone (D1601).
+    /// and full every [`FULL_EVERY`] collections or after a minor one that left less
+    /// headroom than live data. The schedule is in the image (`Roots::MINORS`), so
+    /// whether a collection is minor or full is a function of the image alone (D1601).
+    /// Without an old region every collection is full.
     pub fn collect_auto(&mut self) -> Result<GcStats, HeapError> {
         let old = self.old_end();
         if old == 0 || self.arena.get(0, Roots::MINORS) + 1 >= FULL_EVERY {
             return self.collect();
         }
         let stats = self.collect_minor()?;
-        if stats.after - old > old || stats.after > self.arena.limit() / 2 {
-            // The next one is full.
+        if stats.after > self.arena.limit() / 2 {
+            // Close to the cap, dead old cells matter: the next collection is full.
             self.arena.set(0, Roots::MINORS, FULL_EVERY - 1);
         }
         Ok(stats)
@@ -218,7 +226,7 @@ impl Heap {
             return Err(HeapError::HostOutOfMemory);
         }
         let old = self.old_end();
-        let (before, after) = self.mark_compact(old)?;
+        let (before, after, _) = self.mark_compact(old)?;
         let minors = self.arena.get(0, Roots::MINORS);
         self.set_old_region(old, minors + 1);
         self.after_collect(after);
@@ -344,7 +352,8 @@ impl Heap {
         // was measured and rejected (D1870): in wasm a freed from-space also serves the
         // Rust allocations between collections, and pinning it raised peak memory.
         self.arena = to;
-        // A full collection: everything live is old now, as after `collect`.
+        // Canonical images are sealed (the base image's old region is all of it), and
+        // their bytes do not depend on where the old region ended (D1730).
         self.set_old_region(after, 0);
         self.after_collect(after);
         for o in collections {
