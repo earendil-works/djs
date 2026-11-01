@@ -331,8 +331,10 @@ impl Repl {
                 }
             }
             Plan::Script(f) => {
+                // Declarations complete with `undefined`: not worth a line each.
                 if let Outcome::Done(v) = self.report(f)
                     && SCRIPT_COMPLETION_VALUES
+                    && !v.is_undefined()
                 {
                     println!("{}", inspect::inspect(self.vm.heap(), v));
                 }
