@@ -161,6 +161,9 @@ impl Parser<'_, '_> {
     }
 
     fn parse_assign_inner(&mut self, no_in: bool) -> PResult<Expr> {
+        if self.f.is_generator && self.tok.kw == Kw::Yield && !self.tok.has_escape() {
+            return self.parse_yield(no_in);
+        }
         if let Some(arrow) = self.try_arrow(no_in)? {
             return Ok(arrow);
         }

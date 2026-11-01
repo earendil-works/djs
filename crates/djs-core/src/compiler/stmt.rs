@@ -454,7 +454,7 @@ impl Parser<'_, '_> {
     /// to its close subroutine). With `keep_value` the value on top of the stack (a
     /// `return` value) stays on top and is the finally blocks' value slot; otherwise
     /// `undefined` is. Returns the operand depth left, not counting a kept value.
-    fn emit_unwind(&mut self, from: usize, keep_value: bool) -> u32 {
+    pub(super) fn emit_unwind(&mut self, from: usize, keep_value: bool) -> u32 {
         let mut cur = self.stmt_depth;
         let exits: Vec<(BlockKind, crate::bytecode::Label, u32)> = self.blocks[from..]
             .iter()
