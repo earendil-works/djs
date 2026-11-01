@@ -22,6 +22,7 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
 - D2100: The guide: Markdown in docs/guide, our own generator, generated parts checked in
 - D2101: Status numbers are generated: counted from the repository or recorded with their commit
 - D2102: The guide is self-contained; checked by djs-docs
+- D2103: Live examples: a textarea over the highlighted code, our own JS tokenizer
 
 ## Testing: test262
 

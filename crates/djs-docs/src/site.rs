@@ -9,6 +9,7 @@ use crate::{Guide, page_set, repo};
 
 const STYLE: &str = include_str!("../assets/style.css");
 const LIVE: &str = include_str!("../assets/live.js");
+const HIGHLIGHT: &str = include_str!("../assets/highlight.js");
 const SEARCH: &str = include_str!("../assets/search.js");
 const STRIP: &str = include_str!("../assets/strip.mjs");
 const PAGE: &str = include_str!("../assets/page.js");
@@ -144,6 +145,7 @@ pub fn build(g: &mut Guide, out: &Path, wasm: &Path) -> Result<(), String> {
     write("page.js", PAGE)?;
     copy_dir(&repo().join(ELANOR_DIR), &out.join("elanor"))?;
     write("live.js", LIVE)?;
+    write("highlight.js", HIGHLIGHT)?;
     write("search.js", SEARCH)?;
     write("search.json", &crate::search::index(&rendered, html_name))?;
     if let Some(first) = order.first().and_then(|e| e.path.as_deref()) {
@@ -338,8 +340,7 @@ fn template(
 <aside class="toc">{toc}</aside></main>
 </div>
 <script type="module" src="page.js"></script>
-<script type="module" src="live.js"></script>
-<script type="module" src="search.js"></script>
+{live}<script type="module" src="search.js"></script>
 </body>
 </html>
 "##,
@@ -349,6 +350,13 @@ fn template(
             .html
             .replace("<table>", "<div class=\"table-scroll\"><table>")
             .replace("</table>", "</table></div>"),
+        // Only pages with live examples load their editor (live.js loads djs-wasm itself,
+        // on first use).
+        live = if page.html.contains("<div class=\"live\"") {
+            "<script type=\"module\" src=\"live.js\"></script>\n"
+        } else {
+            ""
+        },
         repo = render::REPO_URL,
         menu = icon(ICON_MENU, "menu-icon"),
         search_icon = icon(ICON_SEARCH, "search-icon"),

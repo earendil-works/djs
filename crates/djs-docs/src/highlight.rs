@@ -230,6 +230,120 @@ mod tests {
         }
     }
 
+    /// The live examples' editor highlights with assets/highlight.js, a port of the JS
+    /// half of this file: it must give the same HTML for every JS/TS block of the guide
+    /// and for the corner cases below (D2103). Needs node, like the rest of the gate.
+    #[test]
+    fn js_port_agrees() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut samples: Vec<String> = [
+            "const x = f(1, \"a\"); // c\nnew Map(null)",
+            "a / b /* c */ / d; x = /re/g; `t ${x} \\` u`; 'it\\'s'",
+            "function f() {} async function* g() {} fn h",
+            "naïve → done; ünïcode_$ x1 1_000n 0x1F 1.5e3 .5",
+            "type T = { a: number; b: string | unknown }; interface I extends Base {}",
+            "unterminated \"string\nand /* comment",
+            "\t tab\u{a0}nbsp\u{2028}ls ",
+            "",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        for e in std::fs::read_dir(root.join("../../docs/guide")).unwrap() {
+            let text = std::fs::read_to_string(e.unwrap().path()).unwrap_or_default();
+            let mut block: Option<String> = None;
+            for line in text.lines() {
+                match &mut block {
+                    None if line.starts_with("```js") || line.starts_with("```ts") => {
+                        block = Some(String::new())
+                    }
+                    Some(b) if line == "```" => {
+                        samples.push(std::mem::take(b));
+                        block = None;
+                    }
+                    Some(b) => {
+                        b.push_str(line);
+                        b.push('\n');
+                    }
+                    None => {}
+                }
+            }
+        }
+        assert!(samples.len() > 20, "the guide's examples were not found");
+        let script = format!(
+            "import {{ highlight }} from {:?};\n\
+             let s = ''; process.stdin.on('data', (d) => (s += d));\n\
+             process.stdin.on('end', () => process.stdout.write(JSON.stringify(JSON.parse(s).map(highlight))));",
+            format!("file://{}", root.join("assets/highlight.js").display())
+        );
+        let mut child = std::process::Command::new("node")
+            .args(["--input-type=module", "-e", &script])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .expect("node is needed to test assets/highlight.js");
+        let input = format!(
+            "[{}]",
+            samples
+                .iter()
+                .map(|s| json_str(s))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        use std::io::Write;
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(input.as_bytes())
+            .unwrap();
+        let out = child.wait_with_output().unwrap();
+        assert!(out.status.success(), "node failed");
+        let got = String::from_utf8(out.stdout).unwrap();
+        let want = format!(
+            "[{}]",
+            samples
+                .iter()
+                .map(|s| json_str(&highlight("js", s)))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        if got != want {
+            let (g, w): (Vec<char>, Vec<char>) = (got.chars().collect(), want.chars().collect());
+            let at = g.iter().zip(&w).take_while(|(a, b)| a == b).count();
+            let ctx = |v: &[char]| {
+                v[at.saturating_sub(80)..(at + 80).min(v.len())]
+                    .iter()
+                    .collect::<String>()
+            };
+            panic!(
+                "assets/highlight.js differs from highlight.rs\n js: {}\n rs: {}",
+                ctx(&g),
+                ctx(&w)
+            );
+        }
+    }
+
+    /// JSON.stringify's form of a string, so the two outputs compare as text.
+    fn json_str(s: &str) -> String {
+        let mut o = String::from("\"");
+        for c in s.chars() {
+            match c {
+                '"' => o.push_str("\\\""),
+                '\\' => o.push_str("\\\\"),
+                '\n' => o.push_str("\\n"),
+                '\r' => o.push_str("\\r"),
+                '\t' => o.push_str("\\t"),
+                '\u{8}' => o.push_str("\\b"),
+                '\u{c}' => o.push_str("\\f"),
+                c if (c as u32) < 0x20 => o.push_str(&format!("\\u{:04x}", c as u32)),
+                c => o.push(c),
+            }
+        }
+        o.push('"');
+        o
+    }
+
     #[test]
     fn rust_specials() {
         let h = highlight("rust", "fn get<'a>(x: &'a u32) -> char { vec![b'x'] }");

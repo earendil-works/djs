@@ -259,27 +259,57 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
     }
 }
 
+/// A live example (D2103). The markup is the page without JavaScript: the highlighted
+/// code and the output and bytecode from the build. live.js turns the code into an
+/// editor (a textarea over this `pre`, which keeps showing the highlighting), shows the
+/// Run and Reset buttons and makes the tabs work.
 fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
     let out_text = crate::run::run(code);
     let disasm = crate::run::disasm(code);
+    let tab = |id: &str, label: &str, selected: bool| {
+        format!(
+            "<button role=\"tab\" id=\"live-{n}-tab-{id}\" data-tab=\"{id}\" aria-controls=\"live-{n}-{id}\" \
+             aria-selected=\"{selected}\" tabindex=\"{}\"{}>{label}</button>",
+            if selected { 0 } else { -1 },
+            // Without JavaScript the tabs cannot switch: only Output shows.
+            if selected { "" } else { " hidden" }
+        )
+    };
+    let pane = |tag: &str, id: &str, hidden: bool, body: &str| {
+        format!(
+            "<{tag} class=\"live-pane\" data-pane=\"{id}\" id=\"live-{n}-{id}\" role=\"tabpanel\" \
+             aria-labelledby=\"live-{n}-tab-{id}\" tabindex=\"0\"{}>{body}</{tag}>\n",
+            if hidden { " hidden" } else { "" }
+        )
+    };
     format!(
         "<div class=\"live\" id=\"live-{n}\">\n\
          <div class=\"live-bar\"><span class=\"live-badge\">live</span>\
-         <span class=\"live-note\">runs in djs-wasm in your browser</span>\
-         <button class=\"live-edit\">Edit</button><button class=\"live-run\">Run ▸</button></div>\n\
-         <pre class=\"code\"><code class=\"lang-{lang}\">{hl}</code></pre>\n\
-         <textarea class=\"live-src\" hidden spellcheck=\"false\">{}</textarea>\n\
-         <div class=\"live-tabs\" role=\"tablist\"><button data-tab=\"out\" aria-selected=\"true\">Output</button>\
-         <button data-tab=\"bytecode\">Bytecode</button><button data-tab=\"heap\">Heap</button>\
-         <button data-tab=\"snapshot\">Suspend &amp; snapshot</button><span class=\"live-status\"></span></div>\n\
-         <pre class=\"live-pane\" data-pane=\"out\">{}</pre>\n\
-         <pre class=\"live-pane\" data-pane=\"bytecode\" hidden>{}</pre>\n\
-         <div class=\"live-pane\" data-pane=\"heap\" hidden><p class=\"muted\">Run the example to walk the VM's arena.</p></div>\n\
-         <div class=\"live-pane\" data-pane=\"snapshot\" hidden><p class=\"muted\">Run the example to see it suspend and snapshot.</p></div>\n\
-         </div>\n",
-        esc(code),
-        esc(&out_text),
-        esc(&disasm)
+         <span class=\"live-note\">output from the build</span>\
+         <button class=\"live-reset\" hidden>Reset</button>\
+         <button class=\"live-run\" hidden>Run</button></div>\n\
+         <div class=\"live-editor\"><pre class=\"code\"><code class=\"lang-{lang}\">{hl}</code></pre></div>\n\
+         <div class=\"live-tabs\" role=\"tablist\" aria-label=\"Results\">{}{}{}{}\
+         <span class=\"live-status\" role=\"status\"></span></div>\n\
+         {}{}{}{}</div>\n",
+        tab("out", "Output", true),
+        tab("bytecode", "Bytecode", false),
+        tab("heap", "Heap", false),
+        tab("snapshot", "Suspend &amp; snapshot", false),
+        pane("pre", "out", false, &esc(&out_text)),
+        pane("pre", "bytecode", true, &esc(&disasm)),
+        pane(
+            "div",
+            "heap",
+            true,
+            "<p class=\"muted\">Run the example to walk the VM's arena.</p>"
+        ),
+        pane(
+            "div",
+            "snapshot",
+            true,
+            "<p class=\"muted\">Run the example to see it suspend and snapshot.</p>"
+        ),
     )
 }
 
@@ -499,12 +529,15 @@ mod tests {
     fn live_blocks_carry_their_output() {
         let md = "```js live\nconsole.log(6 * 7)\n```\n<!-- gen:run -->\n```text\n42\n```\n<!-- /gen -->\n\nafter\n";
         let (p, _) = with_env(true, |env| render("p.md", md, env));
-        assert!(
-            p.html
-                .contains("<pre class=\"live-pane\" data-pane=\"out\">42\n</pre>"),
-            "{}",
-            p.html
-        );
+        // Without JavaScript: the highlighted code and the build's output, visible.
+        for want in [
+            "<div class=\"live-editor\"><pre class=\"code\"><code class=\"lang-js\"><span class=\"tok-variable\">console</span>",
+            "data-pane=\"out\" id=\"live-1-out\" role=\"tabpanel\" aria-labelledby=\"live-1-tab-out\" tabindex=\"0\">42\n</pre>",
+            "aria-controls=\"live-1-out\" aria-selected=\"true\" tabindex=\"0\">Output</button>",
+            "data-pane=\"bytecode\" id=\"live-1-bytecode\" role=\"tabpanel\" aria-labelledby=\"live-1-tab-bytecode\" tabindex=\"0\" hidden>",
+        ] {
+            assert!(p.html.contains(want), "{want} in {}", p.html);
+        }
         // The region's copy of the output is not rendered a second time.
         assert!(!p.html.contains("lang-text"), "{}", p.html);
         assert!(p.html.contains("<p>after</p>"));

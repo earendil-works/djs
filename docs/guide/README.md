@@ -81,10 +81,22 @@ snapshot, suspended and restored from its heap image every 50 fuel units. A `run
 is only rewritten by `regen --examples`: a changed output fails the gate, because it is
 a behavior change that someone should look at.
 
-A block marked ```` ```js live ```` becomes a live example on the site: edit and run it in
+A block marked ```` ```js live ```` becomes a live example on the site (D2103): the code is
+an editor, highlighted as it is typed in the same colors as static code, and runs in
 djs-wasm in the browser, with its bytecode, a walk over the VM's heap, and its fuel slices
 and snapshot. Put its `gen:run` region right after it; the site shows that output inside
-the widget.
+the widget until the reader runs the code, and without JavaScript.
+
+How the editor behaves: Run or Ctrl/Cmd-Enter runs the code, and it also runs by itself
+600 ms after the last edit. Tab and Shift-Tab indent and dedent (two spaces, also a
+selection of lines), Enter keeps the line's indentation, Escape leaves the editor so that
+Tab moves on through the page, and Reset (shown once the code differs) brings back the
+original code; undo works throughout. A SyntaxError shows its line and column, an
+uncaught error its stack, both with the source line and a caret, and the place is
+underlined in the code. Runs stop after 20 million units of fuel. The highlighter in the
+browser, `crates/djs-docs/assets/highlight.js`, is a port of
+[highlight.rs](../../crates/djs-docs/src/highlight.rs); a test keeps the two in step, so
+a change to one needs the same change in the other.
 
 ## Checks
 

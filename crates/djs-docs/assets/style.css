@@ -298,7 +298,9 @@ figure.diagram {
 figure.diagram svg { max-inline-size: 100%; block-size: auto; }
 figure.diagram figcaption { margin-block-start: var(--semantic-dimension-space-gap-small); color: var(--semantic-color-text-secondary); font: var(--semantic-typography-ui-secondary); }
 
-/* Live examples (render.rs live_block, live.js) */
+/* Live examples (render.rs live_block, live.js; D2103). The editor is a textarea with
+   transparent text over the highlighted pre: both must lay text out identically, so
+   they share every property that moves a glyph, and both wrap long lines. */
 .live {
   min-inline-size: 0; overflow: hidden;
   border: var(--semantic-dimension-border-width-small) solid var(--semantic-color-border-secondary);
@@ -319,7 +321,18 @@ figure.diagram figcaption { margin-block-start: var(--semantic-dimension-space-g
   background: var(--semantic-color-background-fill-primary); color: var(--semantic-color-text-on-primary-fill);
   font: var(--semantic-typography-ui-tertiary); font-weight: var(--semantic-font-weight-ui-emphasis);
 }
-.live-note { flex: 1; color: var(--semantic-color-text-secondary); }
+.live-note, .live-keys { flex: 1; min-inline-size: 0; color: var(--semantic-color-text-secondary); }
+/* While the code has the keyboard, the bar says which keys do what. */
+.live-keys { display: none; }
+.live:has(.live-src:focus) .live-keys { display: block; }
+.live:has(.live-src:focus) .live-note { display: none; }
+.live kbd { font: inherit; }
+.live-keys kbd {
+  padding-inline: var(--semantic-dimension-space-control-padding-inline-x-small);
+  border: var(--semantic-dimension-border-width-small) solid var(--semantic-color-border-secondary);
+  border-radius: var(--semantic-dimension-radius-small);
+  color: var(--semantic-color-text-primary);
+}
 .live button {
   padding: var(--semantic-dimension-space-control-padding-block-small) var(--semantic-dimension-space-control-padding-inline-small);
   border: 0; border-radius: var(--semantic-dimension-radius-small);
@@ -327,17 +340,47 @@ figure.diagram figcaption { margin-block-start: var(--semantic-dimension-space-g
   font: var(--semantic-typography-ui-secondary); cursor: pointer;
 }
 @media (hover: hover) { .live button:hover { background: var(--semantic-color-background-fill-secondary-hover); } }
-.live button.live-run { background: var(--semantic-color-background-fill-primary); color: var(--semantic-color-text-on-primary-fill); }
+.live button.live-run { background: var(--semantic-color-background-fill-primary); color: var(--semantic-color-text-on-primary-fill); font-weight: var(--semantic-font-weight-ui-emphasis); }
+.live button.live-run kbd { margin-inline-start: var(--semantic-dimension-space-control-gap-small); font-weight: normal; opacity: 0.75; }
+.live-bar button:not(.live-run) { box-shadow: inset 0 0 0 var(--semantic-dimension-border-width-small) var(--semantic-color-border-secondary); background: none; }
 @media (hover: hover) { .live button.live-run:hover { background: var(--semantic-color-background-fill-primary-hover); } }
+.live.is-running button.live-run { cursor: progress; }
 .live-tabs button { background: var(--semantic-color-background-fill-ghost-neutral); color: var(--semantic-color-text-secondary); }
 .live-tabs button[aria-selected="true"] { background: var(--semantic-color-background-fill-ghost-neutral-active); color: var(--semantic-color-text-primary); font-weight: var(--semantic-font-weight-ui-selected); }
 .live-status { margin-inline-start: auto; color: var(--semantic-color-text-secondary); }
-.live-src {
-  display: block; inline-size: 100%; resize: vertical; border: 0;
+.live-editor { position: relative; background: var(--semantic-color-background-fill-secondary); }
+@media (hover: hover) { .live.is-live .live-editor:hover { background: var(--semantic-color-background-fill-secondary-hover); } }
+.live.is-live .live-editor:focus-within { background: var(--semantic-color-background-fill-secondary); }
+.live-editor pre, .live-src {
+  box-sizing: border-box; margin: 0; border: 0;
   padding: var(--semantic-dimension-space-padding-medium) var(--semantic-dimension-space-padding-x-large);
-  background: var(--semantic-color-background-fill-secondary); color: var(--semantic-color-text-code);
-  font: var(--semantic-typography-code-primary); tab-size: 4;
+  font: var(--semantic-typography-code-primary); letter-spacing: var(--semantic-typography-code-primary-letter-spacing);
+  font-kerning: none; font-variant-ligatures: none; tab-size: 4;
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal;
 }
+.live-editor pre { overflow: visible; background: none; }
+.live-editor pre code { white-space: inherit; overflow-wrap: inherit; }
+.live-src {
+  position: absolute; inset: 0; inline-size: 100%; block-size: 100%;
+  overflow: hidden; resize: none; outline: none;
+  background: transparent; color: transparent; -webkit-text-fill-color: transparent;
+  caret-color: var(--semantic-color-text-primary);
+}
+.live-src::selection { background: color-mix(in srgb, var(--semantic-color-focus-ring) 30%, transparent); }
+.live-editor:has(.live-src:focus-visible) { box-shadow: inset 0 0 0 var(--semantic-dimension-border-width-large) var(--semantic-color-focus-ring); }
+@media (forced-colors: active) {
+  /* No colors to highlight with: show the textarea's own text. */
+  .live-src { color: CanvasText; -webkit-text-fill-color: CanvasText; }
+  .live.is-live .live-editor pre { visibility: hidden; }
+}
+/* Where an error happened (a SyntaxError's position, the top frame of an uncaught error). */
+.live-mark { background: var(--semantic-color-background-fill-secondary-negative); text-decoration: underline wavy var(--semantic-color-text-negative); text-decoration-skip-ink: none; text-underline-offset: 0.2em; }
+.live-mark-at { position: relative; }
+.live-mark-at::after {
+  position: absolute; inset-block-end: -0.25em; inset-inline-start: 0; inline-size: 1ch; block-size: 0.15em;
+  background: var(--semantic-color-text-negative); content: "";
+}
+.live-error { color: var(--semantic-color-text-negative); }
 div.live-pane { padding: var(--semantic-dimension-space-padding-small) var(--semantic-dimension-space-padding-x-large); overflow-x: auto; }
 div.live-pane p { margin-block: var(--semantic-dimension-space-flow-x-small); }
 /* Output and bytecode on the canvas, set apart from the source above. */

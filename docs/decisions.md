@@ -5040,3 +5040,30 @@ date: 2026-11-03 · by: perf · issue: 0116
   positives, never miss. With the first byte alone, a common letter (`t` of "throw")
   flagged most positions of a line.
 - `flat_fast` (D2090) is `inline(always)`.
+## D2103: Live examples: a textarea over the highlighted code, our own JS tokenizer
+date: 2026-11-01 · by: docs · issue: 0119
+Every live example of the guide is an editor (owner feedback: no separate view and edit
+modes). It is a `<textarea>` with transparent text and a visible caret laid exactly over
+the `<pre>` that shows the highlighted code; both share every property that moves a
+glyph and wrap long lines (`pre-wrap`, `overflow-wrap: anywhere`), so the page never
+scrolls sideways, and the pre sizes the editor. On every input,
+crates/djs-docs/assets/highlight.js, a port of the JS/TS half of highlight.rs with the
+same roles and classes, repaints the pre. A test runs it in node over every JS/TS block
+of the guide and fails if its HTML differs from highlight.rs. Editing goes through the
+browser's editing commands (`insertText`), so native undo, selection, input methods and
+screen readers keep working: Tab/Shift-Tab indent and dedent (two spaces, also over a
+selection of lines), Enter keeps the indentation (one step more after `{[(`), Backspace
+in the indentation removes one step, Ctrl/Cmd-Enter runs, Escape hands the keyboard back
+to the page (to the result tabs after the editor), Reset restores the original code (undoable). The code
+re-runs 600 ms after the last edit; a run is capped at 20M fuel. Errors are shown with
+their position: a SyntaxError's line and column, an uncaught Error's stack (the code runs
+inside a `try` on its first line whose catch passes the stack out; only line 1's columns
+move, and they are corrected), each with the source line and a caret, and the place is
+underlined in the editor. Without JavaScript the page shows the highlighted code and the
+build-time output, as before; only pages with live examples load live.js, and the sandbox
+package and djs-wasm load on first use (focus, Run). Alternatives: CodeMirror 6 vendored
+(about 150–200 KB minified for the editor and the JavaScript mode, a second highlighter
+whose colors would have to be mapped onto the Elanor roles, and a bundle to pin and
+update) for features a 5–20 line example does not need; highlighting in Rust in the
+docs-only wasm (highlight.rs lives in the std tool crate, and the module loads only on
+first use, so typing before it arrives would show plain text).
