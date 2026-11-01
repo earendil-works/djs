@@ -1,7 +1,7 @@
 # 0060: Out-of-memory recovery
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0060-oom-recovery
 depends-on: 0051
 touches: crates/djs-core/src/heap/ (gc, arena), crates/djs-core/src/interp/ (the OOM throw path), crates/djs-core/src/vm/, js/test/pi-vm.test.ts (restore the strict expectation)
