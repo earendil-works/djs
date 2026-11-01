@@ -29,15 +29,16 @@ messages.
 Measured at issue 0095 (main after 0091). TESTING.md and docs/host.md have the details.
 
 **Conformance.**
-- test262 (at dquickts' pinned commit): djs passes **37,890 of the 37,930** tests in the
-  active group (99.8%). The 40 failures are listed with reasons in
+- test262 (at dquickts' pinned commit): djs passes **38,069 of the 38,109** tests in the
+  active group (99.9%; at 0097 every test outside the skip groups is active). The 40 failures are listed with reasons in
   `tests/test262/expected-failures.txt`; 35 of them follow from djs being always strict
   (TESTING.md "Known differences").
   dquickts' qjs fails 4 active tests under the same runner. Skipped by design: Intl,
   Temporal, SharedArrayBuffer/Atomics, Annex B, sloppy mode, direct eval, modules.
 - The differential corpus (codemode scripts, console and result formatting, error
-  messages, TypeScript, dquickts' own tests): **220 of 227** cases match qjs; 2 known
-  failures (the immutable ArrayBuffer proposal) and 5 skipped as non-goals.
+  messages, TypeScript, dquickts' own tests): **224 of 230** cases match qjs; 1 known
+  failure (a dquickts test that needs SharedArrayBuffer/Atomics, a non-goal) and 5
+  skipped as non-goals.
 - pi's codemode test suite on djs: 221 of 226 tests pass (last run at 0066). The
   failures follow from djs being always strict, or from tests that expect the
   quickjs-wasi fingerprint.

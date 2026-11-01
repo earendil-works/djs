@@ -336,9 +336,12 @@ function DecrementRemaining(remaining: Obj): f64 {
   return n;
 }
 
-/** The Record of an element function. */
+/**
+ * The Record of an element function: 0 called, 1 index, 2 values, 3 capability, 4 the
+ * remaining count, 5 the keys of a keyed combinator (D1972) or undefined.
+ */
 function NewElementRecord(index: f64, values: Obj, capability: Value, remaining: Obj): Obj {
-  const r: Obj = NewRecord(5);
+  const r: Obj = NewRecord(6);
   RecordSet(r, 0, false);
   RecordSet(r, 1, index);
   RecordSet(r, 2, values);
@@ -362,12 +365,93 @@ function SettleElement(data: Value, x: Value, reject: boolean): void {
   CreateDataPropertyOrThrow(values, RecordGet(r, 1), x);
   if (DecrementRemaining(AsObj(RecordGet(r, 4))) === 0) {
     const capability: Value = RecordGet(r, 3);
+    const keys: Value = RecordGet(r, 5);
     if (reject) {
       RejectCapability(capability, NewAggregateError(values));
+    } else if (keys !== undefined) {
+      ResolveCapability(capability, KeyedResult(AsObj(keys), values));
     } else {
       ResolveCapability(capability, values);
     }
   }
+}
+
+/** CreateKeyedPromiseCombinatorResultObject ( keys, values ): a null-prototype object. */
+function KeyedResult(keys: Obj, values: Obj): Obj {
+  const o: Obj = ObjectCreate(null);
+  const n: f64 = LengthOfArrayLike(keys);
+  for (let i: f64 = 0; i < n; i++) {
+    CreateDataPropertyOrThrow(o, Get(keys, i), Get(values, i));
+  }
+  return o;
+}
+
+/**
+ * PerformPromiseKeyed: Promise.allKeyed (kind 0) and allSettledKeyed (1) of the
+ * await-dictionary proposal (D1972). Each own enumerable property (strings and symbols,
+ * in [[OwnPropertyKeys]] order) is resolved with C.resolve and subscribed like an
+ * element of Promise.all / allSettled; the result is a null-prototype object with the
+ * same keys. An abrupt completion rejects the capability.
+ */
+function PerformPromiseKeyed(thisValue: Value, promises: Value, kind: i32): Value {
+  const c: Value = PromiseThisConstructor(thisValue);
+  const capability: Value = NewPromiseCapability(c);
+  try {
+    const promiseResolve: Value = GetPromiseResolve(c);
+    if (!IsObject(promises)) {
+      throw NewTypeError("not an object");
+    }
+    const o: Obj = AsObj(promises);
+    const allKeys: Obj = OwnPropertyKeys(o, 2);
+    const count: f64 = LengthOfArrayLike(allKeys);
+    const keys: Obj = ArrayCreate(0);
+    const values: Obj = ArrayCreate(0);
+    const remaining: Obj = NewRecord(1);
+    RecordSet(remaining, 0, 1);
+    const rejectFn: Value = kind === 0 ? CapabilityRejectFunction(capability) : undefined;
+    let index: f64 = 0;
+    for (let k: f64 = 0; k < count; k++) {
+      const key: Value = Get(allKeys, k);
+      const attrs: i32 = OwnPropertyAttributes(o, key);
+      if (attrs >= 0 && (attrs & 2) !== 0) {
+        const value: Value = Get(o, key);
+        CreateDataPropertyOrThrow(keys, index, key);
+        CreateDataPropertyOrThrow(values, index, undefined);
+        const nextPromise: Value = Call(promiseResolve, c, value);
+        const data: Obj = NewElementRecord(index, values, capability, remaining);
+        RecordSet(data, 5, keys);
+        RecordSet(remaining, 0, AsNumber(RecordGet(remaining, 0)) + 1);
+        if (kind === 0) {
+          InvokeThen(nextPromise, NewBuiltinClosure(3, data, 1), rejectFn);
+        } else {
+          InvokeThen(nextPromise, NewBuiltinClosure(4, data, 1), NewBuiltinClosure(5, data, 1));
+        }
+        index++;
+      }
+    }
+    if (DecrementRemaining(remaining) === 0) {
+      ResolveCapability(capability, KeyedResult(keys, values));
+    }
+  } catch (e) {
+    RejectCapability(capability, e);
+  }
+  return CapabilityPromise(capability);
+}
+
+/**
+ * Promise.allKeyed ( promises ) (the await-dictionary proposal, D1972).
+ * @builtin Promise.allKeyed
+ */
+function PromiseAllKeyed(this: Value, promises: Value): Value {
+  return PerformPromiseKeyed(this, promises, 0);
+}
+
+/**
+ * Promise.allSettledKeyed ( promises ) (the await-dictionary proposal, D1972).
+ * @builtin Promise.allSettledKeyed
+ */
+function PromiseAllSettledKeyed(this: Value, promises: Value): Value {
+  return PerformPromiseKeyed(this, promises, 1);
 }
 
 /**

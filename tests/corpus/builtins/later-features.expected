@@ -1,0 +1,14 @@
+message function function false true
+string true {} {"e":{}}
+custom message,stack
+TypeError
+TypeError
+undefined undefined undefined
+true true
+message string
+null {"a":1,"b":2} 3
+fulfilled y rejected n
+RangeError first
+TypeError
+{} 1 allSettledKeyed
+=== completed

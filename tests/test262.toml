@@ -107,11 +107,10 @@ description = "Phases P3 to P5 of ARCH.md: on the roadmap, not in the current mi
 # and __proto__ (0044's accessor; the error-stack-accessor tests among them stay later).
 # Moved to active in 0065: the feature decorators (the decorator syntax tests and the
 # `accessor` fields).
+# Moved to active in 0097 (the group is empty now): immutable-arraybuffer (D1970),
+# error-stack-accessor (D1971), await-dictionary (D1972) and Symbol.unscopables (its
+# tests passed already; the `with` ones stay skipped).
 paths = [
 ]
 features = [
-  "immutable-arraybuffer",      # binary data
-  "Symbol.unscopables",         # Symbol-heavy (mostly `with`)
-  "error-stack-accessor",       # error stack traces (P5)
-  "await-dictionary",           # proposal
 ]

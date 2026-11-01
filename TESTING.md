@@ -63,9 +63,10 @@ Initial skip set (from ARCH non-goals):
 The initial `later` set covered everything in phases P3 to P5 (BigInt, Proxy, Reflect, typed
 arrays, ArrayBuffer/DataView, generators, regexp features, WeakRef/FinalizationRegistry,
 decorators, explicit-resource-management, Symbol-heavy features, …). Those phases are done
-and their features are active. At 0095 the groups are: 37,930 active, 179 later (proposals
-such as immutable ArrayBuffers, and the error-stack accessor tests), 525 direct-eval and
-14,963 skipped, of 53,597 tests (`djs-test262 list`). Moving tests from `later` to
+and their features are active. 0097 promoted the last 179 (immutable ArrayBuffers,
+the error-stack accessor, Promise.allKeyed, Symbol.unscopables), so the later group is
+empty: 38,109 active, 525 direct-eval and 14,963 skipped, of 53,597 tests
+(`djs-test262 list`). Moving tests from `later` to
 `active` is a coordinator decision; `tests/test262.toml` says why each rule exists.
 
 ### Execution model
@@ -152,9 +153,9 @@ and `--test262 DIR` / `$DJS_TEST262` the checkout. qjs results are cached (D1531
 repeated qjs run of active + later (about 38,100 tests) takes seconds; djs runs the active
 group in about a minute of CPU (release, `-j` workers).
 
-Status at 0095: djs passes 37,890 of the 37,930 active tests (99.8%); the 40 failures are
-listed with reasons in `tests/test262/expected-failures.txt`. qjs fails 4 active tests
-under our runner (`tests/test262/oracle-failures.txt`).
+Status at 0097: djs passes 38,069 of the 38,109 active tests (99.9%), with both builtin
+backends; the 40 failures are listed with reasons in `tests/test262/expected-failures.txt`.
+qjs fails 4 active tests under our runner (`tests/test262/oracle-failures.txt`).
 
 `cargo test -p djs-test262` includes a fixture suite run with qjs that checks failures
 are detected (skipped if qjs is missing). `cargo test -p djs-test262 --test
@@ -186,8 +187,8 @@ Sources (about 230 cases at 0095, in `builtins/`, `codemode/`, `console/`, `dqui
    paths (each fast path's corpus case covers the cases where it must decline).
 
 Error message texts: djs matches QuickJS's messages verbatim. A deliberate difference is
-declared per case with `djs-expect` (below, D1540). Status at 0095: 220 pass, 2 known
-failures (`tests/corpus/expected-failures.txt`), 5 skipped as djs non-goals.
+declared per case with `djs-expect` (below, D1540). Status at 0097: 224 of 230 pass, 1
+known failure (`tests/corpus/expected-failures.txt`), 5 skipped as djs non-goals.
 
 ### The codemode model (D1100)
 
@@ -328,7 +329,7 @@ At 0048: 4053/4802 compared files match, 0 differ, 749 are djs syntax errors.
 ## Known differences (0082)
 
 What is left in the ratchets (`tests/test262/expected-failures.txt`, 40 active tests at
-0095; `tests/corpus/expected-failures.txt`, 2 cases) and why. Everything else in the active
+0095; `tests/corpus/expected-failures.txt`, 1 case at 0097) and why. Everything else in the active
 group passes. Update this list when an entry goes away or a new one is accepted.
 
 **By design** (no fix planned; 40 test262 tests):
@@ -355,9 +356,10 @@ group passes. Update this list when an entry goes away or a new one is accepted.
 Fixed in 0090: the 3 typed-array tests on resizable buffers (Array.prototype.fill with an
 object value, Object.freeze of a non-fixed-length view, subarray of an out-of-bounds view).
 
-**Later** (2 difftest cases): the immutable ArrayBuffer proposal
-(`transferToImmutable`, `sliceToImmutable`) in dquickts/builtin/test_immutable_array_buffer.js
-and test_typed_array.js.
+**Non-goal** (1 difftest case): dquickts/builtin/test_immutable_array_buffer.js needs
+SharedArrayBuffer and Atomics (ARCH non-goals) and sloppy `Function` code. The immutable
+ArrayBuffer proposal itself is implemented (0097, D1970): the same test without those
+lines is tests/corpus/builtins/immutable-arraybuffer.js, and test_typed_array.js passes.
 
 Fixed since 0082 (0084, D1840): Function.prototype is a function (9 tests), [[Set]] of
 an array's `length` converts non-Number values (4), and `atob`/`btoa` and

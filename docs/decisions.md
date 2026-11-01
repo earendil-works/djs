@@ -4349,3 +4349,16 @@ longer lists `stack` (as qjs); `JSON.stringify` and the reader's `Opaque` are un
 through the getter (js/test/pi-vm.test.ts's stack assertions pass), and the difftest
 corpus is unchanged. Objects that are not Errors (`%CaptureStack` of something else) still
 get an own `stack`.
+
+## D1972: Promise.allKeyed and Promise.allSettledKeyed
+date: 2026-11-03 · by: infra · issue: 0097
+The await-dictionary proposal at the pinned test262 commit, as qjs has it.
+`PerformPromiseKeyed` (builtins/promise.ts) walks the own keys of the argument (strings
+and symbols, [[OwnPropertyKeys]] order), takes the enumerable ones ([[GetOwnProperty]]
+then Get, so proxies see their traps in the spec's order), resolves each value with
+C.resolve and subscribes the Promise.all / allSettled element functions (builtin
+closures 3, 4 and 5), whose Record gains a sixth slot with the keys. When the last one
+settles, the result is a null-prototype object with the same keys
+(CreateKeyedPromiseCombinatorResultObject). A non-object argument and every abrupt step
+reject the returned promise. With 0097, test262's later group is empty (D1970, D1971,
+this, and Symbol.unscopables, whose tests passed already).
