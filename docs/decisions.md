@@ -4753,3 +4753,30 @@ Also in 0107:
 
 Tried and dropped: reading a resume call's argument Values with one `n_srcs([..])` call
 instead of one `n_slot` call per argument. It was 13% slower and 1 KB larger.
+
+## D2150: Prototype objects in qjs's property order
+date: 2026-11-03 · by: infra · issue: 0111
+D2072's qjs-order table (crates/djs-bgen/src/qjs_order.rs) now lists the prototypes
+whose order differed: Array, ArrayBuffer, the disposable stacks, DOMException, Date,
+Error, Function, Iterator, Map, Number, Object, RegExp, Set, String, Symbol, Uint8Array,
+WeakMap, WeakSet and %TypedArray%. Symbol keys are written `[Symbol.x]`. Three changes
+let the table decide every key:
+- `constructor` is an install like the others. `%InstallPrototype` sets only
+  `f.prototype`. A new leaf `%InstallPrototypeConstructor(key)` sets
+  `prototype.constructor`, emitted by bgen among the prototype's installs. By default it
+  comes after the prototype's methods (qjs puts it last on most prototypes), and the
+  table moves it where qjs has it elsewhere (String.prototype, %TypedArray%.prototype,
+  DOMException.prototype). A prototype that installs its own `constructor`
+  (Iterator.prototype's accessor) keeps it.
+- Error.prototype's `name` and `message` are `@value` installs in builtins/error.ts
+  rather than realm properties, so that they can follow `toString`. The native error
+  prototypes keep theirs from the realm, already in qjs's order (name, message,
+  constructor).
+- The function-kind prototypes link `constructor` and `prototype` when the prelude
+  installs their constructors (`wire_function_kind_constructor`), not at realm creation.
+  That gives qjs's order on %GeneratorFunction.prototype% (constructor, prototype) and
+  on %GeneratorPrototype% (next, return, throw, constructor).
+What still differs are keys djs does not have: Annex B's HTML methods of
+String.prototype, `setYear`, `RegExp.prototype.compile`, the `__defineGetter__` family,
+and qjs's `Function.prototype.fileName`/`lineNumber`/`columnNumber`. The base image
+changes with the new order.

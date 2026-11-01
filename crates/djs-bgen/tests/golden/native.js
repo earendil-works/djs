@@ -108,6 +108,7 @@ function Ctor(v) {
 %InstallConstructor("globalThis", "Ctor", Ctor, 1, undefined);
 %InstallPrototype("globalThis", "Ctor", undefined);
 %InstallMethod("Example.prototype", "loops", NativeLoops, 1);
+%InstallPrototypeConstructor("Ctor");
 %InstallIntrinsic("NativeTry", NativeTry);
 %InstallIntrinsic("Count", Count);
 %MarkNative(NativeLoops, 0);

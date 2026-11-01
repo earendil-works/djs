@@ -251,6 +251,7 @@ const TYPED_ARRAY_SET_FROM_DENSE: u16 = id("TypedArraySetFromDense");
 const ITERATOR_FAST_VALUE: u16 = id("IteratorFastValue");
 const INSTALL_CONSTRUCTOR: u16 = id("InstallConstructor");
 const INSTALL_PROTOTYPE: u16 = id("InstallPrototype");
+const INSTALL_PROTOTYPE_CONSTRUCTOR: u16 = id("InstallPrototypeConstructor");
 const INSTALL_ACCESSOR: u16 = id("InstallAccessor");
 const INSTALL_VALUE: u16 = id("InstallValue");
 const INSTALL_METHOD: u16 = id("InstallMethod");
@@ -1830,6 +1831,10 @@ impl Exec<'_> {
                 self.install_prototype(a0, arg(self, 1), arg(self, 2))?;
                 Value::UNDEFINED
             }
+            INSTALL_PROTOTYPE_CONSTRUCTOR => {
+                self.install_prototype_constructor(a0)?;
+                Value::UNDEFINED
+            }
             INSTALL_ACCESSOR => {
                 self.install_accessor(a0, arg(self, 1), arg(self, 2), arg(self, 3))?;
                 Value::UNDEFINED
@@ -2280,6 +2285,22 @@ impl Exec<'_> {
         self.heap.define_own_property(fo, atoms::PROTOTYPE, &d)?;
         let d = PropertyDescriptor::data(f, PropFlags::CONFIGURABLE);
         self.heap.define_own_property(p, atoms::CONSTRUCTOR, &d)?;
+        // The links to the instances' prototype (`prototype` and `constructor` are
+        // configurable but not writable), after the prelude installed its methods: qjs's
+        // order (D2150).
+        let instances = match proto {
+            Intrinsic::GeneratorFunctionProto => Some(Intrinsic::GeneratorProto),
+            Intrinsic::AsyncGeneratorFunctionProto => Some(Intrinsic::AsyncGeneratorProto),
+            _ => None,
+        };
+        if let Some(i) = instances {
+            let instances = intrinsic_obj(self.heap, i);
+            let d = PropertyDescriptor::data(Value::object(instances), PropFlags::CONFIGURABLE);
+            self.heap.define_own_property(p, atoms::PROTOTYPE, &d)?;
+            let d = PropertyDescriptor::data(Value::object(p), PropFlags::CONFIGURABLE);
+            self.heap
+                .define_own_property(instances, atoms::CONSTRUCTOR, &d)?;
+        }
         self.mark_builtin(fo, OBJ_BUILTIN | OBJ_BUILTIN_CTOR)?;
         Ok(())
     }
@@ -2354,7 +2375,37 @@ impl Exec<'_> {
         };
         let d = PropertyDescriptor::data(Value::object(proto), PropFlags::NONE);
         self.heap.define_own_property(fo, atoms::PROTOTYPE, &d)?;
-        realm::define_hidden(self.heap, proto, atoms::CONSTRUCTOR, f)?;
+        Ok(())
+    }
+
+    /// `%InstallPrototypeConstructor(key)` (D2150): `prototype.constructor` of the
+    /// constructor `key`, after the prototype's methods (where qjs's order puts it).
+    fn install_prototype_constructor(&mut self, key: Value) -> Result<(), Fault> {
+        let Some(k) = key.as_string() else {
+            return bad_argument("InstallPrototypeConstructor");
+        };
+        let ctors = intrinsic_obj(self.heap, Intrinsic::Constructors);
+        let ckey = self.heap.intern(k)?;
+        let f = self
+            .heap
+            .get_own_property(ctors, ckey)
+            .and_then(|p| p.value());
+        let proto = f
+            .and_then(|f| f.as_object())
+            .and_then(|fo| self.heap.get_own_property(fo, atoms::PROTOTYPE))
+            .and_then(|p| p.value())
+            .and_then(|v| v.as_object());
+        let (Some(f), Some(proto)) = (f, proto) else {
+            return bad_argument("InstallPrototypeConstructor");
+        };
+        // A builtin may have installed its own (Iterator.prototype's accessor).
+        if self
+            .heap
+            .get_own_property(proto, atoms::CONSTRUCTOR)
+            .is_none()
+        {
+            realm::define_hidden(self.heap, proto, atoms::CONSTRUCTOR, f)?;
+        }
         Ok(())
     }
 

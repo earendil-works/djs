@@ -3282,7 +3282,17 @@ function URIErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "URIErrorPrototype", message, options);
 }
 
-// builtins/error.ts:237 Error.prototype.toString
+// builtins/error.ts:239 value Error.prototype.name
+function ErrorPrototypeName() {
+  return "Error";
+}
+
+// builtins/error.ts:248 value Error.prototype.message
+function ErrorPrototypeMessage() {
+  return "";
+}
+
+// builtins/error.ts:256 Error.prototype.toString
 function ErrorPrototypeToString() {
   if (!%IsObject(this)) {
     throw %NewTypeError("not an object");
@@ -3301,19 +3311,19 @@ function ErrorPrototypeToString() {
   return nameStr + ": " + msgStr;
 }
 
-// builtins/error.ts:261 constructor InternalError
+// builtins/error.ts:280 constructor InternalError
 function InternalErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "InternalErrorPrototype", message, options);
 }
 
-// builtins/error.ts:271 constructor AggregateError
+// builtins/error.ts:290 constructor AggregateError
 function AggregateErrorConstructor(errors, message, options) {
   const o = ErrorConstruct(new.target, "AggregateErrorPrototype", message, options);
   %DefineDataPropertyOrThrow(o, "errors", IterableToList(errors), 5);
   return o;
 }
 
-// builtins/error.ts:282 constructor SuppressedError
+// builtins/error.ts:301 constructor SuppressedError
 function SuppressedErrorConstructor(error, suppressed, message) {
   const o = %ErrorCreate(GetPrototypeFromConstructor(new.target, "SuppressedErrorPrototype"));
   if (message !== undefined) {
@@ -3325,44 +3335,44 @@ function SuppressedErrorConstructor(error, suppressed, message) {
   return o;
 }
 
-// builtins/error.ts:300 %CallSitePrototype%.isNative
+// builtins/error.ts:319 %CallSitePrototype%.isNative
 function CallSiteIsNative() {
   return %CallSiteSlot(this, 5);
 }
 
-// builtins/error.ts:308 %CallSitePrototype%.isConstructor
+// builtins/error.ts:327 %CallSitePrototype%.isConstructor
 function CallSiteIsConstructor() {
   return %CallSiteSlot(this, 6);
 }
 
-// builtins/error.ts:316 %CallSitePrototype%.getFileName
+// builtins/error.ts:335 %CallSitePrototype%.getFileName
 function CallSiteGetFileName() {
   return %CallSiteSlot(this, 2);
 }
 
-// builtins/error.ts:324 %CallSitePrototype%.getFunction
+// builtins/error.ts:343 %CallSitePrototype%.getFunction
 function CallSiteGetFunction() {
   return %CallSiteSlot(this, 0);
 }
 
-// builtins/error.ts:332 %CallSitePrototype%.getFunctionName
+// builtins/error.ts:351 %CallSitePrototype%.getFunctionName
 function CallSiteGetFunctionName() {
   return %CallSiteSlot(this, 1);
 }
 
-// builtins/error.ts:340 %CallSitePrototype%.getLineNumber
+// builtins/error.ts:359 %CallSitePrototype%.getLineNumber
 function CallSiteGetLineNumber() {
   const line = %CallSiteSlot(this, 3);
   return line === 0 ? null : line;
 }
 
-// builtins/error.ts:349 %CallSitePrototype%.getColumnNumber
+// builtins/error.ts:368 %CallSitePrototype%.getColumnNumber
 function CallSiteGetColumnNumber() {
   const line = %CallSiteSlot(this, 3);
   return line === 0 ? null : %CallSiteSlot(this, 4);
 }
 
-// builtins/error.ts:359 value %CallSitePrototype%[Symbol.toStringTag]
+// builtins/error.ts:378 value %CallSitePrototype%[Symbol.toStringTag]
 function CallSiteToStringTag() {
   return "CallSite";
 }
@@ -11549,43 +11559,43 @@ function GlobalAtob(...args) {
 %InstallPrototype("globalThis", "DOMException", "Error");
 %InstallMethod("globalThis", "btoa", GlobalBtoa, 1);
 %InstallMethod("globalThis", "atob", GlobalAtob, 1);
+%InstallMethod("Array.prototype", "at", ArrayPrototypeAt, 1);
+%InstallMethod("Array.prototype", "with", ArrayPrototypeWith, 2);
+%InstallMethod("Array.prototype", "concat", ArrayPrototypeConcat, 1);
+%InstallMethod("Array.prototype", "every", ArrayPrototypeEvery, 1);
+%InstallMethod("Array.prototype", "some", ArrayPrototypeSome, 1);
 %InstallMethod("Array.prototype", "forEach", ArrayPrototypeForEach, 1);
 %InstallMethod("Array.prototype", "map", ArrayPrototypeMap, 1);
-%InstallMethod("Array.prototype", "indexOf", ArrayPrototypeIndexOf, 1);
-%InstallMethod("Array.prototype", "join", ArrayPrototypeJoin, 1);
-%InstallMethod("Array.prototype", "includes", ArrayPrototypeIncludes, 1);
-%InstallMethod("Array.prototype", "push", ArrayPrototypePush, 1);
-%InstallMethod("Array.prototype", "at", ArrayPrototypeAt, 1);
-%InstallMethod("Array.prototype", "lastIndexOf", ArrayPrototypeLastIndexOf, 1);
+%InstallMethod("Array.prototype", "filter", ArrayPrototypeFilter, 1);
+%InstallMethod("Array.prototype", "reduce", ArrayPrototypeReduce, 1);
+%InstallMethod("Array.prototype", "reduceRight", ArrayPrototypeReduceRight, 1);
+%InstallMethod("Array.prototype", "fill", ArrayPrototypeFill, 1);
 %InstallMethod("Array.prototype", "find", ArrayPrototypeFind, 1);
 %InstallMethod("Array.prototype", "findIndex", ArrayPrototypeFindIndex, 1);
 %InstallMethod("Array.prototype", "findLast", ArrayPrototypeFindLast, 1);
 %InstallMethod("Array.prototype", "findLastIndex", ArrayPrototypeFindLastIndex, 1);
-%InstallMethod("Array.prototype", "every", ArrayPrototypeEvery, 1);
-%InstallMethod("Array.prototype", "some", ArrayPrototypeSome, 1);
-%InstallMethod("Array.prototype", "filter", ArrayPrototypeFilter, 1);
-%InstallMethod("Array.prototype", "reduce", ArrayPrototypeReduce, 1);
-%InstallMethod("Array.prototype", "reduceRight", ArrayPrototypeReduceRight, 1);
-%InstallMethod("Array.prototype", "concat", ArrayPrototypeConcat, 1);
-%InstallMethod("Array.prototype", "slice", ArrayPrototypeSlice, 2);
-%InstallMethod("Array.prototype", "splice", ArrayPrototypeSplice, 2);
-%InstallMethod("Array.prototype", "copyWithin", ArrayPrototypeCopyWithin, 2);
-%InstallMethod("Array.prototype", "fill", ArrayPrototypeFill, 1);
-%InstallMethod("Array.prototype", "reverse", ArrayPrototypeReverse, 0);
+%InstallMethod("Array.prototype", "indexOf", ArrayPrototypeIndexOf, 1);
+%InstallMethod("Array.prototype", "lastIndexOf", ArrayPrototypeLastIndexOf, 1);
+%InstallMethod("Array.prototype", "includes", ArrayPrototypeIncludes, 1);
+%InstallMethod("Array.prototype", "join", ArrayPrototypeJoin, 1);
+%InstallMethod("Array.prototype", "toString", ArrayPrototypeToString, 0);
+%InstallMethod("Array.prototype", "toLocaleString", ArrayPrototypeToLocaleString, 0);
 %InstallMethod("Array.prototype", "pop", ArrayPrototypePop, 0);
+%InstallMethod("Array.prototype", "push", ArrayPrototypePush, 1);
 %InstallMethod("Array.prototype", "shift", ArrayPrototypeShift, 0);
 %InstallMethod("Array.prototype", "unshift", ArrayPrototypeUnshift, 1);
-%InstallMethod("Array.prototype", "flat", ArrayPrototypeFlat, 0);
-%InstallMethod("Array.prototype", "flatMap", ArrayPrototypeFlatMap, 1);
+%InstallMethod("Array.prototype", "reverse", ArrayPrototypeReverse, 0);
+%InstallMethod("Array.prototype", "toReversed", ArrayPrototypeToReversed, 0);
 %InstallMethod("Array.prototype", "sort", ArrayPrototypeSort, 1);
 %InstallMethod("Array.prototype", "toSorted", ArrayPrototypeToSorted, 1);
-%InstallMethod("Array.prototype", "toReversed", ArrayPrototypeToReversed, 0);
+%InstallMethod("Array.prototype", "slice", ArrayPrototypeSlice, 2);
+%InstallMethod("Array.prototype", "splice", ArrayPrototypeSplice, 2);
 %InstallMethod("Array.prototype", "toSpliced", ArrayPrototypeToSpliced, 2);
-%InstallMethod("Array.prototype", "with", ArrayPrototypeWith, 2);
-%InstallMethod("Array.prototype", "toString", ArrayPrototypeToString, 0);
-%InstallMethod("%TypedArray%.prototype", "toString", ArrayPrototypeToString, 0);
-%InstallMethod("Array.prototype", "toLocaleString", ArrayPrototypeToLocaleString, 0);
-%InstallValue("Array.prototype", %WellKnownSymbol("unscopables"), ArrayPrototypeUnscopables(), 4);
+%InstallMethod("Array.prototype", "copyWithin", ArrayPrototypeCopyWithin, 2);
+%InstallMethod("Array.prototype", "flatMap", ArrayPrototypeFlatMap, 1);
+%InstallAccessor("%TypedArray%.prototype", "length", TypedArrayPrototypeLength, false);
+%InstallMethod("Array.prototype", "flat", ArrayPrototypeFlat, 0);
+%InstallMethod("Array.prototype", "values", ArrayPrototypeValues, 0);
 %InstallAccessor("ArrayBuffer.prototype", "byteLength", ArrayBufferPrototypeByteLength, false);
 %InstallAccessor("ArrayBuffer.prototype", "maxByteLength", ArrayBufferPrototypeMaxByteLength, false);
 %InstallAccessor("ArrayBuffer.prototype", "resizable", ArrayBufferPrototypeResizable, false);
@@ -11593,11 +11603,11 @@ function GlobalAtob(...args) {
 %InstallAccessor("ArrayBuffer.prototype", "immutable", ArrayBufferPrototypeImmutable, false);
 %InstallMethod("ArrayBuffer.prototype", "resize", ArrayBufferPrototypeResize, 1);
 %InstallMethod("ArrayBuffer.prototype", "slice", ArrayBufferPrototypeSlice, 2);
+%InstallMethod("ArrayBuffer.prototype", "sliceToImmutable", ArrayBufferPrototypeSliceToImmutable, 2);
 %InstallMethod("ArrayBuffer.prototype", "transfer", ArrayBufferPrototypeTransfer, 0);
 %InstallMethod("ArrayBuffer.prototype", "transferToFixedLength", ArrayBufferPrototypeTransferToFixedLength, 0);
 %InstallMethod("ArrayBuffer.prototype", "transferToImmutable", ArrayBufferPrototypeTransferToImmutable, 0);
-%InstallMethod("ArrayBuffer.prototype", "sliceToImmutable", ArrayBufferPrototypeSliceToImmutable, 2);
-%InstallValue("ArrayBuffer.prototype", %WellKnownSymbol("toStringTag"), ArrayBufferPrototypeToStringTag(), 4);
+%InstallPrototypeConstructor("ArrayBuffer");
 %InstallMethod("%AsyncGeneratorPrototype%", "next", AsyncGeneratorPrototypeNext, 1);
 %InstallMethod("%AsyncGeneratorPrototype%", "return", AsyncGeneratorPrototypeReturn, 1);
 %InstallMethod("%AsyncGeneratorPrototype%", "throw", AsyncGeneratorPrototypeThrow, 1);
@@ -11637,14 +11647,25 @@ function GlobalAtob(...args) {
 %InstallMethod("DataView.prototype", "setFloat16", DataViewPrototypeSetFloat16, 2);
 %InstallMethod("DataView.prototype", "setFloat32", DataViewPrototypeSetFloat32, 2);
 %InstallMethod("DataView.prototype", "setFloat64", DataViewPrototypeSetFloat64, 2);
+%InstallMethod("Date.prototype", "valueOf", DatePrototypeValueOf, 0);
+%InstallMethod("Date.prototype", "toString", DatePrototypeToString, 0);
+%InstallMethod("Date.prototype", "toUTCString", DatePrototypeToUTCString, 0);
+%InstallMethod("Date.prototype", "toGMTString", DatePrototypeToUTCString, 0);
+%InstallMethod("Date.prototype", "toISOString", DatePrototypeToISOString, 0);
+%InstallMethod("Date.prototype", "toDateString", DatePrototypeToDateString, 0);
+%InstallMethod("Date.prototype", "toTimeString", DatePrototypeToTimeString, 0);
+%InstallMethod("Date.prototype", "toLocaleString", DatePrototypeToLocaleString, 0);
+%InstallMethod("Date.prototype", "toLocaleDateString", DatePrototypeToLocaleDateString, 0);
+%InstallMethod("Date.prototype", "toLocaleTimeString", DatePrototypeToLocaleTimeString, 0);
+%InstallMethod("Date.prototype", "getTimezoneOffset", DatePrototypeGetTimezoneOffset, 0);
+%InstallMethod("Date.prototype", "getTime", DatePrototypeGetTime, 0);
+%InstallMethod("Date.prototype", "getYear", DatePrototypeGetYear, 0);
 %InstallMethod("Date.prototype", "getFullYear", DatePrototypeGetFullYear, 0);
 %InstallMethod("Date.prototype", "getUTCFullYear", DatePrototypeGetUTCFullYear, 0);
 %InstallMethod("Date.prototype", "getMonth", DatePrototypeGetMonth, 0);
 %InstallMethod("Date.prototype", "getUTCMonth", DatePrototypeGetUTCMonth, 0);
 %InstallMethod("Date.prototype", "getDate", DatePrototypeGetDate, 0);
 %InstallMethod("Date.prototype", "getUTCDate", DatePrototypeGetUTCDate, 0);
-%InstallMethod("Date.prototype", "getDay", DatePrototypeGetDay, 0);
-%InstallMethod("Date.prototype", "getUTCDay", DatePrototypeGetUTCDay, 0);
 %InstallMethod("Date.prototype", "getHours", DatePrototypeGetHours, 0);
 %InstallMethod("Date.prototype", "getUTCHours", DatePrototypeGetUTCHours, 0);
 %InstallMethod("Date.prototype", "getMinutes", DatePrototypeGetMinutes, 0);
@@ -11653,6 +11674,9 @@ function GlobalAtob(...args) {
 %InstallMethod("Date.prototype", "getUTCSeconds", DatePrototypeGetUTCSeconds, 0);
 %InstallMethod("Date.prototype", "getMilliseconds", DatePrototypeGetMilliseconds, 0);
 %InstallMethod("Date.prototype", "getUTCMilliseconds", DatePrototypeGetUTCMilliseconds, 0);
+%InstallMethod("Date.prototype", "getDay", DatePrototypeGetDay, 0);
+%InstallMethod("Date.prototype", "getUTCDay", DatePrototypeGetUTCDay, 0);
+%InstallMethod("Date.prototype", "setTime", DatePrototypeSetTime, 1);
 %InstallMethod("Date.prototype", "setMilliseconds", DatePrototypeSetMilliseconds, 1);
 %InstallMethod("Date.prototype", "setUTCMilliseconds", DatePrototypeSetUTCMilliseconds, 1);
 %InstallMethod("Date.prototype", "setSeconds", DatePrototypeSetSeconds, 2);
@@ -11667,44 +11691,31 @@ function GlobalAtob(...args) {
 %InstallMethod("Date.prototype", "setUTCMonth", DatePrototypeSetUTCMonth, 2);
 %InstallMethod("Date.prototype", "setFullYear", DatePrototypeSetFullYear, 3);
 %InstallMethod("Date.prototype", "setUTCFullYear", DatePrototypeSetUTCFullYear, 3);
-%InstallMethod("Date.prototype", "getTime", DatePrototypeGetTime, 0);
-%InstallMethod("Date.prototype", "valueOf", DatePrototypeValueOf, 0);
-%InstallMethod("Date.prototype", "getTimezoneOffset", DatePrototypeGetTimezoneOffset, 0);
-%InstallMethod("Date.prototype", "setTime", DatePrototypeSetTime, 1);
-%InstallMethod("Date.prototype", "toString", DatePrototypeToString, 0);
-%InstallMethod("Date.prototype", "toDateString", DatePrototypeToDateString, 0);
-%InstallMethod("Date.prototype", "toTimeString", DatePrototypeToTimeString, 0);
-%InstallMethod("Date.prototype", "toISOString", DatePrototypeToISOString, 0);
-%InstallMethod("Date.prototype", "toLocaleString", DatePrototypeToLocaleString, 0);
-%InstallMethod("Date.prototype", "toLocaleDateString", DatePrototypeToLocaleDateString, 0);
-%InstallMethod("Date.prototype", "toLocaleTimeString", DatePrototypeToLocaleTimeString, 0);
-%InstallMethod("Date.prototype", "toUTCString", DatePrototypeToUTCString, 0);
-%InstallMethod("Date.prototype", "toGMTString", DatePrototypeToUTCString, 0);
-%InstallMethod("Date.prototype", "getYear", DatePrototypeGetYear, 0);
 %InstallMethod("Date.prototype", "toJSON", DatePrototypeToJSON, 1);
-%InstallMethod("Date.prototype", %WellKnownSymbol("toPrimitive"), DatePrototypeToPrimitive, 1);
-%InstallValue("Date.prototype", %WellKnownSymbol("toPrimitive"), DatePrototypeToPrimitive, 4);
-%InstallAccessor("DisposableStack.prototype", "disposed", DisposableStackPrototypeDisposed, false);
-%InstallMethod("DisposableStack.prototype", "dispose", DisposableStackPrototypeDispose, 0);
-%InstallMethod("DisposableStack.prototype", %WellKnownSymbol("dispose"), DisposableStackPrototypeDispose, 0);
-%InstallMethod("DisposableStack.prototype", "use", DisposableStackPrototypeUse, 1);
+%InstallPrototypeConstructor("Date");
 %InstallMethod("DisposableStack.prototype", "adopt", DisposableStackPrototypeAdopt, 2);
 %InstallMethod("DisposableStack.prototype", "defer", DisposableStackPrototypeDefer, 1);
+%InstallMethod("DisposableStack.prototype", "dispose", DisposableStackPrototypeDispose, 0);
+%InstallAccessor("DisposableStack.prototype", "disposed", DisposableStackPrototypeDisposed, false);
 %InstallMethod("DisposableStack.prototype", "move", DisposableStackPrototypeMove, 0);
-%InstallValue("DisposableStack.prototype", %WellKnownSymbol("toStringTag"), DisposableStackPrototypeToStringTag(), 4);
-%InstallAccessor("AsyncDisposableStack.prototype", "disposed", AsyncDisposableStackPrototypeDisposed, false);
-%InstallMethod("AsyncDisposableStack.prototype", "use", AsyncDisposableStackPrototypeUse, 1);
+%InstallMethod("DisposableStack.prototype", "use", DisposableStackPrototypeUse, 1);
+%InstallPrototypeConstructor("DisposableStack");
+%InstallMethod("DisposableStack.prototype", %WellKnownSymbol("dispose"), DisposableStackPrototypeDispose, 0);
 %InstallMethod("AsyncDisposableStack.prototype", "adopt", AsyncDisposableStackPrototypeAdopt, 2);
 %InstallMethod("AsyncDisposableStack.prototype", "defer", AsyncDisposableStackPrototypeDefer, 1);
-%InstallMethod("AsyncDisposableStack.prototype", "move", AsyncDisposableStackPrototypeMove, 0);
-%InstallValue("AsyncDisposableStack.prototype", %WellKnownSymbol("toStringTag"), AsyncDisposableStackPrototypeToStringTag(), 4);
 %InstallMethod("AsyncDisposableStack.prototype", "disposeAsync", AsyncDisposableStackPrototypeDisposeAsync, 0);
+%InstallAccessor("AsyncDisposableStack.prototype", "disposed", AsyncDisposableStackPrototypeDisposed, false);
+%InstallMethod("AsyncDisposableStack.prototype", "move", AsyncDisposableStackPrototypeMove, 0);
+%InstallMethod("AsyncDisposableStack.prototype", "use", AsyncDisposableStackPrototypeUse, 1);
+%InstallPrototypeConstructor("AsyncDisposableStack");
 %InstallMethod("AsyncDisposableStack.prototype", %WellKnownSymbol("asyncDispose"), AsyncDisposableStackPrototypeDisposeAsync, 0);
-%InstallMethod("Iterator.prototype", %WellKnownSymbol("dispose"), IteratorPrototypeDispose, 0);
+%InstallMethod("Iterator.prototype", "chunks", IteratorPrototypeChunks, 1);
 %InstallMethod("%AsyncIteratorPrototype%", %WellKnownSymbol("asyncDispose"), AsyncIteratorPrototypeAsyncDispose, 0);
+%InstallMethod("Error.prototype", "toString", ErrorPrototypeToString, 0);
+%InstallValue("Error.prototype", "name", ErrorPrototypeName(), 5);
+%InstallValue("Error.prototype", "message", ErrorPrototypeMessage(), 5);
 %InstallAccessor("Error.prototype", "stack", ErrorPrototypeGetStack, false);
 %InstallAccessor("Error.prototype", "stack", ErrorPrototypeSetStack, true);
-%InstallMethod("Error.prototype", "toString", ErrorPrototypeToString, 0);
 %InstallMethod("%CallSitePrototype%", "isNative", CallSiteIsNative, 0);
 %InstallMethod("%CallSitePrototype%", "isConstructor", CallSiteIsConstructor, 0);
 %InstallMethod("%CallSitePrototype%", "getFileName", CallSiteGetFileName, 0);
@@ -11713,30 +11724,29 @@ function GlobalAtob(...args) {
 %InstallMethod("%CallSitePrototype%", "getLineNumber", CallSiteGetLineNumber, 0);
 %InstallMethod("%CallSitePrototype%", "getColumnNumber", CallSiteGetColumnNumber, 0);
 %InstallValue("%CallSitePrototype%", %WellKnownSymbol("toStringTag"), CallSiteToStringTag(), 4);
-%InstallMethod("Function.prototype", "call", FunctionPrototypeCall, 1);
-%InstallMethod("Function.prototype", "apply", FunctionPrototypeApply, 2);
-%InstallMethod("Function.prototype", "bind", FunctionPrototypeBind, 1);
-%InstallMethod("Function.prototype", "toString", FunctionPrototypeToString, 0);
-%InstallMethod("Function.prototype", %WellKnownSymbol("hasInstance"), FunctionPrototypeHasInstance, 1);
-%InstallValue("Function.prototype", %WellKnownSymbol("hasInstance"), FunctionPrototypeHasInstance, 0);
+%InstallValue("Function.prototype", "length", FunctionPrototypeLength(), 4);
+%InstallValue("Function.prototype", "name", FunctionPrototypeName(), 4);
 %InstallAccessor("Function.prototype", "caller", ThrowTypeError, false);
 %InstallAccessor("Function.prototype", "caller", ThrowTypeError, true);
 %InstallAccessor("Function.prototype", "arguments", ThrowTypeError, false);
 %InstallAccessor("Function.prototype", "arguments", ThrowTypeError, true);
-%InstallValue("Function.prototype", "length", FunctionPrototypeLength(), 4);
-%InstallValue("Function.prototype", "name", FunctionPrototypeName(), 4);
+%InstallMethod("Function.prototype", "call", FunctionPrototypeCall, 1);
+%InstallMethod("Function.prototype", "apply", FunctionPrototypeApply, 2);
+%InstallMethod("Function.prototype", "bind", FunctionPrototypeBind, 1);
+%InstallMethod("Function.prototype", "toString", FunctionPrototypeToString, 0);
+%InstallPrototypeConstructor("Function");
 %InstallMethod("%GeneratorPrototype%", "next", GeneratorPrototypeNext, 1);
 %InstallMethod("%GeneratorPrototype%", "return", GeneratorPrototypeReturn, 1);
 %InstallMethod("%GeneratorPrototype%", "throw", GeneratorPrototypeThrow, 1);
 %InstallValue("%GeneratorPrototype%", %WellKnownSymbol("toStringTag"), GeneratorPrototypeToStringTag(), 4);
-%InstallMethod("Array.prototype", "values", ArrayPrototypeValues, 0);
-%InstallMethod("Array.prototype", %WellKnownSymbol("iterator"), ArrayPrototypeValues, 0);
 %InstallMethod("Array.prototype", "keys", ArrayPrototypeKeys, 0);
 %InstallMethod("Array.prototype", "entries", ArrayPrototypeEntries, 0);
+%InstallPrototypeConstructor("Array");
+%InstallMethod("Array.prototype", %WellKnownSymbol("iterator"), ArrayPrototypeValues, 0);
 %InstallMethod("%ArrayIteratorPrototype%", "next", ArrayIteratorPrototypeNext, 0);
 %InstallMethod("%IteratorPrototype%", %WellKnownSymbol("iterator"), IteratorPrototypeIterator, 0);
 %InstallValue("%ArrayIteratorPrototype%", %WellKnownSymbol("toStringTag"), ArrayIteratorPrototypeToStringTag(), 4);
-%InstallMethod("String.prototype", %WellKnownSymbol("iterator"), StringPrototypeIterator, 0);
+%InstallMethod("String.prototype", "at", StringPrototypeAt, 1);
 %InstallMethod("%StringIteratorPrototype%", "next", StringIteratorPrototypeNext, 0);
 %InstallValue("%StringIteratorPrototype%", %WellKnownSymbol("toStringTag"), StringIteratorToStringTag(), 4);
 %InstallMethod("%IteratorHelperPrototype%", "next", IteratorHelperPrototypeNext, 0);
@@ -11744,44 +11754,44 @@ function GlobalAtob(...args) {
 %InstallValue("%IteratorHelperPrototype%", %WellKnownSymbol("toStringTag"), IteratorHelperPrototypeToStringTag(), 4);
 %InstallMethod("%WrapForValidIteratorPrototype%", "next", WrapForValidIteratorPrototypeNext, 0);
 %InstallMethod("%WrapForValidIteratorPrototype%", "return", WrapForValidIteratorPrototypeReturn, 0);
-%InstallMethod("Iterator.prototype", "map", IteratorPrototypeMap, 1);
-%InstallMethod("Iterator.prototype", "filter", IteratorPrototypeFilter, 1);
-%InstallMethod("Iterator.prototype", "take", IteratorPrototypeTake, 1);
 %InstallMethod("Iterator.prototype", "drop", IteratorPrototypeDrop, 1);
+%InstallMethod("Iterator.prototype", "filter", IteratorPrototypeFilter, 1);
 %InstallMethod("Iterator.prototype", "flatMap", IteratorPrototypeFlatMap, 1);
-%InstallMethod("Iterator.prototype", "reduce", IteratorPrototypeReduce, 1);
-%InstallMethod("Iterator.prototype", "toArray", IteratorPrototypeToArray, 0);
-%InstallMethod("Iterator.prototype", "forEach", IteratorPrototypeForEach, 1);
-%InstallMethod("Iterator.prototype", "some", IteratorPrototypeSome, 1);
+%InstallMethod("Iterator.prototype", "map", IteratorPrototypeMap, 1);
+%InstallMethod("Iterator.prototype", "take", IteratorPrototypeTake, 1);
+%InstallMethod("Iterator.prototype", "windows", IteratorPrototypeWindows, 1);
 %InstallMethod("Iterator.prototype", "every", IteratorPrototypeEvery, 1);
 %InstallMethod("Iterator.prototype", "find", IteratorPrototypeFind, 1);
-%InstallAccessor("Iterator.prototype", "constructor", IteratorPrototypeConstructorGet, false);
-%InstallAccessor("Iterator.prototype", "constructor", IteratorPrototypeConstructorSet, true);
-%InstallAccessor("Iterator.prototype", %WellKnownSymbol("toStringTag"), IteratorPrototypeToStringTagGet, false);
-%InstallAccessor("Iterator.prototype", %WellKnownSymbol("toStringTag"), IteratorPrototypeToStringTagSet, true);
-%InstallMethod("Iterator.prototype", "chunks", IteratorPrototypeChunks, 1);
-%InstallMethod("Iterator.prototype", "windows", IteratorPrototypeWindows, 1);
+%InstallMethod("Iterator.prototype", "forEach", IteratorPrototypeForEach, 1);
+%InstallMethod("Iterator.prototype", "some", IteratorPrototypeSome, 1);
 %InstallMethod("Iterator.prototype", "includes", IteratorPrototypeIncludes, 1);
 %InstallMethod("Iterator.prototype", "join", IteratorPrototypeJoin, 1);
+%InstallMethod("Iterator.prototype", "reduce", IteratorPrototypeReduce, 1);
+%InstallMethod("Iterator.prototype", "toArray", IteratorPrototypeToArray, 0);
+%InstallAccessor("Iterator.prototype", "constructor", IteratorPrototypeConstructorGet, false);
+%InstallAccessor("Iterator.prototype", "constructor", IteratorPrototypeConstructorSet, true);
+%InstallPrototypeConstructor("Iterator");
+%InstallMethod("Iterator.prototype", %WellKnownSymbol("dispose"), IteratorPrototypeDispose, 0);
+%InstallAccessor("Iterator.prototype", %WellKnownSymbol("toStringTag"), IteratorPrototypeToStringTagGet, false);
 %InstallMethod("JSON", "isRawJSON", JSONIsRawJSON, 1);
 %InstallMethod("JSON", "parse", JSONParse, 2);
 %InstallMethod("JSON", "rawJSON", JSONRawJSON, 1);
 %InstallMethod("JSON", "stringify", JSONStringify, 3);
 %InstallValue("JSON", %WellKnownSymbol("toStringTag"), JSONToStringTag(), 4);
-%InstallMethod("Map.prototype", "clear", MapPrototypeClear, 0);
-%InstallMethod("Map.prototype", "delete", MapPrototypeDelete, 1);
-%InstallMethod("Map.prototype", "entries", MapPrototypeEntries, 0);
-%InstallMethod("Map.prototype", %WellKnownSymbol("iterator"), MapPrototypeEntries, 0);
-%InstallMethod("Map.prototype", "forEach", MapPrototypeForEach, 1);
+%InstallMethod("Map.prototype", "set", MapPrototypeSet, 2);
 %InstallMethod("Map.prototype", "get", MapPrototypeGet, 1);
 %InstallMethod("Map.prototype", "getOrInsert", MapPrototypeGetOrInsert, 2);
 %InstallMethod("Map.prototype", "getOrInsertComputed", MapPrototypeGetOrInsertComputed, 2);
 %InstallMethod("Map.prototype", "has", MapPrototypeHas, 1);
-%InstallMethod("Map.prototype", "keys", MapPrototypeKeys, 0);
-%InstallMethod("Map.prototype", "set", MapPrototypeSet, 2);
+%InstallMethod("Map.prototype", "delete", MapPrototypeDelete, 1);
+%InstallMethod("Map.prototype", "clear", MapPrototypeClear, 0);
 %InstallAccessor("Map.prototype", "size", MapPrototypeSize, false);
+%InstallMethod("Map.prototype", "forEach", MapPrototypeForEach, 1);
 %InstallMethod("Map.prototype", "values", MapPrototypeValues, 0);
-%InstallValue("Map.prototype", %WellKnownSymbol("toStringTag"), MapPrototypeToStringTag(), 4);
+%InstallMethod("Map.prototype", "keys", MapPrototypeKeys, 0);
+%InstallMethod("Map.prototype", "entries", MapPrototypeEntries, 0);
+%InstallPrototypeConstructor("Map");
+%InstallMethod("Map.prototype", %WellKnownSymbol("iterator"), MapPrototypeEntries, 0);
 %InstallMethod("%MapIteratorPrototype%", "next", MapIteratorPrototypeNext, 0);
 %InstallValue("%MapIteratorPrototype%", %WellKnownSymbol("toStringTag"), MapIteratorToStringTag(), 4);
 %InstallMethod("Math", "min", MathMin, 2);
@@ -11830,20 +11840,20 @@ function GlobalAtob(...args) {
 %InstallValue("Math", "SQRT1_2", MathSQRT12(), 0);
 %InstallValue("Math", "SQRT2", MathSQRT2(), 0);
 %InstallValue("Math", %WellKnownSymbol("toStringTag"), MathToStringTag(), 4);
+%InstallMethod("Number.prototype", "toExponential", NumberPrototypeToExponential, 1);
+%InstallMethod("Number.prototype", "toFixed", NumberPrototypeToFixed, 1);
+%InstallMethod("Number.prototype", "toPrecision", NumberPrototypeToPrecision, 1);
 %InstallMethod("Number.prototype", "toString", NumberPrototypeToString, 1);
 %InstallMethod("Number.prototype", "toLocaleString", NumberPrototypeToLocaleString, 0);
 %InstallMethod("Number.prototype", "valueOf", NumberPrototypeValueOf, 0);
-%InstallMethod("Number.prototype", "toFixed", NumberPrototypeToFixed, 1);
-%InstallMethod("Number.prototype", "toExponential", NumberPrototypeToExponential, 1);
-%InstallMethod("Number.prototype", "toPrecision", NumberPrototypeToPrecision, 1);
-%InstallMethod("Object.prototype", "hasOwnProperty", ObjectPrototypeHasOwnProperty, 1);
-%InstallMethod("Object.prototype", "propertyIsEnumerable", ObjectPrototypePropertyIsEnumerable, 1);
-%InstallAccessor("Object.prototype", "__proto__", ObjectPrototypeGetProto, false);
-%InstallAccessor("Object.prototype", "__proto__", ObjectPrototypeSetProto, true);
 %InstallMethod("Object.prototype", "toString", ObjectPrototypeToString, 0);
 %InstallMethod("Object.prototype", "toLocaleString", ObjectPrototypeToLocaleString, 0);
 %InstallMethod("Object.prototype", "valueOf", ObjectPrototypeValueOf, 0);
+%InstallMethod("Object.prototype", "hasOwnProperty", ObjectPrototypeHasOwnProperty, 1);
 %InstallMethod("Object.prototype", "isPrototypeOf", ObjectPrototypeIsPrototypeOf, 1);
+%InstallMethod("Object.prototype", "propertyIsEnumerable", ObjectPrototypePropertyIsEnumerable, 1);
+%InstallAccessor("Object.prototype", "__proto__", ObjectPrototypeGetProto, false);
+%InstallAccessor("Object.prototype", "__proto__", ObjectPrototypeSetProto, true);
 %InstallMethod("Promise.prototype", "then", PromisePrototypeThen, 2);
 %InstallMethod("Promise.prototype", "catch", PromisePrototypeCatch, 1);
 %InstallMethod("Promise.prototype", "finally", PromisePrototypeFinally, 1);
@@ -11862,7 +11872,8 @@ function GlobalAtob(...args) {
 %InstallMethod("Reflect", "preventExtensions", ReflectPreventExtensions, 1);
 %InstallMethod("Reflect", "set", ReflectSet, 3);
 %InstallMethod("Reflect", "setPrototypeOf", ReflectSetPrototypeOf, 2);
-%InstallAccessor("RegExp.prototype", "hasIndices", RegExpPrototypeHasIndices, false);
+%InstallAccessor("RegExp.prototype", "flags", RegExpPrototypeFlags, false);
+%InstallAccessor("RegExp.prototype", "source", RegExpPrototypeSource, false);
 %InstallAccessor("RegExp.prototype", "global", RegExpPrototypeGlobal, false);
 %InstallAccessor("RegExp.prototype", "ignoreCase", RegExpPrototypeIgnoreCase, false);
 %InstallAccessor("RegExp.prototype", "multiline", RegExpPrototypeMultiline, false);
@@ -11870,96 +11881,95 @@ function GlobalAtob(...args) {
 %InstallAccessor("RegExp.prototype", "unicode", RegExpPrototypeUnicode, false);
 %InstallAccessor("RegExp.prototype", "unicodeSets", RegExpPrototypeUnicodeSets, false);
 %InstallAccessor("RegExp.prototype", "sticky", RegExpPrototypeSticky, false);
-%InstallAccessor("RegExp.prototype", "flags", RegExpPrototypeFlags, false);
-%InstallAccessor("RegExp.prototype", "source", RegExpPrototypeSource, false);
-%InstallMethod("RegExp.prototype", "toString", RegExpPrototypeToString, 0);
+%InstallAccessor("RegExp.prototype", "hasIndices", RegExpPrototypeHasIndices, false);
 %InstallMethod("RegExp.prototype", "exec", RegExpPrototypeExec, 1);
 %InstallMethod("RegExp.prototype", "test", RegExpPrototypeTest, 1);
-%InstallMethod("RegExp.prototype", %WellKnownSymbol("match"), RegExpPrototypeMatch, 1);
-%InstallMethod("RegExp.prototype", %WellKnownSymbol("matchAll"), RegExpPrototypeMatchAll, 1);
+%InstallMethod("RegExp.prototype", "toString", RegExpPrototypeToString, 0);
+%InstallPrototypeConstructor("RegExp");
+%InstallMethod("RegExp.prototype", %WellKnownSymbol("replace"), RegExpPrototypeReplace, 2);
 %InstallMethod("%RegExpStringIteratorPrototype%", "next", RegExpStringIteratorNext, 0);
 %InstallValue("%RegExpStringIteratorPrototype%", %WellKnownSymbol("toStringTag"), RegExpStringIteratorToStringTag(), 4);
-%InstallMethod("RegExp.prototype", %WellKnownSymbol("replace"), RegExpPrototypeReplace, 2);
+%InstallMethod("RegExp.prototype", %WellKnownSymbol("match"), RegExpPrototypeMatch, 1);
+%InstallMethod("RegExp.prototype", %WellKnownSymbol("matchAll"), RegExpPrototypeMatchAll, 1);
 %InstallMethod("RegExp.prototype", %WellKnownSymbol("search"), RegExpPrototypeSearch, 1);
-%InstallMethod("RegExp.prototype", %WellKnownSymbol("split"), RegExpPrototypeSplit, 2);
 %InstallMethod("Set.prototype", "add", SetPrototypeAdd, 1);
-%InstallMethod("Set.prototype", "clear", SetPrototypeClear, 0);
-%InstallMethod("Set.prototype", "delete", SetPrototypeDelete, 1);
-%InstallMethod("Set.prototype", "entries", SetPrototypeEntries, 0);
-%InstallMethod("Set.prototype", "forEach", SetPrototypeForEach, 1);
 %InstallMethod("Set.prototype", "has", SetPrototypeHas, 1);
+%InstallMethod("Set.prototype", "delete", SetPrototypeDelete, 1);
+%InstallMethod("Set.prototype", "clear", SetPrototypeClear, 0);
 %InstallAccessor("Set.prototype", "size", SetPrototypeSize, false);
-%InstallMethod("Set.prototype", "values", SetPrototypeValues, 0);
-%InstallMethod("Set.prototype", "keys", SetPrototypeValues, 0);
-%InstallMethod("Set.prototype", %WellKnownSymbol("iterator"), SetPrototypeValues, 0);
-%InstallValue("Set.prototype", %WellKnownSymbol("toStringTag"), SetPrototypeToStringTag(), 4);
-%InstallMethod("%SetIteratorPrototype%", "next", SetIteratorPrototypeNext, 0);
-%InstallValue("%SetIteratorPrototype%", %WellKnownSymbol("toStringTag"), SetIteratorToStringTag(), 4);
-%InstallMethod("Set.prototype", "union", SetPrototypeUnion, 1);
-%InstallMethod("Set.prototype", "intersection", SetPrototypeIntersection, 1);
-%InstallMethod("Set.prototype", "difference", SetPrototypeDifference, 1);
-%InstallMethod("Set.prototype", "symmetricDifference", SetPrototypeSymmetricDifference, 1);
+%InstallMethod("Set.prototype", "forEach", SetPrototypeForEach, 1);
+%InstallMethod("Set.prototype", "isDisjointFrom", SetPrototypeIsDisjointFrom, 1);
 %InstallMethod("Set.prototype", "isSubsetOf", SetPrototypeIsSubsetOf, 1);
 %InstallMethod("Set.prototype", "isSupersetOf", SetPrototypeIsSupersetOf, 1);
-%InstallMethod("Set.prototype", "isDisjointFrom", SetPrototypeIsDisjointFrom, 1);
-%InstallMethod("String.prototype", "match", StringPrototypeMatch, 1);
-%InstallMethod("String.prototype", "matchAll", StringPrototypeMatchAll, 1);
-%InstallMethod("String.prototype", "search", StringPrototypeSearch, 1);
-%InstallMethod("String.prototype", "replace", StringPrototypeReplace, 2);
-%InstallMethod("String.prototype", "replaceAll", StringPrototypeReplaceAll, 2);
-%InstallMethod("String.prototype", "split", StringPrototypeSplit, 2);
-%InstallMethod("String.prototype", "toString", StringPrototypeToString, 0);
-%InstallMethod("String.prototype", "valueOf", StringPrototypeValueOf, 0);
-%InstallMethod("String.prototype", "at", StringPrototypeAt, 1);
-%InstallMethod("String.prototype", "charAt", StringPrototypeCharAt, 1);
+%InstallMethod("Set.prototype", "intersection", SetPrototypeIntersection, 1);
+%InstallMethod("Set.prototype", "difference", SetPrototypeDifference, 1);
+%InstallMethod("%SetIteratorPrototype%", "next", SetIteratorPrototypeNext, 0);
+%InstallValue("%SetIteratorPrototype%", %WellKnownSymbol("toStringTag"), SetIteratorToStringTag(), 4);
+%InstallMethod("Set.prototype", "symmetricDifference", SetPrototypeSymmetricDifference, 1);
+%InstallMethod("Set.prototype", "union", SetPrototypeUnion, 1);
+%InstallMethod("Set.prototype", "values", SetPrototypeValues, 0);
+%InstallMethod("Set.prototype", "keys", SetPrototypeValues, 0);
+%InstallMethod("Set.prototype", "entries", SetPrototypeEntries, 0);
+%InstallPrototypeConstructor("Set");
+%InstallMethod("Set.prototype", %WellKnownSymbol("iterator"), SetPrototypeValues, 0);
 %InstallMethod("String.prototype", "charCodeAt", StringPrototypeCharCodeAt, 1);
+%InstallMethod("String.prototype", "charAt", StringPrototypeCharAt, 1);
+%InstallMethod("String.prototype", "concat", StringPrototypeConcat, 1);
 %InstallMethod("String.prototype", "codePointAt", StringPrototypeCodePointAt, 1);
+%InstallMethod("String.prototype", "isWellFormed", StringPrototypeIsWellFormed, 0);
+%InstallMethod("String.prototype", "toWellFormed", StringPrototypeToWellFormed, 0);
 %InstallMethod("String.prototype", "indexOf", StringPrototypeIndexOf, 1);
 %InstallMethod("String.prototype", "lastIndexOf", StringPrototypeLastIndexOf, 1);
 %InstallMethod("String.prototype", "includes", StringPrototypeIncludes, 1);
-%InstallMethod("String.prototype", "startsWith", StringPrototypeStartsWith, 1);
 %InstallMethod("String.prototype", "endsWith", StringPrototypeEndsWith, 1);
-%InstallMethod("String.prototype", "localeCompare", StringPrototypeLocaleCompare, 1);
-%InstallMethod("String.prototype", "slice", StringPrototypeSlice, 2);
+%InstallMethod("String.prototype", "startsWith", StringPrototypeStartsWith, 1);
+%InstallMethod("String.prototype", "match", StringPrototypeMatch, 1);
+%InstallMethod("String.prototype", "matchAll", StringPrototypeMatchAll, 1);
+%InstallMethod("String.prototype", "search", StringPrototypeSearch, 1);
+%InstallMethod("String.prototype", "split", StringPrototypeSplit, 2);
 %InstallMethod("String.prototype", "substring", StringPrototypeSubstring, 2);
 %InstallMethod("String.prototype", "substr", StringPrototypeSubstr, 2);
-%InstallMethod("String.prototype", "concat", StringPrototypeConcat, 1);
+%InstallMethod("String.prototype", "slice", StringPrototypeSlice, 2);
 %InstallMethod("String.prototype", "repeat", StringPrototypeRepeat, 1);
+%InstallMethod("String.prototype", "replace", StringPrototypeReplace, 2);
+%InstallMethod("String.prototype", "replaceAll", StringPrototypeReplaceAll, 2);
 %InstallMethod("String.prototype", "padEnd", StringPrototypePadEnd, 1);
 %InstallMethod("String.prototype", "padStart", StringPrototypePadStart, 1);
+%InstallMethod("String.prototype", "trim", StringPrototypeTrim, 0);
+%InstallMethod("String.prototype", "trimEnd", StringPrototypeTrimEnd, 0);
+%InstallMethod("String.prototype", "trimRight", StringPrototypeTrimEnd, 0);
+%InstallMethod("String.prototype", "trimStart", StringPrototypeTrimStart, 0);
+%InstallMethod("String.prototype", "trimLeft", StringPrototypeTrimStart, 0);
+%InstallMethod("String.prototype", "toString", StringPrototypeToString, 0);
+%InstallMethod("String.prototype", "valueOf", StringPrototypeValueOf, 0);
 %InstallMethod("String.prototype", "toLowerCase", StringPrototypeToLowerCase, 0);
 %InstallMethod("String.prototype", "toUpperCase", StringPrototypeToUpperCase, 0);
 %InstallMethod("String.prototype", "toLocaleLowerCase", StringPrototypeToLocaleLowerCase, 0);
 %InstallMethod("String.prototype", "toLocaleUpperCase", StringPrototypeToLocaleUpperCase, 0);
-%InstallMethod("String.prototype", "trim", StringPrototypeTrim, 0);
-%InstallMethod("String.prototype", "trimStart", StringPrototypeTrimStart, 0);
-%InstallMethod("String.prototype", "trimLeft", StringPrototypeTrimStart, 0);
-%InstallMethod("String.prototype", "trimEnd", StringPrototypeTrimEnd, 0);
-%InstallMethod("String.prototype", "trimRight", StringPrototypeTrimEnd, 0);
-%InstallMethod("String.prototype", "isWellFormed", StringPrototypeIsWellFormed, 0);
-%InstallMethod("String.prototype", "toWellFormed", StringPrototypeToWellFormed, 0);
+%InstallPrototypeConstructor("String");
 %InstallMethod("String.prototype", "normalize", StringPrototypeNormalize, 0);
-%InstallAccessor("Symbol.prototype", "description", SymbolPrototypeDescription, false);
+%InstallMethod("String.prototype", "localeCompare", StringPrototypeLocaleCompare, 1);
 %InstallMethod("Symbol.prototype", "toString", SymbolPrototypeToString, 0);
 %InstallMethod("Symbol.prototype", "valueOf", SymbolPrototypeValueOf, 0);
+%InstallAccessor("Symbol.prototype", "description", SymbolPrototypeDescription, false);
+%InstallPrototypeConstructor("Symbol");
 %InstallMethod("Symbol.prototype", %WellKnownSymbol("toPrimitive"), SymbolPrototypeToPrimitive, 1);
 %InstallValue("Symbol.prototype", %WellKnownSymbol("toPrimitive"), SymbolPrototypeToPrimitive, 4);
-%InstallValue("Symbol.prototype", %WellKnownSymbol("toStringTag"), SymbolPrototypeToStringTag(), 4);
+%InstallMethod("%TypedArray%.prototype", "at", TypedArrayPrototypeAt, 1);
+%InstallMethod("%TypedArray%.prototype", "with", TypedArrayPrototypeWith, 2);
 %InstallAccessor("%TypedArray%.prototype", "buffer", TypedArrayPrototypeBuffer, false);
 %InstallAccessor("%TypedArray%.prototype", "byteLength", TypedArrayPrototypeByteLength, false);
 %InstallAccessor("%TypedArray%.prototype", "byteOffset", TypedArrayPrototypeByteOffset, false);
-%InstallAccessor("%TypedArray%.prototype", "length", TypedArrayPrototypeLength, false);
-%InstallAccessor("%TypedArray%.prototype", %WellKnownSymbol("toStringTag"), TypedArrayPrototypeToStringTag, false);
 %InstallMethod("%TypedArray%.prototype", "set", TypedArrayPrototypeSet, 1);
-%InstallMethod("%TypedArray%.prototype", "subarray", TypedArrayPrototypeSubarray, 2);
-%InstallMethod("%TypedArray%.prototype", "slice", TypedArrayPrototypeSlice, 2);
-%InstallMethod("%TypedArray%.prototype", "fill", TypedArrayPrototypeFill, 1);
+%InstallMethod("%TypedArray%.prototype", "values", TypedArrayPrototypeValues, 0);
+%InstallMethod("%TypedArray%.prototype", "keys", TypedArrayPrototypeKeys, 0);
+%InstallMethod("%TypedArray%.prototype", "entries", TypedArrayPrototypeEntries, 0);
+%InstallValue("Uint8Array.prototype", "BYTES_PER_ELEMENT", Uint8ArrayPrototypeBytesPerElement(), 0);
 %InstallMethod("Uint8Array.prototype", "toBase64", Uint8ArrayPrototypeToBase64, 0);
 %InstallMethod("Uint8Array.prototype", "toHex", Uint8ArrayPrototypeToHex, 0);
 %InstallMethod("Uint8Array.prototype", "setFromBase64", Uint8ArrayPrototypeSetFromBase64, 1);
-%InstallMethod("Uint8Array.prototype", "setFromHex", Uint8ArrayPrototypeSetFromHex, 1);
 %InstallValue("Int8Array.prototype", "BYTES_PER_ELEMENT", Int8ArrayPrototypeBytesPerElement(), 0);
-%InstallValue("Uint8Array.prototype", "BYTES_PER_ELEMENT", Uint8ArrayPrototypeBytesPerElement(), 0);
+%InstallMethod("Uint8Array.prototype", "setFromHex", Uint8ArrayPrototypeSetFromHex, 1);
 %InstallValue("Uint8ClampedArray.prototype", "BYTES_PER_ELEMENT", Uint8ClampedArrayPrototypeBytesPerElement(), 0);
 %InstallValue("Int16Array.prototype", "BYTES_PER_ELEMENT", Int16ArrayPrototypeBytesPerElement(), 0);
 %InstallValue("Uint16Array.prototype", "BYTES_PER_ELEMENT", Uint16ArrayPrototypeBytesPerElement(), 0);
@@ -11970,44 +11980,44 @@ function GlobalAtob(...args) {
 %InstallValue("Float64Array.prototype", "BYTES_PER_ELEMENT", Float64ArrayPrototypeBytesPerElement(), 0);
 %InstallValue("BigInt64Array.prototype", "BYTES_PER_ELEMENT", BigInt64ArrayPrototypeBytesPerElement(), 0);
 %InstallValue("BigUint64Array.prototype", "BYTES_PER_ELEMENT", BigUint64ArrayPrototypeBytesPerElement(), 0);
-%InstallMethod("%TypedArray%.prototype", "at", TypedArrayPrototypeAt, 1);
 %InstallMethod("%TypedArray%.prototype", "copyWithin", TypedArrayPrototypeCopyWithin, 2);
-%InstallMethod("%TypedArray%.prototype", "entries", TypedArrayPrototypeEntries, 0);
-%InstallMethod("%TypedArray%.prototype", "keys", TypedArrayPrototypeKeys, 0);
-%InstallMethod("%TypedArray%.prototype", "values", TypedArrayPrototypeValues, 0);
-%InstallMethod("%TypedArray%.prototype", %WellKnownSymbol("iterator"), TypedArrayPrototypeValues, 0);
 %InstallMethod("%TypedArray%.prototype", "every", TypedArrayPrototypeEvery, 1);
 %InstallMethod("%TypedArray%.prototype", "some", TypedArrayPrototypeSome, 1);
+%InstallMethod("%TypedArray%.prototype", "forEach", TypedArrayPrototypeForEach, 1);
+%InstallMethod("%TypedArray%.prototype", "map", TypedArrayPrototypeMap, 1);
 %InstallMethod("%TypedArray%.prototype", "filter", TypedArrayPrototypeFilter, 1);
+%InstallMethod("%TypedArray%.prototype", "reduce", TypedArrayPrototypeReduce, 1);
+%InstallMethod("%TypedArray%.prototype", "reduceRight", TypedArrayPrototypeReduceRight, 1);
+%InstallMethod("%TypedArray%.prototype", "fill", TypedArrayPrototypeFill, 1);
 %InstallMethod("%TypedArray%.prototype", "find", TypedArrayPrototypeFind, 1);
 %InstallMethod("%TypedArray%.prototype", "findIndex", TypedArrayPrototypeFindIndex, 1);
 %InstallMethod("%TypedArray%.prototype", "findLast", TypedArrayPrototypeFindLast, 1);
 %InstallMethod("%TypedArray%.prototype", "findLastIndex", TypedArrayPrototypeFindLastIndex, 1);
-%InstallMethod("%TypedArray%.prototype", "forEach", TypedArrayPrototypeForEach, 1);
-%InstallMethod("%TypedArray%.prototype", "includes", TypedArrayPrototypeIncludes, 1);
-%InstallMethod("%TypedArray%.prototype", "indexOf", TypedArrayPrototypeIndexOf, 1);
-%InstallMethod("%TypedArray%.prototype", "lastIndexOf", TypedArrayPrototypeLastIndexOf, 1);
-%InstallMethod("%TypedArray%.prototype", "join", TypedArrayPrototypeJoin, 1);
-%InstallMethod("%TypedArray%.prototype", "map", TypedArrayPrototypeMap, 1);
-%InstallMethod("%TypedArray%.prototype", "reduce", TypedArrayPrototypeReduce, 1);
-%InstallMethod("%TypedArray%.prototype", "reduceRight", TypedArrayPrototypeReduceRight, 1);
 %InstallMethod("%TypedArray%.prototype", "reverse", TypedArrayPrototypeReverse, 0);
+%InstallMethod("%TypedArray%.prototype", "toReversed", TypedArrayPrototypeToReversed, 0);
+%InstallMethod("%TypedArray%.prototype", "slice", TypedArrayPrototypeSlice, 2);
+%InstallMethod("%TypedArray%.prototype", "subarray", TypedArrayPrototypeSubarray, 2);
 %InstallMethod("%TypedArray%.prototype", "sort", TypedArrayPrototypeSort, 1);
 %InstallMethod("%TypedArray%.prototype", "toSorted", TypedArrayPrototypeToSorted, 1);
-%InstallMethod("%TypedArray%.prototype", "toReversed", TypedArrayPrototypeToReversed, 0);
-%InstallMethod("%TypedArray%.prototype", "with", TypedArrayPrototypeWith, 2);
+%InstallMethod("%TypedArray%.prototype", "join", TypedArrayPrototypeJoin, 1);
 %InstallMethod("%TypedArray%.prototype", "toLocaleString", TypedArrayPrototypeToLocaleString, 0);
-%InstallMethod("WeakMap.prototype", "delete", WeakMapPrototypeDelete, 1);
-%InstallMethod("WeakMap.prototype", "get", WeakMapPrototypeGet, 1);
-%InstallMethod("WeakMap.prototype", "has", WeakMapPrototypeHas, 1);
+%InstallMethod("%TypedArray%.prototype", "indexOf", TypedArrayPrototypeIndexOf, 1);
+%InstallMethod("%TypedArray%.prototype", "lastIndexOf", TypedArrayPrototypeLastIndexOf, 1);
+%InstallMethod("%TypedArray%.prototype", "includes", TypedArrayPrototypeIncludes, 1);
+%InstallPrototypeConstructor("%TypedArray%");
+%InstallMethod("%TypedArray%.prototype", "toString", ArrayPrototypeToString, 0);
+%InstallMethod("%TypedArray%.prototype", %WellKnownSymbol("iterator"), TypedArrayPrototypeValues, 0);
 %InstallMethod("WeakMap.prototype", "set", WeakMapPrototypeSet, 2);
+%InstallMethod("WeakMap.prototype", "get", WeakMapPrototypeGet, 1);
 %InstallMethod("WeakMap.prototype", "getOrInsert", WeakMapPrototypeGetOrInsert, 2);
 %InstallMethod("WeakMap.prototype", "getOrInsertComputed", WeakMapPrototypeGetOrInsertComputed, 2);
-%InstallValue("WeakMap.prototype", %WellKnownSymbol("toStringTag"), WeakMapPrototypeToStringTag(), 4);
+%InstallMethod("WeakMap.prototype", "has", WeakMapPrototypeHas, 1);
+%InstallMethod("WeakMap.prototype", "delete", WeakMapPrototypeDelete, 1);
+%InstallPrototypeConstructor("WeakMap");
 %InstallMethod("WeakSet.prototype", "add", WeakSetPrototypeAdd, 1);
-%InstallMethod("WeakSet.prototype", "delete", WeakSetPrototypeDelete, 1);
 %InstallMethod("WeakSet.prototype", "has", WeakSetPrototypeHas, 1);
-%InstallValue("WeakSet.prototype", %WellKnownSymbol("toStringTag"), WeakSetPrototypeToStringTag(), 4);
+%InstallMethod("WeakSet.prototype", "delete", WeakSetPrototypeDelete, 1);
+%InstallPrototypeConstructor("WeakSet");
 %InstallMethod("WeakRef.prototype", "deref", WeakRefPrototypeDeref, 0);
 %InstallValue("WeakRef.prototype", %WellKnownSymbol("toStringTag"), WeakRefPrototypeToStringTag(), 4);
 %InstallMethod("FinalizationRegistry.prototype", "register", FinalizationRegistryPrototypeRegister, 2);
@@ -12016,6 +12026,54 @@ function GlobalAtob(...args) {
 %InstallAccessor("DOMException.prototype", "name", DOMExceptionPrototypeName, false);
 %InstallAccessor("DOMException.prototype", "message", DOMExceptionPrototypeMessage, false);
 %InstallAccessor("DOMException.prototype", "code", DOMExceptionPrototypeCode, false);
+%InstallPrototypeConstructor("DOMException");
+%InstallValue("Array.prototype", %WellKnownSymbol("unscopables"), ArrayPrototypeUnscopables(), 4);
+%InstallValue("ArrayBuffer.prototype", %WellKnownSymbol("toStringTag"), ArrayBufferPrototypeToStringTag(), 4);
+%InstallPrototypeConstructor("BigInt");
+%InstallPrototypeConstructor("Boolean");
+%InstallPrototypeConstructor("DataView");
+%InstallMethod("Date.prototype", %WellKnownSymbol("toPrimitive"), DatePrototypeToPrimitive, 1);
+%InstallValue("Date.prototype", %WellKnownSymbol("toPrimitive"), DatePrototypeToPrimitive, 4);
+%InstallValue("DisposableStack.prototype", %WellKnownSymbol("toStringTag"), DisposableStackPrototypeToStringTag(), 4);
+%InstallValue("AsyncDisposableStack.prototype", %WellKnownSymbol("toStringTag"), AsyncDisposableStackPrototypeToStringTag(), 4);
+%InstallPrototypeConstructor("Error");
+%InstallPrototypeConstructor("EvalError");
+%InstallPrototypeConstructor("RangeError");
+%InstallPrototypeConstructor("ReferenceError");
+%InstallPrototypeConstructor("SyntaxError");
+%InstallPrototypeConstructor("TypeError");
+%InstallPrototypeConstructor("URIError");
+%InstallPrototypeConstructor("InternalError");
+%InstallPrototypeConstructor("AggregateError");
+%InstallPrototypeConstructor("SuppressedError");
+%InstallMethod("Function.prototype", %WellKnownSymbol("hasInstance"), FunctionPrototypeHasInstance, 1);
+%InstallValue("Function.prototype", %WellKnownSymbol("hasInstance"), FunctionPrototypeHasInstance, 0);
+%InstallAccessor("Iterator.prototype", %WellKnownSymbol("toStringTag"), IteratorPrototypeToStringTagSet, true);
+%InstallValue("Map.prototype", %WellKnownSymbol("toStringTag"), MapPrototypeToStringTag(), 4);
+%InstallPrototypeConstructor("Number");
+%InstallPrototypeConstructor("Object");
+%InstallPrototypeConstructor("Promise");
+%InstallMethod("RegExp.prototype", %WellKnownSymbol("split"), RegExpPrototypeSplit, 2);
+%InstallValue("Set.prototype", %WellKnownSymbol("toStringTag"), SetPrototypeToStringTag(), 4);
+%InstallMethod("String.prototype", %WellKnownSymbol("iterator"), StringPrototypeIterator, 0);
+%InstallValue("Symbol.prototype", %WellKnownSymbol("toStringTag"), SymbolPrototypeToStringTag(), 4);
+%InstallAccessor("%TypedArray%.prototype", %WellKnownSymbol("toStringTag"), TypedArrayPrototypeToStringTag, false);
+%InstallPrototypeConstructor("Int8Array");
+%InstallPrototypeConstructor("Uint8Array");
+%InstallPrototypeConstructor("Uint8ClampedArray");
+%InstallPrototypeConstructor("Int16Array");
+%InstallPrototypeConstructor("Uint16Array");
+%InstallPrototypeConstructor("Int32Array");
+%InstallPrototypeConstructor("Uint32Array");
+%InstallPrototypeConstructor("Float16Array");
+%InstallPrototypeConstructor("Float32Array");
+%InstallPrototypeConstructor("Float64Array");
+%InstallPrototypeConstructor("BigInt64Array");
+%InstallPrototypeConstructor("BigUint64Array");
+%InstallValue("WeakMap.prototype", %WellKnownSymbol("toStringTag"), WeakMapPrototypeToStringTag(), 4);
+%InstallValue("WeakSet.prototype", %WellKnownSymbol("toStringTag"), WeakSetPrototypeToStringTag(), 4);
+%InstallPrototypeConstructor("WeakRef");
+%InstallPrototypeConstructor("FinalizationRegistry");
 %InstallValue("DOMException.prototype", %WellKnownSymbol("toStringTag"), DOMExceptionToStringTag(), 4);
 %InstallIntrinsic("ArraySpeciesCreate", ArraySpeciesCreate);
 %InstallIntrinsic("ArrayConstructor", ArrayConstructor);

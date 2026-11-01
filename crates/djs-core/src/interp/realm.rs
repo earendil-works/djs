@@ -373,10 +373,9 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     }
     let error_proto = heap.new_object(Some(object_proto))?;
     set(heap, Intrinsic::ErrorProto, Value::object(error_proto));
+    // Error.prototype's `name` and `message` come from the prelude (builtins/error.ts),
+    // after `toString`, in qjs's order (D2150).
     let empty = Value::string(heap.atom_string(atoms::EMPTY)?);
-    define_hidden(heap, error_proto, atoms::MESSAGE, empty)?;
-    let name = heap.alloc_str("Error")?;
-    define_hidden(heap, error_proto, atoms::NAME, Value::string(name))?;
     for kind in [
         ErrorKind::TypeError,
         ErrorKind::RangeError,
@@ -447,8 +446,9 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
         Intrinsic::AsyncFromSyncIteratorProto,
         Value::object(from_sync),
     );
-    // The function-kind prototypes and their links (27.3.3, 27.4.3, 27.7.3): `prototype`
-    // and `constructor` are configurable but not writable; tags like qjs.
+    // The function-kind prototypes (27.3.3, 27.4.3, 27.7.3), tagged like qjs. Their
+    // `constructor` and `prototype` links are made when the prelude installs the
+    // constructors, so that they come in qjs's order (D2150).
     let function_proto = intrinsic_obj(heap, Intrinsic::FunctionProto);
     let tag = |heap: &mut Heap, o: Obj, s: &str| -> Result<(), HeapError> {
         let v = Value::string(heap.alloc_str(s)?);
@@ -456,27 +456,16 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
         heap.define_own_property(o, atoms::SYM_TO_STRING_TAG, &d)
             .map(|_| ())
     };
-    for (i, name, instances) in [
-        (
-            Intrinsic::GeneratorFunctionProto,
-            "GeneratorFunction",
-            Some(generator_proto),
-        ),
-        (Intrinsic::AsyncFunctionProto, "AsyncFunction", None),
+    for (i, name) in [
+        (Intrinsic::GeneratorFunctionProto, "GeneratorFunction"),
+        (Intrinsic::AsyncFunctionProto, "AsyncFunction"),
         (
             Intrinsic::AsyncGeneratorFunctionProto,
             "AsyncGeneratorFunction",
-            Some(async_generator_proto),
         ),
     ] {
         let p = heap.new_object(Some(function_proto))?;
         set(heap, i, Value::object(p));
-        if let Some(instances) = instances {
-            let d = PropertyDescriptor::data(Value::object(instances), PropFlags::CONFIGURABLE);
-            heap.define_own_property(p, atoms::PROTOTYPE, &d)?;
-            let d = PropertyDescriptor::data(Value::object(p), PropFlags::CONFIGURABLE);
-            heap.define_own_property(instances, atoms::CONSTRUCTOR, &d)?;
-        }
         tag(heap, p, name)?;
     }
     tag(heap, async_generator_proto, "AsyncGenerator")?;

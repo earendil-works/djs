@@ -231,6 +231,25 @@ function URIErrorConstructor(message?: Value, options?: Value): Obj {
 }
 
 /**
+ * Error.prototype.name, 20.5.3.3 (installed here rather than with the realm, so that
+ * it comes after toString, in qjs's order, D2150).
+ * @value Error.prototype.name
+ * @attributes writable configurable
+ */
+function ErrorPrototypeName(): Str {
+  return "Error";
+}
+
+/**
+ * Error.prototype.message, 20.5.3.2.
+ * @value Error.prototype.message
+ * @attributes writable configurable
+ */
+function ErrorPrototypeMessage(): Str {
+  return "";
+}
+
+/**
  * Error.prototype.toString ( ), 20.5.3.4.
  * @builtin Error.prototype.toString
  */

@@ -98,7 +98,23 @@ pub fn emit(p: &Program, sources: &Sources) -> String {
             rest.push((i.target.clone(), i.key.clone(), install(b, i)));
         }
     }
-    // Namespace objects (Math, JSON) in qjs's order too (D2072).
+    // Each prototype's `constructor`, after its methods unless qjs's order says
+    // otherwise (D2150).
+    for b in &p.builtins {
+        for i in &b.installs {
+            if i.on_global()
+                && let InstallKind::Constructor { .. } = i.kind
+                && i.key != "Proxy"
+            {
+                rest.push((
+                    format!("{}.prototype", i.key),
+                    "constructor".to_string(),
+                    format!("%InstallPrototypeConstructor({});\n", js_str(&i.key)),
+                ));
+            }
+        }
+    }
+    // Namespace objects (Math, JSON) and prototypes in qjs's order too (D2072, D2150).
     crate::qjs_order::reorder(&mut rest);
     for (_, _, line) in rest {
         out.push_str(&line);

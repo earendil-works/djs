@@ -1019,10 +1019,16 @@ declare function InstallConstructor(target: Str, key: Str, f: Value, length: u32
  * The `prototype` of the constructor `key`, installed after its statics (D2052, qjs's
  * order): the realm's intrinsic prototype for that name if there is one, else a new
  * object inheriting from the parent's prototype (or Object.prototype). Sets
- * `f.prototype` and `prototype.constructor`.
+ * `f.prototype`.
  * @leaf
  */
 declare function InstallPrototype(target: Str, key: Str, parent: Value): void;
+/**
+ * `prototype.constructor` of the constructor `key`, installed among the prototype's
+ * methods where qjs's order puts it (D2150).
+ * @leaf
+ */
+declare function InstallPrototypeConstructor(key: Str): void;
 /** `@getter`/`@setter`: one half of an accessor (configurable, not enumerable). @leaf */
 declare function InstallAccessor(target: Str, key: Value, f: Value, isSetter: boolean): void;
 /** `@value`: a data property with `attrs` (writable 1, enumerable 2, configurable 4). @leaf */

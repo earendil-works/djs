@@ -280,6 +280,7 @@ const I = {
   },
   // The prototype is set by InstallConstructor already.
   InstallPrototype: () => {},
+  InstallPrototypeConstructor: () => {},
   InstallAccessor: (target, key, f, isSetter) => {
     installed[(isSetter ? "set " : "get ") + target + "." + String(key)] = { f };
   },
