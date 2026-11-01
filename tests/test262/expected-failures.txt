@@ -44,14 +44,12 @@ built-ins/ArrayBuffer/isView/arg-is-typedarray-buffer.js: TypeError: not support
 built-ins/ArrayBuffer/isView/arg-is-typedarray-subclass-instance.js: parse: Unsupported: classes are not supported yet
 built-ins/ArrayBuffer/isView/arg-is-typedarray.js: TypeError: not supported yet: BigInt typed arrays (Testing with BigInt64Array and makePassthrough.)
 built-ins/ArrayBuffer/isView/invoked-as-a-fn.js: TypeError: not supported yet: BigInt typed arrays (Testing with BigInt64Array and makePassthrough.)
-built-ins/ArrayBuffer/options-non-object.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/ArrayIteratorPrototype/next/detach-typedarray-in-progress.js: TypeError: not supported yet: BigInt typed arrays (Testing with BigInt64Array and makePassthrough.)
 built-ins/AsyncGeneratorPrototype/throw/throw-suspendedYield-try-finally-return.js: parse: Unsupported: classes are not supported yet
-built-ins/AsyncIteratorPrototype/Symbol.asyncIterator/return-val.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/DataView/prototype/getBigInt64/resizable-buffer.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/DataView/prototype/getBigUint64/resizable-buffer.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/DataView/prototype/setBigInt64/resizable-buffer.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/DataView/prototype/setBigUint64/resizable-buffer.js: parse: Unsupported: BigInt literals are not supported yet
+built-ins/DataView/prototype/getBigInt64/resizable-buffer.js: TypeError: not supported yet: BigInt typed arrays
+built-ins/DataView/prototype/getBigUint64/resizable-buffer.js: TypeError: not supported yet: BigInt typed arrays
+built-ins/DataView/prototype/setBigInt64/resizable-buffer.js: TypeError: not supported yet: BigInt typed arrays
+built-ins/DataView/prototype/setBigUint64/resizable-buffer.js: TypeError: not supported yet: BigInt typed arrays
 built-ins/Date/prototype/toDateString/format.js: parse: Unsupported: regular expressions are not supported yet
 built-ins/Date/prototype/toDateString/negative-year.js: TypeError: not a function
 built-ins/Date/prototype/toString/format.js: parse: Unsupported: regular expressions are not supported yet
@@ -174,7 +172,7 @@ built-ins/Math/sumPrecise/sum-is-infinite.js: TypeError: not a function
 built-ins/Math/sumPrecise/sum-is-minus-zero.js: TypeError: not a function
 built-ins/Math/sumPrecise/sum.js: TypeError: not a function
 built-ins/Math/sumPrecise/takes-iterable.js: TypeError: not a function
-built-ins/Math/sumPrecise/throws-on-non-number.js: parse: Unsupported: BigInt literals are not supported yet
+built-ins/Math/sumPrecise/throws-on-non-number.js: Test262Error: Expected SameValue(«0», «1») to be true
 built-ins/Number/prototype/toString/length.js: Test262Error: length descriptor value should be 1; length value should be 1
 built-ins/Object/create/15.2.3.5-4-119.js: ReferenceError: 'RegExp' is not defined
 built-ins/Object/create/15.2.3.5-4-12.js: ReferenceError: 'RegExp' is not defined
@@ -318,65 +316,43 @@ built-ins/Proxy/getOwnPropertyDescriptor/trap-is-undefined-target-is-proxy.js: p
 built-ins/Proxy/isExtensible/trap-is-missing-target-is-proxy.js: parse: Unsupported: regular expressions are not supported yet
 built-ins/Proxy/set/trap-is-missing-target-is-proxy.js: parse: Unsupported: regular expressions are not supported yet
 built-ins/Set/prototype/difference/allows-set-like-class.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/difference/called-with-object.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/difference/receiver-not-set.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/difference/require-internal-slot.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/difference/set-like-class-order.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/difference/size-is-a-number.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/difference/subclass-receiver-methods.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/difference/subclass-symbol-species.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/difference/subclass.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/intersection/allows-set-like-class.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/intersection/called-with-object.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/intersection/receiver-not-set.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/intersection/require-internal-slot.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/intersection/set-like-class-order.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/intersection/size-is-a-number.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/intersection/subclass-receiver-methods.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/intersection/subclass-symbol-species.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/intersection/subclass.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/isDisjointFrom/allows-set-like-class.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/isDisjointFrom/called-with-object.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/isDisjointFrom/receiver-not-set.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/isDisjointFrom/require-internal-slot.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/isDisjointFrom/set-like-class-order.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/isDisjointFrom/size-is-a-number.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/isDisjointFrom/subclass-receiver-methods.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/isSubsetOf/allows-set-like-class.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/isSubsetOf/called-with-object.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/isSubsetOf/receiver-not-set.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/isSubsetOf/require-internal-slot.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/isSubsetOf/set-like-class-order.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/isSubsetOf/size-is-a-number.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/isSubsetOf/subclass-receiver-methods.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/isSupersetOf/allows-set-like-class.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/isSupersetOf/called-with-object.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/isSupersetOf/receiver-not-set.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/isSupersetOf/require-internal-slot.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/isSupersetOf/set-like-class-order.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/isSupersetOf/size-is-a-number.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/isSupersetOf/subclass-receiver-methods.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/symmetricDifference/allows-set-like-class.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/symmetricDifference/called-with-object.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/symmetricDifference/receiver-not-set.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/symmetricDifference/require-internal-slot.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/symmetricDifference/set-like-class-order.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/symmetricDifference/size-is-a-number.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/symmetricDifference/subclass-receiver-methods.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/symmetricDifference/subclass-symbol-species.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/symmetricDifference/subclass.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/union/allows-set-like-class.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/union/called-with-object.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/union/receiver-not-set.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/union/require-internal-slot.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/union/set-like-class-order.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/union/size-is-a-number.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/union/subclass-receiver-methods.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/union/subclass-symbol-species.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/union/subclass.js: parse: Unsupported: classes are not supported yet
 built-ins/String/prototype/endsWith/searchstring-is-regexp-throws.js: parse: Unsupported: regular expressions are not supported yet
 built-ins/String/prototype/includes/searchstring-is-regexp-throws.js: parse: Unsupported: regular expressions are not supported yet
-built-ins/String/prototype/isWellFormed/to-string-primitive.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/String/prototype/localeCompare/15.5.4.9_CE.js: Test262Error: String.prototype.localeCompare considers ö (\u006f\u0308) ≠ ö (\u00f6).
 built-ins/String/prototype/match/S15.5.4.10_A1_T10.js: TypeError: not a function
 built-ins/String/prototype/match/S15.5.4.10_A1_T11.js: Test262Error: #1.1: Exception === "intostr". Actual: TypeError: not a function
@@ -629,7 +605,6 @@ built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T14.js: ReferenceErro
 built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T14.js: ReferenceError: 'RegExp' is not defined
 built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T14.js: ReferenceError: 'RegExp' is not defined
 built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T14.js: ReferenceError: 'RegExp' is not defined
-built-ins/String/prototype/toWellFormed/to-string-primitive.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/String/prototype/trim/15.5.4.20-2-49.js: parse: Unsupported: regular expressions are not supported yet
 built-ins/Symbol/species/builtin-getter-name.js: ReferenceError: 'RegExp' is not defined
 built-ins/Symbol/species/subclassing.js: parse: Unsupported: classes are not supported yet
@@ -651,9 +626,7 @@ built-ins/TypedArray/prototype/findIndex/predicate-is-not-callable-throws.js: pa
 built-ins/TypedArray/prototype/findLast/predicate-is-not-callable-throws.js: parse: Unsupported: regular expressions are not supported yet
 built-ins/TypedArray/prototype/findLastIndex/predicate-is-not-callable-throws.js: parse: Unsupported: regular expressions are not supported yet
 built-ins/TypedArray/prototype/sort/comparefn-nonfunction-call-throws.js: parse: Unsupported: regular expressions are not supported yet
-built-ins/TypedArray/prototype/toReversed/this-value-invalid.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/TypedArray/prototype/toSorted/comparefn-not-a-function.js: parse: Unsupported: regular expressions are not supported yet
-built-ins/TypedArray/prototype/toSorted/this-value-invalid.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/TypedArrayConstructors/BigUint64Array/is-a-constructor.js: TypeError: not supported yet: BigInt typed arrays
 built-ins/TypedArrayConstructors/ctors/no-species.js: parse: Unsupported: classes are not supported yet
 built-ins/Uint8Array/fromBase64/ignores-receiver.js: parse: Unsupported: classes are not supported yet
@@ -1033,8 +1006,6 @@ language/expressions/arrow-function/lexical-supercall-from-immediately-invoked-a
 language/expressions/arrow-function/scope-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/arrow-function/static-init-await-binding.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/expressions/arrow-function/static-init-await-reference.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/expressions/assignment/destructuring/default-expr-throws-iterator-return-is-not-callable.js: parse: Unsupported: BigInt literals are not supported yet
-language/expressions/assignment/destructuring/target-assign-throws-iterator-return-is-not-callable.js: parse: Unsupported: BigInt literals are not supported yet
 language/expressions/assignment/dstr/array-elem-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/expressions/assignment/dstr/obj-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/expressions/assignment/dstr/obj-prop-elem-init-fn-name-class.js: parse: Unsupported: classes are not supported yet

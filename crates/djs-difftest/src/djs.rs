@@ -366,7 +366,9 @@ impl Session {
         match stringify_fast(self.vm.heap_mut(), v, &[]) {
             Ok(Some(s)) => self.vm.heap().str_to_string(s),
             Ok(None) => self.string_of(v),
-            Err(StringifyError::Circular | StringifyError::StackOverflow) => self.string_of(v),
+            Err(
+                StringifyError::Circular | StringifyError::StackOverflow | StringifyError::BigInt,
+            ) => self.string_of(v),
             Err(e) => format!("<djs: JSON.stringify needs the slow path ({e:?})>"),
         }
     }
@@ -394,6 +396,7 @@ impl Session {
             Kind::Bool => v.as_bool().unwrap().to_string(),
             Kind::Number => num::to_string(v.as_number().unwrap()).as_str().to_string(),
             Kind::String => heap.str_to_string(v.as_string().unwrap()),
+            Kind::BigInt => heap.bigint(v).to_string_radix(10),
             Kind::Symbol => {
                 let d = heap.symbol_description(v.as_symbol().unwrap());
                 let d = d
@@ -435,6 +438,9 @@ impl Session {
             Err(StringifyError::Circular) => Done::Throw("TypeError: circular reference".into()),
             Err(StringifyError::StackOverflow) => {
                 Done::Throw("InternalError: stack overflow".into())
+            }
+            Err(StringifyError::BigInt) => {
+                Done::Throw("TypeError: Do not know how to serialize a BigInt".into())
             }
             Err(e) => Done::Crash(format!(
                 "the return value needs JSON.stringify's slow path ({e:?})"

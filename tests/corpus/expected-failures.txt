@@ -4,19 +4,17 @@ codemode/script-style.js: throws TypeError: not a function
 codemode/store.js: throws TypeError: store("obj"): djs cannot serialize this value yet (Slow)
 codemode/tools.js: throws TypeError: djs cannot serialize this value yet (Slow)
 console/collections.js: throws SyntaxError: regular expressions are not supported yet
-console/cycles.js: throws SyntaxError: BigInt literals are not supported yet
+console/cycles.js: line 3: expected `1`, got `<djs: String(array)>`
 console/cyclic-array.js: line 2: expected `=== throw`, got `<djs: String(array)>`
 console/errors.js: throws SyntaxError: classes are not supported yet
 console/functions-classes.js: throws SyntaxError: classes are not supported yet
-console/levels-and-text.js: throws SyntaxError: BigInt literals are not supported yet
+console/levels-and-text.js: line 15: expected `() => 1`, got `<djs: function source>`
 console/numbers-in-json.js: line 4: expected `[1,"s",false]`, got `<djs: JSON.stringify needs the slow path (Slow)>`
 console/objects.js: line 5: expected `{"n":null,"k":1}`, got `<djs: JSON.stringify needs the slow path (Slow)>`
-console/primitives.js: throws SyntaxError: BigInt literals are not supported yet
 console/tojson.js: line 1: expected `"replaced"`, got `<djs: JSON.stringify needs the slow path (Slow)>`
 dquickts/builtin/test_base64.js: throws ReferenceError: 'btoa' is not defined
 dquickts/builtin/test_dom_exception.js: throws SyntaxError: classes are not supported yet
 dquickts/builtin/test_json.js: throws TypeError: not a function
-dquickts/builtin/test_map.js: throws SyntaxError: BigInt literals are not supported yet
 dquickts/builtin/test_math.js: throws TypeError: not a function
 dquickts/builtin/test_typed_array.js: throws TypeError: not a function
 dquickts/language/test_class.js: throws SyntaxError: classes are not supported yet
@@ -45,12 +43,11 @@ dquickts/typescript/test_type_erasure.ts: throws SyntaxError: expecting ';'
 dquickts/typescript/test_type_grammar.ts: throws SyntaxError: expecting ';'
 dquickts/typescript/test_using.ts: throws SyntaxError: missing initializer for const variable
 dquickts/typescript/test_using_syntax_2.ts: throws SyntaxError: expecting ';'
-errors/other-errors.js: throws SyntaxError: BigInt literals are not supported yet
+errors/other-errors.js: line 18: expected `decodeURIComponent -> URIError: expecting hex digit`, got `decodeURIComponent -> ReferenceError: 'decodeURIComponent' is not defined`
 errors/reference-errors.js: throws SyntaxError: classes are not supported yet
-errors/type-errors.js: throws SyntaxError: BigInt literals are not supported yet
+errors/type-errors.js: throws SyntaxError: classes are not supported yet
 errors/uncaught-custom.js: throws SyntaxError: classes are not supported yet
 errors/undescribable.js: throws : x
-result/bigint.js: throws SyntaxError: BigInt literals are not supported yet
 result/date.js: crash: the return value needs JSON.stringify's slow path (Slow)
 result/tojson-throws.js: crash: the return value needs JSON.stringify's slow path (Slow)
 result/tojson.js: crash: the return value needs JSON.stringify's slow path (Slow)

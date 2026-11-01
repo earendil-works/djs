@@ -59,6 +59,16 @@ of difftest cases (0016: 6 BigInt literal cases).
   parse O(n^2). With the 32768-limb cap the worst single operation is ~2.7e8 limb
   products (16k x 16k), uninterruptible but charged as fuel afterwards.
 
+- JSON fast path: `StringifyError::BigInt` (TypeError) when no toJSON is on the BigInt's
+  prototype chain, so hosts (difftest glue, djs-wasm) report qjs's error;
+  `JSON.stringify` itself falls back to the slow path. `djs run`'s console prints `10n`
+  like qjs (e2e prelude in gen-expected.sh too).
+- qjs bug (node as tie-breaker): qjs compares a negative BigInt with a negative
+  non-integral Number wrongly (`-1n < -0.5` is false in qjs, true in node and the spec).
+  djs follows the spec; e2e and the corpus avoid that case.
+- e2e `bigint.js` (three modes); test262 active +29 (tests that used BigInt without the
+  feature tag); difftest ratchet: test_map.js and result/bigint.js pass now.
+
 ## Follow-ups
 
 ## Result

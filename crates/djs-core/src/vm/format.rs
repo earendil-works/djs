@@ -1,5 +1,6 @@
 //! Value formatting for `console.log` in `djs run` (a simple printer, D1100: strings raw,
-//! Errors as name and message, everything else JSON with a `String()` fallback).
+//! Errors as name and message, BigInts as `10n`, everything else JSON with a `String()`
+//! fallback).
 
 use alloc::string::String;
 
@@ -41,6 +42,8 @@ pub(crate) fn display(heap: &mut Heap, v: Value) -> String {
                 return String::from("function");
             }
         }
+        // As qjs's console.log prints a BigInt.
+        Kind::BigInt => return alloc::format!("{}n", heap.bigint(v).to_string_radix(10)),
         _ => {}
     }
     match stringify_fast(heap, v, &[]) {

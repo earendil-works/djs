@@ -156,11 +156,15 @@ impl Exec<'_> {
                 let Some(n) = a0.as_number() else {
                     return bad_argument(name);
                 };
-                if !n.is_finite() || libm::trunc(n) != n {
-                    return Err(Fault::Error(
-                        ErrorKind::RangeError,
-                        String::from("cannot convert to BigInt: not an integer"),
-                    ));
+                let msg = if !n.is_finite() {
+                    "cannot convert NaN or Infinity to BigInt"
+                } else if libm::trunc(n) != n {
+                    "cannot convert to BigInt: not an integer"
+                } else {
+                    ""
+                };
+                if !msg.is_empty() {
+                    return Err(Fault::Error(ErrorKind::RangeError, String::from(msg)));
                 }
                 self.heap.alloc_bigint(&BigInt::from_f64(n))?
             }

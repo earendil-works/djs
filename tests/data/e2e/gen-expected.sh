@@ -3,6 +3,7 @@
 #
 # Each case runs strict, with a console.log that formats values the way `djs run` does
 # (vm::display): strings raw, Errors as `Name: message`, -0/NaN/Infinity as String(),
+# BigInts as `10n`,
 # undefined, functions as `function`, everything else JSON.stringify. An uncaught
 # exception adds a last line `Uncaught <formatted>`.
 #
@@ -20,6 +21,7 @@ PRELUDE='function __fmt(v) {
   if (typeof v === "number" && (Object.is(v, -0) || !isFinite(v))) return Object.is(v, -0) ? "-0" : String(v);
   if (typeof v === "function") return "function";
   if (typeof v === "symbol") return "Symbol(" + (v.description ?? "") + ")";
+  if (typeof v === "bigint") return v + "n";
   const j = JSON.stringify(v);
   return j === undefined ? String(v) : j;
 }

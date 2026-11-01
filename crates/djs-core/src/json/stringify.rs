@@ -37,6 +37,9 @@ pub enum StringifyError {
     /// Out of memory, or the result would be longer than the string limit
     /// (`RangeError: invalid string length`).
     Heap(HeapError),
+    /// `TypeError: Do not know how to serialize a BigInt` (no `toJSON` on its
+    /// prototype chain).
+    BigInt,
 }
 
 impl StringifyError {
@@ -51,6 +54,7 @@ impl StringifyError {
                 Some(("InternalError", "out of memory"))
             }
             StringifyError::Heap(_) => Some(("RangeError", "invalid string length")),
+            StringifyError::BigInt => Some(("TypeError", "Do not know how to serialize a BigInt")),
         }
     }
 }
@@ -436,7 +440,23 @@ impl Ser<'_, '_> {
                 self.check_to_json(o)?;
                 Class::Object(o, is_array)
             }
-            Kind::BigInt | Kind::HostRef | Kind::Hole | Kind::Uninitialized | Kind::Internal => {
+            Kind::BigInt => {
+                // A BigInt.prototype.toJSON (or one further up) is user code.
+                if self.heap.realm().is_undefined() {
+                    return Err(StringifyError::BigInt);
+                }
+                let proto = crate::interp::realm::primitive_proto(self.heap, v).unwrap();
+                let found = self
+                    .heap
+                    .find_property(proto, atoms::TO_JSON)
+                    .map(|(_, p)| p);
+                return Err(if found.is_some() {
+                    StringifyError::Slow
+                } else {
+                    StringifyError::BigInt
+                });
+            }
+            Kind::HostRef | Kind::Hole | Kind::Uninitialized | Kind::Internal => {
                 return Err(StringifyError::Slow);
             }
         })

@@ -1,0 +1,48 @@
+0n 0n 123n 31n 15n 10n 1000000n
+18446744073709551616n -1267650600228229401496703205376n 18446744073709551615n
+3n -3n 1n -1n -15n -7n
+1n -5n -6n -6n 0n 1180591620717411303424n -1n -5n 2n
+9007199254740994n 9007199254740994n 9007199254740993n -9007199254740993n
+bigint object false true true f
+true false false true false true true true
+false true
+true true true false true true false true
+10 -3 5 a1 1,2 ff -11111111
+21i3v9 0 10 7n
+42n 0n 16n -12n 0n 1n 1000000000000000000000n
+-1n 255n -9223372036854775808n 18446744073709551615n
+18446744073709552000 -5 9007199254740992 12
+true true true 0
+a big false 3
+one two 20
+[object BigInt] 6n true BigInt
+8n
+TypeError: cannot convert bigint to number
+TypeError: cannot convert bigint to number
+TypeError: cannot convert symbol to number
+TypeError: bigint operands are forbidden for >>>
+TypeError: bigint argument with unary +
+TypeError: cannot convert bigint to number
+RangeError: BigInt division by zero
+RangeError: BigInt division by zero
+RangeError: BigInt negative exponent
+RangeError: BigInt is too large
+RangeError: BigInt is too large to allocate
+RangeError: BigInt is too large to allocate
+RangeError: cannot convert to BigInt: not an integer
+RangeError: cannot convert NaN or Infinity to BigInt
+SyntaxError: invalid bigint literal
+SyntaxError: invalid bigint literal
+TypeError: cannot convert to BigInt
+TypeError: cannot convert to BigInt
+TypeError: cannot convert to BigInt
+TypeError: BigInt is not a constructor
+RangeError: radix must be between 2 and 36
+TypeError: not a BigInt
+RangeError: invalid array index
+TypeError: Do not know how to serialize a BigInt
+{"a":"1","b":["2"]}
+30414093201713378043612608166064768844377641568960512000000000000n 216105129892080882169214875191192738017616943359375n 318608048n
+76115729698631600110671441758749569297726080017066962606908909145508275781085384577167582253167851320n 1558186302814865144924666367072735618279666n true
+true true 10000000000000000000000000000000000000000
+1 BigInt 2 0

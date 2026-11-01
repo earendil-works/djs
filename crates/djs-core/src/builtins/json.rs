@@ -31,7 +31,8 @@ pub(crate) fn stringify_fast(heap: &mut Heap, v: Value, gap: Str) -> Result<Valu
     match json::stringify_fast(heap, v, &gap) {
         Ok(Some(s)) => Ok(Value::string(s)),
         Ok(None) => Ok(Value::UNDEFINED),
-        Err(StringifyError::Slow) => Ok(Value::NULL),
+        // The full algorithm throws for a BigInt (after a replacer had its say).
+        Err(StringifyError::Slow | StringifyError::BigInt) => Ok(Value::NULL),
         Err(StringifyError::Heap(e)) => Err(Fault::Heap(e)),
         Err(StringifyError::Circular) => Err(Fault::Error(
             ErrorKind::TypeError,
