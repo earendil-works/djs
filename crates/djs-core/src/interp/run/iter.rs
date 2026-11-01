@@ -142,6 +142,21 @@ impl Exec<'_> {
         })
     }
 
+    /// `fast_step` for `iter_next`: an Array Iterator of kind values at a present
+    /// dense element (for-of over an array); false, with nothing changed, otherwise.
+    #[inline(never)]
+    pub(super) fn fast_iter_next(&mut self) -> bool {
+        let Plan::Elem(it, v, i, 1) = self.iter_plan(self.top(1), self.top(0)) else {
+            return false;
+        };
+        self.heap
+            .set_object_slot(it, 1, conv::number(i as f64 + 1.0));
+        self.sp -= 1;
+        self.set(self.sp - 1, v);
+        self.fast_jump(Op::IterNext, true);
+        true
+    }
+
     /// Whether `iter_fast_next` would produce a value (`%IteratorFastReady`).
     pub(super) fn iter_fast_ready(&self, it: Value, f: Value) -> bool {
         matches!(self.iter_plan(it, f), Plan::Str(..) | Plan::Elem(..))

@@ -108,6 +108,8 @@ mod fast {
     pub const UNDEFINED: u8 = Op::Undefined as u8;
     pub const DROP: u8 = Op::Drop as u8;
     pub const DUP: u8 = Op::Dup as u8;
+    pub const DUP2: u8 = Op::Dup2 as u8;
+    pub const ITER_NEXT: u8 = Op::IterNext as u8;
     pub const TO_NUMERIC: u8 = Op::ToNumeric as u8;
     pub const INC: u8 = Op::Inc as u8;
     pub const DEC: u8 = Op::Dec as u8;
@@ -1181,6 +1183,14 @@ impl<'h> Exec<'h> {
                 self.push(v);
                 self.advance(Op::Dup, sp0);
             }
+            // for-of's step (D1800): `dup2; iter_next`.
+            fast::DUP2 => {
+                let (a, b) = (self.top(1), self.top(0));
+                self.push(a);
+                self.push(b);
+                self.advance(Op::Dup2, sp0);
+            }
+            fast::ITER_NEXT => return self.fast_iter_next(),
             // Number operands only: these never need `primitive_operands` (D1280).
             fast::TO_NUMERIC if self.top(0).is_number() => self.advance(Op::ToNumeric, sp0),
             fast::INC => return self.fast_inc(Op::Inc, 1, sp0),
