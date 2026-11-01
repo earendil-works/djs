@@ -1126,10 +1126,48 @@ impl Heap {
                 a.set(v, PropValues::SHAPE, Ref(parent));
                 return Ok(());
             }
+            if let Some(s) = self.shape_without(o, i)? {
+                let a = self.arena_mut();
+                let at = PropValues::VALUES.at(v, i);
+                a.copy_within(at + 8, 8 * (len - i - 1), at);
+                a.write(PropValues::VALUES.at(v, len - 1), Value::ZERO);
+                a.set(v, PropValues::LEN, len - 1);
+                a.set(v, PropValues::SHAPE, Ref(s));
+                return Ok(());
+            }
             self.become_dictionary(o, 0, Dict::Delete)?;
         }
         self.table_remove(o, i);
         Ok(())
+    }
+
+    /// The shape of shape-mode `o` without its property `i` (not the last): the
+    /// ancestor before `i`, then the transitions for the keys after it. At most one of
+    /// them may be new, so deleting keys of map-like objects does not spend the shape
+    /// budget on every subset of their keys; `None` means "become a dictionary".
+    fn shape_without(&mut self, o: Obj, i: u32) -> Result<Option<u32>, HeapError> {
+        let s = self.arena().get(self.props(o), PropValues::SHAPE).0;
+        let count = self.shape_count(s);
+        let mut base = s;
+        for _ in i..count {
+            base = self.shape_parent(base);
+        }
+        let mut created = false;
+        for j in i + 1..count {
+            let (key, flags) = self.shape_desc(s, j);
+            base = match self.shape_transition(base, key, flags) {
+                Some(c) => c,
+                None if !created => {
+                    created = true;
+                    match self.shape_child(base, key, flags)? {
+                        Some(c) => c,
+                        None => return Ok(None),
+                    }
+                }
+                None => return Ok(None),
+            };
+        }
+        Ok(Some(base))
     }
 
     /// Makes `o` a dictionary-mode object (builtin namespaces and prototypes: one-off

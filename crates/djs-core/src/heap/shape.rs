@@ -101,19 +101,10 @@ impl Heap {
         } else {
             self.arena().get(tr, RefArray::LEN)
         };
-        // Children are sorted by (key, flags) of their last descriptor.
-        let want = (key.id(), flags);
-        let (mut lo, mut hi) = (0, len);
-        while lo < hi {
-            let mid = (lo + hi) / 2;
-            let c = self.arena().read::<Ref>(RefArray::REFS.at(tr, mid)).0;
-            let (k, f) = self.shape_desc(c, count);
-            match (k.id(), f).cmp(&want) {
-                core::cmp::Ordering::Equal => return Ok(Some(c)),
-                core::cmp::Ordering::Less => lo = mid + 1,
-                core::cmp::Ordering::Greater => hi = mid,
-            }
-        }
+        let lo = match self.transition_search(s, key, flags) {
+            Ok(c) => return Ok(Some(c)),
+            Err(lo) => lo,
+        };
         let shapes = self.arena().get(0, Roots::SHAPES);
         if count >= SHAPE_MAX || shapes >= SHAPE_BUDGET {
             return Ok(None);
@@ -175,6 +166,34 @@ impl Heap {
         a.set(s, Shape::TRANSITIONS, Ref(new_tr));
         a.set(0, Roots::SHAPES, shapes + 1);
         Ok(Some(c))
+    }
+
+    /// The existing child of `s` for `(key, flags)`, if any.
+    pub(super) fn shape_transition(&self, s: u32, key: Atom, flags: u32) -> Option<u32> {
+        self.transition_search(s, key, flags).ok()
+    }
+
+    /// Binary search of `s`'s children, which are sorted by the key and flags of their
+    /// last descriptor: the child, or where it would go.
+    fn transition_search(&self, s: u32, key: Atom, flags: u32) -> Result<u32, u32> {
+        let count = self.shape_count(s);
+        let tr = self.arena().get(s, Shape::TRANSITIONS).0;
+        if tr == 0 {
+            return Err(0);
+        }
+        let want = (key.id(), flags);
+        let (mut lo, mut hi) = (0, self.arena().get(tr, RefArray::LEN));
+        while lo < hi {
+            let mid = (lo + hi) / 2;
+            let c = self.arena().read::<Ref>(RefArray::REFS.at(tr, mid)).0;
+            let (k, f) = self.shape_desc(c, count);
+            match (k.id(), f).cmp(&want) {
+                core::cmp::Ordering::Equal => return Ok(c),
+                core::cmp::Ordering::Less => lo = mid + 1,
+                core::cmp::Ordering::Greater => hi = mid,
+            }
+        }
+        Err(lo)
     }
 
     fn ref_array_capacity(&self, r: u32) -> u32 {

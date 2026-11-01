@@ -126,12 +126,22 @@ fn deleting_the_last_key_goes_back_to_the_parent() {
     assert!(h.create_data_property(abc, c, Value::int(5)).unwrap());
     let fresh = obj(&mut h, &["a", "b", "c"]);
     assert_eq!(shape_of(&h, abc), shape_of(&h, fresh));
-    // Deleting another key makes a dictionary, in the same order.
+    // Deleting another key re-walks the tree from the parent of the key, if at most one
+    // shape is new: `{b}` exists, `{b, c}` is new.
+    obj(&mut h, &["b"]);
     let a = key(&mut h, "a");
     assert!(h.delete_own_property(abc, a).unwrap());
-    assert!(is_dict(&h, abc));
+    assert!(!is_dict(&h, abc));
     assert_eq!(names(&h, abc), ["b", "c"]);
     assert_eq!(get(&h, abc, c), Some(Value::int(5)));
+    let bc = obj(&mut h, &["b", "c"]);
+    assert_eq!(shape_of(&h, abc), shape_of(&h, bc));
+    // Two new shapes are too many: `{q, r, s}` from `{p, q, r, s}`.
+    let o = obj(&mut h, &["p", "q", "r", "s"]);
+    let p = key(&mut h, "p");
+    assert!(h.delete_own_property(o, p).unwrap());
+    assert!(is_dict(&h, o));
+    assert_eq!(names(&h, o), ["q", "r", "s"]);
     h.verify().unwrap();
 }
 
