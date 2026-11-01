@@ -110,10 +110,6 @@ mod fast {
     pub const DROP: u8 = Op::Drop as u8;
     pub const DUP: u8 = Op::Dup as u8;
     pub const DUP2: u8 = Op::Dup2 as u8;
-    pub const INSERT2: u8 = Op::Insert2 as u8;
-    pub const INSERT3: u8 = Op::Insert3 as u8;
-    pub const STRICT_EQ: u8 = Op::StrictEq as u8;
-    pub const STRICT_NE: u8 = Op::StrictNe as u8;
     pub const ITER_NEXT: u8 = Op::IterNext as u8;
     pub const TO_NUMERIC: u8 = Op::ToNumeric as u8;
     pub const INC: u8 = Op::Inc as u8;
@@ -1241,22 +1237,6 @@ impl<'h> Exec<'h> {
                 self.push(b);
                 self.advance(Op::Dup2, sp0);
             }
-            // `o[k] = v` / `o.f = v` as expressions and `a[i++] = v` (D1783).
-            fast::INSERT2 => {
-                let (a, b) = (self.top(1), self.top(0));
-                self.set(self.sp - 2, b);
-                self.set(self.sp - 1, a);
-                self.push(b);
-                self.advance(Op::Insert2, sp0);
-            }
-            fast::INSERT3 => {
-                let (a, b, c) = (self.top(2), self.top(1), self.top(0));
-                self.set(self.sp - 3, c);
-                self.set(self.sp - 2, a);
-                self.set(self.sp - 1, b);
-                self.push(c);
-                self.advance(Op::Insert3, sp0);
-            }
             fast::ITER_NEXT => return self.fast_iter_next(),
             // Number operands only: these never need `primitive_operands` (D1280).
             fast::TO_NUMERIC if self.top(0).is_number() => self.advance(Op::ToNumeric, sp0),
@@ -1295,15 +1275,6 @@ impl<'h> Exec<'h> {
             fast::GE => {
                 return self.fast_int(Op::Ge, sp0, |x, y| Some(Value::bool(x >= y)))
                     || self.fast_float(Op::Ge, sp0);
-            }
-            // Two Numbers (D1783); strings, BigInts and mixed types take `strict_equals`.
-            fast::STRICT_EQ => {
-                return self.fast_int(Op::StrictEq, sp0, |x, y| Some(Value::bool(x == y)))
-                    || self.fast_float(Op::StrictEq, sp0);
-            }
-            fast::STRICT_NE => {
-                return self.fast_int(Op::StrictNe, sp0, |x, y| Some(Value::bool(x != y)))
-                    || self.fast_float(Op::StrictNe, sp0);
             }
             fast::JUMP => self.fast_jump(Op::Jump, true),
             fast::JUMP_IF_FALSE | fast::JUMP_IF_TRUE => {
@@ -1414,8 +1385,6 @@ impl<'h> Exec<'h> {
             Op::Le => Value::bool(x <= y),
             Op::Gt => Value::bool(x > y),
             Op::Ge => Value::bool(x >= y),
-            Op::StrictEq => Value::bool(x == y),
-            Op::StrictNe => Value::bool(x != y),
             _ => return false,
         };
         self.sp -= 1;
