@@ -1106,55 +1106,57 @@ ErrorCaptureStackTrace: reentrant (Error.captureStackTrace)
   builtins/error.ts:62:39  IsExtensible (intrinsic)
   builtins/error.ts:65:3  DefineDataPropertyOrThrow (intrinsic)
 
+ErrorStackTraceLimit: leaf (value Error.stackTraceLimit)
+
 ErrorConstruct: reentrant
-  builtins/error.ts:73:30  GetPrototypeFromConstructor (builtin)
-  builtins/error.ts:75:45  ToString (builtin)
-  builtins/error.ts:75:5  DefineDataPropertyOrThrow (intrinsic)
-  builtins/error.ts:77:3  InstallErrorCause (builtin)
+  builtins/error.ts:84:30  GetPrototypeFromConstructor (builtin)
+  builtins/error.ts:86:45  ToString (builtin)
+  builtins/error.ts:86:5  DefineDataPropertyOrThrow (intrinsic)
+  builtins/error.ts:88:3  InstallErrorCause (builtin)
 
 ErrorConstructor: reentrant (constructor Error)
-  builtins/error.ts:88:10  ErrorConstruct (builtin)
+  builtins/error.ts:99:10  ErrorConstruct (builtin)
 
 EvalErrorConstructor: reentrant (constructor EvalError)
-  builtins/error.ts:98:10  ErrorConstruct (builtin)
+  builtins/error.ts:109:10  ErrorConstruct (builtin)
 
 RangeErrorConstructor: reentrant (constructor RangeError)
-  builtins/error.ts:108:10  ErrorConstruct (builtin)
+  builtins/error.ts:119:10  ErrorConstruct (builtin)
 
 ReferenceErrorConstructor: reentrant (constructor ReferenceError)
-  builtins/error.ts:118:10  ErrorConstruct (builtin)
+  builtins/error.ts:129:10  ErrorConstruct (builtin)
 
 SyntaxErrorConstructor: reentrant (constructor SyntaxError)
-  builtins/error.ts:128:10  ErrorConstruct (builtin)
+  builtins/error.ts:139:10  ErrorConstruct (builtin)
 
 TypeErrorConstructor: reentrant (constructor TypeError)
-  builtins/error.ts:138:10  ErrorConstruct (builtin)
+  builtins/error.ts:149:10  ErrorConstruct (builtin)
 
 URIErrorConstructor: reentrant (constructor URIError)
-  builtins/error.ts:148:10  ErrorConstruct (builtin)
+  builtins/error.ts:159:10  ErrorConstruct (builtin)
 
 ErrorIsError: leaf (Error.isError)
 
 ErrorPrototypeToString: reentrant (Error.prototype.toString)
-  builtins/error.ts:172:23  Get (intrinsic)
-  builtins/error.ts:173:55  ToString (builtin)
-  builtins/error.ts:174:22  Get (intrinsic)
-  builtins/error.ts:175:48  ToString (builtin)
+  builtins/error.ts:183:23  Get (intrinsic)
+  builtins/error.ts:184:55  ToString (builtin)
+  builtins/error.ts:185:22  Get (intrinsic)
+  builtins/error.ts:186:48  ToString (builtin)
 
 InternalErrorConstructor: reentrant (constructor InternalError)
-  builtins/error.ts:192:10  ErrorConstruct (builtin)
+  builtins/error.ts:203:10  ErrorConstruct (builtin)
 
 AggregateErrorConstructor: reentrant (constructor AggregateError)
-  builtins/error.ts:202:18  ErrorConstruct (builtin)
-  builtins/error.ts:203:42  IterableToList (builtin)
-  builtins/error.ts:203:3  DefineDataPropertyOrThrow (intrinsic)
+  builtins/error.ts:213:18  ErrorConstruct (builtin)
+  builtins/error.ts:214:42  IterableToList (builtin)
+  builtins/error.ts:214:3  DefineDataPropertyOrThrow (intrinsic)
 
 SuppressedErrorConstructor: reentrant (constructor SuppressedError)
-  builtins/error.ts:213:30  GetPrototypeFromConstructor (builtin)
-  builtins/error.ts:215:45  ToString (builtin)
-  builtins/error.ts:215:5  DefineDataPropertyOrThrow (intrinsic)
-  builtins/error.ts:217:3  DefineDataPropertyOrThrow (intrinsic)
-  builtins/error.ts:218:3  DefineDataPropertyOrThrow (intrinsic)
+  builtins/error.ts:224:30  GetPrototypeFromConstructor (builtin)
+  builtins/error.ts:226:45  ToString (builtin)
+  builtins/error.ts:226:5  DefineDataPropertyOrThrow (intrinsic)
+  builtins/error.ts:228:3  DefineDataPropertyOrThrow (intrinsic)
+  builtins/error.ts:229:3  DefineDataPropertyOrThrow (intrinsic)
 
 GlobalEval: reentrant (eval)
   builtins/eval.ts:14:10  Call (intrinsic)
