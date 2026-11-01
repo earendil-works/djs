@@ -16,6 +16,20 @@
 //! nothing ever refers to the roots cell.
 //!
 //! Field offsets below are relative to the cell start and include the header.
+//!
+//! # Adding a cell kind
+//!
+//! 1. Declare it in `cells!` below with the next free kind id. Give every field that holds
+//!    a reference the type [`Value`] or [`Ref`], never a plain `u32`: those two types *are*
+//!    the trace description. The GC (`gc.rs`), the walker and `verify` then handle the kind
+//!    automatically, including a tail of values or of a record declared in `records!`.
+//! 2. Zero bytes must be a valid initial state for tracing (they are, for `Value` and
+//!    `Ref`). Do not cache arena offsets anywhere else: tables keyed by offsets would need
+//!    rehashing after every collection.
+//! 3. Optionally add kind-specific checks to `walk::cell_invariants`, for anything the heap
+//!    code relies on to terminate (counts, ref target kinds).
+//!
+//! The layout hash changes with any edit here, which invalidates old heap images.
 
 use super::layout::{Field, Ref, cells, records};
 use crate::value::Value;
@@ -70,7 +84,17 @@ records! {
         VALUE: Value = 8,
         SETTER: Value = 16,
     }
+
+    /// One slot of the [`HandleTable`]. A live slot has `NEXT` = [`HANDLE_LIVE`]; a free
+    /// slot holds `undefined` and links to the next free slot (`index + 1`, 0 = end).
+    HandleSlot[16] {
+        VALUE: Value = 0,
+        NEXT: u32 = 8,
+    }
 }
+
+/// [`HandleSlot::NEXT`] of a live handle.
+pub const HANDLE_LIVE: u32 = u32::MAX;
 
 cells! {
     /// The root set, always at offset 0. Everything live is reachable from here. The GC
@@ -91,7 +115,8 @@ cells! {
         JOBS: Ref = 32,
         /// The pending host call table. Null for now.
         HOST_CALLS: Ref = 36,
-        /// The host handle table (values the embedder holds). Null for now.
+        /// The [`HandleTable`] (values the embedder or Rust code hold across a GC). Null
+        /// until the first handle is created.
         HANDLES: Ref = 40,
         /// Reserved, 0.
         RESERVED: u32 = 44,
@@ -184,7 +209,30 @@ cells! {
         /// [`U32Array`] of buckets holding string atom indexes (0 = empty).
         INDEX: Ref = 16,
     };
+
+    /// The host handle table: values held by the embedder or by Rust code across a
+    /// collection. Grown by copying.
+    11 => HandleTable {
+        /// Slots ever used (live or free); slots at and beyond are 0.
+        LEN: u32 = 8,
+        /// Head of the free list: `index + 1`, 0 = empty.
+        FREE: u32 = 12,
+        /// Live handles.
+        LIVE: u32 = 16,
+    } tail SLOTS: [HandleSlot] = 24;
 }
+
+// The GC stores the forwarding offset in the first payload word, so every cell needs one.
+const _: () = {
+    let mut i = 0;
+    while i < LAYOUTS.len() {
+        assert!(
+            LAYOUTS[i].min_size >= 16,
+            "layout: cells need a payload word"
+        );
+        i += 1;
+    }
+};
 
 /// Hash of the layout table and the well-known atom list. Stored in [`Roots::VERSION`];
 /// part of the snapshot build hash.

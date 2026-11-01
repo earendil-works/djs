@@ -7,8 +7,8 @@
 use alloc::vec::Vec;
 
 use super::cells::{
-    AtomTable, Header, Object, PropTable, Roots, Rope, Str8, Str16, Symbol, U32Array, ValueArray,
-    flags,
+    AtomTable, HANDLE_LIVE, HandleSlot, HandleTable, Header, Object, PropTable, Roots, Rope, Str8,
+    Str16, Symbol, U32Array, ValueArray, flags,
 };
 use super::layout::{FieldTy, Ref};
 use super::object::ObjectClass;
@@ -89,23 +89,8 @@ impl Heap {
 
     /// Visits every traced slot of the cell at `cell` (whether or not it currently holds
     /// a reference).
-    pub fn trace_cell(&self, cell: u32, mut f: impl FnMut(Slot)) {
-        let layout = self.cell_kind(cell).layout();
-        for field in layout.fields {
-            visit(field.ty, cell + field.offset, &mut f);
-        }
-        if let Some(tail) = &layout.tail {
-            if !tail.elem.fields.iter().any(|fi| fi.ty.is_traced()) {
-                return;
-            }
-            let n = layout.tail_capacity(self.cell_size(cell));
-            for i in 0..n {
-                let base = cell + tail.offset + i * tail.elem.size;
-                for field in tail.elem.fields {
-                    visit(field.ty, base + field.offset, &mut f);
-                }
-            }
-        }
+    pub fn trace_cell(&self, cell: u32, f: impl FnMut(Slot)) {
+        for_each_slot(self.cell_kind(cell), cell, self.cell_size(cell), f);
     }
 
     /// The offsets of all cells the cell at `cell` references.
@@ -240,7 +225,20 @@ impl Heap {
         };
         let pow2 = |r: Ref| self.u32_array_len(r.0).is_power_of_two();
         match kind {
-            CellKind::Roots => fits(a.get(cell, Roots::ATOMS), false, &[CellKind::AtomTable]),
+            CellKind::Roots => {
+                fits(a.get(cell, Roots::ATOMS), false, &[CellKind::AtomTable])
+                    && fits(a.get(cell, Roots::HANDLES), true, &[CellKind::HandleTable])
+            }
+            CellKind::HandleTable => {
+                let len = a.get(cell, HandleTable::LEN);
+                len <= HandleTable::LAYOUT.tail_capacity(self.cell_size(cell))
+                    && a.get(cell, HandleTable::FREE) <= len
+                    && a.get(cell, HandleTable::LIVE) <= len
+                    && (0..len).all(|i| {
+                        let next = a.get(HandleTable::SLOTS.at(cell, i), HandleSlot::NEXT);
+                        next == HANDLE_LIVE || next <= len
+                    })
+            }
             CellKind::AtomTable => {
                 let index = a.get(cell, AtomTable::INDEX);
                 fits(
@@ -347,6 +345,28 @@ impl Heap {
             _ => Some(0),
         };
         matches!(need, Some(n) if n <= size)
+    }
+}
+
+/// Visits every traced slot of a cell of `kind` and `size` at `cell`, from the layout
+/// table alone. It does not touch the arena, so the caller may mutate it in `f` (the GC
+/// does).
+pub fn for_each_slot(kind: CellKind, cell: u32, size: u32, mut f: impl FnMut(Slot)) {
+    let layout = kind.layout();
+    for field in layout.fields {
+        visit(field.ty, cell + field.offset, &mut f);
+    }
+    if let Some(tail) = &layout.tail {
+        if !tail.elem.fields.iter().any(|fi| fi.ty.is_traced()) {
+            return;
+        }
+        let n = layout.tail_capacity(size);
+        for i in 0..n {
+            let base = cell + tail.offset + i * tail.elem.size;
+            for field in tail.elem.fields {
+                visit(field.ty, base + field.offset, &mut f);
+            }
+        }
     }
 }
 

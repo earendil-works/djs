@@ -27,6 +27,29 @@ impl Arena {
         }
     }
 
+    /// An empty arena with `capacity` bytes reserved up front, so allocations up to that
+    /// total never touch the host allocator (the GC's to-space).
+    pub fn with_capacity(capacity: usize, limit: usize) -> Result<Arena, HeapError> {
+        let mut bytes = Vec::new();
+        bytes
+            .try_reserve_exact(capacity)
+            .map_err(|_| HeapError::OutOfMemory)?;
+        Ok(Arena {
+            bytes,
+            limit: clamp_limit(limit),
+        })
+    }
+
+    /// Bytes reserved from the host.
+    pub fn capacity(&self) -> usize {
+        self.bytes.capacity()
+    }
+
+    /// Returns reserved memory beyond `keep` bytes (at least the length) to the host.
+    pub fn shrink_capacity(&mut self, keep: usize) {
+        self.bytes.shrink_to(keep.max(self.bytes.len()));
+    }
+
     /// An arena over existing bytes (for restoring a heap image). The caller validates the
     /// contents.
     pub fn from_bytes(bytes: Vec<u8>, limit: usize) -> Arena {

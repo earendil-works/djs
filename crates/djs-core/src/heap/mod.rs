@@ -13,17 +13,19 @@
 //! - References are `u32` arena offsets of a cell start; 0 is null. Cells are 8-aligned.
 //! - The arena is little-endian, contains no host pointers, and can be copied byte for byte
 //!   into a fresh [`Heap`] ([`Heap::from_bytes`]): that is the precursor of snapshots.
-//! - Allocation never collects. It bumps and may fail with [`HeapError::OutOfMemory`].
-//!   Rust locals holding references stay valid until the next GC, which runs only at
-//!   safepoints (ARCH "Generated state machines").
+//! - Allocation never collects. It bumps, may fail with [`HeapError::OutOfMemory`], and
+//!   sets [`Heap::gc_pending`] once the heap has grown past its threshold. Rust locals
+//!   holding references stay valid until the next [`Heap::collect`], which the owner calls
+//!   only at safepoints (ARCH "Generated state machines"). Across a collection, only
+//!   [`Handle`]s and the arena's own roots survive.
 //! - Allocated memory is zeroed, and zero is a valid non-reference state for every traced
 //!   field, so a cell can be traced at any point after allocation.
 //!
 //! # Roots
 //!
 //! The [`Roots`] cell lives at offset 0 and holds everything the GC starts
-//! from: the atom table, the realm, and (once they exist) the value stack, the job queue,
-//! the pending host call table and the host handle table. Rust code holds no roots: the
+//! from: the atom table, the realm, the [`handle`] table, and (once they exist) the value
+//! stack, the job queue and the pending host call table. Rust code holds no roots: the
 //! interpreter (0006) keeps live values on the arena value stack, and the embedder holds
 //! values through the handle table. A copying GC copies the roots cell first and then
 //! scans the to-space linearly from 0 (Cheney), so the roots cell is traced like any
@@ -33,6 +35,8 @@ pub mod arena;
 mod arrays;
 pub mod atom;
 pub mod cells;
+pub mod gc;
+pub mod handle;
 pub mod layout;
 pub mod object;
 pub mod string;
@@ -43,6 +47,8 @@ use core::fmt;
 pub use arena::Arena;
 pub use atom::{Atom, atoms};
 pub use cells::CellKind;
+pub use gc::GcStats;
+pub use handle::Handle;
 pub use layout::Ref;
 pub use object::{ObjectClass, PropFlags, Property, PropertyDescriptor};
 pub use string::StrView;
@@ -98,6 +104,13 @@ pub const DEFAULT_LIMIT: usize = arena::MAX_ARENA as usize;
 /// The VM heap. All state is in the arena; this struct only adds methods.
 pub struct Heap {
     arena: Arena,
+    /// Allocation sets `gc_pending` once the arena reaches this size. Policy, not VM state,
+    /// so it lives outside the arena and is recomputed on restore.
+    gc_threshold: u32,
+    gc_pending: bool,
+    /// Test hook: make the next collection fail to reserve its to-space.
+    #[cfg(test)]
+    pub(crate) fail_next_gc_reserve: bool,
 }
 
 impl Heap {
@@ -109,9 +122,7 @@ impl Heap {
     /// A fresh heap: the roots cell, the atom table with the well-known atoms and the
     /// well-known symbols.
     pub fn with_limit(limit: usize) -> Result<Heap, HeapError> {
-        let mut heap = Heap {
-            arena: Arena::new(limit),
-        };
+        let mut heap = Heap::over(Arena::new(limit));
         let roots = heap.alloc_cell(CellKind::Roots, Roots::LAYOUT.min_size)?;
         debug_assert_eq!(roots, 0);
         heap.arena.set(0, Roots::MAGIC, cells::MAGIC);
@@ -124,9 +135,7 @@ impl Heap {
     /// Restores a heap from an image produced by [`Heap::bytes`] of the same build. The
     /// whole image is verified (cell structure and every reference).
     pub fn from_bytes(bytes: alloc::vec::Vec<u8>, limit: usize) -> Result<Heap, LoadError> {
-        let heap = Heap {
-            arena: Arena::from_bytes(bytes, limit),
-        };
+        let heap = Heap::over(Arena::from_bytes(bytes, limit));
         let a = &heap.arena;
         if a.len() > a.limit() {
             return Err(LoadError::TooLarge);
@@ -141,6 +150,17 @@ impl Heap {
         }
         heap.verify().map_err(LoadError::Corrupt)?;
         Ok(heap)
+    }
+
+    fn over(arena: Arena) -> Heap {
+        let gc_threshold = gc::next_threshold(arena.len(), arena.limit());
+        Heap {
+            arena,
+            gc_threshold,
+            gc_pending: false,
+            #[cfg(test)]
+            fail_next_gc_reserve: false,
+        }
     }
 
     /// The arena bytes: a complete, position-independent image of the heap.
@@ -163,6 +183,9 @@ impl Heap {
     pub fn alloc_cell(&mut self, kind: CellKind, size: u32) -> Result<u32, HeapError> {
         let size = align8(size.max(kind.layout().min_size));
         let off = self.arena.alloc(size)?;
+        if self.arena.len() >= self.gc_threshold {
+            self.gc_pending = true;
+        }
         self.arena.set(off, Header::KIND, kind as u8);
         self.arena.set(off, Header::SIZE, size);
         Ok(off)
@@ -202,3 +225,6 @@ impl Heap {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod gc_tests;
