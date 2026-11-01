@@ -5,30 +5,20 @@ dquickts/builtin/test_dom_exception.js: throws ReferenceError: 'DOMException' is
 dquickts/builtin/test_math.js: throws TypeError: not a function
 dquickts/builtin/test_typed_array.js: throws TypeError: not a function
 dquickts/language/test_optional_chaining.js: throws TypeError: cannot read property '_b' of undefined
-dquickts/typescript/test_asi_contextual_keywords.ts: throws SyntaxError: expecting ';'
-dquickts/typescript/test_classes.ts: throws SyntaxError: expecting ';'
+dquickts/typescript/test_classes.ts: throws Error: assertion failed: got |[sqNaN]|, expected |[sq9]|
 dquickts/typescript/test_const_enums.ts: throws SyntaxError: variable name expected
 dquickts/typescript/test_const_enums_syntax_1.ts: throws SyntaxError: variable name expected
 dquickts/typescript/test_const_enums_syntax_2.ts: throws SyntaxError: variable name expected
-dquickts/typescript/test_expressions.ts: throws SyntaxError: expecting '('
-dquickts/typescript/test_namespaces.ts: throws SyntaxError: expecting ';'
-dquickts/typescript/test_namespaces_syntax_1.ts: throws SyntaxError: expecting ';'
-dquickts/typescript/test_parameter_properties.ts: throws SyntaxError: missing initializer for const variable
-dquickts/typescript/test_rejected_syntax_10.ts: throws SyntaxError: expecting ';'
-dquickts/typescript/test_rejected_syntax_11.ts: throws SyntaxError: expecting ';'
-dquickts/typescript/test_rejected_syntax_12.ts: throws SyntaxError: expecting ')'
-dquickts/typescript/test_rejected_syntax_2.js: throws SyntaxError: unexpected token in expression: 'enum'
+dquickts/typescript/test_namespaces.ts: throws SyntaxError: TypeScript namespaces are not supported yet
+dquickts/typescript/test_namespaces_syntax_1.ts: throws SyntaxError: TypeScript namespaces are not supported yet
+dquickts/typescript/test_parameter_properties.ts: throws Error: assertion failed: got |ctor|base:|field::undefined|after:field:undefined|, expected |ctor|base:b|field:b,x,y,z:undefined|after:b,x,y,z,field:5|
 dquickts/typescript/test_rejected_syntax_5.ts: throws SyntaxError: missing formal parameter
 dquickts/typescript/test_rejected_syntax_6.ts: throws SyntaxError: unexpected token in expression: '@'
 dquickts/typescript/test_rejected_syntax_7.ts: throws SyntaxError: unsupported keyword: import
 dquickts/typescript/test_rejected_syntax_8.ts: throws SyntaxError: variable name expected
-dquickts/typescript/test_rejected_syntax_9.ts: throws SyntaxError: unexpected token in expression: 'enum'
-dquickts/typescript/test_type_erasure.ts: throws SyntaxError: expecting ';'
-dquickts/typescript/test_type_grammar.ts: throws SyntaxError: expecting ';'
-dquickts/typescript/test_using.ts: throws SyntaxError: missing initializer for const variable
+dquickts/typescript/test_rejected_syntax_9.ts: throws SyntaxError: unsupported keyword: enum
+dquickts/typescript/test_using.ts: throws SyntaxError: expecting ';'
 dquickts/typescript/test_using_syntax_2.ts: throws SyntaxError: expecting ';'
 errors/other-errors.js: line 18: expected `decodeURIComponent -> URIError: expecting hex digit`, got `decodeURIComponent -> ReferenceError: 'decodeURIComponent' is not defined`
 errors/type-errors.js: line 16: expected `getter only -> TypeError: no setter for property`, got `getter only -> TypeError: no setter for property 'g'`
-ts/basics.ts: throws SyntaxError: unexpected token in expression: 'interface'
-ts/enums-classes.ts: throws SyntaxError: unexpected token in expression: 'enum'
-ts/generic-calls.ts: throws SyntaxError: expecting '('
+ts/enums-classes.ts: throws SyntaxError: unsupported keyword: enum
