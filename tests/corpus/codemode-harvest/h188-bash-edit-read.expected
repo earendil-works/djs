@@ -1,0 +1,35 @@
+{"path":"gofogedu/qed1/peta/bizi2.md","offset":1,"chars":110,"exampleRows":[]}
+{"path":"gofogedu/qed1/peta/bizi2.md","offset":1001,"chars":193,"exampleRows":[]}
+{"path":"gofogedu/qed1/peta/bizi2.md","offset":2001,"chars":294,"exampleRows":[]}
+{"path":"gofogedu/qed1/peta/bizi2.md","offset":3001,"chars":104,"exampleRows":[]}
+{"path":"gofogedu/qed1/lonogugi/qed3/qed4/qed5","content":"delta lambda red done ready delta omega gamma\neast status build west beta done blue\nkappa entry delta green record status 4801\nzeta done record build\nentry south\ncheck alpha done delta\nkappa alpha beta status zeta check"}
+{"path":"gofogedu/qed1/lonogugi/qed3/qed4/bizi6.qile","content":"{\n  \"items\": [\n    {\n      \"id\": 1,\n      \"name\": \"epsilon\",\n      \"status\": \"ok\",\n      \"count\": 324,\n      \"tags\": [\n        \"entry\",\n        \"blue\"\n      ]\n    },\n    {\n      \"id\": 2,\n      \"name\": \"test\",\n      \"status\": \"pending\",\n      \"count\": 412,\n      \"tags\": [\n        \"blue\",\n        \"epsilon\",\n        \"item\"\n      ]\n    },\n    {\n      \"id\": 3,\n      \"name\": \"iota\",\n      \"status\": \"closed\",\n      \"count\": 330,\n      \"tags\": []\n    }\n  ],\n  \"total\": 3\n}"}
+beta build delta
+zeta delta epsilon entry gamma
+zeta ready
+item zeta check omega done beta test gamma
+kappa alpha check lambda epsilon blue east ready 1947
+green beta eta
+east omega theta build value status
+value kappa beta build omega lambda lambda build 7793
+green green west zeta
+south kappa green iota
+lambda gamma north north lambda item green 8359
+delta kappa lambda epsilon theta zeta lambda eta 1120
+entry value item kappa 8299
+north gamma 8030
+north west epsilon
+test west
+check test iota
+check east entry kappa value
+status west delta 6165
+west gamma lambda epsilon epsilon eta
+status red
+record epsilon test epsilon east
+iota iota epsilon kappa gamma status record done 2535
+gamma south ready entry
+zeta red omega west east 5695
+item zeta iota beta 632
+done blue delta
+=== throw
+Error: Tool failed (synthetic error)

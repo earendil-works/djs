@@ -1,0 +1,2 @@
+=== return
+{"ms":0,"r":{"provider":"kamok.qip","model":"qib1/qib2:Q4_K_M","answers":{"frustration":{"type":"bool","probability":0.65}},"stopReason":"stop"}}

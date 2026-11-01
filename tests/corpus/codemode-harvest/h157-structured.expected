@@ -1,0 +1,2 @@
+=== throw
+TypeError: cannot read property 'artifacts' of undefined

@@ -1,0 +1,2 @@
+=== throw
+RangeError: Date value is NaN

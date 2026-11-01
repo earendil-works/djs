@@ -28,6 +28,7 @@ diff stat stats cwd pwd ssh http2 tcp udp dns ip ipv4 ipv6 lsof ps kill pid pids
 utf8 ascii unicode stringify fetch href hostname pathname querystring sqlite postgres mysql
 pnpm yarn vite vitest jest eslint prettier tsc rustc cargo clippy rustfmt wasm wasi inline
 offset limit cancelled fulfilled rejected settled truncated nullish lookup lookups unhandled
+classify classifier classifiers structured mime
 """.split())
 
 # Ordinary words that name private services, products or people in these sessions.
@@ -67,7 +68,8 @@ def split_parts(word):
 
 _WORDS = None
 # An escape sequence (kept whole) or a run of letters.
-_ESC_OR_WORD = re.compile(r"(\\.)|([A-Za-z]+)")
+# Letters of any script: a non-ASCII word is never in the dictionary and is renamed.
+_ESC_OR_WORD = re.compile(r"(\\.)|([^\W\d_]+)")
 
 
 def known(part):
@@ -116,6 +118,9 @@ class Anonymizer:
 
     def word(self, word):
         """A letters-only run (an identifier part, or a word in text)."""
+        if not word.isascii():
+            self.count += 1
+            return self._synthetic(word)
         out = []
         pos = 0
         for m in _PART_RE.finditer(word):
@@ -158,4 +163,4 @@ class Anonymizer:
         return _ESC_OR_WORD.sub(sub, s)
 
     def identifier(self, name):
-        return re.sub(r"[A-Za-z]+", lambda m: self.word(m.group()), name)
+        return re.sub(r"[^\W\d_]+", lambda m: self.word(m.group()), name)

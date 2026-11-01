@@ -1,0 +1,10 @@
+src/file9.ts:361: epsilon north
+src/file6.ts:246: item entry beta
+src/file1.ts:89: record epsilon south status beta item
+src/file6.ts:318: iota value status omega ready
+src/file2.ts:362: test build record
+src/file8.ts:202: test ready done
+src/file5.ts:92: east zeta
+src/file1.ts:252: record omega iota epsilon
+{"content":[{"type":"text","text":"(structured)"}],"structuredContent":{"south":{"value":"omega entry alpha"},"build":{"value":"build omega"}}}
+=== completed

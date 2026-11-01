@@ -12,6 +12,13 @@ url, email, ip, key, token, connection-string, high-entropy (replaced by synthet
 text of the same shape), word (a word part that is not a common English word or a
 programming term, in a literal or an identifier, renamed consistently, D2281).
 
+Round 2 (0121, D2283, D2284) adds cases whose tools return structured results (MCP tools,
+with values synthesized from their declared result types), `models`, `image`, edit/write
+and `load` (values synthesized from the shapes the session stored). Two more kinds:
+argument-or-command now also covers string literals longer than 40 characters (code,
+prompts, queries, notes), and opaque-id replaces slugs and ids that mix letters and
+digits. Tool names are given as the case calls them (an MCP server name is renamed).
+
 | case | source | redacted | flagged | tool calls |
 | --- | --- | --- | --- | --- |
 | h001-bash-read.js | 56c9b8523fb1:9 | argument-or-command 2, path 9, word 140 | - | bash 1, read 7 |
@@ -164,8 +171,158 @@ programming term, in a literal or an identifier, renamed consistently, D2281).
 | h148-bash-read.js | a24acb0c1a6c:17 | argument-or-command 3, home-dir 1, host 4, path 8, url 2, word 79 | - | bash 2, read 1 |
 | h149-read.js | 142dd10e5c41:3 | path 6 | - | read 6 |
 | h150-bash.js | 414b0a3ed2df:9 | argument-or-command 4, path 4, word 58 | - | bash 4 |
+| h151-bash-structured-models-write.js | ce34804b6b24:4 | argument-or-command 17, comment 1, path 5, word 90 | - | bash 20, models.classify 5373, write 18 |
+| h152-read-transcribe_file.js | 1c15d2312520:5 | argument-or-command 1, comment 2, path 1, word 5 | - | read 1, transcribe_file 29 |
+| h153-structured.js | 603d3ca490ba:4 | word 23 | - | taz__dev_mabupa__artifacts_list 3 |
+| h154-bash-structured-load.js | 318c155db788:5 | argument-or-command 1, path 1, word 28 | - | bash 1 |
+| h155-bash-structured-models.js | de07db7dafb8:0 | argument-or-command 9, comment 1, path 1, word 34 | - | bash 1, models.classify 100 |
+| h156-bash-edit.js | 82bb8a427333:54 | argument-or-command 10, path 7, word 65 | - | bash 2, edit 2 |
+| h157-structured.js | 603d3ca490ba:5 | argument-or-command 4, word 17 | - | lun__dev_piduvi__artifacts_list 3 |
+| h158-bash-edit.js | 91a843f95dc1:12 | argument-or-command 14, path 8, word 216 | - | bash 2, edit 2 |
+| h159-structured.js | ac93d02d269c:1 | word 6 | - | qib__sentry__search_sentry_tools 5 |
+| h160-bash-structured-models-read.js | f7970f73ed2f:2 | argument-or-command 5, comment 1, path 2, word 45 | - | bash 1, models.classify 165, read 165 |
+| h161-bash-load-structured.js | a24acb0c1a6c:21 | argument-or-command 4, home-dir 2, path 6, word 61 | - | bash 1, bim__figode__artifacts_create 1 |
+| h162-load-models-read.js | 97576e7db6d9:4 | argument-or-command 1, comment 1, path 1, word 8 | - | models.classify 161, read 21 |
+| h163-read-write.js | 44b139574d95:10 | argument-or-command 1, path 9, word 139 | - | read 1, write 1 |
+| h164-load.js | d7e090da4c82:36 | word 467 | - | none |
+| h165-edit.js | 56c9b8523fb1:16 | argument-or-command 8, path 5, word 145 | - | edit 2 |
+| h166-image-models.js | 45b90cb33362:2 | argument-or-command 4, comment 1, path 1, word 117 | - | models.generateImages 2 |
+| h167-bash-structured-load-read.js | a24acb0c1a6c:51 | argument-or-command 8, path 2, word 22 | - | bash 3, read 1 |
+| h168-structured.js | db96f09412ba:4 | argument-or-command 1, word 8 | - | por__talagez__search_documents 1 |
+| h169-bash-structured-read-write.js | 727961718e57:4 | argument-or-command 5, path 5, word 225 | - | bash 1, read 1, write 1 |
+| h170-bash-load-structured.js | 01fa376fb415:5 | argument-or-command 2, comment 1, home-dir 1, path 4, word 21 | - | bash 1, zez__blender__execute_blender_code 1 |
+| h171-load-structured.js | 01fa376fb415:8 | argument-or-command 1, comment 1, word 5 | - | nad__blender__execute_blender_code 1 |
+| h172-bash-structured-structured.js | 914ab5355c17:17 | argument-or-command 8, path 5, word 50 | - | bash 2, qip__tomege__artifacts_create 1, qip__tomege__artifacts_scratch_commit 1, qip__tomege__artifacts_scratch_files_put 2 |
+| h173-structured.js | 6f73431876fd:0 | word 12 | - | gis__sentry__find_organizations 1, gis__sentry__find_projects 6 |
+| h174-structured.js | e0fe75f0d33d:12 | argument-or-command 7, comment 1, word 97 | capitalized word pair (possible name) 7 | vil__vepide__tools_webSearch_run 3 |
+| h175-models.js | caf5a8be4811:1 | argument-or-command 10, path 1, word 51 | - | models.classify 1 |
+| h176-bash-structured-edit-read-write.js | 06ea32b617f4:32 | argument-or-command 14, home-dir 1, path 12, word 89 | - | bash 2, edit 2, read 1, write 1 |
+| h177-edit-read.js | 7f84c529099a:28 | argument-or-command 16, path 12, word 150 | - | edit 3, read 1 |
+| h178-transcribe_file.js | a4fb63392002:4 | argument-or-command 2, path 1, word 10 | - | transcribe_file 4 |
+| h179-bash-structured-load-write.js | 8cc9835f5d46:2 | argument-or-command 5, path 6, user-name 1, word 70 | - | bash 10, write 9 |
+| h180-bash-structured-structured-write.js | 3fe4efa2cce2:2 | argument-or-command 6, comment 1, path 6, word 58 | - | bash 2, write 1, zuv__soguri__tools_imageGeneration_run 1 |
+| h181-read-structured.js | e372eca1c8df:5 | argument-or-command 4, home-dir 1, path 2, word 30 | capitalized word pair (possible name) 1 | qar__tuvepa__artifacts_create 1, read 1 |
+| h182-bash-structured-image-models-write.js | 932221802fce:1 | argument-or-command 8, path 6, word 51 | - | bash 1, models.generateImages 1, write 1 |
+| h183-bash-structured-models-read.js | f8f3a79f7d1e:0 | argument-or-command 13, comment 1, path 3, word 58 | - | bash 1, models.classify 10, read 10 |
+| h184-bash-structured-structured.js | 32e17bc72a8f:9 | argument-or-command 8, high-entropy 1, opaque-id 1, path 3, word 74 | - | bash 1, qag__rifone__artifacts_scratch_commit 1, qag__rifone__artifacts_scratch_files_put 1, qag__rifone__artifacts_scratch_open 1 |
+| h185-read.js | beb1674d24d5:1 | argument-or-command 2, path 1, word 4 | - | read 1 |
+| h186-read-structured.js | a5860fb27141:1 | argument-or-command 2, path 5, word 28 | - | qap__blender__execute_blender_code 1, read 5 |
+| h187-image-structured.js | 5aba33207fcc:17 | argument-or-command 3, word 8 | - | tel__blender__get_bulofiluli_of_area_as_image 1 |
+| h188-bash-edit-read.js | be95b560b8b1:35 | argument-or-command 11, path 11, word 147 | - | bash 1, edit 2, read 6 |
+| h189-bash-read-structured.js | 82bb8a427333:15 | argument-or-command 4, host 1, path 3, word 45 | - | bash 1, qut__blender__execute_blender_code 1, read 2 |
+| h190-structured.js | b375385e1704:3 | argument-or-command 2, high-entropy 1, opaque-id 1, word 10 | - | qur__danumu__artifacts_versions_read 1 |
+| h191-structured.js | 5aba33207fcc:7 | argument-or-command 2, home-dir 1, path 1, word 49 | - | kiz__blender__execute_blender_code 1, kiz__blender__render_gepagava_to_path 1 |
+| h192-structured.js | 82bb8a427333:7 | argument-or-command 1, path 1, word 7 | - | qis__blender__render_degopipu_to_path 1 |
+| h193-image-models-read.js | 2ae0f80d94e5:1 | argument-or-command 6, comment 1, path 4, word 262 | - | models.generateImages 4, read 1 |
+| h194-structured.js | e44989ab28a3:1 | argument-or-command 2, comment 1, opaque-id 2, path 15, word 281 | - | vub__kafonaminu__execute 1 |
+| h195-load.js | 97576e7db6d9:7 | comment 1, word 2 | - | none |
+| h196-bash-structured-transcribe_file.js | e51e2b285ded:20 | argument-or-command 2, path 8, word 40 | - | bash 1, transcribe_file 2 |
+| h197-structured.js | a5860fb27141:3 | argument-or-command 2, home-dir 3, path 3, word 53 | - | nev__blender__execute_blender_code_for_cli 1 |
+| h198-bash-structured-load.js | 318c155db788:4 | argument-or-command 1, path 6, word 51 | - | bash 1 |
+| h199-load-models-read.js | 97576e7db6d9:6 | argument-or-command 1, comment 2, path 1, word 18 | - | models.classify 161, read 21 |
+| h200-bash-read-structured.js | 74544022e519:4 | argument-or-command 6, home-dir 1, path 8, word 105 | - | bash 1, qan__blender__execute_blender_code_for_cli 1, read 3 |
+| h201-edit.js | 80d2ae3d6a14:0 | argument-or-command 10, path 7, word 172 | - | edit 2 |
+| h202-bash-structured-models.js | 548a6c9ca3b9:1 | argument-or-command 7, comment 1, path 1, word 45 | - | bash 1, models.classify 100 |
+| h203-bash-structured-models-write.js | ce34804b6b24:3 | argument-or-command 13, comment 1, path 5, word 96 | - | bash 2, models.classify 846, write 1 |
+| h204-image-models.js | f8f3a79f7d1e:1 | argument-or-command 3, comment 1, word 18 | - | models.generateImages 1 |
+| h205-read-write.js | 9bfe92f89aff:6 | argument-or-command 3, home-dir 1, path 3, word 21 | - | read 2, write 1 |
+| h206-structured.js | db96f09412ba:3 | argument-or-command 1, word 10 | - | qig__roselup__search_documents 1 |
+| h207-bash-structured-image-read.js | 4de934a45bb2:2 | argument-or-command 4, home-dir 2, path 2, word 14 | - | bash 1, read 1 |
+| h208-edit.js | 44b139574d95:9 | argument-or-command 9, path 9, word 219 | - | edit 3 |
+| h209-bash-edit.js | 91a843f95dc1:9 | argument-or-command 12, path 8, word 167 | - | bash 1, edit 2 |
+| h210-models-read.js | b3c0e25e1b8c:3 | argument-or-command 6, comment 1, path 2, word 43 | - | models.classify 100, read 4 |
+| h211-structured.js | 4073b6a189ca:1 | word 12 | - | qot__sentry__find_organizations 1, qot__sentry__find_projects 6 |
+| h212-transcribe_file.js | 387d1219286a:2 | argument-or-command 2, path 1, word 5 | - | transcribe_file 3 |
+| h213-bash-structured-models.js | 4c9a6130aca0:5 | argument-or-command 9, comment 1, path 1, word 58 | - | bash 1, models.classify 100 |
+| h214-bash-structured-read-write.js | 9a16979d43d6:6 | argument-or-command 8, home-dir 2, path 4, word 143 | - | bash 1, read 1, write 1 |
+| h215-structured.js | 3fe4efa2cce2:4 | argument-or-command 1, comment 1, word 6 | - | fus__sozisi__tools_webSearch_run 1 |
+| h216-bash-structured-structured.js | 61181c8a7379:27 | argument-or-command 4, home-dir 1, path 3, word 46 | capitalized word pair (possible name) 3 | bash 1, kad__gunevu__artifacts_create 1 |
+| h217-load-read.js | 8cc9835f5d46:10 | argument-or-command 2, comment 1, path 2, word 12 | - | read 2 |
+| h218-structured.js | 2dc2e33ab3ab:1 | argument-or-command 1, host 1, word 39 | - | qak__blender__execute_blender_code 1 |
+| h219-bash-structured.js | b3c0e25e1b8c:2 | argument-or-command 1, path 1, word 12 | - | bash 1 |
+| h220-bash-edit.js | a5860fb27141:25 | argument-or-command 6, home-dir 2, path 5, word 178 | - | bash 1, edit 2 |
+| h221-bash-structured-structured.js | 32e17bc72a8f:11 | argument-or-command 9, path 3, word 65 | - | bash 1, qod__semela__artifacts_create 1, qod__semela__artifacts_scratch_commit 1, qod__semela__artifacts_scratch_files_put 1 |
+| h222-load.js | d7e090da4c82:35 | word 467 | - | none |
+| h223-bash-write.js | 9bfe92f89aff:14 | argument-or-command 5, home-dir 1, host 3, path 17, word 154 | - | bash 1, write 3 |
+| h224-read-structured.js | a5860fb27141:19 | argument-or-command 1, path 6, word 24 | - | qig__blender__execute_blender_code 1, read 6 |
+| h225-bash-read-structured.js | 82bb8a427333:1 | argument-or-command 6, host 1, path 6, word 58 | - | bash 1, read 4, zun__blender__execute_blender_code 1 |
+| h226-bash-structured.js | 74544022e519:12 | argument-or-command 3, home-dir 1, path 7, word 133 | - | bash 1, qas__blender__execute_blender_code 1 |
+| h227-bash-edit-read.js | a5860fb27141:40 | argument-or-command 10, home-dir 1, host 4, path 11, url 2, word 91 | - | bash 1, edit 1, read 3 |
+| h228-edit-read.js | e51e2b285ded:19 | argument-or-command 4, path 5, word 52 | - | edit 1, read 1 |
+| h229-structured.js | 5aba33207fcc:6 | argument-or-command 2, home-dir 1, path 1, word 49 | - | qas__blender__execute_blender_code 1, qas__blender__render_bikogotu_to_path 1 |
+| h230-image-models.js | bf326ce462a4:0 | argument-or-command 6, comment 1, word 29 | - | models.generateImages 1 |
+| h231-bash-structured-structured-write.js | 3fe4efa2cce2:6 | argument-or-command 14, comment 1, path 4, word 207 | capitalized word pair (possible name) 1 | bash 5, puf__vozaga__tools_imageGeneration_run 4, write 4 |
+| h232-bash-structured-models.js | 4c9a6130aca0:3 | argument-or-command 9, comment 1, path 1, word 47 | - | bash 1, models.classify 20 |
+| h233-bash-edit.js | 56c9b8523fb1:22 | argument-or-command 13, path 8, word 224 | - | bash 1, edit 3 |
+| h234-bash-structured-read.js | f68d5c9c1234:2 | argument-or-command 3, home-dir 1, path 7, word 31 | - | bash 1, read 5 |
+| h235-bash-structured-edit-read-write.js | 06ea32b617f4:26 | argument-or-command 21, path 10, word 138 | - | bash 2, edit 3, read 2, write 1 |
+| h236-load.js | cb20daba5e3f:3 | word 2 | - | none |
+| h237-structured.js | 6f73431876fd:1 | comment 1, word 11 | - | qar__sentry__find_organizations 1, qar__sentry__find_projects 6 |
+| h238-bash-structured-load.js | 5f1ff9ffdb85:5 | argument-or-command 5, path 2, word 13 | - | bash 1 |
+| h239-structured.js | db96f09412ba:2 | argument-or-command 1, word 7 | - | tof__gitikis__search_documents 1 |
+| h240-image-read.js | 44b139574d95:16 | argument-or-command 2, path 1, word 3 | - | read 2 |
+| h241-bash-structured-structured.js | 61181c8a7379:21 | argument-or-command 4, home-dir 1, path 3, word 43 | capitalized word pair (possible name) 1 | bash 1, rup__tarusi__artifacts_create 1 |
+| h242-transcribe_file.js | 387d1219286a:1 | argument-or-command 2, path 1, word 4 | - | transcribe_file 3 |
+| h243-load-models-read.js | 97576e7db6d9:5 | argument-or-command 13, comment 2, path 2, word 134 | - | models.classify 4, read 21 |
+| h244-structured.js | 6afb3cfd3753:2 | argument-or-command 1, host 1, word 21 | - | vuz__blender__execute_blender_code 1 |
+| h245-load.js | 61e40b6b50f6:1 | nothing | - | none |
+| h246-bash-structured-models.js | 4c9a6130aca0:4 | argument-or-command 9, comment 1, path 1, word 45 | - | bash 1, models.classify 20 |
+| h247-structured.js | e0fe75f0d33d:11 | argument-or-command 12, comment 1, path 2, word 135 | capitalized word pair (possible name) 2 | kal__tukami__tools_webSearch_run 5 |
+| h248-image-models.js | 45b90cb33362:4 | argument-or-command 4, comment 1, path 1, word 138 | - | models.generateImages 2 |
+| h249-bash-load-write.js | 414b0a3ed2df:24 | argument-or-command 8, host 2, path 9, url 1, word 139 | - | bash 1, write 2 |
+| h250-bash-structured-structured.js | 32e17bc72a8f:8 | argument-or-command 9, path 3, word 73 | capitalized word pair (possible name) 1 | bash 1, zaz__seridi__artifacts_create 1, zaz__seridi__artifacts_scratch_commit 1, zaz__seridi__artifacts_scratch_files_put 1 |
+| h251-bash-structured-read-write.js | 727961718e57:9 | argument-or-command 5, path 2, word 196 | capitalized word pair (possible name) 1 | bash 1, read 1, write 1 |
+| h252-bash-structured.js | 82bb8a427333:28 | argument-or-command 3, home-dir 2, host 1, path 8, word 83 | - | bash 1, qir__blender__execute_blender_code 1 |
+| h253-read-structured.js | a5860fb27141:2 | argument-or-command 3, host 1, path 2, word 41 | - | les__blender__execute_blender_code 1, read 2 |
+| h254-bash-read-structured.js | 74544022e519:5 | argument-or-command 3, home-dir 1, host 1, path 3, word 45 | - | bash 1, pog__blender__execute_blender_code 1, read 1 |
+| h255-edit-read.js | 28cd05939657:42 | argument-or-command 4, path 2, word 50 | capitalized word pair (possible name) 2 | edit 1, read 1 |
+| h256-bash-structured-load.js | ea4695033feb:5 | argument-or-command 4, path 5, word 30 | - | bash 1 |
+| h257-no-tools.js | ce34804b6b24:0 | argument-or-command 2, word 2 | - | none |
+| h258-bash-structured-image-read.js | af62f7a54c12:2 | argument-or-command 3, home-dir 1, path 1, word 11 | - | bash 1, read 7 |
+| h259-edit.js | a091c5afb1dc:18 | argument-or-command 7, path 6, word 109 | - | edit 1 |
+| h260-image-read.js | 1551e488b21e:0 | argument-or-command 5, path 1, word 5 | - | read 3 |
+| h261-bash-structured-models.js | ce34804b6b24:2 | argument-or-command 4, path 1, word 20 | - | bash 1, models.classify 32 |
+| h262-structured.js | 0d22ae95bac3:0 | word 14 | - | guf__sentry__find_organizations 1, guf__sentry__find_projects 6 |
+| h263-transcribe_file.js | 1c15d2312520:0 | argument-or-command 2, path 1, word 6 | - | transcribe_file 3 |
+| h264-structured.js | 82bb8a427333:9 | argument-or-command 2, path 1, word 162 | capitalized word pair (possible name) 3 | qut__blender__execute_blender_code 1, qut__blender__render_vabinati_to_path 1 |
+| h265-bash-edit.js | 82d9fec9f437:14 | argument-or-command 12, path 4, word 102 | - | bash 1, edit 2 |
+| h266-structured.js | a5860fb27141:11 | argument-or-command 1, home-dir 1, path 1, word 76 | - | fup__blender__execute_blender_code 1 |
+| h267-load.js | 4d1795f6504f:7 | word 8 | - | none |
+| h268-bash-structured-image-read.js | af62f7a54c12:1 | argument-or-command 3, home-dir 1, path 1, word 11 | - | bash 1, read 4 |
+| h269-bash.js | f90f87a10c4d:9 | argument-or-command 2, home-dir 1, path 2, word 80 | - | bash 1 |
+| h270-bash-structured.js | 74544022e519:1 | argument-or-command 2, word 61 | - | bash 1, sez__blender__execute_blender_code 1 |
+| h271-bash-structured-models.js | ce34804b6b24:1 | argument-or-command 9, path 1, word 76 | - | bash 1, models.classify 20 |
+| h272-bash-structured-read-write.js | 9a16979d43d6:34 | argument-or-command 4, home-dir 2, path 8, word 69 | - | bash 1, read 1, write 1 |
+| h273-image-read.js | 44b139574d95:13 | argument-or-command 2, path 1, word 4 | - | read 2 |
+| h274-bash-write.js | 2dbac8f941bb:7 | argument-or-command 5, home-dir 1, host 5, path 10, word 93 | - | bash 1, write 2 |
+| h275-transcribe_file.js | 1c15d2312520:2 | argument-or-command 2, path 1, word 6 | - | transcribe_file 3 |
+| h276-bash-image-read-structured.js | 5aba33207fcc:3 | argument-or-command 6, path 7, word 67 | - | bash 1, qip__blender__execute_blender_code 1, read 3 |
+| h277-image-models.js | 45b90cb33362:8 | argument-or-command 5, comment 1, path 1, word 183 | - | models.generateImages 3 |
+| h278-edit.js | e5f654653abf:0 | argument-or-command 10, path 10, word 140 | - | edit 2 |
+| h279-structured.js | b3c0e25e1b8c:0 | word 13 | - | qer__sentry__find_organizations 1, qer__sentry__find_projects 6 |
+| h280-edit-read.js | 28cd05939657:40 | argument-or-command 4, path 2, word 71 | - | edit 1, read 1 |
+| h281-structured.js | e0fe75f0d33d:10 | argument-or-command 18, comment 1, path 2, word 231 | capitalized word pair (possible name) 7 | gov__mababu__tools_webSearch_run 8 |
+| h282-bash-structured.js | 4c9a6130aca0:0 | argument-or-command 2, word 9 | - | bash 1 |
+| h283-bash-structured-image-read.js | 3ca35eb85ae3:1 | argument-or-command 3, home-dir 1, path 1, word 10 | - | bash 1, read 10 |
+| h284-structured.js | 74544022e519:6 | argument-or-command 1, home-dir 1, path 1, word 49 | - | det__blender__execute_blender_code 1 |
+| h285-load.js | 4d1795f6504f:3 | nothing | - | none |
+| h286-transcribe_file.js | 1c15d2312520:1 | argument-or-command 2, path 1, word 6 | - | transcribe_file 2 |
+| h287-image-read.js | 8d0a11936d2a:2 | argument-or-command 2, path 1, word 4 | - | read 5 |
+| h288-bash-structured-models.js | 4c9a6130aca0:1 | argument-or-command 12, comment 1, path 3, word 111 | - | bash 1, models.classify 20 |
+| h289-image-read-structured.js | 5aba33207fcc:13 | argument-or-command 4, home-dir 2, host 2, path 7, word 121 | - | qod__blender__execute_blender_code 1, read 3 |
+| h290-bash-structured.js | a5860fb27141:10 | argument-or-command 3, host 1, path 5, word 64 | - | bash 1, qot__blender__execute_blender_code 1 |
+| h291-image-models.js | 1f7b3152c1cf:1 | argument-or-command 8, path 2, word 37 | - | models.generateImages 1 |
+| h292-structured.js | 82bb8a427333:11 | argument-or-command 2, home-dir 1, path 2, word 174 | capitalized word pair (possible name) 3 | kel__blender__execute_blender_code 1, kel__blender__render_sanepuke_to_path 1 |
+| h293-bash-read-write.js | 1811828de1cf:4 | argument-or-command 6, path 11, word 65 | - | bash 2, read 1, write 1 |
+| h294-structured.js | f7970f73ed2f:0 | word 12 | - | zop__sentry__find_organizations 1, zop__sentry__find_projects 6 |
+| h295-bash-read-structured.js | 74544022e519:9 | argument-or-command 4, home-dir 1, path 5, word 86 | - | bash 1, qus__blender__execute_blender_code 1, read 2 |
+| h296-bash-edit.js | 1aafebd77978:12 | argument-or-command 14, path 5, word 215 | - | bash 1, edit 3 |
+| h297-bash-structured-load.js | 32e17bc72a8f:4 | argument-or-command 2, path 2, word 11 | - | bash 1 |
+| h298-image-read.js | 0b6aea9b5b41:13 | argument-or-command 2, path 1, word 4 | - | read 6 |
+| h299-transcribe_file.js | e51e2b285ded:10 | argument-or-command 2, path 1, word 7 | - | transcribe_file 3 |
+| h300-edit.js | 56c9b8523fb1:24 | argument-or-command 6, path 2, word 39 | - | edit 2 |
 
-## Selection
+## Selection, round 1 (0118, h001–h150)
 
 - executions: 2620
 - unfaked globals or modules: 637
@@ -177,6 +334,26 @@ programming term, in a literal or an identifier, renamed consistently, D2281).
 - candidates after filters and deduplication: 573
 - cases written: 150
 
-## Feature coverage
+## Feature coverage, round 1
 
 await 147, promise-all 98, map 73, filter 12, reduce 1, forEach 22, flatMap 0, for-of 27, for-in 1, for-classic 16, while 1, regex 9, match 6, replace 3, split 15, join 36, json-parse 8, json-stringify 7, template 36, destructuring 17, spread 25, object-static 6, sort 0, set 0, map-coll 0, try 2, throw 2, class 3, function-decl 8, async-fn 30, optional-chain 2, nullish 10, pad 0, slice 15, string-search 15, number 1, math 4, date 0, text 104, console 13, store 6, trim 8, case 0, array-from 1, length 24, ternary 22, label-continue 1, exit 0, return 40, generator 0, localeCompare 0
+
+## Selection, round 2 (0121, h151–h300)
+
+- executions: 2620
+- unfaked globals or modules: 404
+- tools without a declared result type: 429
+- length outside range: 259
+- duplicate: 340
+- already in the corpus (round 1): 146
+- load() of values the session did not record: 11
+- admin tools: 36
+- result types the parser does not read: 34
+- excluded (a SyntaxError in qjs, or rejected in review): 60
+- does not tokenize: 1
+- candidates after filters and deduplication: 900
+- cases written: 150
+
+## Feature coverage, round 2
+
+await 143, promise-all 46, map 73, filter 24, reduce 3, forEach 14, flatMap 1, for-of 46, for-in 0, for-classic 14, while 2, regex 19, match 7, replace 15, split 30, join 41, json-parse 13, json-stringify 19, template 63, destructuring 15, spread 17, object-static 13, sort 12, set 3, map-coll 4, try 12, throw 13, class 0, function-decl 8, async-fn 19, optional-chain 26, nullish 30, pad 1, slice 33, string-search 31, number 14, math 12, date 12, text 68, console 7, store 24, trim 25, case 1, array-from 4, length 29, ternary 22, label-continue 10, exit 0, return 81, generator 0, localeCompare 2, shape:mcp 55, shape:structured 35, shape:models 29, shape:classify 17, shape:edit-write 37, shape:load 22, shape:image 20

@@ -1,0 +1,4 @@
+model: synthetic/model-1, errors: 0
+gugevup (kini, vuso, gesazidodu, volil): 0, 0, 0, 0
+=== throw
+TypeError: cannot read property 'toFixed' of undefined

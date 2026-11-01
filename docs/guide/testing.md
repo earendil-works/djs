@@ -124,9 +124,11 @@ hand-written cases for builtins, formatting, errors and every fast path, includi
 inputs where a fast path must decline. The harvested scripts are the most realistic
 input there is: they read files and run commands in parallel, slice and join the
 results, and print summaries. The sessions do not record what the tools returned, so
-each harvested case answers its tool calls with synthetic text of the same kind, and the
-text of the calls' arguments, which is where the private paths and commands were, is
-replaced.
+each harvested case answers its tool calls with synthetic results of the same kind:
+text for files and commands, and for tools with structured results a value built from
+the result type the session declared for the tool (D2283). The text of the calls'
+arguments, which is where the private paths and commands were, is replaced, and so is
+any long string literal, such as a prompt or an embedded program (D2284).
 
 > **Trade-off.** Comparing transcripts with QuickJS over writing expected output by
 > hand. A new case costs only its source: `--update` records the expected output from

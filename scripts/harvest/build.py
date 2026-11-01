@@ -25,16 +25,21 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
+import synth  # noqa: E402
 from anon import Anonymizer  # noqa: E402
+from extract import toident  # noqa: E402
 from jstok import TokenizeError, tokenize  # noqa: E402
 
-STRING_TOOLS = {"read", "bash", "ls", "grep", "find"}
-# Scripts that use these need hosts or APIs the corpus does not fake (`load` needs values
-# stored by earlier runs, which the sessions do not have).
+# Tools whose results are their text (pi's tools without an output schema).
+STRING_TOOLS = {"read", "bash", "ls", "grep", "find", "edit", "write", "transcribe_file"}
+# Scripts that use these need hosts or APIs the corpus does not fake. `models`, `image`
+# and `load` are faked (0121, D2283): `load` only for literal keys whose stored value the
+# session recorded.
 EXCLUDED_GLOBALS = re.compile(
-    r"\b(?:models|image|searchTools|describeTool|describeNamespace|fetch|require|load)\s*[.(]|^\s*(?:import|export)\s",
+    r"\b(?:searchTools|describeTool|describeNamespace|fetch|require)\b|^\s*(?:import|export)\s",
     re.M,
 )
+LOAD_CALL_RE = re.compile(r"\bload\(\s*([^)]*?)\s*\)")
 
 FEATURES = {
     "await": r"\bawait\b",
@@ -88,6 +93,14 @@ FEATURES = {
     "return": r"^\s*return\b",
     "generator": r"function\s*\*",
     "localeCompare": r"\.localeCompare\(",
+    # Tool shapes (0121): what the fake tools and globals answer with.
+    "shape:mcp": r"\btools\.mcp_",
+    "shape:structured": r"structuredContent",
+    "shape:models": r"\bmodels\.\w+\(",
+    "shape:classify": r"\bmodels\.classify\(",
+    "shape:edit-write": r"\btools\.(?:edit|write)\(",
+    "shape:load": r"\bload\(",
+    "shape:image": r"\bimage\(",
 }
 FEATURE_RES = {k: re.compile(v, re.M) for k, v in FEATURES.items()}
 
@@ -243,11 +256,22 @@ class Redactor:
             return t
 
         s = HIGH_ENTROPY_RE.sub(high_entropy, s)
+
+        def opaque(m):
+            self.counts["opaque-id"] += 1
+            return synthetic_like(m.group(), self.case_id)
+
+        s = OPAQUE_ID_RE.sub(opaque, s)
         for m in NAME_RE.finditer(s):
             self.flags["capitalized word pair (possible name)"] += 1
         return self.anon.text(s)
 
 
+# A literal longer than this is content (code, prompts, queries, notes) rather than a
+# label or a key, and is scrubbed like tool arguments (0121, D2284).
+LONG_LITERAL = 40
+# Opaque ids (slugs, organization ids): letters and digits mixed, 12 or more.
+OPAQUE_ID_RE = re.compile(r"\b(?=[A-Za-z0-9_]*\d)(?=[A-Za-z0-9_]*[A-Za-z])[A-Za-z0-9_]{12,}\b")
 COMMAND_RE = re.compile(
     r"^[`'\"]\s*(?:cd|rg|git|gh|node|npm|npx|pnpm|ls|cat|find|fd|grep|sed|awk|curl|python3?|make|"
     r"cargo|echo|wc|head|tail|jq|mv|cp|rm|mkdir|sh|bash|tree|open|lsof|ps|du|df)\b"
@@ -261,7 +285,13 @@ def tool_call_tokens(tokens):
     sig = [i for i, (k, _) in enumerate(tokens) if k not in ("ws", "comment")]
     for n, i in enumerate(sig[:-3]):
         a, b, c, d = (tokens[sig[n + j]] for j in range(4))
-        if a == ("word", "tools") and b == ("punct", ".") and c[0] == "word" and d == ("punct", "("):
+        if (
+            a[0] == "word"
+            and a[1] in ("tools", "models")
+            and b == ("punct", ".")
+            and c[0] == "word"
+            and d == ("punct", "(")
+        ) or (a == ("word", "image") and b == ("punct", "(")):
             depth = 0
             for j in range(sig[n + 3], len(tokens)):
                 kind, text = tokens[j]
@@ -284,7 +314,8 @@ def redact_code(code, red):
     tokens = tokenize(code)
     in_call = tool_call_tokens(tokens)
     for index, (kind, text) in enumerate(tokens):
-        if kind in ("string", "template") and (index in in_call or COMMAND_RE.search(text)):
+        long_text = kind in ("string", "template") and len(text) > LONG_LITERAL
+        if kind in ("string", "template") and (index in in_call or COMMAND_RE.search(text) or long_text):
             red.counts["argument-or-command"] += 1
             # Paths, URLs and secrets first, so the report counts them.
             text = red.text(text)
@@ -411,10 +442,99 @@ for (const name of Object.keys(results)) {{
     return r.value;
   }};
 }}
-return await (async (tools) => {{
+{extra}return await (async (tools{params}) => {{
 {code}
-}})(fake);
+}})(fake{args});
 """
+
+# The fakes of pi's codemode globals (0121, D2283): `models` answers from the arguments the
+# script passes (the questions it asks), `image` shows a placeholder, `load` returns the
+# script's own stored values first, then synthetic values shaped like the recorded ones.
+MODELS_FAKE = """\
+const fakeModels = {
+  async getModelsOfType(type, provider) {
+    return [1, 2].map((i) => ({ type, provider: provider ?? "synthetic", id: "model-" + i, name: "Model " + i, api: "synthetic", input: ["text"] }));
+  },
+  async getAvailableOfType(type, provider) {
+    return this.getModelsOfType(type, provider);
+  },
+  async getModelOfType(type, provider, id) {
+    return { type, provider, id, name: id, api: "synthetic", input: ["text", "image"] };
+  },
+  async classify(model, context) {
+    JSON.stringify(context);
+    const answers = {};
+    for (const [id, q] of Object.entries(context.questions ?? {})) {
+      if (q.type === "choice") {
+        const labels = Object.keys(q.criteria ?? {});
+        const probabilities = Object.fromEntries(labels.map((l, i) => [l, i === 0 ? 0.7 : 0.3 / Math.max(1, labels.length - 1)]));
+        answers[id] = { type: "choice", choice: labels[0], probabilities, confidence: 0.7 };
+      } else if (q.type === "score") {
+        answers[id] = { type: "score", score: Math.min(1, (q.criteria ?? []).length - 1), confidence: 0.6 };
+      } else {
+        answers[id] = { type: "bool", probability: 0.65 };
+      }
+    }
+    return { provider: model?.provider, model: model?.id, answers, stopReason: "stop" };
+  },
+  async generateImages(model, context) {
+    JSON.stringify(context);
+    return { provider: model?.provider, model: model?.id, output: [{ type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" }], stopReason: "stop" };
+  },
+};
+"""
+IMAGE_FAKE = """\
+const fakeImage = (value) => text("[image]");
+"""
+LOAD_FAKE = """\
+const stored = {stored};
+const realLoad = load;
+const fakeLoad = (key) => {{
+  const own = realLoad(key);
+  if (own !== undefined) return own;
+  return key in stored ? JSON.parse(JSON.stringify(stored[key])) : undefined;
+}};
+"""
+
+
+def bash_is_structured(run):
+    """Whether bash results are objects in this run: declared so, or used so by a script
+    from a session that did not record the declaration."""
+    decl = run.get("decls", {}).get("bash")
+    if decl is not None:
+        return decl.strip() != "string"
+    return re.search(r"\.(?:output|exit_code)\b", run["code"]) is not None
+
+
+def literal_key(red, key):
+    """A store key as the redacted script spells it in a string literal."""
+    return json.loads(red.text(json.dumps(key)))
+
+
+def usable(run):
+    """Why a run cannot become a case, or None: every call needs a result we can fake,
+    and every `load` a literal key with a recorded value."""
+    for c in run["calls"]:
+        name = c["name"] or ""
+        if "admin" in name.lower():
+            # Admin APIs of private services: their very use is private (0121 review).
+            return "admin tools"
+        if name in STRING_TOOLS or name.startswith("models."):
+            continue
+        decl = run.get("decls", {}).get(toident(name))
+        if decl is None:
+            return "tools without a declared result type"
+        try:
+            synth.parse(decl)
+        except synth.ParseError:
+            return "result types the parser does not read"
+    if EXCLUDED_GLOBALS.search(run["code"]):
+        return "unfaked globals or modules"
+    for arg in LOAD_CALL_RE.findall(run["code"]):
+        m = re.fullmatch(r"""(["'])(.*)\1""", arg)
+        if not m or m.group(2) not in run.get("loads", {}):
+            return "load() of values the session did not record"
+    return None
 
 
 def features(code):
@@ -443,10 +563,17 @@ def main():
     ap.add_argument("--max-len", type=int, default=2000)
     ap.add_argument("--min-len", type=int, default=120)
     ap.add_argument("--exclude", default="", help="file of source ids to leave out (rejected in review)")
+    ap.add_argument("--skip", default="", help="REDACTION.md of cases already in the corpus: their sources are left out")
+    ap.add_argument("--start", type=int, default=1, help="number of the first case")
     opts = ap.parse_args()
     excluded = set()
     if opts.exclude and os.path.exists(opts.exclude):
         excluded = {l.split()[0] for l in open(opts.exclude) if l.strip() and not l.startswith("#")}
+    already = set()
+    if opts.skip:
+        for line in open(opts.skip):
+            if line.startswith("| h"):
+                already.add(line.split("|")[2].strip())
 
     runs = [json.loads(l) for l in open(opts.extract)]
     usernames = set()
@@ -460,15 +587,15 @@ def main():
     for r in runs:
         stats["executions"] += 1
         code = r["code"]
-        names = {c["name"] for c in r["calls"]}
-        if not names <= STRING_TOOLS:
-            stats["other tools (mcp, models, edit, write, ...)"] += 1
-            continue
-        if EXCLUDED_GLOBALS.search(code):
-            stats["unfaked globals or modules"] += 1
+        why = usable(r)
+        if why is not None:
+            stats[why] += 1
             continue
         if not opts.min_len <= len(code) <= opts.max_len:
             stats["length outside range"] += 1
+            continue
+        if r["source"] in already:
+            stats["already in the corpus"] += 1
             continue
         if r["source"] in excluded:
             stats["excluded (a SyntaxError in qjs, or rejected in review)"] += 1
@@ -508,7 +635,7 @@ def main():
     report = []
     written = 0
     for i, r in enumerate(chosen):
-        case_id = f"h{i + 1:03d}"
+        case_id = f"h{i + opts.start:03d}"
         red = Redactor(case_id, usernames)
         try:
             code = redact_code(r["code"], red)
@@ -517,10 +644,50 @@ def main():
             continue
         rng = random.Random(case_id)
         results = collections.defaultdict(list)
+        shapes = set()
         for c in r["calls"]:
-            results[c["name"]].append(synthetic_result(c, rng))
-        body = CASE_TEMPLATE.format(results=json.dumps(dict(results), indent=1), code=code)
-        name = f"{case_id}-{'-'.join(sorted(results)) or 'no-tools'}.js"
+            name = c["name"] or ""
+            if name.startswith("models."):
+                shapes.add("models")
+                continue
+            key = red.anon.identifier(toident(name))
+            if name == "bash" and bash_is_structured(r):
+                # pi's bash with an output schema: `{ exit_code, output, truncated }`,
+                # also for a failed command.
+                text = synthetic_result(dict(c, status="ok"), rng)["value"]
+                failed = c.get("status") != "ok"
+                results[key].append({"ok": True, "value": {"exit_code": 1 if failed else 0, "output": text, "truncated": False}})
+                shapes.add("bash-structured")
+            elif name in STRING_TOOLS:
+                results[key].append(synthetic_result(c, rng))
+                shapes.add(name)
+            elif c.get("status") != "ok":
+                results[key].append({"ok": False, "value": "Tool failed (synthetic error)"})
+                shapes.add("structured")
+            else:
+                t = synth.parse(r["decls"][toident(name)])
+                results[key].append({"ok": True, "value": synth.value(t, rng, red.anon)})
+                shapes.add("structured")
+        extra, params, args = "", "", ""
+        if re.search(r"\bmodels\.", code):
+            extra += MODELS_FAKE
+            params += ", models"
+            args += ", fakeModels"
+        if re.search(r"\bimage\(", code):
+            extra += IMAGE_FAKE
+            params += ", image"
+            args += ", fakeImage"
+            shapes.add("image")
+        if r.get("loads") and re.search(r"\bload\(", code):
+            stored = {literal_key(red, k): synth.like(v, rng, red.anon) for k, v in r["loads"].items()}
+            extra += LOAD_FAKE.format(stored=json.dumps(stored, indent=1))
+            params += ", load"
+            args += ", fakeLoad"
+            shapes.add("load")
+        body = CASE_TEMPLATE.format(
+            results=json.dumps(dict(results), indent=1), code=code, extra=extra, params=params, args=args
+        )
+        name = f"{case_id}-{'-'.join(sorted(shapes)) or 'no-tools'}.js"
         with open(os.path.join(opts.outdir, name), "w") as f:
             f.write(body)
         written += 1
@@ -528,7 +695,10 @@ def main():
             red.counts["word"] = red.anon.count
         counts = ", ".join(f"{k} {v}" for k, v in sorted(red.counts.items()) if v) or "nothing"
         flags = ", ".join(f"{k} {v}" for k, v in sorted(red.flags.items()))
-        calls = collections.Counter(c["name"] for c in r["calls"])
+        # The names as the case calls them: an MCP tool's server name can be private.
+        calls = collections.Counter(
+            n if n.startswith("models.") else red.anon.identifier(toident(n)) for n in (c["name"] or "" for c in r["calls"])
+        )
         report.append((name, r["source"], counts, flags, dict(calls), sorted(feats[id(r)])))
 
     with open(os.path.join(opts.outdir, "REDACTION.md"), "w") as f:

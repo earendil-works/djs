@@ -1,0 +1,2 @@
+=== throw
+TypeError: cannot read property '0' of null

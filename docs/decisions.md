@@ -5148,3 +5148,53 @@ going on with it and restoring the bytes continue from the same heap, and garbag
 spoil the compression. A collection is invisible to scripts except through WeakRefs in
 "collected" mode and the out-of-memory point of allocations that are not retried; journals
 compare canonical hashes, which do not depend on collections (D1730).
+
+## D2282: Difftest ratchet reasons are an excerpt around the first difference
+date: 2026-11-04 · by: infra · issue: 0121
+A corpus ratchet line (`tests/corpus/expected-failures.txt`) used to carry the whole
+first differing line of both transcripts, which made a single harvested case's entry
+several kilobytes long. A reason is now the two lines from 20 characters before the
+first differing character, at most 80 characters each, with `…` where they are cut.
+For an uncaught error, the message is cut the same way. The full diff is still in the
+runner's normal output (without `--no-diff`). The ratchet file went from 28.7 KB to
+1.2 KB.
+
+## D2283: Harvested cases with structured tool results
+date: 2026-11-04 · by: infra · issue: 0121
+0118 kept only codemode runs whose tools return plain strings. The sessions do not
+record nested results, but they do record the TypeScript declarations the model saw:
+`toolsAdded` descriptions and `describeTool` output. extract.py collects them per run,
+and scripts/harvest/synth.py parses a tool's result type (unions, intersections, arrays,
+tuples, object and index types, `Record`, generics such as `CallToolResult<T>`,
+literals) and builds a synthetic value of that type, with dictionary-word keys kept as
+the script reads them. A run is used only if every tool it calls has a declared,
+parsable result type. The other fakes:
+- bash returns `{ exit_code, output, truncated }` when declared so or read so;
+- edit, write and transcribe_file return text like the other string tools;
+- `models` gets fakes for getModelsOfType/getAvailableOfType/getModelOfType, classify
+  (answers by question type) and generateImages;
+- `image()` prints `[image]`;
+- `load(key)` only for literal keys whose value the session stored
+  (`codemode-store` entries), answered with a synthetic value of the same shape.
+Tool discovery, `fetch`, `require` and modules stay unfaked; such runs are left out.
+This added 150 cases (h151–h300): 89 with MCP-style structured results, 25 with
+`models`, 22 with `load`, 20 with `image`, 37 with edit/write. With them the corpus
+covers 46 of build.py's 51 language features (36 before) and 2.3 times as many feature
+occurrences.
+
+## D2284: Extra redaction for structured-result harvests
+date: 2026-11-04 · by: infra · issue: 0121
+The new runs carry more private text outside tool arguments: prompts and classifier
+instructions, search queries, notes, embedded Python and HTML. On top of D2281:
+- every string literal longer than 40 characters is replaced letter by letter, like an
+  argument; shorter literals are redacted word by word as before;
+- ids and slugs that mix letters and digits (12 characters or more) become synthetic
+  text;
+- words with non-ASCII letters are always renamed;
+- MCP server prefixes are renamed like any word, and REDACTION.md lists tool calls
+  under the names the case uses, never the session's;
+- runs of tools whose name contains `admin` are left out.
+32 picks were rejected in review (private service and project names in surviving
+words, a private app's file layout, recognizable prose); their sources are excluded and
+the selection reran until every pick passed review and ran under qjs without a
+SyntaxError.

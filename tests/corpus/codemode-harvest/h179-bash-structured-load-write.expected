@@ -1,0 +1,11 @@
+{"items":[{"id":1,"name":"red","status":"closed","count":162,"tags":[]}],"total":1}
+[{"id":1,"name":"record","status":"ok","count":115,"tags":["omega"]}]
+[{"id":1,"name":"status","status":"closed","count":489,"tags":["check","delta"]},{"id":2,"name":"epsilon","status":"open","count":254,"tags":[]},{"id":3,"name":"check","status":"open","count":126,"tags":["eta","check"]},{"id":4,"name":"alpha","status":"pending","count":189,"tags":["alpha","check","beta"]}]
+[{"id":1,"name":"blue","status":"closed","count":192,"tags":[]},{"id":2,"name":"record","status":"open","count":38,"tags":["entry","blue","alpha"]},{"id":3,"name":"eta","status":"ok","count":20,"tags":["eta"]},{"id":4,"name":"status","status":"pending","count":472,"tags":["west"]},{"id":5,"name":"omega","status":"closed","count":23,"tags":["item"]}]
+[{"id":1,"name":"eta","status":"ok","count":448,"tags":["delta"]},{"id":2,"name":"south","status":"ok","count":204,"tags":["north","omega","entry"]}]
+[{"id":1,"name":"iota","status":"ok","count":214,"tags":["blue","iota","iota"]}]
+[{"id":1,"name":"west","status":"pending","count":25,"tags":["blue","red","ready"]},{"id":2,"name":"done","status":"ok","count":338,"tags":["ready"]},{"id":3,"name":"lambda","status":"open","count":377,"tags":["north","blue","blue"]}]
+{"items":[{"id":1,"name":"omega","status":"ok","count":212,"tags":["north","north"]},{"id":2,"name":"iota","status":"pending","count":427,"tags":["check","theta"]},{"id":3,"name":"item","status":"closed","count":218,"tags":[]},{"id":4,"name":"east","status":"pending","count":461,"tags":["south","build","east"]},{"id":5,"name":"iota","status":"pending","count":228,"tags":["eta","omega"]}],"total":5}
+{"items":[{"id":1,"name":"test","status":"ok","count":474,"tags":["entry","green","lambda"]},{"id":2,"name":"entry","status":"ok","count":438,"tags":["lambda"]}],"total":2}
+{"exit_code":0,"output":"delta zeta 2503\ncheck lambda check alpha green east build ready\nready blue 542\nsouth iota south zeta epsilon beta iota check\nblue east done lambda iota test epsilon\nitem done 9919\ngamma record blue gamma item south","truncated":false}
+=== completed

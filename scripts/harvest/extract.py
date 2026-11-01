@@ -11,6 +11,7 @@ work/scratch/0118/ (gitignored), and nothing here prints session content.
 import hashlib
 import json
 import os
+import re
 import sys
 
 
@@ -21,18 +22,88 @@ def session_files(root):
                 yield os.path.join(dirpath, name)
 
 
+LOAD_KEY_RE = re.compile(r"""\bload\(\s*(["'])((?:(?!\1)[^\\])*)\1\s*\)""")
+
+
+def declarations(description):
+    """Tool declarations in the codemode tool's description: `name(args: ...): Promise<T>`
+    by the tool's JavaScript name, as the type text T (0121, D2283)."""
+    decls = {}
+    for m in re.finditer(r"([A-Za-z_$][\w$]*)\(args: ", description):
+        i = m.end()
+        depth = 0
+        # Skip the argument type: up to the `)` that closes the parameter list.
+        while i < len(description):
+            c = description[i]
+            if c in "({[<":
+                depth += 1
+            elif c in ")}]>":
+                if depth == 0:
+                    break
+                depth -= 1
+            elif description.startswith("//", i):
+                i = description.find("\n", i)
+                if i < 0:
+                    break
+                continue
+            i += 1
+        if i < 0 or not description.startswith("): Promise<", i):
+            continue
+        j = i + len("): Promise<")
+        depth = 0
+        k = j
+        while k < len(description):
+            c = description[k]
+            if description.startswith("//", k):
+                k = description.find("\n", k)
+                if k < 0:
+                    break
+                continue
+            if c in "({[<":
+                depth += 1
+            elif c in ")}]":
+                depth -= 1
+            elif c == ">":
+                if depth == 0:
+                    decls[m.group(1)] = description[j:k]
+                    break
+                depth -= 1
+            k += 1
+    return decls
+
+
 def executions(path):
-    """The codemode executions of one session file, in order."""
+    """The codemode executions of one session file, in order, with the tool declarations
+    the codemode tool showed at the time and the stored values (`codemode-store`) of the
+    keys the script loads."""
     pending = {}
+    decls = {}
+    store = {}
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
-            if '"codemode"' not in line:
+            if '"codemode' not in line:
                 continue
             try:
                 entry = json.loads(line)
             except ValueError:
                 continue
+            if entry.get("type") == "custom" and entry.get("customType") == "codemode-store":
+                data = entry.get("data") or {}
+                for k in data.get("delete") or []:
+                    store.pop(k, None)
+                for k, v in (data.get("set") or {}).items():
+                    store[k] = v
+                continue
             m = entry.get("message") or {}
+            # Declarations come with the tools (the codemode tool's catalog, and each
+            # tool's own sample) and from describeTool() output in earlier scripts.
+            for tool in m.get("toolsAdded") or []:
+                if isinstance(tool, dict):
+                    decls.update(declarations(tool.get("description") or ""))
+            if m.get("role") == "toolResult" and m.get("toolName") == "codemode":
+                for c in m.get("content") or []:
+                    if isinstance(c, dict) and isinstance(c.get("text"), str) and "): Promise<" in c["text"]:
+                        decls.update(declarations(c["text"]))
             if m.get("role") == "assistant":
                 for c in m.get("content") or []:
                     if isinstance(c, dict) and c.get("type") == "toolCall" and c.get("name") == "codemode":
@@ -50,7 +121,24 @@ def executions(path):
                     if not isinstance(args, str):
                         args = json.dumps(args)
                     calls.append({"name": c.get("name"), "status": c.get("status"), "args": args})
-                yield {"code": code, "calls": calls, "isError": bool(m.get("isError"))}
+                called = {toident(c["name"] or "") for c in calls}
+                loads = {k: store[k] for _, k in LOAD_KEY_RE.findall(code) if k in store}
+                yield {
+                    "code": code,
+                    "calls": calls,
+                    "isError": bool(m.get("isError")),
+                    "decls": {k: v for k, v in decls.items() if k in called},
+                    "loads": loads,
+                }
+
+
+def toident(name):
+    """pi's toCodemodeIdentifier: invalid identifier characters become `_`."""
+    out = ""
+    for ch in name:
+        ok = re.match(r"[A-Za-z_$]", ch) if not out else re.match(r"[A-Za-z0-9_$]", ch)
+        out += ch if ok else "_"
+    return out or "_"
 
 
 def main():
