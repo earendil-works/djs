@@ -8,7 +8,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0136 | Base layout stability (atom table, growable cells) for small snapshots | heap | .worktrees/heap |
-| 0135 | Why REPL heap dumps are ~450 KB and docs heaps ~6000 cells | bloat | .worktrees/bloat |
 | 0133 | Heap dump analyzer | snapshot | .worktrees/snapshot |
 | 0129 | pi-like hot spots (interpreter, native calls, JSON) | perf | .worktrees/perf |
 
@@ -81,6 +80,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0135 | Why heap dumps are big: REPL containers, Heap tab own-vs-base (D2340) | aee70c1b (agent bloat; REPL dump 341 -> 16.4 KB; 3,723 of 5,768 base cells are builtin functions) |
 | 0134 | Faster old-region walk (D2055); young-sized threshold rejected (D2056) | e4257900 (agent heap; pi-like -3.3%, props -3.3%) |
 | 0132 | json peak regression analysed, accepted (D2054) | 0616aeab (agent heap; + pi-like GC profile: 9.1% of instructions) |
 | 0131 | Size: decomposition stream, derived compositions, message builder (D2337-D2339) | ef739b01 (agent bloat; -6.3 KB, 454.6 KB, 1.586x) |
