@@ -1,7 +1,7 @@
 # 0043: wasm size audit and reduction
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0043-wasm-size
 depends-on: 0039 (part 1)
 touches: crates/djs-prelude/, crates/djs-core/src/compiler/ (privileged-code size options only), crates/djs-core/src/heap/ (image encoding only), crates/djs-wasm/, crates/djs-bench/ + tests/bench/size, scripts/
