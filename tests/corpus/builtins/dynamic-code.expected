@@ -1,0 +1,40 @@
+Function = 5
+new Function = 24
+no args = undefined
+toString = function anonymous(a,b
+) {
+return a
+}
+toString empty = function anonymous(
+) {
+
+}
+name/length = anonymous,2,1
+prototype = object true
+global scope = 7
+syntax error -> SyntaxError: unexpected token in expression: ')'
+bad params -> SyntaxError: expecting ','
+ToString order = p1,body
+generator = 5,10
+generator toString = function* anonymous(
+) {
+yield 1
+}
+generator proto = true
+async toString = async function anonymous(x
+) {
+return await x
+}
+async generator toString = async function* anonymous(
+) {
+yield 1
+}
+subclass = 1,true,true
+indirect eval side effect = 12
+eval syntax error -> SyntaxError: unexpected token in expression: ';'
+eval non-string = true
+eval name/length = eval 1
+queueMicrotask arity = 1 queueMicrotask
+queueMicrotask non-callable -> TypeError: not a function
+order = micro 1, then, micro 2, async 9
+=== completed

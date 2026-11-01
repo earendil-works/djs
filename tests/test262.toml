@@ -67,20 +67,14 @@ scan = [
 ]
 
 [[group]]
-name = "scan-eval"
+name = "direct-eval"
 kind = "skip"
-description = "Dynamic code: direct or indirect eval and the Function constructors. Skipped for now; the group's size tells us whether indirect eval and Function are worth adding."
+description = "Direct eval: access to the caller's scope is a non-goal (D014). djs treats `eval(x)` as indirect eval, so tests of direct eval semantics cannot pass. Indirect eval and the Function constructors are active since 0059."
 paths = [
-  "language/eval-code",  # all about eval
-  "built-ins/eval",      # all about eval
+  "language/eval-code/direct",  # all about direct eval
 ]
 scan = [
-  "eval(",                    # direct eval (and obj.eval(...), conservatively)
-  "eval)(",                   # indirect eval: (0, eval)(...)
-  "Function(",                # Function constructor, called or with `new`
-  "GeneratorFunction(",       # dynamic generator functions
-  "AsyncFunction(",           # dynamic async functions
-  "AsyncGeneratorFunction(",  # dynamic async generator functions
+  "eval(",  # a direct eval call (and obj.eval(...), conservatively; `(0, eval)(` does not match)
 ]
 
 [[group]]

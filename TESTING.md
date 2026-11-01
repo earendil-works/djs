@@ -56,9 +56,9 @@ Initial skip set (from ARCH non-goals):
   `tail-call-optimization`, `IsHTMLDDA`, `cross-realm`, `caller`, `legacy-regexp`,
   `dynamic-import`, `import-*`, `json-modules`, `source-phase-imports*`, `top-level-await`,
   `host-gc-required`, `Atomics.waitAsync`, `import-defer`.
-- scan: direct-eval and Function-constructor tests go into their own group (`scan-eval`),
-  which is skipped for now. Its size tells us whether indirect eval and `Function` are
-  worth adding.
+- direct eval (`direct-eval`, skipped, D014): `language/eval-code/direct` and every test
+  whose source has an `eval(` call. djs treats `eval(x)` as indirect eval (0059). Indirect
+  eval (`(0, eval)(`) and the Function constructors are active.
 
 The initial `later` set covers everything in phases P3 to P5 (BigInt, Proxy, Reflect, typed
 arrays, ArrayBuffer/DataView, generators, regexp features, WeakRef/FinalizationRegistry,
@@ -122,7 +122,7 @@ T=target/release/djs-test262
 
 $T list                                  # counts per group and top-level dir
 $T list --depth 2 --features             # finer dirs, plus the per-feature table
-$T list --paths --group scan-eval        # each test with the rule that grouped it
+$T list --paths --group direct-eval      # each test with the rule that grouped it
 
 $T run                                   # active + later with qjs (the default engine)
 $T run built-ins/Array --failures        # a path prefix, with one-line failure reasons

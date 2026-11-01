@@ -4,12 +4,7 @@ built-ins/Array/S15.4.5.2_A3_T2.js: RangeError: invalid array length
 built-ins/Array/length/S15.4.5.1_A1.3_T1.js: RangeError: invalid array length
 built-ins/Array/length/S15.4.5.1_A1.3_T2.js: RangeError: invalid array length
 built-ins/Array/length/define-own-prop-length-coercion-order-set.js: Test262Error: `"use strict"; array.length = length` throws a TypeError exception Expected a TypeError but got a RangeError
-built-ins/Array/prototype/every/15.4.4.16-5-7.js: ReferenceError: 'eval' is not defined
-built-ins/Array/prototype/filter/15.4.4.20-5-7.js: ReferenceError: 'eval' is not defined
-built-ins/Array/prototype/forEach/15.4.4.18-5-7.js: ReferenceError: 'eval' is not defined
-built-ins/Array/prototype/lastIndexOf/15.4.4.15-2-8.js: ReferenceError: 'eval' is not defined
-built-ins/Array/prototype/map/15.4.4.19-5-7.js: ReferenceError: 'eval' is not defined
-built-ins/Array/prototype/some/15.4.4.17-5-7.js: ReferenceError: 'eval' is not defined
+built-ins/Array/prototype/fill/typed-array-resize.js: TypeError: '1' is read-only
 built-ins/Error/isError/bigints.js: TypeError: not a function
 built-ins/Error/isError/error-subclass.js: TypeError: not a function
 built-ins/Error/isError/errors.js: TypeError: not a function
@@ -20,24 +15,57 @@ built-ins/Error/isError/non-error-objects.js: TypeError: not a function
 built-ins/Error/isError/primitives.js: TypeError: not a function
 built-ins/Error/isError/prop-desc.js: Test262Error: isError should be an own property
 built-ins/Error/isError/symbols.js: TypeError: not a function
-built-ins/Function/15.3.5.4_2-13gs.js: ReferenceError: 'eval' is not defined
-built-ins/Function/S15.3.2_A1.js: TypeError: not supported yet: the Function constructor
-built-ins/Function/S15.3.5_A1_T1.js: TypeError: not supported yet: the Function constructor
-built-ins/Function/S15.3_A2_T1.js: Test262Error: The result of evaluating (e instanceof SyntaxError) is expected to be true
-built-ins/Function/S15.3_A2_T2.js: Test262Error: The result of evaluating (e instanceof SyntaxError) is expected to be true
-built-ins/Function/S15.3_A3_T1.js: TypeError: not supported yet: the Function constructor
-built-ins/Function/S15.3_A3_T2.js: TypeError: not supported yet: the Function constructor
-built-ins/Function/S15.3_A3_T3.js: TypeError: not supported yet: the Function constructor
-built-ins/Function/S15.3_A3_T4.js: TypeError: not supported yet: the Function constructor
-built-ins/Function/S15.3_A3_T5.js: TypeError: not supported yet: the Function constructor
-built-ins/Function/S15.3_A3_T6.js: TypeError: not supported yet: the Function constructor
+built-ins/Function/15.3.2.1-11-1.js: SyntaxError: duplicate argument names not allowed in this context
+built-ins/Function/15.3.2.1-11-2-s.js: SyntaxError: duplicate argument names not allowed in this context
+built-ins/Function/15.3.2.1-11-3.js: SyntaxError: invalid argument name in strict code
+built-ins/Function/15.3.2.1-11-4-s.js: SyntaxError: invalid argument name in strict code
+built-ins/Function/15.3.2.1-11-5.js: SyntaxError: duplicate argument names not allowed in this context
+built-ins/Function/15.3.2.1-11-6-s.js: SyntaxError: duplicate argument names not allowed in this context
+built-ins/Function/15.3.2.1-11-7-s.js: SyntaxError: invalid argument name in strict code
+built-ins/Function/15.3.2.1-11-8-s.js: SyntaxError: duplicate argument names not allowed in this context
+built-ins/Function/15.3.2.1-11-9-s.js: SyntaxError: duplicate argument names not allowed in this context
+built-ins/Function/S15.3.2.1_A3_T8.js: Test262Error: f() must return this Expected SameValue(«undefined», «[object Object]») to be true
+built-ins/Function/S15.3.5_A2_T1.js: TypeError: cannot set property 'y' of undefined
+built-ins/Function/S15.3.5_A2_T2.js: TypeError: cannot set property 'y' of undefined
+built-ins/Function/S15.3_A3_T1.js: TypeError: cannot set property 'godname' of undefined
+built-ins/Function/S15.3_A3_T2.js: TypeError: cannot read property 'color' of undefined
+built-ins/Function/S15.3_A3_T5.js: TypeError: cannot read property 'planet' of undefined
+built-ins/Function/S15.3_A3_T6.js: TypeError: cannot read property 'planet' of undefined
+built-ins/Function/length/S15.3.5.1_A1_T3.js: SyntaxError: duplicate argument names not allowed in this context
+built-ins/Function/length/S15.3.5.1_A2_T3.js: SyntaxError: duplicate argument names not allowed in this context
+built-ins/Function/length/S15.3.5.1_A3_T3.js: SyntaxError: duplicate argument names not allowed in this context
+built-ins/Function/length/S15.3.5.1_A4_T3.js: SyntaxError: duplicate argument names not allowed in this context
 built-ins/Function/prototype/S15.3.3.1_A1.js: Test262Error: #2.1: the Function.prototype property has the attributes ReadOnly: TypeError: not a function
 built-ins/Function/prototype/S15.3.4_A1.js: Test262Error: Object.prototype.toString.call(Function.prototype) must return "[object Function]" Expected SameValue(«"[object Object]"», «"[object Function]"»)…
 built-ins/Function/prototype/S15.3.4_A2_T1.js: Test262Error: #1.1: The Function prototype object is itself a Function object that, when invoked, accepts any arguments and returns undefined: TypeError: not a…
 built-ins/Function/prototype/S15.3.4_A2_T2.js: Test262Error: #1.1: The Function prototype object is itself a Function object that, when invoked, accepts any arguments and returns undefined: TypeError: not a…
 built-ins/Function/prototype/S15.3.4_A2_T3.js: TypeError: not a function
-built-ins/Function/prototype/call/S15.3.4.4_A2_T2.js: TypeError: not supported yet: the Function constructor
-built-ins/Function/prototype/toString/AsyncGenerator.js: TypeError: not supported yet: the AsyncGeneratorFunction constructor
+built-ins/Function/prototype/apply/S15.3.4.3_A3_T1.js: TypeError: cannot set property 'field' of undefined
+built-ins/Function/prototype/apply/S15.3.4.3_A3_T2.js: TypeError: cannot set property 'field' of null
+built-ins/Function/prototype/apply/S15.3.4.3_A3_T3.js: TypeError: cannot set property 'field' of undefined
+built-ins/Function/prototype/apply/S15.3.4.3_A3_T4.js: TypeError: cannot set property 'field' of undefined
+built-ins/Function/prototype/apply/S15.3.4.3_A3_T5.js: TypeError: cannot set property 'feat' of undefined
+built-ins/Function/prototype/apply/S15.3.4.3_A3_T7.js: TypeError: cannot set property 'feat' of undefined
+built-ins/Function/prototype/apply/S15.3.4.3_A5_T1.js: TypeError: not an object
+built-ins/Function/prototype/apply/S15.3.4.3_A5_T2.js: TypeError: not an object
+built-ins/Function/prototype/apply/S15.3.4.3_A7_T1.js: TypeError: cannot set property 'shifted' of null
+built-ins/Function/prototype/apply/S15.3.4.3_A7_T2.js: TypeError: cannot set property 'shifted' of null
+built-ins/Function/prototype/apply/S15.3.4.3_A7_T5.js: TypeError: cannot set property 'shifted' of null
+built-ins/Function/prototype/apply/S15.3.4.3_A7_T7.js: TypeError: cannot set property 'shifted' of null
+built-ins/Function/prototype/apply/S15.3.4.3_A7_T8.js: TypeError: cannot set property 'shifted' of undefined
+built-ins/Function/prototype/call/S15.3.4.4_A3_T1.js: TypeError: cannot set property 'field' of undefined
+built-ins/Function/prototype/call/S15.3.4.4_A3_T2.js: TypeError: cannot set property 'field' of null
+built-ins/Function/prototype/call/S15.3.4.4_A3_T3.js: TypeError: cannot set property 'field' of undefined
+built-ins/Function/prototype/call/S15.3.4.4_A3_T4.js: TypeError: cannot set property 'field' of undefined
+built-ins/Function/prototype/call/S15.3.4.4_A3_T5.js: TypeError: cannot set property 'feat' of undefined
+built-ins/Function/prototype/call/S15.3.4.4_A3_T7.js: TypeError: cannot set property 'feat' of undefined
+built-ins/Function/prototype/call/S15.3.4.4_A5_T1.js: TypeError: not an object
+built-ins/Function/prototype/call/S15.3.4.4_A5_T2.js: TypeError: not an object
+built-ins/Function/prototype/call/S15.3.4.4_A6_T1.js: TypeError: cannot set property 'shifted' of null
+built-ins/Function/prototype/call/S15.3.4.4_A6_T2.js: TypeError: cannot set property 'shifted' of null
+built-ins/Function/prototype/call/S15.3.4.4_A6_T5.js: TypeError: cannot set property 'shifted' of null
+built-ins/Function/prototype/call/S15.3.4.4_A6_T7.js: TypeError: cannot set property 'shifted' of null
+built-ins/Function/prototype/call/S15.3.4.4_A6_T8.js: TypeError: cannot set property 'shifted' of undefined
 built-ins/Math/f16round/length.js: TypeError: cannot convert to object
 built-ins/Math/f16round/name.js: TypeError: cannot convert to object
 built-ins/Math/f16round/not-a-constructor.js: Test262Error: isConstructor invoked with a non-function value
@@ -54,26 +82,13 @@ built-ins/Math/sumPrecise/sum.js: TypeError: not a function
 built-ins/Math/sumPrecise/takes-iterable.js: TypeError: not a function
 built-ins/Math/sumPrecise/throws-on-non-number.js: Test262Error: Expected SameValue(«0», «1») to be true
 built-ins/Number/prototype/toString/length.js: Test262Error: length descriptor value should be 1; length value should be 1
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-4.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyNames/15.2.3.4-4-1.js: Test262Error: result1[expResult[p1]] !== true
+built-ins/Object/entries/tamper-with-global-object.js: TypeError: cannot set property 'Object' of undefined
+built-ins/Object/freeze/typedarray-backed-by-resizable-buffer.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
 built-ins/Object/prototype/setPrototypeOf-with-non-circular-values-__proto__.js: Test262Error: Object.setPrototypeOf(ObjProto, { __proto__: null }) throws a TypeError Expected a TypeError to be thrown but no exception was thrown at all
 built-ins/Object/prototype/setPrototypeOf-with-non-circular-values.js: Test262Error: Object.setPrototypeOf(ObjProto, Object.create(null)) throws a TypeError Expected a TypeError to be thrown but no exception was thrown at all
-built-ins/Object/seal/seal-arrowfunction.js: TypeError: not supported yet: the Function constructor
-built-ins/Object/seal/seal-asyncarrowfunction.js: TypeError: not supported yet: the AsyncFunction constructor
-built-ins/Object/seal/seal-asyncfunction.js: TypeError: not supported yet: the AsyncFunction constructor
-built-ins/Object/seal/seal-asyncgeneratorfunction.js: TypeError: not supported yet: the AsyncGeneratorFunction constructor
-built-ins/Object/seal/seal-generatorfunction.js: TypeError: not supported yet: the GeneratorFunction constructor
 built-ins/Object/subclass-object-arg.js: Test262Error: Expected SameValue(«1», «undefined») to be true
-built-ins/Promise/all/ctx-non-ctor.js: Test262Error: Expected a TypeError but got a ReferenceError
-built-ins/Promise/allSettled/ctx-non-ctor.js: Test262Error: Expected a TypeError but got a ReferenceError
-built-ins/Promise/any/ctx-non-ctor.js: Test262Error: Expected a TypeError but got a ReferenceError
+built-ins/Object/values/tamper-with-global-object.js: TypeError: cannot set property 'Object' of undefined
 built-ins/Promise/prototype/finally/rejected-observable-then-calls-argument.js: async: Test262Error: Test262Error: `then` invoked with one argument Expected SameValue(«2», «1») to be true
-built-ins/Promise/race/ctx-non-ctor.js: Test262Error: Expected a TypeError but got a ReferenceError
-built-ins/Promise/reject/ctx-non-ctor.js: Test262Error: Expected a TypeError but got a ReferenceError
-built-ins/Promise/resolve/ctx-non-ctor.js: Test262Error: Expected a TypeError but got a ReferenceError
-built-ins/Promise/try/ctx-non-ctor.js: Test262Error: Expected a TypeError but got a ReferenceError
-built-ins/Promise/withResolvers/ctx-non-ctor.js: Test262Error: Expected a TypeError but got a ReferenceError
-built-ins/Proxy/create-target-is-not-a-constructor.js: ReferenceError: 'eval' is not defined
 built-ins/String/prototype/localeCompare/15.5.4.9_CE.js: Test262Error: String.prototype.localeCompare considers ö (\u006f\u0308) ≠ ö (\u00f6).
 built-ins/String/prototype/normalize/return-normalized-string-from-coerced-form.js: TypeError: not supported yet: normalize of this string (no Unicode normalization tables)
 built-ins/String/prototype/normalize/return-normalized-string-using-default-parameter.js: TypeError: not supported yet: normalize of this string (no Unicode normalization tables)
@@ -91,8 +106,8 @@ built-ins/ThrowTypeError/throws-type-error.js: TypeError: cannot read property '
 built-ins/ThrowTypeError/unique-per-realm-function-proto.js: TypeError: cannot read property 'get' of undefined
 built-ins/ThrowTypeError/unique-per-realm-non-simple.js: TypeError: cannot read property 'get' of undefined
 built-ins/ThrowTypeError/unique-per-realm-unmapped-args.js: TypeError: cannot read property 'get' of undefined
-built-ins/global/S10.2.3_A1.1_T2.js: ReferenceError: 'eval' is not defined
-built-ins/global/S10.2.3_A1.2_T2.js: ReferenceError: 'eval' is not defined
+built-ins/TypedArray/prototype/subarray/resizable-buffer.js: Test262Error: Expected a RangeError to be thrown but no exception was thrown at all
+harness/fnGlobalObject.js: Test262Error: Expected true but got false
 language/arguments-object/10.6-13-c-1-s.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
 language/arguments-object/10.6-13-c-2-s.js: Test262Error: Expected SameValue(«undefined», «undefined») to be false
 language/arguments-object/10.6-13-c-3-s.js: TypeError: cannot read property 'configurable' of undefined
@@ -100,7 +115,27 @@ language/arguments-object/10.6-14-c-1-s.js: Test262Error: callee should be an ow
 language/arguments-object/10.6-14-c-4-s.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
 language/arguments-object/10.6-2gs.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
 language/arguments-object/S10.6_A3_T1.js: Test262Error: #1: arguments object doesn't exists
-language/comments/hashbang/function-constructor.js: Test262Error: Function Call argument Expected a SyntaxError but got a TypeError
+language/comments/hashbang/eval-indirect.js: Test262Error: Expected SameValue(«undefined», «1») to be true
+language/eval-code/indirect/always-non-strict.js: SyntaxError: variable name expected
+language/eval-code/indirect/cptn-nrml-expr-obj.js: Test262Error: AssignmentExpression Expected SameValue(«undefined», «[object Object]») to be true
+language/eval-code/indirect/cptn-nrml-expr-prim.js: Test262Error: AssignmentExpression Expected SameValue(«undefined», «1») to be true
+language/eval-code/indirect/global-env-rec-catch.js: Test262Error: indirect eval
+language/eval-code/indirect/global-env-rec-fun.js: Test262Error: indirect eval
+language/eval-code/indirect/global-env-rec.js: Test262Error: indirect eval
+language/eval-code/indirect/lex-env-distinct-cls.js: SyntaxError: redeclaration of 'outside'
+language/eval-code/indirect/lex-env-distinct-const.js: SyntaxError: redeclaration of 'outside'
+language/eval-code/indirect/lex-env-distinct-let.js: SyntaxError: redeclaration of 'outside'
+language/eval-code/indirect/lex-env-heritage.js: Test262Error: non strict mode Expected SameValue(«undefined», «"outside"») to be true
+language/eval-code/indirect/non-definable-function-with-function.js: Test262Error: declaration preceding Expected SameValue(«[object Object]», «undefined») to be true
+language/eval-code/indirect/non-definable-function-with-variable.js: Test262Error: declaration preceding Expected SameValue(«[object Object]», «undefined») to be true
+language/eval-code/indirect/this-value-func.js: Test262Error: Expected SameValue(«undefined», «[object Object]») to be true
+language/eval-code/indirect/this-value-global.js: Test262Error: Expected SameValue(«undefined», «[object Object]») to be true
+language/eval-code/indirect/var-env-func-init-global-new.js: Test262Error: f descriptor should be configurable
+language/eval-code/indirect/var-env-func-init-global-update-configurable.js: TypeError: 'f' is read-only
+language/eval-code/indirect/var-env-func-strict.js: Test262Error: Expected SameValue(«"function"», «"undefined"») to be true
+language/eval-code/indirect/var-env-global-lex-strict.js: SyntaxError: redeclaration of 'x'
+language/eval-code/indirect/var-env-var-init-global-new.js: Test262Error: x descriptor should be configurable
+language/eval-code/indirect/var-env-var-strict.js: Test262Error: Strict indirect eval leaked a top level declaration
 language/expressions/arrow-function/scope-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/assignmenttargettype/parenthesized-import.meta.js: expected parse SyntaxError, got parse Unsupported: import() is not supported yet
 language/expressions/bitwise-and/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
@@ -114,7 +149,6 @@ language/expressions/class/scope-setter-paramsbody-var-open.js: Test262Error: Ex
 language/expressions/class/scope-static-gen-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/class/scope-static-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/class/scope-static-setter-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/expressions/class/subclass-builtins/subclass-Function.js: TypeError: not supported yet: the Function constructor
 language/expressions/compound-assignment/S11.13.2_A7.10_T1.js: Test262Error: Expected a TypeError but got a Test262Error
 language/expressions/compound-assignment/S11.13.2_A7.10_T2.js: Test262Error: Expected a TypeError but got a Test262Error
 language/expressions/compound-assignment/S11.13.2_A7.10_T4.js: Test262Error: Expected true but got false
@@ -152,9 +186,6 @@ language/expressions/division/order-of-evaluation.js: Test262Error: ?ToNumeric(l
 language/expressions/exponentiation/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/expressions/function/scope-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/generators/scope-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/expressions/instanceof/S11.8.6_A7_T3.js: TypeError: not supported yet: the Function constructor
-language/expressions/instanceof/S15.3.5.3_A2_T2.js: TypeError: not supported yet: the Function constructor
-language/expressions/instanceof/S15.3.5.3_A2_T6.js: TypeError: not supported yet: the Function constructor
 language/expressions/instanceof/primitive-prototype-with-primitive.js: TypeError: invalid 'instanceof' right operand
 language/expressions/instanceof/prototype-getter-with-object-throws.js: Test262Error: Expected a DummyError to be thrown but no exception was thrown at all
 language/expressions/instanceof/prototype-getter-with-object.js: Test262Error: [] should be instance of Function.prototype
@@ -178,7 +209,7 @@ language/expressions/object/computed-property-name-topropertykey-before-value-ev
 language/expressions/object/scope-gen-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/object/scope-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/object/scope-setter-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/expressions/optional-chaining/eval-optional-call.js: ReferenceError: 'eval' is not defined
+language/expressions/optional-chaining/eval-optional-call.js: Test262Error: fn() returns "global" value from indirect eval Expected SameValue(«undefined», «"global"») to be true
 language/expressions/optional-chaining/optional-call-preserves-this.js: TypeError: cannot read property '_b' of undefined
 language/expressions/postfix-decrement/S11.3.2_A6_T1.js: Test262Error: Expected a TypeError but got a Test262Error
 language/expressions/postfix-decrement/S11.3.2_A6_T2.js: Test262Error: Expected a TypeError but got a Test262Error
@@ -196,8 +227,12 @@ language/expressions/property-accessors/S11.2.1_A4_T3.js: Test262Error: #1: type
 language/expressions/right-shift/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/expressions/subtraction/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/expressions/unsigned-right-shift/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
-language/function-code/10.4.3-1-19-s.js: ReferenceError: 'eval' is not defined
-language/function-code/10.4.3-1-19gs.js: ReferenceError: 'eval' is not defined
+language/function-code/10.4.3-1-13-s.js: Test262Error: f() Expected SameValue(«"undefined"», «"undefined"») to be false
+language/function-code/10.4.3-1-13gs.js: string: 'this' had incorrect value!
+language/function-code/10.4.3-1-15-s.js: Test262Error: f() Expected SameValue(«"undefined"», «"undefined"») to be false
+language/function-code/10.4.3-1-15gs.js: string: 'this' had incorrect value!
+language/function-code/10.4.3-1-19-s.js: Test262Error: my_eval("this") Expected SameValue(«undefined», «[object Object]») to be true
+language/function-code/10.4.3-1-19gs.js: string: 'this' had incorrect value!
 language/global-code/script-decl-func-err-non-configurable.js: Test262Error: writable, non-enumerable data property Expected a TypeError to be thrown but no exception was thrown at all
 language/global-code/script-decl-func.js: TypeError: 'configurable' is read-only
 language/identifier-resolution/assign-to-global-undefined.js: expected runtime ReferenceError, but no error was thrown
@@ -210,22 +245,16 @@ language/statements/class/scope-static-gen-meth-paramsbody-var-open.js: Test262E
 language/statements/class/scope-static-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/statements/class/scope-static-setter-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/statements/class/strict-mode/arguments-callee.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
-language/statements/class/subclass-builtins/subclass-Function.js: TypeError: not supported yet: the Function constructor
-language/statements/class/subclass/builtin-objects/Function/instance-length.js: TypeError: not supported yet: the Function constructor
-language/statements/class/subclass/builtin-objects/Function/instance-name.js: TypeError: not supported yet: the Function constructor
-language/statements/class/subclass/builtin-objects/Function/regular-subclassing.js: TypeError: not supported yet: the Function constructor
-language/statements/class/subclass/builtin-objects/Function/super-must-be-called.js: TypeError: not supported yet: the Function constructor
-language/statements/class/subclass/builtin-objects/GeneratorFunction/instance-length.js: TypeError: not supported yet: the GeneratorFunction constructor
-language/statements/class/subclass/builtin-objects/GeneratorFunction/instance-name.js: TypeError: not supported yet: the GeneratorFunction constructor
-language/statements/class/subclass/builtin-objects/GeneratorFunction/instance-prototype.js: TypeError: not supported yet: the GeneratorFunction constructor
-language/statements/class/subclass/builtin-objects/GeneratorFunction/regular-subclassing.js: TypeError: not supported yet: the GeneratorFunction constructor
-language/statements/class/subclass/builtin-objects/GeneratorFunction/super-must-be-called.js: TypeError: not supported yet: the GeneratorFunction constructor
-language/statements/function/S13.2.2_A8_T3.js: TypeError: not supported yet: the Function constructor
+language/statements/function/13.0-12-s.js: SyntaxError: invalid lvalue in strict mode
+language/statements/function/13.0_4-17gs.js: SyntaxError: invalid lvalue in strict mode
 language/statements/function/scope-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/statements/generators/scope-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/statements/try/scope-catch-block-lex-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/statements/variable/12.2.1-10-s.js: ReferenceError: 'eval' is not defined
-language/statements/variable/12.2.1-20-s.js: ReferenceError: 'eval' is not defined
-language/statements/variable/12.2.1-21-s.js: ReferenceError: 'eval' is not defined
-language/statements/variable/12.2.1-22-s.js: ReferenceError: 'eval' is not defined
-language/statements/variable/12.2.1-9-s.js: ReferenceError: 'eval' is not defined
+language/statements/variable/12.2.1-10-s.js: SyntaxError: invalid lvalue in strict mode
+language/statements/variable/12.2.1-16-s.js: SyntaxError: invalid variable name in strict mode
+language/statements/variable/12.2.1-17-s.js: SyntaxError: invalid lvalue in strict mode
+language/statements/variable/12.2.1-20-s.js: SyntaxError: invalid variable name in strict mode
+language/statements/variable/12.2.1-21-s.js: SyntaxError: invalid lvalue in strict mode
+language/statements/variable/12.2.1-5-s.js: SyntaxError: invalid variable name in strict mode
+language/statements/variable/12.2.1-6-s.js: SyntaxError: invalid lvalue in strict mode
+language/statements/variable/12.2.1-9-s.js: SyntaxError: invalid variable name in strict mode

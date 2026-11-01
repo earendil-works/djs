@@ -85,7 +85,8 @@ const BRIDGE_FN = 1;
 const SCRIPT_PREFIX = "return (async (tools, console) => {";
 
 /**
- * Globals quickjs-wasi's host layer gives pi's scripts that djs does not have, defined before
+ * Globals quickjs-wasi's host layer gives pi's scripts that djs does not have (`queueMicrotask`
+ * is native since 0059), defined before
  * pi's prelude so its lockdown freezes them too. `performance.now()` counts from the VM's
  * start on the VM clock (deterministic mode: from `startedAt`, as pi's quickjs VM does).
  */
@@ -97,12 +98,6 @@ let origin = 0;
 const performance = {};
 Object.defineProperty(performance, "now", { value: { now() { return now() - origin; } }.now, writable: true, configurable: true });
 define("performance", performance);
-const resolved = Promise.resolve();
-const then = Promise.prototype.then;
-define("queueMicrotask", { queueMicrotask(callback) {
-  if (typeof callback !== "function") throw new TypeError("queueMicrotask: the callback is not a function");
-  then.call(resolved, () => callback());
-} }.queueMicrotask);
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const invalidCharacter = (message) => {
   const error = new Error(message);

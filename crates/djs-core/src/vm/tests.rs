@@ -892,6 +892,38 @@ fn error_display_with_accessor_names() {
     );
 }
 
+/// 0059: CreateDynamicFunction parses the parameters and the body as separate goals, so
+/// neither can close the other's brackets (qjs only evaluates the joined source); eval
+/// and the constructors compile at the global scope.
+#[test]
+fn dynamic_code() {
+    let out = run_js(
+        "const r = [];\n\
+         const t = (f) => { try { r.push(String(f())); } catch (e) { r.push(e.name + ': ' + e.message); } };\n\
+         globalThis.ran = false;\n\
+         t(() => Function('){}; globalThis.ran = true; (function(', '')); \n\
+         t(() => Function('/*', '*/){'));\n\
+         t(() => Function('', '}{'));\n\
+         t(() => Function('', '}); globalThis.ran = true; (function(){'));\n\
+         t(() => Function('a = 1, ...b', 'return a + b.length')(undefined, 2, 3));\n\
+         t(() => Function('-->', ''));\n\
+         t(() => (0, eval)('globalThis.e1 = typeof r'));\n\
+         t(() => e1);\n\
+         t(() => ran);\n\
+         console.log(r.join('|'));\n",
+    );
+    assert_eq!(
+        out.log[0],
+        "SyntaxError: parameters end before the parameter list|\
+         SyntaxError: parameters end before the parameter list|\
+         SyntaxError: unexpected token after the function body|\
+         SyntaxError: unexpected token after the function body|\
+         3|\
+         SyntaxError: missing formal parameter|\
+         undefined|object|false"
+    );
+}
+
 #[test]
 fn error_stack_traces() {
     // Positions checked against qjs.
