@@ -1,6 +1,6 @@
 # 0037: P2 Promises, job queue, async host calls, suspendable frames
 
-status: in-progress
+status: done
 agent: heap
 branch: issue/0037-p2-promises-jobs
 depends-on: 0035
@@ -15,35 +15,35 @@ function bodies. This issue builds the **runtime**: the compiler side of
 the ops defined here.
 
 ## Acceptance criteria
-- [ ] Promise in the builtin language (`builtins/promise.ts`): the constructor,
+- [x] Promise in the builtin language (`builtins/promise.ts`): the constructor,
       `then/catch/finally`, `resolve/reject/all/allSettled/any/race/withResolvers/try`,
       thenable adoption, species. Leaf intrinsics for the internal slots (state,
       result, reaction lists) and HostPromiseRejectionTracker-style unhandled rejection
       tracking (qjs reports unhandled rejections: check what codemode/difftest expects).
-- [ ] The microtask job queue as a heap structure (a root, ARCH "Roots"). Running a job
+- [x] The microtask job queue as a heap structure (a root, ARCH "Roots"). Running a job
       pushes a frame. `run(fuel)` drains jobs after the main frame finishes or parks
       (spec order), and returns `Idle` when only pending host calls remain.
-- [ ] Async host functions: calling one creates a promise and a pending host call
+- [x] Async host functions: calling one creates a promise and a pending host call
       `{call_id, fn_id, args, promise}` in the heap table. Execution continues. The
       embedder reads new pending calls after `run`, resolves or rejects them
       (`resolve_host_call(id, ok|err, value)`), which enqueues the reactions. Multiple
       outstanding calls at once (`Promise.all` over tools runs them concurrently: the
       0023 follow-up). Sync host calls stay as they are.
-- [ ] Suspendable frames for await and yield: ops that save the current frame's slice of
+- [x] Suspendable frames for await and yield: ops that save the current frame's slice of
       the value stack (frame header, locals, operand stack, pc) into a heap
       generator/async object, and resume it later (ARCH "Generators and async
       functions"). Async function objects: the return promise, resuming on settlement
       via a job. Define the ops in the ops! table and document them in
       docs/compiler.md for the compiler side, and test them with hand-assembled bytecode
       (as 0015 did).
-- [ ] Snapshots: a VM parked with pending host calls and queued jobs round-trips through
+- [x] Snapshots: a VM parked with pending host calls and queued jobs round-trips through
       heap images (ARCH "Durability"); a test covers it.
-- [ ] djs-wasm + js/src/sandbox.ts: async host functions end to end (a JS host function
+- [x] djs-wasm + js/src/sandbox.ts: async host functions end to end (a JS host function
       returning a promise → a pending call → resolved later → the VM continues),
       several at once.
-- [ ] e2e and difftest cases using Promise directly (`Promise.resolve(1).then(...)`,
+- [x] e2e and difftest cases using Promise directly (`Promise.resolve(1).then(...)`,
       ordering of microtasks vs host calls), checked against qjs. Ratchets updated.
-- [ ] Also, from the 0035 review: `tests/corpus/dquickts/builtin/test_rope.js` became
+- [x] Also, from the 0035 review: `tests/corpus/dquickts/builtin/test_rope.js` became
       very slow under `--gc-stress` (a 600 s run timed out). Find out why (repeated
       flattening, long rope chains copied at every safepoint?) and fix it or log it.
 
@@ -86,7 +86,52 @@ the ops defined here.
   - Sandbox: `asyncFunctions` / `defineAsyncFunction`; runAsync serves them concurrently
     (test: four calls outstanding at once); promise results unwrapped. Also fixed the
     out-buffer reads to not assume 4-byte alignment (a DataView).
+- Part 3 (suspendable frames), D1375: ObjectClass::Generator (21), ops generator_start,
+  yield, async_start, await, async_return, async_reject (docs/compiler.md 7.7);
+  `interp/run/suspend.rs`; builtins/generator.ts (%GeneratorPrototype% next/return/
+  throw, %AsyncAwait, %AsyncFunctionReturn/Throw); `%GeneratorResume` reentrant
+  intrinsic; await reactions resume the async state from %PromiseReactionJob. Generator
+  functions get a `prototype` inheriting from %GeneratorPrototype%. Tests on
+  hand-assembled bytecode (vm/tests.rs): a generator (next/return/throw/for-of), async
+  functions (fulfilled, rejected, caught, thenable) with qjs's job order, and an async
+  entry function awaiting two async host calls; plain, suspended through images, GC
+  stress.
 
 ## Follow-ups
+- Compiler (lexer agent): `async`/`await`, generators and async arrows/methods on the
+  ops of docs/compiler.md 7.7; `yield*` (a loop around `yield`); the codemode body as an
+  async function (then difftest's `await` cases and `Vm::promise_state` unwrapping
+  apply as they are).
+- Async generators: not in the runtime yet (need a request queue per generator).
+- %GeneratorFunction% / %AsyncFunction% and their prototypes (the [[Prototype]] of
+  generator/async functions), `%GeneratorPrototype%.constructor`.
+- Export `take_unhandled_rejections` through djs-wasm and report them in the Sandbox.
+- An exception escaping a job (only a user capability's resolve/reject can throw there)
+  ends the run as `Threw`; qjs prints it and keeps running jobs.
+- difftest's fake tools are still sync host functions; making them async host functions
+  would exercise concurrency there, but the order of their settlement relative to other
+  jobs differs from the qjs prelude's `then`-based tools.
+- Constructors installed by the prelude define `prototype`/`constructor` before the
+  methods; qjs lists them last (`Object.getOwnPropertyNames(Promise)`).
+- `Reflect.construct(Promise, [f], newTarget)` with an accessor `prototype` on newTarget:
+  "not supported yet: getter for 'prototype'" (test262 Promise/get-prototype-abrupt.js),
+  same for every builtin constructor.
 
 ## Result
+Landed in three parts (main d2913b3, 131888c + 2b7030a, and this merge):
+- **Promises and jobs** (D1370-D1373): Promise in builtins/promise.ts over leaf
+  intrinsics; the microtask queue in `Roots::JOBS`, drained by `run` after the entry call;
+  `Done`/`Threw` only when quiescent, `Idle` when only async host calls are pending;
+  builtin closures and internal records; unhandled rejection tracking
+  (`Vm::take_unhandled_rejections`, printed by `djs run` like qjs). All of test262
+  built-ins/Promise passes except tests needing classes, eval or Proxy.
+- **Async host calls** (D1374): `Vm::new_async_host_function`, `new_host_calls`,
+  `pending_host_calls`, `resolve_host_call` in any state; djs-wasm exports and the
+  Sandbox's `asyncFunctions` (concurrent in `runAsync`); host clock (`vm_set_now`,
+  `vm_set_time_zone_offset`, Sandbox `now`/`timeZoneOffset`).
+- **Suspendable frames** (D1375): generator/async ops for the compiler (docs/compiler.md
+  7.7), %GeneratorPrototype%, await via tail calls into %AsyncAwait.
+- Snapshots: pending calls, queued jobs and suspended frames are heap state; tests
+  restore VMs in each of those states.
+- test_rope: fixed on main by infra (see Log).
+Known gaps: see Follow-ups (compiler side, async generators, %GeneratorFunction%).
