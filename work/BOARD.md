@@ -9,8 +9,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0078 | Leaf quick wins (ASCII check, UTF-8 in transcode, short_decimal), then 0087 | num | .worktrees/num |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0090 | Natives: collect-and-retry, resizable TA, JSON slow path | infra | .worktrees/infra |
-| 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
-| 0079 | Integration efficiency: items 1-4 landed (D1790-D1793), measuring for train/post-merge | devflow | .worktrees/devflow |
 | 0086 | Bytecode quality + dispatch (0081 P4) | lexer | .worktrees/lexer |
 | 0083 | Shapes + leaner object/image layout (design first) | heap | .worktrees/heap |
 | 0085 | Leaf fast paths for everyday builtins (0081 P1) | perf | .worktrees/perf |
@@ -71,6 +69,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0067 | Host inbox (async host results as macrotasks) | 7988b76 (agent determinism; D1670) |
 | 0066 | pi adapter determinism fixes | 6c523da (agent determinism; equal polls cold/warm; pi suite 221/226) |
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
+| 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
+| 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
 | 0080 | for-of/iteration fast paths + natives wave 2 | fd5a6d1 (agent infra; for-of 5,433 -> 738 instr/elem) |
 | 0063 | D015 + bgen Rust backend v1 (35 natives) | 9f662b7 (agent infra; higher-order 6.8x -> 2.3x qjs; +80 KB code) |
 | 0069 | Host OOM status | 893495f (agent heap; D1690) |
