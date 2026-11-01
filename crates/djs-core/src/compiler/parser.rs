@@ -568,8 +568,8 @@ impl<'a, 'h> Parser<'a, 'h> {
         out
     }
 
-    /// The atom of the current identifier-name token (identifier, keyword, private
-    /// name without the `#`... P0 has no private names).
+    /// The atom of the current identifier-name token (identifier, keyword, or private
+    /// name with its `#`).
     pub fn ident_atom(&mut self) -> PResult<Atom> {
         let tok = self.tok;
         let bytes = self.lx.ident_value(&tok, &mut self.buf8);

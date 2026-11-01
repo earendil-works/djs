@@ -1,6 +1,6 @@
 # 0040: P1-7 Classes
 
-status: in-progress
+status: done
 agent: lexer
 branch: issue/0040-p1-classes
 depends-on: 0036
@@ -40,7 +40,48 @@ plus 786 class early-error negatives), and classes also block ~74 Set/other test
 
 ## Log
 
-### Parked (coordinator: 0041 async/generators first). No code yet; design notes so far.
+### Resumed after 0041 (lexer)
+
+The interp list went to the coordinator; answer: implement all of it here, heap part
+included, private names must bypass proxies (0045). Landed in steps on the branch:
+
+- Interp/heap (outside compiler/, logged): new ops in bytecode/ops.rs replacing the
+  unimplemented atom-immediate private/super ops (`private_symbol`,
+  `get/put_private_field`, `define_private_field`, `define_private_accessor`,
+  `private_in`, `get_super`, `get/put_super_field/elem` taking the base, not the home,
+  `set_home_object`, `define_class`, `define_class_method[_elem]`, `define_class_field`,
+  `super_call` (f a1..an nt), `super_call_spread`, `check_this`, `check_this_uninit`,
+  `check_ctor_return`, `throw_error`), interp/run/class.rs; `func_flags::HOME = 1<<6`
+  (bit 8 stays free for heap's PRIVILEGED, now on main); closure home slot,
+  `special_object HOME_OBJECT`, object-literal define ops set the home; derived ctors in
+  `construct_with`/`is_constructor`; arguments `[Symbol.iterator]`; heap: symbol cell
+  flags `SYM_PRIVATE`/`SYM_PRIVATE_METHOD`/`SYM_PRIVATE_READONLY`,
+  `new_private_symbol`, `is_private_atom`, `add_private_property`, `ordinary_own_keys`
+  skips private symbols; builtins/function.ts `%ClassHeritage`.
+- `new` of a non-constructor object: `<name> is not a constructor` for any object
+  (also non-callable ones, qjs), the empty name kept.
+- Compiler: compiler/class.rs (design in docs/compiler.md 7.9, D1400-D1404), super in
+  expr.rs, new LValue kinds (Private, SuperField, SuperElem) with `LValue::refs()`,
+  `#x in o` in parse_binary, derived-ctor return epilogue, `(fn) = function(){}` no
+  longer names, a parenthesized anonymous function under a computed key is named.
+- Rebased onto main with Proxy (0045): super gets/sets and public fields on proxies go
+  through the traps (`call_proxy_get`, `%ProxySetOrThrow`, `%ProxySetOnReceiver`,
+  `%ProxyCreateDataPropertyOrThrow`); private ops never trap.
+- Spec over qjs where they differ (noted in the error tests): `class eval {}` is an
+  error; `delete this?.#x` is an error; private elements on non-extensible objects are
+  a TypeError (D1401). qjs reports undefined private names without a position; djs at
+  the reference.
+- Tests: e2e classes.js, classes_super.js, classes_private.js (checked against qjs);
+  the same in tests/corpus/language/classes*.js (stress modes); 68 class early errors in
+  compiler/tests.rs; snapshot classes.js.
+- Compile sweep: before 34745 ok / 14281 not supported; after 42900 ok / 4707 not
+  supported (negatives detected 2682 -> 4067).
+- test262 active: 31,758 / 32,718 (main before: 23,007 / 32,718). Class dirs
+  (language/{statements,expressions}/class): all active pass except decorators/auto
+  accessors, RegExp/BigInt/Function-ctor subclassing, the known 0024 param/body var
+  scope simplification, `__lookupGetter__` and strict `arguments.callee`.
+
+### Earlier: parked for 0041; design notes (superseded by docs/compiler.md 7.9)
 
 State: only reading and qjs probing done. Interp has none of get/put/define_private,
 private_in, *_super_*, super_call, check_ctor (they hit the `not supported yet` arm);
@@ -93,5 +134,25 @@ Design draft (to confirm, then send the coordinator ONE interp list):
   into a pseudo var so arrows capture it. `get/put_super_field/elem` with receiver = this.
 
 ## Follow-ups
+- Function.prototype is not callable and has no `length`/`name` (qjs: `new (class
+  extends null {})` says ` is not a constructor`; djs `not a constructor`).
+- Strict arguments objects lack the `callee` accessor (%ThrowTypeError%):
+  language/statements/class/strict-mode/arguments-callee.js, arguments-object tests.
+- `__lookupGetter__`/`__lookupSetter__` are missing (private-getter-is-not-a-own-property).
+- `super.x = v` with a proxy receiver goes through `%ProxySetOnReceiver` but a false
+  result is not a TypeError yet; `super_call_spread`/the default derived ctor messages
+  are fine, ConstructWithArray is no longer used by classes.
+- Private names leak atom table entries per class evaluation (atom GC).
+- The instance initializer always starts with `jump` to the method installation and
+  back, even without private methods (two jumps per `new`).
+- Decorators and `accessor` fields (later group); `class A { static async {} }` style
+  messages differ slightly from qjs in a few corner cases (see errs in scratch).
 
 ## Result
+Classes per docs/compiler.md 7.9: declarations and expressions, methods, accessors,
+static members, computed keys, public and private fields (instance and static),
+private methods/accessors with brand checks, `#x in o`, static blocks, `extends`
+(null, builtins via new.target), derived constructors with the TDZ `this` and the
+return rules, `super` calls and properties (also in object-literal methods), class
+binding TDZ, async/generator methods, and the class early errors with qjs messages.
+Decisions D1400-D1404. Known gaps: see Follow-ups.
