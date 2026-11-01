@@ -10087,6 +10087,86 @@ function WeakSetPrototypeToStringTag() {
   return "WeakSet";
 }
 
+// builtins/weakref.ts:9 constructor WeakRef
+function WeakRefConstructor(target) {
+  if (new.target === undefined) {
+    throw %NewTypeError("constructor requires 'new'");
+  }
+  if (!%CanBeHeldWeakly(target)) {
+    throw %NewTypeError("invalid target");
+  }
+  return %WeakRefCreate(GetPrototypeFromConstructor(new.target, "WeakRefPrototype"), target);
+}
+
+// builtins/weakref.ts:23 WeakRef.prototype.deref
+function WeakRefPrototypeDeref() {
+  return %WeakRefDeref(this);
+}
+
+// builtins/weakref.ts:32 value WeakRef.prototype[Symbol.toStringTag]
+function WeakRefPrototypeToStringTag() {
+  return "WeakRef";
+}
+
+// builtins/weakref.ts:40 constructor FinalizationRegistry
+function FinalizationRegistryConstructor(cleanupCallback) {
+  if (new.target === undefined) {
+    throw %NewTypeError("constructor requires 'new'");
+  }
+  if (!%IsCallable(cleanupCallback)) {
+    throw %NewTypeError("argument must be a function");
+  }
+  const proto = GetPrototypeFromConstructor(new.target, "FinalizationRegistryPrototype");
+  return %FinalizationRegistryCreate(proto, cleanupCallback);
+}
+
+// builtins/weakref.ts:57 FinalizationRegistry.prototype.register
+function FinalizationRegistryPrototypeRegister(target, heldValue, unregisterToken) {
+  const r = %ThisFinalizationRegistry(this);
+  if (!%CanBeHeldWeakly(target)) {
+    throw %NewTypeError("invalid target");
+  }
+  if (%SameValue(target, heldValue)) {
+    throw %NewTypeError("held value cannot be the target");
+  }
+  if (unregisterToken !== undefined && !%CanBeHeldWeakly(unregisterToken)) {
+    throw %NewTypeError("invalid unregister token");
+  }
+  %FinalizationRegistryRegister(r, target, heldValue, unregisterToken);
+}
+
+// builtins/weakref.ts:75 FinalizationRegistry.prototype.unregister
+function FinalizationRegistryPrototypeUnregister(unregisterToken) {
+  const r = %ThisFinalizationRegistry(this);
+  if (!%CanBeHeldWeakly(unregisterToken)) {
+    throw %NewTypeError("invalid unregister token");
+  }
+  return %FinalizationRegistryUnregister(r, unregisterToken);
+}
+
+// builtins/weakref.ts:88 value FinalizationRegistry.prototype[Symbol.toStringTag]
+function FinalizationRegistryPrototypeToStringTag() {
+  return "FinalizationRegistry";
+}
+
+// builtins/weakref.ts:99 %FinalizationRegistryCleanupJob
+function FinalizationRegistryCleanupJob(r) {
+  %FinalizationRegistrySetQueued(r, false);
+  const callback = %RecordGet(r, 0);
+  while (true) {
+    const i = %FinalizationRegistryNextDead(r);
+    if (i < 0) {
+      return;
+    }
+    const held = %FinalizationRegistryTake(r, i);
+    try {
+      %Call(callback, undefined, held);
+    } catch (e) {
+      return;
+    }
+  }
+}
+
 %InstallConstructor("globalThis", "Array", ArrayConstructor, 1, undefined);
 %InstallConstructor("globalThis", "ArrayBuffer", ArrayBufferConstructor, 1, undefined);
 %InstallConstructor("globalThis", "BigInt", BigIntConstructor, 1, undefined);
@@ -10144,6 +10224,8 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("globalThis", "unescape", GlobalUnescape, 1);
 %InstallConstructor("globalThis", "WeakMap", WeakMapConstructor, 0, undefined);
 %InstallConstructor("globalThis", "WeakSet", WeakSetConstructor, 0, undefined);
+%InstallConstructor("globalThis", "WeakRef", WeakRefConstructor, 1, undefined);
+%InstallConstructor("globalThis", "FinalizationRegistry", FinalizationRegistryConstructor, 1, undefined);
 %InstallMethod("Array.prototype", "forEach", ArrayPrototypeForEach, 1);
 %InstallMethod("Array.prototype", "map", ArrayPrototypeMap, 1);
 %InstallMethod("Array.prototype", "indexOf", ArrayPrototypeIndexOf, 1);
@@ -10691,6 +10773,11 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("WeakSet.prototype", "delete", WeakSetPrototypeDelete, 1);
 %InstallMethod("WeakSet.prototype", "has", WeakSetPrototypeHas, 1);
 %InstallValue("WeakSet.prototype", %WellKnownSymbol("toStringTag"), WeakSetPrototypeToStringTag(), 4);
+%InstallMethod("WeakRef.prototype", "deref", WeakRefPrototypeDeref, 0);
+%InstallValue("WeakRef.prototype", %WellKnownSymbol("toStringTag"), WeakRefPrototypeToStringTag(), 4);
+%InstallMethod("FinalizationRegistry.prototype", "register", FinalizationRegistryPrototypeRegister, 2);
+%InstallMethod("FinalizationRegistry.prototype", "unregister", FinalizationRegistryPrototypeUnregister, 1);
+%InstallValue("FinalizationRegistry.prototype", %WellKnownSymbol("toStringTag"), FinalizationRegistryPrototypeToStringTag(), 4);
 %InstallIntrinsic("AsyncGeneratorStep", AsyncGeneratorStep);
 %InstallIntrinsic("AsyncGeneratorAwaitReturnFulfilled", AsyncGeneratorAwaitReturnFulfilled);
 %InstallIntrinsic("AsyncGeneratorAwaitReturnRejected", AsyncGeneratorAwaitReturnRejected);
@@ -10781,4 +10868,5 @@ function WeakSetPrototypeToStringTag() {
 %InstallIntrinsic("ArraySpread", ArraySpread);
 %InstallIntrinsic("CopyDataProperties", CopyDataProperties);
 %InstallIntrinsic("CopyDataPropertiesExcluding", CopyDataPropertiesExcluding);
+%InstallIntrinsic("FinalizationRegistryCleanupJob", FinalizationRegistryCleanupJob);
 })();

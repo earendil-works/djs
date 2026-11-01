@@ -46,6 +46,7 @@ pub mod proxy;
 pub mod string;
 pub mod typed;
 pub mod walk;
+pub mod weakref;
 
 use core::fmt;
 

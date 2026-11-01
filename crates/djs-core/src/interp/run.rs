@@ -60,6 +60,9 @@ pub struct ExecOptions {
     /// Maximum value stack size in slots (`RangeError: Maximum call stack size exceeded`
     /// beyond, D013).
     pub max_stack: u32,
+    /// Queue FinalizationRegistry cleanup jobs right after every collection (the
+    /// default). Off, the host decides when: `Vm::schedule_finalization_cleanup` (D1513).
+    pub finalization_after_gc: bool,
 }
 
 impl Default for ExecOptions {
@@ -67,6 +70,7 @@ impl Default for ExecOptions {
         ExecOptions {
             gc_stress: false,
             max_stack: 1 << 20,
+            finalization_after_gc: true,
         }
     }
 }
@@ -75,7 +79,7 @@ mod bigint;
 mod class;
 mod intrinsics;
 mod json_regexp;
-mod late;
+pub(crate) mod late;
 pub(crate) mod promise;
 mod proxy;
 pub(crate) mod suspend;
@@ -531,6 +535,9 @@ impl<'h> Exec<'h> {
     /// stops with the outcome. D1370: `Done`/`Threw` only once the queue is empty and no
     /// async host call is pending; with pending calls, `Idle`.
     fn next_job(&mut self) -> Option<Status> {
+        // The synchronous run of a job (or of the entry call) is over: ClearKeptObjects
+        // (9.10.3), which lets dereferenced WeakRef targets die again.
+        late::clear_kept_objects(self.heap);
         let Some(job) = promise::dequeue(self.heap) else {
             let outcome = state::outcome(self.heap);
             state::set_state(self.heap, outcome);
@@ -753,6 +760,10 @@ impl<'h> Exec<'h> {
             self.stack = state::stack(self.heap);
             if self.has_frame() {
                 self.load_frame();
+            }
+            if self.opts.finalization_after_gc {
+                // Out of memory here only delays the callbacks to a later collection.
+                let _ = late::schedule_finalization_cleanup(self.heap);
             }
         }
     }

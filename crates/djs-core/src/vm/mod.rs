@@ -628,7 +628,19 @@ impl Vm {
         for k in sp..self.heap.value_array_capacity(stack) {
             self.heap.value_array_set(stack, k, Value::UNDEFINED);
         }
-        self.heap.collect().map(|_| ())
+        self.heap.collect()?;
+        if self.opts.exec.finalization_after_gc {
+            self.schedule_finalization_cleanup()?;
+        }
+        Ok(())
+    }
+
+    /// Queues a cleanup job for every FinalizationRegistry with cells whose targets
+    /// died in a collection (HostEnqueueFinalizationRegistryCleanupJob); the number of
+    /// jobs. They run at the next `run`. Collections do this themselves unless
+    /// `ExecOptions::finalization_after_gc` is off (D1513).
+    pub fn schedule_finalization_cleanup(&mut self) -> Result<usize, HeapError> {
+        crate::interp::run::late::schedule_finalization_cleanup(&mut self.heap)
     }
 }
 

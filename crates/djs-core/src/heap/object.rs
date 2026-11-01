@@ -133,6 +133,9 @@ pub enum ObjectClass {
     /// wrapper, told apart by slot 0 (the kind). The builtins keep their state in slots
     /// 0..8 with `%RecordGet`/`%RecordSet`.
     IteratorHelper = 28,
+    /// A WeakRef and a FinalizationRegistry (0051, `heap/weakref.rs`, D1513).
+    WeakRef = 31,
+    FinalizationRegistry = 32,
     /// A DisposableStack or AsyncDisposableStack (0051, builtins/disposable.ts): slot 0
     /// true for an AsyncDisposableStack, slot 1 the state (0 pending, 1 disposed), slot 2
     /// the resources (an internal Array of [value, method, kind] triples).
@@ -174,6 +177,8 @@ impl ObjectClass {
             26 => Some(ObjectClass::RegExpStringIterator),
             27 => Some(ObjectClass::Proxy),
             28 => Some(ObjectClass::IteratorHelper),
+            31 => Some(ObjectClass::WeakRef),
+            32 => Some(ObjectClass::FinalizationRegistry),
             33 => Some(ObjectClass::DisposableStack),
             30 => Some(ObjectClass::BigInt),
             _ => None,
@@ -208,6 +213,8 @@ impl ObjectClass {
             ObjectClass::Proxy => 3,
             ObjectClass::IteratorHelper => 8,
             ObjectClass::DisposableStack => 3,
+            ObjectClass::WeakRef => 1,
+            ObjectClass::FinalizationRegistry => 5,
         }
     }
 

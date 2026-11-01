@@ -161,6 +161,39 @@ const I = {
   NewTypeError: (m) => new TypeError(m),
   NewRangeError: (m) => new RangeError(m),
   NewReferenceError: (m) => new ReferenceError(m),
+  // WeakRef/FinalizationRegistry (0051): nothing is ever collected here.
+  WeakRefCreate: (proto, target) => {
+    const o = Object.create(proto);
+    helperSlots.set(o, ["weakref", target]);
+    return o;
+  },
+  WeakRefDeref: (v) => {
+    const slots = isObject(v) ? helperSlots.get(v) : undefined;
+    if (!slots || slots[0] !== "weakref") throw new TypeError("WeakRef object expected");
+    return slots[1];
+  },
+  FinalizationRegistryCreate: (proto, cleanup) => {
+    const o = Object.create(proto);
+    helperSlots.set(o, [cleanup, []]);
+    return o;
+  },
+  ThisFinalizationRegistry: (v) => {
+    const slots = isObject(v) ? helperSlots.get(v) : undefined;
+    if (!slots || slots.length !== 2 || !Array.isArray(slots[1])) throw new TypeError("FinalizationRegistry object expected");
+    return v;
+  },
+  FinalizationRegistryRegister: (r, target, held, token) => {
+    helperSlots.get(r)[1].push({ target, held, token });
+  },
+  FinalizationRegistryUnregister: (r, token) => {
+    const cells = helperSlots.get(r)[1];
+    const n = cells.length;
+    helperSlots.get(r)[1] = cells.filter((c) => c.token !== token);
+    return helperSlots.get(r)[1].length !== n;
+  },
+  FinalizationRegistryNextDead: () => -1,
+  FinalizationRegistryTake: () => check(false, "FinalizationRegistryTake"),
+  FinalizationRegistrySetQueued: () => {},
   DisposableStackCreate: (proto, isAsync) => {
     const o = Object.create(proto);
     helperSlots.set(o, [isAsync, 0, []]);
@@ -1888,6 +1921,41 @@ for (const [name, run] of dsCases) {
   same("DisposableStack.prototype." + name, native, (f, log) => {
     return run(dsKit(f, native), log);
   });
+}
+
+// WeakRef and FinalizationRegistry (0051).
+same("globalThis.WeakRef", WeakRef, (C) => Object.getPrototypeOf(new C({})) === WeakRef.prototype);
+same("globalThis.WeakRef", WeakRef, (C) => new C(1));
+same("globalThis.WeakRef", WeakRef, (C) => new C(Symbol.for("r")));
+same("globalThis.WeakRef", WeakRef, (C) => C({}));
+same("WeakRef.prototype.deref", WeakRef.prototype.deref, (f) => f.call({}));
+same("globalThis.FinalizationRegistry", FinalizationRegistry, (C) => new C(1));
+same("globalThis.FinalizationRegistry", FinalizationRegistry, (C) => C(() => 1));
+for (const [name, run] of [
+  ["register", (f) => f.call({}, {}, 1)],
+  ["unregister", (f) => f.call({}, {})],
+]) {
+  same("FinalizationRegistry.prototype." + name, FinalizationRegistry.prototype[name], run);
+}
+{
+  const nativeReg = FinalizationRegistry.prototype.register;
+  const nativeUnreg = FinalizationRegistry.prototype.unregister;
+  const ourReg = installed["FinalizationRegistry.prototype.register"].f;
+  const ourUnreg = installed["FinalizationRegistry.prototype.unregister"].f;
+  const ourCtor = installed["globalThis.FinalizationRegistry"].f;
+  const flow = (reg, unreg, r) => {
+    const tok = {};
+    const target = {};
+    const out = [reg.call(r, target, 1, tok), reg.call(r, {}, 2, tok), reg.call(r, Symbol("s"), 3)];
+    for (const args of [[1, 2], [target, target], [target, 1, 1]]) {
+      try { reg.call(r, ...args); } catch (e) { out.push(String(e)); }
+    }
+    out.push(unreg.call(r, tok), unreg.call(r, tok));
+    try { unreg.call(r, 1); } catch (e) { out.push(String(e)); }
+    return out;
+  };
+  same("FinalizationRegistry.prototype.register", nativeReg, (f) =>
+    f === nativeReg ? flow(nativeReg, nativeUnreg, new FinalizationRegistry(() => 1)) : flow(ourReg, ourUnreg, new ourCtor(() => 1)));
 }
 
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));

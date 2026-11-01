@@ -1,0 +1,16 @@
+true true [object WeakRef]
+TypeError: invalid target
+TypeError: invalid target
+TypeError: constructor requires 'new'
+TypeError: WeakRef object expected
+undefined undefined undefined
+true false true false
+TypeError: invalid target
+TypeError: held value cannot be the target
+TypeError: invalid unregister token
+TypeError: invalid unregister token
+TypeError: argument must be a function
+TypeError: constructor requires 'new'
+TypeError: FinalizationRegistry object expected
+true true 1 0
+2 [object FinalizationRegistry] []

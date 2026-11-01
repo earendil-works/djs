@@ -707,6 +707,30 @@ declare function CreateIteratorHelper(kind: i32, iterator: Value, next: Value): 
  */
 declare function ThisIteratorHelper(v: Value, wrap: boolean): Obj;
 
+// ---- WeakRef and FinalizationRegistry (0051, heap/weakref.rs, D1513) --------------------
+
+/** A new WeakRef with prototype proto and target (AddToKeptObjects ( target ) too). @leaf */
+declare function WeakRefCreate(proto: Obj, target: Value): Obj;
+/**
+ * WeakRefDeref of v (AddToKeptObjects of a live target): the target, or undefined once
+ * it died. TypeError "WeakRef object expected" for anything else. @leaf
+ */
+declare function WeakRefDeref(v: Value): Value;
+/** A new FinalizationRegistry with prototype proto and cleanupCallback. @leaf */
+declare function FinalizationRegistryCreate(proto: Obj, cleanup: Value): Obj;
+/** v if it is a FinalizationRegistry, else TypeError "FinalizationRegistry object expected". @leaf */
+declare function ThisFinalizationRegistry(v: Value): Obj;
+/** Appends a cell (token undefined for none). @leaf */
+declare function FinalizationRegistryRegister(r: Obj, target: Value, held: Value, token: Value): void;
+/** Removes the cells registered with token; whether there were any. @leaf */
+declare function FinalizationRegistryUnregister(r: Obj, token: Value): boolean;
+/** The index of the first cell whose target died, or -1. @leaf */
+declare function FinalizationRegistryNextDead(r: Obj): i32;
+/** The held value of dead cell i, removing the cell. @leaf */
+declare function FinalizationRegistryTake(r: Obj, i: i32): Value;
+/** Marks whether a cleanup job for r is queued. @leaf */
+declare function FinalizationRegistrySetQueued(r: Obj, queued: boolean): void;
+
 // ---- Disposable stacks (0051, builtins/disposable.ts) -----------------------------------
 
 /**

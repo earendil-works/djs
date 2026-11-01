@@ -2439,3 +2439,29 @@ modules, so `compiler::strip_types` sets `Parser::strip`, which accepts `import`
 run) and erases type-only imports, exports and specifiers as ts-blank-space does. Normal
 compilation is unchanged: `import`/`export` stay "unsupported keyword" errors.
 
+
+## D1513: WeakRef and FinalizationRegistry on ephemeron tables; cleanup jobs after a collection
+date: 2026-11-03 · by: heap · issue: 0051
+No collector changes: the weakness comes from D1382's EphemeronArray (a pair whose key
+died is cleared). A WeakRef (`ObjectClass::WeakRef`, 31) holds a one-pair table
+`[target, true]`; `deref` sees HOLE once the target died. A FinalizationRegistry
+(`ObjectClass::FinalizationRegistry`, 32) keeps its cells in three parallel arrays: an
+ephemeron table of targets, one of unregister tokens (both weak, as the spec wants),
+and a strong ValueArray of held values (HOLE marks a free cell). A cell whose held value
+is set and whose target is HOLE is dead. The realm lists the registries in an ephemeron
+table too (`Intrinsic::Registries`), so a dead registry's callbacks never run (allowed).
+heap/weakref.rs has the storage.
+
+After every successful collection (the interpreter's safepoints and `Vm::collect`), the
+interpreter queues one `%FinalizationRegistryCleanupJob` per live registry with dead
+cells and no job queued yet, in registration order. `ExecOptions::finalization_after_gc`
+(default on) is the host hook: off, nothing is queued until the host calls
+`Vm::schedule_finalization_cleanup()`. The job calls the callback for each dead cell in
+index order; an exception ends the job and is dropped (the spec leaves reporting to the
+host; a finalizer must not make the run `Threw`), and the remaining dead cells wait for
+the next scheduling. [[KeptAlive]] is `Intrinsic::KeptObjects`, filled by the WeakRef
+constructor and `deref`, cleared whenever a job or the entry call finishes (`next_job`).
+Everything iterates in index order, so collections stay deterministic (D1090), but GC
+timing is observable through these objects: `--gc-stress` runs differ from plain runs
+for scripts that let targets die. Tests keep targets reachable (e2e weakref.js) or
+collect explicitly (vm/tests.rs).

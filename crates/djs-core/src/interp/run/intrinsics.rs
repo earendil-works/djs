@@ -283,7 +283,10 @@ const PROMISE_RESOLVE_THENABLE_JOB: u16 = id("PromiseResolveThenableJob");
 fn is_slot_object(class: ObjectClass) -> bool {
     matches!(
         class,
-        ObjectClass::Record | ObjectClass::IteratorHelper | ObjectClass::DisposableStack
+        ObjectClass::Record
+            | ObjectClass::IteratorHelper
+            | ObjectClass::DisposableStack
+            | ObjectClass::FinalizationRegistry
     )
 }
 

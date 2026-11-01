@@ -1,5 +1,6 @@
 //! Leaf intrinsics of the remaining builtins (0051): iterator helpers, disposable
-//! stacks. The intrinsic
+//! stacks, WeakRef and FinalizationRegistry (with the KeptAlive list and the cleanup
+//! jobs after a collection, D1513). The intrinsic
 //! fallback chain runs `call_intrinsic` → `json_regexp_intrinsic` → `bigint_intrinsic` →
 //! [`Exec::late_intrinsic`].
 
@@ -9,6 +10,61 @@ use super::*;
 const CREATE_ITERATOR_HELPER: u16 = id("CreateIteratorHelper");
 const THIS_ITERATOR_HELPER: u16 = id("ThisIteratorHelper");
 const DISPOSABLE_STACK_CREATE: u16 = id("DisposableStackCreate");
+const WEAK_REF_CREATE: u16 = id("WeakRefCreate");
+const WEAK_REF_DEREF: u16 = id("WeakRefDeref");
+const FINALIZATION_REGISTRY_CREATE: u16 = id("FinalizationRegistryCreate");
+const THIS_FINALIZATION_REGISTRY: u16 = id("ThisFinalizationRegistry");
+const FINALIZATION_REGISTRY_REGISTER: u16 = id("FinalizationRegistryRegister");
+const FINALIZATION_REGISTRY_UNREGISTER: u16 = id("FinalizationRegistryUnregister");
+const FINALIZATION_REGISTRY_NEXT_DEAD: u16 = id("FinalizationRegistryNextDead");
+const FINALIZATION_REGISTRY_TAKE: u16 = id("FinalizationRegistryTake");
+const FINALIZATION_REGISTRY_SET_QUEUED: u16 = id("FinalizationRegistrySetQueued");
+const CLEANUP_JOB: u16 = id("FinalizationRegistryCleanupJob");
+
+/// AddToKeptObjects ( value ), 9.10.2.
+fn add_kept_object(heap: &mut Heap, v: Value) -> Result<(), HeapError> {
+    let list = intrinsic(heap, Intrinsic::KeptObjects)
+        .as_internal()
+        .unwrap_or(0);
+    let n = if list == 0 {
+        0
+    } else {
+        heap.value_array_len(list)
+    };
+    let list = heap.value_array_reserve(list, n + 1)?;
+    heap.value_array_set(list, n, v);
+    heap.arena_mut()
+        .set(list, crate::heap::cells::ValueArray::LEN, n + 1);
+    realm::set_intrinsic(heap, Intrinsic::KeptObjects, Value::internal(list));
+    Ok(())
+}
+
+/// ClearKeptObjects ( ), 9.10.3.
+pub(crate) fn clear_kept_objects(heap: &mut Heap) {
+    if !intrinsic(heap, Intrinsic::KeptObjects).is_undefined() {
+        realm::set_intrinsic(heap, Intrinsic::KeptObjects, Value::UNDEFINED);
+    }
+}
+
+/// HostEnqueueFinalizationRegistryCleanupJob for every live registry with dead cells
+/// and no queued job; the number of jobs queued. Called after a collection (or by the
+/// host, D1513).
+pub(crate) fn schedule_finalization_cleanup(heap: &mut Heap) -> Result<usize, HeapError> {
+    let list = intrinsic(heap, Intrinsic::Registries)
+        .as_internal()
+        .unwrap_or(0);
+    let due = heap.registries_needing_cleanup(list);
+    let job = realm::installed_intrinsic(heap, CLEANUP_JOB);
+    if job.is_undefined() {
+        return Ok(0);
+    }
+    for &r in &due {
+        let u = Value::UNDEFINED;
+        promise::enqueue(heap, job, [Value::object(r), u, u, u])?;
+        heap.set_registry_queued(r, true);
+    }
+    Ok(due.len())
+}
 const THIS_DISPOSABLE_STACK: u16 = id("ThisDisposableStack");
 
 /// The kind (slot 0) of `Iterator.from`'s wrapper; the other kinds are helpers
@@ -87,6 +143,92 @@ impl Exec<'_> {
                 self.heap.set_object_slot(o, 1, Value::int(0));
                 self.heap.set_object_slot(o, 2, Value::object(resources));
                 Value::object(o)
+            }
+            WEAK_REF_CREATE => {
+                let Some(proto) = a0.as_object() else {
+                    return bad_argument(name);
+                };
+                let target = arg(self, 1);
+                let o = self.heap.weakref_new(proto, target)?;
+                add_kept_object(self.heap, target)?;
+                Value::object(o)
+            }
+            WEAK_REF_DEREF => {
+                let o = a0
+                    .as_object()
+                    .filter(|&o| self.heap.object_class(o) == ObjectClass::WeakRef);
+                let Some(o) = o else {
+                    return type_error("WeakRef object expected");
+                };
+                match self.heap.weakref_target(o) {
+                    Some(t) => {
+                        add_kept_object(self.heap, t)?;
+                        t
+                    }
+                    None => Value::UNDEFINED,
+                }
+            }
+            FINALIZATION_REGISTRY_CREATE => {
+                let Some(proto) = a0.as_object() else {
+                    return bad_argument(name);
+                };
+                let r = self.heap.registry_new(proto, arg(self, 1))?;
+                let list = intrinsic(self.heap, Intrinsic::Registries)
+                    .as_internal()
+                    .unwrap_or(0);
+                let list = self.heap.registry_list_push(list, r)?;
+                realm::set_intrinsic(self.heap, Intrinsic::Registries, Value::internal(list));
+                Value::object(r)
+            }
+            THIS_FINALIZATION_REGISTRY => {
+                let ok = a0.as_object().is_some_and(|o| {
+                    self.heap.object_class(o) == ObjectClass::FinalizationRegistry
+                });
+                if !ok {
+                    return type_error("FinalizationRegistry object expected");
+                }
+                a0
+            }
+            FINALIZATION_REGISTRY_REGISTER
+            | FINALIZATION_REGISTRY_UNREGISTER
+            | FINALIZATION_REGISTRY_NEXT_DEAD
+            | FINALIZATION_REGISTRY_TAKE
+            | FINALIZATION_REGISTRY_SET_QUEUED => {
+                let r = a0
+                    .as_object()
+                    .filter(|&o| self.heap.object_class(o) == ObjectClass::FinalizationRegistry);
+                let Some(r) = r else {
+                    return bad_argument(name);
+                };
+                match id {
+                    FINALIZATION_REGISTRY_REGISTER => {
+                        let token = match arg(self, 3) {
+                            t if t.is_undefined() => Value::HOLE,
+                            t => t,
+                        };
+                        self.heap
+                            .registry_register(r, arg(self, 1), arg(self, 2), token)?;
+                        Value::UNDEFINED
+                    }
+                    FINALIZATION_REGISTRY_UNREGISTER => {
+                        Value::bool(self.heap.registry_unregister(r, arg(self, 1)))
+                    }
+                    FINALIZATION_REGISTRY_NEXT_DEAD => {
+                        Value::int(self.heap.registry_next_dead(r).map_or(-1, |i| i as i32))
+                    }
+                    FINALIZATION_REGISTRY_TAKE => {
+                        let i = arg(self, 1).as_int().and_then(|i| u32::try_from(i).ok());
+                        match i.and_then(|i| self.heap.registry_take(r, i)) {
+                            Some(v) => v,
+                            None => return bad_argument(name),
+                        }
+                    }
+                    _ => {
+                        self.heap
+                            .set_registry_queued(r, arg(self, 1) == Value::TRUE);
+                        Value::UNDEFINED
+                    }
+                }
             }
             THIS_DISPOSABLE_STACK => {
                 let is_async = arg(self, 1) == Value::TRUE;

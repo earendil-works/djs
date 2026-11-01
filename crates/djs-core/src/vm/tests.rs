@@ -934,6 +934,82 @@ fn iterator_helpers_follow_the_spec_where_qjs_differs() {
     assert_eq!(out.log, ["next,empty iterator", "0 next,next"]);
 }
 
+/// Compiles and runs one more Script in `vm` (globals persist between scripts).
+fn run_script(mut vm: Vm, src: &str) -> (Vm, Outcome) {
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("t.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    finish(vm, 1 << 40, false)
+}
+
+#[test]
+fn weak_refs_and_finalization_after_collect() {
+    let vm = vm();
+    let (mut vm, out) = run_script(
+        vm,
+        "globalThis.kept = {};\n\
+         globalThis.w1 = new WeakRef(kept);\n\
+         globalThis.w2 = new WeakRef({ dies: true });\n\
+         globalThis.r = new FinalizationRegistry((h) => console.log('cleanup', h));\n\
+         globalThis.token = {};\n\
+         r.register({}, 'a');\n\
+         r.register({}, 'b', token);\n\
+         r.register({}, 'c', {});\n\
+         r.register(kept, 'kept');\n\
+         r.unregister(token);\n\
+         // KeepDuringJob: a collection inside the job leaves w2's target alone.\n\
+         console.log(typeof w2.deref());\n",
+    );
+    assert_eq!(out.log, ["object"]);
+    vm.collect().unwrap();
+    vm.heap().verify().unwrap();
+    // The queued cleanup jobs run after the next call.
+    let (mut vm, out) = run_script(vm, "console.log(w1.deref() === kept, w2.deref());\n");
+    assert_eq!(out.log, ["true undefined", "cleanup a", "cleanup c"]);
+    // Collecting again changes nothing, and the layout is a function of the graph.
+    vm.collect().unwrap();
+    vm.collect().unwrap();
+    let image = vm.bytes().to_vec();
+    vm.collect().unwrap();
+    assert!(image == vm.bytes(), "a collection changed the image");
+    let (_, out) = run_script(vm, "console.log('done');\n");
+    assert_eq!(out.log, ["done"]);
+}
+
+#[test]
+fn finalization_cleanup_can_wait_for_the_host() {
+    let vm = vm_with(VmOptions {
+        exec: ExecOptions {
+            finalization_after_gc: false,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    let (mut vm, _) = run_script(
+        vm,
+        "globalThis.r = new FinalizationRegistry((h) => { console.log('cleanup', h); throw new Error('ignored'); });\n\
+         r.register({}, 1);\n\
+         r.register({}, 2);\n",
+    );
+    vm.collect().unwrap();
+    let (mut vm, out) = run_script(vm, "console.log('no cleanup yet');\n");
+    assert_eq!(out.log, ["no cleanup yet"]);
+    assert_eq!(vm.schedule_finalization_cleanup().unwrap(), 1);
+    assert_eq!(vm.schedule_finalization_cleanup().unwrap(), 0);
+    // The first callback throws: the job ends, the error is dropped (D1513), and the
+    // other cell waits for the next scheduling.
+    let (mut vm, out) = run_script(vm, "console.log('after');\n");
+    assert_eq!(out.log, ["after", "cleanup 1"]);
+    assert_eq!(vm.schedule_finalization_cleanup().unwrap(), 1);
+    let (_, out) = run_script(vm, "console.log('end');\n");
+    assert_eq!(out.log, ["end", "cleanup 2"]);
+}
+
 /// `Vm::new` with and without the prelude. Run with
 /// `cargo test -p djs-core --release vm_new_cost -- --ignored --nocapture`.
 #[test]

@@ -105,10 +105,10 @@ description = "Phases P3 to P5 of ARCH.md: on the roadmap, not in the current mi
 # iterator-sequencing, iterator-chunking, iterator-includes, Iterator.prototype.join,
 # joint-iteration, upsert, Array.fromAsync, and built-ins/DisposableStack,
 # AsyncDisposableStack, SuppressedError with the runtime half of the feature
-# explicit-resource-management (the `using` tests stay later, by path).
+# explicit-resource-management (the `using` tests stay later, by path), and
+# built-ins/WeakRef, FinalizationRegistry with the features WeakRef, FinalizationRegistry,
+# and __proto__ (0044's accessor; the error-stack-accessor tests among them stay later).
 paths = [
-  "built-ins/WeakRef",                        # GC-observable
-  "built-ins/FinalizationRegistry",           # GC-observable
   # `using` declarations (explicit-resource-management syntax, after P5; the runtime
   # parts are active since 0051).
   "language/statements/using",
@@ -129,11 +129,8 @@ paths = [
 features = [
   "immutable-arraybuffer",      # binary data
   "Symbol.unscopables",         # Symbol-heavy (mostly `with`)
-  "WeakRef",                    # GC-observable
-  "FinalizationRegistry",       # GC-observable
   "decorators",                 # decorators come after P5
   "error-stack-accessor",       # error stack traces (P5)
   "json-parse-with-source",     # JSON.parse source text access
   "await-dictionary",           # proposal
-  "__proto__",                  # Annex B __proto__ (literal and accessor)
 ]

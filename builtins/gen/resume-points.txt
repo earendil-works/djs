@@ -3657,3 +3657,22 @@ WeakSetPrototypeDelete: leaf (WeakSet.prototype.delete)
 WeakSetPrototypeHas: leaf (WeakSet.prototype.has)
 
 WeakSetPrototypeToStringTag: leaf (value WeakSet.prototype[Symbol.toStringTag])
+
+WeakRefConstructor: reentrant (constructor WeakRef)
+  builtins/weakref.ts:16:24  GetPrototypeFromConstructor (builtin)
+
+WeakRefPrototypeDeref: leaf (WeakRef.prototype.deref)
+
+WeakRefPrototypeToStringTag: leaf (value WeakRef.prototype[Symbol.toStringTag])
+
+FinalizationRegistryConstructor: reentrant (constructor FinalizationRegistry)
+  builtins/weakref.ts:47:22  GetPrototypeFromConstructor (builtin)
+
+FinalizationRegistryPrototypeRegister: leaf (FinalizationRegistry.prototype.register)
+
+FinalizationRegistryPrototypeUnregister: leaf (FinalizationRegistry.prototype.unregister)
+
+FinalizationRegistryPrototypeToStringTag: leaf (value FinalizationRegistry.prototype[Symbol.toStringTag])
+
+FinalizationRegistryCleanupJob: reentrant (%FinalizationRegistryCleanupJob)
+  builtins/weakref.ts:109:7  Call (intrinsic)

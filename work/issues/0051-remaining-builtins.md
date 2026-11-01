@@ -1,6 +1,6 @@
 # 0051: Remaining builtins: iterator helpers, WeakRef/FinalizationRegistry, disposables, Array.fromAsync, upsert
 
-status: in-progress
+status: done
 agent: heap
 branch: issue/0051-remaining-builtins
 depends-on: 0046
@@ -73,8 +73,46 @@ exists (generators/iterators from 0029/0037/0042, the ephemeron GC from 0038):
   (heap/atom.rs). Built-in ERM tests 226/226 (baseline 59). The `using` syntax tests
   (language/statements/using, await-using and 12 for-of/for-await-of head-using files;
   59/169 pass by accident) stay later by path. Active after promotion (with main's
-  0050 regexp promotion): 37,084 tests, 36,680 passing.
+  0050 regexp promotion): 37,084 tests, 36,680 passing. Merged (main 559a972).
+- Part 6, WeakRef + FinalizationRegistry (D1513): heap/weakref.rs on ephemeron tables
+  (no gc.rs changes), ObjectClass 31/32, realm intrinsics KeptObjects and Registries,
+  cleanup jobs queued after each collection, host hook
+  `ExecOptions::finalization_after_gc` + `Vm::schedule_finalization_cleanup()`.
+  ClearKeptObjects in `next_job`. 80/80; promoted (+80). Unit tests with explicit
+  collections in vm/tests.rs (outside `touches`, additive), e2e weakref.js keeps
+  targets reachable so gc-stress agrees.
+- `__proto__`: the 18 tests outside error-stack-accessor pass; promoted (+18; the 2
+  error-stack-accessor ones stay later through that feature). Active: 37,182 tests,
+  36,778 passing (98.9%), no new failures.
 
 ## Follow-ups
 
+- The `using` / `await using` syntax (compiler): the runtime (DisposableStack,
+  Symbol.dispose, SuppressedError) is in; its tests are kept later by path in
+  tests/test262.toml (language/statements/using, await-using, 12 for-of files).
+- FinalizationRegistry callback errors are dropped (D1513); if hosts want to see them,
+  add a report list like `take_unhandled_rejections`.
+- qjs deviations noted in D1510 (reduce's empty-iterator close, flatMap inner close).
+
 ## Result
+
+Landed in six merges: iterator helpers + Iterator.concat (D1510), the iterator
+proposals qjs has (chunks, windows, includes, join, Iterator.zip/zipKeyed), Map/WeakMap
+upsert, Array.fromAsync (D1511), the explicit-resource-management runtime (D1512) and
+WeakRef/FinalizationRegistry (D1513). Every promoted feature passes all its tests.
+
+test262, before → after (djs passing / tests, qjs passes all):
+- built-ins/Iterator + iterator features: 18 → 655 / 655
+- Array.fromAsync: 0 → 93 / 93
+- upsert: 23 → 70 / 70
+- WeakRef + FinalizationRegistry: 0 → 80 / 80
+- explicit-resource-management: built-ins 226 / 226 (was 0 of the built-ins); the 169
+  `using` syntax tests stay later
+- `__proto__`: 18 / 18 promoted (2 error-stack-accessor tests stay later)
+- active group: 33,854 tests / 33,450 passing at the start; 37,182 / 36,778 now (that
+  includes 0050's regexp promotion merged meanwhile); no new expected failures.
+
+Embedder API: `ExecOptions::finalization_after_gc` (default true) and
+`Vm::schedule_finalization_cleanup()`. Ids: ObjectClass 28 IteratorHelper, 31 WeakRef,
+32 FinalizationRegistry, 33 DisposableStack; builtin closures 16-19; new leaves in
+interp/run/late.rs.

@@ -275,6 +275,15 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("CreateAsyncFromSyncIterator", L, 2, false),
     i("CreateIteratorHelper", L, 3, false),
     i("ThisIteratorHelper", L, 2, false),
+    i("WeakRefCreate", L, 2, false),
+    i("WeakRefDeref", L, 1, false),
+    i("FinalizationRegistryCreate", L, 2, false),
+    i("ThisFinalizationRegistry", L, 1, false),
+    i("FinalizationRegistryRegister", L, 4, false),
+    i("FinalizationRegistryUnregister", L, 2, false),
+    i("FinalizationRegistryNextDead", L, 1, false),
+    i("FinalizationRegistryTake", L, 2, false),
+    i("FinalizationRegistrySetQueued", L, 2, false),
     i("DisposableStackCreate", L, 2, false),
     i("ThisDisposableStack", L, 2, false),
     i("JsonParse", L, 1, false),
@@ -397,6 +406,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("ArraySpread", B, 2, false),
     i("CopyDataProperties", B, 2, false),
     i("CopyDataPropertiesExcluding", B, 2, false),
+    i("FinalizationRegistryCleanupJob", B, 1, false),
 ];
 
 /// The id of the intrinsic `name`.

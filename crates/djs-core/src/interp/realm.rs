@@ -112,9 +112,19 @@ pub enum Intrinsic {
     DisposableStackProto,
     AsyncDisposableStackProto,
     SuppressedErrorProto,
+    /// %WeakRef.prototype% and %FinalizationRegistry.prototype% (0051).
+    WeakRefProto,
+    FinalizationRegistryProto,
+    /// [[KeptAlive]] (9.10, the agent's KeptAlive list): an internal ValueArray of the
+    /// WeakRef targets created or dereferenced since the last ClearKeptObjects, or
+    /// undefined (D1513).
+    KeptObjects,
+    /// The live FinalizationRegistries: an internal EphemeronArray of `[registry,
+    /// true]`, or undefined (heap/weakref.rs).
+    Registries,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::SuppressedErrorProto as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::Registries as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -166,6 +176,8 @@ impl Intrinsic {
             "DisposableStack" => Intrinsic::DisposableStackProto,
             "AsyncDisposableStack" => Intrinsic::AsyncDisposableStackProto,
             "SuppressedError" => Intrinsic::SuppressedErrorProto,
+            "WeakRef" => Intrinsic::WeakRefProto,
+            "FinalizationRegistry" => Intrinsic::FinalizationRegistryProto,
             _ => return None,
         })
     }
@@ -302,6 +314,8 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
         set(heap, i, Value::object(p));
     }
     set(heap, Intrinsic::TypedArrayCtor, Value::UNDEFINED);
+    set(heap, Intrinsic::KeptObjects, Value::UNDEFINED);
+    set(heap, Intrinsic::Registries, Value::UNDEFINED);
     let ctors = heap.new_object(None)?;
     set(heap, Intrinsic::Constructors, Value::object(ctors));
     let typed_array_proto = intrinsic_obj(heap, Intrinsic::TypedArrayProto);
@@ -333,6 +347,8 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
         Intrinsic::RegExpProto,
         Intrinsic::DisposableStackProto,
         Intrinsic::AsyncDisposableStackProto,
+        Intrinsic::WeakRefProto,
+        Intrinsic::FinalizationRegistryProto,
     ] {
         let p = heap.new_object(Some(object_proto))?;
         set(heap, i, Value::object(p));
