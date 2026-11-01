@@ -215,14 +215,14 @@ class Chunk:
         if code == "" or code.startswith("//"):
             self.kind = "comment"
             return
-        if re.match(r"['\"]use strict['\"];?$", code):
+        raw = re.sub(r"//[^\n]*", "", self.text).strip()
+        if re.match(r"['\"]use strict['\"];?$", raw):
             self.kind = "drop"
             return
         if "__loadScript" in code or re.match(r"import\s+\*\s+as\s+std\b", code):
             self.kind = "drop"
             return
         # (string contents are blanked in `code`, so match the import on the raw text)
-        raw = re.sub(r"//[^\n]*", "", self.text).strip()
         if re.match(r"import\s*\{[^}]*\}\s*from\s*['\"]\./assert\.js['\"];?$", raw):
             self.kind = "import-assert"
             return
