@@ -116,7 +116,10 @@ pi-like one each run 3.3% fewer instructions.
 end: the base is made by the copying collector, which seals what it leaves. An embedder
 can seal a heap itself with `Vm::seal` (`vm_seal` in wasm): a full collection, after which
 everything live is old. pi does that after running its own prelude, so its lockdown and
-helpers become old too. Nothing else moves B up.
+helpers become old too. Nothing else moves B up. Before that collection, `seal` copies the
+cells a session replaces first to the end of the heap: Map and Set tables, the root shape's
+transitions, the global object's property table and the atom table. Their dead copies
+then drop out at the end of the old region instead of shifting it (D2057).
 
 **Full collections** still trace everything. They run every 16th time, when a minor
 collection left more than half the memory cap in use, whenever the embedder asks
@@ -332,9 +335,10 @@ not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D16
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2042 D2044 D2055 D2056 D2045 D2046 D2047 D2048 D2053 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 -->
+<!-- gen:decisions D2040 D2041 D2057 D2042 D2044 D2055 D2056 D2045 D2046 D2047 D2048 D2053 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
+- D2057: The cells a VM replaces first sit at the end of base and sealed images
 - D2042: Full collections do not promote; only seal points make cells old
 - D2044: No card table and write barrier (old-generation phase 2) for now
 - D2055: The old-region walk uses per-kind slot plans

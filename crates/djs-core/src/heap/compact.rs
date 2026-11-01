@@ -299,7 +299,7 @@ impl Heap {
                         0
                     };
                     let at = Object::SLOTS.at(c, 0);
-                    out.extend_from_slice(&[at | 1 | forward, at + 8 | 1]);
+                    out.extend_from_slice(&[at | 1 | forward, (at + 8) | 1]);
                 }
             }
             c += (h >> 32) as u32;

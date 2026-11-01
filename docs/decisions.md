@@ -5984,3 +5984,63 @@ Measured for the owner, not done: inlining the native API in wasm (D1634).
 - `n_slot` and `n_arg`: +4.6 KB gzip, for higher-order −10.5%, foreach −5.7%, pi-like
   −2.1%.
 - The full accessor set: +10.7 KB, for −17%, −9%, −2.6%.
+## D2057: The cells a VM replaces first sit at the end of base and sealed images
+date: 2026-11-03 · by: heap · issue: 0136
+**The mechanism**, from `djs heap --diff base` on a fresh REPL's `.snapshot`:
+- The REPL, `Sandbox.bytes()` and pi's `snapshot()` all collect in full (D1890), and a
+  full collection compacts the old region too: it keeps only the region's live cells
+  (D2041). Minor collections leave the old region alone, but these dumps come from full
+  collections.
+- A fresh VM replaces some base cells outright:
+  - the atom table's entries array, 30.3 KB at offset ~68 KB, copied by the first new
+    atom;
+  - the global object's property table and index (4 KB), copied by the first global;
+  - the root shape's transition list.
+
+  The full collection drops the dead originals and slides everything after them down.
+  Only 14.7% of the image's words stayed at the reference's offsets, and an empty
+  Sandbox's container was 15.7 KB, a fresh REPL's 16.0 KB.
+- pi's prelude image had the same problem with the prelude's `pending` Map (snapshot,
+  0133).
+
+**The fix:**
+- `Heap::first_grown(global)` lists, in this order:
+  1. every Map/Set's entries and index;
+  2. the root shape's transitions;
+  3. the global object's property index and table;
+  4. the atom index;
+  5. last and largest, the atom entries, which the first new atom replaces.
+
+  A dying cell shifts only those after it.
+- The base build (`Vm::prepare_base_image`) passes these cells to `order_for_image`, which
+  puts them after all others (the kind grouping of D2251 stays for the rest).
+- `Vm::seal` first copies them to the end of the arena (`Heap::move_to_end`, which
+  repoints the slots; a Map/Set's old entries forward to the copy, for live iterators).
+  The seal's full collection then drops the originals and leaves the copies at the end
+  of the sealed image.
+- The atom entries grow by a quarter instead of doubling (`push_atom_entry`): the base's
+  ~2,000 atoms doubled to 3,900 slots on the first new atom, 15 KB of zeros in every
+  image.
+
+**Measured** (scripts/snapshot-research/wasm.ts and the REPL; main → branch):
+- Empty Sandbox container 15.7 → 0.8 KB, with 1000 records 31.2 → 15.7 KB.
+- Fresh REPL `.snapshot` 16,023 → 835 B, and after `let x = 1` 16,200 → 1,005 B.
+- Raw fresh REPL dump 340,784 → 329,208 B. The words at the reference's offsets went from
+  14.7% to 90.3%; the rest is the session's own changes.
+- pi waiting sessions (medians): agent-loop 7.0 → 6.2 KB, sequential 7.4 → 6.7 KB;
+  ask, records, big-log and tool-heavy are equal within 1 KB. Collected images are
+  11 KB smaller.
+- `vm_new` 3.9–4.0 µs both; the pi bench's starts are unchanged.
+- Determinism: native-vs-wasm, e2e, difftest and the base built twice all agree.
+
+## D2058: The size ceiling rises by 600 B for stable snapshot layouts
+date: 2026-11-03 · by: heap · issue: 0136
+D2057's shipped code costs +588 B gzip: `seal`'s relocation, the list of first-grown
+cells, and the atom table's quarter growth. The kind-ordered base costs +40 B of data. The
+module went from 455,584 to 456,172 B gzip, over the ratchet ceiling (455,619). On top
+of D2302's ceiling (457,967), which landed meanwhile, it rises by 600 B to 458,567 in
+tests/scores/size.tsv.
+- **Bought:** empty Sandbox snapshots 15.7 → 0.8 KB, fresh REPL dumps 16 → 0.8 KB, and
+  11 KB smaller raw images of every VM from the base.
+- **Not found:** no cheaper encoding. The relocation was already cut from +2.1 KB raw to
+  +1.4 KB (header walk instead of the cell iterator, one push site).

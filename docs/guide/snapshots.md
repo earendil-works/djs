@@ -169,20 +169,29 @@ left is what the script did:
 
 | a snapshot of | image | compressed against the reference |
 | --- | ---: | ---: |
-| a pi session waiting on a tool | 489–503 KB | 2–9 KB |
-| a pi session holding 60 files it read | 671–854 KB | 58–111 KB |
+| a pi session waiting on a tool | 478–500 KB | 2–8 KB |
+| a pi session holding 60 files it read | 660–842 KB | 57–110 KB |
 | a pi session holding a 1.5 MB log | 2.2 MB | 404 KB |
-| a new sandbox | 333 KB | 16 KB |
+| a new sandbox | 322 KB | 0.8 KB |
 
 Against the base image instead of pi's prelude image, the waiting session is about 51
 KB, and with the copying collector the heap used before, it was 40 KB: one word in eight
-stayed in place. A new sandbox shows the same effect on a smaller scale. Defining its
-`console` grows the global object's property table, which is exactly full in the base;
-the grown table goes to the young end, and the collection slides everything after the
-old table's place down by its size. Only a fifth of the image then lines up with the
-base, and the cells that moved cost the compressor the references they hold to other
-moved cells, about 40 KB of them. Compressing a waiting session takes about 1.2 ms, and
-restoring costs 0.1 to 0.3 ms more than an uncompressed image.
+stayed in place. Compressing a waiting session takes about 1.2 ms, and restoring costs
+0.1 to 0.3 ms more than an uncompressed image.
+
+One more thing keeps the reference's cells in place: where its growable cells sit (D2057).
+A session's first steps replace a few cells of the reference outright. Defining a
+sandbox's `console` grows the global object's property table, which is exactly full in
+the base. The first new string a script interns copies the atom table's list of entries
+(15 KB in the base), and the first calls through pi grow the prelude's Map of pending
+calls. The grown copies go to the young end, and the next full collection drops the old
+ones. If those sat in the middle of the reference, everything after them would slide
+down. A new sandbox's snapshot was 16 KB that way: only a fifth of the image lined up
+with the base, and the moved cells cost the compressor the references they hold to
+other moved cells. So the base image puts those cells last, and so does `Vm::seal` for an
+image an embedder seals itself, like pi's prelude image. A dead copy then moves nothing
+before it. The atom table also grows by a quarter rather than doubling, so a fresh VM's
+image carries 11 KB fewer empty slots.
 
 A snapshot is a small container: a 40-byte header, the host's own metadata (the
 `Sandbox`'s host function names, the adapter's session state) as JSON, and the image,
@@ -301,9 +310,11 @@ of the call it waits on, and the container is 2.1 KB.
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2043 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 -->
+<!-- gen:decisions D2040 D2041 D2057 D2058 D2043 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
+- D2057: The cells a VM replaces first sit at the end of base and sealed images
+- D2058: The size ceiling rises by 600 B for stable snapshot layouts
 - D2043: pi's later cold starts size the arena for the sealed prelude heap
 - D1091: Handle table
 - D1890: pi adapter: snapshot() and the prelude image collect first
