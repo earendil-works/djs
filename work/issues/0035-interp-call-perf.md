@@ -1,6 +1,6 @@
 # 0035: Interpreter call-path performance
 
-status: in-progress
+status: done
 agent: heap
 branch: issue/0035-interp-call-perf
 depends-on: 0030 (parts 1-3 merged)
@@ -115,7 +115,65 @@ properties.
     with no new failures, test262 active with no new failures and no stale entries.
   - Status stays in-progress: props, sort and map still to do, plus wasm numbers and
     `bench.sh --record`.
+- Part 2 (D1352):
+  - [[Set]] fast path for own writable data properties, and CreateDataProperty of new
+    keys. These are additive helpers in `heap/object.rs`, outside `touches:` but small
+    and equivalent.
+  - `fast_intrinsic`. Sort's slow path was 21.7M `call_intrinsic`s: Get 7.5M,
+    CreateDataPropertyOrThrow 3.8M, IsNumber/AsNumber/Call 3.3M each.
+  - `fast_float`, for float.js.
+  - `fast_elem`, for dense `a[i]` reads and writes.
+  - Measured with the temporary counter (reverted) and `prof.sh`.
 
 ## Follow-ups
 
 ## Result
+Landed: 2-4x faster interpretation, with no semantic changes.
+- Changes:
+  - the dispatch loop and stack/immediate helpers are inlined;
+  - int32 fast paths in the general arithmetic;
+  - D1350 `fast_step` handles the hottest simple ops, plus call/return of JS closures,
+    without building a `Step`;
+  - D1352 adds leaf intrinsics, floats, dense elements and own-property writes;
+  - the call path sets the frame cache from the template (`push_frame`, `pop_frame`,
+    `enter_template`).
+- Checks: e2e in all three modes, difftest stress identical, and the difftest and
+  test262 ratchets unchanged.
+
+Engine track (`scripts/bench.sh --record engine/`, tests/scores/bench.tsv; before is
+0394842cf4, after is c31aaa6):
+
+| bench | before | after | djs/qjs before | djs/qjs after |
+| --- | ---: | ---: | ---: | ---: |
+| calls | 242 ms | 116 ms | 7.5x | 3.35x |
+| loop | 665 ms | 279 ms | 9.6x | 3.8x |
+| props | 372 ms | 234 ms | 4.3x | 2.5x |
+| arrays | (new) | 1345 ms | | 12.8x |
+| float | (new) | 1672 ms | | 21.5x |
+| higher-order | (new) | 679 ms | | 6.9x |
+
+Issue benchmarks (wall time per run):
+
+| bench | native before | native after | wasm before | wasm after |
+| --- | ---: | ---: | ---: | ---: |
+| sort 200k with comparator | 1807 ms | 818 ms | 2897 ms | 991 ms |
+| map 10x100k | 247 ms | 130 ms | 413 ms | 179 ms |
+
+On wasm: calls 418 to 166 ms, loop 1216 to 323 ms, props 853 to 457 ms.
+
+What is structural (later issues):
+- Builtin-heavy benchmarks are now bounded by the *instruction count* of the TS
+  builtins, not by dispatch:
+  - sort executes ~85 instructions per comparison in its merge sort (qjs: native C);
+  - `Math.min`/`max` allocate a rest array and go through `CoerceNumbers`;
+  - arrays.js is dominated by `push`/`slice`/`pop` in TS.
+  Options: Rust leaves for hot builtins (a sort with a comparator continuation,
+  Math.min/max of numbers), or superinstructions.
+- About 10 cycles per instruction remain. `pc`, `sp` and `fuel` live in `Exec` fields
+  (memory), and the shared indirect branch mispredicts. Further cuts need registers for
+  the hot state (a loop that keeps `pc`/`sp` in locals and syncs at calls, a sizable
+  rewrite that would need a decision) or superinstructions (`get_loc; get_loc; add`,
+  `inc_loc`, `lt; jump_if_false`) in the compiler.
+- Property access is a hash-table probe per access. Inline caches and shapes would be
+  the next step for props.
+- `JSON` is missing from the global object, so engine/djs/json is skipped.

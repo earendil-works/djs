@@ -1357,3 +1357,20 @@ only when a jump uses them (`BlockEnv::used`). No array fast path yet: `%GetIter
 and `next()` calls are observable (a patched `Array.prototype[Symbol.iterator]` or
 `%ArrayIteratorPrototype%.next`), so a fast path needs a guard on both.
 
+## D1352: more fast paths: leaf intrinsics, floats, dense elements, own-property writes
+date: 2026-11-01 · by: heap · issue: 0035
+D1350's `fast_step` also handles:
+- `call_intrinsic` of IsNumber, IsObject, AsNumber and AsObj (when they hold), Get and
+  CreateDataPropertyOrThrow on an existing dense Array element, and `%Call` of a JS
+  closure (`fast_intrinsic`);
+- add, sub, mul, div and the relational ops on two Numbers (`fast_float`);
+- `get_elem`/`put_elem` with an int key on an existing dense element (`fast_elem`).
+
+These rarer cases live out of line. Inlining them made the int32 loop slower, which
+shows how sensitive the dispatch loop's register allocation is: measure any addition
+with interleaved A/B runs (`work/scratch/0035/ab.sh`). The heap gets two equivalent
+shortcuts:
+- `Heap::set_own_data_value`, for [[Set]] of an own writable data property (only the
+  value changes);
+- a new-key branch in `create_data_property` for non-Array objects (a table insert
+  without building and validating a descriptor).
