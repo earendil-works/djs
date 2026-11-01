@@ -8,6 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0132 | Initial arena room (json peak regression) | heap | .worktrees/heap |
+| 0133 | Heap dump analyzer | snapshot | .worktrees/snapshot |
 | 0129 | pi-like hot spots (interpreter, native calls, JSON) | perf | .worktrees/perf |
 | 0130 | Codemode feature usage across all sessions (research) | infra | .worktrees/infra |
 | 0131 | Size follow-ups: message builder, decomposition, composition | bloat | .worktrees/bloat |
