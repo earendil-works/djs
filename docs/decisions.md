@@ -596,3 +596,12 @@ wire cross-language test (node writes a corpus into a temporary directory, then
 TypeScript type stripping. The `js/` package has no dependencies and no build step. Its
 `tsconfig.json` type-checks `src/` (`tsc -p js`); the tests and benchmarks use node's APIs
 and are only type-stripped, since there is no `@types/node` without dependencies.
+
+## D1200: Tests that run subprocesses use generous timeouts
+date: 2026-11-01 · by: infra · issue: 0020
+Tests that shell out to qjs (or any engine) give every case a generous wall-clock limit
+(60 s, hang protection only) and bounded parallelism (4 workers). The gate runs while
+other agents build and test, and a millisecond run can stall for over a second.
+A case that is meant to hang gets its own short limit (a `// difftest: timeout`
+directive, or a separate run) and is never the reason another case times out. Timeouts
+are reported as `timeout: no result within Ns`, not as an output difference.
