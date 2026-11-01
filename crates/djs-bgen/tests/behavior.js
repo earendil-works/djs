@@ -428,6 +428,7 @@ const I = {
   EnumerableOwnDataProperties: (o, kind) => undefined,
   IteratorFastReady: (it, next) => false,
   IsOriginalCollectionAdder: (adder, kind) => false,
+  TypedArraySetFromDense: (o, values) => false,
   // No direct paths in the stand-ins: always the iterator protocol.
   HasOriginalIteration: (v) => false,
   CreateStringIterator: (s) => s[Symbol.iterator](),

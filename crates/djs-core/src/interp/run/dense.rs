@@ -173,6 +173,31 @@ impl Exec<'_> {
         ))
     }
 
+    /// `%TypedArraySetFromDense(o, values)`.
+    pub(super) fn typed_array_set_from_dense(&mut self, o: Obj, values: Obj) -> bool {
+        if self.heap.object_class(o) != ObjectClass::TypedArray
+            || self.heap.object_class(values) != ObjectClass::Array
+        {
+            return false;
+        }
+        let n = self.heap.array_length(values);
+        if self.heap.ta_length(o).is_none_or(|len| len < n) {
+            return false;
+        }
+        let kind = self.heap.ta_kind(o);
+        let Some(elems) = dense_range(self.heap, values, 0, n).and_then(|vals| {
+            vals.into_iter()
+                .map(|v| self.heap.element_of(kind, v))
+                .collect::<Option<Vec<_>>>()
+        }) else {
+            return false;
+        };
+        for (i, e) in elems.into_iter().enumerate() {
+            self.heap.ta_set(o, i as u32, e);
+        }
+        true
+    }
+
     /// `%ArrayJoinDense(o, len, sep)`: the joined string, or undefined.
     pub(super) fn array_join_dense(&mut self, o: Obj, len: f64, sep: Str) -> Result<Value, Fault> {
         let Some(len) = index(len) else {

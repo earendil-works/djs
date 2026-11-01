@@ -50,6 +50,12 @@ adders 112
 map-next 2112
 forEach TypeError
 forEach2 Map object expected
+ta1 1,0,255,1 255,0,2,2 0.10000000149011612
+ta2 7,1,0,0 1,-1 0.5,1
+ta3 1,2,3 99
+ta4 TypeError
+ta5 TypeError
+ta6 1,0,3 1,2 4,5
 all 1,2,3
 allSettled fulfilled,fulfilled,rejected
 === completed

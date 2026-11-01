@@ -255,6 +255,7 @@ const IS_ORIGINAL_COLLECTION_ADDER: u16 = id("IsOriginalCollectionAdder");
 const MAP_PROTOTYPE_SET: u16 = id("MapPrototypeSet");
 const SET_PROTOTYPE_ADD: u16 = id("SetPrototypeAdd");
 const ENUMERABLE_OWN_DATA_PROPERTIES: u16 = id("EnumerableOwnDataProperties");
+const TYPED_ARRAY_SET_FROM_DENSE: u16 = id("TypedArraySetFromDense");
 const ITERATOR_FAST_VALUE: u16 = id("IteratorFastValue");
 const INSTALL_CONSTRUCTOR: u16 = id("InstallConstructor");
 const INSTALL_ACCESSOR: u16 = id("InstallAccessor");
@@ -1050,6 +1051,10 @@ impl Exec<'_> {
                 };
                 self.array_join_dense(o, len, sep)?
             }
+            TYPED_ARRAY_SET_FROM_DENSE => match (a0.as_object(), arg(self, 1).as_object()) {
+                (Some(o), Some(values)) => Value::bool(self.typed_array_set_from_dense(o, values)),
+                _ => return bad_argument(info.name),
+            },
             ENUMERABLE_OWN_DATA_PROPERTIES => {
                 let (Some(o), Some(kind)) = (a0.as_object(), arg(self, 1).as_int()) else {
                     return bad_argument(info.name);

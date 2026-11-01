@@ -157,6 +157,9 @@ function TypedArrayFromBuffer(kind: i32, proto: Obj, buffer: Obj, byteOffset: Va
 function TypedArrayFromValues(kind: i32, proto: Obj, values: Obj): Obj {
   const len: f64 = LengthOfArrayLike(values);
   const o: Obj = AllocateTypedArrayOfLength(kind, proto, len);
+  if (TypedArraySetFromDense(o, values)) {
+    return o;
+  }
   for (let k: f64 = 0; k < len; k++) {
     TypedArraySet(o, k, ToElementValue(o, Get(values, k)));
   }
@@ -193,6 +196,11 @@ function TypedArrayConstruct(newTarget: Value, kind: i32, args: Obj): Obj {
     return TypedArrayFromBuffer(kind, proto, src, n > 1 ? Get(args, 1) : undefined, n > 2 ? Get(args, 2) : undefined);
   }
   const usingIterator: Value = GetMethod(src, WellKnownSymbol("iterator"));
+  // An array of Numbers iterated the original way: its elements are the list, and
+  // converting them runs no user code (0080).
+  if (HasOriginalIteration(src) && IsDenseArray(src) && AllNumbers(src)) {
+    return TypedArrayFromValues(kind, proto, src);
+  }
   if (usingIterator !== undefined) {
     const list: Obj = ArrayCreate(0);
     const target: Obj = ArrayFromIterator(list, src, usingIterator, undefined, undefined);

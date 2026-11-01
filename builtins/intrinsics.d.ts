@@ -459,6 +459,13 @@ declare function ArrayJoinDense(o: Obj, len: f64, sep: Str): Value;
  * (no Proxy): the array, or undefined for the general loop (0080). @leaf
  */
 declare function EnumerableOwnDataProperties(o: Obj, kind: i32): Value;
+/**
+ * Writes values[0 .. length) into the typed array `o` (at least that long) when
+ * `values` is an Array whose elements are all present in dense storage and primitives
+ * of `o`'s content type (ToNumber / ToBigInt run no user code). False, with nothing
+ * written, otherwise (0080). @leaf
+ */
+declare function TypedArraySetFromDense(o: Obj, values: Obj): boolean;
 // ---- Strings (0034): leaves on the heap representation -------------------------------
 
 /**

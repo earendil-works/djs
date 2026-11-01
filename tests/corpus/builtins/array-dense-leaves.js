@@ -169,6 +169,17 @@ const log = (...a) => out.push(a.map(String).join(" "));
   try { Map.prototype.forEach.call(new Set(), () => {}); } catch (e) { log("forEach2", e.message); }
 }
 
+// Typed arrays from arrays: Numbers in one step; anything else converts in order.
+{
+  log("ta1", new Uint8Array([1, 256, -1, 1.7]).join(), new Uint8ClampedArray([300, -5, 1.5, 2.5]).join(), new Float32Array([0.1]).join());
+  log("ta2", new Int16Array(["7", true, null, undefined]).join(), new BigInt64Array([1n, -1n]).join(), Float64Array.from([1, 2], (x) => x / 2).join());
+  const src = [1, { valueOf() { src[2] = 99; return 2; } }, 3];
+  log("ta3", new Int32Array(src).join(), src[2]);
+  try { new BigInt64Array([1, 2]); } catch (e) { log("ta4", e.constructor.name); }
+  try { new Int8Array([1n]); } catch (e) { log("ta5", e.constructor.name); }
+  log("ta6", new Int8Array([1, , 3]).join(), Int8Array.of(1, 2).join(), new Uint16Array(new Set([4, 5])).join());
+}
+
 log("all", await Promise.all([1, Promise.resolve(2), 3]));
 log("allSettled", (await Promise.allSettled([1, , Promise.reject(3)])).map((r) => r.status));
 console.log(out.join("\n"));
