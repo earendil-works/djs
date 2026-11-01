@@ -1,7 +1,7 @@
 # 0024: P1-1 Functions and closures (compiler side)
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0024-p1-functions-closures
 depends-on: 0014, 0015
 touches: crates/djs-core/src/compiler/, docs/compiler.md (corrections), crates/djs-core/src/bytecode/ (additive only)
