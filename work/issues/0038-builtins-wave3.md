@@ -69,6 +69,24 @@ counts them.
   builtins/reflect.js.
 - After part 1: active 12,354 / 22,142 (55.8%); Reflect 140 / 142, Symbol 64 / 68.
 
+### Part 2: Map, Set, WeakMap, WeakSet
+- Part 1 merged: main ..90f7881.
+- Coordinator approved both GC changes (made here, logged): the collector rehashes
+  collections after a move (D1381; an epoch counter was dropped because it would break
+  D1090 image determinism), and ephemerons (D1382). New: heap/collection.rs, cell kind
+  EphemeronArray (cells.rs, walk.rs verify), gc.rs fixpoint + rehash post-pass; object
+  classes 12-16; realm prototypes; js/src/layout.generated.ts regenerated.
+- gc_tests: weak entries die with their keys, chains, cycles through values, a key
+  reachable only through another table's value, WeakSet, image round trip, object keys
+  after moves, iterators across deletes/compaction/clear/GC; every test collects twice
+  and compares the images.
+- Builtins: map.ts, set.ts (with the 7 ES2025 methods), weak.ts, Map.groupBy,
+  Map/Set iterators. behavior.js vs qjs (constructors over iterables, -0/NaN keys,
+  forEach while mutating, set methods with logging set-likes, CanBeHeldWeakly): clean.
+  difftest builtins/map-set.js, e2e collections.js (three modes).
+- test262: Map 167/167, Set 305/379 (the rest: classes, generators, BigInt syntax),
+  WeakMap 101/101, WeakSet 84/84, Map/Set iterator prototypes 11/11 each.
+
 ## Follow-ups
 
 ## Result

@@ -1399,3 +1399,41 @@ safepoint (D1281's GC hazard) before it is written to the frame. Builtin constru
 already read new.target; `Array` now gives a non-Array new.target's prototype to its
 result. Error messages follow qjs: a primitive target is "not a function", a non-callable
 object "not a constructor", a callable one "<name> is not a constructor".
+
+## D1381: Map and Set are ordered hash tables rehashed by the collector
+date: 2026-11-01 · by: infra · issue: 0038
+`heap/collection.rs` implements Map, Set, WeakMap and WeakSet as objects
+(`ObjectClass` 12-15) with three slots: the entries, a linear-probing index (a U32Array
+of entry number + 1) and the live count. Keys are SameValueZero: numbers are stored
+normalized (-0 → +0, one NaN, the int form where it fits), strings are flattened on
+insertion and hash by content, objects and symbols hash by offset. Because the copying
+collector moves objects, `collect` rehashes every collection it copied, in place (same
+index size, no allocation), as a post-pass; so does the Map/Set code itself when it
+grows or compacts. (A GC epoch in Roots with lazy rebuilds was considered and dropped:
+the counter would make collecting twice change the image, breaking D1090.) Known cost:
+every collection rehashes every live table, O(total entries); under `--gc-stress` that
+is per safepoint. Map/Set entries are a ValueArray `[forward, removed, k0, v0, ...]`;
+deletion leaves a HOLE key. Growth and compaction (more than half deleted, or a clear)
+allocate a new array and leave `forward` and the sorted `removed` entry numbers in the
+old one, so a Map/Set Iterator (`ObjectClass::CollectionIterator`, 16) that still holds
+the old array moves over and shifts its position: entries added during iteration are
+visited and deleted ones skipped, as the spec's index-based iteration does. The builtins
+(builtins/map.ts, set.ts, weak.ts) call leaf intrinsics (`%CollectionGet`, ...); forEach
+and the Set methods walk with `%CollectionIteratorStep`. The Set methods follow the
+spec's size-based branches and call the other set's `has`/`keys` as GetSetRecord reads
+them.
+
+## D1382: WeakMap and WeakSet are ephemerons in the Cheney collector
+date: 2026-11-01 · by: infra · issue: 0038
+A WeakMap/WeakSet keeps its pairs in an `EphemeronArray` (cell kind 20, laid out like a
+ValueArray). The scan does not trace it; it records the table instead. When the scan
+catches up, every untouched pair whose key has been copied gets its key and value
+forwarded, and the scan resumes. This repeats until a round changes nothing, so chains
+(k1 → v1 holding k2 → ...) and keys reachable only through another table's value stay,
+while a key that is reachable only through its own value dies. Pairs with dead keys are
+then cleared (HOLE key, undefined value) and the post-pass of D1381 recounts the table.
+Tables are processed in copy order and pairs in index order, so the layout is still a
+function of the object graph: collecting twice gives identical images (tests in
+gc_tests.rs, with image round trips). `verify` checks the cell (pairs, keys objects,
+symbols or HOLE). Keys must satisfy CanBeHeldWeakly: objects and symbols not registered
+with Symbol.for.
