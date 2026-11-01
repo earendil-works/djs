@@ -78,6 +78,10 @@ pub fn run_once(
         timeout: Duration::from_secs(60),
         fuel: None,
         memory_limit: None,
+        now: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as f64)
+            .unwrap_or(0.0),
     };
     let start = Instant::now();
     let result = engine.run(&job);
