@@ -1276,3 +1276,16 @@ A `@builtin` path may start with a `%Name%` segment (`%ArrayIteratorPrototype%.n
 through as the `%InstallMethod` target string, which the runtime resolves to the realm
 intrinsic (0030). Only the first segment may be `%Name%`.
 
+
+## D1345: Builtins over iterables
+date: 2026-11-01 · by: infra · issue: 0034
+builtins/iterable.ts builds on 0029's `%GetIterator`: IterableToList, Array.from's
+iterator path (GetIteratorFromMethod with the method read once; the iterator is closed
+with `%IteratorCloseThrow` when mapping or storing throws), Object.fromEntries,
+Object.groupBy (the groups live in a prototype-less object from keys to arrays, so the
+lookups run no user code; keys keep first-seen order) and AggregateError's `errors`.
+A non-object from `next()` throws without closing the iterator, as the spec says (qjs
+closes it). RequireObjectCoercible is GetIterator's own TypeError, which gives qjs's
+message. Until the Array and String iterators exist (0030 part 4), Array.from reads
+arrays and strings directly, which is what their default iterators do; it switches to
+the iterator path when they land.

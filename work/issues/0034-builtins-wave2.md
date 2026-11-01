@@ -100,6 +100,16 @@ the 0031 leftovers.
   keys/values/entries/@@iterator, String @@iterator, Array.from of other iterables:
   all wait for 0029's iterator intrinsics (%GetIterator, CreateArrayIterator).
 
+### Part 4: iterables (on 0029 part 1)
+- Behavior test timeout (D1344) merged early (4f2ae92).
+- builtins/iterable.ts (D1345): Object.fromEntries, Object.groupBy, AggregateError,
+  Array.from over iterables. Work with user iterables now; arrays and strings as input
+  need the Array/String iterators (0030 part 4; the String iterator is drafted in
+  work/scratch/0034/draft/string-iterator.ts on heap's ArrayIterator class).
+- behavior.js: all of them against qjs with logging iterators (no mismatches, one
+  documented spec difference). difftest builtins/iterables.js.
+- Results: AggregateError 0 → 6 / 19, Object 1,882, Array 2,448; built-ins 5,844.
+
 ## Follow-ups
 - Unicode normalization tables (NFC/NFD/NFKC/NFKD): size them (qjs's libunicode has
   them) and decide; localeCompare should then compare NFC forms like qjs.
