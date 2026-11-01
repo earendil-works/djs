@@ -38,6 +38,7 @@ pub mod bigint;
 pub mod cells;
 pub mod collection;
 mod compact;
+mod fail;
 pub mod gc;
 pub mod handle;
 pub mod layout;
@@ -431,7 +432,7 @@ impl Heap {
     #[inline]
     pub fn cell_kind(&self, off: u32) -> CellKind {
         let k = self.arena.get(off, Header::KIND);
-        CellKind::from_u8(k).unwrap_or_else(|| panic!("invalid cell kind {k} at {off}"))
+        CellKind::from_u8(k).unwrap_or_else(|| fail::bad_cell_kind(k, off))
     }
 
     #[inline]

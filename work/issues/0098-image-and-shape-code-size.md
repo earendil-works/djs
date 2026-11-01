@@ -49,6 +49,13 @@ and transition arrays (~1 KB). The base image is 398 KB of the 1.5 MB module.
 - Rebased onto 0093's run_hot: its define_field hit uses `ic_define` too, and its raw NATIVE read masks to the u16 (hot.rs, two
   line).
 
+- Follow-up after the first merge (coordinator, from num's 0104): the heap's formatted
+  invariant panics moved out of line, into heap/fail.rs (cold, inline(never), same
+  messages). Covers cell_kind, the GC's kind check, object_class, object_slot and
+  set_object_slot, the string-kind matches, the atom and handle checks, the hash index
+  probe and the cell walker. Code 920,619 -> 918,782 B (-1.8 KB, gzip -0.9 KB). Wasm
+  engine track unchanged (±3%, p-w +5% within noise).
+
 ## Follow-ups
 
 ## Result

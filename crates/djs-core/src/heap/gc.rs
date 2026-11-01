@@ -191,7 +191,8 @@ impl Heap {
         loop {
             while scan < to.len() {
                 let kb = to.get(scan, Header::KIND);
-                let kind = CellKind::from_u8(kb).unwrap_or_else(|| panic!("gc: bad kind {kb}"));
+                let kind =
+                    CellKind::from_u8(kb).unwrap_or_else(|| super::fail::bad_cell_kind(kb, scan));
                 let size = to.get(scan, Header::SIZE);
                 if kind == CellKind::EphemeronArray {
                     // Not traced: a pair lives only through its key (below).

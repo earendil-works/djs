@@ -334,7 +334,9 @@ impl Heap {
         debug_assert!(!a.is_int() && !a.is_null());
         let i = a.table_index();
         let entries = self.atom_entries();
-        assert!(i < self.value_array_len(entries), "invalid atom {a:?}");
+        if i >= self.value_array_len(entries) {
+            super::fail::invalid_atom(a);
+        }
         self.value_array_get(entries, i)
     }
 

@@ -585,7 +585,7 @@ impl Heap {
 
     pub fn object_class(&self, o: Obj) -> ObjectClass {
         let c = self.arena().get(o.0, Object::CLASS);
-        ObjectClass::from_u32(c).unwrap_or_else(|| panic!("invalid object class {c}"))
+        ObjectClass::from_u32(c).unwrap_or_else(|| super::fail::bad_object_class(c))
     }
 
     /// Number of internal slots.
@@ -594,12 +594,16 @@ impl Heap {
     }
 
     pub fn object_slot(&self, o: Obj, i: u32) -> Value {
-        assert!(i < self.object_slot_count(o), "slot {i} out of range");
+        if i >= self.object_slot_count(o) {
+            super::fail::slot_out_of_range(i);
+        }
         self.arena().read(Object::SLOTS.at(o.0, i))
     }
 
     pub fn set_object_slot(&mut self, o: Obj, i: u32, v: Value) {
-        assert!(i < self.object_slot_count(o), "slot {i} out of range");
+        if i >= self.object_slot_count(o) {
+            super::fail::slot_out_of_range(i);
+        }
         self.arena_mut().write(Object::SLOTS.at(o.0, i), v)
     }
 

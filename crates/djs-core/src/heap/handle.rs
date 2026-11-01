@@ -54,16 +54,13 @@ impl Heap {
     /// Returns the slot of live handle `h`, panicking if it is not live.
     fn live_slot(&self, h: Handle) -> u32 {
         let t = self.handle_table();
-        assert!(
-            t != 0 && h.0 < self.arena().get(t, HandleTable::LEN),
-            "invalid handle {h:?}"
-        );
+        if t == 0 || h.0 >= self.arena().get(t, HandleTable::LEN) {
+            super::fail::invalid_handle(h, false);
+        }
         let slot = Self::handle_slot(t, h.0);
-        assert_eq!(
-            self.arena().get(slot, HandleSlot::NEXT),
-            HANDLE_LIVE,
-            "handle {h:?} was dropped"
-        );
+        if self.arena().get(slot, HandleSlot::NEXT) != HANDLE_LIVE {
+            super::fail::invalid_handle(h, true);
+        }
         slot
     }
 

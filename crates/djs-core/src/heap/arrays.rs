@@ -91,7 +91,9 @@ impl Heap {
         mut f: impl FnMut(u32, u32) -> Option<R>,
     ) -> R {
         let len = self.u32_array_len(index);
-        assert!(len.is_power_of_two(), "hash index length {len}");
+        if !len.is_power_of_two() {
+            super::fail::bad_hash_index(index, len);
+        }
         let mask = len - 1;
         let mut b = hash & mask;
         for _ in 0..len {
@@ -100,7 +102,7 @@ impl Heap {
             }
             b = (b + 1) & mask;
         }
-        panic!("hash index {index} is full");
+        super::fail::bad_hash_index(index, len)
     }
 
     /// The first empty bucket (value 0) for `hash`.

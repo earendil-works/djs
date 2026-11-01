@@ -229,7 +229,7 @@ impl<'a> Iterator for Chunks<'a> {
                     }
                 }
                 CellKind::Rope => self.heap.push_children(off, &mut self.stack),
-                k => panic!("not a string cell: {k:?} at {off}"),
+                k => super::fail::not_a_string(k, off),
             }
         }
         None
@@ -271,7 +271,7 @@ impl Heap {
         match self.cell_kind(off) {
             CellKind::Str8 => StrView::Latin1(self.arena().slice(data, len)),
             CellKind::Str16 => StrView::Utf16(self.arena().slice(data, len * 2)),
-            k => panic!("not a flat string: {k:?}"),
+            k => super::fail::not_a_string(k, off),
         }
     }
 
@@ -409,7 +409,7 @@ impl Heap {
             CellKind::Str8 => false,
             CellKind::Str16 => true,
             CellKind::Rope => self.cell_flags(s.0) & flags::ROPE_TWO_BYTE != 0,
-            k => panic!("not a string cell: {k:?}"),
+            k => super::fail::not_a_string(k, s.0),
         }
     }
 

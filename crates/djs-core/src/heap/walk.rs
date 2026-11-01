@@ -73,10 +73,9 @@ impl Iterator for Cells<'_> {
         let offset = self.pos;
         let kind = self.heap.cell_kind(offset);
         let size = self.heap.cell_size(offset);
-        assert!(
-            size >= 8 && size.is_multiple_of(8),
-            "bad cell size {size} at {offset}"
-        );
+        if size < 8 || !size.is_multiple_of(8) {
+            super::fail::bad_cell_size(size, offset);
+        }
         self.pos += size;
         Some(CellInfo { offset, kind, size })
     }
