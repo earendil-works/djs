@@ -428,3 +428,58 @@ handler table (16-byte records) are `Bytes` cells read in place; constants are a
 `bytecode::alloc_template` writes a template from its parts after running the stack
 checker, which also fills in `STACK`. None of this needs the internal-ref Value tag
 (D007). Only putting templates or Boxes into object slots does, which is 0015's job.
+
+## D1110: Annex B regex grammar in non-unicode mode
+date: 2026-11-01 · by: num · issue: 0011
+Supersedes the "no Annex B" wording of issue 0011 for regular expressions (agreed with the
+coordinator). Without the `u` and `v` flags, patterns use the Annex B.1.2 grammar exactly as
+QuickJS implements it: lone `{`, `}` and `]`, identity escapes such as `\_`, legacy octal
+escapes and `\8`, `\c` without a letter, class escapes in ranges (`[\w-.]`), `\k` without named
+groups, and quantified lookaheads. Engines apply this grammar regardless of strict mode and
+real-world patterns rely on it, so it does not conflict with "always strict". `u` and `v` mode
+patterns stay strict. The legacy RegExp statics (`RegExp.$1`, test262 feature
+`legacy-regexp`) remain out of scope.
+
+## D1111: Regex engine design
+date: 2026-11-01 · by: num · issue: 0011
+`djs_core::regexp` parses a pattern into a small tree (regexes only; ARCH's "no AST" is
+about the JS compiler) and compiles it to a `Vec<u32>` program: a header (flags, capture
+count, register count, search and anchored entry points), the group names, then code with
+absolute jump targets. The execution model follows QuickJS: one backtrack stack of `u32`
+words with frames (pc, position, previous frame | kind, generation) and an undo log of
+capture and register writes above each frame; a slot is logged at most once per frame
+(per-slot generation marks). All state is integers, so running out of fuel at any
+instruction returns an `ExecState` (serializable with `to_words`) that `resume` continues.
+Fuel is one unit per instruction, plus the length for backreferences and one per character
+skipped by the first-character prefilter (`SCAN`) at the head of the search loop. The stack
+limit is a parameter (`ExecLimits`) and overflowing it is a result, not an allocation failure.
+
+## D1112: `\p{...}` is not supported yet
+date: 2026-11-01 · by: num · issue: 0011
+Unicode property escapes need large tables (General_Category, Script, Script_Extensions,
+binary and sequence properties). Until they land behind the `regexp-unicode-props` cargo
+feature (follow-up), `\p`/`\P` in `u`/`v` mode are syntax-checked like qjs and then rejected
+with the SyntaxError "unicode property escapes are not supported". In non-unicode mode `\p`
+is the identity escape `p`, as in qjs.
+
+## D1113: Where the regex parser deliberately differs from qjs
+date: 2026-11-01 · by: num · issue: 0011
+Duplicate named groups follow the spec: an error unless the two groups are in different
+alternatives of some disjunction (MightBothParticipate). qjs only checks a coarse
+"alternative scope" counter and accepts nested or sequential duplicates such as
+`(?<a>x)(?:y|(?<a>z))`. We also do not copy qjs' implementation limits: up to 65535
+capture groups (qjs: 254), no group name length limit (qjs: about 120 bytes), no register
+limit; nesting deeper than 255 groups or classes is "stack overflow". Everything else,
+including error messages, matches qjs (checked by the corpus).
+
+## D1114: Case mapping tables
+date: 2026-11-01 · by: num · issue: 0011
+`scripts/gen-unicode.py` also writes `unicode/case_tables.rs` from UnicodeData.txt,
+CaseFolding.txt and SpecialCasing.txt (Unicode 17.0.0, D1031): simple upper and lower case
+mappings as runs of equal delta with stride 1 or 2 (203 and 185 runs, 8 bytes each), simple
+case folding as 28 exception runs over lowercase, unconditional multi-character upper (102)
+and lower (1) mappings as `[u16; 4]`, and `Cased` (156 ranges) and `Case_Ignorable` (459)
+for Final_Sigma. About 7.6 KB in total; the regex engine uses about 4 KB of it. ASCII is
+handled in code. Context and language dependent mappings are left to callers (Final_Sigma
+is a String.prototype.toLowerCase rule). `unicode::case` exposes the lookups and in-order
+iteration over mapped code points.
