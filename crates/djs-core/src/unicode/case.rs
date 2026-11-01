@@ -19,7 +19,7 @@ fn run_delta(runs: &[u32], deltas: &[i32], c: u32) -> Option<i32> {
     let stride = ((r >> t::RUN_LEN_BITS) & 1) + 1;
     let len = (r & ((1 << t::RUN_LEN_BITS) - 1)) + 1;
     let off = c - start;
-    (off % stride == 0 && off / stride < len).then(|| deltas[idx - 1])
+    (off.is_multiple_of(stride) && off / stride < len).then(|| deltas[idx - 1])
 }
 
 fn apply(c: u32, delta: Option<i32>) -> u32 {
