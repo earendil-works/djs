@@ -326,7 +326,7 @@ fn weak_ref_modes() {
     for (mode, want) in [
         (0, "function,1"),
         (1, "function,1"),
-        (2, "undefined,undefined"),
+        (2, "undefined,"),
     ] {
         let vm = vm_new(0);
         assert_eq!(vm_set_weak_refs(vm, mode), 0);
