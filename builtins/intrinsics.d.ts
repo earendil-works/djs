@@ -837,6 +837,18 @@ declare function RegExpSplitRaw(r: Obj, s: Str, lim: f64, state: Value): Obj;
  */
 declare function RegExpReplaceRaw(r: Obj, s: Str, template: Str, state: Value): Str;
 
+// ---- Bulk fast paths (0056, D1561) ------------------------------------------------------
+
+/**
+ * Whether v is an Array whose elements 0 .. length-1 are all present in its dense store
+ * (no holes): reading them with Get then runs no user code. @leaf
+ */
+declare function IsDenseArray(v: Value): boolean;
+/** Whether every element of a dense array (no holes) is a Number. @leaf */
+declare function AllNumbers(list: Obj): boolean;
+/** Whether every element of a dense array is an integral Number in [0, 0x10FFFF]. @leaf */
+declare function AllCodePoints(list: Obj): boolean;
+
 // ---- Used by the generated code (crates/djs-bgen/src/emit_js.rs) ------------------------
 
 /**

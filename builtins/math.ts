@@ -336,6 +336,9 @@ function MathPow(base: Value, exponent: Value): f64 {
 /** ToNumber of every element of `args` (a rest array), in place. */
 function CoerceNumbers(args: Obj): f64 {
   const n: f64 = LengthOfArrayLike(args);
+  if (AllNumbers(args)) {
+    return n;
+  }
   for (let i: f64 = 0; i < n; i++) {
     const v: Value = Get(args, i);
     if (!IsNumber(v)) {

@@ -24,6 +24,9 @@ const REGEXP_STRING_ITERATOR_SLOT: u16 = id("RegExpStringIteratorSlot");
 const REGEXP_STRING_ITERATOR_FINISH: u16 = id("RegExpStringIteratorFinish");
 const REGEXP_ESCAPE_STRING: u16 = id("RegExpEscapeString");
 const IS_PRISTINE_REGEXP: u16 = id("IsPristineRegExp");
+const IS_DENSE_ARRAY: u16 = id("IsDenseArray");
+const ALL_NUMBERS: u16 = id("AllNumbers");
+const ALL_CODE_POINTS: u16 = id("AllCodePoints");
 const REGEXP_TEST_RAW: u16 = id("RegExpTestRaw");
 const IS_ORIGINAL_REGEXP_EXEC: u16 = id("IsOriginalRegExpExec");
 const REGEXP_SPLIT_RAW: u16 = id("RegExpSplitRaw");
@@ -160,6 +163,33 @@ impl Exec<'_> {
             REGEXP_SPLIT_RAW if argc == 4 => return self.regexp_split_raw(name, base, next),
             REGEXP_REPLACE_RAW if argc == 4 => return self.regexp_replace_raw(name, base, next),
             IS_PRISTINE_REGEXP => Value::bool(self.regexp_pristine(a0)?),
+            // Bulk fast paths for builtins (D1561): apply, fromCodePoint, Math.max.
+            IS_DENSE_ARRAY => Value::bool(
+                a0.as_object()
+                    .is_some_and(|a| self.dense_values(a).is_some()),
+            ),
+            ALL_NUMBERS | ALL_CODE_POINTS => {
+                let Some(list) = a0.as_object() else {
+                    return bad_argument(name);
+                };
+                let points = id == ALL_CODE_POINTS;
+                let ok = self.dense_values(list).is_some_and(|n| {
+                    (0..n).all(|i| {
+                        let v = self
+                            .heap
+                            .get_element_fast(list, i)
+                            .unwrap_or(Value::UNDEFINED);
+                        match v.as_number() {
+                            Some(x) if points => {
+                                (0.0..=1114111.0).contains(&x) && libm::trunc(x) == x
+                            }
+                            Some(_) => true,
+                            None => false,
+                        }
+                    })
+                });
+                Value::bool(ok)
+            }
             CREATE_REGEXP_STRING_ITERATOR => {
                 let (Some(r), Some(s)) = (a0.as_object(), arg(self, 1).as_string()) else {
                     return bad_argument(name);
@@ -212,6 +242,17 @@ impl Exec<'_> {
         self.push(v);
         self.pc = next;
         Ok(None)
+    }
+
+    /// The length of an Array whose elements are all in its dense store (no holes), so
+    /// that Get on them runs no user code; `None` for anything else.
+    fn dense_values(&self, a: Obj) -> Option<u32> {
+        if self.heap.object_class(a) != crate::heap::ObjectClass::Array {
+            return None;
+        }
+        let n = self.heap.array_length(a);
+        (self.heap.dense_len(a) >= n && (0..n).all(|i| self.heap.get_element_fast(a, i).is_some()))
+            .then_some(n)
     }
 
     /// Runs the matcher on the flat string `flat` with the remaining fuel (at least one

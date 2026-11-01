@@ -459,6 +459,9 @@ function StringFromCharCode(...codeUnits: Value[]): Str {
  * @length 1
  */
 function StringFromCodePoint(...codePoints: Value[]): Str {
+  if (AllCodePoints(codePoints)) {
+    return StrFromCodePoints(codePoints);
+  }
   const n: f64 = LengthOfArrayLike(codePoints);
   for (let i: f64 = 0; i < n; i++) {
     const next: Value = Get(codePoints, i);

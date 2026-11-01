@@ -408,6 +408,84 @@ impl Machine<'_> {
         ok.then_some(next as u32)
     }
 
+    /// Matches up to `cap` characters forward with the case-sensitive one-character
+    /// matcher at `pc` (D1562): the count and the position after them.
+    fn scan_forward(&self, pc: usize, cap: u32) -> (u32, u32) {
+        match self.input {
+            Input::Latin1(b) => self.scan_with(pc, cap, b.len(), |i| b[i] as u32),
+            Input::Utf16(u) => self.scan_with(pc, cap, u.len(), |i| u[i] as u32),
+            Input::Utf16Le(b) => self.scan_with(pc, cap, b.len() / 2, |i| {
+                u16::from_le_bytes([b[2 * i], b[2 * i + 1]]) as u32
+            }),
+        }
+    }
+
+    #[inline(always)]
+    fn scan_with(
+        &self,
+        pc: usize,
+        cap: u32,
+        len: usize,
+        unit: impl Fn(usize) -> u32,
+    ) -> (u32, u32) {
+        let code = self.code;
+        let op = code[pc] & OP_MASK;
+        let ranges: &[u32] = if op == CLASS {
+            let n = code[pc + 1] as usize;
+            &code[pc + 2..pc + 2 + 2 * n]
+        } else {
+            &[]
+        };
+        let ch = code[pc + 1];
+        let mut hint = 0usize;
+        let mut pos = self.s.pos as usize;
+        let mut count = 0;
+        while count < cap && pos < len {
+            let mut c = unit(pos);
+            let mut next = pos + 1;
+            if self.unicode && (0xD800..0xDC00).contains(&c) && next < len {
+                let d = unit(next);
+                if (0xDC00..0xE000).contains(&d) {
+                    c = 0x10000 + ((c - 0xD800) << 10) + (d - 0xDC00);
+                    next += 1;
+                }
+            }
+            let ok = match op {
+                CHAR => c == ch,
+                CLASS => {
+                    // Consecutive characters usually fall in the same range.
+                    if hint < ranges.len() && ranges[hint] <= c && c <= ranges[hint + 1] {
+                        true
+                    } else {
+                        let (mut lo, mut hi) = (0, ranges.len() / 2);
+                        let mut found = false;
+                        while lo < hi {
+                            let mid = (lo + hi) / 2;
+                            if c < ranges[2 * mid] {
+                                hi = mid;
+                            } else if c > ranges[2 * mid + 1] {
+                                lo = mid + 1;
+                            } else {
+                                hint = 2 * mid;
+                                found = true;
+                                break;
+                            }
+                        }
+                        found
+                    }
+                }
+                DOT => !is_line_terminator(c),
+                _ => true,
+            };
+            if !ok {
+                break;
+            }
+            pos = next;
+            count += 1;
+        }
+        (count, pos as u32)
+    }
+
     /// One position back towards the loop's start `start` (the other way for a backward
     /// loop): a whole code point, unless that would cross `start`.
     fn give_back(&self, back: bool, start: u32) -> u32 {
@@ -718,7 +796,23 @@ impl Machine<'_> {
                 let start = self.s.slots[r];
                 let mut n = start;
                 let mut stopped = false;
-                while n < limit {
+                let fast = !back && code[pc + 6] & F_ICASE == 0;
+                if fast && n < limit {
+                    // The common case in one tight loop (D1562); same fuel accounting as
+                    // the general loop below: one unit per character after the first.
+                    let cap =
+                        (limit - n).min(u32::try_from(*fuel).unwrap_or(u32::MAX).saturating_add(1));
+                    let (m, pos) = self.scan_forward(pc + 6, cap);
+                    self.s.pos = pos;
+                    n += m;
+                    if m > 0 && u64::from(m) == fuel.saturating_add(1) {
+                        stopped = true;
+                        *fuel = 0;
+                    } else {
+                        *fuel -= u64::from(m);
+                    }
+                }
+                while !fast && n < limit {
                     match self.single(pc + 6, back) {
                         Some(p) => {
                             self.s.pos = p;

@@ -38,6 +38,10 @@ function FunctionPrototypeApply(this: Value, thisArg: Value, argArray: Value): V
   if (argArray === undefined || argArray === null) {
     return Call(this, thisArg);
   }
+  // A dense array is read without observable effects: pass it as is (D1561).
+  if (IsDenseArray(argArray)) {
+    return CallWithArray(this, thisArg, AsObj(argArray));
+  }
   return CallWithArray(this, thisArg, CreateListFromArrayLike(argArray));
 }
 

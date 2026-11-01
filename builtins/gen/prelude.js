@@ -2863,10 +2863,13 @@ function FunctionPrototypeApply(thisArg, argArray) {
   if (argArray === undefined || argArray === null) {
     return %Call(this, thisArg);
   }
+  if (%IsDenseArray(argArray)) {
+    return %CallWithArray(this, thisArg, %AsObj(argArray));
+  }
   return %CallWithArray(this, thisArg, CreateListFromArrayLike(argArray));
 }
 
-// builtins/function.ts:49 Function.prototype.bind
+// builtins/function.ts:53 Function.prototype.bind
 function FunctionPrototypeBind(thisArg, ...args) {
   if (!%IsCallable(this)) {
     throw %NewTypeError("not a function");
@@ -2898,7 +2901,7 @@ function FunctionPrototypeBind(thisArg, ...args) {
   return f;
 }
 
-// builtins/function.ts:86 Function.prototype.toString
+// builtins/function.ts:90 Function.prototype.toString
 function FunctionPrototypeToString() {
   if (%IsProxy(this) && %IsCallable(this)) {
     const name = %Get(%AsObj(this), "name");
@@ -2908,12 +2911,12 @@ function FunctionPrototypeToString() {
   return %FunctionToString(this);
 }
 
-// builtins/function.ts:102 constructor Function
+// builtins/function.ts:106 constructor Function
 function FunctionConstructor(...args) {
   throw %NewTypeError("not supported yet: the Function constructor");
 }
 
-// builtins/function.ts:107
+// builtins/function.ts:111
 function OrdinaryHasInstance(c, o) {
   if (!%IsCallable(c)) {
     return false;
@@ -2939,7 +2942,7 @@ function OrdinaryHasInstance(c, o) {
   return false;
 }
 
-// builtins/function.ts:137 %InstanceofOperator
+// builtins/function.ts:141 %InstanceofOperator
 function InstanceofOperator(v, target) {
   if (!%IsObject(target)) {
     throw %NewTypeError("invalid 'instanceof' right operand");
@@ -2954,7 +2957,7 @@ function InstanceofOperator(v, target) {
   return OrdinaryHasInstance(target, v);
 }
 
-// builtins/function.ts:157 %ClassHeritage
+// builtins/function.ts:161 %ClassHeritage
 function ClassHeritage(parent) {
   if (parent === null) {
     return null;
@@ -2969,12 +2972,12 @@ function ClassHeritage(parent) {
   return protoParent;
 }
 
-// builtins/function.ts:176 Function.prototype[Symbol.hasInstance]
+// builtins/function.ts:180 Function.prototype[Symbol.hasInstance]
 function FunctionPrototypeHasInstance(v) {
   return OrdinaryHasInstance(this, v);
 }
 
-// builtins/function.ts:188 get Function.prototype.caller set Function.prototype.caller get Function.prototype.arguments set Function.prototype.arguments
+// builtins/function.ts:192 get Function.prototype.caller set Function.prototype.caller get Function.prototype.arguments set Function.prototype.arguments
 function ThrowTypeError(v) {
   throw %NewTypeError("invalid property access");
 }
@@ -5045,6 +5048,9 @@ function MathPow(base, exponent) {
 // builtins/math.ts:337
 function CoerceNumbers(args) {
   const n = LengthOfArrayLike(args);
+  if (%AllNumbers(args)) {
+    return n;
+  }
   for (let i = 0; i < n; i++) {
     const v = %Get(args, i);
     if (!%IsNumber(v)) {
@@ -5054,7 +5060,7 @@ function CoerceNumbers(args) {
   return n;
 }
 
-// builtins/math.ts:353 Math.max
+// builtins/math.ts:356 Math.max
 function MathMax(...args) {
   const n = CoerceNumbers(args);
   let highest = -1 / 0;
@@ -5070,7 +5076,7 @@ function MathMax(...args) {
   return highest;
 }
 
-// builtins/math.ts:374 Math.min
+// builtins/math.ts:377 Math.min
 function MathMin(...args) {
   const n = CoerceNumbers(args);
   let lowest = 1 / 0;
@@ -5086,7 +5092,7 @@ function MathMin(...args) {
   return lowest;
 }
 
-// builtins/math.ts:395 Math.hypot
+// builtins/math.ts:398 Math.hypot
 function MathHypot(...args) {
   const n = CoerceNumbers(args);
   let r = 0;
@@ -5096,7 +5102,7 @@ function MathHypot(...args) {
   return r;
 }
 
-// builtins/math.ts:408 Math.random
+// builtins/math.ts:411 Math.random
 function MathRandomBuiltin() {
   return %MathRandom();
 }
@@ -8613,6 +8619,9 @@ function StringFromCharCode(...codeUnits) {
 
 // builtins/string.ts:461 String.fromCodePoint
 function StringFromCodePoint(...codePoints) {
+  if (%AllCodePoints(codePoints)) {
+    return %StrFromCodePoints(codePoints);
+  }
   const n = LengthOfArrayLike(codePoints);
   for (let i = 0; i < n; i++) {
     const next = %Get(codePoints, i);
@@ -8625,7 +8634,7 @@ function StringFromCodePoint(...codePoints) {
   return %StrFromCodePoints(codePoints);
 }
 
-// builtins/string.ts:479 String.raw
+// builtins/string.ts:482 String.raw
 function StringRaw(template, ...substitutions) {
   const cooked = %ToObject(template);
   const literals = %ToObject(%Get(cooked, "raw"));
