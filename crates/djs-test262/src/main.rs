@@ -292,25 +292,18 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
     );
     print!("{}", report::summary(&config, &tests, &outs, &report_opts));
 
-    let results: Vec<(&str, Option<&str>)> = tests[..ran]
+    // Reasons are single lines of bounded length, so the failures file stays readable.
+    let reasons: Vec<Option<String>> = outcomes
         .iter()
-        .zip(&outcomes)
-        .map(|(t, o)| {
-            let reason = match &o.verdict {
-                Verdict::Pass => None,
-                Verdict::Fail(r) => Some(r.as_str()),
-            };
-            (t.path.as_str(), reason)
+        .map(|o| match &o.verdict {
+            Verdict::Pass => None,
+            Verdict::Fail(r) => Some(one_line_reason(r)),
         })
         .collect();
-    // Reasons are single lines of bounded length, so the failures file stays readable.
-    let one_line: Vec<(String, Option<String>)> = results
+    let results: Vec<(&str, Option<&str>)> = tests[..ran]
         .iter()
-        .map(|(p, r)| (p.to_string(), r.map(one_line_reason)))
-        .collect();
-    let results: Vec<(&str, Option<&str>)> = one_line
-        .iter()
-        .map(|(p, r)| (p.as_str(), r.as_deref()))
+        .zip(&reasons)
+        .map(|(t, r)| (t.path.as_str(), r.as_deref()))
         .collect();
 
     if args.failures {
