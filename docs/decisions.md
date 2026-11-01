@@ -316,3 +316,28 @@ The value stack is a growable arena `ValueArray` addressed by index. A frame is
 argc, flags/continuation, new_target, as int32 Values), locals, operand stack`. Calls do
 not copy arguments. The GC traces the stack as plain values, and interpreter registers
 are flushed to an arena `Interp` cell whenever `run` returns. §7.1.
+
+## D006: Accept compiler design note 0008 (docs/compiler.md)
+date: 2026-11-01 · by: coordinator · issue: 0008
+docs/compiler.md is the implementation reference for the compiler, bytecode and
+interpreter. Its [ARCH] proposals (D1080, D1081, D1084, D1085, privileged mode in P1) are
+applied to ARCH.md. 0006 is split into 0013 to 0016 following its section 10.
+
+## D007: Internal-reference Value tag
+date: 2026-11-01 · by: coordinator · issue: 0008
+Add a Value tag for references to internal cells (function templates, Boxes, …) so they
+can sit in object slots. Such values never reach JS code; the GC and `verify` trace them
+like other references. Implemented by the first issue that needs it (0015 or P1-1),
+which updates value.rs, the GC and verify together.
+
+## D008: Codemode top level is a function body
+date: 2026-11-01 · by: coordinator · issue: 0008
+pi wraps codemode scripts as `(async (tools, console) => {<code>\n})`
+(pi-private/packages/codemode/src/runtime/vm.ts). So top-level declarations are locals,
+`this` is lexical (the global `this`), and `tools`/`console` are parameters. The async-body
+mode matches that; dquickts' global-eval async semantics are not what pi uses.
+
+## D009: Keep source text for Function.prototype.toString
+date: 2026-11-01 · by: coordinator · issue: 0008
+Scripts keep their source (one-byte when possible). Function templates record their span,
+and `toString` slices it. A compile flag may strip the source later if memory matters.

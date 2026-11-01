@@ -153,13 +153,14 @@ way QuickJS does. This needs four techniques:
      and check what follows, using tsc's rules.
 
    The scan only moves the lexer; nothing is emitted.
-2. **Rewind:** a checkpoint is (lexer position, bytecode length, constant pool length,
-   scope depth). Where speculative parsing is simpler than scanning, we emit, and on failure
-   truncate back to the checkpoint.
+2. **Rewind:** speculation never emits bytecode. A checkpoint is just the lexer state plus
+   the current token, so rewinding is a copy (D1080). The only rewrite of emitted code is
+   turning the last instruction (a load) into an assignment target.
 3. **Deferred variable resolution:** the compiler emits scope-generic opcodes
-   (`get_name atom, scope`) and runs a **resolution pass** over a function's bytecode when
-   that function ends. By then every inner function has been compiled and has reported
-   which outer bindings it captures. The pass rewrites each access into a local slot, a
+   (`get_name atom, scope`) and runs a **resolution pass** once per compilation unit after
+   parsing, over all functions, children before parents (D1081). Resolving when a function
+   ends is not enough because of hoisting. By then every inner function has reported which
+   outer bindings it captures. The pass rewrites each access into a local slot, a
    captured cell (box), or a global lookup. Instructions are encoded so this can be done in
    place, or with one linear re-emit. Hoisting (`var`, function declarations) and TDZ checks
    are handled in the same pass.
@@ -201,9 +202,15 @@ loop {
 - **Re-entrant operations without recursion:** an opcode that may invoke user code (getter,
   setter, `valueOf`/`toString` during `+`, iterator protocol in `for-of` / spread /
   destructuring, `instanceof` with `Symbol.hasInstance`, Proxy traps later) pushes a frame
-  for the callee with a *continuation*: either the result is delivered to the operand stack
-  and the next instruction continues, or a small numbered resume state is recorded on the
-  frame for multi-step ops. Nothing is left on the Rust stack.
+  for the callee with one of a few fixed *continuations* (push the result, discard it,
+  the construct result rule, return from `run`). **An op never resumes mid-way** (D1085):
+  it runs its fast path inline, and when user code is needed it either calls the user
+  function directly (getters, setters) or calls a privileged JS builtin (`%Add`,
+  `%ToPropertyKey`, `%GetIterator`, …) that holds the multi-step logic. Nothing is left on
+  the Rust stack, and the interpreter has no per-op state machines. (Generated `@native`
+  builtins do have states; see "Builtins".)
+- **Exceptions:** per-function handler tables map pc ranges to handlers. `finally` uses
+  `gosub`/`ret` at a fixed stack depth (D1084). Unwinding walks frames in the arena.
 - **Generators and async functions:** on `yield`/`await`, the frame's slice of the value
   stack is copied into a heap generator/async object. Resuming copies it back. Closures
   capture boxed cells, chosen by the resolution pass, so frames never need to outlive
@@ -513,7 +520,9 @@ identical. This turns G4 and G5 from claims into tested properties from day one.
   harness, and suspension stress mode (trivial at this point, and that is the point).
 - **P1, core language:** functions, closures and the resolution pass, objects, arrays,
   control flow, exceptions, `let`/`const`/TDZ, template literals, destructuring, spread,
-  arrow functions, classes. Copying GC.
+  arrow functions, classes. Copying GC. A minimal privileged compiler mode (`%Name(…)`
+  intrinsic calls) and a hand-written `prelude.js` for slow paths (ToPrimitive and the
+  like), which bgen replaces in P2 (docs/compiler.md 7.3).
 - **P2, codemode MVP:** promises, async/await, job queue, async host functions, djs-bgen
   (subset checker + JS emitter only), builtins in the builtin language on the bytecode
   backend + base snapshot, JSON, core String/Array/Object/Math builtins, the wasm
