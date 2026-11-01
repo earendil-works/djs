@@ -120,13 +120,14 @@ records! {
     /// One property in a [`PropTable`]. For a data property `VALUE` is the value and
     /// `SETTER` is unused (0). For an accessor `VALUE` is the getter and `SETTER` the
     /// setter (`undefined` when absent). A deleted entry has `KEY` 0 and zeroed slots.
-    PropEntry[24] {
+    PropEntry[16] {
         /// The key: an [`Atom`](super::Atom) id. 0 marks a deleted entry.
         KEY: u32 = 0,
-        /// [`PropFlags`](super::PropFlags) bits.
+        /// [`PropFlags`](super::PropFlags) bits, plus `object::STORE_ACCESSOR`.
         FLAGS: u32 = 4,
+        /// A data property's value, or an internal ref to the [`AccessorPair`] of an
+        /// accessor (D1830).
         VALUE: Value = 8,
-        SETTER: Value = 16,
     }
 
     /// One slot of the [`HandleTable`]. A live slot has `NEXT` = [`HANDLE_LIVE`]; a free
@@ -439,6 +440,14 @@ cells! {
     /// A BigInt primitive (0046, D1460): immutable, the magnitude in little-endian
     /// `u32` limbs without high zero limbs (zero has none). Header flag
     /// [`flags::BIGINT_NEG`]: negative (never set for zero).
+    /// The getter and setter of an accessor property (D1830), referenced from its
+    /// property entry: entries hold one value, so data properties take 16 bytes.
+    /// Never shared between properties.
+    25 => AccessorPair {
+        GETTER: Value = 8,
+        SETTER: Value = 16,
+    };
+
     24 => BigInt {
         /// Limb count.
         LEN: u32 = 8,
@@ -494,7 +503,7 @@ mod tests {
         assert_eq!(Object::LAYOUT.min_size, 24);
         assert_eq!(Roots::LAYOUT.min_size, 64);
         let t = PropTable::LAYOUT.tail.unwrap();
-        assert_eq!(t.elem.size, 24);
+        assert_eq!(t.elem.size, 16);
         assert_eq!(t.elem.name, "PropEntry");
         let traced: alloc::vec::Vec<_> = t
             .elem
@@ -503,9 +512,9 @@ mod tests {
             .filter(|f| f.ty.is_traced())
             .map(|f| f.name)
             .collect();
-        assert_eq!(traced, ["VALUE", "SETTER"]);
+        assert_eq!(traced, ["VALUE"]);
         assert_eq!(Rope::LAYOUT.fields[2].ty, FieldTy::Ref);
-        assert_eq!(PropTable::ENTRIES.cell_size(2), Some(72));
+        assert_eq!(PropTable::ENTRIES.cell_size(2), Some(56));
         assert_eq!(Str16::DATA.cell_size(3), Some(24));
         assert_eq!(Str8::DATA.cell_size(u32::MAX), None);
         assert_eq!(Object::LAYOUT.tail_capacity(40), 2);

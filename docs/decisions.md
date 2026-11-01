@@ -3315,3 +3315,13 @@ prints all dots (it printed `.EEEE…`).
 
 Native builtins (0063) are not retried: an allocation failure inside a native frame is
 still an immediate out-of-memory error.
+
+## D1830: Property entries are 16 bytes; accessors live in an AccessorPair cell
+date: 2026-11-03 · by: heap · issue: 0083
+A `PropEntry` is `KEY: u32, FLAGS: u32, VALUE: Value` (was 24 bytes with a `SETTER`
+slot that data properties never used). An accessor's `VALUE` is an internal ref to an
+`AccessorPair` cell (CellKind 25: `GETTER`, `SETTER`), allocated before the entry is
+written (D1700) and reused when the accessor is redefined. Pairs are never shared.
+`heap::walk::verify` checks that every live accessor entry points at a pair. The reader
+skips accessors as before, so it needs only the regenerated layout. The first step of the
+shapes design (docs/objects.md §7): 0052 S2's first item.

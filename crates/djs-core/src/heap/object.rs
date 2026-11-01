@@ -30,7 +30,7 @@ use alloc::vec::Vec;
 
 use super::atom::{Atom, atoms};
 use super::cells::{
-    Object, PropEntry, PropTable, Roots, ValueArray,
+    AccessorPair, Object, PropEntry, PropTable, Roots, ValueArray,
     flags::{OBJ_EXTENSIBLE, OBJ_INDEXED_PROPS, OBJ_IS_PROTO, OBJ_LENGTH_READONLY},
 };
 use super::layout::Ref;
@@ -475,7 +475,7 @@ impl Heap {
             let p = Property::data(value, PropFlags::ALL);
             let t = self.props(o);
             match self.table_find(t, key) {
-                Some(i) => self.write_entry(t, i, key, &p),
+                Some(i) => self.write_entry(t, i, key, &p)?,
                 None => {
                     self.table_insert(o, key, &p)?;
                     indexed |= self.atom_array_index(key).is_some();
@@ -882,9 +882,13 @@ impl Heap {
         let fl = a.get(e, PropEntry::FLAGS);
         let flags = PropFlags::from_bits(fl as u8);
         if fl & STORE_ACCESSOR != 0 {
+            let pair = a
+                .get::<Value>(e, PropEntry::VALUE)
+                .as_internal()
+                .expect("accessor pair");
             Property::Accessor {
-                getter: a.get(e, PropEntry::VALUE),
-                setter: a.get(e, PropEntry::SETTER),
+                getter: a.get(pair, AccessorPair::GETTER),
+                setter: a.get(pair, AccessorPair::SETTER),
                 flags,
             }
         } else {
@@ -895,28 +899,44 @@ impl Heap {
         }
     }
 
-    fn write_entry(&mut self, t: u32, i: u32, key: Atom, p: &Property) {
+    /// Writes entry i. An accessor reuses the entry's pair if it has one, else allocates
+    /// one first, so a failed allocation changes nothing (D1700).
+    fn write_entry(&mut self, t: u32, i: u32, key: Atom, p: &Property) -> Result<(), HeapError> {
         let e = PropTable::ENTRIES.at(t, i);
-        let a = self.arena_mut();
-        a.set(e, PropEntry::KEY, key.id());
         match *p {
             Property::Data { value, flags } => {
+                let a = self.arena_mut();
+                a.set(e, PropEntry::KEY, key.id());
                 a.set(e, PropEntry::FLAGS, flags.bits() as u32);
                 a.set(e, PropEntry::VALUE, value);
-                a.set(e, PropEntry::SETTER, Value::ZERO);
             }
             Property::Accessor {
                 getter,
                 setter,
                 flags,
             } => {
+                let a = self.arena();
+                let old = (a.get(e, PropEntry::KEY) == key.id()
+                    && a.get(e, PropEntry::FLAGS) & STORE_ACCESSOR != 0)
+                    .then(|| a.get::<Value>(e, PropEntry::VALUE).as_internal())
+                    .flatten();
+                let pair = match old {
+                    Some(pair) => pair,
+                    None => {
+                        self.alloc_cell(CellKind::AccessorPair, AccessorPair::LAYOUT.min_size)?
+                    }
+                };
                 // Accessors have no writable attribute.
                 let bits = (flags.bits() & !PropFlags::WRITABLE.bits()) as u32;
+                let a = self.arena_mut();
+                a.set(pair, AccessorPair::GETTER, getter);
+                a.set(pair, AccessorPair::SETTER, setter);
+                a.set(e, PropEntry::KEY, key.id());
                 a.set(e, PropEntry::FLAGS, bits | STORE_ACCESSOR);
-                a.set(e, PropEntry::VALUE, getter);
-                a.set(e, PropEntry::SETTER, setter);
+                a.set(e, PropEntry::VALUE, Value::internal(pair));
             }
         }
+        Ok(())
     }
 
     fn alloc_table(&mut self, cap: u32) -> Result<u32, HeapError> {
@@ -989,7 +1009,7 @@ impl Heap {
             self.build_index(t)?;
             index = self.arena().get(t, PropTable::INDEX).0;
         }
-        self.write_entry(t, count, key, p);
+        self.write_entry(t, count, key, p)?;
         self.arena_mut().set(t, PropTable::COUNT, count + 1);
         if index != 0 {
             let b = self.probe(index, key_hash(key), |b, v| {
@@ -1204,7 +1224,7 @@ impl Heap {
             }
             Loc::Table(i) => {
                 let t = self.props(o);
-                self.write_entry(t, i, key, &p);
+                self.write_entry(t, i, key, &p)?;
             }
             Loc::ArrayLength => unreachable!("array length is written by array_set_length"),
             Loc::None => {

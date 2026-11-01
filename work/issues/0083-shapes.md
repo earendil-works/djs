@@ -34,6 +34,26 @@ re-check).
 
 ## Log
 
+- Design (docs/objects.md §7) approved with conditions: ephemeron GC tests for internal-ref
+  keys, determinism gate checks and reader cross tests green at every part, the 32/32
+  limits measured on realistic data, numbers only on a quiet machine.
+- Ids: CellKind 25 AccessorPair, 26 Shape, 27 PropValues; header flag OBJ_DICTIONARY 128.
+- Part 1 (D1830): 16-byte PropEntry plus the AccessorPair cell. Sizes are byte counts, so
+  they don't depend on machine load:
+  - base image 416,120 -> 402,432 bytes (-13.7 KB, -3.3%);
+  - memory per object (vm/tests.rs `memory_per_object_report`, 10k objects kept in an
+    array, after a collect):
+
+    | data | before | after |
+    | --- | ---: | ---: |
+    | `{a,b,c,d}` literal | 157.1 B | 125.1 B |
+    | JSON.parse 5-key record | 259.7 B | 219.7 B |
+    | class instance, 3 fields | 157.2 B | 125.2 B |
+    | closure | 189.1 B | 157.1 B |
+    | `{}` | 37.1 B | 37.1 B |
+
+  No timing: the machine is at load ~10, and part 1 only changes the storage layout.
+
 ## Follow-ups
 
 ## Result

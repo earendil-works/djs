@@ -1041,7 +1041,7 @@ fn tracing_follows_layouts() {
         Slot::Value(_) => values += 1,
         Slot::Ref(_) => refs += 1,
     });
-    assert_eq!(values, cap * 2);
+    assert_eq!(values, cap);
     assert_eq!(refs, 1, "INDEX");
     // Strings have no traced slots; ropes have two.
     let a = s(&mut h, "plain");

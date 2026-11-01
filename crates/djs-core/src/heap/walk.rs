@@ -276,6 +276,17 @@ impl Heap {
                     && a.get(cell, PropTable::DELETED) <= count
                     && fits(index, true, &[CellKind::U32Array])
                     && (index.is_null() || (pow2(index) && self.u32_array_len(index.0) > count))
+                    // An accessor's value is its pair (D1830).
+                    && (0..count).all(|i| {
+                        let e = PropTable::ENTRIES.at(cell, i);
+                        let accessor = a.get(e, super::cells::PropEntry::FLAGS)
+                            & super::object::STORE_ACCESSOR
+                            != 0;
+                        let v: Value = a.get(e, super::cells::PropEntry::VALUE);
+                        !accessor
+                            || a.get(e, super::cells::PropEntry::KEY) == 0
+                            || v.as_internal().and_then(kind_at) == Some(CellKind::AccessorPair)
+                    })
             }
             CellKind::Rope => {
                 let len = a.get(cell, Rope::LEN);

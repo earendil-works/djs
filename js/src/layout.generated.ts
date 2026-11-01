@@ -2,7 +2,7 @@
 // Regenerate: DJS_UPDATE_LAYOUT=1 cargo test -p djs-core layout_generated
 
 export const LAYOUT = {
-  "layoutHash": 395468381,
+  "layoutHash": 1974166534,
   "magic": 5458500,
   "headerSize": 8,
   "header": { "KIND": 0, "GC": 1, "FLAGS": 2, "SIZE": 4 },
@@ -121,12 +121,11 @@ export const LAYOUT = {
         "name": "ENTRIES",
         "offset": 24,
         "elem": "PropEntry",
-        "elemSize": 24,
+        "elemSize": 16,
         "fields": {
           "KEY": { "offset": 0, "type": "u32" },
           "FLAGS": { "offset": 4, "type": "u32" },
-          "VALUE": { "offset": 8, "type": "Value" },
-          "SETTER": { "offset": 16, "type": "Value" }
+          "VALUE": { "offset": 8, "type": "Value" }
         }
       }
     },
@@ -335,6 +334,15 @@ export const LAYOUT = {
           "": { "offset": 0, "type": "Value" }
         }
       }
+    },
+    "AccessorPair": {
+      "kind": 25,
+      "minSize": 24,
+      "fields": {
+        "GETTER": { "offset": 8, "type": "Value" },
+        "SETTER": { "offset": 16, "type": "Value" }
+      },
+      "tail": null
     },
     "BigInt": {
       "kind": 24,

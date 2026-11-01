@@ -2970,3 +2970,43 @@ fn a_failing_allocation_collects_and_retries() {
         assert_eq!(plain, restored, "{limit}");
     }
 }
+
+/// Bytes per object for some shapes of data (0083): run with
+/// `cargo test -p djs-core --lib memory_per_object -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn memory_per_object_report() {
+    extern crate std;
+    let n: u32 = 10_000;
+    let cases = [
+        (
+            "literal {a,b,c,d}",
+            "globalThis.keep = []; for (let i = 0; i < COUNT; i++) keep.push({ a: i, b: i, c: i, d: i });",
+        ),
+        (
+            "JSON.parse 5-key records",
+            "const s = JSON.stringify(Array.from({ length: COUNT }, (_, i) => ({ id: i, name: 'n' + (i % 10), ok: true, score: i / 2, tags: null }))); globalThis.keep = JSON.parse(s);",
+        ),
+        (
+            "class instances (3 fields)",
+            "class P { constructor(i) { this.x = i; this.y = i; this.z = i; } } globalThis.keep = []; for (let i = 0; i < COUNT; i++) keep.push(new P(i));",
+        ),
+        (
+            "closures",
+            "globalThis.keep = []; for (let i = 0; i < COUNT; i++) keep.push(() => i);",
+        ),
+        (
+            "empty objects",
+            "globalThis.keep = []; for (let i = 0; i < COUNT; i++) keep.push({});",
+        ),
+    ];
+    for (name, src) in cases {
+        let (mut vm, _) = run_script(vm(), "globalThis.keep = [];");
+        vm.collect().unwrap();
+        let before = vm.bytes().len();
+        let (mut vm, _) = run_script(vm, &src.replace("COUNT", &format!("{n}")));
+        vm.collect().unwrap();
+        let after = vm.bytes().len();
+        std::println!("{name}: {:.1} B/object", (after - before) as f64 / n as f64);
+    }
+}
