@@ -1,7 +1,7 @@
 # 0128: Page allocator in djs-wasm: in-place arena growth
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0128-page-allocator
 depends-on: 0125, 0126 (no_std djs-wasm + dlmalloc global allocator)
 guide: docs/guide/gc.md / arena.md (memory growth), docs/guide/host.md if visible
