@@ -274,7 +274,7 @@ fn rejects_control_flow_and_tags() {
     );
     reject(
         "/** @builtin A.b\n * @getter A.c */ function F(this: Value): void {}",
-        "install a function once",
+        "mix only with each other",
     );
     reject(
         "/** @extends Error */ function F(): void {}",

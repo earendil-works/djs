@@ -860,6 +860,11 @@ impl Exec<'_> {
             ..Default::default()
         };
         self.heap.define_own_property(holder, atom, &d)?;
+        // Installed before (%ThrowTypeError% is every half of two accessors): keep the
+        // first name.
+        if self.heap.cell_flags(fo.offset()) & OBJ_BUILTIN != 0 {
+            return Ok(());
+        }
         let key_name = self.heap.str_to_string(key_name.as_string().expect("name"));
         let name = format!("{} {key_name}", if setter { "set" } else { "get" });
         let name = Value::string(self.heap.alloc_str(&name)?);

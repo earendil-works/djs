@@ -1142,3 +1142,36 @@ code that builds the realm is no longer linked. After 0031 part 1 the base is 72
 compiling takes 216 µs natively and the copy 0.8 µs.
 
 Instantiating the wasm module (about 35 µs) is now most of a sandbox's startup.
+
+## D1313: Primitive wrappers and property lookup on primitives
+date: 2026-11-01 · by: infra · issue: 0031
+Boolean, Number, String and Symbol objects are `ObjectClass` 8-11 with the primitive in
+slot 0 (`realm::wrap_primitive`; `%ToObject` and `%WrapPrimitive` create them). A String
+object's index properties (read-only, enumerable) and `length` are ordinary own
+properties defined at creation, which costs O(length) per ToObject of a string; the
+interpreter's own string fast paths never create wrappers. Boolean.prototype,
+Number.prototype and String.prototype are wrappers of false, +0 and "" (realm
+intrinsics, like Symbol.prototype). Property reads on primitives (`lookup`) go through
+the realm prototype for the type, and getters get the primitive as `this`.
+`%PrimitiveValue` unwraps for thisBooleanValue and friends. The `Symbol.for` registry is
+a prototype-less realm object from keys to symbols; `keyFor` checks the entry under the
+symbol's description.
+
+## D1314: Math.random
+date: 2026-11-01 · by: infra · issue: 0031
+xorshift64* (as QuickJS), 52 bits into [0, 1). The state is a realm intrinsic (an
+internal ValueArray of two int32 halves), so it is heap data: a restored snapshot
+continues its sequence. `VmOptions::random_seed` (0 = a fixed default) is applied by
+`Vm::new` and by `Vm::after_copy` (D1321), so every VM from the base starts from the
+host's seed; `Vm::set_random_seed` reseeds a running VM.
+
+## D1315: Symbol keys and attributes in installation tags
+date: 2026-11-01 · by: infra · issue: 0031
+Extends D1310. A path may end in a well-known symbol: `@builtin
+Symbol.prototype[Symbol.toPrimitive]`, `@value Math[Symbol.toStringTag]`; bgen emits the
+key as `%WellKnownSymbol("toPrimitive")` and the install intrinsics accept string or
+symbol keys (a symbol method is named `[description]`). `@attributes` also applies to
+`@builtin` (emitted as `%InstallMethod` followed by `%InstallValue` with the attributes;
+`none` means all false). One function may be several accessor halves
+(`%ThrowTypeError%` is Function.prototype's `caller` and `arguments` getter and setter);
+the first install names it.

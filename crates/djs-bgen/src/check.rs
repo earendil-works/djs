@@ -386,9 +386,12 @@ fn builtin_info(
     let ctors = kinds(|k| matches!(k, InstallKind::Constructor { .. }));
     let values = kinds(|k| matches!(k, InstallKind::Value { .. }));
     let accessors = kinds(|k| matches!(k, InstallKind::Getter | InstallKind::Setter));
-    if (ctors > 0 || values > 0 || accessors > 0) && b.installs.len() > 1 {
+    // One function may be several accessor halves (%ThrowTypeError%), but not mix them
+    // with other forms.
+    let mixed_accessors = accessors > 0 && accessors < b.installs.len();
+    if (ctors > 0 || values > 0 || mixed_accessors) && b.installs.len() > 1 {
         err(
-            "`@constructor`, `@value`, `@getter` and `@setter` install a function once, alone"
+            "`@constructor` and `@value` install a function once, alone; `@getter`/`@setter` mix only with each other"
                 .into(),
         );
     }

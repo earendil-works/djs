@@ -141,3 +141,15 @@ function InstanceofOperator(v: Value, target: Value): boolean {
 function FunctionPrototypeHasInstance(this: Value, v: Value): boolean {
   return OrdinaryHasInstance(this, v);
 }
+
+/**
+ * %ThrowTypeError% ( ), 10.2.4.1: the `caller` and `arguments` accessors of
+ * Function.prototype (AddRestrictedFunctionProperties, 10.2.4).
+ * @getter Function.prototype.caller
+ * @setter Function.prototype.caller
+ * @getter Function.prototype.arguments
+ * @setter Function.prototype.arguments
+ */
+function ThrowTypeError(this: Value, v?: Value): void {
+  throw NewTypeError("invalid property access");
+}

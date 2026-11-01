@@ -167,6 +167,8 @@ InstanceofOperator: reentrant
 FunctionPrototypeHasInstance: reentrant (Function.prototype[Symbol.hasInstance])
   builtins/function.ts:142:10  OrdinaryHasInstance (builtin)
 
+ThrowTypeError: leaf (get Function.prototype.caller, set Function.prototype.caller, get Function.prototype.arguments, set Function.prototype.arguments)
+
 MathObject: leaf (value Math)
 
 MathToStringTag: leaf (value Math[Symbol.toStringTag])

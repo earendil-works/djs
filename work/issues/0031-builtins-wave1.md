@@ -130,9 +130,66 @@ intrinsic. Document the pattern in builtins/README.md with one worked example.
 - Remaining stack-position difference: `new X(...)` stacks point at `new`, qjs at the
   `(` (compiler line table; follow-up for the compiler).
 
+### Part 2: Object rest, wrappers, Boolean, Symbol, Number, Math, globals
+- Main had 0032 (base snapshot): rebased; the Math.random seed is per VM via
+  `VmOptions::random_seed`, applied in `Vm::new` and `after_copy` (D1314).
+- Object: getPrototypeOf setPrototypeOf create defineProperties keys values entries
+  assign freeze seal preventExtensions isFrozen isSealed isExtensible
+  getOwnPropertySymbols getOwnPropertyDescriptors hasOwn is; Object.prototype toString
+  (class tag + @@toStringTag) toLocaleString valueOf isPrototypeOf. Not yet:
+  `fromEntries` and `groupBy` (need iteration, 0029/0030).
+- Wrappers + primitive lookup (D1313), Boolean, Symbol (constructor, for/keyFor,
+  description, toString, valueOf, @@toPrimitive, @@toStringTag, the 13 well-known
+  symbols), Number (constructor, statics, constants, toString/toFixed/toExponential/
+  toPrecision/valueOf/toLocaleString via crate::num), globals parseInt parseFloat
+  isNaN isFinite (Number.parseInt === parseInt), Math (all functions and constants,
+  libm; random D1314), Function.prototype[@@hasInstance], %ThrowTypeError% for
+  Function.prototype.caller/arguments, `new String` wrappers and
+  String.prototype.toString/valueOf.
+- bgen: symbol keys `[Symbol.x]`, `@attributes` on `@builtin` (+ `none`), accessor
+  halves on one function (D1315). New leaf module crates/djs-core/src/builtins/number.rs.
+- behavior.js compares every part-2 builtin with qjs (0 mismatches), except one
+  deliberate difference: qjs's Object.defineProperties reads all descriptor objects
+  before converting any, the spec (and djs) converts each right after reading it.
+- Outside touches: heap/object.rs (wrapper classes 8-11), interp/run.rs (`lookup` of
+  primitives through their prototypes), vm/mod.rs (`VmOptions::random_seed`,
+  `after_copy`, `set_random_seed`), vm/tests.rs (seed test; one runtime_errors
+  expectation: `{} + 1` no longer throws now that Object.prototype.toString exists).
+- Tests: difftest builtins/{object-statics,number-math,boolean-symbol}.js, e2e
+  builtins_wave1_part2.js; all six builtins cases pass on djs (with stress).
+- libm precision: `Math.exp(1) !== Math.E` with libm (qjs uses the system libm, which
+  gives E exactly); left out of the difftest case.
+- Results after part 2: difftest 74 / 171 pass (86 expected failures, from 103 at the
+  start). test262 active 7,687 / 20,124 (38.2%): built-ins 3,617, language 4,027,
+  harness 43. Per dir: Object 1,838/3,197 (from 1), Function 150/242 (from 1), Error
+  28/50 (0), NativeErrors 38/82 (0), Boolean 35/45 (0), Number 270/324 (6), Math
+  162/284 (0), Array 809/2,680 (129), String 156/1,040 (0), parseInt 51/54,
+  parseFloat 50/53, isNaN 6/8, isFinite 6/8, global 11/21. Symbol's tests are all in
+  the `later` group. Most remaining failures in these dirs are propertyHelper.js's
+  for-in (1,058) and for-in/of in tests (276), then Date/RegExp/JSON globals.
+- Startup: `Vm::new` compiling the prelude 600 µs native release; heap after collect
+  174 KB (17 KB bare). With the base snapshot (0032) `djs_prelude::new_vm` takes
+  2.3 µs. The base grew from 36 KB; 46 KB of it is the prelude's source text, kept
+  for Function.prototype.toString (D009) although prelude functions print as native:
+  a compile option to drop it would shrink the base by a quarter (follow-up).
+- The e2e suite takes ~47 s in debug (was ~24 s at part 1): the suspension mode copies
+  the whole heap at every fuel-1 stop, so its cost grows with the base size.
+
 ## Follow-ups
 - Compiler: stack position of `new F()` (qjs: the call's `(`), see Log.
 - Setting an array index past a non-writable `length` says "object is not extensible"
   (interp set_property), qjs says "'length' is read-only".
+- Object.fromEntries, Object.groupBy and AggregateError need IterableToList / GetIterator
+  (0029/0030); write them on top of those.
+- `instanceof` in the interpreter ignores a user `Symbol.hasInstance`; builtins/
+  function.ts has InstanceofOperator, which the op could call as a slow path.
+- Privileged compiles could drop the source text (46 KB of the 174 KB base).
+- e2e suspension mode cost grows with the base size (see Log); maybe suspend every N > 1
+  or restore from a smaller delta.
+- %ThrowTypeError% is named `get caller` (should be "", non-extensible, frozen
+  name/length).
+- Symbol.prototype[@@toPrimitive], Function.prototype[@@hasInstance] attributes are
+  right; Math functions use libm (Math.exp(1) differs from qjs's system libm in the
+  last bit).
 
 ## Result

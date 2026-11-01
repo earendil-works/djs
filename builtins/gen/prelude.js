@@ -505,6 +505,11 @@ function FunctionPrototypeHasInstance(v) {
   return OrdinaryHasInstance(this, v);
 }
 
+// builtins/function.ts:153 get Function.prototype.caller set Function.prototype.caller get Function.prototype.arguments set Function.prototype.arguments
+function ThrowTypeError(v) {
+  throw %NewTypeError("invalid property access");
+}
+
 // builtins/math.ts:8 value Math
 function MathObject() {
   return %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
@@ -1499,6 +1504,10 @@ function SymbolUnscopables() {
 %InstallMethod("Function.prototype", "toString", FunctionPrototypeToString, 0);
 %InstallMethod("Function.prototype", %WellKnownSymbol("hasInstance"), FunctionPrototypeHasInstance, 1);
 %InstallValue("Function.prototype", %WellKnownSymbol("hasInstance"), FunctionPrototypeHasInstance, 0);
+%InstallAccessor("Function.prototype", "caller", ThrowTypeError, false);
+%InstallAccessor("Function.prototype", "caller", ThrowTypeError, true);
+%InstallAccessor("Function.prototype", "arguments", ThrowTypeError, false);
+%InstallAccessor("Function.prototype", "arguments", ThrowTypeError, true);
 %InstallValue("Math", %WellKnownSymbol("toStringTag"), MathToStringTag(), 4);
 %InstallValue("Math", "E", MathE(), 0);
 %InstallValue("Math", "LN10", MathLN10(), 0);
