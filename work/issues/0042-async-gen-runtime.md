@@ -1,6 +1,6 @@
 # 0042: Async generator runtime, function-kind intrinsics, rejections in the host
 
-status: in-progress
+status: done
 agent: heap
 branch: issue/0042-async-gen-runtime
 depends-on: 0037
@@ -11,19 +11,19 @@ The 0037 follow-ups that the compiler side (0041, lexer, in parallel) needs next
 the host-side gap for unhandled rejections.
 
 ## Acceptance criteria
-- [ ] Async generators: the per-generator request queue (AsyncGeneratorEnqueue /
+- [x] Async generators: the per-generator request queue (AsyncGeneratorEnqueue /
       Resume / Drain per spec), `%AsyncGeneratorPrototype%` (next/return/throw),
       `%AsyncIteratorPrototype%`, `%AsyncFromSyncIteratorPrototype%` (for `for await`
       over sync iterables), and the ops/contract the compiler needs (extend
       docs/compiler.md 7.7). Tests with hand-assembled bytecode, as in 0037.
-- [ ] `%GeneratorFunction%`, `%AsyncFunction%`, `%AsyncGeneratorFunction%` and their
+- [x] `%GeneratorFunction%`, `%AsyncFunction%`, `%AsyncGeneratorFunction%` and their
       prototypes (the constructors themselves throw like `Function`: no eval), wired
       so the closures the compiler creates for each kind get the right [[Prototype]]
       and `prototype` objects. Coordinate the function-kind flags with the lexer via the
       coordinator.
-- [ ] Unhandled rejections exported from djs-wasm and reported by the Sandbox (an
+- [x] Unhandled rejections exported from djs-wasm and reported by the Sandbox (an
       option: throw, warn, or collect).
-- [ ] Ratchets updated; test262 numbers for built-ins/AsyncGenerator*, GeneratorPrototype
+- [x] Ratchets updated; test262 numbers for built-ins/AsyncGenerator*, GeneratorPrototype
       and AsyncFromSyncIteratorPrototype (likely blocked on 0041 until it lands).
 
 ## Log
@@ -43,5 +43,20 @@ the host-side gap for unhandled rejections.
   marks it handled, so a rejected result is not also reported. docs/host.md.
 
 ## Follow-ups
+- Measure test262 (built-ins/AsyncGenerator*, GeneratorPrototype,
+  AsyncFromSyncIteratorPrototype, for-await statements) once 0041 lands; update the
+  ratchet (the gate lists the newly passing tests as stale entries).
+- qjs never settles a `next()` queued behind `return()` on an unstarted async generator;
+  djs follows node/spec. A difftest/e2e case doing that would differ from qjs.
 
 ## Result
+Landed in two parts (main b2a3352, c45c004):
+- Function kinds (D1420): [[Prototype]] by the ASYNC/GENERATOR bits for any kind;
+  `prototype` objects for every generator; %GeneratorFunction%, %AsyncFunction%,
+  %AsyncGeneratorFunction% (not globals, throw like `Function`) and their prototypes.
+- Async generators and async iteration (D1421) on the existing ops (docs/compiler.md 7.7),
+  request queue in builtins/asyncgen.ts; %AsyncIteratorPrototype%,
+  %AsyncFromSyncIteratorPrototype%, %GetAsyncIterator, %AsyncIteratorReturnMethod,
+  %AsyncIteratorCloseThrow; `yield_star` for sync `yield*` (D1422).
+- Unhandled rejections in djs-wasm and the Sandbox (D1423).
+Known gap: the test262 numbers wait for 0041's syntax (see Follow-ups).
