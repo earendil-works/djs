@@ -1,7 +1,7 @@
 # 0065: `accessor` auto-accessors and decorators (TC39, then TS legacy)
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0065-decorators
 depends-on: 0058
 touches: crates/djs-core/src/compiler/, crates/djs-core/src/bytecode/ (additive), crates/djs-core/src/interp/ (small additive ops, logged), builtins/ (decorator helpers), crates/djs-cli + djs-wasm + js/src/sandbox.ts (a legacy-decorators compile flag, part 2), tests/test262.toml (promote `decorators`), ratchets
