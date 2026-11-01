@@ -195,16 +195,13 @@ impl Session {
             "globalThis[{CASE:?}] = (async (tools, console) => {{{}\n}})",
             job.source
         );
-        match self
-            .vm
-            .compile(
-                src.as_bytes(),
-                &CompileOptions {
-                    typescript: job.ts,
-                    ..CompileOptions::script(job.name)
-                },
-            )
-        {
+        match self.vm.compile(
+            src.as_bytes(),
+            &CompileOptions {
+                typescript: job.ts,
+                ..CompileOptions::script(job.name)
+            },
+        ) {
             Ok(script) => {
                 // (Read again: the global object moves when the heap is collected.)
                 let global = Value::object(self.vm.global());
