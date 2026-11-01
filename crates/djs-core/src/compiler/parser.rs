@@ -590,6 +590,30 @@ impl<'a, 'h> Parser<'a, 'h> {
         self.f.lines.push((pc, pos));
     }
 
+    /// Moves the code in `mid..end` in front of `start..mid` (loop rotation, 0086), with
+    /// the line table entries. The moved blocks and the code after `end` keep the
+    /// positions they started with.
+    pub fn rotate_code(&mut self, start: u32, mid: u32, end: u32) {
+        if start == mid || mid == end {
+            return;
+        }
+        self.f.code.rotate(start, mid, end);
+        let lines = &mut self.f.lines;
+        let at = |pc: u32| lines.iter().rev().find(|l| l.0 <= pc).map(|l| l.1);
+        let exact = |pc: u32| lines.iter().any(|l| l.0 == pc);
+        let mut extra = alloc::vec::Vec::new();
+        for (old, new) in [(start, start + (end - mid)), (mid, start), (end, end)] {
+            if let Some(pos) = at(old).filter(|_| !exact(old)) {
+                extra.push((new, pos));
+            }
+        }
+        for l in lines.iter_mut() {
+            l.0 = crate::bytecode::rotated(l.0, start, mid, end);
+        }
+        lines.extend(extra);
+        lines.sort_by_key(|l| l.0);
+    }
+
     /// Removes the last instruction (lvalue conversion, docs/compiler.md 3.7).
     pub fn truncate_last(&mut self) {
         self.f.code.truncate_last();

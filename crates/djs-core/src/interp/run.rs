@@ -112,6 +112,8 @@ mod fast {
     pub const ITER_NEXT: u8 = Op::IterNext as u8;
     pub const TO_NUMERIC: u8 = Op::ToNumeric as u8;
     pub const INC: u8 = Op::Inc as u8;
+    pub const INC_LOC: u8 = Op::IncLoc as u8;
+    pub const DEC_LOC: u8 = Op::DecLoc as u8;
     pub const DEC: u8 = Op::Dec as u8;
     pub const ADD: u8 = Op::Add as u8;
     pub const SUB: u8 = Op::Sub as u8;
@@ -1194,6 +1196,8 @@ impl<'h> Exec<'h> {
             // Number operands only: these never need `primitive_operands` (D1280).
             fast::TO_NUMERIC if self.top(0).is_number() => self.advance(Op::ToNumeric, sp0),
             fast::INC => return self.fast_inc(Op::Inc, 1, sp0),
+            fast::INC_LOC => return self.fast_inc_loc(Op::IncLoc, 1, sp0),
+            fast::DEC_LOC => return self.fast_inc_loc(Op::DecLoc, -1, sp0),
             fast::DEC => return self.fast_inc(Op::Dec, -1, sp0),
             // Two int32s inline; two Numbers (or an int32 overflow) in `fast_float`.
             fast::ADD => {
@@ -1286,6 +1290,19 @@ impl<'h> Exec<'h> {
         match self.top(0).as_int().and_then(|i| i.checked_add(d)) {
             Some(i) => {
                 self.set(self.sp - 1, Value::int(i));
+                self.advance(op, sp0);
+                true
+            }
+            None => false,
+        }
+    }
+
+    #[inline(always)]
+    fn fast_inc_loc(&mut self, op: Op, d: i32, sp0: u32) -> bool {
+        let slot = self.lp + self.imm_u16(1);
+        match self.get(slot).as_int().and_then(|i| i.checked_add(d)) {
+            Some(i) => {
+                self.set(slot, Value::int(i));
                 self.advance(op, sp0);
                 true
             }
@@ -1788,6 +1805,23 @@ impl<'h> Exec<'h> {
             }
             Op::SetLocUninit => {
                 self.set(self.lp + self.imm_u16(1), Value::UNINITIALIZED);
+            }
+            Op::IncLoc | Op::DecLoc => {
+                let slot = self.lp + self.imm_u16(1);
+                let a = self.get(slot);
+                if a.as_object().is_some() {
+                    // ToNumeric of an object runs user code: its result replaces the
+                    // local and the instruction runs again. Nothing else can see the
+                    // local in between, and a throw leaves it unchanged.
+                    return self.call_converter(intrinsics::TO_NUMERIC, slot);
+                }
+                let d = if op == Op::IncLoc { 1 } else { -1 };
+                let v = match a.as_int().and_then(|i| i.checked_add(d)) {
+                    Some(i) => Value::int(i),
+                    None if a.as_bigint().is_some() => self.bigint_add_small(a, d)?,
+                    None => conv::number(conv::to_number(self.heap, a)? + d as f64),
+                };
+                self.set(slot, v);
             }
             Op::GetArg => {
                 let v = self.get(self.bp + 2 + self.imm_u16(1));

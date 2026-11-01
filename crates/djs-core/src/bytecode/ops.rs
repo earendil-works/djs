@@ -412,6 +412,11 @@ ops! {
     SetLocChk set_loc_chk(loc: Loc) pop 1 push 1 cost Basic flags THROWS;
     /// Store the uninitialized marker.
     SetLocUninit set_loc_uninit(loc: Loc) pop 0 push 0 cost Basic;
+    /// `loc = loc + 1` (`i++;`, `++i;` on an unchecked local, 0086): `inc` in place. An
+    /// object takes `%ToNumeric` into the local first, then the instruction runs again.
+    IncLoc inc_loc(loc: Loc) pop 0 push 0 cost Basic flags THROWS | CALLS;
+    /// `loc = loc - 1`, as `inc_loc`.
+    DecLoc dec_loc(loc: Loc) pop 0 push 0 cost Basic flags THROWS | CALLS;
     /// `-> v`
     GetArg get_arg(arg: Arg) pop 0 push 1 cost Basic;
     /// `v ->`

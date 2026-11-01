@@ -432,22 +432,50 @@ fn emit_function(
     let all: Vec<crate::bytecode::Insn> = insns(&phase1.code)
         .collect::<Result<_, _>>()
         .map_err(|e| internal(&format!("{e:?}")))?;
-    let mut i = 0;
-    while i < all.len() {
-        let insn = all[i];
-        i += 1;
-        while li < f.lines.len() && f.lines[li].0 <= insn.pc {
-            let entry = (out.pos(), f.lines[li].1);
+    let all = super::peephole::simplify(all);
+    // The line table entries of phase-1 instructions up to `pc` start at the current
+    // position of `out` (the last one wins).
+    let flush = |out: &CodeBuf, li: &mut usize, lines: &mut Vec<(u32, u32)>, pc: u32| {
+        while *li < f.lines.len() && f.lines[*li].0 <= pc {
+            let entry = (out.pos(), f.lines[*li].1);
             match lines.last_mut() {
                 Some(last) if last.0 == entry.0 => *last = entry,
                 _ => lines.push(entry),
             }
-            li += 1;
+            *li += 1;
         }
+    };
+    let mut i = 0;
+    while i < all.len() {
+        let insn = all[i];
+        i += 1;
+        flush(&out, &mut li, &mut lines, insn.pc);
         match insn.op {
             Op::NameGet | Op::NamePut | Op::NameSet | Op::NameInit | Op::NameTypeof => {
                 let r = insn.imm(0) as usize;
                 let atom = f.refs[r].atom;
+                // `i++;` / `++i;` on an unchecked local: `get_loc; inc; put_loc` in place.
+                if insn.op == Op::NameGet
+                    && let [upd, put, ..] = all[i..]
+                    && matches!(upd.op, Op::Inc | Op::Dec)
+                    && matches!(put.op, Op::NamePut | Op::NameSet)
+                    && let Some(s) = unchecked_local(storage, resolved[r])
+                    && unchecked_local(storage, resolved[put.imm(0) as usize]) == Some(s)
+                    && !resolved[put.imm(0) as usize].immutable
+                {
+                    // Errors point at the update (the operator), as for `inc`.
+                    flush(&out, &mut li, &mut lines, upd.pc);
+                    if upd.op == Op::Inc {
+                        out.inc_loc(s);
+                    } else {
+                        out.dec_loc(s);
+                    }
+                    if put.op == Op::NameSet {
+                        out.get_loc(s);
+                    }
+                    i += 2;
+                    continue;
+                }
                 if insn.op == Op::NameGet
                     && let Some(d) = resolved[r].decl
                     && let Some((v, n)) = fold_const_enum(decls, d, &all[i..])
@@ -740,6 +768,17 @@ fn fold_const_enum<'d>(
         }
     }
     None
+}
+
+/// The local slot of a reference that resolved to a local without a TDZ check.
+fn unchecked_local(storage: &[Storage], res: Resolved) -> Option<u16> {
+    match res.target {
+        Target::Var(v) if !res.check => match storage[v as usize] {
+            Storage::Local(s) => Some(s),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 /// Pushes a number constant (small integers inline).

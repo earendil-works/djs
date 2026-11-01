@@ -1,5 +1,5 @@
-function 0 <anonymous>: params=2 locals=7 stack=4 captures=0
-  handler [3, 127) -> 127 depth 0
+function 0 <anonymous>: params=2 locals=7 stack=3 captures=0
+  handler [3, 112) -> 112 depth 0
     0  async_start loc0 (<state>)
     3  undefined
     4  new_box_init loc5 (isEven)
@@ -19,34 +19,27 @@ function 0 <anonymous>: params=2 locals=7 stack=4 captures=0
    52  push_i8 0
    54  put_box loc3 (i)
    57  rebox loc3 (i)
-   60  get_box loc3 (i)  ; 8:17
-   63  push_i8 3
-   65  lt  ; 8:19
-   66  jump_if_false -> 113
-   71  jump -> 94
-   76  rebox loc3 (i)
-   79  get_box loc3 (i)  ; 8:24
-   82  to_numeric
-   83  dup
-   84  inc  ; 8:25
-   85  put_box loc3 (i)  ; 8:24
-   88  drop
-   89  jump -> 60
-   94  get_loc loc2 (fns)  ; 8:29
-   97  get_box loc3 (i)  ; 8:33
-  100  fclosure child1  ; 8:32
-  105  insert3
-  106  put_elem
+   60  jump -> 87
+   65  get_loc loc2 (fns)  ; 8:29
+   68  get_box loc3 (i)  ; 8:33
+   71  fclosure child1  ; 8:32
+   76  put_elem
+   77  rebox loc3 (i)  ; 8:19
+   80  get_box loc3 (i)  ; 8:24
+   83  inc  ; 8:25
+   84  put_box loc3 (i)  ; 8:24
+   87  get_box loc3 (i)  ; 8:17
+   90  push_i8 3
+   92  lt  ; 8:19
+   93  jump_if_true -> 65  ; 8:32
+   98  get_box loc5 (isEven)  ; 15:1
+  101  undefined
+  102  push_i8 4
+  104  call 1  ; 15:7
   107  drop
-  108  jump -> 76
-  113  get_box loc5 (isEven)  ; 15:1
-  116  undefined
-  117  push_i8 4
-  119  call 1  ; 15:7
-  122  drop
-  123  undefined
-  124  async_return loc0 (<state>)
-  127  async_reject loc0 (<state>)
+  108  undefined
+  109  async_return loc0 (<state>)
+  112  async_reject loc0 (<state>)
 function 0.0 counter: params=0 locals=1 stack=1 captures=0
     0  new_box loc0 (n)
     3  push_i8 0

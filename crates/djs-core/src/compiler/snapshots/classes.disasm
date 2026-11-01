@@ -63,16 +63,15 @@ function 0.0 A: params=1 locals=4 stack=3 captures=1
    53  drop
    54  undefined
    55  put_loc loc0 (<return>)
-   58  jump -> 63
-   63  get_loc loc0 (<return>)
-   66  check_ctor_return  ; 9:4
-   67  dup
-   68  is_undefined
-   69  jump_if_false -> 79
-   74  drop
-   75  get_loc loc3 (this)
-   78  check_this
-   79  return
+   58  get_loc loc0 (<return>)
+   61  check_ctor_return  ; 9:4
+   62  dup
+   63  is_undefined
+   64  jump_if_false -> 74
+   69  drop
+   70  get_loc loc3 (this)
+   73  check_this
+   74  return
 function 0.1 #m: params=0 locals=1 stack=2 captures=1
     0  special_object 4
     2  put_loc loc0 (this)
@@ -132,26 +131,23 @@ function 0.4 <anonymous>: params=0 locals=1 stack=3 captures=3
 function 0.5 <anonymous>: params=0 locals=1 stack=3 captures=0
     0  special_object 4
     2  put_loc loc0 (this)
-    5  jump -> 37
-   10  get_loc loc0 (this)  ; 6:12
-   13  push_atom "s"
-   18  push_i8 3
-   20  define_class_field
-   21  drop
-   22  get_loc loc0 (this)  ; 16:10
-   25  fclosure child0
-   30  set_home_object
-   31  swap
-   32  call 0
-   35  drop
-   36  return_undef
-   37  jump -> 10
-function 0.5.0 <anonymous>: params=0 locals=1 stack=3 captures=0
+    5  get_loc loc0 (this)  ; 6:12
+    8  push_atom "s"
+   13  push_i8 3
+   15  define_class_field
+   16  drop
+   17  get_loc loc0 (this)  ; 16:10
+   20  fclosure child0
+   25  set_home_object
+   26  swap
+   27  call 0
+   30  drop
+   31  return_undef
+   32  jump -> 5
+function 0.5.0 <anonymous>: params=0 locals=1 stack=2 captures=0
     0  special_object 4
     2  put_loc loc0 (this)
     5  get_loc loc0 (this)  ; 17:5
     8  push_i8 4  ; 17:9
-   10  insert2
-   11  put_field "t" ic0
-   18  drop
-   19  return_undef
+   10  put_field "t" ic0
+   17  return_undef

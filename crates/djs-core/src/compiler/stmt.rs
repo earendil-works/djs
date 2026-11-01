@@ -362,11 +362,20 @@ impl Parser<'_, '_> {
         self.next()?;
         self.reset_completion();
         let (l_break, l_cont) = self.push_loop(labels);
+        // Rotated (0086): `jump L_cont; L_body: body; L_cont: test; jump_if_true
+        // L_body; L_break:`, one jump per iteration. Emitted in source order, then the
+        // body is moved in front of the test.
+        let l_body = self.new_label();
+        self.code().jump(l_cont);
+        let t0 = self.f.code.pos();
         self.place(l_cont);
         self.parse_paren_expr()?;
-        self.code().jump_if_false(l_break);
+        let b0 = self.f.code.pos();
+        self.place(l_body);
         self.parse_statement()?;
-        self.code().jump(l_cont);
+        let b1 = self.f.code.pos();
+        self.rotate_code(t0, b0, b1);
+        self.code().jump_if_true(l_body);
         self.place(l_break);
         self.blocks.pop();
         Ok(())
@@ -390,11 +399,11 @@ impl Parser<'_, '_> {
         Ok(())
     }
 
-    /// `for (init; test; update) body`, laid out as
-    /// `init; L_test: test; jump_if_false L_break; jump L_body; L_cont: update; jump
-    /// L_test; L_body: body; jump L_cont; L_break:` so everything is emitted in source
-    /// order. Without an update: `L_test: test; jump_if_false L_break; body; L_cont:
-    /// jump L_test; L_break:`.
+    /// `for (init; test; update) body`, laid out rotated (0086) as `init; jump L_test;
+    /// L_body: body; L_cont: update; L_test: test; jump_if_true L_body; L_break:`, one
+    /// jump per iteration (without a test: `init; L_body: body; L_cont: update; jump
+    /// L_body`). The parts are emitted in source order, then the body is moved in
+    /// front of the update and the test.
     fn parse_for(&mut self, labels: Vec<Atom>) -> PResult<()> {
         let for_pos = self.tok.start;
         self.next()?;
@@ -467,36 +476,38 @@ impl Parser<'_, '_> {
         if let Some(s) = iter_scope {
             self.code().iter_scope(s);
         }
-        self.place(l_test);
-        if !self.is(TokenKind::Semicolon) {
-            self.parse_expr(false)?;
-            self.code().jump_if_false(l_break);
-        }
-        self.expect(TokenKind::Semicolon, ";")?;
-        let has_update = !self.is(TokenKind::RParen);
-        if has_update {
-            self.code().jump(l_body);
-            self.place(l_cont);
-            if let Some(s) = iter_scope {
-                self.code().iter_scope(s);
-            }
-            self.parse_expr(false)?;
-            self.code().drop();
+        let has_test = !self.is(TokenKind::Semicolon);
+        if has_test {
             self.code().jump(l_test);
         }
+        let t0 = self.f.code.pos();
+        self.place(l_test);
+        if has_test {
+            self.parse_expr(false)?;
+        }
+        self.expect(TokenKind::Semicolon, ";")?;
+        let u0 = self.f.code.pos();
+        self.place(l_cont);
+        if let Some(s) = iter_scope {
+            self.code().iter_scope(s);
+        }
+        if !self.is(TokenKind::RParen) {
+            self.parse_expr(false)?;
+            self.code().drop();
+        }
         self.expect(TokenKind::RParen, ")")?;
+        let b0 = self.f.code.pos();
         self.place(l_body);
         self.ts_semi = true;
         self.parse_statement()?;
-        if !has_update {
-            // No update: `continue` goes straight to the test.
-            self.place(l_cont);
-            if let Some(s) = iter_scope {
-                self.code().iter_scope(s);
-            }
-            self.code().jump(l_test);
+        let b1 = self.f.code.pos();
+        // [test][update][body] -> [update][body][test] -> [body][update][test]
+        self.rotate_code(t0, u0, b1);
+        self.rotate_code(t0, t0 + (b0 - u0), t0 + (b1 - u0));
+        if has_test {
+            self.code().jump_if_true(l_body);
         } else {
-            self.code().jump(l_cont);
+            self.code().jump(l_body);
         }
         self.place(l_break);
         self.blocks.pop();

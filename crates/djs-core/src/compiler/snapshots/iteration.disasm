@@ -9,7 +9,7 @@ function 0 <anonymous>: params=2 locals=9 stack=6 captures=0
   handler [528, 546) -> 512 depth 4
   handler [484, 584) -> 468 depth 2
   handler [663, 692) -> 647 depth 2
-  handler [3, 823) -> 823 depth 0
+  handler [3, 818) -> 818 depth 0
     0  async_start loc0 (<state>)
     3  fclosure child0
     8  put_loc loc6 (f)
@@ -124,7 +124,7 @@ function 0 <anonymous>: params=2 locals=9 stack=6 captures=0
   375  get_field "value" ic23
   382  put_loc loc3 (x)  ; 10:12
   385  get_loc loc3 (x)  ; 10:27
-  388  jump_if_false -> 403
+  388  jump_if_false -> 408
   393  jump -> 436
   398  jump -> 408
   403  jump -> 408
@@ -249,17 +249,16 @@ function 0 <anonymous>: params=2 locals=9 stack=6 captures=0
   776  jump -> 794
   781  get_global "o" ic43  ; 18:13
   788  for_in_start  ; 18:1
-  789  jump -> 811
+  789  jump -> 806
   794  get_global "k" ic44  ; 18:22
-  801  jump_if_false -> 811
-  806  jump -> 818
-  811  for_in_next
-  812  jump_if_false -> 761
-  817  drop
-  818  drop
-  819  undefined
-  820  async_return loc0 (<state>)
-  823  async_reject loc0 (<state>)
+  801  jump_if_true -> 813
+  806  for_in_next
+  807  jump_if_false -> 761
+  812  drop
+  813  drop
+  814  undefined
+  815  async_return loc0 (<state>)
+  818  async_reject loc0 (<state>)
 function 0.0 f: params=0 locals=1 stack=4 captures=0
   handler [41, 56) -> 25 depth 2
     0  get_global "xs" ic0  ; 13:32

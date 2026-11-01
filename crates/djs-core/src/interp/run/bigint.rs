@@ -112,6 +112,16 @@ impl Exec<'_> {
         Ok(())
     }
 
+    /// `a + d` for a BigInt `a` and `d` = ±1 (`inc_loc`, `dec_loc`).
+    #[cold]
+    pub(super) fn bigint_add_small(&mut self, a: Value, d: i32) -> Result<Value, Fault> {
+        let x = self.heap.bigint(a);
+        let one = BigInt::from_u64(1);
+        let r = if d > 0 { x.add(&one) } else { x.sub(&one) }.map_err(bigint_fault)?;
+        self.fuel -= bigint::linear_cost(r.mag.len()) as i64;
+        Ok(self.heap.alloc_bigint(&r)?)
+    }
+
     #[cold]
     fn bigint_unary(&mut self, op: Op, a: Value) -> Result<(), Fault> {
         let x = self.heap.bigint(a);

@@ -277,6 +277,19 @@ impl CodeBuf<Final> {
 }
 
 impl CodeBuf<Phase1> {
+    /// Moves the code in `mid..end` in front of `start..mid` (loop rotation, 0086).
+    /// Phase-1 code refers to labels, not positions, so only the jump fixups move along.
+    /// Nothing before `end` can be truncated afterwards.
+    pub fn rotate(&mut self, start: u32, mid: u32, end: u32) {
+        debug_assert!(start <= mid && mid <= end && end as usize <= self.code.len());
+        self.code[start as usize..end as usize].rotate_left((mid - start) as usize);
+        for f in &mut self.fixups {
+            *f = rotated(*f, start, mid, end);
+        }
+        self.fixups.sort_unstable();
+        self.last = None;
+    }
+
     /// Checks that every label used by a jump was placed and returns the code.
     pub fn finish(self) -> Result<Phase1Code, CodeError> {
         if let Some(e) = self.error {
@@ -293,5 +306,17 @@ impl CodeBuf<Phase1> {
             code: self.code,
             label_count: self.labels.len() as u32,
         })
+    }
+}
+
+/// Where position `p` goes when [`CodeBuf::rotate`] moves `mid..end` in front of
+/// `start..mid`.
+pub fn rotated(p: u32, start: u32, mid: u32, end: u32) -> u32 {
+    if p < start || p >= end {
+        p
+    } else if p < mid {
+        p + (end - mid)
+    } else {
+        p - (mid - start)
     }
 }

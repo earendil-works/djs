@@ -34,6 +34,23 @@ impl Insn {
         self.op.info()
     }
 
+    /// The same instruction with opcode `op`, which must have the same immediate layout
+    /// (the peepholes turn `name_set` into `name_put`, `not; jump_if_false` into
+    /// `jump_if_true`).
+    pub fn with_op(self, op: Op) -> Insn {
+        debug_assert_eq!(op.info().imms, self.op.info().imms);
+        Insn { op, ..self }
+    }
+
+    /// A phase-1 jump retargeted to label `l`.
+    pub fn with_label(self, l: Label) -> Insn {
+        let mut insn = self;
+        if let Some(i) = self.target_index() {
+            insn.imms[i] = l.0;
+        }
+        insn
+    }
+
     /// Encoded size in bytes.
     pub fn size(&self) -> u32 {
         self.op.size() as u32

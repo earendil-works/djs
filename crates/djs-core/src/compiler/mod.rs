@@ -26,6 +26,7 @@ mod generator;
 mod module;
 mod parser;
 mod pattern;
+mod peephole;
 mod resolve;
 mod scan;
 mod stmt;

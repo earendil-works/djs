@@ -1,5 +1,5 @@
 function 0 <anonymous>: params=2 locals=8 stack=4 captures=0
-  handler [8, 157) -> 157 depth 0
+  handler [8, 142) -> 142 depth 0
     0  special_object 4
     2  put_loc loc7 (this)
     5  async_start loc0 (<state>)
@@ -21,42 +21,35 @@ function 0 <anonymous>: params=2 locals=8 stack=4 captures=0
    56  push_i8 1
    58  put_loc loc3 (late)
    61  push_i8 2  ; 8:18
-   63  set_loc loc3 (late)
-   66  drop
-   67  get_loc loc1 (total)  ; 9:9
-   70  set_loc_uninit loc4 (y)
-   73  jump -> 78
-   78  dup
-   79  push_i8 0
-   81  strict_eq
-   82  jump_if_false -> 108
-   87  drop
-   88  push_i8 1
-   90  put_loc loc4 (y)
-   93  get_loc_chk loc4 (y)  ; 10:22
-   96  to_numeric
-   97  dup
-   98  inc  ; 10:23
-   99  put_loc_chk loc4 (y)  ; 10:22
-  102  drop
-  103  jump -> 118
-  108  dup
-  109  push_i8 1
-  111  strict_eq
-  112  jump_if_false -> 127
-  117  drop
-  118  get_loc_chk loc4 (y)  ; 11:11
-  121  drop
-  122  jump -> 133
-  127  drop
-  128  jump -> 133
-  133  push_i8 1  ; 13:1
-  135  throw_const_assign "items"
-  140  drop
-  141  get_loc loc7 (this)  ; 15:12
-  144  put_loc loc6 (v2)  ; 15:7
-  147  get_loc loc1 (total)  ; 16:8
-  150  async_return loc0 (<state>)
-  153  undefined
-  154  async_return loc0 (<state>)
-  157  async_reject loc0 (<state>)
+   63  put_loc loc3 (late)
+   66  get_loc loc1 (total)  ; 9:9
+   69  set_loc_uninit loc4 (y)
+   72  dup
+   73  push_i8 0
+   75  strict_eq
+   76  jump_if_false -> 99
+   81  drop
+   82  push_i8 1
+   84  put_loc loc4 (y)
+   87  get_loc_chk loc4 (y)  ; 10:22
+   90  inc  ; 10:23
+   91  put_loc_chk loc4 (y)  ; 10:22
+   94  jump -> 109
+   99  dup
+  100  push_i8 1
+  102  strict_eq
+  103  jump_if_false -> 118
+  108  drop
+  109  get_loc_chk loc4 (y)  ; 11:11
+  112  drop
+  113  jump -> 119
+  118  drop
+  119  push_i8 1  ; 13:1
+  121  throw_const_assign "items"
+  126  get_loc loc7 (this)  ; 15:12
+  129  put_loc loc6 (v2)  ; 15:7
+  132  get_loc loc1 (total)  ; 16:8
+  135  async_return loc0 (<state>)
+  138  undefined
+  139  async_return loc0 (<state>)
+  142  async_reject loc0 (<state>)

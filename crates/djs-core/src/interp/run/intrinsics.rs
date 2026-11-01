@@ -269,6 +269,8 @@ pub(super) const TO_PRIMITIVE: u16 = id("ToPrimitive");
 /// The installed `%ToNumber`, for typed array element writes (0039).
 pub(super) const TO_NUMBER: u16 = id("ToNumber");
 pub(super) const TO_BIG_INT: u16 = id("ToBigInt");
+/// The installed `%ToNumeric`, for `inc_loc` / `dec_loc` of an object (0086).
+pub(super) const TO_NUMERIC: u16 = id("ToNumeric");
 /// The installed `%InstanceofOperator`, for `instanceof` with a custom Symbol.hasInstance.
 pub(super) const INSTANCEOF_OPERATOR: u16 = id("InstanceofOperator");
 /// The installed `%ArraySpread`, for `array_spread` over a general iterable.
