@@ -1,6 +1,6 @@
 # 0014: P0 compiler
 
-status: in-progress
+status: done
 agent: lexer
 branch: issue/0014-p0-compiler
 depends-on: 0013
@@ -14,17 +14,17 @@ the line table, templates in the heap, and SyntaxErrors with positions. Both Scr
 async-body mode as far as P0 needs them (D004, D008).
 
 ## Acceptance criteria
-- [ ] `compile(heap, source, mode) -> Result<ScriptRef, SyntaxError>` producing the
+- [x] `compile(heap, source, mode) -> Result<ScriptRef, SyntaxError>` producing the
       template cells from 0013.
-- [ ] The parser per sections 2 and 3, as far as P0 constructs go. The 0003 follow-up
+- [x] The parser per sections 2 and 3, as far as P0 constructs go. The 0003 follow-up
       checks that apply to P0 syntax are in place.
-- [ ] Resolution (section 5) for locals/globals, without captures (those come with
+- [x] Resolution (section 5) for locals/globals, without captures (those come with
       functions in P1-1). The design must not block captures.
-- [ ] Number literals through `num::literal_digits_value`, strings through atoms or the
+- [x] Number literals through `num::literal_digits_value`, strings through atoms or the
       heap, regex literals rejected with a clear "not supported yet" SyntaxError (0011 is
       building the engine).
-- [ ] Error messages per 8.1 (QuickJS wording) with line/column.
-- [ ] Tests: disassembly snapshot tests for representative programs (a stable text
+- [x] Error messages per 8.1 (QuickJS wording) with line/column.
+- [x] Tests: disassembly snapshot tests for representative programs (a stable text
       format, reviewed by eye), and error tests. Run the compiler over test262 files with
       only P0 syntax, if a cheap filter exists (optional, ignored test).
 
@@ -62,6 +62,41 @@ async-body mode as far as P0 needs them (D004, D008).
 - `djs disasm [--body] file.js` in djs-cli (`disasm.rs` plus a one-arm dispatch in
   `main.rs`).
 
+- Rebased onto 0015 (2373382). `end_to_end` runs 31 async-body programs (operators,
+  loops, labels, switch fallthrough, objects, optional chains, logical assignment,
+  templates, TDZ and const errors, `console.log` as a host call) on the interpreter. All
+  31 outputs were cross-checked with qjs (wrapped as pi does,
+  `(async (console) => {...})`).
+
 ## Follow-ups
 
+- 0022 (wiring): the interpreter does not run `special_object THIS` (any use of
+  `this`), `global_decls` or `init_global_lex` yet, so Script-mode programs with
+  top-level declarations and anything using `this` need those ops. The semantics are
+  in D1140/D1141 (`get_global_typeof` must throw for an uninitialized global `let`).
+  `delete` is also still "not supported yet" in the interpreter.
+- Script completion value for `$262.evalScript` (compiler.md 5.8), when 0007 needs it.
+- P1-1: functions, closures (the resolver's `classify` walk to enclosing functions,
+  Boxes), `rebox` for per-iteration `let` bindings in `for(;;)`.
+- A peephole pass: `set_*`/`insert*` followed by `drop` in expression statements,
+  `jump` to the next instruction, `&&`/`||` in conditions as direct jumps, constant
+  folding of `-1`.
+- The destructuring cover check (`{ a = 1 } = x`) only looks at the innermost literal;
+  P1-6 replaces it with the memoized pattern scan (compiler.md 3.3).
+
 ## Result
+
+`djs_core::compiler::compile(heap, src, &CompileOptions::script(name) |
+CompileOptions::async_body(name, &["tools", "console"])) -> Result<Ref, CompileError>`
+returns a `FuncTemplate` (and its `Script`, with the source) for the P0 language
+(D1142). Call the instantiated closure with `this` = the global object; in body mode,
+pass the params. `CompileError` carries the QuickJS-worded message, the byte offset and
+line/column. Templates carry the line table (`; line:col` in listings), names of locals,
+`func_flags`, and `global_decls` for Script top-level declarations (D1141).
+
+`djs disasm [--body] file.js` prints the bytecode. Tests: 6 disassembly snapshots
+(`compiler/snapshots`, update with `DJS_UPDATE_SNAPSHOTS=1`), ~75 error cases, the
+depth-limit test, 31 end-to-end programs on the interpreter, and an ignored test262
+compile sweep (no panics; 11,443 tests compile).
+
+Known gaps: see Follow-ups; everything with functions is "not supported yet".
