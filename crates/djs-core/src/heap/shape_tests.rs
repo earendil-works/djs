@@ -336,3 +336,34 @@ fn dictionaries_and_shapes_round_trip_images() {
     assert_eq!(get(&h2, a, y), Some(Value::int(1)));
     assert_eq!(get(&h2, d, y), Some(Value::int(1)));
 }
+
+#[test]
+fn compacted_shapes_keep_working() {
+    // 0098: compact_for_image shrinks descriptor and transition arrays to their use; the
+    // tree then grows by copying.
+    let mut h = heap();
+    let a = obj(&mut h, &["a", "b", "c"]);
+    let b = obj(&mut h, &["a", "x"]);
+    let arr = h
+        .new_array_from_values(None, &[Value::object(a), Value::object(b)])
+        .unwrap();
+    h.set_realm(Value::object(arr));
+    h.compact_for_image().unwrap();
+    h.collect().unwrap();
+    h.verify().unwrap();
+    let arr = h.realm().as_object().unwrap();
+    let a = h.get_element_fast(arr, 0).unwrap().as_object().unwrap();
+    let d = descs(&h, shape_of(&h, a));
+    assert_eq!(h.u32_array_len(d), 1 + 2 * 3);
+    // Extending the full chain copies; the old shapes still match new objects.
+    let d1 = key(&mut h, "d");
+    assert!(h.create_data_property(a, d1, Value::int(9)).unwrap());
+    let again = obj(&mut h, &["a", "b", "c"]);
+    let c = key(&mut h, "c");
+    assert_eq!(get(&h, again, c), Some(Value::int(2)));
+    assert_eq!(names(&h, a), ["a", "b", "c", "d"]);
+    let ax = obj(&mut h, &["a", "x"]);
+    let b = h.get_element_fast(arr, 1).unwrap().as_object().unwrap();
+    assert_eq!(shape_of(&h, ax), shape_of(&h, b));
+    h.verify().unwrap();
+}

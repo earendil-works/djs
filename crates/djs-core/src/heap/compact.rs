@@ -5,9 +5,14 @@
 //! afterwards: a full table or array grows on the next insert.
 
 use super::cells::flags::OBJ_DICTIONARY;
-use super::cells::{AtomTable, Object, PropEntry, PropTable, PropValues, Roots, ValueArray};
+use super::cells::{
+    AtomTable, Object, PropEntry, PropTable, PropValues, RefArray, Roots, Shape, U32Array,
+    ValueArray,
+};
 use super::object::LINEAR_MAX;
 use super::{CellKind, Heap, HeapError, Ref};
+use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
 
 /// The value stack of an image: room for a few frames; `run` grows it on demand.
 const IMAGE_STACK: u32 = 256;
@@ -29,6 +34,7 @@ impl Heap {
                 None => {}
             }
         }
+        self.shrink_shapes()?;
         // The atom table's entries (slot 0 unused, then one per atom).
         let table = self.atom_table();
         let entries: Ref = self.arena().get(table, AtomTable::ENTRIES);
@@ -58,6 +64,54 @@ impl Heap {
         }
         self.arena_mut().set(new, ValueArray::LEN, len);
         Ok(new)
+    }
+
+    /// Shrinks the shapes' descriptor arrays to the pairs written and their transition
+    /// arrays to their children (0098). A shared descriptor array is copied once and
+    /// every shape on it points at the copy; the next child then copies instead of
+    /// appending in place, as for any full array.
+    fn shrink_shapes(&mut self) -> Result<(), HeapError> {
+        let shapes: Vec<u32> = self
+            .cells()
+            .filter(|c| c.kind == CellKind::Shape)
+            .map(|c| c.offset)
+            .collect();
+        let mut copies: BTreeMap<u32, u32> = BTreeMap::new();
+        for s in shapes {
+            if let Some(d) = self.arena().get::<Ref>(s, Shape::DESCS).get() {
+                let copy = match copies.get(&d) {
+                    Some(&c) => c,
+                    None => {
+                        let n = 1 + 2 * self.u32_array_get(d, 0);
+                        let c = if n < self.u32_array_len(d) {
+                            let c = self.alloc_u32_array(n)?;
+                            let (src, dst) = (U32Array::DATA.at(d, 0), U32Array::DATA.at(c, 0));
+                            self.arena_mut().copy_within(src, 4 * n, dst);
+                            c
+                        } else {
+                            d
+                        };
+                        copies.insert(d, c);
+                        c
+                    }
+                };
+                self.arena_mut().set(s, Shape::DESCS, Ref(copy));
+            }
+            if let Some(t) = self.arena().get::<Ref>(s, Shape::TRANSITIONS).get() {
+                let len = self.arena().get(t, RefArray::LEN);
+                if len < RefArray::LAYOUT.tail_capacity(self.cell_size(t)) {
+                    let size = RefArray::REFS
+                        .cell_size(len)
+                        .ok_or(HeapError::OutOfMemory)?;
+                    let c = self.alloc_cell(CellKind::RefArray, size)?;
+                    let (src, dst) = (RefArray::REFS.at(t, 0), RefArray::REFS.at(c, 0));
+                    self.arena_mut().copy_within(src, 4 * len, dst);
+                    self.arena_mut().set(c, RefArray::LEN, len);
+                    self.arena_mut().set(s, Shape::TRANSITIONS, Ref(c));
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Replaces object `o`'s values block `v` by one of exactly its length.
