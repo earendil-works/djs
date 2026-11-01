@@ -11,7 +11,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0090 | Natives: collect-and-retry, resizable TA, JSON slow path | infra | .worktrees/infra |
 | 0092 | Compiler code size + compile throughput in wasm | lexer | .worktrees/lexer |
 | 0083 | Shapes + leaner object/image layout (design first) | heap | .worktrees/heap |
-| 0085 | Leaf fast paths for everyday builtins (0081 P1) | perf | .worktrees/perf |
+| 0093 | Run-loop state in locals + compact call protocol (design first) | perf | .worktrees/perf |
 
 ## Open (ready)
 
@@ -22,7 +22,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0091 | dense leaves -> @fast; fromCharCode/URI @fast | 0085 (infra) |
+| 0091 | dense leaves -> @fast; fromCharCode/URI @fast | 0085 (done), after 0090 (infra) |
 | 0087 | Allocation churn + wasm memory (0081 P5) | num, after 0071 |
 
 ## Done
@@ -61,6 +61,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0077 | deser deps investigation | report (agent deps, archived): no new deps; quick wins -> 0078 |
 | 0089 | pi snapshot collect fix | 68343b1 (agent snapshot, archived; snapshots 936 -> 498 KB; DETERMINISTIC_VERSION 2) |
 | 0088 | Snapshot design research | 6c0e381 (agent snapshot; recommends A now, B long-term, defer C; owner decision pending) |
+| 0085 | @fast leaf entries (57) | 0dd2c96 (agent perf; pi-like 3.6x -> 1.8x quickjs-wasi in wasm instructions) |
 | 0081 | Perf anatomy | report (agent perf): plain bytecode at par in wasm; gap is builtins/iteration; P1-P10 |
 | 0072 | Determinism checks in the gate (both parts) | 38f0c91 (agent determinism, archived; D1720, D1725) |
 | 0071 | GC points + raw images slice-independent | f14da99 (agent num; D1710, D1711) |
