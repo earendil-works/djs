@@ -314,3 +314,128 @@ fn case_insensitive_pairs_match_qjs() {
     }
     assert!(n > 4000, "{n}");
 }
+
+/// Runs with `chunk` fuel at a time, serializing the state between runs.
+fn exec_chunked(prog: &Program, input: Input<'_>, start: usize, chunk: u64) -> (ExecResult, usize) {
+    let mut fuel = chunk;
+    let mut r = exec(prog, input, start, &mut fuel, ExecLimits::default());
+    let mut suspensions = 0;
+    loop {
+        match r {
+            ExecResult::OutOfFuel(state) => {
+                suspensions += 1;
+                let words = state.to_words();
+                let state = ExecState::from_words(&words).unwrap();
+                assert_eq!(state.to_words(), words);
+                fuel = chunk;
+                r = resume(prog, input, state, &mut fuel, ExecLimits::default());
+            }
+            other => return (other, suspensions),
+        }
+    }
+}
+
+fn same_result(a: &ExecResult, b: &ExecResult) -> bool {
+    match (a, b) {
+        (ExecResult::Match(x), ExecResult::Match(y)) => x == y,
+        (ExecResult::NoMatch, ExecResult::NoMatch) => true,
+        (ExecResult::StackOverflow, ExecResult::StackOverflow) => true,
+        _ => false,
+    }
+}
+
+#[test]
+fn pathological_patterns_run_out_of_fuel() {
+    let input = u16s(&"a".repeat(40));
+    for p in [
+        "(a*)*b",
+        "(a+)+b",
+        "(a|aa)+b",
+        "(a|a)*b",
+        "(?:a*)*b",
+        "(a*)*(a*)*b",
+        "^(a+)+$x",
+    ] {
+        let prog = re(p, "");
+        let mut fuel = 1_000_000;
+        let r = exec(
+            &prog,
+            Input::Utf16(&input),
+            0,
+            &mut fuel,
+            ExecLimits::default(),
+        );
+        assert!(matches!(r, ExecResult::OutOfFuel(_)), "{p}");
+        assert_eq!(fuel, 0);
+    }
+}
+
+#[test]
+fn suspend_and_resume_give_the_same_result() {
+    let cases = [
+        ("(a*)*b", "", "aaaaaaaaaaab"),
+        ("(a*)*b", "", "aaaaaaaaaaa"),
+        ("(x+x+)+y", "", "xxxxxxxxxxy"),
+        ("^(?:(a)|b)*?c\\1$", "", "babbac"),
+        ("(?<=(\\d+)(\\d+))$", "", "12345"),
+        ("(?=(a+))a*b\\1", "", "baaabac"),
+        ("(.*?)a(?!(a+)b\\2c)\\2(.*)", "", "baaabaac"),
+        ("[\\q{abc|ab|a}]+c", "v", "abcababc"),
+        ("(?:(\\w)(?:\\1)?)+$", "i", "aAbBcC"),
+        ("\\b\\w+(?=,)", "g", "one, two, three"),
+        (".+", "su", "😀\n😀"),
+    ];
+    for (p, f, i) in cases {
+        let prog = re(p, f);
+        let input = u16s(i);
+        let mut fuel = u64::MAX;
+        let once = exec(
+            &prog,
+            Input::Utf16(&input),
+            0,
+            &mut fuel,
+            ExecLimits::default(),
+        );
+        for chunk in [1, 2, 3, 7, 100] {
+            let (r, n) = exec_chunked(&prog, Input::Utf16(&input), 0, chunk);
+            assert!(same_result(&once, &r), "/{p}/{f} chunk {chunk}");
+            if chunk == 1 {
+                assert!(n > 5, "/{p}/{f} suspended only {n} times");
+            }
+        }
+    }
+}
+
+#[test]
+fn stack_limit() {
+    let prog = re("(?:a|b)*c", "");
+    let input = u16s(&"a".repeat(10_000));
+    let mut fuel = u64::MAX;
+    let limits = ExecLimits { max_stack: 1000 };
+    let r = exec(&prog, Input::Utf16(&input), 0, &mut fuel, limits);
+    assert!(matches!(r, ExecResult::StackOverflow));
+    // A plain loop without choice points does not grow the stack.
+    let prog = re("a{10000}", "");
+    let r = exec(&prog, Input::Utf16(&input), 0, &mut fuel, limits);
+    assert!(matches!(r, ExecResult::Match(_)));
+    let prog = re("(a){10000}", "");
+    let r = exec(&prog, Input::Utf16(&input), 0, &mut fuel, limits);
+    assert!(matches!(r, ExecResult::Match(_)));
+}
+
+#[test]
+fn latin1_input() {
+    let prog = re("caf\u{e9}", "i");
+    let input = b"un CAF\xc9";
+    let mut fuel = u64::MAX;
+    match exec(
+        &prog,
+        Input::Latin1(input),
+        0,
+        &mut fuel,
+        ExecLimits::default(),
+    ) {
+        ExecResult::Match(c) => assert_eq!(c.get(0), Some((3, 7))),
+        _ => panic!(),
+    }
+}

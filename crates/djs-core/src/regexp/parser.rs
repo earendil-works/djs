@@ -783,14 +783,16 @@ impl Parser<'_> {
                         {
                             has_named = true;
                             if let Some(w) = wanted {
-                                p += 3;
-                                if let Some(name) = self.group_name(&mut p)
-                                    && name == w
-                                {
-                                    found = true;
+                                // Like qjs: after a valid name the scan resumes one past the
+                                // `>` (skipping a character), otherwise at the name.
+                                let mut q = p + 3;
+                                match self.group_name(&mut q) {
+                                    Some(name) => {
+                                        found |= name == w;
+                                        p = q;
+                                    }
+                                    None => p += 3,
                                 }
-                                // qjs continues one past the name here (see `p++` below).
-                                p -= 1;
                             }
                             index += 1;
                         }
@@ -1044,6 +1046,31 @@ impl Parser<'_> {
         if self.cur() != '{' as u32 {
             return err("expecting '{' after \\p");
         }
+        self.pos += 1;
+        let is_name_char =
+            |c: u32| char::from_u32(c).is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
+        let mut n = 0;
+        while is_name_char(self.cur()) {
+            n += 1;
+            if n >= 64 {
+                return err("unknown unicode property name");
+            }
+            self.pos += 1;
+        }
+        if self.cur() == '=' as u32 {
+            self.pos += 1;
+            let mut n = 0;
+            while is_name_char(self.cur()) {
+                n += 1;
+                if n >= 64 {
+                    return err("unknown unicode property value");
+                }
+                self.pos += 1;
+            }
+        }
+        if self.cur() != '}' as u32 || self.at_end() {
+            return err("expecting '}'");
+        }
         err("unicode property escapes are not supported")
     }
 
@@ -1124,6 +1151,8 @@ impl Parser<'_> {
                     && !(self.at(self.pos + 1) == '-' as u32 && self.sets && is_first)
                 {
                     self.class_range(&mut cr, c1)?;
+                    // A range cannot be the left operand of `&&` or `--`.
+                    is_first = false;
                 } else {
                     self.add_atom(&mut cr, c1);
                 }
