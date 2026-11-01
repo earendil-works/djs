@@ -243,11 +243,17 @@ macro_rules! ops {
             $(
                 $(#[$doc])*
                 // Emitter names mirror the opcode names (`drop`, `add`, `not`, ...).
-                #[allow(clippy::should_implement_trait)]
+                #[allow(clippy::should_implement_trait, unused_mut, unused_assignments)]
                 #[inline]
                 pub fn $method(&mut self $( , $iname: <super::imm::$ikind as super::imm::Imm>::Ty )* ) {
-                    self.begin(Op::$name);
-                    $( <super::imm::$ikind as super::imm::Imm>::emit(self, $iname); )*
+                    // One out-of-line call per call site (0092).
+                    let mut raw = [0u32; 2];
+                    let mut _i = 0;
+                    $(
+                        raw[_i] = <super::imm::$ikind as super::imm::Imm>::raw($iname);
+                        _i += 1;
+                    )*
+                    self.encode(Op::$name, raw[0], raw[1]);
                 }
             )*
         }

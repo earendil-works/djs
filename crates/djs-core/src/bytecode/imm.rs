@@ -4,7 +4,7 @@
 //! (little-endian, unaligned), the Rust type of the emitter argument, and how the
 //! disassembler prints it.
 
-use super::code::{CodeBuf, Label, LabelMode};
+use super::code::Label;
 use crate::heap::Atom as AtomId;
 
 /// The kind of an immediate operand.
@@ -79,58 +79,48 @@ impl ImmKind {
     }
 }
 
-/// Maps an immediate kind to its emitter argument type and encoding. Implemented by the
-/// marker types below, which the `ops!` table names.
+/// Maps an immediate kind to its emitter argument type and its raw `u32` (the bytes
+/// [`CodeBuf`] writes are the low `width` bytes, little-endian; a `Target` is a label
+/// id). Implemented by the marker types below, which the `ops!` table names.
 pub trait Imm {
     const KIND: ImmKind;
     type Ty: Copy;
-    fn emit<M: LabelMode>(buf: &mut CodeBuf<M>, v: Self::Ty);
+    fn raw(v: Self::Ty) -> u32;
 }
 
 macro_rules! plain_imm {
-    ($($name:ident: $ty:ty => |$v:ident| $bytes:expr;)*) => {$(
+    ($($name:ident: $ty:ty => |$v:ident| $raw:expr;)*) => {$(
         #[doc = concat!("Marker for [`ImmKind::", stringify!($name), "`].")]
         pub struct $name;
         impl Imm for $name {
             const KIND: ImmKind = ImmKind::$name;
             type Ty = $ty;
-            #[inline]
-            fn emit<M: LabelMode>(buf: &mut CodeBuf<M>, $v: $ty) {
-                buf.push_bytes(&$bytes);
+            #[inline(always)]
+            fn raw($v: $ty) -> u32 {
+                $raw
             }
         }
     )*};
 }
 
 plain_imm! {
-    U8: u8 => |v| [v];
-    I8: i8 => |v| v.to_le_bytes();
-    I32: i32 => |v| v.to_le_bytes();
-    Count: u16 => |v| v.to_le_bytes();
-    Loc: u16 => |v| v.to_le_bytes();
-    Arg: u16 => |v| v.to_le_bytes();
-    Cap: u16 => |v| v.to_le_bytes();
-    Argc: u16 => |v| v.to_le_bytes();
-    Scope: u16 => |v| v.to_le_bytes();
-    Intrinsic: u16 => |v| v.to_le_bytes();
-    Cache: u16 => |v| v.to_le_bytes();
-    Const: u32 => |v| v.to_le_bytes();
-    Child: u32 => |v| v.to_le_bytes();
-    NameRef: u32 => |v| v.to_le_bytes();
-    LabelId: Label => |v| v.0.to_le_bytes();
-    Atom: AtomId => |v| v.id().to_le_bytes();
-}
-
-/// Marker for [`ImmKind::Target`].
-pub struct Target;
-
-impl Imm for Target {
-    const KIND: ImmKind = ImmKind::Target;
-    type Ty = Label;
-    #[inline]
-    fn emit<M: LabelMode>(buf: &mut CodeBuf<M>, v: Label) {
-        buf.push_target(v);
-    }
+    U8: u8 => |v| v as u32;
+    I8: i8 => |v| v as u8 as u32;
+    I32: i32 => |v| v as u32;
+    Count: u16 => |v| v as u32;
+    Loc: u16 => |v| v as u32;
+    Arg: u16 => |v| v as u32;
+    Cap: u16 => |v| v as u32;
+    Argc: u16 => |v| v as u32;
+    Scope: u16 => |v| v as u32;
+    Intrinsic: u16 => |v| v as u32;
+    Cache: u16 => |v| v as u32;
+    Const: u32 => |v| v;
+    Child: u32 => |v| v;
+    NameRef: u32 => |v| v;
+    LabelId: Label => |v| v.0;
+    Atom: AtomId => |v| v.id();
+    Target: Label => |v| v.0;
 }
 
 // The table's `ImmKind`s and the marker types must agree on the width.

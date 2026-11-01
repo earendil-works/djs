@@ -206,42 +206,31 @@ impl<M: LabelMode> CodeBuf<M> {
     /// this copies phase-1 instructions (it is how the re-emit passes through everything
     /// that needs no rewriting).
     pub fn emit_insn(&mut self, insn: &Insn) {
-        self.begin(insn.op);
-        for (i, &kind) in insn.op.info().imms.iter().enumerate() {
-            let raw = insn.imm(i);
-            match kind {
-                ImmKind::Target => self.push_target(Label(raw)),
-                _ => {
-                    let bytes = raw.to_le_bytes();
-                    self.push_bytes(&bytes[..kind.width() as usize]);
-                }
-            }
-        }
+        self.encode(insn.op, insn.imm(0), insn.imm(1));
     }
 
-    /// Starts an instruction (used by the generated emitters).
+    /// Emits `op` with the raw immediates `a`, `b` (as many as it has: the low bytes of
+    /// each, a label id for a `Target`). Every generated emitter calls this.
     ///
-    /// The emit helpers stay out of line: the per-opcode emitters are inlined into
-    /// hundreds of compiler sites, and an inlined `Vec::push` (length check, grow call,
-    /// store) at each of them was ~35 KB of wasm (D1571).
+    /// It stays out of line: the per-opcode emitters are inlined into hundreds of
+    /// compiler sites, and an inlined `Vec::push` (length check, grow call, store) at
+    /// each of them was ~35 KB of wasm (D1571); one call with the opcode and the raw
+    /// values is the smallest call site (0092).
     #[inline(never)]
-    pub(super) fn begin(&mut self, op: Op) {
+    pub(super) fn encode(&mut self, op: Op, a: u32, b: u32) {
         self.last = Some(self.code.len() as u32);
         self.code.push(op as u8);
-    }
-
-    #[inline(never)]
-    pub(super) fn push_bytes(&mut self, b: &[u8]) {
-        self.code.extend_from_slice(b);
-    }
-
-    #[inline(never)]
-    pub(super) fn push_target(&mut self, l: Label) {
-        if (l.0 as usize) >= self.labels.len() {
-            self.fail(CodeError::UnknownLabel(l));
+        for (i, &kind) in op.info().imms.iter().enumerate() {
+            let v = if i == 0 { a } else { b };
+            if kind == ImmKind::Target {
+                if (v as usize) >= self.labels.len() {
+                    self.fail(CodeError::UnknownLabel(Label(v)));
+                }
+                self.fixups.push(self.code.len() as u32);
+            }
+            self.code
+                .extend_from_slice(&v.to_le_bytes()[..kind.width() as usize]);
         }
-        self.fixups.push(self.code.len() as u32);
-        self.code.extend_from_slice(&l.0.to_le_bytes());
     }
 
     fn fail(&mut self, e: CodeError) {
