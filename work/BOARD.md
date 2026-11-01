@@ -11,7 +11,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0059 | Indirect eval, Function constructors, queueMicrotask (D014) | infra | .worktrees/infra |
 | 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
 | 0058 | Compiler: using, completion values, import(), accessor/decorators | lexer | .worktrees/lexer |
-| 0051 | Remaining builtins (iterator helpers, WeakRef/FR, disposables, fromAsync, upsert) | heap | .worktrees/0051-remaining-builtins |
+| 0060 | Out-of-memory recovery | heap | .worktrees/heap |
 | 0057 | Size quick wins Q1-Q6 (after merging the 0052 report) | bloat | .worktrees/0052-bloat-investigation |
 | 0055 | Determinism investigation (report only; proposes issues) | determinism | .worktrees/determinism |
 
@@ -47,6 +47,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0046 | BigInt | 63d8468 (agent heap; BigInt 1135/1142; active 98.8%) |
 | 0033 | JSON + RegExp builtins, regex literals | 8b5ccfb (agent num; active 32,303 / 32,718) |
 | 0040 | P1-7 Classes | 2d08a6c (agent lexer; test262 active 97.1%) |
+| 0051 | Remaining builtins | df48233 (agent heap; all promoted features 100%) |
 | 0054 | pi follow-ups | 69ee33c (agent infra; pi suite 213/226; OOM recovery bug -> heap) |
 | 0049 | pi codemode adapter | e39a47e (agent infra; pi's suite 204/226 on djs; start 0.49 ms vs 3.2 ms) |
 | 0047 | Dev-flow investigation | report in issue file (D012 adopted) |
@@ -116,6 +117,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 2026-11-01 (0046 BigInt done + promoted) | | 33,450 / 33,854 (98.8%) |
 | 2026-11-01 (0051 p1: iterator helpers promoted) | | 33,879 / 34,283 (98.8%) |
 | 2026-11-01 (0050: RegExp promoted, +2,186 tests) | | 36,285 / 36,689 (98.9%) |
+| 2026-11-01 (0051 done) | | 36,778 / 37,182 (98.9%) |
 
 ## Id reservations (in flight; check main for the authoritative list)
 
