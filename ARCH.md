@@ -350,9 +350,12 @@ Builtins are written in a **strict subset of TypeScript**, in the spirit of V8's
 One source has two backends:
 
 1. **Bytecode backend (every builtin).** djs-bgen erases types and emits plain JS with
-   `%Intrinsic` calls. djs compiles it in privileged mode into the base snapshot. Privileged
-   mode unlocks intrinsic calls and opcodes that user code cannot reach (unchecked element
-   access, int32 loop counters, direct slot access). This costs nothing in wasm size.
+   `%Intrinsic` calls. djs compiles it in privileged mode into the base snapshot (D1172).
+   Privileged mode unlocks `%Name(...)` intrinsic calls (`call_intrinsic`, D1270); the
+   proposal's privileged-only opcodes (unchecked element access, int32 loop counters,
+   direct slot access) were not needed: the leaf intrinsics and the interpreter's fast
+   paths cover them. Privileged code keeps no line tables or local names (D1430). This
+   costs nothing in wasm size.
 2. **Rust backend (opt-in, `/** @native */`).** djs-bgen emits a resumable Rust state
    machine (D1632). It is used for hot paths (`map`, `forEach`, `filter`, `join`,
    `indexOf`, `GetIterator`, the Map/Set constructors, the `JSON.stringify` slow path, …)
