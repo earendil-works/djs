@@ -7,7 +7,7 @@ use core::fmt::Write;
 
 use super::disasm::{DisasmContext, disasm};
 use super::handlers::{Handler, HandlerTable, encode_handlers};
-use super::stack::{StackError, check_stack_caches};
+use super::stack::{StackError, StackScratch, check_stack_in};
 use crate::heap::cells::{Bytes, CellKind, FuncTemplate, RefArray, Script, U32Array, ValueArray};
 use crate::heap::{Atom, Heap, HeapError, Ref};
 use crate::value::{Str, Value};
@@ -122,11 +122,21 @@ impl From<HeapError> for TemplateError {
 /// `FuncTemplate` cell with its `Bytes`, `ValueArray`, `RefArray` and `U32Array` parts.
 /// Empty parts are stored as null.
 pub fn alloc_template(heap: &mut Heap, p: &TemplateParts<'_>) -> Result<Ref, TemplateError> {
-    let (stack, cache_sites) =
-        check_stack_caches(p.code, p.handlers).map_err(TemplateError::Stack)?;
+    alloc_template_in(heap, p, &mut StackScratch::default())
+}
+
+/// [`alloc_template`] with the stack checker's buffers reused (the compiler's loop over
+/// the functions of a unit).
+pub fn alloc_template_in(
+    heap: &mut Heap,
+    p: &TemplateParts<'_>,
+    scratch: &mut StackScratch,
+) -> Result<Ref, TemplateError> {
+    let stack = check_stack_in(p.code, p.handlers, scratch).map_err(TemplateError::Stack)?;
+    let cache_sites = &scratch.caches;
     let captures = u16::try_from(p.captures.len()).map_err(|_| TemplateError::TooManyCaptures)?;
     let mut code_bytes = p.code.to_vec();
-    let ic_count = number_caches(&mut code_bytes, &cache_sites);
+    let ic_count = number_caches(&mut code_bytes, cache_sites);
     let code = alloc_bytes(heap, &code_bytes)?;
     let consts = nonempty(p.consts, |v| alloc_value_array(heap, v))?;
     let children = nonempty(p.children, |c| alloc_ref_array(heap, c))?;

@@ -38,7 +38,8 @@ pub use ops::{
     CostClass, OP_COUNT, OPS, OPS_HASH, Op, OpInfo, build_hash, capture_desc, flags, global_decls,
     special,
 };
-pub use stack::{StackError, UNKNOWN_DEPTH, check_stack, stack_depths};
+pub use stack::{StackError, StackScratch, UNKNOWN_DEPTH, check_stack, stack_depths};
 pub use template::{
-    TemplateError, TemplateParts, alloc_script, alloc_template, bytes_of, func_flags,
+    TemplateError, TemplateParts, alloc_script, alloc_template, alloc_template_in, bytes_of,
+    func_flags,
 };

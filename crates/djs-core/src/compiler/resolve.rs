@@ -22,7 +22,7 @@ use super::{CompileOptions, PErr, PResult};
 use crate::bytecode::global_decls::GlobalDecls;
 use crate::bytecode::{
     CodeBuf, Label, LineTableBuilder, Op, TemplateError, TemplateParts, alloc_script,
-    alloc_template, capture_desc, func_flags, special,
+    alloc_template_in, capture_desc, func_flags, special,
 };
 use crate::heap::{Atom, Heap, Ref};
 use crate::lexer::LineTable;
@@ -118,6 +118,7 @@ pub(super) fn finish(
         phase1.push(code);
     }
     let mut templates: Vec<Ref> = vec![Ref::NULL; funcs.len()];
+    let mut scratch = Scratch::default();
     for id in (0..funcs.len()).rev() {
         let f = &funcs[id];
         let parent_storage = f.parent.map(|(p, _)| &storages[p as usize].0);
@@ -138,6 +139,7 @@ pub(super) fn finish(
             opts.privileged,
             src,
             script,
+            &mut scratch,
         )?;
         templates[id] = t;
     }
@@ -351,6 +353,7 @@ fn emit_function(
     privileged: bool,
     src: &[u8],
     script: Ref,
+    scratch: &mut Scratch,
 ) -> PResult<Ref> {
     let mut consts = f.consts.clone();
     let mut needs_uninit = vec![false; f.vars.len()];
@@ -360,7 +363,8 @@ fn emit_function(
         }
     }
 
-    let mut all = Vec::with_capacity(phase1.code.len() / 3);
+    let mut all = core::mem::take(&mut scratch.insns);
+    all.clear();
     let mut pc = 0;
     while (pc as usize) < phase1.code.len() {
         let insn = crate::bytecode::decode::decode(&phase1.code, pc)
@@ -438,7 +442,8 @@ fn emit_function(
     }
 
     // ---- Re-emit.
-    let mut lines: Vec<(u32, u32)> = Vec::with_capacity(f.lines.len());
+    let mut lines = core::mem::take(&mut scratch.lines);
+    lines.clear();
     let mut li = 0;
     // The line table entries of phase-1 instructions up to `pc` start at the current
     // position of `out` (the last one wins).
@@ -734,7 +739,7 @@ fn emit_function(
         Some(line_table) => {
             let mut lt = LineTableBuilder::new();
             let mut cursor = crate::lexer::LineCursor::default();
-            for (pc, pos) in lines {
+            for &(pc, pos) in &lines {
                 let (line, col) = line_table.line_col_from(src, pos, &mut cursor);
                 lt.add(pc, line, col);
             }
@@ -792,10 +797,22 @@ fn emit_function(
         src_start: f.src_start,
         src_end: f.src_end,
     };
-    alloc_template(heap, &parts).map_err(|e| match e {
+    let t = alloc_template_in(heap, &parts, &mut scratch.stack).map_err(|e| match e {
         TemplateError::Heap(e) => e.into(),
         e => internal(&format!("{e:?}")),
-    })
+    });
+    scratch.insns = all;
+    scratch.lines = lines;
+    t
+}
+
+/// Buffers reused across the functions of a unit (0096: per-function allocations were
+/// a tenth of a compile).
+#[derive(Default)]
+struct Scratch {
+    insns: Vec<crate::bytecode::Insn>,
+    lines: Vec<(u32, u32)>,
+    stack: crate::bytecode::StackScratch,
 }
 
 /// A const enum member read through the binding of declaration `d`: the
