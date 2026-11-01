@@ -275,7 +275,8 @@ console.log(kept.length, kept[49].label, kept[49].round);
 ```
 <!-- /gen -->
 
-On the docs site, the *Heap* tab shows this example's arena by cell kind after the run,
+On the docs site, the *Heap* tab shows the cells this example allocated, by kind, apart
+from the base realm every VM starts with,
 and its *Collect now* button runs a collection in the page: most of the ten thousand
 objects disappear, and the fifty kept ones are packed in with the rest of the live heap.
 

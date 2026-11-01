@@ -55,7 +55,9 @@ The header's `size` is the size of the whole cell, so `offset + size` is the nex
 and anyone holding the bytes can walk the heap from 0 without knowing any cell kind. The
 garbage collector, the image verifier (D1056) and the host all do. On the docs site, the
 *Heap* tab of a live example walks the arena of the wasm VM in your browser this way, in
-a short loop of JavaScript, and counts the cells by kind:
+a short loop of JavaScript, and counts the cells by kind. It separates what the example
+allocated from the base realm before it: the roughly 5,800 cells of builtins, their
+code and names that every VM starts with as a copy of the base snapshot (D2340):
 
 ```js live
 const rows = [];

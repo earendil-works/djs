@@ -5884,3 +5884,13 @@ Every gain costs peak memory roughly in proportion: collections are fewer only b
 the arena grows further between them. pi runs many VMs and memory was the target of
 D2041–D2053, so 2–4% of instructions don't buy +0.3–0.9 MiB per VM. Reopen if
 instructions matter more than per-VM memory.
+## D2340: Heap views show the program's own cells apart from the base realm
+date: 2026-11-07 · by: bloat · issue: 0135
+A fresh VM is a copy of the base snapshot: about 5,800 cells and 320 KB of builtins,
+their bytecode, templates and names (0135). Every heap view used to report the arena as
+a whole, so a three-line example showed "almost 6,000 cells". The docs' Heap tab now shows
+the cells allocated after the base (offsets from the fresh VM's length on), by kind, and
+names the base realm's cells and bytes separately, with the total; a base cell the
+program grew (the atom table, the global object's properties) is reallocated after the
+base and counts as the program's. After *Collect now* the compaction slides cells, so the
+split is by the same offset and approximate.

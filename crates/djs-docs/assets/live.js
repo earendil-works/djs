@@ -52,14 +52,19 @@ function disasm(module, src) {
   return new TextDecoder().decode(new Uint8Array(x.memory.buffer, x.djs_out_ptr(), x.djs_out_len()));
 }
 
-/** Walks the arena cell by cell: the heap is walkable because every header has a size. */
-function walk(sb, { kindNames, classNames }) {
+/**
+ * Walks the arena cell by cell: the heap is walkable because every header has a size.
+ * Cells below `baseEnd` (the fresh VM's length) are the base realm every VM starts as a
+ * copy of; cells after it are what the program allocated (D2340).
+ */
+function walk(sb, { kindNames, classNames }, baseEnd = Infinity) {
   const heap = sb.heapView();
   const len = heap.length;
   const dv = new DataView(heap.buffer, heap.byteOffset, len);
   const kinds = new Map();
   const classes = new Map();
   let cells = 0;
+  const own = { cells: 0, bytes: 0, kinds: new Map() };
   for (let off = 0; off + 8 <= len; ) {
     const kind = dv.getUint8(off);
     const size = dv.getUint32(off + 4, true);
@@ -73,10 +78,18 @@ function walk(sb, { kindNames, classNames }) {
       const cls = classNames[dv.getUint32(off + 8, true)] ?? "?";
       classes.set(cls, (classes.get(cls) ?? 0) + 1);
     }
+    if (off >= baseEnd) {
+      own.cells++;
+      own.bytes += size;
+      const o = own.kinds.get(name) ?? { n: 0, bytes: 0 };
+      o.n++;
+      o.bytes += size;
+      own.kinds.set(name, o);
+    }
     cells++;
     off += size;
   }
-  return { len, cells, kinds, classes };
+  return { len, cells, kinds, classes, own };
 }
 
 function show(v) {
@@ -95,15 +108,18 @@ function kb(n) {
 }
 
 function heapHtml(before, after) {
-  const rows = [...after.kinds.entries()].sort((a, b) => b[1].bytes - a[1].bytes);
+  const own = after.own;
+  const rows = [...own.kinds.entries()].sort((a, b) => b[1].bytes - a[1].bytes);
   const max = rows[0]?.[1].bytes ?? 1;
-  let h = `<p>Arena: <b>${kb(after.len)}</b> in <b>${after.cells}</b> cells. The base snapshot it started from: ${kb(before.len)} in ${before.cells} cells.</p><table class="bars">`;
-  for (const [name, k] of rows.slice(0, 12)) {
-    const b = before.kinds.get(name);
-    const delta = k.n - (b?.n ?? 0);
-    h += `<tr><td class="mono">${name}</td><td class="num">${k.n}</td><td class="num delta">${delta > 0 ? "+" + delta : ""}</td><td class="bar"><span style="width:${(100 * k.bytes) / max}%"></span></td><td class="num">${kb(k.bytes)}</td></tr>`;
+  let h = `<p>This program: <b>${own.cells}</b> cells, <b>${kb(own.bytes)}</b>, allocated after the base realm.</p>`;
+  if (rows.length > 0) {
+    h += `<table class="bars">`;
+    for (const [name, k] of rows.slice(0, 12)) {
+      h += `<tr><td class="mono">${name}</td><td class="num">${k.n}</td><td class="bar"><span style="width:${(100 * k.bytes) / max}%"></span></td><td class="num">${kb(k.bytes)}</td></tr>`;
+    }
+    h += `</table>`;
   }
-  h += `</table><p class="muted">Counted by walking the arena from offset 0, cell by cell, with the layout the engine exports. Garbage stays until the next collection: <button class="live-gc">Collect now</button></p>`;
+  h += `<p class="muted">The base realm before it (the builtins, their code and names, which every VM starts with as a copy of the base snapshot): ${before.cells} cells, ${kb(before.len)}. Arena in total: ${after.cells} cells, ${kb(after.len)}. Counted by walking the arena cell by cell, with the layout the engine exports. Garbage stays until the next collection, which slides the program's live cells together: <button class="live-gc">Collect now</button></p>`;
   return h;
 }
 
@@ -343,12 +359,12 @@ async function run(ex) {
     const listing = disasm(module, src);
     pane("bytecode").textContent =
       listing ?? (src === ex.original ? ex.listing : `(The original example's bytecode, from the build.)\n\n${ex.listing}`);
-    const after = walk(sb, l);
+    const after = walk(sb, l, before.len);
     pane("heap").innerHTML = heapHtml(before, after);
     const keep = sb;
     pane("heap").querySelector(".live-gc").onclick = () => {
       keep.collect();
-      pane("heap").innerHTML = heapHtml(before, walk(keep, l));
+      pane("heap").innerHTML = heapHtml(before, walk(keep, l, before.len));
     };
     const t1 = performance.now();
     const image = sb.bytes();
