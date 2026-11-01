@@ -127,6 +127,10 @@ cells! {
         /// The [`Interp`] cell: interpreter registers and run state. Null until a VM
         /// exists.
         INTERP: Ref = 44,
+        /// The build hash of the VM that made the image (`vm::BUILD_HASH`: layout,
+        /// instruction table and intrinsic ids, D1320), 0 for a bare heap. Images hold
+        /// bytecode, so they load only into the same build.
+        BUILD: u32 = 48,
     };
 
     /// A flat one-byte (Latin-1) string. Holds only strings with every code unit <= 0xFF;
@@ -397,7 +401,7 @@ mod tests {
         assert_eq!(Rope::LAYOUT.min_size, 24);
         assert_eq!(Symbol::LAYOUT.min_size, 24);
         assert_eq!(Object::LAYOUT.min_size, 24);
-        assert_eq!(Roots::LAYOUT.min_size, 48);
+        assert_eq!(Roots::LAYOUT.min_size, 56);
         let t = PropTable::LAYOUT.tail.unwrap();
         assert_eq!(t.elem.size, 24);
         assert_eq!(t.elem.name, "PropEntry");

@@ -96,6 +96,24 @@ pub enum LoadError {
     TooLarge,
     /// The cell structure is broken (see [`walk::VerifyError`]).
     Corrupt(walk::VerifyError),
+    /// A VM image from a different build: its bytecode, intrinsic ids or layout do not
+    /// match this one (`Roots::BUILD`, D1320).
+    BuildMismatch { found: u32, expected: u32 },
+}
+
+impl fmt::Display for LoadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LoadError::BadHeader => f.write_str("not a djs heap image of this layout"),
+            LoadError::TooLarge => f.write_str("the image is larger than the memory limit"),
+            LoadError::Corrupt(e) => write!(f, "corrupt heap image: {e:?}"),
+            LoadError::BuildMismatch { found, expected } => write!(
+                f,
+                "the image is from another djs build (build hash {found:08x}, this build \
+                 {expected:08x})"
+            ),
+        }
+    }
 }
 
 /// The default memory cap: the whole `u32` offset space.
@@ -135,6 +153,16 @@ impl Heap {
     /// Restores a heap from an image produced by [`Heap::bytes`] of the same build. The
     /// whole image is verified (cell structure and every reference).
     pub fn from_bytes(bytes: alloc::vec::Vec<u8>, limit: usize) -> Result<Heap, LoadError> {
+        let heap = Heap::from_bytes_trusted(bytes, limit)?;
+        heap.verify().map_err(LoadError::Corrupt)?;
+        Ok(heap)
+    }
+
+    /// Like [`Heap::from_bytes`] but checks only the header, not every cell: for images
+    /// that cannot be corrupt, such as the base snapshot embedded at build time (verified
+    /// when it was built). Restoring the 36 KB base takes 8 µs with verification and
+    /// 1 µs without (D1321). Still memory safe: a bad cell is a panic, not UB.
+    pub fn from_bytes_trusted(bytes: alloc::vec::Vec<u8>, limit: usize) -> Result<Heap, LoadError> {
         let heap = Heap::over(Arena::from_bytes(bytes, limit));
         let a = &heap.arena;
         if a.len() > a.limit() {
@@ -148,7 +176,6 @@ impl Heap {
         {
             return Err(LoadError::BadHeader);
         }
-        heap.verify().map_err(LoadError::Corrupt)?;
         Ok(heap)
     }
 

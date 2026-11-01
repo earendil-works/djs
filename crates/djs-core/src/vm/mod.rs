@@ -32,6 +32,18 @@ use crate::value::{Obj, Value};
 /// The generated prelude (`builtins/gen/prelude.js`, D1172).
 const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude.js");
 
+/// The build hash of VM images (D1320): the heap layout, the instruction table and the
+/// intrinsic ids. Images hold bytecode and intrinsic ids, so they load only into a build
+/// with the same hash. Stored in `Roots::BUILD`.
+pub const BUILD_HASH: u32 = {
+    use crate::bytecode::intrinsics::INTRINSICS_HASH;
+    use crate::bytecode::{OPS_HASH, build_hash};
+    build_hash(
+        build_hash(crate::heap::cells::LAYOUT_HASH, OPS_HASH),
+        INTRINSICS_HASH,
+    )
+};
+
 /// VM configuration.
 #[derive(Clone, Copy, Debug)]
 pub struct VmOptions {
@@ -87,6 +99,8 @@ pub struct Vm {
 impl Vm {
     pub fn new(opts: VmOptions) -> Result<Vm, HeapError> {
         let mut heap = Heap::with_limit(opts.memory_limit)?;
+        heap.arena_mut()
+            .set(0, crate::heap::cells::Roots::BUILD, BUILD_HASH);
         state::init(&mut heap)?;
         realm::init(&mut heap)?;
         let mut vm = Vm { heap, opts };
@@ -142,9 +156,59 @@ impl Vm {
     }
 
     /// Restores a VM from [`Vm::bytes`] of the same build, in any state (including
-    /// suspended mid-call or parked on a host call).
+    /// suspended mid-call or parked on a host call). The whole image is verified.
     pub fn from_bytes(bytes: Vec<u8>, opts: VmOptions) -> Result<Vm, LoadError> {
-        let heap = Heap::from_bytes(bytes, opts.memory_limit)?;
+        Vm::check_image(&bytes)?;
+        Vm::over(Heap::from_bytes(bytes, opts.memory_limit)?, opts)
+    }
+
+    /// A new VM from a base snapshot: the image of an idle VM with its prelude installed,
+    /// made at build time (`djs-prelude`, D1321). Creating a VM is then a copy, with no
+    /// compile. The image is trusted (its cells are not verified: it was verified when it
+    /// was built), but its header and build hash are checked.
+    ///
+    /// What the base holds: the realm (global object, intrinsics, builtins), the atoms
+    /// and the compiled prelude. Nothing per VM: no handles, no host functions, no
+    /// pending calls. Per-VM state is set up after the copy (see `after_copy`).
+    pub fn from_base(base: &[u8], opts: VmOptions) -> Result<Vm, LoadError> {
+        Vm::check_image(base)?;
+        let heap = Heap::from_bytes_trusted(base.to_vec(), opts.memory_limit)?;
+        let mut vm = Vm::over(heap, opts)?;
+        if vm.state() != RunState::Idle || vm.heap.handle_count() != 0 {
+            return Err(LoadError::BadHeader);
+        }
+        vm.after_copy();
+        Ok(vm)
+    }
+
+    /// Per-VM initialization after copying a base: state that must not be shared between
+    /// VMs or baked into the base. There is none yet; a `Math.random` seed goes here.
+    fn after_copy(&mut self) {}
+
+    /// The build hash, before anything else: an image from another build must be
+    /// rejected with a clear error, not fail verification somewhere in the middle.
+    fn check_image(bytes: &[u8]) -> Result<(), LoadError> {
+        use crate::heap::cells::{self, Roots};
+        let u32_at = |at: u32| {
+            let at = at as usize;
+            bytes
+                .get(at..at + 4)
+                .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        };
+        if u32_at(Roots::MAGIC.offset) != Some(cells::MAGIC) {
+            return Err(LoadError::BadHeader);
+        }
+        let found = u32_at(Roots::BUILD.offset).ok_or(LoadError::BadHeader)?;
+        if found != BUILD_HASH {
+            return Err(LoadError::BuildMismatch {
+                found,
+                expected: BUILD_HASH,
+            });
+        }
+        Ok(())
+    }
+
+    fn over(heap: Heap, opts: VmOptions) -> Result<Vm, LoadError> {
         if state::interp(&heap) == 0 || heap.realm().as_internal().is_none() {
             return Err(LoadError::BadHeader);
         }

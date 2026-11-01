@@ -919,6 +919,29 @@ fn vm_new_cost() {
             per * 1e6
         );
     }
+    // What a base snapshot costs: the image after a collect, restored with full
+    // verification, and a plain copy.
+    let mut vm = Vm::new(VmOptions::default()).unwrap();
+    vm.collect().unwrap();
+    let image = vm.bytes().to_vec();
+    let n = 2000;
+    let t = Instant::now();
+    for _ in 0..n {
+        let vm = Vm::from_bytes(image.clone(), VmOptions::default()).unwrap();
+        std::hint::black_box(vm.bytes().len());
+    }
+    let per = t.elapsed().as_secs_f64() / n as f64;
+    let t = Instant::now();
+    for _ in 0..n {
+        std::hint::black_box(image.clone());
+    }
+    let copy = t.elapsed().as_secs_f64() / n as f64;
+    std::println!(
+        "image {} bytes: from_bytes {:.1} µs, copy {:.1} µs",
+        image.len(),
+        per * 1e6,
+        copy * 1e6
+    );
 }
 
 #[test]
@@ -1006,4 +1029,103 @@ fn to_primitive_through_a_host_valueof() {
         }
     }
     assert_eq!(log, ["11 30"]);
+}
+
+/// Runs `src` as a script and returns what it evaluates to (`return` value of a body).
+fn eval(vm: &mut Vm, src: &str) -> String {
+    let opts = crate::compiler::CompileOptions::async_body("t.js", &[]);
+    let f = vm.compile(src.as_bytes(), &opts).unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    match vm.run(1 << 30) {
+        Status::Done(v) => vm.display(v),
+        Status::Threw(e) => panic!("threw: {}", vm.display(e)),
+        s => panic!("{s:?}"),
+    }
+}
+
+/// A base image as djs-prelude makes it: a fresh VM with the prelude, collected.
+fn base_image() -> Vec<u8> {
+    let mut vm = Vm::new(VmOptions::default()).unwrap();
+    vm.collect().unwrap();
+    vm.bytes().to_vec()
+}
+
+#[test]
+fn from_base_gives_independent_vms() {
+    let base = base_image();
+    let mut a = Vm::from_base(&base, VmOptions::default()).unwrap();
+    let mut b = Vm::from_base(&base, VmOptions::default()).unwrap();
+    assert_eq!(
+        eval(&mut a, "globalThis.x = 1; return [1, 2, 3].length + 1"),
+        "4"
+    );
+    // The second VM does not see the first one's global.
+    assert_eq!(eval(&mut b, "return typeof globalThis.x"), "undefined");
+    // A VM from the base behaves like one that compiled its prelude.
+    let mut c = Vm::new(VmOptions::default()).unwrap();
+    let probe = "return typeof JSON + typeof Math + typeof Array + typeof String + typeof Object \
+                 + typeof [].push + typeof ''.slice + [1, 2, 3].length";
+    assert_eq!(eval(&mut b, probe), eval(&mut c, probe));
+    // Host functions are bound after the copy, per VM.
+    let h = a.new_host_function(7, "f").unwrap();
+    a.define_global("f", h).unwrap();
+    assert_eq!(eval(&mut b, "return typeof f"), "undefined");
+}
+
+#[test]
+fn images_carry_the_build_hash() {
+    let vm = Vm::new(VmOptions::default()).unwrap();
+    let at = crate::heap::cells::Roots::BUILD.offset as usize;
+    assert_eq!(vm.bytes()[at..at + 4], BUILD_HASH.to_le_bytes());
+    let mut other = vm.bytes().to_vec();
+    other[at] ^= 1;
+    let expected = BUILD_HASH;
+    let found = expected ^ 1;
+    assert_eq!(
+        Vm::from_bytes(other.clone(), VmOptions::default()).err(),
+        Some(LoadError::BuildMismatch { found, expected })
+    );
+    assert_eq!(
+        Vm::from_base(&other, VmOptions::default()).err(),
+        Some(LoadError::BuildMismatch { found, expected })
+    );
+    let msg = alloc::format!("{}", LoadError::BuildMismatch { found, expected });
+    assert!(msg.contains("another djs build"), "{msg}");
+    // Not an image at all.
+    assert_eq!(
+        Vm::from_base(b"not an image", VmOptions::default()).err(),
+        Some(LoadError::BadHeader)
+    );
+    // A bare heap (no VM) has no build hash.
+    let bare = crate::heap::Heap::new().unwrap();
+    assert!(matches!(
+        Vm::from_bytes(bare.bytes().to_vec(), VmOptions::default()),
+        Err(LoadError::BuildMismatch { found: 0, .. })
+    ));
+}
+
+#[test]
+fn from_base_needs_an_idle_vm_and_room() {
+    // A VM suspended mid-call is a valid image for from_bytes, but not a base.
+    let mut vm = Vm::new(VmOptions::default()).unwrap();
+    let opts = crate::compiler::CompileOptions::async_body("t.js", &[]);
+    let f = vm.compile(b"for (;;) {}", &opts).unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    assert!(matches!(vm.run(1000), Status::OutOfFuel));
+    let busy = vm.bytes().to_vec();
+    assert!(Vm::from_bytes(busy.clone(), VmOptions::default()).is_ok());
+    assert_eq!(
+        Vm::from_base(&busy, VmOptions::default()).err(),
+        Some(LoadError::BadHeader)
+    );
+    let small = VmOptions {
+        memory_limit: 4096,
+        ..VmOptions::default()
+    };
+    assert_eq!(
+        Vm::from_base(&base_image(), small).err(),
+        Some(LoadError::TooLarge)
+    );
 }
