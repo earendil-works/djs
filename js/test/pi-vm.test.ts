@@ -310,6 +310,10 @@ test("pi: deterministic runs repeat exactly, with QuickJS's random numbers", asy
   );
   const reseeded = await run(DETERMINISTIC_CODE, { tools: { echo }, deterministic: { ...det, seed: 2 } });
   assert.notEqual((reseeded.calls[0].args as number[])[2], random);
+  // As pi's quickjs VM: no WeakRef or FinalizationRegistry in deterministic runs only.
+  const weak = "return [typeof WeakRef, typeof FinalizationRegistry]";
+  assert.deepEqual(value(await run(weak, { deterministic: det })), ["undefined", "undefined"]);
+  assert.deepEqual(value(await run(weak)), ["function", "function"]);
   // Not deterministic: real randomness.
   const a = value(await run("return Math.random()"));
   const b = value(await run("return Math.random()"));

@@ -91,6 +91,12 @@ const SCRIPT_PREFIX = "return (async (tools, console) => {";
  * start on the VM clock (deterministic mode: from `startedAt`, as pi's quickjs VM does).
  */
 const HOST_GLOBALS = `
+// Deterministic runs have no WeakRef or FinalizationRegistry: collection timing is not
+// deterministic (as pi's quickjs VM leaves them out).
+if (deterministic) {
+  delete globalThis.WeakRef;
+  delete globalThis.FinalizationRegistry;
+}
 const define = (name, value) =>
   Object.defineProperty(globalThis, name, { value, writable: true, enumerable: false, configurable: true });
 const now = Date.now;
@@ -424,7 +430,7 @@ interface Prepared {
 
 /**
  * VM images taken right after the prelude, per module, by everything the prelude depends on
- * (the prelude, tools, globals, store and heap limit): a start with the same inputs restores
+ * (the prelude, tools, globals, store, heap limit and deterministic mode): a start with the same inputs restores
  * the image instead of running the prelude again. Most of a start is the prelude's
  * lockdown, so this makes repeated starts about 10x faster (docs/host.md "pi codemode").
  */
@@ -437,8 +443,10 @@ function prepare(session: Session, engine: Engine, prelude: string, data: VmStar
   // Handles live as long as the VM, which the caller disposes as a whole.
   const bridge = engine.hostFunction(BRIDGE_FN, "bridge");
   const getter = compileOrThrow(engine, "codemode-prelude.js", ["o", "k"], "return o[k]");
-  const host = compileOrThrow(engine, "codemode-prelude.js", [], HOST_GLOBALS);
-  const setOrigin = evaluate(session, engine, host);
+  const host = compileOrThrow(engine, "codemode-prelude.js", ["deterministic"], HOST_GLOBALS);
+  const flag = engine.value(data.deterministic !== undefined);
+  const setOrigin = evaluate(session, engine, host, [flag]);
+  engine.free(flag);
   engine.free(host);
   const preludeFn = compileOrThrow(engine, "codemode-prelude.js", [], `return ${prelude}`);
   const factory = evaluate(session, engine, preludeFn);
@@ -466,7 +474,14 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
   const { data, post, prelude } = options;
   const module = options.wasm as WebAssembly.Module;
   const deterministic = data.deterministic;
-  const key = JSON.stringify([prelude, data.tools, data.globals, data.store, data.memoryLimitBytes ?? null]);
+  const key = JSON.stringify([
+    prelude,
+    data.tools,
+    data.globals,
+    data.store,
+    data.memoryLimitBytes ?? null,
+    data.deterministic !== undefined,
+  ]);
   let cache = imageCache.get(module);
   if (!cache) imageCache.set(module, (cache = new Map()));
   const cached = options.reuseImages === false || key.length > MAX_CACHE_KEY ? undefined : cache.get(key);

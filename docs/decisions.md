@@ -2580,3 +2580,58 @@ in `Roots::GC_THRESHOLD` and a restore keeps it (capped by what the restoring ca
 and limit, the OOM point is the same with any fuel slicing and any snapshot/restore
 points (vm/tests.rs `the_out_of_memory_point_is_deterministic`); `--gc-stress` is a
 different policy and differs.
+## D1590: CreateDynamicFunction parses one function and checks where its parts end
+date: 2026-11-01 · by: infra · issue: 0059
+The Function constructors build the spec's sourceText, `<prefix> anonymous(<P>\n) {\n<body>\n}`.
+`compiler::compile_dynamic_function` (compiler/dynamic.rs) parses exactly one function
+from it, with no binding of `anonymous` inside, at the top of a Script whose code returns
+the closure. The spec parses P and the body separately. Two checks give the same result on the
+joined text. The parameter list must end at the `)` the builtin inserted (`params_close`),
+and nothing may follow the function. So `Function("){}; x(); (function(", "")`,
+`Function("/*", "*/){")` and `Function("", "}{")` are SyntaxErrors. qjs evaluates the
+joined source and would run the first one's injected code if it were not wrapped in
+parentheses. The function's source text is the sourceText (Function.prototype.toString
+matches qjs). ToString of the arguments happens in the builtin, in spec order. The four
+constructors share one builtin (builtins/eval.ts), and new.target selects the prototype
+through GetPrototypeFromConstructor. bgen now allows `new.target` in `@intrinsic`
+builtins, because Rust installs the function-kind constructors as constructors (D1420).
+
+## D1591: Dynamic code compiles in a leaf, runs as an ordinary call; fuel per code unit
+date: 2026-11-01 · by: infra · issue: 0059
+`CompileEval` and `CompileFunction` (builtins/eval.rs) only compile: they return a Script
+closure, and the builtin calls it (`this` = the global object). Running the code is then
+an ordinary JS call, so fuel, suspension, snapshots and GC need nothing new. A compile is
+not interruptible, so the leaf charges it up front: 4 fuel per code unit of source,
+roughly the cost of a few simple instructions per unit. The file name in stack traces is
+`<input>`, as in qjs. Source is passed to the compiler as UTF-8. A lone surrogate in eval'd
+source becomes U+FFFD; the compiler has no WTF-8 input. Eval code is a Script for now, so
+it returns `undefined` and its top-level declarations go to the global scope. The TODO in
+`compile_eval` is the one place where 0058's completion values and an eval goal (strict
+eval's own environment) take over. The builtin needs no change.
+
+## D1592: queueMicrotask is native; a throwing callback is reported like a rejection
+date: 2026-11-01 · by: infra · issue: 0059
+`queueMicrotask(callback)` (qjs and the HTML spec have it) queues the builtin job
+`MicrotaskJob(callback)`, which calls the callback with no arguments and `this`
+undefined. If the callback throws, qjs prints the error and drops the rest of its job queue.
+Browsers report the error and go on. djs goes on and reports the error as an unhandled
+promise rejection (a rejected promise with no handler), so hosts see it where they already
+look (the Sandbox's `unhandledRejections`, the CLI's "Possibly unhandled promise
+rejection"). The pi adapter's polyfill is gone. The adapter now removes WeakRef and
+FinalizationRegistry in deterministic runs (as pi's quickjs VM leaves them out), and its
+prelude images are keyed by the mode.
+
+## D1593: test262's scan-eval group becomes direct-eval
+date: 2026-11-01 · by: infra · issue: 0059
+The skipped group is now `direct-eval`: `language/eval-code/direct` and tests whose
+source has an `eval(` call (conservative: `obj.eval(` matches too, `(0, eval)(` does
+not). 540 of the old group's 1,065 tests are active: indirect eval, built-ins/eval and the
+Function constructors. 461 of them pass. The 79 failures are in the ratchet:
+- 56 assume sloppy functions from `Function(...)`: duplicate parameters, `eval`/`arguments`
+  as names, and `this` coerced to the global object (`Function("return this")()`, the
+  harness's fnGlobalObject). djs is always strict.
+- 20 need eval's completion value or strict eval's own environment (0058).
+- 3 resizable typed array tests fail on unrelated gaps.
+In the difftest corpus, the dquickts cases that use dynamic code run now. Four that read
+the caller's locals through eval are `skip-djs` (direct eval). The rest pass or are in the
+ratchet, waiting for completion values.

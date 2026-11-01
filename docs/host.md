@@ -287,13 +287,13 @@ but pi keeps the prelude's `settle`/`run`/`stalled` alive across calls).
 | deterministic: WASI clocks read virtual time, `random_get` a PRNG, UTC, no WeakRef | `vm_set_now(clock.now)` before every slice, time zone 0, `vm_set_random_seed`. djs reads no clock or entropy of its own (ARCH "Nondeterminism") and has no WeakRef at all |
 | `Math.random` seeded by QuickJS from its first clock read (seed + 1), one draw used up while creating the context | djs's `Math.random` is the same xorshift64*, so the adapter seeds it one step after seed + 1. **The same seed gives the same numbers on both engines**; pi's pinned values pass |
 | fingerprint `quickjs-wasi X, quickjs Y, prelude H, deterministic 1, stack S, heap M, budget B` | `djs <build hash>, prelude H, deterministic 1, fuel per poll F, heap M, budget B` (`djs_build_hash`) |
-| quickjs-wasi's host globals `performance`, `queueMicrotask`, `atob`, `btoa` | defined by the adapter in JS before the prelude, so the lockdown freezes them too. `performance.now()` counts from the run's start on the VM clock (deterministic: from `startedAt`, as on quickjs) |
+| quickjs-wasi's host globals `performance`, `atob`, `btoa` (`queueMicrotask` is native since 0059) | defined by the adapter in JS before the prelude, so the lockdown freezes them too. `performance.now()` counts from the run's start on the VM clock (deterministic: from `startedAt`, as on quickjs). Deterministic runs also lose `WeakRef` and `FinalizationRegistry` there, as on quickjs |
 | no snapshots: durability by deterministic replay | `snapshot()` / `resumeVm()` in addition: the VM image plus the adapter's few numbers, taken while the script waits. A resumed session continues with no replay (tested against an uninterrupted run) |
 
 **Prelude images.** Running pi's prelude is most of a start: its lockdown walks and freezes
 about 700 objects, and the djs interpreter is still several times slower than QuickJS
 (the board's perf track). The adapter keeps the VM image taken right after the prelude,
-keyed by everything the prelude saw (prelude, tools, globals, store, heap limit; at most
+keyed by everything the prelude saw (prelude, tools, globals, store, heap limit, deterministic mode; at most
 16 images per module, 450 KB each). A start with the same inputs restores the image
 (0.6 ms) instead. Only `performance`'s origin and the seed are set per run, after the
 restore. `reuseImages: false` turns it off. pi's worker launcher creates a worker per
@@ -306,18 +306,18 @@ benefit. The in-thread and remote launchers benefit as they are.
 swaps `src/runtime/vm.ts` for a three-line wrapper around js/pi/vm.ts and `src/wasm.ts` for
 the djs-wasm loader, and runs pi's installed vitest on the copy. node_modules are symlinks
 and vite's cache stays in the copy, so nothing is written to pi-private. The run writes
-`report.md` with pass/fail per test and the failure messages. At pi d65de9db942d: **213 of
-226 pass** at 0054's merge (204 in 0049). Since then the stack overflow test passes (0054),
-and so do the two large-image tests (0050's regexp work). Declarations, source, portable
-and worker-lifetime pass completely; sandbox 144/153; deterministic 26/30.
+`report.md` with pass/fail per test and the failure messages. At pi d65de9db942d: **215 of
+226 pass** after 0059 (204 in 0049, 213 after 0054). 0054 fixed the stack overflow test,
+0050's regexp work the two large-image tests, and 0051 plus the adapter's deterministic
+mode the WeakRef test. Declarations, source, portable and worker-lifetime pass
+completely; sandbox 144/153; deterministic 28/30.
 Each failing test fails on every backend it runs on (worker, inline, remote):
 
 | test | why |
 | --- | --- |
-| keeps eval and Function inside the VM | no global `eval`. The Function and AsyncFunction constructors throw "not supported yet" (ARCH: no direct eval; indirect eval and `Function` may come later) |
+| keeps eval and Function inside the VM | the constructors work (0059), but `eval("typeof process")` returns `undefined`: eval returns the Script's completion value, which arrives with 0058 |
 | rejects dynamic import | `import()` is a compile-time SyntaxError, so the whole script fails instead of the `await import()` rejecting |
 | ignores patches to built-ins and built-in globals | djs is always strict (ARCH). Assigning to a frozen built-in throws a TypeError where sloppy QuickJS ignores it. The protection itself works: the prelude's JSON and promises are intact |
-| runs in UTC … without WeakRef or FinalizationRegistry | the deterministic half passes. `execute()` expects WeakRef and FinalizationRegistry to exist, and djs has neither yet (0051) |
 | reports the fingerprint … | the test matches `/^quickjs-wasi /`. Inherent: a different engine must have a different fingerprint |
 
 ### What differs for scripts
@@ -326,11 +326,14 @@ Besides the failures above:
 - **Strict mode.** pi evaluates scripts sloppy on QuickJS. On djs they are strict: an
   assignment to an undeclared variable is a ReferenceError instead of creating a global,
   and writes to read-only properties throw. Model-written code rarely relies on either.
-- **Globals djs lacks** (quickjs-wasi has them; compared again after 0054): `WeakRef`,
-  `FinalizationRegistry` (0051), `DOMException`, `eval`, and `SharedArrayBuffer` (an ARCH
-  non-goal). `Iterator` (D1510), the disposables (D1512), the URI functions and
-  `escape`/`unescape` (0054) are there now. The adapter
-  supplies `performance`, `queueMicrotask`, `atob` and `btoa`.
+- **Globals djs lacks** (quickjs-wasi has them; compared again after 0059): `DOMException`
+  and `SharedArrayBuffer` (an ARCH non-goal). `Iterator` (D1510), the disposables (D1512),
+  WeakRef and FinalizationRegistry (D1513), the URI functions and `escape`/`unescape`
+  (0054), `eval`, the Function constructors and `queueMicrotask` (0059) are there now. The
+  adapter supplies `performance`, `atob` and `btoa`.
+- **Dynamic code.** `eval(x)` is always indirect eval (D014): it sees globals, not the
+  caller's locals. Functions made by `Function(...)` are strict like everything else, so
+  `Function("return this")()` is `undefined`, not the global object.
 - **Interrupt budgets.** A poll is 10,000 fuel. On a tight loop that is about as many polls
   per second as QuickJS makes (34,000/s vs 32,000/s; a budget of 20,000 lasts 0.58 s vs
   0.62 s). Code that allocates or calls builtins polls far more often than on QuickJS,
@@ -355,8 +358,8 @@ Besides the failures above:
 4. Optionally, for fast starts in the worker launcher: keep prelude images in the parent
    thread, or keep warm workers. Splitting the lockdown out of the argument-dependent part of
    the prelude would let one image serve every tool table and store.
-5. Before the flag is the default, close these engine gaps: `eval`/`Function`, `import()` as a runtime rejection, WeakRef/
-   FinalizationRegistry, and the remaining globals. Stack overflow is a `RangeError` since
+5. Before the flag is the default, close these engine gaps: eval's completion value
+   (0058) and `import()` as a runtime rejection. Stack overflow is a `RangeError` since
    0054 (D013).
    Interpreter speed matters for heavier scripts (see below).
 
