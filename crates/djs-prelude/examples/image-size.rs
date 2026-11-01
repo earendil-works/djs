@@ -68,7 +68,7 @@ fn main() {
         total += c.size as u64;
     }
     let mut rows: Vec<_> = by.into_iter().collect();
-    rows.sort_by(|x, y| y.1.0.cmp(&x.1.0));
+    rows.sort_by_key(|r| std::cmp::Reverse(r.1.0));
     println!(
         "base image: {} bytes in the arena, {} in cells",
         vm.bytes().len(),
