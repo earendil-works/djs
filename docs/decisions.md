@@ -2725,3 +2725,19 @@ using`) tick exactly like qjs's. Alternatives: qjs's hidden (value, method) loca
 declaration with unrolled disposal (needs per-entry resets of the locals for loops, and
 inlines the disposal at every jump), or one `await` of a disposeAsync-style promise
 (extra ticks).
+
+## D1581: Script and eval completion values; `Goal::Eval` for indirect eval
+date: 2026-11-03 · by: lexer · issue: 0058
+Script code (except the privileged prelude) and the new `Goal::Eval` return their
+completion value: a hidden local updated by expression statements and reset by
+`if`/loops/`switch`/`try`/`catch` (docs/compiler.md 5.8), as qjs's `eval_ret`.
+`$262.evalScript` returns it with no change, and djs-difftest's temporary globals
+(`__difftestSetup`, `__difftestCase`, D1440) are gone: the prelude and the case Script
+are called for their values. `Goal::Eval` (`CompileOptions::eval`, `FuncKind::Eval`,
+template kind KIND_SCRIPT) is strict eval code: top-level declarations are locals of
+the call, free names are globals, `this` is the call's (the global object), `return`,
+`new.target`, `super` and top-level `using` are SyntaxErrors, and `await` stays an
+identifier as in any Script. builtins/eval.rs compiles indirect eval with it. Since djs
+is always strict, test262's indirect-eval tests that need sloppy eval code (vars leaking
+to the global object, global function declarations) now fail; they passed only because
+eval code was a Script.

@@ -994,18 +994,28 @@ handles arrows' lexical `this` with no special case.
   (`new.target only allowed within functions`).
 - `super` property access: the home object, a binding set by `define_method`.
 
-### 5.8 Script mode vs async-body mode (D004)
+### 5.8 Script mode vs async-body mode vs eval code (D004, D1581)
 
-| | Script | AsyncBody (codemode) |
-| --- | --- | --- |
-| top-level function | a script function, `this` = global object | an async function body, called with `this` = undefined |
-| top-level `var`, function declarations | global object properties, created by `global_decls` at script start (CanDeclareGlobalVar/Function checks, conflicts with global lexicals throw at instantiation) | locals of the body function |
-| top-level `let`/`const`/`class` | entries in the realm's global lexical record (uninitialized at `global_decls`, set by `init_global_lex`) | locals |
-| inner functions referring to top-level names | global access (another script may define or read them) | captures |
-| free names | `get_global` etc.: global lexical record, then global object | same |
-| `await` at top level | identifier | operator |
-| `return` at top level | `return not in a function` | allowed, the result of the run |
-| completion value | needed for `$262.evalScript`: a hidden local `%completion` updated by expression statements in Script mode only (later, when 0007 needs it) | no |
+| | Script | AsyncBody (codemode) | Eval (indirect eval) |
+| --- | --- | --- | --- |
+| top-level function | a script function, `this` = global object | an async function body, called with `this` = undefined | a sync body, called with `this` = global object |
+| top-level `var`, function declarations | global object properties, created by `global_decls` at script start (CanDeclareGlobalVar/Function checks, conflicts with global lexicals throw at instantiation) | locals of the body function | locals (strict eval: a fresh environment per call) |
+| top-level `let`/`const`/`class` | entries in the realm's global lexical record (uninitialized at `global_decls`, set by `init_global_lex`) | locals | locals |
+| inner functions referring to top-level names | global access (another script may define or read them) | captures | captures |
+| free names | `get_global` etc.: global lexical record, then global object | same | same |
+| `await` at top level | identifier | operator | identifier |
+| `return` at top level | `return not in a function` | allowed, the result of the run | `return not in a function` |
+| `using` at top level | error | allowed | error |
+| completion value | the result of the call (not for the privileged prelude) | no | the result of the call |
+
+Completion values (0058): a hidden local `<completion>` (`VarKind::Internal`, set to
+`undefined` at the start) takes the value of every expression statement of the
+top-level code (nested functions drop it, as before), and `if`, loops, `switch`, `try`
+and a `catch` block reset it to `undefined` first (UpdateEmpty(…, undefined)). A finally
+block keeps the try statement's value unless it exits abruptly: the value is saved on
+the operand stack at its entry (the finally block's statements run one deeper) and
+restored at its normal end. The top level returns the local. This is qjs's `eval_ret`,
+except that do-while resets once before the loop, as the spec says, not per iteration.
 
 The global lexical record is a realm heap cell (atom → value, flags `const`), shared by
 all scripts of the realm. Global accesses go through it first, so TDZ for global

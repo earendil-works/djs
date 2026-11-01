@@ -35,16 +35,14 @@ fn instantiate(heap: &mut Heap, template: crate::heap::layout::Ref) -> Result<Va
     Ok(Value::object(f))
 }
 
-/// PerformEval's parse (19.2.1.1) for indirect eval: the source as a Script, returned as
-/// a closure that the builtin calls with `this` = the global object.
-// TODO(0058): eval code is a Script for now. With 0058's completion values and an eval
-// goal, this compiles with that goal instead, so that the call returns the completion
-// value and top-level declarations stay local to the call (strict eval, 19.2.1.1 steps
-// 16-17). The builtin needs no change.
+/// PerformEval's parse (19.2.1.1) for indirect eval: the source as eval code
+/// (`Goal::Eval`: top-level declarations are locals of the call, strict eval steps
+/// 16-17), returned as a closure that the builtin calls with `this` = the global object;
+/// the call returns the completion value.
 pub(crate) fn compile_eval(heap: &mut Heap, src: Str) -> Result<Value, Fault> {
     let bytes = utf8(heap, src);
     let template =
-        compiler::compile(heap, &bytes, &CompileOptions::script(FILE)).map_err(compile_error)?;
+        compiler::compile(heap, &bytes, &CompileOptions::eval(FILE)).map_err(compile_error)?;
     instantiate(heap, template)
 }
 
