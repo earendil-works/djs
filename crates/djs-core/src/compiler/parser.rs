@@ -511,7 +511,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         if tok.kind != TokenKind::Ident
             || tok.is_escaped_reserved()
             || tok.kw.is_strict_reserved()
-            || (tok.kw == Kw::Await && self.f.is_async)
+            || (tok.kw == Kw::Await && self.await_reserved())
         {
             return syntax(tok.start, "variable name expected");
         }
@@ -668,6 +668,27 @@ impl<'a, 'h> Parser<'a, 'h> {
             }
         }
         true
+    }
+
+    /// `await` is reserved here: in async functions, and in the parameters of arrows
+    /// nested in their parameters or bodies (arrow parameters see the enclosing
+    /// context, ECMA-262 15.3).
+    pub fn await_reserved(&self) -> bool {
+        if self.f.is_async {
+            return true;
+        }
+        if !(self.f.kind == FuncKind::Arrow && self.f.in_params) {
+            return false;
+        }
+        for s in self.stack.iter().rev() {
+            if s.f.is_async {
+                return true;
+            }
+            if !(s.f.kind == FuncKind::Arrow && s.f.in_params) {
+                return false;
+            }
+        }
+        false
     }
 
     /// The hinted name if the function or arrow at `pos` is the hinted expression.

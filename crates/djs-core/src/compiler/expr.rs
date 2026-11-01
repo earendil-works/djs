@@ -1032,7 +1032,7 @@ impl Parser<'_, '_> {
         }
         if tok.is_escaped_reserved()
             || tok.kw.is_strict_reserved()
-            || (tok.is_contextual(Kw::Await) && self.f.is_async)
+            || (tok.kw == Kw::Await && self.await_reserved())
         {
             return self.unexpected();
         }
@@ -1405,7 +1405,7 @@ impl Parser<'_, '_> {
                 if key_tok.is_escaped_reserved() || key_tok.kw.is_strict_reserved() {
                     return syntax(key_tok.start, "invalid property name");
                 }
-                if key_tok.is_contextual(Kw::Await) && self.f.is_async {
+                if key_tok.kw == Kw::Await && self.await_reserved() {
                     return syntax(self.tok.start, "expecting ':'");
                 }
                 let a = key.unwrap_or(Atom::NULL);

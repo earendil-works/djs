@@ -166,7 +166,7 @@ impl Parser<'_, '_> {
                 continue;
             }
             if self.tok.kind != TokenKind::Ident
-                || (self.f.is_async && self.tok.is_contextual(Kw::Await))
+                || (self.tok.kw == Kw::Await && self.await_reserved())
             {
                 return syntax(self.tok.start, "missing formal parameter");
             }
@@ -396,9 +396,11 @@ impl Parser<'_, '_> {
         self.f.name = hint;
         self.f.src_start = start;
         if self.is(TokenKind::Ident) {
-            if is_async && self.tok.is_contextual(Kw::Await) {
+            self.f.in_params = true;
+            if self.tok.kw == Kw::Await && self.await_reserved() {
                 return syntax(self.tok.start, "missing formal parameter");
             }
+            self.f.in_params = false;
             let name = self.function_binding_name("invalid argument name in strict code")?;
             self.next()?;
             let v = self.declare_param(name, self.tok.start)?;
