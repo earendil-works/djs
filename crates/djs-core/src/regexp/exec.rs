@@ -514,7 +514,7 @@ impl Machine<'_> {
         let at = pc + 6 + code[pc + 4] as usize;
         match self.next_char(self.s.pos as usize) {
             Some((c, _)) => in_ranges(&code[at..at + 2 * n], c),
-            None => false,
+            None => code[pc] & F_END != 0,
         }
     }
 
@@ -529,7 +529,7 @@ impl Machine<'_> {
         let n0 = n;
         while !self.star_follows(pc) {
             if code[pc] & F_GREEDY != 0 {
-                if n <= min {
+                if n <= min || code[pc] & F_DISJOINT != 0 {
                     return None;
                 }
                 self.s.pos = self.give_back(back, self.s.slots[r + 1]);
@@ -843,7 +843,11 @@ impl Machine<'_> {
                 let Some(n) = self.star_settle(pc, n) else {
                     return fail;
                 };
-                let more = if greedy { n > min } else { n < max };
+                let more = if greedy {
+                    n > min && word & F_DISJOINT == 0
+                } else {
+                    n < max
+                };
                 if more {
                     self.push_frame(pc as u32, K_STAR)?;
                 }

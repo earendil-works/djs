@@ -98,9 +98,27 @@ pub(crate) const SKIP: u32 = 23;
 /// On a `STAR`: it starts the pattern; its run end goes into the skip register, the word
 /// after its follow set.
 pub(crate) const F_LEAD: u32 = 1 << 15;
+/// On a `STAR` with a follow set: the end of the input can start the continuation too.
+pub(crate) const F_END: u32 = 1 << 16;
+/// On a greedy `STAR` with a follow set: no character the loop matches can start the
+/// continuation, so giving characters back can never help (D1563).
+pub(crate) const F_DISJOINT: u32 = 1 << 17;
 
 /// Quantifier infinity.
 const INF: u32 = u32::MAX;
+
+/// What can start the rest of a match after some node (`Compiler::follow`): a character
+/// in the set, or, with the flag, the end of the input.
+type Follow = (CharSet, bool);
+
+/// Whether a node can match the empty string: never, only at the end of the input (a
+/// non-multiline `$`), or (as far as we know) anywhere.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+enum Empty {
+    No,
+    AtEnd,
+    Anywhere,
+}
 
 struct Compiler {
     code: Vec<u32>,
@@ -108,7 +126,7 @@ struct Compiler {
     reg_max: u32,
     /// The characters that can start what follows the node being compiled (forward
     /// direction), if that cannot match empty: `STAR` uses it to skip hopeless positions.
-    follow: Option<CharSet>,
+    follow: Option<Follow>,
     unicode: bool,
     /// The skip register while the leading `STAR` (see `SKIP`) is still to be compiled.
     lead: Option<u32>,
@@ -258,6 +276,51 @@ fn case_closure(set: CharSet, icase: bool, unicode: bool) -> CharSet {
     } else {
         set
     }
+}
+
+/// `first_chars` with a finer notion of emptiness (for follow sets, D1563).
+fn start_cond(node: &Node, unicode: bool) -> Option<(CharSet, Empty)> {
+    Some(match node {
+        Node::LineEnd { multiline: false } => (CharSet::new(), Empty::AtEnd),
+        Node::Empty
+        | Node::LineStart { .. }
+        | Node::LineEnd { .. }
+        | Node::WordBoundary { .. }
+        | Node::Look { .. } => (CharSet::new(), Empty::Anywhere),
+        Node::Char { .. } | Node::Class { .. } | Node::Dot { .. } => {
+            let (f, nullable) = first_chars(node, unicode)?;
+            (f, if nullable { Empty::Anywhere } else { Empty::No })
+        }
+        Node::Backref { .. } => return None,
+        Node::Group { body, .. } => start_cond(body, unicode)?,
+        Node::Repeat { min, body, .. } => {
+            let (f, e) = start_cond(body, unicode)?;
+            (f, if *min == 0 { Empty::Anywhere } else { e })
+        }
+        Node::Concat(v) => {
+            let mut acc = CharSet::new();
+            let mut empty = Empty::Anywhere;
+            for n in v {
+                let (f, e) = start_cond(n, unicode)?;
+                acc = acc.union(&f);
+                empty = empty.min(e);
+                if e == Empty::No {
+                    break;
+                }
+            }
+            (acc, empty)
+        }
+        Node::Alt(v) => {
+            let mut acc = CharSet::new();
+            let mut empty = Empty::No;
+            for n in v {
+                let (f, e) = start_cond(n, unicode)?;
+                acc = acc.union(&f);
+                empty = empty.max(e);
+            }
+            (acc, empty)
+        }
+    })
 }
 
 /// A greedy, unbounded loop over one character, as the first thing a node matches.
@@ -432,16 +495,21 @@ impl Compiler {
     }
 
     /// The follow set of each element of a forward concatenation (see `follow`).
-    fn concat_follows(&self, v: &[Node], outer: Option<CharSet>) -> Vec<Option<CharSet>> {
+    fn concat_follows(&self, v: &[Node], outer: Option<Follow>) -> Vec<Option<Follow>> {
         let unicode = self.unicode;
         let mut out = alloc::vec![None; v.len()];
         let mut acc = outer;
         for i in (0..v.len()).rev() {
-            out[i] = acc.clone().filter(|s| s.ranges() != [(0, charset::MAX_CP)]);
-            acc = match first_chars(&v[i], unicode) {
+            out[i] = acc
+                .clone()
+                .filter(|(s, end)| !(*end && s.ranges() == [(0, charset::MAX_CP)]));
+            acc = match start_cond(&v[i], unicode) {
                 None => None,
-                Some((f, false)) => Some(f),
-                Some((f, true)) => acc.map(|a| f.union(&a)),
+                Some((f, Empty::No)) => Some((f, false)),
+                // Empty only at the end, where no character follows: the rest must then
+                // accept the end too.
+                Some((f, Empty::AtEnd)) => Some((f, acc.as_ref().is_none_or(|(_, e)| *e))),
+                Some((f, Empty::Anywhere)) => acc.map(|(a, e)| (f.union(&a), e)),
             };
         }
         out
@@ -451,7 +519,7 @@ impl Compiler {
         &mut self,
         alts: impl ExactSizeIterator<Item = &'a Node>,
         back: bool,
-        follow: Option<CharSet>,
+        follow: Option<Follow>,
     ) {
         let n = alts.len();
         let mut gotos = Vec::new();
@@ -502,7 +570,7 @@ impl Compiler {
     }
 
     /// A `Node::Repeat`.
-    fn repeat(&mut self, node: &Node, back: bool, follow: Option<CharSet>) {
+    fn repeat(&mut self, node: &Node, back: bool, follow: Option<Follow>) {
         let Node::Repeat {
             min,
             max,
@@ -523,7 +591,18 @@ impl Compiler {
             self.code.push(0);
             self.emit2(SET_POS, r + 1);
             let follow = follow.filter(|_| !back);
-            let check = if follow.is_some() { F_CHECK } else { 0 };
+            let mut check = match &follow {
+                Some((_, true)) => F_CHECK | F_END,
+                Some((_, false)) => F_CHECK,
+                None => 0,
+            };
+            if let (Some((f, _)), Some((body_chars, _))) =
+                (&follow, first_chars(body, self.unicode))
+                && greedy
+                && body_chars.intersect(f).is_empty()
+            {
+                check |= F_DISJOINT;
+            }
             // The first STAR compiled is the leading one, if the pattern has one.
             let lead = if back { None } else { self.lead.take() };
             let flags = if back { F_BACK } else { 0 }
@@ -536,7 +615,7 @@ impl Compiler {
             let len_at = self.code.len();
             self.code.push(0);
             let follow_ranges: Vec<(u32, u32)> =
-                follow.map(|f| f.ranges().to_vec()).unwrap_or_default();
+                follow.map(|(f, _)| f.ranges().to_vec()).unwrap_or_default();
             self.code.push(follow_ranges.len() as u32);
             let body_start = self.here();
             self.node(body, back);

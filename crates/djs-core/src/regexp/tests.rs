@@ -452,6 +452,14 @@ fn star_loops() {
     assert_eq!(first("\\d+x", "", "1234 56x"), Some("56x".into()));
     assert_eq!(first("\\d{1,2}5", "", "12345"), Some("345".into()));
     assert_eq!(first("[ab]+c", "", "abab abc"), Some("abc".into()));
+    // Follow sets that accept the end of the input (`$`, D1563).
+    assert_eq!(first("a+=?$", "", "aaa="), Some("aaa=".into()));
+    assert_eq!(first("a+=?$", "", "aaa"), Some("aaa".into()));
+    assert!(m("^a+=?$", "", "aaab").is_none());
+    assert_eq!(first("x*$|y", "", "xxy"), Some("y".into()));
+    assert_eq!(first("a*(?:$|b)", "", "aab"), Some("aab".into()));
+    assert_eq!(first("a*$", "m", "aa\nb"), Some("aa".into()));
+    assert_eq!(first("\\d+(?=$)", "", "12 34"), Some("34".into()));
 }
 
 #[test]

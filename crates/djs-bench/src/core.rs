@@ -322,6 +322,19 @@ pub fn regexp(r: &mut Runner) {
             });
         }
     }
+    // Property escapes and long single-class runs (0056): multilingual words, and pi's
+    // base64 check on 1 MB.
+    let words = "Grüße, Привет! word 漢字 αβγ abc;def\n".repeat(r.scale(2000, 5));
+    let words16 = u16s(&words);
+    let prog = compile(&u16s("\\p{L}+"), Flags::parse(&u16s("gu")).unwrap()).unwrap();
+    r.bytes("regexp/scan /\\p{L}+/gu utf16", words16.len() * 2, || {
+        black_box(scan(&prog, Input::Utf16(&words16)));
+    });
+    let b64 = "QUJD".repeat(r.scale(262_144, 100)) + "==!";
+    let prog = compile(&u16s("^[A-Za-z0-9+/]+={0,2}$"), Flags::empty()).unwrap();
+    r.bytes("regexp/scan base64 check latin1", b64.len(), || {
+        black_box(scan(&prog, Input::Latin1(b64.as_bytes())));
+    });
 }
 
 /// Finds all matches like a global `exec` loop; returns the count.
