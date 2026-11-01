@@ -590,8 +590,9 @@ impl Heap {
         let el = self.elements(o);
         if el == 0 {
             // Typed arrays have no elements store: their elements live in the buffer.
+            // A BigInt element (a placeholder here) takes the generic path.
             return if self.object_class(o) == ObjectClass::TypedArray {
-                self.ta_get(o, i)
+                self.ta_get(o, i).filter(|v| !v.is_hole())
             } else {
                 None
             };
@@ -681,7 +682,7 @@ impl Heap {
             // A typed array element: [[Set]] with the array as receiver always succeeds
             // (an invalid index writes nothing), once the value is a primitive.
             if el == 0 && self.object_class(o) == ObjectClass::TypedArray {
-                return Ok(match self.primitive_number(v) {
+                return Ok(match self.element_of(self.ta_kind(o), v) {
                     Some(x) => {
                         self.ta_set(o, i, x);
                         true
@@ -969,7 +970,7 @@ impl Heap {
         {
             // [[Set]] on a typed array: true even for an invalid index (nothing written),
             // once the value is a primitive.
-            if v.as_object().is_none() && v.as_symbol().is_none() {
+            if self.element_of(self.ta_kind(o), v).is_some() {
                 self.ta_numeric_set(o, key, v);
                 return true;
             }

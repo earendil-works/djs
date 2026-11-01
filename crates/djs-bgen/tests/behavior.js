@@ -443,7 +443,7 @@ const I = {
   },
   DataViewGet: (v, at, kind, little) => new DataView(dataViews.get(v)[0])["get" + DV_NAMES[kind]](at, little),
   DataViewSet: (v, at, kind, n, little) => {
-    check(typeof n === "number", "DataViewSet");
+    check(typeof n === (kind >= 10 ? "bigint" : "number"), "DataViewSet");
     new DataView(dataViews.get(v)[0])["set" + DV_NAMES[kind]](at, n, little);
   },
   IsDataView: (v) => {
@@ -468,7 +468,12 @@ const I = {
     return [kind, buffer, g("byteOffset"), g("length"), g("byteLength"), oob, false][f];
   },
   TypedArrayGet: (o, i) => (taKind(o) >= 0 ? o[i] : undefined),
-  TypedArraySet: (o, i, n) => (check(typeof n === "number", "TypedArraySet"), void (Number.isInteger(i) && i >= 0 && (o[i] = n))),
+  TypedArraySet: (o, i, n) => {
+    if (typeof n !== (taKind(o) >= 10 ? "bigint" : "number")) {
+      throw new TypeError(taKind(o) >= 10 ? "cannot convert to bigint" : "cannot convert bigint to number");
+    }
+    if (Number.isInteger(i) && i >= 0) o[i] = n;
+  },
   TypedArrayCopy: (src, from, dst, to, count) => {
     const vals = [];
     for (let i = 0; i < count; i++) vals.push(src[from + i]);
@@ -505,8 +510,9 @@ const I = {
   CompareStrings: (a, b) => (check(typeof a === "string" && typeof b === "string", "CompareStrings"), a < b ? -1 : a > b ? 1 : 0),
   StringCodePoints: (s) => [...s],
   SortNumbers: (list) => {
-    check(Array.isArray(list) && list.every((v) => typeof v === "number"), "SortNumbers");
-    const out = Float64Array.from(list).sort();
+    const big = list.length > 0 && typeof list[0] === "bigint";
+    check(Array.isArray(list) && list.every((v) => typeof v === (big ? "bigint" : "number")), "SortNumbers");
+    const out = (big ? BigInt64Array : Float64Array).from(list).sort();
     for (let i = 0; i < out.length; i++) list[i] = out[i];
   },
   SortPrimitives: (list) => {
@@ -1445,6 +1451,35 @@ for (let k = 0; k < 10; k++) {
     same("globalThis." + name, TA_CTORS[k], (f) => { const t = Reflect.construct(f, args); return [t.length, t.byteOffset, Array.from(t)]; });
   }
   same("globalThis." + name, TA_CTORS[k], (f) => f(1));
+}
+for (let k = 10; k < 12; k++) {
+  const name = TA_CTORS[k].name;
+  for (const args of [[3], [[1n, -1n, 2n ** 64n + 3n]], [new BigInt64Array([5n, -6n])], [{ length: 2, 0: "7", 1: true }], [[1]], [[undefined]], [new Int8Array(1)], [new ArrayBuffer(16), 8], [-1], [new Set([5n])]]) {
+    same("globalThis." + name, TA_CTORS[k], (f) => { const t = Reflect.construct(f, args); return [t.length, t.byteOffset, Array.from(t)]; });
+  }
+}
+const bigTaCases = [
+  ["fill", [[7n], [7], ["8", 1], [toPrim("9")]]],
+  ["set", [[[1n, 2n]], [[1]], [new Int8Array(1)], [new BigUint64Array([2n ** 64n - 1n]), 1]]],
+  ["includes", [[3n], [3], [9n]]],
+  ["indexOf", [[1n], [1], [1n, 2]]],
+  ["join", [[], ["-"]]],
+  ["map", [[(v) => v * 2n], [(v) => 1]]],
+  ["sort", [[], [(a, b) => (a < b ? 1 : -1)]]],
+  ["toSorted", [[]]],
+  ["with", [[0, 9n], [0, 9], [9, 1n]]],
+  ["slice", [[1], [-2, -1]]],
+  ["reverse", [[]]],
+  ["toLocaleString", [[]]],
+];
+for (const [name, argss] of bigTaCases) {
+  for (const args of argss) {
+    same("%TypedArray%.prototype." + name, TA_PROTO[name], (f) => {
+      const t = new BigInt64Array([3n, -1n, 4n, 1n, -(2n ** 63n)]);
+      const r = f.call(t, ...args);
+      return [ArrayBuffer.isView(r) ? Array.from(r) : r, Array.from(t)];
+    });
+  }
 }
 const TAP = TA_PROTO;
 for (const name of ["set", "subarray", "slice", "fill"]) {

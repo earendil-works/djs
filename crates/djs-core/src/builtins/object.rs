@@ -69,7 +69,7 @@ pub(crate) fn define_from_record(
 
 /// FromPropertyDescriptor of an own property, or `undefined`.
 pub(crate) fn descriptor_object(heap: &mut Heap, o: Obj, key: Atom) -> Result<Value, Fault> {
-    let Some(p) = heap.get_own_property(o, key) else {
+    let Some(p) = heap.get_own_property_alloc(o, key)? else {
         return Ok(Value::UNDEFINED);
     };
     let proto = crate::interp::realm::intrinsic_obj(heap, crate::interp::Intrinsic::ObjectProto);

@@ -2056,3 +2056,23 @@ call_intrinsic %RegExpCreate 3`, so every evaluation creates a fresh RegExp and
 recompiles. Caching the program per literal is a possible optimization.
 
 **JSON.parse errors** put qjs's `<input>:line:col` first line in `stack`.
+
+## D1463: BigInt typed array elements: placeholders in `&self` reads, `Elem` writes
+date: 2026-11-02 · by: heap · issue: 0046
+A BigInt64Array/BigUint64Array element only becomes a value with an allocation, but the
+heap's property reads (`get_own_property`, `find_property`, `lookup_property`,
+`get_element_fast`, `ta_get`) are `&self`. They now return `Value::HOLE` as a
+placeholder for a BigInt element (`get_element_fast` returns `None`, the generic path);
+the places that hand element values to JS materialize it: the interpreter's
+`lookup_object`, object spread (`copy_data_props`), `descriptor_object`
+(getOwnPropertyDescriptor) and the `TypedArrayGet` leaf, through
+`Heap::ta_get_alloc`/`get_own_property_alloc`/`find_property_alloc`/`materialize_value`.
+New code that reads typed array elements for JS must use those. Writes take a
+`typed::Elem` (a Number, or the 64 element bits): `Heap::element_of(kind, v)` converts a
+primitive without user code or errors (a BigInt kind takes only BigInts, a Number kind no
+BigInts), and `None` means the caller converts first: the interpreter calls `%ToBigInt`
+instead of `%ToNumber` for a BigInt array, and the builtins use `ToElementValue`
+(builtins/typedarray.ts). The leaves `TypedArraySet` and `DataViewSet` take a Value (a
+Number or a BigInt by kind; anything else is ToNumber's/ToBigInt's TypeError), and
+`DataViewGet` returns one. A species constructor with the other content type is a
+TypeError (spec; qjs converts and throws later).

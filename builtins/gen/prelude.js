@@ -1722,131 +1722,139 @@ function DVByteIndex(view, getIndex, kind) {
 
 // builtins/dataview.ts:131
 function GetViewValue(view, requestIndex, isLittleEndian, kind) {
+  return %AsNumber(GetViewElement(view, requestIndex, isLittleEndian, kind));
+}
+
+// builtins/dataview.ts:136
+function GetViewElement(view, requestIndex, isLittleEndian, kind) {
   %DataViewField(view, 0);
   const getIndex = ToIndex(requestIndex);
   const little = %ToBoolean(isLittleEndian);
-  RequireNumberKind(kind);
   const v = %AsObj(view);
   return %DataViewGet(v, DVByteIndex(v, getIndex, kind), kind, little);
 }
 
-// builtins/dataview.ts:141
+// builtins/dataview.ts:145
 function SetViewValue(view, requestIndex, isLittleEndian, kind, value) {
   %DataViewField(view, 0);
   const getIndex = ToIndex(requestIndex);
-  RequireNumberKind(kind);
-  const n = ToNumber(value);
+  let n = undefined;
+  if (kind >= 10) {
+    n = ToBigInt(value);
+  } else {
+    n = ToNumber(value);
+  }
   const little = %ToBoolean(isLittleEndian);
   const v = %AsObj(view);
   %DataViewSet(v, DVByteIndex(v, getIndex, kind), kind, n, little);
 }
 
-// builtins/dataview.ts:155 DataView.prototype.getInt8
+// builtins/dataview.ts:163 DataView.prototype.getInt8
 function DataViewPrototypeGetInt8(byteOffset) {
   return GetViewValue(this, byteOffset, false, 0);
 }
 
-// builtins/dataview.ts:163 DataView.prototype.getUint8
+// builtins/dataview.ts:171 DataView.prototype.getUint8
 function DataViewPrototypeGetUint8(byteOffset) {
   return GetViewValue(this, byteOffset, false, 1);
 }
 
-// builtins/dataview.ts:171 DataView.prototype.getInt16
+// builtins/dataview.ts:179 DataView.prototype.getInt16
 function DataViewPrototypeGetInt16(byteOffset, littleEndian) {
   return GetViewValue(this, byteOffset, littleEndian, 3);
 }
 
-// builtins/dataview.ts:179 DataView.prototype.getUint16
+// builtins/dataview.ts:187 DataView.prototype.getUint16
 function DataViewPrototypeGetUint16(byteOffset, littleEndian) {
   return GetViewValue(this, byteOffset, littleEndian, 4);
 }
 
-// builtins/dataview.ts:187 DataView.prototype.getInt32
+// builtins/dataview.ts:195 DataView.prototype.getInt32
 function DataViewPrototypeGetInt32(byteOffset, littleEndian) {
   return GetViewValue(this, byteOffset, littleEndian, 5);
 }
 
-// builtins/dataview.ts:195 DataView.prototype.getUint32
+// builtins/dataview.ts:203 DataView.prototype.getUint32
 function DataViewPrototypeGetUint32(byteOffset, littleEndian) {
   return GetViewValue(this, byteOffset, littleEndian, 6);
 }
 
-// builtins/dataview.ts:203 DataView.prototype.getBigInt64
+// builtins/dataview.ts:211 DataView.prototype.getBigInt64
 function DataViewPrototypeGetBigInt64(byteOffset, littleEndian) {
-  return GetViewValue(this, byteOffset, littleEndian, 10);
+  return GetViewElement(this, byteOffset, littleEndian, 10);
 }
 
-// builtins/dataview.ts:211 DataView.prototype.getBigUint64
+// builtins/dataview.ts:219 DataView.prototype.getBigUint64
 function DataViewPrototypeGetBigUint64(byteOffset, littleEndian) {
-  return GetViewValue(this, byteOffset, littleEndian, 11);
+  return GetViewElement(this, byteOffset, littleEndian, 11);
 }
 
-// builtins/dataview.ts:219 DataView.prototype.getFloat16
+// builtins/dataview.ts:227 DataView.prototype.getFloat16
 function DataViewPrototypeGetFloat16(byteOffset, littleEndian) {
   return GetViewValue(this, byteOffset, littleEndian, 7);
 }
 
-// builtins/dataview.ts:227 DataView.prototype.getFloat32
+// builtins/dataview.ts:235 DataView.prototype.getFloat32
 function DataViewPrototypeGetFloat32(byteOffset, littleEndian) {
   return GetViewValue(this, byteOffset, littleEndian, 8);
 }
 
-// builtins/dataview.ts:235 DataView.prototype.getFloat64
+// builtins/dataview.ts:243 DataView.prototype.getFloat64
 function DataViewPrototypeGetFloat64(byteOffset, littleEndian) {
   return GetViewValue(this, byteOffset, littleEndian, 9);
 }
 
-// builtins/dataview.ts:243 DataView.prototype.setInt8
+// builtins/dataview.ts:251 DataView.prototype.setInt8
 function DataViewPrototypeSetInt8(byteOffset, value) {
   SetViewValue(this, byteOffset, false, 0, value);
 }
 
-// builtins/dataview.ts:251 DataView.prototype.setUint8
+// builtins/dataview.ts:259 DataView.prototype.setUint8
 function DataViewPrototypeSetUint8(byteOffset, value) {
   SetViewValue(this, byteOffset, false, 1, value);
 }
 
-// builtins/dataview.ts:259 DataView.prototype.setInt16
+// builtins/dataview.ts:267 DataView.prototype.setInt16
 function DataViewPrototypeSetInt16(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 3, value);
 }
 
-// builtins/dataview.ts:267 DataView.prototype.setUint16
+// builtins/dataview.ts:275 DataView.prototype.setUint16
 function DataViewPrototypeSetUint16(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 4, value);
 }
 
-// builtins/dataview.ts:275 DataView.prototype.setInt32
+// builtins/dataview.ts:283 DataView.prototype.setInt32
 function DataViewPrototypeSetInt32(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 5, value);
 }
 
-// builtins/dataview.ts:283 DataView.prototype.setUint32
+// builtins/dataview.ts:291 DataView.prototype.setUint32
 function DataViewPrototypeSetUint32(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 6, value);
 }
 
-// builtins/dataview.ts:291 DataView.prototype.setBigInt64
+// builtins/dataview.ts:299 DataView.prototype.setBigInt64
 function DataViewPrototypeSetBigInt64(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 10, value);
 }
 
-// builtins/dataview.ts:299 DataView.prototype.setBigUint64
+// builtins/dataview.ts:307 DataView.prototype.setBigUint64
 function DataViewPrototypeSetBigUint64(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 11, value);
 }
 
-// builtins/dataview.ts:307 DataView.prototype.setFloat16
+// builtins/dataview.ts:315 DataView.prototype.setFloat16
 function DataViewPrototypeSetFloat16(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 7, value);
 }
 
-// builtins/dataview.ts:315 DataView.prototype.setFloat32
+// builtins/dataview.ts:323 DataView.prototype.setFloat32
 function DataViewPrototypeSetFloat32(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 8, value);
 }
 
-// builtins/dataview.ts:323 DataView.prototype.setFloat64
+// builtins/dataview.ts:331 DataView.prototype.setFloat64
 function DataViewPrototypeSetFloat64(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 9, value);
 }
@@ -3681,7 +3689,7 @@ function ToPropertyDescriptor(attributes) {
 function DefineOwnProperty(o, key, desc) {
   if (%IsTypedArray(o) && %HasOwnProperty(desc, "value") && IsCanonicalNumericKey(key)) {
     const value = %Get(desc, "value");
-    if (!%IsNumber(value)) {
+    if (!IsElementValue(o, value)) {
       %DeleteProperty(desc, "value");
       if (!%DefineOwnPropertyFromRecord(o, key, desc)) {
         return false;
@@ -5450,8 +5458,8 @@ function ReflectSet(target, propertyKey, v, ...rest) {
   const o = ReflectTarget(target);
   const key = ToPropertyKey(propertyKey);
   const receiver = LengthOfArrayLike(rest) > 0 ? %Get(rest, 0) : o;
-  if (%IsTypedArray(receiver) && !%IsNumber(v) && IsCanonicalNumericKey(key) && ReachesReceiver(o, key, %AsObj(receiver))) {
-    return %SetWithReceiver(o, key, ToNumber(v), receiver);
+  if (%IsTypedArray(receiver) && !IsElementValue(%AsObj(receiver), v) && IsCanonicalNumericKey(key) && ReachesReceiver(o, key, %AsObj(receiver))) {
+    return %SetWithReceiver(o, key, ToElementValue(%AsObj(receiver), v), receiver);
   }
   return %SetWithReceiver(o, key, v, receiver);
 }
@@ -7182,13 +7190,27 @@ function ValidateTypedArray(v) {
 }
 
 // builtins/typedarray.ts:87
-function RequireNumberKind(kind) {
-  if (kind >= 10) {
-    throw %NewTypeError("not supported yet: BigInt typed arrays");
-  }
+function SameContentType(a, b) {
+  return (KindOf(a) >= 10) === (KindOf(b) >= 10);
 }
 
-// builtins/typedarray.ts:94
+// builtins/typedarray.ts:95
+function ToElementValue(o, v) {
+  if (KindOf(o) >= 10) {
+    return ToBigInt(v);
+  }
+  return ToNumber(v);
+}
+
+// builtins/typedarray.ts:103
+function IsElementValue(o, v) {
+  if (KindOf(o) >= 10) {
+    return %IsBigInt(v);
+  }
+  return %IsNumber(v);
+}
+
+// builtins/typedarray.ts:111
 function AllocateTypedArrayOfLength(kind, proto, length) {
   const size = ElementSize(kind);
   if (length * size > 2147483648) {
@@ -7198,7 +7220,7 @@ function AllocateTypedArrayOfLength(kind, proto, length) {
   return %TypedArrayCreate(proto, kind, buffer, 0, length);
 }
 
-// builtins/typedarray.ts:104
+// builtins/typedarray.ts:121
 function TypedArrayFromBuffer(kind, proto, buffer, byteOffset, length) {
   const size = ElementSize(kind);
   const offset = ToIndex(byteOffset);
@@ -7234,22 +7256,21 @@ function TypedArrayFromBuffer(kind, proto, buffer, byteOffset, length) {
   return %TypedArrayCreate(proto, kind, buffer, offset, newLength);
 }
 
-// builtins/typedarray.ts:140
+// builtins/typedarray.ts:157
 function TypedArrayFromValues(kind, proto, values) {
   const len = LengthOfArrayLike(values);
   const o = AllocateTypedArrayOfLength(kind, proto, len);
   for (let k = 0; k < len; k++) {
-    %TypedArraySet(o, k, ToNumber(%Get(values, k)));
+    %TypedArraySet(o, k, ToElementValue(o, %Get(values, k)));
   }
   return o;
 }
 
-// builtins/typedarray.ts:150
+// builtins/typedarray.ts:167
 function TypedArrayConstruct(newTarget, kind, args) {
   if (newTarget === undefined) {
     throw %NewTypeError("must be called with new");
   }
-  RequireNumberKind(kind);
   const n = LengthOfArrayLike(args);
   const first = n > 0 ? %Get(args, 0) : undefined;
   if (!%IsObject(first)) {
@@ -7263,7 +7284,7 @@ function TypedArrayConstruct(newTarget, kind, args) {
       throw %NewTypeError("ArrayBuffer is detached or resized");
     }
     if ((KindOf(src) >= 10) !== (kind >= 10)) {
-      throw %NewTypeError("cannot mix BigInt and other types");
+      throw %NewTypeError("incompatible content type");
     }
     const len = TALength(src);
     const o = AllocateTypedArrayOfLength(kind, proto, len);
@@ -7282,7 +7303,7 @@ function TypedArrayConstruct(newTarget, kind, args) {
   return TypedArrayFromValues(kind, proto, src);
 }
 
-// builtins/typedarray.ts:189
+// builtins/typedarray.ts:205
 function BufferInfoOrUndefined(o) {
   try {
     %BufferInfo(o, 0);
@@ -7292,36 +7313,37 @@ function BufferInfoOrUndefined(o) {
   }
 }
 
-// builtins/typedarray.ts:202 constructor %TypedArray%
+// builtins/typedarray.ts:218 constructor %TypedArray%
 function TypedArrayAbstract() {
   throw %NewTypeError("cannot be called");
 }
 
-// builtins/typedarray.ts:210 get %TypedArray%[Symbol.species]
+// builtins/typedarray.ts:226 get %TypedArray%[Symbol.species]
 function TypedArraySpecies() {
   return this;
 }
 
-// builtins/typedarray.ts:215
+// builtins/typedarray.ts:231
 function TypedArrayCreateWithLength(c, length) {
   const created = %Construct(c, length);
   ValidateTypedArray(created);
-  if (KindOf(created) >= 10) {
-    throw %NewTypeError("not supported yet: BigInt typed arrays");
-  }
   if (TALength(created) < length) {
     throw %NewTypeError("TypedArray length is too small");
   }
   return created;
 }
 
-// builtins/typedarray.ts:228
+// builtins/typedarray.ts:241
 function TypedArraySpeciesCreate(exemplar, length) {
   const c = SpeciesConstructor(exemplar, %RealmConstructor(KindName(KindOf(exemplar))));
-  return TypedArrayCreateWithLength(c, length);
+  const r = TypedArrayCreateWithLength(c, length);
+  if (!SameContentType(r, exemplar)) {
+    throw %NewTypeError("incompatible content type");
+  }
+  return r;
 }
 
-// builtins/typedarray.ts:237 %TypedArray%.from
+// builtins/typedarray.ts:254 %TypedArray%.from
 function TypedArrayFrom(source, mapfn, thisArg) {
   if (!%IsConstructor(this)) {
     throw %NewTypeError("not a constructor");
@@ -7347,7 +7369,7 @@ function TypedArrayFrom(source, mapfn, thisArg) {
   return target;
 }
 
-// builtins/typedarray.ts:266 %TypedArray%.of
+// builtins/typedarray.ts:283 %TypedArray%.of
 function TypedArrayOf(...items) {
   if (!%IsConstructor(this)) {
     throw %NewTypeError("not a constructor");
@@ -7360,27 +7382,27 @@ function TypedArrayOf(...items) {
   return target;
 }
 
-// builtins/typedarray.ts:282 get %TypedArray%.prototype.buffer
+// builtins/typedarray.ts:299 get %TypedArray%.prototype.buffer
 function TypedArrayPrototypeBuffer() {
   return %TypedArrayField(this, 1);
 }
 
-// builtins/typedarray.ts:290 get %TypedArray%.prototype.byteLength
+// builtins/typedarray.ts:307 get %TypedArray%.prototype.byteLength
 function TypedArrayPrototypeByteLength() {
   return %TypedArrayField(this, 4);
 }
 
-// builtins/typedarray.ts:298 get %TypedArray%.prototype.byteOffset
+// builtins/typedarray.ts:315 get %TypedArray%.prototype.byteOffset
 function TypedArrayPrototypeByteOffset() {
   return %TypedArrayField(this, 2);
 }
 
-// builtins/typedarray.ts:306 get %TypedArray%.prototype.length
+// builtins/typedarray.ts:323 get %TypedArray%.prototype.length
 function TypedArrayPrototypeLength() {
   return %TypedArrayField(this, 3);
 }
 
-// builtins/typedarray.ts:314 get %TypedArray%.prototype[Symbol.toStringTag]
+// builtins/typedarray.ts:331 get %TypedArray%.prototype[Symbol.toStringTag]
 function TypedArrayPrototypeToStringTag() {
   if (!%IsTypedArray(this)) {
     return undefined;
@@ -7388,7 +7410,7 @@ function TypedArrayPrototypeToStringTag() {
   return KindName(KindOf(%AsObj(this)));
 }
 
-// builtins/typedarray.ts:325 %TypedArray%.prototype.set
+// builtins/typedarray.ts:342 %TypedArray%.prototype.set
 function TypedArrayPrototypeSet(source, offset) {
   %TypedArrayField(this, 0);
   const target = %AsObj(this);
@@ -7409,8 +7431,8 @@ function TypedArrayPrototypeSet(source, offset) {
     if (targetOffset === 1 / 0 || srcLength + targetOffset > targetLength) {
       throw %NewRangeError("invalid array length");
     }
-    if ((KindOf(src) >= 10) !== (KindOf(target) >= 10)) {
-      throw %NewTypeError("cannot mix BigInt and other types");
+    if (!SameContentType(src, target)) {
+      throw %NewTypeError(KindOf(target) >= 10 ? "cannot convert to bigint" : "cannot convert bigint to number");
     }
     %TypedArrayCopy(src, 0, target, targetOffset, srcLength);
     return;
@@ -7421,12 +7443,12 @@ function TypedArrayPrototypeSet(source, offset) {
     throw %NewRangeError("invalid array length");
   }
   for (let k = 0; k < srcLength; k++) {
-    const value = ToNumber(%Get(src, k));
+    const value = ToElementValue(target, %Get(src, k));
     %TypedArraySet(target, targetOffset + k, value);
   }
 }
 
-// builtins/typedarray.ts:366 %TypedArray%.prototype.subarray
+// builtins/typedarray.ts:384 %TypedArray%.prototype.subarray
 function TypedArrayPrototypeSubarray(start, end) {
   %TypedArrayField(this, 0);
   const o = %AsObj(this);
@@ -7447,10 +7469,13 @@ function TypedArrayPrototypeSubarray(start, end) {
     created = %Construct(c, buffer, beginByteOffset, newLength);
   }
   ValidateTypedArray(created);
+  if (!SameContentType(%AsObj(created), o)) {
+    throw %NewTypeError("incompatible content type");
+  }
   return %AsObj(created);
 }
 
-// builtins/typedarray.ts:393 %TypedArray%.prototype.slice
+// builtins/typedarray.ts:414 %TypedArray%.prototype.slice
 function TypedArrayPrototypeSlice(start, end) {
   const o = ValidateTypedArray(this);
   const srcLength = TALength(o);
@@ -7468,7 +7493,7 @@ function TypedArrayPrototypeSlice(start, end) {
     if (n === 0) {
     } else if (KindOf(a) === KindOf(o) && %TypedArrayField(a, 0) === %TypedArrayField(o, 0)) {
       for (let k = 0; k < n; k++) {
-        %TypedArraySet(a, k, %ToNumberPrimitive(%TypedArrayGet(o, startIndex + k)));
+        %TypedArraySet(a, k, %TypedArrayGet(o, startIndex + k));
       }
     } else if (KindOf(a) === KindOf(o)) {
       %TypedArrayCopy(o, startIndex, a, 0, n);
@@ -7481,11 +7506,11 @@ function TypedArrayPrototypeSlice(start, end) {
   return a;
 }
 
-// builtins/typedarray.ts:430 %TypedArray%.prototype.fill
+// builtins/typedarray.ts:451 %TypedArray%.prototype.fill
 function TypedArrayPrototypeFill(value, start, end) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
-  const n = ToNumber(value);
+  const n = ToElementValue(o, value);
   const k = RelativeIndex(start, len, 0);
   const fin = RelativeIndex(end, len, len);
   if (TAOutOfBounds(o)) {
@@ -7499,7 +7524,7 @@ function TypedArrayPrototypeFill(value, start, end) {
   return o;
 }
 
-// builtins/typedarray.ts:450
+// builtins/typedarray.ts:471
 function ValidateUint8Array(v) {
   if (!%IsTypedArray(v) || KindOf(%AsObj(v)) !== 1) {
     throw %NewTypeError("not a Uint8Array");
@@ -7507,7 +7532,7 @@ function ValidateUint8Array(v) {
   return %AsObj(v);
 }
 
-// builtins/typedarray.ts:458
+// builtins/typedarray.ts:479
 function GetOptionsObject(options) {
   if (options === undefined) {
     return undefined;
@@ -7518,7 +7543,7 @@ function GetOptionsObject(options) {
   return options;
 }
 
-// builtins/typedarray.ts:469
+// builtins/typedarray.ts:490
 function Base64Alphabet(opts) {
   if (opts === undefined) {
     return false;
@@ -7533,7 +7558,7 @@ function Base64Alphabet(opts) {
   throw %NewTypeError("invalid alphabet");
 }
 
-// builtins/typedarray.ts:484
+// builtins/typedarray.ts:505
 function LastChunkHandling(opts) {
   if (opts === undefined) {
     return 0;
@@ -7551,14 +7576,14 @@ function LastChunkHandling(opts) {
   throw %NewTypeError("invalid lastChunkHandling option");
 }
 
-// builtins/typedarray.ts:502
+// builtins/typedarray.ts:523
 function Uint8ArrayFromRecord(rec) {
   const bytes = %AsObj(%Get(rec, "bytes"));
   const len = BufferLength(bytes);
   return %TypedArrayCreate(%RealmIntrinsic("Uint8ArrayPrototype"), 1, bytes, 0, len);
 }
 
-// builtins/typedarray.ts:512 Uint8Array.fromBase64
+// builtins/typedarray.ts:533 Uint8Array.fromBase64
 function Uint8ArrayFromBase64(string, options) {
   if (!%IsString(string)) {
     throw %NewTypeError("expected string");
@@ -7573,7 +7598,7 @@ function Uint8ArrayFromBase64(string, options) {
   return Uint8ArrayFromRecord(rec);
 }
 
-// builtins/typedarray.ts:530 Uint8Array.fromHex
+// builtins/typedarray.ts:551 Uint8Array.fromHex
 function Uint8ArrayFromHex(string) {
   if (!%IsString(string)) {
     throw %NewTypeError("expected string");
@@ -7585,7 +7610,7 @@ function Uint8ArrayFromHex(string) {
   return Uint8ArrayFromRecord(rec);
 }
 
-// builtins/typedarray.ts:545 Uint8Array.prototype.toBase64
+// builtins/typedarray.ts:566 Uint8Array.prototype.toBase64
 function Uint8ArrayPrototypeToBase64(options) {
   const o = ValidateUint8Array(this);
   const opts = GetOptionsObject(options);
@@ -7597,12 +7622,12 @@ function Uint8ArrayPrototypeToBase64(options) {
   return %Base64Encode(o, url, omit);
 }
 
-// builtins/typedarray.ts:560 Uint8Array.prototype.toHex
+// builtins/typedarray.ts:581 Uint8Array.prototype.toHex
 function Uint8ArrayPrototypeToHex() {
   return %HexEncode(ValidateUint8Array(this));
 }
 
-// builtins/typedarray.ts:565
+// builtins/typedarray.ts:586
 function WriteDecoded(into, rec, isHex) {
   const bytes = %AsObj(%Get(rec, "bytes"));
   const written = BufferLength(bytes);
@@ -7616,7 +7641,7 @@ function WriteDecoded(into, rec, isHex) {
   return result;
 }
 
-// builtins/typedarray.ts:582 Uint8Array.prototype.setFromBase64
+// builtins/typedarray.ts:603 Uint8Array.prototype.setFromBase64
 function Uint8ArrayPrototypeSetFromBase64(string, options) {
   const into = ValidateUint8Array(this);
   if (!%IsString(string)) {
@@ -7632,7 +7657,7 @@ function Uint8ArrayPrototypeSetFromBase64(string, options) {
   return WriteDecoded(into, rec, false);
 }
 
-// builtins/typedarray.ts:601 Uint8Array.prototype.setFromHex
+// builtins/typedarray.ts:622 Uint8Array.prototype.setFromHex
 function Uint8ArrayPrototypeSetFromHex(string) {
   const into = ValidateUint8Array(this);
   if (!%IsString(string)) {
@@ -7645,187 +7670,187 @@ function Uint8ArrayPrototypeSetFromHex(string) {
   return WriteDecoded(into, rec, true);
 }
 
-// builtins/typedarray.ts:619 constructor Int8Array
+// builtins/typedarray.ts:640 constructor Int8Array
 function Int8ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 0, args);
 }
 
-// builtins/typedarray.ts:627 value Int8Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:648 value Int8Array.BYTES_PER_ELEMENT
 function Int8ArrayBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:635 value Int8Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:656 value Int8Array.prototype.BYTES_PER_ELEMENT
 function Int8ArrayPrototypeBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:645 constructor Uint8Array
+// builtins/typedarray.ts:666 constructor Uint8Array
 function Uint8ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 1, args);
 }
 
-// builtins/typedarray.ts:653 value Uint8Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:674 value Uint8Array.BYTES_PER_ELEMENT
 function Uint8ArrayBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:661 value Uint8Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:682 value Uint8Array.prototype.BYTES_PER_ELEMENT
 function Uint8ArrayPrototypeBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:671 constructor Uint8ClampedArray
+// builtins/typedarray.ts:692 constructor Uint8ClampedArray
 function Uint8ClampedArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 2, args);
 }
 
-// builtins/typedarray.ts:679 value Uint8ClampedArray.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:700 value Uint8ClampedArray.BYTES_PER_ELEMENT
 function Uint8ClampedArrayBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:687 value Uint8ClampedArray.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:708 value Uint8ClampedArray.prototype.BYTES_PER_ELEMENT
 function Uint8ClampedArrayPrototypeBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:697 constructor Int16Array
+// builtins/typedarray.ts:718 constructor Int16Array
 function Int16ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 3, args);
 }
 
-// builtins/typedarray.ts:705 value Int16Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:726 value Int16Array.BYTES_PER_ELEMENT
 function Int16ArrayBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:713 value Int16Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:734 value Int16Array.prototype.BYTES_PER_ELEMENT
 function Int16ArrayPrototypeBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:723 constructor Uint16Array
+// builtins/typedarray.ts:744 constructor Uint16Array
 function Uint16ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 4, args);
 }
 
-// builtins/typedarray.ts:731 value Uint16Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:752 value Uint16Array.BYTES_PER_ELEMENT
 function Uint16ArrayBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:739 value Uint16Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:760 value Uint16Array.prototype.BYTES_PER_ELEMENT
 function Uint16ArrayPrototypeBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:749 constructor Int32Array
+// builtins/typedarray.ts:770 constructor Int32Array
 function Int32ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 5, args);
 }
 
-// builtins/typedarray.ts:757 value Int32Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:778 value Int32Array.BYTES_PER_ELEMENT
 function Int32ArrayBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:765 value Int32Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:786 value Int32Array.prototype.BYTES_PER_ELEMENT
 function Int32ArrayPrototypeBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:775 constructor Uint32Array
+// builtins/typedarray.ts:796 constructor Uint32Array
 function Uint32ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 6, args);
 }
 
-// builtins/typedarray.ts:783 value Uint32Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:804 value Uint32Array.BYTES_PER_ELEMENT
 function Uint32ArrayBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:791 value Uint32Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:812 value Uint32Array.prototype.BYTES_PER_ELEMENT
 function Uint32ArrayPrototypeBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:801 constructor Float16Array
+// builtins/typedarray.ts:822 constructor Float16Array
 function Float16ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 7, args);
 }
 
-// builtins/typedarray.ts:809 value Float16Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:830 value Float16Array.BYTES_PER_ELEMENT
 function Float16ArrayBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:817 value Float16Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:838 value Float16Array.prototype.BYTES_PER_ELEMENT
 function Float16ArrayPrototypeBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:827 constructor Float32Array
+// builtins/typedarray.ts:848 constructor Float32Array
 function Float32ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 8, args);
 }
 
-// builtins/typedarray.ts:835 value Float32Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:856 value Float32Array.BYTES_PER_ELEMENT
 function Float32ArrayBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:843 value Float32Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:864 value Float32Array.prototype.BYTES_PER_ELEMENT
 function Float32ArrayPrototypeBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:853 constructor Float64Array
+// builtins/typedarray.ts:874 constructor Float64Array
 function Float64ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 9, args);
 }
 
-// builtins/typedarray.ts:861 value Float64Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:882 value Float64Array.BYTES_PER_ELEMENT
 function Float64ArrayBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:869 value Float64Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:890 value Float64Array.prototype.BYTES_PER_ELEMENT
 function Float64ArrayPrototypeBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:879 constructor BigInt64Array
+// builtins/typedarray.ts:900 constructor BigInt64Array
 function BigInt64ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 10, args);
 }
 
-// builtins/typedarray.ts:887 value BigInt64Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:908 value BigInt64Array.BYTES_PER_ELEMENT
 function BigInt64ArrayBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:895 value BigInt64Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:916 value BigInt64Array.prototype.BYTES_PER_ELEMENT
 function BigInt64ArrayPrototypeBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:905 constructor BigUint64Array
+// builtins/typedarray.ts:926 constructor BigUint64Array
 function BigUint64ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 11, args);
 }
 
-// builtins/typedarray.ts:913 value BigUint64Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:934 value BigUint64Array.BYTES_PER_ELEMENT
 function BigUint64ArrayBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:921 value BigUint64Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:942 value BigUint64Array.prototype.BYTES_PER_ELEMENT
 function BigUint64ArrayPrototypeBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:932 %TypedArray%.prototype.at
+// builtins/typedarray.ts:953 %TypedArray%.prototype.at
 function TypedArrayPrototypeAt(index) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -7837,7 +7862,7 @@ function TypedArrayPrototypeAt(index) {
   return %TypedArrayGet(o, k);
 }
 
-// builtins/typedarray.ts:947 %TypedArray%.prototype.copyWithin
+// builtins/typedarray.ts:968 %TypedArray%.prototype.copyWithin
 function TypedArrayPrototypeCopyWithin(target, start, end) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -7863,22 +7888,22 @@ function TypedArrayPrototypeCopyWithin(target, start, end) {
   return o;
 }
 
-// builtins/typedarray.ts:977 %TypedArray%.prototype.entries
+// builtins/typedarray.ts:998 %TypedArray%.prototype.entries
 function TypedArrayPrototypeEntries() {
   return %CreateArrayIterator(ValidateTypedArray(this), 2);
 }
 
-// builtins/typedarray.ts:985 %TypedArray%.prototype.keys
+// builtins/typedarray.ts:1006 %TypedArray%.prototype.keys
 function TypedArrayPrototypeKeys() {
   return %CreateArrayIterator(ValidateTypedArray(this), 0);
 }
 
-// builtins/typedarray.ts:994 %TypedArray%.prototype.values %TypedArray%.prototype[Symbol.iterator]
+// builtins/typedarray.ts:1015 %TypedArray%.prototype.values %TypedArray%.prototype[Symbol.iterator]
 function TypedArrayPrototypeValues() {
   return %CreateArrayIterator(ValidateTypedArray(this), 1);
 }
 
-// builtins/typedarray.ts:999
+// builtins/typedarray.ts:1020
 function TAEveryOrSome(o, callbackfn, thisArg, wantAll) {
   const len = TALength(o);
   RequireCallable(callbackfn);
@@ -7891,17 +7916,17 @@ function TAEveryOrSome(o, callbackfn, thisArg, wantAll) {
   return wantAll;
 }
 
-// builtins/typedarray.ts:1015 %TypedArray%.prototype.every
+// builtins/typedarray.ts:1036 %TypedArray%.prototype.every
 function TypedArrayPrototypeEvery(callbackfn, thisArg) {
   return TAEveryOrSome(ValidateTypedArray(this), callbackfn, thisArg, true);
 }
 
-// builtins/typedarray.ts:1023 %TypedArray%.prototype.some
+// builtins/typedarray.ts:1044 %TypedArray%.prototype.some
 function TypedArrayPrototypeSome(callbackfn, thisArg) {
   return TAEveryOrSome(ValidateTypedArray(this), callbackfn, thisArg, false);
 }
 
-// builtins/typedarray.ts:1031 %TypedArray%.prototype.filter
+// builtins/typedarray.ts:1052 %TypedArray%.prototype.filter
 function TypedArrayPrototypeFilter(callbackfn, thisArg) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -7922,7 +7947,7 @@ function TypedArrayPrototypeFilter(callbackfn, thisArg) {
   return a;
 }
 
-// builtins/typedarray.ts:1052
+// builtins/typedarray.ts:1073
 function TAFind(thisValue, predicate, thisArg, fromEnd, wantIndex) {
   const o = ValidateTypedArray(thisValue);
   const len = TALength(o);
@@ -7940,27 +7965,27 @@ function TAFind(thisValue, predicate, thisArg, fromEnd, wantIndex) {
   return undefined;
 }
 
-// builtins/typedarray.ts:1073 %TypedArray%.prototype.find
+// builtins/typedarray.ts:1094 %TypedArray%.prototype.find
 function TypedArrayPrototypeFind(predicate, thisArg) {
   return TAFind(this, predicate, thisArg, false, false);
 }
 
-// builtins/typedarray.ts:1081 %TypedArray%.prototype.findIndex
+// builtins/typedarray.ts:1102 %TypedArray%.prototype.findIndex
 function TypedArrayPrototypeFindIndex(predicate, thisArg) {
   return TAFind(this, predicate, thisArg, false, true);
 }
 
-// builtins/typedarray.ts:1089 %TypedArray%.prototype.findLast
+// builtins/typedarray.ts:1110 %TypedArray%.prototype.findLast
 function TypedArrayPrototypeFindLast(predicate, thisArg) {
   return TAFind(this, predicate, thisArg, true, false);
 }
 
-// builtins/typedarray.ts:1097 %TypedArray%.prototype.findLastIndex
+// builtins/typedarray.ts:1118 %TypedArray%.prototype.findLastIndex
 function TypedArrayPrototypeFindLastIndex(predicate, thisArg) {
   return TAFind(this, predicate, thisArg, true, true);
 }
 
-// builtins/typedarray.ts:1105 %TypedArray%.prototype.forEach
+// builtins/typedarray.ts:1126 %TypedArray%.prototype.forEach
 function TypedArrayPrototypeForEach(callbackfn, thisArg) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -7970,7 +7995,7 @@ function TypedArrayPrototypeForEach(callbackfn, thisArg) {
   }
 }
 
-// builtins/typedarray.ts:1118 %TypedArray%.prototype.includes
+// builtins/typedarray.ts:1139 %TypedArray%.prototype.includes
 function TypedArrayPrototypeIncludes(searchElement, fromIndex) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -7995,7 +8020,7 @@ function TypedArrayPrototypeIncludes(searchElement, fromIndex) {
   return false;
 }
 
-// builtins/typedarray.ts:1146 %TypedArray%.prototype.indexOf
+// builtins/typedarray.ts:1167 %TypedArray%.prototype.indexOf
 function TypedArrayPrototypeIndexOf(searchElement, fromIndex) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -8021,7 +8046,7 @@ function TypedArrayPrototypeIndexOf(searchElement, fromIndex) {
   return -1;
 }
 
-// builtins/typedarray.ts:1176 %TypedArray%.prototype.lastIndexOf
+// builtins/typedarray.ts:1197 %TypedArray%.prototype.lastIndexOf
 function TypedArrayPrototypeLastIndexOf(searchElement, ...rest) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -8045,7 +8070,7 @@ function TypedArrayPrototypeLastIndexOf(searchElement, ...rest) {
   return -1;
 }
 
-// builtins/typedarray.ts:1203 %TypedArray%.prototype.join
+// builtins/typedarray.ts:1224 %TypedArray%.prototype.join
 function TypedArrayPrototypeJoin(separator) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -8066,7 +8091,7 @@ function TypedArrayPrototypeJoin(separator) {
   return r;
 }
 
-// builtins/typedarray.ts:1227 %TypedArray%.prototype.map
+// builtins/typedarray.ts:1248 %TypedArray%.prototype.map
 function TypedArrayPrototypeMap(callbackfn, thisArg) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -8079,7 +8104,7 @@ function TypedArrayPrototypeMap(callbackfn, thisArg) {
   return a;
 }
 
-// builtins/typedarray.ts:1240
+// builtins/typedarray.ts:1261
 function TAReduce(o, callbackfn, rest, fromEnd) {
   const len = TALength(o);
   RequireCallable(callbackfn);
@@ -8101,17 +8126,17 @@ function TAReduce(o, callbackfn, rest, fromEnd) {
   return accumulator;
 }
 
-// builtins/typedarray.ts:1266 %TypedArray%.prototype.reduce
+// builtins/typedarray.ts:1287 %TypedArray%.prototype.reduce
 function TypedArrayPrototypeReduce(callbackfn, ...rest) {
   return TAReduce(ValidateTypedArray(this), callbackfn, rest, false);
 }
 
-// builtins/typedarray.ts:1275 %TypedArray%.prototype.reduceRight
+// builtins/typedarray.ts:1296 %TypedArray%.prototype.reduceRight
 function TypedArrayPrototypeReduceRight(callbackfn, ...rest) {
   return TAReduce(ValidateTypedArray(this), callbackfn, rest, true);
 }
 
-// builtins/typedarray.ts:1283 %TypedArray%.prototype.reverse
+// builtins/typedarray.ts:1304 %TypedArray%.prototype.reverse
 function TypedArrayPrototypeReverse() {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -8119,13 +8144,13 @@ function TypedArrayPrototypeReverse() {
     const upper = len - lower - 1;
     const lv = %TypedArrayGet(o, lower);
     const uv = %TypedArrayGet(o, upper);
-    %TypedArraySet(o, lower, %ToNumberPrimitive(uv));
-    %TypedArraySet(o, upper, %ToNumberPrimitive(lv));
+    %TypedArraySet(o, lower, uv);
+    %TypedArraySet(o, upper, lv);
   }
   return o;
 }
 
-// builtins/typedarray.ts:1297
+// builtins/typedarray.ts:1318
 function TASortedList(o, len, comparefn) {
   const list = %ArrayCreate(0);
   for (let k = 0; k < len; k++) {
@@ -8139,7 +8164,7 @@ function TASortedList(o, len, comparefn) {
   return list;
 }
 
-// builtins/typedarray.ts:1314 %TypedArray%.prototype.sort
+// builtins/typedarray.ts:1335 %TypedArray%.prototype.sort
 function TypedArrayPrototypeSort(comparefn) {
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
@@ -8148,12 +8173,12 @@ function TypedArrayPrototypeSort(comparefn) {
   const len = TALength(o);
   const list = TASortedList(o, len, comparefn);
   for (let k = 0; k < len; k++) {
-    %TypedArraySet(o, k, %ToNumberPrimitive(%Get(list, k)));
+    %TypedArraySet(o, k, %Get(list, k));
   }
   return o;
 }
 
-// builtins/typedarray.ts:1331 %TypedArray%.prototype.toSorted
+// builtins/typedarray.ts:1352 %TypedArray%.prototype.toSorted
 function TypedArrayPrototypeToSorted(comparefn) {
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
@@ -8163,40 +8188,40 @@ function TypedArrayPrototypeToSorted(comparefn) {
   const a = AllocateTypedArrayOfLength(KindOf(o), %TypedArrayKindProto(KindOf(o)), len);
   const list = TASortedList(o, len, comparefn);
   for (let k = 0; k < len; k++) {
-    %TypedArraySet(a, k, %ToNumberPrimitive(%Get(list, k)));
+    %TypedArraySet(a, k, %Get(list, k));
   }
   return a;
 }
 
-// builtins/typedarray.ts:1349 %TypedArray%.prototype.toReversed
+// builtins/typedarray.ts:1370 %TypedArray%.prototype.toReversed
 function TypedArrayPrototypeToReversed() {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
   const a = AllocateTypedArrayOfLength(KindOf(o), %TypedArrayKindProto(KindOf(o)), len);
   for (let k = 0; k < len; k++) {
-    %TypedArraySet(a, k, %ToNumberPrimitive(%TypedArrayGet(o, len - k - 1)));
+    %TypedArraySet(a, k, %TypedArrayGet(o, len - k - 1));
   }
   return a;
 }
 
-// builtins/typedarray.ts:1363 %TypedArray%.prototype.with
+// builtins/typedarray.ts:1384 %TypedArray%.prototype.with
 function TypedArrayPrototypeWith(index, value) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
   const rel = ToIntegerOrInfinity(index);
   const actual = rel >= 0 ? rel : len + rel;
-  const n = ToNumber(value);
+  const n = ToElementValue(o, value);
   if (!(actual >= 0 && actual < TALength(o))) {
     throw %NewRangeError("invalid array index");
   }
   const a = AllocateTypedArrayOfLength(KindOf(o), %TypedArrayKindProto(KindOf(o)), len);
   for (let k = 0; k < len; k++) {
-    %TypedArraySet(a, k, k === actual ? n : %ToNumberPrimitive(%TypedArrayGet(o, k)));
+    %TypedArraySet(a, k, k === actual ? n : %TypedArrayGet(o, k));
   }
   return a;
 }
 
-// builtins/typedarray.ts:1383 %TypedArray%.prototype.toLocaleString
+// builtins/typedarray.ts:1404 %TypedArray%.prototype.toLocaleString
 function TypedArrayPrototypeToLocaleString() {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -8213,7 +8238,7 @@ function TypedArrayPrototypeToLocaleString() {
   return r;
 }
 
-// builtins/typedarray.ts:1400
+// builtins/typedarray.ts:1421
 function IsCanonicalNumericKey(key) {
   if (%IsNumber(key)) {
     return true;
@@ -8224,9 +8249,9 @@ function IsCanonicalNumericKey(key) {
   return key === "-0" || ToString(ToNumber(key)) === key;
 }
 
-// builtins/typedarray.ts:1416
+// builtins/typedarray.ts:1437
 function TASet(o, k, v) {
-  %TypedArraySet(o, k, ToNumber(v));
+  %TypedArraySet(o, k, ToElementValue(o, v));
 }
 
 // builtins/weak.ts:5

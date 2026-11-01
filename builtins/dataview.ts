@@ -1,6 +1,6 @@
 // DataView (ECMA-262 25.3): a view of an ArrayBuffer's bytes, either endianness. Slots in
 // builtins/typed.rs (`data_view_create`); the bytes go through heap/typed.rs's element
-// encodings (D1390). BigInt64/BigUint64 throw until BigInt exists.
+// encodings (D1390). BigInt64/BigUint64 read and write BigInts (0046).
 
 /** IsViewOutOfBounds ( viewRecord ), 25.3.1.3 (detached counts). */
 function DVOutOfBounds(view: Obj): boolean {
@@ -129,10 +129,14 @@ function DVByteIndex(view: Obj, getIndex: f64, kind: i32): f64 {
 
 /** GetViewValue ( view, requestIndex, isLittleEndian, type ), 25.3.1.5. */
 function GetViewValue(view: Value, requestIndex: Value, isLittleEndian: Value, kind: i32): f64 {
+  return AsNumber(GetViewElement(view, requestIndex, isLittleEndian, kind));
+}
+
+/** GetViewValue for any kind: a Number, or a BigInt for kinds 10 and 11. */
+function GetViewElement(view: Value, requestIndex: Value, isLittleEndian: Value, kind: i32): Value {
   DataViewField(view, 0);
   const getIndex: f64 = ToIndex(requestIndex);
   const little: boolean = ToBoolean(isLittleEndian);
-  RequireNumberKind(kind);
   const v: Obj = AsObj(view);
   return DataViewGet(v, DVByteIndex(v, getIndex, kind), kind, little);
 }
@@ -141,8 +145,12 @@ function GetViewValue(view: Value, requestIndex: Value, isLittleEndian: Value, k
 function SetViewValue(view: Value, requestIndex: Value, isLittleEndian: Value, kind: i32, value: Value): void {
   DataViewField(view, 0);
   const getIndex: f64 = ToIndex(requestIndex);
-  RequireNumberKind(kind);
-  const n: f64 = ToNumber(value);
+  let n: Value = undefined;
+  if (kind >= 10) {
+    n = ToBigInt(value);
+  } else {
+    n = ToNumber(value);
+  }
   const little: boolean = ToBoolean(isLittleEndian);
   const v: Obj = AsObj(view);
   DataViewSet(v, DVByteIndex(v, getIndex, kind), kind, n, little);
@@ -200,16 +208,16 @@ function DataViewPrototypeGetUint32(this: Value, byteOffset: Value, littleEndian
  * DataView.prototype.getBigInt64 ( byteOffset [ , littleEndian ] ).
  * @builtin DataView.prototype.getBigInt64
  */
-function DataViewPrototypeGetBigInt64(this: Value, byteOffset: Value, littleEndian?: Value): f64 {
-  return GetViewValue(this, byteOffset, littleEndian, 10);
+function DataViewPrototypeGetBigInt64(this: Value, byteOffset: Value, littleEndian?: Value): Value {
+  return GetViewElement(this, byteOffset, littleEndian, 10);
 }
 
 /**
  * DataView.prototype.getBigUint64 ( byteOffset [ , littleEndian ] ).
  * @builtin DataView.prototype.getBigUint64
  */
-function DataViewPrototypeGetBigUint64(this: Value, byteOffset: Value, littleEndian?: Value): f64 {
-  return GetViewValue(this, byteOffset, littleEndian, 11);
+function DataViewPrototypeGetBigUint64(this: Value, byteOffset: Value, littleEndian?: Value): Value {
+  return GetViewElement(this, byteOffset, littleEndian, 11);
 }
 
 /**

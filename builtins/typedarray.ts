@@ -83,11 +83,28 @@ function ValidateTypedArray(v: Value): Obj {
   return o;
 }
 
-/** BigInt typed arrays need BigInt, which djs does not have yet. */
-function RequireNumberKind(kind: i32): void {
-  if (kind >= 10) {
-    throw NewTypeError("not supported yet: BigInt typed arrays");
+/** Whether two typed arrays have the same [[ContentType]] (Number or BigInt). */
+function SameContentType(a: Obj, b: Obj): boolean {
+  return (KindOf(a) >= 10) === (KindOf(b) >= 10);
+}
+
+/**
+ * The element value of v for typed array o: ToBigInt for a BigInt array, ToNumber
+ * otherwise (TypedArraySetElement, 10.4.5.16, step 1-2).
+ */
+function ToElementValue(o: Obj, v: Value): Value {
+  if (KindOf(o) >= 10) {
+    return ToBigInt(v);
   }
+  return ToNumber(v);
+}
+
+/** Whether v needs no conversion to be an element of o. */
+function IsElementValue(o: Obj, v: Value): boolean {
+  if (KindOf(o) >= 10) {
+    return IsBigInt(v);
+  }
+  return IsNumber(v);
 }
 
 /** AllocateTypedArray ( ..., length ) with a fresh buffer of length elements. */
@@ -141,7 +158,7 @@ function TypedArrayFromValues(kind: i32, proto: Obj, values: Obj): Obj {
   const len: f64 = LengthOfArrayLike(values);
   const o: Obj = AllocateTypedArrayOfLength(kind, proto, len);
   for (let k: f64 = 0; k < len; k++) {
-    TypedArraySet(o, k, ToNumber(Get(values, k)));
+    TypedArraySet(o, k, ToElementValue(o, Get(values, k)));
   }
   return o;
 }
@@ -151,7 +168,6 @@ function TypedArrayConstruct(newTarget: Value, kind: i32, args: Obj): Obj {
   if (newTarget === undefined) {
     throw NewTypeError("must be called with new");
   }
-  RequireNumberKind(kind);
   const n: f64 = LengthOfArrayLike(args);
   const first: Value = n > 0 ? Get(args, 0) : undefined;
   if (!IsObject(first)) {
@@ -166,7 +182,7 @@ function TypedArrayConstruct(newTarget: Value, kind: i32, args: Obj): Obj {
       throw NewTypeError("ArrayBuffer is detached or resized");
     }
     if ((KindOf(src) >= 10) !== (kind >= 10)) {
-      throw NewTypeError("cannot mix BigInt and other types");
+      throw NewTypeError("incompatible content type");
     }
     const len: f64 = TALength(src);
     const o: Obj = AllocateTypedArrayOfLength(kind, proto, len);
@@ -215,9 +231,6 @@ function TypedArraySpecies(this: Value): Value {
 function TypedArrayCreateWithLength(c: Value, length: f64): Obj {
   const created: Obj = Construct(c, length);
   ValidateTypedArray(created);
-  if (KindOf(created) >= 10) {
-    throw NewTypeError("not supported yet: BigInt typed arrays");
-  }
   if (TALength(created) < length) {
     throw NewTypeError("TypedArray length is too small");
   }
@@ -227,7 +240,11 @@ function TypedArrayCreateWithLength(c: Value, length: f64): Obj {
 /** TypedArraySpeciesCreate ( exemplar, « length » ), 23.2.4.1. */
 function TypedArraySpeciesCreate(exemplar: Obj, length: f64): Obj {
   const c: Value = SpeciesConstructor(exemplar, RealmConstructor(KindName(KindOf(exemplar))));
-  return TypedArrayCreateWithLength(c, length);
+  const r: Obj = TypedArrayCreateWithLength(c, length);
+  if (!SameContentType(r, exemplar)) {
+    throw NewTypeError("incompatible content type");
+  }
+  return r;
 }
 
 /**
@@ -342,8 +359,9 @@ function TypedArrayPrototypeSet(this: Value, source: Value, offset?: Value): voi
     if (targetOffset === 1 / 0 || srcLength + targetOffset > targetLength) {
       throw NewRangeError("invalid array length");
     }
-    if ((KindOf(src) >= 10) !== (KindOf(target) >= 10)) {
-      throw NewTypeError("cannot mix BigInt and other types");
+    if (!SameContentType(src, target)) {
+      // qjs's words: it converts the first element.
+      throw NewTypeError(KindOf(target) >= 10 ? "cannot convert to bigint" : "cannot convert bigint to number");
     }
     TypedArrayCopy(src, 0, target, targetOffset, srcLength);
     return;
@@ -354,7 +372,7 @@ function TypedArrayPrototypeSet(this: Value, source: Value, offset?: Value): voi
     throw NewRangeError("invalid array length");
   }
   for (let k: f64 = 0; k < srcLength; k++) {
-    const value: f64 = ToNumber(Get(src, k));
+    const value: Value = ToElementValue(target, Get(src, k));
     TypedArraySet(target, targetOffset + k, value);
   }
 }
@@ -383,6 +401,9 @@ function TypedArrayPrototypeSubarray(this: Value, start: Value, end: Value): Obj
     created = Construct(c, buffer, beginByteOffset, newLength);
   }
   ValidateTypedArray(created);
+  if (!SameContentType(AsObj(created), o)) {
+    throw NewTypeError("incompatible content type");
+  }
   return AsObj(created);
 }
 
@@ -410,7 +431,7 @@ function TypedArrayPrototypeSlice(this: Value, start: Value, end: Value): Obj {
       // The same buffer: the spec copies byte by byte, forwards (23.2.3.27 step 14.g),
       // so an overlap repeats the first elements; elements are aligned, so per element.
       for (let k: f64 = 0; k < n; k++) {
-        TypedArraySet(a, k, ToNumberPrimitive(TypedArrayGet(o, startIndex + k)));
+        TypedArraySet(a, k, TypedArrayGet(o, startIndex + k));
       }
     } else if (KindOf(a) === KindOf(o)) {
       TypedArrayCopy(o, startIndex, a, 0, n);
@@ -430,7 +451,7 @@ function TypedArrayPrototypeSlice(this: Value, start: Value, end: Value): Obj {
 function TypedArrayPrototypeFill(this: Value, value: Value, start?: Value, end?: Value): Obj {
   const o: Obj = ValidateTypedArray(this);
   const len: f64 = TALength(o);
-  const n: f64 = ToNumber(value);
+  const n: Value = ToElementValue(o, value);
   const k: f64 = RelativeIndex(start, len, 0);
   const fin: f64 = RelativeIndex(end, len, len);
   if (TAOutOfBounds(o)) {
@@ -1287,8 +1308,8 @@ function TypedArrayPrototypeReverse(this: Value): Obj {
     const upper: f64 = len - lower - 1;
     const lv: Value = TypedArrayGet(o, lower);
     const uv: Value = TypedArrayGet(o, upper);
-    TypedArraySet(o, lower, ToNumberPrimitive(uv));
-    TypedArraySet(o, upper, ToNumberPrimitive(lv));
+    TypedArraySet(o, lower, uv);
+    TypedArraySet(o, upper, lv);
   }
   return o;
 }
@@ -1319,7 +1340,7 @@ function TypedArrayPrototypeSort(this: Value, comparefn: Value): Obj {
   const len: f64 = TALength(o);
   const list: Obj = TASortedList(o, len, comparefn);
   for (let k: f64 = 0; k < len; k++) {
-    TypedArraySet(o, k, ToNumberPrimitive(Get(list, k)));
+    TypedArraySet(o, k, Get(list, k));
   }
   return o;
 }
@@ -1337,7 +1358,7 @@ function TypedArrayPrototypeToSorted(this: Value, comparefn: Value): Obj {
   const a: Obj = AllocateTypedArrayOfLength(KindOf(o), TypedArrayKindProto(KindOf(o)), len);
   const list: Obj = TASortedList(o, len, comparefn);
   for (let k: f64 = 0; k < len; k++) {
-    TypedArraySet(a, k, ToNumberPrimitive(Get(list, k)));
+    TypedArraySet(a, k, Get(list, k));
   }
   return a;
 }
@@ -1351,7 +1372,7 @@ function TypedArrayPrototypeToReversed(this: Value): Obj {
   const len: f64 = TALength(o);
   const a: Obj = AllocateTypedArrayOfLength(KindOf(o), TypedArrayKindProto(KindOf(o)), len);
   for (let k: f64 = 0; k < len; k++) {
-    TypedArraySet(a, k, ToNumberPrimitive(TypedArrayGet(o, len - k - 1)));
+    TypedArraySet(a, k, TypedArrayGet(o, len - k - 1));
   }
   return a;
 }
@@ -1365,13 +1386,13 @@ function TypedArrayPrototypeWith(this: Value, index: Value, value: Value): Obj {
   const len: f64 = TALength(o);
   const rel: f64 = ToIntegerOrInfinity(index);
   const actual: f64 = rel >= 0 ? rel : len + rel;
-  const n: f64 = ToNumber(value);
+  const n: Value = ToElementValue(o, value);
   if (!(actual >= 0 && actual < TALength(o))) {
     throw NewRangeError("invalid array index");
   }
   const a: Obj = AllocateTypedArrayOfLength(KindOf(o), TypedArrayKindProto(KindOf(o)), len);
   for (let k: f64 = 0; k < len; k++) {
-    TypedArraySet(a, k, k === actual ? n : ToNumberPrimitive(TypedArrayGet(o, k)));
+    TypedArraySet(a, k, k === actual ? n : TypedArrayGet(o, k));
   }
   return a;
 }
@@ -1414,6 +1435,6 @@ function IsCanonicalNumericKey(key: Value): boolean {
  * is still valid.
  */
 function TASet(o: Obj, k: f64, v: Value): void {
-  TypedArraySet(o, k, ToNumber(v));
+  TypedArraySet(o, k, ToElementValue(o, v));
 }
 

@@ -160,9 +160,9 @@ function ReflectSet(target: Value, propertyKey: Value, v: Value, ...rest: Value[
   const key: Value = ToPropertyKey(propertyKey);
   const receiver: Value = LengthOfArrayLike(rest) > 0 ? Get(rest, 0) : o;
   // A typed array's own element: TypedArraySetElement converts the value first (10.4.5.5),
-  // which may run user code; the leaf only writes Numbers.
-  if (IsTypedArray(receiver) && !IsNumber(v) && IsCanonicalNumericKey(key) && ReachesReceiver(o, key, AsObj(receiver))) {
-    return SetWithReceiver(o, key, ToNumber(v), receiver);
+  // which may run user code; the leaf only writes element values.
+  if (IsTypedArray(receiver) && !IsElementValue(AsObj(receiver), v) && IsCanonicalNumericKey(key) && ReachesReceiver(o, key, AsObj(receiver))) {
+    return SetWithReceiver(o, key, ToElementValue(AsObj(receiver), v), receiver);
   }
   return SetWithReceiver(o, key, v, receiver);
 }

@@ -200,15 +200,15 @@ pub(crate) fn typed_array_copy(
         buffer_copy(heap, sb, so, db, d0, count * size);
         return;
     }
-    let values: Vec<f64> = (0..count)
+    // Number kinds convert through f64; BigInt64 <-> BigUint64 keep the 64 bits.
+    let values: Vec<typed::Elem> = (0..count)
         .map(|i| {
-            heap.ta_get(src, from + i)
-                .and_then(|v| v.as_number())
-                .unwrap_or(0.0)
+            heap.ta_elem(src, from + i)
+                .unwrap_or(typed::Elem::Number(0.0))
         })
         .collect();
-    for (i, n) in values.into_iter().enumerate() {
-        heap.ta_set(dst, to + i as u32, n);
+    for (i, e) in values.into_iter().enumerate() {
+        heap.ta_set(dst, to + i as u32, e);
     }
 }
 
@@ -490,10 +490,10 @@ pub(crate) fn data_view_create(
 /// GetValueFromBuffer for a DataView: the element of `kind` at byte `at` of the view's
 /// buffer (absolute), `little` endian or not. The caller checked the bounds; a stale
 /// index reads NaN instead of panicking.
-pub(crate) fn view_get(heap: &Heap, view: Obj, at: f64, kind: Kind, little: bool) -> f64 {
+pub(crate) fn view_get(heap: &Heap, view: Obj, at: f64, kind: Kind, little: bool) -> typed::Elem {
     let size = kind.size() as usize;
     let Some(range) = view_range(heap, view, at, size) else {
-        return f64::NAN;
+        return typed::Elem::Number(f64::NAN);
     };
     let buffer = heap
         .object_slot(view, 0)
@@ -504,11 +504,18 @@ pub(crate) fn view_get(heap: &Heap, view: Obj, at: f64, kind: Kind, little: bool
     if !little {
         b[..size].reverse();
     }
-    typed::decode(kind, &b[..size])
+    typed::decode_elem(kind, &b[..size])
 }
 
 /// SetValueInBuffer for a DataView (see `view_get`); out of range writes nothing.
-pub(crate) fn view_set(heap: &mut Heap, view: Obj, at: f64, kind: Kind, n: f64, little: bool) {
+pub(crate) fn view_set(
+    heap: &mut Heap,
+    view: Obj,
+    at: f64,
+    kind: Kind,
+    e: typed::Elem,
+    little: bool,
+) {
     let size = kind.size() as usize;
     let Some(range) = view_range(heap, view, at, size) else {
         return;
@@ -518,7 +525,7 @@ pub(crate) fn view_set(heap: &mut Heap, view: Obj, at: f64, kind: Kind, n: f64, 
         .as_object()
         .expect("DataView buffer");
     let mut b = [0u8; 8];
-    typed::encode(kind, n, &mut b);
+    typed::encode_elem(kind, e, &mut b);
     if !little {
         b[..size].reverse();
     }

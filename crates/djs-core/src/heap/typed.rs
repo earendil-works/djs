@@ -16,10 +16,29 @@
 //! prototype chain. Element values are converted here only from primitives; objects
 //! and symbols need ToNumber with user code, which the interpreter and the builtins do
 //! first.
+//!
+//! BigInt64Array and BigUint64Array (0046, D1463) hold BigInts: an element is an
+//! [`Elem`] (a Number, or the 64 element bits) until it becomes a value. Making a
+//! BigInt value allocates, so the `&self` reads ([`Heap::ta_get`], and through it
+//! `get_own_property`/`find_property`) give `Value::HOLE` as a placeholder for a BigInt
+//! element; code that hands element values to JS uses the allocating
+//! [`Heap::ta_get_alloc`], [`Heap::get_own_property_alloc`] or
+//! [`Heap::find_property_alloc`]. Writes take an [`Elem`]: a BigInt kind only accepts a
+//! BigInt value (anything else needs ToBigInt, done by the caller), a Number kind only
+//! Numbers (a BigInt needs ToNumber, which throws).
 
 use super::cells::Bytes;
-use super::{Atom, Heap, ObjectClass};
+use super::{Atom, Heap, HeapError, ObjectClass, Property};
+use crate::bigint::BigInt;
 use crate::value::{Obj, Value};
+
+/// A typed array element without its allocation: a Number, or the 64 bits of a BigInt
+/// element (two's complement; the kind says whether they are signed).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Elem {
+    Number(f64),
+    Big(u64),
+}
 
 /// The element types, in the order of `Kind as i32` (the builtins use the numbers).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -56,6 +75,11 @@ impl Kind {
             11 => BigUint64,
             _ => return None,
         })
+    }
+
+    /// BigInt64 or BigUint64: the elements are BigInts.
+    pub fn is_bigint(self) -> bool {
+        matches!(self, Kind::BigInt64 | Kind::BigUint64)
     }
 
     /// Bytes per element.
@@ -223,6 +247,33 @@ pub fn decode(kind: Kind, b: &[u8]) -> f64 {
     }
 }
 
+/// Encodes an element of `kind` (little endian) into `out[..size]`.
+pub fn encode_elem(kind: Kind, e: Elem, out: &mut [u8; 8]) {
+    match e {
+        Elem::Big(bits) if kind.is_bigint() => out.copy_from_slice(&bits.to_le_bytes()),
+        Elem::Big(bits) => encode(kind, bits as i64 as f64, out),
+        Elem::Number(n) => encode(kind, n, out),
+    }
+}
+
+/// Decodes an element of `kind` from little-endian bytes.
+pub fn decode_elem(kind: Kind, b: &[u8]) -> Elem {
+    if kind.is_bigint() {
+        Elem::Big(u64::from_le_bytes(b[..8].try_into().unwrap()))
+    } else {
+        Elem::Number(decode(kind, b))
+    }
+}
+
+/// The BigInt of a BigInt element's bits.
+pub fn elem_bigint(kind: Kind, bits: u64) -> BigInt {
+    if kind == Kind::BigInt64 {
+        BigInt::from_i64(bits as i64)
+    } else {
+        BigInt::from_u64(bits)
+    }
+}
+
 /// A Number as a Value in its canonical form (int where it fits).
 fn number(n: f64) -> Value {
     let i = n as i32;
@@ -348,19 +399,117 @@ impl Heap {
     }
 
     /// Element `i` of a typed array, `None` if it is not a valid index.
-    pub fn ta_get(&self, o: Obj, i: u32) -> Option<Value> {
+    pub fn ta_elem(&self, o: Obj, i: u32) -> Option<Elem> {
         if i >= self.ta_length(o)? {
             return None;
         }
         let kind = self.ta_kind(o);
         let at = (self.ta_byte_offset(o) + i * kind.size()) as usize;
         let data = self.buffer_data(self.ta_buffer(o));
-        Some(number(decode(kind, &data[at..at + kind.size() as usize])))
+        Some(decode_elem(kind, &data[at..at + kind.size() as usize]))
     }
 
-    /// Writes Number `n` to element `i`; false (nothing written) if it is not a valid
-    /// index.
-    pub fn ta_set(&mut self, o: Obj, i: u32, n: f64) -> bool {
+    /// Element `i` of a typed array, `None` if it is not a valid index. A BigInt element
+    /// is `Value::HOLE` (it needs an allocation: see [`Heap::ta_get_alloc`]).
+    pub fn ta_get(&self, o: Obj, i: u32) -> Option<Value> {
+        Some(match self.ta_elem(o, i)? {
+            Elem::Number(n) => number(n),
+            Elem::Big(_) => Value::HOLE,
+        })
+    }
+
+    /// Element `i` of a typed array as a value (a BigInt element is allocated).
+    pub fn ta_get_alloc(&mut self, o: Obj, i: u32) -> Result<Option<Value>, HeapError> {
+        let kind = self.ta_kind(o);
+        match self.ta_elem(o, i) {
+            None => Ok(None),
+            Some(e) => self.elem_value(kind, e).map(Some),
+        }
+    }
+
+    /// The value of an element of `kind`.
+    pub fn elem_value(&mut self, kind: Kind, e: Elem) -> Result<Value, HeapError> {
+        match e {
+            Elem::Number(n) => Ok(number(n)),
+            Elem::Big(bits) => self.alloc_bigint(&elem_bigint(kind, bits)),
+        }
+    }
+
+    /// The element a primitive value converts to for `kind` without user code or an
+    /// error: a Number kind takes ToNumber of a primitive that is not a symbol or a
+    /// BigInt, a BigInt kind only a BigInt. `None` means the caller converts first.
+    pub(crate) fn element_of(&self, kind: Kind, v: Value) -> Option<Elem> {
+        if kind.is_bigint() {
+            v.as_bigint()?;
+            Some(Elem::Big(self.bigint(v).to_u64_wrapping()))
+        } else {
+            self.primitive_number(v).map(Elem::Number)
+        }
+    }
+
+    /// Replaces the placeholder of a BigInt typed array element in a property found on
+    /// `holder` (see the module docs).
+    fn materialize(
+        &mut self,
+        holder: Obj,
+        key: Atom,
+        p: Option<Property>,
+    ) -> Result<Option<Property>, HeapError> {
+        if let Some(Property::Data { value, flags }) = p
+            && value.is_hole()
+            && self.is_typed_array(holder)
+            && let Some(i) = self
+                .canonical_numeric_index(key)
+                .and_then(|n| self.ta_index(holder, n))
+            && let Some(v) = self.ta_get_alloc(holder, i)?
+        {
+            return Ok(Some(Property::Data { value: v, flags }));
+        }
+        Ok(p)
+    }
+
+    /// The value of a property found on `holder` whose value is the placeholder of a
+    /// BigInt element (see the module docs); `value` itself otherwise.
+    pub fn materialize_value(
+        &mut self,
+        holder: Obj,
+        key: Atom,
+        value: Value,
+    ) -> Result<Value, HeapError> {
+        if !value.is_hole() {
+            return Ok(value);
+        }
+        let p = Some(Property::data(value, super::PropFlags::NONE));
+        Ok(match self.materialize(holder, key, p)? {
+            Some(Property::Data { value, .. }) if !value.is_hole() => value,
+            _ => Value::UNDEFINED,
+        })
+    }
+
+    /// `[[GetOwnProperty]]` with BigInt typed array elements allocated.
+    pub fn get_own_property_alloc(
+        &mut self,
+        o: Obj,
+        key: Atom,
+    ) -> Result<Option<Property>, HeapError> {
+        let p = self.get_own_property(o, key);
+        self.materialize(o, key, p)
+    }
+
+    /// `find_property` with BigInt typed array elements allocated.
+    pub fn find_property_alloc(
+        &mut self,
+        o: Obj,
+        key: Atom,
+    ) -> Result<Option<(Obj, Property)>, HeapError> {
+        let Some((holder, p)) = self.find_property(o, key) else {
+            return Ok(None);
+        };
+        Ok(self.materialize(holder, key, Some(p))?.map(|p| (holder, p)))
+    }
+
+    /// Writes element `i`; false (nothing written) if it is not a valid index.
+    pub fn ta_set(&mut self, o: Obj, i: u32, e: Elem) -> bool {
         let Some(len) = self.ta_length(o) else {
             return false;
         };
@@ -371,7 +520,7 @@ impl Heap {
         let size = kind.size() as usize;
         let at = (self.ta_byte_offset(o) as usize) + i as usize * size;
         let mut buf = [0u8; 8];
-        encode(kind, n, &mut buf);
+        encode_elem(kind, e, &mut buf);
         let buffer = self.ta_buffer(o);
         self.buffer_data_mut(buffer)[at..at + size].copy_from_slice(&buf[..size]);
         true
@@ -409,7 +558,8 @@ impl Heap {
         (n < len as f64).then_some(n as u32)
     }
 
-    /// ToNumber of a primitive that cannot run user code (not a symbol or an object).
+    /// ToNumber of a primitive that cannot run user code or throw (not a symbol, a BigInt
+    /// or an object).
     pub(crate) fn primitive_number(&self, v: Value) -> Option<f64> {
         if let Some(n) = v.as_number() {
             return Some(n);
@@ -447,7 +597,7 @@ impl Heap {
     /// caller converts first.
     pub(crate) fn ta_numeric_set(&mut self, o: Obj, key: Atom, v: Value) -> Option<bool> {
         let n = self.canonical_numeric_index(key)?;
-        let Some(x) = self.primitive_number(v) else {
+        let Some(x) = self.element_of(self.ta_kind(o), v) else {
             return Some(false);
         };
         Some(match self.ta_index(o, n) {

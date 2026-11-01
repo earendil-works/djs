@@ -69,6 +69,30 @@ of difftest cases (0016: 6 BigInt literal cases).
 - e2e `bigint.js` (three modes); test262 active +29 (tests that used BigInt without the
   feature tag); difftest ratchet: test_map.js and result/bigint.js pass now.
 
+- Part 2 (typed arrays, D1463; coordinator OK'd touching infra's typed-array code).
+  For infra, the new signatures:
+  - heap/typed.rs: `Elem { Number(f64), Big(u64) }`, `Kind::is_bigint`,
+    `encode_elem`/`decode_elem`/`elem_bigint`; `ta_elem(&self) -> Option<Elem>`;
+    `ta_get(&self)` gives `Value::HOLE` for a BigInt element (placeholder), use
+    `ta_get_alloc(&mut self) -> Result<Option<Value>>` to hand values to JS;
+    `ta_set(o, i, Elem)` (was f64); `element_of(kind, v) -> Option<Elem>` replaces
+    `primitive_number` in the write paths; `get_own_property_alloc`,
+    `find_property_alloc`, `materialize_value` for reads that expose values.
+  - builtins/typed.rs: `view_get` returns `Elem`, `view_set` takes `Elem`;
+    `typed_array_copy` copies `Elem`s.
+  - leaves: `TypedArraySet(o, i, v: Value)`, `DataViewGet(...): Value`,
+    `DataViewSet(view, at, kind, v: Value, little)`; `SortNumbers` sorts BigInts too.
+  - typedarray.ts: `ToElementValue`/`IsElementValue`/`SameContentType` (ToBigInt for
+    BigInt arrays) replace the ToNumber calls; `RequireNumberKind` is gone; species
+    results must have the same content type. object.ts DefineOwnProperty and reflect.ts
+    Reflect.set use IsElementValue/ToElementValue.
+  - interp: PutElem/PutField on a BigInt typed array calls `%ToBigInt` (generalized
+    `call_converter(id, slot)`, was `call_to_number`).
+- test262 BigInt group (built-ins/BigInt + feature BigInt, 1142 tests): before 161
+  (14.0%), after 1121 (98.1%). The 21 left: classes 9, regexp 6, Promise.allKeyed 2,
+  JSON.rawJSON, Error.isError, Array.fromAsync, harness deepEqual (regexp). Promoted to
+  active: active 23,007 / 32,718 (70.3%) -> 24,139 / 33,854 (71.3%).
+
 ## Follow-ups
 
 ## Result

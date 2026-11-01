@@ -2351,11 +2351,18 @@ impl<'h> Exec<'h> {
                 {
                     return Some(self.call_to_primitive(k, STRING));
                 }
-                if (v.as_object().is_some() || v.as_symbol().is_some())
-                    && o.as_object().is_some_and(|t| self.heap.is_typed_array(t))
+                // A BigInt typed array takes ToBigInt instead (0046): anything but a
+                // BigInt, which also makes a BigInt into a Number array throw.
+                if let Some(t) = o.as_object().filter(|&t| self.heap.is_typed_array(t))
+                    && self.heap.element_of(self.heap.ta_kind(t), v).is_none()
                     && self.typed_array_key(op)
                 {
-                    return Some(self.call_to_number(self.sp - 1));
+                    let id = if self.heap.ta_kind(t).is_bigint() {
+                        intrinsics::TO_BIG_INT
+                    } else {
+                        intrinsics::TO_NUMBER
+                    };
+                    return Some(self.call_converter(id, self.sp - 1));
                 }
                 return None;
             }
@@ -2411,10 +2418,10 @@ impl<'h> Exec<'h> {
         self.heap.canonical_numeric_index(key).is_some()
     }
 
-    /// Calls the prelude's `%ToNumber(stack[slot])`; its result replaces `stack[slot]`
-    /// and the current instruction runs again.
-    fn call_to_number(&mut self, slot: u32) -> Step {
-        let f = realm::installed_intrinsic(self.heap, intrinsics::TO_NUMBER);
+    /// Calls the prelude's `%ToNumber(stack[slot])` (or another one-argument conversion
+    /// `id`); its result replaces `stack[slot]` and the current instruction runs again.
+    fn call_converter(&mut self, id: u16, slot: u32) -> Step {
+        let f = realm::installed_intrinsic(self.heap, id);
         if f.is_undefined() {
             return type_error("cannot convert an object to a number (no prelude)");
         }
@@ -2451,7 +2458,7 @@ impl<'h> Exec<'h> {
     /// What `o[key]` is: a value, a getter to call, or a proxy's `get` trap.
     fn lookup(&mut self, o: Value, key: Atom) -> Result<Got, Fault> {
         match o.kind() {
-            Kind::Object => Ok(self.lookup_object(o.as_object().unwrap(), key)),
+            Kind::Object => self.lookup_object(o.as_object().unwrap(), key),
             Kind::String => {
                 let s = o.as_string().unwrap();
                 let len = self.heap.str_len(s);
@@ -2478,20 +2485,24 @@ impl<'h> Exec<'h> {
         let Some(proto) = realm::primitive_proto(self.heap, o) else {
             return Ok(Got::Value(Value::UNDEFINED));
         };
-        Ok(self.lookup_object(proto, key))
+        self.lookup_object(proto, key)
     }
 
     /// [`Exec::lookup`] on the chain of an object.
     #[inline]
-    fn lookup_object(&self, o: Obj, key: Atom) -> Got {
-        match self.heap.lookup_property(o, key) {
+    fn lookup_object(&mut self, o: Obj, key: Atom) -> Result<Got, Fault> {
+        Ok(match self.heap.lookup_property(o, key) {
+            // A BigInt typed array element needs its allocation.
+            Lookup::Found(h, Property::Data { value, .. }) if value.is_hole() => {
+                Got::Value(self.heap.materialize_value(h, key, value)?)
+            }
             Lookup::Found(_, Property::Data { value, .. }) => Got::Value(value),
             Lookup::Found(_, Property::Accessor { getter, .. }) if !getter.is_undefined() => {
                 Got::Getter(getter)
             }
             Lookup::Found(..) | Lookup::Absent => Got::Value(Value::UNDEFINED),
             Lookup::Proxy(p) => Got::Proxy(p),
-        }
+        })
     }
 
     /// Calls `%ProxyGet(p, key, receiver)`, the result going where `cont` says; `pc`
@@ -2790,7 +2801,7 @@ impl<'h> Exec<'h> {
             return Ok(false);
         }
         for k in keys {
-            if let Some(Property::Data { value, flags }) = self.heap.get_own_property(s, k)
+            if let Some(Property::Data { value, flags }) = self.heap.get_own_property_alloc(s, k)?
                 && flags.enumerable()
             {
                 self.heap.create_data_property(o, k, value)?;

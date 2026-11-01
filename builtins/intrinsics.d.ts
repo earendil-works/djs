@@ -316,7 +316,7 @@ declare function BufferTransfer(b: Obj, byteLength: f64, max: Value): Obj;
 declare function BufferCopy(src: Obj, from: f64, dst: Obj, to: f64, count: f64): void;
 /**
  * Sorts a dense array of Numbers numerically in place (a typed array's default order:
- * -0 before +0, NaN last; stable). @leaf
+ * -0 before +0, NaN last; stable), or one of BigInts by value. @leaf
  */
 declare function SortNumbers(list: Obj): void;
 /** A DataView over buffer (byteLength -1: length-tracking). @leaf */
@@ -326,10 +326,13 @@ declare function DataViewCreate(proto: Obj, buffer: Obj, byteOffset: f64, byteLe
  * TypeError "DataView object expected" for anything else. @leaf
  */
 declare function DataViewField(v: Value, field: i32): Value;
-/** The element of kind at byte `at` of the view's buffer (bounds checked by the caller). @leaf */
-declare function DataViewGet(view: Obj, at: f64, kind: i32, little: boolean): f64;
-/** Writes Number n as kind at byte `at` of the view's buffer. @leaf */
-declare function DataViewSet(view: Obj, at: f64, kind: i32, n: f64, little: boolean): void;
+/**
+ * The element of kind at byte `at` of the view's buffer (bounds checked by the caller): a
+ * Number, or a BigInt for kinds 10 and 11. @leaf
+ */
+declare function DataViewGet(view: Obj, at: f64, kind: i32, little: boolean): Value;
+/** Writes v (a Number, or a BigInt for kinds 10 and 11) as kind at byte `at` of the view's buffer. @leaf */
+declare function DataViewSet(view: Obj, at: f64, kind: i32, v: Value, little: boolean): void;
 /** Whether v is a DataView. @leaf */
 declare function IsDataView(v: Value): boolean;
 /** The constructor installed as `name` (the realm's %Name%, whatever the global is now). @leaf */
@@ -346,8 +349,8 @@ declare function TypedArrayCreate(proto: Obj, kind: i32, buffer: Obj, byteOffset
 declare function TypedArrayField(o: Value, field: i32): Value;
 /** Element i (undefined if not a valid index). @leaf */
 declare function TypedArrayGet(o: Obj, i: f64): Value;
-/** Writes Number n to element i (nothing if not a valid index). @leaf */
-declare function TypedArraySet(o: Obj, i: f64, n: f64): void;
+/** Writes v (a Number, or a BigInt for a BigInt array) to element i (nothing if not a valid index). @leaf */
+declare function TypedArraySet(o: Obj, i: f64, v: Value): void;
 /** Copies count elements from src (at from) to dst (at to), converting; overlaps ok. @leaf */
 declare function TypedArrayCopy(src: Obj, from: f64, dst: Obj, to: f64, count: f64): void;
 /** The prototype of the typed array constructor for kind (the realm's). @leaf */

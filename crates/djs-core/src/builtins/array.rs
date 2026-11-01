@@ -50,6 +50,22 @@ pub(crate) fn sort_primitives(heap: &mut Heap, list: Obj) -> Result<bool, Fault>
 /// numeric, -0 before +0, NaN last; stable.
 pub(crate) fn sort_numbers(heap: &mut Heap, list: Obj) -> Result<(), Fault> {
     let n = heap.array_length(list);
+    if n > 0
+        && heap
+            .get_element_fast(list, 0)
+            .is_some_and(|v| v.as_bigint().is_some())
+    {
+        // A BigInt typed array's elements (0046): sorted by value.
+        let mut values: Vec<(crate::bigint::BigInt, Value)> = (0..n)
+            .filter_map(|i| heap.get_element_fast(list, i))
+            .map(|v| (heap.bigint(v), v))
+            .collect();
+        crate::sort::sort_by(&mut values, |a, b| a.0 < b.0);
+        for (i, (_, v)) in values.into_iter().enumerate() {
+            heap.set_element_fast(list, i as u32, v)?;
+        }
+        return Ok(());
+    }
     let mut values: Vec<f64> = (0..n)
         .map(|i| {
             heap.get_element_fast(list, i)

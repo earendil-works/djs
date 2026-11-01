@@ -229,6 +229,7 @@ const INSTALL_INTRINSIC: u16 = id("InstallIntrinsic");
 pub(super) const TO_PRIMITIVE: u16 = id("ToPrimitive");
 /// The installed `%ToNumber`, for typed array element writes (0039).
 pub(super) const TO_NUMBER: u16 = id("ToNumber");
+pub(super) const TO_BIG_INT: u16 = id("ToBigInt");
 /// The installed `%InstanceofOperator`, for `instanceof` with a custom Symbol.hasInstance.
 pub(super) const INSTANCEOF_OPERATOR: u16 = id("InstanceofOperator");
 /// The installed `%ArraySpread`, for `array_spread` over a general iterable.
@@ -1277,11 +1278,17 @@ impl Exec<'_> {
                 };
                 if id == DATA_VIEW_GET {
                     let little = arg(self, 3) == Value::TRUE;
-                    Value::number(typed::view_get(self.heap, o, at, kind, little))
+                    let e = typed::view_get(self.heap, o, at, kind, little);
+                    match e {
+                        crate::heap::typed::Elem::Number(n) => Value::number(n),
+                        _ => self.heap.elem_value(kind, e)?,
+                    }
                 } else {
-                    let n = arg(self, 3).as_number().unwrap_or(f64::NAN);
+                    let Some(e) = self.heap.element_of(kind, arg(self, 3)) else {
+                        return bad_argument(info.name);
+                    };
                     let little = arg(self, 4) == Value::TRUE;
-                    typed::view_set(self.heap, o, at, kind, n, little);
+                    typed::view_set(self.heap, o, at, kind, e, little);
                     Value::UNDEFINED
                 }
             }
@@ -1333,13 +1340,24 @@ impl Exec<'_> {
                 let index =
                     (i >= 0.0 && i <= u32::MAX as f64 && i == libm::trunc(i)).then_some(i as u32);
                 if id == TYPED_ARRAY_GET {
-                    index
-                        .and_then(|i| self.heap.ta_get(o, i))
-                        .unwrap_or(Value::UNDEFINED)
+                    match index {
+                        Some(i) => self.heap.ta_get_alloc(o, i)?.unwrap_or(Value::UNDEFINED),
+                        None => Value::UNDEFINED,
+                    }
                 } else {
+                    // A Number for a Number kind, a BigInt for a BigInt kind (converted).
+                    // Anything else is a primitive the caller did not convert (`undefined`
+                    // read past a shrunk buffer): ToBigInt's or ToNumber's TypeError.
+                    let kind = self.heap.ta_kind(o);
+                    let Some(e) = self.heap.element_of(kind, arg(self, 2)) else {
+                        return type_error(if kind.is_bigint() {
+                            "cannot convert to bigint"
+                        } else {
+                            "cannot convert bigint to number"
+                        });
+                    };
                     if let Some(i) = index {
-                        let n = arg(self, 2).as_number().unwrap_or(f64::NAN);
-                        self.heap.ta_set(o, i, n);
+                        self.heap.ta_set(o, i, e);
                     }
                     Value::UNDEFINED
                 }
