@@ -2476,7 +2476,20 @@ fn global_caches_follow_every_change() {
 fn warm_and_cold_inline_caches_behave_the_same() {
     // Warm the caches, take an image, and run the same script in a VM restored from it,
     // once with the caches as they are and once with all of them emptied (D1620).
-    let (vm, _) = run_script(vm(), GLOBAL_CHANGES);
+    let fields = "\
+        function getA(o) { return o.a; }\n\
+        function setA(o, v) { o.a = v; return o.a; }\n\
+        function callM(o) { return o.m(); }\n\
+        globalThis.obj = { x: 1, a: 2, m() { return 'm'; } };\n\
+        for (let i = 0; i < 3; i++) { getA(obj); setA(obj, i); callM(obj); }\n";
+    let fields_2 = "\
+        console.log(getA(obj), setA(obj, 'w'), callM(obj));\n\
+        delete obj.x;\n\
+        console.log(getA(obj), setA(obj, 'v'), callM(obj));\n\
+        Object.defineProperty(obj, 'a', { value: 'ro', writable: false });\n\
+        try { setA(obj, 1); } catch (e) { console.log(String(e)); }\n\
+        console.log(getA({ a: 'other' }), getA([]));\n";
+    let (vm, _) = run_script(vm(), &(String::from(GLOBAL_CHANGES) + fields));
     let image = vm.bytes().to_vec();
     let warm = Vm::from_bytes(image.clone(), VmOptions::default()).unwrap();
     let mut cold = Vm::from_bytes(image, VmOptions::default()).unwrap();
@@ -2484,9 +2497,10 @@ fn warm_and_cold_inline_caches_behave_the_same() {
         clear_inline_caches(&mut cold) > 0,
         "no warm caches in the image"
     );
-    let (_, warm_out) = run_script(warm, GLOBAL_CHANGES_2);
-    let (_, cold_out) = run_script(cold, GLOBAL_CHANGES_2);
+    let (_, warm_out) = run_script(warm, &(String::from(GLOBAL_CHANGES_2) + fields_2));
+    let (_, cold_out) = run_script(cold, &(String::from(GLOBAL_CHANGES_2) + fields_2));
     assert_eq!(warm_out, cold_out);
+    assert_eq!(warm_out.log.len(), 8, "{:?}", warm_out.log);
 }
 
 // ---- The host inbox (D1670) --------------------------------------------------------------

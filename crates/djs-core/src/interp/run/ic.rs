@@ -11,6 +11,9 @@
 //! - globals: word 0 = entry index + 1, with [`IN_LEX`] set when the entry is in the
 //!   global lexical record; word 1 = the realm's `GlobalLexEpoch` when the entry is in
 //!   the global object (a newer lexical binding could shadow it).
+//! - property reads and writes: word 0 = entry index + 1 of an own data property of
+//!   the receiver. Only keys that are not array indexes are cached: for those, an own
+//!   property is always a table entry, whatever the object's class.
 
 use super::*;
 use crate::bytecode::template::NO_CACHE;
@@ -139,5 +142,75 @@ impl Exec<'_> {
             let epoch = self.lex_epoch();
             self.ic_write(ic, [i + 1, epoch, 0]);
         }
+    }
+
+    /// A cached own data property read: `obj[key]` if slot `ic` still points at it.
+    #[inline(always)]
+    pub(super) fn ic_own_get(&self, obj: Obj, key: Atom, ic: u32) -> Option<Value> {
+        let w0 = self.ic_read(ic)[0];
+        if w0 == 0 {
+            return None;
+        }
+        self.heap.data_at(obj, w0 - 1, key)
+    }
+
+    /// A cached own data property write: true if slot `ic` still points at a writable
+    /// data property `key` of `obj` and `v` was written ([[Set]] on such a property only
+    /// replaces the value).
+    #[inline(always)]
+    pub(super) fn ic_own_put(&mut self, obj: Obj, key: Atom, ic: u32, v: Value) -> bool {
+        let w0 = self.ic_read(ic)[0];
+        w0 != 0 && self.heap.set_data_at(obj, w0 - 1, key, v)
+    }
+
+    /// After a slow access to `obj[key]`: remembers the entry if `key` is an own data
+    /// property of `obj` (and not an array index).
+    #[inline(never)]
+    pub(super) fn ic_own_fill(&mut self, obj: Obj, key: Atom, ic: u32) {
+        if key.as_int().is_some() {
+            return;
+        }
+        if let Some(i) = self.heap.own_entry_index(obj, key)
+            && self.heap.data_at(obj, i, key).is_some()
+        {
+            self.ic_write(ic, [i + 1, 0, 0]);
+        }
+    }
+
+    /// `fast_step` for `get_field`, `get_method` and `put_field` on an own data property
+    /// the site's cache points at; false, with nothing changed, otherwise.
+    #[inline(always)]
+    pub(super) fn fast_field(&mut self, sp0: u32) -> bool {
+        let op = self.byte(self.pc);
+        let key = Atom::from_id(self.imm_u32(1));
+        let ic = self.imm_u16(5);
+        if op == fast::PUT_FIELD {
+            let (o, v) = (self.top(1), self.top(0));
+            let Some(obj) = o.as_object() else {
+                return false;
+            };
+            if !self.ic_own_put(obj, key, ic, v) {
+                return false;
+            }
+            self.sp -= 2;
+            self.advance(Op::PutField, sp0);
+            return true;
+        }
+        let o = self.top(0);
+        let Some(obj) = o.as_object() else {
+            return false;
+        };
+        let Some(v) = self.ic_own_get(obj, key, ic) else {
+            return false;
+        };
+        if op == fast::GET_FIELD {
+            self.set(self.sp - 1, v);
+            self.advance(Op::GetField, sp0);
+        } else {
+            self.set(self.sp - 1, v);
+            self.push(o);
+            self.advance(Op::GetMethod, sp0);
+        }
+        true
     }
 }

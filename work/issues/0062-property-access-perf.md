@@ -49,6 +49,16 @@ and implement it.
   scratch ab.py/micro_ab.py): global read 10.4 -> 1.3 ns; test262 decodeURI test -13%;
   engine track within noise (float -4%: its time is the prelude Math functions). Found
   that default release builds vary ±15% between builds from layout (noted in D1620).
+  Merged (main 09e5bc2).
+- Part 1b, own-property caches: get_field/get_method/put_field hit an own data
+  property through the site's slot in `fast_step` (`fast_field`); the slow path fills it
+  (`lookup_ic`, PutField after `set_own_data_value`). Only non-index keys are cached, so
+  an own property is always a table entry. Tests: e2e field_caches.js (14 receiver
+  kinds incl. proxies, typed arrays, wrappers, frozen, getters; changes under the
+  cache), warm/cold restore test extended. The machine is at load 25-30, so timings are
+  CPU-time min-of-7 of interleaved LTO builds: engine/props -14..-18% (stable); own read
+  ~6.5 -> ~1.7 ns, 4th of 4 14.7 -> 5.8, own write 15.7 -> 10.2, m.PI 9.4 -> 2.5; other
+  engine benches within the noise (±10%).
 
 ## Follow-ups
 

@@ -117,6 +117,9 @@ mod fast {
     pub const CALL_INTRINSIC: u8 = Op::CallIntrinsic as u8;
     pub const GET_ELEM: u8 = Op::GetElem as u8;
     pub const PUT_ELEM: u8 = Op::PutElem as u8;
+    pub const GET_FIELD: u8 = Op::GetField as u8;
+    pub const GET_METHOD: u8 = Op::GetMethod as u8;
+    pub const PUT_FIELD: u8 = Op::PutField as u8;
 }
 
 type Step = Result<Option<Status>, Fault>;
@@ -1028,6 +1031,7 @@ impl<'h> Exec<'h> {
             fast::RETURN_UNDEF => return self.fast_return(Op::ReturnUndef),
             fast::CALL_INTRINSIC => return self.fast_intrinsic(),
             fast::GET_ELEM | fast::PUT_ELEM => return self.fast_elem(sp0),
+            fast::GET_FIELD | fast::GET_METHOD | fast::PUT_FIELD => return self.fast_field(sp0),
             _ => return false,
         }
         true
@@ -1759,14 +1763,17 @@ impl<'h> Exec<'h> {
             // ---- properties ----
             Op::GetField => {
                 let key = self.imm_atom();
+                let ic = self.imm_u16(5);
                 let o = self.top(0);
                 self.pc = next;
-                return self.get_property(o, key);
+                let got = self.lookup_ic(o, key, ic)?;
+                return self.get_property_got(o, key, got);
             }
             Op::GetMethod => {
                 let key = self.imm_atom();
+                let ic = self.imm_u16(5);
                 let o = self.top(0);
-                match self.lookup(o, key)? {
+                match self.lookup_ic(o, key, ic)? {
                     Got::Value(f) => {
                         self.set(self.sp - 1, f);
                         self.push(o);
@@ -1789,11 +1796,17 @@ impl<'h> Exec<'h> {
             }
             Op::PutField => {
                 let key = self.imm_atom();
+                let ic = self.imm_u16(5);
                 let (o, v) = (self.top(1), self.top(0));
                 let Some(obj) = o.as_object() else {
                     return self.put_on_primitive(o, key, v, 2, next);
                 };
                 self.pc = next;
+                if self.heap.set_own_data_value(obj, key, v) {
+                    self.ic_own_fill(obj, key, ic);
+                    self.sp -= 2;
+                    return Ok(None);
+                }
                 return self.set_property(obj, key, v, 2);
             }
             Op::GetElem => {
@@ -2598,7 +2611,31 @@ impl<'h> Exec<'h> {
     /// [`Exec::lookup`] on the chain of an object.
     #[inline]
     fn lookup_object(&mut self, o: Obj, key: Atom) -> Result<Got, Fault> {
-        Ok(match self.heap.lookup_property(o, key) {
+        let l = self.heap.lookup_property(o, key);
+        self.got_of(l, key)
+    }
+
+    /// [`Exec::lookup`] for an access site with inline cache `ic`: an own data property
+    /// of an object receiver fills the cache (D1620).
+    #[inline]
+    fn lookup_ic(&mut self, o: Value, key: Atom, ic: u32) -> Result<Got, Fault> {
+        let Some(obj) = o.as_object() else {
+            return self.lookup(o, key);
+        };
+        let l = self.heap.lookup_property(obj, key);
+        if let Lookup::Found(h, Property::Data { value, .. }) = l
+            && h == obj
+            && !value.is_hole()
+        {
+            self.ic_own_fill(obj, key, ic);
+        }
+        self.got_of(l, key)
+    }
+
+    /// The [`Got`] of a heap lookup.
+    #[inline]
+    fn got_of(&mut self, l: Lookup, key: Atom) -> Result<Got, Fault> {
+        Ok(match l {
             // A BigInt typed array element needs its allocation.
             Lookup::Found(h, Property::Data { value, .. }) if value.is_hole() => {
                 Got::Value(self.heap.materialize_value(h, key, value)?)
@@ -2622,7 +2659,13 @@ impl<'h> Exec<'h> {
     /// Replaces the object at `sp - 1` with `o[key]`, calling a getter if needed. `pc` is
     /// already the next instruction.
     fn get_property(&mut self, o: Value, key: Atom) -> Step {
-        match self.lookup(o, key)? {
+        let got = self.lookup(o, key)?;
+        self.get_property_got(o, key, got)
+    }
+
+    /// [`Exec::get_property`] with the lookup done.
+    fn get_property_got(&mut self, o: Value, key: Atom, got: Got) -> Step {
+        match got {
             Got::Value(v) => {
                 self.set(self.sp - 1, v);
                 Ok(None)

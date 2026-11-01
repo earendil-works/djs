@@ -1,0 +1,35 @@
+1|3|4|proto||array prop||wrapper prop|trap a|plain target||fn prop|frozen|getter
+1|3|4|proto||array prop||wrapper prop|trap a|plain target||fn prop|frozen|getter
+set
+set
+set
+set
+set
+set
+set
+set
+trap a
+set
+set
+set
+TypeError
+TypeError
+set|set|set|set|set|set|set|set|trap a|set|set|set|frozen|getter
+2
+undefined
+back again
+setter 9
+now a getter now a getter
+read-only
+TypeError: 'a' is read-only
+big a
+big a big set big set
+own m
+own m2
+class m
+own m
+arrow m
+TypeError: not a function
+TypeError: cannot read property 'm' of null
+2,3,7,2
+5 zero q
