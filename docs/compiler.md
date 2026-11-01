@@ -503,6 +503,12 @@ Runtime constructs (compiler/ts_decl.rs, D1482 to D1484):
   entry in a base class, right after `super()` in a derived one) and assigned
   `this.x = x` after the parameters (after the field initializers in a derived class).
 
+strip-types mode (`Parser::strip`, only `compiler::strip_types`) also parses module
+syntax (compiler/module.rs, D1485) and records what ts-blank-space needs to reproduce
+its output: erased type-only statements get a `;` when the JS before them did not end
+with one (`Parser::ts_semi`, reset in function bodies), an `as` that ends a statement
+without `;` too, and generics or arrow return types that span lines move a `(` or `)`.
+
 Every erased range is recorded (when `Parser::erased` is on) by the code that commits
 to it, never inside speculation. `compiler::strip_types` blanks them like ts-blank-space
 (one space per UTF-16 unit, line breaks kept) for `djs strip-types`, the parse-only

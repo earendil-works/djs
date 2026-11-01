@@ -2430,3 +2430,12 @@ code. After pi's lockdown, the native prototypes' `name`s are accessors, so erro
 displayed as ": message". When `name` is not a data string, the summary now uses the
 nearest native error prototype on the chain (TypeError, ..., Error). An own `name`, such as
 one set by a subclass through the lockdown's setter, still wins.
+
+## D1485: strip-types parses module syntax; djs still has no modules
+date: 2026-11-03 · by: lexer · issue: 0048
+The strip-types oracle's corpus (TypeScript's sources and conformance tests) is ES
+modules, so `compiler::strip_types` sets `Parser::strip`, which accepts `import` and
+`export` declarations, `import(...)` and `import.meta` (compiled to placeholders, never
+run) and erases type-only imports, exports and specifiers as ts-blank-space does. Normal
+compilation is unchanged: `import`/`export` stay "unsupported keyword" errors.
+
