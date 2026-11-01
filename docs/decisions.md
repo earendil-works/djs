@@ -3325,3 +3325,21 @@ written (D1700) and reused when the accessor is redefined. Pairs are never share
 `heap::walk::verify` checks that every live accessor entry points at a pair. The reader
 skips accessors as before, so it needs only the regenerated layout. The first step of the
 shapes design (docs/objects.md §7): 0052 S2's first item.
+
+## D016: wasm32 is the primary target for performance and memory design
+date: 2026-11-01 · by: coordinator (owner direction) · issue: -
+djs ships as wasm32 for all practical purposes. Memory and performance decisions are
+judged first by their effect in wasm32 (node/V8's wasm tier), and native builds are a
+development convenience. In practice:
+- measure the important numbers in the wasm build (scripts/build-wasm.sh, node), not only
+  natively;
+- design layouts for a 32-bit address space and linear memory: u32 offsets, 4-byte
+  fields where 8 aren't needed, compact cells, little padding; memory grows in 64 KiB
+  pages and `memory.grow` has a cost (arena growth policy);
+- wasm already bounds-checks every load and store against linear memory, so our own
+  arena bounds checks (D1260) are a second check: removing or hoisting them (e.g. one
+  check per cell, 0052 S3) matters more in wasm than natively;
+- 64-bit values (the NaN-boxed `Value`) are native i64 operations in wasm and fine; no
+  SIMD unless explicitly decided (0077: `+simd128` is cheap but drops SIMD-less
+  embedders);
+- code size counts (ARCH G2), so prefer table-driven or out-of-line code on cold paths.

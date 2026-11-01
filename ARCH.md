@@ -3,7 +3,8 @@
 Status: initial proposal, meant to be argued with.
 
 djs is a small JavaScript + TypeScript interpreter written in `no_std` Rust (with `alloc`).
-It is primarily meant to be compiled to WebAssembly and hosted from JavaScript (pi's
+It is primarily meant to be compiled to WebAssembly (wasm32 is the target that memory and
+performance design is judged by, D016) and hosted from JavaScript (pi's
 codemode), replacing QuickJS / dquickts there. Behavior should roughly match
 `~/Development/dquickts`, which is also the test oracle.
 
