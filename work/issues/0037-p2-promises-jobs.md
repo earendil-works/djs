@@ -53,6 +53,8 @@ the ops defined here.
 - Land in parts: Promise + job queue first; then async host calls; then frames.
 
 ## Log
+- test_rope item dropped by the coordinator: infra fixed it on main (string leaves flatten
+  the rope once; ratchets updated in 8ab7e30). The branch already contains a05575b.
 
 ## Follow-ups
 
