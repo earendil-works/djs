@@ -1,7 +1,7 @@
 # 0079: Integration and test efficiency (investigation + proposals, then implementation)
 
-status: open
-agent: -
+status: in-progress
+agent: devflow
 branch: issue/0079-integration-efficiency
 depends-on: 0053
 touches: work/issues/0079-integration-efficiency.md (report first); later, after coordinator approval: scripts/gate.sh, scripts/merge-to-main.sh, a gate worktree setup, test runners
