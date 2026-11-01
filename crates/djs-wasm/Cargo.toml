@@ -1,0 +1,14 @@
+[package]
+name = "djs-wasm"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The wasm32 export layer over djs-core's Vm (docs/host.md)."
+
+[lib]
+# cdylib: the .wasm module; rlib: so native unit tests can call the exports.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+djs-core = { path = "../djs-core" }
