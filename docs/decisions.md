@@ -5885,6 +5885,7 @@ the arena grows further between them. pi runs many VMs and memory was the target
 D2041–D2053, so 2–4% of instructions don't buy +0.3–0.9 MiB per VM. Reopen if
 instructions matter more than per-VM memory.
 ## D2340: Heap views show the program's own cells apart from the base realm
+## D2340: Heap views show the program's own cells apart from the base realm; REPL dumps are containers
 date: 2026-11-07 · by: bloat · issue: 0135
 A fresh VM is a copy of the base snapshot: about 5,800 cells and 320 KB of builtins,
 their bytecode, templates and names (0135). Every heap view used to report the arena as
@@ -5894,3 +5895,10 @@ names the base realm's cells and bytes separately, with the total; a base cell t
 program grew (the atom table, the global object's properties) is reallocated after the
 base and counts as the program's. After *Collect now* the compaction slides cells, so the
 split is by the same offset and approximate.
+The REPL's `.snapshot` writes a snapshot container (app 3, `repl`, metadata `{}`)
+compressed against the base image by default, through djs-cli's container module (0133):
+a small session is ~16 KB instead of its ~330 KB image; `.snapshot --raw` writes the
+image. `.restore` reads containers of any app (decompressed with this build's base) and
+raw images. `.heap` runs `djs heap`'s analyzer over the live VM against the base image:
+by default the summary and the diff, which lists the session's new cells and the base
+cells it changed apart from the base realm.

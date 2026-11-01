@@ -180,16 +180,29 @@ fn snapshot_and_restore() {
     ));
     let lines: Vec<&str> = out.lines().collect();
     assert!(
-        lines[0].starts_with("wrote ") && lines[0].ends_with(&snap),
+        lines[0].starts_with("wrote ") && lines[0].contains(&snap),
         "{out}"
     );
     assert_eq!(lines[1], "a fresh VM");
     assert_eq!(lines[2], "'undefined'");
     assert!(lines[3].starts_with("restored "), "{out}");
     assert_eq!(&lines[4..], ["{ v: [ 1, 2 ] }", "42"]);
+    // The default is a container compressed against the base image (D2340): a fraction
+    // of the image, and named so when restored.
+    let size = std::fs::metadata(&snap).unwrap().len();
+    assert!(size < 64 * 1024, "{size}");
+    assert_eq!(&std::fs::read(&snap).unwrap()[..4], b"DJSN");
+    assert!(lines[3].contains("DJSN container (repl"), "{out}");
     // A new process restores it too.
     let out = repl(&format!(".restore {snap}\ntwice(kept.v[1])\n"));
     assert!(out.ends_with("\n4\n"), "{out}");
+    // `--raw` writes the image itself, which restores as well.
+    let out = repl(&format!(
+        "let r = 7\n.snapshot --raw {snap}\n.restore {snap}\nr\n"
+    ));
+    assert!(out.contains("(the heap image)"), "{out}");
+    assert!(out.ends_with("(raw image)\n7\n"), "{out}");
+    assert!(std::fs::metadata(&snap).unwrap().len() > 200 * 1024);
     std::fs::remove_file(&snap).unwrap();
     check(
         ".restore /nonexistent/x.img\n",
@@ -199,9 +212,11 @@ fn snapshot_and_restore() {
 
 #[test]
 fn meta_commands() {
-    let out = repl(".gc\n.heap\n.time on\n1\n.fuel\n");
+    let out = repl(".gc\n.heap\n.heap kinds\n.time on\n1\n.fuel\n");
     assert!(out.starts_with("arena: "), "{out}");
-    assert!(out.contains("\nFuncTemplate "), "{out}");
+    // `.heap`: the session apart from the base realm (D2340).
+    assert!(out.contains("== diff against the base image\n"), "{out}");
+    assert!(out.contains("  FuncTemplate "), "{out}");
     assert!(out.contains("\ntiming: on\n1\n("), "{out}");
     assert!(out.contains("fuel)\nlast input: "), "{out}");
     let out = repl("function f(a) { return a + 1 }\n.disasm f\n.disasm let q = 1\n");
@@ -211,7 +226,7 @@ fn meta_commands() {
         ".nope\n.exit\n1\n",
         "unknown command or missing argument: .nope (.help lists them)\n",
     );
-    assert!(repl(".help\n").contains(".snapshot <file>"));
+    assert!(repl(".help\n").contains(".snapshot [--raw] <file>"));
 }
 
 #[test]

@@ -173,7 +173,6 @@ pub fn run(
 }
 
 /// Analyzes a heap image held in memory (the REPL's VM), against a reference image.
-#[allow(dead_code)] // the REPL's `.heap` next
 pub fn analyze_image(
     image: &[u8],
     reference: Option<(&str, &[u8])>,

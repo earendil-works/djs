@@ -20,6 +20,8 @@ const HEADER: usize = 40;
 /// The app byte: what the metadata is.
 pub const APP_SANDBOX: u8 = 1;
 pub const APP_PI_SESSION: u8 = 2;
+/// The djs REPL's `.snapshot` (D2340): metadata `{}`.
+pub const APP_REPL: u8 = 3;
 
 pub const REFERENCE_NONE: u8 = 0;
 /// This build's base snapshot (`djs_prelude::BASE`).
@@ -31,7 +33,6 @@ pub const COMPRESSION_NONE: u8 = 0;
 pub const COMPRESSION_ZSTD: u8 = 1;
 
 /// js/src/snapshot.ts's `DEFAULT_ZSTD_LEVEL` (D2261).
-#[allow(dead_code)] // the writer's: the REPL's `.snapshot` next
 pub const DEFAULT_LEVEL: i32 = 3;
 
 /// The header fields of a container.
@@ -78,6 +79,7 @@ impl Header {
         match self.app {
             APP_SANDBOX => "sandbox".into(),
             APP_PI_SESSION => "pi session".into(),
+            APP_REPL => "repl".into(),
             n => format!("app {n}"),
         }
     }
@@ -282,7 +284,6 @@ pub fn image_of(bytes: &[u8]) -> Result<Vec<u8>, String> {
 
 /// A container as js/src/snapshot.ts writes it: `image` compressed with zstd at `level`
 /// against `reference` (kind, bytes), or stored as it is without one.
-#[allow(dead_code)] // the REPL's `.snapshot` next; the tests now
 pub fn write(
     app: u8,
     build: u32,
@@ -321,7 +322,6 @@ pub fn write(
 
 /// zstd with `reference` as a raw-content dictionary, a content checksum and a window
 /// covering the reference and the image (D2261).
-#[allow(dead_code)]
 fn compress(image: &[u8], reference: &[u8], level: i32) -> std::io::Result<Vec<u8>> {
     use zstd::zstd_safe::CParameter;
     let mut c = zstd::bulk::Compressor::with_dictionary(level, reference)?;

@@ -20,7 +20,7 @@ REPL.
 
 ## `djs heap`
 
-What is in a heap dump (D2264): a raw image (`.snapshot` of the REPL, `Vm::bytes`), a
+What is in a heap dump (D2264): a raw image (`.snapshot --raw` of the REPL, `Vm::bytes`), a
 snapshot container (`Sandbox.bytes()`, pi's `snapshot()`, D2260) or an older DJSS/DJPI
 snapshot. Sections (`--only summary,kinds,...` picks some; `--json` prints one object with
 a key per section):
@@ -86,9 +86,9 @@ suspending every 300 fuel
 | `.complete <text>` | the Tab completions for `text` (what Tab offers in the editor) |
 | `.time [on\|off]` | after each input: wall time (compile and run) and fuel |
 | `.gc` | collect; the arena size before and after |
-| `.heap` | arena bytes used, allocated and the limit, handles, atoms, then cells per kind and objects per class (count and bytes), largest first |
-| `.snapshot <file>` | collect, then write the heap image (`vm.bytes()`): the whole VM |
-| `.restore <file>` | replace the VM with `Vm::from_bytes` of a file. It must come from the same build (the build hash is checked). Images from `djs repl` and `djs run` both work: `console` is host function 1 in both |
+| `.heap [sections]` | arena bytes used, allocated and the limit, handles, atoms; then `djs heap`'s sections over the live VM against the base image (default `summary,diff`: the session's own cells and the base cells it changed, apart from the base realm every VM starts with; `all`, or a list such as `kinds,largest`) (D2340) |
+| `.snapshot [--raw] <file>` | collect, then write a snapshot container (app 3, `repl`) compressed against the base image: about 16 KB for a small session instead of its ~330 KB image. `--raw` writes the image itself (`vm.bytes()`) |
+| `.restore <file>` | replace the VM with one restored from a container (any app; decompressed with this build's base) or a raw image. It must come from the same build (the build hash is checked). Images from `djs repl` and `djs run` both work: `console` is host function 1 in both |
 | `.clear` | a fresh VM |
 
 ### Input

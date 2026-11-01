@@ -15,8 +15,7 @@ use std::time::Instant;
 
 use djs_core::bytecode::template::disasm_template;
 use djs_core::compiler::{self, CompileError, CompileErrorKind, CompileOptions};
-use djs_core::heap::cells::Object;
-use djs_core::heap::{CellKind, ObjectClass, Ref};
+use djs_core::heap::{ObjectClass, Ref};
 use djs_core::value::Value;
 use djs_core::vm::{ExecOptions, Status, Vm, VmOptions};
 
@@ -47,9 +46,12 @@ const HELP: &str = "\
 .complete <text>      the Tab completions for text (globals and properties)
 .time [on|off]        show the time and fuel each input takes
 .gc                   collect garbage, show the arena before and after
-.heap                 arena size and limit, cells per kind, objects per class
-.snapshot <file>      write the heap image (after a collection)
-.restore <file>       replace the VM with one restored from a heap image
+.heap [sections]      what is in the heap: this session's cells apart from the base
+                      realm every VM starts with (`djs heap` sections, default
+                      summary,diff; `all` for every section)
+.snapshot [--raw] <file>  collect, then write a snapshot container compressed against
+                      the base image (--raw: the plain heap image)
+.restore <file>       replace the VM with one restored from a container or image
 .clear                start over with a fresh VM
 
 Ctrl-C cancels the line, or stops a running input between fuel slices.
@@ -655,26 +657,25 @@ impl Repl {
                     Err(e) => println!("collection failed: {e:?}"),
                 }
             }
-            ".heap" => self.heap_stats(),
-            ".snapshot" if !arg.is_empty() => {
-                if let Err(e) = self.vm.collect() {
-                    println!("collection failed: {e:?}");
-                    return None;
-                }
-                match std::fs::write(arg, self.vm.bytes()) {
-                    Ok(()) => println!("wrote {} bytes to {arg}", self.vm.bytes().len()),
-                    Err(e) => println!("cannot write {arg}: {e}"),
-                }
-            }
+            ".heap" => self.heap_report(arg),
+            ".snapshot" if !arg.is_empty() => self.snapshot(arg),
             ".restore" if !arg.is_empty() => match std::fs::read(arg) {
                 Ok(bytes) => {
                     let n = bytes.len();
-                    match Vm::from_bytes(bytes, self.vm.options()) {
+                    let snap = match crate::container::read(&bytes, None) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            println!("cannot read {arg}: {e}");
+                            return None;
+                        }
+                    };
+                    let what = snap.describe();
+                    match Vm::from_bytes(snap.image, self.vm.options()) {
                         Ok(vm) => {
                             self.vm = vm;
-                            println!("restored {n} bytes from {arg}");
+                            println!("restored {n} bytes from {arg} ({what})");
                         }
-                        Err(e) => println!("not a heap image of this build: {e:?}"),
+                        Err(e) => println!("not a heap image of this build: {e}"),
                     }
                 }
                 Err(e) => println!("cannot read {arg}: {e}"),
@@ -756,7 +757,18 @@ impl Repl {
         None
     }
 
-    fn heap_stats(&self) {
+    /// `.heap [sections]`: the analyzer of `djs heap` over the live VM's image, against
+    /// the base image, so the session's own cells show apart from the base realm (D2340).
+    fn heap_report(&self, arg: &str) {
+        let only = match arg {
+            "" => Some(vec!["summary".into(), "diff".into()]),
+            "all" => None,
+            a => Some(a.split(',').map(|k| k.trim().to_string()).collect()),
+        };
+        let o = crate::heap::Options {
+            only,
+            ..Default::default()
+        };
         let heap = self.vm.heap();
         let a = heap.arena();
         println!(
@@ -767,43 +779,55 @@ impl Repl {
             heap.handle_count(),
             heap.atom_count()
         );
-        let mut kinds: Vec<(CellKind, usize, u64)> = Vec::new();
-        let mut classes: Vec<(ObjectClass, usize, u64)> = Vec::new();
-        let mut unknown = 0usize;
-        for c in heap.cells() {
-            match kinds.iter_mut().find(|k| k.0 == c.kind) {
-                Some(k) => {
-                    k.1 += 1;
-                    k.2 += u64::from(c.size);
+        let image = self.vm.bytes();
+        match crate::heap::analyze_image(image, Some(("the base image", djs_prelude::BASE)), &o) {
+            Ok(sections) => print!("{}", crate::heap::to_text(&sections)),
+            Err(e) => println!("cannot analyze the heap: {e}"),
+        }
+    }
+
+    /// `.snapshot [--raw] <file>`: collects, then writes a container compressed against
+    /// the base image (D2260), or with `--raw` the image itself (D2340).
+    fn snapshot(&mut self, arg: &str) {
+        let (raw, path) = match arg.strip_prefix("--raw") {
+            Some(rest) => (true, rest.trim()),
+            None => (false, arg),
+        };
+        if path.is_empty() {
+            println!(".snapshot needs a file");
+            return;
+        }
+        if let Err(e) = self.vm.collect() {
+            println!("collection failed: {e:?}");
+            return;
+        }
+        let image = self.vm.bytes().to_vec();
+        let bytes = if raw {
+            image.clone()
+        } else {
+            match crate::container::write(
+                crate::container::APP_REPL,
+                djs_core::vm::BUILD_HASH,
+                "{}",
+                &image,
+                Some((crate::container::REFERENCE_BASE, djs_prelude::BASE)),
+                crate::container::DEFAULT_LEVEL,
+            ) {
+                Ok(b) => b,
+                Err(e) => {
+                    println!("cannot write the container: {e}");
+                    return;
                 }
-                None => kinds.push((c.kind, 1, u64::from(c.size))),
             }
-            if c.kind == CellKind::Object {
-                let class: u32 = a.get(c.offset, Object::CLASS);
-                match ObjectClass::from_u32(class) {
-                    Some(cl) => match classes.iter_mut().find(|k| k.0 == cl) {
-                        Some(k) => {
-                            k.1 += 1;
-                            k.2 += u64::from(c.size);
-                        }
-                        None => classes.push((cl, 1, u64::from(c.size))),
-                    },
-                    None => unknown += 1,
-                }
-            }
-        }
-        kinds.sort_by_key(|k| std::cmp::Reverse(k.2));
-        classes.sort_by_key(|k| std::cmp::Reverse(k.2));
-        println!("{:<22} {:>8} {:>10}", "cell kind", "cells", "bytes");
-        for (k, n, b) in &kinds {
-            println!("{:<22} {n:>8} {b:>10}", k.layout().name);
-        }
-        println!("{:<22} {:>8} {:>10}", "object class", "objects", "bytes");
-        for (k, n, b) in &classes {
-            println!("{:<22} {n:>8} {b:>10}", format!("{k:?}"));
-        }
-        if unknown > 0 {
-            println!("({unknown} objects of an unknown class)");
+        };
+        match std::fs::write(path, &bytes) {
+            Ok(()) if raw => println!("wrote {} bytes to {path} (the heap image)", bytes.len()),
+            Ok(()) => println!(
+                "wrote {} bytes to {path} (a {} byte image, zstd against the base image)",
+                bytes.len(),
+                image.len()
+            ),
+            Err(e) => println!("cannot write {path}: {e}"),
         }
     }
 }

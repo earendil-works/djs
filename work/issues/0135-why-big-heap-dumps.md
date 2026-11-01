@@ -1,6 +1,6 @@
 # 0135: Why are REPL heap dumps ~450 KB and the docs' heaps ~6000 cells?
 
-status: in-progress
+status: done
 agent: bloat
 branch: issue/0135-heap-dump-size
 depends-on: 0117, 0127
@@ -27,16 +27,24 @@ the docs show almost 6000 active cells. That's silly."
      bytes saved and the cost to vm_new and determinism.
 
 ## Acceptance criteria
-- [ ] A clear answer with numbers (use 0133's analyzer if it has landed, or the REPL's
+- [x] A clear answer with numbers (use 0133's analyzer if it has landed, or the REPL's
       `.heap` and the walker).
-- [ ] Land the presentation fixes (REPL default, Heap tab) if they're small.
-- [ ] Substance changes as a ranked proposal for the coordinator/owner, not built here
+- [x] Land the presentation fixes (REPL default, Heap tab) if they're small.
+- [x] Substance changes as a ranked proposal for the coordinator/owner, not built here
       unless trivial.
 
 ## Log
 - Measured with the REPL's `.heap`/`.snapshot`, perf's image-kinds.py, a scratch walker
   (crates/djs-prelude/examples, not committed) and a QuickJS memory-usage program over
   dquickts's sources (copied to work/scratch/0123, never built in place).
+- Presentation (D2340): the docs Heap tab shows the program's cells apart from the base
+  realm (live.js; guide arena.md and gc.md sentences updated). After snapshot's 0133
+  landed its container module and analyzer, the REPL uses them: `.snapshot` writes a
+  container (new app 3 `repl`, docs/host.md) compressed against the base, `--raw` the
+  image; `.restore` reads both; `.heap [sections]` is the analyzer against the base
+  (default summary + diff). Removed the container/analyzer `#[allow(dead_code)]`s. A
+  small REPL session: 16.4 KB (container) vs 341 KB (raw); the analyzer's diff names the
+  atom entries array (30.3 KB of the 34.6 KB that differs) as proposal 1's target.
 
 ## Findings (main b8fb03ae; native REPL, same image as the wasm module's base)
 
@@ -138,3 +146,13 @@ data vs the base; the docs Heap tab shows the program's own cells separately.
 ## Follow-ups
 
 ## Result
+Answer and proposal above (Findings, Proposal). A fresh VM is ~5,800 cells and ~320 KB
+because the builtins are JS: each of 874 functions is an object, a template, bytecode and
+tables in every VM's heap (3,723 cells, 217 KB); QuickJS has 1,097 allocations / 77 KB
+after JS_NewContext (lazy builtins; 2,085 / 125 KB fully touched). REPL dumps were raw
+images (now containers: 16 KB for a small session). Dump size beyond that is mostly
+layout: growing the atom table and the global object's properties moves them past the
+base and shifts 250 KB of base cells. Presentation landed (D2340); substance ranked as a
+proposal: growable base cells last with slack (16 → 1–3 KB dumps), atom table growth,
+builtin code outside the arena (−178 KB and −2,850 cells per VM), lazy builtins,
+helper functions without objects.

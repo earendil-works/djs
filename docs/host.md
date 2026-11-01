@@ -173,7 +173,7 @@ the session started from (D2262). Little-endian:
 | ---: | ---: | --- |
 | 0 | 4 | magic `"DJSN"` (`0x4e534a44`) |
 | 4 | 2 | format version, 1 |
-| 6 | 1 | app, which says what the metadata is: 1 Sandbox, 2 pi session |
+| 6 | 1 | app, which says what the metadata is: 1 Sandbox, 2 pi session, 3 the djs REPL (`{}`) |
 | 7 | 1 | compression: 0 none, 1 zstd |
 | 8 | 4 | the engine build hash (`djs_build_hash`) |
 | 12 | 1 | the reference: 0 none, 1 the base image, 2 pi's prelude image |
