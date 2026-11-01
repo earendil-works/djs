@@ -1,7 +1,7 @@
 # 0012: Native JSON (leaf): parse and stringify fast path
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0012-json-leaf
 depends-on: 0004, 0009
 touches: crates/djs-core/src/json/, crates/djs-core/src/heap/ (small additions only, listed in the Log), tests/data/json/, crates/djs-core/src/lib.rs (mod lines only)
