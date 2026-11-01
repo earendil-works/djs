@@ -154,6 +154,19 @@ test("async host functions run concurrently", async () => {
   sb.dispose();
 });
 
+test("the clock and time zone come from the host", async () => {
+  const sb = await Sandbox.create();
+  const t = sb.run("return Date.now()") as number;
+  assert.ok(Math.abs(t - Date.now()) < 5000, `Date.now() in the VM: ${t}`);
+  const fixed = await Sandbox.create({ now: 1_646_177_400_000, timeZoneOffset: 120 });
+  assert.equal(fixed.run("const d = new Date(); return d.toISOString() + ' ' + d.getHours()"), "2022-03-01T23:30:00.000Z 1");
+  let tick = 0;
+  const ticking = await Sandbox.create({ now: () => 1000 * ++tick, timeZoneOffset: 0 });
+  assert.equal(ticking.run("return Date.now()"), 1000);
+  assert.equal(ticking.run("return Date.now()"), 2000);
+  for (const s of [sb, fixed, ticking]) s.dispose();
+});
+
 test("syntax errors", async () => {
   const sb = await Sandbox.create();
   assert.throws(() => sb.run("return )"), (e: unknown) => e instanceof SandboxError && e.kind === "syntax");

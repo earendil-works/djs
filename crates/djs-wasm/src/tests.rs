@@ -274,3 +274,20 @@ fn async_host_calls() {
     assert_eq!(vm_promise_state(vm, r), 0);
     vm_free(vm);
 }
+
+#[test]
+fn host_clock() {
+    let vm = vm_new(0);
+    vm_set_now(vm, 1_646_177_400_000.0);
+    vm_set_time_zone_offset(vm, 120);
+    let f = compile_body(
+        vm,
+        "",
+        "const d = new Date(); return d.toISOString() + ' ' + d.getHours()",
+    );
+    call(vm, f, &[]);
+    assert_eq!(vm_run(vm, 1_000_000), status::DONE);
+    let r = vm_result(vm);
+    assert_eq!(display(vm, r), "2022-03-01T23:30:00.000Z 1");
+    vm_free(vm);
+}

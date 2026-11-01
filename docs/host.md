@@ -26,6 +26,8 @@ const sb = await Sandbox.create({
   memoryLimit: 64 << 20,         // heap cap in bytes; default 4 GiB
   fuelSlice: 1_000_000,          // fuel per vm_run, i.e. how often the host gets control
   maxFuel: 1e9,                  // per run; default unlimited
+  now: Date.now,                 // the VM's clock (ms), a function or a fixed time; default Date.now
+  timeZoneOffset: 0,             // minutes east of UTC; default: the host's current offset
 });
 sb.run("return readFile(path).length", { path: "README.md" });   // codemode function body
 await sb.runAsync("return await fetchJson(url)", { url });       // host functions may return promises
@@ -58,6 +60,10 @@ sb.dispose();
   pending calls are left (IDLE) awaits whichever settles first, passes its result back and
   runs on. The function may return a value or a promise (`run` accepts only values). A
   rejection or a thrown error rejects the VM promise with an Error of the same kind.
+- The VM reads no clock (D1383, ARCH "Nondeterminism"): before every fuel slice the
+  Sandbox sets `Date.now()` from `opts.now` (default `Date.now`; a number fixes it, for
+  replays) and the local time zone from `opts.timeZoneOffset` (minutes east of UTC, no
+  DST; default the host's offset at that time). Without a host clock `Date.now()` is 0.
 - A promise as the result is unwrapped: its value, or `threw` with its reason; a promise
   that can never settle is a `threw` error.
 - `defineFunction(name, f)`, `defineAsyncFunction(name, f)` and `setGlobal(name, value)`
@@ -80,7 +86,7 @@ sb.dispose();
 
 ## The ABI
 
-Exports take and return only `i32`s. There are no imports: the module needs nothing from
+Exports take and return only `i32`s, except `vm_set_now`'s `f64`. There are no imports: the module needs nothing from
 the host, so `WebAssembly.instantiate(module, {})` works anywhere. `djs_abi_version()`
 returns `1` and is bumped on any incompatible change. The Sandbox checks it.
 
@@ -121,6 +127,8 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_display(vm, h) -> len` | out = the value as `djs run`'s console.log shows it |
 | `vm_call(vm, f, this, argc) -> 0/-1` | start a call; argument handles as u32 LE in staging |
 | `vm_run(vm, fuel) -> status` | 0 DONE, 1 THREW, 2 OUT_OF_FUEL, 3 HOST_CALL, 4 IDLE |
+| `vm_set_now(vm, ms: f64)` | the clock `Date` reads, ms since the epoch (D1383); set it before every `vm_run` |
+| `vm_set_time_zone_offset(vm, minutes)` | the local time zone, minutes east of UTC (default 0) |
 | `vm_abort(vm)` | abandon the current call (out of fuel or parked): the VM is idle and usable again |
 | `vm_result(vm) -> h` | the DONE/THREW value, once |
 | `vm_host_call(vm) -> argc` | out = `[call_id, fn_id, this lo, hi, (arg lo, hi)*]` |

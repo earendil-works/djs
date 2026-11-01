@@ -36,6 +36,17 @@ export interface SandboxOptions {
   asyncFunctions?: Record<string, HostFunction>;
   /** Receives `console.*` calls from the sandbox; default: the host's `console`. */
   console?: ConsoleLike;
+  /**
+   * The clock `Date.now()` and `new Date()` see, in ms since the epoch (the VM reads no
+   * clock itself, D1383): a fixed time (replays) or a function; default `Date.now`.
+   * Set before every fuel slice.
+   */
+  now?: number | (() => number);
+  /**
+   * The VM's local time zone, in minutes east of UTC (fixed, no DST); default: the
+   * host's current offset. Set before every fuel slice.
+   */
+  timeZoneOffset?: number;
 }
 
 export type SandboxErrorKind = "threw" | "syntax" | "fuel" | "trap" | "memory" | "misuse";
@@ -95,6 +106,8 @@ interface Exports {
   vm_promise_state(vm: number, h: number): number;
   vm_resolve_host_call(vm: number, callId: number, ok: number, value: number): number;
   vm_abort(vm: number): void;
+  vm_set_now(vm: number, ms: number): void;
+  vm_set_time_zone_offset(vm: number, minutes: number): void;
 }
 
 const modules = new Map<string, Promise<WebAssembly.Module>>();
@@ -478,7 +491,10 @@ export class Sandbox {
         inflight.delete(callId);
         this.complete(callId, ok, value);
       }
-      const st = this.guard(() => x.vm_run(vm, slice));
+      const st = this.guard(() => {
+        this.setClock();
+        return x.vm_run(vm, slice);
+      });
       for (const callId of this.newHostCalls()) {
         const { fnId, args } = this.callInfo(callId);
         let p: Promise<unknown>;
@@ -561,6 +577,14 @@ export class Sandbox {
       }
       this.complete(callId, ok, result);
     }
+  }
+
+  /** Passes the host clock and time zone to the VM (before every slice). */
+  private setClock(): void {
+    const { now, timeZoneOffset } = this.opts;
+    const ms = typeof now === "number" ? now : (now ?? Date.now)();
+    this.x.vm_set_now(this.vm, ms);
+    this.x.vm_set_time_zone_offset(this.vm, timeZoneOffset ?? -new Date(ms).getTimezoneOffset());
   }
 
   /** Calls host function `fnId` with arguments read from the VM. */

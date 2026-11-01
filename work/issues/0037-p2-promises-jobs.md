@@ -72,7 +72,9 @@ the ops defined here.
   - Tests: e2e promise_{basic,order,errors,unhandled}; difftest builtins/promise-jobs,
     errors/promise-rejected-result. test262: 562 more pass (all of built-ins/Promise
     except classes, eval, Proxy). difftest: result/promise.js passes.
-- Part 2 (async host calls), D1374:
+- Part 2 (async host calls), D1374. Plus (coordinator request) the host clock: djs-wasm
+  `vm_set_now`/`vm_set_time_zone_offset`; the Sandbox sets them before every slice
+  (`opts.now`, `opts.timeZoneOffset` for replays); docs/host.md.
   - VM: `OBJ_HOST_ASYNC` host functions return a promise and add a pending call;
     `Vm::new_async_host_function`, `new_host_calls`, `pending_host_calls`,
     `HostCallInfo::is_async`; `resolve_host_call` settles via a `%HostCallSettle` job.

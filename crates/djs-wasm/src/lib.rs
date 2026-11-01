@@ -618,6 +618,21 @@ pub extern "C" fn vm_run(vm: u32, fuel: u32) -> u32 {
     })
 }
 
+/// Sets the clock `Date.now()` and `new Date()` read, in ms since the epoch
+/// (`Vm::set_now`, D1383). The VM reads no system clock: the host sets it, typically
+/// before every `vm_run`. The only export with an f64 argument.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_set_now(vm: u32, ms: f64) {
+    with(|s| s.slot(vm).vm.set_now(ms))
+}
+
+/// Sets the local time zone as a fixed offset in minutes east of UTC
+/// (`Vm::set_time_zone_offset`; 0, UTC, by default).
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_set_time_zone_offset(vm: u32, minutes: i32) {
+    with(|s| s.slot(vm).vm.set_time_zone_offset(minutes))
+}
+
 /// Abandons the current call (after OUT_OF_FUEL, or while parked on a host call): the VM
 /// is idle and usable again, its globals intact (`Vm::abort`).
 #[unsafe(no_mangle)]
