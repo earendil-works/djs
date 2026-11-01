@@ -1,7 +1,7 @@
 # 0050: RegExp completion: \p property escapes, compact greedy loops, literal caching, promotion
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0050-regexp-completion
 depends-on: 0033
 touches: crates/djs-core/src/regexp/, crates/djs-core/src/unicode/ + scripts/gen-unicode.py (property tables), builtins/regexp.ts + crates/djs-core/src/builtins/ (regexp leaves), crates/djs-core/src/compiler/ (literal caching only, if done there), tests/test262.toml (promotion), ratchets
