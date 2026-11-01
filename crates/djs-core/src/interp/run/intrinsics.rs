@@ -140,6 +140,7 @@ const F64_TRUNC: u16 = id("F64Trunc");
 const COMPARE_STRINGS: u16 = id("CompareStrings");
 const STRING_CODE_POINTS: u16 = id("StringCodePoints");
 const SORT_PRIMITIVES: u16 = id("SortPrimitives");
+const ARRAY_SPLICE_DENSE: u16 = id("ArraySpliceDense");
 const INSTALL_CONSTRUCTOR: u16 = id("InstallConstructor");
 const INSTALL_ACCESSOR: u16 = id("InstallAccessor");
 const INSTALL_VALUE: u16 = id("InstallValue");
@@ -184,6 +185,17 @@ fn math_leaf(id: u16, x: f64, y: f64) -> Option<f64> {
         F64_TRUNC => libm::trunc(x),
         _ => return None,
     })
+}
+
+/// An array index key (a non-negative integral Number below 2^31) for the element fast
+/// paths.
+fn index_key(k: Value) -> Option<u32> {
+    if let Some(i) = k.as_int() {
+        return u32::try_from(i).ok();
+    }
+    k.as_number()
+        .filter(|&n| (0.0..2147483648.0).contains(&n) && (n as u32) as f64 == n)
+        .map(|n| n as u32)
 }
 
 fn bad_argument<T>(name: &str) -> Result<T, Fault> {
@@ -297,6 +309,15 @@ impl Exec<'_> {
                 None => return bad_argument(info.name),
             },
             GET | GET_V => {
+                // Dense elements first: builtins read arrays element by element.
+                if let (Some(o), Some(i)) = (a0.as_object(), index_key(arg(self, 1)))
+                    && let Some(v) = self.heap.get_element_fast(o, i)
+                {
+                    self.sp = base;
+                    self.push(v);
+                    self.pc = next;
+                    return Ok(None);
+                }
                 let key = conv::to_property_key(self.heap, arg(self, 1))?;
                 match self.lookup(a0, key)? {
                     Ok(v) => v,
@@ -330,6 +351,17 @@ impl Exec<'_> {
                 let Some(o) = a0.as_object() else {
                     return bad_argument(info.name);
                 };
+                // An Array's dense element (or the next one) takes the fast store: for
+                // those, defining a default data property and [[Set]] are the same.
+                if let Some(i) = index_key(arg(self, 1))
+                    && self.heap.object_class(o) == ObjectClass::Array
+                    && self.heap.set_element_fast(o, i, arg(self, 2))?
+                {
+                    self.sp = base;
+                    self.push(Value::UNDEFINED);
+                    self.pc = next;
+                    return Ok(None);
+                }
                 let key = conv::to_property_key(self.heap, arg(self, 1))?;
                 if !self.heap.create_data_property(o, key, arg(self, 2))? {
                     return type_error("could not define property");
@@ -558,6 +590,26 @@ impl Exec<'_> {
                 Some(s) => Value::object(string::code_points(self.heap, s)?),
                 None => return bad_argument(info.name),
             },
+            ARRAY_SPLICE_DENSE => {
+                let Some(o) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                let as_u32 = |v: Value| {
+                    v.as_number()
+                        .filter(|&n| (n as u32) as f64 == n)
+                        .map(|n| n as u32)
+                };
+                match (
+                    as_u32(arg(self, 1)),
+                    as_u32(arg(self, 2)),
+                    as_u32(arg(self, 3)),
+                ) {
+                    (Some(s), Some(d), Some(i)) => {
+                        Value::bool(self.heap.array_splice_dense(o, s, d, i)?)
+                    }
+                    _ => Value::FALSE,
+                }
+            }
             SORT_PRIMITIVES => match a0.as_object() {
                 Some(o) => Value::bool(array::sort_primitives(self.heap, o)?),
                 None => return bad_argument(info.name),

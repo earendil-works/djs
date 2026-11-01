@@ -217,6 +217,13 @@ declare function StringCodePoints(s: Str): Obj;
  * symbol. Returns false, leaving it unchanged, otherwise. @leaf
  */
 declare function SortPrimitives(list: Obj): boolean;
+/**
+ * Splice's element moves in one step on a plain dense Array (no holes, default
+ * attributes, extensible, writable length, no index properties on the prototype chain):
+ * o[start .. start + deleteCount) becomes itemCount undefined slots and `length`
+ * follows. False, with nothing changed, for any other object. @leaf
+ */
+declare function ArraySpliceDense(o: Obj, start: f64, deleteCount: f64, itemCount: f64): boolean;
 /** A new symbol; the description is a string or undefined. @leaf */
 declare function NewSymbol(description: Value): Sym;
 /** [[Description]] of a symbol: a string or undefined. @leaf */

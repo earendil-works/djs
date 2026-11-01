@@ -179,6 +179,7 @@ const I = {
   NumberToInt32: (n) => n | 0,
   NumberToUint32: (n) => n >>> 0,
   MathRandom: () => 0.5,
+  ArraySpliceDense: (o, start, deleteCount, itemCount) => false,
   CompareStrings: (a, b) => (check(typeof a === "string" && typeof b === "string", "CompareStrings"), a < b ? -1 : a > b ? 1 : 0),
   StringCodePoints: (s) => [...s],
   SortPrimitives: (list) => {

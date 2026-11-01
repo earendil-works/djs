@@ -114,6 +114,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("CompareStrings", L, 2, false),
     i("StringCodePoints", L, 1, false),
     i("SortPrimitives", L, 1, false),
+    i("ArraySpliceDense", L, 4, false),
     i("NewSymbol", L, 1, false),
     i("SymbolDescription", L, 1, false),
     i("SymbolFor", L, 1, false),

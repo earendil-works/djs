@@ -515,6 +515,9 @@ function ArrayPrototypeSplice(...args) {
 
 // builtins/array.ts:626
 function MoveElements(o, len, start, deleteCount, itemCount) {
+  if (deleteCount !== itemCount && %ArraySpliceDense(o, start, deleteCount, itemCount)) {
+    return;
+  }
   if (itemCount < deleteCount) {
     for (let k = start; k < len - deleteCount; k++) {
       const from = k + deleteCount;
@@ -541,7 +544,7 @@ function MoveElements(o, len, start, deleteCount, itemCount) {
   }
 }
 
-// builtins/array.ts:657 Array.prototype.copyWithin
+// builtins/array.ts:661 Array.prototype.copyWithin
 function ArrayPrototypeCopyWithin(target, start, end) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -568,7 +571,7 @@ function ArrayPrototypeCopyWithin(target, start, end) {
   return o;
 }
 
-// builtins/array.ts:687 Array.prototype.fill
+// builtins/array.ts:691 Array.prototype.fill
 function ArrayPrototypeFill(value, start, end) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -580,7 +583,7 @@ function ArrayPrototypeFill(value, start, end) {
   return o;
 }
 
-// builtins/array.ts:702 Array.prototype.reverse
+// builtins/array.ts:706 Array.prototype.reverse
 function ArrayPrototypeReverse() {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -611,7 +614,7 @@ function ArrayPrototypeReverse() {
   return o;
 }
 
-// builtins/array.ts:736 Array.prototype.pop
+// builtins/array.ts:740 Array.prototype.pop
 function ArrayPrototypePop() {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -626,7 +629,7 @@ function ArrayPrototypePop() {
   return element;
 }
 
-// builtins/array.ts:754 Array.prototype.shift
+// builtins/array.ts:758 Array.prototype.shift
 function ArrayPrototypeShift() {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -640,7 +643,7 @@ function ArrayPrototypeShift() {
   return first;
 }
 
-// builtins/array.ts:772 Array.prototype.unshift
+// builtins/array.ts:776 Array.prototype.unshift
 function ArrayPrototypeUnshift(...items) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -656,7 +659,7 @@ function ArrayPrototypeUnshift(...items) {
   return len + argCount;
 }
 
-// builtins/array.ts:788
+// builtins/array.ts:792
 function FlattenIntoArray(target, source, sourceLen, start, depth, mapper, thisArg) {
   let targetIndex = start;
   for (let sourceIndex = 0; sourceIndex < sourceLen; sourceIndex++) {
@@ -678,7 +681,7 @@ function FlattenIntoArray(target, source, sourceLen, start, depth, mapper, thisA
   return targetIndex;
 }
 
-// builtins/array.ts:813 Array.prototype.flat
+// builtins/array.ts:817 Array.prototype.flat
 function ArrayPrototypeFlat(depth) {
   const o = %ToObject(this);
   const sourceLen = LengthOfArrayLike(o);
@@ -694,7 +697,7 @@ function ArrayPrototypeFlat(depth) {
   return a;
 }
 
-// builtins/array.ts:832 Array.prototype.flatMap
+// builtins/array.ts:836 Array.prototype.flatMap
 function ArrayPrototypeFlatMap(mapperFunction, thisArg) {
   const o = %ToObject(this);
   const sourceLen = LengthOfArrayLike(o);
@@ -704,44 +707,53 @@ function ArrayPrototypeFlatMap(mapperFunction, thisArg) {
   return a;
 }
 
-// builtins/array.ts:844
-function SortCompare(x, y, comparefn) {
-  if (x === undefined) {
-    return y === undefined ? 0 : 1;
-  }
-  if (y === undefined) {
-    return -1;
-  }
-  if (comparefn !== undefined) {
-    const v = ToNumber(%Call(comparefn, undefined, x, y));
-    return v !== v ? 0 : v;
-  }
-  const xs = ToString(x);
-  return %CompareStrings(xs, ToString(y));
-}
-
-// builtins/array.ts:863
+// builtins/array.ts:851
 function SortList(list, n, comparefn) {
   if (comparefn === undefined && %SortPrimitives(list)) {
     return;
   }
+  let m = 0;
+  for (let k = 0; k < n; k++) {
+    const v = %Get(list, k);
+    if (v !== undefined) {
+      if (m !== k) {
+        %CreateDataPropertyOrThrow(list, m, v);
+      }
+      m++;
+    }
+  }
+  for (let k = m; k < n; k++) {
+    %CreateDataPropertyOrThrow(list, k, undefined);
+  }
   let src = list;
-  let dst = %ArrayCreate(n);
+  let dst = %ArrayCreate(m);
   let width = 1;
-  while (width < n) {
-    for (let lo = 0; lo < n; lo += 2 * width) {
-      const mid = lo + width < n ? lo + width : n;
-      const hi = lo + 2 * width < n ? lo + 2 * width : n;
+  while (width < m) {
+    for (let lo = 0; lo < m; lo += 2 * width) {
+      const mid = lo + width < m ? lo + width : m;
+      const hi = lo + 2 * width < m ? lo + 2 * width : m;
       let i = lo;
       let j = mid;
-      for (let k = lo; k < hi; k++) {
-        if (i < mid && (j >= hi || SortCompare(%Get(src, i), %Get(src, j), comparefn) <= 0)) {
-          %CreateDataPropertyOrThrow(dst, k, %Get(src, i));
+      let k = lo;
+      while (i < mid && j < hi) {
+        const x = %Get(src, i);
+        const y = %Get(src, j);
+        if (SortCompareDefined(x, y, comparefn) <= 0) {
+          %CreateDataPropertyOrThrow(dst, k, x);
           i++;
         } else {
-          %CreateDataPropertyOrThrow(dst, k, %Get(src, j));
+          %CreateDataPropertyOrThrow(dst, k, y);
           j++;
         }
+        k++;
+      }
+      for (; i < mid; i++) {
+        %CreateDataPropertyOrThrow(dst, k, %Get(src, i));
+        k++;
+      }
+      for (; j < hi; j++) {
+        %CreateDataPropertyOrThrow(dst, k, %Get(src, j));
+        k++;
       }
     }
     const t = src;
@@ -750,13 +762,24 @@ function SortList(list, n, comparefn) {
     width = width * 2;
   }
   if (src !== list) {
-    for (let k = 0; k < n; k++) {
+    for (let k = 0; k < m; k++) {
       %CreateDataPropertyOrThrow(list, k, %Get(src, k));
     }
   }
 }
 
-// builtins/array.ts:899
+// builtins/array.ts:913
+function SortCompareDefined(x, y, comparefn) {
+  if (comparefn !== undefined) {
+    const r = %Call(comparefn, undefined, x, y);
+    const v = %IsNumber(r) ? %AsNumber(r) : ToNumber(r);
+    return v !== v ? 0 : v;
+  }
+  const xs = ToString(x);
+  return %CompareStrings(xs, ToString(y));
+}
+
+// builtins/array.ts:924
 function CollectPresent(o, len, skipHoles) {
   const items = %ArrayCreate(0);
   let n = 0;
@@ -769,7 +792,7 @@ function CollectPresent(o, len, skipHoles) {
   return items;
 }
 
-// builtins/array.ts:915 Array.prototype.sort
+// builtins/array.ts:940 Array.prototype.sort
 function ArrayPrototypeSort(comparefn) {
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
@@ -788,7 +811,7 @@ function ArrayPrototypeSort(comparefn) {
   return o;
 }
 
-// builtins/array.ts:938 Array.prototype.toSorted
+// builtins/array.ts:963 Array.prototype.toSorted
 function ArrayPrototypeToSorted(comparefn) {
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
@@ -801,7 +824,7 @@ function ArrayPrototypeToSorted(comparefn) {
   return items;
 }
 
-// builtins/array.ts:956 Array.prototype.toReversed
+// builtins/array.ts:981 Array.prototype.toReversed
 function ArrayPrototypeToReversed() {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -812,7 +835,7 @@ function ArrayPrototypeToReversed() {
   return a;
 }
 
-// builtins/array.ts:971 Array.prototype.toSpliced
+// builtins/array.ts:996 Array.prototype.toSpliced
 function ArrayPrototypeToSpliced(...args) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -847,7 +870,7 @@ function ArrayPrototypeToSpliced(...args) {
   return a;
 }
 
-// builtins/array.ts:1009 Array.prototype.with
+// builtins/array.ts:1034 Array.prototype.with
 function ArrayPrototypeWith(index, value) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -863,7 +886,7 @@ function ArrayPrototypeWith(index, value) {
   return a;
 }
 
-// builtins/array.ts:1030 Array.prototype.toString
+// builtins/array.ts:1055 Array.prototype.toString
 function ArrayPrototypeToString() {
   const array = %ToObject(this);
   const func = %Get(array, "join");
@@ -873,7 +896,7 @@ function ArrayPrototypeToString() {
   return ObjectToString(array);
 }
 
-// builtins/array.ts:1043 Array.prototype.toLocaleString
+// builtins/array.ts:1068 Array.prototype.toLocaleString
 function ArrayPrototypeToLocaleString() {
   const array = %ToObject(this);
   const len = LengthOfArrayLike(array);
@@ -890,7 +913,7 @@ function ArrayPrototypeToLocaleString() {
   return r;
 }
 
-// builtins/array.ts:1064 value Array.prototype[Symbol.unscopables]
+// builtins/array.ts:1089 value Array.prototype[Symbol.unscopables]
 function ArrayPrototypeUnscopables() {
   const u = %ObjectCreate(null);
   %CreateDataPropertyOrThrow(u, "at", true);

@@ -624,6 +624,10 @@ function ArrayPrototypeSplice(this: Value, ...args: Value[]): Obj {
  * shrinking is deleted.
  */
 function MoveElements(o: Obj, len: f64, start: f64, deleteCount: f64, itemCount: f64): void {
+  // Plain dense arrays move in one leaf step: nothing observable happens in between.
+  if (deleteCount !== itemCount && ArraySpliceDense(o, start, deleteCount, itemCount)) {
+    return;
+  }
   if (itemCount < deleteCount) {
     for (let k: f64 = start; k < len - deleteCount; k++) {
       const from: f64 = k + deleteCount;
@@ -840,22 +844,6 @@ function ArrayPrototypeFlatMap(this: Value, mapperFunction: Value, thisArg?: Val
 
 // ---- Sorting ----------------------------------------------------------------------------
 
-/** SortCompare ( x, y ), 23.1.3.30.2, with comparefn or by ToString. */
-function SortCompare(x: Value, y: Value, comparefn: Value): f64 {
-  if (x === undefined) {
-    return y === undefined ? 0 : 1;
-  }
-  if (y === undefined) {
-    return -1;
-  }
-  if (comparefn !== undefined) {
-    const v: f64 = ToNumber(Call(comparefn, undefined, x, y));
-    return v !== v ? 0 : v;
-  }
-  const xs: Str = ToString(x);
-  return CompareStrings(xs, ToString(y));
-}
-
 /**
  * Sorts the dense array `list` (length n) in place: stable, a bottom-up merge sort with
  * comparefn or ToString order. Lists of primitives without comparefn go to a leaf.
@@ -864,23 +852,49 @@ function SortList(list: Obj, n: f64, comparefn: Value): void {
   if (comparefn === undefined && SortPrimitives(list)) {
     return;
   }
+  // undefined sorts last and is never passed to comparefn: set those aside first.
+  let m: f64 = 0;
+  for (let k: f64 = 0; k < n; k++) {
+    const v: Value = Get(list, k);
+    if (v !== undefined) {
+      if (m !== k) {
+        CreateDataPropertyOrThrow(list, m, v);
+      }
+      m++;
+    }
+  }
+  for (let k: f64 = m; k < n; k++) {
+    CreateDataPropertyOrThrow(list, k, undefined);
+  }
   let src: Obj = list;
-  let dst: Obj = ArrayCreate(n);
+  let dst: Obj = ArrayCreate(m);
   let width: f64 = 1;
-  while (width < n) {
-    for (let lo: f64 = 0; lo < n; lo += 2 * width) {
-      const mid: f64 = lo + width < n ? lo + width : n;
-      const hi: f64 = lo + 2 * width < n ? lo + 2 * width : n;
+  while (width < m) {
+    for (let lo: f64 = 0; lo < m; lo += 2 * width) {
+      const mid: f64 = lo + width < m ? lo + width : m;
+      const hi: f64 = lo + 2 * width < m ? lo + 2 * width : m;
       let i: f64 = lo;
       let j: f64 = mid;
-      for (let k: f64 = lo; k < hi; k++) {
-        if (i < mid && (j >= hi || SortCompare(Get(src, i), Get(src, j), comparefn) <= 0)) {
-          CreateDataPropertyOrThrow(dst, k, Get(src, i));
+      let k: f64 = lo;
+      while (i < mid && j < hi) {
+        const x: Value = Get(src, i);
+        const y: Value = Get(src, j);
+        if (SortCompareDefined(x, y, comparefn) <= 0) {
+          CreateDataPropertyOrThrow(dst, k, x);
           i++;
         } else {
-          CreateDataPropertyOrThrow(dst, k, Get(src, j));
+          CreateDataPropertyOrThrow(dst, k, y);
           j++;
         }
+        k++;
+      }
+      for (; i < mid; i++) {
+        CreateDataPropertyOrThrow(dst, k, Get(src, i));
+        k++;
+      }
+      for (; j < hi; j++) {
+        CreateDataPropertyOrThrow(dst, k, Get(src, j));
+        k++;
       }
     }
     const t: Obj = src;
@@ -889,10 +903,21 @@ function SortList(list: Obj, n: f64, comparefn: Value): void {
     width = width * 2;
   }
   if (src !== list) {
-    for (let k: f64 = 0; k < n; k++) {
+    for (let k: f64 = 0; k < m; k++) {
       CreateDataPropertyOrThrow(list, k, Get(src, k));
     }
   }
+}
+
+/** SortCompare for two values that are not undefined. */
+function SortCompareDefined(x: Value, y: Value, comparefn: Value): f64 {
+  if (comparefn !== undefined) {
+    const r: Value = Call(comparefn, undefined, x, y);
+    const v: f64 = IsNumber(r) ? AsNumber(r) : ToNumber(r);
+    return v !== v ? 0 : v;
+  }
+  const xs: Str = ToString(x);
+  return CompareStrings(xs, ToString(y));
 }
 
 /** The present elements of o[0 .. len) as a dense list (SortIndexedProperties' read). */

@@ -502,6 +502,69 @@ impl Heap {
     /// overwriting a dense element, or adding one (filling a hole or appending) to an
     /// extensible array whose prototype chain has no index properties. `Ok(false)` means
     /// "take the generic `[[Set]]` path".
+    /// splice's element moves on a plain dense array in one step: `o[start .. start +
+    /// delete)` is replaced by `insert` undefined slots (the caller writes them), the
+    /// tail moves, and `length` follows. Only for an extensible Array with a writable
+    /// length, no holes, every element dense (default attributes) and no index
+    /// properties on its prototype chain, where the generic moves (HasProperty, Get,
+    /// Set, DeletePropertyOrThrow) could not observe anything else. `Ok(false)`: not
+    /// such an array; nothing changed.
+    pub(crate) fn array_splice_dense(
+        &mut self,
+        o: Obj,
+        start: u32,
+        delete: u32,
+        insert: u32,
+    ) -> Result<bool, HeapError> {
+        if self.object_class(o) != ObjectClass::Array {
+            return Ok(false);
+        }
+        let f = self.obj_flags(o);
+        if f & OBJ_EXTENSIBLE == 0 || f & (OBJ_INDEXED_PROPS | OBJ_LENGTH_READONLY) != 0 {
+            return Ok(false);
+        }
+        let len = self.array_length(o);
+        if self.dense_len(o) != len || start > len || delete > len - start {
+            return Ok(false);
+        }
+        let mut p = self.get_prototype_of(o);
+        while let Some(q) = p {
+            if self.dense_len(q) != 0 || self.obj_flags(q) & OBJ_INDEXED_PROPS != 0 {
+                return Ok(false);
+            }
+            p = self.get_prototype_of(q);
+        }
+        let el = self.elements(o);
+        let mut values: Vec<Value> = Vec::with_capacity((len - delete + insert) as usize);
+        for i in 0..len {
+            let v = self.value_array_get(el, i);
+            if v.is_hole() {
+                return Ok(false);
+            }
+            if i == start {
+                values.extend(core::iter::repeat_n(Value::UNDEFINED, insert as usize));
+            }
+            if i < start || i >= start + delete {
+                values.push(v);
+            }
+        }
+        if start == len {
+            values.extend(core::iter::repeat_n(Value::UNDEFINED, insert as usize));
+        }
+        let new_len = u32::try_from(values.len()).map_err(|_| HeapError::OutOfMemory)?;
+        if new_len > atom_int_max() {
+            return Ok(false);
+        }
+        for (i, v) in values.into_iter().enumerate() {
+            self.dense_put(o, i as u32, v)?;
+        }
+        if new_len < len {
+            self.truncate_elements(o, new_len);
+        }
+        self.set_array_length_raw(o, new_len);
+        Ok(true)
+    }
+
     pub fn set_element_fast(&mut self, o: Obj, i: u32, v: Value) -> Result<bool, HeapError> {
         let el = self.elements(o);
         let len = if el == 0 { 0 } else { self.value_array_len(el) };
