@@ -72,6 +72,18 @@ the ops defined here.
   - Tests: e2e promise_{basic,order,errors,unhandled}; difftest builtins/promise-jobs,
     errors/promise-rejected-result. test262: 562 more pass (all of built-ins/Promise
     except classes, eval, Proxy). difftest: result/promise.js passes.
+- Part 2 (async host calls), D1374:
+  - VM: `OBJ_HOST_ASYNC` host functions return a promise and add a pending call;
+    `Vm::new_async_host_function`, `new_host_calls`, `pending_host_calls`,
+    `HostCallInfo::is_async`; `resolve_host_call` settles via a `%HostCallSettle` job.
+  - Tests (vm/tests.rs): concurrent calls resolved out of order, errors/chained calls,
+    the entry callee being async, and a VM image with a pending call plus a queued job
+    restored and finished elsewhere; all in plain/suspend/gc-stress modes.
+  - djs-wasm: `vm_new_async_host_function`, `vm_new_host_calls`, `vm_host_call_info`,
+    `vm_promise_state` (additive, ABI stays 1).
+  - Sandbox: `asyncFunctions` / `defineAsyncFunction`; runAsync serves them concurrently
+    (test: four calls outstanding at once); promise results unwrapped. Also fixed the
+    out-buffer reads to not assume 4-byte alignment (a DataView).
 
 ## Follow-ups
 
