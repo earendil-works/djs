@@ -283,12 +283,14 @@ loop {
   builtins do have states; see "Builtins".) A slow path that needs a conversion first
   replaces the operand and runs the instruction again (the Retry continuation, D1280,
   D1861).
-- **Fast paths:** `fast_step` and `fast_more` handle the hottest simple ops (locals,
-  int32 and float arithmetic, comparisons, jumps, calls and returns of JS closures,
-  dense element and own-property access) without building a `Step`; anything else falls
-  through to the full `step` with identical fuel and safepoints (D1350, D1352, D1783,
-  D1860). Their register allocation in wasm is sensitive, so every addition is measured
-  (D1352, D1862). Property access uses inline caches: verified table indexes per
+- **Fast paths:** the main loop is the tier-0 loop `run_hot` (D1930). It keeps `pc`,
+  `sp`, the fuel and the frame data in Rust locals and runs the hottest simple ops itself
+  (locals, constants, int32 and float arithmetic, comparisons, jumps, calls and returns
+  of JS closures, inline-cache hits, dense elements; D1931). Anything else, and every
+  case it declines, goes to the full `step` (`step_once`) with identical fuel and
+  safepoints. It replaced the earlier `fast_step`/`fast_more` (D1350, D1352, D1783,
+  D1860), which remain only in tests as the reference it must equal. Register allocation
+  in wasm is sensitive, so every addition is measured (D1352, D1862). Property access uses inline caches: verified table indexes per
   template, and prototype caches validated by an epoch (D1620, D1621). for-of and
   array destructuring step Array, String, Map and Set iterators without result objects
   while `next` is the original (`iter_next`, D1800).
@@ -335,7 +337,7 @@ The rule that makes G5 hold for builtins:
   `String(x)`, `hasOwnProperty`, the ToString/ToNumber helpers, ...) and the element
   loops of Array builtins over dense arrays (push, pop, indexOf, slice, join, fill, ...)
   are tagged `@fast`: a Rust entry runs in place of the call (in `Exec::call` and in the
-  run loop after `fast_step` declines a call, not inside `fast_step`) when nothing
+  run loop after `run_hot` declines a call, not inside `run_hot`) when nothing
   observable can happen, and declines otherwise, also at the heap cap (D1850, D1910). The
   same rule decides when a builtin may skip a protocol: iteration and spread over
   original iterators (D1351, D1800, D1802), dense-array leaves (D1801), JSON's fast path
@@ -630,7 +632,7 @@ commands, D016 says why wasm numbers come first):
 | Metric | Target | Measured |
 | --- | --- | --- |
 | wasm size (release, after `wasm-opt`) | < 400 KB (quickjs.wasm is ~850 KB) | 1,515 KB without wasm-opt (code 935 KB, data 576 KB of which the base image is 398 KB); 531 KB gzip -9, 426 KB brotli |
-| `vm_new` from the base snapshot | < 100 µs | a few µs (a copy); `Sandbox.create` ~60-140 µs, mostly instantiation |
+| `vm_new` from the base snapshot | < 100 µs | about 40 µs in wasm, mostly the copy of the base (D1990); `Sandbox.create` ~60-140 µs, mostly instantiation |
 | compile throughput | > 50 MB/s of source on native builds | not tracked as a target; startup of a codemode script is µs |
 | interpreter speed | within 1.5x of QuickJS-wasm (stretch: parity) | wasm instructions vs quickjs-wasi: plain loops and property access 0.55-0.65x, strings and arrays 0.55-0.8x, JSON 0.5-0.6x; calls 1.3x, builtin-heavy code (higher-order, forEach) 2-4x, pi-like 1.5x |
 | host string out, 1 MiB | ~memcpy speed | yes (the reader, docs/host.md) |

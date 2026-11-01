@@ -296,9 +296,9 @@ behave the same in every mode; only the fuel spent differs (D1633).
   stress modes, a backend switch between runs, fuel; `backends_agree` samples the modes
   in about a second, the exhaustive `backends_agree_in_every_mode` is `#[ignore]`d:
   run it with `cargo test -p djs-core --lib backends_agree -- --ignored` before merging
-  backend changes), bgen's golden fixture
-  `tests/golden/native.ts` → `native.rs.txt`, and `scripts/native-sizes.sh` for the wasm
-  code size per native function.
+  backend changes), bgen's golden fixture `crates/djs-bgen/tests/golden/native.ts` →
+  `native.rs.txt`, and `scripts/native-sizes.sh` for the wasm code size per native
+  function.
 
 ## TypeScript
 

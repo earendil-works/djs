@@ -107,6 +107,11 @@ struct Parser<'a, 'h> {
 | `ident_atom(tok)` | `lx.ident_value` → atom (no escapes: borrowed bytes, interned directly) |
 | `number_value(tok)` | `lx.number_literal(&tok)` → `crate::num::literal_digits_value(radix, digits)` (separators allowed); BigInt literals are BigInt constants (D1460) |
 
+As built, the names differ from these sketches: the function state is `FuncState` in
+compiler/func.rs (flags such as `simple_params` and `use_strict` are fields), and the
+`>` and regex rescans happen inline where the parser needs them (parser.rs, expr.rs).
+The rules are as described.
+
 Lookahead never crosses a position whose meaning depends on parser context without
 applying the same rule the parser would (regex after an operand, `>` merging,
 template continuation). That is why scans (3.1) carry their own regex heuristic.
@@ -261,7 +266,7 @@ entries) would otherwise have to be part of the checkpoint.
 
 In `parse_assign`:
 - `Ident` (not a keyword) followed by `Arrow`: a single-parameter arrow. One `peek()`.
-- `LParen`: run `scan_arrow_head()` on a copy of the lexer. It returns `true` when the
+- `LParen`: run `scan_arrow_head()` (as built: `scan::is_arrow_head`) on a copy of the lexer. It returns `true` when the
   balanced `(...)` is followed by `=>` with no newline before the arrow. If so, parse
   the parameter list directly as formal parameters of a new function. Otherwise parse
   a parenthesized expression. In both cases nothing was emitted before the decision.
@@ -398,7 +403,9 @@ operator; in Script mode outside async functions it is an ordinary identifier
 Expressions are emitted as loads. When an assignment operator, `++`/`--` or a
 for-in/of head turns out to need a reference, `to_lvalue()` inspects the **last
 emitted instruction** (the compiler tracks `last_insn_start`), removes it and returns
-a reference kind:
+a reference kind. As built, the expression parser returns an `Expr` that records what
+its last instruction was, and `Parser::lvalue` (compiler/expr.rs) turns it into an
+`LValue` and removes the instruction (`truncate_last`):
 
 | last instruction | reference | stack left for the store |
 | --- | --- | --- |
@@ -1225,13 +1232,18 @@ bp      callee            the function object (or host function)
 bp+1    this
 bp+2    arg0 .. arg(n-1)  n = max(argc, PARAMS), missing args padded with undefined
 hp      prev_bp           int32 Value     (hp = bp + 2 + n)
-hp+1    ret_pc            int32: caller pc to resume (after the call instruction)
-hp+2    argc              int32: actual argument count (for `arguments`)
-hp+3    flags             int32: continuation kind (7.3), construct, ...
-hp+4    new_target        Value
-lp      local0 .. local(L-1)       lp = hp + 5, filled with undefined
+hp+1    prev_hp           int32 Value
+hp+2    ret_pc            int32: caller pc to resume (after the call instruction)
+hp+3    argc              int32: actual argument count (for `arguments`)
+hp+4    flags             int32: continuation kind (7.3), construct, native, ...
+hp+5    new_target        Value
+lp      local0 .. local(L-1)       lp = hp + 6, filled with undefined
 sb      operand stack (≤ STACK)    sb = lp + L
 ```
+
+As built (D1151, `interp/frame.rs`) the header has six slots: `prev_hp` is needed
+because a frame's header position depends on its padded argument count, which only
+its own header records.
 
 - Header fields are int32 Values, so the GC traces the whole stack array from 0 to
   `sp` with no frame knowledge. Snapshots need no frame serializer.
@@ -1245,7 +1257,7 @@ sb      operand stack (≤ STACK)    sb = lp + L
   elements); it writes them back whenever it calls the general path (`step`) or
   returns, and nothing in it can collect. Calls and returns there use the same frame
   layout, with the header and the locals written as checked blocks (D1931).
-- A call reserves `5 + LOCALS + STACK` slots once, at frame entry, and checks the
+- A call reserves `6 + LOCALS + STACK` slots once, at frame entry, and checks the
   stack limit there (qjs: InternalError `stack overflow`). Pushes within the frame
   need no capacity check.
 
