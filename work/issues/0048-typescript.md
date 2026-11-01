@@ -1,6 +1,6 @@
 # 0048: P3 TypeScript: type skipper, runtime TS constructs, strip-types oracle
 
-status: in-progress
+status: done
 agent: lexer
 branch: issue/0048-typescript
 depends-on: 0040
@@ -83,6 +83,50 @@ flag enables the TS grammar.
   (test_using*), which djs does not have in JS either. JS fixes: `function f(private)`
   says `missing formal parameter` like qjs.
 
+- Part 3 (strip-types oracle): `djs strip-types [--compare]`, scripts/strip-types/
+  (fetch.sh: ts-blank-space 0.9.0 + TypeScript 5.9.3, the compiler's src/ and
+  tests/cases/conformance; oracle.sh; update-cases.sh), strip mode parses module syntax
+  (compiler/module.rs) and emulates ts-blank-space's `;`/`(`/`)` insertions. Result:
+  4053/4802 compared files match byte for byte, 0 differ, 749 are djs syntax errors
+  (decorators, `using`, `accessor`, and the conformance tests' deliberate JS errors).
+  Gate: tests/strip-types/ (compiler test `ts_strip_corpus`).
+  Found through the corpus and fixed: `class implements I {}`, `declare class X extends
+  Mixin(B)`, tsc's `allowReturnTypeInArrowFunction` propagation (`x ? y => ({ y }) : z
+  => ({ z })` was rejected, also by dquickts), `import type from from`, `{ type as }`.
+- Part 4: djs-wasm `vm_compile` goal bit 2 = TypeScript, `SandboxOptions.typescript`,
+  difftest case ts/codemode-tools.ts.
+
 ## Follow-ups
+- Decorators (legacy, `experimentalDecorators`, test_decorators_legacy.ts, and TC39
+  ones, test_rejected_syntax_5/6): not in scope here; djs has no decorators in JS
+  either (ARCH lists them later). They are the largest cluster of strip-types errors.
+- `using` / `await using` (test_using*.ts) and `accessor` fields: missing in djs's JS too.
+- js/pi/engine.ts could compile codemode with the TypeScript bit (`goal | 2`) if pi's
+  codemode scripts are TypeScript, as with dquickts; that is the pi adapter's call.
+- tsc parses the body of an arrow in a conditional's `b` and then checks for `:`;
+  djs (like dquickts) skips tokens, which can cross a statement boundary
+  (`a ? (b) : c => (d) : e => f` followed by another conditional). Rare.
+- Module syntax exists only in strip mode (djs has no modules); `import type` in a
+  codemode script is a SyntaxError on both engines.
 
 ## Result
+TypeScript behind `CompileOptions::typescript` (`CompileOptions::ts()`), `djs run --ts`
+(default for .ts), the difftest .ts cases, djs-wasm goal bit 2 and
+`SandboxOptions.typescript`:
+- compiler/ts.rs: the type skipper and all disambiguation, ported from dquickts (D1480):
+  annotations everywhere, type parameters/arguments, generic calls vs comparisons,
+  arrows with return types and generic arrows, `as`/`satisfies`/`!`/`<T>x`, `type`,
+  `interface`, `declare`, overloads, `abstract`, member modifiers, index signatures,
+  `this` parameters, assertion functions, `unique symbol`; dquickts' messages and
+  positions.
+- compiler/ts_decl.rs: enums (constant evaluation, reverse mapping, merging, const enums
+  checked and folded, D1483), namespaces (nested, merged, merged with functions/classes,
+  exported vars as members resolved after parsing, D1482), `import X = A.B`; parameter
+  properties in class.rs (D1484).
+- strip-types: compiler::strip_types, `djs strip-types [--compare]`, the oracle scripts
+  in scripts/strip-types/ (D1481, TESTING.md "How to run the strip-types oracle"):
+  4053/4802 files of TypeScript's src and conformance tests match ts-blank-space, none
+  differ.
+- difftest: every dquickts TypeScript case passes except decorators and `using`;
+  tests/corpus/ts/ all pass.
+Known gaps: see Follow-ups.

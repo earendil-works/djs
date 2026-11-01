@@ -1,0 +1,3 @@
+summary: a.txt, b.txt, nope {"ok":2,"failed":1} 10 dir
+=== return
+3
