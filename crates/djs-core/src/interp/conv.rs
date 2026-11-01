@@ -182,7 +182,7 @@ pub(crate) fn typeof_atom(heap: &Heap, v: Value) -> Atom {
         Kind::Symbol => atoms::SYMBOL,
         Kind::BigInt => atoms::BIGINT,
         Kind::Object => {
-            if heap.object_class(v.as_object().unwrap()).is_callable() {
+            if heap.is_callable(v.as_object().unwrap()) {
                 atoms::FUNCTION
             } else {
                 atoms::OBJECT

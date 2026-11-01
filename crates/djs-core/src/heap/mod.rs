@@ -41,6 +41,7 @@ pub mod gc;
 pub mod handle;
 pub mod layout;
 pub mod object;
+pub mod proxy;
 pub mod string;
 pub mod typed;
 pub mod walk;
@@ -53,7 +54,7 @@ pub use cells::CellKind;
 pub use gc::GcStats;
 pub use handle::Handle;
 pub use layout::Ref;
-pub use object::{ObjectClass, PropFlags, Property, PropertyDescriptor};
+pub use object::{Lookup, ObjectClass, PropFlags, Property, PropertyDescriptor};
 pub use string::StrView;
 
 use cells::{Header, Roots};

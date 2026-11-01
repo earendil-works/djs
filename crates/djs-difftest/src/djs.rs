@@ -404,7 +404,7 @@ impl Session {
             }
             Kind::Object => {
                 let o = v.as_object().unwrap();
-                if heap.object_class(o).is_callable() {
+                if heap.is_callable(o) {
                     "<djs: function source>".into()
                 } else if heap.object_class(o) == djs_core::heap::ObjectClass::Array {
                     "<djs: String(array)>".into()
@@ -417,8 +417,7 @@ impl Session {
     }
 
     fn is_callable(&self, v: Value) -> bool {
-        v.as_object()
-            .is_some_and(|o| self.vm.heap().object_class(o).is_callable())
+        v.as_object().is_some_and(|o| self.vm.heap().is_callable(o))
     }
 
     /// The return value as the model sees it.

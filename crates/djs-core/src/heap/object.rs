@@ -18,8 +18,8 @@
 //! elements with non-default attributes, index keys of non-arrays) set the
 //! [`OBJ_INDEXED_PROPS`] flag, so objects without it never search the table for an index.
 //!
-//! Classes with exotic integer-keyed behavior (String wrappers, typed arrays, proxies,
-//! later) must also set [`OBJ_INDEXED_PROPS`]: the element fast paths rely on it to know
+//! Classes with exotic integer-keyed behavior (String wrappers, typed arrays, proxies)
+//! must also set [`OBJ_INDEXED_PROPS`]: the element fast paths rely on it to know
 //! that a prototype chain cannot intercept an index.
 //!
 //! An array's `length` is internal slot 0 (a Number), not a table entry. It is reported as
@@ -116,6 +116,13 @@ pub enum ObjectClass {
     ArrayBuffer = 22,
     TypedArray = 23,
     DataView = 24,
+    // 25 and 26 are RegExp and RegExpStringIterator (0033).
+    /// A Proxy exotic object (0045, `heap/proxy.rs`): slot 0 the target, slot 1 the
+    /// handler (both null once revoked), slot 2 flags (int32: 1 callable, 2
+    /// constructor, fixed at creation from the target). No prototype, no own
+    /// properties, not extensible as far as the heap is concerned: the interpreter and
+    /// the builtins send every internal method to the traps (builtins/proxy.ts).
+    Proxy = 27,
 }
 
 impl ObjectClass {
@@ -146,6 +153,7 @@ impl ObjectClass {
             22 => Some(ObjectClass::ArrayBuffer),
             23 => Some(ObjectClass::TypedArray),
             24 => Some(ObjectClass::DataView),
+            27 => Some(ObjectClass::Proxy),
             _ => None,
         }
     }
@@ -173,10 +181,12 @@ impl ObjectClass {
             ObjectClass::ArrayBuffer => 2,
             ObjectClass::TypedArray => 4,
             ObjectClass::DataView => 3,
+            ObjectClass::Proxy => 3,
         }
     }
 
-    /// Callable objects.
+    /// Callable objects of this class. A Proxy is callable when its target is: see
+    /// [`Heap::is_callable`].
     pub const fn is_callable(self) -> bool {
         matches!(
             self,
@@ -330,6 +340,16 @@ impl PropertyDescriptor {
     const fn is_empty(&self) -> bool {
         self.is_generic() && self.enumerable.is_none() && self.configurable.is_none()
     }
+}
+
+/// The result of [`Heap::lookup_property`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Lookup {
+    /// The object on the chain that has the key, and the property.
+    Found(Obj, Property),
+    Absent,
+    /// A Proxy reached before the key was found.
+    Proxy(Obj),
 }
 
 /// Where an own property is stored.
@@ -982,38 +1002,66 @@ impl Heap {
 
     /// Looks `key` up along the prototype chain. Returns the object that has it and the
     /// property; for an accessor the caller calls the getter with the original receiver.
+    /// A Proxy on the chain ends the walk as if it were an empty object without a
+    /// prototype: callers that can meet one use [`Heap::lookup_property`].
     pub fn find_property(&self, o: Obj, key: Atom) -> Option<(Obj, Property)> {
-        let mut cur = Some(o);
-        while let Some(c) = cur {
-            if let Some(p) = self.get_own_property(c, key) {
-                return Some((c, p));
-            }
-            // A typed array answers numeric keys itself: no prototype lookup.
-            if self.object_class(c) == ObjectClass::TypedArray
-                && self.canonical_numeric_index(key).is_some()
-            {
-                return None;
-            }
-            cur = self.get_prototype_of(c);
+        match self.lookup_property(o, key) {
+            Lookup::Found(h, p) => Some((h, p)),
+            Lookup::Absent | Lookup::Proxy(_) => None,
         }
-        None
     }
 
-    /// `[[HasProperty]]`.
-    pub fn has_property(&self, o: Obj, key: Atom) -> bool {
-        let mut cur = Some(o);
-        while let Some(c) = cur {
-            if self.has_own_property(c, key) {
-                return true;
+    /// [`Heap::find_property`] that reports a Proxy on the chain (`o` itself or a
+    /// prototype) before the key was found: the rest of the lookup is its traps'.
+    #[inline]
+    pub fn lookup_property(&self, o: Obj, key: Atom) -> Lookup {
+        let mut c = o;
+        loop {
+            if let Some(p) = self.get_own_property(c, key) {
+                return Lookup::Found(c, p);
             }
-            if self.object_class(c) == ObjectClass::TypedArray
-                && self.canonical_numeric_index(key).is_some()
-            {
-                return false;
+            match self.object_class(c) {
+                // A typed array answers numeric keys itself: no prototype lookup.
+                ObjectClass::TypedArray if self.canonical_numeric_index(key).is_some() => {
+                    return Lookup::Absent;
+                }
+                ObjectClass::Proxy => return Lookup::Proxy(c),
+                _ => {}
             }
-            cur = self.get_prototype_of(c);
+            match self.get_prototype_of(c) {
+                Some(p) => c = p,
+                None => return Lookup::Absent,
+            }
         }
-        false
+    }
+
+    /// `[[HasProperty]]`, with a Proxy on the chain counting as absent: callers that can
+    /// meet one use [`Heap::has_property_or_proxy`].
+    pub fn has_property(&self, o: Obj, key: Atom) -> bool {
+        self.has_property_or_proxy(o, key) == Ok(true)
+    }
+
+    /// `[[HasProperty]]` up to a Proxy on the chain: `Err(proxy)` when the answer is its
+    /// `has` trap's.
+    #[inline]
+    pub fn has_property_or_proxy(&self, o: Obj, key: Atom) -> Result<bool, Obj> {
+        let mut c = o;
+        loop {
+            if self.has_own_property(c, key) {
+                return Ok(true);
+            }
+            match self.object_class(c) {
+                ObjectClass::TypedArray if self.canonical_numeric_index(key).is_some() => {
+                    return Ok(false);
+                }
+                ObjectClass::Proxy => return Err(c),
+                _ => {}
+            }
+            match self.get_prototype_of(c) {
+                Some(p) => c = p,
+                None => return Ok(false),
+            }
+        }
     }
 
     /// Stores a complete property at `loc` (where `key` currently is, or `Loc::None`).

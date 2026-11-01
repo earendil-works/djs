@@ -19,7 +19,9 @@
 use alloc::vec::Vec;
 
 use super::DEFAULT_MAX_DEPTH;
-use crate::heap::{Atom, Heap, HeapError, ObjectClass, Property, StrView, atoms, string::MAX_LEN};
+use crate::heap::{
+    Atom, Heap, HeapError, Lookup, ObjectClass, Property, StrView, atoms, string::MAX_LEN,
+};
 use crate::num;
 use crate::value::{Kind, Obj, Str, Value};
 
@@ -401,7 +403,12 @@ impl Ser<'_, '_> {
         if self.clean_protos.contains(&p) {
             return Ok(());
         }
-        let found = self.heap.find_property(p, atoms::TO_JSON).map(|(_, p)| p);
+        // A proxy on the chain answers with its `get` trap (user code).
+        let found = match self.heap.lookup_property(p, atoms::TO_JSON) {
+            Lookup::Found(_, p) => Some(p),
+            Lookup::Absent => None,
+            Lookup::Proxy(_) => return Err(StringifyError::Slow),
+        };
         if to_json_blocks(found) {
             return Err(StringifyError::Slow);
         }
@@ -420,7 +427,8 @@ impl Ser<'_, '_> {
                 let is_array = match self.heap.object_class(o) {
                     ObjectClass::Ordinary => false,
                     ObjectClass::Array => true,
-                    // Functions (skipped), wrappers (ToPrimitive), exotics: full algorithm.
+                    // Functions (skipped), wrappers (ToPrimitive), exotics (proxies
+                    // included): full algorithm.
                     #[allow(unreachable_patterns)]
                     _ => return Err(StringifyError::Slow),
                 };
@@ -578,10 +586,12 @@ impl Ser<'_, '_> {
             return Ok(v);
         }
         let key = self.heap.atom_from_index(i)?;
-        match self.heap.find_property(o, key) {
-            None => Ok(Value::UNDEFINED),
-            Some((_, Property::Data { value, .. })) => Ok(value),
-            Some((_, Property::Accessor { .. })) => Err(StringifyError::Slow),
+        match self.heap.lookup_property(o, key) {
+            Lookup::Absent => Ok(Value::UNDEFINED),
+            Lookup::Found(_, Property::Data { value, .. }) => Ok(value),
+            Lookup::Found(_, Property::Accessor { .. }) | Lookup::Proxy(_) => {
+                Err(StringifyError::Slow)
+            }
         }
     }
 

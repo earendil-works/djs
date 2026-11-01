@@ -28,7 +28,8 @@ use crate::bytecode::{HandlerTable, OPS, Op, special};
 use crate::heap::cells::flags::OBJ_HOST_ASYNC;
 use crate::heap::cells::{BoxCell, FuncTemplate, HostCall, Interp, Roots, U32Array, ValueArray};
 use crate::heap::{
-    Atom, CellKind, Heap, HeapError, ObjectClass, PropFlags, Property, PropertyDescriptor, Ref,
+    Atom, CellKind, Heap, HeapError, Lookup, ObjectClass, PropFlags, Property, PropertyDescriptor,
+    Ref,
 };
 use crate::value::{Kind, Obj, Value};
 
@@ -69,6 +70,7 @@ impl Default for ExecOptions {
 mod intrinsics;
 mod json_regexp;
 pub(crate) mod promise;
+mod proxy;
 pub(crate) mod suspend;
 
 /// The opcodes `Exec::fast_step` handles, as bytes for its `match`.
@@ -106,6 +108,15 @@ mod fast {
 }
 
 type Step = Result<Option<Status>, Fault>;
+
+/// What a property lookup found (`Exec::lookup`).
+enum Got {
+    Value(Value),
+    /// A getter to call with the receiver.
+    Getter(Value),
+    /// A proxy on the chain: its `get` trap answers (`%ProxyGet(p, key, receiver)`).
+    Proxy(Obj),
+}
 
 /// Frames in a stack trace (QuickJS's default `Error.stackTraceLimit`).
 pub const STACK_TRACE_LIMIT: u32 = 10;
@@ -381,6 +392,9 @@ impl<'h> Exec<'h> {
             ObjectClass::BoundFunction => {
                 let argc = self.unwrap_bound(base, argc, o)?;
                 self.call(base, argc, cont, ret_pc)
+            }
+            ObjectClass::Proxy if self.heap.is_callable(o) => {
+                self.proxy_call(base, argc, cont, ret_pc)
             }
             ObjectClass::BuiltinClosure => {
                 // `F this args` becomes `builtin data args` (D1372).
@@ -1639,16 +1653,23 @@ impl<'h> Exec<'h> {
                 let key = self.imm_atom();
                 let o = self.top(0);
                 match self.lookup(o, key)? {
-                    Ok(f) => {
+                    Got::Value(f) => {
                         self.set(self.sp - 1, f);
                         self.push(o);
                     }
-                    Err(getter) => {
+                    Got::Getter(getter) => {
                         // `o -> f o`: the getter's result fills the placeholder.
                         self.set(self.sp - 1, Value::UNDEFINED);
                         self.push(o);
                         self.pc = next;
                         return self.call_getter_into(getter, o, self.sp - 2);
+                    }
+                    Got::Proxy(p) => {
+                        self.set(self.sp - 1, Value::UNDEFINED);
+                        self.push(o);
+                        self.pc = next;
+                        let slot = self.sp - 2;
+                        return self.call_proxy_get(p, key, o, Continuation::Replace(slot));
                     }
                 }
             }
@@ -1680,15 +1701,22 @@ impl<'h> Exec<'h> {
                 let (o, k) = (self.top(1), self.top(0));
                 let key = self.property_key(o, k)?;
                 match self.lookup(o, key)? {
-                    Ok(f) => {
+                    Got::Value(f) => {
                         self.set(self.sp - 2, f);
                         self.set(self.sp - 1, o);
                     }
-                    Err(getter) => {
+                    Got::Getter(getter) => {
                         self.set(self.sp - 2, Value::UNDEFINED);
                         self.set(self.sp - 1, o);
                         self.pc = next;
                         return self.call_getter_into(getter, o, self.sp - 2);
+                    }
+                    Got::Proxy(p) => {
+                        self.set(self.sp - 2, Value::UNDEFINED);
+                        self.set(self.sp - 1, o);
+                        self.pc = next;
+                        let slot = self.sp - 2;
+                        return self.call_proxy_get(p, key, o, Continuation::Replace(slot));
                     }
                 }
             }
@@ -1724,9 +1752,22 @@ impl<'h> Exec<'h> {
                     return type_error("invalid 'in' operand");
                 };
                 let key = self.property_key(o, k)?;
-                let r = self.heap.has_property(obj, key);
-                self.sp -= 2;
-                self.push(Value::bool(r));
+                match self.heap.has_property_or_proxy(obj, key) {
+                    Ok(r) => {
+                        self.sp -= 2;
+                        self.push(Value::bool(r));
+                    }
+                    Err(p) => {
+                        self.sp -= 2;
+                        self.pc = next;
+                        let k = self.heap.atom_to_value(key)?;
+                        return self.call_prelude(
+                            proxy::PROXY_HAS,
+                            &[Value::object(p), k],
+                            Continuation::PushResult,
+                        );
+                    }
+                }
             }
             Op::DefineMethod | Op::DefineGetter | Op::DefineSetter => {
                 let key = self.imm_atom();
@@ -1742,7 +1783,18 @@ impl<'h> Exec<'h> {
                 self.sp -= 2;
             }
             Op::ForInStart => {
-                let v = self.pop();
+                let v = self.top(0);
+                if v.as_object().is_some_and(|o| self.chain_has_proxy(o)) {
+                    // Traps decide the keys: %ForInKeys gives a Record of them, which
+                    // replaces the operand, and this instruction runs again.
+                    let slot = self.sp - 1;
+                    return self.call_prelude(
+                        proxy::FOR_IN_KEYS,
+                        &[v],
+                        Continuation::Replace(slot),
+                    );
+                }
+                self.sp -= 1;
                 let it = self.for_in_start(v)?;
                 self.push(it);
             }
@@ -1815,6 +1867,18 @@ impl<'h> Exec<'h> {
             }
             Op::Delete => {
                 let (o, k) = (self.top(1), self.top(0));
+                if let Some(p) = o.as_object().filter(|&p| self.heap.is_proxy(p)) {
+                    let key = self.property_key(o, k)?;
+                    let k = self.heap.atom_to_value(key)?;
+                    self.sp -= 2;
+                    self.pc = next;
+                    let args = [Value::object(p), k];
+                    return self.call_prelude(
+                        proxy::PROXY_DELETE_OR_THROW,
+                        &args,
+                        Continuation::PushResult,
+                    );
+                }
                 let r = self.delete(o, k)?;
                 self.sp -= 2;
                 self.push(Value::bool(r));
@@ -1949,24 +2013,28 @@ impl<'h> Exec<'h> {
             }
             Op::Instanceof => {
                 let (v, f) = (self.top(1), self.top(0));
-                if self.instanceof_needs_builtin(f) {
-                    // A custom Symbol.hasInstance or a `prototype` getter: the spec's
-                    // InstanceofOperator in the builtin language (builtins/function.ts).
-                    let g = realm::installed_intrinsic(self.heap, intrinsics::INSTANCEOF_OPERATOR);
-                    if !g.is_undefined() {
-                        let base = self.sp - 2;
-                        self.ensure(base + 4)?;
-                        self.set(base + 2, v);
-                        self.set(base + 3, f);
-                        self.set(base, g);
-                        self.set(base + 1, Value::UNDEFINED);
-                        self.sp = base + 4;
-                        return self.call(base, 2, Continuation::PushResult, next);
-                    }
+                let g = realm::installed_intrinsic(self.heap, intrinsics::INSTANCEOF_OPERATOR);
+                let r = if g.is_undefined() || !self.instanceof_needs_builtin(f) {
+                    self.instance_of(v, f, !g.is_undefined())?
+                } else {
+                    None
+                };
+                if let Some(r) = r {
+                    self.sp -= 2;
+                    self.push(Value::bool(r));
+                } else {
+                    // A custom Symbol.hasInstance, a `prototype` getter or a proxy: the
+                    // spec's InstanceofOperator in the builtin language
+                    // (builtins/function.ts).
+                    let base = self.sp - 2;
+                    self.ensure(base + 4)?;
+                    self.set(base + 2, v);
+                    self.set(base + 3, f);
+                    self.set(base, g);
+                    self.set(base + 1, Value::UNDEFINED);
+                    self.sp = base + 4;
+                    return self.call(base, 2, Continuation::PushResult, next);
                 }
-                let r = self.instance_of(v, f)?;
-                self.sp -= 2;
-                self.push(Value::bool(r));
             }
             Op::IsNullish => {
                 let a = self.pop();
@@ -2347,32 +2415,22 @@ impl<'h> Exec<'h> {
         ))
     }
 
-    /// The value of `o[key]`, or `Err(getter)` if a getter must be called.
-    fn lookup(&mut self, o: Value, key: Atom) -> Result<Result<Value, Value>, Fault> {
+    /// What `o[key]` is: a value, a getter to call, or a proxy's `get` trap.
+    fn lookup(&mut self, o: Value, key: Atom) -> Result<Got, Fault> {
         match o.kind() {
-            Kind::Object => {
-                let obj = o.as_object().unwrap();
-                Ok(match self.heap.find_property(obj, key) {
-                    None => Ok(Value::UNDEFINED),
-                    Some((_, Property::Data { value, .. })) => Ok(value),
-                    Some((_, Property::Accessor { getter, .. })) if getter.is_undefined() => {
-                        Ok(Value::UNDEFINED)
-                    }
-                    Some((_, Property::Accessor { getter, .. })) => Err(getter),
-                })
-            }
+            Kind::Object => Ok(self.lookup_object(o.as_object().unwrap(), key)),
             Kind::String => {
                 let s = o.as_string().unwrap();
                 let len = self.heap.str_len(s);
                 if key == crate::heap::atoms::LENGTH {
-                    return Ok(Ok(Value::int(len as i32)));
+                    return Ok(Got::Value(Value::int(len as i32)));
                 }
                 if let Some(i) = key.as_int()
                     && i < len
                 {
                     let u = self.heap.char_code_at(s, i).unwrap();
                     let c = self.heap.alloc_utf16(&[u])?;
-                    return Ok(Ok(Value::string(c)));
+                    return Ok(Got::Value(Value::string(c)));
                 }
                 self.lookup_primitive(o, key)
             }
@@ -2383,31 +2441,48 @@ impl<'h> Exec<'h> {
 
     /// `o[key]` for a primitive `o`: through its realm prototype (a getter gets the
     /// primitive as `this`).
-    fn lookup_primitive(&mut self, o: Value, key: Atom) -> Result<Result<Value, Value>, Fault> {
+    fn lookup_primitive(&mut self, o: Value, key: Atom) -> Result<Got, Fault> {
         let Some(proto) = realm::primitive_proto(self.heap, o) else {
-            return Ok(Ok(Value::UNDEFINED));
+            return Ok(Got::Value(Value::UNDEFINED));
         };
-        Ok(match self.heap.find_property(proto, key) {
-            None => Ok(Value::UNDEFINED),
-            Some((_, Property::Data { value, .. })) => Ok(value),
-            Some((_, Property::Accessor { getter, .. })) if getter.is_undefined() => {
-                Ok(Value::UNDEFINED)
+        Ok(self.lookup_object(proto, key))
+    }
+
+    /// [`Exec::lookup`] on the chain of an object.
+    #[inline]
+    fn lookup_object(&self, o: Obj, key: Atom) -> Got {
+        match self.heap.lookup_property(o, key) {
+            Lookup::Found(_, Property::Data { value, .. }) => Got::Value(value),
+            Lookup::Found(_, Property::Accessor { getter, .. }) if !getter.is_undefined() => {
+                Got::Getter(getter)
             }
-            Some((_, Property::Accessor { getter, .. })) => Err(getter),
-        })
+            Lookup::Found(..) | Lookup::Absent => Got::Value(Value::UNDEFINED),
+            Lookup::Proxy(p) => Got::Proxy(p),
+        }
+    }
+
+    /// Calls `%ProxyGet(p, key, receiver)`, the result going where `cont` says; `pc`
+    /// is already the instruction to resume.
+    fn call_proxy_get(&mut self, p: Obj, key: Atom, receiver: Value, cont: Continuation) -> Step {
+        let k = self.heap.atom_to_value(key)?;
+        self.call_prelude(proxy::PROXY_GET, &[Value::object(p), k, receiver], cont)
     }
 
     /// Replaces the object at `sp - 1` with `o[key]`, calling a getter if needed. `pc` is
     /// already the next instruction.
     fn get_property(&mut self, o: Value, key: Atom) -> Step {
         match self.lookup(o, key)? {
-            Ok(v) => {
+            Got::Value(v) => {
                 self.set(self.sp - 1, v);
                 Ok(None)
             }
-            Err(getter) => {
+            Got::Getter(getter) => {
                 self.sp -= 1;
                 self.call_accessor(getter, o, None)
+            }
+            Got::Proxy(p) => {
+                self.sp -= 1;
+                self.call_proxy_get(p, key, o, Continuation::PushResult)
             }
         }
     }
@@ -2437,7 +2512,21 @@ impl<'h> Exec<'h> {
             self.sp -= n;
             return Ok(None);
         }
-        let found = self.heap.find_property(o, key);
+        let found = match self.heap.lookup_property(o, key) {
+            Lookup::Found(h, p) => Some((h, p)),
+            Lookup::Absent => None,
+            Lookup::Proxy(p) => {
+                // Strict mode: a false from the trap is a TypeError.
+                self.sp -= n;
+                let k = self.heap.atom_to_value(key)?;
+                let args = [Value::object(p), k, v, Value::object(o)];
+                return self.call_prelude(
+                    proxy::PROXY_SET_OR_THROW,
+                    &args,
+                    Continuation::DiscardResult,
+                );
+            }
+        };
         let readonly = |heap: &Heap| {
             Err(Fault::Error(
                 ErrorKind::TypeError,
@@ -2615,6 +2704,9 @@ impl<'h> Exec<'h> {
         let Some(s) = src.as_object() else {
             return Ok(true);
         };
+        if self.heap.is_proxy(s) {
+            return Ok(false);
+        }
         let keys = self.heap.own_keys(s);
         let getter = keys.iter().any(|&k| {
             matches!(self.heap.get_own_property(s, k),
@@ -2666,6 +2758,20 @@ impl<'h> Exec<'h> {
             for i in 0..self.heap.str_len(s) {
                 keys.push(self.heap.atom_to_value(Atom::int(i).unwrap())?);
             }
+        } else if let Some(r) = v
+            .as_object()
+            .filter(|&r| self.heap.object_class(r) == ObjectClass::Record)
+        {
+            // %ForInKeys's Record (a proxy on the chain): its array of keys, visited
+            // without the deleted-key check (that would be a `has` trap per key).
+            let a = self
+                .heap
+                .object_slot(r, 0)
+                .as_object()
+                .expect("for-in keys");
+            for i in 0..self.heap.array_length(a) {
+                keys.push(self.heap.get_element_fast(a, i).unwrap_or(Value::UNDEFINED));
+            }
         } else if let Some(o) = v.as_object() {
             // Objects already visited: their keys (enumerable or not) shadow the same
             // keys further up. Checked by lookup rather than kept in a set (0043: a set
@@ -2691,7 +2797,10 @@ impl<'h> Exec<'h> {
         }
         let n = keys.len() as u32;
         let arr = self.heap.alloc_value_array(n + 2)?;
-        let target = if v.as_object().is_some() {
+        let target = if v
+            .as_object()
+            .is_some_and(|o| self.heap.object_class(o) != ObjectClass::Record)
+        {
             v
         } else {
             Value::UNDEFINED
@@ -2891,6 +3000,9 @@ impl<'h> Exec<'h> {
     /// constructors.
     fn is_constructor(&self, fo: Obj) -> bool {
         use crate::heap::cells::flags::{OBJ_BUILTIN, OBJ_BUILTIN_CTOR};
+        if self.heap.is_proxy(fo) {
+            return self.proxy_is_constructor(fo);
+        }
         if self.heap.object_class(fo) == ObjectClass::BoundFunction {
             let target = self.heap.object_slot(fo, 0).as_object().expect("target");
             return self.is_constructor(target);
@@ -2949,7 +3061,7 @@ impl<'h> Exec<'h> {
             return type_error("not a function");
         };
         if !self.is_constructor(fo) {
-            if !self.heap.object_class(fo).is_callable() {
+            if !self.heap.is_callable(fo) {
                 return type_error("not a function");
             }
             return type_error(&self.not_a_constructor_message(f));
@@ -2979,6 +3091,10 @@ impl<'h> Exec<'h> {
                 new_target = Some(f);
             }
         }
+        if self.heap.is_proxy(fo) {
+            let nt = new_target.unwrap_or(f);
+            return self.construct_through(proxy::PROXY_CONSTRUCT, base, argc, nt, next);
+        }
         let proto_source = new_target.and_then(|v| v.as_object()).unwrap_or(fo);
         // A builtin constructor makes its own object (GetPrototypeFromConstructor in the
         // builtin, which may run a `prototype` getter): `this` is not read (0039).
@@ -2986,12 +3102,23 @@ impl<'h> Exec<'h> {
             self.heap.cell_flags(fo.offset()) & crate::heap::cells::flags::OBJ_BUILTIN != 0;
         let proto = match self
             .heap
-            .find_property(proto_source, crate::heap::atoms::PROTOTYPE)
+            .lookup_property(proto_source, crate::heap::atoms::PROTOTYPE)
         {
             _ if builtin => None,
-            Some((_, Property::Data { value, .. })) => value.as_object(),
-            None => None,
-            Some(_) => return type_error("not supported yet: getter for 'prototype'"),
+            Lookup::Found(_, Property::Data { value, .. }) => value.as_object(),
+            Lookup::Absent => None,
+            // A `prototype` getter or a proxy's `get` trap: GetPrototypeFromConstructor
+            // runs user code, in %OrdinaryConstructSlow.
+            Lookup::Found(..) | Lookup::Proxy(_) => {
+                let nt = new_target.unwrap_or(f);
+                return self.construct_through(
+                    proxy::ORDINARY_CONSTRUCT_SLOW,
+                    base,
+                    argc,
+                    nt,
+                    next,
+                );
+            }
         };
         let proto = proto.unwrap_or_else(|| intrinsic_obj(self.heap, Intrinsic::ObjectProto));
         let this = Value::object(self.heap.new_object(Some(proto))?);
@@ -3003,6 +3130,18 @@ impl<'h> Exec<'h> {
         }
         self.set(base + 1, this);
         self.sp += 1;
+        self.construct_call(base, argc, new_target, next)
+    }
+
+    /// [[Construct]] of the ordinary function at `stack[base]` with `this` and the
+    /// arguments above it (`f this a1 .. an`) and new.target (`None`: f).
+    pub(super) fn construct_call(
+        &mut self,
+        base: u32,
+        argc: u32,
+        new_target: Option<Value>,
+        next: u32,
+    ) -> Step {
         // An explicit new.target is held in a handle across `call`, whose safepoint may
         // move it; without one it is the callee, read back from the frame.
         let held = match new_target {
@@ -3053,20 +3192,19 @@ impl<'h> Exec<'h> {
         )
     }
 
-    /// OrdinaryHasInstance, for functions with the default Symbol.hasInstance.
-    fn instance_of(&mut self, v: Value, f: Value) -> Result<bool, Fault> {
-        let Some(fo) = f
-            .as_object()
-            .filter(|&o| self.heap.object_class(o).is_callable())
-        else {
+    /// OrdinaryHasInstance, for functions with the default Symbol.hasInstance. `None`
+    /// (only if `can_defer`) when a proxy's getPrototypeOf trap must answer: the caller
+    /// runs %InstanceofOperator.
+    fn instance_of(&mut self, v: Value, f: Value, can_defer: bool) -> Result<Option<bool>, Fault> {
+        let Some(fo) = f.as_object().filter(|&o| self.heap.is_callable(o)) else {
             return type_error("invalid 'instanceof' right operand");
         };
         let Some(mut o) = v.as_object() else {
-            return Ok(false);
+            return Ok(Some(false));
         };
         if self.heap.object_class(fo) == ObjectClass::BoundFunction {
             let target = self.heap.object_slot(fo, 0);
-            return self.instance_of(v, target);
+            return self.instance_of(v, target, can_defer);
         }
         let proto = match self.heap.find_property(fo, crate::heap::atoms::PROTOTYPE) {
             Some((_, Property::Data { value, .. })) => value,
@@ -3076,13 +3214,28 @@ impl<'h> Exec<'h> {
         let Some(p) = proto.as_object() else {
             return type_error("operand 'prototype' property is not an object");
         };
-        while let Some(q) = self.heap.get_prototype_of(o) {
-            if q == p {
-                return Ok(true);
+        loop {
+            if can_defer && self.heap.is_proxy(o) {
+                return Ok(None);
             }
-            o = q;
+            match self.heap.get_prototype_of(o) {
+                Some(q) if q == p => return Ok(Some(true)),
+                Some(q) => o = q,
+                None => return Ok(Some(false)),
+            }
         }
-        Ok(false)
+    }
+
+    /// Whether `o` or an object on its prototype chain is a proxy.
+    fn chain_has_proxy(&self, o: Obj) -> bool {
+        let mut c = Some(o);
+        while let Some(x) = c {
+            if self.heap.is_proxy(x) {
+                return true;
+            }
+            c = self.heap.get_prototype_of(x);
+        }
+        false
     }
 }
 

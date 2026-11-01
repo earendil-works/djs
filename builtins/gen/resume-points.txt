@@ -42,6 +42,7 @@ ArrayConstructor: reentrant (constructor Array)
   builtins/array.ts:166:7  LengthOfArrayLike (builtin)
   builtins/array.ts:167:24  Get (intrinsic)
   builtins/array.ts:179:24  GetPrototypeFromConstructor (builtin)
+  builtins/array.ts:181:7  SetPrototypeOf (intrinsic)
 
 ArrayIsArray: leaf (Array.isArray)
 
@@ -788,10 +789,12 @@ DatePrototypeToPrimitive: reentrant (Date.prototype[Symbol.toPrimitive])
 InstallErrorCause: reentrant
   builtins/error.ts:7:9  HasProperty (intrinsic)
   builtins/error.ts:8:45  Get (intrinsic)
+  builtins/error.ts:8:7  DefineDataPropertyOrThrow (intrinsic)
 
 ErrorConstruct: reentrant
   builtins/error.ts:18:30  GetPrototypeFromConstructor (builtin)
   builtins/error.ts:20:45  ToString (builtin)
+  builtins/error.ts:20:5  DefineDataPropertyOrThrow (intrinsic)
   builtins/error.ts:22:3  InstallErrorCause (builtin)
 
 ErrorConstructor: reentrant (constructor Error)
@@ -827,6 +830,7 @@ InternalErrorConstructor: reentrant (constructor InternalError)
 AggregateErrorConstructor: reentrant (constructor AggregateError)
   builtins/error.ts:135:18  ErrorConstruct (builtin)
   builtins/error.ts:136:42  IterableToList (builtin)
+  builtins/error.ts:136:3  DefineDataPropertyOrThrow (intrinsic)
 
 FunctionPrototypeCall: reentrant (Function.prototype.call)
   builtins/function.ts:13:10  CallWithArray (intrinsic)
@@ -842,25 +846,32 @@ FunctionPrototypeApply: reentrant (Function.prototype.apply)
   builtins/function.ts:41:10  CallWithArray (intrinsic)
 
 FunctionPrototypeBind: reentrant (Function.prototype.bind)
-  builtins/function.ts:57:30  Get (intrinsic)
-  builtins/function.ts:63:44  LengthOfArrayLike (builtin)
-  builtins/function.ts:71:23  Get (intrinsic)
+  builtins/function.ts:58:23  GetPrototypeOf (intrinsic)
+  builtins/function.ts:58:5  SetPrototypeOf (intrinsic)
+  builtins/function.ts:61:7  HasOwnProperty (intrinsic)
+  builtins/function.ts:62:30  Get (intrinsic)
+  builtins/function.ts:68:44  LengthOfArrayLike (builtin)
+  builtins/function.ts:75:3  DefineDataPropertyOrThrow (intrinsic)
+  builtins/function.ts:76:23  Get (intrinsic)
+  builtins/function.ts:78:3  DefineDataPropertyOrThrow (intrinsic)
 
 FunctionPrototypeToString: leaf (Function.prototype.toString)
 
 FunctionConstructor: leaf (constructor Function)
 
 OrdinaryHasInstance: reentrant
-  builtins/function.ts:102:12  InstanceofOperator (builtin)
-  builtins/function.ts:107:20  Get (intrinsic)
+  builtins/function.ts:107:12  InstanceofOperator (builtin)
+  builtins/function.ts:112:20  Get (intrinsic)
+  builtins/function.ts:116:18  GetPrototypeOf (intrinsic)
+  builtins/function.ts:121:9  GetPrototypeOf (intrinsic)
 
 InstanceofOperator: reentrant (%InstanceofOperator)
-  builtins/function.ts:130:32  GetMethod (builtin)
-  builtins/function.ts:132:22  Call (intrinsic)
-  builtins/function.ts:137:10  OrdinaryHasInstance (builtin)
+  builtins/function.ts:135:32  GetMethod (builtin)
+  builtins/function.ts:137:22  Call (intrinsic)
+  builtins/function.ts:142:10  OrdinaryHasInstance (builtin)
 
 FunctionPrototypeHasInstance: reentrant (Function.prototype[Symbol.hasInstance])
-  builtins/function.ts:146:10  OrdinaryHasInstance (builtin)
+  builtins/function.ts:151:10  OrdinaryHasInstance (builtin)
 
 ThrowTypeError: leaf (get Function.prototype.caller, set Function.prototype.caller, get Function.prototype.arguments, set Function.prototype.arguments)
 
@@ -1002,6 +1013,7 @@ InternalizeJSONProperty: reentrant
   builtins/json.ts:39:22  Get (intrinsic)
   builtins/json.ts:43:24  LengthOfArrayLike (builtin)
   builtins/json.ts:45:9  InternalizeJSONMember (builtin)
+  builtins/json.ts:48:25  OwnPropertyKeys (intrinsic)
   builtins/json.ts:49:22  LengthOfArrayLike (builtin)
   builtins/json.ts:51:40  Get (intrinsic)
   builtins/json.ts:51:9  InternalizeJSONMember (builtin)
@@ -1009,6 +1021,7 @@ InternalizeJSONProperty: reentrant
 
 InternalizeJSONMember: reentrant
   builtins/json.ts:60:29  InternalizeJSONProperty (builtin)
+  builtins/json.ts:62:5  DeleteProperty (intrinsic)
   builtins/json.ts:64:5  CreateDataProperty (intrinsic)
 
 JSONStringify: reentrant (JSON.stringify)
@@ -1050,6 +1063,7 @@ JSONJoin: reentrant
   builtins/json.ts:237:16  Get (intrinsic)
 
 SerializeJSONObject: reentrant
+  builtins/json.ts:252:50  OwnPropertyKeys (intrinsic)
   builtins/json.ts:253:20  LengthOfArrayLike (builtin)
   builtins/json.ts:257:26  Get (intrinsic)
   builtins/json.ts:258:25  SerializeJSONProperty (builtin)
@@ -1343,118 +1357,150 @@ ToPropertyDescriptor: reentrant
   builtins/object.ts:53:5  CreateDataPropertyOrThrow (intrinsic)
 
 DefineOwnProperty: reentrant
+  builtins/object.ts:69:26  HasOwnProperty (intrinsic)
   builtins/object.ts:69:59  IsCanonicalNumericKey (builtin)
   builtins/object.ts:70:26  Get (intrinsic)
+  builtins/object.ts:72:7  DeleteProperty (intrinsic)
+  builtins/object.ts:73:12  DefineOwnPropertyFromRecord (intrinsic)
   builtins/object.ts:76:16  ToNumber (builtin)
   builtins/object.ts:76:7  TASet (builtin)
-  builtins/object.ts:81:22  Get (intrinsic)
-  builtins/object.ts:82:25  ToNumber (builtin)
-  builtins/object.ts:83:28  ToNumber (builtin)
-  builtins/object.ts:90:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:81:56  HasOwnProperty (intrinsic)
+  builtins/object.ts:82:22  Get (intrinsic)
+  builtins/object.ts:83:25  ToNumber (builtin)
+  builtins/object.ts:84:28  ToNumber (builtin)
+  builtins/object.ts:91:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:93:10  DefineOwnPropertyFromRecord (intrinsic)
 
 DefinePropertyOrThrow: reentrant
-  builtins/object.ts:97:8  DefineOwnProperty (builtin)
+  builtins/object.ts:98:8  DefineOwnProperty (builtin)
+  builtins/object.ts:103:9  OwnPropertyAttributes (intrinsic)
 
 ObjectDefineProperty: reentrant (Object.defineProperty)
-  builtins/object.ts:113:22  ToPropertyKey (builtin)
-  builtins/object.ts:114:21  ToPropertyDescriptor (builtin)
-  builtins/object.ts:115:3  DefinePropertyOrThrow (builtin)
+  builtins/object.ts:118:22  ToPropertyKey (builtin)
+  builtins/object.ts:119:21  ToPropertyDescriptor (builtin)
+  builtins/object.ts:120:3  DefinePropertyOrThrow (builtin)
 
 ObjectGetOwnPropertyDescriptor: reentrant (Object.getOwnPropertyDescriptor)
-  builtins/object.ts:125:22  ToPropertyKey (builtin)
+  builtins/object.ts:130:22  ToPropertyKey (builtin)
+  builtins/object.ts:131:10  GetOwnPropertyDescriptorObject (intrinsic)
 
-ObjectGetOwnPropertyNames: leaf (Object.getOwnPropertyNames)
+ObjectGetOwnPropertyNames: reentrant (Object.getOwnPropertyNames)
+  builtins/object.ts:139:10  OwnPropertyKeys (intrinsic)
 
 ObjectPrototypeHasOwnProperty: reentrant (Object.prototype.hasOwnProperty)
-  builtins/object.ts:142:22  ToPropertyKey (builtin)
+  builtins/object.ts:147:22  ToPropertyKey (builtin)
+  builtins/object.ts:148:10  HasOwnProperty (intrinsic)
 
 ObjectPrototypePropertyIsEnumerable: reentrant (Object.prototype.propertyIsEnumerable)
-  builtins/object.ts:151:22  ToPropertyKey (builtin)
+  builtins/object.ts:156:22  ToPropertyKey (builtin)
+  builtins/object.ts:157:22  OwnPropertyAttributes (intrinsic)
 
-ObjectGetPrototypeOf: leaf (Object.getPrototypeOf)
+ObjectGetPrototypeOf: reentrant (Object.getPrototypeOf)
+  builtins/object.ts:169:10  GetPrototypeOf (intrinsic)
 
-ObjectSetPrototypeOf: leaf (Object.setPrototypeOf)
+ObjectSetPrototypeOf: reentrant (Object.setPrototypeOf)
+  builtins/object.ts:186:8  SetPrototypeOf (intrinsic)
+  builtins/object.ts:187:10  IsExtensible (intrinsic)
 
 ObjectCreateBuiltin: reentrant (Object.create)
-  builtins/object.ts:200:5  ObjectDefinePropertiesHelper (builtin)
+  builtins/object.ts:205:5  ObjectDefinePropertiesHelper (builtin)
 
 ObjectDefinePropertiesHelper: reentrant
-  builtins/object.ts:209:18  LengthOfArrayLike (builtin)
-  builtins/object.ts:215:24  Get (intrinsic)
-  builtins/object.ts:218:30  Get (intrinsic)
-  builtins/object.ts:219:7  CreateDataPropertyOrThrow (intrinsic)
-  builtins/object.ts:220:47  ToPropertyDescriptor (builtin)
-  builtins/object.ts:220:7  CreateDataPropertyOrThrow (intrinsic)
-  builtins/object.ts:225:30  Get (intrinsic)
-  builtins/object.ts:225:54  Get (intrinsic)
-  builtins/object.ts:225:5  DefinePropertyOrThrow (builtin)
+  builtins/object.ts:213:21  OwnPropertyKeys (intrinsic)
+  builtins/object.ts:214:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:220:24  Get (intrinsic)
+  builtins/object.ts:221:24  OwnPropertyAttributes (intrinsic)
+  builtins/object.ts:223:30  Get (intrinsic)
+  builtins/object.ts:224:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:225:47  ToPropertyDescriptor (builtin)
+  builtins/object.ts:225:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:230:30  Get (intrinsic)
+  builtins/object.ts:230:54  Get (intrinsic)
+  builtins/object.ts:230:5  DefinePropertyOrThrow (builtin)
 
 ObjectDefineProperties: reentrant (Object.defineProperties)
-  builtins/object.ts:238:10  ObjectDefinePropertiesHelper (builtin)
+  builtins/object.ts:243:10  ObjectDefinePropertiesHelper (builtin)
 
 EnumerableOwnProperties: reentrant
-  builtins/object.ts:250:18  LengthOfArrayLike (builtin)
-  builtins/object.ts:254:24  Get (intrinsic)
-  builtins/object.ts:257:28  Get (intrinsic)
-  builtins/object.ts:259:9  CreateDataPropertyOrThrow (intrinsic)
-  builtins/object.ts:262:9  CreateDataPropertyOrThrow (intrinsic)
-  builtins/object.ts:263:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:252:12  OwnPropertyKeys (intrinsic)
+  builtins/object.ts:254:21  OwnPropertyKeys (intrinsic)
+  builtins/object.ts:255:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:259:24  Get (intrinsic)
+  builtins/object.ts:260:24  OwnPropertyAttributes (intrinsic)
+  builtins/object.ts:262:28  Get (intrinsic)
   builtins/object.ts:264:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:267:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:268:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:269:9  CreateDataPropertyOrThrow (intrinsic)
 
 ObjectKeys: reentrant (Object.keys)
-  builtins/object.ts:277:10  EnumerableOwnProperties (builtin)
+  builtins/object.ts:282:10  EnumerableOwnProperties (builtin)
 
 ObjectValues: reentrant (Object.values)
-  builtins/object.ts:285:10  EnumerableOwnProperties (builtin)
+  builtins/object.ts:290:10  EnumerableOwnProperties (builtin)
 
 ObjectEntries: reentrant (Object.entries)
-  builtins/object.ts:293:10  EnumerableOwnProperties (builtin)
+  builtins/object.ts:298:10  EnumerableOwnProperties (builtin)
 
 ObjectAssign: reentrant (Object.assign)
-  builtins/object.ts:303:18  LengthOfArrayLike (builtin)
-  builtins/object.ts:305:31  Get (intrinsic)
-  builtins/object.ts:309:26  LengthOfArrayLike (builtin)
-  builtins/object.ts:311:28  Get (intrinsic)
-  builtins/object.ts:314:24  Get (intrinsic)
-  builtins/object.ts:314:11  Set (intrinsic)
+  builtins/object.ts:308:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:310:31  Get (intrinsic)
+  builtins/object.ts:313:25  OwnPropertyKeys (intrinsic)
+  builtins/object.ts:314:26  LengthOfArrayLike (builtin)
+  builtins/object.ts:316:28  Get (intrinsic)
+  builtins/object.ts:317:28  OwnPropertyAttributes (intrinsic)
+  builtins/object.ts:319:24  Get (intrinsic)
+  builtins/object.ts:319:11  Set (intrinsic)
 
-ObjectFreeze: leaf (Object.freeze)
+ObjectFreeze: reentrant (Object.freeze)
+  builtins/object.ts:335:8  SetIntegrityLevel (intrinsic)
 
-ObjectSeal: leaf (Object.seal)
+ObjectSeal: reentrant (Object.seal)
+  builtins/object.ts:349:8  SetIntegrityLevel (intrinsic)
 
-ObjectPreventExtensions: leaf (Object.preventExtensions)
+ObjectPreventExtensions: reentrant (Object.preventExtensions)
+  builtins/object.ts:363:8  PreventExtensions (intrinsic)
 
-ObjectIsFrozen: leaf (Object.isFrozen)
+ObjectIsFrozen: reentrant (Object.isFrozen)
+  builtins/object.ts:374:26  TestIntegrityLevel (intrinsic)
 
-ObjectIsSealed: leaf (Object.isSealed)
+ObjectIsSealed: reentrant (Object.isSealed)
+  builtins/object.ts:382:26  TestIntegrityLevel (intrinsic)
 
-ObjectIsExtensible: leaf (Object.isExtensible)
+ObjectIsExtensible: reentrant (Object.isExtensible)
+  builtins/object.ts:390:25  IsExtensible (intrinsic)
 
-ObjectGetOwnPropertySymbols: leaf (Object.getOwnPropertySymbols)
+ObjectGetOwnPropertySymbols: reentrant (Object.getOwnPropertySymbols)
+  builtins/object.ts:398:10  OwnPropertyKeys (intrinsic)
 
 ObjectGetOwnPropertyDescriptors: reentrant (Object.getOwnPropertyDescriptors)
-  builtins/object.ts:403:18  LengthOfArrayLike (builtin)
-  builtins/object.ts:406:24  Get (intrinsic)
-  builtins/object.ts:409:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:407:21  OwnPropertyKeys (intrinsic)
+  builtins/object.ts:408:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:411:24  Get (intrinsic)
+  builtins/object.ts:412:25  GetOwnPropertyDescriptorObject (intrinsic)
+  builtins/object.ts:414:7  CreateDataPropertyOrThrow (intrinsic)
 
 ObjectHasOwn: reentrant (Object.hasOwn)
-  builtins/object.ts:421:30  ToPropertyKey (builtin)
+  builtins/object.ts:426:30  ToPropertyKey (builtin)
+  builtins/object.ts:426:10  HasOwnProperty (intrinsic)
 
 ObjectIs: leaf (Object.is)
 
 ObjectPrototypeToString: reentrant (Object.prototype.toString)
-  builtins/object.ts:437:10  ObjectToString (builtin)
+  builtins/object.ts:442:10  ObjectToString (builtin)
 
 ObjectToString: reentrant
-  builtins/object.ts:449:22  Get (intrinsic)
+  builtins/object.ts:454:22  Get (intrinsic)
 
 ObjectPrototypeToLocaleString: reentrant (Object.prototype.toLocaleString)
-  builtins/object.ts:461:15  GetV (intrinsic)
-  builtins/object.ts:461:10  Call (intrinsic)
+  builtins/object.ts:466:15  GetV (intrinsic)
+  builtins/object.ts:466:10  Call (intrinsic)
 
 ObjectPrototypeValueOf: leaf (Object.prototype.valueOf)
 
-ObjectPrototypeIsPrototypeOf: leaf (Object.prototype.isPrototypeOf)
+ObjectPrototypeIsPrototypeOf: reentrant (Object.prototype.isPrototypeOf)
+  builtins/object.ts:486:18  GetPrototypeOf (intrinsic)
+  builtins/object.ts:491:9  GetPrototypeOf (intrinsic)
 
 ResolvePromise: reentrant
   builtins/promise.ts:30:12  Get (intrinsic)
@@ -1562,6 +1608,7 @@ PromiseAnyRejectElement: reentrant (%PromiseAnyRejectElement)
 
 NewAggregateError: reentrant
   builtins/promise.ts:420:42  CreateArrayFromList (builtin)
+  builtins/promise.ts:420:3  DefineDataPropertyOrThrow (intrinsic)
 
 CreateArrayFromList: reentrant
   builtins/promise.ts:427:20  LengthOfArrayLike (builtin)
@@ -1644,6 +1691,331 @@ PromisePrototypeToStringTag: leaf (value Promise.prototype[Symbol.toStringTag])
 HostCallSettle: reentrant (%HostCallSettle)
   builtins/promise.ts:682:5  ResolvePromise (builtin)
 
+ProxyConstructor: leaf (constructor Proxy)
+
+ProxyCreate: leaf
+
+ProxyRevocable: reentrant (Proxy.revocable)
+  builtins/proxy.ts:42:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:43:3  CreateDataPropertyOrThrow (intrinsic)
+
+ProxyRevokeFunction: leaf (%ProxyRevokeFunction)
+
+TrapKey: leaf
+
+ProxyTrap: reentrant
+  builtins/proxy.ts:69:10  GetMethod (builtin)
+
+DescFlag: reentrant
+  builtins/proxy.ts:74:10  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:74:51  Get (intrinsic)
+
+IsAccessorDescriptor: reentrant
+  builtins/proxy.ts:79:10  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:79:41  HasOwnProperty (intrinsic)
+
+IsDataDescriptor: reentrant
+  builtins/proxy.ts:84:10  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:84:43  HasOwnProperty (intrinsic)
+
+CompletePropertyDescriptor: reentrant
+  builtins/proxy.ts:89:8  IsAccessorDescriptor (builtin)
+  builtins/proxy.ts:90:10  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:91:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:93:10  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:94:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:97:10  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:98:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:100:10  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:101:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:104:8  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:105:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:107:8  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:108:5  CreateDataPropertyOrThrow (intrinsic)
+
+IsCompatiblePropertyDescriptor: reentrant
+  builtins/proxy.ts:122:7  DescFlag (builtin)
+  builtins/proxy.ts:125:7  DescFlag (builtin)
+  builtins/proxy.ts:128:7  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:128:45  DescFlag (builtin)
+  builtins/proxy.ts:128:78  DescFlag (builtin)
+  builtins/proxy.ts:131:29  IsAccessorDescriptor (builtin)
+  builtins/proxy.ts:131:60  IsDataDescriptor (builtin)
+  builtins/proxy.ts:132:19  IsAccessorDescriptor (builtin)
+  builtins/proxy.ts:132:50  IsAccessorDescriptor (builtin)
+  builtins/proxy.ts:135:7  IsAccessorDescriptor (builtin)
+  builtins/proxy.ts:136:9  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:136:51  Get (intrinsic)
+  builtins/proxy.ts:136:69  Get (intrinsic)
+  builtins/proxy.ts:139:9  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:139:51  Get (intrinsic)
+  builtins/proxy.ts:139:69  Get (intrinsic)
+  builtins/proxy.ts:142:15  DescFlag (builtin)
+  builtins/proxy.ts:143:9  DescFlag (builtin)
+  builtins/proxy.ts:146:9  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:146:53  Get (intrinsic)
+  builtins/proxy.ts:146:73  Get (intrinsic)
+
+FromPropertyDescriptor: reentrant
+  builtins/proxy.ts:156:7  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:157:43  Get (intrinsic)
+  builtins/proxy.ts:157:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:159:7  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:160:46  Get (intrinsic)
+  builtins/proxy.ts:160:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:162:7  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:163:41  Get (intrinsic)
+  builtins/proxy.ts:163:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:165:7  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:166:41  Get (intrinsic)
+  builtins/proxy.ts:166:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:168:7  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:169:48  Get (intrinsic)
+  builtins/proxy.ts:169:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:171:7  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:172:50  Get (intrinsic)
+  builtins/proxy.ts:172:5  CreateDataPropertyOrThrow (intrinsic)
+
+DescriptorAttributes: reentrant
+  builtins/proxy.ts:184:7  DescFlag (builtin)
+  builtins/proxy.ts:187:7  DescFlag (builtin)
+  builtins/proxy.ts:190:7  DescFlag (builtin)
+  builtins/proxy.ts:193:7  IsAccessorDescriptor (builtin)
+
+ListIncludes: reentrant
+  builtins/proxy.ts:201:18  LengthOfArrayLike (builtin)
+  builtins/proxy.ts:203:19  Get (intrinsic)
+
+ProxyGetPrototypeOf: reentrant (%ProxyGetPrototypeOf)
+  builtins/proxy.ts:219:23  ProxyTrap (builtin)
+  builtins/proxy.ts:221:12  GetPrototypeOf (intrinsic)
+  builtins/proxy.ts:223:31  Call (intrinsic)
+  builtins/proxy.ts:227:7  IsExtensible (intrinsic)
+  builtins/proxy.ts:230:32  GetPrototypeOf (intrinsic)
+
+ProxySetPrototypeOf: reentrant (%ProxySetPrototypeOf)
+  builtins/proxy.ts:243:23  ProxyTrap (builtin)
+  builtins/proxy.ts:245:12  SetPrototypeOf (intrinsic)
+  builtins/proxy.ts:247:18  Call (intrinsic)
+  builtins/proxy.ts:250:7  IsExtensible (intrinsic)
+  builtins/proxy.ts:253:21  GetPrototypeOf (intrinsic)
+
+ProxyIsExtensible: reentrant (%ProxyIsExtensible)
+  builtins/proxy.ts:266:23  ProxyTrap (builtin)
+  builtins/proxy.ts:268:12  IsExtensible (intrinsic)
+  builtins/proxy.ts:270:37  Call (intrinsic)
+  builtins/proxy.ts:271:18  IsExtensible (intrinsic)
+
+ProxyPreventExtensions: reentrant (%ProxyPreventExtensions)
+  builtins/proxy.ts:284:23  ProxyTrap (builtin)
+  builtins/proxy.ts:286:12  PreventExtensions (intrinsic)
+  builtins/proxy.ts:288:37  Call (intrinsic)
+  builtins/proxy.ts:289:17  IsExtensible (intrinsic)
+
+ProxyGetOwnProperty: reentrant
+  builtins/proxy.ts:301:23  ProxyTrap (builtin)
+  builtins/proxy.ts:303:12  GetOwnPropertyDescriptorObject (intrinsic)
+  builtins/proxy.ts:305:32  Call (intrinsic)
+  builtins/proxy.ts:309:29  GetOwnPropertyDescriptorObject (intrinsic)
+  builtins/proxy.ts:314:10  DescFlag (builtin)
+  builtins/proxy.ts:317:10  IsExtensible (intrinsic)
+  builtins/proxy.ts:322:37  IsExtensible (intrinsic)
+  builtins/proxy.ts:323:27  ToPropertyDescriptor (builtin)
+  builtins/proxy.ts:324:3  CompletePropertyDescriptor (builtin)
+  builtins/proxy.ts:325:8  IsCompatiblePropertyDescriptor (builtin)
+  builtins/proxy.ts:328:8  DescFlag (builtin)
+  builtins/proxy.ts:329:37  DescFlag (builtin)
+  builtins/proxy.ts:332:9  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:332:52  DescFlag (builtin)
+  builtins/proxy.ts:333:11  DescFlag (builtin)
+
+ProxyGetOwnPropertyDescriptorObject: reentrant (%ProxyGetOwnPropertyDescriptorObject)
+  builtins/proxy.ts:347:23  ProxyGetOwnProperty (builtin)
+  builtins/proxy.ts:351:10  FromPropertyDescriptor (builtin)
+
+ProxyHasOwnProperty: reentrant (%ProxyHasOwnProperty)
+  builtins/proxy.ts:359:10  ProxyGetOwnProperty (builtin)
+
+ProxyOwnPropertyAttributes: reentrant (%ProxyOwnPropertyAttributes)
+  builtins/proxy.ts:367:31  ProxyGetOwnProperty (builtin)
+  builtins/proxy.ts:367:10  DescriptorAttributes (builtin)
+
+ProxyDefineOwnPropertyFromRecord: reentrant (%ProxyDefineOwnPropertyFromRecord)
+  builtins/proxy.ts:377:23  ProxyTrap (builtin)
+  builtins/proxy.ts:379:12  DefineOwnProperty (builtin)
+  builtins/proxy.ts:381:24  FromPropertyDescriptor (builtin)
+  builtins/proxy.ts:382:18  Call (intrinsic)
+  builtins/proxy.ts:385:29  GetOwnPropertyDescriptorObject (intrinsic)
+  builtins/proxy.ts:386:37  IsExtensible (intrinsic)
+  builtins/proxy.ts:387:39  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:387:80  DescFlag (builtin)
+  builtins/proxy.ts:395:8  IsCompatiblePropertyDescriptor (builtin)
+  builtins/proxy.ts:398:29  DescFlag (builtin)
+  builtins/proxy.ts:401:7  IsDataDescriptor (builtin)
+  builtins/proxy.ts:401:32  DescFlag (builtin)
+  builtins/proxy.ts:401:64  DescFlag (builtin)
+  builtins/proxy.ts:402:9  HasOwnProperty (intrinsic)
+  builtins/proxy.ts:402:46  DescFlag (builtin)
+
+DataDescriptorRecord: reentrant
+  builtins/proxy.ts:412:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:413:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:414:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:415:3  CreateDataPropertyOrThrow (intrinsic)
+
+ProxyDefineDataPropertyOrThrow: reentrant (%ProxyDefineDataPropertyOrThrow)
+  builtins/proxy.ts:424:49  DataDescriptorRecord (builtin)
+  builtins/proxy.ts:424:8  ProxyDefineOwnPropertyFromRecord (builtin)
+
+ProxyCreateDataProperty: reentrant (%ProxyCreateDataProperty)
+  builtins/proxy.ts:434:51  DataDescriptorRecord (builtin)
+  builtins/proxy.ts:434:10  ProxyDefineOwnPropertyFromRecord (builtin)
+
+ProxyCreateDataPropertyOrThrow: reentrant (%ProxyCreateDataPropertyOrThrow)
+  builtins/proxy.ts:442:8  ProxyCreateDataProperty (builtin)
+
+ProxyHas: reentrant (%ProxyHas)
+  builtins/proxy.ts:454:23  ProxyTrap (builtin)
+  builtins/proxy.ts:456:12  HasProperty (intrinsic)
+  builtins/proxy.ts:458:37  Call (intrinsic)
+  builtins/proxy.ts:460:31  GetOwnPropertyDescriptorObject (intrinsic)
+  builtins/proxy.ts:462:12  DescFlag (builtin)
+  builtins/proxy.ts:465:12  IsExtensible (intrinsic)
+
+ProxyGet: reentrant (%ProxyGet)
+  builtins/proxy.ts:480:23  ProxyTrap (builtin)
+  builtins/proxy.ts:482:12  GetWithReceiver (intrinsic)
+  builtins/proxy.ts:484:29  Call (intrinsic)
+  builtins/proxy.ts:485:29  GetOwnPropertyDescriptorObject (intrinsic)
+  builtins/proxy.ts:488:10  DescFlag (builtin)
+  builtins/proxy.ts:489:11  IsDataDescriptor (builtin)
+  builtins/proxy.ts:489:36  DescFlag (builtin)
+  builtins/proxy.ts:490:36  Get (intrinsic)
+  builtins/proxy.ts:494:11  IsAccessorDescriptor (builtin)
+  builtins/proxy.ts:494:39  Get (intrinsic)
+
+ProxySet: reentrant (%ProxySet)
+  builtins/proxy.ts:509:23  ProxyTrap (builtin)
+  builtins/proxy.ts:511:12  SetWithReceiver (intrinsic)
+  builtins/proxy.ts:513:18  Call (intrinsic)
+  builtins/proxy.ts:516:29  GetOwnPropertyDescriptorObject (intrinsic)
+  builtins/proxy.ts:519:10  DescFlag (builtin)
+  builtins/proxy.ts:520:11  IsDataDescriptor (builtin)
+  builtins/proxy.ts:520:36  DescFlag (builtin)
+  builtins/proxy.ts:521:27  Get (intrinsic)
+  builtins/proxy.ts:525:11  IsAccessorDescriptor (builtin)
+  builtins/proxy.ts:525:39  Get (intrinsic)
+
+ProxySetOrThrow: reentrant (%ProxySetOrThrow)
+  builtins/proxy.ts:539:8  ProxySet (builtin)
+
+ProxySetOnReceiver: reentrant (%ProxySetOnReceiver)
+  builtins/proxy.ts:551:27  GetOwnPropertyDescriptorObject (intrinsic)
+  builtins/proxy.ts:554:9  IsAccessorDescriptor (builtin)
+  builtins/proxy.ts:554:37  DescFlag (builtin)
+  builtins/proxy.ts:558:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:559:12  DefineOwnPropertyFromRecord (intrinsic)
+  builtins/proxy.ts:561:10  CreateDataProperty (intrinsic)
+
+ProxyDeleteProperty: reentrant (%ProxyDeleteProperty)
+  builtins/proxy.ts:571:23  ProxyTrap (builtin)
+  builtins/proxy.ts:573:12  DeleteProperty (intrinsic)
+  builtins/proxy.ts:575:18  Call (intrinsic)
+  builtins/proxy.ts:578:29  GetOwnPropertyDescriptorObject (intrinsic)
+  builtins/proxy.ts:582:8  DescFlag (builtin)
+  builtins/proxy.ts:585:8  IsExtensible (intrinsic)
+
+ProxyDeletePropertyOrThrow: reentrant (%ProxyDeletePropertyOrThrow)
+  builtins/proxy.ts:597:8  ProxyDeleteProperty (builtin)
+
+ProxyOwnKeys: reentrant
+  builtins/proxy.ts:607:23  ProxyTrap (builtin)
+  builtins/proxy.ts:609:12  OwnPropertyKeys (intrinsic)
+  builtins/proxy.ts:611:34  Call (intrinsic)
+  builtins/proxy.ts:617:20  LengthOfArrayLike (builtin)
+  builtins/proxy.ts:620:24  Get (intrinsic)
+  builtins/proxy.ts:624:9  ListIncludes (builtin)
+  builtins/proxy.ts:627:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:629:37  IsExtensible (intrinsic)
+  builtins/proxy.ts:630:27  OwnPropertyKeys (intrinsic)
+  builtins/proxy.ts:631:18  LengthOfArrayLike (builtin)
+  builtins/proxy.ts:635:24  Get (intrinsic)
+  builtins/proxy.ts:636:25  GetOwnPropertyDescriptorObject (intrinsic)
+  builtins/proxy.ts:637:32  DescFlag (builtin)
+  builtins/proxy.ts:638:50  LengthOfArrayLike (builtin)
+  builtins/proxy.ts:638:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:640:47  LengthOfArrayLike (builtin)
+  builtins/proxy.ts:640:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:643:27  LengthOfArrayLike (builtin)
+  builtins/proxy.ts:649:45  Get (intrinsic)
+  builtins/proxy.ts:649:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:652:19  LengthOfArrayLike (builtin)
+  builtins/proxy.ts:654:31  Get (intrinsic)
+  builtins/proxy.ts:654:10  StrikeKey (builtin)
+  builtins/proxy.ts:662:19  LengthOfArrayLike (builtin)
+  builtins/proxy.ts:664:31  Get (intrinsic)
+  builtins/proxy.ts:664:10  StrikeKey (builtin)
+
+StrikeKey: reentrant
+  builtins/proxy.ts:680:18  LengthOfArrayLike (builtin)
+  builtins/proxy.ts:682:19  Get (intrinsic)
+  builtins/proxy.ts:683:7  CreateDataPropertyOrThrow (intrinsic)
+
+ProxyOwnPropertyKeys: reentrant (%ProxyOwnPropertyKeys)
+  builtins/proxy.ts:696:21  ProxyOwnKeys (builtin)
+  builtins/proxy.ts:700:18  LengthOfArrayLike (builtin)
+  builtins/proxy.ts:704:24  Get (intrinsic)
+  builtins/proxy.ts:707:27  ProxyGetOwnProperty (builtin)
+  builtins/proxy.ts:708:36  DescFlag (builtin)
+  builtins/proxy.ts:711:7  CreateDataPropertyOrThrow (intrinsic)
+
+ProxyCall: reentrant (%ProxyCall)
+  builtins/proxy.ts:725:23  ProxyTrap (builtin)
+  builtins/proxy.ts:727:12  CallWithArray (intrinsic)
+  builtins/proxy.ts:729:10  Call (intrinsic)
+
+ProxyConstruct: reentrant (%ProxyConstruct)
+  builtins/proxy.ts:739:23  ProxyTrap (builtin)
+  builtins/proxy.ts:741:12  ConstructWithArray (intrinsic)
+  builtins/proxy.ts:743:25  Call (intrinsic)
+
+OrdinaryConstructSlow: reentrant (%OrdinaryConstructSlow)
+  builtins/proxy.ts:758:22  GetPrototypeFromConstructor (builtin)
+  builtins/proxy.ts:759:10  ConstructWithThis (intrinsic)
+
+ProxySetIntegrityLevel: reentrant (%ProxySetIntegrityLevel)
+  builtins/proxy.ts:767:8  PreventExtensions (intrinsic)
+  builtins/proxy.ts:770:21  OwnPropertyKeys (intrinsic)
+  builtins/proxy.ts:771:18  LengthOfArrayLike (builtin)
+  builtins/proxy.ts:773:24  Get (intrinsic)
+  builtins/proxy.ts:775:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:777:30  GetOwnPropertyDescriptorObject (intrinsic)
+  builtins/proxy.ts:781:12  IsAccessorDescriptor (builtin)
+  builtins/proxy.ts:782:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:785:5  DefinePropertyOrThrow (builtin)
+
+ProxyTestIntegrityLevel: reentrant (%ProxyTestIntegrityLevel)
+  builtins/proxy.ts:795:7  IsExtensible (intrinsic)
+  builtins/proxy.ts:798:21  OwnPropertyKeys (intrinsic)
+  builtins/proxy.ts:799:18  LengthOfArrayLike (builtin)
+  builtins/proxy.ts:801:62  Get (intrinsic)
+  builtins/proxy.ts:801:28  GetOwnPropertyDescriptorObject (intrinsic)
+  builtins/proxy.ts:804:11  DescFlag (builtin)
+  builtins/proxy.ts:807:21  IsDataDescriptor (builtin)
+  builtins/proxy.ts:807:44  DescFlag (builtin)
+
+ForInKeys: reentrant (%ForInKeys)
+  builtins/proxy.ts:827:23  OwnPropertyKeys (intrinsic)
+  builtins/proxy.ts:828:20  LengthOfArrayLike (builtin)
+  builtins/proxy.ts:830:26  Get (intrinsic)
+  builtins/proxy.ts:831:12  ListIncludes (builtin)
+  builtins/proxy.ts:832:28  OwnPropertyAttributes (intrinsic)
+  builtins/proxy.ts:834:46  LengthOfArrayLike (builtin)
+  builtins/proxy.ts:834:11  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:836:47  LengthOfArrayLike (builtin)
+  builtins/proxy.ts:836:13  CreateDataPropertyOrThrow (intrinsic)
+  builtins/proxy.ts:841:11  GetPrototypeOf (intrinsic)
+
 ReflectObject: leaf (value Reflect)
 
 ReflectToStringTag: leaf (value Reflect[Symbol.toStringTag])
@@ -1669,6 +2041,7 @@ ReflectDefineProperty: reentrant (Reflect.defineProperty)
 
 ReflectDeleteProperty: reentrant (Reflect.deleteProperty)
   builtins/reflect.ts:90:28  ToPropertyKey (builtin)
+  builtins/reflect.ts:90:10  DeleteProperty (intrinsic)
 
 ReflectGet: reentrant (Reflect.get)
   builtins/reflect.ts:99:22  ToPropertyKey (builtin)
@@ -1678,31 +2051,41 @@ ReflectGet: reentrant (Reflect.get)
 
 ReflectGetOwnPropertyDescriptor: reentrant (Reflect.getOwnPropertyDescriptor)
   builtins/reflect.ts:110:44  ToPropertyKey (builtin)
+  builtins/reflect.ts:110:10  GetOwnPropertyDescriptorObject (intrinsic)
 
-ReflectGetPrototypeOf: leaf (Reflect.getPrototypeOf)
+ReflectGetPrototypeOf: reentrant (Reflect.getPrototypeOf)
+  builtins/reflect.ts:118:10  GetPrototypeOf (intrinsic)
 
 ReflectHas: reentrant (Reflect.has)
   builtins/reflect.ts:127:25  ToPropertyKey (builtin)
   builtins/reflect.ts:127:10  HasProperty (intrinsic)
 
-ReflectIsExtensible: leaf (Reflect.isExtensible)
+ReflectIsExtensible: reentrant (Reflect.isExtensible)
+  builtins/reflect.ts:135:10  IsExtensible (intrinsic)
 
-ReflectOwnKeys: leaf (Reflect.ownKeys)
+ReflectOwnKeys: reentrant (Reflect.ownKeys)
+  builtins/reflect.ts:143:10  OwnPropertyKeys (intrinsic)
 
-ReflectPreventExtensions: leaf (Reflect.preventExtensions)
+ReflectPreventExtensions: reentrant (Reflect.preventExtensions)
+  builtins/reflect.ts:151:10  PreventExtensions (intrinsic)
 
 ReflectSet: reentrant (Reflect.set)
   builtins/reflect.ts:160:22  ToPropertyKey (builtin)
   builtins/reflect.ts:161:27  LengthOfArrayLike (builtin)
   builtins/reflect.ts:161:57  Get (intrinsic)
   builtins/reflect.ts:164:49  IsCanonicalNumericKey (builtin)
+  builtins/reflect.ts:164:79  ReachesReceiver (builtin)
   builtins/reflect.ts:165:36  ToNumber (builtin)
   builtins/reflect.ts:165:12  SetWithReceiver (intrinsic)
   builtins/reflect.ts:167:10  SetWithReceiver (intrinsic)
 
-ReachesReceiver: leaf
+ReachesReceiver: reentrant
+  builtins/reflect.ts:183:24  OwnPropertyAttributes (intrinsic)
+  builtins/reflect.ts:193:11  GetPrototypeOf (intrinsic)
+  builtins/reflect.ts:195:10  OwnPropertyAttributes (intrinsic)
 
-ReflectSetPrototypeOf: leaf (Reflect.setPrototypeOf)
+ReflectSetPrototypeOf: reentrant (Reflect.setPrototypeOf)
+  builtins/reflect.ts:207:10  SetPrototypeOf (intrinsic)
 
 ThisSet: leaf
 
@@ -1839,16 +2222,20 @@ ArraySpread: reentrant (%ArraySpread)
   builtins/spread.ts:21:5  CreateDataPropertyOrThrow (intrinsic)
 
 CopyDataProperties: reentrant (%CopyDataProperties)
+  builtins/spread.ts:37:21  OwnPropertyKeys (intrinsic)
   builtins/spread.ts:38:22  LengthOfArrayLike (builtin)
   builtins/spread.ts:40:24  Get (intrinsic)
+  builtins/spread.ts:41:24  OwnPropertyAttributes (intrinsic)
   builtins/spread.ts:43:46  Get (intrinsic)
   builtins/spread.ts:43:7  CreateDataPropertyOrThrow (intrinsic)
 
 CopyDataPropertiesExcluding: reentrant (%CopyDataPropertiesExcluding)
+  builtins/spread.ts:59:21  OwnPropertyKeys (intrinsic)
   builtins/spread.ts:60:22  LengthOfArrayLike (builtin)
   builtins/spread.ts:61:18  LengthOfArrayLike (builtin)
   builtins/spread.ts:63:24  Get (intrinsic)
   builtins/spread.ts:66:22  Get (intrinsic)
+  builtins/spread.ts:76:26  OwnPropertyAttributes (intrinsic)
   builtins/spread.ts:78:48  Get (intrinsic)
   builtins/spread.ts:78:9  CreateDataPropertyOrThrow (intrinsic)
 

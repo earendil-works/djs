@@ -37,7 +37,7 @@ declare function IsObject(v: Value): boolean;
 declare function IsCallable(v: Value): boolean;
 /** IsConstructor ( argument ). @leaf */
 declare function IsConstructor(v: Value): boolean;
-/** IsArray ( argument ), without proxies. @leaf */
+/** IsArray ( argument ), 7.2.2, through proxies: TypeError for a revoked proxy. @leaf */
 declare function IsArray(v: Value): boolean;
 /** @leaf */
 declare function IsString(v: Value): boolean;
@@ -92,11 +92,11 @@ declare function Get(o: Obj, key: Value): Value;
 declare function GetV(v: Value, key: Value): Value;
 /** Set ( O, P, V, true ): may call a setter; throws on failure. @reentrant */
 declare function Set(o: Obj, key: Value, v: Value): void;
-/** HasProperty ( O, P ): reentrant once proxies exist. @reentrant */
+/** HasProperty ( O, P ): a proxy's `has` trap. @reentrant */
 declare function HasProperty(o: Obj, key: Value): boolean;
-/** CreateDataPropertyOrThrow ( O, P, V ): reentrant once proxies exist. @reentrant */
+/** CreateDataPropertyOrThrow ( O, P, V ): a proxy's `defineProperty` trap. @reentrant */
 declare function CreateDataPropertyOrThrow(o: Obj, key: Value, v: Value): void;
-/** DeletePropertyOrThrow ( O, P ): reentrant once proxies exist. @reentrant */
+/** DeletePropertyOrThrow ( O, P ): a proxy's `deleteProperty` trap. @reentrant */
 declare function DeletePropertyOrThrow(o: Obj, key: Value): void;
 
 // ---- Calls ---------------------------------------------------------------------------
@@ -139,40 +139,40 @@ declare function ErrorCreate(proto: Obj): Obj;
 declare function CaptureStack(o: Obj): void;
 /**
  * DefinePropertyOrThrow ( O, P, desc ) with a complete data descriptor; `attrs` are
- * writable 1, enumerable 2, configurable 4. @leaf
+ * writable 1, enumerable 2, configurable 4. @reentrant
  */
 declare function DefineDataPropertyOrThrow(o: Obj, key: Value, v: Value, attrs: i32): void;
 /**
  * [[DefineOwnProperty]] with a descriptor record from ToPropertyDescriptor (an object
- * whose own data properties are the present fields). False if it was rejected. @leaf
+ * whose own data properties are the present fields). False if it was rejected. @reentrant
  */
 declare function DefineOwnPropertyFromRecord(o: Obj, key: Value, desc: Obj): boolean;
-/** FromPropertyDescriptor ( [[GetOwnProperty]](o, key) ): undefined if absent. @leaf */
+/** FromPropertyDescriptor ( [[GetOwnProperty]](o, key) ): undefined if absent. @reentrant */
 declare function GetOwnPropertyDescriptorObject(o: Obj, key: Value): Value;
-/** HasOwnProperty ( O, P ). @leaf */
+/** HasOwnProperty ( O, P ). @reentrant */
 declare function HasOwnProperty(o: Obj, key: Value): boolean;
 /**
  * The attributes of an own property: -1 if absent, else writable 1, enumerable 2,
- * configurable 4, accessor 8. @leaf
+ * configurable 4, accessor 8. @reentrant
  */
 declare function OwnPropertyAttributes(o: Obj, key: Value): i32;
 /**
  * The own keys of o as a new array, in [[OwnPropertyKeys]] order: kind 0 strings,
- * 1 symbols, 2 both, 3 enumerable strings. @leaf
+ * 1 symbols, 2 both, 3 enumerable strings. @reentrant
  */
 declare function OwnPropertyKeys(o: Obj, kind: i32): Obj;
 
-/** [[GetPrototypeOf]] ( ): an object or null. @leaf */
+/** [[GetPrototypeOf]] ( ): an object or null. @reentrant */
 declare function GetPrototypeOf(o: Obj): Value;
-/** [[SetPrototypeOf]] ( V ) with an object or null: false if refused. @leaf */
+/** [[SetPrototypeOf]] ( V ) with an object or null: false if refused. @reentrant */
 declare function SetPrototypeOf(o: Obj, proto: Value): boolean;
-/** [[PreventExtensions]] ( ). @leaf */
+/** [[PreventExtensions]] ( ). @reentrant */
 declare function PreventExtensions(o: Obj): boolean;
-/** [[IsExtensible]] ( ). @leaf */
+/** [[IsExtensible]] ( ). @reentrant */
 declare function IsExtensible(o: Obj): boolean;
-/** SetIntegrityLevel ( O, level ): sealed, or frozen if `frozen`. @leaf */
+/** SetIntegrityLevel ( O, level ): sealed, or frozen if `frozen`. @reentrant */
 declare function SetIntegrityLevel(o: Obj, frozen: boolean): boolean;
-/** TestIntegrityLevel ( O, level ): sealed, or frozen if `frozen`. @leaf */
+/** TestIntegrityLevel ( O, level ): sealed, or frozen if `frozen`. @reentrant */
 declare function TestIntegrityLevel(o: Obj, frozen: boolean): boolean;
 /** SameValue ( x, y ). @leaf */
 declare function SameValue(x: Value, y: Value): boolean;
@@ -193,12 +193,34 @@ declare function PrimitiveValue(v: Value): Value;
 
 /** Construct ( F, args, newTarget ) with the arguments in a dense array. @reentrant */
 declare function ConstructWithArray(f: Value, args: Obj, newTarget: Value): Obj;
+/**
+ * [[Construct]] of an ordinary (non-builtin) function f with `thisArg` as the new
+ * object (OrdinaryCreateFromConstructor done by the caller) and new.target. @reentrant
+ */
+declare function ConstructWithThis(f: Obj, thisArg: Obj, args: Obj, newTarget: Value): Obj;
 /** [[Get]] ( P, Receiver ): a getter runs with `receiver` as this. @reentrant */
 declare function GetWithReceiver(o: Obj, key: Value, receiver: Value): Value;
 /** OrdinarySet ( O, P, V, Receiver ): false when refused; a setter runs with receiver. @reentrant */
 declare function SetWithReceiver(o: Obj, key: Value, v: Value, receiver: Value): boolean;
-/** [[Delete]] ( P ): false for a non-configurable property. @leaf */
+/** [[Delete]] ( P ): false for a non-configurable property. @reentrant */
 declare function DeleteProperty(o: Obj, key: Value): boolean;
+
+// ---- Proxy (0045, heap/proxy.rs, builtins/proxy.ts) ---------------------------------------
+//
+// The internal-method intrinsics above (Get, Set, HasProperty, OwnPropertyKeys,
+// GetPrototypeOf, ...) take proxies too: on one they call the builtin of proxy.ts that
+// runs the trap (interp/run/proxy.rs), so they are reentrant.
+
+/** Whether v is a Proxy exotic object (revoked or not). @leaf */
+declare function IsProxy(v: Value): boolean;
+/** A new proxy (ProxyCreate's object, 10.5.14): callable/constructor as target is. @leaf */
+declare function NewProxy(target: Obj, handler: Obj): Obj;
+/** [[ProxyTarget]] of a proxy: TypeError "revoked proxy" once revoked. @leaf */
+declare function ProxyTarget(p: Obj): Obj;
+/** [[ProxyHandler]] of a proxy: TypeError "revoked proxy" once revoked. @leaf */
+declare function ProxyHandler(p: Obj): Obj;
+/** Revokes a proxy (target and handler become null). @leaf */
+declare function ProxyRevoke(p: Obj): void;
 
 // ---- Map, Set, WeakMap, WeakSet (0038, heap/collection.rs) --------------------------
 
@@ -595,8 +617,10 @@ declare function RecordSet(r: Obj, i: i32, v: Value): void;
  * interp/run/intrinsics.rs: 0 PromiseResolveFunction, 1 PromiseRejectFunction, 2
  * GetCapabilitiesExecutor, 3 PromiseAllResolveElement, 4 PromiseAllSettledResolveElement,
  * 5 PromiseAllSettledRejectElement, 6 PromiseAnyRejectElement, 7 PromiseThenFinally, 8
- * PromiseCatchFinally, 9 PromiseValueThunk, 10 PromiseThrower) with `this` = data and its
- * own arguments.
+ * PromiseCatchFinally, 9 PromiseValueThunk, 10 PromiseThrower, 11
+ * AsyncGeneratorAwaitReturnFulfilled, 12 AsyncGeneratorAwaitReturnRejected, 13
+ * AsyncFromSyncIteratorUnwrap, 14 AsyncFromSyncIteratorCloseThrow, 15
+ * ProxyRevokeFunction) with `this` = data and its own arguments.
  * @leaf
  */
 declare function NewBuiltinClosure(kind: i32, data: Value, length: i32): Fn;
@@ -658,7 +682,7 @@ declare function JsonParse(text: Str): Value;
 declare function JsonStringifyFast(v: Value, gap: Str): Value;
 /** QuoteJSONString ( value ), 25.5.2.3. @leaf */
 declare function JsonQuote(s: Str): Str;
-/** CreateDataProperty ( O, P, V ): false if refused. Reentrant once proxies exist. @reentrant */
+/** CreateDataProperty ( O, P, V ): false if refused. @reentrant */
 declare function CreateDataProperty(o: Obj, key: Value, v: Value): boolean;
 
 // ---- Used by the generated code (crates/djs-bgen/src/emit_js.rs) ------------------------

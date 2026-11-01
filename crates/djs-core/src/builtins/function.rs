@@ -31,10 +31,7 @@ pub(crate) fn bound_function_create(
 /// source slice for JS functions (D009), `function name() {\n    [native code]\n}` (as
 /// qjs prints it) for builtins, host and bound functions.
 pub(crate) fn to_string(heap: &mut Heap, f: Value) -> Result<Str, Fault> {
-    let Some(o) = f
-        .as_object()
-        .filter(|&o| heap.object_class(o).is_callable())
-    else {
+    let Some(o) = f.as_object().filter(|&o| heap.is_callable(o)) else {
         return type_error("not a function");
     };
     if heap.object_class(o) == ObjectClass::Function

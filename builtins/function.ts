@@ -52,6 +52,11 @@ function FunctionPrototypeBind(this: Value, thisArg?: Value, ...args: Value[]): 
   }
   const target: Fn = AsFn(this);
   const f: Obj = BoundFunctionCreate(target, thisArg, args);
+  if (IsProxy(target)) {
+    // BoundFunctionCreate's target.[[GetPrototypeOf]]() is a trap for a proxy; the leaf
+    // took the proxy's own (null) prototype.
+    SetPrototypeOf(f, GetPrototypeOf(target));
+  }
   let l: f64 = 0;
   if (HasOwnProperty(target, "length")) {
     const targetLen: Value = Get(target, "length");

@@ -274,7 +274,7 @@ const PROMISE_RESOLVE_THENABLE_JOB: u16 = id("PromiseResolveThenableJob");
 
 /// The builtins a `%NewBuiltinClosure(kind, ..)` calls, by kind (D1372; the list in
 /// builtins/intrinsics.d.ts).
-const BUILTIN_CLOSURES: [u16; 15] = [
+const BUILTIN_CLOSURES: [u16; 16] = [
     id("PromiseResolveFunction"),
     id("PromiseRejectFunction"),
     id("GetCapabilitiesExecutor"),
@@ -290,6 +290,7 @@ const BUILTIN_CLOSURES: [u16; 15] = [
     id("AsyncGeneratorAwaitReturnRejected"),
     id("AsyncFromSyncIteratorUnwrap"),
     id("AsyncFromSyncIteratorCloseThrow"),
+    id("ProxyRevokeFunction"),
 ];
 
 /// The function-kind constructors, wired to their prototypes when installed (D1420).
@@ -310,6 +311,17 @@ const FUNCTION_KIND_CONSTRUCTORS: [(u16, Intrinsic, &str); 3] = [
         "AsyncFunction",
     ),
 ];
+
+/// What `ordinary_set` leaves to its caller.
+enum SetStep {
+    Done(bool),
+    /// Call this setter with the receiver.
+    Setter(Value),
+    /// `%ProxySet(p, key, v, receiver)`: a proxy on the chain.
+    Proxy(Obj),
+    /// `%ProxySetOnReceiver(receiver, key, v)`: the receiver is a proxy.
+    Receiver(Obj),
+}
 
 /// The libm intrinsics (D1150): `F64Sin(x)` and friends.
 fn math_leaf(id: u16, x: f64, y: f64) -> Option<f64> {
@@ -388,33 +400,21 @@ impl Exec<'_> {
             }
         };
         if info.kind == IntrinsicKind::Builtin {
-            let f = realm::installed_intrinsic(self.heap, id);
-            if f.is_undefined() {
-                return Err(Fault::Error(
-                    ErrorKind::InternalError,
-                    format!("%{} is not installed", info.name),
-                ));
-            }
-            // `a1 .. an` becomes `f undefined a1 .. an`.
-            self.ensure(self.sp + 2)?;
-            for i in (0..argc).rev() {
-                let v = self.get(base + i);
-                self.set(base + 2 + i, v);
-            }
-            self.set(base, f);
-            self.set(base + 1, Value::UNDEFINED);
-            self.sp += 2;
-            return self.call(base, argc, Continuation::PushResult, next);
+            return self.call_installed(id, base, argc, next);
+        }
+        if let Some(step) = self.proxy_intrinsic(id, base, argc, next) {
+            return step;
         }
         let a0 = arg(self, 0);
         let v = match id {
             IS_OBJECT => Value::bool(a0.as_object().is_some()),
             IS_CALLABLE => Value::bool(self.is_callable(a0)),
             IS_CONSTRUCTOR => Value::bool(a0.as_object().is_some_and(|o| self.is_constructor(o))),
-            IS_ARRAY => Value::bool(
-                a0.as_object()
-                    .is_some_and(|o| self.heap.object_class(o) == ObjectClass::Array),
-            ),
+            IS_ARRAY => match a0.as_object().map(|o| self.heap.is_array(o)) {
+                None => Value::FALSE,
+                Some(Ok(b)) => Value::bool(b),
+                Some(Err(())) => return type_error("revoked proxy"),
+            },
             IS_STRING => Value::bool(a0.as_string().is_some()),
             IS_NUMBER => Value::bool(a0.is_number()),
             IS_SYMBOL => Value::bool(a0.as_symbol().is_some()),
@@ -485,11 +485,16 @@ impl Exec<'_> {
                 }
                 let key = conv::to_property_key(self.heap, arg(self, 1))?;
                 match self.lookup(a0, key)? {
-                    Ok(v) => v,
-                    Err(getter) => {
+                    Got::Value(v) => v,
+                    Got::Getter(getter) => {
                         self.sp = base;
                         self.pc = next;
                         return self.call_accessor(getter, a0, None);
+                    }
+                    Got::Proxy(p) => {
+                        self.sp = base;
+                        self.pc = next;
+                        return self.call_proxy_get(p, key, a0, Continuation::PushResult);
                     }
                 }
             }
@@ -510,7 +515,19 @@ impl Exec<'_> {
                     return bad_argument(info.name);
                 };
                 let key = conv::to_property_key(self.heap, arg(self, 1))?;
-                Value::bool(self.heap.has_property(o, key))
+                match self.heap.has_property_or_proxy(o, key) {
+                    Ok(r) => Value::bool(r),
+                    Err(p) => {
+                        self.sp = base;
+                        self.pc = next;
+                        let k = self.heap.atom_to_value(key)?;
+                        return self.call_prelude(
+                            proxy::PROXY_HAS,
+                            &[Value::object(p), k],
+                            Continuation::PushResult,
+                        );
+                    }
+                }
             }
             CREATE_DATA_PROPERTY_OR_THROW => {
                 let Some(o) = a0.as_object() else {
@@ -623,7 +640,14 @@ impl Exec<'_> {
                     PREVENT_EXTENSIONS => Value::bool(self.heap.prevent_extensions(o)),
                     IS_EXTENSIBLE => Value::bool(self.heap.is_extensible(o)),
                     _ => {
-                        let tag = object::class_tag(self.heap, o);
+                        let tag = match self.heap.is_array(o) {
+                            Err(()) => return type_error("revoked proxy"),
+                            Ok(true) => "Array",
+                            Ok(false) if self.heap.is_proxy(o) && self.heap.is_callable(o) => {
+                                "Function"
+                            }
+                            Ok(false) => object::class_tag(self.heap, o),
+                        };
                         Value::string(self.heap.alloc_str(tag)?)
                     }
                 }
@@ -1380,6 +1404,7 @@ impl Exec<'_> {
                 };
                 typed::decoded_record(self.heap, d)?
             }
+            proxy::CONSTRUCT_WITH_THIS => return self.construct_with_this(base, next),
             CONSTRUCT_WITH_ARRAY => {
                 // `f args newTarget` becomes `f a1 .. an`.
                 let Some(args) = arg(self, 1).as_object() else {
@@ -1402,11 +1427,16 @@ impl Exec<'_> {
                 let key = object::key(self.heap, arg(self, 1))?;
                 let receiver = arg(self, 2);
                 match self.lookup(a0, key)? {
-                    Ok(v) => v,
-                    Err(getter) => {
+                    Got::Value(v) => v,
+                    Got::Getter(getter) => {
                         self.sp = base;
                         self.pc = next;
                         return self.call_accessor(getter, receiver, None);
+                    }
+                    Got::Proxy(p) => {
+                        self.sp = base;
+                        self.pc = next;
+                        return self.call_proxy_get(p, key, receiver, Continuation::PushResult);
                     }
                 }
             }
@@ -1417,13 +1447,35 @@ impl Exec<'_> {
                 let key = object::key(self.heap, arg(self, 1))?;
                 let (v, receiver) = (arg(self, 2), arg(self, 3));
                 match self.ordinary_set(o, key, v, receiver)? {
-                    Ok(done) => Value::bool(done),
-                    Err(setter) => {
+                    SetStep::Done(done) => Value::bool(done),
+                    SetStep::Setter(setter) => {
                         // `true` goes below the setter's frame; its result is dropped.
                         self.sp = base;
                         self.push(Value::TRUE);
                         self.pc = next;
                         return self.call_accessor(setter, receiver, Some(v));
+                    }
+                    SetStep::Proxy(p) => {
+                        self.sp = base;
+                        self.pc = next;
+                        let k = self.heap.atom_to_value(key)?;
+                        let args = [Value::object(p), k, v, receiver];
+                        return self.call_prelude(
+                            proxy::PROXY_SET,
+                            &args,
+                            Continuation::PushResult,
+                        );
+                    }
+                    SetStep::Receiver(r) => {
+                        self.sp = base;
+                        self.pc = next;
+                        let k = self.heap.atom_to_value(key)?;
+                        let args = [Value::object(r), k, v];
+                        return self.call_prelude(
+                            proxy::PROXY_SET_ON_RECEIVER,
+                            &args,
+                            Continuation::PushResult,
+                        );
                     }
                 }
             }
@@ -1655,6 +1707,7 @@ impl Exec<'_> {
                 }
                 Value::UNDEFINED
             }
+            _ if let Some(r) = self.proxy_leaf(id, a0, arg(self, 1)) => r?,
             _ => match math_leaf(
                 id,
                 a0.as_number().unwrap_or(f64::NAN),
@@ -1671,8 +1724,7 @@ impl Exec<'_> {
     }
 
     fn is_callable(&self, v: Value) -> bool {
-        v.as_object()
-            .is_some_and(|o| self.heap.object_class(o).is_callable())
+        v.as_object().is_some_and(|o| self.heap.is_callable(o))
     }
 
     /// A new error of `kind` with a stack from the current frames (the intrinsic's
@@ -1717,15 +1769,15 @@ impl Exec<'_> {
             .unwrap_or(0) as i64
     }
 
-    /// OrdinarySet ( O, P, V, Receiver ), 10.1.9.2, without calling a setter:
-    /// `Ok(result)`, or `Err(setter)` for the caller to call with the receiver.
+    /// OrdinarySet ( O, P, V, Receiver ), 10.1.9.2, as far as it needs no user code:
+    /// the result, or the setter, proxy trap or receiver step the caller must run.
     fn ordinary_set(
         &mut self,
         o: Obj,
         key: Atom,
         v: Value,
         receiver: Value,
-    ) -> Result<Result<bool, Value>, Fault> {
+    ) -> Result<SetStep, Fault> {
         // A typed array receiving its own numeric key writes the element (the value was
         // converted by the builtin); an invalid index elsewhere on the chain is a no-op.
         if self.heap.is_typed_array(o)
@@ -1733,26 +1785,34 @@ impl Exec<'_> {
             && self.heap.canonical_numeric_index(key).is_some()
         {
             self.heap.ta_numeric_set(o, key, v);
-            return Ok(Ok(true));
+            return Ok(SetStep::Done(true));
         }
-        if self.heap.find_property(o, key).is_none() && self.heap.typed_array_set_stops(o, key) {
-            return Ok(Ok(true));
+        let found = self.heap.lookup_property(o, key);
+        if matches!(found, Lookup::Absent) && self.heap.typed_array_set_stops(o, key) {
+            return Ok(SetStep::Done(true));
         }
-        match self.heap.find_property(o, key) {
-            Some((_, Property::Accessor { setter, .. })) => {
+        match found {
+            // The [[Set]] of a proxy on the chain (or o itself) takes over.
+            Lookup::Proxy(p) => return Ok(SetStep::Proxy(p)),
+            Lookup::Found(_, Property::Accessor { setter, .. }) => {
                 return Ok(if setter.is_undefined() {
-                    Ok(false)
+                    SetStep::Done(false)
                 } else {
-                    Err(setter)
+                    SetStep::Setter(setter)
                 });
             }
-            Some((_, Property::Data { flags, .. })) if !flags.writable() => return Ok(Ok(false)),
+            Lookup::Found(_, Property::Data { flags, .. }) if !flags.writable() => {
+                return Ok(SetStep::Done(false));
+            }
             _ => {}
         }
         let Some(r) = receiver.as_object() else {
-            return Ok(Ok(false));
+            return Ok(SetStep::Done(false));
         };
-        Ok(Ok(match self.heap.get_own_property(r, key) {
+        if self.heap.is_proxy(r) {
+            return Ok(SetStep::Receiver(r));
+        }
+        Ok(SetStep::Done(match self.heap.get_own_property(r, key) {
             Some(Property::Accessor { .. }) => false,
             Some(Property::Data { flags, .. }) if !flags.writable() => false,
             Some(_) => {
@@ -1896,9 +1956,13 @@ impl Exec<'_> {
             Value::string(k)
         };
         self.name_and_length(fo, fname, length.as_number().unwrap_or(0.0))?;
-        let d = PropertyDescriptor::data(Value::object(proto), PropFlags::NONE);
-        self.heap.define_own_property(fo, atoms::PROTOTYPE, &d)?;
-        realm::define_hidden(self.heap, proto, atoms::CONSTRUCTOR, f)?;
+        // The Proxy constructor has no `prototype` (28.2.2): proxies take theirs from
+        // the target.
+        if name != "Proxy" {
+            let d = PropertyDescriptor::data(Value::object(proto), PropFlags::NONE);
+            self.heap.define_own_property(fo, atoms::PROTOTYPE, &d)?;
+            realm::define_hidden(self.heap, proto, atoms::CONSTRUCTOR, f)?;
+        }
         self.mark_builtin(fo, OBJ_BUILTIN | OBJ_BUILTIN_CTOR);
         Ok(())
     }

@@ -37,7 +37,7 @@ pub(crate) fn display(heap: &mut Heap, v: Value) -> String {
         }
         Kind::Object => {
             let o = v.as_object().unwrap();
-            if heap.object_class(o).is_callable() {
+            if heap.is_callable(o) {
                 return String::from("function");
             }
         }

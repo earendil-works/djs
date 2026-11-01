@@ -2227,6 +2227,9 @@ function FunctionPrototypeBind(thisArg, ...args) {
   }
   const target = %AsFn(this);
   const f = %BoundFunctionCreate(target, thisArg, args);
+  if (%IsProxy(target)) {
+    %SetPrototypeOf(f, %GetPrototypeOf(target));
+  }
   let l = 0;
   if (%HasOwnProperty(target, "length")) {
     const targetLen = %Get(target, "length");
@@ -2249,17 +2252,17 @@ function FunctionPrototypeBind(thisArg, ...args) {
   return f;
 }
 
-// builtins/function.ts:81 Function.prototype.toString
+// builtins/function.ts:86 Function.prototype.toString
 function FunctionPrototypeToString() {
   return %FunctionToString(this);
 }
 
-// builtins/function.ts:91 constructor Function
+// builtins/function.ts:96 constructor Function
 function FunctionConstructor(...args) {
   throw %NewTypeError("not supported yet: the Function constructor");
 }
 
-// builtins/function.ts:96
+// builtins/function.ts:101
 function OrdinaryHasInstance(c, o) {
   if (!%IsCallable(c)) {
     return false;
@@ -2285,7 +2288,7 @@ function OrdinaryHasInstance(c, o) {
   return false;
 }
 
-// builtins/function.ts:126 %InstanceofOperator
+// builtins/function.ts:131 %InstanceofOperator
 function InstanceofOperator(v, target) {
   if (!%IsObject(target)) {
     throw %NewTypeError("invalid 'instanceof' right operand");
@@ -2300,12 +2303,12 @@ function InstanceofOperator(v, target) {
   return OrdinaryHasInstance(target, v);
 }
 
-// builtins/function.ts:145 Function.prototype[Symbol.hasInstance]
+// builtins/function.ts:150 Function.prototype[Symbol.hasInstance]
 function FunctionPrototypeHasInstance(v) {
   return OrdinaryHasInstance(this, v);
 }
 
-// builtins/function.ts:157 get Function.prototype.caller set Function.prototype.caller get Function.prototype.arguments set Function.prototype.arguments
+// builtins/function.ts:162 get Function.prototype.caller set Function.prototype.caller get Function.prototype.arguments set Function.prototype.arguments
 function ThrowTypeError(v) {
   throw %NewTypeError("invalid property access");
 }
@@ -3577,7 +3580,7 @@ function DefineOwnProperty(o, key, desc) {
       return true;
     }
   }
-  if (%IsArray(o) && key === "length" && %HasOwnProperty(desc, "value")) {
+  if (!%IsProxy(o) && %IsArray(o) && key === "length" && %HasOwnProperty(desc, "value")) {
     const v = %Get(desc, "value");
     const newLen = ToNumber(v);
     const numberLen = ToNumber(v);
@@ -3592,9 +3595,12 @@ function DefineOwnProperty(o, key, desc) {
   return %DefineOwnPropertyFromRecord(o, key, desc);
 }
 
-// builtins/object.ts:96
+// builtins/object.ts:97
 function DefinePropertyOrThrow(o, key, desc) {
   if (!DefineOwnProperty(o, key, desc)) {
+    if (%IsProxy(o)) {
+      throw %NewTypeError("proxy: defineProperty exception");
+    }
     if (%OwnPropertyAttributes(o, key) < 0) {
       throw %NewTypeError("object is not extensible");
     }
@@ -3602,7 +3608,7 @@ function DefinePropertyOrThrow(o, key, desc) {
   }
 }
 
-// builtins/object.ts:109 Object.defineProperty
+// builtins/object.ts:114 Object.defineProperty
 function ObjectDefineProperty(o, p, attributes) {
   if (!%IsObject(o)) {
     throw %NewTypeError("not an object");
@@ -3613,32 +3619,32 @@ function ObjectDefineProperty(o, p, attributes) {
   return o;
 }
 
-// builtins/object.ts:123 Object.getOwnPropertyDescriptor
+// builtins/object.ts:128 Object.getOwnPropertyDescriptor
 function ObjectGetOwnPropertyDescriptor(o, p) {
   const obj = %ToObject(o);
   const key = ToPropertyKey(p);
   return %GetOwnPropertyDescriptorObject(obj, key);
 }
 
-// builtins/object.ts:133 Object.getOwnPropertyNames
+// builtins/object.ts:138 Object.getOwnPropertyNames
 function ObjectGetOwnPropertyNames(o) {
   return %OwnPropertyKeys(%ToObject(o), 0);
 }
 
-// builtins/object.ts:141 Object.prototype.hasOwnProperty
+// builtins/object.ts:146 Object.prototype.hasOwnProperty
 function ObjectPrototypeHasOwnProperty(v) {
   const key = ToPropertyKey(v);
   return %HasOwnProperty(%ToObject(this), key);
 }
 
-// builtins/object.ts:150 Object.prototype.propertyIsEnumerable
+// builtins/object.ts:155 Object.prototype.propertyIsEnumerable
 function ObjectPrototypePropertyIsEnumerable(v) {
   const key = ToPropertyKey(v);
   const attrs = %OwnPropertyAttributes(%ToObject(this), key);
   return attrs >= 0 && (attrs & 2) !== 0;
 }
 
-// builtins/object.ts:160 Object.getPrototypeOf
+// builtins/object.ts:165 Object.getPrototypeOf
 function ObjectGetPrototypeOf(o) {
   if (o === undefined || o === null) {
     throw %NewTypeError("not an object");
@@ -3646,7 +3652,7 @@ function ObjectGetPrototypeOf(o) {
   return %GetPrototypeOf(%ToObject(o));
 }
 
-// builtins/object.ts:171 Object.setPrototypeOf
+// builtins/object.ts:176 Object.setPrototypeOf
 function ObjectSetPrototypeOf(o, proto) {
   if (o === undefined || o === null) {
     throw %NewTypeError("not an object");
@@ -3666,7 +3672,7 @@ function ObjectSetPrototypeOf(o, proto) {
   return o;
 }
 
-// builtins/object.ts:194 Object.create
+// builtins/object.ts:199 Object.create
 function ObjectCreateBuiltin(o, properties) {
   if (!%IsObject(o) && o !== null) {
     throw %NewTypeError("not a prototype");
@@ -3678,7 +3684,7 @@ function ObjectCreateBuiltin(o, properties) {
   return obj;
 }
 
-// builtins/object.ts:206
+// builtins/object.ts:211
 function ObjectDefinePropertiesHelper(o, properties) {
   const props = %ToObject(properties);
   const keys = %OwnPropertyKeys(props, 2);
@@ -3702,7 +3708,7 @@ function ObjectDefinePropertiesHelper(o, properties) {
   return o;
 }
 
-// builtins/object.ts:234 Object.defineProperties
+// builtins/object.ts:239 Object.defineProperties
 function ObjectDefineProperties(o, properties) {
   if (!%IsObject(o)) {
     throw %NewTypeError("not an object");
@@ -3710,12 +3716,12 @@ function ObjectDefineProperties(o, properties) {
   return ObjectDefinePropertiesHelper(%AsObj(o), properties);
 }
 
-// builtins/object.ts:245
+// builtins/object.ts:250
 function EnumerableOwnProperties(o, kind) {
-  const keys = %OwnPropertyKeys(o, 0);
   if (kind === 0) {
     return %OwnPropertyKeys(o, 3);
   }
+  const keys = %OwnPropertyKeys(o, 0);
   const n = LengthOfArrayLike(keys);
   const result = %ArrayCreate(0);
   let count = 0;
@@ -3738,22 +3744,22 @@ function EnumerableOwnProperties(o, kind) {
   return result;
 }
 
-// builtins/object.ts:276 Object.keys
+// builtins/object.ts:281 Object.keys
 function ObjectKeys(o) {
   return EnumerableOwnProperties(%ToObject(o), 0);
 }
 
-// builtins/object.ts:284 Object.values
+// builtins/object.ts:289 Object.values
 function ObjectValues(o) {
   return EnumerableOwnProperties(%ToObject(o), 1);
 }
 
-// builtins/object.ts:292 Object.entries
+// builtins/object.ts:297 Object.entries
 function ObjectEntries(o) {
   return EnumerableOwnProperties(%ToObject(o), 2);
 }
 
-// builtins/object.ts:301 Object.assign
+// builtins/object.ts:306 Object.assign
 function ObjectAssign(target, ...sources) {
   const to = %ToObject(target);
   const n = LengthOfArrayLike(sources);
@@ -3775,7 +3781,7 @@ function ObjectAssign(target, ...sources) {
   return to;
 }
 
-// builtins/object.ts:326 Object.freeze
+// builtins/object.ts:331 Object.freeze
 function ObjectFreeze(o) {
   if (!%IsObject(o)) {
     return o;
@@ -3786,7 +3792,7 @@ function ObjectFreeze(o) {
   return o;
 }
 
-// builtins/object.ts:340 Object.seal
+// builtins/object.ts:345 Object.seal
 function ObjectSeal(o) {
   if (!%IsObject(o)) {
     return o;
@@ -3797,7 +3803,7 @@ function ObjectSeal(o) {
   return o;
 }
 
-// builtins/object.ts:354 Object.preventExtensions
+// builtins/object.ts:359 Object.preventExtensions
 function ObjectPreventExtensions(o) {
   if (!%IsObject(o)) {
     return o;
@@ -3808,27 +3814,27 @@ function ObjectPreventExtensions(o) {
   return o;
 }
 
-// builtins/object.ts:368 Object.isFrozen
+// builtins/object.ts:373 Object.isFrozen
 function ObjectIsFrozen(o) {
   return !%IsObject(o) || %TestIntegrityLevel(%AsObj(o), true);
 }
 
-// builtins/object.ts:376 Object.isSealed
+// builtins/object.ts:381 Object.isSealed
 function ObjectIsSealed(o) {
   return !%IsObject(o) || %TestIntegrityLevel(%AsObj(o), false);
 }
 
-// builtins/object.ts:384 Object.isExtensible
+// builtins/object.ts:389 Object.isExtensible
 function ObjectIsExtensible(o) {
   return %IsObject(o) && %IsExtensible(%AsObj(o));
 }
 
-// builtins/object.ts:392 Object.getOwnPropertySymbols
+// builtins/object.ts:397 Object.getOwnPropertySymbols
 function ObjectGetOwnPropertySymbols(o) {
   return %OwnPropertyKeys(%ToObject(o), 1);
 }
 
-// builtins/object.ts:400 Object.getOwnPropertyDescriptors
+// builtins/object.ts:405 Object.getOwnPropertyDescriptors
 function ObjectGetOwnPropertyDescriptors(o) {
   const obj = %ToObject(o);
   const keys = %OwnPropertyKeys(obj, 2);
@@ -3844,23 +3850,23 @@ function ObjectGetOwnPropertyDescriptors(o) {
   return descriptors;
 }
 
-// builtins/object.ts:419 Object.hasOwn
+// builtins/object.ts:424 Object.hasOwn
 function ObjectHasOwn(o, p) {
   const obj = %ToObject(o);
   return %HasOwnProperty(obj, ToPropertyKey(p));
 }
 
-// builtins/object.ts:428 Object.is
+// builtins/object.ts:433 Object.is
 function ObjectIs(value1, value2) {
   return %SameValue(value1, value2);
 }
 
-// builtins/object.ts:436 Object.prototype.toString
+// builtins/object.ts:441 Object.prototype.toString
 function ObjectPrototypeToString() {
   return ObjectToString(this);
 }
 
-// builtins/object.ts:441
+// builtins/object.ts:446
 function ObjectToString(v) {
   if (v === undefined) {
     return "[object Undefined]";
@@ -3876,17 +3882,17 @@ function ObjectToString(v) {
   return "[object " + %ObjectClassTag(o) + "]";
 }
 
-// builtins/object.ts:460 Object.prototype.toLocaleString
+// builtins/object.ts:465 Object.prototype.toLocaleString
 function ObjectPrototypeToLocaleString() {
   return %Call(%GetV(this, "toString"), this);
 }
 
-// builtins/object.ts:468 Object.prototype.valueOf
+// builtins/object.ts:473 Object.prototype.valueOf
 function ObjectPrototypeValueOf() {
   return %ToObject(this);
 }
 
-// builtins/object.ts:476 Object.prototype.isPrototypeOf
+// builtins/object.ts:481 Object.prototype.isPrototypeOf
 function ObjectPrototypeIsPrototypeOf(v) {
   if (!%IsObject(v)) {
     return false;
@@ -4449,6 +4455,728 @@ function HostCallSettle(promise, ok, value) {
   } else {
     %RejectPromise(promise, value);
   }
+}
+
+// builtins/proxy.ts:19 constructor Proxy
+function ProxyConstructor(target, handler) {
+  if (new.target === undefined) {
+    throw %NewTypeError("must be called with new");
+  }
+  return ProxyCreate(target, handler);
+}
+
+// builtins/proxy.ts:27
+function ProxyCreate(target, handler) {
+  if (!%IsObject(target) || !%IsObject(handler)) {
+    throw %NewTypeError("not an object");
+  }
+  return %NewProxy(%AsObj(target), %AsObj(handler));
+}
+
+// builtins/proxy.ts:38 Proxy.revocable
+function ProxyRevocable(target, handler) {
+  const p = ProxyCreate(target, handler);
+  const revoker = %NewBuiltinClosure(15, p, 0);
+  const result = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+  %CreateDataPropertyOrThrow(result, "proxy", p);
+  %CreateDataPropertyOrThrow(result, "revoke", revoker);
+  return result;
+}
+
+// builtins/proxy.ts:52 %ProxyRevokeFunction
+function ProxyRevokeFunction() {
+  %ProxyRevoke(%AsObj(this));
+  return undefined;
+}
+
+// builtins/proxy.ts:60
+function TrapKey(key) {
+  if (%IsNumber(key)) {
+    return %ToStringPrimitive(key);
+  }
+  return key;
+}
+
+// builtins/proxy.ts:68
+function ProxyTrap(handler, name) {
+  return GetMethod(handler, name);
+}
+
+// builtins/proxy.ts:73
+function DescFlag(desc, field) {
+  return %HasOwnProperty(desc, field) && %ToBoolean(%Get(desc, field));
+}
+
+// builtins/proxy.ts:78
+function IsAccessorDescriptor(desc) {
+  return %HasOwnProperty(desc, "get") || %HasOwnProperty(desc, "set");
+}
+
+// builtins/proxy.ts:83
+function IsDataDescriptor(desc) {
+  return %HasOwnProperty(desc, "value") || %HasOwnProperty(desc, "writable");
+}
+
+// builtins/proxy.ts:88
+function CompletePropertyDescriptor(desc) {
+  if (!IsAccessorDescriptor(desc)) {
+    if (!%HasOwnProperty(desc, "value")) {
+      %CreateDataPropertyOrThrow(desc, "value", undefined);
+    }
+    if (!%HasOwnProperty(desc, "writable")) {
+      %CreateDataPropertyOrThrow(desc, "writable", false);
+    }
+  } else {
+    if (!%HasOwnProperty(desc, "get")) {
+      %CreateDataPropertyOrThrow(desc, "get", undefined);
+    }
+    if (!%HasOwnProperty(desc, "set")) {
+      %CreateDataPropertyOrThrow(desc, "set", undefined);
+    }
+  }
+  if (!%HasOwnProperty(desc, "enumerable")) {
+    %CreateDataPropertyOrThrow(desc, "enumerable", false);
+  }
+  if (!%HasOwnProperty(desc, "configurable")) {
+    %CreateDataPropertyOrThrow(desc, "configurable", false);
+  }
+}
+
+// builtins/proxy.ts:117
+function IsCompatiblePropertyDescriptor(extensible, desc, current) {
+  if (current === undefined) {
+    return extensible;
+  }
+  const cur = %AsObj(current);
+  if (DescFlag(cur, "configurable")) {
+    return true;
+  }
+  if (DescFlag(desc, "configurable")) {
+    return false;
+  }
+  if (%HasOwnProperty(desc, "enumerable") && DescFlag(desc, "enumerable") !== DescFlag(cur, "enumerable")) {
+    return false;
+  }
+  const generic = !IsAccessorDescriptor(desc) && !IsDataDescriptor(desc);
+  if (!generic && IsAccessorDescriptor(desc) !== IsAccessorDescriptor(cur)) {
+    return false;
+  }
+  if (IsAccessorDescriptor(cur)) {
+    if (%HasOwnProperty(desc, "get") && !%SameValue(%Get(desc, "get"), %Get(cur, "get"))) {
+      return false;
+    }
+    if (%HasOwnProperty(desc, "set") && !%SameValue(%Get(desc, "set"), %Get(cur, "set"))) {
+      return false;
+    }
+  } else if (!DescFlag(cur, "writable")) {
+    if (DescFlag(desc, "writable")) {
+      return false;
+    }
+    if (%HasOwnProperty(desc, "value") && !%SameValue(%Get(desc, "value"), %Get(cur, "value"))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// builtins/proxy.ts:154
+function FromPropertyDescriptor(desc) {
+  const o = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+  if (%HasOwnProperty(desc, "value")) {
+    %CreateDataPropertyOrThrow(o, "value", %Get(desc, "value"));
+  }
+  if (%HasOwnProperty(desc, "writable")) {
+    %CreateDataPropertyOrThrow(o, "writable", %Get(desc, "writable"));
+  }
+  if (%HasOwnProperty(desc, "get")) {
+    %CreateDataPropertyOrThrow(o, "get", %Get(desc, "get"));
+  }
+  if (%HasOwnProperty(desc, "set")) {
+    %CreateDataPropertyOrThrow(o, "set", %Get(desc, "set"));
+  }
+  if (%HasOwnProperty(desc, "enumerable")) {
+    %CreateDataPropertyOrThrow(o, "enumerable", %Get(desc, "enumerable"));
+  }
+  if (%HasOwnProperty(desc, "configurable")) {
+    %CreateDataPropertyOrThrow(o, "configurable", %Get(desc, "configurable"));
+  }
+  return o;
+}
+
+// builtins/proxy.ts:178
+function DescriptorAttributes(desc) {
+  if (desc === undefined) {
+    return -1;
+  }
+  const d = %AsObj(desc);
+  let attrs = 0;
+  if (DescFlag(d, "writable")) {
+    attrs = attrs | 1;
+  }
+  if (DescFlag(d, "enumerable")) {
+    attrs = attrs | 2;
+  }
+  if (DescFlag(d, "configurable")) {
+    attrs = attrs | 4;
+  }
+  if (IsAccessorDescriptor(d)) {
+    attrs = attrs | 8;
+  }
+  return attrs;
+}
+
+// builtins/proxy.ts:200
+function ListIncludes(list, v) {
+  const n = LengthOfArrayLike(list);
+  for (let i = 0; i < n; i++) {
+    if (%SameValue(%Get(list, i), v)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// builtins/proxy.ts:216 %ProxyGetPrototypeOf
+function ProxyGetPrototypeOf(p) {
+  const handler = %ProxyHandler(p);
+  const target = %ProxyTarget(p);
+  const trap = ProxyTrap(handler, "getPrototypeOf");
+  if (trap === undefined) {
+    return %GetPrototypeOf(target);
+  }
+  const handlerProto = %Call(trap, handler, target);
+  if (!%IsObject(handlerProto) && handlerProto !== null) {
+    throw %NewTypeError("proxy: inconsistent prototype");
+  }
+  if (%IsExtensible(target)) {
+    return handlerProto;
+  }
+  if (!%SameValue(handlerProto, %GetPrototypeOf(target))) {
+    throw %NewTypeError("proxy: inconsistent prototype");
+  }
+  return handlerProto;
+}
+
+// builtins/proxy.ts:240 %ProxySetPrototypeOf
+function ProxySetPrototypeOf(p, v) {
+  const handler = %ProxyHandler(p);
+  const target = %ProxyTarget(p);
+  const trap = ProxyTrap(handler, "setPrototypeOf");
+  if (trap === undefined) {
+    return %SetPrototypeOf(target, v);
+  }
+  if (!%ToBoolean(%Call(trap, handler, target, v))) {
+    return false;
+  }
+  if (%IsExtensible(target)) {
+    return true;
+  }
+  if (!%SameValue(v, %GetPrototypeOf(target))) {
+    throw %NewTypeError("proxy: inconsistent prototype");
+  }
+  return true;
+}
+
+// builtins/proxy.ts:263 %ProxyIsExtensible
+function ProxyIsExtensible(p) {
+  const handler = %ProxyHandler(p);
+  const target = %ProxyTarget(p);
+  const trap = ProxyTrap(handler, "isExtensible");
+  if (trap === undefined) {
+    return %IsExtensible(target);
+  }
+  const result = %ToBoolean(%Call(trap, handler, target));
+  if (result !== %IsExtensible(target)) {
+    throw %NewTypeError("proxy: inconsistent isExtensible");
+  }
+  return result;
+}
+
+// builtins/proxy.ts:281 %ProxyPreventExtensions
+function ProxyPreventExtensions(p) {
+  const handler = %ProxyHandler(p);
+  const target = %ProxyTarget(p);
+  const trap = ProxyTrap(handler, "preventExtensions");
+  if (trap === undefined) {
+    return %PreventExtensions(target);
+  }
+  const result = %ToBoolean(%Call(trap, handler, target));
+  if (result && %IsExtensible(target)) {
+    throw %NewTypeError("proxy: inconsistent preventExtensions");
+  }
+  return result;
+}
+
+// builtins/proxy.ts:298
+function ProxyGetOwnProperty(p, key) {
+  const handler = %ProxyHandler(p);
+  const target = %ProxyTarget(p);
+  const trap = ProxyTrap(handler, "getOwnPropertyDescriptor");
+  if (trap === undefined) {
+    return %GetOwnPropertyDescriptorObject(target, key);
+  }
+  const trapResultObj = %Call(trap, handler, target, TrapKey(key));
+  if (!%IsObject(trapResultObj) && trapResultObj !== undefined) {
+    throw %NewTypeError("proxy: inconsistent getOwnPropertyDescriptor");
+  }
+  const targetDesc = %GetOwnPropertyDescriptorObject(target, key);
+  if (trapResultObj === undefined) {
+    if (targetDesc === undefined) {
+      return undefined;
+    }
+    if (!DescFlag(%AsObj(targetDesc), "configurable")) {
+      throw %NewTypeError("proxy: inconsistent getOwnPropertyDescriptor");
+    }
+    if (!%IsExtensible(target)) {
+      throw %NewTypeError("proxy: inconsistent getOwnPropertyDescriptor");
+    }
+    return undefined;
+  }
+  const extensibleTarget = %IsExtensible(target);
+  const resultDesc = ToPropertyDescriptor(trapResultObj);
+  CompletePropertyDescriptor(resultDesc);
+  if (!IsCompatiblePropertyDescriptor(extensibleTarget, resultDesc, targetDesc)) {
+    throw %NewTypeError("proxy: inconsistent getOwnPropertyDescriptor");
+  }
+  if (!DescFlag(resultDesc, "configurable")) {
+    if (targetDesc === undefined || DescFlag(%AsObj(targetDesc), "configurable")) {
+      throw %NewTypeError("proxy: inconsistent getOwnPropertyDescriptor");
+    }
+    if (%HasOwnProperty(resultDesc, "writable") && !DescFlag(resultDesc, "writable")) {
+      if (DescFlag(%AsObj(targetDesc), "writable")) {
+        throw %NewTypeError("proxy: inconsistent getOwnPropertyDescriptor");
+      }
+    }
+  }
+  return resultDesc;
+}
+
+// builtins/proxy.ts:346 %ProxyGetOwnPropertyDescriptorObject
+function ProxyGetOwnPropertyDescriptorObject(p, key) {
+  const desc = ProxyGetOwnProperty(p, key);
+  if (desc === undefined) {
+    return undefined;
+  }
+  return FromPropertyDescriptor(%AsObj(desc));
+}
+
+// builtins/proxy.ts:358 %ProxyHasOwnProperty
+function ProxyHasOwnProperty(p, key) {
+  return ProxyGetOwnProperty(p, key) !== undefined;
+}
+
+// builtins/proxy.ts:366 %ProxyOwnPropertyAttributes
+function ProxyOwnPropertyAttributes(p, key) {
+  return DescriptorAttributes(ProxyGetOwnProperty(p, key));
+}
+
+// builtins/proxy.ts:374 %ProxyDefineOwnPropertyFromRecord
+function ProxyDefineOwnPropertyFromRecord(p, key, desc) {
+  const handler = %ProxyHandler(p);
+  const target = %ProxyTarget(p);
+  const trap = ProxyTrap(handler, "defineProperty");
+  if (trap === undefined) {
+    return DefineOwnProperty(target, key, desc);
+  }
+  const descObj = FromPropertyDescriptor(desc);
+  if (!%ToBoolean(%Call(trap, handler, target, TrapKey(key), descObj))) {
+    return false;
+  }
+  const targetDesc = %GetOwnPropertyDescriptorObject(target, key);
+  const extensibleTarget = %IsExtensible(target);
+  const settingConfigFalse = %HasOwnProperty(desc, "configurable") && !DescFlag(desc, "configurable");
+  if (targetDesc === undefined) {
+    if (!extensibleTarget || settingConfigFalse) {
+      throw %NewTypeError("proxy: inconsistent defineProperty");
+    }
+    return true;
+  }
+  const td = %AsObj(targetDesc);
+  if (!IsCompatiblePropertyDescriptor(extensibleTarget, desc, targetDesc)) {
+    throw %NewTypeError("proxy: inconsistent defineProperty");
+  }
+  if (settingConfigFalse && DescFlag(td, "configurable")) {
+    throw %NewTypeError("proxy: inconsistent defineProperty");
+  }
+  if (IsDataDescriptor(td) && !DescFlag(td, "configurable") && DescFlag(td, "writable")) {
+    if (%HasOwnProperty(desc, "writable") && !DescFlag(desc, "writable")) {
+      throw %NewTypeError("proxy: inconsistent defineProperty");
+    }
+  }
+  return true;
+}
+
+// builtins/proxy.ts:410
+function DataDescriptorRecord(v, attrs) {
+  const desc = %ObjectCreate(null);
+  %CreateDataPropertyOrThrow(desc, "value", v);
+  %CreateDataPropertyOrThrow(desc, "writable", (attrs & 1) !== 0);
+  %CreateDataPropertyOrThrow(desc, "enumerable", (attrs & 2) !== 0);
+  %CreateDataPropertyOrThrow(desc, "configurable", (attrs & 4) !== 0);
+  return desc;
+}
+
+// builtins/proxy.ts:423 %ProxyDefineDataPropertyOrThrow
+function ProxyDefineDataPropertyOrThrow(p, key, v, attrs) {
+  if (!ProxyDefineOwnPropertyFromRecord(p, key, DataDescriptorRecord(v, attrs))) {
+    throw %NewTypeError("proxy: defineProperty exception");
+  }
+}
+
+// builtins/proxy.ts:433 %ProxyCreateDataProperty
+function ProxyCreateDataProperty(p, key, v) {
+  return ProxyDefineOwnPropertyFromRecord(p, key, DataDescriptorRecord(v, 7));
+}
+
+// builtins/proxy.ts:441 %ProxyCreateDataPropertyOrThrow
+function ProxyCreateDataPropertyOrThrow(p, key, v) {
+  if (!ProxyCreateDataProperty(p, key, v)) {
+    throw %NewTypeError("proxy: defineProperty exception");
+  }
+}
+
+// builtins/proxy.ts:451 %ProxyHas
+function ProxyHas(p, key) {
+  const handler = %ProxyHandler(p);
+  const target = %ProxyTarget(p);
+  const trap = ProxyTrap(handler, "has");
+  if (trap === undefined) {
+    return %HasProperty(target, key);
+  }
+  const result = %ToBoolean(%Call(trap, handler, target, TrapKey(key)));
+  if (!result) {
+    const targetDesc = %GetOwnPropertyDescriptorObject(target, key);
+    if (targetDesc !== undefined) {
+      if (!DescFlag(%AsObj(targetDesc), "configurable")) {
+        throw %NewTypeError("proxy: inconsistent has");
+      }
+      if (!%IsExtensible(target)) {
+        throw %NewTypeError("proxy: inconsistent has");
+      }
+    }
+  }
+  return result;
+}
+
+// builtins/proxy.ts:477 %ProxyGet
+function ProxyGet(p, key, receiver) {
+  const handler = %ProxyHandler(p);
+  const target = %ProxyTarget(p);
+  const trap = ProxyTrap(handler, "get");
+  if (trap === undefined) {
+    return %GetWithReceiver(target, key, receiver);
+  }
+  const trapResult = %Call(trap, handler, target, TrapKey(key), receiver);
+  const targetDesc = %GetOwnPropertyDescriptorObject(target, key);
+  if (targetDesc !== undefined) {
+    const td = %AsObj(targetDesc);
+    if (!DescFlag(td, "configurable")) {
+      if (IsDataDescriptor(td) && !DescFlag(td, "writable")) {
+        if (!%SameValue(trapResult, %Get(td, "value"))) {
+          throw %NewTypeError("proxy: inconsistent get");
+        }
+      }
+      if (IsAccessorDescriptor(td) && %Get(td, "get") === undefined && trapResult !== undefined) {
+        throw %NewTypeError("proxy: inconsistent get");
+      }
+    }
+  }
+  return trapResult;
+}
+
+// builtins/proxy.ts:506 %ProxySet
+function ProxySet(p, key, v, receiver) {
+  const handler = %ProxyHandler(p);
+  const target = %ProxyTarget(p);
+  const trap = ProxyTrap(handler, "set");
+  if (trap === undefined) {
+    return %SetWithReceiver(target, key, v, receiver);
+  }
+  if (!%ToBoolean(%Call(trap, handler, target, TrapKey(key), v, receiver))) {
+    return false;
+  }
+  const targetDesc = %GetOwnPropertyDescriptorObject(target, key);
+  if (targetDesc !== undefined) {
+    const td = %AsObj(targetDesc);
+    if (!DescFlag(td, "configurable")) {
+      if (IsDataDescriptor(td) && !DescFlag(td, "writable")) {
+        if (!%SameValue(v, %Get(td, "value"))) {
+          throw %NewTypeError("proxy: inconsistent set");
+        }
+      }
+      if (IsAccessorDescriptor(td) && %Get(td, "set") === undefined) {
+        throw %NewTypeError("proxy: inconsistent set");
+      }
+    }
+  }
+  return true;
+}
+
+// builtins/proxy.ts:538 %ProxySetOrThrow
+function ProxySetOrThrow(p, key, v, receiver) {
+  if (!ProxySet(p, key, v, receiver)) {
+    throw %NewTypeError("proxy: cannot set property");
+  }
+}
+
+// builtins/proxy.ts:550 %ProxySetOnReceiver
+function ProxySetOnReceiver(receiver, key, v) {
+  const existing = %GetOwnPropertyDescriptorObject(receiver, key);
+  if (existing !== undefined) {
+    const e = %AsObj(existing);
+    if (IsAccessorDescriptor(e) || !DescFlag(e, "writable")) {
+      return false;
+    }
+    const valueDesc = %ObjectCreate(null);
+    %CreateDataPropertyOrThrow(valueDesc, "value", v);
+    return %DefineOwnPropertyFromRecord(receiver, key, valueDesc);
+  }
+  return %CreateDataProperty(receiver, key, v);
+}
+
+// builtins/proxy.ts:568 %ProxyDeleteProperty
+function ProxyDeleteProperty(p, key) {
+  const handler = %ProxyHandler(p);
+  const target = %ProxyTarget(p);
+  const trap = ProxyTrap(handler, "deleteProperty");
+  if (trap === undefined) {
+    return %DeleteProperty(target, key);
+  }
+  if (!%ToBoolean(%Call(trap, handler, target, TrapKey(key)))) {
+    return false;
+  }
+  const targetDesc = %GetOwnPropertyDescriptorObject(target, key);
+  if (targetDesc === undefined) {
+    return true;
+  }
+  if (!DescFlag(%AsObj(targetDesc), "configurable")) {
+    throw %NewTypeError("proxy: inconsistent deleteProperty");
+  }
+  if (!%IsExtensible(target)) {
+    throw %NewTypeError("proxy: inconsistent deleteProperty");
+  }
+  return true;
+}
+
+// builtins/proxy.ts:596 %ProxyDeletePropertyOrThrow
+function ProxyDeletePropertyOrThrow(p, key) {
+  if (!ProxyDeleteProperty(p, key)) {
+    throw %NewTypeError("could not delete property");
+  }
+  return true;
+}
+
+// builtins/proxy.ts:604
+function ProxyOwnKeys(p) {
+  const handler = %ProxyHandler(p);
+  const target = %ProxyTarget(p);
+  const trap = ProxyTrap(handler, "ownKeys");
+  if (trap === undefined) {
+    return %OwnPropertyKeys(target, 2);
+  }
+  const trapResultArray = %Call(trap, handler, target);
+  if (!%IsObject(trapResultArray)) {
+    throw %NewTypeError("not an object");
+  }
+  const arr = %AsObj(trapResultArray);
+  const len = LengthOfArrayLike(arr);
+  const trapResult = %ArrayCreate(0);
+  for (let i = 0; i < len; i++) {
+    const key = %Get(arr, i);
+    if (!%IsString(key) && !%IsSymbol(key)) {
+      throw %NewTypeError("proxy: properties must be strings or symbols");
+    }
+    if (ListIncludes(trapResult, key)) {
+      throw %NewTypeError("proxy: duplicate property");
+    }
+    %CreateDataPropertyOrThrow(trapResult, i, key);
+  }
+  const extensibleTarget = %IsExtensible(target);
+  const targetKeys = %OwnPropertyKeys(target, 2);
+  const n = LengthOfArrayLike(targetKeys);
+  const configurable = %ArrayCreate(0);
+  const nonconfigurable = %ArrayCreate(0);
+  for (let i = 0; i < n; i++) {
+    const key = %Get(targetKeys, i);
+    const desc = %GetOwnPropertyDescriptorObject(target, key);
+    if (desc !== undefined && !DescFlag(%AsObj(desc), "configurable")) {
+      %CreateDataPropertyOrThrow(nonconfigurable, LengthOfArrayLike(nonconfigurable), key);
+    } else {
+      %CreateDataPropertyOrThrow(configurable, LengthOfArrayLike(configurable), key);
+    }
+  }
+  if (extensibleTarget && LengthOfArrayLike(nonconfigurable) === 0) {
+    return trapResult;
+  }
+  const unchecked = %ArrayCreate(0);
+  for (let i = 0; i < len; i++) {
+    %CreateDataPropertyOrThrow(unchecked, i, %Get(trapResult, i));
+  }
+  let remaining = len;
+  const nn = LengthOfArrayLike(nonconfigurable);
+  for (let i = 0; i < nn; i++) {
+    if (!StrikeKey(unchecked, %Get(nonconfigurable, i))) {
+      throw %NewTypeError("proxy: target property must be present in proxy ownKeys");
+    }
+    remaining--;
+  }
+  if (extensibleTarget) {
+    return trapResult;
+  }
+  const nc = LengthOfArrayLike(configurable);
+  for (let i = 0; i < nc; i++) {
+    if (!StrikeKey(unchecked, %Get(configurable, i))) {
+      throw %NewTypeError("proxy: target property must be present in proxy ownKeys");
+    }
+    remaining--;
+  }
+  if (remaining !== 0) {
+    throw %NewTypeError("proxy: target is non-extensible");
+  }
+  return trapResult;
+}
+
+// builtins/proxy.ts:679
+function StrikeKey(list, key) {
+  const n = LengthOfArrayLike(list);
+  for (let i = 0; i < n; i++) {
+    if (%SameValue(%Get(list, i), key)) {
+      %CreateDataPropertyOrThrow(list, i, null);
+      return true;
+    }
+  }
+  return false;
+}
+
+// builtins/proxy.ts:695 %ProxyOwnPropertyKeys
+function ProxyOwnPropertyKeys(p, kind) {
+  const keys = ProxyOwnKeys(p);
+  if (kind === 2) {
+    return keys;
+  }
+  const n = LengthOfArrayLike(keys);
+  const result = %ArrayCreate(0);
+  let count = 0;
+  for (let i = 0; i < n; i++) {
+    const key = %Get(keys, i);
+    let take = kind === 1 ? %IsSymbol(key) : %IsString(key);
+    if (take && kind === 3) {
+      const desc = ProxyGetOwnProperty(p, key);
+      take = desc !== undefined && DescFlag(%AsObj(desc), "enumerable");
+    }
+    if (take) {
+      %CreateDataPropertyOrThrow(result, count, key);
+      count++;
+    }
+  }
+  return result;
+}
+
+// builtins/proxy.ts:722 %ProxyCall
+function ProxyCall(p, thisArg, args) {
+  const handler = %ProxyHandler(p);
+  const target = %ProxyTarget(p);
+  const trap = ProxyTrap(handler, "apply");
+  if (trap === undefined) {
+    return %CallWithArray(target, thisArg, args);
+  }
+  return %Call(trap, handler, target, thisArg, args);
+}
+
+// builtins/proxy.ts:736 %ProxyConstruct
+function ProxyConstruct(p, args, newTarget) {
+  const handler = %ProxyHandler(p);
+  const target = %ProxyTarget(p);
+  const trap = ProxyTrap(handler, "construct");
+  if (trap === undefined) {
+    return %ConstructWithArray(target, args, newTarget);
+  }
+  const newObj = %Call(trap, handler, target, args, newTarget);
+  if (!%IsObject(newObj)) {
+    throw %NewTypeError("not an object");
+  }
+  return %AsObj(newObj);
+}
+
+// builtins/proxy.ts:757 %OrdinaryConstructSlow
+function OrdinaryConstructSlow(f, args, newTarget) {
+  const proto = GetPrototypeFromConstructor(newTarget, "ObjectPrototype");
+  return %ConstructWithThis(f, %ObjectCreate(proto), args, newTarget);
+}
+
+// builtins/proxy.ts:766 %ProxySetIntegrityLevel
+function ProxySetIntegrityLevel(o, frozen) {
+  if (!%PreventExtensions(o)) {
+    return false;
+  }
+  const keys = %OwnPropertyKeys(o, 2);
+  const n = LengthOfArrayLike(keys);
+  for (let i = 0; i < n; i++) {
+    const key = %Get(keys, i);
+    const desc = %ObjectCreate(null);
+    %CreateDataPropertyOrThrow(desc, "configurable", false);
+    if (frozen) {
+      const current = %GetOwnPropertyDescriptorObject(o, key);
+      if (current === undefined) {
+        continue;
+      }
+      if (!IsAccessorDescriptor(%AsObj(current))) {
+        %CreateDataPropertyOrThrow(desc, "writable", false);
+      }
+    }
+    DefinePropertyOrThrow(o, key, desc);
+  }
+  return true;
+}
+
+// builtins/proxy.ts:794 %ProxyTestIntegrityLevel
+function ProxyTestIntegrityLevel(o, frozen) {
+  if (%IsExtensible(o)) {
+    return false;
+  }
+  const keys = %OwnPropertyKeys(o, 2);
+  const n = LengthOfArrayLike(keys);
+  for (let i = 0; i < n; i++) {
+    const current = %GetOwnPropertyDescriptorObject(o, %Get(keys, i));
+    if (current !== undefined) {
+      const c = %AsObj(current);
+      if (DescFlag(c, "configurable")) {
+        return false;
+      }
+      if (frozen && IsDataDescriptor(c) && DescFlag(c, "writable")) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+// builtins/proxy.ts:821 %ForInKeys
+function ForInKeys(o) {
+  const visited = %ArrayCreate(0);
+  const result = %ArrayCreate(0);
+  let cur = o;
+  while (cur !== null) {
+    const c = %AsObj(cur);
+    const keys = %OwnPropertyKeys(c, 0);
+    const n = LengthOfArrayLike(keys);
+    for (let i = 0; i < n; i++) {
+      const key = %Get(keys, i);
+      if (!ListIncludes(visited, key)) {
+        const attrs = %OwnPropertyAttributes(c, key);
+        if (attrs >= 0) {
+          %CreateDataPropertyOrThrow(visited, LengthOfArrayLike(visited), key);
+          if ((attrs & 2) !== 0) {
+            %CreateDataPropertyOrThrow(result, LengthOfArrayLike(result), key);
+          }
+        }
+      }
+    }
+    cur = %GetPrototypeOf(c);
+  }
+  const r = %NewRecord(1);
+  %RecordSet(r, 0, result);
+  return r;
 }
 
 // builtins/reflect.ts:9 value Reflect
@@ -6762,6 +7490,7 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("globalThis", "isFinite", GlobalIsFinite, 1);
 %InstallConstructor("globalThis", "Object", ObjectConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Promise", PromiseConstructor, 1, undefined);
+%InstallConstructor("globalThis", "Proxy", ProxyConstructor, 2, undefined);
 %InstallValue("globalThis", "Reflect", ReflectObject(), 5);
 %InstallConstructor("globalThis", "Set", SetConstructor, 0, undefined);
 %InstallConstructor("globalThis", "String", StringConstructor, 1, undefined);
@@ -7068,6 +7797,7 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("Promise.prototype", "catch", PromisePrototypeCatch, 1);
 %InstallMethod("Promise.prototype", "finally", PromisePrototypeFinally, 1);
 %InstallValue("Promise.prototype", %WellKnownSymbol("toStringTag"), PromisePrototypeToStringTag(), 4);
+%InstallMethod("Proxy", "revocable", ProxyRevocable, 2);
 %InstallValue("Reflect", %WellKnownSymbol("toStringTag"), ReflectToStringTag(), 4);
 %InstallMethod("Reflect", "apply", ReflectApply, 3);
 %InstallMethod("Reflect", "construct", ReflectConstruct, 2);
@@ -7278,6 +8008,32 @@ function WeakSetPrototypeToStringTag() {
 %InstallIntrinsic("PromiseValueThunk", PromiseValueThunk);
 %InstallIntrinsic("PromiseThrower", PromiseThrower);
 %InstallIntrinsic("HostCallSettle", HostCallSettle);
+%InstallIntrinsic("ProxyRevokeFunction", ProxyRevokeFunction);
+%InstallIntrinsic("ProxyGetPrototypeOf", ProxyGetPrototypeOf);
+%InstallIntrinsic("ProxySetPrototypeOf", ProxySetPrototypeOf);
+%InstallIntrinsic("ProxyIsExtensible", ProxyIsExtensible);
+%InstallIntrinsic("ProxyPreventExtensions", ProxyPreventExtensions);
+%InstallIntrinsic("ProxyGetOwnPropertyDescriptorObject", ProxyGetOwnPropertyDescriptorObject);
+%InstallIntrinsic("ProxyHasOwnProperty", ProxyHasOwnProperty);
+%InstallIntrinsic("ProxyOwnPropertyAttributes", ProxyOwnPropertyAttributes);
+%InstallIntrinsic("ProxyDefineOwnPropertyFromRecord", ProxyDefineOwnPropertyFromRecord);
+%InstallIntrinsic("ProxyDefineDataPropertyOrThrow", ProxyDefineDataPropertyOrThrow);
+%InstallIntrinsic("ProxyCreateDataProperty", ProxyCreateDataProperty);
+%InstallIntrinsic("ProxyCreateDataPropertyOrThrow", ProxyCreateDataPropertyOrThrow);
+%InstallIntrinsic("ProxyHas", ProxyHas);
+%InstallIntrinsic("ProxyGet", ProxyGet);
+%InstallIntrinsic("ProxySet", ProxySet);
+%InstallIntrinsic("ProxySetOrThrow", ProxySetOrThrow);
+%InstallIntrinsic("ProxySetOnReceiver", ProxySetOnReceiver);
+%InstallIntrinsic("ProxyDeleteProperty", ProxyDeleteProperty);
+%InstallIntrinsic("ProxyDeletePropertyOrThrow", ProxyDeletePropertyOrThrow);
+%InstallIntrinsic("ProxyOwnPropertyKeys", ProxyOwnPropertyKeys);
+%InstallIntrinsic("ProxyCall", ProxyCall);
+%InstallIntrinsic("ProxyConstruct", ProxyConstruct);
+%InstallIntrinsic("OrdinaryConstructSlow", OrdinaryConstructSlow);
+%InstallIntrinsic("ProxySetIntegrityLevel", ProxySetIntegrityLevel);
+%InstallIntrinsic("ProxyTestIntegrityLevel", ProxyTestIntegrityLevel);
+%InstallIntrinsic("ForInKeys", ForInKeys);
 %InstallIntrinsic("ArraySpread", ArraySpread);
 %InstallIntrinsic("CopyDataProperties", CopyDataProperties);
 %InstallIntrinsic("CopyDataPropertiesExcluding", CopyDataPropertiesExcluding);

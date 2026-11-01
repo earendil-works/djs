@@ -77,7 +77,8 @@ function DefineOwnProperty(o: Obj, key: Value, desc: Obj): boolean {
       return true;
     }
   }
-  if (IsArray(o) && key === "length" && HasOwnProperty(desc, "value")) {
+  // A proxy's defineProperty trap sees the descriptor unconverted.
+  if (!IsProxy(o) && IsArray(o) && key === "length" && HasOwnProperty(desc, "value")) {
     const v: Value = Get(desc, "value");
     const newLen: f64 = ToNumber(v);
     const numberLen: f64 = ToNumber(v);
@@ -95,6 +96,10 @@ function DefineOwnProperty(o: Obj, key: Value, desc: Obj): boolean {
 /** DefinePropertyOrThrow ( O, P, desc ), 7.3.8, with a descriptor record. */
 function DefinePropertyOrThrow(o: Obj, key: Value, desc: Obj): void {
   if (!DefineOwnProperty(o, key, desc)) {
+    // Probing a proxy for the message would run its getOwnPropertyDescriptor trap.
+    if (IsProxy(o)) {
+      throw NewTypeError("proxy: defineProperty exception");
+    }
     if (OwnPropertyAttributes(o, key) < 0) {
       throw NewTypeError("object is not extensible");
     }
@@ -243,10 +248,10 @@ function ObjectDefineProperties(o: Value, properties: Value): Obj {
  * enumerable check happens per key, after the getters of earlier keys ran.
  */
 function EnumerableOwnProperties(o: Obj, kind: i32): Obj {
-  const keys: Obj = OwnPropertyKeys(o, 0);
   if (kind === 0) {
     return OwnPropertyKeys(o, 3);
   }
+  const keys: Obj = OwnPropertyKeys(o, 0);
   const n: f64 = LengthOfArrayLike(keys);
   const result: Obj = ArrayCreate(0);
   let count: f64 = 0;

@@ -216,7 +216,7 @@ pub(crate) fn perform_then(
     // An async function's state is the handler of an await (D1375).
     let callable = |v: Value| {
         if v.as_object().is_some_and(|o| {
-            heap.object_class(o).is_callable()
+            heap.is_callable(o)
                 || super::suspend::as_generator(heap, v, super::suspend::ASYNC).is_some()
                 || super::suspend::as_generator(heap, v, super::suspend::ASYNC_GENERATOR).is_some()
         }) {
