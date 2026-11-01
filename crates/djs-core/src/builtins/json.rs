@@ -268,7 +268,7 @@ pub(crate) fn source_records(heap: &mut Heap, text: Str, root: Value) -> Result<
 /// SyntaxError "invalid rawJSON string" otherwise).
 pub(crate) fn raw_json(heap: &mut Heap, text: Str) -> Result<Value, Fault> {
     let invalid = || {
-        Err(Fault::Error(
+        Err(Fault::error(
             ErrorKind::SyntaxError,
             String::from("invalid rawJSON string"),
         ))
