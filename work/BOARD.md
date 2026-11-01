@@ -13,7 +13,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0079 | Integration efficiency: items 1-4 landed (D1790-D1793), measuring for train/post-merge | devflow | .worktrees/devflow |
 | 0086 | Bytecode quality + dispatch (0081 P4) | lexer | .worktrees/lexer |
 | 0083 | Shapes + leaner object/image layout (design first) | heap | .worktrees/heap |
-| 0072 | Determinism gate checks part 2 (raw images; fix detprobe) | determinism | .worktrees/determinism |
 | 0085 | Leaf fast paths for everyday builtins (0081 P1) | perf | .worktrees/perf |
 | 0088 | Snapshot design research: long-lived, cross-version, small (report only) | snapshot | .worktrees/snapshot |
 
@@ -62,6 +61,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0064 | djs repl | 31797b6 (agent repl, archived; docs/cli.md; follow-ups: tab completion, interactive .step) |
 | 0077 | deser deps investigation | report (agent deps, archived): no new deps; quick wins -> 0078 |
 | 0081 | Perf anatomy | report (agent perf): plain bytecode at par in wasm; gap is builtins/iteration; P1-P10 |
+| 0072 | Determinism checks in the gate (both parts) | 38f0c91 (agent determinism, archived; D1720, D1725) |
 | 0071 | GC points + raw images slice-independent | f14da99 (agent num; D1710, D1711) |
 | 0074 | Fuel overshoot carried across runs | 793e29d (agent determinism; D1740) |
 | 0073 | Replay journal + canonical hash | 37e6172 (agent determinism; D1730) |
