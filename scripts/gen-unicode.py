@@ -450,6 +450,115 @@ def encode_sequences(seqs, data):
     return off
 
 
+# The coding of each property of strings (generate_props).
+STRING_KINDS = {
+    "Basic_Emoji": 1, "Emoji_Keycap_Sequence": 0, "RGI_Emoji_Modifier_Sequence": 2,
+    "RGI_Emoji_Flag_Sequence": 3, "RGI_Emoji_Tag_Sequence": 0, "RGI_Emoji_ZWJ_Sequence": 4,
+}
+MODIFIERS = range(0x1F3FB, 0x1F400)
+HAIR = range(0x1F9B0, 0x1F9B4)
+
+
+def encode_partition(sets):
+    """The code space as runs of the index of the set each code point is in (each code
+    point in exactly one): `len << 5 | index` for lengths 1..=6, else `7 << 5 | index`
+    and a varint length - 7."""
+    owner = [None] * 0x110000
+    for i, cps in enumerate(sets):
+        for c in cps:
+            assert owner[c] is None
+            owner[c] = i
+    assert all(o is not None for o in owner)
+    out = []
+    c = 0
+    while c < 0x110000:
+        j = c
+        while j < 0x110000 and owner[j] == owner[c]:
+            j += 1
+        n = j - c
+        if n <= 6:
+            out.append(n << 5 | owner[c])
+        else:
+            out.append(7 << 5 | owner[c])
+            varint(n - 7, out)
+        c = j
+    return out
+
+
+def gc_mask_toward(target, base, leaf_sets):
+    """The union of `base` and the General_Category leaves that bring it closer to
+    `target` (more of the leaf's new code points inside than outside): (mask, union)."""
+    mask, full = 0, set(base)
+    for i, leaf in enumerate(leaf_sets):
+        new = leaf - full
+        if len(new & target) > len(new - target):
+            mask |= 1 << i
+            full |= leaf
+    return mask, full
+
+
+def zwj_pattern(n_mod, hair, variants):
+    """The expansion code of a ZWJ template's variants (n_mod modifier slots, a hair slot
+    or not): 0 none, 1 one slot of all five tones, 2 two slots of all 25 pairs, 3 two
+    slots of the 20 pairs of different tones; +4 with all four hair components. None if
+    the variants are none of these."""
+    hairs = list(range(4)) if hair else [None]
+    pairs = [(a, b) for a in range(5) for b in range(5)]
+    options = {0: [()], 1: [(i,) for i in range(5)], 2: pairs,
+               3: [(a, b) for a, b in pairs if a != b]}
+    for code, mods in options.items():
+        if len(mods[0]) != n_mod:
+            continue
+        if variants == {(m, h) for m in mods for h in hairs}:
+            return code + (4 if hair else 0)
+    return None
+
+
+def encode_zwj(seqs):
+    """ZWJ sequences as templates (D2334): a sequence with skin tone modifiers and hair
+    components replaced by slots, and the code of the variants it stands for
+    (zwj_pattern). Templates are sorted and front-coded: the count, then per template the
+    shared prefix length, the number of new tokens, the variant code and the tokens:
+    0 a modifier slot, 1 the hair slot, 2 U+200D, 3 U+FE0F, else 4 + the zigzag delta of
+    a code point from the previous one (0 at the start)."""
+    groups = {}
+    for q in seqs:
+        sk, mods, hair = [], [], None
+        for c in q:
+            if c in MODIFIERS:
+                sk.append("M")
+                mods.append(c - MODIFIERS[0])
+            elif c in HAIR:
+                sk.append("H")
+                hair = c - HAIR[0]
+            else:
+                sk.append(c)
+        groups.setdefault(tuple(sk), set()).add((tuple(mods), hair))
+    special = {"M": 0, "H": 1, 0x200D: 2, 0xFE0F: 3}
+    key = lambda sk: [x if isinstance(x, int) else -1 for x in sk]
+    out = []
+    varint(len(groups), out)
+    prev = []
+    for sk in sorted(groups, key=key):
+        code = zwj_pattern(sk.count("M"), "H" in sk, groups[sk])
+        assert code is not None, sk
+        p = 0
+        while p < len(sk) and p < len(prev) and sk[p] == prev[p]:
+            p += 1
+        varint(p, out)
+        varint(len(sk) - p, out)
+        out.append(code)
+        last = next((x for x in reversed(sk[:p]) if x not in special), 0)
+        for x in sk[p:]:
+            if x in special:
+                out.append(special[x])
+            else:
+                varint(4 + zigzag(x - last), out)
+                last = x
+        prev = list(sk)
+    return out
+
+
 def value_aliases(path, prop):
     """[[short, long, other aliases...]] of a property in PropertyValueAliases.txt."""
     check_version(path)
@@ -467,18 +576,26 @@ def generate_props(vendor):
     data = []
     pva = fetch(vendor, "PropertyValueAliases.txt")
 
-    # General_Category: the leaf values (Cn included), and the groups as leaf lists.
+    # General_Category: the leaf values (Cn included) in GENERAL_CATEGORY's order, as one
+    # partition of the code space (GC_RUNS, D2334), and the groups as masks of leaves.
     gc = parse_props(fetch(vendor, "extracted/DerivedGeneralCategory.txt"))
-    gc_entries, gc_groups = [], []
+    gc_entries, gc_groups, leaf_sets = [], [], []
     groups = {"C": "Cc,Cf,Cn,Co,Cs", "L": "Ll,Lm,Lo,Lt,Lu", "LC": "Ll,Lt,Lu",
               "M": "Mc,Me,Mn", "N": "Nd,Nl,No", "P": "Pc,Pd,Pe,Pf,Pi,Po,Ps",
               "S": "Sc,Sk,Sm,So", "Z": "Zl,Zp,Zs"}
-    for names in value_aliases(pva, "gc"):
-        if names[0] in groups:
-            gc_groups.append((",".join(names), groups[names[0]]))
-        else:
-            gc_entries.append((",".join(names), encode_set(gc.get(names[0], set()), data)))
+    aliases = value_aliases(pva, "gc")
+    leaf_index = {}
+    for names in aliases:
+        if names[0] not in groups:
+            leaf_index[names[0]] = len(gc_entries)
+            gc_entries.append((",".join(names),))
+            leaf_sets.append(gc.get(names[0], set()))
     assert len(gc_entries) == 30, len(gc_entries)
+    for names in aliases:
+        if names[0] in groups:
+            mask = sum(1 << leaf_index[m] for m in groups[names[0]].split(","))
+            gc_groups.append((",".join(names), mask))
+    gc_runs = encode_partition(leaf_sets)
 
     # Script and Script_Extensions. scx(X) = sc(X) - EXPLICIT + explicit(X), where
     # EXPLICIT is every code point listed in ScriptExtensions.txt.
@@ -519,10 +636,28 @@ def generate_props(vendor):
     emoji = parse_props(fetch(vendor, "emoji/emoji-data.txt"), "Version: 17.0")
     for k, v in emoji.items():
         props.setdefault(k, set()).update(v)
-    binary = []
+    # Each binary property is coded as a base (a union of General_Category leaves and at
+    # most one earlier binary property) and its symmetric difference from the property,
+    # whichever is smallest (D2334). Most are close to a union of leaves (ID_Start: the
+    # letters and Nl) or to another property (XID_Start: ID_Start).
+    binary, done = [], []
     for name, alias in BINARY_PROPERTIES:
         names = name if alias is None else f"{name},{alias}"
-        binary.append((names, encode_set(props[name], data)))
+        target = props[name]
+        best = None
+        for j in [None] + list(range(len(done))):
+            base = set() if j is None else done[j]
+            for use_gc in (False, True):
+                mask, full = gc_mask_toward(target, base, leaf_sets) if use_gc else (0, set(base))
+                cand = []
+                varint(mask, cand)
+                varint(0 if j is None else j + 1, cand)
+                encode_set(target ^ full, cand)
+                if best is None or len(cand) < len(best):
+                    best = cand
+        binary.append((names, len(data)))
+        data.extend(best)
+        done.append(target)
 
     # Properties of strings.
     seqs = {}
@@ -547,10 +682,32 @@ def generate_props(vendor):
                     entry[0].append(cps[0])
                 else:
                     entry[1].append(cps)
+    # Sequences coded by their structure where it has one (D2334, as libunicode does):
+    # kind 0 front-coded sequences, 1 `c FE0F` pairs as the set of c, 2 `c modifier` pairs
+    # with all five skin tones as the set of c, 3 flag pairs of regional indicators as the
+    # set of (first - 1F1E6) * 26 + (second - 1F1E6), 4 ZWJ sequences as templates (see
+    # encode_zwj).
     strings = []
     for name in STRING_PROPERTIES:
         chars, multi = seqs[name]
-        strings.append((name, encode_set(set(chars), data), encode_sequences(multi, data)))
+        kind = STRING_KINDS[name]
+        if kind == 1:
+            assert all(len(q) == 2 and q[1] == 0xFE0F for q in multi), name
+            seq_off = encode_set({q[0] for q in multi}, data)
+        elif kind == 2:
+            heads = {q[0] for q in multi}
+            assert {tuple(q) for q in multi} == {(h, m) for h in heads for m in MODIFIERS}, name
+            seq_off = encode_set(heads, data)
+        elif kind == 3:
+            ri = range(0x1F1E6, 0x1F200)
+            assert all(len(q) == 2 and q[0] in ri and q[1] in ri for q in multi), name
+            seq_off = encode_set({(q[0] - 0x1F1E6) * 26 + (q[1] - 0x1F1E6) for q in multi}, data)
+        elif kind == 4:
+            seq_off = len(data)
+            data.extend(encode_zwj(multi))
+        else:
+            seq_off = encode_sequences(multi, data)
+        strings.append((name, encode_set(set(chars), data), seq_off, kind))
 
     def tuples(name, doc, ty, rows):
         lines = [f"/// {doc}", f"pub(super) static {name}: [{ty}; {len(rows)}] = ["]
@@ -573,12 +730,23 @@ def generate_props(vendor):
         "// lists are sorted and front-coded: the count, then per sequence the length of the",
         "// prefix shared with the previous one, the number of new code points, and those as",
         "// zigzag deltas from the code point before each. Names are comma-separated aliases.",
+        "// Binary properties, General_Category and the emoji sequences have their own codings",
+        "// (D2334, see the tables' docs and scripts/gen-unicode.py).",
         "",
-        tuples("GENERAL_CATEGORY", "General_Category leaf values: names, set.", "(&str, u32)",
-               gc_entries),
+        "/// General_Category leaf values: names; the index is the value in GC_RUNS and the",
+        "/// bit in masks.",
+        f"pub(super) static GENERAL_CATEGORY: [&str; {len(gc_entries)}] = [",
+        *[f'    "{e[0]}",' for e in gc_entries],
+        "];",
         "",
-        tuples("GENERAL_CATEGORY_GROUPS", "General_Category groups: names, leaf values.",
-               "(&str, &str)", gc_groups),
+        tuples("GENERAL_CATEGORY_GROUPS", "General_Category groups: names, mask of leaf values.",
+               "(&str, u32)", gc_groups),
+        "",
+        "/// General_Category as a partition of the code space: runs from 0, each a byte",
+        "/// `len << 5 | value` for lengths 1..=6, or `7 << 5 | value` and a varint length - 7.",
+        f"pub(super) static GC_RUNS: [u8; {len(gc_runs)}] = [",
+        *["    " + " ".join(f"{b}," for b in gc_runs[i:i + 24]) for i in range(0, len(gc_runs), 24)],
+        "];",
         "",
         tuples("SCRIPTS", "Script values: names, Script set, Script_Extensions additions "
                "(u32::MAX: none).", "(&str, u32, u32)", scripts),
@@ -586,10 +754,12 @@ def generate_props(vendor):
         "/// Every code point listed in ScriptExtensions.txt.",
         f"pub(super) const SCX_EXPLICIT: u32 = {explicit_off};",
         "",
-        tuples("BINARY", "Binary properties: names, set.", "(&str, u32)", binary),
+        tuples("BINARY", "Binary properties: names, coded set (varint mask of General_Category "
+               "leaves, varint index + 1 of an earlier property or 0, then the set to XOR with "
+               "their union).", "(&str, u32)", binary),
         "",
-        tuples("STRINGS", "Properties of strings: name, single code points, sequences.",
-               "(&str, u32, u32)", strings),
+        tuples("STRINGS", "Properties of strings: name, single code points, sequences, kind of "
+               "the sequences' coding (see gen-unicode.py).", "(&str, u32, u32, u8)", strings),
         "",
         "\n".join(blob),
         "",

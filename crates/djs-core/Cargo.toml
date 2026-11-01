@@ -11,7 +11,7 @@ libm = "=0.2.16"
 
 [features]
 default = ["regexp-unicode-props", "unicode-normalization"]
-# `\p{..}` / `\P{..}` in regular expressions: about 58 KB of Unicode property tables
+# `\p{..}` / `\P{..}` in regular expressions: about 21 KB of Unicode property tables
 # (D1500). Without it they are a SyntaxError (D1112).
 regexp-unicode-props = []
 # String.prototype.normalize for every string, and localeCompare normalizing to NFC like

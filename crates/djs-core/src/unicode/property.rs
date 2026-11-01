@@ -8,7 +8,8 @@
 use alloc::vec::Vec;
 
 use super::props::{
-    BINARY, DATA, GENERAL_CATEGORY, GENERAL_CATEGORY_GROUPS, SCRIPTS, SCX_EXPLICIT, STRINGS,
+    BINARY, DATA, GC_RUNS, GENERAL_CATEGORY, GENERAL_CATEGORY_GROUPS, SCRIPTS, SCX_EXPLICIT,
+    STRINGS,
 };
 
 /// Why a lookup failed; the messages are QuickJS's.
@@ -75,10 +76,14 @@ fn has_name(names: &str, name: &str) -> bool {
 
 /// A varint at `*p` in DATA.
 fn varint(p: &mut usize) -> u32 {
+    varint_in(&DATA, p)
+}
+
+fn varint_in(bytes: &[u8], p: &mut usize) -> u32 {
     let mut v = 0;
     let mut shift = 0;
     loop {
-        let b = DATA[*p];
+        let b = bytes[*p];
         *p += 1;
         v |= ((b & 0x7F) as u32) << shift;
         if b < 0x80 {
@@ -125,6 +130,111 @@ fn decode_sequences(off: u32) -> Vec<Vec<u32>> {
             s.push(last);
         }
         out.push(s);
+    }
+    out
+}
+
+/// The ZWJ sequences of the templates at `off` (scripts/gen-unicode.py `encode_zwj`, D2334):
+/// each template with its modifier and hair slots filled in every way its code says.
+fn decode_zwj(off: u32) -> Vec<Vec<u32>> {
+    const MODIFIER: u32 = 0x1F3FB;
+    const HAIR: u32 = 0x1F9B0;
+    // Slot markers in a template; real code points are never this large.
+    const MOD_SLOT: u32 = u32::MAX;
+    const HAIR_SLOT: u32 = u32::MAX - 1;
+    let mut p = off as usize;
+    let n = varint(&mut p);
+    let mut out = Vec::new();
+    let mut sk: Vec<u32> = Vec::new();
+    for _ in 0..n {
+        let prefix = varint(&mut p) as usize;
+        let len = varint(&mut p);
+        let code = DATA[p];
+        p += 1;
+        sk.truncate(prefix);
+        // Deltas continue from the last real code point of the shared prefix.
+        let mut last = 0;
+        for &c in &sk {
+            if c < HAIR_SLOT && c != 0x200D && c != 0xFE0F {
+                last = c;
+            }
+        }
+        for _ in 0..len {
+            let t = varint(&mut p);
+            sk.push(match t {
+                0 => MOD_SLOT,
+                1 => HAIR_SLOT,
+                2 => 0x200D,
+                3 => 0xFE0F,
+                z => {
+                    let z = z - 4;
+                    let d = if z & 1 == 0 {
+                        (z >> 1) as i64
+                    } else {
+                        -(((z + 1) >> 1) as i64)
+                    };
+                    last = (last as i64 + d) as u32;
+                    last
+                }
+            });
+        }
+        let hairs = if code & 4 != 0 { 4 } else { 1 };
+        for h in 0..hairs {
+            for a in 0..5 {
+                for b in 0..5 {
+                    let keep = match code & 3 {
+                        0 => a == 0 && b == 0,
+                        1 => b == 0,
+                        2 => true,
+                        _ => a != b,
+                    };
+                    if !keep {
+                        continue;
+                    }
+                    let mut seq = Vec::with_capacity(sk.len());
+                    let mut first = true;
+                    for &c in &sk {
+                        seq.push(match c {
+                            MOD_SLOT => {
+                                let t = if first { a } else { b };
+                                first = false;
+                                MODIFIER + t
+                            }
+                            HAIR_SLOT => HAIR + h,
+                            c => c,
+                        });
+                    }
+                    out.push(seq);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The code points whose General_Category is one of `mask`'s leaves (bit i:
+/// `GENERAL_CATEGORY[i]`), from the partition in GC_RUNS (D2334).
+fn gc_set(mask: u32) -> Vec<(u32, u32)> {
+    let mut out: Vec<(u32, u32)> = Vec::new();
+    if mask == 0 {
+        return out;
+    }
+    let mut c = 0u32;
+    let mut p = 0;
+    while p < GC_RUNS.len() {
+        let b = GC_RUNS[p];
+        p += 1;
+        let mut n = (b >> 5) as u32;
+        if n == 7 {
+            n += varint_in(&GC_RUNS, &mut p);
+        }
+        if mask >> (b & 31) & 1 != 0 {
+            match out.last_mut() {
+                Some(last) if last.1 + 1 == c => last.1 = c + n - 1,
+                _ => out.push((c, c + n - 1)),
+            }
+        }
+        c += n;
     }
     out
 }
@@ -177,18 +287,13 @@ fn subtract(a: &[(u32, u32)], b: &[(u32, u32)]) -> Vec<(u32, u32)> {
 }
 
 fn general_category(value: &str) -> Option<Vec<(u32, u32)>> {
-    if let Some(&(_, off)) = GENERAL_CATEGORY.iter().find(|(n, _)| has_name(n, value)) {
-        return Some(decode_set(off));
+    if let Some(i) = GENERAL_CATEGORY.iter().position(|n| has_name(n, value)) {
+        return Some(gc_set(1 << i));
     }
-    let &(_, members) = GENERAL_CATEGORY_GROUPS
+    let &(_, mask) = GENERAL_CATEGORY_GROUPS
         .iter()
         .find(|(n, _)| has_name(n, value))?;
-    let mut out = Vec::new();
-    for m in members.split(',') {
-        let &(_, off) = GENERAL_CATEGORY.iter().find(|(n, _)| has_name(n, m))?;
-        out = union(out, &decode_set(off));
-    }
-    Some(out)
+    Some(gc_set(mask))
 }
 
 fn script(value: &str, extensions: bool) -> Option<Vec<(u32, u32)>> {
@@ -210,28 +315,68 @@ fn binary(name: &str) -> Option<Vec<(u32, u32)>> {
         "Any" => return Some(alloc::vec![(0, 0x10FFFF)]),
         "ASCII" => return Some(alloc::vec![(0, 0x7F)]),
         "Assigned" => {
-            let cn = general_category("Cn")?;
-            return Some(subtract(&[(0, 0x10FFFF)], &cn));
+            let cn = GENERAL_CATEGORY.iter().position(|n| has_name(n, "Cn"))?;
+            return Some(gc_set(((1 << GENERAL_CATEGORY.len()) - 1) & !(1 << cn)));
         }
         _ => {}
     }
-    let &(_, off) = BINARY.iter().find(|(n, _)| has_name(n, name))?;
-    Some(decode_set(off))
+    let i = BINARY.iter().position(|(n, _)| has_name(n, name))?;
+    Some(binary_set(i))
+}
+
+/// Binary property `i`: its base (a union of General_Category leaves and maybe an earlier
+/// property) XOR the stored difference (D2334).
+fn binary_set(i: usize) -> Vec<(u32, u32)> {
+    let mut p = BINARY[i].1 as usize;
+    let mask = varint(&mut p);
+    let earlier = varint(&mut p) as usize;
+    let mut base = gc_set(mask);
+    if earlier != 0 {
+        base = union(base, &binary_set(earlier - 1));
+    }
+    let diff = decode_set(p as u32);
+    union(subtract(&base, &diff), &subtract(&diff, &base))
+}
+
+/// The sequences of a property of strings, by the coding `kind` (D2334). In no particular
+/// order: the regexp compiler orders class strings itself.
+fn decode_strings(off: u32, kind: u8) -> Vec<Vec<u32>> {
+    if kind == 4 {
+        return decode_zwj(off);
+    }
+    if kind == 0 {
+        return decode_sequences(off);
+    }
+    let mut out = Vec::new();
+    for (lo, hi) in decode_set(off) {
+        for c in lo..=hi {
+            match kind {
+                1 => out.push(alloc::vec![c, 0xFE0F]),
+                2 => {
+                    for m in 0x1F3FB..0x1F400 {
+                        out.push(alloc::vec![c, m]);
+                    }
+                }
+                _ => out.push(alloc::vec![0x1F1E6 + c / 26, 0x1F1E6 + c % 26]),
+            }
+        }
+    }
+    out
 }
 
 fn string_property(name: &str) -> Option<Property> {
     if name == "RGI_Emoji" {
         let mut all = Property::default();
-        for &(_, chars, seqs) in &STRINGS {
+        for &(_, chars, seqs, kind) in &STRINGS {
             all.ranges = union(all.ranges, &decode_set(chars));
-            all.strings.extend(decode_sequences(seqs));
+            all.strings.extend(decode_strings(seqs, kind));
         }
         return Some(all);
     }
-    let &(_, chars, seqs) = STRINGS.iter().find(|(n, _, _)| *n == name)?;
+    let &(_, chars, seqs, kind) = STRINGS.iter().find(|(n, _, _, _)| *n == name)?;
     Some(Property {
         ranges: decode_set(chars),
-        strings: decode_sequences(seqs),
+        strings: decode_strings(seqs, kind),
     })
 }
 

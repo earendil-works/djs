@@ -5561,3 +5561,25 @@ k × 1000 bytes allocated first, and prints min, mean and max of the peak wasm m
 - **Rule:** memory claims ("no worse than main") compare these distributions against
   main, using `--root` for another checkout's reader. A workload is worse if its mean or
   max is clearly above main's, not if one run is (TESTING.md "Peak memory claims").
+## D2334: Unicode property tables coded by structure
+date: 2026-11-07 · by: bloat · issue: 0126
+props.rs (the tables of `\p{..}`) drops from 57,820 bytes of range lists to 20,477
+(GC_RUNS 5,202 + DATA 15,275), module 471,983 -> 466,299 bytes gzip (−5.7 KB; data
+−37.6 KB raw, decoders +1.9 KB raw code). scripts/gen-unicode.py codes:
+- General_Category as one partition of the code space (each code point in exactly one
+  leaf): runs `len << 5 | leaf`, long runs with a varint. A leaf or group is one pass
+  over the runs with a mask of leaves.
+- each binary property as a base (a union of General_Category leaves and at most one
+  earlier binary property) XOR a stored difference, the generator picking the smallest:
+  ID_Start is the letters and Nl plus 19 bytes, XID_Start is ID_Start plus 40 bytes,
+  Uppercase is Lu plus 18 (25,091 -> ~5,500 bytes for all 50).
+- the emoji sequences by their structure, as libunicode does: Basic_Emoji's `c FE0F`
+  pairs as the set of c, the modifier sequences as the set of bases (each with all five
+  skin tones), the flag sequences as regional-indicator pair indexes, the ZWJ sequences
+  as 440 templates with skin tone and hair slots and a code for which combinations exist
+  (12,054 -> 3,203 bytes). The generator asserts each structure, so a Unicode update that
+  breaks one fails loudly.
+Scripts stay range lists (a partition was larger). Every lookup decodes exactly what it
+did before: a scratch comparison of all 976 property names and values against the old
+tables, and test262's property-escapes tests (613/613). Decoding is cold (regexp
+compilation of `\p{..}`); the lexer's ID tables and the case tables are unchanged.
