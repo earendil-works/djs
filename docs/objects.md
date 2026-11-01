@@ -392,9 +392,11 @@ documented in `interp/run/ic.rs`, and the hit checks are two shared functions,
 
 - 16-byte entries: part of this design.
 - Shared `length`/`name`: shapes.
-- A slimmer template for privileged (prelude) functions: no `NAMES`, `LINES`, `SRC_*` or
-  `IC` fields, so about 48 B instead of 80 B. Independent of shapes.
-- The atom index at ~75% load: independent.
+- A slimmer template for privileged (prelude) functions: done in 0098 (D1980). The debug
+  fields are optional, so a prelude template is 56 B instead of 80 B (−20.4 KB of base
+  image). The `IC` field stays, since the builtins' caches matter.
+- The atom index at ~75% load: measured in 0098 and not adopted (D1981). It saved 5 KB but
+  made computed-key lookups about 10% slower.
 
 I'd do the last two as their own small parts at the end, since they don't depend on
 shapes.

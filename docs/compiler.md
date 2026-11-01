@@ -1137,7 +1137,9 @@ for the whole compilation.
 
 ```rust
 cells! {
-    /// Immutable compiled function (one per source function).
+    /// Immutable compiled function (one per source function). As built (0098, D1980):
+    /// the debug fields from LINES on are optional, so a privileged (prelude) template
+    /// is 56 bytes and others 80.
     FuncTemplate {
         FLAGS: u32 = 8,        // kind (4 bits), async, generator, simple_params,
                                // uses_arguments, uses_this, class_ctor, derived, ...
@@ -1147,20 +1149,23 @@ cells! {
         LOCALS: u16 = 20,
         STACK: u16 = 22,       // max operand depth (4.4)
         CAPTURES: u16 = 24,
-        RESERVED: u16 = 26,
+        IC_COUNT: u16 = 26,    // inline cache sites (D1620)
         CODE: Ref = 28,        // Bytes: final bytecode
         CONSTS: Ref = 32,      // ValueArray: numbers, strings, template-object caches; or null
         CHILDREN: Ref = 36,    // RefArray of FuncTemplate; or null
         CAPTURE_DESC: Ref = 40,// U32Array: bit 31 = Outer, low bits = slot/index; or null
         HANDLERS: Ref = 44,    // Bytes: 16-byte (start, end, handler, depth) records; or null
-        LINES: Ref = 48,       // Bytes: line table (6.2)
-        SCRIPT: Ref = 52,      // Script
-        SRC_START: u32 = 56,   // source span of the function (Function.prototype.toString, D009)
-        SRC_END: u32 = 60,
-        NAMES: Ref = 64,       // U32Array of atoms: locals, then captures (TDZ messages,
+        IC: Ref = 48,          // U32Array: the inline cache slots; or null
+        NATIVE: u16 = 52,      // @native builtin index (0063)
+        FAST: u16 = 54,        // @fast builtin index (D1850)
+        // optional (absent from privileged templates):
+        LINES: Ref = 56,       // Bytes: line table (6.2)
+        SCRIPT: Ref = 60,      // Script
+        SRC_START: u32 = 64,   // source span of the function (Function.prototype.toString, D009)
+        SRC_END: u32 = 68,
+        NAMES: Ref = 72,       // U32Array of atoms: locals, then captures (TDZ messages,
                                // disassembler, debugger)
-        RESERVED2: u32 = 68,
-    };
+    } min 56;
     /// One per compiled source: name for stack traces, optionally the source text.
     Script { NAME: Ref = 8 /* Str */, SOURCE: Ref = 12 /* Str or null */ };
     /// A captured binding (`BoxCell` in code, so it does not shadow `alloc::boxed::Box`).

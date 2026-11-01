@@ -4443,3 +4443,34 @@ for line-mode tests. `.step [n]` runs inputs in slices of `n` fuel and stops at 
 `step>` prompt after each one, using only `Vm::run_metered` and `Vm::backtrace`; in line
 mode the prompt reads the following input lines. `.decorators tc39|legacy|metadata`
 selects the compile options of D1651 for later inputs.
+## D1980: Privileged templates without debug fields (optional trailing fields)
+date: 2026-11-03 · by: heap · issue: 0098
+`cells!` takes an optional `min N` after a cell's fields
+(`CellLayout::with_min_size`). The fields from offset N on are then optional: a cell may
+stop before them, the walker (`walk::for_each_slot`, so the GC and `verify`) skips the
+fields a cell lacks, and readers check the cell size. `min_size` is part of the layout
+hash.
+
+`FuncTemplate` uses this. Its debug fields `LINES`, `SCRIPT`, `SRC_START`, `SRC_END`
+and `NAMES` moved to the end, from offset 56. `NATIVE` and `FAST` are u16 now (their
+tables are far smaller). A privileged template without lines or names is allocated at
+56 bytes instead of 80. Prelude functions show up in traces as hidden frames or
+`(native)`, never with a file or line; their `toString` is `[native code]`; their
+locals are never named. So nothing reads those fields for them.
+`bytecode::template::debug_info` reads the five fields, null/0 for a short template.
+Stack traces recognize prelude frames by the `PRIVILEGED` flag; they used to compare
+the template's script with `Intrinsic::PreludeScript`, which stays for the non-privileged
+case.
+
+Base image 398,216 → 377,768 bytes (−20.4 KB, gzip −6.9 KB), the same in the wasm data
+section; code +0.2 KB.
+
+## D1981: The atom index stays at load ≤ 1/2 (measured)
+date: 2026-11-03 · by: heap · issue: 0098
+0052 S2 proposed a ~75% load for the atom index. A power-of-two index can't get there for
+the prelude's ~1,880 string atoms (2,048 buckets would be 92% full). So 0098 tried
+`hash * len >> 32` bucket selection with any length, a load limit of 3/4, and
+`compact_for_image` sizing the index at 2/3 load. That saved 5.1 KB of the base image,
+but atom lookups of non-atom strings (`o[k]` with computed keys) were about 10% slower and
+new atoms 8% slower (release builds, interleaved). Not adopted: the index stays a
+power of two at load ≤ 1/2. The patch is in work/scratch/0098/atom-load-34.diff.
