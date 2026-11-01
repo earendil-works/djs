@@ -559,7 +559,7 @@ const I = {
   ArrayBufferCreate: (proto, len, max) => Object.setPrototypeOf(max === undefined ? new ArrayBuffer(len) : new ArrayBuffer(len, { maxByteLength: max }), proto),
   BufferInfo: (b, f) => {
     const g = (n) => Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, n).get.call(b);
-    return [g("byteLength"), g("maxByteLength"), g("resizable"), g("detached")][f];
+    return [g("byteLength"), g("maxByteLength"), g("resizable"), g("detached"), g("immutable")][f];
   },
   BufferDetach: (b) => void b.transfer(),
   BufferResize: (b, n) => b.resize(n),
