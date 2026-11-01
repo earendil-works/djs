@@ -1,7 +1,7 @@
 # 0020: Flaky djs-difftest `qjs_comparisons` test under load
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0020-flaky-difftest-timeout
 depends-on: 0010
 touches: crates/djs-difftest/, crates/djs-test262/ (the same pattern, if present)
