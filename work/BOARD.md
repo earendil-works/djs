@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0033 | JSON + RegExp builtins, regex literals | num | .worktrees/0033-json-regexp-builtins |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
-| 0039 | Binary data: ArrayBuffer, typed arrays, DataView, base64 | infra | .worktrees/0039-binary-data |
+| 0045 | Proxy | infra | .worktrees/0045-proxy |
 | 0041 | Async functions, await, generators (compiler) | lexer | .worktrees/0041-async-generators-compiler |
 | 0040 | P1-7 Classes (paused for 0041) | lexer (parked) | .worktrees/0040-p1-classes |
 | 0043 | wasm size audit and reduction | heap | .worktrees/0043-wasm-size |
@@ -38,6 +38,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0042 | Async generator runtime, function kinds, host rejections | 6e3c965 (agent heap) |
 | 0037 | P2 Promises, jobs, async host calls, suspendable frames | bd6f974 (agent heap; 3 parts) |
 | 0036 | P1-6 Destructuring + tagged templates | 234fd3c (agent lexer; +~1,940 test262) |
+| 0039 | Binary data | c8aefb6 (agent infra; DataView 445/449, TypedArray 841/849) |
 | 0038 | Builtins wave 3 | e43d075 (agent infra; Map/Set/Weak*/Reflect/Date; test262 active 64.8%) |
 | 0034 | Core builtins wave 2 | a05575b (agent infra; Array 2,461/2,680, String 688/1,040; gate back to 60 s) |
 | 0035 | Interpreter call-path performance | 2779e53 (agent heap; calls 7.5x -> 3.35x qjs, loop 9.6x -> 3.8x) |
@@ -93,6 +94,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 2026-11-01 (0038 p1: promotion to active, +2,018 tests) | | 12,354 / 22,142 (55.8%) |
 | 2026-11-01 (0038 p2: Map/Set/Weak*) | | 13,049 / 22,142 (58.9%) |
 | 2026-11-01 (0038 done + 0037 p1) | 96 / 182 | 14,367 / 22,142 (64.8%) |
+| 2026-11-01 (0039 done; binary data promoted, +1,978 tests) | | 18,484 / 24,120 (76.6%) |
 
 ## Parallelism notes
 
