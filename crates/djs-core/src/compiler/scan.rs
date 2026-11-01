@@ -141,10 +141,11 @@ pub(super) struct PatternScan {
 impl PatternScan {
     /// With `open` the current `{` or `[` token and `lx` positioned after it.
     pub fn follow(&mut self, lx: Lexer<'_>, open: Token) -> Follow {
-        if self.start <= open.start && open.start < self.end {
-            if let Ok(i) = self.entries.binary_search_by_key(&open.start, |e| e.0) {
-                return self.entries[i].1;
-            }
+        if self.start <= open.start
+            && open.start < self.end
+            && let Ok(i) = self.entries.binary_search_by_key(&open.start, |e| e.0)
+        {
+            return self.entries[i].1;
         }
         self.scan(lx, open)
     }
