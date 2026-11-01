@@ -4,6 +4,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Full width for the gate (only one runs at a time, under the merge lock); the repo's
+# .cargo/config.toml caps everything else at 6 (D012).
+ncpu=$(sysctl -n hw.ncpu 2>/dev/null || nproc)
+export CARGO_BUILD_JOBS="$ncpu" RUST_TEST_THREADS="$ncpu" DJS_JOBS="$ncpu"
+
 echo "== fmt";   cargo fmt --all --check
 echo "== clippy"; cargo clippy --workspace --all-targets --quiet -- -D warnings
 echo "== test";  cargo test --workspace --quiet

@@ -2172,3 +2172,16 @@ entries, keys under 64 KB). A start with the same inputs restores the image (0.6
 A start then takes 0.5 ms, against 3.2 ms on quickjs-wasi. The handles of the prelude's
 functions are part of the image (handles survive images, heap/handle.rs). Off with
 `reuseImages: false`.
+
+## D012: Development flow: per-agent job caps, iteration habits, worktree slots
+date: 2026-11-01 · by: coordinator · issue: 0047
+From devflow's measurements (work/issues/0047-devflow.md): the gate is not the main cost;
+agents running unfiltered or release test262/difftest/qjs runs at full machine width are.
+Adopted now: (1) the "Testing while iterating" section in AGENTS.md; (2) the repo's
+`.cargo/config.toml` caps cargo at 6 jobs / 6 test threads, and the gate overrides to full
+width; (3) the coordinator reuses one worktree per agent (`.worktrees/<agent>`) across
+issues instead of a fresh worktree (and a cold target/) per issue. The test-side fixes
+(difftest no-stress for the six timeout cases, parallel and fuel-capped e2e, the two slow
+unit tests, the qjs result cache, runners honouring DJS_JOBS) are issue 0053. Rejected:
+a shared CARGO_TARGET_DIR (artifact clobbering across branches), gate tiers, and release
+builds in the gate.

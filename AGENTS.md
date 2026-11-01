@@ -87,6 +87,27 @@ Rules:
   something outside them, say so in the log and keep the change minimal: other agents may
   be working there in parallel.
 
+## Testing while iterating
+
+The gate runs once, inside `scripts/merge-to-main.sh`. Don't run `scripts/gate.sh` yourself
+before merging; while iterating, run only what your change can break (0047, D012):
+
+- Unit tests of one area: `cargo test -p djs-core --lib compiler::` (2–3 s).
+- e2e: `DJS_E2E_MODE=plain cargo test -p djs-core --test e2e`; the stress modes once
+  before merging.
+- test262: dev build, filtered: `cargo run -q -p djs-test262 -- run --engine djs
+  built-ins/RegExp`. djs-core is opt-level 1 in dev; the active group takes ~4 s in dev vs
+  ~3 s in release, and a release rebuild costs more than that. Don't run the unfiltered
+  default (all groups, ~300 CPU-s) to check a change.
+- difftest: `cargo run -q -p djs-difftest -- --engine djs <filter>`; add the stress flags
+  for the cases you touched.
+- qjs results don't change: read `tests/test262/oracle-failures.txt` and the corpus
+  `.expected` files instead of re-running qjs.
+- Use `--release` only for benchmarks (`scripts/bench.sh`) and timing work.
+- Leave cores for the others: the repo's `.cargo/config.toml` caps cargo at 6 jobs and 6
+  test threads; pass `-j 6` to the test262/difftest runners. Everything that runs an
+  engine goes under `scripts/timeout.sh`.
+
 ## Coordinator
 
 The coordinator (the main agent) owns `work/BOARD.md`, creates issues and worktrees,

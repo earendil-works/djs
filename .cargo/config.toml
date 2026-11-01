@@ -1,0 +1,9 @@
+# Several agents build and test in parallel on one machine (D012): cap each cargo
+# invocation at 6 jobs and 6 test threads. scripts/gate.sh overrides both to run at full
+# width, since only one gate runs at a time (merge lock).
+[build]
+jobs = 6
+
+[env]
+RUST_TEST_THREADS = "6"
+DJS_JOBS = "6"
