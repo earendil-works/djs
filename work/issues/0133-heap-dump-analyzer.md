@@ -1,7 +1,7 @@
 # 0133: A heap dump analyzer
 
-status: open
-agent: -
+status: in-progress
+agent: snapshot
 branch: issue/0133-heap-dump-analyzer
 depends-on: 0117
 guide: docs/guide/snapshots.md or gc.md (a short "inspecting a heap" section, D2102 rules)
