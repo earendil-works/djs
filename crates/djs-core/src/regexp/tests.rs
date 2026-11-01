@@ -25,7 +25,7 @@ fn syntax_error(pattern: &str, flags: &str) -> String {
 /// Runs to completion; captures as strings (None = undefined).
 fn exec_str(prog: &Program, input: &str, start: usize) -> Option<Vec<Option<String>>> {
     let text = u16s(input);
-    let mut fuel = u64::MAX;
+    let mut fuel = i64::MAX;
     match exec(
         prog,
         Input::Utf16(&text),
@@ -281,7 +281,7 @@ fn case_insensitive_pairs_match_qjs() {
             pat.extend(u16s("$"));
             let prog = compile(&pat, Flags::parse(&u16s(flags)).unwrap()).unwrap();
             let input = utf16(x);
-            let mut fuel = u64::MAX;
+            let mut fuel = i64::MAX;
             let got = matches!(
                 exec(
                     &prog,
@@ -316,9 +316,21 @@ fn case_insensitive_pairs_match_qjs() {
 }
 
 /// Runs with `chunk` fuel at a time, serializing the state between runs.
-fn exec_chunked(prog: &Program, input: Input<'_>, start: usize, chunk: u64) -> (ExecResult, usize) {
+fn exec_chunked(prog: &Program, input: Input<'_>, start: usize, chunk: i64) -> (ExecResult, usize) {
+    exec_chunked_metered(prog, input, start, chunk).0
+}
+
+/// [`exec_chunked`], also returning the total fuel used (a backreference may overdraw a
+/// chunk: that counts too, D1711).
+fn exec_chunked_metered(
+    prog: &Program,
+    input: Input<'_>,
+    start: usize,
+    chunk: i64,
+) -> ((ExecResult, usize), i64) {
     let mut fuel = chunk;
     let mut r = exec(prog, input, start, &mut fuel, ExecLimits::default());
+    let mut used = chunk - fuel;
     let mut suspensions = 0;
     loop {
         match r {
@@ -329,8 +341,39 @@ fn exec_chunked(prog: &Program, input: Input<'_>, start: usize, chunk: u64) -> (
                 assert_eq!(state.to_words(), words);
                 fuel = chunk;
                 r = resume(prog, input, state, &mut fuel, ExecLimits::default());
+                used += chunk - fuel;
             }
-            other => return (other, suspensions),
+            other => return ((other, suspensions), used),
+        }
+    }
+}
+
+/// D1711: the total fuel of a match does not depend on how it is sliced, including
+/// scans and loops stopped half-way and backreferences longer than a slice.
+#[test]
+fn chunked_fuel_is_additive() {
+    let long_a = "a".repeat(300) + "b";
+    let cases: [(&str, &str); 6] = [
+        (
+            "needle",
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxneedle",
+        ),
+        ("[n]eedle", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxneedle"),
+        (
+            "y+z",
+            "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyz",
+        ),
+        ("(a{100})\\1", &long_a),
+        ("(a+)\\1b", &long_a),
+        ("(?:ab|a)*?c", "abababababababababababababaabababc"),
+    ];
+    for (pat, text) in cases {
+        let prog = re(pat, "");
+        let input: Vec<u16> = text.encode_utf16().collect();
+        let ((_, _), want) = exec_chunked_metered(&prog, Input::Utf16(&input), 0, i64::MAX / 2);
+        for chunk in [1, 2, 3, 7, 50, 101] {
+            let ((_, n), used) = exec_chunked_metered(&prog, Input::Utf16(&input), 0, chunk);
+            assert_eq!(used, want, "/{pat}/ in chunks of {chunk} ({n} suspensions)");
         }
     }
 }
@@ -395,7 +438,7 @@ fn suspend_and_resume_give_the_same_result() {
     for (p, f, i) in cases {
         let prog = re(p, f);
         let input = u16s(i);
-        let mut fuel = u64::MAX;
+        let mut fuel = i64::MAX;
         let once = exec(
             &prog,
             Input::Utf16(&input),
@@ -417,7 +460,7 @@ fn suspend_and_resume_give_the_same_result() {
 fn stack_limit() {
     let prog = re("(?:a|b)*c", "");
     let input = u16s(&"a".repeat(10_000));
-    let mut fuel = u64::MAX;
+    let mut fuel = i64::MAX;
     let limits = ExecLimits { max_stack: 1000 };
     let r = exec(&prog, Input::Utf16(&input), 0, &mut fuel, limits);
     assert!(matches!(r, ExecResult::StackOverflow));
@@ -473,7 +516,7 @@ fn star_loops_keep_the_stack_flat() {
     ] {
         let prog = re(p, "");
         let input = u16s(&input);
-        let mut fuel = u64::MAX;
+        let mut fuel = i64::MAX;
         let r = exec(&prog, Input::Utf16(&input), 0, &mut fuel, limits);
         assert!(!matches!(r, ExecResult::StackOverflow), "/{p}/");
     }
@@ -483,7 +526,7 @@ fn star_loops_keep_the_stack_flat() {
 fn latin1_input() {
     let prog = re("caf\u{e9}", "i");
     let input = b"un CAF\xc9";
-    let mut fuel = u64::MAX;
+    let mut fuel = i64::MAX;
     match exec(
         &prog,
         Input::Latin1(input),
@@ -551,7 +594,7 @@ fn bench_regexp() {
             let mut count = 0;
             let mut steps = 0u64;
             loop {
-                let mut fuel = u64::MAX;
+                let mut fuel = i64::MAX;
                 match exec(&prog, inp, start, &mut fuel, ExecLimits::default()) {
                     ExecResult::Match(c) => {
                         let (s, e) = c.get(0).unwrap();
@@ -559,11 +602,11 @@ fn bench_regexp() {
                         count += 1;
                     }
                     _ => {
-                        steps += u64::MAX - fuel;
+                        steps += (i64::MAX - fuel) as u64;
                         break;
                     }
                 }
-                steps += u64::MAX - fuel;
+                steps += (i64::MAX - fuel) as u64;
             }
             let el = t.elapsed();
             println!(
@@ -590,7 +633,7 @@ fn star_retries_do_not_grow_the_stack() {
     ] {
         let prog = re(p, "");
         let input = u16s(&(data.clone() + tail));
-        let mut fuel = u64::MAX;
+        let mut fuel = i64::MAX;
         let r = exec(&prog, Input::Utf16(&input), 0, &mut fuel, limits);
         match r {
             ExecResult::Match(_) => assert!(want, "/{p}/ matched"),

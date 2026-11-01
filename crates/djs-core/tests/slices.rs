@@ -16,8 +16,9 @@ fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// Runs `src` in slices of `slice` fuel; returns its output and the final raw image.
-fn run(src: &str, slice: u64, restore: bool) -> (String, Vec<u8>) {
+/// Runs `src` in slices of `slice` fuel; returns its output, the final raw image and the
+/// total fuel used.
+fn run(src: &str, slice: u64, restore: bool) -> (String, Vec<u8>, u64) {
     let mut vm = djs_prelude::new_vm(VmOptions::default()).unwrap();
     vm.set_now(1_700_000_000_000.0);
     let console = vm.new_object().unwrap();
@@ -39,8 +40,11 @@ fn run(src: &str, slice: u64, restore: bool) -> (String, Vec<u8>) {
     let this = Value::object(vm.global());
     vm.call(main, this, &args).unwrap();
     let mut out = String::new();
+    let mut fuel = 0;
     loop {
-        match vm.run(slice) {
+        let (st, used) = vm.run_metered(slice);
+        fuel += used;
+        match st {
             Status::Done(_) | Status::Idle => break,
             Status::Threw(e) => {
                 out += &format!("Uncaught {}\n", vm.display(e));
@@ -61,26 +65,43 @@ fn run(src: &str, slice: u64, restore: bool) -> (String, Vec<u8>) {
             vm = Vm::from_bytes(vm.bytes().to_vec(), o).unwrap();
         }
     }
-    (out, vm.bytes().to_vec())
+    (out, vm.bytes().to_vec(), fuel)
 }
 
-/// Every schedule of `path` against all the fuel at once: the same output and arena.
+/// Every schedule of the script at `path` against all the fuel at once: the same
+/// output, arena and total fuel.
 fn check(path: &Path, schedules: &[(u64, bool)]) -> Result<(), String> {
     let src = std::fs::read_to_string(path).unwrap();
-    let (want_out, want_raw) = run(&src, u64::MAX, false);
+    check_src(&path.display().to_string(), &src, schedules)
+}
+
+fn check_src(name: &str, src: &str, schedules: &[(u64, bool)]) -> Result<(), String> {
+    let src = src.to_string();
+    let (want_out, want_raw, want_fuel) = run(&src, u64::MAX, false);
     for &(slice, restore) in schedules {
-        let (out, raw) = run(&src, slice, restore);
+        let t = std::time::Instant::now();
+        let (out, raw, fuel) = run(&src, slice, restore);
+        eprintln!(
+            "TIME {name} {slice} {restore} {:?} fuel {fuel}",
+            t.elapsed()
+        );
         if out != want_out {
             return Err(format!(
                 "{}: slice {slice} restore {restore}: output differs",
-                path.display()
+                name
+            ));
+        }
+        if fuel != want_fuel {
+            return Err(format!(
+                "{}: slice {slice} restore {restore}: fuel {fuel} vs {want_fuel}",
+                name
             ));
         }
         if raw != want_raw {
             let at = raw.iter().zip(&want_raw).position(|(a, b)| a != b);
             return Err(format!(
                 "{}: slice {slice} restore {restore}: raw image differs (len {} vs {}, first at {at:?})",
-                path.display(),
+                name,
                 raw.len(),
                 want_raw.len()
             ));
@@ -113,6 +134,51 @@ fn raw_images_independent_of_slice() {
     assert!(errors.is_empty(), "{}", errors.join("\n"));
 }
 
+/// Workloads whose fuel used to depend on where the GC ran (append buffers, D1610; JSON;
+/// Array.from: 0074) or on how much fuel a slice had left (regexp backreferences, D1711).
+#[test]
+fn fuel_independent_of_slice() {
+    let cases = [
+        (
+            "append",
+            r#"let s = ""; let g = 0; const keep = [];
+               for (let i = 0; i < 30000; i++) {
+                 s += "abcdefgh" + (i % 10);
+                 const o = { a: i, b: [i, i] }; g += o.b.length;
+                 if (i % 5000 == 4999) { keep.push(s); s = s.slice(0, 100); }
+               }
+               console.log(s.length, g, keep.length);"#,
+        ),
+        (
+            "json",
+            r#"const o = []; for (let i = 0; i < 3000; i++) o.push({ i, s: "v" + i, a: [i, i * 2] });
+               let n = 0; for (let k = 0; k < 4; k++) n += JSON.parse(JSON.stringify(o)).length;
+               console.log(n);"#,
+        ),
+        (
+            "array-from",
+            r#"let n = 0; for (let k = 0; k < 40; k++) {
+                 n += Array.from({ length: 2000 }, (_, i) => i * k).length;
+                 n += Array.from(new Set(Array.from("abcdefghij".repeat(50)))).length;
+               }
+               console.log(n);"#,
+        ),
+        (
+            "backref",
+            r#"const s = "a".repeat(2000) + "b"; let n = 0;
+               for (let i = 0; i < 3; i++) { n += /(a{500})\1/.exec(s)[0].length; n += /(a+)\1b/.test(s) ? 1 : 0; }
+               console.log(n);"#,
+        ),
+    ];
+    // Restores copy the image at every stop: at a larger slice, to stay fast.
+    let schedules = [(997, false), (101, false), (20_011, true), (1, false)];
+    let errors: Vec<String> = cases
+        .iter()
+        .filter_map(|(name, src)| check_src(name, src, &schedules).err())
+        .collect();
+    assert!(errors.is_empty(), "{}", errors.join("\n"));
+}
+
 /// Every e2e case at a few slices (slow; `cargo test --test slices -- --ignored`).
 #[test]
 #[ignore]
@@ -123,6 +189,9 @@ fn raw_images_independent_of_slice_all_e2e() {
         .filter(|p| p.extension().is_some_and(|e| e == "js"))
         .collect();
     paths.sort();
+    if let Ok(extra) = std::env::var("DJS_SLICES_CASES") {
+        paths = extra.split(',').map(PathBuf::from).collect();
+    }
     let schedules = [(997, false), (101, true), (13, false), (1, false)];
     let errors: Vec<String> = paths
         .iter()

@@ -175,12 +175,14 @@ impl ExecState {
 
 /// Runs `prog` on `input` starting at `start` (a UTF-16 index). Unless the program is
 /// sticky, the match is searched for from `start` on. Each instruction costs one unit of
-/// `fuel` (a backreference costs its length).
+/// `fuel` (a backreference costs its length, and may take `fuel` below zero: the caller
+/// carries the overdraft). The match stops with [`ExecResult::OutOfFuel`] once `fuel` is
+/// not positive.
 pub fn exec(
     prog: &Program,
     input: Input<'_>,
     start: usize,
-    fuel: &mut u64,
+    fuel: &mut i64,
     limits: ExecLimits,
 ) -> ExecResult {
     let sticky = prog.flags().contains(super::Flags::STICKY);
@@ -194,7 +196,7 @@ pub fn exec_at(
     input: Input<'_>,
     start: usize,
     sticky: bool,
-    fuel: &mut u64,
+    fuel: &mut i64,
     limits: ExecLimits,
 ) -> ExecResult {
     let w = prog.words();
@@ -231,7 +233,7 @@ pub fn resume(
     prog: &Program,
     input: Input<'_>,
     state: ExecState,
-    fuel: &mut u64,
+    fuel: &mut i64,
     limits: ExecLimits,
 ) -> ExecResult {
     let mut m = Machine {
@@ -646,9 +648,9 @@ impl Machine<'_> {
         }
     }
 
-    fn run(&mut self, fuel: &mut u64) -> ExecResult {
+    fn run(&mut self, fuel: &mut i64) -> ExecResult {
         loop {
-            if *fuel == 0 {
+            if *fuel <= 0 {
                 return ExecResult::OutOfFuel(core::mem::replace(
                     &mut self.s,
                     ExecState {
@@ -677,7 +679,7 @@ impl Machine<'_> {
     }
 
     /// Executes one instruction. `Ok(true)` is a match.
-    fn step(&mut self, fuel: &mut u64) -> Result<bool, Stop> {
+    fn step(&mut self, fuel: &mut i64) -> Result<bool, Stop> {
         let code = self.code;
         let pc = self.s.pc as usize;
         let word = code[pc];
@@ -778,7 +780,7 @@ impl Machine<'_> {
                         break;
                     }
                     self.s.pos = next as u32;
-                    if *fuel == 0 {
+                    if *fuel <= 0 {
                         // Out of fuel mid-scan: resume at this instruction.
                         break;
                     }
@@ -800,16 +802,19 @@ impl Machine<'_> {
                 if fast && n < limit {
                     // The common case in one tight loop (D1562); same fuel accounting as
                     // the general loop below: one unit per character after the first.
-                    let cap =
-                        (limit - n).min(u32::try_from(*fuel).unwrap_or(u32::MAX).saturating_add(1));
+                    let cap = (limit - n).min(
+                        u32::try_from((*fuel).max(0))
+                            .unwrap_or(u32::MAX)
+                            .saturating_add(1),
+                    );
                     let (m, pos) = self.scan_forward(pc + 6, cap);
                     self.s.pos = pos;
                     n += m;
-                    if m > 0 && u64::from(m) == fuel.saturating_add(1) {
+                    if m > 0 && i64::from(m) == (*fuel).max(0).saturating_add(1) {
                         stopped = true;
                         *fuel = 0;
                     } else {
-                        *fuel -= u64::from(m);
+                        *fuel -= i64::from(m);
                     }
                 }
                 while !fast && n < limit {
@@ -820,7 +825,7 @@ impl Machine<'_> {
                         }
                         None => break,
                     }
-                    if *fuel == 0 {
+                    if *fuel <= 0 {
                         stopped = true;
                         break;
                     }
@@ -892,7 +897,10 @@ impl Machine<'_> {
                     (s != UNSET && e != UNSET).then_some((s as usize, e as usize))
                 });
                 if let Some((s, e)) = span {
-                    *fuel = fuel.saturating_sub((e - s) as u64);
+                    // Charged in full, even past the end of the fuel (a backreference
+                    // cannot stop half-way): the overdraft is the caller's debt, so the
+                    // total does not depend on how much fuel a slice had left (D1711).
+                    *fuel -= (e - s) as i64;
                     if !self.match_backref(s, e, back, icase) {
                         return fail;
                     }

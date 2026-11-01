@@ -286,7 +286,7 @@ impl Exec<'_> {
         sticky: bool,
         pending: Option<ExecState>,
     ) -> ExecResult {
-        let budget = self.fuel.max(1) as u64;
+        let budget = self.fuel.max(1);
         let mut fuel = budget;
         let limits = ExecLimits::default();
         let result = {
@@ -297,7 +297,9 @@ impl Exec<'_> {
                 None => crate::regexp::exec_at(prog, input, start, sticky, &mut fuel, limits),
             }
         };
-        self.fuel -= (budget - fuel) as i64;
+        // A backreference can overdraw (D1711): the overdraft stays negative fuel, which
+        // `run` carries as debt (D1740).
+        self.fuel -= budget - fuel;
         result
     }
 
