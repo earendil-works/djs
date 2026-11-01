@@ -77,7 +77,7 @@ heap is done later, with the builtins.
   and Case_Ignorable 459 packed ranges; 6.6 KB in total. The generator asserts that run spans
   are disjoint (Vithkuqi interleaves; stride-2 runs only cover gaps of unmapped code points).
   `tests/data/regexp/gen-case.js` (qjs) produces `case.txt`: full mappings of every code point
-  that has one (2,997) and qjs' `i`/`ui` equivalence for related pairs (2,992 pairs); both are
+  that has one (3,037) and qjs' `i`/`ui` equivalence for related pairs (2,992 pairs); both are
   checked: all equal.
 - `regexp/`: `charset.rs` (range sets, Canonicalize, set canonicalization and case closure),
   `parser.rs` (tree; port of qjs' grammar decisions and messages, Annex B, `v` class set
