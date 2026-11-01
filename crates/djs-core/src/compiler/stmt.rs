@@ -14,22 +14,31 @@ impl Parser<'_, '_> {
     /// positions.
     pub(super) fn parse_statement_list_item(&mut self) -> PResult<()> {
         if self.ts && self.ts_statement()? {
+            if !self.ts_type_only {
+                self.ts_note_stmt_end();
+            }
             return Ok(());
         }
         match self.tok.kind {
-            TokenKind::Const => self.parse_lexical_declaration(VarKind::Const),
+            TokenKind::Const => self.parse_lexical_declaration(VarKind::Const)?,
             TokenKind::Ident if self.tok.is_contextual(Kw::Let) => {
-                self.parse_lexical_declaration(VarKind::Let)
+                self.parse_lexical_declaration(VarKind::Let)?
             }
-            TokenKind::Function => self.parse_function_declaration(self.tok.start, false),
+            TokenKind::Function => self.parse_function_declaration(self.tok.start, false)?,
             TokenKind::Ident if self.at_async_function() => {
                 let start = self.tok.start;
                 self.next()?;
-                self.parse_function_declaration(start, true)
+                self.parse_function_declaration(start, true)?
             }
-            TokenKind::Class => self.parse_class(true, Atom::NULL),
-            _ => self.parse_statement(),
+            TokenKind::Class => self.parse_class(true, Atom::NULL)?,
+            TokenKind::Import | TokenKind::Export if self.strip && self.strip_at_module_item() => {
+                return self.strip_module_item();
+            }
+            _ => return self.parse_statement(),
         }
+        self.ts_note_stmt_end();
+        self.ts_type_only = false;
+        Ok(())
     }
 
     pub(super) fn parse_statement(&mut self) -> PResult<()> {
@@ -41,8 +50,18 @@ impl Parser<'_, '_> {
 
     fn parse_statement_inner(&mut self) -> PResult<()> {
         if self.ts && self.ts_statement()? {
+            if !self.ts_type_only {
+                self.ts_note_stmt_end();
+            }
             return Ok(());
         }
+        self.parse_js_statement()?;
+        self.ts_note_stmt_end();
+        self.ts_type_only = false;
+        Ok(())
+    }
+
+    fn parse_js_statement(&mut self) -> PResult<()> {
         let tok = self.tok;
         match tok.kind {
             TokenKind::LBrace => self.parse_block(),
@@ -222,6 +241,7 @@ impl Parser<'_, '_> {
     fn parse_paren_expr(&mut self) -> PResult<()> {
         self.expect(TokenKind::LParen, "(")?;
         self.parse_expr(false)?;
+        self.ts_semi = true;
         self.expect(TokenKind::RParen, ")")
     }
 
@@ -392,6 +412,7 @@ impl Parser<'_, '_> {
         }
         self.expect(TokenKind::RParen, ")")?;
         self.place(l_body);
+        self.ts_semi = true;
         self.parse_statement()?;
         if !has_update {
             // No update: `continue` goes straight to the test.
@@ -743,6 +764,7 @@ impl Parser<'_, '_> {
                     self.code().strict_eq();
                     self.code().jump_if_false(next_test);
                     self.code().drop();
+                    self.ts_semi = true;
                     self.expect(TokenKind::Colon, ":")?;
                 }
                 TokenKind::Default => {

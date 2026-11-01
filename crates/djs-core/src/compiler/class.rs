@@ -111,7 +111,8 @@ impl Parser<'_, '_> {
         self.next()?;
         let mut name = Atom::NULL;
         let mut outer = None;
-        if self.is(TokenKind::Ident) {
+        // `class implements I {}` (TypeScript) is anonymous.
+        if self.is(TokenKind::Ident) && !(self.ts && self.tok.is_contextual(Kw::Implements)) {
             let tok = self.tok;
             if tok.is_escaped_reserved()
                 || tok.kw.is_strict_reserved()
@@ -190,6 +191,10 @@ impl Parser<'_, '_> {
             keys: 0,
         };
         self.expect(TokenKind::LBrace, "{")?;
+        if !name.is_null() || derived {
+            // strip-types: the name or heritage was the last JS before the members.
+            self.ts_semi = true;
+        }
         while !self.is(TokenKind::RBrace) {
             if self.eat(TokenKind::Semicolon)? {
                 continue;
@@ -197,7 +202,12 @@ impl Parser<'_, '_> {
             if self.is(TokenKind::Eof) {
                 return syntax(self.tok.start, "expecting '}'");
             }
+            // Index signatures, overloads, `declare` and `abstract` members: no code.
+            if self.ts && self.ts_skip_class_member()? {
+                continue;
+            }
             self.parse_class_element(&mut b)?;
+            self.ts_note_stmt_end();
         }
         self.next()?;
         if !b.has_ctor {
@@ -290,13 +300,11 @@ impl Parser<'_, '_> {
 
     /// One class element (not `;`).
     fn parse_class_element(&mut self, b: &mut ClassBuild) -> PResult<()> {
-        if self.ts {
-            // Index signatures, overloads, `declare` and `abstract` members: no code.
-            if self.ts_skip_class_member()? {
-                return Ok(());
-            }
-            self.ts_member_modifiers()?;
-        }
+        let first_modifier = if self.ts {
+            self.ts_member_modifiers()?
+        } else {
+            None
+        };
         let mut is_static = false;
         if self.tok.kw == Kw::Static && self.tok.kind == TokenKind::Ident && !self.tok.has_escape()
         {
@@ -365,6 +373,12 @@ impl Parser<'_, '_> {
             self.code().swap();
         }
         let key_tok = self.tok;
+        if key_tok.kind == TokenKind::LBracket
+            && let (Some(i), Some(e)) = (first_modifier, &mut self.erased)
+        {
+            // ts-blank-space: `private [k]` must not join the line before.
+            e[i].2 = super::ts::ER_SEMI;
+        }
         let key = if key_tok.kind == TokenKind::PrivateName {
             let a = self.ident_atom()?;
             self.next()?;

@@ -143,15 +143,46 @@ impl<'a> Parser<'a, '_> {
 
     /// Records the erased range from `start` to the end of the last token.
     pub(super) fn ts_erase(&mut self, start: u32) {
-        self.ts_erase_range(start, self.prev_end);
+        self.ts_erase_kind(start, self.prev_end, ER_BLANK);
     }
 
-    pub(super) fn ts_erase_range(&mut self, start: u32, end: u32) {
+    /// Records an erased statement (a type-only declaration) from `start`:
+    /// ts-blank-space writes a `;` in its place when the JS before it did not end with
+    /// one (`Parser::ts_semi`), so the code around it cannot join.
+    pub(super) fn ts_erase_stmt(&mut self, start: u32) {
+        let kind = if self.ts_semi { ER_SEMI } else { ER_BLANK };
+        self.ts_erase_kind(start, self.prev_end, kind);
+    }
+
+    pub(super) fn ts_erase_kind(&mut self, start: u32, end: u32, kind: u8) {
         if self.spec == 0
             && start < end
             && let Some(e) = &mut self.erased
         {
-            e.push((start, end));
+            e.push((start, end, kind));
+        }
+    }
+
+    /// A statement ended without a `;` (ASI): an `as`/`satisfies` that ends it is
+    /// replaced by `;` + blanks (ts-blank-space), so the next line cannot continue it.
+    pub(super) fn ts_stmt_end_asi(&mut self) {
+        let end = self.prev_end;
+        let next_semi = self.src.get(end as usize) == Some(&b';');
+        if let Some(e) = &mut self.erased
+            && let Some(last) = e.last_mut()
+            && last.2 == ER_AS
+            && last.1 == end
+            && !next_semi
+        {
+            last.2 = ER_SEMI;
+        }
+    }
+
+    /// A JS statement (or class member) ended: does what follows need a `;` before an
+    /// erased statement? (ts-blank-space's `semicolonNeeded`.)
+    pub(super) fn ts_note_stmt_end(&mut self) {
+        if self.prev_end > 0 {
+            self.ts_semi = self.src[self.prev_end as usize - 1] != b';';
         }
     }
 
@@ -930,6 +961,7 @@ impl<'a> Parser<'a, '_> {
     /// parsed. The contextual keywords follow tsc's line break rules (a line break
     /// after `type`, `declare`, ... makes it an identifier).
     pub(super) fn ts_statement(&mut self) -> PResult<bool> {
+        self.ts_type_only = false;
         let tok = self.tok;
         let start = tok.start;
         match tok.kind {
@@ -1029,7 +1061,7 @@ impl<'a> Parser<'a, '_> {
                 }
             }
         }
-        self.ts_erase(start);
+        self.ts_erase_stmt(start);
         Ok(true)
     }
 
@@ -1037,7 +1069,20 @@ impl<'a> Parser<'a, '_> {
     /// ambient declaration without a body is skipped (returns true).
     fn ts_function_signature(&mut self) -> PResult<bool> {
         let start = self.tok.start;
-        let ok = self.ts_try(|p| {
+        let ok = self.ts_try(|p| p.ts_skip_signature());
+        if !ok {
+            return Ok(false);
+        }
+        self.expect_semicolon()?;
+        self.ts_erase(start);
+        self.ts_type_only = true;
+        Ok(true)
+    }
+
+    /// Skips a function header without a body (speculative: false if it has one).
+    pub(super) fn ts_skip_signature(&mut self) -> PResult<bool> {
+        {
+            let p = self;
             if p.tok.is_contextual(Kw::Async) {
                 p.next()?;
             }
@@ -1061,14 +1106,7 @@ impl<'a> Parser<'a, '_> {
                 p.ts_skip_return_type()?;
             }
             Ok(!p.is(TokenKind::LBrace))
-        });
-        if !ok {
-            return Ok(false);
         }
-        self.expect_semicolon()?;
-        self.ts_erase(start);
-        self.ts_type_only = true;
-        Ok(true)
     }
 
     /// `type T<P> = ...;` at `type`.
@@ -1268,6 +1306,49 @@ impl<'a> Parser<'a, '_> {
         Ok(())
     }
 
+    /// The type parameters of a function, method or arrow (erased). If the list and the
+    /// `(` span lines, ts-blank-space writes the `(` in place of the `<` (so a `return`
+    /// before it keeps its operand) and blanks the original.
+    pub(super) fn ts_fn_type_params(&mut self) -> PResult<()> {
+        if !self.ts || !self.is(TokenKind::Lt) {
+            return Ok(());
+        }
+        let start = self.tok.start;
+        self.ts_skip_type_params(TP_CONST)?;
+        let paren = self.tok;
+        let spans = paren.kind == TokenKind::LParen
+            && self.src[start as usize + 1..paren.end as usize].contains(&b'\n');
+        if spans {
+            self.ts_erase_kind(start, self.prev_end, ER_OPEN_PAREN);
+            self.ts_erase_kind(paren.start, paren.end, ER_BLANK);
+        } else {
+            self.ts_erase(start);
+        }
+        Ok(())
+    }
+
+    /// An arrow's return type (erased). If a line break separates the parameters from
+    /// `=>`, ts-blank-space moves the `)` to the end of the type (`=>` must stay on the
+    /// line of the `)`).
+    pub(super) fn ts_arrow_return_annotation(&mut self) -> PResult<()> {
+        if !self.ts || !self.is(TokenKind::Colon) {
+            return Ok(());
+        }
+        let params_end = self.ts_params_end as usize;
+        let paren = self.prev_end - 1;
+        let start = self.tok.start;
+        self.next()?;
+        self.ts_skip_return_type()?;
+        let end = self.prev_end;
+        if self.src[params_end..end as usize].contains(&b'\n') {
+            self.ts_erase_kind(paren, end - 1, ER_BLANK);
+            self.ts_erase_kind(end - 1, end, ER_CLOSE_PAREN);
+        } else {
+            self.ts_erase(start);
+        }
+        Ok(())
+    }
+
     /// An optional type parameter list (erased).
     pub(super) fn ts_type_params(&mut self, flags: u8) -> PResult<()> {
         if !self.ts || !self.is(TokenKind::Lt) {
@@ -1402,19 +1483,26 @@ impl<'a> Parser<'a, '_> {
     }
 
     /// Erases the accessibility, `readonly` and `override` modifiers of a class member.
-    pub(super) fn ts_member_modifiers(&mut self) -> PResult<()> {
-        let start = self.tok.start;
+    /// Returns the erasure of the first modifier if it starts the member (ts-blank-space
+    /// turns it into a `;` when the member's name is computed).
+    pub(super) fn ts_member_modifiers(&mut self) -> PResult<Option<usize>> {
+        let mut first = None;
         while self.ts_is_member_modifier() && self.ts_next_is_member_name(false) {
+            let start = self.tok.start;
             self.next()?;
+            if first.is_none() {
+                first = self.erased.as_ref().map(|e| e.len());
+            }
+            self.ts_erase(start);
         }
-        self.ts_erase(start);
-        Ok(())
+        Ok(first)
     }
 
     /// A class member that emits no code (an index signature, a method overload
     /// signature, a `declare` or `abstract` member) is skipped: returns true.
     pub(super) fn ts_skip_class_member(&mut self) -> PResult<bool> {
         let start = self.tok.start;
+        let mut field = false;
         let ok = self.ts_try(|p| {
             let mut no_code = false;
             // Modifiers.
@@ -1505,6 +1593,7 @@ impl<'a> Parser<'a, '_> {
                 }
             } else if no_code {
                 // A `declare` or `abstract` field.
+                field = true;
                 if p.is(TokenKind::Colon) {
                     p.next()?;
                     p.ts_skip_type()?;
@@ -1522,7 +1611,12 @@ impl<'a> Parser<'a, '_> {
         if self.is(TokenKind::Semicolon) {
             self.next()?;
         }
-        self.ts_erase(start);
+        // ts-blank-space blanks a declared field like a statement, signatures exactly.
+        if field {
+            self.ts_erase_stmt(start);
+        } else {
+            self.ts_erase(start);
+        }
         Ok(true)
     }
 
@@ -1539,19 +1633,38 @@ impl<'a> Parser<'a, '_> {
     }
 }
 
+/// Erasure kinds: blanks; blanks after a `;` in place of the first character; an
+/// `as`/`satisfies` (blanks, or `;` if it turns out to end its statement).
+pub(super) const ER_BLANK: u8 = 0;
+pub(super) const ER_SEMI: u8 = 1;
+pub(super) const ER_AS: u8 = 2;
+/// Blanks after a `(` in place of the first character, or a `)` in place of it.
+pub(super) const ER_OPEN_PAREN: u8 = 3;
+pub(super) const ER_CLOSE_PAREN: u8 = 4;
+
 /// The source with the erased `ranges` blanked like ts-blank-space: one space per
 /// UTF-16 unit, line feeds and carriage returns kept.
-pub(super) fn blank(src: &[u8], mut ranges: Vec<(u32, u32)>) -> Vec<u8> {
+pub(super) fn blank(src: &[u8], mut ranges: super::parser::Erased) -> Vec<u8> {
     crate::sort::sort_by(&mut ranges, |a, b| a.0 < b.0);
     let mut out = Vec::with_capacity(src.len());
     let mut pos = 0usize;
-    for (start, end) in ranges {
+    for (start, end, kind) in ranges {
         let (start, end) = (start as usize, end as usize);
         if end <= pos {
             continue;
         }
-        let start = start.max(pos);
+        let mut start = start.max(pos);
         out.extend_from_slice(&src[pos..start]);
+        let first = match kind {
+            ER_SEMI => Some(b';'),
+            ER_OPEN_PAREN => Some(b'('),
+            ER_CLOSE_PAREN => Some(b')'),
+            _ => None,
+        };
+        if let Some(c) = first {
+            out.push(c);
+            start += 1;
+        }
         for &b in &src[start..end] {
             match b {
                 b'\n' | b'\r' => out.push(b),

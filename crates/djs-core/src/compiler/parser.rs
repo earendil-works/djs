@@ -134,10 +134,18 @@ pub(super) struct Parser<'a, 'h> {
     /// The last statement was a TypeScript declaration without runtime code (for
     /// type-only namespaces).
     pub ts_type_only: bool,
+    /// strip-types: the last JS statement did not end with `;` (`ts_note_stmt_end`).
+    pub ts_semi: bool,
+    /// strip-types: module syntax (`import`, `export`) is parsed (and compiles to
+    /// nothing useful): the corpus is modules.
+    pub strip: bool,
+    /// strip-types: where the last formal parameter list's contents ended (tsc's
+    /// `parameters.end`).
+    pub ts_params_end: u32,
 }
 
-/// Erased TypeScript ranges, `start..end` byte offsets.
-pub(super) type Erased = Vec<(u32, u32)>;
+/// Erased TypeScript ranges: `start..end` byte offsets and the kind (`ts::ER_*`).
+pub(super) type Erased = Vec<(u32, u32, u8)>;
 
 /// Parser position for emission-free lookahead and deferred parsing (docs/compiler.md
 /// 3, D1080): the lexer state and the current token.
@@ -215,6 +223,9 @@ impl<'a, 'h> Parser<'a, 'h> {
             after_q: false,
             ts_decls: Vec::new(),
             ts_type_only: false,
+            ts_semi: false,
+            strip: false,
+            ts_params_end: 0,
         };
         p.f.src_end = src.len() as u32;
         if kind == FuncKind::AsyncBody {
@@ -440,6 +451,9 @@ impl<'a, 'h> Parser<'a, 'h> {
         }
         if matches!(self.tok.kind, TokenKind::RBrace | TokenKind::Eof) || self.tok.newline_before()
         {
+            if self.erased.is_some() {
+                self.ts_stmt_end_asi();
+            }
             return Ok(());
         }
         syntax(self.tok.start, "expecting ';'")

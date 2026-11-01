@@ -20,6 +20,7 @@ mod for_in_of;
 mod func;
 mod function;
 mod generator;
+mod module;
 mod parser;
 mod pattern;
 mod resolve;
@@ -185,6 +186,7 @@ pub fn strip_types(
     };
     let result = parser::Parser::new(heap, src, &opts).and_then(|mut p| {
         p.erased = Some(Vec::new());
+        p.strip = true;
         p.compile()
     });
     let (_, ranges) = result.map_err(|e| error_at(src, e))?;

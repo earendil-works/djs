@@ -327,6 +327,7 @@ impl<'a> Parser<'a, '_> {
             used: false,
         });
         self.stmt_depth = base + state;
+        self.ts_semi = true;
         // On an error the parser state is abandoned (a nested function's may not be
         // restored), so only pop on success.
         self.parse_statement()?;

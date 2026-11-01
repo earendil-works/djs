@@ -523,10 +523,11 @@ impl Parser<'_, '_> {
                 // so higher operators apply to the result (`x as T * 2` is
                 // `(x as T) * 2`). The expression stays what it was: `(x as T) = 1`
                 // assigns `x`.
-                let start = self.tok.start;
+                // ts-blank-space blanks from the end of the expression.
+                let start = self.prev_end;
                 self.next()?;
                 self.ts_skip_type()?;
-                self.ts_erase(start);
+                self.ts_erase_kind(start, self.prev_end, super::ts::ER_AS);
                 lhs_unary = false;
                 continue;
             }
@@ -1231,6 +1232,21 @@ impl Parser<'_, '_> {
                 Ok(Expr::Value)
             }
             TokenKind::Super => self.parse_super(),
+            // strip-types parses modules: `import(...)` and `import.meta` compile to
+            // placeholders there.
+            TokenKind::Import if self.strip => {
+                self.next()?;
+                if self.eat(TokenKind::Dot)? {
+                    self.next()?;
+                    self.code().undefined();
+                } else {
+                    self.code().undefined();
+                    self.prepare_call(Expr::Value);
+                    let args = self.parse_args()?;
+                    self.emit_call(args);
+                }
+                Ok(Expr::Value)
+            }
             TokenKind::Import => self.unsupported(tok.start, "import() is"),
             TokenKind::Percent if self.opts.privileged => self.parse_intrinsic_call(),
             _ => self.unexpected(),

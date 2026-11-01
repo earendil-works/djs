@@ -87,7 +87,7 @@ impl Parser<'_, '_> {
         self.start_flavor(flavor)?;
         self.f.name = name;
         self.f.src_start = start;
-        self.ts_type_params(super::ts::TP_CONST)?;
+        self.ts_fn_type_params()?;
         self.expect(TokenKind::LParen, "(")?;
         self.parse_params()?;
         // qjs reports a wrong accessor arity at the `)`.
@@ -132,7 +132,7 @@ impl Parser<'_, '_> {
             let v = self.f.add_var(name, VarKind::FuncName, s);
             self.f.func_name_var = Some(v);
         }
-        self.ts_type_params(super::ts::TP_CONST)?;
+        self.ts_fn_type_params()?;
         self.expect(TokenKind::LParen, "(")?;
         self.parse_params()?;
         self.ts_return_annotation()?;
@@ -218,6 +218,7 @@ impl Parser<'_, '_> {
             // qjs: `function f(a b)` expects a comma.
             self.expect(TokenKind::Comma, ",")?;
         }
+        self.ts_params_end = self.prev_end;
         self.expect(close, ")")
     }
 
@@ -295,6 +296,8 @@ impl Parser<'_, '_> {
             self.code().generator_start(0);
         }
         self.code().enter_scope(BODY_SCOPE as u16);
+        // strip-types: a function body starts a new statement context.
+        let outer_semi = core::mem::replace(&mut self.ts_semi, false);
         // Directive prologue: everything is strict already, but `"use strict"` with
         // non-simple parameters is an error.
         let mut directives = true;
@@ -330,6 +333,7 @@ impl Parser<'_, '_> {
             self.parse_statement_list_item()?;
         }
         self.next()?;
+        self.ts_semi = outer_semi;
         self.code().leave_scope(BODY_SCOPE as u16);
         self.emit_return_undef();
         Ok(())
@@ -455,7 +459,7 @@ impl Parser<'_, '_> {
         self.start_flavor((is_async, false))?;
         self.f.name = hint;
         self.f.src_start = start;
-        self.ts_type_params(super::ts::TP_CONST)?;
+        self.ts_fn_type_params()?;
         if self.is(TokenKind::Ident) {
             self.f.in_params = true;
             if self.tok.kw == Kw::Await && self.await_reserved() {
@@ -470,7 +474,7 @@ impl Parser<'_, '_> {
         } else {
             self.expect(TokenKind::LParen, "(")?;
             self.parse_params()?;
-            self.ts_return_annotation()?;
+            self.ts_arrow_return_annotation()?;
         }
         if !self.is(TokenKind::Arrow) || self.tok.newline_before() {
             return self.unexpected();
