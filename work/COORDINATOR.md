@@ -37,3 +37,8 @@ Notes for the coordinator (the main agent), learned the hard way.
 - Shared hot files: `bytecode/intrinsics.rs` (regenerate, never hand-merge),
   `heap/cells.rs` and `heap/object.rs` (class/kind numbers: coordinate), `interp/run.rs`,
   `docs/decisions.md` (append-only; conflicts are trivial).
+
+## Pushing
+- The owner added `origin` (github.com/earendil-works/djs). The coordinator may push
+  `main` (optional; e.g. after a batch of merges): `git push origin main`, under the merge
+  lock. Sub-agents never push (AGENTS.md).
