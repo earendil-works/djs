@@ -220,18 +220,22 @@ impl<M: LabelMode> CodeBuf<M> {
     }
 
     /// Starts an instruction (used by the generated emitters).
-    #[inline]
+    ///
+    /// The emit helpers stay out of line: the per-opcode emitters are inlined into
+    /// hundreds of compiler sites, and an inlined `Vec::push` (length check, grow call,
+    /// store) at each of them was ~35 KB of wasm (D1571).
+    #[inline(never)]
     pub(super) fn begin(&mut self, op: Op) {
         self.last = Some(self.code.len() as u32);
         self.code.push(op as u8);
     }
 
-    #[inline]
+    #[inline(never)]
     pub(super) fn push_bytes(&mut self, b: &[u8]) {
         self.code.extend_from_slice(b);
     }
 
-    #[inline]
+    #[inline(never)]
     pub(super) fn push_target(&mut self, l: Label) {
         if (l.0 as usize) >= self.labels.len() {
             self.fail(CodeError::UnknownLabel(l));

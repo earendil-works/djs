@@ -2665,3 +2665,11 @@ when the target is wasm32 and the build has no debug info (wasm-ld rejects the f
 otherwise; the gate's debug build and `CARGO_PROFILE_WASM_DEBUG=1` line-table builds keep
 the padded form). Same instructions, minimal LEBs: code 837,472 -> 779,856. A build.rs
 rather than `.cargo/config.toml` rustflags, which cannot depend on the profile.
+
+## D1571: The bytecode emit helpers are not inlined
+date: 2026-11-03 · by: bloat · issue: 0057
+`CodeBuf::begin`, `push_bytes` and `push_target` are `#[inline(never)]`. The generated
+per-opcode emitters (`#[inline]`) call them from hundreds of compiler sites, and with
+them inlined every site carried a `Vec::push`/`extend_from_slice` (length check, grow
+call, store): code 779,856 -> 743,536 in wasm. Emitting is a small part of compile time
+(lexing and parsing dominate), see 0057 for the compile-throughput check.
