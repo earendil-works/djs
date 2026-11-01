@@ -183,7 +183,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | ObjectClass RawJSON | 29 | num / 0061 (merged) |
 | CellKind AccessorPair, Shape, PropValues | 25, 26, 27 | heap / 0083 |
 | object header flag OBJ_DICTIONARY | 128 | heap / 0083 |
-| next free ObjectClass | 34 | |
+| ObjectClass CallSite | 34 | infra / 0106 |
+| next free ObjectClass | 35 | |
 | func_flags PRIVILEGED | 1 << 8 | heap / 0043 (merged) |
 | func_flags HOME | 1 << 6 (check) | lexer / 0040 |
 
