@@ -93,6 +93,7 @@ impl Default for ExecOptions {
 mod bigint;
 mod class;
 mod dense;
+mod each;
 mod fastpath;
 mod hot;
 #[cfg(test)]
@@ -670,6 +671,8 @@ impl<'h> Exec<'h> {
             Continuation::PushResult | Continuation::ConstructResult => self.push(p),
             Continuation::DiscardResult => {}
             Continuation::Replace(slot) | Continuation::Retry(slot) => self.set(slot, p),
+            // (`%EachDense` calls plain closures only.)
+            Continuation::Each => unreachable!(),
             // `Vm::call` of an async host function: done at once (it must not run jobs,
             // which could collect); the next `run` drains the queue.
             Continuation::Entry => {
@@ -714,6 +717,9 @@ impl<'h> Exec<'h> {
         if cont.is_bottom() {
             return Ok(self.bottom_done(cont, Ok(v)));
         }
+        if cont == Continuation::Each {
+            return Ok(self.each_return(v));
+        }
         self.pop_frame();
         match cont {
             Continuation::PushResult => self.push(v),
@@ -722,7 +728,7 @@ impl<'h> Exec<'h> {
                 self.push(if v.as_object().is_some() { v } else { this })
             }
             Continuation::Replace(slot) | Continuation::Retry(slot) => self.set(slot, v),
-            Continuation::Entry | Continuation::Job => unreachable!(),
+            Continuation::Entry | Continuation::Job | Continuation::Each => unreachable!(),
         }
         self.safepoint();
         Ok(None)

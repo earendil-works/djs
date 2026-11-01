@@ -434,6 +434,7 @@ const I = {
   ArrayFillDense: (o, value, k, fin) => k,
   ArraySearchDense: (o, search, from, len, mode) => -2,
   ArraySliceDense: (o, k, fin, a) => false,
+  EachDense: (mode, o, k, len, f, thisArg, a) => k,
   ArrayJoinDense: (o, len, sep) => undefined,
   EnumerableOwnDataProperties: (o, kind) => undefined,
   IteratorFastReady: (it, next) => false,

@@ -107,6 +107,7 @@ There are only a few continuations:
 | `Job` | the bottom frame of a promise job: drop it and run the next job |
 | `Replace(slot)` | store it in a stack slot of the caller and continue after the instruction |
 | `Retry(slot)` | store it in a stack slot and run the same instruction again |
+| `Each` | a callback of `%EachDense`: complete the loop's step, then enter the same frame again for the next element, or give the builtin the index its own loop goes on from |
 
 `Retry` is how conversions work (D1280, D1861). When `+` finds an object operand, it
 calls the builtin `%ToPrimitive` on it with `Retry` aimed at the operand's own stack
@@ -209,15 +210,22 @@ The return address is an int32 value on the operand stack, so a VM suspended ins
 
 ## Native frames
 
-Some builtins (`Array.prototype.map`, `forEach`, `sort`, ...) are compiled to Rust state
-machines rather than bytecode ([builtins](builtins.md)). They run in **native frames**:
+Some builtins (`Array.prototype.push`, `sort`, `JSON.stringify`'s slow path, ...) are
+compiled to Rust state machines rather than bytecode ([builtins](builtins.md)). They run in **native frames**:
 the same frame records on the same value stack, with a bit in the flags, the state
 number where a bytecode frame has its `pc`, and the builtin's locals in the frame's
-slots (D1631, D1632). When `map` calls its callback, it does not call it from Rust: it
+slots (D1631, D1632). When `sort` calls its comparator, it does not call it from Rust: it
 writes the callee's frame on top of its own, saves the state to resume at, and leaves.
 The loop runs the callback like any other closure, and its return re-enters the native
 frame at the saved state, one native run per callback call (D2060). A native builtin in
 the middle of a loop is therefore as suspendable as bytecode.
+
+`map`, `forEach`, `filter` and the other callback loops go one step further (D2303).
+Their intrinsic `%EachDense` keeps the loop's state in its own arguments, below the
+callback's frame, and pushes that frame once with the `Each` continuation. When the
+callback returns, the hot loop completes the step (the store into `map`'s result, say)
+and rewrites the same frame for the next element: arguments, undefined locals, `pc` 0.
+The builtin itself only runs again when the dense part is over.
 
 Errors carry QuickJS-style stack traces, with the function names and source positions of
 the frames, read from the frame records and the templates' line tables (D1282).

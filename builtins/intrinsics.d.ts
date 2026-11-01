@@ -488,6 +488,24 @@ declare function ArraySearchDense(o: Obj, search: Value, from: f64, len: f64, mo
  */
 declare function ArraySliceDense(o: Obj, k: f64, fin: f64, a: Obj): boolean;
 /**
+ * The dense part of the loops of the callback builtins (0137). From `k`, while `o` is an
+ * Array whose element k is present in its dense store (so HasProperty and Get observe
+ * nothing), calls `f(o[k], k, o)` with `thisArg` and completes the step by `mode`:
+ * - 0 forEach;
+ * - 1 map: CreateDataPropertyOrThrow(a, k, result);
+ * - 2 filter: for a truthy result, CreateDataPropertyOrThrow(a, to, o[k]), with `to` the
+ *   length of `a`, a fresh Array (the receiver's species is plain);
+ * - 3 some, 4 every: a truthy (some) or falsy (every) result decides;
+ * - 5 find: a truthy result decides, and o[k] goes to element 0 of the Array `a`;
+ * - 6 findIndex: a truthy result decides;
+ * - 7 reduce: calls `f(acc, o[k], k, o)` (`thisArg` undefined), with the accumulator as
+ *   element 0 of the Array `a`, which gets the result.
+ * One frame for `f`, entered again per element. Returns the k the builtin's own loop goes
+ * on from (`len`: done; `k` itself when `f` is not a plain closure or `a` is not as
+ * required), or -1 - k when the result at k decided. @reentrant
+ */
+declare function EachDense(mode: i32, o: Obj, k: f64, len: f64, f: Value, thisArg: Value, a: Value): f64;
+/**
  * join over o[0 .. len) when every element is present in dense storage and a primitive
  * other than a symbol (ToString runs no user code): the string, or undefined for the
  * general loop. @leaf

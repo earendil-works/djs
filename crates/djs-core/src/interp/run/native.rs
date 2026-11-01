@@ -993,12 +993,13 @@ mod tests {
         assert_eq!(finish(start(SCRIPT, m), m, true).0, expected);
     }
 
-    /// Native builtins do the same work for less fuel: a forEach over 2000 elements
-    /// needs fewer slices of fuel than as bytecode.
+    /// Native builtins do the same work for less fuel: a sort of 2000 elements with a
+    /// comparator needs fewer slices of fuel than as bytecode. (Not the callback loops
+    /// of forEach, map, reduce ..: both backends run them in `%EachDense`, 0137.)
     #[test]
     fn native_frames_are_used() {
-        let src = "const a = []; for (let i = 0; i < 2000; i++) a[i] = i;\n\
-                   let n = 0; a.forEach(x => { n += x; }); console.log(n);";
+        let src = "const a = []; for (let i = 0; i < 2000; i++) a[i] = (i * 7) % 2000;\n\
+                   a.sort((x, y) => x - y); console.log(a[1999] * 1000 + a[0]);";
         let m = Mode {
             fuel: 1000,
             ..PLAIN

@@ -78,6 +78,7 @@ pub(crate) static FAST: &[FastFn] = &[
     f("ToNumber", to_number),
     f("ToIntegerOrInfinity", to_integer_or_infinity),
     f("ToLength", to_length),
+    f("LengthOfArrayLike", length_of_array_like),
     f("ToPropertyKey", to_property_key),
     f("ThisToString", this_to_string),
     f("RequireThisCoercible", require_this_coercible),
@@ -269,6 +270,15 @@ fn to_integer_or_infinity(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
 
 fn to_length(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
     Ok(int_arg(heap, arg(args, 0))?.map(|n| conv::number(n.clamp(0.0, 9007199254740991.0))))
+}
+
+/// LengthOfArrayLike of an Array: its own `length`, which nothing can observe (0137:
+/// the bytecode builtins call it once per call).
+fn length_of_array_like(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
+    Ok(arg(args, 0)
+        .as_object()
+        .filter(|&o| heap.object_class(o) == ObjectClass::Array)
+        .map(|o| conv::number(f64::from(heap.array_length(o)))))
 }
 
 fn to_property_key(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
@@ -983,7 +993,7 @@ fn array_species_create(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
 /// Whether ArraySpeciesCreate(o, n) is ArrayCreate(n) with %Array.prototype%, found
 /// without running user code: `o` is no Array, or an Array whose `constructor` is the
 /// untouched %Array% with the original @@species getter.
-fn plain_species(heap: &Heap, o: Obj) -> bool {
+pub(crate) fn plain_species(heap: &Heap, o: Obj) -> bool {
     if heap.is_proxy(o) {
         return false;
     }

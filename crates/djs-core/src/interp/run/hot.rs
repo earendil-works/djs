@@ -40,6 +40,8 @@ const IS_NUMBER: u16 = super::intrinsics::id("IsNumber");
 const IS_OBJECT: u16 = super::intrinsics::id("IsObject");
 const AS_NUMBER: u16 = super::intrinsics::id("AsNumber");
 const AS_OBJ: u16 = super::intrinsics::id("AsObj");
+const TO_OBJECT: u16 = super::intrinsics::id("ToObject");
+const IS_CALLABLE: u16 = super::intrinsics::id("IsCallable");
 const GET: u16 = super::intrinsics::id("Get");
 const CREATE_DATA_PROPERTY_OR_THROW: u16 = super::intrinsics::id("CreateDataPropertyOrThrow");
 const CALL: u16 = super::intrinsics::id("Call");
@@ -50,6 +52,7 @@ const PUT_GLOBAL: u8 = Op::PutGlobal as u8;
 
 /// The flags word of a `PushResult` frame (`fast_return`'s condition).
 const PUSH_RESULT: i32 = Continuation::PushResult.to_flags();
+const EACH: i32 = Continuation::Each.to_flags();
 
 #[cold]
 #[inline(never)]
@@ -59,7 +62,7 @@ fn out_of_bounds() -> ! {
 
 /// The Value at byte offset `off` (one-sided check).
 #[inline(always)]
-fn ld(b: &[u8], off: u32) -> Value {
+pub(super) fn ld(b: &[u8], off: u32) -> Value {
     let o = off as usize;
     match b.get(o..o + 8) {
         Some(s) => Value::from_raw(u64::from_le_bytes(s.try_into().unwrap())),
@@ -239,6 +242,8 @@ enum Exit {
     Safepoint,
     /// `hot_backedges` backward jumps: return to the run loop (V8 tier-up).
     Budget,
+    /// `%EachDense`'s callback returned this value (0137).
+    Each(Value),
 }
 
 impl Exec<'_> {
@@ -289,7 +294,9 @@ impl Exec<'_> {
             (IS_NUMBER, 1) => Value::bool(a[0].is_number()),
             (IS_OBJECT, 1) => Value::bool(a[0].as_object().is_some()),
             (AS_NUMBER, 1) if a[0].is_number() => a[0],
-            (AS_OBJ, 1) if a[0].as_object().is_some() => a[0],
+            (AS_OBJ, 1) | (TO_OBJECT, 1) if a[0].as_object().is_some() => a[0],
+            // The callback builtins' checks (0137).
+            (IS_CALLABLE, 1) => Value::bool(self.is_callable(a[0])),
             (GET, 2) => {
                 let o = a[0]
                     .as_object()
@@ -947,9 +954,18 @@ impl Exec<'_> {
                         }
                         fast::RETURN | fast::RETURN_UNDEF => {
                             // `fast_return`: into a PushResult frame of a bytecode caller.
-                            if ld(b, slot!(hp + frame::FLAGS)).as_int().unwrap_or(0) != PUSH_RESULT
-                            {
-                                break Exit::Decline(op);
+                            let flags = ld(b, slot!(hp + frame::FLAGS)).as_int().unwrap_or(0);
+                            if flags != PUSH_RESULT {
+                                if flags != EACH {
+                                    break Exit::Decline(op);
+                                }
+                                let (v, o) = if op == fast::RETURN {
+                                    (top!(0), Op::Return)
+                                } else {
+                                    (Value::UNDEFINED, Op::ReturnUndef)
+                                };
+                                fuel -= OPS[o as usize].cost.fuel() as i64;
+                                break Exit::Each(v);
                             }
                             let int = |v: Value| v.as_int().unwrap_or(0) as u32;
                             let h: [u8; 48] = window(b, slot!(hp));
@@ -1020,6 +1036,11 @@ impl Exec<'_> {
             self.sp = sp;
             self.fuel = fuel;
             match exit {
+                Exit::Each(v) => {
+                    if let Some(st) = self.each_return(v) {
+                        return Some(st);
+                    }
+                }
                 Exit::Safepoint => self.safepoint(),
                 Exit::Budget => return None,
                 Exit::Decline(op) => {

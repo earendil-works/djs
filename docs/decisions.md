@@ -6082,3 +6082,73 @@ was used once.
   - first `Sandbox.create` 12.5–12.9 ms both; later ones ~20 µs faster (no copy);
   - pi warm start 0.52 → 0.43 ms (no injection into restore instances);
   - code +157 B gzip.
+## D2303: Callback loops in one intrinsic, with a reused frame (`%EachDense`, the `Each` continuation)
+date: 2026-11-08 · by: perf · issue: 0137
+The dense part of the loops of forEach, map, filter, some, every, find, findIndex and
+(forward) reduce is one reentrant intrinsic:
+`%EachDense(mode, o, k, len, f, thisArg, a)` (builtins/intrinsics.d.ts,
+interp/run/each.rs).
+
+How it works:
+- Its arguments, plus a kValue slot, stay on the stack as the loop's state.
+- The callback gets one frame, pushed with a new continuation `Each` (frame kind 7).
+- When the callback returns (in the hot loop or in `do_return`), `each_return`
+  completes the step: map's store, filter's keep, a decision, reduce's accumulator.
+  It then rewrites the same frame for the next element and starts it at pc 0: the
+  arguments padded with undefined, the header's NEW_TARGET, undefined locals. Or it
+  pops the frame and gives the builtin `k` (or -1 - k for a decision).
+- Each element is the spec's step: a present dense element of an Array, so HasProperty
+  and Get observe nothing. `len` is fixed, the element is re-checked every time, and
+  the builtin's own loop takes over from `k` at the first hole, shorter array or other
+  object.
+- Only plain closures qualify (the `n_call_closure` rule).
+- An async callback's frame is replaced on return (`tail_call_builtin`); it is entered
+  fresh rather than reused.
+
+The store targets, which never run user code:
+- `a` must be an Array: map's result, filter's result, find's box, reduce's box.
+- filter needs a plain species (so `a` is fresh and its length counts the kept
+  elements).
+- reduce passes the accumulator in and out as element 0 of its own rest array.
+- At the heap cap a store collects and retries once (D1900).
+
+Fuel, safepoints and stack contents are the same in the hot and general paths
+(`hot_loop_is_invisible`). Heap images see ordinary frames and values.
+
+These builtins, and Reduce, FindViaPredicate and CollectPresent (now one
+`%ArraySliceDense` copy for a dense array), are no longer `@native`. Their Rust state
+machines cost 8.2 KB raw.
+
+Per-call costs of the bytecode versions:
+- LengthOfArrayLike is `@fast`: an Array's own length.
+- The hot loop answers `%ToObject` of an object and `%IsCallable` inline.
+- The four callback builtins check callability inline instead of calling
+  RequireCallable.
+
+Measured in wasm against main 5d66ef74:
+- The module is 196 B smaller in gzip: 457,604 → 457,408.
+- Workloads (n=3, rechecked at n=5): pi-like −7.7% (0.87x quickjs-wasi), foreach −27.5%
+  (0.99x), higher-order −30.9% (2.58x → 1.78x). Every other workload is within ±0.5%.
+- Per element, from main to now (quickjs-wasi in brackets):
+
+  | builtin | main | now (quickjs-wasi) |
+  | --- | ---: | ---: |
+  | forEach | 2176 | 1156 (1007) |
+  | map | 2487 | 1265 (1052) |
+  | filter | 2764 | 1379 (1019) |
+  | reduce | 2070 | 1392 (869) |
+  | some/every | 3714 | 1000 (785) |
+  | find | 2203 | 1000 (796) |
+
+- The cost: a call on an empty or one-element array is 0.8–3.8k instructions dearer than
+  the native builtin was. For forEach that is +1.9k (+40%), filter +3.5k, reduce
+  +3.8k: the bytecode builtin's intrinsic calls through the general path. Arrays of a
+  few elements already come out ahead.
+
+The native-API inlining trade (D2302's numbers), re-measured on top of this:
+- n_slot and n_arg: +2.9 KB gzip, for higher-order −4.8% (sort's comparator) and
+  json-replacer −2.7%; pi-like −0.4%, foreach 0.
+- The whole set: +6.5 KB, for −8.7% and −3.4%; pi-like +0.4%.
+
+With the callback loops out of the natives, the trade no longer pays; I recommend
+dropping it.

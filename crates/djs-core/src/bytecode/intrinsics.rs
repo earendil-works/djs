@@ -193,6 +193,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("ArrayPushDense", L, 2, false),
     i("ArraySearchDense", L, 5, false),
     i("ArraySliceDense", L, 4, false),
+    i("EachDense", R, 7, false),
     i("ArrayJoinDense", L, 3, false),
     i("EnumerableOwnDataProperties", L, 2, false),
     i("TypedArraySetFromDense", L, 2, false),

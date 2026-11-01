@@ -32,7 +32,6 @@ function ArraySpeciesCreate(original: Obj, length: f64): Obj {
 /**
  * Array.prototype.forEach ( callbackfn [ , thisArg ] ), 23.1.3.15.
  * @builtin Array.prototype.forEach
- * @native
  */
 function ArrayPrototypeForEach(this: Value, callbackfn: Value, thisArg?: Value): void {
   const o: Obj = ToObject(this);
@@ -40,7 +39,8 @@ function ArrayPrototypeForEach(this: Value, callbackfn: Value, thisArg?: Value):
   if (!IsCallable(callbackfn)) {
     throw NewTypeError("not a function");
   }
-  for (let k: f64 = 0; k < len; k++) {
+  // The dense part in one intrinsic (0137), then the spec's loop from where it stopped.
+  for (let k: f64 = EachDense(0, o, 0, len, callbackfn, thisArg, undefined); k < len; k++) {
     if (HasProperty(o, k)) {
       Call(callbackfn, thisArg, Get(o, k), k, o);
     }
@@ -50,7 +50,6 @@ function ArrayPrototypeForEach(this: Value, callbackfn: Value, thisArg?: Value):
 /**
  * Array.prototype.map ( callbackfn [ , thisArg ] ), 23.1.3.21.
  * @builtin Array.prototype.map
- * @native
  */
 function ArrayPrototypeMap(this: Value, callbackfn: Value, thisArg?: Value): Obj {
   const o: Obj = ToObject(this);
@@ -59,7 +58,7 @@ function ArrayPrototypeMap(this: Value, callbackfn: Value, thisArg?: Value): Obj
     throw NewTypeError("not a function");
   }
   const a: Obj = ArraySpeciesCreate(o, len);
-  for (let k: f64 = 0; k < len; k++) {
+  for (let k: f64 = EachDense(1, o, 0, len, callbackfn, thisArg, a); k < len; k++) {
     if (HasProperty(o, k)) {
       const kValue: Value = Get(o, k);
       const mappedValue: Value = Call(callbackfn, thisArg, kValue, k, o);
@@ -402,11 +401,21 @@ function ArrayPrototypeLastIndexOf(this: Value, searchElement: Value, ...rest: V
  * The find family: `fromEnd` searches backwards, `wantIndex` returns the index (-1)
  * instead of the element (undefined). 23.1.3.9-12.
  * @intrinsic
- * @native
  */
 function FindViaPredicate(o: Obj, len: f64, fromEnd: boolean, predicate: Value, thisArg: Value, wantIndex: boolean): Value {
-  RequireCallable(predicate);
-  for (let i: f64 = 0; i < len; i++) {
+  if (!IsCallable(predicate)) {
+    throw NewTypeError("not a function");
+  }
+  let i: f64 = 0;
+  if (!fromEnd) {
+    // The dense part (0137): -1 - k when the result at k decided, o[k] in the box.
+    const box: Obj = ArrayCreate(0);
+    i = EachDense(wantIndex ? 6 : 5, o, 0, len, predicate, thisArg, box);
+    if (i < 0) {
+      return wantIndex ? -1 - i : Get(box, 0);
+    }
+  }
+  for (; i < len; i++) {
     const k: f64 = fromEnd ? len - 1 - i : i;
     const kValue: Value = Get(o, k);
     if (ToBoolean(Call(predicate, thisArg, kValue, k, o))) {
@@ -422,7 +431,6 @@ function FindViaPredicate(o: Obj, len: f64, fromEnd: boolean, predicate: Value, 
 /**
  * Array.prototype.find ( predicate [ , thisArg ] ), 23.1.3.9.
  * @builtin Array.prototype.find
- * @native
  */
 function ArrayPrototypeFind(this: Value, predicate: Value, thisArg?: Value): Value {
   const o: Obj = ToObject(this);
@@ -462,8 +470,15 @@ function ArrayPrototypeFindLastIndex(this: Value, predicate: Value, thisArg?: Va
  */
 function EveryOrSome(o: Obj, callbackfn: Value, thisArg: Value, wantAll: boolean): boolean {
   const len: f64 = LengthOfArrayLike(o);
-  RequireCallable(callbackfn);
-  for (let k: f64 = 0; k < len; k++) {
+  if (!IsCallable(callbackfn)) {
+    throw NewTypeError("not a function");
+  }
+  // The dense part (0137): -1 - k when the result at k decided.
+  let k: f64 = EachDense(wantAll ? 4 : 3, o, 0, len, callbackfn, thisArg, undefined);
+  if (k < 0) {
+    return !wantAll;
+  }
+  for (; k < len; k++) {
     if (HasProperty(o, k)) {
       const r: boolean = ToBoolean(Call(callbackfn, thisArg, Get(o, k), k, o));
       if (r !== wantAll) {
@@ -493,15 +508,18 @@ function ArrayPrototypeSome(this: Value, callbackfn: Value, thisArg?: Value): bo
 /**
  * Array.prototype.filter ( callbackfn [ , thisArg ] ), 23.1.3.8.
  * @builtin Array.prototype.filter
- * @native
  */
 function ArrayPrototypeFilter(this: Value, callbackfn: Value, thisArg?: Value): Obj {
   const o: Obj = ToObject(this);
   const len: f64 = LengthOfArrayLike(o);
-  RequireCallable(callbackfn);
+  if (!IsCallable(callbackfn)) {
+    throw NewTypeError("not a function");
+  }
   const a: Obj = ArraySpeciesCreate(o, 0);
-  let to: f64 = 0;
-  for (let k: f64 = 0; k < len; k++) {
+  // The dense part (0137) keeps elements in the fresh `a`: its length counts them.
+  let k: f64 = EachDense(2, o, 0, len, callbackfn, thisArg, a);
+  let to: f64 = k > 0 ? LengthOfArrayLike(a) : 0;
+  for (; k < len; k++) {
     if (HasProperty(o, k)) {
       const kValue: Value = Get(o, k);
       if (ToBoolean(Call(callbackfn, thisArg, kValue, k, o))) {
@@ -516,11 +534,12 @@ function ArrayPrototypeFilter(this: Value, callbackfn: Value, thisArg?: Value): 
 /**
  * reduce and reduceRight (`fromEnd`), 23.1.3.24-25.
  * @intrinsic
- * @native
  */
 function Reduce(o: Obj, callbackfn: Value, rest: Obj, fromEnd: boolean): Value {
   const len: f64 = LengthOfArrayLike(o);
-  RequireCallable(callbackfn);
+  if (!IsCallable(callbackfn)) {
+    throw NewTypeError("not a function");
+  }
   let i: f64 = 0;
   let accumulator: Value = undefined;
   if (LengthOfArrayLike(rest) > 0) {
@@ -539,6 +558,13 @@ function Reduce(o: Obj, callbackfn: Value, rest: Obj, fromEnd: boolean): Value {
       throw NewTypeError("empty array");
     }
   }
+  if (!fromEnd && i < len) {
+    // The dense part (0137). The accumulator goes in and out as element 0 of `rest`,
+    // the caller's fresh rest-parameter array.
+    CreateDataPropertyOrThrow(rest, 0, accumulator);
+    i = EachDense(7, o, i, len, callbackfn, undefined, rest);
+    accumulator = Get(rest, 0);
+  }
   for (; i < len; i++) {
     const k: f64 = fromEnd ? len - 1 - i : i;
     if (HasProperty(o, k)) {
@@ -552,7 +578,6 @@ function Reduce(o: Obj, callbackfn: Value, rest: Obj, fromEnd: boolean): Value {
  * Array.prototype.reduce ( callbackfn [ , initialValue ] ), 23.1.3.24.
  * @builtin Array.prototype.reduce
  * @length 1
- * @native
  */
 function ArrayPrototypeReduce(this: Value, callbackfn: Value, ...rest: Value[]): Value {
   return Reduce(ToObject(this), callbackfn, rest, false);
@@ -991,10 +1016,13 @@ function SortCompareDefined(x: Value, y: Value, comparefn: Value): f64 {
 /**
  * The present elements of o[0 .. len) as a dense list (SortIndexedProperties' read).
  * @intrinsic
- * @native
  */
 function CollectPresent(o: Obj, len: f64, skipHoles: boolean): Obj {
   const items: Obj = ArrayCreate(0);
+  // A dense Array without holes in one copy (0137: in place of a native loop).
+  if (ArraySliceDense(o, 0, len, items)) {
+    return items;
+  }
   let n: f64 = 0;
   for (let k: f64 = 0; k < len; k++) {
     if (!skipHoles || HasProperty(o, k)) {

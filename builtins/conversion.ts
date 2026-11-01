@@ -99,6 +99,7 @@ function ToLength(v: Value): f64 {
 /**
  * LengthOfArrayLike ( obj ), 7.3.18.
  * @intrinsic
+ * @fast
  */
 function LengthOfArrayLike(o: Obj): f64 {
   return ToLength(Get(o, "length"));

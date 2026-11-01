@@ -137,53 +137,60 @@ copy of that image, with all builtins installed and compiled, so no VM ever comp
 prelude. Privileged templates keep no line tables or local names, which saves space in
 that image (D1430, D1980).
 
-**The Rust backend** is opt-in. A builtin tagged `@native` (about 30 of them: `map`,
-`forEach`, `filter`, the iteration helpers, `JSON.stringify`'s slow path, the Map and
-Set constructors, ...) is also compiled to a Rust state machine in
+**The Rust backend** is opt-in. A builtin tagged `@native` (ten of them: `push`, `sort`
+and its merge, `JSON.stringify`'s slow path, promise reaction jobs, ...) is also
+compiled to a Rust state machine in
 `crates/djs-core/src/builtins/gen/natives.rs` (D1632). bgen splits the function into
 basic blocks, and each block becomes one arm of a `match` on the state. A resume point
-ends a block. Here is the loop of `Array.prototype.map`, excerpted from the generated
-file. The source is the plain loop
-`for (let k = 0; k < len; k++) { if (HasProperty(o, k)) { ... } }`:
+ends a block. Here is the loop of `Array.prototype.push` for several items, excerpted
+from the generated file. The source is the plain loop
+`for (let i = 0; i < argCount; i++) { Set(o, len, Get(items, i)); len++; }`:
 
-<!-- gen:excerpt crates/djs-core/src/builtins/gen/natives.rs "fn native_ArrayPrototypeMap(" "5 => {" 17 -->
-[`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs#L183-L199), lines 183–199:
+<!-- gen:excerpt crates/djs-core/src/builtins/gen/natives.rs "fn native_ArrayPrototypePush(" "7 => {" 18 -->
+[`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs#L108-L125), lines 108–125:
 
 ```rust
-5 => {
-    if (l3f < l1f) { st = 8; continue; } else { st = 7; continue; }
-}
-6 => {
-    let rv = (l3f + 1.0_f64); l3f = rv; ex.n_set_slot(3, num(rv));
-    if ex.n_backedge(5) { return Ok(None); } st = 5; continue;
-}
 7 => {
-    let v = ex.n_slot(2); return ex.n_ret(v);
+    if (l4f < l2f) { st = 8; continue; } else { st = 10; continue; }
 }
 8 => {
-    if { let a0 = ex.n_slot(0); let a1 = ex.n_slot(3); ex.n_dense_pre(a0, a1) } { st = 12; continue; } else { st = 9; continue; }
+    // resume point: Set
+    match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(1); let a2 = { let a0 = ex.n_slot(4); ex.n_rest_get(0, a0) }; ex.n_set(&[a0, a1, a2], 11) }? { Flow::Inline => { st = 11; continue } Flow::Leave(s) => return Ok(s) }
 }
 9 => {
-    // resume point: HasProperty
-    match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(3); ex.n_has_property(&[a0, a1], 10) }? { Flow::Inline => { st = 10; continue } Flow::Leave(s) => return Ok(s) }
+    let rv = (l4f + 1.0_f64); l4f = rv; ex.n_set_slot(4, num(rv));
+    if ex.n_backedge(7) { return Ok(None); } st = 7; continue;
 }
+10 => {
+    // resume point: Set
+    match { let a0 = ex.n_slot(0); let a1 = ex.n_str("length")?; let a2 = ex.n_slot(1); ex.n_set(&[a0, a1, a2], 12) }? { Flow::Inline => { st = 12; continue } Flow::Leave(s) => return Ok(s) }
+}
+11 => {
+    ex.n_result();
+    let rv = (l1f + 1.0_f64); l1f = rv; ex.n_set_slot(1, num(rv));
 ```
 <!-- /gen -->
 
 A native builtin runs in a **native frame**: an ordinary frame record in the arena with
 a header bit set, its state in place of the program counter and its locals in the
-frame's slots (D1631). A typed local such as the counter `k` (`l3f` above) also lives in
+frame's slots (D1631). A typed local such as the counter `i` (`l4f` above) also lives in
 a Rust variable, but every write goes to the slot too (D2000), so the frame always holds
-the whole state. The common case stays in the same Rust loop. State 8 is a fused check
-(`n_dense_pre`, D2090): when `o` is an Array with an element at `k`, both
-`HasProperty(o, k)` and `Get(o, k)` would just answer from the dense storage, so it
-takes the element and jumps past both call states. Otherwise state 9 makes the
-`HasProperty` call, a resume point, which still completes inline (`Flow::Inline`) when
-no user code is involved. When a call needs a JavaScript frame (the callback, a getter),
-the native writes the callee's frame (for a plain closure in place, D2060) and returns
-to the interpreter (`Flow::Leave`), which runs it and later re-enters the state machine
-at the resume state. A loop back-edge (`n_backedge`) charges fuel and is a safepoint, so
-a `map` over a million elements can stop and be saved in the middle, like bytecode.
+the whole state. The common case stays in the same Rust loop. State 8's `Set` is a
+resume point: on an Array it completes inline (`Flow::Inline`) and the loop goes on to
+state 11. When a call needs a JavaScript frame (a setter, a proxy trap), the native
+writes the callee's frame and returns to the interpreter (`Flow::Leave`), which runs it
+and later re-enters the state machine at the resume state. A loop back-edge
+(`n_backedge`) charges fuel and is a safepoint, so a native loop over a million elements
+can stop and be saved in the middle, like bytecode.
+
+The callback loops of `forEach`, `map`, `filter`, `some`, `every`, `find`, `findIndex`
+and `reduce` are bytecode builtins. Their dense part is one intrinsic, `%EachDense`
+(D2303). It enters the callback's frame once and, on each return, completes the step
+(store, test, accumulate) and enters the same frame again for the next element. No
+native state machine runs per element, and the builtin's own spec loop takes over at the
+first hole, proxy or other array. That made these builtins about twice as fast per
+element as their native versions, and dropping them from the Rust backend left the
+module smaller.
 
 Two rules keep this safe:
 

@@ -241,6 +241,7 @@ const ARRAY_PUSH_DENSE: u16 = id("ArrayPushDense");
 const ARRAY_FILL_DENSE: u16 = id("ArrayFillDense");
 const ARRAY_SEARCH_DENSE: u16 = id("ArraySearchDense");
 const ARRAY_SLICE_DENSE: u16 = id("ArraySliceDense");
+const EACH_DENSE: u16 = id("EachDense");
 const ARRAY_JOIN_DENSE: u16 = id("ArrayJoinDense");
 const ITERATOR_FAST_READY: u16 = id("IteratorFastReady");
 const IS_ORIGINAL_COLLECTION_ADDER: u16 = id("IsOriginalCollectionAdder");
@@ -648,6 +649,7 @@ impl Exec<'_> {
             }
             // `f this a1 .. an` is already a call's stack layout.
             CALL => return self.call(base, argc - 2, Continuation::PushResult, next),
+            EACH_DENSE => return self.each_dense(base, next),
             // `f a1 .. an` is a construct's.
             CONSTRUCT => return self.construct(argc - 1, next),
             OBJECT_CREATE => {

@@ -58,6 +58,10 @@ pub enum Continuation {
     /// `try` regions and line are those of `ret_pc` itself, not of `ret_pc - 1` (0086:
     /// `inc_loc` can be the first instruction of a `try`).
     Retry(u32),
+    /// `%EachDense`'s callback (0137): the result completes one step of the loop, whose
+    /// state is in the intrinsic's arguments right below the frame, then the frame is
+    /// entered again for the next element, or the loop's k goes to the caller.
+    Each,
 }
 
 /// Continuation kind bits of `flags` (bits 0-3); the `Replace` slot is in bits 8-30.
@@ -73,6 +77,7 @@ impl Continuation {
             4 => Continuation::Replace((flags as u32 & 0x7FFF_FFFF) >> SLOT_SHIFT),
             5 => Continuation::Job,
             6 => Continuation::Retry((flags as u32 & 0x7FFF_FFFF) >> SLOT_SHIFT),
+            7 => Continuation::Each,
             _ => Continuation::Entry,
         }
     }
@@ -88,6 +93,7 @@ impl Continuation {
             Continuation::Replace(slot) => 4 | ((slot << SLOT_SHIFT) & 0x7FFF_FFFF) as i32,
             Continuation::Job => 5,
             Continuation::Retry(slot) => 6 | ((slot << SLOT_SHIFT) & 0x7FFF_FFFF) as i32,
+            Continuation::Each => 7,
         }
     }
 
