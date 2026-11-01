@@ -45,8 +45,8 @@ The remaining language gaps after classes and TypeScript:
   `Goal::Eval` (`CompileOptions::eval`): strict eval code, declarations local to the
   call; builtins/eval.rs (0059) compiles indirect eval with it. djs-difftest's
   `__difftestSetup`/`__difftestCase` globals are gone; djs-test262 had no workaround
-  (`$262.evalScript` already returned the call's result). test262: +20 (indirect eval
-  completion/this/lexical env), -8 indirect-eval tests that need sloppy eval code
+  (`$262.evalScript` already returned the call's result). test262 (after the rebase onto 0059): +24 (indirect eval
+  completion/this/lexical env), -11 indirect-eval tests that need sloppy eval code
   (vars leaking to the global object; djs is always strict). difftest: 4 more cases pass
   (test_regexp, test_string, test_parse_arrow_function, test_enums used eval values).
   vm/tests.rs' OOM test now accepts a completion value as the result (outside touches,

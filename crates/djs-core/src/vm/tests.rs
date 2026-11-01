@@ -894,7 +894,8 @@ fn error_display_with_accessor_names() {
 
 /// 0059: CreateDynamicFunction parses the parameters and the body as separate goals, so
 /// neither can close the other's brackets (qjs only evaluates the joined source); eval
-/// and the constructors compile at the global scope.
+/// and the constructors compile at the global scope; eval returns the completion value
+/// (0058).
 #[test]
 fn dynamic_code() {
     let out = run_js(
@@ -920,7 +921,7 @@ fn dynamic_code() {
          SyntaxError: unexpected token after the function body|\
          3|\
          SyntaxError: missing formal parameter|\
-         undefined|object|false"
+         object|object|false"
     );
 }
 
