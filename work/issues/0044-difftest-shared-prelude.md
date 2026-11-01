@@ -1,7 +1,7 @@
 # 0044: djs runs the shared difftest prelude (retire D1160's native console)
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0044-difftest-shared-prelude
 depends-on: 0033 (JSON, done), 0041 (await), 0040 (classes, if the prelude uses them)
 touches: crates/djs-difftest/, tests/corpus/prelude.js (only if a djs incompatibility must be worked around, with a comment), js/src/sandbox.ts (console formatting, if it has the same issue), ratchets
