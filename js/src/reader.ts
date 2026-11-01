@@ -24,6 +24,8 @@ const STR16_DATA = cells.Str16.tail.offset;
 const ROPE_LEFT = cells.Rope.fields.LEFT.offset;
 const ROPE_RIGHT = cells.Rope.fields.RIGHT.offset;
 const ROPE_FLATTENED = LAYOUT.flags.ROPE_FLATTENED;
+const ROPE_APPEND = LAYOUT.flags.ROPE_APPEND;
+const ROPE_LEN = cells.Rope.fields.LEN.offset;
 const SYM_DESCRIPTION = cells.Symbol.fields.DESCRIPTION.offset;
 const BIG_LEN = cells.BigInt.fields.LEN.offset;
 const BIG_LIMBS = cells.BigInt.tail.offset;
@@ -306,7 +308,10 @@ class Reader {
     const kind = this.mem[off + HDR_KIND];
     if (kind === K_STR8) return this.latin1(off + STR8_DATA, this.view.getUint32(off + STR8_LEN, true));
     if (kind === K_STR16) return this.utf16(off + STR16_DATA, this.view.getUint32(off + STR16_LEN, true));
-    if (kind === K_ROPE) return this.rope(off);
+    if (kind === K_ROPE) {
+      if (this.view.getUint16(off + HDR_FLAGS, true) & ROPE_APPEND) return this.appendRope(off);
+      return this.rope(off);
+    }
     throw new Error(`djs heap: cell ${off} is not a string`);
   }
 
@@ -318,6 +323,8 @@ class Reader {
       const c = stack.pop()!;
       if (this.mem[c + HDR_KIND] !== K_ROPE) {
         parts.push(this.string(c));
+      } else if (this.view.getUint16(c + HDR_FLAGS, true) & ROPE_APPEND) {
+        parts.push(this.appendRope(c));
       } else if (this.view.getUint16(c + HDR_FLAGS, true) & ROPE_FLATTENED) {
         stack.push(this.view.getUint32(c + ROPE_LEFT, true));
       } else {
@@ -325,6 +332,14 @@ class Reader {
       }
     }
     return parts.join("");
+  }
+
+  /** An append rope (D1610): the first LEN code units of its buffer (LEFT). */
+  appendRope(off: number): string {
+    const buf = this.view.getUint32(off + ROPE_LEFT, true);
+    const n = this.view.getUint32(off + ROPE_LEN, true);
+    if (this.mem[buf + HDR_KIND] === K_STR8) return this.latin1(buf + STR8_DATA, n);
+    return this.utf16(buf + STR16_DATA, n);
   }
 
   latin1(at: number, n: number): string {

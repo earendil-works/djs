@@ -12,7 +12,7 @@ export const LAYOUT = {
     "tags": { "UNDEFINED": 1, "NULL": 2, "BOOL": 3, "INT": 4, "HOLE": 5, "UNINITIALIZED": 6, "STRING": 8, "OBJECT": 9, "SYMBOL": 10, "BIGINT": 11, "HOST_REF": 12, "INTERNAL": 13 }
   },
   "atom": { "intBit": 2147483648, "symbolBit": 1073741824, "indexMask": 1073741823 },
-  "flags": { "ROPE_TWO_BYTE": 1, "ROPE_FLATTENED": 2, "OBJ_EXTENSIBLE": 1, "OBJ_INDEXED_PROPS": 2, "OBJ_LENGTH_READONLY": 4, "BIGINT_NEG": 1 },
+  "flags": { "ROPE_TWO_BYTE": 1, "ROPE_FLATTENED": 2, "ROPE_APPEND": 4, "STR_APPEND_BUF": 1, "OBJ_EXTENSIBLE": 1, "OBJ_INDEXED_PROPS": 2, "OBJ_LENGTH_READONLY": 4, "BIGINT_NEG": 1 },
   "objectClasses": { "Ordinary": 0, "Array": 1, "Function": 2, "HostFunction": 3, "Error": 4, "Arguments": 5, "ArrayIterator": 6, "BoundFunction": 7, "Boolean": 8, "Number": 9, "String": 10, "Symbol": 11, "Map": 12, "Set": 13, "WeakMap": 14, "WeakSet": 15, "CollectionIterator": 16, "Promise": 17, "BuiltinClosure": 18, "Record": 19, "Date": 20, "Generator": 21, "ArrayBuffer": 22, "TypedArray": 23, "DataView": 24, "RegExp": 25, "RegExpStringIterator": 26, "Proxy": 27, "IteratorHelper": 28, "BigInt": 30, "WeakRef": 31, "FinalizationRegistry": 32, "DisposableStack": 33 },
   "propFlags": { "WRITABLE": 1, "ENUMERABLE": 2, "CONFIGURABLE": 4, "ACCESSOR": 8 },
   "cells": {

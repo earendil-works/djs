@@ -819,6 +819,22 @@ fn reader_images() {
     let flat_src = h.concat(a, b).unwrap();
     h.flatten(flat_src).unwrap();
     add(&mut h, "rope-flattened", Value::string(flat_src), true);
+    // Append ropes (D1610): `s += piece` chains share one buffer; an older, shorter value
+    // stays a prefix, and a two-byte piece moves to a two-byte buffer.
+    let mut s = h.alloc_str(&"line ".repeat(8)).unwrap();
+    let mut older = s;
+    for i in 0..300 {
+        let piece = h.alloc_str(&format!("{i},")).unwrap();
+        s = h.concat(s, piece).unwrap();
+        if i == 150 {
+            older = s;
+        }
+    }
+    add(&mut h, "append-rope", Value::string(s), true);
+    add(&mut h, "append-rope-prefix", Value::string(older), true);
+    let s2 = h.concat(s, w).unwrap();
+    let s2 = h.concat(s2, a).unwrap();
+    add(&mut h, "append-rope-two-byte", Value::string(s2), true);
 
     // Big strings: ASCII, Latin-1 with and without the C1 range, two-byte, lone surrogate.
     let mib = 1 << 20;

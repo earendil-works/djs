@@ -60,6 +60,13 @@ pub mod flags {
     pub const ROPE_TWO_BYTE: u16 = 1;
     /// Rope: flattened. `LEFT` points to the flat string, `RIGHT` is null.
     pub const ROPE_FLATTENED: u16 = 2;
+    /// Rope: an append rope (D1610). `LEFT` points to an append buffer (or a frozen one)
+    /// and the string is its first `LEN` code units; `RIGHT` is null.
+    pub const ROPE_APPEND: u16 = 4;
+    /// Str8/Str16: an append buffer (D1610). Spare capacity beyond `LEN` (the used length)
+    /// may be written in place. Only append ropes' `LEFT` fields reference it; freezing
+    /// clears the flag, after which it is an ordinary flat string.
+    pub const STR_APPEND_BUF: u16 = 1;
     /// Object: new properties may be added.
     pub const OBJ_EXTENSIBLE: u16 = 1;
     /// Object: the property table holds array-index keys (or the class has exotic
@@ -173,10 +180,12 @@ cells! {
         HASH: u32 = 12,
     } tail DATA: [u16] = 16;
 
-    /// A concatenation of two strings, flattened lazily. Header flags:
-    /// [`flags::ROPE_TWO_BYTE`], [`flags::ROPE_FLATTENED`].
+    /// A concatenation of two strings, flattened lazily, or an append rope (a prefix of an
+    /// append buffer). Header flags: [`flags::ROPE_TWO_BYTE`], [`flags::ROPE_FLATTENED`],
+    /// [`flags::ROPE_APPEND`].
     4 => Rope {
-        /// Length in code units: `len(LEFT) + len(RIGHT)`.
+        /// Length in code units: `len(LEFT) + len(RIGHT)` (an append rope: at most
+        /// `len(LEFT)`).
         LEN: u32 = 8,
         /// Cached string hash; 0 means not computed yet.
         HASH: u32 = 12,

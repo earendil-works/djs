@@ -385,3 +385,6 @@ mod tests;
 
 #[cfg(test)]
 mod gc_tests;
+
+#[cfg(test)]
+mod append_tests;

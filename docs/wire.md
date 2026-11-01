@@ -205,7 +205,7 @@ generated file and throws `LayoutMismatch` on a difference.
 | VM value | host value |
 | --- | --- |
 | undefined, null, booleans, numbers (int32 or f64) | themselves |
-| string: one-byte, two-byte, or a rope | a string. Ropes are walked iteratively, flattened ones through `LEFT`; the VM does not need to flatten first |
+| string: one-byte, two-byte, or a rope | a string. Ropes are walked iteratively, flattened ones through `LEFT`; an append rope (`ROPE_APPEND`, D1610) is the first `LEN` code units of the flat buffer in `LEFT`; the VM does not need to flatten first |
 | Array | an array of the same `length`; holes stay holes, and elements kept in the property table (far beyond the dense part) are included |
 | ordinary object | a plain object with the own enumerable string-keyed data properties, in property order (index keys ascending, then insertion order); `__proto__` becomes an own property |
 | accessors, non-enumerable properties, symbol keys | left out |

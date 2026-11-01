@@ -173,7 +173,9 @@ impl Heap {
                             return;
                         };
                         if let Some(t) = v.ref_offset() {
-                            let ok = ref_fits(v.tag(), kind_at(t));
+                            // Append buffers never escape as values (D1610).
+                            let ok = ref_fits(v.tag(), kind_at(t))
+                                && !self.is_append_buffer(t, &kind_at);
                             if !ok {
                                 err = Some(VerifyError::BadRef {
                                     slot: off,
@@ -189,6 +191,17 @@ impl Heap {
                                 slot: off,
                                 target: t,
                             });
+                        } else if t != 0 && self.is_append_buffer(t, &kind_at) {
+                            // Only an append rope's LEFT may hold an append buffer.
+                            let from_append_rope = self.cell_kind(cell) == CellKind::Rope
+                                && self.cell_flags(cell) & flags::ROPE_APPEND != 0
+                                && off == cell + Rope::LEFT.offset;
+                            if !from_append_rope {
+                                err = Some(VerifyError::BadRef {
+                                    slot: off,
+                                    target: t,
+                                });
+                            }
                         }
                     }
                 }
@@ -269,7 +282,16 @@ impl Heap {
                 let (left, right) = (a.get(cell, Rope::LEFT), a.get(cell, Rope::RIGHT));
                 let fl = self.cell_flags(cell);
                 let two = fl & flags::ROPE_TWO_BYTE != 0;
-                if fl & flags::ROPE_FLATTENED != 0 {
+                if fl & flags::ROPE_APPEND != 0 {
+                    // A prefix of an append buffer (or a frozen one), D1610.
+                    let k = left.get().and_then(kind_at);
+                    let flat = matches!(k, Some(CellKind::Str8 | CellKind::Str16));
+                    flat && fl & flags::ROPE_FLATTENED == 0
+                        && right.is_null()
+                        && len > 0
+                        && len <= a.get(left.0, Str8::LEN)
+                        && (k == Some(CellKind::Str16)) == two
+                } else if fl & flags::ROPE_FLATTENED != 0 {
                     let k = left.get().and_then(kind_at);
                     let flat = matches!(k, Some(CellKind::Str8 | CellKind::Str16));
                     flat && right.is_null()
@@ -350,6 +372,12 @@ impl Heap {
             }
         }
         Ok(())
+    }
+
+    /// Whether `t` is an (unfrozen) append buffer.
+    fn is_append_buffer(&self, t: u32, kind_at: &impl Fn(u32) -> Option<CellKind>) -> bool {
+        matches!(kind_at(t), Some(CellKind::Str8 | CellKind::Str16))
+            && self.cell_flags(t) & flags::STR_APPEND_BUF != 0
     }
 
     /// Whether the cell's own length field fits its size.

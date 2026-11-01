@@ -11,6 +11,14 @@
 //!   `RIGHT` = null, `ROPE_FLATTENED`). Every operation resolves that redirect first; the GC
 //!   can later short-circuit it.
 //!
+//! - An append rope (`ROPE_APPEND`, D1610) is the first `LEN` code units of the flat cell
+//!   in `LEFT`, an append buffer (`STR_APPEND_BUF`: spare capacity past its `LEN`, the
+//!   used length) or a frozen former one. `concat` writes into a buffer in place only when
+//!   the rope ends where the buffer's used part ends, so every older, shorter rope over the
+//!   same buffer keeps its value. Buffers are only ever referenced from append ropes'
+//!   `LEFT`: [`Heap::flatten`] hands out a buffer only after freezing it (clearing the
+//!   flag), and a frozen buffer is never written again.
+//!
 //! Nothing here recurses: rope walks use an explicit stack, so a million-deep rope built by
 //! `s += x` in a loop is fine.
 
@@ -19,7 +27,7 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 
 use super::cells::{Rope, Str8, Str16, flags};
-use super::layout::{FieldType, Ref};
+use super::layout::Ref;
 use super::{CellKind, Heap, HeapError};
 use crate::value::Str;
 
@@ -28,6 +36,9 @@ pub const MAX_LEN: u32 = (1 << 30) - 1;
 
 /// Concatenations shorter than this are copied into a flat string instead of making a rope.
 pub const ROPE_MIN_LEN: u32 = 32;
+
+/// Smallest append buffer, in code units.
+const APPEND_MIN_CAP: u32 = 64;
 
 // The three string kinds share LEN and HASH offsets, so code that only needs those does not
 // have to dispatch on the kind.
@@ -160,30 +171,23 @@ pub fn hash_units(units: impl Iterator<Item = u16>) -> u32 {
 /// Iterator over the flat pieces of a string, in order, without flattening it.
 pub struct Chunks<'a> {
     heap: &'a Heap,
-    stack: Vec<u32>,
+    /// `(cell, length)`: the length clips an append rope's buffer.
+    stack: Vec<(u32, u32)>,
 }
 
 impl<'a> Iterator for Chunks<'a> {
     type Item = StrView<'a>;
 
     fn next(&mut self) -> Option<StrView<'a>> {
-        while let Some(off) = self.stack.pop() {
+        while let Some((off, len)) = self.stack.pop() {
             match self.heap.cell_kind(off) {
                 CellKind::Str8 | CellKind::Str16 => {
-                    let v = self.heap.flat_view(Str(off));
+                    let v = self.heap.prefix_view(off, len);
                     if !v.is_empty() {
                         return Some(v);
                     }
                 }
-                CellKind::Rope => {
-                    let a = self.heap.arena();
-                    if self.heap.cell_flags(off) & flags::ROPE_FLATTENED != 0 {
-                        self.stack.push(a.get(off, Rope::LEFT).0);
-                    } else {
-                        self.stack.push(a.get(off, Rope::RIGHT).0);
-                        self.stack.push(a.get(off, Rope::LEFT).0);
-                    }
-                }
+                CellKind::Rope => self.heap.push_children(off, &mut self.stack),
                 k => panic!("not a string cell: {k:?} at {off}"),
             }
         }
@@ -192,6 +196,60 @@ impl<'a> Iterator for Chunks<'a> {
 }
 
 impl Heap {
+    /// The parts of the rope `off` as `(cell, length)`, in order (one or two).
+    fn children(&self, off: u32) -> ([(u32, u32); 2], usize) {
+        let a = self.arena();
+        let fl = self.cell_flags(off);
+        let left = a.get(off, Rope::LEFT).0;
+        if fl & flags::ROPE_APPEND != 0 {
+            ([(left, a.get(off, Rope::LEN)), (0, 0)], 1)
+        } else if fl & flags::ROPE_FLATTENED != 0 {
+            ([(left, self.str_len(Str(left))), (0, 0)], 1)
+        } else {
+            let right = a.get(off, Rope::RIGHT).0;
+            (
+                [
+                    (left, self.str_len(Str(left))),
+                    (right, self.str_len(Str(right))),
+                ],
+                2,
+            )
+        }
+    }
+
+    /// Pushes the parts of the rope `off` as `(cell, length)` for a left-to-right walk
+    /// with a stack (right first).
+    fn push_children(&self, off: u32, stack: &mut Vec<(u32, u32)>) {
+        let (kids, n) = self.children(off);
+        stack.extend(kids[..n].iter().rev());
+    }
+
+    /// The first `len` code units of the flat cell `off`.
+    fn prefix_view(&self, off: u32, len: u32) -> StrView<'_> {
+        let data = off + Str8::DATA.offset;
+        match self.cell_kind(off) {
+            CellKind::Str8 => StrView::Latin1(self.arena().slice(data, len)),
+            CellKind::Str16 => StrView::Utf16(self.arena().slice(data, len * 2)),
+            k => panic!("not a flat string: {k:?}"),
+        }
+    }
+
+    /// The buffer cell of an append rope, if `s` is one.
+    fn append_rope_buffer(&self, s: Str) -> Option<u32> {
+        (self.cell_kind(s.0) == CellKind::Rope && self.cell_flags(s.0) & flags::ROPE_APPEND != 0)
+            .then(|| self.arena().get(s.0, Rope::LEFT).0)
+    }
+
+    /// The capacity of a flat string cell in code units.
+    fn buffer_capacity(&self, buf: u32) -> u32 {
+        let size = self.cell_size(buf);
+        if self.cell_kind(buf) == CellKind::Str16 {
+            Str16::LAYOUT.tail_capacity(size)
+        } else {
+            Str8::LAYOUT.tail_capacity(size)
+        }
+    }
+
     /// Allocates a flat string cell for `len` code units, with `LEN` set and the data
     /// zeroed.
     fn alloc_flat(&mut self, len: u32, two_byte: bool) -> Result<u32, HeapError> {
@@ -316,26 +374,29 @@ impl Heap {
 
     /// The view of a flat string cell. `s` must be a `Str8` or `Str16`.
     fn flat_view(&self, s: Str) -> StrView<'_> {
-        let len = self.str_len(s);
-        let data = s.0 + Str8::DATA.offset;
-        match self.cell_kind(s.0) {
-            CellKind::Str8 => StrView::Latin1(self.arena().slice(data, len)),
-            CellKind::Str16 => StrView::Utf16(self.arena().slice(data, len * 2)),
-            k => panic!("not a flat string: {k:?}"),
-        }
+        self.prefix_view(s.0, self.str_len(s))
     }
 
-    /// The code units of `s` if it is flat (or a flattened rope), else `None`.
+    /// The code units of `s` if it is flat (a flattened rope or an append rope too), else
+    /// `None`.
     pub fn str_view(&self, s: Str) -> Option<StrView<'_>> {
         let s = self.resolve_str(s);
+        if let Some(buf) = self.append_rope_buffer(s) {
+            return Some(self.prefix_view(buf, self.str_len(s)));
+        }
         match self.cell_kind(s.0) {
             CellKind::Rope => None,
             _ => Some(self.flat_view(s)),
         }
     }
 
-    /// Flattens `s` and returns its code units.
+    /// The code units of `s`, flattening it first if it is a concatenation rope. An append
+    /// rope is read in place (no copy, and its buffer stays appendable).
     pub fn str_view_flat(&mut self, s: Str) -> Result<StrView<'_>, HeapError> {
+        let s = self.resolve_str(s);
+        if let Some(buf) = self.append_rope_buffer(s) {
+            return Ok(self.prefix_view(buf, self.str_len(s)));
+        }
         let f = self.flatten(s)?;
         Ok(self.flat_view(f))
     }
@@ -344,7 +405,7 @@ impl Heap {
     pub fn str_chunks(&self, s: Str) -> Chunks<'_> {
         Chunks {
             heap: self,
-            stack: alloc::vec![s.0],
+            stack: alloc::vec![(s.0, self.str_len(s))],
         }
     }
 
@@ -367,6 +428,11 @@ impl Heap {
                 CellKind::Str8 | CellKind::Str16 => return Some(self.flat_view(s).get(i as usize)),
                 _ => {
                     let a = self.arena();
+                    if self.cell_flags(s.0) & flags::ROPE_APPEND != 0 {
+                        // i < LEN <= the buffer's used length.
+                        let buf = a.get(s.0, Rope::LEFT).0;
+                        return Some(self.prefix_view(buf, i + 1).get(i as usize));
+                    }
                     if self.cell_flags(s.0) & flags::ROPE_FLATTENED != 0 {
                         s = Str(a.get(s.0, Rope::LEFT).0);
                         continue;
@@ -384,34 +450,28 @@ impl Heap {
         }
     }
 
-    /// Appends the flat leaves of `s`, in order, to `out`.
-    fn collect_leaves(&self, s: Str, out: &mut Vec<u32>) {
-        let mut stack = alloc::vec![s.0];
-        while let Some(off) = stack.pop() {
+    /// Appends the flat leaves of `s` as `(cell, length)`, in order, to `out`.
+    fn collect_leaves(&self, s: Str, out: &mut Vec<(u32, u32)>) {
+        let mut stack = alloc::vec![(s.0, self.str_len(s))];
+        while let Some((off, len)) = stack.pop() {
             match self.cell_kind(off) {
-                CellKind::Rope => {
-                    let a = self.arena();
-                    if self.cell_flags(off) & flags::ROPE_FLATTENED != 0 {
-                        stack.push(a.get(off, Rope::LEFT).0);
-                    } else {
-                        stack.push(a.get(off, Rope::RIGHT).0);
-                        stack.push(a.get(off, Rope::LEFT).0);
-                    }
-                }
-                _ => out.push(off),
+                CellKind::Rope => self.push_children(off, &mut stack),
+                _ => out.push((off, len)),
             }
         }
     }
 
-    /// Copies the flat cells `leaves` back to back into the data of the flat cell `dst`,
-    /// which must have been allocated after all of them.
-    fn write_leaves(&mut self, leaves: &[u32], dst: u32) {
+    /// Copies the first `len` units of each flat cell in `leaves`, back to back, into the
+    /// data of the flat cell `dst` from code unit `at` on. The leaves must lie below `dst`
+    /// in the arena.
+    fn write_leaves(&mut self, leaves: &[(u32, u32)], dst: u32, at: u32) {
         let two_byte = self.cell_kind(dst) == CellKind::Str16;
         let (src, out) = self.arena_mut().split_mut(dst);
-        let mut pos = Str8::DATA.offset as usize;
-        for &leaf in leaves {
+        let unit = if two_byte { 2 } else { 1 };
+        let mut pos = Str8::DATA.offset as usize + unit * at as usize;
+        for &(leaf, len) in leaves {
             let leaf = leaf as usize;
-            let len = u32::read(src, leaf + Str8::LEN.offset as usize) as usize;
+            let len = len as usize;
             let data = leaf + Str8::DATA.offset as usize;
             let leaf_two = src[leaf] == CellKind::Str16 as u8;
             match (leaf_two, two_byte) {
@@ -441,8 +501,136 @@ impl Heap {
         }
     }
 
+    /// Appends `b` in place to the append buffer `buf`, whose used part ends at `at` (the
+    /// caller checked the room, the width and that `at` is the end). The pieces may lie
+    /// anywhere in the arena.
+    fn append_into(&mut self, buf: u32, at: u32, b: Str) {
+        if matches!(self.cell_kind(b.0), CellKind::Str8 | CellKind::Str16) {
+            let lb = self.str_len(b);
+            self.copy_piece(b.0, lb, buf, at);
+            return;
+        }
+        // A small rope (a template literal's result): walk it with a stack on the Rust
+        // stack, so the hot path does not allocate.
+        let mut stack = [(0u32, 0u32); 16];
+        let mut n = 0;
+        stack[0] = (b.0, self.str_len(b));
+        n += 1;
+        let mut at = at;
+        while n > 0 {
+            n -= 1;
+            let (off, len) = stack[n];
+            if self.cell_kind(off) != CellKind::Rope {
+                self.copy_piece(off, len, buf, at);
+                at += len;
+                continue;
+            }
+            let (kids, nk) = self.children(off);
+            if n + nk > stack.len() {
+                // Deep: the general walk.
+                let mut leaves = Vec::new();
+                for &(k, kl) in &kids[..nk] {
+                    self.collect_leaves_of(k, kl, &mut leaves);
+                }
+                for (k, kl) in stack[..n].iter().rev().copied() {
+                    self.collect_leaves_of(k, kl, &mut leaves);
+                }
+                for (leaf, len) in leaves {
+                    self.copy_piece(leaf, len, buf, at);
+                    at += len;
+                }
+                return;
+            }
+            for &k in kids[..nk].iter().rev() {
+                stack[n] = k;
+                n += 1;
+            }
+        }
+    }
+
+    /// The leaves of `(off, len)` (a string cell clipped to `len`), appended to `out`.
+    fn collect_leaves_of(&self, off: u32, len: u32, out: &mut Vec<(u32, u32)>) {
+        let mut stack = alloc::vec![(off, len)];
+        while let Some((off, len)) = stack.pop() {
+            match self.cell_kind(off) {
+                CellKind::Rope => self.push_children(off, &mut stack),
+                _ => out.push((off, len)),
+            }
+        }
+    }
+
+    /// Copies the first `len` units of the flat cell `src` into the buffer `buf` at unit
+    /// `at` (widening when needed; anywhere in the arena).
+    fn copy_piece(&mut self, src: u32, len: u32, buf: u32, at: u32) {
+        let src_two = self.cell_kind(src) == CellKind::Str16;
+        let wide = self.cell_kind(buf) == CellKind::Str16;
+        let from = src + Str8::DATA.offset;
+        let a = self.arena_mut();
+        match (src_two, wide) {
+            (false, false) => a.copy_within(from, len, buf + Str8::DATA.offset + at),
+            (true, true) => a.copy_within(from, 2 * len, buf + Str16::DATA.offset + 2 * at),
+            (false, true) => {
+                for i in 0..len {
+                    let c = a.read::<u8>(from + i);
+                    a.write::<u16>(buf + Str16::DATA.offset + 2 * (at + i), c as u16);
+                }
+            }
+            (true, false) => unreachable!("two-byte piece in a one-byte buffer"),
+        }
+    }
+
+    /// A new append rope over `buf` with length `len`.
+    fn new_append_rope(&mut self, buf: u32, len: u32) -> Result<Str, HeapError> {
+        let two = self.cell_kind(buf) == CellKind::Str16;
+        let r = self.alloc_cell(CellKind::Rope, Rope::LAYOUT.min_size)?;
+        let ar = self.arena_mut();
+        ar.set(r, Rope::LEN, len);
+        ar.set(r, Rope::LEFT, Ref(buf));
+        ar.set(r, Rope::RIGHT, Ref::NULL);
+        let fl = flags::ROPE_APPEND | if two { flags::ROPE_TWO_BYTE } else { 0 };
+        self.set_cell_flags(r, fl);
+        Ok(Str(r))
+    }
+
+    /// A new append buffer holding `a` then `b`, with about twice their length as
+    /// capacity, and an append rope over it.
+    fn start_buffer(&mut self, a: Str, b: Str, len: u32, two_byte: bool) -> Result<Str, HeapError> {
+        let cap = len.saturating_mul(2).clamp(APPEND_MIN_CAP, MAX_LEN);
+        let buf = match self.alloc_flat(cap, two_byte) {
+            Ok(buf) => buf,
+            // No room for the slack: an exact buffer still works (it regrows later).
+            Err(HeapError::OutOfMemory) => self.alloc_flat(len, two_byte)?,
+            Err(e) => return Err(e),
+        };
+        let mut leaves = Vec::new();
+        self.collect_leaves(a, &mut leaves);
+        self.collect_leaves(b, &mut leaves);
+        self.write_leaves(&leaves, buf, 0);
+        self.arena_mut().set(buf, Str8::LEN, len);
+        self.set_cell_flags(buf, flags::STR_APPEND_BUF);
+        self.new_append_rope(buf, len)
+    }
+
+    /// Whether `a + b` looks like a step of `s += piece` in a loop: `a` is already an
+    /// append rope, or a concatenation rope whose right part is short, and `b` is not
+    /// longer than `a`. Such chains get a buffer (D1610); other concatenations stay O(1)
+    /// ropes.
+    fn appending(&self, a: Str, la: u32, lb: u32) -> bool {
+        if lb > la || self.cell_kind(a.0) != CellKind::Rope {
+            return false;
+        }
+        let fl = self.cell_flags(a.0);
+        if fl & flags::ROPE_APPEND != 0 {
+            return true;
+        }
+        fl & flags::ROPE_FLATTENED == 0
+            && self.str_len(Str(self.arena().get(a.0, Rope::RIGHT).0)) <= 2 * ROPE_MIN_LEN
+    }
+
     /// Returns the flat form of `s`. A rope is copied into a new flat cell once and then
-    /// redirected to it; later calls return that cell.
+    /// redirected to it; later calls return that cell. An append rope that covers its
+    /// whole buffer hands out the buffer itself, frozen first (from then on it may be
+    /// referenced directly, so it is never written again); a shorter one is copied.
     pub fn flatten(&mut self, s: Str) -> Result<Str, HeapError> {
         let s = self.resolve_str(s);
         if self.cell_kind(s.0) != CellKind::Rope {
@@ -450,17 +638,29 @@ impl Heap {
         }
         let len = self.str_len(s);
         let two_byte = self.str_is_two_byte(s);
-        let mut leaves = Vec::new();
-        self.collect_leaves(s, &mut leaves);
-        let dst = self.alloc_flat(len, two_byte)?;
-        self.write_leaves(&leaves, dst);
+        let dst = match self.append_rope_buffer(s) {
+            Some(buf) if self.str_len(Str(buf)) == len => {
+                let f = self.cell_flags(buf);
+                self.set_cell_flags(buf, f & !flags::STR_APPEND_BUF);
+                buf
+            }
+            _ => {
+                let mut leaves = Vec::new();
+                self.collect_leaves(s, &mut leaves);
+                let dst = self.alloc_flat(len, two_byte)?;
+                self.write_leaves(&leaves, dst, 0);
+                dst
+            }
+        };
         let hash = self.arena().get(s.0, Rope::HASH);
         let a = self.arena_mut();
-        a.set(dst, Str8::HASH, hash);
+        if a.get(dst, Str8::HASH) == 0 {
+            a.set(dst, Str8::HASH, hash);
+        }
         a.set(s.0, Rope::LEFT, Ref(dst));
         a.set(s.0, Rope::RIGHT, Ref::NULL);
         let f = self.cell_flags(s.0);
-        self.set_cell_flags(s.0, f | flags::ROPE_FLATTENED);
+        self.set_cell_flags(s.0, (f & !flags::ROPE_APPEND) | flags::ROPE_FLATTENED);
         Ok(Str(dst))
     }
 
@@ -486,8 +686,24 @@ impl Heap {
             self.collect_leaves(a, &mut leaves);
             self.collect_leaves(b, &mut leaves);
             let dst = self.alloc_flat(len, two_byte)?;
-            self.write_leaves(&leaves, dst);
+            self.write_leaves(&leaves, dst, 0);
             return Ok(Str(dst));
+        }
+        // In place (D1610): `a` ends exactly where its buffer's used part ends (no other
+        // string sees the units past it), the buffer is not frozen, and `b` fits in room
+        // and width.
+        if let Some(buf) = self.append_rope_buffer(a)
+            && self.cell_flags(buf) & flags::STR_APPEND_BUF != 0
+            && self.str_len(Str(buf)) == la
+            && len <= self.buffer_capacity(buf)
+            && (self.cell_kind(buf) == CellKind::Str16 || !two_byte)
+        {
+            self.append_into(buf, la, b);
+            self.arena_mut().set(buf, Str8::LEN, len);
+            return self.new_append_rope(buf, len);
+        }
+        if self.appending(a, la, lb) {
+            return self.start_buffer(a, b, len, two_byte);
         }
         let r = self.alloc_cell(CellKind::Rope, Rope::LAYOUT.min_size)?;
         let ar = self.arena_mut();
