@@ -31,7 +31,7 @@ impl Exec<'_> {
         let Some(o) = self.get(base).as_object() else {
             return false;
         };
-        if self.heap.object_class(o) != ObjectClass::Function {
+        if !self.is_class(o, ObjectClass::Function) {
             return false;
         }
         let t = self.template_of(o);
@@ -66,7 +66,7 @@ impl Exec<'_> {
         let bad = |msg: String| Err(Fault::error(ErrorKind::InternalError, msg));
         let Some(o) = f
             .as_object()
-            .filter(|&o| self.heap.object_class(o) == ObjectClass::Function)
+            .filter(|&o| self.is_class(o, ObjectClass::Function))
         else {
             return bad(String::from("%MarkFast: not a function"));
         };

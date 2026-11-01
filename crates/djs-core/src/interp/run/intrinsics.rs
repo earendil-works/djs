@@ -448,10 +448,14 @@ fn decline_oom<T>(r: Result<T, Fault>, decline: T) -> Result<T, Fault> {
 }
 
 pub(super) fn bad_argument<T>(name: &str) -> Result<T, Fault> {
-    Err(Fault::error(
-        ErrorKind::InternalError,
-        format!("bad argument to %{name}"),
-    ))
+    Err(bad_argument_fault(name))
+}
+
+/// Out of line: the `format!` of 136 sites (0107).
+#[cold]
+#[inline(never)]
+fn bad_argument_fault(name: &str) -> Fault {
+    Fault::error(ErrorKind::InternalError, format!("bad argument to %{name}"))
 }
 
 impl Exec<'_> {
@@ -691,24 +695,27 @@ impl Exec<'_> {
                     Some(crate::heap::StrView::Latin1(b)) => b,
                     _ => b"",
                 };
-                let atom = match name {
-                    b"iterator" => atoms::SYM_ITERATOR,
-                    b"asyncIterator" => atoms::SYM_ASYNC_ITERATOR,
-                    b"hasInstance" => atoms::SYM_HAS_INSTANCE,
-                    b"toPrimitive" => atoms::SYM_TO_PRIMITIVE,
-                    b"toStringTag" => atoms::SYM_TO_STRING_TAG,
-                    b"species" => atoms::SYM_SPECIES,
-                    b"isConcatSpreadable" => atoms::SYM_IS_CONCAT_SPREADABLE,
-                    b"unscopables" => atoms::SYM_UNSCOPABLES,
-                    b"match" => atoms::SYM_MATCH,
-                    b"matchAll" => atoms::SYM_MATCH_ALL,
-                    b"replace" => atoms::SYM_REPLACE,
-                    b"search" => atoms::SYM_SEARCH,
-                    b"split" => atoms::SYM_SPLIT,
-                    b"dispose" => atoms::SYM_DISPOSE,
-                    b"asyncDispose" => atoms::SYM_ASYNC_DISPOSE,
-                    b"metadata" => atoms::SYM_METADATA,
-                    _ => return bad_argument(info.name),
+                // A table, not a `match` on byte strings (that compiled to 1.7 KB, 0107).
+                const NAMES: [(&[u8], crate::heap::atom::Atom); 16] = [
+                    (b"iterator", atoms::SYM_ITERATOR),
+                    (b"asyncIterator", atoms::SYM_ASYNC_ITERATOR),
+                    (b"hasInstance", atoms::SYM_HAS_INSTANCE),
+                    (b"toPrimitive", atoms::SYM_TO_PRIMITIVE),
+                    (b"toStringTag", atoms::SYM_TO_STRING_TAG),
+                    (b"species", atoms::SYM_SPECIES),
+                    (b"isConcatSpreadable", atoms::SYM_IS_CONCAT_SPREADABLE),
+                    (b"unscopables", atoms::SYM_UNSCOPABLES),
+                    (b"match", atoms::SYM_MATCH),
+                    (b"matchAll", atoms::SYM_MATCH_ALL),
+                    (b"replace", atoms::SYM_REPLACE),
+                    (b"search", atoms::SYM_SEARCH),
+                    (b"split", atoms::SYM_SPLIT),
+                    (b"dispose", atoms::SYM_DISPOSE),
+                    (b"asyncDispose", atoms::SYM_ASYNC_DISPOSE),
+                    (b"metadata", atoms::SYM_METADATA),
+                ];
+                let Some(&(_, atom)) = NAMES.iter().find(|(n, _)| *n == name) else {
+                    return bad_argument(info.name);
                 };
                 Value::symbol(self.heap.atom_symbol(atom).expect("well-known symbol"))
             }

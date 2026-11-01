@@ -56,16 +56,6 @@ pub mod prof {
     pub fn inc(a: &AtomicU64, n: u64) { if on() { a.fetch_add(n, Relaxed); } }
     pub fn reset() { ENABLED.store(true, Relaxed); }
     #[inline(always)]
-    pub(crate) fn kind(ex: &super::Exec<'_>) -> usize {
-        if !on() || ex.pc >= ex.code_len { return 2; }
-        use crate::heap::cells::FuncTemplate;
-        let script: crate::heap::Ref = ex.heap.arena().get(ex.template, FuncTemplate::SCRIPT);
-        let prelude = super::intrinsic(ex.heap, super::Intrinsic::PreludeScript).as_internal();
-        let a: u32 = ex.heap.arena().get(ex.template, FuncTemplate::NAME);
-        FN_OPS[(a & 0xffff) as usize].fetch_add(1, Relaxed);
-        (prelude == script.get()) as usize
-    }
-    #[inline(always)]
     pub(crate) fn count(k: usize, fast: bool, b: u8) {
         if k > 1 { return; }
         if fast { FAST[k][b as usize].fetch_add(1, Relaxed); } else { SLOW[k][b as usize].fetch_add(1, Relaxed); }
@@ -133,13 +123,12 @@ pub mod prof {
 
 R = "crates/djs-core/src/interp/run.rs"
 patch(R, "pub(crate) struct Exec<'h> {", PROF + "\npub(crate) struct Exec<'h> {")
-patch(R, "            if self.fast_step() || self.fast_more() {\n                continue;\n            }",
-      "            let prof_k = prof::kind(self);\n"
-      "            let prof_b = if prof_k < 2 { self.byte(self.pc) } else { 0 };\n"
-      "            if self.fast_step() || self.fast_more() {\n                prof::count(prof_k, true, prof_b);\n                continue;\n            }\n"
-      "            prof::count(prof_k, false, prof_b);")
-patch(R, "    fn push_frame(&mut self, t: u32, base: u32, argc: u32, cont: Continuation, ret_pc: u32) {\n",
-      "    fn push_frame(&mut self, t: u32, base: u32, argc: u32, cont: Continuation, ret_pc: u32) {\n        prof::inc(&prof::FRAMES, 1);\n        prof::fn_call(self.heap, t);\n")
+# Bytecodes `run_hot` declined (its own ops are not counted, 0107): by opcode.
+patch(R, "    pub(super) fn step_once(&mut self) -> Option<Status> {\n",
+      "    pub(super) fn step_once(&mut self) -> Option<Status> {\n"
+      "        if self.pc < self.code_len { let b = self.byte(self.pc); prof::count(0, false, b); }\n")
+patch(R, "        let (params, locals) = (th.params, th.locals);\n",
+      "        let (params, locals) = (th.params, th.locals);\n        prof::inc(&prof::FRAMES, 1);\n")
 N = "crates/djs-core/src/interp/run/native.rs"
 patch(N, "        let idx = self.heap.arena().get(t, FuncTemplate::NATIVE);\n        let Some(nf)",
       "        let idx = self.heap.arena().get(t, FuncTemplate::NATIVE);\n        super::prof::inc(&super::prof::NFRAMES, 1);\n        super::prof::fn_call(self.heap, t);\n        let Some(nf)")

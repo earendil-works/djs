@@ -17,9 +17,6 @@ const I_ARRAY_ITERATOR_TARGET: u16 = iid("ArrayIteratorTarget");
 const I_ARRAY_PUSH_DENSE: u16 = iid("ArrayPushDense");
 const I_ARRAY_SPECIES_CREATE: u16 = iid("ArraySpeciesCreate");
 const I_AS_BOOL: u16 = iid("AsBool");
-const I_AS_FN: u16 = iid("AsFn");
-const I_AS_NUMBER: u16 = iid("AsNumber");
-const I_AS_STR: u16 = iid("AsStr");
 const I_ASYNC_GENERATOR_STATE: u16 = iid("AsyncGeneratorState");
 const I_ASYNC_GENERATOR_STEP: u16 = iid("AsyncGeneratorStep");
 const I_CALL: u16 = iid("Call");
@@ -999,7 +996,7 @@ fn native_SortList(ex: &mut Exec<'_>) -> Step {
                 if { let a0 = ex.n_slot(19); a0.is_number() } { st = 32; continue; } else { st = 33; continue; }
             }
             32 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(19); ex.n_leaf(I_AS_NUMBER, &[a0])? })); ex.n_set_slot(21, v);
+                let v = num({ let a0 = ex.n_slot(19); ex.n_as_number(a0)? }); ex.n_set_slot(21, v);
                 st = 34; continue;
             }
             33 => {
@@ -1677,13 +1674,13 @@ fn native_SerializeJSONProperty(ex: &mut Exec<'_>) -> Step {
                 if { let a0 = ex.n_slot(0); a0.as_string().is_some() } { st = 32; continue; } else { st = 33; continue; }
             }
             32 => {
-                let v = { let a0 = { let a0 = ex.n_slot(0); ex.n_leaf(I_AS_STR, &[a0])? }; ex.n_leaf(I_JSON_QUOTE, &[a0])? }; return ex.n_ret(v);
+                let v = { let a0 = { let a0 = ex.n_slot(0); ex.n_as_str(a0)? }; ex.n_leaf(I_JSON_QUOTE, &[a0])? }; return ex.n_ret(v);
             }
             33 => {
                 if { let a0 = ex.n_slot(0); a0.is_number() } { st = 34; continue; } else { st = 35; continue; }
             }
             34 => {
-                let rv = f64_of({ let a0 = ex.n_slot(0); ex.n_leaf(I_AS_NUMBER, &[a0])? }); l5f = rv; ex.n_set_slot(5, num(rv));
+                let rv = { let a0 = ex.n_slot(0); ex.n_as_number(a0)? }; l5f = rv; ex.n_set_slot(5, num(rv));
                 let v = (if ((l5f - l5f) == 0.0_f64) { { let a0 = ex.n_slot(0); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? } } else { ex.n_str("null")? }); return ex.n_ret(v);
             }
             35 => {
@@ -1870,7 +1867,7 @@ fn native_JSONJoin(ex: &mut Exec<'_>) -> Step {
             }
             9 => {
                 let r = ex.n_result(); ex.n_set_slot(3, r);
-                let v = { let a0 = ex.n_slot(1); let a1 = { let a0 = ex.n_slot(3); ex.n_leaf(I_AS_STR, &[a0])? }; ex.n_concat_gc(a0, a1)? }; ex.n_set_slot(1, v);
+                let v = { let a0 = ex.n_slot(1); let a1 = { let a0 = ex.n_slot(3); ex.n_as_str(a0)? }; ex.n_concat_gc(a0, a1)? }; ex.n_set_slot(1, v);
                 st = 5; continue;
             }
             _ => return Err(bad_state()),
@@ -1943,7 +1940,7 @@ fn native_SerializeJSONObject(ex: &mut Exec<'_>) -> Step {
             }
             10 => {
                 let r = ex.n_result(); ex.n_set_slot(3, r);
-                let v = { let a0 = ex.n_slot(3); ex.n_leaf(I_AS_STR, &[a0])? }; ex.n_set_slot(8, v);
+                let v = { let a0 = ex.n_slot(3); ex.n_as_str(a0)? }; ex.n_set_slot(8, v);
                 // resume point: SerializeJSONProperty
                 match { let a0 = ex.n_arg(0); let a1 = ex.n_arg(1); let a2 = ex.n_arg(2); let a3 = ex.n_arg(3); let a4 = ex.n_slot(0); let a5 = ex.n_slot(8); let a6 = ex.n_arg(5); ex.n_call(I_SERIALIZE_J_S_O_N_PROPERTY, &[a0, a1, a2, a3, a4, a5, a6], 11) }? { Flow::Inline => { st = 11; continue } Flow::Leave(s) => return Ok(s) }
             }
@@ -1954,7 +1951,7 @@ fn native_SerializeJSONObject(ex: &mut Exec<'_>) -> Step {
             12 => {
                 let v = (if { let a0 = ex.n_arg(2); let a1 = ex.n_str("")?; ex.n_strict_eq(a0, a1) } { { let a0 = { let a0 = ex.n_slot(8); ex.n_leaf(I_JSON_QUOTE, &[a0])? }; let a1 = ex.n_str(":")?; ex.n_concat(a0, a1)? } } else { { let a0 = { let a0 = ex.n_slot(8); ex.n_leaf(I_JSON_QUOTE, &[a0])? }; let a1 = ex.n_str(": ")?; ex.n_concat(a0, a1)? } }); ex.n_set_slot(10, v);
                 // resume point: CreateDataPropertyOrThrow
-                match { let a0 = ex.n_slot(5); let a1 = ex.n_slot(6); let a2 = { let a0 = ex.n_slot(10); let a1 = { let a0 = ex.n_slot(9); ex.n_leaf(I_AS_STR, &[a0])? }; ex.n_concat(a0, a1)? }; ex.n_create_data_property_or_throw(&[a0, a1, a2], 13) }? { Flow::Inline => { st = 13; continue } Flow::Leave(s) => return Ok(s) }
+                match { let a0 = ex.n_slot(5); let a1 = ex.n_slot(6); let a2 = { let a0 = ex.n_slot(10); let a1 = { let a0 = ex.n_slot(9); ex.n_as_str(a0)? }; ex.n_concat(a0, a1)? }; ex.n_create_data_property_or_throw(&[a0, a1, a2], 13) }? { Flow::Inline => { st = 13; continue } Flow::Leave(s) => return Ok(s) }
             }
             13 => {
                 ex.n_result();
@@ -2017,7 +2014,7 @@ fn native_SerializeJSONArray(ex: &mut Exec<'_>) -> Step {
             6 => {
                 let r = ex.n_result(); ex.n_set_slot(4, r);
                 // resume point: CreateDataPropertyOrThrow
-                match { let a0 = ex.n_slot(2); let a1 = ex.n_slot(3); let a2 = (if ex.n_slot(4).is_undefined() { ex.n_str("null")? } else { { let a0 = ex.n_slot(4); ex.n_leaf(I_AS_STR, &[a0])? } }); ex.n_create_data_property_or_throw(&[a0, a1, a2], 7) }? { Flow::Inline => { st = 7; continue } Flow::Leave(s) => return Ok(s) }
+                match { let a0 = ex.n_slot(2); let a1 = ex.n_slot(3); let a2 = (if ex.n_slot(4).is_undefined() { ex.n_str("null")? } else { { let a0 = ex.n_slot(4); ex.n_as_str(a0)? } }); ex.n_create_data_property_or_throw(&[a0, a1, a2], 7) }? { Flow::Inline => { st = 7; continue } Flow::Leave(s) => return Ok(s) }
             }
             7 => {
                 ex.n_result();
@@ -2606,14 +2603,14 @@ fn leaf_RequireCallable(ex: &mut Exec<'_>, mut l_f: Value) -> Result<Value, Faul
     if (!{ let a0 = l_f; ex.n_is_callable(a0) }) {
         return Err(Fault::throw({ let a0 = ex.n_str("not a function")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }));
     }
-    return Ok({ let a0 = l_f; ex.n_leaf(I_AS_FN, &[a0])? });
+    return Ok({ let a0 = l_f; ex.n_as_fn(a0)? });
     #[allow(unreachable_code)]
     Err(bad_state())
 }
 
 // builtins/typedarray.ts:64 (leaf)
 fn leaf_TALength(ex: &mut Exec<'_>, mut l_o: Value) -> Result<f64, Fault> {
-    return Ok(f64_of({ let a0 = { let a0 = l_o; let a1 = Value::int(3); ex.n_leaf(I_TYPED_ARRAY_FIELD, &[a0, a1])? }; ex.n_leaf(I_AS_NUMBER, &[a0])? }));
+    return Ok({ let a0 = { let a0 = l_o; let a1 = Value::int(3); ex.n_leaf(I_TYPED_ARRAY_FIELD, &[a0, a1])? }; ex.n_as_number(a0)? });
     #[allow(unreachable_code)]
     Err(bad_state())
 }

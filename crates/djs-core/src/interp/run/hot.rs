@@ -120,6 +120,18 @@ pub(super) fn write_frame(
     fill(b, slot(hp + HEADER), locals, Value::UNDEFINED);
 }
 
+/// `vs` at `off`, with one range check.
+#[inline(always)]
+pub(super) fn write_values(b: &mut [u8], off: u32, vs: &[Value]) {
+    let o = off as usize;
+    let Some(s) = b.get_mut(o..o + 8 * vs.len()) else {
+        out_of_bounds()
+    };
+    for (c, v) in s.as_chunks_mut::<8>().0.iter_mut().zip(vs) {
+        *c = v.to_bits().to_le_bytes();
+    }
+}
+
 /// The fields of a function template a call reads (FLAGS .. CONSTS, in one read).
 pub(super) struct TemplateHead {
     pub flags: u32,
@@ -199,8 +211,12 @@ fn word(b: &[u8], ip: u32) -> Option<u64> {
 #[inline(always)]
 fn object_slot(b: &[u8], cell: u32, i: u32) -> u32 {
     let size = ld32(b, cell + Header::SIZE.offset);
-    let n = Object::LAYOUT.tail_capacity(size);
-    assert!(i < n, "slot {i} out of range");
+    // `i < tail_capacity(size)` without its division (a call in wasm, 0107): slot `i`
+    // ends inside the cell.
+    assert!(
+        Object::SLOTS.at(cell, i) + 8 <= cell + size,
+        "slot {i} out of range"
+    );
     Object::SLOTS.at(cell, i)
 }
 

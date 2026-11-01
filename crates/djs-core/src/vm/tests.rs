@@ -3526,6 +3526,17 @@ fn hot_loop_is_invisible() {
         function fib(n) { return n < 2 ? n : fib(n - 1) + fib(n - 2); } acc += fib(12);\n\
         acc += ps.map((p) => p.x).filter((x) => x & 1).length + [3, 1, 2].sort((a, b) => a - b)[0];\n\
         console.log(acc, arr.join(), 'abc' === 'ab' + 'c', !'');\n\
+        let cb = 0; const nums = []; for (let i = 0; i < 300; i++) nums.push((i * 37) % 101);\n\
+        nums.forEach((x, i) => { cb += x * (i & 3); });\n\
+        nums.forEach(function (x) { cb += this.k * x; }, { k: 2 });\n\
+        nums.forEach(function (x, i, a, extra) { if (extra === undefined && a === nums) cb++; });\n\
+        const words = nums.map((x) => 'w' + x).filter((w, i) => (i & 1) === 0);\n\
+        cb += words.length + nums.reduce((s, x) => s + x, 0) + (nums.find((x) => x > 99) || 0);\n\
+        const sorted = nums.slice().sort((a, b) => { const g = [a, b]; return g[0] - g[1]; });\n\
+        cb += sorted[0] + sorted[299] + nums.some((x) => x === 100) + nums.every((x) => x >= 0);\n\
+        try { nums.forEach((x) => { if (x === 50) throw new Error('stop ' + x); }); } catch (e) { cb += e.message.length; }\n\
+        cb += [[1, 2], [3]].map((p) => p.map((x) => x * cb % 7).join('')).join('|').length;\n\
+        console.log(cb, words[3], sorted[150]);\n\
         console.log(sum, o.a, xs.length, s);\n";
     const HOT: u32 = crate::interp::run::HOT_BACKEDGES;
     let cases: &[(u64, bool, u32, bool)] = &[

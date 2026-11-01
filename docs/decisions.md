@@ -4711,3 +4711,45 @@ onto each listed object are sorted into it, in place. A key that is not listed k
 source order after the listed ones, so a new builtin lands at the end until someone adds
 it to the table. Prototype objects keep source order, with `constructor` first; qjs
 installs it last. That is a follow-up.
+## D2060: Natives call plain closures by writing the frame in place
+date: 2026-11-03 · by: perf · issue: 0107
+`%Call(f, this, ..)` from a native builtin (`n_call`, the callback call of forEach, map,
+sort and the rest) used to take the general route:
+- `n_call_once` pushed the arguments one by one;
+- `call_intrinsic` dispatched;
+- `Exec::call` re-read the callee and the template;
+- the frame was then written.
+
+For a plain closure (class Function, none of the FAST, NATIVE or SLOPPY_THIS flags),
+`Exec::n_call_closure` now does all of it in one step:
+- it reads the template once (`hot::template_head`);
+- it makes the same two stack checks (`n_call_once`'s, then the frame top), so that the
+  stack grows exactly as before;
+- it writes the arguments as one block and the frame with `push_frame_head`;
+- it charges the same `CALL_FUEL` and leaves the native, as before.
+
+Heap images, fuel and stops are unchanged. The path is off when the hot loop is off, so
+`hot_loop_is_invisible` (extended with callback natives: forEach with `this`, padded
+arguments, map/filter/reduce/find/some/every, sort with an allocating comparator, a
+callback that throws, nested natives) compares the two paths.
+
+The return already goes straight back: `run_hot`'s return arm enters a native caller
+with `code_len` 0, so the next round runs `native_step`. I measured a direct
+`native_step` call in `run_hot`'s decline arm once more: it costs ~2% on tight loops in
+wasm, as in 0100, so I left it out.
+
+Also in 0107:
+- `CellLayout::tail_capacity` is `#[inline]`. In wasm it was a call plus a runtime
+  division in every `Heap::object_slot`; with a constant layout the division is a shift.
+  This is the broadest win: tight −2.8%, call1 −3.4%.
+- `hot.rs`'s `object_slot` checks the slot range without the division.
+- The native fast paths test the class word in place (`Exec::is_class`) instead of the
+  out-of-line `object_class`. Making `object_class` itself `#[inline]` cost 8.8 KB for
+  0.5–3%, so it stays out of line.
+- `AsNumber`/`AsFn`/`AsStr` have inline forms in natives (`n_as_number` …). Sort's
+  comparator result went through `call_intrinsic` on every comparison.
+- `type_error` and `bad_argument` build their faults out of line, and the well-known
+  symbol names are a table. Together this is −1.3 KB.
+
+Tried and dropped: reading a resume call's argument Values with one `n_srcs([..])` call
+instead of one `n_slot` call per argument. It was 13% slower and 1 KB larger.

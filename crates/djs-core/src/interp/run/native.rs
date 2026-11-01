@@ -230,6 +230,16 @@ impl Exec<'_> {
         }
     }
 
+    /// Whether `o` is of class `c`: the class word compared in place (`object_class`
+    /// is a call in wasm and checks the range, 0107).
+    #[inline(always)]
+    pub(super) fn is_class(&self, o: crate::value::Obj, c: ObjectClass) -> bool {
+        self.heap
+            .arena()
+            .get(o.offset(), crate::heap::cells::Object::CLASS)
+            == c as u32
+    }
+
     /// Runs the current native frame from its state until it calls, returns, throws or
     /// reaches a back-edge without fuel. Its faults are thrown here, in its own frame.
     #[inline(never)]
@@ -251,7 +261,7 @@ impl Exec<'_> {
         let bad = |msg: String| Err(Fault::error(ErrorKind::InternalError, msg));
         let Some(o) = f
             .as_object()
-            .filter(|&o| self.heap.object_class(o) == ObjectClass::Function)
+            .filter(|&o| self.is_class(o, ObjectClass::Function))
         else {
             return bad(String::from("%MarkNative: not a function"));
         };
@@ -454,10 +464,48 @@ impl Exec<'_> {
     /// A reentrant intrinsic or an `@intrinsic` builtin through `call_intrinsic`,
     /// resuming at state `next`. The intrinsics D1700 retries are retried here too.
     pub(crate) fn n_call(&mut self, id: u16, args: &[Value], next: u32) -> Result<Flow, Fault> {
+        // (Off with the hot loop: `hot_loop_is_invisible` compares the two paths.)
+        if id == const { iid("Call") }
+            && args.len() >= 2
+            && self.opts.hot_loop
+            && let Some(r) = self.n_call_closure(args, next)
+        {
+            return r;
+        }
         if super::retry::retries(id) {
             return self.n_retry(args, |ex, a| ex.n_call_once(id, a, next));
         }
         self.n_call_once(id, args, next)
+    }
+
+    /// `%Call(f, this, ..)` of a plain closure (no FAST/NATIVE/SLOPPY_THIS flag): its
+    /// frame is written in place, arguments and all, as `Exec::call` would after the
+    /// pushes of `n_call_once` (D2060). `None`: not such a closure, nothing changed.
+    fn n_call_closure(&mut self, args: &[Value], next: u32) -> Option<Result<Flow, Fault>> {
+        let f = args[0].as_object()?;
+        if !self.is_class(f, ObjectClass::Function) {
+            return None;
+        }
+        let t = self.template_of(f);
+        let th = super::hot::template_head(self.heap.arena().bytes(), t);
+        if th.flags & self.slow_call_flags != 0 {
+            return None;
+        }
+        self.fuel -= CALL_FUEL;
+        let base = self.sp;
+        let argc = args.len() as u32 - 2;
+        let top = base + 2 + argc.max(th.params) + HEADER + th.locals + th.stack;
+        // The two checks of `n_call_once` + `Exec::call`, so that the stack grows the same.
+        if let Err(e) = self
+            .ensure(base + args.len() as u32 + 2)
+            .and_then(|_| self.ensure(top))
+        {
+            return Some(Err(e));
+        }
+        let vals = crate::heap::cells::ValueArray::VALUES.at(self.stack, 0);
+        super::hot::write_values(self.heap.arena_mut().hot_bytes(), vals + 8 * base, args);
+        self.push_frame_head(t, &th, base, argc, Continuation::PushResult, next);
+        Some(Ok(Flow::Leave(None)))
     }
 
     fn n_call_once(&mut self, id: u16, args: &[Value], next: u32) -> Result<Flow, Fault> {
@@ -522,6 +570,39 @@ impl Exec<'_> {
         conv::strict_equals(self.heap, a, b)
     }
 
+    /// `%AsNumber` (as `call_intrinsic`; 0107), as the f64 its callers take.
+    #[cfg_attr(target_arch = "wasm32", inline(never))]
+    #[cfg_attr(not(target_arch = "wasm32"), inline(always))]
+    pub(crate) fn n_as_number(&self, v: Value) -> Result<f64, Fault> {
+        if let Some(n) = v.as_number() {
+            Ok(n)
+        } else {
+            intrinsics::bad_argument("AsNumber")
+        }
+    }
+
+    /// `%AsFn` (as `call_intrinsic`; 0107).
+    #[cfg_attr(target_arch = "wasm32", inline(never))]
+    #[cfg_attr(not(target_arch = "wasm32"), inline(always))]
+    pub(crate) fn n_as_fn(&self, v: Value) -> Result<Value, Fault> {
+        if self.is_callable(v) {
+            Ok(v)
+        } else {
+            intrinsics::bad_argument("AsFn")
+        }
+    }
+
+    /// `%AsStr` (as `call_intrinsic`; 0107).
+    #[cfg_attr(target_arch = "wasm32", inline(never))]
+    #[cfg_attr(not(target_arch = "wasm32"), inline(always))]
+    pub(crate) fn n_as_str(&self, v: Value) -> Result<Value, Fault> {
+        if v.as_string().is_some() {
+            Ok(v)
+        } else {
+            intrinsics::bad_argument("AsStr")
+        }
+    }
+
     /// `%AsObj`.
     #[cfg_attr(target_arch = "wasm32", inline(never))]
     #[cfg_attr(not(target_arch = "wasm32"), inline(always))]
@@ -580,7 +661,7 @@ impl Exec<'_> {
     pub(crate) fn n_get(&mut self, args: &[Value; 2], next: u32) -> Result<Flow, Fault> {
         if let Some(o) = args[0]
             .as_object()
-            .filter(|&o| self.heap.object_class(o) == ObjectClass::Array)
+            .filter(|&o| self.is_class(o, ObjectClass::Array))
             && let Some(i) = index_of(args[1])
             && let Some(v) = self.heap.get_element_fast(o, i)
         {
@@ -593,7 +674,7 @@ impl Exec<'_> {
     pub(crate) fn n_has_property(&mut self, args: &[Value; 2], next: u32) -> Result<Flow, Fault> {
         if let Some(o) = args[0]
             .as_object()
-            .filter(|&o| self.heap.object_class(o) == ObjectClass::Array)
+            .filter(|&o| self.is_class(o, ObjectClass::Array))
             && let Some(i) = index_of(args[1])
             && self.heap.get_element_fast(o, i).is_some()
         {
@@ -615,7 +696,7 @@ impl Exec<'_> {
     fn n_cdp_once(&mut self, args: &[Value], next: u32) -> Result<Flow, Fault> {
         if let Some(o) = args[0]
             .as_object()
-            .filter(|&o| self.heap.object_class(o) == ObjectClass::Array)
+            .filter(|&o| self.is_class(o, ObjectClass::Array))
             && let Some(i) = index_of(args[1])
             && self.heap.set_element_fast(o, i, args[2])?
         {
@@ -633,7 +714,7 @@ impl Exec<'_> {
     fn n_set_once(&mut self, args: &[Value], next: u32) -> Result<Flow, Fault> {
         if let Some(o) = args[0]
             .as_object()
-            .filter(|&o| self.heap.object_class(o) == ObjectClass::Array)
+            .filter(|&o| self.is_class(o, ObjectClass::Array))
         {
             if let Some(i) = index_of(args[1]) {
                 if self.heap.set_element_fast(o, i, args[2])? {
@@ -674,7 +755,7 @@ impl Exec<'_> {
     ) -> Result<Flow, Fault> {
         if let Some(o) = args[0]
             .as_object()
-            .filter(|&o| self.heap.object_class(o) == ObjectClass::Array)
+            .filter(|&o| self.is_class(o, ObjectClass::Array))
         {
             let n = self.heap.array_length(o);
             return self.n_inline(u32_value(n), next);

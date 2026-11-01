@@ -231,6 +231,9 @@ fn inline_leaf(name: &str) -> Option<&'static str> {
         "IsCallable" => "ex.n_is_callable({0})",
         "ToBoolean" => "ex.n_to_boolean({0})",
         "AsObj" => "ex.n_as_obj({0})?",
+        "AsNumber" => "ex.n_as_number({0})?",
+        "AsFn" => "ex.n_as_fn({0})?",
+        "AsStr" => "ex.n_as_str({0})?",
         "ToObject" => "ex.n_to_object({0})?",
         _ => return None,
     })

@@ -65,7 +65,15 @@ impl From<HeapError> for Fault {
 }
 
 pub(crate) fn type_error<T>(msg: &str) -> Result<T, Fault> {
-    Err(Fault::error(ErrorKind::TypeError, String::from(msg)))
+    Err(type_error_fault(msg))
+}
+
+/// Out of line: `String::from` inlined at each of the ~90 `type_error` sites was a
+/// copy loop and an allocation call per site (0107).
+#[cold]
+#[inline(never)]
+fn type_error_fault(msg: &str) -> Fault {
+    Fault::error(ErrorKind::TypeError, String::from(msg))
 }
 
 fn to_primitive_unsupported<T>() -> Result<T, Fault> {

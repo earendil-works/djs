@@ -179,7 +179,10 @@ impl CellLayout {
         self
     }
 
-    /// Number of tail elements a cell of `size` bytes can hold.
+    /// Number of tail elements a cell of `size` bytes can hold. Inline: with a constant
+    /// layout the division becomes a shift; out of line in wasm it was a call and a
+    /// division in every `object_slot` (0107).
+    #[inline]
     pub const fn tail_capacity(&self, size: u32) -> u32 {
         match &self.tail {
             Some(t) if size > t.offset => (size - t.offset) / t.elem.size,
