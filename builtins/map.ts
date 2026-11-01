@@ -148,6 +148,46 @@ function MapPrototypeGet(this: Value, key: Value): Value {
   return CollectionGet(ThisMap(this), key);
 }
 
+/** CanonicalizeKeyedCollectionKey ( key ), 24.5.1: -0 becomes +0. */
+function CanonicalizeKeyedCollectionKey(key: Value): Value {
+  if (IsNumber(key) && AsNumber(key) === 0) {
+    return 0;
+  }
+  return key;
+}
+
+/**
+ * Map.prototype.getOrInsert ( key, value ) (upsert).
+ * @builtin Map.prototype.getOrInsert
+ */
+function MapPrototypeGetOrInsert(this: Value, key: Value, value: Value): Value {
+  const m: Obj = ThisMap(this);
+  if (CollectionHas(m, key)) {
+    return CollectionGet(m, key);
+  }
+  CollectionSet(m, key, value);
+  return value;
+}
+
+/**
+ * Map.prototype.getOrInsertComputed ( key, callbackfn ) (upsert): the callback may
+ * insert the key itself; its result overwrites that entry.
+ * @builtin Map.prototype.getOrInsertComputed
+ */
+function MapPrototypeGetOrInsertComputed(this: Value, key: Value, callbackfn: Value): Value {
+  const m: Obj = ThisMap(this);
+  if (!IsCallable(callbackfn)) {
+    throw NewTypeError("not a function");
+  }
+  const k: Value = CanonicalizeKeyedCollectionKey(key);
+  if (CollectionHas(m, k)) {
+    return CollectionGet(m, k);
+  }
+  const value: Value = Call(callbackfn, undefined, k);
+  CollectionSet(m, k, value);
+  return value;
+}
+
 /**
  * Map.prototype.has ( key ), 24.1.3.7.
  * @builtin Map.prototype.has

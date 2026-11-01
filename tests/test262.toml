@@ -103,7 +103,7 @@ description = "Phases P3 to P5 of ARCH.md: on the roadmap, not in the current mi
 # Moved to active in 0045: built-ins/Proxy and the features Proxy, proxy-missing-checks.
 # Moved to active in 0051: built-ins/Iterator and the features iterator-helpers,
 # iterator-sequencing, iterator-chunking, iterator-includes, Iterator.prototype.join,
-# joint-iteration.
+# joint-iteration, upsert.
 paths = [
   "built-ins/WeakRef",                        # GC-observable
   "built-ins/FinalizationRegistry",           # GC-observable
@@ -115,7 +115,6 @@ features = [
   "immutable-arraybuffer",      # binary data
   "Array.fromAsync",            # async iteration
   "Symbol.unscopables",         # Symbol-heavy (mostly `with`)
-  "upsert",                     # Map.prototype.getOrInsert
   "WeakRef",                    # GC-observable
   "FinalizationRegistry",       # GC-observable
   "decorators",                 # decorators come after P5

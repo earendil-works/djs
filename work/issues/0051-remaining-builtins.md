@@ -56,7 +56,11 @@ exists (generators/iterators from 0029/0037/0042, the ephemeron GC from 0038):
   includes, join, Iterator.zip/zipKeyed (kinds 7-9 of D1510). x-iter 649/655 (the 6
   left are Iterator.prototype[Symbol.dispose], with the disposables). Promoted
   iterator-chunking, iterator-includes, Iterator.prototype.join, joint-iteration:
-  active 34,283 → 34,503 tests, 34,099 passing (+220, no new failures).
+  active 34,283 → 34,503 tests, 34,099 passing (+220, no new failures). Merged
+  (main 1335b44).
+- Part 3, upsert: Map/WeakMap getOrInsert(Computed) in map.ts/weak.ts. WeakMap's
+  getOrInsertComputed checks the callback before the key (spec step 3/4, qjs too).
+  70/70; promoted: active 34,573 tests, 34,169 passing (+70).
 
 ## Follow-ups
 

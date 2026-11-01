@@ -81,6 +81,42 @@ function WeakMapPrototypeSet(this: Value, key: Value, value: Value): Value {
 }
 
 /**
+ * WeakMap.prototype.getOrInsert ( key, value ) (upsert).
+ * @builtin WeakMap.prototype.getOrInsert
+ */
+function WeakMapPrototypeGetOrInsert(this: Value, key: Value, value: Value): Value {
+  const m: Obj = ThisWeakMap(this);
+  if (!CanBeHeldWeakly(key)) {
+    throw NewTypeError("invalid value used as WeakMap key");
+  }
+  if (CollectionHas(m, key)) {
+    return CollectionGet(m, key);
+  }
+  CollectionSet(m, key, value);
+  return value;
+}
+
+/**
+ * WeakMap.prototype.getOrInsertComputed ( key, callbackfn ) (upsert).
+ * @builtin WeakMap.prototype.getOrInsertComputed
+ */
+function WeakMapPrototypeGetOrInsertComputed(this: Value, key: Value, callbackfn: Value): Value {
+  const m: Obj = ThisWeakMap(this);
+  if (!IsCallable(callbackfn)) {
+    throw NewTypeError("not a function");
+  }
+  if (!CanBeHeldWeakly(key)) {
+    throw NewTypeError("invalid value used as WeakMap key");
+  }
+  if (CollectionHas(m, key)) {
+    return CollectionGet(m, key);
+  }
+  const value: Value = Call(callbackfn, undefined, key);
+  CollectionSet(m, key, value);
+  return value;
+}
+
+/**
  * WeakMap.prototype [ %Symbol.toStringTag% ], 24.3.3.6.
  * @value WeakMap.prototype[Symbol.toStringTag]
  * @attributes configurable

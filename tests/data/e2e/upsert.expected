@@ -1,0 +1,12 @@
+one two [[1,"one"],[2,"two"]]
+30 30
+false true
+outer outer 5
+TypeError: not a function
+TypeError: Map object expected
+1 1 c
+TypeError: invalid value used as WeakMap key
+TypeError: not a function
+TypeError: not a function
+TypeError: WeakMap object expected
+2 getOrInsertComputed

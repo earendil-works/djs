@@ -1477,6 +1477,13 @@ MapPrototypeForEach: reentrant (Map.prototype.forEach)
 
 MapPrototypeGet: leaf (Map.prototype.get)
 
+CanonicalizeKeyedCollectionKey: leaf
+
+MapPrototypeGetOrInsert: leaf (Map.prototype.getOrInsert)
+
+MapPrototypeGetOrInsertComputed: reentrant (Map.prototype.getOrInsertComputed)
+  builtins/map.ts:186:24  Call (intrinsic)
+
 MapPrototypeHas: leaf (Map.prototype.has)
 
 MapPrototypeKeys: leaf (Map.prototype.keys)
@@ -3420,18 +3427,23 @@ WeakMapPrototypeHas: leaf (WeakMap.prototype.has)
 
 WeakMapPrototypeSet: leaf (WeakMap.prototype.set)
 
+WeakMapPrototypeGetOrInsert: leaf (WeakMap.prototype.getOrInsert)
+
+WeakMapPrototypeGetOrInsertComputed: reentrant (WeakMap.prototype.getOrInsertComputed)
+  builtins/weak.ts:114:24  Call (intrinsic)
+
 WeakMapPrototypeToStringTag: leaf (value WeakMap.prototype[Symbol.toStringTag])
 
 WeakSetConstructor: reentrant (constructor WeakSet)
-  builtins/weak.ts:100:40  GetPrototypeFromConstructor (builtin)
-  builtins/weak.ts:104:24  Get (intrinsic)
-  builtins/weak.ts:108:25  GetIterator (builtin)
-  builtins/weak.ts:109:23  Get (intrinsic)
-  builtins/weak.ts:111:25  IteratorNextResult (builtin)
-  builtins/weak.ts:112:19  Get (intrinsic)
-  builtins/weak.ts:115:30  Get (intrinsic)
-  builtins/weak.ts:117:7  Call (intrinsic)
-  builtins/weak.ts:119:7  IteratorCloseThrow (builtin)
+  builtins/weak.ts:136:40  GetPrototypeFromConstructor (builtin)
+  builtins/weak.ts:140:24  Get (intrinsic)
+  builtins/weak.ts:144:25  GetIterator (builtin)
+  builtins/weak.ts:145:23  Get (intrinsic)
+  builtins/weak.ts:147:25  IteratorNextResult (builtin)
+  builtins/weak.ts:148:19  Get (intrinsic)
+  builtins/weak.ts:151:30  Get (intrinsic)
+  builtins/weak.ts:153:7  Call (intrinsic)
+  builtins/weak.ts:155:7  IteratorCloseThrow (builtin)
 
 WeakSetPrototypeAdd: leaf (WeakSet.prototype.add)
 

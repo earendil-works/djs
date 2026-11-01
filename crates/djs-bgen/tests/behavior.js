@@ -1825,4 +1825,18 @@ same("Iterator.zip", Iterator.zip, (f) => f([], { mode: 1 }));
 same("Iterator.zip", Iterator.zip, (f) => f([], { mode: "longest", padding: 1 }));
 same("Iterator.zipKeyed", Iterator.zipKeyed, (f) => f(1));
 
+// upsert (0051).
+for (const [name, native, mk, key] of [
+  ["Map.prototype", Map.prototype, () => new Map([[1, "a"]]), 1],
+  ["WeakMap.prototype", WeakMap.prototype, () => new WeakMap(), {}],
+]) {
+  same(name + ".getOrInsert", native.getOrInsert, (f) => { const m = mk(); return [f.call(m, key, "x"), f.call(m, key, "y")]; });
+  same(name + ".getOrInsert", native.getOrInsert, (f) => f.call({}, key, 1));
+  same(name + ".getOrInsert", native.getOrInsert, (f) => f.call(mk(), 1n, 1));
+  same(name + ".getOrInsertComputed", native.getOrInsertComputed, (f, log) => { const m = mk(); return [f.call(m, key, (k) => { log.push("cb"); return "c"; }), f.call(m, key, () => "d")]; });
+  same(name + ".getOrInsertComputed", native.getOrInsertComputed, (f) => { const m = mk(); return f.call(m, key, (k) => { m.set(k, "in"); return "out"; }); });
+  same(name + ".getOrInsertComputed", native.getOrInsertComputed, (f) => f.call(mk(), 2, 1));
+  same(name + ".getOrInsertComputed", native.getOrInsertComputed, (f) => f.call(mk(), -0, (k) => Object.is(k, -0)));
+}
+
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));

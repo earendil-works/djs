@@ -4194,43 +4194,76 @@ function MapPrototypeGet(key) {
   return %CollectionGet(ThisMap(this), key);
 }
 
-// builtins/map.ts:155 Map.prototype.has
+// builtins/map.ts:152
+function CanonicalizeKeyedCollectionKey(key) {
+  if (%IsNumber(key) && %AsNumber(key) === 0) {
+    return 0;
+  }
+  return key;
+}
+
+// builtins/map.ts:163 Map.prototype.getOrInsert
+function MapPrototypeGetOrInsert(key, value) {
+  const m = ThisMap(this);
+  if (%CollectionHas(m, key)) {
+    return %CollectionGet(m, key);
+  }
+  %CollectionSet(m, key, value);
+  return value;
+}
+
+// builtins/map.ts:177 Map.prototype.getOrInsertComputed
+function MapPrototypeGetOrInsertComputed(key, callbackfn) {
+  const m = ThisMap(this);
+  if (!%IsCallable(callbackfn)) {
+    throw %NewTypeError("not a function");
+  }
+  const k = CanonicalizeKeyedCollectionKey(key);
+  if (%CollectionHas(m, k)) {
+    return %CollectionGet(m, k);
+  }
+  const value = %Call(callbackfn, undefined, k);
+  %CollectionSet(m, k, value);
+  return value;
+}
+
+// builtins/map.ts:195 Map.prototype.has
 function MapPrototypeHas(key) {
   return %CollectionHas(ThisMap(this), key);
 }
 
-// builtins/map.ts:163 Map.prototype.keys
+// builtins/map.ts:203 Map.prototype.keys
 function MapPrototypeKeys() {
   return %CollectionIterator(ThisMap(this), 0);
 }
 
-// builtins/map.ts:171 Map.prototype.set
+// builtins/map.ts:211 Map.prototype.set
 function MapPrototypeSet(key, value) {
   %CollectionSet(ThisMap(this), key, value);
   return this;
 }
 
-// builtins/map.ts:180 get Map.prototype.size
+// builtins/map.ts:220 get Map.prototype.size
 function MapPrototypeSize() {
   return %CollectionSize(ThisMap(this));
 }
 
-// builtins/map.ts:188 Map.prototype.values
+// builtins/map.ts:228 Map.prototype.values
 function MapPrototypeValues() {
   return %CollectionIterator(ThisMap(this), 1);
 }
 
-// builtins/map.ts:197 value Map.prototype[Symbol.toStringTag]
+// builtins/map.ts:237 value Map.prototype[Symbol.toStringTag]
 function MapPrototypeToStringTag() {
   return "Map";
 }
 
-// builtins/map.ts:205 %MapIteratorPrototype%.next
+// builtins/map.ts:245 %MapIteratorPrototype%.next
 function MapIteratorPrototypeNext() {
   return %CollectionIteratorNext(this, false);
 }
 
-// builtins/map.ts:214 value %MapIteratorPrototype%[Symbol.toStringTag]
+// builtins/map.ts:254 value %MapIteratorPrototype%[Symbol.toStringTag]
 function MapIteratorToStringTag() {
   return "Map Iterator";
 }
@@ -9366,12 +9399,42 @@ function WeakMapPrototypeSet(key, value) {
   return this;
 }
 
-// builtins/weak.ts:88 value WeakMap.prototype[Symbol.toStringTag]
+// builtins/weak.ts:87 WeakMap.prototype.getOrInsert
+function WeakMapPrototypeGetOrInsert(key, value) {
+  const m = ThisWeakMap(this);
+  if (!%CanBeHeldWeakly(key)) {
+    throw %NewTypeError("invalid value used as WeakMap key");
+  }
+  if (%CollectionHas(m, key)) {
+    return %CollectionGet(m, key);
+  }
+  %CollectionSet(m, key, value);
+  return value;
+}
+
+// builtins/weak.ts:103 WeakMap.prototype.getOrInsertComputed
+function WeakMapPrototypeGetOrInsertComputed(key, callbackfn) {
+  const m = ThisWeakMap(this);
+  if (!%IsCallable(callbackfn)) {
+    throw %NewTypeError("not a function");
+  }
+  if (!%CanBeHeldWeakly(key)) {
+    throw %NewTypeError("invalid value used as WeakMap key");
+  }
+  if (%CollectionHas(m, key)) {
+    return %CollectionGet(m, key);
+  }
+  const value = %Call(callbackfn, undefined, key);
+  %CollectionSet(m, key, value);
+  return value;
+}
+
+// builtins/weak.ts:124 value WeakMap.prototype[Symbol.toStringTag]
 function WeakMapPrototypeToStringTag() {
   return "WeakMap";
 }
 
-// builtins/weak.ts:96 constructor WeakSet
+// builtins/weak.ts:132 constructor WeakSet
 function WeakSetConstructor(iterable) {
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
@@ -9401,7 +9464,7 @@ function WeakSetConstructor(iterable) {
   }
 }
 
-// builtins/weak.ts:129 WeakSet.prototype.add
+// builtins/weak.ts:165 WeakSet.prototype.add
 function WeakSetPrototypeAdd(value) {
   const s = ThisWeakSet(this);
   if (!%CanBeHeldWeakly(value)) {
@@ -9411,19 +9474,19 @@ function WeakSetPrototypeAdd(value) {
   return this;
 }
 
-// builtins/weak.ts:142 WeakSet.prototype.delete
+// builtins/weak.ts:178 WeakSet.prototype.delete
 function WeakSetPrototypeDelete(value) {
   const s = ThisWeakSet(this);
   return %CanBeHeldWeakly(value) && %CollectionDelete(s, value);
 }
 
-// builtins/weak.ts:151 WeakSet.prototype.has
+// builtins/weak.ts:187 WeakSet.prototype.has
 function WeakSetPrototypeHas(value) {
   const s = ThisWeakSet(this);
   return %CanBeHeldWeakly(value) && %CollectionHas(s, value);
 }
 
-// builtins/weak.ts:161 value WeakSet.prototype[Symbol.toStringTag]
+// builtins/weak.ts:197 value WeakSet.prototype[Symbol.toStringTag]
 function WeakSetPrototypeToStringTag() {
   return "WeakSet";
 }
@@ -9685,6 +9748,8 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("Map.prototype", %WellKnownSymbol("iterator"), MapPrototypeEntries, 0);
 %InstallMethod("Map.prototype", "forEach", MapPrototypeForEach, 1);
 %InstallMethod("Map.prototype", "get", MapPrototypeGet, 1);
+%InstallMethod("Map.prototype", "getOrInsert", MapPrototypeGetOrInsert, 2);
+%InstallMethod("Map.prototype", "getOrInsertComputed", MapPrototypeGetOrInsertComputed, 2);
 %InstallMethod("Map.prototype", "has", MapPrototypeHas, 1);
 %InstallMethod("Map.prototype", "keys", MapPrototypeKeys, 0);
 %InstallMethod("Map.prototype", "set", MapPrototypeSet, 2);
@@ -9991,6 +10056,8 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("WeakMap.prototype", "get", WeakMapPrototypeGet, 1);
 %InstallMethod("WeakMap.prototype", "has", WeakMapPrototypeHas, 1);
 %InstallMethod("WeakMap.prototype", "set", WeakMapPrototypeSet, 2);
+%InstallMethod("WeakMap.prototype", "getOrInsert", WeakMapPrototypeGetOrInsert, 2);
+%InstallMethod("WeakMap.prototype", "getOrInsertComputed", WeakMapPrototypeGetOrInsertComputed, 2);
 %InstallValue("WeakMap.prototype", %WellKnownSymbol("toStringTag"), WeakMapPrototypeToStringTag(), 4);
 %InstallMethod("WeakSet.prototype", "add", WeakSetPrototypeAdd, 1);
 %InstallMethod("WeakSet.prototype", "delete", WeakSetPrototypeDelete, 1);
