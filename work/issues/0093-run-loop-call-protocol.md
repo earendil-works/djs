@@ -76,7 +76,7 @@ fields are the canonical state whenever `run_hot` is not running.
   primitives, `not` on Bool, `jump`/`jump_if_*`. Their `fast_step`/`fast_more` arms are
   then removed (code size, and `fast_step` gets smaller).
 - **Decoding:** one bounds check per instruction for the opcode and its immediates: an
-  8-byte little-endian load at `ip` (no instruction is longer; a fallback for the last 8
+  8-byte little-endian load at `ip` (the longest instruction is 7 bytes; a fallback for the last 8
   bytes of the arena), immediates by shifts. Stack slots: one-sided checks (`get(off..
   off + 8)`, one compare) instead of today's two-sided `first_chunk` checks.
 
@@ -95,7 +95,7 @@ in `run_hot`:
   tracing do not change. The cost today is not the layout but how it is accessed: each of
   the six header stores reloads the arena Vec and is checked on its own (0081 F4: 72 of
   call's 234 instructions are bounds checks).
-- **Block access:** the template's call data is read from one checked 24-byte window
+- **Block access:** the template's call data is read from one checked 28-byte window
   (FLAGS, PARAMS, LOCALS, STACK, CODE, CONSTS are at offsets 8–35 of the cell); the header
   is written as one checked 48-byte block (a `&mut [u8; 48]` from one range check, then six
   unchecked-by-construction stores), the locals filled through one checked range, and a
