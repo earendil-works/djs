@@ -25,6 +25,15 @@ disjoint from perf's 0122 work:
 - [ ] Decisions recorded.
 
 ## Log
+- Priority item (coordinator, from perf): the shipped module carried absolute paths of
+  the build machine in panic locations (`/Users/<name>/.rustup/...` for inlined std code,
+  `.../.cargo/registry/...` for libm). `scripts/wasm-rustflags.sh` remaps them
+  (CARGO_ENCODED_RUSTFLAGS with `--remap-path-prefix`; cargo's trim-paths is unstable in
+  1.99) for every shipped-module build: build-wasm.sh, the gate's size step, djs-bench's
+  size/wasm groups (shared with perf: two `.env(...)` lines), variant.sh. budget.py now
+  fails on `/Users/`, `/home/`, `.cargo/registry`, `.rustup/` in the module (D2331).
+  Module 1,186,680 -> 1,186,312 raw (the paths get shorter; the panic work removes the
+  rest). Merged on its own first.
 
 ## Follow-ups
 
