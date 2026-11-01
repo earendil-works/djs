@@ -1,7 +1,8 @@
 // pi's codemode guards `tools` (and global namespaces) with a Proxy whose `get` names
 // close matches for a missing member (prelude-source.ts `guard`). The same guard over
-// the fake tools: calls, `in`, keys, missing members, and a namespace object.
-// (pi's comparable uses a regexp: /[^a-z0-9]/g.)
+// the prelude's tools: calls, `in`, keys, missing members, rest, printing the proxies,
+// and a namespace object.
+// (pi's comparable uses a regexp, /[^a-z0-9]/g, which djs does not have yet.)
 const comparable = (name) => [...name.toLowerCase()].filter((c) => (c >= "a" && c <= "z") || (c >= "0" && c <= "9")).join("");
 function guard(target, label, names, hint) {
   return new Proxy(target, {
@@ -21,15 +22,8 @@ function guard(target, label, names, hint) {
     },
   });
 }
-// pi's tools object: frozen, without a prototype. (Built here and the names spelled
-// out: djs-difftest's own tools and ALL_TOOLS differ from pi's until 0044.)
-const base = Object.create(null);
-base.echo = (args) => tools.echo(args);
-base.fail = (args) => tools.fail(args);
-Object.freeze(base);
-const t = guard(base, "tools", ["echo", "fail"], "ALL_TOOLS lists every tool.");
-// (No await: tool results through then, so the case runs before 0041.)
-Promise.resolve(t.echo({ hello: "world" })).then((v) => console.log("echo", v));
+const t = guard(tools, "tools", ALL_TOOLS.map((tool) => tool.name), "ALL_TOOLS lists every tool.");
+console.log("echo", await t.echo({ hello: "world" }));
 console.log("echo" in t, "nope" in t, Object.keys(t), typeof t.echo, typeof t.fail);
 for (const name of ["Echo", "ech", "readFile"]) {
   try {
@@ -53,4 +47,8 @@ try {
 const { read, ...rest } = fs;
 console.log(typeof read, Object.keys(rest));
 console.log(Object.isFrozen(fs), Reflect.ownKeys(fs));
-return Promise.all([t.echo(1), t.echo("two")]);
+const { echo, ...others } = t;
+console.log(typeof echo, Object.keys(others), Object.isFrozen(t));
+console.log(t, fs);
+const results = await Promise.allSettled([t.echo(1), t.fail({ message: "boom" })]);
+return results.map((r) => r.status + ":" + (r.status === "fulfilled" ? r.value : r.reason.message));

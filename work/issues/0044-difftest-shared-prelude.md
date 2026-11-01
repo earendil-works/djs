@@ -33,6 +33,40 @@ compare exactly what the model sees (D1100). The native glue only uses the host-
 - `Function.prototype.toString` of a callable proxy shows the target's name like qjs.
 
 ## Log
+- The djs engine now runs the shared prelude like qjs_driver.js (D1440); host functions
+  are only `host.output` and `host.done`. Workarounds: djs Scripts have no completion
+  value (the prelude and the case Script store theirs in a global that the engine reads
+  and deletes); String.prototype.split does not exist yet (0033 has it in progress), so
+  the prelude's errorText splits with a loop (commented; remove once split lands). No
+  classes needed: the prelude uses none.
+- First run: every djs case failed to set up, then 15 regressed because errorText threw
+  (split), then codemode/top-level.js (`this` in the body: the case is now an arrow in a
+  Script, as on qjs). A GC-stress crash was the engine holding the global object's
+  Value across a run (it moves).
+- Tools: kept as the prelude's JS (promise jobs), as on qjs, instead of async host
+  functions; see D1440 for why. D1160's difference (tools returning directly) was
+  already gone with 0041 and stays gone.
+- Ratchet (tests/corpus/expected-failures.txt): 59 -> 49, 10 fixed, 0 new. Fixed:
+  codemode/store.js and codemode/tools.js (the native glue's stringify_fast-only store
+  and its tools object), console/cyclic-array.js, console/numbers-in-json.js,
+  console/objects.js, console/tojson.js, errors/undescribable.js, result/date.js,
+  result/tojson-throws.js, result/tojson.js (all values the host-side formatter could
+  not show: toJSON, Date, getters, cycles, undescribable throws).
+- Stress: all cases identical under --suspend-every 97 and --gc-stress. Each case now
+  also evaluates the prelude, so the gate's difftest step costs about twice the CPU
+  (wall time 21 -> 22 s in release on 18 cores). Under stress, console/cyclic-array.js
+  and builtins/array-methods.js now hit the stress timeout (not compared, as
+  dquickts/builtin/test_rope.js already did).
+- Sandbox (js/src/sandbox.ts): no host-side formatting to fix; it passes console
+  arguments to the embedder's console as values (Opaque values as `[Class]`), and pi
+  installs its own in-VM console from its prelude.
+- The 0045 leftovers: the tools/ALL_TOOLS differences disappeared with the shared
+  prelude (codemode/tools-proxy.js now guards the real tools and maps ALL_TOOLS, prints
+  the proxies, rest-destructures the guarded tools). Object.prototype.__proto__ and
+  callable-proxy toString (D1441), case builtins/proto-accessor.js. test262 unchanged
+  (annexB is skipped; no active test changed).
+- djs-difftest's runner test: tools/fail now compared with qjs instead of djs-only
+  expectations, plus slow-path JSON values and a stalled case.
 
 ## Follow-ups
 

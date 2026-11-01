@@ -183,13 +183,44 @@ function ObjectSetPrototypeOf(o: Value, proto: Value): Value {
   if (!IsObject(o)) {
     return o;
   }
-  if (!SetPrototypeOf(AsObj(o), proto)) {
-    if (!IsExtensible(AsObj(o))) {
+  SetPrototypeOrThrow(AsObj(o), proto);
+  return o;
+}
+
+/** O.[[SetPrototypeOf]](proto), a TypeError with qjs's messages when refused. */
+function SetPrototypeOrThrow(o: Obj, proto: Value): void {
+  if (!SetPrototypeOf(o, proto)) {
+    if (o === RealmIntrinsic("ObjectPrototype")) {
+      throw NewTypeError("prototype is immutable");
+    }
+    if (!IsProxy(o) && !IsExtensible(o)) {
       throw NewTypeError("object is not extensible");
     }
-    throw NewTypeError("circular prototype chain");
+    throw NewTypeError(IsProxy(o) ? "proxy: bad prototype" : "circular prototype chain");
   }
-  return o;
+}
+
+/**
+ * get Object.prototype.__proto__, B.2.2.1.1.
+ * @getter Object.prototype.__proto__
+ */
+function ObjectPrototypeGetProto(this: Value): Value {
+  return GetPrototypeOf(ToObject(this));
+}
+
+/**
+ * set Object.prototype.__proto__, B.2.2.1.2.
+ * @setter Object.prototype.__proto__
+ */
+function ObjectPrototypeSetProto(this: Value, proto: Value): Value {
+  if (this === undefined || this === null) {
+    throw NewTypeError("not an object");
+  }
+  if ((!IsObject(proto) && proto !== null) || !IsObject(this)) {
+    return undefined;
+  }
+  SetPrototypeOrThrow(AsObj(this), proto);
+  return undefined;
 }
 
 /**

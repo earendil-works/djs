@@ -883,26 +883,28 @@ FunctionPrototypeBind: reentrant (Function.prototype.bind)
   builtins/function.ts:76:23  Get (intrinsic)
   builtins/function.ts:78:3  DefineDataPropertyOrThrow (intrinsic)
 
-FunctionPrototypeToString: leaf (Function.prototype.toString)
+FunctionPrototypeToString: reentrant (Function.prototype.toString)
+  builtins/function.ts:89:25  Get (intrinsic)
+  builtins/function.ts:90:46  ToString (builtin)
 
 FunctionConstructor: leaf (constructor Function)
 
 OrdinaryHasInstance: reentrant
-  builtins/function.ts:107:12  InstanceofOperator (builtin)
-  builtins/function.ts:112:20  Get (intrinsic)
-  builtins/function.ts:116:18  GetPrototypeOf (intrinsic)
-  builtins/function.ts:121:9  GetPrototypeOf (intrinsic)
+  builtins/function.ts:113:12  InstanceofOperator (builtin)
+  builtins/function.ts:118:20  Get (intrinsic)
+  builtins/function.ts:122:18  GetPrototypeOf (intrinsic)
+  builtins/function.ts:127:9  GetPrototypeOf (intrinsic)
 
 InstanceofOperator: reentrant (%InstanceofOperator)
-  builtins/function.ts:135:32  GetMethod (builtin)
-  builtins/function.ts:137:22  Call (intrinsic)
-  builtins/function.ts:142:10  OrdinaryHasInstance (builtin)
+  builtins/function.ts:141:32  GetMethod (builtin)
+  builtins/function.ts:143:22  Call (intrinsic)
+  builtins/function.ts:148:10  OrdinaryHasInstance (builtin)
 
 ClassHeritage: reentrant (%ClassHeritage)
-  builtins/function.ts:158:30  Get (intrinsic)
+  builtins/function.ts:164:30  Get (intrinsic)
 
 FunctionPrototypeHasInstance: reentrant (Function.prototype[Symbol.hasInstance])
-  builtins/function.ts:171:10  OrdinaryHasInstance (builtin)
+  builtins/function.ts:177:10  OrdinaryHasInstance (builtin)
 
 ThrowTypeError: leaf (get Function.prototype.caller, set Function.prototype.caller, get Function.prototype.arguments, set Function.prototype.arguments)
 
@@ -1430,108 +1432,117 @@ ObjectGetPrototypeOf: reentrant (Object.getPrototypeOf)
   builtins/object.ts:169:10  GetPrototypeOf (intrinsic)
 
 ObjectSetPrototypeOf: reentrant (Object.setPrototypeOf)
-  builtins/object.ts:186:8  SetPrototypeOf (intrinsic)
-  builtins/object.ts:187:10  IsExtensible (intrinsic)
+  builtins/object.ts:186:3  SetPrototypeOrThrow (builtin)
+
+SetPrototypeOrThrow: reentrant
+  builtins/object.ts:192:8  SetPrototypeOf (intrinsic)
+  builtins/object.ts:196:25  IsExtensible (intrinsic)
+
+ObjectPrototypeGetProto: reentrant (get Object.prototype.__proto__)
+  builtins/object.ts:208:10  GetPrototypeOf (intrinsic)
+
+ObjectPrototypeSetProto: reentrant (set Object.prototype.__proto__)
+  builtins/object.ts:222:3  SetPrototypeOrThrow (builtin)
 
 ObjectCreateBuiltin: reentrant (Object.create)
-  builtins/object.ts:205:5  ObjectDefinePropertiesHelper (builtin)
+  builtins/object.ts:236:5  ObjectDefinePropertiesHelper (builtin)
 
 ObjectDefinePropertiesHelper: reentrant
-  builtins/object.ts:213:21  OwnPropertyKeys (intrinsic)
-  builtins/object.ts:214:18  LengthOfArrayLike (builtin)
-  builtins/object.ts:220:24  Get (intrinsic)
-  builtins/object.ts:221:24  OwnPropertyAttributes (intrinsic)
-  builtins/object.ts:223:30  Get (intrinsic)
-  builtins/object.ts:224:7  CreateDataPropertyOrThrow (intrinsic)
-  builtins/object.ts:225:47  ToPropertyDescriptor (builtin)
-  builtins/object.ts:225:7  CreateDataPropertyOrThrow (intrinsic)
-  builtins/object.ts:230:30  Get (intrinsic)
-  builtins/object.ts:230:54  Get (intrinsic)
-  builtins/object.ts:230:5  DefinePropertyOrThrow (builtin)
+  builtins/object.ts:244:21  OwnPropertyKeys (intrinsic)
+  builtins/object.ts:245:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:251:24  Get (intrinsic)
+  builtins/object.ts:252:24  OwnPropertyAttributes (intrinsic)
+  builtins/object.ts:254:30  Get (intrinsic)
+  builtins/object.ts:255:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:256:47  ToPropertyDescriptor (builtin)
+  builtins/object.ts:256:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:261:30  Get (intrinsic)
+  builtins/object.ts:261:54  Get (intrinsic)
+  builtins/object.ts:261:5  DefinePropertyOrThrow (builtin)
 
 ObjectDefineProperties: reentrant (Object.defineProperties)
-  builtins/object.ts:243:10  ObjectDefinePropertiesHelper (builtin)
+  builtins/object.ts:274:10  ObjectDefinePropertiesHelper (builtin)
 
 EnumerableOwnProperties: reentrant
-  builtins/object.ts:252:12  OwnPropertyKeys (intrinsic)
-  builtins/object.ts:254:21  OwnPropertyKeys (intrinsic)
-  builtins/object.ts:255:18  LengthOfArrayLike (builtin)
-  builtins/object.ts:259:24  Get (intrinsic)
-  builtins/object.ts:260:24  OwnPropertyAttributes (intrinsic)
-  builtins/object.ts:262:28  Get (intrinsic)
-  builtins/object.ts:264:9  CreateDataPropertyOrThrow (intrinsic)
-  builtins/object.ts:267:9  CreateDataPropertyOrThrow (intrinsic)
-  builtins/object.ts:268:9  CreateDataPropertyOrThrow (intrinsic)
-  builtins/object.ts:269:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:283:12  OwnPropertyKeys (intrinsic)
+  builtins/object.ts:285:21  OwnPropertyKeys (intrinsic)
+  builtins/object.ts:286:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:290:24  Get (intrinsic)
+  builtins/object.ts:291:24  OwnPropertyAttributes (intrinsic)
+  builtins/object.ts:293:28  Get (intrinsic)
+  builtins/object.ts:295:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:298:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:299:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:300:9  CreateDataPropertyOrThrow (intrinsic)
 
 ObjectKeys: reentrant (Object.keys)
-  builtins/object.ts:282:10  EnumerableOwnProperties (builtin)
+  builtins/object.ts:313:10  EnumerableOwnProperties (builtin)
 
 ObjectValues: reentrant (Object.values)
-  builtins/object.ts:290:10  EnumerableOwnProperties (builtin)
+  builtins/object.ts:321:10  EnumerableOwnProperties (builtin)
 
 ObjectEntries: reentrant (Object.entries)
-  builtins/object.ts:298:10  EnumerableOwnProperties (builtin)
+  builtins/object.ts:329:10  EnumerableOwnProperties (builtin)
 
 ObjectAssign: reentrant (Object.assign)
-  builtins/object.ts:308:18  LengthOfArrayLike (builtin)
-  builtins/object.ts:310:31  Get (intrinsic)
-  builtins/object.ts:313:25  OwnPropertyKeys (intrinsic)
-  builtins/object.ts:314:26  LengthOfArrayLike (builtin)
-  builtins/object.ts:316:28  Get (intrinsic)
-  builtins/object.ts:317:28  OwnPropertyAttributes (intrinsic)
-  builtins/object.ts:319:24  Get (intrinsic)
-  builtins/object.ts:319:11  Set (intrinsic)
+  builtins/object.ts:339:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:341:31  Get (intrinsic)
+  builtins/object.ts:344:25  OwnPropertyKeys (intrinsic)
+  builtins/object.ts:345:26  LengthOfArrayLike (builtin)
+  builtins/object.ts:347:28  Get (intrinsic)
+  builtins/object.ts:348:28  OwnPropertyAttributes (intrinsic)
+  builtins/object.ts:350:24  Get (intrinsic)
+  builtins/object.ts:350:11  Set (intrinsic)
 
 ObjectFreeze: reentrant (Object.freeze)
-  builtins/object.ts:335:8  SetIntegrityLevel (intrinsic)
+  builtins/object.ts:366:8  SetIntegrityLevel (intrinsic)
 
 ObjectSeal: reentrant (Object.seal)
-  builtins/object.ts:349:8  SetIntegrityLevel (intrinsic)
+  builtins/object.ts:380:8  SetIntegrityLevel (intrinsic)
 
 ObjectPreventExtensions: reentrant (Object.preventExtensions)
-  builtins/object.ts:363:8  PreventExtensions (intrinsic)
+  builtins/object.ts:394:8  PreventExtensions (intrinsic)
 
 ObjectIsFrozen: reentrant (Object.isFrozen)
-  builtins/object.ts:374:26  TestIntegrityLevel (intrinsic)
+  builtins/object.ts:405:26  TestIntegrityLevel (intrinsic)
 
 ObjectIsSealed: reentrant (Object.isSealed)
-  builtins/object.ts:382:26  TestIntegrityLevel (intrinsic)
+  builtins/object.ts:413:26  TestIntegrityLevel (intrinsic)
 
 ObjectIsExtensible: reentrant (Object.isExtensible)
-  builtins/object.ts:390:25  IsExtensible (intrinsic)
+  builtins/object.ts:421:25  IsExtensible (intrinsic)
 
 ObjectGetOwnPropertySymbols: reentrant (Object.getOwnPropertySymbols)
-  builtins/object.ts:398:10  OwnPropertyKeys (intrinsic)
+  builtins/object.ts:429:10  OwnPropertyKeys (intrinsic)
 
 ObjectGetOwnPropertyDescriptors: reentrant (Object.getOwnPropertyDescriptors)
-  builtins/object.ts:407:21  OwnPropertyKeys (intrinsic)
-  builtins/object.ts:408:18  LengthOfArrayLike (builtin)
-  builtins/object.ts:411:24  Get (intrinsic)
-  builtins/object.ts:412:25  GetOwnPropertyDescriptorObject (intrinsic)
-  builtins/object.ts:414:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:438:21  OwnPropertyKeys (intrinsic)
+  builtins/object.ts:439:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:442:24  Get (intrinsic)
+  builtins/object.ts:443:25  GetOwnPropertyDescriptorObject (intrinsic)
+  builtins/object.ts:445:7  CreateDataPropertyOrThrow (intrinsic)
 
 ObjectHasOwn: reentrant (Object.hasOwn)
-  builtins/object.ts:426:30  ToPropertyKey (builtin)
-  builtins/object.ts:426:10  HasOwnProperty (intrinsic)
+  builtins/object.ts:457:30  ToPropertyKey (builtin)
+  builtins/object.ts:457:10  HasOwnProperty (intrinsic)
 
 ObjectIs: leaf (Object.is)
 
 ObjectPrototypeToString: reentrant (Object.prototype.toString)
-  builtins/object.ts:442:10  ObjectToString (builtin)
+  builtins/object.ts:473:10  ObjectToString (builtin)
 
 ObjectToString: reentrant
-  builtins/object.ts:456:22  Get (intrinsic)
+  builtins/object.ts:487:22  Get (intrinsic)
 
 ObjectPrototypeToLocaleString: reentrant (Object.prototype.toLocaleString)
-  builtins/object.ts:468:15  GetV (intrinsic)
-  builtins/object.ts:468:10  Call (intrinsic)
+  builtins/object.ts:499:15  GetV (intrinsic)
+  builtins/object.ts:499:10  Call (intrinsic)
 
 ObjectPrototypeValueOf: leaf (Object.prototype.valueOf)
 
 ObjectPrototypeIsPrototypeOf: reentrant (Object.prototype.isPrototypeOf)
-  builtins/object.ts:488:18  GetPrototypeOf (intrinsic)
-  builtins/object.ts:493:9  GetPrototypeOf (intrinsic)
+  builtins/object.ts:519:18  GetPrototypeOf (intrinsic)
+  builtins/object.ts:524:9  GetPrototypeOf (intrinsic)
 
 ResolvePromise: reentrant
   builtins/promise.ts:30:12  Get (intrinsic)

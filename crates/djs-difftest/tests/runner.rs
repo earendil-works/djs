@@ -180,8 +180,8 @@ fn fake_engine_skips_and_panics() {
     fs::remove_dir_all(&dir).unwrap();
 }
 
-/// Cases that djs can already run, whose transcripts must be the same on qjs (with the
-/// shared prelude) and on djs (with its native codemode globals, D1160).
+/// Cases whose transcripts must be the same on qjs and djs, both running the shared
+/// prelude (D1440).
 const GLUE_CASES: &[(&str, &str)] = &[
     (
         "console.js",
@@ -212,6 +212,16 @@ const GLUE_CASES: &[(&str, &str)] = &[
         "store(\"k\", {v: [1, 2]});\nconsole.log(load(\"k\"), load(\"nope\"));\nstore(\"k\", undefined);\nconsole.log(load(\"k\"));",
     ),
     ("syntax.js", "let = ;"),
+    (
+        "tools.js",
+        "console.log(await tools.echo({p: \"x\", n: [1, true]}), ALL_TOOLS.length, ALL_TOOLS.map((t) => t.name), Object.keys(tools));",
+    ),
+    ("fail.js", "await tools.fail({message: \"denied\"});"),
+    (
+        "slow-json.js",
+        "console.log({toJSON() { return \"j\"; }}, new Proxy({a: 1}, {}));\ntext({get g() { return 1; }});\nreturn [new Date(0)];",
+    ),
+    ("stalled.js", "await new Promise(() => {});"),
 ];
 
 fn glue_corpus(name: &str) -> (PathBuf, Vec<case::Case>) {
@@ -219,17 +229,6 @@ fn glue_corpus(name: &str) -> (PathBuf, Vec<case::Case>) {
     for (name, src) in GLUE_CASES {
         write(&dir, &format!("area/{name}"), src);
     }
-    // djs-only expectations: tools return directly until djs has promises.
-    write(
-        &dir,
-        "area/tools.js",
-        "console.log(await tools.echo({p: \"x\", n: [1, true]}), ALL_TOOLS.length);",
-    );
-    write(
-        &dir,
-        "area/fail.js",
-        "await tools.fail({message: \"denied\"});",
-    );
     write(
         &dir,
         "area/fuel.js",
@@ -253,7 +252,7 @@ fn djs_glue_matches_qjs() {
     };
     assert_eq!(
         by_name("tools.js").transcript,
-        "{\"p\":\"x\",\"n\":[1,true]} 2\n=== completed\n"
+        "{\"p\":\"x\",\"n\":[1,true]} 2 [\"echo\",\"fail\"] [\"echo\",\"fail\"]\n=== completed\n"
     );
     assert_eq!(by_name("fail.js").transcript, "=== throw\nError: denied\n");
     assert_eq!(by_name("fuel.js").done, Some(Done::Timeout));

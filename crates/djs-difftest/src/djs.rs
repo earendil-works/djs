@@ -177,7 +177,9 @@ impl Session {
                 .vm
                 .new_host_function(id, name)
                 .map_err(|e| format!("{e:?}"))?;
-            self.vm.define(host, name, f).map_err(|e| format!("{e:?}"))?;
+            self.vm
+                .define(host, name, f)
+                .map_err(|e| format!("{e:?}"))?;
         }
         let api = self.call(setup, Value::UNDEFINED, &[Value::object(host)], "setup")?;
         let api = self

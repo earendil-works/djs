@@ -1970,3 +1970,34 @@ result checks run outside the body's try statements, as [[Construct]] does them.
 `super()` constructs `[[GetPrototypeOf]]` of the active function (`<active>`
 pseudo-binding) with the frame's new.target. `new` of a non-constructor object now says
 `<name> is not a constructor` (or `not a constructor` without a `name` string), like qjs.
+## D1440: djs-difftest runs the shared prelude (supersedes D1160)
+date: 2026-11-01 · by: infra · issue: 0044
+The djs engine of djs-difftest now does what qjs_driver.js does, in-process: it evaluates
+tests/corpus/prelude.js as a strict Script, calls its setup with a `host` object whose
+`output` and `done` are the only host functions, evaluates the case as a Script
+`(async (tools, console) => {<case>\n})` (an arrow: `this` is the global object, as in
+pi and the qjs driver), passes it to `api.run`, and calls `api.stalled()` once nothing is
+left to run. djs Scripts have no completion value, so both Scripts store their value in
+a global (`__difftestSetup`, `__difftestCase`, on the first line, so line numbers are
+kept) that the engine reads and deletes. The api object is held in a heap handle across
+runs. Everything the model sees (console/text formatting, the return value, the
+uncaught error, `exit`, `store`/`load`, the fake tools and ALL_TOOLS) is now the same JS
+on both engines; the native formatting, the `<djs: ...>` slow-path markers and D1160's
+known differences are gone. The fake tools stay JS in the prelude, resolved through
+promise jobs exactly as on qjs, rather than async host functions: an async host call
+settles only when the job queue is empty, which would order tool results differently
+from the oracle. The prelude's `errorText` splits the stack with a small loop until
+String.prototype.split lands with 0033 (marked in the prelude). The Sandbox (js/) needs
+no change: it hands console arguments to the embedder's console as values, and pi's
+own prelude formats in the VM.
+
+## D1441: Object.prototype.__proto__, and Function.prototype.toString of proxies
+date: 2026-11-01 · by: infra · issue: 0044
+The Annex B accessor (B.2.2.1) is in builtins/object.ts: the getter is
+`GetPrototypeOf(ToObject(this))`, the setter ignores non-object values and primitive
+receivers and throws on undefined/null, with qjs's messages (also for
+Object.setPrototypeOf now: "prototype is immutable" for Object.prototype, "proxy: bad
+prototype" for a refusing proxy). Object literals keep their own `__proto__: v` form
+(compiler) and `["__proto__"]` still defines an own property. Function.prototype.toString
+of a callable proxy is `function <name>() { [native code] }` with the name read by
+[[Get]] (a trap call), as qjs does.

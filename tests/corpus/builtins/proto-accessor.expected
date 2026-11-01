@@ -1,0 +1,26 @@
+desc ["function","function",false,true,"get __proto__","set __proto__",0,1]
+get undefined TypeError: cannot convert to object
+get primitive true
+set undefined TypeError: not an object
+set primitive undefined
+set non-object undefined
+assign [false,true,[]]
+assign null [null,null]
+immutable TypeError: prototype is immutable
+not extensible TypeError: object is not extensible
+cycle TypeError: circular prototype chain
+destructure true
+literal [false,false,[]]
+computed own [["__proto__"],1,true]
+proxy [true,["gpo","spo"]]
+null proto undefined
+names true
+fn proxy ["function named() {\n    [native code]\n}",["name"]]
+arrow proxy function () {
+    [native code]
+}
+name getter function 42() {
+    [native code]
+}
+not callable TypeError: not a function
+=== completed

@@ -221,8 +221,9 @@ $D --engine djs --ratchet --suspend-every 97 --gc-stress   # what the gate runs
 $D --engine djs --update-ratchet     # after fixing cases: rewrite expected-failures.txt
 ```
 
-With `--engine djs` the codemode globals are host functions with the prelude's formatting
-until djs can run the prelude itself (D1160). `--suspend-every N` and `--gc-stress` run
+With `--engine djs` the case runs exactly as with qjs: djs evaluates the shared prelude
+and the case Script in-process, and only `host.output`/`host.done` are host functions
+(D1440). `--suspend-every N` and `--gc-stress` run
 every case a second (third) time; a transcript that differs from the plain djs run is a
 hard failure, separate from the oracle comparison and the ratchet (D1161).
 
