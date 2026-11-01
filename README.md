@@ -118,7 +118,7 @@ const sb = await Sandbox.create({
   memoryLimit: 64 << 20,
 });
 const result = await sb.runAsync("const hits = await search(q); return hits.length;", { q: "djs" });
-const image = sb.bytes();                    // snapshot: VM image plus host function names
+const image = sb.bytes();                    // snapshot: compressed VM image plus host function names
 ```
 
 `js/pi/vm.ts` implements pi's codemode VM contract (`startVm`) on djs, running pi's

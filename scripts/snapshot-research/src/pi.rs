@@ -148,7 +148,8 @@ impl Session {
             run: Handle::from_index(0),
             set_origin: Handle::from_index(0),
             ev: Events::default(),
-            now: started_at,
+            // As the adapter (D2262): the prelude runs with the clock at 0.
+            now: 0.0,
         };
         let bridge = s.vm.new_host_function(BRIDGE_FN, "bridge").unwrap();
         let bridge = s.h(bridge);
@@ -176,6 +177,7 @@ impl Session {
         s.stalled = member(&mut s, "stalled");
         s.run = member(&mut s, "run");
         s.api = api;
+        s.now = started_at;
         s.set_origin = set_origin;
         for h in [bridge, getter, factory] {
             s.vm.heap_mut().drop_handle(h);

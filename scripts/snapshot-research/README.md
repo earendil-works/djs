@@ -1,13 +1,37 @@
-# Snapshot design measurements (issue 0088)
+# Snapshot design measurements (issues 0088, 0117)
 
-`snaplab` measures what alternatives to raw VM images would cost on realistic pi codemode
-sessions. The findings and the designs it compares are in
-`work/issues/0088-snapshot-design-research.md`. Not part of the workspace or the gate (like
-`scripts/determinism/probe`).
+Two tools on the same six cases (`cases/`), neither part of the workspace or the gate (like
+`scripts/determinism/probe`):
+
+- `snaplab` (Rust, native) measures what alternatives to raw VM images would cost on
+  realistic pi codemode sessions. The findings and the designs it compares are in
+  `work/issues/0088-snapshot-design-research.md`.
+- `wasm.ts` (node, djs-wasm) measures the snapshot container that was built (D2260) through
+  the real pi adapter: below.
 
 ```sh
-scripts/snapshot-research/run.sh [out-dir] [case.js ...]
+scripts/snapshot-research/run.sh [out-dir] [case.js ...]                # snaplab
+scripts/build-wasm.sh && node scripts/snapshot-research/wasm.ts [out-dir] [case.js ...]
 ```
+
+## wasm.ts
+
+Runs each case through `js/pi/vm.ts` on djs-wasm (`$DJS_WASM`, default the `wasm` profile
+build) in deterministic mode, with tools like snaplab's (real source files and prose). At
+every idle point it calls `snapshot()`, restores it with `resumeVm()` into a new instance and
+continues there, and also restores the same image from an uncompressed container. It writes
+`wasm-report.md` to the out dir (default `work/scratch/snapshot-research`):
+
+- per case: idle points, collected image and container sizes, `snapshot()` and `resumeVm()`
+  times, and the uncompressed restore time (median and max);
+- for the Sandbox: a new one and one holding 1000 records, `bytes()` and `fromBytes()`;
+- at the first, the largest and the last idle point of each case: zstd at levels 1 to 19,
+  with the prelude image, the base image or no dictionary, and a window that covers the
+  dictionary and the image or the default one; compressed size, compression and
+  decompression time.
+
+It also writes the prelude image (`prelude.img`) and each case's last image, for
+comparisons with other compressors (0117 used them to measure zstd-rs compiled to wasm).
 
 Defaults: `work/scratch/snapshot-research`, all of `cases/`. The script extracts pi's prelude
 from `tests/pi/prelude-source.ts` (needs node), builds snaplab into the repo's `target/`
