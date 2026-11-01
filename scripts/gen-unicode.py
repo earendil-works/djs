@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Generate the Unicode tables in crates/djs-core/src/unicode/ from the Unicode Character
-Database: tables.rs (identifier and space properties, for the lexer) and case_tables.rs
-(case mapping and folding, for the regex engine and the String case methods).
+Database: tables.rs (identifier and space properties, for the lexer), case_tables.rs
+(case mapping and folding, for the regex engine and the String case methods) and
+props.rs (the property escapes `\\p{..}` of regular expressions, D1500).
 
 The UCD files are downloaded once into vendor/unicode/<version>/ of the primary checkout
 (shared by all worktrees, gitignored). The generated Rust file is checked in.
@@ -52,12 +53,12 @@ def primary_checkout():
     return os.path.dirname(common)
 
 
-def fetch(vendor_dir, name):
+def fetch(vendor_dir, name, url=None):
     path = os.path.join(vendor_dir, name)
     if os.path.exists(path):
         return path
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    url = f"{BASE_URL}/{name}"
+    url = url or f"{BASE_URL}/{name}"
     tmp = path + ".tmp"
     # curl rather than urllib: it uses the system certificate store. unicode.org
     # occasionally answers with transient 5xx errors, hence the retries.
@@ -343,9 +344,265 @@ def generate_case(vendor):
     return "\n".join(parts)
 
 
+# ---- Property escapes (props.rs, D1500) -------------------------------------------------
+
+PROPS_OUT = os.path.join(ROOT, "crates/djs-core/src/unicode/props.rs")
+EMOJI_URL = f"https://www.unicode.org/Public/{UNICODE_VERSION}/emoji"
+
+# The binary properties of ECMA-262 table "Binary Unicode property aliases", with their
+# aliases there (not all of PropertyAliases.txt: `WSpace` is not allowed). Any, ASCII and
+# Assigned are computed in props.rs.
+BINARY_PROPERTIES = [
+    ("ASCII_Hex_Digit", "AHex"), ("Alphabetic", "Alpha"), ("Bidi_Control", "Bidi_C"),
+    ("Bidi_Mirrored", "Bidi_M"), ("Case_Ignorable", "CI"), ("Cased", None),
+    ("Changes_When_Casefolded", "CWCF"), ("Changes_When_Casemapped", "CWCM"),
+    ("Changes_When_Lowercased", "CWL"), ("Changes_When_NFKC_Casefolded", "CWKCF"),
+    ("Changes_When_Titlecased", "CWT"), ("Changes_When_Uppercased", "CWU"), ("Dash", None),
+    ("Default_Ignorable_Code_Point", "DI"), ("Deprecated", "Dep"), ("Diacritic", "Dia"),
+    ("Emoji", None), ("Emoji_Component", "EComp"), ("Emoji_Modifier", "EMod"),
+    ("Emoji_Modifier_Base", "EBase"), ("Emoji_Presentation", "EPres"),
+    ("Extended_Pictographic", "ExtPict"), ("Extender", "Ext"), ("Grapheme_Base", "Gr_Base"),
+    ("Grapheme_Extend", "Gr_Ext"), ("Hex_Digit", "Hex"), ("IDS_Binary_Operator", "IDSB"),
+    ("IDS_Trinary_Operator", "IDST"), ("ID_Continue", "IDC"), ("ID_Start", "IDS"),
+    ("Ideographic", "Ideo"), ("Join_Control", "Join_C"), ("Logical_Order_Exception", "LOE"),
+    ("Lowercase", "Lower"), ("Math", None), ("Noncharacter_Code_Point", "NChar"),
+    ("Pattern_Syntax", "Pat_Syn"), ("Pattern_White_Space", "Pat_WS"),
+    ("Quotation_Mark", "QMark"), ("Radical", None), ("Regional_Indicator", "RI"),
+    ("Sentence_Terminal", "STerm"), ("Soft_Dotted", "SD"), ("Terminal_Punctuation", "Term"),
+    ("Unified_Ideograph", "UIdeo"), ("Uppercase", "Upper"), ("Variation_Selector", "VS"),
+    ("White_Space", "space"), ("XID_Continue", "XIDC"), ("XID_Start", "XIDS"),
+]
+
+# Properties of strings (`v` mode). RGI_Emoji is the union of the others (props.rs).
+STRING_PROPERTIES = [
+    "Basic_Emoji", "Emoji_Keycap_Sequence", "RGI_Emoji_Modifier_Sequence",
+    "RGI_Emoji_Flag_Sequence", "RGI_Emoji_Tag_Sequence", "RGI_Emoji_ZWJ_Sequence",
+]
+
+
+def parse_props(path, version_line=None):
+    """{value of field 1: set(code points)} of a UCD-style file."""
+    out = {}
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    if version_line is None:
+        if UNICODE_VERSION not in text.split("\n", 1)[0]:
+            sys.exit(f"{path}: expected Unicode {UNICODE_VERSION}")
+    elif version_line not in text[:2000]:
+        sys.exit(f"{path}: expected {version_line}")
+    for line in text.split("\n"):
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        fields = [x.strip() for x in line.split(";")]
+        lo, _, hi = fields[0].partition("..")
+        lo = int(lo, 16)
+        hi = int(hi, 16) if hi else lo
+        out.setdefault(fields[1], set()).update(range(lo, hi + 1))
+    return out
+
+
+def varint(n, out):
+    assert n >= 0
+    while n >= 0x80:
+        out.append((n & 0x7F) | 0x80)
+        n >>= 7
+    out.append(n)
+
+
+def zigzag(n):
+    return n << 1 if n >= 0 else ((-n) << 1) - 1
+
+
+def encode_set(cps, data):
+    """Appends a set as `count, (gap, len - 1)*` varints (gap from the previous range's
+    end + 1) and returns its offset."""
+    off = len(data)
+    rs = ranges(cps)
+    varint(len(rs), data)
+    prev = 0
+    for lo, hi in rs:
+        varint(lo - prev, data)
+        varint(hi - lo, data)
+        prev = hi + 1
+    return off
+
+
+def encode_sequences(seqs, data):
+    """Appends sorted sequences front-coded: `count, (prefix, suffix_len, zigzag deltas*)*`;
+    each delta is from the previous code point of the same sequence (0 before the first)."""
+    off = len(data)
+    seqs = sorted(seqs)
+    varint(len(seqs), data)
+    prev = []
+    for sq in seqs:
+        p = 0
+        while p < len(sq) and p < len(prev) and sq[p] == prev[p]:
+            p += 1
+        varint(p, data)
+        varint(len(sq) - p, data)
+        last = sq[p - 1] if p else 0
+        for c in sq[p:]:
+            varint(zigzag(c - last), data)
+            last = c
+        prev = sq
+    return off
+
+
+def value_aliases(path, prop):
+    """[[short, long, other aliases...]] of a property in PropertyValueAliases.txt."""
+    check_version(path)
+    out = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.split("#", 1)[0].strip()
+            fields = [x.strip() for x in line.split(";")]
+            if fields[0] == prop:
+                out.append(fields[1:])
+    return out
+
+
+def generate_props(vendor):
+    data = []
+    pva = fetch(vendor, "PropertyValueAliases.txt")
+
+    # General_Category: the leaf values (Cn included), and the groups as leaf lists.
+    gc = parse_props(fetch(vendor, "extracted/DerivedGeneralCategory.txt"))
+    gc_entries, gc_groups = [], []
+    groups = {"C": "Cc,Cf,Cn,Co,Cs", "L": "Ll,Lm,Lo,Lt,Lu", "LC": "Ll,Lt,Lu",
+              "M": "Mc,Me,Mn", "N": "Nd,Nl,No", "P": "Pc,Pd,Pe,Pf,Pi,Po,Ps",
+              "S": "Sc,Sk,Sm,So", "Z": "Zl,Zp,Zs"}
+    for names in value_aliases(pva, "gc"):
+        if names[0] in groups:
+            gc_groups.append((",".join(names), groups[names[0]]))
+        else:
+            gc_entries.append((",".join(names), encode_set(gc.get(names[0], set()), data)))
+    assert len(gc_entries) == 30, len(gc_entries)
+
+    # Script and Script_Extensions. scx(X) = sc(X) - EXPLICIT + explicit(X), where
+    # EXPLICIT is every code point listed in ScriptExtensions.txt.
+    sc = parse_props(fetch(vendor, "Scripts.txt"))
+    explicit = {}
+    path = fetch(vendor, "ScriptExtensions.txt")
+    check_version(path)
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            fields = [x.strip() for x in line.split(";")]
+            lo, _, hi = fields[0].partition("..")
+            lo = int(lo, 16)
+            hi = int(hi, 16) if hi else lo
+            for name in fields[1].split():
+                explicit.setdefault(name, set()).update(range(lo, hi + 1))
+    all_explicit = set().union(*explicit.values())
+    assigned_sc = set().union(*sc.values())
+    scripts = []
+    for names in value_aliases(pva, "sc"):
+        short, long_ = names[0], names[1]
+        cps = sc.get(long_, set())
+        if short == "Zzzz":
+            cps = set(range(0x110000)) - assigned_sc
+        sc_off = encode_set(cps, data)
+        scx_off = encode_set(explicit[short], data) if short in explicit else 0xFFFFFFFF
+        scripts.append((",".join(names), sc_off, scx_off))
+    explicit_off = encode_set(all_explicit, data)
+
+    # Binary properties.
+    props = {}
+    for name in ["PropList.txt", "DerivedCoreProperties.txt",
+                 "extracted/DerivedBinaryProperties.txt", "DerivedNormalizationProps.txt"]:
+        for k, v in parse_props(fetch(vendor, name)).items():
+            props.setdefault(k, set()).update(v)
+    emoji = parse_props(fetch(vendor, "emoji/emoji-data.txt"), "Version: 17.0")
+    for k, v in emoji.items():
+        props.setdefault(k, set()).update(v)
+    binary = []
+    for name, alias in BINARY_PROPERTIES:
+        names = name if alias is None else f"{name},{alias}"
+        binary.append((names, encode_set(props[name], data)))
+
+    # Properties of strings.
+    seqs = {}
+    for name in ["emoji-sequences.txt", "emoji-zwj-sequences.txt"]:
+        path = fetch(vendor, f"emoji-seq/{name}", f"{EMOJI_URL}/{name}")
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        if "Version: 17.0" not in text[:2000]:
+            sys.exit(f"{path}: expected Version: 17.0")
+        for line in text.split("\n"):
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            fields = [x.strip() for x in line.split(";")]
+            entry = seqs.setdefault(fields[1], ([], []))
+            if ".." in fields[0]:
+                lo, hi = fields[0].split("..")
+                entry[0].extend(range(int(lo, 16), int(hi, 16) + 1))
+            else:
+                cps = [int(x, 16) for x in fields[0].split()]
+                if len(cps) == 1:
+                    entry[0].append(cps[0])
+                else:
+                    entry[1].append(cps)
+    strings = []
+    for name in STRING_PROPERTIES:
+        chars, multi = seqs[name]
+        strings.append((name, encode_set(set(chars), data), encode_sequences(multi, data)))
+
+    def tuples(name, doc, ty, rows):
+        lines = [f"/// {doc}", f"pub(super) static {name}: [{ty}; {len(rows)}] = ["]
+        for row in rows:
+            cells = ", ".join(f'"{x}"' if isinstance(x, str) else str(x) for x in row)
+            lines.append(f"    ({cells}),")
+        lines.append("];")
+        return "\n".join(lines)
+
+    blob = ["/// The encoded sets and sequences (see the module docs).",
+            f"pub(super) static DATA: [u8; {len(data)}] = ["]
+    for i in range(0, len(data), 24):
+        blob.append("    " + " ".join(f"{b}," for b in data[i:i + 24]))
+    blob.append("];")
+    parts = [
+        "// Generated by scripts/gen-unicode.py from the Unicode Character Database. Do not edit.",
+        "//",
+        "// Sets in DATA are varints (7 bits per byte, low first): the number of ranges, then",
+        "// per range the gap from the previous range's end + 1 and the length - 1. Sequence",
+        "// lists are sorted and front-coded: the count, then per sequence the length of the",
+        "// prefix shared with the previous one, the number of new code points, and those as",
+        "// zigzag deltas from the code point before each. Names are comma-separated aliases.",
+        "",
+        tuples("GENERAL_CATEGORY", "General_Category leaf values: names, set.", "(&str, u32)",
+               gc_entries),
+        "",
+        tuples("GENERAL_CATEGORY_GROUPS", "General_Category groups: names, leaf values.",
+               "(&str, &str)", gc_groups),
+        "",
+        tuples("SCRIPTS", "Script values: names, Script set, Script_Extensions additions "
+               "(u32::MAX: none).", "(&str, u32, u32)", scripts),
+        "",
+        "/// Every code point listed in ScriptExtensions.txt.",
+        f"pub(super) const SCX_EXPLICIT: u32 = {explicit_off};",
+        "",
+        tuples("BINARY", "Binary properties: names, set.", "(&str, u32)", binary),
+        "",
+        tuples("STRINGS", "Properties of strings: name, single code points, sequences.",
+               "(&str, u32, u32)", strings),
+        "",
+        "\n".join(blob),
+        "",
+    ]
+    return "\n".join(parts)
+
+
 def main():
     vendor = os.path.join(primary_checkout(), "vendor", "unicode", UNICODE_VERSION)
-    outputs = [(OUT, generate(vendor)), (CASE_OUT, generate_case(vendor))]
+    outputs = [
+        (OUT, generate(vendor)),
+        (CASE_OUT, generate_case(vendor)),
+        (PROPS_OUT, generate_props(vendor)),
+    ]
     if "--check" in sys.argv[1:]:
         for path, text in outputs:
             try:

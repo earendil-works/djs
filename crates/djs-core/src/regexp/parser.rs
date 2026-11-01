@@ -1040,37 +1040,80 @@ impl Parser<'_> {
         Ok(ClassAtom::Char(ch))
     }
 
-    /// `\p{..}` / `\P{..}`. Property tables are not built in (D1112); the syntax is checked
-    /// so the error is clear.
-    fn property_escape(&mut self, _negate: bool) -> Result<ClassSet, SyntaxError> {
+    /// `\p{..}` / `\P{..}` (D1500): a property set, case-folded and inverted in qjs'
+    /// order (which differs between `u` and `v`). Without the `regexp-unicode-props`
+    /// feature the syntax is checked and then rejected (D1112).
+    fn property_escape(&mut self, negate: bool) -> Result<ClassSet, SyntaxError> {
         if self.cur() != '{' as u32 {
             return err("expecting '{' after \\p");
         }
         self.pos += 1;
         let is_name_char =
             |c: u32| char::from_u32(c).is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
-        let mut n = 0;
+        let mut name = String::new();
         while is_name_char(self.cur()) {
-            n += 1;
-            if n >= 64 {
+            if name.len() >= 63 {
                 return err("unknown unicode property name");
             }
+            name.push(self.cur() as u8 as char);
             self.pos += 1;
         }
+        let mut value = None;
         if self.cur() == '=' as u32 {
             self.pos += 1;
-            let mut n = 0;
+            let mut v = String::new();
             while is_name_char(self.cur()) {
-                n += 1;
-                if n >= 64 {
+                if v.len() >= 63 {
                     return err("unknown unicode property value");
                 }
+                v.push(self.cur() as u8 as char);
                 self.pos += 1;
             }
+            value = Some(v);
         }
         if self.cur() != '}' as u32 || self.at_end() {
             return err("expecting '}'");
         }
+        self.pos += 1;
+        self.property_set(&name, value.as_deref(), negate)
+    }
+
+    #[cfg(feature = "regexp-unicode-props")]
+    fn property_set(
+        &mut self,
+        name: &str,
+        value: Option<&str>,
+        negate: bool,
+    ) -> Result<ClassSet, SyntaxError> {
+        use crate::unicode::property;
+        let p = property::lookup(name, value.unwrap_or(""), self.sets && !negate)
+            .map_err(|e| SyntaxError::new(String::from(e.message())))?;
+        let mut set = ClassSet {
+            chars: CharSet::from_sorted(p.ranges),
+            strings: Vec::new(),
+        };
+        for s in p.strings {
+            set.add_string(s);
+        }
+        if self.icase && self.sets {
+            set = self.canonicalize_class(set);
+        }
+        if negate {
+            set.chars = set.chars.invert();
+        }
+        if self.icase && !self.sets {
+            set = self.canonicalize_class(set);
+        }
+        Ok(set)
+    }
+
+    #[cfg(not(feature = "regexp-unicode-props"))]
+    fn property_set(
+        &mut self,
+        _name: &str,
+        _value: Option<&str>,
+        _negate: bool,
+    ) -> Result<ClassSet, SyntaxError> {
         err("unicode property escapes are not supported")
     }
 
@@ -1173,10 +1216,8 @@ impl Parser<'_> {
         self.depth -= 1;
         if invert {
             if !cr.strings.is_empty() {
-                // qjs' message, verbatim.
-                return err(
-                    "negated character class with strings in regular expression debugger eval code",
-                );
+                // qjs' message, cut at its 64-byte error buffer.
+                return err("negated character class with strings in regular expression debu");
             }
             cr.chars = cr.chars.invert();
         }

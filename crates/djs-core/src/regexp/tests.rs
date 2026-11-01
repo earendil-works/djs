@@ -246,7 +246,7 @@ fn syntax_errors() {
         (
             "[^\\q{ab}]",
             "v",
-            "negated character class with strings in regular expression debugger eval code",
+            "negated character class with strings in regular expression debu",
         ),
         ("(?<a>x)(?:y|(?<a>z))", "", "duplicate group name"),
     ] {

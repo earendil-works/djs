@@ -9,6 +9,11 @@
 mod tables;
 #[rustfmt::skip]
 mod case_tables;
+#[cfg(feature = "regexp-unicode-props")]
+#[rustfmt::skip]
+mod props;
+#[cfg(feature = "regexp-unicode-props")]
+pub mod property;
 
 pub mod case;
 
