@@ -87,3 +87,40 @@ function Count(v: Value): f64 {
   }
   return n;
 }
+
+/**
+ * try/finally (0080): the finally block runs after the body, on an exception (then
+ * rethrows), and before a return or a break that leaves it.
+ * @builtin Fin
+ * @native
+ */
+function Fin(v: Value): f64 {
+  let n: f64 = 0;
+  while (n < 5) {
+    try {
+      if (Leaf(User(v, n))) {
+        break;
+      }
+      if (n > 3) {
+        return n;
+      }
+    } catch (e) {
+      User(e);
+    } finally {
+      n++;
+    }
+  }
+  return n;
+}
+
+/**
+ * A constructor (0080): new.target is the frame's.
+ * @constructor Ctor
+ * @native
+ */
+function Ctor(v: Value): Value {
+  if (new.target === undefined) {
+    return User(v);
+  }
+  return Make();
+}

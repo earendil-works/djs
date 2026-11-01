@@ -7,6 +7,7 @@ use crate::interp::run::{Exec, Step};
 use crate::interp::run::native::*;
 use crate::value::Value;
 
+const I_ADD_ENTRIES_FROM_ITERABLE: u16 = iid("AddEntriesFromIterable");
 const I_ARRAY_CAN_POP_DENSE: u16 = iid("ArrayCanPopDense");
 const I_ARRAY_CREATE: u16 = iid("ArrayCreate");
 const I_ARRAY_ITERATOR_FINISH: u16 = iid("ArrayIteratorFinish");
@@ -28,10 +29,12 @@ const I_ASYNC_GENERATOR_STEP: u16 = iid("AsyncGeneratorStep");
 const I_CALL: u16 = iid("Call");
 const I_COLLECT_PRESENT: u16 = iid("CollectPresent");
 const I_COLLECTION_CLASS: u16 = iid("CollectionClass");
+const I_COLLECTION_CREATE: u16 = iid("CollectionCreate");
 const I_COLLECTION_ITERATOR: u16 = iid("CollectionIterator");
 const I_COLLECTION_ITERATOR_KEY: u16 = iid("CollectionIteratorKey");
 const I_COLLECTION_ITERATOR_STEP: u16 = iid("CollectionIteratorStep");
 const I_COLLECTION_ITERATOR_VALUE: u16 = iid("CollectionIteratorValue");
+const I_COLLECTION_SET: u16 = iid("CollectionSet");
 const I_COMPARE_STRINGS: u16 = iid("CompareStrings");
 const I_CREATE_ARRAY_FROM_PAIR: u16 = iid("CreateArrayFromPair");
 const I_CREATE_ITER_RESULT_OBJECT: u16 = iid("CreateIterResultObject");
@@ -39,14 +42,23 @@ const I_DELETE_PROPERTY_OR_THROW: u16 = iid("DeletePropertyOrThrow");
 const I_EVERY_OR_SOME: u16 = iid("EveryOrSome");
 const I_FIND_VIA_PREDICATE: u16 = iid("FindViaPredicate");
 const I_GENERATOR_RESUME: u16 = iid("GeneratorResume");
+const I_GET_ITERATOR: u16 = iid("GetIterator");
+const I_GET_PROTOTYPE_FROM_CONSTRUCTOR: u16 = iid("GetPrototypeFromConstructor");
 const I_GET_V: u16 = iid("GetV");
 const I_IS_ASYNC_FUNCTION_STATE: u16 = iid("IsAsyncFunctionState");
+const I_IS_ORIGINAL_COLLECTION_ADDER: u16 = iid("IsOriginalCollectionAdder");
 const I_IS_PROMISE: u16 = iid("IsPromise");
+const I_IS_PROXY: u16 = iid("IsProxy");
 const I_IS_REG_EXP_OBJECT: u16 = iid("IsRegExpObject");
 const I_IS_TYPED_ARRAY: u16 = iid("IsTypedArray");
+const I_ITERATOR_CLOSE_THROW: u16 = iid("IteratorCloseThrow");
+const I_ITERATOR_FAST_READY: u16 = iid("IteratorFastReady");
+const I_ITERATOR_FAST_VALUE: u16 = iid("IteratorFastValue");
 const I_NEW_RANGE_ERROR: u16 = iid("NewRangeError");
 const I_NEW_TYPE_ERROR: u16 = iid("NewTypeError");
 const I_PROMISE_CLAIM_RESOLVE: u16 = iid("PromiseClaimResolve");
+const I_PROXY_TARGET: u16 = iid("ProxyTarget");
+const I_REALM_INTRINSIC: u16 = iid("RealmIntrinsic");
 const I_RECORD_GET: u16 = iid("RecordGet");
 const I_RECORD_SET: u16 = iid("RecordSet");
 const I_REDUCE: u16 = iid("Reduce");
@@ -90,10 +102,14 @@ pub(crate) static NATIVES: &[NativeFn] = &[
     NativeFn { name: "CollectPresent", params: 3, locals: 5, run: native_CollectPresent, handler: handler_CollectPresent },
     NativeFn { name: "ArrayPrototypeSort", params: 1, locals: 7, run: native_ArrayPrototypeSort, handler: handler_ArrayPrototypeSort },
     NativeFn { name: "ArrayPrototypeToSorted", params: 1, locals: 3, run: native_ArrayPrototypeToSorted, handler: handler_ArrayPrototypeToSorted },
+    NativeFn { name: "GetPrototypeFromConstructor", params: 2, locals: 2, run: native_GetPrototypeFromConstructor, handler: handler_GetPrototypeFromConstructor },
     NativeFn { name: "GetIterator", params: 1, locals: 2, run: native_GetIterator, handler: handler_GetIterator },
     NativeFn { name: "ArrayIteratorPrototypeNext", params: 0, locals: 8, run: native_ArrayIteratorPrototypeNext, handler: handler_ArrayIteratorPrototypeNext },
+    NativeFn { name: "AddEntriesFromIterable", params: 3, locals: 12, run: native_AddEntriesFromIterable, handler: handler_AddEntriesFromIterable },
+    NativeFn { name: "MapConstructor", params: 1, locals: 3, run: native_MapConstructor, handler: handler_MapConstructor },
     NativeFn { name: "MapPrototypeForEach", params: 2, locals: 2, run: native_MapPrototypeForEach, handler: handler_MapPrototypeForEach },
     NativeFn { name: "PromiseReactionJob", params: 4, locals: 8, run: native_PromiseReactionJob, handler: handler_PromiseReactionJob },
+    NativeFn { name: "SetConstructor", params: 1, locals: 11, run: native_SetConstructor, handler: handler_SetConstructor },
     NativeFn { name: "SetPrototypeForEach", params: 2, locals: 3, run: native_SetPrototypeForEach, handler: handler_SetPrototypeForEach },
     NativeFn { name: "StringPrototypeAt", params: 1, locals: 8, run: native_StringPrototypeAt, handler: handler_StringPrototypeAt },
     NativeFn { name: "StringPrototypeCharAt", params: 1, locals: 6, run: native_StringPrototypeCharAt, handler: handler_StringPrototypeCharAt },
@@ -1750,6 +1766,51 @@ fn handler_ArrayPrototypeToSorted(state: u32) -> Option<(u32, u32)> {
     None
 }
 
+// builtins/conversion.ts:119
+fn native_GetPrototypeFromConstructor(ex: &mut Exec<'_>) -> Step {
+    loop {
+        match ex.n_state() {
+            0 => {
+                if ex.n_arg(0).is_undefined() { ex.n_goto(1); continue; } else { ex.n_goto(2); continue; }
+            }
+            1 => {
+                let v = { let a0 = ex.n_arg(1); ex.n_leaf(I_REALM_INTRINSIC, &[a0])? }; return ex.n_ret(v);
+            }
+            2 => {
+                // resume point: Get
+                match { let a0 = { let a0 = ex.n_arg(0); ex.n_as_obj(a0)? }; let a1 = ex.n_str("prototype")?; ex.n_get(&[a0, a1], 3) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            3 => {
+                let r = ex.n_result(); ex.n_set_slot(0, r);
+                if { let a0 = ex.n_slot(0); a0.as_object().is_some() } { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
+            }
+            4 => {
+                let v = { let a0 = ex.n_slot(0); ex.n_as_obj(a0)? }; return ex.n_ret(v);
+            }
+            5 => {
+                let v = { let a0 = ex.n_arg(0); ex.n_as_obj(a0)? }; ex.n_set_slot(1, v);
+                ex.n_goto(6); continue;
+            }
+            6 => {
+                if bool_of({ let a0 = ex.n_slot(1); ex.n_leaf(I_IS_PROXY, &[a0])? }) { ex.n_goto(7); continue; } else { ex.n_goto(8); continue; }
+            }
+            7 => {
+                let v = { let a0 = ex.n_slot(1); ex.n_leaf(I_PROXY_TARGET, &[a0])? }; ex.n_set_slot(1, v);
+                if ex.n_backedge(6) { return Ok(None); } continue;
+            }
+            8 => {
+                let v = { let a0 = ex.n_arg(1); ex.n_leaf(I_REALM_INTRINSIC, &[a0])? }; return ex.n_ret(v);
+            }
+            _ => return Err(bad_state()),
+        }
+    }
+}
+
+fn handler_GetPrototypeFromConstructor(state: u32) -> Option<(u32, u32)> {
+    let _ = state;
+    None
+}
+
 // builtins/iter.ts:11
 fn native_GetIterator(ex: &mut Exec<'_>) -> Step {
     loop {
@@ -1858,7 +1919,179 @@ fn handler_ArrayIteratorPrototypeNext(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/map.ts:151 (Map.prototype.forEach)
+// builtins/map.ts:17
+fn native_AddEntriesFromIterable(ex: &mut Exec<'_>) -> Step {
+    loop {
+        match ex.n_state() {
+            0 => {
+                let v = Value::bool((bool_of({ let a0 = ex.n_arg(2); let a1 = Value::int(0); ex.n_leaf(I_IS_ORIGINAL_COLLECTION_ADDER, &[a0, a1])? }) && (i32_of({ let a0 = ex.n_arg(0); ex.n_leaf(I_COLLECTION_CLASS, &[a0])? }) == 0_i32))); ex.n_set_slot(0, v);
+                // resume point: GetIterator
+                match { let a0 = ex.n_arg(1); ex.n_call(I_GET_ITERATOR, &[a0], 1) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            1 => {
+                let r = ex.n_result(); ex.n_set_slot(1, r);
+                // resume point: Get
+                match { let a0 = ex.n_slot(1); let a1 = ex.n_str("next")?; ex.n_get(&[a0, a1], 2) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            2 => {
+                let r = ex.n_result(); ex.n_set_slot(2, r);
+                ex.n_goto(3); continue;
+            }
+            3 => {
+                if true { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
+            }
+            4 => {
+                let v = Value::UNDEFINED; ex.n_set_slot(3, v);
+                if bool_of({ let a0 = ex.n_slot(1); let a1 = ex.n_slot(2); ex.n_leaf(I_ITERATOR_FAST_READY, &[a0, a1])? }) { ex.n_goto(6); continue; } else { ex.n_goto(7); continue; }
+            }
+            5 => {
+                let v = Value::UNDEFINED; return ex.n_ret(v);
+            }
+            6 => {
+                let v = { let a0 = ex.n_slot(1); let a1 = ex.n_slot(2); ex.n_leaf(I_ITERATOR_FAST_VALUE, &[a0, a1])? }; ex.n_set_slot(3, v);
+                ex.n_goto(17); continue;
+            }
+            7 => {
+                // inlined: IteratorNextResult
+                let v = ex.n_slot(1); ex.n_set_slot(5, v);
+                let v = ex.n_slot(2); ex.n_set_slot(6, v);
+                // resume point: Call
+                match { let a0 = ex.n_slot(6); let a1 = ex.n_slot(5); ex.n_call(I_CALL, &[a0, a1], 9) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            8 => {
+                // resume point: Get
+                match { let a0 = ex.n_slot(4); let a1 = ex.n_str("done")?; ex.n_get(&[a0, a1], 12) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            9 => {
+                let r = ex.n_result(); ex.n_set_slot(7, r);
+                if (!{ let a0 = ex.n_slot(7); a0.as_object().is_some() }) { ex.n_goto(10); continue; } else { ex.n_goto(11); continue; }
+            }
+            10 => {
+                let v = { let a0 = ex.n_str("iterator must return an object")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
+            }
+            11 => {
+                let v = { let a0 = ex.n_slot(7); ex.n_as_obj(a0)? }; ex.n_set_slot(4, v);
+                ex.n_goto(8); continue;
+            }
+            12 => {
+                let r = ex.n_result(); ex.n_set_slot(7, r);
+                if { let a0 = ex.n_slot(7); ex.n_to_boolean(a0) } { ex.n_goto(13); continue; } else { ex.n_goto(14); continue; }
+            }
+            13 => {
+                let v = Value::UNDEFINED; return ex.n_ret(v);
+            }
+            14 => {
+                // resume point: Get
+                match { let a0 = ex.n_slot(4); let a1 = ex.n_str("value")?; ex.n_get(&[a0, a1], 15) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            15 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                ex.n_goto(17); continue;
+            }
+            16 => {
+                // resume point: IteratorCloseThrow
+                match { let a0 = ex.n_slot(1); ex.n_call(I_ITERATOR_CLOSE_THROW, &[a0], 25) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            17 => {
+                if (!{ let a0 = ex.n_slot(3); a0.as_object().is_some() }) { ex.n_goto(18); continue; } else { ex.n_goto(19); continue; }
+            }
+            18 => {
+                let v = { let a0 = ex.n_str("not an object")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
+            }
+            19 => {
+                let v = { let a0 = ex.n_slot(3); ex.n_as_obj(a0)? }; ex.n_set_slot(9, v);
+                // resume point: Get
+                match { let a0 = ex.n_slot(9); let a1 = ex.n_str("0")?; ex.n_get(&[a0, a1], 20) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            20 => {
+                let r = ex.n_result(); ex.n_set_slot(10, r);
+                // resume point: Get
+                match { let a0 = ex.n_slot(9); let a1 = ex.n_str("1")?; ex.n_get(&[a0, a1], 21) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            21 => {
+                let r = ex.n_result(); ex.n_set_slot(11, r);
+                if bool_of(ex.n_slot(0)) { ex.n_goto(22); continue; } else { ex.n_goto(23); continue; }
+            }
+            22 => {
+                let _ = { let a0 = ex.n_arg(0); let a1 = ex.n_slot(10); let a2 = ex.n_slot(11); ex.n_leaf(I_COLLECTION_SET, &[a0, a1, a2])? };
+                if ex.n_backedge(3) { return Ok(None); } continue;
+            }
+            23 => {
+                // resume point: Call
+                match { let a0 = ex.n_arg(2); let a1 = ex.n_arg(0); let a2 = ex.n_slot(10); let a3 = ex.n_slot(11); ex.n_call(I_CALL, &[a0, a1, a2, a3], 24) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            24 => {
+                ex.n_result();
+                if ex.n_backedge(3) { return Ok(None); } continue;
+            }
+            25 => {
+                ex.n_result();
+                let v = ex.n_slot(8); return Err(Fault::throw(v));
+            }
+            _ => return Err(bad_state()),
+        }
+    }
+}
+
+fn handler_AddEntriesFromIterable(state: u32) -> Option<(u32, u32)> {
+    match state {
+        17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 => Some((16, 8)),
+        _ => None,
+    }
+}
+
+// builtins/map.ts:58 (constructor Map)
+fn native_MapConstructor(ex: &mut Exec<'_>) -> Step {
+    loop {
+        match ex.n_state() {
+            0 => {
+                if ex.n_new_target().is_undefined() { ex.n_goto(1); continue; } else { ex.n_goto(2); continue; }
+            }
+            1 => {
+                let v = { let a0 = ex.n_str("must be called with new")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
+            }
+            2 => {
+                // resume point: GetPrototypeFromConstructor
+                match { let a0 = ex.n_new_target(); let a1 = ex.n_str("MapPrototype")?; ex.n_call(I_GET_PROTOTYPE_FROM_CONSTRUCTOR, &[a0, a1], 3) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            3 => {
+                let r = ex.n_result(); ex.n_set_slot(1, r);
+                let v = { let a0 = Value::int(0); let a1 = ex.n_slot(1); ex.n_leaf(I_COLLECTION_CREATE, &[a0, a1])? }; ex.n_set_slot(0, v);
+                if (ex.n_arg(0).is_undefined() || ex.n_arg(0).is_null()) { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
+            }
+            4 => {
+                let v = ex.n_slot(0); return ex.n_ret(v);
+            }
+            5 => {
+                // resume point: Get
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_str("set")?; ex.n_get(&[a0, a1], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            6 => {
+                let r = ex.n_result(); ex.n_set_slot(2, r);
+                if (!{ let a0 = ex.n_slot(2); ex.n_is_callable(a0) }) { ex.n_goto(7); continue; } else { ex.n_goto(8); continue; }
+            }
+            7 => {
+                let v = { let a0 = ex.n_str("not a function")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
+            }
+            8 => {
+                // resume point: AddEntriesFromIterable
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_arg(0); let a2 = ex.n_slot(2); ex.n_call(I_ADD_ENTRIES_FROM_ITERABLE, &[a0, a1, a2], 9) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            9 => {
+                ex.n_result();
+                let v = ex.n_slot(0); return ex.n_ret(v);
+            }
+            _ => return Err(bad_state()),
+        }
+    }
+}
+
+fn handler_MapConstructor(state: u32) -> Option<(u32, u32)> {
+    let _ = state;
+    None
+}
+
+// builtins/map.ts:154 (Map.prototype.forEach)
 fn native_MapPrototypeForEach(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -2013,7 +2246,140 @@ fn handler_PromiseReactionJob(state: u32) -> Option<(u32, u32)> {
     }
 }
 
-// builtins/set.ts:103 (Set.prototype.forEach)
+// builtins/set.ts:16 (constructor Set)
+fn native_SetConstructor(ex: &mut Exec<'_>) -> Step {
+    loop {
+        match ex.n_state() {
+            0 => {
+                if ex.n_new_target().is_undefined() { ex.n_goto(1); continue; } else { ex.n_goto(2); continue; }
+            }
+            1 => {
+                let v = { let a0 = ex.n_str("must be called with new")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
+            }
+            2 => {
+                // resume point: GetPrototypeFromConstructor
+                match { let a0 = ex.n_new_target(); let a1 = ex.n_str("SetPrototype")?; ex.n_call(I_GET_PROTOTYPE_FROM_CONSTRUCTOR, &[a0, a1], 3) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            3 => {
+                let r = ex.n_result(); ex.n_set_slot(1, r);
+                let v = { let a0 = Value::int(1); let a1 = ex.n_slot(1); ex.n_leaf(I_COLLECTION_CREATE, &[a0, a1])? }; ex.n_set_slot(0, v);
+                if (ex.n_arg(0).is_undefined() || ex.n_arg(0).is_null()) { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
+            }
+            4 => {
+                let v = ex.n_slot(0); return ex.n_ret(v);
+            }
+            5 => {
+                // resume point: Get
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_str("add")?; ex.n_get(&[a0, a1], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            6 => {
+                let r = ex.n_result(); ex.n_set_slot(2, r);
+                if (!{ let a0 = ex.n_slot(2); ex.n_is_callable(a0) }) { ex.n_goto(7); continue; } else { ex.n_goto(8); continue; }
+            }
+            7 => {
+                let v = { let a0 = ex.n_str("not a function")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
+            }
+            8 => {
+                let v = Value::bool(bool_of({ let a0 = ex.n_slot(2); let a1 = Value::int(1); ex.n_leaf(I_IS_ORIGINAL_COLLECTION_ADDER, &[a0, a1])? })); ex.n_set_slot(3, v);
+                // resume point: GetIterator
+                match { let a0 = ex.n_arg(0); ex.n_call(I_GET_ITERATOR, &[a0], 9) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            9 => {
+                let r = ex.n_result(); ex.n_set_slot(4, r);
+                // resume point: Get
+                match { let a0 = ex.n_slot(4); let a1 = ex.n_str("next")?; ex.n_get(&[a0, a1], 10) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            10 => {
+                let r = ex.n_result(); ex.n_set_slot(5, r);
+                ex.n_goto(11); continue;
+            }
+            11 => {
+                if true { ex.n_goto(12); continue; } else { ex.n_goto(13); continue; }
+            }
+            12 => {
+                let v = Value::UNDEFINED; ex.n_set_slot(6, v);
+                if bool_of({ let a0 = ex.n_slot(4); let a1 = ex.n_slot(5); ex.n_leaf(I_ITERATOR_FAST_READY, &[a0, a1])? }) { ex.n_goto(14); continue; } else { ex.n_goto(16); continue; }
+            }
+            13 => {
+                let v = Value::UNDEFINED; return ex.n_ret(v);
+            }
+            14 => {
+                let v = { let a0 = ex.n_slot(4); let a1 = ex.n_slot(5); ex.n_leaf(I_ITERATOR_FAST_VALUE, &[a0, a1])? }; ex.n_set_slot(6, v);
+                ex.n_goto(15); continue;
+            }
+            15 => {
+                if bool_of(ex.n_slot(3)) { ex.n_goto(25); continue; } else { ex.n_goto(27); continue; }
+            }
+            16 => {
+                // inlined: IteratorNextResult
+                let v = ex.n_slot(4); ex.n_set_slot(1, v);
+                let v = ex.n_slot(5); ex.n_set_slot(8, v);
+                // resume point: Call
+                match { let a0 = ex.n_slot(8); let a1 = ex.n_slot(1); ex.n_call(I_CALL, &[a0, a1], 18) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            17 => {
+                // resume point: Get
+                match { let a0 = ex.n_slot(7); let a1 = ex.n_str("done")?; ex.n_get(&[a0, a1], 21) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            18 => {
+                let r = ex.n_result(); ex.n_set_slot(9, r);
+                if (!{ let a0 = ex.n_slot(9); a0.as_object().is_some() }) { ex.n_goto(19); continue; } else { ex.n_goto(20); continue; }
+            }
+            19 => {
+                let v = { let a0 = ex.n_str("iterator must return an object")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
+            }
+            20 => {
+                let v = { let a0 = ex.n_slot(9); ex.n_as_obj(a0)? }; ex.n_set_slot(7, v);
+                ex.n_goto(17); continue;
+            }
+            21 => {
+                let r = ex.n_result(); ex.n_set_slot(9, r);
+                if { let a0 = ex.n_slot(9); ex.n_to_boolean(a0) } { ex.n_goto(22); continue; } else { ex.n_goto(23); continue; }
+            }
+            22 => {
+                let v = ex.n_slot(0); return ex.n_ret(v);
+            }
+            23 => {
+                // resume point: Get
+                match { let a0 = ex.n_slot(7); let a1 = ex.n_str("value")?; ex.n_get(&[a0, a1], 24) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            24 => {
+                let r = ex.n_result(); ex.n_set_slot(6, r);
+                ex.n_goto(15); continue;
+            }
+            25 => {
+                let _ = { let a0 = ex.n_slot(0); let a1 = ex.n_slot(6); let a2 = Value::bool(true); ex.n_leaf(I_COLLECTION_SET, &[a0, a1, a2])? };
+                if ex.n_backedge(11) { return Ok(None); } continue;
+            }
+            26 => {
+                // resume point: IteratorCloseThrow
+                match { let a0 = ex.n_slot(4); ex.n_call(I_ITERATOR_CLOSE_THROW, &[a0], 29) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            27 => {
+                // resume point: Call
+                match { let a0 = ex.n_slot(2); let a1 = ex.n_slot(0); let a2 = ex.n_slot(6); ex.n_call(I_CALL, &[a0, a1, a2], 28) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            28 => {
+                ex.n_result();
+                if ex.n_backedge(11) { return Ok(None); } continue;
+            }
+            29 => {
+                ex.n_result();
+                let v = ex.n_slot(10); return Err(Fault::throw(v));
+            }
+            _ => return Err(bad_state()),
+        }
+    }
+}
+
+fn handler_SetConstructor(state: u32) -> Option<(u32, u32)> {
+    match state {
+        27 | 28 => Some((26, 10)),
+        _ => None,
+    }
+}
+
+// builtins/set.ts:104 (Set.prototype.forEach)
 fn native_SetPrototypeForEach(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {

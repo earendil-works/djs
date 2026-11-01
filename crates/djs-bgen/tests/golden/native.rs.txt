@@ -9,6 +9,7 @@ use crate::value::Value;
 
 const I_COUNT: u16 = iid("Count");
 const I_LEAF: u16 = iid("Leaf");
+const I_MAKE: u16 = iid("Make");
 const I_NEW_ERROR: u16 = iid("NewError");
 const I_USER: u16 = iid("User");
 
@@ -16,6 +17,8 @@ const I_USER: u16 = iid("User");
 pub(crate) static NATIVES: &[NativeFn] = &[
     NativeFn { name: "NativeLoops", params: 1, locals: 9, run: native_NativeLoops, handler: handler_NativeLoops },
     NativeFn { name: "NativeTry", params: 1, locals: 4, run: native_NativeTry, handler: handler_NativeTry },
+    NativeFn { name: "Fin", params: 1, locals: 5, run: native_Fin, handler: handler_Fin },
+    NativeFn { name: "Ctor", params: 1, locals: 1, run: native_Ctor, handler: handler_Ctor },
 ];
 
 // golden/native.ts:9 (Example.prototype.loops)
@@ -184,6 +187,103 @@ fn handler_NativeTry(state: u32) -> Option<(u32, u32)> {
         7 | 8 => Some((6, 3)),
         _ => None,
     }
+}
+
+// golden/native.ts:97 (Fin)
+fn native_Fin(ex: &mut Exec<'_>) -> Step {
+    loop {
+        match ex.n_state() {
+            0 => {
+                let v = num(0.0_f64); ex.n_set_slot(0, v);
+                ex.n_goto(1); continue;
+            }
+            1 => {
+                if (f64_of(ex.n_slot(0)) < 5.0_f64) { ex.n_goto(5); continue; } else { ex.n_goto(2); continue; }
+            }
+            2 => {
+                let v = num(f64_of(ex.n_slot(0))); return ex.n_ret(v);
+            }
+            3 => {
+                let v = num((f64_of(ex.n_slot(0)) + 1.0_f64)); ex.n_set_slot(0, v);
+                let v = ex.n_slot(1); return Err(Fault::throw(v));
+            }
+            4 => {
+                // resume point: User
+                match { let a0 = ex.n_slot(2); ex.n_call(I_USER, &[a0], 12) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            5 => {
+                // resume point: User
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(0); ex.n_call(I_USER, &[a0, a1], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            6 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                if bool_of({ let a0 = ex.n_slot(3); ex.n_leaf(I_LEAF, &[a0])? }) { ex.n_goto(8); continue; } else { ex.n_goto(7); continue; }
+            }
+            7 => {
+                if (f64_of(ex.n_slot(0)) > 3.0_f64) { ex.n_goto(9); continue; } else { ex.n_goto(13); continue; }
+            }
+            8 => {
+                let v = num((f64_of(ex.n_slot(0)) + 1.0_f64)); ex.n_set_slot(0, v);
+                ex.n_goto(2); continue;
+            }
+            9 => {
+                let v = num(f64_of(ex.n_slot(0))); ex.n_set_slot(4, v);
+                ex.n_goto(10); continue;
+            }
+            10 => {
+                let v = num((f64_of(ex.n_slot(0)) + 1.0_f64)); ex.n_set_slot(0, v);
+                ex.n_goto(11); continue;
+            }
+            11 => {
+                let v = ex.n_slot(4); return ex.n_ret(v);
+            }
+            12 => {
+                ex.n_result();
+                ex.n_goto(13); continue;
+            }
+            13 => {
+                let v = num((f64_of(ex.n_slot(0)) + 1.0_f64)); ex.n_set_slot(0, v);
+                if ex.n_backedge(1) { return Ok(None); } continue;
+            }
+            _ => return Err(bad_state()),
+        }
+    }
+}
+
+fn handler_Fin(state: u32) -> Option<(u32, u32)> {
+    match state {
+        4 | 12 => Some((3, 1)),
+        5 | 6 | 7 | 9 | 11 => Some((4, 2)),
+        _ => None,
+    }
+}
+
+// golden/native.ts:121 (constructor Ctor)
+fn native_Ctor(ex: &mut Exec<'_>) -> Step {
+    loop {
+        match ex.n_state() {
+            0 => {
+                if ex.n_new_target().is_undefined() { ex.n_goto(1); continue; } else { ex.n_goto(2); continue; }
+            }
+            1 => {
+                // resume point: User
+                match { let a0 = ex.n_arg(0); ex.n_call(I_USER, &[a0], 3) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            2 => {
+                let v = ex.n_leaf(I_MAKE, &[])?; return ex.n_ret(v);
+            }
+            3 => {
+                let r = ex.n_result(); ex.n_set_slot(0, r);
+                let v = ex.n_slot(0); return ex.n_ret(v);
+            }
+            _ => return Err(bad_state()),
+        }
+    }
+}
+
+fn handler_Ctor(state: u32) -> Option<(u32, u32)> {
+    let _ = state;
+    None
 }
 
 // golden/native.ts:67 (leaf)

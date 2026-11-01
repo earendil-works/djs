@@ -11,6 +11,8 @@ function ThisMap(v: Value): Obj {
 /**
  * AddEntriesFromIterable ( target, iterable, adder ), 24.1.1.2: each entry must be an
  * object; the iterator is closed when reading it or calling the adder throws.
+ * @intrinsic
+ * @native
  */
 function AddEntriesFromIterable(target: Obj, iterable: Value, adder: Value): void {
   // The original Map.prototype.set on a Map is CollectionSet itself (0080).
@@ -51,6 +53,7 @@ function AddEntriesFromIterable(target: Obj, iterable: Value, adder: Value): voi
 /**
  * Map ( [ iterable ] ), 24.1.1.1.
  * @constructor Map
+ * @native
  */
 function MapConstructor(iterable?: Value): Obj {
   if (new.target === undefined) {

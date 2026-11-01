@@ -420,6 +420,14 @@ const I = {
   NumberToUint32: (n) => n >>> 0,
   MathRandom: () => 0.5,
   ArraySpliceDense: (o, start, deleteCount, itemCount) => false,
+  // The dense leaves of 0080 decline: the general loops run.
+  ArrayCanPopDense: (o) => false,
+  ArraySearchDense: (o, search, from, len, mode) => -2,
+  ArraySliceDense: (o, k, fin, a) => false,
+  ArrayJoinDense: (o, len, sep) => undefined,
+  EnumerableOwnDataProperties: (o, kind) => undefined,
+  IteratorFastReady: (it, next) => false,
+  IsOriginalCollectionAdder: (adder, kind) => false,
   // No direct paths in the stand-ins: always the iterator protocol.
   HasOriginalIteration: (v) => false,
   CreateStringIterator: (s) => s[Symbol.iterator](),

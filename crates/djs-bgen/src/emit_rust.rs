@@ -247,16 +247,6 @@ pub fn emit(
                 format!(" ({})", what.join(", "))
             }
         );
-        if b.installs
-            .iter()
-            .any(|i| matches!(i.kind, crate::check::InstallKind::Constructor { .. }))
-        {
-            cx.errors.push(Diagnostic::new(
-                f.name_span,
-                "`@native` constructors are not supported yet",
-            ));
-            continue;
-        }
         if let Some(code) = Fsm::emit(&mut cx, i, f, sources, &origin) {
             fsms.push((f.name.clone(), code));
         }
@@ -870,13 +860,22 @@ struct Fsm<'a, 'c> {
     slots: u32,
     free_temps: Vec<u32>,
     used_temps: Vec<u32>,
-    /// (break target, continue target, continue is a back-edge)
-    loops: Vec<(usize, usize, bool)>,
+    /// (break target, continue target, continue is a back-edge, `finallys` depth)
+    loops: Vec<(usize, usize, bool, usize)>,
+    /// The `finally` blocks around the current statement, innermost last: jumps out of
+    /// them (`return`, `break`, `continue`) run their copies first.
+    finallys: Vec<Finally>,
     /// (catch block, exception slot) per try region, and the current region.
     tries: Vec<(usize, u32)>,
     try_ctx: Option<usize>,
     /// Inlined builtin calls being lowered, innermost last.
     inlines: Vec<Inline>,
+}
+
+/// An enclosing `finally` block: its statements and the try region outside it.
+struct Finally {
+    body: Vec<Stmt>,
+    ctx: Option<usize>,
 }
 
 /// An inlined call of a builtin (a small, internal helper): its body is lowered into the
@@ -925,6 +924,7 @@ impl<'a, 'c> Fsm<'a, 'c> {
             free_temps: Vec::new(),
             used_temps: Vec::new(),
             loops: Vec::new(),
+            finallys: Vec::new(),
             tries: Vec::new(),
             try_ctx: None,
             inlines: vec![Inline {
@@ -1416,7 +1416,7 @@ impl<'a, 'c> Fsm<'a, 'c> {
                 let c = self.lower(cond, Rep::Bool);
                 self.end_statement();
                 self.term_to(Term::If(c.s, (bbody, false), (exit, false)), bbody);
-                self.loops.push((exit, head, true));
+                self.loops.push((exit, head, true, self.finallys.len()));
                 self.sub(body, sources);
                 self.loops.pop();
                 self.term(Term::Goto(head, true));
@@ -1425,7 +1425,7 @@ impl<'a, 'c> Fsm<'a, 'c> {
             Stmt::DoWhile { body, cond, .. } => {
                 let (bbody, bcond, exit) = (self.new_bb(), self.new_bb(), self.new_bb());
                 self.term_to(Term::Goto(bbody, false), bbody);
-                self.loops.push((exit, bcond, false));
+                self.loops.push((exit, bcond, false, self.finallys.len()));
                 self.sub(body, sources);
                 self.loops.pop();
                 self.term_to(Term::Goto(bcond, false), bcond);
@@ -1456,7 +1456,7 @@ impl<'a, 'c> Fsm<'a, 'c> {
                     }
                     None => self.term_to(Term::Goto(bbody, false), bbody),
                 }
-                self.loops.push((exit, bupd, false));
+                self.loops.push((exit, bupd, false, self.finallys.len()));
                 self.sub(body, sources);
                 self.loops.pop();
                 self.term_to(Term::Goto(bupd, false), bupd);
@@ -1500,6 +1500,15 @@ impl<'a, 'c> Fsm<'a, 'c> {
                     }
                     None => "Value::UNDEFINED".into(),
                 };
+                let v = if self.finallys.is_empty() {
+                    v
+                } else {
+                    // The value waits in a slot while the finally blocks run.
+                    let s = self.slot();
+                    self.push(format!("let v = {v}; ex.n_set_slot({s}, v);"));
+                    self.run_finallys(0, sources);
+                    format!("ex.n_slot({s})")
+                };
                 self.term(Term::Return(v));
                 self.dead();
             }
@@ -1509,12 +1518,14 @@ impl<'a, 'c> Fsm<'a, 'c> {
                 self.dead();
             }
             Stmt::Break(_) => {
-                let (b, _, _) = *self.loops.last().unwrap();
+                let (b, _, _, depth) = *self.loops.last().unwrap();
+                self.run_finallys(depth, sources);
                 self.term(Term::Goto(b, false));
                 self.dead();
             }
             Stmt::Continue(_) => {
-                let (_, c, back) = *self.loops.last().unwrap();
+                let (_, c, back, depth) = *self.loops.last().unwrap();
+                self.run_finallys(depth, sources);
                 self.term(Term::Goto(c, back));
                 self.dead();
             }
@@ -1524,11 +1535,19 @@ impl<'a, 'c> Fsm<'a, 'c> {
                 finally,
                 span,
             } => {
-                if finally.is_some() {
-                    self.cx.errors.push(Diagnostic::new(
-                        *span,
-                        "the Rust backend does not support try/finally yet",
-                    ));
+                if let Some(fin) = finally {
+                    // `try B catch C finally F` is `try { try B catch C } finally F`.
+                    let protected = match catch {
+                        Some(_) => vec![Stmt::Try {
+                            body: body.clone(),
+                            catch: catch.clone(),
+                            finally: None,
+                            span: *span,
+                        }],
+                        None => body.stmts.clone(),
+                    };
+                    self.try_finally(&protected, &fin.stmts, sources);
+                    self.end_statement();
                     return;
                 }
                 let c = catch.as_ref().unwrap();
@@ -1557,6 +1576,66 @@ impl<'a, 'c> Fsm<'a, 'c> {
             Stmt::Block(b) => self.block(&b.stmts, sources),
         }
         self.end_statement();
+    }
+
+    /// `try { body } finally { fin }`: the finally block is copied onto each way out of
+    /// the body: after its normal end, on an exception (in a handler region of its own,
+    /// which rethrows after it) and before each `return`, `break` and `continue` that
+    /// leaves it (`run_finallys`). Each copy runs in the try region outside.
+    fn try_finally(&mut self, body: &[Stmt], fin: &[Stmt], sources: &Sources) {
+        let slot = self.slot();
+        let outer = self.try_ctx;
+        let join = self.new_bb();
+        let bthrow = self.new_bb();
+        self.tries.push((bthrow, slot));
+        self.try_ctx = Some(self.tries.len() - 1);
+        self.finallys.push(Finally {
+            body: fin.to_vec(),
+            ctx: outer,
+        });
+        let bbody = self.new_bb();
+        self.end_statement();
+        self.term_to(Term::Goto(bbody, false), bbody);
+        self.block(body, sources);
+        self.finallys.pop();
+        self.try_ctx = outer;
+        // The normal way out.
+        let bnormal = self.new_bb();
+        self.term_to(Term::Goto(bnormal, false), bnormal);
+        self.block(fin, sources);
+        self.term(Term::Goto(join, false));
+        // An exception: the finally block, then the exception again.
+        self.cur = bthrow;
+        self.block(fin, sources);
+        self.term(Term::Throw(format!("ex.n_slot({slot})")));
+        self.cur = join;
+    }
+
+    /// Runs copies of the enclosing finally blocks from the innermost down to depth
+    /// `to` (a jump out of them), each in the try region outside it.
+    fn run_finallys(&mut self, to: usize, sources: &Sources) {
+        let saved = core::mem::take(&mut self.finallys);
+        let ctx = self.try_ctx;
+        for i in (to..saved.len()).rev() {
+            // A jump out of this copy only runs the ones further out.
+            self.finallys = saved[..i]
+                .iter()
+                .map(|f| Finally {
+                    body: f.body.clone(),
+                    ctx: f.ctx,
+                })
+                .collect();
+            self.try_ctx = saved[i].ctx;
+            let b = self.new_bb();
+            self.end_statement();
+            self.term_to(Term::Goto(b, false), b);
+            self.block(&saved[i].body, sources);
+        }
+        self.finallys = saved;
+        self.try_ctx = ctx;
+        // Back in the region of the jump (its target decides where it goes).
+        let b = self.new_bb();
+        self.term_to(Term::Goto(b, false), b);
     }
 
     /// Prunes unreachable blocks, numbers the states and writes the functions.

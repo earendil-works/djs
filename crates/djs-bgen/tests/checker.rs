@@ -420,19 +420,18 @@ fn installation_forms() {
 /// What the Rust backend (0063) does not support in a `@native` builtin yet.
 #[test]
 fn rust_backend_rejects() {
-    reject(
-        "/** @native */\nfunction F(x: Value): void { try { Call(x, x); } finally { Opt(x); } }",
-        "does not support try/finally",
-    );
     // A reentrant builtin that is neither inlined (it is installed) nor @intrinsic.
     reject(
         "/** @builtin G */\nfunction G(x: Value): Value { return Call(x, x); }\n\
          /** @native */\nfunction F(x: Value): Value { return G(x); }",
         "only if it is `@intrinsic`",
     );
-    reject(
-        "/** @constructor C\n * @native */\nfunction C(x: Value): Value { return x; }",
-        "`@native` constructors",
+    // try/finally and constructors (0080).
+    accept(
+        "/** @native */\nfunction F(x: Value): void { try { Call(x, x); } finally { Opt(x); } }",
+    );
+    accept(
+        "/** @constructor C\n * @native */\nfunction C(x: Value): Value { return new.target === undefined ? x : 1; }",
     );
     // The same callee as an @intrinsic is fine, and a small internal one is inlined.
     accept(

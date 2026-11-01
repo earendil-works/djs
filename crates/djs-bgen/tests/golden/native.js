@@ -76,9 +76,41 @@ function Count(v) {
   return n;
 }
 
+// golden/native.ts:97 Fin
+function Fin(v) {
+  let n = 0;
+  while (n < 5) {
+    try {
+      if (%Leaf(%User(v, n))) {
+        break;
+      }
+      if (n > 3) {
+        return n;
+      }
+    } catch (e) {
+      %User(e);
+    } finally {
+      n++;
+    }
+  }
+  return n;
+}
+
+// golden/native.ts:121 constructor Ctor
+function Ctor(v) {
+  if (new.target === undefined) {
+    return %User(v);
+  }
+  return %Make();
+}
+
+%InstallMethod("globalThis", "Fin", Fin, 1);
+%InstallConstructor("globalThis", "Ctor", Ctor, 1, undefined);
 %InstallMethod("Example.prototype", "loops", NativeLoops, 1);
 %InstallIntrinsic("NativeTry", NativeTry);
 %InstallIntrinsic("Count", Count);
 %MarkNative(NativeLoops, 0);
 %MarkNative(NativeTry, 1);
+%MarkNative(Fin, 2);
+%MarkNative(Ctor, 3);
 })();
