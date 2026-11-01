@@ -680,6 +680,20 @@ pub extern "C" fn vm_set_now(vm: u32, ms: f64) {
     with(|s| s.slot(vm).vm.set_now(ms))
 }
 
+/// The VM's canonical hash (`Vm::canonical_hash`, D1730): FNV-1a 64 of the image a
+/// collection would leave, computed on a copy (the VM is unchanged). Writes it to the out
+/// buffer as u32 lo, hi; returns 0, or -1 when there is no memory for the copy.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_canonical_hash(vm: u32) -> i32 {
+    with(|s| match s.slot(vm).vm.canonical_hash() {
+        Ok(h) => {
+            s.set_out_words(&[h as u32, (h >> 32) as u32]);
+            0
+        }
+        Err(_) => -1,
+    })
+}
+
 /// What WeakRef and FinalizationRegistry do (`Vm::set_weak_refs`, D1680): 0 collected
 /// (weak, the default), 1 strong (no collection is observable), 2 absent (the globals are
 /// deleted). Set it on a new VM, before running code. Returns 0, or -1 for a bad mode or

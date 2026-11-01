@@ -722,19 +722,38 @@ impl Vm {
 
     /// Collects garbage now. Raw values held outside the heap are invalid afterwards.
     pub fn collect(&mut self) -> Result<(), HeapError> {
-        // Popped values above `sp` must not keep garbage alive (as at the interpreter's
-        // safepoints): the stack is traced to its full capacity.
-        let i = state::interp(&self.heap);
-        let sp = self.heap.arena().get(i, Interp::SP);
-        let stack = state::stack(&self.heap);
-        for k in sp..self.heap.value_array_capacity(stack) {
-            self.heap.value_array_set(stack, k, Value::UNDEFINED);
-        }
-        self.heap.collect()?;
+        Self::collect_heap(&mut self.heap)?;
         if self.opts.exec.finalization_after_gc {
             self.schedule_finalization_cleanup()?;
         }
         Ok(())
+    }
+
+    /// A collection of `heap` alone (no finalization scheduling).
+    fn collect_heap(heap: &mut Heap) -> Result<(), HeapError> {
+        // Popped values above `sp` must not keep garbage alive (as at the interpreter's
+        // safepoints): the stack is traced to its full capacity.
+        let i = state::interp(heap);
+        let sp = heap.arena().get(i, Interp::SP);
+        let stack = state::stack(heap);
+        for k in sp..heap.value_array_capacity(stack) {
+            heap.value_array_set(stack, k, Value::UNDEFINED);
+        }
+        heap.collect().map(|_| ())
+    }
+
+    /// A hash of the VM's state that does not depend on when it last collected (D1730):
+    /// FNV-1a (64 bits) over the image a collection would leave. Computed on a copy, so
+    /// the VM itself is unchanged and a check never perturbs the run it checks. Two VMs
+    /// with the same graph (the same script, inputs and engine build) have the same hash,
+    /// whatever their fuel slices, snapshots or collection points were (D1090, D1601).
+    /// Needs memory for the copy and its collection (about three times the arena).
+    pub fn canonical_hash(&self) -> Result<u64, HeapError> {
+        let limit = (self.heap.bytes().len()).max(self.opts.memory_limit);
+        let mut copy = Heap::from_bytes_trusted(self.heap.bytes().to_vec(), limit)
+            .map_err(|_| HeapError::OutOfMemory)?;
+        Self::collect_heap(&mut copy)?;
+        Ok(fnv64(copy.bytes()))
     }
 
     /// Queues a cleanup job for every FinalizationRegistry with cells whose targets
@@ -744,6 +763,15 @@ impl Vm {
     pub fn schedule_finalization_cleanup(&mut self) -> Result<usize, HeapError> {
         crate::interp::run::late::schedule_finalization_cleanup(&mut self.heap)
     }
+}
+
+/// FNV-1a, 64 bits.
+fn fnv64(bytes: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for &b in bytes {
+        h = (h ^ b as u64).wrapping_mul(0x0100_0000_01b3);
+    }
+    h
 }
 
 #[cfg(test)]

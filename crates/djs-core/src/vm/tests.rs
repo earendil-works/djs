@@ -1003,7 +1003,12 @@ fn iterator_helpers_follow_the_spec_where_qjs_differs() {
 }
 
 /// Compiles and runs one more Script in `vm` (globals persist between scripts).
-fn run_script(mut vm: Vm, src: &str) -> (Vm, Outcome) {
+fn run_script(vm: Vm, src: &str) -> (Vm, Outcome) {
+    finish_script(vm, src, 1 << 40, false)
+}
+
+/// `run_script` with a fuel slice, restoring the image at every stop with `suspend`.
+fn finish_script(mut vm: Vm, src: &str, fuel: u64, suspend: bool) -> (Vm, Outcome) {
     let f = vm
         .compile(
             src.as_bytes(),
@@ -1012,7 +1017,7 @@ fn run_script(mut vm: Vm, src: &str) -> (Vm, Outcome) {
         .unwrap();
     let this = Value::object(vm.global());
     vm.call(f, this, &[]).unwrap();
-    finish(vm, 1 << 40, false)
+    finish(vm, fuel, suspend)
 }
 
 #[test]
@@ -2923,4 +2928,28 @@ fn a_refused_to_space_stops_the_run() {
     assert_eq!(vm.collect(), Err(HeapError::HostOutOfMemory));
     let (_, out) = run_script(vm, "console.log('fine');\n");
     assert_eq!(out.log, ["fine"]);
+
+// ---- The canonical hash (D1730) --------------------------------------------------------------
+
+#[test]
+fn canonical_hash_ignores_collection_points() {
+    let src = "globalThis.keep = [];\n\
+               for (let i = 0; i < 5000; i++) { const o = { i, s: 'x' + i }; if (i % 7 == 0) keep.push(o); }\n\
+               const m = new Map(keep.map((o) => [o, o.i]));\n\
+               globalThis.n = m.size;\n";
+    let hash_at = |fuel: u64, suspend: bool| {
+        let (mut vm, _) = finish_script(vm(), src, fuel, suspend);
+        let before = vm.bytes().to_vec();
+        let h = vm.canonical_hash().unwrap();
+        assert!(before == vm.bytes(), "canonical_hash changed the VM");
+        vm.collect().unwrap();
+        assert_eq!(vm.canonical_hash().unwrap(), h, "a collection changed it");
+        h
+    };
+    let h = hash_at(u64::MAX, false);
+    assert_eq!(hash_at(997, true), h);
+    assert_eq!(hash_at(1000, false), h);
+    // A different state hashes differently.
+    let (vm2, _) = finish_script(vm(), "globalThis.n = 1;\n", u64::MAX, false);
+    assert_ne!(vm2.canonical_hash().unwrap(), h);
 }
