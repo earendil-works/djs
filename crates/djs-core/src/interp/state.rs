@@ -1,5 +1,5 @@
 //! The `Interp` cell: run state and registers, and the arena roots the interpreter owns
-//! (value stack, pending host calls).
+//! (value stack, pending host calls, the job queue).
 
 use super::frame::Continuation;
 use crate::heap::cells::{Interp, Roots, ValueArray};
@@ -79,9 +79,33 @@ pub(crate) fn result(heap: &Heap) -> Value {
     heap.arena().get(interp(heap), Interp::RESULT)
 }
 
-pub(crate) fn set_result(heap: &mut Heap, v: Value) {
+/// The state the VM returns to when no frame is active (`Interp::OUTCOME`, D1370).
+pub(crate) fn outcome(heap: &Heap) -> RunState {
+    RunState::from_u32(heap.arena().get(interp(heap), Interp::OUTCOME))
+}
+
+/// Records how the entry call ended (`Idle` for none) and makes it the current state:
+/// `RESULT`, `OUTCOME` and `STATE`.
+pub(crate) fn set_outcome(heap: &mut Heap, s: RunState, v: Value) {
+    debug_assert!(matches!(
+        s,
+        RunState::Idle | RunState::Done | RunState::Threw
+    ));
     let i = interp(heap);
-    heap.arena_mut().set(i, Interp::RESULT, v);
+    let a = heap.arena_mut();
+    a.set(i, Interp::RESULT, v);
+    a.set(i, Interp::OUTCOME, s as u32);
+    a.set(i, Interp::STATE, s as u32);
+}
+
+/// The exception a `ThrowPending` VM throws at the parked call.
+pub(crate) fn pending_throw(heap: &Heap) -> Value {
+    heap.arena().get(interp(heap), Interp::THROW)
+}
+
+pub(crate) fn set_pending_throw(heap: &mut Heap, v: Value) {
+    let i = interp(heap);
+    heap.arena_mut().set(i, Interp::THROW, v);
 }
 
 /// A `ValueArray` whose `LEN` is its full capacity (the stack's slots are all addressable).
@@ -99,6 +123,7 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     let calls = heap.alloc_value_array(4)?;
     let a = heap.arena_mut();
     a.set(i, Interp::RESULT, Value::UNDEFINED);
+    a.set(i, Interp::THROW, Value::UNDEFINED);
     a.set(i, Interp::NEXT_CALL_ID, 1);
     a.set(0, Roots::INTERP, Ref(i));
     a.set(0, Roots::STACK, Ref(s));

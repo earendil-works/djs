@@ -56,6 +56,23 @@ the ops defined here.
 - test_rope item dropped by the coordinator: infra fixed it on main (string leaves flatten
   the rope once; ratchets updated in 8ab7e30). The branch already contains a05575b.
 
+- Part 1 (Promise + job queue), D1370-D1373:
+  - `builtins/promise.ts`: the constructor, then/catch/finally, resolve/reject/all/
+    allSettled/any/race/try/withResolvers, species, thenables. Rust side in
+    `interp/run/promise.rs` (slots, reactions, queue, rejection tracking) and 14 leaves.
+  - New object classes Promise (12), BuiltinClosure (13), Record (14); Interp fields
+    OUTCOME, JOB_HEAD, THROW, REJECTIONS; HostCall fields PROMISE, FLAGS (for part 2);
+    `Continuation::Job`; `Intrinsic::PromiseProto`.
+  - `run` drains the queue after the entry call; Done only when quiescent (D1370).
+  - `Vm::promise_state`, `Vm::take_unhandled_rejections`.
+  - Outside `touches:` (small, additive): `djs-cli/src/run.rs` prints unhandled
+    rejections like qjs (exit 1); `djs-difftest/src/djs.rs` unwraps a promise result
+    (fulfilled / rejected / pending = stall); `tests/e2e.rs` reports the first unhandled
+    rejection. `builtins/object.rs` class tag for BuiltinClosure.
+  - Tests: e2e promise_{basic,order,errors,unhandled}; difftest builtins/promise-jobs,
+    errors/promise-rejected-result. test262: 562 more pass (all of built-ins/Promise
+    except classes, eval, Proxy). difftest: result/promise.js passes.
+
 ## Follow-ups
 
 ## Result

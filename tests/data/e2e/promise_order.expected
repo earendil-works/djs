@@ -1,0 +1,6 @@
+sync getter true
+undefined constructor true
+getter true object
+rejected by RangeError
+self TypeError promise self resolution
+a0 b0 shared1 shared2 c0 a1 b1 thenable called c1 a2 b2 thenable ctor adopt c2 a3 b3 adopted c3 c4 c5

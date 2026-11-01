@@ -117,9 +117,10 @@ cells! {
         STACK: Ref = 20,
         /// The realm record (global object, intrinsics). `undefined` until a realm exists.
         REALM: Value = 24,
-        /// The microtask queue. Null for now.
+        /// The microtask queue (D1370): a [`ValueArray`] of 5-value entries `[f, a0, a1,
+        /// a2, a3]` from `Interp::JOB_HEAD` to `LEN`. Null until the first job.
         JOBS: Ref = 32,
-        /// The pending host call table. Null for now.
+        /// The pending host call table.
         HOST_CALLS: Ref = 36,
         /// The [`HandleTable`] (values the embedder or Rust code hold across a GC). Null
         /// until the first handle is created.
@@ -326,9 +327,17 @@ cells! {
         /// `interp::state` flags of the parked host call (its continuation, whether it
         /// was the entry callee).
         FLAGS: u32 = 36,
-        /// The completion value (`Done`) or the exception (`Threw`, or pending to be
-        /// thrown at the parked call).
+        /// The completion value (`Done`) or the exception (`Threw`) of the last call.
         RESULT: Value = 40,
+        /// The `interp::RunState` the VM returns to when no frame is active (D1370):
+        /// `Idle`, or `Done`/`Threw` once the entry call completed. Jobs run on top.
+        OUTCOME: u32 = 48,
+        /// Index of the first queued job in the [`Roots::JOBS`] array.
+        JOB_HEAD: u32 = 52,
+        /// The exception `ThrowPending` throws at the parked call.
+        THROW: Value = 56,
+        /// [`ValueArray`] of the rejected promises without a handler (D1373), or null.
+        REJECTIONS: Ref = 64,
     };
 
     /// A realm record: the global object and the intrinsics, indexed by
@@ -351,6 +360,10 @@ cells! {
         ARGS: Ref = 16,
         /// The `this` value of the call.
         THIS: Value = 24,
+        /// An async host call's promise (D1374); undefined for a sync (parked) call.
+        PROMISE: Value = 32,
+        /// Bit 0: reported to the embedder by `Vm::new_host_calls`.
+        FLAGS: u32 = 40,
     };
 
     /// The entries of a WeakMap or WeakSet (0038, D1382): key/value pairs like a

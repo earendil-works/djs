@@ -91,6 +91,18 @@ pub enum ObjectClass {
     /// the next entry number, slot 2 the kind (0 keys, 1 values, 2 entries), slot 3 0
     /// for a Map, 1 for a Set, slots 4 and 5 the key and value of the last step.
     CollectionIterator = 16,
+    /// A Promise (`[[PromiseState]]` ...): slot 0 the state (int32: 0 pending, 1
+    /// fulfilled, 2 rejected), slot 1 the result, slot 2 the pending reactions (an
+    /// internal `ValueArray` of `[capability, onFulfilled, onRejected]` triples, or
+    /// undefined), slot 3 flags (int32, `interp::run::promise`). D1371.
+    Promise = 17,
+    /// A builtin closure (D1372): calling it calls the installed intrinsic builtin whose
+    /// id is slot 0 (int32) with `this` = slot 1 (its data) and the call's arguments.
+    /// Promise resolving functions, `Promise.all` element functions, ...
+    BuiltinClosure = 18,
+    /// An internal record (D1372): a prototype-less object with only internal slots,
+    /// never handed to user code; the builtins read it with `%RecordGet`/`%RecordSet`.
+    Record = 19,
 }
 
 impl ObjectClass {
@@ -113,6 +125,9 @@ impl ObjectClass {
             14 => Some(ObjectClass::WeakMap),
             15 => Some(ObjectClass::WeakSet),
             16 => Some(ObjectClass::CollectionIterator),
+            17 => Some(ObjectClass::Promise),
+            18 => Some(ObjectClass::BuiltinClosure),
+            19 => Some(ObjectClass::Record),
             _ => None,
         }
     }
@@ -120,7 +135,12 @@ impl ObjectClass {
     /// Number of internal slots the class needs.
     pub const fn slots(self) -> u32 {
         match self {
-            ObjectClass::Ordinary | ObjectClass::Error | ObjectClass::Arguments => 0,
+            ObjectClass::Ordinary
+            | ObjectClass::Error
+            | ObjectClass::Arguments
+            | ObjectClass::Record => 0,
+            ObjectClass::Promise => 4,
+            ObjectClass::BuiltinClosure => 2,
             ObjectClass::Array | ObjectClass::Function | ObjectClass::HostFunction => 1,
             ObjectClass::ArrayIterator => 3,
             ObjectClass::BoundFunction => 3,
@@ -137,7 +157,10 @@ impl ObjectClass {
     pub const fn is_callable(self) -> bool {
         matches!(
             self,
-            ObjectClass::Function | ObjectClass::HostFunction | ObjectClass::BoundFunction
+            ObjectClass::Function
+                | ObjectClass::HostFunction
+                | ObjectClass::BoundFunction
+                | ObjectClass::BuiltinClosure
         )
     }
 }

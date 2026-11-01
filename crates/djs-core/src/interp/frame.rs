@@ -42,6 +42,8 @@ pub enum Continuation {
     ConstructResult,
     /// The bottom frame of a `Vm::call`: `run` returns `Done(value)`.
     Entry,
+    /// The bottom frame of a job (D1370): drop the value and run the next job.
+    Job,
     /// Store it in the caller's stack slot (an absolute index) and resume at `ret_pc`.
     /// Slow paths use it to replace an operand with its primitive value and re-execute
     /// the instruction, or to fill a placeholder (`get_method` through a getter).
@@ -59,6 +61,7 @@ impl Continuation {
             1 => Continuation::DiscardResult,
             2 => Continuation::ConstructResult,
             4 => Continuation::Replace((flags as u32 & 0x7FFF_FFFF) >> SLOT_SHIFT),
+            5 => Continuation::Job,
             _ => Continuation::Entry,
         }
     }
@@ -71,6 +74,12 @@ impl Continuation {
             Continuation::ConstructResult => 2,
             Continuation::Entry => 3,
             Continuation::Replace(slot) => 4 | ((slot << SLOT_SHIFT) & 0x7FFF_FFFF) as i32,
+            Continuation::Job => 5,
         }
+    }
+
+    /// A frame with no caller: the entry call's or a job's.
+    pub const fn is_bottom(self) -> bool {
+        matches!(self, Continuation::Entry | Continuation::Job)
     }
 }

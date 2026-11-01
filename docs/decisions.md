@@ -1437,3 +1437,57 @@ function of the object graph: collecting twice gives identical images (tests in
 gc_tests.rs, with image round trips). `verify` checks the cell (pairs, keys objects,
 symbols or HOLE). Keys must satisfy CanBeHeldWeakly: objects and symbols not registered
 with Symbol.for.
+## D1370: The job queue, and when `run` reports Done
+date: 2026-11-01 · by: heap · issue: 0037
+The microtask queue is `Roots::JOBS`: a `ValueArray` of 5-value entries `[f, a0, a1, a2,
+a3]`, read from `Interp::JOB_HEAD`. A job is a call `f(a0..a3)` (`this` undefined) of an
+installed builtin, in a bottom frame with the new continuation `Job` (like `Entry`: no
+caller, `prev_bp` 0). `run` drains the queue whenever no frame is active: after the entry
+call returns, and at the start of a `run` in state `Idle`/`Done`/`Threw`. The entry
+call's completion is kept in `Interp::OUTCOME`/`RESULT` while jobs run on top
+(`STATE` is `Running` then). `run` returns:
+- `Done(v)` / `Threw(e)` once the entry call completed, the queue is empty and no async
+  host call is pending (so `Done` means quiescent, as qjs's job loop ends);
+- `Idle` when the queue is empty but async host calls are pending (or no call was made);
+- `Threw(e)` immediately for an uncaught exception of the entry call or a job, without
+  draining the queue first (qjs exits on an uncaught exception without running jobs).
+  Only internal errors escape a job: the promise jobs catch everything.
+`ThrowPending`'s exception moved to its own field (`Interp::THROW`), so a failing sync
+host call inside a job does not overwrite the entry call's result. `Vm::abort` also
+drops the queue and the tracked rejections.
+
+## D1371: Promises: Rust slots and reactions, the algorithms in builtins/promise.ts
+date: 2026-11-01 · by: heap · issue: 0037
+A Promise is `ObjectClass::Promise` (12) with slots state, result, reactions (an internal
+`ValueArray` of `[capability, onFulfilled, onRejected]` triples) and flags (handled,
+resolved). Leaf intrinsics settle promises (reactions become `%PromiseReactionJob` jobs),
+perform `then` and queue thenable jobs; everything that can run user code is in
+`builtins/promise.ts`. A promise capability is `undefined` (no result), a Promise, or a
+Record `[promise, resolve, reject]`. The Promise form is an internal capability of
+`%Promise%`: `NewPromiseCapability(%Promise%)` is unobservable, so it skips the executor
+and the two resolving functions, and resolves the promise directly with the promise's
+own `[[AlreadyResolved]]` flag. `then`, `finally` and the statics on plain promises thus
+allocate one object, not three. Resolving functions for user code (the constructor's
+pair) use the same flag; the thenable job makes a fresh pair over a Record, as the spec
+does. Messages follow qjs; `Promise.try` follows qjs and the current draft (the callback
+runs first, and a promise of the same constructor is returned as is).
+
+## D1372: Builtin closures and internal records
+date: 2026-11-01 · by: heap · issue: 0037
+The builtin language has no closures, but the spec's promise machinery is full of them
+(resolving functions, element functions, finally's thunks). `ObjectClass::BuiltinClosure`
+(13) holds an installed intrinsic id and a data value: calling it calls that builtin
+with `this` = the data (the interpreter rewrites the frame, like a bound function).
+`%NewBuiltinClosure(kind, data, length)` makes one (name "", the given `length`, not a
+constructor); `kind` indexes a fixed table in `interp/run/intrinsics.rs`. Shared mutable
+state lives in `ObjectClass::Record` (14) objects: prototype-less, internal slots only,
+read and written with `%RecordGet`/`%RecordSet`, never handed to user code.
+
+## D1373: Unhandled rejections are tracked in the heap and taken by the embedder
+date: 2026-11-01 · by: heap · issue: 0037
+HostPromiseRejectionTracker: rejecting a promise that has no handler adds it to
+`Interp::REJECTIONS`; a later `then` on it removes it. `Vm::take_unhandled_rejections`
+returns (and forgets) the reasons. Embedders check it when `run` returns
+`Done`/`Threw`/`Idle` (the queue is empty then), which is when qjs prints `Possibly
+unhandled promise rejection: <reason>` and exits with 1; `djs run` does the same, and the
+e2e harness reports the first one like gen-expected.sh (qjs's first stderr line).

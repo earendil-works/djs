@@ -69,7 +69,6 @@ result/awaited.js: throws SyntaxError: await is not supported yet
 result/bigint.js: throws SyntaxError: BigInt literals are not supported yet
 result/date.js: throws ReferenceError: 'Date' is not defined
 result/exit-in-callback.js: throws SyntaxError: await is not supported yet
-result/promise.js: throws ReferenceError: 'Promise' is not defined
 result/tojson-throws.js: crash: the return value needs JSON.stringify's slow path (Slow)
 result/tojson.js: crash: the return value needs JSON.stringify's slow path (Slow)
 ts/basics.ts: throws SyntaxError: unexpected token in expression: 'interface'

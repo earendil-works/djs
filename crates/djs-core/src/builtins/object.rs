@@ -186,7 +186,7 @@ pub(crate) fn class_tag(heap: &Heap, o: Obj) -> &'static str {
     match heap.object_class(o) {
         C::Array => "Array",
         C::Arguments => "Arguments",
-        C::Function | C::HostFunction | C::BoundFunction => "Function",
+        C::Function | C::HostFunction | C::BoundFunction | C::BuiltinClosure => "Function",
         C::Error => "Error",
         C::Boolean => "Boolean",
         C::Number => "Number",

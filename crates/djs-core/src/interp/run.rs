@@ -34,15 +34,16 @@ use crate::value::{Kind, Obj, Value};
 /// Why `run` returned.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Status {
-    /// The call returned this value.
+    /// The call returned this value, and no job or async host call is left (D1370).
     Done(Value),
-    /// The call threw this value.
+    /// The call (or a job) threw this value; no job or async host call is left.
     Threw(Value),
     /// The fuel ran out; `run` again to continue.
     OutOfFuel,
     /// Parked on a sync host call: resolve it, then `run` again.
     HostCall { call_id: u32, fn_id: u32 },
-    /// Nothing to run (no call in progress).
+    /// Nothing to run: no call in progress, or the job queue is empty and only async
+    /// host calls are pending (resolve them, then `run` again).
     Idle,
 }
 
@@ -65,6 +66,7 @@ impl Default for ExecOptions {
 }
 
 mod intrinsics;
+pub(crate) mod promise;
 
 /// The opcodes `Exec::fast_step` handles, as bytes for its `match`.
 mod fast {
@@ -300,9 +302,10 @@ impl<'h> Exec<'h> {
             self.set(base + 2 + i, Value::UNDEFINED);
         }
         let entry = cont == Continuation::Entry;
+        let bottom = cont.is_bottom();
         let header = [
-            Value::int(if entry { 0 } else { self.bp as i32 }),
-            Value::int(if entry { 0 } else { self.hp as i32 }),
+            Value::int(if bottom { 0 } else { self.bp as i32 }),
+            Value::int(if bottom { 0 } else { self.hp as i32 }),
             Value::int(ret_pc as i32),
             Value::int(argc as i32),
             Value::int(cont.to_flags()),
@@ -373,6 +376,23 @@ impl<'h> Exec<'h> {
                 let argc = self.unwrap_bound(base, argc, o)?;
                 self.call(base, argc, cont, ret_pc)
             }
+            ObjectClass::BuiltinClosure => {
+                // `F this args` becomes `builtin data args` (D1372).
+                let id = self.heap.object_slot(o, 0).as_int().unwrap_or(-1);
+                let target = u16::try_from(id)
+                    .map(|id| realm::installed_intrinsic(self.heap, id))
+                    .unwrap_or(Value::UNDEFINED);
+                if target.as_object().is_none() {
+                    return Err(Fault::Error(
+                        ErrorKind::InternalError,
+                        String::from("bad builtin closure"),
+                    ));
+                }
+                let data = self.heap.object_slot(o, 1);
+                self.set(base, target);
+                self.set(base + 1, data);
+                self.call(base, argc, cont, ret_pc)
+            }
             _ => type_error("not a function"),
         }
     }
@@ -407,12 +427,8 @@ impl<'h> Exec<'h> {
     fn do_return(&mut self, v: Value) -> Step {
         let cont = Continuation::from_flags(self.header_int(frame::FLAGS) as i32);
         let this = self.get(self.bp + 1);
-        if cont == Continuation::Entry {
-            self.sp = self.bp;
-            state::set_result(self.heap, v);
-            state::set_state(self.heap, RunState::Done);
-            self.flush();
-            return Ok(Some(Status::Done(v)));
+        if cont.is_bottom() {
+            return Ok(self.bottom_done(cont, Ok(v)));
         }
         self.pop_frame();
         match cont {
@@ -422,10 +438,80 @@ impl<'h> Exec<'h> {
                 self.push(if v.as_object().is_some() { v } else { this })
             }
             Continuation::Replace(slot) => self.set(slot, v),
-            Continuation::Entry => unreachable!(),
+            Continuation::Entry | Continuation::Job => unreachable!(),
         }
         self.safepoint();
         Ok(None)
+    }
+
+    /// The bottom frame of the entry call or of a job returned (`Ok`) or threw (`Err`):
+    /// records the entry call's outcome, then continues with the next job, if any.
+    /// D1370: an uncaught exception stops right away with `Threw`, like qjs, which runs
+    /// no more jobs after an uncaught exception (queued jobs run at the next `run`). Only
+    /// internal errors escape a job: the promise jobs catch everything else.
+    fn bottom_done(&mut self, cont: Continuation, r: Result<Value, Value>) -> Option<Status> {
+        self.sp = 0;
+        self.bp = 0;
+        self.hp = 0;
+        self.pc = 0;
+        match (cont, r) {
+            (Continuation::Job, Ok(_)) => self.next_job(),
+            (_, Ok(v)) => {
+                state::set_outcome(self.heap, RunState::Done, v);
+                self.next_job()
+            }
+            (_, Err(e)) => {
+                state::set_outcome(self.heap, RunState::Threw, e);
+                self.flush();
+                Some(Status::Threw(e))
+            }
+        }
+    }
+
+    /// With no frame active: enters the next queued job (`None`: keep running), or
+    /// stops with the outcome. D1370: `Done`/`Threw` only once the queue is empty and no
+    /// async host call is pending; with pending calls, `Idle`.
+    fn next_job(&mut self) -> Option<Status> {
+        let Some(job) = promise::dequeue(self.heap) else {
+            let outcome = state::outcome(self.heap);
+            state::set_state(self.heap, outcome);
+            self.flush();
+            if pending_async_calls(self.heap) {
+                return Some(Status::Idle);
+            }
+            let v = state::result(self.heap);
+            return Some(match outcome {
+                RunState::Done => Status::Done(v),
+                RunState::Threw => Status::Threw(v),
+                _ => Status::Idle,
+            });
+        };
+        // Jobs are installed builtins: JS closures, which never park.
+        debug_assert!(
+            job[0]
+                .as_object()
+                .is_some_and(|o| self.heap.object_class(o) == ObjectClass::Function)
+        );
+        state::set_state(self.heap, RunState::Running);
+        let r = self.ensure(2 + 4).and_then(|()| {
+            self.push(job[0]);
+            self.push(Value::UNDEFINED);
+            for &a in &job[1..] {
+                self.push(a);
+            }
+            self.call(0, 4, Continuation::Job, 0)
+        });
+        match r {
+            Ok(_) => None,
+            Err(f) => {
+                // The job could not even start (out of memory, stack limit).
+                let e = self.fault_value(f, None);
+                self.sp = 0;
+                state::set_outcome(self.heap, RunState::Threw, e);
+                self.flush();
+                Some(Status::Threw(e))
+            }
+        }
     }
 
     /// Pops the current (non-entry) frame and resumes the caller at its return pc.
@@ -458,12 +544,8 @@ impl<'h> Exec<'h> {
                 return None;
             }
             let cont = Continuation::from_flags(self.header_int(frame::FLAGS) as i32);
-            if cont == Continuation::Entry {
-                self.sp = self.bp;
-                state::set_result(self.heap, exc);
-                state::set_state(self.heap, RunState::Threw);
-                self.flush();
-                return Some(Status::Threw(exc));
+            if cont.is_bottom() {
+                return self.bottom_done(cont, Err(exc));
             }
             let ret_pc = self.header_int(frame::RET_PC);
             self.sp = self.bp;
@@ -579,7 +661,7 @@ impl<'h> Exec<'h> {
             }
             let _ = Object::CLASS;
             let cont = Continuation::from_flags(self.get(hp + frame::FLAGS).as_int().unwrap_or(0));
-            if cont == Continuation::Entry || lines >= STACK_TRACE_LIMIT {
+            if cont.is_bottom() || lines >= STACK_TRACE_LIMIT {
                 break;
             }
             let ret_pc = self.get(hp + frame::RET_PC).as_int().unwrap_or(1) as u32;
@@ -630,10 +712,12 @@ impl<'h> Exec<'h> {
     pub fn run(&mut self, fuel: u64) -> Status {
         self.fuel = fuel.min(i64::MAX as u64) as i64;
         match state::state(self.heap) {
-            RunState::Running | RunState::ThrowPending => {}
-            RunState::Idle => return Status::Idle,
-            RunState::Done => return Status::Done(state::result(self.heap)),
-            RunState::Threw => return Status::Threw(state::result(self.heap)),
+            RunState::Running | RunState::ThrowPending => self.load_frame(),
+            RunState::Idle | RunState::Done | RunState::Threw => {
+                if let Some(st) = self.next_job() {
+                    return st;
+                }
+            }
             RunState::HostCall => {
                 let i = state::interp(self.heap);
                 let call_id = self.heap.arena().get(i, Interp::HOST_CALL);
@@ -642,10 +726,10 @@ impl<'h> Exec<'h> {
                 return Status::HostCall { call_id, fn_id };
             }
         }
-        self.load_frame();
         if state::state(self.heap) == RunState::ThrowPending {
             state::set_state(self.heap, RunState::Running);
-            let exc = state::result(self.heap);
+            let exc = state::pending_throw(self.heap);
+            state::set_pending_throw(self.heap, Value::UNDEFINED);
             if let Some(st) = self.throw_value(exc, self.pc.saturating_sub(1)) {
                 return st;
             }
@@ -993,13 +1077,14 @@ impl<'h> Exec<'h> {
         self.fuel -= info.cost.fuel() as i64;
         let next = self.pc + info.size as u32;
         #[cfg(debug_assertions)]
-        let (pc0, sp0, bp0) = (self.pc, self.sp, self.bp);
+        let (pc0, sp0, bp0, t0) = (self.pc, self.sp, self.bp, self.template);
         let r = self.exec(op, next);
         // The table and the interpreter must agree (docs/compiler.md 4.2): when an
         // instruction completes in the same frame, it moved `sp` by its stack effect, and
         // fell through unless it jumps.
         #[cfg(debug_assertions)]
-        if matches!(r, Ok(None)) && self.bp == bp0 {
+        // (A bottom frame's return can enter a job's frame at the same `bp`.)
+        if matches!(r, Ok(None)) && self.bp == bp0 && self.template == t0 {
             use crate::bytecode::flags as opflags;
             let pops = info.pop as u32
                 + info.pop_imm.map_or(0, |k| {
@@ -2790,6 +2875,18 @@ fn add_host_call(heap: &mut Heap, fn_id: u32, args: u32, this: Value) -> Result<
     heap.value_array_set(table2, len, Value::internal(c));
     heap.arena_mut().set(table2, ValueArray::LEN, len + 1);
     Ok(id)
+}
+
+/// Whether an async host call is pending (its promise unsettled), D1374.
+pub(crate) fn pending_async_calls(heap: &Heap) -> bool {
+    let table = state::host_calls(heap);
+    (0..heap.value_array_len(table)).any(|i| {
+        let c = heap.value_array_get(table, i).as_internal().unwrap();
+        heap.arena()
+            .get::<Value>(c, HostCall::PROMISE)
+            .as_object()
+            .is_some()
+    })
 }
 
 /// The `HostCall` cell with `id`, if pending.

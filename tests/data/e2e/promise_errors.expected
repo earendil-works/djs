@@ -1,0 +1,23 @@
+TypeError: Promise object expected
+TypeError: not a function
+TypeError: must be called with new
+TypeError: not an object
+TypeError: not an object
+TypeError: not an object
+TypeError: not an object
+TypeError: not a function
+TypeError: not an object
+TypeError: not an object
+TypeError: not a constructor
+TypeError: resolving function already set
+TypeError: not a function
+TypeError: not an object
+TypeError: not a constructor
+TypeError: then is not a constructor
+fake reject TypeError: not a function
+fake reject TypeError: not a function
+fake reject 4
+fake resolve 5
+executor SyntaxError in executor
+all TypeError: value is not iterable
+handler TypeError

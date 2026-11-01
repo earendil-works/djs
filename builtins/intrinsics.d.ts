@@ -444,6 +444,56 @@ declare function CreateIterResultObject(value: Value, done: boolean): Obj;
 /** A new Array [a, b]. @leaf */
 declare function CreateArrayFromPair(a: Value, b: Value): Obj;
 
+// ---- Promises, records, builtin closures (0037, D1371/D1372) ----------------------------
+//
+// A promise capability is undefined (no result promise), a Promise (an internal
+// capability of %Promise%, resolved directly), or a Record [promise, resolve, reject].
+
+/** A new pending Promise with prototype proto. @leaf */
+declare function PromiseCreate(proto: Obj): Obj;
+/** Whether v is a Promise object (has [[PromiseState]]). @leaf */
+declare function IsPromise(v: Value): boolean;
+/** The realm's %Promise% constructor. @leaf */
+declare function IntrinsicPromise(): Obj;
+/** [[PromiseState]]: 0 pending, 1 fulfilled, 2 rejected. @leaf */
+declare function PromiseState(p: Obj): i32;
+/** [[PromiseResult]]. @leaf */
+declare function PromiseResult(p: Obj): Value;
+/** FulfillPromise ( promise, value ), 27.2.1.4: reactions become jobs. No-op unless pending. @leaf */
+declare function FulfillPromise(p: Obj, v: Value): void;
+/** RejectPromise ( promise, reason ), 27.2.1.7, with the rejection tracker. No-op unless pending. @leaf */
+declare function RejectPromise(p: Obj, reason: Value): void;
+/**
+ * Sets the [[AlreadyResolved]] of p's own resolving functions (and internal capability);
+ * false if it was already set.
+ * @leaf
+ */
+declare function PromiseClaimResolve(p: Obj): boolean;
+/**
+ * PerformPromiseThen ( promise, onFulfilled, onRejected, resultCapability ), 27.2.5.4.1,
+ * without the result: handlers that are not callable count as empty.
+ * @leaf
+ */
+declare function PerformPromiseThen(p: Obj, onFulfilled: Value, onRejected: Value, capability: Value): void;
+/** Queues NewPromiseResolveThenableJob ( promise, thenable, then ), 27.2.2.2. @leaf */
+declare function EnqueuePromiseResolveThenableJob(p: Obj, thenable: Obj, then: Value): void;
+/** A new internal Record with n slots, all undefined. @leaf */
+declare function NewRecord(n: i32): Obj;
+/** Slot i of a Record. @leaf */
+declare function RecordGet(r: Obj, i: i32): Value;
+/** @leaf */
+declare function RecordSet(r: Obj, i: i32, v: Value): void;
+/**
+ * A function (name "", `length`) that calls the builtin `kind` (the table in
+ * interp/run/intrinsics.rs: 0 PromiseResolveFunction, 1 PromiseRejectFunction, 2
+ * GetCapabilitiesExecutor, 3 PromiseAllResolveElement, 4 PromiseAllSettledResolveElement,
+ * 5 PromiseAllSettledRejectElement, 6 PromiseAnyRejectElement, 7 PromiseThenFinally, 8
+ * PromiseCatchFinally, 9 PromiseValueThunk, 10 PromiseThrower) with `this` = data and its
+ * own arguments.
+ * @leaf
+ */
+declare function NewBuiltinClosure(kind: i32, data: Value, length: i32): Fn;
+
 // ---- Used by the generated code (crates/djs-bgen/src/emit_js.rs) ------------------------
 
 /**

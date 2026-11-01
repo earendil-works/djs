@@ -1,0 +1,3 @@
+sync end
+caught handled late
+Uncaught Possibly unhandled promise rejection: TypeError: nobody listens

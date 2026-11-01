@@ -2497,6 +2497,535 @@ function ObjectPrototypeIsPrototypeOf(v) {
   return false;
 }
 
+// builtins/promise.ts:19
+function ResolvePromise(promise, resolution) {
+  if (resolution === promise) {
+    %RejectPromise(promise, %NewTypeError("promise self resolution"));
+    return;
+  }
+  if (!%IsObject(resolution)) {
+    %FulfillPromise(promise, resolution);
+    return;
+  }
+  let then = undefined;
+  try {
+    then = %Get(%AsObj(resolution), "then");
+  } catch (e) {
+    %RejectPromise(promise, e);
+    return;
+  }
+  if (!%IsCallable(then)) {
+    %FulfillPromise(promise, resolution);
+    return;
+  }
+  %EnqueuePromiseResolveThenableJob(promise, %AsObj(resolution), then);
+}
+
+// builtins/promise.ts:46
+function ClaimResolution(data) {
+  if (%IsPromise(data)) {
+    return %PromiseClaimResolve(%AsObj(data)) ? data : undefined;
+  }
+  const r = %AsObj(data);
+  if (%RecordGet(r, 1) === true) {
+    return undefined;
+  }
+  %RecordSet(r, 1, true);
+  return %RecordGet(r, 0);
+}
+
+// builtins/promise.ts:62 %PromiseResolveFunction
+function PromiseResolveFunction(resolution) {
+  ResolveWithData(this, resolution);
+}
+
+// builtins/promise.ts:67
+function ResolveWithData(data, resolution) {
+  const promise = ClaimResolution(data);
+  if (promise !== undefined) {
+    ResolvePromise(%AsObj(promise), resolution);
+  }
+}
+
+// builtins/promise.ts:75
+function RejectWithData(data, reason) {
+  const promise = ClaimResolution(data);
+  if (promise !== undefined) {
+    %RejectPromise(%AsObj(promise), reason);
+  }
+}
+
+// builtins/promise.ts:86 %PromiseRejectFunction
+function PromiseRejectFunction(reason) {
+  RejectWithData(this, reason);
+}
+
+// builtins/promise.ts:91
+function CapabilityPromise(capability) {
+  if (%IsPromise(capability)) {
+    return capability;
+  }
+  return %RecordGet(%AsObj(capability), 0);
+}
+
+// builtins/promise.ts:99
+function ResolveCapability(capability, v) {
+  if (%IsPromise(capability)) {
+    ResolveWithData(capability, v);
+    return;
+  }
+  %Call(%RecordGet(%AsObj(capability), 1), undefined, v);
+}
+
+// builtins/promise.ts:108
+function RejectCapability(capability, reason) {
+  if (%IsPromise(capability)) {
+    RejectWithData(capability, reason);
+    return;
+  }
+  %Call(%RecordGet(%AsObj(capability), 2), undefined, reason);
+}
+
+// builtins/promise.ts:117
+function CapabilityResolveFunction(capability) {
+  if (%IsPromise(capability)) {
+    return %NewBuiltinClosure(0, capability, 1);
+  }
+  return %RecordGet(%AsObj(capability), 1);
+}
+
+// builtins/promise.ts:125
+function CapabilityRejectFunction(capability) {
+  if (%IsPromise(capability)) {
+    return %NewBuiltinClosure(1, capability, 1);
+  }
+  return %RecordGet(%AsObj(capability), 2);
+}
+
+// builtins/promise.ts:136 %GetCapabilitiesExecutor
+function GetCapabilitiesExecutor(resolve, reject) {
+  const r = %AsObj(this);
+  if (%RecordGet(r, 1) !== undefined || %RecordGet(r, 2) !== undefined) {
+    throw %NewTypeError("resolving function already set");
+  }
+  %RecordSet(r, 1, resolve);
+  %RecordSet(r, 2, reject);
+}
+
+// builtins/promise.ts:146
+function NewPromiseCapability(c) {
+  if (c === %IntrinsicPromise()) {
+    return %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
+  }
+  if (!%IsConstructor(c)) {
+    throw %NewTypeError("not a constructor");
+  }
+  const r = %NewRecord(3);
+  const executor = %NewBuiltinClosure(2, r, 2);
+  const promise = %Construct(c, executor);
+  if (!%IsCallable(%RecordGet(r, 1)) || !%IsCallable(%RecordGet(r, 2))) {
+    throw %NewTypeError("not a function");
+  }
+  %RecordSet(r, 0, promise);
+  return r;
+}
+
+// builtins/promise.ts:165
+function PromiseResolve(c, x) {
+  if (%IsPromise(x)) {
+    const xConstructor = %Get(%AsObj(x), "constructor");
+    if (xConstructor === c) {
+      return x;
+    }
+  }
+  const capability = NewPromiseCapability(c);
+  ResolveCapability(capability, x);
+  return CapabilityPromise(capability);
+}
+
+// builtins/promise.ts:178
+function SpeciesConstructor(o, defaultConstructor) {
+  const c = %Get(o, "constructor");
+  if (c === undefined) {
+    return defaultConstructor;
+  }
+  if (!%IsObject(c)) {
+    throw %NewTypeError("not an object");
+  }
+  const s = %Get(%AsObj(c), %WellKnownSymbol("species"));
+  if (s === undefined || s === null) {
+    return defaultConstructor;
+  }
+  if (%IsConstructor(s)) {
+    return s;
+  }
+  throw %NewTypeError("not a constructor");
+}
+
+// builtins/promise.ts:197
+function InvokeThen(v, onFulfilled, onRejected) {
+  return %Call(%GetV(v, "then"), v, onFulfilled, onRejected);
+}
+
+// builtins/promise.ts:208 %PromiseReactionJob
+function PromiseReactionJob(capability, handler, argument, fulfilled) {
+  let ok = fulfilled;
+  let result = argument;
+  if (handler !== undefined) {
+    try {
+      result = %Call(handler, undefined, argument);
+      ok = true;
+    } catch (e) {
+      result = e;
+      ok = false;
+    }
+  }
+  if (capability === undefined) {
+    return;
+  }
+  if (ok) {
+    ResolveCapability(capability, result);
+  } else {
+    RejectCapability(capability, result);
+  }
+}
+
+// builtins/promise.ts:235 %PromiseResolveThenableJob
+function PromiseResolveThenableJob(promise, thenable, then) {
+  const r = %NewRecord(2);
+  %RecordSet(r, 0, promise);
+  %RecordSet(r, 1, false);
+  const resolve = %NewBuiltinClosure(0, r, 1);
+  const reject = %NewBuiltinClosure(1, r, 1);
+  try {
+    %Call(then, thenable, resolve, reject);
+  } catch (e) {
+    %Call(reject, undefined, e);
+  }
+}
+
+// builtins/promise.ts:255 constructor Promise %PromiseConstructor
+function PromiseConstructor(executor) {
+  if (new.target === undefined) {
+    throw %NewTypeError("must be called with new");
+  }
+  if (!%IsCallable(executor)) {
+    throw %NewTypeError("not a function");
+  }
+  const promise = %PromiseCreate(GetPrototypeFromConstructor(new.target, "PromisePrototype"));
+  const resolve = %NewBuiltinClosure(0, promise, 1);
+  const reject = %NewBuiltinClosure(1, promise, 1);
+  try {
+    %Call(executor, undefined, resolve, reject);
+  } catch (e) {
+    %Call(reject, undefined, e);
+  }
+  return promise;
+}
+
+// builtins/promise.ts:277 get Promise[Symbol.species]
+function PromiseSpecies() {
+  return this;
+}
+
+// builtins/promise.ts:282
+function PromiseThisConstructor(c) {
+  if (!%IsObject(c)) {
+    throw %NewTypeError("not an object");
+  }
+  return c;
+}
+
+// builtins/promise.ts:293 Promise.resolve
+function PromiseStaticResolve(x) {
+  return PromiseResolve(PromiseThisConstructor(this), x);
+}
+
+// builtins/promise.ts:301 Promise.reject
+function PromiseStaticReject(r) {
+  const capability = NewPromiseCapability(PromiseThisConstructor(this));
+  RejectCapability(capability, r);
+  return CapabilityPromise(capability);
+}
+
+// builtins/promise.ts:313
+function GetPromiseResolve(c) {
+  const promiseResolve = %Get(%AsObj(c), "resolve");
+  if (!%IsCallable(promiseResolve)) {
+    throw %NewTypeError("not a function");
+  }
+  return promiseResolve;
+}
+
+// builtins/promise.ts:322
+function DecrementRemaining(remaining) {
+  const n = %AsNumber(%RecordGet(remaining, 0)) - 1;
+  %RecordSet(remaining, 0, n);
+  return n;
+}
+
+// builtins/promise.ts:329
+function NewElementRecord(index, values, capability, remaining) {
+  const r = %NewRecord(5);
+  %RecordSet(r, 0, false);
+  %RecordSet(r, 1, index);
+  %RecordSet(r, 2, values);
+  %RecordSet(r, 3, capability);
+  %RecordSet(r, 4, remaining);
+  return r;
+}
+
+// builtins/promise.ts:344
+function SettleElement(data, x, reject) {
+  const r = %AsObj(data);
+  if (%RecordGet(r, 0) === true) {
+    return;
+  }
+  %RecordSet(r, 0, true);
+  const values = %AsObj(%RecordGet(r, 2));
+  %CreateDataPropertyOrThrow(values, %RecordGet(r, 1), x);
+  if (DecrementRemaining(%AsObj(%RecordGet(r, 4))) === 0) {
+    const capability = %RecordGet(r, 3);
+    if (reject) {
+      RejectCapability(capability, NewAggregateError(values));
+    } else {
+      ResolveCapability(capability, values);
+    }
+  }
+}
+
+// builtins/promise.ts:366 %PromiseAllResolveElement
+function PromiseAllResolveElement(x) {
+  SettleElement(this, x, false);
+}
+
+// builtins/promise.ts:371
+function SettledRecord(fulfilled, x) {
+  const o = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+  %CreateDataPropertyOrThrow(o, "status", fulfilled ? "fulfilled" : "rejected");
+  %CreateDataPropertyOrThrow(o, fulfilled ? "value" : "reason", x);
+  return o;
+}
+
+// builtins/promise.ts:382 %PromiseAllSettledResolveElement
+function PromiseAllSettledResolveElement(x) {
+  if (%RecordGet(%AsObj(this), 0) === true) {
+    return;
+  }
+  SettleElement(this, SettledRecord(true, x), false);
+}
+
+// builtins/promise.ts:393 %PromiseAllSettledRejectElement
+function PromiseAllSettledRejectElement(x) {
+  if (%RecordGet(%AsObj(this), 0) === true) {
+    return;
+  }
+  SettleElement(this, SettledRecord(false, x), false);
+}
+
+// builtins/promise.ts:404 %PromiseAnyRejectElement
+function PromiseAnyRejectElement(x) {
+  SettleElement(this, x, true);
+}
+
+// builtins/promise.ts:409
+function NewAggregateError(errors) {
+  const e = %ErrorCreate(%RealmIntrinsic("AggregateErrorPrototype"));
+  %DefineDataPropertyOrThrow(e, "errors", CreateArrayFromList(errors), 5);
+  %CaptureStack(e);
+  return e;
+}
+
+// builtins/promise.ts:417
+function CreateArrayFromList(list) {
+  const len = LengthOfArrayLike(list);
+  const a = %ArrayCreate(0);
+  for (let k = 0; k < len; k++) {
+    %CreateDataPropertyOrThrow(a, k, %Get(list, k));
+  }
+  return a;
+}
+
+// builtins/promise.ts:432
+function PerformPromiseCombinator(thisValue, iterable, kind) {
+  const c = PromiseThisConstructor(thisValue);
+  const capability = NewPromiseCapability(c);
+  let promiseResolve = undefined;
+  let iterator = undefined;
+  let next = undefined;
+  try {
+    promiseResolve = GetPromiseResolve(c);
+    iterator = GetIterator(iterable);
+    next = %Get(%AsObj(iterator), "next");
+  } catch (e) {
+    RejectCapability(capability, e);
+    return CapabilityPromise(capability);
+  }
+  const it = %AsObj(iterator);
+  let iteratorDone = false;
+  try {
+    const values = %ArrayCreate(0);
+    const remaining = %NewRecord(1);
+    %RecordSet(remaining, 0, 1);
+    let index = 0;
+    let resolveFn = undefined;
+    let rejectFn = undefined;
+    if (kind === 3 || kind === 2) {
+      resolveFn = CapabilityResolveFunction(capability);
+    }
+    if (kind !== 2) {
+      rejectFn = CapabilityRejectFunction(capability);
+    }
+    while (true) {
+      iteratorDone = true;
+      const result = IteratorNextResult(it, next);
+      if (%ToBoolean(%Get(result, "done"))) {
+        if (kind !== 3 && DecrementRemaining(remaining) === 0) {
+          if (kind === 2) {
+            RejectCapability(capability, NewAggregateError(values));
+          } else {
+            ResolveCapability(capability, values);
+          }
+        }
+        return CapabilityPromise(capability);
+      }
+      const nextValue = %Get(result, "value");
+      iteratorDone = false;
+      if (kind !== 3) {
+        %CreateDataPropertyOrThrow(values, index, undefined);
+      }
+      const nextPromise = %Call(promiseResolve, c, nextValue);
+      if (kind === 3) {
+        InvokeThen(nextPromise, resolveFn, rejectFn);
+      } else {
+        const data = NewElementRecord(index, values, capability, remaining);
+        %RecordSet(remaining, 0, %AsNumber(%RecordGet(remaining, 0)) + 1);
+        if (kind === 0) {
+          InvokeThen(nextPromise, %NewBuiltinClosure(3, data, 1), rejectFn);
+        } else if (kind === 1) {
+          InvokeThen(nextPromise, %NewBuiltinClosure(4, data, 1), %NewBuiltinClosure(5, data, 1));
+        } else {
+          InvokeThen(nextPromise, resolveFn, %NewBuiltinClosure(6, data, 1));
+        }
+      }
+      index++;
+    }
+  } catch (e) {
+    if (!iteratorDone) {
+      IteratorCloseThrow(it);
+    }
+    RejectCapability(capability, e);
+    return CapabilityPromise(capability);
+  }
+}
+
+// builtins/promise.ts:511 Promise.all
+function PromiseAll(iterable) {
+  return PerformPromiseCombinator(this, iterable, 0);
+}
+
+// builtins/promise.ts:519 Promise.allSettled
+function PromiseAllSettled(iterable) {
+  return PerformPromiseCombinator(this, iterable, 1);
+}
+
+// builtins/promise.ts:527 Promise.any
+function PromiseAny(iterable) {
+  return PerformPromiseCombinator(this, iterable, 2);
+}
+
+// builtins/promise.ts:536 Promise.try
+function PromiseTry(callback, ...args) {
+  const c = PromiseThisConstructor(this);
+  let result = undefined;
+  try {
+    result = %CallWithArray(callback, undefined, args);
+  } catch (e) {
+    const capability = NewPromiseCapability(c);
+    RejectCapability(capability, e);
+    return CapabilityPromise(capability);
+  }
+  return PromiseResolve(c, result);
+}
+
+// builtins/promise.ts:553 Promise.race
+function PromiseRace(iterable) {
+  return PerformPromiseCombinator(this, iterable, 3);
+}
+
+// builtins/promise.ts:561 Promise.withResolvers
+function PromiseWithResolvers() {
+  const capability = NewPromiseCapability(PromiseThisConstructor(this));
+  const o = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+  %CreateDataPropertyOrThrow(o, "promise", CapabilityPromise(capability));
+  %CreateDataPropertyOrThrow(o, "resolve", CapabilityResolveFunction(capability));
+  %CreateDataPropertyOrThrow(o, "reject", CapabilityRejectFunction(capability));
+  return o;
+}
+
+// builtins/promise.ts:576 Promise.prototype.then
+function PromisePrototypeThen(onFulfilled, onRejected) {
+  if (!%IsPromise(this)) {
+    throw %NewTypeError("Promise object expected");
+  }
+  const promise = %AsObj(this);
+  const c = SpeciesConstructor(promise, %IntrinsicPromise());
+  const capability = NewPromiseCapability(c);
+  %PerformPromiseThen(promise, onFulfilled, onRejected, capability);
+  return CapabilityPromise(capability);
+}
+
+// builtins/promise.ts:591 Promise.prototype.catch
+function PromisePrototypeCatch(onRejected) {
+  return InvokeThen(this, undefined, onRejected);
+}
+
+// builtins/promise.ts:599 Promise.prototype.finally
+function PromisePrototypeFinally(onFinally) {
+  if (!%IsObject(this)) {
+    throw %NewTypeError("not an object");
+  }
+  const c = SpeciesConstructor(%AsObj(this), %IntrinsicPromise());
+  if (!%IsCallable(onFinally)) {
+    return InvokeThen(this, onFinally, onFinally);
+  }
+  const data = %NewRecord(2);
+  %RecordSet(data, 0, onFinally);
+  %RecordSet(data, 1, c);
+  return InvokeThen(this, %NewBuiltinClosure(7, data, 1), %NewBuiltinClosure(8, data, 1));
+}
+
+// builtins/promise.ts:617 %PromiseThenFinally
+function PromiseThenFinally(value) {
+  const data = %AsObj(this);
+  const result = %Call(%RecordGet(data, 0), undefined);
+  const p = PromiseResolve(%RecordGet(data, 1), result);
+  return InvokeThen(p, %NewBuiltinClosure(9, value, 0), undefined);
+}
+
+// builtins/promise.ts:628 %PromiseCatchFinally
+function PromiseCatchFinally(reason) {
+  const data = %AsObj(this);
+  const result = %Call(%RecordGet(data, 0), undefined);
+  const p = PromiseResolve(%RecordGet(data, 1), result);
+  return InvokeThen(p, %NewBuiltinClosure(10, reason, 0), undefined);
+}
+
+// builtins/promise.ts:639 %PromiseValueThunk
+function PromiseValueThunk() {
+  return this;
+}
+
+// builtins/promise.ts:647 %PromiseThrower
+function PromiseThrower() {
+  throw this;
+}
+
+// builtins/promise.ts:656 value Promise.prototype[Symbol.toStringTag]
+function PromisePrototypeToStringTag() {
+  return "Promise";
+}
+
 // builtins/reflect.ts:9 value Reflect
 function ReflectObject() {
   return %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
@@ -3604,6 +4133,7 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("globalThis", "isNaN", GlobalIsNaN, 1);
 %InstallMethod("globalThis", "isFinite", GlobalIsFinite, 1);
 %InstallConstructor("globalThis", "Object", ObjectConstructor, 1, undefined);
+%InstallConstructor("globalThis", "Promise", PromiseConstructor, 1, undefined);
 %InstallValue("globalThis", "Reflect", ReflectObject(), 5);
 %InstallConstructor("globalThis", "Set", SetConstructor, 0, undefined);
 %InstallConstructor("globalThis", "String", StringConstructor, 1, undefined);
@@ -3782,6 +4312,19 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("Object.prototype", "toLocaleString", ObjectPrototypeToLocaleString, 0);
 %InstallMethod("Object.prototype", "valueOf", ObjectPrototypeValueOf, 0);
 %InstallMethod("Object.prototype", "isPrototypeOf", ObjectPrototypeIsPrototypeOf, 1);
+%InstallAccessor("Promise", %WellKnownSymbol("species"), PromiseSpecies, false);
+%InstallMethod("Promise", "resolve", PromiseStaticResolve, 1);
+%InstallMethod("Promise", "reject", PromiseStaticReject, 1);
+%InstallMethod("Promise", "all", PromiseAll, 1);
+%InstallMethod("Promise", "allSettled", PromiseAllSettled, 1);
+%InstallMethod("Promise", "any", PromiseAny, 1);
+%InstallMethod("Promise", "try", PromiseTry, 1);
+%InstallMethod("Promise", "race", PromiseRace, 1);
+%InstallMethod("Promise", "withResolvers", PromiseWithResolvers, 0);
+%InstallMethod("Promise.prototype", "then", PromisePrototypeThen, 2);
+%InstallMethod("Promise.prototype", "catch", PromisePrototypeCatch, 1);
+%InstallMethod("Promise.prototype", "finally", PromisePrototypeFinally, 1);
+%InstallValue("Promise.prototype", %WellKnownSymbol("toStringTag"), PromisePrototypeToStringTag(), 4);
 %InstallValue("Reflect", %WellKnownSymbol("toStringTag"), ReflectToStringTag(), 4);
 %InstallMethod("Reflect", "apply", ReflectApply, 3);
 %InstallMethod("Reflect", "construct", ReflectConstruct, 2);
@@ -3892,5 +4435,19 @@ function WeakSetPrototypeToStringTag() {
 %InstallIntrinsic("ArrayIteratorPrototypeNext", ArrayIteratorPrototypeNext);
 %InstallIntrinsic("StringPrototypeIterator", StringPrototypeIterator);
 %InstallIntrinsic("StringIteratorPrototypeNext", StringIteratorPrototypeNext);
+%InstallIntrinsic("PromiseResolveFunction", PromiseResolveFunction);
+%InstallIntrinsic("PromiseRejectFunction", PromiseRejectFunction);
+%InstallIntrinsic("GetCapabilitiesExecutor", GetCapabilitiesExecutor);
+%InstallIntrinsic("PromiseReactionJob", PromiseReactionJob);
+%InstallIntrinsic("PromiseResolveThenableJob", PromiseResolveThenableJob);
+%InstallIntrinsic("PromiseConstructor", PromiseConstructor);
+%InstallIntrinsic("PromiseAllResolveElement", PromiseAllResolveElement);
+%InstallIntrinsic("PromiseAllSettledResolveElement", PromiseAllSettledResolveElement);
+%InstallIntrinsic("PromiseAllSettledRejectElement", PromiseAllSettledRejectElement);
+%InstallIntrinsic("PromiseAnyRejectElement", PromiseAnyRejectElement);
+%InstallIntrinsic("PromiseThenFinally", PromiseThenFinally);
+%InstallIntrinsic("PromiseCatchFinally", PromiseCatchFinally);
+%InstallIntrinsic("PromiseValueThunk", PromiseValueThunk);
+%InstallIntrinsic("PromiseThrower", PromiseThrower);
 %InstallIntrinsic("ArraySpread", ArraySpread);
 })();

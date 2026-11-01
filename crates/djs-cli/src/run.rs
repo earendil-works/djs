@@ -160,7 +160,18 @@ pub fn run_main(
     let fuel = opts.suspend_every.unwrap_or(u64::MAX);
     loop {
         match vm.run(fuel) {
-            Status::Done(_) | Status::Idle => return 0,
+            Status::Done(_) | Status::Idle => {
+                // Like qjs: unhandled rejections are reported once the jobs ran out.
+                let rejections = vm.take_unhandled_rejections();
+                for &r in &rejections {
+                    let msg = vm.display(r);
+                    let _ = writeln!(err, "Possibly unhandled promise rejection: {msg}");
+                    if let Some(stack) = vm.error_stack(r) {
+                        let _ = write!(err, "{stack}");
+                    }
+                }
+                return i32::from(!rejections.is_empty());
+            }
             Status::Threw(e) => {
                 let msg = vm.display(e);
                 let _ = writeln!(err, "Uncaught {msg}");

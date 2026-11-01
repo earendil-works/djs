@@ -90,7 +90,16 @@ fn run_case(src: &str, name: &str, mode: Mode) -> String {
         stops += 1;
         let status = vm.run(fuel);
         match status {
-            Status::Done(_) => break,
+            Status::Done(_) => {
+                // qjs reports these on stderr, and gen-expected.sh keeps its first line.
+                if let Some(&r) = vm.take_unhandled_rejections().first() {
+                    out += &format!(
+                        "Uncaught Possibly unhandled promise rejection: {}\n",
+                        vm.display(r)
+                    );
+                }
+                break;
+            }
             Status::Threw(e) => {
                 out += &format!("Uncaught {}\n", vm.display(e));
                 break;

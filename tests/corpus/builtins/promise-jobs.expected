@@ -1,0 +1,6 @@
+sync 0
+allSettled [{"status":"rejected","reason":4},{"status":"fulfilled","value":5}]
+any AggregateError [6]
+all [1,2,3]
+=== return
+then 1, ctor 2, caught no, finally, chain 3, race 7, after finally 8

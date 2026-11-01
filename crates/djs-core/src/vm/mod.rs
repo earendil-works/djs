@@ -5,6 +5,7 @@
 //! vm.instantiate(template)           a closure for a compiled top-level template
 //! vm.call(f, this, args)             pushes the entry frame; does not run it
 //! vm.run(fuel) -> Status             Done | Threw | OutOfFuel | HostCall | Idle
+//!                                    (the job queue runs after the entry call, D1370)
 //! vm.host_call(id)                   the fn id, `this` and arguments of a parked call
 //! vm.resolve_host_call(id, result)   completes it; then `run` again
 //! vm.bytes() / Vm::from_bytes(..)    the whole VM as a position-independent image
@@ -359,15 +360,15 @@ impl Vm {
                 let exc = ex.fault_value(fault, None);
                 ex.set_sp(0);
                 ex.flush();
-                state::set_result(&mut self.heap, exc);
-                state::set_state(&mut self.heap, RunState::Threw);
+                state::set_outcome(&mut self.heap, RunState::Threw, exc);
             }
         }
         Ok(())
     }
 
     /// Abandons the current call, if any (running, out of fuel, or parked on a host
-    /// call): its frames and pending host calls are dropped and the VM is `Idle` again,
+    /// call): its frames, pending host calls, queued jobs and tracked rejections are
+    /// dropped and the VM is `Idle` again,
     /// with its realm and globals intact. For hosts that stop a run that used up its fuel
     /// budget.
     pub fn abort(&mut self) {
@@ -395,8 +396,10 @@ impl Vm {
             self.heap.value_array_set(calls, k, Value::ZERO);
         }
         self.heap.arena_mut().set(calls, ValueArray::LEN, 0);
-        state::set_result(&mut self.heap, Value::UNDEFINED);
-        state::set_state(&mut self.heap, RunState::Idle);
+        run::promise::clear_jobs(&mut self.heap);
+        run::promise::clear_rejections(&mut self.heap);
+        state::set_pending_throw(&mut self.heap, Value::UNDEFINED);
+        state::set_outcome(&mut self.heap, RunState::Idle, Value::UNDEFINED);
     }
 
     /// Runs with `fuel` (instruction cost units).
@@ -440,8 +443,7 @@ impl Vm {
                 Ok(v) => (RunState::Done, v),
                 Err(e) => (RunState::Threw, e),
             };
-            state::set_result(&mut self.heap, v);
-            state::set_state(&mut self.heap, s);
+            state::set_outcome(&mut self.heap, s, v);
             return Ok(());
         }
         match result {
@@ -456,11 +458,37 @@ impl Vm {
                 state::set_state(&mut self.heap, RunState::Running);
             }
             Err(e) => {
-                state::set_result(&mut self.heap, e);
+                state::set_pending_throw(&mut self.heap, e);
                 state::set_state(&mut self.heap, RunState::ThrowPending);
             }
         }
         Ok(())
+    }
+
+    /// The state of a Promise: `None` if `v` is not a promise, `Some(None)` while it is
+    /// pending, else its result (`Ok` fulfilled, `Err` rejected). For hosts whose entry
+    /// function returns a promise (an async body).
+    #[allow(clippy::option_option)]
+    pub fn promise_state(&self, v: Value) -> Option<Option<Result<Value, Value>>> {
+        use run::promise;
+        let p = promise::as_promise(&self.heap, v)?;
+        let r = promise::result_of(&self.heap, p);
+        Some(match promise::state_of(&self.heap, p) {
+            promise::FULFILLED => Some(Ok(r)),
+            promise::REJECTED => Some(Err(r)),
+            _ => None,
+        })
+    }
+
+    /// The reasons of the promises that were rejected without a handler and still have
+    /// none (HostPromiseRejectionTracker, D1373), oldest first; they are forgotten. Check
+    /// after `run` returns `Done`, `Threw` or `Idle` (the job queue is empty then), the way
+    /// qjs reports `Possibly unhandled promise rejection`.
+    pub fn take_unhandled_rejections(&mut self) -> Vec<Value> {
+        run::promise::take_rejections(&mut self.heap)
+            .into_iter()
+            .map(|p| run::promise::result_of(&self.heap, p))
+            .collect()
     }
 
     /// Formats a value the way `console.log` shows it in `djs run`: strings raw, Errors

@@ -144,7 +144,13 @@ impl Djs {
         loop {
             match s.vm.run(slice) {
                 Status::Done(v) => {
-                    let done = s.result(v);
+                    // The async body's promise (D1370: Done comes once no job is left).
+                    let done = match s.vm.promise_state(v) {
+                        None => s.result(v),
+                        Some(Some(Ok(v))) => s.result(v),
+                        Some(Some(Err(e))) => Done::Throw(s.describe(e)),
+                        Some(None) => Done::Throw(STALL.into()),
+                    };
                     return Ok(s.finish(done));
                 }
                 Status::Threw(e) => {

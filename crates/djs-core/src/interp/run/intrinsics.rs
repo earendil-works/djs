@@ -13,7 +13,7 @@ use crate::heap::cells::flags::{OBJ_BUILTIN, OBJ_BUILTIN_CTOR};
 use crate::heap::{ObjectClass, atoms};
 
 /// The id of `name`, at compile time (a typo fails the build).
-const fn id(name: &str) -> u16 {
+pub(super) const fn id(name: &str) -> u16 {
     let mut k = 0;
     while k < INTRINSICS.len() {
         let a = INTRINSICS[k].name.as_bytes();
@@ -204,6 +204,38 @@ const CREATE_STRING_ITERATOR: u16 = id("CreateStringIterator");
 const STRING_ITERATOR_TARGET: u16 = id("StringIteratorTarget");
 const STR_CODE_POINT_STRING: u16 = id("StrCodePointString");
 const HAS_ORIGINAL_ITERATION: u16 = id("HasOriginalIteration");
+const PROMISE_CREATE: u16 = id("PromiseCreate");
+const IS_PROMISE: u16 = id("IsPromise");
+const INTRINSIC_PROMISE: u16 = id("IntrinsicPromise");
+const PROMISE_STATE: u16 = id("PromiseState");
+const PROMISE_RESULT: u16 = id("PromiseResult");
+const FULFILL_PROMISE: u16 = id("FulfillPromise");
+const REJECT_PROMISE: u16 = id("RejectPromise");
+const PROMISE_CLAIM_RESOLVE: u16 = id("PromiseClaimResolve");
+const PERFORM_PROMISE_THEN: u16 = id("PerformPromiseThen");
+const ENQUEUE_PROMISE_RESOLVE_THENABLE_JOB: u16 = id("EnqueuePromiseResolveThenableJob");
+const NEW_RECORD: u16 = id("NewRecord");
+const RECORD_GET: u16 = id("RecordGet");
+const RECORD_SET: u16 = id("RecordSet");
+const NEW_BUILTIN_CLOSURE: u16 = id("NewBuiltinClosure");
+pub(super) const PROMISE_CONSTRUCTOR: u16 = id("PromiseConstructor");
+const PROMISE_RESOLVE_THENABLE_JOB: u16 = id("PromiseResolveThenableJob");
+
+/// The builtins a `%NewBuiltinClosure(kind, ..)` calls, by kind (D1372; the list in
+/// builtins/intrinsics.d.ts).
+const BUILTIN_CLOSURES: [u16; 11] = [
+    id("PromiseResolveFunction"),
+    id("PromiseRejectFunction"),
+    id("GetCapabilitiesExecutor"),
+    id("PromiseAllResolveElement"),
+    id("PromiseAllSettledResolveElement"),
+    id("PromiseAllSettledRejectElement"),
+    id("PromiseAnyRejectElement"),
+    id("PromiseThenFinally"),
+    id("PromiseCatchFinally"),
+    id("PromiseValueThunk"),
+    id("PromiseThrower"),
+];
 
 /// The libm intrinsics (D1150): `F64Sin(x)` and friends.
 fn math_leaf(id: u16, x: f64, y: f64) -> Option<f64> {
@@ -1077,6 +1109,100 @@ impl Exec<'_> {
             INSTALL_METHOD => {
                 self.install_method(a0, arg(self, 1), arg(self, 2), arg(self, 3))?;
                 Value::UNDEFINED
+            }
+            PROMISE_CREATE => {
+                let Some(proto) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                Value::object(promise::alloc(self.heap, Some(proto))?)
+            }
+            IS_PROMISE => Value::bool(promise::as_promise(self.heap, a0).is_some()),
+            INTRINSIC_PROMISE => realm::installed_intrinsic(self.heap, PROMISE_CONSTRUCTOR),
+            PROMISE_STATE
+            | PROMISE_RESULT
+            | FULFILL_PROMISE
+            | REJECT_PROMISE
+            | PROMISE_CLAIM_RESOLVE
+            | PERFORM_PROMISE_THEN
+            | ENQUEUE_PROMISE_RESOLVE_THENABLE_JOB => {
+                let Some(p) = promise::as_promise(self.heap, a0) else {
+                    return bad_argument(info.name);
+                };
+                match id {
+                    PROMISE_STATE => Value::int(promise::state_of(self.heap, p)),
+                    PROMISE_RESULT => promise::result_of(self.heap, p),
+                    FULFILL_PROMISE | REJECT_PROMISE => {
+                        let v = arg(self, 1);
+                        promise::settle(self.heap, p, id == FULFILL_PROMISE, v)?;
+                        Value::UNDEFINED
+                    }
+                    PROMISE_CLAIM_RESOLVE => {
+                        let f = promise::flags(self.heap, p);
+                        promise::set_flags(self.heap, p, f | promise::FLAG_RESOLVED);
+                        Value::bool(f & promise::FLAG_RESOLVED == 0)
+                    }
+                    PERFORM_PROMISE_THEN => {
+                        let (f, r, cap) = (arg(self, 1), arg(self, 2), arg(self, 3));
+                        promise::perform_then(self.heap, p, f, r, cap)?;
+                        Value::UNDEFINED
+                    }
+                    _ => {
+                        let job =
+                            realm::installed_intrinsic(self.heap, PROMISE_RESOLVE_THENABLE_JOB);
+                        let args = [a0, arg(self, 1), arg(self, 2), Value::UNDEFINED];
+                        promise::enqueue(self.heap, job, args)?;
+                        Value::UNDEFINED
+                    }
+                }
+            }
+            NEW_RECORD => {
+                let n = a0.as_int().and_then(|n| u32::try_from(n).ok());
+                let Some(n) = n.filter(|&n| n <= 16) else {
+                    return bad_argument(info.name);
+                };
+                let r = self.heap.alloc_object(ObjectClass::Record, None, n)?;
+                for i in 0..n {
+                    self.heap.set_object_slot(r, i, Value::UNDEFINED);
+                }
+                Value::object(r)
+            }
+            RECORD_GET | RECORD_SET => {
+                let r = a0
+                    .as_object()
+                    .filter(|&o| self.heap.object_class(o) == ObjectClass::Record);
+                let i = arg(self, 1).as_int().and_then(|i| u32::try_from(i).ok());
+                let (Some(r), Some(i)) = (r, i) else {
+                    return bad_argument(info.name);
+                };
+                if i >= self.heap.object_slot_count(r) {
+                    return bad_argument(info.name);
+                }
+                if id == RECORD_GET {
+                    self.heap.object_slot(r, i)
+                } else {
+                    self.heap.set_object_slot(r, i, arg(self, 2));
+                    Value::UNDEFINED
+                }
+            }
+            NEW_BUILTIN_CLOSURE => {
+                let kind = a0.as_int().and_then(|k| usize::try_from(k).ok());
+                let target = kind.and_then(|k| BUILTIN_CLOSURES.get(k).copied());
+                let (Some(target), Some(length)) = (target, arg(self, 2).as_int()) else {
+                    return bad_argument(info.name);
+                };
+                let proto = intrinsic_obj(self.heap, Intrinsic::FunctionProto);
+                let f = self
+                    .heap
+                    .alloc_object(ObjectClass::BuiltinClosure, Some(proto), 2)?;
+                self.heap.set_object_slot(f, 0, Value::int(target as i32));
+                self.heap.set_object_slot(f, 1, arg(self, 1));
+                let ro = PropFlags::CONFIGURABLE;
+                let d = PropertyDescriptor::data(Value::int(length), ro);
+                self.heap.define_own_property(f, atoms::LENGTH, &d)?;
+                let empty = Value::string(self.heap.atom_string(atoms::EMPTY)?);
+                let d = PropertyDescriptor::data(empty, ro);
+                self.heap.define_own_property(f, atoms::NAME, &d)?;
+                Value::object(f)
             }
             INSTALL_INTRINSIC => {
                 let name = a0

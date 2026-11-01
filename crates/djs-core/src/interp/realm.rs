@@ -55,9 +55,11 @@ pub enum Intrinsic {
     /// %IteratorPrototype%).
     MapIteratorProto,
     SetIteratorProto,
+    /// %Promise.prototype% (an ordinary object).
+    PromiseProto,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::SetIteratorProto as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::PromiseProto as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -84,6 +86,7 @@ impl Intrinsic {
             "Set" => Intrinsic::SetProto,
             "WeakMap" => Intrinsic::WeakMapProto,
             "WeakSet" => Intrinsic::WeakSetProto,
+            "Promise" => Intrinsic::PromiseProto,
             _ => return None,
         })
     }
@@ -251,6 +254,8 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     heap.define_own_property(string_proto, atoms::LENGTH, &d)?;
     let symbol_proto = heap.new_object(Some(object_proto))?;
     set(heap, Intrinsic::SymbolProto, Value::object(symbol_proto));
+    let promise_proto = heap.new_object(Some(object_proto))?;
+    set(heap, Intrinsic::PromiseProto, Value::object(promise_proto));
     let registry = heap.new_object(None)?;
     set(heap, Intrinsic::SymbolRegistry, Value::object(registry));
     let random = heap.alloc_value_array(2)?;

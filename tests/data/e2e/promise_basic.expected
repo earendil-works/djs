@@ -1,0 +1,26 @@
+start
+[object Promise] function 1 <>
+["length","name"] 1 Promise true
+["catch","constructor","finally","then"] Promise
+true true
+end
+then 1
+ctor 2
+caught bad
+all empty []
+withResolvers 9
+try 10
+try rejected 11
+chain 4
+finally
+all rejected TypeError: no
+allSettled [{"status":"fulfilled","value":1},{"status":"rejected","reason":2}]
+any 5
+any rejected AggregateError [1,2] true
+race 7
+passthrough 1
+passthrough rejected 4
+finally throws 9
+all [1,2,3]
+finally keeps 5
+finally keeps reason 7
