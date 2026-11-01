@@ -8,6 +8,9 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0101 | Mark-compact (approved D018): finishing + merging | heap | .worktrees/heap |
+| 0117 | Compact snapshot images (D019) | snapshot | .worktrees/snapshot |
+| 0118 | Codemode corpus harvest, redacted (D021) | infra | .worktrees/infra |
+| 0119 | Live editor with syntax highlighting for guide examples | docs | .worktrees/docs |
 | 0116 | JSON output in place, flat_fast inline, next hot spots | perf | .worktrees/perf |
 
 ## Open (ready)
@@ -19,8 +22,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0117 | Compact snapshot images (direction A, D019) | snapshot (restoring) |
-| 0118 | Harvest a redacted codemode corpus from pi sessions (D021) | infra (restoring) |
 
 ## Done
 
