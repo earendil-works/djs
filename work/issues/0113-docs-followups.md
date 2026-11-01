@@ -1,6 +1,6 @@
 # 0113: Docs follow-ups: stale reference docs, status numbers, search, live disassembly
 
-status: in-progress
+status: done
 agent: docs
 branch: issue/0113-docs-followups
 depends-on: 0103
@@ -21,7 +21,7 @@ touches: ARCH.md, docs/*.md, docs/guide/, crates/djs-docs/, crates/djs-wasm/ (a 
    feature, so the shipping module doesn't grow).
 
 ## Acceptance criteria
-- [ ] Each item merged separately; `djs-docs check` green; the shipping wasm unchanged in
+- [x] Each item merged separately; `djs-docs check` green; the shipping wasm unchanged in
       size.
 
 ## Log
@@ -78,3 +78,20 @@ touches: ARCH.md, docs/*.md, docs/guide/, crates/djs-docs/, crates/djs-wasm/ (a 
   Pages workflow. If that matters: add `--features docs` to the gate's wasm32 clippy step.
 
 ## Result
+
+All four items landed, each merged separately:
+1. Stale reference docs and a drift pass (d780463b): ARCH's fast paths and vm_new time,
+   compiler.md's frame header and as-built names, TESTING's bgen golden path; every
+   repository path in the docs exists, backticked identifiers were grepped.
+2. Generated status numbers, D2101 (f51b92e3): `gen:status conformance|speed|size|
+   inventory`; README.md's Status section and the guide's "Status in numbers" page are
+   generated; counts from the repository on every regen, measurements recorded by
+   `scripts/status.py` in `tests/scores/status.tsv` with their commit.
+3. Search (72bed725): search.json + assets/search.js, `/` to focus.
+4. Live disassembly (93fdd405): djs-wasm `docs` feature (`djs_disasm`),
+   `scripts/build-wasm.sh --docs` (target/docs-wasm), used by `djs-docs build` and the
+   Pages workflow. The shipping module is unchanged (1,471,134 bytes, no `djs_disasm`).
+
+Known gaps: recorded measurements go stale until someone runs `scripts/status.py`
+(the generated text shows the commit they were measured at); the gate does not build the
+`docs` feature.
