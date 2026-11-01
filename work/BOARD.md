@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0026 | Leaf performance sweep | num | .worktrees/0026-leaf-perf-sweep |
 | 0028 | P1-2 runtime (call_intrinsic, prelude, slow paths, Error stack) | heap | .worktrees/0028-p1-objects-runtime |
-| 0016 | djs in difftest + gate (+ bench engine track) | infra | .worktrees/0016-djs-difftest-gate |
+| 0007 | test262 on djs + ratchet in gate | infra | .worktrees/0007-test262-djs-engine |
 | 0029 | P1-5 Loops and iteration (compiler + iterator builtins) | lexer | .worktrees/0029-p1-iteration-compiler |
 
 ## Open (ready)
@@ -21,7 +21,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | depends-on |
 | --- | --- | --- |
 | 0030 | P1-5 runtime (for-in ops, array iterators, symbol installs) | 0028, 0029 (heap, next) |
-| 0007 | test262 on djs + ratchet in gate | 0014, 0015, P1-8 (script mode) |
 
 ## Done
 
@@ -31,6 +30,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0003 | Lexer | e4a42c3 (agent lexer; parser follow-ups listed in the issue) |
 | 0005 | Values, arena heap, strings, atoms, objects | dc751e2 (agent heap; follow-ups in the issue) |
 | 0023 | djs-wasm + JS host package | d4fb4a4 (agent num; djs runs in node; vm_new 11 us; 132 KB gz at opt s) |
+| 0016 | djs in difftest + gate | b01a03a (agent infra; 50/154 pass; djs 4-9x slower than qjs on calls/loops/props) |
 | 0027 | P1-2 Objects/privileged mode (compiler) | 2e11de2 (agent lexer; test262 compiling 26.0k) |
 | 0022 | E2E wiring | f235cdd (agent heap; djs run works; 29 e2e cases x 3 modes) |
 | 0025 | P1-3 Exceptions + P1-4 leftovers | d45e837 (agent lexer; test262 compiling 24.7k) |
@@ -64,6 +64,12 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 - P4: snapshot/restore API, deltas, old generation.
 - P5: regex engine, generators, Map/Set/WeakMap, Symbol, iterators, typed arrays, …
 - Perf track: the bgen Rust backend, benchmarks.
+
+## Scores
+
+| date | difftest (djs) | test262 active |
+| --- | --- | --- |
+| 2026-11-01 | 50 / 154 (11 skipped) | (0007) |
 
 ## Parallelism notes
 
