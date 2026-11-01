@@ -869,6 +869,14 @@ declare function IsRawJSON(v: Value): boolean;
  * TypeError "circular reference" and RangeError "Maximum call stack size exceeded" are final. @leaf
  */
 declare function JsonStringifyFast(v: Value, gap: Str): Value;
+/**
+ * JsonStringifyFast for an object the full algorithm reached, after its toJSON and
+ * replacer (its own toJSON is not looked at again), nested in the objects of the
+ * algorithm's `stack` (a cycle back to one throws; they set the indentation), with an
+ * array replacer's PropertyList or undefined: the string, or null when it is not plain
+ * data (0090). @leaf
+ */
+declare function JsonStringifyFastAt(v: Obj, gap: Str, stack: Obj, propertyList: Value): Value;
 /** QuoteJSONString ( value ), 25.5.2.3. @leaf */
 declare function JsonQuote(s: Str): Str;
 /** CreateDataProperty ( O, P, V ): false if refused. @reentrant */

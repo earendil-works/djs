@@ -314,6 +314,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("JsonRawJSON", L, 1, false),
     i("IsRawJSON", L, 1, false),
     i("JsonStringifyFast", L, 2, false),
+    i("JsonStringifyFastAt", L, 4, false),
     i("JsonQuote", L, 1, false),
     i("CreateDataProperty", R, 3, false),
     i("IsBigInt", L, 1, false),
@@ -374,6 +375,10 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("LengthOfArrayLike", B, 1, false),
     i("ToPropertyKey", B, 1, false),
     i("GetPrototypeFromConstructor", B, 2, false),
+    i("DatePrototypeValueOf", B, 0, false),
+    i("DatePrototypeToISOString", B, 0, false),
+    i("DatePrototypeToJSON", B, 1, false),
+    i("DatePrototypeToPrimitive", B, 1, false),
     i("DecoratorStart", B, 2, false),
     i("ApplyDecorators", B, 6, false),
     i("DecoratorRunInits", B, 3, false),
@@ -417,6 +422,11 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("ArrayIteratorPrototypeNext", B, 0, false),
     i("StringPrototypeIterator", B, 0, false),
     i("StringIteratorPrototypeNext", B, 0, false),
+    i("SerializeJSONProperty", B, 7, false),
+    i("JSONStackIncludes", B, 2, false),
+    i("JSONJoin", B, 7, false),
+    i("SerializeJSONObject", B, 6, false),
+    i("SerializeJSONArray", B, 6, false),
     i("AddEntriesFromIterable", B, 3, false),
     i("MapPrototypeSet", B, 2, false),
     i("MapIteratorPrototypeNext", B, 0, false),
@@ -482,6 +492,27 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("TypedArraySetElementSlow", B, 3, false),
     i("FinalizationRegistryCleanupJob", B, 1, false),
 ];
+
+/// The id of the intrinsic `name`, at compile time in a `const` (a typo fails the
+/// build).
+pub const fn const_id(name: &str) -> u16 {
+    let mut k = 0;
+    while k < INTRINSICS.len() {
+        let a = INTRINSICS[k].name.as_bytes();
+        let b = name.as_bytes();
+        if a.len() == b.len() {
+            let mut j = 0;
+            while j < a.len() && a[j] == b[j] {
+                j += 1;
+            }
+            if j == a.len() {
+                return k as u16;
+            }
+        }
+        k += 1;
+    }
+    panic!("unknown intrinsic")
+}
 
 /// The id of the intrinsic `name`.
 pub fn intrinsic_id(name: &str) -> Option<u16> {

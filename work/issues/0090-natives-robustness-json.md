@@ -1,6 +1,6 @@
 # 0090: Natives: collect-and-retry, resizable typed arrays, JSON.stringify slow path
 
-status: in-progress
+status: done
 agent: infra
 branch: issue/0090-natives-robustness-json
 depends-on: 0080
@@ -23,8 +23,8 @@ touches: crates/djs-core/src/interp/run/native.rs + builtins/gen/ (generated), c
 - [x] 1 with a test like 0070's oom.js but going through native builtins (map/filter/
       push in a loop at a tight cap), identical sliced and restored; D1601's test passes.
 - [x] 2 with the test262 tests passing.
-- [ ] 3 with wasm instruction counts before/after on toJSON-heavy and replacer data.
-- [ ] Ratchets, both backends, stress modes and determinism checks identical.
+- [x] 3 with wasm instruction counts before/after on toJSON-heavy and replacer data.
+- [x] Ratchets, both backends, stress modes and determinism checks identical.
 
 ## Log
 - 2 (a53c940): three separate bugs.
@@ -53,7 +53,41 @@ touches: crates/djs-core/src/interp/run/native.rs + builtins/gen/ (generated), c
 - Rebase note: after a plain `git rebase main` the merge driver keeps one side of the
   generated files; run scripts/regen.sh (my first commit's prelude was stale until the
   regen in this one).
+- Items 1+2 merged (main 54d984b).
+- 3 (D1901): measured first with new perf workloads scripts/perf/w/json-{date,replacer,
+  indent}.js (wmeasure.py, wasm instructions, M): json 1,536 (qjs-wasi 2,187), json-date
+  18,157 (1,858), json-replacer 8,894 (1,390), json-indent 14,802 (1,835): the full
+  algorithm was ~10x qjs. Done: subtree fast path inside the full algorithm, Dates with
+  original toJSON in the fast path, array replacer keys in the fast path, a cheap
+  QuoteJSONString (it set up a serializer with a 128-entry key cache per string), lazy key
+  cache, the full algorithm `@native`. After: json 1,547, json-date 1,220, json-replacer
+  4,130, json-indent 2,758. The native full algorithm costs 10.5 KB of wasm for -20% on
+  json-replacer (5,156 → 4,150 without/with); kept, easy to drop. Corpus case
+  builtins/json-stringify-paths.js.
+- Remaining replacer-function cost: per key a call of the replacer plus string concat
+  (heap `concat` collects leaves into Vecs, perf F6) and GC: ~3x qjs-wasi.
 
 ## Follow-ups
+- JSON with a replacer function: ~3x quickjs-wasi; a string builder for the full
+  algorithm instead of concat/partial arrays would be the next step.
+- OOM inside a perf `@fast` entry (fastpath.rs) is thrown without D1700's retry.
 
 ## Result
+- Native builtins collect and retry at the heap cap (D1900): `Exec::n_retry` in the
+  native API for a state's final call (n_set, n_create_data_property_or_throw, n_call of
+  D1700's intrinsics) and for whole-statement calls of D1700's allocating leaves and
+  string concat (djs-bgen emits `n_leaf_gc` / `n_concat_gc`). Test
+  `native_builtins_collect_and_retry` (scripts/determinism/js/oom_native.js).
+- The 3 resizable typed-array test262 tests pass: [[Set]] of a typed array element with
+  an object value converts through `%TypedArraySetElementSlow` (it threw "read-only" for
+  any object value through `Set`), subarray uses [[ByteOffset]], [[PreventExtensions]]
+  of a typed array that is not fixed-length is false (heap `prevent_extensions`,
+  `ta_fixed_length`). Corpus builtins/typed-array-resizable.js.
+- JSON.stringify (D1901): plain subtrees, Dates and array replacers in the fast path,
+  cheaper quoting, the full algorithm native. wasm instructions: toJSON/Date data
+  18.1G → 1.2G (qjs-wasi 1.9G), getters + indent 14.8G → 2.8G (1.8G), replacers 8.9G
+  → 4.1G (1.4G). Corpus builtins/json-stringify-paths.js; perf workloads
+  scripts/perf/w/json-{date,replacer,indent}.js.
+- Known gaps: replacer functions stay ~3x qjs-wasi; `@fast` entries do not retry at
+  the cap.
+

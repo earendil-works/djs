@@ -372,6 +372,7 @@ function DatePrototypeGetTime(this: Value): f64 {
 /**
  * Date.prototype.valueOf ( ), 21.4.4.44.
  * @builtin Date.prototype.valueOf
+ * @intrinsic
  */
 function DatePrototypeValueOf(this: Value): f64 {
   return DateValue(this);
@@ -422,6 +423,7 @@ function DatePrototypeToTimeString(this: Value): Str {
 /**
  * Date.prototype.toISOString ( ).
  * @builtin Date.prototype.toISOString
+ * @intrinsic
  */
 function DatePrototypeToISOString(this: Value): Str {
   return DateFormat(DateValue(this), 2, 3);
@@ -472,6 +474,7 @@ function DatePrototypeGetYear(this: Value): f64 {
 /**
  * Date.prototype.toJSON ( key ), 21.4.4.37.
  * @builtin Date.prototype.toJSON
+ * @intrinsic
  */
 function DatePrototypeToJSON(this: Value, key: Value): Value {
   const o: Obj = ToObject(this);
@@ -489,6 +492,7 @@ function DatePrototypeToJSON(this: Value, key: Value): Value {
  * Date.prototype [ %Symbol.toPrimitive% ] ( hint ), 21.4.4.45.
  * @builtin Date.prototype[Symbol.toPrimitive]
  * @attributes configurable
+ * @intrinsic
  */
 function DatePrototypeToPrimitive(this: Value, hint: Value): Value {
   if (!IsObject(this)) {

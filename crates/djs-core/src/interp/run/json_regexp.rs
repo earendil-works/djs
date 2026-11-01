@@ -11,6 +11,7 @@ use crate::value::Str;
 
 const JSON_PARSE: u16 = id("JsonParse");
 const JSON_STRINGIFY_FAST: u16 = id("JsonStringifyFast");
+const JSON_STRINGIFY_FAST_AT: u16 = id("JsonStringifyFastAt");
 const JSON_QUOTE: u16 = id("JsonQuote");
 const JSON_RAW_JSON: u16 = id("JsonRawJSON");
 const IS_RAW_JSON: u16 = id("IsRawJSON");
@@ -112,11 +113,18 @@ impl Exec<'_> {
                     }
                 }
             }
-            JSON_STRINGIFY_FAST => {
+            JSON_STRINGIFY_FAST | JSON_STRINGIFY_FAST_AT => {
                 let Some(gap) = arg(self, 1).as_string() else {
                     return bad_argument(name);
                 };
-                let r = json::stringify_fast(self.heap, a0, gap)?;
+                let r = if id == JSON_STRINGIFY_FAST {
+                    json::stringify_fast(self.heap, a0, gap)?
+                } else {
+                    let Some(stack) = arg(self, 2).as_object() else {
+                        return bad_argument(name);
+                    };
+                    json::stringify_fast_in(self.heap, a0, gap, stack, arg(self, 3))?
+                };
                 if let Some(s) = r.as_string() {
                     self.fuel -= length_fuel(self.heap.str_len(s));
                 }

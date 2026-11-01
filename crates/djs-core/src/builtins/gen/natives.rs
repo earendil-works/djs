@@ -46,17 +46,26 @@ const I_GENERATOR_RESUME: u16 = iid("GeneratorResume");
 const I_GET_ITERATOR: u16 = iid("GetIterator");
 const I_GET_PROTOTYPE_FROM_CONSTRUCTOR: u16 = iid("GetPrototypeFromConstructor");
 const I_GET_V: u16 = iid("GetV");
+const I_IS_ARRAY: u16 = iid("IsArray");
 const I_IS_ASYNC_FUNCTION_STATE: u16 = iid("IsAsyncFunctionState");
+const I_IS_BIG_INT: u16 = iid("IsBigInt");
 const I_IS_ORIGINAL_COLLECTION_ADDER: u16 = iid("IsOriginalCollectionAdder");
 const I_IS_PROMISE: u16 = iid("IsPromise");
 const I_IS_PROXY: u16 = iid("IsProxy");
+const I_IS_RAW_J_S_O_N: u16 = iid("IsRawJSON");
 const I_IS_REG_EXP_OBJECT: u16 = iid("IsRegExpObject");
 const I_IS_TYPED_ARRAY: u16 = iid("IsTypedArray");
 const I_ITERATOR_CLOSE_THROW: u16 = iid("IteratorCloseThrow");
 const I_ITERATOR_FAST_READY: u16 = iid("IteratorFastReady");
 const I_ITERATOR_FAST_VALUE: u16 = iid("IteratorFastValue");
+const I_J_S_O_N_JOIN: u16 = iid("JSONJoin");
+const I_J_S_O_N_STACK_INCLUDES: u16 = iid("JSONStackIncludes");
+const I_JSON_QUOTE: u16 = iid("JsonQuote");
+const I_JSON_STRINGIFY_FAST_AT: u16 = iid("JsonStringifyFastAt");
 const I_NEW_RANGE_ERROR: u16 = iid("NewRangeError");
 const I_NEW_TYPE_ERROR: u16 = iid("NewTypeError");
+const I_OWN_PROPERTY_KEYS: u16 = iid("OwnPropertyKeys");
+const I_PRIMITIVE_VALUE: u16 = iid("PrimitiveValue");
 const I_PROMISE_CLAIM_RESOLVE: u16 = iid("PromiseClaimResolve");
 const I_PROXY_TARGET: u16 = iid("ProxyTarget");
 const I_REALM_INTRINSIC: u16 = iid("RealmIntrinsic");
@@ -65,6 +74,9 @@ const I_RECORD_SET: u16 = iid("RecordSet");
 const I_REDUCE: u16 = iid("Reduce");
 const I_REJECT_PROMISE: u16 = iid("RejectPromise");
 const I_RESOLVE_PROMISE: u16 = iid("ResolvePromise");
+const I_SERIALIZE_J_S_O_N_ARRAY: u16 = iid("SerializeJSONArray");
+const I_SERIALIZE_J_S_O_N_OBJECT: u16 = iid("SerializeJSONObject");
+const I_SERIALIZE_J_S_O_N_PROPERTY: u16 = iid("SerializeJSONProperty");
 const I_SORT_LIST: u16 = iid("SortList");
 const I_SORT_PRIMITIVES: u16 = iid("SortPrimitives");
 const I_STR_CHAR_CODE_AT: u16 = iid("StrCharCodeAt");
@@ -106,6 +118,11 @@ pub(crate) static NATIVES: &[NativeFn] = &[
     NativeFn { name: "GetPrototypeFromConstructor", params: 2, locals: 2, run: native_GetPrototypeFromConstructor, handler: handler_GetPrototypeFromConstructor },
     NativeFn { name: "GetIterator", params: 1, locals: 2, run: native_GetIterator, handler: handler_GetIterator },
     NativeFn { name: "ArrayIteratorPrototypeNext", params: 0, locals: 8, run: native_ArrayIteratorPrototypeNext, handler: handler_ArrayIteratorPrototypeNext },
+    NativeFn { name: "SerializeJSONProperty", params: 7, locals: 11, run: native_SerializeJSONProperty, handler: handler_SerializeJSONProperty },
+    NativeFn { name: "JSONStackIncludes", params: 2, locals: 3, run: native_JSONStackIncludes, handler: handler_JSONStackIncludes },
+    NativeFn { name: "JSONJoin", params: 7, locals: 4, run: native_JSONJoin, handler: handler_JSONJoin },
+    NativeFn { name: "SerializeJSONObject", params: 6, locals: 11, run: native_SerializeJSONObject, handler: handler_SerializeJSONObject },
+    NativeFn { name: "SerializeJSONArray", params: 6, locals: 6, run: native_SerializeJSONArray, handler: handler_SerializeJSONArray },
     NativeFn { name: "AddEntriesFromIterable", params: 3, locals: 12, run: native_AddEntriesFromIterable, handler: handler_AddEntriesFromIterable },
     NativeFn { name: "MapConstructor", params: 1, locals: 3, run: native_MapConstructor, handler: handler_MapConstructor },
     NativeFn { name: "MapPrototypeForEach", params: 2, locals: 2, run: native_MapPrototypeForEach, handler: handler_MapPrototypeForEach },
@@ -1926,6 +1943,455 @@ fn native_ArrayIteratorPrototypeNext(ex: &mut Exec<'_>) -> Step {
 }
 
 fn handler_ArrayIteratorPrototypeNext(state: u32) -> Option<(u32, u32)> {
+    let _ = state;
+    None
+}
+
+// builtins/json.ts:194
+fn native_SerializeJSONProperty(ex: &mut Exec<'_>) -> Step {
+    loop {
+        match ex.n_state() {
+            0 => {
+                // resume point: Get
+                match { let a0 = ex.n_arg(6); let a1 = ex.n_arg(5); ex.n_get(&[a0, a1], 1) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            1 => {
+                let r = ex.n_result(); ex.n_set_slot(0, r);
+                if ({ let a0 = ex.n_slot(0); a0.as_object().is_some() } || bool_of({ let a0 = ex.n_slot(0); ex.n_leaf(I_IS_BIG_INT, &[a0])? })) { ex.n_goto(2); continue; } else { ex.n_goto(3); continue; }
+            }
+            2 => {
+                // resume point: GetV
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_str("toJSON")?; ex.n_call(I_GET_V, &[a0, a1], 4) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            3 => {
+                if !ex.n_arg(0).is_undefined() { ex.n_goto(7); continue; } else { ex.n_goto(8); continue; }
+            }
+            4 => {
+                let r = ex.n_result(); ex.n_set_slot(1, r);
+                if { let a0 = ex.n_slot(1); ex.n_is_callable(a0) } { ex.n_goto(5); continue; } else { ex.n_goto(3); continue; }
+            }
+            5 => {
+                // resume point: Call
+                match { let a0 = ex.n_slot(1); let a1 = ex.n_slot(0); let a2 = ex.n_arg(5); ex.n_call(I_CALL, &[a0, a1, a2], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            6 => {
+                let r = ex.n_result(); ex.n_set_slot(0, r);
+                ex.n_goto(3); continue;
+            }
+            7 => {
+                // resume point: Call
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_arg(6); let a2 = ex.n_arg(5); let a3 = ex.n_slot(0); ex.n_call(I_CALL, &[a0, a1, a2, a3], 9) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            8 => {
+                if bool_of({ let a0 = ex.n_slot(0); ex.n_leaf(I_IS_RAW_J_S_O_N, &[a0])? }) { ex.n_goto(10); continue; } else { ex.n_goto(11); continue; }
+            }
+            9 => {
+                let r = ex.n_result(); ex.n_set_slot(0, r);
+                ex.n_goto(8); continue;
+            }
+            10 => {
+                // resume point: Get
+                match { let a0 = { let a0 = ex.n_slot(0); ex.n_as_obj(a0)? }; let a1 = ex.n_str("rawJSON")?; ex.n_get(&[a0, a1], 12) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            11 => {
+                if { let a0 = ex.n_slot(0); a0.as_object().is_some() } { ex.n_goto(13); continue; } else { ex.n_goto(14); continue; }
+            }
+            12 => {
+                let r = ex.n_result(); ex.n_set_slot(2, r);
+                let v = ex.n_slot(2); return ex.n_ret(v);
+            }
+            13 => {
+                let v = { let a0 = ex.n_slot(0); ex.n_leaf(I_PRIMITIVE_VALUE, &[a0])? }; ex.n_set_slot(3, v);
+                if { let a0 = ex.n_slot(3); a0.is_number() } { ex.n_goto(15); continue; } else { ex.n_goto(16); continue; }
+            }
+            14 => {
+                if ex.n_slot(0).is_null() { ex.n_goto(26); continue; } else { ex.n_goto(27); continue; }
+            }
+            15 => {
+                // inlined: ToNumber
+                let v = ex.n_slot(0); ex.n_set_slot(2, v);
+                if { let a0 = ex.n_slot(2); a0.as_object().is_some() } { ex.n_goto(17); continue; } else { ex.n_goto(18); continue; }
+            }
+            16 => {
+                if { let a0 = ex.n_slot(3); a0.as_string().is_some() } { ex.n_goto(20); continue; } else { ex.n_goto(21); continue; }
+            }
+            17 => {
+                // resume point: ToPrimitive
+                match { let a0 = ex.n_slot(2); let a1 = ex.n_str("number")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 19) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            18 => {
+                let v = num(f64_of({ let a0 = ex.n_slot(2); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(0, v);
+                ex.n_goto(14); continue;
+            }
+            19 => {
+                let r = ex.n_result(); ex.n_set_slot(4, r);
+                let v = num(f64_of({ let a0 = ex.n_slot(4); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(0, v);
+                ex.n_goto(14); continue;
+            }
+            20 => {
+                // inlined: ToString
+                let v = ex.n_slot(0); ex.n_set_slot(2, v);
+                if { let a0 = ex.n_slot(2); a0.as_object().is_some() } { ex.n_goto(22); continue; } else { ex.n_goto(23); continue; }
+            }
+            21 => {
+                if ({ let a0 = ex.n_slot(3); a0.as_bool().is_some() } || bool_of({ let a0 = ex.n_slot(3); ex.n_leaf(I_IS_BIG_INT, &[a0])? })) { ex.n_goto(25); continue; } else { ex.n_goto(14); continue; }
+            }
+            22 => {
+                // resume point: ToPrimitive
+                match { let a0 = ex.n_slot(2); let a1 = ex.n_str("string")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 24) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            23 => {
+                let v = { let a0 = ex.n_slot(2); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
+                ex.n_goto(14); continue;
+            }
+            24 => {
+                let r = ex.n_result(); ex.n_set_slot(4, r);
+                let v = { let a0 = ex.n_slot(4); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
+                ex.n_goto(14); continue;
+            }
+            25 => {
+                let v = ex.n_slot(3); ex.n_set_slot(0, v);
+                ex.n_goto(14); continue;
+            }
+            26 => {
+                let v = ex.n_str("null")?; return ex.n_ret(v);
+            }
+            27 => {
+                if { let a0 = ex.n_slot(0); let a1 = Value::bool(true); ex.n_strict_eq(a0, a1) } { ex.n_goto(28); continue; } else { ex.n_goto(29); continue; }
+            }
+            28 => {
+                let v = ex.n_str("true")?; return ex.n_ret(v);
+            }
+            29 => {
+                if { let a0 = ex.n_slot(0); let a1 = Value::bool(false); ex.n_strict_eq(a0, a1) } { ex.n_goto(30); continue; } else { ex.n_goto(31); continue; }
+            }
+            30 => {
+                let v = ex.n_str("false")?; return ex.n_ret(v);
+            }
+            31 => {
+                if { let a0 = ex.n_slot(0); a0.as_string().is_some() } { ex.n_goto(32); continue; } else { ex.n_goto(33); continue; }
+            }
+            32 => {
+                let v = { let a0 = { let a0 = ex.n_slot(0); ex.n_leaf(I_AS_STR, &[a0])? }; ex.n_leaf(I_JSON_QUOTE, &[a0])? }; return ex.n_ret(v);
+            }
+            33 => {
+                if { let a0 = ex.n_slot(0); a0.is_number() } { ex.n_goto(34); continue; } else { ex.n_goto(35); continue; }
+            }
+            34 => {
+                let v = num(f64_of({ let a0 = ex.n_slot(0); ex.n_leaf(I_AS_NUMBER, &[a0])? })); ex.n_set_slot(5, v);
+                let v = (if ((f64_of(ex.n_slot(5)) - f64_of(ex.n_slot(5))) == 0.0_f64) { { let a0 = ex.n_slot(0); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? } } else { ex.n_str("null")? }); return ex.n_ret(v);
+            }
+            35 => {
+                if bool_of({ let a0 = ex.n_slot(0); ex.n_leaf(I_IS_BIG_INT, &[a0])? }) { ex.n_goto(36); continue; } else { ex.n_goto(37); continue; }
+            }
+            36 => {
+                let v = { let a0 = ex.n_str("Do not know how to serialize a BigInt")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
+            }
+            37 => {
+                if ({ let a0 = ex.n_slot(0); a0.as_object().is_some() } && (!{ let a0 = ex.n_slot(0); ex.n_is_callable(a0) })) { ex.n_goto(38); continue; } else { ex.n_goto(39); continue; }
+            }
+            38 => {
+                let v = { let a0 = ex.n_slot(0); ex.n_as_obj(a0)? }; ex.n_set_slot(6, v);
+                if ex.n_arg(0).is_undefined() { ex.n_goto(40); continue; } else { ex.n_goto(41); continue; }
+            }
+            39 => {
+                let v = Value::UNDEFINED; return ex.n_ret(v);
+            }
+            40 => {
+                let v = { let a0 = ex.n_slot(6); let a1 = ex.n_arg(2); let a2 = ex.n_arg(3); let a3 = ex.n_arg(1); ex.n_leaf(I_JSON_STRINGIFY_FAST_AT, &[a0, a1, a2, a3])? }; ex.n_set_slot(7, v);
+                if !ex.n_slot(7).is_null() { ex.n_goto(42); continue; } else { ex.n_goto(41); continue; }
+            }
+            41 => {
+                // resume point: JSONStackIncludes
+                match { let a0 = ex.n_arg(3); let a1 = ex.n_slot(6); ex.n_call(I_J_S_O_N_STACK_INCLUDES, &[a0, a1], 43) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            42 => {
+                let v = ex.n_slot(7); return ex.n_ret(v);
+            }
+            43 => {
+                let r = ex.n_result(); ex.n_set_slot(2, r);
+                if bool_of(ex.n_slot(2)) { ex.n_goto(44); continue; } else { ex.n_goto(45); continue; }
+            }
+            44 => {
+                let v = { let a0 = ex.n_str("circular reference")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
+            }
+            45 => {
+                // resume point: LengthOfArrayLike
+                match { let a0 = ex.n_arg(3); ex.n_length_of_array_like(&[a0], 46) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            46 => {
+                let r = ex.n_result(); ex.n_set_slot(8, r);
+                // resume point: CreateDataPropertyOrThrow
+                match { let a0 = ex.n_arg(3); let a1 = ex.n_slot(8); let a2 = ex.n_slot(6); ex.n_create_data_property_or_throw(&[a0, a1, a2], 47) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            47 => {
+                ex.n_result();
+                if bool_of({ let a0 = ex.n_slot(6); ex.n_leaf(I_IS_ARRAY, &[a0])? }) { ex.n_goto(48); continue; } else { ex.n_goto(49); continue; }
+            }
+            48 => {
+                // resume point: SerializeJSONArray
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_arg(1); let a2 = ex.n_arg(2); let a3 = ex.n_arg(3); let a4 = ex.n_arg(4); let a5 = ex.n_slot(6); ex.n_call(I_SERIALIZE_J_S_O_N_ARRAY, &[a0, a1, a2, a3, a4, a5], 51) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            49 => {
+                // resume point: SerializeJSONObject
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_arg(1); let a2 = ex.n_arg(2); let a3 = ex.n_arg(3); let a4 = ex.n_arg(4); let a5 = ex.n_slot(6); ex.n_call(I_SERIALIZE_J_S_O_N_OBJECT, &[a0, a1, a2, a3, a4, a5], 52) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            50 => {
+                let v = ex.n_slot(2); ex.n_set_slot(9, v);
+                // resume point: Set
+                match { let a0 = ex.n_arg(3); let a1 = ex.n_str("length")?; let a2 = ex.n_slot(8); ex.n_set(&[a0, a1, a2], 53) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            51 => {
+                let r = ex.n_result(); ex.n_set_slot(4, r);
+                let v = ex.n_slot(4); ex.n_set_slot(2, v);
+                ex.n_goto(50); continue;
+            }
+            52 => {
+                let r = ex.n_result(); ex.n_set_slot(10, r);
+                let v = ex.n_slot(10); ex.n_set_slot(2, v);
+                ex.n_goto(50); continue;
+            }
+            53 => {
+                ex.n_result();
+                let v = ex.n_slot(9); return ex.n_ret(v);
+            }
+            _ => return Err(bad_state()),
+        }
+    }
+}
+
+fn handler_SerializeJSONProperty(state: u32) -> Option<(u32, u32)> {
+    let _ = state;
+    None
+}
+
+// builtins/json.ts:275
+fn native_JSONStackIncludes(ex: &mut Exec<'_>) -> Step {
+    loop {
+        match ex.n_state() {
+            0 => {
+                // resume point: LengthOfArrayLike
+                match { let a0 = ex.n_arg(0); ex.n_length_of_array_like(&[a0], 1) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            1 => {
+                let r = ex.n_result(); ex.n_set_slot(0, r);
+                let v = num(0.0_f64); ex.n_set_slot(1, v);
+                ex.n_goto(2); continue;
+            }
+            2 => {
+                if (f64_of(ex.n_slot(1)) < f64_of(ex.n_slot(0))) { ex.n_goto(3); continue; } else { ex.n_goto(5); continue; }
+            }
+            3 => {
+                // resume point: Get
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(1); ex.n_get(&[a0, a1], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            4 => {
+                let v = num((f64_of(ex.n_slot(1)) + 1.0_f64)); ex.n_set_slot(1, v);
+                if ex.n_backedge(2) { return Ok(None); } continue;
+            }
+            5 => {
+                let v = Value::bool(false); return ex.n_ret(v);
+            }
+            6 => {
+                let r = ex.n_result(); ex.n_set_slot(2, r);
+                if { let a0 = ex.n_slot(2); let a1 = ex.n_arg(1); ex.n_strict_eq(a0, a1) } { ex.n_goto(7); continue; } else { ex.n_goto(4); continue; }
+            }
+            7 => {
+                let v = Value::bool(true); return ex.n_ret(v);
+            }
+            _ => return Err(bad_state()),
+        }
+    }
+}
+
+fn handler_JSONStackIncludes(state: u32) -> Option<(u32, u32)> {
+    let _ = state;
+    None
+}
+
+// builtins/json.ts:290
+fn native_JSONJoin(ex: &mut Exec<'_>) -> Step {
+    loop {
+        match ex.n_state() {
+            0 => {
+                if (f64_of(ex.n_arg(3)) == 0.0_f64) { ex.n_goto(1); continue; } else { ex.n_goto(2); continue; }
+            }
+            1 => {
+                let v = { let a0 = ex.n_arg(0); let a1 = ex.n_arg(1); ex.n_concat_gc(a0, a1)? }; return ex.n_ret(v);
+            }
+            2 => {
+                let v = (if { let a0 = ex.n_arg(4); let a1 = ex.n_str("")?; ex.n_strict_eq(a0, a1) } { ex.n_str(",")? } else { { let a0 = ex.n_str(",\u{a}")?; let a1 = ex.n_arg(6); ex.n_concat(a0, a1)? } }); ex.n_set_slot(0, v);
+                let v = (if { let a0 = ex.n_arg(4); let a1 = ex.n_str("")?; ex.n_strict_eq(a0, a1) } { ex.n_arg(0) } else { { let a0 = { let a0 = ex.n_arg(0); let a1 = ex.n_str("\u{a}")?; ex.n_concat(a0, a1)? }; let a1 = ex.n_arg(6); ex.n_concat(a0, a1)? } }); ex.n_set_slot(1, v);
+                let v = num(0.0_f64); ex.n_set_slot(2, v);
+                ex.n_goto(3); continue;
+            }
+            3 => {
+                if (f64_of(ex.n_slot(2)) < f64_of(ex.n_arg(3))) { ex.n_goto(4); continue; } else { ex.n_goto(6); continue; }
+            }
+            4 => {
+                if (f64_of(ex.n_slot(2)) > 0.0_f64) { ex.n_goto(7); continue; } else { ex.n_goto(8); continue; }
+            }
+            5 => {
+                let v = num((f64_of(ex.n_slot(2)) + 1.0_f64)); ex.n_set_slot(2, v);
+                if ex.n_backedge(3) { return Ok(None); } continue;
+            }
+            6 => {
+                let v = (if { let a0 = ex.n_arg(4); let a1 = ex.n_str("")?; ex.n_strict_eq(a0, a1) } { { let a0 = ex.n_slot(1); let a1 = ex.n_arg(1); ex.n_concat(a0, a1)? } } else { { let a0 = { let a0 = { let a0 = ex.n_slot(1); let a1 = ex.n_str("\u{a}")?; ex.n_concat(a0, a1)? }; let a1 = ex.n_arg(5); ex.n_concat(a0, a1)? }; let a1 = ex.n_arg(1); ex.n_concat(a0, a1)? } }); return ex.n_ret(v);
+            }
+            7 => {
+                let v = { let a0 = ex.n_slot(1); let a1 = ex.n_slot(0); ex.n_concat_gc(a0, a1)? }; ex.n_set_slot(1, v);
+                ex.n_goto(8); continue;
+            }
+            8 => {
+                // resume point: Get
+                match { let a0 = ex.n_arg(2); let a1 = ex.n_slot(2); ex.n_get(&[a0, a1], 9) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            9 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                let v = { let a0 = ex.n_slot(1); let a1 = { let a0 = ex.n_slot(3); ex.n_leaf(I_AS_STR, &[a0])? }; ex.n_concat_gc(a0, a1)? }; ex.n_set_slot(1, v);
+                ex.n_goto(5); continue;
+            }
+            _ => return Err(bad_state()),
+        }
+    }
+}
+
+fn handler_JSONJoin(state: u32) -> Option<(u32, u32)> {
+    let _ = state;
+    None
+}
+
+// builtins/json.ts:310
+fn native_SerializeJSONObject(ex: &mut Exec<'_>) -> Step {
+    loop {
+        match ex.n_state() {
+            0 => {
+                let v = { let a0 = ex.n_arg(4); let a1 = ex.n_arg(2); ex.n_concat_gc(a0, a1)? }; ex.n_set_slot(0, v);
+                if ex.n_arg(1).is_undefined() { ex.n_goto(1); continue; } else { ex.n_goto(2); continue; }
+            }
+            1 => {
+                // resume point: OwnPropertyKeys
+                match { let a0 = ex.n_arg(5); let a1 = Value::int(3); ex.n_call(I_OWN_PROPERTY_KEYS, &[a0, a1], 4) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            2 => {
+                let v = { let a0 = ex.n_arg(1); ex.n_as_obj(a0)? }; ex.n_set_slot(2, v);
+                ex.n_goto(3); continue;
+            }
+            3 => {
+                let v = ex.n_slot(2); ex.n_set_slot(1, v);
+                // resume point: LengthOfArrayLike
+                match { let a0 = ex.n_slot(1); ex.n_length_of_array_like(&[a0], 5) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            4 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                let v = ex.n_slot(3); ex.n_set_slot(2, v);
+                ex.n_goto(3); continue;
+            }
+            5 => {
+                let r = ex.n_result(); ex.n_set_slot(4, r);
+                let v = { let a0 = Value::int(0); ex.n_leaf_gc(I_ARRAY_CREATE, &[a0])? }; ex.n_set_slot(5, v);
+                let v = num(0.0_f64); ex.n_set_slot(6, v);
+                let v = num(0.0_f64); ex.n_set_slot(7, v);
+                ex.n_goto(6); continue;
+            }
+            6 => {
+                if (f64_of(ex.n_slot(7)) < f64_of(ex.n_slot(4))) { ex.n_goto(7); continue; } else { ex.n_goto(9); continue; }
+            }
+            7 => {
+                // resume point: Get
+                match { let a0 = ex.n_slot(1); let a1 = ex.n_slot(7); ex.n_get(&[a0, a1], 10) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            8 => {
+                let v = num((f64_of(ex.n_slot(7)) + 1.0_f64)); ex.n_set_slot(7, v);
+                if ex.n_backedge(6) { return Ok(None); } continue;
+            }
+            9 => {
+                // resume point: JSONJoin
+                match { let a0 = ex.n_str("{")?; let a1 = ex.n_str("}")?; let a2 = ex.n_slot(5); let a3 = ex.n_slot(6); let a4 = ex.n_arg(2); let a5 = ex.n_arg(4); let a6 = ex.n_slot(0); ex.n_call(I_J_S_O_N_JOIN, &[a0, a1, a2, a3, a4, a5, a6], 14) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            10 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                let v = { let a0 = ex.n_slot(3); ex.n_leaf(I_AS_STR, &[a0])? }; ex.n_set_slot(8, v);
+                // resume point: SerializeJSONProperty
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_arg(1); let a2 = ex.n_arg(2); let a3 = ex.n_arg(3); let a4 = ex.n_slot(0); let a5 = ex.n_slot(8); let a6 = ex.n_arg(5); ex.n_call(I_SERIALIZE_J_S_O_N_PROPERTY, &[a0, a1, a2, a3, a4, a5, a6], 11) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            11 => {
+                let r = ex.n_result(); ex.n_set_slot(9, r);
+                if !ex.n_slot(9).is_undefined() { ex.n_goto(12); continue; } else { ex.n_goto(8); continue; }
+            }
+            12 => {
+                let v = (if { let a0 = ex.n_arg(2); let a1 = ex.n_str("")?; ex.n_strict_eq(a0, a1) } { { let a0 = { let a0 = ex.n_slot(8); ex.n_leaf(I_JSON_QUOTE, &[a0])? }; let a1 = ex.n_str(":")?; ex.n_concat(a0, a1)? } } else { { let a0 = { let a0 = ex.n_slot(8); ex.n_leaf(I_JSON_QUOTE, &[a0])? }; let a1 = ex.n_str(": ")?; ex.n_concat(a0, a1)? } }); ex.n_set_slot(10, v);
+                // resume point: CreateDataPropertyOrThrow
+                match { let a0 = ex.n_slot(5); let a1 = ex.n_slot(6); let a2 = { let a0 = ex.n_slot(10); let a1 = { let a0 = ex.n_slot(9); ex.n_leaf(I_AS_STR, &[a0])? }; ex.n_concat(a0, a1)? }; ex.n_create_data_property_or_throw(&[a0, a1, a2], 13) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            13 => {
+                ex.n_result();
+                let v = num((f64_of(ex.n_slot(6)) + 1.0_f64)); ex.n_set_slot(6, v);
+                ex.n_goto(8); continue;
+            }
+            14 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                let v = ex.n_slot(3); return ex.n_ret(v);
+            }
+            _ => return Err(bad_state()),
+        }
+    }
+}
+
+fn handler_SerializeJSONObject(state: u32) -> Option<(u32, u32)> {
+    let _ = state;
+    None
+}
+
+// builtins/json.ts:340
+fn native_SerializeJSONArray(ex: &mut Exec<'_>) -> Step {
+    loop {
+        match ex.n_state() {
+            0 => {
+                let v = { let a0 = ex.n_arg(4); let a1 = ex.n_arg(2); ex.n_concat_gc(a0, a1)? }; ex.n_set_slot(0, v);
+                // resume point: LengthOfArrayLike
+                match { let a0 = ex.n_arg(5); ex.n_length_of_array_like(&[a0], 1) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            1 => {
+                let r = ex.n_result(); ex.n_set_slot(1, r);
+                let v = { let a0 = Value::int(0); ex.n_leaf_gc(I_ARRAY_CREATE, &[a0])? }; ex.n_set_slot(2, v);
+                let v = num(0.0_f64); ex.n_set_slot(3, v);
+                ex.n_goto(2); continue;
+            }
+            2 => {
+                if (f64_of(ex.n_slot(3)) < f64_of(ex.n_slot(1))) { ex.n_goto(3); continue; } else { ex.n_goto(5); continue; }
+            }
+            3 => {
+                // resume point: SerializeJSONProperty
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_arg(1); let a2 = ex.n_arg(2); let a3 = ex.n_arg(3); let a4 = ex.n_slot(0); let a5 = { let a0 = ex.n_slot(3); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; let a6 = ex.n_arg(5); ex.n_call(I_SERIALIZE_J_S_O_N_PROPERTY, &[a0, a1, a2, a3, a4, a5, a6], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            4 => {
+                let v = num((f64_of(ex.n_slot(3)) + 1.0_f64)); ex.n_set_slot(3, v);
+                if ex.n_backedge(2) { return Ok(None); } continue;
+            }
+            5 => {
+                // resume point: JSONJoin
+                match { let a0 = ex.n_str("[")?; let a1 = ex.n_str("]")?; let a2 = ex.n_slot(2); let a3 = ex.n_slot(1); let a4 = ex.n_arg(2); let a5 = ex.n_arg(4); let a6 = ex.n_slot(0); ex.n_call(I_J_S_O_N_JOIN, &[a0, a1, a2, a3, a4, a5, a6], 8) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            6 => {
+                let r = ex.n_result(); ex.n_set_slot(4, r);
+                // resume point: CreateDataPropertyOrThrow
+                match { let a0 = ex.n_slot(2); let a1 = ex.n_slot(3); let a2 = (if ex.n_slot(4).is_undefined() { ex.n_str("null")? } else { { let a0 = ex.n_slot(4); ex.n_leaf(I_AS_STR, &[a0])? } }); ex.n_create_data_property_or_throw(&[a0, a1, a2], 7) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            7 => {
+                ex.n_result();
+                ex.n_goto(4); continue;
+            }
+            8 => {
+                let r = ex.n_result(); ex.n_set_slot(5, r);
+                let v = ex.n_slot(5); return ex.n_ret(v);
+            }
+            _ => return Err(bad_state()),
+        }
+    }
+}
+
+fn handler_SerializeJSONArray(state: u32) -> Option<(u32, u32)> {
     let _ = state;
     None
 }

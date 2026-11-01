@@ -4046,3 +4046,25 @@ Effect, before → after:
 | strbuild, Rust allocations | 2.8 M | 100 k |
 | strings, native instructions | | −4% |
 | strbuild, wasm instructions | | −10% |
+## D1901: JSON.stringify: plain subtrees and Dates in the fast path
+date: 2026-11-03 · by: infra · issue: 0090
+One `toJSON`, getter, replacer or class instance anywhere used to send the whole value
+to the full algorithm in the builtin language (about 10x quickjs-wasi in wasm). Now:
+- the full algorithm tries the fast path (`%JsonStringifyFastAt`,
+  `json::stringify_fast_at`) on every object it reaches without a replacer function,
+  after that object's own `toJSON` (not looked at again) and with its stack: reaching an
+  object of the stack is the cycle TypeError, and the stack depth sets the indentation.
+  A subtree that is not plain data declines (nothing observable happened) and the full
+  algorithm goes on one level down, so only the path to a non-plain value is slow;
+- the fast path serializes a Date itself while its `toJSON`, `toISOString`, `valueOf`
+  and @@toPrimitive are the originals (data properties, no Proxy on the chain): then
+  `toJSON` runs no user code and gives the ISO string or `null` (D1801's identity
+  rule; the four are `@intrinsic` for that);
+- an array replacer's PropertyList goes into the fast path as the key list ([[Get]] of
+  each key: inherited and non-enumerable properties count, accessors decline);
+- QuoteJSONString no longer sets up a serializer per string, and the key cache is
+  filled on first use.
+The full algorithm's functions are `@native` (10.5 KB of wasm, -20% on replacer
+functions). wasm instructions (wmeasure.py, before → after, quickjs-wasi): one Date in
+2000 records 18.1G → 1.2G (1.9G), indent + a getter 14.8G → 2.8G (1.8G), replacer
+function + array replacer 8.9G → 4.1G (1.4G), plain 1.5G unchanged (2.2G).

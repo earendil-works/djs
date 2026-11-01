@@ -19,8 +19,10 @@
 use alloc::vec::Vec;
 
 use super::DEFAULT_MAX_DEPTH;
+use crate::bytecode::intrinsics::const_id;
 use crate::heap::{
-    Atom, Heap, HeapError, Lookup, ObjectClass, Property, StrView, atoms, string::MAX_LEN,
+    Atom, Heap, HeapError, Lookup, ObjectClass, PropFlags, Property, StrView, atoms,
+    string::MAX_LEN,
 };
 use crate::num;
 use crate::value::{Kind, Obj, Str, Value};
@@ -88,6 +90,21 @@ pub fn stringify_fast(
     value: Value,
     gap: &[u16],
 ) -> Result<Option<Str>, StringifyError> {
+    stringify_fast_at(heap, value, gap, &[], true, None)
+}
+
+/// [`stringify_fast`] for a value inside the full algorithm (0090, D1901): `outer` are
+/// the objects being serialized around it (the algorithm's stack; reaching one is a
+/// cycle), which also set its indentation, and with `to_json` false the value's own
+/// `toJSON` is not looked at (the algorithm called it already).
+pub fn stringify_fast_at(
+    heap: &mut Heap,
+    value: Value,
+    gap: &[u16],
+    outer: &[Obj],
+    to_json: bool,
+    list: Option<&[Atom]>,
+) -> Result<Option<Str>, StringifyError> {
     let limit = {
         let a = heap.arena();
         // The result cell needs a 16-byte header plus the data.
@@ -102,11 +119,15 @@ pub fn stringify_fast(
             room: limit.1,
         },
         gap,
+        outer,
+        skip_to_json: !to_json,
+        list,
         stack: Vec::new(),
         keys: Vec::new(),
         deep: Vec::new(),
         clean_protos: Vec::new(),
-        key_cache: alloc::vec![(Atom::NULL, Vec::new()); KEY_CACHE],
+        // Filled on the first key: most calls on small values need none.
+        key_cache: Vec::new(),
     };
     if !s.run(value)? {
         return Ok(None);
@@ -116,6 +137,23 @@ pub fn stringify_fast(
         Buf::Wide(w) => s.heap.alloc_utf16(&w)?,
     };
     Ok(Some(str))
+}
+
+/// QuoteJSONString ( value ), 25.5.2.3, of a string, without a serializer's setup
+/// (the full algorithm quotes every key and string through this).
+pub fn quote(heap: &mut Heap, s: Str) -> Result<Str, HeapError> {
+    let flat = heap.flatten(s)?;
+    let view = heap.str_view(flat).expect("flat");
+    let mut out = Out {
+        buf: Buf::Narrow(Vec::with_capacity(view.len() + 2)),
+        max_len: usize::MAX,
+        room: usize::MAX,
+    };
+    out.quote(view);
+    match out.buf {
+        Buf::Narrow(b) => heap.alloc_latin1(&b),
+        Buf::Wide(w) => heap.alloc_utf16(&w),
+    }
 }
 
 enum Buf {
@@ -360,7 +398,18 @@ enum Class {
     Skip,
     Primitive,
     Object(Obj, bool),
+    /// A Date whose `toJSON` is the original (D1901): its time value.
+    Date(f64),
 }
+
+/// Date.prototype's methods that `toJSON` of a Date runs: with the originals in place,
+/// it is `null` for an invalid date and the ISO string otherwise.
+const DATE_JSON: [u16; 4] = [
+    const_id("DatePrototypeToJSON"),
+    const_id("DatePrototypeToISOString"),
+    const_id("DatePrototypeValueOf"),
+    const_id("DatePrototypeToPrimitive"),
+];
 
 /// Frames beyond this many are also kept in a set, so the cycle check stays cheap for deep
 /// structures.
@@ -370,6 +419,12 @@ struct Ser<'h, 'g> {
     heap: &'h mut Heap,
     out: Out,
     gap: &'g [u16],
+    /// The enclosing objects of a value inside the full algorithm (`stringify_fast_at`).
+    outer: &'g [Obj],
+    /// The next object classified is that value: its `toJSON` was handled already.
+    skip_to_json: bool,
+    /// The keys of an array replacer (the PropertyList): objects serialize these.
+    list: Option<&'g [Atom]>,
     stack: Vec<Frame>,
     keys: Vec<Atom>,
     /// Sorted offsets of the frames beyond the first [`LINEAR_CYCLE_CHECK`].
@@ -434,13 +489,18 @@ impl Ser<'_, '_> {
                 let is_array = match self.heap.object_class(o) {
                     ObjectClass::Ordinary => false,
                     ObjectClass::Array => true,
+                    ObjectClass::Date if !self.skip_to_json => {
+                        return self.date(o).ok_or(StringifyError::Slow);
+                    }
                     // Functions (skipped), wrappers (ToPrimitive), exotics (proxies
                     // included): full algorithm.
                     #[allow(unreachable_patterns)]
                     _ => return Err(StringifyError::Slow),
                 };
                 // A toJSON that might be callable means calling user code.
-                self.check_to_json(o)?;
+                if !core::mem::take(&mut self.skip_to_json) {
+                    self.check_to_json(o)?;
+                }
                 Class::Object(o, is_array)
             }
             Kind::BigInt => {
@@ -465,12 +525,34 @@ impl Ser<'_, '_> {
         })
     }
 
+    /// A Date whose `toJSON`, `toISOString`, `valueOf` and @@toPrimitive are the
+    /// originals, found as data properties without a Proxy: `toJSON` runs no user code
+    /// then, and gives its time value as an ISO string (or `null`).
+    fn date(&mut self, o: Obj) -> Option<Class> {
+        let iso = self.heap.atom_str("toISOString").ok()?;
+        let keys = [
+            atoms::TO_JSON,
+            iso,
+            atoms::VALUE_OF,
+            atoms::SYM_TO_PRIMITIVE,
+        ];
+        for (key, id) in keys.into_iter().zip(DATE_JSON) {
+            let original = crate::interp::realm::installed_intrinsic(self.heap, id);
+            match self.heap.lookup_property(o, key) {
+                Lookup::Found(_, Property::Data { value, .. }) if value == original => {}
+                _ => return None,
+            }
+        }
+        let t = self.heap.object_slot(o, 0).as_number().unwrap_or(f64::NAN);
+        Some(Class::Date(t))
+    }
+
     fn newline(&mut self, depth: usize) {
         if self.gap.is_empty() {
             return;
         }
         self.out.byte(b'\n');
-        for _ in 0..depth {
+        for _ in 0..depth + self.outer.len() {
             self.out.units(self.gap);
         }
     }
@@ -504,6 +586,9 @@ impl Ser<'_, '_> {
             write_int(&mut self.out, i as i64);
             self.out.byte(b'"');
         } else {
+            if self.key_cache.is_empty() {
+                self.key_cache = alloc::vec![(Atom::NULL, Vec::new()); KEY_CACHE];
+            }
             let slot = k.id() as usize % KEY_CACHE;
             if self.key_cache[slot].0 == k {
                 self.out.latin1(&self.key_cache[slot].1);
@@ -536,6 +621,17 @@ impl Ser<'_, '_> {
         let (o, is_array) = match c {
             Class::Skip => unreachable!(),
             Class::Primitive => return self.primitive(v),
+            Class::Date(t) => {
+                match crate::builtins::date::format(t, 2, 3, 0) {
+                    Some(iso) => {
+                        self.out.byte(b'"');
+                        self.out.latin1(iso.as_bytes());
+                        self.out.byte(b'"');
+                    }
+                    None => self.out.latin1(b"null"),
+                }
+                return self.out.check();
+            }
             Class::Object(o, a) => (o, a),
         };
         let n = self.stack.len();
@@ -543,10 +639,11 @@ impl Ser<'_, '_> {
             .iter()
             .any(|f| f.obj() == o)
             || self.deep.binary_search(&o.offset()).is_ok()
+            || self.outer.contains(&o)
         {
             return Err(StringifyError::Circular);
         }
-        if n >= DEFAULT_MAX_DEPTH as usize {
+        if n + self.outer.len() >= DEFAULT_MAX_DEPTH as usize {
             return Err(StringifyError::StackOverflow);
         }
         if n >= LINEAR_CYCLE_CHECK
@@ -561,7 +658,9 @@ impl Ser<'_, '_> {
             self.out.byte(b'[');
             let len = self.heap.array_length(o);
             self.stack.push(Frame::Arr { o, next: 0, len });
-        } else if let Some(count) = self.heap.plain_entry_slots(o) {
+        } else if self.list.is_none()
+            && let Some(count) = self.heap.plain_entry_slots(o)
+        {
             self.out.byte(b'{');
             self.stack.push(Frame::Plain {
                 o,
@@ -572,9 +671,13 @@ impl Ser<'_, '_> {
         } else {
             self.out.byte(b'{');
             let start = self.keys.len();
-            for k in self.heap.own_keys(o) {
-                if !k.is_symbol() {
-                    self.keys.push(k);
+            if let Some(list) = self.list {
+                self.keys.extend_from_slice(list);
+            } else {
+                for k in self.heap.own_keys(o) {
+                    if !k.is_symbol() {
+                        self.keys.push(k);
+                    }
                 }
             }
             let end = self.keys.len();
@@ -725,8 +828,23 @@ impl Ser<'_, '_> {
                         end,
                         any,
                     };
-                    let Some(p) = self.heap.get_own_property(o, key) else {
-                        continue;
+                    let p = if self.list.is_some() {
+                        // A property list reads each key with [[Get]]: inherited and
+                        // non-enumerable properties too.
+                        match self.heap.lookup_property(o, key) {
+                            Lookup::Found(_, Property::Data { value, .. }) => {
+                                Property::data(value, PropFlags::ALL)
+                            }
+                            Lookup::Absent => continue,
+                            Lookup::Found(..) | Lookup::Proxy(_) => {
+                                return Err(StringifyError::Slow);
+                            }
+                        }
+                    } else {
+                        match self.heap.get_own_property(o, key) {
+                            Some(p) => p,
+                            None => continue,
+                        }
                     };
                     let Some((value, c)) = self.member_value(p)? else {
                         continue;

@@ -4,7 +4,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::heap::{Atom, Heap, HeapError, ObjectClass, PropFlags, PropertyDescriptor, atoms};
+use crate::heap::{Atom, Heap, ObjectClass, PropFlags, PropertyDescriptor, atoms};
 use crate::interp::conv::Fault;
 use crate::interp::{ErrorKind, Intrinsic, realm};
 use crate::json::{self, ParseError, ParseOptions, StringifyError};
@@ -29,8 +29,61 @@ pub(crate) fn parse(heap: &mut Heap, text: Str) -> Result<Result<Value, json::Sy
 /// result, or `null` when the value needs the full algorithm (nothing observable has
 /// happened then).
 pub(crate) fn stringify_fast(heap: &mut Heap, v: Value, gap: Str) -> Result<Value, Fault> {
+    stringify_fast_at(heap, v, gap, &[], true, None)
+}
+
+/// `%JsonStringifyFastAt(value, gap, stack)`: [`stringify_fast`] for a value the full
+/// algorithm reached (its toJSON and replacer done), inside the objects of `stack` (an
+/// Array): its plain subtrees take the fast path (D1901).
+pub(crate) fn stringify_fast_in(
+    heap: &mut Heap,
+    v: Value,
+    gap: Str,
+    stack: Obj,
+    list: Value,
+) -> Result<Value, Fault> {
+    let n = heap.dense_len(stack);
+    let mut outer = Vec::with_capacity(n as usize);
+    for i in 0..n {
+        match heap.get_element_fast(stack, i).and_then(|v| v.as_object()) {
+            Some(o) => outer.push(o),
+            None => return Ok(Value::NULL),
+        }
+    }
+    if heap.object_class(stack) != ObjectClass::Array || heap.array_length(stack) != n {
+        return Ok(Value::NULL);
+    }
+    // The array replacer's PropertyList (strings, from JSONPropertyList) as keys.
+    let keys = match list.as_object() {
+        None => None,
+        Some(l) => {
+            let n = heap.dense_len(l);
+            if heap.object_class(l) != ObjectClass::Array || heap.array_length(l) != n {
+                return Ok(Value::NULL);
+            }
+            let mut keys = Vec::with_capacity(n as usize);
+            for i in 0..n {
+                match heap.get_element_fast(l, i).and_then(|v| v.as_string()) {
+                    Some(s) => keys.push(heap.intern(s)?),
+                    None => return Ok(Value::NULL),
+                }
+            }
+            Some(keys)
+        }
+    };
+    stringify_fast_at(heap, v, gap, &outer, false, keys.as_deref())
+}
+
+fn stringify_fast_at(
+    heap: &mut Heap,
+    v: Value,
+    gap: Str,
+    outer: &[Obj],
+    to_json: bool,
+    list: Option<&[Atom]>,
+) -> Result<Value, Fault> {
     let gap = heap.str_to_utf16(gap);
-    match json::stringify_fast(heap, v, &gap) {
+    match json::stringify_fast_at(heap, v, &gap, outer, to_json, list) {
         Ok(Some(s)) => Ok(Value::string(s)),
         Ok(None) => Ok(Value::UNDEFINED),
         // The full algorithm throws for a BigInt (after a replacer had its say).
@@ -49,12 +102,7 @@ pub(crate) fn stringify_fast(heap: &mut Heap, v: Value, gap: Str) -> Result<Valu
 
 /// `%JsonQuote(s)`: QuoteJSONString ( value ), 25.5.2.3.
 pub(crate) fn quote(heap: &mut Heap, s: Str) -> Result<Str, Fault> {
-    // A string is plain data: the fast path always handles it.
-    match json::stringify_fast(heap, Value::string(s), &[]) {
-        Ok(Some(q)) => Ok(q),
-        Err(StringifyError::Heap(e)) => Err(Fault::heap(e)),
-        _ => Err(Fault::heap(HeapError::OutOfMemory)),
-    }
+    Ok(json::quote(heap, s)?)
 }
 
 /// One open container while walking the source for [`source_records`].

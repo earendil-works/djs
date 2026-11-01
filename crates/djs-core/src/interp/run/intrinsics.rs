@@ -15,28 +15,13 @@ use crate::compiler::DynamicKind;
 /// Fuel per code unit of compiled source (eval, the Function constructors): compiling
 /// one unit costs about as much as a few simple instructions (D1591).
 const COMPILE_FUEL_PER_UNIT: i64 = 4;
-use crate::bytecode::intrinsics::{INTRINSICS, IntrinsicKind, intrinsic, intrinsic_id};
+use crate::bytecode::intrinsics::{IntrinsicKind, intrinsic, intrinsic_id};
 use crate::heap::cells::flags::{OBJ_BUILTIN, OBJ_BUILTIN_CTOR};
 use crate::heap::{ObjectClass, atoms};
 
 /// The id of `name`, at compile time (a typo fails the build).
 pub(super) const fn id(name: &str) -> u16 {
-    let mut k = 0;
-    while k < INTRINSICS.len() {
-        let a = INTRINSICS[k].name.as_bytes();
-        let b = name.as_bytes();
-        if a.len() == b.len() {
-            let mut j = 0;
-            while j < a.len() && a[j] == b[j] {
-                j += 1;
-            }
-            if j == a.len() {
-                return k as u16;
-            }
-        }
-        k += 1;
-    }
-    panic!("unknown intrinsic")
+    crate::bytecode::intrinsics::const_id(name)
 }
 
 const IS_OBJECT: u16 = id("IsObject");

@@ -2148,70 +2148,70 @@ function DatePrototypeGetTime() {
   return %DateValue(this);
 }
 
-// builtins/date.ts:376 Date.prototype.valueOf
+// builtins/date.ts:377 Date.prototype.valueOf %DatePrototypeValueOf
 function DatePrototypeValueOf() {
   return %DateValue(this);
 }
 
-// builtins/date.ts:384 Date.prototype.getTimezoneOffset
+// builtins/date.ts:385 Date.prototype.getTimezoneOffset
 function DatePrototypeGetTimezoneOffset() {
   return %DateTimezoneOffset(%DateValue(this));
 }
 
-// builtins/date.ts:392 Date.prototype.setTime
+// builtins/date.ts:393 Date.prototype.setTime
 function DatePrototypeSetTime(time) {
   %DateValue(this);
   const t = ToNumber(time);
   return %DateSetValue(this, TimeClip(t));
 }
 
-// builtins/date.ts:402 Date.prototype.toString
+// builtins/date.ts:403 Date.prototype.toString
 function DatePrototypeToString() {
   return %DateFormat(%DateValue(this), 1, 3);
 }
 
-// builtins/date.ts:410 Date.prototype.toDateString
+// builtins/date.ts:411 Date.prototype.toDateString
 function DatePrototypeToDateString() {
   return %DateFormat(%DateValue(this), 1, 1);
 }
 
-// builtins/date.ts:418 Date.prototype.toTimeString
+// builtins/date.ts:419 Date.prototype.toTimeString
 function DatePrototypeToTimeString() {
   return %DateFormat(%DateValue(this), 1, 2);
 }
 
-// builtins/date.ts:426 Date.prototype.toISOString
+// builtins/date.ts:428 Date.prototype.toISOString %DatePrototypeToISOString
 function DatePrototypeToISOString() {
   return %DateFormat(%DateValue(this), 2, 3);
 }
 
-// builtins/date.ts:434 Date.prototype.toLocaleString
+// builtins/date.ts:436 Date.prototype.toLocaleString
 function DatePrototypeToLocaleString() {
   return %DateFormat(%DateValue(this), 3, 3);
 }
 
-// builtins/date.ts:442 Date.prototype.toLocaleDateString
+// builtins/date.ts:444 Date.prototype.toLocaleDateString
 function DatePrototypeToLocaleDateString() {
   return %DateFormat(%DateValue(this), 3, 1);
 }
 
-// builtins/date.ts:450 Date.prototype.toLocaleTimeString
+// builtins/date.ts:452 Date.prototype.toLocaleTimeString
 function DatePrototypeToLocaleTimeString() {
   return %DateFormat(%DateValue(this), 3, 2);
 }
 
-// builtins/date.ts:459 Date.prototype.toUTCString Date.prototype.toGMTString
+// builtins/date.ts:461 Date.prototype.toUTCString Date.prototype.toGMTString
 function DatePrototypeToUTCString() {
   return %DateFormat(%DateValue(this), 0, 3);
 }
 
-// builtins/date.ts:467 Date.prototype.getYear
+// builtins/date.ts:469 Date.prototype.getYear
 function DatePrototypeGetYear() {
   const y = %DateGetField(%DateValue(this), 0, true);
   return y - 1900;
 }
 
-// builtins/date.ts:476 Date.prototype.toJSON
+// builtins/date.ts:479 Date.prototype.toJSON %DatePrototypeToJSON
 function DatePrototypeToJSON(key) {
   const o = %ToObject(this);
   const tv = ToPrimitive(o, "number");
@@ -2224,7 +2224,7 @@ function DatePrototypeToJSON(key) {
   return %Call(%Get(o, "toISOString"), o);
 }
 
-// builtins/date.ts:493 Date.prototype[Symbol.toPrimitive]
+// builtins/date.ts:497 Date.prototype[Symbol.toPrimitive] %DatePrototypeToPrimitive
 function DatePrototypeToPrimitive(hint) {
   if (!%IsObject(this)) {
     throw %NewTypeError("not an object");
@@ -5215,7 +5215,7 @@ function JSONListIncludes(list, n, v) {
   return false;
 }
 
-// builtins/json.ts:192
+// builtins/json.ts:194 %SerializeJSONProperty
 function SerializeJSONProperty(replacer, propertyList, gap, stack, indent, key, holder) {
   let value = %Get(holder, key);
   if (%IsObject(value) || %IsBigInt(value)) {
@@ -5261,6 +5261,12 @@ function SerializeJSONProperty(replacer, propertyList, gap, stack, indent, key, 
   }
   if (%IsObject(value) && !%IsCallable(value)) {
     const o = %AsObj(value);
+    if (replacer === undefined) {
+      const fast = %JsonStringifyFastAt(o, gap, stack, propertyList);
+      if (fast !== null) {
+        return fast;
+      }
+    }
     if (JSONStackIncludes(stack, o)) {
       throw %NewTypeError("circular reference");
     }
@@ -5273,7 +5279,7 @@ function SerializeJSONProperty(replacer, propertyList, gap, stack, indent, key, 
   return undefined;
 }
 
-// builtins/json.ts:262
+// builtins/json.ts:275 %JSONStackIncludes
 function JSONStackIncludes(stack, o) {
   const n = LengthOfArrayLike(stack);
   for (let i = 0; i < n; i++) {
@@ -5284,7 +5290,7 @@ function JSONStackIncludes(stack, o) {
   return false;
 }
 
-// builtins/json.ts:273
+// builtins/json.ts:290 %JSONJoin
 function JSONJoin(open, close, partial, n, gap, stepback, indent) {
   if (n === 0) {
     return open + close;
@@ -5300,7 +5306,7 @@ function JSONJoin(open, close, partial, n, gap, stepback, indent) {
   return gap === "" ? r + close : r + "\n" + stepback + close;
 }
 
-// builtins/json.ts:289
+// builtins/json.ts:310 %SerializeJSONObject
 function SerializeJSONObject(replacer, propertyList, gap, stack, stepback, value) {
   const indent = stepback + gap;
   const keys = propertyList === undefined ? %OwnPropertyKeys(value, 3) : %AsObj(propertyList);
@@ -5319,7 +5325,7 @@ function SerializeJSONObject(replacer, propertyList, gap, stack, stepback, value
   return JSONJoin("{", "}", partial, n, gap, stepback, indent);
 }
 
-// builtins/json.ts:315
+// builtins/json.ts:340 %SerializeJSONArray
 function SerializeJSONArray(replacer, propertyList, gap, stack, stepback, value) {
   const indent = stepback + gap;
   const len = LengthOfArrayLike(value);
@@ -11710,6 +11716,10 @@ function GlobalAtob(...args) {
 %InstallIntrinsic("LengthOfArrayLike", LengthOfArrayLike);
 %InstallIntrinsic("ToPropertyKey", ToPropertyKey);
 %InstallIntrinsic("GetPrototypeFromConstructor", GetPrototypeFromConstructor);
+%InstallIntrinsic("DatePrototypeValueOf", DatePrototypeValueOf);
+%InstallIntrinsic("DatePrototypeToISOString", DatePrototypeToISOString);
+%InstallIntrinsic("DatePrototypeToJSON", DatePrototypeToJSON);
+%InstallIntrinsic("DatePrototypeToPrimitive", DatePrototypeToPrimitive);
 %InstallIntrinsic("DecoratorStart", DecoratorStart);
 %InstallIntrinsic("ApplyDecorators", ApplyDecorators);
 %InstallIntrinsic("DecoratorRunInits", DecoratorRunInits);
@@ -11753,6 +11763,11 @@ function GlobalAtob(...args) {
 %InstallIntrinsic("ArrayIteratorPrototypeNext", ArrayIteratorPrototypeNext);
 %InstallIntrinsic("StringPrototypeIterator", StringPrototypeIterator);
 %InstallIntrinsic("StringIteratorPrototypeNext", StringIteratorPrototypeNext);
+%InstallIntrinsic("SerializeJSONProperty", SerializeJSONProperty);
+%InstallIntrinsic("JSONStackIncludes", JSONStackIncludes);
+%InstallIntrinsic("JSONJoin", JSONJoin);
+%InstallIntrinsic("SerializeJSONObject", SerializeJSONObject);
+%InstallIntrinsic("SerializeJSONArray", SerializeJSONArray);
 %InstallIntrinsic("AddEntriesFromIterable", AddEntriesFromIterable);
 %InstallIntrinsic("MapPrototypeSet", MapPrototypeSet);
 %InstallIntrinsic("MapIteratorPrototypeNext", MapIteratorPrototypeNext);
@@ -11842,20 +11857,25 @@ function GlobalAtob(...args) {
 %MarkNative(GetPrototypeFromConstructor, 22);
 %MarkNative(GetIterator, 23);
 %MarkNative(ArrayIteratorPrototypeNext, 24);
-%MarkNative(AddEntriesFromIterable, 25);
-%MarkNative(MapConstructor, 26);
-%MarkNative(MapPrototypeForEach, 27);
-%MarkNative(PromiseReactionJob, 28);
-%MarkNative(SetConstructor, 29);
-%MarkNative(SetPrototypeForEach, 30);
-%MarkNative(StringPrototypeAt, 31);
-%MarkNative(StringPrototypeCharAt, 32);
-%MarkNative(StringPrototypeCharCodeAt, 33);
-%MarkNative(StringPrototypeCodePointAt, 34);
-%MarkNative(StringPrototypeIndexOf, 35);
-%MarkNative(StringPrototypeStartsWith, 36);
-%MarkNative(StringPrototypeSlice, 37);
-%MarkNative(StringPrototypeSubstring, 38);
+%MarkNative(SerializeJSONProperty, 25);
+%MarkNative(JSONStackIncludes, 26);
+%MarkNative(JSONJoin, 27);
+%MarkNative(SerializeJSONObject, 28);
+%MarkNative(SerializeJSONArray, 29);
+%MarkNative(AddEntriesFromIterable, 30);
+%MarkNative(MapConstructor, 31);
+%MarkNative(MapPrototypeForEach, 32);
+%MarkNative(PromiseReactionJob, 33);
+%MarkNative(SetConstructor, 34);
+%MarkNative(SetPrototypeForEach, 35);
+%MarkNative(StringPrototypeAt, 36);
+%MarkNative(StringPrototypeCharAt, 37);
+%MarkNative(StringPrototypeCharCodeAt, 38);
+%MarkNative(StringPrototypeCodePointAt, 39);
+%MarkNative(StringPrototypeIndexOf, 40);
+%MarkNative(StringPrototypeStartsWith, 41);
+%MarkNative(StringPrototypeSlice, 42);
+%MarkNative(StringPrototypeSubstring, 43);
 %MarkFast(ArraySpeciesCreate);
 %MarkFast(ArrayIsArray);
 %MarkFast(RelativeIndex);

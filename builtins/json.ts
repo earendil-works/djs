@@ -188,6 +188,8 @@ function JSONListIncludes(list: Obj, n: f64, v: Value): boolean {
 /**
  * SerializeJSONProperty ( state, key, holder ), 25.5.2.2: a string, or undefined. The
  * state is replacer, propertyList, gap, stack and indent.
+ * @intrinsic
+ * @native
  */
 function SerializeJSONProperty(
   replacer: Value,
@@ -244,6 +246,13 @@ function SerializeJSONProperty(
   }
   if (IsObject(value) && !IsCallable(value)) {
     const o: Obj = AsObj(value);
+    // A plain subtree in one step, without a replacer function (D1901).
+    if (replacer === undefined) {
+      const fast: Value = JsonStringifyFastAt(o, gap, stack, propertyList);
+      if (fast !== null) {
+        return fast;
+      }
+    }
     if (JSONStackIncludes(stack, o)) {
       throw NewTypeError("circular reference");
     }
@@ -258,7 +267,11 @@ function SerializeJSONProperty(
   return undefined;
 }
 
-/** Whether the internal stack array holds o. */
+/**
+ * Whether the internal stack array holds o.
+ * @intrinsic
+ * @native
+ */
 function JSONStackIncludes(stack: Obj, o: Obj): boolean {
   const n: f64 = LengthOfArrayLike(stack);
   for (let i: f64 = 0; i < n; i++) {
@@ -269,7 +282,11 @@ function JSONStackIncludes(stack: Obj, o: Obj): boolean {
   return false;
 }
 
-/** The members joined: `{a,b}`, or with a gap, one per line at `indent`. */
+/**
+ * The members joined: `{a,b}`, or with a gap, one per line at `indent`.
+ * @intrinsic
+ * @native
+ */
 function JSONJoin(open: Str, close: Str, partial: Obj, n: f64, gap: Str, stepback: Str, indent: Str): Str {
   if (n === 0) {
     return open + close;
@@ -285,7 +302,11 @@ function JSONJoin(open: Str, close: Str, partial: Obj, n: f64, gap: Str, stepbac
   return gap === "" ? r + close : r + "\n" + stepback + close;
 }
 
-/** SerializeJSONObject ( state, value ), 25.5.2.5, after the cycle check. */
+/**
+ * SerializeJSONObject ( state, value ), 25.5.2.5, after the cycle check.
+ * @intrinsic
+ * @native
+ */
 function SerializeJSONObject(
   replacer: Value,
   propertyList: Value,
@@ -311,7 +332,11 @@ function SerializeJSONObject(
   return JSONJoin("{", "}", partial, n, gap, stepback, indent);
 }
 
-/** SerializeJSONArray ( state, value ), 25.5.2.6, after the cycle check. */
+/**
+ * SerializeJSONArray ( state, value ), 25.5.2.6, after the cycle check.
+ * @intrinsic
+ * @native
+ */
 function SerializeJSONArray(
   replacer: Value,
   propertyList: Value,
