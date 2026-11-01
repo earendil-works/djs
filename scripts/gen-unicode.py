@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Generate crates/djs-core/src/unicode/tables.rs from the Unicode Character Database.
+"""Generate the Unicode tables in crates/djs-core/src/unicode/ from the Unicode Character
+Database: tables.rs (identifier and space properties, for the lexer) and case_tables.rs
+(case mapping and folding, for the regex engine and the String case methods).
 
 The UCD files are downloaded once into vendor/unicode/<version>/ of the primary checkout
 (shared by all worktrees, gitignored). The generated Rust file is checked in.
@@ -8,7 +10,7 @@ The Unicode version matches what test262 at the pinned commit expects (the versi
 dquickts uses, see its unicode_download.sh).
 
 Usage: scripts/gen-unicode.py [--check]
-  --check   do not write, exit 1 if the checked-in table is out of date
+  --check   do not write, exit 1 if a checked-in table is out of date
 """
 
 import os
@@ -17,7 +19,13 @@ import sys
 
 UNICODE_VERSION = "17.0.0"
 BASE_URL = f"https://www.unicode.org/Public/{UNICODE_VERSION}/ucd"
-FILES = ["DerivedCoreProperties.txt", "extracted/DerivedGeneralCategory.txt"]
+FILES = [
+    "DerivedCoreProperties.txt",
+    "extracted/DerivedGeneralCategory.txt",
+    "UnicodeData.txt",
+    "CaseFolding.txt",
+    "SpecialCasing.txt",
+]
 
 # Packed range encoding: start << LEN_BITS | (len - 1). start needs 21 bits.
 LEN_BITS = 11
@@ -25,6 +33,14 @@ MAX_LEN = 1 << LEN_BITS
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(ROOT, "crates/djs-core/src/unicode/tables.rs")
+CASE_OUT = os.path.join(ROOT, "crates/djs-core/src/unicode/case_tables.rs")
+
+# Case mapping runs: `start << RUN_START_SHIFT | (stride - 1) << RUN_LEN_BITS | (len - 1)`
+# plus a separate signed delta; the run maps start, start + stride, ... (len code points)
+# each to itself + delta.
+RUN_LEN_BITS = 10
+RUN_START_SHIFT = RUN_LEN_BITS + 1
+RUN_MAX_LEN = 1 << RUN_LEN_BITS
 
 
 def primary_checkout():
@@ -108,8 +124,7 @@ def emit_table(name, doc, words):
     return "\n".join(lines)
 
 
-def generate():
-    vendor = os.path.join(primary_checkout(), "vendor", "unicode", UNICODE_VERSION)
+def generate(vendor):
     core = parse_ucd(fetch(vendor, FILES[0]), ["ID_Start", "ID_Continue"])
     gc = parse_ucd(fetch(vendor, FILES[1]), ["Zs"])
 
@@ -143,16 +158,208 @@ def generate():
     return "\n".join(parts)
 
 
+def check_version(path):
+    with open(path, encoding="utf-8") as f:
+        first = f.readline()
+    if UNICODE_VERSION not in first:
+        sys.exit(f"{path}: expected Unicode {UNICODE_VERSION}, got {first.strip()}")
+
+
+def parse_unicode_data(path):
+    """Simple uppercase and lowercase mappings (UnicodeData.txt fields 12 and 13)."""
+    upper, lower = {}, {}
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            fields = line.split(";")
+            c = int(fields[0], 16)
+            if fields[12]:
+                upper[c] = int(fields[12], 16)
+            if fields[13]:
+                lower[c] = int(fields[13], 16)
+    # UnicodeData.txt has no version line; spot-check a mapping added in Unicode 16 to
+    # catch a stale download.
+    assert lower.get(0x1C89) == 0x1C8A, "UnicodeData.txt looks older than expected"
+    return upper, lower
+
+
+def parse_case_folding(path):
+    """Simple case folding: the C and S entries of CaseFolding.txt."""
+    check_version(path)
+    fold = {}
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            fields = [x.strip() for x in line.split(";")]
+            if fields[1] in ("C", "S"):
+                fold[int(fields[0], 16)] = int(fields[2], 16)
+    return fold
+
+
+def parse_special_casing(path):
+    """Unconditional full lower and upper mappings that differ from the simple ones."""
+    check_version(path)
+    lower, upper = {}, {}
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            fields = [x.strip() for x in line.split(";")]
+            if len(fields) > 4 and fields[4]:
+                continue  # language or context dependent (Final_Sigma is done in code)
+            c = int(fields[0], 16)
+            lo = [int(x, 16) for x in fields[1].split()]
+            up = [int(x, 16) for x in fields[3].split()]
+            if len(lo) != 1:
+                lower[c] = lo
+            if len(up) != 1:
+                upper[c] = up
+    return lower, upper
+
+
+def case_runs(mapping):
+    """Splits {c: mapped} into runs of equal delta with stride 1 or 2. ASCII is left out
+    (the lookups handle it inline)."""
+    mapping = {c: m for c, m in mapping.items() if c >= 0x80}
+    done = set()
+    runs = []
+    for c in sorted(mapping):
+        if c in done:
+            continue
+        d = mapping[c] - c
+
+        def extent(stride):
+            n = 1
+            while n < RUN_MAX_LEN:
+                x = c + stride * n
+                if x not in mapping or x in done or mapping[x] - x != d:
+                    break
+                # A stride-2 run must not interleave with another run: the code point it
+                # skips has to be unmapped, so that run spans stay disjoint.
+                if stride == 2 and x - 1 in mapping:
+                    break
+                n += 1
+            return n
+
+        n1, n2 = extent(1), extent(2)
+        stride, n = (2, n2) if n2 > n1 else (1, n1)
+        for k in range(n):
+            done.add(c + stride * k)
+        runs.append((c, stride, n, d))
+    # The lookup binary-searches the run start, which needs disjoint spans.
+    for (a, sa, na, _), (b, _, _, _) in zip(runs, runs[1:]):
+        assert a + sa * (na - 1) < b, f"overlapping case runs at {a:#x}"
+    return runs
+
+
+def emit_runs(name, doc, runs):
+    keys = [(c << RUN_START_SHIFT) | ((stride - 1) << RUN_LEN_BITS) | (n - 1)
+            for c, stride, n, _ in runs]
+    deltas = [d for _, _, _, d in runs]
+    lines = [emit_table(f"{name}_RUNS", doc, keys), ""]
+    lines.append(f"/// Deltas of `{name}_RUNS`.")
+    lines.append(f"pub(super) static {name}_DELTAS: [i32; {len(deltas)}] = [")
+    row = []
+    for d in deltas:
+        row.append(f"{d},")
+        if len(row) == 12:
+            lines.append("    " + " ".join(row))
+            row = []
+    if row:
+        lines.append("    " + " ".join(row))
+    lines.append("];")
+    return "\n".join(lines)
+
+
+def emit_special(name, doc, mapping):
+    """Entries `[c, m0, m1, m2]` sorted by c; unused slots are 0. All are in the BMP."""
+    lines = [f"/// {doc}", f"pub(super) static {name}: [[u16; 4]; {len(mapping)}] = ["]
+    for c in sorted(mapping):
+        m = mapping[c] + [0] * (3 - len(mapping[c]))
+        assert len(mapping[c]) <= 3 and max([c] + m) <= 0xFFFF
+        lines.append(f"    [0x{c:04x}, 0x{m[0]:04x}, 0x{m[1]:04x}, 0x{m[2]:04x}],")
+    lines.append("];")
+    return "\n".join(lines)
+
+
+def generate_case(vendor):
+    upper, lower = parse_unicode_data(fetch(vendor, FILES[2]))
+    fold = parse_case_folding(fetch(vendor, FILES[3]))
+    special_lower, special_upper = parse_special_casing(fetch(vendor, FILES[4]))
+    core = parse_ucd(fetch(vendor, FILES[0]), ["Cased", "Case_Ignorable"])
+
+    # Simple case folding mostly equals simple lowercasing; store only the differences
+    # (an exception that maps a code point to itself has delta 0).
+    fold_exceptions = {}
+    for c in set(fold) | set(lower):
+        f = fold.get(c, c)
+        if f != lower.get(c, c):
+            fold_exceptions[c] = f
+    exc_runs = case_runs(fold_exceptions)
+    cased = {c for c in core["Cased"] if c >= 0x80}
+    ignorable = {c for c in core["Case_Ignorable"] if c >= 0x80}
+
+    parts = [
+        "// Generated by scripts/gen-unicode.py from the Unicode Character Database. Do not edit.",
+        "//",
+        "// Case mapping runs are packed as",
+        "// `start << RUN_START_SHIFT | (stride - 1) << RUN_LEN_BITS | (len - 1)` and sorted by",
+        "// start; a run maps `start + k * stride` (k < len) to itself plus the run's delta.",
+        "// ASCII is not in the run tables.",
+        "// Range tables use the packing of tables.rs and only list code points >= 0x80.",
+        "",
+        f"pub(super) const RUN_LEN_BITS: u32 = {RUN_LEN_BITS};",
+        f"pub(super) const RUN_START_SHIFT: u32 = {RUN_START_SHIFT};",
+        "",
+        emit_runs("UPPER", "Simple uppercase mapping (UnicodeData.txt).", case_runs(upper)),
+        "",
+        emit_runs("LOWER", "Simple lowercase mapping (UnicodeData.txt).", case_runs(lower)),
+        "",
+        emit_runs(
+            "FOLD_EXCEPTIONS",
+            "Simple case folding (CaseFolding.txt C+S) where it differs from simple lowercase.",
+            exc_runs,
+        ),
+        "",
+        emit_special(
+            "SPECIAL_UPPER",
+            "Unconditional multi-character uppercase mappings (SpecialCasing.txt).",
+            special_upper,
+        ),
+        "",
+        emit_special(
+            "SPECIAL_LOWER",
+            "Unconditional multi-character lowercase mappings (SpecialCasing.txt).",
+            special_lower,
+        ),
+        "",
+        emit_table("CASED", "Non-ASCII `Cased`.", packed(cased)),
+        "",
+        emit_table("CASE_IGNORABLE", "Non-ASCII `Case_Ignorable`.", packed(ignorable)),
+        "",
+    ]
+    return "\n".join(parts)
+
+
 def main():
-    text = generate()
+    vendor = os.path.join(primary_checkout(), "vendor", "unicode", UNICODE_VERSION)
+    outputs = [(OUT, generate(vendor)), (CASE_OUT, generate_case(vendor))]
     if "--check" in sys.argv[1:]:
-        with open(OUT, encoding="utf-8") as f:
-            if f.read() != text:
-                sys.exit(f"{OUT} is out of date; run scripts/gen-unicode.py")
+        for path, text in outputs:
+            try:
+                with open(path, encoding="utf-8") as f:
+                    current = f.read()
+            except FileNotFoundError:
+                current = None
+            if current != text:
+                sys.exit(f"{path} is out of date; run scripts/gen-unicode.py")
         return
-    with open(OUT, "w", encoding="utf-8") as f:
-        f.write(text)
-    print(f"wrote {os.path.relpath(OUT, ROOT)}")
+    for path, text in outputs:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        print(f"wrote {os.path.relpath(path, ROOT)}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,6029 @@
+map	41	41	61
+eq	41	61	1	1
+map	42	42	62
+eq	42	62	1	1
+map	43	43	63
+eq	43	63	1	1
+map	44	44	64
+eq	44	64	1	1
+map	45	45	65
+eq	45	65	1	1
+map	46	46	66
+eq	46	66	1	1
+map	47	47	67
+eq	47	67	1	1
+map	48	48	68
+eq	48	68	1	1
+map	49	49	69
+eq	49	69	1	1
+map	4a	4a	6a
+eq	4a	6a	1	1
+map	4b	4b	6b
+eq	4b	6b	1	1
+map	4c	4c	6c
+eq	4c	6c	1	1
+map	4d	4d	6d
+eq	4d	6d	1	1
+map	4e	4e	6e
+eq	4e	6e	1	1
+map	4f	4f	6f
+eq	4f	6f	1	1
+map	50	50	70
+eq	50	70	1	1
+map	51	51	71
+eq	51	71	1	1
+map	52	52	72
+eq	52	72	1	1
+map	53	53	73
+eq	53	73	1	1
+map	54	54	74
+eq	54	74	1	1
+map	55	55	75
+eq	55	75	1	1
+map	56	56	76
+eq	56	76	1	1
+map	57	57	77
+eq	57	77	1	1
+map	58	58	78
+eq	58	78	1	1
+map	59	59	79
+eq	59	79	1	1
+map	5a	5a	7a
+eq	5a	7a	1	1
+map	61	41	61
+eq	61	41	1	1
+map	62	42	62
+eq	62	42	1	1
+map	63	43	63
+eq	63	43	1	1
+map	64	44	64
+eq	64	44	1	1
+map	65	45	65
+eq	65	45	1	1
+map	66	46	66
+eq	66	46	1	1
+map	67	47	67
+eq	67	47	1	1
+map	68	48	68
+eq	68	48	1	1
+map	69	49	69
+eq	69	49	1	1
+map	6a	4a	6a
+eq	6a	4a	1	1
+map	6b	4b	6b
+eq	6b	4b	1	1
+map	6c	4c	6c
+eq	6c	4c	1	1
+map	6d	4d	6d
+eq	6d	4d	1	1
+map	6e	4e	6e
+eq	6e	4e	1	1
+map	6f	4f	6f
+eq	6f	4f	1	1
+map	70	50	70
+eq	70	50	1	1
+map	71	51	71
+eq	71	51	1	1
+map	72	52	72
+eq	72	52	1	1
+map	73	53	73
+eq	73	53	1	1
+map	74	54	74
+eq	74	54	1	1
+map	75	55	75
+eq	75	55	1	1
+map	76	56	76
+eq	76	56	1	1
+map	77	57	77
+eq	77	57	1	1
+map	78	58	78
+eq	78	58	1	1
+map	79	59	79
+eq	79	59	1	1
+map	7a	5a	7a
+eq	7a	5a	1	1
+map	b5	39c	b5
+eq	b5	39c	1	1
+eq	b5	3bc	1	1
+map	c0	c0	e0
+eq	c0	e0	1	1
+map	c1	c1	e1
+eq	c1	e1	1	1
+map	c2	c2	e2
+eq	c2	e2	1	1
+map	c3	c3	e3
+eq	c3	e3	1	1
+map	c4	c4	e4
+eq	c4	e4	1	1
+map	c5	c5	e5
+eq	c5	e5	1	1
+map	c6	c6	e6
+eq	c6	e6	1	1
+map	c7	c7	e7
+eq	c7	e7	1	1
+map	c8	c8	e8
+eq	c8	e8	1	1
+map	c9	c9	e9
+eq	c9	e9	1	1
+map	ca	ca	ea
+eq	ca	ea	1	1
+map	cb	cb	eb
+eq	cb	eb	1	1
+map	cc	cc	ec
+eq	cc	ec	1	1
+map	cd	cd	ed
+eq	cd	ed	1	1
+map	ce	ce	ee
+eq	ce	ee	1	1
+map	cf	cf	ef
+eq	cf	ef	1	1
+map	d0	d0	f0
+eq	d0	f0	1	1
+map	d1	d1	f1
+eq	d1	f1	1	1
+map	d2	d2	f2
+eq	d2	f2	1	1
+map	d3	d3	f3
+eq	d3	f3	1	1
+map	d4	d4	f4
+eq	d4	f4	1	1
+map	d5	d5	f5
+eq	d5	f5	1	1
+map	d6	d6	f6
+eq	d6	f6	1	1
+map	d8	d8	f8
+eq	d8	f8	1	1
+map	d9	d9	f9
+eq	d9	f9	1	1
+map	da	da	fa
+eq	da	fa	1	1
+map	db	db	fb
+eq	db	fb	1	1
+map	dc	dc	fc
+eq	dc	fc	1	1
+map	dd	dd	fd
+eq	dd	fd	1	1
+map	de	de	fe
+eq	de	fe	1	1
+map	df	53,53	df
+map	e0	c0	e0
+eq	e0	c0	1	1
+map	e1	c1	e1
+eq	e1	c1	1	1
+map	e2	c2	e2
+eq	e2	c2	1	1
+map	e3	c3	e3
+eq	e3	c3	1	1
+map	e4	c4	e4
+eq	e4	c4	1	1
+map	e5	c5	e5
+eq	e5	c5	1	1
+map	e6	c6	e6
+eq	e6	c6	1	1
+map	e7	c7	e7
+eq	e7	c7	1	1
+map	e8	c8	e8
+eq	e8	c8	1	1
+map	e9	c9	e9
+eq	e9	c9	1	1
+map	ea	ca	ea
+eq	ea	ca	1	1
+map	eb	cb	eb
+eq	eb	cb	1	1
+map	ec	cc	ec
+eq	ec	cc	1	1
+map	ed	cd	ed
+eq	ed	cd	1	1
+map	ee	ce	ee
+eq	ee	ce	1	1
+map	ef	cf	ef
+eq	ef	cf	1	1
+map	f0	d0	f0
+eq	f0	d0	1	1
+map	f1	d1	f1
+eq	f1	d1	1	1
+map	f2	d2	f2
+eq	f2	d2	1	1
+map	f3	d3	f3
+eq	f3	d3	1	1
+map	f4	d4	f4
+eq	f4	d4	1	1
+map	f5	d5	f5
+eq	f5	d5	1	1
+map	f6	d6	f6
+eq	f6	d6	1	1
+map	f8	d8	f8
+eq	f8	d8	1	1
+map	f9	d9	f9
+eq	f9	d9	1	1
+map	fa	da	fa
+eq	fa	da	1	1
+map	fb	db	fb
+eq	fb	db	1	1
+map	fc	dc	fc
+eq	fc	dc	1	1
+map	fd	dd	fd
+eq	fd	dd	1	1
+map	fe	de	fe
+eq	fe	de	1	1
+map	ff	178	ff
+eq	ff	178	1	1
+map	100	100	101
+eq	100	101	1	1
+map	101	100	101
+eq	101	100	1	1
+map	102	102	103
+eq	102	103	1	1
+map	103	102	103
+eq	103	102	1	1
+map	104	104	105
+eq	104	105	1	1
+map	105	104	105
+eq	105	104	1	1
+map	106	106	107
+eq	106	107	1	1
+map	107	106	107
+eq	107	106	1	1
+map	108	108	109
+eq	108	109	1	1
+map	109	108	109
+eq	109	108	1	1
+map	10a	10a	10b
+eq	10a	10b	1	1
+map	10b	10a	10b
+eq	10b	10a	1	1
+map	10c	10c	10d
+eq	10c	10d	1	1
+map	10d	10c	10d
+eq	10d	10c	1	1
+map	10e	10e	10f
+eq	10e	10f	1	1
+map	10f	10e	10f
+eq	10f	10e	1	1
+map	110	110	111
+eq	110	111	1	1
+map	111	110	111
+eq	111	110	1	1
+map	112	112	113
+eq	112	113	1	1
+map	113	112	113
+eq	113	112	1	1
+map	114	114	115
+eq	114	115	1	1
+map	115	114	115
+eq	115	114	1	1
+map	116	116	117
+eq	116	117	1	1
+map	117	116	117
+eq	117	116	1	1
+map	118	118	119
+eq	118	119	1	1
+map	119	118	119
+eq	119	118	1	1
+map	11a	11a	11b
+eq	11a	11b	1	1
+map	11b	11a	11b
+eq	11b	11a	1	1
+map	11c	11c	11d
+eq	11c	11d	1	1
+map	11d	11c	11d
+eq	11d	11c	1	1
+map	11e	11e	11f
+eq	11e	11f	1	1
+map	11f	11e	11f
+eq	11f	11e	1	1
+map	120	120	121
+eq	120	121	1	1
+map	121	120	121
+eq	121	120	1	1
+map	122	122	123
+eq	122	123	1	1
+map	123	122	123
+eq	123	122	1	1
+map	124	124	125
+eq	124	125	1	1
+map	125	124	125
+eq	125	124	1	1
+map	126	126	127
+eq	126	127	1	1
+map	127	126	127
+eq	127	126	1	1
+map	128	128	129
+eq	128	129	1	1
+map	129	128	129
+eq	129	128	1	1
+map	12a	12a	12b
+eq	12a	12b	1	1
+map	12b	12a	12b
+eq	12b	12a	1	1
+map	12c	12c	12d
+eq	12c	12d	1	1
+map	12d	12c	12d
+eq	12d	12c	1	1
+map	12e	12e	12f
+eq	12e	12f	1	1
+map	12f	12e	12f
+eq	12f	12e	1	1
+map	130	130	69,307
+map	131	49	131
+eq	131	49	0	0
+eq	131	69	0	0
+map	132	132	133
+eq	132	133	1	1
+map	133	132	133
+eq	133	132	1	1
+map	134	134	135
+eq	134	135	1	1
+map	135	134	135
+eq	135	134	1	1
+map	136	136	137
+eq	136	137	1	1
+map	137	136	137
+eq	137	136	1	1
+map	139	139	13a
+eq	139	13a	1	1
+map	13a	139	13a
+eq	13a	139	1	1
+map	13b	13b	13c
+eq	13b	13c	1	1
+map	13c	13b	13c
+eq	13c	13b	1	1
+map	13d	13d	13e
+eq	13d	13e	1	1
+map	13e	13d	13e
+eq	13e	13d	1	1
+map	13f	13f	140
+eq	13f	140	1	1
+map	140	13f	140
+eq	140	13f	1	1
+map	141	141	142
+eq	141	142	1	1
+map	142	141	142
+eq	142	141	1	1
+map	143	143	144
+eq	143	144	1	1
+map	144	143	144
+eq	144	143	1	1
+map	145	145	146
+eq	145	146	1	1
+map	146	145	146
+eq	146	145	1	1
+map	147	147	148
+eq	147	148	1	1
+map	148	147	148
+eq	148	147	1	1
+map	149	2bc,4e	149
+map	14a	14a	14b
+eq	14a	14b	1	1
+map	14b	14a	14b
+eq	14b	14a	1	1
+map	14c	14c	14d
+eq	14c	14d	1	1
+map	14d	14c	14d
+eq	14d	14c	1	1
+map	14e	14e	14f
+eq	14e	14f	1	1
+map	14f	14e	14f
+eq	14f	14e	1	1
+map	150	150	151
+eq	150	151	1	1
+map	151	150	151
+eq	151	150	1	1
+map	152	152	153
+eq	152	153	1	1
+map	153	152	153
+eq	153	152	1	1
+map	154	154	155
+eq	154	155	1	1
+map	155	154	155
+eq	155	154	1	1
+map	156	156	157
+eq	156	157	1	1
+map	157	156	157
+eq	157	156	1	1
+map	158	158	159
+eq	158	159	1	1
+map	159	158	159
+eq	159	158	1	1
+map	15a	15a	15b
+eq	15a	15b	1	1
+map	15b	15a	15b
+eq	15b	15a	1	1
+map	15c	15c	15d
+eq	15c	15d	1	1
+map	15d	15c	15d
+eq	15d	15c	1	1
+map	15e	15e	15f
+eq	15e	15f	1	1
+map	15f	15e	15f
+eq	15f	15e	1	1
+map	160	160	161
+eq	160	161	1	1
+map	161	160	161
+eq	161	160	1	1
+map	162	162	163
+eq	162	163	1	1
+map	163	162	163
+eq	163	162	1	1
+map	164	164	165
+eq	164	165	1	1
+map	165	164	165
+eq	165	164	1	1
+map	166	166	167
+eq	166	167	1	1
+map	167	166	167
+eq	167	166	1	1
+map	168	168	169
+eq	168	169	1	1
+map	169	168	169
+eq	169	168	1	1
+map	16a	16a	16b
+eq	16a	16b	1	1
+map	16b	16a	16b
+eq	16b	16a	1	1
+map	16c	16c	16d
+eq	16c	16d	1	1
+map	16d	16c	16d
+eq	16d	16c	1	1
+map	16e	16e	16f
+eq	16e	16f	1	1
+map	16f	16e	16f
+eq	16f	16e	1	1
+map	170	170	171
+eq	170	171	1	1
+map	171	170	171
+eq	171	170	1	1
+map	172	172	173
+eq	172	173	1	1
+map	173	172	173
+eq	173	172	1	1
+map	174	174	175
+eq	174	175	1	1
+map	175	174	175
+eq	175	174	1	1
+map	176	176	177
+eq	176	177	1	1
+map	177	176	177
+eq	177	176	1	1
+map	178	178	ff
+eq	178	ff	1	1
+map	179	179	17a
+eq	179	17a	1	1
+map	17a	179	17a
+eq	17a	179	1	1
+map	17b	17b	17c
+eq	17b	17c	1	1
+map	17c	17b	17c
+eq	17c	17b	1	1
+map	17d	17d	17e
+eq	17d	17e	1	1
+map	17e	17d	17e
+eq	17e	17d	1	1
+map	17f	53	17f
+eq	17f	53	0	1
+eq	17f	73	0	1
+map	180	243	180
+eq	180	243	1	1
+map	181	181	253
+eq	181	253	1	1
+map	182	182	183
+eq	182	183	1	1
+map	183	182	183
+eq	183	182	1	1
+map	184	184	185
+eq	184	185	1	1
+map	185	184	185
+eq	185	184	1	1
+map	186	186	254
+eq	186	254	1	1
+map	187	187	188
+eq	187	188	1	1
+map	188	187	188
+eq	188	187	1	1
+map	189	189	256
+eq	189	256	1	1
+map	18a	18a	257
+eq	18a	257	1	1
+map	18b	18b	18c
+eq	18b	18c	1	1
+map	18c	18b	18c
+eq	18c	18b	1	1
+map	18e	18e	1dd
+eq	18e	1dd	1	1
+map	18f	18f	259
+eq	18f	259	1	1
+map	190	190	25b
+eq	190	25b	1	1
+map	191	191	192
+eq	191	192	1	1
+map	192	191	192
+eq	192	191	1	1
+map	193	193	260
+eq	193	260	1	1
+map	194	194	263
+eq	194	263	1	1
+map	195	1f6	195
+eq	195	1f6	1	1
+map	196	196	269
+eq	196	269	1	1
+map	197	197	268
+eq	197	268	1	1
+map	198	198	199
+eq	198	199	1	1
+map	199	198	199
+eq	199	198	1	1
+map	19a	23d	19a
+eq	19a	23d	1	1
+map	19b	a7dc	19b
+eq	19b	a7dc	1	1
+map	19c	19c	26f
+eq	19c	26f	1	1
+map	19d	19d	272
+eq	19d	272	1	1
+map	19e	220	19e
+eq	19e	220	1	1
+map	19f	19f	275
+eq	19f	275	1	1
+map	1a0	1a0	1a1
+eq	1a0	1a1	1	1
+map	1a1	1a0	1a1
+eq	1a1	1a0	1	1
+map	1a2	1a2	1a3
+eq	1a2	1a3	1	1
+map	1a3	1a2	1a3
+eq	1a3	1a2	1	1
+map	1a4	1a4	1a5
+eq	1a4	1a5	1	1
+map	1a5	1a4	1a5
+eq	1a5	1a4	1	1
+map	1a6	1a6	280
+eq	1a6	280	1	1
+map	1a7	1a7	1a8
+eq	1a7	1a8	1	1
+map	1a8	1a7	1a8
+eq	1a8	1a7	1	1
+map	1a9	1a9	283
+eq	1a9	283	1	1
+map	1ac	1ac	1ad
+eq	1ac	1ad	1	1
+map	1ad	1ac	1ad
+eq	1ad	1ac	1	1
+map	1ae	1ae	288
+eq	1ae	288	1	1
+map	1af	1af	1b0
+eq	1af	1b0	1	1
+map	1b0	1af	1b0
+eq	1b0	1af	1	1
+map	1b1	1b1	28a
+eq	1b1	28a	1	1
+map	1b2	1b2	28b
+eq	1b2	28b	1	1
+map	1b3	1b3	1b4
+eq	1b3	1b4	1	1
+map	1b4	1b3	1b4
+eq	1b4	1b3	1	1
+map	1b5	1b5	1b6
+eq	1b5	1b6	1	1
+map	1b6	1b5	1b6
+eq	1b6	1b5	1	1
+map	1b7	1b7	292
+eq	1b7	292	1	1
+map	1b8	1b8	1b9
+eq	1b8	1b9	1	1
+map	1b9	1b8	1b9
+eq	1b9	1b8	1	1
+map	1bc	1bc	1bd
+eq	1bc	1bd	1	1
+map	1bd	1bc	1bd
+eq	1bd	1bc	1	1
+map	1bf	1f7	1bf
+eq	1bf	1f7	1	1
+map	1c4	1c4	1c6
+eq	1c4	1c6	1	1
+map	1c5	1c4	1c6
+eq	1c5	1c4	1	1
+eq	1c5	1c6	1	1
+map	1c6	1c4	1c6
+eq	1c6	1c4	1	1
+map	1c7	1c7	1c9
+eq	1c7	1c9	1	1
+map	1c8	1c7	1c9
+eq	1c8	1c7	1	1
+eq	1c8	1c9	1	1
+map	1c9	1c7	1c9
+eq	1c9	1c7	1	1
+map	1ca	1ca	1cc
+eq	1ca	1cc	1	1
+map	1cb	1ca	1cc
+eq	1cb	1ca	1	1
+eq	1cb	1cc	1	1
+map	1cc	1ca	1cc
+eq	1cc	1ca	1	1
+map	1cd	1cd	1ce
+eq	1cd	1ce	1	1
+map	1ce	1cd	1ce
+eq	1ce	1cd	1	1
+map	1cf	1cf	1d0
+eq	1cf	1d0	1	1
+map	1d0	1cf	1d0
+eq	1d0	1cf	1	1
+map	1d1	1d1	1d2
+eq	1d1	1d2	1	1
+map	1d2	1d1	1d2
+eq	1d2	1d1	1	1
+map	1d3	1d3	1d4
+eq	1d3	1d4	1	1
+map	1d4	1d3	1d4
+eq	1d4	1d3	1	1
+map	1d5	1d5	1d6
+eq	1d5	1d6	1	1
+map	1d6	1d5	1d6
+eq	1d6	1d5	1	1
+map	1d7	1d7	1d8
+eq	1d7	1d8	1	1
+map	1d8	1d7	1d8
+eq	1d8	1d7	1	1
+map	1d9	1d9	1da
+eq	1d9	1da	1	1
+map	1da	1d9	1da
+eq	1da	1d9	1	1
+map	1db	1db	1dc
+eq	1db	1dc	1	1
+map	1dc	1db	1dc
+eq	1dc	1db	1	1
+map	1dd	18e	1dd
+eq	1dd	18e	1	1
+map	1de	1de	1df
+eq	1de	1df	1	1
+map	1df	1de	1df
+eq	1df	1de	1	1
+map	1e0	1e0	1e1
+eq	1e0	1e1	1	1
+map	1e1	1e0	1e1
+eq	1e1	1e0	1	1
+map	1e2	1e2	1e3
+eq	1e2	1e3	1	1
+map	1e3	1e2	1e3
+eq	1e3	1e2	1	1
+map	1e4	1e4	1e5
+eq	1e4	1e5	1	1
+map	1e5	1e4	1e5
+eq	1e5	1e4	1	1
+map	1e6	1e6	1e7
+eq	1e6	1e7	1	1
+map	1e7	1e6	1e7
+eq	1e7	1e6	1	1
+map	1e8	1e8	1e9
+eq	1e8	1e9	1	1
+map	1e9	1e8	1e9
+eq	1e9	1e8	1	1
+map	1ea	1ea	1eb
+eq	1ea	1eb	1	1
+map	1eb	1ea	1eb
+eq	1eb	1ea	1	1
+map	1ec	1ec	1ed
+eq	1ec	1ed	1	1
+map	1ed	1ec	1ed
+eq	1ed	1ec	1	1
+map	1ee	1ee	1ef
+eq	1ee	1ef	1	1
+map	1ef	1ee	1ef
+eq	1ef	1ee	1	1
+map	1f0	4a,30c	1f0
+map	1f1	1f1	1f3
+eq	1f1	1f3	1	1
+map	1f2	1f1	1f3
+eq	1f2	1f1	1	1
+eq	1f2	1f3	1	1
+map	1f3	1f1	1f3
+eq	1f3	1f1	1	1
+map	1f4	1f4	1f5
+eq	1f4	1f5	1	1
+map	1f5	1f4	1f5
+eq	1f5	1f4	1	1
+map	1f6	1f6	195
+eq	1f6	195	1	1
+map	1f7	1f7	1bf
+eq	1f7	1bf	1	1
+map	1f8	1f8	1f9
+eq	1f8	1f9	1	1
+map	1f9	1f8	1f9
+eq	1f9	1f8	1	1
+map	1fa	1fa	1fb
+eq	1fa	1fb	1	1
+map	1fb	1fa	1fb
+eq	1fb	1fa	1	1
+map	1fc	1fc	1fd
+eq	1fc	1fd	1	1
+map	1fd	1fc	1fd
+eq	1fd	1fc	1	1
+map	1fe	1fe	1ff
+eq	1fe	1ff	1	1
+map	1ff	1fe	1ff
+eq	1ff	1fe	1	1
+map	200	200	201
+eq	200	201	1	1
+map	201	200	201
+eq	201	200	1	1
+map	202	202	203
+eq	202	203	1	1
+map	203	202	203
+eq	203	202	1	1
+map	204	204	205
+eq	204	205	1	1
+map	205	204	205
+eq	205	204	1	1
+map	206	206	207
+eq	206	207	1	1
+map	207	206	207
+eq	207	206	1	1
+map	208	208	209
+eq	208	209	1	1
+map	209	208	209
+eq	209	208	1	1
+map	20a	20a	20b
+eq	20a	20b	1	1
+map	20b	20a	20b
+eq	20b	20a	1	1
+map	20c	20c	20d
+eq	20c	20d	1	1
+map	20d	20c	20d
+eq	20d	20c	1	1
+map	20e	20e	20f
+eq	20e	20f	1	1
+map	20f	20e	20f
+eq	20f	20e	1	1
+map	210	210	211
+eq	210	211	1	1
+map	211	210	211
+eq	211	210	1	1
+map	212	212	213
+eq	212	213	1	1
+map	213	212	213
+eq	213	212	1	1
+map	214	214	215
+eq	214	215	1	1
+map	215	214	215
+eq	215	214	1	1
+map	216	216	217
+eq	216	217	1	1
+map	217	216	217
+eq	217	216	1	1
+map	218	218	219
+eq	218	219	1	1
+map	219	218	219
+eq	219	218	1	1
+map	21a	21a	21b
+eq	21a	21b	1	1
+map	21b	21a	21b
+eq	21b	21a	1	1
+map	21c	21c	21d
+eq	21c	21d	1	1
+map	21d	21c	21d
+eq	21d	21c	1	1
+map	21e	21e	21f
+eq	21e	21f	1	1
+map	21f	21e	21f
+eq	21f	21e	1	1
+map	220	220	19e
+eq	220	19e	1	1
+map	222	222	223
+eq	222	223	1	1
+map	223	222	223
+eq	223	222	1	1
+map	224	224	225
+eq	224	225	1	1
+map	225	224	225
+eq	225	224	1	1
+map	226	226	227
+eq	226	227	1	1
+map	227	226	227
+eq	227	226	1	1
+map	228	228	229
+eq	228	229	1	1
+map	229	228	229
+eq	229	228	1	1
+map	22a	22a	22b
+eq	22a	22b	1	1
+map	22b	22a	22b
+eq	22b	22a	1	1
+map	22c	22c	22d
+eq	22c	22d	1	1
+map	22d	22c	22d
+eq	22d	22c	1	1
+map	22e	22e	22f
+eq	22e	22f	1	1
+map	22f	22e	22f
+eq	22f	22e	1	1
+map	230	230	231
+eq	230	231	1	1
+map	231	230	231
+eq	231	230	1	1
+map	232	232	233
+eq	232	233	1	1
+map	233	232	233
+eq	233	232	1	1
+map	23a	23a	2c65
+eq	23a	2c65	1	1
+map	23b	23b	23c
+eq	23b	23c	1	1
+map	23c	23b	23c
+eq	23c	23b	1	1
+map	23d	23d	19a
+eq	23d	19a	1	1
+map	23e	23e	2c66
+eq	23e	2c66	1	1
+map	23f	2c7e	23f
+eq	23f	2c7e	1	1
+map	240	2c7f	240
+eq	240	2c7f	1	1
+map	241	241	242
+eq	241	242	1	1
+map	242	241	242
+eq	242	241	1	1
+map	243	243	180
+eq	243	180	1	1
+map	244	244	289
+eq	244	289	1	1
+map	245	245	28c
+eq	245	28c	1	1
+map	246	246	247
+eq	246	247	1	1
+map	247	246	247
+eq	247	246	1	1
+map	248	248	249
+eq	248	249	1	1
+map	249	248	249
+eq	249	248	1	1
+map	24a	24a	24b
+eq	24a	24b	1	1
+map	24b	24a	24b
+eq	24b	24a	1	1
+map	24c	24c	24d
+eq	24c	24d	1	1
+map	24d	24c	24d
+eq	24d	24c	1	1
+map	24e	24e	24f
+eq	24e	24f	1	1
+map	24f	24e	24f
+eq	24f	24e	1	1
+map	250	2c6f	250
+eq	250	2c6f	1	1
+map	251	2c6d	251
+eq	251	2c6d	1	1
+map	252	2c70	252
+eq	252	2c70	1	1
+map	253	181	253
+eq	253	181	1	1
+map	254	186	254
+eq	254	186	1	1
+map	256	189	256
+eq	256	189	1	1
+map	257	18a	257
+eq	257	18a	1	1
+map	259	18f	259
+eq	259	18f	1	1
+map	25b	190	25b
+eq	25b	190	1	1
+map	25c	a7ab	25c
+eq	25c	a7ab	1	1
+map	260	193	260
+eq	260	193	1	1
+map	261	a7ac	261
+eq	261	a7ac	1	1
+map	263	194	263
+eq	263	194	1	1
+map	264	a7cb	264
+eq	264	a7cb	1	1
+map	265	a78d	265
+eq	265	a78d	1	1
+map	266	a7aa	266
+eq	266	a7aa	1	1
+map	268	197	268
+eq	268	197	1	1
+map	269	196	269
+eq	269	196	1	1
+map	26a	a7ae	26a
+eq	26a	a7ae	1	1
+map	26b	2c62	26b
+eq	26b	2c62	1	1
+map	26c	a7ad	26c
+eq	26c	a7ad	1	1
+map	26f	19c	26f
+eq	26f	19c	1	1
+map	271	2c6e	271
+eq	271	2c6e	1	1
+map	272	19d	272
+eq	272	19d	1	1
+map	275	19f	275
+eq	275	19f	1	1
+map	27d	2c64	27d
+eq	27d	2c64	1	1
+map	280	1a6	280
+eq	280	1a6	1	1
+map	282	a7c5	282
+eq	282	a7c5	1	1
+map	283	1a9	283
+eq	283	1a9	1	1
+map	287	a7b1	287
+eq	287	a7b1	1	1
+map	288	1ae	288
+eq	288	1ae	1	1
+map	289	244	289
+eq	289	244	1	1
+map	28a	1b1	28a
+eq	28a	1b1	1	1
+map	28b	1b2	28b
+eq	28b	1b2	1	1
+map	28c	245	28c
+eq	28c	245	1	1
+map	292	1b7	292
+eq	292	1b7	1	1
+map	29d	a7b2	29d
+eq	29d	a7b2	1	1
+map	29e	a7b0	29e
+eq	29e	a7b0	1	1
+map	345	399	345
+eq	345	399	1	1
+eq	345	3b9	1	1
+map	370	370	371
+eq	370	371	1	1
+map	371	370	371
+eq	371	370	1	1
+map	372	372	373
+eq	372	373	1	1
+map	373	372	373
+eq	373	372	1	1
+map	376	376	377
+eq	376	377	1	1
+map	377	376	377
+eq	377	376	1	1
+map	37b	3fd	37b
+eq	37b	3fd	1	1
+map	37c	3fe	37c
+eq	37c	3fe	1	1
+map	37d	3ff	37d
+eq	37d	3ff	1	1
+map	37f	37f	3f3
+eq	37f	3f3	1	1
+map	386	386	3ac
+eq	386	3ac	1	1
+map	388	388	3ad
+eq	388	3ad	1	1
+map	389	389	3ae
+eq	389	3ae	1	1
+map	38a	38a	3af
+eq	38a	3af	1	1
+map	38c	38c	3cc
+eq	38c	3cc	1	1
+map	38e	38e	3cd
+eq	38e	3cd	1	1
+map	38f	38f	3ce
+eq	38f	3ce	1	1
+map	390	399,308,301	390
+map	391	391	3b1
+eq	391	3b1	1	1
+map	392	392	3b2
+eq	392	3b2	1	1
+map	393	393	3b3
+eq	393	3b3	1	1
+map	394	394	3b4
+eq	394	3b4	1	1
+map	395	395	3b5
+eq	395	3b5	1	1
+map	396	396	3b6
+eq	396	3b6	1	1
+map	397	397	3b7
+eq	397	3b7	1	1
+map	398	398	3b8
+eq	398	3b8	1	1
+map	399	399	3b9
+eq	399	3b9	1	1
+map	39a	39a	3ba
+eq	39a	3ba	1	1
+map	39b	39b	3bb
+eq	39b	3bb	1	1
+map	39c	39c	3bc
+eq	39c	3bc	1	1
+map	39d	39d	3bd
+eq	39d	3bd	1	1
+map	39e	39e	3be
+eq	39e	3be	1	1
+map	39f	39f	3bf
+eq	39f	3bf	1	1
+map	3a0	3a0	3c0
+eq	3a0	3c0	1	1
+map	3a1	3a1	3c1
+eq	3a1	3c1	1	1
+map	3a3	3a3	3c3
+eq	3a3	3c3	1	1
+map	3a4	3a4	3c4
+eq	3a4	3c4	1	1
+map	3a5	3a5	3c5
+eq	3a5	3c5	1	1
+map	3a6	3a6	3c6
+eq	3a6	3c6	1	1
+map	3a7	3a7	3c7
+eq	3a7	3c7	1	1
+map	3a8	3a8	3c8
+eq	3a8	3c8	1	1
+map	3a9	3a9	3c9
+eq	3a9	3c9	1	1
+map	3aa	3aa	3ca
+eq	3aa	3ca	1	1
+map	3ab	3ab	3cb
+eq	3ab	3cb	1	1
+map	3ac	386	3ac
+eq	3ac	386	1	1
+map	3ad	388	3ad
+eq	3ad	388	1	1
+map	3ae	389	3ae
+eq	3ae	389	1	1
+map	3af	38a	3af
+eq	3af	38a	1	1
+map	3b0	3a5,308,301	3b0
+map	3b1	391	3b1
+eq	3b1	391	1	1
+map	3b2	392	3b2
+eq	3b2	392	1	1
+map	3b3	393	3b3
+eq	3b3	393	1	1
+map	3b4	394	3b4
+eq	3b4	394	1	1
+map	3b5	395	3b5
+eq	3b5	395	1	1
+map	3b6	396	3b6
+eq	3b6	396	1	1
+map	3b7	397	3b7
+eq	3b7	397	1	1
+map	3b8	398	3b8
+eq	3b8	398	1	1
+map	3b9	399	3b9
+eq	3b9	399	1	1
+map	3ba	39a	3ba
+eq	3ba	39a	1	1
+map	3bb	39b	3bb
+eq	3bb	39b	1	1
+map	3bc	39c	3bc
+eq	3bc	39c	1	1
+map	3bd	39d	3bd
+eq	3bd	39d	1	1
+map	3be	39e	3be
+eq	3be	39e	1	1
+map	3bf	39f	3bf
+eq	3bf	39f	1	1
+map	3c0	3a0	3c0
+eq	3c0	3a0	1	1
+map	3c1	3a1	3c1
+eq	3c1	3a1	1	1
+map	3c2	3a3	3c2
+eq	3c2	3a3	1	1
+eq	3c2	3c3	1	1
+map	3c3	3a3	3c3
+eq	3c3	3a3	1	1
+map	3c4	3a4	3c4
+eq	3c4	3a4	1	1
+map	3c5	3a5	3c5
+eq	3c5	3a5	1	1
+map	3c6	3a6	3c6
+eq	3c6	3a6	1	1
+map	3c7	3a7	3c7
+eq	3c7	3a7	1	1
+map	3c8	3a8	3c8
+eq	3c8	3a8	1	1
+map	3c9	3a9	3c9
+eq	3c9	3a9	1	1
+map	3ca	3aa	3ca
+eq	3ca	3aa	1	1
+map	3cb	3ab	3cb
+eq	3cb	3ab	1	1
+map	3cc	38c	3cc
+eq	3cc	38c	1	1
+map	3cd	38e	3cd
+eq	3cd	38e	1	1
+map	3ce	38f	3ce
+eq	3ce	38f	1	1
+map	3cf	3cf	3d7
+eq	3cf	3d7	1	1
+map	3d0	392	3d0
+eq	3d0	392	1	1
+eq	3d0	3b2	1	1
+map	3d1	398	3d1
+eq	3d1	398	1	1
+eq	3d1	3b8	1	1
+map	3d5	3a6	3d5
+eq	3d5	3a6	1	1
+eq	3d5	3c6	1	1
+map	3d6	3a0	3d6
+eq	3d6	3a0	1	1
+eq	3d6	3c0	1	1
+map	3d7	3cf	3d7
+eq	3d7	3cf	1	1
+map	3d8	3d8	3d9
+eq	3d8	3d9	1	1
+map	3d9	3d8	3d9
+eq	3d9	3d8	1	1
+map	3da	3da	3db
+eq	3da	3db	1	1
+map	3db	3da	3db
+eq	3db	3da	1	1
+map	3dc	3dc	3dd
+eq	3dc	3dd	1	1
+map	3dd	3dc	3dd
+eq	3dd	3dc	1	1
+map	3de	3de	3df
+eq	3de	3df	1	1
+map	3df	3de	3df
+eq	3df	3de	1	1
+map	3e0	3e0	3e1
+eq	3e0	3e1	1	1
+map	3e1	3e0	3e1
+eq	3e1	3e0	1	1
+map	3e2	3e2	3e3
+eq	3e2	3e3	1	1
+map	3e3	3e2	3e3
+eq	3e3	3e2	1	1
+map	3e4	3e4	3e5
+eq	3e4	3e5	1	1
+map	3e5	3e4	3e5
+eq	3e5	3e4	1	1
+map	3e6	3e6	3e7
+eq	3e6	3e7	1	1
+map	3e7	3e6	3e7
+eq	3e7	3e6	1	1
+map	3e8	3e8	3e9
+eq	3e8	3e9	1	1
+map	3e9	3e8	3e9
+eq	3e9	3e8	1	1
+map	3ea	3ea	3eb
+eq	3ea	3eb	1	1
+map	3eb	3ea	3eb
+eq	3eb	3ea	1	1
+map	3ec	3ec	3ed
+eq	3ec	3ed	1	1
+map	3ed	3ec	3ed
+eq	3ed	3ec	1	1
+map	3ee	3ee	3ef
+eq	3ee	3ef	1	1
+map	3ef	3ee	3ef
+eq	3ef	3ee	1	1
+map	3f0	39a	3f0
+eq	3f0	39a	1	1
+eq	3f0	3ba	1	1
+map	3f1	3a1	3f1
+eq	3f1	3a1	1	1
+eq	3f1	3c1	1	1
+map	3f2	3f9	3f2
+eq	3f2	3f9	1	1
+map	3f3	37f	3f3
+eq	3f3	37f	1	1
+map	3f4	3f4	3b8
+eq	3f4	398	0	1
+eq	3f4	3b8	0	1
+map	3f5	395	3f5
+eq	3f5	395	1	1
+eq	3f5	3b5	1	1
+map	3f7	3f7	3f8
+eq	3f7	3f8	1	1
+map	3f8	3f7	3f8
+eq	3f8	3f7	1	1
+map	3f9	3f9	3f2
+eq	3f9	3f2	1	1
+map	3fa	3fa	3fb
+eq	3fa	3fb	1	1
+map	3fb	3fa	3fb
+eq	3fb	3fa	1	1
+map	3fd	3fd	37b
+eq	3fd	37b	1	1
+map	3fe	3fe	37c
+eq	3fe	37c	1	1
+map	3ff	3ff	37d
+eq	3ff	37d	1	1
+map	400	400	450
+eq	400	450	1	1
+map	401	401	451
+eq	401	451	1	1
+map	402	402	452
+eq	402	452	1	1
+map	403	403	453
+eq	403	453	1	1
+map	404	404	454
+eq	404	454	1	1
+map	405	405	455
+eq	405	455	1	1
+map	406	406	456
+eq	406	456	1	1
+map	407	407	457
+eq	407	457	1	1
+map	408	408	458
+eq	408	458	1	1
+map	409	409	459
+eq	409	459	1	1
+map	40a	40a	45a
+eq	40a	45a	1	1
+map	40b	40b	45b
+eq	40b	45b	1	1
+map	40c	40c	45c
+eq	40c	45c	1	1
+map	40d	40d	45d
+eq	40d	45d	1	1
+map	40e	40e	45e
+eq	40e	45e	1	1
+map	40f	40f	45f
+eq	40f	45f	1	1
+map	410	410	430
+eq	410	430	1	1
+map	411	411	431
+eq	411	431	1	1
+map	412	412	432
+eq	412	432	1	1
+map	413	413	433
+eq	413	433	1	1
+map	414	414	434
+eq	414	434	1	1
+map	415	415	435
+eq	415	435	1	1
+map	416	416	436
+eq	416	436	1	1
+map	417	417	437
+eq	417	437	1	1
+map	418	418	438
+eq	418	438	1	1
+map	419	419	439
+eq	419	439	1	1
+map	41a	41a	43a
+eq	41a	43a	1	1
+map	41b	41b	43b
+eq	41b	43b	1	1
+map	41c	41c	43c
+eq	41c	43c	1	1
+map	41d	41d	43d
+eq	41d	43d	1	1
+map	41e	41e	43e
+eq	41e	43e	1	1
+map	41f	41f	43f
+eq	41f	43f	1	1
+map	420	420	440
+eq	420	440	1	1
+map	421	421	441
+eq	421	441	1	1
+map	422	422	442
+eq	422	442	1	1
+map	423	423	443
+eq	423	443	1	1
+map	424	424	444
+eq	424	444	1	1
+map	425	425	445
+eq	425	445	1	1
+map	426	426	446
+eq	426	446	1	1
+map	427	427	447
+eq	427	447	1	1
+map	428	428	448
+eq	428	448	1	1
+map	429	429	449
+eq	429	449	1	1
+map	42a	42a	44a
+eq	42a	44a	1	1
+map	42b	42b	44b
+eq	42b	44b	1	1
+map	42c	42c	44c
+eq	42c	44c	1	1
+map	42d	42d	44d
+eq	42d	44d	1	1
+map	42e	42e	44e
+eq	42e	44e	1	1
+map	42f	42f	44f
+eq	42f	44f	1	1
+map	430	410	430
+eq	430	410	1	1
+map	431	411	431
+eq	431	411	1	1
+map	432	412	432
+eq	432	412	1	1
+map	433	413	433
+eq	433	413	1	1
+map	434	414	434
+eq	434	414	1	1
+map	435	415	435
+eq	435	415	1	1
+map	436	416	436
+eq	436	416	1	1
+map	437	417	437
+eq	437	417	1	1
+map	438	418	438
+eq	438	418	1	1
+map	439	419	439
+eq	439	419	1	1
+map	43a	41a	43a
+eq	43a	41a	1	1
+map	43b	41b	43b
+eq	43b	41b	1	1
+map	43c	41c	43c
+eq	43c	41c	1	1
+map	43d	41d	43d
+eq	43d	41d	1	1
+map	43e	41e	43e
+eq	43e	41e	1	1
+map	43f	41f	43f
+eq	43f	41f	1	1
+map	440	420	440
+eq	440	420	1	1
+map	441	421	441
+eq	441	421	1	1
+map	442	422	442
+eq	442	422	1	1
+map	443	423	443
+eq	443	423	1	1
+map	444	424	444
+eq	444	424	1	1
+map	445	425	445
+eq	445	425	1	1
+map	446	426	446
+eq	446	426	1	1
+map	447	427	447
+eq	447	427	1	1
+map	448	428	448
+eq	448	428	1	1
+map	449	429	449
+eq	449	429	1	1
+map	44a	42a	44a
+eq	44a	42a	1	1
+map	44b	42b	44b
+eq	44b	42b	1	1
+map	44c	42c	44c
+eq	44c	42c	1	1
+map	44d	42d	44d
+eq	44d	42d	1	1
+map	44e	42e	44e
+eq	44e	42e	1	1
+map	44f	42f	44f
+eq	44f	42f	1	1
+map	450	400	450
+eq	450	400	1	1
+map	451	401	451
+eq	451	401	1	1
+map	452	402	452
+eq	452	402	1	1
+map	453	403	453
+eq	453	403	1	1
+map	454	404	454
+eq	454	404	1	1
+map	455	405	455
+eq	455	405	1	1
+map	456	406	456
+eq	456	406	1	1
+map	457	407	457
+eq	457	407	1	1
+map	458	408	458
+eq	458	408	1	1
+map	459	409	459
+eq	459	409	1	1
+map	45a	40a	45a
+eq	45a	40a	1	1
+map	45b	40b	45b
+eq	45b	40b	1	1
+map	45c	40c	45c
+eq	45c	40c	1	1
+map	45d	40d	45d
+eq	45d	40d	1	1
+map	45e	40e	45e
+eq	45e	40e	1	1
+map	45f	40f	45f
+eq	45f	40f	1	1
+map	460	460	461
+eq	460	461	1	1
+map	461	460	461
+eq	461	460	1	1
+map	462	462	463
+eq	462	463	1	1
+map	463	462	463
+eq	463	462	1	1
+map	464	464	465
+eq	464	465	1	1
+map	465	464	465
+eq	465	464	1	1
+map	466	466	467
+eq	466	467	1	1
+map	467	466	467
+eq	467	466	1	1
+map	468	468	469
+eq	468	469	1	1
+map	469	468	469
+eq	469	468	1	1
+map	46a	46a	46b
+eq	46a	46b	1	1
+map	46b	46a	46b
+eq	46b	46a	1	1
+map	46c	46c	46d
+eq	46c	46d	1	1
+map	46d	46c	46d
+eq	46d	46c	1	1
+map	46e	46e	46f
+eq	46e	46f	1	1
+map	46f	46e	46f
+eq	46f	46e	1	1
+map	470	470	471
+eq	470	471	1	1
+map	471	470	471
+eq	471	470	1	1
+map	472	472	473
+eq	472	473	1	1
+map	473	472	473
+eq	473	472	1	1
+map	474	474	475
+eq	474	475	1	1
+map	475	474	475
+eq	475	474	1	1
+map	476	476	477
+eq	476	477	1	1
+map	477	476	477
+eq	477	476	1	1
+map	478	478	479
+eq	478	479	1	1
+map	479	478	479
+eq	479	478	1	1
+map	47a	47a	47b
+eq	47a	47b	1	1
+map	47b	47a	47b
+eq	47b	47a	1	1
+map	47c	47c	47d
+eq	47c	47d	1	1
+map	47d	47c	47d
+eq	47d	47c	1	1
+map	47e	47e	47f
+eq	47e	47f	1	1
+map	47f	47e	47f
+eq	47f	47e	1	1
+map	480	480	481
+eq	480	481	1	1
+map	481	480	481
+eq	481	480	1	1
+map	48a	48a	48b
+eq	48a	48b	1	1
+map	48b	48a	48b
+eq	48b	48a	1	1
+map	48c	48c	48d
+eq	48c	48d	1	1
+map	48d	48c	48d
+eq	48d	48c	1	1
+map	48e	48e	48f
+eq	48e	48f	1	1
+map	48f	48e	48f
+eq	48f	48e	1	1
+map	490	490	491
+eq	490	491	1	1
+map	491	490	491
+eq	491	490	1	1
+map	492	492	493
+eq	492	493	1	1
+map	493	492	493
+eq	493	492	1	1
+map	494	494	495
+eq	494	495	1	1
+map	495	494	495
+eq	495	494	1	1
+map	496	496	497
+eq	496	497	1	1
+map	497	496	497
+eq	497	496	1	1
+map	498	498	499
+eq	498	499	1	1
+map	499	498	499
+eq	499	498	1	1
+map	49a	49a	49b
+eq	49a	49b	1	1
+map	49b	49a	49b
+eq	49b	49a	1	1
+map	49c	49c	49d
+eq	49c	49d	1	1
+map	49d	49c	49d
+eq	49d	49c	1	1
+map	49e	49e	49f
+eq	49e	49f	1	1
+map	49f	49e	49f
+eq	49f	49e	1	1
+map	4a0	4a0	4a1
+eq	4a0	4a1	1	1
+map	4a1	4a0	4a1
+eq	4a1	4a0	1	1
+map	4a2	4a2	4a3
+eq	4a2	4a3	1	1
+map	4a3	4a2	4a3
+eq	4a3	4a2	1	1
+map	4a4	4a4	4a5
+eq	4a4	4a5	1	1
+map	4a5	4a4	4a5
+eq	4a5	4a4	1	1
+map	4a6	4a6	4a7
+eq	4a6	4a7	1	1
+map	4a7	4a6	4a7
+eq	4a7	4a6	1	1
+map	4a8	4a8	4a9
+eq	4a8	4a9	1	1
+map	4a9	4a8	4a9
+eq	4a9	4a8	1	1
+map	4aa	4aa	4ab
+eq	4aa	4ab	1	1
+map	4ab	4aa	4ab
+eq	4ab	4aa	1	1
+map	4ac	4ac	4ad
+eq	4ac	4ad	1	1
+map	4ad	4ac	4ad
+eq	4ad	4ac	1	1
+map	4ae	4ae	4af
+eq	4ae	4af	1	1
+map	4af	4ae	4af
+eq	4af	4ae	1	1
+map	4b0	4b0	4b1
+eq	4b0	4b1	1	1
+map	4b1	4b0	4b1
+eq	4b1	4b0	1	1
+map	4b2	4b2	4b3
+eq	4b2	4b3	1	1
+map	4b3	4b2	4b3
+eq	4b3	4b2	1	1
+map	4b4	4b4	4b5
+eq	4b4	4b5	1	1
+map	4b5	4b4	4b5
+eq	4b5	4b4	1	1
+map	4b6	4b6	4b7
+eq	4b6	4b7	1	1
+map	4b7	4b6	4b7
+eq	4b7	4b6	1	1
+map	4b8	4b8	4b9
+eq	4b8	4b9	1	1
+map	4b9	4b8	4b9
+eq	4b9	4b8	1	1
+map	4ba	4ba	4bb
+eq	4ba	4bb	1	1
+map	4bb	4ba	4bb
+eq	4bb	4ba	1	1
+map	4bc	4bc	4bd
+eq	4bc	4bd	1	1
+map	4bd	4bc	4bd
+eq	4bd	4bc	1	1
+map	4be	4be	4bf
+eq	4be	4bf	1	1
+map	4bf	4be	4bf
+eq	4bf	4be	1	1
+map	4c0	4c0	4cf
+eq	4c0	4cf	1	1
+map	4c1	4c1	4c2
+eq	4c1	4c2	1	1
+map	4c2	4c1	4c2
+eq	4c2	4c1	1	1
+map	4c3	4c3	4c4
+eq	4c3	4c4	1	1
+map	4c4	4c3	4c4
+eq	4c4	4c3	1	1
+map	4c5	4c5	4c6
+eq	4c5	4c6	1	1
+map	4c6	4c5	4c6
+eq	4c6	4c5	1	1
+map	4c7	4c7	4c8
+eq	4c7	4c8	1	1
+map	4c8	4c7	4c8
+eq	4c8	4c7	1	1
+map	4c9	4c9	4ca
+eq	4c9	4ca	1	1
+map	4ca	4c9	4ca
+eq	4ca	4c9	1	1
+map	4cb	4cb	4cc
+eq	4cb	4cc	1	1
+map	4cc	4cb	4cc
+eq	4cc	4cb	1	1
+map	4cd	4cd	4ce
+eq	4cd	4ce	1	1
+map	4ce	4cd	4ce
+eq	4ce	4cd	1	1
+map	4cf	4c0	4cf
+eq	4cf	4c0	1	1
+map	4d0	4d0	4d1
+eq	4d0	4d1	1	1
+map	4d1	4d0	4d1
+eq	4d1	4d0	1	1
+map	4d2	4d2	4d3
+eq	4d2	4d3	1	1
+map	4d3	4d2	4d3
+eq	4d3	4d2	1	1
+map	4d4	4d4	4d5
+eq	4d4	4d5	1	1
+map	4d5	4d4	4d5
+eq	4d5	4d4	1	1
+map	4d6	4d6	4d7
+eq	4d6	4d7	1	1
+map	4d7	4d6	4d7
+eq	4d7	4d6	1	1
+map	4d8	4d8	4d9
+eq	4d8	4d9	1	1
+map	4d9	4d8	4d9
+eq	4d9	4d8	1	1
+map	4da	4da	4db
+eq	4da	4db	1	1
+map	4db	4da	4db
+eq	4db	4da	1	1
+map	4dc	4dc	4dd
+eq	4dc	4dd	1	1
+map	4dd	4dc	4dd
+eq	4dd	4dc	1	1
+map	4de	4de	4df
+eq	4de	4df	1	1
+map	4df	4de	4df
+eq	4df	4de	1	1
+map	4e0	4e0	4e1
+eq	4e0	4e1	1	1
+map	4e1	4e0	4e1
+eq	4e1	4e0	1	1
+map	4e2	4e2	4e3
+eq	4e2	4e3	1	1
+map	4e3	4e2	4e3
+eq	4e3	4e2	1	1
+map	4e4	4e4	4e5
+eq	4e4	4e5	1	1
+map	4e5	4e4	4e5
+eq	4e5	4e4	1	1
+map	4e6	4e6	4e7
+eq	4e6	4e7	1	1
+map	4e7	4e6	4e7
+eq	4e7	4e6	1	1
+map	4e8	4e8	4e9
+eq	4e8	4e9	1	1
+map	4e9	4e8	4e9
+eq	4e9	4e8	1	1
+map	4ea	4ea	4eb
+eq	4ea	4eb	1	1
+map	4eb	4ea	4eb
+eq	4eb	4ea	1	1
+map	4ec	4ec	4ed
+eq	4ec	4ed	1	1
+map	4ed	4ec	4ed
+eq	4ed	4ec	1	1
+map	4ee	4ee	4ef
+eq	4ee	4ef	1	1
+map	4ef	4ee	4ef
+eq	4ef	4ee	1	1
+map	4f0	4f0	4f1
+eq	4f0	4f1	1	1
+map	4f1	4f0	4f1
+eq	4f1	4f0	1	1
+map	4f2	4f2	4f3
+eq	4f2	4f3	1	1
+map	4f3	4f2	4f3
+eq	4f3	4f2	1	1
+map	4f4	4f4	4f5
+eq	4f4	4f5	1	1
+map	4f5	4f4	4f5
+eq	4f5	4f4	1	1
+map	4f6	4f6	4f7
+eq	4f6	4f7	1	1
+map	4f7	4f6	4f7
+eq	4f7	4f6	1	1
+map	4f8	4f8	4f9
+eq	4f8	4f9	1	1
+map	4f9	4f8	4f9
+eq	4f9	4f8	1	1
+map	4fa	4fa	4fb
+eq	4fa	4fb	1	1
+map	4fb	4fa	4fb
+eq	4fb	4fa	1	1
+map	4fc	4fc	4fd
+eq	4fc	4fd	1	1
+map	4fd	4fc	4fd
+eq	4fd	4fc	1	1
+map	4fe	4fe	4ff
+eq	4fe	4ff	1	1
+map	4ff	4fe	4ff
+eq	4ff	4fe	1	1
+map	500	500	501
+eq	500	501	1	1
+map	501	500	501
+eq	501	500	1	1
+map	502	502	503
+eq	502	503	1	1
+map	503	502	503
+eq	503	502	1	1
+map	504	504	505
+eq	504	505	1	1
+map	505	504	505
+eq	505	504	1	1
+map	506	506	507
+eq	506	507	1	1
+map	507	506	507
+eq	507	506	1	1
+map	508	508	509
+eq	508	509	1	1
+map	509	508	509
+eq	509	508	1	1
+map	50a	50a	50b
+eq	50a	50b	1	1
+map	50b	50a	50b
+eq	50b	50a	1	1
+map	50c	50c	50d
+eq	50c	50d	1	1
+map	50d	50c	50d
+eq	50d	50c	1	1
+map	50e	50e	50f
+eq	50e	50f	1	1
+map	50f	50e	50f
+eq	50f	50e	1	1
+map	510	510	511
+eq	510	511	1	1
+map	511	510	511
+eq	511	510	1	1
+map	512	512	513
+eq	512	513	1	1
+map	513	512	513
+eq	513	512	1	1
+map	514	514	515
+eq	514	515	1	1
+map	515	514	515
+eq	515	514	1	1
+map	516	516	517
+eq	516	517	1	1
+map	517	516	517
+eq	517	516	1	1
+map	518	518	519
+eq	518	519	1	1
+map	519	518	519
+eq	519	518	1	1
+map	51a	51a	51b
+eq	51a	51b	1	1
+map	51b	51a	51b
+eq	51b	51a	1	1
+map	51c	51c	51d
+eq	51c	51d	1	1
+map	51d	51c	51d
+eq	51d	51c	1	1
+map	51e	51e	51f
+eq	51e	51f	1	1
+map	51f	51e	51f
+eq	51f	51e	1	1
+map	520	520	521
+eq	520	521	1	1
+map	521	520	521
+eq	521	520	1	1
+map	522	522	523
+eq	522	523	1	1
+map	523	522	523
+eq	523	522	1	1
+map	524	524	525
+eq	524	525	1	1
+map	525	524	525
+eq	525	524	1	1
+map	526	526	527
+eq	526	527	1	1
+map	527	526	527
+eq	527	526	1	1
+map	528	528	529
+eq	528	529	1	1
+map	529	528	529
+eq	529	528	1	1
+map	52a	52a	52b
+eq	52a	52b	1	1
+map	52b	52a	52b
+eq	52b	52a	1	1
+map	52c	52c	52d
+eq	52c	52d	1	1
+map	52d	52c	52d
+eq	52d	52c	1	1
+map	52e	52e	52f
+eq	52e	52f	1	1
+map	52f	52e	52f
+eq	52f	52e	1	1
+map	531	531	561
+eq	531	561	1	1
+map	532	532	562
+eq	532	562	1	1
+map	533	533	563
+eq	533	563	1	1
+map	534	534	564
+eq	534	564	1	1
+map	535	535	565
+eq	535	565	1	1
+map	536	536	566
+eq	536	566	1	1
+map	537	537	567
+eq	537	567	1	1
+map	538	538	568
+eq	538	568	1	1
+map	539	539	569
+eq	539	569	1	1
+map	53a	53a	56a
+eq	53a	56a	1	1
+map	53b	53b	56b
+eq	53b	56b	1	1
+map	53c	53c	56c
+eq	53c	56c	1	1
+map	53d	53d	56d
+eq	53d	56d	1	1
+map	53e	53e	56e
+eq	53e	56e	1	1
+map	53f	53f	56f
+eq	53f	56f	1	1
+map	540	540	570
+eq	540	570	1	1
+map	541	541	571
+eq	541	571	1	1
+map	542	542	572
+eq	542	572	1	1
+map	543	543	573
+eq	543	573	1	1
+map	544	544	574
+eq	544	574	1	1
+map	545	545	575
+eq	545	575	1	1
+map	546	546	576
+eq	546	576	1	1
+map	547	547	577
+eq	547	577	1	1
+map	548	548	578
+eq	548	578	1	1
+map	549	549	579
+eq	549	579	1	1
+map	54a	54a	57a
+eq	54a	57a	1	1
+map	54b	54b	57b
+eq	54b	57b	1	1
+map	54c	54c	57c
+eq	54c	57c	1	1
+map	54d	54d	57d
+eq	54d	57d	1	1
+map	54e	54e	57e
+eq	54e	57e	1	1
+map	54f	54f	57f
+eq	54f	57f	1	1
+map	550	550	580
+eq	550	580	1	1
+map	551	551	581
+eq	551	581	1	1
+map	552	552	582
+eq	552	582	1	1
+map	553	553	583
+eq	553	583	1	1
+map	554	554	584
+eq	554	584	1	1
+map	555	555	585
+eq	555	585	1	1
+map	556	556	586
+eq	556	586	1	1
+map	561	531	561
+eq	561	531	1	1
+map	562	532	562
+eq	562	532	1	1
+map	563	533	563
+eq	563	533	1	1
+map	564	534	564
+eq	564	534	1	1
+map	565	535	565
+eq	565	535	1	1
+map	566	536	566
+eq	566	536	1	1
+map	567	537	567
+eq	567	537	1	1
+map	568	538	568
+eq	568	538	1	1
+map	569	539	569
+eq	569	539	1	1
+map	56a	53a	56a
+eq	56a	53a	1	1
+map	56b	53b	56b
+eq	56b	53b	1	1
+map	56c	53c	56c
+eq	56c	53c	1	1
+map	56d	53d	56d
+eq	56d	53d	1	1
+map	56e	53e	56e
+eq	56e	53e	1	1
+map	56f	53f	56f
+eq	56f	53f	1	1
+map	570	540	570
+eq	570	540	1	1
+map	571	541	571
+eq	571	541	1	1
+map	572	542	572
+eq	572	542	1	1
+map	573	543	573
+eq	573	543	1	1
+map	574	544	574
+eq	574	544	1	1
+map	575	545	575
+eq	575	545	1	1
+map	576	546	576
+eq	576	546	1	1
+map	577	547	577
+eq	577	547	1	1
+map	578	548	578
+eq	578	548	1	1
+map	579	549	579
+eq	579	549	1	1
+map	57a	54a	57a
+eq	57a	54a	1	1
+map	57b	54b	57b
+eq	57b	54b	1	1
+map	57c	54c	57c
+eq	57c	54c	1	1
+map	57d	54d	57d
+eq	57d	54d	1	1
+map	57e	54e	57e
+eq	57e	54e	1	1
+map	57f	54f	57f
+eq	57f	54f	1	1
+map	580	550	580
+eq	580	550	1	1
+map	581	551	581
+eq	581	551	1	1
+map	582	552	582
+eq	582	552	1	1
+map	583	553	583
+eq	583	553	1	1
+map	584	554	584
+eq	584	554	1	1
+map	585	555	585
+eq	585	555	1	1
+map	586	556	586
+eq	586	556	1	1
+map	587	535,552	587
+map	10a0	10a0	2d00
+eq	10a0	2d00	1	1
+map	10a1	10a1	2d01
+eq	10a1	2d01	1	1
+map	10a2	10a2	2d02
+eq	10a2	2d02	1	1
+map	10a3	10a3	2d03
+eq	10a3	2d03	1	1
+map	10a4	10a4	2d04
+eq	10a4	2d04	1	1
+map	10a5	10a5	2d05
+eq	10a5	2d05	1	1
+map	10a6	10a6	2d06
+eq	10a6	2d06	1	1
+map	10a7	10a7	2d07
+eq	10a7	2d07	1	1
+map	10a8	10a8	2d08
+eq	10a8	2d08	1	1
+map	10a9	10a9	2d09
+eq	10a9	2d09	1	1
+map	10aa	10aa	2d0a
+eq	10aa	2d0a	1	1
+map	10ab	10ab	2d0b
+eq	10ab	2d0b	1	1
+map	10ac	10ac	2d0c
+eq	10ac	2d0c	1	1
+map	10ad	10ad	2d0d
+eq	10ad	2d0d	1	1
+map	10ae	10ae	2d0e
+eq	10ae	2d0e	1	1
+map	10af	10af	2d0f
+eq	10af	2d0f	1	1
+map	10b0	10b0	2d10
+eq	10b0	2d10	1	1
+map	10b1	10b1	2d11
+eq	10b1	2d11	1	1
+map	10b2	10b2	2d12
+eq	10b2	2d12	1	1
+map	10b3	10b3	2d13
+eq	10b3	2d13	1	1
+map	10b4	10b4	2d14
+eq	10b4	2d14	1	1
+map	10b5	10b5	2d15
+eq	10b5	2d15	1	1
+map	10b6	10b6	2d16
+eq	10b6	2d16	1	1
+map	10b7	10b7	2d17
+eq	10b7	2d17	1	1
+map	10b8	10b8	2d18
+eq	10b8	2d18	1	1
+map	10b9	10b9	2d19
+eq	10b9	2d19	1	1
+map	10ba	10ba	2d1a
+eq	10ba	2d1a	1	1
+map	10bb	10bb	2d1b
+eq	10bb	2d1b	1	1
+map	10bc	10bc	2d1c
+eq	10bc	2d1c	1	1
+map	10bd	10bd	2d1d
+eq	10bd	2d1d	1	1
+map	10be	10be	2d1e
+eq	10be	2d1e	1	1
+map	10bf	10bf	2d1f
+eq	10bf	2d1f	1	1
+map	10c0	10c0	2d20
+eq	10c0	2d20	1	1
+map	10c1	10c1	2d21
+eq	10c1	2d21	1	1
+map	10c2	10c2	2d22
+eq	10c2	2d22	1	1
+map	10c3	10c3	2d23
+eq	10c3	2d23	1	1
+map	10c4	10c4	2d24
+eq	10c4	2d24	1	1
+map	10c5	10c5	2d25
+eq	10c5	2d25	1	1
+map	10c7	10c7	2d27
+eq	10c7	2d27	1	1
+map	10cd	10cd	2d2d
+eq	10cd	2d2d	1	1
+map	10d0	1c90	10d0
+eq	10d0	1c90	1	1
+map	10d1	1c91	10d1
+eq	10d1	1c91	1	1
+map	10d2	1c92	10d2
+eq	10d2	1c92	1	1
+map	10d3	1c93	10d3
+eq	10d3	1c93	1	1
+map	10d4	1c94	10d4
+eq	10d4	1c94	1	1
+map	10d5	1c95	10d5
+eq	10d5	1c95	1	1
+map	10d6	1c96	10d6
+eq	10d6	1c96	1	1
+map	10d7	1c97	10d7
+eq	10d7	1c97	1	1
+map	10d8	1c98	10d8
+eq	10d8	1c98	1	1
+map	10d9	1c99	10d9
+eq	10d9	1c99	1	1
+map	10da	1c9a	10da
+eq	10da	1c9a	1	1
+map	10db	1c9b	10db
+eq	10db	1c9b	1	1
+map	10dc	1c9c	10dc
+eq	10dc	1c9c	1	1
+map	10dd	1c9d	10dd
+eq	10dd	1c9d	1	1
+map	10de	1c9e	10de
+eq	10de	1c9e	1	1
+map	10df	1c9f	10df
+eq	10df	1c9f	1	1
+map	10e0	1ca0	10e0
+eq	10e0	1ca0	1	1
+map	10e1	1ca1	10e1
+eq	10e1	1ca1	1	1
+map	10e2	1ca2	10e2
+eq	10e2	1ca2	1	1
+map	10e3	1ca3	10e3
+eq	10e3	1ca3	1	1
+map	10e4	1ca4	10e4
+eq	10e4	1ca4	1	1
+map	10e5	1ca5	10e5
+eq	10e5	1ca5	1	1
+map	10e6	1ca6	10e6
+eq	10e6	1ca6	1	1
+map	10e7	1ca7	10e7
+eq	10e7	1ca7	1	1
+map	10e8	1ca8	10e8
+eq	10e8	1ca8	1	1
+map	10e9	1ca9	10e9
+eq	10e9	1ca9	1	1
+map	10ea	1caa	10ea
+eq	10ea	1caa	1	1
+map	10eb	1cab	10eb
+eq	10eb	1cab	1	1
+map	10ec	1cac	10ec
+eq	10ec	1cac	1	1
+map	10ed	1cad	10ed
+eq	10ed	1cad	1	1
+map	10ee	1cae	10ee
+eq	10ee	1cae	1	1
+map	10ef	1caf	10ef
+eq	10ef	1caf	1	1
+map	10f0	1cb0	10f0
+eq	10f0	1cb0	1	1
+map	10f1	1cb1	10f1
+eq	10f1	1cb1	1	1
+map	10f2	1cb2	10f2
+eq	10f2	1cb2	1	1
+map	10f3	1cb3	10f3
+eq	10f3	1cb3	1	1
+map	10f4	1cb4	10f4
+eq	10f4	1cb4	1	1
+map	10f5	1cb5	10f5
+eq	10f5	1cb5	1	1
+map	10f6	1cb6	10f6
+eq	10f6	1cb6	1	1
+map	10f7	1cb7	10f7
+eq	10f7	1cb7	1	1
+map	10f8	1cb8	10f8
+eq	10f8	1cb8	1	1
+map	10f9	1cb9	10f9
+eq	10f9	1cb9	1	1
+map	10fa	1cba	10fa
+eq	10fa	1cba	1	1
+map	10fd	1cbd	10fd
+eq	10fd	1cbd	1	1
+map	10fe	1cbe	10fe
+eq	10fe	1cbe	1	1
+map	10ff	1cbf	10ff
+eq	10ff	1cbf	1	1
+map	13a0	13a0	ab70
+eq	13a0	ab70	1	1
+map	13a1	13a1	ab71
+eq	13a1	ab71	1	1
+map	13a2	13a2	ab72
+eq	13a2	ab72	1	1
+map	13a3	13a3	ab73
+eq	13a3	ab73	1	1
+map	13a4	13a4	ab74
+eq	13a4	ab74	1	1
+map	13a5	13a5	ab75
+eq	13a5	ab75	1	1
+map	13a6	13a6	ab76
+eq	13a6	ab76	1	1
+map	13a7	13a7	ab77
+eq	13a7	ab77	1	1
+map	13a8	13a8	ab78
+eq	13a8	ab78	1	1
+map	13a9	13a9	ab79
+eq	13a9	ab79	1	1
+map	13aa	13aa	ab7a
+eq	13aa	ab7a	1	1
+map	13ab	13ab	ab7b
+eq	13ab	ab7b	1	1
+map	13ac	13ac	ab7c
+eq	13ac	ab7c	1	1
+map	13ad	13ad	ab7d
+eq	13ad	ab7d	1	1
+map	13ae	13ae	ab7e
+eq	13ae	ab7e	1	1
+map	13af	13af	ab7f
+eq	13af	ab7f	1	1
+map	13b0	13b0	ab80
+eq	13b0	ab80	1	1
+map	13b1	13b1	ab81
+eq	13b1	ab81	1	1
+map	13b2	13b2	ab82
+eq	13b2	ab82	1	1
+map	13b3	13b3	ab83
+eq	13b3	ab83	1	1
+map	13b4	13b4	ab84
+eq	13b4	ab84	1	1
+map	13b5	13b5	ab85
+eq	13b5	ab85	1	1
+map	13b6	13b6	ab86
+eq	13b6	ab86	1	1
+map	13b7	13b7	ab87
+eq	13b7	ab87	1	1
+map	13b8	13b8	ab88
+eq	13b8	ab88	1	1
+map	13b9	13b9	ab89
+eq	13b9	ab89	1	1
+map	13ba	13ba	ab8a
+eq	13ba	ab8a	1	1
+map	13bb	13bb	ab8b
+eq	13bb	ab8b	1	1
+map	13bc	13bc	ab8c
+eq	13bc	ab8c	1	1
+map	13bd	13bd	ab8d
+eq	13bd	ab8d	1	1
+map	13be	13be	ab8e
+eq	13be	ab8e	1	1
+map	13bf	13bf	ab8f
+eq	13bf	ab8f	1	1
+map	13c0	13c0	ab90
+eq	13c0	ab90	1	1
+map	13c1	13c1	ab91
+eq	13c1	ab91	1	1
+map	13c2	13c2	ab92
+eq	13c2	ab92	1	1
+map	13c3	13c3	ab93
+eq	13c3	ab93	1	1
+map	13c4	13c4	ab94
+eq	13c4	ab94	1	1
+map	13c5	13c5	ab95
+eq	13c5	ab95	1	1
+map	13c6	13c6	ab96
+eq	13c6	ab96	1	1
+map	13c7	13c7	ab97
+eq	13c7	ab97	1	1
+map	13c8	13c8	ab98
+eq	13c8	ab98	1	1
+map	13c9	13c9	ab99
+eq	13c9	ab99	1	1
+map	13ca	13ca	ab9a
+eq	13ca	ab9a	1	1
+map	13cb	13cb	ab9b
+eq	13cb	ab9b	1	1
+map	13cc	13cc	ab9c
+eq	13cc	ab9c	1	1
+map	13cd	13cd	ab9d
+eq	13cd	ab9d	1	1
+map	13ce	13ce	ab9e
+eq	13ce	ab9e	1	1
+map	13cf	13cf	ab9f
+eq	13cf	ab9f	1	1
+map	13d0	13d0	aba0
+eq	13d0	aba0	1	1
+map	13d1	13d1	aba1
+eq	13d1	aba1	1	1
+map	13d2	13d2	aba2
+eq	13d2	aba2	1	1
+map	13d3	13d3	aba3
+eq	13d3	aba3	1	1
+map	13d4	13d4	aba4
+eq	13d4	aba4	1	1
+map	13d5	13d5	aba5
+eq	13d5	aba5	1	1
+map	13d6	13d6	aba6
+eq	13d6	aba6	1	1
+map	13d7	13d7	aba7
+eq	13d7	aba7	1	1
+map	13d8	13d8	aba8
+eq	13d8	aba8	1	1
+map	13d9	13d9	aba9
+eq	13d9	aba9	1	1
+map	13da	13da	abaa
+eq	13da	abaa	1	1
+map	13db	13db	abab
+eq	13db	abab	1	1
+map	13dc	13dc	abac
+eq	13dc	abac	1	1
+map	13dd	13dd	abad
+eq	13dd	abad	1	1
+map	13de	13de	abae
+eq	13de	abae	1	1
+map	13df	13df	abaf
+eq	13df	abaf	1	1
+map	13e0	13e0	abb0
+eq	13e0	abb0	1	1
+map	13e1	13e1	abb1
+eq	13e1	abb1	1	1
+map	13e2	13e2	abb2
+eq	13e2	abb2	1	1
+map	13e3	13e3	abb3
+eq	13e3	abb3	1	1
+map	13e4	13e4	abb4
+eq	13e4	abb4	1	1
+map	13e5	13e5	abb5
+eq	13e5	abb5	1	1
+map	13e6	13e6	abb6
+eq	13e6	abb6	1	1
+map	13e7	13e7	abb7
+eq	13e7	abb7	1	1
+map	13e8	13e8	abb8
+eq	13e8	abb8	1	1
+map	13e9	13e9	abb9
+eq	13e9	abb9	1	1
+map	13ea	13ea	abba
+eq	13ea	abba	1	1
+map	13eb	13eb	abbb
+eq	13eb	abbb	1	1
+map	13ec	13ec	abbc
+eq	13ec	abbc	1	1
+map	13ed	13ed	abbd
+eq	13ed	abbd	1	1
+map	13ee	13ee	abbe
+eq	13ee	abbe	1	1
+map	13ef	13ef	abbf
+eq	13ef	abbf	1	1
+map	13f0	13f0	13f8
+eq	13f0	13f8	1	1
+map	13f1	13f1	13f9
+eq	13f1	13f9	1	1
+map	13f2	13f2	13fa
+eq	13f2	13fa	1	1
+map	13f3	13f3	13fb
+eq	13f3	13fb	1	1
+map	13f4	13f4	13fc
+eq	13f4	13fc	1	1
+map	13f5	13f5	13fd
+eq	13f5	13fd	1	1
+map	13f8	13f0	13f8
+eq	13f8	13f0	1	1
+map	13f9	13f1	13f9
+eq	13f9	13f1	1	1
+map	13fa	13f2	13fa
+eq	13fa	13f2	1	1
+map	13fb	13f3	13fb
+eq	13fb	13f3	1	1
+map	13fc	13f4	13fc
+eq	13fc	13f4	1	1
+map	13fd	13f5	13fd
+eq	13fd	13f5	1	1
+map	1c80	412	1c80
+eq	1c80	412	1	1
+eq	1c80	432	1	1
+map	1c81	414	1c81
+eq	1c81	414	1	1
+eq	1c81	434	1	1
+map	1c82	41e	1c82
+eq	1c82	41e	1	1
+eq	1c82	43e	1	1
+map	1c83	421	1c83
+eq	1c83	421	1	1
+eq	1c83	441	1	1
+map	1c84	422	1c84
+eq	1c84	422	1	1
+eq	1c84	442	1	1
+map	1c85	422	1c85
+eq	1c85	422	1	1
+eq	1c85	442	1	1
+map	1c86	42a	1c86
+eq	1c86	42a	1	1
+eq	1c86	44a	1	1
+map	1c87	462	1c87
+eq	1c87	462	1	1
+eq	1c87	463	1	1
+map	1c88	a64a	1c88
+eq	1c88	a64a	1	1
+eq	1c88	a64b	1	1
+map	1c89	1c89	1c8a
+eq	1c89	1c8a	1	1
+map	1c8a	1c89	1c8a
+eq	1c8a	1c89	1	1
+map	1c90	1c90	10d0
+eq	1c90	10d0	1	1
+map	1c91	1c91	10d1
+eq	1c91	10d1	1	1
+map	1c92	1c92	10d2
+eq	1c92	10d2	1	1
+map	1c93	1c93	10d3
+eq	1c93	10d3	1	1
+map	1c94	1c94	10d4
+eq	1c94	10d4	1	1
+map	1c95	1c95	10d5
+eq	1c95	10d5	1	1
+map	1c96	1c96	10d6
+eq	1c96	10d6	1	1
+map	1c97	1c97	10d7
+eq	1c97	10d7	1	1
+map	1c98	1c98	10d8
+eq	1c98	10d8	1	1
+map	1c99	1c99	10d9
+eq	1c99	10d9	1	1
+map	1c9a	1c9a	10da
+eq	1c9a	10da	1	1
+map	1c9b	1c9b	10db
+eq	1c9b	10db	1	1
+map	1c9c	1c9c	10dc
+eq	1c9c	10dc	1	1
+map	1c9d	1c9d	10dd
+eq	1c9d	10dd	1	1
+map	1c9e	1c9e	10de
+eq	1c9e	10de	1	1
+map	1c9f	1c9f	10df
+eq	1c9f	10df	1	1
+map	1ca0	1ca0	10e0
+eq	1ca0	10e0	1	1
+map	1ca1	1ca1	10e1
+eq	1ca1	10e1	1	1
+map	1ca2	1ca2	10e2
+eq	1ca2	10e2	1	1
+map	1ca3	1ca3	10e3
+eq	1ca3	10e3	1	1
+map	1ca4	1ca4	10e4
+eq	1ca4	10e4	1	1
+map	1ca5	1ca5	10e5
+eq	1ca5	10e5	1	1
+map	1ca6	1ca6	10e6
+eq	1ca6	10e6	1	1
+map	1ca7	1ca7	10e7
+eq	1ca7	10e7	1	1
+map	1ca8	1ca8	10e8
+eq	1ca8	10e8	1	1
+map	1ca9	1ca9	10e9
+eq	1ca9	10e9	1	1
+map	1caa	1caa	10ea
+eq	1caa	10ea	1	1
+map	1cab	1cab	10eb
+eq	1cab	10eb	1	1
+map	1cac	1cac	10ec
+eq	1cac	10ec	1	1
+map	1cad	1cad	10ed
+eq	1cad	10ed	1	1
+map	1cae	1cae	10ee
+eq	1cae	10ee	1	1
+map	1caf	1caf	10ef
+eq	1caf	10ef	1	1
+map	1cb0	1cb0	10f0
+eq	1cb0	10f0	1	1
+map	1cb1	1cb1	10f1
+eq	1cb1	10f1	1	1
+map	1cb2	1cb2	10f2
+eq	1cb2	10f2	1	1
+map	1cb3	1cb3	10f3
+eq	1cb3	10f3	1	1
+map	1cb4	1cb4	10f4
+eq	1cb4	10f4	1	1
+map	1cb5	1cb5	10f5
+eq	1cb5	10f5	1	1
+map	1cb6	1cb6	10f6
+eq	1cb6	10f6	1	1
+map	1cb7	1cb7	10f7
+eq	1cb7	10f7	1	1
+map	1cb8	1cb8	10f8
+eq	1cb8	10f8	1	1
+map	1cb9	1cb9	10f9
+eq	1cb9	10f9	1	1
+map	1cba	1cba	10fa
+eq	1cba	10fa	1	1
+map	1cbd	1cbd	10fd
+eq	1cbd	10fd	1	1
+map	1cbe	1cbe	10fe
+eq	1cbe	10fe	1	1
+map	1cbf	1cbf	10ff
+eq	1cbf	10ff	1	1
+map	1d79	a77d	1d79
+eq	1d79	a77d	1	1
+map	1d7d	2c63	1d7d
+eq	1d7d	2c63	1	1
+map	1d8e	a7c6	1d8e
+eq	1d8e	a7c6	1	1
+map	1e00	1e00	1e01
+eq	1e00	1e01	1	1
+map	1e01	1e00	1e01
+eq	1e01	1e00	1	1
+map	1e02	1e02	1e03
+eq	1e02	1e03	1	1
+map	1e03	1e02	1e03
+eq	1e03	1e02	1	1
+map	1e04	1e04	1e05
+eq	1e04	1e05	1	1
+map	1e05	1e04	1e05
+eq	1e05	1e04	1	1
+map	1e06	1e06	1e07
+eq	1e06	1e07	1	1
+map	1e07	1e06	1e07
+eq	1e07	1e06	1	1
+map	1e08	1e08	1e09
+eq	1e08	1e09	1	1
+map	1e09	1e08	1e09
+eq	1e09	1e08	1	1
+map	1e0a	1e0a	1e0b
+eq	1e0a	1e0b	1	1
+map	1e0b	1e0a	1e0b
+eq	1e0b	1e0a	1	1
+map	1e0c	1e0c	1e0d
+eq	1e0c	1e0d	1	1
+map	1e0d	1e0c	1e0d
+eq	1e0d	1e0c	1	1
+map	1e0e	1e0e	1e0f
+eq	1e0e	1e0f	1	1
+map	1e0f	1e0e	1e0f
+eq	1e0f	1e0e	1	1
+map	1e10	1e10	1e11
+eq	1e10	1e11	1	1
+map	1e11	1e10	1e11
+eq	1e11	1e10	1	1
+map	1e12	1e12	1e13
+eq	1e12	1e13	1	1
+map	1e13	1e12	1e13
+eq	1e13	1e12	1	1
+map	1e14	1e14	1e15
+eq	1e14	1e15	1	1
+map	1e15	1e14	1e15
+eq	1e15	1e14	1	1
+map	1e16	1e16	1e17
+eq	1e16	1e17	1	1
+map	1e17	1e16	1e17
+eq	1e17	1e16	1	1
+map	1e18	1e18	1e19
+eq	1e18	1e19	1	1
+map	1e19	1e18	1e19
+eq	1e19	1e18	1	1
+map	1e1a	1e1a	1e1b
+eq	1e1a	1e1b	1	1
+map	1e1b	1e1a	1e1b
+eq	1e1b	1e1a	1	1
+map	1e1c	1e1c	1e1d
+eq	1e1c	1e1d	1	1
+map	1e1d	1e1c	1e1d
+eq	1e1d	1e1c	1	1
+map	1e1e	1e1e	1e1f
+eq	1e1e	1e1f	1	1
+map	1e1f	1e1e	1e1f
+eq	1e1f	1e1e	1	1
+map	1e20	1e20	1e21
+eq	1e20	1e21	1	1
+map	1e21	1e20	1e21
+eq	1e21	1e20	1	1
+map	1e22	1e22	1e23
+eq	1e22	1e23	1	1
+map	1e23	1e22	1e23
+eq	1e23	1e22	1	1
+map	1e24	1e24	1e25
+eq	1e24	1e25	1	1
+map	1e25	1e24	1e25
+eq	1e25	1e24	1	1
+map	1e26	1e26	1e27
+eq	1e26	1e27	1	1
+map	1e27	1e26	1e27
+eq	1e27	1e26	1	1
+map	1e28	1e28	1e29
+eq	1e28	1e29	1	1
+map	1e29	1e28	1e29
+eq	1e29	1e28	1	1
+map	1e2a	1e2a	1e2b
+eq	1e2a	1e2b	1	1
+map	1e2b	1e2a	1e2b
+eq	1e2b	1e2a	1	1
+map	1e2c	1e2c	1e2d
+eq	1e2c	1e2d	1	1
+map	1e2d	1e2c	1e2d
+eq	1e2d	1e2c	1	1
+map	1e2e	1e2e	1e2f
+eq	1e2e	1e2f	1	1
+map	1e2f	1e2e	1e2f
+eq	1e2f	1e2e	1	1
+map	1e30	1e30	1e31
+eq	1e30	1e31	1	1
+map	1e31	1e30	1e31
+eq	1e31	1e30	1	1
+map	1e32	1e32	1e33
+eq	1e32	1e33	1	1
+map	1e33	1e32	1e33
+eq	1e33	1e32	1	1
+map	1e34	1e34	1e35
+eq	1e34	1e35	1	1
+map	1e35	1e34	1e35
+eq	1e35	1e34	1	1
+map	1e36	1e36	1e37
+eq	1e36	1e37	1	1
+map	1e37	1e36	1e37
+eq	1e37	1e36	1	1
+map	1e38	1e38	1e39
+eq	1e38	1e39	1	1
+map	1e39	1e38	1e39
+eq	1e39	1e38	1	1
+map	1e3a	1e3a	1e3b
+eq	1e3a	1e3b	1	1
+map	1e3b	1e3a	1e3b
+eq	1e3b	1e3a	1	1
+map	1e3c	1e3c	1e3d
+eq	1e3c	1e3d	1	1
+map	1e3d	1e3c	1e3d
+eq	1e3d	1e3c	1	1
+map	1e3e	1e3e	1e3f
+eq	1e3e	1e3f	1	1
+map	1e3f	1e3e	1e3f
+eq	1e3f	1e3e	1	1
+map	1e40	1e40	1e41
+eq	1e40	1e41	1	1
+map	1e41	1e40	1e41
+eq	1e41	1e40	1	1
+map	1e42	1e42	1e43
+eq	1e42	1e43	1	1
+map	1e43	1e42	1e43
+eq	1e43	1e42	1	1
+map	1e44	1e44	1e45
+eq	1e44	1e45	1	1
+map	1e45	1e44	1e45
+eq	1e45	1e44	1	1
+map	1e46	1e46	1e47
+eq	1e46	1e47	1	1
+map	1e47	1e46	1e47
+eq	1e47	1e46	1	1
+map	1e48	1e48	1e49
+eq	1e48	1e49	1	1
+map	1e49	1e48	1e49
+eq	1e49	1e48	1	1
+map	1e4a	1e4a	1e4b
+eq	1e4a	1e4b	1	1
+map	1e4b	1e4a	1e4b
+eq	1e4b	1e4a	1	1
+map	1e4c	1e4c	1e4d
+eq	1e4c	1e4d	1	1
+map	1e4d	1e4c	1e4d
+eq	1e4d	1e4c	1	1
+map	1e4e	1e4e	1e4f
+eq	1e4e	1e4f	1	1
+map	1e4f	1e4e	1e4f
+eq	1e4f	1e4e	1	1
+map	1e50	1e50	1e51
+eq	1e50	1e51	1	1
+map	1e51	1e50	1e51
+eq	1e51	1e50	1	1
+map	1e52	1e52	1e53
+eq	1e52	1e53	1	1
+map	1e53	1e52	1e53
+eq	1e53	1e52	1	1
+map	1e54	1e54	1e55
+eq	1e54	1e55	1	1
+map	1e55	1e54	1e55
+eq	1e55	1e54	1	1
+map	1e56	1e56	1e57
+eq	1e56	1e57	1	1
+map	1e57	1e56	1e57
+eq	1e57	1e56	1	1
+map	1e58	1e58	1e59
+eq	1e58	1e59	1	1
+map	1e59	1e58	1e59
+eq	1e59	1e58	1	1
+map	1e5a	1e5a	1e5b
+eq	1e5a	1e5b	1	1
+map	1e5b	1e5a	1e5b
+eq	1e5b	1e5a	1	1
+map	1e5c	1e5c	1e5d
+eq	1e5c	1e5d	1	1
+map	1e5d	1e5c	1e5d
+eq	1e5d	1e5c	1	1
+map	1e5e	1e5e	1e5f
+eq	1e5e	1e5f	1	1
+map	1e5f	1e5e	1e5f
+eq	1e5f	1e5e	1	1
+map	1e60	1e60	1e61
+eq	1e60	1e61	1	1
+map	1e61	1e60	1e61
+eq	1e61	1e60	1	1
+map	1e62	1e62	1e63
+eq	1e62	1e63	1	1
+map	1e63	1e62	1e63
+eq	1e63	1e62	1	1
+map	1e64	1e64	1e65
+eq	1e64	1e65	1	1
+map	1e65	1e64	1e65
+eq	1e65	1e64	1	1
+map	1e66	1e66	1e67
+eq	1e66	1e67	1	1
+map	1e67	1e66	1e67
+eq	1e67	1e66	1	1
+map	1e68	1e68	1e69
+eq	1e68	1e69	1	1
+map	1e69	1e68	1e69
+eq	1e69	1e68	1	1
+map	1e6a	1e6a	1e6b
+eq	1e6a	1e6b	1	1
+map	1e6b	1e6a	1e6b
+eq	1e6b	1e6a	1	1
+map	1e6c	1e6c	1e6d
+eq	1e6c	1e6d	1	1
+map	1e6d	1e6c	1e6d
+eq	1e6d	1e6c	1	1
+map	1e6e	1e6e	1e6f
+eq	1e6e	1e6f	1	1
+map	1e6f	1e6e	1e6f
+eq	1e6f	1e6e	1	1
+map	1e70	1e70	1e71
+eq	1e70	1e71	1	1
+map	1e71	1e70	1e71
+eq	1e71	1e70	1	1
+map	1e72	1e72	1e73
+eq	1e72	1e73	1	1
+map	1e73	1e72	1e73
+eq	1e73	1e72	1	1
+map	1e74	1e74	1e75
+eq	1e74	1e75	1	1
+map	1e75	1e74	1e75
+eq	1e75	1e74	1	1
+map	1e76	1e76	1e77
+eq	1e76	1e77	1	1
+map	1e77	1e76	1e77
+eq	1e77	1e76	1	1
+map	1e78	1e78	1e79
+eq	1e78	1e79	1	1
+map	1e79	1e78	1e79
+eq	1e79	1e78	1	1
+map	1e7a	1e7a	1e7b
+eq	1e7a	1e7b	1	1
+map	1e7b	1e7a	1e7b
+eq	1e7b	1e7a	1	1
+map	1e7c	1e7c	1e7d
+eq	1e7c	1e7d	1	1
+map	1e7d	1e7c	1e7d
+eq	1e7d	1e7c	1	1
+map	1e7e	1e7e	1e7f
+eq	1e7e	1e7f	1	1
+map	1e7f	1e7e	1e7f
+eq	1e7f	1e7e	1	1
+map	1e80	1e80	1e81
+eq	1e80	1e81	1	1
+map	1e81	1e80	1e81
+eq	1e81	1e80	1	1
+map	1e82	1e82	1e83
+eq	1e82	1e83	1	1
+map	1e83	1e82	1e83
+eq	1e83	1e82	1	1
+map	1e84	1e84	1e85
+eq	1e84	1e85	1	1
+map	1e85	1e84	1e85
+eq	1e85	1e84	1	1
+map	1e86	1e86	1e87
+eq	1e86	1e87	1	1
+map	1e87	1e86	1e87
+eq	1e87	1e86	1	1
+map	1e88	1e88	1e89
+eq	1e88	1e89	1	1
+map	1e89	1e88	1e89
+eq	1e89	1e88	1	1
+map	1e8a	1e8a	1e8b
+eq	1e8a	1e8b	1	1
+map	1e8b	1e8a	1e8b
+eq	1e8b	1e8a	1	1
+map	1e8c	1e8c	1e8d
+eq	1e8c	1e8d	1	1
+map	1e8d	1e8c	1e8d
+eq	1e8d	1e8c	1	1
+map	1e8e	1e8e	1e8f
+eq	1e8e	1e8f	1	1
+map	1e8f	1e8e	1e8f
+eq	1e8f	1e8e	1	1
+map	1e90	1e90	1e91
+eq	1e90	1e91	1	1
+map	1e91	1e90	1e91
+eq	1e91	1e90	1	1
+map	1e92	1e92	1e93
+eq	1e92	1e93	1	1
+map	1e93	1e92	1e93
+eq	1e93	1e92	1	1
+map	1e94	1e94	1e95
+eq	1e94	1e95	1	1
+map	1e95	1e94	1e95
+eq	1e95	1e94	1	1
+map	1e96	48,331	1e96
+map	1e97	54,308	1e97
+map	1e98	57,30a	1e98
+map	1e99	59,30a	1e99
+map	1e9a	41,2be	1e9a
+map	1e9b	1e60	1e9b
+eq	1e9b	1e60	1	1
+eq	1e9b	1e61	1	1
+map	1e9e	1e9e	df
+eq	1e9e	df	0	1
+map	1ea0	1ea0	1ea1
+eq	1ea0	1ea1	1	1
+map	1ea1	1ea0	1ea1
+eq	1ea1	1ea0	1	1
+map	1ea2	1ea2	1ea3
+eq	1ea2	1ea3	1	1
+map	1ea3	1ea2	1ea3
+eq	1ea3	1ea2	1	1
+map	1ea4	1ea4	1ea5
+eq	1ea4	1ea5	1	1
+map	1ea5	1ea4	1ea5
+eq	1ea5	1ea4	1	1
+map	1ea6	1ea6	1ea7
+eq	1ea6	1ea7	1	1
+map	1ea7	1ea6	1ea7
+eq	1ea7	1ea6	1	1
+map	1ea8	1ea8	1ea9
+eq	1ea8	1ea9	1	1
+map	1ea9	1ea8	1ea9
+eq	1ea9	1ea8	1	1
+map	1eaa	1eaa	1eab
+eq	1eaa	1eab	1	1
+map	1eab	1eaa	1eab
+eq	1eab	1eaa	1	1
+map	1eac	1eac	1ead
+eq	1eac	1ead	1	1
+map	1ead	1eac	1ead
+eq	1ead	1eac	1	1
+map	1eae	1eae	1eaf
+eq	1eae	1eaf	1	1
+map	1eaf	1eae	1eaf
+eq	1eaf	1eae	1	1
+map	1eb0	1eb0	1eb1
+eq	1eb0	1eb1	1	1
+map	1eb1	1eb0	1eb1
+eq	1eb1	1eb0	1	1
+map	1eb2	1eb2	1eb3
+eq	1eb2	1eb3	1	1
+map	1eb3	1eb2	1eb3
+eq	1eb3	1eb2	1	1
+map	1eb4	1eb4	1eb5
+eq	1eb4	1eb5	1	1
+map	1eb5	1eb4	1eb5
+eq	1eb5	1eb4	1	1
+map	1eb6	1eb6	1eb7
+eq	1eb6	1eb7	1	1
+map	1eb7	1eb6	1eb7
+eq	1eb7	1eb6	1	1
+map	1eb8	1eb8	1eb9
+eq	1eb8	1eb9	1	1
+map	1eb9	1eb8	1eb9
+eq	1eb9	1eb8	1	1
+map	1eba	1eba	1ebb
+eq	1eba	1ebb	1	1
+map	1ebb	1eba	1ebb
+eq	1ebb	1eba	1	1
+map	1ebc	1ebc	1ebd
+eq	1ebc	1ebd	1	1
+map	1ebd	1ebc	1ebd
+eq	1ebd	1ebc	1	1
+map	1ebe	1ebe	1ebf
+eq	1ebe	1ebf	1	1
+map	1ebf	1ebe	1ebf
+eq	1ebf	1ebe	1	1
+map	1ec0	1ec0	1ec1
+eq	1ec0	1ec1	1	1
+map	1ec1	1ec0	1ec1
+eq	1ec1	1ec0	1	1
+map	1ec2	1ec2	1ec3
+eq	1ec2	1ec3	1	1
+map	1ec3	1ec2	1ec3
+eq	1ec3	1ec2	1	1
+map	1ec4	1ec4	1ec5
+eq	1ec4	1ec5	1	1
+map	1ec5	1ec4	1ec5
+eq	1ec5	1ec4	1	1
+map	1ec6	1ec6	1ec7
+eq	1ec6	1ec7	1	1
+map	1ec7	1ec6	1ec7
+eq	1ec7	1ec6	1	1
+map	1ec8	1ec8	1ec9
+eq	1ec8	1ec9	1	1
+map	1ec9	1ec8	1ec9
+eq	1ec9	1ec8	1	1
+map	1eca	1eca	1ecb
+eq	1eca	1ecb	1	1
+map	1ecb	1eca	1ecb
+eq	1ecb	1eca	1	1
+map	1ecc	1ecc	1ecd
+eq	1ecc	1ecd	1	1
+map	1ecd	1ecc	1ecd
+eq	1ecd	1ecc	1	1
+map	1ece	1ece	1ecf
+eq	1ece	1ecf	1	1
+map	1ecf	1ece	1ecf
+eq	1ecf	1ece	1	1
+map	1ed0	1ed0	1ed1
+eq	1ed0	1ed1	1	1
+map	1ed1	1ed0	1ed1
+eq	1ed1	1ed0	1	1
+map	1ed2	1ed2	1ed3
+eq	1ed2	1ed3	1	1
+map	1ed3	1ed2	1ed3
+eq	1ed3	1ed2	1	1
+map	1ed4	1ed4	1ed5
+eq	1ed4	1ed5	1	1
+map	1ed5	1ed4	1ed5
+eq	1ed5	1ed4	1	1
+map	1ed6	1ed6	1ed7
+eq	1ed6	1ed7	1	1
+map	1ed7	1ed6	1ed7
+eq	1ed7	1ed6	1	1
+map	1ed8	1ed8	1ed9
+eq	1ed8	1ed9	1	1
+map	1ed9	1ed8	1ed9
+eq	1ed9	1ed8	1	1
+map	1eda	1eda	1edb
+eq	1eda	1edb	1	1
+map	1edb	1eda	1edb
+eq	1edb	1eda	1	1
+map	1edc	1edc	1edd
+eq	1edc	1edd	1	1
+map	1edd	1edc	1edd
+eq	1edd	1edc	1	1
+map	1ede	1ede	1edf
+eq	1ede	1edf	1	1
+map	1edf	1ede	1edf
+eq	1edf	1ede	1	1
+map	1ee0	1ee0	1ee1
+eq	1ee0	1ee1	1	1
+map	1ee1	1ee0	1ee1
+eq	1ee1	1ee0	1	1
+map	1ee2	1ee2	1ee3
+eq	1ee2	1ee3	1	1
+map	1ee3	1ee2	1ee3
+eq	1ee3	1ee2	1	1
+map	1ee4	1ee4	1ee5
+eq	1ee4	1ee5	1	1
+map	1ee5	1ee4	1ee5
+eq	1ee5	1ee4	1	1
+map	1ee6	1ee6	1ee7
+eq	1ee6	1ee7	1	1
+map	1ee7	1ee6	1ee7
+eq	1ee7	1ee6	1	1
+map	1ee8	1ee8	1ee9
+eq	1ee8	1ee9	1	1
+map	1ee9	1ee8	1ee9
+eq	1ee9	1ee8	1	1
+map	1eea	1eea	1eeb
+eq	1eea	1eeb	1	1
+map	1eeb	1eea	1eeb
+eq	1eeb	1eea	1	1
+map	1eec	1eec	1eed
+eq	1eec	1eed	1	1
+map	1eed	1eec	1eed
+eq	1eed	1eec	1	1
+map	1eee	1eee	1eef
+eq	1eee	1eef	1	1
+map	1eef	1eee	1eef
+eq	1eef	1eee	1	1
+map	1ef0	1ef0	1ef1
+eq	1ef0	1ef1	1	1
+map	1ef1	1ef0	1ef1
+eq	1ef1	1ef0	1	1
+map	1ef2	1ef2	1ef3
+eq	1ef2	1ef3	1	1
+map	1ef3	1ef2	1ef3
+eq	1ef3	1ef2	1	1
+map	1ef4	1ef4	1ef5
+eq	1ef4	1ef5	1	1
+map	1ef5	1ef4	1ef5
+eq	1ef5	1ef4	1	1
+map	1ef6	1ef6	1ef7
+eq	1ef6	1ef7	1	1
+map	1ef7	1ef6	1ef7
+eq	1ef7	1ef6	1	1
+map	1ef8	1ef8	1ef9
+eq	1ef8	1ef9	1	1
+map	1ef9	1ef8	1ef9
+eq	1ef9	1ef8	1	1
+map	1efa	1efa	1efb
+eq	1efa	1efb	1	1
+map	1efb	1efa	1efb
+eq	1efb	1efa	1	1
+map	1efc	1efc	1efd
+eq	1efc	1efd	1	1
+map	1efd	1efc	1efd
+eq	1efd	1efc	1	1
+map	1efe	1efe	1eff
+eq	1efe	1eff	1	1
+map	1eff	1efe	1eff
+eq	1eff	1efe	1	1
+map	1f00	1f08	1f00
+eq	1f00	1f08	1	1
+map	1f01	1f09	1f01
+eq	1f01	1f09	1	1
+map	1f02	1f0a	1f02
+eq	1f02	1f0a	1	1
+map	1f03	1f0b	1f03
+eq	1f03	1f0b	1	1
+map	1f04	1f0c	1f04
+eq	1f04	1f0c	1	1
+map	1f05	1f0d	1f05
+eq	1f05	1f0d	1	1
+map	1f06	1f0e	1f06
+eq	1f06	1f0e	1	1
+map	1f07	1f0f	1f07
+eq	1f07	1f0f	1	1
+map	1f08	1f08	1f00
+eq	1f08	1f00	1	1
+map	1f09	1f09	1f01
+eq	1f09	1f01	1	1
+map	1f0a	1f0a	1f02
+eq	1f0a	1f02	1	1
+map	1f0b	1f0b	1f03
+eq	1f0b	1f03	1	1
+map	1f0c	1f0c	1f04
+eq	1f0c	1f04	1	1
+map	1f0d	1f0d	1f05
+eq	1f0d	1f05	1	1
+map	1f0e	1f0e	1f06
+eq	1f0e	1f06	1	1
+map	1f0f	1f0f	1f07
+eq	1f0f	1f07	1	1
+map	1f10	1f18	1f10
+eq	1f10	1f18	1	1
+map	1f11	1f19	1f11
+eq	1f11	1f19	1	1
+map	1f12	1f1a	1f12
+eq	1f12	1f1a	1	1
+map	1f13	1f1b	1f13
+eq	1f13	1f1b	1	1
+map	1f14	1f1c	1f14
+eq	1f14	1f1c	1	1
+map	1f15	1f1d	1f15
+eq	1f15	1f1d	1	1
+map	1f18	1f18	1f10
+eq	1f18	1f10	1	1
+map	1f19	1f19	1f11
+eq	1f19	1f11	1	1
+map	1f1a	1f1a	1f12
+eq	1f1a	1f12	1	1
+map	1f1b	1f1b	1f13
+eq	1f1b	1f13	1	1
+map	1f1c	1f1c	1f14
+eq	1f1c	1f14	1	1
+map	1f1d	1f1d	1f15
+eq	1f1d	1f15	1	1
+map	1f20	1f28	1f20
+eq	1f20	1f28	1	1
+map	1f21	1f29	1f21
+eq	1f21	1f29	1	1
+map	1f22	1f2a	1f22
+eq	1f22	1f2a	1	1
+map	1f23	1f2b	1f23
+eq	1f23	1f2b	1	1
+map	1f24	1f2c	1f24
+eq	1f24	1f2c	1	1
+map	1f25	1f2d	1f25
+eq	1f25	1f2d	1	1
+map	1f26	1f2e	1f26
+eq	1f26	1f2e	1	1
+map	1f27	1f2f	1f27
+eq	1f27	1f2f	1	1
+map	1f28	1f28	1f20
+eq	1f28	1f20	1	1
+map	1f29	1f29	1f21
+eq	1f29	1f21	1	1
+map	1f2a	1f2a	1f22
+eq	1f2a	1f22	1	1
+map	1f2b	1f2b	1f23
+eq	1f2b	1f23	1	1
+map	1f2c	1f2c	1f24
+eq	1f2c	1f24	1	1
+map	1f2d	1f2d	1f25
+eq	1f2d	1f25	1	1
+map	1f2e	1f2e	1f26
+eq	1f2e	1f26	1	1
+map	1f2f	1f2f	1f27
+eq	1f2f	1f27	1	1
+map	1f30	1f38	1f30
+eq	1f30	1f38	1	1
+map	1f31	1f39	1f31
+eq	1f31	1f39	1	1
+map	1f32	1f3a	1f32
+eq	1f32	1f3a	1	1
+map	1f33	1f3b	1f33
+eq	1f33	1f3b	1	1
+map	1f34	1f3c	1f34
+eq	1f34	1f3c	1	1
+map	1f35	1f3d	1f35
+eq	1f35	1f3d	1	1
+map	1f36	1f3e	1f36
+eq	1f36	1f3e	1	1
+map	1f37	1f3f	1f37
+eq	1f37	1f3f	1	1
+map	1f38	1f38	1f30
+eq	1f38	1f30	1	1
+map	1f39	1f39	1f31
+eq	1f39	1f31	1	1
+map	1f3a	1f3a	1f32
+eq	1f3a	1f32	1	1
+map	1f3b	1f3b	1f33
+eq	1f3b	1f33	1	1
+map	1f3c	1f3c	1f34
+eq	1f3c	1f34	1	1
+map	1f3d	1f3d	1f35
+eq	1f3d	1f35	1	1
+map	1f3e	1f3e	1f36
+eq	1f3e	1f36	1	1
+map	1f3f	1f3f	1f37
+eq	1f3f	1f37	1	1
+map	1f40	1f48	1f40
+eq	1f40	1f48	1	1
+map	1f41	1f49	1f41
+eq	1f41	1f49	1	1
+map	1f42	1f4a	1f42
+eq	1f42	1f4a	1	1
+map	1f43	1f4b	1f43
+eq	1f43	1f4b	1	1
+map	1f44	1f4c	1f44
+eq	1f44	1f4c	1	1
+map	1f45	1f4d	1f45
+eq	1f45	1f4d	1	1
+map	1f48	1f48	1f40
+eq	1f48	1f40	1	1
+map	1f49	1f49	1f41
+eq	1f49	1f41	1	1
+map	1f4a	1f4a	1f42
+eq	1f4a	1f42	1	1
+map	1f4b	1f4b	1f43
+eq	1f4b	1f43	1	1
+map	1f4c	1f4c	1f44
+eq	1f4c	1f44	1	1
+map	1f4d	1f4d	1f45
+eq	1f4d	1f45	1	1
+map	1f50	3a5,313	1f50
+map	1f51	1f59	1f51
+eq	1f51	1f59	1	1
+map	1f52	3a5,313,300	1f52
+map	1f53	1f5b	1f53
+eq	1f53	1f5b	1	1
+map	1f54	3a5,313,301	1f54
+map	1f55	1f5d	1f55
+eq	1f55	1f5d	1	1
+map	1f56	3a5,313,342	1f56
+map	1f57	1f5f	1f57
+eq	1f57	1f5f	1	1
+map	1f59	1f59	1f51
+eq	1f59	1f51	1	1
+map	1f5b	1f5b	1f53
+eq	1f5b	1f53	1	1
+map	1f5d	1f5d	1f55
+eq	1f5d	1f55	1	1
+map	1f5f	1f5f	1f57
+eq	1f5f	1f57	1	1
+map	1f60	1f68	1f60
+eq	1f60	1f68	1	1
+map	1f61	1f69	1f61
+eq	1f61	1f69	1	1
+map	1f62	1f6a	1f62
+eq	1f62	1f6a	1	1
+map	1f63	1f6b	1f63
+eq	1f63	1f6b	1	1
+map	1f64	1f6c	1f64
+eq	1f64	1f6c	1	1
+map	1f65	1f6d	1f65
+eq	1f65	1f6d	1	1
+map	1f66	1f6e	1f66
+eq	1f66	1f6e	1	1
+map	1f67	1f6f	1f67
+eq	1f67	1f6f	1	1
+map	1f68	1f68	1f60
+eq	1f68	1f60	1	1
+map	1f69	1f69	1f61
+eq	1f69	1f61	1	1
+map	1f6a	1f6a	1f62
+eq	1f6a	1f62	1	1
+map	1f6b	1f6b	1f63
+eq	1f6b	1f63	1	1
+map	1f6c	1f6c	1f64
+eq	1f6c	1f64	1	1
+map	1f6d	1f6d	1f65
+eq	1f6d	1f65	1	1
+map	1f6e	1f6e	1f66
+eq	1f6e	1f66	1	1
+map	1f6f	1f6f	1f67
+eq	1f6f	1f67	1	1
+map	1f70	1fba	1f70
+eq	1f70	1fba	1	1
+map	1f71	1fbb	1f71
+eq	1f71	1fbb	1	1
+map	1f72	1fc8	1f72
+eq	1f72	1fc8	1	1
+map	1f73	1fc9	1f73
+eq	1f73	1fc9	1	1
+map	1f74	1fca	1f74
+eq	1f74	1fca	1	1
+map	1f75	1fcb	1f75
+eq	1f75	1fcb	1	1
+map	1f76	1fda	1f76
+eq	1f76	1fda	1	1
+map	1f77	1fdb	1f77
+eq	1f77	1fdb	1	1
+map	1f78	1ff8	1f78
+eq	1f78	1ff8	1	1
+map	1f79	1ff9	1f79
+eq	1f79	1ff9	1	1
+map	1f7a	1fea	1f7a
+eq	1f7a	1fea	1	1
+map	1f7b	1feb	1f7b
+eq	1f7b	1feb	1	1
+map	1f7c	1ffa	1f7c
+eq	1f7c	1ffa	1	1
+map	1f7d	1ffb	1f7d
+eq	1f7d	1ffb	1	1
+map	1f80	1f08,399	1f80
+map	1f81	1f09,399	1f81
+map	1f82	1f0a,399	1f82
+map	1f83	1f0b,399	1f83
+map	1f84	1f0c,399	1f84
+map	1f85	1f0d,399	1f85
+map	1f86	1f0e,399	1f86
+map	1f87	1f0f,399	1f87
+map	1f88	1f08,399	1f80
+eq	1f88	1f80	0	1
+map	1f89	1f09,399	1f81
+eq	1f89	1f81	0	1
+map	1f8a	1f0a,399	1f82
+eq	1f8a	1f82	0	1
+map	1f8b	1f0b,399	1f83
+eq	1f8b	1f83	0	1
+map	1f8c	1f0c,399	1f84
+eq	1f8c	1f84	0	1
+map	1f8d	1f0d,399	1f85
+eq	1f8d	1f85	0	1
+map	1f8e	1f0e,399	1f86
+eq	1f8e	1f86	0	1
+map	1f8f	1f0f,399	1f87
+eq	1f8f	1f87	0	1
+map	1f90	1f28,399	1f90
+map	1f91	1f29,399	1f91
+map	1f92	1f2a,399	1f92
+map	1f93	1f2b,399	1f93
+map	1f94	1f2c,399	1f94
+map	1f95	1f2d,399	1f95
+map	1f96	1f2e,399	1f96
+map	1f97	1f2f,399	1f97
+map	1f98	1f28,399	1f90
+eq	1f98	1f90	0	1
+map	1f99	1f29,399	1f91
+eq	1f99	1f91	0	1
+map	1f9a	1f2a,399	1f92
+eq	1f9a	1f92	0	1
+map	1f9b	1f2b,399	1f93
+eq	1f9b	1f93	0	1
+map	1f9c	1f2c,399	1f94
+eq	1f9c	1f94	0	1
+map	1f9d	1f2d,399	1f95
+eq	1f9d	1f95	0	1
+map	1f9e	1f2e,399	1f96
+eq	1f9e	1f96	0	1
+map	1f9f	1f2f,399	1f97
+eq	1f9f	1f97	0	1
+map	1fa0	1f68,399	1fa0
+map	1fa1	1f69,399	1fa1
+map	1fa2	1f6a,399	1fa2
+map	1fa3	1f6b,399	1fa3
+map	1fa4	1f6c,399	1fa4
+map	1fa5	1f6d,399	1fa5
+map	1fa6	1f6e,399	1fa6
+map	1fa7	1f6f,399	1fa7
+map	1fa8	1f68,399	1fa0
+eq	1fa8	1fa0	0	1
+map	1fa9	1f69,399	1fa1
+eq	1fa9	1fa1	0	1
+map	1faa	1f6a,399	1fa2
+eq	1faa	1fa2	0	1
+map	1fab	1f6b,399	1fa3
+eq	1fab	1fa3	0	1
+map	1fac	1f6c,399	1fa4
+eq	1fac	1fa4	0	1
+map	1fad	1f6d,399	1fa5
+eq	1fad	1fa5	0	1
+map	1fae	1f6e,399	1fa6
+eq	1fae	1fa6	0	1
+map	1faf	1f6f,399	1fa7
+eq	1faf	1fa7	0	1
+map	1fb0	1fb8	1fb0
+eq	1fb0	1fb8	1	1
+map	1fb1	1fb9	1fb1
+eq	1fb1	1fb9	1	1
+map	1fb2	1fba,399	1fb2
+map	1fb3	391,399	1fb3
+map	1fb4	386,399	1fb4
+map	1fb6	391,342	1fb6
+map	1fb7	391,342,399	1fb7
+map	1fb8	1fb8	1fb0
+eq	1fb8	1fb0	1	1
+map	1fb9	1fb9	1fb1
+eq	1fb9	1fb1	1	1
+map	1fba	1fba	1f70
+eq	1fba	1f70	1	1
+map	1fbb	1fbb	1f71
+eq	1fbb	1f71	1	1
+map	1fbc	391,399	1fb3
+eq	1fbc	1fb3	0	1
+map	1fbe	399	1fbe
+eq	1fbe	399	1	1
+eq	1fbe	3b9	1	1
+map	1fc2	1fca,399	1fc2
+map	1fc3	397,399	1fc3
+map	1fc4	389,399	1fc4
+map	1fc6	397,342	1fc6
+map	1fc7	397,342,399	1fc7
+map	1fc8	1fc8	1f72
+eq	1fc8	1f72	1	1
+map	1fc9	1fc9	1f73
+eq	1fc9	1f73	1	1
+map	1fca	1fca	1f74
+eq	1fca	1f74	1	1
+map	1fcb	1fcb	1f75
+eq	1fcb	1f75	1	1
+map	1fcc	397,399	1fc3
+eq	1fcc	1fc3	0	1
+map	1fd0	1fd8	1fd0
+eq	1fd0	1fd8	1	1
+map	1fd1	1fd9	1fd1
+eq	1fd1	1fd9	1	1
+map	1fd2	399,308,300	1fd2
+map	1fd3	399,308,301	1fd3
+map	1fd6	399,342	1fd6
+map	1fd7	399,308,342	1fd7
+map	1fd8	1fd8	1fd0
+eq	1fd8	1fd0	1	1
+map	1fd9	1fd9	1fd1
+eq	1fd9	1fd1	1	1
+map	1fda	1fda	1f76
+eq	1fda	1f76	1	1
+map	1fdb	1fdb	1f77
+eq	1fdb	1f77	1	1
+map	1fe0	1fe8	1fe0
+eq	1fe0	1fe8	1	1
+map	1fe1	1fe9	1fe1
+eq	1fe1	1fe9	1	1
+map	1fe2	3a5,308,300	1fe2
+map	1fe3	3a5,308,301	1fe3
+map	1fe4	3a1,313	1fe4
+map	1fe5	1fec	1fe5
+eq	1fe5	1fec	1	1
+map	1fe6	3a5,342	1fe6
+map	1fe7	3a5,308,342	1fe7
+map	1fe8	1fe8	1fe0
+eq	1fe8	1fe0	1	1
+map	1fe9	1fe9	1fe1
+eq	1fe9	1fe1	1	1
+map	1fea	1fea	1f7a
+eq	1fea	1f7a	1	1
+map	1feb	1feb	1f7b
+eq	1feb	1f7b	1	1
+map	1fec	1fec	1fe5
+eq	1fec	1fe5	1	1
+map	1ff2	1ffa,399	1ff2
+map	1ff3	3a9,399	1ff3
+map	1ff4	38f,399	1ff4
+map	1ff6	3a9,342	1ff6
+map	1ff7	3a9,342,399	1ff7
+map	1ff8	1ff8	1f78
+eq	1ff8	1f78	1	1
+map	1ff9	1ff9	1f79
+eq	1ff9	1f79	1	1
+map	1ffa	1ffa	1f7c
+eq	1ffa	1f7c	1	1
+map	1ffb	1ffb	1f7d
+eq	1ffb	1f7d	1	1
+map	1ffc	3a9,399	1ff3
+eq	1ffc	1ff3	0	1
+map	2126	2126	3c9
+eq	2126	3a9	0	1
+eq	2126	3c9	0	1
+map	212a	212a	6b
+eq	212a	4b	0	1
+eq	212a	6b	0	1
+map	212b	212b	e5
+eq	212b	c5	0	1
+eq	212b	e5	0	1
+map	2132	2132	214e
+eq	2132	214e	1	1
+map	214e	2132	214e
+eq	214e	2132	1	1
+map	2160	2160	2170
+eq	2160	2170	1	1
+map	2161	2161	2171
+eq	2161	2171	1	1
+map	2162	2162	2172
+eq	2162	2172	1	1
+map	2163	2163	2173
+eq	2163	2173	1	1
+map	2164	2164	2174
+eq	2164	2174	1	1
+map	2165	2165	2175
+eq	2165	2175	1	1
+map	2166	2166	2176
+eq	2166	2176	1	1
+map	2167	2167	2177
+eq	2167	2177	1	1
+map	2168	2168	2178
+eq	2168	2178	1	1
+map	2169	2169	2179
+eq	2169	2179	1	1
+map	216a	216a	217a
+eq	216a	217a	1	1
+map	216b	216b	217b
+eq	216b	217b	1	1
+map	216c	216c	217c
+eq	216c	217c	1	1
+map	216d	216d	217d
+eq	216d	217d	1	1
+map	216e	216e	217e
+eq	216e	217e	1	1
+map	216f	216f	217f
+eq	216f	217f	1	1
+map	2170	2160	2170
+eq	2170	2160	1	1
+map	2171	2161	2171
+eq	2171	2161	1	1
+map	2172	2162	2172
+eq	2172	2162	1	1
+map	2173	2163	2173
+eq	2173	2163	1	1
+map	2174	2164	2174
+eq	2174	2164	1	1
+map	2175	2165	2175
+eq	2175	2165	1	1
+map	2176	2166	2176
+eq	2176	2166	1	1
+map	2177	2167	2177
+eq	2177	2167	1	1
+map	2178	2168	2178
+eq	2178	2168	1	1
+map	2179	2169	2179
+eq	2179	2169	1	1
+map	217a	216a	217a
+eq	217a	216a	1	1
+map	217b	216b	217b
+eq	217b	216b	1	1
+map	217c	216c	217c
+eq	217c	216c	1	1
+map	217d	216d	217d
+eq	217d	216d	1	1
+map	217e	216e	217e
+eq	217e	216e	1	1
+map	217f	216f	217f
+eq	217f	216f	1	1
+map	2183	2183	2184
+eq	2183	2184	1	1
+map	2184	2183	2184
+eq	2184	2183	1	1
+map	24b6	24b6	24d0
+eq	24b6	24d0	1	1
+map	24b7	24b7	24d1
+eq	24b7	24d1	1	1
+map	24b8	24b8	24d2
+eq	24b8	24d2	1	1
+map	24b9	24b9	24d3
+eq	24b9	24d3	1	1
+map	24ba	24ba	24d4
+eq	24ba	24d4	1	1
+map	24bb	24bb	24d5
+eq	24bb	24d5	1	1
+map	24bc	24bc	24d6
+eq	24bc	24d6	1	1
+map	24bd	24bd	24d7
+eq	24bd	24d7	1	1
+map	24be	24be	24d8
+eq	24be	24d8	1	1
+map	24bf	24bf	24d9
+eq	24bf	24d9	1	1
+map	24c0	24c0	24da
+eq	24c0	24da	1	1
+map	24c1	24c1	24db
+eq	24c1	24db	1	1
+map	24c2	24c2	24dc
+eq	24c2	24dc	1	1
+map	24c3	24c3	24dd
+eq	24c3	24dd	1	1
+map	24c4	24c4	24de
+eq	24c4	24de	1	1
+map	24c5	24c5	24df
+eq	24c5	24df	1	1
+map	24c6	24c6	24e0
+eq	24c6	24e0	1	1
+map	24c7	24c7	24e1
+eq	24c7	24e1	1	1
+map	24c8	24c8	24e2
+eq	24c8	24e2	1	1
+map	24c9	24c9	24e3
+eq	24c9	24e3	1	1
+map	24ca	24ca	24e4
+eq	24ca	24e4	1	1
+map	24cb	24cb	24e5
+eq	24cb	24e5	1	1
+map	24cc	24cc	24e6
+eq	24cc	24e6	1	1
+map	24cd	24cd	24e7
+eq	24cd	24e7	1	1
+map	24ce	24ce	24e8
+eq	24ce	24e8	1	1
+map	24cf	24cf	24e9
+eq	24cf	24e9	1	1
+map	24d0	24b6	24d0
+eq	24d0	24b6	1	1
+map	24d1	24b7	24d1
+eq	24d1	24b7	1	1
+map	24d2	24b8	24d2
+eq	24d2	24b8	1	1
+map	24d3	24b9	24d3
+eq	24d3	24b9	1	1
+map	24d4	24ba	24d4
+eq	24d4	24ba	1	1
+map	24d5	24bb	24d5
+eq	24d5	24bb	1	1
+map	24d6	24bc	24d6
+eq	24d6	24bc	1	1
+map	24d7	24bd	24d7
+eq	24d7	24bd	1	1
+map	24d8	24be	24d8
+eq	24d8	24be	1	1
+map	24d9	24bf	24d9
+eq	24d9	24bf	1	1
+map	24da	24c0	24da
+eq	24da	24c0	1	1
+map	24db	24c1	24db
+eq	24db	24c1	1	1
+map	24dc	24c2	24dc
+eq	24dc	24c2	1	1
+map	24dd	24c3	24dd
+eq	24dd	24c3	1	1
+map	24de	24c4	24de
+eq	24de	24c4	1	1
+map	24df	24c5	24df
+eq	24df	24c5	1	1
+map	24e0	24c6	24e0
+eq	24e0	24c6	1	1
+map	24e1	24c7	24e1
+eq	24e1	24c7	1	1
+map	24e2	24c8	24e2
+eq	24e2	24c8	1	1
+map	24e3	24c9	24e3
+eq	24e3	24c9	1	1
+map	24e4	24ca	24e4
+eq	24e4	24ca	1	1
+map	24e5	24cb	24e5
+eq	24e5	24cb	1	1
+map	24e6	24cc	24e6
+eq	24e6	24cc	1	1
+map	24e7	24cd	24e7
+eq	24e7	24cd	1	1
+map	24e8	24ce	24e8
+eq	24e8	24ce	1	1
+map	24e9	24cf	24e9
+eq	24e9	24cf	1	1
+map	2c00	2c00	2c30
+eq	2c00	2c30	1	1
+map	2c01	2c01	2c31
+eq	2c01	2c31	1	1
+map	2c02	2c02	2c32
+eq	2c02	2c32	1	1
+map	2c03	2c03	2c33
+eq	2c03	2c33	1	1
+map	2c04	2c04	2c34
+eq	2c04	2c34	1	1
+map	2c05	2c05	2c35
+eq	2c05	2c35	1	1
+map	2c06	2c06	2c36
+eq	2c06	2c36	1	1
+map	2c07	2c07	2c37
+eq	2c07	2c37	1	1
+map	2c08	2c08	2c38
+eq	2c08	2c38	1	1
+map	2c09	2c09	2c39
+eq	2c09	2c39	1	1
+map	2c0a	2c0a	2c3a
+eq	2c0a	2c3a	1	1
+map	2c0b	2c0b	2c3b
+eq	2c0b	2c3b	1	1
+map	2c0c	2c0c	2c3c
+eq	2c0c	2c3c	1	1
+map	2c0d	2c0d	2c3d
+eq	2c0d	2c3d	1	1
+map	2c0e	2c0e	2c3e
+eq	2c0e	2c3e	1	1
+map	2c0f	2c0f	2c3f
+eq	2c0f	2c3f	1	1
+map	2c10	2c10	2c40
+eq	2c10	2c40	1	1
+map	2c11	2c11	2c41
+eq	2c11	2c41	1	1
+map	2c12	2c12	2c42
+eq	2c12	2c42	1	1
+map	2c13	2c13	2c43
+eq	2c13	2c43	1	1
+map	2c14	2c14	2c44
+eq	2c14	2c44	1	1
+map	2c15	2c15	2c45
+eq	2c15	2c45	1	1
+map	2c16	2c16	2c46
+eq	2c16	2c46	1	1
+map	2c17	2c17	2c47
+eq	2c17	2c47	1	1
+map	2c18	2c18	2c48
+eq	2c18	2c48	1	1
+map	2c19	2c19	2c49
+eq	2c19	2c49	1	1
+map	2c1a	2c1a	2c4a
+eq	2c1a	2c4a	1	1
+map	2c1b	2c1b	2c4b
+eq	2c1b	2c4b	1	1
+map	2c1c	2c1c	2c4c
+eq	2c1c	2c4c	1	1
+map	2c1d	2c1d	2c4d
+eq	2c1d	2c4d	1	1
+map	2c1e	2c1e	2c4e
+eq	2c1e	2c4e	1	1
+map	2c1f	2c1f	2c4f
+eq	2c1f	2c4f	1	1
+map	2c20	2c20	2c50
+eq	2c20	2c50	1	1
+map	2c21	2c21	2c51
+eq	2c21	2c51	1	1
+map	2c22	2c22	2c52
+eq	2c22	2c52	1	1
+map	2c23	2c23	2c53
+eq	2c23	2c53	1	1
+map	2c24	2c24	2c54
+eq	2c24	2c54	1	1
+map	2c25	2c25	2c55
+eq	2c25	2c55	1	1
+map	2c26	2c26	2c56
+eq	2c26	2c56	1	1
+map	2c27	2c27	2c57
+eq	2c27	2c57	1	1
+map	2c28	2c28	2c58
+eq	2c28	2c58	1	1
+map	2c29	2c29	2c59
+eq	2c29	2c59	1	1
+map	2c2a	2c2a	2c5a
+eq	2c2a	2c5a	1	1
+map	2c2b	2c2b	2c5b
+eq	2c2b	2c5b	1	1
+map	2c2c	2c2c	2c5c
+eq	2c2c	2c5c	1	1
+map	2c2d	2c2d	2c5d
+eq	2c2d	2c5d	1	1
+map	2c2e	2c2e	2c5e
+eq	2c2e	2c5e	1	1
+map	2c2f	2c2f	2c5f
+eq	2c2f	2c5f	1	1
+map	2c30	2c00	2c30
+eq	2c30	2c00	1	1
+map	2c31	2c01	2c31
+eq	2c31	2c01	1	1
+map	2c32	2c02	2c32
+eq	2c32	2c02	1	1
+map	2c33	2c03	2c33
+eq	2c33	2c03	1	1
+map	2c34	2c04	2c34
+eq	2c34	2c04	1	1
+map	2c35	2c05	2c35
+eq	2c35	2c05	1	1
+map	2c36	2c06	2c36
+eq	2c36	2c06	1	1
+map	2c37	2c07	2c37
+eq	2c37	2c07	1	1
+map	2c38	2c08	2c38
+eq	2c38	2c08	1	1
+map	2c39	2c09	2c39
+eq	2c39	2c09	1	1
+map	2c3a	2c0a	2c3a
+eq	2c3a	2c0a	1	1
+map	2c3b	2c0b	2c3b
+eq	2c3b	2c0b	1	1
+map	2c3c	2c0c	2c3c
+eq	2c3c	2c0c	1	1
+map	2c3d	2c0d	2c3d
+eq	2c3d	2c0d	1	1
+map	2c3e	2c0e	2c3e
+eq	2c3e	2c0e	1	1
+map	2c3f	2c0f	2c3f
+eq	2c3f	2c0f	1	1
+map	2c40	2c10	2c40
+eq	2c40	2c10	1	1
+map	2c41	2c11	2c41
+eq	2c41	2c11	1	1
+map	2c42	2c12	2c42
+eq	2c42	2c12	1	1
+map	2c43	2c13	2c43
+eq	2c43	2c13	1	1
+map	2c44	2c14	2c44
+eq	2c44	2c14	1	1
+map	2c45	2c15	2c45
+eq	2c45	2c15	1	1
+map	2c46	2c16	2c46
+eq	2c46	2c16	1	1
+map	2c47	2c17	2c47
+eq	2c47	2c17	1	1
+map	2c48	2c18	2c48
+eq	2c48	2c18	1	1
+map	2c49	2c19	2c49
+eq	2c49	2c19	1	1
+map	2c4a	2c1a	2c4a
+eq	2c4a	2c1a	1	1
+map	2c4b	2c1b	2c4b
+eq	2c4b	2c1b	1	1
+map	2c4c	2c1c	2c4c
+eq	2c4c	2c1c	1	1
+map	2c4d	2c1d	2c4d
+eq	2c4d	2c1d	1	1
+map	2c4e	2c1e	2c4e
+eq	2c4e	2c1e	1	1
+map	2c4f	2c1f	2c4f
+eq	2c4f	2c1f	1	1
+map	2c50	2c20	2c50
+eq	2c50	2c20	1	1
+map	2c51	2c21	2c51
+eq	2c51	2c21	1	1
+map	2c52	2c22	2c52
+eq	2c52	2c22	1	1
+map	2c53	2c23	2c53
+eq	2c53	2c23	1	1
+map	2c54	2c24	2c54
+eq	2c54	2c24	1	1
+map	2c55	2c25	2c55
+eq	2c55	2c25	1	1
+map	2c56	2c26	2c56
+eq	2c56	2c26	1	1
+map	2c57	2c27	2c57
+eq	2c57	2c27	1	1
+map	2c58	2c28	2c58
+eq	2c58	2c28	1	1
+map	2c59	2c29	2c59
+eq	2c59	2c29	1	1
+map	2c5a	2c2a	2c5a
+eq	2c5a	2c2a	1	1
+map	2c5b	2c2b	2c5b
+eq	2c5b	2c2b	1	1
+map	2c5c	2c2c	2c5c
+eq	2c5c	2c2c	1	1
+map	2c5d	2c2d	2c5d
+eq	2c5d	2c2d	1	1
+map	2c5e	2c2e	2c5e
+eq	2c5e	2c2e	1	1
+map	2c5f	2c2f	2c5f
+eq	2c5f	2c2f	1	1
+map	2c60	2c60	2c61
+eq	2c60	2c61	1	1
+map	2c61	2c60	2c61
+eq	2c61	2c60	1	1
+map	2c62	2c62	26b
+eq	2c62	26b	1	1
+map	2c63	2c63	1d7d
+eq	2c63	1d7d	1	1
+map	2c64	2c64	27d
+eq	2c64	27d	1	1
+map	2c65	23a	2c65
+eq	2c65	23a	1	1
+map	2c66	23e	2c66
+eq	2c66	23e	1	1
+map	2c67	2c67	2c68
+eq	2c67	2c68	1	1
+map	2c68	2c67	2c68
+eq	2c68	2c67	1	1
+map	2c69	2c69	2c6a
+eq	2c69	2c6a	1	1
+map	2c6a	2c69	2c6a
+eq	2c6a	2c69	1	1
+map	2c6b	2c6b	2c6c
+eq	2c6b	2c6c	1	1
+map	2c6c	2c6b	2c6c
+eq	2c6c	2c6b	1	1
+map	2c6d	2c6d	251
+eq	2c6d	251	1	1
+map	2c6e	2c6e	271
+eq	2c6e	271	1	1
+map	2c6f	2c6f	250
+eq	2c6f	250	1	1
+map	2c70	2c70	252
+eq	2c70	252	1	1
+map	2c72	2c72	2c73
+eq	2c72	2c73	1	1
+map	2c73	2c72	2c73
+eq	2c73	2c72	1	1
+map	2c75	2c75	2c76
+eq	2c75	2c76	1	1
+map	2c76	2c75	2c76
+eq	2c76	2c75	1	1
+map	2c7e	2c7e	23f
+eq	2c7e	23f	1	1
+map	2c7f	2c7f	240
+eq	2c7f	240	1	1
+map	2c80	2c80	2c81
+eq	2c80	2c81	1	1
+map	2c81	2c80	2c81
+eq	2c81	2c80	1	1
+map	2c82	2c82	2c83
+eq	2c82	2c83	1	1
+map	2c83	2c82	2c83
+eq	2c83	2c82	1	1
+map	2c84	2c84	2c85
+eq	2c84	2c85	1	1
+map	2c85	2c84	2c85
+eq	2c85	2c84	1	1
+map	2c86	2c86	2c87
+eq	2c86	2c87	1	1
+map	2c87	2c86	2c87
+eq	2c87	2c86	1	1
+map	2c88	2c88	2c89
+eq	2c88	2c89	1	1
+map	2c89	2c88	2c89
+eq	2c89	2c88	1	1
+map	2c8a	2c8a	2c8b
+eq	2c8a	2c8b	1	1
+map	2c8b	2c8a	2c8b
+eq	2c8b	2c8a	1	1
+map	2c8c	2c8c	2c8d
+eq	2c8c	2c8d	1	1
+map	2c8d	2c8c	2c8d
+eq	2c8d	2c8c	1	1
+map	2c8e	2c8e	2c8f
+eq	2c8e	2c8f	1	1
+map	2c8f	2c8e	2c8f
+eq	2c8f	2c8e	1	1
+map	2c90	2c90	2c91
+eq	2c90	2c91	1	1
+map	2c91	2c90	2c91
+eq	2c91	2c90	1	1
+map	2c92	2c92	2c93
+eq	2c92	2c93	1	1
+map	2c93	2c92	2c93
+eq	2c93	2c92	1	1
+map	2c94	2c94	2c95
+eq	2c94	2c95	1	1
+map	2c95	2c94	2c95
+eq	2c95	2c94	1	1
+map	2c96	2c96	2c97
+eq	2c96	2c97	1	1
+map	2c97	2c96	2c97
+eq	2c97	2c96	1	1
+map	2c98	2c98	2c99
+eq	2c98	2c99	1	1
+map	2c99	2c98	2c99
+eq	2c99	2c98	1	1
+map	2c9a	2c9a	2c9b
+eq	2c9a	2c9b	1	1
+map	2c9b	2c9a	2c9b
+eq	2c9b	2c9a	1	1
+map	2c9c	2c9c	2c9d
+eq	2c9c	2c9d	1	1
+map	2c9d	2c9c	2c9d
+eq	2c9d	2c9c	1	1
+map	2c9e	2c9e	2c9f
+eq	2c9e	2c9f	1	1
+map	2c9f	2c9e	2c9f
+eq	2c9f	2c9e	1	1
+map	2ca0	2ca0	2ca1
+eq	2ca0	2ca1	1	1
+map	2ca1	2ca0	2ca1
+eq	2ca1	2ca0	1	1
+map	2ca2	2ca2	2ca3
+eq	2ca2	2ca3	1	1
+map	2ca3	2ca2	2ca3
+eq	2ca3	2ca2	1	1
+map	2ca4	2ca4	2ca5
+eq	2ca4	2ca5	1	1
+map	2ca5	2ca4	2ca5
+eq	2ca5	2ca4	1	1
+map	2ca6	2ca6	2ca7
+eq	2ca6	2ca7	1	1
+map	2ca7	2ca6	2ca7
+eq	2ca7	2ca6	1	1
+map	2ca8	2ca8	2ca9
+eq	2ca8	2ca9	1	1
+map	2ca9	2ca8	2ca9
+eq	2ca9	2ca8	1	1
+map	2caa	2caa	2cab
+eq	2caa	2cab	1	1
+map	2cab	2caa	2cab
+eq	2cab	2caa	1	1
+map	2cac	2cac	2cad
+eq	2cac	2cad	1	1
+map	2cad	2cac	2cad
+eq	2cad	2cac	1	1
+map	2cae	2cae	2caf
+eq	2cae	2caf	1	1
+map	2caf	2cae	2caf
+eq	2caf	2cae	1	1
+map	2cb0	2cb0	2cb1
+eq	2cb0	2cb1	1	1
+map	2cb1	2cb0	2cb1
+eq	2cb1	2cb0	1	1
+map	2cb2	2cb2	2cb3
+eq	2cb2	2cb3	1	1
+map	2cb3	2cb2	2cb3
+eq	2cb3	2cb2	1	1
+map	2cb4	2cb4	2cb5
+eq	2cb4	2cb5	1	1
+map	2cb5	2cb4	2cb5
+eq	2cb5	2cb4	1	1
+map	2cb6	2cb6	2cb7
+eq	2cb6	2cb7	1	1
+map	2cb7	2cb6	2cb7
+eq	2cb7	2cb6	1	1
+map	2cb8	2cb8	2cb9
+eq	2cb8	2cb9	1	1
+map	2cb9	2cb8	2cb9
+eq	2cb9	2cb8	1	1
+map	2cba	2cba	2cbb
+eq	2cba	2cbb	1	1
+map	2cbb	2cba	2cbb
+eq	2cbb	2cba	1	1
+map	2cbc	2cbc	2cbd
+eq	2cbc	2cbd	1	1
+map	2cbd	2cbc	2cbd
+eq	2cbd	2cbc	1	1
+map	2cbe	2cbe	2cbf
+eq	2cbe	2cbf	1	1
+map	2cbf	2cbe	2cbf
+eq	2cbf	2cbe	1	1
+map	2cc0	2cc0	2cc1
+eq	2cc0	2cc1	1	1
+map	2cc1	2cc0	2cc1
+eq	2cc1	2cc0	1	1
+map	2cc2	2cc2	2cc3
+eq	2cc2	2cc3	1	1
+map	2cc3	2cc2	2cc3
+eq	2cc3	2cc2	1	1
+map	2cc4	2cc4	2cc5
+eq	2cc4	2cc5	1	1
+map	2cc5	2cc4	2cc5
+eq	2cc5	2cc4	1	1
+map	2cc6	2cc6	2cc7
+eq	2cc6	2cc7	1	1
+map	2cc7	2cc6	2cc7
+eq	2cc7	2cc6	1	1
+map	2cc8	2cc8	2cc9
+eq	2cc8	2cc9	1	1
+map	2cc9	2cc8	2cc9
+eq	2cc9	2cc8	1	1
+map	2cca	2cca	2ccb
+eq	2cca	2ccb	1	1
+map	2ccb	2cca	2ccb
+eq	2ccb	2cca	1	1
+map	2ccc	2ccc	2ccd
+eq	2ccc	2ccd	1	1
+map	2ccd	2ccc	2ccd
+eq	2ccd	2ccc	1	1
+map	2cce	2cce	2ccf
+eq	2cce	2ccf	1	1
+map	2ccf	2cce	2ccf
+eq	2ccf	2cce	1	1
+map	2cd0	2cd0	2cd1
+eq	2cd0	2cd1	1	1
+map	2cd1	2cd0	2cd1
+eq	2cd1	2cd0	1	1
+map	2cd2	2cd2	2cd3
+eq	2cd2	2cd3	1	1
+map	2cd3	2cd2	2cd3
+eq	2cd3	2cd2	1	1
+map	2cd4	2cd4	2cd5
+eq	2cd4	2cd5	1	1
+map	2cd5	2cd4	2cd5
+eq	2cd5	2cd4	1	1
+map	2cd6	2cd6	2cd7
+eq	2cd6	2cd7	1	1
+map	2cd7	2cd6	2cd7
+eq	2cd7	2cd6	1	1
+map	2cd8	2cd8	2cd9
+eq	2cd8	2cd9	1	1
+map	2cd9	2cd8	2cd9
+eq	2cd9	2cd8	1	1
+map	2cda	2cda	2cdb
+eq	2cda	2cdb	1	1
+map	2cdb	2cda	2cdb
+eq	2cdb	2cda	1	1
+map	2cdc	2cdc	2cdd
+eq	2cdc	2cdd	1	1
+map	2cdd	2cdc	2cdd
+eq	2cdd	2cdc	1	1
+map	2cde	2cde	2cdf
+eq	2cde	2cdf	1	1
+map	2cdf	2cde	2cdf
+eq	2cdf	2cde	1	1
+map	2ce0	2ce0	2ce1
+eq	2ce0	2ce1	1	1
+map	2ce1	2ce0	2ce1
+eq	2ce1	2ce0	1	1
+map	2ce2	2ce2	2ce3
+eq	2ce2	2ce3	1	1
+map	2ce3	2ce2	2ce3
+eq	2ce3	2ce2	1	1
+map	2ceb	2ceb	2cec
+eq	2ceb	2cec	1	1
+map	2cec	2ceb	2cec
+eq	2cec	2ceb	1	1
+map	2ced	2ced	2cee
+eq	2ced	2cee	1	1
+map	2cee	2ced	2cee
+eq	2cee	2ced	1	1
+map	2cf2	2cf2	2cf3
+eq	2cf2	2cf3	1	1
+map	2cf3	2cf2	2cf3
+eq	2cf3	2cf2	1	1
+map	2d00	10a0	2d00
+eq	2d00	10a0	1	1
+map	2d01	10a1	2d01
+eq	2d01	10a1	1	1
+map	2d02	10a2	2d02
+eq	2d02	10a2	1	1
+map	2d03	10a3	2d03
+eq	2d03	10a3	1	1
+map	2d04	10a4	2d04
+eq	2d04	10a4	1	1
+map	2d05	10a5	2d05
+eq	2d05	10a5	1	1
+map	2d06	10a6	2d06
+eq	2d06	10a6	1	1
+map	2d07	10a7	2d07
+eq	2d07	10a7	1	1
+map	2d08	10a8	2d08
+eq	2d08	10a8	1	1
+map	2d09	10a9	2d09
+eq	2d09	10a9	1	1
+map	2d0a	10aa	2d0a
+eq	2d0a	10aa	1	1
+map	2d0b	10ab	2d0b
+eq	2d0b	10ab	1	1
+map	2d0c	10ac	2d0c
+eq	2d0c	10ac	1	1
+map	2d0d	10ad	2d0d
+eq	2d0d	10ad	1	1
+map	2d0e	10ae	2d0e
+eq	2d0e	10ae	1	1
+map	2d0f	10af	2d0f
+eq	2d0f	10af	1	1
+map	2d10	10b0	2d10
+eq	2d10	10b0	1	1
+map	2d11	10b1	2d11
+eq	2d11	10b1	1	1
+map	2d12	10b2	2d12
+eq	2d12	10b2	1	1
+map	2d13	10b3	2d13
+eq	2d13	10b3	1	1
+map	2d14	10b4	2d14
+eq	2d14	10b4	1	1
+map	2d15	10b5	2d15
+eq	2d15	10b5	1	1
+map	2d16	10b6	2d16
+eq	2d16	10b6	1	1
+map	2d17	10b7	2d17
+eq	2d17	10b7	1	1
+map	2d18	10b8	2d18
+eq	2d18	10b8	1	1
+map	2d19	10b9	2d19
+eq	2d19	10b9	1	1
+map	2d1a	10ba	2d1a
+eq	2d1a	10ba	1	1
+map	2d1b	10bb	2d1b
+eq	2d1b	10bb	1	1
+map	2d1c	10bc	2d1c
+eq	2d1c	10bc	1	1
+map	2d1d	10bd	2d1d
+eq	2d1d	10bd	1	1
+map	2d1e	10be	2d1e
+eq	2d1e	10be	1	1
+map	2d1f	10bf	2d1f
+eq	2d1f	10bf	1	1
+map	2d20	10c0	2d20
+eq	2d20	10c0	1	1
+map	2d21	10c1	2d21
+eq	2d21	10c1	1	1
+map	2d22	10c2	2d22
+eq	2d22	10c2	1	1
+map	2d23	10c3	2d23
+eq	2d23	10c3	1	1
+map	2d24	10c4	2d24
+eq	2d24	10c4	1	1
+map	2d25	10c5	2d25
+eq	2d25	10c5	1	1
+map	2d27	10c7	2d27
+eq	2d27	10c7	1	1
+map	2d2d	10cd	2d2d
+eq	2d2d	10cd	1	1
+map	a640	a640	a641
+eq	a640	a641	1	1
+map	a641	a640	a641
+eq	a641	a640	1	1
+map	a642	a642	a643
+eq	a642	a643	1	1
+map	a643	a642	a643
+eq	a643	a642	1	1
+map	a644	a644	a645
+eq	a644	a645	1	1
+map	a645	a644	a645
+eq	a645	a644	1	1
+map	a646	a646	a647
+eq	a646	a647	1	1
+map	a647	a646	a647
+eq	a647	a646	1	1
+map	a648	a648	a649
+eq	a648	a649	1	1
+map	a649	a648	a649
+eq	a649	a648	1	1
+map	a64a	a64a	a64b
+eq	a64a	a64b	1	1
+map	a64b	a64a	a64b
+eq	a64b	a64a	1	1
+map	a64c	a64c	a64d
+eq	a64c	a64d	1	1
+map	a64d	a64c	a64d
+eq	a64d	a64c	1	1
+map	a64e	a64e	a64f
+eq	a64e	a64f	1	1
+map	a64f	a64e	a64f
+eq	a64f	a64e	1	1
+map	a650	a650	a651
+eq	a650	a651	1	1
+map	a651	a650	a651
+eq	a651	a650	1	1
+map	a652	a652	a653
+eq	a652	a653	1	1
+map	a653	a652	a653
+eq	a653	a652	1	1
+map	a654	a654	a655
+eq	a654	a655	1	1
+map	a655	a654	a655
+eq	a655	a654	1	1
+map	a656	a656	a657
+eq	a656	a657	1	1
+map	a657	a656	a657
+eq	a657	a656	1	1
+map	a658	a658	a659
+eq	a658	a659	1	1
+map	a659	a658	a659
+eq	a659	a658	1	1
+map	a65a	a65a	a65b
+eq	a65a	a65b	1	1
+map	a65b	a65a	a65b
+eq	a65b	a65a	1	1
+map	a65c	a65c	a65d
+eq	a65c	a65d	1	1
+map	a65d	a65c	a65d
+eq	a65d	a65c	1	1
+map	a65e	a65e	a65f
+eq	a65e	a65f	1	1
+map	a65f	a65e	a65f
+eq	a65f	a65e	1	1
+map	a660	a660	a661
+eq	a660	a661	1	1
+map	a661	a660	a661
+eq	a661	a660	1	1
+map	a662	a662	a663
+eq	a662	a663	1	1
+map	a663	a662	a663
+eq	a663	a662	1	1
+map	a664	a664	a665
+eq	a664	a665	1	1
+map	a665	a664	a665
+eq	a665	a664	1	1
+map	a666	a666	a667
+eq	a666	a667	1	1
+map	a667	a666	a667
+eq	a667	a666	1	1
+map	a668	a668	a669
+eq	a668	a669	1	1
+map	a669	a668	a669
+eq	a669	a668	1	1
+map	a66a	a66a	a66b
+eq	a66a	a66b	1	1
+map	a66b	a66a	a66b
+eq	a66b	a66a	1	1
+map	a66c	a66c	a66d
+eq	a66c	a66d	1	1
+map	a66d	a66c	a66d
+eq	a66d	a66c	1	1
+map	a680	a680	a681
+eq	a680	a681	1	1
+map	a681	a680	a681
+eq	a681	a680	1	1
+map	a682	a682	a683
+eq	a682	a683	1	1
+map	a683	a682	a683
+eq	a683	a682	1	1
+map	a684	a684	a685
+eq	a684	a685	1	1
+map	a685	a684	a685
+eq	a685	a684	1	1
+map	a686	a686	a687
+eq	a686	a687	1	1
+map	a687	a686	a687
+eq	a687	a686	1	1
+map	a688	a688	a689
+eq	a688	a689	1	1
+map	a689	a688	a689
+eq	a689	a688	1	1
+map	a68a	a68a	a68b
+eq	a68a	a68b	1	1
+map	a68b	a68a	a68b
+eq	a68b	a68a	1	1
+map	a68c	a68c	a68d
+eq	a68c	a68d	1	1
+map	a68d	a68c	a68d
+eq	a68d	a68c	1	1
+map	a68e	a68e	a68f
+eq	a68e	a68f	1	1
+map	a68f	a68e	a68f
+eq	a68f	a68e	1	1
+map	a690	a690	a691
+eq	a690	a691	1	1
+map	a691	a690	a691
+eq	a691	a690	1	1
+map	a692	a692	a693
+eq	a692	a693	1	1
+map	a693	a692	a693
+eq	a693	a692	1	1
+map	a694	a694	a695
+eq	a694	a695	1	1
+map	a695	a694	a695
+eq	a695	a694	1	1
+map	a696	a696	a697
+eq	a696	a697	1	1
+map	a697	a696	a697
+eq	a697	a696	1	1
+map	a698	a698	a699
+eq	a698	a699	1	1
+map	a699	a698	a699
+eq	a699	a698	1	1
+map	a69a	a69a	a69b
+eq	a69a	a69b	1	1
+map	a69b	a69a	a69b
+eq	a69b	a69a	1	1
+map	a722	a722	a723
+eq	a722	a723	1	1
+map	a723	a722	a723
+eq	a723	a722	1	1
+map	a724	a724	a725
+eq	a724	a725	1	1
+map	a725	a724	a725
+eq	a725	a724	1	1
+map	a726	a726	a727
+eq	a726	a727	1	1
+map	a727	a726	a727
+eq	a727	a726	1	1
+map	a728	a728	a729
+eq	a728	a729	1	1
+map	a729	a728	a729
+eq	a729	a728	1	1
+map	a72a	a72a	a72b
+eq	a72a	a72b	1	1
+map	a72b	a72a	a72b
+eq	a72b	a72a	1	1
+map	a72c	a72c	a72d
+eq	a72c	a72d	1	1
+map	a72d	a72c	a72d
+eq	a72d	a72c	1	1
+map	a72e	a72e	a72f
+eq	a72e	a72f	1	1
+map	a72f	a72e	a72f
+eq	a72f	a72e	1	1
+map	a732	a732	a733
+eq	a732	a733	1	1
+map	a733	a732	a733
+eq	a733	a732	1	1
+map	a734	a734	a735
+eq	a734	a735	1	1
+map	a735	a734	a735
+eq	a735	a734	1	1
+map	a736	a736	a737
+eq	a736	a737	1	1
+map	a737	a736	a737
+eq	a737	a736	1	1
+map	a738	a738	a739
+eq	a738	a739	1	1
+map	a739	a738	a739
+eq	a739	a738	1	1
+map	a73a	a73a	a73b
+eq	a73a	a73b	1	1
+map	a73b	a73a	a73b
+eq	a73b	a73a	1	1
+map	a73c	a73c	a73d
+eq	a73c	a73d	1	1
+map	a73d	a73c	a73d
+eq	a73d	a73c	1	1
+map	a73e	a73e	a73f
+eq	a73e	a73f	1	1
+map	a73f	a73e	a73f
+eq	a73f	a73e	1	1
+map	a740	a740	a741
+eq	a740	a741	1	1
+map	a741	a740	a741
+eq	a741	a740	1	1
+map	a742	a742	a743
+eq	a742	a743	1	1
+map	a743	a742	a743
+eq	a743	a742	1	1
+map	a744	a744	a745
+eq	a744	a745	1	1
+map	a745	a744	a745
+eq	a745	a744	1	1
+map	a746	a746	a747
+eq	a746	a747	1	1
+map	a747	a746	a747
+eq	a747	a746	1	1
+map	a748	a748	a749
+eq	a748	a749	1	1
+map	a749	a748	a749
+eq	a749	a748	1	1
+map	a74a	a74a	a74b
+eq	a74a	a74b	1	1
+map	a74b	a74a	a74b
+eq	a74b	a74a	1	1
+map	a74c	a74c	a74d
+eq	a74c	a74d	1	1
+map	a74d	a74c	a74d
+eq	a74d	a74c	1	1
+map	a74e	a74e	a74f
+eq	a74e	a74f	1	1
+map	a74f	a74e	a74f
+eq	a74f	a74e	1	1
+map	a750	a750	a751
+eq	a750	a751	1	1
+map	a751	a750	a751
+eq	a751	a750	1	1
+map	a752	a752	a753
+eq	a752	a753	1	1
+map	a753	a752	a753
+eq	a753	a752	1	1
+map	a754	a754	a755
+eq	a754	a755	1	1
+map	a755	a754	a755
+eq	a755	a754	1	1
+map	a756	a756	a757
+eq	a756	a757	1	1
+map	a757	a756	a757
+eq	a757	a756	1	1
+map	a758	a758	a759
+eq	a758	a759	1	1
+map	a759	a758	a759
+eq	a759	a758	1	1
+map	a75a	a75a	a75b
+eq	a75a	a75b	1	1
+map	a75b	a75a	a75b
+eq	a75b	a75a	1	1
+map	a75c	a75c	a75d
+eq	a75c	a75d	1	1
+map	a75d	a75c	a75d
+eq	a75d	a75c	1	1
+map	a75e	a75e	a75f
+eq	a75e	a75f	1	1
+map	a75f	a75e	a75f
+eq	a75f	a75e	1	1
+map	a760	a760	a761
+eq	a760	a761	1	1
+map	a761	a760	a761
+eq	a761	a760	1	1
+map	a762	a762	a763
+eq	a762	a763	1	1
+map	a763	a762	a763
+eq	a763	a762	1	1
+map	a764	a764	a765
+eq	a764	a765	1	1
+map	a765	a764	a765
+eq	a765	a764	1	1
+map	a766	a766	a767
+eq	a766	a767	1	1
+map	a767	a766	a767
+eq	a767	a766	1	1
+map	a768	a768	a769
+eq	a768	a769	1	1
+map	a769	a768	a769
+eq	a769	a768	1	1
+map	a76a	a76a	a76b
+eq	a76a	a76b	1	1
+map	a76b	a76a	a76b
+eq	a76b	a76a	1	1
+map	a76c	a76c	a76d
+eq	a76c	a76d	1	1
+map	a76d	a76c	a76d
+eq	a76d	a76c	1	1
+map	a76e	a76e	a76f
+eq	a76e	a76f	1	1
+map	a76f	a76e	a76f
+eq	a76f	a76e	1	1
+map	a779	a779	a77a
+eq	a779	a77a	1	1
+map	a77a	a779	a77a
+eq	a77a	a779	1	1
+map	a77b	a77b	a77c
+eq	a77b	a77c	1	1
+map	a77c	a77b	a77c
+eq	a77c	a77b	1	1
+map	a77d	a77d	1d79
+eq	a77d	1d79	1	1
+map	a77e	a77e	a77f
+eq	a77e	a77f	1	1
+map	a77f	a77e	a77f
+eq	a77f	a77e	1	1
+map	a780	a780	a781
+eq	a780	a781	1	1
+map	a781	a780	a781
+eq	a781	a780	1	1
+map	a782	a782	a783
+eq	a782	a783	1	1
+map	a783	a782	a783
+eq	a783	a782	1	1
+map	a784	a784	a785
+eq	a784	a785	1	1
+map	a785	a784	a785
+eq	a785	a784	1	1
+map	a786	a786	a787
+eq	a786	a787	1	1
+map	a787	a786	a787
+eq	a787	a786	1	1
+map	a78b	a78b	a78c
+eq	a78b	a78c	1	1
+map	a78c	a78b	a78c
+eq	a78c	a78b	1	1
+map	a78d	a78d	265
+eq	a78d	265	1	1
+map	a790	a790	a791
+eq	a790	a791	1	1
+map	a791	a790	a791
+eq	a791	a790	1	1
+map	a792	a792	a793
+eq	a792	a793	1	1
+map	a793	a792	a793
+eq	a793	a792	1	1
+map	a794	a7c4	a794
+eq	a794	a7c4	1	1
+map	a796	a796	a797
+eq	a796	a797	1	1
+map	a797	a796	a797
+eq	a797	a796	1	1
+map	a798	a798	a799
+eq	a798	a799	1	1
+map	a799	a798	a799
+eq	a799	a798	1	1
+map	a79a	a79a	a79b
+eq	a79a	a79b	1	1
+map	a79b	a79a	a79b
+eq	a79b	a79a	1	1
+map	a79c	a79c	a79d
+eq	a79c	a79d	1	1
+map	a79d	a79c	a79d
+eq	a79d	a79c	1	1
+map	a79e	a79e	a79f
+eq	a79e	a79f	1	1
+map	a79f	a79e	a79f
+eq	a79f	a79e	1	1
+map	a7a0	a7a0	a7a1
+eq	a7a0	a7a1	1	1
+map	a7a1	a7a0	a7a1
+eq	a7a1	a7a0	1	1
+map	a7a2	a7a2	a7a3
+eq	a7a2	a7a3	1	1
+map	a7a3	a7a2	a7a3
+eq	a7a3	a7a2	1	1
+map	a7a4	a7a4	a7a5
+eq	a7a4	a7a5	1	1
+map	a7a5	a7a4	a7a5
+eq	a7a5	a7a4	1	1
+map	a7a6	a7a6	a7a7
+eq	a7a6	a7a7	1	1
+map	a7a7	a7a6	a7a7
+eq	a7a7	a7a6	1	1
+map	a7a8	a7a8	a7a9
+eq	a7a8	a7a9	1	1
+map	a7a9	a7a8	a7a9
+eq	a7a9	a7a8	1	1
+map	a7aa	a7aa	266
+eq	a7aa	266	1	1
+map	a7ab	a7ab	25c
+eq	a7ab	25c	1	1
+map	a7ac	a7ac	261
+eq	a7ac	261	1	1
+map	a7ad	a7ad	26c
+eq	a7ad	26c	1	1
+map	a7ae	a7ae	26a
+eq	a7ae	26a	1	1
+map	a7b0	a7b0	29e
+eq	a7b0	29e	1	1
+map	a7b1	a7b1	287
+eq	a7b1	287	1	1
+map	a7b2	a7b2	29d
+eq	a7b2	29d	1	1
+map	a7b3	a7b3	ab53
+eq	a7b3	ab53	1	1
+map	a7b4	a7b4	a7b5
+eq	a7b4	a7b5	1	1
+map	a7b5	a7b4	a7b5
+eq	a7b5	a7b4	1	1
+map	a7b6	a7b6	a7b7
+eq	a7b6	a7b7	1	1
+map	a7b7	a7b6	a7b7
+eq	a7b7	a7b6	1	1
+map	a7b8	a7b8	a7b9
+eq	a7b8	a7b9	1	1
+map	a7b9	a7b8	a7b9
+eq	a7b9	a7b8	1	1
+map	a7ba	a7ba	a7bb
+eq	a7ba	a7bb	1	1
+map	a7bb	a7ba	a7bb
+eq	a7bb	a7ba	1	1
+map	a7bc	a7bc	a7bd
+eq	a7bc	a7bd	1	1
+map	a7bd	a7bc	a7bd
+eq	a7bd	a7bc	1	1
+map	a7be	a7be	a7bf
+eq	a7be	a7bf	1	1
+map	a7bf	a7be	a7bf
+eq	a7bf	a7be	1	1
+map	a7c0	a7c0	a7c1
+eq	a7c0	a7c1	1	1
+map	a7c1	a7c0	a7c1
+eq	a7c1	a7c0	1	1
+map	a7c2	a7c2	a7c3
+eq	a7c2	a7c3	1	1
+map	a7c3	a7c2	a7c3
+eq	a7c3	a7c2	1	1
+map	a7c4	a7c4	a794
+eq	a7c4	a794	1	1
+map	a7c5	a7c5	282
+eq	a7c5	282	1	1
+map	a7c6	a7c6	1d8e
+eq	a7c6	1d8e	1	1
+map	a7c7	a7c7	a7c8
+eq	a7c7	a7c8	1	1
+map	a7c8	a7c7	a7c8
+eq	a7c8	a7c7	1	1
+map	a7c9	a7c9	a7ca
+eq	a7c9	a7ca	1	1
+map	a7ca	a7c9	a7ca
+eq	a7ca	a7c9	1	1
+map	a7cb	a7cb	264
+eq	a7cb	264	1	1
+map	a7cc	a7cc	a7cd
+eq	a7cc	a7cd	1	1
+map	a7cd	a7cc	a7cd
+eq	a7cd	a7cc	1	1
+map	a7ce	a7ce	a7cf
+eq	a7ce	a7cf	1	1
+map	a7cf	a7ce	a7cf
+eq	a7cf	a7ce	1	1
+map	a7d0	a7d0	a7d1
+eq	a7d0	a7d1	1	1
+map	a7d1	a7d0	a7d1
+eq	a7d1	a7d0	1	1
+map	a7d2	a7d2	a7d3
+eq	a7d2	a7d3	1	1
+map	a7d3	a7d2	a7d3
+eq	a7d3	a7d2	1	1
+map	a7d4	a7d4	a7d5
+eq	a7d4	a7d5	1	1
+map	a7d5	a7d4	a7d5
+eq	a7d5	a7d4	1	1
+map	a7d6	a7d6	a7d7
+eq	a7d6	a7d7	1	1
+map	a7d7	a7d6	a7d7
+eq	a7d7	a7d6	1	1
+map	a7d8	a7d8	a7d9
+eq	a7d8	a7d9	1	1
+map	a7d9	a7d8	a7d9
+eq	a7d9	a7d8	1	1
+map	a7da	a7da	a7db
+eq	a7da	a7db	1	1
+map	a7db	a7da	a7db
+eq	a7db	a7da	1	1
+map	a7dc	a7dc	19b
+eq	a7dc	19b	1	1
+map	a7f5	a7f5	a7f6
+eq	a7f5	a7f6	1	1
+map	a7f6	a7f5	a7f6
+eq	a7f6	a7f5	1	1
+map	ab53	a7b3	ab53
+eq	ab53	a7b3	1	1
+map	ab70	13a0	ab70
+eq	ab70	13a0	1	1
+map	ab71	13a1	ab71
+eq	ab71	13a1	1	1
+map	ab72	13a2	ab72
+eq	ab72	13a2	1	1
+map	ab73	13a3	ab73
+eq	ab73	13a3	1	1
+map	ab74	13a4	ab74
+eq	ab74	13a4	1	1
+map	ab75	13a5	ab75
+eq	ab75	13a5	1	1
+map	ab76	13a6	ab76
+eq	ab76	13a6	1	1
+map	ab77	13a7	ab77
+eq	ab77	13a7	1	1
+map	ab78	13a8	ab78
+eq	ab78	13a8	1	1
+map	ab79	13a9	ab79
+eq	ab79	13a9	1	1
+map	ab7a	13aa	ab7a
+eq	ab7a	13aa	1	1
+map	ab7b	13ab	ab7b
+eq	ab7b	13ab	1	1
+map	ab7c	13ac	ab7c
+eq	ab7c	13ac	1	1
+map	ab7d	13ad	ab7d
+eq	ab7d	13ad	1	1
+map	ab7e	13ae	ab7e
+eq	ab7e	13ae	1	1
+map	ab7f	13af	ab7f
+eq	ab7f	13af	1	1
+map	ab80	13b0	ab80
+eq	ab80	13b0	1	1
+map	ab81	13b1	ab81
+eq	ab81	13b1	1	1
+map	ab82	13b2	ab82
+eq	ab82	13b2	1	1
+map	ab83	13b3	ab83
+eq	ab83	13b3	1	1
+map	ab84	13b4	ab84
+eq	ab84	13b4	1	1
+map	ab85	13b5	ab85
+eq	ab85	13b5	1	1
+map	ab86	13b6	ab86
+eq	ab86	13b6	1	1
+map	ab87	13b7	ab87
+eq	ab87	13b7	1	1
+map	ab88	13b8	ab88
+eq	ab88	13b8	1	1
+map	ab89	13b9	ab89
+eq	ab89	13b9	1	1
+map	ab8a	13ba	ab8a
+eq	ab8a	13ba	1	1
+map	ab8b	13bb	ab8b
+eq	ab8b	13bb	1	1
+map	ab8c	13bc	ab8c
+eq	ab8c	13bc	1	1
+map	ab8d	13bd	ab8d
+eq	ab8d	13bd	1	1
+map	ab8e	13be	ab8e
+eq	ab8e	13be	1	1
+map	ab8f	13bf	ab8f
+eq	ab8f	13bf	1	1
+map	ab90	13c0	ab90
+eq	ab90	13c0	1	1
+map	ab91	13c1	ab91
+eq	ab91	13c1	1	1
+map	ab92	13c2	ab92
+eq	ab92	13c2	1	1
+map	ab93	13c3	ab93
+eq	ab93	13c3	1	1
+map	ab94	13c4	ab94
+eq	ab94	13c4	1	1
+map	ab95	13c5	ab95
+eq	ab95	13c5	1	1
+map	ab96	13c6	ab96
+eq	ab96	13c6	1	1
+map	ab97	13c7	ab97
+eq	ab97	13c7	1	1
+map	ab98	13c8	ab98
+eq	ab98	13c8	1	1
+map	ab99	13c9	ab99
+eq	ab99	13c9	1	1
+map	ab9a	13ca	ab9a
+eq	ab9a	13ca	1	1
+map	ab9b	13cb	ab9b
+eq	ab9b	13cb	1	1
+map	ab9c	13cc	ab9c
+eq	ab9c	13cc	1	1
+map	ab9d	13cd	ab9d
+eq	ab9d	13cd	1	1
+map	ab9e	13ce	ab9e
+eq	ab9e	13ce	1	1
+map	ab9f	13cf	ab9f
+eq	ab9f	13cf	1	1
+map	aba0	13d0	aba0
+eq	aba0	13d0	1	1
+map	aba1	13d1	aba1
+eq	aba1	13d1	1	1
+map	aba2	13d2	aba2
+eq	aba2	13d2	1	1
+map	aba3	13d3	aba3
+eq	aba3	13d3	1	1
+map	aba4	13d4	aba4
+eq	aba4	13d4	1	1
+map	aba5	13d5	aba5
+eq	aba5	13d5	1	1
+map	aba6	13d6	aba6
+eq	aba6	13d6	1	1
+map	aba7	13d7	aba7
+eq	aba7	13d7	1	1
+map	aba8	13d8	aba8
+eq	aba8	13d8	1	1
+map	aba9	13d9	aba9
+eq	aba9	13d9	1	1
+map	abaa	13da	abaa
+eq	abaa	13da	1	1
+map	abab	13db	abab
+eq	abab	13db	1	1
+map	abac	13dc	abac
+eq	abac	13dc	1	1
+map	abad	13dd	abad
+eq	abad	13dd	1	1
+map	abae	13de	abae
+eq	abae	13de	1	1
+map	abaf	13df	abaf
+eq	abaf	13df	1	1
+map	abb0	13e0	abb0
+eq	abb0	13e0	1	1
+map	abb1	13e1	abb1
+eq	abb1	13e1	1	1
+map	abb2	13e2	abb2
+eq	abb2	13e2	1	1
+map	abb3	13e3	abb3
+eq	abb3	13e3	1	1
+map	abb4	13e4	abb4
+eq	abb4	13e4	1	1
+map	abb5	13e5	abb5
+eq	abb5	13e5	1	1
+map	abb6	13e6	abb6
+eq	abb6	13e6	1	1
+map	abb7	13e7	abb7
+eq	abb7	13e7	1	1
+map	abb8	13e8	abb8
+eq	abb8	13e8	1	1
+map	abb9	13e9	abb9
+eq	abb9	13e9	1	1
+map	abba	13ea	abba
+eq	abba	13ea	1	1
+map	abbb	13eb	abbb
+eq	abbb	13eb	1	1
+map	abbc	13ec	abbc
+eq	abbc	13ec	1	1
+map	abbd	13ed	abbd
+eq	abbd	13ed	1	1
+map	abbe	13ee	abbe
+eq	abbe	13ee	1	1
+map	abbf	13ef	abbf
+eq	abbf	13ef	1	1
+map	fb00	46,46	fb00
+map	fb01	46,49	fb01
+map	fb02	46,4c	fb02
+map	fb03	46,46,49	fb03
+map	fb04	46,46,4c	fb04
+map	fb05	53,54	fb05
+map	fb06	53,54	fb06
+map	fb13	544,546	fb13
+map	fb14	544,535	fb14
+map	fb15	544,53b	fb15
+map	fb16	54e,546	fb16
+map	fb17	544,53d	fb17
+map	ff21	ff21	ff41
+eq	ff21	ff41	1	1
+map	ff22	ff22	ff42
+eq	ff22	ff42	1	1
+map	ff23	ff23	ff43
+eq	ff23	ff43	1	1
+map	ff24	ff24	ff44
+eq	ff24	ff44	1	1
+map	ff25	ff25	ff45
+eq	ff25	ff45	1	1
+map	ff26	ff26	ff46
+eq	ff26	ff46	1	1
+map	ff27	ff27	ff47
+eq	ff27	ff47	1	1
+map	ff28	ff28	ff48
+eq	ff28	ff48	1	1
+map	ff29	ff29	ff49
+eq	ff29	ff49	1	1
+map	ff2a	ff2a	ff4a
+eq	ff2a	ff4a	1	1
+map	ff2b	ff2b	ff4b
+eq	ff2b	ff4b	1	1
+map	ff2c	ff2c	ff4c
+eq	ff2c	ff4c	1	1
+map	ff2d	ff2d	ff4d
+eq	ff2d	ff4d	1	1
+map	ff2e	ff2e	ff4e
+eq	ff2e	ff4e	1	1
+map	ff2f	ff2f	ff4f
+eq	ff2f	ff4f	1	1
+map	ff30	ff30	ff50
+eq	ff30	ff50	1	1
+map	ff31	ff31	ff51
+eq	ff31	ff51	1	1
+map	ff32	ff32	ff52
+eq	ff32	ff52	1	1
+map	ff33	ff33	ff53
+eq	ff33	ff53	1	1
+map	ff34	ff34	ff54
+eq	ff34	ff54	1	1
+map	ff35	ff35	ff55
+eq	ff35	ff55	1	1
+map	ff36	ff36	ff56
+eq	ff36	ff56	1	1
+map	ff37	ff37	ff57
+eq	ff37	ff57	1	1
+map	ff38	ff38	ff58
+eq	ff38	ff58	1	1
+map	ff39	ff39	ff59
+eq	ff39	ff59	1	1
+map	ff3a	ff3a	ff5a
+eq	ff3a	ff5a	1	1
+map	ff41	ff21	ff41
+eq	ff41	ff21	1	1
+map	ff42	ff22	ff42
+eq	ff42	ff22	1	1
+map	ff43	ff23	ff43
+eq	ff43	ff23	1	1
+map	ff44	ff24	ff44
+eq	ff44	ff24	1	1
+map	ff45	ff25	ff45
+eq	ff45	ff25	1	1
+map	ff46	ff26	ff46
+eq	ff46	ff26	1	1
+map	ff47	ff27	ff47
+eq	ff47	ff27	1	1
+map	ff48	ff28	ff48
+eq	ff48	ff28	1	1
+map	ff49	ff29	ff49
+eq	ff49	ff29	1	1
+map	ff4a	ff2a	ff4a
+eq	ff4a	ff2a	1	1
+map	ff4b	ff2b	ff4b
+eq	ff4b	ff2b	1	1
+map	ff4c	ff2c	ff4c
+eq	ff4c	ff2c	1	1
+map	ff4d	ff2d	ff4d
+eq	ff4d	ff2d	1	1
+map	ff4e	ff2e	ff4e
+eq	ff4e	ff2e	1	1
+map	ff4f	ff2f	ff4f
+eq	ff4f	ff2f	1	1
+map	ff50	ff30	ff50
+eq	ff50	ff30	1	1
+map	ff51	ff31	ff51
+eq	ff51	ff31	1	1
+map	ff52	ff32	ff52
+eq	ff52	ff32	1	1
+map	ff53	ff33	ff53
+eq	ff53	ff33	1	1
+map	ff54	ff34	ff54
+eq	ff54	ff34	1	1
+map	ff55	ff35	ff55
+eq	ff55	ff35	1	1
+map	ff56	ff36	ff56
+eq	ff56	ff36	1	1
+map	ff57	ff37	ff57
+eq	ff57	ff37	1	1
+map	ff58	ff38	ff58
+eq	ff58	ff38	1	1
+map	ff59	ff39	ff59
+eq	ff59	ff39	1	1
+map	ff5a	ff3a	ff5a
+eq	ff5a	ff3a	1	1
+map	10400	10400	10428
+eq	10400	10428	-	1
+map	10401	10401	10429
+eq	10401	10429	-	1
+map	10402	10402	1042a
+eq	10402	1042a	-	1
+map	10403	10403	1042b
+eq	10403	1042b	-	1
+map	10404	10404	1042c
+eq	10404	1042c	-	1
+map	10405	10405	1042d
+eq	10405	1042d	-	1
+map	10406	10406	1042e
+eq	10406	1042e	-	1
+map	10407	10407	1042f
+eq	10407	1042f	-	1
+map	10408	10408	10430
+eq	10408	10430	-	1
+map	10409	10409	10431
+eq	10409	10431	-	1
+map	1040a	1040a	10432
+eq	1040a	10432	-	1
+map	1040b	1040b	10433
+eq	1040b	10433	-	1
+map	1040c	1040c	10434
+eq	1040c	10434	-	1
+map	1040d	1040d	10435
+eq	1040d	10435	-	1
+map	1040e	1040e	10436
+eq	1040e	10436	-	1
+map	1040f	1040f	10437
+eq	1040f	10437	-	1
+map	10410	10410	10438
+eq	10410	10438	-	1
+map	10411	10411	10439
+eq	10411	10439	-	1
+map	10412	10412	1043a
+eq	10412	1043a	-	1
+map	10413	10413	1043b
+eq	10413	1043b	-	1
+map	10414	10414	1043c
+eq	10414	1043c	-	1
+map	10415	10415	1043d
+eq	10415	1043d	-	1
+map	10416	10416	1043e
+eq	10416	1043e	-	1
+map	10417	10417	1043f
+eq	10417	1043f	-	1
+map	10418	10418	10440
+eq	10418	10440	-	1
+map	10419	10419	10441
+eq	10419	10441	-	1
+map	1041a	1041a	10442
+eq	1041a	10442	-	1
+map	1041b	1041b	10443
+eq	1041b	10443	-	1
+map	1041c	1041c	10444
+eq	1041c	10444	-	1
+map	1041d	1041d	10445
+eq	1041d	10445	-	1
+map	1041e	1041e	10446
+eq	1041e	10446	-	1
+map	1041f	1041f	10447
+eq	1041f	10447	-	1
+map	10420	10420	10448
+eq	10420	10448	-	1
+map	10421	10421	10449
+eq	10421	10449	-	1
+map	10422	10422	1044a
+eq	10422	1044a	-	1
+map	10423	10423	1044b
+eq	10423	1044b	-	1
+map	10424	10424	1044c
+eq	10424	1044c	-	1
+map	10425	10425	1044d
+eq	10425	1044d	-	1
+map	10426	10426	1044e
+eq	10426	1044e	-	1
+map	10427	10427	1044f
+eq	10427	1044f	-	1
+map	10428	10400	10428
+eq	10428	10400	-	1
+map	10429	10401	10429
+eq	10429	10401	-	1
+map	1042a	10402	1042a
+eq	1042a	10402	-	1
+map	1042b	10403	1042b
+eq	1042b	10403	-	1
+map	1042c	10404	1042c
+eq	1042c	10404	-	1
+map	1042d	10405	1042d
+eq	1042d	10405	-	1
+map	1042e	10406	1042e
+eq	1042e	10406	-	1
+map	1042f	10407	1042f
+eq	1042f	10407	-	1
+map	10430	10408	10430
+eq	10430	10408	-	1
+map	10431	10409	10431
+eq	10431	10409	-	1
+map	10432	1040a	10432
+eq	10432	1040a	-	1
+map	10433	1040b	10433
+eq	10433	1040b	-	1
+map	10434	1040c	10434
+eq	10434	1040c	-	1
+map	10435	1040d	10435
+eq	10435	1040d	-	1
+map	10436	1040e	10436
+eq	10436	1040e	-	1
+map	10437	1040f	10437
+eq	10437	1040f	-	1
+map	10438	10410	10438
+eq	10438	10410	-	1
+map	10439	10411	10439
+eq	10439	10411	-	1
+map	1043a	10412	1043a
+eq	1043a	10412	-	1
+map	1043b	10413	1043b
+eq	1043b	10413	-	1
+map	1043c	10414	1043c
+eq	1043c	10414	-	1
+map	1043d	10415	1043d
+eq	1043d	10415	-	1
+map	1043e	10416	1043e
+eq	1043e	10416	-	1
+map	1043f	10417	1043f
+eq	1043f	10417	-	1
+map	10440	10418	10440
+eq	10440	10418	-	1
+map	10441	10419	10441
+eq	10441	10419	-	1
+map	10442	1041a	10442
+eq	10442	1041a	-	1
+map	10443	1041b	10443
+eq	10443	1041b	-	1
+map	10444	1041c	10444
+eq	10444	1041c	-	1
+map	10445	1041d	10445
+eq	10445	1041d	-	1
+map	10446	1041e	10446
+eq	10446	1041e	-	1
+map	10447	1041f	10447
+eq	10447	1041f	-	1
+map	10448	10420	10448
+eq	10448	10420	-	1
+map	10449	10421	10449
+eq	10449	10421	-	1
+map	1044a	10422	1044a
+eq	1044a	10422	-	1
+map	1044b	10423	1044b
+eq	1044b	10423	-	1
+map	1044c	10424	1044c
+eq	1044c	10424	-	1
+map	1044d	10425	1044d
+eq	1044d	10425	-	1
+map	1044e	10426	1044e
+eq	1044e	10426	-	1
+map	1044f	10427	1044f
+eq	1044f	10427	-	1
+map	104b0	104b0	104d8
+eq	104b0	104d8	-	1
+map	104b1	104b1	104d9
+eq	104b1	104d9	-	1
+map	104b2	104b2	104da
+eq	104b2	104da	-	1
+map	104b3	104b3	104db
+eq	104b3	104db	-	1
+map	104b4	104b4	104dc
+eq	104b4	104dc	-	1
+map	104b5	104b5	104dd
+eq	104b5	104dd	-	1
+map	104b6	104b6	104de
+eq	104b6	104de	-	1
+map	104b7	104b7	104df
+eq	104b7	104df	-	1
+map	104b8	104b8	104e0
+eq	104b8	104e0	-	1
+map	104b9	104b9	104e1
+eq	104b9	104e1	-	1
+map	104ba	104ba	104e2
+eq	104ba	104e2	-	1
+map	104bb	104bb	104e3
+eq	104bb	104e3	-	1
+map	104bc	104bc	104e4
+eq	104bc	104e4	-	1
+map	104bd	104bd	104e5
+eq	104bd	104e5	-	1
+map	104be	104be	104e6
+eq	104be	104e6	-	1
+map	104bf	104bf	104e7
+eq	104bf	104e7	-	1
+map	104c0	104c0	104e8
+eq	104c0	104e8	-	1
+map	104c1	104c1	104e9
+eq	104c1	104e9	-	1
+map	104c2	104c2	104ea
+eq	104c2	104ea	-	1
+map	104c3	104c3	104eb
+eq	104c3	104eb	-	1
+map	104c4	104c4	104ec
+eq	104c4	104ec	-	1
+map	104c5	104c5	104ed
+eq	104c5	104ed	-	1
+map	104c6	104c6	104ee
+eq	104c6	104ee	-	1
+map	104c7	104c7	104ef
+eq	104c7	104ef	-	1
+map	104c8	104c8	104f0
+eq	104c8	104f0	-	1
+map	104c9	104c9	104f1
+eq	104c9	104f1	-	1
+map	104ca	104ca	104f2
+eq	104ca	104f2	-	1
+map	104cb	104cb	104f3
+eq	104cb	104f3	-	1
+map	104cc	104cc	104f4
+eq	104cc	104f4	-	1
+map	104cd	104cd	104f5
+eq	104cd	104f5	-	1
+map	104ce	104ce	104f6
+eq	104ce	104f6	-	1
+map	104cf	104cf	104f7
+eq	104cf	104f7	-	1
+map	104d0	104d0	104f8
+eq	104d0	104f8	-	1
+map	104d1	104d1	104f9
+eq	104d1	104f9	-	1
+map	104d2	104d2	104fa
+eq	104d2	104fa	-	1
+map	104d3	104d3	104fb
+eq	104d3	104fb	-	1
+map	104d8	104b0	104d8
+eq	104d8	104b0	-	1
+map	104d9	104b1	104d9
+eq	104d9	104b1	-	1
+map	104da	104b2	104da
+eq	104da	104b2	-	1
+map	104db	104b3	104db
+eq	104db	104b3	-	1
+map	104dc	104b4	104dc
+eq	104dc	104b4	-	1
+map	104dd	104b5	104dd
+eq	104dd	104b5	-	1
+map	104de	104b6	104de
+eq	104de	104b6	-	1
+map	104df	104b7	104df
+eq	104df	104b7	-	1
+map	104e0	104b8	104e0
+eq	104e0	104b8	-	1
+map	104e1	104b9	104e1
+eq	104e1	104b9	-	1
+map	104e2	104ba	104e2
+eq	104e2	104ba	-	1
+map	104e3	104bb	104e3
+eq	104e3	104bb	-	1
+map	104e4	104bc	104e4
+eq	104e4	104bc	-	1
+map	104e5	104bd	104e5
+eq	104e5	104bd	-	1
+map	104e6	104be	104e6
+eq	104e6	104be	-	1
+map	104e7	104bf	104e7
+eq	104e7	104bf	-	1
+map	104e8	104c0	104e8
+eq	104e8	104c0	-	1
+map	104e9	104c1	104e9
+eq	104e9	104c1	-	1
+map	104ea	104c2	104ea
+eq	104ea	104c2	-	1
+map	104eb	104c3	104eb
+eq	104eb	104c3	-	1
+map	104ec	104c4	104ec
+eq	104ec	104c4	-	1
+map	104ed	104c5	104ed
+eq	104ed	104c5	-	1
+map	104ee	104c6	104ee
+eq	104ee	104c6	-	1
+map	104ef	104c7	104ef
+eq	104ef	104c7	-	1
+map	104f0	104c8	104f0
+eq	104f0	104c8	-	1
+map	104f1	104c9	104f1
+eq	104f1	104c9	-	1
+map	104f2	104ca	104f2
+eq	104f2	104ca	-	1
+map	104f3	104cb	104f3
+eq	104f3	104cb	-	1
+map	104f4	104cc	104f4
+eq	104f4	104cc	-	1
+map	104f5	104cd	104f5
+eq	104f5	104cd	-	1
+map	104f6	104ce	104f6
+eq	104f6	104ce	-	1
+map	104f7	104cf	104f7
+eq	104f7	104cf	-	1
+map	104f8	104d0	104f8
+eq	104f8	104d0	-	1
+map	104f9	104d1	104f9
+eq	104f9	104d1	-	1
+map	104fa	104d2	104fa
+eq	104fa	104d2	-	1
+map	104fb	104d3	104fb
+eq	104fb	104d3	-	1
+map	10570	10570	10597
+eq	10570	10597	-	1
+map	10571	10571	10598
+eq	10571	10598	-	1
+map	10572	10572	10599
+eq	10572	10599	-	1
+map	10573	10573	1059a
+eq	10573	1059a	-	1
+map	10574	10574	1059b
+eq	10574	1059b	-	1
+map	10575	10575	1059c
+eq	10575	1059c	-	1
+map	10576	10576	1059d
+eq	10576	1059d	-	1
+map	10577	10577	1059e
+eq	10577	1059e	-	1
+map	10578	10578	1059f
+eq	10578	1059f	-	1
+map	10579	10579	105a0
+eq	10579	105a0	-	1
+map	1057a	1057a	105a1
+eq	1057a	105a1	-	1
+map	1057c	1057c	105a3
+eq	1057c	105a3	-	1
+map	1057d	1057d	105a4
+eq	1057d	105a4	-	1
+map	1057e	1057e	105a5
+eq	1057e	105a5	-	1
+map	1057f	1057f	105a6
+eq	1057f	105a6	-	1
+map	10580	10580	105a7
+eq	10580	105a7	-	1
+map	10581	10581	105a8
+eq	10581	105a8	-	1
+map	10582	10582	105a9
+eq	10582	105a9	-	1
+map	10583	10583	105aa
+eq	10583	105aa	-	1
+map	10584	10584	105ab
+eq	10584	105ab	-	1
+map	10585	10585	105ac
+eq	10585	105ac	-	1
+map	10586	10586	105ad
+eq	10586	105ad	-	1
+map	10587	10587	105ae
+eq	10587	105ae	-	1
+map	10588	10588	105af
+eq	10588	105af	-	1
+map	10589	10589	105b0
+eq	10589	105b0	-	1
+map	1058a	1058a	105b1
+eq	1058a	105b1	-	1
+map	1058c	1058c	105b3
+eq	1058c	105b3	-	1
+map	1058d	1058d	105b4
+eq	1058d	105b4	-	1
+map	1058e	1058e	105b5
+eq	1058e	105b5	-	1
+map	1058f	1058f	105b6
+eq	1058f	105b6	-	1
+map	10590	10590	105b7
+eq	10590	105b7	-	1
+map	10591	10591	105b8
+eq	10591	105b8	-	1
+map	10592	10592	105b9
+eq	10592	105b9	-	1
+map	10594	10594	105bb
+eq	10594	105bb	-	1
+map	10595	10595	105bc
+eq	10595	105bc	-	1
+map	10597	10570	10597
+eq	10597	10570	-	1
+map	10598	10571	10598
+eq	10598	10571	-	1
+map	10599	10572	10599
+eq	10599	10572	-	1
+map	1059a	10573	1059a
+eq	1059a	10573	-	1
+map	1059b	10574	1059b
+eq	1059b	10574	-	1
+map	1059c	10575	1059c
+eq	1059c	10575	-	1
+map	1059d	10576	1059d
+eq	1059d	10576	-	1
+map	1059e	10577	1059e
+eq	1059e	10577	-	1
+map	1059f	10578	1059f
+eq	1059f	10578	-	1
+map	105a0	10579	105a0
+eq	105a0	10579	-	1
+map	105a1	1057a	105a1
+eq	105a1	1057a	-	1
+map	105a3	1057c	105a3
+eq	105a3	1057c	-	1
+map	105a4	1057d	105a4
+eq	105a4	1057d	-	1
+map	105a5	1057e	105a5
+eq	105a5	1057e	-	1
+map	105a6	1057f	105a6
+eq	105a6	1057f	-	1
+map	105a7	10580	105a7
+eq	105a7	10580	-	1
+map	105a8	10581	105a8
+eq	105a8	10581	-	1
+map	105a9	10582	105a9
+eq	105a9	10582	-	1
+map	105aa	10583	105aa
+eq	105aa	10583	-	1
+map	105ab	10584	105ab
+eq	105ab	10584	-	1
+map	105ac	10585	105ac
+eq	105ac	10585	-	1
+map	105ad	10586	105ad
+eq	105ad	10586	-	1
+map	105ae	10587	105ae
+eq	105ae	10587	-	1
+map	105af	10588	105af
+eq	105af	10588	-	1
+map	105b0	10589	105b0
+eq	105b0	10589	-	1
+map	105b1	1058a	105b1
+eq	105b1	1058a	-	1
+map	105b3	1058c	105b3
+eq	105b3	1058c	-	1
+map	105b4	1058d	105b4
+eq	105b4	1058d	-	1
+map	105b5	1058e	105b5
+eq	105b5	1058e	-	1
+map	105b6	1058f	105b6
+eq	105b6	1058f	-	1
+map	105b7	10590	105b7
+eq	105b7	10590	-	1
+map	105b8	10591	105b8
+eq	105b8	10591	-	1
+map	105b9	10592	105b9
+eq	105b9	10592	-	1
+map	105bb	10594	105bb
+eq	105bb	10594	-	1
+map	105bc	10595	105bc
+eq	105bc	10595	-	1
+map	10c80	10c80	10cc0
+eq	10c80	10cc0	-	1
+map	10c81	10c81	10cc1
+eq	10c81	10cc1	-	1
+map	10c82	10c82	10cc2
+eq	10c82	10cc2	-	1
+map	10c83	10c83	10cc3
+eq	10c83	10cc3	-	1
+map	10c84	10c84	10cc4
+eq	10c84	10cc4	-	1
+map	10c85	10c85	10cc5
+eq	10c85	10cc5	-	1
+map	10c86	10c86	10cc6
+eq	10c86	10cc6	-	1
+map	10c87	10c87	10cc7
+eq	10c87	10cc7	-	1
+map	10c88	10c88	10cc8
+eq	10c88	10cc8	-	1
+map	10c89	10c89	10cc9
+eq	10c89	10cc9	-	1
+map	10c8a	10c8a	10cca
+eq	10c8a	10cca	-	1
+map	10c8b	10c8b	10ccb
+eq	10c8b	10ccb	-	1
+map	10c8c	10c8c	10ccc
+eq	10c8c	10ccc	-	1
+map	10c8d	10c8d	10ccd
+eq	10c8d	10ccd	-	1
+map	10c8e	10c8e	10cce
+eq	10c8e	10cce	-	1
+map	10c8f	10c8f	10ccf
+eq	10c8f	10ccf	-	1
+map	10c90	10c90	10cd0
+eq	10c90	10cd0	-	1
+map	10c91	10c91	10cd1
+eq	10c91	10cd1	-	1
+map	10c92	10c92	10cd2
+eq	10c92	10cd2	-	1
+map	10c93	10c93	10cd3
+eq	10c93	10cd3	-	1
+map	10c94	10c94	10cd4
+eq	10c94	10cd4	-	1
+map	10c95	10c95	10cd5
+eq	10c95	10cd5	-	1
+map	10c96	10c96	10cd6
+eq	10c96	10cd6	-	1
+map	10c97	10c97	10cd7
+eq	10c97	10cd7	-	1
+map	10c98	10c98	10cd8
+eq	10c98	10cd8	-	1
+map	10c99	10c99	10cd9
+eq	10c99	10cd9	-	1
+map	10c9a	10c9a	10cda
+eq	10c9a	10cda	-	1
+map	10c9b	10c9b	10cdb
+eq	10c9b	10cdb	-	1
+map	10c9c	10c9c	10cdc
+eq	10c9c	10cdc	-	1
+map	10c9d	10c9d	10cdd
+eq	10c9d	10cdd	-	1
+map	10c9e	10c9e	10cde
+eq	10c9e	10cde	-	1
+map	10c9f	10c9f	10cdf
+eq	10c9f	10cdf	-	1
+map	10ca0	10ca0	10ce0
+eq	10ca0	10ce0	-	1
+map	10ca1	10ca1	10ce1
+eq	10ca1	10ce1	-	1
+map	10ca2	10ca2	10ce2
+eq	10ca2	10ce2	-	1
+map	10ca3	10ca3	10ce3
+eq	10ca3	10ce3	-	1
+map	10ca4	10ca4	10ce4
+eq	10ca4	10ce4	-	1
+map	10ca5	10ca5	10ce5
+eq	10ca5	10ce5	-	1
+map	10ca6	10ca6	10ce6
+eq	10ca6	10ce6	-	1
+map	10ca7	10ca7	10ce7
+eq	10ca7	10ce7	-	1
+map	10ca8	10ca8	10ce8
+eq	10ca8	10ce8	-	1
+map	10ca9	10ca9	10ce9
+eq	10ca9	10ce9	-	1
+map	10caa	10caa	10cea
+eq	10caa	10cea	-	1
+map	10cab	10cab	10ceb
+eq	10cab	10ceb	-	1
+map	10cac	10cac	10cec
+eq	10cac	10cec	-	1
+map	10cad	10cad	10ced
+eq	10cad	10ced	-	1
+map	10cae	10cae	10cee
+eq	10cae	10cee	-	1
+map	10caf	10caf	10cef
+eq	10caf	10cef	-	1
+map	10cb0	10cb0	10cf0
+eq	10cb0	10cf0	-	1
+map	10cb1	10cb1	10cf1
+eq	10cb1	10cf1	-	1
+map	10cb2	10cb2	10cf2
+eq	10cb2	10cf2	-	1
+map	10cc0	10c80	10cc0
+eq	10cc0	10c80	-	1
+map	10cc1	10c81	10cc1
+eq	10cc1	10c81	-	1
+map	10cc2	10c82	10cc2
+eq	10cc2	10c82	-	1
+map	10cc3	10c83	10cc3
+eq	10cc3	10c83	-	1
+map	10cc4	10c84	10cc4
+eq	10cc4	10c84	-	1
+map	10cc5	10c85	10cc5
+eq	10cc5	10c85	-	1
+map	10cc6	10c86	10cc6
+eq	10cc6	10c86	-	1
+map	10cc7	10c87	10cc7
+eq	10cc7	10c87	-	1
+map	10cc8	10c88	10cc8
+eq	10cc8	10c88	-	1
+map	10cc9	10c89	10cc9
+eq	10cc9	10c89	-	1
+map	10cca	10c8a	10cca
+eq	10cca	10c8a	-	1
+map	10ccb	10c8b	10ccb
+eq	10ccb	10c8b	-	1
+map	10ccc	10c8c	10ccc
+eq	10ccc	10c8c	-	1
+map	10ccd	10c8d	10ccd
+eq	10ccd	10c8d	-	1
+map	10cce	10c8e	10cce
+eq	10cce	10c8e	-	1
+map	10ccf	10c8f	10ccf
+eq	10ccf	10c8f	-	1
+map	10cd0	10c90	10cd0
+eq	10cd0	10c90	-	1
+map	10cd1	10c91	10cd1
+eq	10cd1	10c91	-	1
+map	10cd2	10c92	10cd2
+eq	10cd2	10c92	-	1
+map	10cd3	10c93	10cd3
+eq	10cd3	10c93	-	1
+map	10cd4	10c94	10cd4
+eq	10cd4	10c94	-	1
+map	10cd5	10c95	10cd5
+eq	10cd5	10c95	-	1
+map	10cd6	10c96	10cd6
+eq	10cd6	10c96	-	1
+map	10cd7	10c97	10cd7
+eq	10cd7	10c97	-	1
+map	10cd8	10c98	10cd8
+eq	10cd8	10c98	-	1
+map	10cd9	10c99	10cd9
+eq	10cd9	10c99	-	1
+map	10cda	10c9a	10cda
+eq	10cda	10c9a	-	1
+map	10cdb	10c9b	10cdb
+eq	10cdb	10c9b	-	1
+map	10cdc	10c9c	10cdc
+eq	10cdc	10c9c	-	1
+map	10cdd	10c9d	10cdd
+eq	10cdd	10c9d	-	1
+map	10cde	10c9e	10cde
+eq	10cde	10c9e	-	1
+map	10cdf	10c9f	10cdf
+eq	10cdf	10c9f	-	1
+map	10ce0	10ca0	10ce0
+eq	10ce0	10ca0	-	1
+map	10ce1	10ca1	10ce1
+eq	10ce1	10ca1	-	1
+map	10ce2	10ca2	10ce2
+eq	10ce2	10ca2	-	1
+map	10ce3	10ca3	10ce3
+eq	10ce3	10ca3	-	1
+map	10ce4	10ca4	10ce4
+eq	10ce4	10ca4	-	1
+map	10ce5	10ca5	10ce5
+eq	10ce5	10ca5	-	1
+map	10ce6	10ca6	10ce6
+eq	10ce6	10ca6	-	1
+map	10ce7	10ca7	10ce7
+eq	10ce7	10ca7	-	1
+map	10ce8	10ca8	10ce8
+eq	10ce8	10ca8	-	1
+map	10ce9	10ca9	10ce9
+eq	10ce9	10ca9	-	1
+map	10cea	10caa	10cea
+eq	10cea	10caa	-	1
+map	10ceb	10cab	10ceb
+eq	10ceb	10cab	-	1
+map	10cec	10cac	10cec
+eq	10cec	10cac	-	1
+map	10ced	10cad	10ced
+eq	10ced	10cad	-	1
+map	10cee	10cae	10cee
+eq	10cee	10cae	-	1
+map	10cef	10caf	10cef
+eq	10cef	10caf	-	1
+map	10cf0	10cb0	10cf0
+eq	10cf0	10cb0	-	1
+map	10cf1	10cb1	10cf1
+eq	10cf1	10cb1	-	1
+map	10cf2	10cb2	10cf2
+eq	10cf2	10cb2	-	1
+map	10d50	10d50	10d70
+eq	10d50	10d70	-	1
+map	10d51	10d51	10d71
+eq	10d51	10d71	-	1
+map	10d52	10d52	10d72
+eq	10d52	10d72	-	1
+map	10d53	10d53	10d73
+eq	10d53	10d73	-	1
+map	10d54	10d54	10d74
+eq	10d54	10d74	-	1
+map	10d55	10d55	10d75
+eq	10d55	10d75	-	1
+map	10d56	10d56	10d76
+eq	10d56	10d76	-	1
+map	10d57	10d57	10d77
+eq	10d57	10d77	-	1
+map	10d58	10d58	10d78
+eq	10d58	10d78	-	1
+map	10d59	10d59	10d79
+eq	10d59	10d79	-	1
+map	10d5a	10d5a	10d7a
+eq	10d5a	10d7a	-	1
+map	10d5b	10d5b	10d7b
+eq	10d5b	10d7b	-	1
+map	10d5c	10d5c	10d7c
+eq	10d5c	10d7c	-	1
+map	10d5d	10d5d	10d7d
+eq	10d5d	10d7d	-	1
+map	10d5e	10d5e	10d7e
+eq	10d5e	10d7e	-	1
+map	10d5f	10d5f	10d7f
+eq	10d5f	10d7f	-	1
+map	10d60	10d60	10d80
+eq	10d60	10d80	-	1
+map	10d61	10d61	10d81
+eq	10d61	10d81	-	1
+map	10d62	10d62	10d82
+eq	10d62	10d82	-	1
+map	10d63	10d63	10d83
+eq	10d63	10d83	-	1
+map	10d64	10d64	10d84
+eq	10d64	10d84	-	1
+map	10d65	10d65	10d85
+eq	10d65	10d85	-	1
+map	10d70	10d50	10d70
+eq	10d70	10d50	-	1
+map	10d71	10d51	10d71
+eq	10d71	10d51	-	1
+map	10d72	10d52	10d72
+eq	10d72	10d52	-	1
+map	10d73	10d53	10d73
+eq	10d73	10d53	-	1
+map	10d74	10d54	10d74
+eq	10d74	10d54	-	1
+map	10d75	10d55	10d75
+eq	10d75	10d55	-	1
+map	10d76	10d56	10d76
+eq	10d76	10d56	-	1
+map	10d77	10d57	10d77
+eq	10d77	10d57	-	1
+map	10d78	10d58	10d78
+eq	10d78	10d58	-	1
+map	10d79	10d59	10d79
+eq	10d79	10d59	-	1
+map	10d7a	10d5a	10d7a
+eq	10d7a	10d5a	-	1
+map	10d7b	10d5b	10d7b
+eq	10d7b	10d5b	-	1
+map	10d7c	10d5c	10d7c
+eq	10d7c	10d5c	-	1
+map	10d7d	10d5d	10d7d
+eq	10d7d	10d5d	-	1
+map	10d7e	10d5e	10d7e
+eq	10d7e	10d5e	-	1
+map	10d7f	10d5f	10d7f
+eq	10d7f	10d5f	-	1
+map	10d80	10d60	10d80
+eq	10d80	10d60	-	1
+map	10d81	10d61	10d81
+eq	10d81	10d61	-	1
+map	10d82	10d62	10d82
+eq	10d82	10d62	-	1
+map	10d83	10d63	10d83
+eq	10d83	10d63	-	1
+map	10d84	10d64	10d84
+eq	10d84	10d64	-	1
+map	10d85	10d65	10d85
+eq	10d85	10d65	-	1
+map	118a0	118a0	118c0
+eq	118a0	118c0	-	1
+map	118a1	118a1	118c1
+eq	118a1	118c1	-	1
+map	118a2	118a2	118c2
+eq	118a2	118c2	-	1
+map	118a3	118a3	118c3
+eq	118a3	118c3	-	1
+map	118a4	118a4	118c4
+eq	118a4	118c4	-	1
+map	118a5	118a5	118c5
+eq	118a5	118c5	-	1
+map	118a6	118a6	118c6
+eq	118a6	118c6	-	1
+map	118a7	118a7	118c7
+eq	118a7	118c7	-	1
+map	118a8	118a8	118c8
+eq	118a8	118c8	-	1
+map	118a9	118a9	118c9
+eq	118a9	118c9	-	1
+map	118aa	118aa	118ca
+eq	118aa	118ca	-	1
+map	118ab	118ab	118cb
+eq	118ab	118cb	-	1
+map	118ac	118ac	118cc
+eq	118ac	118cc	-	1
+map	118ad	118ad	118cd
+eq	118ad	118cd	-	1
+map	118ae	118ae	118ce
+eq	118ae	118ce	-	1
+map	118af	118af	118cf
+eq	118af	118cf	-	1
+map	118b0	118b0	118d0
+eq	118b0	118d0	-	1
+map	118b1	118b1	118d1
+eq	118b1	118d1	-	1
+map	118b2	118b2	118d2
+eq	118b2	118d2	-	1
+map	118b3	118b3	118d3
+eq	118b3	118d3	-	1
+map	118b4	118b4	118d4
+eq	118b4	118d4	-	1
+map	118b5	118b5	118d5
+eq	118b5	118d5	-	1
+map	118b6	118b6	118d6
+eq	118b6	118d6	-	1
+map	118b7	118b7	118d7
+eq	118b7	118d7	-	1
+map	118b8	118b8	118d8
+eq	118b8	118d8	-	1
+map	118b9	118b9	118d9
+eq	118b9	118d9	-	1
+map	118ba	118ba	118da
+eq	118ba	118da	-	1
+map	118bb	118bb	118db
+eq	118bb	118db	-	1
+map	118bc	118bc	118dc
+eq	118bc	118dc	-	1
+map	118bd	118bd	118dd
+eq	118bd	118dd	-	1
+map	118be	118be	118de
+eq	118be	118de	-	1
+map	118bf	118bf	118df
+eq	118bf	118df	-	1
+map	118c0	118a0	118c0
+eq	118c0	118a0	-	1
+map	118c1	118a1	118c1
+eq	118c1	118a1	-	1
+map	118c2	118a2	118c2
+eq	118c2	118a2	-	1
+map	118c3	118a3	118c3
+eq	118c3	118a3	-	1
+map	118c4	118a4	118c4
+eq	118c4	118a4	-	1
+map	118c5	118a5	118c5
+eq	118c5	118a5	-	1
+map	118c6	118a6	118c6
+eq	118c6	118a6	-	1
+map	118c7	118a7	118c7
+eq	118c7	118a7	-	1
+map	118c8	118a8	118c8
+eq	118c8	118a8	-	1
+map	118c9	118a9	118c9
+eq	118c9	118a9	-	1
+map	118ca	118aa	118ca
+eq	118ca	118aa	-	1
+map	118cb	118ab	118cb
+eq	118cb	118ab	-	1
+map	118cc	118ac	118cc
+eq	118cc	118ac	-	1
+map	118cd	118ad	118cd
+eq	118cd	118ad	-	1
+map	118ce	118ae	118ce
+eq	118ce	118ae	-	1
+map	118cf	118af	118cf
+eq	118cf	118af	-	1
+map	118d0	118b0	118d0
+eq	118d0	118b0	-	1
+map	118d1	118b1	118d1
+eq	118d1	118b1	-	1
+map	118d2	118b2	118d2
+eq	118d2	118b2	-	1
+map	118d3	118b3	118d3
+eq	118d3	118b3	-	1
+map	118d4	118b4	118d4
+eq	118d4	118b4	-	1
+map	118d5	118b5	118d5
+eq	118d5	118b5	-	1
+map	118d6	118b6	118d6
+eq	118d6	118b6	-	1
+map	118d7	118b7	118d7
+eq	118d7	118b7	-	1
+map	118d8	118b8	118d8
+eq	118d8	118b8	-	1
+map	118d9	118b9	118d9
+eq	118d9	118b9	-	1
+map	118da	118ba	118da
+eq	118da	118ba	-	1
+map	118db	118bb	118db
+eq	118db	118bb	-	1
+map	118dc	118bc	118dc
+eq	118dc	118bc	-	1
+map	118dd	118bd	118dd
+eq	118dd	118bd	-	1
+map	118de	118be	118de
+eq	118de	118be	-	1
+map	118df	118bf	118df
+eq	118df	118bf	-	1
+map	16e40	16e40	16e60
+eq	16e40	16e60	-	1
+map	16e41	16e41	16e61
+eq	16e41	16e61	-	1
+map	16e42	16e42	16e62
+eq	16e42	16e62	-	1
+map	16e43	16e43	16e63
+eq	16e43	16e63	-	1
+map	16e44	16e44	16e64
+eq	16e44	16e64	-	1
+map	16e45	16e45	16e65
+eq	16e45	16e65	-	1
+map	16e46	16e46	16e66
+eq	16e46	16e66	-	1
+map	16e47	16e47	16e67
+eq	16e47	16e67	-	1
+map	16e48	16e48	16e68
+eq	16e48	16e68	-	1
+map	16e49	16e49	16e69
+eq	16e49	16e69	-	1
+map	16e4a	16e4a	16e6a
+eq	16e4a	16e6a	-	1
+map	16e4b	16e4b	16e6b
+eq	16e4b	16e6b	-	1
+map	16e4c	16e4c	16e6c
+eq	16e4c	16e6c	-	1
+map	16e4d	16e4d	16e6d
+eq	16e4d	16e6d	-	1
+map	16e4e	16e4e	16e6e
+eq	16e4e	16e6e	-	1
+map	16e4f	16e4f	16e6f
+eq	16e4f	16e6f	-	1
+map	16e50	16e50	16e70
+eq	16e50	16e70	-	1
+map	16e51	16e51	16e71
+eq	16e51	16e71	-	1
+map	16e52	16e52	16e72
+eq	16e52	16e72	-	1
+map	16e53	16e53	16e73
+eq	16e53	16e73	-	1
+map	16e54	16e54	16e74
+eq	16e54	16e74	-	1
+map	16e55	16e55	16e75
+eq	16e55	16e75	-	1
+map	16e56	16e56	16e76
+eq	16e56	16e76	-	1
+map	16e57	16e57	16e77
+eq	16e57	16e77	-	1
+map	16e58	16e58	16e78
+eq	16e58	16e78	-	1
+map	16e59	16e59	16e79
+eq	16e59	16e79	-	1
+map	16e5a	16e5a	16e7a
+eq	16e5a	16e7a	-	1
+map	16e5b	16e5b	16e7b
+eq	16e5b	16e7b	-	1
+map	16e5c	16e5c	16e7c
+eq	16e5c	16e7c	-	1
+map	16e5d	16e5d	16e7d
+eq	16e5d	16e7d	-	1
+map	16e5e	16e5e	16e7e
+eq	16e5e	16e7e	-	1
+map	16e5f	16e5f	16e7f
+eq	16e5f	16e7f	-	1
+map	16e60	16e40	16e60
+eq	16e60	16e40	-	1
+map	16e61	16e41	16e61
+eq	16e61	16e41	-	1
+map	16e62	16e42	16e62
+eq	16e62	16e42	-	1
+map	16e63	16e43	16e63
+eq	16e63	16e43	-	1
+map	16e64	16e44	16e64
+eq	16e64	16e44	-	1
+map	16e65	16e45	16e65
+eq	16e65	16e45	-	1
+map	16e66	16e46	16e66
+eq	16e66	16e46	-	1
+map	16e67	16e47	16e67
+eq	16e67	16e47	-	1
+map	16e68	16e48	16e68
+eq	16e68	16e48	-	1
+map	16e69	16e49	16e69
+eq	16e69	16e49	-	1
+map	16e6a	16e4a	16e6a
+eq	16e6a	16e4a	-	1
+map	16e6b	16e4b	16e6b
+eq	16e6b	16e4b	-	1
+map	16e6c	16e4c	16e6c
+eq	16e6c	16e4c	-	1
+map	16e6d	16e4d	16e6d
+eq	16e6d	16e4d	-	1
+map	16e6e	16e4e	16e6e
+eq	16e6e	16e4e	-	1
+map	16e6f	16e4f	16e6f
+eq	16e6f	16e4f	-	1
+map	16e70	16e50	16e70
+eq	16e70	16e50	-	1
+map	16e71	16e51	16e71
+eq	16e71	16e51	-	1
+map	16e72	16e52	16e72
+eq	16e72	16e52	-	1
+map	16e73	16e53	16e73
+eq	16e73	16e53	-	1
+map	16e74	16e54	16e74
+eq	16e74	16e54	-	1
+map	16e75	16e55	16e75
+eq	16e75	16e55	-	1
+map	16e76	16e56	16e76
+eq	16e76	16e56	-	1
+map	16e77	16e57	16e77
+eq	16e77	16e57	-	1
+map	16e78	16e58	16e78
+eq	16e78	16e58	-	1
+map	16e79	16e59	16e79
+eq	16e79	16e59	-	1
+map	16e7a	16e5a	16e7a
+eq	16e7a	16e5a	-	1
+map	16e7b	16e5b	16e7b
+eq	16e7b	16e5b	-	1
+map	16e7c	16e5c	16e7c
+eq	16e7c	16e5c	-	1
+map	16e7d	16e5d	16e7d
+eq	16e7d	16e5d	-	1
+map	16e7e	16e5e	16e7e
+eq	16e7e	16e5e	-	1
+map	16e7f	16e5f	16e7f
+eq	16e7f	16e5f	-	1
+map	16ea0	16ea0	16ebb
+eq	16ea0	16ebb	-	1
+map	16ea1	16ea1	16ebc
+eq	16ea1	16ebc	-	1
+map	16ea2	16ea2	16ebd
+eq	16ea2	16ebd	-	1
+map	16ea3	16ea3	16ebe
+eq	16ea3	16ebe	-	1
+map	16ea4	16ea4	16ebf
+eq	16ea4	16ebf	-	1
+map	16ea5	16ea5	16ec0
+eq	16ea5	16ec0	-	1
+map	16ea6	16ea6	16ec1
+eq	16ea6	16ec1	-	1
+map	16ea7	16ea7	16ec2
+eq	16ea7	16ec2	-	1
+map	16ea8	16ea8	16ec3
+eq	16ea8	16ec3	-	1
+map	16ea9	16ea9	16ec4
+eq	16ea9	16ec4	-	1
+map	16eaa	16eaa	16ec5
+eq	16eaa	16ec5	-	1
+map	16eab	16eab	16ec6
+eq	16eab	16ec6	-	1
+map	16eac	16eac	16ec7
+eq	16eac	16ec7	-	1
+map	16ead	16ead	16ec8
+eq	16ead	16ec8	-	1
+map	16eae	16eae	16ec9
+eq	16eae	16ec9	-	1
+map	16eaf	16eaf	16eca
+eq	16eaf	16eca	-	1
+map	16eb0	16eb0	16ecb
+eq	16eb0	16ecb	-	1
+map	16eb1	16eb1	16ecc
+eq	16eb1	16ecc	-	1
+map	16eb2	16eb2	16ecd
+eq	16eb2	16ecd	-	1
+map	16eb3	16eb3	16ece
+eq	16eb3	16ece	-	1
+map	16eb4	16eb4	16ecf
+eq	16eb4	16ecf	-	1
+map	16eb5	16eb5	16ed0
+eq	16eb5	16ed0	-	1
+map	16eb6	16eb6	16ed1
+eq	16eb6	16ed1	-	1
+map	16eb7	16eb7	16ed2
+eq	16eb7	16ed2	-	1
+map	16eb8	16eb8	16ed3
+eq	16eb8	16ed3	-	1
+map	16ebb	16ea0	16ebb
+eq	16ebb	16ea0	-	1
+map	16ebc	16ea1	16ebc
+eq	16ebc	16ea1	-	1
+map	16ebd	16ea2	16ebd
+eq	16ebd	16ea2	-	1
+map	16ebe	16ea3	16ebe
+eq	16ebe	16ea3	-	1
+map	16ebf	16ea4	16ebf
+eq	16ebf	16ea4	-	1
+map	16ec0	16ea5	16ec0
+eq	16ec0	16ea5	-	1
+map	16ec1	16ea6	16ec1
+eq	16ec1	16ea6	-	1
+map	16ec2	16ea7	16ec2
+eq	16ec2	16ea7	-	1
+map	16ec3	16ea8	16ec3
+eq	16ec3	16ea8	-	1
+map	16ec4	16ea9	16ec4
+eq	16ec4	16ea9	-	1
+map	16ec5	16eaa	16ec5
+eq	16ec5	16eaa	-	1
+map	16ec6	16eab	16ec6
+eq	16ec6	16eab	-	1
+map	16ec7	16eac	16ec7
+eq	16ec7	16eac	-	1
+map	16ec8	16ead	16ec8
+eq	16ec8	16ead	-	1
+map	16ec9	16eae	16ec9
+eq	16ec9	16eae	-	1
+map	16eca	16eaf	16eca
+eq	16eca	16eaf	-	1
+map	16ecb	16eb0	16ecb
+eq	16ecb	16eb0	-	1
+map	16ecc	16eb1	16ecc
+eq	16ecc	16eb1	-	1
+map	16ecd	16eb2	16ecd
+eq	16ecd	16eb2	-	1
+map	16ece	16eb3	16ece
+eq	16ece	16eb3	-	1
+map	16ecf	16eb4	16ecf
+eq	16ecf	16eb4	-	1
+map	16ed0	16eb5	16ed0
+eq	16ed0	16eb5	-	1
+map	16ed1	16eb6	16ed1
+eq	16ed1	16eb6	-	1
+map	16ed2	16eb7	16ed2
+eq	16ed2	16eb7	-	1
+map	16ed3	16eb8	16ed3
+eq	16ed3	16eb8	-	1
+map	1e900	1e900	1e922
+eq	1e900	1e922	-	1
+map	1e901	1e901	1e923
+eq	1e901	1e923	-	1
+map	1e902	1e902	1e924
+eq	1e902	1e924	-	1
+map	1e903	1e903	1e925
+eq	1e903	1e925	-	1
+map	1e904	1e904	1e926
+eq	1e904	1e926	-	1
+map	1e905	1e905	1e927
+eq	1e905	1e927	-	1
+map	1e906	1e906	1e928
+eq	1e906	1e928	-	1
+map	1e907	1e907	1e929
+eq	1e907	1e929	-	1
+map	1e908	1e908	1e92a
+eq	1e908	1e92a	-	1
+map	1e909	1e909	1e92b
+eq	1e909	1e92b	-	1
+map	1e90a	1e90a	1e92c
+eq	1e90a	1e92c	-	1
+map	1e90b	1e90b	1e92d
+eq	1e90b	1e92d	-	1
+map	1e90c	1e90c	1e92e
+eq	1e90c	1e92e	-	1
+map	1e90d	1e90d	1e92f
+eq	1e90d	1e92f	-	1
+map	1e90e	1e90e	1e930
+eq	1e90e	1e930	-	1
+map	1e90f	1e90f	1e931
+eq	1e90f	1e931	-	1
+map	1e910	1e910	1e932
+eq	1e910	1e932	-	1
+map	1e911	1e911	1e933
+eq	1e911	1e933	-	1
+map	1e912	1e912	1e934
+eq	1e912	1e934	-	1
+map	1e913	1e913	1e935
+eq	1e913	1e935	-	1
+map	1e914	1e914	1e936
+eq	1e914	1e936	-	1
+map	1e915	1e915	1e937
+eq	1e915	1e937	-	1
+map	1e916	1e916	1e938
+eq	1e916	1e938	-	1
+map	1e917	1e917	1e939
+eq	1e917	1e939	-	1
+map	1e918	1e918	1e93a
+eq	1e918	1e93a	-	1
+map	1e919	1e919	1e93b
+eq	1e919	1e93b	-	1
+map	1e91a	1e91a	1e93c
+eq	1e91a	1e93c	-	1
+map	1e91b	1e91b	1e93d
+eq	1e91b	1e93d	-	1
+map	1e91c	1e91c	1e93e
+eq	1e91c	1e93e	-	1
+map	1e91d	1e91d	1e93f
+eq	1e91d	1e93f	-	1
+map	1e91e	1e91e	1e940
+eq	1e91e	1e940	-	1
+map	1e91f	1e91f	1e941
+eq	1e91f	1e941	-	1
+map	1e920	1e920	1e942
+eq	1e920	1e942	-	1
+map	1e921	1e921	1e943
+eq	1e921	1e943	-	1
+map	1e922	1e900	1e922
+eq	1e922	1e900	-	1
+map	1e923	1e901	1e923
+eq	1e923	1e901	-	1
+map	1e924	1e902	1e924
+eq	1e924	1e902	-	1
+map	1e925	1e903	1e925
+eq	1e925	1e903	-	1
+map	1e926	1e904	1e926
+eq	1e926	1e904	-	1
+map	1e927	1e905	1e927
+eq	1e927	1e905	-	1
+map	1e928	1e906	1e928
+eq	1e928	1e906	-	1
+map	1e929	1e907	1e929
+eq	1e929	1e907	-	1
+map	1e92a	1e908	1e92a
+eq	1e92a	1e908	-	1
+map	1e92b	1e909	1e92b
+eq	1e92b	1e909	-	1
+map	1e92c	1e90a	1e92c
+eq	1e92c	1e90a	-	1
+map	1e92d	1e90b	1e92d
+eq	1e92d	1e90b	-	1
+map	1e92e	1e90c	1e92e
+eq	1e92e	1e90c	-	1
+map	1e92f	1e90d	1e92f
+eq	1e92f	1e90d	-	1
+map	1e930	1e90e	1e930
+eq	1e930	1e90e	-	1
+map	1e931	1e90f	1e931
+eq	1e931	1e90f	-	1
+map	1e932	1e910	1e932
+eq	1e932	1e910	-	1
+map	1e933	1e911	1e933
+eq	1e933	1e911	-	1
+map	1e934	1e912	1e934
+eq	1e934	1e912	-	1
+map	1e935	1e913	1e935
+eq	1e935	1e913	-	1
+map	1e936	1e914	1e936
+eq	1e936	1e914	-	1
+map	1e937	1e915	1e937
+eq	1e937	1e915	-	1
+map	1e938	1e916	1e938
+eq	1e938	1e916	-	1
+map	1e939	1e917	1e939
+eq	1e939	1e917	-	1
+map	1e93a	1e918	1e93a
+eq	1e93a	1e918	-	1
+map	1e93b	1e919	1e93b
+eq	1e93b	1e919	-	1
+map	1e93c	1e91a	1e93c
+eq	1e93c	1e91a	-	1
+map	1e93d	1e91b	1e93d
+eq	1e93d	1e91b	-	1
+map	1e93e	1e91c	1e93e
+eq	1e93e	1e91c	-	1
+map	1e93f	1e91d	1e93f
+eq	1e93f	1e91d	-	1
+map	1e940	1e91e	1e940
+eq	1e940	1e91e	-	1
+map	1e941	1e91f	1e941
+eq	1e941	1e91f	-	1
+map	1e942	1e920	1e942
+eq	1e942	1e920	-	1
+map	1e943	1e921	1e943
+eq	1e943	1e921	-	1
