@@ -7,7 +7,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0026 | Leaf performance sweep | num | .worktrees/0026-leaf-perf-sweep |
-| 0022 | E2E wiring: Vm::compile, djs run, missing P0 interp ops | heap | .worktrees/0022-e2e-wiring |
+| 0028 | P1-2 runtime (call_intrinsic, prelude, slow paths, Error stack) | heap | .worktrees/0028-p1-objects-runtime |
+| 0016 | djs in difftest + gate (+ bench engine track) | infra | .worktrees/0016-djs-difftest-gate |
 | 0027 | P1-2 Objects/arrays/privileged mode (compiler) | lexer | .worktrees/0027-p1-objects-compiler |
 
 ## Open (ready)
@@ -19,8 +20,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0028 | P1-2 runtime: call_intrinsic, prelude install, ToPrimitive slow paths, Error stack | 0022, 0027 (heap, next) |
-| 0016 | djs in difftest + gate | 0014, 0022 (infra, next) |
 | 0007 | test262 on djs + ratchet in gate | 0014, 0015, P1-8 (script mode) |
 
 ## Done
@@ -31,6 +30,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0003 | Lexer | e4a42c3 (agent lexer; parser follow-ups listed in the issue) |
 | 0005 | Values, arena heap, strings, atoms, objects | dc751e2 (agent heap; follow-ups in the issue) |
 | 0023 | djs-wasm + JS host package | d4fb4a4 (agent num; djs runs in node; vm_new 11 us; 132 KB gz at opt s) |
+| 0022 | E2E wiring | f235cdd (agent heap; djs run works; 29 e2e cases x 3 modes) |
 | 0025 | P1-3 Exceptions + P1-4 leftovers | d45e837 (agent lexer; test262 compiling 24.7k) |
 | 0024 | P1-1 Functions and closures (compiler) | ad6c70f (agent lexer; test262 compiling 11.4k -> 23.5k) |
 | 0014 | P0 compiler | 5c5ce95 (agent lexer; 31 e2e programs match qjs; test262 sweep no panics) |
