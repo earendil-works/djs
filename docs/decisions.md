@@ -5680,3 +5680,72 @@ second << 21 | composite`, ~940 entries, 7.5 KB) held by the heap
 (`Heap::compositions`, Rust memory, not part of the image: rebuilt after a restore), so a
 lookup stays a binary search, after an early exit for second code points below U+0300.
 `normalize` takes the cache as a parameter.
+
+## D2053: A page allocator under dlmalloc in djs-wasm: huge blocks grow in place
+date: 2026-11-03 · by: heap · issue: 0128
+On wasm32, djs-wasm's global allocator is `allocator::PageAlloc`, over the module's
+linear memory in 64 KiB pages.
+- **The page manager (`Pages`)** owns all memory growth. It keeps a sorted, coalesced
+  free list of page runs: a fixed array of 64, since an allocator cannot allocate for
+  itself; a run freed while the list is full is leaked.
+- **Huge blocks** (≥ 256 KiB: in practice the arena and big strings) are page runs of
+  their own. A huge realloc:
+  1. grows in place into a free run after it, or at memory's end by `memory.grow`;
+  2. otherwise moves to the best-fitting free run;
+  3. only if there is none, moves to memory's end.
+- **Everything smaller** goes to dlmalloc, the same allocator as before, whose system
+  allocator now takes pages from the manager instead of growing memory itself. It keeps
+  its segments (no release), as before.
+
+Why: before, every growth of the arena that dlmalloc could not do in place copied it,
+with the old and new blocks coexisting. Those moments were most peaks, and they were a
+chaotic function of sizes (D2047).
+
+**Peak wasm memory**, mean of 24 perturbed runs (D2048), main → branch, MiB:
+
+| workload | main | branch |
+| --- | ---: | ---: |
+| strbuild | 38.6 | 19.5 |
+| arrays | 28.0 | 14.3 |
+| higher-order | 28.9 | 15.5 |
+| foreach, forof | 9.3 | 5.3 |
+| strings | 11.97 | 11.26 |
+| json-date | 6.12 | 4.81 |
+| json-indent | 6.30 | 5.92 |
+| pi-like | 3.70 | 2.81 |
+
+Small heaps are unchanged at 1.6, and the pi bench's warm and cold starts too
+(1.94–2.13 MiB). Worse:
+- json 6.2 → 6.8 and json-replacer 4.43 → 4.83 (its max 8.0 → 5.6). One of dlmalloc's
+  first segments lands right after the young arena and blocks its first in-place growth.
+  The arena moves once, and the pages it leaves are only partly reused.
+- jsonh 6.2 → 6.3, json-text 2.5 → 2.6, props 2.43 → 2.53.
+
+**Other measurements:**
+- Wasm instructions: strbuild −1.8%, higher-order and arrays −0.5%, the rest within
+  ±0.8% (noise).
+- Code: +1.2 KB wasm, +588 B gzip, within the size ratchet.
+
+**Unsafe:** confined to djs-wasm's allocator.rs. It is the `GlobalAlloc` contract
+forwarded to dlmalloc, raw page addresses, and dlmalloc's system allocator reaching the
+manager through a pointer. The pointer is set once, when the static allocator is first
+used, and the static never moves. djs-core stays safe.
+
+**Tests** (natively, over a fake memory):
+- the free list;
+- in-place extension;
+- moves into free runs;
+- a randomized stress test: 3000 operations over small, medium and huge blocks with
+  random alignments, contents and overlap checked;
+- an arena-like growth to 48 MiB staying near its size.
+
+**Measured and rejected** (each moved single workloads by 0.5–10 MiB either way, like
+D2047):
+- free pages left before huge blocks placed at the end, for dlmalloc's growth (2–4
+  pages, or 1/8);
+- dlmalloc granularity 256 KiB / 1 MiB (small runs +0.2–0.9 MiB);
+- a minimum of 2–8 pages per dlmalloc growth;
+- huge thresholds of 128 KiB to 1 MiB (no change below 1 MiB, worse at it);
+- moving a blocked huge block down into the free run before it (no change);
+- placing huge blocks only at memory's end (worse);
+- letting dlmalloc release segments (no change, +274 B gzip).

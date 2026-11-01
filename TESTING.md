@@ -387,9 +387,9 @@ an array's `length` converts non-Number values (4), and `atob`/`btoa` and
 ## Peak memory claims (D2048)
 
 Peak wasm memory (`wasm memory` in `scripts/perf/wasm-run.ts`) is deterministic for one
-build and input, but a chaotic function of where dlmalloc places the arena when it
-grows. A shift of a few KB in the live heap can move a workload's peak by 3–6 MiB, in
-either direction. A single run per build shows the placement, not the policy. Any claim
+build and input, but sensitive to where the allocator places blocks. Before djs-wasm's
+page allocator (D2053) a shift of a few KB in the live heap could move a workload's peak
+by 3–6 MiB, in either direction; it is less sensitive now, but not insensitive. A single run per build shows the placement, not the policy. Any claim
 that a change makes peak memory better or worse is backed by
 `scripts/perf/mem-perturb.sh`: 24 runs per workload, run k with a kept string of
 k × 1000 bytes allocated first. Compare the distributions (mean and max) against main,

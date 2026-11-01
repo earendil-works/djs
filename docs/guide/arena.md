@@ -126,6 +126,10 @@ The arena grows like a `Vec`, by reallocating, with two twists:
   what a run costs. Below the threshold, growth doubles but never reserves past the
   threshold; past it, a collection is pending and growth is by a quarter. Thresholds are
   whole 64 KiB wasm pages (D1870).
+- **In wasm it grows in place.** The module's allocator keeps big blocks, the arena
+  among them, as runs of whole pages. When the pages after the arena are free or memory
+  ends there, a growth adds pages instead of copying the arena into a new block, which
+  would hold the old and the new copy at once (D2053).
 - **It has a cap.** The embedder sets a memory limit. The arena may grow to the limit
   minus a reserve of `min(cap / 32, 1 MiB)`. Reaching that point is the catchable
   `InternalError: out of memory`, a preallocated object, as in QuickJS. Throwing it
@@ -195,7 +199,8 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 
 Decisions on this page:
 
-<!-- gen:decisions D1051 D1052 D1261 D1151 D1091 D1870 D1600 D1690 D1700 D1056 D1573 -->
+<!-- gen:decisions D2053 D1051 D1052 D1261 D1151 D1091 D1870 D1600 D1690 D1700 D1056 D1573 -->
+- D2053: A page allocator under dlmalloc in djs-wasm: huge blocks grow in place
 - D1051: Arena and cell header
 - D1052: Layout description macro
 - D1261: The arena keeps a zeroed frontier; data is written once

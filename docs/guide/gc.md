@@ -126,9 +126,8 @@ never grows.
 **What it retains.** Between full collections, an old cell that died still holds its
 fields, so the young cells only it reaches survive too: say, an old object's property
 table after the object grew. In practice that is a few kilobytes, and the next full
-collection frees it. Few kilobytes still matter for peak memory: in wasm, where the
-host allocator places the growing arena depends on its exact sizes, so a few kilobytes
-more can move a run's peak by megabytes either way (see below).
+collection frees it. Few kilobytes could still move peak memory by megabytes, through
+where the growing arena landed (see below).
 
 **Determinism.** B and the count of minor collections since the last full one are in the
 `Roots` cell, like the threshold. Whether a collection is minor or full is decided from
@@ -159,17 +158,28 @@ collections ran before it or not.
 > The old region is the state of a setup phase, sealed on purpose. A program with a large
 > long-lived young heap gains little: its minor collections still trace that data.
 
-### Peak memory is chaotic
+### Peak memory and the host allocator
 
-In wasm the arena is one block of the host allocator's memory, and memory never shrinks.
-When the arena grows and the allocator cannot extend it in place, the old and the new
-block exist at the same time, and the run's peak is often exactly such a moment. Whether
-a growth can stay in place depends on the exact sizes involved. A few kilobytes more or
-less in the live heap, or a threshold one 64 KiB page higher, can move a run's peak by
+In wasm the arena is one block of the module's memory, and memory never shrinks. A
+general-purpose allocator grows such a block by copying it when it cannot extend it in
+place. The old and the new block then exist at the same time, and a run's peak was most
+often exactly such a moment. Whether a growth could stay in place depended on the exact
+sizes involved: a few kilobytes more or less in the live heap could move a run's peak by
 3–6 MiB, up or down. Policies such as reserving the capacity right after a collection,
 or growing by smaller steps, moved some workloads one way and others the other (D2047).
-So a memory claim about the collector compares distributions over many slightly
-perturbed runs, never one run per build (D2048).
+
+So the wasm module has its own allocator for big blocks
+([`crates/djs-wasm/src/allocator.rs`](../../crates/djs-wasm/src/allocator.rs), D2053). It
+manages the memory in 64 KiB pages. A block of 256 KiB or more, the arena among them,
+is a run of pages of its own, and it grows in place whenever the pages after it are free
+or it ends where memory ends: memory then grows by just the difference. Smaller
+allocations stay with the general allocator, which takes its pages from the same pool.
+Peaks of allocation-heavy runs halved, to about the arena's size plus the rest of the
+heap.
+
+A run's peak still depends a little on placement, so a memory claim about the collector
+compares distributions over many slightly perturbed runs, never one run per build
+(D2048).
 
 ## Copying, for canonical layouts
 
@@ -310,7 +320,7 @@ not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D16
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2042 D2044 D2045 D2046 D2047 D2048 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 -->
+<!-- gen:decisions D2040 D2041 D2042 D2044 D2045 D2046 D2047 D2048 D2053 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2042: Full collections do not promote; only seal points make cells old
@@ -319,6 +329,7 @@ Decisions on this page:
 - D2046: No aging promotion
 - D2047: Arena growth policies that did not help
 - D2048: Peak memory is compared as a distribution over perturbed runs
+- D2053: A page allocator under dlmalloc in djs-wasm: huge blocks grow in place
 - D018: Adopt mark-compact for in-VM collections
 - D1090: Copying collector
 - D1052: Layout description macro
