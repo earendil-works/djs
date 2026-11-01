@@ -177,6 +177,14 @@ fn non_finite_or_zero<const N: usize>(out: &mut NumStr<N>, x: f64) -> bool {
 
 /// Shortest decimal digits of a finite positive `a` and the decimal point position.
 fn shortest(a: f64, tmp: &mut [u8; 20]) -> (&[u8], i32) {
+    if let Some((m, k)) = short_decimal(a) {
+        let digits = u64_digits(m, 10, tmp);
+        return (digits, digits.len() as i32 - k);
+    }
+    ryu_shortest(a, tmp)
+}
+
+fn ryu_shortest(a: f64, tmp: &mut [u8; 20]) -> (&[u8], i32) {
     let bits = a.to_bits();
     let ryu::Decimal {
         mut mantissa,
@@ -189,6 +197,50 @@ fn shortest(a: f64, tmp: &mut [u8; 20]) -> (&[u8], i32) {
     let digits = u64_digits(mantissa, 10, tmp);
     let e = exponent + digits.len() as i32;
     (digits, e)
+}
+
+/// The shortest form of `a` (positive, finite) when it has at most 8 decimals, such as
+/// prices, scores and coordinates: `(m, k)` with `a == m / 10^k`. Much cheaper than Ryu,
+/// and the same result (D1262):
+/// - `m as f64 / 10^k` is the correctly rounded value of the decimal `m * 10^-k` (both
+///   operands are exact), so the check is exactly "the decimal round-trips";
+/// - while `ulp(a) * 10^k < 1`, the round-trip interval (at most `ulp(a)` wide, also for
+///   powers of two) holds at most one integer multiple of `10^-k`, so the first `k` that
+///   works gives the unique shortest digits Ryu would find, and no shorter form exists;
+/// - a candidate near a half-way point cannot round-trip under that bound, so rounding in
+///   `a * 10^k` never hides the right candidate.
+///
+/// `None` means "use Ryu".
+fn short_decimal(a: f64) -> Option<(u64, i32)> {
+    const P10: [f64; 9] = [1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8];
+    const MAX: f64 = 9007199254740992.0; // 2^53
+    let ulp = f64::from_bits(a.to_bits() + 1) - a;
+    for (k, &p) in P10.iter().enumerate().skip(1) {
+        let tol = ulp * p;
+        if tol >= 1.0 {
+            return None;
+        }
+        let y = a * p;
+        if y >= MAX {
+            return None;
+        }
+        let m = (y + 0.5) as u64;
+        let d = m as f64;
+        // Cheap filter before the division: the candidate is within ulp(a) * 10^k / 2 of
+        // the exact product, and `y` within half an ulp of that.
+        if y - d > 2.0 * tol || d - y > 2.0 * tol {
+            continue;
+        }
+        if d / p == a {
+            // Not a multiple of 10, or a smaller k would have matched.
+            return if m % 10 == 0 {
+                None
+            } else {
+                Some((m, k as i32))
+            };
+        }
+    }
+    None
 }
 
 /// `Number.prototype.toString(radix)` for an integer `radix` (the caller applies
@@ -457,6 +509,60 @@ mod tests {
             let (ryu_digits, ryu_e) = shortest(a, &mut tmp2);
             assert_eq!((digits, e), (ryu_digits, ryu_e), "{a:e}");
         }
+    }
+
+    /// The short-decimal fast path agrees with Ryu wherever it answers.
+    #[test]
+    fn short_decimal_matches_ryu() {
+        let mut x = 0x0bad_5eed_dead_beefu64;
+        let mut next = || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x
+        };
+        let mut hits = 0;
+        let check = |a: f64, hits: &mut usize| {
+            if !a.is_finite() || a <= 0.0 {
+                return;
+            }
+            if let Some((m, k)) = short_decimal(a) {
+                *hits += 1;
+                let mut t1 = [0u8; 20];
+                let mut t2 = [0u8; 20];
+                let digits = u64_digits(m, 10, &mut t1);
+                let fast = (digits, digits.len() as i32 - k);
+                assert_eq!(fast, ryu_shortest(a, &mut t2), "{a:e} = {m}e-{k}");
+            }
+        };
+        for i in 0..2_000_000u64 {
+            let r = next();
+            let a = match i % 5 {
+                // Random doubles (rarely short).
+                0 => f64::from_bits(r >> 1),
+                // Short decimals of every size and scale, and their neighbours.
+                1 | 2 => {
+                    let m = (r >> 20) % 10u64.pow(1 + (r % 15) as u32);
+                    let k = ((r >> 8) % 12) as i32;
+                    let a = m as f64 / 10f64.powi(k);
+                    match (r >> 4) % 3 {
+                        0 => a,
+                        1 => f64::from_bits(a.to_bits() + 1),
+                        _ => f64::from_bits(a.to_bits().wrapping_sub(1)),
+                    }
+                }
+                // Powers of two (asymmetric intervals) times short decimals.
+                3 => 2f64.powi((r % 80) as i32 - 40) * ((r >> 16) % 1000) as f64 / 8.0,
+                // Near the 2^53 / 10^k limits.
+                _ => {
+                    let k = 1 + (r % 8) as i32;
+                    9007199254740992.0 / 10f64.powi(k) - ((r >> 8) % 1000) as f64 / 10f64.powi(k)
+                }
+            };
+            check(a, &mut hits);
+        }
+        // The path is actually exercised.
+        assert!(hits > 200_000, "{hits}");
     }
 
     #[test]

@@ -142,6 +142,9 @@ impl Out {
     #[inline]
     fn latin1(&mut self, s: &[u8]) {
         match &mut self.buf {
+            // Most pieces are short (numbers, punctuation, keys): an inline copy beats a
+            // memcpy call; long ones (strings) still get the memcpy.
+            Buf::Narrow(b) if s.len() <= 32 => b.extend(s.iter().copied()),
             Buf::Narrow(b) => b.extend_from_slice(s),
             Buf::Wide(w) => w.extend(s.iter().map(|&c| c as u16)),
         }
