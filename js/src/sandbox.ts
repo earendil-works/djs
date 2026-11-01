@@ -26,8 +26,14 @@ export interface SandboxOptions {
    * abandoned; the sandbox stays usable). Default: none.
    */
   maxFuel?: number;
-  /** Global host functions, by name. */
+  /** Global host functions, by name. A call parks the VM until the function returns. */
   functions?: Record<string, HostFunction>;
+  /**
+   * Global async host functions, by name (D1374): a call returns a promise in the VM at
+   * once and the script goes on, so several calls can be outstanding (`Promise.all`
+   * over tools). The function may return a value or a promise.
+   */
+  asyncFunctions?: Record<string, HostFunction>;
   /** Receives `console.*` calls from the sandbox; default: the host's `console`. */
   console?: ConsoleLike;
 }
@@ -50,6 +56,7 @@ const STATUS_DONE = 0;
 const STATUS_THREW = 1;
 const STATUS_OUT_OF_FUEL = 2;
 const STATUS_HOST_CALL = 3;
+const STATUS_IDLE = 4;
 const ABI_VERSION = 1;
 const CONSOLE_METHODS = ["log", "info", "warn", "error"] as const;
 
@@ -72,6 +79,7 @@ interface Exports {
   vm_global(vm: number): number;
   vm_new_object(vm: number): number;
   vm_new_host_function(vm: number, fnId: number, nameLen: number): number;
+  vm_new_async_host_function(vm: number, fnId: number, nameLen: number): number;
   vm_define(vm: number, obj: number, nameLen: number, value: number): number;
   vm_decode_wire(vm: number, len: number): number;
   vm_new_error(vm: number, kind: number, msgLen: number): number;
@@ -82,6 +90,9 @@ interface Exports {
   vm_run(vm: number, fuel: number): number;
   vm_result(vm: number): number;
   vm_host_call(vm: number): number;
+  vm_host_call_info(vm: number, callId: number): number;
+  vm_new_host_calls(vm: number): number;
+  vm_promise_state(vm: number, h: number): number;
   vm_resolve_host_call(vm: number, callId: number, ok: number, value: number): number;
   vm_abort(vm: number): void;
 }
@@ -197,7 +208,7 @@ export class Sandbox {
     if (snapshot !== undefined) {
       // The VM already has its host functions; bind the ids to the given implementations.
       restoredFns.forEach((name, i) => {
-        const f = builtins[name] ?? opts.functions?.[name];
+        const f = builtins[name] ?? opts.functions?.[name] ?? opts.asyncFunctions?.[name];
         if (f === undefined) throw new SandboxError("misuse", `snapshot needs host function ${name}`);
         this.fnNames.push(name);
         this.fns.set(i + 1, f);
@@ -216,13 +227,23 @@ export class Sandbox {
         x.vm_handle_free(vm, console);
       });
       for (const [name, f] of Object.entries(opts.functions ?? {})) this.defineFunction(name, f);
+      for (const [name, f] of Object.entries(opts.asyncFunctions ?? {})) this.defineAsyncFunction(name, f);
     }
   }
 
   /** Defines a global host function. */
   defineFunction(name: string, f: HostFunction): void {
+    this.defineGlobalFunction(name, f, false);
+  }
+
+  /** Defines a global async host function (see `SandboxOptions.asyncFunctions`). */
+  defineAsyncFunction(name: string, f: HostFunction): void {
+    this.defineGlobalFunction(name, f, true);
+  }
+
+  private defineGlobalFunction(name: string, f: HostFunction, async: boolean): void {
     this.guard(() => {
-      const h = this.hostFunction(name, f);
+      const h = this.hostFunction(name, f, async);
       const g = this.x.vm_global(this.vm);
       this.defineOn(g, name, h);
       this.x.vm_handle_free(this.vm, g);
@@ -243,8 +264,9 @@ export class Sandbox {
 
   /**
    * Runs `code` as a codemode function body (`return` gives the result) with the
-   * `params` as its parameters (sent through the wire format). `console` is a global. Host functions must return synchronously; use
-   * `runAsync` for ones that return promises.
+   * `params` as its parameters (sent through the wire format). `console` is a global. Host
+   * functions must return synchronously; use `runAsync` for ones that return promises. A
+   * promise as the result is unwrapped (fulfilled: its value; rejected: thrown).
    */
   run(code: string, params: Record<string, unknown> = {}): unknown {
     this.start(code, params);
@@ -257,7 +279,10 @@ export class Sandbox {
     }
   }
 
-  /** Like `run`, but awaits host functions that return promises (the VM stays parked). */
+  /**
+   * Like `run`, but awaits host functions that return promises: a sync one keeps the VM
+   * parked meanwhile, async ones run concurrently while the script goes on.
+   */
   async runAsync(code: string, params: Record<string, unknown> = {}): Promise<unknown> {
     this.start(code, params);
     try {
@@ -355,7 +380,7 @@ export class Sandbox {
     return b.length;
   }
 
-  private hostFunction(name: string, f: HostFunction): number {
+  private hostFunction(name: string, f: HostFunction, async = false): number {
     let id = this.fnNames.indexOf(name) + 1;
     if (id === 0) {
       this.fnNames.push(name);
@@ -363,7 +388,11 @@ export class Sandbox {
     }
     this.fns.set(id, f);
     const shortName = name.slice(name.lastIndexOf(".") + 1);
-    return this.check(this.x.vm_new_host_function(this.vm, id, this.stageText(shortName)), "memory");
+    const len = this.stageText(shortName);
+    const h = async
+      ? this.x.vm_new_async_host_function(this.vm, id, len)
+      : this.x.vm_new_host_function(this.vm, id, len);
+    return this.check(h, "memory");
   }
 
   private defineOn(obj: number, name: string, value: number): void {
@@ -391,7 +420,7 @@ export class Sandbox {
 
   private readHandle(h: number): unknown {
     this.x.vm_handle_bits(this.vm, h);
-    const w = new Uint32Array(this.x.memory.buffer, this.x.djs_out_ptr(), 2);
+    const w = outWords(this.x, 2);
     return this.read(w[0], w[1]);
   }
 
@@ -431,8 +460,9 @@ export class Sandbox {
   }
 
   /**
-   * The run loop, as a generator: yields a promise when an async host function must be
-   * awaited (only when `async`), returns the result.
+   * The run loop, as a generator: yields a promise when the host must wait (a sync host
+   * function's promise, or until one of the outstanding async calls settles; only when
+   * `async`), returns the result.
    */
   private *drive(async: boolean): Generator<Promise<unknown>, unknown, unknown> {
     const x = this.x;
@@ -440,17 +470,60 @@ export class Sandbox {
     const slice = this.opts.fuelSlice ?? 1_000_000;
     const maxFuel = this.opts.maxFuel ?? Infinity;
     let used = 0;
+    // Async host calls being served, and those that finished but are not passed back yet.
+    const inflight = new Map<number, Promise<void>>();
+    const finished: { callId: number; ok: boolean; value: unknown }[] = [];
     for (;;) {
+      for (const { callId, ok, value } of finished.splice(0)) {
+        inflight.delete(callId);
+        this.complete(callId, ok, value);
+      }
       const st = this.guard(() => x.vm_run(vm, slice));
+      for (const callId of this.newHostCalls()) {
+        const { fnId, args } = this.callInfo(callId);
+        let p: Promise<unknown>;
+        try {
+          const r = this.invoke(fnId, args);
+          if (!(r instanceof Promise)) {
+            finished.push({ callId, ok: true, value: r });
+            continue;
+          }
+          if (!async) throw new TypeError(`host function ${this.fnNames[fnId - 1]} returned a promise; use runAsync`);
+          p = r;
+        } catch (e) {
+          finished.push({ callId, ok: false, value: e });
+          continue;
+        }
+        inflight.set(
+          callId,
+          p.then(
+            (value) => void finished.push({ callId, ok: true, value }),
+            (value) => void finished.push({ callId, ok: false, value }),
+          ),
+        );
+      }
       if (st === STATUS_DONE || st === STATUS_THREW) {
-        const { value, message } = this.guard(() => {
-          const h = x.vm_result(vm);
+        const { value, message, threw } = this.guard(() => {
+          let h = x.vm_result(vm);
+          let threw = st === STATUS_THREW;
+          // A promise result (an async body): its outcome.
+          const ps = x.vm_promise_state(vm, h);
+          if (ps === 1) {
+            x.vm_handle_free(vm, h);
+            throw new SandboxError("threw", "the result is a promise that never settles");
+          }
+          if (ps >= 2) {
+            const r = outWords(x, 1)[0];
+            x.vm_handle_free(vm, h);
+            h = r;
+            threw = ps === 3;
+          }
           const value = this.readHandle(h);
-          const message = st === STATUS_THREW ? this.display(h) : "";
+          const message = threw ? this.display(h) : "";
           x.vm_handle_free(vm, h);
-          return { value, message };
+          return { value, message, threw };
         });
-        if (st === STATUS_THREW) throw new SandboxError("threw", message, value);
+        if (threw) throw new SandboxError("threw", message, value);
         return value;
       }
       if (st === STATUS_OUT_OF_FUEL) {
@@ -461,50 +534,108 @@ export class Sandbox {
         }
         continue;
       }
-      if (st !== STATUS_HOST_CALL) return undefined; // idle
+      if (st === STATUS_IDLE) {
+        if (finished.length > 0) continue;
+        if (inflight.size === 0) return undefined; // nothing was called
+        // Only async host calls are left: wait for one of them.
+        yield Promise.race(inflight.values());
+        continue;
+      }
+      if (st !== STATUS_HOST_CALL) return undefined;
       const { callId, fnId, args } = this.guard(() => {
         const argc = x.vm_host_call(vm);
-        const w = new Uint32Array(x.memory.buffer, x.djs_out_ptr(), 4 + 2 * argc).slice();
-        const args: unknown[] = [];
-        for (let i = 0; i < argc; i++) {
-          const v = this.read(w[4 + 2 * i], w[5 + 2 * i]);
-          args.push(v);
-        }
-        return { callId: w[0], fnId: w[1], args };
+        return this.readCall(argc);
       });
-      const f = this.fns.get(fnId);
       let ok = true;
-      let h = 0;
+      let result: unknown;
       try {
-        if (f === undefined) throw new TypeError(`unknown host function ${fnId}`);
-        const isConsole = this.fnNames[fnId - 1]?.startsWith("console.");
-        let result = f(...(isConsole ? args.map(consoleArg) : args));
+        result = this.invoke(fnId, args);
         if (result instanceof Promise) {
           if (!async) throw new TypeError(`host function ${this.fnNames[fnId - 1]} returned a promise; use runAsync`);
           result = yield result;
         }
-        h = this.guard(() => this.toHandle(result));
       } catch (e) {
         if (e instanceof SandboxError && e.kind === "trap") throw e;
-        // Thrown at the call in the VM, as an Error with the host error's message.
         ok = false;
-        h = this.guard(() => {
-          const msg = this.stageText(e instanceof Error ? e.message : String(e));
-          const kind = e instanceof TypeError ? 1 : e instanceof RangeError ? 2 : 0;
-          return this.check(x.vm_new_error(vm, kind, msg), "memory");
-        });
+        result = e;
       }
-      this.guard(() => {
-        x.vm_resolve_host_call(vm, callId, ok ? 1 : 0, h);
-        if (h !== 0) x.vm_handle_free(vm, h);
+      this.complete(callId, ok, result);
+    }
+  }
+
+  /** Calls host function `fnId` with arguments read from the VM. */
+  private invoke(fnId: number, args: unknown[]): unknown {
+    const f = this.fns.get(fnId);
+    if (f === undefined) throw new TypeError(`unknown host function ${fnId}`);
+    const isConsole = this.fnNames[fnId - 1]?.startsWith("console.");
+    return f(...(isConsole ? args.map(consoleArg) : args));
+  }
+
+  /** The async host calls made since the last check (`vm_new_host_calls`). */
+  private newHostCalls(): number[] {
+    return this.guard(() => {
+      const n = this.x.vm_new_host_calls(this.vm);
+      return outWords(this.x, n);
+    });
+  }
+
+  /** The function and arguments of pending host call `callId`. */
+  private callInfo(callId: number): { fnId: number; args: unknown[] } {
+    return this.guard(() => this.readCall(this.x.vm_host_call_info(this.vm, callId)));
+  }
+
+  /** Reads `[call_id, fn_id, this, args...]` from the out buffer. */
+  private readCall(argc: number): { callId: number; fnId: number; args: unknown[] } {
+    const x = this.x;
+    const w = outWords(x, 4 + 2 * argc);
+    const args: unknown[] = [];
+    for (let i = 0; i < argc; i++) args.push(this.read(w[4 + 2 * i], w[5 + 2 * i]));
+    return { callId: w[0], fnId: w[1], args };
+  }
+
+  /**
+   * Passes a host call's outcome back: a value (through the wire format), or an error
+   * thrown at the call (sync) or rejecting its promise (async), as an Error of the same
+   * kind with the host error's message. A value the wire format cannot carry becomes
+   * such an error too.
+   */
+  private complete(callId: number, ok: boolean, value: unknown): void {
+    const x = this.x;
+    const vm = this.vm;
+    let h = 0;
+    if (ok) {
+      try {
+        h = this.guard(() => this.toHandle(value));
+      } catch (e) {
+        if (e instanceof SandboxError && e.kind === "trap") throw e;
+        ok = false;
+        value = e;
+      }
+    }
+    if (!ok) {
+      const e = value;
+      h = this.guard(() => {
+        const msg = this.stageText(e instanceof Error ? e.message : String(e));
+        const kind = e instanceof TypeError ? 1 : e instanceof RangeError ? 2 : 0;
+        return this.check(x.vm_new_error(vm, kind, msg), "memory");
       });
     }
+    this.guard(() => {
+      x.vm_resolve_host_call(vm, callId, ok ? 1 : 0, h);
+      if (h !== 0) x.vm_handle_free(vm, h);
+    });
   }
 }
 
 /** Console arguments: values without a host form are shown by their class. */
 function consoleArg(a: unknown): unknown {
   return a instanceof Opaque ? `[${a.className ?? a.type}]` : a;
+}
+
+/** The first `n` u32 (LE) words of the out buffer, which need not be aligned. */
+function outWords(x: Exports, n: number): number[] {
+  const dv = new DataView(x.memory.buffer, x.djs_out_ptr(), 4 * n);
+  return Array.from({ length: n }, (_, i) => dv.getUint32(4 * i, true));
 }
 
 function outText(x: Exports): string {

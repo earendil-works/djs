@@ -109,6 +109,23 @@ impl State {
         self.out.extend_from_slice(bytes);
     }
 
+    /// Writes `[call_id, fn_id, this_lo, this_hi, (arg_lo, arg_hi) * argc]` for host call
+    /// `id` to the out buffer; returns `argc` (0 with an empty buffer if there is none).
+    fn describe_call(&mut self, vm: u32, id: u32) -> u32 {
+        let Some(info) = self.slot(vm).vm.host_call(id) else {
+            self.out.clear();
+            return 0;
+        };
+        let mut words = vec![id, info.fn_id];
+        for v in std::iter::once(info.this).chain(info.args.iter().copied()) {
+            let b = v.to_bits();
+            words.push(b as u32);
+            words.push((b >> 32) as u32);
+        }
+        self.set_out_words(&words);
+        info.args.len() as u32
+    }
+
     fn set_out_words(&mut self, words: &[u32]) {
         self.out.clear();
         for w in words {
@@ -384,6 +401,20 @@ pub extern "C" fn vm_new_host_function(vm: u32, fn_id: u32, name_len: usize) -> 
     })
 }
 
+/// A handle to a new async host function `fn_id` named staging[0..name_len] (D1374):
+/// calling it returns a promise and adds a pending call (`vm_new_host_calls`).
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_new_async_host_function(vm: u32, fn_id: u32, name_len: usize) -> u32 {
+    with(|s| {
+        let (slot, staging) = s.vm_and_staging(vm);
+        let name = staged_str(staging, 0, name_len).to_owned();
+        match slot.vm.new_async_host_function(fn_id, &name) {
+            Ok(f) => slot.handle(f),
+            Err(_) => 0,
+        }
+    })
+}
+
 /// Defines property staging[0..name_len] of object `obj` (a handle) as `value` (a handle),
 /// writable and configurable but not enumerable, like builtins. Returns 0, or -1 if `obj`
 /// is not an object or the heap is full.
@@ -610,20 +641,45 @@ pub extern "C" fn vm_result(vm: u32) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_host_call(vm: u32) -> u32 {
     with(|s| {
+        let id = s.slot(vm).call_id;
+        s.describe_call(vm, id)
+    })
+}
+
+/// `vm_host_call` for any pending call by id (an async one from `vm_new_host_calls`).
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_host_call_info(vm: u32, call_id: u32) -> u32 {
+    with(|s| s.describe_call(vm, call_id))
+}
+
+/// The async host calls made since the last call of this (D1374): writes their ids as
+/// u32 to the out buffer and returns how many. Read them after every `vm_run`.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_new_host_calls(vm: u32) -> u32 {
+    with(|s| {
+        let ids = s.slot(vm).vm.new_host_calls();
+        s.set_out_words(&ids);
+        ids.len() as u32
+    })
+}
+
+/// The state of the promise `h` (a handle): 0 not a promise, 1 pending, 2 fulfilled, 3
+/// rejected. When settled, the out buffer holds a handle (u32) to its result, which the
+/// host frees.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_promise_state(vm: u32, h: u32) -> u32 {
+    with(|s| {
         let slot = s.slot(vm);
-        let id = slot.call_id;
-        let Some(info) = slot.vm.host_call(id) else {
-            s.out.clear();
-            return 0;
+        let v = slot.value(h);
+        let (code, result) = match slot.vm.promise_state(v) {
+            None => (0, None),
+            Some(None) => (1, None),
+            Some(Some(Ok(r))) => (2, Some(r)),
+            Some(Some(Err(r))) => (3, Some(r)),
         };
-        let mut words = vec![id, info.fn_id];
-        for v in std::iter::once(info.this).chain(info.args.iter().copied()) {
-            let b = v.to_bits();
-            words.push(b as u32);
-            words.push((b >> 32) as u32);
-        }
+        let words: Vec<u32> = result.map(|r| slot.handle(r)).into_iter().collect();
         s.set_out_words(&words);
-        info.args.len() as u32
+        code
     })
 }
 

@@ -116,6 +116,44 @@ test("async host functions with runAsync", async () => {
   sb.dispose();
 });
 
+test("async host functions run concurrently", async () => {
+  let running = 0;
+  let maxRunning = 0;
+  const c = collect();
+  const sb = await Sandbox.create({
+    console: c.console,
+    asyncFunctions: {
+      tool: async (name, ms) => {
+        running++;
+        maxRunning = Math.max(maxRunning, running);
+        await new Promise((r) => setTimeout(r, ms as number));
+        running--;
+        if (name === "bad") throw new RangeError("bad tool");
+        return { name, ms };
+      },
+      // An async host function may answer synchronously too.
+      now: () => 7,
+    },
+  });
+  const r = await sb.runAsync(`
+    const calls = [tool("a", 30), tool("b", 10), tool("c", 20)];
+    calls[1].then((v) => console.log("b first", v.name));
+    tool("bad", 5).catch((e) => console.log("caught", e.name, e.message));
+    console.log("sync end", typeof calls[0].then);
+    return Promise.all([Promise.all(calls), now()]).then((r) => r[0].map((v) => v.name).join() + r[1]);
+  `);
+  assert.equal(r, "a,b,c7");
+  assert.equal(maxRunning, 4, "all four calls were outstanding at once");
+  assert.deepEqual(c.lines, ["sync end function", "caught RangeError bad tool", "b first b"]);
+  // A rejected result promise is an error; a sync run can serve async functions that
+  // answer synchronously, but not ones that return promises.
+  await assert.rejects(sb.runAsync("return tool('bad', 1)"), (e: unknown) => e instanceof SandboxError && e.kind === "threw" && /bad tool/.test(e.message));
+  assert.equal(sb.run("return now().then((n) => n + 1)"), 8);
+  assert.throws(() => sb.run("return tool('a', 1)"), /returned a promise; use runAsync/);
+  assert.throws(() => sb.run("return new Promise(() => {})"), /never settles/);
+  sb.dispose();
+});
+
 test("syntax errors", async () => {
   const sb = await Sandbox.create();
   assert.throws(() => sb.run("return )"), (e: unknown) => e instanceof SandboxError && e.kind === "syntax");

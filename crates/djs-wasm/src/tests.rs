@@ -238,3 +238,35 @@ fn base_equals_a_compiled_realm() {
     vm_free(base);
     vm_free(compiled);
 }
+
+#[test]
+fn async_host_calls() {
+    let vm = vm_new(0);
+    stage(b"tool");
+    let tool = vm_new_async_host_function(vm, 3, 4);
+    assert_ne!(tool, 0);
+    let f = compile_body(vm, "tool", "return Promise.all([tool(1), tool(2)])");
+    call(vm, f, &[tool]);
+    assert_eq!(vm_run(vm, 1_000_000), status::IDLE);
+    assert_eq!(vm_new_host_calls(vm), 2);
+    let ids = out_words();
+    assert_eq!(vm_new_host_calls(vm), 0);
+    for (k, &id) in ids.iter().enumerate().rev() {
+        assert_eq!(vm_host_call_info(vm, id), 1);
+        let w = out_words();
+        assert_eq!(w[..2], [id, 3]);
+        assert_eq!(w[4..6], [k as u32 + 1, 0xFFF8_0004]);
+        stage(format!("{}", (k + 1) * 10).as_bytes());
+        let v = vm_parse_json(vm, 2);
+        assert_eq!(vm_resolve_host_call(vm, id, 1, v), 0);
+        vm_handle_free(vm, v);
+    }
+    assert_eq!(vm_resolve_host_call(vm, ids[0], 1, 0), -1, "already resolved");
+    assert_eq!(vm_run(vm, 1_000_000), status::DONE);
+    let p = vm_result(vm);
+    assert_eq!(vm_promise_state(vm, p), 2);
+    let r = out_words()[0];
+    assert_eq!(display(vm, r), "[10,20]");
+    assert_eq!(vm_promise_state(vm, r), 0);
+    vm_free(vm);
+}
