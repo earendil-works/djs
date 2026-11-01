@@ -1807,3 +1807,9 @@ called, and the builtins user code can see get both from `%InstallMethod`,
 `%InstallConstructor` and `%InstallAccessor`, which now define `length` before `name`
 (and before `prototype` for constructors), the order qjs and the spec use. Base image
 296 KB -> 268 KB.
+
+## D1434: String constants are shared across a compilation unit
+date: 2026-11-01 · by: heap · issue: 0043
+The compiler deduplicated string constants per function; it now keeps one pool per
+compilation unit (strings are immutable, so sharing a cell is invisible). The prelude
+repeats messages ("not a function" 26 times) and keys across functions: base -8 KB.

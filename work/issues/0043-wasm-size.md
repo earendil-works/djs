@@ -81,6 +81,7 @@ Date, typed arrays, …), and the code is about 590 KB.
   coordinated with the lexer via the coordinator): base 296,200 -> 268,480; stripped
   905,901. Builtins' own keys are now `length, name, prototype, ...` (qjs: prototype
   after the methods).
+- R5 (D1434) string constants shared per compilation unit: base 268,480 -> 260,472.
 
 ## Follow-ups
 - `Vm::collect` (vm_collect) does not clear the value stack above `sp` the way the

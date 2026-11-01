@@ -111,6 +111,10 @@ pub(super) struct Parser<'a, 'h> {
     pub pattern_vars: Vec<VarId>,
     /// Iterators to close on a return from inside an expression, innermost last.
     pub open_iters: Vec<OpenIter>,
+    /// String constants of the whole unit, sorted by content: functions share them
+    /// (strings are immutable, so sharing is invisible; the prelude repeats its error
+    /// messages and keys across hundreds of functions, 0043).
+    pub str_pool: Vec<(Vec<u16>, crate::value::Str)>,
 }
 
 /// Parser position for emission-free lookahead and deferred parsing (docs/compiler.md
@@ -177,6 +181,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             pat_scan: Default::default(),
             pattern_vars: Vec::new(),
             open_iters: Vec::new(),
+            str_pool: Vec::new(),
         };
         p.f.src_end = src.len() as u32;
         if kind == FuncKind::AsyncBody {
@@ -476,7 +481,17 @@ impl<'a, 'h> Parser<'a, 'h> {
             Ok(k) => return Ok(self.f.str_consts[k].1),
             Err(k) => k,
         };
-        let s = self.alloc_units(units)?;
+        let s = match self
+            .str_pool
+            .binary_search_by(|e| e.0.as_slice().cmp(units))
+        {
+            Ok(p) => self.str_pool[p].1,
+            Err(p) => {
+                let s = self.alloc_units(units)?;
+                self.str_pool.insert(p, (units.to_vec(), s));
+                s
+            }
+        };
         let i = self.add_const(Value::string(s));
         self.f.str_consts.insert(k, (units.to_vec(), i));
         Ok(i)
