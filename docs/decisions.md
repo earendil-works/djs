@@ -605,3 +605,45 @@ other agents build and test, and a millisecond run can stall for over a second.
 A case that is meant to hang gets its own short limit (a `// difftest: timeout`
 directive, or a separate run) and is never the reason another case times out. Timeouts
 are reported as `timeout: no result within Ns`, not as an output difference.
+
+## D1150: libm is the math dependency of djs-core
+date: 2026-11-01 · by: heap (approved by the coordinator) · issue: 0015
+`libm` (pure Rust, no_std, a port of musl's libm) is the only allowed runtime dependency
+for math in djs-core: `**` now, `Math.*` later. `core` has no `pow`, `exp`, `sin`, ...
+Number::exponentiate handles the spec's special cases before calling `libm::pow`,
+because C's pow differs from JS there: any `x ** NaN` is NaN, `x ** ±0` is 1, and
+`(±1) ** ±Infinity` is NaN. qjs on macOS uses the system libm, which can differ from
+musl in the last bit for some inputs. That is acceptable (the spec says
+implementation-approximated), so difftest failures of that kind are expected; recognize
+them as such rather than "fixing" them.
+
+## D1151: Interpreter state in the arena
+date: 2026-11-01 · by: heap · issue: 0015
+The value stack is `Roots::STACK` (a `ValueArray` whose `LEN` is its capacity, addressed
+by index, grown by copying). The `Interp` cell (`Roots::INTERP`, kind 17) holds the
+registers `BP HP SP PC`, the run state (`Idle Running HostCall Done Threw ThrowPending`),
+the parked host call id and continuation, and the completion value. The realm
+(`Roots::REALM`) is an internal reference (D007, tag 13) to a `Realm` cell (kind 18) with
+the global object and the intrinsics by index. Pending host calls are `HostCall` cells
+(kind 19) listed in `Roots::HOST_CALLS`. Frame records follow D1086, but the header has 6
+slots, `prev_bp prev_hp ret_pc argc flags new_target`. `prev_hp` is needed because a
+frame's header position depends on its padded argument count, which is only recorded in
+that header. Closures are objects of class `Function` (slot 0 = template, slots 1.. =
+Boxes, all internal refs); host functions are class `HostFunction` (slot 0 = fn id).
+Error instances are class `Error`. Since every register is an index, a suspended or
+parked VM is fully described by its heap bytes, and `Vm::from_bytes(vm.bytes())`
+continues where it stopped.
+
+## D1152: Host call protocol and fuel semantics
+date: 2026-11-01 · by: heap · issue: 0015
+Calling a `HostFunction` (from bytecode, from a getter or setter, or directly with
+`Vm::call`) records a `HostCall` cell `{id, fn_id, this, args}`, pops the callee,
+`this` and the arguments, parks with `pc` after the call, and `run` returns
+`HostCall { call_id, fn_id }`. While parked, `run` returns the same status again.
+`resolve_host_call(id, Ok(v))` applies the call's continuation: push `v`, or drop it for
+setters, or `Done(v)` for an entry call. `Err(e)` throws `e` at the call instruction
+(handler lookup with `pc - 1`). Fuel: each instruction charges its `OPS` cost class.
+`run` stops with `OutOfFuel` at the first instruction boundary where the fuel is used up,
+so resuming re-executes nothing. Safepoints are back jumps, frame entry and return, and
+the start of `run`. There the stack above `sp` is cleared, the heap is collected if it
+asks (or always with `gc_stress`), and the cached code and stack offsets are re-derived.
