@@ -101,8 +101,8 @@ has a bytes tag that decodes to a placeholder). ARCH G1 wants bytes in and out c
   841/849, TypedArrayConstructors 357/360, Uint8Array 66/68, ArrayIteratorPrototype
   18/19. Every remaining failure in these directories needs BigInt, RegExp, classes or
   generators (19 tests).
-- GC cost: buffers are copied by every collection like any cell (memcpy speed, about 1
-  ms per 10 MiB of live buffers on this machine). For codemode's images (a few MiB, short
+- GC cost: buffers are copied by every collection like any cell (one memcpy of each live
+  buffer per collection; not measured separately). For codemode's images (a few MiB, short
   lived) this is fine; a large-object space (0009) pays off only once VMs hold tens of
   MiB of long-lived buffers. Not needed now; listed as a follow-up.
 
