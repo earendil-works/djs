@@ -6144,9 +6144,8 @@ language/expressions/instanceof/S11.8.6_A7_T3.js: TypeError: not supported yet: 
 language/expressions/instanceof/S15.3.5.3_A2_T2.js: TypeError: not supported yet: the Function constructor
 language/expressions/instanceof/S15.3.5.3_A2_T6.js: TypeError: not supported yet: the Function constructor
 language/expressions/instanceof/primitive-prototype-with-primitive.js: TypeError: invalid 'instanceof' right operand
-language/expressions/instanceof/prototype-getter-with-object-throws.js: Test262Error: Expected a DummyError but got a TypeError
-language/expressions/instanceof/prototype-getter-with-object.js: TypeError: invalid 'instanceof' right operand
-language/expressions/instanceof/prototype-getter-with-primitive.js: TypeError: invalid 'instanceof' right operand
+language/expressions/instanceof/prototype-getter-with-object-throws.js: Test262Error: Expected a DummyError to be thrown but no exception was thrown at all
+language/expressions/instanceof/prototype-getter-with-object.js: Test262Error: [] should be instance of Function.prototype
 language/expressions/left-shift/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/expressions/logical-assignment/left-hand-side-private-reference-accessor-property-and.js: parse: Unsupported: classes are not supported yet
 language/expressions/logical-assignment/left-hand-side-private-reference-accessor-property-nullish.js: parse: Unsupported: classes are not supported yet

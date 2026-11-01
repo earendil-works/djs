@@ -90,6 +90,16 @@ the 0031 leftovers.
   propertyHelper's for-in (96), regex literals (70), tagged templates, normalize.
   built-ins 5,809, language 4,046, harness 45. difftest 82 / 173.
 
+### Part 3: instanceof, %ThrowTypeError%
+- Part 2 merged: main ..6b0cc5e.
+- `instanceof` (D1343): custom Symbol.hasInstance, `prototype` getters and bound
+  functions over such targets go through `%InstanceofOperator`; checked against qjs
+  (builtins/instanceof.js, stress OK). %ThrowTypeError%: name "", length 0, frozen.
+- Outside touches: interp/run.rs (`Op::Instanceof` slow path, `instanceof_needs_builtin`).
+- Still open: Object.fromEntries, Object.groupBy, AggregateError, Array
+  keys/values/entries/@@iterator, String @@iterator, Array.from of other iterables:
+  all wait for 0029's iterator intrinsics (%GetIterator, CreateArrayIterator).
+
 ## Follow-ups
 - Unicode normalization tables (NFC/NFD/NFKC/NFKD): size them (qjs's libunicode has
   them) and decide; localeCompare should then compare NFC forms like qjs.

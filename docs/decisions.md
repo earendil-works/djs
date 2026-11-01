@@ -1234,3 +1234,15 @@ U+0300 for NFC, below U+00A0 for the other forms) and throws a TypeError ("not s
 yet") for anything else; the tables are a follow-up. IsRegExp looks only at
 Symbol.match until RegExp objects exist (RegExp.prototype has @@match, so regexps
 answer true). `String.prototype[Symbol.iterator]` waits for the iterator intrinsics.
+
+## D1343: instanceof through InstanceofOperator when it matters
+date: 2026-11-01 · by: infra · issue: 0034
+The `instanceof` op keeps its Rust OrdinaryHasInstance for the common case: the target
+inherits Function.prototype's own Symbol.hasInstance (or there is none, without a
+prelude) and its `prototype` is a data property; a bound function is checked through its
+target chain. Otherwise (a custom or non-callable @@hasInstance, a getter, a `prototype`
+accessor) it calls the prelude's `%InstanceofOperator(v, target)` (builtins/function.ts,
+`@intrinsic`) with a PushResult continuation, so user code runs as an ordinary call.
+%ThrowTypeError% (Function.prototype's `caller`/`arguments` accessors) is set up by
+`%InstallAccessor` as the spec has it: name "", length 0, both non-configurable, and not
+extensible.
