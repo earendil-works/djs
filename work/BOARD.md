@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0033 | JSON + RegExp builtins, regex literals | num | .worktrees/0033-json-regexp-builtins |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
-| 0045 | Proxy | infra | .worktrees/0045-proxy |
+| 0044 | djs runs the shared difftest prelude (+ small 0045 items) | infra | .worktrees/0044-difftest-shared-prelude |
 | 0040 | P1-7 Classes | lexer | .worktrees/0040-p1-classes |
 | 0046 | BigInt | heap | .worktrees/0046-bigint |
 
@@ -21,7 +21,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0044 | djs runs the shared difftest prelude (retire D1160) | (infra, after 0045) |
 
 ## Done
 
@@ -39,6 +38,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0042 | Async generator runtime, function kinds, host rejections | 6e3c965 (agent heap) |
 | 0037 | P2 Promises, jobs, async host calls, suspendable frames | bd6f974 (agent heap; 3 parts) |
 | 0036 | P1-6 Destructuring + tagged templates | 234fd3c (agent lexer; +~1,940 test262) |
+| 0045 | Proxy | 7427f4f (agent infra; Proxy 352/375; ~5,000 behavior cases vs qjs) |
 | 0039 | Binary data | c8aefb6 (agent infra; DataView 445/449, TypedArray 841/849) |
 | 0038 | Builtins wave 3 | e43d075 (agent infra; Map/Set/Weak*/Reflect/Date; test262 active 64.8%) |
 | 0034 | Core builtins wave 2 | a05575b (agent infra; Array 2,461/2,680, String 688/1,040; gate back to 60 s) |
@@ -104,7 +104,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | what | id | owner / issue |
 | --- | --- | --- |
 | ObjectClass RegExp, RegExpStringIterator | 25, 26 | num / 0033 |
-| ObjectClass Proxy | 27 | infra / 0045 |
+| ObjectClass Proxy | 27 | infra / 0045 (merged) |
 | ObjectClass BigInt wrapper | 30 | heap / 0046 |
 | CellKind BigInt | 24 | heap / 0046 |
 | func_flags PRIVILEGED | 1 << 8 | heap / 0043 (merged) |

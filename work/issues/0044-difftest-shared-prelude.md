@@ -23,6 +23,15 @@ compare exactly what the model sees (D1100). The native glue only uses the host-
 - [ ] Same for the Sandbox if it formats console output on the host side (check pi's
       prelude behavior, D1100).
 
+## Also (small, from 0045)
+- djs-difftest's own codemode setup: `ALL_TOOLS` lacks Array.prototype; `tools` members
+  are not enumerable (rest destructuring gives nothing); values print through the fast
+  JSON path only (proxies print as `<djs: … Slow>`). All of this should disappear with
+  the shared prelude; check it.
+- `Object.prototype.__proto__` accessor (Annex B, but real code and `const {__proto__: p}`
+  patterns use it; qjs has it).
+- `Function.prototype.toString` of a callable proxy shows the target's name like qjs.
+
 ## Log
 
 ## Follow-ups
