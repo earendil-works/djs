@@ -1664,7 +1664,6 @@ For sync `yield*` (requested by 0041): `yield_star loc` is `yield` with the stat
 (suspended raw), and `%GeneratorPrototype%` methods return the yielded value itself
 instead of wrapping it in a new iterator result (GeneratorYield ( innerResult )).
 
-
 ## D1330: The build hash includes a hash of djs-core's sources
 date: 2026-11-01 · by: num · issue: 0033
 Extends D1320. `crates/djs-core/build.rs` hashes (FNV-1a, `\r` dropped) the non-test Rust
