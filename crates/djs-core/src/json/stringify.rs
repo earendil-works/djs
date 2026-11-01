@@ -491,6 +491,9 @@ impl Ser<'_, '_> {
         if n >= LINEAR_CYCLE_CHECK {
             self.deep.insert(o.offset());
         }
+        // Containers without primitives (`[[],[]]` with a long gap) must not grow the
+        // output unchecked either.
+        self.out.check()?;
         if is_array {
             self.out.byte(b'[');
             let len = self.heap.array_length(o);

@@ -620,6 +620,20 @@ fn stringify_respects_the_memory_cap() {
     );
 }
 
+#[test]
+fn stringify_checks_output_of_empty_containers() {
+    let mut h = Heap::with_limit(4 << 20).unwrap();
+    // 2000 levels of [[[...]]] with a 10-unit gap: about 20 MB of indentation from a tiny heap.
+    let n = 2000;
+    let text = "[".repeat(n) + &"]".repeat(n);
+    let v = json(&mut h, &text);
+    let gap = gap_from_number(10.0);
+    assert_eq!(
+        stringify_fast(&mut h, v, &gap),
+        Err(StringifyError::Heap(crate::heap::HeapError::OutOfMemory))
+    );
+}
+
 // ------------------------------------------------------------------ round trips and GC
 
 struct Rng(u64);
