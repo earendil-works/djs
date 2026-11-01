@@ -196,6 +196,15 @@ test("syntax errors", async () => {
   sb.dispose();
 });
 
+test("typescript", async () => {
+  const ts = await Sandbox.create({ typescript: true });
+  assert.equal(ts.run("enum E { A = 2 } const x: number = E.A as number; return x * 21"), 42);
+  ts.dispose();
+  const js = await Sandbox.create();
+  assert.throws(() => js.run("let x: number = 1"), (e: unknown) => e instanceof SandboxError && e.kind === "syntax");
+  js.dispose();
+});
+
 test("snapshots", async () => {
   const c = collect();
   const sb = await Sandbox.create({ console: c.console, functions: { add: (a, b) => (a as number) + (b as number) } });

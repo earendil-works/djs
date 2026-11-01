@@ -349,7 +349,7 @@ pub extern "C" fn vm_collect(vm: u32) -> i32 {
 
 /// Compiles staging[params_len..params_len + src_len] (UTF-8 source). `goal` 0 is a
 /// Script; 1 is a codemode async function body whose parameter names are
-/// staging[0..params_len], separated by `\n`. Returns a handle to the closure, or 0 with
+/// staging[0..params_len], separated by `\n`. `goal | 2` parses TypeScript (0048). Returns a handle to the closure, or 0 with
 /// the error (`SyntaxError: ... at line:col`) in the out buffer. Stack traces name the
 /// code `sandbox.js`; `vm_compile_file` names it.
 #[unsafe(no_mangle)]
@@ -383,7 +383,7 @@ fn compile(vm: u32, goal: u32, name_len: usize, params_len: usize, src_len: usiz
         let src = staged(staging, name_len + params_len, src_len).to_vec();
         let params: Vec<&str> = params_text.split('\n').filter(|p| !p.is_empty()).collect();
         let opts = CompileOptions {
-            goal: if goal == 0 {
+            goal: if goal & 1 == 0 {
                 Goal::Script
             } else {
                 Goal::AsyncBody
@@ -391,7 +391,7 @@ fn compile(vm: u32, goal: u32, name_len: usize, params_len: usize, src_len: usiz
             filename: &name,
             params: &params,
             privileged: false,
-            typescript: false,
+            typescript: goal & 2 != 0,
         };
         let result = slot.vm.compile(&src, &opts).map_err(|e| e.to_string());
         match result {

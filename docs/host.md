@@ -121,7 +121,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_free(vm)` | drop the VM |
 | `vm_arena_ptr(vm)`, `vm_arena_len(vm)` | the arena (the image, and the reader's view) |
 | `vm_collect(vm) -> 0/-1` | run the GC |
-| `vm_compile(vm, goal, params_len, src_len) -> h` | compile staging: `params_len` bytes of `\n`-separated parameter names (goal 1, async body) then the source; goal 0 is a Script |
+| `vm_compile(vm, goal, params_len, src_len) -> h` | compile staging: `params_len` bytes of `\n`-separated parameter names (goal 1, async body) then the source; goal 0 is a Script; `goal \| 2` parses TypeScript (0048) |
 | `vm_compile_file(vm, goal, name_len, params_len, src_len) -> h` | `vm_compile` with the file name stack traces show (staging: name, parameters, source; 0049) |
 | `vm_global(vm) -> h`, `vm_new_object(vm) -> h` | objects |
 | `vm_new_host_function(vm, fn_id, name_len) -> h` | a function that parks the VM with `fn_id` |

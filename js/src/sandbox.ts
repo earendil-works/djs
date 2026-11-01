@@ -55,6 +55,11 @@ export interface SandboxOptions {
    * `takeUnhandledRejections()`.
    */
   unhandledRejections?: "warn" | "throw" | "collect";
+  /**
+   * Parse the code as TypeScript (types are erased, enums and namespaces run; 0048).
+   * Default false.
+   */
+  typescript?: boolean;
 }
 
 export type SandboxErrorKind = "threw" | "syntax" | "fuel" | "trap" | "memory" | "misuse";
@@ -467,7 +472,8 @@ export class Sandbox {
       both.set(head);
       both.set(src, head.length);
       this.stage(both);
-      const f = x.vm_compile(vm, 1, head.length, src.length);
+      const goal = 1 | (this.opts.typescript ? 2 : 0);
+      const f = x.vm_compile(vm, goal, head.length, src.length);
       if (f === 0) {
         const msg = outText(x);
         for (const h of handles) if (h !== 0) x.vm_handle_free(vm, h);

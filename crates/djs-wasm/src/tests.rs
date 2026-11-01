@@ -332,6 +332,27 @@ fn unhandled_rejections() {
     vm_free(vm);
 }
 
+/// 0048: goal bit 2 compiles TypeScript; without it, types are syntax errors.
+#[test]
+fn typescript_goal() {
+    let vm = vm_new(0);
+    let src = "enum E { A = 2 } const x: number = E.A as number; return x * 21";
+    stage(src.as_bytes());
+    assert_eq!(vm_compile(vm, 1, 0, src.len()), 0);
+    assert!(out_text().starts_with("SyntaxError"), "{}", out_text());
+    stage(src.as_bytes());
+    let f = vm_compile(vm, 3, 0, src.len());
+    assert_ne!(f, 0, "{}", out_text());
+    call(vm, f, &[]);
+    let st = vm_run(vm, 1_000_000);
+    let (ok, h) = outcome(vm, st);
+    assert!(ok);
+    assert_eq!(display(vm, h), "42");
+    vm_handle_free(vm, h);
+    vm_handle_free(vm, f);
+    vm_free(vm);
+}
+
 /// 0049: `vm_compile_file` names the code in stack traces; `vm_set_random_seed` reseeds
 /// `Math.random` reproducibly; `djs_build_hash` is the image build hash.
 #[test]
