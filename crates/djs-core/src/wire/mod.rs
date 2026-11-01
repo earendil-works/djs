@@ -265,7 +265,8 @@ impl<'a> Decoder<'a, '_> {
                         self.heap
                             .new_object_from_entries(self.opts.object_proto, &[], &[])?
                     } else {
-                        self.heap.new_array_from_values(self.opts.array_proto, &[])?
+                        self.heap
+                            .new_array_from_values(self.opts.array_proto, &[])?
                     };
                     Value::object(o)
                 } else {
@@ -292,7 +293,10 @@ impl<'a> Decoder<'a, '_> {
                 let bytes = self.take(n)?;
                 // Until typed arrays exist: an array of numbers (docs/wire.md).
                 let vals: Vec<Value> = bytes.iter().map(|&b| Value::int(b as i32)).collect();
-                Value::object(self.heap.new_array_from_values(self.opts.array_proto, &vals)?)
+                Value::object(
+                    self.heap
+                        .new_array_from_values(self.opts.array_proto, &vals)?,
+                )
             }
             tag::HOST_REF => {
                 self.pos = at;
