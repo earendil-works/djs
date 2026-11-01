@@ -1305,78 +1305,81 @@ function DateSetter(date, args, first, maxCount, local) {
   for (let i = 0; i < count; i++) {
     %CreateDataPropertyOrThrow(nums, i, ToNumber(%Get(args, i)));
   }
+  if (t !== t && first !== 0) {
+    return t;
+  }
   return %DateSetValue(date, %DateSetFields(t, first, nums, local));
 }
 
-// builtins/date.ts:363 Date.prototype.getTime
+// builtins/date.ts:368 Date.prototype.getTime
 function DatePrototypeGetTime() {
   return %DateValue(this);
 }
 
-// builtins/date.ts:371 Date.prototype.valueOf
+// builtins/date.ts:376 Date.prototype.valueOf
 function DatePrototypeValueOf() {
   return %DateValue(this);
 }
 
-// builtins/date.ts:379 Date.prototype.getTimezoneOffset
+// builtins/date.ts:384 Date.prototype.getTimezoneOffset
 function DatePrototypeGetTimezoneOffset() {
   return %DateTimezoneOffset(%DateValue(this));
 }
 
-// builtins/date.ts:387 Date.prototype.setTime
+// builtins/date.ts:392 Date.prototype.setTime
 function DatePrototypeSetTime(time) {
   %DateValue(this);
   const t = ToNumber(time);
   return %DateSetValue(this, TimeClip(t));
 }
 
-// builtins/date.ts:397 Date.prototype.toString
+// builtins/date.ts:402 Date.prototype.toString
 function DatePrototypeToString() {
   return %DateFormat(%DateValue(this), 1, 3);
 }
 
-// builtins/date.ts:405 Date.prototype.toDateString
+// builtins/date.ts:410 Date.prototype.toDateString
 function DatePrototypeToDateString() {
   return %DateFormat(%DateValue(this), 1, 1);
 }
 
-// builtins/date.ts:413 Date.prototype.toTimeString
+// builtins/date.ts:418 Date.prototype.toTimeString
 function DatePrototypeToTimeString() {
   return %DateFormat(%DateValue(this), 1, 2);
 }
 
-// builtins/date.ts:421 Date.prototype.toISOString
+// builtins/date.ts:426 Date.prototype.toISOString
 function DatePrototypeToISOString() {
   return %DateFormat(%DateValue(this), 2, 3);
 }
 
-// builtins/date.ts:429 Date.prototype.toLocaleString
+// builtins/date.ts:434 Date.prototype.toLocaleString
 function DatePrototypeToLocaleString() {
   return %DateFormat(%DateValue(this), 3, 3);
 }
 
-// builtins/date.ts:437 Date.prototype.toLocaleDateString
+// builtins/date.ts:442 Date.prototype.toLocaleDateString
 function DatePrototypeToLocaleDateString() {
   return %DateFormat(%DateValue(this), 3, 1);
 }
 
-// builtins/date.ts:445 Date.prototype.toLocaleTimeString
+// builtins/date.ts:450 Date.prototype.toLocaleTimeString
 function DatePrototypeToLocaleTimeString() {
   return %DateFormat(%DateValue(this), 3, 2);
 }
 
-// builtins/date.ts:454 Date.prototype.toUTCString Date.prototype.toGMTString
+// builtins/date.ts:459 Date.prototype.toUTCString Date.prototype.toGMTString
 function DatePrototypeToUTCString() {
   return %DateFormat(%DateValue(this), 0, 3);
 }
 
-// builtins/date.ts:462 Date.prototype.getYear
+// builtins/date.ts:467 Date.prototype.getYear
 function DatePrototypeGetYear() {
   const y = %DateGetField(%DateValue(this), 0, true);
   return y - 1900;
 }
 
-// builtins/date.ts:471 Date.prototype.toJSON
+// builtins/date.ts:476 Date.prototype.toJSON
 function DatePrototypeToJSON(key) {
   const o = %ToObject(this);
   const tv = ToPrimitive(o, "number");
@@ -1389,7 +1392,7 @@ function DatePrototypeToJSON(key) {
   return %Call(%Get(o, "toISOString"), o);
 }
 
-// builtins/date.ts:488 Date.prototype[Symbol.toPrimitive]
+// builtins/date.ts:493 Date.prototype[Symbol.toPrimitive]
 function DatePrototypeToPrimitive(hint) {
   if (!%IsObject(this)) {
     throw %NewTypeError("not an object");

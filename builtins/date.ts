@@ -353,6 +353,11 @@ function DateSetter(date: Value, args: Obj, first: i32, maxCount: f64, local: bo
   for (let i: f64 = 0; i < count; i++) {
     CreateDataPropertyOrThrow(nums, i, ToNumber(Get(args, i)));
   }
+  // An invalid date stays as it is (only setFullYear starts over from +0); the value
+  // may have changed while the arguments were converted.
+  if (t !== t && first !== 0) {
+    return t;
+  }
   return DateSetValue(date, DateSetFields(t, first, nums, local));
 }
 

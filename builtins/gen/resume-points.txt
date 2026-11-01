@@ -526,7 +526,7 @@ DatePrototypeValueOf: leaf (Date.prototype.valueOf)
 DatePrototypeGetTimezoneOffset: leaf (Date.prototype.getTimezoneOffset)
 
 DatePrototypeSetTime: reentrant (Date.prototype.setTime)
-  builtins/date.ts:389:18  ToNumber (builtin)
+  builtins/date.ts:394:18  ToNumber (builtin)
 
 DatePrototypeToString: leaf (Date.prototype.toString)
 
@@ -547,13 +547,13 @@ DatePrototypeToUTCString: leaf (Date.prototype.toUTCString, Date.prototype.toGMT
 DatePrototypeGetYear: leaf (Date.prototype.getYear)
 
 DatePrototypeToJSON: reentrant (Date.prototype.toJSON)
-  builtins/date.ts:473:21  ToPrimitive (builtin)
-  builtins/date.ts:480:15  Get (intrinsic)
-  builtins/date.ts:480:10  Call (intrinsic)
+  builtins/date.ts:478:21  ToPrimitive (builtin)
+  builtins/date.ts:485:15  Get (intrinsic)
+  builtins/date.ts:485:10  Call (intrinsic)
 
 DatePrototypeToPrimitive: reentrant (Date.prototype[Symbol.toPrimitive])
-  builtins/date.ts:493:12  OrdinaryToPrimitive (builtin)
-  builtins/date.ts:496:12  OrdinaryToPrimitive (builtin)
+  builtins/date.ts:498:12  OrdinaryToPrimitive (builtin)
+  builtins/date.ts:501:12  OrdinaryToPrimitive (builtin)
 
 InstallErrorCause: reentrant
   builtins/error.ts:7:9  HasProperty (intrinsic)
