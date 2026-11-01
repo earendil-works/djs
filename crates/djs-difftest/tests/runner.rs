@@ -27,10 +27,12 @@ fn write(dir: &Path, name: &str, text: &str) {
     fs::write(dir.join(name), text).unwrap();
 }
 
+/// Generous: these cases take milliseconds, and a loaded machine must not turn that
+/// into a timeout (0020). Only `timeout.js` has a short limit, via its directive.
 fn opts(is_djs: bool) -> Options {
     Options {
         jobs: 4,
-        timeout: Duration::from_secs(1),
+        timeout: Duration::from_secs(60),
         memory_limit: None,
         progress: false,
         is_djs,
@@ -58,7 +60,11 @@ fn qjs_comparisons() {
     write(&dir, "area/differs.js", "console.log('actual');\n");
     write(&dir, "area/differs.expected", "expected\n=== completed\n");
     write(&dir, "area/missing.js", "1;\n");
-    write(&dir, "area/timeout.js", "for (;;) {}\n");
+    write(
+        &dir,
+        "area/timeout.js",
+        "// difftest: timeout 0.5\nfor (;;) {}\n",
+    );
     write(&dir, "area/timeout.expected", "=== completed\n");
     // Stack frames are not compared: an expected file without them matches.
     write(
@@ -94,7 +100,10 @@ fn qjs_comparisons() {
         matches!(verdict("area/missing.js").0, Verdict::Fail { reason, .. } if reason.contains("no .expected"))
     );
     let (v, done) = verdict("area/timeout.js");
-    assert!(matches!(v, Verdict::Fail { .. }));
+    assert!(
+        matches!(v, Verdict::Fail { reason, .. } if reason == "timeout: no result within 0.5s"),
+        "{v:?}"
+    );
     assert_eq!(done, &Some(Done::Timeout));
     fs::remove_dir_all(&dir).unwrap();
 }

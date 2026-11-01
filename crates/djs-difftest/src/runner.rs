@@ -93,6 +93,14 @@ pub fn run_one(
             let expected = crate::engine::normalize(&expected);
             if expected == actual {
                 Verdict::Pass
+            } else if let Some(reason) =
+                engine_failure(&result.done, case.meta.timeout.unwrap_or(opts.timeout))
+            {
+                // Not a behavior difference: say so instead of pointing at a line.
+                Verdict::Fail {
+                    reason,
+                    diff: diff::line_diff(&expected, &actual, 3),
+                }
             } else {
                 Verdict::Fail {
                     reason: diff::first_difference(&expected, &actual),
@@ -110,6 +118,18 @@ pub fn run_one(
         transcript: actual,
         done: Some(result.done),
         elapsed: start.elapsed(),
+    }
+}
+
+/// A timeout or crash is reported as such rather than as a transcript difference.
+fn engine_failure(done: &Done, timeout: Duration) -> Option<String> {
+    match done {
+        Done::Timeout => Some(format!(
+            "timeout: no result within {:.1}s",
+            timeout.as_secs_f64()
+        )),
+        Done::Crash(msg) => Some(format!("crash: {msg}")),
+        _ => None,
     }
 }
 

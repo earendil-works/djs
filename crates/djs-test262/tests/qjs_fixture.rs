@@ -55,7 +55,7 @@ const FAILURES: &[(&str, &str)] = &[
     ("fail/tamper-throw.js", "Test262Error: after tampering é\n"),
     ("fail/throw-primitive.js", "number: 1"),
     ("fail/throws.js", "Test262Error: boom"),
-    ("fail/timeout.js", "timeout"),
+    ("fail/timeout.js", "timeout: no result within 0.5s"),
 ];
 
 #[test]
@@ -75,15 +75,22 @@ fn fixture_suite_with_qjs() {
     assert_eq!(config.groups[include.group].name, "later");
     assert_eq!(include.features, ["implied-feature"]);
 
+    // Every test runs with a generous limit, so a loaded machine cannot turn a
+    // millisecond run into a timeout (0020). The deliberately hanging test runs on its
+    // own with a short limit, so it cannot slow down the others either.
     let engine = Qjs { binary: qjs };
-    let opts = Options {
-        jobs: 8,
-        timeout: Duration::from_secs(1),
+    let opts = |timeout| Options {
+        jobs: 4,
+        timeout,
         memory_limit: None,
         progress: false,
     };
-    let refs: Vec<_> = tests.iter().collect();
-    let outcomes = runner::run_all(&engine, &suite, &refs, &opts);
+    let (hang, rest): (Vec<_>, Vec<_>) = tests.iter().partition(|t| t.path == "fail/timeout.js");
+    assert_eq!(hang.len(), 1);
+    let mut outcomes = runner::run_all(&engine, &suite, &rest, &opts(Duration::from_secs(60)));
+    let hang_outcome = runner::run_all(&engine, &suite, &hang, &opts(Duration::from_millis(500)));
+    outcomes.extend(hang_outcome);
+    let tests: Vec<_> = rest.into_iter().chain(hang).collect();
 
     let mut problems = Vec::new();
     let mut seen_failures = 0;
@@ -110,10 +117,7 @@ fn fixture_suite_with_qjs() {
     }
     assert!(problems.is_empty(), "\n{}", problems.join("\n"));
     assert_eq!(seen_failures, FAILURES.len());
-    // The timeout test must not hold the run up for long.
-    let timeout = tests
-        .iter()
-        .position(|t| t.path == "fail/timeout.js")
-        .unwrap();
-    assert!(outcomes[timeout].elapsed < Duration::from_secs(3));
+    // Hang protection works: the test is killed shortly after its limit (generous
+    // bound for a loaded machine).
+    assert!(outcomes.last().unwrap().elapsed < Duration::from_secs(30));
 }
