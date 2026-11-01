@@ -1,7 +1,7 @@
 # 0132: Initial arena room for VMs from the base image (json peak regression)
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0132-initial-arena-room
 depends-on: 0128
 guide: docs/guide/gc.md (peak memory section) if behavior changes
