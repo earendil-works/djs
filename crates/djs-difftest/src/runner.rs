@@ -28,6 +28,9 @@ pub struct StressMismatch {
     pub label: String,
     pub reason: String,
     pub diff: String,
+    /// The stressed run hit its time limit while the plain run finished: reported, but
+    /// not a failure (a stress mode can be orders of magnitude slower, D1347).
+    pub timed_out: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,18 +101,20 @@ pub fn run_one(
     };
     let mut stress = Vec::new();
     for (label, variant) in &opts.stress {
-        let t = transcript(&execute(
-            variant.as_ref(),
-            case,
-            prelude_file,
-            prelude,
-            opts,
-        ));
+        let r = execute(variant.as_ref(), case, prelude_file, prelude, opts);
+        let t = transcript(&r);
         if t != actual {
+            let timed_out =
+                matches!(r.done, Done::Timeout) && !matches!(result.done, Done::Timeout);
             stress.push(StressMismatch {
                 label: label.clone(),
-                reason: diff::first_difference(&actual, &t),
+                reason: if timed_out {
+                    "timed out, not compared".into()
+                } else {
+                    diff::first_difference(&actual, &t)
+                },
                 diff: diff::line_diff(&actual, &t, 3),
+                timed_out,
             });
         }
     }

@@ -29,6 +29,8 @@ use crate::engine::{Done, Engine, Job, RunResult};
 pub const DEFAULT_FUEL: u64 = 20_000_000_000;
 /// Fuel per `run` in the plain mode; the wall-clock timeout is checked between slices.
 const SLICE: u64 = 10_000_000;
+/// Fuel per `run` under `--gc-stress`.
+const STRESS_SLICE: u64 = 20_000;
 
 const STALL: &str = "Error: The script is waiting on a promise that can never settle: no tool call is pending, and timers do not exist here.";
 
@@ -133,7 +135,10 @@ impl Djs {
             .map_err(|e| format!("Vm::call: {e:?}"))?;
 
         let budget = job.fuel.unwrap_or(DEFAULT_FUEL);
-        let slice = self.suspend_every.unwrap_or(SLICE).min(budget.max(1));
+        // Under GC stress a slice can take a long time (a collection at every safepoint),
+        // so the wall-clock limit is checked more often.
+        let plain_slice = if self.gc_stress { STRESS_SLICE } else { SLICE };
+        let slice = self.suspend_every.unwrap_or(plain_slice).min(budget.max(1));
         let start = Instant::now();
         let mut used = 0u64;
         loop {

@@ -1374,3 +1374,14 @@ shortcuts:
   value changes);
 - a new-key branch in `create_data_property` for non-Array objects (a table insert
   without building and validating a descriptor).
+
+## D1347: A stressed difftest run that only times out is reported, not failed
+date: 2026-11-01 · by: infra · issue: 0034
+Amends D1161. Stress variants (`--suspend-every`, `--gc-stress`) can be orders of
+magnitude slower than the plain run: once 0034 made `dquickts/builtin/test_rope.js`
+pass (200k rope operations), its stressed runs took 15 minutes in the debug gate, because
+the wall-clock limit was only checked between 10M-fuel slices. Now GC stress runs in
+20k-fuel slices so the limit (the case's timeout) is honored, and a stressed run that
+times out while the plain run finished is listed in the `stress:` line ("timed out, not
+compared") instead of failing. Any other difference from the plain run stays a hard
+failure.

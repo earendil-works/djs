@@ -264,21 +264,38 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
     if args.clusters && !failures.is_empty() {
         print!("\nfailure clusters:\n{}", clusters(&cases, &outcomes));
     }
-    // Stress variants must behave exactly like the plain run: always a hard failure.
+    // Stress variants must behave exactly like the plain run: always a hard failure,
+    // except a stressed run that only ran out of time (reported, D1347).
     let mismatches: Vec<(&Case, &runner::StressMismatch)> = cases
         .iter()
         .zip(&outcomes)
         .flat_map(|(c, o)| o.stress.iter().map(move |m| (c, m)))
+        .filter(|(_, m)| !m.timed_out)
+        .collect();
+    let slow: Vec<String> = cases
+        .iter()
+        .zip(&outcomes)
+        .flat_map(|(c, o)| {
+            o.stress
+                .iter()
+                .filter(|m| m.timed_out)
+                .map(move |m| format!("{} [{}]", c.name, m.label))
+        })
         .collect();
     if !labels.is_empty() {
+        let note = if slow.is_empty() {
+            String::new()
+        } else {
+            format!(" (timed out, not compared: {})", slow.join(", "))
+        };
         if mismatches.is_empty() {
             println!(
-                "\nstress: OK, {} identical to the plain run",
+                "\nstress: OK, {} identical to the plain run{note}",
                 labels.join(" and ")
             );
         } else {
             println!(
-                "\nstress: {} transcripts differ from the plain run:",
+                "\nstress: {} transcripts differ from the plain run{note}:",
                 mismatches.len()
             );
             for (c, m) in &mismatches {
