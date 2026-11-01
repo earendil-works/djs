@@ -181,6 +181,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("ToPrimitive", B, 2, false),
     i("ToNumber", B, 1, false),
     i("ToString", B, 1, false),
+    i("InstanceofOperator", B, 2, false),
 ];
 
 /// The id of the intrinsic `name`.

@@ -473,13 +473,13 @@ OrdinaryHasInstance: reentrant
   builtins/function.ts:102:12  InstanceofOperator (builtin)
   builtins/function.ts:107:20  Get (intrinsic)
 
-InstanceofOperator: reentrant
-  builtins/function.ts:126:32  GetMethod (builtin)
-  builtins/function.ts:128:22  Call (intrinsic)
-  builtins/function.ts:133:10  OrdinaryHasInstance (builtin)
+InstanceofOperator: reentrant (%InstanceofOperator)
+  builtins/function.ts:130:32  GetMethod (builtin)
+  builtins/function.ts:132:22  Call (intrinsic)
+  builtins/function.ts:137:10  OrdinaryHasInstance (builtin)
 
 FunctionPrototypeHasInstance: reentrant (Function.prototype[Symbol.hasInstance])
-  builtins/function.ts:142:10  OrdinaryHasInstance (builtin)
+  builtins/function.ts:146:10  OrdinaryHasInstance (builtin)
 
 ThrowTypeError: leaf (get Function.prototype.caller, set Function.prototype.caller, get Function.prototype.arguments, set Function.prototype.arguments)
 

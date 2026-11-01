@@ -1367,6 +1367,21 @@ impl<'h> Exec<'h> {
             }
             Op::Instanceof => {
                 let (v, f) = (self.top(1), self.top(0));
+                if self.instanceof_needs_builtin(f) {
+                    // A custom Symbol.hasInstance or a `prototype` getter: the spec's
+                    // InstanceofOperator in the builtin language (builtins/function.ts).
+                    let g = realm::installed_intrinsic(self.heap, intrinsics::INSTANCEOF_OPERATOR);
+                    if !g.is_undefined() {
+                        let base = self.sp - 2;
+                        self.ensure(base + 4)?;
+                        self.set(base + 2, v);
+                        self.set(base + 3, f);
+                        self.set(base, g);
+                        self.set(base + 1, Value::UNDEFINED);
+                        self.sp = base + 4;
+                        return self.call(base, 2, Continuation::PushResult, next);
+                    }
+                }
                 let r = self.instance_of(v, f)?;
                 self.sp -= 2;
                 self.push(Value::bool(r));
@@ -2214,7 +2229,37 @@ impl<'h> Exec<'h> {
         Ok(r)
     }
 
-    /// OrdinaryHasInstance (no `Symbol.hasInstance` yet).
+    /// Whether `v instanceof f` needs the builtin InstanceofOperator: `f` has a
+    /// Symbol.hasInstance other than Function.prototype's (a getter, a user method, a
+    /// non-callable value), or its `prototype` is an accessor. The common case (a plain
+    /// function inheriting the default) stays in [`Exec::instance_of`].
+    fn instanceof_needs_builtin(&self, f: Value) -> bool {
+        use crate::heap::atoms::{PROTOTYPE, SYM_HAS_INSTANCE};
+        let Some(fo) = f.as_object() else {
+            return false;
+        };
+        let default = self.heap.get_own_property(
+            intrinsic_obj(self.heap, Intrinsic::FunctionProto),
+            SYM_HAS_INSTANCE,
+        );
+        let found = self
+            .heap
+            .find_property(fo, SYM_HAS_INSTANCE)
+            .map(|(_, p)| p);
+        if found != default {
+            return true;
+        }
+        // A bound function defers to its target's InstanceofOperator.
+        if self.heap.object_class(fo) == ObjectClass::BoundFunction {
+            return self.instanceof_needs_builtin(self.heap.object_slot(fo, 0));
+        }
+        matches!(
+            self.heap.find_property(fo, PROTOTYPE),
+            Some((_, Property::Accessor { .. }))
+        )
+    }
+
+    /// OrdinaryHasInstance, for functions with the default Symbol.hasInstance.
     fn instance_of(&mut self, v: Value, f: Value) -> Result<bool, Fault> {
         let Some(fo) = f
             .as_object()

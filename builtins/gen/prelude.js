@@ -1245,7 +1245,7 @@ function OrdinaryHasInstance(c, o) {
   return false;
 }
 
-// builtins/function.ts:122
+// builtins/function.ts:126 %InstanceofOperator
 function InstanceofOperator(v, target) {
   if (!%IsObject(target)) {
     throw %NewTypeError("invalid 'instanceof' right operand");
@@ -1260,12 +1260,12 @@ function InstanceofOperator(v, target) {
   return OrdinaryHasInstance(target, v);
 }
 
-// builtins/function.ts:141 Function.prototype[Symbol.hasInstance]
+// builtins/function.ts:145 Function.prototype[Symbol.hasInstance]
 function FunctionPrototypeHasInstance(v) {
   return OrdinaryHasInstance(this, v);
 }
 
-// builtins/function.ts:153 get Function.prototype.caller set Function.prototype.caller get Function.prototype.arguments set Function.prototype.arguments
+// builtins/function.ts:157 get Function.prototype.caller set Function.prototype.caller get Function.prototype.arguments set Function.prototype.arguments
 function ThrowTypeError(v) {
   throw %NewTypeError("invalid property access");
 }
@@ -2793,4 +2793,5 @@ function SymbolUnscopables() {
 %InstallIntrinsic("ToPrimitive", ToPrimitive);
 %InstallIntrinsic("ToNumber", ToNumber);
 %InstallIntrinsic("ToString", ToString);
+%InstallIntrinsic("InstanceofOperator", InstanceofOperator);
 })();

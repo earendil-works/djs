@@ -163,6 +163,8 @@ const INSTALL_METHOD: u16 = id("InstallMethod");
 const INSTALL_INTRINSIC: u16 = id("InstallIntrinsic");
 /// The installed `%ToPrimitive`, used by the interpreter's slow paths.
 pub(super) const TO_PRIMITIVE: u16 = id("ToPrimitive");
+/// The installed `%InstanceofOperator`, for `instanceof` with a custom Symbol.hasInstance.
+pub(super) const INSTANCEOF_OPERATOR: u16 = id("InstanceofOperator");
 
 /// The libm intrinsics (D1150): `F64Sin(x)` and friends.
 fn math_leaf(id: u16, x: f64, y: f64) -> Option<f64> {
@@ -1018,6 +1020,18 @@ impl Exec<'_> {
             return Ok(());
         }
         let key_name = self.heap.str_to_string(key_name.as_string().expect("name"));
+        if path == "Function.prototype" && (key_name == "caller" || key_name == "arguments") {
+            // %ThrowTypeError% (10.2.4.1): an unnamed, frozen function shared by the
+            // restricted accessors.
+            let empty = Value::string(self.heap.atom_string(atoms::EMPTY)?);
+            for (k, v) in [(atoms::NAME, empty), (atoms::LENGTH, Value::int(0))] {
+                let d = PropertyDescriptor::data(v, PropFlags::NONE);
+                self.heap.define_own_property(fo, k, &d)?;
+            }
+            self.mark_builtin(fo, OBJ_BUILTIN);
+            self.heap.prevent_extensions(fo);
+            return Ok(());
+        }
         let name = format!("{} {key_name}", if setter { "set" } else { "get" });
         let name = Value::string(self.heap.alloc_str(&name)?);
         self.name_and_length(fo, name, if setter { 1.0 } else { 0.0 })?;

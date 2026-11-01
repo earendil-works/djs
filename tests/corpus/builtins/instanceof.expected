@@ -1,0 +1,8 @@
+true false
+true true true false
+TypeError: operand 'prototype' property is not an object
+TypeError: invalid 'instanceof' right operand
+TypeError: not a function
+true
+true true 0 true false
+=== completed

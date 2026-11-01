@@ -118,7 +118,11 @@ function OrdinaryHasInstance(c: Value, o: Value): boolean {
   return false;
 }
 
-/** InstanceofOperator ( V, target ), 13.10.2. */
+/**
+ * InstanceofOperator ( V, target ), 13.10.2. The interpreter calls it for `instanceof`
+ * when the target has its own Symbol.hasInstance or a `prototype` getter.
+ * @intrinsic
+ */
 function InstanceofOperator(v: Value, target: Value): boolean {
   if (!IsObject(target)) {
     throw NewTypeError("invalid 'instanceof' right operand");
