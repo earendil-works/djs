@@ -1,11 +1,11 @@
 # The tour
 
 - [What djs is for](introduction.md)
-- [One arena: all state in a byte array]()
+- [One arena: all state in a byte array](arena.md)
 - [Values and NaN-boxing](values.md)
-- [Cells, strings and objects]()
-- [The compiler: tokens to bytecode, no AST]()
-- [The interpreter: frames in the heap]()
+- [Cells, strings and objects](heap.md)
+- [The compiler: tokens to bytecode, no AST](compiler.md)
+- [The interpreter: frames in the heap](interpreter.md)
 - [Suspending anywhere: fuel and host calls]()
 - [The garbage collector]()
 - [Snapshots and images]()

@@ -40,6 +40,7 @@ in, so the Markdown reads the same on GitHub. Never edit it by hand.
 | `ops-all` | every opcode |
 | `intrinsics-all` | every intrinsic, descriptions from builtins/intrinsics.d.ts |
 | `decisions D1050 D1051 ...` | a list of decisions with their titles |
+| `excerpt PATH "ANCHOR" "START" N` | N lines of a repository file: from the first line containing START after the line containing ANCHOR (quoted code that cannot drift) |
 | `disasm` | the bytecode of the closest `js` block above |
 | `run` | the output of the closest `js` block above, as this build prints it |
 

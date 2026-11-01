@@ -172,9 +172,9 @@ pub fn regen(page: &str, md: &str, cx: &mut Ctx) -> String {
                 spec.trim()
             ));
         }
-        let mut words = spec.split_whitespace();
-        let name = words.next().unwrap_or("");
-        let args: Vec<&str> = words.collect();
+        let words = split_args(spec);
+        let name = words.first().map_or("", String::as_str);
+        let args: Vec<&str> = words.iter().skip(1).map(String::as_str).collect();
         let body = generate(page, name, &args, last_js.as_deref(), &old, cx);
         out.push_str(&body);
         out.push_str("<!-- /gen -->\n");
@@ -244,6 +244,7 @@ fn generate(
             }
             s
         }
+        "excerpt" => excerpt(args, page, cx),
         "run" | "disasm" => {
             let Some(src) = last_js else {
                 cx.errors
@@ -265,6 +266,86 @@ fn generate(
             String::new()
         }
     }
+}
+
+/// A region's arguments: whitespace-separated words, or `"quoted strings"` (no escapes).
+fn split_args(spec: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = spec.trim();
+    while !rest.is_empty() {
+        if let Some(q) = rest.strip_prefix('"') {
+            let end = q.find('"').unwrap_or(q.len());
+            out.push(q[..end].to_string());
+            rest = q.get(end + 1..).unwrap_or("").trim_start();
+        } else {
+            let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+            out.push(rest[..end].to_string());
+            rest = rest[end..].trim_start();
+        }
+    }
+    out
+}
+
+/// `excerpt PATH ANCHOR START N`: `N` lines of a repository file, starting at the first
+/// line that contains `START` after the first line that contains `ANCHOR`, so that
+/// quoted code (generated code in particular) cannot drift from the file: `check` fails
+/// when it changes or the anchors disappear.
+fn excerpt(args: &[&str], page: &str, cx: &mut Ctx) -> String {
+    let [path, anchor, start, n] = args else {
+        cx.errors
+            .push(format!("{page}: gen:excerpt takes PATH ANCHOR START N"));
+        return String::new();
+    };
+    let Ok(n) = n.parse::<usize>() else {
+        cx.errors
+            .push(format!("{page}: gen:excerpt: bad line count {n}"));
+        return String::new();
+    };
+    let Ok(text) = std::fs::read_to_string(crate::repo().join(path)) else {
+        cx.errors
+            .push(format!("{page}: gen:excerpt: cannot read {path}"));
+        return String::new();
+    };
+    match excerpt_lines(&text, anchor, start, n) {
+        Some(lines) => {
+            let lang = match path.rsplit('.').next() {
+                Some("rs") => "rust",
+                Some(ext @ ("ts" | "js")) => ext,
+                _ => "text",
+            };
+            fenced(lang, &dedent(&lines))
+        }
+        None => {
+            cx.errors.push(format!(
+                "{page}: gen:excerpt: {path} has no {start:?} after {anchor:?}"
+            ));
+            String::new()
+        }
+    }
+}
+
+fn excerpt_lines<'a>(text: &'a str, anchor: &str, start: &str, n: usize) -> Option<Vec<&'a str>> {
+    let mut lines = text.lines().skip_while(|l| !l.contains(anchor));
+    lines.next()?;
+    let mut lines = lines.skip_while(|l| !l.contains(start)).peekable();
+    lines.peek()?;
+    Some(lines.take(n).collect())
+}
+
+/// Removes the indentation all non-empty lines share.
+fn dedent(lines: &[&str]) -> String {
+    let indent = lines
+        .iter()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.len() - l.trim_start().len())
+        .min()
+        .unwrap_or(0);
+    let mut s = String::new();
+    for l in lines {
+        s.push_str(l.get(indent..).unwrap_or("").trim_end());
+        s.push('\n');
+    }
+    s
 }
 
 fn fenced(lang: &str, body: &str) -> String {
@@ -361,6 +442,23 @@ fn intrinsics_table(cx: &mut Ctx) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn args_may_be_quoted() {
+        assert_eq!(
+            split_args(r#"excerpt a/b.rs "fn x(" "5 => {" 3 "#),
+            ["excerpt", "a/b.rs", "fn x(", "5 => {", "3"]
+        );
+    }
+
+    #[test]
+    fn excerpts_start_after_the_anchor() {
+        let text = "fn a() {\n    5 => {}\n}\nfn b() {\n    5 => {\n        x\n    }\n}\n";
+        let lines = excerpt_lines(text, "fn b(", "5 =>", 2).unwrap();
+        assert_eq!(dedent(&lines), "5 => {\n    x\n");
+        assert!(excerpt_lines(text, "fn c(", "5 =>", 2).is_none());
+        assert!(excerpt_lines(text, "fn b(", "6 =>", 2).is_none());
+    }
 
     fn cx() -> Ctx {
         Ctx::new(

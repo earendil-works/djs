@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 290" width="760" height="290" role="img" aria-label="Two objects with the same keys share one shape chain; each has only its own values block">
+<title>Two objects with the same keys share one shape chain; each has only its own values block</title>
+<style>
+  text { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; fill: #1f2328; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; }
+  .small { font-size: 10.5px; fill: #59636e; }
+  .title { font-weight: 600; font-size: 13px; }
+  .host { fill: #f6f8fa; stroke: #8c959f; }
+  .engine { fill: #ddf4ff; stroke: #54aeff; }
+  .arena { fill: #fff1e5; stroke: #fb8f44; }
+  .cell { fill: #ffffff; stroke: #fb8f44; }
+  .arrow { stroke: #59636e; fill: none; stroke-width: 1.3; marker-end: url(#a); }
+  .faint { stroke: #8c959f; fill: none; stroke-width: 1.1; stroke-dasharray: 4 3; marker-end: url(#a); }
+  .head { fill: #59636e; }
+  @media (prefers-color-scheme: dark) {
+    text { fill: #e6edf3; }
+    .small { fill: #9198a1; }
+    .host { fill: #161b22; stroke: #6e7681; }
+    .engine { fill: #0c2d6b; stroke: #388bfd; }
+    .arena { fill: #2b1a0a; stroke: #db6d28; }
+    .cell { fill: #0d1117; stroke: #db6d28; }
+    .arrow { stroke: #9198a1; }
+    .faint { stroke: #6e7681; }
+    .head { fill: #9198a1; }
+  }
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+
+<!-- Objects -->
+<text class="title" x="20" y="22">per object</text>
+<rect class="cell" x="20" y="34" width="150" height="44" rx="4"/>
+<text class="mono" x="32" y="52">Object</text>
+<text class="small" x="32" y="68">PROPS: the values block</text>
+<rect class="cell" x="20" y="164" width="150" height="44" rx="4"/>
+<text class="mono" x="32" y="182">Object</text>
+<text class="small" x="32" y="198">PROPS: the values block</text>
+
+<rect class="arena" x="210" y="34" width="190" height="44" rx="4"/>
+<text class="mono" x="222" y="52">PropValues</text>
+<text class="mono small" x="222" y="68">SHAPE │ 1 │ "row 1"</text>
+<rect class="arena" x="210" y="164" width="190" height="44" rx="4"/>
+<text class="mono" x="222" y="182">PropValues</text>
+<text class="mono small" x="222" y="198">SHAPE │ 2 │ "row 2"</text>
+<path class="arrow" d="M170 56 L208 56"/>
+<path class="arrow" d="M170 186 L208 186"/>
+
+<!-- Shapes -->
+<text class="title" x="450" y="22">shared, one chain per key sequence</text>
+<rect class="engine" x="450" y="100" width="130" height="44" rx="4"/>
+<text class="mono" x="462" y="118">Shape  COUNT 2</text>
+<text class="small" x="462" y="134">last key: name</text>
+<rect class="engine" x="450" y="190" width="130" height="44" rx="4"/>
+<text class="mono" x="462" y="208">Shape  COUNT 1</text>
+<text class="small" x="462" y="224">last key: id</text>
+<rect class="engine" x="620" y="190" width="120" height="44" rx="4"/>
+<text class="mono" x="632" y="208">root Shape</text>
+<text class="small" x="632" y="224">Roots.ROOT_SHAPE</text>
+<path class="arrow" d="M400 50 C 430 50, 440 90, 470 100"/>
+<path class="arrow" d="M400 180 C 430 170, 440 150, 470 144"/>
+<path class="arrow" d="M515 144 L515 188"/>
+<text class="small" x="521" y="170">PARENT</text>
+<path class="arrow" d="M580 212 L618 212"/>
+<text class="small" x="584" y="228">PARENT</text>
+<path class="faint" d="M670 190 C 660 160, 600 160, 574 188"/>
+<text class="small" x="600" y="158">TRANSITIONS</text>
+
+<!-- Descriptors -->
+<rect class="host" x="450" y="250" width="290" height="30" rx="4"/>
+<text class="mono small" x="462" y="269">DESCS: [2, id, flags, name, flags]  shared</text>
+<path class="faint" d="M515 234 L515 248"/>
+<text class="small" x="20" y="248">An object holds only its values; a property's slot is its descriptor's index.</text>
+<text class="small" x="20" y="264">Adding a key moves the object to a child shape, found in the parent's</text>
+<text class="small" x="20" y="280">sorted TRANSITIONS or created there.</text>
+</svg>
