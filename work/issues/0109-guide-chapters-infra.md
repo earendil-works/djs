@@ -1,7 +1,7 @@
 # 0109: Guide chapters: builtins, host interface, testing
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0109-guide-chapters-infra
 depends-on: 0103 (part 1: djs-docs and the authoring guide)
 guide: docs/guide/ (three new tour chapters; SUMMARY.md)
