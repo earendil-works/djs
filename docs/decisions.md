@@ -402,3 +402,29 @@ returns `Slow` before any observable effect for:
 Cycle and depth errors found by the fast path are final, because everything before them
 was plain data. Its output buffer is bounded by the string limit and the heap's remaining
 room.
+
+## D1130: The bytecode table and emitter API
+date: 2026-11-01 · by: lexer · issue: 0013
+`bytecode/ops.rs` declares every opcode once:
+`Name method(imm: Kind, ...) pop N [+ imm K] push M cost Class [flags ...];`. The macro
+generates `Op` (`repr(u8)`, table order, which the interpreter matches on), `OPS:
+&[OpInfo]` (name, immediate kinds, size, stack effect, cost class, flags THROWS / CALLS /
+PHASE1 / JUMP / BRANCH / TERM / GOSUB / ALLOC), and one typed emitter method per opcode
+on `CodeBuf<M>`. The label mode is a type: `CodeBuf<Phase1>` keeps labels symbolic (the
+`label` pseudo-op, label ids in `Target`s), `CodeBuf<Final>` patches `i32` offsets
+relative to the end of the instruction on `finish`. The resolution re-emit uses
+`CodeBuf::with_labels(n)` to reuse the phase-1 label ids. Decoding, disassembly and the
+stack checker are table-driven with no per-opcode code. `OPS_HASH` (FNV-1a over the
+table) changes with any table edit. `build_hash(LAYOUT_HASH, OPS_HASH)` is meant for heap
+images that contain bytecode.
+
+## D1131: Code cells
+date: 2026-11-01 · by: lexer · issue: 0013
+`heap/cells.rs` gains kinds 12 to 16: `FuncTemplate`, `Script`, `BoxCell` (the Box of
+compiler.md 5.4; named so it does not shadow `alloc::boxed::Box`), `Bytes` (raw bytes,
+untraced) and `RefArray` (traced refs to non-JS cells). Code, the line table and the
+handler table (16-byte records) are `Bytes` cells read in place; constants are a
+`ValueArray`, children a `RefArray`, capture descriptors and names `U32Array`s.
+`bytecode::alloc_template` writes a template from its parts after running the stack
+checker, which also fills in `STACK`. None of this needs the internal-ref Value tag
+(D007). Only putting templates or Boxes into object slots does, which is 0015's job.
