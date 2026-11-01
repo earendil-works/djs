@@ -75,25 +75,51 @@ fn pages_coalesce_and_fit() {
     assert!(p.free_runs().is_empty());
 }
 
-#[test]
-fn pages_extend_in_place() {
+/// Pages with blocks of the given sizes allocated in order, then the listed ones freed.
+fn laid_out(sizes: &[usize], freed: &[usize]) -> (Pages<Fake>, Vec<usize>) {
     let mut p = Pages::new(Fake::new(64));
-    let a = p.alloc(2).unwrap();
-    // At memory's end: grows memory.
-    assert!(p.extend(a, 2, 5));
-    assert_eq!(p.memory().pages(), 5);
-    let b = p.alloc(1).unwrap();
-    assert_eq!(b, 5);
-    // Blocked by `b`.
-    assert!(!p.extend(a, 5, 6));
-    p.free(b, 1);
-    // Into the free page and memory's end.
-    assert!(p.extend(a, 5, 9));
-    assert_eq!(p.memory().pages(), 9);
-    assert!(p.free_runs().is_empty());
+    let starts: Vec<usize> = sizes.iter().map(|&n| p.alloc(n).unwrap()).collect();
+    for &i in freed {
+        p.free(starts[i], sizes[i]);
+    }
+    (p, starts)
+}
+
+#[test]
+fn growing_blocks_reuse_pages_before_growing_memory() {
+    // 1. Into the free run after it.
+    let (mut p, s) = laid_out(&[2, 3, 1], &[1]);
+    assert_eq!(p.grow_block(s[0], 2, 4), Some(0));
+    assert_eq!(p.free_runs(), &[(4, 1)]);
+    assert_eq!(p.memory().pages(), 6);
+    // 2. Down into the run before it, and all of the one after.
+    let (mut p, s) = laid_out(&[3, 2, 1, 1], &[0, 2]);
+    assert_eq!(p.grow_block(s[1], 2, 5), Some(1), "two pages down, one up");
+    assert_eq!(p.free_runs(), &[(0, 1)]);
+    assert_eq!(p.memory().pages(), 7);
+    // 3. Elsewhere: the best-fitting free run, not memory growth.
+    let (mut p, s) = laid_out(&[4, 1, 2, 1, 3, 1], &[0, 4]);
+    assert_eq!(
+        p.grow_block(s[2], 2, 3),
+        Some(8),
+        "the 3-page run, not the 4-page one"
+    );
+    assert_eq!(p.free_runs(), &[(0, 4), (5, 2)]);
+    assert_eq!(p.memory().pages(), 12);
+    // 4. In place at memory's end.
+    let (mut p, s) = laid_out(&[1, 2], &[]);
+    assert_eq!(p.grow_block(s[1], 2, 6), Some(1));
+    assert_eq!(p.memory().pages(), 7);
+    // 5. At memory's end.
+    let (mut p, s) = laid_out(&[2, 1, 1], &[]);
+    assert_eq!(p.grow_block(s[0], 2, 3), Some(4));
+    assert_eq!(p.free_runs(), &[(0, 2)]);
+    assert_eq!(p.memory().pages(), 7);
     // Refused by the host: no change.
-    assert!(!p.extend(a, 9, 100));
-    assert_eq!(p.memory().pages(), 9);
+    let runs = p.free_runs().to_vec();
+    assert_eq!(p.grow_block(4, 3, 100), None);
+    assert_eq!(p.free_runs(), &runs[..]);
+    assert_eq!(p.memory().pages(), 7);
 }
 
 #[test]
