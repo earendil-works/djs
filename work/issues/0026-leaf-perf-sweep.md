@@ -1,7 +1,7 @@
 # 0026: Leaf performance sweep (arena inlining, opt-level, allocation, stringify)
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0026-leaf-perf-sweep
 depends-on: 0023
 touches: crates/djs-core/src/heap/ (arena accessors, allocation), crates/djs-core/src/json/, crates/djs-core/src/wire/, Cargo.toml ([profile.wasm] only), crates/djs-bench/ (new benchmarks)
