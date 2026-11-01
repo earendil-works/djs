@@ -6,6 +6,13 @@
 //! 2. suspension: fuel 1 per `run`, and at every stop (out of fuel or a host call) the VM
 //!    continues in a fresh one restored from its heap image;
 //! 3. GC stress: a collection at every safepoint.
+//!
+//! The plain and suspension modes must also leave identical heap images after a final
+//! collection (0072, D1720): the copying GC lays the heap out as a function of the object
+//! graph (D1090) and collects at the same points under any slicing and restore (D1601), so
+//! a stop or an image round trip that changes the graph shows. GC stress is a different
+//! collection policy: weak tables lose their dead entries at other times (and compact
+//! differently), so its image is not compared.
 
 use std::path::{Path, PathBuf};
 
@@ -40,9 +47,19 @@ fn cases_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/e2e")
 }
 
-/// Runs one case and returns its output: console.log lines, then `Uncaught ...` or a
-/// compile error if there is one.
-fn run_case(src: &str, name: &str, mode: Mode) -> String {
+/// FNV-1a, 64 bits.
+fn fnv64(bytes: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for &b in bytes {
+        h = (h ^ b as u64).wrapping_mul(0x0100_0000_01b3);
+    }
+    h
+}
+
+/// Runs one case and returns its output (console.log lines, then `Uncaught ...` or a
+/// compile error if there is one) and the hash of the heap image after a final collection
+/// (`None` for a compile error).
+fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<u64>) {
     let exec = ExecOptions {
         gc_stress: matches!(mode, Mode::GcStress),
         ..Default::default()
@@ -66,7 +83,8 @@ fn run_case(src: &str, name: &str, mode: Mode) -> String {
         Ok(f) => f,
         Err(e) => {
             assert_eq!(e.kind, CompileErrorKind::Syntax);
-            return format!("SyntaxError: {} at {}:{}\n", e.message, e.line, e.col);
+            let msg = format!("SyntaxError: {} at {}:{}\n", e.message, e.line, e.col);
+            return (msg, None);
         }
     };
     let args = if body {
@@ -128,7 +146,8 @@ fn run_case(src: &str, name: &str, mode: Mode) -> String {
         }
     }
     vm.heap().verify().unwrap();
-    out
+    vm.collect().unwrap();
+    (out, Some(fnv64(vm.bytes())))
 }
 
 #[test]
@@ -152,13 +171,23 @@ fn e2e_cases() {
             Ok("gc") => vec![Mode::GcStress],
             _ => vec![Mode::Plain, Mode::Suspend, Mode::GcStress],
         };
+        let mut images: Vec<(Mode, Option<u64>)> = Vec::new();
+        // GC stress is not compared (see the module docs).
         for mode in modes {
-            let got = run_case(&src, &name, mode);
+            let (got, image) = run_case(&src, &name, mode);
             if got != want {
                 failures.push(format!(
                     "{name} ({mode:?}):\n--- want\n{want}--- got\n{got}"
                 ));
             }
+            if !matches!(mode, Mode::GcStress) {
+                images.push((mode, image));
+            }
+        }
+        if images.iter().any(|(_, h)| *h != images[0].1) {
+            failures.push(format!(
+                "{name}: the heap images after a collection differ between the plain and suspension modes: {images:x?}"
+            ));
         }
     }
     assert!(
