@@ -1,7 +1,7 @@
 # 0059: Indirect eval, Function constructors, queueMicrotask
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0059-dynamic-code
 depends-on: 0054
 touches: builtins/ (function.ts, global), crates/djs-core/src/builtins/, crates/djs-core/src/vm/ + interp/ (a leaf that compiles source at runtime: additive), crates/djs-core/src/compiler/ (CreateDynamicFunction entry points only: parse parameters + body as a function, minimal), tests/test262.toml (re-split scan-eval), ratchets, js/pi/ (drop the queueMicrotask polyfill)
