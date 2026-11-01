@@ -495,18 +495,21 @@ fn base_is_decoded_or_injected() {
     let decoded: Vec<u8> = in_instance(base_copy);
     assert_eq!(decoded.len(), djs_prelude::base_len());
     // A second instance takes the host's copy and never decodes; the first VM takes it as
-    // its arena, without a copy (D2060).
+    // its arena (D2060; that the bytes are not copied, js/test/base.test.ts checks in
+    // wasm, where the page allocator grows them in place: here the system allocator may
+    // move them).
     let copy = decoded.clone();
-    let (ok, p, arena, vm) = in_instance(move || {
+    let (ok, vm) = in_instance(move || {
         let p = djs_base_inject_ptr(copy.len());
         assert_ne!(p, 0);
         unsafe { std::ptr::copy_nonoverlapping(copy.as_ptr(), p as *mut u8, copy.len()) };
         let ok = djs_base_inject();
+        assert!(BASE.with(|b| b.borrow().is_some()));
         let vm = vm_new(0);
-        (ok, p, vm_arena_ptr(vm), vm)
+        assert!(BASE.with(|b| b.borrow().is_none()), "taken by the VM");
+        (ok, vm)
     });
     assert_eq!(ok, 1);
-    assert_eq!(arena, p, "the injected bytes are the arena");
     assert_ne!(vm, 0);
     // A wrong length gets no room; a corrupted copy is refused and the instance decodes.
     let mut bad = decoded.clone();
@@ -531,9 +534,9 @@ fn vms_take_the_decoded_base_as_their_arena() {
     // and the instance keeps that copy; all VMs start from the same bytes.
     let expect = in_instance(base_copy);
     in_instance(move || {
-        let p = djs_base_ptr();
+        djs_base_ptr();
         let a = vm_new(0);
-        assert_eq!(vm_arena_ptr(a), p, "no copy");
+        assert!(BASE.with(|b| b.borrow().is_none()), "taken by the VM");
         let b = vm_new(0);
         assert_ne!(b, 0);
         assert_ne!(vm_arena_ptr(b), vm_arena_ptr(a));
