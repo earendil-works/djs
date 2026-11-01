@@ -3,7 +3,7 @@
 #   builtins/gen/prelude.js, builtins/gen/resume-points.txt   (scripts/bgen.sh)
 #   the INTRINSICS table in bytecode/intrinsics.rs            (scripts/gen-intrinsics.py)
 #   js/src/layout.generated.ts                                (--layout: builds djs-core)
-#   the guide's generated regions and docs/guide/gen/         (djs-docs regen, D2030)
+#   the guide's generated regions and docs/guide/gen/         (djs-docs regen, D2100)
 # A file the merge driver kept one side of (listed in $GIT_DIR/djs-regen) is always
 # regenerated. merge-to-main.sh runs this after the rebase and commits the result, so
 # merges of generated text never need resolving by hand.
@@ -31,5 +31,5 @@ if $layout; then
 fi
 
 # Last: the guide reads the intrinsics table, the layout and the opcode table. Example
-# output (`gen:run`) is not rewritten here; the gate reports a change (D2030).
+# output (`gen:run`) is not rewritten here; the gate reports a change (D2100).
 cargo run -q -p djs-docs -- regen > /dev/null

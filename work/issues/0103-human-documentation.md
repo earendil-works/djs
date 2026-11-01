@@ -70,7 +70,7 @@ Questions for the proposal:
   opcodes (with the `///` docs read from ops.rs: no wasm cost), cell layouts and
   intrinsics (docs from intrinsics.d.ts). `check` in gate.sh, `regen` in regen.sh,
   `.gitattributes` treats gen/ and ref-*.md as generated. AGENTS.md "Keeping the guide
-  current" plus the coordinator's `guide:` field. D2030.
+  current" plus the coordinator's `guide:` field. D2100 (first merged as D2030, which collided with infra's Error.stackTraceLimit decision; renumbered).
 - Examples are codemode async bodies now (as in the live widget and in pi), run with a
   50-fuel suspend/restore cycle; `gen:run` output only changes with `--examples`, so a
   behavior change fails the gate instead of silently updating the page.

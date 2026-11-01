@@ -7,7 +7,7 @@ reference for people changing the code; the guide tells the story and links to t
 `SUMMARY.md` lists the pages in reading order (mdBook's format). A `- [Title]()` entry
 is a chapter not written yet.
 
-## Tooling (D2030)
+## Tooling (D2100)
 
 ```sh
 cargo run -q -p djs-docs -- check             # what the gate runs

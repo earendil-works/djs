@@ -1,4 +1,4 @@
-//! `djs-docs`: the guide in docs/guide (0103, D2030).
+//! `djs-docs`: the guide in docs/guide (0103, D2100).
 //!
 //! ```text
 //! djs-docs check               generated regions and diagrams fresh, examples' output

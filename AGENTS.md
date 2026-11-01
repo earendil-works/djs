@@ -89,7 +89,7 @@ Rules:
 
 ## Keeping the guide current
 
-`docs/guide/` is the human-facing explanation of djs: how it works and why (D2030,
+`docs/guide/` is the human-facing explanation of djs: how it works and why (D2100,
 `docs/guide/README.md` for how to write it). It must stay true as the code changes:
 
 - If your change alters what a guide page says (the issue's `guide:` field names the

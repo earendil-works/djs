@@ -103,7 +103,7 @@ djs/
     djs-test262/    the test262 runner (qjs subprocess or djs in process).
     djs-difftest/   the differential corpus runner and the djs-abidrive driver.
     djs-bench/      benchmarks: component, engine track, wasm size.
-    djs-docs/       the guide's generator and checker (docs/guide, D2030).
+    djs-docs/       the guide's generator and checker (docs/guide, D2100).
   builtins/         builtin sources in the strict TS subset (*.ts), intrinsics.d.ts,
                     tsconfig.json (so tsc and editors type-check them); gen/ holds the
                     generated prelude.js and resume-points.txt.
@@ -115,7 +115,7 @@ djs/
   scripts/          gate.sh, merge-to-main.sh, bgen.sh, regen.sh, build-wasm.sh, bench.sh,
                     timeout.sh, perf/ (instruction-count tools), determinism/, ...
   docs/             compiler.md, objects.md, host.md, wire.md, cli.md, decisions.md and
-                    decisions-index.md; guide/ is the guide for humans (D2030).
+                    decisions-index.md; guide/ is the guide for humans (D2100).
   work/             issues, the board and the process (work/README.md).
 ```
 

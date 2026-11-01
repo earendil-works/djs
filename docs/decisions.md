@@ -4556,7 +4556,8 @@ dropped. The qjs driver now loads the prelude with `std.loadScript`, so its fram
 its path and differ from the case's `<evalScript>`; no other transcript changes (the
 whole corpus still passes under qjs). The wrappers put different prefixes on line 1, and
 line 1 of such a case is always its directive comment.
-## D2030: The guide: Markdown in docs/guide, our own generator, generated parts checked in
+
+## D2100: The guide: Markdown in docs/guide, our own generator, generated parts checked in
 date: 2026-11-03 · by: docs · issue: 0103
 The human-facing guide lives in `docs/guide/` as CommonMark + GFM tables, ordered by an
 mdBook-style SUMMARY.md, and is built by `crates/djs-docs` (owner's choice among own
@@ -4612,3 +4613,5 @@ Effect, wasm instructions per element vs main:
 
 Cost: generated natives are 2.7 KB larger in wasm. The extra code is register copies
 (phis) across the state loop; it buys back far fewer slot calls.
+First merged as D2030 (3ff54985), which infra's Error.stackTraceLimit decision had
+taken; renumbered, so older commits citing D2030 for the guide mean this one.
