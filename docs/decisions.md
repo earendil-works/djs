@@ -72,3 +72,82 @@ date: 2026-11-01 · by: lexer · issue: 0003
 line terminator: LF, CR, CRLF, U+2028 and U+2029. QuickJS counts only LF; the
 difference shows only for lone CRs and LS/PS, which are rare. Lines and columns are
 1-based, and columns count code points, like QuickJS (V8 counts UTF-16 units).
+
+## D1050: Value encoding
+date: 2026-11-01 · by: heap · issue: 0005
+`Value` is a NaN-boxed `u64`. Upper 16 bits `0xFFF8` mean tagged: the high word is
+`0xFFF8_0000 | tag` and the low word is the payload. Everything else is an `f64`, with every
+NaN canonicalized to `0x7FF8_0000_0000_0000`, so numbers never collide with tags. Tags:
+1 undefined, 2 null, 3 bool, 4 int32, 5 hole, 6 uninitialized (TDZ), and the reference
+tags `>= 8`: 8 string, 9 object, 10 symbol, 11 bigint (reserved), 12 host ref (reserved,
+pointing to a host-ref *cell*). A reference payload is a nonzero `u32` arena offset. All-zero
+bits are `+0`, which is not a reference, so zeroed memory is trace-safe. `==` on `Value`
+is bit identity; JS SameValue is `Heap::same_value`. Two words make the JS-side decoder
+trivial (`hi >>> 16 === 0xFFF8`).
+
+## D1051: Arena and cell header
+date: 2026-11-01 · by: heap · issue: 0005
+One little-endian `Vec<u8>` arena, `u32` offsets, every cell 8-aligned. The 8-byte header
+is kind (`u8`, 0 invalid), GC bits (`u8`, 0 between collections), per-kind flags (`u16`)
+and total size (`u32`, multiple of 8). Cells are back to back, so the heap is walkable. The
+`Roots` cell sits at offset 0, which is why 0 can mean null; the copying GC copies it first
+and Cheney-scans from 0. Allocation bumps, zero-fills, may fail with `OutOfMemory` against a
+configurable cap (also on host allocation failure), and never collects. Access is
+bounds-checked slice indexing, no `unsafe`; bulk copies take one slice
+(`Arena::split_mut` to copy from older cells into a fresh one).
+
+## D1052: Layout description macro
+date: 2026-11-01 · by: heap · issue: 0005
+All cell kinds are declared once in `heap/cells.rs` with `cells!` (and `records!` for tail
+element structs). The declaration has explicit byte offsets, which keeps the layout
+reviewable and matches what the JS reader needs. The macro generates typed `Field<T>` and `Tail<T>` handles
+(`arena.get(cell, Str8::LEN)`), a const `CellLayout` per kind, the `LAYOUTS` table, and
+compile-time checks (after the header, naturally aligned, no overlap). Field types `Value`
+and `Ref` are traced; that is the whole trace description. `LAYOUT_HASH` (FNV over the table
+and the well-known atom list) is stored in `Roots::VERSION` and is part of the snapshot
+build hash. The JS-side reader is to be generated from `LAYOUTS`.
+
+## D1053: String representation
+date: 2026-11-01 · by: heap · issue: 0005
+Three cell kinds: `Str8` (Latin-1), `Str16` (UTF-16LE), `Rope`. Constructors narrow, so a
+`Str16` always has a unit above 0xFF. Equal strings therefore have the same width, and
+equal flat strings have equal bytes. Concatenations shorter than 32 units are copied; longer
+ones make a rope whose `ROPE_TWO_BYTE` flag is the OR of its children. Flattening writes a
+new flat cell and redirects the rope (`LEFT` = flat, `RIGHT` = null, `ROPE_FLATTENED`).
+Rope walks are iterative. Max length is 2^30-1 (as QuickJS). The hash is FxHash-style over
+code units with a murmur3 finalizer, so it is representation independent. It is cached in
+the cell, and 0 means not computed.
+
+## D1054: Atom representation; symbols are atoms
+date: 2026-11-01 · by: heap · issue: 0005
+`Atom` is a `u32`: bit 31 set means an integer index atom (0..2^31-1, computed, never
+interned); otherwise bit 30 distinguishes symbol atoms from string atoms, and the low 30 bits
+index the heap atom table (`AtomTable`: entries `ValueArray` + open-addressing `U32Array`
+index). Atom 0 is null. Ids are indexes, not offsets, so they are stable across a moving GC
+and can live in bytecode. Every symbol gets an atom table entry, so every property key is
+just an `Atom` and key comparison is a `u32` compare. Larger array indexes (2^31..2^32-2)
+are string atoms that `atom_array_index` still recognizes. Well-known atoms and symbols have
+fixed ids generated from a list in `heap/atom.rs`. Atoms (and so symbols) are never freed
+for now; atom GC is a follow-up.
+
+## D1055: Object storage
+date: 2026-11-01 · by: heap · issue: 0005
+An `Object` cell has class, proto, property table ref, elements ref and a tail of internal
+slots. `PropTable` entries (24 bytes: key, flags, value-or-getter, setter) are kept in
+insertion order. Up to 8 entries are searched linearly (compacted on delete); above that a
+hash index of entry numbers is built, with tombstones, and compaction happens on growth.
+Dense elements (arrays only for now) are a `ValueArray`. A dense slot always means
+`{writable, enumerable, configurable}` data, or a hole. An array-index key lives in exactly one place. Index keys
+in the table set `OBJ_INDEXED_PROPS`, which exotic classes must also set, so the element fast
+paths can trust objects without it. A write may extend the dense part by at most 64 holes;
+writes further out go to the table. An array's `length` is internal slot 0 (a Number) and is
+synthesized as the own `length` property. `OBJ_LENGTH_READONLY` is a header flag.
+
+## D1056: Heap images are verified on load
+date: 2026-11-01 · by: heap · issue: 0005
+`Heap::from_bytes` checks the magic and `LAYOUT_HASH` and then runs `Heap::verify`: the
+cell structure, every traced slot (a valid encoding pointing at a cell start of a fitting
+kind), kind invariants (counts fit, ref fields point to the right kinds, rope lengths
+strictly decrease towards the leaves) and acyclic prototype chains. `verify` never panics.
+After it passes, heap code may still panic on semantically odd data, but cannot loop forever:
+hash probes are bounded, and ropes and prototype chains are known to be acyclic.

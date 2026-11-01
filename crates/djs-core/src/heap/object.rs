@@ -392,7 +392,7 @@ impl Heap {
     /// Fast path for `o[i] = v` with `o` as receiver. Returns `Ok(true)` when done:
     /// overwriting a dense element, or adding one (filling a hole or appending) to an
     /// extensible array whose prototype chain has no index properties. `Ok(false)` means
-    /// "take the generic [[Set]] path".
+    /// "take the generic `[[Set]]` path".
     pub fn set_element_fast(&mut self, o: Obj, i: u32, v: Value) -> Result<bool, HeapError> {
         let el = self.elements(o);
         let len = if el == 0 { 0 } else { self.value_array_len(el) };
@@ -667,7 +667,7 @@ impl Heap {
         )
     }
 
-    /// [[GetOwnProperty]].
+    /// `[[GetOwnProperty]]`.
     pub fn get_own_property(&self, o: Obj, key: Atom) -> Option<Property> {
         self.read_loc(o, self.find_own(o, key))
     }
@@ -689,7 +689,7 @@ impl Heap {
         None
     }
 
-    /// [[HasProperty]].
+    /// `[[HasProperty]]`.
     pub fn has_property(&self, o: Obj, key: Atom) -> bool {
         let mut cur = Some(o);
         while let Some(c) = cur {
@@ -857,7 +857,7 @@ impl Heap {
         }
     }
 
-    /// [[DefineOwnProperty]] (ordinary, plus the Array exotic behavior). `Ok(false)` means
+    /// `[[DefineOwnProperty]]` (ordinary, plus the Array exotic behavior). `Ok(false)` means
     /// the spec returns false (the caller throws a TypeError in strict code). For an
     /// array's `length`, `d.value` must already be a Number (the caller does the
     /// ToNumber/ToUint32 conversions); a value that is not a `u32` gives
@@ -996,7 +996,7 @@ impl Heap {
         (ok, stop)
     }
 
-    /// [[Delete]]: `false` if the property is non-configurable.
+    /// `[[Delete]]`: `false` if the property is non-configurable.
     pub fn delete_own_property(&mut self, o: Obj, key: Atom) -> bool {
         match self.find_own(o, key) {
             Loc::None => true,
@@ -1016,7 +1016,7 @@ impl Heap {
         }
     }
 
-    /// [[OwnPropertyKeys]] in spec order: array indexes ascending, then string keys in
+    /// `[[OwnPropertyKeys]]` in spec order: array indexes ascending, then string keys in
     /// creation order, then symbols in creation order.
     pub fn own_keys(&self, o: Obj) -> Vec<Atom> {
         let mut indexes: Vec<(u32, Atom)> = Vec::new();

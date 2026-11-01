@@ -509,7 +509,8 @@ impl Heap {
                 }
                 h.finish()
             }
-            _ => hash_units(self.str_units(s)),
+            Some(v) => hash_units(v.units()),
+            None => hash_units(self.str_units(s)),
         }
     }
 

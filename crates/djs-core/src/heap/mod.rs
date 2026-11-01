@@ -21,7 +21,7 @@
 //!
 //! # Roots
 //!
-//! The [`Roots`](cells::Roots) cell lives at offset 0 and holds everything the GC starts
+//! The [`Roots`] cell lives at offset 0 and holds everything the GC starts
 //! from: the atom table, the realm, and (once they exist) the value stack, the job queue,
 //! the pending host call table and the host handle table. Rust code holds no roots: the
 //! interpreter (0006) keeps live values on the arena value stack, and the embedder holds

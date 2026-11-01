@@ -1,6 +1,6 @@
 //! The layout description machinery.
 //!
-//! Every cell kind is declared once, in `cells.rs`, with the [`cells!`] macro: its kind
+//! Every cell kind is declared once, in `cells.rs`, with the `cells!` macro: its kind
 //! id, its fixed fields (name, type, byte offset) and an optional variable-length tail.
 //! From that one declaration the macro generates:
 //!
@@ -14,7 +14,7 @@
 //!   overlap, and the tail starts after the fixed part.
 //!
 //! Tails are arrays of a primitive type or of a *record* (a fixed group of fields declared
-//! with [`records!`]). The number of elements a tail can hold follows from the cell size in
+//! with `records!`). The number of elements a tail can hold follows from the cell size in
 //! the header. How many are in use is up to the cell kind (usually a `LEN` field).
 //!
 //! Traced field types are [`Value`] (traced when it is a reference) and [`Ref`] (traced
