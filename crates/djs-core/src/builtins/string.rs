@@ -486,7 +486,7 @@ pub(crate) fn normalize(heap: &mut Heap, s: Str, form: u8) -> Result<Option<Str>
         if norm::is_normalized_quick(&u, form) {
             return Ok(Some(s));
         }
-        let out = norm::normalize(&u, form);
+        let out = norm::normalize(&u, form, &mut heap.compositions);
         if out == u {
             return Ok(Some(s));
         }
@@ -504,11 +504,11 @@ pub(crate) fn locale_compare(heap: &mut Heap, a: Str, b: Str) -> Result<f64, Fau
     #[cfg(feature = "unicode-normalization")]
     let (ua, ub) = {
         use crate::unicode::normalize::{self as norm, Form};
-        let nfc = |u: Vec<u16>| {
+        let mut nfc = |u: Vec<u16>| {
             if norm::is_normalized_quick(&u, Form::Nfc) {
                 u
             } else {
-                norm::normalize(&u, Form::Nfc)
+                norm::normalize(&u, Form::Nfc, &mut heap.compositions)
             }
         };
         (nfc(ua), nfc(ub))

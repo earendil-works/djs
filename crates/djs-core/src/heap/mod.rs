@@ -158,6 +158,10 @@ pub struct Heap {
     /// out-of-memory reserve is closed, and `hard_limit` while it is open (D1600).
     hard_limit: u32,
     reserve: u32,
+    /// The primary composites of Unicode normalization, derived on first use and kept
+    /// for the VM's lifetime (D2338). Not part of the image.
+    #[cfg(feature = "unicode-normalization")]
+    pub(crate) compositions: crate::unicode::normalize::Compositions,
     /// Test hook: make the next collection fail to reserve its to-space.
     #[cfg(test)]
     pub(crate) fail_next_gc_reserve: bool,
@@ -234,6 +238,8 @@ impl Heap {
             gc_pending: false,
             hard_limit,
             reserve: reserve_for(hard_limit),
+            #[cfg(feature = "unicode-normalization")]
+            compositions: Default::default(),
             #[cfg(test)]
             fail_next_gc_reserve: false,
             #[cfg(test)]

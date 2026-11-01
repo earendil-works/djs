@@ -5653,3 +5653,30 @@ Display impls at their call sites, and JS-visible messages use `format!`, so
 core::fmt::write, integer formatting and `format_inner` remain reachable (~9 KB raw).
 Removing them would take a non-formatting replacement for ~100 `format!` sites (≈2–3 KB
 gzip more).
+
+## D2337: The decomposition stream in two parts with per-position prediction
+date: 2026-11-07 · by: bloat · issue: 0131
+norm_tables.rs's decompositions were one varint stream (20,066 bytes, 11.6 KB gzip, the
+largest Unicode table). They are now two: DECOMP_ENTRIES (gaps, headers, run counts) and
+DECOMP_TARGETS (the mapped code points), indexed together every 32 entries, and each
+mapped code point is predicted by the previous entry's code point at the same position
+(the base letter by the previous base letter, the combining mark by the previous mark),
+not by the code point before it: `A + U+0300` then `A + U+0301` cost a byte each.
+Together with D2338: module 460,874 -> 455,263 bytes gzip (−5.6 KB). Decoding works in
+place in one buffer with a one-byte varint fast path: NFD-heavy work runs 15% faster
+than before (wmeasure: 2,746 -> 2,320 M instructions), NFC/localeCompare 12%.
+Considered: the CJK compatibility ideographs and Arabic presentation forms as their own
+codings (QuickJS has special types), smaller wins than the prediction.
+
+## D2338: Primary composites are derived at run time and cached per heap
+date: 2026-11-07 · by: bloat · issue: 0131
+The composition tables (COMPOSE_KEYS, COMPOSE_DELTAS, COMPOSE_SECONDS: 6 KB raw, 3 KB
+gzip) are gone. The primary composites are the canonical two-code-point decompositions
+that are not non-starter decompositions and not in COMPOSE_EXCLUDED (81 code points:
+the script-specific and post-composition-version exclusions; the generator asserts that
+this rule reproduces Full_Composition_Exclusion). `normalize::Compositions` decodes them
+once, at the first composition a VM does, into a sorted `Vec<u64>` (`first << 42 |
+second << 21 | composite`, ~940 entries, 7.5 KB) held by the heap
+(`Heap::compositions`, Rust memory, not part of the image: rebuilt after a restore), so a
+lookup stays a binary search, after an early exit for second code points below U+0300.
+`normalize` takes the cache as a parameter.

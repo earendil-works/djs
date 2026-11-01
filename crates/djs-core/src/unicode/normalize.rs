@@ -8,7 +8,7 @@
 use alloc::vec::Vec;
 
 use super::norm_tables::{
-    CCC_RUNS, CCC_VALUES, COMPOSE_DELTAS, COMPOSE_KEYS, COMPOSE_SECONDS, DECOMP, DECOMP_INDEX,
+    CCC_RUNS, CCC_VALUES, COMPOSE_EXCLUDED, DECOMP_ENTRIES, DECOMP_INDEX, DECOMP_TARGETS,
     INDEX_STEP, NFC_QC_MAYBE, NFC_QC_NO,
 };
 use super::tables::LEN_BITS;
@@ -61,11 +61,21 @@ pub fn ccc(c: u32) -> u8 {
     find_run(&CCC_RUNS, c).map_or(0, |i| CCC_VALUES[i])
 }
 
-fn varint(p: &mut usize) -> u32 {
+#[inline(always)]
+fn varint(bytes: &[u8], p: &mut usize) -> u32 {
+    let b = bytes[*p];
+    if b < 0x80 {
+        *p += 1;
+        return b as u32;
+    }
+    varint_long(bytes, p)
+}
+
+fn varint_long(bytes: &[u8], p: &mut usize) -> u32 {
     let mut v = 0;
     let mut shift = 0;
     loop {
-        let b = DECOMP[*p];
+        let b = bytes[*p];
         *p += 1;
         v |= ((b & 0x7F) as u32) << shift;
         if b < 0x80 {
@@ -75,68 +85,77 @@ fn varint(p: &mut usize) -> u32 {
     }
 }
 
-/// The single-level decomposition of `c` from the tables (Hangul excluded), appended to
-/// `out`: whether it is a compatibility mapping, or `None` if `c` has none. The stream
-/// format is described in `scripts/gen-unicode.py`.
-fn table_decomposition(c: u32, out: &mut Vec<u32>) -> Option<bool> {
-    let i = DECOMP_INDEX.partition_point(|&(cp, _)| cp <= c);
-    if i == 0 {
-        return None;
-    }
-    let (mut cp, off) = DECOMP_INDEX[i - 1];
-    let mut p = off as usize;
-    let mut prev_target = 0;
-    for k in 0..INDEX_STEP {
-        if p >= DECOMP.len() {
-            return None;
-        }
-        let gap = varint(&mut p);
-        let base = if k == 0 {
-            cp
-        } else {
-            cp += gap;
-            prev_target
-        };
-        if cp > c {
-            return None;
-        }
-        let header = varint(&mut p);
-        let (len, compat) = (header >> 1, header & 1 != 0);
-        if len == 0 {
-            // A run of one-to-one mappings onto consecutive code points.
-            let n = varint(&mut p);
-            prev_target = unzigzag(base, varint(&mut p));
-            if c <= cp + n {
-                out.push(prev_target + (c - cp));
-                return Some(compat);
-            }
-            cp += n;
-            continue;
-        }
-        let hit = cp == c;
-        let mut last = base;
-        for m in 0..len {
-            last = unzigzag(last, varint(&mut p));
-            if m == 0 {
-                prev_target = last;
-            }
-            if hit {
-                out.push(last);
-            }
-        }
-        if hit {
-            return Some(compat);
-        }
-    }
-    None
-}
-
 fn unzigzag(base: u32, z: u32) -> u32 {
     if z & 1 == 0 {
         base + (z >> 1)
     } else {
         base - ((z + 1) >> 1)
     }
+}
+
+/// Decodes the entries of index block `block` (the stream format is described in
+/// `scripts/gen-unicode.py`, D2337) and calls `f(first, last, compat, mapping)` for each:
+/// a run maps `first..=last` one-to-one onto consecutive code points from `mapping[0]`,
+/// any other entry has `first == last`. `f` returns true to stop.
+fn decode_block(block: usize, mut f: impl FnMut(u32, u32, bool, &[u32]) -> bool) {
+    let (mut cp, e, t) = DECOMP_INDEX[block];
+    let (mut pe, mut pt) = (e as usize, t as usize);
+    // The previous entry's mapping, overwritten in place by each entry's: position i is
+    // predicted by the previous entry's i-th code point while it had one.
+    let mut map = [0u32; 18];
+    map[0] = cp;
+    let mut prev_len = 1;
+    for k in 0..INDEX_STEP {
+        if pe >= DECOMP_ENTRIES.len() {
+            return;
+        }
+        let gap = varint(&DECOMP_ENTRIES, &mut pe);
+        if k > 0 {
+            cp += gap;
+        }
+        let header = varint(&DECOMP_ENTRIES, &mut pe);
+        let (len, compat) = (header as usize >> 1, header & 1 != 0);
+        let run = if len == 0 {
+            varint(&DECOMP_ENTRIES, &mut pe)
+        } else {
+            0
+        };
+        let n = len.max(1);
+        let mut last = 0;
+        for (i, m) in map.iter_mut().enumerate().take(n) {
+            let pred = if i < prev_len { *m } else { last };
+            last = unzigzag(pred, varint(&DECOMP_TARGETS, &mut pt));
+            *m = last;
+        }
+        if f(cp, cp + run, compat, &map[..n]) {
+            return;
+        }
+        prev_len = n;
+        cp += run;
+    }
+}
+
+/// The single-level decomposition of `c` from the tables (Hangul excluded), appended to
+/// `out`: whether it is a compatibility mapping, or `None` if `c` has none.
+fn table_decomposition(c: u32, out: &mut Vec<u32>) -> Option<bool> {
+    let i = DECOMP_INDEX.partition_point(|&(cp, _, _)| cp <= c);
+    if i == 0 {
+        return None;
+    }
+    let mut found = None;
+    decode_block(i - 1, |first, last, compat, map| {
+        if c < first {
+            return true;
+        }
+        if c <= last {
+            out.push(map[0] + (c - first));
+            out.extend_from_slice(&map[1..]);
+            found = Some(compat);
+            return true;
+        }
+        false
+    });
+    found
 }
 
 /// Appends the full decomposition of `c` (canonical, or also compatibility) to `out`.
@@ -166,21 +185,60 @@ fn decompose_char(c: u32, compat: bool, out: &mut Vec<u32>) {
     }
 }
 
-/// The primary composite of `a` and `b`, if any.
-fn compose_pair(a: u32, b: u32) -> Option<u32> {
-    // Hangul LV and LVT.
-    if (L_BASE..L_BASE + L_COUNT).contains(&a) && (V_BASE..V_BASE + V_COUNT).contains(&b) {
-        return Some(S_BASE + ((a - L_BASE) * V_COUNT + (b - V_BASE)) * T_COUNT);
+/// The primary composites, derived from the decompositions at the first composition
+/// (D2338) and kept by the caller (the heap holds one per VM), so composing stays a binary
+/// search.
+#[derive(Default)]
+pub struct Compositions {
+    /// `first << 42 | second << 21 | composite`, sorted (so by the pair).
+    pairs: Vec<u64>,
+}
+
+impl Compositions {
+    fn ensure(&mut self) {
+        if !self.pairs.is_empty() {
+            return;
+        }
+        let mut pairs = Vec::new();
+        for block in 0..DECOMP_INDEX.len() {
+            decode_block(block, |cp, _, compat, map| {
+                if !compat
+                    && map.len() == 2
+                    && ccc(cp) == 0
+                    && ccc(map[0]) == 0
+                    && COMPOSE_EXCLUDED.binary_search(&cp).is_err()
+                {
+                    pairs.push((map[0] as u64) << 42 | (map[1] as u64) << 21 | cp as u64);
+                }
+                false
+            });
+        }
+        crate::sort::sort_by(&mut pairs, |x, y| x < y);
+        self.pairs = pairs;
     }
-    if (S_BASE..S_BASE + S_COUNT).contains(&a)
-        && (a - S_BASE).is_multiple_of(T_COUNT)
-        && (T_BASE + 1..T_BASE + T_COUNT).contains(&b)
-    {
-        return Some(a + (b - T_BASE));
+
+    /// The primary composite of `a` and `b`, if any.
+    fn pair(&mut self, a: u32, b: u32) -> Option<u32> {
+        // Hangul LV and LVT.
+        if (L_BASE..L_BASE + L_COUNT).contains(&a) && (V_BASE..V_BASE + V_COUNT).contains(&b) {
+            return Some(S_BASE + ((a - L_BASE) * V_COUNT + (b - V_BASE)) * T_COUNT);
+        }
+        if (S_BASE..S_BASE + S_COUNT).contains(&a)
+            && (a - S_BASE).is_multiple_of(T_COUNT)
+            && (T_BASE + 1..T_BASE + T_COUNT).contains(&b)
+        {
+            return Some(a + (b - T_BASE));
+        }
+        // No primary composite has a second code point below U+0300.
+        if b < 0x300 {
+            return None;
+        }
+        self.ensure();
+        let key = (a as u64) << 21 | b as u64;
+        let i = self.pairs.partition_point(|&p| p >> 21 < key);
+        let p = *self.pairs.get(i)?;
+        (p >> 21 == key).then_some((p & 0x1F_FFFF) as u32)
     }
-    let si = COMPOSE_SECONDS.binary_search(&b).ok()? as u32;
-    let i = COMPOSE_KEYS.binary_search(&((a << 7) | si)).ok()?;
-    Some(a.wrapping_add_signed(COMPOSE_DELTAS[i] as i32))
 }
 
 fn in_table(table: &[u32], c: u32) -> bool {
@@ -259,8 +317,8 @@ pub fn is_normalized_quick(units: &[u16], form: Form) -> bool {
     true
 }
 
-/// Normalizes `units` to `form`.
-pub fn normalize(units: &[u16], form: Form) -> Vec<u16> {
+/// Normalizes `units` to `form`. `comp` is the caller's cache of primary composites.
+pub fn normalize(units: &[u16], form: Form, comp: &mut Compositions) -> Vec<u16> {
     let cps = code_points(units);
     // Decompose.
     let mut d = Vec::with_capacity(cps.len());
@@ -287,7 +345,11 @@ pub fn normalize(units: &[u16], form: Form) -> Vec<u16> {
             }
         }
     }
-    let out_cps = if form.composes() { compose(&d) } else { d };
+    let out_cps = if form.composes() {
+        compose(&d, comp)
+    } else {
+        d
+    };
     let mut out = Vec::with_capacity(out_cps.len());
     for c in out_cps {
         match char::from_u32(c) {
@@ -303,7 +365,7 @@ pub fn normalize(units: &[u16], form: Form) -> Vec<u16> {
 }
 
 /// The canonical composition algorithm over a canonically ordered decomposition.
-fn compose(d: &[u32]) -> Vec<u32> {
+fn compose(d: &[u32], comp: &mut Compositions) -> Vec<u32> {
     let mut out: Vec<u32> = Vec::with_capacity(d.len());
     let mut starter: Option<usize> = None;
     let mut last_ccc: i32 = -1;
@@ -312,8 +374,8 @@ fn compose(d: &[u32]) -> Vec<u32> {
         if let Some(s) = starter {
             // Not blocked: nothing between the starter and c, or the last class is lower.
             let blocked = last_ccc != -1 && (last_ccc >= k || last_ccc == 0);
-            if !blocked && let Some(comp) = compose_pair(out[s], c) {
-                out[s] = comp;
+            if !blocked && let Some(p) = comp.pair(out[s], c) {
+                out[s] = p;
                 continue;
             }
         }
@@ -334,7 +396,7 @@ mod tests {
 
     fn n(s: &str, f: Form) -> alloc::string::String {
         let u: Vec<u16> = s.encode_utf16().collect();
-        alloc::string::String::from_utf16(&normalize(&u, f)).unwrap()
+        alloc::string::String::from_utf16(&normalize(&u, f, &mut Compositions::default())).unwrap()
     }
 
     #[test]
@@ -356,11 +418,12 @@ mod tests {
     #[test]
     fn quick_yes_is_safe_for_every_code_point() {
         let mut buf = [0u16; 2];
+        let mut comp = Compositions::default();
         for c in (0..0x110000u32).filter(|c| !(0xD800..0xE000).contains(c)) {
             let u = char::from_u32(c).unwrap().encode_utf16(&mut buf);
             for f in [Form::Nfc, Form::Nfd, Form::Nfkc, Form::Nfkd] {
                 if quick_yes(c, f) {
-                    assert_eq!(normalize(u, f), u.to_vec(), "{c:x} {f:?}");
+                    assert_eq!(normalize(u, f, &mut comp), u.to_vec(), "{c:x} {f:?}");
                 }
             }
         }
@@ -395,6 +458,7 @@ mod tests {
             }
             out
         };
+        let mut comp = Compositions::default();
         let mut lines = 0;
         let mut listed = std::collections::BTreeSet::new();
         for line in text.lines() {
@@ -406,20 +470,20 @@ mod tests {
             let (c1, c2, c3, c4, c5) = (&c[0], &c[1], &c[2], &c[3], &c[4]);
             // NFC: c2 == toNFC(c1..c3), c4 == toNFC(c4..c5); NFD: c3 / c5; NFKC: c4; NFKD: c5.
             for (x, want) in [(c1, c2), (c2, c2), (c3, c2), (c4, c4), (c5, c4)] {
-                assert_eq!(&normalize(x, Form::Nfc), want, "NFC {line}");
+                assert_eq!(&normalize(x, Form::Nfc, &mut comp), want, "NFC {line}");
                 if is_normalized_quick(x, Form::Nfc) {
                     assert_eq!(x, want, "NFC quick check {line}");
                 }
             }
             for (x, want) in [(c1, c3), (c2, c3), (c3, c3), (c4, c5), (c5, c5)] {
-                assert_eq!(&normalize(x, Form::Nfd), want, "NFD {line}");
+                assert_eq!(&normalize(x, Form::Nfd, &mut comp), want, "NFD {line}");
                 if is_normalized_quick(x, Form::Nfd) {
                     assert_eq!(x, want, "NFD quick check {line}");
                 }
             }
             for x in [c1, c2, c3, c4, c5] {
-                assert_eq!(&normalize(x, Form::Nfkc), c4, "NFKC {line}");
-                assert_eq!(&normalize(x, Form::Nfkd), c5, "NFKD {line}");
+                assert_eq!(&normalize(x, Form::Nfkc, &mut comp), c4, "NFKC {line}");
+                assert_eq!(&normalize(x, Form::Nfkd, &mut comp), c5, "NFKD {line}");
                 if is_normalized_quick(x, Form::Nfkc) {
                     assert_eq!(x, c4, "NFKC quick check {line}");
                 }
@@ -445,7 +509,7 @@ mod tests {
                 .encode_utf16()
                 .collect();
             for f in [Form::Nfc, Form::Nfd, Form::Nfkc, Form::Nfkd] {
-                assert_eq!(normalize(&s, f), s, "{c:x} {f:?}");
+                assert_eq!(normalize(&s, f, &mut comp), s, "{c:x} {f:?}");
             }
         }
     }
