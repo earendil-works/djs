@@ -384,18 +384,15 @@ impl<'a> Decoder<'a, '_> {
         if units == 0 {
             return Ok((self.empty_string()?, Atom::NULL));
         }
+        if ascii {
+            // units == bytes and valid UTF-8: every byte is ASCII, copied straight in.
+            return Ok((Value::string(self.heap.alloc_latin1(bytes)?), Atom::NULL));
+        }
         // A code point above U+00FF starts with a lead byte of 0xC4 or more.
-        let two_byte = !ascii && bytes.iter().any(|&b| b >= 0xC4);
+        let two_byte = bytes.iter().any(|&b| b >= 0xC4);
         let s = self.heap.alloc_str_uninit(units, two_byte)?;
         let data = Heap::str_data_offset(s);
-        let ok = if ascii {
-            // units == bytes and valid UTF-8: every byte is ASCII.
-            self.heap
-                .arena_mut()
-                .slice_mut(data, units)
-                .copy_from_slice(bytes);
-            true
-        } else if two_byte {
+        let ok = if two_byte {
             let dst = self.heap.arena_mut().slice_mut(data, units * 2);
             transcode(bytes, dst.as_chunks_mut::<2>().0, |d, u| {
                 *d = u.to_le_bytes()

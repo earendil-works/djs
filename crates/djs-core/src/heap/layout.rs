@@ -180,24 +180,43 @@ pub trait FieldType: Copy {
     fn write(bytes: &mut [u8], off: usize, v: Self);
 }
 
-#[inline]
+// The field accessors are the innermost loop of everything (decode, parse, the
+// interpreter). `inline(always)` and fixed-size chunks keep them a bounds check plus one
+// load or store even at opt-level "z", where `copy_from_slice` stays a call (D1260).
+#[inline(always)]
 fn read_array<const N: usize>(bytes: &[u8], off: usize) -> [u8; N] {
-    let mut a = [0; N];
-    a.copy_from_slice(&bytes[off..off + N]);
-    a
+    match bytes.get(off..).and_then(<[u8]>::first_chunk::<N>) {
+        Some(a) => *a,
+        None => out_of_bounds(off, N, bytes.len()),
+    }
+}
+
+#[inline(always)]
+fn write_array<const N: usize>(bytes: &mut [u8], off: usize, v: [u8; N]) {
+    let len = bytes.len();
+    match bytes.get_mut(off..).and_then(<[u8]>::first_chunk_mut::<N>) {
+        Some(a) => *a = v,
+        None => out_of_bounds(off, N, len),
+    }
+}
+
+#[cold]
+#[inline(never)]
+fn out_of_bounds(off: usize, n: usize, len: usize) -> ! {
+    panic!("arena access {off}+{n} out of bounds (length {len})")
 }
 
 macro_rules! prim_field {
     ($($t:ty => $ty:ident, $n:literal;)*) => {$(
         impl FieldType for $t {
             const TY: FieldTy = FieldTy::$ty;
-            #[inline]
+            #[inline(always)]
             fn read(bytes: &[u8], off: usize) -> Self {
                 <$t>::from_le_bytes(read_array::<$n>(bytes, off))
             }
-            #[inline]
+            #[inline(always)]
             fn write(bytes: &mut [u8], off: usize, v: Self) {
-                bytes[off..off + $n].copy_from_slice(&v.to_le_bytes());
+                write_array::<$n>(bytes, off, v.to_le_bytes())
             }
         }
         impl Elem for $t {
@@ -221,13 +240,13 @@ prim_field! {
 
 impl FieldType for Value {
     const TY: FieldTy = FieldTy::Value;
-    #[inline]
+    #[inline(always)]
     fn read(bytes: &[u8], off: usize) -> Self {
         Value::from_raw(u64::from_le_bytes(read_array::<8>(bytes, off)))
     }
-    #[inline]
+    #[inline(always)]
     fn write(bytes: &mut [u8], off: usize, v: Self) {
-        bytes[off..off + 8].copy_from_slice(&v.to_bits().to_le_bytes());
+        write_array::<8>(bytes, off, v.to_bits().to_le_bytes())
     }
 }
 
@@ -245,13 +264,13 @@ impl Elem for Value {
 
 impl FieldType for Ref {
     const TY: FieldTy = FieldTy::Ref;
-    #[inline]
+    #[inline(always)]
     fn read(bytes: &[u8], off: usize) -> Self {
         Ref(u32::from_le_bytes(read_array::<4>(bytes, off)))
     }
-    #[inline]
+    #[inline(always)]
     fn write(bytes: &mut [u8], off: usize, v: Self) {
-        bytes[off..off + 4].copy_from_slice(&v.0.to_le_bytes());
+        write_array::<4>(bytes, off, v.0.to_le_bytes())
     }
 }
 

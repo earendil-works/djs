@@ -75,10 +75,8 @@ fn forward(from: &mut Arena, to: &mut Arena, mut off: u32) -> u32 {
     }
     let size = from.get(off, Header::SIZE);
     let new = to
-        .alloc(size)
+        .alloc_init(size, 0, from.slice(off, size))
         .expect("to-space is reserved for the whole from-space");
-    to.slice_mut(new, size)
-        .copy_from_slice(from.slice(off, size));
     from.set(off, Header::GC, gc_bits::FORWARDED);
     from.write::<u32>(off + FORWARD, new);
     new

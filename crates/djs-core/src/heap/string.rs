@@ -225,10 +225,12 @@ impl Heap {
     /// A string from Latin-1 bytes (each byte is one code unit).
     pub fn alloc_latin1(&mut self, data: &[u8]) -> Result<Str, HeapError> {
         let len = u32::try_from(data.len()).map_err(|_| HeapError::StringTooLong)?;
-        let off = self.alloc_flat(len, false)?;
-        self.arena_mut()
-            .slice_mut(off + Str8::DATA.offset, len)
-            .copy_from_slice(data);
+        if len > MAX_LEN {
+            return Err(HeapError::StringTooLong);
+        }
+        let size = Str8::DATA.cell_size(len).ok_or(HeapError::StringTooLong)?;
+        let off = self.alloc_cell_init(CellKind::Str8, size, Str8::DATA.offset, data)?;
+        self.arena_mut().set(off, Str8::LEN, len);
         Ok(Str(off))
     }
 

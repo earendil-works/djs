@@ -60,7 +60,7 @@ impl Arena {
     }
 
     /// Bytes in use. This is also the offset of the next allocation.
-    #[inline]
+    #[inline(always)]
     pub fn len(&self) -> u32 {
         self.bytes.len() as u32
     }
@@ -85,6 +85,28 @@ impl Arena {
     /// Fails with [`HeapError::OutOfMemory`] when the cap would be exceeded or the host
     /// allocator fails. Never panics on exhaustion.
     pub fn alloc(&mut self, size: u32) -> Result<u32, HeapError> {
+        let (start, end) = self.reserve(size)?;
+        self.extend_zeros(end - start);
+        Ok(start)
+    }
+
+    /// Like [`Arena::alloc`], but the `data.len()` bytes at offset `at` of the new block
+    /// are `data` instead of zeros: they are written once, not zeroed and then copied (the
+    /// bulk of strings and GC copies). Panics if `data` does not fit in `size` at `at`.
+    pub fn alloc_init(&mut self, size: u32, at: u32, data: &[u8]) -> Result<u32, HeapError> {
+        let tail = (size as usize).checked_sub(at as usize + data.len());
+        assert!(tail.is_some(), "alloc_init: data does not fit");
+        let (start, end) = self.reserve(size)?;
+        self.extend_zeros(at);
+        self.bytes.extend_from_slice(data);
+        self.extend_zeros(end - self.len());
+        Ok(start)
+    }
+
+    /// Checks the cap and reserves room for `size` bytes (rounded up to 8) at the end;
+    /// returns the block's start and end.
+    #[inline]
+    fn reserve(&mut self, size: u32) -> Result<(u32, u32), HeapError> {
         let size = size.checked_add(7).ok_or(HeapError::OutOfMemory)? & !7;
         let start = self.len();
         let end = start
@@ -102,28 +124,40 @@ impl Arena {
                 .try_reserve_exact(want - self.bytes.len())
                 .map_err(|_| HeapError::OutOfMemory)?;
         }
-        self.bytes.resize(end_us, 0);
-        Ok(start)
+        Ok((start, end))
     }
 
+    /// Appends `n` zero bytes (room is reserved). Copies from a static zero block rather
+    /// than `resize(_, 0)`, which opt-level "z" compiles to a byte-at-a-time loop; a copy
+    /// is one `memory.copy` in wasm at every opt-level (D1261).
     #[inline]
+    fn extend_zeros(&mut self, mut n: u32) {
+        static ZEROS: [u8; 256] = [0; 256];
+        while n > 0 {
+            let k = n.min(ZEROS.len() as u32);
+            self.bytes.extend_from_slice(&ZEROS[..k as usize]);
+            n -= k;
+        }
+    }
+
+    #[inline(always)]
     pub fn read<T: FieldType>(&self, off: u32) -> T {
         T::read(&self.bytes, off as usize)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn write<T: FieldType>(&mut self, off: u32, v: T) {
         T::write(&mut self.bytes, off as usize, v)
     }
 
     /// Reads field `f` of the cell (or record) at `base`.
-    #[inline]
+    #[inline(always)]
     pub fn get<T: FieldType>(&self, base: u32, f: Field<T>) -> T {
         self.read(base + f.offset)
     }
 
     /// Writes field `f` of the cell (or record) at `base`.
-    #[inline]
+    #[inline(always)]
     pub fn set<T: FieldType>(&mut self, base: u32, f: Field<T>, v: T) {
         self.write(base + f.offset, v)
     }
@@ -197,6 +231,31 @@ mod tests {
         assert_eq!(a.read::<i32>(o + 24), -3);
         a.copy_within(o, 4, o + 28);
         assert_eq!(a.read::<u32>(o + 28), 0x0403_0201);
+    }
+
+    #[test]
+    fn alloc_init_writes_data_and_zeroes_the_rest() {
+        let mut a = Arena::new(1 << 20);
+        a.alloc(8).unwrap();
+        let o = a.alloc_init(13, 3, b"abcd").unwrap();
+        assert_eq!(o, 8);
+        assert_eq!(a.len(), 24);
+        assert_eq!(a.slice(8, 16), b"\0\0\0abcd\0\0\0\0\0\0\0\0\0");
+        // Large blocks (more than one zero chunk) on both sides.
+        let o = a.alloc_init(2000, 700, &[7; 600]).unwrap();
+        let s = a.slice(o, 2000);
+        assert!(s[..700].iter().all(|&b| b == 0));
+        assert!(s[700..1300].iter().all(|&b| b == 7));
+        assert!(s[1300..].iter().all(|&b| b == 0));
+        let mut small = Arena::new(32);
+        assert_eq!(small.alloc_init(40, 0, b"x"), Err(HeapError::OutOfMemory));
+        assert_eq!(small.len(), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "does not fit")]
+    fn alloc_init_checks_the_fit() {
+        Arena::new(1 << 20).alloc_init(8, 4, b"12345").unwrap();
     }
 
     #[test]
