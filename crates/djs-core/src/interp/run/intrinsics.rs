@@ -251,6 +251,9 @@ const ARRAY_SEARCH_DENSE: u16 = id("ArraySearchDense");
 const ARRAY_SLICE_DENSE: u16 = id("ArraySliceDense");
 const ARRAY_JOIN_DENSE: u16 = id("ArrayJoinDense");
 const ITERATOR_FAST_READY: u16 = id("IteratorFastReady");
+const IS_ORIGINAL_COLLECTION_ADDER: u16 = id("IsOriginalCollectionAdder");
+const MAP_PROTOTYPE_SET: u16 = id("MapPrototypeSet");
+const SET_PROTOTYPE_ADD: u16 = id("SetPrototypeAdd");
 const ENUMERABLE_OWN_DATA_PROPERTIES: u16 = id("EnumerableOwnDataProperties");
 const ITERATOR_FAST_VALUE: u16 = id("IteratorFastValue");
 const INSTALL_CONSTRUCTOR: u16 = id("InstallConstructor");
@@ -1052,6 +1055,14 @@ impl Exec<'_> {
                     return bad_argument(info.name);
                 };
                 self.enumerable_own_data(o, kind)?
+            }
+            IS_ORIGINAL_COLLECTION_ADDER => {
+                let original = match arg(self, 1).as_int() {
+                    Some(0) => MAP_PROTOTYPE_SET,
+                    Some(1) => SET_PROTOTYPE_ADD,
+                    _ => return bad_argument(info.name),
+                };
+                Value::bool(a0 == realm::installed_intrinsic(self.heap, original))
             }
             ITERATOR_FAST_READY => Value::bool(self.iter_fast_ready(a0, arg(self, 1))),
             ITERATOR_FAST_VALUE => match self.iter_fast_next(a0, arg(self, 1))? {

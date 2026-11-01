@@ -44,6 +44,26 @@ pub(crate) fn iterator(heap: &mut Heap, m: Obj, kind: i32) -> Result<Obj, Fault>
     Ok(heap.collection_iterator(m, kind, proto)?)
 }
 
+/// The next value of Map/Set iterator `o` (key, value or entry by its kind), or `None`
+/// once done: `next` without the result object (D1800).
+pub(crate) fn iterator_step_value(heap: &mut Heap, o: Obj) -> Result<Option<Value>, Fault> {
+    let is_set = heap.object_slot(o, 3).as_int() == Some(1);
+    let kind = heap.object_slot(o, 2).as_int().unwrap_or(0);
+    let Some((k, v)) = heap.collection_iterator_next(o) else {
+        return Ok(None);
+    };
+    Ok(Some(match kind {
+        0 => k,
+        1 => v,
+        // A Set's entries are [value, value].
+        _ => {
+            let proto = realm::intrinsic_obj(heap, Intrinsic::ArrayProto);
+            let pair = if is_set { [k, k] } else { [k, v] };
+            Value::object(heap.new_array_from_values(Some(proto), &pair)?)
+        }
+    }))
+}
+
 /// `next()` of a Map or Set Iterator.
 pub(crate) fn iterator_next(heap: &mut Heap, it: Value, is_set: bool) -> Result<Value, Fault> {
     let Some(o) = it.as_object().filter(|&o| {
@@ -56,28 +76,9 @@ pub(crate) fn iterator_next(heap: &mut Heap, it: Value, is_set: bool) -> Result<
             "Map Iterator object expected"
         });
     };
-    let kind = heap.object_slot(o, 2).as_int().unwrap_or(0);
-    let (value, done) = match heap.collection_iterator_next(o) {
+    let (value, done) = match iterator_step_value(heap, o)? {
+        Some(v) => (v, false),
         None => (Value::UNDEFINED, true),
-        // A Set's entries are [value, value].
-        Some((k, v)) => match kind {
-            2 if is_set => {
-                let proto = realm::intrinsic_obj(heap, Intrinsic::ArrayProto);
-                (
-                    Value::object(heap.new_array_from_values(Some(proto), &[k, k])?),
-                    false,
-                )
-            }
-            0 => (k, false),
-            1 => (v, false),
-            _ => {
-                let proto = realm::intrinsic_obj(heap, Intrinsic::ArrayProto);
-                (
-                    Value::object(heap.new_array_from_values(Some(proto), &[k, v])?),
-                    false,
-                )
-            }
-        },
     };
     let proto = realm::intrinsic_obj(heap, Intrinsic::ObjectProto);
     Ok(Value::object(heap.new_object_from_entries(

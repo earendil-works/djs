@@ -19,7 +19,7 @@ use super::intrinsics::{
     id,
 };
 use super::*;
-use crate::builtins::string;
+use crate::builtins::{collection, string};
 use crate::heap::{Lookup, atoms};
 use crate::value::Str;
 
@@ -28,6 +28,8 @@ const STRING_KIND: i32 = 3;
 
 const GET_ITERATOR: u16 = id("GetIterator");
 const ITERATOR_CLOSE: u16 = id("IteratorClose");
+const MAP_ITERATOR_NEXT: u16 = id("MapIteratorPrototypeNext");
+const SET_ITERATOR_NEXT: u16 = id("SetIteratorPrototypeNext");
 
 impl Exec<'_> {
     /// `%GetIterator(obj)` and `%IteratorClose(it)` of for-of and array destructuring
@@ -108,6 +110,23 @@ impl Exec<'_> {
     /// protocol (module docs); the iterator has then advanced (or finished). `Slow`,
     /// with nothing changed, when the caller must call `next`.
     pub(super) fn iter_fast_next(&mut self, it: Value, f: Value) -> Result<FastStep, Fault> {
+        // A Map or Set Iterator with its original `next`: that never runs user code.
+        if let Some(o) = it.as_object()
+            && self.heap.object_class(o) == ObjectClass::CollectionIterator
+        {
+            let original = if self.heap.object_slot(o, 3).as_int() == Some(1) {
+                SET_ITERATOR_NEXT
+            } else {
+                MAP_ITERATOR_NEXT
+            };
+            if f != realm::installed_intrinsic(self.heap, original) {
+                return Ok(FastStep::Slow);
+            }
+            return Ok(match collection::iterator_step_value(self.heap, o)? {
+                Some(v) => FastStep::Value(v),
+                None => FastStep::Done,
+            });
+        }
         Ok(match self.iter_plan(it, f) {
             Plan::Slow => FastStep::Slow,
             Plan::Done(it) => {

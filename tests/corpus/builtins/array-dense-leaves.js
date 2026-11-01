@@ -131,6 +131,44 @@ const log = (...a) => out.push(a.map(String).join(" "));
 }
 
 // Promise.all over an array.
+// Map/Set iteration (original next: no result objects) and the constructors' adders.
+{
+  const m = new Map([[1, "a"], [-0, "z"], [2, "b"]]);
+  const r = [];
+  for (const [k, v] of m) { r.push(k + v); if (k === 1) { m.delete(2); m.set(3, "c"); } }
+  for (const k of m.keys()) r.push(k);
+  for (const v of m.values()) r.push(v);
+  const s = new Set([1, 2, 3]);
+  for (const x of s) { r.push(x); if (x === 1) { s.delete(1); s.add(4); } }
+  for (const [a, b] of s.entries()) r.push(a + "=" + b);
+  m.forEach((v, k, mm) => { r.push(k + ":" + v); if (k === 1) mm.set(9, "n"); });
+  s.forEach((v, k) => { r.push(v === k); if (v === 2) s.clear(); });
+  log("coll", r.join(), Object.is([...new Map([[-0, 1]]).keys()][0], 0));
+  const it = new Set([1, 2])[Symbol.iterator]();
+  for (const x of it) { r.length = 0; r.push(x); break; }
+  log("coll-it", [...it], JSON.stringify(it.next()));
+  const add = Set.prototype.add;
+  let n = 0;
+  Set.prototype.add = function (v) { n++; return add.call(this, v); };
+  new Set([1, 2]);
+  Set.prototype.add = add;
+  const set = Map.prototype.set;
+  Map.prototype.set = function (k, v) { n += 10; return set.call(this, k, v); };
+  new Map([[1, 2]]);
+  Map.prototype.set = set;
+  class M extends Map { set(k, v) { n += 100; return super.set(k, v); } }
+  new M([[1, 1]]);
+  log("adders", n);
+  const proto = Object.getPrototypeOf(new Map().entries());
+  const next = proto.next;
+  proto.next = function () { n += 1000; return next.call(this); };
+  for (const e of new Map([[1, 1]])) n;
+  proto.next = next;
+  log("map-next", n);
+  try { new Set([1]).forEach(5); } catch (e) { log("forEach", e.constructor.name); }
+  try { Map.prototype.forEach.call(new Set(), () => {}); } catch (e) { log("forEach2", e.message); }
+}
+
 log("all", await Promise.all([1, Promise.resolve(2), 3]));
 log("allSettled", (await Promise.allSettled([1, , Promise.reject(3)])).map((r) => r.status));
 console.log(out.join("\n"));

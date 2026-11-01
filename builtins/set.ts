@@ -24,6 +24,8 @@ function SetConstructor(iterable?: Value): Obj {
   if (!IsCallable(adder)) {
     throw NewTypeError("not a function");
   }
+  // The original add on the new Set is CollectionSet itself (0080).
+  const direct: boolean = IsOriginalCollectionAdder(adder, 1);
   const iterator: Obj = GetIterator(iterable);
   const next: Value = Get(iterator, "next");
   while (true) {
@@ -37,6 +39,10 @@ function SetConstructor(iterable?: Value): Obj {
         return set;
       }
       nextValue = Get(result, "value");
+    }
+    if (direct) {
+      CollectionSet(set, nextValue, true);
+      continue;
     }
     try {
       Call(adder, set, nextValue);
@@ -58,6 +64,7 @@ function SetSpecies(this: Value): Value {
 /**
  * Set.prototype.add ( value ), 24.2.4.1.
  * @builtin Set.prototype.add
+ * @intrinsic
  */
 function SetPrototypeAdd(this: Value, value: Value): Value {
   CollectionSet(ThisSet(this), value, true);
@@ -91,6 +98,7 @@ function SetPrototypeEntries(this: Value): Obj {
 /**
  * Set.prototype.forEach ( callbackfn [ , thisArg ] ), 24.2.4.7.
  * @builtin Set.prototype.forEach
+ * @native
  */
 function SetPrototypeForEach(this: Value, callbackfn: Value, thisArg?: Value): void {
   const s: Obj = ThisSet(this);
@@ -142,6 +150,7 @@ function SetPrototypeToStringTag(): Str {
 /**
  * %SetIteratorPrototype%.next ( ), 24.2.6.2.1.
  * @builtin %SetIteratorPrototype%.next
+ * @intrinsic
  */
 function SetIteratorPrototypeNext(this: Value): Obj {
   return CollectionIteratorNext(this, true);

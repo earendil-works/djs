@@ -264,6 +264,11 @@ declare function CollectionIterator(m: Obj, kind: i32): Obj;
  * TypeError "Map Iterator object expected" (or Set) for anything else. @leaf
  */
 declare function CollectionIteratorNext(it: Value, isSet: boolean): Obj;
+/**
+ * Whether `adder` is the installed Map.prototype.set (kind 0) or Set.prototype.add (1):
+ * the constructors then store directly (0080). @leaf
+ */
+declare function IsOriginalCollectionAdder(adder: Value, kind: i32): boolean;
 /** Advances an iterator to the next entry; false when done. @leaf */
 declare function CollectionIteratorStep(it: Obj): boolean;
 /** The key of the entry the last step reached. @leaf */

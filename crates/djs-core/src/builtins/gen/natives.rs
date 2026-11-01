@@ -27,6 +27,11 @@ const I_ASYNC_GENERATOR_STATE: u16 = iid("AsyncGeneratorState");
 const I_ASYNC_GENERATOR_STEP: u16 = iid("AsyncGeneratorStep");
 const I_CALL: u16 = iid("Call");
 const I_COLLECT_PRESENT: u16 = iid("CollectPresent");
+const I_COLLECTION_CLASS: u16 = iid("CollectionClass");
+const I_COLLECTION_ITERATOR: u16 = iid("CollectionIterator");
+const I_COLLECTION_ITERATOR_KEY: u16 = iid("CollectionIteratorKey");
+const I_COLLECTION_ITERATOR_STEP: u16 = iid("CollectionIteratorStep");
+const I_COLLECTION_ITERATOR_VALUE: u16 = iid("CollectionIteratorValue");
 const I_COMPARE_STRINGS: u16 = iid("CompareStrings");
 const I_CREATE_ARRAY_FROM_PAIR: u16 = iid("CreateArrayFromPair");
 const I_CREATE_ITER_RESULT_OBJECT: u16 = iid("CreateIterResultObject");
@@ -87,7 +92,9 @@ pub(crate) static NATIVES: &[NativeFn] = &[
     NativeFn { name: "ArrayPrototypeToSorted", params: 1, locals: 3, run: native_ArrayPrototypeToSorted, handler: handler_ArrayPrototypeToSorted },
     NativeFn { name: "GetIterator", params: 1, locals: 2, run: native_GetIterator, handler: handler_GetIterator },
     NativeFn { name: "ArrayIteratorPrototypeNext", params: 0, locals: 8, run: native_ArrayIteratorPrototypeNext, handler: handler_ArrayIteratorPrototypeNext },
+    NativeFn { name: "MapPrototypeForEach", params: 2, locals: 2, run: native_MapPrototypeForEach, handler: handler_MapPrototypeForEach },
     NativeFn { name: "PromiseReactionJob", params: 4, locals: 8, run: native_PromiseReactionJob, handler: handler_PromiseReactionJob },
+    NativeFn { name: "SetPrototypeForEach", params: 2, locals: 3, run: native_SetPrototypeForEach, handler: handler_SetPrototypeForEach },
     NativeFn { name: "StringPrototypeAt", params: 1, locals: 8, run: native_StringPrototypeAt, handler: handler_StringPrototypeAt },
     NativeFn { name: "StringPrototypeCharAt", params: 1, locals: 6, run: native_StringPrototypeCharAt, handler: handler_StringPrototypeCharAt },
     NativeFn { name: "StringPrototypeCharCodeAt", params: 1, locals: 6, run: native_StringPrototypeCharCodeAt, handler: handler_StringPrototypeCharCodeAt },
@@ -1851,6 +1858,45 @@ fn handler_ArrayIteratorPrototypeNext(state: u32) -> Option<(u32, u32)> {
     None
 }
 
+// builtins/map.ts:151 (Map.prototype.forEach)
+fn native_MapPrototypeForEach(ex: &mut Exec<'_>) -> Step {
+    loop {
+        match ex.n_state() {
+            0 => {
+                let v = { let a0 = ex.n_this(); leaf_ThisMap(ex, a0)? }; ex.n_set_slot(0, v);
+                if (!{ let a0 = ex.n_arg(0); ex.n_is_callable(a0) }) { ex.n_goto(1); continue; } else { ex.n_goto(2); continue; }
+            }
+            1 => {
+                let v = { let a0 = ex.n_str("not a function")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
+            }
+            2 => {
+                let v = { let a0 = ex.n_slot(0); let a1 = Value::int(2); ex.n_leaf(I_COLLECTION_ITERATOR, &[a0, a1])? }; ex.n_set_slot(1, v);
+                ex.n_goto(3); continue;
+            }
+            3 => {
+                if bool_of({ let a0 = ex.n_slot(1); ex.n_leaf(I_COLLECTION_ITERATOR_STEP, &[a0])? }) { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
+            }
+            4 => {
+                // resume point: Call
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_arg(1); let a2 = { let a0 = ex.n_slot(1); ex.n_leaf(I_COLLECTION_ITERATOR_VALUE, &[a0])? }; let a3 = { let a0 = ex.n_slot(1); ex.n_leaf(I_COLLECTION_ITERATOR_KEY, &[a0])? }; let a4 = ex.n_slot(0); ex.n_call(I_CALL, &[a0, a1, a2, a3, a4], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            5 => {
+                let v = Value::UNDEFINED; return ex.n_ret(v);
+            }
+            6 => {
+                ex.n_result();
+                if ex.n_backedge(3) { return Ok(None); } continue;
+            }
+            _ => return Err(bad_state()),
+        }
+    }
+}
+
+fn handler_MapPrototypeForEach(state: u32) -> Option<(u32, u32)> {
+    let _ = state;
+    None
+}
+
 // builtins/promise.ts:210
 fn native_PromiseReactionJob(ex: &mut Exec<'_>) -> Step {
     loop {
@@ -1965,6 +2011,46 @@ fn handler_PromiseReactionJob(state: u32) -> Option<(u32, u32)> {
         9 | 10 => Some((8, 2)),
         _ => None,
     }
+}
+
+// builtins/set.ts:103 (Set.prototype.forEach)
+fn native_SetPrototypeForEach(ex: &mut Exec<'_>) -> Step {
+    loop {
+        match ex.n_state() {
+            0 => {
+                let v = { let a0 = ex.n_this(); leaf_ThisSet(ex, a0)? }; ex.n_set_slot(0, v);
+                if (!{ let a0 = ex.n_arg(0); ex.n_is_callable(a0) }) { ex.n_goto(1); continue; } else { ex.n_goto(2); continue; }
+            }
+            1 => {
+                let v = { let a0 = ex.n_str("not a function")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
+            }
+            2 => {
+                let v = { let a0 = ex.n_slot(0); let a1 = Value::int(0); ex.n_leaf(I_COLLECTION_ITERATOR, &[a0, a1])? }; ex.n_set_slot(1, v);
+                ex.n_goto(3); continue;
+            }
+            3 => {
+                if bool_of({ let a0 = ex.n_slot(1); ex.n_leaf(I_COLLECTION_ITERATOR_STEP, &[a0])? }) { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
+            }
+            4 => {
+                let v = { let a0 = ex.n_slot(1); ex.n_leaf(I_COLLECTION_ITERATOR_KEY, &[a0])? }; ex.n_set_slot(2, v);
+                // resume point: Call
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_arg(1); let a2 = ex.n_slot(2); let a3 = ex.n_slot(2); let a4 = ex.n_slot(0); ex.n_call(I_CALL, &[a0, a1, a2, a3, a4], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            5 => {
+                let v = Value::UNDEFINED; return ex.n_ret(v);
+            }
+            6 => {
+                ex.n_result();
+                if ex.n_backedge(3) { return Ok(None); } continue;
+            }
+            _ => return Err(bad_state()),
+        }
+    }
+}
+
+fn handler_SetPrototypeForEach(state: u32) -> Option<(u32, u32)> {
+    let _ = state;
+    None
 }
 
 // builtins/string.ts:91 (String.prototype.at)
@@ -2835,6 +2921,26 @@ fn leaf_TALength(ex: &mut Exec<'_>, mut l_o: Value) -> Result<f64, Fault> {
 // builtins/typedarray.ts:69 (leaf)
 fn leaf_TAOutOfBounds(ex: &mut Exec<'_>, mut l_o: Value) -> Result<bool, Fault> {
     return Ok(bool_of({ let a0 = { let a0 = l_o; let a1 = Value::int(5); ex.n_leaf(I_TYPED_ARRAY_FIELD, &[a0, a1])? }; ex.n_leaf(I_AS_BOOL, &[a0])? }));
+    #[allow(unreachable_code)]
+    Err(bad_state())
+}
+
+// builtins/map.ts:4 (leaf)
+fn leaf_ThisMap(ex: &mut Exec<'_>, mut l_v: Value) -> Result<Value, Fault> {
+    if (i32_of({ let a0 = l_v; ex.n_leaf(I_COLLECTION_CLASS, &[a0])? }) != 0_i32) {
+        return Err(Fault::throw({ let a0 = ex.n_str("Map object expected")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }));
+    }
+    return Ok({ let a0 = l_v; ex.n_as_obj(a0)? });
+    #[allow(unreachable_code)]
+    Err(bad_state())
+}
+
+// builtins/set.ts:4 (leaf)
+fn leaf_ThisSet(ex: &mut Exec<'_>, mut l_v: Value) -> Result<Value, Fault> {
+    if (i32_of({ let a0 = l_v; ex.n_leaf(I_COLLECTION_CLASS, &[a0])? }) != 1_i32) {
+        return Err(Fault::throw({ let a0 = ex.n_str("Set object expected")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }));
+    }
+    return Ok({ let a0 = l_v; ex.n_as_obj(a0)? });
     #[allow(unreachable_code)]
     Err(bad_state())
 }

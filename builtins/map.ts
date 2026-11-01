@@ -13,6 +13,8 @@ function ThisMap(v: Value): Obj {
  * object; the iterator is closed when reading it or calling the adder throws.
  */
 function AddEntriesFromIterable(target: Obj, iterable: Value, adder: Value): void {
+  // The original Map.prototype.set on a Map is CollectionSet itself (0080).
+  const direct: boolean = IsOriginalCollectionAdder(adder, 0) && CollectionClass(target) === 0;
   const iterator: Obj = GetIterator(iterable);
   const next: Value = Get(iterator, "next");
   while (true) {
@@ -34,7 +36,11 @@ function AddEntriesFromIterable(target: Obj, iterable: Value, adder: Value): voi
       const item: Obj = AsObj(nextItem);
       const k: Value = Get(item, "0");
       const v: Value = Get(item, "1");
-      Call(adder, target, k, v);
+      if (direct) {
+        CollectionSet(target, k, v);
+      } else {
+        Call(adder, target, k, v);
+      }
     } catch (e) {
       IteratorCloseThrow(iterator);
       throw e;
@@ -140,6 +146,7 @@ function MapPrototypeEntries(this: Value): Obj {
 /**
  * Map.prototype.forEach ( callbackfn [ , thisArg ] ), 24.1.3.5.
  * @builtin Map.prototype.forEach
+ * @native
  */
 function MapPrototypeForEach(this: Value, callbackfn: Value, thisArg?: Value): void {
   const m: Obj = ThisMap(this);
@@ -219,6 +226,7 @@ function MapPrototypeKeys(this: Value): Obj {
 /**
  * Map.prototype.set ( key, value ), 24.1.3.9.
  * @builtin Map.prototype.set
+ * @intrinsic
  */
 function MapPrototypeSet(this: Value, key: Value, value: Value): Value {
   CollectionSet(ThisMap(this), key, value);
@@ -253,6 +261,7 @@ function MapPrototypeToStringTag(): Str {
 /**
  * %MapIteratorPrototype%.next ( ), 24.1.5.2.1.
  * @builtin %MapIteratorPrototype%.next
+ * @intrinsic
  */
 function MapIteratorPrototypeNext(this: Value): Obj {
   return CollectionIteratorNext(this, false);

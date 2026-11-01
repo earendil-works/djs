@@ -44,6 +44,12 @@ fn v a,b x,y 0
 proxy trap-a
 error 1
 arguments 1,2
+coll 1a,0z,3c,1,0,3,a,z,c,1,2,3,4,2=2,3=3,4=4,1:a,0:z,3:c,9:n,true true
+coll-it 2 {"done":true}
+adders 112
+map-next 2112
+forEach TypeError
+forEach2 Map object expected
 all 1,2,3
 allSettled fulfilled,fulfilled,rejected
 === completed
