@@ -1,7 +1,7 @@
 # 0007: Run test262 on djs and put the ratchet in the gate
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0007-test262-djs-engine
 depends-on: 0002, 0022
 touches: crates/djs-test262/, tests/test262/, scripts/gate.sh, crates/djs-core/src/vm/ (only additive hooks needed by $262, coordinated in the Log)
