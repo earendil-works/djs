@@ -839,6 +839,30 @@ impl Heap {
         )
     }
 
+    /// [[Set]] on an own writable data property, which only replaces its value
+    /// (OrdinarySet's DefineOwnProperty with `{ [[Value]]: v }`). Returns false, with
+    /// nothing changed, for anything else (absent, an accessor, read-only, an array's
+    /// `length`), which needs the full algorithm. The interpreter's hot path (0035).
+    pub fn set_own_data_value(&mut self, o: Obj, key: Atom, v: Value) -> bool {
+        match self.find_own(o, key) {
+            Loc::Dense(i) => {
+                let el = self.elements(o);
+                self.value_array_set(el, i, v);
+                true
+            }
+            Loc::Table(i) => {
+                let e = PropTable::ENTRIES.at(self.props(o), i);
+                let fl = self.arena().get(e, PropEntry::FLAGS);
+                if fl & STORE_ACCESSOR != 0 || !PropFlags::from_bits(fl as u8).writable() {
+                    return false;
+                }
+                self.arena_mut().set(e, PropEntry::VALUE, v);
+                true
+            }
+            Loc::None | Loc::ArrayLength => false,
+        }
+    }
+
     /// `[[GetOwnProperty]]`.
     pub fn get_own_property(&self, o: Obj, key: Atom) -> Option<Property> {
         self.read_loc(o, self.find_own(o, key))
@@ -1069,6 +1093,19 @@ impl Heap {
         key: Atom,
         value: Value,
     ) -> Result<bool, HeapError> {
+        // A new key on an extensible ordinary object (object literals, the common case):
+        // what ordinary_define would do, without building and validating a descriptor.
+        if self.object_class(o) != ObjectClass::Array
+            && key.as_int().is_none()
+            && self.find_own(o, key) == Loc::None
+            && self.is_extensible(o)
+        {
+            self.table_insert(o, key, &Property::data(value, PropFlags::ALL))?;
+            if self.atom_array_index(key).is_some() {
+                self.set_obj_flag(o, OBJ_INDEXED_PROPS, true);
+            }
+            return Ok(true);
+        }
         self.define_own_property(o, key, &PropertyDescriptor::data(value, PropFlags::ALL))
     }
 

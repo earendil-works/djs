@@ -93,6 +93,7 @@ mod fast {
     pub const CALL: u8 = Op::Call as u8;
     pub const RETURN: u8 = Op::Return as u8;
     pub const RETURN_UNDEF: u8 = Op::ReturnUndef as u8;
+    pub const CALL_INTRINSIC: u8 = Op::CallIntrinsic as u8;
 }
 
 type Step = Result<Option<Status>, Fault>;
@@ -783,6 +784,7 @@ impl<'h> Exec<'h> {
             fast::CALL => return self.fast_call(),
             fast::RETURN => return self.fast_return(Op::Return),
             fast::RETURN_UNDEF => return self.fast_return(Op::ReturnUndef),
+            fast::CALL_INTRINSIC => return self.fast_intrinsic(),
             _ => return false,
         }
         true
@@ -847,9 +849,14 @@ impl<'h> Exec<'h> {
     /// `fast_step` for `call`: a JS closure with the stack already big enough.
     #[inline(always)]
     fn fast_call(&mut self) -> bool {
-        let next = self.pc + OPS[Op::Call as usize].size as u32;
         let argc = self.imm_u16(1);
-        let base = self.sp - 2 - argc;
+        self.fast_call_at(Op::Call, self.sp - 2 - argc, argc)
+    }
+
+    /// Calls the JS closure at `stack[base]` with `argc` arguments for instruction `op`
+    /// (charged here) if the stack has room; false, with nothing changed, otherwise.
+    #[inline(always)]
+    fn fast_call_at(&mut self, op: Op, base: u32, argc: u32) -> bool {
         let Some(o) = self.get(base).as_object() else {
             return false;
         };
@@ -860,7 +867,9 @@ impl<'h> Exec<'h> {
         if self.frame_top(t, base, argc) > self.heap.value_array_capacity(self.stack) {
             return false;
         }
-        self.fuel -= OPS[Op::Call as usize].cost.fuel() as i64;
+        let info = &OPS[op as usize];
+        self.fuel -= info.cost.fuel() as i64;
+        let next = self.pc + info.size as u32;
         self.push_frame(t, base, argc, Continuation::PushResult, next);
         true
     }
@@ -2048,6 +2057,10 @@ impl<'h> Exec<'h> {
 
     /// [[Set]] with receiver `o` for `o v` (the top `n` operands are consumed).
     fn set_property(&mut self, o: Obj, key: Atom, v: Value, n: u32) -> Step {
+        if self.heap.set_own_data_value(o, key, v) {
+            self.sp -= n;
+            return Ok(None);
+        }
         let found = self.heap.find_property(o, key);
         let readonly = |heap: &Heap| {
             Err(Fault::Error(
