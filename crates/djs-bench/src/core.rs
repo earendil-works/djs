@@ -479,7 +479,7 @@ fn collect_bench(r: &mut Runner, name: &str, h: &mut Heap) {
 ///   the direct-read reader (the reader itself is host code; see the wasm group).
 pub fn wire(r: &mut Runner) {
     use djs_core::wire::{DecodeOptions, decode};
-    if !r.wants("wire/") {
+    if !r.wants_group("wire/") {
         return;
     }
     for (name, data) in crate::data::datasets(r.config.quick) {

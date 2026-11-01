@@ -117,6 +117,12 @@ impl Runner {
                 .any(|f| name.contains(f.as_str()))
     }
 
+    /// Whether any result named `prefix...` can pass the filters: for groups that do
+    /// expensive setup once (builds, datasets) before naming their results.
+    pub fn wants_group(&self, prefix: &str) -> bool {
+        self.wants(prefix) || self.config.filters.iter().any(|f| f.starts_with(prefix))
+    }
+
     /// Scale for input sizes: 1.0 normally, small in quick mode.
     pub fn scale(&self, full: usize, quick: usize) -> usize {
         if self.config.quick { quick } else { full }

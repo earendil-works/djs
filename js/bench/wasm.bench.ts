@@ -17,7 +17,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { encode } from "../src/wire.ts";
 import { readValue } from "../src/reader.ts";
-import { defaultWasmPath } from "../src/sandbox.ts";
+import { Sandbox, defaultWasmPath } from "../src/sandbox.ts";
 
 interface X {
   memory: WebAssembly.Memory;
@@ -100,6 +100,21 @@ const row = (name: string, ms: number) => rows.push(`wasm/${name}\t${ms.toFixed(
   const module = new WebAssembly.Module(bytes);
   rows.push(`wasm/instantiate\t${ns(() => new WebAssembly.Instance(module, {})).toFixed(0)}\tns/op`);
   rows.push(`wasm/vm_new\t${ns(() => x.vm_free(x.vm_new(0))).toFixed(0)}\tns/op`);
+  // The interpreter: a loop with arithmetic, property reads and string concatenation
+  // (only what the compiler on main supports).
+  const sb = new Sandbox({ module, fuelSlice: 1e9 });
+  const code =
+    "let s = 0; let o = {a: 1, b: 2}; let arr = []; for (let i = 0; i < 300000; i++) " +
+    "{ s = (s + i * o.a) % 1000003; if (i % 100 === 0) arr[arr.length] = 'x' + i; } return s + arr.length";
+  const runs: number[] = [];
+  for (let i = 0; i < 13; i++) {
+    const t = performance.now();
+    sb.run(code);
+    if (i >= 2) runs.push(performance.now() - t);
+  }
+  runs.sort((a, b) => a - b);
+  row("interp loop", runs[runs.length >> 1]);
+  sb.dispose();
 }
 
 for (const name of names) {

@@ -53,3 +53,120 @@ date	commit	machine	benchmark	value	unit
 2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	size/wasm file	222858	bytes
 2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	size/wasm without custom sections	180610	bytes
 2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	size/wasm gzip -9	85190	bytes
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	lex/synthetic	581.2	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	lex/typescript.js	586.3	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	num/to_string(int)	6.333	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	num/to_string(short decimal)	31.98	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	num/to_string(random bits)	31.38	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	num/to_fixed(short decimal, 2)	33.35	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	num/to_precision(random bits, 6)	148.2	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	num/to_string_radix(random bits, 16)	110.4	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	num/string_to_number(int)	5.334	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	num/string_to_number(short decimal)	6.458	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	num/string_to_number(shortest of random)	22.54	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	num/string_to_number(31 digits)	86.54	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	num/string_to_number(u16, shortest)	24.27	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/compile /\d+/	193.6	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/compile /[\w.+-]+@[\w-]+\.[\w.]+/	728.0	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/compile /https?://([^/\s]+)(/[^\s?#]*)?/	1139	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/compile /(?<y>\d{4})-(?<m>\d{2})-(?<d>\d{2})/	724.7	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/compile /\bfox\b/i	303.8	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/compile /^\s+|\s+$/g	789.8	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/scan /[\w.+-]+@[\w-]+\.[\w.]+/g utf16	33.46	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/scan /[\w.+-]+@[\w-]+\.[\w.]+/g latin1	32.41	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/scan /\d+/g utf16	237.5	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/scan /\d+/g latin1	223.2	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/scan /(?<y>\d{4})-(?<m>\d{2})-(?<d>\d{2})/g utf16	375.9	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/scan /(?<y>\d{4})-(?<m>\d{2})-(?<d>\d{2})/g latin1	336.8	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/scan /\bfox\b/gi utf16	411.5	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/scan /\bfox\b/gi latin1	386.5	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/scan /lazy dog/g utf16	432.0	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/scan /lazy dog/g latin1	416.9	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/scan /zebra/g utf16	770.7	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/scan /zebra/g latin1	652.4	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/scan /\s+/g utf16	63.07	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	regexp/scan /\s+/g latin1	62.34	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	json/parse records	477.4	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	json/parse_utf8 records	417.3	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	json/stringify records	852.0	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	json/parse string	1178	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	json/parse_utf8 string	1051	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	json/stringify string	1795	MB/s
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	gc/records per MiB live	0.245	ms/MiB
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	gc/linked list per MiB live	0.292	ms/MiB
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wire/decode 10k-objects	3.102	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wire/parse_utf8 10k-objects	5.022	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wire/stringify 10k-objects	2.286	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wire/decode 1mib-string	0.024	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wire/parse_utf8 1mib-string	0.422	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wire/stringify 1mib-string	0.105	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wire/decode 1mib-text-unicode	0.552	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wire/parse_utf8 1mib-text-unicode	1.346	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wire/stringify 1mib-text-unicode	1.953	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wire/decode tool-results	0.627	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wire/parse_utf8 tool-results	1.164	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wire/stringify tool-results	0.942	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wire/decode 500k-numbers	1.242	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wire/parse_utf8 500k-numbers	8.059	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wire/stringify 500k-numbers	12.57	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	engine/qjs/empty	2.215	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	engine/qjs/arrays	102.5	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	engine/qjs/calls	33.80	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	engine/qjs/float	74.50	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	engine/qjs/higher-order	90.13	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	engine/qjs/json	21.39	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	engine/qjs/loop	65.76	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	engine/qjs/props	83.23	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	engine/qjs/regexp	24.50	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	engine/qjs/strings	54.57	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	size/wasm file	223520	bytes
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	size/wasm without custom sections	181201	bytes
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	size/wasm gzip -9	85429	bytes
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	size/djs-wasm file	487133	bytes
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	size/djs-wasm without custom sections	380159	bytes
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	size/djs-wasm gzip -9	157378	bytes
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/instantiate	28625	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/vm_new	11208	ns/op
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/decode 10k-objects	4.969	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/parse_json 10k-objects	8.567	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/readValue 10k-objects	3.020	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/json_stringify 10k-objects	5.820	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/decode 1mib-string	0.081	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/parse_json 1mib-string	0.744	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/readValue 1mib-string	0.029	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/json_stringify 1mib-string	0.131	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/decode 1mib-text-unicode	0.691	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/parse_json 1mib-text-unicode	1.989	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/readValue 1mib-text-unicode	0.105	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/json_stringify 1mib-text-unicode	2.708	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/decode tool-results	1.064	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/parse_json tool-results	2.057	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/readValue tool-results	0.447	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/json_stringify tool-results	1.805	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/decode 500k-numbers	1.953	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/parse_json 500k-numbers	12.67	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/readValue 500k-numbers	2.773	ms
+2026-11-01T02:21:59Z	d470bca79e	Mac17,7-aarch64-18cpu	wasm/json_stringify 500k-numbers	23.21	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/instantiate	28083	ns/op
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/vm_new	11417	ns/op
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/interp loop	77.39	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/decode 10k-objects	4.981	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/parse_json 10k-objects	8.626	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/readValue 10k-objects	3.062	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/json_stringify 10k-objects	5.887	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/decode 1mib-string	0.079	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/parse_json 1mib-string	0.744	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/readValue 1mib-string	0.039	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/json_stringify 1mib-string	0.130	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/decode 1mib-text-unicode	0.718	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/parse_json 1mib-text-unicode	1.972	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/readValue 1mib-text-unicode	0.094	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/json_stringify 1mib-text-unicode	2.813	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/decode tool-results	1.060	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/parse_json tool-results	2.052	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/readValue tool-results	0.449	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/json_stringify tool-results	1.838	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/decode 500k-numbers	1.968	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/parse_json 500k-numbers	12.62	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/readValue 500k-numbers	2.784	ms
+2026-11-01T02:23:03Z	d470bca79e-dirty	Mac17,7-aarch64-18cpu	wasm/json_stringify 500k-numbers	23.50	ms

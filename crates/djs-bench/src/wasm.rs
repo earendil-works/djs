@@ -13,7 +13,7 @@ use crate::engine::workspace_root;
 use crate::runner::{Runner, Unit};
 
 pub fn wasm(r: &mut Runner) {
-    if !r.wants("wasm/") {
+    if !r.wants_group("wasm/") {
         return;
     }
     if r.config.quick {
