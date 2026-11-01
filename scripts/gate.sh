@@ -11,4 +11,6 @@ echo "== no_std/wasm build of djs-core"
 cargo build -p djs-core --target wasm32-unknown-unknown --quiet
 
 # Additional gate steps registered by issues go below this line.
+echo "== builtins/gen is up to date (0017)"
+./scripts/bgen.sh --check
 echo "gate: OK"

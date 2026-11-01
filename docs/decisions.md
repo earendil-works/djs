@@ -499,3 +499,44 @@ what it parses), and the TypeScript compiler API on node (TypeScript 7, which pi
 uses, ships only the native `tsc` with no JS API; we would have to pin 5.x and need node
 and npm to regenerate). `builtins/tsconfig.json` still lets editors and any `tsc`
 type-check the sources, but bgen never depends on it.
+
+## D1171: Builtin subset rules
+date: 2026-11-01 · by: infra · issue: 0017
+The subset djs-bgen accepts (builtins/README.md, crates/djs-bgen/src/check.rs):
+top-level functions with explicit types only; locals declared with a type and an
+initializer, no shadowing; assignments and `++`/`--` are statements on locals; calls only
+by name to intrinsics or builtins (user code through `Call`/`Construct`); no property
+access, object/array literals, `new`, closures, `arguments`, `eval`, generators, async,
+classes, `switch`, labels, `typeof`/`in`/`instanceof`, `==`/`!=`, `??`, `**`. Conditions
+must be booleans. Numerics: `+ - *` on one integer type, `/` and `%` only on f64,
+bitwise operators only on i32 (`>>>` gives u32), no mixed numeric types except implicit
+i32/u32 → f64 widening on assignment and argument passing, and integer literals adapt
+when they fit. Integer overflow is a bug in the builtin: the Rust backend will check it
+and raise an internal error, and the JS backend does not check. A builtin that takes
+`this` cannot be called directly from another builtin. `intrinsics.d.ts` brands
+i32/u32 with an optional property so that tsc catches i32/u32 mixing but accepts
+literals; bgen is stricter than tsc on everything numeric.
+
+## D1172: Generated prelude format and installation
+date: 2026-11-01 · by: infra · issue: 0017
+`builtins/gen/prelude.js` is one strict Script: an IIFE that declares every builtin as a
+local function (builtins call each other directly; nothing leaks into the global
+object), in file-name order and then declaration order, followed by installation calls:
+`%InstallMethod(target, key, fn, length)` (method on the object at the dotted path
+`target` from the global object; writable, configurable, not enumerable; `name` = key)
+and `%InstallIntrinsic(name, fn)` (makes `fn` callable as `%name(...)` from privileged
+code and from interpreter slow paths, for builtins tagged `@intrinsic`). Both are leaf
+intrinsics declared in `intrinsics.d.ts`. This is a proposal for P1-2, the first
+consumer: getters, symbol keys, constructors and other attributes are added when needed.
+`builtins/gen/resume-points.txt` (the `--report`) is checked in next to it, so reviews
+see when a builtin becomes reentrant.
+
+## D1173: Reentrant intrinsics are single-step
+date: 2026-11-01 · by: infra · issue: 0017
+Following D1085, an intrinsic tagged `@reentrant` runs a leaf fast path and calls at
+most one user function whose result completes it (`Get`, `GetV`, `Set`, `HasProperty`,
+`CreateDataPropertyOrThrow`, `DeletePropertyOrThrow`, `Call`, `Construct`). Operations
+with several steps around user code (ToPrimitive, GetMethod, ToNumber of objects,
+LengthOfArrayLike, ArraySpeciesCreate) are written in the builtin language. Error texts
+follow QuickJS where cheap, and messages that need engine-internal data (such as a
+function's internal name) come from leaf intrinsics (`NewNotConstructorError`).
