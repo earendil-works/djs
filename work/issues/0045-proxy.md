@@ -70,6 +70,12 @@ in every builtin that reaches internal methods.
   methods over proxied arrays). Features: Proxy 352/375 active (93.8%),
   proxy-missing-checks 3/3, Reflect 276/286, Reflect.construct 404/424. The remaining
   proxy failures all need classes, regexps, async functions or eval.
+- Rebased onto main 4ef2796 (0041 await/generators, 0043 wasm size, D011's promotion of
+  generators): main has 22,613 / 32,341 active passes; with this branch 22,978 / 32,718
+  (70.2%): +377 active tests, +365 passes (15 earlier expected failures pass now, e.g.
+  Object.keys/seal/freeze over proxies and the Array methods' proxy-access-count tests).
+  Adapted to D1433 (prelude closures carry no `prototype`: Proxy now simply skips
+  installing one).
 
 ## Follow-ups
 - Private names (0040): they bypass proxies and act on the proxy object itself, but the
@@ -102,7 +108,8 @@ Tests: behavior.js (proxies behind native shells against qjs, ~5,000 comparisons
 logs and invariant errors), tests/corpus/builtins/proxy.js and codemode/tools-proxy.js
 (a pi-like `guard` over tools and a namespace), tests/data/e2e/proxies.js (three modes),
 dquickts' test_for_in_proxy passes. test262 Proxy promoted to active: 18,484 -> 18,853
-active passes; Proxy feature 352/375. Ratchets updated. No engine benchmark regression.
+active passes on 23be57f; after the rebase onto 4ef2796, 22,613 -> 22,978. Proxy feature
+352/375. Ratchets updated. No engine benchmark regression.
 
 Known gaps: see Follow-ups (private names on proxies with 0040, the difftest glue,
 Function.prototype.toString naming); for a proxy further up a for-in chain qjs reads its
