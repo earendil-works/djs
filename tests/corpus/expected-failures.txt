@@ -22,7 +22,6 @@ dquickts/builtin/test_generator.js: throws SyntaxError: generators are not suppo
 dquickts/builtin/test_json.js: throws ReferenceError: 'JSON' is not defined
 dquickts/builtin/test_map.js: throws SyntaxError: BigInt literals are not supported yet
 dquickts/builtin/test_math.js: throws TypeError: not a function
-dquickts/builtin/test_rope.js: timeout: no result within 10.0s
 dquickts/builtin/test_typed_array.js: throws ReferenceError: 'Uint8Array' is not defined
 dquickts/language/test_class.js: throws SyntaxError: classes are not supported yet
 dquickts/language/test_constructor.js: throws SyntaxError: generators are not supported yet
