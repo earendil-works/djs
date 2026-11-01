@@ -314,6 +314,8 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("ToNumber", B, 1, false),
     i("ToString", B, 1, false),
     i("ToPropertyKey", B, 1, false),
+    i("FromAsyncFulfilled", B, 1, false),
+    i("FromAsyncRejected", B, 1, false),
     i("InstanceofOperator", B, 2, false),
     i("ClassHeritage", B, 1, false),
     i("AsyncAwait", B, 2, false),

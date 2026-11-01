@@ -281,7 +281,7 @@ fn is_slot_object(class: ObjectClass) -> bool {
 
 /// The builtins a `%NewBuiltinClosure(kind, ..)` calls, by kind (D1372; the list in
 /// builtins/intrinsics.d.ts).
-const BUILTIN_CLOSURES: [u16; 16] = [
+const BUILTIN_CLOSURES: [u16; 18] = [
     id("PromiseResolveFunction"),
     id("PromiseRejectFunction"),
     id("GetCapabilitiesExecutor"),
@@ -298,6 +298,8 @@ const BUILTIN_CLOSURES: [u16; 16] = [
     id("AsyncFromSyncIteratorUnwrap"),
     id("AsyncFromSyncIteratorCloseThrow"),
     id("ProxyRevokeFunction"),
+    id("FromAsyncFulfilled"),
+    id("FromAsyncRejected"),
 ];
 
 /// The function-kind constructors, wired to their prototypes when installed (D1420).

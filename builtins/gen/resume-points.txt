@@ -864,6 +864,72 @@ AggregateErrorConstructor: reentrant (constructor AggregateError)
   builtins/error.ts:136:42  IterableToList (builtin)
   builtins/error.ts:136:3  DefineDataPropertyOrThrow (intrinsic)
 
+ArrayFromAsync: reentrant (Array.fromAsync)
+  builtins/fromasync.ts:23:5  FromAsyncStart (builtin)
+
+FromAsyncStart: reentrant
+  builtins/fromasync.ts:40:37  GetMethod (builtin)
+  builtins/fromasync.ts:43:25  GetMethod (builtin)
+  builtins/fromasync.ts:48:18  GetIteratorFromMethod (builtin)
+  builtins/fromasync.ts:50:33  GetIteratorFromMethod (builtin)
+  builtins/fromasync.ts:51:60  Get (intrinsic)
+  builtins/fromasync.ts:54:21  Get (intrinsic)
+  builtins/fromasync.ts:55:40  Construct (intrinsic)
+  builtins/fromasync.ts:56:5  FromAsyncIteratorNext (builtin)
+  builtins/fromasync.ts:60:20  LengthOfArrayLike (builtin)
+  builtins/fromasync.ts:61:38  Construct (intrinsic)
+  builtins/fromasync.ts:64:3  FromAsyncArrayLikeNext (builtin)
+
+FromAsyncAwait: reentrant
+  builtins/fromasync.ts:70:26  PromiseResolve (builtin)
+
+FromAsyncReject: leaf
+
+FromAsyncIteratorNext: reentrant
+  builtins/fromasync.ts:83:7  FromAsyncClose (builtin)
+  builtins/fromasync.ts:86:27  Call (intrinsic)
+  builtins/fromasync.ts:87:5  FromAsyncAwait (builtin)
+
+FromAsyncClose: reentrant
+  builtins/fromasync.ts:101:27  GetMethod (builtin)
+  builtins/fromasync.ts:106:23  Call (intrinsic)
+  builtins/fromasync.ts:106:5  FromAsyncAwait (builtin)
+
+FromAsyncIteratorResult: reentrant
+  builtins/fromasync.ts:119:19  Get (intrinsic)
+  builtins/fromasync.ts:120:7  Set (intrinsic)
+  builtins/fromasync.ts:121:7  ResolvePromise (builtin)
+  builtins/fromasync.ts:124:13  Get (intrinsic)
+  builtins/fromasync.ts:131:5  FromAsyncIteratorStore (builtin)
+  builtins/fromasync.ts:135:27  Call (intrinsic)
+  builtins/fromasync.ts:136:5  FromAsyncAwait (builtin)
+  builtins/fromasync.ts:138:5  FromAsyncClose (builtin)
+
+FromAsyncIteratorStore: reentrant
+  builtins/fromasync.ts:146:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/fromasync.ts:148:5  FromAsyncClose (builtin)
+  builtins/fromasync.ts:152:3  FromAsyncIteratorNext (builtin)
+
+FromAsyncArrayLikeNext: reentrant
+  builtins/fromasync.ts:161:25  Get (intrinsic)
+  builtins/fromasync.ts:161:7  FromAsyncAwait (builtin)
+  builtins/fromasync.ts:164:5  Set (intrinsic)
+  builtins/fromasync.ts:165:5  ResolvePromise (builtin)
+
+FromAsyncArrayLikeValue: reentrant
+  builtins/fromasync.ts:177:25  Call (intrinsic)
+  builtins/fromasync.ts:177:7  FromAsyncAwait (builtin)
+  builtins/fromasync.ts:180:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/fromasync.ts:186:3  FromAsyncArrayLikeNext (builtin)
+
+FromAsyncFulfilled: reentrant (%FromAsyncFulfilled)
+  builtins/fromasync.ts:197:5  FromAsyncIteratorResult (builtin)
+  builtins/fromasync.ts:199:5  FromAsyncIteratorStore (builtin)
+  builtins/fromasync.ts:203:5  FromAsyncArrayLikeValue (builtin)
+
+FromAsyncRejected: reentrant (%FromAsyncRejected)
+  builtins/fromasync.ts:216:5  FromAsyncClose (builtin)
+
 FunctionPrototypeCall: reentrant (Function.prototype.call)
   builtins/function.ts:13:10  CallWithArray (intrinsic)
 

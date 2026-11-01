@@ -623,7 +623,8 @@ declare function RecordSet(r: Obj, i: i32, v: Value): void;
  * PromiseCatchFinally, 9 PromiseValueThunk, 10 PromiseThrower, 11
  * AsyncGeneratorAwaitReturnFulfilled, 12 AsyncGeneratorAwaitReturnRejected, 13
  * AsyncFromSyncIteratorUnwrap, 14 AsyncFromSyncIteratorCloseThrow, 15
- * ProxyRevokeFunction) with `this` = data and its own arguments.
+ * ProxyRevokeFunction, 16 FromAsyncFulfilled, 17 FromAsyncRejected) with `this` = data
+ * and its own arguments.
  * @leaf
  */
 declare function NewBuiltinClosure(kind: i32, data: Value, length: i32): Fn;

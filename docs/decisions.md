@@ -2327,3 +2327,12 @@ Release build, 20k lines of text, 5 runs each:
 | `split(/[,;\s]+/)` | 3130 ms | 120 ms | 120 ms |
 | `replace(/\s+/g, " ")` | 900 ms | 60 ms | 30 ms |
 | `replace(/(\w+),/g, "$1;")` | 1110 ms | 160 ms | 80 ms |
+## D1511: Array.fromAsync is a state machine resumed by builtin closures
+date: 2026-11-03 · by: heap · issue: 0051
+The spec runs Array.fromAsync's body as an async closure. The builtin language has no
+`await`, so builtins/fromasync.ts keeps the closure's state in a Record and each Await
+is `PromiseResolve` + `PerformPromiseThen` with two builtin closures (kinds 16
+FromAsyncFulfilled and 17 FromAsyncRejected of `NewBuiltinClosure`) whose `this` is the
+Record; a phase slot says where to resume. One reaction job per await, as the spec's
+Await, so the tick order matches qjs (tests/data/e2e/array_from_async.js). The same
+pattern fits other async builtins (AsyncDisposableStack).

@@ -61,6 +61,10 @@ exists (generators/iterators from 0029/0037/0042, the ephemeron GC from 0038):
 - Part 3, upsert: Map/WeakMap getOrInsert(Computed) in map.ts/weak.ts. WeakMap's
   getOrInsertComputed checks the callback before the key (spec step 3/4, qjs too).
   70/70; promoted: active 34,573 tests, 34,169 passing (+70).
+- Part 4, Array.fromAsync (D1511): builtins/fromasync.ts, a Record state machine with
+  builtin closures 16/17 as the await continuations. 93/93; promoted: active 34,666
+  tests. No behavior.js cases (its comparisons are synchronous); e2e covers results,
+  closing and the tick order against qjs.
 
 ## Follow-ups
 

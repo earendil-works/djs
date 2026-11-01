@@ -2277,6 +2277,201 @@ function AggregateErrorConstructor(errors, message, options) {
   return o;
 }
 
+// builtins/fromasync.ts:20 Array.fromAsync
+function ArrayFromAsync(asyncItems, mapfn, thisArg) {
+  const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
+  try {
+    FromAsyncStart(this, promise, asyncItems, mapfn, thisArg);
+  } catch (e) {
+    %RejectPromise(promise, e);
+  }
+  return promise;
+}
+
+// builtins/fromasync.ts:31
+function FromAsyncStart(c, promise, asyncItems, mapfn, thisArg) {
+  if (mapfn !== undefined && !%IsCallable(mapfn)) {
+    throw %NewTypeError("mapfn is not callable");
+  }
+  const s = %NewRecord(11);
+  %RecordSet(s, 0, promise);
+  %RecordSet(s, 1, mapfn);
+  %RecordSet(s, 2, thisArg);
+  %RecordSet(s, 6, 0);
+  const usingAsyncIterator = GetMethod(asyncItems, %WellKnownSymbol("asyncIterator"));
+  let usingSyncIterator = undefined;
+  if (usingAsyncIterator === undefined) {
+    usingSyncIterator = GetMethod(asyncItems, %WellKnownSymbol("iterator"));
+  }
+  if (usingAsyncIterator !== undefined || usingSyncIterator !== undefined) {
+    let iterator = s;
+    if (usingAsyncIterator !== undefined) {
+      iterator = GetIteratorFromMethod(asyncItems, usingAsyncIterator);
+    } else {
+      const syncIterator = GetIteratorFromMethod(asyncItems, usingSyncIterator);
+      iterator = %CreateAsyncFromSyncIterator(syncIterator, %Get(syncIterator, "next"));
+    }
+    %RecordSet(s, 3, iterator);
+    %RecordSet(s, 4, %Get(iterator, "next"));
+    %RecordSet(s, 5, %IsConstructor(c) ? %Construct(c) : %ArrayCreate(0));
+    FromAsyncIteratorNext(s);
+    return;
+  }
+  const arrayLike = %ToObject(asyncItems);
+  const len = LengthOfArrayLike(arrayLike);
+  %RecordSet(s, 5, %IsConstructor(c) ? %Construct(c, len) : %ArrayCreate(len));
+  %RecordSet(s, 8, arrayLike);
+  %RecordSet(s, 9, len);
+  FromAsyncArrayLikeNext(s);
+}
+
+// builtins/fromasync.ts:68
+function FromAsyncAwait(s, v, phase) {
+  %RecordSet(s, 7, phase);
+  const promise = PromiseResolve(%IntrinsicPromise(), v);
+  %PerformPromiseThen(%AsObj(promise), %NewBuiltinClosure(16, s, 1), %NewBuiltinClosure(17, s, 1), undefined);
+}
+
+// builtins/fromasync.ts:75
+function FromAsyncReject(s, e) {
+  %RejectPromise(%AsObj(%RecordGet(s, 0)), e);
+}
+
+// builtins/fromasync.ts:80
+function FromAsyncIteratorNext(s) {
+  try {
+    if (%AsNumber(%RecordGet(s, 6)) >= 9007199254740991) {
+      FromAsyncClose(s, %NewTypeError("Array too long"));
+      return;
+    }
+    const result = %Call(%RecordGet(s, 4), %RecordGet(s, 3));
+    FromAsyncAwait(s, result, 1);
+  } catch (e) {
+    FromAsyncReject(s, e);
+  }
+}
+
+// builtins/fromasync.ts:97
+function FromAsyncClose(s, error) {
+  %RecordSet(s, 10, error);
+  try {
+    const iterator = %AsObj(%RecordGet(s, 3));
+    const method = GetMethod(iterator, "return");
+    if (method === undefined) {
+      FromAsyncReject(s, error);
+      return;
+    }
+    FromAsyncAwait(s, %Call(method, iterator), 3);
+  } catch (e) {
+    FromAsyncReject(s, error);
+  }
+}
+
+// builtins/fromasync.ts:113
+function FromAsyncIteratorResult(s, nextResult) {
+  let value = undefined;
+  try {
+    if (!%IsObject(nextResult)) {
+      throw %NewTypeError("iterator must return an object");
+    }
+    if (%ToBoolean(%Get(%AsObj(nextResult), "done"))) {
+      %Set(%AsObj(%RecordGet(s, 5)), "length", %RecordGet(s, 6));
+      ResolvePromise(%AsObj(%RecordGet(s, 0)), %RecordGet(s, 5));
+      return;
+    }
+    value = %Get(%AsObj(nextResult), "value");
+  } catch (e) {
+    FromAsyncReject(s, e);
+    return;
+  }
+  const mapfn = %RecordGet(s, 1);
+  if (mapfn === undefined) {
+    FromAsyncIteratorStore(s, value);
+    return;
+  }
+  try {
+    const mapped = %Call(mapfn, %RecordGet(s, 2), value, %RecordGet(s, 6));
+    FromAsyncAwait(s, mapped, 2);
+  } catch (e) {
+    FromAsyncClose(s, e);
+  }
+}
+
+// builtins/fromasync.ts:143
+function FromAsyncIteratorStore(s, value) {
+  const k = %AsNumber(%RecordGet(s, 6));
+  try {
+    %CreateDataPropertyOrThrow(%AsObj(%RecordGet(s, 5)), k, value);
+  } catch (e) {
+    FromAsyncClose(s, e);
+    return;
+  }
+  %RecordSet(s, 6, k + 1);
+  FromAsyncIteratorNext(s);
+}
+
+// builtins/fromasync.ts:156
+function FromAsyncArrayLikeNext(s) {
+  try {
+    const k = %AsNumber(%RecordGet(s, 6));
+    const len = %AsNumber(%RecordGet(s, 9));
+    if (k < len) {
+      FromAsyncAwait(s, %Get(%AsObj(%RecordGet(s, 8)), k), 4);
+      return;
+    }
+    %Set(%AsObj(%RecordGet(s, 5)), "length", len);
+    ResolvePromise(%AsObj(%RecordGet(s, 0)), %RecordGet(s, 5));
+  } catch (e) {
+    FromAsyncReject(s, e);
+  }
+}
+
+// builtins/fromasync.ts:172
+function FromAsyncArrayLikeValue(s, value, phase) {
+  try {
+    const k = %AsNumber(%RecordGet(s, 6));
+    const mapfn = %RecordGet(s, 1);
+    if (phase === 4 && mapfn !== undefined) {
+      FromAsyncAwait(s, %Call(mapfn, %RecordGet(s, 2), value, k), 5);
+      return;
+    }
+    %CreateDataPropertyOrThrow(%AsObj(%RecordGet(s, 5)), k, value);
+    %RecordSet(s, 6, k + 1);
+  } catch (e) {
+    FromAsyncReject(s, e);
+    return;
+  }
+  FromAsyncArrayLikeNext(s);
+}
+
+// builtins/fromasync.ts:193 %FromAsyncFulfilled
+function FromAsyncFulfilled(value) {
+  const s = %AsObj(this);
+  const phase = %F64ToI32(%AsNumber(%RecordGet(s, 7)));
+  if (phase === 1) {
+    FromAsyncIteratorResult(s, value);
+  } else if (phase === 2) {
+    FromAsyncIteratorStore(s, value);
+  } else if (phase === 3) {
+    FromAsyncReject(s, %RecordGet(s, 10));
+  } else {
+    FromAsyncArrayLikeValue(s, value, phase);
+  }
+}
+
+// builtins/fromasync.ts:212 %FromAsyncRejected
+function FromAsyncRejected(reason) {
+  const s = %AsObj(this);
+  const phase = %F64ToI32(%AsNumber(%RecordGet(s, 7)));
+  if (phase === 2) {
+    FromAsyncClose(s, reason);
+  } else if (phase === 3) {
+    FromAsyncReject(s, %RecordGet(s, 10));
+  } else {
+    FromAsyncReject(s, reason);
+  }
+}
+
 // builtins/function.ts:9 Function.prototype.call
 function FunctionPrototypeCall(thisArg, ...args) {
   if (!%IsCallable(this)) {
@@ -9683,6 +9878,7 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("Date.prototype", %WellKnownSymbol("toPrimitive"), DatePrototypeToPrimitive, 1);
 %InstallValue("Date.prototype", %WellKnownSymbol("toPrimitive"), DatePrototypeToPrimitive, 4);
 %InstallMethod("Error.prototype", "toString", ErrorPrototypeToString, 0);
+%InstallMethod("Array", "fromAsync", ArrayFromAsync, 1);
 %InstallMethod("Function.prototype", "call", FunctionPrototypeCall, 1);
 %InstallMethod("Function.prototype", "apply", FunctionPrototypeApply, 2);
 %InstallMethod("Function.prototype", "bind", FunctionPrototypeBind, 1);
@@ -10077,6 +10273,8 @@ function WeakSetPrototypeToStringTag() {
 %InstallIntrinsic("ToNumber", ToNumber);
 %InstallIntrinsic("ToString", ToString);
 %InstallIntrinsic("ToPropertyKey", ToPropertyKey);
+%InstallIntrinsic("FromAsyncFulfilled", FromAsyncFulfilled);
+%InstallIntrinsic("FromAsyncRejected", FromAsyncRejected);
 %InstallIntrinsic("InstanceofOperator", InstanceofOperator);
 %InstallIntrinsic("ClassHeritage", ClassHeritage);
 %InstallIntrinsic("AsyncAwait", AsyncAwait);
