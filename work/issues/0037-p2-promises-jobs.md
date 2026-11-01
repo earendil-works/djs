@@ -1,7 +1,7 @@
 # 0037: P2 Promises, job queue, async host calls, suspendable frames
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0037-p2-promises-jobs
 depends-on: 0035
 touches: crates/djs-core/src/interp/, crates/djs-core/src/vm/, crates/djs-core/src/heap/ (additive cells), builtins/promise.ts (new) + intrinsics.d.ts additions + gen, crates/djs-wasm/ + js/src/sandbox.ts (async host calls), docs/host.md
