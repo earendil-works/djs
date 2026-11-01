@@ -131,8 +131,9 @@ get/setBigInt64/BigUint64 replace the 0039 stubs (D1463; new heap read/write sig
 in the Log). `djs run` prints `10n`; the JS reader returns native bigints.
 
 test262: the BigInt group (built-ins/BigInt + feature BigInt, 1142 tests) went from 161
-(14.0%) to 1121 (98.1%) and is promoted to active: 24,139 / 33,854 (71.3%), was 23,007 /
-32,718 (70.3%). The rest fail on classes, regexp and unrelated proposals.
+(14.0%) to 1121 (98.1%), and to 1135 (99.3%) after rebasing onto 0040's classes; it is
+promoted to active. Active after the final rebase: 33,450 / 33,854 (98.8%, 404 expected
+failures). The 7 left fail on regexp and unrelated proposals.
 
 Known gaps: see Follow-ups (radix conversion speed, inbound wire tag, builtin Set on
 typed arrays). `BigInt.prototype.toLocaleString(locale)` ignores the locale like node
