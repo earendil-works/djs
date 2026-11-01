@@ -688,6 +688,10 @@ ops! {
     AsyncReject async_reject(state: Loc) pop 1 push 0 cost Call flags THROWS | CALLS | TERM;
     /// `obj -> iterator`
     GetIterator get_iterator() pop 1 push 1 cost Access flags THROWS | CALLS | ALLOC;
+    /// `it next -> r`: `r = next.call(it)`, an iterator result. When `next` is the
+    /// original `next` of an Array or String Iterator and that step runs no user code,
+    /// `r` is the next value itself and the instruction jumps (no result object, D1800).
+    IterNext iter_next(target: Target) pop 2 push 1 cost Call flags THROWS | CALLS | ALLOC | BRANCH;
     /// `v -> v`: TypeError if `v` is not an object (iterator results).
     IterCheckObject iter_check_object() pop 1 push 1 cost Basic flags THROWS;
     /// `iterator ->`: call `iterator.return()` if present.

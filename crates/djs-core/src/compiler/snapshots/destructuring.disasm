@@ -1,10 +1,10 @@
 function 0 <anonymous>: params=2 locals=8 stack=6 captures=0
-  handler [107, 120) -> 170 depth 4
-  handler [148, 151) -> 170 depth 4
-  handler [272, 282) -> 354 depth 3
-  handler [328, 335) -> 354 depth 3
-  handler [411, 547) -> 395 depth 2
-  handler [3, 593) -> 593 depth 0
+  handler [109, 122) -> 172 depth 4
+  handler [150, 153) -> 172 depth 4
+  handler [276, 286) -> 359 depth 3
+  handler [333, 340) -> 359 depth 3
+  handler [416, 555) -> 400 depth 2
+  handler [3, 602) -> 602 depth 0
     0  async_start loc0 (<state>)
     3  fclosure child0
     8  put_loc loc5 (f)
@@ -24,192 +24,189 @@ function 0 <anonymous>: params=2 locals=8 stack=6 captures=0
    60  dup
    61  get_field "next" ic3
    68  swap
-   69  pick 1
-   71  pick 1
-   73  call 0
-   76  iter_check_object
-   77  dup
-   78  get_field "done" ic4
-   85  jump_if_true -> 102
-   90  get_field "value" ic5
-   97  jump -> 107
-  102  drop
-  103  undefined
-  104  poke 0
-  106  undefined
-  107  dup
-  108  is_undefined
-  109  jump_if_false -> 117
-  114  drop
-  115  push_i8 1
-  117  put_loc loc2 (c)  ; 5:13
-  120  pick 0
-  122  dup
-  123  is_undefined
-  124  jump_if_true -> 144
-  129  pick 2
-  131  call_intrinsic %IteratorRest 2  ; 5:12
-  136  undefined
-  137  poke 1
-  139  jump -> 148
-  144  drop
-  145  array_from 0
-  148  put_loc loc3 (d)  ; 5:23
-  151  nip
-  152  dup
-  153  is_undefined
-  154  jump_if_true -> 164
-  159  call_intrinsic %IteratorClose 1  ; 5:12
-  164  drop
-  165  jump -> 185
-  170  swap
-  171  dup
-  172  is_undefined
-  173  jump_if_true -> 183
-  178  call_intrinsic %IteratorCloseThrow 1
-  183  drop
-  184  throw
-  185  pick 1
+   69  pick 0
+   71  pick 2
+   73  iter_next -> 99
+   78  iter_check_object
+   79  dup
+   80  get_field "done" ic4
+   87  jump_if_true -> 104
+   92  get_field "value" ic5
+   99  jump -> 109
+  104  drop
+  105  undefined
+  106  poke 0
+  108  undefined
+  109  dup
+  110  is_undefined
+  111  jump_if_false -> 119
+  116  drop
+  117  push_i8 1
+  119  put_loc loc2 (c)  ; 5:13
+  122  pick 0
+  124  dup
+  125  is_undefined
+  126  jump_if_true -> 146
+  131  pick 2
+  133  call_intrinsic %IteratorRest 2  ; 5:12
+  138  undefined
+  139  poke 1
+  141  jump -> 150
+  146  drop
+  147  array_from 0
+  150  put_loc loc3 (d)  ; 5:23
+  153  nip
+  154  dup
+  155  is_undefined
+  156  jump_if_true -> 166
+  161  call_intrinsic %IteratorClose 1  ; 5:12
+  166  drop
+  167  jump -> 187
+  172  swap
+  173  dup
+  174  is_undefined
+  175  jump_if_true -> 185
+  180  call_intrinsic %IteratorCloseThrow 1
+  185  drop
+  186  throw
   187  pick 1
-  189  call_intrinsic %CopyDataPropertiesExcluding 2  ; 5:27
-  194  put_loc loc4 (rest)  ; 5:30
-  197  drop
-  198  drop
-  199  get_global "o" ic6  ; 6:13
-  206  get_field "p" ic7  ; 6:14
-  213  get_loc loc1 (a)  ; 6:18
-  216  array_from 2
-  219  dup
-  220  call_intrinsic %GetIterator 1  ; 6:1
-  225  dup
-  226  get_field "next" ic8
-  233  swap
-  234  pick 1  ; 6:2
-  236  pick 1
-  238  call 0  ; 6:1
-  241  iter_check_object
-  242  dup
-  243  get_field "done" ic9
-  250  jump_if_true -> 267
-  255  get_field "value" ic10
-  262  jump -> 272
-  267  drop
-  268  undefined
-  269  poke 0
-  271  undefined
-  272  put_loc loc1 (a)  ; 6:2
-  275  get_global "o" ic11  ; 6:5
-  282  pick 1  ; 6:6
-  284  dup
-  285  is_undefined
-  286  jump_if_true -> 328
-  291  pick 3
-  293  swap
-  294  call 0  ; 6:1
-  297  iter_check_object
-  298  dup
-  299  get_field "done" ic12
-  306  jump_if_true -> 323
-  311  get_field "value" ic13
-  318  jump -> 328
-  323  drop
-  324  undefined
-  325  poke 1
-  327  undefined
-  328  put_field "p" ic14  ; 6:6
-  335  nip
-  336  dup
-  337  is_undefined
-  338  jump_if_true -> 348
-  343  call_intrinsic %IteratorClose 1  ; 6:1
-  348  drop
-  349  jump -> 369
-  354  swap
-  355  dup
-  356  is_undefined
-  357  jump_if_true -> 367
-  362  call_intrinsic %IteratorCloseThrow 1
-  367  drop
-  368  throw
-  369  drop
-  370  get_global "entries" ic15  ; 8:28
-  377  call_intrinsic %GetIterator 1  ; 8:1
-  382  dup
-  383  get_field "next" ic16
-  390  jump -> 547
-  395  nip
-  396  swap
-  397  call_intrinsic %IteratorCloseThrow 1
-  402  drop
-  403  throw
-  404  get_field "value" ic17
-  411  call_intrinsic %GetIterator 1  ; 8:12
-  416  dup
-  417  get_field "next" ic18
-  424  swap
-  425  pick 1
-  427  pick 1
-  429  call 0
-  432  iter_check_object
-  433  dup
-  434  get_field "done" ic19
-  441  jump_if_true -> 458
-  446  get_field "value" ic20
-  453  jump -> 463
-  458  drop
-  459  undefined
-  460  poke 0
-  462  undefined
-  463  put_loc loc6 (key)  ; 8:13
-  466  pick 0
-  468  dup
-  469  is_undefined
-  470  jump_if_true -> 512
-  475  pick 2
-  477  swap
-  478  call 0  ; 8:12
-  481  iter_check_object
-  482  dup
-  483  get_field "done" ic21
-  490  jump_if_true -> 507
-  495  get_field "value" ic22
-  502  jump -> 512
-  507  drop
-  508  undefined
-  509  poke 0
-  511  undefined
-  512  put_loc loc7 (value)  ; 8:18
-  515  nip
-  516  dup
-  517  is_undefined
-  518  jump_if_true -> 528
-  523  call_intrinsic %IteratorClose 1  ; 8:12
-  528  drop
-  529  get_global "use" ic23  ; 8:37
-  536  undefined
-  537  get_loc loc6 (key)  ; 8:41
-  540  get_loc loc7 (value)  ; 8:46
-  543  call 2  ; 8:40
-  546  drop
-  547  dup2  ; 8:1
-  548  swap
-  549  call 0
-  552  iter_check_object
-  553  dup
-  554  get_field "done" ic24
-  561  jump_if_false -> 404
-  566  drop
-  567  drop
-  568  drop
-  569  get_global "tag" ic25  ; 9:1
-  576  undefined
-  577  get_template_object #0 (1)
-  582  get_loc loc1 (a)  ; 9:10
-  585  call 2  ; 9:4
-  588  drop
-  589  undefined
-  590  async_return loc0 (<state>)
-  593  async_reject loc0 (<state>)
+  189  pick 1
+  191  call_intrinsic %CopyDataPropertiesExcluding 2  ; 5:27
+  196  put_loc loc4 (rest)  ; 5:30
+  199  drop
+  200  drop
+  201  get_global "o" ic6  ; 6:13
+  208  get_field "p" ic7  ; 6:14
+  215  get_loc loc1 (a)  ; 6:18
+  218  array_from 2
+  221  dup
+  222  call_intrinsic %GetIterator 1  ; 6:1
+  227  dup
+  228  get_field "next" ic8
+  235  swap
+  236  pick 0  ; 6:2
+  238  pick 2
+  240  iter_next -> 266  ; 6:1
+  245  iter_check_object
+  246  dup
+  247  get_field "done" ic9
+  254  jump_if_true -> 271
+  259  get_field "value" ic10
+  266  jump -> 276
+  271  drop
+  272  undefined
+  273  poke 0
+  275  undefined
+  276  put_loc loc1 (a)  ; 6:2
+  279  get_global "o" ic11  ; 6:5
+  286  pick 1  ; 6:6
+  288  dup
+  289  is_undefined
+  290  jump_if_true -> 333
+  295  pick 3
+  297  iter_next -> 323  ; 6:1
+  302  iter_check_object
+  303  dup
+  304  get_field "done" ic12
+  311  jump_if_true -> 328
+  316  get_field "value" ic13
+  323  jump -> 333
+  328  drop
+  329  undefined
+  330  poke 1
+  332  undefined
+  333  put_field "p" ic14  ; 6:6
+  340  nip
+  341  dup
+  342  is_undefined
+  343  jump_if_true -> 353
+  348  call_intrinsic %IteratorClose 1  ; 6:1
+  353  drop
+  354  jump -> 374
+  359  swap
+  360  dup
+  361  is_undefined
+  362  jump_if_true -> 372
+  367  call_intrinsic %IteratorCloseThrow 1
+  372  drop
+  373  throw
+  374  drop
+  375  get_global "entries" ic15  ; 8:28
+  382  call_intrinsic %GetIterator 1  ; 8:1
+  387  dup
+  388  get_field "next" ic16
+  395  jump -> 555
+  400  nip
+  401  swap
+  402  call_intrinsic %IteratorCloseThrow 1
+  407  drop
+  408  throw
+  409  get_field "value" ic17
+  416  call_intrinsic %GetIterator 1  ; 8:12
+  421  dup
+  422  get_field "next" ic18
+  429  swap
+  430  pick 0
+  432  pick 2
+  434  iter_next -> 460
+  439  iter_check_object
+  440  dup
+  441  get_field "done" ic19
+  448  jump_if_true -> 465
+  453  get_field "value" ic20
+  460  jump -> 470
+  465  drop
+  466  undefined
+  467  poke 0
+  469  undefined
+  470  put_loc loc6 (key)  ; 8:13
+  473  pick 0
+  475  dup
+  476  is_undefined
+  477  jump_if_true -> 520
+  482  pick 2
+  484  iter_next -> 510  ; 8:12
+  489  iter_check_object
+  490  dup
+  491  get_field "done" ic21
+  498  jump_if_true -> 515
+  503  get_field "value" ic22
+  510  jump -> 520
+  515  drop
+  516  undefined
+  517  poke 0
+  519  undefined
+  520  put_loc loc7 (value)  ; 8:18
+  523  nip
+  524  dup
+  525  is_undefined
+  526  jump_if_true -> 536
+  531  call_intrinsic %IteratorClose 1  ; 8:12
+  536  drop
+  537  get_global "use" ic23  ; 8:37
+  544  undefined
+  545  get_loc loc6 (key)  ; 8:41
+  548  get_loc loc7 (value)  ; 8:46
+  551  call 2  ; 8:40
+  554  drop
+  555  dup2  ; 8:1
+  556  iter_next -> 416
+  561  iter_check_object
+  562  dup
+  563  get_field "done" ic24
+  570  jump_if_false -> 409
+  575  drop
+  576  drop
+  577  drop
+  578  get_global "tag" ic25  ; 9:1
+  585  undefined
+  586  get_template_object #0 (1)
+  591  get_loc loc1 (a)  ; 9:10
+  594  call 2  ; 9:4
+  597  drop
+  598  undefined
+  599  async_return loc0 (<state>)
+  602  async_reject loc0 (<state>)
 function 0.0 f: params=2 locals=2 stack=4 captures=0
     0  get_arg arg0
     3  require_object_coercible  ; 7:12
@@ -227,28 +224,28 @@ function 0.0 f: params=2 locals=2 stack=4 captures=0
    36  dup
    37  get_field "next" ic1
    44  swap
-   45  pick 1
-   47  pick 1
-   49  call 0
-   52  iter_check_object
-   53  dup
-   54  get_field "done" ic2
-   61  jump_if_true -> 78
-   66  get_field "value" ic3
-   73  jump -> 83
-   78  drop
-   79  undefined
-   80  poke 0
-   82  undefined
-   83  put_loc loc1 (m)  ; 7:18
-   86  nip
-   87  dup
-   88  is_undefined
-   89  jump_if_true -> 99
-   94  call_intrinsic %IteratorClose 1  ; 7:17
-   99  drop
-  100  get_loc loc0 (k)  ; 7:36
-  103  get_loc loc1 (m)  ; 7:40
-  106  add  ; 7:38
-  107  return
-  108  return_undef
+   45  pick 0
+   47  pick 2
+   49  iter_next -> 75
+   54  iter_check_object
+   55  dup
+   56  get_field "done" ic2
+   63  jump_if_true -> 80
+   68  get_field "value" ic3
+   75  jump -> 85
+   80  drop
+   81  undefined
+   82  poke 0
+   84  undefined
+   85  put_loc loc1 (m)  ; 7:18
+   88  nip
+   89  dup
+   90  is_undefined
+   91  jump_if_true -> 101
+   96  call_intrinsic %IteratorClose 1  ; 7:17
+  101  drop
+  102  get_loc loc0 (k)  ; 7:36
+  105  get_loc loc1 (m)  ; 7:40
+  108  add  ; 7:38
+  109  return
+  110  return_undef

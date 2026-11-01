@@ -524,25 +524,24 @@ impl<'a> Parser<'a, '_> {
     fn emit_iter_step(&mut self, refs: u8, first: bool, pos: u32) {
         let l_end = self.new_label();
         let l_done = self.new_label();
-        if first {
-            self.code().pick(refs + 1);
-            self.code().pick(refs + 1);
-        } else {
+        // `it next`, for `iter_next` (D1800).
+        self.code().pick(refs);
+        if !first {
             // A done iterator is `undefined`, which is also the value.
-            self.code().pick(refs);
             self.code().dup();
             self.code().is_undefined();
             self.code().jump_if_true(l_end);
-            self.code().pick(refs + 2);
-            self.code().swap();
         }
+        self.code().pick(refs + 2);
         self.mark(pos);
-        self.code().call(0);
+        let l_value = self.new_label();
+        self.code().iter_next(l_value);
         self.code().iter_check_object();
         self.code().dup();
         self.code().get_field(atoms::DONE, 0);
         self.code().jump_if_true(l_done);
         self.code().get_field(atoms::VALUE, 0);
+        self.place(l_value);
         self.code().jump(l_end);
         self.place(l_done);
         self.code().drop();

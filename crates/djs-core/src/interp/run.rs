@@ -87,6 +87,7 @@ mod bigint;
 mod class;
 mod ic;
 mod intrinsics;
+mod iter;
 mod json_regexp;
 pub(crate) mod late;
 pub(crate) mod native;
@@ -2136,6 +2137,36 @@ impl<'h> Exec<'h> {
                 let (key, done) = self.for_in_next(it)?;
                 self.push(key);
                 self.push(Value::bool(done));
+            }
+            Op::IterNext => {
+                // `it next -> r` (D1800): the value itself when `next` is the original
+                // one of an Array or String Iterator and the step runs no user code;
+                // otherwise `next.call(it)`, whose result the code after this checks.
+                let (it, f) = (self.top(1), self.top(0));
+                match self.iter_fast_next(it, f)? {
+                    iter::FastStep::Value(v) => {
+                        self.sp -= 1;
+                        self.set(self.sp - 1, v);
+                        self.pc = self.jump_target(next);
+                        if self.pc < next {
+                            self.safepoint();
+                        }
+                        return Ok(None);
+                    }
+                    // The one result object of the loop, as `next` would return it.
+                    iter::FastStep::Done => {
+                        let r = self.done_result()?;
+                        self.sp -= 1;
+                        self.set(self.sp - 1, r);
+                        self.pc = next;
+                        return Ok(None);
+                    }
+                    iter::FastStep::Slow => {}
+                }
+                let base = self.sp - 2;
+                self.set(base, f);
+                self.set(base + 1, it);
+                return self.call(base, 0, Continuation::PushResult, next);
             }
             Op::IterCheckObject => {
                 if self.top(0).as_object().is_none() {

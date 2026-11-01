@@ -11,7 +11,7 @@ function 0 <anonymous>: params=0 locals=1 stack=1 captures=0
 function 0.0 f: params=1 locals=3 stack=7 captures=0
   handler [64, 99) -> 112 depth 4
   handler [56, 135) -> 40 depth 3
-  handler [5, 178) -> 191 depth 1
+  handler [5, 179) -> 192 depth 1
     0  call_intrinsic %UsingCreate 0
     5  get_arg arg0  ; 4:13
     8  pick 1  ; 4:9
@@ -42,7 +42,7 @@ function 0.0 f: params=1 locals=3 stack=7 captures=0
    87  gosub -> 126
    92  drop
    93  drop
-   94  jump -> 162
+   94  jump -> 163
    99  undefined
   100  gosub -> 126
   105  drop
@@ -58,37 +58,36 @@ function 0.0 f: params=1 locals=3 stack=7 captures=0
   133  drop
   134  ret
   135  dup2  ; 5:3
-  136  swap
-  137  call 0
-  140  iter_check_object
-  141  dup
-  142  get_field "done" ic2
-  149  jump_if_false -> 49
-  154  drop
+  136  iter_next -> 56
+  141  iter_check_object
+  142  dup
+  143  get_field "done" ic2
+  150  jump_if_false -> 49
   155  drop
   156  drop
-  157  jump -> 169
-  162  drop
-  163  call_intrinsic %IteratorClose 1
-  168  drop
-  169  get_loc loc0 (x)  ; 9:10
-  172  gosub -> 205
-  177  return
-  178  undefined
-  179  gosub -> 205
-  184  drop
+  157  drop
+  158  jump -> 170
+  163  drop
+  164  call_intrinsic %IteratorClose 1
+  169  drop
+  170  get_loc loc0 (x)  ; 9:10
+  173  gosub -> 206
+  178  return
+  179  undefined
+  180  gosub -> 206
   185  drop
-  186  jump -> 214
-  191  pick 1
-  193  swap
-  194  call_intrinsic %UsingDisposeError 2
-  199  gosub -> 205
-  204  throw
-  205  pick 2
-  207  call_intrinsic %UsingDispose 1
-  212  drop
-  213  ret
-  214  return_undef
+  186  drop
+  187  jump -> 215
+  192  pick 1
+  194  swap
+  195  call_intrinsic %UsingDisposeError 2
+  200  gosub -> 206
+  205  throw
+  206  pick 2
+  208  call_intrinsic %UsingDispose 1
+  213  drop
+  214  ret
+  215  return_undef
 function 0.1 g: params=1 locals=2 stack=6 captures=0
   handler [8, 22) -> 35 depth 1
   handler [68, 71) -> 77 depth 4

@@ -27,8 +27,10 @@
 //! `<rhs>; <setup>; jump L_step; [L_throw]; L_assign: <store>; <body>; L_step: ...`.
 //!
 //! for-of keeps `it next` on the stack. Setup is `call_intrinsic %GetIterator 1; dup;
-//! get_field next`, the step is `dup2; swap; call 0; iter_check_object; dup; get_field
-//! done` (D1290). The lhs store and the body are covered by a handler (`L_throw`) that
+//! get_field next`, the step is `dup2; iter_next L_value; iter_check_object; dup;
+//! get_field done` (D1290; for-await: `dup2; swap; call 0; await; ...`). `iter_next`
+//! jumps to `L_value`, right after `get_field value`, with the value itself when it
+//! needs no result object (D1800). The lhs store and the body are covered by a handler (`L_throw`) that
 //! closes the iterator with `%IteratorCloseThrow` and rethrows; errors from the
 //! iterator itself (`next`, `done`, `value`) are not covered, so they do not close it.
 //! `break`, `continue` and `return` leaving the loop close it through the `L_close`
@@ -78,6 +80,8 @@ impl<'a> Parser<'a, '_> {
         let outer = self.scope;
         let mut scoped = false;
         let l_assign = self.new_label();
+        // for-of: after `get_field value`, where `iter_next` jumps with the value.
+        let l_value = self.new_label();
         let l_body = self.new_label();
         // Handler regions of the for-of close handler: [start, end) pairs.
         let mut regions: Vec<(Label, Label)> = Vec::new();
@@ -160,6 +164,7 @@ impl<'a> Parser<'a, '_> {
                 self.place(l_assign);
                 if is_of {
                     self.code().get_field(atoms::VALUE, 0);
+                    self.place(l_value);
                 }
                 let start = self.new_label();
                 let end = self.new_label();
@@ -283,6 +288,7 @@ impl<'a> Parser<'a, '_> {
                 self.place(l_assign);
                 if is_of {
                     self.code().get_field(atoms::VALUE, 0);
+                    self.place(l_value);
                 }
                 let start = self.new_label();
                 self.place(start);
@@ -312,6 +318,7 @@ impl<'a> Parser<'a, '_> {
                 self.place(l_assign);
                 if is_of {
                     self.code().get_field(atoms::VALUE, 0);
+                    self.place(l_value);
                 }
                 let start = self.new_label();
                 self.place(start);
@@ -393,10 +400,12 @@ impl<'a> Parser<'a, '_> {
             }
             self.mark(for_pos);
             self.code().dup2();
-            self.code().swap();
-            self.code().call(0);
             if is_await {
+                self.code().swap();
+                self.code().call(0);
                 self.code().await_(0);
+            } else {
+                self.code().iter_next(l_value);
             }
             self.code().iter_check_object();
             self.code().dup();

@@ -1,0 +1,11 @@
+holes 1,proto,3,1,,3,0,get,7
+mutate 1,2,3,3 0,1,2,3
+shrink 1,2
+kinds 0,1,0a,1b,1,2,1,1,-1,2,bigint
+next 1,2,3,mine,8,mine,9,mine,mine,mine,5,6
+iterator own,proto,proto,str
+close return,1,return,3,oproto,getter,1,1,1,1
+exotic 0,get length,get 0,1,get length,get 1,2,get length,get length,get 0,1,get length,get 1,2,get length
+iterator-object 1,2,{"done":true},[object Array Iterator],a,b,{"done":true}
+misc body 1,11
+=== completed

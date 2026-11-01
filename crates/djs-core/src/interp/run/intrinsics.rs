@@ -444,6 +444,12 @@ impl Exec<'_> {
             }
         };
         if info.kind == IntrinsicKind::Builtin {
+            if let Some(v) = self.iter_intrinsic_fast(id, base, argc)? {
+                self.sp = base;
+                self.push(v);
+                self.pc = next;
+                return Ok(None);
+            }
             return self.call_installed(id, base, argc, next);
         }
         if let Some(step) = self.proxy_intrinsic(id, base, argc, next) {
