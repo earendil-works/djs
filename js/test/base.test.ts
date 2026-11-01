@@ -23,6 +23,8 @@ test("the base equals a realm compiled in wasm", (t) => {
   const compiled = x.vm_new_compiled(0);
   assert.notEqual(compiled, 0);
   assert.equal(x.vm_collect(compiled), 0);
+  // Both collected: a canonical image schedules its first collection as full (D2045).
+  assert.equal(x.vm_collect(base), 0);
   const a = arena(base);
   const b = arena(compiled);
   assert.equal(a.length, b.length);

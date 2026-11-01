@@ -55,6 +55,7 @@ touches: crates/djs-core/src/heap/ (gc, compact, old region, scheduling), crates
   U32Array). They stay until the 16th collection. Fix: the first collection after a
   canonical image is full (D2045). strbuild is back to 25.5 across all 24 runs;
   json-indent goes back to its pre-0120 10.3 (0120 had placed it luckily at 7.5).
+- js/test/base.test.ts (outside touches): the base-vs-compiled test collects both VMs, since the base now schedules a full first collection.
 - Guide: gc.md (first full collection, retention wording, the "No promotion" trade-off
   with both attempts, new subsection "Peak memory is chaotic"). ARCH Heap/GC.
 
