@@ -131,7 +131,6 @@ const log = (...a) => out.push(a.map(String).join(" "));
 }
 
 // Promise.all over an array.
-Promise.all([1, Promise.resolve(2), 3]).then((v) => {
-  log("all", v);
-  console.log(out.join("\n"));
-});
+log("all", await Promise.all([1, Promise.resolve(2), 3]));
+log("allSettled", (await Promise.allSettled([1, , Promise.reject(3)])).map((r) => r.status));
+console.log(out.join("\n"));
