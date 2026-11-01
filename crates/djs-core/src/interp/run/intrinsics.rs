@@ -629,26 +629,28 @@ impl Exec<'_> {
                 self.new_error_here(ErrorKind::TypeError, &msg)?
             }
             WELL_KNOWN_SYMBOL => {
-                let name = a0
-                    .as_string()
-                    .map(|s| self.heap.str_to_string(s))
-                    .unwrap_or_default();
-                let atom = match name.as_str() {
-                    "iterator" => atoms::SYM_ITERATOR,
-                    "asyncIterator" => atoms::SYM_ASYNC_ITERATOR,
-                    "hasInstance" => atoms::SYM_HAS_INSTANCE,
-                    "toPrimitive" => atoms::SYM_TO_PRIMITIVE,
-                    "toStringTag" => atoms::SYM_TO_STRING_TAG,
-                    "species" => atoms::SYM_SPECIES,
-                    "isConcatSpreadable" => atoms::SYM_IS_CONCAT_SPREADABLE,
-                    "unscopables" => atoms::SYM_UNSCOPABLES,
-                    "match" => atoms::SYM_MATCH,
-                    "matchAll" => atoms::SYM_MATCH_ALL,
-                    "replace" => atoms::SYM_REPLACE,
-                    "search" => atoms::SYM_SEARCH,
-                    "split" => atoms::SYM_SPLIT,
-                    "dispose" => atoms::SYM_DISPOSE,
-                    "asyncDispose" => atoms::SYM_ASYNC_DISPOSE,
+                // The names are the prelude's one-byte string constants: compare their
+                // bytes in place instead of building a String on every call (0056).
+                let name: &[u8] = match a0.as_string().and_then(|s| self.heap.str_view(s)) {
+                    Some(crate::heap::StrView::Latin1(b)) => b,
+                    _ => b"",
+                };
+                let atom = match name {
+                    b"iterator" => atoms::SYM_ITERATOR,
+                    b"asyncIterator" => atoms::SYM_ASYNC_ITERATOR,
+                    b"hasInstance" => atoms::SYM_HAS_INSTANCE,
+                    b"toPrimitive" => atoms::SYM_TO_PRIMITIVE,
+                    b"toStringTag" => atoms::SYM_TO_STRING_TAG,
+                    b"species" => atoms::SYM_SPECIES,
+                    b"isConcatSpreadable" => atoms::SYM_IS_CONCAT_SPREADABLE,
+                    b"unscopables" => atoms::SYM_UNSCOPABLES,
+                    b"match" => atoms::SYM_MATCH,
+                    b"matchAll" => atoms::SYM_MATCH_ALL,
+                    b"replace" => atoms::SYM_REPLACE,
+                    b"search" => atoms::SYM_SEARCH,
+                    b"split" => atoms::SYM_SPLIT,
+                    b"dispose" => atoms::SYM_DISPOSE,
+                    b"asyncDispose" => atoms::SYM_ASYNC_DISPOSE,
                     _ => return bad_argument(info.name),
                 };
                 Value::symbol(self.heap.atom_symbol(atom).expect("well-known symbol"))

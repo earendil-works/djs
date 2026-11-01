@@ -5,6 +5,7 @@
 use super::intrinsics::{bad_argument, id};
 use super::*;
 use crate::builtins::{json, regexp as re};
+use crate::heap::{Atom, atoms};
 use crate::regexp::{ExecLimits, ExecResult, ExecState, Flags, Program};
 use crate::value::Str;
 
@@ -35,16 +36,16 @@ const REGEXP_PROTOTYPE_EXEC: u16 = id("RegExpPrototypeExec");
 const REGEXP_PROTOTYPE_MATCH: u16 = id("RegExpPrototypeMatch");
 const REGEXP_SPECIES: u16 = id("RegExpSpecies");
 /// The accessors of %RegExp.prototype% that a pristine RegExp must still have (D1503).
-const REGEXP_GETTERS: [(&str, u16); 9] = [
-    ("flags", id("RegExpPrototypeFlags")),
-    ("hasIndices", id("RegExpPrototypeHasIndices")),
-    ("global", id("RegExpPrototypeGlobal")),
-    ("ignoreCase", id("RegExpPrototypeIgnoreCase")),
-    ("multiline", id("RegExpPrototypeMultiline")),
-    ("dotAll", id("RegExpPrototypeDotAll")),
-    ("unicode", id("RegExpPrototypeUnicode")),
-    ("unicodeSets", id("RegExpPrototypeUnicodeSets")),
-    ("sticky", id("RegExpPrototypeSticky")),
+const REGEXP_GETTERS: [(Atom, u16); 9] = [
+    (atoms::FLAGS, id("RegExpPrototypeFlags")),
+    (atoms::HAS_INDICES, id("RegExpPrototypeHasIndices")),
+    (atoms::GLOBAL, id("RegExpPrototypeGlobal")),
+    (atoms::IGNORE_CASE, id("RegExpPrototypeIgnoreCase")),
+    (atoms::MULTILINE, id("RegExpPrototypeMultiline")),
+    (atoms::DOT_ALL, id("RegExpPrototypeDotAll")),
+    (atoms::UNICODE, id("RegExpPrototypeUnicode")),
+    (atoms::UNICODE_SETS, id("RegExpPrototypeUnicodeSets")),
+    (atoms::STICKY, id("RegExpPrototypeSticky")),
 ];
 
 /// Fuel for work proportional to a string's length: one unit per 16 code units (the
@@ -397,7 +398,7 @@ impl Exec<'_> {
     /// @@species getter is the original. Then RegExpExec, the flags, SpeciesConstructor
     /// and IsRegExp read only data, and a fast path may skip them.
     fn regexp_pristine(&mut self, v: Value) -> Result<bool, Fault> {
-        use crate::heap::{Property, atoms};
+        use crate::heap::Property;
         let Some(r) = re::as_regexp(self.heap, v) else {
             return Ok(false);
         };
@@ -419,8 +420,7 @@ impl Exec<'_> {
             Some(Property::Accessor { getter, .. }) => Some(getter),
             _ => None,
         };
-        let exec = self.heap.atom_str("exec")?; // not a well-known atom
-        if data(self, proto, exec) != Some(installed(self, REGEXP_PROTOTYPE_EXEC)) {
+        if data(self, proto, atoms::EXEC) != Some(installed(self, REGEXP_PROTOTYPE_EXEC)) {
             return Ok(false);
         }
         let matcher = installed(self, REGEXP_PROTOTYPE_MATCH);
@@ -428,14 +428,12 @@ impl Exec<'_> {
             return Ok(false);
         }
         for (key, id) in REGEXP_GETTERS {
-            let k = self.heap.atom_str(key)?;
-            if getter(self, proto, k) != Some(installed(self, id)) {
+            if getter(self, proto, key) != Some(installed(self, id)) {
                 return Ok(false);
             }
         }
         let ctors = intrinsic_obj(self.heap, Intrinsic::Constructors);
-        let regexp = self.heap.atom_str("RegExp")?;
-        let Some(ctor) = data(self, ctors, regexp) else {
+        let Some(ctor) = data(self, ctors, atoms::REG_EXP) else {
             return Ok(false);
         };
         if data(self, proto, atoms::CONSTRUCTOR) != Some(ctor) {

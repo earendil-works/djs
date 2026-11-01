@@ -217,6 +217,17 @@ well_known! {
         RANGE_ERROR = "RangeError",
         SYNTAX_ERROR = "SyntaxError",
         REFERENCE_ERROR = "ReferenceError",
+        // RegExp protocol names, looked up on every split/replace (0056).
+        EXEC = "exec",
+        GLOBAL = "global",
+        IGNORE_CASE = "ignoreCase",
+        MULTILINE = "multiline",
+        DOT_ALL = "dotAll",
+        UNICODE = "unicode",
+        UNICODE_SETS = "unicodeSets",
+        STICKY = "sticky",
+        HAS_INDICES = "hasIndices",
+        REG_EXP = "RegExp",
     }
     symbols {
         SYM_ITERATOR = "Symbol.iterator",
