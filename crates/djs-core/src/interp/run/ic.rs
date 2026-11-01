@@ -11,9 +11,13 @@
 //! - globals: word 0 = entry index + 1, with [`IN_LEX`] set when the entry is in the
 //!   global lexical record; word 1 = the realm's `GlobalLexEpoch` when the entry is in
 //!   the global object (a newer lexical binding could shadow it).
-//! - property reads and writes: word 0 = entry index + 1 of an own data property of
-//!   the receiver. Only keys that are not array indexes are cached: for those, an own
-//!   property is always a table entry, whatever the object's class.
+//! - property reads and writes, dictionary-mode receiver: word 0 = entry index + 1 of an
+//!   own data property of the receiver. Only keys that are not array indexes are cached:
+//!   for those, an own property is always a named property, whatever the object's class.
+//! - property reads and writes, shape-mode receiver (0083): word 0 = [`IC_OFFSET_SLOT`] |
+//!   slot + 1 (depth 0), word 1 = the receiver's shape, word 2 = 1 if the property is
+//!   writable. A hit is a shape compare: the shape fixes the key and its attributes. The
+//!   collector empties these slots like the prototype ones.
 //! - prototype property reads (D1621): word 0 = [`IC_OFFSET_SLOT`] | depth << 24 |
 //!   entry index + 1 of the holder; word 1 = the offset of the receiver's prototype (an
 //!   object's, or the realm's prototype of a primitive); word 2 = `Roots::PROTO_EPOCH`.
@@ -157,8 +161,14 @@ impl Exec<'_> {
     /// A cached own data property read: `obj[key]` if slot `ic` still points at it.
     #[inline(always)]
     pub(super) fn ic_own_get(&self, obj: Obj, key: Atom, ic: u32) -> Option<Value> {
-        let w0 = self.ic_read(ic)[0];
-        if w0 == 0 || w0 & IC_OFFSET_SLOT != 0 {
+        let [w0, w1, _] = self.ic_read(ic);
+        if w0 & IC_OFFSET_SLOT != 0 {
+            if w0 >> DEPTH_SHIFT & MAX_DEPTH != 0 {
+                return None;
+            }
+            return self.heap.shaped_get(obj, w1, (w0 & INDEX_MASK) - 1);
+        }
+        if w0 == 0 {
             return None;
         }
         self.heap.data_at(obj, w0 - 1, key)
@@ -197,7 +207,10 @@ impl Exec<'_> {
     #[inline(always)]
     pub(super) fn ic_proto_get(&self, o: Value, key: Atom, ic: u32) -> Option<Value> {
         let [w0, w1, w2] = self.ic_read(ic);
-        if w0 & IC_OFFSET_SLOT == 0 || w2 != self.heap.proto_epoch() {
+        if w0 & IC_OFFSET_SLOT == 0
+            || w0 >> DEPTH_SHIFT & MAX_DEPTH == 0
+            || w2 != self.heap.proto_epoch()
+        {
             return None;
         }
         let proto = self.ic_start(o, key)?;
@@ -256,8 +269,13 @@ impl Exec<'_> {
     /// replaces the value).
     #[inline(always)]
     pub(super) fn ic_own_put(&mut self, obj: Obj, key: Atom, ic: u32, v: Value) -> bool {
-        let w0 = self.ic_read(ic)[0];
-        w0 != 0 && w0 & IC_OFFSET_SLOT == 0 && self.heap.set_data_at(obj, w0 - 1, key, v)
+        let [w0, w1, w2] = self.ic_read(ic);
+        if w0 & IC_OFFSET_SLOT != 0 {
+            return w0 >> DEPTH_SHIFT & MAX_DEPTH == 0
+                && w2 & 1 != 0
+                && self.heap.shaped_set(obj, w1, (w0 & INDEX_MASK) - 1, v);
+        }
+        w0 != 0 && self.heap.set_data_at(obj, w0 - 1, key, v)
     }
 
     /// After a slow access to `obj[key]`: remembers the entry if `key` is an own data
@@ -265,6 +283,12 @@ impl Exec<'_> {
     #[inline(never)]
     pub(super) fn ic_own_fill(&mut self, obj: Obj, key: Atom, ic: u32) {
         if key.as_int().is_some() {
+            return;
+        }
+        if let Some((shape, slot, writable)) = self.heap.shape_slot(obj, key) {
+            if slot < INDEX_MASK {
+                self.ic_write(ic, [IC_OFFSET_SLOT | (slot + 1), shape, writable as u32]);
+            }
             return;
         }
         if let Some(i) = self.heap.own_entry_index(obj, key)

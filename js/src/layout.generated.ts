@@ -2,7 +2,7 @@
 // Regenerate: DJS_UPDATE_LAYOUT=1 cargo test -p djs-core layout_generated
 
 export const LAYOUT = {
-  "layoutHash": 3064155679,
+  "layoutHash": 3240989622,
   "magic": 5458500,
   "headerSize": 8,
   "header": { "KIND": 0, "GC": 1, "FLAGS": 2, "SIZE": 4 },
@@ -12,13 +12,13 @@ export const LAYOUT = {
     "tags": { "UNDEFINED": 1, "NULL": 2, "BOOL": 3, "INT": 4, "HOLE": 5, "UNINITIALIZED": 6, "STRING": 8, "OBJECT": 9, "SYMBOL": 10, "BIGINT": 11, "HOST_REF": 12, "INTERNAL": 13 }
   },
   "atom": { "intBit": 2147483648, "symbolBit": 1073741824, "indexMask": 1073741823 },
-  "flags": { "ROPE_TWO_BYTE": 1, "ROPE_FLATTENED": 2, "ROPE_APPEND": 4, "STR_APPEND_BUF": 1, "OBJ_EXTENSIBLE": 1, "OBJ_INDEXED_PROPS": 2, "OBJ_LENGTH_READONLY": 4, "BIGINT_NEG": 1 },
+  "flags": { "ROPE_TWO_BYTE": 1, "ROPE_FLATTENED": 2, "ROPE_APPEND": 4, "STR_APPEND_BUF": 1, "OBJ_EXTENSIBLE": 1, "OBJ_INDEXED_PROPS": 2, "OBJ_LENGTH_READONLY": 4, "OBJ_DICTIONARY": 128, "BIGINT_NEG": 1 },
   "objectClasses": { "Ordinary": 0, "Array": 1, "Function": 2, "HostFunction": 3, "Error": 4, "Arguments": 5, "ArrayIterator": 6, "BoundFunction": 7, "Boolean": 8, "Number": 9, "String": 10, "Symbol": 11, "Map": 12, "Set": 13, "WeakMap": 14, "WeakSet": 15, "CollectionIterator": 16, "Promise": 17, "BuiltinClosure": 18, "Record": 19, "Date": 20, "Generator": 21, "ArrayBuffer": 22, "TypedArray": 23, "DataView": 24, "RegExp": 25, "RegExpStringIterator": 26, "Proxy": 27, "IteratorHelper": 28, "RawJSON": 29, "BigInt": 30, "WeakRef": 31, "FinalizationRegistry": 32, "DisposableStack": 33 },
   "propFlags": { "WRITABLE": 1, "ENUMERABLE": 2, "CONFIGURABLE": 4, "ACCESSOR": 8 },
   "cells": {
     "Roots": {
       "kind": 1,
-      "minSize": 64,
+      "minSize": 72,
       "fields": {
         "MAGIC": { "offset": 8, "type": "u32" },
         "VERSION": { "offset": 12, "type": "u32" },
@@ -32,7 +32,9 @@ export const LAYOUT = {
         "BUILD": { "offset": 48, "type": "u32" },
         "FLAGS": { "offset": 52, "type": "u32" },
         "GC_THRESHOLD": { "offset": 56, "type": "u32" },
-        "PROTO_EPOCH": { "offset": 60, "type": "u32" }
+        "PROTO_EPOCH": { "offset": 60, "type": "u32" },
+        "ROOT_SHAPE": { "offset": 64, "type": "Ref" },
+        "SHAPES": { "offset": 68, "type": "u32" }
       },
       "tail": null
     },
@@ -345,6 +347,34 @@ export const LAYOUT = {
         "SETTER": { "offset": 16, "type": "Value" }
       },
       "tail": null
+    },
+    "Shape": {
+      "kind": 26,
+      "minSize": 24,
+      "fields": {
+        "PARENT": { "offset": 8, "type": "Ref" },
+        "DESCS": { "offset": 12, "type": "Ref" },
+        "COUNT": { "offset": 16, "type": "u32" },
+        "TRANSITIONS": { "offset": 20, "type": "Ref" }
+      },
+      "tail": null
+    },
+    "PropValues": {
+      "kind": 27,
+      "minSize": 16,
+      "fields": {
+        "SHAPE": { "offset": 8, "type": "Ref" },
+        "LEN": { "offset": 12, "type": "u32" }
+      },
+      "tail": {
+        "name": "VALUES",
+        "offset": 16,
+        "elem": "Value",
+        "elemSize": 8,
+        "fields": {
+          "": { "offset": 0, "type": "Value" }
+        }
+      }
     },
     "BigInt": {
       "kind": 24,

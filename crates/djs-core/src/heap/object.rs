@@ -1260,6 +1260,49 @@ impl Heap {
         self.prop_set_value(o, i, v)
     }
 
+    /// For a shape-mode object whose own `key` is a data property: its shape, its slot
+    /// and whether it is writable (what an own-property inline cache remembers, 0083).
+    pub fn shape_slot(&self, o: Obj, key: Atom) -> Option<(u32, u32, bool)> {
+        let v = self.props(o);
+        if v == 0 || self.is_dictionary(o) {
+            return None;
+        }
+        let s = self.arena().get(v, PropValues::SHAPE).0;
+        let i = self.shape_find(s, key)?;
+        let fl = self.shape_desc(s, i).1;
+        (fl & STORE_ACCESSOR == 0).then(|| (s, i, PropFlags::from_bits(fl as u8).writable()))
+    }
+
+    /// The values block of `o` if it is in shape mode with shape `shape`.
+    #[inline(always)]
+    fn values_if_shape(&self, o: Obj, shape: u32) -> Option<u32> {
+        if self.is_dictionary(o) {
+            return None;
+        }
+        let v = self.props(o);
+        (v != 0 && self.arena().get(v, PropValues::SHAPE).0 == shape).then_some(v)
+    }
+
+    /// Value slot `slot` of `o` if `o` has shape `shape` (an inline cache hit: the shape
+    /// fixes the key and its attributes).
+    #[inline(always)]
+    pub fn shaped_get(&self, o: Obj, shape: u32, slot: u32) -> Option<Value> {
+        let v = self.values_if_shape(o, shape)?;
+        Some(self.arena().read(PropValues::VALUES.at(v, slot)))
+    }
+
+    /// Writes value slot `slot` of `o` if `o` has shape `shape`; the caller knows from the
+    /// shape that the slot is a writable data property.
+    #[inline(always)]
+    pub fn shaped_set(&mut self, o: Obj, shape: u32, slot: u32, value: Value) -> bool {
+        let Some(v) = self.values_if_shape(o, shape) else {
+            return false;
+        };
+        self.arena_mut()
+            .write(PropValues::VALUES.at(v, slot), value);
+        true
+    }
+
     fn read_entry(&self, t: u32, i: u32) -> Property {
         let e = PropTable::ENTRIES.at(t, i);
         let a = self.arena();
