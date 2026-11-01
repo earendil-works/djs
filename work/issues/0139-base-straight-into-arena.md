@@ -1,7 +1,7 @@
 # 0139: Decode/inject the base image straight into the VM's arena
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0139-base-into-arena
 depends-on: 0122, 0138
 guide: docs/guide/host.md / arena.md if they describe base loading
