@@ -37,6 +37,37 @@ adds the missing interp ops for P0 and `Vm::compile`.
 
 ## Log
 
+- 2026-11-01: Before: the test262 compile sweep had 11,438 files compiling and 39,903
+  "not supported yet".
+- Compiler: `function.rs` (declarations, expressions, arrows, parameters, bodies, the
+  directive check), a function stack in the parser (`begin_function`/`end_function`;
+  finished functions by id), pseudo-bindings found by name and declared in the
+  innermost non-arrow function (`this`, `arguments`, `new.target`), and named function
+  expressions bound in a scope outside the function scope. Hoisted function declarations
+  are registered per scope and created at its `enter_scope`. NamedEvaluation is done
+  with compile-time name hints.
+- Resolution (D1081) now has three passes over all functions: classify (children first;
+  free names walk into enclosing functions, mark the binding captured and add capture
+  slots on the path), storage (captured → Box), emit (children first, so capture
+  descriptors can use the parent's Box slots). Lexical bindings reached through
+  captures are always TDZ-checked.
+- Bytecode, additive: `rest index` (args from `index` on as an array) and the phase-1
+  pseudo-op `iter_scope s` (per-iteration `rebox`). `DefineElem` became `push 1`, the
+  same one-character fix 0022 made, so the rebase is trivial.
+- Interpreter needs were routed through the coordinator: special_object kinds, closure
+  `length`/`name`/`prototype`, construct. 0022 does them; `rest` comes after this lands.
+- Early errors with qjs messages and positions: duplicate parameters, "use strict"
+  with non-simple parameters, eval/arguments as function or parameter names, rest not
+  last, missing formal parameter, `new.target` outside functions (arrows at top level
+  too), "invalid redefinition of parameter name", var/let conflicts with block-level
+  functions, labeled function declarations.
+- After: 23,482 files compile and 27,156 are "not supported yet". The negative parse
+  tests that compile are now only module-only cases. The sweep found the missing
+  var-vs-block-function redeclaration errors.
+- Snapshots `closures.js` (body mode) and `functions.js` (Script). `end_to_end_functions`:
+  26 programs, all cross-checked with qjs (`work/scratch/0024/qjs_check.py`). Pure
+  closure cases pass on the current interpreter; the rest need 0022.
+
 ## Follow-ups
 
 ## Result
