@@ -99,6 +99,19 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 2026-11-01 (0041 done) | 62 expected failures | 18,833 / 24,120 (78.1%) |
 | 2026-11-01 (D011: generators + async iteration promoted, +8,213 tests) | | 22,605 / 32,333 (69.9%) |
 
+## Id reservations (in flight; check main for the authoritative list)
+
+| what | id | owner / issue |
+| --- | --- | --- |
+| ObjectClass RegExp, RegExpStringIterator | 25, 26 | num / 0033 |
+| ObjectClass Proxy | 27 | infra / 0045 |
+| ObjectClass BigInt wrapper | 30 | heap / 0046 |
+| CellKind BigInt | 24 | heap / 0046 |
+| func_flags PRIVILEGED | 1 << 8 | heap / 0043 (merged) |
+| func_flags HOME | 1 << 6 (check) | lexer / 0040 |
+
+Realm `Intrinsic` enum: append at the end; rebase conflicts there are expected and trivial.
+
 ## Parallelism notes
 
 0002, 0003, 0004 and 0005 touch disjoint areas (the only shared file is
