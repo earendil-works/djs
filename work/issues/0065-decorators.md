@@ -62,6 +62,8 @@ dquickts' `--experimental-decorators` and tests/test_decorators_legacy.ts.
   positions match qjs for the cases tried.
 - strip-types: parameter decorators stay unerased (as ts-blank-space): 4307 → 4316/4802
   match, 0 differ, 486 errors (the remaining decorator ones are deliberate TS errors).
+- difftest ratchet: dquickts/typescript/test_rejected_syntax_5.ts passes now (qjs's
+  parameter decorator message without the flag).
 - qjs bug found: with legacy decorators qjs ignores a parenthesized class decorator
   (`@((c) => ...) class C {}` is never called); djs applies it (as tsc). The corpus
   avoids it.
