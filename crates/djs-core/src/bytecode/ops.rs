@@ -338,6 +338,8 @@ ops! {
     GetTemplateObject get_template_object(idx: Const) pop 0 push 1 cost Alloc flags ALLOC;
     /// `-> v`: `arguments`, `new.target`, home object, ... (function entry only).
     SpecialObject special_object(kind: U8) pop 0 push 1 cost Alloc flags ALLOC;
+    /// `-> array`: the actual arguments from `index` on (a rest parameter).
+    Rest rest(index: Arg) pop 0 push 1 cost Alloc flags ALLOC;
 
     // ---- Stack shuffles ----------------------------------------------------------------
 
@@ -378,6 +380,9 @@ ops! {
     EnterScope enter_scope(scope: Scope) pop 0 push 0 cost Free flags PHASE1;
     /// Scope exit.
     LeaveScope leave_scope(scope: Scope) pop 0 push 0 cost Free flags PHASE1;
+    /// Start of a `for (let ...)` iteration: fresh copies of the scope's captured
+    /// bindings (`rebox`, CreatePerIterationEnvironment).
+    IterScope iter_scope(scope: Scope) pop 0 push 0 cost Free flags PHASE1;
     /// A label position (symbolic labels, docs/compiler.md 4.3).
     Label label(id: LabelId) pop 0 push 0 cost Free flags PHASE1;
 
@@ -466,7 +471,7 @@ ops! {
     /// `obj v -> obj`: CreateDataProperty (literals).
     DefineField define_field(atom: Atom) pop 2 push 1 cost Access flags THROWS | ALLOC;
     /// `obj key v -> obj`: computed keys.
-    DefineElem define_elem() pop 3 push 2 cost Access flags THROWS | CALLS | ALLOC;
+    DefineElem define_elem() pop 3 push 1 cost Access flags THROWS | CALLS | ALLOC;
     /// `obj f -> obj`
     DefineGetter define_getter(atom: Atom) pop 2 push 1 cost Access flags THROWS | ALLOC;
     /// `obj f -> obj`

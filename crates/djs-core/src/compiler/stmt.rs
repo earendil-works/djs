@@ -17,7 +17,7 @@ impl Parser<'_, '_> {
             TokenKind::Ident if self.tok.is_contextual(Kw::Let) => {
                 self.parse_lexical_declaration(VarKind::Let)
             }
-            TokenKind::Function => self.unsupported(self.tok.start, "functions are"),
+            TokenKind::Function => self.parse_function_declaration(),
             TokenKind::Class => self.unsupported(self.tok.start, "classes are"),
             _ => self.parse_statement(),
         }
@@ -118,6 +118,7 @@ impl Parser<'_, '_> {
             self.next()?;
             let v = self.declare_lexical(name, kind, self.tok.start)?;
             if self.eat(TokenKind::Assign)? {
+                self.name_hint = Some((name, self.tok.start));
                 self.parse_assign(in_for)?;
             } else if in_for && (self.is(TokenKind::In) || self.tok.is_contextual(Kw::Of)) {
                 return Ok(());
@@ -146,6 +147,7 @@ impl Parser<'_, '_> {
             self.next()?;
             self.declare_var(name, self.tok.start)?;
             if self.eat(TokenKind::Assign)? {
+                self.name_hint = Some((name, self.tok.start));
                 self.parse_assign(in_for)?;
                 let r = self.name_ref(name, pos);
                 self.mark(pos);
@@ -299,6 +301,16 @@ impl Parser<'_, '_> {
         let (l_break, l_cont) = self.push_loop(labels);
         let l_test = self.new_label();
         let l_body = self.new_label();
+        // Per-iteration copies of captured `let` bindings (docs/compiler.md 5.9):
+        // after the init and before each update.
+        let iter_scope = if scoped {
+            Some(self.scope as u16)
+        } else {
+            None
+        };
+        if let Some(s) = iter_scope {
+            self.code().iter_scope(s);
+        }
         self.place(l_test);
         if !self.is(TokenKind::Semicolon) {
             self.parse_expr(false)?;
@@ -309,6 +321,9 @@ impl Parser<'_, '_> {
         if has_update {
             self.code().jump(l_body);
             self.place(l_cont);
+            if let Some(s) = iter_scope {
+                self.code().iter_scope(s);
+            }
             self.parse_expr(false)?;
             self.code().drop();
             self.code().jump(l_test);
@@ -319,6 +334,9 @@ impl Parser<'_, '_> {
         if !has_update {
             // No update: `continue` goes straight to the test.
             self.place(l_cont);
+            if let Some(s) = iter_scope {
+                self.code().iter_scope(s);
+            }
             self.code().jump(l_test);
         } else {
             self.code().jump(l_cont);

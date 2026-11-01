@@ -6,7 +6,9 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use super::func::{BODY_SCOPE, FuncKind, FuncState, NameRef, ScopeId, ScopeKind, VarId, VarKind};
+use super::func::{
+    BODY_SCOPE, FuncId, FuncKind, FuncState, NameRef, ScopeId, ScopeKind, VarId, VarKind,
+};
 use super::{CompileOptions, Goal, PErr, PResult};
 use crate::bytecode::{CodeBuf, Label, Phase1};
 use crate::heap::{Atom, Heap, Ref};
@@ -33,6 +35,13 @@ pub(super) enum BlockKind {
     Labeled,
 }
 
+/// The state of an enclosing function while a nested one is parsed.
+pub(super) struct Suspended {
+    pub f: FuncState,
+    pub scope: ScopeId,
+    pub blocks: Vec<BlockEnv>,
+}
+
 pub(super) struct Parser<'a, 'h> {
     pub lx: Lexer<'a>,
     pub tok: Token,
@@ -40,14 +49,25 @@ pub(super) struct Parser<'a, 'h> {
     pub src: &'a [u8],
     pub heap: &'h mut Heap,
     pub opts: &'a CompileOptions<'a>,
+    /// The function being parsed.
     pub f: FuncState,
-    /// The innermost scope.
+    /// Its enclosing functions, innermost last.
+    pub stack: Vec<Suspended>,
+    /// Finished functions by id (the unit's top level is id 0, finished last).
+    pub done: Vec<Option<FuncState>>,
+    /// The innermost scope of `f`.
     pub scope: ScopeId,
     pub depth: u32,
+    /// Break/continue targets of `f` (they never cross functions).
     pub blocks: Vec<BlockEnv>,
     pub buf8: Vec<u8>,
     pub atom_undefined: Atom,
     pub atom_this: Atom,
+    pub atom_arguments: Atom,
+    pub atom_new_target: Atom,
+    /// The name for an anonymous function or arrow that starts at the given offset
+    /// (NamedEvaluation: `let f = () => 1` names it `f`).
+    pub name_hint: Option<(Atom, u32)>,
 }
 
 pub(super) fn syntax<T>(pos: u32, msg: impl Into<Cow<'static, str>>) -> PResult<T> {
@@ -71,6 +91,9 @@ impl<'a, 'h> Parser<'a, 'h> {
         };
         let atom_undefined = heap.atom_str("undefined")?;
         let atom_this = heap.atom_str("this")?;
+        let atom_arguments = heap.atom_str("arguments")?;
+        // Not an identifier, so it cannot collide with a user binding.
+        let atom_new_target = heap.atom_str("new.target")?;
         let mut p = Parser {
             lx,
             tok,
@@ -78,28 +101,32 @@ impl<'a, 'h> Parser<'a, 'h> {
             src,
             heap,
             opts,
-            f: FuncState::new(kind),
+            f: FuncState::new(0, kind, None),
+            stack: Vec::new(),
+            done: alloc::vec![None],
             scope: BODY_SCOPE,
             depth: 0,
             blocks: Vec::new(),
             buf8: Vec::new(),
             atom_undefined,
             atom_this,
+            atom_arguments,
+            atom_new_target,
+            name_hint: None,
         };
+        p.f.src_end = src.len() as u32;
         if kind == FuncKind::AsyncBody {
-            for (i, name) in opts.params.iter().enumerate() {
+            for name in opts.params.iter() {
                 let atom = p.heap.atom_str(name)?;
-                if p.f.find_in_scope(BODY_SCOPE, atom).is_none() {
-                    let v = p.f.add_var(atom, VarKind::Param, BODY_SCOPE);
-                    p.f.vars[v as usize].param = i as u16;
-                }
+                let v = p.declare_param(atom, 0)?;
+                p.f.vars[v as usize].init_end = 0;
             }
-            p.f.param_count = opts.params.len() as u16;
+            p.f.length = p.f.param_count;
         }
         Ok(p)
     }
 
-    /// Parses the whole source and builds the template.
+    /// Parses the whole source and builds the templates.
     pub fn compile(mut self) -> PResult<Ref> {
         self.code().enter_scope(BODY_SCOPE as u16);
         while self.tok.kind != TokenKind::Eof {
@@ -107,7 +134,62 @@ impl<'a, 'h> Parser<'a, 'h> {
         }
         self.code().leave_scope(BODY_SCOPE as u16);
         self.code().return_undef();
-        super::resolve::finish(self)
+        let top = core::mem::replace(&mut self.f, FuncState::new(0, FuncKind::Script, None));
+        self.done[0] = Some(top);
+        let funcs = core::mem::take(&mut self.done)
+            .into_iter()
+            .map(|f| f.ok_or_else(|| super::resolve::internal("unfinished function")))
+            .collect::<PResult<Vec<_>>>()?;
+        super::resolve::finish(self.heap, self.src, self.opts, self.atom_undefined, funcs)
+    }
+
+    // ---- Functions ----------------------------------------------------------------
+
+    /// Starts parsing a nested function: `f` becomes the new function.
+    pub fn begin_function(&mut self, kind: FuncKind) -> PResult<()> {
+        let id = self.done.len() as FuncId;
+        self.done.push(None);
+        let child = FuncState::new(id, kind, Some((self.f.id, self.scope)));
+        let parent = core::mem::replace(&mut self.f, child);
+        self.stack.push(Suspended {
+            f: parent,
+            scope: self.scope,
+            blocks: core::mem::take(&mut self.blocks),
+        });
+        self.scope = BODY_SCOPE;
+        Ok(())
+    }
+
+    /// Finishes the current function and returns to its parent. Returns the child
+    /// index for `fclosure`.
+    pub fn end_function(&mut self) -> PResult<u32> {
+        let s = self
+            .stack
+            .pop()
+            .ok_or_else(|| super::resolve::internal("no parent function"))?;
+        let child = core::mem::replace(&mut self.f, s.f);
+        self.scope = s.scope;
+        self.blocks = s.blocks;
+        let id = child.id;
+        self.done[id as usize] = Some(child);
+        self.f.children.push(id);
+        Ok((self.f.children.len() - 1) as u32)
+    }
+
+    /// Declares the next parameter of the current function. Its `init_end` is set by
+    /// the caller once the parameter (and its default) has been parsed.
+    pub fn declare_param(&mut self, name: Atom, pos: u32) -> PResult<VarId> {
+        if self.f.find_in_scope(BODY_SCOPE, name).is_some() {
+            return syntax(pos, "duplicate argument names not allowed in this context");
+        }
+        if self.f.param_count == u16::MAX {
+            return syntax(pos, "too many parameters");
+        }
+        let v = self.f.add_var(name, VarKind::Param, BODY_SCOPE);
+        self.f.vars[v as usize].param = self.f.param_count;
+        self.f.params.push(v);
+        self.f.param_count += 1;
+        Ok(v)
     }
 
     // ---- Tokens ---------------------------------------------------------------------
@@ -417,24 +499,128 @@ impl<'a, 'h> Parser<'a, 'h> {
     fn var_conflict_message(&self) -> &'static str {
         match self.f.kind {
             FuncKind::Script => "invalid redefinition of global identifier",
-            FuncKind::AsyncBody => "invalid redefinition of a variable",
+            _ => "invalid redefinition of a variable",
         }
     }
 
-    /// The `this` pseudo-binding of the current function, created on first use.
-    pub fn this_ref(&mut self, pos: u32) -> u32 {
-        if self.f.this_var.is_none() {
-            let v = self.f.add_var(self.atom_this, VarKind::This, BODY_SCOPE);
-            self.f.this_var = Some(v);
+    /// Declares a function declaration's name in the current scope (hoisted to the
+    /// scope's entry, docs/compiler.md 5.5) and registers the child that initializes it.
+    pub fn declare_function(&mut self, name: Atom, child: u32, pos: u32) -> PResult<()> {
+        let scope = self.scope;
+        let v = if scope == BODY_SCOPE {
+            // Like `var` at the function level: it may share a binding with a `var`,
+            // a parameter or an earlier function declaration (the last one wins).
+            match self.f.find_in_scope(BODY_SCOPE, name) {
+                Some(v) if self.f.vars[v as usize].kind.is_lexical() => {
+                    return syntax(pos, "invalid redefinition of lexical identifier");
+                }
+                Some(v) => v,
+                None => {
+                    let v = self.f.add_var(name, VarKind::Func, BODY_SCOPE);
+                    self.f.vars[v as usize].global = self.f.kind == FuncKind::Script;
+                    v
+                }
+            }
+        } else {
+            // In a block: lexical (strict mode, no Annex B).
+            if self.f.find_in_scope(scope, name).is_some()
+                || self
+                    .f
+                    .var_decls
+                    .iter()
+                    .any(|&(n, d)| n == name && self.f.scope_within(d, scope))
+            {
+                return syntax(pos, "invalid redefinition of lexical identifier");
+            }
+            self.f.add_var(name, VarKind::Func, scope)
+        };
+        let var = &mut self.f.vars[v as usize];
+        if var.kind == VarKind::Var {
+            // `var f; function f() {}`: the function now initializes it.
+            var.kind = VarKind::Func;
         }
-        // Resolution looks `this` up by name from the body scope.
-        self.f.refs.push(NameRef {
-            atom: self.atom_this,
-            scope: BODY_SCOPE,
-            pos,
-            init: false,
-        });
-        (self.f.refs.len() - 1) as u32
+        self.f.scopes[scope as usize].funcs.push((v, child));
+        Ok(())
+    }
+
+    /// The innermost function with its own `this`/`arguments`/`new.target` (not an
+    /// arrow): `None` = the current one, `Some(i)` = `stack[i]`. `Err` if none.
+    fn own_this_function(&self) -> Result<Option<usize>, ()> {
+        if self.f.kind.has_own_this() {
+            return Ok(None);
+        }
+        for (i, s) in self.stack.iter().enumerate().rev() {
+            if s.f.kind.has_own_this() {
+                return Ok(Some(i));
+            }
+        }
+        Err(())
+    }
+
+    /// Declares a pseudo-binding (`this`, `arguments`, `new.target`) in the function
+    /// that owns it. Returns false if there is none (top-level code has a `this` but no
+    /// `arguments` or `new.target`).
+    fn declare_pseudo(&mut self, kind: VarKind) -> bool {
+        let Ok(owner) = self.own_this_function() else {
+            return false;
+        };
+        let atom = match kind {
+            VarKind::This => self.atom_this,
+            VarKind::Arguments => self.atom_arguments,
+            _ => self.atom_new_target,
+        };
+        let f = match owner {
+            None => &mut self.f,
+            Some(i) => &mut self.stack[i].f,
+        };
+        if f.kind.is_top_level() && kind != VarKind::This {
+            return false;
+        }
+        let existing = match kind {
+            VarKind::This => f.this_var,
+            VarKind::Arguments => f.arguments_var,
+            _ => f.new_target_var,
+        };
+        if existing.is_none() {
+            let v = f.add_var(atom, kind, BODY_SCOPE);
+            match kind {
+                VarKind::This => f.this_var = Some(v),
+                VarKind::Arguments => f.arguments_var = Some(v),
+                _ => f.new_target_var = Some(v),
+            }
+        }
+        true
+    }
+
+    /// The hinted name if the function or arrow at `pos` is the hinted expression.
+    pub fn take_name_hint(&mut self, pos: u32) -> Atom {
+        match self.name_hint.take() {
+            Some((a, p)) if p == pos => a,
+            _ => Atom::NULL,
+        }
+    }
+
+    /// A reference to `this` (docs/compiler.md 5.7). In arrows it resolves to the
+    /// enclosing function's binding through a capture.
+    pub fn this_ref(&mut self, pos: u32) -> u32 {
+        self.declare_pseudo(VarKind::This);
+        let atom = self.atom_this;
+        self.name_ref(atom, pos)
+    }
+
+    /// Before a reference to the name `arguments`: makes sure the owning function has
+    /// the binding. In top-level code `arguments` is an ordinary (global) name.
+    pub fn note_arguments(&mut self) {
+        self.declare_pseudo(VarKind::Arguments);
+    }
+
+    /// A reference to `new.target`, or `None` outside functions.
+    pub fn new_target_ref(&mut self, pos: u32) -> Option<u32> {
+        if !self.declare_pseudo(VarKind::NewTarget) {
+            return None;
+        }
+        let atom = self.atom_new_target;
+        Some(self.name_ref(atom, pos))
     }
 
     // ---- Scopes ----------------------------------------------------------------------

@@ -37,7 +37,10 @@ fn table_is_consistent() {
         assert!(info.imms.len() <= 2, "{}", info.name);
         // Phase-1 ops are exactly the scope-generic names and markers.
         let phase1 = info.name.starts_with("name_")
-            || matches!(*op, Op::EnterScope | Op::LeaveScope | Op::Label);
+            || matches!(
+                *op,
+                Op::EnterScope | Op::LeaveScope | Op::IterScope | Op::Label
+            );
         assert_eq!(info.has(flags::PHASE1), phase1, "{}", info.name);
         // Calling implies the op can also throw.
         if info.has(flags::CALLS) {

@@ -226,9 +226,6 @@ fn errors() {
             6,
         ),
         // Not supported yet in P0.
-        ("function f() {}", "functions are not supported yet", 1, 1),
-        ("x => 1", "arrow functions are not supported yet", 1, 1),
-        ("(a, b) => 1", "arrow functions are not supported yet", 1, 1),
         (
             "async function f() {}",
             "async functions are not supported yet",

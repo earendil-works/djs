@@ -149,12 +149,18 @@ impl Parser<'_, '_> {
     }
 
     fn parse_assign_inner(&mut self, no_in: bool) -> PResult<Expr> {
-        self.reject_arrows()?;
+        if let Some(arrow) = self.try_arrow(no_in)? {
+            return Ok(arrow);
+        }
         let lhs = self.parse_conditional(no_in)?;
         let op = self.tok;
         if op.kind == TokenKind::Assign {
             let lv = self.lvalue(lhs, "invalid assignment left-hand side")?;
             self.next()?;
+            if let LValue::Name { r, .. } = lv {
+                // NamedEvaluation: `f = function () {}` names the function `f`.
+                self.name_hint = Some((self.f.refs[r as usize].atom, self.tok.start));
+            }
             self.parse_assign(no_in)?;
             self.emit_store(lv, true);
             return Ok(Expr::Value);
@@ -208,15 +214,20 @@ impl Parser<'_, '_> {
         Ok(lhs)
     }
 
-    /// Arrow functions and async functions start here; P0 rejects them with a clear
-    /// message rather than a confusing syntax error.
-    fn reject_arrows(&mut self) -> PResult<()> {
+    /// Arrow functions start here (docs/compiler.md 3.1). Returns the arrow if there
+    /// is one; async arrows and functions are rejected with a clear message.
+    fn try_arrow(&mut self, no_in: bool) -> PResult<Option<Expr>> {
         let tok = self.tok;
+        let hint = match self.name_hint {
+            Some((a, p)) if p == tok.start => a,
+            _ => Atom::NULL,
+        };
         match tok.kind {
             TokenKind::Ident => {
                 let next = self.peek();
                 if next.kind == TokenKind::Arrow && !next.newline_before() {
-                    return self.unsupported(tok.start, "arrow functions are");
+                    self.name_hint = None;
+                    return self.parse_arrow(no_in, hint).map(Some);
                 }
                 if tok.is_contextual(Kw::Async) && !next.newline_before() {
                     match next.kind {
@@ -239,11 +250,12 @@ impl Parser<'_, '_> {
                 }
             }
             TokenKind::LParen if super::scan::is_arrow_head(self.lx, tok) => {
-                return self.unsupported(tok.start, "arrow functions are");
+                self.name_hint = None;
+                return self.parse_arrow(no_in, hint).map(Some);
             }
             _ => {}
         }
-        Ok(())
+        Ok(None)
     }
 
     /// Lvalue conversion: removes the load that `e` ended with.
@@ -704,7 +716,16 @@ impl Parser<'_, '_> {
         let pos = self.tok.start;
         self.next()?;
         if self.is(TokenKind::Dot) {
-            return syntax(pos, "new.target only allowed within functions");
+            self.next()?;
+            if !self.tok.is_contextual(Kw::Target) {
+                return syntax(self.tok.start, "expecting target");
+            }
+            self.next()?;
+            let Some(r) = self.new_target_ref(pos) else {
+                return syntax(pos, "new.target only allowed within functions");
+            };
+            self.code().name_get(r);
+            return Ok(Expr::Value);
         }
         self.enter()?;
         if self.is(TokenKind::New) {
@@ -814,7 +835,10 @@ impl Parser<'_, '_> {
             }
             TokenKind::LBracket => self.parse_array(),
             TokenKind::LBrace => self.parse_object(),
-            TokenKind::Function => self.unsupported(tok.start, "functions are"),
+            TokenKind::Function => {
+                let hint = self.take_name_hint(tok.start);
+                self.parse_function_expression(hint)
+            }
             TokenKind::Class => self.unsupported(tok.start, "classes are"),
             TokenKind::PrivateName => self.unsupported(tok.start, "private names are"),
             TokenKind::Super => syntax(tok.start, "'super' is only valid in a method"),
@@ -834,6 +858,9 @@ impl Parser<'_, '_> {
         }
         let atom = self.ident_atom()?;
         self.next()?;
+        if tok.kw == Kw::Arguments {
+            self.note_arguments();
+        }
         let r = self.name_ref(atom, tok.start);
         self.mark(tok.start);
         self.code().name_get(r);
@@ -1016,6 +1043,9 @@ impl Parser<'_, '_> {
                             return self.unsupported(tok.start, "__proto__ in object literals is");
                         }
                         self.next()?;
+                        if let Some(a) = atom {
+                            self.name_hint = Some((a, self.tok.start));
+                        }
                         self.parse_assign(false)?;
                         match atom {
                             Some(a) => self.code().define_field(a),
@@ -1036,6 +1066,9 @@ impl Parser<'_, '_> {
                             return self.unsupported(tok.start, "await is");
                         }
                         let a = atom.unwrap_or(Atom::NULL);
+                        if tok.kw == Kw::Arguments {
+                            self.note_arguments();
+                        }
                         let r = self.name_ref(a, tok.start);
                         self.mark(tok.start);
                         self.code().name_get(r);
