@@ -673,3 +673,39 @@ classes, BigInt and host refs become `Opaque` placeholders. On node, strings are
 uses only `TextDecoder` and `String.fromCharCode`: windows-1252 only when there are no bytes
 in 0x80..0x9F, and a fatal UTF-16 decoder with a fallback for lone surrogates. The gate runs
 the reader's cross-language test (extends D1181).
+
+## D1140: The compile() entry point and template conventions
+date: 2026-11-01 · by: lexer · issue: 0014
+`compiler::compile(heap, src: &[u8], &CompileOptions { goal, filename, params }) ->
+Result<Ref, CompileError>` returns a `FuncTemplate` without captures (plus its `Script`
+cell, with the source kept per D009). `Goal::Script` (D004) or `Goal::AsyncBody` (D008:
+`params` such as `["tools", "console"]` become argument slots). `CompileError { kind:
+Syntax | OutOfMemory, message, pos, line, col }` uses QuickJS wording; the embedder makes
+the SyntaxError object. `FuncTemplate::FLAGS` is `bytecode::func_flags`: the kind in the
+low 4 bits (`KIND_SCRIPT`, `KIND_ASYNC_BODY`, then the P1 function kinds), `ASYNC`,
+`GENERATOR`. The embedder calls the top level with `this` = the global object in both
+modes. The function reads it with `special_object THIS` (new kind 4) into a local in the
+prologue, as for any `this` pseudo-binding (compiler.md 5.7).
+
+## D1141: Script-mode globals in bytecode
+date: 2026-11-01 · by: lexer · issue: 0014
+A script with top-level declarations starts with `global_decls idx`. `CONSTS[idx..]` holds
+int32 Values `n_var, n_func, n_let, n_const` and then the atom ids in that order
+(`bytecode::global_decls`). The op performs GlobalDeclarationInstantiation: check
+everything, then create the bindings. Top-level `let`/`const` initializers use
+`init_global_lex`; every other access to a top-level name is `get_global`/`put_global`,
+and these check TDZ at run time (so does `get_global_typeof`). An assignment to a
+`const` (local or global) compiles to a TDZ read when one is needed, then
+`throw_const_assign`. A read of an undeclared global `undefined` compiles to the
+`undefined` op (the global is non-writable and non-configurable).
+
+## D1142: P0 compiler scope and structure
+date: 2026-11-01 · by: lexer · issue: 0014
+P0 compiles every statement and expression that needs no functions: literals (objects
+without methods/accessors, arrays with holes and spread, untagged templates), all
+operators including optional chains and logical assignment, calls and `new`, `if`,
+`while`, `do`, `for(;;)`, `switch`, labels, `break`/`continue`, `throw`, blocks, and
+`var`/`let`/`const` with TDZ checks. Everything else is a SyntaxError
+"<construct> not supported yet". Reference-ness is tracked by an `Expr` kind returned
+from the expression parser (not by inspecting the bytecode), so `(0, o.m)()` correctly
+calls with `this` = undefined. The depth limit is 1000, pinned by a 1 MiB-stack test.
