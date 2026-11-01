@@ -128,6 +128,7 @@ impl Parser<'_, '_> {
         } else if decl {
             return syntax(self.tok.start, "class statement requires a name");
         }
+        self.ts_type_params(super::ts::TP_IN_OUT | super::ts::TP_CONST)?;
         let class_scope = self.push_scope(super::func::ScopeKind::Class)?;
         let inner = if name.is_null() {
             None
@@ -138,6 +139,11 @@ impl Parser<'_, '_> {
         if derived {
             let pos = self.tok.start;
             self.parse_lhs(false)?;
+            // `extends Base<T>`
+            let args = self.tok.start;
+            if self.ts && self.ts_skip_type_args(false)? {
+                self.ts_erase(args);
+            }
             self.code().dup();
             let id = crate::bytecode::intrinsics::intrinsic_id("ClassHeritage").expect("intrinsic");
             self.mark(pos);
@@ -145,6 +151,17 @@ impl Parser<'_, '_> {
         } else {
             self.code().undefined();
             self.code().undefined();
+        }
+        if self.ts && self.ts_at(Kw::Implements) {
+            let start = self.tok.start;
+            loop {
+                self.next()?;
+                self.ts_skip_type()?;
+                if !self.is(TokenKind::Comma) {
+                    break;
+                }
+            }
+            self.ts_erase(start);
         }
         let scope = self.push_scope(super::func::ScopeKind::Class)?;
         let fields_atom = self
@@ -273,6 +290,13 @@ impl Parser<'_, '_> {
 
     /// One class element (not `;`).
     fn parse_class_element(&mut self, b: &mut ClassBuild) -> PResult<()> {
+        if self.ts {
+            // Index signatures, overloads, `declare` and `abstract` members: no code.
+            if self.ts_skip_class_member()? {
+                return Ok(());
+            }
+            self.ts_member_modifiers()?;
+        }
         let mut is_static = false;
         if self.tok.kw == Kw::Static && self.tok.kind == TokenKind::Ident && !self.tok.has_escape()
         {
@@ -281,12 +305,20 @@ impl Parser<'_, '_> {
                 self.next()?;
                 return self.parse_static_block(b);
             }
-            if !matches!(
+            let name = matches!(
                 next.kind,
                 TokenKind::LParen | TokenKind::Assign | TokenKind::Semicolon | TokenKind::RBrace
-            ) {
+            ) || (self.ts
+                && matches!(
+                    next.kind,
+                    TokenKind::Colon | TokenKind::Question | TokenKind::Bang | TokenKind::Lt
+                ));
+            if !name {
                 self.next()?;
                 is_static = true;
+                if self.ts {
+                    self.ts_member_modifiers()?;
+                }
             }
         }
         let start = self.tok.start;
@@ -343,7 +375,8 @@ impl Parser<'_, '_> {
                 None => Key::Computed,
             }
         };
-        let is_method = self.is(TokenKind::LParen);
+        self.ts_eat_marker(TokenKind::Question)?;
+        let is_method = self.is(TokenKind::LParen) || (self.ts && self.is(TokenKind::Lt));
         let swapped = early_swap || (is_static && is_method);
         if swapped && !early_swap {
             self.code().swap();
@@ -541,6 +574,8 @@ impl Parser<'_, '_> {
     /// initializer function. A computed key is converted now and kept in a hidden
     /// binding.
     fn parse_field(&mut self, b: &mut ClassBuild, key: Key, is_static: bool) -> PResult<()> {
+        self.ts_eat_marker(TokenKind::Bang)?;
+        self.ts_annotation()?;
         let pos = self.tok.start;
         let key_var = match key {
             Key::Computed => {

@@ -7,7 +7,7 @@ use crate::lexer::{Kw, Lexer, Token, TokenKind};
 
 /// The previous-token heuristic for scans: may a `/` after `prev` start a regex
 /// (QuickJS's `is_regexp_allowed`)? The parser itself always knows.
-fn regex_allowed(prev: &Token) -> bool {
+pub(super) fn regex_allowed(prev: &Token) -> bool {
     use TokenKind::*;
     match prev.kind {
         Ident => matches!(prev.kw, Kw::Yield | Kw::Await | Kw::Of) && !prev.has_escape(),

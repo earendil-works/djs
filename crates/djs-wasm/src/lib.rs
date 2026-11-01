@@ -360,6 +360,7 @@ pub extern "C" fn vm_compile(vm: u32, goal: u32, params_len: usize, src_len: usi
             filename: "sandbox.js",
             params: &params,
             privileged: false,
+            typescript: false,
         };
         let result = slot.vm.compile(&src, &opts).map_err(|e| e.to_string());
         match result {

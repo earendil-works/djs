@@ -1,4 +1,4 @@
-//! `djs run [--body] [--gc-stress] [--suspend-every N] <file.js>`: run a script,
+//! `djs run [--body] [--ts] [--gc-stress] [--suspend-every N] <file.js>`: run a script,
 //! serving `console.log` as a sync host call.
 //!
 //! Exit codes: 0 ok, 1 uncaught exception (printed as `Uncaught Name: message`), 2 usage
@@ -10,8 +10,9 @@ use djs_core::compiler::{CompileErrorKind, CompileOptions};
 use djs_core::value::Value;
 use djs_core::vm::{ExecOptions, Status, Vm, VmOptions};
 
-const USAGE: &str = "usage: djs run [--body] [--gc-stress] [--suspend-every N] <file.js>\n\
+const USAGE: &str = "usage: djs run [--body] [--ts] [--gc-stress] [--suspend-every N] <file.js>\n\
   --body             run as a codemode async body with parameters (tools, console)\n\
+  --ts               parse as TypeScript (the default for .ts files)\n\
   --gc-stress        collect garbage at every safepoint\n\
   --suspend-every N  run N fuel at a time; at every stop, continue in a fresh VM\n\
                      restored from the heap image";
@@ -23,6 +24,7 @@ pub fn main(args: &[String]) -> i32 {
     while let Some(a) = it.next() {
         match a.as_str() {
             "--body" => opts.body = true,
+            "--ts" => opts.typescript = true,
             "--gc-stress" => opts.gc_stress = true,
             "--suspend-every" => match it.next().and_then(|n| n.parse().ok()) {
                 Some(n) if n > 0 => opts.suspend_every = Some(n),
@@ -46,6 +48,9 @@ pub fn main(args: &[String]) -> i32 {
         eprintln!("{USAGE}");
         return 2;
     };
+    if path.ends_with(".ts") || path.ends_with(".mts") {
+        opts.typescript = true;
+    }
     let src = match std::fs::read(&path) {
         Ok(s) => s,
         Err(e) => {
@@ -72,6 +77,10 @@ pub fn run_source(
         CompileOptions::async_body(filename, &params)
     } else {
         CompileOptions::script(filename)
+    };
+    let copts = CompileOptions {
+        typescript: opts.typescript,
+        ..copts
     };
     let main = match vm.compile(src, &copts) {
         Ok(f) => f,
@@ -119,6 +128,8 @@ pub struct RunOptions {
     /// Run with this much fuel at a time; on `OutOfFuel`, rebuild the VM from its heap
     /// image and continue (the suspension stress mode).
     pub suspend_every: Option<u64>,
+    /// Parse as TypeScript.
+    pub typescript: bool,
 }
 
 impl RunOptions {

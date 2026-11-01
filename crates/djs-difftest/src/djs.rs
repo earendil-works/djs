@@ -197,7 +197,13 @@ impl Session {
         );
         match self
             .vm
-            .compile(src.as_bytes(), &CompileOptions::script(job.name))
+            .compile(
+                src.as_bytes(),
+                &CompileOptions {
+                    typescript: job.ts,
+                    ..CompileOptions::script(job.name)
+                },
+            )
         {
             Ok(script) => {
                 // (Read again: the global object moves when the heap is collected.)

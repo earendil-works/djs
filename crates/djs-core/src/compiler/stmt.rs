@@ -13,6 +13,9 @@ impl Parser<'_, '_> {
     /// StatementListItem: declarations are allowed here, not in single-statement
     /// positions.
     pub(super) fn parse_statement_list_item(&mut self) -> PResult<()> {
+        if self.ts && self.ts_statement()? {
+            return Ok(());
+        }
         match self.tok.kind {
             TokenKind::Const => self.parse_lexical_declaration(VarKind::Const),
             TokenKind::Ident if self.tok.is_contextual(Kw::Let) => {
@@ -37,6 +40,9 @@ impl Parser<'_, '_> {
     }
 
     fn parse_statement_inner(&mut self) -> PResult<()> {
+        if self.ts && self.ts_statement()? {
+            return Ok(());
+        }
         let tok = self.tok;
         match tok.kind {
             TokenKind::LBrace => self.parse_block(),
@@ -61,7 +67,7 @@ impl Parser<'_, '_> {
                 self.expect_semicolon()
             }
             TokenKind::With => syntax(tok.start, "invalid keyword: with"),
-            TokenKind::Import | TokenKind::Export => {
+            TokenKind::Import | TokenKind::Export | TokenKind::Enum => {
                 let text = self.tok_text();
                 syntax(tok.start, alloc::format!("unsupported keyword: {text}"))
             }
@@ -135,6 +141,8 @@ impl Parser<'_, '_> {
             let pos = self.tok.start;
             let name = self.binding_name()?;
             self.next()?;
+            self.ts_eat_marker(TokenKind::Bang)?;
+            self.ts_annotation()?;
             let v = self.declare_lexical(name, kind, self.tok.start)?;
             if self.eat(TokenKind::Assign)? {
                 self.name_hint = Some((name, self.tok.start));
@@ -168,6 +176,8 @@ impl Parser<'_, '_> {
             let pos = self.tok.start;
             let name = self.binding_name()?;
             self.next()?;
+            self.ts_eat_marker(TokenKind::Bang)?;
+            self.ts_annotation()?;
             self.declare_var(name, self.tok.start)?;
             if self.eat(TokenKind::Assign)? {
                 self.name_hint = Some((name, self.tok.start));
@@ -187,6 +197,13 @@ impl Parser<'_, '_> {
         let mark = self.pattern_vars.len();
         let start = self.tok.start;
         self.deferred_pattern(b, |p| {
+            let typed = p.ts && p.is(TokenKind::Colon);
+            p.ts_annotation()?;
+            if typed && !p.is(TokenKind::Assign) {
+                // As dquickts: `let [a]: T;` destructures `undefined`.
+                p.code().undefined();
+                return Ok(());
+            }
             if !p.is(TokenKind::Assign) {
                 // As qjs: without an initializer the pattern is not one.
                 return syntax(start, "variable name expected");
@@ -617,6 +634,7 @@ impl Parser<'_, '_> {
                     // A pattern binds like `let` (in its TDZ until initialized).
                     let mark = self.pattern_vars.len();
                     self.parse_pattern(Binding::Lexical(VarKind::Let))?;
+                    self.ts_annotation()?;
                     let end = self.prev_end;
                     self.end_pattern_bindings(mark, end);
                     self.expect(TokenKind::RParen, ")")?;
@@ -627,6 +645,7 @@ impl Parser<'_, '_> {
                     let pos = self.tok.start;
                     let name = self.binding_name()?;
                     self.next()?;
+                    self.ts_annotation()?;
                     self.f.add_var(name, VarKind::CatchParam, self.scope);
                     self.expect(TokenKind::RParen, ")")?;
                     let r = self.init_ref(name, pos);

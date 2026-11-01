@@ -1353,13 +1353,21 @@ fn compile_test262() {
 /// Runs `src` as a codemode body with `console` as its parameter. Returns the printed
 /// lines and the completion (`=> value` or `throw error`).
 fn run_body(src: &str) -> String {
+    run_body_opts(src, false)
+}
+
+/// [`run_body`], optionally as TypeScript.
+pub(super) fn run_body_opts(src: &str, typescript: bool) -> String {
     use crate::vm::{Status, Vm, VmOptions};
     const LOG: u32 = 1;
     let mut vm = Vm::new(VmOptions::default()).unwrap();
     let console = vm.new_object().unwrap();
     let log = vm.new_host_function(LOG, "log").unwrap();
     vm.define(console, "log", log).unwrap();
-    let opts = CompileOptions::async_body("e2e.js", &["console"]);
+    let opts = CompileOptions {
+        typescript,
+        ..CompileOptions::async_body("e2e.js", &["console"])
+    };
     let template = match compile(vm.heap_mut(), src.as_bytes(), &opts) {
         Ok(t) => t,
         Err(e) => return alloc::format!("compile error: {e}"),

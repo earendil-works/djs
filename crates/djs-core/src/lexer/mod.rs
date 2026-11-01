@@ -246,6 +246,24 @@ impl<'a> Lexer<'a> {
         simple(kind, start, start + len, tok.flags & Token::NEWLINE_BEFORE)
     }
 
+    /// Splits a `<<`, `<=` or `<<=` token into its first `<` and moves the lexer after
+    /// it (tsc's `reScanLessThanToken`): TypeScript type argument lists can start with
+    /// a generic function type, `f<<T>(x: T) => T>()`.
+    pub fn rescan_less(&mut self, tok: Token) -> Token {
+        debug_assert!(matches!(
+            tok.kind,
+            TokenKind::Lt | TokenKind::Le | TokenKind::Shl | TokenKind::ShlAssign
+        ));
+        let start = tok.start as usize;
+        self.pos = (start + 1) as u32;
+        simple(
+            TokenKind::Lt,
+            start,
+            start + 1,
+            tok.flags & Token::NEWLINE_BEFORE,
+        )
+    }
+
     /// Skips white space, line terminators and comments. Returns whether a line
     /// terminator was seen (for `newline_before`).
     fn skip_trivia(&mut self) -> Result<bool, LexError> {

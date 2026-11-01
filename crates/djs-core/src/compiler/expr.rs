@@ -204,10 +204,11 @@ impl Parser<'_, '_> {
     }
 
     fn parse_assign_inner(&mut self, no_in: bool) -> PResult<Expr> {
+        let after_q = core::mem::take(&mut self.after_q);
         if self.f.is_generator && self.tok.kw == Kw::Yield && !self.tok.has_escape() {
             return self.parse_yield(no_in);
         }
-        if let Some(arrow) = self.try_arrow(no_in)? {
+        if let Some(arrow) = self.try_arrow(no_in, after_q)? {
             return Ok(arrow);
         }
         if self.starts_assignment_pattern(Follow::Assign) {
@@ -283,7 +284,7 @@ impl Parser<'_, '_> {
 
     /// Arrow functions start here (docs/compiler.md 3.1). Returns the arrow if there
     /// is one; async arrows and functions are rejected with a clear message.
-    fn try_arrow(&mut self, no_in: bool) -> PResult<Option<Expr>> {
+    fn try_arrow(&mut self, no_in: bool, after_q: bool) -> PResult<Option<Expr>> {
         let tok = self.tok;
         let hint = match self.name_hint {
             Some((a, p)) if p == tok.start => a,
@@ -319,7 +320,17 @@ impl Parser<'_, '_> {
                         TokenKind::LParen => {
                             let mut lx = self.lx;
                             matches!(lx.next_token(), Ok(open) if super::scan::is_arrow_head(lx, open))
+                                || (self.ts
+                                    && self.ts_lookahead(|p| {
+                                        p.next()?;
+                                        Ok(p.ts_is_arrow_paren(false))
+                                    }))
                         }
+                        // `async <T>(x: T) => x`
+                        TokenKind::Lt if self.ts => self.ts_lookahead(|p| {
+                            p.next()?;
+                            Ok(p.ts_is_generic_arrow())
+                        }),
                         _ => false,
                     };
                     if arrow {
@@ -328,7 +339,15 @@ impl Parser<'_, '_> {
                     }
                 }
             }
-            TokenKind::LParen if super::scan::is_arrow_head(self.lx, tok) => {
+            TokenKind::LParen
+                if super::scan::is_arrow_head(self.lx, tok)
+                    || (self.ts && self.ts_is_arrow_paren(after_q)) =>
+            {
+                self.name_hint = None;
+                return self.parse_arrow(no_in, hint).map(Some);
+            }
+            // A generic arrow `<T>(x: T) => x`.
+            TokenKind::Lt if self.ts && self.ts_is_generic_arrow() => {
                 self.name_hint = None;
                 return self.parse_arrow(no_in, hint).map(Some);
             }
@@ -465,6 +484,7 @@ impl Parser<'_, '_> {
         let l_else = self.new_label();
         let l_end = self.new_label();
         self.code().jump_if_false(l_else);
+        self.after_q = self.ts;
         self.parse_assign(false)?;
         self.expect(TokenKind::Colon, ":")?;
         self.code().jump(l_end);
@@ -494,6 +514,22 @@ impl Parser<'_, '_> {
         let mut mix = 0u8;
         loop {
             self.operator_tok();
+            if self.ts
+                && min <= 8
+                && !self.tok.newline_before()
+                && (self.tok.is_contextual(Kw::As) || self.tok.is_contextual(Kw::Satisfies))
+            {
+                // `x as T`, `x as const`, `x satisfies T`: a relational-level postfix,
+                // so higher operators apply to the result (`x as T * 2` is
+                // `(x as T) * 2`). The expression stays what it was: `(x as T) = 1`
+                // assigns `x`.
+                let start = self.tok.start;
+                self.next()?;
+                self.ts_skip_type()?;
+                self.ts_erase(start);
+                lhs_unary = false;
+                continue;
+            }
             let Some((prec, op)) = binop(self.tok.kind) else {
                 break;
             };
@@ -698,6 +734,19 @@ impl Parser<'_, '_> {
                 self.mark(tok.start);
                 self.code().await_(0);
             }
+            // A type assertion `<T>x` (TypeScript): the operand stays what it was, so
+            // `(<T>x)++` updates `x`.
+            TokenKind::Lt if self.ts => {
+                self.next()?;
+                self.ts_skip_type()?;
+                if !self.is(TokenKind::Gt) {
+                    return self.ts_error();
+                }
+                self.next()?;
+                self.ts_erase(tok.start);
+                let (e, _) = self.parse_unary()?;
+                return Ok((e, true));
+            }
             _ => return Ok((self.parse_postfix(delete_operand)?, false)),
         }
         Ok((Expr::Value, true))
@@ -784,6 +833,17 @@ impl Parser<'_, '_> {
                                 e = self.parse_dot_name(tok.start)?;
                             }
                         }
+                    }
+                }
+                // A non-null assertion `x!` (TypeScript).
+                TokenKind::Bang if self.ts && !tok.newline_before() => {
+                    self.next()?;
+                    self.ts_erase(tok.start);
+                }
+                // Type arguments: `f<T>(x)`, `` f<T>`t` ``, `f<T>` (or a comparison).
+                k if self.ts && super::ts::is_lt(k) => {
+                    if !self.ts_type_args_in_expr() {
+                        break;
                     }
                 }
                 TokenKind::NoSubstTemplate | TokenKind::TemplateHead => {
@@ -1006,6 +1066,11 @@ impl Parser<'_, '_> {
                         tok.start,
                         "new keyword cannot be used with an optional chain",
                     );
+                }
+                k if self.ts && super::ts::is_lt(k) => {
+                    if !self.ts_type_args_in_expr() {
+                        break;
+                    }
                 }
                 TokenKind::NoSubstTemplate | TokenKind::TemplateHead => {
                     // `new tag`x`` constructs the result of the tagged call.
@@ -1642,11 +1707,12 @@ impl Parser<'_, '_> {
             }
             return Ok(());
         }
-        if (is_async || is_gen) && !self.is(TokenKind::LParen) {
+        let method_start = self.is(TokenKind::LParen) || (self.ts && self.is(TokenKind::Lt));
+        if (is_async || is_gen) && !method_start {
             return syntax(self.tok.start, "invalid property name");
         }
         match self.tok.kind {
-            TokenKind::LParen => {
+            _ if method_start => {
                 let child = self.parse_method_function(
                     FuncKind::Method,
                     key.unwrap_or(Atom::NULL),

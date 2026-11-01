@@ -2076,3 +2076,20 @@ instead of `%ToNumber` for a BigInt array, and the builtins use `ToElementValue`
 Number or a BigInt by kind; anything else is ToNumber's/ToBigInt's TypeError), and
 `DataViewGet` returns one. A species constructor with the other content type is a
 TypeError (spec; qjs converts and throws later).
+
+## D1480: TypeScript is a compile flag; the skipper ports dquickts' rules
+date: 2026-11-03 · by: lexer · issue: 0048
+`CompileOptions { typescript: bool, .. }` (and `CompileOptions::ts()`) enables the TS
+grammar in the one parser; there is no separate TS front end. The type skipper and its
+disambiguation (generic calls, arrows with return types, `as` precedence, the line
+break rules of contextual keywords) port dquickts' `ts_*` functions one to one, and its
+syntax error messages, so the oracle comparison stays exact. Speculation is lexer-only
+(D1080) and its errors are message-free.
+
+## D1481: Erased ranges are recorded by committing code, blanked like ts-blank-space
+date: 2026-11-03 · by: lexer · issue: 0048
+`Parser::erased` (on only for `compiler::strip_types`) collects `start..end` of every
+erased type, recorded after the skipper committed, never during speculation. The
+blanking writes one space per UTF-16 unit and keeps `\n` and `\r`, as ts-blank-space's
+`getSpace` does, so `djs strip-types` can be compared byte for byte.
+

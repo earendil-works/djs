@@ -243,7 +243,7 @@ entries) would otherwise have to be part of the checkpoint.
 | `let` as identifier vs declaration | always a declaration (strict) (3.6) | |
 | `for (... in/of ...)` vs `for (;;)` | head scan for `;` at depth 1 (3.8) | |
 | assignment target vs expression | lvalue conversion of the last instruction (3.7) | |
-| TS `f<T>(x)` vs `f < T > (x)` (P3) | emission-free speculation with a checkpoint (3.9) | |
+| TS `f<T>(x)` vs `f < T > (x)`, TS arrows | emission-free speculation with a checkpoint (3.9) | a skip of the type arguments or the parenthesized group |
 
 ### 3.1 Arrow heads
 
@@ -438,21 +438,50 @@ A pattern head (`for (const [k, v] of m)`) is skipped and parsed at the store (3
 an expression pattern head (`for ([a, b] of xs)`) is emitted at `L_assign` like any
 expression target. `for await` is not supported yet.
 
-### 3.9 TypeScript generics (sketch for P3)
+### 3.9 TypeScript (0048, compiler/ts.rs)
 
-All TS disambiguation is emission-free speculation over the type skipper:
+`CompileOptions::typescript` turns the TypeScript grammar on (D1480). The type skipper
+consumes types token by token and emits nothing; its rules port dquickts' parser
+(which follows esbuild and tsc), so both engines accept and reject the same programs
+with the same messages (`unexpected token in type: 'x'`, `unexpected end of input in
+type`). All disambiguation is emission-free speculation (D1080): `ts_try` keeps the
+position on success and rewinds otherwise, `ts_lookahead` always rewinds. Errors inside
+speculation carry no message (`Parser::spec`).
 
-- `expr <` in TS mode, where a call or instantiation may follow: take a checkpoint
-  and try to skip a type argument list. Inside it, `>` tokens are **not** rescanned
-  (no `rescan_greater`), so `Array<Array<T>>` closes two lists. Then apply tsc's
-  `canFollowTypeArgumentsInExpression` (`(`, a template, or a token that cannot start
-  an expression). Success: the type arguments are erased, parsing continues. Failure:
-  restore the checkpoint, and `<` is less-than.
-- Generic arrows `<T>(x: T) => x` and arrows with return types `(a): T => a`: the
-  arrow-head scan in TS mode runs the type skipper over annotations. dquickts follows
-  esbuild's TypeScript parser here, and so should we.
-- A `rescan_less` (splitting `<<` into `<` `<`, tsc's `reScanLessThanToken`) will be
-  needed for `f<<T>(x: T) => T>()`. It is a lexer addition at that time.
+- `expr <` where a call or instantiation may follow (`parse_lhs`, the member loop of
+  `new`): try to skip a type argument list, then apply tsc's
+  `canFollowTypeArgumentsInExpression` (`(`, a template, a line break, a binary
+  operator or a token that cannot start an expression). Inside types `>` is never
+  rescanned, so `Array<Array<T>>` closes two lists. In an expression the closing `>`
+  must not be the start of `>=` or `>>` (`a < b >= c` compares).
+  `Lexer::rescan_less` splits `<<`, `<=` for `f<<T>(x: T) => T>()`.
+- Arrows: in TS mode a `(` that the JS arrow-head scan rejects is skipped as a balanced
+  group; `=>` after it, or `:` and a return type followed by `=>`, makes it an arrow.
+  Right after the `?` of a conditional (`Parser::after_q`) the return type form also
+  needs a `:` after the arrow body, as in tsc (`a ? (b) : c => d` is a conditional).
+  Generic arrows `<T>(x) => x` and `async <T>(x) => x` are type parameters followed by
+  either form.
+- `x as T`, `x satisfies T` are a postfix at relational precedence in the binary
+  loop: higher operators apply to the result (`x as T * 2` is `(x as T) * 2`). The
+  expression keeps its kind, so `(x as T) = 1`, `(<T>x)++` and `x! += 1` assign `x`.
+- `<T>x` assertions are unary operators (the `**` rule applies); `x!` is a postfix
+  in the member loop when no line break precedes it.
+- Statements: `type`, `interface`, `declare ...`, `abstract class`, ambient
+  `module "m" {}` and function overload signatures (a `function` header without a
+  body) are recognized at the start of a statement with tsc's line break rule (`type\n
+  Foo = 1` is an expression). Class members without code (index signatures, method
+  overloads, `declare` and `abstract` members) are skipped by `ts_skip_class_member`
+  before the element is parsed.
+- Annotations: bindings (`let x!: T`), parameters (`x?: T`, patterns, rest, a leading
+  `this: T`, accessibility / `readonly` / `override` modifiers), return types, type
+  parameters of functions, methods, arrows and classes, `extends B<T>`,
+  `implements I`, fields (`x?: T`, `x!: T`), catch parameters.
+
+Every erased range is recorded (when `Parser::erased` is on) by the code that commits
+to it, never inside speculation. `compiler::strip_types` blanks them like ts-blank-space
+(one space per UTF-16 unit, line breaks kept) for `djs strip-types`, the parse-only
+oracle of TESTING.md. Positions never move, so line tables and error positions refer to
+the original source.
 
 ### 3.10 Destructuring patterns (0036, compiler/pattern.rs)
 

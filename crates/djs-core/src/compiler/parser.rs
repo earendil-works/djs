@@ -119,7 +119,20 @@ pub(super) struct Parser<'a, 'h> {
     /// (strings are immutable, so sharing is invisible; the prelude repeats its error
     /// messages and keys across hundreds of functions, 0043).
     pub str_pool: Vec<(Vec<u16>, crate::value::Str)>,
+    /// The TypeScript grammar is on (`CompileOptions::typescript`).
+    pub ts: bool,
+    /// Nesting of TypeScript speculation (compiler/ts.rs): errors inside are cheap and
+    /// only mean "not this".
+    pub spec: u32,
+    /// The erased type ranges, for `strip_types` (`None`: not recorded).
+    pub erased: Option<Erased>,
+    /// The next assignment expression is the `b` of `a ? b : c` (TypeScript arrows with
+    /// return types, compiler/ts.rs).
+    pub after_q: bool,
 }
+
+/// Erased TypeScript ranges, `start..end` byte offsets.
+pub(super) type Erased = Vec<(u32, u32)>;
 
 /// Parser position for emission-free lookahead and deferred parsing (docs/compiler.md
 /// 3, D1080): the lexer state and the current token.
@@ -191,6 +204,10 @@ impl<'a, 'h> Parser<'a, 'h> {
             pattern_vars: Vec::new(),
             open_iters: Vec::new(),
             str_pool: Vec::new(),
+            ts: opts.typescript,
+            spec: 0,
+            erased: None,
+            after_q: false,
         };
         p.f.src_end = src.len() as u32;
         if kind == FuncKind::AsyncBody {
@@ -204,8 +221,9 @@ impl<'a, 'h> Parser<'a, 'h> {
         Ok(p)
     }
 
-    /// Parses the whole source and builds the templates.
-    pub fn compile(mut self) -> PResult<Ref> {
+    /// Parses the whole source and builds the templates. Also returns the erased type
+    /// ranges if they were recorded.
+    pub fn compile(mut self) -> PResult<(Ref, Option<Erased>)> {
         if self.f.kind == FuncKind::AsyncBody {
             self.start_flavor((true, false))?;
         }
@@ -222,7 +240,9 @@ impl<'a, 'h> Parser<'a, 'h> {
             .into_iter()
             .map(|f| f.ok_or_else(|| super::resolve::internal("unfinished function")))
             .collect::<PResult<Vec<_>>>()?;
-        super::resolve::finish(self.heap, self.src, self.opts, self.atom_undefined, funcs)
+        let erased = self.erased.take();
+        let t = super::resolve::finish(self.heap, self.src, self.opts, self.atom_undefined, funcs)?;
+        Ok((t, erased))
     }
 
     // ---- Functions ----------------------------------------------------------------

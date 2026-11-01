@@ -25,12 +25,16 @@ mod pattern;
 mod resolve;
 mod scan;
 mod stmt;
+mod ts;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod ts_tests;
 
 use alloc::borrow::Cow;
 use alloc::string::String;
+use alloc::vec::Vec;
 use core::fmt;
 
 use crate::heap::{Heap, HeapError, Ref};
@@ -58,6 +62,9 @@ pub struct CompileOptions<'a> {
     /// (`bytecode::intrinsics`). Only the embedder sets it, for the prelude; it is never
     /// reachable from user code. Privileged scripts also keep no source text (D1340).
     pub privileged: bool,
+    /// TypeScript: the type skipper erases types while parsing, enums, namespaces and
+    /// parameter properties compile to code (compiler/ts.rs).
+    pub typescript: bool,
 }
 
 impl<'a> CompileOptions<'a> {
@@ -67,6 +74,7 @@ impl<'a> CompileOptions<'a> {
             filename,
             params: &[],
             privileged: false,
+            typescript: false,
         }
     }
 
@@ -76,6 +84,15 @@ impl<'a> CompileOptions<'a> {
             filename,
             params,
             privileged: false,
+            typescript: false,
+        }
+    }
+
+    /// The same options with the TypeScript grammar.
+    pub fn ts(self) -> Self {
+        CompileOptions {
+            typescript: true,
+            ..self
         }
     }
 
@@ -149,22 +166,45 @@ pub fn compile(
     opts: &CompileOptions<'_>,
 ) -> Result<Ref, CompileError> {
     let result = parser::Parser::new(heap, src, opts).and_then(|p| p.compile());
-    result.map_err(|e| {
-        let (kind, pos, message) = match e {
-            PErr::Syntax { pos, msg } => (CompileErrorKind::Syntax, pos, String::from(msg)),
-            PErr::Oom => (
-                CompileErrorKind::OutOfMemory,
-                0,
-                String::from("out of memory"),
-            ),
-        };
-        let (line, col) = LineTable::new(src).line_col(src, pos);
-        CompileError {
-            kind,
-            message,
-            pos,
-            line,
-            col,
-        }
-    })
+    result.map(|(t, _)| t).map_err(|e| error_at(src, e))
+}
+
+/// TypeScript erasure for the strip-types oracle (TESTING.md): compiles `src` with the
+/// TypeScript grammar and returns it with every erased type range blanked (spaces;
+/// line breaks stay, so positions do not move). The heap only holds the compiled
+/// template, which the caller drops.
+pub fn strip_types(
+    heap: &mut Heap,
+    src: &[u8],
+    opts: &CompileOptions<'_>,
+) -> Result<Vec<u8>, CompileError> {
+    let opts = CompileOptions {
+        typescript: true,
+        ..*opts
+    };
+    let result = parser::Parser::new(heap, src, &opts).and_then(|mut p| {
+        p.erased = Some(Vec::new());
+        p.compile()
+    });
+    let (_, ranges) = result.map_err(|e| error_at(src, e))?;
+    Ok(ts::blank(src, ranges.unwrap_or_default()))
+}
+
+fn error_at(src: &[u8], e: PErr) -> CompileError {
+    let (kind, pos, message) = match e {
+        PErr::Syntax { pos, msg } => (CompileErrorKind::Syntax, pos, String::from(msg)),
+        PErr::Oom => (
+            CompileErrorKind::OutOfMemory,
+            0,
+            String::from("out of memory"),
+        ),
+    };
+    let (line, col) = LineTable::new(src).line_col(src, pos);
+    CompileError {
+        kind,
+        message,
+        pos,
+        line,
+        col,
+    }
 }
