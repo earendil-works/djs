@@ -1,7 +1,7 @@
 # 0048: P3 TypeScript: type skipper, runtime TS constructs, strip-types oracle
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0048-typescript
 depends-on: 0040
 touches: crates/djs-core/src/compiler/ (the TS grammar behind the `ts` flag), crates/djs-core/src/lexer/ (`rescan_less`, the 0003 follow-up), crates/djs-cli/ (`djs strip-types`), crates/djs-difftest/ (.ts cases on djs), crates/djs-wasm + js/src/sandbox.ts (a `typescript` compile flag), tests/corpus/ts/, TESTING.md (the strip-types oracle how-to), vendor/ (ts-blank-space + a TS corpus, gitignored, fetched by a script)
