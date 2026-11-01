@@ -1490,17 +1490,17 @@ ObjectPrototypeToString: reentrant (Object.prototype.toString)
   builtins/object.ts:442:10  ObjectToString (builtin)
 
 ObjectToString: reentrant
-  builtins/object.ts:454:22  Get (intrinsic)
+  builtins/object.ts:456:22  Get (intrinsic)
 
 ObjectPrototypeToLocaleString: reentrant (Object.prototype.toLocaleString)
-  builtins/object.ts:466:15  GetV (intrinsic)
-  builtins/object.ts:466:10  Call (intrinsic)
+  builtins/object.ts:468:15  GetV (intrinsic)
+  builtins/object.ts:468:10  Call (intrinsic)
 
 ObjectPrototypeValueOf: leaf (Object.prototype.valueOf)
 
 ObjectPrototypeIsPrototypeOf: reentrant (Object.prototype.isPrototypeOf)
-  builtins/object.ts:486:18  GetPrototypeOf (intrinsic)
-  builtins/object.ts:491:9  GetPrototypeOf (intrinsic)
+  builtins/object.ts:488:18  GetPrototypeOf (intrinsic)
+  builtins/object.ts:493:9  GetPrototypeOf (intrinsic)
 
 ResolvePromise: reentrant
   builtins/promise.ts:30:12  Get (intrinsic)

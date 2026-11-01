@@ -1528,6 +1528,10 @@ function GetPrototypeFromConstructor(newTarget, fallback) {
   if (%IsObject(proto)) {
     return %AsObj(proto);
   }
+  let c = %AsObj(newTarget);
+  while (%IsProxy(c)) {
+    c = %ProxyTarget(c);
+  }
   return %RealmIntrinsic(fallback);
 }
 
@@ -3875,24 +3879,25 @@ function ObjectToString(v) {
     return "[object Null]";
   }
   const o = %ToObject(v);
+  const builtinTag = %ObjectClassTag(o);
   const tag = %Get(o, %WellKnownSymbol("toStringTag"));
   if (%IsString(tag)) {
     return "[object " + %AsStr(tag) + "]";
   }
-  return "[object " + %ObjectClassTag(o) + "]";
+  return "[object " + builtinTag + "]";
 }
 
-// builtins/object.ts:465 Object.prototype.toLocaleString
+// builtins/object.ts:467 Object.prototype.toLocaleString
 function ObjectPrototypeToLocaleString() {
   return %Call(%GetV(this, "toString"), this);
 }
 
-// builtins/object.ts:473 Object.prototype.valueOf
+// builtins/object.ts:475 Object.prototype.valueOf
 function ObjectPrototypeValueOf() {
   return %ToObject(this);
 }
 
-// builtins/object.ts:481 Object.prototype.isPrototypeOf
+// builtins/object.ts:483 Object.prototype.isPrototypeOf
 function ObjectPrototypeIsPrototypeOf(v) {
   if (!%IsObject(v)) {
     return false;

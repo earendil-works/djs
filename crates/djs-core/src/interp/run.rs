@@ -1677,7 +1677,7 @@ impl<'h> Exec<'h> {
                 let key = self.imm_atom();
                 let (o, v) = (self.top(1), self.top(0));
                 let Some(obj) = o.as_object() else {
-                    return self.put_on_primitive(o, key);
+                    return self.put_on_primitive(o, key, v, 2, next);
                 };
                 self.pc = next;
                 return self.set_property(obj, key, v, 2);
@@ -1724,7 +1724,7 @@ impl<'h> Exec<'h> {
                 let (o, k, v) = (self.top(2), self.top(1), self.top(0));
                 let Some(obj) = o.as_object() else {
                     let key = conv::to_property_key(self.heap, k)?;
-                    return self.put_on_primitive(o, key);
+                    return self.put_on_primitive(o, key, v, 3, next);
                 };
                 if let Some(i) = k.as_int()
                     && i >= 0
@@ -2572,9 +2572,37 @@ impl<'h> Exec<'h> {
         Ok(None)
     }
 
-    fn put_on_primitive(&mut self, o: Value, key: Atom) -> Step {
+    /// `o[key] = v` for a primitive `o` (the top `n` operands are consumed): [[Set]] on
+    /// its wrapper with `o` as the receiver, which strict mode makes a TypeError unless
+    /// a setter or a proxy's `set` trap on the prototype chain takes it.
+    fn put_on_primitive(&mut self, o: Value, key: Atom, v: Value, n: u32, next: u32) -> Step {
         if o.is_nullish() {
             return self.nullish_base(o, key, "set");
+        }
+        let own_string_key = o.as_string().is_some_and(|s| {
+            key == crate::heap::atoms::LENGTH
+                || key.as_int().is_some_and(|i| i < self.heap.str_len(s))
+        });
+        if !own_string_key && let Some(proto) = realm::primitive_proto(self.heap, o) {
+            match self.heap.lookup_property(proto, key) {
+                Lookup::Found(_, Property::Accessor { setter, .. }) if !setter.is_undefined() => {
+                    self.sp -= n;
+                    self.pc = next;
+                    return self.call_accessor(setter, o, Some(v));
+                }
+                Lookup::Proxy(p) => {
+                    self.sp -= n;
+                    self.pc = next;
+                    let k = self.heap.atom_to_value(key)?;
+                    let args = [Value::object(p), k, v, o];
+                    return self.call_prelude(
+                        proxy::PROXY_SET_OR_THROW,
+                        &args,
+                        Continuation::DiscardResult,
+                    );
+                }
+                _ => {}
+            }
         }
         // A string's own `length` and indexes are read-only; anything else would be
         // created on a temporary wrapper object, which strict mode rejects.

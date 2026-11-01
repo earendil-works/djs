@@ -119,5 +119,10 @@ function GetPrototypeFromConstructor(newTarget: Value, fallback: Str): Obj {
   if (IsObject(proto)) {
     return AsObj(proto);
   }
+  // GetFunctionRealm ( obj ), 7.3.24: one realm, but a revoked proxy is a TypeError.
+  let c: Obj = AsObj(newTarget);
+  while (IsProxy(c)) {
+    c = ProxyTarget(c);
+  }
   return RealmIntrinsic(fallback);
 }

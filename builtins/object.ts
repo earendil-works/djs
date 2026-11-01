@@ -451,11 +451,13 @@ function ObjectToString(v: Value): Str {
     return "[object Null]";
   }
   const o: Obj = ToObject(v);
+  // The builtinTag first: IsArray throws for a revoked proxy before the Get.
+  const builtinTag: Str = ObjectClassTag(o);
   const tag: Value = Get(o, WellKnownSymbol("toStringTag"));
   if (IsString(tag)) {
     return "[object " + AsStr(tag) + "]";
   }
-  return "[object " + ObjectClassTag(o) + "]";
+  return "[object " + builtinTag + "]";
 }
 
 /**
