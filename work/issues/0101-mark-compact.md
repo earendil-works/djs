@@ -33,6 +33,15 @@ MiB (estimate). See work/issues/0099-cold-start-memory.md (Result) for the numbe
 - Design note: docs/mark-compact.md (Compressor-style sliding collector: header mark bit,
   live-word bitmap, 512-byte block table, bounded mark stack with overflow rescan; Cheney
   kept for canonical_hash and image canonicalization). Sent to the coordinator for review.
+- Coordinator: prototype on the branch and measure; don't merge before the owner decides.
+- Prototype (heap/compactor.rs; Heap::collect = mark-compact, Heap::collect_canonical =
+  Cheney for canonical_hash, the base image, vm_new_compiled and the djs-prelude test).
+  - The first version was 10x slower on a long list: a 64 K mark stack plus full
+    rescans, and ropes accumulated on the stack.
+  - Fixed with a growable stack (up to len/64), leaf cells not pushed, and rescans from
+    the lowest unpushed cell.
+  - Then: rope slots rewritten while marking, slides by runs, the dense prefix.
+  - Numbers in docs/mark-compact.md section 10.
 
 ## Follow-ups
 

@@ -199,3 +199,100 @@ threshold, the capacity) can go into a shared tail, so the net cost is somewhat 
 3. Should `Heap::collect` keep its name for mark-compact, with Cheney as
    `collect_canonical`? The embedder API (`Vm::collect`, `vm_collect`) would mean "in
    place".
+
+## 10. Prototype numbers (branch issue/0101-mark-compact, not merged)
+
+The prototype is as designed, plus five implementation details:
+- **Growable mark stack:** it starts at 16 K entries and grows on demand up to len/64
+  entries. Past that, or when the host refuses, the overflow rescan takes over; the rescan
+  starts at the lowest cell left unpushed.
+- **Leaf cells are not pushed:** strings, bytes, U32Arrays and BigInts.
+- **Rope slots rewritten during marking:** references to flattened ropes are rewritten
+  while marking, so the update pass reads no target headers.
+- **Slide by runs:** adjacent live cells move with one `copy_within`.
+- **Dense prefix:** nothing below the first dead word moves, and no forwarding is
+  computed for it.
+
+All measured against main c4acd0ee. Load was 6–25, so instruction counts are the reliable
+measure and the ms are indicative only.
+
+**Peak wasm memory** (`scripts/perf/wasm-run.ts`, ONCE, MiB):
+
+| workload | Cheney | mark-compact |
+| --- | ---: | ---: |
+| strbuild | 45.6 | 31.6 (−31%) |
+| higher-order | 39.0 | 28.4 (−27%) |
+| arrays | 29.6 | 28.6 (−3%) |
+| json | 12.6 | 9.9 (−21%) |
+| jsonh | 12.1 | 6.8 (−44%) |
+| forof | 10.7 | 9.8 (−8%) |
+| pi-like | 6.1 | 4.2 (−31%) |
+| props | 4.4 | 2.9 (−34%) |
+| strings | 16.5 | 7.9 (−52%) |
+| loop | 1.7 | 1.7 |
+
+**pi** (`js/pi/vm.ts`, one measured run in a fresh instance after a warm-up, MiB;
+work/scratch/0101/pi-mem.ts):
+
+| case | Cheney | mark-compact |
+| --- | ---: | ---: |
+| warm, `return 1` | 2.00 | 2.00 |
+| cold, `return 1` | 3.56 | 2.94 |
+| warm, tool-heavy | 3.13 | 2.13 |
+| cold, tool-heavy | 4.69 | 4.31 |
+
+The cold starts don't reach the ~2.0 MiB estimate, and the reason is not the collector.
+With `alloc-stats`, the peak of live Rust allocations in a cold run is only 1.10–1.43 MiB.
+The remainder of the cold peak is the 1 MiB stack, the module's data, and dlmalloc holes
+left while the prelude compiles: compiler buffers interleave with the arena's growth, so
+the arena moves.
+- Tried and rejected: reserving the next threshold right after an in-place collection.
+  Warm tool-heavy got worse, 2.13 → 3.63 MiB.
+- A follow-up could size the arena once before compiling the prelude.
+
+**Time, wasm instructions** (`scripts/perf/wmeasure.py -n 3`, whole node process, M):
+
+| workload | Cheney | mark-compact |
+| --- | ---: | ---: |
+| strbuild | 3942.6 | 4035.1 (+2.3%) |
+| higher-order | 17755.7 | 17993.6 (+1.3%) |
+| arrays | 11305.2 | 11447.8 (+1.3%) |
+| json | 1269.2 | 1320.8 (+4.1%) |
+| jsonh | 1920.9 | 2026.1 (+5.5%) |
+| forof | 6546.3 | 6592.3 (+0.7%) |
+| pi-like | 10528.4 | 10929.9 (+3.8%) |
+| props | 8290.1 | 8607.3 (+3.8%) |
+| strings | 3118.2 | 3213.8 (+3.1%) |
+| loop | 6633.0 | 6627.7 (±0) |
+
+**Collection time** (`gc_tests::gc_collectors_compared`, native release, 43–46 MiB
+arenas):
+
+| heap | mark-compact vs Cheney |
+| --- | ---: |
+| records | 1.50× |
+| linked list | 1.14–1.22× |
+| records, half garbage | 1.09–1.17× |
+| linked list, half garbage | 1.54–1.61× |
+
+In props the collector's share of native samples is 13.8% with Cheney and 17.7% with
+mark-compact. Most of that is tracing the base image (~380 KB live) at every collection,
+which both collectors do. Making the collector skip the image (an old generation, or
+sticky marks for the base) would cut both; that is a separate design.
+
+**Code size** (the gate's wasm profile build): code 890,785 → 896,823 B (+6.0 KB,
++0.68%), module gzip +2.0 KB. Data and the base image are unchanged (the base still comes
+from Cheney: 382,392 B on both).
+
+**Tests:**
+- lib (+ `both_collectors_keep_the_same_graph` with a 3-entry stack,
+  `collection_points_do_not_change_compacted_images`), e2e ×3, `tests/slices.rs`;
+- difftest with suspension, GC stress and `--determinism` over builtins, language,
+  codemode and errors;
+- native vs wasm, the node tests (the base equals a compiled realm), the djs-prelude
+  tests.
+
+**A property beyond the design:** sliding keeps allocation order. Collecting along the
+way (in place) therefore ends in the *same bytes* as collecting once at the end, for the
+same mutation sequence. Compacted images depend on the program and its allocations, not on
+where the collections were. GC stress can still differ, through weak tables.
