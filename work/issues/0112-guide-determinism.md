@@ -1,7 +1,7 @@
 # 0112: Guide chapter: determinism
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0112-guide-determinism
 depends-on: 0109
 guide: docs/guide/determinism.md (new); links from arena.md, heap.md, gc.md, suspension.md, host.md
