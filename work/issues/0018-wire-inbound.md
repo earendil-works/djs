@@ -1,7 +1,7 @@
 # 0018: Inbound wire format (host → VM)
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0018-wire-inbound
 depends-on: 0012
 touches: crates/djs-core/src/wire/, crates/djs-core/src/heap/ (small additive helpers only), js/ (new package: the encoder only), docs/wire.md, crates/djs-core/src/lib.rs (mod lines only)
