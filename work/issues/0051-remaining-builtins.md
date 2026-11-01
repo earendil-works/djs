@@ -1,7 +1,7 @@
 # 0051: Remaining builtins: iterator helpers, WeakRef/FinalizationRegistry, disposables, Array.fromAsync, upsert
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0051-remaining-builtins
 depends-on: 0046
 touches: builtins/ (iterator.ts, weakref.ts, disposable.ts, …), builtins/gen/, crates/djs-core/src/builtins/, crates/djs-core/src/heap/ (weak references in the GC, additive), crates/djs-core/src/interp/realm.rs (additive), crates/djs-core/src/vm/ (the host hook for FinalizationRegistry cleanup scheduling, additive), tests/test262.toml (promotion), ratchets
