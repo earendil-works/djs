@@ -1,0 +1,2 @@
+start
+Uncaught ReferenceError: 'nope' is not defined

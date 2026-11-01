@@ -64,6 +64,9 @@ pub enum ObjectClass {
     HostFunction = 3,
     /// An Error instance (`[[ErrorData]]`).
     Error = 4,
+    /// An unmapped (strict) arguments object: ordinary storage, its own class for
+    /// `Object.prototype.toString`.
+    Arguments = 5,
 }
 
 impl ObjectClass {
@@ -74,6 +77,7 @@ impl ObjectClass {
             2 => Some(ObjectClass::Function),
             3 => Some(ObjectClass::HostFunction),
             4 => Some(ObjectClass::Error),
+            5 => Some(ObjectClass::Arguments),
             _ => None,
         }
     }
@@ -81,7 +85,7 @@ impl ObjectClass {
     /// Number of internal slots the class needs.
     pub const fn slots(self) -> u32 {
         match self {
-            ObjectClass::Ordinary | ObjectClass::Error => 0,
+            ObjectClass::Ordinary | ObjectClass::Error | ObjectClass::Arguments => 0,
             ObjectClass::Array | ObjectClass::Function | ObjectClass::HostFunction => 1,
         }
     }

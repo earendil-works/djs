@@ -1,0 +1,7 @@
+{"3":"three","a":11,"b-c":2,"computed":4,"d":{"e":[1,2,3]}} 2 three undefined
+true false true true false true
+{"3":"three","b-c":2,"computed":4,"d":{"e":[1,2,3]},"a":"again"}
+[1,null,3] 3 false
+[1,null,3,null,null,6] 6
+2 undefined dflt 0 or 0
+5

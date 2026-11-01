@@ -1,0 +1,10 @@
+var v = 1;
+let l = 2;
+const c = 3;
+console.log(v, l, c, globalThis.v, globalThis.l, typeof globalThis.c);
+v = 10;
+l = 20;
+console.log(v, l, this === globalThis, typeof this);
+console.log(typeof notDefined);
+globalThis.dyn = 5;
+console.log(dyn);

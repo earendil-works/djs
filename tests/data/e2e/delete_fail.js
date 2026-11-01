@@ -1,0 +1,1 @@
+delete "abc".length;

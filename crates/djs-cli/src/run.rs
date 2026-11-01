@@ -1,9 +1,110 @@
-//! `djs run`: run a script, serving `console.log` as a sync host call.
+//! `djs run [--body] [--gc-stress] [--suspend-every N] <file.js>`: run a script,
+//! serving `console.log` as a sync host call.
+//!
+//! Exit codes: 0 ok, 1 uncaught exception (printed as `Uncaught Name: message`), 2 usage
+//! or compile error.
 
 use std::io::Write;
 
+use djs_core::compiler::{CompileErrorKind, CompileOptions};
 use djs_core::value::Value;
 use djs_core::vm::{ExecOptions, Status, Vm, VmOptions};
+
+const USAGE: &str = "usage: djs run [--body] [--gc-stress] [--suspend-every N] <file.js>\n\
+  --body             run as a codemode async body with parameters (tools, console)\n\
+  --gc-stress        collect garbage at every safepoint\n\
+  --suspend-every N  run N fuel at a time; at every stop, continue in a fresh VM\n\
+                     restored from the heap image";
+
+pub fn main(args: &[String]) -> i32 {
+    let mut opts = RunOptions::default();
+    let mut path = None;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--body" => opts.body = true,
+            "--gc-stress" => opts.gc_stress = true,
+            "--suspend-every" => match it.next().and_then(|n| n.parse().ok()) {
+                Some(n) if n > 0 => opts.suspend_every = Some(n),
+                _ => {
+                    eprintln!("{USAGE}");
+                    return 2;
+                }
+            },
+            "-h" | "--help" => {
+                println!("{USAGE}");
+                return 0;
+            }
+            _ if path.is_none() && !a.starts_with('-') => path = Some(a.clone()),
+            _ => {
+                eprintln!("{USAGE}");
+                return 2;
+            }
+        }
+    }
+    let Some(path) = path else {
+        eprintln!("{USAGE}");
+        return 2;
+    };
+    let src = match std::fs::read(&path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("djs: cannot read {path}: {e}");
+            return 2;
+        }
+    };
+    let stdout = std::io::stdout();
+    let stderr = std::io::stderr();
+    run_source(&src, &path, &opts, &mut stdout.lock(), &mut stderr.lock())
+}
+
+/// Compiles and runs `src`. See the module docs for the exit codes.
+pub fn run_source(
+    src: &[u8],
+    filename: &str,
+    opts: &RunOptions,
+    out: &mut impl Write,
+    err: &mut impl Write,
+) -> i32 {
+    let mut vm = new_vm(opts);
+    let params = ["tools", "console"];
+    let copts = if opts.body {
+        CompileOptions::async_body(filename, &params)
+    } else {
+        CompileOptions::script(filename)
+    };
+    let main = match vm.compile(src, &copts) {
+        Ok(f) => f,
+        Err(e) => {
+            match e.kind {
+                CompileErrorKind::Syntax => {
+                    let _ = writeln!(
+                        err,
+                        "SyntaxError: {} at {filename}:{}:{}",
+                        e.message, e.line, e.col
+                    );
+                }
+                CompileErrorKind::OutOfMemory => {
+                    let _ = writeln!(err, "djs: out of memory while compiling");
+                }
+            }
+            return 2;
+        }
+    };
+    let args: Vec<Value> = if opts.body {
+        // `tools` is not provided by `djs run`; `console` is the global console object.
+        let key = vm.heap_mut().atom_str("console").expect("oom");
+        let console = vm
+            .heap()
+            .find_property(vm.global(), key)
+            .and_then(|(_, p)| p.value())
+            .unwrap_or(Value::UNDEFINED);
+        vec![Value::UNDEFINED, console]
+    } else {
+        Vec::new()
+    };
+    run_main(vm, main, &args, opts, out, err)
+}
 
 /// Host function ids registered by `djs run`.
 pub const CONSOLE_LOG: u32 = 1;
@@ -11,6 +112,8 @@ pub const CONSOLE_LOG: u32 = 1;
 /// Options of `djs run`.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RunOptions {
+    /// Compile as a codemode async body (D008) instead of a Script.
+    pub body: bool,
     /// Collect at every safepoint.
     pub gc_stress: bool,
     /// Run with this much fuel at a time; on `OutOfFuel`, rebuild the VM from its heap
@@ -46,13 +149,14 @@ pub fn new_vm(opts: &RunOptions) -> Vm {
 pub fn run_main(
     mut vm: Vm,
     main: Value,
+    args: &[Value],
     opts: &RunOptions,
     out: &mut impl Write,
     err: &mut impl Write,
 ) -> i32 {
-    // Script mode: the top-level `this` is the global object (D004).
+    // The top level is called with `this` = the global object in both modes (D1140).
     let this = Value::object(vm.global());
-    vm.call(main, this, &[]).expect("the VM is idle");
+    vm.call(main, this, args).expect("the VM is idle");
     let fuel = opts.suspend_every.unwrap_or(u64::MAX);
     loop {
         match vm.run(fuel) {

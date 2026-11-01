@@ -21,11 +21,13 @@ use super::frame::{self, Continuation, HEADER};
 use super::realm::{self, ErrorKind, Intrinsic, intrinsic, intrinsic_obj};
 use super::state::{self, PARK_ENTRY, RunState, park_flags};
 use crate::bytecode::decode::{read_i8, read_i32, read_u16, read_u32};
+use crate::bytecode::global_decls::GlobalDecls;
+use crate::bytecode::template::func_flags;
 use crate::bytecode::template::{bytes_of, ref_array_get};
-use crate::bytecode::{HandlerTable, OPS, Op, flags as opflags};
+use crate::bytecode::{HandlerTable, OPS, Op, flags as opflags, special};
 use crate::heap::cells::{BoxCell, FuncTemplate, HostCall, Interp, Roots, U32Array, ValueArray};
 use crate::heap::{
-    Atom, CellKind, Heap, HeapError, ObjectClass, Property, PropertyDescriptor, Ref,
+    Atom, CellKind, Heap, HeapError, ObjectClass, PropFlags, Property, PropertyDescriptor, Ref,
 };
 use crate::value::{Kind, Obj, Value};
 
@@ -855,6 +857,11 @@ impl<'h> Exec<'h> {
             // ---- globals ----
             Op::GetGlobal | Op::GetGlobalTypeof => {
                 let key = self.imm_atom();
+                if let Some(v) = self.global_lexical(key)? {
+                    self.push(v);
+                    self.pc = next;
+                    return Ok(None);
+                }
                 let g = intrinsic_obj(self.heap, Intrinsic::Global);
                 match self.heap.find_property(g, key) {
                     None if op == Op::GetGlobal => {
@@ -873,6 +880,20 @@ impl<'h> Exec<'h> {
             }
             Op::PutGlobal => {
                 let key = self.imm_atom();
+                let lex = realm::global_lex(self.heap);
+                if let Some(Property::Data { flags, .. }) = self.heap.get_own_property(lex, key) {
+                    self.global_lexical(key)?;
+                    if !flags.writable() {
+                        return Err(Fault::Error(
+                            ErrorKind::TypeError,
+                            format!("'{}' is read-only", self.heap.atom_name(key)),
+                        ));
+                    }
+                    let v = self.pop();
+                    realm::set_global_lexical(self.heap, key, v)?;
+                    self.pc = next;
+                    return Ok(None);
+                }
                 let g = intrinsic_obj(self.heap, Intrinsic::Global);
                 if !self.heap.has_property(g, key) {
                     return Err(Fault::Error(
@@ -883,6 +904,20 @@ impl<'h> Exec<'h> {
                 let v = self.top(0);
                 self.pc = next;
                 return self.set_property(g, key, v, 1);
+            }
+            Op::InitGlobalLex => {
+                let key = self.imm_atom();
+                let v = self.pop();
+                realm::set_global_lexical(self.heap, key, v)?;
+            }
+            Op::GlobalDecls => {
+                let idx = self.imm_u32(1);
+                self.global_decls(idx)?;
+            }
+            Op::SpecialObject => {
+                let kind = self.heap.arena().bytes()[(self.code + self.pc + 1) as usize];
+                let v = self.special_object(kind)?;
+                self.push(v);
             }
             Op::ThrowConstAssign => {
                 return Err(Fault::Error(
@@ -971,6 +1006,35 @@ impl<'h> Exec<'h> {
                 let r = self.heap.has_property(obj, key);
                 self.sp -= 2;
                 self.push(Value::bool(r));
+            }
+            Op::DefineElem => {
+                let (o, k, v) = (self.top(2), self.top(1), self.top(0));
+                let key = self.property_key(o, k)?;
+                let obj = o.as_object().expect("object literal");
+                self.heap.create_data_property(obj, key, v)?;
+                self.sp -= 2;
+            }
+            Op::CopyDataProps => {
+                let mode = self.heap.arena().bytes()[(self.code + self.pc + 1) as usize];
+                if mode != 0 {
+                    return Err(Fault::Error(
+                        ErrorKind::InternalError,
+                        format!("not supported yet: copy_data_props {mode}"),
+                    ));
+                }
+                let (o, src) = (self.top(1), self.top(0));
+                self.copy_data_props(o.as_object().expect("object literal"), src)?;
+                self.sp -= 1;
+            }
+            Op::Delete => {
+                let (o, k) = (self.top(1), self.top(0));
+                let r = self.delete(o, k)?;
+                self.sp -= 2;
+                self.push(Value::bool(r));
+            }
+            Op::Construct => {
+                let argc = self.imm_u16(1);
+                return self.construct(argc, next);
             }
             Op::RequireObjectCoercible => {
                 if self.top(0).is_nullish() {
@@ -1175,7 +1239,37 @@ impl<'h> Exec<'h> {
             };
             self.heap.set_object_slot(f, 1 + i, b);
         }
+        self.function_properties(f, t.0)?;
         Ok(Value::object(f))
+    }
+
+    /// `length`, `name` and (for ordinary functions) `prototype` of a new closure.
+    fn function_properties(&mut self, f: Obj, t: u32) -> Result<(), Fault> {
+        use crate::heap::atoms;
+        let a = self.heap.arena();
+        let length = a.get(t, FuncTemplate::LENGTH);
+        let name = Atom::from_id(a.get(t, FuncTemplate::NAME));
+        let flags = a.get(t, FuncTemplate::FLAGS);
+        let ro = PropFlags::CONFIGURABLE;
+        let d = PropertyDescriptor::data(Value::int(length as i32), ro);
+        self.heap.define_own_property(f, atoms::LENGTH, &d)?;
+        let name = if name.is_null() {
+            self.heap.atom_string(atoms::EMPTY)?
+        } else {
+            self.heap.atom_string(name)?
+        };
+        let d = PropertyDescriptor::data(Value::string(name), ro);
+        self.heap.define_own_property(f, atoms::NAME, &d)?;
+        if func_flags::kind(flags) == func_flags::KIND_NORMAL
+            && flags & (func_flags::ASYNC | func_flags::GENERATOR) == 0
+        {
+            let op = intrinsic_obj(self.heap, Intrinsic::ObjectProto);
+            let proto = self.heap.new_object(Some(op))?;
+            realm::define_hidden(self.heap, proto, atoms::CONSTRUCTOR, Value::object(f))?;
+            let d = PropertyDescriptor::data(Value::object(proto), PropFlags::WRITABLE);
+            self.heap.define_own_property(f, atoms::PROTOTYPE, &d)?;
+        }
+        Ok(())
     }
 
     fn property_key(&mut self, _o: Value, k: Value) -> Result<Atom, Fault> {
@@ -1320,7 +1414,216 @@ impl<'h> Exec<'h> {
         if o.is_nullish() {
             return self.nullish_base(o, key, "set");
         }
+        // A string's own `length` and indexes are read-only; anything else would be
+        // created on a temporary wrapper object, which strict mode rejects.
+        if let Some(s) = o.as_string()
+            && (key == crate::heap::atoms::LENGTH
+                || key.as_int().is_some_and(|i| i < self.heap.str_len(s)))
+        {
+            return type_error(&format!("'{}' is read-only", self.heap.atom_name(key)));
+        }
         type_error("not an object")
+    }
+
+    /// The value of a global lexical binding (`None` if there is none); a ReferenceError
+    /// while it is uninitialized (TDZ).
+    fn global_lexical(&self, key: Atom) -> Result<Option<Value>, Fault> {
+        let lex = realm::global_lex(self.heap);
+        match self.heap.get_own_property(lex, key) {
+            Some(Property::Data { value, .. }) if value.is_uninitialized() => Err(Fault::Error(
+                ErrorKind::ReferenceError,
+                format!("{} is not initialized", self.heap.atom_name(key)),
+            )),
+            Some(p) => Ok(p.value()),
+            None => Ok(None),
+        }
+    }
+
+    /// GlobalDeclarationInstantiation for the declaration list in constant `idx`, with
+    /// QuickJS' checks (`JS_CheckDefineGlobalVar`): all checks first, then the bindings.
+    fn global_decls(&mut self, idx: u32) -> Result<(), Fault> {
+        let n = self.heap.value_array_len(self.consts);
+        let consts: alloc::vec::Vec<Value> = (0..n)
+            .map(|i| self.heap.value_array_get(self.consts, i))
+            .collect();
+        let decls = GlobalDecls::decode(&consts, idx as usize).ok_or_else(|| {
+            Fault::Error(ErrorKind::InternalError, String::from("bad global_decls"))
+        })?;
+        let g = intrinsic_obj(self.heap, Intrinsic::Global);
+        let lex = realm::global_lex(self.heap);
+        let redeclaration = |heap: &Heap, k: Atom| {
+            Err(Fault::Error(
+                ErrorKind::SyntaxError,
+                format!("redeclaration of '{}'", heap.atom_name(k)),
+            ))
+        };
+        for &k in decls.lets.iter().chain(&decls.consts) {
+            let own = self.heap.get_own_property(g, k);
+            if own.is_some_and(|p| !p.flags().configurable()) || self.heap.has_own_property(lex, k)
+            {
+                return redeclaration(self.heap, k);
+            }
+        }
+        for &k in decls.vars.iter().chain(&decls.funcs) {
+            if !self.heap.has_own_property(g, k) && !self.heap.is_extensible(g) {
+                return Err(Fault::Error(
+                    ErrorKind::TypeError,
+                    format!("cannot define variable '{}'", self.heap.atom_name(k)),
+                ));
+            }
+            if self.heap.has_own_property(lex, k) {
+                return redeclaration(self.heap, k);
+            }
+        }
+        for &k in decls.vars.iter().chain(&decls.funcs) {
+            if !self.heap.has_own_property(g, k) {
+                let d = PropertyDescriptor::data(
+                    Value::UNDEFINED,
+                    PropFlags::WRITABLE | PropFlags::ENUMERABLE,
+                );
+                self.heap.define_own_property(g, k, &d)?;
+            }
+        }
+        for (list, writable) in [(&decls.lets, true), (&decls.consts, false)] {
+            for &k in list {
+                realm::declare_global_lexical(self.heap, k, writable)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// `special_object kind`.
+    fn special_object(&mut self, kind: u8) -> Result<Value, Fault> {
+        Ok(match kind {
+            special::THIS => self.get(self.bp + 1),
+            special::NEW_TARGET => self.header(frame::NEW_TARGET),
+            special::ACTIVE_FUNCTION => self.get(self.bp),
+            special::ARGUMENTS => {
+                // An unmapped (strict) arguments object.
+                let argc = self.header_int(frame::ARGC);
+                let proto = intrinsic_obj(self.heap, Intrinsic::ObjectProto);
+                let a = self
+                    .heap
+                    .alloc_object(ObjectClass::Arguments, Some(proto), 0)?;
+                for i in 0..argc {
+                    let v = self.get(self.bp + 2 + i);
+                    self.heap
+                        .create_data_property(a, Atom::int(i).unwrap(), v)?;
+                }
+                realm::define_hidden(
+                    self.heap,
+                    a,
+                    crate::heap::atoms::LENGTH,
+                    Value::int(argc as i32),
+                )?;
+                Value::object(a)
+            }
+            _ => {
+                return Err(Fault::Error(
+                    ErrorKind::InternalError,
+                    format!("not supported yet: special_object {kind}"),
+                ));
+            }
+        })
+    }
+
+    /// `{...src}` (CopyDataProperties without excluded keys). Like QuickJS, primitive
+    /// sources contribute nothing.
+    fn copy_data_props(&mut self, o: Obj, src: Value) -> Result<(), Fault> {
+        let Some(s) = src.as_object() else {
+            return Ok(());
+        };
+        for k in self.heap.own_keys(s) {
+            match self.heap.get_own_property(s, k) {
+                Some(Property::Data { value, flags }) if flags.enumerable() => {
+                    self.heap.create_data_property(o, k, value)?;
+                }
+                Some(Property::Accessor { flags, .. }) if flags.enumerable() => {
+                    return type_error("not supported yet: getter in an object spread");
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// The `delete` operator (strict: failure is a TypeError).
+    fn delete(&mut self, o: Value, k: Value) -> Result<bool, Fault> {
+        if o.is_nullish() {
+            return type_error("cannot convert to object");
+        }
+        let key = self.property_key(o, k)?;
+        let deleted = match (o.as_object(), o.as_string()) {
+            (Some(obj), _) => self.heap.delete_own_property(obj, key),
+            // A string's `length` and its index properties are not configurable.
+            (None, Some(s)) => {
+                !(key == crate::heap::atoms::LENGTH
+                    || key.as_int().is_some_and(|i| i < self.heap.str_len(s)))
+            }
+            (None, None) => true,
+        };
+        if !deleted {
+            return type_error("could not delete property");
+        }
+        Ok(true)
+    }
+
+    /// `new f(args)`: `f a1 .. an` on the stack.
+    fn construct(&mut self, argc: u32, next: u32) -> Step {
+        let base = self.sp - 1 - argc;
+        let f = self.get(base);
+        let Some(fo) = f.as_object() else {
+            return type_error("not a function");
+        };
+        let constructible = self.heap.object_class(fo) == ObjectClass::Function && {
+            let t = self
+                .heap
+                .object_slot(fo, 0)
+                .as_internal()
+                .expect("template");
+            let flags = self.heap.arena().get(t, FuncTemplate::FLAGS);
+            flags & (func_flags::ASYNC | func_flags::GENERATOR) == 0
+                && matches!(
+                    func_flags::kind(flags),
+                    func_flags::KIND_NORMAL | func_flags::KIND_CLASS_CTOR
+                )
+        };
+        if !constructible {
+            if !self.heap.object_class(fo).is_callable() {
+                return type_error("not a function");
+            }
+            let name = self
+                .heap
+                .get_own_property(fo, crate::heap::atoms::NAME)
+                .and_then(|p| p.value())
+                .and_then(|v| v.as_string())
+                .map(|s| self.heap.str_to_string(s))
+                .filter(|s| !s.is_empty());
+            return type_error(&match name {
+                Some(n) => format!("{n} is not a constructor"),
+                None => String::from("not a constructor"),
+            });
+        }
+        let proto = match self.heap.find_property(fo, crate::heap::atoms::PROTOTYPE) {
+            Some((_, Property::Data { value, .. })) => value.as_object(),
+            None => None,
+            Some(_) => return type_error("not supported yet: getter for 'prototype'"),
+        };
+        let proto = proto.unwrap_or_else(|| intrinsic_obj(self.heap, Intrinsic::ObjectProto));
+        let this = Value::object(self.heap.new_object(Some(proto))?);
+        // Make room for `this` below the arguments.
+        self.ensure(self.sp + 1)?;
+        for i in (0..argc).rev() {
+            let v = self.get(base + 1 + i);
+            self.set(base + 2 + i, v);
+        }
+        self.set(base + 1, this);
+        self.sp += 1;
+        let r = self.call(base, argc, Continuation::ConstructResult, next)?;
+        let flags = self.header_int(frame::FLAGS) as i32 | frame::FLAG_CONSTRUCT;
+        self.set(self.hp + frame::FLAGS, Value::int(flags));
+        self.set(self.hp + frame::NEW_TARGET, f);
+        Ok(r)
     }
 
     /// OrdinaryHasInstance (no `Symbol.hasInstance` yet).

@@ -131,9 +131,52 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     let global = heap.new_object(Some(object_proto))?;
     set(heap, Intrinsic::Global, Value::object(global));
     define_hidden(heap, global, atoms::GLOBAL_THIS, Value::object(global))?;
+    // The value properties of the global object: non-writable, non-configurable.
+    for (k, v) in [
+        (atoms::NAN, Value::NAN),
+        (atoms::INFINITY, Value::number(f64::INFINITY)),
+        (atoms::UNDEFINED, Value::UNDEFINED),
+    ] {
+        heap.define_own_property(global, k, &PropertyDescriptor::data(v, PropFlags::NONE))?;
+    }
+    // The global lexical record: a hidden object, never visible to JS. Bindings are
+    // configurable data properties (so `init_global_lex` can always overwrite them);
+    // `writable` is false for `const` (D1220).
+    let lex = heap.new_object(None)?;
+    heap.arena_mut()
+        .set(r, Realm::GLOBAL_LEX, crate::heap::Ref(lex.offset()));
     let oom = new_error(heap, ErrorKind::InternalError, "out of memory")?;
     set(heap, Intrinsic::OutOfMemoryError, oom);
     debug_assert_eq!(heap.arena().get(0, Roots::REALM).as_internal(), Some(r));
+    Ok(())
+}
+
+/// The global lexical record (Script-mode `let`/`const`, D1220).
+pub(crate) fn global_lex(heap: &Heap) -> Obj {
+    let r: crate::heap::Ref = heap.arena().get(realm(heap), Realm::GLOBAL_LEX);
+    Obj(r.0)
+}
+
+/// Declares an uninitialized global lexical binding.
+pub(crate) fn declare_global_lexical(
+    heap: &mut Heap,
+    key: Atom,
+    writable: bool,
+) -> Result<(), HeapError> {
+    let lex = global_lex(heap);
+    let d = PropertyDescriptor::data(Value::UNINITIALIZED, PropFlags::new(writable, true, true));
+    heap.define_own_property(lex, key, &d)?;
+    Ok(())
+}
+
+/// Sets the value of a declared global lexical binding.
+pub(crate) fn set_global_lexical(heap: &mut Heap, key: Atom, v: Value) -> Result<(), HeapError> {
+    let lex = global_lex(heap);
+    let d = PropertyDescriptor {
+        value: Some(v),
+        ..Default::default()
+    };
+    heap.define_own_property(lex, key, &d)?;
     Ok(())
 }
 

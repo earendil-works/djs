@@ -135,6 +135,26 @@ impl Vm {
         Ok(Value::object(f))
     }
 
+    /// Compiles `src` (UTF-8) and returns the top-level function, ready for
+    /// [`Vm::call`]. Call it with `this` = the global object; in
+    /// [`Goal::AsyncBody`](crate::compiler::Goal) mode, pass the parameters as arguments.
+    /// Until async functions exist, an async body runs as a plain function body.
+    pub fn compile(
+        &mut self,
+        src: &[u8],
+        opts: &crate::compiler::CompileOptions<'_>,
+    ) -> Result<Value, crate::compiler::CompileError> {
+        let template = crate::compiler::compile(&mut self.heap, src, opts)?;
+        self.instantiate(template)
+            .map_err(|_| crate::compiler::CompileError {
+                kind: crate::compiler::CompileErrorKind::OutOfMemory,
+                message: String::from("out of memory"),
+                pos: 0,
+                line: 0,
+                col: 0,
+            })
+    }
+
     /// A function implemented by the embedder: calling it parks the VM with
     /// `Status::HostCall { fn_id, .. }`.
     pub fn new_host_function(&mut self, fn_id: u32, name: &str) -> Result<Value, HeapError> {

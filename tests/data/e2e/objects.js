@@ -1,0 +1,17 @@
+const o = { a: 1, "b-c": 2, 3: "three", ["comp" + "uted"]: 4 };
+o.a += 10;
+o.d = { e: [1, 2] };
+o.d.e[2] = 3;
+console.log(o, o["b-c"], o[3], o.missing);
+console.log("a" in o, "zz" in o, 3 in o, delete o.a, "a" in o, delete o.nothing);
+const sp = { ...o, a: "again", ...null, ...undefined };
+console.log(sp);
+const arr = [1, , 3];
+arr.push;
+console.log(arr, arr.length, 1 in arr);
+arr[5] = 6;
+console.log(arr, arr.length);
+console.log(o?.d?.e?.[1], o?.zz?.yy, null ?? "dflt", 0 ?? 1, "" || "or", 0 && "and");
+let x;
+x ??= 4; x ||= 5; x &&= x + 1;
+console.log(x);
