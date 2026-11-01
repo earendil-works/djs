@@ -201,3 +201,25 @@ failing tests that are not listed, reports listed tests that passed (stale) with
 failing, and ignores entries for tests outside the run. `--update` replaces the entries of
 the tests that ran and keeps the rest, so filtered runs can update it. Reasons are
 informational and are not compared.
+
+## D1040: Number conversion algorithms and the shared power-of-five table
+date: 2026-11-01 · by: num · issue: 0004
+`djs_core::num` uses Ryu (ported from the `ryu` crate) for shortest decimal output, and
+QuickJS' `js_dtoa` algorithms on a small fixed-size bignum for everything that needs exact
+digits (toFixed/toExponential/toPrecision, toString(radix)), so corner cases match qjs.
+Decimal parsing is Clinger's fast path, then Eisel-Lemire (ported from `core::num::dec2flt`),
+then an exact bignum slow path. Ryu and Eisel-Lemire share one table of 128-bit powers of five,
+stored as every 27th entry plus 2-bit corrections (800 bytes instead of ~21 KB for the two full
+tables); unit tests rebuild every entry exactly. The API takes already-converted integer
+arguments, reports RangeErrors as an enum with the qjs message, and writes into stack buffers
+(no allocation).
+
+## D1041: Decimal strings are always correctly rounded (qjs truncates after 38 digits)
+date: 2026-11-01 · by: num · issue: 0004
+qjs keeps only the first 38 significant digits of a decimal string or literal and drops the
+rest without rounding, so e.g. `Number("9007199254740993." + "0".repeat(30) + "1")` is
+9007199254740992 in qjs but 9007199254740994 in V8. djs rounds correctly for any length, like
+V8 and SpiderMonkey; the spec allows either. Results differ from qjs only for inputs with more
+than 38 significant digits that are within 10^-38 (relative) of a halfway point. For parseInt
+with a radix that is neither 10 nor a power of two (where the spec allows approximation) djs
+matches qjs exactly: about 128 bits of leading digits, the rest truncated.
