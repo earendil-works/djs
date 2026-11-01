@@ -105,6 +105,7 @@ impl Djs {
                 gc_stress: self.gc_stress,
                 ..ExecOptions::default()
             },
+            ..VmOptions::default()
         };
         let vm = Vm::new(opts).map_err(|e| format!("Vm::new: {e:?}"))?;
         let mut s = Session {

@@ -74,6 +74,10 @@ from the line table (the 0025 contract: the current pc on top, `ret_pc - 1` for 
   djs-wasm under node 25 (11 µs before), heap 36 KB (17 KB). `docs/host.md`'s startup
   table updated (outside `touches:`, one line).
 - `js/src/layout.generated.ts` regenerated for the realm/flag changes.
+- Merge: 0016 (djs-difftest) landed meanwhile and builds `VmOptions` with every field
+  listed, so the new `prelude` field broke it. Added `..VmOptions::default()` there
+  (crates/djs-difftest/src/djs.rs, one line, outside `touches:`). The difftest engine
+  now runs with the prelude.
 - 0030 note: symbol-keyed `%InstallMethod` needs `key: Str` in intrinsics.d.ts widened
   (bgen's file), so it stays with 0030.
 
