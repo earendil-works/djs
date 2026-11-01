@@ -63,14 +63,19 @@ function IteratorRest(iterator: Obj, next: Value): Obj {
   const arr: Obj = ArrayCreate(0);
   let n: f64 = 0;
   while (true) {
-    const result: Value = Call(next, iterator);
-    if (!IsObject(result)) {
-      throw NewTypeError("iterator must return an object");
+    // Without a result object where that is unobservable (D1800).
+    if (IteratorFastReady(iterator, next)) {
+      CreateDataPropertyOrThrow(arr, n, IteratorFastValue(iterator, next));
+    } else {
+      const result: Value = Call(next, iterator);
+      if (!IsObject(result)) {
+        throw NewTypeError("iterator must return an object");
+      }
+      if (ToBoolean(Get(AsObj(result), "done"))) {
+        return arr;
+      }
+      CreateDataPropertyOrThrow(arr, n, Get(AsObj(result), "value"));
     }
-    if (ToBoolean(Get(AsObj(result), "done"))) {
-      return arr;
-    }
-    CreateDataPropertyOrThrow(arr, n, Get(AsObj(result), "value"));
     n = n + 1;
   }
 }

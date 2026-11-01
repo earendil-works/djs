@@ -21,6 +21,7 @@ use super::intrinsics::{
 use super::*;
 use crate::builtins::string;
 use crate::heap::{Lookup, atoms};
+use crate::value::Str;
 
 /// The kind slot of a String Iterator (D1346).
 const STRING_KIND: i32 = 3;
@@ -107,18 +108,59 @@ impl Exec<'_> {
     /// protocol (module docs); the iterator has then advanced (or finished). `Slow`,
     /// with nothing changed, when the caller must call `next`.
     pub(super) fn iter_fast_next(&mut self, it: Value, f: Value) -> Result<FastStep, Fault> {
+        Ok(match self.iter_plan(it, f) {
+            Plan::Slow => FastStep::Slow,
+            Plan::Done(it) => {
+                self.heap.set_object_slot(it, 0, Value::UNDEFINED);
+                FastStep::Done
+            }
+            Plan::Str(it, s, i) => {
+                let s = self.heap.flatten(s)?;
+                let n = match string::code_point_at(self.heap, s, i) {
+                    Some(c) if c >= 65536.0 => 2,
+                    _ => 1,
+                };
+                let cp = string::substring(self.heap, s, i, i + n)?;
+                self.heap
+                    .set_object_slot(it, 1, conv::number((i + n) as f64));
+                FastStep::Value(Value::string(cp))
+            }
+            Plan::Elem(it, v, i, kind) => {
+                let r = match kind {
+                    0 => conv::number(i as f64),
+                    1 => v,
+                    _ => {
+                        let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
+                        let pair = [conv::number(i as f64), v];
+                        Value::object(self.heap.new_array_from_values(Some(proto), &pair)?)
+                    }
+                };
+                self.heap
+                    .set_object_slot(it, 1, conv::number(i as f64 + 1.0));
+                FastStep::Value(r)
+            }
+        })
+    }
+
+    /// Whether `iter_fast_next` would produce a value (`%IteratorFastReady`).
+    pub(super) fn iter_fast_ready(&self, it: Value, f: Value) -> bool {
+        matches!(self.iter_plan(it, f), Plan::Str(..) | Plan::Elem(..))
+    }
+
+    /// What the next step of `it` with `next` method `f` does, without doing it.
+    fn iter_plan(&self, it: Value, f: Value) -> Plan {
         let Some(it) = it.as_object() else {
-            return Ok(FastStep::Slow);
+            return Plan::Slow;
         };
         if self.heap.object_class(it) != ObjectClass::ArrayIterator || f.as_object().is_none() {
-            return Ok(FastStep::Slow);
+            return Plan::Slow;
         }
         let target = self.heap.object_slot(it, 0);
         let (Some(index), Some(kind)) = (
             self.heap.object_slot(it, 1).as_number(),
             self.heap.object_slot(it, 2).as_int(),
         ) else {
-            return Ok(FastStep::Slow);
+            return Plan::Slow;
         };
         let original = if kind == STRING_KIND {
             STRING_ITERATOR_NEXT
@@ -127,65 +169,40 @@ impl Exec<'_> {
         };
         // Index slots stay below 2^32 for the targets handled here.
         if f != realm::installed_intrinsic(self.heap, original) || index >= u32::MAX as f64 {
-            return Ok(FastStep::Slow);
+            return Plan::Slow;
         }
         if target.is_undefined() {
-            return Ok(FastStep::Done);
+            return Plan::Done(it);
         }
         let i = index as u32;
         if kind == STRING_KIND {
-            let Some(s) = target.as_string() else {
-                return Ok(FastStep::Slow);
+            return match target.as_string() {
+                Some(s) if i >= self.heap.str_len(s) => Plan::Done(it),
+                Some(s) => Plan::Str(it, s, i),
+                None => Plan::Slow,
             };
-            if i >= self.heap.str_len(s) {
-                self.heap.set_object_slot(it, 0, Value::UNDEFINED);
-                return Ok(FastStep::Done);
-            }
-            let s = self.heap.flatten(s)?;
-            let n = match string::code_point_at(self.heap, s, i) {
-                Some(c) if c >= 65536.0 => 2,
-                Some(_) => 1,
-                None => return Ok(FastStep::Slow),
-            };
-            let cp = string::substring(self.heap, s, i, i + n)?;
-            self.heap
-                .set_object_slot(it, 1, conv::number((i + n) as f64));
-            return Ok(FastStep::Value(Value::string(cp)));
         }
         let Some(o) = target.as_object() else {
-            return Ok(FastStep::Slow);
+            return Plan::Slow;
         };
         let len = match self.heap.object_class(o) {
             ObjectClass::Array => self.heap.array_length(o),
             // Detached or out of bounds: the real `next` throws.
             ObjectClass::TypedArray => match self.heap.ta_length(o) {
                 Some(n) => n,
-                None => return Ok(FastStep::Slow),
+                None => return Plan::Slow,
             },
-            _ => return Ok(FastStep::Slow),
+            _ => return Plan::Slow,
         };
         if i >= len {
-            self.heap.set_object_slot(it, 0, Value::UNDEFINED);
-            return Ok(FastStep::Done);
+            return Plan::Done(it);
         }
         // A hole or a non-dense element may reach a getter or the prototype chain, and
         // a BigInt element allocates: the real `next` reads those.
-        let Some(v) = self.heap.get_element_fast(o, i) else {
-            return Ok(FastStep::Slow);
-        };
-        let r = match kind {
-            0 => conv::number(i as f64),
-            1 => v,
-            2 => {
-                let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
-                let pair = [conv::number(i as f64), v];
-                Value::object(self.heap.new_array_from_values(Some(proto), &pair)?)
-            }
-            _ => return Ok(FastStep::Slow),
-        };
-        self.heap
-            .set_object_slot(it, 1, conv::number(i as f64 + 1.0));
-        Ok(FastStep::Value(r))
+        match self.heap.get_element_fast(o, i) {
+            Some(v) if (0..=2).contains(&kind) => Plan::Elem(it, v, i, kind),
+            _ => Plan::Slow,
+        }
     }
 
     /// CreateIterResultObject(undefined, true).
@@ -198,6 +215,16 @@ impl Exec<'_> {
         )?;
         Ok(Value::object(o))
     }
+}
+
+/// [`Exec::iter_plan`]'s answer: the iterator (and what the step reads).
+enum Plan {
+    Slow,
+    Done(Obj),
+    /// A String Iterator at code unit `i` of a string.
+    Str(Obj, Str, u32),
+    /// An Array Iterator of kind 0-2 at index `i`, whose element is the value.
+    Elem(Obj, Value, u32, i32),
 }
 
 /// The outcome of [`Exec::iter_fast_next`].

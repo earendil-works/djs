@@ -27,11 +27,17 @@ function SetConstructor(iterable?: Value): Obj {
   const iterator: Obj = GetIterator(iterable);
   const next: Value = Get(iterator, "next");
   while (true) {
-    const result: Obj = IteratorNextResult(iterator, next);
-    if (ToBoolean(Get(result, "done"))) {
-      return set;
+    // Without a result object where that is unobservable (D1800).
+    let nextValue: Value = undefined;
+    if (IteratorFastReady(iterator, next)) {
+      nextValue = IteratorFastValue(iterator, next);
+    } else {
+      const result: Obj = IteratorNextResult(iterator, next);
+      if (ToBoolean(Get(result, "done"))) {
+        return set;
+      }
+      nextValue = Get(result, "value");
     }
-    const nextValue: Value = Get(result, "value");
     try {
       Call(adder, set, nextValue);
     } catch (e) {

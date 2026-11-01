@@ -85,6 +85,7 @@ impl Default for ExecOptions {
 
 mod bigint;
 mod class;
+mod dense;
 mod ic;
 mod intrinsics;
 mod iter;

@@ -7,16 +7,22 @@ use crate::interp::run::{Exec, Step};
 use crate::interp::run::native::*;
 use crate::value::Value;
 
+const I_ARRAY_CAN_POP_DENSE: u16 = iid("ArrayCanPopDense");
 const I_ARRAY_CREATE: u16 = iid("ArrayCreate");
 const I_ARRAY_ITERATOR_FINISH: u16 = iid("ArrayIteratorFinish");
 const I_ARRAY_ITERATOR_INDEX: u16 = iid("ArrayIteratorIndex");
 const I_ARRAY_ITERATOR_KIND: u16 = iid("ArrayIteratorKind");
 const I_ARRAY_ITERATOR_SET_INDEX: u16 = iid("ArrayIteratorSetIndex");
 const I_ARRAY_ITERATOR_TARGET: u16 = iid("ArrayIteratorTarget");
+const I_ARRAY_JOIN_DENSE: u16 = iid("ArrayJoinDense");
+const I_ARRAY_POP_DENSE: u16 = iid("ArrayPopDense");
+const I_ARRAY_SEARCH_DENSE: u16 = iid("ArraySearchDense");
+const I_ARRAY_SLICE_DENSE: u16 = iid("ArraySliceDense");
 const I_ARRAY_SPECIES_CREATE: u16 = iid("ArraySpeciesCreate");
 const I_AS_BOOL: u16 = iid("AsBool");
 const I_AS_FN: u16 = iid("AsFn");
 const I_AS_NUMBER: u16 = iid("AsNumber");
+const I_AS_STR: u16 = iid("AsStr");
 const I_ASYNC_GENERATOR_STATE: u16 = iid("AsyncGeneratorState");
 const I_ASYNC_GENERATOR_STEP: u16 = iid("AsyncGeneratorStep");
 const I_CALL: u16 = iid("Call");
@@ -59,9 +65,9 @@ const I_WELL_KNOWN_SYMBOL: u16 = iid("WellKnownSymbol");
 pub(crate) static NATIVES: &[NativeFn] = &[
     NativeFn { name: "ArrayPrototypeForEach", params: 2, locals: 4, run: native_ArrayPrototypeForEach, handler: handler_ArrayPrototypeForEach },
     NativeFn { name: "ArrayPrototypeMap", params: 2, locals: 7, run: native_ArrayPrototypeMap, handler: handler_ArrayPrototypeMap },
-    NativeFn { name: "ArrayPrototypeIndexOf", params: 2, locals: 8, run: native_ArrayPrototypeIndexOf, handler: handler_ArrayPrototypeIndexOf },
-    NativeFn { name: "ArrayPrototypeJoin", params: 1, locals: 9, run: native_ArrayPrototypeJoin, handler: handler_ArrayPrototypeJoin },
-    NativeFn { name: "ArrayPrototypeIncludes", params: 2, locals: 8, run: native_ArrayPrototypeIncludes, handler: handler_ArrayPrototypeIncludes },
+    NativeFn { name: "ArrayPrototypeIndexOf", params: 2, locals: 9, run: native_ArrayPrototypeIndexOf, handler: handler_ArrayPrototypeIndexOf },
+    NativeFn { name: "ArrayPrototypeJoin", params: 1, locals: 10, run: native_ArrayPrototypeJoin, handler: handler_ArrayPrototypeJoin },
+    NativeFn { name: "ArrayPrototypeIncludes", params: 2, locals: 9, run: native_ArrayPrototypeIncludes, handler: handler_ArrayPrototypeIncludes },
     NativeFn { name: "ArrayPrototypePush", params: 0, locals: 4, run: native_ArrayPrototypePush, handler: handler_ArrayPrototypePush },
     NativeFn { name: "FindViaPredicate", params: 6, locals: 4, run: native_FindViaPredicate, handler: handler_FindViaPredicate },
     NativeFn { name: "ArrayPrototypeFind", params: 2, locals: 3, run: native_ArrayPrototypeFind, handler: handler_ArrayPrototypeFind },
@@ -278,41 +284,48 @@ fn native_ArrayPrototypeIndexOf(ex: &mut Exec<'_>) -> Step {
                 if (f64_of(ex.n_slot(2)) < 0.0_f64) { ex.n_goto(13); continue; } else { ex.n_goto(12); continue; }
             }
             12 => {
-                let v = num(f64_of(ex.n_slot(2))); ex.n_set_slot(7, v);
-                ex.n_goto(14); continue;
+                let v = num(f64_of({ let a0 = ex.n_slot(0); let a1 = ex.n_arg(0); let a2 = ex.n_slot(2); let a3 = ex.n_slot(1); let a4 = Value::int(0); ex.n_leaf(I_ARRAY_SEARCH_DENSE, &[a0, a1, a2, a3, a4])? })); ex.n_set_slot(7, v);
+                if (f64_of(ex.n_slot(7)) != (-2.0_f64)) { ex.n_goto(14); continue; } else { ex.n_goto(15); continue; }
             }
             13 => {
                 let v = num(0.0_f64); ex.n_set_slot(2, v);
                 ex.n_goto(12); continue;
             }
             14 => {
-                if (f64_of(ex.n_slot(7)) < f64_of(ex.n_slot(1))) { ex.n_goto(15); continue; } else { ex.n_goto(17); continue; }
+                let v = num(f64_of(ex.n_slot(7))); return ex.n_ret(v);
             }
             15 => {
-                // resume point: HasProperty
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(7); ex.n_has_property(&[a0, a1], 18) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+                let v = num(f64_of(ex.n_slot(2))); ex.n_set_slot(8, v);
+                ex.n_goto(16); continue;
             }
             16 => {
-                let v = num((f64_of(ex.n_slot(7)) + 1.0_f64)); ex.n_set_slot(7, v);
-                if ex.n_backedge(14) { return Ok(None); } continue;
+                if (f64_of(ex.n_slot(8)) < f64_of(ex.n_slot(1))) { ex.n_goto(17); continue; } else { ex.n_goto(19); continue; }
             }
             17 => {
-                let v = num((-1.0_f64)); return ex.n_ret(v);
+                // resume point: HasProperty
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(8); ex.n_has_property(&[a0, a1], 20) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
             }
             18 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                if bool_of(ex.n_slot(3)) { ex.n_goto(19); continue; } else { ex.n_goto(16); continue; }
+                let v = num((f64_of(ex.n_slot(8)) + 1.0_f64)); ex.n_set_slot(8, v);
+                if ex.n_backedge(16) { return Ok(None); } continue;
             }
             19 => {
-                // resume point: Get
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(7); ex.n_get(&[a0, a1], 20) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+                let v = num((-1.0_f64)); return ex.n_ret(v);
             }
             20 => {
                 let r = ex.n_result(); ex.n_set_slot(3, r);
-                if { let a0 = ex.n_slot(3); let a1 = ex.n_arg(0); ex.n_strict_eq(a0, a1) } { ex.n_goto(21); continue; } else { ex.n_goto(16); continue; }
+                if bool_of(ex.n_slot(3)) { ex.n_goto(21); continue; } else { ex.n_goto(18); continue; }
             }
             21 => {
-                let v = num(f64_of(ex.n_slot(7))); return ex.n_ret(v);
+                // resume point: Get
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(8); ex.n_get(&[a0, a1], 22) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            22 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                if { let a0 = ex.n_slot(3); let a1 = ex.n_arg(0); ex.n_strict_eq(a0, a1) } { ex.n_goto(23); continue; } else { ex.n_goto(18); continue; }
+            }
+            23 => {
+                let v = num(f64_of(ex.n_slot(8))); return ex.n_ret(v);
             }
             _ => return Err(bad_state()),
         }
@@ -324,7 +337,7 @@ fn handler_ArrayPrototypeIndexOf(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:107 (Array.prototype.join)
+// builtins/array.ts:111 (Array.prototype.join)
 fn native_ArrayPrototypeJoin(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -344,9 +357,8 @@ fn native_ArrayPrototypeJoin(ex: &mut Exec<'_>) -> Step {
                 if { let a0 = ex.n_slot(3); a0.as_object().is_some() } { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
             }
             3 => {
-                let v = ex.n_str("")?; ex.n_set_slot(5, v);
-                let v = num(0.0_f64); ex.n_set_slot(6, v);
-                ex.n_goto(7); continue;
+                let v = { let a0 = ex.n_slot(0); let a1 = ex.n_slot(1); let a2 = ex.n_slot(2); ex.n_leaf(I_ARRAY_JOIN_DENSE, &[a0, a1, a2])? }; ex.n_set_slot(5, v);
+                if !ex.n_slot(5).is_undefined() { ex.n_goto(7); continue; } else { ex.n_goto(8); continue; }
             }
             4 => {
                 // resume point: ToPrimitive
@@ -362,51 +374,59 @@ fn native_ArrayPrototypeJoin(ex: &mut Exec<'_>) -> Step {
                 ex.n_goto(3); continue;
             }
             7 => {
-                if (f64_of(ex.n_slot(6)) < f64_of(ex.n_slot(1))) { ex.n_goto(8); continue; } else { ex.n_goto(10); continue; }
+                let v = { let a0 = ex.n_slot(5); ex.n_leaf(I_AS_STR, &[a0])? }; return ex.n_ret(v);
             }
             8 => {
-                if (f64_of(ex.n_slot(6)) > 0.0_f64) { ex.n_goto(11); continue; } else { ex.n_goto(12); continue; }
-            }
-            9 => {
-                let v = num((f64_of(ex.n_slot(6)) + 1.0_f64)); ex.n_set_slot(6, v);
-                if ex.n_backedge(7) { return Ok(None); } continue;
-            }
-            10 => {
-                let v = ex.n_slot(5); return ex.n_ret(v);
-            }
-            11 => {
-                let v = { let a0 = ex.n_slot(5); let a1 = ex.n_slot(2); ex.n_concat(a0, a1)? }; ex.n_set_slot(5, v);
-                ex.n_goto(12); continue;
-            }
-            12 => {
-                // resume point: Get
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(6); ex.n_get(&[a0, a1], 13) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            13 => {
-                let r = ex.n_result(); ex.n_set_slot(7, r);
-                if (!ex.n_slot(7).is_undefined() && !ex.n_slot(7).is_null()) { ex.n_goto(14); continue; } else { ex.n_goto(9); continue; }
-            }
-            14 => {
-                // inlined: ToString
-                let v = ex.n_slot(7); ex.n_set_slot(4, v);
-                if { let a0 = ex.n_slot(4); a0.as_object().is_some() } { ex.n_goto(16); continue; } else { ex.n_goto(17); continue; }
-            }
-            15 => {
-                let v = { let a0 = ex.n_slot(5); let a1 = ex.n_slot(3); ex.n_concat(a0, a1)? }; ex.n_set_slot(5, v);
+                let v = ex.n_str("")?; ex.n_set_slot(6, v);
+                let v = num(0.0_f64); ex.n_set_slot(7, v);
                 ex.n_goto(9); continue;
             }
+            9 => {
+                if (f64_of(ex.n_slot(7)) < f64_of(ex.n_slot(1))) { ex.n_goto(10); continue; } else { ex.n_goto(12); continue; }
+            }
+            10 => {
+                if (f64_of(ex.n_slot(7)) > 0.0_f64) { ex.n_goto(13); continue; } else { ex.n_goto(14); continue; }
+            }
+            11 => {
+                let v = num((f64_of(ex.n_slot(7)) + 1.0_f64)); ex.n_set_slot(7, v);
+                if ex.n_backedge(9) { return Ok(None); } continue;
+            }
+            12 => {
+                let v = ex.n_slot(6); return ex.n_ret(v);
+            }
+            13 => {
+                let v = { let a0 = ex.n_slot(6); let a1 = ex.n_slot(2); ex.n_concat(a0, a1)? }; ex.n_set_slot(6, v);
+                ex.n_goto(14); continue;
+            }
+            14 => {
+                // resume point: Get
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(7); ex.n_get(&[a0, a1], 15) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            15 => {
+                let r = ex.n_result(); ex.n_set_slot(8, r);
+                if (!ex.n_slot(8).is_undefined() && !ex.n_slot(8).is_null()) { ex.n_goto(16); continue; } else { ex.n_goto(11); continue; }
+            }
             16 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(4); let a1 = ex.n_str("string")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 18) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+                // inlined: ToString
+                let v = ex.n_slot(8); ex.n_set_slot(4, v);
+                if { let a0 = ex.n_slot(4); a0.as_object().is_some() } { ex.n_goto(18); continue; } else { ex.n_goto(19); continue; }
             }
             17 => {
-                let v = { let a0 = ex.n_slot(4); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(3, v);
-                ex.n_goto(15); continue;
+                let v = { let a0 = ex.n_slot(6); let a1 = ex.n_slot(3); ex.n_concat(a0, a1)? }; ex.n_set_slot(6, v);
+                ex.n_goto(11); continue;
             }
             18 => {
-                let r = ex.n_result(); ex.n_set_slot(8, r);
-                let v = { let a0 = ex.n_slot(8); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(3, v);
-                ex.n_goto(15); continue;
+                // resume point: ToPrimitive
+                match { let a0 = ex.n_slot(4); let a1 = ex.n_str("string")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 20) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            19 => {
+                let v = { let a0 = ex.n_slot(4); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(3, v);
+                ex.n_goto(17); continue;
+            }
+            20 => {
+                let r = ex.n_result(); ex.n_set_slot(9, r);
+                let v = { let a0 = ex.n_slot(9); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(3, v);
+                ex.n_goto(17); continue;
             }
             _ => return Err(bad_state()),
         }
@@ -418,7 +438,7 @@ fn handler_ArrayPrototypeJoin(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:143 (Array.prototype.includes)
+// builtins/array.ts:151 (Array.prototype.includes)
 fn native_ArrayPrototypeIncludes(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -466,32 +486,39 @@ fn native_ArrayPrototypeIncludes(ex: &mut Exec<'_>) -> Step {
                 if (f64_of(ex.n_slot(2)) < 0.0_f64) { ex.n_goto(11); continue; } else { ex.n_goto(10); continue; }
             }
             10 => {
-                let v = num(f64_of(ex.n_slot(2))); ex.n_set_slot(7, v);
-                ex.n_goto(12); continue;
+                let v = num(f64_of({ let a0 = ex.n_slot(0); let a1 = ex.n_arg(0); let a2 = ex.n_slot(2); let a3 = ex.n_slot(1); let a4 = Value::int(2); ex.n_leaf(I_ARRAY_SEARCH_DENSE, &[a0, a1, a2, a3, a4])? })); ex.n_set_slot(7, v);
+                if (f64_of(ex.n_slot(7)) != (-2.0_f64)) { ex.n_goto(12); continue; } else { ex.n_goto(13); continue; }
             }
             11 => {
                 let v = num(0.0_f64); ex.n_set_slot(2, v);
                 ex.n_goto(10); continue;
             }
             12 => {
-                if (f64_of(ex.n_slot(7)) < f64_of(ex.n_slot(1))) { ex.n_goto(13); continue; } else { ex.n_goto(15); continue; }
+                let v = Value::bool((f64_of(ex.n_slot(7)) != (-1.0_f64))); return ex.n_ret(v);
             }
             13 => {
-                // resume point: Get
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(7); ex.n_get(&[a0, a1], 16) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+                let v = num(f64_of(ex.n_slot(2))); ex.n_set_slot(8, v);
+                ex.n_goto(14); continue;
             }
             14 => {
-                let v = num((f64_of(ex.n_slot(7)) + 1.0_f64)); ex.n_set_slot(7, v);
-                if ex.n_backedge(12) { return Ok(None); } continue;
+                if (f64_of(ex.n_slot(8)) < f64_of(ex.n_slot(1))) { ex.n_goto(15); continue; } else { ex.n_goto(17); continue; }
             }
             15 => {
-                let v = Value::bool(false); return ex.n_ret(v);
+                // resume point: Get
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(8); ex.n_get(&[a0, a1], 18) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
             }
             16 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                if { let a0 = ex.n_slot(3); let a1 = ex.n_arg(0); leaf_SameValueZero(ex, a0, a1)? } { ex.n_goto(17); continue; } else { ex.n_goto(14); continue; }
+                let v = num((f64_of(ex.n_slot(8)) + 1.0_f64)); ex.n_set_slot(8, v);
+                if ex.n_backedge(14) { return Ok(None); } continue;
             }
             17 => {
+                let v = Value::bool(false); return ex.n_ret(v);
+            }
+            18 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                if { let a0 = ex.n_slot(3); let a1 = ex.n_arg(0); leaf_SameValueZero(ex, a0, a1)? } { ex.n_goto(19); continue; } else { ex.n_goto(16); continue; }
+            }
+            19 => {
                 let v = Value::bool(true); return ex.n_ret(v);
             }
             _ => return Err(bad_state()),
@@ -504,7 +531,7 @@ fn handler_ArrayPrototypeIncludes(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:206 (Array.prototype.push)
+// builtins/array.ts:218 (Array.prototype.push)
 fn native_ArrayPrototypePush(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -559,7 +586,7 @@ fn handler_ArrayPrototypePush(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:378
+// builtins/array.ts:394
 fn native_FindViaPredicate(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -611,7 +638,7 @@ fn handler_FindViaPredicate(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:398 (Array.prototype.find)
+// builtins/array.ts:414 (Array.prototype.find)
 fn native_ArrayPrototypeFind(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -639,7 +666,7 @@ fn handler_ArrayPrototypeFind(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:408 (Array.prototype.findIndex)
+// builtins/array.ts:424 (Array.prototype.findIndex)
 fn native_ArrayPrototypeFindIndex(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -667,7 +694,7 @@ fn handler_ArrayPrototypeFindIndex(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:436
+// builtins/array.ts:452
 fn native_EveryOrSome(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -726,7 +753,7 @@ fn handler_EveryOrSome(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:455 (Array.prototype.every)
+// builtins/array.ts:471 (Array.prototype.every)
 fn native_ArrayPrototypeEvery(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -748,7 +775,7 @@ fn handler_ArrayPrototypeEvery(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:464 (Array.prototype.some)
+// builtins/array.ts:480 (Array.prototype.some)
 fn native_ArrayPrototypeSome(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -770,7 +797,7 @@ fn handler_ArrayPrototypeSome(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:473 (Array.prototype.filter)
+// builtins/array.ts:489 (Array.prototype.filter)
 fn native_ArrayPrototypeFilter(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -841,7 +868,7 @@ fn handler_ArrayPrototypeFilter(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:496
+// builtins/array.ts:512
 fn native_Reduce(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -946,7 +973,7 @@ fn handler_Reduce(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:532 (Array.prototype.reduce)
+// builtins/array.ts:548 (Array.prototype.reduce)
 fn native_ArrayPrototypeReduce(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -969,7 +996,7 @@ fn handler_ArrayPrototypeReduce(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:542 (Array.prototype.reduceRight)
+// builtins/array.ts:558 (Array.prototype.reduceRight)
 fn native_ArrayPrototypeReduceRight(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -992,7 +1019,7 @@ fn handler_ArrayPrototypeReduceRight(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:597 (Array.prototype.slice)
+// builtins/array.ts:613 (Array.prototype.slice)
 fn native_ArrayPrototypeSlice(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1103,47 +1130,58 @@ fn native_ArrayPrototypeSlice(ex: &mut Exec<'_>) -> Step {
             }
             22 => {
                 let r = ex.n_result(); ex.n_set_slot(13, r);
-                let v = num(0.0_f64); ex.n_set_slot(14, v);
-                let v = num(f64_of(ex.n_slot(2))); ex.n_set_slot(15, v);
-                ex.n_goto(23); continue;
+                if bool_of({ let a0 = ex.n_slot(0); let a1 = ex.n_slot(2); let a2 = ex.n_slot(11); let a3 = ex.n_slot(13); ex.n_leaf(I_ARRAY_SLICE_DENSE, &[a0, a1, a2, a3])? }) { ex.n_goto(23); continue; } else { ex.n_goto(24); continue; }
             }
             23 => {
-                if (f64_of(ex.n_slot(15)) < f64_of(ex.n_slot(11))) { ex.n_goto(24); continue; } else { ex.n_goto(26); continue; }
+                // resume point: Set
+                match { let a0 = ex.n_slot(13); let a1 = ex.n_str("length")?; let a2 = ex.n_slot(12); ex.n_set(&[a0, a1, a2], 25) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
             }
             24 => {
-                // resume point: HasProperty
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(15); ex.n_has_property(&[a0, a1], 27) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+                let v = num(0.0_f64); ex.n_set_slot(14, v);
+                let v = num(f64_of(ex.n_slot(2))); ex.n_set_slot(15, v);
+                ex.n_goto(26); continue;
             }
             25 => {
-                let v = num((f64_of(ex.n_slot(15)) + 1.0_f64)); ex.n_set_slot(15, v);
-                if ex.n_backedge(23) { return Ok(None); } continue;
+                ex.n_result();
+                let v = ex.n_slot(13); return ex.n_ret(v);
             }
             26 => {
-                // resume point: Set
-                match { let a0 = ex.n_slot(13); let a1 = ex.n_str("length")?; let a2 = ex.n_slot(14); ex.n_set(&[a0, a1, a2], 32) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+                if (f64_of(ex.n_slot(15)) < f64_of(ex.n_slot(11))) { ex.n_goto(27); continue; } else { ex.n_goto(29); continue; }
             }
             27 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                if bool_of(ex.n_slot(3)) { ex.n_goto(28); continue; } else { ex.n_goto(29); continue; }
+                // resume point: HasProperty
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(15); ex.n_has_property(&[a0, a1], 30) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
             }
             28 => {
-                // resume point: Get
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(15); ex.n_get(&[a0, a1], 30) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+                let v = num((f64_of(ex.n_slot(15)) + 1.0_f64)); ex.n_set_slot(15, v);
+                if ex.n_backedge(26) { return Ok(None); } continue;
             }
             29 => {
-                let v = num((f64_of(ex.n_slot(14)) + 1.0_f64)); ex.n_set_slot(14, v);
-                ex.n_goto(25); continue;
+                // resume point: Set
+                match { let a0 = ex.n_slot(13); let a1 = ex.n_str("length")?; let a2 = ex.n_slot(14); ex.n_set(&[a0, a1, a2], 35) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
             }
             30 => {
                 let r = ex.n_result(); ex.n_set_slot(3, r);
-                // resume point: CreateDataPropertyOrThrow
-                match { let a0 = ex.n_slot(13); let a1 = ex.n_slot(14); let a2 = ex.n_slot(3); ex.n_create_data_property_or_throw(&[a0, a1, a2], 31) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+                if bool_of(ex.n_slot(3)) { ex.n_goto(31); continue; } else { ex.n_goto(32); continue; }
             }
             31 => {
-                ex.n_result();
-                ex.n_goto(29); continue;
+                // resume point: Get
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(15); ex.n_get(&[a0, a1], 33) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
             }
             32 => {
+                let v = num((f64_of(ex.n_slot(14)) + 1.0_f64)); ex.n_set_slot(14, v);
+                ex.n_goto(28); continue;
+            }
+            33 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                // resume point: CreateDataPropertyOrThrow
+                match { let a0 = ex.n_slot(13); let a1 = ex.n_slot(14); let a2 = ex.n_slot(3); ex.n_create_data_property_or_throw(&[a0, a1, a2], 34) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            34 => {
+                ex.n_result();
+                ex.n_goto(32); continue;
+            }
+            35 => {
                 ex.n_result();
                 let v = ex.n_slot(13); return ex.n_ret(v);
             }
@@ -1157,43 +1195,49 @@ fn handler_ArrayPrototypeSlice(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:774 (Array.prototype.pop)
+// builtins/array.ts:794 (Array.prototype.pop)
 fn native_ArrayPrototypePop(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
             0 => {
                 let v = { let a0 = ex.n_this(); ex.n_to_object(a0)? }; ex.n_set_slot(0, v);
-                // resume point: LengthOfArrayLike
-                match { let a0 = ex.n_slot(0); ex.n_length_of_array_like(&[a0], 1) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+                if bool_of({ let a0 = ex.n_slot(0); ex.n_leaf(I_ARRAY_CAN_POP_DENSE, &[a0])? }) { ex.n_goto(1); continue; } else { ex.n_goto(2); continue; }
             }
             1 => {
-                let r = ex.n_result(); ex.n_set_slot(1, r);
-                if (f64_of(ex.n_slot(1)) == 0.0_f64) { ex.n_goto(2); continue; } else { ex.n_goto(3); continue; }
+                let v = { let a0 = ex.n_slot(0); ex.n_leaf(I_ARRAY_POP_DENSE, &[a0])? }; return ex.n_ret(v);
             }
             2 => {
-                // resume point: Set
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_str("length")?; let a2 = Value::int(0); ex.n_set(&[a0, a1, a2], 4) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+                // resume point: LengthOfArrayLike
+                match { let a0 = ex.n_slot(0); ex.n_length_of_array_like(&[a0], 3) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
             }
             3 => {
-                let v = num((f64_of(ex.n_slot(1)) - 1.0_f64)); ex.n_set_slot(2, v);
-                // resume point: Get
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(2); ex.n_get(&[a0, a1], 5) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+                let r = ex.n_result(); ex.n_set_slot(1, r);
+                if (f64_of(ex.n_slot(1)) == 0.0_f64) { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
             }
             4 => {
-                ex.n_result();
-                let v = Value::UNDEFINED; return ex.n_ret(v);
+                // resume point: Set
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_str("length")?; let a2 = Value::int(0); ex.n_set(&[a0, a1, a2], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
             }
             5 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                // resume point: DeletePropertyOrThrow
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(2); ex.n_call(I_DELETE_PROPERTY_OR_THROW, &[a0, a1], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+                let v = num((f64_of(ex.n_slot(1)) - 1.0_f64)); ex.n_set_slot(2, v);
+                // resume point: Get
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(2); ex.n_get(&[a0, a1], 7) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
             }
             6 => {
                 ex.n_result();
-                // resume point: Set
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_str("length")?; let a2 = ex.n_slot(2); ex.n_set(&[a0, a1, a2], 7) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+                let v = Value::UNDEFINED; return ex.n_ret(v);
             }
             7 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                // resume point: DeletePropertyOrThrow
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(2); ex.n_call(I_DELETE_PROPERTY_OR_THROW, &[a0, a1], 8) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            8 => {
+                ex.n_result();
+                // resume point: Set
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_str("length")?; let a2 = ex.n_slot(2); ex.n_set(&[a0, a1, a2], 9) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            9 => {
                 ex.n_result();
                 let v = ex.n_slot(3); return ex.n_ret(v);
             }
@@ -1207,7 +1251,7 @@ fn handler_ArrayPrototypePop(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:887
+// builtins/array.ts:910
 fn native_SortList(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1512,7 +1556,7 @@ fn handler_SortList(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:964
+// builtins/array.ts:987
 fn native_CollectPresent(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1572,7 +1616,7 @@ fn handler_CollectPresent(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:981 (Array.prototype.sort)
+// builtins/array.ts:1004 (Array.prototype.sort)
 fn native_ArrayPrototypeSort(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1659,7 +1703,7 @@ fn handler_ArrayPrototypeSort(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:1005 (Array.prototype.toSorted)
+// builtins/array.ts:1028 (Array.prototype.toSorted)
 fn native_ArrayPrototypeToSorted(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1738,7 +1782,7 @@ fn handler_GetIterator(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/iter.ts:110 (%ArrayIteratorPrototype%.next)
+// builtins/iter.ts:115 (%ArrayIteratorPrototype%.next)
 fn native_ArrayIteratorPrototypeNext(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -2718,7 +2762,7 @@ fn handler_StringPrototypeSubstring(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:255 (leaf)
+// builtins/array.ts:267 (leaf)
 fn leaf_ArrayCreateChecked(ex: &mut Exec<'_>, mut l_len: f64) -> Result<Value, Fault> {
     if (l_len > 4294967295.0_f64) {
         return Err(Fault::throw({ let a0 = ex.n_str("invalid array length")?; ex.n_leaf(I_NEW_RANGE_ERROR, &[a0])? }));
@@ -2752,7 +2796,7 @@ fn leaf_RejectWithData(ex: &mut Exec<'_>, mut l_data: Value, mut l_reason: Value
     Ok(())
 }
 
-// builtins/array.ts:240 (leaf)
+// builtins/array.ts:252 (leaf)
 fn leaf_RequireCallable(ex: &mut Exec<'_>, mut l_f: Value) -> Result<Value, Fault> {
     if (!{ let a0 = l_f; ex.n_is_callable(a0) }) {
         return Err(Fault::throw({ let a0 = ex.n_str("not a function")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }));
@@ -2762,7 +2806,7 @@ fn leaf_RequireCallable(ex: &mut Exec<'_>, mut l_f: Value) -> Result<Value, Faul
     Err(bad_state())
 }
 
-// builtins/array.ts:128 (leaf)
+// builtins/array.ts:136 (leaf)
 fn leaf_SameValueZero(ex: &mut Exec<'_>, mut l_x: Value, mut l_y: Value) -> Result<bool, Fault> {
     if ({ let a0 = l_x; a0.is_number() } && { let a0 = l_y; a0.is_number() }) {
         let mut l_a: f64 = f64_of({ let a0 = l_x; ex.n_leaf(I_AS_NUMBER, &[a0])? });

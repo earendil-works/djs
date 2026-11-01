@@ -89,6 +89,10 @@ function ArrayPrototypeIndexOf(this: Value, searchElement: Value, fromIndex?: Va
       n = 0;
     }
   }
+  const found: f64 = ArraySearchDense(o, searchElement, n, len, 0);
+  if (found !== -2) {
+    return found;
+  }
   for (let k: f64 = n; k < len; k++) {
     if (HasProperty(o, k)) {
       if (Get(o, k) === searchElement) {
@@ -110,6 +114,10 @@ function ArrayPrototypeJoin(this: Value, separator: Value): Str {
   let sep: Str = ",";
   if (separator !== undefined) {
     sep = ToString(separator);
+  }
+  const dense: Value = ArrayJoinDense(o, len, sep);
+  if (dense !== undefined) {
+    return AsStr(dense);
   }
   let r: Str = "";
   for (let k: f64 = 0; k < len; k++) {
@@ -152,6 +160,10 @@ function ArrayPrototypeIncludes(this: Value, searchElement: Value, fromIndex?: V
     if (n < 0) {
       n = 0;
     }
+  }
+  const found: f64 = ArraySearchDense(o, searchElement, n, len, 2);
+  if (found !== -2) {
+    return found !== -1;
   }
   for (let k: f64 = n; k < len; k++) {
     if (SameValueZero(Get(o, k), searchElement)) {
@@ -358,6 +370,10 @@ function ArrayPrototypeLastIndexOf(this: Value, searchElement: Value, ...rest: V
     k = n < len - 1 ? n : len - 1;
   } else {
     k = len + n;
+  }
+  const found: f64 = ArraySearchDense(o, searchElement, k, len, 1);
+  if (found !== -2) {
+    return found;
   }
   for (; k >= 0; k--) {
     if (HasProperty(o, k)) {
@@ -601,6 +617,10 @@ function ArrayPrototypeSlice(this: Value, start: Value, end: Value): Obj {
   const fin: f64 = RelativeIndex(end, len, len);
   const count: f64 = fin > k ? fin - k : 0;
   const a: Obj = ArraySpeciesCreate(o, count);
+  if (ArraySliceDense(o, k, fin, a)) {
+    Set(a, "length", count);
+    return a;
+  }
   let n: f64 = 0;
   for (let i: f64 = k; i < fin; i++) {
     if (HasProperty(o, i)) {
@@ -773,6 +793,9 @@ function ArrayPrototypeReverse(this: Value): Obj {
  */
 function ArrayPrototypePop(this: Value): Value {
   const o: Obj = ToObject(this);
+  if (ArrayCanPopDense(o)) {
+    return ArrayPopDense(o);
+  }
   const len: f64 = LengthOfArrayLike(o);
   if (len === 0) {
     Set(o, "length", 0);

@@ -245,6 +245,13 @@ const STR_FROM_CODE_POINTS: u16 = id("StrFromCodePoints");
 const STR_NORMALIZE: u16 = id("StrNormalize");
 
 const ARRAY_SPLICE_DENSE: u16 = id("ArraySpliceDense");
+const ARRAY_CAN_POP_DENSE: u16 = id("ArrayCanPopDense");
+const ARRAY_POP_DENSE: u16 = id("ArrayPopDense");
+const ARRAY_SEARCH_DENSE: u16 = id("ArraySearchDense");
+const ARRAY_SLICE_DENSE: u16 = id("ArraySliceDense");
+const ARRAY_JOIN_DENSE: u16 = id("ArrayJoinDense");
+const ITERATOR_FAST_READY: u16 = id("IteratorFastReady");
+const ITERATOR_FAST_VALUE: u16 = id("IteratorFastValue");
 const INSTALL_CONSTRUCTOR: u16 = id("InstallConstructor");
 const INSTALL_ACCESSOR: u16 = id("InstallAccessor");
 const INSTALL_VALUE: u16 = id("InstallValue");
@@ -998,6 +1005,51 @@ impl Exec<'_> {
             STRING_CODE_POINTS => match a0.as_string() {
                 Some(s) => Value::object(string::code_points(self.heap, s)?),
                 None => return bad_argument(info.name),
+            },
+            ARRAY_CAN_POP_DENSE => Value::bool(
+                a0.as_object()
+                    .is_some_and(|o| self.heap.array_can_pop_dense(o)),
+            ),
+            ARRAY_POP_DENSE => match a0.as_object().and_then(|o| self.heap.array_pop_dense(o)) {
+                Some(v) => v,
+                None => return bad_argument(info.name),
+            },
+            ARRAY_SEARCH_DENSE => {
+                let (Some(o), Some(from), Some(len), Some(mode)) = (
+                    a0.as_object(),
+                    arg(self, 2).as_number(),
+                    arg(self, 3).as_number(),
+                    arg(self, 4).as_int(),
+                ) else {
+                    return bad_argument(info.name);
+                };
+                conv::number(self.array_search_dense(o, arg(self, 1), from, len, mode))
+            }
+            ARRAY_SLICE_DENSE => {
+                let (Some(o), Some(k), Some(fin), Some(a)) = (
+                    a0.as_object(),
+                    arg(self, 1).as_number(),
+                    arg(self, 2).as_number(),
+                    arg(self, 3).as_object(),
+                ) else {
+                    return bad_argument(info.name);
+                };
+                Value::bool(self.array_slice_dense(o, k, fin, a)?)
+            }
+            ARRAY_JOIN_DENSE => {
+                let (Some(o), Some(len), Some(sep)) = (
+                    a0.as_object(),
+                    arg(self, 1).as_number(),
+                    arg(self, 2).as_string(),
+                ) else {
+                    return bad_argument(info.name);
+                };
+                self.array_join_dense(o, len, sep)?
+            }
+            ITERATOR_FAST_READY => Value::bool(self.iter_fast_ready(a0, arg(self, 1))),
+            ITERATOR_FAST_VALUE => match self.iter_fast_next(a0, arg(self, 1))? {
+                super::iter::FastStep::Value(v) => v,
+                _ => return bad_argument(info.name),
             },
             ARRAY_SPLICE_DENSE => {
                 let Some(o) = a0.as_object() else {

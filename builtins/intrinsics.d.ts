@@ -418,6 +418,36 @@ declare function SortPrimitives(list: Obj): boolean;
  * follows. False, with nothing changed, for any other object. @leaf
  */
 declare function ArraySpliceDense(o: Obj, start: f64, deleteCount: f64, itemCount: f64): boolean;
+/**
+ * Whether `ArrayPopDense(o)` applies: an Array with only dense elements, a writable
+ * length, its last element present and no index properties on its prototype chain,
+ * where pop's Get, DeletePropertyOrThrow and Set observe nothing else (0080). @leaf
+ */
+declare function ArrayCanPopDense(o: Obj): boolean;
+/** Array.prototype.pop of an array `ArrayCanPopDense` accepts. @leaf */
+declare function ArrayPopDense(o: Obj): Value;
+/**
+ * The search loops of indexOf (mode 0: `from` up to len, strict equality), lastIndexOf
+ * (1: `from` down to 0) and includes (2: up to len, SameValueZero) over an Array whose
+ * elements in the range are all present in dense storage, where HasProperty and Get
+ * observe nothing: the index found or -1. -2, for the general loop, for anything else
+ * (a hole, a shorter array, another object). @leaf
+ */
+declare function ArraySearchDense(o: Obj, search: Value, from: f64, len: f64, mode: i32): f64;
+/**
+ * slice's copy loop: `a[0 .. fin - k) = o[k .. fin)` when every element of `o` in the
+ * range is present in dense storage and `a` is an extensible Array without index
+ * properties (a fresh ArraySpeciesCreate result), so HasProperty, Get and
+ * CreateDataPropertyOrThrow observe nothing. False, with nothing changed, otherwise.
+ * @leaf
+ */
+declare function ArraySliceDense(o: Obj, k: f64, fin: f64, a: Obj): boolean;
+/**
+ * join over o[0 .. len) when every element is present in dense storage and a primitive
+ * other than a symbol (ToString runs no user code): the string, or undefined for the
+ * general loop. @leaf
+ */
+declare function ArrayJoinDense(o: Obj, len: f64, sep: Str): Value;
 // ---- Strings (0034): leaves on the heap representation -------------------------------
 
 /**
@@ -622,6 +652,14 @@ declare function StrCodePointString(s: Str, i: f64): Str;
  * directly. @leaf
  */
 declare function HasOriginalIteration(v: Value): boolean;
+/**
+ * Whether the next step of `iterator` with `next` gives a value without running user
+ * code: `next` is the original one of an Array or String Iterator and the value is at
+ * hand (D1800). Then `IteratorFastValue` returns it; otherwise call `next`. @leaf
+ */
+declare function IteratorFastReady(iterator: Obj, next: Value): boolean;
+/** The next value of an iterator `IteratorFastReady` accepts (it advances). @leaf */
+declare function IteratorFastValue(iterator: Obj, next: Value): Value;
 /** CreateIterResultObject ( value, done ), 7.4.14. @leaf */
 declare function CreateIterResultObject(value: Value, done: boolean): Obj;
 /** A new Array [a, b]. @leaf */

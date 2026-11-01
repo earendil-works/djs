@@ -1533,6 +1533,48 @@ impl Heap {
         (ok, stop)
     }
 
+    /// Array.prototype.pop's moves in one step (0080): for an Array with only dense
+    /// elements (no index properties in the table, so none is non-configurable, as in a
+    /// frozen array), a writable `length`, its last element present in dense storage and
+    /// no index properties on its prototype chain, removes that element, shrinks
+    /// `length` by one and returns the element. There `Get`, `DeletePropertyOrThrow` and
+    /// `Set(length)` observe nothing else. `None`, with nothing changed, otherwise.
+    pub fn array_pop_dense(&mut self, o: Obj) -> Option<Value> {
+        if !self.array_can_pop_dense(o) {
+            return None;
+        }
+        let len = self.array_length(o);
+        let el = self.elements(o);
+        let v = self.value_array_get(el, len - 1);
+        // As `truncate_elements`: the slots past the length are zero.
+        let at = ValueArray::VALUES.at(el, len - 1);
+        self.arena_mut().zero(at, 8);
+        self.arena_mut().set(el, ValueArray::LEN, len - 1);
+        self.set_array_length_raw(o, len - 1);
+        Some(v)
+    }
+
+    /// Whether [`Heap::array_pop_dense`] applies to `o`.
+    pub fn array_can_pop_dense(&self, o: Obj) -> bool {
+        if self.object_class(o) != ObjectClass::Array
+            || self.obj_flags(o) & (OBJ_INDEXED_PROPS | OBJ_LENGTH_READONLY) != 0
+        {
+            return false;
+        }
+        let len = self.array_length(o);
+        if len == 0 || self.dense_len(o) != len {
+            return false;
+        }
+        let mut p = self.get_prototype_of(o);
+        while let Some(q) = p {
+            if self.dense_len(q) != 0 || self.obj_flags(q) & OBJ_INDEXED_PROPS != 0 {
+                return false;
+            }
+            p = self.get_prototype_of(q);
+        }
+        !self.value_array_get(self.elements(o), len - 1).is_hole()
+    }
+
     /// `[[Delete]]`: `false` if the property is non-configurable.
     pub fn delete_own_property(&mut self, o: Obj, key: Atom) -> bool {
         if self.object_class(o) == ObjectClass::TypedArray

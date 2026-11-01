@@ -29,11 +29,16 @@ function IterableToList(items: Value): Obj {
   const list: Obj = ArrayCreate(0);
   let n: f64 = 0;
   while (true) {
-    const result: Obj = IteratorNextResult(iterator, next);
-    if (ToBoolean(Get(result, "done"))) {
-      return list;
+    // Without a result object where that is unobservable (D1800).
+    if (IteratorFastReady(iterator, next)) {
+      CreateDataPropertyOrThrow(list, n, IteratorFastValue(iterator, next));
+    } else {
+      const result: Obj = IteratorNextResult(iterator, next);
+      if (ToBoolean(Get(result, "done"))) {
+        return list;
+      }
+      CreateDataPropertyOrThrow(list, n, Get(result, "value"));
     }
-    CreateDataPropertyOrThrow(list, n, Get(result, "value"));
     n++;
   }
 }
@@ -52,12 +57,18 @@ function ArrayFromIterator(a: Obj, items: Value, method: Value, mapfn: Value, th
       IteratorCloseThrow(iterator);
       throw error;
     }
-    const result: Obj = IteratorNextResult(iterator, next);
-    if (ToBoolean(Get(result, "done"))) {
-      Set(a, "length", k);
-      return a;
+    // Without a result object where that is unobservable (D1800).
+    let nextValue: Value = undefined;
+    if (IteratorFastReady(iterator, next)) {
+      nextValue = IteratorFastValue(iterator, next);
+    } else {
+      const result: Obj = IteratorNextResult(iterator, next);
+      if (ToBoolean(Get(result, "done"))) {
+        Set(a, "length", k);
+        return a;
+      }
+      nextValue = Get(result, "value");
     }
-    const nextValue: Value = Get(result, "value");
     try {
       const mappedValue: Value = mapfn === undefined ? nextValue : Call(mapfn, thisArg, nextValue, k);
       CreateDataPropertyOrThrow(a, k, mappedValue);
@@ -80,11 +91,17 @@ function ObjectFromEntries(iterable: Value): Obj {
   const iterator: Obj = GetIterator(iterable);
   const next: Value = Get(iterator, "next");
   while (true) {
-    const result: Obj = IteratorNextResult(iterator, next);
-    if (ToBoolean(Get(result, "done"))) {
-      return obj;
+    // Without a result object where that is unobservable (D1800).
+    let nextItem: Value = undefined;
+    if (IteratorFastReady(iterator, next)) {
+      nextItem = IteratorFastValue(iterator, next);
+    } else {
+      const result: Obj = IteratorNextResult(iterator, next);
+      if (ToBoolean(Get(result, "done"))) {
+        return obj;
+      }
+      nextItem = Get(result, "value");
     }
-    const nextItem: Value = Get(result, "value");
     try {
       if (!IsObject(nextItem)) {
         throw NewTypeError("not an object");
@@ -115,11 +132,17 @@ function GroupByProperty(items: Value, callback: Value): Obj {
   const next: Value = Get(iterator, "next");
   let k: f64 = 0;
   while (true) {
-    const result: Obj = IteratorNextResult(iterator, next);
-    if (ToBoolean(Get(result, "done"))) {
-      return groups;
+    // Without a result object where that is unobservable (D1800).
+    let value: Value = undefined;
+    if (IteratorFastReady(iterator, next)) {
+      value = IteratorFastValue(iterator, next);
+    } else {
+      const result: Obj = IteratorNextResult(iterator, next);
+      if (ToBoolean(Get(result, "done"))) {
+        return groups;
+      }
+      value = Get(result, "value");
     }
-    const value: Value = Get(result, "value");
     let key: Value = undefined;
     try {
       key = ToPropertyKey(Call(callback, undefined, value, k));

@@ -474,18 +474,24 @@ function PerformPromiseCombinator(thisValue: Value, iterable: Value, kind: i32):
     }
     while (true) {
       iteratorDone = true;
-      const result: Obj = IteratorNextResult(it, next);
-      if (ToBoolean(Get(result, "done"))) {
-        if (kind !== 3 && DecrementRemaining(remaining) === 0) {
-          if (kind === 2) {
-            RejectCapability(capability, NewAggregateError(values));
-          } else {
-            ResolveCapability(capability, values);
+      // Without a result object where that is unobservable (D1800).
+      let nextValue: Value = undefined;
+      if (IteratorFastReady(it, next)) {
+        nextValue = IteratorFastValue(it, next);
+      } else {
+        const result: Obj = IteratorNextResult(it, next);
+        if (ToBoolean(Get(result, "done"))) {
+          if (kind !== 3 && DecrementRemaining(remaining) === 0) {
+            if (kind === 2) {
+              RejectCapability(capability, NewAggregateError(values));
+            } else {
+              ResolveCapability(capability, values);
+            }
           }
+          return CapabilityPromise(capability);
         }
-        return CapabilityPromise(capability);
+        nextValue = Get(result, "value");
       }
-      const nextValue: Value = Get(result, "value");
       iteratorDone = false;
       if (kind !== 3) {
         CreateDataPropertyOrThrow(values, index, undefined);

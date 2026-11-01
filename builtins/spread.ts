@@ -11,14 +11,20 @@ function ArraySpread(arr: Obj, src: Value): Obj {
   const next: Value = Get(iterator, "next");
   let n: f64 = LengthOfArrayLike(arr);
   while (true) {
-    const result: Value = Call(next, iterator);
-    if (!IsObject(result)) {
-      throw NewTypeError("iterator must return an object");
+    // Without a result object where that is unobservable (D1800): arrays with holes,
+    // typed arrays, `arr.entries()`.
+    if (IteratorFastReady(iterator, next)) {
+      CreateDataPropertyOrThrow(arr, n, IteratorFastValue(iterator, next));
+    } else {
+      const result: Value = Call(next, iterator);
+      if (!IsObject(result)) {
+        throw NewTypeError("iterator must return an object");
+      }
+      if (ToBoolean(Get(AsObj(result), "done"))) {
+        return arr;
+      }
+      CreateDataPropertyOrThrow(arr, n, Get(AsObj(result), "value"));
     }
-    if (ToBoolean(Get(AsObj(result), "done"))) {
-      return arr;
-    }
-    CreateDataPropertyOrThrow(arr, n, Get(AsObj(result), "value"));
     n = n + 1;
   }
 }

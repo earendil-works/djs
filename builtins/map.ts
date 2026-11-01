@@ -16,11 +16,17 @@ function AddEntriesFromIterable(target: Obj, iterable: Value, adder: Value): voi
   const iterator: Obj = GetIterator(iterable);
   const next: Value = Get(iterator, "next");
   while (true) {
-    const result: Obj = IteratorNextResult(iterator, next);
-    if (ToBoolean(Get(result, "done"))) {
-      return;
+    // Without a result object where that is unobservable (D1800).
+    let nextItem: Value = undefined;
+    if (IteratorFastReady(iterator, next)) {
+      nextItem = IteratorFastValue(iterator, next);
+    } else {
+      const result: Obj = IteratorNextResult(iterator, next);
+      if (ToBoolean(Get(result, "done"))) {
+        return;
+      }
+      nextItem = Get(result, "value");
     }
-    const nextItem: Value = Get(result, "value");
     try {
       if (!IsObject(nextItem)) {
         throw NewTypeError("not an object");
@@ -69,11 +75,17 @@ function MapGroupBy(items: Value, callback: Value): Obj {
   const next: Value = Get(iterator, "next");
   let k: f64 = 0;
   while (true) {
-    const result: Obj = IteratorNextResult(iterator, next);
-    if (ToBoolean(Get(result, "done"))) {
-      return map;
+    // Without a result object where that is unobservable (D1800).
+    let value: Value = undefined;
+    if (IteratorFastReady(iterator, next)) {
+      value = IteratorFastValue(iterator, next);
+    } else {
+      const result: Obj = IteratorNextResult(iterator, next);
+      if (ToBoolean(Get(result, "done"))) {
+        return map;
+      }
+      value = Get(result, "value");
     }
-    const value: Value = Get(result, "value");
     let key: Value = undefined;
     try {
       key = Call(callback, undefined, value, k);
