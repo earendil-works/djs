@@ -83,6 +83,9 @@ pub mod flags {
     /// HostFunction: async (D1374). A call returns a promise and leaves a pending host
     /// call for the embedder instead of parking the VM.
     pub const OBJ_HOST_ASYNC: u16 = 32;
+    /// Object: on the prototype chain of a cached prototype property (D1621): adding a
+    /// key or changing its prototype bumps `Roots::PROTO_EPOCH`. Never cleared.
+    pub const OBJ_IS_PROTO: u16 = 64;
     /// BigInt: the value is negative.
     pub const BIGINT_NEG: u16 = 1;
     /// Symbol: a private name (`#x`, D1400). Never an own key of [[OwnPropertyKeys]],
@@ -97,6 +100,12 @@ pub mod flags {
 
 /// `"DJS\0"` little-endian, in [`Roots::MAGIC`].
 pub const MAGIC: u32 = u32::from_le_bytes(*b"DJS\0");
+
+/// Words per inline cache slot in `FuncTemplate::IC` (D1620).
+pub const IC_WORDS: u32 = 3;
+/// Inline cache slot word 0: the slot holds an arena offset (a prototype property slot,
+/// D1621); the collector empties such slots.
+pub const IC_OFFSET_SLOT: u32 = 1 << 30;
 
 /// `Roots::FLAGS`: the out-of-memory reserve is open (D1600): an out-of-memory error was
 /// thrown and the arena may use the bytes held back below the cap.
@@ -161,6 +170,9 @@ cells! {
         /// The arena size at which the next collection is requested (D1601: part of the
         /// image, so a restored VM collects at the same points). 0 for a fresh heap.
         GC_THRESHOLD: u32 = 56,
+        /// The prototype epoch of the inline caches (D1621): bumped by key additions and
+        /// prototype changes of objects marked [`flags::OBJ_IS_PROTO`].
+        PROTO_EPOCH: u32 = 60,
     };
 
     /// A flat one-byte (Latin-1) string. Holds only strings with every code unit <= 0xFF;

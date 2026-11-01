@@ -58,7 +58,17 @@ and implement it.
   cache), warm/cold restore test extended. The machine is at load 25-30, so timings are
   CPU-time min-of-7 of interleaved LTO builds: engine/props -14..-18% (stable); own read
   ~6.5 -> ~1.7 ns, 4th of 4 14.7 -> 5.8, own write 15.7 -> 10.2, m.PI 9.4 -> 2.5; other
-  engine benches within the noise (±10%).
+  engine benches within the noise (±10%). Merged (main 6d50b12).
+- Part 1c, prototype caches (D1621): get_field/get_method on primitives and objects hit
+  data properties on the prototype chain (receiver prototype offset + PROTO_EPOCH, chain
+  marked OBJ_IS_PROTO, GC empties offset slots). Tests: e2e proto_caches.js (shadowing at
+  every level, setPrototypeOf, getters, classes, primitives and patched builtin
+  prototypes, typed array with a canonical numeric key, proxies), warm/cold restore with
+  prototype slots, collect-twice identical images. Measurements (LTO cgu=1 builds,
+  CPU-time min-of-7, load ~8-20): prototype read depth 1 13.7 -> 2.8 ns, depth 3 16.3 ->
+  2.6 ns, method call p.f() 28.6 -> 20.1 ns; engine arrays -22%, higher-order -14%,
+  calls -9%, loop -21% (the last two do not use properties: layout noise), props/float/
+  strings/pi-like/decodeURI within ±3%.
 
 ## Follow-ups
 

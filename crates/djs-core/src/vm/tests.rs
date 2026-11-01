@@ -2481,14 +2481,19 @@ fn warm_and_cold_inline_caches_behave_the_same() {
         function setA(o, v) { o.a = v; return o.a; }\n\
         function callM(o) { return o.m(); }\n\
         globalThis.obj = { x: 1, a: 2, m() { return 'm'; } };\n\
-        for (let i = 0; i < 3; i++) { getA(obj); setA(obj, i); callM(obj); }\n";
+        globalThis.Proto = { a: 'proto a', m() { return 'proto m'; } };\n\
+        globalThis.child = Object.create(Object.create(Proto));\n\
+        for (let i = 0; i < 3; i++) { getA(obj); setA(obj, i); callM(obj); getA(child); callM(child); 'x'.toUpperCase(); }\n";
     let fields_2 = "\
         console.log(getA(obj), setA(obj, 'w'), callM(obj));\n\
         delete obj.x;\n\
         console.log(getA(obj), setA(obj, 'v'), callM(obj));\n\
         Object.defineProperty(obj, 'a', { value: 'ro', writable: false });\n\
         try { setA(obj, 1); } catch (e) { console.log(String(e)); }\n\
-        console.log(getA({ a: 'other' }), getA([]));\n";
+        console.log(getA({ a: 'other' }), getA([]));\n\
+        console.log(getA(child), callM(child));\n\
+        Object.getPrototypeOf(child).a = 'shadow';\n\
+        console.log(getA(child), callM(child));\n";
     let (vm, _) = run_script(vm(), &(String::from(GLOBAL_CHANGES) + fields));
     let image = vm.bytes().to_vec();
     let warm = Vm::from_bytes(image.clone(), VmOptions::default()).unwrap();
@@ -2500,7 +2505,7 @@ fn warm_and_cold_inline_caches_behave_the_same() {
     let (_, warm_out) = run_script(warm, &(String::from(GLOBAL_CHANGES_2) + fields_2));
     let (_, cold_out) = run_script(cold, &(String::from(GLOBAL_CHANGES_2) + fields_2));
     assert_eq!(warm_out, cold_out);
-    assert_eq!(warm_out.log.len(), 8, "{:?}", warm_out.log);
+    assert_eq!(warm_out.log.len(), 10, "{:?}", warm_out.log);
 }
 
 // ---- The host inbox (D1670) --------------------------------------------------------------
@@ -2748,4 +2753,21 @@ fn build_inputs_list_features_and_libm() {
         BUILD_INPUTS,
         want.iter().map(String::as_str).collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn collections_empty_prototype_caches_and_stay_deterministic() {
+    // Prototype slots hold offsets: a collection empties them (D1621), so collecting a
+    // collected heap still reproduces it byte for byte (D1090), and lookups stay right.
+    let src = "globalThis.P = { m() { return 'm'; } };\n\
+               globalThis.o = Object.create(P);\n\
+               globalThis.f = (x) => x.m();\n\
+               for (let i = 0; i < 3; i++) f(o);\n";
+    let (mut vm, _) = run_script(vm(), src);
+    vm.collect().unwrap();
+    let a = vm.bytes().to_vec();
+    vm.collect().unwrap();
+    assert!(a == vm.bytes(), "a collection changed a collected image");
+    let (_, out) = run_script(vm, "console.log(f(o), f(Object.create(o)));\n");
+    assert_eq!(out.log, ["m m"]);
 }

@@ -30,8 +30,8 @@ use alloc::vec::Vec;
 
 use super::atom::{Atom, atoms};
 use super::cells::{
-    Object, PropEntry, PropTable, ValueArray,
-    flags::{OBJ_EXTENSIBLE, OBJ_INDEXED_PROPS, OBJ_LENGTH_READONLY},
+    Object, PropEntry, PropTable, Roots, ValueArray,
+    flags::{OBJ_EXTENSIBLE, OBJ_INDEXED_PROPS, OBJ_IS_PROTO, OBJ_LENGTH_READONLY},
 };
 use super::layout::Ref;
 use super::{CellKind, Heap, HeapError};
@@ -565,7 +565,33 @@ impl Heap {
         }
         self.arena_mut()
             .set(o.0, Object::PROTO, Ref(proto.map_or(0, |p| p.0)));
+        self.proto_changed(o);
         true
+    }
+
+    /// The prototype epoch of the inline caches (D1621).
+    #[inline(always)]
+    pub fn proto_epoch(&self) -> u32 {
+        self.arena().get(0, Roots::PROTO_EPOCH)
+    }
+
+    pub(crate) fn bump_proto_epoch(&mut self) {
+        let e = self.proto_epoch();
+        self.arena_mut()
+            .set(0, Roots::PROTO_EPOCH, e.wrapping_add(1));
+    }
+
+    /// Marks `o` as on the chain of a cached prototype property (D1621).
+    pub fn mark_proto(&mut self, o: Obj) {
+        self.set_obj_flag(o, OBJ_IS_PROTO, true);
+    }
+
+    /// A key was added to `o` or its prototype changed: caches through it are stale.
+    #[inline]
+    fn proto_changed(&mut self, o: Obj) {
+        if self.obj_flags(o) & OBJ_IS_PROTO != 0 {
+            self.bump_proto_epoch();
+        }
     }
 
     pub fn is_extensible(&self, o: Obj) -> bool {
@@ -952,6 +978,7 @@ impl Heap {
 
     /// Appends a property (the key must not be present).
     fn table_insert(&mut self, o: Obj, key: Atom, p: &Property) -> Result<(), HeapError> {
+        self.proto_changed(o);
         let mut t = self.props(o);
         if t == 0 || self.arena().get(t, PropTable::COUNT) == self.table_capacity(t) {
             t = self.grow_table(o, t)?;

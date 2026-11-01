@@ -3087,3 +3087,18 @@ compared yet, because suspended intrinsics allocate progress records only when a
 ends inside them, and `run` collects at its start (0071). Part 2 of 0072 adds them after
 0071. Cost: about +25 s wall for difftest at -j 6 (one more variant), 7 s for the
 native/wasm check.
+## D1621: Prototype property caches: a receiver-prototype offset, an epoch, and GC clearing
+date: 2026-11-03 · by: heap · issue: 0062
+A `get_field`/`get_method` slot (D1620) may also remember a data property found on the
+prototype chain: the depth of the holder, its entry index, the offset of the receiver's
+prototype (an object's, or the realm's prototype of a primitive), and
+`Roots::PROTO_EPOCH`. A hit checks the epoch, that the receiver is not a proxy or a typed
+array and has no own `key` (a string's `length`/indexes never hit), that its prototype is
+the cached one, walks to the holder and re-checks the key at the index there. Filling
+marks every object from the receiver's prototype to the holder `OBJ_IS_PROTO` (flag 64,
+never cleared); adding a key to such an object (`table_insert`) or changing its prototype
+bumps the epoch. The receiver's own changes are covered by the per-hit own check, the
+holder's by the key check. These are the only slots with arena offsets (word 0 bit
+`IC_OFFSET_SLOT`): the collector empties them when it copies a template, rather than
+bumping the epoch, so a collection of a collected heap stays byte-identical (D1090). Only
+data properties are cached; getters take the slow path.

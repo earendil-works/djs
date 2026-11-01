@@ -2619,15 +2619,28 @@ impl<'h> Exec<'h> {
     /// of an object receiver fills the cache (D1620).
     #[inline]
     fn lookup_ic(&mut self, o: Value, key: Atom, ic: u32) -> Result<Got, Fault> {
-        let Some(obj) = o.as_object() else {
-            return self.lookup(o, key);
+        let start = match o.as_object() {
+            Some(obj) => obj,
+            None => match realm::primitive_proto(self.heap, o) {
+                // A string's `length` and indexes are not on its prototype.
+                Some(p)
+                    if !(o.as_string().is_some()
+                        && (key == crate::heap::atoms::LENGTH || key.as_int().is_some())) =>
+                {
+                    p
+                }
+                _ => return self.lookup(o, key),
+            },
         };
-        let l = self.heap.lookup_property(obj, key);
+        let l = self.heap.lookup_property(start, key);
         if let Lookup::Found(h, Property::Data { value, .. }) = l
-            && h == obj
             && !value.is_hole()
         {
-            self.ic_own_fill(obj, key, ic);
+            if Value::object(h) == o {
+                self.ic_own_fill(h, key, ic);
+            } else {
+                self.ic_proto_fill(o, key, h, ic);
+            }
         }
         self.got_of(l, key)
     }

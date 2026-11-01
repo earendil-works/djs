@@ -14,13 +14,23 @@
 //! - property reads and writes: word 0 = entry index + 1 of an own data property of
 //!   the receiver. Only keys that are not array indexes are cached: for those, an own
 //!   property is always a table entry, whatever the object's class.
+//! - prototype property reads (D1621): word 0 = [`IC_OFFSET_SLOT`] | depth << 24 |
+//!   entry index + 1 of the holder; word 1 = the offset of the receiver's prototype (an
+//!   object's, or the realm's prototype of a primitive); word 2 = `Roots::PROTO_EPOCH`.
+//!   The objects from that prototype to the holder are marked `OBJ_IS_PROTO`, so a key
+//!   added to one of them or a prototype change bumps the epoch; the collector empties
+//!   these slots, since offsets move. A hit also checks that the receiver has no own
+//!   property `key`.
 
 use super::*;
 use crate::bytecode::template::NO_CACHE;
-use crate::heap::cells::U32Array;
+use crate::heap::cells::{IC_OFFSET_SLOT, IC_WORDS as WORDS, U32Array};
 
-/// Words per slot.
-const WORDS: u32 = 3;
+/// Prototype slot word 0: the depth of the holder (bits 24..30, 1 = the receiver's
+/// prototype) and the entry index + 1 (bits 0..24).
+const DEPTH_SHIFT: u32 = 24;
+const INDEX_MASK: u32 = (1 << DEPTH_SHIFT) - 1;
+const MAX_DEPTH: u32 = 63;
 
 /// Global slot word 0: the entry is in the global lexical record.
 const IN_LEX: u32 = 1 << 31;
@@ -148,10 +158,97 @@ impl Exec<'_> {
     #[inline(always)]
     pub(super) fn ic_own_get(&self, obj: Obj, key: Atom, ic: u32) -> Option<Value> {
         let w0 = self.ic_read(ic)[0];
-        if w0 == 0 {
+        if w0 == 0 || w0 & IC_OFFSET_SLOT != 0 {
             return None;
         }
         self.heap.data_at(obj, w0 - 1, key)
+    }
+
+    /// The prototype a cached lookup on `o` starts from, if `o` cannot have an own
+    /// property `key` that the cache would skip: `None` for a proxy or a typed array, an
+    /// object with its own `key`, nullish values, and a string's `length` and indexes.
+    #[inline(always)]
+    fn ic_start(&self, o: Value, key: Atom) -> Option<Obj> {
+        match o.as_object() {
+            Some(obj) => {
+                // A typed array answers canonical numeric keys itself, without its
+                // prototype.
+                if matches!(
+                    self.heap.object_class(obj),
+                    ObjectClass::Proxy | ObjectClass::TypedArray
+                ) || self.heap.has_own_property(obj, key)
+                {
+                    return None;
+                }
+                self.heap.get_prototype_of(obj)
+            }
+            None => {
+                if o.as_string().is_some()
+                    && (key == crate::heap::atoms::LENGTH || key.as_int().is_some())
+                {
+                    return None;
+                }
+                realm::primitive_proto(self.heap, o)
+            }
+        }
+    }
+
+    /// A cached prototype data property read (D1621).
+    #[inline(always)]
+    pub(super) fn ic_proto_get(&self, o: Value, key: Atom, ic: u32) -> Option<Value> {
+        let [w0, w1, w2] = self.ic_read(ic);
+        if w0 & IC_OFFSET_SLOT == 0 || w2 != self.heap.proto_epoch() {
+            return None;
+        }
+        let proto = self.ic_start(o, key)?;
+        if proto.offset() != w1 {
+            return None;
+        }
+        let mut h = proto;
+        for _ in 1..(w0 >> DEPTH_SHIFT) & MAX_DEPTH {
+            h = self.heap.get_prototype_of(h)?;
+        }
+        self.heap.data_at(h, (w0 & INDEX_MASK) - 1, key)
+    }
+
+    /// After a slow lookup found data property `key` on `holder`, on the prototype chain
+    /// of `o`: remembers it (D1621).
+    #[inline(never)]
+    pub(super) fn ic_proto_fill(&mut self, o: Value, key: Atom, holder: Obj, ic: u32) {
+        if key.as_int().is_some() {
+            return;
+        }
+        let Some(proto) = self.ic_start(o, key) else {
+            return;
+        };
+        let mut depth = 1;
+        let mut h = proto;
+        while h != holder {
+            match self.heap.get_prototype_of(h) {
+                Some(p) if depth < MAX_DEPTH => {
+                    h = p;
+                    depth += 1;
+                }
+                _ => return,
+            }
+        }
+        let Some(i) = self.heap.own_entry_index(holder, key) else {
+            return;
+        };
+        if i + 1 > INDEX_MASK || self.heap.data_at(holder, i, key).is_none() {
+            return;
+        }
+        let mut h = proto;
+        loop {
+            self.heap.mark_proto(h);
+            if h == holder {
+                break;
+            }
+            h = self.heap.get_prototype_of(h).expect("walked above");
+        }
+        let w0 = IC_OFFSET_SLOT | depth << DEPTH_SHIFT | (i + 1);
+        let epoch = self.heap.proto_epoch();
+        self.ic_write(ic, [w0, proto.offset(), epoch]);
     }
 
     /// A cached own data property write: true if slot `ic` still points at a writable
@@ -160,7 +257,7 @@ impl Exec<'_> {
     #[inline(always)]
     pub(super) fn ic_own_put(&mut self, obj: Obj, key: Atom, ic: u32, v: Value) -> bool {
         let w0 = self.ic_read(ic)[0];
-        w0 != 0 && self.heap.set_data_at(obj, w0 - 1, key, v)
+        w0 != 0 && w0 & IC_OFFSET_SLOT == 0 && self.heap.set_data_at(obj, w0 - 1, key, v)
     }
 
     /// After a slow access to `obj[key]`: remembers the entry if `key` is an own data
@@ -197,10 +294,11 @@ impl Exec<'_> {
             return true;
         }
         let o = self.top(0);
-        let Some(obj) = o.as_object() else {
-            return false;
+        let own = match o.as_object() {
+            Some(obj) => self.ic_own_get(obj, key, ic),
+            None => None,
         };
-        let Some(v) = self.ic_own_get(obj, key, ic) else {
+        let Some(v) = own.or_else(|| self.ic_proto_get(o, key, ic)) else {
             return false;
         };
         if op == fast::GET_FIELD {

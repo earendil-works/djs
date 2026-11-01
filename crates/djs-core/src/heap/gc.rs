@@ -95,6 +95,26 @@ fn trace(from: &mut Arena, to: &mut Arena, slot: Slot) {
     }
 }
 
+/// Empties the inline cache slots of a (copied) template that hold arena offsets
+/// (prototype property slots, D1621): the offsets are stale now. Everything else in a
+/// slot is offset-free. Clearing (rather than bumping an epoch) keeps a collection of a
+/// collected heap byte-identical (D1090).
+fn clear_offset_caches(to: &mut Arena, template: u32) {
+    use super::cells::{FuncTemplate, IC_OFFSET_SLOT, IC_WORDS, U32Array};
+    let Some(ic) = to.get::<Ref>(template, FuncTemplate::IC).get() else {
+        return;
+    };
+    let n = to.get(template, FuncTemplate::IC_COUNT) as u32;
+    for i in 0..n {
+        let at = U32Array::DATA.at(ic, i * IC_WORDS);
+        if to.read::<u32>(at) & IC_OFFSET_SLOT != 0 {
+            for k in 0..IC_WORDS {
+                to.write::<u32>(at + 4 * k, 0);
+            }
+        }
+    }
+}
+
 /// Whether the from-space cell at `off` has been copied (is live).
 fn is_forwarded(from: &Arena, off: u32) -> bool {
     from.get(off, Header::GC) & gc_bits::FORWARDED != 0
@@ -181,6 +201,9 @@ impl Heap {
                     collections.push(scan);
                 }
                 walk::for_each_slot(kind, scan, size, |slot| trace(from, &mut to, slot));
+                if kind == CellKind::FuncTemplate {
+                    clear_offset_caches(&mut to, scan);
+                }
                 scan += size;
             }
             // Ephemerons to a fixpoint: a pair whose key was copied keeps its value; that

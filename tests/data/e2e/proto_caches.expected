@@ -1,0 +1,23 @@
+A.m A.m A.f A.f
+A.m A.m A.f A.f
+A.m A.m A.f A.f
+B.m B.m
+own x.m B.m
+A.m A.m
+A.m changed A.f
+A getter
+A.m data again
+new C proto A.m data again
+A.m data again
+undefined undefined
+base,base,base
+derived,derived,base
+instance,derived,base
+AB CD 3 1.3 2.0
+patched ef
+from Object.prototype from Object.prototype from Object.prototype from Object.prototype
+from Number.prototype from Object.prototype
+undefined undefined
+from P from P undefined
+trap m trap m
+TypeError: cannot read property 'm' of null
