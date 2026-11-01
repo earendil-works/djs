@@ -34,4 +34,4 @@ Cases in `js/`: `async_interleave.js` (delivery position), `oom.js` (`--limit 15
 `2000000`: OOM depends on restores), `alloc_only.js` (pure interpreter allocation: raw
 images vs slice size and restore), `general.js` / `general_body.js` (mixed workload with
 GC), `floats_body.js` (libm, number formatting, NaN bytes, Date, sort), `deep_body.js`
-(deep data structures and promise chains).
+(deep data structures and promise chains), `weakref.js` (WeakRef/FinalizationRegistry under slicing and restore).
