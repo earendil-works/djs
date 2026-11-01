@@ -271,7 +271,10 @@ behave the same in every mode; only the fuel spent differs (D1633).
   tests/test262/expected-failures.txt` (run it when changing a `@native` builtin, bgen's
   Rust backend or `interp/run/native.rs`). At 0063 both backends pass 37,504/37,722.
 - Unit tests: `interp::run::native::tests` (both backends in plain, suspension and GC
-  stress modes, a backend switch between runs, fuel), bgen's golden fixture
+  stress modes, a backend switch between runs, fuel; `backends_agree` samples the modes
+  in about a second, the exhaustive `backends_agree_in_every_mode` is `#[ignore]`d:
+  run it with `cargo test -p djs-core --lib backends_agree -- --ignored` before merging
+  backend changes), bgen's golden fixture
   `tests/golden/native.ts` → `native.rs.txt`, and `scripts/native-sizes.sh` for the wasm
   code size per native function.
 

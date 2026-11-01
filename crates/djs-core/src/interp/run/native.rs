@@ -726,8 +726,7 @@ mod tests {
         (async () => { for (const p of [Promise.resolve(2), 3]) console.log('await', await p); })();\n\
         console.log('done');\n";
 
-    #[test]
-    fn backends_agree_in_every_mode() {
+    fn check_modes(modes: &[Mode]) {
         let expected = run(SCRIPT, PLAIN);
         assert_eq!(expected.log.last().unwrap(), "await 3");
         assert!(
@@ -737,13 +736,31 @@ mod tests {
                 .any(|l| l.contains("at forEach (native)"))
         );
         assert!(expected.log.iter().any(|l| l == "caught in then 1"));
-        let modes = [
+        for &m in modes {
+            assert_eq!(run(SCRIPT, m), expected);
+        }
+    }
+
+    /// Both backends, resumed after every few units of fuel, through images and under
+    /// GC stress, agree. A sample of the modes (about a second): the exhaustive
+    /// version is `backends_agree_in_every_mode`, run it before merging backend
+    /// changes (`cargo test -p djs-core --lib backends_agree -- --ignored`).
+    #[test]
+    fn backends_agree() {
+        check_modes(&[
             Mode {
                 native: false,
                 ..PLAIN
             },
+            Mode { fuel: 7, ..PLAIN },
             Mode {
-                fuel: 7,
+                fuel: 97,
+                suspend: true,
+                ..PLAIN
+            },
+            Mode {
+                native: false,
+                fuel: 211,
                 suspend: true,
                 ..PLAIN
             },
@@ -752,16 +769,31 @@ mod tests {
                 gc_stress: true,
                 ..PLAIN
             },
-            Mode {
-                native: false,
+        ]);
+    }
+
+    /// Every combination: an image round trip after every 7 units of fuel on both
+    /// backends, GC stress on both (about 30 s).
+    #[test]
+    #[ignore = "exhaustive (30 s); run before merging backend changes"]
+    fn backends_agree_in_every_mode() {
+        let mut modes = Vec::new();
+        for native in [true, false] {
+            modes.push(Mode { native, ..PLAIN });
+            modes.push(Mode {
+                native,
                 fuel: 7,
                 suspend: true,
                 ..PLAIN
-            },
-        ];
-        for m in modes {
-            assert_eq!(run(SCRIPT, m), expected);
+            });
+            modes.push(Mode {
+                native,
+                fuel: 50,
+                gc_stress: true,
+                ..PLAIN
+            });
         }
+        check_modes(&modes);
     }
 
     /// The backend may change between runs: running frames keep their kind.
