@@ -7,7 +7,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
-| 0115 | The guide must be self-contained (owner rule; enforced by check) | docs | .worktrees/docs |
+| 0115 | Guide self-contained: header source link (small follow-up) | docs | .worktrees/docs |
 | 0101 | Mark-compact collection (design first) | heap | .worktrees/heap |
 | 0116 | JSON output in place, flat_fast inline, next hot spots | perf | .worktrees/perf |
 
@@ -80,6 +80,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0115 | Guide self-contained (owner rule) | f829f68d (agent docs; D2102; goals.md; enforced by check) |
 | 0114 | Guide design: Elanor | f93c1058 (agent design, archived; vendored published packages, D2200) |
 | 0113 | Docs follow-ups | 6f687be1 (agent docs; generated status D2101, search, live disasm) |
 | 0103 | Human-facing guide (djs-docs + 10 chapters) | 46667f42 (agent docs; Pages workflow) |
