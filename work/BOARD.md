@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0140 | Snapshots across djs versions (research report) | snapshot | .worktrees/snapshot |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 
 ## Open (ready)
@@ -78,6 +77,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0140 | Snapshots across djs versions (research) | 8b50738b (agent snapshot; docs/snapshot-versioning.md: journal as durable record, snapshot as same-build fast path) |
 | 0137 | Callback loops via %EachDense (D2303) | 9dddc84c (agent perf; pi-like -7.7% -> 0.87x quickjs-wasi, higher-order -31%, -196 B) |
 | 0139 | Base image becomes the first VM's arena (D2060) | 91a406d0 (agent heap; -0.31 MiB per Sandbox/pi instance) |
 | 0138 | Shared read-only builtin segment: design study (not built) | 5d66ef74 (agent heap; docs/shared-segment.md: don't build now; lazy variant 6-7 weeks) |
