@@ -318,6 +318,13 @@ impl Vm {
         intrinsic_obj(&self.heap, Intrinsic::Global)
     }
 
+    /// The global lexical record: Script-level `let`/`const`/`class` bindings as data
+    /// properties of a hidden object (D1220). For tools that read the heap (the REPL's
+    /// completion); an uninitialized binding holds `Value::UNINITIALIZED`.
+    pub fn global_lexical(&self) -> Obj {
+        crate::interp::realm::global_lex(&self.heap)
+    }
+
     /// A closure for a top-level `FuncTemplate` (one without captures).
     pub fn instantiate(&mut self, template: Ref) -> Result<Value, HeapError> {
         let proto = intrinsic_obj(&self.heap, Intrinsic::FunctionProto);

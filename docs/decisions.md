@@ -4431,3 +4431,15 @@ TypeError ("not an object"), a non-extensible object without an own `stack` too 
 is not extensible"). The trace comes from `Exec::stack_trace_from(pc, skip_prelude,
 below)` through the leaf `%StackTraceString`. `Error.stackTraceLimit` (qjs has it, set to
 10) is not added: the limit stays the constant of D1282.
+
+## D2011: REPL completion reads the heap; `.step` pauses between fuel slices
+date: 2026-11-03 · by: infra · issue: 0102
+`djs repl` completes names with Tab from the heap without running JS
+(crates/djs-cli/src/repl/complete.rs): globals from the global lexical record
+(`Vm::global_lexical`, a new read-only accessor) and the global object's chain; after a
+dotted path, the string keys along the chain of the object the path names, following
+data properties only (an accessor or a proxy ends it). `.complete <text>` prints the list
+for line-mode tests. `.step [n]` runs inputs in slices of `n` fuel and stops at a nested
+`step>` prompt after each one, using only `Vm::run_metered` and `Vm::backtrace`; in line
+mode the prompt reads the following input lines. `.decorators tc39|legacy|metadata`
+selects the compile options of D1651 for later inputs.

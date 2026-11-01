@@ -240,3 +240,51 @@ fn load_a_file() {
     std::fs::remove_file(&path).unwrap();
     assert_eq!(out, "7\n");
 }
+
+#[test]
+fn completion() {
+    check(
+        "let foo = {bar: 1, baz: {qux: 2}, get acc() { return {z: 1}; }}\n\
+         .complete fo\n.complete foo.ba\n.complete foo.baz.q\n.complete foo.acc.\n\
+         .complete Math.ma\n.complete foo.bar.toFix\nconst p = new Proxy({a: 1}, {})\n\
+         .complete p.\n.complete 1.5\n.complete x = JSO\n",
+        "foo\nbar baz\nqux\n\nmax\ntoFixed\n\n\nJSON\n",
+    );
+    // An unknown name completes nothing.
+    check(".complete undefinedNam\n", "\n");
+}
+
+#[test]
+fn decorators_switch() {
+    let legacy = ".ts on\n.decorators legacy\n\
+        function d(t: any, k: string) { t.seen = k; }\n\
+        class C { @d m() {} }\n(C.prototype as any).seen\n\
+        .decorators tc39\n\
+        function e(v: any, ctx: any) { return v; }\n\
+        class D { @e m() {} }\nD.name\n";
+    assert_eq!(
+        repl(legacy),
+        "TypeScript: on\ndecorators: legacy (experimentalDecorators)\n'm'\ndecorators: tc39\n'D'\n"
+    );
+    check(
+        ".decorators metadata\n.decorators x\n",
+        "decorators: legacy with emitDecoratorMetadata (applies in TypeScript mode: .ts on)\n.decorators takes tc39, legacy or metadata\n",
+    );
+}
+
+#[test]
+fn stepping() {
+    check(
+        ".step 300\nfunction spin(n) { let s = 0; for (let i = 0; i < n; i++) s += i; return s }\n\
+         spin(100)\n\nbt\nfuel\nhuh\nc\nspin(100)\nq\n.step off\nspin(10)\n",
+        "stepping every 300 fuel\n\
+         [step, 300 fuel] at spin (repl:1:64)\n\
+         [step, 600 fuel] at spin (repl:1:55)\n\
+         \x20   at spin (repl:1:55)\n    at <eval> (repl:1:5)\n\
+         600 fuel\n\
+         huh: at step> use Enter (next slice), c (continue), bt, fuel or q (stop)\n\
+         4950\n\
+         [step, 300 fuel] at spin (repl:1:64)\nStopped\n\
+         stepping: off\n45\n",
+    );
+}

@@ -98,7 +98,14 @@ impl Terminal {
     }
 
     /// Reads one line with editing and history.
-    pub fn read_line(&mut self, prompt: &str, history: &[String]) -> Input {
+    /// Reads a line with editing. `complete` gives the completions for the text before
+    /// the cursor: the length of the word it replaces (in characters) and the candidates.
+    pub fn read_line(
+        &mut self,
+        prompt: &str,
+        history: &[String],
+        complete: &mut dyn FnMut(&str) -> (usize, Vec<String>),
+    ) -> Input {
         let mut ed = Editor {
             prompt,
             line: Vec::new(),
@@ -150,7 +157,25 @@ impl Terminal {
                 0x0c => print!("\x1b[H\x1b[2J"),
                 0x10 => self.history_move(&mut ed, history, &mut hist, &mut draft, -1),
                 0x0e => self.history_move(&mut ed, history, &mut hist, &mut draft, 1),
-                b'\t' => ed.insert(' '),
+                b'\t' => {
+                    let before: String = ed.line[..ed.cursor].iter().collect();
+                    let (n, cands) = complete(&before);
+                    let word: String = ed.line[ed.cursor - n.min(ed.cursor)..ed.cursor]
+                        .iter()
+                        .collect();
+                    let prefix = common_prefix(&cands);
+                    if cands.len() == 1 || prefix.chars().count() > n {
+                        let with = if cands.len() == 1 { &cands[0] } else { &prefix };
+                        ed.line.drain(ed.cursor - n..ed.cursor);
+                        ed.cursor -= n;
+                        with.chars().for_each(|c| ed.insert(c));
+                    } else if cands.len() > 1 {
+                        // Nothing to add: list them under the line.
+                        print!("\r\n{}\r\n", cands.join("  "));
+                    } else if word.is_empty() && cands.is_empty() {
+                        ed.insert(' ');
+                    }
+                }
                 0x1b => match self.key() {
                     Some(b'[' | b'O') => {
                         let mut param = Vec::new();
@@ -292,4 +317,23 @@ impl Editor<'_> {
         let _ = out.write_all(s.as_bytes());
         let _ = out.flush();
     }
+}
+
+/// The longest common prefix of the candidates.
+fn common_prefix(cands: &[String]) -> String {
+    let Some(first) = cands.first() else {
+        return String::new();
+    };
+    let mut n = first.len();
+    for c in &cands[1..] {
+        n = first
+            .char_indices()
+            .zip(c.chars())
+            .take_while(|((_, a), b)| a == b)
+            .map(|((i, a), _)| i + a.len_utf8())
+            .last()
+            .unwrap_or(0)
+            .min(n);
+    }
+    first[..n].to_string()
 }

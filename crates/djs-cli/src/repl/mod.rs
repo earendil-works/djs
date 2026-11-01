@@ -5,6 +5,7 @@
 //! limit and `.suspend-every`. With stdin not a terminal it reads lines without prompts
 //! or editing (line mode, for tests and pipes).
 
+mod complete;
 mod input;
 mod inspect;
 mod term;
@@ -33,11 +34,17 @@ const HELP: &str = "\
 .exit                 leave (or Ctrl-D)
 .load <file>          run a file as one input (a Script, or a top-level-await body)
 .ts [on|off]          parse inputs as TypeScript
+.decorators [tc39|legacy|metadata]  TypeScript decorators: the standard ones, or
+                      experimentalDecorators (with emitDecoratorMetadata)
 .disasm <code>        bytecode: of the function a code expression evaluates to, or of
                       the code itself (compiled, not run) when it is not an expression
 .fuel [n|off]         fuel used by the last input; with n, a fuel limit per input
 .suspend-every [n|off] run in slices of n fuel; at every stop, show where, and continue
                       in a fresh VM restored from the heap image
+.step [n|off]         pause every n fuel (default 1000) with a step> prompt: Enter
+                      runs the next slice, c continues to the end, bt shows the
+                      frames, fuel the fuel so far, q stops the input
+.complete <text>      the Tab completions for text (globals and properties)
 .time [on|off]        show the time and fuel each input takes
 .gc                   collect garbage, show the arena before and after
 .heap                 arena size and limit, cells per kind, objects per class
@@ -109,6 +116,13 @@ enum Plan {
     Error(String),
 }
 
+/// What the `step>` prompt decided.
+enum Step {
+    Next,
+    Continue,
+    Quit,
+}
+
 /// How a run ended.
 enum Outcome {
     Done(Value),
@@ -125,6 +139,13 @@ struct Repl {
     suspend_every: Option<u64>,
     time: bool,
     term: Option<Terminal>,
+    /// `.decorators`: TypeScript's legacy decorators, and their metadata.
+    legacy_decorators: bool,
+    decorator_metadata: bool,
+    /// `.step`: the slice after which a running input pauses at a `step>` prompt.
+    step: Option<u64>,
+    /// Line mode: the lines still to read (the `step>` prompt reads from them too).
+    source: Option<Box<dyn Iterator<Item = String>>>,
 }
 
 impl Repl {
@@ -138,14 +159,18 @@ impl Repl {
             suspend_every: None,
             time: false,
             term: None,
+            legacy_decorators: false,
+            decorator_metadata: false,
+            step: None,
+            source: None,
         }
     }
 
     /// Line mode: no prompts, no editing.
-    fn lines(&mut self, input: impl BufRead) -> i32 {
+    fn lines(&mut self, input: impl BufRead + 'static) -> i32 {
         let mut buf = String::new();
-        for line in input.lines() {
-            let Ok(line) = line else { break };
+        self.source = Some(Box::new(input.lines().map_while(Result::ok)));
+        while let Some(line) = self.source.as_mut().and_then(|s| s.next()) {
             match self.line(&mut buf, &line) {
                 Some(code) => return code,
                 None => continue,
@@ -171,7 +196,13 @@ impl Repl {
         let mut buf = String::new();
         loop {
             let prompt = if buf.is_empty() { "> " } else { "... " };
-            let read = self.term.as_mut().unwrap().read_line(prompt, &history);
+            let Repl { term, vm, .. } = self;
+            let read = term
+                .as_mut()
+                .unwrap()
+                .read_line(prompt, &history, &mut |before| {
+                    complete::complete(vm, before)
+                });
             match read {
                 Input::Eof => break,
                 Input::Interrupt => {
@@ -224,6 +255,8 @@ impl Repl {
         };
         CompileOptions {
             typescript: self.typescript,
+            experimental_decorators: self.legacy_decorators,
+            emit_decorator_metadata: self.decorator_metadata,
             ..o
         }
     }
@@ -413,8 +446,13 @@ impl Repl {
             return Outcome::Stopped("djs: the VM is busy".into());
         }
         let mut used: u64 = 0;
+        // `.step`: pause at every slice until `c`.
+        let mut stepping = self.step.is_some();
         let outcome = loop {
             let mut slice = self.suspend_every.unwrap_or(SLICE);
+            if let Some(n) = self.step.filter(|_| stepping) {
+                slice = slice.min(n);
+            }
             if let Some(limit) = self.fuel_limit {
                 slice = slice.min(limit.saturating_sub(used).max(1));
             }
@@ -435,6 +473,16 @@ impl Repl {
                         break Outcome::Stopped(format!(
                             "Stopped: the fuel limit ({limit}) ran out"
                         ));
+                    }
+                    if stepping {
+                        match self.step_prompt(used) {
+                            Step::Next => {}
+                            Step::Continue => stepping = false,
+                            Step::Quit => {
+                                self.vm.abort();
+                                break Outcome::Stopped("Stopped".into());
+                            }
+                        }
                     }
                     if self.suspend_every.is_some() {
                         let bt = self.vm.backtrace();
@@ -469,6 +517,42 @@ impl Repl {
         outcome
     }
 
+    /// The `step>` prompt of a paused input: shows where it stands, reads commands until
+    /// one resumes it.
+    fn step_prompt(&mut self, used: u64) -> Step {
+        let bt = self.vm.backtrace();
+        let at = bt.lines().next().unwrap_or("").trim().to_string();
+        println!("[step, {used} fuel] {at}");
+        loop {
+            let Some(line) = self.read_nested("step> ") else {
+                return Step::Continue;
+            };
+            match line.trim() {
+                "" | "s" | "n" | "next" => return Step::Next,
+                "c" | "continue" => return Step::Continue,
+                "q" | "quit" | "stop" => return Step::Quit,
+                "bt" | "backtrace" => print!("{bt}"),
+                "fuel" => println!("{used} fuel"),
+                other => println!(
+                    "{other}: at step> use Enter (next slice), c (continue), bt, fuel or q (stop)"
+                ),
+            }
+            let _ = std::io::stdout().flush();
+        }
+    }
+
+    /// A line for a nested prompt: from the terminal, or the next input line.
+    fn read_nested(&mut self, prompt: &str) -> Option<String> {
+        if let Some(t) = self.term.as_mut() {
+            return match t.read_line(prompt, &[], &mut |_| (0, Vec::new())) {
+                Input::Line(l) => Some(l),
+                Input::Eof => None,
+                Input::Interrupt => Some(String::from("q")),
+            };
+        }
+        self.source.as_mut()?.next()
+    }
+
     /// A meta command. `Some(code)` exits.
     fn command(&mut self, line: &str) -> Option<i32> {
         let (cmd, arg) = match line.split_once(char::is_whitespace) {
@@ -483,6 +567,52 @@ impl Repl {
                 Ok(()) => println!("TypeScript: {}", if self.typescript { "on" } else { "off" }),
                 Err(e) => println!("{e}"),
             },
+            ".decorators" => {
+                match arg {
+                    "" => {}
+                    "tc39" | "standard" => {
+                        self.legacy_decorators = false;
+                        self.decorator_metadata = false;
+                    }
+                    "legacy" => {
+                        self.legacy_decorators = true;
+                        self.decorator_metadata = false;
+                    }
+                    "metadata" => {
+                        self.legacy_decorators = true;
+                        self.decorator_metadata = true;
+                    }
+                    _ => {
+                        println!(".decorators takes tc39, legacy or metadata");
+                        return None;
+                    }
+                }
+                let which = match (self.legacy_decorators, self.decorator_metadata) {
+                    (false, _) => "tc39",
+                    (true, false) => "legacy (experimentalDecorators)",
+                    (true, true) => "legacy with emitDecoratorMetadata",
+                };
+                let note = if self.legacy_decorators && !self.typescript {
+                    " (applies in TypeScript mode: .ts on)"
+                } else {
+                    ""
+                };
+                println!("decorators: {which}{note}");
+            }
+            ".step" => match number_or_off(arg) {
+                Ok(n) => {
+                    self.step = if arg.is_empty() { Some(1000) } else { n };
+                    match self.step {
+                        Some(n) => println!("stepping every {n} fuel"),
+                        None => println!("stepping: off"),
+                    }
+                }
+                Err(e) => println!("{e}"),
+            },
+            ".complete" => {
+                let (_, cands) = complete::complete(&self.vm, arg);
+                println!("{}", cands.join(" "));
+            }
             ".time" => match on_off(arg, &mut self.time) {
                 Ok(()) => println!("timing: {}", if self.time { "on" } else { "off" }),
                 Err(e) => println!("{e}"),

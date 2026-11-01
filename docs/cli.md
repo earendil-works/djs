@@ -42,9 +42,12 @@ suspending every 300 fuel
 | `.help`, `.exit` | the list; leave (Ctrl-D on an empty line leaves too) |
 | `.load <file>` | runs a file as one input: a Script, or a top-level-await body. `.ts` files are TypeScript |
 | `.ts [on\|off]` | parse inputs as TypeScript (`--ts` at start) |
+| `.decorators [tc39\|legacy\|metadata]` | TypeScript decorators: the standard ones (the default), TypeScript's `experimentalDecorators`, or those with `emitDecoratorMetadata` (D1651). Legacy decorators need TypeScript mode |
 | `.disasm <code>` | if `code` is an expression that evaluates to a function (a bound one is followed to its target), that function's bytecode with its nested functions. Otherwise the bytecode of `code` itself, compiled and not run. The expression *is* evaluated |
 | `.fuel [n\|off]` | without an argument: the fuel the last input used, and the limit. With `n`: each input may use `n` fuel, then it is stopped (`vm.abort()`, the globals stay) |
 | `.suspend-every [n\|off]` | run inputs in slices of `n` fuel. At every stop, print the fuel so far and the innermost frame (`Vm::backtrace`), then continue in a new VM restored from the heap image, as `djs run --suspend-every` does |
+| `.step [n\|off]` | pause a running input every `n` fuel (default 1000) at a nested `step>` prompt that shows the innermost frame: Enter (or `s`/`n`) runs the next slice, `c` runs to the end, `bt` prints all frames (`Vm::backtrace`), `fuel` the fuel so far, `q` (or Ctrl-C) stops the input (`vm.abort()`, the globals stay). In line mode the prompt reads the next input lines |
+| `.complete <text>` | the Tab completions for `text` (what Tab offers in the editor) |
 | `.time [on\|off]` | after each input: wall time (compile and run) and fuel |
 | `.gc` | collect; the arena size before and after |
 | `.heap` | arena bytes used, allocated and the limit, handles, atoms, then cells per kind and objects per class (count and bytes), largest first |
@@ -116,6 +119,14 @@ Hand-rolled, without dependencies (D1640). The terminal is put in non-canonical 
 without echo or signal keys through `stty`, so Ctrl-C arrives as a key, and a thread reads
 stdin into a channel that the REPL checks between fuel slices. Keys: Left/Right,
 Home/End, Up/Down (history), Backspace/Delete, Ctrl-A/E/B/F/K/U/W/L/P/N, Alt-B/F.
-Characters count as one column each. Long lines that wrap are redrawn imperfectly, and
-there is no completion. Without `stty` (not a Unix terminal) the REPL falls back to line
+Characters count as one column each. Long lines that wrap are redrawn imperfectly.
+
+**Tab** completes the name before the cursor (0102, D2011): a global (Script `let`/
+`const`/`class` bindings and the global object's properties along its prototype chain) or,
+after a dotted path such as `foo.bar.`, a property of the object the path names (own and
+inherited string keys, non-enumerable ones too, as node does). The path is followed
+through data properties only, read from the heap: no getter, proxy trap or other JS runs,
+so a path through an accessor or a proxy completes nothing. One candidate is inserted; with
+several, their common prefix, or, if that adds nothing, the list is printed under the
+line. `.complete <text>` shows the same list. Without `stty` (not a Unix terminal) the REPL falls back to line
 mode.
