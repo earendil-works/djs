@@ -4897,3 +4897,31 @@ Quoted developer comments in generated tables (opcode and intrinsic descriptions
 parenthesized references to documents and issues; generated status text names no
 documents. Alternatives considered for decisions: per-page decision footnotes (would
 duplicate the log) or no IDs at all (loses the trail to the measurements).
+
+## D018: Adopt mark-compact for in-VM collections
+date: 2026-11-01 · by: owner · issue: 0101
+The owner approved heap's prototype (docs/mark-compact.md): mark-compact for every in-VM
+collection, Cheney kept as `collect_canonical` for `canonical_hash` and the base image;
+the gate's "after a final collection" comparisons use `canonical_hash`; naming as proposed
+(`Heap::collect` = mark-compact). Measured: 10–50% lower peak memory on heavy workloads
+for 0–5.5% more instructions and +6 KB of code.
+
+## D019: Snapshots: compact images now
+date: 2026-11-01 · by: owner · issue: 0088
+Direction A from the snapshot research: collect, then compress against the recomputable
+reference image (the base/prelude image as a zstd dictionary), with a reference
+descriptor in the header and restore pinned to the engine build. B (journal replay as the
+durable record) and the ARCH "Deltas" replacement are not decided yet.
+
+## D020: The size budget is gzip relative to quickjs-wasi
+date: 2026-11-01 · by: owner · issue: -
+ARCH's "< 400 KB release wasm" target is replaced: the shipped module's gzip size must stay
+within 1.5x quickjs-wasi's (today ~1.8x: 528 KB vs 287 KB), measured on every merge by the
+size track. The base image is part of the module and part of the budget.
+
+## D021: pi integration deferred; codemode corpus harvested with redaction
+date: 2026-11-01 · by: owner · issue: -
+Wiring djs into pi-private is deferred to later. The owner allows harvesting codemode scripts
+from ~/.pi/agent/sessions into the difftest corpus, provided everything committed is
+redacted (no secrets, credentials, personal data or private content in scripts or recorded
+tool results).

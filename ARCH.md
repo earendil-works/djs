@@ -631,7 +631,7 @@ numbers, generated, D2101; D016 says why wasm numbers come first):
 
 | Metric | Target | Measured |
 | --- | --- | --- |
-| wasm size (release, after `wasm-opt`) | < 400 KB (quickjs.wasm is ~850 KB) | 1,515 KB without wasm-opt (code 935 KB, data 576 KB of which the base image is 398 KB); 531 KB gzip -9, 426 KB brotli |
+| wasm size (release, after `wasm-opt`) | gzip within 1.5x of quickjs-wasi (D020; the original target was < 400 KB raw) | 1,515 KB without wasm-opt (code 935 KB, data 576 KB of which the base image is 398 KB); 531 KB gzip -9, 426 KB brotli |
 | `vm_new` from the base snapshot | < 100 µs | about 40 µs in wasm, mostly the copy of the base (D1990); `Sandbox.create` ~60-140 µs, mostly instantiation |
 | compile throughput | > 50 MB/s of source on native builds | not tracked as a target; startup of a codemode script is µs |
 | interpreter speed | within 1.5x of QuickJS-wasm (stretch: parity) | wasm instructions vs quickjs-wasi: plain loops and property access 0.55-0.65x, strings and arrays 0.55-0.8x, JSON 0.5-0.6x; calls 1.3x, builtin-heavy code (higher-order, forEach) 2-4x, pi-like 1.5x |
