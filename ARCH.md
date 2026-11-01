@@ -349,7 +349,7 @@ The rule that makes G5 hold for builtins:
 Builtins are written in a **strict subset of TypeScript**, in the spirit of V8's Torque.
 One source has two backends:
 
-1. **Bytecode backend (default).** djs-bgen erases types and emits plain JS with
+1. **Bytecode backend (every builtin).** djs-bgen erases types and emits plain JS with
    `%Intrinsic` calls. djs compiles it in privileged mode into the base snapshot. Privileged
    mode unlocks intrinsic calls and opcodes that user code cannot reach (unchecked element
    access, int32 loop counters, direct slot access). This costs nothing in wasm size.
