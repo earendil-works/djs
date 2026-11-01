@@ -802,6 +802,13 @@ declare function RegExpEscapedSource(r: Obj): Str;
  * backtracking stack overflows. @leaf
  */
 declare function RegExpExecRaw(r: Obj, s: Str, lastIndex: f64, state: Value): Value;
+/**
+ * RegExpExecRaw without the match array: whether it matched (lastIndex is updated the
+ * same way). Suspendable like RegExpExecRaw. @leaf
+ */
+declare function RegExpTestRaw(r: Obj, s: Str, lastIndex: f64, state: Value): boolean;
+/** Whether v is the original RegExp.prototype.exec (the installed builtin). @leaf */
+declare function IsOriginalRegExpExec(v: Value): boolean;
 /** A RegExp String Iterator (CreateRegExpStringIterator, 22.2.9.1). @leaf */
 declare function CreateRegExpStringIterator(r: Obj, s: Str, global: boolean, unicode: boolean): Obj;
 /**

@@ -9,7 +9,9 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::heap::{Heap, HeapError, ObjectClass, PropFlags, Property, PropertyDescriptor, StrView};
+use crate::heap::{
+    Heap, HeapError, ObjectClass, PropFlags, Property, PropertyDescriptor, StrView, atoms,
+};
 use crate::interp::conv::{Fault, type_error};
 use crate::interp::{ErrorKind, Intrinsic, realm};
 use crate::regexp::{self, Captures, Flags, Program};
@@ -95,7 +97,7 @@ pub(crate) fn create(
     heap.set_object_slot(o, SLOT_PROGRAM, Value::internal(cell));
     heap.set_object_slot(o, SLOT_SOURCE, Value::string(pattern));
     heap.set_object_slot(o, SLOT_FLAGS, Value::int(bits as i32));
-    let key = heap.atom_str("lastIndex")?;
+    let key = atoms::LAST_INDEX;
     let d = PropertyDescriptor::data(Value::int(0), PropFlags::WRITABLE);
     heap.define_own_property(o, key, &d)?;
     Ok(o)
@@ -108,7 +110,17 @@ pub(crate) fn program(heap: &Heap, o: Obj) -> Program {
         .as_internal()
         .expect("RegExp program");
     let n = heap.u32_array_len(cell);
-    Program::from_words((0..n).map(|i| heap.u32_array_get(cell, i)).collect())
+    // One bulk read: this runs on every exec.
+    let bytes = heap
+        .arena()
+        .slice(crate::heap::cells::U32Array::DATA.at(cell, 0), 4 * n);
+    let words = bytes
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| u32::from_le_bytes(*b))
+        .collect();
+    Program::from_words(words)
 }
 
 pub(crate) fn flags(heap: &Heap, o: Obj) -> Flags {
@@ -201,7 +213,7 @@ fn alloc_units(heap: &mut Heap, units: &[u16]) -> Result<Str, HeapError> {
 /// Sets `lastIndex` (an own data property that is never an accessor: it is
 /// non-configurable), with Set's TypeError when it is read-only.
 pub(crate) fn set_last_index(heap: &mut Heap, o: Obj, v: Value) -> Result<(), Fault> {
-    let key = heap.atom_str("lastIndex")?;
+    let key = atoms::LAST_INDEX;
     match heap.get_own_property(o, key) {
         Some(Property::Data { flags, .. }) if !flags.writable() => {
             type_error("'lastIndex' is read-only")
@@ -268,9 +280,9 @@ pub(crate) fn match_result(
     let array_proto = realm::intrinsic_obj(heap, Intrinsic::ArrayProto);
     let a = heap.new_array_from_values(Some(array_proto), &values)?;
     let (start, _) = caps.get(0).expect("group 0 matched");
-    let index = heap.atom_str("index")?;
+    let index = atoms::INDEX;
     heap.create_data_property(a, index, Value::int(start as i32))?;
-    let input = heap.atom_str("input")?;
+    let input = atoms::INPUT;
     heap.create_data_property(a, input, Value::string(s))?;
     let has_names = prog.has_group_names();
     let groups = if has_names {
@@ -284,7 +296,7 @@ pub(crate) fn match_result(
     } else {
         Value::UNDEFINED
     };
-    let groups_key = heap.atom_str("groups")?;
+    let groups_key = atoms::GROUPS;
     heap.create_data_property(a, groups_key, groups)?;
     if prog.flags().contains(Flags::HAS_INDICES) {
         let mut pairs = Vec::with_capacity(n);

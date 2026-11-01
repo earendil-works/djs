@@ -24,6 +24,8 @@ const REGEXP_STRING_ITERATOR_SLOT: u16 = id("RegExpStringIteratorSlot");
 const REGEXP_STRING_ITERATOR_FINISH: u16 = id("RegExpStringIteratorFinish");
 const REGEXP_ESCAPE_STRING: u16 = id("RegExpEscapeString");
 const IS_PRISTINE_REGEXP: u16 = id("IsPristineRegExp");
+const REGEXP_TEST_RAW: u16 = id("RegExpTestRaw");
+const IS_ORIGINAL_REGEXP_EXEC: u16 = id("IsOriginalRegExpExec");
 const REGEXP_SPLIT_RAW: u16 = id("RegExpSplitRaw");
 const REGEXP_REPLACE_RAW: u16 = id("RegExpReplaceRaw");
 const REGEXP_PROTOTYPE_EXEC: u16 = id("RegExpPrototypeExec");
@@ -150,7 +152,11 @@ impl Exec<'_> {
                     }
                 }
             }
-            REGEXP_EXEC_RAW if argc == 4 => return self.regexp_exec_raw(name, base, next),
+            REGEXP_EXEC_RAW if argc == 4 => return self.regexp_exec_raw(name, base, next, false),
+            REGEXP_TEST_RAW if argc == 4 => return self.regexp_exec_raw(name, base, next, true),
+            IS_ORIGINAL_REGEXP_EXEC => {
+                Value::bool(a0 == realm::installed_intrinsic(self.heap, REGEXP_PROTOTYPE_EXEC))
+            }
             REGEXP_SPLIT_RAW if argc == 4 => return self.regexp_split_raw(name, base, next),
             REGEXP_REPLACE_RAW if argc == 4 => return self.regexp_replace_raw(name, base, next),
             IS_PRISTINE_REGEXP => Value::bool(self.regexp_pristine(a0)?),
@@ -287,7 +293,8 @@ impl Exec<'_> {
     /// `pc` still at this instruction, so the next `run` executes it again and resumes the
     /// match from that state. Everything is in the arena: a heap image taken while
     /// suspended resumes the same match.
-    fn regexp_exec_raw(&mut self, name: &str, base: u32, next: u32) -> Step {
+    /// With `test`, the result is just whether it matched (RegExp.prototype.test, D1560).
+    fn regexp_exec_raw(&mut self, name: &str, base: u32, next: u32, test: bool) -> Step {
         let state_slot = base + 3;
         let (Some(r), Some(s), Some(last)) = (
             re::as_regexp(self.heap, self.get(base)),
@@ -307,7 +314,7 @@ impl Exec<'_> {
             if g_or_y {
                 re::set_last_index(self.heap, r, Value::int(0))?;
             }
-            Value::NULL
+            if test { Value::FALSE } else { Value::NULL }
         } else {
             let prog = re::program(self.heap, r);
             let pending = self.load_exec_state(self.get(state_slot));
@@ -322,14 +329,18 @@ impl Exec<'_> {
                     if g_or_y {
                         re::set_last_index(self.heap, r, Value::int(0))?;
                     }
-                    Value::NULL
+                    if test { Value::FALSE } else { Value::NULL }
                 }
                 ExecResult::Match(caps) => {
                     if g_or_y {
                         let (_, end) = caps.get(0).expect("group 0 matched");
                         re::set_last_index(self.heap, r, Value::int(end as i32))?;
                     }
-                    re::match_result(self.heap, &prog, s, &caps)?
+                    if test {
+                        Value::TRUE
+                    } else {
+                        re::match_result(self.heap, &prog, s, &caps)?
+                    }
                 }
             }
         };
@@ -353,7 +364,7 @@ impl Exec<'_> {
         if self.heap.get_prototype_of(r) != Some(proto) || self.heap.own_keys(r).len() != 1 {
             return Ok(false);
         }
-        let last_index = self.heap.atom_str("lastIndex")?;
+        let last_index = atoms::LAST_INDEX;
         match self.heap.get_own_property(r, last_index) {
             Some(Property::Data { value, flags }) if flags.writable() && value.is_number() => {}
             _ => return Ok(false),
@@ -367,7 +378,7 @@ impl Exec<'_> {
             Some(Property::Accessor { getter, .. }) => Some(getter),
             _ => None,
         };
-        let exec = self.heap.atom_str("exec")?;
+        let exec = self.heap.atom_str("exec")?; // not a well-known atom
         if data(self, proto, exec) != Some(installed(self, REGEXP_PROTOTYPE_EXEC)) {
             return Ok(false);
         }

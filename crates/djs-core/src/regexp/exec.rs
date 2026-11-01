@@ -220,7 +220,8 @@ pub fn exec_at(
         next_gen: 0,
         slots: alloc::vec![UNSET; nslots],
         slot_gen: alloc::vec![UNSET; nslots],
-        stack: Vec::new(),
+        // Most matches need a few frames; growing from empty reallocates repeatedly.
+        stack: Vec::with_capacity(64),
     };
     resume(prog, input, state, fuel, limits)
 }

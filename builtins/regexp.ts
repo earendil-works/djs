@@ -229,13 +229,19 @@ function RegExpPrototypeExec(this: Value, string: Value): Value {
     throw NewTypeError("RegExp object expected");
   }
   const r: Obj = AsObj(this);
-  const s: Str = ToString(string);
-  return RegExpBuiltinExec(r, s);
+  const s: Str = IsString(string) ? AsStr(string) : ToString(string);
+  // RegExpBuiltinExec, inlined: this is the hot path of every match (D1560).
+  const lastIndex: Value = Get(r, "lastIndex");
+  return RegExpExecRaw(r, s, IsNumber(lastIndex) ? AsNumber(lastIndex) : ToLength(lastIndex), undefined);
 }
 
 /** RegExpExec ( R, S ), 22.2.7.1. */
 function RegExpExec(r: Obj, s: Str): Value {
   const exec: Value = Get(r, "exec");
+  // The original exec on a RegExp: call its body directly (no frame, no result check).
+  if (IsOriginalRegExpExec(exec) && IsRegExpObject(r)) {
+    return RegExpBuiltinExec(r, s);
+  }
   if (IsCallable(exec)) {
     const result: Value = Call(exec, r, s);
     if (!IsObject(result) && result !== null) {
@@ -259,7 +265,14 @@ function RegExpPrototypeTest(this: Value, s: Value): boolean {
     throw NewTypeError("RegExp object expected");
   }
   const r: Obj = AsObj(this);
-  const str: Str = ToString(s);
+  const str: Str = IsString(s) ? AsStr(s) : ToString(s);
+  const exec: Value = Get(r, "exec");
+  if (IsOriginalRegExpExec(exec) && IsRegExpObject(r)) {
+    // No match array is built when only the outcome is needed (D1560).
+    const lastIndex: Value = Get(r, "lastIndex");
+    const li: f64 = IsNumber(lastIndex) ? AsNumber(lastIndex) : ToLength(lastIndex);
+    return RegExpTestRaw(r, str, li, undefined);
+  }
   return RegExpExec(r, str) !== null;
 }
 
