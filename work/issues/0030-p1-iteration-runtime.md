@@ -3,7 +3,7 @@
 status: open
 agent: -
 branch: issue/0030-p1-iteration-runtime
-depends-on: 0028, 0029 (for the .d.ts declarations and the ops in the table)
+depends-on: 0028 (done), 0029 (for the .d.ts declarations and the iteration ops)
 touches: crates/djs-core/src/interp/, crates/djs-core/src/vm/, crates/djs-core/src/heap/ (additive)
 
 ## Goal
@@ -44,6 +44,16 @@ dup; get_field done; jump_if_true; get_field value`. for-in uses
    realm must create (%ArrayIteratorPrototype%.[[Prototype]] = %IteratorPrototype%). One
    function may be installed twice (`Array.prototype.values` ===
    `Array.prototype[Symbol.iterator]`).
+
+## Also (left over from 0028)
+- `define_method` / `define_getter` / `define_setter` and their `_elem` forms, and
+  `array_spread`: 0027's ignored test `compiler::tests::end_to_end_objects_0028` still
+  fails on these (verified on main 468f874). Do these first, since they are on main
+  already, then un-ignore that test.
+- Widen `%InstallMethod`'s key type in `builtins/intrinsics.d.ts` to allow symbols (0029
+  may already do this; check).
+- The `return f()` stack position (qjs reports the `return` keyword): this is a compiler
+  question. Note it for the lexer agent, don't change the compiler.
 
 ## Acceptance criteria
 - [ ] Everything in the list, with qjs messages.
