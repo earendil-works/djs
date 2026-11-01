@@ -189,8 +189,8 @@ memory. A freed VM's memory is reused but not returned: wasm memory cannot shrin
 
 Node 25, Apple M-series, the `wasm` profile at opt-level `s` (D1232), medians.
 
-**Size.** 1,209 KB (0057, after 0051): code 687 KB, data 519 KB of which the base snapshot
-is 387 KB; 416 KB gzip -9, 336 KB brotli -q 11. The `wasm` profile strips the name section
+**Size.** 1,241 KB (0057, after 0059): code 709 KB, data 528 KB of which the base snapshot
+is 395 KB; 428 KB gzip -9, 345 KB brotli -q 11. The `wasm` profile strips the name section
 (D1575) and links with `--compress-relocations` (D1570). Where the bytes go and what could
 shrink them: work/issues/0052-bloat-investigation.md. The size track (`scripts/bench.sh
 size`) records `size/djs-wasm ...` (file, code, data, names, gzip, brotli) next to the old

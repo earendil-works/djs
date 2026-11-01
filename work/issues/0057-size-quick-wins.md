@@ -84,6 +84,7 @@ default) is 1,208,946 bytes: code 837 -> 687 KB (-18%), gzip -9 436 -> 416 KB, b
 348 -> 336 KB; the file as built 1,544 -> 1,209 KB. No measurable perf regression
 (native engine track equal or faster, wasm compile throughput unchanged). Use
 `scripts/build-wasm.sh --keep-names` for profiling or `scripts/wasm-funcs.py`.
-Known gaps: the base snapshot (387 KB, S1/S2) is now the dominant part of the data and
+After rebasing onto 0059 (dynamic code, +32 KB): 1,240,988 bytes, code 709,292, data
+528,203 (base snapshot 395,424), gzip 427,897, brotli 344,697. Known gaps: the base snapshot (387 KB, S1/S2) is now the dominant part of the data and
 the biggest remaining item; the size probe (tests/bench/size) keeps its own profile and
 is not stripped.
