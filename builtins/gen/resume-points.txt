@@ -2132,6 +2132,176 @@ ReachesReceiver: reentrant
 ReflectSetPrototypeOf: reentrant (Reflect.setPrototypeOf)
   builtins/reflect.ts:207:10  SetPrototypeOf (intrinsic)
 
+RegExpConstructor: reentrant (constructor RegExp)
+  builtins/regexp.ts:11:36  IsRegExp (builtin)
+  builtins/regexp.ts:16:41  Get (intrinsic)
+  builtins/regexp.ts:30:9  Get (intrinsic)
+  builtins/regexp.ts:32:11  Get (intrinsic)
+  builtins/regexp.ts:35:22  GetPrototypeFromConstructor (builtin)
+  builtins/regexp.ts:36:44  ToString (builtin)
+  builtins/regexp.ts:37:44  ToString (builtin)
+
+RegExpSpecies: leaf (get RegExp[Symbol.species])
+
+ThisRegExpObject: leaf
+
+RegExpFlagGetter: leaf
+
+RegExpPrototypeHasIndices: leaf (get RegExp.prototype.hasIndices)
+
+RegExpPrototypeGlobal: leaf (get RegExp.prototype.global)
+
+RegExpPrototypeIgnoreCase: leaf (get RegExp.prototype.ignoreCase)
+
+RegExpPrototypeMultiline: leaf (get RegExp.prototype.multiline)
+
+RegExpPrototypeDotAll: leaf (get RegExp.prototype.dotAll)
+
+RegExpPrototypeUnicode: leaf (get RegExp.prototype.unicode)
+
+RegExpPrototypeUnicodeSets: leaf (get RegExp.prototype.unicodeSets)
+
+RegExpPrototypeSticky: leaf (get RegExp.prototype.sticky)
+
+RegExpPrototypeFlags: reentrant (get RegExp.prototype.flags)
+  builtins/regexp.ts:142:17  Get (intrinsic)
+  builtins/regexp.ts:145:17  Get (intrinsic)
+  builtins/regexp.ts:148:17  Get (intrinsic)
+  builtins/regexp.ts:151:17  Get (intrinsic)
+  builtins/regexp.ts:154:17  Get (intrinsic)
+  builtins/regexp.ts:157:17  Get (intrinsic)
+  builtins/regexp.ts:160:17  Get (intrinsic)
+  builtins/regexp.ts:163:17  Get (intrinsic)
+
+RegExpPrototypeSource: leaf (get RegExp.prototype.source)
+
+RegExpPrototypeToString: reentrant (RegExp.prototype.toString)
+  builtins/regexp.ts:190:33  Get (intrinsic)
+  builtins/regexp.ts:190:24  ToString (builtin)
+  builtins/regexp.ts:191:31  Get (intrinsic)
+  builtins/regexp.ts:191:22  ToString (builtin)
+
+RegExpBuiltinExec: reentrant
+  builtins/regexp.ts:197:35  Get (intrinsic)
+  builtins/regexp.ts:197:26  ToLength (builtin)
+
+RegExpPrototypeExec: reentrant (RegExp.prototype.exec, %RegExpPrototypeExec)
+  builtins/regexp.ts:211:18  ToString (builtin)
+  builtins/regexp.ts:212:10  RegExpBuiltinExec (builtin)
+
+RegExpExec: reentrant
+  builtins/regexp.ts:217:23  Get (intrinsic)
+  builtins/regexp.ts:219:27  Call (intrinsic)
+  builtins/regexp.ts:228:10  RegExpBuiltinExec (builtin)
+
+RegExpPrototypeTest: reentrant (RegExp.prototype.test)
+  builtins/regexp.ts:237:20  ToString (builtin)
+  builtins/regexp.ts:238:10  RegExpExec (builtin)
+
+AdvanceStringIndex: leaf
+
+FlagsInclude: leaf
+
+MatchString: reentrant
+  builtins/regexp.ts:257:19  Get (intrinsic)
+  builtins/regexp.ts:257:10  ToString (builtin)
+
+AdvanceAfterEmptyMatch: reentrant
+  builtins/regexp.ts:262:35  Get (intrinsic)
+  builtins/regexp.ts:262:26  ToLength (builtin)
+  builtins/regexp.ts:263:3  Set (intrinsic)
+
+RegExpPrototypeMatch: reentrant (RegExp.prototype[Symbol.match])
+  builtins/regexp.ts:272:18  ToString (builtin)
+  builtins/regexp.ts:273:31  Get (intrinsic)
+  builtins/regexp.ts:273:22  ToString (builtin)
+  builtins/regexp.ts:275:12  RegExpExec (builtin)
+  builtins/regexp.ts:278:3  Set (intrinsic)
+  builtins/regexp.ts:282:27  RegExpExec (builtin)
+  builtins/regexp.ts:289:27  MatchString (builtin)
+  builtins/regexp.ts:290:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/regexp.ts:292:7  AdvanceAfterEmptyMatch (builtin)
+
+RegExpPrototypeMatchAll: reentrant (RegExp.prototype[Symbol.matchAll])
+  builtins/regexp.ts:304:18  ToString (builtin)
+  builtins/regexp.ts:305:20  SpeciesConstructor (builtin)
+  builtins/regexp.ts:306:31  Get (intrinsic)
+  builtins/regexp.ts:306:22  ToString (builtin)
+  builtins/regexp.ts:307:24  Construct (intrinsic)
+  builtins/regexp.ts:308:35  Get (intrinsic)
+  builtins/regexp.ts:308:26  ToLength (builtin)
+  builtins/regexp.ts:309:3  Set (intrinsic)
+
+RegExpStringIteratorNext: reentrant (%RegExpStringIteratorPrototype%.next)
+  builtins/regexp.ts:325:24  RegExpExec (builtin)
+  builtins/regexp.ts:331:9  MatchString (builtin)
+  builtins/regexp.ts:332:7  AdvanceAfterEmptyMatch (builtin)
+
+RegExpStringIteratorToStringTag: leaf (value %RegExpStringIteratorPrototype%[Symbol.toStringTag])
+
+RegExpPrototypeReplace: reentrant (RegExp.prototype[Symbol.replace])
+  builtins/regexp.ts:355:18  ToString (builtin)
+  builtins/regexp.ts:360:18  ToString (builtin)
+  builtins/regexp.ts:362:31  Get (intrinsic)
+  builtins/regexp.ts:362:22  ToString (builtin)
+  builtins/regexp.ts:367:5  Set (intrinsic)
+  builtins/regexp.ts:372:27  RegExpExec (builtin)
+  builtins/regexp.ts:376:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/regexp.ts:381:9  MatchString (builtin)
+  builtins/regexp.ts:382:7  AdvanceAfterEmptyMatch (builtin)
+  builtins/regexp.ts:388:31  Get (intrinsic)
+  builtins/regexp.ts:389:31  LengthOfArrayLike (builtin)
+  builtins/regexp.ts:391:35  Get (intrinsic)
+  builtins/regexp.ts:391:26  ToString (builtin)
+  builtins/regexp.ts:393:45  Get (intrinsic)
+  builtins/regexp.ts:393:25  ToIntegerOrInfinity (builtin)
+  builtins/regexp.ts:401:25  Get (intrinsic)
+  builtins/regexp.ts:403:16  ToString (builtin)
+  builtins/regexp.ts:405:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/regexp.ts:407:32  Get (intrinsic)
+  builtins/regexp.ts:411:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/regexp.ts:413:48  Get (intrinsic)
+  builtins/regexp.ts:413:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/regexp.ts:415:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/regexp.ts:416:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/regexp.ts:418:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/regexp.ts:420:30  CallWithArray (intrinsic)
+  builtins/regexp.ts:420:21  ToString (builtin)
+  builtins/regexp.ts:425:21  GetSubstitution (builtin)
+
+GetSubstitution: reentrant
+  builtins/regexp.ts:500:32  Get (intrinsic)
+  builtins/regexp.ts:516:32  Get (intrinsic)
+  builtins/regexp.ts:518:21  ToString (builtin)
+
+RegExpPrototypeSearch: reentrant (RegExp.prototype[Symbol.search])
+  builtins/regexp.ts:536:18  ToString (builtin)
+  builtins/regexp.ts:537:36  Get (intrinsic)
+  builtins/regexp.ts:539:5  Set (intrinsic)
+  builtins/regexp.ts:541:25  RegExpExec (builtin)
+  builtins/regexp.ts:542:35  Get (intrinsic)
+  builtins/regexp.ts:544:5  Set (intrinsic)
+  builtins/regexp.ts:549:10  Get (intrinsic)
+
+RegExpPrototypeSplit: reentrant (RegExp.prototype[Symbol.split])
+  builtins/regexp.ts:558:18  ToString (builtin)
+  builtins/regexp.ts:559:20  SpeciesConstructor (builtin)
+  builtins/regexp.ts:560:31  Get (intrinsic)
+  builtins/regexp.ts:560:22  ToString (builtin)
+  builtins/regexp.ts:563:25  Construct (intrinsic)
+  builtins/regexp.ts:566:70  ToNumber (builtin)
+  builtins/regexp.ts:572:22  RegExpExec (builtin)
+  builtins/regexp.ts:576:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/regexp.ts:582:5  Set (intrinsic)
+  builtins/regexp.ts:583:22  RegExpExec (builtin)
+  builtins/regexp.ts:588:27  Get (intrinsic)
+  builtins/regexp.ts:588:18  ToLength (builtin)
+  builtins/regexp.ts:596:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/regexp.ts:603:35  LengthOfArrayLike (builtin)
+  builtins/regexp.ts:605:45  Get (intrinsic)
+  builtins/regexp.ts:605:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/regexp.ts:613:3  CreateDataPropertyOrThrow (intrinsic)
+
 ThisSet: leaf
 
 SetConstructor: reentrant (constructor Set)
@@ -2302,7 +2472,7 @@ ThisToString: reentrant
   builtins/string.ts:60:10  ToString (builtin)
 
 IsRegExp: reentrant
-  builtins/string.ts:71:26  Get (intrinsic)
+  builtins/string.ts:68:26  Get (intrinsic)
 
 ClampPosition: reentrant
   builtins/string.ts:77:18  ToIntegerOrInfinity (builtin)

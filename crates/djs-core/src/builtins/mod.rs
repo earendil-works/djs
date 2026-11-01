@@ -12,5 +12,6 @@ pub(crate) mod function;
 pub(crate) mod json;
 pub(crate) mod number;
 pub(crate) mod object;
+pub(crate) mod regexp;
 pub(crate) mod string;
 pub(crate) mod typed;

@@ -192,6 +192,7 @@ pub(crate) fn class_tag(heap: &Heap, o: Obj) -> &'static str {
         C::Number => "Number",
         C::String => "String",
         C::Date => "Date",
+        C::RegExp => "RegExp",
         _ => "Object",
     }
 }

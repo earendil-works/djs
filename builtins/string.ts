@@ -60,16 +60,16 @@ function ThisToString(v: Value): Str {
   return ToString(v);
 }
 
-/**
- * IsRegExp ( argument ), 7.2.6. Without RegExp objects of its own yet, only
- * Symbol.match decides (RegExp.prototype has it, so regexps answer true).
- */
+/** IsRegExp ( argument ), 7.2.6. */
 function IsRegExp(v: Value): boolean {
   if (!IsObject(v)) {
     return false;
   }
   const matcher: Value = Get(AsObj(v), WellKnownSymbol("match"));
-  return matcher !== undefined && ToBoolean(matcher);
+  if (matcher !== undefined) {
+    return ToBoolean(matcher);
+  }
+  return IsRegExpObject(v);
 }
 
 /** A position argument clamped to [0, len] (ToIntegerOrInfinity first). */

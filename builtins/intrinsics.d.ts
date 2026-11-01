@@ -702,6 +702,42 @@ declare function BigIntAsUintN(bits: f64, b: Value): Value;
 /** The Number value of a BigInt (rounded to nearest). @leaf */
 declare function BigIntToNumber(b: Value): f64;
 
+// ---- RegExp (0033, builtins/regexp.rs over crate::regexp; D1332) -----------------------
+
+/** Whether v is a RegExp object (has [[RegExpMatcher]]). @leaf */
+declare function IsRegExpObject(v: Value): boolean;
+/**
+ * RegExpAlloc + RegExpInitialize after the ToStrings: a new RegExp with prototype proto
+ * (%RegExp.prototype% for undefined) and lastIndex 0. qjs's SyntaxError for a bad
+ * pattern or flags. Regex literals compile to this. @leaf
+ */
+declare function RegExpCreate(proto: Value, pattern: Str, flags: Str): Obj;
+/** [[OriginalSource]] of a RegExp object. @leaf */
+declare function RegExpSource(r: Obj): Str;
+/** [[OriginalFlags]] of a RegExp object, in canonical order. @leaf */
+declare function RegExpFlags(r: Obj): Str;
+/** Whether a RegExp object has the flag letter `flag`. @leaf */
+declare function RegExpHasFlag(r: Obj, flag: Str): boolean;
+/** EscapeRegExpPattern of [[OriginalSource]] (`(?:)` when empty). @leaf */
+declare function RegExpEscapedSource(r: Obj): Str;
+/**
+ * RegExpBuiltinExec ( R, S ) once lastIndex is ToLength(Get(R, "lastIndex")): the match
+ * array or null, and lastIndex updated for g and y. Pass undefined as state: when the
+ * fuel runs out mid-match the interpreter suspends here and keeps the matcher's state
+ * in that argument. InternalError "out of memory in regexp execution" if the
+ * backtracking stack overflows. @leaf
+ */
+declare function RegExpExecRaw(r: Obj, s: Str, lastIndex: f64, state: Value): Value;
+/** A RegExp String Iterator (CreateRegExpStringIterator, 22.2.9.1). @leaf */
+declare function CreateRegExpStringIterator(r: Obj, s: Str, global: boolean, unicode: boolean): Obj;
+/**
+ * Slot i of a RegExp String Iterator: 0 the regexp, 1 the string, 2 global, 3 unicode,
+ * 4 done. TypeError "RegExp String Iterator object expected" for anything else. @leaf
+ */
+declare function RegExpStringIteratorSlot(it: Value, i: i32): Value;
+/** Marks a RegExp String Iterator done. @leaf */
+declare function RegExpStringIteratorFinish(it: Value): void;
+
 // ---- Used by the generated code (crates/djs-bgen/src/emit_js.rs) ------------------------
 
 /**

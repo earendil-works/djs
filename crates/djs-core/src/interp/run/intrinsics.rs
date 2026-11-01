@@ -2037,6 +2037,7 @@ impl Exec<'_> {
             "%AsyncFromSyncIteratorPrototype%" => Some(Intrinsic::AsyncFromSyncIteratorProto),
             "%MapIteratorPrototype%" => Some(Intrinsic::MapIteratorProto),
             "%SetIteratorPrototype%" => Some(Intrinsic::SetIteratorProto),
+            "%RegExpStringIteratorPrototype%" => Some(Intrinsic::RegExpStringIteratorProto),
             "%TypedArray%" => Some(Intrinsic::TypedArrayCtor),
             // `X.prototype` of a constructor the prelude has not installed yet.
             _ => Intrinsic::prototype_of(name.strip_suffix(".prototype")?),

@@ -116,7 +116,12 @@ pub enum ObjectClass {
     ArrayBuffer = 22,
     TypedArray = 23,
     DataView = 24,
-    // 25 and 26 are RegExp and RegExpStringIterator (0033).
+    /// A RegExp (0033, `builtins/regexp.rs`): slot 0 the compiled program (an internal
+    /// U32Array), slot 1 the source string, slot 2 the flag bits (int32).
+    RegExp = 25,
+    /// A RegExp String Iterator (matchAll): slot 0 the regexp, slot 1 the string, slot
+    /// 2 flags (int32: 1 global, 2 unicode, 4 done).
+    RegExpStringIterator = 26,
     /// A Proxy exotic object (0045, `heap/proxy.rs`): slot 0 the target, slot 1 the
     /// handler (both null once revoked), slot 2 flags (int32: 1 callable, 2
     /// constructor, fixed at creation from the target). No prototype, no own
@@ -156,6 +161,8 @@ impl ObjectClass {
             22 => Some(ObjectClass::ArrayBuffer),
             23 => Some(ObjectClass::TypedArray),
             24 => Some(ObjectClass::DataView),
+            25 => Some(ObjectClass::RegExp),
+            26 => Some(ObjectClass::RegExpStringIterator),
             27 => Some(ObjectClass::Proxy),
             30 => Some(ObjectClass::BigInt),
             _ => None,
@@ -186,6 +193,7 @@ impl ObjectClass {
             ObjectClass::ArrayBuffer => 2,
             ObjectClass::TypedArray => 4,
             ObjectClass::DataView => 3,
+            ObjectClass::RegExp | ObjectClass::RegExpStringIterator => 3,
             ObjectClass::Proxy => 3,
         }
     }

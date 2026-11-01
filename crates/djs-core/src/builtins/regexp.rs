@@ -1,0 +1,321 @@
+//! RegExp leaf intrinsics over `crate::regexp` (D1332): creating RegExp objects,
+//! reading their internal slots, the escaped source, and building match results. The
+//! matcher itself runs in `interp/run/json_regexp.rs`, which owns fuel and suspension.
+//!
+//! A RegExp object (`ObjectClass::RegExp`) holds its compiled program in a U32Array cell
+//! (pointer-free words, so the heap image carries it as is), its source string and its
+//! flag bits. `lastIndex` is an ordinary own data property (writable only).
+
+use alloc::string::String;
+use alloc::vec::Vec;
+
+use crate::heap::{Heap, ObjectClass, PropFlags, Property, PropertyDescriptor, StrView};
+use crate::interp::conv::{Fault, type_error};
+use crate::interp::{ErrorKind, Intrinsic, realm};
+use crate::regexp::{self, Captures, Flags, Program};
+use crate::value::{Obj, Str, Value};
+
+pub(crate) const SLOT_PROGRAM: u32 = 0;
+pub(crate) const SLOT_SOURCE: u32 = 1;
+pub(crate) const SLOT_FLAGS: u32 = 2;
+
+/// RegExp String Iterator slots and flag bits.
+pub(crate) const IT_REGEXP: u32 = 0;
+pub(crate) const IT_STRING: u32 = 1;
+pub(crate) const IT_FLAGS: u32 = 2;
+pub(crate) const IT_GLOBAL: i32 = 1;
+pub(crate) const IT_UNICODE: i32 = 2;
+pub(crate) const IT_DONE: i32 = 4;
+
+/// The flag letters in `flags` order (hasIndices first, as in RegExp.prototype.flags).
+const FLAG_CHARS: [(u8, Flags); 8] = [
+    (b'd', Flags::HAS_INDICES),
+    (b'g', Flags::GLOBAL),
+    (b'i', Flags::IGNORE_CASE),
+    (b'm', Flags::MULTILINE),
+    (b's', Flags::DOT_ALL),
+    (b'u', Flags::UNICODE),
+    (b'v', Flags::UNICODE_SETS),
+    (b'y', Flags::STICKY),
+];
+
+fn syntax_error<T>(msg: &str) -> Result<T, Fault> {
+    Err(Fault::Error(ErrorKind::SyntaxError, String::from(msg)))
+}
+
+/// The RegExp object `v`, if it is one.
+pub(crate) fn as_regexp(heap: &Heap, v: Value) -> Option<Obj> {
+    v.as_object()
+        .filter(|&o| heap.object_class(o) == ObjectClass::RegExp)
+}
+
+/// Compiles `pattern` with `flags` (both as written in the source or given to the
+/// constructor), with QuickJS's SyntaxError messages.
+pub(crate) fn compile(pattern: &[u16], flags: &[u16]) -> Result<Program, regexp::SyntaxError> {
+    let f = Flags::parse(flags)?;
+    regexp::compile(pattern, f)
+}
+
+/// RegExpCreate: a new RegExp object with prototype `proto` (%RegExp.prototype% if
+/// `None`), `lastIndex` 0.
+pub(crate) fn create(
+    heap: &mut Heap,
+    proto: Option<Obj>,
+    pattern: Str,
+    flags: Str,
+) -> Result<Obj, Fault> {
+    let p = heap.str_to_utf16(pattern);
+    let f = heap.str_to_utf16(flags);
+    let prog = match compile(&p, &f) {
+        Ok(prog) => prog,
+        Err(e) => return syntax_error(e.message()),
+    };
+    let words = prog.words();
+    let cell = heap.alloc_u32_array(words.len() as u32)?;
+    for (i, &w) in words.iter().enumerate() {
+        heap.u32_array_set(cell, i as u32, w);
+    }
+    let proto = proto.unwrap_or_else(|| realm::intrinsic_obj(heap, Intrinsic::RegExpProto));
+    let o = heap.alloc_object(ObjectClass::RegExp, Some(proto), 3)?;
+    heap.set_object_slot(o, SLOT_PROGRAM, Value::internal(cell));
+    heap.set_object_slot(o, SLOT_SOURCE, Value::string(pattern));
+    heap.set_object_slot(o, SLOT_FLAGS, Value::int(prog.flags().bits() as i32));
+    let key = heap.atom_str("lastIndex")?;
+    let d = PropertyDescriptor::data(Value::int(0), PropFlags::WRITABLE);
+    heap.define_own_property(o, key, &d)?;
+    Ok(o)
+}
+
+/// The compiled program of a RegExp object (copied out of its cell).
+pub(crate) fn program(heap: &Heap, o: Obj) -> Program {
+    let cell = heap
+        .object_slot(o, SLOT_PROGRAM)
+        .as_internal()
+        .expect("RegExp program");
+    let n = heap.u32_array_len(cell);
+    Program::from_words((0..n).map(|i| heap.u32_array_get(cell, i)).collect())
+}
+
+pub(crate) fn flags(heap: &Heap, o: Obj) -> Flags {
+    Flags::from_bits(heap.object_slot(o, SLOT_FLAGS).as_int().unwrap_or(0) as u16)
+}
+
+pub(crate) fn source(heap: &Heap, o: Obj) -> Str {
+    heap.object_slot(o, SLOT_SOURCE)
+        .as_string()
+        .expect("RegExp source")
+}
+
+/// The flags as a string, in canonical order ([[OriginalFlags]]).
+pub(crate) fn flags_string(heap: &mut Heap, o: Obj) -> Result<Str, Fault> {
+    let f = flags(heap, o);
+    let s: Vec<u8> = FLAG_CHARS
+        .iter()
+        .filter(|(_, bit)| f.contains(*bit))
+        .map(|(c, _)| *c)
+        .collect();
+    Ok(heap.alloc_latin1(&s)?)
+}
+
+/// Whether the RegExp has the flag letter `c`.
+pub(crate) fn has_flag(heap: &Heap, o: Obj, c: u16) -> bool {
+    let f = flags(heap, o);
+    FLAG_CHARS
+        .iter()
+        .any(|(ch, bit)| *ch as u16 == c && f.contains(*bit))
+}
+
+/// EscapeRegExpPattern as QuickJS does it: `/` outside classes and line terminators
+/// escaped, `(?:)` for the empty pattern.
+pub(crate) fn escaped_source(heap: &mut Heap, o: Obj) -> Result<Str, Fault> {
+    let src = source(heap, o);
+    let units = heap.str_to_utf16(src);
+    if units.is_empty() {
+        return Ok(heap.alloc_str("(?:)")?);
+    }
+    let mut out = Vec::with_capacity(units.len() + 4);
+    let mut in_class = false;
+    let mut i = 0;
+    while i < units.len() {
+        let c = units[i];
+        i += 1;
+        match c {
+            0x5C => {
+                out.push(c);
+                if i < units.len() {
+                    out.push(units[i]);
+                    i += 1;
+                }
+            }
+            0x5D => {
+                in_class = false;
+                out.push(c);
+            }
+            0x5B => {
+                out.push(c);
+                if !in_class {
+                    in_class = true;
+                    // `[]` and `[^]`-style leading `]` stays literal.
+                    if i < units.len() && units[i] == 0x5D {
+                        out.push(units[i]);
+                        i += 1;
+                    }
+                }
+            }
+            0x0A => out.extend_from_slice(&[0x5C, b'n' as u16]),
+            0x0D => out.extend_from_slice(&[0x5C, b'r' as u16]),
+            0x2F if !in_class => out.extend_from_slice(&[0x5C, 0x2F]),
+            _ => out.push(c),
+        }
+    }
+    if out == units {
+        return Ok(src);
+    }
+    Ok(alloc_units(heap, &out)?)
+}
+
+fn alloc_units(heap: &mut Heap, units: &[u16]) -> Result<Str, crate::heap::HeapError> {
+    if units.iter().all(|&u| u <= 0xFF) {
+        let bytes: Vec<u8> = units.iter().map(|&u| u as u8).collect();
+        heap.alloc_latin1(&bytes)
+    } else {
+        heap.alloc_utf16(units)
+    }
+}
+
+/// Sets `lastIndex` (an own data property that is never an accessor: it is
+/// non-configurable), with Set's TypeError when it is read-only.
+pub(crate) fn set_last_index(heap: &mut Heap, o: Obj, v: Value) -> Result<(), Fault> {
+    let key = heap.atom_str("lastIndex")?;
+    match heap.get_own_property(o, key) {
+        Some(Property::Data { flags, .. }) if !flags.writable() => {
+            type_error("'lastIndex' is read-only")
+        }
+        _ => {
+            let d = PropertyDescriptor {
+                value: Some(v),
+                ..Default::default()
+            };
+            heap.define_own_property(o, key, &d)?;
+            Ok(())
+        }
+    }
+}
+
+/// The substring `s[start..end)` of a flat string view.
+fn substring(heap: &mut Heap, s: Str, start: usize, end: usize) -> Result<Value, Fault> {
+    Ok(Value::string(super::string::substring(
+        heap,
+        s,
+        start as u32,
+        end as u32,
+    )?))
+}
+
+/// Defines `key: v` on a groups object, except that an undefined value never replaces
+/// a defined one (duplicate named groups: only one of them participates).
+fn define_group(heap: &mut Heap, groups: Obj, name: &[u32], v: Value) -> Result<(), Fault> {
+    let units: Vec<u16> = name.iter().map(|&u| u as u16).collect();
+    let key = heap.atom_utf16(&units)?;
+    if v.is_undefined() && heap.has_own_property(groups, key) {
+        return Ok(());
+    }
+    heap.create_data_property(groups, key, v)?;
+    Ok(())
+}
+
+/// The match result array of RegExpBuiltinExec (22.2.7.2 steps 22-35): the captures,
+/// `index`, `input`, `groups`, and with the `d` flag `indices`.
+pub(crate) fn match_result(
+    heap: &mut Heap,
+    prog: &Program,
+    s: Str,
+    caps: &Captures,
+) -> Result<Value, Fault> {
+    let n = caps.len();
+    let mut values = Vec::with_capacity(n);
+    for i in 0..n {
+        values.push(match caps.get(i) {
+            Some((a, b)) => substring(heap, s, a, b)?,
+            None => Value::UNDEFINED,
+        });
+    }
+    let array_proto = realm::intrinsic_obj(heap, Intrinsic::ArrayProto);
+    let a = heap.new_array_from_values(Some(array_proto), &values)?;
+    let (start, _) = caps.get(0).expect("group 0 matched");
+    let index = heap.atom_str("index")?;
+    heap.create_data_property(a, index, Value::int(start as i32))?;
+    let input = heap.atom_str("input")?;
+    heap.create_data_property(a, input, Value::string(s))?;
+    let has_names = prog.has_group_names();
+    let groups = if has_names {
+        let g = heap.new_object(None)?;
+        for (i, v) in values.iter().enumerate().skip(1) {
+            if let Some(name) = prog.group_name(i) {
+                define_group(heap, g, name, *v)?;
+            }
+        }
+        Value::object(g)
+    } else {
+        Value::UNDEFINED
+    };
+    let groups_key = heap.atom_str("groups")?;
+    heap.create_data_property(a, groups_key, groups)?;
+    if prog.flags().contains(Flags::HAS_INDICES) {
+        let mut pairs = Vec::with_capacity(n);
+        for i in 0..n {
+            pairs.push(match caps.get(i) {
+                Some((a, b)) => {
+                    let pair = [Value::int(a as i32), Value::int(b as i32)];
+                    Value::object(heap.new_array_from_values(Some(array_proto), &pair)?)
+                }
+                None => Value::UNDEFINED,
+            });
+        }
+        let indices = heap.new_array_from_values(Some(array_proto), &pairs)?;
+        let igroups = if has_names {
+            let g = heap.new_object(None)?;
+            for (i, v) in pairs.iter().enumerate().skip(1) {
+                if let Some(name) = prog.group_name(i) {
+                    define_group(heap, g, name, *v)?;
+                }
+            }
+            Value::object(g)
+        } else {
+            Value::UNDEFINED
+        };
+        heap.create_data_property(indices, groups_key, igroups)?;
+        let key = heap.atom_str("indices")?;
+        heap.create_data_property(a, key, Value::object(indices))?;
+    }
+    Ok(Value::object(a))
+}
+
+/// A new RegExp String Iterator.
+pub(crate) fn string_iterator(heap: &mut Heap, r: Obj, s: Str, flags: i32) -> Result<Obj, Fault> {
+    let proto = realm::intrinsic_obj(heap, Intrinsic::RegExpStringIteratorProto);
+    let it = heap.alloc_object(ObjectClass::RegExpStringIterator, Some(proto), 3)?;
+    heap.set_object_slot(it, IT_REGEXP, Value::object(r));
+    heap.set_object_slot(it, IT_STRING, Value::string(s));
+    heap.set_object_slot(it, IT_FLAGS, Value::int(flags));
+    Ok(it)
+}
+
+/// The RegExp String Iterator `v`, or qjs's TypeError.
+pub(crate) fn as_string_iterator(heap: &Heap, v: Value) -> Result<Obj, Fault> {
+    match v
+        .as_object()
+        .filter(|&o| heap.object_class(o) == ObjectClass::RegExpStringIterator)
+    {
+        Some(o) => Ok(o),
+        None => type_error("RegExp String Iterator object expected"),
+    }
+}
+
+/// The input of the matcher: a flat string's code units, read in place.
+pub(crate) fn input(view: StrView<'_>) -> regexp::Input<'_> {
+    match view {
+        StrView::Latin1(b) => regexp::Input::Latin1(b),
+        StrView::Utf16(b) => regexp::Input::Utf16Le(b),
+    }
+}

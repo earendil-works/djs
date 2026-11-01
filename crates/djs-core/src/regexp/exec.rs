@@ -44,6 +44,8 @@ fn in_ranges(ranges: &[u32], c: u32) -> bool {
 pub enum Input<'a> {
     Latin1(&'a [u8]),
     Utf16(&'a [u16]),
+    /// UTF-16 as little-endian byte pairs: a two-byte heap string, read in place.
+    Utf16Le(&'a [u8]),
 }
 
 impl Input<'_> {
@@ -51,6 +53,7 @@ impl Input<'_> {
         match self {
             Input::Latin1(s) => s.len(),
             Input::Utf16(s) => s.len(),
+            Input::Utf16Le(s) => s.len() / 2,
         }
     }
 
@@ -62,6 +65,7 @@ impl Input<'_> {
         match self {
             Input::Latin1(s) => s[i] as u32,
             Input::Utf16(s) => s[i] as u32,
+            Input::Utf16Le(s) => u16::from_le_bytes([s[2 * i], s[2 * i + 1]]) as u32,
         }
     }
 }
@@ -175,9 +179,8 @@ pub fn exec(
     let mut start = start;
     if unicode && start > 0 && start < input.len() {
         // Starting inside a surrogate pair starts at the pair (RegExpBuiltinExec).
-        if let Input::Utf16(s) = input
-            && (0xDC00..=0xDFFF).contains(&s[start])
-            && (0xD800..=0xDBFF).contains(&s[start - 1])
+        if (0xDC00..=0xDFFF).contains(&input.unit(start))
+            && (0xD800..=0xDBFF).contains(&input.unit(start - 1))
         {
             start -= 1;
         }
