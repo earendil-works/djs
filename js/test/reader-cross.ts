@@ -124,7 +124,7 @@ assert.ok(Number.isNaN(read("nan")));
 const bad = extra.slice(0, 4096);
 bad[12] ^= 1; // Roots.VERSION
 assert.throws(() => readValue(bad, [0, 0]), LayoutMismatch);
-const notHeap = new Uint8Array(64);
+const notHeap = new Uint8Array(128);
 assert.throws(() => readValue(notHeap, [0, 0]), /bad magic/);
 
 console.log(`reader: ${n} corpus cases and ${cases.size} extra cases match`);
