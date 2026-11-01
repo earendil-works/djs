@@ -562,6 +562,16 @@ fn emit_function(
                         _ => {}
                     }
                 }
+                // `var`s named like a parameter (a separate var scope, D1820).
+                for &(v, p) in &scope.copies {
+                    match storage[p as usize] {
+                        Storage::Local(s) => out.get_loc(s),
+                        Storage::Box(s) => out.get_box(s),
+                        Storage::Arg(a) => out.get_arg(a),
+                        _ => out.undefined(),
+                    }
+                    emit_init(&mut out, storage[v as usize], f.vars[v as usize].name, false);
+                }
                 // Hoisted function declarations (docs/compiler.md 5.5).
                 for &(v, child) in &scope.funcs {
                     out.fclosure(child);

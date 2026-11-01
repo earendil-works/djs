@@ -334,6 +334,18 @@ impl Parser<'_, '_> {
             self.code().generator_start(0);
         }
         self.code().enter_scope(BODY_SCOPE as u16);
+        // With a non-simple parameter list the body's `var`s live in a scope of their
+        // own; a `var` named like a parameter starts with its value (`Scope::copies`,
+        // done by its `enter_scope`).
+        let separate = if self.f.simple_params {
+            None
+        } else {
+            let vs = self.f.new_scope(BODY_SCOPE, ScopeKind::Block);
+            self.f.var_scope = vs;
+            self.scope = vs;
+            self.code().enter_scope(vs as u16);
+            Some(vs)
+        };
         // strip-types: a function body starts a new statement context.
         let outer_semi = core::mem::replace(&mut self.ts_semi, false);
         // Directive prologue: everything is strict already, but `"use strict"` with
@@ -373,6 +385,23 @@ impl Parser<'_, '_> {
         self.next()?;
         self.end_using_list(using);
         self.ts_semi = outer_semi;
+        if let Some(vs) = separate {
+            self.code().leave_scope(vs as u16);
+            let mut copies = alloc::vec::Vec::new();
+            for &v in &self.f.scopes[vs as usize].vars {
+                let var = &self.f.vars[v as usize];
+                if var.kind != VarKind::Var {
+                    continue;
+                }
+                if let Some(p) = self.f.find_in_scope(BODY_SCOPE, var.name)
+                    && self.f.vars[p as usize].kind == VarKind::Param
+                {
+                    copies.push((v, p));
+                }
+            }
+            self.f.scopes[vs as usize].copies = copies;
+            self.scope = BODY_SCOPE;
+        }
         self.code().leave_scope(BODY_SCOPE as u16);
         self.emit_return_undef();
         Ok(())

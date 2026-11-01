@@ -216,7 +216,7 @@ impl<'a> Parser<'a, '_> {
     fn ts_declare_binding(&mut self, d: u32, name: Atom, pos: u32) -> PResult<()> {
         let v = match self.f.find_in_scope(self.scope, name) {
             Some(v) => v,
-            None if self.scope == BODY_SCOPE => self.declare_var(name, pos)?,
+            None if self.scope == self.f.var_scope => self.declare_var(name, pos)?,
             None => {
                 let v = self.declare_lexical(name, VarKind::Let, pos)?;
                 self.code().undefined();

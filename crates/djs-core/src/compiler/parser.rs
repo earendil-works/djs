@@ -751,7 +751,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             if let Some(v) = self.f.find_in_scope(s, name) {
                 let kind = self.f.vars[v as usize].kind;
                 // Block-level function declarations are lexical too.
-                if kind.is_lexical() || (kind == VarKind::Func && s != BODY_SCOPE) {
+                if kind.is_lexical() || (kind == VarKind::Func && s != self.f.var_scope) {
                     return syntax(pos, "invalid redefinition of lexical identifier");
                 }
             }
@@ -761,22 +761,31 @@ impl<'a, 'h> Parser<'a, 'h> {
             }
         }
         self.f.var_decls.push((name, self.scope));
-        if let Some(v) = self.f.find_in_scope(BODY_SCOPE, name) {
+        let vs = self.f.var_scope;
+        if let Some(v) = self.f.find_in_scope(vs, name) {
             // `var` after `var`, or a parameter: the same binding.
             return Ok(v);
         }
-        let v = self.f.add_var(name, VarKind::Var, BODY_SCOPE);
+        let v = self.f.add_var(name, VarKind::Var, vs);
         self.f.vars[v as usize].global = self.f.kind == FuncKind::Script;
         Ok(v)
     }
 
     /// Declares a `let`/`const` in the current scope.
     pub fn declare_lexical(&mut self, name: Atom, kind: VarKind, pos: u32) -> PResult<VarId> {
-        if let Some(v) = self.f.find_in_scope(self.scope, name) {
+        // In a separate var scope, the parameters are still the body's names.
+        let params_too = self.scope == self.f.var_scope && self.scope != BODY_SCOPE;
+        let found = self.f.find_in_scope(self.scope, name).or_else(|| {
+            params_too
+                .then(|| self.f.find_in_scope(BODY_SCOPE, name))
+                .flatten()
+                .filter(|&v| self.f.vars[v as usize].kind == VarKind::Param)
+        });
+        if let Some(v) = found {
             let msg = match self.f.vars[v as usize].kind {
                 // Function declarations at the function level behave like `var`.
                 VarKind::Var => self.var_conflict_message(),
-                VarKind::Func if self.scope == BODY_SCOPE => self.var_conflict_message(),
+                VarKind::Func if self.scope == self.f.var_scope => self.var_conflict_message(),
                 VarKind::Param => "invalid redefinition of parameter name",
                 _ => "invalid redefinition of lexical identifier",
             };
@@ -807,16 +816,16 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// scope's entry, docs/compiler.md 5.5) and registers the child that initializes it.
     pub fn declare_function(&mut self, name: Atom, child: u32, pos: u32) -> PResult<()> {
         let scope = self.scope;
-        let v = if scope == BODY_SCOPE {
+        let v = if scope == self.f.var_scope {
             // Like `var` at the function level: it may share a binding with a `var`,
             // a parameter or an earlier function declaration (the last one wins).
-            match self.f.find_in_scope(BODY_SCOPE, name) {
+            match self.f.find_in_scope(scope, name) {
                 Some(v) if self.f.vars[v as usize].kind.is_lexical() => {
                     return syntax(pos, "invalid redefinition of lexical identifier");
                 }
                 Some(v) => v,
                 None => {
-                    let v = self.f.add_var(name, VarKind::Func, BODY_SCOPE);
+                    let v = self.f.add_var(name, VarKind::Func, scope);
                     self.f.vars[v as usize].global = self.f.kind == FuncKind::Script;
                     v
                 }

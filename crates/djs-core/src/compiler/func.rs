@@ -36,6 +36,9 @@ pub(super) struct Scope {
     pub vars: Vec<VarId>,
     /// Function declarations hoisted to this scope's entry: `(binding, child index)`.
     pub funcs: Vec<(VarId, u32)>,
+    /// `var`s that start with the value of a parameter at this scope's entry, before
+    /// the function declarations: `(var, parameter)` (`FuncState::var_scope`).
+    pub copies: Vec<(VarId, VarId)>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -286,6 +289,10 @@ pub(super) struct FuncState {
     /// (compiler/ts_decl.rs). Free names that are members resolve to properties of the
     /// closure's parameter.
     pub ns: Option<u32>,
+    /// The scope of the body's `var`s and function declarations: `BODY_SCOPE`, or with
+    /// a non-simple parameter list a separate scope inside it, so that closures in the
+    /// parameters do not see them (FunctionDeclarationInstantiation step 28, D1820).
+    pub var_scope: ScopeId,
 }
 
 pub(super) const BODY_SCOPE: ScopeId = 0;
@@ -304,6 +311,7 @@ impl FuncState {
                 kind: ScopeKind::Body,
                 vars: Vec::new(),
                 funcs: Vec::new(),
+                copies: Vec::new(),
             }],
             vars: Vec::new(),
             refs: Vec::new(),
@@ -339,6 +347,7 @@ impl FuncState {
             src_end: 0,
             param_props: Vec::new(),
             ns: None,
+            var_scope: BODY_SCOPE,
         }
     }
 
@@ -348,6 +357,7 @@ impl FuncState {
             kind,
             vars: Vec::new(),
             funcs: Vec::new(),
+            copies: Vec::new(),
         });
         (self.scopes.len() - 1) as ScopeId
     }

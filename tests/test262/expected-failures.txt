@@ -87,24 +87,12 @@ language/eval-code/indirect/var-env-global-lex-non-strict.js: Test262Error: Expe
 language/eval-code/indirect/var-env-var-init-global-exstng.js: Test262Error: x descriptor value should be 45; x value should be 45
 language/eval-code/indirect/var-env-var-init-global-new.js: Test262Error: x should be an own property
 language/eval-code/indirect/var-env-var-non-strict.js: ReferenceError: 'x' is not defined
-language/expressions/arrow-function/scope-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/class/elements/private-getter-is-not-a-own-property.js: TypeError: not a function
 language/expressions/class/elements/private-setter-is-not-a-own-property.js: TypeError: not a function
-language/expressions/class/scope-gen-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/expressions/class/scope-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/expressions/class/scope-setter-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/expressions/class/scope-static-gen-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/expressions/class/scope-static-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/expressions/class/scope-static-setter-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/expressions/function/scope-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/expressions/generators/scope-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/instanceof/primitive-prototype-with-primitive.js: TypeError: invalid 'instanceof' right operand
 language/expressions/instanceof/prototype-getter-with-object-throws.js: Test262Error: Expected a DummyError to be thrown but no exception was thrown at all
 language/expressions/instanceof/prototype-getter-with-object.js: Test262Error: [] should be instance of Function.prototype
 language/expressions/object/computed-property-name-topropertykey-before-value-evaluation.js: Test262Error: Expected SameValue(«"bad"», «"ok"») to be true
-language/expressions/object/scope-gen-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/expressions/object/scope-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/expressions/object/scope-setter-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/optional-chaining/optional-call-preserves-this.js: TypeError: cannot read property '_b' of undefined
 language/expressions/property-accessors/S11.2.1_A4_T3.js: Test262Error: #1: typeof Function.prototype === "function". Actual: object
 language/global-code/script-decl-func-err-non-configurable.js: Test262Error: writable, non-enumerable data property Expected a TypeError to be thrown but no exception was thrown at all
@@ -112,17 +100,9 @@ language/global-code/script-decl-func.js: TypeError: 'configurable' is read-only
 language/identifier-resolution/assign-to-global-undefined.js: expected runtime ReferenceError, but no error was thrown
 language/statements/class/elements/private-getter-is-not-a-own-property.js: TypeError: not a function
 language/statements/class/elements/private-setter-is-not-a-own-property.js: TypeError: not a function
-language/statements/class/scope-gen-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/statements/class/scope-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/statements/class/scope-setter-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/statements/class/scope-static-gen-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/statements/class/scope-static-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/statements/class/scope-static-setter-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/statements/class/strict-mode/arguments-callee.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
 language/statements/function/13.0-12-s.js: SyntaxError: invalid lvalue in strict mode
 language/statements/function/13.0_4-17gs.js: SyntaxError: invalid lvalue in strict mode
-language/statements/function/scope-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
-language/statements/generators/scope-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/statements/try/scope-catch-block-lex-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/statements/variable/12.2.1-10-s.js: SyntaxError: invalid lvalue in strict mode
 language/statements/variable/12.2.1-16-s.js: SyntaxError: invalid variable name in strict mode
