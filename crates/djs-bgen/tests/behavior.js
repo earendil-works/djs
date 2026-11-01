@@ -31,6 +31,14 @@ function decodeRecord(run) {
   }
   return rec;
 }
+function denseArray(v) {
+  if (!Array.isArray(v) || ourProxies.has(v)) return false;
+  for (let i = 0; i < v.length; i++) {
+    const d = Object.getOwnPropertyDescriptor(v, i);
+    if (!d || !("value" in d)) return false;
+  }
+  return true;
+}
 const iterState = new WeakMap();
 const MapIterNext = Object.getPrototypeOf(new Map().keys()).next;
 const SetIterNext = Object.getPrototypeOf(new Set().keys()).next;
@@ -594,6 +602,11 @@ const I = {
   StrRepeat: (s, n) => (check(Number.isInteger(n) && n >= 0, "StrRepeat"), s.repeat(n)),
   StrFromCodeUnits: (list) => String.fromCharCode(...list),
   StrFromCodePoints: (list) => String.fromCodePoint(...list),
+  // Bulk fast paths (0056, D1561): an Array with every element an own data property.
+  IsDenseArray: (v) => denseArray(v),
+  AllNumbers: (list) => denseArray(list) && list.every((x) => typeof x === "number"),
+  AllCodePoints: (list) =>
+    denseArray(list) && list.every((x) => typeof x === "number" && Number.isInteger(x) && x >= 0 && x <= 0x10ffff),
   StrNormalize: (s, f) => s.normalize(["NFC", "NFD", "NFKC", "NFKD"][f]),
   CompareStrings: (a, b) => (check(typeof a === "string" && typeof b === "string", "CompareStrings"), a < b ? -1 : a > b ? 1 : 0),
   StringCodePoints: (s) => [...s],

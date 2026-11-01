@@ -81,7 +81,9 @@ regex over large tool output).
   - Slowest after: the three TypedArray copyWithin detached tests (1.5-2.3 s each, not
     regex); character-class-escape-non-whitespace.js 0.49 s (65k replace calls,
     interpreter-bound); the property-escape tests at 0.2 s each.
-  - Ratchets unchanged (404); difftest with --suspend-every 97 --gc-stress OK.
+  - Ratchets unchanged; difftest with --suspend-every 97 --gc-stress OK.
+- crates/djs-bgen/tests/behavior.js: stand-ins for IsDenseArray, AllNumbers and
+  AllCodePoints (outside touches, test only).
 
 ## Follow-ups
 - What remains in the property-escape tests and character-class tests is the
