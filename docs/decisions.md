@@ -5067,3 +5067,71 @@ whose colors would have to be mapped onto the Elanor roles, and a bundle to pin 
 update) for features a 5–20 line example does not need; highlighting in Rust in the
 docs-only wasm (highlight.rs lives in the std tool crate, and the module loads only on
 first use, so typing before it arrives would show plain text).
+## D2260: Snapshots are compact containers: collected, zstd against a reference, pinned to the build
+date: 2026-11-01 · by: snapshot · issue: 0117
+Direction A of the snapshot research (D019). The Sandbox's `bytes()`/`fromBytes()` and the
+pi adapter's `snapshot()`/`resumeVm()` write and read one container (js/src/snapshot.ts,
+layout in docs/host.md "Snapshots"): a 40-byte little-endian header (magic `DJSN`, format
+1, app, compression, the engine build hash, the reference kind, FNV-1a 64 and length of the
+reference, the image length, the metadata and payload lengths), the host's metadata as
+JSON (the Sandbox's host function names and clock, the adapter's session state), and the
+collected image, compressed with zstd using a *reference image* as a raw-content
+dictionary: the module's base snapshot (new exports `djs_base_ptr`/`djs_base_len`,
+additive, ABI version unchanged) or pi's prelude image (D2262). Neither side stores the
+reference: the build fixes the base, and the prelude's inputs fix the prelude image.
+
+Restoring checks the container, the app, then the engine build before anything else, and
+refuses another build with both hashes in the message ("snapshot from djs build X; this
+module is build Y: an image restores only into the engine build that wrote it"); then the
+reference (kind, hash, length), then zstd's content checksum ("corrupt snapshot"), then
+the image's own verification as before. A host that must restore snapshots of older builds
+has to keep those builds (an engine registry: not built). The formats before the container
+(the Sandbox's `DJSS` and the adapter's `DJPI`, version 1: header, JSON, raw image) still
+load. Measured on wasm: a pi session waiting on a tool is 42–48 KB instead of 546–567 KB
+(its collected image; 936 KB before D1890), a new Sandbox 33 KB instead of 395 KB; a
+restore costs 0.25–0.3 ms more for light sessions.
+
+## D2261: Snapshot compression runs in the host: node's zstd at level 3; none without it
+date: 2026-11-01 · by: snapshot · issue: 0117
+`nodeZstd()` finds node's built-in zstd (`node:zlib`, node 22.15 and 23.8 on) through
+`process.getBuiltinModule`, so the package still loads in a browser, and compresses at
+level 3 with a window covering the reference and the image and a content checksum. Where
+there is none (browsers, older node), snapshots are written uncompressed (the container
+says so) and a compressed one cannot be read; `snapshotCodec` (SandboxOptions, VmHooks)
+plugs in any zstd with raw-content dictionaries, `null` turns compression off, and
+`bytes({ compression: "none" })` does it per snapshot.
+
+Measured on a waiting pi session (546 KB image, prelude reference): level 1 132 KB, level
+3 40 KB in 1.4 ms (decompression 0.2 ms), level 6 37 KB in 2.2 ms, level 9 34 KB in 3.3 ms,
+level 19 30 KB in 106 ms; a window covering both changed nothing at these sizes, long
+distance matching made it 2% worse. Level 3 keeps `snapshot()` under 2 ms while a script
+waits. Compressing in wasm instead was measured with zstd-rs 0.1 (pure Rust, no_std,
+interoperable with C zstd both ways): sizes within 10% of node's at level 3, compression
+1.1–1.8x and decompression 1.5–1.8x slower, and +141 KB of module (57 KB gzip; 54 KB, 24 KB gzip
+for the decoder alone). The module is already over its size budget (D020), and a 0.1
+crate in the shipped engine is a risk, so it is not built in: a browser host that wants
+compact snapshots can load such a codec as a separate module.
+
+## D2262: pi's prelude image is the reference of the adapter's snapshots and is recomputable
+date: 2026-11-01 · by: snapshot · issue: 0117
+A session's snapshots are compressed against the prelude image it started from (a cached
+one, or the one its cold start cached): 40 KB instead of 70 KB against the base. Sessions
+started without prelude images (`reuseImages: false`) use the base. To make the prelude
+image a function of its inputs (the prelude, tools, globals, store, heap limit,
+deterministic mode, and the build), the adapter runs the host globals and the prelude with
+the clock at 0 in UTC; nothing there reads the time, and every run sets its clock before
+its first slice, so scripts see nothing new. Two compilations of the module, and two
+processes, produce the same image byte for byte (a test compiles the module twice; two
+processes were compared by hand). `resumeVm` finds the reference
+among the process's prelude images by its hash, or recomputes it from `options.prelude`
+and `options.data` (the session's start data), refusing data that make another image;
+without either it says what it needs. The FNV-1a 64 of a prelude image is computed the
+first time a snapshot or a resume needs it (about 3 ms for 540 KB).
+
+## D2263: Sandbox.bytes() collects first
+date: 2026-11-01 · by: snapshot · issue: 0117
+As the adapter does (D1890): the sandbox itself collects before its image is taken, so
+going on with it and restoring the bytes continue from the same heap, and garbage does not
+spoil the compression. A collection is invisible to scripts except through WeakRefs in
+"collected" mode and the out-of-memory point of allocations that are not retried; journals
+compare canonical hashes, which do not depend on collections (D1730).
