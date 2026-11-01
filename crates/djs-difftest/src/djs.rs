@@ -38,6 +38,8 @@ pub struct Djs {
     pub suspend_every: Option<u64>,
     /// Collect garbage at every safepoint.
     pub gc_stress: bool,
+    /// Report a hash of the heap image after a final collection (`--determinism`).
+    pub image: bool,
 }
 
 impl Djs {
@@ -63,6 +65,7 @@ impl Engine for Djs {
                 return RunResult {
                     output: Vec::new(),
                     done: Done::Crash(msg),
+                    image: None,
                 };
             }
         };
@@ -73,11 +76,26 @@ impl Engine for Djs {
             Err(Stop::Timeout) => Done::Timeout,
             Err(Stop::Crash(msg)) => Done::Crash(msg),
         };
+        let image = if self.image && !matches!(done, Done::Timeout | Done::Crash(_)) {
+            s.vm.collect().ok().map(|()| fnv64(s.vm.bytes()))
+        } else {
+            None
+        };
         RunResult {
             output: s.output,
             done,
+            image,
         }
     }
+}
+
+/// FNV-1a, 64 bits.
+fn fnv64(bytes: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for &b in bytes {
+        h = (h ^ b as u64).wrapping_mul(0x0100_0000_01b3);
+    }
+    h
 }
 
 /// Why a session stopped early.
@@ -126,13 +144,9 @@ impl Djs {
             ..VmOptions::default()
         };
         let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;
-        // The wall clock, in UTC (D1383); the qjs engine runs with TZ=UTC to match.
-        vm.set_now(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis() as f64)
-                .unwrap_or(0.0),
-        );
+        // The wall clock, read once per case, in UTC (D1383); the qjs engine runs with
+        // TZ=UTC to match.
+        vm.set_now(job.now);
         let budget = job.fuel.unwrap_or(DEFAULT_FUEL);
         // Under GC stress a slice can take a long time (a collection at every safepoint),
         // so the wall-clock limit is checked more often.

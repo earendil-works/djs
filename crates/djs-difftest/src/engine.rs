@@ -21,6 +21,9 @@ pub struct Job<'a> {
     /// Fuel limit for engines that meter instructions (djs).
     pub fuel: Option<u64>,
     pub memory_limit: Option<u64>,
+    /// The clock the case sees (ms since the epoch): read once per case, so the plain run
+    /// and its stress variants see the same time (and leave comparable heap images).
+    pub now: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +44,8 @@ pub struct RunResult {
     /// Output items in order (`console.*` and `text()`), each possibly multi-line.
     pub output: Vec<String>,
     pub done: Done,
+    /// djs with `--determinism`: a hash of the heap image after a final collection.
+    pub image: Option<u64>,
 }
 
 pub trait Engine: Sync {
@@ -107,16 +112,19 @@ mod tests {
                 "Error: x\n    at f (codemode.js:1:2)\n    at g".into(),
             ],
             done: Done::Return("{\"v\":1}".into()),
+            image: None,
         };
         assert_eq!(transcript(&r), "a\nError: x\n=== return\n{\"v\":1}\n");
         let r = RunResult {
             output: vec![],
             done: Done::Throw("TypeError: no\n    at <eval>".into()),
+            image: None,
         };
         assert_eq!(transcript(&r), "=== throw\nTypeError: no\n");
         let r = RunResult {
             output: vec!["".into()],
             done: Done::Completed,
+            image: None,
         };
         assert_eq!(transcript(&r), "\n=== completed\n");
     }

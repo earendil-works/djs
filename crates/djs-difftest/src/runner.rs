@@ -72,7 +72,12 @@ pub fn run_one(
             stress: Vec::new(),
         };
     }
-    let result = execute(engine, case, prelude_file, prelude, opts);
+    // One clock reading per case, shared by the main run and its stress variants.
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(0.0);
+    let result = execute(engine, case, prelude_file, prelude, opts, now);
     let actual = transcript(&result);
     let verdict = match fs::read_to_string(&case.expected_file) {
         Ok(expected) => {
@@ -104,9 +109,25 @@ pub fn run_one(
     };
     let mut stress = Vec::new();
     for (label, variant) in &opts.stress {
-        let r = execute(variant.as_ref(), case, prelude_file, prelude, opts);
+        let r = execute(variant.as_ref(), case, prelude_file, prelude, opts, now);
         let t = transcript(&r);
-        if t != actual {
+        if t == actual {
+            // `--determinism`: the same graph, so the same heap image after a collection
+            // (D1720). A variant that collects on another policy (GC stress) does not
+            // hash its image.
+            if let (Some(a), Some(b)) = (result.image, r.image)
+                && a != b
+            {
+                stress.push(StressMismatch {
+                    label: label.clone(),
+                    reason: format!(
+                        "the same transcript, but the heap image after a collection differs ({a:016x} vs {b:016x})"
+                    ),
+                    diff: String::new(),
+                    timed_out: false,
+                });
+            }
+        } else {
             let timed_out =
                 matches!(r.done, Done::Timeout) && !matches!(result.done, Done::Timeout);
             stress.push(StressMismatch {
@@ -137,6 +158,7 @@ fn execute(
     prelude_file: &Path,
     prelude: &str,
     opts: &Options,
+    now: f64,
 ) -> RunResult {
     match fs::read_to_string(&case.file) {
         Ok(source) => {
@@ -150,6 +172,7 @@ fn execute(
                 timeout: case.meta.timeout.unwrap_or(opts.timeout),
                 fuel: case.meta.fuel,
                 memory_limit: opts.memory_limit,
+                now,
             };
             // An engine bug must fail one case, not abort the run.
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| engine.run(&job)))
@@ -162,12 +185,14 @@ fn execute(
                     RunResult {
                         output: Vec::new(),
                         done: Done::Crash(format!("engine panicked: {msg}")),
+                        image: None,
                     }
                 })
         }
         Err(e) => RunResult {
             output: Vec::new(),
             done: Done::Crash(format!("cannot read case: {e}")),
+            image: None,
         },
     }
 }

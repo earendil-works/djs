@@ -25,6 +25,10 @@ options:
                       heap images; its output must equal the plain run (hard failure)
   --gc-stress         djs only: also run every case collecting at every safepoint;
                       its output must equal the plain run (hard failure)
+  --determinism       djs only: also run every case suspending every 1009 fuel (and 97
+                      without --suspend-every) through heap images, and require the
+                      suspended runs to leave the same heap image as the plain run after
+                      a final collection (hard failure; GC stress is not compared, D1720)
   --clusters          group the failures by the first line of what went wrong
   --qjs PATH          qjs binary (default: $DJS_QJS, else ~/Development/dquickts/qjs)
   --update            rewrite .expected files from qjs (never from djs)
@@ -56,6 +60,7 @@ struct Args {
     quiet: bool,
     suspend_every: Option<u64>,
     gc_stress: bool,
+    determinism: bool,
     clusters: bool,
 }
 
@@ -95,6 +100,7 @@ fn parse_args() -> Result<Args, String> {
         quiet: false,
         suspend_every: None,
         gc_stress: false,
+        determinism: false,
         clusters: false,
     };
     let mut it = std::env::args().skip(1);
@@ -144,6 +150,7 @@ fn parse_args() -> Result<Args, String> {
                 args.suspend_every = Some(n);
             }
             "--gc-stress" => args.gc_stress = true,
+            "--determinism" => args.determinism = true,
             "--clusters" => args.clusters = true,
             "-q" | "--quiet" => args.quiet = true,
             // `run` is accepted for symmetry with djs-test262.
@@ -161,8 +168,9 @@ fn parse_args() -> Result<Args, String> {
     if args.update_ratchet && args.ratchet.is_none() {
         args.ratchet = Some(args.corpus.join("expected-failures.txt"));
     }
-    if (args.suspend_every.is_some() || args.gc_stress) && args.engine != "djs" {
-        return Err("--suspend-every and --gc-stress need --engine djs".into());
+    if (args.suspend_every.is_some() || args.gc_stress || args.determinism) && args.engine != "djs"
+    {
+        return Err("--suspend-every, --gc-stress and --determinism need --engine djs".into());
     }
     if args.update && args.engine != "qjs" {
         return Err("--update records the oracle; it only works with --engine qjs".into());
@@ -200,7 +208,10 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
                 binary: args.qjs.clone(),
             })
         }
-        "djs" => Box::new(Djs::default()),
+        "djs" => Box::new(Djs {
+            image: args.determinism,
+            ..Djs::default()
+        }),
         e => return Err(format!("unknown engine `{e}`")),
     };
     let cases = case::discover(&args.corpus, &args.filters)?;
@@ -478,10 +489,20 @@ fn row(name: &str, r: &[usize; 4]) -> Vec<String> {
 /// The stress variants requested on the command line.
 fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
     let mut v: Vec<(String, Box<dyn Engine>)> = Vec::new();
-    if let Some(n) = args.suspend_every {
+    // `--determinism`: at least two slice sizes through heap images, their images compared.
+    let mut slices: Vec<u64> = args.suspend_every.into_iter().collect();
+    if args.determinism {
+        for n in [97, 1009] {
+            if !slices.contains(&n) && (n == 1009 || args.suspend_every.is_none()) {
+                slices.push(n);
+            }
+        }
+    }
+    for n in slices {
         let e = Djs {
             suspend_every: Some(n),
             gc_stress: false,
+            image: args.determinism,
         };
         v.push((e.label(), Box::new(e)));
     }
@@ -489,6 +510,7 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
         let e = Djs {
             suspend_every: None,
             gc_stress: true,
+            image: false,
         };
         v.push((e.label(), Box::new(e)));
     }

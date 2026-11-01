@@ -39,6 +39,7 @@ impl Engine for Qjs {
         let crash = |msg: String| RunResult {
             output: Vec::new(),
             done: Done::Crash(msg),
+            image: None,
         };
         let mut cmd = Command::new(&self.binary);
         // Local time is UTC on both engines (djs has no host offset here, D1383).
@@ -137,7 +138,11 @@ fn parse_output(
             .trim();
         Done::Crash(format!("no result ({code}) {first}").trim_end().to_string())
     };
-    RunResult { output, done }
+    RunResult {
+        output,
+        done,
+        image: None,
+    }
 }
 
 fn json_quote(s: &str) -> String {
