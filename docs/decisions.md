@@ -5749,3 +5749,39 @@ D2047):
 - moving a blocked huge block down into the free run before it (no change);
 - placing huge blocks only at memory's end (worse);
 - letting dlmalloc release segments (no change, +274 B gzip).
+
+## D2054: VMs from the base keep their initial arena room; json's +0.6 MiB is accepted
+date: 2026-11-03 · by: heap · issue: 0132
+D2053 made json 6.2 → 6.8 MiB and json-replacer 4.43 → 4.83 MiB, means of 24 perturbed
+runs. Nothing is changed for it.
+- **The cause**, from a log of the page manager over all workloads:
+  1. Every growing workload starts the same way. dlmalloc takes 1 page (page 8), the
+     decoded base 5 pages (9..14), then the arena 11 pages (14..25), already sized to
+     its first collection threshold plus slack (D1990).
+  2. When the script compiles, dlmalloc asks for 2 more pages. They land after the
+     arena (25..27), so the arena's next growth is blocked and it moves once, to page 27.
+  3. The arena then grows in place to the end. Below it stay the old arena's 11 pages
+     (partly reused by dlmalloc and a temporary side table) and the 2-page segment.
+
+  json's arena ends at page 27 + 82. Under dlmalloc alone it moved many times, and its
+  last move went down into a big coalesced hole at page ~14. Those 13 pages are the
+  difference.
+- **More initial room doesn't help.** json grows past its first threshold in one native
+  operation (11 → 17 pages) before any safepoint. Room for that up front costs every VM
+  the pages, including the small ones at 1.6 MiB, and dlmalloc's segment would still
+  land after the arena and block a later, bigger growth.
+- **A dlmalloc-only pool at instance start doesn't help.** Single runs, MiB:
+
+  | pool | json | small VMs | elsewhere |
+  | --- | ---: | ---: | --- |
+  | none (D2053) | 6.8 | 1.6 | |
+  | 2 pages | 6.8 | 1.6 | identical to no pool |
+  | 4 pages | 7.4 | 1.7 | arrays 14.3 → 19.9, higher-order 15.5 → 21.1, pi-like 3.1 → 2.4 |
+  | 6 pages | 7.6 | 1.8 | similar mix |
+
+  dlmalloc needs 3–9 pages over a run. A smaller pool only delays the blocking segment
+  until the arena is bigger, and a large enough pool costs small VMs 0.2–0.5 MiB.
+- **Accepted:** json +0.6 MiB and json-replacer +0.4 MiB, against 2× lower peaks on
+  arrays, higher-order and strbuild and pi-like 3.70 → 2.81 MiB.
+- **Not built:** letting a collection's shrinking realloc move the arena down into a lower
+  free run (0132's follow-up).
