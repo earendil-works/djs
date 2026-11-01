@@ -114,8 +114,9 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- |
 | ObjectClass RegExp, RegExpStringIterator | 25, 26 | num / 0033 |
 | ObjectClass Proxy | 27 | infra / 0045 (merged) |
-| ObjectClass BigInt wrapper | 30 | heap / 0046 |
-| CellKind BigInt | 24 | heap / 0046 |
+| ObjectClass BigInt wrapper | 30 | heap / 0046 (merged) |
+| CellKind BigInt | 24 | heap / 0046 (merged) |
+| ObjectClass IteratorHelper, WeakRef, FinalizationRegistry, DisposableStack | 28, 31, 32, 33 | heap / 0051 |
 | func_flags PRIVILEGED | 1 << 8 | heap / 0043 (merged) |
 | func_flags HOME | 1 << 6 (check) | lexer / 0040 |
 
