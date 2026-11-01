@@ -1625,3 +1625,41 @@ costs 0.017 ms to decode and 0.022 ms to read (docs/wire.md); a base64 string of
 image decodes in 0.1 ms. Uint8Array.fromBase64/toBase64/fromHex/toHex/setFrom* are leaf
 code (builtins/typed.rs) and match qjs on every edge case of the corpus case
 builtins/base64.js.
+
+## D1420: Function kinds: [[Prototype]] and `prototype` from the ASYNC/GENERATOR bits
+date: 2026-11-01 · by: heap · issue: 0042
+`fclosure` picks the closure's [[Prototype]] from the template's `func_flags::ASYNC` and
+`GENERATOR` bits, for any kind (normal, arrow, method; agreed with the lexer for 0041):
+%AsyncFunction.prototype%, %GeneratorFunction.prototype% or
+%AsyncGeneratorFunction.prototype%. Every GENERATOR closure gets an own `prototype`
+inheriting from %GeneratorPrototype% or %AsyncGeneratorPrototype%; async functions get
+none. The three prototypes are realm intrinsics, linked to %GeneratorPrototype% /
+%AsyncGeneratorPrototype% (`prototype`/`constructor`, configurable, not writable) at realm
+creation. Their constructors are not globals: they are `@intrinsic` builtins in
+builtins/generator.ts that throw like `Function` (no source compilation), and Rust wires
+them (name, length, `prototype`, [[Prototype]] %Function%, constructor flag) when the
+prelude installs them with `%InstallIntrinsic`, because the builtin language cannot pass
+functions around as values.
+
+## D1421: Async generators and async iteration on the generator ops
+date: 2026-11-01 · by: heap · issue: 0042
+No new ops: an async generator is `generator_start` on an ASYNC|GENERATOR function, and its
+body uses `yield` and `await` on the same local (docs/compiler.md 7.7 has the sequences:
+the yield operand and the return value are awaited by the compiler, as is a `return(x)`
+resumption). `await` now suspends with its own state (4, AWAITING) and `yield` with 1, so
+`%AsyncGeneratorStep` (builtins/asyncgen.ts), which resumes the frame for a request or for
+an awaited promise's job, knows from the state why the frame handed back control: an
+await (wait for the job), a yield (settle the oldest request, then go on with the next
+one), or a return (complete, drain the queue). Requests are Records `[type, value,
+promise]` in an internal queue (slot 6 of the Generator object), handled per spec
+(AsyncGeneratorEnqueue/CompleteStep/DrainQueue/AwaitReturn). `for await` uses
+`%GetAsyncIterator` (wrapping sync iterators in %AsyncFromSyncIteratorPrototype% objects:
+Records with that prototype) and `%AsyncIteratorReturnMethod` / `%AsyncIteratorCloseThrow`
+for closing. Job order checked against node; qjs never settles a `next()` queued behind
+`return()` on an unstarted async generator (a qjs bug we do not copy).
+
+## D1422: `yield_star` passes the inner result object through
+date: 2026-11-01 · by: heap · issue: 0042
+For sync `yield*` (requested by 0041): `yield_star loc` is `yield` with the state 6
+(suspended raw), and `%GeneratorPrototype%` methods return the yielded value itself
+instead of wrapping it in a new iterator result (GeneratorYield ( innerResult )).

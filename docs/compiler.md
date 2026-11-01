@@ -1210,6 +1210,7 @@ immediate); the compiler reserves it (call it `%gen` / `%async`).
 | --- | --- | --- |
 | `generator_start loc` | `->` | first instruction of a generator function: creates the generator object (prototype: the function's own `prototype` if an object, else %GeneratorPrototype%), stores it in `loc`, suspends, and returns it to the caller. `next()` resumes at the following instruction. |
 | `yield loc` | `v -> received isReturn` | suspends; `next()`/`return()`/`throw()` get `v`. Resumed by `next(x)`: `x false`; by `return(x)`: `x true`; by `throw(e)`: `e` is thrown at the `yield` (handler lookup with the yield's pc). |
+| `yield_star loc` | `innerResult -> received isReturn` | sync generators only (0042): `yield` for `yield*`, whose `next()`/`return()`/`throw()` return `innerResult` itself (GeneratorYield ( innerResult ): no `value` read, no new result object). Resumes like `yield`. |
 | `async_start loc` | `->` | first instruction of an async function (and of an async codemode body): creates the async state with its result promise in `loc`. The body runs on synchronously. |
 | `await loc` | `v -> value` | suspends until `v` settles (PromiseResolve, then a reaction): pushes the value, or throws the reason at the `await`. The first `await` returns the result promise to the caller. |
 | `async_return loc` | `v ->` | resolves the result promise with `v` (thenables adopted) and returns the promise. TERM. |
@@ -1246,7 +1247,47 @@ What the compiler emits:
   ```
   Parameter initialization goes inside the region (errors there reject the promise). The
   caller always gets the promise, whatever the body does.
-- Async generators are not covered yet (they need a queue of requests; later).
+- **Async generators** (`ASYNC|GENERATOR`, 0042, D1421) use the generator ops plus
+  `await` on the same local; `generator_start` makes an async generator when the
+  function has the ASYNC bit (prototype: its own `prototype`, else
+  %AsyncGeneratorPrototype%). The runtime keeps the request queue and settles the
+  promises of `next`/`return`/`throw`; the body only yields, awaits and returns:
+  ```
+  generator_start %gen
+  ...
+  <v> await %gen; yield %gen          ; yield v: the operand is awaited first
+  jump_if_false L_next
+  await %gen                          ; return(x): x is awaited, then returned
+  <the ordinary return sequence>
+  L_next: ...                         ; the received value
+  <v> await %gen; return              ; return v: awaited, then the ordinary return
+  ```
+  `throw(e)` throws at the `yield`. An exception leaving the body rejects the pending
+  request (no catch-all handler, unlike async functions); falling off the end returns
+  `undefined` as usual (`return_undef`, nothing to await). `yield*` in an async
+  generator iterates the inner async iterator with `await`s around `next`/`throw`/
+  `return` and yields `value` with plain `yield` (no `yield_star`; spec: the inner
+  result's value is not awaited again, so skip the operand `await` there).
+- **`for await (x of o)`** in async functions and async generators (`%state` is the
+  async state or the generator):
+  ```
+  <o> call_intrinsic %GetAsyncIterator 1        ; it (sync iterables are wrapped, D1421)
+  dup; get_field next                           ; it next, as for-of
+  loop: <it next> call 0 (this = it); await %state; iter_check_object
+        dup; get_field done; jump_if_true L_done; get_field value; <bind x>; <body>
+  ```
+  Leaving the loop early (`break`, `return`, `continue L` outward) closes the iterator
+  (AsyncIteratorClose, normal completion):
+  ```
+  <it> call_intrinsic %AsyncIteratorReturnMethod 1   ; return method or undefined
+  dup; is_undefined; jump_if_true L_skip
+  <it> call 0 (this = it); await %state; iter_check_object
+  L_skip: drop
+  ```
+  An exception leaving the body closes it with the throw completion:
+  `<it> call_intrinsic %AsyncIteratorCloseThrow 1; await %state; drop; throw` (the
+  intrinsic gives a promise that always fulfills: errors from `return()` are ignored).
+  qjs's message for a non-iterable is `not a function`.
 
 ## 8. Error reporting and early errors
 
