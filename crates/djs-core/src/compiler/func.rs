@@ -297,6 +297,69 @@ pub(super) struct FuncState {
     /// a non-simple parameter list a separate scope inside it, so that closures in the
     /// parameters do not see them (FunctionDeclarationInstantiation step 28, D1820).
     pub var_scope: ScopeId,
+    /// `(scope, name)` → binding, once the function has many (0092).
+    pub index: VarIndex,
+}
+
+/// A hash index of the bindings by `(scope, name)`: the first one declared with that
+/// name in that scope, as the linear search finds it (0092: typescript.js's top-level
+/// closure has thousands of bindings in one scope, and every reference was a linear
+/// scan). Built only once a function has `VarIndex::MIN` bindings.
+#[derive(Default)]
+pub struct VarIndex {
+    /// Open addressing; key 0 is empty, else `(scope + 1) << 32 | atom id`.
+    slots: Vec<(u64, VarId)>,
+    len: usize,
+}
+
+impl VarIndex {
+    const MIN: usize = 32;
+
+    fn key(scope: ScopeId, name: Atom) -> u64 {
+        (u64::from(scope) + 1) << 32 | u64::from(name.id())
+    }
+
+    fn slot(&self, key: u64) -> usize {
+        let h = key.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        (h >> 32) as usize & (self.slots.len() - 1)
+    }
+
+    fn get(&self, key: u64) -> Option<VarId> {
+        let mut i = self.slot(key);
+        loop {
+            match self.slots[i] {
+                (0, _) => return None,
+                (k, v) if k == key => return Some(v),
+                _ => i = (i + 1) & (self.slots.len() - 1),
+            }
+        }
+    }
+
+    /// Adds `v` unless the key has a binding already.
+    fn insert(&mut self, key: u64, v: VarId) {
+        if (self.len + 1) * 2 > self.slots.len() {
+            let cap = (self.slots.len() * 2).max(64);
+            let old = core::mem::replace(&mut self.slots, alloc::vec![(0, 0); cap]);
+            self.len = 0;
+            for (k, v) in old {
+                if k != 0 {
+                    self.insert(k, v);
+                }
+            }
+        }
+        let mut i = self.slot(key);
+        loop {
+            match self.slots[i] {
+                (0, _) => {
+                    self.slots[i] = (key, v);
+                    self.len += 1;
+                    return;
+                }
+                (k, _) if k == key => return,
+                _ => i = (i + 1) & (self.slots.len() - 1),
+            }
+        }
+    }
 }
 
 pub(super) const BODY_SCOPE: ScopeId = 0;
@@ -352,6 +415,7 @@ impl FuncState {
             param_props: Vec::new(),
             ns: None,
             var_scope: BODY_SCOPE,
+            index: VarIndex::default(),
         }
     }
 
@@ -381,11 +445,22 @@ impl FuncState {
             ts_decl: None,
         });
         self.scopes[scope as usize].vars.push(id);
+        if !self.index.slots.is_empty() {
+            self.index.insert(VarIndex::key(scope, name), id);
+        } else if self.vars.len() >= VarIndex::MIN {
+            for (i, v) in self.vars.iter().enumerate() {
+                self.index
+                    .insert(VarIndex::key(v.scope, v.name), i as VarId);
+            }
+        }
         id
     }
 
     /// The binding named `name` declared directly in `scope`.
     pub fn find_in_scope(&self, scope: ScopeId, name: Atom) -> Option<VarId> {
+        if !self.index.slots.is_empty() {
+            return self.index.get(VarIndex::key(scope, name));
+        }
         self.scopes[scope as usize]
             .vars
             .iter()

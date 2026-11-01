@@ -1370,6 +1370,27 @@ fn line_table() {
     assert_eq!((t.line_count(), t.line_col(b"", 0)), (1, (1, 1)));
 }
 
+#[test]
+fn line_cursor_matches_line_col() {
+    use crate::lexer::LineCursor;
+    let src = "ab\ncd\r\nef\rgh\u{2028}ij\u{2029}k\n\"😀😀\"; @ x\n\nlast";
+    let b = src.as_bytes();
+    let t = LineTable::new(b);
+    let n = b.len() as u32 + 3;
+    // Increasing, decreasing and jumping offsets, all through one cursor.
+    let mut order: Vec<u32> = (0..n).collect();
+    order.extend((0..n).rev());
+    order.extend((0..n).map(|i| (i * 7) % n));
+    let mut c = LineCursor::default();
+    for pos in order {
+        assert_eq!(
+            t.line_col_from(b, pos, &mut c),
+            t.line_col(b, pos),
+            "at {pos}"
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------------
 // A realistic snippet, end to end.
 

@@ -33,7 +33,7 @@ use core::fmt;
 
 use crate::unicode;
 
-pub use line_table::LineTable;
+pub use line_table::{LineCursor, LineTable};
 pub use number::{NumberBase, NumberLiteral, strip_separators};
 pub use token::{Kw, Span, Token, TokenKind};
 

@@ -22,7 +22,7 @@ use super::{CompileOptions, PErr, PResult};
 use crate::bytecode::global_decls::GlobalDecls;
 use crate::bytecode::{
     CodeBuf, Label, LineTableBuilder, Op, TemplateError, TemplateParts, alloc_script,
-    alloc_template, capture_desc, func_flags, insns, special,
+    alloc_template, capture_desc, func_flags, special,
 };
 use crate::heap::{Atom, Heap, Ref};
 use crate::lexer::LineTable;
@@ -360,9 +360,14 @@ fn emit_function(
         }
     }
 
-    let all: Vec<crate::bytecode::Insn> = insns(&phase1.code)
-        .collect::<Result<_, _>>()
-        .map_err(|e| internal(&format!("{e:?}")))?;
+    let mut all = Vec::with_capacity(phase1.code.len() / 3);
+    let mut pc = 0;
+    while (pc as usize) < phase1.code.len() {
+        let insn = crate::bytecode::decode::decode(&phase1.code, pc)
+            .map_err(|e| internal(&format!("{e:?}")))?;
+        pc = insn.next_pc();
+        all.push(insn);
+    }
     let mut label_count = phase1.label_count;
     let all = super::peephole::simplify(all, &mut label_count);
     let mut out = CodeBuf::with_labels(label_count);
@@ -727,8 +732,9 @@ fn emit_function(
     let (line_bytes, all_names) = match line_table {
         Some(line_table) => {
             let mut lt = LineTableBuilder::new();
+            let mut cursor = crate::lexer::LineCursor::default();
             for (pc, pos) in lines {
-                let (line, col) = line_table.line_col(src, pos);
+                let (line, col) = line_table.line_col_from(src, pos, &mut cursor);
                 lt.add(pc, line, col);
             }
             let mut all_names = names.clone();

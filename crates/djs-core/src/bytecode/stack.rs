@@ -65,7 +65,18 @@ pub const UNKNOWN_DEPTH: u32 = u32::MAX;
 
 /// Checks final code and returns its maximum operand stack depth.
 pub fn check_stack(code: &[u8], handlers: &[Handler]) -> Result<u16, StackError> {
-    walk(code, handlers, false).map(|(_, max)| max)
+    walk(code, handlers, false, &mut Vec::new()).map(|(_, max)| max)
+}
+
+/// [`check_stack`], also returning the positions of the `Cache` immediates in code
+/// order (for `alloc_template`'s numbering, without decoding the code again).
+pub fn check_stack_caches(
+    code: &[u8],
+    handlers: &[Handler],
+) -> Result<(u16, Vec<u32>), StackError> {
+    let mut caches = Vec::new();
+    let (_, max) = walk(code, handlers, false, &mut caches)?;
+    Ok((max, caches))
 }
 
 /// The operand stack depth before each instruction (indexed by pc; [`UNKNOWN_DEPTH`]
@@ -74,25 +85,39 @@ pub fn check_stack(code: &[u8], handlers: &[Handler]) -> Result<u16, StackError>
 /// reachable only through them stays unknown. The compiler uses this to find handler
 /// depths it only knows relative to the code (array destructuring inside expressions).
 pub fn stack_depths(code: &[u8], handlers: &[Handler]) -> Result<Vec<u32>, StackError> {
-    walk(code, handlers, true).map(|(depth, _)| depth)
+    walk(code, handlers, true, &mut Vec::new()).map(|(depth, _)| depth)
 }
 
 fn walk(
     code: &[u8],
     handlers: &[Handler],
     skip_unknown: bool,
+    caches: &mut Vec<u32>,
 ) -> Result<(Vec<u32>, u16), StackError> {
-    // Instruction starts; the code must decode linearly from 0 to the end.
-    let mut is_start = vec![false; code.len() + 1];
+    // Instruction starts; the code must decode linearly from 0 to the end. Each is
+    // decoded once (0092): `at_pc[pc]` is 1 + its index in `insns`, 0 inside an
+    // instruction.
+    let mut at_pc = vec![0u32; code.len() + 1];
+    let mut insns = Vec::new();
     let mut pc = 0u32;
     while (pc as usize) < code.len() {
         let insn = decode(code, pc).map_err(StackError::Decode)?;
-        if insn.info().has(flags::PHASE1) {
+        let info = insn.info();
+        if info.has(flags::PHASE1) {
             return Err(StackError::Phase1Op { pc });
         }
-        is_start[pc as usize] = true;
+        let mut at = pc + 1;
+        for &k in info.imms {
+            if k == super::imm::ImmKind::Cache {
+                caches.push(at);
+            }
+            at += k.width() as u32;
+        }
+        insns.push(insn);
+        at_pc[pc as usize] = insns.len() as u32;
         pc = insn.next_pc();
     }
+    let is_start = |pc: usize| at_pc[pc] != 0;
     let len = code.len() as u32;
 
     let mut depth = vec![UNKNOWN; code.len()];
@@ -113,7 +138,7 @@ fn walk(
                 StackError::BadTarget { pc: from, target }
             });
         }
-        if !is_start[target as usize] {
+        if !is_start(target as usize) {
             return Err(StackError::BadTarget { pc: from, target });
         }
         let slot = &mut depth[target as usize];
@@ -138,9 +163,8 @@ fn walk(
         if skip_unknown && h.depth == UNKNOWN_DEPTH {
             continue;
         }
-        let start_ok = (h.start as usize) < is_start.len() && is_start[h.start as usize];
-        let end_ok =
-            h.end == len || ((h.end as usize) < is_start.len() && is_start[h.end as usize]);
+        let start_ok = (h.start as usize) < at_pc.len() && is_start(h.start as usize);
+        let end_ok = h.end == len || ((h.end as usize) < at_pc.len() && is_start(h.end as usize));
         if !start_ok || !end_ok || h.start > h.end {
             return Err(StackError::BadHandler { index });
         }
@@ -154,7 +178,7 @@ fn walk(
     }
 
     while let Some(pc) = work.pop() {
-        let insn = decode(code, pc).map_err(StackError::Decode)?;
+        let insn = insns[at_pc[pc as usize] as usize - 1];
         let info = insn.info();
         let d = depth[pc as usize];
         let pops = insn.pops();

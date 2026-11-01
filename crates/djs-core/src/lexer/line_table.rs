@@ -62,11 +62,45 @@ impl LineTable {
         let line = self.line(pos);
         let start = self.line_start(line) as usize;
         let end = (pos as usize).min(src.len()).max(start);
-        // Count the bytes that start a code point (not UTF-8 continuation bytes).
-        let col = src[start..end]
-            .iter()
-            .filter(|&&b| b & 0xC0 != 0x80)
-            .count();
-        (line, col as u32 + 1)
+        (line, count_chars(&src[start..end]) + 1)
     }
+
+    /// `line_col` for a run of mostly increasing offsets (the line table of a function,
+    /// 0092): continues counting from the previous offset on the same line instead of
+    /// from the line start, which is quadratic on long (minified) lines.
+    pub fn line_col_from(&self, src: &[u8], pos: u32, c: &mut LineCursor) -> (u32, u32) {
+        if c.line != 0 && pos >= c.end && pos < c.next_start {
+            let end = (pos as usize).min(src.len());
+            c.col += count_chars(&src[(c.end as usize).min(end)..end]);
+            c.end = end as u32;
+            return (c.line, c.col + 1);
+        }
+        let line = self.line(pos);
+        let start = self.line_start(line) as usize;
+        let end = (pos as usize).min(src.len()).max(start);
+        *c = LineCursor {
+            line,
+            end: end as u32,
+            next_start: self.starts.get(line as usize).copied().unwrap_or(u32::MAX),
+            col: count_chars(&src[start..end]),
+        };
+        (line, c.col + 1)
+    }
+}
+
+/// The state of [`LineTable::line_col_from`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LineCursor {
+    /// The line of the previous offset (0: none yet).
+    line: u32,
+    /// The previous offset (clamped to the source) and its 0-based column.
+    end: u32,
+    col: u32,
+    /// The start of the next line.
+    next_start: u32,
+}
+
+/// Code points in UTF-8 `b`: the bytes that are not continuation bytes.
+fn count_chars(b: &[u8]) -> u32 {
+    b.iter().filter(|&&b| b & 0xC0 != 0x80).count() as u32
 }

@@ -601,25 +601,27 @@ impl<'a, 'h> Parser<'a, 'h> {
         // The entries are sorted by pc: before `start`, the moved `start..mid` and
         // `mid..end`, the rest. Each block starts with the entry in effect where it
         // started (unless it has its own), and so does the code after `end`.
-        let old = core::mem::take(&mut self.f.lines);
-        let at = |pc: u32| old.iter().rev().find(|l| l.0 <= pc).map(|l| l.1);
-        let range = |a: u32, b: u32| old.iter().filter(move |l| l.0 >= a && l.0 < b);
-        let mut lines = alloc::vec::Vec::with_capacity(old.len() + 3);
-        lines.extend(old.iter().filter(|l| l.0 < start));
-        let shift_b = mid - start;
-        let shift_a = end - mid;
-        for (a, b, new_start) in [(mid, end, start), (start, mid, start + shift_a)] {
-            if let Some(pos) = at(a).filter(|_| !old.iter().any(|l| l.0 == a)) {
-                lines.push((new_start, pos));
-            }
-            let shift = |pc: u32| if a == mid { pc - shift_b } else { pc + shift_a };
-            lines.extend(range(a, b).map(|l| (shift(l.0), l.1)));
-        }
-        if let Some(pos) = at(end).filter(|_| !old.iter().any(|l| l.0 == end)) {
-            lines.push((end, pos));
-        }
-        lines.extend(old.iter().filter(|l| l.0 >= end));
-        self.f.lines = lines;
+        // Only the entries from `start` on move (0092: binary search, not a scan of
+        // the whole function per loop).
+        let lines = &mut self.f.lines;
+        let idx = |pc: u32| lines.partition_point(|l| l.0 < pc);
+        let (i0, i1, i2) = (idx(start), idx(mid), idx(end));
+        // The entry in effect at `pc` (index `i`), unless one starts there.
+        let eff = |i: usize, pc: u32| match lines.get(i) {
+            Some(l) if l.0 == pc => None,
+            _ => i.checked_sub(1).map(|j| lines[j].1),
+        };
+        let (e_start, e_mid, e_end) = (eff(i0, start), eff(i1, mid), eff(i2, end));
+        let tail = lines.split_off(i0);
+        let (a, rest) = tail.split_at(i1 - i0);
+        let (b, after) = rest.split_at(i2 - i1);
+        let (shift_b, shift_a) = (mid - start, end - mid);
+        lines.extend(e_mid.map(|p| (start, p)));
+        lines.extend(b.iter().map(|&(pc, p)| (pc - shift_b, p)));
+        lines.extend(e_start.map(|p| (start + shift_a, p)));
+        lines.extend(a.iter().map(|&(pc, p)| (pc + shift_a, p)));
+        lines.extend(e_end.map(|p| (end, p)));
+        lines.extend_from_slice(after);
     }
 
     /// Removes the last instruction (lvalue conversion, docs/compiler.md 3.7).

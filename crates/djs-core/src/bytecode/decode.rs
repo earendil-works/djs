@@ -3,7 +3,7 @@
 
 use super::code::Label;
 use super::imm::ImmKind;
-use super::ops::{Op, OpInfo};
+use super::ops::{OP_COUNT, OPS, Op, OpInfo};
 use crate::heap::Atom;
 
 /// A decoded instruction.
@@ -122,25 +122,53 @@ impl Insn {
     }
 }
 
+/// Per opcode, how its immediates decode (0092: one table load instead of walking
+/// `OpInfo::imms`): bits 0-3 and 4-7 describe immediate 0 and 1 (0 none, 1 u8, 2 i8,
+/// 3 u16, 4 u32/i32).
+const LAYOUT: [u8; OP_COUNT] = {
+    let mut t = [0u8; OP_COUNT];
+    let mut i = 0;
+    while i < OP_COUNT {
+        let imms = OPS[i].imms;
+        let mut j = 0;
+        while j < imms.len() {
+            let code = match imms[j].width() {
+                1 if imms[j].is_signed() => 2,
+                1 => 1,
+                2 => 3,
+                _ => 4,
+            };
+            t[i] |= code << (4 * j);
+            j += 1;
+        }
+        i += 1;
+    }
+    t
+};
+
 /// Decodes the instruction at `pc`.
 pub fn decode(code: &[u8], pc: u32) -> Result<Insn, DecodeError> {
     let at = pc as usize;
     let byte = *code.get(at).ok_or(DecodeError::Truncated { pc })?;
     let op = Op::from_u8(byte).ok_or(DecodeError::InvalidOpcode { pc, byte })?;
-    let info = op.info();
-    if at + info.size as usize > code.len() {
+    let Some(b) = code.get(at + 1..at + op.size()) else {
         return Err(DecodeError::Truncated { pc });
-    }
+    };
     let mut imms = [0u32; 2];
-    let mut p = at + 1;
-    for (i, &kind) in info.imms.iter().enumerate() {
-        imms[i] = match kind.width() {
-            1 if kind.is_signed() => code[p] as i8 as i32 as u32,
-            1 => u32::from(code[p]),
-            2 => u32::from(read_u16(code, p)),
-            _ => read_u32(code, p),
+    let mut layout = LAYOUT[op as usize];
+    let mut p = 0;
+    let mut i = 0;
+    while layout != 0 {
+        let (v, w) = match layout & 0xF {
+            1 => (u32::from(b[p]), 1),
+            2 => (b[p] as i8 as i32 as u32, 1),
+            3 => (u32::from(u16::from_le_bytes([b[p], b[p + 1]])), 2),
+            _ => (u32::from_le_bytes([b[p], b[p + 1], b[p + 2], b[p + 3]]), 4),
         };
-        p += kind.width() as usize;
+        imms[i] = v;
+        p += w;
+        i += 1;
+        layout >>= 4;
     }
     Ok(Insn { op, pc, imms })
 }
