@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0002 | test262 infrastructure and oracle baseline | infra | .worktrees/0002-test262-infra |
+| 0010 | Differential corpus and difftest runner | infra | .worktrees/0010-difftest-corpus |
 | 0004 | Number <-> string conversion | num | .worktrees/0004-number-conversion |
 | 0009 | Copying GC and handle table | heap | .worktrees/0009-copying-gc |
 | 0008 | Compiler and bytecode design note | lexer | .worktrees/0008-compiler-design |
@@ -30,6 +30,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0001 | Workspace skeleton and process | initial commit |
 | 0003 | Lexer | e4a42c3 (agent lexer; parser follow-ups listed in the issue) |
 | 0005 | Values, arena heap, strings, atoms, objects | dc751e2 (agent heap; follow-ups in the issue) |
+| 0002 | test262 infrastructure and oracle baseline | 5087390 (agent infra; qjs: 37,569 tests in ~10s, 4 oracle failures) |
 
 ## Backlog (not yet written up)
 
