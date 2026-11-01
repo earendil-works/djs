@@ -87,7 +87,7 @@ impl Parser<'_, '_> {
             ),
             TokenKind::Ident
                 if self.peek().kind == TokenKind::Colon
-                    && !(tok.kw == Kw::Await && self.f.is_async) =>
+                    && !(tok.kw == Kw::Await && self.await_reserved()) =>
             {
                 self.parse_labeled()
             }
