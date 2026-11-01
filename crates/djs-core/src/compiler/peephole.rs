@@ -19,30 +19,72 @@ use crate::bytecode::{Insn, Label, Op};
 /// Applies the rules until none matches. `label_count` grows by the labels the rules
 /// create.
 pub(super) fn simplify(mut code: Vec<Insn>, label_count: &mut u32) -> Vec<Insn> {
-    // Cycles of jumps could retarget each other forever: a few passes are enough for
-    // everything else.
-    for _ in 0..16 {
-        let mut changed = thread_jumps(&mut code, label_count);
-        let mut out = Vec::with_capacity(code.len());
-        let mut i = 0;
-        while i < code.len() {
-            match rewrite(&code[i..], &mut out) {
-                Some(n) => {
-                    i += n;
-                    changed = true;
-                }
-                None => {
-                    out.push(code[i]);
-                    i += 1;
-                }
+    // Threading again is only worth it after a rule changed a jump (0092: each pass
+    // costs a few % of compile time). Cycles of jumps could retarget each other
+    // forever: a few rounds are enough for everything else.
+    for round in 0..16 {
+        // Threading until nothing changes: new labels and removed `dup`s open more
+        // `&&`/`||` shortcuts (`a && b && c`).
+        let mut threaded = false;
+        for _ in 0..8 {
+            let (changed, labels) = thread_jumps(&mut code, label_count);
+            threaded |= changed;
+            if !changed && !labels {
+                break;
             }
         }
+        if round > 0 && !threaded {
+            break;
+        }
+        let (out, jumps) = rewrite_all(code);
         code = out;
-        if !changed {
+        if !jumps {
             break;
         }
     }
     code
+}
+
+/// One pass of the local rules to their fixpoint: after a match, the replacement and
+/// the instructions before it are looked at again (every rule shortens the code, so
+/// this ends). Returns whether a rule consumed a jump.
+fn rewrite_all(mut code: Vec<Insn>) -> (Vec<Insn>, bool) {
+    // Rules match at most this many instructions, so a replacement can complete a match
+    // starting this many before it.
+    const WINDOW: usize = 5;
+    let mut out = Vec::with_capacity(code.len());
+    let mut repl = Vec::with_capacity(WINDOW);
+    let mut jumps = false;
+    // `code[..i]` is free (moved to `out`); a replacement is shorter than what it
+    // replaces, so it and the instructions taken back from `out` fit in front of `i`.
+    let mut i = 0;
+    while i < code.len() {
+        repl.clear();
+        match rewrite(&code[i..], &mut repl) {
+            Some(n) => {
+                jumps |= code[i..i + n]
+                    .iter()
+                    .any(|x| matches!(x.op, Op::Jump | Op::JumpIfFalse | Op::JumpIfTrue));
+                let mut j = i + n - repl.len();
+                code[j..i + n].copy_from_slice(&repl);
+                for _ in 0..WINDOW - 1 {
+                    match out.pop() {
+                        Some(x) => {
+                            j -= 1;
+                            code[j] = x;
+                        }
+                        None => break,
+                    }
+                }
+                i = j;
+            }
+            None => {
+                out.push(code[i]);
+                i += 1;
+            }
+        }
+    }
+    (out, jumps)
 }
 
 /// Jump threading: a jump to a `jump` goes to its target instead (`if (x) break;` in a
@@ -50,7 +92,8 @@ pub(super) fn simplify(mut code: Vec<Insn>, label_count: &mut u32) -> Vec<Insn> 
 /// value a `&&` / `||` keeps for a condition is not tested twice (`if (a || b)` is `a;
 /// dup; jump_if_true L; drop; b; L: jump_if_false Else`: when `a` is true, the second
 /// test falls through, so the first one jumps past it).
-fn thread_jumps(code: &mut Vec<Insn>, label_count: &mut u32) -> bool {
+/// Returns whether anything changed and whether labels were added.
+fn thread_jumps(code: &mut Vec<Insn>, label_count: &mut u32) -> (bool, bool) {
     const NONE: usize = usize::MAX;
     // For each label id: the index of the first instruction after it that is no label.
     let mut at = vec![NONE; *label_count as usize];
@@ -65,23 +108,36 @@ fn thread_jumps(code: &mut Vec<Insn>, label_count: &mut u32) -> bool {
         }
         pending = 0;
     }
-    let target = |insn: &Insn| -> Option<usize> {
+    // The first instruction a jump lands on, past the `dup`s and `drop`s this pass
+    // removed (marked `nop`): processing from the end, a whole `a || b || c` chain is
+    // threaded in one pass.
+    let skip = |code: &[Insn], mut k: usize| {
+        while code.get(k).is_some_and(|i| i.op == Op::Nop) {
+            k += 1;
+        }
+        k
+    };
+    let target = |code: &[Insn], insn: &Insn| -> Option<usize> {
         let k = *at.get(insn.label()?.0 as usize)?;
-        (k != NONE).then_some(k)
+        (k != NONE)
+            .then(|| skip(code, k))
+            .filter(|&k| k < code.len())
     };
     let cond = |op: Op| matches!(op, Op::JumpIfFalse | Op::JumpIfTrue);
     let mut changed = false;
     let mut label_after = vec![false; code.len()];
-    for k in 0..code.len() {
+    for k in (0..code.len()).rev() {
         let insn = code[k];
         if !matches!(insn.op, Op::Jump | Op::JumpIfFalse | Op::JumpIfTrue) {
             continue;
         }
-        let Some(mut t) = target(&insn) else { continue };
+        let Some(mut t) = target(code, &insn) else {
+            continue;
+        };
         // A cycle of jumps (`for (;;) {}` after rotation) stops after a few steps.
         let mut new = insn;
         for _ in 0..8 {
-            match (code[t].op, target(&code[t])) {
+            match (code[t].op, target(code, &code[t])) {
                 (Op::Jump, Some(n)) if n != t => {
                     new = new.with_label(code[t].label().unwrap_or(Label(0)));
                     t = n;
@@ -100,8 +156,8 @@ fn thread_jumps(code: &mut Vec<Insn>, label_count: &mut u32) -> bool {
             // `dup; jump_if_x L; drop` with `L: jump_if_y M`.
             let next = if insn.op == code[t].op {
                 code[t].label()
-            } else if code.get(t + 1).is_some_and(|i| i.op == Op::Label) {
-                Some(Label(code[t + 1].imm(0)))
+            } else if let Some(l) = code.get(skip(code, t + 1)).filter(|i| i.op == Op::Label) {
+                Some(Label(l.imm(0)))
             } else {
                 label_after[t] = true;
                 None
@@ -117,7 +173,8 @@ fn thread_jumps(code: &mut Vec<Insn>, label_count: &mut u32) -> bool {
             changed = true;
         }
     }
-    if changed || label_after.contains(&true) {
+    let labels = label_after.contains(&true);
+    if changed || labels {
         // Without the removed `dup`s, with the new labels.
         let mut out = Vec::with_capacity(code.len() + 4);
         for (k, insn) in code.iter().enumerate() {
@@ -133,7 +190,7 @@ fn thread_jumps(code: &mut Vec<Insn>, label_count: &mut u32) -> bool {
         }
         *code = out;
     }
-    changed
+    (changed, labels)
 }
 
 /// The store of a reference with `refs` values under the stored value, as `emit_store`
