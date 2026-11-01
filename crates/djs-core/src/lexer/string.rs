@@ -226,7 +226,9 @@ impl<'a> Lexer<'a> {
     pub fn cook_string(&self, tok: &Token, out: &mut Vec<u16>) -> bool {
         debug_assert_eq!(tok.kind, TokenKind::String);
         // Scanning validated the literal, so cooking cannot fail.
-        cook(self.string_content(tok), false, out).unwrap_or(false)
+        let result = cook(self.string_content(tok), false, out);
+        debug_assert!(result.is_ok(), "cooking a validated string failed");
+        result.unwrap_or(false)
     }
 
     /// Appends the cooked value of a template part to `out` as UTF-16 code units and

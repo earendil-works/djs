@@ -1464,10 +1464,40 @@ impl<'a> Driver<'a> {
 fn lex_with_driver(src: &[u8]) -> Result<usize, LexError> {
     let mut d = Driver::new(src)?;
     let mut n = 0;
-    while d.next()?.kind != Eof {
+    let mut buf16 = Vec::new();
+    let mut buf8 = Vec::new();
+    loop {
+        let tok = d.next()?;
+        // Cook everything, to exercise the value paths on real code.
+        buf16.clear();
+        match tok.kind {
+            Eof => return Ok(n),
+            String => {
+                let latin1 = d.lx.cook_string(&tok, &mut buf16);
+                assert_eq!(latin1, buf16.iter().all(|&u| u <= 0xFF));
+                if !tok.has_escape() {
+                    let content = d.lx.string_content(&tok);
+                    assert_eq!(
+                        buf16,
+                        std::str::from_utf8(content)
+                            .unwrap()
+                            .encode_utf16()
+                            .collect::<Vec<_>>()
+                    );
+                }
+            }
+            NoSubstTemplate | TemplateHead | TemplateMiddle | TemplateTail => {
+                let cooked = d.lx.cook_template(&tok, &mut buf16);
+                assert_eq!(cooked.is_err(), tok.has_flag(Token::INVALID_ESCAPE));
+                d.lx.template_raw(&tok, &mut buf16);
+            }
+            k if k.is_identifier_name() || k == PrivateName => {
+                assert!(std::str::from_utf8(d.lx.ident_value(&tok, &mut buf8)).is_ok());
+            }
+            _ => {}
+        }
         n += 1;
     }
-    Ok(n)
 }
 
 fn test262_dir() -> Option<std::path::PathBuf> {
