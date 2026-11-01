@@ -1,7 +1,7 @@
 # 0021: Outbound direct heap reader (VM → host)
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0021-outbound-reader
 depends-on: 0018
 touches: js/ (new reader module), crates/djs-core/src/heap/layout.rs (additive: layout export), docs/wire.md (outbound section), tests for both
