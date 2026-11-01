@@ -1,7 +1,7 @@
 # 0111: Prototype objects' property order (qjs)
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0111-prototype-order
 depends-on: 0108
 guide: -
