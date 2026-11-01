@@ -2141,6 +2141,10 @@ impl<'h> Exec<'h> {
         let length = a.get(t, FuncTemplate::LENGTH);
         let name = Atom::from_id(a.get(t, FuncTemplate::NAME));
         let flags = a.get(t, FuncTemplate::FLAGS);
+        if flags & func_flags::PRIVILEGED != 0 {
+            // The prelude: `%Install*` names the builtins user code can see (D1433).
+            return Ok(());
+        }
         let ro = PropFlags::CONFIGURABLE;
         let d = PropertyDescriptor::data(Value::int(length as i32), ro);
         self.heap.define_own_property(f, atoms::LENGTH, &d)?;

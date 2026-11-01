@@ -1806,14 +1806,14 @@ impl Exec<'_> {
             .and_then(|p| p.value())
             .and_then(|v| v.as_object());
         self.heap.set_prototype_of(fo, ctor);
+        let n = self.heap.alloc_str(name)?;
+        self.name_and_length(fo, Value::string(n), 1.0)?;
         self.heap
             .remove_own_property_unchecked(fo, atoms::PROTOTYPE);
         let d = PropertyDescriptor::data(Value::object(p), PropFlags::NONE);
         self.heap.define_own_property(fo, atoms::PROTOTYPE, &d)?;
         let d = PropertyDescriptor::data(f, PropFlags::CONFIGURABLE);
         self.heap.define_own_property(p, atoms::CONSTRUCTOR, &d)?;
-        let n = self.heap.alloc_str(name)?;
-        self.name_and_length(fo, Value::string(n), 1.0)?;
         self.mark_builtin(fo, OBJ_BUILTIN | OBJ_BUILTIN_CTOR);
         Ok(())
     }
@@ -1828,12 +1828,13 @@ impl Exec<'_> {
     }
 
     /// `name` and `length` of an installed builtin (configurable only).
+    /// `length` then `name` (qjs's and the spec's order of a builtin's own keys).
     fn name_and_length(&mut self, fo: Obj, name: Value, length: f64) -> Result<(), Fault> {
         let ro = PropFlags::CONFIGURABLE;
-        let d = PropertyDescriptor::data(name, ro);
-        self.heap.define_own_property(fo, atoms::NAME, &d)?;
         let d = PropertyDescriptor::data(conv::number(length), ro);
         self.heap.define_own_property(fo, atoms::LENGTH, &d)?;
+        let d = PropertyDescriptor::data(name, ro);
+        self.heap.define_own_property(fo, atoms::NAME, &d)?;
         Ok(())
     }
 
@@ -1889,15 +1890,15 @@ impl Exec<'_> {
             let key = self.heap.intern(k)?;
             realm::define_hidden(self.heap, holder, key, f)?;
         }
-        let d = PropertyDescriptor::data(Value::object(proto), PropFlags::NONE);
-        self.heap.define_own_property(fo, atoms::PROTOTYPE, &d)?;
-        realm::define_hidden(self.heap, proto, atoms::CONSTRUCTOR, f)?;
         let fname = if name.starts_with('%') {
             Value::string(self.heap.alloc_str(name.trim_matches('%'))?)
         } else {
             Value::string(k)
         };
         self.name_and_length(fo, fname, length.as_number().unwrap_or(0.0))?;
+        let d = PropertyDescriptor::data(Value::object(proto), PropFlags::NONE);
+        self.heap.define_own_property(fo, atoms::PROTOTYPE, &d)?;
+        realm::define_hidden(self.heap, proto, atoms::CONSTRUCTOR, f)?;
         self.mark_builtin(fo, OBJ_BUILTIN | OBJ_BUILTIN_CTOR);
         Ok(())
     }

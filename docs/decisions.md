@@ -1798,3 +1798,12 @@ for-in shadowing checks the objects already visited instead of keeping a set; an
 three sorts go through `crate::sort::sort_by`, one stable merge sort of indexes (a few
 hundred bytes per use). Code 612,581 -> 581,874 bytes. Prefer these over new uses of
 BTreeMap/BTreeSet and `sort*` in djs-core.
+
+## D1433: Prelude closures carry no `length`, `name` or `prototype`
+date: 2026-11-01 · by: heap · issue: 0043
+Templates compiled in privileged mode get `func_flags::PRIVILEGED` (1 << 8), and `fclosure`
+skips `length`/`name`/`prototype` for them: about 200 prelude helpers are only ever
+called, and the builtins user code can see get both from `%InstallMethod`,
+`%InstallConstructor` and `%InstallAccessor`, which now define `length` before `name`
+(and before `prototype` for constructors), the order qjs and the spec use. Base image
+296 KB -> 268 KB.

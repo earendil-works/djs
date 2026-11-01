@@ -130,6 +130,7 @@ pub(super) fn finish(
             // frames show as `(native)` or not at all in stack traces, and it has no
             // TDZ errors to name (D1430).
             (!opts.privileged).then_some(&line_table),
+            opts.privileged,
             src,
             script,
         )?;
@@ -309,6 +310,7 @@ fn emit_function(
     templates: &[Ref],
     atom_undefined: Atom,
     line_table: Option<&LineTable>,
+    privileged: bool,
     src: &[u8],
     script: Ref,
 ) -> PResult<Ref> {
@@ -534,6 +536,10 @@ fn emit_function(
         FuncKind::Method => func_flags::KIND_METHOD,
         FuncKind::Getter => func_flags::KIND_GETTER,
         FuncKind::Setter => func_flags::KIND_SETTER,
+    } | if privileged {
+        func_flags::PRIVILEGED
+    } else {
+        0
     };
     let mut flags = kind;
     if f.is_async {

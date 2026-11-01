@@ -77,6 +77,10 @@ Date, typed arrays, …), and the code is about 590 KB.
   core's (-14.4 KB): code 612,581 -> 581,874. Edits outside `touches:` (small): compiler
   func.rs/parser.rs/scan.rs, json/stringify.rs, interp/run.rs (for-in), heap/object.rs
   (own keys sort), builtins/array.rs (sort_primitives), new src/sort.rs.
+- R4 (D1433) prelude closures without length/name/prototype (func_flags::PRIVILEGED,
+  coordinated with the lexer via the coordinator): base 296,200 -> 268,480; stripped
+  905,901. Builtins' own keys are now `length, name, prototype, ...` (qjs: prototype
+  after the methods).
 
 ## Follow-ups
 - `Vm::collect` (vm_collect) does not clear the value stack above `sp` the way the

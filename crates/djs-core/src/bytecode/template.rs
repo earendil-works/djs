@@ -30,6 +30,10 @@ pub mod func_flags {
     pub const KIND_FIELD_INIT: u32 = 9;
     pub const ASYNC: u32 = 1 << 4;
     pub const GENERATOR: u32 = 1 << 5;
+    /// Compiled in privileged mode (the prelude): closures get no `length`, `name` or
+    /// `prototype`, since the `%Install*` intrinsics define them on the builtins that
+    /// user code can see (D1433).
+    pub const PRIVILEGED: u32 = 1 << 8;
 
     pub const fn kind(flags: u32) -> u32 {
         flags & KIND_MASK

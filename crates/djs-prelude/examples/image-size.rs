@@ -83,6 +83,7 @@ fn main() {
     let _ = Vm::new; // (the image is djs_prelude::BASE)
     if std::env::args().any(|a| a == "--detail") {
         detail(heap);
+        strings(heap);
     }
 }
 
@@ -140,4 +141,38 @@ pub fn detail(heap: &Heap) {
         100.0 * zeros as f64 / bytes.len() as f64,
         zero_words
     );
+}
+
+/// Strings: duplicates by content, atoms vs other.
+#[allow(dead_code)]
+pub fn strings(heap: &Heap) {
+    use djs_core::heap::cells::Str8;
+    let a = heap.arena();
+    let mut seen: HashMap<Vec<u8>, (u32, u32)> = HashMap::new();
+    for c in heap.cells() {
+        if c.kind == CellKind::Str8 {
+            let len: u32 = a.get(c.offset, Str8::LEN);
+            let data =
+                heap.bytes()[(c.offset + 16) as usize..(c.offset + 16 + len) as usize].to_vec();
+            let e = seen.entry(data).or_default();
+            e.0 += 1;
+            e.1 += c.size;
+        }
+    }
+    let dup: u32 = seen
+        .values()
+        .filter(|e| e.0 > 1)
+        .map(|e| e.1 - e.1 / e.0)
+        .sum();
+    let total: u32 = seen.values().map(|e| e.1).sum();
+    println!(
+        "\nStr8: {} cells, {} distinct, {total} bytes, {dup} in duplicates",
+        seen.values().map(|e| e.0).sum::<u32>(),
+        seen.len()
+    );
+    let mut v: Vec<_> = seen.iter().filter(|e| e.1.0 > 1).collect();
+    v.sort_by_key(|e| std::cmp::Reverse(e.1.1));
+    for (s, (n, size)) in v.iter().take(10) {
+        println!("{n:>4} {size:>6} {:?}", String::from_utf8_lossy(s));
+    }
 }
