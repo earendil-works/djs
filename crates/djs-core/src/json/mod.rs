@@ -1,0 +1,73 @@
+//! Native JSON: the leaf parts of `JSON.parse` and `JSON.stringify` (ARCH "The leaf
+//! rule").
+//!
+//! - [`parse`] / [`parse_utf8`]: `JSON.parse` without a reviver, straight into heap values.
+//!   It never runs user code, so the whole parse is one native op.
+//! - [`stringify_fast`]: `JSON.stringify` without a replacer, for plain data. Anything that
+//!   could run user code (accessors, `toJSON`, wrapper objects, exotic objects) makes it
+//!   return [`StringifyError::Slow`] before it has had any effect other than allocating
+//!   garbage, and the caller then runs the full algorithm.
+//!
+//! Both follow the GC contract: they allocate but never collect, and hold intermediate
+//! values in Rust memory, which is safe because no collection can happen until they
+//! return. The caller checks [`Heap::gc_pending`](crate::heap::Heap::gc_pending) afterwards.
+//!
+//! Messages match QuickJS (`SyntaxError` for parse errors, `TypeError: circular reference`,
+//! `InternalError: stack overflow`).
+
+mod parse;
+mod stringify;
+
+#[cfg(test)]
+mod corpus_tests;
+#[cfg(test)]
+mod tests;
+
+use alloc::string::String;
+use core::fmt;
+
+pub use parse::{ParseOptions, parse, parse_utf8};
+pub use stringify::{StringifyError, gap_from_number, gap_from_units, stringify_fast};
+
+use crate::heap::HeapError;
+
+/// Default maximum nesting depth of arrays and objects, for parse and stringify. QuickJS'
+/// limit depends on its C stack (about 6500 levels for parse and 4600 for stringify on a
+/// typical build); ours is fixed.
+pub const DEFAULT_MAX_DEPTH: u32 = 5000;
+
+/// A JSON syntax error, positioned like QuickJS: `line` and `column` are 1-based, lines end
+/// at `\n` only, and columns count code points. `offset` is the position in the input's code
+/// units (bytes for Latin-1 and UTF-8 input).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct SyntaxError {
+    pub message: String,
+    pub offset: u32,
+    pub line: u32,
+    pub column: u32,
+}
+
+impl fmt::Display for SyntaxError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "SyntaxError: {} at <input>:{}:{}",
+            self.message, self.line, self.column
+        )
+    }
+}
+
+/// Why [`parse`] failed.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum ParseError {
+    /// Invalid JSON: a JS `SyntaxError`.
+    Syntax(SyntaxError),
+    /// The heap ran out of memory, or a string got too long.
+    Heap(HeapError),
+}
+
+impl From<HeapError> for ParseError {
+    fn from(e: HeapError) -> ParseError {
+        ParseError::Heap(e)
+    }
+}

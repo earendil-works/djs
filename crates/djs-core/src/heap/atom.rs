@@ -425,6 +425,27 @@ impl Heap {
         self.add_string_atom(s, hash)
     }
 
+    /// Interns a string given as UTF-16 code units; allocates only if it is not interned
+    /// yet.
+    pub fn atom_utf16(&mut self, units: &[u16]) -> Result<Atom, HeapError> {
+        if let Some(i) = parse_array_index(units.iter().copied())
+            && let Some(a) = Atom::int(i)
+        {
+            return Ok(a);
+        }
+        let hash = hash_units(units.iter().copied());
+        let found = self.find_string_atom(hash, |h, s| match h.str_view(s) {
+            Some(v) => v.len() == units.len() && v.units().eq(units.iter().copied()),
+            None => false,
+        });
+        if let Some(a) = found {
+            return Ok(a);
+        }
+        let s = self.alloc_utf16(units)?;
+        self.str_hash(s);
+        self.add_string_atom(s, hash)
+    }
+
     /// The atom for an array index: an integer atom below 2^31, else an interned string.
     pub fn atom_from_index(&mut self, i: u32) -> Result<Atom, HeapError> {
         if let Some(a) = Atom::int(i) {

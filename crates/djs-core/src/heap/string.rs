@@ -208,6 +208,20 @@ impl Heap {
         Ok(off)
     }
 
+    /// Allocates a flat string of `len` code units with zeroed data, for callers that write
+    /// the data themselves (at [`Heap::str_data_offset`], one byte per unit for one-byte
+    /// strings, little-endian pairs otherwise). A two-byte string must end up containing a
+    /// unit above 0xFF (the width invariant), so only ask for one when that is known.
+    pub fn alloc_str_uninit(&mut self, len: u32, two_byte: bool) -> Result<Str, HeapError> {
+        self.alloc_flat(len, two_byte).map(Str)
+    }
+
+    /// The arena offset of the code units of a flat string cell.
+    #[inline]
+    pub fn str_data_offset(s: Str) -> u32 {
+        s.0 + Str8::DATA.offset
+    }
+
     /// A string from Latin-1 bytes (each byte is one code unit).
     pub fn alloc_latin1(&mut self, data: &[u8]) -> Result<Str, HeapError> {
         let len = u32::try_from(data.len()).map_err(|_| HeapError::StringTooLong)?;

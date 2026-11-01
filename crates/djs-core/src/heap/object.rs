@@ -283,6 +283,68 @@ impl Heap {
         Ok(o)
     }
 
+    /// A new ordinary object with the data properties `keys[i]: values[i]` (writable,
+    /// enumerable, configurable), defined in order: a repeated key keeps its first
+    /// position and its last value, as repeated CreateDataProperty calls would. The table is
+    /// allocated once at its final size. Used by JSON.parse and object literals.
+    pub fn new_object_from_entries(
+        &mut self,
+        proto: Option<Obj>,
+        keys: &[Atom],
+        values: &[Value],
+    ) -> Result<Obj, HeapError> {
+        assert_eq!(keys.len(), values.len());
+        let o = self.new_object(proto)?;
+        if keys.is_empty() {
+            return Ok(o);
+        }
+        let n = u32::try_from(keys.len()).map_err(|_| HeapError::OutOfMemory)?;
+        let t = self.alloc_table(n.max(4))?;
+        self.arena_mut().set(o.0, Object::PROPS, Ref(t));
+        let mut indexed = false;
+        for (&key, &value) in keys.iter().zip(values) {
+            let p = Property::data(value, PropFlags::ALL);
+            let t = self.props(o);
+            match self.table_find(t, key) {
+                Some(i) => self.write_entry(t, i, key, &p),
+                None => {
+                    self.table_insert(o, key, &p)?;
+                    indexed |= self.atom_array_index(key).is_some();
+                }
+            }
+        }
+        if indexed {
+            self.set_obj_flag(o, OBJ_INDEXED_PROPS, true);
+        }
+        Ok(o)
+    }
+
+    /// A new array with `values` as its dense elements (`length` = `values.len()`).
+    /// Values may be holes.
+    pub fn new_array_from_values(
+        &mut self,
+        proto: Option<Obj>,
+        values: &[Value],
+    ) -> Result<Obj, HeapError> {
+        let n = u32::try_from(values.len())
+            .ok()
+            .filter(|&n| n <= atom_int_max())
+            .ok_or(HeapError::OutOfMemory)?;
+        let o = self.new_array(proto, n)?;
+        if n > 0 {
+            let el = self.elements(o);
+            let a = self.arena_mut();
+            let base = ValueArray::VALUES.at(el, 0);
+            let dst = a.slice_mut(base, n * 8);
+            for (d, v) in dst.as_chunks_mut::<8>().0.iter_mut().zip(values) {
+                *d = v.to_bits().to_le_bytes();
+            }
+            a.set(el, ValueArray::LEN, n);
+            self.set_array_length_raw(o, n);
+        }
+        Ok(o)
+    }
+
     pub fn object_class(&self, o: Obj) -> ObjectClass {
         let c = self.arena().get(o.0, Object::CLASS);
         ObjectClass::from_u32(c).unwrap_or_else(|| panic!("invalid object class {c}"))
