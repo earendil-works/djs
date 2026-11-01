@@ -10,6 +10,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0063 | D015 sloppy this + bgen Rust backend v1 | infra | .worktrees/infra |
 | 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
+| 0079 | Integration and test efficiency (investigate first) | devflow, after 0053 | .worktrees/devflow |
 | 0065 | accessor + decorators (TC39, then TS legacy) | lexer | .worktrees/lexer |
 | 0069 | Host OOM is not a JS OOM (then 0070 GC-and-retry) | heap | .worktrees/heap |
 | 0068 | Deterministic mode for VM and Sandbox | determinism | .worktrees/determinism |
