@@ -384,6 +384,18 @@ Fixed since 0082 (0084, D1840): Function.prototype is a function (9 tests), [[Se
 an array's `length` converts non-Number values (4), and `atob`/`btoa` and
 `DOMException` are native globals as in qjs (2 difftest cases).
 
+## Peak memory claims (D2048)
+
+Peak wasm memory (`wasm memory` in `scripts/perf/wasm-run.ts`) is deterministic for one
+build and input, but a chaotic function of where dlmalloc places the arena when it
+grows. A shift of a few KB in the live heap can move a workload's peak by 3–6 MiB, in
+either direction. A single run per build shows the placement, not the policy. Any claim
+that a change makes peak memory better or worse is backed by
+`scripts/perf/mem-perturb.sh`: 24 runs per workload, run k with a kept string of
+k × 1000 bytes allocated first. Compare the distributions (mean and max) against main,
+with `--root` pointing at a main checkout for builds whose heap layout differs. A workload
+is worse than main if its distribution is, not if one run is.
+
 ## The gate
 
 `scripts/gate.sh` must pass before anything merges into `main` (`scripts/merge-to-main.sh`

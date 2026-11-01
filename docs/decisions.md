@@ -5476,3 +5476,88 @@ The module's gzip went down 3.3 KB. Natively the workloads are unchanged (indexo
 json-date, pushpop, tight within 0.1%), and the wasm deltas were noise on a loaded
 machine. The measured costs for the dropped ops are 1.3–2.5x on those ops, which neither
 the workloads nor the corpus exercise.
+
+## D2045: The first collection after a canonical image is full
+date: 2026-11-03 · by: heap · issue: 0125
+`collect_canonical` leaves `Roots::MINORS = FULL_EVERY - 1`, so a VM made from the base
+image (or any canonical image) runs its first scheduled collection in full; `seal`
+still leaves 0.
+- **Why:** a VM from the base kills about 17.7 KB of old cells right away (probe on the
+  djs-prelude base). The atom table's entries array (15.5 KB) is replaced when the first
+  compiled script adds an atom; the rest are a PropTable (1.1 KB) and a U32Array (1 KB).
+  Under D2041 they stayed until the 16th collection and shifted every threshold by about
+  a 64 KiB page. That moved where dlmalloc placed the growing arena.
+- **Peak wasm memory, mean (max) of 24 perturbed runs (D2048):**
+
+  | workload | before D2041 | with D2041 | with D2045 |
+  | --- | ---: | ---: | ---: |
+  | strbuild | 25.50 (26.6) | 28.07 (31.9) | 25.51 (25.6) |
+  | json-indent | 10.48 (12.5) | 7.55 (8.8) | 10.30 (10.3) |
+  | strings | 14.25 (18.6) | 14.85 (18.1) | 14.90 (18.6) |
+  | json-replacer | 6.99 (7.4) | 6.87 (7.6) | 6.76 (7.4) |
+
+  The other workloads, over 8 runs, are back to their values before D2041, e.g. json
+  10.0 → 9.9, json-date 11.2 → 11.0, pi-like 4.3 → 4.2 MiB.
+- **Trade-off:** json-indent loses the lucky placement D2041 gave it.
+- **Cost:** one full collection (~0.1 ms more than a minor one at the base's size) per
+  VM that collects. Wasm instructions are within noise against main.
+
+## D2046: No aging promotion
+date: 2026-11-03 · by: heap · issue: 0125
+Measured and rejected. The design (the prototype is not kept):
+- `Roots::AGED` ends the survivors of one collection, `[OLD_END, AGED)`.
+- A minor collection promotes the survivors of that range (OLD_END becomes their slid
+  end, AGED becomes `after`).
+- Full collections keep the ages, so collecting a collected heap stays a fixpoint.
+- A full collection follows once the old region has grown by 1/2 (or 1/4, 1/8) since the
+  last full one.
+
+Results:
+- **Wasm instructions** against no aging: props −2.1%, json −1.1%, jsonh −1.2%, pi-like
+  −1.0%, strbuild −0.8%, strings +0.7%, the rest ±0.3%.
+- **Native collection time:** higher-order −12–15%, pi-like −12–21%, props −7–9%.
+- **Peak memory** (8 perturbed runs) got worse:
+  - pi-like 4.3 → 6.3 MiB;
+  - strbuild mean 27.4 → 33.2 MiB (max 49.8);
+  - json-replacer 6.8 → 12.3 MiB;
+  - a 1/8 trigger keeps pi-like at 4.3 but not strbuild.
+
+Cells that survive two collections still die soon: pi-like's per-task data, a string
+buffer that is replaced as it grows. Adding a full collection whenever a minor one would
+grow the arena (D2047) brings memory back, except pi-like at 5.8 MiB, but costs +2–6%
+instructions. The gain is about 1% of instructions; the memory risk is several MiB.
+
+## D2047: Arena growth policies that did not help
+date: 2026-11-03 · by: heap · issue: 0125
+Measured on peak wasm memory and rejected. The baseline is D2041 with D2045's cause still
+in place.
+- **Reserving the threshold's capacity right after a collection:** arrays 28.6 → 36.3 MiB
+  (shrinking to the live size first) or 49.1 (not shrinking), foreach 9.8 → 14.5,
+  json-indent 7.5 → 9.8. Memory is committed that the program may never use.
+- **Shrinking the capacity to the live size after each collection:** arrays 45.4 MiB,
+  higher-order 36.9.
+- **Growth by 1.5× or 1.25× instead of doubling up to the threshold:** json-date
+  improves (7.3 / 5.9 MiB), but with 1.25× json rises to 15.3 and jsonh to 10.6; strbuild
+  stays at 31.9.
+- **Slack in the base image's atom table:** strbuild mean 27.6, strings 17.3.
+- **A full collection instead of growing after a minor one** (threshold rising): memory
+  as before D2041 except strings, but +2–6% wasm instructions on growing heaps (arrays,
+  json, jsonh, pi-like, strings).
+
+The allocation traces show the cause. Every big peak is an arena realloc that dlmalloc
+cannot do in place, so the old and new blocks coexist (strbuild: 9.3 MB + 11.6 MB at the
+top of memory). Which reallocs move depends on the exact sizes, so any policy change
+moves some workload's peak by MiB either way. The robust fix is in-place growth of the
+arena, a page allocator in djs-wasm (follow-up issue).
+
+## D2048: Peak memory is compared as a distribution over perturbed runs
+date: 2026-11-03 · by: heap · issue: 0125
+`scripts/perf/mem-perturb.sh` runs each workload 24 times, run k with a kept string of
+k × 1000 bytes allocated first, and prints min, mean and max of the peak wasm memory.
+- **Why:** peak memory is deterministic but chaotic (D2047). One run per build reports
+  the allocator's placement, not the policy:
+  - strings is 14.1 or 18.6 MiB depending on a 1 KB shift;
+  - json-indent 7.5 or 10.3 depending on 17 KB.
+- **Rule:** memory claims ("no worse than main") compare these distributions against
+  main, using `--root` for another checkout's reader. A workload is worse if its mean or
+  max is clearly above main's, not if one run is (TESTING.md "Peak memory claims").

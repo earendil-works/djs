@@ -115,14 +115,20 @@ helpers become old too. Nothing else moves B up.
 
 **Full collections** still trace everything. They run every 16th time, when a minor
 collection left more than half the memory cap in use, whenever the embedder asks
-(`Vm::collect`), and with no old region at all (B = 0). A full collection keeps the old
+(`Vm::collect`), and with no old region at all (B = 0). The first collection of a VM
+made from the base image is full too (D2045). The VM's setup kills some base cells
+right away; the atom table's entries, for one, are replaced as soon as a script adds an
+atom. If those dead cells stayed for sixteen collections, they would shift every later
+threshold. A full collection keeps the old
 region's live cells and drops its dead ones: B shrinks to the live bytes below it, but it
 never grows.
 
 **What it retains.** Between full collections, an old cell that died still holds its
-fields, so the young cells only it reaches survive too: the old value stack after the
-stack grew, the realm's atom table before its first growth. In practice that is a few
-tens of kilobytes, and the next full collection frees it.
+fields, so the young cells only it reaches survive too: say, an old object's property
+table after the object grew. In practice that is a few kilobytes, and the next full
+collection frees it. Few kilobytes still matter for peak memory: in wasm, where the
+host allocator places the growing arena depends on its exact sizes, so a few kilobytes
+more can move a run's peak by megabytes either way (see below).
 
 **Determinism.** B and the count of minor collections since the last full one are in the
 `Roots` cell, like the threshold. Whether a collection is minor or full is decided from
@@ -139,12 +145,31 @@ collections ran before it or not.
 > so the barrier is not built (D2044).
 
 > **Trade-off.** No promotion. A generational collector moves long-lived young cells into
-> the old region, so later collections stop tracing them. djs tried making every full
-> collection's survivors old. Data that died after its promotion then stayed until the
-> next full collection, and the thresholds were computed over it. Peak memory rose by up
-> to 76% (D2042). The old region is the state of a setup phase, sealed on purpose. A
-> program with a large long-lived young heap gains little: its minor collections still
-> trace that data.
+> the old region, so later collections stop tracing them. djs tried this twice.
+> - Making every full collection's survivors old (D2042). Data that died after its
+>   promotion stayed until the next full collection, and thresholds were computed over
+>   it: peak memory rose by up to 76%.
+> - Promoting the cells that survived two collections, tracked by region: the survivors
+>   of one collection sit in a known range just above the old region (D2046).
+>   Collections got 7–20% faster, about 1% of the run, but peak memory still rose by up
+>   to 2 MiB on a pi-like workload and far more on one that grows a long string. Cells
+>   that live through two collections still die soon: per-task data, or a string's
+>   buffer that is replaced as it grows.
+>
+> The old region is the state of a setup phase, sealed on purpose. A program with a large
+> long-lived young heap gains little: its minor collections still trace that data.
+
+### Peak memory is chaotic
+
+In wasm the arena is one block of the host allocator's memory, and memory never shrinks.
+When the arena grows and the allocator cannot extend it in place, the old and the new
+block exist at the same time, and the run's peak is often exactly such a moment. Whether
+a growth can stay in place depends on the exact sizes involved. A few kilobytes more or
+less in the live heap, or a threshold one 64 KiB page higher, can move a run's peak by
+3–6 MiB, up or down. Policies such as reserving the capacity right after a collection,
+or growing by smaller steps, moved some workloads one way and others the other (D2047).
+So a memory claim about the collector compares distributions over many slightly
+perturbed runs, never one run per build (D2048).
 
 ## Copying, for canonical layouts
 
@@ -285,11 +310,15 @@ not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D16
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2042 D2044 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 -->
+<!-- gen:decisions D2040 D2041 D2042 D2044 D2045 D2046 D2047 D2048 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2042: Full collections do not promote; only seal points make cells old
 - D2044: No card table and write barrier (old-generation phase 2) for now
+- D2045: The first collection after a canonical image is full
+- D2046: No aging promotion
+- D2047: Arena growth policies that did not help
+- D2048: Peak memory is compared as a distribution over perturbed runs
 - D018: Adopt mark-compact for in-VM collections
 - D1090: Copying collector
 - D1052: Layout description macro

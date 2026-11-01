@@ -1271,3 +1271,28 @@ fn old_ropes_flattened_later() {
     let r2 = prop(&mut h, o, "r").as_string().unwrap();
     assert_eq!(h.str_to_string(r2), "a".repeat(40) + &"b".repeat(40));
 }
+
+#[test]
+fn the_first_collection_after_a_canonical_image_is_full() {
+    // D2045: a VM made from a canonical image (the base) collects in full first, so the
+    // cells its setup killed in the old region are gone before they shift thresholds.
+    let mut h = Heap::new().unwrap();
+    build_random(&mut h, 3, 300, None);
+    let o = h.new_object(None).unwrap();
+    let ho = h.new_handle(Value::object(o)).unwrap();
+    h.collect_canonical().unwrap();
+    let old = h.old_end();
+    assert_eq!(old, h.arena().len());
+    // Grow an old object: its old property storage dies.
+    let o = h.get_handle(ho).as_object().unwrap();
+    for i in 0..40 {
+        let k = h.atom_str(&format!("k{i}")).unwrap();
+        h.create_data_property(o, k, Value::int(i)).unwrap();
+    }
+    h.collect_auto().unwrap();
+    assert_eq!(h.arena().get(0, Roots::MINORS), 0, "full");
+    assert!(h.old_end() <= old);
+    h.collect_auto().unwrap();
+    assert_eq!(h.arena().get(0, Roots::MINORS), 1, "then minor");
+    h.verify().unwrap();
+}

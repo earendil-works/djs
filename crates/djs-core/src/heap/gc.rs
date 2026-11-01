@@ -357,8 +357,11 @@ impl Heap {
         // Rust allocations between collections, and pinning it raised peak memory.
         self.arena = to;
         // Canonical images are sealed (the base image's old region is all of it), and
-        // their bytes do not depend on where the old region ended (D1730).
-        self.set_old_region(after, 0);
+        // their bytes do not depend on where the old region ended (D1730). The first
+        // collection after one is full (D2045): a VM made from the base kills some of its
+        // cells right away (the atom table grows with the first compiled script), and
+        // until a full collection drops them they shift every later threshold.
+        self.set_old_region(after, FULL_EVERY - 1);
         self.after_collect(after);
         for o in collections {
             self.collection_rehash(crate::value::Obj(o));

@@ -185,7 +185,8 @@ scaled by the 8-byte alignment.
     is the base image's length after `vm_new`, and `Vm::seal` (pi calls it after its
     prelude) sets it to the arena size after a full collection. Full collections shrink
     the old region to its live cells but never extend it (D2042). The safepoints'
-    collections are minor, and every 16th is full; the schedule is image state, like the
+    collections are minor, and every 16th is full, as is the first one after a canonical
+    image (D2045); the schedule is image state, like the
     threshold. Dead old cells, and young cells only they reach, wait for a full collection.
     No card table (D2044).
   - **Cheney copying** (breadth-first, a function of the graph alone) is
@@ -210,7 +211,9 @@ scaled by the 8-byte alignment.
     different: it stops the run with `Status::HostOutOfMemory` (D1690).
   - **Not built:** a non-moving large-object space for big strings and buffers; a 1 MiB
     tool output still slides when garbage lies below it (0081 F6). Promotion of long-lived
-    young cells into the old region (D2042) and card marking (D2044) are not built.
+    young cells into the old region (D2042, D2046) and card marking (D2044) are not built.
+    Peak wasm memory is a chaotic function of where dlmalloc places the growing arena, so
+    memory claims compare distributions over perturbed runs (D2047, D2048).
 - **Roots:** the realm, the value stack and frames, the job queue, the pending host call
   table, the host inbox (D1670), unhandled rejections, and a host handle table (values the
   embedder holds, D1091). Every root lives in the arena.
