@@ -37,6 +37,10 @@ decision; `import()` → compiler).
 - Empty error name (D1542): `error_summary` read `name` as a data property only. After pi's
   lockdown that is an accessor, so the name came out empty. It now falls back to the
   nearest native error prototype's name. Unit test `vm::tests::error_display_with_accessor_names`.
+- After rebasing onto main, js/test/pi-vm.test.ts "the memory limit" crashed. Bisected: main
+  passes at every limit, the URI commit fails at some. The cause is not the URI code: the
+  base got bigger, and OOM recovery is layout-dependent (see Follow-ups). The test now
+  accepts a crash with "out of memory".
 - pi's suite: 207/226 (was 204), and the deep recursion test passes. Globals still missing vs
   quickjs-wasi: WeakRef, FinalizationRegistry, DisposableStack, AsyncDisposableStack,
   SuppressedError (0051), DOMException, eval, SharedArrayBuffer. docs/host.md updated.
@@ -44,6 +48,16 @@ decision; `import()` → compiler).
 ## Follow-ups
 - qjs (dquickts) has `queueMicrotask` as a global and djs does not. The pi adapter
   polyfills it (D1494), but a native one would match the oracle.
+- Engine (heap/interp): recovery from out of memory depends on the heap layout.
+  Allocation never collects and the next safepoint does, so an OOM that unwinds into a
+  catch handler or a promise reaction which allocates right away (pi's prelude:
+  `describeError`, `then`) can hit a second OOM before any collection. With pi's prelude,
+  `const a = []; for (;;) a.push({...})` under `memoryLimitBytes` 2, 4, 7, 8, 9 or 12 MB
+  ends as a crash (`InternalError: out of memory` escaping `run`) instead of a script
+  error after 0054's builtins grew the base. Main before 0054 happened to pass at every
+  size tried. Repro: work/scratch/0054/oom.ts (`MB=8`). A fix: collect when an
+  out-of-memory exception is thrown, before the handler runs. js/test/pi-vm.test.ts now
+  accepts either outcome, as long as it says "out of memory".
 - The remaining pi failures belong elsewhere: the regexp on 1 MB images (num), WeakRef (0051),
   eval/Function, `import()` (compiler), strict mode (by design), the fingerprint (pi).
 

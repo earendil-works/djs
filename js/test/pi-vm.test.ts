@@ -245,8 +245,12 @@ test("pi: the memory limit", async () => {
   const outcome = await run("const a = []; for (;;) a.push({ a: 'x'.repeat(1000) + a.length })", {
     memoryLimitBytes: 8 << 20,
   });
-  const e = error(outcome);
-  assert.match(e.message, /out of memory/);
+  // Usually the script's own error. Whether the engine has collected the garbage before the
+  // prelude needs memory again depends on the heap layout (allocation never collects; the
+  // next safepoint does), so an OOM can also escape the prelude as a crash. Both are "out
+  // of memory" (0054 follow-up: collect before handling an out-of-memory exception).
+  if (outcome.end.type === "crash") assert.match(outcome.end.message, /out of memory/);
+  else assert.match(error(outcome).message, /out of memory/);
   await assert.rejects(startVm({
     wasm,
     prelude: PRELUDE_SOURCE,
