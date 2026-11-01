@@ -13,3 +13,4 @@ pub mod num;
 pub mod regexp;
 pub mod unicode;
 pub mod value;
+pub mod wire;

@@ -6,3 +6,4 @@
 # external checkouts (test262 etc.), fetched by scripts/
 /vendor/
 .DS_Store
+node_modules/
