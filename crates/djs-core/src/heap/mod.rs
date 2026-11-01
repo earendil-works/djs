@@ -33,6 +33,7 @@
 
 pub mod arena;
 mod arrays;
+pub mod collection;
 pub mod atom;
 pub mod cells;
 pub mod gc;

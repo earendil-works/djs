@@ -352,6 +352,15 @@ cells! {
         /// The `this` value of the call.
         THIS: Value = 24,
     };
+
+    /// The entries of a WeakMap or WeakSet (0038, D1382): key/value pairs like a
+    /// [`ValueArray`], but the collector does not trace them. A pair stays alive only if
+    /// its key is reachable otherwise (ephemeron semantics), and the pairs of dead keys
+    /// are cleared. Slots at and beyond `LEN` are 0.
+    20 => EphemeronArray {
+        /// Slots in use (two per pair).
+        LEN: u32 = 8,
+    } tail VALUES: [Value] = 16;
 }
 
 // The GC stores the forwarding offset in the first payload word, so every cell needs one.

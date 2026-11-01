@@ -667,3 +667,237 @@ fn internal_refs_are_traced_and_verified() {
     h.set_object_slot(o, 0, Value::internal(p.offset()));
     assert!(matches!(h.verify(), Err(walk::VerifyError::BadRef { .. })));
 }
+
+// ------------------------------------------------------------------ collections, ephemerons
+
+/// A new object with `k = v` (k a fresh atom name).
+fn obj_with(h: &mut Heap, k: &str, v: Value) -> Value {
+    let o = h.new_object(None).unwrap();
+    let key = h.atom_str(k).unwrap();
+    h.create_data_property(o, key, v).unwrap();
+    Value::object(o)
+}
+
+fn prop(h: &mut Heap, o: Value, k: &str) -> Value {
+    let key = h.atom_str(k).unwrap();
+    h.get_own_property(o.as_object().unwrap(), key)
+        .and_then(|p| p.value())
+        .unwrap()
+}
+
+fn weak(h: &mut Heap, class: ObjectClass) -> Handle {
+    let proto = h.new_object(None).unwrap();
+    let m = h.collection_new(class, proto).unwrap();
+    h.new_handle(Value::object(m)).unwrap()
+}
+
+fn coll(h: &Heap, hd: Handle) -> crate::value::Obj {
+    h.get_handle(hd).as_object().unwrap()
+}
+
+/// Collects twice: the images must be identical (D1090) and verify.
+fn collect_twice(h: &mut Heap) {
+    h.collect().unwrap();
+    h.verify().unwrap();
+    let first = h.bytes().to_vec();
+    h.collect().unwrap();
+    assert_eq!(h.bytes(), &first[..], "collecting twice changed the image");
+}
+
+#[test]
+fn weakmap_entries_die_with_their_keys() {
+    let mut h = Heap::new().unwrap();
+    let wm = weak(&mut h, ObjectClass::WeakMap);
+    let live = Value::object(h.new_object(None).unwrap());
+    let hl = h.new_handle(live).unwrap();
+    for i in 0..20 {
+        let k = Value::object(h.new_object(None).unwrap());
+        let v = obj_with(&mut h, "i", Value::int(i));
+        let m = coll(&h, wm);
+        h.collection_set(m, k, v).unwrap();
+    }
+    let v = obj_with(&mut h, "live", Value::TRUE);
+    let m = coll(&h, wm);
+    h.collection_set(m, live, v).unwrap();
+    assert_eq!(h.collection_size(m), 21);
+    collect_twice(&mut h);
+    let m = coll(&h, wm);
+    assert_eq!(h.collection_size(m), 1);
+    let live = h.get_handle(hl);
+    let v = h.collection_get(m, live).unwrap();
+    assert_eq!(prop(&mut h, v, "live"), Value::TRUE);
+    // Once the key dies, so does the entry.
+    h.drop_handle(hl);
+    collect_twice(&mut h);
+    let m = coll(&h, wm);
+    assert_eq!(h.collection_size(m), 0);
+}
+
+#[test]
+fn ephemeron_chains_and_cycles() {
+    let mut h = Heap::new().unwrap();
+    let wm = weak(&mut h, ObjectClass::WeakMap);
+    // k1 -> v1 { next: k2 }, k2 -> v2 { next: k3 }, k3 -> v3. The pairs are inserted in
+    // reverse order, so the fixpoint needs several rounds.
+    let k3 = Value::object(h.new_object(None).unwrap());
+    let v3 = obj_with(&mut h, "end", Value::TRUE);
+    let k2 = Value::object(h.new_object(None).unwrap());
+    let v2 = obj_with(&mut h, "next", k3);
+    let k1 = Value::object(h.new_object(None).unwrap());
+    let v1 = obj_with(&mut h, "next", k2);
+    let m = coll(&h, wm);
+    h.collection_set(m, k3, v3).unwrap();
+    h.collection_set(m, k2, v2).unwrap();
+    h.collection_set(m, k1, v1).unwrap();
+    // A cycle through its own value: k4 -> v4 { back: k4 }, k4 otherwise unreachable.
+    let k4 = Value::object(h.new_object(None).unwrap());
+    let v4 = obj_with(&mut h, "back", k4);
+    h.collection_set(m, k4, v4).unwrap();
+    let hk1 = h.new_handle(k1).unwrap();
+    collect_twice(&mut h);
+    let m = coll(&h, wm);
+    assert_eq!(h.collection_size(m), 3, "the chain lives, the cycle dies");
+    let k1 = h.get_handle(hk1);
+    let v1 = h.collection_get(m, k1).unwrap();
+    let k2 = prop(&mut h, v1, "next");
+    let v2 = h.collection_get(m, k2).unwrap();
+    let k3 = prop(&mut h, v2, "next");
+    let v3 = h.collection_get(m, k3).unwrap();
+    assert_eq!(prop(&mut h, v3, "end"), Value::TRUE);
+    h.drop_handle(hk1);
+    collect_twice(&mut h);
+    assert_eq!(h.collection_size(coll(&h, wm)), 0);
+}
+
+#[test]
+fn ephemeron_key_reachable_through_another_table() {
+    let mut h = Heap::new().unwrap();
+    let a = weak(&mut h, ObjectClass::WeakMap);
+    let b = weak(&mut h, ObjectClass::WeakMap);
+    // b: x -> "found"; a: root -> { x }. x is reachable only through a's value.
+    let x = Value::object(h.new_object(None).unwrap());
+    let found = Value::string(h.alloc_str("found").unwrap());
+    let mb = coll(&h, b);
+    h.collection_set(mb, x, found).unwrap();
+    let root = Value::object(h.new_object(None).unwrap());
+    let holder = obj_with(&mut h, "x", x);
+    let ma = coll(&h, a);
+    h.collection_set(ma, root, holder).unwrap();
+    let hr = h.new_handle(root).unwrap();
+    collect_twice(&mut h);
+    let (ma, mb) = (coll(&h, a), coll(&h, b));
+    assert_eq!((h.collection_size(ma), h.collection_size(mb)), (1, 1));
+    let root = h.get_handle(hr);
+    let holder = h.collection_get(ma, root).unwrap();
+    let x = prop(&mut h, holder, "x");
+    let v = h.collection_get(mb, x).unwrap();
+    assert_eq!(h.str_to_string(v.as_string().unwrap()), "found");
+}
+
+#[test]
+fn weakset_and_image_round_trip() {
+    let mut h = Heap::new().unwrap();
+    let ws = weak(&mut h, ObjectClass::WeakSet);
+    let keep = Value::object(h.new_object(None).unwrap());
+    let hk = h.new_handle(keep).unwrap();
+    let s = coll(&h, ws);
+    h.collection_set(s, keep, Value::TRUE).unwrap();
+    for _ in 0..10 {
+        let k = Value::object(h.new_object(None).unwrap());
+        let s = coll(&h, ws);
+        h.collection_set(s, k, Value::TRUE).unwrap();
+    }
+    collect_twice(&mut h);
+    assert_eq!(h.collection_size(coll(&h, ws)), 1);
+    // The image loads, verifies, and still finds the key.
+    let mut h2 = Heap::from_bytes(h.bytes().to_vec(), usize::MAX).unwrap();
+    h2.verify().unwrap();
+    let s = coll(&h2, ws);
+    let keep = h2.get_handle(hk);
+    assert!(h2.collection_has(s, keep));
+    h2.collect().unwrap();
+    let s = coll(&h2, ws);
+    let keep = h2.get_handle(hk);
+    assert!(h2.collection_has(s, keep));
+}
+
+#[test]
+fn maps_rehash_object_keys_after_moves() {
+    let mut h = Heap::new().unwrap();
+    let hm = weak(&mut h, ObjectClass::Map);
+    let mut keys = Vec::new();
+    for i in 0..50 {
+        // Garbage in between, so the keys move.
+        h.new_object(None).unwrap();
+        let k = Value::object(h.new_object(None).unwrap());
+        keys.push(h.new_handle(k).unwrap());
+        let m = coll(&h, hm);
+        h.collection_set(m, k, Value::int(i)).unwrap();
+        let s = Value::string(h.alloc_str(&format!("s{i}")).unwrap());
+        h.collection_set(m, s, Value::int(-i)).unwrap();
+    }
+    collect_twice(&mut h);
+    let m = coll(&h, hm);
+    assert_eq!(h.collection_size(m), 100);
+    for (i, &hk) in keys.iter().enumerate() {
+        let k = h.get_handle(hk);
+        assert_eq!(h.collection_get(m, k), Some(Value::int(i as i32)));
+        let s = Value::string(h.alloc_str(&format!("s{i}")).unwrap());
+        assert_eq!(h.collection_get(m, s), Some(Value::int(-(i as i32))));
+    }
+    // -0 and +0 are one key, NaN equals NaN.
+    h.collection_set(m, Value::number(-0.0), Value::int(1)).unwrap();
+    h.collection_set(m, Value::NAN, Value::int(2)).unwrap();
+    assert_eq!(h.collection_get(m, Value::int(0)), Some(Value::int(1)));
+    assert_eq!(h.collection_get(m, Value::number(f64::NAN)), Some(Value::int(2)));
+}
+
+#[test]
+fn iterators_survive_deletes_compaction_and_clear() {
+    let mut h = Heap::new().unwrap();
+    let hm = weak(&mut h, ObjectClass::Map);
+    let m = coll(&h, hm);
+    for i in 0..40 {
+        h.collection_set(m, Value::int(i), Value::int(i)).unwrap();
+    }
+    let proto = h.new_object(None).unwrap();
+    let it = h.collection_iterator(m, 0, proto).unwrap();
+    let hi = h.new_handle(Value::object(it)).unwrap();
+    let mut seen = Vec::new();
+    for _ in 0..5 {
+        let it = coll(&h, hi);
+        seen.push(h.collection_iterator_next(it).unwrap().0);
+    }
+    // Delete most entries (compacts), add new ones, collect: the iterator continues
+    // after 4 with the survivors and the additions.
+    let m = coll(&h, hm);
+    for i in 0..40 {
+        if i % 10 != 9 {
+            h.collection_delete(m, Value::int(i)).unwrap();
+        }
+    }
+    h.collection_set(m, Value::int(100), Value::int(100)).unwrap();
+    collect_twice(&mut h);
+    loop {
+        let it = coll(&h, hi);
+        match h.collection_iterator_next(it) {
+            Some((k, _)) => seen.push(k),
+            None => break,
+        }
+    }
+    let nums: Vec<i32> = seen.iter().map(|v| v.as_int().unwrap()).collect();
+    assert_eq!(nums, [0, 1, 2, 3, 4, 9, 19, 29, 39, 100]);
+    // After clear, entries added later are still visited by a new iterator walk.
+    let m = coll(&h, hm);
+    let proto = h.new_object(None).unwrap();
+    let it2 = h.collection_iterator(m, 0, proto).unwrap();
+    let h2 = h.new_handle(Value::object(it2)).unwrap();
+    let it2 = coll(&h, h2);
+    assert_eq!(h.collection_iterator_next(it2).unwrap().0, Value::int(9));
+    let m = coll(&h, hm);
+    h.collection_clear(m).unwrap();
+    h.collection_set(m, Value::int(7), Value::int(7)).unwrap();
+    let it2 = coll(&h, h2);
+    assert_eq!(h.collection_iterator_next(it2).unwrap().0, Value::int(7));
+    assert!(h.collection_iterator_next(it2).is_none());
+}

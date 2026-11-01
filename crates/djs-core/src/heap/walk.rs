@@ -7,7 +7,8 @@
 use alloc::vec::Vec;
 
 use super::cells::{
-    AtomTable, HANDLE_LIVE, HandleSlot, HandleTable, Header, Object, PropTable, Roots, Rope, Str8,
+    AtomTable, EphemeronArray, HANDLE_LIVE, HandleSlot, HandleTable, Header, Object, PropTable,
+    Roots, Rope, Str8,
     Str16, Symbol, U32Array, ValueArray, flags,
 };
 use super::layout::{FieldTy, Ref};
@@ -296,6 +297,15 @@ impl Heap {
                 let d: Value = a.get(cell, Symbol::DESCRIPTION);
                 d.is_undefined() || d.as_string().is_some()
             }
+            // Pairs; a live key is an object or a symbol (or a cleared HOLE).
+            CellKind::EphemeronArray => {
+                let len = a.get(cell, EphemeronArray::LEN);
+                len % 2 == 0
+                    && (0..len).step_by(2).all(|i| {
+                        let k: Value = a.read(EphemeronArray::VALUES.at(cell, i));
+                        k.is_hole() || k.as_object().is_some() || k.as_symbol().is_some()
+                    })
+            }
             _ => true,
         }
     }
@@ -341,6 +351,9 @@ impl Heap {
             CellKind::Str8 => Str8::DATA.cell_size(a.get(cell, Str8::LEN)),
             CellKind::Str16 => Str16::DATA.cell_size(a.get(cell, Str16::LEN)),
             CellKind::ValueArray => ValueArray::VALUES.cell_size(a.get(cell, ValueArray::LEN)),
+            CellKind::EphemeronArray => {
+                EphemeronArray::VALUES.cell_size(a.get(cell, EphemeronArray::LEN))
+            }
             CellKind::U32Array => U32Array::DATA.cell_size(a.get(cell, U32Array::LEN)),
             _ => Some(0),
         };

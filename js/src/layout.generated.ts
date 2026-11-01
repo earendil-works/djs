@@ -2,7 +2,7 @@
 // Regenerate: DJS_UPDATE_LAYOUT=1 cargo test -p djs-core layout_generated
 
 export const LAYOUT = {
-  "layoutHash": 2598672584,
+  "layoutHash": 2470322518,
   "magic": 5458500,
   "headerSize": 8,
   "header": { "KIND": 0, "GC": 1, "FLAGS": 2, "SIZE": 4 },
@@ -13,7 +13,7 @@ export const LAYOUT = {
   },
   "atom": { "intBit": 2147483648, "symbolBit": 1073741824, "indexMask": 1073741823 },
   "flags": { "ROPE_TWO_BYTE": 1, "ROPE_FLATTENED": 2, "OBJ_EXTENSIBLE": 1, "OBJ_INDEXED_PROPS": 2, "OBJ_LENGTH_READONLY": 4 },
-  "objectClasses": { "Ordinary": 0, "Array": 1, "Function": 2, "HostFunction": 3, "Error": 4, "Arguments": 5, "ArrayIterator": 6, "BoundFunction": 7, "Boolean": 8, "Number": 9, "String": 10, "Symbol": 11 },
+  "objectClasses": { "Ordinary": 0, "Array": 1, "Function": 2, "HostFunction": 3, "Error": 4, "Arguments": 5, "ArrayIterator": 6, "BoundFunction": 7, "Boolean": 8, "Number": 9, "String": 10, "Symbol": 11, "Map": 12, "Set": 13, "WeakMap": 14, "WeakSet": 15, "CollectionIterator": 16 },
   "propFlags": { "WRITABLE": 1, "ENUMERABLE": 2, "CONFIGURABLE": 4, "ACCESSOR": 8 },
   "cells": {
     "Roots": {
@@ -306,6 +306,22 @@ export const LAYOUT = {
         "THIS": { "offset": 24, "type": "Value" }
       },
       "tail": null
+    },
+    "EphemeronArray": {
+      "kind": 20,
+      "minSize": 16,
+      "fields": {
+        "LEN": { "offset": 8, "type": "u32" }
+      },
+      "tail": {
+        "name": "VALUES",
+        "offset": 16,
+        "elem": "Value",
+        "elemSize": 8,
+        "fields": {
+          "": { "offset": 0, "type": "Value" }
+        }
+      }
     }
   }
 } as const;

@@ -26,14 +26,25 @@
 //! function of the object graph alone: collecting an already collected heap reproduces it
 //! byte for byte, which keeps snapshots deterministic.
 //!
-//! Nothing in the heap is keyed by arena offsets: the atom index is keyed by string
-//! content hashes, property indexes by atom ids, string hashes are content based. So no
-//! table needs rehashing after a move.
+//! Almost nothing in the heap is keyed by arena offsets: the atom index is keyed by string
+//! content hashes, property indexes by atom ids, string hashes are content based. The
+//! exception is the index of Map/Set/WeakMap/WeakSet (object and symbol keys hash by
+//! offset): `collect` rehashes every collection it copied, in place (D1381).
+//!
+//! Ephemerons (D1382): an [`EphemeronArray`] (WeakMap/WeakSet entries) is not traced by
+//! the scan. After the scan catches up, every pair whose key has been copied gets its
+//! key and value forwarded, and the scan resumes; this repeats until nothing changes.
+//! Pairs whose keys were never copied are then cleared (HOLE key, undefined value). The
+//! order (tables in copy order, pairs in index order) depends only on the object graph,
+//! so the layout stays deterministic.
 //!
 //! [`Roots`]: super::cells::Roots
 
 use super::arena::Arena;
-use super::cells::{Header, Rope, flags, gc_bits};
+use alloc::vec::Vec;
+
+use super::cells::{EphemeronArray, Header, Object, Rope, flags, gc_bits};
+use super::object::ObjectClass;
 use super::layout::Ref;
 use super::walk::{self, Slot};
 use super::{CellKind, Heap, HeapError};
@@ -61,6 +72,32 @@ pub struct GcStats {
 pub fn next_threshold(live: u32, limit: u32) -> u32 {
     let headroom = limit.saturating_sub(live);
     live + live.max(MIN_GROWTH).min(headroom / 2)
+}
+
+/// Forwards one traced slot of a to-space cell, rewriting it with the new offset.
+fn trace(from: &mut Arena, to: &mut Arena, slot: Slot) {
+    match slot {
+        Slot::Value(s) => {
+            let v: Value = to.read(s);
+            if let Some(t) = v.ref_offset() {
+                let n = forward(from, to, t);
+                let bits = (v.to_bits() & !0xFFFF_FFFF) | n as u64;
+                to.write(s, Value::from_raw(bits));
+            }
+        }
+        Slot::Ref(s) => {
+            let r: Ref = to.read(s);
+            if let Some(t) = r.get() {
+                let n = forward(from, to, t);
+                to.write(s, Ref(n));
+            }
+        }
+    }
+}
+
+/// Whether the from-space cell at `off` has been copied (is live).
+fn is_forwarded(from: &Arena, off: u32) -> bool {
+    from.get(off, Header::GC) & gc_bits::FORWARDED != 0
 }
 
 /// Returns the new offset of the from-space cell at `off`, copying it if needed.
@@ -112,35 +149,86 @@ impl Heap {
         let from = &mut self.arena;
         let roots = forward(from, &mut to, 0);
         debug_assert_eq!(roots, 0);
+        // Ephemeron tables (WeakMap/WeakSet entries) in to-space, with a flag per pair:
+        // done once its key turned out live and the pair was forwarded.
+        let mut ephemerons: Vec<(u32, Vec<bool>)> = Vec::new();
+        // Collections to rehash afterwards (their object keys hash by offset).
+        let mut collections: Vec<u32> = Vec::new();
         let mut scan = 0;
-        while scan < to.len() {
-            let kb = to.get(scan, Header::KIND);
-            let kind = CellKind::from_u8(kb).unwrap_or_else(|| panic!("gc: bad kind {kb}"));
-            let size = to.get(scan, Header::SIZE);
-            walk::for_each_slot(kind, scan, size, |slot| match slot {
-                Slot::Value(s) => {
-                    let v: Value = to.read(s);
-                    if let Some(t) = v.ref_offset() {
-                        let n = forward(from, &mut to, t);
-                        let bits = (v.to_bits() & !0xFFFF_FFFF) | n as u64;
-                        to.write(s, Value::from_raw(bits));
-                    }
+        loop {
+            while scan < to.len() {
+                let kb = to.get(scan, Header::KIND);
+                let kind = CellKind::from_u8(kb).unwrap_or_else(|| panic!("gc: bad kind {kb}"));
+                let size = to.get(scan, Header::SIZE);
+                if kind == CellKind::EphemeronArray {
+                    // Not traced: a pair lives only through its key (below).
+                    let pairs = to.get(scan, EphemeronArray::LEN) / 2;
+                    ephemerons.push((scan, alloc::vec![false; pairs as usize]));
+                    scan += size;
+                    continue;
                 }
-                Slot::Ref(s) => {
-                    let r: Ref = to.read(s);
-                    if let Some(t) = r.get() {
-                        let n = forward(from, &mut to, t);
-                        to.write(s, Ref(n));
-                    }
+                if kind == CellKind::Object
+                    && ObjectClass::from_u32(to.get(scan, Object::CLASS)).is_some_and(|c| {
+                        matches!(
+                            c,
+                            ObjectClass::Map
+                                | ObjectClass::Set
+                                | ObjectClass::WeakMap
+                                | ObjectClass::WeakSet
+                        )
+                    })
+                {
+                    collections.push(scan);
                 }
-            });
-            scan += size;
+                walk::for_each_slot(kind, scan, size, |slot| trace(from, &mut to, slot));
+                scan += size;
+            }
+            // Ephemerons to a fixpoint: a pair whose key was copied keeps its value; that
+            // may copy more cells (and make more keys live), so scan again.
+            let mut progress = false;
+            for (table, done) in &mut ephemerons {
+                for (i, d) in done.iter_mut().enumerate() {
+                    if *d {
+                        continue;
+                    }
+                    let ks = EphemeronArray::VALUES.at(*table, 2 * i as u32);
+                    let k: Value = to.read(ks);
+                    let Some(t) = k.ref_offset() else {
+                        // A cleared pair (HOLE): nothing to keep.
+                        *d = true;
+                        continue;
+                    };
+                    if !is_forwarded(from, t) {
+                        continue;
+                    }
+                    trace(from, &mut to, Slot::Value(ks));
+                    trace(from, &mut to, Slot::Value(ks + 8));
+                    *d = true;
+                    progress = true;
+                }
+            }
+            if !progress && scan == to.len() {
+                break;
+            }
+        }
+        // Pairs whose key died are cleared.
+        for (table, done) in &ephemerons {
+            for (i, d) in done.iter().enumerate() {
+                if !d {
+                    let ks = EphemeronArray::VALUES.at(*table, 2 * i as u32);
+                    to.write(ks, Value::HOLE);
+                    to.write(ks + 8, Value::UNDEFINED);
+                }
+            }
         }
         let after = to.len();
         self.gc_threshold = next_threshold(after, to.limit());
         to.shrink_capacity(self.gc_threshold as usize);
         self.arena = to;
         self.gc_pending = false;
+        for o in collections {
+            self.collection_rehash(crate::value::Obj(o));
+        }
         Ok(GcStats { before, after })
     }
 }

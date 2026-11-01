@@ -80,6 +80,17 @@ pub enum ObjectClass {
     Number = 9,
     String = 10,
     Symbol = 11,
+    /// Map, Set, WeakMap, WeakSet (0038, `heap/collection.rs`): slot 0 the entries (a
+    /// ValueArray, or an EphemeronArray for the weak ones), slot 1 the hash index (a
+    /// U32Array), slot 2 the number of live entries.
+    Map = 12,
+    Set = 13,
+    WeakMap = 14,
+    WeakSet = 15,
+    /// A Map or Set Iterator: slot 0 the entries it walks (undefined once done), slot 1
+    /// the next entry number, slot 2 the kind (0 keys, 1 values, 2 entries), slot 3 0
+    /// for a Map, 1 for a Set.
+    CollectionIterator = 16,
 }
 
 impl ObjectClass {
@@ -97,6 +108,11 @@ impl ObjectClass {
             9 => Some(ObjectClass::Number),
             10 => Some(ObjectClass::String),
             11 => Some(ObjectClass::Symbol),
+            12 => Some(ObjectClass::Map),
+            13 => Some(ObjectClass::Set),
+            14 => Some(ObjectClass::WeakMap),
+            15 => Some(ObjectClass::WeakSet),
+            16 => Some(ObjectClass::CollectionIterator),
             _ => None,
         }
     }
@@ -112,6 +128,8 @@ impl ObjectClass {
             | ObjectClass::Number
             | ObjectClass::String
             | ObjectClass::Symbol => 1,
+            ObjectClass::Map | ObjectClass::Set | ObjectClass::WeakMap | ObjectClass::WeakSet => 3,
+            ObjectClass::CollectionIterator => 4,
         }
     }
 
