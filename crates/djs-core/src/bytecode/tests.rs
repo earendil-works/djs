@@ -828,6 +828,14 @@ fn template_cells() {
 }
 
 #[test]
+fn capture_descriptors() {
+    use capture_desc::{decode, local, outer};
+    assert_eq!(decode(local(7)), (false, 7));
+    assert_eq!(decode(outer(65535)), (true, 65535));
+    assert_ne!(local(1), outer(1));
+}
+
+#[test]
 fn disasm_without_heap() {
     let mut b = CodeBuf::new();
     b.get_field(Atom::from_id(5));

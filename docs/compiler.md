@@ -461,19 +461,21 @@ from it:
 
 ```rust
 ops! {
-//  name            immediates            pop     push  cost  flags
-    Undefined       ()                    0       1     1     ;
-    PushI32         (v: i32)              0       1     1     ;
-    PushConst       (idx: u32)            0       1     1     ;
-    GetLoc          (loc: u16)            0       1     1     ;
-    PutLoc          (loc: u16)            1       0     1     ;
-    Call            (argc: u16)           2+argc  1     4     CALL;
-    JumpIfFalse     (target: label)       1       0     1     BRANCH;
-    Return          ()                    1       0     2     TERM;
-    NameGet         (r: u32)              0       1     0     PHASE1;
+    /// `-> n`: an integer constant.
+    PushI32 push_i32(v: I32) pop 0 push 1 cost Basic;
+    GetLoc get_loc(loc: Loc) pop 0 push 1 cost Basic;
+    /// `f this a1 .. an -> r`
+    Call call(argc: Argc) pop 2 + imm 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
+    JumpIfFalse jump_if_false(target: Target) pop 1 push 0 cost Basic flags BRANCH;
+    Return return_() pop 1 push 0 cost Basic flags TERM;
+    NameGet name_get(r: NameRef) pop 0 push 1 cost Free flags PHASE1 | THROWS | CALLS;
     // ...
 }
 ```
+
+(As implemented in `bytecode/ops.rs`, 0013: variant name, emitter method name, typed
+immediates, stack effect with `+ imm k` for counts, a cost class and flags. Method names
+that are Rust keywords end in `_`; the disassembler name drops it.)
 
 The macro generates:
 
@@ -500,12 +502,16 @@ bytecode), `JUMP` (unconditional, no fallthrough), `BRANCH` (conditional), `TERM
 
 ### 4.3 Labels and fixups
 
-- Phase 1: `new_label() -> LabelId`. `emit_jump(op, label)` writes the label id in
-  the `label` immediate. `place_label(label)` emits the `label id` pseudo-instruction
-  (5 bytes, `PHASE1`). Forward and backward jumps are handled the same way.
-- Re-emit (5.3): when it copies a `label` pseudo-op it records the **final**
-  position of the label and drops the instruction. When it copies a jump it records
-  `(final_pos, label)` in a fixup list.
+- The emitter is `CodeBuf<Phase1>` (`CodeBuf::phase1()`) or `CodeBuf<Final>`
+  (`CodeBuf::new()`), as implemented in 0013.
+- Phase 1: `new_label() -> Label`. `buf.jump(label)` and the other jumps write the
+  label id in the `Target` immediate. `place_label(label)` emits the `label id`
+  pseudo-instruction (5 bytes, `PHASE1`). Forward and backward jumps are handled the
+  same way.
+- Re-emit (5.3): a `CodeBuf<Final>` created with `with_labels(phase1.label_count)`
+  takes over the label ids. When the re-emit sees a `label` pseudo-op it calls
+  `place_label` (recording the **final** position, emitting nothing). Jumps are
+  copied with `emit_insn`, which records a fixup.
 - After the re-emit: patch each jump's `i32` with `label_pos - (jump_pos + 5)`. That
   is a fixed-width, in-place patch. Exception handler regions and the line table are
   expressed with labels or phase-1 positions and are remapped the same way.
@@ -597,8 +603,9 @@ Properties (P0 field access on plain objects, P1 the rest):
 | `define_field` | `atom` | o v → o | CreateDataProperty (literals), P1 |
 | `define_elem` | | o k v → o | computed keys, R (ToPropertyKey), P1 |
 | `define_getter` / `define_setter` | `atom` | o f → o | P1; `_elem` variants for computed keys |
-| `define_method` | `atom` | o f → o | sets the home object, P1 |
+| `define_method` | `atom` | o f → o | sets the home object, P1; `define_method_elem` for computed keys |
 | `copy_data_props` | `u8` flags | o src → o | object spread, rest with excluded keys, R, P1 |
+| `require_object_coercible` | | v → v | TypeError for null/undefined (`const {} = null`), P1 |
 | `delete` | | o k → b | P1 |
 | `in` | | k o → b | (in the binary table) |
 | `get_private` `put_private` `define_private` `private_in` | `atom` | as fields | P1 classes (brand checks inside) |
@@ -861,24 +868,24 @@ cells! {
         LOCALS: u16 = 20,
         STACK: u16 = 22,       // max operand depth (4.4)
         CAPTURES: u16 = 24,
-        _PAD: u16 = 26,
+        RESERVED: u16 = 26,
         CODE: Ref = 28,        // Bytes: final bytecode
         CONSTS: Ref = 32,      // ValueArray: numbers, strings, template-object caches; or null
         CHILDREN: Ref = 36,    // RefArray of FuncTemplate; or null
         CAPTURE_DESC: Ref = 40,// U32Array: bit 31 = Outer, low bits = slot/index; or null
-        HANDLERS: Ref = 44,    // U32Array: (start, end, handler, depth) quads; or null
+        HANDLERS: Ref = 44,    // Bytes: 16-byte (start, end, handler, depth) records; or null
         LINES: Ref = 48,       // Bytes: line table (6.2)
         SCRIPT: Ref = 52,      // Script
         SRC_START: u32 = 56,   // source span of the function (Function.prototype.toString, later)
         SRC_END: u32 = 60,
         NAMES: Ref = 64,       // U32Array of atoms: locals, then captures (TDZ messages,
                                // disassembler, debugger)
-        _PAD2: u32 = 68,
+        RESERVED2: u32 = 68,
     };
     /// One per compiled source: name for stack traces, optionally the source text.
     Script { NAME: Ref = 8 /* Str */, SOURCE: Ref = 12 /* Str or null */ };
-    /// A captured binding.
-    Box { VALUE: Value = 8 };
+    /// A captured binding (`BoxCell` in code, so it does not shadow `alloc::boxed::Box`).
+    BoxCell { VALUE: Value = 8 };
     /// Raw bytes, not traced (bytecode, line tables).
     Bytes { LEN: u32 = 8 } tail DATA: [u8] = 12;
     /// Traced references to non-JS cells.

@@ -45,6 +45,35 @@ pub mod flags {
     pub const ALLOC: u16 = 1 << 7;
 }
 
+/// Kinds for `special_object` (its `U8` immediate).
+pub mod special {
+    pub const ARGUMENTS: u8 = 0;
+    pub const NEW_TARGET: u8 = 1;
+    pub const HOME_OBJECT: u8 = 2;
+    pub const ACTIVE_FUNCTION: u8 = 3;
+}
+
+/// `FuncTemplate::CAPTURE_DESC` words (docs/compiler.md 5.4): where `fclosure` takes each
+/// capture's Box from.
+pub mod capture_desc {
+    /// Set: from the creating closure's captures; clear: from a local slot of the
+    /// creating frame.
+    pub const OUTER: u32 = 1 << 31;
+
+    pub const fn local(slot: u16) -> u32 {
+        slot as u32
+    }
+
+    pub const fn outer(capture: u16) -> u32 {
+        OUTER | capture as u32
+    }
+
+    /// `(is_outer, index)`
+    pub const fn decode(word: u32) -> (bool, u16) {
+        (word & OUTER != 0, word as u16)
+    }
+}
+
 /// Fuel cost class. The interpreter charges [`CostClass::fuel`] per instruction; leaf
 /// operations add charges proportional to their work (docs/compiler.md 7.6).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]

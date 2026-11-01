@@ -33,5 +33,8 @@ pub use disasm::{DisasmContext, disasm};
 pub use handlers::{Handler, HandlerTable, encode_handlers};
 pub use imm::ImmKind;
 pub use lines::{LineTableBuilder, line_entries, lookup_line};
-pub use ops::{CostClass, OP_COUNT, OPS, OPS_HASH, Op, OpInfo, build_hash, flags};
+pub use ops::{
+    CostClass, OP_COUNT, OPS, OPS_HASH, Op, OpInfo, build_hash, capture_desc, flags, special,
+};
 pub use stack::{StackError, check_stack};
+pub use template::{TemplateError, TemplateParts, alloc_script, alloc_template, bytes_of};
