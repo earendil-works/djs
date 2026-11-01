@@ -1,6 +1,6 @@
 # 0050: RegExp completion: \p property escapes, compact greedy loops, literal caching, promotion
 
-status: in-progress
+status: done
 agent: num
 branch: issue/0050-regexp-completion
 depends-on: 0033
@@ -32,7 +32,71 @@ Finish RegExp so it can move to the active group: the 0033 follow-ups.
 - [ ] Ratchets updated, and corpus cases for property escapes.
 
 ## Log
+- Property escapes (D1500): scripts/gen-unicode.py writes unicode/props.rs. The new
+  vendored UCD files are PropList, DerivedBinaryProperties, DerivedNormalizationProps,
+  Scripts, ScriptExtensions, PropertyValueAliases, emoji-data, and the emoji
+  sequence/zwj files from Public/17.0.0/emoji. Lookups and set algebra are in
+  unicode/property.rs, and the parser uses them behind `regexp-unicode-props`.
+  - qjs messages and quirks: `\p{Script}` is "unknown unicode script", `\p{Lu=}` is
+    `\p{Lu}`, case folding comes before inversion in v mode and after it in u mode.
+  - The "negated character class with strings" message is now cut at qjs's 64-byte
+    buffer, as qjs prints it.
+- Size, djs-wasm stripped: +72.6 KB raw (+6.3%) and +27 KB gzip (+7.3%) for 57.8 KB of
+  tables. The feature is on by default (D1500).
+- STAR loops (D1501): one backtrack frame per loop, follow-set skipping, SKIP for
+  leading loops. Email pattern 6.4 -> 1.5 ms. All test262 RegExp overflows are gone.
+- Literal programs are compiled once and kept in the constant pool (D1502).
+- Fast paths (D1503): IsPristineRegExp, plus the RegExpSplitRaw and RegExpReplaceRaw
+  leaves (suspendable through a progress record in the state slot). `exec` passes a
+  Number lastIndex straight to the leaf.
+
+  | case | djs before | djs after | qjs |
+  | --- | ---: | ---: | ---: |
+  | split | 3130 ms | 120 ms | 120 ms |
+  | replace | 900 ms | 60 ms | 30 ms |
+  | replace with `$1` | 1110 ms | 160 ms | 80 ms |
+  | literal loop | 110 ms | 80 ms | 10 ms |
+- Promotion (tests/test262.toml): before, active was 32,303 / 32,718 (98.7%) and later
+  2,761 / 4,851. After, active is 34,489 / 34,904 (98.8%): all 2,186 moved tests pass.
+  Later is 575 / 2,665.
+- New tests:
+  - corpus: tests/corpus/builtins/regexp-property-escapes.js and regexp-fast-paths.js,
+    identical to qjs and stressed;
+  - e2e: tests/data/e2e/regexp_props.js;
+  - unit: regexp star_loops, star_loops_keep_the_stack_flat, the suspension cases, and
+    unicode::property tests;
+  - regexp_fuel.rs: the split and replace leaves suspended and restored.
+- The test262 active run grows by about 250 CPU-s: the property-escape tests build 1M
+  code point strings in the harness. That is about 30 s wall at -j 18.
+- Outside `touches:`, all small:
+  - heap/walk.rs is unchanged;
+  - interp/run/json_regexp.rs: my 0033 file;
+  - bytecode/intrinsics.rs: regenerated;
+  - crates/djs-core/Cargo.toml: the feature;
+  - regexp/tests.rs and tests/regexp_fuel.rs: tests.
 
 ## Follow-ups
+- JSON.parse source text access (json-parse-with-source: the reviver's `{source}`,
+  JSON.rawJSON and JSON.isRawJSON) is not cheap. It needs:
+  - a parse mode that records the source text of every primitive in a snapshot tree the
+    reviver walks next to the values (json/parse.rs, the heap's area);
+  - a raw-JSON object kind with [[IsRawJSON]];
+  - stringify support for it in both paths.
+  My estimate is half a day to a day; about 40 test262 tests (later group).
+- `%RegExpExecRaw` copies the program out of its cell on every call. That is O(program)
+  per exec: 11 KB for `\p{L}`, 136 KB for `\p{RGI_Emoji}` with its 3,700 strings. A
+  matcher that reads the words in place, or a per-run cache, would remove the copy.
+- Literal evaluation is still 8x qjs (object creation plus the exec protocol in the
+  builtin language): a candidate for a `test`/`exec` fast path on pristine RegExps.
+- Properties of strings could go behind their own feature if size gets tight (18 KB).
 
 ## Result
+- `\p{..}`/`\P{..}`: all the properties, with qjs semantics. Feature
+  `regexp-unicode-props`, on by default (D1500).
+- Loops over one character use a single backtrack frame, skip hopeless positions, and
+  skip failed runs when the loop starts the pattern (D1501).
+- Regex literals compile once (D1502).
+- split and global string replace on unmodified RegExps run as suspendable leaves at
+  about qjs speed (D1503).
+- RegExp is in the active group: 34,489 / 34,904 active passing.
+- Not done: JSON.parse source text access (follow-up).
