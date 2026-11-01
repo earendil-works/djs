@@ -13,7 +13,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0079 | Integration and test efficiency (investigate first) | devflow, after 0053 | .worktrees/devflow |
 | 0065 | accessor + decorators (TC39, then TS legacy) | lexer | .worktrees/lexer |
 | 0069 | Host OOM is not a JS OOM (then 0070 GC-and-retry) | heap | .worktrees/heap |
-| 0068 | Deterministic mode for VM and Sandbox | determinism | .worktrees/determinism |
+| 0073 | Replay journal and canonical image hash | determinism | .worktrees/determinism |
 
 ## Open (ready)
 
@@ -27,7 +27,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0078 | Leaf quick wins from 0077 (ASCII check, UTF-8 in transcode, short_decimal) | num, after 0075 |
 | 0070 | Collect and retry at a failing allocation | 0069 |
 | 0072 | Determinism checks in the gate, part 2 (part 1 done: 6ab3968) | 0071 |
-| 0073 | Replay journal and image hash | 0067 (done) |
 | 0074 | Carry fuel overshoot across runs | - |
 
 ## Done
@@ -60,6 +59,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0059 | Indirect eval, Function ctors, queueMicrotask | 4435b3b (agent infra; active 37,464 / 37,722 = 99.3%; pi 215/226) |
 | 0064 | djs repl | 31797b6 (agent repl, archived; docs/cli.md; follow-ups: tab completion, interactive .step) |
 | 0077 | deser deps investigation | report (agent deps, archived): no new deps; quick wins -> 0078 |
+| 0068 | Deterministic mode for VM and Sandbox | 971036e (agent determinism; D1680) |
 | 0067 | Host inbox (async host results as macrotasks) | 7988b76 (agent determinism; D1670) |
 | 0066 | pi adapter determinism fixes | 6c523da (agent determinism; equal polls cold/warm; pi suite 221/226) |
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
