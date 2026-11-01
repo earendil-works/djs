@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0087 | Allocation churn + wasm memory (0081 P5) | num | .worktrees/num |
+| 0094 | Baseline wasm memory of a VM (3.9 vs 1.6 MiB) | num | .worktrees/num |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0090 | Natives: collect-and-retry, resizable TA, JSON slow path | infra | .worktrees/infra |
 | 0092 | Compiler code size + compile throughput in wasm | lexer | .worktrees/lexer |
@@ -63,6 +63,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0085 | @fast leaf entries (57) | 0dd2c96 (agent perf; pi-like 3.6x -> 1.8x quickjs-wasi in wasm instructions) |
 | 0081 | Perf anatomy | report (agent perf): plain bytecode at par in wasm; gap is builtins/iteration; P1-P10 |
 | 0072 | Determinism checks in the gate (both parts) | 38f0c91 (agent determinism, archived; D1720, D1725) |
+| 0087 | Allocation churn + wasm memory | 2d24853f (agent num; strbuild 57.8 -> 35.5 MiB, json 21 -> 14; to-space reuse measured worse, dropped) |
 | 0078 | Leaf quick wins | 73836fe (agent num; wasm ASCII 4x, non-ASCII wire decode -35..40%) + test262 property-escape speedup 1cbfc29 (D1783-D1785; gate test262 187 -> 133 CPU-s) |
 | 0071 | GC points + raw images slice-independent | f14da99 (agent num; D1710, D1711) |
 | 0074 | Fuel overshoot carried across runs | 793e29d (agent determinism; D1740) |
