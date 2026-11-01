@@ -3844,20 +3844,18 @@ cheaper than the compare tree, and the move perturbs the run loop (D1352). The `
 order stays semantic; work/scratch/0086/renumber.py (not committed) redoes the reorder
 for a later measurement, e.g. after the run-loop restructuring (0081 P6).
 ## D1783: Fast paths for array appends, strict equality and insert2/insert3
+## D1783: `put_elem` appends on the fast path
 date: 2026-11-03 · by: num · issue: gate time (coordinator)
 test262's 613 RegExp property-escape tests were about 60% of the gate's test262 CPU. Each
 one builds its strings with the harness's `buildString`, a JS loop of
-`codePoints[length++] = codePoint; if (length === CHUNK_SIZE) …` over about 1.1M code
-points, and it runs twice (strict and sloppy). Three of that loop's ops took the slow
-path:
-- `put_elem`: `fast_elem` required an existing element, so every append went through
-  generic [[Set]]. `set_element_fast` already appends and fills holes where that is
-  unobservable (an extensible Array, writable length, no index properties on the
-  prototype chain), so `put_elem` now calls it directly.
-- `strict_eq` / `strict_ne` now have `fast_step` arms for two int32s or two Numbers.
-  Everything else goes through `strict_equals` as before.
-- `insert2` / `insert3`, the stack shuffles of assignment expressions, now have
-  `fast_step` arms.
+`codePoints[length++] = codePoint` over about 1.1M code points, and it runs twice
+(strict and sloppy).
+
+`fast_elem` handled `put_elem` only on an existing element, so every append took
+generic [[Set]]. `set_element_fast` already appends and fills holes where that is
+unobservable: an extensible Array, writable length, no index properties on the
+prototype chain. `put_elem` now calls it directly. (`strict_eq` and the `insert` ops,
+the loop's other slow ops, came onto the fast path with 0086's `fast_more` meanwhile.)
 
 `tests/corpus/language/elem-append-strict-eq.js` matches qjs, also under stress. It
 covers appends, holes, frozen, non-extensible and length-readonly arrays, a setter on
@@ -3889,14 +3887,21 @@ precondition checks: `Range::contains`, range iteration and `unchecked_add`.
 at opt-level 1 too. That alone cut a debug test262 property-escape run by 22% of its
 instructions. Debug assertions and overflow checks stay on, as D010 wants.
 
-Result for the 613 property-escape tests, `djs-test262` built in dev, `-j 6`:
+Result of D1783–D1785 on the 613 property-escape tests, against main with 0086
+(`djs-test262` built in dev, `-j 6`):
 
 | | before | after |
 | --- | ---: | ---: |
-| instructions | 3.31 T | 1.66 T (−50%) |
-| CPU | 152–157 s | 69–83 s |
-| per test | 0.25 s | 0.12 s |
+| instructions | 2.74 T | 1.33 T (−52%) |
+| CPU | 97 s | 44 s |
+| per test | 0.16 s | 0.07 s |
 
-On `buildString` + checks (one Alphabetic test, 15 runs) the instructions went from
-103 G to 54 G in dev and from 42 G to 32 G in release. The rest is the interpreter's
-per-op cost on that loop, about 70 native instructions per op (0081 F2, 0086).
+Other measurements:
+- One test (Alphabetic): 5.70 → 2.95 G instructions in dev, 2.26 → 1.78 G in release.
+- `fromCodePoint.apply` of 10k code points, 2,000 calls: 5.67 → 2.93 G in release,
+  28.5 → 5.0 G in dev.
+- wasm (node, `scripts/perf/wasm-run.ts`): Alphabetic 139 → 112 ms; the apply loop 463
+  → 173 ms.
+- djs-wasm size: +1.2 KB (+0.4 KB gzip).
+
+The rest is the interpreter's per-op cost on the harness loop.
