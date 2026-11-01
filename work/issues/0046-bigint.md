@@ -1,7 +1,7 @@
 # 0046: BigInt
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0046-bigint
 depends-on: 0043
 touches: crates/djs-core/src/value.rs (the reserved bigint tag), crates/djs-core/src/heap/ (a BigInt cell kind, additive), crates/djs-core/src/num/ (or a new bigint/ module: arbitrary-precision arithmetic, string conversion), crates/djs-core/src/interp/ (operators on BigInt: isolated arms and slow paths), crates/djs-core/src/compiler/ (BigInt literals only: the lexer already lexes them), builtins/bigint.ts + leaves, typed arrays (BigInt64Array/BigUint64Array, DataView BigInt methods: currently stubs from 0039), wire + reader (a bigint tag, if cheap), tests/test262.toml (promote BigInt), ratchets
