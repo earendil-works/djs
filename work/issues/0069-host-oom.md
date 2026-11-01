@@ -29,6 +29,8 @@ scripts/determinism/.
   not run, the VM is reusable) and `a_refused_to_space_stops_the_run` (gc stress; also
   `Vm::collect`). No JS test: forcing a wasm memory.grow failure needs a module with a
   small maximum memory.
+- Rebased onto 0063: one match arm added in interp/run/native.rs's test (infra's file,
+  outside `touches`); native frames' faults already go through `fault_value`.
 
 ## Follow-ups
 
