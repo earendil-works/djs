@@ -347,25 +347,25 @@ function ArrayPrototypeFind(predicate, thisArg) {
   return FindViaPredicate(o, LengthOfArrayLike(o), false, predicate, thisArg, false);
 }
 
-// builtins/array.ts:437 Array.prototype.findIndex
+// builtins/array.ts:436 Array.prototype.findIndex
 function ArrayPrototypeFindIndex(predicate, thisArg) {
   const o = %ToObject(this);
   return FindViaPredicate(o, LengthOfArrayLike(o), false, predicate, thisArg, true);
 }
 
-// builtins/array.ts:446 Array.prototype.findLast
+// builtins/array.ts:445 Array.prototype.findLast
 function ArrayPrototypeFindLast(predicate, thisArg) {
   const o = %ToObject(this);
   return FindViaPredicate(o, LengthOfArrayLike(o), true, predicate, thisArg, false);
 }
 
-// builtins/array.ts:455 Array.prototype.findLastIndex
+// builtins/array.ts:454 Array.prototype.findLastIndex
 function ArrayPrototypeFindLastIndex(predicate, thisArg) {
   const o = %ToObject(this);
   return FindViaPredicate(o, LengthOfArrayLike(o), true, predicate, thisArg, true);
 }
 
-// builtins/array.ts:465 %EveryOrSome
+// builtins/array.ts:463 %EveryOrSome
 function EveryOrSome(o, callbackfn, thisArg, wantAll) {
   const len = LengthOfArrayLike(o);
   RequireCallable(callbackfn);
@@ -380,17 +380,17 @@ function EveryOrSome(o, callbackfn, thisArg, wantAll) {
   return wantAll;
 }
 
-// builtins/array.ts:484 Array.prototype.every
+// builtins/array.ts:481 Array.prototype.every
 function ArrayPrototypeEvery(callbackfn, thisArg) {
   return EveryOrSome(%ToObject(this), callbackfn, thisArg, true);
 }
 
-// builtins/array.ts:493 Array.prototype.some
+// builtins/array.ts:489 Array.prototype.some
 function ArrayPrototypeSome(callbackfn, thisArg) {
   return EveryOrSome(%ToObject(this), callbackfn, thisArg, false);
 }
 
-// builtins/array.ts:502 Array.prototype.filter
+// builtins/array.ts:498 Array.prototype.filter
 function ArrayPrototypeFilter(callbackfn, thisArg) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -409,7 +409,7 @@ function ArrayPrototypeFilter(callbackfn, thisArg) {
   return a;
 }
 
-// builtins/array.ts:525 %Reduce
+// builtins/array.ts:521 %Reduce
 function Reduce(o, callbackfn, rest, fromEnd) {
   const len = LengthOfArrayLike(o);
   RequireCallable(callbackfn);
@@ -440,17 +440,17 @@ function Reduce(o, callbackfn, rest, fromEnd) {
   return accumulator;
 }
 
-// builtins/array.ts:561 Array.prototype.reduce
+// builtins/array.ts:557 Array.prototype.reduce
 function ArrayPrototypeReduce(callbackfn, ...rest) {
   return Reduce(%ToObject(this), callbackfn, rest, false);
 }
 
-// builtins/array.ts:571 Array.prototype.reduceRight
+// builtins/array.ts:566 Array.prototype.reduceRight
 function ArrayPrototypeReduceRight(callbackfn, ...rest) {
   return Reduce(%ToObject(this), callbackfn, rest, true);
 }
 
-// builtins/array.ts:578
+// builtins/array.ts:573
 function IsConcatSpreadable(o) {
   if (!%IsObject(o)) {
     return false;
@@ -462,7 +462,7 @@ function IsConcatSpreadable(o) {
   return %IsArray(o);
 }
 
-// builtins/array.ts:594 Array.prototype.concat
+// builtins/array.ts:589 Array.prototype.concat
 function ArrayPrototypeConcat(...items) {
   const o = %ToObject(this);
   const a = ArraySpeciesCreate(o, 0);
@@ -490,7 +490,7 @@ function ArrayPrototypeConcat(...items) {
   return a;
 }
 
-// builtins/array.ts:626 Array.prototype.slice
+// builtins/array.ts:621 Array.prototype.slice
 function ArrayPrototypeSlice(start, end) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -513,7 +513,7 @@ function ArrayPrototypeSlice(start, end) {
   return a;
 }
 
-// builtins/array.ts:654 Array.prototype.splice
+// builtins/array.ts:649 Array.prototype.splice
 function ArrayPrototypeSplice(...args) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -547,7 +547,7 @@ function ArrayPrototypeSplice(...args) {
   return a;
 }
 
-// builtins/array.ts:692
+// builtins/array.ts:687
 function MoveElements(o, len, start, deleteCount, itemCount) {
   if (deleteCount !== itemCount && %ArraySpliceDense(o, start, deleteCount, itemCount)) {
     return;
@@ -578,7 +578,7 @@ function MoveElements(o, len, start, deleteCount, itemCount) {
   }
 }
 
-// builtins/array.ts:727 Array.prototype.copyWithin
+// builtins/array.ts:722 Array.prototype.copyWithin
 function ArrayPrototypeCopyWithin(target, start, end) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -605,7 +605,7 @@ function ArrayPrototypeCopyWithin(target, start, end) {
   return o;
 }
 
-// builtins/array.ts:758 Array.prototype.fill
+// builtins/array.ts:753 Array.prototype.fill
 function ArrayPrototypeFill(value, start, end) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -617,7 +617,7 @@ function ArrayPrototypeFill(value, start, end) {
   return o;
 }
 
-// builtins/array.ts:773 Array.prototype.reverse
+// builtins/array.ts:768 Array.prototype.reverse
 function ArrayPrototypeReverse() {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -648,7 +648,7 @@ function ArrayPrototypeReverse() {
   return o;
 }
 
-// builtins/array.ts:808 Array.prototype.pop
+// builtins/array.ts:803 Array.prototype.pop
 function ArrayPrototypePop() {
   const o = %ToObject(this);
   if (%ArrayCanPopDense(o)) {
@@ -666,7 +666,7 @@ function ArrayPrototypePop() {
   return element;
 }
 
-// builtins/array.ts:829 Array.prototype.shift
+// builtins/array.ts:824 Array.prototype.shift
 function ArrayPrototypeShift() {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -680,7 +680,7 @@ function ArrayPrototypeShift() {
   return first;
 }
 
-// builtins/array.ts:847 Array.prototype.unshift
+// builtins/array.ts:842 Array.prototype.unshift
 function ArrayPrototypeUnshift(...items) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -696,7 +696,7 @@ function ArrayPrototypeUnshift(...items) {
   return len + argCount;
 }
 
-// builtins/array.ts:863
+// builtins/array.ts:858
 function FlattenIntoArray(target, source, sourceLen, start, depth, mapper, thisArg) {
   let targetIndex = start;
   for (let sourceIndex = 0; sourceIndex < sourceLen; sourceIndex++) {
@@ -718,7 +718,7 @@ function FlattenIntoArray(target, source, sourceLen, start, depth, mapper, thisA
   return targetIndex;
 }
 
-// builtins/array.ts:888 Array.prototype.flat
+// builtins/array.ts:883 Array.prototype.flat
 function ArrayPrototypeFlat(depth) {
   const o = %ToObject(this);
   const sourceLen = LengthOfArrayLike(o);
@@ -734,7 +734,7 @@ function ArrayPrototypeFlat(depth) {
   return a;
 }
 
-// builtins/array.ts:907 Array.prototype.flatMap
+// builtins/array.ts:902 Array.prototype.flatMap
 function ArrayPrototypeFlatMap(mapperFunction, thisArg) {
   const o = %ToObject(this);
   const sourceLen = LengthOfArrayLike(o);
@@ -744,7 +744,7 @@ function ArrayPrototypeFlatMap(mapperFunction, thisArg) {
   return a;
 }
 
-// builtins/array.ts:924 %SortList
+// builtins/array.ts:919 %SortList
 function SortList(list, n, comparefn) {
   if (comparefn === undefined && %SortPrimitives(list)) {
     return;
@@ -805,7 +805,7 @@ function SortList(list, n, comparefn) {
   }
 }
 
-// builtins/array.ts:986
+// builtins/array.ts:981
 function SortCompareDefined(x, y, comparefn) {
   if (comparefn !== undefined) {
     const r = %Call(comparefn, undefined, x, y);
@@ -816,7 +816,7 @@ function SortCompareDefined(x, y, comparefn) {
   return %CompareStrings(xs, ToString(y));
 }
 
-// builtins/array.ts:1001 %CollectPresent
+// builtins/array.ts:996 %CollectPresent
 function CollectPresent(o, len, skipHoles) {
   const items = %ArrayCreate(0);
   let n = 0;
@@ -829,7 +829,7 @@ function CollectPresent(o, len, skipHoles) {
   return items;
 }
 
-// builtins/array.ts:1018 Array.prototype.sort
+// builtins/array.ts:1013 Array.prototype.sort
 function ArrayPrototypeSort(comparefn) {
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
@@ -848,7 +848,7 @@ function ArrayPrototypeSort(comparefn) {
   return o;
 }
 
-// builtins/array.ts:1042 Array.prototype.toSorted
+// builtins/array.ts:1036 Array.prototype.toSorted
 function ArrayPrototypeToSorted(comparefn) {
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
@@ -861,7 +861,7 @@ function ArrayPrototypeToSorted(comparefn) {
   return items;
 }
 
-// builtins/array.ts:1060 Array.prototype.toReversed
+// builtins/array.ts:1054 Array.prototype.toReversed
 function ArrayPrototypeToReversed() {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -872,7 +872,7 @@ function ArrayPrototypeToReversed() {
   return a;
 }
 
-// builtins/array.ts:1075 Array.prototype.toSpliced
+// builtins/array.ts:1069 Array.prototype.toSpliced
 function ArrayPrototypeToSpliced(...args) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -907,7 +907,7 @@ function ArrayPrototypeToSpliced(...args) {
   return a;
 }
 
-// builtins/array.ts:1113 Array.prototype.with
+// builtins/array.ts:1107 Array.prototype.with
 function ArrayPrototypeWith(index, value) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -923,7 +923,7 @@ function ArrayPrototypeWith(index, value) {
   return a;
 }
 
-// builtins/array.ts:1135 Array.prototype.toString %TypedArray%.prototype.toString
+// builtins/array.ts:1129 Array.prototype.toString %TypedArray%.prototype.toString
 function ArrayPrototypeToString() {
   const array = %ToObject(this);
   const func = %Get(array, "join");
@@ -933,7 +933,7 @@ function ArrayPrototypeToString() {
   return ObjectToString(array);
 }
 
-// builtins/array.ts:1148 Array.prototype.toLocaleString
+// builtins/array.ts:1142 Array.prototype.toLocaleString
 function ArrayPrototypeToLocaleString() {
   const array = %ToObject(this);
   const len = LengthOfArrayLike(array);
@@ -950,7 +950,7 @@ function ArrayPrototypeToLocaleString() {
   return r;
 }
 
-// builtins/array.ts:1169 value Array.prototype[Symbol.unscopables]
+// builtins/array.ts:1163 value Array.prototype[Symbol.unscopables]
 function ArrayPrototypeUnscopables() {
   const u = %ObjectCreate(null);
   %CreateDataPropertyOrThrow(u, "at", true);
@@ -972,7 +972,7 @@ function ArrayPrototypeUnscopables() {
   return u;
 }
 
-// builtins/array.ts:1197 %ArraySetLength
+// builtins/array.ts:1191 %ArraySetLength
 function ArraySetLength(a, v, strict) {
   const newLen = ToNumber(v);
   const numberLen = ToNumber(v);
@@ -3927,7 +3927,7 @@ function DynamicImport(specifier, options) {
   return promise;
 }
 
-// builtins/iter.ts:11 %GetIterator
+// builtins/iter.ts:10 %GetIterator
 function GetIterator(obj) {
   const method = %GetV(obj, %WellKnownSymbol("iterator"));
   if (!%IsCallable(method)) {
@@ -3940,7 +3940,7 @@ function GetIterator(obj) {
   return %AsObj(iterator);
 }
 
-// builtins/iter.ts:28 %IteratorClose
+// builtins/iter.ts:27 %IteratorClose
 function IteratorClose(iterator) {
   const method = %Get(iterator, "return");
   if (method === undefined || method === null) {
@@ -3952,7 +3952,7 @@ function IteratorClose(iterator) {
   }
 }
 
-// builtins/iter.ts:44 %IteratorCloseThrow
+// builtins/iter.ts:43 %IteratorCloseThrow
 function IteratorCloseThrow(iterator) {
   try {
     const method = %Get(iterator, "return");
@@ -3965,7 +3965,7 @@ function IteratorCloseThrow(iterator) {
   }
 }
 
-// builtins/iter.ts:62 %IteratorRest
+// builtins/iter.ts:61 %IteratorRest
 function IteratorRest(iterator, next) {
   const arr = %ArrayCreate(0);
   let n = 0;
@@ -3986,22 +3986,22 @@ function IteratorRest(iterator, next) {
   }
 }
 
-// builtins/iter.ts:89 Array.prototype.values Array.prototype[Symbol.iterator] %ArrayPrototypeValues
+// builtins/iter.ts:88 Array.prototype.values Array.prototype[Symbol.iterator] %ArrayPrototypeValues
 function ArrayPrototypeValues() {
   return %CreateArrayIterator(%ToObject(this), 1);
 }
 
-// builtins/iter.ts:97 Array.prototype.keys
+// builtins/iter.ts:96 Array.prototype.keys
 function ArrayPrototypeKeys() {
   return %CreateArrayIterator(%ToObject(this), 0);
 }
 
-// builtins/iter.ts:105 Array.prototype.entries
+// builtins/iter.ts:104 Array.prototype.entries
 function ArrayPrototypeEntries() {
   return %CreateArrayIterator(%ToObject(this), 2);
 }
 
-// builtins/iter.ts:115 %ArrayIteratorPrototype%.next %ArrayIteratorPrototypeNext
+// builtins/iter.ts:113 %ArrayIteratorPrototype%.next %ArrayIteratorPrototypeNext
 function ArrayIteratorPrototypeNext() {
   const target = %ArrayIteratorTarget(this);
   if (target === undefined) {
@@ -4026,12 +4026,12 @@ function ArrayIteratorPrototypeNext() {
   return %CreateIterResultObject(%CreateArrayFromPair(index, value), false);
 }
 
-// builtins/iter.ts:145 %IteratorPrototype%[Symbol.iterator]
+// builtins/iter.ts:143 %IteratorPrototype%[Symbol.iterator]
 function IteratorPrototypeIterator() {
   return this;
 }
 
-// builtins/iter.ts:154 value %ArrayIteratorPrototype%[Symbol.toStringTag]
+// builtins/iter.ts:152 value %ArrayIteratorPrototype%[Symbol.toStringTag]
 function ArrayIteratorPrototypeToStringTag() {
   return "Array Iterator";
 }
@@ -5533,7 +5533,7 @@ function ThisMap(v) {
   return %AsObj(v);
 }
 
-// builtins/map.ts:17 %AddEntriesFromIterable
+// builtins/map.ts:16 %AddEntriesFromIterable
 function AddEntriesFromIterable(target, iterable, adder) {
   const direct = %IsOriginalCollectionAdder(adder, 0) && %CollectionClass(target) === 0;
   const iterator = GetIterator(iterable);
@@ -5568,7 +5568,7 @@ function AddEntriesFromIterable(target, iterable, adder) {
   }
 }
 
-// builtins/map.ts:58 constructor Map
+// builtins/map.ts:56 constructor Map
 function MapConstructor(iterable) {
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
@@ -5585,7 +5585,7 @@ function MapConstructor(iterable) {
   return map;
 }
 
-// builtins/map.ts:78 Map.groupBy
+// builtins/map.ts:76 Map.groupBy
 function MapGroupBy(items, callback) {
   if (!%IsCallable(callback)) {
     throw %NewTypeError("not a function");
@@ -5623,27 +5623,27 @@ function MapGroupBy(items, callback) {
   }
 }
 
-// builtins/map.ts:120 get Map[Symbol.species]
+// builtins/map.ts:118 get Map[Symbol.species]
 function MapSpecies() {
   return this;
 }
 
-// builtins/map.ts:128 Map.prototype.clear
+// builtins/map.ts:126 Map.prototype.clear
 function MapPrototypeClear() {
   %CollectionClear(ThisMap(this));
 }
 
-// builtins/map.ts:136 Map.prototype.delete
+// builtins/map.ts:134 Map.prototype.delete
 function MapPrototypeDelete(key) {
   return %CollectionDelete(ThisMap(this), key);
 }
 
-// builtins/map.ts:145 Map.prototype.entries Map.prototype[Symbol.iterator]
+// builtins/map.ts:143 Map.prototype.entries Map.prototype[Symbol.iterator]
 function MapPrototypeEntries() {
   return %CollectionIterator(ThisMap(this), 2);
 }
 
-// builtins/map.ts:154 Map.prototype.forEach
+// builtins/map.ts:151 Map.prototype.forEach
 function MapPrototypeForEach(callbackfn, thisArg) {
   const m = ThisMap(this);
   if (!%IsCallable(callbackfn)) {
@@ -5655,12 +5655,12 @@ function MapPrototypeForEach(callbackfn, thisArg) {
   }
 }
 
-// builtins/map.ts:169 Map.prototype.get
+// builtins/map.ts:166 Map.prototype.get
 function MapPrototypeGet(key) {
   return %CollectionGet(ThisMap(this), key);
 }
 
-// builtins/map.ts:174
+// builtins/map.ts:171
 function CanonicalizeKeyedCollectionKey(key) {
   if (%IsNumber(key) && %AsNumber(key) === 0) {
     return 0;
@@ -5668,7 +5668,7 @@ function CanonicalizeKeyedCollectionKey(key) {
   return key;
 }
 
-// builtins/map.ts:185 Map.prototype.getOrInsert
+// builtins/map.ts:182 Map.prototype.getOrInsert
 function MapPrototypeGetOrInsert(key, value) {
   const m = ThisMap(this);
   if (%CollectionHas(m, key)) {
@@ -5678,7 +5678,7 @@ function MapPrototypeGetOrInsert(key, value) {
   return value;
 }
 
-// builtins/map.ts:199 Map.prototype.getOrInsertComputed
+// builtins/map.ts:196 Map.prototype.getOrInsertComputed
 function MapPrototypeGetOrInsertComputed(key, callbackfn) {
   const m = ThisMap(this);
   if (!%IsCallable(callbackfn)) {
@@ -5693,43 +5693,43 @@ function MapPrototypeGetOrInsertComputed(key, callbackfn) {
   return value;
 }
 
-// builtins/map.ts:217 Map.prototype.has
+// builtins/map.ts:214 Map.prototype.has
 function MapPrototypeHas(key) {
   return %CollectionHas(ThisMap(this), key);
 }
 
-// builtins/map.ts:225 Map.prototype.keys
+// builtins/map.ts:222 Map.prototype.keys
 function MapPrototypeKeys() {
   return %CollectionIterator(ThisMap(this), 0);
 }
 
-// builtins/map.ts:234 Map.prototype.set %MapPrototypeSet
+// builtins/map.ts:231 Map.prototype.set %MapPrototypeSet
 function MapPrototypeSet(key, value) {
   %CollectionSet(ThisMap(this), key, value);
   return this;
 }
 
-// builtins/map.ts:243 get Map.prototype.size
+// builtins/map.ts:240 get Map.prototype.size
 function MapPrototypeSize() {
   return %CollectionSize(ThisMap(this));
 }
 
-// builtins/map.ts:251 Map.prototype.values
+// builtins/map.ts:248 Map.prototype.values
 function MapPrototypeValues() {
   return %CollectionIterator(ThisMap(this), 1);
 }
 
-// builtins/map.ts:260 value Map.prototype[Symbol.toStringTag]
+// builtins/map.ts:257 value Map.prototype[Symbol.toStringTag]
 function MapPrototypeToStringTag() {
   return "Map";
 }
 
-// builtins/map.ts:269 %MapIteratorPrototype%.next %MapIteratorPrototypeNext
+// builtins/map.ts:266 %MapIteratorPrototype%.next %MapIteratorPrototypeNext
 function MapIteratorPrototypeNext() {
   return %CollectionIteratorNext(this, false);
 }
 
-// builtins/map.ts:278 value %MapIteratorPrototype%[Symbol.toStringTag]
+// builtins/map.ts:275 value %MapIteratorPrototype%[Symbol.toStringTag]
 function MapIteratorToStringTag() {
   return "Map Iterator";
 }
@@ -8715,7 +8715,7 @@ function ThisSet(v) {
   return %AsObj(v);
 }
 
-// builtins/set.ts:16 constructor Set
+// builtins/set.ts:15 constructor Set
 function SetConstructor(iterable) {
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
@@ -8755,33 +8755,33 @@ function SetConstructor(iterable) {
   }
 }
 
-// builtins/set.ts:61 get Set[Symbol.species]
+// builtins/set.ts:60 get Set[Symbol.species]
 function SetSpecies() {
   return this;
 }
 
-// builtins/set.ts:70 Set.prototype.add %SetPrototypeAdd
+// builtins/set.ts:69 Set.prototype.add %SetPrototypeAdd
 function SetPrototypeAdd(value) {
   %CollectionSet(ThisSet(this), value, true);
   return this;
 }
 
-// builtins/set.ts:79 Set.prototype.clear
+// builtins/set.ts:78 Set.prototype.clear
 function SetPrototypeClear() {
   %CollectionClear(ThisSet(this));
 }
 
-// builtins/set.ts:87 Set.prototype.delete
+// builtins/set.ts:86 Set.prototype.delete
 function SetPrototypeDelete(value) {
   return %CollectionDelete(ThisSet(this), value);
 }
 
-// builtins/set.ts:95 Set.prototype.entries
+// builtins/set.ts:94 Set.prototype.entries
 function SetPrototypeEntries() {
   return %CollectionIterator(ThisSet(this), 2);
 }
 
-// builtins/set.ts:104 Set.prototype.forEach
+// builtins/set.ts:102 Set.prototype.forEach
 function SetPrototypeForEach(callbackfn, thisArg) {
   const s = ThisSet(this);
   if (!%IsCallable(callbackfn)) {
@@ -8794,37 +8794,37 @@ function SetPrototypeForEach(callbackfn, thisArg) {
   }
 }
 
-// builtins/set.ts:120 Set.prototype.has
+// builtins/set.ts:118 Set.prototype.has
 function SetPrototypeHas(value) {
   return %CollectionHas(ThisSet(this), value);
 }
 
-// builtins/set.ts:128 get Set.prototype.size
+// builtins/set.ts:126 get Set.prototype.size
 function SetPrototypeSize() {
   return %CollectionSize(ThisSet(this));
 }
 
-// builtins/set.ts:138 Set.prototype.values Set.prototype.keys Set.prototype[Symbol.iterator]
+// builtins/set.ts:136 Set.prototype.values Set.prototype.keys Set.prototype[Symbol.iterator]
 function SetPrototypeValues() {
   return %CollectionIterator(ThisSet(this), 0);
 }
 
-// builtins/set.ts:147 value Set.prototype[Symbol.toStringTag]
+// builtins/set.ts:145 value Set.prototype[Symbol.toStringTag]
 function SetPrototypeToStringTag() {
   return "Set";
 }
 
-// builtins/set.ts:156 %SetIteratorPrototype%.next %SetIteratorPrototypeNext
+// builtins/set.ts:154 %SetIteratorPrototype%.next %SetIteratorPrototypeNext
 function SetIteratorPrototypeNext() {
   return %CollectionIteratorNext(this, true);
 }
 
-// builtins/set.ts:165 value %SetIteratorPrototype%[Symbol.toStringTag]
+// builtins/set.ts:163 value %SetIteratorPrototype%[Symbol.toStringTag]
 function SetIteratorToStringTag() {
   return "Set Iterator";
 }
 
-// builtins/set.ts:175
+// builtins/set.ts:173
 function GetSetRecord(obj) {
   if (!%IsObject(obj)) {
     throw %NewTypeError("not an object");
@@ -8855,17 +8855,17 @@ function GetSetRecord(obj) {
   return rec;
 }
 
-// builtins/set.ts:206
+// builtins/set.ts:204
 function RecordSize(rec) {
   return %AsNumber(%Get(rec, "size"));
 }
 
-// builtins/set.ts:211
+// builtins/set.ts:209
 function RecordHas(rec, value) {
   return %ToBoolean(%Call(%Get(rec, "has"), %Get(rec, "set"), value));
 }
 
-// builtins/set.ts:216
+// builtins/set.ts:214
 function RecordKeys(rec) {
   const iterator = %Call(%Get(rec, "keys"), %Get(rec, "set"));
   if (!%IsObject(iterator)) {
@@ -8874,7 +8874,7 @@ function RecordKeys(rec) {
   return %AsObj(iterator);
 }
 
-// builtins/set.ts:225
+// builtins/set.ts:223
 function SetCopy(s) {
   const result = %CollectionCreate(1, %RealmIntrinsic("SetPrototype"));
   const it = %CollectionIterator(s, 0);
@@ -8884,7 +8884,7 @@ function SetCopy(s) {
   return result;
 }
 
-// builtins/set.ts:238
+// builtins/set.ts:236
 function KeysNext(iterator, next, out) {
   const result = IteratorNextResult(iterator, next);
   if (%ToBoolean(%Get(result, "done"))) {
@@ -8894,7 +8894,7 @@ function KeysNext(iterator, next, out) {
   return true;
 }
 
-// builtins/set.ts:251 Set.prototype.union
+// builtins/set.ts:249 Set.prototype.union
 function SetPrototypeUnion(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8908,7 +8908,7 @@ function SetPrototypeUnion(other) {
   return result;
 }
 
-// builtins/set.ts:268 Set.prototype.intersection
+// builtins/set.ts:266 Set.prototype.intersection
 function SetPrototypeIntersection(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8935,7 +8935,7 @@ function SetPrototypeIntersection(other) {
   return result;
 }
 
-// builtins/set.ts:298 Set.prototype.difference
+// builtins/set.ts:296 Set.prototype.difference
 function SetPrototypeDifference(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8959,7 +8959,7 @@ function SetPrototypeDifference(other) {
   return result;
 }
 
-// builtins/set.ts:325 Set.prototype.symmetricDifference
+// builtins/set.ts:323 Set.prototype.symmetricDifference
 function SetPrototypeSymmetricDifference(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8978,7 +8978,7 @@ function SetPrototypeSymmetricDifference(other) {
   return result;
 }
 
-// builtins/set.ts:347 Set.prototype.isSubsetOf
+// builtins/set.ts:345 Set.prototype.isSubsetOf
 function SetPrototypeIsSubsetOf(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8994,7 +8994,7 @@ function SetPrototypeIsSubsetOf(other) {
   return true;
 }
 
-// builtins/set.ts:366 Set.prototype.isSupersetOf
+// builtins/set.ts:364 Set.prototype.isSupersetOf
 function SetPrototypeIsSupersetOf(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -9013,7 +9013,7 @@ function SetPrototypeIsSupersetOf(other) {
   return true;
 }
 
-// builtins/set.ts:388 Set.prototype.isDisjointFrom
+// builtins/set.ts:386 Set.prototype.isDisjointFrom
 function SetPrototypeIsDisjointFrom(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -12223,32 +12223,19 @@ function GlobalAtob(...args) {
 %MarkNative(ArrayPrototypePush, 2);
 %MarkNative(FindViaPredicate, 3);
 %MarkNative(ArrayPrototypeFind, 4);
-%MarkNative(ArrayPrototypeFindIndex, 5);
-%MarkNative(EveryOrSome, 6);
-%MarkNative(ArrayPrototypeEvery, 7);
-%MarkNative(ArrayPrototypeSome, 8);
-%MarkNative(ArrayPrototypeFilter, 9);
-%MarkNative(Reduce, 10);
-%MarkNative(ArrayPrototypeReduce, 11);
-%MarkNative(ArrayPrototypeReduceRight, 12);
-%MarkNative(SortList, 13);
-%MarkNative(CollectPresent, 14);
-%MarkNative(ArrayPrototypeSort, 15);
-%MarkNative(ArrayPrototypeToSorted, 16);
-%MarkNative(GetPrototypeFromConstructor, 17);
-%MarkNative(GetIterator, 18);
-%MarkNative(ArrayIteratorPrototypeNext, 19);
-%MarkNative(SerializeJSONProperty, 20);
-%MarkNative(JSONStackIncludes, 21);
-%MarkNative(JSONJoin, 22);
-%MarkNative(SerializeJSONObject, 23);
-%MarkNative(SerializeJSONArray, 24);
-%MarkNative(AddEntriesFromIterable, 25);
-%MarkNative(MapConstructor, 26);
-%MarkNative(MapPrototypeForEach, 27);
-%MarkNative(PromiseReactionJob, 28);
-%MarkNative(SetConstructor, 29);
-%MarkNative(SetPrototypeForEach, 30);
+%MarkNative(ArrayPrototypeFilter, 5);
+%MarkNative(Reduce, 6);
+%MarkNative(ArrayPrototypeReduce, 7);
+%MarkNative(SortList, 8);
+%MarkNative(CollectPresent, 9);
+%MarkNative(ArrayPrototypeSort, 10);
+%MarkNative(GetPrototypeFromConstructor, 11);
+%MarkNative(SerializeJSONProperty, 12);
+%MarkNative(JSONStackIncludes, 13);
+%MarkNative(JSONJoin, 14);
+%MarkNative(SerializeJSONObject, 15);
+%MarkNative(SerializeJSONArray, 16);
+%MarkNative(PromiseReactionJob, 17);
 %MarkFast(ArraySpeciesCreate);
 %MarkFast(ArrayPrototypeIndexOf);
 %MarkFast(ArrayPrototypeJoin);

@@ -11,7 +11,6 @@ function ThisSet(v: Value): Obj {
 /**
  * Set ( [ iterable ] ), 24.2.2.1.
  * @constructor Set
- * @native
  */
 function SetConstructor(iterable?: Value): Obj {
   if (new.target === undefined) {
@@ -99,7 +98,6 @@ function SetPrototypeEntries(this: Value): Obj {
 /**
  * Set.prototype.forEach ( callbackfn [ , thisArg ] ), 24.2.4.7.
  * @builtin Set.prototype.forEach
- * @native
  */
 function SetPrototypeForEach(this: Value, callbackfn: Value, thisArg?: Value): void {
   const s: Obj = ThisSet(this);

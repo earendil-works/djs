@@ -432,7 +432,6 @@ function ArrayPrototypeFind(this: Value, predicate: Value, thisArg?: Value): Val
 /**
  * Array.prototype.findIndex ( predicate [ , thisArg ] ), 23.1.3.10.
  * @builtin Array.prototype.findIndex
- * @native
  */
 function ArrayPrototypeFindIndex(this: Value, predicate: Value, thisArg?: Value): Value {
   const o: Obj = ToObject(this);
@@ -460,7 +459,6 @@ function ArrayPrototypeFindLastIndex(this: Value, predicate: Value, thisArg?: Va
 /**
  * every (`wantAll`) and some, 23.1.3.6 and 23.1.3.29.
  * @intrinsic
- * @native
  */
 function EveryOrSome(o: Obj, callbackfn: Value, thisArg: Value, wantAll: boolean): boolean {
   const len: f64 = LengthOfArrayLike(o);
@@ -479,7 +477,6 @@ function EveryOrSome(o: Obj, callbackfn: Value, thisArg: Value, wantAll: boolean
 /**
  * Array.prototype.every ( callbackfn [ , thisArg ] ), 23.1.3.6.
  * @builtin Array.prototype.every
- * @native
  */
 function ArrayPrototypeEvery(this: Value, callbackfn: Value, thisArg?: Value): boolean {
   return EveryOrSome(ToObject(this), callbackfn, thisArg, true);
@@ -488,7 +485,6 @@ function ArrayPrototypeEvery(this: Value, callbackfn: Value, thisArg?: Value): b
 /**
  * Array.prototype.some ( callbackfn [ , thisArg ] ), 23.1.3.29.
  * @builtin Array.prototype.some
- * @native
  */
 function ArrayPrototypeSome(this: Value, callbackfn: Value, thisArg?: Value): boolean {
   return EveryOrSome(ToObject(this), callbackfn, thisArg, false);
@@ -566,7 +562,6 @@ function ArrayPrototypeReduce(this: Value, callbackfn: Value, ...rest: Value[]):
  * Array.prototype.reduceRight ( callbackfn [ , initialValue ] ), 23.1.3.25.
  * @builtin Array.prototype.reduceRight
  * @length 1
- * @native
  */
 function ArrayPrototypeReduceRight(this: Value, callbackfn: Value, ...rest: Value[]): Value {
   return Reduce(ToObject(this), callbackfn, rest, true);
@@ -1037,7 +1032,6 @@ function ArrayPrototypeSort(this: Value, comparefn: Value): Obj {
 /**
  * Array.prototype.toSorted ( comparefn ), 23.1.3.33.
  * @builtin Array.prototype.toSorted
- * @native
  */
 function ArrayPrototypeToSorted(this: Value, comparefn: Value): Obj {
   if (comparefn !== undefined && !IsCallable(comparefn)) {

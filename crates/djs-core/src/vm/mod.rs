@@ -16,6 +16,7 @@
 //! [`Handle`](crate::heap::Handle) to hold them longer.
 
 mod format;
+mod image;
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -787,10 +788,13 @@ impl Vm {
     }
 
     /// Makes this (idle) VM's heap the base image, as djs-prelude's build does: tables
-    /// shrunk to their use (0043), collected by copying so that the image depends on its
-    /// graph alone (0101), then its cells ordered by kind for the module's gzip (D2251).
+    /// shrunk to their use (0043), the prelude's internal names dropped (D2253), collected
+    /// by copying so that the image depends on its graph alone (0101), then its cells
+    /// ordered by kind for the module's gzip (D2251).
     pub fn prepare_base_image(&mut self) -> Result<(), HeapError> {
         self.heap.compact_for_image()?;
+        // Without the prelude's internal names (D2253).
+        image::drop_internal_names(&mut self.heap)?;
         self.collect_canonical()?;
         self.heap.order_for_image()
     }

@@ -5427,3 +5427,52 @@ and RUSTC_BOOTSTRAP (tested: the module builds and passes, at the larger size). 
 if a future rustc changes or removes the flag, set DJS_STABLE_ONLY behavior as the
 default (delete the two lines in wasm-build-env.sh) and raise the size ratchet
 (tests/scores/size.tsv) by the recorded 8.5 KB under this decision.
+## D2253: The base image drops the prelude's internal names
+date: 2026-11-03 · by: perf · issue: 0127
+Compiling the prelude interns the names of its internal functions
+(`ArrayPrototypeMap`, `IsCompatiblePropertyDescriptor`) and of its locals and
+parameters as atoms. Nothing at run time needs them:
+- a builtin's visible `name` is the property `%Install*` defines (D1433);
+- stack traces skip prelude frames (D1980);
+- privileged templates keep no local names.
+
+`Vm::prepare_base_image` now drops them (vm/image.rs) after compacting and before the
+canonical collection:
+- the NAME of every privileged template is set to the null atom;
+- every string atom the heap does not refer to is forgotten (`Heap::forget_string_atoms`):
+  its entry becomes `undefined` and the intern index is rebuilt for the rest.
+
+An atom is kept if anything refers to it:
+- a property table key, a shape descriptor key, a symbol;
+- a template's NAME or NAMES;
+- an atom immediate in bytecode;
+- any int32 in a constant pool (global declarations keep their atom ids there; other
+  int32s are kept too, which costs a few extra atoms at most).
+
+The well-known atoms and all symbols are always kept. A forgotten name that user code
+interns later gets a new id. Atoms are indexes, so nothing else moves.
+
+The image went from 385 to 322 KB raw, its gzip from 96 to 70 KB, and the module's gzip
+from 509.5 to 487.1 KB. Unit tests, e2e, difftest (both backends, stress, determinism),
+test262, the js tests (the wasm-compiled realm equals the base) and pi's codemode tests
+(215/226, as on main) are unchanged.
+
+## D2254: `@native` only where benchmarks or real codemode pay
+date: 2026-11-03 · by: perf · issue: 0127
+Applying D2020's rule to the remaining natives, with two kinds of evidence:
+- `instr.py` counts over the 22 perf workloads;
+- uses in the 320 codemode corpus scripts (300 harvested: `new Set(`/`new Map(` in 2,
+  `.find(` 5, `toSorted`/`reduceRight`/`findIndex`/`some`/`every`/explicit `.next()` in
+  none; `await` in 306, `.map(` 149, `.forEach(` 35).
+
+13 builtins go back to bytecode only: Array.prototype.findIndex, every and some (with
+EveryOrSome), reduceRight and toSorted; GetIterator; %ArrayIteratorPrototype%.next; the
+Map and Set constructors (with AddEntriesFromIterable); Map and Set.prototype.forEach.
+
+forEach, map, filter, push, reduce, sort, find, the JSON serializer, Promise reaction
+jobs and GetPrototypeFromConstructor stay native.
+
+The module's gzip went down 3.3 KB. Natively the workloads are unchanged (indexof,
+json-date, pushpop, tight within 0.1%), and the wasm deltas were noise on a loaded
+machine. The measured costs for the dropped ops are 1.3–2.5x on those ops, which neither
+the workloads nor the corpus exercise.

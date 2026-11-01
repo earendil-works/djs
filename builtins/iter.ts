@@ -6,7 +6,6 @@
  * GetIterator ( obj, sync ), 7.4.3, returning only the iterator: the caller reads
  * `next` once, right after.
  * @intrinsic
- * @native
  */
 function GetIterator(obj: Value): Obj {
   const method: Value = GetV(obj, WellKnownSymbol("iterator"));
@@ -110,7 +109,6 @@ function ArrayPrototypeEntries(this: Value): Obj {
  * %ArrayIteratorPrototype%.next ( ), 23.1.5.2.1 (no typed arrays yet).
  * @builtin %ArrayIteratorPrototype%.next
  * @intrinsic
- * @native
  */
 function ArrayIteratorPrototypeNext(this: Value): Obj {
   const target: Value = ArrayIteratorTarget(this);

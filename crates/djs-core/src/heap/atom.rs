@@ -402,6 +402,45 @@ impl Heap {
         Ok(Atom(idx))
     }
 
+    /// Forgets the string atoms whose table index `keep` does not list (indexes past its
+    /// end are kept): their entries become `undefined` and the intern index is rebuilt
+    /// without them, sized for the rest. The well-known atoms and every symbol are kept.
+    /// Only for the base image (D2253): the caller guarantees that nothing in the heap
+    /// refers to a forgotten atom, which interns again as a new id if it is needed later.
+    /// Returns the number forgotten.
+    pub(crate) fn forget_string_atoms(&mut self, keep: &[bool]) -> Result<u32, HeapError> {
+        let table = self.atom_table();
+        let entries = self.atom_entries();
+        let n = self.value_array_len(entries);
+        let fixed = (WELL_KNOWN_STRINGS.len() + WELL_KNOWN_SYMBOLS.len()) as u32;
+        let mut strings: u32 = 0;
+        let mut forgotten = 0;
+        for i in 1..n {
+            if self.value_array_get(entries, i).as_string().is_none() {
+                continue;
+            }
+            if i > fixed && keep.get(i as usize) == Some(&false) {
+                self.value_array_set(entries, i, Value::UNDEFINED);
+                forgotten += 1;
+            } else {
+                strings += 1;
+            }
+        }
+        // The index at a load factor of at most 1/2, as `add_string_atom` keeps it.
+        let len = (2 * strings).next_power_of_two().max(INITIAL_BUCKETS);
+        let index = self.alloc_u32_array(len)?;
+        for i in 1..n {
+            if let Some(t) = self.value_array_get(entries, i).as_string() {
+                let h = self.str_hash_uncached(t);
+                self.index_insert(index, h, i);
+            }
+        }
+        let a = self.arena_mut();
+        a.set(table, AtomTable::INDEX, Ref(index));
+        a.set(table, AtomTable::STRINGS, strings);
+        Ok(forgotten)
+    }
+
     /// Interns a heap string. Canonical array indexes below 2^31 become integer atoms.
     pub fn intern(&mut self, s: Str) -> Result<Atom, HeapError> {
         if let Some(i) = self.str_array_index(s)
