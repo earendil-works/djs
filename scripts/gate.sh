@@ -46,9 +46,11 @@ sort -rn target/test-times.tsv | head -10 | tee target/gate-slowest-tests.tsv |
 step "no_std/wasm build of djs-core"
 cargo build -p djs-core --target wasm32-unknown-unknown --quiet
 # Clippy for wasm32 in release (no debug_assertions), so warnings that only appear in
-# that configuration fail the gate too.
+# that configuration fail the gate too. With djs-wasm's docs-only `docs` feature
+# (`djs_disasm`, 0113), so the docs site's module keeps compiling;
+# the shipping build leaves it off.
 step "clippy (wasm32, release)"
-cargo clippy -p djs-core -p djs-wasm --target wasm32-unknown-unknown --release --quiet -- -D warnings
+cargo clippy -p djs-core -p djs-wasm --features djs-wasm/docs --target wasm32-unknown-unknown --release --quiet -- -D warnings
 
 # Additional gate steps registered by issues go below this line.
 step "builtins/gen is up to date (0017)"

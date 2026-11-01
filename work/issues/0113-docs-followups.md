@@ -72,10 +72,13 @@ touches: ARCH.md, docs/*.md, docs/guide/, crates/djs-docs/, crates/djs-wasm/ (a 
   Shipping module unchanged: 1,471,134 bytes, the same as recorded at d780463b0d, no
   `djs_disasm` in it; the docs module is 1,516,619 bytes (+45 KB, the disassembler).
 
+- Follow-up (after review): the gate's wasm32 clippy step now compiles djs-wasm with
+  `--features djs-wasm/docs`, so a break of `djs_disasm` fails the gate instead of the
+  Pages workflow; clean on main.
+
 ## Follow-ups
 
-- The gate never compiles djs-wasm's `docs` feature; a break would show first in the
-  Pages workflow. If that matters: add `--features docs` to the gate's wasm32 clippy step.
+- ~~The gate never compiles djs-wasm's `docs` feature~~ done: the wasm32 clippy step.
 
 ## Result
 
@@ -93,5 +96,4 @@ All four items landed, each merged separately:
    Pages workflow. The shipping module is unchanged (1,471,134 bytes, no `djs_disasm`).
 
 Known gaps: recorded measurements go stale until someone runs `scripts/status.py`
-(the generated text shows the commit they were measured at); the gate does not build the
-`docs` feature.
+(the generated text shows the commit they were measured at).
