@@ -35,6 +35,14 @@ Today only the REPL's `.heap` prints cells per kind and objects per class for th
 
 ## Log
 
+- Early merge (at the coordinator's request, for bloat's 0135): `djs heap` in
+  crates/djs-cli/src/heap/ and the Rust snapshot container reader/writer in
+  crates/djs-cli/src/container.rs (zstd crate, D2264), `heap::analyze_image` for the
+  REPL, scripts/heap/reference.ts (a module's base, pi's prelude image for start data;
+  `preludeImage` exported from js/pi/vm.ts), wasm.ts writes containers and start.json,
+  docs/cli.md. bloat owns the REPL (`.snapshot`/`.restore`/`.heap`); I don't touch repl/.
+  Still to do: the pi waiting-session test, the guide section, the re-measurement.
+
 ## Follow-ups
 
 ## Result
