@@ -33,6 +33,8 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::{OnceCell, RefCell};
 
+mod allocator;
+
 use djs_core::compiler::{CompileOptions, Goal};
 use djs_core::heap::Handle;
 use djs_core::interp::{ErrorKind, Intrinsic, intrinsic};
@@ -112,8 +114,8 @@ fn record_panic(msg: impl FnOnce() -> String) {
     });
 }
 
-/// The wasm32 runtime without std (D2332): instance globals, the allocator, the panic
-/// handler.
+/// The wasm32 runtime without std (D2332): instance globals and the panic handler (the
+/// allocator is in allocator.rs).
 #[cfg(target_arch = "wasm32")]
 mod wasm {
     /// A global of the instance. wasm32-unknown-unknown without the atomics feature has
@@ -130,11 +132,6 @@ mod wasm {
             f(&self.0)
         }
     }
-
-    // The allocator std uses on this target, now named directly.
-    #[cfg(not(feature = "alloc-stats"))]
-    #[global_allocator]
-    static ALLOC: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
 
     /// Never formats in release modules: formatting would keep core::fmt, every panic
     /// message and every panic location (source paths) in the module (D2332). Debug
@@ -287,11 +284,8 @@ mod alloc_stats {
     use core::alloc::{GlobalAlloc, Layout};
     use core::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
-    // The allocator underneath: std's natively, dlmalloc (std's on wasm32) without std.
-    #[cfg(target_arch = "wasm32")]
-    use dlmalloc::GlobalDlmalloc as System;
-    #[cfg(not(target_arch = "wasm32"))]
-    use std::alloc::System;
+    // The allocator underneath (allocator.rs).
+    use crate::allocator::Base as System;
 
     pub static LIVE: AtomicUsize = AtomicUsize::new(0);
     pub static PEAK: AtomicUsize = AtomicUsize::new(0);

@@ -48,6 +48,10 @@ disjoint from perf's 0122 work:
 - Perf (wmeasure, wasm instructions, n=3, base vs new): loop/calls/props/strings/json/
   higher-order/regexp equal or lower, arrays +0.3%, strbuild +0.2%, pi-like +0.6%
   (spread 0.2–0.6%): no workload beyond +1%.
+- For heap's 0128 (page allocator): the allocator setup moved to its own module,
+  crates/djs-wasm/src/allocator.rs (`Base`: dlmalloc on wasm32, std's System natively for
+  alloc-stats; the global allocator unless alloc-stats wraps it). Named `allocator`, not
+  `alloc`, which is the alloc crate. Module unchanged (1,159,910 raw).
 - js/test sandbox trap test accepts the release module's fixed message too. Guide:
   docs/guide/host.md (trap paragraph) updated; docs/host.md too.
 
