@@ -492,6 +492,36 @@ impl Heap {
     }
 
     /// Appends the flat leaves of `s` as `(cell, length)`, in order, to `out`.
+    /// The leaves of `parts` (strings with fewer than [`ROPE_MIN_LEN`] units in total), in
+    /// order, into `out`; returns how many. No Rust allocation (D1871): `'a' + i` used to
+    /// spend more in malloc on three Vecs than on the concatenation. Every pending subtree
+    /// and every leaf holds at least one unit, so neither array can overflow.
+    fn short_leaves(
+        &self,
+        parts: [(u32, u32); 2],
+        out: &mut [(u32, u32); ROPE_MIN_LEN as usize],
+    ) -> usize {
+        let mut stack = [(0, 0); ROPE_MIN_LEN as usize];
+        stack[0] = parts[1];
+        stack[1] = parts[0];
+        let (mut sp, mut n) = (2, 0);
+        while sp > 0 {
+            sp -= 1;
+            let (off, len) = stack[sp];
+            if self.cell_kind(off) == CellKind::Rope {
+                let (kids, k) = self.children(off);
+                for &kid in kids[..k].iter().rev() {
+                    stack[sp] = kid;
+                    sp += 1;
+                }
+            } else {
+                out[n] = (off, len);
+                n += 1;
+            }
+        }
+        n
+    }
+
     fn collect_leaves(&self, s: Str, out: &mut Vec<(u32, u32)>) {
         let mut stack = alloc::vec![(s.0, self.str_len(s))];
         while let Some((off, len)) = stack.pop() {
@@ -723,11 +753,10 @@ impl Heap {
         }
         let two_byte = self.str_is_two_byte(a) || self.str_is_two_byte(b);
         if len < ROPE_MIN_LEN {
-            let mut leaves = Vec::new();
-            self.collect_leaves(a, &mut leaves);
-            self.collect_leaves(b, &mut leaves);
+            let mut leaves = [(0, 0); ROPE_MIN_LEN as usize];
+            let n = self.short_leaves([(a.0, la), (b.0, lb)], &mut leaves);
             let dst = self.alloc_flat(len, two_byte)?;
-            self.write_leaves(&leaves, dst, 0);
+            self.write_leaves(&leaves[..n], dst, 0);
             return Ok(Str(dst));
         }
         // In place (D1610): `a` ends exactly where its buffer's used part ends (no other
