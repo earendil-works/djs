@@ -5377,3 +5377,18 @@ Measured in node (`Sandbox.create`, ms):
 The extra time on later instances is the 385 KB copy, its zeroing and the hash check.
 Memory per instance is +64 KB (the coded segment stays in the data section beside the
 decoded copy).
+
+## D2331: The shipped module is built with remapped source paths
+date: 2026-11-07 · by: bloat · issue: 0126
+Panic locations embed the source file path of the code they come from, and for the
+standard library inlined into djs and for registry crates (libm, dlmalloc) that was an
+absolute path of the build machine (`/Users/<name>/.rustup/...`, `.../.cargo/registry/...`):
+a privacy leak in a shipped artifact. `scripts/wasm-rustflags.sh` prints
+`--remap-path-prefix` flags (the home directory to `~`, CARGO_HOME to `/cargo`, the
+toolchain's rust-src to `/rustc/<commit>` like the precompiled std, the checkout to
+`/djs`) as CARGO_ENCODED_RUSTFLAGS, and every build of the shipped module uses it:
+scripts/build-wasm.sh, the gate's size step, djs-bench's size and wasm groups and
+scripts/size/variant.sh. Cargo's `trim-paths` profile option would do this but is not
+stable in cargo 1.99. scripts/size/budget.py fails the gate when the module contains
+`/Users/`, `/home/`, `.cargo/registry` or `.rustup/`. The paths do not change between
+machines or worktrees any more, so the module is reproducible across them.

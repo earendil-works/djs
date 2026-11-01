@@ -21,9 +21,31 @@ def read():
             vals[k] = int(v)
     return vals, lines
 
+# Build-machine paths that must not reach the shipped module (D2331): panic locations
+# carry source paths, scripts/wasm-rustflags.sh remaps them.
+LEAKS = [b"/Users/", b"/home/", b".cargo/registry", b".rustup/", b"C:\\Users\\"]
+
+
+def leaks(data):
+    found = []
+    for pat in LEAKS:
+        i = data.find(pat)
+        if i >= 0:
+            start = max(data.rfind(b"\0", 0, i) + 1, i - 80)
+            found.append(data[start:i + 60].split(b"\0")[0].decode("latin1"))
+    return found
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     data = open(args[0], "rb").read()
+    bad = leaks(data)
+    if bad:
+        print("size: FAIL: the module contains build-machine paths (D2331; build it with "
+              "scripts/wasm-rustflags.sh):")
+        for b in bad:
+            print(f"  {b}")
+        sys.exit(1)
     size = len(gzip.compress(data, 9, mtime=0))
     vals, lines = read()
     qjs, ceiling = vals["quickjs_wasi_gzip"], vals["ceiling_gzip"]

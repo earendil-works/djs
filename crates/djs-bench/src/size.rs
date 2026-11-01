@@ -27,6 +27,18 @@ pub fn size(r: &mut Runner) {
     measure(r, "size/djs-wasm", &module, &target_dir, "djs_wasm.wasm");
 }
 
+/// The rustflags of every shipped-module build (`scripts/wasm-rustflags.sh`, D2331: no
+/// absolute build-machine paths in the module), so the size track measures the same
+/// bytes as scripts/build-wasm.sh. Empty if the script fails.
+pub fn shipped_rustflags() -> String {
+    Command::new(workspace_root().join("scripts/wasm-rustflags.sh"))
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default()
+}
+
 /// Builds a wasm32 cdylib with the `wasm` profile and reports its sizes under `prefix`.
 fn measure(r: &mut Runner, prefix: &str, what: &[&str], target_dir: &Path, file: &str) {
     if !r.wants(prefix) {
@@ -35,6 +47,7 @@ fn measure(r: &mut Runner, prefix: &str, what: &[&str], target_dir: &Path, file:
     let root = workspace_root();
     let status = Command::new(env!("CARGO"))
         .current_dir(&root)
+        .env("CARGO_ENCODED_RUSTFLAGS", shipped_rustflags())
         .args(["build", "--quiet"])
         .args(what)
         .args([

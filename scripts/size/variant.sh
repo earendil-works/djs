@@ -29,7 +29,7 @@ if [ $# -gt 0 ] && [[ "$1" == +* ]]; then
   toolchain=("$1")
   shift
 fi
-(cd "$src" && CARGO_TARGET_DIR="$out/$name/target" nice -n 10 cargo ${toolchain[@]+"${toolchain[@]}"} \
+(cd "$src" && CARGO_ENCODED_RUSTFLAGS=$("$root/scripts/wasm-rustflags.sh") CARGO_TARGET_DIR="$out/$name/target" nice -n 10 cargo ${toolchain[@]+"${toolchain[@]}"} \
   build -q -p djs-wasm --target wasm32-unknown-unknown --profile wasm "$@")
 cp "$out/$name/target/wasm32-unknown-unknown/wasm/djs_wasm.wasm" "$out/$name.wasm"
 python3 - "$out/$name.wasm" "$name" <<'EOF'

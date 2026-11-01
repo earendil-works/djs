@@ -17,6 +17,9 @@ case "${1:-}" in
   --strip | "") ;;
   *) echo "usage: scripts/build-wasm.sh [--keep-names | --docs]" >&2; exit 2 ;;
 esac
+# No absolute build-machine paths in the module (D2331).
+CARGO_ENCODED_RUSTFLAGS=$(scripts/wasm-rustflags.sh)
+export CARGO_ENCODED_RUSTFLAGS
 CARGO_TARGET_DIR="$target" cargo build -p djs-wasm --target wasm32-unknown-unknown --profile wasm --quiet ${features[@]+"${features[@]}"}
 out=$target/wasm32-unknown-unknown/wasm/djs_wasm.wasm
 ls -l "$out" | awk '{print $5 " bytes: " $9}'

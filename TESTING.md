@@ -411,6 +411,11 @@ gzip with `tests/scores/size.tsv`:
   module's gzip exceeds it. Once the module is within 1.5x, the budget itself is the
   limit as well.
 
+`budget.py` also fails when the module contains a build-machine path (`/Users/`,
+`/home/`, `.cargo/registry`, `.rustup/`): panic locations carry source file paths, and
+every build of the shipped module takes its rustflags from `scripts/wasm-rustflags.sh`,
+which remaps them (`--remap-path-prefix`, D2331).
+
 An issue that makes the module smaller lowers the ceiling on its branch
 (`scripts/size/budget.py MODULE --update`: this gzip plus 1 KB of slack, never higher).
 Raising it is a trade, recorded as a decision with the size and what it buys. The
