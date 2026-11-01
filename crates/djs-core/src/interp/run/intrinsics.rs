@@ -1617,12 +1617,7 @@ impl Exec<'_> {
                 arg(self, 1).as_number().unwrap_or(f64::NAN),
             ) {
                 Some(r) => conv::number(r),
-                None => {
-                    return Err(Fault::Error(
-                        ErrorKind::InternalError,
-                        format!("not supported yet: %{}", info.name),
-                    ));
-                }
+                None => return self.json_regexp_intrinsic(id, info.name, base, argc, next),
             },
         };
         self.sp = base;

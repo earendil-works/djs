@@ -67,6 +67,7 @@ impl Default for ExecOptions {
 }
 
 mod intrinsics;
+mod json_regexp;
 pub(crate) mod promise;
 pub(crate) mod suspend;
 

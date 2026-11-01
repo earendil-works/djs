@@ -2442,6 +2442,246 @@ function StringIteratorToStringTag() {
   return "String Iterator";
 }
 
+// builtins/json.ts:9 value JSON
+function JSONObject() {
+  return %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+}
+
+// builtins/json.ts:18 value JSON[Symbol.toStringTag]
+function JSONToStringTag() {
+  return "JSON";
+}
+
+// builtins/json.ts:26 JSON.parse
+function JSONParse(text, reviver) {
+  const jsonString = ToString(text);
+  const unfiltered = %JsonParse(jsonString);
+  if (!%IsCallable(reviver)) {
+    return unfiltered;
+  }
+  const root = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+  %CreateDataPropertyOrThrow(root, "", unfiltered);
+  return InternalizeJSONProperty(root, "", reviver);
+}
+
+// builtins/json.ts:38
+function InternalizeJSONProperty(holder, name, reviver) {
+  const val = %Get(holder, name);
+  if (%IsObject(val)) {
+    const o = %AsObj(val);
+    if (%IsArray(o)) {
+      const len = LengthOfArrayLike(o);
+      for (let i = 0; i < len; i++) {
+        InternalizeJSONMember(o, %ToStringPrimitive(i), reviver);
+      }
+    } else {
+      const keys = %OwnPropertyKeys(o, 3);
+      const n = LengthOfArrayLike(keys);
+      for (let k = 0; k < n; k++) {
+        InternalizeJSONMember(o, %AsStr(%Get(keys, k)), reviver);
+      }
+    }
+  }
+  return %Call(reviver, holder, name, val);
+}
+
+// builtins/json.ts:59
+function InternalizeJSONMember(o, p, reviver) {
+  const newElement = InternalizeJSONProperty(o, p, reviver);
+  if (newElement === undefined) {
+    %DeleteProperty(o, p);
+  } else {
+    %CreateDataProperty(o, p, newElement);
+  }
+}
+
+// builtins/json.ts:73 JSON.stringify
+function JSONStringify(value, replacer, space) {
+  let replacerFunction = undefined;
+  let propertyList = undefined;
+  if (%IsObject(replacer)) {
+    if (%IsCallable(replacer)) {
+      replacerFunction = replacer;
+    } else if (%IsArray(replacer)) {
+      propertyList = JSONPropertyList(%AsObj(replacer));
+    }
+  }
+  let sp = space;
+  if (%IsObject(sp)) {
+    const p = %PrimitiveValue(sp);
+    if (%IsNumber(p)) {
+      sp = ToNumber(sp);
+    } else if (%IsString(p)) {
+      sp = ToString(sp);
+    }
+  }
+  let gap = "";
+  if (%IsNumber(sp)) {
+    const n = %ToIntegerOrInfinityNumber(%AsNumber(sp));
+    for (let i = 0; i < n && i < 10; i++) {
+      gap += " ";
+    }
+  } else if (%IsString(sp)) {
+    const s = %AsStr(sp);
+    gap = %StrLength(s) <= 10 ? s : %StrSubstring(s, 0, 10);
+  }
+  if (replacerFunction === undefined && propertyList === undefined) {
+    const fast = %JsonStringifyFast(value, gap);
+    if (fast !== null) {
+      return fast;
+    }
+  }
+  const wrapper = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+  %CreateDataPropertyOrThrow(wrapper, "", value);
+  return SerializeJSONProperty(replacerFunction, propertyList, gap, %ArrayCreate(0), "", "", wrapper);
+}
+
+// builtins/json.ts:114
+function JSONPropertyList(r) {
+  const list = %ArrayCreate(0);
+  let n = 0;
+  const len = LengthOfArrayLike(r);
+  for (let k = 0; k < len; k++) {
+    const v = %Get(r, k);
+    let item = undefined;
+    if (%IsString(v)) {
+      item = v;
+    } else if (%IsNumber(v)) {
+      item = %ToStringPrimitive(v);
+    } else if (%IsObject(v)) {
+      const p = %PrimitiveValue(v);
+      if (%IsString(p) || %IsNumber(p)) {
+        item = ToString(v);
+      }
+    }
+    if (item !== undefined && !JSONListIncludes(list, n, item)) {
+      %CreateDataPropertyOrThrow(list, n, item);
+      n++;
+    }
+  }
+  return list;
+}
+
+// builtins/json.ts:140
+function JSONListIncludes(list, n, v) {
+  for (let i = 0; i < n; i++) {
+    if (%Get(list, i) === v) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// builtins/json.ts:153
+function SerializeJSONProperty(replacer, propertyList, gap, stack, indent, key, holder) {
+  let value = %Get(holder, key);
+  if (%IsObject(value)) {
+    const toJSON = %GetV(value, "toJSON");
+    if (%IsCallable(toJSON)) {
+      value = %Call(toJSON, value, key);
+    }
+  }
+  if (replacer !== undefined) {
+    value = %Call(replacer, holder, key, value);
+  }
+  if (%IsObject(value)) {
+    const p = %PrimitiveValue(value);
+    if (%IsNumber(p)) {
+      value = ToNumber(value);
+    } else if (%IsString(p)) {
+      value = ToString(value);
+    } else if (%IsBoolean(p)) {
+      value = p;
+    }
+  }
+  if (value === null) {
+    return "null";
+  }
+  if (value === true) {
+    return "true";
+  }
+  if (value === false) {
+    return "false";
+  }
+  if (%IsString(value)) {
+    return %JsonQuote(%AsStr(value));
+  }
+  if (%IsNumber(value)) {
+    const n = %AsNumber(value);
+    return n - n === 0 ? %ToStringPrimitive(value) : "null";
+  }
+  if (%IsObject(value) && !%IsCallable(value)) {
+    const o = %AsObj(value);
+    if (JSONStackIncludes(stack, o)) {
+      throw %NewTypeError("circular reference");
+    }
+    const depth = LengthOfArrayLike(stack);
+    %CreateDataPropertyOrThrow(stack, depth, o);
+    const r = %IsArray(o) ? SerializeJSONArray(replacer, propertyList, gap, stack, indent, o) : SerializeJSONObject(replacer, propertyList, gap, stack, indent, o);
+    %Set(stack, "length", depth);
+    return r;
+  }
+  return undefined;
+}
+
+// builtins/json.ts:216
+function JSONStackIncludes(stack, o) {
+  const n = LengthOfArrayLike(stack);
+  for (let i = 0; i < n; i++) {
+    if (%Get(stack, i) === o) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// builtins/json.ts:227
+function JSONJoin(open, close, partial, n, gap, stepback, indent) {
+  if (n === 0) {
+    return open + close;
+  }
+  const sep = gap === "" ? "," : ",\n" + indent;
+  let r = gap === "" ? open : open + "\n" + indent;
+  for (let i = 0; i < n; i++) {
+    if (i > 0) {
+      r += sep;
+    }
+    r += %AsStr(%Get(partial, i));
+  }
+  return gap === "" ? r + close : r + "\n" + stepback + close;
+}
+
+// builtins/json.ts:243
+function SerializeJSONObject(replacer, propertyList, gap, stack, stepback, value) {
+  const indent = stepback + gap;
+  const keys = propertyList === undefined ? %OwnPropertyKeys(value, 3) : %AsObj(propertyList);
+  const len = LengthOfArrayLike(keys);
+  const partial = %ArrayCreate(0);
+  let n = 0;
+  for (let k = 0; k < len; k++) {
+    const p = %AsStr(%Get(keys, k));
+    const strP = SerializeJSONProperty(replacer, propertyList, gap, stack, indent, p, value);
+    if (strP !== undefined) {
+      const member = gap === "" ? %JsonQuote(p) + ":" : %JsonQuote(p) + ": ";
+      %CreateDataPropertyOrThrow(partial, n, member + %AsStr(strP));
+      n++;
+    }
+  }
+  return JSONJoin("{", "}", partial, n, gap, stepback, indent);
+}
+
+// builtins/json.ts:269
+function SerializeJSONArray(replacer, propertyList, gap, stack, stepback, value) {
+  const indent = stepback + gap;
+  const len = LengthOfArrayLike(value);
+  const partial = %ArrayCreate(0);
+  for (let i = 0; i < len; i++) {
+    const strP = SerializeJSONProperty(replacer, propertyList, gap, stack, indent, %ToStringPrimitive(i), value);
+    %CreateDataPropertyOrThrow(partial, i, strP === undefined ? "null" : %AsStr(strP));
+  }
+  return JSONJoin("[", "]", partial, len, gap, stepback, indent);
+}
+
 // builtins/map.ts:4
 function ThisMap(v) {
   if (%CollectionClass(v) !== 0) {
@@ -5826,6 +6066,7 @@ function WeakSetPrototypeToStringTag() {
 %InstallConstructor("globalThis", "InternalError", InternalErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "AggregateError", AggregateErrorConstructor, 2, "Error");
 %InstallConstructor("globalThis", "Function", FunctionConstructor, 1, undefined);
+%InstallValue("globalThis", "JSON", JSONObject(), 5);
 %InstallConstructor("globalThis", "Map", MapConstructor, 0, undefined);
 %InstallValue("globalThis", "Math", MathObject(), 5);
 %InstallConstructor("globalThis", "Number", NumberConstructor, 1, undefined);
@@ -5991,6 +6232,9 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("String.prototype", %WellKnownSymbol("iterator"), StringPrototypeIterator, 0);
 %InstallMethod("%StringIteratorPrototype%", "next", StringIteratorPrototypeNext, 0);
 %InstallValue("%StringIteratorPrototype%", %WellKnownSymbol("toStringTag"), StringIteratorToStringTag(), 4);
+%InstallValue("JSON", %WellKnownSymbol("toStringTag"), JSONToStringTag(), 4);
+%InstallMethod("JSON", "parse", JSONParse, 2);
+%InstallMethod("JSON", "stringify", JSONStringify, 3);
 %InstallMethod("Map", "groupBy", MapGroupBy, 2);
 %InstallAccessor("Map", %WellKnownSymbol("species"), MapSpecies, false);
 %InstallMethod("Map.prototype", "clear", MapPrototypeClear, 0);

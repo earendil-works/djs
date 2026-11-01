@@ -629,6 +629,21 @@ declare function AsyncGeneratorDequeue(g: Obj): Value;
  * @leaf
  */
 declare function CreateAsyncFromSyncIterator(iterator: Obj, next: Value): Obj;
+// ---- JSON (0033, builtins/json.rs over crate::json) -------------------------------------
+
+/** JSON.parse of text without a reviver; qjs's SyntaxError for invalid JSON. @leaf */
+declare function JsonParse(text: Str): Value;
+/**
+ * JSON.stringify(v, undefined, space) with gap already computed, for plain data: the
+ * string, undefined for an undefined result, or null when the value needs the full
+ * algorithm (accessors, toJSON, wrappers, exotic objects; nothing observable happened).
+ * TypeError "circular reference" and InternalError "stack overflow" are final. @leaf
+ */
+declare function JsonStringifyFast(v: Value, gap: Str): Value;
+/** QuoteJSONString ( value ), 25.5.2.3. @leaf */
+declare function JsonQuote(s: Str): Str;
+/** CreateDataProperty ( O, P, V ): false if refused. Reentrant once proxies exist. @reentrant */
+declare function CreateDataProperty(o: Obj, key: Value, v: Value): boolean;
 
 // ---- Used by the generated code (crates/djs-bgen/src/emit_js.rs) ------------------------
 

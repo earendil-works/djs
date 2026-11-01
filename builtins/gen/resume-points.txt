@@ -897,6 +897,79 @@ StringIteratorPrototypeNext: leaf (%StringIteratorPrototype%.next, %StringIterat
 
 StringIteratorToStringTag: leaf (value %StringIteratorPrototype%[Symbol.toStringTag])
 
+JSONObject: leaf (value JSON)
+
+JSONToStringTag: leaf (value JSON[Symbol.toStringTag])
+
+JSONParse: reentrant (JSON.parse)
+  builtins/json.ts:27:27  ToString (builtin)
+  builtins/json.ts:33:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/json.ts:34:10  InternalizeJSONProperty (builtin)
+
+InternalizeJSONProperty: reentrant
+  builtins/json.ts:39:22  Get (intrinsic)
+  builtins/json.ts:43:24  LengthOfArrayLike (builtin)
+  builtins/json.ts:45:9  InternalizeJSONMember (builtin)
+  builtins/json.ts:49:22  LengthOfArrayLike (builtin)
+  builtins/json.ts:51:40  Get (intrinsic)
+  builtins/json.ts:51:9  InternalizeJSONMember (builtin)
+  builtins/json.ts:55:10  Call (intrinsic)
+
+InternalizeJSONMember: reentrant
+  builtins/json.ts:60:29  InternalizeJSONProperty (builtin)
+  builtins/json.ts:64:5  CreateDataProperty (intrinsic)
+
+JSONStringify: reentrant (JSON.stringify)
+  builtins/json.ts:80:22  JSONPropertyList (builtin)
+  builtins/json.ts:87:12  ToNumber (builtin)
+  builtins/json.ts:89:12  ToString (builtin)
+  builtins/json.ts:109:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/json.ts:110:10  SerializeJSONProperty (builtin)
+
+JSONPropertyList: reentrant
+  builtins/json.ts:117:20  LengthOfArrayLike (builtin)
+  builtins/json.ts:119:22  Get (intrinsic)
+  builtins/json.ts:128:16  ToString (builtin)
+  builtins/json.ts:131:32  JSONListIncludes (builtin)
+  builtins/json.ts:132:7  CreateDataPropertyOrThrow (intrinsic)
+
+JSONListIncludes: reentrant
+  builtins/json.ts:142:9  Get (intrinsic)
+
+SerializeJSONProperty: reentrant
+  builtins/json.ts:162:22  Get (intrinsic)
+  builtins/json.ts:164:27  GetV (intrinsic)
+  builtins/json.ts:166:15  Call (intrinsic)
+  builtins/json.ts:170:13  Call (intrinsic)
+  builtins/json.ts:175:15  ToNumber (builtin)
+  builtins/json.ts:177:15  ToString (builtin)
+  builtins/json.ts:201:9  JSONStackIncludes (builtin)
+  builtins/json.ts:204:24  LengthOfArrayLike (builtin)
+  builtins/json.ts:205:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/json.ts:207:9  SerializeJSONArray (builtin)
+  builtins/json.ts:208:9  SerializeJSONObject (builtin)
+  builtins/json.ts:209:5  Set (intrinsic)
+
+JSONStackIncludes: reentrant
+  builtins/json.ts:217:18  LengthOfArrayLike (builtin)
+  builtins/json.ts:219:9  Get (intrinsic)
+
+JSONJoin: reentrant
+  builtins/json.ts:237:16  Get (intrinsic)
+
+SerializeJSONObject: reentrant
+  builtins/json.ts:253:20  LengthOfArrayLike (builtin)
+  builtins/json.ts:257:26  Get (intrinsic)
+  builtins/json.ts:258:25  SerializeJSONProperty (builtin)
+  builtins/json.ts:261:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/json.ts:265:10  JSONJoin (builtin)
+
+SerializeJSONArray: reentrant
+  builtins/json.ts:278:20  LengthOfArrayLike (builtin)
+  builtins/json.ts:281:25  SerializeJSONProperty (builtin)
+  builtins/json.ts:290:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/json.ts:292:10  JSONJoin (builtin)
+
 ThisMap: leaf
 
 AddEntriesFromIterable: reentrant
