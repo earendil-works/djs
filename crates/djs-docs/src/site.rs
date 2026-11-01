@@ -125,6 +125,7 @@ fn source_rev(repo: &Path) -> String {
 
 pub fn build(g: &mut Guide, out: &Path, wasm: &Path) -> Result<(), String> {
     let rendered = render_all(g);
+    let rev = source_rev(&repo());
     std::fs::create_dir_all(out.join("djs")).map_err(|e| format!("{}: {e}", out.display()))?;
     let order: Vec<&Entry> = g.summary.iter().filter(|e| e.path.is_some()).collect();
     let write = |name: &str, text: &str| {
@@ -136,7 +137,7 @@ pub fn build(g: &mut Guide, out: &Path, wasm: &Path) -> Result<(), String> {
             .position(|e| e.path.as_deref() == Some(name.as_str()));
         write(
             &html_name(name),
-            &template(&g.summary, name, page, pos.map(|i| (i, &order[..]))),
+            &template(&g.summary, name, page, pos.map(|i| (i, &order[..])), &rev),
         )?;
     }
     write("style.css", STYLE)?;
@@ -225,6 +226,7 @@ fn template(
     current: &str,
     page: &Page,
     pos: Option<(usize, &[&Entry])>,
+    rev: &str,
 ) -> String {
     let mut nav = String::from("<ol>");
     for e in entries {
@@ -291,11 +293,18 @@ fn template(
         }
         pager.push_str("</nav>");
     }
-    let edit = if current == "decisions.md" {
-        "docs/decisions.md".to_string()
-    } else {
-        format!("docs/guide/{current}")
-    };
+    // The page's Markdown, at the commit the site was built from, like every other source
+    // link (`render::source_url`, D2102).
+    let edit = render::source_url(
+        &if current == "decisions.md" {
+            "docs/decisions.md".to_string()
+        } else {
+            format!("docs/guide/{current}")
+        },
+        false,
+        "",
+        rev,
+    );
     let (sha, brand) = elanor_version();
     format!(
         r##"<!doctype html>
@@ -318,7 +327,7 @@ fn template(
 <div class="identity"><a class="mark" href="https://earendil.com" title="Earendil"><img class="on-light" src="elanor/logos/earendil-logo-on-light.svg" alt="Earendil"><img class="on-dark" src="elanor/logos/earendil-logo-on-dark.svg" alt="Earendil"></a><a class="brand" href="index.html"><b>djs</b><span>How djs works</span></a></div>
 <span class="spacer"></span>
 <div class="search">{search_icon}<input type="search" id="search" placeholder="Search  /" aria-label="Search the guide" autocomplete="off"><ol id="search-results" hidden></ol></div>
-<div class="actions"><a class="icon-button src" href="{repo}/blob/main/{edit}" title="This page's source">Source</a><button class="icon-button scheme" type="button" aria-label="Switch between light and dark">{to_dark}{to_light}</button></div>
+<div class="actions"><a class="icon-button src" href="{edit}" title="This page's source">Source</a><button class="icon-button scheme" type="button" aria-label="Switch between light and dark">{to_dark}{to_light}</button></div>
 </header>
 <div class="layout">
 <nav class="book" aria-label="Chapters">{nav}</nav>

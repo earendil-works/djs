@@ -72,9 +72,9 @@ and ~135 links that leave docs/guide via ../../.
   the fused check, D2090 added to the page's decisions.
 - Rule text: docs/guide/README.md ("The guide is self-contained") and AGENTS.md "Keeping
   the guide current". D2102 in the log and the index.
-- Not mine to change (template, design's 0114): the header's "page source" link still
-  points at `blob/main/docs/guide/<page>.md`; it could use `source_url` at the build's
-  commit too.
+- Follow-up after review (design archived): the header's "Source" link now goes through
+  `render::source_url` at the build's commit (site.rs `template` takes the revision);
+  no `blob/main` link is left in the built site (`$GITHUB_SHA` overrides, checked).
 
 ## Follow-ups
 
