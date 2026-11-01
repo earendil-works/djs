@@ -139,6 +139,9 @@ function ObjectPrototypePropertyIsEnumerable(this: Value, v: Value): boolean {
  * @builtin Object.getPrototypeOf
  */
 function ObjectGetPrototypeOf(o: Value): Value {
+  if (o === undefined || o === null) {
+    throw NewTypeError("not an object");
+  }
   return GetPrototypeOf(ToObject(o));
 }
 
@@ -148,7 +151,7 @@ function ObjectGetPrototypeOf(o: Value): Value {
  */
 function ObjectSetPrototypeOf(o: Value, proto: Value): Value {
   if (o === undefined || o === null) {
-    throw NewTypeError("cannot convert to object");
+    throw NewTypeError("not an object");
   }
   if (!IsObject(proto) && proto !== null) {
     throw NewTypeError("not an object");
@@ -157,7 +160,10 @@ function ObjectSetPrototypeOf(o: Value, proto: Value): Value {
     return o;
   }
   if (!SetPrototypeOf(AsObj(o), proto)) {
-    throw NewTypeError("cannot set prototype");
+    if (!IsExtensible(AsObj(o))) {
+      throw NewTypeError("object is not extensible");
+    }
+    throw NewTypeError("circular prototype chain");
   }
   return o;
 }
@@ -168,7 +174,7 @@ function ObjectSetPrototypeOf(o: Value, proto: Value): Value {
  */
 function ObjectCreateBuiltin(o: Value, properties: Value): Obj {
   if (!IsObject(o) && o !== null) {
-    throw NewTypeError("not an object");
+    throw NewTypeError("not a prototype");
   }
   const obj: Obj = ObjectCreate(o);
   if (properties !== undefined) {

@@ -1048,13 +1048,16 @@ function ObjectPrototypePropertyIsEnumerable(v) {
 
 // builtins/object.ts:141 Object.getPrototypeOf
 function ObjectGetPrototypeOf(o) {
+  if (o === undefined || o === null) {
+    throw %NewTypeError("not an object");
+  }
   return %GetPrototypeOf(%ToObject(o));
 }
 
-// builtins/object.ts:149 Object.setPrototypeOf
+// builtins/object.ts:152 Object.setPrototypeOf
 function ObjectSetPrototypeOf(o, proto) {
   if (o === undefined || o === null) {
-    throw %NewTypeError("cannot convert to object");
+    throw %NewTypeError("not an object");
   }
   if (!%IsObject(proto) && proto !== null) {
     throw %NewTypeError("not an object");
@@ -1063,15 +1066,18 @@ function ObjectSetPrototypeOf(o, proto) {
     return o;
   }
   if (!%SetPrototypeOf(%AsObj(o), proto)) {
-    throw %NewTypeError("cannot set prototype");
+    if (!%IsExtensible(%AsObj(o))) {
+      throw %NewTypeError("object is not extensible");
+    }
+    throw %NewTypeError("circular prototype chain");
   }
   return o;
 }
 
-// builtins/object.ts:169 Object.create
+// builtins/object.ts:175 Object.create
 function ObjectCreateBuiltin(o, properties) {
   if (!%IsObject(o) && o !== null) {
-    throw %NewTypeError("not an object");
+    throw %NewTypeError("not a prototype");
   }
   const obj = %ObjectCreate(o);
   if (properties !== undefined) {
@@ -1080,7 +1086,7 @@ function ObjectCreateBuiltin(o, properties) {
   return obj;
 }
 
-// builtins/object.ts:181
+// builtins/object.ts:187
 function ObjectDefinePropertiesHelper(o, properties) {
   const props = %ToObject(properties);
   const keys = %OwnPropertyKeys(props, 2);
@@ -1104,7 +1110,7 @@ function ObjectDefinePropertiesHelper(o, properties) {
   return o;
 }
 
-// builtins/object.ts:209 Object.defineProperties
+// builtins/object.ts:215 Object.defineProperties
 function ObjectDefineProperties(o, properties) {
   if (!%IsObject(o)) {
     throw %NewTypeError("not an object");
@@ -1112,7 +1118,7 @@ function ObjectDefineProperties(o, properties) {
   return ObjectDefinePropertiesHelper(%AsObj(o), properties);
 }
 
-// builtins/object.ts:220
+// builtins/object.ts:226
 function EnumerableOwnProperties(o, kind) {
   const keys = %OwnPropertyKeys(o, 0);
   if (kind === 0) {
@@ -1140,22 +1146,22 @@ function EnumerableOwnProperties(o, kind) {
   return result;
 }
 
-// builtins/object.ts:251 Object.keys
+// builtins/object.ts:257 Object.keys
 function ObjectKeys(o) {
   return EnumerableOwnProperties(%ToObject(o), 0);
 }
 
-// builtins/object.ts:259 Object.values
+// builtins/object.ts:265 Object.values
 function ObjectValues(o) {
   return EnumerableOwnProperties(%ToObject(o), 1);
 }
 
-// builtins/object.ts:267 Object.entries
+// builtins/object.ts:273 Object.entries
 function ObjectEntries(o) {
   return EnumerableOwnProperties(%ToObject(o), 2);
 }
 
-// builtins/object.ts:276 Object.assign
+// builtins/object.ts:282 Object.assign
 function ObjectAssign(target, ...sources) {
   const to = %ToObject(target);
   const n = LengthOfArrayLike(sources);
@@ -1177,7 +1183,7 @@ function ObjectAssign(target, ...sources) {
   return to;
 }
 
-// builtins/object.ts:301 Object.freeze
+// builtins/object.ts:307 Object.freeze
 function ObjectFreeze(o) {
   if (!%IsObject(o)) {
     return o;
@@ -1188,7 +1194,7 @@ function ObjectFreeze(o) {
   return o;
 }
 
-// builtins/object.ts:315 Object.seal
+// builtins/object.ts:321 Object.seal
 function ObjectSeal(o) {
   if (!%IsObject(o)) {
     return o;
@@ -1199,7 +1205,7 @@ function ObjectSeal(o) {
   return o;
 }
 
-// builtins/object.ts:329 Object.preventExtensions
+// builtins/object.ts:335 Object.preventExtensions
 function ObjectPreventExtensions(o) {
   if (!%IsObject(o)) {
     return o;
@@ -1210,27 +1216,27 @@ function ObjectPreventExtensions(o) {
   return o;
 }
 
-// builtins/object.ts:343 Object.isFrozen
+// builtins/object.ts:349 Object.isFrozen
 function ObjectIsFrozen(o) {
   return !%IsObject(o) || %TestIntegrityLevel(%AsObj(o), true);
 }
 
-// builtins/object.ts:351 Object.isSealed
+// builtins/object.ts:357 Object.isSealed
 function ObjectIsSealed(o) {
   return !%IsObject(o) || %TestIntegrityLevel(%AsObj(o), false);
 }
 
-// builtins/object.ts:359 Object.isExtensible
+// builtins/object.ts:365 Object.isExtensible
 function ObjectIsExtensible(o) {
   return %IsObject(o) && %IsExtensible(%AsObj(o));
 }
 
-// builtins/object.ts:367 Object.getOwnPropertySymbols
+// builtins/object.ts:373 Object.getOwnPropertySymbols
 function ObjectGetOwnPropertySymbols(o) {
   return %OwnPropertyKeys(%ToObject(o), 1);
 }
 
-// builtins/object.ts:375 Object.getOwnPropertyDescriptors
+// builtins/object.ts:381 Object.getOwnPropertyDescriptors
 function ObjectGetOwnPropertyDescriptors(o) {
   const obj = %ToObject(o);
   const keys = %OwnPropertyKeys(obj, 2);
@@ -1246,18 +1252,18 @@ function ObjectGetOwnPropertyDescriptors(o) {
   return descriptors;
 }
 
-// builtins/object.ts:394 Object.hasOwn
+// builtins/object.ts:400 Object.hasOwn
 function ObjectHasOwn(o, p) {
   const obj = %ToObject(o);
   return %HasOwnProperty(obj, ToPropertyKey(p));
 }
 
-// builtins/object.ts:403 Object.is
+// builtins/object.ts:409 Object.is
 function ObjectIs(value1, value2) {
   return %SameValue(value1, value2);
 }
 
-// builtins/object.ts:411 Object.prototype.toString
+// builtins/object.ts:417 Object.prototype.toString
 function ObjectPrototypeToString() {
   if (this === undefined) {
     return "[object Undefined]";
@@ -1273,17 +1279,17 @@ function ObjectPrototypeToString() {
   return "[object " + %ObjectClassTag(o) + "]";
 }
 
-// builtins/object.ts:430 Object.prototype.toLocaleString
+// builtins/object.ts:436 Object.prototype.toLocaleString
 function ObjectPrototypeToLocaleString() {
   return %Call(%GetV(this, "toString"), this);
 }
 
-// builtins/object.ts:438 Object.prototype.valueOf
+// builtins/object.ts:444 Object.prototype.valueOf
 function ObjectPrototypeValueOf() {
   return %ToObject(this);
 }
 
-// builtins/object.ts:446 Object.prototype.isPrototypeOf
+// builtins/object.ts:452 Object.prototype.isPrototypeOf
 function ObjectPrototypeIsPrototypeOf(v) {
   if (!%IsObject(v)) {
     return false;

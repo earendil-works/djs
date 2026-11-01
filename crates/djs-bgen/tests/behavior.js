@@ -76,7 +76,7 @@ const I = {
   NewNotConstructorError: (f) => new TypeError(f.name + " is not a constructor"),
   WellKnownSymbol: (name) => Symbol[name],
   InstallMethod: (target, key, f, length) => {
-    installed[target + "." + key] = { f, length };
+    installed[target + (typeof key === "symbol" ? "[" + key.description + "]" : "." + key)] = { f, length };
   },
   InstallIntrinsic: (name, f) => {
     installed["%" + name] = { f };
@@ -87,10 +87,10 @@ const I = {
     installed[target + "." + key] = { f, length };
   },
   InstallAccessor: (target, key, f, isSetter) => {
-    installed[(isSetter ? "set " : "get ") + target + "." + key] = { f };
+    installed[(isSetter ? "set " : "get ") + target + "." + String(key)] = { f };
   },
   InstallValue: (target, key, v, attrs) => {
-    installed[target + "." + key] = { v, attrs };
+    installed[target + "." + String(key)] = { v, attrs };
   },
   RealmIntrinsic: (name) => globalThis[name.replace(/Prototype$/, "")].prototype,
   ErrorCreate: (proto) => Object.setPrototypeOf(new Error(), proto),
@@ -125,7 +125,67 @@ const I = {
   FunctionToString: (f) => Function.prototype.toString.call(f),
   NumberPow: (b, e) => (check(typeof b === "number" && typeof e === "number", "NumberPow"), Math.pow(b, e)),
   SymbolDescriptiveString: (s) => s.toString(),
+  GetPrototypeOf: (o) => Object.getPrototypeOf(o),
+  SetPrototypeOf: (o, p) => Reflect.setPrototypeOf(o, p),
+  PreventExtensions: (o) => Reflect.preventExtensions(o),
+  IsExtensible: (o) => Reflect.isExtensible(o),
+  SetIntegrityLevel: (o, frozen) => {
+    if (!Reflect.preventExtensions(o)) return false;
+    for (const k of Reflect.ownKeys(o)) {
+      const d = Reflect.getOwnPropertyDescriptor(o, k);
+      const nd = frozen && "value" in d ? { configurable: false, writable: false } : { configurable: false };
+      if (!Reflect.defineProperty(o, k, nd)) return false;
+    }
+    return true;
+  },
+  TestIntegrityLevel: (o, frozen) => (frozen ? Object.isFrozen(o) : Object.isSealed(o)),
+  SameValue: (a, b) => Object.is(a, b),
+  ObjectClassTag: (o) => {
+    if (Array.isArray(o)) return "Array";
+    if (typeof o === "function") return "Function";
+    if (o instanceof Error) return "Error";
+    for (const [C, n] of [[Boolean, "Boolean"], [Number, "Number"], [String, "String"]]) {
+      try {
+        C.prototype.valueOf.call(o);
+        return n;
+      } catch {}
+    }
+    return "Object";
+  },
+  WrapPrimitive: (v, proto) => Object.setPrototypeOf(Object(v), proto),
+  PrimitiveValue: (v) => {
+    if (!isObject(v)) return v;
+    for (const C of [Boolean, Number, String, Symbol]) {
+      try {
+        return C.prototype.valueOf.call(v);
+      } catch {}
+    }
+    return undefined;
+  },
+  BoundTargetFunction: (f) => undefined,
+  NewSymbol: (d) => Symbol(d),
+  SymbolDescription: (s) => s.description,
+  SymbolFor: (k) => Symbol.for(k),
+  SymbolKeyFor: (s) => Symbol.keyFor(s),
+  NumberToString: (x, r) => {
+    if (r < 2 || r > 36) throw new RangeError("radix must be between 2 and 36");
+    return x.toString(r);
+  },
+  NumberToFixed: (x, d) => x.toFixed(d),
+  NumberToExponential: (x, d) => x.toExponential(d),
+  NumberToPrecision: (x, p) => x.toPrecision(p),
+  StringParseFloat: (s) => parseFloat(s),
+  StringParseInt: (s, r) => parseInt(s, r),
+  NumberToInt32: (n) => n | 0,
+  NumberToUint32: (n) => n >>> 0,
+  MathRandom: () => 0.5,
 };
+for (const name of ["abs", "acos", "acosh", "asin", "asinh", "atan", "atanh", "atan2", "cbrt", "hypot", "ceil", "clz32", "cos", "cosh", "exp", "expm1", "floor", "fround", "imul", "log", "log1p", "log10", "log2", "round", "sign", "sin", "sinh", "sqrt", "tan", "tanh", "trunc"]) {
+  I["F64" + name[0].toUpperCase() + name.slice(1)] = (x, y) => {
+    check(typeof x === "number", "F64" + name);
+    return Math[name](x, y);
+  };
+}
 
 PRELUDE;
 
@@ -448,6 +508,133 @@ for (const [b, e] of [[2, 10], [2, -1], [NaN, 0], [1, Infinity], [-8, 1 / 3], ["
 }
 for (const args of [[], [undefined], [null], [5], [Symbol("d")], [Symbol()], [toPrim("v")], [{}], [[1, 2]]]) {
   same("globalThis.String", String, (f) => f(...args));
+}
+
+// ---- 0031 part 2 ---------------------------------------------------------------------
+
+const objs = (log) => [
+  { a: 1, b: 2 },
+  [1, , 3],
+  { get g() { log.push("getter"); return 1; }, x: 2 },
+  logged({ p: 1, q: 2 }, log),
+  Object.defineProperty({ v: 1 }, "hidden", { value: 2, enumerable: false }),
+  Object.freeze({ f: 1 }),
+  Object.seal({ s: 1 }),
+  Object.preventExtensions({ e: 1 }),
+  "str",
+  5,
+  true,
+  Symbol("s"),
+  null,
+  undefined,
+  function named() {},
+  new Number(3),
+  new Boolean(false),
+  Object.create(null),
+];
+const nObjs = objs([]).length;
+const OC = Object;
+for (let i = 0; i < nObjs; i++) {
+  for (const name of ["keys", "values", "entries", "getPrototypeOf", "isFrozen", "isSealed", "isExtensible", "getOwnPropertySymbols", "getOwnPropertyDescriptors", "freeze", "seal", "preventExtensions"]) {
+    same("Object." + name, OC[name], (f, log) => f(objs(log)[i]));
+  }
+  same("Object.hasOwn", OC.hasOwn, (f, log) => f(objs(log)[i], "a"));
+  same("Object.assign", OC.assign, (f, log) => f({}, objs(log)[i]));
+  same("Object.assign", OC.assign, (f, log) => f(objs(log)[i], { z: 1 }));
+  same("Object.prototype.toString", Object.prototype.toString, (f, log) => f.call(objs(log)[i]));
+  same("Object.prototype.valueOf", Object.prototype.valueOf, (f, log) => typeof f.call(objs(log)[i]));
+  same("Object.prototype.toLocaleString", Object.prototype.toLocaleString, (f, log) => f.call(objs(log)[i]));
+  same("Object.prototype.isPrototypeOf", Object.prototype.isPrototypeOf, (f, log) => f.call(Object.prototype, objs(log)[i]));
+  same("Object.setPrototypeOf", OC.setPrototypeOf, (f, log) => f(objs(log)[i], Array.prototype));
+  same("Object.setPrototypeOf", OC.setPrototypeOf, (f, log) => f({}, objs(log)[i]));
+  same("Object.create", OC.create, (f, log) => f(objs(log)[i]));
+  // qjs reads every descriptor object before converting any; the spec (and djs)
+  // converts each right after reading it. Only the logged proxy shows the difference.
+  if (i !== 3) {
+    same("Object.defineProperties", OC.defineProperties, (f, log) => f({}, objs(log)[i]));
+  }
+  same("Object.is", OC.is, (f, log) => f(objs(log)[i], objs(log)[i]));
+}
+same("Object.create", OC.create, (f, log) => f({}, logged({ a: { value: 1, enumerable: true }, b: { get() {} } }, log)));
+same("Object.defineProperties", OC.defineProperties, (f) => f({}, { a: { value: 1 }, b: 5 }));
+same("Object.defineProperties", OC.defineProperties, (f) => f(5, {}));
+same("Object.prototype.toString", Object.prototype.toString, (f) => f.call({ [Symbol.toStringTag]: "Tagged" }));
+same("Object.prototype.toString", Object.prototype.toString, (f) => f.call({ [Symbol.toStringTag]: 5 }));
+same("Object.prototype.toString", Object.prototype.toString, (f) => f.call(new Error("x")));
+for (const [a, b] of [[NaN, NaN], [0, -0], [-0, -0], [1, "1"], [null, undefined]]) {
+  same("Object.is", OC.is, (f) => f(a, b));
+}
+
+for (const v of [true, false, new Boolean(true), 1, "true", {}, null, undefined]) {
+  same("globalThis.Boolean", Boolean, (f) => f(v));
+  same("globalThis.Boolean", Boolean, (f) => typeof Reflect.construct(f, [v]));
+  same("Boolean.prototype.toString", Boolean.prototype.toString, (f) => f.call(v));
+  same("Boolean.prototype.valueOf", Boolean.prototype.valueOf, (f) => f.call(v));
+}
+const sym = Symbol("d");
+for (const v of [sym, Object(sym), Symbol(), Symbol.iterator, "s", {}, undefined]) {
+  same("Symbol.prototype.toString", Symbol.prototype.toString, (f) => f.call(v));
+  same("Symbol.prototype.valueOf", Symbol.prototype.valueOf, (f) => String(f.call(v)));
+  same("get Symbol.prototype.description", Object.getOwnPropertyDescriptor(Symbol.prototype, "description").get, (f) => f.call(v));
+  same("Symbol.keyFor", Symbol.keyFor, (f) => f(v));
+}
+for (const d of [undefined, "x", 5, null, toPrim("p")]) {
+  same("globalThis.Symbol", Symbol, (f) => f(d).description);
+  same("globalThis.Symbol", Symbol, (f) => Reflect.construct(f, [d]));
+  same("Symbol.for", Symbol.for, (f) => f(d) === Symbol.for(String(d)));
+}
+const numbers = [0, -0, 1, -1.5, 255, 0.1, 1e21, 123.456, 1e-7, NaN, Infinity, -Infinity, 2 ** 53, new Number(7), "5", {}, true];
+for (const x of numbers) {
+  for (const r of [undefined, 2, 16, 36, 1, 37, "10", 10.9]) {
+    same("Number.prototype.toString", Number.prototype.toString, (f) => f.call(x, r));
+  }
+  for (const d of [undefined, 0, 2, 20, 100, 101, -1, 2.7, Infinity]) {
+    same("Number.prototype.toFixed", Number.prototype.toFixed, (f) => f.call(x, d));
+    same("Number.prototype.toExponential", Number.prototype.toExponential, (f) => f.call(x, d));
+    same("Number.prototype.toPrecision", Number.prototype.toPrecision, (f) => f.call(x, d));
+  }
+  same("Number.prototype.valueOf", Number.prototype.valueOf, (f) => f.call(x));
+  for (const name of ["isFinite", "isInteger", "isNaN", "isSafeInteger"]) {
+    same("Number." + name, Number[name], (f) => f(x));
+  }
+  same("globalThis.isNaN", isNaN, (f) => f(x));
+  same("globalThis.isFinite", isFinite, (f) => f(x));
+  same("globalThis.Number", Number, (f) => f(x));
+  same("globalThis.Number", Number, (f) => Number.prototype.valueOf.call(Reflect.construct(f, [x])));
+}
+same("globalThis.Number", Number, (f) => f());
+for (const s of ["12", "  -12.5e3xyz", "0x1F", "0b11", "Infinity", "-Infinity", "", "abc", "1e1000", ".5", "08", toPrim(3)]) {
+  for (const r of [undefined, 0, 2, 10, 16, 36, 37, 1, "16", -1]) {
+    same("globalThis.parseInt", parseInt, (f) => f(s, r));
+  }
+  same("globalThis.parseFloat", parseFloat, (f) => f(s));
+}
+const mathArgs = [0, -0, 1, -1, 0.5, -0.5, 2.5, -2.5, 1e300, -1e-300, NaN, Infinity, -Infinity, "3", null, undefined, true, toPrim(2), 2 ** 32 + 5, -(2 ** 31)];
+for (const name of ["abs", "acos", "acosh", "asin", "asinh", "atan", "atanh", "cbrt", "ceil", "clz32", "cos", "cosh", "exp", "expm1", "floor", "fround", "log", "log1p", "log10", "log2", "round", "sign", "sin", "sinh", "sqrt", "tan", "tanh", "trunc"]) {
+  for (const x of mathArgs) {
+    same("Math." + name, Math[name], (f) => f(x));
+  }
+  same("Math." + name, Math[name], () => installed["Math." + name].length === Math[name].length);
+}
+for (const x of mathArgs) {
+  for (const y of [0, -0, 1, -1, NaN, Infinity, 3, "2"]) {
+    for (const name of ["atan2", "imul", "pow", "max", "min", "hypot"]) {
+      same("Math." + name, Math[name], (f) => f(x, y));
+    }
+  }
+}
+for (const name of ["max", "min", "hypot"]) {
+  same("Math." + name, Math[name], (f) => f());
+  same("Math." + name, Math[name], (f) => f(1, 2, 3, NaN, Infinity));
+  same("Math." + name, Math[name], (f) => f(NaN, Infinity));
+  same("Math." + name, Math[name], (f, log) => f(valueOfObj(1, log), valueOfObj(2, log)));
+  same("Math." + name, Math[name], () => installed["Math." + name].length === Math[name].length);
+}
+function C0() {}
+const bound = C0.bind(null);
+for (const v of [new C0(), {}, 5, Object.create(C0.prototype)]) {
+  same("Function.prototype[Symbol.hasInstance]", Function.prototype[Symbol.hasInstance], (f) => f.call(C0, v));
+  same("Function.prototype[Symbol.hasInstance]", Function.prototype[Symbol.hasInstance], (f) => f.call({}, v));
 }
 
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));
