@@ -63,7 +63,10 @@ impl Type {
     }
 
     pub fn is_numeric(self) -> bool {
-        matches!(self, Type::I32 | Type::U32 | Type::F64 | Type::IntLit(_) | Type::NumLit)
+        matches!(
+            self,
+            Type::I32 | Type::U32 | Type::F64 | Type::IntLit(_) | Type::NumLit
+        )
     }
 }
 
@@ -122,18 +125,64 @@ pub struct Block {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
-    Decl { kind: DeclKind, name: String, ty: TypeRef, init: Expr, span: Span },
-    Assign { target: String, target_span: Span, op: AssignOp, value: Expr, span: Span },
+    Decl {
+        kind: DeclKind,
+        name: String,
+        ty: TypeRef,
+        init: Expr,
+        span: Span,
+    },
+    Assign {
+        target: String,
+        target_span: Span,
+        op: AssignOp,
+        value: Expr,
+        span: Span,
+    },
     /// `x++`, `x--`, `++x`, `--x` as statements.
-    Update { target: String, inc: bool, span: Span },
+    Update {
+        target: String,
+        inc: bool,
+        span: Span,
+    },
     Expr(Expr),
-    If { cond: Expr, then: Box<Stmt>, els: Option<Box<Stmt>>, span: Span },
-    While { cond: Expr, body: Box<Stmt>, span: Span },
-    DoWhile { body: Box<Stmt>, cond: Expr, span: Span },
-    For { init: Option<Box<Stmt>>, cond: Option<Expr>, update: Option<Box<Stmt>>, body: Box<Stmt>, span: Span },
-    Return { value: Option<Expr>, span: Span },
-    Throw { value: Expr, span: Span },
-    Try { body: Block, catch: Option<Catch>, finally: Option<Block>, span: Span },
+    If {
+        cond: Expr,
+        then: Box<Stmt>,
+        els: Option<Box<Stmt>>,
+        span: Span,
+    },
+    While {
+        cond: Expr,
+        body: Box<Stmt>,
+        span: Span,
+    },
+    DoWhile {
+        body: Box<Stmt>,
+        cond: Expr,
+        span: Span,
+    },
+    For {
+        init: Option<Box<Stmt>>,
+        cond: Option<Expr>,
+        update: Option<Box<Stmt>>,
+        body: Box<Stmt>,
+        span: Span,
+    },
+    Return {
+        value: Option<Expr>,
+        span: Span,
+    },
+    Throw {
+        value: Expr,
+        span: Span,
+    },
+    Try {
+        body: Block,
+        catch: Option<Catch>,
+        finally: Option<Block>,
+        span: Span,
+    },
     Break(Span),
     Continue(Span),
     Block(Block),
@@ -296,7 +345,11 @@ pub enum ExprKind {
     Unary(UnOp, Box<Expr>),
     Binary(BinOp, Box<Expr>, Box<Expr>),
     Cond(Box<Expr>, Box<Expr>, Box<Expr>),
-    Call { callee: String, callee_span: Span, args: Vec<Expr> },
+    Call {
+        callee: String,
+        callee_span: Span,
+        args: Vec<Expr>,
+    },
     Paren(Box<Expr>),
 }
 

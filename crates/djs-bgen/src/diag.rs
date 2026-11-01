@@ -12,11 +12,19 @@ pub struct Span {
 
 impl Span {
     pub fn new(file: u32, start: usize, end: usize) -> Span {
-        Span { file, start: start as u32, end: end as u32 }
+        Span {
+            file,
+            start: start as u32,
+            end: end as u32,
+        }
     }
 
     pub fn to(self, other: Span) -> Span {
-        Span { file: self.file, start: self.start, end: other.end.max(self.end) }
+        Span {
+            file: self.file,
+            start: self.start,
+            end: other.end.max(self.end),
+        }
     }
 }
 
@@ -49,7 +57,10 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     pub fn new(span: Span, message: impl Into<String>) -> Diagnostic {
-        Diagnostic { span, message: message.into() }
+        Diagnostic {
+            span,
+            message: message.into(),
+        }
     }
 }
 
@@ -61,7 +72,10 @@ pub struct Sources {
 
 impl Sources {
     pub fn add(&mut self, name: impl Into<String>, text: impl Into<String>) -> u32 {
-        self.files.push(SourceFile { name: name.into(), text: text.into() });
+        self.files.push(SourceFile {
+            name: name.into(),
+            text: text.into(),
+        });
         (self.files.len() - 1) as u32
     }
 
@@ -82,7 +96,11 @@ impl Sources {
         let (line, col) = f.line_col(d.span.start);
         let text = f.line_text(line);
         let (end_line, end_col) = f.line_col(d.span.end);
-        let width = if end_line == line && end_col > col { end_col - col } else { 1 };
+        let width = if end_line == line && end_col > col {
+            end_col - col
+        } else {
+            1
+        };
         format!(
             "{}:{line}:{col}: error: {}\n  {text}\n  {}{}\n",
             f.name,
@@ -110,6 +128,9 @@ mod tests {
         let start = s.files[0].text.find('é').unwrap();
         let d = Diagnostic::new(Span::new(id, start, start + 3), "bad");
         assert_eq!(s.position(d.span), "a.ts:2:11");
-        assert_eq!(s.render(&d), "a.ts:2:11: error: bad\n    let x = é1;\n            ^^\n");
+        assert_eq!(
+            s.render(&d),
+            "a.ts:2:11: error: bad\n    let x = é1;\n            ^^\n"
+        );
     }
 }

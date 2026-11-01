@@ -9,10 +9,50 @@ use crate::lexer::{Tok, Token, tokenize};
 type PResult<T> = Result<T, Diagnostic>;
 
 const KEYWORDS: &[&str] = &[
-    "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete", "do", "else",
-    "enum", "export", "extends", "false", "finally", "for", "function", "if", "import", "in", "instanceof",
-    "new", "null", "return", "super", "switch", "this", "throw", "true", "try", "typeof", "var", "void",
-    "while", "with", "yield", "let", "static", "await", "async", "undefined", "arguments", "eval",
+    "break",
+    "case",
+    "catch",
+    "class",
+    "const",
+    "continue",
+    "debugger",
+    "default",
+    "delete",
+    "do",
+    "else",
+    "enum",
+    "export",
+    "extends",
+    "false",
+    "finally",
+    "for",
+    "function",
+    "if",
+    "import",
+    "in",
+    "instanceof",
+    "new",
+    "null",
+    "return",
+    "super",
+    "switch",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typeof",
+    "var",
+    "void",
+    "while",
+    "with",
+    "yield",
+    "let",
+    "static",
+    "await",
+    "async",
+    "undefined",
+    "arguments",
+    "eval",
 ];
 
 struct Parser<'a> {
@@ -22,7 +62,10 @@ struct Parser<'a> {
 
 pub fn parse_module(file: u32, src: &str) -> PResult<Module> {
     let toks = tokenize(file, src)?;
-    let mut p = Parser { toks: &toks, pos: 0 };
+    let mut p = Parser {
+        toks: &toks,
+        pos: 0,
+    };
     let mut functions = Vec::new();
     while !p.at_eof() {
         functions.push(p.function()?);
@@ -32,7 +75,10 @@ pub fn parse_module(file: u32, src: &str) -> PResult<Module> {
 
 pub fn parse_declarations(file: u32, src: &str) -> PResult<Declarations> {
     let toks = tokenize(file, src)?;
-    let mut p = Parser { toks: &toks, pos: 0 };
+    let mut p = Parser {
+        toks: &toks,
+        pos: 0,
+    };
     let mut intrinsics = Vec::new();
     while !p.at_eof() {
         if p.is_ident("type") {
@@ -49,19 +95,37 @@ pub fn parse_declarations(file: u32, src: &str) -> PResult<Declarations> {
         p.expect(":")?;
         let ret = p.type_ref()?;
         let end = p.expect(";")?;
-        intrinsics.push(IntrinsicDecl { name, params, ret, tags: parse_tags(doc.as_deref()), span: start.to(end) });
+        intrinsics.push(IntrinsicDecl {
+            name,
+            params,
+            ret,
+            tags: parse_tags(doc.as_deref()),
+            span: start.to(end),
+        });
     }
     Ok(Declarations { intrinsics })
 }
 
-/// The `@tags` of a JSDoc comment; other lines are description.
+/// The `@tags` of a JSDoc comment. A tag starts with `@` at the start of a line or
+/// after whitespace and runs to the next tag or the end of the line, so one-line
+/// comments like `/** Description. @leaf */` work. Everything else is description.
 pub fn parse_tags(doc: Option<&str>) -> Vec<Tag> {
     let mut tags = Vec::new();
     for line in doc.unwrap_or("").lines() {
         let line = line.trim().trim_start_matches('*').trim();
-        if let Some(rest) = line.strip_prefix('@') {
+        let starts: Vec<usize> = line
+            .char_indices()
+            .filter(|&(i, c)| c == '@' && (i == 0 || line[..i].ends_with(char::is_whitespace)))
+            .map(|(i, _)| i)
+            .collect();
+        for (n, &start) in starts.iter().enumerate() {
+            let end = starts.get(n + 1).copied().unwrap_or(line.len());
+            let rest = &line[start + 1..end];
             let (name, value) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));
-            tags.push(Tag { name: name.to_string(), value: value.trim().to_string() });
+            tags.push(Tag {
+                name: name.to_string(),
+                value: value.trim().to_string(),
+            });
         }
     }
     tags
@@ -124,7 +188,10 @@ impl Parser<'_> {
             Ok(self.next().span)
         } else {
             let t = self.peek();
-            self.err(t.span, format!("expected `{p}`, found {}", Self::describe(&t.tok)))
+            self.err(
+                t.span,
+                format!("expected `{p}`, found {}", Self::describe(&t.tok)),
+            )
         }
     }
 
@@ -133,7 +200,10 @@ impl Parser<'_> {
             Ok(self.next().span)
         } else {
             let t = self.peek();
-            self.err(t.span, format!("expected `{name}`, found {}", Self::describe(&t.tok)))
+            self.err(
+                t.span,
+                format!("expected `{name}`, found {}", Self::describe(&t.tok)),
+            )
         }
     }
 
@@ -151,7 +221,10 @@ impl Parser<'_> {
                 self.next();
                 Ok((n.clone(), t.span))
             }
-            other => self.err(t.span, format!("expected a name, found {}", Self::describe(other))),
+            other => self.err(
+                t.span,
+                format!("expected a name, found {}", Self::describe(other)),
+            ),
         }
     }
 
@@ -181,7 +254,10 @@ impl Parser<'_> {
         {
             self.next();
             if self.is("|") || (self.is("[") && !array_ok) || self.is("<") || self.is("&") {
-                return self.err(self.peek().span, "only the plain type names of intrinsics.d.ts are in the subset");
+                return self.err(
+                    self.peek().span,
+                    "only the plain type names of intrinsics.d.ts are in the subset",
+                );
             }
             return Ok(TypeRef { ty, span: t.span });
         }
@@ -213,12 +289,18 @@ impl Parser<'_> {
                 let (name, _) = self.ident()?;
                 let optional = self.eat("?");
                 if self.is("=") {
-                    return self.err(self.peek().span, "default parameter values are not in the subset");
+                    return self.err(
+                        self.peek().span,
+                        "default parameter values are not in the subset",
+                    );
                 }
                 self.expect(":")?;
                 let ty = self.type_ref_in(rest)?;
                 if self.is("=") {
-                    return self.err(self.peek().span, "default parameter values are not in the subset");
+                    return self.err(
+                        self.peek().span,
+                        "default parameter values are not in the subset",
+                    );
                 }
                 let mut end = ty.span;
                 if rest {
@@ -231,7 +313,13 @@ impl Parser<'_> {
                 if params.iter().any(|p| p.rest) {
                     return self.err(start, "the rest parameter must be last");
                 }
-                params.push(Param { name, ty, optional, rest, span: start.to(end) });
+                params.push(Param {
+                    name,
+                    ty,
+                    optional,
+                    rest,
+                    span: start.to(end),
+                });
             }
             if !self.eat(",") {
                 break;
@@ -246,18 +334,42 @@ impl Parser<'_> {
         let doc = t.doc.clone();
         match &t.tok {
             Tok::Ident(k) if k == "function" => {}
-            Tok::Ident(k) if k == "async" => return self.err(t.span, "async functions are not in the subset"),
+            Tok::Ident(k) if k == "async" => {
+                return self.err(t.span, "async functions are not in the subset");
+            }
             Tok::Ident(k) if k == "export" || k == "import" => {
-                return self.err(t.span, "builtin files are scripts: no import/export (intrinsics.d.ts is global)");
+                return self.err(
+                    t.span,
+                    "builtin files are scripts: no import/export (intrinsics.d.ts is global)",
+                );
             }
-            Tok::Ident(k) if matches!(k.as_str(), "const" | "let" | "var" | "class" | "type" | "interface") => {
-                return self.err(t.span, "only function declarations are allowed at the top level");
+            Tok::Ident(k)
+                if matches!(
+                    k.as_str(),
+                    "const" | "let" | "var" | "class" | "type" | "interface"
+                ) =>
+            {
+                return self.err(
+                    t.span,
+                    "only function declarations are allowed at the top level",
+                );
             }
-            other => return self.err(t.span, format!("expected a function declaration, found {}", Self::describe(other))),
+            other => {
+                return self.err(
+                    t.span,
+                    format!(
+                        "expected a function declaration, found {}",
+                        Self::describe(other)
+                    ),
+                );
+            }
         }
         self.next();
         if self.is("*") {
-            return self.err(self.peek().span, "generators are not in the subset; write an explicit state object");
+            return self.err(
+                self.peek().span,
+                "generators are not in the subset; write an explicit state object",
+            );
         }
         let (name, name_span) = self.ident()?;
         if self.is("<") {
@@ -265,13 +377,25 @@ impl Parser<'_> {
         }
         let (this_ty, params) = self.params(false)?;
         if !self.is(":") {
-            return self.err(self.peek().span, "the return type must be written explicitly");
+            return self.err(
+                self.peek().span,
+                "the return type must be written explicitly",
+            );
         }
         self.next();
         let ret = self.type_ref()?;
         let body = self.block()?;
         let span = t.span.to(body.span);
-        Ok(Function { name, this_ty, params, ret, body, tags: parse_tags(doc.as_deref()), span, name_span })
+        Ok(Function {
+            name,
+            this_ty,
+            params,
+            ret,
+            body,
+            tags: parse_tags(doc.as_deref()),
+            span,
+            name_span,
+        })
     }
 
     fn block(&mut self) -> PResult<Block> {
@@ -284,7 +408,10 @@ impl Parser<'_> {
             stmts.push(self.stmt()?);
         }
         let end = self.expect("}")?;
-        Ok(Block { stmts, span: start.to(end) })
+        Ok(Block {
+            stmts,
+            span: start.to(end),
+        })
     }
 
     fn stmt(&mut self) -> PResult<Stmt> {
@@ -319,8 +446,16 @@ impl Parser<'_> {
                 } else {
                     None
                 };
-                let end = els.as_ref().map(|s| stmt_span(s)).unwrap_or_else(|| stmt_span(&then));
-                Ok(Stmt::If { cond, then, els, span: t.span.to(end) })
+                let end = els
+                    .as_ref()
+                    .map(|s| stmt_span(s))
+                    .unwrap_or_else(|| stmt_span(&then));
+                Ok(Stmt::If {
+                    cond,
+                    then,
+                    els,
+                    span: t.span.to(end),
+                })
             }
             "while" => {
                 self.next();
@@ -339,13 +474,20 @@ impl Parser<'_> {
                 let cond = self.expr()?;
                 self.expect(")")?;
                 let end = self.expect(";")?;
-                Ok(Stmt::DoWhile { body, cond, span: t.span.to(end) })
+                Ok(Stmt::DoWhile {
+                    body,
+                    cond,
+                    span: t.span.to(end),
+                })
             }
             "for" => {
                 self.next();
                 self.expect("(")?;
                 if matches!(&self.peek_at(2).tok, Tok::Ident(w) if w == "of" || w == "in") {
-                    return self.err(self.peek_at(2).span, "for-in and for-of are not in the subset; use an index loop");
+                    return self.err(
+                        self.peek_at(2).span,
+                        "for-in and for-of are not in the subset; use an index loop",
+                    );
                 }
                 let init = if self.is(";") {
                     None
@@ -355,28 +497,55 @@ impl Parser<'_> {
                     Some(Box::new(self.simple_stmt()?))
                 };
                 if self.is_ident("of") || self.is_ident("in") {
-                    return self.err(self.peek().span, "for-in and for-of are not in the subset; use an index loop");
+                    return self.err(
+                        self.peek().span,
+                        "for-in and for-of are not in the subset; use an index loop",
+                    );
                 }
                 self.expect(";")?;
-                let cond = if self.is(";") { None } else { Some(self.expr()?) };
+                let cond = if self.is(";") {
+                    None
+                } else {
+                    Some(self.expr()?)
+                };
                 self.expect(";")?;
-                let update = if self.is(")") { None } else { Some(Box::new(self.simple_stmt()?)) };
+                let update = if self.is(")") {
+                    None
+                } else {
+                    Some(Box::new(self.simple_stmt()?))
+                };
                 self.expect(")")?;
                 let body = Box::new(self.stmt()?);
                 let span = t.span.to(stmt_span(&body));
-                Ok(Stmt::For { init, cond, update, body, span })
+                Ok(Stmt::For {
+                    init,
+                    cond,
+                    update,
+                    body,
+                    span,
+                })
             }
             "return" => {
                 self.next();
-                let value = if self.is(";") { None } else { Some(self.expr()?) };
+                let value = if self.is(";") {
+                    None
+                } else {
+                    Some(self.expr()?)
+                };
                 let end = self.expect(";")?;
-                Ok(Stmt::Return { value, span: t.span.to(end) })
+                Ok(Stmt::Return {
+                    value,
+                    span: t.span.to(end),
+                })
             }
             "throw" => {
                 self.next();
                 let value = self.expr()?;
                 let end = self.expect(";")?;
-                Ok(Stmt::Throw { value, span: t.span.to(end) })
+                Ok(Stmt::Throw {
+                    value,
+                    span: t.span.to(end),
+                })
             }
             "try" => {
                 self.next();
@@ -396,7 +565,10 @@ impl Parser<'_> {
                     } else {
                         None
                     };
-                    Some(Catch { name, body: self.block()? })
+                    Some(Catch {
+                        name,
+                        body: self.block()?,
+                    })
                 } else {
                     None
                 };
@@ -409,8 +581,17 @@ impl Parser<'_> {
                 if catch.is_none() && finally.is_none() {
                     return self.err(t.span, "`try` needs `catch` or `finally`");
                 }
-                let end = finally.as_ref().map(|b| b.span).or(catch.as_ref().map(|c| c.body.span)).unwrap();
-                Ok(Stmt::Try { body, catch, finally, span: t.span.to(end) })
+                let end = finally
+                    .as_ref()
+                    .map(|b| b.span)
+                    .or(catch.as_ref().map(|c| c.body.span))
+                    .unwrap();
+                Ok(Stmt::Try {
+                    body,
+                    catch,
+                    finally,
+                    span: t.span.to(end),
+                })
             }
             "break" | "continue" => {
                 self.next();
@@ -419,12 +600,20 @@ impl Parser<'_> {
                 }
                 let end = self.expect(";")?;
                 let span = t.span.to(end);
-                Ok(if word == "break" { Stmt::Break(span) } else { Stmt::Continue(span) })
+                Ok(if word == "break" {
+                    Stmt::Break(span)
+                } else {
+                    Stmt::Continue(span)
+                })
             }
             "switch" => self.err(t.span, "`switch` is not in the subset; use if/else"),
             "with" => self.err(t.span, "`with` is not in the subset"),
-            "function" | "class" => self.err(t.span, "nested functions and classes are not in the subset"),
-            _ if matches!(self.peek_at(1).tok, Tok::Punct(":")) => self.err(t.span, "labels are not in the subset"),
+            "function" | "class" => {
+                self.err(t.span, "nested functions and classes are not in the subset")
+            }
+            _ if matches!(self.peek_at(1).tok, Tok::Punct(":")) => {
+                self.err(t.span, "labels are not in the subset")
+            }
             _ => {
                 let s = self.simple_stmt()?;
                 self.expect(";")?;
@@ -436,7 +625,11 @@ impl Parser<'_> {
     /// `const|let name: T = expr` (without the semicolon).
     fn decl(&mut self) -> PResult<Stmt> {
         let t = self.next().clone();
-        let kind = if t.tok == Tok::Ident("const".into()) { DeclKind::Const } else { DeclKind::Let };
+        let kind = if t.tok == Tok::Ident("const".into()) {
+            DeclKind::Const
+        } else {
+            DeclKind::Let
+        };
         let (name, name_span) = self.ident()?;
         if !self.is(":") {
             return self.err(name_span, format!("`{name}` needs a type annotation"));
@@ -449,7 +642,13 @@ impl Parser<'_> {
         self.next();
         let init = self.expr()?;
         let span = t.span.to(init.span);
-        Ok(Stmt::Decl { kind, name, ty, init, span })
+        Ok(Stmt::Decl {
+            kind,
+            name,
+            ty,
+            init,
+            span,
+        })
     }
 
     /// An assignment, an update (`x++`) or an expression, without the semicolon.
@@ -458,7 +657,11 @@ impl Parser<'_> {
         if self.is("++") || self.is("--") {
             let inc = self.next().tok == Tok::Punct("++");
             let (target, span) = self.ident()?;
-            return Ok(Stmt::Update { target, inc, span: start.to(span) });
+            return Ok(Stmt::Update {
+                target,
+                inc,
+                span: start.to(span),
+            });
         }
         if let Tok::Ident(_) = &self.peek().tok
             && let Tok::Punct(p) = self.peek_at(1).tok
@@ -466,14 +669,24 @@ impl Parser<'_> {
             if p == "++" || p == "--" {
                 let (target, _) = self.ident()?;
                 let end = self.next().span;
-                return Ok(Stmt::Update { target, inc: p == "++", span: start.to(end) });
+                return Ok(Stmt::Update {
+                    target,
+                    inc: p == "++",
+                    span: start.to(end),
+                });
             }
             if let Some(op) = assign_op(p) {
                 let (target, target_span) = self.ident()?;
                 self.next();
                 let value = self.expr()?;
                 let span = start.to(value.span);
-                return Ok(Stmt::Assign { target, target_span, op, value, span });
+                return Ok(Stmt::Assign {
+                    target,
+                    target_span,
+                    op,
+                    value,
+                    span,
+                });
             }
             if matches!(p, "**=" | ">>>=" | "&&=" | "||=" | "??=") {
                 return self.err(self.peek_at(1).span, format!("`{p}` is not in the subset"));
@@ -495,11 +708,17 @@ impl Parser<'_> {
             self.expect(":")?;
             let b = self.expr()?;
             let span = cond.span.to(b.span);
-            return Ok(Expr { kind: ExprKind::Cond(Box::new(cond), Box::new(a), Box::new(b)), span });
+            return Ok(Expr {
+                kind: ExprKind::Cond(Box::new(cond), Box::new(a), Box::new(b)),
+                span,
+            });
         }
         if let Tok::Punct(p) = self.peek().tok {
             if assign_op(p).is_some() {
-                return self.err(self.peek().span, "assignments are statements in the subset, not expressions");
+                return self.err(
+                    self.peek().span,
+                    "assignments are statements in the subset, not expressions",
+                );
             }
             if p == "=>" {
                 return self.err(self.peek().span, "arrow functions are not in the subset");
@@ -522,7 +741,9 @@ impl Parser<'_> {
                         break;
                     }
                 },
-                Tok::Ident(w) if w == "in" || w == "instanceof" || w == "as" || w == "satisfies" => {
+                Tok::Ident(w)
+                    if w == "in" || w == "instanceof" || w == "as" || w == "satisfies" =>
+                {
                     return self.err(t.span, format!("`{w}` is not in the subset"));
                 }
                 _ => break,
@@ -534,7 +755,10 @@ impl Parser<'_> {
             self.next();
             let right = self.binary(prec + 1)?;
             let span = left.span.to(right.span);
-            left = Expr { kind: ExprKind::Binary(op, Box::new(left), Box::new(right)), span };
+            left = Expr {
+                kind: ExprKind::Binary(op, Box::new(left), Box::new(right)),
+                span,
+            };
         }
         Ok(left)
     }
@@ -545,9 +769,18 @@ impl Parser<'_> {
             Tok::Punct("!") => Some(UnOp::Not),
             Tok::Punct("-") => Some(UnOp::Neg),
             Tok::Punct("~") => Some(UnOp::BitNot),
-            Tok::Punct("+") => return self.err(t.span, "unary `+` is not in the subset; use a conversion intrinsic"),
-            Tok::Punct("++" | "--") => return self.err(t.span, "`++` and `--` are statements in the subset"),
-            Tok::Ident(w) if matches!(w.as_str(), "typeof" | "void" | "delete" | "await" | "yield") => {
+            Tok::Punct("+") => {
+                return self.err(
+                    t.span,
+                    "unary `+` is not in the subset; use a conversion intrinsic",
+                );
+            }
+            Tok::Punct("++" | "--") => {
+                return self.err(t.span, "`++` and `--` are statements in the subset");
+            }
+            Tok::Ident(w)
+                if matches!(w.as_str(), "typeof" | "void" | "delete" | "await" | "yield") =>
+            {
                 return self.err(t.span, format!("`{w}` is not in the subset"));
             }
             _ => None,
@@ -556,7 +789,10 @@ impl Parser<'_> {
             self.next();
             let e = self.unary()?;
             let span = t.span.to(e.span);
-            return Ok(Expr { kind: ExprKind::Unary(op, Box::new(e)), span });
+            return Ok(Expr {
+                kind: ExprKind::Unary(op, Box::new(e)),
+                span,
+            });
         }
         let e = self.primary()?;
         match &self.peek().tok {
@@ -565,8 +801,14 @@ impl Parser<'_> {
                 "property access is not in the subset; use an intrinsic such as Get(o, key)",
             ),
             Tok::Punct("(") => self.err(self.peek().span, "only named functions can be called"),
-            Tok::Punct("++" | "--") => self.err(self.peek().span, "`++` and `--` are statements in the subset"),
-            Tok::Punct("!") => self.err(self.peek().span, "non-null assertions are not in the subset"),
+            Tok::Punct("++" | "--") => self.err(
+                self.peek().span,
+                "`++` and `--` are statements in the subset",
+            ),
+            Tok::Punct("!") => self.err(
+                self.peek().span,
+                "non-null assertions are not in the subset",
+            ),
             _ => Ok(e),
         }
     }
@@ -584,15 +826,26 @@ impl Parser<'_> {
             }
             Tok::Punct("(") => {
                 self.next();
-                if self.is(")") || matches!((&self.peek().tok, &self.peek_at(1).tok), (Tok::Ident(_), Tok::Punct(":" | ","))) {
+                if self.is(")")
+                    || matches!(
+                        (&self.peek().tok, &self.peek_at(1).tok),
+                        (Tok::Ident(_), Tok::Punct(":" | ","))
+                    )
+                {
                     return self.err(t.span, "arrow functions are not in the subset");
                 }
                 let e = self.expr()?;
                 let end = self.expect(")")?;
-                return Ok(Expr { kind: ExprKind::Paren(Box::new(e)), span: t.span.to(end) });
+                return Ok(Expr {
+                    kind: ExprKind::Paren(Box::new(e)),
+                    span: t.span.to(end),
+                });
             }
             Tok::Punct("{" | "[") => {
-                return self.err(t.span, "object and array literals are not in the subset; use intrinsics");
+                return self.err(
+                    t.span,
+                    "object and array literals are not in the subset; use intrinsics",
+                );
             }
             Tok::Ident(w) => match w.as_str() {
                 "true" | "false" => {
@@ -613,7 +866,10 @@ impl Parser<'_> {
                 }
                 "new" => return self.err(t.span, "`new` is not in the subset; use Construct(...)"),
                 "function" | "class" | "async" => {
-                    return self.err(t.span, "function expressions and closures are not in the subset");
+                    return self.err(
+                        t.span,
+                        "function expressions and closures are not in the subset",
+                    );
                 }
                 "super" => return self.err(t.span, "`super` is not in the subset"),
                 _ => {
@@ -623,7 +879,10 @@ impl Parser<'_> {
                         let mut args = Vec::new();
                         while !self.is(")") {
                             if self.is("...") {
-                                return self.err(self.peek().span, "spread arguments are not in the subset");
+                                return self.err(
+                                    self.peek().span,
+                                    "spread arguments are not in the subset",
+                                );
                             }
                             args.push(self.expr()?);
                             if !self.eat(",") {
@@ -631,15 +890,30 @@ impl Parser<'_> {
                             }
                         }
                         let end = self.expect(")")?;
-                        return Ok(Expr { kind: ExprKind::Call { callee: name, callee_span: span, args }, span: span.to(end) });
+                        return Ok(Expr {
+                            kind: ExprKind::Call {
+                                callee: name,
+                                callee_span: span,
+                                args,
+                            },
+                            span: span.to(end),
+                        });
                     }
-                    if self.is("<") && matches!(self.peek_at(1).tok, Tok::Ident(_)) && matches!(self.peek_at(2).tok, Tok::Punct(">")) {
+                    if self.is("<")
+                        && matches!(self.peek_at(1).tok, Tok::Ident(_))
+                        && matches!(self.peek_at(2).tok, Tok::Punct(">"))
+                    {
                         return self.err(self.peek().span, "type arguments are not in the subset");
                     }
                     ExprKind::Ident(name)
                 }
             },
-            other => return self.err(t.span, format!("expected an expression, found {}", Self::describe(other))),
+            other => {
+                return self.err(
+                    t.span,
+                    format!("expected an expression, found {}", Self::describe(other)),
+                );
+            }
         };
         Ok(Expr { kind, span: t.span })
     }
@@ -746,17 +1020,41 @@ mod tests {
         assert_eq!(f.params.len(), 2);
         assert!(f.params[1].optional);
         assert_eq!(f.ret.ty, Type::Obj);
-        assert_eq!(f.tags, [Tag { name: "builtin".into(), value: "Array.prototype.map".into() }, Tag { name: "length".into(), value: "1".into() }]);
+        assert_eq!(
+            f.tags,
+            [
+                Tag {
+                    name: "builtin".into(),
+                    value: "Array.prototype.map".into()
+                },
+                Tag {
+                    name: "length".into(),
+                    value: "1".into()
+                }
+            ]
+        );
         assert_eq!(f.body.stmts.len(), 7);
     }
 
     #[test]
     fn precedence() {
         let m = module("function f(): void { g(1 + 2 * 3 === 7 && !h(), a < b ? c : d - -e); }");
-        let Stmt::Expr(Expr { kind: ExprKind::Call { args, .. }, .. }) = &m.functions[0].body.stmts[0] else { panic!() };
-        let ExprKind::Binary(BinOp::And, l, _) = &args[0].kind else { panic!("{:?}", args[0]) };
-        let ExprKind::Binary(BinOp::StrictEq, l, _) = &l.kind else { panic!() };
-        assert!(matches!(&l.kind, ExprKind::Binary(BinOp::Add, _, r) if matches!(r.kind, ExprKind::Binary(BinOp::Mul, ..))));
+        let Stmt::Expr(Expr {
+            kind: ExprKind::Call { args, .. },
+            ..
+        }) = &m.functions[0].body.stmts[0]
+        else {
+            panic!()
+        };
+        let ExprKind::Binary(BinOp::And, l, _) = &args[0].kind else {
+            panic!("{:?}", args[0])
+        };
+        let ExprKind::Binary(BinOp::StrictEq, l, _) = &l.kind else {
+            panic!()
+        };
+        assert!(
+            matches!(&l.kind, ExprKind::Binary(BinOp::Add, _, r) if matches!(r.kind, ExprKind::Binary(BinOp::Mul, ..)))
+        );
         assert!(matches!(args[1].kind, ExprKind::Cond(..)));
     }
 
@@ -767,7 +1065,10 @@ mod tests {
             ("function f(): void { o[0]; }", "property access"),
             ("function f(): void { new X(); }", "Construct"),
             ("function f(): void { const g: Value = () => 1; }", "arrow"),
-            ("function f(): void { function g(): void {} }", "nested functions"),
+            (
+                "function f(): void { function g(): void {} }",
+                "nested functions",
+            ),
             ("function* f(): void {}", "generators"),
             ("async function f(): void {}", "async"),
             ("function f(): void { var x: i32 = 1; }", "let"),
@@ -787,7 +1088,10 @@ mod tests {
             ("function f(a: number): void {}", "expected a type"),
             ("function f(a: Value[]): void {}", "plain type names"),
             ("function f(...a: Value): void {}", "rest parameters"),
-            ("function f(a?: Value, b: Value): void {}", "required parameter"),
+            (
+                "function f(a?: Value, b: Value): void {}",
+                "required parameter",
+            ),
             ("function f(a: Value = 1): void {}", "default"),
             ("function f(): void { g(a as Obj); }", "`as`"),
             ("function f(): void { g(...a); }", "spread"),
@@ -798,12 +1102,27 @@ mod tests {
             ("function f(): void { ; }", "empty statements"),
             ("function f(): void { f()(); }", "named functions"),
             ("function f(): void { try {} }", "catch"),
-            ("function f(): void { try {} catch (e: Obj) {} }", "type Value"),
+            (
+                "function f(): void { try {} catch (e: Obj) {} }",
+                "type Value",
+            ),
         ];
         for (src, want) in cases {
             let e = error(src);
             assert!(e.contains(want), "{src}: `{e}` does not mention `{want}`");
         }
+    }
+
+    #[test]
+    fn tags() {
+        let t = parse_tags(Some(
+            " Does X. @leaf\n * @builtin A.b @length 2\n * mail me@example.com\n",
+        ));
+        let names: Vec<(&str, &str)> = t
+            .iter()
+            .map(|t| (t.name.as_str(), t.value.as_str()))
+            .collect();
+        assert_eq!(names, [("leaf", ""), ("builtin", "A.b"), ("length", "2")]);
     }
 
     #[test]
@@ -820,7 +1139,9 @@ mod tests {
         assert!(d.intrinsics[0].params[2].rest);
         assert_eq!(d.intrinsics[0].tags[0].name, "reentrant");
         assert_eq!(d.intrinsics[1].ret.ty, Type::Bool);
-        assert!(parse_declarations(0, "declare function F(...a: Value[], b: Value): void;").is_err());
+        assert!(
+            parse_declarations(0, "declare function F(...a: Value[], b: Value): void;").is_err()
+        );
         assert!(parse_declarations(0, "function F(): void;").is_err());
     }
 }

@@ -27,10 +27,10 @@ pub struct Token {
 
 // Longest first, so that maximal munch is a linear scan.
 const PUNCTS: &[&str] = &[
-    ">>>=", "...", "===", "!==", "**=", "<<=", ">>=", ">>>", "&&=", "||=", "??=", "=>", "==", "!=", "<=",
-    ">=", "&&", "||", "??", "?.", "++", "--", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<", ">>",
-    "**", "{", "}", "(", ")", "[", "]", ";", ",", "<", ">", "+", "-", "*", "/", "%", "&", "|", "^", "!",
-    "~", "?", ":", "=", ".", "@", "#",
+    ">>>=", "...", "===", "!==", "**=", "<<=", ">>=", ">>>", "&&=", "||=", "??=", "=>", "==", "!=",
+    "<=", ">=", "&&", "||", "??", "?.", "++", "--", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=",
+    "<<", ">>", "**", "{", "}", "(", ")", "[", "]", ";", ",", "<", ">", "+", "-", "*", "/", "%",
+    "&", "|", "^", "!", "~", "?", ":", "=", ".", "@", "#",
 ];
 
 pub fn tokenize(file: u32, src: &str) -> Result<Vec<Token>, Diagnostic> {
@@ -73,31 +73,54 @@ pub fn tokenize(file: u32, src: &str) -> Result<Vec<Token>, Diagnostic> {
             }
             Tok::Ident(src[start..i].to_string())
         } else if c >= 0x80 {
-            return Err(Diagnostic::new(span(i, i + 1), "non-ASCII characters are only allowed in strings and comments"));
-        } else if c.is_ascii_digit() || (c == b'.' && b.get(i + 1).is_some_and(u8::is_ascii_digit)) {
+            return Err(Diagnostic::new(
+                span(i, i + 1),
+                "non-ASCII characters are only allowed in strings and comments",
+            ));
+        } else if c.is_ascii_digit() || (c == b'.' && b.get(i + 1).is_some_and(u8::is_ascii_digit))
+        {
             i = lex_number(src, i).map_err(|m| Diagnostic::new(span(start, start + 1), m))?;
             let text = &src[start..i];
-            let value = if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
-                u64::from_str_radix(hex, 16).map(|v| v as f64).map_err(|_| Diagnostic::new(span(start, i), "bad hex literal"))?
-            } else {
-                text.parse::<f64>().map_err(|_| Diagnostic::new(span(start, i), "bad number literal"))?
-            };
+            let value =
+                if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+                    u64::from_str_radix(hex, 16)
+                        .map(|v| v as f64)
+                        .map_err(|_| Diagnostic::new(span(start, i), "bad hex literal"))?
+                } else {
+                    text.parse::<f64>()
+                        .map_err(|_| Diagnostic::new(span(start, i), "bad number literal"))?
+                };
             Tok::Num(value, text.to_string())
         } else if c == b'"' || c == b'\'' {
-            let (value, end) = lex_string(src, i).map_err(|(at, m)| Diagnostic::new(span(at, at + 1), m))?;
+            let (value, end) =
+                lex_string(src, i).map_err(|(at, m)| Diagnostic::new(span(at, at + 1), m))?;
             i = end;
             Tok::Str(value)
         } else if c == b'`' {
-            return Err(Diagnostic::new(span(i, i + 1), "template literals are not in the subset; use `+` on Str"));
+            return Err(Diagnostic::new(
+                span(i, i + 1),
+                "template literals are not in the subset; use `+` on Str",
+            ));
         } else if let Some(p) = PUNCTS.iter().find(|p| src[i..].starts_with(**p)) {
             i += p.len();
             Tok::Punct(p)
         } else {
-            return Err(Diagnostic::new(span(i, i + 1), format!("unexpected character `{}`", c as char)));
+            return Err(Diagnostic::new(
+                span(i, i + 1),
+                format!("unexpected character `{}`", c as char),
+            ));
         };
-        out.push(Token { tok, span: span(start, i), doc: doc.take() });
+        out.push(Token {
+            tok,
+            span: span(start, i),
+            doc: doc.take(),
+        });
     }
-    out.push(Token { tok: Tok::Eof, span: span(b.len(), b.len()), doc: doc.take() });
+    out.push(Token {
+        tok: Tok::Eof,
+        span: span(b.len(), b.len()),
+        doc: doc.take(),
+    });
     Ok(out)
 }
 
@@ -140,7 +163,9 @@ fn lex_number(src: &str, mut i: usize) -> Result<usize, &'static str> {
         }
     }
     if i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_') {
-        return Err("numeric separators, BigInt literals and other number forms are not in the subset");
+        return Err(
+            "numeric separators, BigInt literals and other number forms are not in the subset",
+        );
     }
     Ok(i)
 }
@@ -149,7 +174,9 @@ fn lex_number(src: &str, mut i: usize) -> Result<usize, &'static str> {
 fn lex_string(src: &str, start: usize) -> Result<(Vec<u16>, usize), (usize, &'static str)> {
     let quote = src.as_bytes()[start] as char;
     let mut out = Vec::new();
-    let mut chars = src[start + 1..].char_indices().map(|(k, c)| (start + 1 + k, c));
+    let mut chars = src[start + 1..]
+        .char_indices()
+        .map(|(k, c)| (start + 1 + k, c));
     while let Some((at, c)) = chars.next() {
         match c {
             c if c == quote => return Ok((out, at + 1)),
@@ -166,7 +193,9 @@ fn lex_string(src: &str, start: usize) -> Result<(Vec<u16>, usize), (usize, &'st
                     '0' => out.push(0),
                     '\\' | '\'' | '"' => out.push(e as u16),
                     'x' => {
-                        let h: String = (0..2).filter_map(|_| chars.next().map(|(_, c)| c)).collect();
+                        let h: String = (0..2)
+                            .filter_map(|_| chars.next().map(|(_, c)| c))
+                            .collect();
                         out.push(u16::from_str_radix(&h, 16).map_err(|_| (at, "bad \\x escape"))?);
                     }
                     'u' => {
@@ -180,7 +209,10 @@ fn lex_string(src: &str, start: usize) -> Result<(Vec<u16>, usize), (usize, &'st
                                     None => return Err((at, "bad \\u escape")),
                                 }
                             }
-                            u32::from_str_radix(&h, 16).ok().filter(|&v| v <= 0x10ffff).ok_or((at, "bad \\u escape"))?
+                            u32::from_str_radix(&h, 16)
+                                .ok()
+                                .filter(|&v| v <= 0x10ffff)
+                                .ok_or((at, "bad \\u escape"))?
                         } else {
                             let mut h: String = first.into_iter().collect();
                             h.extend((0..3).filter_map(|_| chars.next().map(|(_, c)| c)));
@@ -212,7 +244,11 @@ mod tests {
     use super::*;
 
     fn toks(src: &str) -> Vec<Tok> {
-        tokenize(0, src).unwrap().into_iter().map(|t| t.tok).collect()
+        tokenize(0, src)
+            .unwrap()
+            .into_iter()
+            .map(|t| t.tok)
+            .collect()
     }
 
     #[test]
