@@ -1,4 +1,5 @@
-// The wasm twin of src/abidrive.rs: the same export calls in the same order.
+// The wasm twin of crates/djs-difftest/src/bin/djs-abidrive.rs: the same export calls in
+// the same order, so native and wasm images can be compared (0072).
 // usage: node abidrive.mjs <wasm> <body.js> <slice> [trace-every] [raw-out]
 import { readFileSync, writeFileSync } from "node:fs";
 

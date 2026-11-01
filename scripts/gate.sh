@@ -30,6 +30,8 @@ echo "== djs-wasm"
 cargo build -p djs-wasm --target wasm32-unknown-unknown --features compiled-prelude --quiet
 export DJS_WASM="$PWD/target/wasm32-unknown-unknown/debug/djs_wasm.wasm"
 echo "== js tests"; node --test js/test/*.test.ts
+# 0072: native and wasm builds leave byte-identical heap images and spend the same fuel.
+echo "== native vs wasm images"; ./scripts/determinism/native-vs-wasm.sh "$DJS_WASM"
 echo "== wire cross-language"
 wire_dir=$(mktemp -d)
 node js/test/gen-cross.ts "$wire_dir" > /dev/null

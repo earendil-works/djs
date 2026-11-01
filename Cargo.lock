@@ -38,6 +38,7 @@ dependencies = [
  "djs-core",
  "djs-prelude",
  "djs-test262",
+ "djs-wasm",
 ]
 
 [[package]]
