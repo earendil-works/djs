@@ -48,6 +48,19 @@ following 0031's pattern (builtin-language wrappers around leaf intrinsics):
 
 ## Log
 
+### Side task (coordinator): base image vs. djs-core
+- The "Function" instead of "function" seen in djs-cli output came from the agent tool
+  display, which capitalizes the first character of a command's output (`echo function`
+  prints `Function`; `od -c` shows the real bytes). It was not an engine bug and the base
+  was not stale.
+- Checked: cargo reruns djs-prelude's build script whenever djs-core is rebuilt (`cargo
+  build -v` shows `Dirty djs-prelude: the dependency djs-core was rebuilt`, and then the
+  build script runs). After swapping two well-known atoms, the incremental build made a
+  new base and the output was right.
+- The build hash already covered the well-known atoms and symbols (in LAYOUT_HASH). It did
+  not cover realm slot order, object class ids, flag bits or the prelude. Now
+  djs-core/build.rs hashes the non-test sources and prelude.js into BUILD_HASH (D1330).
+
 ## Follow-ups
 
 ## Result

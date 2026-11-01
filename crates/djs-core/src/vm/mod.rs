@@ -36,15 +36,22 @@ const HOST_CALL_REPORTED: u32 = 1;
 /// The generated prelude (`builtins/gen/prelude.js`, D1172).
 const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude.js");
 
-/// The build hash of VM images (D1320): the heap layout, the instruction table and the
-/// intrinsic ids. Images hold bytecode and intrinsic ids, so they load only into a build
-/// with the same hash. Stored in `Roots::BUILD`.
+// `SOURCE_HASH`: the library's non-test sources and the prelude (build.rs, D1330).
+include!(concat!(env!("OUT_DIR"), "/source_hash.rs"));
+
+/// The build hash of VM images (D1320, D1330): the heap layout (with the well-known
+/// atoms), the instruction table, the intrinsic ids and the source hash. Images hold
+/// bytecode and ids of all kinds (realm slots, object classes, flags), so they load only
+/// into the build that made them. Stored in `Roots::BUILD`.
 pub const BUILD_HASH: u32 = {
     use crate::bytecode::intrinsics::INTRINSICS_HASH;
     use crate::bytecode::{OPS_HASH, build_hash};
     build_hash(
-        build_hash(crate::heap::cells::LAYOUT_HASH, OPS_HASH),
-        INTRINSICS_HASH,
+        build_hash(
+            build_hash(crate::heap::cells::LAYOUT_HASH, OPS_HASH),
+            INTRINSICS_HASH,
+        ),
+        SOURCE_HASH,
     )
 };
 

@@ -1663,3 +1663,22 @@ date: 2026-11-01 · by: heap · issue: 0042
 For sync `yield*` (requested by 0041): `yield_star loc` is `yield` with the state 6
 (suspended raw), and `%GeneratorPrototype%` methods return the yielded value itself
 instead of wrapping it in a new iterator result (GeneratorYield ( innerResult )).
+
+
+## D1330: The build hash includes a hash of djs-core's sources
+date: 2026-11-01 · by: num · issue: 0033
+Extends D1320. `crates/djs-core/build.rs` hashes (FNV-1a, `\r` dropped) the non-test Rust
+sources under `src/` (every `*.rs` except `*tests.rs`) and `builtins/gen/prelude.js` into
+`SOURCE_HASH`, and `vm::BUILD_HASH` now combines it with the layout, op and intrinsic
+hashes. Before this, the hash covered the cell layouts, the well-known atom and symbol
+names, the op table and the intrinsic table, but not the other ids an image depends on: the
+realm's slot order (`Intrinsic`), object class numbers, cell flag bits, the meaning of
+slots, or the prelude's code. So an old image could load into a build that reads it
+differently. Now an image loads only into the build that made it. That was already the
+contract (images are not a storage format across djs versions).
+
+Editing a test file does not rebuild the library or the base snapshot. Cargo reruns
+djs-prelude's build script whenever djs-core is rebuilt, which was checked by hand (D1321),
+so the base cannot go stale. The "Function" for `typeof` that agents saw in djs-cli output
+was not an engine bug. The agent tool display capitalizes the first character of a
+command's output (`echo function` shows `Function`); `od -c` shows the real bytes.
