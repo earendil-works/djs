@@ -323,6 +323,15 @@ impl Exec<'_> {
         cached_get(self.heap, slot_at(self.heap, self.template, ic), o, key)
     }
 
+    /// A cached `define_field` (CreateDataProperty of a new key): true if slot `ic`
+    /// applies and `v` was stored. A define site only ever holds an addition
+    /// (`ic_add_fill` with `set` false), so this skips `cached_put`'s other kinds.
+    #[inline(always)]
+    pub(super) fn ic_define(&mut self, obj: Obj, ic: u32, v: Value) -> bool {
+        let at = slot_at(self.heap, self.template, ic);
+        at != 0 && cached_define(self.heap, at, obj, v)
+    }
+
     /// A cached store: true if slot `ic` applies to `obj[key] = v` and `v` was stored.
     #[inline(always)]
     pub(super) fn ic_put(&mut self, obj: Obj, key: Atom, ic: u32, v: Value) -> bool {
@@ -468,9 +477,7 @@ impl Exec<'_> {
         let Some(obj) = o.as_object() else {
             return false;
         };
-        // A define site only ever holds an addition (ic_add_fill with `set` false).
-        let at = slot_at(self.heap, self.template, ic);
-        if at == 0 || !cached_define(self.heap, at, obj, v) {
+        if !self.ic_define(obj, ic, v) {
             return false;
         }
         // `obj v -> obj`

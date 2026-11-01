@@ -163,7 +163,11 @@ impl Exec<'_> {
     /// addition may allocate (never collect), like `set_element_fast`.
     #[inline(always)]
     fn field_hit(&mut self, op: u8, key: Atom, ic: u32, o: Value, v: Value) -> Option<Value> {
-        if op == fast::PUT_FIELD || op == fast::DEFINE_FIELD {
+        if op == fast::DEFINE_FIELD {
+            let obj = o.as_object()?;
+            return self.ic_define(obj, ic, v).then_some(Value::UNDEFINED);
+        }
+        if op == fast::PUT_FIELD {
             let obj = o.as_object()?;
             return self.ic_put(obj, key, ic, v).then_some(Value::UNDEFINED);
         }
