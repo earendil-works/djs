@@ -3010,3 +3010,55 @@ fn memory_per_object_report() {
         std::println!("{name}: {:.1} B/object", (after - before) as f64 / n as f64);
     }
 }
+
+// ---- Fuel debt (D1740) -------------------------------------------------------------------
+
+#[test]
+fn a_fuel_budget_stops_at_the_same_point_for_any_slice() {
+    // Ordinary code and expensive leaf ops (long string searches, splits). A budget of
+    // k * B fuel, given as one run or as B/s runs of s fuel, must stop at the same
+    // instruction with the same state: the overshoot of each slice carries to the next
+    // (before D1740 it was forgiven, so small slices got further). Known exceptions
+    // (0074's log): code whose fuel depends on collection points (append buffers) until
+    // 0071 removes the collection at the start of `run`, and regexp scans.
+    let src = "globalThis.s = 'xy'.repeat(20000);\n\
+               globalThis.k = 0;\n\
+               for (let i = 0; ; i++) {\n\
+                 k += s.indexOf('yz', i % 7) + s.lastIndexOf('q') + s.split('y').length;\n\
+                 const a = [5, 3, 9, 1, 7, i % 13];\n\
+                 a.sort((p, q) => p - q);\n\
+                 k += a[2];\n\
+               }\n";
+    const B: u64 = 60_060;
+    let states = |slice: u64, suspend: bool| {
+        let mut vm = vm();
+        let f = vm
+            .compile(
+                src.as_bytes(),
+                &crate::compiler::CompileOptions::script("t.js"),
+            )
+            .unwrap();
+        let this = Value::object(vm.global());
+        vm.call(f, this, &[]).unwrap();
+        let mut states = Vec::new();
+        for _ in 0..8 {
+            for _ in 0..B / slice {
+                assert_eq!(vm.run(slice), Status::OutOfFuel);
+                if suspend {
+                    let opts = vm.options();
+                    vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();
+                }
+            }
+            states.push((vm.canonical_hash().unwrap(), vm.backtrace()));
+        }
+        states
+    };
+    let reference = states(B, false);
+    for (slice, suspend) in [(30_030, false), (4620, true), (143, false), (13, false)] {
+        assert_eq!(
+            states(slice, suspend),
+            reference,
+            "slice {slice}, suspend {suspend}"
+        );
+    }
+}

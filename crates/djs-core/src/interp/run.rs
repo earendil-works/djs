@@ -197,6 +197,9 @@ pub(crate) struct Exec<'h> {
     /// collection when it runs out of memory (D1700): their count, or `NO_RETRY`.
     retry_len: u32,
     retry_ops: [Value; 4],
+    /// The fuel the run started its instructions with (after paying the debt, D1740);
+    /// `None` while it has not executed any (it returned a status right away).
+    fuel_start: Option<i64>,
 }
 
 /// `Exec::retry_len` when the current instruction is not retried.
@@ -238,6 +241,7 @@ impl<'h> Exec<'h> {
             host_oom: false,
             retry_len: NO_RETRY,
             retry_ops: [Value::UNDEFINED; 4],
+            fuel_start: None,
         }
     }
 
@@ -249,9 +253,11 @@ impl<'h> Exec<'h> {
         self.fuel = 0;
     }
 
-    /// The fuel left after `run` (negative by the overshoot of the last instruction).
-    pub(crate) fn fuel_left(&self) -> i64 {
-        self.fuel
+    /// The fuel the last `run` spent on instructions (its overshoot included, the debt
+    /// it paid not: D1740).
+    pub(crate) fn fuel_used(&self) -> u64 {
+        self.fuel_start
+            .map_or(0, |start| start.saturating_sub(self.fuel).max(0) as u64)
     }
 
     /// The current pc (for `Vm::backtrace`).
@@ -942,6 +948,11 @@ impl<'h> Exec<'h> {
     /// Runs with `fuel`.
     pub fn run(&mut self, fuel: u64) -> Status {
         let st = self.run_loop(fuel);
+        // D1740: a run that executed instructions carries its overshoot to the next one
+        // (and has paid the debt it started with).
+        if self.fuel_start.is_some() {
+            state::set_fuel_debt(self.heap, -self.fuel);
+        }
         if self.host_oom {
             self.flush();
             return Status::HostOutOfMemory;
@@ -975,6 +986,10 @@ impl<'h> Exec<'h> {
             }
         }
         self.safepoint();
+        // Pay the overshoot of the previous run first (D1740): with a debt larger than
+        // the fuel, the run stops at once and the rest of the debt carries on.
+        self.fuel = self.fuel.saturating_sub(state::fuel_debt(self.heap));
+        self.fuel_start = Some(self.fuel);
         loop {
             if self.fuel <= 0 {
                 self.flush();

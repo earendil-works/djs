@@ -400,6 +400,10 @@ cells! {
         INBOX: Ref = 72,
         /// Index of the first unapplied entry in [`Interp::INBOX`].
         INBOX_HEAD: u32 = 76,
+        /// Fuel the last run overshot by (D1740): its last instruction cost more than was
+        /// left. The next run that executes instructions starts that much shorter, so a
+        /// call's total fuel does not depend on how it was sliced. A Number, 0 for none.
+        FUEL_DEBT: Value = 80,
     };
 
     /// A realm record: the global object and the intrinsics, indexed by

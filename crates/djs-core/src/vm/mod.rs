@@ -479,6 +479,8 @@ impl Vm {
         for f in [Interp::BP, Interp::HP, Interp::SP, Interp::PC] {
             self.heap.arena_mut().set(i, f, 0);
         }
+        // A new call starts without the previous one's overshoot (D1740).
+        state::set_fuel_debt(&mut self.heap, 0);
         let argc = u32::try_from(args.len()).map_err(|_| HeapError::OutOfMemory)?;
         state::set_state(&mut self.heap, RunState::Running);
         let mut ex = Exec::new(&mut self.heap, self.opts.exec);
@@ -536,6 +538,7 @@ impl Vm {
         run::promise::clear_inbox(&mut self.heap);
         run::promise::clear_rejections(&mut self.heap);
         state::set_pending_throw(&mut self.heap, Value::UNDEFINED);
+        state::set_fuel_debt(&mut self.heap, 0);
         state::set_outcome(&mut self.heap, RunState::Idle, Value::UNDEFINED);
     }
 
@@ -558,8 +561,7 @@ impl Vm {
     pub fn run_metered(&mut self, fuel: u64) -> (Status, u64) {
         let mut ex = Exec::new(&mut self.heap, self.opts.exec);
         let st = ex.run(fuel);
-        let given = fuel.min(i64::MAX as u64) as i64;
-        let used = given.saturating_sub(ex.fuel_left()).max(0) as u64;
+        let used = ex.fuel_used();
         (self.after_run(st), used)
     }
 

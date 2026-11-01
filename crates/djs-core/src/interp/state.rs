@@ -98,6 +98,20 @@ pub(crate) fn set_outcome(heap: &mut Heap, s: RunState, v: Value) {
     a.set(i, Interp::STATE, s as u32);
 }
 
+/// The fuel overshoot carried to the next run (D1740).
+pub(crate) fn fuel_debt(heap: &Heap) -> i64 {
+    heap.arena()
+        .get::<Value>(interp(heap), Interp::FUEL_DEBT)
+        .as_number()
+        .map_or(0, |n| n as i64)
+}
+
+pub(crate) fn set_fuel_debt(heap: &mut Heap, debt: i64) {
+    let i = interp(heap);
+    heap.arena_mut()
+        .set(i, Interp::FUEL_DEBT, Value::number(debt.max(0) as f64));
+}
+
 /// The exception a `ThrowPending` VM throws at the parked call.
 pub(crate) fn pending_throw(heap: &Heap) -> Value {
     heap.arena().get(interp(heap), Interp::THROW)

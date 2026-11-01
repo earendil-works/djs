@@ -27,7 +27,7 @@ const NATIVE_STACK: u32 = 8;
 /// Fuel per loop back-edge and per call from native code (bytecode charges per
 /// instruction; a native loop iteration does the work of a few dozen of them).
 const BACKEDGE_FUEL: i64 = 4;
-const CALL_FUEL: i64 = 2;
+pub(super) const CALL_FUEL: i64 = 2;
 
 /// A generated native function (`builtins/gen/natives.rs`).
 pub(crate) struct NativeFn {

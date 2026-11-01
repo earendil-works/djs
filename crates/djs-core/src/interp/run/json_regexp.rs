@@ -323,6 +323,16 @@ impl Exec<'_> {
     /// `run` executes the same `call_intrinsic` again and continues from there (D1332).
     fn suspend_in(&mut self, slot: u32, progress: Value) -> Step {
         self.set(slot, progress);
+        // The resume dispatches this intrinsic again and charges it again (the
+        // `call_intrinsic` instruction, or a native builtin's call): give back this
+        // dispatch's charge, so a suspension costs nothing extra (D1740).
+        self.fuel += if self.native != 0 {
+            super::native::CALL_FUEL
+        } else {
+            crate::bytecode::OPS[crate::bytecode::Op::CallIntrinsic as usize]
+                .cost
+                .fuel() as i64
+        };
         self.flush();
         Ok(Some(Status::OutOfFuel))
     }
