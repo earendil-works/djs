@@ -536,12 +536,11 @@ fn emit_function(
         FuncKind::Method => func_flags::KIND_METHOD,
         FuncKind::Getter => func_flags::KIND_GETTER,
         FuncKind::Setter => func_flags::KIND_SETTER,
-    } | if privileged {
-        func_flags::PRIVILEGED
-    } else {
-        0
     };
     let mut flags = kind;
+    if privileged {
+        flags |= func_flags::PRIVILEGED;
+    }
     if f.is_async {
         flags |= func_flags::ASYNC;
     }
