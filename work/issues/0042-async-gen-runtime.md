@@ -27,6 +27,16 @@ the host-side gap for unhandled rejections.
       and AsyncFromSyncIteratorPrototype (likely blocked on 0041 until it lands).
 
 ## Log
+- Flags agreed with the lexer (via coordinator): existing `func_flags` bits, any kind.
+- Part 1 (D1420-D1422): function-kind prototypes and constructors; async generators
+  (no new ops; state 4 for await, request queue, builtins/asyncgen.ts);
+  %AsyncIteratorPrototype%, %AsyncFromSyncIteratorPrototype%, %GetAsyncIterator,
+  %AsyncIteratorReturnMethod, %AsyncIteratorCloseThrow; `yield_star` (0041's request).
+  docs/compiler.md 7.7 extended. Tests on hand-assembled bytecode (vm/tests.rs): async
+  generator request queue (order checked against node: qjs never settles a next() queued
+  behind return() on an unstarted async generator), yield_star, for await over sync,
+  async-generator and custom async iterables incl. break-close, function kinds.
+  test262: no change yet (the tests need 0041's syntax).
 
 ## Follow-ups
 
