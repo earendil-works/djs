@@ -2495,7 +2495,80 @@ function DecoratorAccessHas(o) {
   return %HasProperty(%AsObj(o), this);
 }
 
-// builtins/decorators.ts:363 value Symbol.metadata
+// builtins/decorators.ts:362
+function DecoratorReflectFn(reflect, name) {
+  if (!%IsObject(reflect)) {
+    return undefined;
+  }
+  const f = %Get(%AsObj(reflect), name);
+  return %IsCallable(f) ? f : undefined;
+}
+
+// builtins/decorators.ts:378 %ApplyLegacyDecorators
+function ApplyLegacyDecorators(target, key, decs, kind) {
+  let r = undefined;
+  if (kind === 0) {
+    r = target;
+  } else if (kind !== 5) {
+    r = ObjectGetOwnPropertyDescriptor(target, key);
+  }
+  const reflect = %Get(%GlobalObject(), "Reflect");
+  const decorate = DecoratorReflectFn(reflect, "decorate");
+  if (decorate !== undefined) {
+    if (kind === 0) {
+      r = %Call(decorate, reflect, decs, target);
+    } else {
+      r = %Call(decorate, reflect, decs, target, key, r);
+    }
+  } else {
+    const list = %AsObj(decs);
+    let i = LengthOfArrayLike(list);
+    while (i > 0) {
+      i -= 1;
+      const dec = %Get(list, i);
+      if (!%ToBoolean(dec)) {
+        continue;
+      }
+      const res = kind === 0 ? %Call(dec, undefined, r) : %Call(dec, undefined, target, key, r);
+      if (%ToBoolean(res)) {
+        r = res;
+      }
+    }
+  }
+  if (kind === 0) {
+    return r;
+  }
+  if (%ToBoolean(r)) {
+    ObjectDefineProperty(target, key, r);
+  }
+  return undefined;
+}
+
+// builtins/decorators.ts:421 %DecoratorParam
+function DecoratorParam(dec, index) {
+  const data = %NewRecord(2);
+  %RecordSet(data, 0, dec);
+  %RecordSet(data, 1, index);
+  return %NewBuiltinClosure(24, data, 2);
+}
+
+// builtins/decorators.ts:433 %DecoratorParamCall
+function DecoratorParamCall(target, key) {
+  const data = %AsObj(this);
+  %Call(%RecordGet(data, 0), undefined, target, key, %RecordGet(data, 1));
+}
+
+// builtins/decorators.ts:443 %DecoratorMetadata
+function DecoratorMetadata(key, value) {
+  const reflect = %Get(%GlobalObject(), "Reflect");
+  const f = DecoratorReflectFn(reflect, "metadata");
+  if (f === undefined) {
+    return undefined;
+  }
+  return %Call(f, reflect, key, value);
+}
+
+// builtins/decorators.ts:456 value Symbol.metadata
 function SymbolMetadata() {
   return %WellKnownSymbol("metadata");
 }
@@ -11362,6 +11435,10 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallIntrinsic("DecoratorAccessGet", DecoratorAccessGet);
 %InstallIntrinsic("DecoratorAccessSet", DecoratorAccessSet);
 %InstallIntrinsic("DecoratorAccessHas", DecoratorAccessHas);
+%InstallIntrinsic("ApplyLegacyDecorators", ApplyLegacyDecorators);
+%InstallIntrinsic("DecoratorParam", DecoratorParam);
+%InstallIntrinsic("DecoratorParamCall", DecoratorParamCall);
+%InstallIntrinsic("DecoratorMetadata", DecoratorMetadata);
 %InstallIntrinsic("AsyncDisposeFulfilled", AsyncDisposeFulfilled);
 %InstallIntrinsic("AsyncDisposeRejected", AsyncDisposeRejected);
 %InstallIntrinsic("UsingCreate", UsingCreate);

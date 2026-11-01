@@ -351,9 +351,11 @@ pub extern "C" fn vm_collect(vm: u32) -> i32 {
 
 /// Compiles staging[params_len..params_len + src_len] (UTF-8 source). `goal` 0 is a
 /// Script; 1 is a codemode async function body whose parameter names are
-/// staging[0..params_len], separated by `\n`. `goal | 2` parses TypeScript (0048). Returns a handle to the closure, or 0 with
-/// the error (`SyntaxError: ... at line:col`) in the out buffer. Stack traces name the
-/// code `sandbox.js`; `vm_compile_file` names it.
+/// staging[0..params_len], separated by `\n`. `goal | 2` parses TypeScript (0048), `| 4`
+/// with legacy `experimentalDecorators`, `| 8` also with `emitDecoratorMetadata` (0065).
+/// Returns a handle to the closure, or 0 with the error (`SyntaxError: ... at
+/// line:col`) in the out buffer. Stack traces name the code `sandbox.js`;
+/// `vm_compile_file` names it.
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_compile(vm: u32, goal: u32, params_len: usize, src_len: usize) -> u32 {
     compile(vm, goal, 0, params_len, src_len)
@@ -394,6 +396,8 @@ fn compile(vm: u32, goal: u32, name_len: usize, params_len: usize, src_len: usiz
             params: &params,
             privileged: false,
             typescript: goal & 2 != 0,
+            experimental_decorators: goal & 12 != 0,
+            emit_decorator_metadata: goal & 8 != 0,
         };
         let result = slot.vm.compile(&src, &opts).map_err(|e| e.to_string());
         match result {

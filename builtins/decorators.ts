@@ -356,6 +356,99 @@ function DecoratorAccessHas(this: Value, o: Value): boolean {
   return HasProperty(AsObj(o), this);
 }
 
+// ---- TypeScript legacy decorators (experimentalDecorators, 0065 part 2) --------------
+
+/** Reflect[name] (the global Reflect) if it is a function, else undefined: tsc's helpers. */
+function DecoratorReflectFn(reflect: Value, name: Str): Value {
+  if (!IsObject(reflect)) {
+    return undefined;
+  }
+  const f: Value = Get(AsObj(reflect), name);
+  return IsCallable(f) ? f : undefined;
+}
+
+/**
+ * tsc's __decorate(decs, target, key, desc) for one class element or the class
+ * (`kind` 0 class, 5 field, else a method, getter, setter or auto-accessor): uses
+ * Reflect.decorate if it exists, else applies the decorators from the last one; a
+ * truthy result replaces the descriptor (the class), which is defined on the target.
+ * Returns the new class (undefined for an element).
+ * @intrinsic
+ */
+function ApplyLegacyDecorators(target: Value, key: Value, decs: Value, kind: i32): Value {
+  let r: Value = undefined;
+  if (kind === 0) {
+    r = target;
+  } else if (kind !== 5) {
+    r = ObjectGetOwnPropertyDescriptor(target, key);
+  }
+  const reflect: Value = Get(GlobalObject(), "Reflect");
+  const decorate: Value = DecoratorReflectFn(reflect, "decorate");
+  if (decorate !== undefined) {
+    if (kind === 0) {
+      r = Call(decorate, reflect, decs, target);
+    } else {
+      r = Call(decorate, reflect, decs, target, key, r);
+    }
+  } else {
+    const list: Obj = AsObj(decs);
+    let i: f64 = LengthOfArrayLike(list);
+    while (i > 0) {
+      i -= 1;
+      const dec: Value = Get(list, i);
+      if (!ToBoolean(dec)) {
+        continue;
+      }
+      const res: Value = kind === 0 ? Call(dec, undefined, r) : Call(dec, undefined, target, key, r);
+      if (ToBoolean(res)) {
+        r = res;
+      }
+    }
+  }
+  if (kind === 0) {
+    return r;
+  }
+  if (ToBoolean(r)) {
+    ObjectDefineProperty(target, key, r);
+  }
+  return undefined;
+}
+
+/**
+ * tsc's __param(index, dec): the decorator of parameter `index` as a method decorator.
+ * @intrinsic
+ */
+function DecoratorParam(dec: Value, index: Value): Value {
+  const data: Obj = NewRecord(2);
+  RecordSet(data, 0, dec);
+  RecordSet(data, 1, index);
+  return NewBuiltinClosure(24, data, 2);
+}
+
+/**
+ * The function of DecoratorParam: calls the parameter decorator with (target, key,
+ * index); `this` is the Record [dec, index].
+ * @intrinsic
+ */
+function DecoratorParamCall(this: Value, target: Value, key: Value): void {
+  const data: Obj = AsObj(this);
+  Call(RecordGet(data, 0), undefined, target, key, RecordGet(data, 1));
+}
+
+/**
+ * tsc's __metadata(key, value): Reflect.metadata(key, value) if it exists, else
+ * undefined (a decorator that is skipped).
+ * @intrinsic
+ */
+function DecoratorMetadata(key: Value, value: Value): Value {
+  const reflect: Value = Get(GlobalObject(), "Reflect");
+  const f: Value = DecoratorReflectFn(reflect, "metadata");
+  if (f === undefined) {
+    return undefined;
+  }
+  return Call(f, reflect, key, value);
+}
+
 /**
  * Symbol.metadata, 20.4.2 (decorators proposal).
  * @value Symbol.metadata

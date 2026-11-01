@@ -1,4 +1,5 @@
-//! `djs run [--body] [--ts] [--gc-stress] [--suspend-every N] [--backend B] <file.js>`: run a script,
+//! `djs run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
+//! [--gc-stress] [--suspend-every N] [--backend B] <file.js>`: run a script,
 //! serving `console.log` as a sync host call.
 //!
 //! Exit codes: 0 ok, 1 uncaught exception (printed as `Uncaught Name: message`), 2 usage
@@ -10,9 +11,15 @@ use djs_core::compiler::{CompileErrorKind, CompileOptions};
 use djs_core::value::Value;
 use djs_core::vm::{ExecOptions, Status, Vm, VmOptions};
 
-const USAGE: &str = "usage: djs run [--body] [--ts] [--gc-stress] [--suspend-every N] [--backend B] <file.js>\n\
+const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\n\
+                [--emit-decorator-metadata] [--gc-stress] [--suspend-every N] [--backend B]\n\
+                <file.js>\n\
   --body             run as a codemode async body with parameters (tools, console)\n\
   --ts               parse as TypeScript (the default for .ts files)\n\
+  --experimental-decorators\n\
+                     TypeScript legacy decorators (experimentalDecorators)\n\
+  --emit-decorator-metadata\n\
+                     legacy decorators with emitDecoratorMetadata\n\
   --gc-stress        collect garbage at every safepoint\n\
   --suspend-every N  run N fuel at a time; at every stop, continue in a fresh VM\n\
                      restored from the heap image\n\
@@ -26,6 +33,11 @@ pub fn main(args: &[String]) -> i32 {
         match a.as_str() {
             "--body" => opts.body = true,
             "--ts" => opts.typescript = true,
+            "--experimental-decorators" => opts.experimental_decorators = true,
+            "--emit-decorator-metadata" => {
+                opts.experimental_decorators = true;
+                opts.emit_decorator_metadata = true;
+            }
             "--gc-stress" => opts.gc_stress = true,
             "--backend" => match it.next().map(|s| s.as_str()) {
                 Some("native") => opts.bytecode_builtins = false,
@@ -89,6 +101,8 @@ pub fn run_source(
     };
     let copts = CompileOptions {
         typescript: opts.typescript,
+        experimental_decorators: opts.experimental_decorators,
+        emit_decorator_metadata: opts.emit_decorator_metadata,
         ..copts
     };
     let main = match vm.compile(src, &copts) {
@@ -144,6 +158,9 @@ pub struct RunOptions {
     pub typescript: bool,
     /// Run the `@native` builtins as bytecode (`--backend bytecode`, 0063).
     pub bytecode_builtins: bool,
+    /// TypeScript legacy decorators, and their metadata.
+    pub experimental_decorators: bool,
+    pub emit_decorator_metadata: bool,
 }
 
 impl RunOptions {

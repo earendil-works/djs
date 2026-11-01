@@ -903,6 +903,31 @@ DecoratorAccessSet: reentrant (%DecoratorAccessSet)
 DecoratorAccessHas: reentrant (%DecoratorAccessHas)
   builtins/decorators.ts:356:10  HasProperty (intrinsic)
 
+DecoratorReflectFn: reentrant
+  builtins/decorators.ts:366:20  Get (intrinsic)
+
+ApplyLegacyDecorators: reentrant (%ApplyLegacyDecorators)
+  builtins/decorators.ts:383:9  ObjectGetOwnPropertyDescriptor (builtin)
+  builtins/decorators.ts:385:26  Get (intrinsic)
+  builtins/decorators.ts:386:27  DecoratorReflectFn (builtin)
+  builtins/decorators.ts:389:11  Call (intrinsic)
+  builtins/decorators.ts:391:11  Call (intrinsic)
+  builtins/decorators.ts:395:18  LengthOfArrayLike (builtin)
+  builtins/decorators.ts:398:26  Get (intrinsic)
+  builtins/decorators.ts:402:39  Call (intrinsic)
+  builtins/decorators.ts:402:65  Call (intrinsic)
+  builtins/decorators.ts:412:5  ObjectDefineProperty (builtin)
+
+DecoratorParam: leaf (%DecoratorParam)
+
+DecoratorParamCall: reentrant (%DecoratorParamCall)
+  builtins/decorators.ts:435:3  Call (intrinsic)
+
+DecoratorMetadata: reentrant (%DecoratorMetadata)
+  builtins/decorators.ts:444:26  Get (intrinsic)
+  builtins/decorators.ts:445:20  DecoratorReflectFn (builtin)
+  builtins/decorators.ts:449:10  Call (intrinsic)
+
 SymbolMetadata: leaf (value Symbol.metadata)
 
 NewSuppressedError: reentrant

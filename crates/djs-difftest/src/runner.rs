@@ -186,6 +186,8 @@ fn execute(
                 file: &case.file,
                 source: &source,
                 ts: case.meta.ts,
+                legacy_decorators: case.meta.legacy_decorators,
+                decorator_metadata: case.meta.decorator_metadata,
                 prelude_file,
                 prelude,
                 timeout,

@@ -21,10 +21,12 @@
 //! `get x() { return this.<storage>; }` (`emit_synth_fn`).
 
 use alloc::format;
+use alloc::vec::Vec;
 
 use super::PResult;
-use super::func::{FuncKind, ScopeId, VarKind};
+use super::func::{FuncKind, FuncState, ScopeId, VarKind};
 use super::parser::{Parser, syntax};
+use super::ts_meta::{MetaKind, TsMeta};
 use crate::heap::Atom;
 use crate::lexer::{Kw, TokenKind};
 
@@ -67,6 +69,49 @@ pub(super) struct DecElem {
     pub rec: Atom,
 }
 
+/// TypeScript legacy decorators (`experimentalDecorators`): an arrow function,
+/// parked while the class is parsed, whose body evaluates the decorators of one
+/// element (or of the class) and returns their array (qjs's DecThunk). It is created
+/// and called in the class's scope after the class is defined, as tsc evaluates them.
+pub(super) struct Thunk {
+    pub f: FuncState,
+    /// The decorators pushed so far.
+    pub count: u32,
+    /// The first `@`.
+    pub start: u32,
+}
+
+/// Legacy decorators: the parameter decorators and types of the method or
+/// constructor being parsed. Its parameter decorators go into `thunk` (the method's,
+/// or for the constructor the class's), created if needed.
+pub(super) struct DecParams {
+    pub thunk: Option<Thunk>,
+    /// Collect the types (`emitDecoratorMetadata`).
+    pub metadata: bool,
+    pub types: Vec<TsMeta>,
+    pub ret: Option<TsMeta>,
+}
+
+impl DecParams {
+    pub fn new(thunk: Option<Thunk>, metadata: bool) -> DecParams {
+        DecParams {
+            thunk,
+            metadata,
+            types: Vec::new(),
+            ret: None,
+        }
+    }
+}
+
+/// A class element with legacy decorators.
+pub(super) struct LegacyElem {
+    pub kind: u8,
+    pub is_static: bool,
+    /// `Atom` or `Computed` (private elements cannot have them).
+    pub key: DecKey,
+    pub thunk: Thunk,
+}
+
 /// A synthesized function (`emit_synth_fn`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Synth {
@@ -91,7 +136,7 @@ impl Parser<'_, '_> {
     pub(super) fn parse_decorators(&mut self) -> PResult<()> {
         let mut n: u32 = 0;
         while self.is(TokenKind::At) {
-            self.parse_decorator()?;
+            self.parse_decorator(true)?;
             n += 2;
             if n > u16::MAX as u32 {
                 return syntax(self.tok.start, "too many decorators");
@@ -103,8 +148,8 @@ impl Parser<'_, '_> {
 
     /// `@` DecoratorMemberExpression, DecoratorCallExpression or `( Expression )`, as
     /// qjs parses it: a primary expression and then `.x`, `.#x` and calls (no `[`,
-    /// `?.` or template). Pushes the decorator and its receiver.
-    fn parse_decorator(&mut self) -> PResult<()> {
+    /// `?.` or template). Pushes the decorator and, with `receiver`, its receiver.
+    fn parse_decorator(&mut self, receiver: bool) -> PResult<()> {
         self.enter()?;
         let at = self.tok.start;
         self.next()?;
@@ -130,8 +175,10 @@ impl Parser<'_, '_> {
                 _ => break,
             }
         }
-        // `dec recv`, like a call's callee and `this`.
-        self.prepare_call(e);
+        if receiver {
+            // `dec recv`, like a call's callee and `this`.
+            self.prepare_call(e);
+        }
         self.leave();
         Ok(())
     }
@@ -140,12 +187,25 @@ impl Parser<'_, '_> {
     /// strip-types, of `export class`).
     pub(super) fn parse_decorated_statement(&mut self) -> PResult<()> {
         let start = self.tok.start;
-        self.parse_decorators()?;
+        self.parse_class_decorators()?;
         self.expect_decorated_class(true)?;
-        self.class_decs = Some(start);
         self.parse_statement_list_item()?;
-        if self.class_decs.take().is_some() {
+        if self.class_decs.take().is_some() || self.class_thunk.take().is_some() {
             return syntax(start, "decorators must be followed by a class");
+        }
+        Ok(())
+    }
+
+    /// The decorators of the next class (`parse_class` takes them): their array on the
+    /// stack (`class_decs`), or with legacy decorators their thunk (`class_thunk`).
+    pub(super) fn parse_class_decorators(&mut self) -> PResult<()> {
+        let start = self.tok.start;
+        if self.legacy_decorators() {
+            let t = self.parse_legacy_decorators(None)?;
+            self.class_thunk = Some(t);
+        } else {
+            self.parse_decorators()?;
+            self.class_decs = Some(start);
         }
         Ok(())
     }
@@ -450,6 +510,238 @@ impl Parser<'_, '_> {
         self.code()
             .call_intrinsic(intrinsic("DecoratorRunExtras"), 3);
         self.code().drop();
+    }
+
+    // ---- TypeScript legacy decorators (0065 part 2) -----------------------------------
+
+    /// TypeScript's `experimentalDecorators` are on (not in strip-types, which keeps
+    /// decorators as they are).
+    pub(super) fn legacy_decorators(&self) -> bool {
+        self.ts && !self.strip && self.opts.experimental_decorators
+    }
+
+    /// `emitDecoratorMetadata` is on.
+    pub(super) fn decorator_metadata(&self) -> bool {
+        self.legacy_decorators() && self.opts.emit_decorator_metadata
+    }
+
+    /// A new empty thunk in the current function and scope.
+    fn new_thunk(&mut self, start: u32) -> PResult<Thunk> {
+        self.begin_function(FuncKind::Arrow)?;
+        self.f.src_start = start;
+        self.f.src_end = start;
+        let f = self.park_function()?;
+        Ok(Thunk { f, count: 0, start })
+    }
+
+    /// Legacy decorators at `@`: their expressions go into `thunk` (a new one if
+    /// `None`).
+    pub(super) fn parse_legacy_decorators(&mut self, thunk: Option<Thunk>) -> PResult<Thunk> {
+        let mut t = match thunk {
+            Some(t) => t,
+            None => self.new_thunk(self.tok.start)?,
+        };
+        self.resume_function(t.f);
+        while self.is(TokenKind::At) {
+            self.parse_decorator(false)?;
+            t.count += 1;
+        }
+        t.f = self.park_function()?;
+        Ok(t)
+    }
+
+    /// Parameter decorators at `@` (after a parameter's `this` check, before its
+    /// modifiers): `__param(index, dec)` decorators of the method, in its thunk. Only
+    /// class methods and constructors with legacy decorators have `dp`.
+    pub(super) fn parse_param_decorators(&mut self, dp: Option<&mut DecParams>) -> PResult<()> {
+        let Some(dp) = dp else {
+            if self.strip {
+                // ts-blank-space keeps them, types included.
+                let erased = self.erased.take();
+                while self.is(TokenKind::At) {
+                    self.parse_decorator(false)?;
+                    self.code().drop();
+                }
+                self.erased = erased;
+                return Ok(());
+            }
+            return syntax(
+                self.tok.start,
+                "parameter decorators are only supported with experimentalDecorators",
+            );
+        };
+        let index = self.f.param_count;
+        // The thunk is a child of the class's function: the method steps aside while
+        // the decorators are parsed (its parameter list has no blocks or iterators).
+        let scope = self.scope;
+        let method = self.park_function()?;
+        let mut t = match dp.thunk.take() {
+            Some(t) => t,
+            None => self.new_thunk(self.tok.start)?,
+        };
+        self.resume_function(t.f);
+        let id = intrinsic("DecoratorParam");
+        while self.is(TokenKind::At) {
+            let pos = self.tok.start;
+            self.parse_decorator(false)?;
+            self.code().push_i32(i32::from(index));
+            self.mark(pos);
+            self.code().call_intrinsic(id, 2);
+            t.count += 1;
+        }
+        t.f = self.park_function()?;
+        dp.thunk = Some(t);
+        self.resume_function(method);
+        self.scope = scope;
+        Ok(())
+    }
+
+    /// Ends `t` and calls it: pushes the decorator array.
+    pub(super) fn emit_thunk_call(&mut self, t: Thunk) -> PResult<()> {
+        if t.count > u16::MAX as u32 {
+            return syntax(t.start, "too many decorators");
+        }
+        self.resume_function(t.f);
+        self.code().array_from(t.count as u16);
+        self.code().return_();
+        let child = self.end_function()?;
+        self.code().fclosure(child);
+        self.code().undefined();
+        self.mark(t.start);
+        self.code().call(0);
+        Ok(())
+    }
+
+    /// Drops an unused thunk (the decorators of a TypeScript member without code).
+    pub(super) fn discard_thunk(&mut self, t: Thunk) -> PResult<()> {
+        self.resume_function(t.f);
+        // Its template is still written: it must be complete.
+        self.code().array_from(t.count.min(u16::MAX as u32) as u16);
+        self.code().return_();
+        self.discard_function()
+    }
+
+    /// Adds the decorator `__metadata(key, value)` to `t`, `value` being the type `m`
+    /// or with `list` the array of the types `ms`.
+    fn thunk_metadata(
+        &mut self,
+        mut t: Thunk,
+        key: &str,
+        ms: &[TsMeta],
+        list: bool,
+    ) -> PResult<Thunk> {
+        let pos = t.start;
+        self.resume_function(t.f);
+        let a = self.heap.atom_str(key)?;
+        self.code().push_atom(a);
+        for m in ms {
+            self.emit_ts_meta(m, pos)?;
+        }
+        if list {
+            if ms.len() > u16::MAX as usize {
+                return syntax(pos, "too many parameters");
+            }
+            self.code().array_from(ms.len() as u16);
+        }
+        self.mark(pos);
+        self.code()
+            .call_intrinsic(intrinsic("DecoratorMetadata"), 2);
+        t.count += 1;
+        t.f = self.park_function()?;
+        Ok(t)
+    }
+
+    /// The `design:type` metadata of a field with the annotation at the current token.
+    pub(super) fn thunk_field_metadata(&mut self, t: Thunk) -> PResult<Thunk> {
+        let m = self.ts_meta_annotation();
+        self.thunk_metadata(t, "design:type", &[m], false)
+    }
+
+    /// The metadata of a decorated method (kind `DEC_METHOD`), getter or setter, from
+    /// its parameter and return types, as qjs's emit_class_legacy_metadata.
+    pub(super) fn thunk_method_metadata(
+        &mut self,
+        t: Thunk,
+        kind: u8,
+        dp: &DecParams,
+        is_async: bool,
+    ) -> PResult<Thunk> {
+        let object = TsMeta::new(MetaKind::Object);
+        match kind {
+            DEC_METHOD => {
+                let t = self.thunk_metadata(
+                    t,
+                    "design:type",
+                    &[TsMeta::new(MetaKind::Function)],
+                    false,
+                )?;
+                let t = self.thunk_metadata(t, "design:paramtypes", &dp.types, true)?;
+                let ret = match &dp.ret {
+                    Some(m) => m.clone(),
+                    None if is_async => {
+                        let mut m = TsMeta::new(MetaKind::Ref);
+                        m.names.push(self.heap.atom_str("Promise")?);
+                        m
+                    }
+                    None => TsMeta::new(MetaKind::Void),
+                };
+                self.thunk_metadata(t, "design:returntype", &[ret], false)
+            }
+            DEC_GETTER => {
+                let ty = dp.ret.clone().unwrap_or(object);
+                let t = self.thunk_metadata(t, "design:type", &[ty], false)?;
+                self.thunk_metadata(t, "design:paramtypes", &[], true)
+            }
+            _ => {
+                let ty = dp.types.first().cloned().unwrap_or(object);
+                let t = self.thunk_metadata(t, "design:type", &[ty], false)?;
+                self.thunk_metadata(t, "design:paramtypes", &dp.types, true)
+            }
+        }
+    }
+
+    /// The `design:paramtypes` metadata of the class (its constructor's parameters).
+    pub(super) fn thunk_ctor_metadata(&mut self, t: Thunk, types: &[TsMeta]) -> PResult<Thunk> {
+        self.thunk_metadata(t, "design:paramtypes", types, true)
+    }
+
+    /// With the class on the stack (it stays): applies the legacy decorators of `e`
+    /// (tsc's `__decorate(decs, C.prototype, key, desc)`).
+    pub(super) fn emit_legacy_apply(&mut self, e: LegacyElem) -> PResult<()> {
+        let pos = e.thunk.start;
+        self.code().dup();
+        if !e.is_static {
+            let a = self.heap.atom_str("prototype")?;
+            self.mark(pos);
+            self.code().get_field(a, 0);
+        }
+        match e.key {
+            DecKey::Atom(a) | DecKey::Private(a) => self.code().push_atom(a),
+            DecKey::Computed(v) => {
+                let r = self.name_ref(v, pos);
+                self.code().name_get(r);
+            }
+        }
+        self.emit_thunk_call(e.thunk)?;
+        self.code().push_i8(e.kind as i8);
+        self.mark(pos);
+        self.code()
+            .call_intrinsic(intrinsic("ApplyLegacyDecorators"), 4);
+        self.code().drop();
+        Ok(())
+    }
+
+    /// With the class on the stack: applies the legacy class decorators in `t`,
+    /// leaving the new class.
+    pub(super) fn emit_legacy_apply_class(&mut self, t: Thunk) -> PResult<()> {
+        let pos = t.start;
+        self.code().undefined();
+        self.emit_thunk_call(t)?;
+        self.code().push_i8(DEC_CLASS as i8);
+        self.mark(pos);
+        self.code()
+            .call_intrinsic(intrinsic("ApplyLegacyDecorators"), 4);
+        Ok(())
     }
 }
 

@@ -211,6 +211,8 @@ impl Session {
             src.as_bytes(),
             &CompileOptions {
                 typescript: job.ts,
+                experimental_decorators: job.legacy_decorators,
+                emit_decorator_metadata: job.decorator_metadata,
                 ..CompileOptions::script(job.name)
             },
         ) {

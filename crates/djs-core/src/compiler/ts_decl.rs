@@ -181,7 +181,7 @@ impl<'a> Parser<'a, '_> {
 
     /// The enum or namespace `name` visible from here, for constant enum expressions:
     /// members of the enclosing namespaces, then declarations of the enclosing scopes.
-    fn ts_lookup_decl(&self, name: Atom) -> Option<u32> {
+    pub(super) fn ts_lookup_decl(&self, name: Atom) -> Option<u32> {
         let chain = core::iter::once((&self.f, self.scope))
             .chain(self.stack.iter().rev().map(|s| (&s.f, s.scope)));
         for (f, scope) in chain {

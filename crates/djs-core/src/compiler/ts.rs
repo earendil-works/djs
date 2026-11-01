@@ -21,7 +21,7 @@ use crate::lexer::{Kw, Token, TokenKind};
 
 /// Precedence levels of the type grammar (`|` binds loosest).
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum Level {
+pub(super) enum Level {
     Lowest,
     Or,
     And,
@@ -30,10 +30,10 @@ enum Level {
 
 /// Type flags: a return type (`asserts x`), an index signature or mapped type key, a
 /// tuple element (labels), no conditional type (`extends` in a constraint).
-const T_RETURN: u8 = 1;
+pub(super) const T_RETURN: u8 = 1;
 const T_INDEX_SIG: u8 = 2;
 const T_TUPLE_LABELS: u8 = 4;
-const T_NO_COND: u8 = 8;
+pub(super) const T_NO_COND: u8 = 8;
 
 /// Type parameter list flags: an empty list `<>` is allowed (type aliases,
 /// interfaces); the others document which modifiers tsc allows where.
@@ -107,7 +107,7 @@ impl<'a> Parser<'a, '_> {
         )
     }
 
-    fn ts_expect(&mut self, kind: TokenKind) -> PResult<()> {
+    pub(super) fn ts_expect(&mut self, kind: TokenKind) -> PResult<()> {
         if self.tok.kind != kind {
             return self.ts_error();
         }
@@ -420,7 +420,7 @@ impl<'a> Parser<'a, '_> {
     }
 
     /// The parameters of a function type followed by `=>`, if they are (else rewinds).
-    fn ts_try_skip_arrow_args(&mut self) -> bool {
+    pub(super) fn ts_try_skip_arrow_args(&mut self) -> bool {
         self.ts_try(|p| {
             p.ts_skip_fn_args()?;
             if !p.is(TokenKind::Arrow) {
@@ -450,7 +450,7 @@ impl<'a> Parser<'a, '_> {
         });
     }
 
-    fn ts_skip_type2(&mut self, level: Level, flags: u8) -> PResult<()> {
+    pub(super) fn ts_skip_type2(&mut self, level: Level, flags: u8) -> PResult<()> {
         self.enter()?;
         let r = self.ts_skip_type_inner(level, flags);
         self.leave();
@@ -1373,9 +1373,13 @@ impl<'a> Parser<'a, '_> {
     }
 
     /// At the start of a formal parameter: a `this` parameter (type only: erased with
-    /// its comma, returns true) or accessibility / `readonly` / `override` modifiers
-    /// (erased; parameter properties are found by `ts_scan_param_props` beforehand).
-    pub(super) fn ts_param_prefix(&mut self) -> PResult<bool> {
+    /// its comma, returns true) or parameter decorators (legacy, into `dp`) and
+    /// accessibility / `readonly` / `override` modifiers (erased; parameter properties
+    /// are found by `ts_scan_param_props` beforehand).
+    pub(super) fn ts_param_prefix(
+        &mut self,
+        dp: Option<&mut super::decorators::DecParams>,
+    ) -> PResult<bool> {
         let start = self.tok.start;
         if self.is(TokenKind::This)
             && self.f.param_count == 0
@@ -1392,6 +1396,11 @@ impl<'a> Parser<'a, '_> {
             self.ts_erase(start);
             return Ok(true);
         }
+        if self.is(TokenKind::At) {
+            self.parse_param_decorators(dp)?;
+        }
+        // (After the decorators: ts-blank-space keeps them.)
+        let start = self.tok.start;
         let mut any = false;
         while self.ts_is_param_modifier() {
             self.next()?;
@@ -1411,6 +1420,10 @@ impl<'a> Parser<'a, '_> {
         self.ts_lookahead(|p| {
             p.ts_expect(TokenKind::LParen)?;
             while !p.is(TokenKind::RParen) {
+                while p.is(TokenKind::At) {
+                    p.next()?;
+                    p.ts_skip_decorator()?;
+                }
                 let mut modifier = false;
                 while p.ts_is_param_modifier() {
                     modifier = true;
@@ -1448,6 +1461,30 @@ impl<'a> Parser<'a, '_> {
             atoms.push(self.heap.atom_str(s)?);
         }
         Ok(atoms)
+    }
+
+    /// A decorator expression after its `@` (parameter property lookahead).
+    fn ts_skip_decorator(&mut self) -> PResult<()> {
+        if self.is(TokenKind::LParen) {
+            return self.ts_skip_balanced();
+        }
+        if !self.is(TokenKind::Ident) {
+            return self.ts_error();
+        }
+        self.next()?;
+        loop {
+            match self.tok.kind {
+                TokenKind::Dot => {
+                    self.next()?;
+                    if !self.tok.kind.is_identifier_name() && !self.is(TokenKind::PrivateName) {
+                        return self.ts_error();
+                    }
+                    self.next()?;
+                }
+                TokenKind::LParen => self.ts_skip_balanced()?,
+                _ => return Ok(()),
+            }
+        }
     }
 
     /// An accessibility, `readonly` or `override` modifier of a parameter (otherwise it

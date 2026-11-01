@@ -31,10 +31,12 @@ impl Engine for Qjs {
 
     fn run(&self, job: &Job<'_>) -> RunResult {
         let spec = format!(
-            "{{\"prelude\":{},\"case\":{},\"ts\":{}}}",
+            "{{\"prelude\":{},\"case\":{},\"ts\":{},\"legacy\":{},\"metadata\":{}}}",
             json_quote(&job.prelude_file.to_string_lossy()),
             json_quote(&job.file.to_string_lossy()),
-            job.ts
+            job.ts,
+            job.legacy_decorators,
+            job.decorator_metadata
         );
         let crash = |msg: String| RunResult {
             output: Vec::new(),

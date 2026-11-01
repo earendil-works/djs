@@ -31,6 +31,7 @@ mod scan;
 mod stmt;
 mod ts;
 mod ts_decl;
+mod ts_meta;
 mod using;
 
 #[cfg(test)]
@@ -78,6 +79,13 @@ pub struct CompileOptions<'a> {
     /// TypeScript: the type skipper erases types while parsing, enums, namespaces and
     /// parameter properties compile to code (compiler/ts.rs).
     pub typescript: bool,
+    /// TypeScript's legacy `experimentalDecorators` instead of the standard decorators
+    /// (TypeScript only, compiler/decorators.rs): tsc's `__decorate` semantics and
+    /// parameter decorators.
+    pub experimental_decorators: bool,
+    /// With `experimental_decorators`: `emitDecoratorMetadata`, the `design:type`,
+    /// `design:paramtypes` and `design:returntype` metadata (compiler/ts_meta.rs).
+    pub emit_decorator_metadata: bool,
 }
 
 impl<'a> CompileOptions<'a> {
@@ -88,6 +96,8 @@ impl<'a> CompileOptions<'a> {
             params: &[],
             privileged: false,
             typescript: false,
+            experimental_decorators: false,
+            emit_decorator_metadata: false,
         }
     }
 
@@ -106,6 +116,8 @@ impl<'a> CompileOptions<'a> {
             params,
             privileged: false,
             typescript: false,
+            experimental_decorators: false,
+            emit_decorator_metadata: false,
         }
     }
 

@@ -1,0 +1,87 @@
+C.prototype a design:type=Object
+  b design:type=Number
+  c design:type=String
+  e design:type=String
+  f design:type=Boolean
+  g design:type=BigInt
+  h design:type=Symbol
+  i design:type=Number
+  j design:type=String
+  k design:type=Object
+  l design:type=Array
+  m design:type=Array
+  n design:type=Map
+  o design:type=X
+  p design:type=Object
+  q design:type=Object
+  r design:type=undefined
+  s design:type=Object
+  t design:type=Object
+  u design:type=Object
+  v design:type=Object
+  w design:type=Object
+  x design:type=Object
+  y design:type=Array
+  z design:type=Object
+  aa design:type=Array
+  ab design:type=Number
+  ac design:type=Function
+  ad design:type=undefined
+  ae design:type=undefined
+  af design:type=Array
+  ag design:type=Number
+  ah design:type=BigInt
+  ai design:type=Dep
+  aj design:type=Object
+  ak design:type=String
+  al design:type=String
+  am design:type=Function
+  an design:type=Array
+  Symbol(Symbol.iterator) design:type=Number
+  comp1 design:type=Number
+  acc design:type=Number
+C st design:type=Number
+d 3 a undefined
+d 3 b undefined
+d 3 c undefined
+d 3 e undefined
+d 3 f undefined
+d 3 g undefined
+d 3 h undefined
+d 3 i undefined
+d 3 j undefined
+d 3 k undefined
+d 3 l undefined
+d 3 m undefined
+d 3 n undefined
+d 3 o undefined
+d 3 p undefined
+d 3 q undefined
+d 3 r undefined
+d 3 s undefined
+d 3 t undefined
+d 3 u undefined
+d 3 v undefined
+d 3 w undefined
+d 3 x undefined
+d 3 y undefined
+d 3 z undefined
+d 3 aa undefined
+d 3 ab undefined
+d 3 ac undefined
+d 3 ad undefined
+d 3 ae undefined
+d 3 af undefined
+d 3 ag undefined
+d 3 ah undefined
+d 3 ai undefined
+d 3 aj undefined
+d 3 ak undefined
+d 3 al undefined
+d 3 am undefined
+d 3 an undefined
+d 3 Symbol(Symbol.iterator) undefined
+d 3 comp1 undefined
+d 3 acc object
+d 3 st undefined
+=== completed

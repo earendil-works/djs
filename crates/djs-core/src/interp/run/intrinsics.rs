@@ -305,7 +305,7 @@ fn is_slot_object(class: ObjectClass) -> bool {
 
 /// The builtins a `%NewBuiltinClosure(kind, ..)` calls, by kind (D1372; the list in
 /// builtins/intrinsics.d.ts).
-const BUILTIN_CLOSURES: [u16; 24] = [
+const BUILTIN_CLOSURES: [u16; 25] = [
     id("PromiseResolveFunction"),
     id("PromiseRejectFunction"),
     id("GetCapabilitiesExecutor"),
@@ -330,6 +330,7 @@ const BUILTIN_CLOSURES: [u16; 24] = [
     id("DecoratorAccessGet"),
     id("DecoratorAccessSet"),
     id("DecoratorAccessHas"),
+    id("DecoratorParamCall"),
 ];
 
 /// The function-kind constructors, wired to their prototypes when installed (D1420).

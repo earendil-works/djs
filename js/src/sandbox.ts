@@ -81,6 +81,17 @@ export interface SandboxOptions {
    * fuel slices do not move it. A fixed `now` makes the clock fully reproducible.
    */
   deterministic?: { startedAt: number; seed: number | bigint };
+  /**
+   * With `typescript`: TypeScript's legacy `experimentalDecorators` (tsc's decorator
+   * semantics and parameter decorators) instead of the standard decorators (0065).
+   * Default false.
+   */
+  experimentalDecorators?: boolean;
+  /**
+   * With `typescript`: `emitDecoratorMetadata` (`design:type` and friends through
+   * `Reflect.metadata`); implies `experimentalDecorators`. Default false.
+   */
+  emitDecoratorMetadata?: boolean;
 }
 
 export type SandboxErrorKind = "threw" | "syntax" | "fuel" | "trap" | "memory" | "misuse";
@@ -516,7 +527,12 @@ export class Sandbox {
       both.set(head);
       both.set(src, head.length);
       this.stage(both);
-      const goal = 1 | (this.opts.typescript ? 2 : 0);
+      const o = this.opts;
+      const goal =
+        1 |
+        (o.typescript ? 2 : 0) |
+        (o.experimentalDecorators || o.emitDecoratorMetadata ? 4 : 0) |
+        (o.emitDecoratorMetadata ? 8 : 0);
       const f = x.vm_compile(vm, goal, head.length, src.length);
       if (f === 0) {
         const msg = outText(x);

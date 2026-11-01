@@ -273,6 +273,22 @@ test("typescript", async () => {
   js.dispose();
 });
 
+test("legacy decorators", async () => {
+  const src =
+    "const log = []; const d = (t, k, i) => { log.push(typeof t + ' ' + k + ' ' + i); };" +
+    "Reflect.metadata = (k, v) => () => { log.push(k); };" +
+    "class C { m(@d a: number) {} } return log.join()";
+  const legacy = await Sandbox.create({ typescript: true, experimentalDecorators: true });
+  assert.equal(legacy.run(src), "object m 0");
+  legacy.dispose();
+  const meta = await Sandbox.create({ typescript: true, emitDecoratorMetadata: true });
+  assert.equal(meta.run(src), "design:returntype,design:paramtypes,design:type,object m 0");
+  meta.dispose();
+  const standard = await Sandbox.create({ typescript: true });
+  assert.throws(() => standard.run(src), (e: unknown) => e instanceof SandboxError && e.kind === "syntax");
+  standard.dispose();
+});
+
 test("snapshots", async () => {
   const c = collect();
   const sb = await Sandbox.create({ console: c.console, functions: { add: (a, b) => (a as number) + (b as number) } });

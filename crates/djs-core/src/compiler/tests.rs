@@ -1482,7 +1482,7 @@ pub(super) fn run_body_opts(src: &str, typescript: bool) -> String {
 
 /// Runs `src` compiled with `opts` (a Script or eval code gets `console` too, as an
 /// ignored argument; it prints through the global `console` there).
-fn run_opts(src: &str, opts: &CompileOptions) -> String {
+pub(super) fn run_opts(src: &str, opts: &CompileOptions) -> String {
     use crate::vm::{Status, Vm, VmOptions};
     const LOG: u32 = 1;
     let mut vm = Vm::new(VmOptions::default()).unwrap();

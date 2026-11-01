@@ -29,10 +29,12 @@ use alloc::vec::Vec;
 
 use super::PResult;
 use super::decorators::{
-    DEC_ACCESSOR, DEC_FIELD, DEC_GETTER, DEC_METHOD, DEC_SETTER, DecElem, DecKey, Synth,
+    DEC_ACCESSOR, DEC_FIELD, DEC_GETTER, DEC_METHOD, DEC_SETTER, DecElem, DecKey, DecParams,
+    LegacyElem, Synth, Thunk,
 };
 use super::func::{FuncKind, FuncState, ScopeId, VarId, VarKind};
 use super::parser::{Parser, syntax};
+use super::ts_meta::TsMeta;
 use crate::bytecode::Label;
 use crate::heap::Atom;
 use crate::lexer::{Kw, TokenKind};
@@ -105,6 +107,15 @@ struct ClassBuild {
     /// field initializer runs instance extra initializers.
     state: Option<Atom>,
     inst_extras: bool,
+    /// TypeScript legacy decorators (`experimentalDecorators`), with metadata.
+    legacy: bool,
+    metadata: bool,
+    /// Legacy: the class decorators' thunk, the one of the element being parsed, the
+    /// decorated elements in source order, and the constructor's parameter types.
+    class_thunk: Option<Thunk>,
+    pending_thunk: Option<Thunk>,
+    legacy_elems: Vec<LegacyElem>,
+    ctor_types: Vec<TsMeta>,
 }
 
 /// A method being parsed: its key, start, `static` and decorators.
@@ -113,6 +124,7 @@ struct Elem {
     start: u32,
     is_static: bool,
     decs: Option<Atom>,
+    thunk: Option<Thunk>,
 }
 
 fn intrinsic(name: &str) -> u16 {
@@ -135,6 +147,8 @@ impl Parser<'_, '_> {
     pub(super) fn parse_class(&mut self, decl: bool, hint: Atom) -> PResult<()> {
         self.enter()?;
         let decorated = self.class_decs.take();
+        let mut class_thunk = self.class_thunk.take();
+        let decorated_at = decorated.or(class_thunk.as_ref().map(|t| t.start));
         let start = self.tok.start;
         self.next()?;
         let mut name = Atom::NULL;
@@ -158,7 +172,12 @@ impl Parser<'_, '_> {
             return syntax(self.tok.start, "class statement requires a name");
         }
         self.ts_type_params(super::ts::TP_IN_OUT | super::ts::TP_CONST)?;
+        let outer_scope = self.scope;
         let class_scope = self.push_scope(super::func::ScopeKind::Class)?;
+        if let Some(t) = &mut class_thunk {
+            // Legacy class decorators are evaluated in the class scope (as tsc).
+            t.f.parent = Some((self.f.id, class_scope));
+        }
         let class_decs = match decorated {
             Some(_) => {
                 // The class decorators' array (evaluated before `class`).
@@ -234,6 +253,12 @@ impl Parser<'_, '_> {
             class_decs,
             state: None,
             inst_extras: false,
+            legacy: self.legacy_decorators(),
+            metadata: self.decorator_metadata(),
+            class_thunk,
+            pending_thunk: None,
+            legacy_elems: Vec::new(),
+            ctor_types: Vec::new(),
         };
         self.expect(TokenKind::LBrace, "{")?;
         if derived {
@@ -252,17 +277,24 @@ impl Parser<'_, '_> {
             if self.is(TokenKind::At) {
                 let pos = self.tok.start;
                 dec_start = Some(pos);
-                let a = self.dec_hidden(b.scope, &mut b.hidden)?;
-                self.parse_decorators()?;
-                let r = self.init_ref(a, pos);
-                self.code().name_init(r);
-                b.pending = Some(a);
+                if b.legacy {
+                    b.pending_thunk = Some(self.parse_legacy_decorators(None)?);
+                } else {
+                    let a = self.dec_hidden(b.scope, &mut b.hidden)?;
+                    self.parse_decorators()?;
+                    let r = self.init_ref(a, pos);
+                    self.code().name_init(r);
+                    b.pending = Some(a);
+                }
             }
             // Index signatures, overloads, `declare` and `abstract` members: no code
             // (their decorators are ignored).
             let member = self.tok.start;
             if self.ts && self.ts_skip_class_member()? {
                 b.pending = None;
+                if let Some(t) = b.pending_thunk.take() {
+                    self.discard_thunk(t)?;
+                }
                 // ts-blank-space erases them with the member.
                 if let (Some(d), Some(e)) = (dec_start, &mut self.erased)
                     && let Some(r) = e.iter_mut().rev().find(|r| r.0 == member)
@@ -353,6 +385,35 @@ impl Parser<'_, '_> {
         if let Some(state) = b.state {
             self.emit_state_extras(state, super::decorators::SLOT_CLASS_EXTRAS, start);
         }
+        if b.class_thunk.is_some() || !b.legacy_elems.is_empty() {
+            // Legacy decorators: the instance elements, the static ones, the class.
+            if outer.is_some() {
+                // As tsc, the declaration's binding holds the class meanwhile.
+                self.code().dup();
+                let scope = core::mem::replace(&mut self.scope, outer_scope);
+                let r = self.init_ref(name, start);
+                self.scope = scope;
+                self.code().name_init(r);
+            }
+            let elems = core::mem::take(&mut b.legacy_elems);
+            let (stat, inst): (Vec<_>, Vec<_>) = elems.into_iter().partition(|e| e.is_static);
+            for e in inst.into_iter().chain(stat) {
+                self.emit_legacy_apply(e)?;
+            }
+            if let Some(mut t) = b.class_thunk.take() {
+                if b.metadata && b.has_ctor {
+                    let types = core::mem::take(&mut b.ctor_types);
+                    t = self.thunk_ctor_metadata(t, &types)?;
+                }
+                self.emit_legacy_apply_class(t)?;
+                if inner.is_some() {
+                    // The class name refers to the decorated class.
+                    self.code().dup();
+                    let r = self.init_ref(name, end);
+                    self.code().name_init(r);
+                }
+            }
+        }
         self.pop_scope();
         self.pop_scope();
         self.check_private_refs()?;
@@ -362,7 +423,7 @@ impl Parser<'_, '_> {
             self.code().name_init(r);
             self.f.vars[v as usize].init_end = end;
         } else if name.is_null() {
-            self.last_anon_fn = Some((decorated.unwrap_or(start), end));
+            self.last_anon_fn = Some((decorated_at.unwrap_or(start), end));
         }
         self.leave();
         Ok(())
@@ -404,6 +465,8 @@ impl Parser<'_, '_> {
     /// One class element (not `;`).
     fn parse_class_element(&mut self, b: &mut ClassBuild) -> PResult<()> {
         let decs = b.pending.take();
+        let thunk = b.pending_thunk.take();
+        let has_decs = decs.is_some() || thunk.is_some();
         let first_modifier = if self.ts {
             self.ts_member_modifiers()?
         } else {
@@ -415,7 +478,7 @@ impl Parser<'_, '_> {
             let next = self.peek();
             if next.kind == TokenKind::LBrace {
                 self.next()?;
-                if decs.is_some() {
+                if has_decs {
                     return syntax(self.tok.start, "decorators are not valid here");
                 }
                 return self.parse_static_block(b);
@@ -486,7 +549,7 @@ impl Parser<'_, '_> {
         }
         let key_tok = self.tok;
         if key_tok.kind == TokenKind::LBracket
-            && decs.is_none()
+            && !has_decs
             && let (Some(i), Some(e)) = (first_modifier, &mut self.erased)
         {
             // ts-blank-space: `private [k]` must not join the line before (decorators
@@ -504,6 +567,10 @@ impl Parser<'_, '_> {
             }
         };
         self.ts_eat_marker(TokenKind::Question)?;
+        if thunk.is_some() && matches!(key, Key::Private(_)) {
+            // Legacy decorators cannot decorate private elements.
+            return syntax(self.tok.start, "decorators are not valid here");
+        }
         let is_method = self.is(TokenKind::LParen) || (self.ts && self.is(TokenKind::Lt));
         if auto && is_method {
             return syntax(self.tok.start, "expecting ';'");
@@ -529,7 +596,7 @@ impl Parser<'_, '_> {
                 if !plain {
                     return syntax(self.tok.start, "invalid method name");
                 }
-                if decs.is_some() {
+                if has_decs {
                     return syntax(self.tok.start, "decorators are not valid here");
                 }
                 if b.has_ctor {
@@ -556,13 +623,14 @@ impl Parser<'_, '_> {
                 start,
                 is_static,
                 decs,
+                thunk,
             };
             self.parse_class_method(b, el, accessor, (is_async, is_gen))?;
         } else {
             if !plain || self.is(TokenKind::LBrace) {
                 return syntax(self.tok.start, "invalid property name");
             }
-            self.parse_field(b, key, is_static, decs, auto)?;
+            self.parse_field(b, key, is_static, (decs, thunk), auto)?;
         }
         if swapped {
             self.code().swap();
@@ -584,6 +652,7 @@ impl Parser<'_, '_> {
             start,
             is_static,
             decs,
+            thunk,
         } = el;
         let kind = accessor.unwrap_or(FuncKind::Method);
         let (prefix, word) = match kind {
@@ -637,7 +706,45 @@ impl Parser<'_, '_> {
                 rec: Atom::NULL,
             });
         }
-        let child = self.parse_method_function(kind, fname, start, flavor)?;
+        let dk = match kind {
+            FuncKind::Getter => DEC_GETTER,
+            FuncKind::Setter => DEC_SETTER,
+            _ => DEC_METHOD,
+        };
+        // Legacy decorators: the key (a computed one is kept, as qjs: a parameter
+        // decorator may need it) and the parameter decorators and types. (A private
+        // method's parameter decorators get its name as a string key, as qjs.)
+        let mut legacy = None;
+        if b.legacy {
+            let lkey = match key {
+                Key::Computed => {
+                    let v = self.dec_hidden(b.scope, &mut b.hidden)?;
+                    self.code().call_intrinsic(intrinsic("ToPropertyKey"), 1);
+                    self.code().dup();
+                    let r = self.init_ref(v, start);
+                    self.code().name_init(r);
+                    DecKey::Computed(v)
+                }
+                Key::Atom(a) | Key::Private(a) => DecKey::Atom(a),
+            };
+            legacy = Some((lkey, DecParams::new(thunk, b.metadata)));
+        }
+        let dp = legacy.as_mut().map(|(_, dp)| dp);
+        let child = self.parse_method_function_dp(kind, fname, start, flavor, dp)?;
+        if let Some((lkey, mut dp)) = legacy
+            && let Some(mut t) = dp.thunk.take()
+        {
+            if b.metadata {
+                let is_async = flavor == (true, false);
+                t = self.thunk_method_metadata(t, dk, &dp, is_async)?;
+            }
+            b.legacy_elems.push(LegacyElem {
+                kind: dk,
+                is_static,
+                key: lkey,
+                thunk: t,
+            });
+        }
         self.code().fclosure(child);
         match key {
             Key::Atom(a) => self.code().define_class_method(a, prefix),
@@ -760,16 +867,21 @@ impl Parser<'_, '_> {
     /// A field after its key: the initializer goes into the instance or static
     /// initializer function. A computed key is converted now and kept in a hidden
     /// binding. An auto-accessor (`auto`) is a field of a private storage name and a
-    /// getter and setter of it.
+    /// getter and setter of it. `decs` are its decorators: standard or legacy.
     fn parse_field(
         &mut self,
         b: &mut ClassBuild,
         key: Key,
         is_static: bool,
-        decs: Option<Atom>,
+        (decs, mut thunk): (Option<Atom>, Option<Thunk>),
         auto: bool,
     ) -> PResult<()> {
         self.ts_eat_marker(TokenKind::Bang)?;
+        if b.metadata
+            && let Some(t) = thunk.take()
+        {
+            thunk = Some(self.thunk_field_metadata(t)?);
+        }
         self.ts_annotation()?;
         let pos = self.tok.start;
         // The hidden bindings in qjs's order (the storage name shows in messages).
@@ -829,6 +941,17 @@ impl Parser<'_, '_> {
             }
             _ => None,
         };
+        if let Some(t) = thunk {
+            b.legacy_elems.push(LegacyElem {
+                kind: if auto { DEC_ACCESSOR } else { DEC_FIELD },
+                is_static,
+                key: match key {
+                    Key::Atom(a) | Key::Private(a) => DecKey::Atom(a),
+                    Key::Computed => DecKey::Computed(key_var.expect("key binding")),
+                },
+                thunk: t,
+            });
+        }
         let init = match if is_static {
             b.stat.take()
         } else {
@@ -1043,7 +1166,15 @@ impl Parser<'_, '_> {
         };
         self.begin_ctor(b, props)?;
         self.expect(TokenKind::LParen, "(")?;
-        self.parse_params()?;
+        if b.legacy {
+            // Its parameter decorators and types belong to the class.
+            let mut dp = DecParams::new(b.class_thunk.take(), b.metadata);
+            self.parse_params_dp(Some(&mut dp))?;
+            b.class_thunk = dp.thunk;
+            b.ctor_types = dp.types;
+        } else {
+            self.parse_params()?;
+        }
         if !b.derived {
             // Parameter properties are assigned once the parameters are (a derived
             // constructor does it after `super()`).

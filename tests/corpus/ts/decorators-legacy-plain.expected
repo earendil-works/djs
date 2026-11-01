@@ -1,0 +1,35 @@
+k x
+k m
+constructor,m
+err ReferenceError
+m:3:m:value/writable/enumerable/configurable
+ce:1:undefined:undefined
+E1 name E1
+E2  1 true
+outer during: true
+Box2 X true true Box2
+outerm:3:m:value/writable/enumerable/configurable
+outer:1:undefined:undefined
+F.z 42 own true
+decorate 2 m object
+decorate 1 f undefined
+decorate 2 undefined undefined
+ok:3:m:value/writable/enumerable/configurable
+H.m writable false
+acc:3:a:get/set/enumerable/configurable
+set:3:s:get/set/enumerable/configurable
+sym:3:Symbol(s):value/writable/enumerable/configurable
+dynp:3:dyn1:0
+dyn:3:dyn1:value/writable/enumerable/configurable
+cf:3:dyn2:undefined
+priv:3:#p:0
+sacc:3:sa:get/set/enumerable/configurable
+sg:3:sg:get/set/enumerable/configurable
+L 1 2
+m2:3:m:2
+m0:3:m:0
+s0:3:s:0
+c1b:3:undefined:1
+c1:3:undefined:1
+c0:3:undefined:0
+=== completed

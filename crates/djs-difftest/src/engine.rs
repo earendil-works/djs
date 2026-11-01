@@ -15,6 +15,9 @@ pub struct Job<'a> {
     pub source: &'a str,
     /// Parse the case as TypeScript.
     pub ts: bool,
+    /// TypeScript legacy decorators, and their metadata.
+    pub legacy_decorators: bool,
+    pub decorator_metadata: bool,
     pub prelude_file: &'a Path,
     pub prelude: &'a str,
     pub timeout: Duration,

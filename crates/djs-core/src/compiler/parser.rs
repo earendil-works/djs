@@ -110,6 +110,8 @@ pub(super) struct Parser<'a, 'h> {
     /// Decorators were parsed for the next class (their array is on the stack): the
     /// offset of the first `@` (compiler/decorators.rs).
     pub class_decs: Option<u32>,
+    /// Legacy decorators were parsed for the next class: their thunk.
+    pub class_thunk: Option<super::decorators::Thunk>,
     /// The next unary operand is the operand of `delete`.
     pub delete_operand: bool,
     /// The memoized pattern-or-literal scan (docs/compiler.md 3.3).
@@ -220,6 +222,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             name_hint: None,
             last_anon_fn: None,
             class_decs: None,
+            class_thunk: None,
             delete_operand: false,
             pat_scan: Default::default(),
             pattern_vars: Vec::new(),

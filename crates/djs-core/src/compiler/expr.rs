@@ -1239,9 +1239,8 @@ impl Parser<'_, '_> {
             }
             TokenKind::At => {
                 let hint = self.take_name_hint(tok.start);
-                self.parse_decorators()?;
+                self.parse_class_decorators()?;
                 self.expect_decorated_class(false)?;
-                self.class_decs = Some(tok.start);
                 self.parse_class(false, hint)?;
                 Ok(Expr::Value)
             }

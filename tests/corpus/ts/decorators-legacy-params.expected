@@ -1,0 +1,51 @@
+C.prototype m1 design:returntype=undefined
+  m1 design:paramtypes=[Dep,String]
+  m1 design:type=Function
+  m2 design:returntype=undefined
+  m2 design:paramtypes=[Object]
+  m2 design:type=Function
+  m3 design:returntype=Promise
+  m3 design:paramtypes=[]
+  m3 design:type=Function
+  m4 design:returntype=undefined
+  m4 design:paramtypes=[]
+  m4 design:type=Function
+  m5 design:returntype=undefined
+  m5 design:paramtypes=[]
+  m5 design:type=Function
+  m6 design:returntype=Promise
+  m6 design:paramtypes=[]
+  m6 design:type=Function
+  g1 design:paramtypes=[]
+  g1 design:type=Number
+  g1 design:paramtypes=[Object]
+  g1 design:type=Object
+  g2 design:paramtypes=[]
+  g2 design:type=Object
+  g3 design:paramtypes=[Dep]
+  g3 design:type=Dep
+  Symbol(s) design:returntype=undefined
+  Symbol(s) design:paramtypes=[String]
+  Symbol(s) design:type=Function
+  m7 design:returntype=Boolean
+  m7 design:paramtypes=[Boolean]
+  m7 design:type=Function
+C sm design:returntype=undefined
+  sm design:paramtypes=[String]
+  sm design:type=Function
+  undefined design:paramtypes=[Number,String,Object,Object,Array,Dep]
+d 3 m1 object
+d 3 m2 object
+d 3 m3 object
+d 3 m4 object
+d 3 m5 object
+d 3 m6 object
+d 3 g1 object
+d 3 g1 object
+d 3 g2 object
+d 3 g3 object
+d 3 Symbol(s) object
+d 3 m7 object
+d 3 sm object
+d 1 undefined undefined
+=== completed
