@@ -1,6 +1,6 @@
 # 0103: Human-facing documentation: format proposal first, then the docs
 
-status: in-progress (phase 2: tooling and first chapters landing; chapters in parts)
+status: done
 agent: docs
 branch: issue/0103-docs
 depends-on: -
@@ -70,7 +70,8 @@ Questions for the proposal:
   opcodes (with the `///` docs read from ops.rs: no wasm cost), cell layouts and
   intrinsics (docs from intrinsics.d.ts). `check` in gate.sh, `regen` in regen.sh,
   `.gitattributes` treats gen/ and ref-*.md as generated. AGENTS.md "Keeping the guide
-  current" plus the coordinator's `guide:` field. D2100 (first merged as D2030, which collided with infra's Error.stackTraceLimit decision; renumbered).
+  current" plus the coordinator's `guide:` field. D2100 (first merged as D2030, which
+  collided with infra's Error.stackTraceLimit decision; renumbered).
 - Examples are codemode async bodies now (as in the live widget and in pi), run with a
   50-fuel suspend/restore cycle; `gen:run` output only changes with `--examples`, so a
   behavior change fails the gate instead of silently updating the page.
@@ -78,6 +79,23 @@ Questions for the proposal:
   prototype's reach into private fields.
 - D1980 (optional trailing fields) showed up after the rebase: the cell diagrams draw
   fields past `min_size` dashed, with an "optional" legend.
+- GitHub Pages (owner's request, Pages already enabled with source "GitHub Actions"):
+  `.github/workflows/docs.yml` (outside `touches:`, new file only). On a push to main or
+  by hand it builds djs-wasm (scripts/build-wasm.sh), runs `djs-docs build --out _site`
+  (node 24 for strip.mjs) and deploys with actions/deploy-pages. No `check` there: the
+  gate ran it before main moved. Tested locally by serving the site under `/djs/` (the
+  Pages path): the live examples load the wasm relative to the page and run.
+- Renumbered the guide decision to D2100 (8680046d); Pages workflow (97461df8).
+- Tour chapters written: arena.md, heap.md, compiler.md, interpreter.md, suspension.md,
+  gc.md, snapshots.md (hand-drawn img/arena.svg, img/shapes.svg, img/cheney.svg).
+  Facts checked against ARCH.md, docs/compiler.md, docs/objects.md, the decision log
+  and the code (frame.rs: the header is 6 words, not compiler.md's 5; `run_hot` is the
+  main loop since D1930, ARCH still names fast_step/fast_more; vm_new is ~40 us per
+  D1990, ARCH's table says "a few us"). infra wrote builtins.md, host.md and testing.md
+  (0109, reviewed by me) and takes determinism.md; my chapters refer to it in plain
+  text until it exists.
+- New region `gen:excerpt PATH "ANCHOR" "START" N` (quoted code that cannot drift); the
+  natives.rs excerpt in builtins.md uses it.
 
 ## Proposal
 
@@ -204,24 +222,28 @@ Open questions for the owner:
 
 ## Result
 
-- GitHub Pages (owner's request, Pages already enabled with source "GitHub Actions"):
-  `.github/workflows/docs.yml` (outside `touches:`, new file only). On a push to main or
-  by hand it builds djs-wasm (scripts/build-wasm.sh), runs `djs-docs build --out _site`
-  (node 24 for strip.mjs) and deploys with actions/deploy-pages. No `check` there: the
-  gate ran it before main moved. Tested locally by serving the site under `/djs/` (the
-  Pages path): the live examples load the wasm relative to the page and run.
+Landed (phase 1: f8983773; phase 2: 3ff54985, 8680046d, 97461df8, 057c77f1..ac979ede,
+plus this commit):
+- **`crates/djs-docs`** (D2100): `check` (in the gate) fails on stale generated regions
+  or diagrams, broken links, unknown decision IDs, opcodes and cell kinds, and changed
+  example output; `regen` (in scripts/regen.sh) rewrites generated parts;
+  `regen --examples` accepts new example output; `build` writes the static site to
+  target/docs-site with live examples on djs-wasm (Output, Bytecode, Heap, Suspend &
+  snapshot tabs). Regions: value-tags, value-bits, cell, cell-all, ops, ops-all,
+  intrinsics-all, decisions, disasm, run, excerpt. How to write a page:
+  docs/guide/README.md.
+- **docs/guide**: the tour (introduction, arena, values, heap, compiler, interpreter,
+  suspension, gc, snapshots by docs; builtins, host, testing by infra in 0109) and three
+  generated reference pages (opcodes, cell layouts, intrinsics). Determinism is
+  infra's 0112.
+- **Publishing**: `.github/workflows/docs.yml` deploys the site to GitHub Pages on every
+  push to main (goes live with the owner's next push).
+- **Process**: AGENTS.md "Keeping the guide current", the `guide:` field in issues, the
+  merge flow regenerates the guide after a rebase.
 
-- Renumbered the guide decision to D2100 (8680046d); Pages workflow (97461df8).
-- Tour chapters written: arena.md, heap.md, compiler.md, interpreter.md, suspension.md,
-  gc.md, snapshots.md (hand-drawn img/arena.svg, img/shapes.svg, img/cheney.svg).
-  Facts checked against ARCH.md, docs/compiler.md, docs/objects.md, the decision log
-  and the code (frame.rs: the header is 6 words, not compiler.md's 5; `run_hot` is the
-  main loop since D1930, ARCH still names fast_step/fast_more; vm_new is ~40 us per
-  D1990, ARCH's table says "a few us"). infra wrote builtins.md, host.md and testing.md
-  (0109, reviewed by me) and takes determinism.md; my chapters refer to it in plain
-  text until it exists.
-- New region `gen:excerpt PATH "ANCHOR" "START" N` (quoted code that cannot drift); the
-  natives.rs excerpt in builtins.md uses it.
+Known gaps: the Bytecode tab shows build-time bytecode only (edited examples have no
+live disassembly); no search; the guide's numbers in prose (sizes, timings, counts) are
+not checked and can go stale.
 
 ## Follow-ups
 
