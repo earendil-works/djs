@@ -10,7 +10,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0045 | Proxy | infra | .worktrees/0045-proxy |
 | 0040 | P1-7 Classes | lexer | .worktrees/0040-p1-classes |
-| 0043 | wasm size audit and reduction | heap | .worktrees/0043-wasm-size |
+| 0046 | BigInt | heap | .worktrees/0046-bigint |
 
 ## Open (ready)
 
@@ -35,6 +35,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0029 | P1-5 Loops and iteration (compiler + iter builtins) | 8cc5aa2 (agent lexer; +1,774 test262) |
 | 0030 | P1-5 runtime + 0028 leftovers + GC audit | 9f35b6f (agent heap; 4 parts) |
 | 0041 | Async/await, generators (compiler) | f93fa30 (agent lexer; codemode body is a real async function) |
+| 0043 | wasm size audit (pass 1) | a35c5e8 (agent heap; stripped 1,200 -> 948 KB; base 502 -> 288 KB; second code pass deferred until wasm-opt numbers) |
 | 0042 | Async generator runtime, function kinds, host rejections | 6e3c965 (agent heap) |
 | 0037 | P2 Promises, jobs, async host calls, suspendable frames | bd6f974 (agent heap; 3 parts) |
 | 0036 | P1-6 Destructuring + tagged templates | 234fd3c (agent lexer; +~1,940 test262) |

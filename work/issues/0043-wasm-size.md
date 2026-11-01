@@ -1,6 +1,6 @@
 # 0043: wasm size audit and reduction
 
-status: in-progress
+status: done
 agent: heap
 branch: issue/0043-wasm-size
 depends-on: 0039 (part 1)
