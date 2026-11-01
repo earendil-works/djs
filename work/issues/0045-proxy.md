@@ -1,7 +1,7 @@
 # 0045: Proxy
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0045-proxy
 depends-on: 0038 (Reflect)
 touches: crates/djs-core/src/interp/ (property-operation dispatch for proxy objects: get/set/has/delete/defineOwnProperty/getOwnPropertyDescriptor/ownKeys/getPrototypeOf/setPrototypeOf/isExtensible/preventExtensions/call/construct), crates/djs-core/src/heap/ (a Proxy object class, additive), builtins/proxy.ts (new) + the internal-method helpers in builtins/object.ts etc., tests/test262.toml (promote Proxy/Reflect-with-proxies), ratchets
