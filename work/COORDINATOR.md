@@ -2,6 +2,12 @@
 
 Notes for the coordinator (the main agent), learned the hard way.
 
+## Editing main
+- Make edits **inside** the merge lock, not before taking it:
+  `scripts/with-merge-lock.sh bash -c '<edit>; git add -A; git commit -qm ...'`. Editing
+  first and then waiting for the lock leaves the primary checkout dirty while an agent's
+  merge holds the lock, and its fast-forward fails after a full gate (happened with D016).
+
 ## Assigning an issue
 1. Write the issue file, update BOARD.md, and commit with
    `scripts/with-merge-lock.sh git commit ...`.
