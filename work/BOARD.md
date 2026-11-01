@@ -10,7 +10,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0128 | Page allocator in djs-wasm (in-place arena growth) | heap | .worktrees/heap |
 | 0129 | pi-like hot spots (interpreter, native calls, JSON) | perf | .worktrees/perf |
 | 0130 | Codemode feature usage across all sessions (research) | infra | .worktrees/infra |
-| 0126 | Size: run-length Unicode tables, panics without fmt | bloat | .worktrees/bloat |
+| 0131 | Size follow-ups: message builder, decomposition, composition | bloat | .worktrees/bloat |
 
 ## Open (ready)
 
@@ -81,6 +81,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0126 | Size: paths, no_std panic handler, location-detail, Unicode recoding (D2331-D2336) | acf388af (agent bloat; ~-20 KB gzip; main 460.9 KB, 1.608x) |
 | 0127 | Size: internal names out of image, natives pruned, inline threshold (D2253-D2256) | f39803d1 (agent perf; 472 -> 462 KB with 0126 Unicode, 1.612x) |
 | 0125 | GC: full first collection; aging rejected; perturbation method (D2045-D2048) | c38968ff (agent heap; strbuild peak back to 25.5 MiB) |
 | 0122 | wasm size: image ordering + codec, size gate (D2251, D2252) | 560008b9 (agent perf; 529.9 -> 509.5 KB gzip, 1.78x) |
