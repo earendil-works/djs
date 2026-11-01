@@ -332,7 +332,11 @@ The raw value bits from `vm_host_call` and `vm_handle_bits` stay valid until the
 `vm_run` or collection (the GC moves objects). Read them right away.
 
 **Traps.** The module is built with `panic = "abort"`. A panic (an engine bug, or a misused
-ABI) records its message through a panic hook, then traps. The host sees a
+ABI) records a message, then traps. On wasm32 djs-wasm is `no_std` with its own panic
+handler (D2332): debug modules record the panic's message, the shipped (release) module a
+fixed one ("djs-wasm panicked ..."), because formatting would keep core::fmt and every
+panic message in the module; a native or debug build reproduces the real message. The
+shipped module also carries no panic locations (D2333). The host sees a
 `WebAssembly.RuntimeError`, reads `djs_panic_*`, and must discard the instance. The Sandbox
 does that and reports `kind: "trap"`. Hostile JS cannot cause a panic: the heap is bounds
 checked, and limits are thrown errors.

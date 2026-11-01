@@ -413,7 +413,7 @@ gzip with `tests/scores/size.tsv`:
 
 `budget.py` also fails when the module contains a build-machine path (`/Users/`,
 `/home/`, `.cargo/registry`, `.rustup/`): panic locations carry source file paths, and
-every build of the shipped module takes its rustflags from `scripts/wasm-rustflags.sh`,
+every build of the shipped module takes its build environment from `scripts/wasm-build-env.sh`,
 which remaps them (`--remap-path-prefix`, D2331).
 
 An issue that makes the module smaller lowers the ceiling on its branch

@@ -27,7 +27,9 @@ meant to replace QuickJS in pi's codemode. Read these before you start any work:
 ## Code conventions
 
 - Rust edition 2024, stable toolchain. `cargo fmt` and clippy with `-D warnings` must be
-  clean.
+  clean. The one exception: the shipped wasm module's build (scripts/wasm-build-env.sh
+  only) sets RUSTC_BOOTSTRAP=1 for `-Zlocation-detail=none` (D2333); everything else,
+  and that build with DJS_STABLE_ONLY=1, compiles on plain stable.
 - `djs-core` is `#![no_std]` + `alloc`. It must always build for
   `wasm32-unknown-unknown`. No `std`, no platform dependencies.
 - Dependencies: none in `djs-core` without a recorded decision in `docs/decisions.md`.

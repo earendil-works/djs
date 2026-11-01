@@ -27,15 +27,21 @@ pub fn size(r: &mut Runner) {
     measure(r, "size/djs-wasm", &module, &target_dir, "djs_wasm.wasm");
 }
 
-/// The rustflags of every shipped-module build (`scripts/wasm-rustflags.sh`, D2331: no
-/// absolute build-machine paths in the module), so the size track measures the same
+/// The build environment of every shipped-module build (`scripts/wasm-build-env.sh`:
+/// remapped paths, D2331; no panic locations, D2333), so the size track measures the same
 /// bytes as scripts/build-wasm.sh. Empty if the script fails.
-pub fn shipped_rustflags() -> String {
-    Command::new(workspace_root().join("scripts/wasm-rustflags.sh"))
+pub fn shipped_env() -> Vec<(String, String)> {
+    Command::new(workspace_root().join("scripts/wasm-build-env.sh"))
         .output()
         .ok()
         .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .filter_map(|l| l.split_once('='))
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -47,7 +53,7 @@ fn measure(r: &mut Runner, prefix: &str, what: &[&str], target_dir: &Path, file:
     let root = workspace_root();
     let status = Command::new(env!("CARGO"))
         .current_dir(&root)
-        .env("CARGO_ENCODED_RUSTFLAGS", shipped_rustflags())
+        .envs(shipped_env())
         .args(["build", "--quiet"])
         .args(what)
         .args([

@@ -35,8 +35,10 @@ writes it into each new instance, which checks its length and hash before using 
 host that skips this still works; each instance then decodes its own copy.
 
 A panic in the engine (a bug, never something a script can cause: the heap is bounds
-checked and every limit is a thrown error) records its message and traps. The host reads
-the message and discards the instance. Every sandbox gets its own instance, so one trap
+checked and every limit is a thrown error) records a message and traps. The host reads
+the message and discards the instance. The shipped module records a fixed message: it
+carries no panic messages, panic locations or formatting code, to stay small (D2332,
+D2333). A debug or native build of the engine reproduces the real message. Every sandbox gets its own instance, so one trap
 cannot affect another.
 
 There are about 45 exports; the `Sandbox` class below wraps them, so most hosts never

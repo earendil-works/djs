@@ -34,6 +34,22 @@ disjoint from perf's 0122 work:
   fails on `/Users/`, `/home/`, `.cargo/registry`, `.rustup/` in the module (D2331).
   Module 1,186,680 -> 1,186,312 raw (the paths get shorter; the panic work removes the
   rest). Merged on its own first.
+- Panics (D2332, D2333): djs-wasm is no_std on wasm32 with its own panic handler (fixed
+  message in release modules, the formatted one in debug modules; natively the std hook as
+  before) and dlmalloc as the global allocator (std's own on that target). Alone: −3.4 KB
+  gzip (std's panic machinery). Core panics still build `fmt::Arguments` and a `Location`
+  at each call site, which LLVM can't drop on stable; `-Zlocation-detail=none` (with
+  RUSTC_BOOTSTRAP=1, only in the shipped build, coordinator's call) removes the locations:
+  506,114 -> 497,603 (−8.5 KB). Total 509,489 -> 497,603 gzip (−11.9 KB), raw 1,186,680 ->
+  1,159,910. With DJS_STABLE_ONLY=1 the module builds on plain stable (506,114, tested).
+  scripts/wasm-rustflags.sh became scripts/wasm-build-env.sh + scripts/with-wasm-env.sh.
+  For comparison, nightly immediate-abort with build-std reaches 487,772: ~10 KB more
+  that stable can't get (call-site `fmt::Arguments` of core panics).
+- Perf (wmeasure, wasm instructions, n=3, base vs new): loop/calls/props/strings/json/
+  higher-order/regexp equal or lower, arrays +0.3%, strbuild +0.2%, pi-like +0.6%
+  (spread 0.2–0.6%): no workload beyond +1%.
+- js/test sandbox trap test accepts the release module's fixed message too. Guide:
+  docs/guide/host.md (trap paragraph) updated; docs/host.md too.
 
 ## Follow-ups
 

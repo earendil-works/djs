@@ -12,11 +12,26 @@
 //! from 1 (`handle index + 1`; 0 means `undefined` where a value is expected). Using a
 //! freed VM or handle number is a trap.
 //!
-//! Panics trap (wasm32-unknown-unknown aborts on panic). A hook records the message
-//! first, so the host can read it with `djs_panic_ptr` / `djs_panic_len` afterwards. After
-//! a trap the instance must not be used again.
+//! Panics trap (wasm32-unknown-unknown aborts on panic). The panic handler records a
+//! message first, so the host can read it with `djs_panic_ptr` / `djs_panic_len`
+//! afterwards. After a trap the instance must not be used again.
+//!
+//! On wasm32 the crate is `no_std` (D2332): its own panic handler never formats, so
+//! neither std's panic machinery nor the panic messages and locations of the engine
+//! reach the shipped module. Release modules report a fixed message; debug modules
+//! (`debug_assertions`) and native builds keep the real one.
 
-use std::cell::RefCell;
+#![cfg_attr(target_arch = "wasm32", no_std)]
+
+extern crate alloc;
+
+use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
+use alloc::format;
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
+use core::cell::{OnceCell, RefCell};
 
 use djs_core::compiler::{CompileOptions, Goal};
 use djs_core::heap::Handle;
@@ -56,24 +71,90 @@ struct State {
     out: Vec<u8>,
 }
 
-thread_local! {
+/// The instance's globals: thread-locals natively (each test thread has its own), plain
+/// statics on wasm32, where an instance has one thread and no std.
+macro_rules! instance_locals {
+    ($($(#[$m:meta])* static $name:ident: $t:ty = $init:expr;)*) => {
+        #[cfg(not(target_arch = "wasm32"))]
+        std::thread_local! { $($(#[$m])* static $name: $t = const { $init };)* }
+        $(
+            $(#[$m])*
+            #[cfg(target_arch = "wasm32")]
+            static $name: wasm::Local<$t> = wasm::Local($init);
+        )*
+    };
+}
+
+instance_locals! {
     // `const`: no lazy-initialization code in each of the ~40 `with` instantiations
     // (0043: 10 KB of wasm).
-    static STATE: RefCell<State> = const {
-        RefCell::new(State {
-            vms: Vec::new(),
-            staging: Vec::new(),
-            out: Vec::new(),
-        })
-    };
+    static STATE: RefCell<State> = RefCell::new(State {
+        vms: Vec::new(),
+        staging: Vec::new(),
+        out: Vec::new(),
+    });
     /// The base snapshot, decoded from djs-prelude's coded image at the first use (D2252)
     /// and kept for the instance's lifetime.
-    static BASE: std::cell::OnceCell<&'static [u8]> = const { std::cell::OnceCell::new() };
+    static BASE: OnceCell<&'static [u8]> = OnceCell::new();
     /// A copy of the base the host is writing (`djs_base_inject_ptr`), until checked.
-    static INJECTED: RefCell<Option<Box<[u8]>>> = const { RefCell::new(None) };
+    static INJECTED: RefCell<Option<Box<[u8]>>> = RefCell::new(None);
     /// The message of the last panic. Separate from `STATE`, which may be left borrowed by
     /// the call that trapped.
-    static PANIC: RefCell<String> = const { RefCell::new(String::new()) };
+    static PANIC: RefCell<String> = RefCell::new(String::new());
+}
+
+/// Records the message of a panic for `djs_panic_ptr` (best effort: never panics).
+fn record_panic(msg: impl FnOnce() -> String) {
+    PANIC.with(|p| {
+        if let Ok(mut p) = p.try_borrow_mut() {
+            *p = msg();
+        }
+    });
+}
+
+/// The wasm32 runtime without std (D2332): instance globals, the allocator, the panic
+/// handler.
+#[cfg(target_arch = "wasm32")]
+mod wasm {
+    /// A global of the instance. wasm32-unknown-unknown without the atomics feature has
+    /// one thread, so a plain static is enough.
+    pub struct Local<T>(pub T);
+
+    // SAFETY: there is only one thread in a wasm32-unknown-unknown instance (no atomics,
+    // no shared memory), so no value is ever reached from two threads.
+    unsafe impl<T> Sync for Local<T> {}
+
+    impl<T> Local<T> {
+        #[inline]
+        pub fn with<R>(&'static self, f: impl FnOnce(&T) -> R) -> R {
+            f(&self.0)
+        }
+    }
+
+    // The allocator std uses on this target, now named directly.
+    #[cfg(not(feature = "alloc-stats"))]
+    #[global_allocator]
+    static ALLOC: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
+
+    /// Never formats in release modules: formatting would keep core::fmt, every panic
+    /// message and every panic location (source paths) in the module (D2332). Debug
+    /// modules keep the message, as the node tests and hosts debugging the engine want.
+    #[panic_handler]
+    fn panic(info: &core::panic::PanicInfo) -> ! {
+        #[cfg(debug_assertions)]
+        super::record_panic(|| alloc::string::ToString::to_string(info));
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = info;
+            super::record_panic(|| {
+                alloc::string::String::from(
+                    "djs-wasm panicked (an engine bug; the release module has no panic \
+                     messages, a debug or native build has them)",
+                )
+            });
+        }
+        core::arch::wasm32::unreachable()
+    }
 }
 
 /// The base snapshot (D1321), decoded once per instance (D2252).
@@ -81,24 +162,21 @@ fn base() -> &'static [u8] {
     BASE.with(|b| *b.get_or_init(|| Box::leak(djs_prelude::unpack_base().into_boxed_slice())))
 }
 
+/// Natively, a panic hook records the message (and the default hook still prints). On
+/// wasm32 the panic handler does that.
 fn init() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        // Natively (tests) the default hook still prints; on wasm32 there is no stderr, and
-        // leaving it out keeps its code out of the module.
-        #[cfg(not(target_arch = "wasm32"))]
-        let previous = std::panic::take_hook();
-        std::panic::set_hook(Box::new(move |info| {
-            let msg = info.to_string();
-            PANIC.with(|p| {
-                if let Ok(mut p) = p.try_borrow_mut() {
-                    *p = msg;
-                }
-            });
-            #[cfg(not(target_arch = "wasm32"))]
-            previous(info);
-        }));
-    });
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        static ONCE: std::sync::Once = std::sync::Once::new();
+        ONCE.call_once(|| {
+            let previous = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                let msg = info.to_string();
+                record_panic(|| msg);
+                previous(info);
+            }));
+        });
+    }
 }
 
 fn with<R>(f: impl FnOnce(&mut State) -> R) -> R {
@@ -137,7 +215,7 @@ impl State {
             return 0;
         };
         let mut words = vec![id, info.fn_id];
-        for v in std::iter::once(info.this).chain(info.args.iter().copied()) {
+        for v in core::iter::once(info.this).chain(info.args.iter().copied()) {
             let b = v.to_bits();
             words.push(b as u32);
             words.push((b >> 32) as u32);
@@ -179,7 +257,7 @@ fn staged(staging: &[u8], start: usize, len: usize) -> &[u8] {
 }
 
 fn staged_str(staging: &[u8], start: usize, len: usize) -> &str {
-    std::str::from_utf8(staged(staging, start, len))
+    core::str::from_utf8(staged(staging, start, len))
         .unwrap_or_else(|_| panic!("djs-wasm: staged text is not UTF-8"))
 }
 
@@ -206,8 +284,14 @@ impl Slot {
 
 #[cfg(feature = "alloc-stats")]
 mod alloc_stats {
-    use std::alloc::{GlobalAlloc, Layout, System};
-    use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+    use core::alloc::{GlobalAlloc, Layout};
+    use core::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+
+    // The allocator underneath: std's natively, dlmalloc (std's on wasm32) without std.
+    #[cfg(target_arch = "wasm32")]
+    use dlmalloc::GlobalDlmalloc as System;
+    #[cfg(not(target_arch = "wasm32"))]
+    use std::alloc::System;
 
     pub static LIVE: AtomicUsize = AtomicUsize::new(0);
     pub static PEAK: AtomicUsize = AtomicUsize::new(0);
@@ -260,7 +344,7 @@ mod alloc_stats {
 #[unsafe(no_mangle)]
 pub extern "C" fn djs_alloc_stats(reset: u32) -> usize {
     use alloc_stats::*;
-    use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
+    use core::sync::atomic::{AtomicU32, Ordering::Relaxed};
     static OUT: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
     let v = [
         LIVE.load(Relaxed),
@@ -462,7 +546,7 @@ pub extern "C" fn vm_from_bytes(len: usize, memory_limit: u32) -> u32 {
     with(|s| {
         staged(&s.staging, 0, len);
         // The image becomes the arena: hand over the staging buffer instead of copying.
-        let mut bytes = std::mem::take(&mut s.staging);
+        let mut bytes = core::mem::take(&mut s.staging);
         bytes.truncate(len);
         match Vm::from_bytes(bytes, options(memory_limit)) {
             Ok(vm) => s.add_vm(vm),
@@ -965,7 +1049,7 @@ pub extern "C" fn vm_abort(vm: u32) {
 /// The handle of the last DONE/THREW value (the host frees it). 0 if there is none.
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_result(vm: u32) -> u32 {
-    with(|s| std::mem::take(&mut s.slot(vm).result))
+    with(|s| core::mem::take(&mut s.slot(vm).result))
 }
 
 /// Describes the parked host call: writes `[call_id, fn_id, this_lo, this_hi, (arg_lo,

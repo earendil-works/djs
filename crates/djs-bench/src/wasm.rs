@@ -26,7 +26,7 @@ pub fn wasm(r: &mut Runner) {
     let target_dir = root.join("target/bench-wasm-build");
     let built = Command::new(env!("CARGO"))
         .current_dir(&root)
-        .env("CARGO_ENCODED_RUSTFLAGS", crate::size::shipped_rustflags())
+        .envs(crate::size::shipped_env())
         .args([
             "build",
             "--quiet",

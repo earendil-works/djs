@@ -22,7 +22,7 @@ def read():
     return vals, lines
 
 # Build-machine paths that must not reach the shipped module (D2331): panic locations
-# carry source paths, scripts/wasm-rustflags.sh remaps them.
+# carry source paths, scripts/wasm-build-env.sh remaps them.
 LEAKS = [b"/Users/", b"/home/", b".cargo/registry", b".rustup/", b"C:\\Users\\"]
 
 
@@ -42,7 +42,7 @@ def main():
     bad = leaks(data)
     if bad:
         print("size: FAIL: the module contains build-machine paths (D2331; build it with "
-              "scripts/wasm-rustflags.sh):")
+              "scripts/with-wasm-env.sh):")
         for b in bad:
             print(f"  {b}")
         sys.exit(1)

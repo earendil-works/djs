@@ -27,3 +27,7 @@ djs-core = { path = "../djs-core" }
 # The base snapshot: vm_new copies it (D1321).
 # The base snapshot, coded (D2252): vm_new copies it after a decode once per instance.
 djs-prelude = { path = "../djs-prelude", default-features = false, features = ["packed"] }
+
+# On wasm32 the crate is no_std (D2332): std's allocator for that target, named directly.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+dlmalloc = { version = "0.2.14", features = ["global"] }

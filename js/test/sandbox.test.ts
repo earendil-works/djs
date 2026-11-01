@@ -434,7 +434,9 @@ test("a trap is a clean error and kills the sandbox", async () => {
   const sb = await Sandbox.create();
   assert.throws(
     () => sb.debugTrap(),
-    (e: unknown) => e instanceof SandboxError && e.kind === "trap" && /djs_debug_panic called/.test(e.message),
+    // Debug modules report the panic message; the shipped module a fixed one (D2332).
+    (e: unknown) =>
+      e instanceof SandboxError && e.kind === "trap" && /djs_debug_panic called|djs-wasm panicked/.test(e.message),
   );
   assert.throws(() => sb.run("return 1"), /unusable: trapped/);
   // Other sandboxes have their own instance.

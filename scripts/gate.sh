@@ -34,7 +34,7 @@ step() {
 # unit: mostly one core for a few minutes) runs in its own target directory beside the
 # other steps.
 size_log=target/size-build.log
-( CARGO_ENCODED_RUSTFLAGS=$(scripts/wasm-rustflags.sh) CARGO_TARGET_DIR=target/size cargo build -p djs-wasm --target wasm32-unknown-unknown \
+( CARGO_TARGET_DIR=target/size scripts/with-wasm-env.sh cargo build -p djs-wasm --target wasm32-unknown-unknown \
     --profile wasm --quiet > "$size_log" 2>&1 ) &
 size_pid=$!
 trap 'kill "$size_pid" 2>/dev/null || true' EXIT

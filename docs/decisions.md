@@ -5392,3 +5392,38 @@ scripts/size/variant.sh. Cargo's `trim-paths` profile option would do this but i
 stable in cargo 1.99. scripts/size/budget.py fails the gate when the module contains
 `/Users/`, `/home/`, `.cargo/registry` or `.rustup/`. The paths do not change between
 machines or worktrees any more, so the module is reproducible across them.
+
+## D2332: djs-wasm is no_std on wasm32, with a panic handler that never formats
+date: 2026-11-07 · by: bloat · issue: 0126
+On wasm32, djs-wasm is `#![no_std]` (all its dependencies already were): its own
+`#[panic_handler]` records a message for `djs_panic_ptr`/`djs_panic_len` and traps.
+Release modules record a fixed message ("djs-wasm panicked (an engine bug; ...)"), debug
+modules (`debug_assertions`, which the gate's node tests use) the formatted panic message;
+native builds keep the std panic hook. Without std, its panic machinery (hooks, payloads,
+`PanicHookInfo` formatting) leaves the module: −3.4 KB gzip. Instance globals are plain
+statics behind a `Local<T>` wrapper on wasm32 (one thread per instance, `unsafe impl
+Sync` with that reasoning), thread-locals natively. The global allocator is the
+`dlmalloc` crate (0.2.14, `global` feature) as a wasm32-only dependency: the same
+allocator, at the same version, that std uses on wasm32-unknown-unknown, now named
+directly. Core panics (`panic_bounds_check`, `expect`, RefCell) still build their
+messages' `fmt::Arguments` at the call site, so core::fmt stays reachable on stable; D2333
+removes their locations.
+
+## D2333: The shipped module drops panic locations (-Zlocation-detail=none, the one unstable flag)
+date: 2026-11-07 · by: bloat · issue: 0126
+Every panicking call site in djs (slice indexing, `expect`, RefCell borrows, asserts)
+materializes a `core::panic::Location` (file, line, column) at the call site, and on
+stable LLVM cannot drop them even though the panic handler ignores them (D2332): ~1,300
+locations, 17 KB raw of data. `-Zlocation-detail=none` makes them all one empty location.
+Measured on the shipped module: 506,114 -> 497,603 bytes gzip (−8,511), raw 1,176,854 ->
+1,159,910. The flag only changes panic metadata, not semantics. It is unstable, so the
+shipped module's build sets RUSTC_BOOTSTRAP=1 with it, and only that build:
+scripts/wasm-build-env.sh (which replaces 0126's scripts/wasm-rustflags.sh and also
+carries D2331's path remaps) prints the environment, scripts/with-wasm-env.sh applies it,
+and every shipped-module build goes through it (scripts/build-wasm.sh, the gate's size
+step, djs-bench's size and wasm groups, scripts/size/variant.sh). djs-core's normal
+builds, tests, clippy and the native tools never see it. DJS_STABLE_ONLY=1 drops the flag
+and RUSTC_BOOTSTRAP (tested: the module builds and passes, at the larger size). Exit plan:
+if a future rustc changes or removes the flag, set DJS_STABLE_ONLY behavior as the
+default (delete the two lines in wasm-build-env.sh) and raise the size ratchet
+(tests/scores/size.tsv) by the recorded 8.5 KB under this decision.
