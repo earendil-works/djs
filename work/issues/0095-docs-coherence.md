@@ -1,7 +1,7 @@
 # 0095: Documentation coherence pass and a project README
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0095-docs-coherence
 depends-on: 0091
 touches: README.md (new), ARCH.md, TESTING.md, docs/*.md, builtins/README.md, work/README.md (process docs only), no code
