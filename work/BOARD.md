@@ -72,6 +72,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | date | difftest (djs) | test262 active |
 | --- | --- | --- |
 | 2026-11-01 | 50 / 154 (11 skipped) | 2,961 / 20,124 (14.7%) |
+| 2026-11-01 (0031 part 1) | 55 / 168 | 5,108 / 20,124 (25.4%) |
 
 ## Parallelism notes
 
