@@ -11,7 +11,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0080 | for-of/iteration fast paths + natives wave 2 | infra | .worktrees/infra |
 | 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
 | 0079 | Integration efficiency: items 1-4 landed (D1790-D1793), measuring for train/post-merge | devflow | .worktrees/devflow |
-| 0084 | Long tail part 2 (Function.prototype callable, array length set, atob/btoa) | lexer | .worktrees/lexer |
+| 0086 | Bytecode quality + dispatch (0081 P4) | lexer | .worktrees/lexer |
 | 0083 | Shapes + leaner object/image layout (design first) | heap | .worktrees/heap |
 | 0072 | Determinism gate checks part 2 (waits for 0071) | determinism (idle until 0071) | .worktrees/determinism |
 | 0085 | Leaf fast paths for everyday builtins (0081 P1) | perf | .worktrees/perf |
@@ -25,7 +25,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0086 | Bytecode quality + dispatch (0081 P4) | lexer, after 0084 |
 | 0087 | Allocation churn + wasm memory (0081 P5) | num, after 0071 |
 | 0078 | Leaf quick wins from 0077 (ASCII check, UTF-8 in transcode, short_decimal) | num, after 0075 |
 
@@ -52,6 +51,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0046 | BigInt | 63d8468 (agent heap; BigInt 1135/1142; active 98.8%) |
 | 0033 | JSON + RegExp builtins, regex literals | 8b5ccfb (agent num; active 32,303 / 32,718) |
 | 0040 | P1-7 Classes | 2d08a6c (agent lexer; test262 active 97.1%) |
+| 0084 | Long tail part 2 | a7a38ed (agent lexer; test262 failures 56 -> 43, all by design or routed) |
 | 0082 | The long tail | 5a4ba6a (agent lexer; test262 failures 203 -> 56; Known differences in TESTING.md) |
 | 0065 | Decorators (TC39 + accessor + TS legacy) | f4894f5 (agent lexer; strip-types 4,316/4,802, 0 differ) |
 | 0058 | Compiler: using, completion values + Goal::Eval, import() | 8bc39dd (agent lexer; strip-types 4,085/4,802, 0 differ) |
