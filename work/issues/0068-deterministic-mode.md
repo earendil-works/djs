@@ -1,7 +1,7 @@
 # 0068: Deterministic mode for VM and Sandbox
 
-status: open
-agent: -
+status: in-progress
+agent: determinism
 branch: issue/0068-deterministic-mode
 depends-on: 0067
 touches: crates/djs-core/src/vm/, crates/djs-core/src/heap/ (weak refs: strong or absent; no FR scheduling), crates/djs-wasm/, js/src/sandbox.ts, js/pi/, docs/host.md

@@ -1032,6 +1032,82 @@ fn weak_refs_and_finalization_after_collect() {
     assert_eq!(out.log, ["done"]);
 }
 
+const WEAK_SCRIPT: &str = "globalThis.kept = {};\n\
+     globalThis.w1 = new WeakRef(kept);\n\
+     globalThis.w2 = new WeakRef({ dies: true });\n\
+     globalThis.r = new FinalizationRegistry((h) => console.log('cleanup', h));\n\
+     r.register({}, 'a');\n\
+     r.register(kept, 'kept');\n\
+     for (let i = 0; i < 3000; i++) r.register({ i }, i);\n";
+
+#[test]
+fn strong_weak_refs_never_lose_their_targets() {
+    // D1680: in strong mode no collection is observable: deref keeps finding targets
+    // nobody else references, and no cleanup callback runs, after explicit collections
+    // and under GC stress.
+    for gc_stress in [false, true] {
+        let vm = vm_with(VmOptions {
+            weak_refs: WeakRefs::Strong,
+            exec: ExecOptions {
+                gc_stress,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        assert!(vm.heap().weak_refs_strong());
+        let (mut vm, _) = run_script(vm, WEAK_SCRIPT);
+        vm.collect().unwrap();
+        vm.collect().unwrap();
+        vm.heap().verify().unwrap();
+        let (mut vm, out) = run_script(vm, "console.log(w1.deref() === kept, w2.deref().dies);\n");
+        assert_eq!(out.log, ["true true"], "gc_stress {gc_stress}");
+        // The mode is in the image.
+        let opts = vm.options();
+        vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();
+        assert!(vm.heap().weak_refs_strong());
+        let (mut vm, out) = run_script(
+            vm,
+            "globalThis.w3 = new WeakRef({ late: 1 }); console.log('ok');\n",
+        );
+        assert_eq!(out.log, ["ok"]);
+        vm.collect().unwrap();
+        let (_, out) = run_script(vm, "console.log(w3.deref().late, w2.deref().dies);\n");
+        assert_eq!(out.log, ["1 true"]);
+    }
+    // The same script with collected weak refs: the targets die and callbacks run.
+    let (mut vm, _) = run_script(vm(), WEAK_SCRIPT);
+    vm.collect().unwrap();
+    let (_, out) = run_script(vm, "console.log(w1.deref() === kept, w2.deref());\n");
+    assert_eq!(out.log[0], "true undefined");
+    assert!(out.log.len() > 1, "cleanup ran");
+}
+
+#[test]
+fn absent_weak_refs() {
+    let vm = vm_with(VmOptions {
+        weak_refs: WeakRefs::Absent,
+        ..Default::default()
+    });
+    let (vm, out) = run_script(
+        vm,
+        "console.log(typeof WeakRef, typeof FinalizationRegistry, typeof WeakMap);\n",
+    );
+    assert_eq!(out.log, ["undefined undefined function"]);
+    // From a base image too (after_copy), as embedders create VMs.
+    let base = Vm::new(VmOptions::default()).unwrap().bytes().to_vec();
+    let mut b = Vm::from_base(
+        &base,
+        VmOptions {
+            weak_refs: WeakRefs::Absent,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let w = b.heap_mut().atom_str("WeakRef").unwrap();
+    assert!(b.heap().find_property(b.global(), w).is_none());
+    drop(vm);
+}
+
 #[test]
 fn finalization_cleanup_can_wait_for_the_host() {
     let vm = vm_with(VmOptions {

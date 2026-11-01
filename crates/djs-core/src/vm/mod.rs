@@ -56,6 +56,23 @@ pub const BUILD_HASH: u32 = {
     )
 };
 
+/// What WeakRef and FinalizationRegistry do (D1680). Collection timing depends on the heap
+/// cap and the GC policy, so a host that needs runs to repeat exactly pins them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WeakRefs {
+    /// Weak, as the spec intends: targets die in collections, and FinalizationRegistry
+    /// callbacks run afterwards (D1513).
+    #[default]
+    Collected,
+    /// Strong: `deref` always returns the target and cleanup callbacks never run, whenever
+    /// collections run (the spec allows an engine that never collects). Applies to the
+    /// WeakRefs and registry cells created afterwards.
+    Strong,
+    /// The globals `WeakRef` and `FinalizationRegistry` are deleted (as pi's quickjs VM
+    /// leaves them out in deterministic runs). Not reversible.
+    Absent,
+}
+
 /// VM configuration.
 #[derive(Clone, Copy, Debug)]
 pub struct VmOptions {
@@ -69,6 +86,9 @@ pub struct VmOptions {
     /// fixed default). Applied by `Vm::new` and after copying a base (`from_base`); a
     /// restored snapshot (`from_bytes`) continues its own sequence.
     pub random_seed: u64,
+    /// WeakRef and FinalizationRegistry (D1680). Applied by `Vm::new` and `from_base`; a
+    /// restored image keeps what it had (the mode is heap state).
+    pub weak_refs: WeakRefs,
 }
 
 impl Default for VmOptions {
@@ -78,6 +98,7 @@ impl Default for VmOptions {
             exec: ExecOptions::default(),
             prelude: true,
             random_seed: crate::builtins::number::DEFAULT_RANDOM_SEED,
+            weak_refs: WeakRefs::Collected,
         }
     }
 }
@@ -128,6 +149,7 @@ impl Vm {
         if opts.prelude {
             vm.install_prelude()?;
         }
+        vm.set_weak_refs(opts.weak_refs)?;
         Ok(vm)
     }
 
@@ -198,15 +220,32 @@ impl Vm {
         if vm.state() != RunState::Idle || vm.heap.handle_count() != 0 {
             return Err(LoadError::BadHeader);
         }
-        vm.after_copy();
+        vm.after_copy().map_err(|_| LoadError::TooLarge)?;
         Ok(vm)
     }
 
     /// Per-VM initialization after copying a base: state that must not be shared between
-    /// VMs or baked into the base: the `Math.random` seed.
-    fn after_copy(&mut self) {
+    /// VMs or baked into the base: the `Math.random` seed and the weak-reference mode.
+    fn after_copy(&mut self) -> Result<(), HeapError> {
         let seed = self.opts.random_seed;
         crate::builtins::number::set_seed(&mut self.heap, seed);
+        self.set_weak_refs(self.opts.weak_refs)
+    }
+
+    /// Sets what WeakRef and FinalizationRegistry do (D1680); set it before running code.
+    /// `Strong` affects the weak references created afterwards, `Absent` deletes the two
+    /// globals, `Collected` makes new ones weak again (it cannot bring back deleted
+    /// globals).
+    pub fn set_weak_refs(&mut self, mode: WeakRefs) -> Result<(), HeapError> {
+        self.heap.set_weak_refs_strong(mode == WeakRefs::Strong);
+        if mode == WeakRefs::Absent {
+            let g = self.global();
+            for name in ["WeakRef", "FinalizationRegistry"] {
+                let key = self.heap.atom_str(name)?;
+                self.heap.delete_own_property(g, key);
+            }
+        }
+        Ok(())
     }
 
     /// The build hash, before anything else: an image from another build must be

@@ -258,6 +258,23 @@ impl Heap {
     /// Opens the out-of-memory reserve (D1600): the interpreter calls this when it turns
     /// an allocation failure into an exception, so that the handlers have room to run.
     /// It closes again in the first collection that leaves twice the reserve free.
+    /// Whether weak references are strong (D1680, [`cells::ROOT_WEAK_STRONG`]).
+    pub fn weak_refs_strong(&self) -> bool {
+        self.arena.get(0, Roots::FLAGS) & cells::ROOT_WEAK_STRONG != 0
+    }
+
+    /// Makes the WeakRefs and FinalizationRegistry cells created from now on strong (or
+    /// weak again). Part of the image.
+    pub fn set_weak_refs_strong(&mut self, strong: bool) {
+        let f = self.arena.get(0, Roots::FLAGS);
+        let f = if strong {
+            f | cells::ROOT_WEAK_STRONG
+        } else {
+            f & !cells::ROOT_WEAK_STRONG
+        };
+        self.arena.set(0, Roots::FLAGS, f);
+    }
+
     pub fn open_memory_reserve(&mut self) {
         if !self.memory_reserve_open() {
             let f = self.arena.get(0, Roots::FLAGS);

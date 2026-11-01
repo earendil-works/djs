@@ -17,6 +17,12 @@
 //!
 //! Everything iterates in index order, so it depends only on the object graph and the
 //! collections stay deterministic (D1090).
+//!
+//! Strong mode (D1680, [`Heap::weak_refs_strong`]): a WeakRef's pair and a registry's
+//! targets table are made as ValueArrays instead (the same layout: LEN, then the
+//! values), which the collector traces like any array. Nothing they reference dies, so
+//! `deref` always finds its target and no cleanup is ever due, whenever collections
+//! run. A table keeps its kind when it grows.
 
 use alloc::vec::Vec;
 
@@ -33,12 +39,29 @@ const FLAGS: u32 = 4;
 impl Heap {
     /// An EphemeronArray with room for `pairs` pairs, LEN 0.
     fn alloc_pairs(&mut self, pairs: u32) -> Result<u32, HeapError> {
+        self.alloc_pairs_of(CellKind::EphemeronArray, pairs)
+    }
+
+    /// A pair table of `kind`: an EphemeronArray (weak keys) or, in strong mode, a
+    /// ValueArray with the same layout (D1680).
+    fn alloc_pairs_of(&mut self, kind: CellKind, pairs: u32) -> Result<u32, HeapError> {
+        debug_assert!(EphemeronArray::VALUES.offset == ValueArray::VALUES.offset);
+        debug_assert!(EphemeronArray::LEN.offset == ValueArray::LEN.offset);
         let size = EphemeronArray::VALUES
             .cell_size(pairs * 2)
             .ok_or(HeapError::OutOfMemory)?;
-        let e = self.alloc_cell(CellKind::EphemeronArray, size)?;
+        let e = self.alloc_cell(kind, size)?;
         self.arena_mut().set(e, EphemeronArray::LEN, 0);
         Ok(e)
+    }
+
+    /// The kind of the tables that hold weak targets: weak, or strong in strong mode.
+    fn weak_table_kind(&self) -> CellKind {
+        if self.weak_refs_strong() {
+            CellKind::ValueArray
+        } else {
+            CellKind::EphemeronArray
+        }
     }
 
     fn pairs_len(&self, e: u32) -> u32 {
@@ -63,7 +86,7 @@ impl Heap {
         let e = if n < cap {
             e
         } else {
-            let new = self.alloc_pairs((cap * 2).max(4))?;
+            let new = self.alloc_pairs_of(self.cell_kind(e), (cap * 2).max(4))?;
             let src = EphemeronArray::VALUES.at(e, 0);
             let dst = EphemeronArray::VALUES.at(new, 0);
             self.arena_mut().copy_within(src, n * 16, dst);
@@ -77,7 +100,7 @@ impl Heap {
     /// A new WeakRef with prototype `proto` and target `target` (an object or a symbol
     /// that can be held weakly).
     pub fn weakref_new(&mut self, proto: Obj, target: Value) -> Result<Obj, HeapError> {
-        let cell = self.alloc_pairs(1)?;
+        let cell = self.alloc_pairs_of(self.weak_table_kind(), 1)?;
         self.push_pair(cell, target, Value::TRUE)?;
         let o = self.alloc_object(ObjectClass::WeakRef, Some(proto), 1)?;
         self.set_object_slot(o, 0, Value::internal(cell));
@@ -94,7 +117,7 @@ impl Heap {
     /// A new FinalizationRegistry with prototype `proto` and cleanup callback `cleanup`.
     /// The caller registers it in the realm's list ([`Heap::registry_list_push`]).
     pub fn registry_new(&mut self, proto: Obj, cleanup: Value) -> Result<Obj, HeapError> {
-        let targets = self.alloc_pairs(4)?;
+        let targets = self.alloc_pairs_of(self.weak_table_kind(), 4)?;
         let tokens = self.alloc_pairs(4)?;
         let held = self.alloc_value_array(4)?;
         self.arena_mut().set(held, ValueArray::LEN, 0);

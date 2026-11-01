@@ -111,6 +111,11 @@ pub const IC_OFFSET_SLOT: u32 = 1 << 30;
 /// thrown and the arena may use the bytes held back below the cap.
 pub const ROOT_RESERVE_OPEN: u32 = 1;
 
+/// `Roots::FLAGS`: weak references are strong (D1680): new WeakRefs and
+/// FinalizationRegistry cells hold their targets in traced tables, so no collection,
+/// whenever it runs, is observable.
+pub const ROOT_WEAK_STRONG: u32 = 2;
+
 records! {
     /// One property in a [`PropTable`]. For a data property `VALUE` is the value and
     /// `SETTER` is unused (0). For an accessor `VALUE` is the getter and `SETTER` the
@@ -165,7 +170,7 @@ cells! {
         /// instruction table and intrinsic ids, D1320), 0 for a bare heap. Images hold
         /// bytecode, so they load only into the same build.
         BUILD: u32 = 48,
-        /// Heap state bits: [`ROOT_RESERVE_OPEN`] (D1600).
+        /// Heap state bits: [`ROOT_RESERVE_OPEN`] (D1600), [`ROOT_WEAK_STRONG`] (D1680).
         FLAGS: u32 = 52,
         /// The arena size at which the next collection is requested (D1601: part of the
         /// image, so a restored VM collects at the same points). 0 for a fresh heap.
