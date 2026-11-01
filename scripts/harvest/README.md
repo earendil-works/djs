@@ -72,3 +72,12 @@ every result is synthetic, in the recorded call order; a failed call rejects.
 
 `source` in REDACTION.md is a hash of the session file's path plus the execution's index:
 it lets whoever has the sessions find the origin and reveals nothing else.
+
+## Feature usage (0130)
+
+`features.py` compiles every extracted script with djs (`djs disasm --body`) and reads the
+JavaScript features it uses off the bytecode, plus a token pass for what bytecode does not
+show (labels, sloppy-only tokens). `--summary` prints per-feature counts (scripts,
+sessions, first and last date) and marks the features pi's prelude uses itself. The
+results are in docs/codemode-feature-usage.md. Its output holds feature keys and hashes,
+no script text, and stays in work/scratch/ like everything derived from sessions.
