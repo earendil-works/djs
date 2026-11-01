@@ -1,6 +1,6 @@
 # 0071: GC points and raw images independent of fuel slice size
 
-status: in-progress
+status: done
 agent: num
 branch: issue/0071-gc-points-slice-independent
 depends-on: -
@@ -12,9 +12,9 @@ From the determinism investigation (0055): see work/issues/0055-determinism-inve
 scripts/determinism/.
 
 ## Acceptance criteria
-- [ ] Remove the collection at the start of `run`. Progress records of suspended regexps/builtins don't count towards the GC threshold. Raw images are identical at slices max/997/101/1.
-- [ ] The criteria in 0055's report for this item.
-- [ ] Ratchets unchanged or better, stress modes identical, decisions recorded.
+- [x] Remove the collection at the start of `run`. Progress records of suspended regexps/builtins don't count towards the GC threshold. Raw images are identical at slices max/997/101/1.
+- [x] The criteria in 0055's report for this item.
+- [x] Ratchets unchanged or better, stress modes identical, decisions recorded.
 
 ## Log
 - Baseline (detprobe, slices max/997/101/1): alloc_only differed at slice 1, regexp.js had 4
@@ -35,5 +35,17 @@ scripts/determinism/.
   regexp/loop/strbuild within noise.
 
 ## Follow-ups
+- 0072 part 2 (determinism): compare raw images in e2e (plain vs suspend) and difftest
+  `--determinism`; `tests/slices.rs` already does it for selected cases.
+- scripts/determinism/probe (detprobe) no longer builds on main (no arm for
+  `Status::HostOutOfMemory`); left to determinism (0072 touches scripts/determinism/).
 
 ## Result
+GC points and raw heap images no longer depend on the fuel slice (D1710): `run` does not
+collect at its start, and progress records of suspended regexp intrinsics are allocated
+outside the cap and the GC threshold and freed off the arena top when the intrinsic
+resumes. Regexp fuel is an i64 that a backreference may overdraw, so its total no longer
+depends on the slice (D1711). Raw images, outputs and total fuel are identical at slices
+max/997/101/13/1 with and without restores for every e2e and determinism case;
+`crates/djs-core/tests/slices.rs` keeps that checked (plus an ignored all-e2e sweep).
+wasm: +387 B raw / +158 B gzip, regexp-scan ~+0.7% instructions.
