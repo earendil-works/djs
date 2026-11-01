@@ -9,7 +9,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0120 | Old generation phase 1 (sticky base prefix) | heap | .worktrees/heap |
 | 0117 | Compact snapshot images (D019) | snapshot | .worktrees/snapshot |
-| 0118 | Codemode corpus harvest, redacted (D021) | infra | .worktrees/infra |
+| 0121 | Codemode corpus expansion; shorter ratchet reasons | infra | .worktrees/infra |
 | 0119 | Live editor with syntax highlighting for guide examples | docs | .worktrees/docs |
 | 0116 | JSON output in place, flat_fast inline, next hot spots | perf | .worktrees/perf |
 
@@ -82,6 +82,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0118 | Redacted codemode corpus (150 cases) | e08736a7 (agent infra; djs matches qjs 145/150, 5 = qjs bug) |
 | 0115 | Guide self-contained (owner rule) | f829f68d (agent docs; D2102; goals.md; enforced by check) |
 | 0114 | Guide design: Elanor | f93c1058 (agent design, archived; vendored published packages, D2200) |
 | 0113 | Docs follow-ups | 6f687be1 (agent docs; generated status D2101, search, live disasm) |
