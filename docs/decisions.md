@@ -3374,7 +3374,8 @@ date: 2026-11-04 · by: lexer · issue: 0082
   (`FuncState::var_scope`, docs/compiler.md 5.5). Its same-named `var`s are copied
   from the parameters at the scope's `enter_scope`, by resolution (`Scope::copies`).
   The criterion is "non-simple" rather than the spec's "has parameter expressions".
-  This differs only when no closure can observe the difference. A `catch` with a
+  The difference is not observable: without parameter expressions, no closure can see
+  the parameter scope. A `catch` with a
   pattern gets a separate block scope (`ScopeKind::CatchBody`), with the
   LexicallyDeclaredNames early error checked across the two scopes.
 - `(a?.b)()` keeps `this`. When an optional chain is the whole content of
