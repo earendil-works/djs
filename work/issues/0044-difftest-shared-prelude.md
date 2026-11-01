@@ -1,6 +1,6 @@
 # 0044: djs runs the shared difftest prelude (retire D1160's native console)
 
-status: in-progress
+status: done
 agent: infra
 branch: issue/0044-difftest-shared-prelude
 depends-on: 0033 (JSON, done), 0041 (await), 0040 (classes, if the prelude uses them)
@@ -14,13 +14,13 @@ compare exactly what the model sees (D1100). The native glue only uses the host-
 `stringify_fast`, so `console/{tojson,objects,numbers-in-json}.js` fail (num, 0033).
 
 ## Acceptance criteria
-- [ ] The djs engine runs the shared prelude and the case like the qjs engine does; the
+- [x] The djs engine runs the shared prelude and the case like the qjs engine does; the
       native host functions remain only for the primitives the prelude itself needs from
       the host (output, store/load, fake tools), now as async host functions where pi's
       are async (`tools.*`).
-- [ ] The D1160 known difference (`tools.*` returning directly) is gone.
-- [ ] Ratchet updated: report how many cases changed (both directions) and why.
-- [ ] Same for the Sandbox if it formats console output on the host side (check pi's
+- [x] The D1160 known difference (`tools.*` returning directly) is gone.
+- [x] Ratchet updated: report how many cases changed (both directions) and why.
+- [x] Same for the Sandbox if it formats console output on the host side (check pi's
       prelude behavior, D1100).
 
 ## Also (small, from 0045)
@@ -69,5 +69,19 @@ compare exactly what the model sees (D1100). The native glue only uses the host-
   expectations, plus slow-path JSON values and a stalled case.
 
 ## Follow-ups
+- Remove `splitLines` from tests/corpus/prelude.js once 0033's String.prototype.split
+  is on main (pi's errorText uses `split("\n")`).
+- If difftest should model pi's tool timing (results after the job queue drains), both
+  engines need it: qjs_driver.js would settle tools from a timer and djs through async
+  host functions. Today both resolve them through promise jobs (D1440).
+- Under --gc-stress / --suspend-every 97, console/cyclic-array.js and
+  builtins/array-methods.js now exceed the stress timeout (reported, not compared).
 
 ## Result
+djs-difftest's djs engine runs tests/corpus/prelude.js and the case exactly like the qjs
+driver (D1440, superseding D1160): only `host.output`/`host.done` are host functions, the
+native formatter and its `<djs: ...>` markers are gone. Ratchet 59 -> 49 (10 fixed, none
+new), all cases stress-identical. Also Object.prototype.__proto__ (Annex B) and
+Function.prototype.toString of callable proxies (D1441), with corpus cases. Known gaps:
+the prelude's split workaround until 0033 lands; tools stay JS (promise jobs) on both
+engines.
