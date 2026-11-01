@@ -86,7 +86,8 @@ impl Engine for Djs {
             Err(Stop::Crash(msg)) => Done::Crash(msg),
         };
         let image = if self.image && !matches!(done, Done::Timeout | Done::Crash(_)) {
-            s.vm.collect().ok().map(|()| fnv64(s.vm.bytes()))
+            let raw = fnv64(s.vm.bytes());
+            s.vm.collect().ok().map(|()| (raw, fnv64(s.vm.bytes())))
         } else {
             None
         };

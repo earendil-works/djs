@@ -131,16 +131,22 @@ pub fn run_one(
         );
         let t = transcript(&r);
         if t == actual {
-            // `--determinism`: the same graph, so the same heap image after a collection
-            // (D1720). A variant that collects on another policy (GC stress) does not
-            // hash its image.
+            // `--determinism`: the same heap image, as left and after a collection (D1720,
+            // D1725). A variant that collects on another policy (GC stress) does not hash
+            // its image.
             if let (Some(a), Some(b)) = (result.image, r.image)
                 && a != b
             {
+                let which = if a.1 != b.1 {
+                    "after a collection"
+                } else {
+                    "as left (raw)"
+                };
                 stress.push(StressMismatch {
                     label: label.clone(),
                     reason: format!(
-                        "the same transcript, but the heap image after a collection differs ({a:016x} vs {b:016x})"
+                        "the same transcript, but the heap image {which} differs ({:016x}/{:016x} vs {:016x}/{:016x})",
+                        a.0, a.1, b.0, b.1
                     ),
                     diff: String::new(),
                 });

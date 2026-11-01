@@ -47,8 +47,9 @@ pub struct RunResult {
     /// Output items in order (`console.*` and `text()`), each possibly multi-line.
     pub output: Vec<String>,
     pub done: Done,
-    /// djs with `--determinism`: a hash of the heap image after a final collection.
-    pub image: Option<u64>,
+    /// djs with `--determinism`: hashes of the final heap image, as left and after a
+    /// collection (D1720, D1725).
+    pub image: Option<(u64, u64)>,
 }
 
 pub trait Engine: Sync {

@@ -239,7 +239,8 @@ hard failure, separate from the oracle comparison and the ratchet (D1161). Stres
 get three times the case's time limit, and a stressed run that still times out is a
 failure too: mark such a case `no-stress` with the measured reason (D1530).
 `--determinism` adds a second suspension slice (1009) and requires the suspended runs to
-leave the same heap image as the plain run after a final collection (D1720). The e2e
+leave the same heap image as the plain run, both as left and after a final collection
+(D1720, D1725). The e2e
 test compares its plain and suspension modes the same way, and
 `scripts/determinism/native-vs-wasm.sh` compares native and wasm builds image for image
 and stop for stop (both in the gate).

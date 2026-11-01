@@ -339,7 +339,7 @@ fn djs_stress_variants_agree() {
         }
         fn run(&self, job: &Job<'_>) -> RunResult {
             let mut r = plain_djs().run(job);
-            r.image = r.image.map(|h| h ^ 1);
+            r.image = r.image.map(|(raw, collected)| (raw ^ 1, collected));
             r
         }
     }

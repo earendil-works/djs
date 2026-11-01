@@ -1,6 +1,6 @@
 # 0072: Determinism checks in the gate
 
-status: in-progress
+status: done
 agent: determinism
 branch: issue/0072-determinism-gate
 depends-on: part 2: 0067, 0071
@@ -12,9 +12,9 @@ From the determinism investigation (0055): see work/issues/0055-determinism-inve
 scripts/determinism/.
 
 ## Acceptance criteria
-- [ ] Part 1 (now): collected-image hashes compared across the e2e modes, a native-vs-wasm image check with the twin drivers, difftest `--determinism`. Part 2: async delivery cases and raw-image equality.
-- [ ] The criteria in 0055's report for this item.
-- [ ] Ratchets unchanged or better, stress modes identical, decisions recorded.
+- [x] Part 1 (now): collected-image hashes compared across the e2e modes, a native-vs-wasm image check with the twin drivers, difftest `--determinism`. Part 2: async delivery cases and raw-image equality.
+- [x] The criteria in 0055's report for this item.
+- [x] Ratchets unchanged or better, stress modes identical, decisions recorded.
 
 ## Log
 
@@ -45,11 +45,24 @@ scripts/determinism/.
   gate after the js tests, against the debug wasm (7 s). OK.
 - TESTING.md (outside `touches`, two sentences in the difftest section) and D1720.
 
+- Part 2 (branch issue/0072-determinism-gate-2, after num's 0071, D1710/D1711): e2e's
+  `run_case` returns (raw, collected) hashes and plain vs suspension must agree on both.
+  Checked that it bites (garbage allocated only in suspend mode is reported as a raw
+  difference). difftest `RunResult::image` is (raw, collected), and the runner names which
+  one differs. Runner test updated (ImageLiar now flips the raw hash). All 62+ e2e cases
+  pass; difftest --determinism on codemode, builtins, console, errors, language, result,
+  ts and dquickts/builtin: identical. The raw-image half of part 2 is done; the async
+  delivery half was covered by 0067's vm tests.
+- scripts/determinism/probe (detprobe) builds again (the HostOutOfMemory arm). With 0071
+  its raw images are identical at every slice, with and without restores.
+- For num: append and JSON/Array.from now pass the 0074 budget test (0071 fixed them).
+  Regexps (/abc|bab?x|q/, /(?:a|b)*c/) still stop at a different matcher step under a
+  fixed budget, though their totals agree. Sent num a repro.
+- D1725, TESTING.md.
+
 ## Follow-ups
 
-- Part 2 after 0071: compare *raw* images too (e2e plain vs suspend, difftest
-  `--determinism`, native-vs-wasm already compares raw at two slices per build but not
-  across slices).
+- (Part 2 done.) Regexp stop points under a fixed budget: with num (0078 or a follow-up).
 
 ## Result
 
@@ -57,4 +70,5 @@ Part 1: the gate now fails if a suspended run (e2e suspension mode, difftest sli
 1009 with restores) leaves a different heap image after a final collection than the
 plain run, or if native and wasm builds differ in images, fuel or results
 (`scripts/determinism/native-vs-wasm.sh`, `djs-abidrive`). GC stress stays an
-output-only comparison (D1720). Part 2 (raw images) waits for 0071.
+output-only comparison (D1720). Part 2: raw images are compared too (e2e plain vs suspension, difftest --determinism),
+D1725.

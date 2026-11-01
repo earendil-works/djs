@@ -116,6 +116,10 @@ fn run(src: &str, c: &Cfg) -> Outcome {
                 out += "IDLE with nothing pending\n";
                 break;
             }
+            Status::HostOutOfMemory => {
+                out += "host out of memory\n";
+                break;
+            }
             Status::OutOfFuel => {}
             Status::HostCall { call_id, fn_id } => {
                 assert_eq!(fn_id, LOG);

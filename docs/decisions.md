@@ -3593,3 +3593,13 @@ Test: `vm::tests::budgets_with_collections_and_suspended_regexps` runs the D1740
 form (budgets of k·B fuel given as one run or as slices of 30030, 4620 with restores, 143
 and 13; the state is compared after each budget) on those three regexps. It also covers
 0074's append-buffer and JSON/Array.from loops, which pass since D1710.
+## D1725: The determinism checks compare raw images too
+date: 2026-11-03 · by: determinism · issue: 0072
+Since 0071 (D1710, D1711) a run's raw heap image is the same under any slicing and
+restores, not just its image after a collection. So e2e (plain vs suspension mode) and
+difftest `--determinism` (the plain run vs the suspended variants at 97 and 1009 fuel)
+now compare both hashes: the raw image at the end of the run and the image after a
+final collection. A mismatch names which one differs. The raw comparison catches
+garbage that depends on where a run stopped (a suspension record, a collection at
+another instruction), which the collected comparison cannot see. GC stress stays
+output-only (D1720). The native-vs-wasm check already compared raw images at each slice.
