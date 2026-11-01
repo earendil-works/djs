@@ -178,6 +178,9 @@ impl Intrinsic {
             "SuppressedError" => Intrinsic::SuppressedErrorProto,
             "WeakRef" => Intrinsic::WeakRefProto,
             "FinalizationRegistry" => Intrinsic::FinalizationRegistryProto,
+            "GeneratorFunction" => Intrinsic::GeneratorFunctionProto,
+            "AsyncGeneratorFunction" => Intrinsic::AsyncGeneratorFunctionProto,
+            "AsyncFunction" => Intrinsic::AsyncFunctionProto,
             _ => return None,
         })
     }

@@ -7,7 +7,14 @@
 //! push exactly one call frame whose result completes them.
 
 use super::*;
-use crate::builtins::{array, collection, date, function, number, object, string, typed, uri};
+use crate::builtins::{
+    array, collection, date, eval, function, number, object, string, typed, uri,
+};
+use crate::compiler::DynamicKind;
+
+/// Fuel per code unit of compiled source (eval, the Function constructors): compiling
+/// one unit costs about as much as a few simple instructions (D1591).
+const COMPILE_FUEL_PER_UNIT: i64 = 4;
 use crate::bytecode::intrinsics::{INTRINSICS, IntrinsicKind, intrinsic, intrinsic_id};
 use crate::heap::cells::flags::{OBJ_BUILTIN, OBJ_BUILTIN_CTOR};
 use crate::heap::{ObjectClass, atoms};
@@ -161,6 +168,11 @@ const NUMBER_TO_PRECISION: u16 = id("NumberToPrecision");
 const STRING_PARSE_FLOAT: u16 = id("StringParseFloat");
 const STRING_PARSE_INT: u16 = id("StringParseInt");
 const URI_ENCODE: u16 = id("UriEncode");
+const COMPILE_EVAL: u16 = id("CompileEval");
+const COMPILE_FUNCTION: u16 = id("CompileFunction");
+const GLOBAL_OBJECT: u16 = id("GlobalObject");
+const ENQUEUE_MICROTASK: u16 = id("EnqueueMicrotask");
+const MICROTASK_JOB: u16 = id("MicrotaskJob");
 const URI_DECODE: u16 = id("UriDecode");
 const STR_ESCAPE: u16 = id("StrEscape");
 const STR_UNESCAPE: u16 = id("StrUnescape");
@@ -793,6 +805,43 @@ impl Exec<'_> {
                 };
                 let radix = (id == STRING_PARSE_INT).then(|| arg(self, 1).as_int().unwrap_or(0));
                 conv::number(number::parse(self.heap, s, radix)?)
+            }
+            COMPILE_EVAL | COMPILE_FUNCTION => {
+                let (src, kind, body) = if id == COMPILE_EVAL {
+                    (a0, None, Value::UNDEFINED)
+                } else {
+                    let kind = match a0.as_int() {
+                        Some(0) => DynamicKind::Normal,
+                        Some(1) => DynamicKind::Generator,
+                        Some(2) => DynamicKind::Async,
+                        Some(3) => DynamicKind::AsyncGenerator,
+                        _ => return bad_argument(info.name),
+                    };
+                    (arg(self, 1), Some(kind), arg(self, 2))
+                };
+                let Some(s) = src.as_string() else {
+                    return bad_argument(info.name);
+                };
+                // The compile is bounded by the source (D1591).
+                let len =
+                    self.heap.str_len(s) + body.as_string().map_or(0, |b| self.heap.str_len(b));
+                self.fuel -= COMPILE_FUEL_PER_UNIT * i64::from(len);
+                match kind {
+                    None => eval::compile_eval(self.heap, s)?,
+                    Some(kind) => {
+                        let Some(b) = body.as_string() else {
+                            return bad_argument(info.name);
+                        };
+                        eval::compile_function(self.heap, kind, s, b)?
+                    }
+                }
+            }
+            GLOBAL_OBJECT => realm::intrinsic(self.heap, Intrinsic::Global),
+            ENQUEUE_MICROTASK => {
+                let job = realm::installed_intrinsic(self.heap, MICROTASK_JOB);
+                let args = [a0, Value::UNDEFINED, Value::UNDEFINED, Value::UNDEFINED];
+                promise::enqueue(self.heap, job, args)?;
+                Value::UNDEFINED
             }
             URI_ENCODE | URI_DECODE | STR_ESCAPE | STR_UNESCAPE => {
                 let Some(s) = a0.as_string() else {

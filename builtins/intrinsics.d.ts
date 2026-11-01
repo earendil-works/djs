@@ -481,6 +481,22 @@ declare function UriDecode(s: Str, component: boolean): Str;
 declare function StrEscape(s: Str): Str;
 /** unescape ( string ), B.2.1.2, after ToString. @leaf */
 declare function StrUnescape(s: Str): Str;
+/**
+ * PerformEval's parse (19.2.1.1) for indirect eval: the source as a Script closure, to be
+ * called with `this` = the global object. SyntaxError for invalid source. Charges fuel per
+ * source byte. @leaf
+ */
+declare function CompileEval(src: Str): Obj;
+/**
+ * CreateDynamicFunction's parse (20.2.1.1.1): `kind` 0 function, 1 generator, 2 async, 3
+ * async generator; `params` joined with ","; a Script closure whose call returns the new
+ * function. SyntaxError for invalid source. Charges fuel per source byte. @leaf
+ */
+declare function CompileFunction(kind: i32, params: Str, body: Str): Obj;
+/** The realm's global object. @leaf */
+declare function GlobalObject(): Obj;
+/** Queues the job MicrotaskJob(callback) (queueMicrotask). @leaf */
+declare function EnqueueMicrotask(callback: Value): void;
 /** ToInt32 of a number. @leaf */
 declare function NumberToInt32(n: f64): i32;
 /** ToUint32 of a number, as an f64. @leaf */

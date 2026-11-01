@@ -15,6 +15,7 @@
 //! the parameters.
 
 mod class;
+mod dynamic;
 mod expr;
 mod for_in_of;
 mod func;
@@ -169,6 +170,53 @@ pub fn compile(
 ) -> Result<Ref, CompileError> {
     let result = parser::Parser::new(heap, src, opts).and_then(|p| p.compile());
     result.map(|(t, _)| t).map_err(|e| error_at(src, e))
+}
+
+/// The kinds of CreateDynamicFunction (20.2.1.1.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DynamicKind {
+    Normal,
+    Generator,
+    Async,
+    AsyncGenerator,
+}
+
+impl DynamicKind {
+    /// The sourceText prefix before ` anonymous(`.
+    pub const fn prefix(self) -> &'static str {
+        match self {
+            DynamicKind::Normal => "function",
+            DynamicKind::Generator => "function*",
+            DynamicKind::Async => "async function",
+            DynamicKind::AsyncGenerator => "async function*",
+        }
+    }
+}
+
+/// Compiles the sourceText of CreateDynamicFunction (`<prefix> anonymous(<P>\n) {\n<body>\n}`)
+/// as a Script whose top-level code returns the function (compiler/dynamic.rs, D1590).
+/// `params_close` is the offset of the `)` after P: a parameter list that ends anywhere
+/// else, or anything after the function, is a SyntaxError.
+pub fn compile_dynamic_function(
+    heap: &mut Heap,
+    src: &[u8],
+    opts: &CompileOptions<'_>,
+    kind: DynamicKind,
+    params_close: u32,
+) -> Result<Ref, CompileError> {
+    let flavor = match kind {
+        DynamicKind::Normal => (false, false),
+        DynamicKind::Generator => (false, true),
+        DynamicKind::Async => (true, false),
+        DynamicKind::AsyncGenerator => (true, true),
+    };
+    let opts = CompileOptions {
+        goal: Goal::Script,
+        ..*opts
+    };
+    parser::Parser::new(heap, src, &opts)
+        .and_then(|p| p.compile_dynamic(flavor, params_close))
+        .map_err(|e| error_at(src, e))
 }
 
 /// TypeScript erasure for the strip-types oracle (TESTING.md): compiles `src` with the

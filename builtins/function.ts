@@ -98,13 +98,12 @@ function FunctionPrototypeToString(this: Value): Str {
 }
 
 /**
- * Function ( ...parameterArgs, bodyArg ), 20.2.1.1: not supported (it compiles source
- * text, like eval). It exists for `Function.prototype` and `constructor` links.
+ * Function ( ...parameterArgs, bodyArg ), 20.2.1.1 (0059).
  * @constructor Function
  * @length 1
  */
 function FunctionConstructor(...args: Value[]): Value {
-  throw NewTypeError("not supported yet: the Function constructor");
+  return CreateDynamicFunction(new.target, 0, "FunctionPrototype", args);
 }
 
 /** OrdinaryHasInstance ( C, O ), 7.3.22. */

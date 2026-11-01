@@ -2638,6 +2638,53 @@ function SuppressedErrorConstructor(error, suppressed, message) {
   return o;
 }
 
+// builtins/eval.ts:9 eval
+function GlobalEval(x) {
+  if (!%IsString(x)) {
+    return x;
+  }
+  const script = %CompileEval(%AsStr(x));
+  return %Call(script, %GlobalObject());
+}
+
+// builtins/eval.ts:22
+function CreateDynamicFunction(newTarget, kind, fallback, args) {
+  const argCount = LengthOfArrayLike(args);
+  let p = "";
+  let body = "";
+  if (argCount > 0) {
+    for (let k = 0; k < argCount - 1; k++) {
+      const next = ToString(%Get(args, k));
+      p = k === 0 ? next : p + "," + next;
+    }
+    body = ToString(%Get(args, argCount - 1));
+  }
+  const script = %CompileFunction(kind, p, body);
+  const f = %AsObj(%Call(script, %GlobalObject()));
+  if (newTarget !== undefined) {
+    const proto = GetPrototypeFromConstructor(newTarget, fallback);
+    %SetPrototypeOf(f, proto);
+  }
+  return f;
+}
+
+// builtins/eval.ts:47 queueMicrotask
+function GlobalQueueMicrotask(callback) {
+  if (!%IsCallable(callback)) {
+    throw %NewTypeError("not a function");
+  }
+  %EnqueueMicrotask(callback);
+}
+
+// builtins/eval.ts:59 %MicrotaskJob
+function MicrotaskJob(callback) {
+  try {
+    %Call(callback, undefined);
+  } catch (e) {
+    %RejectPromise(%PromiseCreate(%RealmIntrinsic("PromisePrototype")), e);
+  }
+}
+
 // builtins/fromasync.ts:20 Array.fromAsync
 function ArrayFromAsync(asyncItems, mapfn, thisArg) {
   const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
@@ -2911,12 +2958,12 @@ function FunctionPrototypeToString() {
   return %FunctionToString(this);
 }
 
-// builtins/function.ts:106 constructor Function
+// builtins/function.ts:105 constructor Function
 function FunctionConstructor(...args) {
-  throw %NewTypeError("not supported yet: the Function constructor");
+  return CreateDynamicFunction(new.target, 0, "FunctionPrototype", args);
 }
 
-// builtins/function.ts:111
+// builtins/function.ts:110
 function OrdinaryHasInstance(c, o) {
   if (!%IsCallable(c)) {
     return false;
@@ -2942,7 +2989,7 @@ function OrdinaryHasInstance(c, o) {
   return false;
 }
 
-// builtins/function.ts:141 %InstanceofOperator
+// builtins/function.ts:140 %InstanceofOperator
 function InstanceofOperator(v, target) {
   if (!%IsObject(target)) {
     throw %NewTypeError("invalid 'instanceof' right operand");
@@ -2957,7 +3004,7 @@ function InstanceofOperator(v, target) {
   return OrdinaryHasInstance(target, v);
 }
 
-// builtins/function.ts:161 %ClassHeritage
+// builtins/function.ts:160 %ClassHeritage
 function ClassHeritage(parent) {
   if (parent === null) {
     return null;
@@ -2972,22 +3019,22 @@ function ClassHeritage(parent) {
   return protoParent;
 }
 
-// builtins/function.ts:180 Function.prototype[Symbol.hasInstance]
+// builtins/function.ts:179 Function.prototype[Symbol.hasInstance]
 function FunctionPrototypeHasInstance(v) {
   return OrdinaryHasInstance(this, v);
 }
 
-// builtins/function.ts:192 get Function.prototype.caller set Function.prototype.caller get Function.prototype.arguments set Function.prototype.arguments
+// builtins/function.ts:191 get Function.prototype.caller set Function.prototype.caller get Function.prototype.arguments set Function.prototype.arguments
 function ThrowTypeError(v) {
   throw %NewTypeError("invalid property access");
 }
 
-// builtins/function.ts:201 value Function.prototype.length
+// builtins/function.ts:200 value Function.prototype.length
 function FunctionPrototypeLength() {
   return 0;
 }
 
-// builtins/function.ts:210 value Function.prototype.name
+// builtins/function.ts:209 value Function.prototype.name
 function FunctionPrototypeName() {
   return "";
 }
@@ -3089,19 +3136,19 @@ function AsyncFunctionThrow(a, e) {
   return promise;
 }
 
-// builtins/generator.ts:148 %GeneratorFunctionConstructor
+// builtins/generator.ts:147 %GeneratorFunctionConstructor
 function GeneratorFunctionConstructor(...args) {
-  throw %NewTypeError("not supported yet: the GeneratorFunction constructor");
+  return CreateDynamicFunction(new.target, 1, "GeneratorFunctionPrototype", args);
 }
 
-// builtins/generator.ts:156 %AsyncGeneratorFunctionConstructor
+// builtins/generator.ts:155 %AsyncGeneratorFunctionConstructor
 function AsyncGeneratorFunctionConstructor(...args) {
-  throw %NewTypeError("not supported yet: the AsyncGeneratorFunction constructor");
+  return CreateDynamicFunction(new.target, 3, "AsyncGeneratorFunctionPrototype", args);
 }
 
-// builtins/generator.ts:164 %AsyncFunctionConstructor
+// builtins/generator.ts:163 %AsyncFunctionConstructor
 function AsyncFunctionConstructor(...args) {
-  throw %NewTypeError("not supported yet: the AsyncFunction constructor");
+  return CreateDynamicFunction(new.target, 2, "AsyncFunctionPrototype", args);
 }
 
 // builtins/iter.ts:10 %GetIterator
@@ -10204,6 +10251,8 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallConstructor("globalThis", "InternalError", InternalErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "AggregateError", AggregateErrorConstructor, 2, "Error");
 %InstallConstructor("globalThis", "SuppressedError", SuppressedErrorConstructor, 3, "Error");
+%InstallMethod("globalThis", "eval", GlobalEval, 1);
+%InstallMethod("globalThis", "queueMicrotask", GlobalQueueMicrotask, 1);
 %InstallConstructor("globalThis", "Function", FunctionConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Iterator", IteratorConstructor, 0, undefined);
 %InstallValue("globalThis", "JSON", JSONObject(), 5);
@@ -10813,6 +10862,7 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallIntrinsic("ToPropertyKey", ToPropertyKey);
 %InstallIntrinsic("AsyncDisposeFulfilled", AsyncDisposeFulfilled);
 %InstallIntrinsic("AsyncDisposeRejected", AsyncDisposeRejected);
+%InstallIntrinsic("MicrotaskJob", MicrotaskJob);
 %InstallIntrinsic("FromAsyncFulfilled", FromAsyncFulfilled);
 %InstallIntrinsic("FromAsyncRejected", FromAsyncRejected);
 %InstallIntrinsic("InstanceofOperator", InstanceofOperator);

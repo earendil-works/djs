@@ -135,32 +135,31 @@ function AsyncFunctionThrow(a: Obj, e: Value): Value {
   return promise;
 }
 
-// ---- The function-kind constructors (27.3.1, 27.7.1, 27.4.1; D1420) ---------------------
+// ---- The function-kind constructors (27.3.1, 27.7.1, 27.4.1; D1420, 0059) --------------
 //
-// Like `Function`, they would compile source text, which djs does not do. They exist for
-// the `constructor` links of their prototypes; installing them (InstallIntrinsic) wires
-// those links in Rust.
+// CreateDynamicFunction (builtins/eval.ts) compiles their source. Installing them
+// (InstallIntrinsic) wires their `prototype` and `constructor` links in Rust.
 
 /**
- * GeneratorFunction ( ...parameterArgs, bodyArg ), 27.3.1.1: not supported.
+ * GeneratorFunction ( ...parameterArgs, bodyArg ), 27.3.1.1.
  * @intrinsic
  */
 function GeneratorFunctionConstructor(...args: Value[]): Value {
-  throw NewTypeError("not supported yet: the GeneratorFunction constructor");
+  return CreateDynamicFunction(new.target, 1, "GeneratorFunctionPrototype", args);
 }
 
 /**
- * AsyncGeneratorFunction ( ...parameterArgs, bodyArg ), 27.4.1.1: not supported.
+ * AsyncGeneratorFunction ( ...parameterArgs, bodyArg ), 27.4.1.1.
  * @intrinsic
  */
 function AsyncGeneratorFunctionConstructor(...args: Value[]): Value {
-  throw NewTypeError("not supported yet: the AsyncGeneratorFunction constructor");
+  return CreateDynamicFunction(new.target, 3, "AsyncGeneratorFunctionPrototype", args);
 }
 
 /**
- * AsyncFunction ( ...parameterArgs, bodyArg ), 27.7.1.1: not supported.
+ * AsyncFunction ( ...parameterArgs, bodyArg ), 27.7.1.1.
  * @intrinsic
  */
 function AsyncFunctionConstructor(...args: Value[]): Value {
-  throw NewTypeError("not supported yet: the AsyncFunction constructor");
+  return CreateDynamicFunction(new.target, 2, "AsyncFunctionPrototype", args);
 }

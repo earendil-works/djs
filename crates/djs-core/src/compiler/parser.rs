@@ -251,6 +251,12 @@ impl<'a, 'h> Parser<'a, 'h> {
         }
         self.code().leave_scope(BODY_SCOPE as u16);
         self.emit_return_undef();
+        self.finish_unit()
+    }
+
+    /// Finishes the unit after its top-level code: resolves every function into
+    /// templates (also used by `compile_dynamic`, compiler/dynamic.rs).
+    pub(super) fn finish_unit(mut self) -> PResult<(Ref, Option<Erased>)> {
         self.end_async_region();
         let top = core::mem::replace(&mut self.f, FuncState::new(0, FuncKind::Script, None));
         self.done[0] = Some(top);

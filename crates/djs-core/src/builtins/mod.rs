@@ -8,6 +8,7 @@
 pub(crate) mod array;
 pub(crate) mod collection;
 pub(crate) mod date;
+pub(crate) mod eval;
 pub(crate) mod function;
 pub(crate) mod json;
 pub(crate) mod number;

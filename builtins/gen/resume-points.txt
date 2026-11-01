@@ -981,6 +981,24 @@ SuppressedErrorConstructor: reentrant (constructor SuppressedError)
   builtins/error.ts:150:3  DefineDataPropertyOrThrow (intrinsic)
   builtins/error.ts:151:3  DefineDataPropertyOrThrow (intrinsic)
 
+GlobalEval: reentrant (eval)
+  builtins/eval.ts:14:10  Call (intrinsic)
+
+CreateDynamicFunction: reentrant
+  builtins/eval.ts:23:25  LengthOfArrayLike (builtin)
+  builtins/eval.ts:28:34  Get (intrinsic)
+  builtins/eval.ts:28:25  ToString (builtin)
+  builtins/eval.ts:31:21  Get (intrinsic)
+  builtins/eval.ts:31:12  ToString (builtin)
+  builtins/eval.ts:34:24  Call (intrinsic)
+  builtins/eval.ts:36:24  GetPrototypeFromConstructor (builtin)
+  builtins/eval.ts:37:5  SetPrototypeOf (intrinsic)
+
+GlobalQueueMicrotask: leaf (queueMicrotask)
+
+MicrotaskJob: reentrant (%MicrotaskJob)
+  builtins/eval.ts:61:5  Call (intrinsic)
+
 ArrayFromAsync: reentrant (Array.fromAsync)
   builtins/fromasync.ts:23:5  FromAsyncStart (builtin)
 
@@ -1075,24 +1093,25 @@ FunctionPrototypeToString: reentrant (Function.prototype.toString)
   builtins/function.ts:93:25  Get (intrinsic)
   builtins/function.ts:94:46  ToString (builtin)
 
-FunctionConstructor: leaf (constructor Function)
+FunctionConstructor: reentrant (constructor Function)
+  builtins/function.ts:106:10  CreateDynamicFunction (builtin)
 
 OrdinaryHasInstance: reentrant
-  builtins/function.ts:117:12  InstanceofOperator (builtin)
-  builtins/function.ts:122:20  Get (intrinsic)
-  builtins/function.ts:126:18  GetPrototypeOf (intrinsic)
-  builtins/function.ts:131:9  GetPrototypeOf (intrinsic)
+  builtins/function.ts:116:12  InstanceofOperator (builtin)
+  builtins/function.ts:121:20  Get (intrinsic)
+  builtins/function.ts:125:18  GetPrototypeOf (intrinsic)
+  builtins/function.ts:130:9  GetPrototypeOf (intrinsic)
 
 InstanceofOperator: reentrant (%InstanceofOperator)
-  builtins/function.ts:145:32  GetMethod (builtin)
-  builtins/function.ts:147:22  Call (intrinsic)
-  builtins/function.ts:152:10  OrdinaryHasInstance (builtin)
+  builtins/function.ts:144:32  GetMethod (builtin)
+  builtins/function.ts:146:22  Call (intrinsic)
+  builtins/function.ts:151:10  OrdinaryHasInstance (builtin)
 
 ClassHeritage: reentrant (%ClassHeritage)
-  builtins/function.ts:168:30  Get (intrinsic)
+  builtins/function.ts:167:30  Get (intrinsic)
 
 FunctionPrototypeHasInstance: reentrant (Function.prototype[Symbol.hasInstance])
-  builtins/function.ts:181:10  OrdinaryHasInstance (builtin)
+  builtins/function.ts:180:10  OrdinaryHasInstance (builtin)
 
 ThrowTypeError: leaf (get Function.prototype.caller, set Function.prototype.caller, get Function.prototype.arguments, set Function.prototype.arguments)
 
@@ -1125,11 +1144,14 @@ AsyncFunctionReturn: reentrant (%AsyncFunctionReturn)
 
 AsyncFunctionThrow: leaf (%AsyncFunctionThrow)
 
-GeneratorFunctionConstructor: leaf (%GeneratorFunctionConstructor)
+GeneratorFunctionConstructor: reentrant (%GeneratorFunctionConstructor)
+  builtins/generator.ts:148:10  CreateDynamicFunction (builtin)
 
-AsyncGeneratorFunctionConstructor: leaf (%AsyncGeneratorFunctionConstructor)
+AsyncGeneratorFunctionConstructor: reentrant (%AsyncGeneratorFunctionConstructor)
+  builtins/generator.ts:156:10  CreateDynamicFunction (builtin)
 
-AsyncFunctionConstructor: leaf (%AsyncFunctionConstructor)
+AsyncFunctionConstructor: reentrant (%AsyncFunctionConstructor)
+  builtins/generator.ts:164:10  CreateDynamicFunction (builtin)
 
 GetIterator: reentrant (%GetIterator)
   builtins/iter.ts:11:25  GetV (intrinsic)

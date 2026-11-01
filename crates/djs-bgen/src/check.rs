@@ -800,10 +800,17 @@ impl<'a> FnChecker<'a> {
                 }
             },
             ExprKind::NewTarget => {
-                if !self.f.tags.iter().any(|t| t.name == "constructor") {
+                // `@intrinsic` too: Rust may install one as a constructor (the
+                // function-kind constructors, D1420, 0059).
+                if !self
+                    .f
+                    .tags
+                    .iter()
+                    .any(|t| t.name == "constructor" || t.name == "intrinsic")
+                {
                     self.error(
                         e.span,
-                        "`new.target` is only available in `@constructor` builtins",
+                        "`new.target` is only available in `@constructor` and `@intrinsic` builtins",
                     );
                 }
                 Type::Value
