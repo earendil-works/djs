@@ -846,10 +846,14 @@ fn maps_rehash_object_keys_after_moves() {
         assert_eq!(h.collection_get(m, s), Some(Value::int(-(i as i32))));
     }
     // -0 and +0 are one key, NaN equals NaN.
-    h.collection_set(m, Value::number(-0.0), Value::int(1)).unwrap();
+    h.collection_set(m, Value::number(-0.0), Value::int(1))
+        .unwrap();
     h.collection_set(m, Value::NAN, Value::int(2)).unwrap();
     assert_eq!(h.collection_get(m, Value::int(0)), Some(Value::int(1)));
-    assert_eq!(h.collection_get(m, Value::number(f64::NAN)), Some(Value::int(2)));
+    assert_eq!(
+        h.collection_get(m, Value::number(f64::NAN)),
+        Some(Value::int(2))
+    );
 }
 
 #[test]
@@ -876,7 +880,8 @@ fn iterators_survive_deletes_compaction_and_clear() {
             h.collection_delete(m, Value::int(i)).unwrap();
         }
     }
-    h.collection_set(m, Value::int(100), Value::int(100)).unwrap();
+    h.collection_set(m, Value::int(100), Value::int(100))
+        .unwrap();
     collect_twice(&mut h);
     loop {
         let it = coll(&h, hi);

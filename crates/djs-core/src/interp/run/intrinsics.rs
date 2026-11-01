@@ -7,7 +7,7 @@
 //! push exactly one call frame whose result completes them.
 
 use super::*;
-use crate::builtins::{array, function, number, object, string};
+use crate::builtins::{array, collection, function, number, object, string};
 use crate::bytecode::intrinsics::{INTRINSICS, IntrinsicKind, intrinsic, intrinsic_id};
 use crate::heap::cells::flags::{OBJ_BUILTIN, OBJ_BUILTIN_CTOR};
 use crate::heap::{ObjectClass, atoms};
@@ -78,6 +78,21 @@ const HAS_OWN_PROPERTY: u16 = id("HasOwnProperty");
 const OWN_PROPERTY_ATTRIBUTES: u16 = id("OwnPropertyAttributes");
 const OWN_PROPERTY_KEYS: u16 = id("OwnPropertyKeys");
 const CALL_WITH_ARRAY: u16 = id("CallWithArray");
+const COLLECTION_CREATE: u16 = id("CollectionCreate");
+const COLLECTION_CLASS: u16 = id("CollectionClass");
+const COLLECTION_GET: u16 = id("CollectionGet");
+const COLLECTION_HAS: u16 = id("CollectionHas");
+const COLLECTION_SET: u16 = id("CollectionSet");
+const COLLECTION_DELETE: u16 = id("CollectionDelete");
+const COLLECTION_CLEAR: u16 = id("CollectionClear");
+const COLLECTION_SIZE: u16 = id("CollectionSize");
+const COLLECTION_ITERATOR: u16 = id("CollectionIterator");
+const COLLECTION_ITERATOR_NEXT: u16 = id("CollectionIteratorNext");
+const COLLECTION_ITERATOR_STEP: u16 = id("CollectionIteratorStep");
+const COLLECTION_ITERATOR_KEY: u16 = id("CollectionIteratorKey");
+const COLLECTION_ITERATOR_VALUE: u16 = id("CollectionIteratorValue");
+const CAN_BE_HELD_WEAKLY: u16 = id("CanBeHeldWeakly");
+
 const CONSTRUCT_WITH_ARRAY: u16 = id("ConstructWithArray");
 const GET_WITH_RECEIVER: u16 = id("GetWithReceiver");
 const SET_WITH_RECEIVER: u16 = id("SetWithReceiver");
@@ -902,6 +917,63 @@ impl Exec<'_> {
                 self.sp = base + 2 + n;
                 return self.call(base, n, Continuation::PushResult, next);
             }
+            COLLECTION_CREATE => {
+                let (Some(cls), Some(proto)) = (
+                    a0.as_int().and_then(collection::class_of),
+                    arg(self, 1).as_object(),
+                ) else {
+                    return bad_argument(info.name);
+                };
+                Value::object(self.heap.collection_new(cls, proto)?)
+            }
+            COLLECTION_CLASS => Value::int(collection::class_index(self.heap, a0)),
+            COLLECTION_GET | COLLECTION_HAS | COLLECTION_SET | COLLECTION_DELETE
+            | COLLECTION_CLEAR | COLLECTION_SIZE | COLLECTION_ITERATOR => {
+                if collection::class_index(self.heap, a0) < 0 {
+                    return bad_argument(info.name);
+                }
+                let m = a0.as_object().expect("collection");
+                let key = arg(self, 1);
+                match id {
+                    COLLECTION_GET => self.heap.collection_get(m, key).unwrap_or(Value::UNDEFINED),
+                    COLLECTION_HAS => Value::bool(self.heap.collection_has(m, key)),
+                    COLLECTION_SET => {
+                        let key = collection::stored_key(self.heap, key)?;
+                        self.heap.collection_set(m, key, arg(self, 2))?;
+                        Value::UNDEFINED
+                    }
+                    COLLECTION_DELETE => Value::bool(self.heap.collection_delete(m, key)?),
+                    COLLECTION_CLEAR => {
+                        self.heap.collection_clear(m)?;
+                        Value::UNDEFINED
+                    }
+                    COLLECTION_SIZE => Value::int(self.heap.collection_size(m) as i32),
+                    _ => Value::object(collection::iterator(
+                        self.heap,
+                        m,
+                        key.as_int().unwrap_or(0),
+                    )?),
+                }
+            }
+            COLLECTION_ITERATOR_NEXT => {
+                collection::iterator_next(self.heap, a0, arg(self, 1).as_bool() == Some(true))?
+            }
+            COLLECTION_ITERATOR_STEP | COLLECTION_ITERATOR_KEY | COLLECTION_ITERATOR_VALUE => {
+                let Some(it) = a0
+                    .as_object()
+                    .filter(|&o| self.heap.object_class(o) == ObjectClass::CollectionIterator)
+                else {
+                    return bad_argument(info.name);
+                };
+                match id {
+                    COLLECTION_ITERATOR_STEP => {
+                        Value::bool(self.heap.collection_iterator_next(it).is_some())
+                    }
+                    COLLECTION_ITERATOR_KEY => self.heap.object_slot(it, 4),
+                    _ => self.heap.object_slot(it, 5),
+                }
+            }
+            CAN_BE_HELD_WEAKLY => Value::bool(collection::can_be_held_weakly(self.heap, a0)?),
             CONSTRUCT_WITH_ARRAY => {
                 // `f args newTarget` becomes `f a1 .. an`.
                 let Some(args) = arg(self, 1).as_object() else {
@@ -1270,6 +1342,8 @@ impl Exec<'_> {
             "%IteratorPrototype%" => Some(Intrinsic::IteratorProto),
             "%ArrayIteratorPrototype%" => Some(Intrinsic::ArrayIteratorProto),
             "%StringIteratorPrototype%" => Some(Intrinsic::StringIteratorProto),
+            "%MapIteratorPrototype%" => Some(Intrinsic::MapIteratorProto),
+            "%SetIteratorPrototype%" => Some(Intrinsic::SetIteratorProto),
             // `X.prototype` of a constructor the prelude has not installed yet.
             _ => Intrinsic::prototype_of(name.strip_suffix(".prototype")?),
         };

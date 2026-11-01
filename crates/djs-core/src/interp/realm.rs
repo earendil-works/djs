@@ -47,9 +47,17 @@ pub enum Intrinsic {
     /// %StringIteratorPrototype% ([[Prototype]] = %IteratorPrototype%). String Iterators
     /// are Array Iterator objects of kind 3 (D1346).
     StringIteratorProto,
+    MapProto,
+    SetProto,
+    WeakMapProto,
+    WeakSetProto,
+    /// %MapIteratorPrototype% and %SetIteratorPrototype% ([[Prototype]]
+    /// %IteratorPrototype%).
+    MapIteratorProto,
+    SetIteratorProto,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::StringIteratorProto as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::SetIteratorProto as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -72,6 +80,10 @@ impl Intrinsic {
             "Number" => Intrinsic::NumberProto,
             "String" => Intrinsic::StringProto,
             "Symbol" => Intrinsic::SymbolProto,
+            "Map" => Intrinsic::MapProto,
+            "Set" => Intrinsic::SetProto,
+            "WeakMap" => Intrinsic::WeakMapProto,
+            "WeakSet" => Intrinsic::WeakSetProto,
             _ => return None,
         })
     }
@@ -180,6 +192,19 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
         Intrinsic::StringIteratorProto,
         Value::object(string_iterator_proto),
     );
+    for i in [Intrinsic::MapIteratorProto, Intrinsic::SetIteratorProto] {
+        let p = heap.new_object(Some(iterator_proto))?;
+        set(heap, i, Value::object(p));
+    }
+    for i in [
+        Intrinsic::MapProto,
+        Intrinsic::SetProto,
+        Intrinsic::WeakMapProto,
+        Intrinsic::WeakSetProto,
+    ] {
+        let p = heap.new_object(Some(object_proto))?;
+        set(heap, i, Value::object(p));
+    }
     let error_proto = heap.new_object(Some(object_proto))?;
     set(heap, Intrinsic::ErrorProto, Value::object(error_proto));
     let empty = Value::string(heap.atom_string(atoms::EMPTY)?);

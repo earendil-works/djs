@@ -4,6 +4,26 @@
 "use strict";
 
 const installed = {};
+const iterState = new WeakMap();
+const MapIterNext = Object.getPrototypeOf(new Map().keys()).next;
+const SetIterNext = Object.getPrototypeOf(new Set().keys()).next;
+function isMapLike(m) {
+  try {
+    Map.prototype.has.call(m, 1);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function collProto(m) {
+  for (const C of [Map, Set, WeakMap, WeakSet]) {
+    try {
+      C.prototype.has.call(m, {});
+      return C.prototype;
+    } catch {}
+  }
+  throw new Error("intrinsic misuse: not a collection");
+}
 const arrayIterators = new WeakMap();
 let ourAIP;
 function ourArrayIteratorPrototype() {
@@ -232,6 +252,44 @@ const I = {
   GetWithReceiver: (o, k, r) => (check(isObject(o) && !isObject(k), "GetWithReceiver"), Reflect.get(o, k, r)),
   SetWithReceiver: (o, k, v, r) => (check(isObject(o) && !isObject(k), "SetWithReceiver"), Reflect.set(o, k, v, r)),
   DeleteProperty: (o, k) => (check(isObject(o) && !isObject(k), "DeleteProperty"), Reflect.deleteProperty(o, k)),
+  CollectionCreate: (cls, proto) => Object.setPrototypeOf(new [Map, Set, WeakMap, WeakSet][cls](), proto),
+  CollectionClass: (v) => {
+    for (const [i, C] of [[0, Map], [1, Set], [2, WeakMap], [3, WeakSet]]) {
+      try {
+        C.prototype.has.call(v, {});
+        return i;
+      } catch {}
+    }
+    return -1;
+  },
+  CollectionGet: (m, k) => (m instanceof Map || isMapLike(m) ? Map.prototype.get.call(m, k) : WeakMap.prototype.get.call(m, k)),
+  CollectionHas: (m, k) => collProto(m).has.call(m, k),
+  CollectionSet: (m, k, v) => {
+    const p = collProto(m);
+    if (p.set) p.set.call(m, k, v);
+    else p.add.call(m, k);
+  },
+  CollectionDelete: (m, k) => collProto(m).delete.call(m, k),
+  CollectionClear: (m) => collProto(m).clear.call(m),
+  CollectionSize: (m) => Reflect.get(collProto(m), "size", m),
+  CollectionIterator: (m, kind) => {
+    const p = collProto(m);
+    const it = [p.keys, p.values, p.entries][kind].call(m);
+    iterState.set(it, {});
+    return it;
+  },
+  CollectionIteratorNext: (it, isSet) => (isSet ? SetIterNext : MapIterNext).call(it),
+  CollectionIteratorStep: (it) => {
+    const r = it.next();
+    if (r.done) return false;
+    const st = iterState.get(it);
+    if (Array.isArray(r.value)) [st.k, st.v] = r.value;
+    else st.k = st.v = r.value;
+    return true;
+  },
+  CollectionIteratorKey: (it) => iterState.get(it).k,
+  CollectionIteratorValue: (it) => iterState.get(it).v,
+  CanBeHeldWeakly: (v) => isObject(v) || (typeof v === "symbol" && Symbol.keyFor(v) === undefined),
   StrLocaleCompare: (a, b) => a.localeCompare(b),
   StrCharCodeAt: (s, i) => (check(typeof s === "string" && Number.isInteger(i) || !isFinite(i), "StrCharCodeAt"), i >= 0 && i < s.length ? s.charCodeAt(i) : NaN),
   StrCodePointAt: (s, i) => (i >= 0 && i < s.length ? s.codePointAt(i) : undefined),
@@ -1037,5 +1095,68 @@ for (const C of [Error, TypeError, Array, Object, Boolean, Number, String, Date]
 for (const name of Object.getOwnPropertyNames(Reflect)) {
   same("Reflect." + name, Reflect[name], () => installed["Reflect." + name].length === Reflect[name].length);
 }
+
+// ---- 0038: Map, Set, WeakMap, WeakSet ------------------------------------------------------
+
+const entryLists = (log) => [[], [["a", 1], ["b", 2]], [[NaN, 1], [-0, 2], [0, 3]], userIter([["k", "v"]], log), [5], "ab", null, undefined];
+for (let i = 0; i < entryLists([]).length; i++) {
+  same("globalThis.Map", Map, (f, log) => { const m = Reflect.construct(f, [entryLists(log)[i]]); return [Map.prototype.size.call ? m.size : 0, [...m]]; });
+  same("globalThis.Set", Set, (f, log) => { const s = Reflect.construct(f, [entryLists(log)[i]]); return [s.size, [...s]]; });
+  same("globalThis.WeakMap", WeakMap, (f, log) => Reflect.construct(f, [entryLists(log)[i]]) instanceof WeakMap);
+}
+same("globalThis.Map", Map, (f) => f());
+const MP = Map.prototype, SP2 = Set.prototype;
+for (const name of ["get", "has", "delete"]) {
+  for (const key of ["a", "zz", NaN, -0, 0, {}]) {
+    same("Map.prototype." + name, MP[name], (f) => { const m = new Map([["a", 1], [NaN, 2], [0, 3]]); return [f.call(m, key), [...m]]; });
+  }
+  same("Map.prototype." + name, MP[name], (f) => f.call(new Set(), 1));
+}
+same("Map.prototype.set", MP.set, (f) => { const m = new Map(); return [f.call(m, -0, "z") === m, [...m], Object.is([...m.keys()][0], 0)]; });
+same("get Map.prototype.size", Object.getOwnPropertyDescriptor(MP, "size").get, (f) => [f.call(new Map([[1, 1]])), f.call(new Map())]);
+same("get Map.prototype.size", Object.getOwnPropertyDescriptor(MP, "size").get, (f) => f.call(new Set()));
+same("Map.prototype.forEach", MP.forEach, (f) => {
+  const m = new Map([["a", 1], ["b", 2], ["c", 3]]);
+  const seen = [];
+  f.call(m, function (v, k, mm) { seen.push([k, v, this.t, mm === m]); if (k === "a") { mm.delete("b"); mm.set("d", 4); } }, { t: "T" });
+  return seen;
+});
+same("Map.prototype.forEach", MP.forEach, (f) => f.call(new Map(), 5));
+for (const name of ["add", "has", "delete"]) {
+  for (const key of [1, "1", NaN, -0, {}]) {
+    same("Set.prototype." + name, SP2[name], (f) => { const s = new Set([1, NaN, 0]); return [f.call(s, key) === s ? "self" : "other", [...s]]; });
+  }
+}
+same("Set.prototype.forEach", SP2.forEach, (f) => { const out = []; f.call(new Set([1, 2]), (a, b, s) => out.push(a, b, s.size)); return out; });
+const setPairs = [[[1, 2, 3, 4], [3, 4, 5]], [[], [1]], [[1, 2], []], [[1, 2, 3], [1, 2, 3]], [["a", NaN], [NaN]]];
+for (const [x, y] of setPairs) {
+  for (const name of ["union", "intersection", "difference", "symmetricDifference", "isSubsetOf", "isSupersetOf", "isDisjointFrom"]) {
+    same("Set.prototype." + name, SP2[name], (f) => { const r = f.call(new Set(x), new Set(y)); return r instanceof Set ? [...r] : r; });
+    same("Set.prototype." + name, SP2[name], (f, log) => {
+      const other = { size: y.length, has: (v) => { log.push("has:" + String(v)); return y.includes(v); }, keys: () => { log.push("keys"); return userIter(y, log)[Symbol.iterator](); } };
+      const r = f.call(new Set(x), other);
+      return r instanceof Set ? [...r] : r;
+    });
+  }
+}
+for (const bad of [{ size: NaN }, { size: -1, has() {}, keys() {} }, { size: 1, has: 1, keys() {} }, { size: 1, has() {}, keys: 1 }, { size: Infinity, has: () => true, keys: () => [][Symbol.iterator]() }]) {
+  for (const name of ["union", "isSubsetOf"]) {
+    same("Set.prototype." + name, SP2[name], (f) => { const r = f.call(new Set([1]), bad); return r instanceof Set ? [...r] : r; });
+  }
+}
+same("Map.groupBy", Map.groupBy, (f) => [...f([1, 2, 3, 4, -0, 0], (v) => (v % 2 ? "odd" : v))]);
+same("Map.groupBy", Map.groupBy, (f, log) => [...f(userIter([1], log), () => { throw new RangeError("cb"); })]);
+same("Map.groupBy", Map.groupBy, (f) => f([1], 5));
+const WMP = WeakMap.prototype, WSP = WeakSet.prototype;
+for (const key of [{}, Symbol("s"), Symbol.for("reg"), Symbol.iterator, 1, "s", null]) {
+  same("WeakMap.prototype.set", WMP.set, (f) => { const m = new WeakMap(); return [f.call(m, key, 1) === m, m.get(key)]; });
+  same("WeakMap.prototype.get", WMP.get, (f) => f.call(new WeakMap(), key));
+  same("WeakMap.prototype.has", WMP.has, (f) => f.call(new WeakMap(), key));
+  same("WeakMap.prototype.delete", WMP.delete, (f) => f.call(new WeakMap(), key));
+  same("WeakSet.prototype.add", WSP.add, (f) => { const s = new WeakSet(); return [f.call(s, key) === s, s.has(key)]; });
+  same("WeakSet.prototype.has", WSP.has, (f) => f.call(new WeakSet(), key));
+  same("WeakSet.prototype.delete", WSP.delete, (f) => f.call(new WeakSet(), key));
+}
+same("WeakMap.prototype.get", WMP.get, (f) => f.call(new Map(), {}));
 
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));

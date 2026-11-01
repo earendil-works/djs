@@ -1526,6 +1526,167 @@ function StringIteratorToStringTag() {
   return "String Iterator";
 }
 
+// builtins/map.ts:4
+function ThisMap(v) {
+  if (%CollectionClass(v) !== 0) {
+    throw %NewTypeError("Map object expected");
+  }
+  return %AsObj(v);
+}
+
+// builtins/map.ts:15
+function AddEntriesFromIterable(target, iterable, adder) {
+  const iterator = GetIterator(iterable);
+  const next = %Get(iterator, "next");
+  while (true) {
+    const result = IteratorNextResult(iterator, next);
+    if (%ToBoolean(%Get(result, "done"))) {
+      return;
+    }
+    const nextItem = %Get(result, "value");
+    try {
+      if (!%IsObject(nextItem)) {
+        throw %NewTypeError("not an object");
+      }
+      const item = %AsObj(nextItem);
+      const k = %Get(item, "0");
+      const v = %Get(item, "1");
+      %Call(adder, target, k, v);
+    } catch (e) {
+      IteratorCloseThrow(iterator);
+      throw e;
+    }
+  }
+}
+
+// builtins/map.ts:43 constructor Map
+function MapConstructor(iterable) {
+  if (new.target === undefined) {
+    throw %NewTypeError("must be called with new");
+  }
+  const map = %CollectionCreate(0, GetPrototypeFromConstructor(new.target, "MapPrototype"));
+  if (iterable === undefined || iterable === null) {
+    return map;
+  }
+  const adder = %Get(map, "set");
+  if (!%IsCallable(adder)) {
+    throw %NewTypeError("not a function");
+  }
+  AddEntriesFromIterable(map, iterable, adder);
+  return map;
+}
+
+// builtins/map.ts:63 Map.groupBy
+function MapGroupBy(items, callback) {
+  if (!%IsCallable(callback)) {
+    throw %NewTypeError("not a function");
+  }
+  const map = %CollectionCreate(0, %RealmIntrinsic("MapPrototype"));
+  const iterator = GetIterator(items);
+  const next = %Get(iterator, "next");
+  let k = 0;
+  while (true) {
+    const result = IteratorNextResult(iterator, next);
+    if (%ToBoolean(%Get(result, "done"))) {
+      return map;
+    }
+    const value = %Get(result, "value");
+    let key = undefined;
+    try {
+      key = %Call(callback, undefined, value, k);
+    } catch (e) {
+      IteratorCloseThrow(iterator);
+      throw e;
+    }
+    let group = %CollectionGet(map, key);
+    if (group === undefined) {
+      group = %ArrayCreate(0);
+      %CollectionSet(map, key, group);
+    }
+    const g = %AsObj(group);
+    %CreateDataPropertyOrThrow(g, LengthOfArrayLike(g), value);
+    k++;
+  }
+}
+
+// builtins/map.ts:99 get Map[Symbol.species]
+function MapSpecies() {
+  return this;
+}
+
+// builtins/map.ts:107 Map.prototype.clear
+function MapPrototypeClear() {
+  %CollectionClear(ThisMap(this));
+}
+
+// builtins/map.ts:115 Map.prototype.delete
+function MapPrototypeDelete(key) {
+  return %CollectionDelete(ThisMap(this), key);
+}
+
+// builtins/map.ts:124 Map.prototype.entries Map.prototype[Symbol.iterator]
+function MapPrototypeEntries() {
+  return %CollectionIterator(ThisMap(this), 2);
+}
+
+// builtins/map.ts:132 Map.prototype.forEach
+function MapPrototypeForEach(callbackfn, thisArg) {
+  const m = ThisMap(this);
+  if (!%IsCallable(callbackfn)) {
+    throw %NewTypeError("not a function");
+  }
+  const it = %CollectionIterator(m, 2);
+  while (%CollectionIteratorStep(it)) {
+    %Call(callbackfn, thisArg, %CollectionIteratorValue(it), %CollectionIteratorKey(it), m);
+  }
+}
+
+// builtins/map.ts:147 Map.prototype.get
+function MapPrototypeGet(key) {
+  return %CollectionGet(ThisMap(this), key);
+}
+
+// builtins/map.ts:155 Map.prototype.has
+function MapPrototypeHas(key) {
+  return %CollectionHas(ThisMap(this), key);
+}
+
+// builtins/map.ts:163 Map.prototype.keys
+function MapPrototypeKeys() {
+  return %CollectionIterator(ThisMap(this), 0);
+}
+
+// builtins/map.ts:171 Map.prototype.set
+function MapPrototypeSet(key, value) {
+  %CollectionSet(ThisMap(this), key, value);
+  return this;
+}
+
+// builtins/map.ts:180 get Map.prototype.size
+function MapPrototypeSize() {
+  return %CollectionSize(ThisMap(this));
+}
+
+// builtins/map.ts:188 Map.prototype.values
+function MapPrototypeValues() {
+  return %CollectionIterator(ThisMap(this), 1);
+}
+
+// builtins/map.ts:197 value Map.prototype[Symbol.toStringTag]
+function MapPrototypeToStringTag() {
+  return "Map";
+}
+
+// builtins/map.ts:205 %MapIteratorPrototype%.next
+function MapIteratorPrototypeNext() {
+  return %CollectionIteratorNext(this, false);
+}
+
+// builtins/map.ts:214 value %MapIteratorPrototype%[Symbol.toStringTag]
+function MapIteratorToStringTag() {
+  return "Map Iterator";
+}
+
 // builtins/math.ts:8 value Math
 function MathObject() {
   return %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
@@ -2462,6 +2623,327 @@ function ReflectSetPrototypeOf(target, proto) {
   return %SetPrototypeOf(o, proto);
 }
 
+// builtins/set.ts:4
+function ThisSet(v) {
+  if (%CollectionClass(v) !== 1) {
+    throw %NewTypeError("Set object expected");
+  }
+  return %AsObj(v);
+}
+
+// builtins/set.ts:15 constructor Set
+function SetConstructor(iterable) {
+  if (new.target === undefined) {
+    throw %NewTypeError("must be called with new");
+  }
+  const set = %CollectionCreate(1, GetPrototypeFromConstructor(new.target, "SetPrototype"));
+  if (iterable === undefined || iterable === null) {
+    return set;
+  }
+  const adder = %Get(set, "add");
+  if (!%IsCallable(adder)) {
+    throw %NewTypeError("not a function");
+  }
+  const iterator = GetIterator(iterable);
+  const next = %Get(iterator, "next");
+  while (true) {
+    const result = IteratorNextResult(iterator, next);
+    if (%ToBoolean(%Get(result, "done"))) {
+      return set;
+    }
+    const nextValue = %Get(result, "value");
+    try {
+      %Call(adder, set, nextValue);
+    } catch (e) {
+      IteratorCloseThrow(iterator);
+      throw e;
+    }
+  }
+}
+
+// builtins/set.ts:48 get Set[Symbol.species]
+function SetSpecies() {
+  return this;
+}
+
+// builtins/set.ts:56 Set.prototype.add
+function SetPrototypeAdd(value) {
+  %CollectionSet(ThisSet(this), value, true);
+  return this;
+}
+
+// builtins/set.ts:65 Set.prototype.clear
+function SetPrototypeClear() {
+  %CollectionClear(ThisSet(this));
+}
+
+// builtins/set.ts:73 Set.prototype.delete
+function SetPrototypeDelete(value) {
+  return %CollectionDelete(ThisSet(this), value);
+}
+
+// builtins/set.ts:81 Set.prototype.entries
+function SetPrototypeEntries() {
+  return %CollectionIterator(ThisSet(this), 2);
+}
+
+// builtins/set.ts:89 Set.prototype.forEach
+function SetPrototypeForEach(callbackfn, thisArg) {
+  const s = ThisSet(this);
+  if (!%IsCallable(callbackfn)) {
+    throw %NewTypeError("not a function");
+  }
+  const it = %CollectionIterator(s, 0);
+  while (%CollectionIteratorStep(it)) {
+    const k = %CollectionIteratorKey(it);
+    %Call(callbackfn, thisArg, k, k, s);
+  }
+}
+
+// builtins/set.ts:105 Set.prototype.has
+function SetPrototypeHas(value) {
+  return %CollectionHas(ThisSet(this), value);
+}
+
+// builtins/set.ts:113 get Set.prototype.size
+function SetPrototypeSize() {
+  return %CollectionSize(ThisSet(this));
+}
+
+// builtins/set.ts:123 Set.prototype.values Set.prototype.keys Set.prototype[Symbol.iterator]
+function SetPrototypeValues() {
+  return %CollectionIterator(ThisSet(this), 0);
+}
+
+// builtins/set.ts:132 value Set.prototype[Symbol.toStringTag]
+function SetPrototypeToStringTag() {
+  return "Set";
+}
+
+// builtins/set.ts:140 %SetIteratorPrototype%.next
+function SetIteratorPrototypeNext() {
+  return %CollectionIteratorNext(this, true);
+}
+
+// builtins/set.ts:149 value %SetIteratorPrototype%[Symbol.toStringTag]
+function SetIteratorToStringTag() {
+  return "Set Iterator";
+}
+
+// builtins/set.ts:159
+function GetSetRecord(obj) {
+  if (!%IsObject(obj)) {
+    throw %NewTypeError("not an object");
+  }
+  const o = %AsObj(obj);
+  const rawSize = %Get(o, "size");
+  const numSize = ToNumber(rawSize);
+  if (numSize !== numSize) {
+    throw %NewTypeError(".size is not a number");
+  }
+  const intSize = %ToIntegerOrInfinityNumber(numSize);
+  if (intSize < 0) {
+    throw %NewRangeError(".size must be positive");
+  }
+  const has = %Get(o, "has");
+  if (!%IsCallable(has)) {
+    throw %NewTypeError(".has is not a function");
+  }
+  const keys = %Get(o, "keys");
+  if (!%IsCallable(keys)) {
+    throw %NewTypeError(".keys is not a function");
+  }
+  const rec = %ObjectCreate(null);
+  %CreateDataPropertyOrThrow(rec, "set", o);
+  %CreateDataPropertyOrThrow(rec, "size", intSize);
+  %CreateDataPropertyOrThrow(rec, "has", has);
+  %CreateDataPropertyOrThrow(rec, "keys", keys);
+  return rec;
+}
+
+// builtins/set.ts:190
+function RecordSize(rec) {
+  return %AsNumber(%Get(rec, "size"));
+}
+
+// builtins/set.ts:195
+function RecordHas(rec, value) {
+  return %ToBoolean(%Call(%Get(rec, "has"), %Get(rec, "set"), value));
+}
+
+// builtins/set.ts:200
+function RecordKeys(rec) {
+  const iterator = %Call(%Get(rec, "keys"), %Get(rec, "set"));
+  if (!%IsObject(iterator)) {
+    throw %NewTypeError("not an object");
+  }
+  return %AsObj(iterator);
+}
+
+// builtins/set.ts:209
+function SetCopy(s) {
+  const result = %CollectionCreate(1, %RealmIntrinsic("SetPrototype"));
+  const it = %CollectionIterator(s, 0);
+  while (%CollectionIteratorStep(it)) {
+    %CollectionSet(result, %CollectionIteratorKey(it), true);
+  }
+  return result;
+}
+
+// builtins/set.ts:222
+function KeysNext(iterator, next, out) {
+  const result = IteratorNextResult(iterator, next);
+  if (%ToBoolean(%Get(result, "done"))) {
+    return false;
+  }
+  %CreateDataPropertyOrThrow(out, 0, %Get(result, "value"));
+  return true;
+}
+
+// builtins/set.ts:235 Set.prototype.union
+function SetPrototypeUnion(other) {
+  const s = ThisSet(this);
+  const rec = GetSetRecord(other);
+  const keys = RecordKeys(rec);
+  const next = %Get(keys, "next");
+  const result = SetCopy(s);
+  const cell = %ArrayCreate(1);
+  while (KeysNext(keys, next, cell)) {
+    %CollectionSet(result, %Get(cell, 0), true);
+  }
+  return result;
+}
+
+// builtins/set.ts:252 Set.prototype.intersection
+function SetPrototypeIntersection(other) {
+  const s = ThisSet(this);
+  const rec = GetSetRecord(other);
+  const result = %CollectionCreate(1, %RealmIntrinsic("SetPrototype"));
+  if (%CollectionSize(s) <= RecordSize(rec)) {
+    const it = %CollectionIterator(s, 0);
+    while (%CollectionIteratorStep(it)) {
+      const e = %CollectionIteratorKey(it);
+      if (RecordHas(rec, e)) {
+        %CollectionSet(result, e, true);
+      }
+    }
+    return result;
+  }
+  const keys = RecordKeys(rec);
+  const next = %Get(keys, "next");
+  const cell = %ArrayCreate(1);
+  while (KeysNext(keys, next, cell)) {
+    const v = %Get(cell, 0);
+    if (%CollectionHas(s, v)) {
+      %CollectionSet(result, v, true);
+    }
+  }
+  return result;
+}
+
+// builtins/set.ts:282 Set.prototype.difference
+function SetPrototypeDifference(other) {
+  const s = ThisSet(this);
+  const rec = GetSetRecord(other);
+  const result = SetCopy(s);
+  if (%CollectionSize(s) <= RecordSize(rec)) {
+    const it = %CollectionIterator(s, 0);
+    while (%CollectionIteratorStep(it)) {
+      const e = %CollectionIteratorKey(it);
+      if (RecordHas(rec, e)) {
+        %CollectionDelete(result, e);
+      }
+    }
+    return result;
+  }
+  const keys = RecordKeys(rec);
+  const next = %Get(keys, "next");
+  const cell = %ArrayCreate(1);
+  while (KeysNext(keys, next, cell)) {
+    %CollectionDelete(result, %Get(cell, 0));
+  }
+  return result;
+}
+
+// builtins/set.ts:309 Set.prototype.symmetricDifference
+function SetPrototypeSymmetricDifference(other) {
+  const s = ThisSet(this);
+  const rec = GetSetRecord(other);
+  const keys = RecordKeys(rec);
+  const next = %Get(keys, "next");
+  const result = SetCopy(s);
+  const cell = %ArrayCreate(1);
+  while (KeysNext(keys, next, cell)) {
+    const v = %Get(cell, 0);
+    if (%CollectionHas(s, v)) {
+      %CollectionDelete(result, v);
+    } else {
+      %CollectionSet(result, v, true);
+    }
+  }
+  return result;
+}
+
+// builtins/set.ts:331 Set.prototype.isSubsetOf
+function SetPrototypeIsSubsetOf(other) {
+  const s = ThisSet(this);
+  const rec = GetSetRecord(other);
+  if (%CollectionSize(s) > RecordSize(rec)) {
+    return false;
+  }
+  const it = %CollectionIterator(s, 0);
+  while (%CollectionIteratorStep(it)) {
+    if (!RecordHas(rec, %CollectionIteratorKey(it))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// builtins/set.ts:350 Set.prototype.isSupersetOf
+function SetPrototypeIsSupersetOf(other) {
+  const s = ThisSet(this);
+  const rec = GetSetRecord(other);
+  if (%CollectionSize(s) < RecordSize(rec)) {
+    return false;
+  }
+  const keys = RecordKeys(rec);
+  const next = %Get(keys, "next");
+  const cell = %ArrayCreate(1);
+  while (KeysNext(keys, next, cell)) {
+    if (!%CollectionHas(s, %Get(cell, 0))) {
+      IteratorClose(keys);
+      return false;
+    }
+  }
+  return true;
+}
+
+// builtins/set.ts:372 Set.prototype.isDisjointFrom
+function SetPrototypeIsDisjointFrom(other) {
+  const s = ThisSet(this);
+  const rec = GetSetRecord(other);
+  if (%CollectionSize(s) <= RecordSize(rec)) {
+    const it = %CollectionIterator(s, 0);
+    while (%CollectionIteratorStep(it)) {
+      if (RecordHas(rec, %CollectionIteratorKey(it))) {
+        return false;
+      }
+    }
+    return true;
+  }
+  const keys = RecordKeys(rec);
+  const next = %Get(keys, "next");
+  const cell = %ArrayCreate(1);
+  while (KeysNext(keys, next, cell)) {
+    if (%CollectionHas(s, %Get(cell, 0))) {
+      IteratorClose(keys);
+      return false;
+    }
+  }
+  return true;
+}
+
 // builtins/spread.ts:9 %ArraySpread
 function ArraySpread(arr, src) {
   const iterator = GetIterator(src);
@@ -2976,6 +3458,132 @@ function SymbolUnscopables() {
   return %WellKnownSymbol("unscopables");
 }
 
+// builtins/weak.ts:5
+function ThisWeakMap(v) {
+  if (%CollectionClass(v) !== 2) {
+    throw %NewTypeError("WeakMap object expected");
+  }
+  return %AsObj(v);
+}
+
+// builtins/weak.ts:13
+function ThisWeakSet(v) {
+  if (%CollectionClass(v) !== 3) {
+    throw %NewTypeError("WeakSet object expected");
+  }
+  return %AsObj(v);
+}
+
+// builtins/weak.ts:24 constructor WeakMap
+function WeakMapConstructor(iterable) {
+  if (new.target === undefined) {
+    throw %NewTypeError("must be called with new");
+  }
+  const map = %CollectionCreate(2, GetPrototypeFromConstructor(new.target, "WeakMapPrototype"));
+  if (iterable === undefined || iterable === null) {
+    return map;
+  }
+  const adder = %Get(map, "set");
+  if (!%IsCallable(adder)) {
+    throw %NewTypeError("not a function");
+  }
+  AddEntriesFromIterable(map, iterable, adder);
+  return map;
+}
+
+// builtins/weak.ts:44 WeakMap.prototype.delete
+function WeakMapPrototypeDelete(key) {
+  const m = ThisWeakMap(this);
+  return %CanBeHeldWeakly(key) && %CollectionDelete(m, key);
+}
+
+// builtins/weak.ts:53 WeakMap.prototype.get
+function WeakMapPrototypeGet(key) {
+  const m = ThisWeakMap(this);
+  if (!%CanBeHeldWeakly(key)) {
+    return undefined;
+  }
+  return %CollectionGet(m, key);
+}
+
+// builtins/weak.ts:65 WeakMap.prototype.has
+function WeakMapPrototypeHas(key) {
+  const m = ThisWeakMap(this);
+  return %CanBeHeldWeakly(key) && %CollectionHas(m, key);
+}
+
+// builtins/weak.ts:74 WeakMap.prototype.set
+function WeakMapPrototypeSet(key, value) {
+  const m = ThisWeakMap(this);
+  if (!%CanBeHeldWeakly(key)) {
+    throw %NewTypeError("invalid value used as WeakMap key");
+  }
+  %CollectionSet(m, key, value);
+  return this;
+}
+
+// builtins/weak.ts:88 value WeakMap.prototype[Symbol.toStringTag]
+function WeakMapPrototypeToStringTag() {
+  return "WeakMap";
+}
+
+// builtins/weak.ts:96 constructor WeakSet
+function WeakSetConstructor(iterable) {
+  if (new.target === undefined) {
+    throw %NewTypeError("must be called with new");
+  }
+  const set = %CollectionCreate(3, GetPrototypeFromConstructor(new.target, "WeakSetPrototype"));
+  if (iterable === undefined || iterable === null) {
+    return set;
+  }
+  const adder = %Get(set, "add");
+  if (!%IsCallable(adder)) {
+    throw %NewTypeError("not a function");
+  }
+  const iterator = GetIterator(iterable);
+  const next = %Get(iterator, "next");
+  while (true) {
+    const result = IteratorNextResult(iterator, next);
+    if (%ToBoolean(%Get(result, "done"))) {
+      return set;
+    }
+    const nextValue = %Get(result, "value");
+    try {
+      %Call(adder, set, nextValue);
+    } catch (e) {
+      IteratorCloseThrow(iterator);
+      throw e;
+    }
+  }
+}
+
+// builtins/weak.ts:129 WeakSet.prototype.add
+function WeakSetPrototypeAdd(value) {
+  const s = ThisWeakSet(this);
+  if (!%CanBeHeldWeakly(value)) {
+    throw %NewTypeError("invalid value used as WeakSet key");
+  }
+  %CollectionSet(s, value, true);
+  return this;
+}
+
+// builtins/weak.ts:142 WeakSet.prototype.delete
+function WeakSetPrototypeDelete(value) {
+  const s = ThisWeakSet(this);
+  return %CanBeHeldWeakly(value) && %CollectionDelete(s, value);
+}
+
+// builtins/weak.ts:151 WeakSet.prototype.has
+function WeakSetPrototypeHas(value) {
+  const s = ThisWeakSet(this);
+  return %CanBeHeldWeakly(value) && %CollectionHas(s, value);
+}
+
+// builtins/weak.ts:161 value WeakSet.prototype[Symbol.toStringTag]
+function WeakSetPrototypeToStringTag() {
+  return "WeakSet";
+}
+
 %InstallConstructor("globalThis", "Array", ArrayConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Boolean", BooleanConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Error", ErrorConstructor, 1, undefined);
@@ -2988,6 +3596,7 @@ function SymbolUnscopables() {
 %InstallConstructor("globalThis", "InternalError", InternalErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "AggregateError", AggregateErrorConstructor, 2, "Error");
 %InstallConstructor("globalThis", "Function", FunctionConstructor, 1, undefined);
+%InstallConstructor("globalThis", "Map", MapConstructor, 0, undefined);
 %InstallValue("globalThis", "Math", MathObject(), 5);
 %InstallConstructor("globalThis", "Number", NumberConstructor, 1, undefined);
 %InstallMethod("globalThis", "parseFloat", GlobalParseFloat, 1);
@@ -2996,8 +3605,11 @@ function SymbolUnscopables() {
 %InstallMethod("globalThis", "isFinite", GlobalIsFinite, 1);
 %InstallConstructor("globalThis", "Object", ObjectConstructor, 1, undefined);
 %InstallValue("globalThis", "Reflect", ReflectObject(), 5);
+%InstallConstructor("globalThis", "Set", SetConstructor, 0, undefined);
 %InstallConstructor("globalThis", "String", StringConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Symbol", SymbolConstructor, 0, undefined);
+%InstallConstructor("globalThis", "WeakMap", WeakMapConstructor, 0, undefined);
+%InstallConstructor("globalThis", "WeakSet", WeakSetConstructor, 0, undefined);
 %InstallMethod("Array.prototype", "forEach", ArrayPrototypeForEach, 1);
 %InstallMethod("Array.prototype", "map", ArrayPrototypeMap, 1);
 %InstallMethod("Array.prototype", "indexOf", ArrayPrototypeIndexOf, 1);
@@ -3063,6 +3675,22 @@ function SymbolUnscopables() {
 %InstallMethod("String.prototype", %WellKnownSymbol("iterator"), StringPrototypeIterator, 0);
 %InstallMethod("%StringIteratorPrototype%", "next", StringIteratorPrototypeNext, 0);
 %InstallValue("%StringIteratorPrototype%", %WellKnownSymbol("toStringTag"), StringIteratorToStringTag(), 4);
+%InstallMethod("Map", "groupBy", MapGroupBy, 2);
+%InstallAccessor("Map", %WellKnownSymbol("species"), MapSpecies, false);
+%InstallMethod("Map.prototype", "clear", MapPrototypeClear, 0);
+%InstallMethod("Map.prototype", "delete", MapPrototypeDelete, 1);
+%InstallMethod("Map.prototype", "entries", MapPrototypeEntries, 0);
+%InstallMethod("Map.prototype", %WellKnownSymbol("iterator"), MapPrototypeEntries, 0);
+%InstallMethod("Map.prototype", "forEach", MapPrototypeForEach, 1);
+%InstallMethod("Map.prototype", "get", MapPrototypeGet, 1);
+%InstallMethod("Map.prototype", "has", MapPrototypeHas, 1);
+%InstallMethod("Map.prototype", "keys", MapPrototypeKeys, 0);
+%InstallMethod("Map.prototype", "set", MapPrototypeSet, 2);
+%InstallAccessor("Map.prototype", "size", MapPrototypeSize, false);
+%InstallMethod("Map.prototype", "values", MapPrototypeValues, 0);
+%InstallValue("Map.prototype", %WellKnownSymbol("toStringTag"), MapPrototypeToStringTag(), 4);
+%InstallMethod("%MapIteratorPrototype%", "next", MapIteratorPrototypeNext, 0);
+%InstallValue("%MapIteratorPrototype%", %WellKnownSymbol("toStringTag"), MapIteratorToStringTag(), 4);
 %InstallValue("Math", %WellKnownSymbol("toStringTag"), MathToStringTag(), 4);
 %InstallValue("Math", "E", MathE(), 0);
 %InstallValue("Math", "LN10", MathLN10(), 0);
@@ -3168,6 +3796,27 @@ function SymbolUnscopables() {
 %InstallMethod("Reflect", "preventExtensions", ReflectPreventExtensions, 1);
 %InstallMethod("Reflect", "set", ReflectSet, 3);
 %InstallMethod("Reflect", "setPrototypeOf", ReflectSetPrototypeOf, 2);
+%InstallAccessor("Set", %WellKnownSymbol("species"), SetSpecies, false);
+%InstallMethod("Set.prototype", "add", SetPrototypeAdd, 1);
+%InstallMethod("Set.prototype", "clear", SetPrototypeClear, 0);
+%InstallMethod("Set.prototype", "delete", SetPrototypeDelete, 1);
+%InstallMethod("Set.prototype", "entries", SetPrototypeEntries, 0);
+%InstallMethod("Set.prototype", "forEach", SetPrototypeForEach, 1);
+%InstallMethod("Set.prototype", "has", SetPrototypeHas, 1);
+%InstallAccessor("Set.prototype", "size", SetPrototypeSize, false);
+%InstallMethod("Set.prototype", "values", SetPrototypeValues, 0);
+%InstallMethod("Set.prototype", "keys", SetPrototypeValues, 0);
+%InstallMethod("Set.prototype", %WellKnownSymbol("iterator"), SetPrototypeValues, 0);
+%InstallValue("Set.prototype", %WellKnownSymbol("toStringTag"), SetPrototypeToStringTag(), 4);
+%InstallMethod("%SetIteratorPrototype%", "next", SetIteratorPrototypeNext, 0);
+%InstallValue("%SetIteratorPrototype%", %WellKnownSymbol("toStringTag"), SetIteratorToStringTag(), 4);
+%InstallMethod("Set.prototype", "union", SetPrototypeUnion, 1);
+%InstallMethod("Set.prototype", "intersection", SetPrototypeIntersection, 1);
+%InstallMethod("Set.prototype", "difference", SetPrototypeDifference, 1);
+%InstallMethod("Set.prototype", "symmetricDifference", SetPrototypeSymmetricDifference, 1);
+%InstallMethod("Set.prototype", "isSubsetOf", SetPrototypeIsSubsetOf, 1);
+%InstallMethod("Set.prototype", "isSupersetOf", SetPrototypeIsSupersetOf, 1);
+%InstallMethod("Set.prototype", "isDisjointFrom", SetPrototypeIsDisjointFrom, 1);
 %InstallMethod("String.prototype", "toString", StringPrototypeToString, 0);
 %InstallMethod("String.prototype", "valueOf", StringPrototypeValueOf, 0);
 %InstallMethod("String.prototype", "at", StringPrototypeAt, 1);
@@ -3223,6 +3872,15 @@ function SymbolUnscopables() {
 %InstallValue("Symbol", "toPrimitive", SymbolToPrimitive(), 0);
 %InstallValue("Symbol", "toStringTag", SymbolToStringTag(), 0);
 %InstallValue("Symbol", "unscopables", SymbolUnscopables(), 0);
+%InstallMethod("WeakMap.prototype", "delete", WeakMapPrototypeDelete, 1);
+%InstallMethod("WeakMap.prototype", "get", WeakMapPrototypeGet, 1);
+%InstallMethod("WeakMap.prototype", "has", WeakMapPrototypeHas, 1);
+%InstallMethod("WeakMap.prototype", "set", WeakMapPrototypeSet, 2);
+%InstallValue("WeakMap.prototype", %WellKnownSymbol("toStringTag"), WeakMapPrototypeToStringTag(), 4);
+%InstallMethod("WeakSet.prototype", "add", WeakSetPrototypeAdd, 1);
+%InstallMethod("WeakSet.prototype", "delete", WeakSetPrototypeDelete, 1);
+%InstallMethod("WeakSet.prototype", "has", WeakSetPrototypeHas, 1);
+%InstallValue("WeakSet.prototype", %WellKnownSymbol("toStringTag"), WeakSetPrototypeToStringTag(), 4);
 %InstallIntrinsic("ToPrimitive", ToPrimitive);
 %InstallIntrinsic("ToNumber", ToNumber);
 %InstallIntrinsic("ToString", ToString);

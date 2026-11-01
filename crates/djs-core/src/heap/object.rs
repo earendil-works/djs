@@ -89,7 +89,7 @@ pub enum ObjectClass {
     WeakSet = 15,
     /// A Map or Set Iterator: slot 0 the entries it walks (undefined once done), slot 1
     /// the next entry number, slot 2 the kind (0 keys, 1 values, 2 entries), slot 3 0
-    /// for a Map, 1 for a Set.
+    /// for a Map, 1 for a Set, slots 4 and 5 the key and value of the last step.
     CollectionIterator = 16,
 }
 
@@ -129,7 +129,7 @@ impl ObjectClass {
             | ObjectClass::String
             | ObjectClass::Symbol => 1,
             ObjectClass::Map | ObjectClass::Set | ObjectClass::WeakMap | ObjectClass::WeakSet => 3,
-            ObjectClass::CollectionIterator => 4,
+            ObjectClass::CollectionIterator => 6,
         }
     }
 

@@ -44,8 +44,8 @@ use super::arena::Arena;
 use alloc::vec::Vec;
 
 use super::cells::{EphemeronArray, Header, Object, Rope, flags, gc_bits};
-use super::object::ObjectClass;
 use super::layout::Ref;
+use super::object::ObjectClass;
 use super::walk::{self, Slot};
 use super::{CellKind, Heap, HeapError};
 use crate::value::Value;

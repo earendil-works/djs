@@ -8,8 +8,7 @@ use alloc::vec::Vec;
 
 use super::cells::{
     AtomTable, EphemeronArray, HANDLE_LIVE, HandleSlot, HandleTable, Header, Object, PropTable,
-    Roots, Rope, Str8,
-    Str16, Symbol, U32Array, ValueArray, flags,
+    Roots, Rope, Str8, Str16, Symbol, U32Array, ValueArray, flags,
 };
 use super::layout::{FieldTy, Ref};
 use super::object::ObjectClass;

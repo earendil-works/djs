@@ -1,0 +1,24 @@
+4 1 nan zero true ["a","b",null,0] [1,2,"nan","zero"] [["a",1],["b",2],[null,"nan"],[0,"zero"]] 4
+["b",null,0,"d"] 4 [object Map] [object Map Iterator] true
+["x"] 1
+[["a",3],["b",2],["c",1]]
+5 [1,2,3,"3",0] true [[1,1],[2,2],[3,3],["3","3"],[0,0]] [1,2,3,"3",0] true true false
+[1,2,3,4,5] [3,4] [1,2] [1,2,5] false true true true false
+[1,2,3,4,7] [1] false
+[["odd",[1,3,5]],["even",[2,4]]]
+one true true false undefined false [object WeakMap]
+true false true true false
+1
+TypeError: must be called with new
+TypeError: Map object expected
+TypeError: Set object expected
+TypeError: invalid value used as WeakMap key
+TypeError: invalid value used as WeakSet key
+TypeError: WeakMap object expected
+TypeError: .size is not a number
+RangeError: .size must be positive
+TypeError: .has is not a function
+TypeError: not an object
+TypeError: invalid value used as WeakMap key
+0 0 0 2 true
+=== completed

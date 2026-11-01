@@ -198,6 +198,43 @@ declare function SetWithReceiver(o: Obj, key: Value, v: Value, receiver: Value):
 /** [[Delete]] ( P ): false for a non-configurable property. @leaf */
 declare function DeleteProperty(o: Obj, key: Value): boolean;
 
+// ---- Map, Set, WeakMap, WeakSet (0038, heap/collection.rs) --------------------------
+
+/** A new empty collection: class 0 Map, 1 Set, 2 WeakMap, 3 WeakSet. @leaf */
+declare function CollectionCreate(cls: i32, proto: Obj): Obj;
+/** The class of a collection object (0 Map, 1 Set, 2 WeakMap, 3 WeakSet), -1 otherwise. @leaf */
+declare function CollectionClass(v: Value): i32;
+/** The value of key (SameValueZero), or undefined. @leaf */
+declare function CollectionGet(m: Obj, key: Value): Value;
+/** Whether key is present. @leaf */
+declare function CollectionHas(m: Obj, key: Value): boolean;
+/** Adds or replaces key (-0 becomes +0); a Set passes true as the value. @leaf */
+declare function CollectionSet(m: Obj, key: Value, value: Value): void;
+/** Removes key; false if it was absent. @leaf */
+declare function CollectionDelete(m: Obj, key: Value): boolean;
+/** Removes every entry. @leaf */
+declare function CollectionClear(m: Obj): void;
+/** The number of entries. @leaf */
+declare function CollectionSize(m: Obj): f64;
+/**
+ * A Map Iterator or Set Iterator over m (kind 0 keys, 1 values, 2 entries): it visits
+ * entries added while iterating and skips deleted ones. @leaf
+ */
+declare function CollectionIterator(m: Obj, kind: i32): Obj;
+/**
+ * %MapIteratorPrototype%.next / %SetIteratorPrototype%.next: the iterator result.
+ * TypeError "Map Iterator object expected" (or Set) for anything else. @leaf
+ */
+declare function CollectionIteratorNext(it: Value, isSet: boolean): Obj;
+/** Advances an iterator to the next entry; false when done. @leaf */
+declare function CollectionIteratorStep(it: Obj): boolean;
+/** The key of the entry the last step reached. @leaf */
+declare function CollectionIteratorKey(it: Obj): Value;
+/** The value of the entry the last step reached. @leaf */
+declare function CollectionIteratorValue(it: Obj): Value;
+/** CanBeHeldWeakly ( v ): an object, or a symbol not in the Symbol.for registry. @leaf */
+declare function CanBeHeldWeakly(v: Value): boolean;
+
 // ---- Functions (0031) -----------------------------------------------------------------
 
 /** Call ( F, V, args ) with the arguments in a dense array. @reentrant */

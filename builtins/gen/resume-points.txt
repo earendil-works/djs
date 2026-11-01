@@ -578,6 +578,64 @@ StringIteratorPrototypeNext: leaf (%StringIteratorPrototype%.next, %StringIterat
 
 StringIteratorToStringTag: leaf (value %StringIteratorPrototype%[Symbol.toStringTag])
 
+ThisMap: leaf
+
+AddEntriesFromIterable: reentrant
+  builtins/map.ts:16:25  GetIterator (builtin)
+  builtins/map.ts:17:23  Get (intrinsic)
+  builtins/map.ts:19:25  IteratorNextResult (builtin)
+  builtins/map.ts:20:19  Get (intrinsic)
+  builtins/map.ts:23:29  Get (intrinsic)
+  builtins/map.ts:29:24  Get (intrinsic)
+  builtins/map.ts:30:24  Get (intrinsic)
+  builtins/map.ts:31:7  Call (intrinsic)
+  builtins/map.ts:33:7  IteratorCloseThrow (builtin)
+
+MapConstructor: reentrant (constructor Map)
+  builtins/map.ts:47:40  GetPrototypeFromConstructor (builtin)
+  builtins/map.ts:51:24  Get (intrinsic)
+  builtins/map.ts:55:3  AddEntriesFromIterable (builtin)
+
+MapGroupBy: reentrant (Map.groupBy)
+  builtins/map.ts:68:25  GetIterator (builtin)
+  builtins/map.ts:69:23  Get (intrinsic)
+  builtins/map.ts:72:25  IteratorNextResult (builtin)
+  builtins/map.ts:73:19  Get (intrinsic)
+  builtins/map.ts:76:26  Get (intrinsic)
+  builtins/map.ts:79:13  Call (intrinsic)
+  builtins/map.ts:81:7  IteratorCloseThrow (builtin)
+  builtins/map.ts:90:34  LengthOfArrayLike (builtin)
+  builtins/map.ts:90:5  CreateDataPropertyOrThrow (intrinsic)
+
+MapSpecies: leaf (get Map[Symbol.species])
+
+MapPrototypeClear: leaf (Map.prototype.clear)
+
+MapPrototypeDelete: leaf (Map.prototype.delete)
+
+MapPrototypeEntries: leaf (Map.prototype.entries, Map.prototype[Symbol.iterator])
+
+MapPrototypeForEach: reentrant (Map.prototype.forEach)
+  builtins/map.ts:139:5  Call (intrinsic)
+
+MapPrototypeGet: leaf (Map.prototype.get)
+
+MapPrototypeHas: leaf (Map.prototype.has)
+
+MapPrototypeKeys: leaf (Map.prototype.keys)
+
+MapPrototypeSet: leaf (Map.prototype.set)
+
+MapPrototypeSize: leaf (get Map.prototype.size)
+
+MapPrototypeValues: leaf (Map.prototype.values)
+
+MapPrototypeToStringTag: leaf (value Map.prototype[Symbol.toStringTag])
+
+MapIteratorPrototypeNext: leaf (%MapIteratorPrototype%.next)
+
+MapIteratorToStringTag: leaf (value %MapIteratorPrototype%[Symbol.toStringTag])
+
 MathObject: leaf (value Math)
 
 MathToStringTag: leaf (value Math[Symbol.toStringTag])
@@ -965,6 +1023,131 @@ ReflectSet: reentrant (Reflect.set)
 
 ReflectSetPrototypeOf: leaf (Reflect.setPrototypeOf)
 
+ThisSet: leaf
+
+SetConstructor: reentrant (constructor Set)
+  builtins/set.ts:19:40  GetPrototypeFromConstructor (builtin)
+  builtins/set.ts:23:24  Get (intrinsic)
+  builtins/set.ts:27:25  GetIterator (builtin)
+  builtins/set.ts:28:23  Get (intrinsic)
+  builtins/set.ts:30:25  IteratorNextResult (builtin)
+  builtins/set.ts:31:19  Get (intrinsic)
+  builtins/set.ts:34:30  Get (intrinsic)
+  builtins/set.ts:36:7  Call (intrinsic)
+  builtins/set.ts:38:7  IteratorCloseThrow (builtin)
+
+SetSpecies: leaf (get Set[Symbol.species])
+
+SetPrototypeAdd: leaf (Set.prototype.add)
+
+SetPrototypeClear: leaf (Set.prototype.clear)
+
+SetPrototypeDelete: leaf (Set.prototype.delete)
+
+SetPrototypeEntries: leaf (Set.prototype.entries)
+
+SetPrototypeForEach: reentrant (Set.prototype.forEach)
+  builtins/set.ts:97:5  Call (intrinsic)
+
+SetPrototypeHas: leaf (Set.prototype.has)
+
+SetPrototypeSize: leaf (get Set.prototype.size)
+
+SetPrototypeValues: leaf (Set.prototype.values, Set.prototype.keys, Set.prototype[Symbol.iterator])
+
+SetPrototypeToStringTag: leaf (value Set.prototype[Symbol.toStringTag])
+
+SetIteratorPrototypeNext: leaf (%SetIteratorPrototype%.next)
+
+SetIteratorToStringTag: leaf (value %SetIteratorPrototype%[Symbol.toStringTag])
+
+GetSetRecord: reentrant
+  builtins/set.ts:164:26  Get (intrinsic)
+  builtins/set.ts:165:24  ToNumber (builtin)
+  builtins/set.ts:173:22  Get (intrinsic)
+  builtins/set.ts:177:23  Get (intrinsic)
+  builtins/set.ts:182:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/set.ts:183:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/set.ts:184:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/set.ts:185:3  CreateDataPropertyOrThrow (intrinsic)
+
+RecordSize: reentrant
+  builtins/set.ts:191:19  Get (intrinsic)
+
+RecordHas: reentrant
+  builtins/set.ts:196:25  Get (intrinsic)
+  builtins/set.ts:196:42  Get (intrinsic)
+  builtins/set.ts:196:20  Call (intrinsic)
+
+RecordKeys: reentrant
+  builtins/set.ts:201:32  Get (intrinsic)
+  builtins/set.ts:201:50  Get (intrinsic)
+  builtins/set.ts:201:27  Call (intrinsic)
+
+SetCopy: leaf
+
+KeysNext: reentrant
+  builtins/set.ts:223:23  IteratorNextResult (builtin)
+  builtins/set.ts:224:17  Get (intrinsic)
+  builtins/set.ts:227:37  Get (intrinsic)
+  builtins/set.ts:227:3  CreateDataPropertyOrThrow (intrinsic)
+
+SetPrototypeUnion: reentrant (Set.prototype.union)
+  builtins/set.ts:237:20  GetSetRecord (builtin)
+  builtins/set.ts:238:21  RecordKeys (builtin)
+  builtins/set.ts:239:23  Get (intrinsic)
+  builtins/set.ts:242:10  KeysNext (builtin)
+  builtins/set.ts:243:27  Get (intrinsic)
+
+SetPrototypeIntersection: reentrant (Set.prototype.intersection)
+  builtins/set.ts:254:20  GetSetRecord (builtin)
+  builtins/set.ts:256:28  RecordSize (builtin)
+  builtins/set.ts:260:11  RecordHas (builtin)
+  builtins/set.ts:266:21  RecordKeys (builtin)
+  builtins/set.ts:267:23  Get (intrinsic)
+  builtins/set.ts:269:10  KeysNext (builtin)
+  builtins/set.ts:270:22  Get (intrinsic)
+
+SetPrototypeDifference: reentrant (Set.prototype.difference)
+  builtins/set.ts:284:20  GetSetRecord (builtin)
+  builtins/set.ts:286:28  RecordSize (builtin)
+  builtins/set.ts:290:11  RecordHas (builtin)
+  builtins/set.ts:296:21  RecordKeys (builtin)
+  builtins/set.ts:297:23  Get (intrinsic)
+  builtins/set.ts:299:10  KeysNext (builtin)
+  builtins/set.ts:300:30  Get (intrinsic)
+
+SetPrototypeSymmetricDifference: reentrant (Set.prototype.symmetricDifference)
+  builtins/set.ts:311:20  GetSetRecord (builtin)
+  builtins/set.ts:312:21  RecordKeys (builtin)
+  builtins/set.ts:313:23  Get (intrinsic)
+  builtins/set.ts:316:10  KeysNext (builtin)
+  builtins/set.ts:317:22  Get (intrinsic)
+
+SetPrototypeIsSubsetOf: reentrant (Set.prototype.isSubsetOf)
+  builtins/set.ts:333:20  GetSetRecord (builtin)
+  builtins/set.ts:334:27  RecordSize (builtin)
+  builtins/set.ts:339:10  RecordHas (builtin)
+
+SetPrototypeIsSupersetOf: reentrant (Set.prototype.isSupersetOf)
+  builtins/set.ts:352:20  GetSetRecord (builtin)
+  builtins/set.ts:353:27  RecordSize (builtin)
+  builtins/set.ts:356:21  RecordKeys (builtin)
+  builtins/set.ts:357:23  Get (intrinsic)
+  builtins/set.ts:359:10  KeysNext (builtin)
+  builtins/set.ts:360:27  Get (intrinsic)
+  builtins/set.ts:361:7  IteratorClose (builtin)
+
+SetPrototypeIsDisjointFrom: reentrant (Set.prototype.isDisjointFrom)
+  builtins/set.ts:374:20  GetSetRecord (builtin)
+  builtins/set.ts:375:28  RecordSize (builtin)
+  builtins/set.ts:378:11  RecordHas (builtin)
+  builtins/set.ts:384:21  RecordKeys (builtin)
+  builtins/set.ts:385:23  Get (intrinsic)
+  builtins/set.ts:387:10  KeysNext (builtin)
+  builtins/set.ts:388:26  Get (intrinsic)
+  builtins/set.ts:389:7  IteratorClose (builtin)
+
 ArraySpread: reentrant (%ArraySpread)
   builtins/spread.ts:10:25  GetIterator (builtin)
   builtins/spread.ts:11:23  Get (intrinsic)
@@ -1177,3 +1360,41 @@ SymbolToPrimitive: leaf (value Symbol.toPrimitive)
 SymbolToStringTag: leaf (value Symbol.toStringTag)
 
 SymbolUnscopables: leaf (value Symbol.unscopables)
+
+ThisWeakMap: leaf
+
+ThisWeakSet: leaf
+
+WeakMapConstructor: reentrant (constructor WeakMap)
+  builtins/weak.ts:28:40  GetPrototypeFromConstructor (builtin)
+  builtins/weak.ts:32:24  Get (intrinsic)
+  builtins/weak.ts:36:3  AddEntriesFromIterable (builtin)
+
+WeakMapPrototypeDelete: leaf (WeakMap.prototype.delete)
+
+WeakMapPrototypeGet: leaf (WeakMap.prototype.get)
+
+WeakMapPrototypeHas: leaf (WeakMap.prototype.has)
+
+WeakMapPrototypeSet: leaf (WeakMap.prototype.set)
+
+WeakMapPrototypeToStringTag: leaf (value WeakMap.prototype[Symbol.toStringTag])
+
+WeakSetConstructor: reentrant (constructor WeakSet)
+  builtins/weak.ts:100:40  GetPrototypeFromConstructor (builtin)
+  builtins/weak.ts:104:24  Get (intrinsic)
+  builtins/weak.ts:108:25  GetIterator (builtin)
+  builtins/weak.ts:109:23  Get (intrinsic)
+  builtins/weak.ts:111:25  IteratorNextResult (builtin)
+  builtins/weak.ts:112:19  Get (intrinsic)
+  builtins/weak.ts:115:30  Get (intrinsic)
+  builtins/weak.ts:117:7  Call (intrinsic)
+  builtins/weak.ts:119:7  IteratorCloseThrow (builtin)
+
+WeakSetPrototypeAdd: leaf (WeakSet.prototype.add)
+
+WeakSetPrototypeDelete: leaf (WeakSet.prototype.delete)
+
+WeakSetPrototypeHas: leaf (WeakSet.prototype.has)
+
+WeakSetPrototypeToStringTag: leaf (value WeakSet.prototype[Symbol.toStringTag])

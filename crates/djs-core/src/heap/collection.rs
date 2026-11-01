@@ -69,7 +69,11 @@ impl Heap {
     }
 
     fn entries_base(&self, o: Obj) -> u32 {
-        if self.is_weak_collection(o) { 0 } else { MAP_BASE }
+        if self.is_weak_collection(o) {
+            0
+        } else {
+            MAP_BASE
+        }
     }
 
     fn collection_entries(&self, o: Obj) -> u32 {
@@ -343,12 +347,7 @@ impl Heap {
     }
 
     /// A new Map/Set iterator over `o` (kind 0 keys, 1 values, 2 entries).
-    pub fn collection_iterator(
-        &mut self,
-        o: Obj,
-        kind: i32,
-        proto: Obj,
-    ) -> Result<Obj, HeapError> {
+    pub fn collection_iterator(&mut self, o: Obj, kind: i32, proto: Obj) -> Result<Obj, HeapError> {
         let is_set = self.object_class(o) == ObjectClass::Set;
         let it = self.alloc_object(
             ObjectClass::CollectionIterator,
@@ -360,6 +359,8 @@ impl Heap {
         self.set_object_slot(it, 1, Value::int(0));
         self.set_object_slot(it, 2, Value::int(kind));
         self.set_object_slot(it, 3, Value::int(is_set as i32));
+        self.set_object_slot(it, 4, Value::UNDEFINED);
+        self.set_object_slot(it, 5, Value::UNDEFINED);
         Ok(it)
     }
 
@@ -387,6 +388,8 @@ impl Heap {
                 let v = self.value_array_get(entries, MAP_BASE + 2 * (n - 1) + 1);
                 self.set_object_slot(it, 0, Value::internal(entries));
                 self.set_object_slot(it, 1, Value::int(n as i32));
+                self.set_object_slot(it, 4, k);
+                self.set_object_slot(it, 5, v);
                 return Some((k, v));
             }
         }
