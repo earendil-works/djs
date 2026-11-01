@@ -1,0 +1,167 @@
+[
+  {
+    "id": 1,
+    "name": "west",
+    "status": "ok",
+    "count": 351,
+    "tags": [
+      "west",
+      "epsilon"
+    ]
+  },
+  {
+    "id": 2,
+    "name": "lambda",
+    "status": "pending",
+    "count": 460,
+    "tags": []
+  },
+  {
+    "id": 3,
+    "name": "blue",
+    "status": "pending",
+    "count": 209,
+    "tags": [
+      "done",
+      "epsilon",
+      "blue"
+    ]
+  },
+  {
+    "id": 4,
+    "name": "entry",
+    "status": "open",
+    "count": 6,
+    "tags": []
+  },
+  {
+    "id": 5,
+    "name": "build",
+    "status": "open",
+    "count": 446,
+    "tags": [
+      "delta"
+    ]
+  }
+]
+[
+  {
+    "id": 1,
+    "name": "kappa",
+    "status": "ok",
+    "count": 309,
+    "tags": []
+  },
+  {
+    "id": 2,
+    "name": "kappa",
+    "status": "ok",
+    "count": 2,
+    "tags": []
+  }
+]
+{
+  "items": [
+    {
+      "id": 1,
+      "name": "value",
+      "status": "ok",
+      "count": 89,
+      "tags": [
+        "red",
+        "value"
+      ]
+    }
+  ],
+  "total": 1
+}
+[
+  {
+    "id": 1,
+    "name": "status",
+    "status": "closed",
+    "count": 239,
+    "tags": [
+      "blue",
+      "iota"
+    ]
+  },
+  {
+    "id": 2,
+    "name": "delta",
+    "status": "ok",
+    "count": 198,
+    "tags": []
+  },
+  {
+    "id": 3,
+    "name": "red",
+    "status": "pending",
+    "count": 58,
+    "tags": [
+      "gamma",
+      "beta",
+      "test"
+    ]
+  },
+  {
+    "id": 4,
+    "name": "build",
+    "status": "open",
+    "count": 175,
+    "tags": [
+      "blue"
+    ]
+  },
+  {
+    "id": 5,
+    "name": "kappa",
+    "status": "ok",
+    "count": 413,
+    "tags": [
+      "epsilon",
+      "alpha",
+      "lambda"
+    ]
+  }
+]
+[
+  {
+    "id": 1,
+    "name": "build",
+    "status": "pending",
+    "count": 418,
+    "tags": [
+      "value",
+      "entry",
+      "check"
+    ]
+  },
+  {
+    "id": 2,
+    "name": "delta",
+    "status": "closed",
+    "count": 297,
+    "tags": []
+  },
+  {
+    "id": 3,
+    "name": "value",
+    "status": "pending",
+    "count": 194,
+    "tags": [
+      "red",
+      "ready"
+    ]
+  },
+  {
+    "id": 4,
+    "name": "test",
+    "status": "pending",
+    "count": 195,
+    "tags": [
+      "blue"
+    ]
+  }
+]
+=== completed

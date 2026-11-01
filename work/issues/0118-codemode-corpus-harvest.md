@@ -40,7 +40,46 @@ tool results through fake tools, compared against qjs.
 - [ ] TESTING.md and the guide's testing.md mention the harvested corpus.
 
 ## Log
+- Session format (read from the files, structure only, and from pi-private's coding-agent
+  codemode extension):
+  - the assistant entry's `toolCall` named `codemode` has `arguments.code`;
+  - the matching `toolResult` has `details.calls` (name, args, status, durationMs) and
+    the transcript text.
+  - Nested call results are not recorded, so replaying real results is impossible: every
+    case gets synthetic results of the recorded kinds, in the recorded order.
+- Numbers:
+  - 10,098 session files, 2,620 codemode executions, 2,525 distinct;
+  - 1,222 use tools with structured or unknown results (MCP, models, edit/write, ...);
+  - 637 use unfaked globals (image, models, tool discovery, load, fetch, require,
+    modules);
+  - 573 candidates after length limits and deduplication by token shape.
+- Harvester:
+  - scripts/harvest/ (extract.py, build.py, jstok.py, anon.py, README.md);
+  - greedy selection by language features;
+  - redaction D2281: comments dropped, tool-call arguments and shell commands scrubbed
+    entirely, secrets, emails, URLs, hosts, IPs, home dirs and user names replaced,
+    paths renamed, unknown words renamed by a dictionary rule.
+- Review: every committed case was read by hand (the script part; the header is
+  generated). Rejected 9 picks: internal tool names, private app component and file
+  names, a private file format, internal function names. 4 picks were excluded because
+  they were already SyntaxErrors in qjs (Python written as JS, or code that needs earlier
+  stored values). An automated audit of the written cases finds no /Users paths, user
+  names, emails, URLs other than example.com, IPs, long hex or key formats.
+- Results: qjs completes 145 cases, 5 throw.
+  - djs: 145/150 identical on both backends.
+  - The 5 differences are one qjs bug: object spread of a string primitive (`{a,
+    ...await tool()}`) copies nothing in qjs, against the spec; djs and node copy its
+    characters. They are in the corpus ratchet.
+  - Identical under --suspend-every 97 and --gc-stress.
+- TESTING.md, the guide's testing.md and D2280/D2281 describe the corpus.
 
 ## Follow-ups
+- qjs (the oracle) is wrong on `{...stringPrimitive}`: it copies no characters. djs is
+  right. Report it to the dquickts owner if wanted. The 5 ratchet entries name it.
+- Harvesting the scripts that use MCP tools, `models.*` or edit/write (about 1,800 more)
+  needs synthetic structured results per tool (their declared output schemas), and
+  stored values for `load`.
+- Ratchet lines for these cases are long (the transcript diff). A shorter reason format
+  in djs-difftest would help.
 
 ## Result

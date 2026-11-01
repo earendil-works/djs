@@ -1,0 +1,2 @@
+=== return
+["echo - Returns its arguments.","fail - Rejects with an Error carrying args.message."]

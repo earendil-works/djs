@@ -1,0 +1,248 @@
+{
+  "items": [
+    {
+      "id": 1,
+      "name": "done",
+      "status": "closed",
+      "count": 301,
+      "tags": []
+    },
+    {
+      "id": 2,
+      "name": "zeta",
+      "status": "open",
+      "count": 125,
+      "tags": [
+        "entry"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "beta",
+      "status": "open",
+      "count": 133,
+      "tags": []
+    },
+    {
+      "id": 4,
+      "name": "ready",
+      "status": "closed",
+      "count": 356,
+      "tags": []
+    }
+  ],
+  "total": 4
+}
+{
+  "items": [
+    {
+      "id": 1,
+      "name": "delta",
+      "status": "pending",
+      "count": 432,
+      "tags": [
+        "south",
+        "north"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "done",
+      "status": "closed",
+      "count": 36,
+      "tags": [
+        "done",
+        "east",
+        "test"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "blue",
+      "status": "closed",
+      "count": 136,
+      "tags": [
+        "value",
+        "value",
+        "value"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "delta",
+      "status": "open",
+      "count": 496,
+      "tags": []
+    },
+    {
+      "id": 5,
+      "name": "status",
+      "status": "pending",
+      "count": 71,
+      "tags": [
+        "value",
+        "theta"
+      ]
+    }
+  ],
+  "total": 5
+}
+[
+  {
+    "id": 1,
+    "name": "build",
+    "status": "ok",
+    "count": 476,
+    "tags": [
+      "item",
+      "east",
+      "zeta"
+    ]
+  },
+  {
+    "id": 2,
+    "name": "item",
+    "status": "open",
+    "count": 408,
+    "tags": [
+      "iota"
+    ]
+  },
+  {
+    "id": 3,
+    "name": "status",
+    "status": "ok",
+    "count": 500,
+    "tags": [
+      "north",
+      "delta"
+    ]
+  },
+  {
+    "id": 4,
+    "name": "iota",
+    "status": "ok",
+    "count": 378,
+    "tags": [
+      "delta",
+      "east",
+      "zeta"
+    ]
+  }
+]
+[
+  {
+    "id": 1,
+    "name": "iota",
+    "status": "ok",
+    "count": 41,
+    "tags": [
+      "blue",
+      "record",
+      "record"
+    ]
+  },
+  {
+    "id": 2,
+    "name": "west",
+    "status": "open",
+    "count": 151,
+    "tags": [
+      "check"
+    ]
+  },
+  {
+    "id": 3,
+    "name": "gamma",
+    "status": "ok",
+    "count": 420,
+    "tags": [
+      "build",
+      "check",
+      "zeta"
+    ]
+  }
+]
+{
+  "items": [
+    {
+      "id": 1,
+      "name": "gamma",
+      "status": "pending",
+      "count": 249,
+      "tags": []
+    },
+    {
+      "id": 2,
+      "name": "record",
+      "status": "pending",
+      "count": 313,
+      "tags": []
+    },
+    {
+      "id": 3,
+      "name": "epsilon",
+      "status": "open",
+      "count": 140,
+      "tags": [
+        "check"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "record",
+      "status": "ok",
+      "count": 160,
+      "tags": []
+    }
+  ],
+  "total": 4
+}
+[
+  {
+    "id": 1,
+    "name": "ready",
+    "status": "ok",
+    "count": 57,
+    "tags": []
+  },
+  {
+    "id": 2,
+    "name": "green",
+    "status": "pending",
+    "count": 259,
+    "tags": [
+      "alpha"
+    ]
+  }
+]
+[
+  {
+    "id": 1,
+    "name": "delta",
+    "status": "open",
+    "count": 139,
+    "tags": []
+  }
+]
+[
+  {
+    "id": 1,
+    "name": "check",
+    "status": "pending",
+    "count": 46,
+    "tags": []
+  },
+  {
+    "id": 2,
+    "name": "item",
+    "status": "ok",
+    "count": 243,
+    "tags": [
+      "red",
+      "zeta",
+      "north"
+    ]
+  }
+]
+=== completed

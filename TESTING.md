@@ -177,9 +177,15 @@ output, the uncaught error (type + message) and the return value.
 Sources (about 230 cases at 0095, in `builtins/`, `codemode/`, `console/`, `dquickts/`,
 `errors/`, `language/`, `result/` and `ts/`):
 
-1. Codemode-style scripts with fake tools (`codemode/`, `result/`, `console/`). The plan
-   was to harvest real pi session scripts; that was not done. pi's own codemode tests run
-   on djs instead (docs/host.md "pi's own tests on djs").
+1. Codemode-style scripts with fake tools (`codemode/`, `result/`, `console/`), and 150
+   scripts models wrote in real pi sessions (`codemode-harvest/`, 0118, D2280, D2281),
+   redacted: the harvester (`scripts/harvest/`, its README has the steps and the privacy
+   rules) keeps scripts whose tools return plain strings, drops comments, replaces the
+   text of tool arguments and shell commands, renames words that are not common English
+   or programming terms, and gives each case synthetic tool results (the sessions do not
+   record them). `codemode-harvest/REDACTION.md` lists what was redacted per case. Every
+   case was reviewed by hand. pi's own codemode tests run on djs too (docs/host.md "pi's
+   own tests on djs").
 2. dquickts' `tests/test_language.js`, `test_builtin.js`, `test_closure.js`,
    `test_loop.js` and `test_typescript.ts`, split into one case per test function
    (D1102).

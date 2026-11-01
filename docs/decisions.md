@@ -4969,3 +4969,45 @@ comparisons are unchanged.
 - wasm instructions ±0 to +5.5%;
 - collection time 1.1–1.6×;
 - code +6.0 KB (+2.0 KB gzip).
+## D2280: The harvested codemode corpus
+date: 2026-11-03 · by: infra · issue: 0118
+Following D021, `tests/corpus/codemode-harvest/` holds 150 scripts that models wrote in
+pi codemode sessions (`~/.pi/agent/sessions`: 2,620 codemode executions, 2,525
+distinct). scripts/harvest/extract.py streams the session files and pairs each
+`codemode` tool call with its result entry: the script, the nested calls (name, status,
+arguments) and whether the run failed. The sessions record no nested results, so the
+cases cannot replay real tool output. Each case answers its calls with synthetic results
+of the recorded kinds, in the recorded order, and a recorded failure rejects.
+build.py:
+- keeps the scripts whose tools return plain strings (read, bash, ls, grep, find, 611
+  after deduplication by token shape) or that call no tool;
+- picks a set greedily by the language features it covers, rare features first;
+- redacts the picks (D2281) and wraps each in a small header that defines the fake
+  tools and runs the script as `async (tools) => {...}`.
+The expected output comes from qjs on the redacted case.
+Five cases differ in djs: `{...await tool()}` spreads a string result. qjs copies
+nothing from a string primitive, against the spec; djs copies its characters, as V8
+does. They are in the corpus ratchet as qjs bugs.
+
+## D2281: Redaction of harvested scripts: arguments scrubbed, unknown words renamed
+date: 2026-11-03 · by: infra · issue: 0118
+Paths, commands, search terms and embedded programs live in the text of tool-call
+arguments. Since the fake tools ignore their arguments, that text is replaced entirely,
+letter by letter: same length and case, escapes kept. The same is done for any string
+that looks like a shell command. Everything else is redacted by kind:
+- comments are dropped;
+- secrets, keys, tokens and connection strings are replaced (regexes per format);
+- emails, URLs, hosts, IPs and home directories are replaced, and user names
+  everywhere;
+- path components are renamed (`dir1/file2.ts`, extensions kept);
+- high-entropy strings become synthetic text of the same shape.
+Then every word part of the remaining literals, regular expressions and identifiers
+(camelCase and snake_case split) is checked: it is kept only if it is a lowercase word
+of the system dictionary (with simple inflections), a JavaScript built-in name or a
+programming or shell term, and is not on a denylist of private names. Every other part
+is renamed to a pronounceable synthetic word, consistently within the case, so the
+script behaves the same. An automated audit then looks for emails, URLs, IPs, hex
+strings, key formats and capitalized name pairs in the written cases, and every case is
+reviewed by hand. 9 picks were rejected in review: private tool names, component and
+file names of private apps, a private file format, and internal function names. Their
+source ids go into the exclude file, and the selection runs again.

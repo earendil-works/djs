@@ -1,0 +1,20 @@
+{"path":"packages/dir1/examples/dir2/dir3/index.ts","content":"function value kappa\n  return test\n}lambda\n  if (green value entry\nconst iota record done zeta"}
+{"path":"packages/dir1/examples/dir2/dir3/package.json","content":"{\n  \"items\": [\n    {\n      \"id\": 1,\n      \"name\": \"lambda\",\n      \"status\": \"open\",\n      \"count\": 351,\n      \"tags\": []\n    },\n    {\n      \"id\": 2,\n      \"name\": \"ready\",\n      \"status\": \"pending\",\n      \"count\": 309,\n      \"tags\": [\n        \"east\",\n        \"iota\"\n      ]\n    }\n  ],\n  \"total\": 2\n}"}
+{"path":"packages/dir1/examples/dir2/dir3/README.md","error":"Error: Tool failed (synthetic error)"}
+{"path":"packages/dir4/README.md","content":"- Done record\nEpsilon check item epsilon zeta iota gamma\n## Check south build north delta kappa green\n1. Omega entry eta delta red zeta east entry\n# Epsilon item theta entry item record eta beta\n1. Check entry record test done green\n- Green epsilon alpha entry south\n- Delta lambda red omega value\n# Eta zeta test blue omega alpha east status\n- Value kappa delta"}
+{"path":"node_modules/dir5/package.json","content":"[\n  {\n    \"id\": 1,\n    \"name\": \"east\",\n    \"status\": \"pending\",\n    \"count\": 116,\n    \"tags\": [\n      \"delta\",\n      \"epsilon\",\n      \"ready\"\n    ]\n  },\n  {\n    \"id\": 2,\n    \"name\": \"test\",\n    \"status\": \"open\",\n    \"count\": 65,\n    \"tags\": [\n      \"check\",\n      \"epsilon\"\n    ]\n  },\n  {\n    \"id\": 3,\n    \"name\": \"eta\",\n    \"status\": \"ok\",\n    \"count\": 477,\n    \"tags\": [\n      \"theta\",\n      \"north\",\n      \"omega\"\n    ]\n  }\n]"}
+red ready west
+iota ready east green zeta green gamma iota 5943
+iota value test gamma 6093
+alpha status epsilon test test delta 1594
+red lambda
+ready status epsilon west eta 3158
+epsilon test 1089
+zeta test south green 4426
+record kappa
+green lambda status theta 5286
+kappa done check
+red entry
+gamma delta
+build blue blue
+=== completed

@@ -1,0 +1,6 @@
+{"query":"label:I-unsound variance"}
+{"query":"label:I-unsound \"well-formed\""}
+{"query":"label:I-unsound \"Drop\""}
+{"query":"label:I-unsound \"bounds\""}
+{"query":"\"covariant\" \"assignment\""}
+=== completed

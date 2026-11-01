@@ -1,0 +1,108 @@
+[
+  {
+    "id": 1,
+    "name": "west",
+    "status": "closed",
+    "count": 486,
+    "tags": [
+      "omega",
+      "epsilon"
+    ]
+  },
+  {
+    "id": 2,
+    "name": "ready",
+    "status": "ok",
+    "count": 68,
+    "tags": [
+      "red"
+    ]
+  },
+  {
+    "id": 3,
+    "name": "green",
+    "status": "open",
+    "count": 380,
+    "tags": [
+      "test",
+      "done"
+    ]
+  }
+]
+[
+  {
+    "id": 1,
+    "name": "south",
+    "status": "closed",
+    "count": 261,
+    "tags": [
+      "blue",
+      "status"
+    ]
+  }
+]
+[
+  {
+    "id": 1,
+    "name": "alpha",
+    "status": "closed",
+    "count": 342,
+    "tags": [
+      "test",
+      "green"
+    ]
+  },
+  {
+    "id": 2,
+    "name": "north",
+    "status": "ok",
+    "count": 492,
+    "tags": []
+  }
+]
+{
+  "items": [
+    {
+      "id": 1,
+      "name": "eta",
+      "status": "ok",
+      "count": 459,
+      "tags": []
+    },
+    {
+      "id": 2,
+      "name": "theta",
+      "status": "pending",
+      "count": 52,
+      "tags": [
+        "north",
+        "epsilon"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "check",
+      "status": "open",
+      "count": 44,
+      "tags": []
+    },
+    {
+      "id": 4,
+      "name": "ready",
+      "status": "pending",
+      "count": 174,
+      "tags": []
+    },
+    {
+      "id": 5,
+      "name": "omega",
+      "status": "open",
+      "count": 225,
+      "tags": [
+        "lambda"
+      ]
+    }
+  ],
+  "total": 5
+}
+=== completed

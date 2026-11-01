@@ -117,10 +117,16 @@ normalized to the case's own (D2032). Other directives in a case's leading comme
 a TypeScript case, a deliberate difference (`djs-expect`), or a case that cannot run
 under the stress modes (`no-stress`, with the measured reason, D1530).
 
-The cases come from three sources: dquickts' own tests, split into one case per test
-function (D1102); codemode-style scripts with fake tools; and hand-written cases for
-builtins, formatting, errors and every fast path, including the inputs where a fast path
-must decline.
+The cases come from four sources: dquickts' own tests, split into one case per test
+function (D1102); codemode-style scripts with fake tools; scripts that models actually
+wrote in pi sessions, redacted before they were committed (D2280, D2281); and
+hand-written cases for builtins, formatting, errors and every fast path, including the
+inputs where a fast path must decline. The harvested scripts are the most realistic
+input there is: they read files and run commands in parallel, slice and join the
+results, and print summaries. The sessions do not record what the tools returned, so
+each harvested case answers its tool calls with synthetic text of the same kind, and the
+text of the calls' arguments, which is where the private paths and commands were, is
+replaced.
 
 > **Trade-off.** Comparing transcripts with QuickJS over writing expected output by
 > hand. A new case costs only its source: `--update` records the expected output from

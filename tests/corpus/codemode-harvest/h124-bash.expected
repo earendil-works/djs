@@ -1,0 +1,6 @@
+{"q":"repo:dir1/dir2 is:issue label:I-unsound variance"}
+{"q":"repo:dir1/dir2 is:issue label:I-unsound \"well-formed\""}
+{"q":"repo:dir1/dir2 is:issue label:I-unsound Drop"}
+{"q":"repo:dir1/dir2 is:issue \"field assignment\""}
+{"q":"repo:dir1/dir2 is:issue \"struct\" \"bounds\" \"unsound\""}
+=== completed

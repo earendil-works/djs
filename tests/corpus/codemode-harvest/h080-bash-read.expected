@@ -1,0 +1,15 @@
+{"path":"/tmp/file1.json","content":"[\n  {\n    \"id\": 1,\n    \"name\": \"blue\",\n    \"status\": \"open\",\n    \"count\": 106,\n    \"tags\": [\n      \"check\",\n      \"south\",\n      \"test\"\n    ]\n  },\n  {\n    \"id\": 2,\n    \"name\": \"alpha\",\n    \"status\": \"open\",\n    \"count\": 200,\n    \"tags\": [\n      \"ready\",\n      \"alpha\"\n    ]\n  }\n]"}
+{"path":"/tmp/file2.json","content":"[\n  {\n    \"id\": 1,\n    \"name\": \"status\",\n    \"status\": \"closed\",\n    \"count\": 326,\n    \"tags\": [\n      \"south\",\n      \"epsilon\"\n    ]\n  },\n  {\n    \"id\": 2,\n    \"name\": \"eta\",\n    \"status\": \"open\",\n    \"count\": 155,\n    \"tags\": []\n  },\n  {\n    \"id\": 3,\n    \"name\": \"kappa\",\n    \"status\": \"pending\",\n    \"count\": 130,\n    \"tags\": [\n      \"ready\",\n      \"item\",\n      \"alpha\"\n    ]\n  }\n]"}
+{"path":"scripts/file3.mjs","content":"const record eta north north\n  return theta test\n}east ready red status"}
+{"path":"dir4/dir5/file6.yml","content":"check north beta lambda east test 3635\nbuild eta zeta green kappa north zeta 9972\nblue omega iota blue theta lambda status north\nvalue done build epsilon west lambda west east"}
+record north iota west build green 7248
+beta delta value status alpha
+green omega ready check entry omega
+blue status
+north north red
+zeta item 1788
+ready alpha south kappa check beta done
+blue value delta value west zeta item 3317
+ready done record record delta record alpha omega
+east red check east
+=== completed

@@ -1,0 +1,3 @@
+{"status":"fulfilled","value":"{\n  \"items\": [\n    {\n      \"id\": 1,\n      \"name\": \"theta\",\n      \"status\": \"closed\",\n      \"count\": 271,\n      \"tags\": []\n    },\n    {\n      \"id\": 2,\n      \"name\": \"eta\",\n      \"status\": \"closed\",\n      \"count\": 253,\n      \"tags\": [\n        \"item\",\n        \"eta\"\n      ]\n    }\n  ],\n  \"total\": 2\n}"}
+{"status":"fulfilled","value":"lib/file1.json\nlib/dir9/dir4/file2.rs\ntest/file3.md\ndocs/file4.rs\ndocs/file5.json\nsrc/dir7/dir2/file6.json\nlib/file7.rs\nlib/dir2/dir9/file8.json\nsrc/file9.rs\ndocs/dir9/file10.rs\nlib/dir4/file11.ts"}
+=== completed
