@@ -78,6 +78,18 @@ per 10k elements in debug), and the next hot builtins are still bytecode.
   2,703, MapConstructor 1,114, GetPrototypeFromConstructor 816, Map/Set forEach 959/928;
   indexOf/includes/join/slice/pop +190..+280 each for the leaf calls), iter.rs 1,972,
   dense.rs 4,265. Shipped (stripped) module 1,411,761 → 1,435,717.
+- Slice 2 merged (main 03c79ff); `backends_agree` sampling (main ffc1811): the default
+  test samples 5 modes (~2 s), the exhaustive one is `#[ignore]`d (TESTING.md).
+- fill: `ArrayFillDense` (plain stores via `set_element_fast`, then the general loop from
+  where it stopped). All O(n) dense leaves charge one fuel unit per four elements
+  (lastIndexOf's charge counts the elements compared: charging the range first made a
+  sparse 2^32 array run out of fuel). copyWithin "detached" tests: their 10,000-element
+  `array.fill` was the cost (debug runner: 1.35 s now incl. startup).
+- decodeURI A2.5_T1: the time is in the harness loop's builtin calls, not the URI code:
+  per iteration decodeURI ~5.5k instructions and String.fromCharCode(H, L) ~12k (rest
+  array, CoerceNumbers frame, leaf), in a Script whose `var`s are globals. The cheap fix
+  is `@fast` entries for fromCharCode and the URI functions once 0085 lands (debug
+  runner: 3.9 s for the test today).
 
 ## Follow-ups
 - After 0085 lands: move the dense.rs paths (push/pop/indexOf/lastIndexOf/includes/slice/
@@ -88,6 +100,8 @@ per 10k elements in debug), and the next hot builtins are still bytecode.
 - JSON.stringify slow path: a subtree fast path (needs an indent parameter in
   json/stringify.rs).
 - Record the engine track / for-of benches on a quiet machine.
+- `@fast` entries for String.fromCharCode and decodeURI/encodeURI(Component) (with the
+  dense.rs move above).
 - (coordinator, from 0082) 3 test262 tests fail on typed arrays over resizable buffers
   that shrink during `fill`/`freeze`/`subarray` (length-tracking views).
 
