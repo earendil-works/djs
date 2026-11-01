@@ -51,6 +51,11 @@ export interface VmHooks {
    * fingerprint, since it decides where a budget runs out.
    */
   fuelPerPoll?: number;
+  /**
+   * Start from a VM image taken after the prelude when an earlier start had the same prelude,
+   * tools, globals, store and heap limit (default true; see `imageCache`).
+   */
+  reuseImages?: boolean;
   /** Accepted for pi's interface; djs keeps frames in its heap, not on the host stack. */
   maxStackSize?: number;
   post(message: WorkerToHostMessage): void;
@@ -88,9 +93,8 @@ const HOST_GLOBALS = `
 const define = (name, value) =>
   Object.defineProperty(globalThis, name, { value, writable: true, enumerable: false, configurable: true });
 const now = Date.now;
-const origin = now();
+let origin = 0;
 const performance = {};
-Object.defineProperty(performance, "timeOrigin", { value: origin, enumerable: true, configurable: true });
 Object.defineProperty(performance, "now", { value: { now() { return now() - origin; } }.now, writable: true, configurable: true });
 define("performance", performance);
 const resolved = Promise.resolve();
@@ -138,6 +142,8 @@ define("atob", { atob(data) {
   }
   return out;
 } }.atob);
+// The host sets the origin per run, after a VM image with the prelude may have been reused.
+return (time) => { origin = time; };
 `;
 
 /** FNV-1a over UTF-16 code units, as 8 hex digits: identifies the prelude in the fingerprint. */
@@ -412,11 +418,66 @@ function evaluate(session: Session, engine: Engine, f: number, args: number[] = 
   throw new VmThrew(text);
 }
 
+/** Handles to what the prelude set up, valid in the VM and in images of it. */
+interface Prepared {
+  api: number;
+  settle: number;
+  stalled: number;
+  run: number;
+  setOrigin: number;
+}
+
+/**
+ * VM images taken right after the prelude, per module, by everything the prelude depends on
+ * (the prelude, tools, globals, store and heap limit): a start with the same inputs restores
+ * the image instead of running the prelude again. Most of a start is the prelude's
+ * lockdown, so this makes repeated starts about 10x faster (docs/host.md "pi codemode").
+ */
+const imageCache = new WeakMap<object, Map<string, { image: Uint8Array; prepared: Prepared }>>();
+const IMAGE_CACHE_ENTRIES = 16;
+const MAX_CACHE_KEY = 64 * 1024;
+
+/** Evaluates the host globals and pi's prelude in a fresh VM. */
+function prepare(session: Session, engine: Engine, prelude: string, data: VmStartData): Prepared {
+  // Handles live as long as the VM, which the caller disposes as a whole.
+  const bridge = engine.hostFunction(BRIDGE_FN, "bridge");
+  const getter = compileOrThrow(engine, "codemode-prelude.js", ["o", "k"], "return o[k]");
+  const host = compileOrThrow(engine, "codemode-prelude.js", [], HOST_GLOBALS);
+  const setOrigin = evaluate(session, engine, host);
+  engine.free(host);
+  const preludeFn = compileOrThrow(engine, "codemode-prelude.js", [], `return ${prelude}`);
+  const factory = evaluate(session, engine, preludeFn);
+  const args = [
+    bridge,
+    engine.value(JSON.stringify(data.tools)),
+    engine.value(JSON.stringify(data.globals)),
+    engine.value(JSON.stringify(data.store)),
+  ];
+  const api = session.invoke(factory, 0, args);
+  for (const h of [preludeFn, factory, ...args]) engine.free(h);
+  const member = (name: string): number => {
+    const key = engine.value(name);
+    const f = evaluate(session, engine, getter, [api, key]);
+    engine.free(key);
+    return f;
+  };
+  const prepared = { api, settle: member("settle"), stalled: member("stalled"), run: member("run"), setOrigin };
+  engine.free(getter);
+  return prepared;
+}
+
 /** Like pi's `startVm`: rejects only when the VM cannot be created at all. */
 export async function startVm(options: StartVmOptions): Promise<VmSession> {
   const { data, post, prelude } = options;
+  const module = options.wasm as WebAssembly.Module;
   const deterministic = data.deterministic;
-  const engine = Engine.create(options.wasm as WebAssembly.Module, data.memoryLimitBytes);
+  const key = JSON.stringify([prelude, data.tools, data.globals, data.store, data.memoryLimitBytes ?? null]);
+  let cache = imageCache.get(module);
+  if (!cache) imageCache.set(module, (cache = new Map()));
+  const cached = options.reuseImages === false || key.length > MAX_CACHE_KEY ? undefined : cache.get(key);
+  const engine = cached
+    ? Engine.restore(module, cached.image, data.memoryLimitBytes)
+    : Engine.create(module, data.memoryLimitBytes);
   const state: SessionState = {
     api: 0,
     settle: 0,
@@ -428,41 +489,27 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
     clock: deterministic ? { startedAt: deterministic.startedAt, now: deterministic.startedAt } : null,
     memoryLimit: data.memoryLimitBytes,
   };
-  if (deterministic) {
-    // djs's Math.random is QuickJS's xorshift64*. pi's quickjs VM seeds it with seed + 1 (its
-    // first clock read) and draws once while creating the context, so starting djs one step
-    // after seed + 1 gives the same numbers on both engines.
-    const state = xorshift(BigInt(deterministic.seed) + 1n);
-    engine.setRandomSeed(Number(state & 0xffffffffn), Number(state >> 32n));
-  } else engine.setRandomSeed(...entropy());
   const session = new Session(engine, options, state);
   try {
-    // Handles live as long as the VM, which the caller disposes as a whole.
-    const bridge = engine.hostFunction(BRIDGE_FN, "bridge");
-    const getter = compileOrThrow(engine, "codemode-prelude.js", ["o", "k"], "return o[k]");
-    const host = compileOrThrow(engine, "codemode-prelude.js", [], HOST_GLOBALS);
-    engine.free(evaluate(session, engine, host));
-    engine.free(host);
-    const preludeFn = compileOrThrow(engine, "codemode-prelude.js", [], `return ${prelude}`);
-    const factory = evaluate(session, engine, preludeFn);
-    const args = [
-      bridge,
-      engine.value(JSON.stringify(data.tools)),
-      engine.value(JSON.stringify(data.globals)),
-      engine.value(JSON.stringify(data.store)),
-    ];
-    state.api = session.invoke(factory, 0, args);
-    for (const h of [preludeFn, factory, ...args]) engine.free(h);
-    const member = (name: string): number => {
-      const key = engine.value(name);
-      const f = evaluate(session, engine, getter, [state.api, key]);
-      engine.free(key);
-      return f;
-    };
-    state.settle = member("settle");
-    const run = member("run");
-    state.stalled = member("stalled");
-    engine.free(getter);
+    let prepared = cached?.prepared;
+    if (!prepared) {
+      prepared = prepare(session, engine, prelude, data);
+      if (options.reuseImages !== false && key.length <= MAX_CACHE_KEY) {
+        if (cache.size >= IMAGE_CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
+        cache.set(key, { image: engine.image(), prepared });
+      }
+    }
+    Object.assign(state, { api: prepared.api, settle: prepared.settle, stalled: prepared.stalled });
+    if (deterministic) {
+      // djs's Math.random is QuickJS's xorshift64*. pi's quickjs VM seeds it with seed + 1 (its
+      // first clock read) and draws once while creating the context, so starting djs one step
+      // after seed + 1 gives the same numbers on both engines.
+      const seed = xorshift(BigInt(deterministic.seed) + 1n);
+      engine.setRandomSeed(Number(seed & 0xffffffffn), Number(seed >> 32n));
+    } else engine.setRandomSeed(...entropy());
+    const origin = engine.value(state.clock ? state.clock.startedAt : Date.now());
+    engine.free(session.invoke(prepared.setOrigin, 0, [origin]));
+    engine.free(origin);
     if (state.clock) {
       const budget = options.interruptBudget ?? "none";
       const fuel = options.fuelPerPoll ?? FUEL_PER_POLL;
@@ -481,9 +528,8 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
     }
     const fn = evaluate(session, engine, compiled.handle);
     engine.free(compiled.handle);
-    engine.free(session.invoke(run, state.api, [fn]));
+    engine.free(session.invoke(prepared.run, state.api, [fn]));
     engine.free(fn);
-    engine.free(run);
     session.drain();
     if (state.clock) post({ type: "idle", seq: 0, issued: state.issued });
   } catch (error) {
