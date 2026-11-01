@@ -938,3 +938,33 @@ fn json_throughput() {
         let _ = Kind::Null;
     }
 }
+
+/// String tokens of many lengths, with escapes, quotes, controls and non-ASCII at random
+/// places: the one-byte lexer (which copies the runs between escapes whole, 0116) agrees
+/// with the UTF-16 and UTF-8 ones, errors and their positions included.
+#[test]
+fn string_tokens_agree_across_encodings() {
+    let mut seed = 0x2545_F491_4F6C_DD1Du64;
+    let mut next = |n: u64| {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed % n
+    };
+    let pieces = [
+        "a", "bc", "xyz12345", "\\n", "\\\"", "\\\\", "\\u0041", "\\u00e9", "\\u20ac", "é", "€",
+        "\\/", "\t", "\"", "\\x",
+    ];
+    for _ in 0..1500 {
+        let mut text = String::from("[\"");
+        for _ in 0..next(24) {
+            // Mostly valid pieces; the last three are a raw control, an early end and a
+            // bad escape.
+            let range = if next(10) == 0 { 15 } else { 12 };
+            let k = next(range) as usize;
+            text.push_str(pieces[k]);
+        }
+        text.push_str("\",\"tail\"]");
+        parse_all(&text);
+    }
+}

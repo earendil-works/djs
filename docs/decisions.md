@@ -5011,3 +5011,32 @@ strings, key formats and capitalized name pairs in the written cases, and every 
 reviewed by hand. 9 picks were rejected in review: private tool names, component and
 file names of private apps, a private file format, and internal function names. Their
 source ids go into the exclude file, and the selection runs again.
+## D2250: JSON without per-key allocations, escapes by runs; two-byte filter in one-byte search
+date: 2026-11-03 · by: perf · issue: 0116
+**JSON.parse**
+- The key cache holds byte ranges of the source (it does not move during a parse)
+  instead of a copied Vec per distinct key. It lives in a fixed array, so a parse
+  allocates nothing for it.
+- Escaped one-byte strings from one-byte input are written by runs:
+  `write_escaped_latin1` copies up to the next backslash whole and decodes the escape in
+  place. It is out of line, so that `write_string` stays small for unescaped strings.
+- Tried and dropped: skipping plain bytes 8 at a time in the string scan, in every
+  variant (in the unit loop, behind a counter, out of line, only after an 8-byte test
+  at the start). It is 5–9% better on long strings, but every variant cost short
+  strings (keys, record fields) 1–6%, and those dominate record-shaped JSON.
+
+**JSON.stringify**
+- The key cache keeps the quoted keys in one buffer (entries are ranges), and keys are
+  quoted straight into the output. Before, there was a Vec per cached key and a
+  temporary output per miss.
+- The output starts at 256 bytes, and `quote` reserves its room once.
+- "Writing in place" in the arena was not done. The final copy into the arena is a
+  single bulk copy, and building the result at the arena frontier would need the fast
+  path to never allocate in between: an invariant nobody enforces today.
+
+**Strings**
+- `find_latin1` tests the needle's first and last byte together, 8 candidate positions
+  at a time, then checks candidates in full; the zero-byte test can flag false
+  positives, never miss. With the first byte alone, a common letter (`t` of "throw")
+  flagged most positions of a line.
+- `flat_fast` (D2090) is `inline(always)`.

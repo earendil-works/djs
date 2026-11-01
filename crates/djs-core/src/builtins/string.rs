@@ -109,15 +109,44 @@ pub(crate) fn find_byte(h: &[u8], b: u8) -> Option<usize> {
     rest.iter().position(|&c| c == b).map(|k| at + k)
 }
 
-/// The first index ≥ `from` of the non-empty `needle` in `h` (one-byte strings).
+/// The first index ≥ `from` of the non-empty `needle` in `h` (one-byte strings). Eight
+/// candidate positions at a time, testing the needle's first and last byte together
+/// (0116): with the first byte alone, a common letter flagged most positions of a line.
 pub(crate) fn find_latin1(h: &[u8], needle: &[u8], from: usize) -> Option<usize> {
-    let (first, rest) = needle.split_first()?;
+    const LO: u64 = 0x0101_0101_0101_0101;
+    const HI: u64 = 0x8080_8080_8080_8080;
     let m = needle.len();
+    let (&first, rest) = needle.split_first()?;
+    if rest.is_empty() {
+        return h
+            .get(from..)
+            .and_then(|t| find_byte(t, first))
+            .map(|k| from + k);
+    }
+    let last = needle[m - 1];
+    let mid = &needle[1..m - 1];
+    let word = |i: usize| u64::from_le_bytes(h[i..i + 8].try_into().unwrap());
+    // `(x - 0x01..) & !x & 0x80..` flags every zero byte (and maybe some above one): a
+    // flagged position is only a candidate, checked in full.
+    let zero = |x: u64| x.wrapping_sub(LO) & !x & HI;
+    let (pf, pl) = (LO * first as u64, LO * last as u64);
     let mut i = from;
+    while i + m - 1 + 8 <= h.len() {
+        let mut flags = zero(word(i) ^ pf) & zero(word(i + m - 1) ^ pl);
+        while flags != 0 {
+            let at = i + (flags.trailing_zeros() / 8) as usize;
+            if h[at] == first
+                && h[at + m - 1] == last
+                && h[at + 1..at + m - 1].iter().zip(mid).all(|(a, b)| a == b)
+            {
+                return Some(at);
+            }
+            flags &= flags - 1;
+        }
+        i += 8;
+    }
     while i + m <= h.len() {
-        i += find_byte(&h[i..=h.len() - m], *first)?;
-        // A loop, not `==`: that is a `memcmp` call, dear for short needles.
-        if h[i + 1..i + m].iter().zip(rest).all(|(a, b)| a == b) {
+        if h[i] == first && h[i + m - 1] == last && h[i + 1..i + m - 1] == *mid {
             return Some(i);
         }
         i += 1;
@@ -514,9 +543,9 @@ mod tests {
             (seed % n) as u8
         };
         let alphabets: [&[u8]; 3] = [b"ab", b"abc\x80\xff\x00", b"\x01\x02\x7f\x80\x81"];
-        for round in 0..4000 {
+        for round in 0..8000 {
             let al = alphabets[round % 3];
-            let n = next(40) as usize;
+            let n = next(90) as usize;
             let h: alloc::vec::Vec<u8> =
                 (0..n).map(|_| al[next(al.len() as u64) as usize]).collect();
             let b = al[next(al.len() as u64) as usize];
@@ -525,7 +554,7 @@ mod tests {
                 h.iter().position(|&c| c == b),
                 "{h:?} {b}"
             );
-            let m = 1 + next(4) as usize;
+            let m = 1 + next(6) as usize;
             let t: alloc::vec::Vec<u8> =
                 (0..m).map(|_| al[next(al.len() as u64) as usize]).collect();
             let from = next(n as u64 + 2) as usize;

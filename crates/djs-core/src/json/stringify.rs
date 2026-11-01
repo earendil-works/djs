@@ -114,7 +114,8 @@ pub fn stringify_fast_at(
     let mut s = Ser {
         heap,
         out: Out {
-            buf: Buf::Narrow(Vec::new()),
+            // (Most results are a few hundred bytes: no growth through 8, 16, ... 128.)
+            buf: Buf::Narrow(Vec::with_capacity(256)),
             max_len: limit.0,
             room: limit.1,
         },
@@ -128,6 +129,7 @@ pub fn stringify_fast_at(
         clean_protos: Vec::new(),
         // Filled on the first key: most calls on small values need none.
         key_cache: Vec::new(),
+        key_bytes: Vec::new(),
     };
     if !s.run(value)? {
         return Ok(None);
@@ -267,6 +269,11 @@ impl Out {
 
     /// QuoteJSONString.
     fn quote(&mut self, v: StrView<'_>) {
+        // Room for the quotes and a few escapes at once (0116): the runs and escapes
+        // below then append without growing.
+        if let Buf::Narrow(o) = &mut self.buf {
+            o.reserve(v.len() + v.len() / 16 + 2);
+        }
         self.byte(b'"');
         match v {
             StrView::Latin1(b) => {
@@ -433,7 +440,10 @@ struct Ser<'h, 'g> {
     /// change during one call, so the answer stays valid.
     clean_protos: Vec<Obj>,
     /// Quoted Latin-1 keys by atom, direct-mapped: arrays of similar objects repeat keys.
-    key_cache: Vec<(Atom, Vec<u8>)>,
+    key_cache: Vec<(Atom, u32, u32)>,
+    /// The quoted keys of `key_cache` (its entries are ranges here): one buffer, not a
+    /// Vec per key (0116).
+    key_bytes: Vec<u8>,
 }
 
 const KEY_CACHE: usize = 128;
@@ -587,11 +597,13 @@ impl Ser<'_, '_> {
             self.out.byte(b'"');
         } else {
             if self.key_cache.is_empty() {
-                self.key_cache = alloc::vec![(Atom::NULL, Vec::new()); KEY_CACHE];
+                self.key_cache = alloc::vec![(Atom::NULL, 0, 0); KEY_CACHE];
             }
             let slot = k.id() as usize % KEY_CACHE;
-            if self.key_cache[slot].0 == k {
-                self.out.latin1(&self.key_cache[slot].1);
+            let (a, at, len) = self.key_cache[slot];
+            if a == k {
+                self.out
+                    .latin1(&self.key_bytes[at as usize..(at + len) as usize]);
                 return;
             }
             let s = self
@@ -599,19 +611,17 @@ impl Ser<'_, '_> {
                 .atom_string(k)
                 .expect("string atoms do not allocate");
             let view = self.heap.str_view(s).expect("atom strings are flat");
-            if let StrView::Latin1(_) = view {
-                let mut q = Out {
-                    buf: Buf::Narrow(Vec::new()),
-                    max_len: usize::MAX,
-                    room: usize::MAX,
-                };
-                q.quote(view);
-                if let Buf::Narrow(b) = q.buf {
-                    self.out.latin1(&b);
-                    self.key_cache[slot] = (k, b);
-                }
-            } else {
-                self.out.quote(view);
+            // Quoted straight into the output; a one-byte result is remembered.
+            let start = match &self.out.buf {
+                Buf::Narrow(b) => Some(b.len()),
+                Buf::Wide(_) => None,
+            };
+            let one_byte = matches!(view, StrView::Latin1(_));
+            self.out.quote(view);
+            if let (Some(start), true, Buf::Narrow(b)) = (start, one_byte, &self.out.buf) {
+                let at = self.key_bytes.len();
+                self.key_bytes.extend_from_slice(&b[start..]);
+                self.key_cache[slot] = (k, at as u32, (b.len() - start) as u32);
             }
         }
     }

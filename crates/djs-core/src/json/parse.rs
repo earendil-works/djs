@@ -395,6 +395,43 @@ fn decode_units<const E: u8>(b: &[u8], s: &StrTok, mut f: impl FnMut(u16)) {
     }
 }
 
+/// `write_string` of an escaped one-byte string from one-byte input: the runs between
+/// escapes are copied whole (0116: a long text has an escaped newline every line or so).
+/// Out of line, so that `write_string` stays small for the common unescaped strings.
+#[inline(never)]
+fn write_escaped_latin1(b: &[u8], s: &StrTok, dst: &mut [u8]) -> usize {
+    let mut k = 0;
+    let mut i = s.start;
+    while i < s.end {
+        let run = crate::builtins::string::find_byte(&b[i..s.end], b'\\').unwrap_or(s.end - i);
+        dst[k..k + run].copy_from_slice(&b[i..i + run]);
+        k += run;
+        i += run;
+        if i < s.end {
+            // An escape (validated by the scan), decoded in place.
+            let (u, len) = match b[i + 1] {
+                b'b' => (0x08, 2),
+                b'f' => (0x0C, 2),
+                b'n' => (0x0A, 2),
+                b'r' => (0x0D, 2),
+                b't' => (0x09, 2),
+                b'u' => {
+                    let mut u = 0;
+                    for &h in &b[i + 2..i + 6] {
+                        u = (u << 4) | hex(h as u32).unwrap_or(0);
+                    }
+                    (u, 6)
+                }
+                other => (other as u32, 2),
+            };
+            dst[k] = u as u8;
+            k += 1;
+            i += len;
+        }
+    }
+    k
+}
+
 /// Writes the decoded token into the data of a flat string (`dst`, exactly sized).
 fn write_string<const E: u8>(b: &[u8], s: &StrTok, dst: &mut [u8], two_byte: bool) {
     if !s.escaped {
@@ -421,7 +458,9 @@ fn write_string<const E: u8>(b: &[u8], s: &StrTok, dst: &mut [u8], two_byte: boo
         }
     }
     let mut k = 0;
-    if two_byte {
+    if E == LATIN1 && !two_byte {
+        k = write_escaped_latin1(b, s, dst);
+    } else if two_byte {
         decode_units::<E>(b, s, |u| {
             dst[k..k + 2].copy_from_slice(&u.to_le_bytes());
             k += 2;
@@ -634,8 +673,10 @@ struct Parser<'a, 'o> {
     key_buf: Vec<u16>,
     /// Direct-mapped cache from the raw bytes of an escape-free key to its atom. Arrays of
     /// similar objects repeat keys constantly; a hit skips decoding, hashing and the atom
-    /// table lookup.
-    key_cache: Vec<(Vec<u8>, Atom)>,
+    /// table lookup. Entries are byte ranges of the source, which does not move while
+    /// the parse runs (0116: a copy of each key was an allocation per distinct key per
+    /// parse).
+    key_cache: [(u32, u32, Atom); KEY_CACHE],
 }
 
 #[inline]
@@ -663,7 +704,7 @@ impl<'a, 'o> Parser<'a, 'o> {
             keys: Vec::new(),
             values: Vec::new(),
             key_buf: Vec::new(),
-            key_cache: alloc::vec![(Vec::new(), Atom::NULL); KEY_CACHE],
+            key_cache: [(0, 0, Atom::NULL); KEY_CACHE],
         }
     }
 
@@ -807,9 +848,9 @@ impl<'a, 'o> Parser<'a, 'o> {
             if !s.escaped {
                 let raw = &b[w * s.start..w * s.end];
                 let slot = cache_slot(raw);
-                let (cached, atom) = &self.key_cache[slot];
-                if !atom.is_null() && cached[..] == *raw {
-                    return Ok(*atom);
+                let (a, e, atom) = self.key_cache[slot];
+                if !atom.is_null() && b[a as usize..e as usize] == *raw {
+                    return Ok(atom);
                 }
                 Some(slot)
             } else {
@@ -824,11 +865,7 @@ impl<'a, 'o> Parser<'a, 'o> {
         }
         let atom = self.heap.atom_utf16(&self.key_buf)?;
         if let Some(slot) = slot {
-            let b = src_bytes(self.heap, &self.src);
-            let entry = &mut self.key_cache[slot];
-            entry.0.clear();
-            entry.0.extend_from_slice(&b[w * s.start..w * s.end]);
-            entry.1 = atom;
+            self.key_cache[slot] = ((w * s.start) as u32, (w * s.end) as u32, atom);
         }
         Ok(atom)
     }

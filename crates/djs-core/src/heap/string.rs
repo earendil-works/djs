@@ -451,7 +451,7 @@ impl Heap {
     /// byte; `None` for a rope. What `str_view` returns for a flat cell, without its
     /// repeated kind checks (0110: four or five per call, ~300 instructions of an
     /// `includes`). The view borrows the heap, so it cannot outlive an append (D1610).
-    #[inline]
+    #[inline(always)]
     fn flat_fast(&self, s: Str) -> Option<StrView<'_>> {
         let a = self.arena();
         let k = a.get(s.0, Header::KIND);
