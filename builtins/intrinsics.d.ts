@@ -432,6 +432,12 @@ declare function ArrayCanPopDense(o: Obj): boolean;
 /** Array.prototype.pop of an array `ArrayCanPopDense` accepts. @leaf */
 declare function ArrayPopDense(o: Obj): Value;
 /**
+ * fill's Sets on an Array while each is a plain store (an existing dense element, or an
+ * append or hole fill of an extensible Array without index properties on its prototype
+ * chain), from k up to fin: the index the general loop continues from (0080). @leaf
+ */
+declare function ArrayFillDense(o: Obj, value: Value, k: f64, fin: f64): f64;
+/**
  * push(v)'s Set and length update in one step when the Set is a plain append to the
  * Array `o` (extensible, writable length, no holes at its end, no index properties on
  * its prototype chain). The new length, or -1 with nothing changed (0080). @leaf

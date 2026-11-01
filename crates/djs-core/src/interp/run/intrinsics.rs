@@ -248,6 +248,7 @@ const ARRAY_SPLICE_DENSE: u16 = id("ArraySpliceDense");
 const ARRAY_CAN_POP_DENSE: u16 = id("ArrayCanPopDense");
 const ARRAY_POP_DENSE: u16 = id("ArrayPopDense");
 const ARRAY_PUSH_DENSE: u16 = id("ArrayPushDense");
+const ARRAY_FILL_DENSE: u16 = id("ArrayFillDense");
 const ARRAY_SEARCH_DENSE: u16 = id("ArraySearchDense");
 const ARRAY_SLICE_DENSE: u16 = id("ArraySliceDense");
 const ARRAY_JOIN_DENSE: u16 = id("ArrayJoinDense");
@@ -1022,6 +1023,16 @@ impl Exec<'_> {
                 Some(v) => v,
                 None => return bad_argument(info.name),
             },
+            ARRAY_FILL_DENSE => {
+                let (Some(o), Some(k), Some(fin)) = (
+                    a0.as_object(),
+                    arg(self, 2).as_number(),
+                    arg(self, 3).as_number(),
+                ) else {
+                    return bad_argument(info.name);
+                };
+                conv::number(self.array_fill_dense(o, arg(self, 1), k, fin)?)
+            }
             ARRAY_PUSH_DENSE => match a0.as_object() {
                 Some(o) => conv::number(self.array_push_dense(o, arg(self, 1))?),
                 None => return bad_argument(info.name),

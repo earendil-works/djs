@@ -33,9 +33,40 @@ fn index(v: f64) -> Option<u32> {
 }
 
 impl Exec<'_> {
+    /// Fuel for a loop over `n` elements done in one leaf call: one unit per four
+    /// elements (the leaves run to completion, so they pay afterwards, as D1561's do).
+    fn charge_elements(&mut self, n: u32) {
+        self.fuel -= i64::from(n / 4);
+    }
+
+    /// `%ArrayFillDense(o, value, k, fin)`: fill's Sets while each is a plain store
+    /// (`set_element_fast`: an existing dense element, or an append or hole fill of an
+    /// extensible Array whose prototypes have no index properties). Returns the index
+    /// to continue from with the general [[Set]] (`fin` when done).
+    pub(super) fn array_fill_dense(
+        &mut self,
+        o: Obj,
+        value: Value,
+        k: f64,
+        fin: f64,
+    ) -> Result<f64, Fault> {
+        let (Some(k), Some(fin)) = (index(k), index(fin)) else {
+            return Ok(k);
+        };
+        if self.heap.object_class(o) != ObjectClass::Array {
+            return Ok(k as f64);
+        }
+        let mut i = k;
+        while i < fin && self.heap.set_element_fast(o, i, value)? {
+            i += 1;
+        }
+        self.charge_elements(i - k);
+        Ok(i as f64)
+    }
+
     /// `%ArraySearchDense(o, search, from, len, mode)` (builtins/intrinsics.d.ts).
     pub(super) fn array_search_dense(
-        &self,
+        &mut self,
         o: Obj,
         search: Value,
         from: f64,
@@ -49,6 +80,21 @@ impl Exec<'_> {
         let (Some(from), Some(len)) = (index(from), index(len)) else {
             return DECLINE;
         };
+        let r = self.search_dense(o, search, from, len, mode);
+        // The elements compared (a decline compared nothing that counts).
+        let scanned = match (r, mode) {
+            (r, 1) if r >= 0.0 => from - r as u32 + 1,
+            (r, _) if r >= 0.0 => r as u32 - from + 1,
+            (_, 1) if r == -1.0 => from + 1,
+            _ if r == -1.0 => len.saturating_sub(from),
+            _ => 0,
+        };
+        self.charge_elements(scanned);
+        r
+    }
+
+    fn search_dense(&self, o: Obj, search: Value, from: u32, len: u32, mode: i32) -> f64 {
+        const DECLINE: f64 = -2.0;
         let el_ok = |i: u32| self.heap.get_element_fast(o, i);
         let same_value_zero = |v: Value| match (v.as_number(), search.as_number()) {
             (Some(a), Some(b)) => a == b || (a.is_nan() && b.is_nan()),
@@ -111,6 +157,7 @@ impl Exec<'_> {
         let Some(values) = dense_range(self.heap, o, k, fin) else {
             return Ok(false);
         };
+        self.charge_elements(fin - k);
         for (n, v) in values.into_iter().enumerate() {
             let n = n as u32;
             // The first store checks what makes all of them plain appends (an
@@ -144,6 +191,7 @@ impl Exec<'_> {
             return Ok(Value::UNDEFINED);
         }
         let keys = self.heap.own_keys(o);
+        self.charge_elements(keys.len() as u32);
         let mut props = Vec::with_capacity(keys.len());
         for k in keys {
             if k.is_symbol() {
@@ -196,6 +244,7 @@ impl Exec<'_> {
         for (i, e) in elems.into_iter().enumerate() {
             self.heap.ta_set(o, i as u32, e);
         }
+        self.charge_elements(n);
         true
     }
 
@@ -219,6 +268,7 @@ impl Exec<'_> {
         let Some(values) = dense_range(self.heap, o, 0, len) else {
             return Ok(Value::UNDEFINED);
         };
+        self.charge_elements(len);
         // Symbols throw and objects run user code: the general loop does those.
         if values
             .iter()

@@ -104,6 +104,27 @@ const log = (...a) => out.push(a.map(String).join(" "));
   log("push", r.join());
 }
 
+// fill: plain stores in one step, the rest through Set.
+{
+  const r = [];
+  const a = [];
+  a.length = 5;
+  r.push(a.fill(7, 1, 4).join(), [1, 2, 3].fill(0, -1).join(), [1, 2].fill(9, 5).join());
+  try { Object.freeze([1, 2]).fill(0); } catch (e) { r.push(e.constructor.name); }
+  Object.defineProperty(Array.prototype, 2, { set(v) { r.push("set " + v); }, configurable: true });
+  const h = [];
+  h.length = 4;
+  h.fill("x");
+  r.push(JSON.stringify(h), Object.keys(h).join());
+  delete Array.prototype[2];
+  const g = [1, 2, 3];
+  Object.defineProperty(g, 1, { set(v) { r.push("own " + v); }, configurable: true });
+  g.fill(5);
+  r.push(g[0], g[2]);
+  r.push(Array.prototype.fill.call({ length: 2 }, 1)[1]);
+  log("fill", r.join());
+}
+
 // Iterable consumers: arrays (dense, holes), strings, typed arrays, entries.
 {
   const h = [1, , 3];

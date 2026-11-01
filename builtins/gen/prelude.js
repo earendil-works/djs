@@ -611,7 +611,7 @@ function ArrayPrototypeFill(value, start, end) {
   const len = LengthOfArrayLike(o);
   const k = RelativeIndex(start, len, 0);
   const fin = RelativeIndex(end, len, len);
-  for (let i = k; i < fin; i++) {
+  for (let i = %ArrayFillDense(o, value, k, fin); i < fin; i++) {
     %Set(o, i, value);
   }
   return o;

@@ -423,6 +423,7 @@ const I = {
   // The dense leaves of 0080 decline: the general loops run.
   ArrayCanPopDense: (o) => false,
   ArrayPushDense: (o, v) => -1,
+  ArrayFillDense: (o, value, k, fin) => k,
   ArraySearchDense: (o, search, from, len, mode) => -2,
   ArraySliceDense: (o, k, fin, a) => false,
   ArrayJoinDense: (o, len, sep) => undefined,
