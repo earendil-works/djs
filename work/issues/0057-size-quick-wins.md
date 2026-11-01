@@ -1,8 +1,8 @@
 # 0057: Size quick wins Q1–Q6 (from 0052)
 
-status: open
-agent: -
-branch: issue/0052-bloat-investigation (continue on it: merge the 0052 report and scripts first, then these)
+status: in-progress
+agent: bloat
+branch: issue/0057-size-quick-wins
 depends-on: 0052
 touches: Cargo.toml / .cargo/config.toml (the wasm link flag only), crates/djs-core/src/compiler/ (emitter inlining, a boxed error), crates/djs-core/src/heap/ (out_of_bounds), crates/djs-core/src/interp/ (a boxed Fault), scripts/build-wasm.sh (strip by default), crates/djs-bench + tests/bench/size (track the new numbers)
 
