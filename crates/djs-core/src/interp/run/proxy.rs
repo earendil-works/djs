@@ -110,7 +110,7 @@ impl Exec<'_> {
         let f = realm::installed_intrinsic(self.heap, id);
         if f.is_undefined() {
             let name = crate::bytecode::intrinsics::intrinsic(id).map_or("?", |i| i.name);
-            return Err(Fault::Error(
+            return Err(Fault::error(
                 ErrorKind::InternalError,
                 format!("%{name} is not installed"),
             ));

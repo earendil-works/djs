@@ -25,7 +25,7 @@ pub(crate) fn bigint_fault(e: bigint::Error) -> Fault {
         bigint::Error::NegativeExponent => "BigInt negative exponent",
         bigint::Error::ExponentTooLarge => "BigInt is too large",
     };
-    Fault::Error(ErrorKind::RangeError, String::from(msg))
+    Fault::error(ErrorKind::RangeError, String::from(msg))
 }
 
 impl Exec<'_> {
@@ -164,7 +164,7 @@ impl Exec<'_> {
                     ""
                 };
                 if !msg.is_empty() {
-                    return Err(Fault::Error(ErrorKind::RangeError, String::from(msg)));
+                    return Err(Fault::error(ErrorKind::RangeError, String::from(msg)));
                 }
                 self.heap.alloc_bigint(&BigInt::from_f64(n))?
             }
@@ -210,7 +210,7 @@ impl Exec<'_> {
     /// ToBigInt (7.1.13) of a primitive.
     fn bigint_of_primitive(&mut self, v: Value) -> Result<Value, Fault> {
         let syntax = || {
-            Err(Fault::Error(
+            Err(Fault::error(
                 ErrorKind::SyntaxError,
                 String::from("invalid bigint literal"),
             ))

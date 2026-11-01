@@ -18,7 +18,7 @@ const ESCAPE_KEEPS: &[u8] = b"@*_+-./";
 const HEX: &[u8; 16] = b"0123456789ABCDEF";
 
 fn uri_error(message: &str) -> Fault {
-    Fault::Error(ErrorKind::UriError, String::from(message))
+    Fault::error(ErrorKind::UriError, String::from(message))
 }
 
 fn is_uri_unescaped(c: u16, component: bool) -> bool {

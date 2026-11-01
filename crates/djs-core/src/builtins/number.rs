@@ -10,7 +10,7 @@ use crate::num;
 use crate::value::{Str, Value};
 
 fn range_error<T>(e: num::RangeError) -> Result<T, Fault> {
-    Err(Fault::Error(ErrorKind::RangeError, e.message().into()))
+    Err(Fault::error(ErrorKind::RangeError, e.message().into()))
 }
 
 /// ToIntegerOrInfinity results saturated to i32 (as `crate::num` wants them).

@@ -15,7 +15,7 @@ use crate::value::{Obj, Value};
 pub(crate) const MAX_BUFFER: f64 = (1u64 << 31) as f64;
 
 pub(crate) fn range_error<T>(msg: &str) -> Result<T, Fault> {
-    Err(Fault::Error(ErrorKind::RangeError, msg.into()))
+    Err(Fault::error(ErrorKind::RangeError, msg.into()))
 }
 
 /// A zeroed Bytes cell of `len` bytes with room for `cap`.

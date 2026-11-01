@@ -20,7 +20,7 @@ pub(crate) fn parse(heap: &mut Heap, text: Str) -> Result<Result<Value, json::Sy
     match json::parse(heap, text, &opts) {
         Ok(v) => Ok(Ok(v)),
         Err(ParseError::Syntax(e)) => Ok(Err(e)),
-        Err(ParseError::Heap(e)) => Err(Fault::Heap(e)),
+        Err(ParseError::Heap(e)) => Err(Fault::heap(e)),
     }
 }
 
@@ -34,12 +34,12 @@ pub(crate) fn stringify_fast(heap: &mut Heap, v: Value, gap: Str) -> Result<Valu
         Ok(None) => Ok(Value::UNDEFINED),
         // The full algorithm throws for a BigInt (after a replacer had its say).
         Err(StringifyError::Slow | StringifyError::BigInt) => Ok(Value::NULL),
-        Err(StringifyError::Heap(e)) => Err(Fault::Heap(e)),
-        Err(StringifyError::Circular) => Err(Fault::Error(
+        Err(StringifyError::Heap(e)) => Err(Fault::heap(e)),
+        Err(StringifyError::Circular) => Err(Fault::error(
             ErrorKind::TypeError,
             String::from("circular reference"),
         )),
-        Err(StringifyError::StackOverflow) => Err(Fault::Error(
+        Err(StringifyError::StackOverflow) => Err(Fault::error(
             ErrorKind::RangeError,
             String::from(crate::interp::STACK_OVERFLOW),
         )),
@@ -51,7 +51,7 @@ pub(crate) fn quote(heap: &mut Heap, s: Str) -> Result<Str, Fault> {
     // A string is plain data: the fast path always handles it.
     match json::stringify_fast(heap, Value::string(s), &[]) {
         Ok(Some(q)) => Ok(q),
-        Err(StringifyError::Heap(e)) => Err(Fault::Heap(e)),
-        _ => Err(Fault::Heap(HeapError::OutOfMemory)),
+        Err(StringifyError::Heap(e)) => Err(Fault::heap(e)),
+        _ => Err(Fault::heap(HeapError::OutOfMemory)),
     }
 }

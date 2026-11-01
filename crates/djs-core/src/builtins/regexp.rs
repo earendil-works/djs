@@ -42,7 +42,7 @@ const FLAG_CHARS: [(u8, Flags); 8] = [
 ];
 
 fn syntax_error<T>(msg: &str) -> Result<T, Fault> {
-    Err(Fault::Error(ErrorKind::SyntaxError, String::from(msg)))
+    Err(Fault::error(ErrorKind::SyntaxError, String::from(msg)))
 }
 
 /// The RegExp object `v`, if it is one.

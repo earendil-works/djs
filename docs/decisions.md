@@ -2689,3 +2689,11 @@ The heap field accessors are inlined everywhere, and each failed check called
 builds now call an argument-less `out_of_bounds_release()` ("arena access out of
 bounds"); builds with debug_assertions keep the offsets in the message. The checks are
 unchanged (no unsafe). Code 712,176 -> 699,863 in wasm.
+
+## D1574: The interpreter's Fault is boxed
+date: 2026-11-03 · by: bloat · issue: 0057
+`Fault` is `struct Fault(Box<FaultKind>)` (`Throw(Value) | Error(ErrorKind, String) |
+Heap(HeapError)`), built by the cold `Fault::throw` / `Fault::error` / `Fault::heap`.
+`Result<(), Fault>` is then one i32 and `?` moves a pointer; `Result<Value, Fault>`
+stays two words. Code 699,863 -> 686,908 in wasm. A fault costs one extra small
+allocation; throw-heavy loops show no measurable change (0057).

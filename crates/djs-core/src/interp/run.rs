@@ -16,7 +16,7 @@
 use alloc::format;
 use alloc::string::String;
 
-use super::conv::{self, Fault, type_error};
+use super::conv::{self, Fault, FaultKind, type_error};
 use super::frame::{self, Continuation, HEADER};
 use super::realm::{self, ErrorKind, Intrinsic, intrinsic, intrinsic_obj};
 use super::state::{self, PARK_ENTRY, RunState, park_flags};
@@ -252,7 +252,7 @@ impl<'h> Exec<'h> {
         let cap = self.heap.value_array_capacity(self.stack);
         if top > self.opts.max_stack {
             // V8's and quickjs-ng's error, which pi's codemode expects (D013).
-            return Err(Fault::Error(
+            return Err(Fault::error(
                 ErrorKind::RangeError,
                 String::from(STACK_OVERFLOW),
             ));
@@ -437,7 +437,7 @@ impl<'h> Exec<'h> {
                     .map(|id| realm::installed_intrinsic(self.heap, id))
                     .unwrap_or(Value::UNDEFINED);
                 if target.as_object().is_none() {
-                    return Err(Fault::Error(
+                    return Err(Fault::error(
                         ErrorKind::InternalError,
                         String::from("bad builtin closure"),
                     ));
@@ -653,18 +653,18 @@ impl<'h> Exec<'h> {
     /// Turns a fault at `pc` of the current frame (`None`: outside any frame) into the
     /// thrown value. New errors get a `stack`.
     pub(crate) fn fault_value(&mut self, f: Fault, pc: Option<u32>) -> Value {
-        let (kind, msg) = match f {
-            Fault::Throw(v) => return v,
-            Fault::Error(k, m) => (k, m),
-            Fault::Heap(HeapError::OutOfMemory) => {
+        let (kind, msg) = match *f.0 {
+            FaultKind::Throw(v) => return v,
+            FaultKind::Error(k, m) => (k, m),
+            FaultKind::Heap(HeapError::OutOfMemory) => {
                 // The handlers get the reserve below the cap to run in (D1600).
                 self.heap.open_memory_reserve();
                 return intrinsic(self.heap, Intrinsic::OutOfMemoryError);
             }
-            Fault::Heap(HeapError::StringTooLong) => {
+            FaultKind::Heap(HeapError::StringTooLong) => {
                 (ErrorKind::RangeError, String::from("invalid string length"))
             }
-            Fault::Heap(HeapError::InvalidArrayLength) => {
+            FaultKind::Heap(HeapError::InvalidArrayLength) => {
                 (ErrorKind::RangeError, String::from("invalid array length"))
             }
         };
@@ -1165,14 +1165,14 @@ impl<'h> Exec<'h> {
     #[inline(always)]
     fn step(&mut self) -> Step {
         if self.pc >= self.code_len {
-            return Err(Fault::Error(
+            return Err(Fault::error(
                 ErrorKind::InternalError,
                 String::from("bad bytecode: pc out of range"),
             ));
         }
         let b = self.byte(self.pc);
         let Some(op) = Op::from_u8(b) else {
-            return Err(Fault::Error(
+            return Err(Fault::error(
                 ErrorKind::InternalError,
                 format!("bad bytecode: opcode {b}"),
             ));
@@ -1251,7 +1251,7 @@ impl<'h> Exec<'h> {
     }
 
     fn uninitialized<T>(&self, name_index: u32) -> Result<T, Fault> {
-        Err(Fault::Error(
+        Err(Fault::error(
             ErrorKind::ReferenceError,
             format!("{} is not initialized", self.name_of(name_index)),
         ))
@@ -1620,7 +1620,7 @@ impl<'h> Exec<'h> {
                 let g = intrinsic_obj(self.heap, Intrinsic::Global);
                 match self.heap.find_property(g, key) {
                     None if op == Op::GetGlobal => {
-                        return Err(Fault::Error(
+                        return Err(Fault::error(
                             ErrorKind::ReferenceError,
                             format!("'{}' is not defined", self.heap.atom_name(key)),
                         ));
@@ -1639,7 +1639,7 @@ impl<'h> Exec<'h> {
                 if let Some(Property::Data { flags, .. }) = self.heap.get_own_property(lex, key) {
                     self.global_lexical(key)?;
                     if !flags.writable() {
-                        return Err(Fault::Error(
+                        return Err(Fault::error(
                             ErrorKind::TypeError,
                             format!("'{}' is read-only", conv::describe_key(self.heap, key)),
                         ));
@@ -1651,7 +1651,7 @@ impl<'h> Exec<'h> {
                 }
                 let g = intrinsic_obj(self.heap, Intrinsic::Global);
                 if !self.heap.has_property(g, key) {
-                    return Err(Fault::Error(
+                    return Err(Fault::error(
                         ErrorKind::ReferenceError,
                         format!("'{}' is not defined", self.heap.atom_name(key)),
                     ));
@@ -1691,7 +1691,7 @@ impl<'h> Exec<'h> {
                 self.push(v);
             }
             Op::ThrowConstAssign => {
-                return Err(Fault::Error(
+                return Err(Fault::error(
                     ErrorKind::TypeError,
                     format!(
                         "'{}' is read-only",
@@ -1895,7 +1895,7 @@ impl<'h> Exec<'h> {
             Op::CopyDataProps => {
                 let mode = self.heap.arena().bytes()[(self.code + self.pc + 1) as usize];
                 if mode != 0 {
-                    return Err(Fault::Error(
+                    return Err(Fault::error(
                         ErrorKind::InternalError,
                         format!("not supported yet: copy_data_props {mode}"),
                     ));
@@ -2143,7 +2143,7 @@ impl<'h> Exec<'h> {
             }
             Op::Throw => {
                 let v = self.pop();
-                return Err(Fault::Throw(v));
+                return Err(Fault::throw(v));
             }
             Op::Return => {
                 let v = self.pop();
@@ -2194,13 +2194,13 @@ impl<'h> Exec<'h> {
             | Op::EnterScope
             | Op::LeaveScope
             | Op::Label => {
-                return Err(Fault::Error(
+                return Err(Fault::error(
                     ErrorKind::InternalError,
                     format!("bad bytecode: phase-1 op {}", op.name()),
                 ));
             }
             _ => {
-                return Err(Fault::Error(
+                return Err(Fault::error(
                     ErrorKind::InternalError,
                     format!("not supported yet: {}", op.name()),
                 ));
@@ -2222,7 +2222,7 @@ impl<'h> Exec<'h> {
         if c.as_object().is_some() {
             return Ok(c);
         }
-        let bad = || Fault::Error(ErrorKind::InternalError, String::from("bad template site"));
+        let bad = || Fault::error(ErrorKind::InternalError, String::from("bad template site"));
         let start = c.as_int().ok_or_else(bad)? as u32;
         let n = self.constant(start).as_int().ok_or_else(bad)? as u32;
         let cooked: alloc::vec::Vec<Value> = (0..n).map(|i| self.constant(start + 1 + i)).collect();
@@ -2623,7 +2623,7 @@ impl<'h> Exec<'h> {
             }
         };
         let readonly = |heap: &Heap| {
-            Err(Fault::Error(
+            Err(Fault::error(
                 ErrorKind::TypeError,
                 format!("'{}' is read-only", conv::describe_key(heap, key)),
             ))
@@ -2718,7 +2718,7 @@ impl<'h> Exec<'h> {
     fn global_lexical(&self, key: Atom) -> Result<Option<Value>, Fault> {
         let lex = realm::global_lex(self.heap);
         match self.heap.get_own_property(lex, key) {
-            Some(Property::Data { value, .. }) if value.is_uninitialized() => Err(Fault::Error(
+            Some(Property::Data { value, .. }) if value.is_uninitialized() => Err(Fault::error(
                 ErrorKind::ReferenceError,
                 format!("{} is not initialized", self.heap.atom_name(key)),
             )),
@@ -2735,12 +2735,12 @@ impl<'h> Exec<'h> {
             .map(|i| self.heap.value_array_get(self.consts, i))
             .collect();
         let decls = GlobalDecls::decode(&consts, idx as usize).ok_or_else(|| {
-            Fault::Error(ErrorKind::InternalError, String::from("bad global_decls"))
+            Fault::error(ErrorKind::InternalError, String::from("bad global_decls"))
         })?;
         let g = intrinsic_obj(self.heap, Intrinsic::Global);
         let lex = realm::global_lex(self.heap);
         let redeclaration = |heap: &Heap, k: Atom| {
-            Err(Fault::Error(
+            Err(Fault::error(
                 ErrorKind::SyntaxError,
                 format!("redeclaration of '{}'", heap.atom_name(k)),
             ))
@@ -2754,7 +2754,7 @@ impl<'h> Exec<'h> {
         }
         for &k in decls.vars.iter().chain(&decls.funcs) {
             if !self.heap.has_own_property(g, k) && !self.heap.is_extensible(g) {
-                return Err(Fault::Error(
+                return Err(Fault::error(
                     ErrorKind::TypeError,
                     format!("cannot define variable '{}'", self.heap.atom_name(k)),
                 ));
@@ -2820,7 +2820,7 @@ impl<'h> Exec<'h> {
                 Value::object(a)
             }
             _ => {
-                return Err(Fault::Error(
+                return Err(Fault::error(
                     ErrorKind::InternalError,
                     format!("not supported yet: special_object {kind}"),
                 ));

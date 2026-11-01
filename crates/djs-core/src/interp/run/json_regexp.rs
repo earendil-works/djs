@@ -99,7 +99,7 @@ impl Exec<'_> {
                                 Value::string(st),
                             )?;
                         }
-                        return Err(Fault::Throw(err));
+                        return Err(Fault::throw(err));
                     }
                 }
             }
@@ -480,7 +480,7 @@ impl Exec<'_> {
         let mut len = self.heap.array_length(a);
         let push = |ex: &mut Self, len: &mut u32, v: Value| -> Result<bool, Fault> {
             let key = crate::heap::Atom::int(*len)
-                .ok_or(Fault::Heap(crate::heap::HeapError::OutOfMemory))?;
+                .ok_or(Fault::heap(crate::heap::HeapError::OutOfMemory))?;
             ex.heap.create_data_property(a, key, v)?;
             *len += 1;
             Ok(*len == lim)
@@ -617,7 +617,7 @@ impl Exec<'_> {
 }
 
 fn regexp_overflow<T>() -> Result<T, Fault> {
-    Err(Fault::Error(
+    Err(Fault::error(
         ErrorKind::InternalError,
         String::from("out of memory in regexp execution"),
     ))

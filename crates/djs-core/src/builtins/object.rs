@@ -11,7 +11,7 @@ use crate::value::{Obj, Value};
 /// A property key that the builtin already converted (a string, symbol or number).
 pub(crate) fn key(heap: &mut Heap, v: Value) -> Result<Atom, Fault> {
     if v.as_object().is_some() {
-        return Err(Fault::Error(
+        return Err(Fault::error(
             crate::interp::ErrorKind::InternalError,
             "bad property key for an intrinsic".into(),
         ));

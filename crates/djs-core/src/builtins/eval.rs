@@ -22,8 +22,8 @@ fn utf8(heap: &Heap, s: Str) -> Vec<u8> {
 
 fn compile_error(e: compiler::CompileError) -> Fault {
     match e.kind {
-        CompileErrorKind::Syntax => Fault::Error(ErrorKind::SyntaxError, e.message),
-        CompileErrorKind::OutOfMemory => Fault::Heap(HeapError::OutOfMemory),
+        CompileErrorKind::Syntax => Fault::error(ErrorKind::SyntaxError, e.message),
+        CompileErrorKind::OutOfMemory => Fault::heap(HeapError::OutOfMemory),
     }
 }
 

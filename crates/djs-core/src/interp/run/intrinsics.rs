@@ -410,7 +410,7 @@ fn index_key(k: Value) -> Option<u32> {
 }
 
 pub(super) fn bad_argument<T>(name: &str) -> Result<T, Fault> {
-    Err(Fault::Error(
+    Err(Fault::error(
         ErrorKind::InternalError,
         format!("bad argument to %{name}"),
     ))
@@ -420,7 +420,7 @@ impl Exec<'_> {
     /// Executes `call_intrinsic id, argc`; `next` is the following instruction.
     pub(super) fn call_intrinsic(&mut self, id: u16, argc: u32, next: u32) -> Step {
         let Some(info) = intrinsic(id) else {
-            return Err(Fault::Error(
+            return Err(Fault::error(
                 ErrorKind::InternalError,
                 format!("bad bytecode: intrinsic {id}"),
             ));
@@ -609,7 +609,7 @@ impl Exec<'_> {
             ARRAY_CREATE => {
                 let n = a0.as_number().unwrap_or(f64::NAN);
                 if !(n >= 0.0 && n <= u32::MAX as f64 && (n as u32) as f64 == n) {
-                    return Err(Fault::Error(
+                    return Err(Fault::error(
                         ErrorKind::RangeError,
                         String::from("invalid array length"),
                     ));
@@ -1268,7 +1268,7 @@ impl Exec<'_> {
                 match date::format(t, fmt, part, self.time_zone_offset()) {
                     Some(s) => Value::string(self.heap.alloc_str(&s)?),
                     None if fmt == 2 => {
-                        return Err(Fault::Error(
+                        return Err(Fault::error(
                             ErrorKind::RangeError,
                             String::from("Date value is NaN"),
                         ));
@@ -2129,7 +2129,7 @@ impl Exec<'_> {
     /// prototypes are reachable as `X.prototype` even before their constructors exist.
     fn resolve_path(&mut self, path: &str) -> Result<Obj, Fault> {
         let unknown = || {
-            Err(Fault::Error(
+            Err(Fault::error(
                 ErrorKind::InternalError,
                 format!("%InstallMethod: no object at {path}"),
             ))

@@ -26,7 +26,7 @@ const PROXY_CREATE_DATA_PROPERTY_OR_THROW: u16 =
     super::intrinsics::id("ProxyCreateDataPropertyOrThrow");
 
 fn reference_error<T>(msg: &str) -> Result<T, Fault> {
-    Err(Fault::Error(ErrorKind::ReferenceError, msg.into()))
+    Err(Fault::error(ErrorKind::ReferenceError, msg.into()))
 }
 
 impl Exec<'_> {
@@ -291,7 +291,7 @@ impl Exec<'_> {
                     1 => ErrorKind::ReferenceError,
                     _ => ErrorKind::TypeError,
                 };
-                return Err(Fault::Error(kind, msg));
+                return Err(Fault::error(kind, msg));
             }
             _ => unreachable!("not a class op: {}", op.name()),
         }

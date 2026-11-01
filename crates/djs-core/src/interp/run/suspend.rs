@@ -148,7 +148,7 @@ impl Exec<'_> {
     /// The Generator object in local `loc` of the current frame.
     fn local_generator(&self, loc: u32, kinds: &[i32]) -> Result<Obj, Fault> {
         as_generator_of(self.heap, self.get(self.lp + loc), kinds).ok_or_else(|| {
-            Fault::Error(
+            Fault::error(
                 ErrorKind::InternalError,
                 String::from("bad bytecode: no generator state"),
             )
@@ -306,7 +306,7 @@ impl Exec<'_> {
                 .and_then(|h| h.find(pc - 1))
                 .is_some();
             if !caught {
-                return Err(Fault::Throw(value));
+                return Err(Fault::throw(value));
             }
         }
         let hp_off = self.heap.object_slot(g, HP).as_int().unwrap_or(0) as u32;

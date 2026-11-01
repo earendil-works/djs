@@ -247,7 +247,7 @@ impl Exec<'_> {
                 a0
             }
             _ => {
-                return Err(Fault::Error(
+                return Err(Fault::error(
                     ErrorKind::InternalError,
                     format!("not supported yet: %{name}"),
                 ));

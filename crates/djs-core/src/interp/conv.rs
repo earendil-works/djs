@@ -2,6 +2,7 @@
 //! ToPrimitive (valueOf/toString, which run user code) fail with a "not supported yet"
 //! TypeError until the privileged slow paths exist (P1-2).
 
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
@@ -12,9 +13,15 @@ use crate::heap::{Atom, Heap, HeapError, StrView, atoms};
 use crate::num;
 use crate::value::{Kind, Str, Value};
 
-/// A failed operation: a JS exception to throw.
+/// A failed operation: a JS exception to throw. Boxed so that `Result<(), Fault>` is
+/// returned in a register and `?` moves one pointer; the inline 16-byte enum cost ~10 KB
+/// of wasm across the interpreter's `?` sites (D1574). Faults are the exceptional path:
+/// one allocation per fault.
 #[derive(Debug)]
-pub(crate) enum Fault {
+pub(crate) struct Fault(pub(crate) Box<FaultKind>);
+
+#[derive(Debug)]
+pub(crate) enum FaultKind {
     /// Throw this value.
     Throw(Value),
     /// Throw a new error of this kind.
@@ -23,14 +30,34 @@ pub(crate) enum Fault {
     Heap(HeapError),
 }
 
+impl Fault {
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn throw(v: Value) -> Fault {
+        Fault(Box::new(FaultKind::Throw(v)))
+    }
+
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn error(kind: ErrorKind, msg: String) -> Fault {
+        Fault(Box::new(FaultKind::Error(kind, msg)))
+    }
+
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn heap(e: HeapError) -> Fault {
+        Fault(Box::new(FaultKind::Heap(e)))
+    }
+}
+
 impl From<HeapError> for Fault {
     fn from(e: HeapError) -> Fault {
-        Fault::Heap(e)
+        Fault::heap(e)
     }
 }
 
 pub(crate) fn type_error<T>(msg: &str) -> Result<T, Fault> {
-    Err(Fault::Error(ErrorKind::TypeError, String::from(msg)))
+    Err(Fault::error(ErrorKind::TypeError, String::from(msg)))
 }
 
 fn to_primitive_unsupported<T>() -> Result<T, Fault> {
