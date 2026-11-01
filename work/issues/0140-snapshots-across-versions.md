@@ -1,7 +1,7 @@
 # 0140: Snapshots across djs versions (research report)
 
-status: open
-agent: -
+status: in-progress
+agent: snapshot
 branch: issue/0140-snapshots-across-versions
 depends-on: 0088, 0117, 0133, 0136, 0139
 guide: - (a guide section may follow)
