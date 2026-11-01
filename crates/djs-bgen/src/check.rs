@@ -114,6 +114,9 @@ pub struct Builtin {
     pub intrinsic: bool,
     /// `@native`: also compiled by the Rust backend (later).
     pub native: bool,
+    /// `@fast`: has a leaf fast path in Rust (`builtins/fast.rs`, D1850), tried before the
+    /// builtin runs; the prelude marks it with `%MarkFast(f)`.
+    pub fast: bool,
 }
 
 /// A checked program: every name resolved and every function type-correct.
@@ -142,6 +145,7 @@ const BUILTIN_TAGS: &[&str] = &[
     "length",
     "native",
     "intrinsic",
+    "fast",
 ];
 
 pub fn check(decls: Declarations, modules: Vec<Module>) -> Result<Program, Vec<Diagnostic>> {
@@ -324,6 +328,7 @@ fn builtin_info(
         installs: Vec::new(),
         intrinsic: false,
         native: false,
+        fast: false,
     };
     let mut length = None;
     let mut parent = None;
@@ -392,6 +397,7 @@ fn builtin_info(
                 attrs = Some(a);
             }
             "native" => b.native = true,
+            "fast" => b.fast = true,
             "intrinsic" => b.intrinsic = true,
             other => err(format!(
                 "unknown tag `@{other}` (builtin functions know {})",

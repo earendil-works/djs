@@ -85,6 +85,7 @@ function MathSQRT2(): f64 {
 /**
  * Math.abs ( x ), 21.3.2.1.
  * @builtin Math.abs
+ * @fast
  */
 function MathAbs(x: Value): f64 {
   return F64Abs(ToNumber(x));
@@ -149,6 +150,7 @@ function MathCbrt(x: Value): f64 {
 /**
  * Math.ceil ( x ), 21.3.2.10.
  * @builtin Math.ceil
+ * @fast
  */
 function MathCeil(x: Value): f64 {
   return F64Ceil(ToNumber(x));
@@ -165,6 +167,7 @@ function MathClz32(x: Value): f64 {
 /**
  * Math.cos ( x ), 21.3.2.12.
  * @builtin Math.cos
+ * @fast
  */
 function MathCos(x: Value): f64 {
   return F64Cos(ToNumber(x));
@@ -181,6 +184,7 @@ function MathCosh(x: Value): f64 {
 /**
  * Math.exp ( x ), 21.3.2.14.
  * @builtin Math.exp
+ * @fast
  */
 function MathExp(x: Value): f64 {
   return F64Exp(ToNumber(x));
@@ -197,6 +201,7 @@ function MathExpm1(x: Value): f64 {
 /**
  * Math.floor ( x ), 21.3.2.16.
  * @builtin Math.floor
+ * @fast
  */
 function MathFloor(x: Value): f64 {
   return F64Floor(ToNumber(x));
@@ -250,6 +255,7 @@ function MathSumPrecise(items: Value): f64 {
 /**
  * Math.log ( x ), 21.3.2.20.
  * @builtin Math.log
+ * @fast
  */
 function MathLog(x: Value): f64 {
   return F64Log(ToNumber(x));
@@ -266,6 +272,7 @@ function MathLog1p(x: Value): f64 {
 /**
  * Math.log10 ( x ), 21.3.2.22.
  * @builtin Math.log10
+ * @fast
  */
 function MathLog10(x: Value): f64 {
   return F64Log10(ToNumber(x));
@@ -274,6 +281,7 @@ function MathLog10(x: Value): f64 {
 /**
  * Math.log2 ( x ), 21.3.2.23.
  * @builtin Math.log2
+ * @fast
  */
 function MathLog2(x: Value): f64 {
   return F64Log2(ToNumber(x));
@@ -282,6 +290,7 @@ function MathLog2(x: Value): f64 {
 /**
  * Math.round ( x ), 21.3.2.28.
  * @builtin Math.round
+ * @fast
  */
 function MathRound(x: Value): f64 {
   return F64Round(ToNumber(x));
@@ -290,6 +299,7 @@ function MathRound(x: Value): f64 {
 /**
  * Math.sign ( x ), 21.3.2.29.
  * @builtin Math.sign
+ * @fast
  */
 function MathSign(x: Value): f64 {
   return F64Sign(ToNumber(x));
@@ -298,6 +308,7 @@ function MathSign(x: Value): f64 {
 /**
  * Math.sin ( x ), 21.3.2.30.
  * @builtin Math.sin
+ * @fast
  */
 function MathSin(x: Value): f64 {
   return F64Sin(ToNumber(x));
@@ -314,6 +325,7 @@ function MathSinh(x: Value): f64 {
 /**
  * Math.sqrt ( x ), 21.3.2.32.
  * @builtin Math.sqrt
+ * @fast
  */
 function MathSqrt(x: Value): f64 {
   return F64Sqrt(ToNumber(x));
@@ -338,6 +350,7 @@ function MathTanh(x: Value): f64 {
 /**
  * Math.trunc ( x ), 21.3.2.35.
  * @builtin Math.trunc
+ * @fast
  */
 function MathTrunc(x: Value): f64 {
   return F64Trunc(ToNumber(x));
@@ -389,6 +402,7 @@ function CoerceNumbers(args: Obj): f64 {
  * Math.max ( ...args ), 21.3.2.24.
  * @builtin Math.max
  * @length 2
+ * @fast
  */
 function MathMax(...args: Value[]): f64 {
   const n: f64 = CoerceNumbers(args);
@@ -410,6 +424,7 @@ function MathMax(...args: Value[]): f64 {
  * Math.min ( ...args ), 21.3.2.25.
  * @builtin Math.min
  * @length 2
+ * @fast
  */
 function MathMin(...args: Value[]): f64 {
   const n: f64 = CoerceNumbers(args);

@@ -3,7 +3,10 @@
 // Symbol.* methods (as in the current spec and QuickJS); primitives are searched as
 // strings or wrapped in a new RegExp.
 
-/** RequireObjectCoercible ( this ), with QuickJS's message for these methods. */
+/**
+ * RequireObjectCoercible ( this ), with QuickJS's message for these methods.
+ * @fast
+ */
 function RequireThisCoercible(v: Value): void {
   if (v === undefined || v === null) {
     throw NewTypeError("cannot convert to object");
@@ -100,6 +103,7 @@ function StringReplacement(
 /**
  * String.prototype.replace ( searchValue, replaceValue ), 22.1.3.19.
  * @builtin String.prototype.replace
+ * @fast
  */
 function StringPrototypeReplace(this: Value, searchValue: Value, replaceValue: Value): Value {
   RequireThisCoercible(this);
@@ -135,6 +139,7 @@ function StringPrototypeReplace(this: Value, searchValue: Value, replaceValue: V
 /**
  * String.prototype.replaceAll ( searchValue, replaceValue ), 22.1.3.20.
  * @builtin String.prototype.replaceAll
+ * @fast
  */
 function StringPrototypeReplaceAll(this: Value, searchValue: Value, replaceValue: Value): Value {
   RequireThisCoercible(this);
@@ -187,6 +192,7 @@ function StringPrototypeReplaceAll(this: Value, searchValue: Value, replaceValue
 /**
  * String.prototype.split ( separator, limit ), 22.1.3.23.
  * @builtin String.prototype.split
+ * @fast
  */
 function StringPrototypeSplit(this: Value, separator: Value, limit: Value): Value {
   RequireThisCoercible(this);

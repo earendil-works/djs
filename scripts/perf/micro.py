@@ -18,54 +18,7 @@ ap.add_argument("names", nargs="*")
 a = ap.parse_args()
 QJS = os.path.expanduser("~/Development/dquickts/qjs")
 K = 10
-CASES = [
-    # name, setup, body (repeated K times), bytecodes it should add (comment)
-    ("local read (x;)", "let x = 1;", "x;"),
-    ("local write (x = i)", "let x = 1;", "x = i;"),
-    ("int add (x = x + 1 | 0)", "let x = 1;", "x = (x + 1) | 0;"),
-    ("float add (y = y + 0.5)", "let y = 0.5;", "y = y + 0.5;"),
-    ("compare+branch (if (i < 0) x++)", "let x = 0;", "if (i < 0) x++;"),
-    ("call+return f(i)", "function f(a) { return a; }", "f(i);"),
-    ("call 0-arg closure g()", "let c = 0; const g = () => c;", "g();"),
-    ("method call o.m(i)", "const o = { m(a) { return a; } };", "o.m(i);"),
-    ("own field read o.c", "const o = { a: 1, b: 2, c: 3, d: 4 };", "o.c;"),
-    ("own field write o.c = i", "const o = { a: 1, b: 2, c: 3, d: 4 };", "o.c = i;"),
-    ("proto field read p.m", "class P { m() {} }; const p = new P();", "p.m;"),
-    ("global read Math", "", "Math;"),
-    ("Math.PI", "", "Math.PI;"),
-    ("array read a[i & 7]", "const a = [1,2,3,4,5,6,7,8];", "a[i & 7];"),
-    ("array write a[i & 7] = i", "const a = [1,2,3,4,5,6,7,8];", "a[i & 7] = i;"),
-    ("arr.length", "const a = [1,2,3,4,5,6,7,8];", "a.length;"),
-    ("push+pop", "const a = [];", "a.push(i); a.pop();"),
-    ("str.charCodeAt(k)", "const s = 'hello world';", "s.charCodeAt(3);"),
-    ("str.length", "const s = 'hello world';", "s.length;"),
-    ("empty object {}", "", "({});"),
-    ("object {a, b}", "", "({ a: i, b: i });"),
-    ("array [i, i]", "", "[i, i];"),
-    ("closure () => i", "", "(() => i);"),
-    ("string concat 'a' + i", "", "'a' + i;"),
-    ("template `a${i}`", "", "`a${i}`;"),
-    ("for-of over [1,2,3]", "const a = [1,2,3]; let t = 0;", "for (const x of a) t = x;"),
-    ("a.indexOf(3) (len 8)", "const a = [1,2,3,4,5,6,7,8];", "a.indexOf(3);"),
-    ("a.includes(3) (len 8)", "const a = [1,2,3,4,5,6,7,8];", "a.includes(3);"),
-    ("arr.map(x=>x) len 4", "const a = [1,2,3,4];", "a.map((x) => x);"),
-    ("s.slice(1, 4)", "const s = 'hello world';", "s.slice(1, 4);"),
-    ("s.indexOf('o')", "const s = 'hello world';", "s.indexOf('o');"),
-    ("JSON.stringify small", "const o = { a: 1, b: 'x' };", "JSON.stringify(o);"),
-    ("Object.keys small", "const o = { a: 1, b: 'x' };", "Object.keys(o);"),
-    ("destructure const {a,b} = o", "const o = { a: 1, b: 2 };", "{ const { a, b } = o; }"),
-    ("spread [...a] len 4", "const a = [1,2,3,4];", "[...a];"),
-    ("try/catch no throw", "let x = 0;", "try { x = i; } catch (e) {}"),
-    ("line.includes('throw')", "const l = '  const value12 = compute(12, 7);';", "l.includes('throw');"),
-    ("'a,b,c'.split(',')", "const t = 'a,b,c';", "t.split(',');"),
-    ("s.padEnd(20)", "const s = 'hello';", "s.padEnd(20);"),
-    ("String(i)", "", "String(i);"),
-    ("s.startsWith('he')", "const s = 'hello';", "s.startsWith('he');"),
-    ("s.trim()", "const s = ' hello ';", "s.trim();"),
-    ("o.hasOwnProperty('a')", "const o = { a: 1 };", "o.hasOwnProperty('a');"),
-    ("Math.max(i, 3)", "", "Math.max(i, 3);"),
-    ("Math.floor(i / 3)", "", "Math.floor(i / 3);"),
-]
+from cases import CASES  # noqa: E402
 def src(setup, body, k):
     return setup + f"\nfor (let i = 0; i < {a.n}; i++) {{ " + " ".join([body] * k) + " }\nreturn 0;"
 def run(cmd):

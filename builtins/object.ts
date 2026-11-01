@@ -146,6 +146,7 @@ function ObjectGetOwnPropertyNames(o: Value): Obj {
 /**
  * Object.prototype.hasOwnProperty ( V ), 20.1.3.2.
  * @builtin Object.prototype.hasOwnProperty
+ * @fast
  */
 function ObjectPrototypeHasOwnProperty(this: Value, v: Value): boolean {
   const key: Value = ToPropertyKey(v);
@@ -459,6 +460,7 @@ function ObjectGetOwnPropertyDescriptors(o: Value): Obj {
 /**
  * Object.hasOwn ( O, P ), 20.1.2.13.
  * @builtin Object.hasOwn
+ * @fast
  */
 function ObjectHasOwn(o: Value, p: Value): boolean {
   const obj: Obj = ToObject(o);

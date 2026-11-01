@@ -23,7 +23,13 @@ for (const name of process.argv.slice(2)) {
   for (let i = 0; i < (once ? 1 : reps + 1); i++) {
     const sb = new Sandbox({ module, fuelSlice: Number(process.env.FUEL ?? 10000) } as never);
     const t = performance.now();
-    sb.run(code);
+    try {
+      sb.run(code);
+    } catch (e) {
+      // An A/B run of an older build against this checkout's reader: the run itself
+      // finished, only reading its result failed.
+      if ((e as Error).name !== "LayoutMismatch") throw e;
+    }
     const dt = performance.now() - t;
     mem = (sb as any).x.memory.buffer.byteLength;
     sb.dispose();

@@ -1,0 +1,90 @@
+true false true true false true true
+4 7 0 11 10 -1 0
+7 4 -1 11 3 7 -1
+true true true false true true true true
+true 12 9 true true false
+true true true true
+includes regexp -> TypeError: regexp not supported
+startsWith regexp -> TypeError: regexp not supported
+includes symbol -> TypeError: cannot convert symbol to string
+includes null this -> TypeError: null or undefined are forbidden
+includes undefined this -> TypeError: null or undefined are forbidden
+true 7 true toString wor;valueOf 5;toString he
+includes non-regexp regexp -> true
+true 2
+world llo wor  hello world hel hello world lo
+ell he rld hello world wor llo world 
+e   h 101 NaN 104 
+  � � h   e l
+el l valueOf 1;valueOf 3;valueOf 2
+ababab   xx 40
+repeat -1 -> RangeError: invalid repeat count
+repeat Infinity -> RangeError: invalid repeat count
+000042 xaba| abc abc   | a a  | ééő
+005 5nul x x x--
+padEnd huge -> RangeError: invalid string length
+001 valueOf 3;toString 0
+HELLO WORLD ÉŐ SS 2 mixed X
+[x] [x] [x ] [ x] []
+trim null -> TypeError: null or undefined are forbidden
+123 TRUE
+["a","b","","c"] ["a","b","c"] ["a","b"] ["abc"] [] [""] []
+["a","b","c"] ["a"] ["a","b","c"] ["a","b"] ["ő","ő"] ["","a"]
+["a","b"] ["a","b"] toString -;valueOf 2
+split symbol -> TypeError: cannot convert symbol to string
+["custom","x",3]
+hell0 world hell0 w0rld hello world _hello world -a-a-a- ba
+helloo world hell[hell] world hell$ world helo worldo worldo wordd hello world 1N
+hellF world hell4 w7rld hellQ world
+replaceAll non-global regexp -> TypeError: regexp must have the 'g' flag
+hell0 w0rld oo héllo Wőrld 😀
+12 0 1e+21 true  null undefined s 12 Symbol(d)
+7 1,2 object
+ff 255 -11111111 0.5 5v1j4f4ds7a000 12 NaN
+toString radix 1 -> RangeError: radix must be between 2 and 36
+toString radix 37 -> RangeError: radix must be between 2 and 36
+1.00 1e+21 -2 0 123.4560000000 3
+toFixed 101 -> RangeError: invalid number of digits
+toFixed on string -> TypeError: not a number
+7 1.3
+5 -Infinity Infinity -0 Infinity -Infinity NaN NaN
+7 1 NaN 9 9
+NaN valueOf 1;valueOf 2
+max symbol -> TypeError: cannot convert symbol to number
+max bigint -> TypeError: cannot convert bigint to number
+2 -3 -0 -Infinity -2 3 -0 3 2
+4 NaN -4 -1 -0 1 1 3 3 0 1
+NaN 0 NaN 3
+true false true true true false
+true true true true true true
+true false true false true
+true toString a
+false false gOPD z;gOPD y
+hasOwn null -> TypeError: cannot convert to object
+hasOwnProperty undefined this -> TypeError: cannot convert to object
+true false false true false true
+isArray revoked -> TypeError: revoked proxy
+patched b
+patched max
+true 2
+bc 007 8 2
+["B","A","C"] ["x","y"]
+-1 2 x1null2 2
+a 1
+42 0 31 0 NaN 1 12 0 1000 NaN 4
+42 255 -7 26 NaN 15 1112745 35
+3.14 0.5 NaN -0 2.5 1000 8
+true false true false true true
+Number symbol -> TypeError: cannot convert symbol to number
+parseInt symbol -> TypeError: cannot convert symbol to string
+object 8
+[2,4,6] [2,3] [2,3] [1,2,3] [1,2]
+true MyArr true
+2
+species 2
+{"0":1,"1":2}
+[1] 1
+true
+[1] ["aa","bb"] [3,6]
+true
+=== completed

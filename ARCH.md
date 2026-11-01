@@ -248,6 +248,10 @@ The rule that makes G5 hold for builtins:
   objects with no accessors, no `toJSON`, no proxies) and returns a "needs slow path"
   signal that falls back to the full version. `Array.prototype.sort` on primitives without
   a comparator can be a leaf.
+- Everyday builtins with primitive arguments (`includes`, `split`, `Math.max`,
+  `String(x)`, `hasOwnProperty`, the ToString/ToNumber helpers, ...) are tagged `@fast`:
+  a Rust entry runs in place of the call when nothing observable can happen, and declines
+  otherwise (D1850).
 - Long leaf ops (for example a regex scan, `JSON.parse` of 10 MB, a big `join`) are
   bounded and fuel-charged. If they turn out to cause suspension latency problems, they
   get an explicit resumable state stored in the heap, as the regex engine has from the

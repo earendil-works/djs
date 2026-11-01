@@ -330,6 +330,9 @@ cells! {
         /// [`U32Array`] of `IC_COUNT` inline cache slots (`interp::run::ic`), allocated
         /// the first time one is filled; null before.
         IC: Ref = 72,
+        /// A `@fast` builtin's index into `builtins::fast::FAST` (with
+        /// `func_flags::FAST`, D1850), else 0. In the padding of the 8-aligned cell.
+        FAST: u32 = 76,
     };
 
     /// One compiled source.

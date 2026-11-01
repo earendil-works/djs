@@ -52,6 +52,7 @@ function GetMethod(v: Value, key: Value): Value {
 /**
  * ToNumber ( argument ), 7.1.4.
  * @intrinsic
+ * @fast
  */
 function ToNumber(v: Value): f64 {
   if (IsObject(v)) {
@@ -63,6 +64,7 @@ function ToNumber(v: Value): f64 {
 /**
  * ToString ( argument ), 7.1.17.
  * @intrinsic
+ * @fast
  */
 function ToString(v: Value): Str {
   if (IsObject(v)) {
@@ -71,12 +73,18 @@ function ToString(v: Value): Str {
   return ToStringPrimitive(v);
 }
 
-/** ToIntegerOrInfinity ( argument ), 7.1.5. */
+/**
+ * ToIntegerOrInfinity ( argument ), 7.1.5.
+ * @fast
+ */
 function ToIntegerOrInfinity(v: Value): f64 {
   return ToIntegerOrInfinityNumber(ToNumber(v));
 }
 
-/** ToLength ( argument ), 7.1.20. */
+/**
+ * ToLength ( argument ), 7.1.20.
+ * @fast
+ */
 function ToLength(v: Value): f64 {
   const len: f64 = ToIntegerOrInfinity(v);
   if (len <= 0) {
@@ -99,6 +107,7 @@ function LengthOfArrayLike(o: Obj): f64 {
 /**
  * ToPropertyKey ( argument ), 7.1.19: a string, a symbol, or a number key.
  * @intrinsic
+ * @fast
  */
 function ToPropertyKey(v: Value): Value {
   const key: Value = ToPrimitive(v, "string");

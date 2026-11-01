@@ -992,3 +992,8 @@ declare function InstallIntrinsic(name: Str, f: Value): void;
  * native builtins on, its calls run the Rust state machine. @leaf
  */
 declare function MarkNative(f: Value, index: i32): void;
+/**
+ * Gives the builtin f its leaf fast path (`@fast`, D1850): with native builtins on, a
+ * call first tries the Rust function of the same name in builtins/fast.rs. @leaf
+ */
+declare function MarkFast(f: Value): void;

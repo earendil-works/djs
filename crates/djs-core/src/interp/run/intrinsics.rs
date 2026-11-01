@@ -265,6 +265,7 @@ const INSTALL_VALUE: u16 = id("InstallValue");
 const INSTALL_METHOD: u16 = id("InstallMethod");
 const INSTALL_INTRINSIC: u16 = id("InstallIntrinsic");
 const MARK_NATIVE: u16 = id("MarkNative");
+const MARK_FAST: u16 = id("MarkFast");
 /// The installed `%ToPrimitive`, used by the interpreter's slow paths.
 pub(super) const TO_PRIMITIVE: u16 = id("ToPrimitive");
 /// The installed `%ToNumber`, for typed array element writes (0039).
@@ -1947,6 +1948,10 @@ impl Exec<'_> {
             }
             MARK_NATIVE => {
                 self.mark_native(a0, arg(self, 1))?;
+                Value::UNDEFINED
+            }
+            MARK_FAST => {
+                self.mark_fast(a0)?;
                 Value::UNDEFINED
             }
             INSTALL_INTRINSIC => {

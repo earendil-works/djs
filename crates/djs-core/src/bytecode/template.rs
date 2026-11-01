@@ -45,6 +45,10 @@ pub mod func_flags {
     /// generated table (`builtins::gen`), set by `%MarkNative`. With
     /// `ExecOptions::native_builtins` its calls get native frames.
     pub const NATIVE: u32 = 1 << 10;
+    /// D1850: a builtin with a leaf fast path; `FuncTemplate::FAST` holds its index into
+    /// `builtins::fast::FAST`, set by `%MarkFast`. With `ExecOptions::native_builtins`
+    /// a call tries the fast path first and runs the builtin only when it declines.
+    pub const FAST: u32 = 1 << 11;
 
     pub const fn kind(flags: u32) -> u32 {
         flags & KIND_MASK

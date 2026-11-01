@@ -71,6 +71,10 @@ pub fn emit(p: &Program, sources: &Sources) -> String {
     for (i, b) in p.builtins.iter().filter(|b| b.native).enumerate() {
         out.push_str(&format!("%MarkNative({}, {i});\n", b.name));
     }
+    // Leaf fast paths (D1850), by name: builtins/fast.rs has the table.
+    for b in p.builtins.iter().filter(|b| b.fast) {
+        out.push_str(&format!("%MarkFast({});\n", b.name));
+    }
     out.push_str("})();\n");
     out
 }

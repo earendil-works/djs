@@ -3,6 +3,7 @@
 /**
  * ArraySpeciesCreate ( originalArray, length ), 10.4.2.3 (one realm).
  * @intrinsic
+ * @fast
  */
 function ArraySpeciesCreate(original: Obj, length: f64): Obj {
   if (!IsArray(original)) {
@@ -177,6 +178,7 @@ function ArrayPrototypeIncludes(this: Value, searchElement: Value, fromIndex?: V
  * Array ( ...values ), 23.1.1.1.
  * @constructor Array
  * @length 1
+ * @intrinsic
  */
 function ArrayConstructor(...values: Value[]): Obj {
   let a: Obj = values;
@@ -204,6 +206,7 @@ function ArrayConstructor(...values: Value[]): Obj {
 /**
  * Array.isArray ( arg ), 23.1.2.2.
  * @builtin Array.isArray
+ * @fast
  */
 function ArrayIsArray(arg: Value): boolean {
   return IsArray(arg);
@@ -241,6 +244,7 @@ function ArrayPrototypePush(this: Value, ...items: Value[]): f64 {
 /**
  * A relative index (at, slice, fill, ...): ToIntegerOrInfinity(v), counted from the end
  * when negative, clamped to [0, len]. `undefined` gives `dflt`.
+ * @fast
  */
 function RelativeIndex(v: Value, len: f64, dflt: f64): f64 {
   if (v === undefined) {
@@ -332,6 +336,7 @@ function ArrayFrom(this: Value, items: Value, mapfn?: Value, thisArg?: Value): O
 /**
  * get Array [ %Symbol.species% ], 23.1.2.5.
  * @getter Array[Symbol.species]
+ * @intrinsic
  */
 function ArraySpecies(this: Value): Value {
   return this;

@@ -3,7 +3,7 @@
 
 use alloc::vec::Vec;
 
-use crate::heap::Heap;
+use crate::heap::{Heap, StrView};
 use crate::interp::conv::Fault;
 use crate::interp::{Intrinsic, realm};
 use crate::value::{Obj, Str, Value};
@@ -54,13 +54,49 @@ pub(crate) fn substring(heap: &mut Heap, s: Str, start: u32, end: u32) -> Result
     if start >= end {
         return Ok(heap.alloc_latin1(&[])?);
     }
-    let view = heap.str_view_flat(s)?;
-    if let crate::heap::StrView::Latin1(b) = view {
-        let part: Vec<u8> = b[start as usize..end as usize].to_vec();
-        return Ok(heap.alloc_latin1(&part)?);
+    join(heap, &mut [(s, start, end)])
+}
+
+/// Short pieces are gathered on the stack: no Rust heap allocation (0081 F6).
+const STACK_UNITS: usize = 256;
+
+/// The concatenation of the pieces `s[start .. end)` as one flat string, written once
+/// (no ropes and no intermediate strings). Pieces are read like `str_view_flat` reads
+/// them (an append rope in place).
+pub(crate) fn join(heap: &mut Heap, pieces: &mut [(Str, u32, u32)]) -> Result<Str, Fault> {
+    let mut total: u64 = 0;
+    let mut two_byte = false;
+    for p in pieces.iter_mut() {
+        total += u64::from(p.2 - p.1);
+        two_byte |= heap.str_is_two_byte(p.0);
     }
-    let part: Vec<u16> = (start..end).map(|i| view.get(i as usize)).collect();
-    Ok(heap.alloc_utf16(&part)?)
+    if total > u64::from(crate::heap::string::MAX_LEN) {
+        return Err(crate::heap::HeapError::StringTooLong.into());
+    }
+    let total = total as usize;
+    if !two_byte {
+        let mut stack = [0u8; STACK_UNITS];
+        let mut vec = Vec::new();
+        let buf: &mut [u8] = if total <= STACK_UNITS {
+            &mut stack[..total]
+        } else {
+            vec.resize(total, 0);
+            &mut vec
+        };
+        let mut at = 0;
+        for &(s, a, b) in pieces.iter() {
+            let (a, b) = (a as usize, b as usize);
+            buf[at..at + b - a].copy_from_slice(&heap.str_view_flat(s)?.bytes()[a..b]);
+            at += b - a;
+        }
+        return Ok(heap.alloc_latin1(buf)?);
+    }
+    let mut units: Vec<u16> = Vec::with_capacity(total);
+    for &(s, a, b) in pieces.iter() {
+        let v = heap.str_view_flat(s)?;
+        units.extend((a as usize..b as usize).map(|i| v.get(i)));
+    }
+    Ok(heap.alloc_utf16(&units)?)
 }
 
 /// The first index ≥ `from` (or, with `last`, the last index ≤ `from`) where `search`
@@ -72,14 +108,54 @@ pub(crate) fn index_of(
     from: u32,
     last: bool,
 ) -> Result<f64, Fault> {
-    let needle = units(heap, search)?;
+    // The needle on the stack when short (no Rust heap allocation, 0081 F6).
+    let search = heap.flatten(search)?;
+    let m = heap.str_len(search) as usize;
+    let mut stack = [0u16; 64];
+    let vec: Vec<u16>;
+    let needle: &[u16] = if m <= stack.len() {
+        let v = heap.str_view(search).expect("flattened");
+        for (i, u) in v.units().enumerate() {
+            stack[i] = u;
+        }
+        &stack[..m]
+    } else {
+        vec = units(heap, search)?;
+        &vec
+    };
     let hay = heap.str_view_flat(s)?;
-    let (n, m) = (hay.len(), needle.len());
+    let n = hay.len();
     if m > n {
         return Ok(-1.0);
     }
-    let matches = |i: usize| (0..m).all(|j| hay.get(i + j) == needle[j]);
     let from = from as usize;
+    // One-byte haystack and needle, forward: compare bytes.
+    if let StrView::Latin1(h) = hay
+        && !last
+        && needle.iter().all(|&u| u < 256)
+    {
+        if m == 0 {
+            return Ok(if from > n { -1.0 } else { from as f64 });
+        }
+        let first = needle[0] as u8;
+        let mut i = from;
+        while i + m <= n {
+            match h[i..=n - m].iter().position(|&b| b == first) {
+                None => break,
+                Some(k) => i += k,
+            }
+            if needle[1..]
+                .iter()
+                .zip(&h[i + 1..i + m])
+                .all(|(&u, &b)| u == b as u16)
+            {
+                return Ok(i as f64);
+            }
+            i += 1;
+        }
+        return Ok(-1.0);
+    }
+    let matches = |i: usize| (0..m).all(|j| hay.get(i + j) == needle[j]);
     if last {
         let mut i = from.min(n - m);
         loop {
@@ -242,6 +318,12 @@ pub(crate) fn repeat(heap: &mut Heap, s: Str, n: u32) -> Result<Str, Fault> {
     let len = heap.str_len(s) as u64;
     if len * n as u64 > crate::heap::string::MAX_LEN as u64 {
         return Err(crate::heap::HeapError::StringTooLong.into());
+    }
+    // Short results are written once (no ropes, no intermediate strings).
+    if len * n as u64 <= 4096 && n <= 4096 {
+        let l = len as u32;
+        let mut pieces: Vec<(Str, u32, u32)> = (0..n).map(|_| (s, 0, l)).collect();
+        return join(heap, &mut pieces);
     }
     let mut result = heap.alloc_latin1(&[])?;
     let mut part = s;

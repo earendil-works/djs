@@ -28,7 +28,7 @@ def run(cmd, env):
     m = re.search(r"\t([\d.]+) ms", r.stdout)
     mem = re.search(r"wasm memory ([\d.]+) MiB", r.stdout)
     return ins, cyc, float(m.group(1)) if m else float("nan"), float(mem.group(1)) if mem else float("nan")
-engines = [(f"djs{i}" if len(wasms) > 1 else "djs-wasm", ["node"] + a.node_flag + [os.path.join(tools, "wasm-run.ts")], {"DJS_WASM": w}) for i, w in enumerate(wasms)]
+engines = [(f"djs{i}" if len(wasms) > 1 else "djs-wasm", ["node"] + a.node_flag + [os.path.join(tools, "wasm-run.ts")], {"DJS_WASM": os.path.abspath(w)}) for i, w in enumerate(wasms)]
 if not a.noqjs:
     engines.append(("qjs-wasi", ["node"] + a.node_flag + [os.path.join(tools, "qjs-wasm-run.mjs")], {}))
 names = ["empty"] + [n for n in a.names if n != "empty"]

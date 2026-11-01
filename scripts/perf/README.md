@@ -15,7 +15,7 @@ from `~/Development/pi-private/node_modules/quickjs-wasi`.
 | --- | --- |
 | `measure.py [--djs BIN]... names` | native djs vs qjs per workload (instructions, cycles, peak memory) |
 | `wmeasure.py [--wasm X]... [--node-flag=--no-liftoff] names` | djs-wasm vs quickjs-wasi in node, minus an empty run |
-| `micro.py` / `wmicro.py` | instructions per JS-level operation (loop body x10 minus x0); wmicro reuses micro's files |
+| `micro.py` / `wmicro.py [--wasm A --wasm B]` | instructions per JS-level operation (loop body x10 minus x0), natively vs qjs and in wasm vs quickjs-wasi; the cases are in `cases.py`; several `--wasm` builds compare side by side (A/B) |
 | `perelem.py` | instructions per array element of the iteration builtins |
 | `wasm-run.ts`, `qjs-wasm-run.mjs` | run a workload in the wasm engines (`ONCE=1`, `FUEL`, `REPS`); `node --cpu-prof` on them profiles |
 | `cpuprof.py file.cpuprofile` | self time by function of a node CPU profile (wasm function names) |
@@ -31,3 +31,7 @@ after the run loop's fuel check (`if self.fuel <= 0`, run.rs `run_loop`), and it
 `Exec.pc`/`code`/`code_len` at offsets 0x28/0x30/0x34 and the arena Vec pointer at
 heap+8. Find them in `llvm-objdump -d -l --dsym=$DJS_PERF_DIR/djs.dSYM` of `run_loop`
 after a rebuild (the fast_step entry loads pc and code_len right after the check).
+
+Instruction counts of node include V8's background compilers; for ops of a few hundred
+instructions, single runs of wmicro vary by up to ~10% with tier-up timing, so judge
+small per-op changes with whole workloads (wmeasure.py, n ≥ 3).

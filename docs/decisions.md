@@ -3788,3 +3788,45 @@ instruction itself, so the caller's handler-table key and stack-trace line are `
 not `ret_pc - 1` (the end of the previous instruction). Before, a throwing conversion in
 the first instruction of a `try` block escaped the block: `try { r++ } catch {}` with an
 object `r` once `r++` is the single `inc_loc`.
+## D1850: Leaf fast paths for everyday builtins (`@fast`)
+date: 2026-11-01 · by: perf · issue: 0085
+0081 F1 showed codemode time dominated by everyday builtins written in the builtin
+language (`includes` = 7 bytecode frames, `split` 1,724 bytecodes per call). A builtin
+tagged `@fast` in `builtins/*.ts` gets a Rust entry of the same name in
+`crates/djs-core/src/builtins/fast.rs`: bgen emits `%MarkFast(f)`, which sets
+`func_flags::FAST` and `FuncTemplate::FAST` (the table index, in the cell's padding, so
+templates do not grow); a name without an entry fails the prelude, an entry without a tag
+fails a unit test. With `ExecOptions::native_builtins` (the default, the native backend),
+a call of such a function first runs the entry with `this` and up to 6 arguments; it
+returns the result (the call completes, no frame) or declines and the builtin runs as
+usual. `--backend bytecode` never takes them, so the gate's bytecode-backend run keeps
+testing the TS path, and fast paths are part of the backend identity (D1633).
+- Unobservable by construction (the D1351 rule): an entry accepts only arguments for
+  which the algorithm cannot run user code or read anything user code could have
+  changed (primitives for ToString/ToNumber/ToPropertyKey; objects only through leaf
+  reads, e.g. own-property checks of non-proxies, or ArraySpeciesCreate's chain of data
+  property and original-getter checks). Every case where the builtin would throw
+  declines, so errors and stack traces come from the builtin. Out of memory propagates;
+  a host refusal stops the run (D1690).
+- Where: `Exec::call` (calls from natives, intrinsics, getters, `%Call`) and, for the
+  `call` instruction, a check in the run loop after `fast_step` declines; not inside
+  `fast_step`, whose register allocation is sensitive (D1352; measured: plain loops
+  within ±1.5% in wasm).
+- No collection inside an entry (a native caller keeps Rust locals across an inline
+  call); allocations set `gc_pending` for the next safepoint. Fuel: 2 per fast call on top
+  of the call instruction's.
+- The set: the conversion helpers every bytecode builtin calls (ToString, ToNumber,
+  ToIntegerOrInfinity, ToLength, ToPropertyKey, ThisToString, RequireThisCoercible,
+  IsRegExp, ClampPosition, RelativeIndex, StrLen), String (constructor call, includes,
+  indexOf, lastIndexOf, startsWith, endsWith, slice, substring, substr, charAt,
+  charCodeAt, codePointAt, at, repeat, padStart/End, case, trim*, split and
+  replace/replaceAll with string arguments and no `$` patterns), Number (call,
+  toString, toFixed), parseInt/parseFloat/isNaN/isFinite, Math (max, min and the unary
+  libm functions), hasOwnProperty, Object.hasOwn, Array.isArray, ArraySpeciesCreate.
+  Array element builtins (push/pop/indexOf/slice/join) are infra's (0080).
+- Strings built by the entries are written once (`string::join`, short ones gathered on
+  the stack), not as ropes of intermediate strings.
+
+Measured (wasm, node 25, instructions, 0085 Log): pi-like −50% (3.6x → 1.8x quickjs-wasi),
+native −57%; per call `includes` 23.5k → 3.0k (qjs-wasi 3.2k), `Math.max` 25.8k → 1.8k,
+`String(i)` 21.5k → 2.7k. Cost: +24 KB of wasm code (+2.9%).

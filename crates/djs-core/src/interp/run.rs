@@ -86,6 +86,7 @@ impl Default for ExecOptions {
 mod bigint;
 mod class;
 mod dense;
+mod fastpath;
 mod ic;
 mod intrinsics;
 mod iter;
@@ -265,7 +266,7 @@ impl<'h> Exec<'h> {
             native: 0,
             slow_call_flags: func_flags::SLOPPY_THIS
                 | if opts.native_builtins {
-                    func_flags::NATIVE
+                    func_flags::NATIVE | func_flags::FAST
                 } else {
                     0
                 },
@@ -279,7 +280,7 @@ impl<'h> Exec<'h> {
     /// The host refused memory: stop the run at the next instruction boundary (the
     /// fuel check) with `Status::HostOutOfMemory` (D1690).
     #[cold]
-    fn host_out_of_memory(&mut self) {
+    pub(super) fn host_out_of_memory(&mut self) {
         self.host_oom = true;
         self.fuel = 0;
     }
@@ -510,6 +511,11 @@ impl<'h> Exec<'h> {
             ObjectClass::Function => {
                 let t = self.template_of(o);
                 let flags = self.heap.arena().get(t, FuncTemplate::FLAGS);
+                if flags & self.slow_call_flags & func_flags::FAST != 0
+                    && self.try_fast_call(t, base, argc, cont, ret_pc)?
+                {
+                    return Ok(None);
+                }
                 if flags & self.slow_call_flags & func_flags::NATIVE != 0 {
                     return self.push_native_frame(t, base, argc, cont, ret_pc);
                 }
@@ -1054,6 +1060,12 @@ impl<'h> Exec<'h> {
                 return Status::OutOfFuel;
             }
             if self.fast_step() || self.fast_more() {
+                continue;
+            }
+            // A call of a `@fast` builtin (D1850), outside `fast_step`: its register
+            // allocation is sensitive to every addition (D1352).
+            if self.pc < self.code_len && self.byte(self.pc) == fast::CALL && self.fast_leaf_call()
+            {
                 continue;
             }
             let pc0 = self.pc;

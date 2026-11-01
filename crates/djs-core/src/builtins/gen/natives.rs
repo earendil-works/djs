@@ -122,7 +122,7 @@ pub(crate) static NATIVES: &[NativeFn] = &[
     NativeFn { name: "StringPrototypeSubstring", params: 2, locals: 13, run: native_StringPrototypeSubstring, handler: handler_StringPrototypeSubstring },
 ];
 
-// builtins/array.ts:36 (Array.prototype.forEach)
+// builtins/array.ts:37 (Array.prototype.forEach)
 fn native_ArrayPrototypeForEach(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -183,7 +183,7 @@ fn handler_ArrayPrototypeForEach(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:54 (Array.prototype.map)
+// builtins/array.ts:55 (Array.prototype.map)
 fn native_ArrayPrototypeMap(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -254,7 +254,7 @@ fn handler_ArrayPrototypeMap(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:76 (Array.prototype.indexOf)
+// builtins/array.ts:77 (Array.prototype.indexOf)
 fn native_ArrayPrototypeIndexOf(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -361,7 +361,7 @@ fn handler_ArrayPrototypeIndexOf(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:111 (Array.prototype.join)
+// builtins/array.ts:112 (Array.prototype.join)
 fn native_ArrayPrototypeJoin(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -462,7 +462,7 @@ fn handler_ArrayPrototypeJoin(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:151 (Array.prototype.includes)
+// builtins/array.ts:152 (Array.prototype.includes)
 fn native_ArrayPrototypeIncludes(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -555,7 +555,7 @@ fn handler_ArrayPrototypeIncludes(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:218 (Array.prototype.push)
+// builtins/array.ts:221 (Array.prototype.push)
 fn native_ArrayPrototypePush(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -620,7 +620,7 @@ fn handler_ArrayPrototypePush(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:400
+// builtins/array.ts:405
 fn native_FindViaPredicate(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -672,7 +672,7 @@ fn handler_FindViaPredicate(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:420 (Array.prototype.find)
+// builtins/array.ts:425 (Array.prototype.find)
 fn native_ArrayPrototypeFind(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -700,7 +700,7 @@ fn handler_ArrayPrototypeFind(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:430 (Array.prototype.findIndex)
+// builtins/array.ts:435 (Array.prototype.findIndex)
 fn native_ArrayPrototypeFindIndex(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -728,7 +728,7 @@ fn handler_ArrayPrototypeFindIndex(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:458
+// builtins/array.ts:463
 fn native_EveryOrSome(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -787,7 +787,7 @@ fn handler_EveryOrSome(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:477 (Array.prototype.every)
+// builtins/array.ts:482 (Array.prototype.every)
 fn native_ArrayPrototypeEvery(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -809,7 +809,7 @@ fn handler_ArrayPrototypeEvery(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:486 (Array.prototype.some)
+// builtins/array.ts:491 (Array.prototype.some)
 fn native_ArrayPrototypeSome(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -831,7 +831,7 @@ fn handler_ArrayPrototypeSome(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:495 (Array.prototype.filter)
+// builtins/array.ts:500 (Array.prototype.filter)
 fn native_ArrayPrototypeFilter(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -902,7 +902,7 @@ fn handler_ArrayPrototypeFilter(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:518
+// builtins/array.ts:523
 fn native_Reduce(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1007,7 +1007,7 @@ fn handler_Reduce(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:554 (Array.prototype.reduce)
+// builtins/array.ts:559 (Array.prototype.reduce)
 fn native_ArrayPrototypeReduce(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1030,7 +1030,7 @@ fn handler_ArrayPrototypeReduce(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:564 (Array.prototype.reduceRight)
+// builtins/array.ts:569 (Array.prototype.reduceRight)
 fn native_ArrayPrototypeReduceRight(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1053,7 +1053,7 @@ fn handler_ArrayPrototypeReduceRight(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:619 (Array.prototype.slice)
+// builtins/array.ts:624 (Array.prototype.slice)
 fn native_ArrayPrototypeSlice(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1229,7 +1229,7 @@ fn handler_ArrayPrototypeSlice(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:800 (Array.prototype.pop)
+// builtins/array.ts:805 (Array.prototype.pop)
 fn native_ArrayPrototypePop(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1285,7 +1285,7 @@ fn handler_ArrayPrototypePop(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:916
+// builtins/array.ts:921
 fn native_SortList(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1590,7 +1590,7 @@ fn handler_SortList(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:993
+// builtins/array.ts:998
 fn native_CollectPresent(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1650,7 +1650,7 @@ fn handler_CollectPresent(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:1010 (Array.prototype.sort)
+// builtins/array.ts:1015 (Array.prototype.sort)
 fn native_ArrayPrototypeSort(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1737,7 +1737,7 @@ fn handler_ArrayPrototypeSort(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:1034 (Array.prototype.toSorted)
+// builtins/array.ts:1039 (Array.prototype.toSorted)
 fn native_ArrayPrototypeToSorted(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1777,7 +1777,7 @@ fn handler_ArrayPrototypeToSorted(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/conversion.ts:119
+// builtins/conversion.ts:128
 fn native_GetPrototypeFromConstructor(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -2430,7 +2430,7 @@ fn handler_SetPrototypeForEach(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/string.ts:91 (String.prototype.at)
+// builtins/string.ts:105 (String.prototype.at)
 fn native_StringPrototypeAt(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -2505,7 +2505,7 @@ fn handler_StringPrototypeAt(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/string.ts:107 (String.prototype.charAt)
+// builtins/string.ts:122 (String.prototype.charAt)
 fn native_StringPrototypeCharAt(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -2578,7 +2578,7 @@ fn handler_StringPrototypeCharAt(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/string.ts:121 (String.prototype.charCodeAt)
+// builtins/string.ts:137 (String.prototype.charCodeAt)
 fn native_StringPrototypeCharCodeAt(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -2645,7 +2645,7 @@ fn handler_StringPrototypeCharCodeAt(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/string.ts:131 (String.prototype.codePointAt)
+// builtins/string.ts:148 (String.prototype.codePointAt)
 fn native_StringPrototypeCodePointAt(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -2712,7 +2712,7 @@ fn handler_StringPrototypeCodePointAt(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/string.ts:143 (String.prototype.indexOf)
+// builtins/string.ts:161 (String.prototype.indexOf)
 fn native_StringPrototypeIndexOf(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -2811,7 +2811,7 @@ fn handler_StringPrototypeIndexOf(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/string.ts:187 (String.prototype.startsWith)
+// builtins/string.ts:208 (String.prototype.startsWith)
 fn native_StringPrototypeStartsWith(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -2949,7 +2949,7 @@ fn handler_StringPrototypeStartsWith(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/string.ts:237 (String.prototype.slice)
+// builtins/string.ts:260 (String.prototype.slice)
 fn native_StringPrototypeSlice(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -3093,7 +3093,7 @@ fn handler_StringPrototypeSlice(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/string.ts:253 (String.prototype.substring)
+// builtins/string.ts:277 (String.prototype.substring)
 fn native_StringPrototypeSubstring(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -3225,7 +3225,7 @@ fn handler_StringPrototypeSubstring(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:273 (leaf)
+// builtins/array.ts:277 (leaf)
 fn leaf_ArrayCreateChecked(ex: &mut Exec<'_>, mut l_len: f64) -> Result<Value, Fault> {
     if (l_len > 4294967295.0_f64) {
         return Err(Fault::throw({ let a0 = ex.n_str("invalid array length")?; ex.n_leaf(I_NEW_RANGE_ERROR, &[a0])? }));
@@ -3259,7 +3259,7 @@ fn leaf_RejectWithData(ex: &mut Exec<'_>, mut l_data: Value, mut l_reason: Value
     Ok(())
 }
 
-// builtins/array.ts:258 (leaf)
+// builtins/array.ts:262 (leaf)
 fn leaf_RequireCallable(ex: &mut Exec<'_>, mut l_f: Value) -> Result<Value, Fault> {
     if (!{ let a0 = l_f; ex.n_is_callable(a0) }) {
         return Err(Fault::throw({ let a0 = ex.n_str("not a function")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }));
@@ -3269,7 +3269,7 @@ fn leaf_RequireCallable(ex: &mut Exec<'_>, mut l_f: Value) -> Result<Value, Faul
     Err(bad_state())
 }
 
-// builtins/array.ts:136 (leaf)
+// builtins/array.ts:137 (leaf)
 fn leaf_SameValueZero(ex: &mut Exec<'_>, mut l_x: Value, mut l_y: Value) -> Result<bool, Fault> {
     if ({ let a0 = l_x; a0.is_number() } && { let a0 = l_y; a0.is_number() }) {
         let mut l_a: f64 = f64_of({ let a0 = l_x; ex.n_leaf(I_AS_NUMBER, &[a0])? });
@@ -3281,7 +3281,7 @@ fn leaf_SameValueZero(ex: &mut Exec<'_>, mut l_x: Value, mut l_y: Value) -> Resu
     Err(bad_state())
 }
 
-// builtins/string.ts:51 (leaf)
+// builtins/string.ts:55 (leaf)
 fn leaf_StrLen(ex: &mut Exec<'_>, mut l_s: Value) -> Result<f64, Fault> {
     return Ok((u32_of({ let a0 = l_s; ex.n_leaf(I_STR_LENGTH, &[a0])? }) as f64));
     #[allow(unreachable_code)]

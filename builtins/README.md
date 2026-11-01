@@ -109,6 +109,14 @@ On builtin functions (JSDoc):
   `--backend bytecode` (djs run, djs-difftest, djs-test262) runs the bytecode instead;
   both must behave the same.
 
+- `@fast`: has a leaf fast path in Rust, the entry of the same name in
+  `crates/djs-core/src/builtins/fast.rs` (D1850). With the native backend a call runs it
+  first; it either returns the builtin's result or declines and the builtin runs. The
+  entry must mirror this source step by step and accept only arguments for which nothing
+  observable can happen (primitives, leaf reads); every throwing case declines. Keep the
+  two in sync; `tests/corpus/builtins/fast-paths.js` checks them against qjs, and the
+  bytecode-backend run tests the TS path.
+
 On intrinsics in `intrinsics.d.ts`, exactly one of:
 
 - `@leaf`: never runs user code.

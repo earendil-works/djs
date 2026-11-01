@@ -1,0 +1,175 @@
+//! Calls of `@fast` builtins (D1850): the leaf fast path of `builtins::fast` runs in
+//! place of the call when it accepts the arguments.
+
+use alloc::format;
+use alloc::string::String;
+
+use super::Exec;
+use crate::builtins::fast::{FAST, MAX_ARGS};
+use crate::bytecode::template::func_flags;
+use crate::bytecode::{OPS, Op};
+use crate::heap::Atom;
+use crate::heap::cells::FuncTemplate;
+use crate::heap::{HeapError, ObjectClass};
+use crate::interp::ErrorKind;
+use crate::interp::conv::{Fault, FaultKind};
+use crate::interp::frame::Continuation;
+use crate::value::Value;
+
+/// Fuel per fast call on top of the call instruction's: a builtin's call runs a few
+/// instructions at least.
+const FAST_FUEL: i64 = 2;
+
+impl Exec<'_> {
+    /// The `call` instruction at `pc` when its callee is a `@fast` builtin whose fast path
+    /// accepts the arguments: true when it completed. Declining leaves everything
+    /// unchanged, and `step` makes the full call.
+    #[inline(never)]
+    pub(super) fn fast_leaf_call(&mut self) -> bool {
+        let argc = self.heap.arena().read::<u16>(self.code + self.pc + 1) as u32;
+        let base = self.sp - 2 - argc;
+        let Some(o) = self.get(base).as_object() else {
+            return false;
+        };
+        if self.heap.object_class(o) != ObjectClass::Function {
+            return false;
+        }
+        let t = self.template_of(o);
+        if self.heap.arena().get(t, FuncTemplate::FLAGS) & self.slow_call_flags & func_flags::FAST
+            == 0
+        {
+            return false;
+        }
+        let info = &OPS[Op::Call as usize];
+        let next = self.pc + info.size as u32;
+        match self.try_fast_call(t, base, argc, Continuation::PushResult, next) {
+            Ok(true) => {
+                self.fuel -= info.cost.fuel() as i64;
+                true
+            }
+            Ok(false) => false,
+            Err(f) => {
+                // The host refused memory: never silently retried (D1690); the run
+                // stops at the next instruction boundary. The cap (OutOfMemory) is
+                // deterministic, so `step`'s retry throws it.
+                if matches!(&*f.0, FaultKind::Heap(HeapError::HostOutOfMemory)) {
+                    self.host_out_of_memory();
+                }
+                false
+            }
+        }
+    }
+
+    /// `%MarkFast(f)`: gives the builtin `f` the fast path named like it. A name without
+    /// an entry fails the prelude (at base-image build time).
+    pub(super) fn mark_fast(&mut self, f: Value) -> Result<(), Fault> {
+        let bad = |msg: String| Err(Fault::error(ErrorKind::InternalError, msg));
+        let Some(o) = f
+            .as_object()
+            .filter(|&o| self.heap.object_class(o) == ObjectClass::Function)
+        else {
+            return bad(String::from("%MarkFast: not a function"));
+        };
+        let t = self.template_of(o);
+        let name = self
+            .heap
+            .atom_name(Atom::from_id(self.heap.arena().get(t, FuncTemplate::NAME)));
+        let Some(i) = crate::builtins::fast::index(&name) else {
+            return bad(format!(
+                "%MarkFast: no fast path for {name} (builtins/fast.rs)"
+            ));
+        };
+        let a = self.heap.arena_mut();
+        let flags = a.get(t, FuncTemplate::FLAGS);
+        a.set(t, FuncTemplate::FLAGS, flags | func_flags::FAST);
+        a.set(t, FuncTemplate::FAST, i as u32);
+        Ok(())
+    }
+
+    /// Tries the fast path of the `@fast` builtin template `t` for the call at `base`
+    /// (`f this a1 .. an`). On success the call is complete: the result went where `cont`
+    /// says and `pc` is `ret_pc`. No collection happens here (a native caller keeps Rust
+    /// locals across an inline call); the allocation sets `gc_pending` for the next
+    /// safepoint as usual.
+    #[inline(never)]
+    pub(super) fn try_fast_call(
+        &mut self,
+        t: u32,
+        base: u32,
+        argc: u32,
+        cont: Continuation,
+        ret_pc: u32,
+    ) -> Result<bool, Fault> {
+        if argc as usize > MAX_ARGS {
+            return Ok(false);
+        }
+        let push = match cont {
+            Continuation::PushResult => true,
+            Continuation::DiscardResult | Continuation::Replace(_) => false,
+            _ => return Ok(false),
+        };
+        let idx = self.heap.arena().get(t, FuncTemplate::FAST) as usize;
+        let Some(ff) = FAST.get(idx) else {
+            return Ok(false);
+        };
+        let mut args = [Value::UNDEFINED; MAX_ARGS];
+        for (i, a) in args.iter_mut().enumerate().take(argc as usize) {
+            *a = self.get(base + 2 + i as u32);
+        }
+        let this = self.get(base + 1);
+        let v = match ff.call(self.heap, this, &args[..argc as usize]) {
+            Ok(Some(v)) => v,
+            Ok(None) => return Ok(false),
+            // Out of memory is out of memory either way; any other error is the builtin's
+            // to throw, with its own frame in the stack trace.
+            Err(f)
+                if matches!(
+                    &*f.0,
+                    FaultKind::Heap(HeapError::OutOfMemory | HeapError::HostOutOfMemory)
+                ) =>
+            {
+                return Err(f);
+            }
+            Err(_) => return Ok(false),
+        };
+        // Like the string leaf intrinsics the builtins call, no charge per code unit.
+        self.fuel -= FAST_FUEL;
+        self.sp = base;
+        match cont {
+            Continuation::Replace(slot) => self.set(slot, v),
+            _ if push => self.push(v),
+            _ => {}
+        }
+        self.pc = ret_pc;
+        Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::builtins::fast::FAST;
+
+    /// Every entry of the table is marked by the prelude (`@fast` in builtins/*.ts):
+    /// `%MarkFast` already fails the prelude for a tag without an entry, this catches an
+    /// entry without a tag (dead code).
+    #[test]
+    fn every_fast_entry_is_marked() {
+        let prelude = include_str!("../../../../../builtins/gen/prelude.js");
+        for f in FAST {
+            assert!(
+                prelude.contains(&alloc::format!("%MarkFast({});", f.name)),
+                "{} has a fast path but no @fast tag",
+                f.name
+            );
+        }
+        let marked = prelude.matches("%MarkFast(").count();
+        let mut names: alloc::vec::Vec<&str> = FAST.iter().map(|f| f.name).collect();
+        names.sort();
+        names.dedup();
+        assert_eq!(
+            marked,
+            names.len(),
+            "names in FAST are unique and all marked"
+        );
+    }
+}
