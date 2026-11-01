@@ -1,7 +1,7 @@
 # 0056: String and regex hot-path performance (+ the test262 property-escape tests' gate cost)
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0056-string-regex-perf
 depends-on: 0050
 touches: crates/djs-core/src/regexp/, crates/djs-core/src/builtins/ (string/regexp leaves), builtins/ (string.ts, regexp.ts, function.ts apply), crates/djs-core/src/heap/ (string building helpers, additive), crates/djs-core/src/interp/ (only isolated fast paths, coordinated), crates/djs-bench/ (benchmarks), crates/djs-core/src/json/ (only for the optional JSON source-text item)
