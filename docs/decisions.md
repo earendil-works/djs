@@ -3622,7 +3622,10 @@ original iteration directly as the iterated list). Each declines with nothing ch
 and the builtin's general loop runs; reads done before declining had no effect. Pure
 checks come before the first mutation; where a store helper checks the conditions
 (`set_element_fast`), its first call does and declines with nothing changed. The bgen
-behavior stand-ins decline, so the general loops keep their qjs comparison.
+behavior stand-ins decline, so the general loops keep their qjs comparison. O(n) leaves charge one fuel unit per four elements
+handled. A leaf that reaches the heap cap declines (its partial work is plain stores the
+general loop repeats), so the allocation fails again at an instruction that collects and
+retries (D1700) and the out-of-memory point stays where it was.
 
 ## D1802: Iterable consumers step without result objects
 date: 2026-11-03 · by: infra · issue: 0080
