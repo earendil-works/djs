@@ -1520,3 +1520,45 @@ job, not directly, keeps the resolution spec-exact (a `then` getter is user code
 order of completions FIFO. While calls are pending and no job is queued, `run` returns
 `Idle` (D1370). Everything is heap state, so a VM with pending calls and queued jobs
 snapshots and restores like any other. Sync host functions are unchanged.
+## D1360: destructuring patterns are parsed after their value (deferred patterns)
+date: 2026-11-02 · by: lexer · issue: 0036
+A pattern that precedes its value in the source (`let [a] = v`, `[a] = v`, a parameter
+or nested pattern with a default, a for-of declaration head) is skipped with a
+balanced-bracket scan, the value is parsed and emitted, then the lexer is rewound to the
+pattern, which is emitted, and the parser jumps back after the value
+(`Parser::deferred_pattern`). Only lexer state moves (D1080), the code needs no jumps
+around the pattern, and resolution after parsing makes the bindings visible (in TDZ) to
+the initializer. Cost: one extra scan of the pattern's tokens. Errors in the value are
+reported before errors in the pattern, which differs from qjs's source order only in
+which of two SyntaxErrors a file reports.
+
+## D1361: array destructuring keeps `next it` and reaches it with `pick`/`poke`
+date: 2026-11-02 · by: lexer · issue: 0036
+Assignment targets are evaluated before the iterator step (spec order), so their
+references (0 to 2 values) sit above the iterator. Two new stack ops, `pick n` and
+`poke n`, reach under them; their stack effects include the immediate (a new `push M
++ imm K` form in the ops table, also in `OPS_HASH`), so the stack checker verifies
+them. "Done" is `undefined` in the iterator slot. The close handler covers the
+pattern's own code and not the steps; its depth is relative to a label
+(`HandlerLabels::depth_from`) and resolution computes it from the final code with
+`bytecode::stack_depths`, since the parser does not track expression stack depth.
+Rest elements use the builtin `%IteratorRest`, object rest `%CopyDataPropertiesExcluding`,
+and computed keys `%ToPropertyKey` (now `@intrinsic`). No array fast path yet (as D1292).
+
+## D1362: template objects are created on first use and cached in the constant pool
+date: 2026-11-02 · by: lexer · issue: 0036
+`get_template_object site` reads `CONSTS[site]`: before the first run it holds the
+index of a `n, cooked x n, raw x n` block (cooked `undefined` for an invalid escape), and
+the interpreter replaces it with the frozen template object (frozen `raw`,
+non-enumerable). The constant pool belongs to the function template, so every closure
+and every evaluation of the site gets the same object, and a recompiled source gets new
+ones (the spec's per-Parse-Node [[TemplateMap]]). Building the object in the compiler
+was the alternative; it needs the realm's Array.prototype at compile time.
+
+## D1363: object spread with getters goes through %CopyDataProperties
+date: 2026-11-02 · by: lexer · issue: 0036
+`copy_data_props 0` still copies plain data properties itself. If the source has an
+enumerable accessor, or is a non-empty string, it copies nothing and calls the builtin
+`%CopyDataProperties(target, src)` (builtins/spread.ts) with a continuation, as
+`array_spread` calls `%ArraySpread`. `{..."hi"}` gives `{0: "h", 1: "i"}` as the spec
+and V8 do; qjs (dquickts) gives `{}`.

@@ -337,7 +337,9 @@ ops! {
     FClosure fclosure(child: Child) pop 0 push 1 cost Alloc flags ALLOC;
     /// `pattern flags -> regexp`
     RegExp regexp() pop 2 push 1 cost Alloc flags THROWS | ALLOC;
-    /// `-> template object`: tagged templates, cached in constant slot `idx`.
+    /// `-> template object`: tagged templates. `CONSTS[idx]` is the site's object once
+    /// created; before that, the index of `n`, `n` cooked strings (or `undefined`) and
+    /// `n` raw strings, from which the first run creates and caches it.
     GetTemplateObject get_template_object(idx: Const) pop 0 push 1 cost Alloc flags ALLOC;
     /// `-> v`: `arguments`, `new.target`, home object, ... (function entry only).
     SpecialObject special_object(kind: U8) pop 0 push 1 cost Alloc flags ALLOC;

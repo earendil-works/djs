@@ -324,6 +324,14 @@ parenthesized literal.
 Binding patterns (`let {a} = o`, parameters, `catch ({a})`) need no scan: the grammar
 position says it is a pattern.
 
+As implemented (0036, `scan::PatternScan`): the memo records, for every bracket, what
+follows its closer (`Follow`): `=`, an element end (`,` `]` `}`), `of`/`in`, or something
+else. In `parse_assign` a bracket is an assignment pattern iff `Follow::Assign`; in a
+for-in/of head iff `Follow::InOf`; inside an assignment pattern a nested bracket is a
+nested pattern iff `Assign` or `ElemEnd` (otherwise it starts a member expression such
+as `[a][0]`). The object literal parser therefore never sees a pattern: `{a = 1}` and
+duplicate `__proto__` are plain literal errors there.
+
 ### 3.4 Regex vs divide
 
 The parser knows: a `/` or `/=` in primary position is a regex (`primary_slash()`),
@@ -422,7 +430,9 @@ moves next to the body and the first jump and `jump L_body` go: `<rhs>; <setup>;
 L_step; [L_throw]; L_assign: <store>; <body>; L_step: ...`. One jump per iteration.
 
 `for (let x of xs)` and `for (const k in o)` declare per-iteration bindings (5.9).
-`for await` and destructuring heads are not supported yet.
+A pattern head (`for (const [k, v] of m)`) is skipped and parsed at the store (3.10);
+an expression pattern head (`for ([a, b] of xs)`) is emitted at `L_assign` like any
+expression target. `for await` is not supported yet.
 
 ### 3.9 TypeScript generics (sketch for P3)
 
@@ -439,6 +449,67 @@ All TS disambiguation is emission-free speculation over the type skipper:
   esbuild's TypeScript parser here, and so should we.
 - A `rescan_less` (splitting `<<` into `<` `<`, tsc's `reScanLessThanToken`) will be
   needed for `f<<T>(x: T) => T>()`. It is a lexer addition at that time.
+
+### 3.10 Destructuring patterns (0036, compiler/pattern.rs)
+
+A pattern consumes the value on top of the stack. Binding patterns declare their names
+(`var`, `let`/`const`, parameters, catch parameters, which bind like `let`); assignment
+patterns store into references, evaluated before the value they receive.
+
+**Deferred patterns.** A pattern mostly comes before its value in the source (`let [a]
+= v`, `[a] = v`, `{x} = {}` as a parameter default, a nested pattern with a default,
+for-of declaration heads), but its code runs after the value. The parser skips the
+pattern (`scan::skip_group`), parses and emits what follows, then rewinds the lexer to
+the pattern, emits it and jumps back (`Parser::deferred_pattern`, D1360). Like the other
+speculation (D1080) only the lexer moves; nothing emitted is rewritten. Resolution runs
+after parsing, so the initializer of `let {a} = a` still sees the new `a` in its TDZ;
+the pattern's bindings get `init_end` = the end of the declarator (or parameter, or
+for head).
+
+**Object patterns** keep the value `v` (after `require_object_coercible`) and read each
+property with `pick` + `get_field`/`get_elem`. A computed key goes through
+`%ToPropertyKey` once, before the target is evaluated (spec order: key, target
+reference, Get, default, store). With a rest property (found by a scan,
+`scan::object_has_rest`) an array of the keys seen sits above `v` and
+`%CopyDataPropertiesExcluding(v, keys)` builds the rest object.
+
+**Array patterns** keep `next it`. Each element evaluates its target references
+(0 to 2 values) and then steps the iterator, reaching under the references with
+`pick`:
+
+```
+first step:  pick r+1; pick r+1; call 0; ...
+later steps: pick r; dup; is_undefined; jump_if_true L_end; pick r+2; swap; call 0
+             iter_check_object; dup; get_field done; jump_if_true L_done
+             get_field value; jump L_end
+L_done:      drop; undefined; poke r; undefined      ; it := undefined (done)
+L_end:       <default>; <store or nested pattern>
+```
+
+A done iterator is `undefined` in its slot: later steps produce `undefined` without
+calling `next`, and nothing closes it. A rest element calls `%IteratorRest(it, next)`.
+After the last element a not-done iterator is closed with `%IteratorClose`. A handler
+around everything but the steps (`next it exc`: `swap; dup; is_undefined;
+jump_if_true L; call_intrinsic %IteratorCloseThrow 1; L: drop; throw`) closes it on an
+exception from a target, a default, a store or a nested pattern; errors from the
+iterator itself do not close it (D1361). Its depth is relative (`HandlerLabels::
+depth_from`: the depth at the label after `swap`), because expressions do not track
+their absolute stack depth; resolution finds it with `bytecode::stack_depths` on the
+final code. The handler is left out when the regions cannot throw (binding names
+without defaults or nested patterns).
+
+**Tagged templates** call the tag with `this` like a call (`o.m`x``), the template
+object first. `get_template_object site` finds `CONSTS[site]`: the template object once
+created, before that the index of `n, cooked x n, raw x n` (cooked `undefined` for an
+invalid escape). The first run builds the frozen array with its frozen, non-enumerable
+`raw` and stores it in the slot: one object per site, reused by every closure of the
+template (D1362).
+
+Early errors as qjs reports them: `rest element must be the last one`, `assignment rest
+property must be last`, `invalid destructuring target` (a non-reference target, a
+parenthesized pattern, `eval`/`arguments` as a binding). NamedEvaluation applies to
+identifier targets with anonymous function defaults, also through parentheses
+(`[cover = (function () {})] = []`).
 
 ## 4. Bytecode
 
@@ -562,13 +633,15 @@ Literals and constants:
 | `array_spread` | | arr iterable → arr | R (iterator), P1 |
 | `fclosure` | `u32` child | → f | create a closure, capturing boxes (6.3), P1 |
 | `regexp` | | pattern flags → re | P5 |
-| `get_template_object` | `u32` const | → t | tagged templates, cached per site in the constant slot, P1 |
+| `get_template_object` | `u32` const | → t | tagged templates, cached per site in the constant slot (3.10), P1 |
 | `special_object` | `u8` kind | → v | `arguments`, `new.target`, home object, active function (function entry only), P1 |
 
 Stack shuffles (P0 unless noted): `drop` (a →), `dup` (a → a a), `dup2` (a b → a b a b),
 `swap` (a b → b a), `nip` (a b → b), `insert2` (a b → b a b), `insert3`
 (a b c → c a b c), `insert4` (a b c d → d a b c d, P1 super), `rot3l` (x a b → a b x),
-`rot3r` (a b x → x a b).
+`rot3r` (a b x → x a b), `pick n` (x a1..an → x a1..an x) and `poke n` (x a1..an v →
+v a1..an), whose stack effects include their `u8` immediate (`pop 1 + imm 0 push 2 +
+imm 0`, so the stack checker verifies the reach; 0036).
 
 Names, phase 1 only (5.2), all with `u32` ref index:
 
@@ -616,7 +689,7 @@ Properties (P0 field access on plain objects, P1 the rest):
 | `define_elem` | | o k v → o | computed keys, R (ToPropertyKey), P1 |
 | `define_getter` / `define_setter` | `atom` | o f → o | P1; `_elem` variants for computed keys |
 | `define_method` | `atom` | o f → o | sets the home object, P1; `define_method_elem` for computed keys |
-| `copy_data_props` | `u8` flags | o src → o | object spread, rest with excluded keys, R, P1 |
+| `copy_data_props` | `u8` flags | o src → o | object spread (mode 0; plain data properties inline, getters and strings through `%CopyDataProperties`). Object rest uses `%CopyDataPropertiesExcluding` (3.10). R, P1 |
 | `set_proto` | | o v → o | literal `__proto__: v` (objects and null only; 0027) |
 | `set_function_name` | `u8` prefix | key f → key f | SetFunctionName for computed keys (prefix none/"get"/"set"), R (ToPropertyKey); 0027 |
 | `require_object_coercible` | | v → v | TypeError for null/undefined (`const {} = null`), P1 |
@@ -1092,6 +1165,10 @@ snapshot replaces compile-at-startup.
   entered on `v it next ret` (`v` the return value or `undefined`, as a finally block's
   value slot) and, since `gosub` keeps the caller's depth, leaves `v it undefined` for
   the caller to drop (`rot3r; drop; dup; call_intrinsic %IteratorClose 1; rot3l; ret`).
+- A handler entry may have a depth relative to a label (`depth_from`, array
+  destructuring inside expressions, 3.10): resolution computes it from the final code
+  with `bytecode::stack_depths`, repeating while a region sits in code that only
+  another such handler reaches.
 - **[ARCH: no change]** Differs from QuickJS, which pushes catch offsets onto the
   value stack and scans the stack while unwinding. A table keeps the stack plain.
 

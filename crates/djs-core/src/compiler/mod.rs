@@ -1,9 +1,10 @@
 //! The single-pass compiler: source text to function templates (docs/compiler.md).
 //!
 //! Scope so far: expressions and statements (0014), functions, arrows and closures
-//! (0024). Constructs that come later (classes, destructuring, `try`, `for-in`/`for-of`,
-//! regex literals, async and generator functions, ...) are rejected with a "... not
-//! supported yet" SyntaxError.
+//! (0024), objects (0027), exceptions (0025), for-in/of (0029), destructuring and
+//! tagged templates (0036). Constructs that come later (classes, regex literals, async
+//! and generator functions, ...) are rejected with a "... not supported yet"
+//! SyntaxError.
 //!
 //! ```ignore
 //! let template = compile(&mut heap, src, &CompileOptions::script("main.js"))?;
