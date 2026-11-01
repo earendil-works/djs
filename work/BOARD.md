@@ -15,6 +15,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0083 | Shapes + leaner object/image layout (design first) | heap | .worktrees/heap |
 | 0072 | Determinism gate checks part 2 (waits for 0071) | determinism (idle until 0071) | .worktrees/determinism |
 | 0085 | Leaf fast paths for everyday builtins (0081 P1) | perf | .worktrees/perf |
+| 0088 | Snapshot design research: long-lived, cross-version, small (report only) | snapshot | .worktrees/snapshot |
 
 ## Open (ready)
 
