@@ -42,6 +42,7 @@ The 0082 leftovers that nobody else owns:
 - pi adapter: the atob/btoa polyfill is removed from js/pi/vm.ts. The js tests pass
   (45 + 1 skipped). pi's suite is 221/226 as before: the 5 inherent failures (the
   fingerprint regex ×2, strict-mode "ignores patches" ×3, docs/host.md).
+- crates/djs-bgen/tests/behavior.js (outside `touches:`): qjs stand-ins for the six new leaves (the @value install function calls DOMExceptionConstant).
 - Tests: tests/data/e2e/web_globals.js (expected from qjs, all three e2e modes), the
   builtins::dom unit tests.
 - test262 active: 56 → 43 expected failures. difftest: 4 → 2 (the immutable ArrayBuffer

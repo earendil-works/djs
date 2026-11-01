@@ -285,6 +285,31 @@ const I = {
   },
   RealmIntrinsic: (name) => globalThis[name.replace(/Prototype$/, "")].prototype,
   ErrorCreate: (proto) => Object.setPrototypeOf(new Error(), proto),
+  // DOMException, atob, btoa (0084): qjs has them natively.
+  DOMExceptionCreate: (proto, name, message) => Object.setPrototypeOf(new DOMException(message, name), proto),
+  DOMExceptionField: (v, i) => {
+    try {
+      return Object.getOwnPropertyDescriptor(DOMException.prototype, i === 0 ? "name" : "message").get.call(v);
+    } catch {
+      return undefined;
+    }
+  },
+  DOMExceptionCode: (name) => new DOMException("", name).code,
+  DOMExceptionConstant: (i) => Object.keys(DOMException)[i - 1],
+  Btoa: (s) => {
+    try {
+      return btoa(s);
+    } catch {
+      return undefined;
+    }
+  },
+  Atob: (s) => {
+    try {
+      return atob(s);
+    } catch {
+      return undefined;
+    }
+  },
   CaptureStack: (o) => {},
   DefineDataPropertyOrThrow: (o, k, v, attrs) => {
     check(isObject(o) && !isObject(k), "DefineDataPropertyOrThrow");
