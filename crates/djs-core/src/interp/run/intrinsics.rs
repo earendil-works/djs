@@ -444,6 +444,16 @@ fn index_key(k: Value) -> Option<u32> {
         .map(|n| n as u32)
 }
 
+/// A dense leaf (0080) that reaches the heap cap declines instead (its partial work, if
+/// any, is plain stores the general loop repeats): the loop's own allocations then fail
+/// at instructions that collect and retry (D1700).
+fn decline_oom<T>(r: Result<T, Fault>, decline: T) -> Result<T, Fault> {
+    match r {
+        Err(f) if f.is_out_of_memory() => Ok(decline),
+        r => r,
+    }
+}
+
 pub(super) fn bad_argument<T>(name: &str) -> Result<T, Fault> {
     Err(Fault::error(
         ErrorKind::InternalError,
@@ -1031,10 +1041,13 @@ impl Exec<'_> {
                 ) else {
                     return bad_argument(info.name);
                 };
-                conv::number(self.array_fill_dense(o, arg(self, 1), k, fin)?)
+                conv::number(decline_oom(
+                    self.array_fill_dense(o, arg(self, 1), k, fin),
+                    k,
+                )?)
             }
             ARRAY_PUSH_DENSE => match a0.as_object() {
-                Some(o) => conv::number(self.array_push_dense(o, arg(self, 1))?),
+                Some(o) => conv::number(decline_oom(self.array_push_dense(o, arg(self, 1)), -1.0)?),
                 None => return bad_argument(info.name),
             },
             ARRAY_SEARCH_DENSE => {
@@ -1057,7 +1070,7 @@ impl Exec<'_> {
                 ) else {
                     return bad_argument(info.name);
                 };
-                Value::bool(self.array_slice_dense(o, k, fin, a)?)
+                Value::bool(decline_oom(self.array_slice_dense(o, k, fin, a), false)?)
             }
             ARRAY_JOIN_DENSE => {
                 let (Some(o), Some(len), Some(sep)) = (
@@ -1067,7 +1080,7 @@ impl Exec<'_> {
                 ) else {
                     return bad_argument(info.name);
                 };
-                self.array_join_dense(o, len, sep)?
+                decline_oom(self.array_join_dense(o, len, sep), Value::UNDEFINED)?
             }
             TYPED_ARRAY_SET_FROM_DENSE => match (a0.as_object(), arg(self, 1).as_object()) {
                 (Some(o), Some(values)) => Value::bool(self.typed_array_set_from_dense(o, values)),
@@ -1077,7 +1090,7 @@ impl Exec<'_> {
                 let (Some(o), Some(kind)) = (a0.as_object(), arg(self, 1).as_int()) else {
                     return bad_argument(info.name);
                 };
-                self.enumerable_own_data(o, kind)?
+                decline_oom(self.enumerable_own_data(o, kind), Value::UNDEFINED)?
             }
             IS_ORIGINAL_COLLECTION_ADDER => {
                 let original = match arg(self, 1).as_int() {
