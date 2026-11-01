@@ -229,7 +229,11 @@ impl Parser<'_, '_> {
     pub(super) fn emit_using_add(&mut self, is_await: bool) {
         self.code().pick(1);
         self.code().swap();
-        let add = if is_await { "AwaitUsingAdd" } else { "UsingAdd" };
+        let add = if is_await {
+            "AwaitUsingAdd"
+        } else {
+            "UsingAdd"
+        };
         self.code().call_intrinsic(intrinsic(add), 2);
     }
 
@@ -237,7 +241,9 @@ impl Parser<'_, '_> {
     /// subroutine. The operand depth is back under the Record.
     pub(super) fn close_using(&mut self, r: UsingRegion) {
         let env = self.blocks.pop();
-        debug_assert!(env.is_some_and(|e| e.kind == BlockKind::Finally && e.break_label == r.l_fin));
+        debug_assert!(
+            env.is_some_and(|e| e.kind == BlockKind::Finally && e.break_label == r.l_fin)
+        );
         let l_try_end = self.new_label();
         let l_exc = self.new_label();
         let l_end = self.new_label();
@@ -257,7 +263,8 @@ impl Parser<'_, '_> {
         self.place(l_exc);
         self.code().pick(1);
         self.code().swap();
-        self.code().call_intrinsic(intrinsic("UsingDisposeError"), 2);
+        self.code()
+            .call_intrinsic(intrinsic("UsingDisposeError"), 2);
         self.code().gosub(r.l_fin);
         self.code().throw();
         self.place(r.l_fin);
@@ -286,7 +293,8 @@ impl Parser<'_, '_> {
             self.place(l_rej);
             self.code().pick(1);
             self.code().swap();
-            self.code().call_intrinsic(intrinsic("UsingDisposeError"), 2);
+            self.code()
+                .call_intrinsic(intrinsic("UsingDisposeError"), 2);
             self.code().drop();
             self.code().jump(l_loop);
             self.place(l_done);

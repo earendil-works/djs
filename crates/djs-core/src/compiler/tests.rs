@@ -1130,14 +1130,24 @@ fn errors() {
         ),
         ("// goal: body\nvar await", "variable name expected", 2, 5),
         // `using` declarations (0058).
-        ("using x = null;", "using declaration not allowed here", 1, 7),
+        (
+            "using x = null;",
+            "using declaration not allowed here",
+            1,
+            7,
+        ),
         (
             "switch (1) { case 1: using x = null; }",
             "using declaration not allowed here",
             1,
             28,
         ),
-        ("{ using x; }", "missing initializer for using declaration", 1, 10),
+        (
+            "{ using x; }",
+            "missing initializer for using declaration",
+            1,
+            10,
+        ),
         (
             "{ using x = null, [y] = null; }",
             "binding patterns are not allowed in using declarations",
