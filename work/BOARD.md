@@ -11,7 +11,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0080 | for-of/iteration fast paths + natives wave 2 | infra | .worktrees/infra |
 | 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
 | 0079 | Integration and test efficiency (investigate first) | devflow, after 0053 | .worktrees/devflow |
-| 0082 | The long tail: remaining test262/difftest failures | lexer | .worktrees/lexer |
+| 0084 | Long tail part 2 (Function.prototype callable, array length set, atob/btoa) | lexer | .worktrees/lexer |
 | 0083 | Shapes + leaner object/image layout (design first) | heap | .worktrees/heap |
 | 0074 | Carry fuel overshoot across runs | determinism | .worktrees/determinism |
 | 0081 | Perf anatomy: disassembly-level investigation (report only) | perf | .worktrees/perf |
@@ -51,6 +51,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0046 | BigInt | 63d8468 (agent heap; BigInt 1135/1142; active 98.8%) |
 | 0033 | JSON + RegExp builtins, regex literals | 8b5ccfb (agent num; active 32,303 / 32,718) |
 | 0040 | P1-7 Classes | 2d08a6c (agent lexer; test262 active 97.1%) |
+| 0082 | The long tail | 5a4ba6a (agent lexer; test262 failures 203 -> 56; Known differences in TESTING.md) |
 | 0065 | Decorators (TC39 + accessor + TS legacy) | f4894f5 (agent lexer; strip-types 4,316/4,802, 0 differ) |
 | 0058 | Compiler: using, completion values + Goal::Eval, import() | 8bc39dd (agent lexer; strip-types 4,085/4,802, 0 differ) |
 | 0075 | Build identity + Float32 NaN | df34400 (agent num; D1750; libm pinned =0.2.16) |
@@ -144,6 +145,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 2026-11-01 (0050: RegExp promoted, +2,186 tests) | | 36,285 / 36,689 (98.9%) |
 | 2026-11-01 (0051 done) | | 36,778 / 37,182 (98.9%) |
 | 2026-11-01 (0059: indirect eval + Function, +540 tests) | | 37,464 / 37,722 (99.3%) |
+| 2026-11-01 (0082 long tail) | 4 expected failures | 56 expected failures in active (~99.85%) |
 
 ## Id reservations (in flight; check main for the authoritative list)
 
