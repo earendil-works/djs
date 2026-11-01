@@ -60,6 +60,7 @@ pub fn render_all(g: &mut Guide) -> Vec<(String, Page)> {
     let pages = page_set(g);
     let repo = repo();
     let rev = source_rev(&repo);
+    let index = crate::paths::RepoIndex::load(&repo);
     let mut out = Vec::new();
     let mut all: Vec<(String, &str, bool)> = g
         .pages
@@ -83,6 +84,7 @@ pub fn render_all(g: &mut Guide) -> Vec<(String, Page)> {
             repo: &repo,
             strict,
             rev: &rev,
+            index: &index,
             errors: &mut g.cx.errors,
         };
         let page = render::render(&name, src, &mut env);

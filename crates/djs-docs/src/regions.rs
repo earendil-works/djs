@@ -335,13 +335,19 @@ fn excerpt(args: &[&str], page: &str, cx: &mut Ctx) -> String {
         return String::new();
     };
     match excerpt_lines(&text, anchor, start, n) {
-        Some(lines) => {
+        Some((first, lines)) => {
             let lang = match path.rsplit('.').next() {
                 Some("rs") => "rust",
                 Some(ext @ ("ts" | "js")) => ext,
                 _ => "text",
             };
-            fenced(lang, &dedent(&lines))
+            // The header links the lines on GitHub, at the commit the site is built from
+            // (D2104).
+            let last = first + lines.len() - 1;
+            format!(
+                "[`{path}`](../../{path}#L{first}-L{last}), lines {first}–{last}:\n\n{}",
+                fenced(lang, &dedent(&lines))
+            )
         }
         None => {
             cx.errors.push(format!(
@@ -352,12 +358,21 @@ fn excerpt(args: &[&str], page: &str, cx: &mut Ctx) -> String {
     }
 }
 
-fn excerpt_lines<'a>(text: &'a str, anchor: &str, start: &str, n: usize) -> Option<Vec<&'a str>> {
-    let mut lines = text.lines().skip_while(|l| !l.contains(anchor));
+/// The excerpt's first line number (from 1) and its lines.
+fn excerpt_lines<'a>(
+    text: &'a str,
+    anchor: &str,
+    start: &str,
+    n: usize,
+) -> Option<(usize, Vec<&'a str>)> {
+    let mut lines = text
+        .lines()
+        .enumerate()
+        .skip_while(|(_, l)| !l.contains(anchor));
     lines.next()?;
-    let mut lines = lines.skip_while(|l| !l.contains(start)).peekable();
-    lines.peek()?;
-    Some(lines.take(n).collect())
+    let mut lines = lines.skip_while(|(_, l)| !l.contains(start)).peekable();
+    let first = lines.peek()?.0 + 1;
+    Some((first, lines.take(n).map(|(_, l)| l).collect()))
 }
 
 /// Removes the indentation all non-empty lines share.
@@ -534,7 +549,8 @@ mod tests {
     #[test]
     fn excerpts_start_after_the_anchor() {
         let text = "fn a() {\n    5 => {}\n}\nfn b() {\n    5 => {\n        x\n    }\n}\n";
-        let lines = excerpt_lines(text, "fn b(", "5 =>", 2).unwrap();
+        let (first, lines) = excerpt_lines(text, "fn b(", "5 =>", 2).unwrap();
+        assert_eq!(first, 5);
         assert_eq!(dedent(&lines), "5 => {\n    x\n");
         assert!(excerpt_lines(text, "fn c(", "5 =>", 2).is_none());
         assert!(excerpt_lines(text, "fn b(", "6 =>", 2).is_none());

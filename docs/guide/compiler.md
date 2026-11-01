@@ -313,9 +313,10 @@ REPL (D004, D1581).
 
 ## Where to look
 
-- [`crates/djs-core/src/compiler/`](../../crates/djs-core/src/compiler/mod.rs): the
-  parser (`parser.rs`, `expr.rs`, `stmt.rs`), the scans (`scan.rs`), resolution
-  (`resolve.rs`), peepholes (`peephole.rs`), TypeScript (`ts.rs`).
+- [`crates/djs-core/src/compiler/`](../../crates/djs-core/src/compiler/): the
+  parser (`compiler/parser.rs`, `compiler/expr.rs`, `compiler/stmt.rs`), the scans
+  (`compiler/scan.rs`), resolution (`compiler/resolve.rs`), peepholes
+  (`compiler/peephole.rs`), TypeScript (`compiler/ts.rs`).
 - [`crates/djs-core/src/bytecode/ops.rs`](../../crates/djs-core/src/bytecode/ops.rs):
   the instruction table.
 - `djs disasm file.js`, a command of djs's command-line tool, prints the bytecode of any

@@ -5198,3 +5198,25 @@ instructions, search queries, notes, embedded Python and HTML. On top of D2281:
 words, a private app's file layout, recognizable prose); their sources are excluded and
 the selection reran until every pick passed review and ran under qjs without a
 SyntaxError.
+
+## D2104: Every repository path in the guide is a source link, made by the renderer
+date: 2026-11-01 · by: docs · issue: 0124
+Owner's rule: every file or directory the guide mentions links to it on GitHub at the
+build commit (`render::source_url`, D2102), not only under "Where to look". The renderer
+does it, so sources and generators stay plain Markdown: inline code that names a tracked
+path (`git ls-files`, work/ excluded; a full path, or the end of exactly one tracked path
+such as `heap/cells.rs` or `gc.rs`; `path:40` and `path:40-52` link the lines) becomes a
+link to the blob (file) or tree (directory) view; in plain text only full paths from a
+top-level directory count (prose has slashes of its own); in inline code with spaces
+(commands) and globs, each path is linked inside the code, a glob to its directory.
+Markdown files are left to the self-containment rule (never linked). `djs-docs check`
+fails, on the guide's pages, on a mention that starts like a repository path but names
+nothing tracked (renamed or removed), on a partial path that fits several files, on a
+link whose path text names another file than its target, and, as a final net over the
+rendered HTML (headings, generated parts), on any path mention outside a link or code
+block. `gen:excerpt` regions start with a link to the quoted lines (`#L223-L239`), so
+their line numbers are regenerated with the excerpt. The decision log links full paths
+that still exist and is not checked. Alternative: fail on unlinked mentions and make
+authors and generators write `[`path`](../../path)` everywhere: more noise in the
+Markdown for the same result, and generated text quoted from code comments (intrinsic
+docs) could not be fixed at its source.

@@ -147,6 +147,8 @@ file. The source is the plain loop
 `for (let k = 0; k < len; k++) { if (HasProperty(o, k)) { ... } }`:
 
 <!-- gen:excerpt crates/djs-core/src/builtins/gen/natives.rs "fn native_ArrayPrototypeMap(" "5 => {" 17 -->
+[`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs#L223-L239), lines 223–239:
+
 ```rust
 5 => {
     if (l3f < l1f) { st = 8; continue; } else { st = 7; continue; }
@@ -272,7 +274,7 @@ true
 - [`crates/djs-core/src/interp/run/native.rs`](../../crates/djs-core/src/interp/run/native.rs):
   native frames;
   [`crates/djs-core/src/builtins/fast.rs`](../../crates/djs-core/src/builtins/fast.rs)
-  and `dense.rs`: the `@fast` entries and dense leaves.
+  and `builtins/dense.rs`: the `@fast` entries and dense leaves.
 
 Decisions on this page:
 

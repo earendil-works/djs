@@ -19,7 +19,15 @@ document they don't have:
 - **Source as source.** Pages may point at code, as links to repository files
   (`[`crates/djs-core/src/value.rs`](../../crates/djs-core/src/value.rs)`). The site
   turns them into links to the published source at the commit it was built from, marked
-  as source links. Under "Where to look", every path is such a link.
+  as source links. Every mention of a repository file or directory is such a link
+  (D2104): inline code that names a tracked path (`crates/djs-core/src/heap/gc.rs`,
+  `js/src/`, `scripts/gate.sh:40` with its line) or ends one uniquely (`heap/cells.rs`)
+  becomes a link by itself, as do full paths in plain text and paths inside commands or
+  globs (`node js/pi/pi-tests.ts`, `builtins/*.ts` links the directory); directories go
+  to GitHub's tree view, files to the blob view. A mention of a path that no longer
+  exists, a partial path that fits several files (`lib.rs`: write the path), and a link
+  whose path text names another file than it links are errors. A `gen:excerpt` region
+  starts with a link to the quoted lines.
 
 `djs-docs check` enforces all of it on the pages in SUMMARY.md (code blocks are exempt,
 and so is the decision log, which is a record).

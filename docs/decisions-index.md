@@ -23,6 +23,7 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
 - D2101: Status numbers are generated: counted from the repository or recorded with their commit
 - D2102: The guide is self-contained; checked by djs-docs
 - D2103: Live examples: a textarea over the highlighted code, our own JS tokenizer
+- D2104: Every repository path in the guide is a source link, made by the renderer
 
 ## Testing: test262
 

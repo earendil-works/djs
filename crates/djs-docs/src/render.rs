@@ -4,7 +4,6 @@
 //! syntax highlighting, and live examples.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt::Write;
 use std::path::Path;
 
 use pulldown_cmark::{
@@ -33,6 +32,8 @@ pub struct Env<'a> {
     pub strict: bool,
     /// The commit source links point at (`source_url`).
     pub rev: &'a str,
+    /// The repository's tracked paths, for linking mentions of them (D2104).
+    pub index: &'a crate::paths::RepoIndex,
     pub errors: &'a mut Vec<String>,
 }
 
@@ -73,9 +74,9 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
     let mut toc = Vec::new();
     let mut title = String::new();
     let mut live_n = 0;
-    // For the rule that code paths under "Where to look" are source links (D2102).
-    let mut where_to_look = false;
     let mut in_link = false;
+    // The repository path the current link goes to, if it is a source link.
+    let mut link_rel: Option<String> = None;
     let mut i = 0;
     while i < events.len() {
         match &events[i] {
@@ -91,9 +92,6 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
                 }
                 if env.strict {
                     check_prose(&text, page, env);
-                }
-                if lvl == 2 {
-                    where_to_look = text == "Where to look";
                 }
                 // Decision headings (`D1050: Value encoding`) are anchored by their ID.
                 let id = match text.split_once(':') {
@@ -201,6 +199,16 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
             }) => {
                 in_link = true;
                 let dest = resolve_link(page, dest_url, env);
+                link_rel = ["blob", "tree"].iter().find_map(|k| {
+                    let rest = dest.strip_prefix(&format!("{REPO_URL}/{k}/{}/", env.rev))?;
+                    Some(
+                        rest.split('#')
+                            .next()
+                            .unwrap_or("")
+                            .trim_end_matches('/')
+                            .to_string(),
+                    )
+                });
                 out.push(Event::Start(Tag::Link {
                     link_type: *link_type,
                     dest_url: CowStr::from(dest),
@@ -214,20 +222,27 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
                 if env.strict {
                     check_prose(t, page, env);
                 }
-                link_decisions(t, &mut out, env, page);
+                link_text(t, &mut out, env, page, in_link);
                 i += 1;
                 continue;
             }
             Event::End(TagEnd::Link) => in_link = false,
-            Event::Code(t) if env.strict => {
-                check_prose(t, page, env);
-                // Code a page points readers at is a link to the published source, made
-                // by `source_url`, never a bare path.
-                let path = t.trim_end_matches('/');
-                if where_to_look && !in_link && path.contains('/') && env.repo.join(path).exists() {
-                    env.errors.push(format!(
-                        "{page}: `{t}` under \"Where to look\": link it ([`{t}`](../../{t})) so it goes to the published source (D2102)"
-                    ));
+            Event::Code(t) => {
+                if env.strict {
+                    check_prose(t, page, env);
+                }
+                // A path as a link's text names the file the link goes to.
+                if let (true, Some(rel), crate::paths::Resolved::Path(p, ..)) =
+                    (env.strict && in_link, &link_rel, env.index.code(t))
+                    && &p != rel
+                {
+                    env.errors
+                        .push(format!("{page}: `{t}` links to {rel}, not to {p} (D2104)"));
+                }
+                if !in_link && let Some(html) = code_link(t, page, env) {
+                    out.push(Event::InlineHtml(CowStr::from(html)));
+                    i += 1;
+                    continue;
                 }
             }
             _ => {}
@@ -237,6 +252,13 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
     }
     let mut body = String::new();
     html::push_html(&mut body, out.into_iter());
+    if env.strict {
+        for p in crate::paths::unlinked(&body, env.index) {
+            env.errors.push(format!(
+                "{page}: {p} is not a link: a mention of a repository path links to it (D2104)"
+            ));
+        }
+    }
     // Source links (`source_url`) are marked, so that readers can tell them from pages.
     let body = body.replace(
         &format!("<a href=\"{REPO_URL}/"),
@@ -395,14 +417,101 @@ fn check_prose(text: &str, page: &str, env: &mut Env) {
     }
 }
 
-/// `D1050` in prose becomes a link to the decision, with its title as the tooltip. In
-/// the guide an unknown ID is an error, so references cannot dangle.
-fn link_decisions<'a>(t: &CowStr<'a>, out: &mut Vec<Event<'a>>, env: &mut Env, page: &str) {
+/// A source link for inline code that names a repository path (D2104). In the guide a
+/// mention that names no tracked path, or more than one, is an error; the decision log
+/// is a record of its time and links only full paths that still exist.
+fn code_link(t: &str, page: &str, env: &mut Env) -> Option<String> {
+    use crate::paths::Resolved;
+    match env.index.code(t) {
+        Resolved::Path(p, dir, frag) => {
+            let full = t
+                .trim()
+                .split(':')
+                .next()
+                .unwrap_or("")
+                .trim_end_matches('/')
+                == p;
+            (env.strict || full).then(|| {
+                format!(
+                    "<a href=\"{}\"><code>{}</code></a>",
+                    source_url(&p, dir, &frag, env.rev),
+                    esc(t)
+                )
+            })
+        }
+        Resolved::Missing if env.strict => {
+            env.errors.push(format!(
+                "{page}: `{t}` names no file or directory of the repository (renamed or removed?) (D2104)"
+            ));
+            None
+        }
+        Resolved::Ambiguous(all) if env.strict => {
+            env.errors.push(format!(
+                "{page}: `{t}` could be any of {}: write the path (D2104)",
+                all.join(", ")
+            ));
+            None
+        }
+        Resolved::No => code_words(t, page, env),
+        _ => None,
+    }
+}
+
+/// Inline code that is a command or glob with repository paths in it (`node
+/// js/pi/pi-tests.ts`, `builtins/*.ts`): the paths become links inside the code (a glob
+/// links its directory). None if it has no paths.
+fn code_words(t: &str, page: &str, env: &mut Env) -> Option<String> {
+    use crate::paths::Resolved;
+    let mut html = String::from("<code>");
+    let mut any = false;
+    for (k, w) in t.split(' ').enumerate() {
+        if k > 0 {
+            html.push(' ');
+        }
+        match env.index.text(w) {
+            Resolved::Path(p, dir, frag) => {
+                any = true;
+                let core = w.trim_end_matches(['.', ',', ';', ':', ')', '!', '?']);
+                let _ = std::fmt::Write::write_fmt(
+                    &mut html,
+                    format_args!(
+                        "<a href=\"{}\">{}</a>{}",
+                        source_url(&p, dir, &frag, env.rev),
+                        esc(core),
+                        esc(&w[core.len()..])
+                    ),
+                );
+            }
+            Resolved::Missing if env.strict => {
+                env.errors.push(format!(
+                    "{page}: {w} in `{t}` names no file or directory of the repository (renamed or removed?) (D2104)"
+                ));
+                html.push_str(&esc(w));
+            }
+            _ => html.push_str(&esc(w)),
+        }
+    }
+    html.push_str("</code>");
+    any.then_some(html)
+}
+
+/// Prose: `D1050` becomes a link to the decision, with its title as the tooltip, and a
+/// repository path (`crates/djs-core/src/heap/gc.rs`) a source link (D2104). In the
+/// guide an unknown ID or a path that does not exist is an error, so references cannot
+/// dangle.
+fn link_text<'a>(
+    t: &CowStr<'a>,
+    out: &mut Vec<Event<'a>>,
+    env: &mut Env,
+    page: &str,
+    in_link: bool,
+) {
+    use crate::paths::Resolved;
     let s = t.as_ref();
+    // (start, end, html) of each replacement, in order.
+    let mut subs: Vec<(usize, usize, String)> = Vec::new();
     let b = s.as_bytes();
-    let mut last = 0;
     let mut i = 0;
-    let mut buf = String::new();
     while i < b.len() {
         let boundary = i == 0 || !b[i - 1].is_ascii_alphanumeric();
         if b[i] == b'D' && boundary {
@@ -414,16 +523,15 @@ fn link_decisions<'a>(t: &CowStr<'a>, out: &mut Vec<Event<'a>>, env: &mut Env, p
             if (3..=4).contains(&(j - i - 1)) && end_ok {
                 let id = &s[i..j];
                 match env.decisions.get(id) {
-                    Some(title) => {
-                        buf.push_str(&esc(&s[last..i]));
-                        let _ = write!(
-                            buf,
+                    Some(title) => subs.push((
+                        i,
+                        j,
+                        format!(
                             "<a class=\"decision\" href=\"decisions.html#{}\" title=\"{}\">{id}</a>",
                             id.to_lowercase(),
                             esc(title)
-                        );
-                        last = j;
-                    }
+                        ),
+                    )),
                     None if env.strict => env.errors.push(format!("{page}: unknown decision {id}")),
                     None => {}
                 }
@@ -433,12 +541,49 @@ fn link_decisions<'a>(t: &CowStr<'a>, out: &mut Vec<Event<'a>>, env: &mut Env, p
         }
         i += 1;
     }
-    if last == 0 {
-        out.push(Event::Text(t.clone()));
-    } else {
-        buf.push_str(&esc(&s[last..]));
-        out.push(Event::InlineHtml(CowStr::from(buf)));
+    if !in_link {
+        let sep = |c: char| c.is_whitespace() || "()[]{},;\"'“”‘’".contains(c);
+        let mut at = 0;
+        for w in s.split(sep) {
+            let start = at;
+            at += w.len() + s[at + w.len()..].chars().next().map_or(0, char::len_utf8);
+            match env.index.text(w) {
+                Resolved::Path(p, dir, frag) => {
+                    let core = w.trim_end_matches(['.', ',', ';', ':', ')', '!', '?']);
+                    subs.push((
+                        start,
+                        start + core.len(),
+                        format!("<a href=\"{}\">{}</a>", source_url(&p, dir, &frag, env.rev), esc(core)),
+                    ));
+                }
+                Resolved::Missing if env.strict => env.errors.push(format!(
+                    "{page}: {w} names no file or directory of the repository (renamed or removed?) (D2104)"
+                )),
+                Resolved::Ambiguous(all) if env.strict => env.errors.push(format!(
+                    "{page}: {w} could be any of {}: write the path (D2104)",
+                    all.join(", ")
+                )),
+                _ => {}
+            }
+        }
+        subs.sort_by_key(|x| x.0);
     }
+    if subs.is_empty() {
+        out.push(Event::Text(t.clone()));
+        return;
+    }
+    let mut buf = String::new();
+    let mut last = 0;
+    for (a, b, h) in subs {
+        if a < last {
+            continue;
+        }
+        buf.push_str(&esc(&s[last..a]));
+        buf.push_str(&h);
+        last = b;
+    }
+    buf.push_str(&esc(&s[last..]));
+    out.push(Event::InlineHtml(CowStr::from(buf)));
 }
 
 #[cfg(test)]
@@ -452,6 +597,7 @@ mod tests {
         let pages: BTreeSet<String> = ["values.md".to_string()].into();
         let mut errors = Vec::new();
         let repo = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
+        let index = crate::paths::RepoIndex::load(repo);
         let r = f(&mut Env {
             files: &files,
             decisions: &decisions,
@@ -459,6 +605,7 @@ mod tests {
             repo,
             strict,
             rev: "main",
+            index: &index,
             errors: &mut errors,
         });
         (r, errors)
@@ -514,6 +661,58 @@ mod tests {
         // The decision log is a record, not explanation: exempt.
         let (_, errors) = with_env(false, |env| render("decisions.md", md, env));
         assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn repository_paths_link_to_the_source() {
+        let md = "# T\n\nIn `crates/djs-core/src/heap/gc.rs`, `js/src/`, `heap/cells.rs:12`, \
+                  `node js/pi/pi-tests.ts`, scripts/gate.sh. and `x / y`.\n\n\
+                  Gone: `crates/djs-core/src/nope.rs`, crates/nope; vague: `lib.rs`; \
+                  [`js/src/`](../../js/src/sandbox.ts).\n\n```sh\nscripts/gate.sh\n```\n";
+        let (p, errors) = with_env(true, |env| render("p.md", md, env));
+        let src = |kind: &str, path: &str| {
+            format!("<a class=\"source\" href=\"{REPO_URL}/{kind}/main/{path}\">")
+        };
+        for want in [
+            format!(
+                "{}<code>crates/djs-core/src/heap/gc.rs</code></a>",
+                src("blob", "crates/djs-core/src/heap/gc.rs")
+            ),
+            format!("{}<code>js/src/</code></a>", src("tree", "js/src")),
+            format!(
+                "{}<code>heap/cells.rs:12</code></a>",
+                src("blob", "crates/djs-core/src/heap/cells.rs#L12")
+            ),
+            format!(
+                "<code>node {}js/pi/pi-tests.ts</a></code>",
+                src("blob", "js/pi/pi-tests.ts")
+            ),
+            format!(
+                "{}scripts/gate.sh</a>. and <code>x / y</code>",
+                src("blob", "scripts/gate.sh")
+            ),
+            "<pre class=\"code\"><code class=\"lang-sh\">scripts/gate.sh".to_string(),
+        ] {
+            assert!(p.html.contains(&want), "{want} in {}", p.html);
+        }
+        let want = [
+            "p.md: `crates/djs-core/src/nope.rs` names no file or directory",
+            "p.md: crates/nope names no file or directory",
+            "p.md: `lib.rs` could be any of crates/",
+            "p.md: `js/src/` links to js/src/sandbox.ts, not to js/src (D2104)",
+        ];
+        assert_eq!(errors.len(), want.len(), "{errors:#?}");
+        for (e, w) in errors.iter().zip(want) {
+            assert!(e.starts_with(w), "{e} vs {w}");
+        }
+        // The decision log links full paths only, and quietly.
+        let (p, errors) = with_env(false, |env| render("decisions.md", md, env));
+        assert!(errors.is_empty(), "{errors:?}");
+        assert!(p.html.contains("<code>heap/cells.rs:12</code>"));
+        assert!(
+            p.html
+                .contains(&src("blob", "crates/djs-core/src/heap/gc.rs"))
+        );
     }
 
     #[test]
