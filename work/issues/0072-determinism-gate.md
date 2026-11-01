@@ -1,6 +1,6 @@
 # 0072: Determinism checks in the gate
 
-status: blocked
+status: in-progress
 agent: determinism
 branch: issue/0072-determinism-gate
 depends-on: part 2: 0067, 0071
