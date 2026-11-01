@@ -220,6 +220,78 @@ cells! {
         /// Live handles.
         LIVE: u32 = 16,
     } tail SLOTS: [HandleSlot] = 24;
+
+    // ---- Compiled code (docs/compiler.md 6.1; encodings in `crate::bytecode`) ----------
+
+    /// An immutable compiled function, one per source function. The meaning of `FLAGS`
+    /// belongs to the compiler.
+    12 => FuncTemplate {
+        /// Function kind and properties (async, generator, simple params, ...).
+        FLAGS: u32 = 8,
+        /// The function's name, an [`Atom`](super::Atom) id (`name`, stack traces).
+        NAME: u32 = 12,
+        /// Formal parameter count: the argument area is padded to it.
+        PARAMS: u16 = 16,
+        /// `fn.length`.
+        LENGTH: u16 = 18,
+        /// Local slots.
+        LOCALS: u16 = 20,
+        /// Maximum operand stack depth (from the stack checker).
+        STACK: u16 = 22,
+        /// Number of captures (Boxes in the closure).
+        CAPTURES: u16 = 24,
+        /// Reserved, 0.
+        RESERVED: u16 = 26,
+        /// [`Bytes`]: the bytecode.
+        CODE: Ref = 28,
+        /// [`ValueArray`] of constants (numbers, strings, template-object caches), or null.
+        CONSTS: Ref = 32,
+        /// [`RefArray`] of child [`FuncTemplate`]s, or null.
+        CHILDREN: Ref = 36,
+        /// [`U32Array`]: one word per capture, bit 31 set = from the parent's captures,
+        /// else from a parent local; low bits = the index. Null without captures.
+        CAPTURE_DESC: Ref = 40,
+        /// [`Bytes`]: the handler table (16-byte records), or null.
+        HANDLERS: Ref = 44,
+        /// [`Bytes`]: the line table, or null.
+        LINES: Ref = 48,
+        /// The [`Script`] the function comes from.
+        SCRIPT: Ref = 52,
+        /// Source span of the function in the script (`Function.prototype.toString`).
+        SRC_START: u32 = 56,
+        SRC_END: u32 = 60,
+        /// [`U32Array`] of atom ids: local names, then capture names (TDZ messages,
+        /// disassembler). Null if not recorded.
+        NAMES: Ref = 64,
+        /// Reserved, 0.
+        RESERVED2: u32 = 68,
+    };
+
+    /// One compiled source.
+    13 => Script {
+        /// The file name, a string.
+        NAME: Ref = 8,
+        /// The source text, a string (D009), or null when stripped.
+        SOURCE: Ref = 12,
+    };
+
+    /// A captured binding, the "Box" of docs/compiler.md 5.4 (named `BoxCell` so it does
+    /// not shadow `alloc::boxed::Box`).
+    14 => BoxCell {
+        VALUE: Value = 8,
+    };
+
+    /// Raw bytes (bytecode, line and handler tables). Not traced.
+    15 => Bytes {
+        /// Length in bytes.
+        LEN: u32 = 8,
+    } tail DATA: [u8] = 12;
+
+    /// References to cells that are not JS values (child templates).
+    16 => RefArray {
+        /// Entries in use.
+        LEN: u32 = 8,
+    } tail REFS: [Ref] = 12;
 }
 
 // The GC stores the forwarding offset in the first payload word, so every cell needs one.

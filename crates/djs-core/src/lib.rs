@@ -5,6 +5,7 @@
 
 extern crate alloc;
 
+pub mod bytecode;
 pub mod heap;
 pub mod json;
 pub mod lexer;
