@@ -8,6 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0113 | Docs follow-ups (stale refs, generated status numbers, search, live disasm) | docs | .worktrees/docs |
+| 0114 | Guide design aligned with Elanor (research first) | design | .worktrees/design |
 | 0101 | Mark-compact collection (design first) | heap | .worktrees/heap |
 | 0110 | pi-like's library hot spots + dense element access in natives | perf | .worktrees/perf |
 
