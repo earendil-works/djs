@@ -898,8 +898,11 @@ InstanceofOperator: reentrant (%InstanceofOperator)
   builtins/function.ts:137:22  Call (intrinsic)
   builtins/function.ts:142:10  OrdinaryHasInstance (builtin)
 
+ClassHeritage: reentrant (%ClassHeritage)
+  builtins/function.ts:158:30  Get (intrinsic)
+
 FunctionPrototypeHasInstance: reentrant (Function.prototype[Symbol.hasInstance])
-  builtins/function.ts:151:10  OrdinaryHasInstance (builtin)
+  builtins/function.ts:171:10  OrdinaryHasInstance (builtin)
 
 ThrowTypeError: leaf (get Function.prototype.caller, set Function.prototype.caller, get Function.prototype.arguments, set Function.prototype.arguments)
 

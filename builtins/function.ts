@@ -143,6 +143,26 @@ function InstanceofOperator(v: Value, target: Value): boolean {
 }
 
 /**
+ * ClassDefinitionEvaluation steps 8.e-h, 15.7.14: checks a class heritage (`extends
+ * parent`) and returns protoParent, the [[Prototype]] of the class's `prototype`.
+ * `define_class` does the rest (0040).
+ * @intrinsic
+ */
+function ClassHeritage(parent: Value): Value {
+  if (parent === null) {
+    return null;
+  }
+  if (!IsConstructor(parent)) {
+    throw NewTypeError("parent class must be constructor");
+  }
+  const protoParent: Value = Get(AsObj(parent), "prototype");
+  if (protoParent !== null && !IsObject(protoParent)) {
+    throw NewTypeError("parent prototype must be an object or null");
+  }
+  return protoParent;
+}
+
+/**
  * Function.prototype [ %Symbol.hasInstance% ] ( V ), 20.2.3.6.
  * @builtin Function.prototype[Symbol.hasInstance]
  * @attributes none

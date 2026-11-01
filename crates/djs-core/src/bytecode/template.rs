@@ -30,6 +30,9 @@ pub mod func_flags {
     pub const KIND_FIELD_INIT: u32 = 9;
     pub const ASYNC: u32 = 1 << 4;
     pub const GENERATOR: u32 = 1 << 5;
+    /// The closure has a home object slot after its captures (methods that use `super`
+    /// properties, directly or in arrows; class constructors and field initializers).
+    pub const HOME: u32 = 1 << 6;
     /// Compiled in privileged mode (the prelude): closures get no `length`, `name` or
     /// `prototype`, since the `%Install*` intrinsics define them on the builtins that
     /// user code can see (D1433).

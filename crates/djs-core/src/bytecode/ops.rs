@@ -506,22 +506,46 @@ ops! {
     Delete delete() pop 2 push 1 cost Access flags THROWS | CALLS;
     /// `key obj -> bool`
     In in_() pop 2 push 1 cost Access flags THROWS | CALLS;
-    /// `obj -> v`: private field (brand check inside).
-    GetPrivate get_private(atom: Atom) pop 1 push 1 cost Access flags THROWS | CALLS;
-    /// `obj v ->`
-    PutPrivate put_private(atom: Atom) pop 2 push 0 cost Access flags THROWS | CALLS;
-    /// `obj v -> obj`
-    DefinePrivate define_private(atom: Atom) pop 2 push 1 cost Access flags THROWS | ALLOC;
-    /// `obj -> bool`: `#x in obj`.
-    PrivateIn private_in(atom: Atom) pop 1 push 1 cost Access flags THROWS;
-    /// `this home -> v`
+    /// `-> sym`: a new private name (a private symbol described `#x`, docs/compiler.md
+    /// 7.9). `flags` bit 0: a private method or accessor (brand check messages).
+    PrivateSymbol private_symbol(atom: Atom, flags: U8) pop 0 push 1 cost Alloc flags ALLOC;
+    /// `obj sym -> v`: `obj.#x` (own properties only, never a proxy trap; a getter is
+    /// called).
+    GetPrivateField get_private_field() pop 2 push 1 cost Access flags THROWS | CALLS;
+    /// `obj sym v ->`: `obj.#x = v` (a setter is called).
+    PutPrivateField put_private_field() pop 3 push 0 cost Access flags THROWS | CALLS;
+    /// `obj sym v -> obj`: adds a private field (`kind` 0) or method (1), ignoring
+    /// extensibility; TypeError if `obj` has it already.
+    DefinePrivateField define_private_field(kind: U8) pop 3 push 1 cost Access flags THROWS | ALLOC;
+    /// `obj sym getter setter -> obj`: adds a private accessor (`undefined` for a
+    /// missing half).
+    DefinePrivateAccessor define_private_accessor() pop 4 push 1 cost Access flags THROWS | ALLOC;
+    /// `sym obj -> bool`: `#x in obj`.
+    PrivateIn private_in() pop 2 push 1 cost Access flags THROWS;
+    /// `o -> o.[[GetPrototypeOf]]()`: the base of a super property (from the home
+    /// object), or the super constructor (from the active function).
+    GetSuper get_super() pop 1 push 1 cost Access flags THROWS;
+    /// `this base -> v`: `super.x`, base.[[Get]](x, this).
     GetSuperField get_super_field(atom: Atom) pop 2 push 1 cost Access flags THROWS | CALLS;
-    /// `this home v ->`
+    /// `this base v ->`: `super.x = v`, base.[[Set]](x, v, this).
     PutSuperField put_super_field(atom: Atom) pop 3 push 0 cost Access flags THROWS | CALLS | ALLOC;
-    /// `this home key -> v`
+    /// `this base key -> v`
     GetSuperElem get_super_elem() pop 3 push 1 cost Access flags THROWS | CALLS;
-    /// `this home key v ->`
+    /// `this base key v ->`
     PutSuperElem put_super_elem() pop 4 push 0 cost Access flags THROWS | CALLS | ALLOC;
+    /// `home f -> home f`: sets the home object of `f` (class field initializers).
+    SetHomeObject set_home_object() pop 2 push 2 cost Basic;
+    /// `parent protoParent ctor -> ctor proto`: ClassDefinitionEvaluation's prototype
+    /// and constructor setup. `flags` bit 0: there is a heritage (`parent` and
+    /// `protoParent`, checked by %ClassHeritage, are used; otherwise ignored).
+    DefineClass define_class(flags: U8) pop 3 push 2 cost Alloc flags THROWS | ALLOC;
+    /// `obj f -> obj`: a class method (`kind` 0), getter (1) or setter (2):
+    /// non-enumerable, and sets the home object.
+    DefineClassMethod define_class_method(atom: Atom, kind: U8) pop 2 push 1 cost Access flags THROWS | ALLOC;
+    /// `obj key f -> obj`
+    DefineClassMethodElem define_class_method_elem(kind: U8) pop 3 push 1 cost Access flags THROWS | CALLS | ALLOC;
+    /// `obj key v -> obj`: a public class field (CreateDataPropertyOrThrow).
+    DefineClassField define_class_field() pop 3 push 1 cost Access flags THROWS | CALLS | ALLOC;
     /// `v -> v`: TypeError for `null`/`undefined` (destructuring).
     RequireObjectCoercible require_object_coercible() pop 1 push 1 cost Basic flags THROWS;
 
@@ -620,8 +644,9 @@ ops! {
     CallSpread call_spread() pop 3 push 1 cost Call flags THROWS | CALLS | ALLOC;
     /// `f args -> r`
     ConstructSpread construct_spread() pop 2 push 1 cost Call flags THROWS | CALLS | ALLOC;
-    /// `a1 .. an -> r`: `super(...)` in a derived constructor.
-    SuperCall super_call(argc: Argc) pop 0 + imm 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
+    /// `f a1 .. an newTarget -> r`: `super(...)` in a derived constructor: constructs
+    /// `f` (the super constructor) with that new.target.
+    SuperCall super_call(argc: Argc) pop 2 + imm 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
     /// `a1 .. an -> r`: privileged code only (docs/compiler.md 7.3).
     CallIntrinsic call_intrinsic(id: Intrinsic, argc: Argc) pop 0 + imm 1 push 1 cost Call flags THROWS | CALLS | ALLOC;
     // ---- Generators and async functions (D1375; docs/compiler.md 7.7) ------------------
@@ -663,6 +688,16 @@ ops! {
     ForInNext for_in_next() pop 1 push 3 cost Access flags THROWS;
     /// TypeError if a class constructor is called without `new`.
     CheckCtor check_ctor() pop 0 push 0 cost Basic flags THROWS;
+    /// `v -> v`: a derived constructor's `this`: ReferenceError while uninitialized
+    /// (`undefined`, before `super()`).
+    CheckThis check_this() pop 1 push 1 cost Basic flags THROWS;
+    /// `v ->`: before `super()` binds `this`: ReferenceError if it is bound already.
+    CheckThisUninit check_this_uninit() pop 1 push 0 cost Basic flags THROWS;
+    /// `v -> v`: a derived constructor's return value: TypeError unless an object or
+    /// `undefined`.
+    CheckCtorReturn check_ctor_return() pop 1 push 1 cost Basic flags THROWS;
+    /// Throws a new error with message `atom`; `kind` 0: TypeError, 1: ReferenceError.
+    ThrowError throw_error(atom: Atom, kind: U8) pop 0 push 0 cost Basic flags THROWS | TERM;
     /// `debugger` (no effect).
     Debugger debugger() pop 0 push 0 cost Free;
     /// No operation.

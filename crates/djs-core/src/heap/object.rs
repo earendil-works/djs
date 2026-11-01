@@ -1463,6 +1463,19 @@ impl Heap {
         }
     }
 
+    /// Adds an own property under a private name (D1400), whether or not the object is
+    /// extensible (PrivateFieldAdd, PrivateMethodOrAccessorAdd). The caller checked that
+    /// it is absent.
+    pub fn add_private_property(
+        &mut self,
+        o: Obj,
+        key: Atom,
+        p: &Property,
+    ) -> Result<(), HeapError> {
+        debug_assert!(self.is_private_atom(key) && self.find_own(o, key) == Loc::None);
+        self.table_insert(o, key, p)
+    }
+
     /// `[[OwnPropertyKeys]]` in spec order: array indexes ascending, then string keys in
     /// creation order, then symbols in creation order.
     pub fn own_keys(&self, o: Obj) -> Vec<Atom> {
@@ -1496,7 +1509,10 @@ impl Heap {
                     continue;
                 }
                 if key.is_symbol() {
-                    symbols.push(key);
+                    // Private names are not property keys to the language (D1400).
+                    if !self.is_private_atom(key) {
+                        symbols.push(key);
+                    }
                 } else if let Some(idx) = indexed.then(|| self.atom_array_index(key)).flatten() {
                     indexes.push((idx, key));
                     sort = true;

@@ -548,6 +548,36 @@ impl Heap {
         Ok(Sym(cell))
     }
 
+    /// Creates a private name (D1400): a symbol flagged [`SYM_PRIVATE`], plus
+    /// [`SYM_PRIVATE_METHOD`] for methods and accessors.
+    ///
+    /// [`SYM_PRIVATE`]: super::cells::flags::SYM_PRIVATE
+    /// [`SYM_PRIVATE_METHOD`]: super::cells::flags::SYM_PRIVATE_METHOD
+    pub fn new_private_symbol(&mut self, description: Str, method: bool) -> Result<Sym, HeapError> {
+        use super::cells::flags::{SYM_PRIVATE, SYM_PRIVATE_METHOD};
+        let s = self.new_symbol(Value::string(description))?;
+        let flags = if method {
+            SYM_PRIVATE | SYM_PRIVATE_METHOD
+        } else {
+            SYM_PRIVATE
+        };
+        self.set_cell_flags(s.0, flags);
+        Ok(s)
+    }
+
+    /// The symbol's private-name flags (0 for an ordinary symbol).
+    pub fn symbol_private_flags(&self, s: Sym) -> u16 {
+        self.cell_flags(s.0)
+    }
+
+    /// `a` is the key of a private name.
+    pub fn is_private_atom(&self, a: Atom) -> bool {
+        a.is_symbol()
+            && self.atom_symbol(a).is_some_and(|s| {
+                self.symbol_private_flags(s) & super::cells::flags::SYM_PRIVATE != 0
+            })
+    }
+
     /// The property key of a symbol.
     pub fn symbol_atom(&self, s: Sym) -> Atom {
         Atom(self.arena().get(s.0, Symbol::ATOM))

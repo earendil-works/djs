@@ -78,6 +78,11 @@ pub mod flags {
     pub const OBJ_HOST_ASYNC: u16 = 32;
     /// BigInt: the value is negative.
     pub const BIGINT_NEG: u16 = 1;
+    /// Symbol: a private name (`#x`, D1400). Never an own key of [[OwnPropertyKeys]],
+    /// so no reflection, copy or freeze sees it.
+    pub const SYM_PRIVATE: u16 = 1;
+    /// Symbol: a private method or accessor name (only for the brand check message).
+    pub const SYM_PRIVATE_METHOD: u16 = 2;
 }
 
 /// `"DJS\0"` little-endian, in [`Roots::MAGIC`].

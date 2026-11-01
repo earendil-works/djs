@@ -2385,12 +2385,27 @@ function InstanceofOperator(v, target) {
   return OrdinaryHasInstance(target, v);
 }
 
-// builtins/function.ts:150 Function.prototype[Symbol.hasInstance]
+// builtins/function.ts:151 %ClassHeritage
+function ClassHeritage(parent) {
+  if (parent === null) {
+    return null;
+  }
+  if (!%IsConstructor(parent)) {
+    throw %NewTypeError("parent class must be constructor");
+  }
+  const protoParent = %Get(%AsObj(parent), "prototype");
+  if (protoParent !== null && !%IsObject(protoParent)) {
+    throw %NewTypeError("parent prototype must be an object or null");
+  }
+  return protoParent;
+}
+
+// builtins/function.ts:170 Function.prototype[Symbol.hasInstance]
 function FunctionPrototypeHasInstance(v) {
   return OrdinaryHasInstance(this, v);
 }
 
-// builtins/function.ts:162 get Function.prototype.caller set Function.prototype.caller get Function.prototype.arguments set Function.prototype.arguments
+// builtins/function.ts:182 get Function.prototype.caller set Function.prototype.caller get Function.prototype.arguments set Function.prototype.arguments
 function ThrowTypeError(v) {
   throw %NewTypeError("invalid property access");
 }
@@ -8100,6 +8115,7 @@ function WeakSetPrototypeToStringTag() {
 %InstallIntrinsic("ToString", ToString);
 %InstallIntrinsic("ToPropertyKey", ToPropertyKey);
 %InstallIntrinsic("InstanceofOperator", InstanceofOperator);
+%InstallIntrinsic("ClassHeritage", ClassHeritage);
 %InstallIntrinsic("AsyncAwait", AsyncAwait);
 %InstallIntrinsic("AsyncFunctionReturn", AsyncFunctionReturn);
 %InstallIntrinsic("AsyncFunctionThrow", AsyncFunctionThrow);

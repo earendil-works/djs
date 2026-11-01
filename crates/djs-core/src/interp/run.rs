@@ -68,6 +68,7 @@ impl Default for ExecOptions {
 }
 
 mod bigint;
+mod class;
 mod intrinsics;
 mod json_regexp;
 pub(crate) mod promise;
@@ -2104,6 +2105,28 @@ impl<'h> Exec<'h> {
                 return self.call(base, argc, Continuation::PushResult, next);
             }
             Op::Debugger | Op::Nop => {}
+            Op::PrivateSymbol
+            | Op::GetPrivateField
+            | Op::PutPrivateField
+            | Op::DefinePrivateField
+            | Op::DefinePrivateAccessor
+            | Op::PrivateIn
+            | Op::GetSuper
+            | Op::GetSuperField
+            | Op::PutSuperField
+            | Op::GetSuperElem
+            | Op::PutSuperElem
+            | Op::SetHomeObject
+            | Op::DefineClass
+            | Op::DefineClassMethod
+            | Op::DefineClassMethodElem
+            | Op::DefineClassField
+            | Op::SuperCall
+            | Op::CheckCtor
+            | Op::CheckThis
+            | Op::CheckThisUninit
+            | Op::CheckCtorReturn
+            | Op::ThrowError => return self.class_op(op, next),
             Op::GeneratorStart => return self.generator_start(next),
             Op::Yield => return self.yield_value(next, false),
             Op::YieldStar => return self.yield_value(next, true),
@@ -2187,9 +2210,11 @@ impl<'h> Exec<'h> {
                 (true, true) => Intrinsic::AsyncGeneratorFunctionProto,
             },
         );
+        // Methods that use `super` get a home object slot after the captures.
+        let home = u32::from(flags & func_flags::HOME != 0);
         let f = self
             .heap
-            .alloc_object(ObjectClass::Function, Some(proto), 1 + ncap)?;
+            .alloc_object(ObjectClass::Function, Some(proto), 1 + ncap + home)?;
         self.heap.set_object_slot(f, 0, Value::internal(t.0));
         for i in 0..ncap {
             let d = self.heap.arena().read::<u32>(U32Array::DATA.at(desc.0, i));
@@ -2283,8 +2308,13 @@ impl<'h> Exec<'h> {
             | Op::Le
             | Op::Ge => &[(1, NUMBER), (0, NUMBER)],
             Op::Neg | Op::Plus | Op::BNot | Op::Inc | Op::Dec | Op::ToNumeric => &[(0, NUMBER)],
-            Op::ToString | Op::GetElem | Op::GetElemMethod | Op::Delete => &[(0, STRING)],
+            Op::ToString | Op::GetElem | Op::GetElemMethod | Op::Delete | Op::GetSuperElem => {
+                &[(0, STRING)]
+            }
             Op::DefineElem
+            | Op::DefineClassMethodElem
+            | Op::DefineClassField
+            | Op::PutSuperElem
             | Op::DefineMethodElem
             | Op::DefineGetterElem
             | Op::DefineSetterElem
@@ -2693,6 +2723,13 @@ impl<'h> Exec<'h> {
             special::THIS => self.get(self.bp + 1),
             special::NEW_TARGET => self.header(frame::NEW_TARGET),
             special::ACTIVE_FUNCTION => self.get(self.bp),
+            special::HOME_OBJECT => {
+                let f = self.get(self.bp).as_object().expect("frame callee");
+                match self.home_slot(f) {
+                    Some(slot) => self.heap.object_slot(f, slot),
+                    None => Value::UNDEFINED,
+                }
+            }
             special::ARGUMENTS => {
                 // An unmapped (strict) arguments object.
                 let argc = self.header_int(frame::ARGC);
@@ -2711,6 +2748,12 @@ impl<'h> Exec<'h> {
                     crate::heap::atoms::LENGTH,
                     Value::int(argc as i32),
                 )?;
+                // CreateUnmappedArgumentsObject: @@iterator is %Array.prototype.values%.
+                let values =
+                    realm::installed_intrinsic(self.heap, intrinsics::ARRAY_PROTOTYPE_VALUES);
+                if !values.is_undefined() {
+                    realm::define_hidden(self.heap, a, crate::heap::atoms::SYM_ITERATOR, values)?;
+                }
                 Value::object(a)
             }
             _ => {
@@ -2875,6 +2918,7 @@ impl<'h> Exec<'h> {
         if !self.heap.define_own_property(o, key, &d)? {
             return type_error("could not define property");
         }
+        self.set_home(f, Value::object(o));
         Ok(())
     }
 
@@ -3035,20 +3079,30 @@ impl<'h> Exec<'h> {
             flags & (func_flags::ASYNC | func_flags::GENERATOR) == 0
                 && matches!(
                     func_flags::kind(flags),
-                    func_flags::KIND_NORMAL | func_flags::KIND_CLASS_CTOR
+                    func_flags::KIND_NORMAL
+                        | func_flags::KIND_CLASS_CTOR
+                        | func_flags::KIND_DERIVED_CTOR
                 )
         }
     }
 
-    /// QuickJS's `<name> is not a constructor` (just `not a constructor` without a name).
+    fn is_derived_ctor(&self, fo: Obj) -> bool {
+        self.heap.object_class(fo) == ObjectClass::Function && {
+            let t = self.template_of(fo);
+            func_flags::kind(self.heap.arena().get(t, FuncTemplate::FLAGS))
+                == func_flags::KIND_DERIVED_CTOR
+        }
+    }
+
+    /// QuickJS's `<name> is not a constructor` (just `not a constructor` without a
+    /// `name` string; an empty name gives ` is not a constructor`, as in qjs).
     fn not_a_constructor_message(&self, f: Value) -> String {
         let name = f
             .as_object()
             .and_then(|fo| self.heap.get_own_property(fo, crate::heap::atoms::NAME))
             .and_then(|p| p.value())
             .and_then(|v| v.as_string())
-            .map(|s| self.heap.str_to_string(s))
-            .filter(|s| !s.is_empty());
+            .map(|s| self.heap.str_to_string(s));
         match name {
             Some(n) => format!("{n} is not a constructor"),
             None => String::from("not a constructor"),
@@ -3110,31 +3164,35 @@ impl<'h> Exec<'h> {
         }
         let proto_source = new_target.and_then(|v| v.as_object()).unwrap_or(fo);
         // A builtin constructor makes its own object (GetPrototypeFromConstructor in the
-        // builtin, which may run a `prototype` getter): `this` is not read (0039).
+        // builtin, which may run a `prototype` getter): `this` is not read (0039). A
+        // derived class constructor gets its `this` from `super()`.
         let builtin =
             self.heap.cell_flags(fo.offset()) & crate::heap::cells::flags::OBJ_BUILTIN != 0;
-        let proto = match self
-            .heap
-            .lookup_property(proto_source, crate::heap::atoms::PROTOTYPE)
-        {
-            _ if builtin => None,
-            Lookup::Found(_, Property::Data { value, .. }) => value.as_object(),
-            Lookup::Absent => None,
-            // A `prototype` getter or a proxy's `get` trap: GetPrototypeFromConstructor
-            // runs user code, in %OrdinaryConstructSlow.
-            Lookup::Found(..) | Lookup::Proxy(_) => {
-                let nt = new_target.unwrap_or(f);
-                return self.construct_through(
-                    proxy::ORDINARY_CONSTRUCT_SLOW,
-                    base,
-                    argc,
-                    nt,
-                    next,
-                );
-            }
+        let this = if builtin || self.is_derived_ctor(fo) {
+            Value::UNDEFINED
+        } else {
+            let proto = match self
+                .heap
+                .lookup_property(proto_source, crate::heap::atoms::PROTOTYPE)
+            {
+                Lookup::Found(_, Property::Data { value, .. }) => value.as_object(),
+                Lookup::Absent => None,
+                // A `prototype` getter or a proxy's `get` trap: GetPrototypeFromConstructor
+                // runs user code, in %OrdinaryConstructSlow.
+                Lookup::Found(..) | Lookup::Proxy(_) => {
+                    let nt = new_target.unwrap_or(f);
+                    return self.construct_through(
+                        proxy::ORDINARY_CONSTRUCT_SLOW,
+                        base,
+                        argc,
+                        nt,
+                        next,
+                    );
+                }
+            };
+            let proto = proto.unwrap_or_else(|| intrinsic_obj(self.heap, Intrinsic::ObjectProto));
+            Value::object(self.heap.new_object(Some(proto))?)
         };
-        let proto = proto.unwrap_or_else(|| intrinsic_obj(self.heap, Intrinsic::ObjectProto));
-        let this = Value::object(self.heap.new_object(Some(proto))?);
         // Make room for `this` below the arguments.
         self.ensure(self.sp + 1)?;
         for i in (0..argc).rev() {
