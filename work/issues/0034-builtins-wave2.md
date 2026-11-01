@@ -1,7 +1,7 @@
 # 0034: Core builtins wave 2: Array and String in full, 0031 leftovers
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0034-builtins-wave2
 depends-on: 0031
 touches: builtins/ (array.ts, string.ts, object.ts, error.ts, …), builtins/gen/, crates/djs-core/src/builtins/, crates/djs-core/src/bytecode/intrinsics.rs (regenerated), crates/djs-bgen/, crates/djs-core/src/compiler/ (only: an option to drop source text for the prelude), crates/djs-prelude/, ratchets
