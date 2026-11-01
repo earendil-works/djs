@@ -180,6 +180,20 @@ const I = {
   NumberToUint32: (n) => n >>> 0,
   MathRandom: () => 0.5,
   ArraySpliceDense: (o, start, deleteCount, itemCount) => false,
+  StrLocaleCompare: (a, b) => a.localeCompare(b),
+  StrCharCodeAt: (s, i) => (check(typeof s === "string" && Number.isInteger(i) || !isFinite(i), "StrCharCodeAt"), i >= 0 && i < s.length ? s.charCodeAt(i) : NaN),
+  StrCodePointAt: (s, i) => (i >= 0 && i < s.length ? s.codePointAt(i) : undefined),
+  StrSubstring: (s, a, b) => (check(typeof s === "string" && Number.isInteger(a) && Number.isInteger(b) && a >= 0 && b >= 0, "StrSubstring " + a + " " + b), s.substring(a, b)),
+  StrIndexOf: (s, t, from) => (check(typeof t === "string" && from >= 0, "StrIndexOf"), s.indexOf(t, from)),
+  StrLastIndexOf: (s, t, from) => (check(typeof t === "string" && from >= 0, "StrLastIndexOf"), s.lastIndexOf(t, from)),
+  StrToCase: (s, upper) => (upper ? s.toUpperCase() : s.toLowerCase()),
+  StrTrim: (s, w) => (w === 0 ? s.trim() : w === 1 ? s.trimStart() : s.trimEnd()),
+  StrIsWellFormed: (s) => s.isWellFormed(),
+  StrToWellFormed: (s) => s.toWellFormed(),
+  StrRepeat: (s, n) => (check(Number.isInteger(n) && n >= 0, "StrRepeat"), s.repeat(n)),
+  StrFromCodeUnits: (list) => String.fromCharCode(...list),
+  StrFromCodePoints: (list) => String.fromCodePoint(...list),
+  StrNormalize: (s, f) => s.normalize(["NFC", "NFD", "NFKC", "NFKD"][f]),
   CompareStrings: (a, b) => (check(typeof a === "string" && typeof b === "string", "CompareStrings"), a < b ? -1 : a > b ? 1 : 0),
   StringCodePoints: (s) => [...s],
   SortPrimitives: (list) => {
@@ -752,5 +766,69 @@ same("Array.of", Array.of, (f) => f(1, 2, 3));
 same("Array.of", Array.of, (f) => f.call(Object, 1, 2));
 same("Array.of", Array.of, (f) => f.call(undefined, 1));
 same("get Array.Symbol(Symbol.species)", Object.getOwnPropertyDescriptor(Array, Symbol.species).get, (f) => f.call(5));
+
+// ---- 0034: String -----------------------------------------------------------------------
+
+const SP = String.prototype;
+const strSubjects = (log) => ["abcabc", "", "Straße ΑΣ ǅ İ", " \u00a0 x\ty \n\u2028", "a\ud83d\ude00b\ud800", 12345, true, new String("wrap"), valueOfObj("vo", log), toPrim("tp")];
+const nStr = strSubjects([]).length;
+const stringMethods = {
+  at: [[0], [-1], [99], ["1"]],
+  charAt: [[0], [-1], [2.7], [99]],
+  charCodeAt: [[0], [-1], [1], [99], [NaN]],
+  codePointAt: [[0], [1], [2], [99], [-1]],
+  indexOf: [["b"], ["c", 3], [""], ["", 99], ["zz"], ["a", -5], [undefined]],
+  lastIndexOf: [["b"], ["c", 3], [""], ["a", 0], ["zz"], ["a", NaN], ["a", -Infinity]],
+  includes: [["bc"], ["bc", 5], [""], ["x"]],
+  startsWith: [["ab"], ["bc", 1], ["", 99], ["abcabcx"]],
+  endsWith: [["bc"], ["ab", 2], ["", 0], ["x"]],
+  localeCompare: [["abc"], ["b"], [""], [5]],
+  slice: [[], [1], [-2], [1, -1], [5, 1], [-Infinity, Infinity], [undefined, 2]],
+  substring: [[], [1], [-2], [4, 1], [1, 99], [NaN, 2], [undefined, 2]],
+  substr: [[], [1], [-2, 1], [1, 2], [1, -1], [99]],
+  concat: [[], ["x", 1, null], [[1, 2]]],
+  repeat: [[0], [3], [-1], [Infinity], ["2"]],
+  padStart: [[10], [10, "xy"], [2], [10, ""], [8, 0]],
+  padEnd: [[10], [10, "xy"], [2], [10, ""]],
+  toLowerCase: [[]],
+  toUpperCase: [[]],
+  toLocaleLowerCase: [[]],
+  toLocaleUpperCase: [[]],
+  trim: [[]],
+  trimStart: [[]],
+  trimEnd: [[]],
+  isWellFormed: [[]],
+  toWellFormed: [[]],
+};
+for (const name of Object.keys(stringMethods)) {
+  const native = SP[name];
+  for (let i = 0; i < nStr; i++) {
+    for (const args of stringMethods[name]) {
+      same("String.prototype." + name, native, (f, log) => f.apply(strSubjects(log)[i], args));
+    }
+  }
+  same("String.prototype." + name, native, (f) => f.call(null));
+  same("String.prototype." + name, native, (f) => f.call(undefined, "x"));
+  same("String.prototype." + name, native, () => installed["String.prototype." + name].length === native.length);
+}
+for (const name of ["includes", "startsWith", "endsWith"]) {
+  same("String.prototype." + name, SP[name], (f) => f.call("abc", { [Symbol.match]: true }));
+  same("String.prototype." + name, SP[name], (f) => f.call("abc", { [Symbol.match]: false, toString: () => "b" }));
+}
+for (const form of [undefined, "NFC", "NFD", "NFKC", "NFKD", "bad"]) {
+  for (const s of ["plain ascii", "caf\u00e9"]) {
+    if (s !== "plain ascii" && form !== undefined && form !== "NFC" && form !== "bad") continue;
+    same("String.prototype.normalize", SP.normalize, (f) => f.call(s, form));
+  }
+}
+for (const args of [[], [65, 66.7, -1, 65536 + 67], ["97"], [0xd83d, 0xde00], [toPrim(5)]]) {
+  same("String.fromCharCode", String.fromCharCode, (f) => f(...args));
+}
+for (const args of [[], [65, 0x1f600], [-1], [1.5], [0x110000], ["66"], [NaN], [Infinity]]) {
+  same("String.fromCodePoint", String.fromCodePoint, (f) => f(...args));
+}
+for (const args of [[{ raw: ["a", "b", "c"] }, 1], [{ raw: ["a", "b"] }, 1, 2, 3], [{ raw: [] }], [{ raw: "xyz" }, "-"], [{}], [null]]) {
+  same("String.raw", String.raw, (f) => f(...args));
+}
 
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));

@@ -140,6 +140,21 @@ const F64_TRUNC: u16 = id("F64Trunc");
 const COMPARE_STRINGS: u16 = id("CompareStrings");
 const STRING_CODE_POINTS: u16 = id("StringCodePoints");
 const SORT_PRIMITIVES: u16 = id("SortPrimitives");
+const STR_LOCALE_COMPARE: u16 = id("StrLocaleCompare");
+const STR_CHAR_CODE_AT: u16 = id("StrCharCodeAt");
+const STR_CODE_POINT_AT: u16 = id("StrCodePointAt");
+const STR_SUBSTRING: u16 = id("StrSubstring");
+const STR_INDEX_OF: u16 = id("StrIndexOf");
+const STR_LAST_INDEX_OF: u16 = id("StrLastIndexOf");
+const STR_TO_CASE: u16 = id("StrToCase");
+const STR_TRIM: u16 = id("StrTrim");
+const STR_IS_WELL_FORMED: u16 = id("StrIsWellFormed");
+const STR_TO_WELL_FORMED: u16 = id("StrToWellFormed");
+const STR_REPEAT: u16 = id("StrRepeat");
+const STR_FROM_CODE_UNITS: u16 = id("StrFromCodeUnits");
+const STR_FROM_CODE_POINTS: u16 = id("StrFromCodePoints");
+const STR_NORMALIZE: u16 = id("StrNormalize");
+
 const ARRAY_SPLICE_DENSE: u16 = id("ArraySpliceDense");
 const INSTALL_CONSTRUCTOR: u16 = id("InstallConstructor");
 const INSTALL_ACCESSOR: u16 = id("InstallAccessor");
@@ -610,6 +625,76 @@ impl Exec<'_> {
                     _ => Value::FALSE,
                 }
             }
+            STR_CHAR_CODE_AT | STR_CODE_POINT_AT | STR_SUBSTRING | STR_INDEX_OF
+            | STR_LAST_INDEX_OF | STR_TO_CASE | STR_TRIM | STR_IS_WELL_FORMED
+            | STR_TO_WELL_FORMED | STR_REPEAT | STR_NORMALIZE => {
+                let Some(s) = a0.as_string() else {
+                    return bad_argument(info.name);
+                };
+                // Integral, non-negative Number arguments (the builtins clamp them).
+                let idx = |v: Value| {
+                    v.as_number()
+                        .filter(|n| *n >= 0.0)
+                        .map_or(0, |n| n.min(u32::MAX as f64) as u32)
+                };
+                let a1 = arg(self, 1);
+                match id {
+                    STR_CHAR_CODE_AT => match a1.as_number() {
+                        Some(n) if n >= 0.0 && n < self.heap.str_len(s) as f64 => {
+                            Value::int(self.heap.char_code_at(s, n as u32).unwrap_or(0) as i32)
+                        }
+                        _ => Value::NAN,
+                    },
+                    STR_CODE_POINT_AT => match a1.as_number() {
+                        Some(n) if n >= 0.0 && n < self.heap.str_len(s) as f64 => {
+                            string::code_point_at(self.heap, s, n as u32)
+                                .map_or(Value::UNDEFINED, conv::number)
+                        }
+                        _ => Value::UNDEFINED,
+                    },
+                    STR_SUBSTRING => {
+                        Value::string(string::substring(self.heap, s, idx(a1), idx(arg(self, 2)))?)
+                    }
+                    STR_INDEX_OF | STR_LAST_INDEX_OF => {
+                        let Some(search) = a1.as_string() else {
+                            return bad_argument(info.name);
+                        };
+                        let from = idx(arg(self, 2));
+                        conv::number(string::index_of(
+                            self.heap,
+                            s,
+                            search,
+                            from,
+                            id == STR_LAST_INDEX_OF,
+                        )?)
+                    }
+                    STR_TO_CASE => {
+                        Value::string(string::to_case(self.heap, s, a1.as_bool() == Some(true))?)
+                    }
+                    STR_TRIM => {
+                        Value::string(string::trim(self.heap, s, a1.as_int().unwrap_or(0))?)
+                    }
+                    STR_IS_WELL_FORMED => string::well_formed(self.heap, s, false)?,
+                    STR_TO_WELL_FORMED => string::well_formed(self.heap, s, true)?,
+                    STR_REPEAT => Value::string(string::repeat(self.heap, s, idx(a1))?),
+                    _ => match string::normalize(self.heap, s, a1.as_int().unwrap_or(0) as u8)? {
+                        Some(r) => Value::string(r),
+                        None => Value::UNDEFINED,
+                    },
+                }
+            }
+            STR_LOCALE_COMPARE => match (a0.as_string(), arg(self, 1).as_string()) {
+                (Some(a), Some(b)) => conv::number(string::locale_compare(self.heap, a, b)?),
+                _ => return bad_argument(info.name),
+            },
+            STR_FROM_CODE_UNITS | STR_FROM_CODE_POINTS => match a0.as_object() {
+                Some(list) => Value::string(string::from_codes(
+                    self.heap,
+                    list,
+                    id == STR_FROM_CODE_POINTS,
+                )?),
+                None => return bad_argument(info.name),
+            },
             SORT_PRIMITIVES => match a0.as_object() {
                 Some(o) => Value::bool(array::sort_primitives(self.heap, o)?),
                 None => return bad_argument(info.name),

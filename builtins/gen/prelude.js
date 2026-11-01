@@ -2110,6 +2110,344 @@ function StringPrototypeValueOf() {
   return ThisStringValue(this);
 }
 
+// builtins/string.ts:51
+function StrLen(s) {
+  return %StrLength(s);
+}
+
+// builtins/string.ts:56
+function ThisToString(v) {
+  if (v === undefined || v === null) {
+    throw %NewTypeError("null or undefined are forbidden");
+  }
+  return ToString(v);
+}
+
+// builtins/string.ts:67
+function IsRegExp(v) {
+  if (!%IsObject(v)) {
+    return false;
+  }
+  const matcher = %Get(%AsObj(v), %WellKnownSymbol("match"));
+  return matcher !== undefined && %ToBoolean(matcher);
+}
+
+// builtins/string.ts:76
+function ClampPosition(v, len) {
+  const p = ToIntegerOrInfinity(v);
+  if (p < 0) {
+    return 0;
+  }
+  return p > len ? len : p;
+}
+
+// builtins/string.ts:90 String.prototype.at
+function StringPrototypeAt(index) {
+  const s = ThisToString(this);
+  const len = StrLen(s);
+  const rel = ToIntegerOrInfinity(index);
+  const k = rel >= 0 ? rel : len + rel;
+  if (k < 0 || k >= len) {
+    return undefined;
+  }
+  return %StrSubstring(s, k, k + 1);
+}
+
+// builtins/string.ts:105 String.prototype.charAt
+function StringPrototypeCharAt(pos) {
+  const s = ThisToString(this);
+  const p = ToIntegerOrInfinity(pos);
+  if (p < 0 || p >= StrLen(s)) {
+    return "";
+  }
+  return %StrSubstring(s, p, p + 1);
+}
+
+// builtins/string.ts:118 String.prototype.charCodeAt
+function StringPrototypeCharCodeAt(pos) {
+  const s = ThisToString(this);
+  return %StrCharCodeAt(s, ToIntegerOrInfinity(pos));
+}
+
+// builtins/string.ts:127 String.prototype.codePointAt
+function StringPrototypeCodePointAt(pos) {
+  const s = ThisToString(this);
+  return %StrCodePointAt(s, ToIntegerOrInfinity(pos));
+}
+
+// builtins/string.ts:138 String.prototype.indexOf
+function StringPrototypeIndexOf(searchString, position) {
+  const s = ThisToString(this);
+  const search = ToString(searchString);
+  const start = ClampPosition(position, StrLen(s));
+  return %StrIndexOf(s, search, start);
+}
+
+// builtins/string.ts:149 String.prototype.lastIndexOf
+function StringPrototypeLastIndexOf(searchString, position) {
+  const s = ThisToString(this);
+  const search = ToString(searchString);
+  const numPos = ToNumber(position);
+  const len = StrLen(s);
+  const pos = numPos !== numPos ? len : ClampPosition(numPos, len);
+  const searchLen = StrLen(search);
+  if (searchLen > len) {
+    return -1;
+  }
+  return %StrLastIndexOf(s, search, pos < len - searchLen ? pos : len - searchLen);
+}
+
+// builtins/string.ts:167 String.prototype.includes
+function StringPrototypeIncludes(searchString, position) {
+  const s = ThisToString(this);
+  if (IsRegExp(searchString)) {
+    throw %NewTypeError("regexp not supported");
+  }
+  const search = ToString(searchString);
+  const start = ClampPosition(position, StrLen(s));
+  return %StrIndexOf(s, search, start) >= 0;
+}
+
+// builtins/string.ts:181 String.prototype.startsWith
+function StringPrototypeStartsWith(searchString, position) {
+  const s = ThisToString(this);
+  if (IsRegExp(searchString)) {
+    throw %NewTypeError("regexp not supported");
+  }
+  const search = ToString(searchString);
+  const len = StrLen(s);
+  const start = ClampPosition(position, len);
+  const searchLength = StrLen(search);
+  if (start + searchLength > len) {
+    return false;
+  }
+  return %StrSubstring(s, start, start + searchLength) === search;
+}
+
+// builtins/string.ts:200 String.prototype.endsWith
+function StringPrototypeEndsWith(searchString, endPosition) {
+  const s = ThisToString(this);
+  if (IsRegExp(searchString)) {
+    throw %NewTypeError("regexp not supported");
+  }
+  const search = ToString(searchString);
+  const len = StrLen(s);
+  const end = endPosition === undefined ? len : ClampPosition(endPosition, len);
+  const searchLength = StrLen(search);
+  if (searchLength > end) {
+    return false;
+  }
+  return %StrSubstring(s, end - searchLength, end) === search;
+}
+
+// builtins/string.ts:219 String.prototype.localeCompare
+function StringPrototypeLocaleCompare(that) {
+  const s = ThisToString(this);
+  return %StrLocaleCompare(s, ToString(that));
+}
+
+// builtins/string.ts:230 String.prototype.slice
+function StringPrototypeSlice(start, end) {
+  const s = ThisToString(this);
+  const len = StrLen(s);
+  const from = RelativeIndex(start, len, 0);
+  const to = RelativeIndex(end, len, len);
+  if (from >= to) {
+    return "";
+  }
+  return %StrSubstring(s, from, to);
+}
+
+// builtins/string.ts:245 String.prototype.substring
+function StringPrototypeSubstring(start, end) {
+  const s = ThisToString(this);
+  const len = StrLen(s);
+  const a = ClampPosition(start, len);
+  const b = end === undefined ? len : ClampPosition(end, len);
+  return a < b ? %StrSubstring(s, a, b) : %StrSubstring(s, b, a);
+}
+
+// builtins/string.ts:257 String.prototype.substr
+function StringPrototypeSubstr(start, length) {
+  const s = ThisToString(this);
+  const size = StrLen(s);
+  const intStart = RelativeIndex(start, size, 0);
+  let intLength = size;
+  if (length !== undefined) {
+    intLength = ToIntegerOrInfinity(length);
+  }
+  let intEnd = intStart + intLength;
+  if (intEnd > size) {
+    intEnd = size;
+  }
+  if (intStart >= intEnd) {
+    return "";
+  }
+  return %StrSubstring(s, intStart, intEnd);
+}
+
+// builtins/string.ts:280 String.prototype.concat
+function StringPrototypeConcat(...args) {
+  let r = ThisToString(this);
+  const n = LengthOfArrayLike(args);
+  for (let i = 0; i < n; i++) {
+    r += ToString(%Get(args, i));
+  }
+  return r;
+}
+
+// builtins/string.ts:293 String.prototype.repeat
+function StringPrototypeRepeat(count) {
+  const s = ThisToString(this);
+  const n = ToIntegerOrInfinity(count);
+  if (n < 0 || n === 1 / 0) {
+    throw %NewRangeError("invalid repeat count");
+  }
+  if (StrLen(s) === 0 || n === 0) {
+    return "";
+  }
+  return %StrRepeat(s, n);
+}
+
+// builtins/string.ts:306
+function StringPad(s, maxLength, fillString, atStart) {
+  const intMaxLength = ToLength(maxLength);
+  const stringLength = StrLen(s);
+  if (intMaxLength <= stringLength) {
+    return s;
+  }
+  const filler = fillString === undefined ? " " : ToString(fillString);
+  const fillerLength = StrLen(filler);
+  if (fillerLength === 0) {
+    return s;
+  }
+  const fillLen = intMaxLength - stringLength;
+  const truncated = %StrSubstring(%StrRepeat(filler, %F64Ceil(fillLen / fillerLength)), 0, fillLen);
+  return atStart ? truncated + s : s + truncated;
+}
+
+// builtins/string.ts:326 String.prototype.padEnd
+function StringPrototypePadEnd(maxLength, fillString) {
+  return StringPad(ThisToString(this), maxLength, fillString, false);
+}
+
+// builtins/string.ts:334 String.prototype.padStart
+function StringPrototypePadStart(maxLength, fillString) {
+  return StringPad(ThisToString(this), maxLength, fillString, true);
+}
+
+// builtins/string.ts:344 String.prototype.toLowerCase
+function StringPrototypeToLowerCase() {
+  return %StrToCase(ThisToString(this), false);
+}
+
+// builtins/string.ts:352 String.prototype.toUpperCase
+function StringPrototypeToUpperCase() {
+  return %StrToCase(ThisToString(this), true);
+}
+
+// builtins/string.ts:360 String.prototype.toLocaleLowerCase
+function StringPrototypeToLocaleLowerCase() {
+  return %StrToCase(ThisToString(this), false);
+}
+
+// builtins/string.ts:368 String.prototype.toLocaleUpperCase
+function StringPrototypeToLocaleUpperCase() {
+  return %StrToCase(ThisToString(this), true);
+}
+
+// builtins/string.ts:376 String.prototype.trim
+function StringPrototypeTrim() {
+  return %StrTrim(ThisToString(this), 0);
+}
+
+// builtins/string.ts:385 String.prototype.trimStart String.prototype.trimLeft
+function StringPrototypeTrimStart() {
+  return %StrTrim(ThisToString(this), 1);
+}
+
+// builtins/string.ts:394 String.prototype.trimEnd String.prototype.trimRight
+function StringPrototypeTrimEnd() {
+  return %StrTrim(ThisToString(this), 2);
+}
+
+// builtins/string.ts:402 String.prototype.isWellFormed
+function StringPrototypeIsWellFormed() {
+  return %StrIsWellFormed(ThisToString(this));
+}
+
+// builtins/string.ts:410 String.prototype.toWellFormed
+function StringPrototypeToWellFormed() {
+  return %StrToWellFormed(ThisToString(this));
+}
+
+// builtins/string.ts:419 String.prototype.normalize
+function StringPrototypeNormalize(form) {
+  const s = ThisToString(this);
+  let f = "NFC";
+  if (form !== undefined) {
+    f = ToString(form);
+  }
+  let code = 0;
+  if (f === "NFC") {
+    code = 0;
+  } else if (f === "NFD") {
+    code = 1;
+  } else if (f === "NFKC") {
+    code = 2;
+  } else if (f === "NFKD") {
+    code = 3;
+  } else {
+    throw %NewRangeError("bad normalization form");
+  }
+  const r = %StrNormalize(s, code);
+  if (r === undefined) {
+    throw %NewTypeError("not supported yet: normalize of this string (no Unicode normalization tables)");
+  }
+  return %AsStr(r);
+}
+
+// builtins/string.ts:451 String.fromCharCode
+function StringFromCharCode(...codeUnits) {
+  CoerceNumbers(codeUnits);
+  return %StrFromCodeUnits(codeUnits);
+}
+
+// builtins/string.ts:461 String.fromCodePoint
+function StringFromCodePoint(...codePoints) {
+  const n = LengthOfArrayLike(codePoints);
+  for (let i = 0; i < n; i++) {
+    const next = %Get(codePoints, i);
+    const cp = %IsNumber(next) ? %AsNumber(next) : ToNumber(next);
+    if (%ToIntegerOrInfinityNumber(cp) !== cp || cp < 0 || cp > 1114111) {
+      throw %NewRangeError("invalid code point");
+    }
+    %CreateDataPropertyOrThrow(codePoints, i, cp);
+  }
+  return %StrFromCodePoints(codePoints);
+}
+
+// builtins/string.ts:479 String.raw
+function StringRaw(template, ...substitutions) {
+  const cooked = %ToObject(template);
+  const literals = %ToObject(%Get(cooked, "raw"));
+  const literalCount = LengthOfArrayLike(literals);
+  if (literalCount <= 0) {
+    return "";
+  }
+  const subCount = LengthOfArrayLike(substitutions);
+  let r = "";
+  for (let nextIndex = 0;; nextIndex++) {
+    r += ToString(%Get(literals, nextIndex));
+    if (nextIndex + 1 === literalCount) {
+      return r;
+    }
+    if (nextIndex < subCount) {
+      r += ToString(%Get(substitutions, nextIndex));
+    }
+  }
+}
+
 // builtins/symbol.ts:7 constructor Symbol
 function SymbolConstructor(description) {
   if (new.target !== undefined) {
@@ -2399,6 +2737,38 @@ function SymbolUnscopables() {
 %InstallMethod("Object.prototype", "isPrototypeOf", ObjectPrototypeIsPrototypeOf, 1);
 %InstallMethod("String.prototype", "toString", StringPrototypeToString, 0);
 %InstallMethod("String.prototype", "valueOf", StringPrototypeValueOf, 0);
+%InstallMethod("String.prototype", "at", StringPrototypeAt, 1);
+%InstallMethod("String.prototype", "charAt", StringPrototypeCharAt, 1);
+%InstallMethod("String.prototype", "charCodeAt", StringPrototypeCharCodeAt, 1);
+%InstallMethod("String.prototype", "codePointAt", StringPrototypeCodePointAt, 1);
+%InstallMethod("String.prototype", "indexOf", StringPrototypeIndexOf, 1);
+%InstallMethod("String.prototype", "lastIndexOf", StringPrototypeLastIndexOf, 1);
+%InstallMethod("String.prototype", "includes", StringPrototypeIncludes, 1);
+%InstallMethod("String.prototype", "startsWith", StringPrototypeStartsWith, 1);
+%InstallMethod("String.prototype", "endsWith", StringPrototypeEndsWith, 1);
+%InstallMethod("String.prototype", "localeCompare", StringPrototypeLocaleCompare, 1);
+%InstallMethod("String.prototype", "slice", StringPrototypeSlice, 2);
+%InstallMethod("String.prototype", "substring", StringPrototypeSubstring, 2);
+%InstallMethod("String.prototype", "substr", StringPrototypeSubstr, 2);
+%InstallMethod("String.prototype", "concat", StringPrototypeConcat, 1);
+%InstallMethod("String.prototype", "repeat", StringPrototypeRepeat, 1);
+%InstallMethod("String.prototype", "padEnd", StringPrototypePadEnd, 1);
+%InstallMethod("String.prototype", "padStart", StringPrototypePadStart, 1);
+%InstallMethod("String.prototype", "toLowerCase", StringPrototypeToLowerCase, 0);
+%InstallMethod("String.prototype", "toUpperCase", StringPrototypeToUpperCase, 0);
+%InstallMethod("String.prototype", "toLocaleLowerCase", StringPrototypeToLocaleLowerCase, 0);
+%InstallMethod("String.prototype", "toLocaleUpperCase", StringPrototypeToLocaleUpperCase, 0);
+%InstallMethod("String.prototype", "trim", StringPrototypeTrim, 0);
+%InstallMethod("String.prototype", "trimStart", StringPrototypeTrimStart, 0);
+%InstallMethod("String.prototype", "trimLeft", StringPrototypeTrimStart, 0);
+%InstallMethod("String.prototype", "trimEnd", StringPrototypeTrimEnd, 0);
+%InstallMethod("String.prototype", "trimRight", StringPrototypeTrimEnd, 0);
+%InstallMethod("String.prototype", "isWellFormed", StringPrototypeIsWellFormed, 0);
+%InstallMethod("String.prototype", "toWellFormed", StringPrototypeToWellFormed, 0);
+%InstallMethod("String.prototype", "normalize", StringPrototypeNormalize, 0);
+%InstallMethod("String", "fromCharCode", StringFromCharCode, 1);
+%InstallMethod("String", "fromCodePoint", StringFromCodePoint, 1);
+%InstallMethod("String", "raw", StringRaw, 1);
 %InstallMethod("Symbol", "for", SymbolForBuiltin, 1);
 %InstallMethod("Symbol", "keyFor", SymbolKeyForBuiltin, 1);
 %InstallAccessor("Symbol.prototype", "description", SymbolPrototypeDescription, false);

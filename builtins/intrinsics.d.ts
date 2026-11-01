@@ -224,6 +224,42 @@ declare function SortPrimitives(list: Obj): boolean;
  * follows. False, with nothing changed, for any other object. @leaf
  */
 declare function ArraySpliceDense(o: Obj, start: f64, deleteCount: f64, itemCount: f64): boolean;
+// ---- Strings (0034): leaves on the heap representation -------------------------------
+
+/**
+ * localeCompare without Intl (as qjs): the difference of the first differing code
+ * points, else -1, 0 or 1 by length. @leaf
+ */
+declare function StrLocaleCompare(a: Str, b: Str): f64;
+/** The code unit at i as a Number, NaN out of range. @leaf */
+declare function StrCharCodeAt(s: Str, i: f64): f64;
+/** The code point at i (a surrogate pair combined), undefined out of range. @leaf */
+declare function StrCodePointAt(s: Str, i: f64): Value;
+/** s[start .. end) in code units; the indexes are integers, clamped by the caller. @leaf */
+declare function StrSubstring(s: Str, start: f64, end: f64): Str;
+/** The first index ≥ from where search occurs, or -1. @leaf */
+declare function StrIndexOf(s: Str, search: Str, from: f64): f64;
+/** The last index ≤ from where search occurs, or -1. @leaf */
+declare function StrLastIndexOf(s: Str, search: Str, from: f64): f64;
+/** Full Unicode upper- or lowercase (SpecialCasing, Final_Sigma; no locales). @leaf */
+declare function StrToCase(s: Str, upper: boolean): Str;
+/** Trims WhiteSpace and LineTerminators: where 0 both ends, 1 start, 2 end. @leaf */
+declare function StrTrim(s: Str, where: i32): Str;
+/** IsStringWellFormedUnicode. @leaf */
+declare function StrIsWellFormed(s: Str): boolean;
+/** Lone surrogates replaced by U+FFFD. @leaf */
+declare function StrToWellFormed(s: Str): Str;
+/** s repeated n times (an integer ≥ 0; RangeError past the string length limit). @leaf */
+declare function StrRepeat(s: Str, n: f64): Str;
+/** A string of the code units ToUint16(n) of the Numbers in a dense array. @leaf */
+declare function StrFromCodeUnits(list: Obj): Str;
+/** A string of the (valid) code points in a dense array. @leaf */
+declare function StrFromCodePoints(list: Obj): Str;
+/**
+ * String.prototype.normalize for form 0 NFC, 1 NFD, 2 NFKC, 3 NFKD: the string if it is
+ * already normalized without tables, undefined when it would need them. @leaf
+ */
+declare function StrNormalize(s: Str, form: i32): Value;
 /** A new symbol; the description is a string or undefined. @leaf */
 declare function NewSymbol(description: Value): Sym;
 /** [[Description]] of a symbol: a string or undefined. @leaf */
