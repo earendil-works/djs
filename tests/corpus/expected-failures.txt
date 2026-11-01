@@ -15,7 +15,7 @@ console/numbers-in-json.js: line 4: expected `[1,"s",false]`, got `<djs: JSON.st
 console/objects.js: line 5: expected `{"n":null,"k":1}`, got `<djs: JSON.stringify needs the slow path (Slow)>`
 console/primitives.js: throws SyntaxError: BigInt literals are not supported yet
 console/tojson.js: throws ReferenceError: 'Date' is not defined
-dquickts/builtin/test_base64.js: throws SyntaxError: for-in and for-of loops are not supported yet
+dquickts/builtin/test_base64.js: throws ReferenceError: 'btoa' is not defined
 dquickts/builtin/test_date.js: throws ReferenceError: 'Date' is not defined
 dquickts/builtin/test_dom_exception.js: throws SyntaxError: classes are not supported yet
 dquickts/builtin/test_generator.js: throws SyntaxError: generators are not supported yet
@@ -34,9 +34,7 @@ dquickts/language/test_parse_semicolon.js: throws SyntaxError: generators are no
 dquickts/language/test_regexp_skip.js: throws SyntaxError: regular expressions are not supported yet
 dquickts/language/test_template.js: throws SyntaxError: tagged templates are not supported yet
 dquickts/language/test_template_skip.js: throws SyntaxError: destructuring is not supported yet
-dquickts/loop/test_for_in2.js: throws SyntaxError: for-in and for-of loops are not supported yet
-dquickts/loop/test_for_in_proxy.js: throws SyntaxError: for-in and for-of loops are not supported yet
-dquickts/loop/test_try_catch8.js: throws SyntaxError: for-in and for-of loops are not supported yet
+dquickts/loop/test_for_in_proxy.js: throws ReferenceError: 'Proxy' is not defined
 dquickts/typescript/test_asi_contextual_keywords.ts: throws SyntaxError: expecting ';'
 dquickts/typescript/test_classes.ts: throws SyntaxError: expecting ';'
 dquickts/typescript/test_const_enums.ts: throws SyntaxError: variable name expected

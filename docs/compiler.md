@@ -395,24 +395,34 @@ stay valid (`(a) = 1`, `(a.b) = 1`). Parenthesized patterns do not (3.3).
 After `for (`, scan the balanced parenthesized head for `;` at depth 1 (QuickJS does
 the same). With `;` it is a C-style `for`. Without it, it is for-in/of, which tells
 the parser *before* parsing the left side that the left side is a per-iteration
-assignment target. QuickJS's code layout then emits everything in source order:
+assignment target. For an expression on the left, a second scan finds whether the
+first `of`/`in` directly inside the parentheses is `of` (an `of` after `.` is a property
+name), since for-of has to emit `get_field value` before the target. Code is emitted
+in source order (as implemented in 0029, `compiler/for_in_of.rs`, D1292):
 
 ```
-    jump L_rhs
-L_assign:                 ; per iteration: next value on the stack
+    jump L_rhs                ; expression heads only
+L_assign:                     ; per iteration: the step result on the stack
+    [get_field value]         ; for-of
     <lhs reference + store>   (parsed first, emitted here)
-    <body>
-L_continue:
-    <next-value logic>; jump_if_true(done) L_break
-    jump L_assign
+    jump L_body
 L_rhs:
     <rhs expression>; <iterator setup>
-    jump L_continue
-L_break:
+    jump L_step
+    [L_throw: for-of close handler]
+L_body:
+    <body>
+L_step:                       ; the continue target
+    <next-value logic>; jump_if_false(done) L_assign
+    <drop the loop state>
 ```
 
-`for (let [a, b] of xs)` and `for (const k in o)` declare per-iteration bindings (5.9).
-`for await` is P2.
+With a declaration on the left nothing of it runs before the right side, so the store
+moves next to the body and the first jump and `jump L_body` go: `<rhs>; <setup>; jump
+L_step; [L_throw]; L_assign: <store>; <body>; L_step: ...`. One jump per iteration.
+
+`for (let x of xs)` and `for (const k in o)` declare per-iteration bindings (5.9).
+`for await` and destructuring heads are not supported yet.
 
 ### 3.9 TypeScript generics (sketch for P3)
 
@@ -645,8 +655,9 @@ Control flow:
 | `check_ctor` | | | class constructor called without `new`: TypeError, P1 |
 | `debugger`, `nop` | | | |
 
-For-of has no dedicated loop opcodes. Setup is `get_iterator; dup; get_field next`
-(→ `iter next`). Each step is ordinary ops: `dup2; swap; call 0; iter_check_object;
+For-of has no dedicated loop opcodes. Setup is `call_intrinsic %GetIterator 1; dup;
+get_field next` (→ `iter next`; as implemented, the builtin-language `%GetIterator`
+replaces the `get_iterator` op, D1290). Each step is ordinary ops: `dup2; swap; call 0; iter_check_object;
 dup; get_field done; jump_if_true L; get_field value`. That reuses
 the reentrancy of `call` and `get_field`, so nothing in for-of needs a resume state.
 An array-iterator superinstruction is a later optimization.
@@ -862,6 +873,8 @@ global, compiles to a TDZ read (when needed) followed by `throw_const_assign`.
   `rebox` for each captured binding of the `for` scope (0024).
 - `for (const x of xs)` / `for (let k in o)`: the binding's scope is entered inside
   the loop, so `enter_scope` makes a fresh Box per iteration when it is captured.
+  The scope is also entered before the right side, which sees the bindings in their
+  TDZ (`for (let x of x)` is a ReferenceError); their `init_end` is the end of the head.
 
 ## 6. Function templates and heap cells
 
@@ -1067,6 +1080,18 @@ snapshot replaces compile-at-startup.
 - Iterator close on abrupt exit from for-of: `break`/`return` emit `iterator_close`
   before leaving; a throw goes through a handler entry around the loop body that
   calls `iterator_close` (ignoring errors from `return()` per spec) and rethrows.
+- As implemented (0029, D1292): the close is `call_intrinsic %IteratorClose` and the
+  handler calls `%IteratorCloseThrow` (`it next exc`: `nip; swap; call_intrinsic
+  %IteratorCloseThrow 1; drop; throw`). The handler covers the target store and the
+  body, not the `next`/`done`/`value` steps. A `break` of the loop itself jumps to an
+  inline close after the loop. Jumps that leave the loop (`break L`, `continue L`,
+  `return`) cannot close inline: the close would sit inside the loop's own handler
+  region, and a throwing `return()` would close the iterator again. They `gosub` a close
+  subroutine placed after the loop instead, found on the `BlockEnv` stack as an `Iter`
+  entry and run in innermost-first order together with the finally blocks. It is
+  entered on `v it next ret` (`v` the return value or `undefined`, as a finally block's
+  value slot) and, since `gosub` keeps the caller's depth, leaves `v it undefined` for
+  the caller to drop (`rot3r; drop; dup; call_intrinsic %IteratorClose 1; rot3l; ret`).
 - **[ARCH: no change]** Differs from QuickJS, which pushes catch offsets onto the
   value stack and scans the stack while unwinding. A table keeps the stack plain.
 

@@ -244,11 +244,12 @@ impl Parser<'_, '_> {
             used: false,
         });
         self.stmt_depth = base + state;
-        let body = self.parse_statement();
+        // On an error the parser state is abandoned (a nested function's may not be
+        // restored), so only pop on success.
+        self.parse_statement()?;
         self.stmt_depth = base;
         let loop_env = self.blocks.pop().expect("loop env");
         let iter_env = if is_of { self.blocks.pop() } else { None };
-        body?;
 
         self.place(l_step);
         if is_of {

@@ -1339,3 +1339,21 @@ pointer. The store/reload chain cost more than the ops themselves (loop.js: 555 
 385 ms). Fuel, `pc` and safepoints are charged exactly as `step` charges them, so fuel
 counts, suspension points and GC stress are unchanged. A new op belongs in `fast_step`
 only if it is simple and stack-only. Keep its semantics identical to its `exec` arm.
+
+
+## D1292: for-in/of code layout and iterator close
+date: 2026-11-01 · by: lexer · issue: 0029
+for-in/of loops compile in source order with QuickJS's layout (docs/compiler.md 3.8):
+a declaration head stores next to the body (one jump per iteration), an expression head
+is emitted at `L_assign` before the right side and jumped around. for-of keeps `it next`
+on the operand stack, for-in the key iterator of `for_in_start`. A handler around the
+target store and the body closes the iterator with `%IteratorCloseThrow` and rethrows;
+the iterator's own steps are outside it. A `break` of the loop closes inline after the
+loop; jumps that leave it (labeled break/continue, `return`) `gosub` a close subroutine
+after the loop, outside the handler, so that a throwing `return()` propagates instead
+of closing twice; `BlockKind::Iter` puts it in the same innermost-first unwind as the
+finally blocks (docs/compiler.md 7.4). The subroutine and the inline close are emitted
+only when a jump uses them (`BlockEnv::used`). No array fast path yet: `%GetIterator`
+and `next()` calls are observable (a patched `Array.prototype[Symbol.iterator]` or
+`%ArrayIteratorPrototype%.next`), so a fast path needs a guard on both.
+
