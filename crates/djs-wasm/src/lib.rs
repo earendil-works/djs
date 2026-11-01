@@ -36,6 +36,8 @@ pub mod status {
     pub const OUT_OF_FUEL: u32 = 2;
     pub const HOST_CALL: u32 = 3;
     pub const IDLE: u32 = 4;
+    /// The host could not provide memory below the cap (D1690): not a JS error.
+    pub const HOST_OUT_OF_MEMORY: u32 = 5;
 }
 
 /// One VM and what the last `vm_run` reported.
@@ -660,6 +662,8 @@ pub extern "C" fn vm_run(vm: u32, fuel: u32) -> u32 {
                 status::HOST_CALL
             }
             Status::Idle => status::IDLE,
+            // The call is abandoned; the VM is idle (D1690).
+            Status::HostOutOfMemory => status::HOST_OUT_OF_MEMORY,
         }
     })
 }

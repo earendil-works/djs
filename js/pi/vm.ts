@@ -27,7 +27,15 @@
  * adapter's state) while the VM waits for results, and `resumeVm` continues it in a new
  * instance, possibly in another process: the script resumes where it waited, with no replay.
  */
-import { Engine, STATUS_DONE, STATUS_HOST_CALL, STATUS_IDLE, STATUS_OUT_OF_FUEL, STATUS_THREW } from "./engine.ts";
+import {
+  Engine,
+  STATUS_DONE,
+  STATUS_HOST_CALL,
+  STATUS_HOST_OUT_OF_MEMORY,
+  STATUS_IDLE,
+  STATUS_OUT_OF_FUEL,
+  STATUS_THREW,
+} from "./engine.ts";
 import type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./protocol.ts";
 
 export type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./protocol.ts";
@@ -346,6 +354,9 @@ class Session implements VmSession {
         }
         case STATUS_IDLE:
           return 0;
+        case STATUS_HOST_OUT_OF_MEMORY:
+          // Not a script error: the engine abandoned the call; pi reports a crash (D1690).
+          throw new Error("out of host memory");
         default:
           throw new Error(`Unexpected VM status ${status}`);
       }

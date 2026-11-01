@@ -132,6 +132,8 @@ pub enum CompileErrorKind {
     Syntax,
     /// The heap ran out of memory while compiling.
     OutOfMemory,
+    /// The host could not provide memory below the cap (D1690).
+    HostOutOfMemory,
 }
 
 /// A compile error with its position: a byte offset and 1-based line/column (columns
@@ -151,6 +153,7 @@ impl fmt::Display for CompileError {
         match self.kind {
             CompileErrorKind::Syntax => write!(f, "SyntaxError: {}", self.message)?,
             CompileErrorKind::OutOfMemory => f.write_str("out of memory")?,
+            CompileErrorKind::HostOutOfMemory => f.write_str("out of host memory")?,
         }
         write!(f, " at {}:{}", self.line, self.col)
     }
@@ -166,6 +169,7 @@ pub(super) struct PErr(Box<PErrKind>);
 pub(super) enum PErrKind {
     Syntax { pos: u32, msg: Cow<'static, str> },
     Oom,
+    HostOom,
 }
 
 impl PErr {
@@ -189,8 +193,12 @@ impl From<LexError> for PErr {
 }
 
 impl From<HeapError> for PErr {
-    fn from(_: HeapError) -> Self {
-        PErr::oom()
+    fn from(e: HeapError) -> Self {
+        if e == HeapError::HostOutOfMemory {
+            PErr(Box::new(PErrKind::HostOom))
+        } else {
+            PErr::oom()
+        }
     }
 }
 
@@ -282,6 +290,11 @@ fn error_at(src: &[u8], e: PErr) -> CompileError {
             CompileErrorKind::OutOfMemory,
             0,
             String::from("out of memory"),
+        ),
+        PErrKind::HostOom => (
+            CompileErrorKind::HostOutOfMemory,
+            0,
+            String::from("out of host memory"),
         ),
     };
     let (line, col) = LineTable::new(src).line_col(src, pos);

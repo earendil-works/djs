@@ -105,6 +105,9 @@ pub fn run_source(
                 CompileErrorKind::OutOfMemory => {
                     let _ = writeln!(err, "djs: out of memory while compiling");
                 }
+                CompileErrorKind::HostOutOfMemory => {
+                    let _ = writeln!(err, "djs: out of host memory while compiling");
+                }
             }
             return 2;
         }
@@ -196,6 +199,10 @@ pub fn run_main(
                     }
                 }
                 return i32::from(!rejections.is_empty());
+            }
+            Status::HostOutOfMemory => {
+                let _ = writeln!(err, "djs: out of host memory");
+                return 1;
             }
             Status::Threw(e) => {
                 let msg = vm.display(e);

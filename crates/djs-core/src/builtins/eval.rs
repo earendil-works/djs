@@ -24,6 +24,7 @@ fn compile_error(e: compiler::CompileError) -> Fault {
     match e.kind {
         CompileErrorKind::Syntax => Fault::error(ErrorKind::SyntaxError, e.message),
         CompileErrorKind::OutOfMemory => Fault::heap(HeapError::OutOfMemory),
+        CompileErrorKind::HostOutOfMemory => Fault::heap(HeapError::HostOutOfMemory),
     }
 }
 

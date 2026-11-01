@@ -698,7 +698,7 @@ fn emit_function(
         src_end: f.src_end,
     };
     alloc_template(heap, &parts).map_err(|e| match e {
-        TemplateError::Heap(_) => PErr::oom(),
+        TemplateError::Heap(e) => e.into(),
         e => internal(&format!("{e:?}")),
     })
 }

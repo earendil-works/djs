@@ -47,6 +47,9 @@ pub enum Status {
     /// Nothing to run: no call in progress, or the job queue is empty and only async
     /// host calls are pending (resolve them, then `run` again).
     Idle,
+    /// The host could not provide memory below the cap (D1690). Not a JS error: the
+    /// call is abandoned (`Vm::run` aborts it) and the VM is idle and usable.
+    HostOutOfMemory,
 }
 
 /// The message of a stack overflow (a RangeError, D013).
@@ -165,6 +168,8 @@ pub(crate) struct Exec<'h> {
     /// Template flags that make `fast_call_at` decline: SLOPPY_THIS, and NATIVE when
     /// native builtins are on.
     slow_call_flags: u32,
+    /// The host refused memory (D1690): the run stops at the next instruction boundary.
+    host_oom: bool,
 }
 
 impl<'h> Exec<'h> {
@@ -200,7 +205,16 @@ impl<'h> Exec<'h> {
                 } else {
                     0
                 },
+            host_oom: false,
         }
+    }
+
+    /// The host refused memory: stop the run at the next instruction boundary (the
+    /// fuel check) with `Status::HostOutOfMemory` (D1690).
+    #[cold]
+    fn host_out_of_memory(&mut self) {
+        self.host_oom = true;
+        self.fuel = 0;
     }
 
     /// The fuel left after `run` (negative by the overshoot of the last instruction).
@@ -734,6 +748,11 @@ impl<'h> Exec<'h> {
                 self.heap.open_memory_reserve();
                 return intrinsic(self.heap, Intrinsic::OutOfMemoryError);
             }
+            FaultKind::Heap(HeapError::HostOutOfMemory) => {
+                // Not catchable: the run stops before a handler can run (D1690).
+                self.host_out_of_memory();
+                return intrinsic(self.heap, Intrinsic::OutOfMemoryError);
+            }
             FaultKind::Heap(HeapError::StringTooLong) => {
                 (ErrorKind::RangeError, String::from("invalid string length"))
             }
@@ -861,7 +880,12 @@ impl<'h> Exec<'h> {
         for i in self.sp..cap {
             self.set(i, Value::UNDEFINED);
         }
-        if self.heap.collect().is_ok() {
+        let collected = self.heap.collect();
+        if let Err(HeapError::HostOutOfMemory) = collected {
+            // Never a silently skipped collection (D1690).
+            self.host_out_of_memory();
+        }
+        if collected.is_ok() {
             self.stack = state::stack(self.heap);
             if self.has_frame() {
                 self.load_frame();
@@ -885,6 +909,15 @@ impl<'h> Exec<'h> {
 
     /// Runs with `fuel`.
     pub fn run(&mut self, fuel: u64) -> Status {
+        let st = self.run_loop(fuel);
+        if self.host_oom {
+            self.flush();
+            return Status::HostOutOfMemory;
+        }
+        st
+    }
+
+    fn run_loop(&mut self, fuel: u64) -> Status {
         self.fuel = fuel.min(i64::MAX as u64) as i64;
         match state::state(self.heap) {
             RunState::Running | RunState::ThrowPending => self.load_frame(),
@@ -913,6 +946,9 @@ impl<'h> Exec<'h> {
         loop {
             if self.fuel <= 0 {
                 self.flush();
+                if self.host_oom {
+                    return Status::HostOutOfMemory;
+                }
                 return Status::OutOfFuel;
             }
             if self.fast_step() {

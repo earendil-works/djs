@@ -163,7 +163,7 @@ impl Heap {
         let before = self.arena.len();
         #[cfg(test)]
         if core::mem::take(&mut self.fail_next_gc_reserve) {
-            return Err(HeapError::OutOfMemory);
+            return Err(HeapError::HostOutOfMemory);
         }
         let mut to = Arena::with_capacity(before as usize, self.arena.limit() as usize)?;
         let from = &mut self.arena;

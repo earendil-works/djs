@@ -424,6 +424,7 @@ impl Repl {
                 Status::Done(v) => break Outcome::Done(v),
                 Status::Idle => break Outcome::Done(Value::UNDEFINED),
                 Status::Threw(e) => break Outcome::Threw(e),
+                Status::HostOutOfMemory => break Outcome::Stopped("out of host memory".into()),
                 Status::OutOfFuel => {
                     if self.term.as_mut().is_some_and(|t| t.interrupted()) {
                         self.vm.abort();
@@ -711,6 +712,7 @@ fn compile_error(e: &CompileError, filename: &str) -> String {
             )
         }
         CompileErrorKind::OutOfMemory => "djs: out of memory while compiling".into(),
+        CompileErrorKind::HostOutOfMemory => "djs: out of host memory while compiling".into(),
     }
 }
 

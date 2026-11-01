@@ -102,6 +102,7 @@ const STATUS_THREW = 1;
 const STATUS_OUT_OF_FUEL = 2;
 const STATUS_HOST_CALL = 3;
 const STATUS_IDLE = 4;
+const STATUS_HOST_OUT_OF_MEMORY = 5;
 const ABI_VERSION = 1;
 const CONSOLE_METHODS = ["log", "info", "warn", "error"] as const;
 
@@ -611,6 +612,11 @@ export class Sandbox {
           throw new SandboxError("fuel", `out of fuel after ${used} units`);
         }
         continue;
+      }
+      if (st === STATUS_HOST_OUT_OF_MEMORY) {
+        // The host (wasm memory) could not back the heap below its cap: not a script
+        // error. The VM abandoned the call and is usable again (D1690).
+        throw new SandboxError("memory", "out of host memory");
       }
       if (st === STATUS_IDLE) {
         this.checkRejections();

@@ -131,6 +131,10 @@ fn finish(mut vm: Vm, fuel: u64, suspend: bool) -> (Vm, Outcome) {
                 vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
             }
             Status::Idle => panic!("idle"),
+            Status::HostOutOfMemory => {
+                let result = String::from("out of host memory");
+                return (vm, Outcome { result, log });
+            }
         }
     }
 }
@@ -1645,6 +1649,7 @@ fn run_tools(src: &str, fuel: u64, suspend: bool, gc_stress: bool) -> Outcome {
                 return Outcome { result, log };
             }
             Status::OutOfFuel => {}
+            Status::HostOutOfMemory => panic!("out of host memory"),
             Status::HostCall { call_id, fn_id } => {
                 assert_eq!(fn_id, LOG);
                 let info = vm.host_call(call_id).unwrap();
@@ -2670,6 +2675,7 @@ fn run_inbox(src: &str, fuel: u64, suspend: bool, delivery: Delivery, clock: boo
             }
             Status::Idle => take_rejections(&mut vm, &mut unhandled),
             Status::OutOfFuel => {}
+            Status::HostOutOfMemory => panic!("out of host memory"),
             Status::HostCall { call_id, fn_id } => {
                 assert_eq!(fn_id, LOG);
                 let info = vm.host_call(call_id).unwrap();
@@ -2859,4 +2865,62 @@ fn collections_empty_prototype_caches_and_stay_deterministic() {
     assert!(a == vm.bytes(), "a collection changed a collected image");
     let (_, out) = run_script(vm, "console.log(f(o), f(Object.create(o)));\n");
     assert_eq!(out.log, ["m m"]);
+}
+
+#[test]
+fn host_memory_failure_is_not_a_js_error() {
+    // The arena cannot grow (the host allocator refuses below the cap): the run ends with
+    // HostOutOfMemory, the script's catch never runs, and the VM is usable (D1690).
+    let src = "let a = [];\n\
+               try { for (let i = 0; ; i++) a.push('x'.repeat(1000) + i); }\n\
+               catch (e) { console.log('caught', String(e)); }\n";
+    let mut vm = vm();
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("t.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    crate::heap::arena::FAIL_NEXT_RESERVE.with(|f| f.set(true));
+    let st = loop {
+        match vm.run(1 << 40) {
+            Status::HostCall { call_id, .. } => {
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap()
+            }
+            st => break st,
+        }
+    };
+    assert_eq!(st, Status::HostOutOfMemory);
+    vm.heap().verify().unwrap();
+    let (_, out) = run_script(vm, "a = null; console.log('again', [1, 2].length);\n");
+    assert_eq!(out.log, ["again 2"]);
+}
+
+#[test]
+fn a_refused_to_space_stops_the_run() {
+    // A collection whose to-space the host refuses is not skipped: the run stops.
+    let mut vm = vm_with(VmOptions {
+        exec: ExecOptions {
+            gc_stress: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    let f = vm
+        .compile(
+            b"let s = 0; for (let i = 0; i < 100; i++) s += i; console.log(s);",
+            &crate::compiler::CompileOptions::script("t.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    vm.heap_mut().fail_next_gc_reserve = true;
+    assert_eq!(vm.run(1 << 40), Status::HostOutOfMemory);
+    // The embedder's own collection reports it too.
+    vm.heap_mut().fail_next_gc_reserve = true;
+    assert_eq!(vm.collect(), Err(HeapError::HostOutOfMemory));
+    let (_, out) = run_script(vm, "console.log('fine');\n");
+    assert_eq!(out.log, ["fine"]);
 }

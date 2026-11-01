@@ -688,6 +688,7 @@ mod tests {
                     vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
                 }
                 Status::Idle => panic!("idle"),
+                Status::HostOutOfMemory => panic!("out of host memory"),
             }
             if m.suspend {
                 let o = vm.options();

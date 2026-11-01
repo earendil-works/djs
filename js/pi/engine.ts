@@ -12,6 +12,8 @@ export const STATUS_THREW = 1;
 export const STATUS_OUT_OF_FUEL = 2;
 export const STATUS_HOST_CALL = 3;
 export const STATUS_IDLE = 4;
+/** The host could not provide memory below the cap (D1690); the call is abandoned. */
+export const STATUS_HOST_OUT_OF_MEMORY = 5;
 const ABI_VERSION = 1;
 
 interface Exports {

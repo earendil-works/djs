@@ -24,6 +24,16 @@ pub struct Arena {
     limit: u32,
 }
 
+#[cfg(test)]
+extern crate std;
+
+#[cfg(test)]
+std::thread_local! {
+    /// Test hook: the next growth of any arena's backing store fails as if the host
+    /// allocator refused (D1690).
+    pub(crate) static FAIL_NEXT_RESERVE: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
+}
+
 /// How far ahead of an allocation the frontier is zeroed: big enough that small cells
 /// rarely touch the Vec, small enough not to matter for memory or the GC.
 const ZERO_AHEAD: u32 = 16 << 10;
@@ -44,7 +54,7 @@ impl Arena {
         let mut bytes = Vec::new();
         bytes
             .try_reserve_exact(capacity)
-            .map_err(|_| HeapError::OutOfMemory)?;
+            .map_err(|_| HeapError::HostOutOfMemory)?;
         Ok(Arena {
             bytes,
             len: 0,
@@ -212,9 +222,14 @@ impl Arena {
                 .max(end)
                 .max(4096)
                 .min(self.limit as usize);
+            #[cfg(test)]
+            if FAIL_NEXT_RESERVE.with(|f| f.replace(false)) {
+                return Err(HeapError::HostOutOfMemory);
+            }
+            // Below the cap, so the host's refusal is not the program's (D1690).
             self.bytes
                 .try_reserve_exact(want - self.bytes.len())
-                .map_err(|_| HeapError::OutOfMemory)?;
+                .map_err(|_| HeapError::HostOutOfMemory)?;
         }
         Ok(())
     }

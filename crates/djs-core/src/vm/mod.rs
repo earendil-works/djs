@@ -164,6 +164,9 @@ impl Vm {
             Err(e) if e.kind == CompileErrorKind::OutOfMemory => {
                 return Err(HeapError::OutOfMemory);
             }
+            Err(e) if e.kind == CompileErrorKind::HostOutOfMemory => {
+                return Err(HeapError::HostOutOfMemory);
+            }
             Err(e) => panic!("the prelude does not compile: {e}"),
         };
         let script: Ref = self
@@ -329,9 +332,13 @@ impl Vm {
     ) -> Result<Value, crate::compiler::CompileError> {
         let template = crate::compiler::compile(&mut self.heap, src, opts)?;
         self.instantiate(template)
-            .map_err(|_| crate::compiler::CompileError {
-                kind: crate::compiler::CompileErrorKind::OutOfMemory,
-                message: String::from("out of memory"),
+            .map_err(|e| crate::compiler::CompileError {
+                kind: if e == HeapError::HostOutOfMemory {
+                    crate::compiler::CompileErrorKind::HostOutOfMemory
+                } else {
+                    crate::compiler::CompileErrorKind::OutOfMemory
+                },
+                message: alloc::format!("{e}"),
                 pos: 0,
                 line: 0,
                 col: 0,
@@ -534,7 +541,16 @@ impl Vm {
 
     /// Runs with `fuel` (instruction cost units).
     pub fn run(&mut self, fuel: u64) -> Status {
-        Exec::new(&mut self.heap, self.opts.exec).run(fuel)
+        let st = Exec::new(&mut self.heap, self.opts.exec).run(fuel);
+        self.after_run(st)
+    }
+
+    /// A run that ran out of host memory abandons the call (D1690).
+    fn after_run(&mut self, st: Status) -> Status {
+        if st == Status::HostOutOfMemory {
+            self.abort();
+        }
+        st
     }
 
     /// [`Vm::run`], also returning the fuel used. It can exceed `fuel` by the cost of the
@@ -543,7 +559,8 @@ impl Vm {
         let mut ex = Exec::new(&mut self.heap, self.opts.exec);
         let st = ex.run(fuel);
         let given = fuel.min(i64::MAX as u64) as i64;
-        (st, given.saturating_sub(ex.fuel_left()).max(0) as u64)
+        let used = given.saturating_sub(ex.fuel_left()).max(0) as u64;
+        (self.after_run(st), used)
     }
 
     /// The stack trace of the current call while it is suspended (out of fuel or parked

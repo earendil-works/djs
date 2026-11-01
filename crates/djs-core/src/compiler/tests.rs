@@ -1530,6 +1530,7 @@ fn run_opts(src: &str, opts: &CompileOptions) -> String {
             }
             Status::OutOfFuel => return out + "out of fuel",
             Status::Idle => return out + "idle",
+            Status::HostOutOfMemory => return out + "out of host memory",
         }
     }
 }

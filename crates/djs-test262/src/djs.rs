@@ -197,6 +197,7 @@ impl Session<'_> {
             match self.vm.run(slice) {
                 VmStatus::Done(_) | VmStatus::Idle => return Ok(Ok(Outcome::Completed)),
                 VmStatus::Threw(e) => return Ok(Ok(Outcome::Threw(self.error_info(e)))),
+                VmStatus::HostOutOfMemory => return Err("out of host memory".into()),
                 VmStatus::OutOfFuel => {
                     self.fuel_left = self.fuel_left.saturating_sub(slice);
                     if self.fuel_left == 0 || self.start.elapsed() >= self.job.timeout {
@@ -330,6 +331,10 @@ fn compile_error(kind: CompileErrorKind, message: &str) -> ErrorInfo {
         CompileErrorKind::OutOfMemory => ErrorInfo {
             name: "InternalError".into(),
             message: "out of memory".into(),
+        },
+        CompileErrorKind::HostOutOfMemory => ErrorInfo {
+            name: "HostOutOfMemory".into(),
+            message: "out of host memory".into(),
         },
     }
 }

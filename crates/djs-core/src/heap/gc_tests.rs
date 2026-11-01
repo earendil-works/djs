@@ -515,7 +515,7 @@ fn failed_collection_leaves_heap_intact() {
     let bytes = h.bytes().to_vec();
     let d = dump(&h, &hs);
     h.fail_next_gc_reserve = true;
-    assert_eq!(h.collect(), Err(HeapError::OutOfMemory));
+    assert_eq!(h.collect(), Err(HeapError::HostOutOfMemory));
     assert_eq!(h.bytes(), &bytes[..]);
     assert_eq!(dump(&h, &hs), d);
     h.collect().unwrap();

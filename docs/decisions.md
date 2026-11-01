@@ -3235,3 +3235,21 @@ are not cached (they can depend on load). A repeated active-group run takes 3.7 
 it the run) and ~11 CPU-s. `--no-cache` reruns everything and rewrites the entries. A
 checkout with local modifications at the pinned commit would be served stale results;
 fetch-test262.sh refuses such a checkout.
+## D1690: Running out of host memory is not a JS out-of-memory error
+date: 2026-11-03 · by: heap · issue: 0069
+`HeapError::OutOfMemory` now means only "the arena reached its cap". That is a function
+of the program and the cap, and it becomes the catchable `InternalError: out of memory`
+(D1600). When the host allocator refuses memory below the cap (the arena's backing store
+cannot grow, or the collector's to-space cannot be reserved), the result is the new
+`HeapError::HostOutOfMemory`, which is never catchable and never skipped:
+- in a run, the fault (or a failed collection at a safepoint, which used to be ignored)
+  sets a flag and zeroes the fuel; the run stops at the next instruction boundary with
+  the new `Status::HostOutOfMemory`; `Vm::run` aborts the call (`Vm::abort`), so the VM is
+  idle, its heap valid and usable;
+- `Vm::collect` returns it, and the compiler reports `CompileErrorKind::HostOutOfMemory`
+  (`eval` turns that back into the host fault, not a JS error);
+- djs-wasm: status 5 HOST_OUT_OF_MEMORY; the Sandbox: `SandboxError` kind `memory`,
+  "out of host memory"; pi's adapter: a `crash`.
+Hosts should pick a cap they can always back (wasm32: about 1 GiB at most, docs/host.md),
+so that out-of-memory stays deterministic. Test hooks: `Heap::fail_next_gc_reserve` (the
+to-space) and `arena::FAIL_NEXT_RESERVE` (growth).

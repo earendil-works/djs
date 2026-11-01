@@ -170,6 +170,7 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<u64>) {
                 vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
             }
             Status::Idle => panic!("idle"),
+            Status::HostOutOfMemory => panic!("out of host memory"),
         }
         if matches!(mode, Mode::Suspend) {
             let o = vm.options();

@@ -267,6 +267,9 @@ impl Session {
                     let msg = self.vm.display(e);
                     return Err(Stop::Crash(format!("{what} threw: {msg}")));
                 }
+                Status::HostOutOfMemory => {
+                    return Err(Stop::Crash(format!("{what}: out of host memory")));
+                }
                 Status::Idle => {
                     // The prelude makes no async host calls.
                     return Err(Stop::Crash(format!("{what}: idle with pending host calls")));

@@ -75,8 +75,13 @@ pub const fn align8(n: u32) -> u32 {
 /// Errors from heap operations that the caller turns into JS exceptions or a VM status.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum HeapError {
-    /// The arena hit its memory cap (or the host allocator failed).
+    /// The arena hit its memory cap: a JS `InternalError: out of memory`, a function of
+    /// the program and the cap (D1600).
     OutOfMemory,
+    /// The host could not provide memory below the cap (arena growth, the collector's
+    /// to-space): not the program's doing, so not catchable (D1690). The run ends with
+    /// `Status::HostOutOfMemory`.
+    HostOutOfMemory,
     /// A string would exceed [`string::MAX_LEN`] code units (a RangeError in JS).
     StringTooLong,
     /// An array length that is not a valid `u32` Number (a RangeError in JS).
@@ -87,6 +92,7 @@ impl fmt::Display for HeapError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             HeapError::OutOfMemory => "out of memory",
+            HeapError::HostOutOfMemory => "out of host memory",
             HeapError::StringTooLong => "invalid string length",
             HeapError::InvalidArrayLength => "invalid array length",
         })

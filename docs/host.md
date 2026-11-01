@@ -23,7 +23,7 @@ const sb = await Sandbox.create({
   functions: { readFile: (p) => fs.readFileSync(p as string, "utf8") },
   asyncFunctions: { fetchJson: (url) => fetch(url as string).then((r) => r.json()) },
   console: myConsole,            // receives console.log/info/warn/error; default: console
-  memoryLimit: 64 << 20,         // heap cap in bytes; default 4 GiB
+  memoryLimit: 64 << 20,         // heap cap in bytes; default 4 GiB (see below)
   fuelSlice: 1_000_000,          // fuel per vm_run, i.e. how often the host gets control
   maxFuel: 1e9,                  // per run; default unlimited
   now: Date.now,                 // the VM's clock (ms), a function or a fixed time; default Date.now
@@ -95,7 +95,10 @@ sb.dispose();
   - `threw`: an uncaught exception in the VM. `message` is the display form (`TypeError: x`);
     `value` is the value as read.
   - `syntax`: a compile error. `memory`: the heap cap ran out outside a run (inside a run,
-    out of memory is a thrown `InternalError`, so `threw`).
+    out of memory is a thrown `InternalError`, so `threw`), or the host could not provide
+    memory below the cap during a run (`out of host memory`, D1690): the wasm memory could
+    not grow. That is not a script error, scripts cannot catch it, and the call is
+    abandoned.
   - `fuel`: `maxFuel` ran out. `trap`: the module trapped (a djs bug), with the panic
     message. `misuse`: a bad snapshot, a missing host function, a disposed sandbox.
 
@@ -106,6 +109,14 @@ sb.dispose();
   `{"functions": [names by fn_id]}`, then the VM image. `fromBytes` binds the host function
   ids to the implementations by name. It refuses a snapshot whose functions are not all
   provided. The image is the arena itself and is validated on load (`Vm::from_bytes`).
+- **Choosing `memoryLimit` (D1690).** A JS `InternalError: out of memory` means the heap
+  reached its cap, which depends only on the program and the cap. If the host cannot back
+  the heap below the cap, the run ends with `memory` / `out of host memory` instead, and
+  the outcome then depends on the machine. To keep out-of-memory deterministic, choose a
+  cap the host can always provide. On wasm32 a collection needs the to-space (as large as
+  the heap) and the heap's buffer grows by doubling, so the address space needs about 3x
+  the cap: at most about **1 GiB** in a 4 GiB wasm32 memory, less if the embedder runs
+  several VMs in one instance.
 
 ## The ABI
 
@@ -150,7 +161,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_handle_free(vm, h)` | release a handle |
 | `vm_display(vm, h) -> len` | out = the value as `djs run`'s console.log shows it |
 | `vm_call(vm, f, this, argc) -> 0/-1` | start a call; argument handles as u32 LE in staging |
-| `vm_run(vm, fuel) -> status` | 0 DONE, 1 THREW, 2 OUT_OF_FUEL, 3 HOST_CALL, 4 IDLE |
+| `vm_run(vm, fuel) -> status` | 0 DONE, 1 THREW, 2 OUT_OF_FUEL, 3 HOST_CALL, 4 IDLE, 5 HOST_OUT_OF_MEMORY (the host could not back the heap below its cap; the call is abandoned and the VM is idle, D1690) |
 | `vm_set_now(vm, ms: f64)` | the clock `Date` reads, ms since the epoch (D1383); set it before every `vm_run` |
 | `vm_set_time_zone_offset(vm, minutes)` | the local time zone, minutes east of UTC (default 0) |
 | `vm_set_weak_refs(vm, mode) -> 0/-1` | WeakRef and FinalizationRegistry (D1680): 0 collected (weak), 1 strong (no collection is observable), 2 absent (the globals are deleted); set it on a new VM |
