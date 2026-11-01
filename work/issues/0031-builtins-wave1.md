@@ -66,6 +66,18 @@ intrinsic. Document the pattern in builtins/README.md with one worked example.
   rebases will conflict there. The drift test prints the right table: regenerate it,
   never hand-merge it.
 
+## Notes from 0007 (test262 blockers)
+- Tests stopping first at a missing global: `Object` 2,597, `Array` 1,036, `String` 743,
+  `Number` 492, `TypeError` 475, `ReferenceError` 179. `propertyHelper.js` needs, at load
+  time: `Array.isArray`, `Object.defineProperty`, `getOwnPropertyDescriptor`,
+  `getOwnPropertyNames`, `Function.prototype.call/bind`, `Array.prototype.join/push`,
+  `Object.prototype.hasOwnProperty/propertyIsEnumerable`, `Math.pow`, and `String()`.
+  Prioritize those first (with the Error constructors, for `assert.throws`). Adding
+  `Array.isArray`, `push` and the `String`/`Array` constructors basics here is in scope,
+  even though Array/String in full are wave 2.
+- `$262.evalScript` runs with `this` undefined; fix the wrapper with
+  `Function.prototype.call` once it exists.
+
 ## Log
 
 ## Follow-ups
