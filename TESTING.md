@@ -197,7 +197,7 @@ transcript in `<name>.expected` is:
 
 Stack frame lines (`    at ...`) are dropped on both sides before comparing; stack
 formats are a separate topic. Leading comment lines can carry directives:
-`// difftest: skip-djs <reason>` (a djs non-goal, such as eval), `// difftest: ts` (a
+`// difftest: skip-djs <reason>` (a djs non-goal, such as direct eval), `// difftest: ts` (a
 `.js` file parsed as TypeScript), `// difftest: fuel <n>`, `// difftest: timeout <secs>`,
 `// difftest: djs-expect <oracle line> => <djs line>` (a deliberate difference from qjs, such
 as D013's RangeError for stack overflow: with djs, that `.expected` line must read the
@@ -235,7 +235,7 @@ the oracle, so a failure there means the case or the runner is wrong. The import
 writes `tests/corpus/dquickts/<file>/<test>.{js,ts}`, leaves out tests that cannot work
 in the codemode model (listed with reasons in the script), turns each one-line
 `assertSyntaxError` of `test_typescript.ts` into its own parse-error case, and marks
-cases that use eval or Function with `skip-djs`. The full corpus runs in well under a
+the cases that need direct eval (a hand-kept list in the script) with `skip-djs`. The full corpus runs in well under a
 second with qjs. `cargo test -p djs-difftest` checks the runner itself on a scratch
 corpus.
 

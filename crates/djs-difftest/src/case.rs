@@ -5,7 +5,7 @@
 //! Metadata lives in the leading `//` comment lines, one directive per line:
 //!
 //! ```text
-//! // difftest: skip-djs <reason>   do not run with djs (a non-goal such as eval)
+//! // difftest: skip-djs <reason>   do not run with djs (a non-goal such as direct eval)
 //! // difftest: ts                  parse a .js file as TypeScript
 //! // difftest: fuel <n>            djs fuel limit for this case
 //! // difftest: timeout <secs>      wall-clock limit for this case

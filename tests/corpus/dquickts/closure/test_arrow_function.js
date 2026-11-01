@@ -1,6 +1,6 @@
-// difftest: skip-djs direct eval: access to the caller's scope is a non-goal (D014)
 // Imported from dquickts tests/test_closure.js (test_arrow_function) by
 // scripts/difftest-import-dquickts.py; edit the script, not this file.
+// difftest: skip-djs direct eval: access to the caller's scope is a non-goal (D014)
 
 function assert(actual, expected, message) {
     if (arguments.length == 1)

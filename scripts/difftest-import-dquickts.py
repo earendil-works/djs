@@ -13,7 +13,9 @@ longer produced are deleted. Afterwards record the expectations with
 `djs-difftest --update dquickts`.
 
 Tests that cannot work in the codemode model are left out (EXCLUDE, with the reason).
-Cases that use dynamic code (eval, Function) get `// difftest: skip-djs`, a djs non-goal.
+Cases that read the caller's locals through eval (direct eval, a djs non-goal, D014) get
+`// difftest: skip-djs` (DIRECT_EVAL, kept by hand: indirect eval and the Function
+constructors work since 0059).
 Only the Python standard library is used.
 """
 
@@ -54,7 +56,13 @@ EXCLUDE = {
     ("test_typescript.ts", "test_using_syntax_1"): "`using x: T = null` is valid in a function body (an error only at script top level)",
 }
 
-DYNAMIC_CODE = re.compile(r"(?<![\w$])(eval\s*\(|eval\)\s*\(|Function\s*\(|evalTS\s*\()")
+# Cases that need direct eval: their eval'd source reads or writes the caller's locals.
+DIRECT_EVAL = {
+    ("test_builtin.js", "test_eval"),
+    ("test_closure.js", "test_arrow_function"),
+    ("test_closure.js", "test_eval_closure"),
+    ("test_closure.js", "test_eval_const"),
+}
 
 IDENT = re.compile(r"[A-Za-z_$][\w$]*")
 
@@ -370,8 +378,10 @@ def main():
             ]
             if note:
                 header.append(f"// {note}.")
-            if DYNAMIC_CODE.search(strip_code(text)):
-                header.append("// difftest: skip-djs dynamic code (eval/Function) is a djs non-goal")
+            if (filename, name) in DIRECT_EVAL:
+                header.append(
+                    "// difftest: skip-djs direct eval: access to the caller's scope is a non-goal (D014)"
+                )
             case_path = os.path.join(out_dir, name + (case_ext or ext))
             with open(case_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(header) + "\n\n" + text)

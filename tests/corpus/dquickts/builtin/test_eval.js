@@ -1,6 +1,6 @@
-// difftest: skip-djs direct eval: access to the caller's scope is a non-goal (D014)
 // Imported from dquickts tests/test_builtin.js (test_eval) by
 // scripts/difftest-import-dquickts.py; edit the script, not this file.
+// difftest: skip-djs direct eval: access to the caller's scope is a non-goal (D014)
 
 var status = 0;
 
