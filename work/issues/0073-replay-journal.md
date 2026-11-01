@@ -1,7 +1,7 @@
 # 0073: Replay journal and image hash
 
-status: open
-agent: -
+status: in-progress
+agent: determinism
 branch: issue/0073-replay-journal
 depends-on: 0067
 touches: crates/djs-core/src/vm/, crates/djs-wasm/, js/src/sandbox.ts, scripts/ or a tool crate
