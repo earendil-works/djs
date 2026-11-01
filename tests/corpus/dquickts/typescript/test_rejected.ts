@@ -1,7 +1,6 @@
 // Imported from dquickts tests/test_typescript.ts (test_rejected) by
 // scripts/difftest-import-dquickts.py; edit the script, not this file.
 // 12 assertSyntaxError checks moved to test_rejected_syntax_N cases; 1 other evalTS lines dropped.
-// difftest: skip-djs dynamic code (eval/Function) is a djs non-goal
 
 function assert(actual, expected, message) {
     if (arguments.length === 1)

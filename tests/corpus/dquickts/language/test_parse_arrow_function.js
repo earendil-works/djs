@@ -1,6 +1,5 @@
 // Imported from dquickts tests/test_language.js (test_parse_arrow_function) by
 // scripts/difftest-import-dquickts.py; edit the script, not this file.
-// difftest: skip-djs dynamic code (eval/Function) is a djs non-goal
 
 function assert(actual, expected, message) {
     if (arguments.length == 1)

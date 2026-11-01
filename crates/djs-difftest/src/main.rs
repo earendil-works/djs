@@ -318,13 +318,34 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
             ExitCode::from(1)
         });
     };
-    // Skipped cases did not run: their entries are neither stale nor replaced.
+    // Skipped cases did not run: their entries are neither stale nor replaced. Control
+    // characters in a reason (a NUL from a failed string assertion) are escaped, so the
+    // ratchet file stays text.
+    let reasons: Vec<Option<String>> = outcomes
+        .iter()
+        .map(|o| match &o.verdict {
+            Verdict::Fail { reason, .. } => Some(
+                reason
+                    .chars()
+                    .map(|c| {
+                        if c.is_control() {
+                            format!("\\u{{{:x}}}", c as u32)
+                        } else {
+                            c.to_string()
+                        }
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .collect();
     let results: Vec<(&str, Option<&str>)> = cases
         .iter()
         .zip(&outcomes)
-        .filter_map(|(c, o)| match &o.verdict {
+        .zip(&reasons)
+        .filter_map(|((c, o), r)| match &o.verdict {
             Verdict::Pass => Some((c.name.as_str(), None)),
-            Verdict::Fail { reason, .. } => Some((c.name.as_str(), Some(reason.as_str()))),
+            Verdict::Fail { .. } => Some((c.name.as_str(), r.as_deref())),
             Verdict::Skipped(_) => None,
         })
         .collect();

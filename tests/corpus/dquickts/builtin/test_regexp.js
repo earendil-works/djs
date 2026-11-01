@@ -1,6 +1,5 @@
 // Imported from dquickts tests/test_builtin.js (test_regexp) by
 // scripts/difftest-import-dquickts.py; edit the script, not this file.
-// difftest: skip-djs dynamic code (eval/Function) is a djs non-goal
 
 var status = 0;
 

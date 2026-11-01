@@ -1,6 +1,5 @@
 // Imported from dquickts tests/test_typescript.ts (test_enums) by
 // scripts/difftest-import-dquickts.py; edit the script, not this file.
-// difftest: skip-djs dynamic code (eval/Function) is a djs non-goal
 
 function assert(actual, expected, message) {
     if (arguments.length === 1)
