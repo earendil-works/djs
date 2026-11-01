@@ -164,7 +164,24 @@ impl Djs {
                     let done = Done::Throw(s.describe(e));
                     return Ok(s.finish(done));
                 }
-                Status::Idle => return Ok(s.finish(Done::Throw(STALL.into()))),
+                Status::Idle => {
+                    // Settle the pending tool calls (the order they were made in).
+                    let ids = s.vm.new_host_calls();
+                    if ids.is_empty() {
+                        return Ok(s.finish(Done::Throw(STALL.into())));
+                    }
+                    for id in ids {
+                        let info = s.vm.host_call(id).ok_or("host call vanished")?;
+                        let host = *HOSTS
+                            .get(info.fn_id as usize)
+                            .ok_or_else(|| format!("unknown host function {}", info.fn_id))?;
+                        let result = s
+                            .host_call(host, &info.args)
+                            .map_err(|e| format!("host call: {e:?}"))?;
+                        s.vm.resolve_host_call(id, result)
+                            .map_err(|e| format!("resolve_host_call: {e:?}"))?;
+                    }
+                }
                 Status::OutOfFuel => {
                     used = used.saturating_add(slice);
                     if used >= budget || start.elapsed() >= job.timeout {
@@ -218,8 +235,9 @@ impl Session {
             self.vm.define(console, level, f)?;
         }
         let tools = self.vm.new_object()?;
+        // Tools return promises, as pi's do (async host functions, D1374).
         for (host, name) in [(Host::Echo, "echo"), (Host::Fail, "fail")] {
-            let f = self.host_fn(host, name)?;
+            let f = self.vm.new_async_host_function(host as u32, name)?;
             self.vm.define(tools, name, f)?;
         }
         for (host, name) in [
@@ -293,8 +311,7 @@ impl Session {
                 }
             }
             Host::Echo => {
-                // A JSON round trip, like pi's tools. Returned directly: djs has no
-                // promises yet, and `await` on a plain value gives the value.
+                // A JSON round trip, like pi's tools.
                 match stringify_fast(self.vm.heap_mut(), arg(0), &[]) {
                     Ok(Some(s)) => {
                         let json = self.vm.heap().str_to_string(s);

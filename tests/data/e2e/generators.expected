@@ -1,0 +1,32 @@
+got X
+fin
+[{value:1,done:false},{value:2,done:false},{value:3,done:false},{value:9,done:true},{value:undefined,done:true}]
+got undefined
+fin
+caught boom
+got undefined
+fin
+5,2,3
+inner got undefined
+v iv
+[1,2,7,8]
+inner got R
+{value:2,done:false}
+{value:"early",done:true}
+outer fin
+{value:5,done:true}
+[{value:10,done:false},{value:20,done:false},{value:30,done:false},{value:9,done:true},{value:undefined,done:true}]
+{value:42,done:true}
+7 object true g
+true
+inner caught E
+{value:99,done:false}
+closed
+iterator does not have a throw method
+0
+1
+cnt closed
+{value:0,done:true}
+pattern closed
+{value:"in default",done:false} {value:"r",done:true}
+param error TypeError

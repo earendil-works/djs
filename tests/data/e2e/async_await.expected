@@ -1,0 +1,8 @@
+21 f start 1, f start [object Promise], sync, f start 10, f got 1, f got 5, fin, early param, t1, f got 10, f1 2, caught boom1, thrower bad, t2, g 11, t3
+thenable
+7 5
+caught bad
+finally
+f g m 1 undefined true
+true [object AsyncFunction]
+3
