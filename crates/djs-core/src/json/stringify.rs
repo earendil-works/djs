@@ -518,10 +518,10 @@ impl Ser<'_, '_> {
         if n >= DEFAULT_MAX_DEPTH as usize {
             return Err(StringifyError::StackOverflow);
         }
-        if n >= LINEAR_CYCLE_CHECK {
-            if let Err(i) = self.deep.binary_search(&o.offset()) {
-                self.deep.insert(i, o.offset());
-            }
+        if n >= LINEAR_CYCLE_CHECK
+            && let Err(i) = self.deep.binary_search(&o.offset())
+        {
+            self.deep.insert(i, o.offset());
         }
         // Containers without primitives (`[[],[]]` with a long gap) must not grow the
         // output unchecked either.
