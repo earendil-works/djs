@@ -71,7 +71,8 @@ Rules:
   gate.
 - Do not edit `work/BOARD.md` (the coordinator owns it) or other agents' issue files.
 - Put scratch files, logs and large outputs in `work/scratch/<issue-id>/`, which is
-  gitignored. External checkouts such as test262 go in `vendor/`, also gitignored.
+  gitignored. External checkouts such as test262 go in `vendor/` **of the primary checkout** (the
+  repo root, not your worktree), so that all worktrees share one copy; it is gitignored.
 - If you are blocked or an issue turns out to be much bigger than described, stop and tell
   the coordinator instead of expanding the scope on your own.
 - Stay inside the areas listed in your issue's `touches:` field. If you need to change

@@ -25,8 +25,10 @@ commit and filters, "dquickts passes it" is nearly "everything not skipped".
 ### Checkout
 
 - Pinned to the commit dquickts uses: `7ab7fafa0003f73fc85c1b95d88094d33f7eb8bd`.
-- `scripts/fetch-test262.sh` clones it into `vendor/test262` (gitignored). It is
-  idempotent and verifies the commit.
+- `scripts/fetch-test262.sh` clones it into `vendor/test262` **of the primary checkout**
+  (gitignored). It is idempotent and verifies the commit. Worktrees share that one copy:
+  tools locate it from `git rev-parse --git-common-dir` (its parent directory is the
+  primary checkout) or from `$DJS_TEST262`.
 - We do not apply dquickts' `tests/test262.patch` unless a decision says otherwise (it
   only tweaks the Atomics timeouts and `regExpUtils.js`).
 
