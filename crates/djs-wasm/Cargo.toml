@@ -10,6 +10,12 @@ description = "The wasm32 export layer over djs-core's Vm (docs/host.md)."
 # cdylib: the .wasm module; rlib: so native unit tests can call the exports.
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# Exports `vm_new_compiled` (Vm::new: builds the realm and compiles the prelude), for
+# checking the base snapshot in wasm. Off by default, so release modules do not carry
+# the prelude source next to its compiled base. The gate's debug build turns it on.
+compiled-prelude = []
+
 [dependencies]
 djs-core = { path = "../djs-core" }
 # The base snapshot: vm_new copies it (D1321).

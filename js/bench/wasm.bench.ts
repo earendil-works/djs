@@ -24,6 +24,7 @@ interface X {
   djs_staging(len: number): number;
   djs_out_ptr(): number;
   vm_new(limit: number): number;
+  vm_new_compiled?: (limit: number) => number;
   vm_free(vm: number): void;
   vm_arena_ptr(vm: number): number;
   vm_arena_len(vm: number): number;
@@ -99,7 +100,15 @@ const row = (name: string, ms: number) => rows.push(`wasm/${name}\t${ms.toFixed(
   };
   const module = new WebAssembly.Module(bytes);
   rows.push(`wasm/instantiate\t${ns(() => new WebAssembly.Instance(module, {})).toFixed(0)}\tns/op`);
-  rows.push(`wasm/vm_new\t${ns(() => x.vm_free(x.vm_new(0))).toFixed(0)}\tns/op`);
+  // Batches of 100: one copy of the base is close to the timer's resolution.
+  const vmNew = ns(() => {
+    for (let i = 0; i < 100; i++) x.vm_free(x.vm_new(0));
+  }) / 100;
+  rows.push(`wasm/vm_new\t${vmNew.toFixed(0)}\tns/op`);
+  if (x.vm_new_compiled !== undefined) {
+    const compiled = x.vm_new_compiled;
+    rows.push(`wasm/vm_new compiling the prelude\t${ns(() => x.vm_free(compiled(0))).toFixed(0)}\tns/op`);
+  }
   // The interpreter: a loop with arithmetic, property reads and string concatenation
   // (only what the compiler on main supports).
   const sb = new Sandbox({ module, fuelSlice: 1e9 });

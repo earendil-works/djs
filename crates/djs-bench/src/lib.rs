@@ -26,6 +26,7 @@ pub const GROUPS: &[(&str, Group)] = &[
     ("json", core::json),
     ("gc", core::gc),
     ("wire", core::wire),
+    ("startup", core::startup),
     ("engine", engine::engine),
     ("size", size::size),
     ("wasm", wasm::wasm),
@@ -64,6 +65,7 @@ mod tests {
             "gc/",
             "wire/decode",
             "wire/stringify",
+            "startup/vm_new from base",
         ] {
             assert!(
                 names.iter().any(|n| n.starts_with(prefix)),

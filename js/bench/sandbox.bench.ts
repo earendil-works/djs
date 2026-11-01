@@ -43,7 +43,7 @@ await loadModule();
 const inst = await WebAssembly.instantiate(module, {});
 const x = inst.exports as unknown as { vm_new(n: number): number; vm_free(vm: number): void };
 console.log(`instantiate: ${(await medianAsync(async () => void (await WebAssembly.instantiate(module, {})))).toFixed(1)} us`);
-console.log(`vm_new: ${median(() => x.vm_free(x.vm_new(0))).toFixed(1)} us (realm built from scratch; no base snapshot yet)`);
+console.log(`vm_new: ${median(() => x.vm_free(x.vm_new(0))).toFixed(1)} us (a copy of the base snapshot, D1321)`);
 console.log(`Sandbox.create: ${(await medianAsync(async () => (await Sandbox.create({ module })).dispose())).toFixed(1)} us`);
 const sb = await Sandbox.create({ module });
 console.log(`run("return 1") (compile + call + run): ${median(() => void sb.run("return 1")).toFixed(1)} us`);

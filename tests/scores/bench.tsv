@@ -336,3 +336,47 @@ date	commit	machine	benchmark	value	unit
 2026-11-01T03:00:40Z	b8cd6ec98f-dirty	Mac17,7-aarch64-18cpu	wasm/parse_json 500k-numbers	13.19	ms
 2026-11-01T03:00:40Z	b8cd6ec98f-dirty	Mac17,7-aarch64-18cpu	wasm/readValue 500k-numbers	2.996	ms
 2026-11-01T03:00:40Z	b8cd6ec98f-dirty	Mac17,7-aarch64-18cpu	wasm/json_stringify 500k-numbers	13.08	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	startup/vm_new from base	466.2	ns/op
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	startup/vm_new compiling the prelude	73381	ns/op
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	startup/base snapshot size	35768	bytes
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/wasm file	229447	bytes
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/wasm without custom sections	186822	bytes
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/wasm gzip -9	87767	bytes
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/djs-wasm file	615928	bytes
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/djs-wasm without custom sections	498922	bytes
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/djs-wasm gzip -9	194888	bytes
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/instantiate	32375	ns/op
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/vm_new	500	ns/op
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/interp loop	81.58	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/decode 10k-objects	4.368	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/parse_json 10k-objects	8.197	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/readValue 10k-objects	3.228	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/json_stringify 10k-objects	5.864	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/decode 1mib-string	0.080	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/parse_json 1mib-string	0.762	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/readValue 1mib-string	0.064	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/json_stringify 1mib-string	0.473	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/decode 1mib-text-unicode	0.658	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/parse_json 1mib-text-unicode	2.135	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/readValue 1mib-text-unicode	0.115	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/json_stringify 1mib-text-unicode	1.318	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/decode tool-results	0.944	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/parse_json tool-results	2.024	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/readValue tool-results	0.502	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/json_stringify tool-results	1.429	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/decode 500k-numbers	2.012	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/parse_json 500k-numbers	12.73	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/readValue 500k-numbers	2.959	ms
+2026-11-01T03:13:55Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/json_stringify 500k-numbers	12.58	ms
+2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	startup/vm_new from base	482.5	ns/op
+2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	startup/vm_new compiling the prelude	74454	ns/op
+2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	startup/base snapshot size	35768	bytes
+2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/wasm file	229447	bytes
+2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/wasm without custom sections	186822	bytes
+2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/wasm gzip -9	87767	bytes
+2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/djs-wasm file	564179	bytes
+2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/djs-wasm without custom sections	450296	bytes
+2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	size/djs-wasm gzip -9	176706	bytes
+2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/instantiate	36458	ns/op
+2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/vm_new	401	ns/op
+2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/vm_new compiling the prelude	143833	ns/op

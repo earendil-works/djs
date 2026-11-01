@@ -91,7 +91,8 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 
 | export | does |
 | --- | --- |
-| `vm_new(limit) -> vm` | a new VM with its realm; `limit` = heap cap in bytes, 0 = default |
+| `vm_new(limit) -> vm` | a new VM: a copy of the base snapshot (D1321); `limit` = heap cap in bytes, 0 = default |
+| `vm_new_compiled(limit) -> vm` | builds the realm and compiles the prelude instead (only with the `compiled-prelude` feature; tests) |
 | `vm_from_bytes(len, limit) -> vm` | restore the image in staging (takes the staging buffer over) |
 | `vm_free(vm)` | drop the VM |
 | `vm_arena_ptr(vm)`, `vm_arena_len(vm)` | the arena (the image, and the reader's view) |
@@ -143,7 +144,8 @@ memory. A freed VM's memory is reused but not returned: wasm memory cannot shrin
 
 Node 25, Apple M-series, the `wasm` profile at opt-level `s` (D1232), medians.
 
-**Size.** 459 KB as built, 359 KB without the name section, 132 KB gzip -9 stripped. The
+**Size.** 564 KB as built, 450 KB without the name section, 158 KB gzip -9 stripped, including
+the 36 KB base snapshot (0032; the module no longer needs the code that builds the realm). The
 size track (`scripts/bench.sh size`) records `size/djs-wasm ...` next to the old probe.
 The ARCH budget (400 KB) is meant after `wasm-opt`, which is not installed here yet.
 
@@ -152,11 +154,13 @@ The ARCH budget (400 KB) is meant after `wasm-opt`, which is not installed here 
 | step | time |
 | --- | ---: |
 | `WebAssembly.compile` (once per process) | 0.6 ms |
-| instantiate | 31 µs |
-| `vm_new` (realm built from scratch, prelude compiled and run; no base snapshot yet, D1281) | 146 µs (11 µs before the prelude) |
-| `Sandbox.create` (instance + VM + console) | 48 µs |
-| `run("return 1")` (compile + call + run) | 3.5 µs |
-| `Sandbox.create` + first run | 59 µs |
+| instantiate | 39 µs |
+| `vm_new` (a copy of the base snapshot, D1321) | 0.4 µs (146 µs compiling the prelude) |
+| `Sandbox.create` (instance + VM + console) | 58 µs |
+| `run("return 1")` (compile + call + run) | 4.4 µs |
+| `Sandbox.create` + first run | 80 µs |
+
+Since the base snapshot, instantiating the module is most of a sandbox's startup.
 | 1000-item tool result in, a loop over it, an object out | 0.6 ms |
 
 **The boundary in wasm** (`node js/bench/wasm.bench.ts <dir>`, datasets from
@@ -202,5 +206,3 @@ host code and runs at the same speed.
   VM is parked, so `Promise.all([f(), g()])` in the sandbox runs the calls one after the
   other. Concurrent host calls need the VM's pending call table and async functions (later
   phases). The ABI already has call ids for that.
-- **Base snapshot.** `vm_new` builds the realm from scratch (11 µs). ARCH's target is
-  < 100 µs from a base snapshot, so it is met without one.

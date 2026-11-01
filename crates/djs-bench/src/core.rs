@@ -514,3 +514,28 @@ pub fn wire(r: &mut Runner) {
         });
     }
 }
+
+// ---- startup -------------------------------------------------------------------------------
+
+/// Creating a VM (0032): a copy of the base snapshot against building the realm and
+/// compiling the prelude, plus the size of the base (it ships in every binary).
+pub fn startup(r: &mut Runner) {
+    use djs_core::vm::{Vm, VmOptions};
+    let n = r.scale(200, 2);
+    r.ops("startup/vm_new from base", n, || {
+        for _ in 0..n {
+            black_box(djs_prelude::new_vm(VmOptions::default()).unwrap());
+        }
+    });
+    let n = r.scale(20, 1);
+    r.ops("startup/vm_new compiling the prelude", n, || {
+        for _ in 0..n {
+            black_box(Vm::new(VmOptions::default()).unwrap());
+        }
+    });
+    r.value(
+        "startup/base snapshot size",
+        crate::runner::Unit::Bytes,
+        djs_prelude::BASE.len() as f64,
+    );
+}

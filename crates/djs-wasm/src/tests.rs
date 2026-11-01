@@ -227,6 +227,7 @@ fn abort_after_out_of_fuel() {
 }
 
 #[test]
+#[cfg(feature = "compiled-prelude")]
 fn base_equals_a_compiled_realm() {
     let base = vm_new(0);
     let compiled = vm_new_compiled(0);

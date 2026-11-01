@@ -235,7 +235,9 @@ pub extern "C" fn vm_new(memory_limit: u32) -> u32 {
 }
 
 /// Like `vm_new`, but builds the realm and compiles the prelude instead of copying the
-/// base (about 10x slower). For checking the base against the realm built in wasm.
+/// base (about 150x slower). For checking the base against the realm built in wasm; only
+/// with the `compiled-prelude` feature.
+#[cfg(feature = "compiled-prelude")]
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_new_compiled(memory_limit: u32) -> u32 {
     add_new_vm(Vm::new(options(memory_limit)))

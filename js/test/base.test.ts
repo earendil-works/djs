@@ -11,8 +11,13 @@ import { defaultWasmPath } from "../src/sandbox.ts";
 const path = defaultWasmPath();
 const module = new WebAssembly.Module(readFileSync(typeof path === "string" ? path : fileURLToPath(path)));
 
-test("the base equals a realm compiled in wasm", () => {
+test("the base equals a realm compiled in wasm", (t) => {
   const x = new WebAssembly.Instance(module, {}).exports as any;
+  if (x.vm_new_compiled === undefined) {
+    // Release modules leave it out; the gate builds with `--features compiled-prelude`.
+    t.skip("djs-wasm built without the compiled-prelude feature");
+    return;
+  }
   const arena = (vm: number) => new Uint8Array(x.memory.buffer, x.vm_arena_ptr(vm), x.vm_arena_len(vm)).slice();
   const base = x.vm_new(0);
   const compiled = x.vm_new_compiled(0);

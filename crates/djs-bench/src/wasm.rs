@@ -3,7 +3,8 @@
 //! boundary datasets as JSON and reads the script's TSV output:
 //! - `wasm/decode` and `wasm/parse_json`: wire and JSON into a fresh VM;
 //! - `wasm/readValue` and `wasm/json_stringify`: the two ways out;
-//! - `wasm/instantiate` and `wasm/vm_new`: startup.
+//! - `wasm/instantiate`, `wasm/vm_new` (from the base snapshot) and `wasm/vm_new compiling
+//!   the prelude`: startup.
 //!
 //! Skipped without node or the wasm32 target, and in quick mode.
 
@@ -20,10 +21,19 @@ pub fn wasm(r: &mut Runner) {
         return r.skip("wasm/", "not in quick mode (needs a wasm build and node)");
     }
     let root = workspace_root();
-    let target_dir = root.join("target/bench-size");
+    // Its own target dir: the `compiled-prelude` feature (for the startup comparison)
+    // must not flip the size track's build.
+    let target_dir = root.join("target/bench-wasm-build");
     let built = Command::new(env!("CARGO"))
         .current_dir(&root)
-        .args(["build", "--quiet", "-p", "djs-wasm"])
+        .args([
+            "build",
+            "--quiet",
+            "-p",
+            "djs-wasm",
+            "--features",
+            "compiled-prelude",
+        ])
         .args(["--target", "wasm32-unknown-unknown", "--profile", "wasm"])
         .arg("--target-dir")
         .arg(&target_dir)
