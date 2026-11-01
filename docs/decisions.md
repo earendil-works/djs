@@ -3063,3 +3063,27 @@ no private-field intrinsic is needed. Hidden decorator bindings are named `<dec>
 qjs's allocation order, since an auto-accessor's storage name appears in qjs's brand
 check message. Known divergence: qjs rejects `@dec abstract class` in TypeScript; djs
 accepts it.
+
+## D1720: Determinism checks in the gate: heap images across schedules and builds
+date: 2026-11-03 · by: determinism · issue: 0072
+Three checks, all hard failures in the gate, all comparing heap images *after a final
+collection*. The copying GC lays a heap out as a function of its object graph (D1090) and
+collects at the same points under any slicing and restore (D1601), so equal graphs give
+equal bytes, and an image difference means the run built a different graph.
+- **e2e:** the plain and suspension modes (fuel 1, then 997 per run, restoring the image
+  at every stop) must leave identical images.
+- **difftest `--determinism`:** suspended variants at 97 and 1009 fuel (restoring at
+  every stop) must leave the plain run's image. The plain run and its variants share one
+  clock reading per case (`Job::now`), since the clock is heap data.
+- **native vs wasm:** `djs-abidrive` (djs-difftest, natively) and
+  `scripts/determinism/abidrive.mjs` (the gate's wasm build) make the same export calls
+  for four bodies at two slices. Build hash, raw and collected image hashes, stop counts
+  (fuel) and results must match.
+
+GC stress is excluded from the image comparisons. It is another collection policy: weak
+tables lose dead entries at other times and compact differently (e2e `collections.js`
+differs only through its WeakMap). Raw images (without the final collection) are not
+compared yet, because suspended intrinsics allocate progress records only when a slice
+ends inside them, and `run` collects at its start (0071). Part 2 of 0072 adds them after
+0071. Cost: about +25 s wall for difftest at -j 6 (one more variant), 7 s for the
+native/wasm check.

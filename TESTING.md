@@ -220,7 +220,7 @@ $D --update-ratchet                  # rewrite tests/corpus/expected-failures.tx
 scripts/difftest-import-dquickts.py  # re-split the dquickts tests (then --update dquickts)
 
 $D --engine djs --clusters           # djs in-process; failures grouped by error
-$D --engine djs --ratchet --suspend-every 97 --gc-stress   # what the gate runs
+$D --engine djs --ratchet --suspend-every 97 --gc-stress --determinism   # what the gate runs
 $D --engine djs --update-ratchet     # after fixing cases: rewrite expected-failures.txt
 ```
 
@@ -229,6 +229,11 @@ and the case Script in-process, and only `host.output`/`host.done` are host func
 (D1440). `--suspend-every N` and `--gc-stress` run
 every case a second (third) time; a transcript that differs from the plain djs run is a
 hard failure, separate from the oracle comparison and the ratchet (D1161).
+`--determinism` adds a second suspension slice (1009) and requires the suspended runs to
+leave the same heap image as the plain run after a final collection (D1720). The e2e
+test compares its plain and suspension modes the same way, and
+`scripts/determinism/native-vs-wasm.sh` compares native and wasm builds image for image
+and stop for stop (both in the gate).
 
 `--update` refuses to record timeouts and crashes. Every case must pass with qjs: it is
 the oracle, so a failure there means the case or the runner is wrong. The importer
