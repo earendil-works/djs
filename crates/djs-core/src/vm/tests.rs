@@ -2928,6 +2928,7 @@ fn a_refused_to_space_stops_the_run() {
     assert_eq!(vm.collect(), Err(HeapError::HostOutOfMemory));
     let (_, out) = run_script(vm, "console.log('fine');\n");
     assert_eq!(out.log, ["fine"]);
+}
 
 // ---- The canonical hash (D1730) --------------------------------------------------------------
 
