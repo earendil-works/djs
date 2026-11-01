@@ -1267,7 +1267,7 @@ impl Heap {
     /// The value of slot `i` of `o` if that slot is the data property `key` (an inline
     /// cache hit, D1620); `None` for anything else, including a stale index. Keys are
     /// never array indexes of arrays here, since those callers only cache non-index atoms.
-    #[inline(always)]
+    #[inline]
     pub fn data_at(&self, o: Obj, i: u32, key: Atom) -> Option<Value> {
         let p = self.props(o);
         if p == 0 {
@@ -1299,7 +1299,7 @@ impl Heap {
 
     /// Writes `v` to slot `i` of `o` if it is the writable data property `key` (an inline
     /// cache hit of a store, D1620); false with nothing changed otherwise.
-    #[inline(always)]
+    #[inline]
     pub fn set_data_at(&mut self, o: Obj, i: u32, key: Atom, v: Value) -> bool {
         if i >= self.prop_slots(o) || self.prop_key(o, i) != key {
             return false;

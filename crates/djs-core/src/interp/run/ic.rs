@@ -180,6 +180,14 @@ pub(crate) fn cached_put(heap: &mut Heap, at: u32, obj: Obj, key: Atom, v: Value
     }
 }
 
+/// A `define_field` site's cache hit (its slots are additions without [`ADD_SET`]).
+#[inline(always)]
+fn cached_define(heap: &mut Heap, at: u32, obj: Obj, v: Value) -> bool {
+    let w0 = word(heap, at, 0);
+    w0 & (IC_OFFSET_SLOT | KIND_MASK << KIND_SHIFT) == IC_OFFSET_SLOT | KIND_ADD << KIND_SHIFT
+        && cached_add(heap, at, w0, obj, v)
+}
+
 /// The addition half of [`cached_put`], out of line: it may allocate, and keeping it out
 /// of the hot own-property path keeps that path small.
 #[inline(never)]
@@ -455,13 +463,14 @@ impl Exec<'_> {
     #[cfg(test)]
     #[inline(never)]
     pub(super) fn fast_define(&mut self, sp0: u32) -> bool {
-        let key = Atom::from_id(self.imm_u32(1));
         let ic = self.imm_u16(5);
         let (o, v) = (self.top(1), self.top(0));
         let Some(obj) = o.as_object() else {
             return false;
         };
-        if !self.ic_put(obj, key, ic, v) {
+        // A define site only ever holds an addition (ic_add_fill with `set` false).
+        let at = slot_at(self.heap, self.template, ic);
+        if at == 0 || !cached_define(self.heap, at, obj, v) {
             return false;
         }
         // `obj v -> obj`
