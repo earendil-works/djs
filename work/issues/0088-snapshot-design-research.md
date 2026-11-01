@@ -1,7 +1,7 @@
 # 0088: Snapshot design research: long-lived, cross-version, small (report only)
 
-status: open
-agent: -
+status: in-progress
+agent: snapshot
 branch: issue/0088-snapshot-research
 depends-on: -
 touches: work/issues/0088-snapshot-design-research.md (the report), docs/ (an optional design note draft, not adopted), work/scratch/0088/ (prototypes and measurements). No changes to engine code on main.
