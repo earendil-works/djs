@@ -26,7 +26,7 @@ const objs = [
   { get a() { return "getter"; } },
 ];
 for (let r = 0; r < 2; r++) console.log(objs.map(getA).join("|"));
-// (Error names only: djs names the property in "no setter for property" messages.)
+// (Error names only.)
 for (const o of objs) { try { console.log(setA(o, "set")); } catch (e) { console.log(e.name); } }
 console.log(objs.map(getA).join("|"));
 // The same object, changing under the cache.

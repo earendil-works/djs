@@ -428,10 +428,8 @@ impl Exec<'_> {
         match found {
             Some((_, Property::Accessor { setter, .. })) => {
                 if setter.is_undefined() {
-                    return type_error(&format!(
-                        "no setter for property '{}'",
-                        self.heap.atom_name(key)
-                    ));
+                    // qjs's message (without the key).
+                    return type_error("no setter for property");
                 }
                 self.sp -= n;
                 return self.call_accessor(setter, this, Some(v));

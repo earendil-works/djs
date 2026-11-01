@@ -570,7 +570,12 @@ fn emit_function(
                         Storage::Arg(a) => out.get_arg(a),
                         _ => out.undefined(),
                     }
-                    emit_init(&mut out, storage[v as usize], f.vars[v as usize].name, false);
+                    emit_init(
+                        &mut out,
+                        storage[v as usize],
+                        f.vars[v as usize].name,
+                        false,
+                    );
                 }
                 // Hoisted function declarations (docs/compiler.md 5.5).
                 for &(v, child) in &scope.funcs {
