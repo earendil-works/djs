@@ -105,7 +105,12 @@ A few old cells need more than their fields read:
 - old function templates get their offset caches emptied, like young ones.
 
 Reading a field is about four times cheaper than tracing it: on a heap holding just the
-base, a minor collection takes 0.08 ms where a full one takes 0.18 ms.
+base, a minor collection takes 0.08 ms where a full one takes 0.18 ms. The walk does not
+go through the general cell walker. For each cell kind, a small table worked out at
+compile time from the layout lists where its `Value` and `Ref` fields are. The walk loads
+each of them and compares it against B, and only a young target leads to a call (D2055).
+That made the walk about four times cheaper again: a property-heavy benchmark and a
+pi-like one each run 3.3% fewer instructions.
 
 **Where B comes from.** A VM created from the base image starts with B at the image's
 end: the base is made by the copying collector, which seals what it leaves. An embedder
@@ -139,9 +144,9 @@ collections ran before it or not.
 > stores into old cells (a card table) would let a minor collection read only the cells
 > written since the last one. But it costs a compare on every traced store in the
 > interpreter's hottest paths, and it has to be complete, raw stack writes included: a
-> forgotten store frees a live cell. The walk has nothing to forget. It costs about
-> 0.04 ms for the 400 KB base, at most 2–2.5% of the workloads that collect most often,
-> so the barrier is not built (D2044).
+> forgotten store frees a live cell. The walk has nothing to forget. Since the per-kind
+> slot tables it costs about 1% of the workloads that collect most often, so the barrier
+> is not built (D2044).
 
 > **Trade-off.** No promotion. A generational collector moves long-lived young cells into
 > the old region, so later collections stop tracing them. djs tried this twice.
@@ -234,6 +239,12 @@ collections come more often as memory gets tight. The arena's backing store stop
 growing at the threshold, since wasm memory never shrinks and the peak is what a run
 costs (D1870).
 
+> **Trade-off.** Twice the live size, not more. Since minor collections skip the old
+> region, a collection's cost is mostly the young data that survives it, and letting the
+> heap grow by the young survivors once more (capped at 256 KiB) means fewer
+> collections. It saved 2–4% of the instructions of pi-like and JSON-heavy runs, but
+> raised their peak memory by 0.3–0.9 MiB, up to 17%. djs keeps the plain rule (D2056).
+
 Which collections are minor and which are full is a function of the program in the same
 way (see [the old region](#the-old-region)). Three rules make the collection points a
 function of the program alone:
@@ -320,11 +331,13 @@ not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D16
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2042 D2044 D2045 D2046 D2047 D2048 D2053 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 -->
+<!-- gen:decisions D2040 D2041 D2042 D2044 D2055 D2056 D2045 D2046 D2047 D2048 D2053 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2042: Full collections do not promote; only seal points make cells old
 - D2044: No card table and write barrier (old-generation phase 2) for now
+- D2055: The old-region walk uses per-kind slot plans
+- D2056: The collection threshold stays at twice the live size
 - D2045: The first collection after a canonical image is full
 - D2046: No aging promotion
 - D2047: Arena growth policies that did not help

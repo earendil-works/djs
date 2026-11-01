@@ -5837,3 +5837,50 @@ suspended activations with their locals). Text by default, `--json` for scripts,
   JS host in both directions by hand (a Rust container restores in `Sandbox.fromBytes`,
   JS containers read in Rust); the Rust tests cover the layout, the older formats and the
   refusals.
+
+## D2055: The old-region walk uses per-kind slot plans
+date: 2026-11-03 · by: heap · issue: 0134
+A minor collection's walk over the old region (D2041) no longer calls
+`walk::for_each_slot` with a closure per traced slot. In wasm that closure was not
+inlined, so the walk paid one call per slot (17,110 slots in the base).
+- **How:** `compactor::PLANS` is a `static` table indexed by kind byte (28 entries, 16 B
+  each), computed at compile time by a `const fn` from `cells::LAYOUTS`. Each entry
+  holds:
+  - the fixed `Value`/`Ref` fields: byte offsets and a bit mask of which are `Ref`s;
+  - the tail element's traced fields, with the tail offset and element size.
+- **The walk:** for each slot, a load, a compare against B and, for a `Value`, the tag
+  check. Only a young target calls the out-of-line `old_hit`, which marks and remembers
+  it. Arrays of values (`ValueArray`, `PropValues`, object slots) get a word-at-a-time
+  loop.
+- **Tested:** `slot_plans_match_the_layouts` checks every kind and size against
+  `for_each_slot`.
+- **Wasm instructions:** pi-like 8064 → 7795 M (−3.3%), props 8154 → 7882 M (−3.3%),
+  strings −0.8%, jsonh −1.6%, the rest within ±1% (noise).
+- **Size:** +459 B gzip, +1.0 KB raw. A first version with a 256-entry table of wider
+  entries cost +16 KB raw / +621 B gzip.
+
+## D2056: The collection threshold stays at twice the live size
+date: 2026-11-03 · by: heap · issue: 0134
+Measured and not adopted: a growth sized from the young part as well. The young part is
+`after − OLD_END`, and B = 0 heaps were unchanged. The rule was
+`growth = max(live, MIN_GROWTH) + extra`, measured on top of D2055 with two choices of
+`extra`:
+- **extra = young survivors** (k = 1). Wasm instructions: pi-like −1.9%, json −6.6%,
+  jsonh −6.2%, json-replacer −4.5%, json-indent −2.3%, higher-order −1.5%. Peak memory,
+  mean of 24 perturbed runs (D2048), MiB:
+  - pi-like 2.81 → 3.30, json 6.8 → 7.4, jsonh 6.3 → 8.1;
+  - json-replacer 4.83 → 7.70, json-indent 5.83 → 7.70;
+  - arrays 14.2 → 17.8, higher-order 15.4 → 21.5, strbuild 19.4 → 22.1.
+
+  k = 2 and 3 gained more and cost more again.
+- **extra = min(young, MIN_GROWTH):** pi-like −2.3%, json −3.7%, jsonh −3.0%,
+  json-replacer −3.2%, json-date −3.0%. Peaks (24 runs, mean):
+  - pi-like 2.81 → 3.30 (+17%), json 6.8 → 7.1, jsonh 6.3 → 6.6;
+  - json-date 4.80 → 5.20, json-indent 5.83 → 6.30, json-replacer 4.83 → 5.71;
+  - props 2.43 → 2.60, strings 11.25 → 13.09;
+  - strbuild mean 19.4 → 20.8 (max 32.7).
+
+Every gain costs peak memory roughly in proportion: collections are fewer only because
+the arena grows further between them. pi runs many VMs and memory was the target of
+D2041–D2053, so 2–4% of instructions don't buy +0.3–0.9 MiB per VM. Reopen if
+instructions matter more than per-VM memory.
