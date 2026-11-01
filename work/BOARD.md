@@ -10,7 +10,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0105 | Stack trace details (stackTraceLimit, call-site columns) | infra | .worktrees/infra |
 | 0103 | Human-facing documentation (format proposal first) | docs | .worktrees/docs |
-| 0098 | Base image + shapes code size (0083 part 4) | heap | .worktrees/heap |
+| 0101 | Mark-compact collection (design first) | heap | .worktrees/heap |
 | 0100 | Native codegen: values in Rust locals (0081 P8) + more run_hot ops | perf | .worktrees/perf |
 
 ## Open (ready)
@@ -22,7 +22,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0101 | In-place mark-compact collection (design first) | 0098, 0099 (heap) |
 
 ## Done
 
@@ -86,6 +85,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0090 | Natives retry, resizable TA, JSON slow path | dee4dc9b (agent infra; JSON with a Date 18.1G -> 1.2G wasm instr) |
 | 0080 | for-of/iteration fast paths + natives wave 2 | fd5a6d1 (agent infra; for-of 5,433 -> 738 instr/elem) |
 | 0063 | D015 + bgen Rust backend v1 (35 natives) | 9f662b7 (agent infra; higher-order 6.8x -> 2.3x qjs; +80 KB code) |
+| 0098 | Base image + shapes code size | 87c5e0ce (agent heap; base.img -21.5 KB; module -25.6 KB; atom 3/4 load rejected) |
 | 0083 | Shapes (parts 1-3) | 9e7bcfd5 (agent heap; D1831-D1832; objects -27..-33% bytes; literals/ctors ~3x faster) |
 | 0069 | Host OOM status | 893495f (agent heap; D1690) |
 | 0070 | Collect-and-retry at a failing allocation | 42b7fc5 (agent heap; D1700; natives not yet) |
