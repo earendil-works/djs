@@ -1,7 +1,7 @@
 # 0074: Carry fuel overshoot across runs
 
-status: open
-agent: -
+status: in-progress
+agent: determinism
 branch: issue/0074-fuel-overshoot
 depends-on: -
 touches: crates/djs-core/src/interp/, crates/djs-core/src/vm/
