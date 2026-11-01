@@ -30,8 +30,19 @@ continues there, and also restores the same image from an uncompressed container
   dictionary and the image or the default one; compressed size, compression and
   decompression time.
 
-It also writes the prelude image (`prelude.img`) and each case's last image, for
-comparisons with other compressors (0117 used them to measure zstd-rs compiled to wasm).
+It also writes the prelude image (`prelude.img`), each case's last image (for comparisons
+with other compressors; 0117 measured zstd-rs compiled to wasm on them), the snapshot
+containers of the first, the largest and the last idle point (`CASE-N.djsn`) and the
+cases' start data (`start.json`). `djs heap` explains a container's size (0133):
+
+```sh
+node scripts/heap/reference.ts pi-prelude --data OUT/start.json -o OUT/prelude.img   # or use OUT/prelude.img
+cargo run -q -p djs-cli -- heap --reference OUT/prelude.img --only diff,session OUT/ask-1.djsn
+```
+
+The search tool steps through the source files with a stride coprime with their count, so
+its hits are distinct files (with a fixed 7, every file came three times whenever djs-core
+had 147 source files, which halved tool-heavy's snapshots).
 
 Defaults: `work/scratch/snapshot-research`, all of `cases/`. The script extracts pi's prelude
 from `tests/pi/prelude-source.ts` (needs node), builds snaplab into the repo's `target/`
