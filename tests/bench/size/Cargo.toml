@@ -1,0 +1,27 @@
+# Size probe for the size track (crates/djs-bench/src/size.rs): a wasm cdylib that
+# references djs-core's main entry points, so the release wasm size of those code
+# paths can be tracked before djs-wasm exists. Its own workspace, so that normal
+# workspace builds do not build it.
+[package]
+name = "djs-size-probe"
+edition = "2024"
+version = "0.0.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+path = "lib.rs"
+
+[dependencies]
+djs-core = { path = "../../../crates/djs-core" }
+
+[workspace]
+
+# Keep in sync with [profile.wasm] in the root Cargo.toml.
+[profile.wasm]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = 0

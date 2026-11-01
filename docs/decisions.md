@@ -540,3 +540,33 @@ with several steps around user code (ToPrimitive, GetMethod, ToNumber of objects
 LengthOfArrayLike, ArraySpeciesCreate) are written in the builtin language. Error texts
 follow QuickJS where cheap, and messages that need engine-internal data (such as a
 function's internal name) come from leaf intrinsics (`NewNotConstructorError`).
+
+## D1190: Benchmark harness
+date: 2026-11-01 · by: infra · issue: 0019
+`crates/djs-bench` is a dependency-free runner (no criterion): warmup (two calls or
+100 ms), then samples for about a second (5 to 50); the median sample is the recorded
+value and the best is printed. Results go to `tests/scores/bench.tsv` (date, commit,
+machine, benchmark, value, unit) with `scripts/bench.sh --record`; `--compare [REV]`
+flags changes beyond 10% (0.5% for sizes) and exits 1 on regressions. Machines are
+identified by hardware model, architecture and CPU count (or `$DJS_BENCH_MACHINE`), and
+comparisons prefer rows of the same machine. The benchmark scenarios are the ones the
+component issues measured, so numbers stay comparable. Timing is not in the gate; quick
+mode (every benchmark once, small inputs) runs as a unit test so the gate keeps the
+harness working.
+
+## D1191: Engine benchmarks run in the difftest codemode model
+date: 2026-11-01 · by: infra · issue: 0019
+`tests/bench/*.js` run through djs-difftest's `Engine` trait with the shared prelude,
+so the qjs engine already exists and the djs engine that 0016 adds to difftest is
+reused unchanged. A sample is a whole run; for qjs that includes the process start,
+measured by `empty.js` and subtracted. Each script declares its expected result
+(`// bench: expect ...`, recorded from qjs), and a run with any other result is not
+counted.
+
+## D1192: Wasm size probe
+date: 2026-11-01 · by: infra · issue: 0019
+Until djs-wasm exists, the size track builds `tests/bench/size`, a cdylib that calls
+djs-core's main entry points, for wasm32-unknown-unknown with the `wasm` profile. It is
+its own Cargo workspace (with a copy of `[profile.wasm]`), so workspace builds and the
+gate never build it. Reported: file size, size without custom sections, gzip -9, and
+`wasm-opt -Oz` when available.

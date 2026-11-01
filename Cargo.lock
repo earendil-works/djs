@@ -3,6 +3,14 @@
 version = 4
 
 [[package]]
+name = "djs-bench"
+version = "0.0.0"
+dependencies = [
+ "djs-core",
+ "djs-difftest",
+]
+
+[[package]]
 name = "djs-bgen"
 version = "0.0.0"
 
