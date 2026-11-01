@@ -1270,6 +1270,89 @@ function ThrowTypeError(v) {
   throw %NewTypeError("invalid property access");
 }
 
+// builtins/iter.ts:10 %GetIterator
+function GetIterator(obj) {
+  const method = %GetV(obj, %WellKnownSymbol("iterator"));
+  if (!%IsCallable(method)) {
+    throw %NewTypeError("value is not iterable");
+  }
+  const iterator = %Call(method, obj);
+  if (!%IsObject(iterator)) {
+    throw %NewTypeError("not an object");
+  }
+  return %AsObj(iterator);
+}
+
+// builtins/iter.ts:27 %IteratorClose
+function IteratorClose(iterator) {
+  const method = %Get(iterator, "return");
+  if (method === undefined || method === null) {
+    return;
+  }
+  const result = %Call(method, iterator);
+  if (!%IsObject(result)) {
+    throw %NewTypeError("not an object");
+  }
+}
+
+// builtins/iter.ts:43 %IteratorCloseThrow
+function IteratorCloseThrow(iterator) {
+  try {
+    const method = %Get(iterator, "return");
+    if (method === undefined || method === null) {
+      return;
+    }
+    %Call(method, iterator);
+  } catch (e) {
+    return;
+  }
+}
+
+// builtins/iter.ts:60 Array.prototype.values Array.prototype[Symbol.iterator]
+function ArrayPrototypeValues() {
+  return %CreateArrayIterator(%ToObject(this), 1);
+}
+
+// builtins/iter.ts:68 Array.prototype.keys
+function ArrayPrototypeKeys() {
+  return %CreateArrayIterator(%ToObject(this), 0);
+}
+
+// builtins/iter.ts:76 Array.prototype.entries
+function ArrayPrototypeEntries() {
+  return %CreateArrayIterator(%ToObject(this), 2);
+}
+
+// builtins/iter.ts:84 %ArrayIteratorPrototype%.next
+function ArrayIteratorPrototypeNext() {
+  const target = %ArrayIteratorTarget(this);
+  if (target === undefined) {
+    return %CreateIterResultObject(undefined, true);
+  }
+  const o = %AsObj(target);
+  const index = %ArrayIteratorIndex(this);
+  const len = LengthOfArrayLike(o);
+  if (index >= len) {
+    %ArrayIteratorFinish(this);
+    return %CreateIterResultObject(undefined, true);
+  }
+  %ArrayIteratorSetIndex(this, index + 1);
+  const kind = %ArrayIteratorKind(this);
+  if (kind === 0) {
+    return %CreateIterResultObject(index, false);
+  }
+  const value = %Get(o, index);
+  if (kind === 1) {
+    return %CreateIterResultObject(value, false);
+  }
+  return %CreateIterResultObject(%CreateArrayFromPair(index, value), false);
+}
+
+// builtins/iter.ts:112 %IteratorPrototype%[Symbol.iterator]
+function IteratorPrototypeIterator() {
+  return this;
+}
+
 // builtins/math.ts:8 value Math
 function MathObject() {
   return %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
@@ -2644,6 +2727,12 @@ function SymbolUnscopables() {
 %InstallAccessor("Function.prototype", "caller", ThrowTypeError, true);
 %InstallAccessor("Function.prototype", "arguments", ThrowTypeError, false);
 %InstallAccessor("Function.prototype", "arguments", ThrowTypeError, true);
+%InstallMethod("Array.prototype", "values", ArrayPrototypeValues, 0);
+%InstallMethod("Array.prototype", %WellKnownSymbol("iterator"), ArrayPrototypeValues, 0);
+%InstallMethod("Array.prototype", "keys", ArrayPrototypeKeys, 0);
+%InstallMethod("Array.prototype", "entries", ArrayPrototypeEntries, 0);
+%InstallMethod("%ArrayIteratorPrototype%", "next", ArrayIteratorPrototypeNext, 0);
+%InstallMethod("%IteratorPrototype%", %WellKnownSymbol("iterator"), IteratorPrototypeIterator, 0);
 %InstallValue("Math", %WellKnownSymbol("toStringTag"), MathToStringTag(), 4);
 %InstallValue("Math", "E", MathE(), 0);
 %InstallValue("Math", "LN10", MathLN10(), 0);
@@ -2794,4 +2883,7 @@ function SymbolUnscopables() {
 %InstallIntrinsic("ToNumber", ToNumber);
 %InstallIntrinsic("ToString", ToString);
 %InstallIntrinsic("InstanceofOperator", InstanceofOperator);
+%InstallIntrinsic("GetIterator", GetIterator);
+%InstallIntrinsic("IteratorClose", IteratorClose);
+%InstallIntrinsic("IteratorCloseThrow", IteratorCloseThrow);
 })();

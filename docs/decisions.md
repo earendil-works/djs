@@ -1253,3 +1253,26 @@ Following D1200, `crates/djs-bgen/tests/behavior.rs` kills qjs after 60 s (hang
 protection only; a run takes well under a second) and fails with `timeout: no result
 within 60s`. Its output pipes are drained on threads, so a large output cannot block qjs.
 A builtin that loops forever in the qjs stand-ins had hung the test for almost two hours.
+
+## D1290: The iteration protocol lives in the builtin language
+date: 2026-11-01 · by: lexer · issue: 0029
+GetIterator, IteratorClose and the throw-completion variant are `@intrinsic` builtins in
+`builtins/iter.ts` (`%GetIterator(obj)`, `%IteratorClose(it)`, `%IteratorCloseThrow(it)`),
+not ops: the compiler emits `call_intrinsic` for them, and the step (`next` / `done` /
+`value`, with `iter_check_object`) is plain bytecode (D1085: multi-step semantics in
+privileged JS). `%GetIterator` returns only the iterator; callers read `next` once,
+right after. `%IteratorCloseThrow` calls `return` but swallows its errors and ignores
+its result, so the body's exception wins. Array Iterators are an `ObjectClass` with
+leaf intrinsics for their state (CreateArrayIterator, ArrayIteratorTarget / Index /
+SetIndex / Finish / Kind) plus CreateIterResultObject and CreateArrayFromPair; next()
+itself is builtin-language code and reads `length` through LengthOfArrayLike (the spec;
+qjs uses ToUint32). `ArrayIteratorTarget` is the brand check ("Array Iterator object
+expected") and returns undefined once the iterator is exhausted.
+
+## D1291: `%Name%` install targets in bgen
+date: 2026-11-01 · by: lexer · issue: 0029
+A `@builtin` path may start with a `%Name%` segment (`%ArrayIteratorPrototype%.next`,
+`%IteratorPrototype%[Symbol.iterator]`): the checker accepts it and the emitter passes it
+through as the `%InstallMethod` target string, which the runtime resolves to the realm
+intrinsic (0030). Only the first segment may be `%Name%`.
+

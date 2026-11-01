@@ -4,6 +4,25 @@
 "use strict";
 
 const installed = {};
+const arrayIterators = new WeakMap();
+let ourAIP;
+function ourArrayIteratorPrototype() {
+  if (!ourAIP) {
+    const iterProto = {};
+    Object.defineProperty(iterProto, Symbol.iterator, {
+      value: installed["%IteratorPrototype%[Symbol.iterator]"].f,
+      writable: true,
+      configurable: true,
+    });
+    ourAIP = Object.create(iterProto);
+    Object.defineProperty(ourAIP, "next", {
+      value: installed["%ArrayIteratorPrototype%.next"].f,
+      writable: true,
+      configurable: true,
+    });
+  }
+  return ourAIP;
+}
 const isObject = (v) => v !== null && (typeof v === "object" || typeof v === "function");
 function check(cond, what) {
   if (!cond) throw new Error("intrinsic misuse: " + what);
@@ -78,6 +97,28 @@ const I = {
   InstallMethod: (target, key, f, length) => {
     installed[target + (typeof key === "symbol" ? "[" + key.description + "]" : "." + key)] = { f, length };
   },
+  // Array Iterators: plain objects whose state lives in a WeakMap, with our next and
+  // %IteratorPrototype%[Symbol.iterator] on their prototype chain.
+  CreateArrayIterator: (o, kind) => {
+    const it = Object.create(ourArrayIteratorPrototype());
+    arrayIterators.set(it, { target: o, index: 0, kind });
+    return it;
+  },
+  ArrayIteratorTarget: (it) => {
+    const st = arrayIterators.get(it);
+    if (!st) throw new TypeError("Array Iterator object expected");
+    return st.target;
+  },
+  ArrayIteratorIndex: (it) => arrayIterators.get(it).index,
+  ArrayIteratorSetIndex: (it, i) => {
+    arrayIterators.get(it).index = i;
+  },
+  ArrayIteratorFinish: (it) => {
+    arrayIterators.get(it).target = undefined;
+  },
+  ArrayIteratorKind: (it) => arrayIterators.get(it).kind,
+  CreateIterResultObject: (value, done) => ({ value, done }),
+  CreateArrayFromPair: (a, b) => [a, b],
   InstallIntrinsic: (name, f) => {
     installed["%" + name] = { f };
   },
@@ -830,5 +871,80 @@ for (const args of [[], [65, 0x1f600], [-1], [1.5], [0x110000], ["66"], [NaN], [
 for (const args of [[{ raw: ["a", "b", "c"] }, 1], [{ raw: ["a", "b"] }, 1, 2, 3], [{ raw: [] }], [{ raw: "xyz" }, "-"], [{}], [null]]) {
   same("String.raw", String.raw, (f) => f(...args));
 }
+
+// Array Iterators: drain an iterator from values/keys/entries/[Symbol.iterator] by
+// calling next() directly, and through for-of (which also uses
+// %IteratorPrototype%[Symbol.iterator]). Both are capped: an iterator over a huge
+// length must not hang the test.
+function drain(it, max = 10) {
+  const out = [];
+  for (let i = 0; i < max; i++) {
+    const r = it.next();
+    out.push(show(r));
+    if (r.done) break;
+  }
+  // Exhausted iterators stay done.
+  out.push(show(it.next()));
+  return out.join(" ");
+}
+function drainForOf(it, max = 10) {
+  const out = [];
+  for (const v of it) {
+    out.push(show(v));
+    if (out.length >= max) break;
+  }
+  return out.join(",");
+}
+for (let i = 0; i < nSubjects; i++) {
+  // qjs reads an Array Iterator's length with ToUint32, not ToLength: { length: -5 }
+  // iterates 2^32 - 5 elements there and none per spec (and here).
+  if (i === 6) continue;
+  for (const [name, native] of [
+    ["Array.prototype.values", AP.values],
+    ["Array.prototype.keys", AP.keys],
+    ["Array.prototype.entries", AP.entries],
+    ["Array.prototype[Symbol.iterator]", AP[Symbol.iterator]],
+  ]) {
+    same(name, native, (f, log) => drain(f.call(subjects(log)[i])));
+    same(name, native, (f, log) => drainForOf(f.call(subjects(log)[i])));
+  }
+}
+for (const name of ["values", "keys", "entries"]) {
+  const native = AP[name];
+  const full = "Array.prototype." + name;
+  same(full, native, (f) => f.call(undefined));
+  same(full, native, (f) => f.call(null));
+  same(full, native, (f) => drain(f.call(5)));
+  same(full, native, () => installed[full].length === native.length);
+  // Growth and shrinking while iterating; an exhausted iterator stays exhausted.
+  same(full, native, (f) => {
+    const a = [1, 2, 3];
+    const it = f.call(a);
+    const out = [show(it.next())];
+    a.push(4);
+    out.push(show(it.next()));
+    a.length = 1;
+    out.push(show(it.next()), show(it.next()));
+    a.push(5);
+    out.push(show(it.next()));
+    return out.join(" ");
+  });
+}
+same(
+  "Array.prototype[Symbol.iterator]",
+  AP[Symbol.iterator],
+  () => installed["Array.prototype[Symbol.iterator]"].f === installed["Array.prototype.values"].f,
+);
+// next on the wrong receiver.
+const nativeAIPNext = Object.getPrototypeOf([].values()).next;
+same("%ArrayIteratorPrototype%.next", nativeAIPNext, (f) => f.call({}));
+same("%ArrayIteratorPrototype%.next", nativeAIPNext, (f) => f.call(undefined));
+same("%ArrayIteratorPrototype%.next", nativeAIPNext, (f) => f.call([].values.call([1]).__proto__));
+// %IteratorPrototype%[Symbol.iterator] returns this.
+const nativeIterProtoIter = Object.getPrototypeOf(Object.getPrototypeOf([].values()))[Symbol.iterator];
+same("%IteratorPrototype%[Symbol.iterator]", nativeIterProtoIter, (f) => {
+  const o = {};
+  return f.call(o) === o && f.call(5);
+});
 
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));

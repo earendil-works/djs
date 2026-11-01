@@ -355,6 +355,29 @@ declare function F64Trunc(x: f64): f64;
 /** The next number in [0, 1) of the realm's generator (xorshift128+, seeded by the host). @leaf */
 declare function MathRandom(): f64;
 
+// ---- Iterators ------------------------------------------------------------------------
+
+/** A new Array Iterator over o (kind 0: keys, 1: values, 2: entries), 23.1.5.1. @leaf */
+declare function CreateArrayIterator(o: Obj, kind: i32): Obj;
+/**
+ * The object an Array Iterator iterates, or undefined once it is exhausted. TypeError
+ * "Array Iterator object expected" if it is not an Array Iterator.
+ * @leaf
+ */
+declare function ArrayIteratorTarget(it: Value): Value;
+/** The next index of an Array Iterator. @leaf */
+declare function ArrayIteratorIndex(it: Value): f64;
+/** @leaf */
+declare function ArrayIteratorSetIndex(it: Value, index: f64): void;
+/** Marks an Array Iterator exhausted (its target becomes undefined). @leaf */
+declare function ArrayIteratorFinish(it: Value): void;
+/** The kind of an Array Iterator (0: keys, 1: values, 2: entries). @leaf */
+declare function ArrayIteratorKind(it: Value): i32;
+/** CreateIterResultObject ( value, done ), 7.4.14. @leaf */
+declare function CreateIterResultObject(value: Value, done: boolean): Obj;
+/** A new Array [a, b]. @leaf */
+declare function CreateArrayFromPair(a: Value, b: Value): Obj;
+
 // ---- Used by the generated code (crates/djs-bgen/src/emit_js.rs) ------------------------
 
 /**

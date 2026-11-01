@@ -173,6 +173,14 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("F64Tanh", L, 1, false),
     i("F64Trunc", L, 1, false),
     i("MathRandom", L, 0, false),
+    i("CreateArrayIterator", L, 2, false),
+    i("ArrayIteratorTarget", L, 1, false),
+    i("ArrayIteratorIndex", L, 1, false),
+    i("ArrayIteratorSetIndex", L, 2, false),
+    i("ArrayIteratorFinish", L, 1, false),
+    i("ArrayIteratorKind", L, 1, false),
+    i("CreateIterResultObject", L, 2, false),
+    i("CreateArrayFromPair", L, 2, false),
     i("InstallMethod", L, 4, false),
     i("InstallConstructor", L, 5, false),
     i("InstallAccessor", L, 4, false),
@@ -182,6 +190,9 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("ToNumber", B, 1, false),
     i("ToString", B, 1, false),
     i("InstanceofOperator", B, 2, false),
+    i("GetIterator", B, 1, false),
+    i("IteratorClose", B, 1, false),
+    i("IteratorCloseThrow", B, 1, false),
 ];
 
 /// The id of the intrinsic `name`.

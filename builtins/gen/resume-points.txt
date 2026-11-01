@@ -483,6 +483,30 @@ FunctionPrototypeHasInstance: reentrant (Function.prototype[Symbol.hasInstance])
 
 ThrowTypeError: leaf (get Function.prototype.caller, set Function.prototype.caller, get Function.prototype.arguments, set Function.prototype.arguments)
 
+GetIterator: reentrant (%GetIterator)
+  builtins/iter.ts:11:25  GetV (intrinsic)
+  builtins/iter.ts:15:27  Call (intrinsic)
+
+IteratorClose: reentrant (%IteratorClose)
+  builtins/iter.ts:28:25  Get (intrinsic)
+  builtins/iter.ts:32:25  Call (intrinsic)
+
+IteratorCloseThrow: reentrant (%IteratorCloseThrow)
+  builtins/iter.ts:45:27  Get (intrinsic)
+  builtins/iter.ts:49:5  Call (intrinsic)
+
+ArrayPrototypeValues: leaf (Array.prototype.values, Array.prototype[Symbol.iterator])
+
+ArrayPrototypeKeys: leaf (Array.prototype.keys)
+
+ArrayPrototypeEntries: leaf (Array.prototype.entries)
+
+ArrayIteratorPrototypeNext: reentrant (%ArrayIteratorPrototype%.next)
+  builtins/iter.ts:91:20  LengthOfArrayLike (builtin)
+  builtins/iter.ts:101:24  Get (intrinsic)
+
+IteratorPrototypeIterator: leaf (%IteratorPrototype%[Symbol.iterator])
+
 MathObject: leaf (value Math)
 
 MathToStringTag: leaf (value Math[Symbol.toStringTag])

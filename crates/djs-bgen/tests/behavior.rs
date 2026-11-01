@@ -64,8 +64,9 @@ fn generated_builtins_match_qjs() {
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let prelude = std::fs::read_to_string(root.join("../../builtins/gen/prelude.js")).unwrap();
-    // `%Name(` only appears as intrinsic calls: the prelude has no `%` in strings.
-    let prelude = prelude.replace('%', "I.");
+    // `%Name` outside strings is an intrinsic call; inside a string (an install target
+    // such as `"%ArrayIteratorPrototype%"`) it stays as it is.
+    let prelude = intrinsic_calls_to_js(&prelude);
     let script = std::fs::read_to_string(root.join("tests/behavior.js"))
         .unwrap()
         .replace("PRELUDE;", &prelude);
@@ -90,4 +91,32 @@ fn generated_builtins_match_qjs() {
     );
     let n: usize = last[3..].trim().parse().unwrap();
     assert!(n > 2000, "only {n} comparisons ran");
+}
+
+/// Rewrites `%Name(` to `I.Name(` outside string literals (the prelude's strings use
+/// double quotes and backslash escapes only).
+fn intrinsic_calls_to_js(src: &str) -> String {
+    let mut out = String::with_capacity(src.len());
+    let mut in_string = false;
+    let mut escaped = false;
+    for c in src.chars() {
+        if in_string {
+            out.push(c);
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                in_string = false;
+            }
+        } else if c == '"' {
+            in_string = true;
+            out.push(c);
+        } else if c == '%' {
+            out.push_str("I.");
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }

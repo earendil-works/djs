@@ -267,15 +267,28 @@ fn split_path(path: &str) -> Option<(String, String)> {
             && s.chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
     };
+    // A target is a dotted path; its first segment may name a realm intrinsic object
+    // (`%ArrayIteratorPrototype%`), which `%InstallMethod` resolves.
+    let target_ok = |t: &str| {
+        t.split('.').enumerate().all(|(i, seg)| {
+            ident(seg)
+                || (i == 0
+                    && seg.len() > 2
+                    && seg.starts_with('%')
+                    && seg.ends_with('%')
+                    && ident(&seg[1..seg.len() - 1]))
+        })
+    };
     if let Some(open) = path.find('[') {
         let (target, key) = path.split_at(open);
         let name = key.strip_prefix("[Symbol.")?.strip_suffix(']')?;
-        if !ident(name) || !target.split('.').all(ident) {
+        if !ident(name) || !target_ok(target) {
             return None;
         }
         return Some((target.into(), key.into()));
     }
-    if !path.split('.').all(ident) {
+    let (t, k) = path.rsplit_once('.').unwrap_or(("", path));
+    if !ident(k) || (!t.is_empty() && !target_ok(t)) {
         return None;
     }
     Some(match path.rsplit_once('.') {
