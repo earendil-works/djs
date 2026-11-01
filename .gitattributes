@@ -1,0 +1,3 @@
+# docs/decisions.md is append-only and every issue adds to its end: merge both sides
+# instead of conflicting (0079).
+docs/decisions.md merge=union
