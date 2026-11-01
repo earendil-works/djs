@@ -607,6 +607,11 @@ impl<'h> Exec<'h> {
                 self.sp = self.lp + self.locals() + h.depth;
                 self.push(exc);
                 self.pc = h.target;
+                if exc == intrinsic(self.heap, Intrinsic::OutOfMemoryError) {
+                    // The frames that held the data are gone: collect before the
+                    // handler allocates (D1600).
+                    self.safepoint_collect();
+                }
                 return None;
             }
             let cont = Continuation::from_flags(self.header_int(frame::FLAGS) as i32);
@@ -630,6 +635,8 @@ impl<'h> Exec<'h> {
             Fault::Throw(v) => return v,
             Fault::Error(k, m) => (k, m),
             Fault::Heap(HeapError::OutOfMemory) => {
+                // The handlers get the reserve below the cap to run in (D1600).
+                self.heap.open_memory_reserve();
                 return intrinsic(self.heap, Intrinsic::OutOfMemoryError);
             }
             Fault::Heap(HeapError::StringTooLong) => {
@@ -641,7 +648,10 @@ impl<'h> Exec<'h> {
         };
         let e = match realm::new_error(self.heap, kind, &msg) {
             Ok(e) => e,
-            Err(_) => return intrinsic(self.heap, Intrinsic::OutOfMemoryError),
+            Err(_) => {
+                self.heap.open_memory_reserve();
+                return intrinsic(self.heap, Intrinsic::OutOfMemoryError);
+            }
         };
         if let Some(pc) = pc {
             let _ = self.set_stack(e, pc);

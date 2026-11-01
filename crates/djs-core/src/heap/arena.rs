@@ -90,6 +90,11 @@ impl Arena {
         self.limit
     }
 
+    /// Moves the cap (the heap's out-of-memory reserve, D1600); clamped like `new`.
+    pub(crate) fn set_limit(&mut self, limit: u32) {
+        self.limit = clamp_limit(limit as usize);
+    }
+
     /// All bytes in use.
     #[inline]
     pub fn bytes(&self) -> &[u8] {

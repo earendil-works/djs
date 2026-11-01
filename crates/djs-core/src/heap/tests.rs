@@ -1180,7 +1180,8 @@ fn image_validation() {
 fn out_of_memory_leaves_heap_valid() {
     let base = heap().arena().len() as usize;
     for extra in [0, 100, 1000, 5000, 20_000] {
-        let mut h = Heap::with_limit(base + extra).unwrap();
+        // The cap keeps 1/32 back as the out-of-memory reserve (D1600).
+        let mut h = Heap::with_limit((base + extra) * 32 / 31 + 64).unwrap();
         let mut steps = 0;
         let r: Result<(), HeapError> = (|| {
             let o = h.new_object(None)?;
@@ -1200,7 +1201,12 @@ fn out_of_memory_leaves_heap_valid() {
             Ok(())
         })();
         assert_eq!(r, Err(HeapError::OutOfMemory));
-        assert!(h.arena().len() as usize <= base + extra);
+        assert!(h.arena().len() <= h.arena().limit());
+        // The reserve gives room for more, up to the cap.
+        let soft = h.arena().limit();
+        h.open_memory_reserve();
+        assert!(h.arena().limit() > soft);
+        assert!(h.alloc_str("after the reserve opened").is_ok());
         h.verify().unwrap();
         let _ = steps;
     }

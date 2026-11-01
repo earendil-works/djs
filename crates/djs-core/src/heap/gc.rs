@@ -222,10 +222,12 @@ impl Heap {
             }
         }
         let after = to.len();
-        self.gc_threshold = next_threshold(after, to.limit());
-        to.shrink_capacity(self.gc_threshold as usize);
         self.arena = to;
+        self.set_gc_threshold(next_threshold(after, self.arena.limit()));
         self.gc_pending = false;
+        self.maybe_close_reserve();
+        let keep = self.gc_threshold as usize;
+        self.arena.shrink_capacity(keep);
         for o in collections {
             self.collection_rehash(crate::value::Obj(o));
         }

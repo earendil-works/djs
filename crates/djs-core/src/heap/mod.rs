@@ -122,16 +122,25 @@ impl fmt::Display for LoadError {
     }
 }
 
+/// The out-of-memory reserve for a cap (D1600): 1/32 of it, at most 1 MiB.
+fn reserve_for(limit: u32) -> u32 {
+    (limit / 32).min(1 << 20) & !7
+}
+
 /// The default memory cap: the whole `u32` offset space.
 pub const DEFAULT_LIMIT: usize = arena::MAX_ARENA as usize;
 
 /// The VM heap. All state is in the arena; this struct only adds methods.
 pub struct Heap {
     arena: Arena,
-    /// Allocation sets `gc_pending` once the arena reaches this size. Policy, not VM state,
-    /// so it lives outside the arena and is recomputed on restore.
+    /// Allocation sets `gc_pending` once the arena reaches this size. A copy of
+    /// `Roots::GC_THRESHOLD` (D1601), kept here for the allocation fast path.
     gc_threshold: u32,
     gc_pending: bool,
+    /// The memory cap. The arena's own limit is `hard_limit - reserve` while the
+    /// out-of-memory reserve is closed, and `hard_limit` while it is open (D1600).
+    hard_limit: u32,
+    reserve: u32,
     /// Test hook: make the next collection fail to reserve its to-space.
     #[cfg(test)]
     pub(crate) fail_next_gc_reserve: bool,
@@ -152,6 +161,8 @@ impl Heap {
         heap.arena.set(0, Roots::MAGIC, cells::MAGIC);
         heap.arena.set(0, Roots::VERSION, cells::LAYOUT_HASH);
         heap.arena.set(0, Roots::REALM, Value::UNDEFINED);
+        let t = heap.gc_threshold;
+        heap.set_gc_threshold(t);
         heap.init_atoms()?;
         Ok(heap)
     }
@@ -171,7 +182,7 @@ impl Heap {
     pub fn from_bytes_trusted(bytes: alloc::vec::Vec<u8>, limit: usize) -> Result<Heap, LoadError> {
         let heap = Heap::over(Arena::from_bytes(bytes, limit));
         let a = &heap.arena;
-        if a.len() > a.limit() {
+        if a.len() > heap.hard_limit {
             return Err(LoadError::TooLarge);
         }
         if (a.len() as usize) < Roots::LAYOUT.min_size as usize
@@ -186,13 +197,87 @@ impl Heap {
     }
 
     fn over(arena: Arena) -> Heap {
-        let gc_threshold = gc::next_threshold(arena.len(), arena.limit());
-        Heap {
+        let hard_limit = arena.limit();
+        let mut heap = Heap {
             arena,
-            gc_threshold,
+            gc_threshold: 0,
             gc_pending: false,
+            hard_limit,
+            reserve: reserve_for(hard_limit),
             #[cfg(test)]
             fail_next_gc_reserve: false,
+        };
+        heap.apply_reserve();
+        heap
+    }
+
+    /// Whether the out-of-memory reserve is open (`Roots::FLAGS`, so it survives
+    /// snapshots).
+    pub fn memory_reserve_open(&self) -> bool {
+        self.arena.len() >= Roots::LAYOUT.min_size
+            && self.arena.get(0, Roots::FLAGS) & cells::ROOT_RESERVE_OPEN != 0
+    }
+
+    /// Sets the arena's cap and the GC threshold from the reserve state.
+    fn apply_reserve(&mut self) {
+        let limit = if self.memory_reserve_open() {
+            self.hard_limit
+        } else {
+            self.hard_limit - self.reserve
+        };
+        self.arena.set_limit(limit);
+        // A restored image keeps the threshold it had (the same collection points as
+        // without the snapshot), unless it is beyond what this cap allows.
+        let fresh = gc::next_threshold(self.arena.len(), self.arena.limit());
+        let stored = self.stored_gc_threshold();
+        let t = if stored == 0 {
+            fresh
+        } else {
+            stored.min(fresh)
+        };
+        self.set_gc_threshold(t);
+        self.gc_pending = self.arena.len() >= self.gc_threshold;
+    }
+
+    fn stored_gc_threshold(&self) -> u32 {
+        if self.arena.len() >= Roots::LAYOUT.min_size {
+            self.arena.get(0, Roots::GC_THRESHOLD)
+        } else {
+            0
+        }
+    }
+
+    /// Sets the GC threshold, in the roots cell too (D1601).
+    pub(crate) fn set_gc_threshold(&mut self, t: u32) {
+        self.gc_threshold = t;
+        if self.arena.len() >= Roots::LAYOUT.min_size {
+            self.arena.set(0, Roots::GC_THRESHOLD, t);
+        }
+    }
+
+    /// Opens the out-of-memory reserve (D1600): the interpreter calls this when it turns
+    /// an allocation failure into an exception, so that the handlers have room to run.
+    /// It closes again in the first collection that leaves twice the reserve free.
+    pub fn open_memory_reserve(&mut self) {
+        if !self.memory_reserve_open() {
+            let f = self.arena.get(0, Roots::FLAGS);
+            self.arena
+                .set(0, Roots::FLAGS, f | cells::ROOT_RESERVE_OPEN);
+            self.apply_reserve();
+        }
+    }
+
+    /// After a collection: closes the reserve if the live data left room for it.
+    fn maybe_close_reserve(&mut self) {
+        if self.memory_reserve_open()
+            && self.arena.len() <= self.hard_limit.saturating_sub(2 * self.reserve)
+        {
+            let f = self.arena.get(0, Roots::FLAGS);
+            self.arena
+                .set(0, Roots::FLAGS, f & !cells::ROOT_RESERVE_OPEN);
+            self.arena.set_limit(self.hard_limit - self.reserve);
+            let t = gc::next_threshold(self.arena.len(), self.arena.limit());
+            self.set_gc_threshold(t);
         }
     }
 

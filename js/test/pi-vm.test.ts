@@ -245,12 +245,18 @@ test("pi: the memory limit", async () => {
   const outcome = await run("const a = []; for (;;) a.push({ a: 'x'.repeat(1000) + a.length })", {
     memoryLimitBytes: 8 << 20,
   });
-  // Usually the script's own error. Whether the engine has collected the garbage before the
-  // prelude needs memory again depends on the heap layout (allocation never collects; the
-  // next safepoint does), so an OOM can also escape the prelude as a crash. Both are "out
-  // of memory" (0054 follow-up: collect before handling an out-of-memory exception).
-  if (outcome.end.type === "crash") assert.match(outcome.end.message, /out of memory/);
-  else assert.match(error(outcome).message, /out of memory/);
+  // The script's own error: the engine collects before the handler runs and opens its
+  // reserve below the cap, so the prelude can report it (D1600).
+  assert.match(error(outcome).message, /out of memory/);
+  // At other limits too, and when the script catches it and returns.
+  for (const mb of [2, 5, 12]) {
+    const fill = "const a = []; for (;;) a.push({ a: 'x'.repeat(1000) + a.length })";
+    assert.match(error(await run(fill, { memoryLimitBytes: mb << 20 })).message, /out of memory/, `${mb} MiB`);
+    const caught = await run(`const a = []; try { ${fill} } catch (e) { a.length = 0; return String(e) }`, {
+      memoryLimitBytes: mb << 20,
+    });
+    assert.equal(value(caught), "InternalError: out of memory", `${mb} MiB`);
+  }
   await assert.rejects(startVm({
     wasm,
     prelude: PRELUDE_SOURCE,

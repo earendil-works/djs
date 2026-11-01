@@ -91,6 +91,10 @@ pub mod flags {
 /// `"DJS\0"` little-endian, in [`Roots::MAGIC`].
 pub const MAGIC: u32 = u32::from_le_bytes(*b"DJS\0");
 
+/// `Roots::FLAGS`: the out-of-memory reserve is open (D1600): an out-of-memory error was
+/// thrown and the arena may use the bytes held back below the cap.
+pub const ROOT_RESERVE_OPEN: u32 = 1;
+
 records! {
     /// One property in a [`PropTable`]. For a data property `VALUE` is the value and
     /// `SETTER` is unused (0). For an accessor `VALUE` is the getter and `SETTER` the
@@ -145,6 +149,11 @@ cells! {
         /// instruction table and intrinsic ids, D1320), 0 for a bare heap. Images hold
         /// bytecode, so they load only into the same build.
         BUILD: u32 = 48,
+        /// Heap state bits: [`ROOT_RESERVE_OPEN`] (D1600).
+        FLAGS: u32 = 52,
+        /// The arena size at which the next collection is requested (D1601: part of the
+        /// image, so a restored VM collects at the same points). 0 for a fresh heap.
+        GC_THRESHOLD: u32 = 56,
     };
 
     /// A flat one-byte (Latin-1) string. Holds only strings with every code unit <= 0xFF;
@@ -444,7 +453,7 @@ mod tests {
         assert_eq!(Rope::LAYOUT.min_size, 24);
         assert_eq!(Symbol::LAYOUT.min_size, 24);
         assert_eq!(Object::LAYOUT.min_size, 24);
-        assert_eq!(Roots::LAYOUT.min_size, 56);
+        assert_eq!(Roots::LAYOUT.min_size, 64);
         let t = PropTable::LAYOUT.tail.unwrap();
         assert_eq!(t.elem.size, 24);
         assert_eq!(t.elem.name, "PropEntry");

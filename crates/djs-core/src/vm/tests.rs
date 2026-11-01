@@ -2214,3 +2214,117 @@ fn collect_drops_popped_stack_values() {
         used(&vm)
     );
 }
+
+/// Runs `src` as a Script with a memory limit: the outcome (`None` if the VM cannot
+/// even be created). With `suspend`, the VM is rebuilt from its image after every
+/// `fuel` slice.
+fn run_limited(src: &str, limit: usize, fuel: u64, suspend: bool) -> Option<Outcome> {
+    let mut vm = Vm::new(VmOptions {
+        memory_limit: limit,
+        ..Default::default()
+    })
+    .ok()?;
+    let console = vm.new_object().ok()?;
+    let log = vm.new_host_function(LOG, "log").ok()?;
+    vm.define(console, "log", log).ok()?;
+    vm.define_global("console", Value::object(console)).ok()?;
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("t.js"),
+        )
+        .ok()?;
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).ok()?;
+    let (vm, out) = finish(vm, fuel, suspend);
+    vm.heap().verify().unwrap();
+    Some(out)
+}
+
+/// Scripts that run out of memory and handle it, each logging one line with "out of
+/// memory" when the handler ran: in a caller, in the same frame after dropping the data,
+/// in a promise reaction, and as pi's prelude reports a failed body (D1600).
+const OOM_CASES: [(&str, &str); 5] = [
+    (
+        "caller",
+        "function fill() { const a = []; for (;;) a.push({ a: 'x'.repeat(1000) + a.length }); }\n\
+         try { fill(); } catch (e) { console.log(String(e)); }",
+    ),
+    (
+        "same frame",
+        "const a = []; try { for (;;) a.push({ a: 'x'.repeat(1000) + a.length }); }\n\
+         catch (e) { a.length = 0; console.log(String(e)); }",
+    ),
+    (
+        "data still live",
+        "const a = []; try { for (;;) a.push('x'.repeat(100) + a.length); }\n\
+         catch (e) { console.log(String(e), a.length > 0); }",
+    ),
+    (
+        "reaction",
+        "async function fill() { const a = []; for (;;) a.push({ a: 'x'.repeat(1000) + a.length }); }\n\
+         fill().catch((e) => console.log(String(e)));",
+    ),
+    (
+        "pi prelude",
+        "(async () => { const a = []; for (;;) a.push({ a: 'x'.repeat(1000) + a.length }); })().then(\n\
+           (v) => console.log(JSON.stringify({ ok: true, v })),\n\
+           (e) => console.log(JSON.stringify({ ok: false, error: JSON.stringify({ name: e.name, message: e.message, stack: e.stack }) })));",
+    ),
+];
+
+#[test]
+fn out_of_memory_is_a_catchable_error_at_every_limit() {
+    for kb in (1024..12 * 1024).step_by(352) {
+        for (name, src) in OOM_CASES {
+            let Some(o) = run_limited(src, kb << 10, 1 << 40, false) else {
+                continue;
+            };
+            assert!(
+                o.result == "undefined" && o.log.len() == 1 && o.log[0].contains("out of memory"),
+                "{kb} KiB, {name}: {} {:?}",
+                o.result,
+                o.log
+            );
+        }
+    }
+}
+
+#[test]
+fn a_script_continues_after_out_of_memory() {
+    // Catch, drop the data, and go on allocating (less): repeatedly.
+    let src = "let caught = 0;\n\
+               for (let round = 0; round < 3; round++) {\n\
+                 let a = [];\n\
+                 try { for (;;) a.push('y'.repeat(500) + a.length); } catch (e) { caught++; }\n\
+                 a = null;\n\
+                 const b = []; for (let i = 0; i < 1000; i++) b.push({ i });\n\
+               }\n\
+               console.log(caught);";
+    for mb in [2, 5, 9] {
+        let o = run_limited(src, mb << 20, 1 << 40, false).unwrap();
+        assert_eq!(
+            (o.result.as_str(), o.log),
+            ("undefined", alloc::vec![String::from("3")]),
+            "{mb} MiB"
+        );
+    }
+}
+
+#[test]
+fn the_out_of_memory_point_is_deterministic() {
+    // How far the loop gets depends only on the script and the limit: not on the fuel
+    // slices, and not on snapshots taken in between (the GC threshold is in the image,
+    // D1601).
+    let src = "const a = []; let n = 0;\n\
+               try { for (;;) { a.push({ s: 'z'.repeat(300) + n }); n++; } }\n\
+               catch (e) { a.length = 0; console.log(n, String(e)); }";
+    for mb in [2, 6] {
+        let plain = run_limited(src, mb << 20, 1 << 40, false).unwrap();
+        let sliced = run_limited(src, mb << 20, 7919, false).unwrap();
+        let restored = run_limited(src, mb << 20, 50_000, true).unwrap();
+        assert_eq!(plain, sliced, "{mb} MiB");
+        assert_eq!(plain, restored, "{mb} MiB");
+        assert!(plain.log[0].ends_with("out of memory"), "{:?}", plain.log);
+    }
+}

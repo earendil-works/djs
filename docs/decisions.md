@@ -2538,3 +2538,45 @@ On the active test262 group (release, -j 6, two runs each):
 
 The property-escape tests went from about 0.65 s to 0.2 s each. What remains in them is
 the harness loop in the interpreter.
+## D1600: Out-of-memory recovery: a collection at the handler and a reserve below the cap
+date: 2026-11-03 · by: heap · issue: 0060
+Allocation never collects (D1090), so before 0060 the garbage of the frames an OOM unwound
+was still in the arena when the handler ran, and a handler that allocated (pi's prelude
+formatting the error) could fail again: layout-dependent crashes. Now:
+
+- **The error.** An allocation failure that reaches JS is the realm's preallocated
+  `InternalError: out of memory` (`Intrinsic::OutOfMemoryError`, one object, never
+  allocated at the throw, no `stack`), as in QuickJS. Rethrows are the same object.
+- **A collection at the handler.** When `throw_value` lands that error in a handler, it
+  collects right there (`safepoint_collect`), after the unwinding: the data of the
+  frames it left is free before the handler's first allocation.
+- **A reserve.** The heap holds back `min(cap / 32, 1 MiB)` below the memory cap
+  (`Heap::hard_limit`; the arena's limit is the cap minus the reserve). Turning an
+  allocation failure into the exception opens it (`Heap::open_memory_reserve`, a bit in
+  `Roots::FLAGS`, so snapshots keep it), so handlers have room even when the data they
+  still reference fills the heap, and the GC threshold drops so the next safepoint
+  collects. The first collection that leaves twice the reserve free closes it again. An
+  allocation failure while it is open is a plain OOM at the cap (the same error).
+- **The contract.** To JS: an OOM is a catchable `InternalError: out of memory`; a
+  script or host prelude that catches it and allocates less than the reserve until its
+  frames have returned can continue (repeatedly: the reserve reopens after it closed).
+  Uncaught, `run` returns `Status::Threw(that error)` like any exception; the heap stays
+  valid and the VM usable. Embedder calls that allocate (`new_object`, `define`, ...)
+  return `HeapError::OutOfMemory`. Usable memory for live data is the cap minus the
+  reserve, so `Heap::with_limit` needs a 1/32 larger cap for the same contents.
+
+Tests: vm/tests.rs sweeps limits from 1 to 12 MiB for five handler shapes (caller, same
+frame, data still live, promise reaction, pi's prelude pattern), and js/test/pi-vm.test.ts
+"the memory limit" expects the script's own error again, at several limits.
+
+## D1601: The GC threshold is part of the heap image
+date: 2026-11-03 · by: heap · issue: 0060
+D1090 kept the collection threshold outside the arena and recomputed it on restore from
+the image size, which includes garbage, so a VM restored from a snapshot collected at
+other points than one that ran on, and the OOM point (which depends on how much garbage
+is in the arena when the cap is reached) changed with snapshots. The threshold now lives
+in `Roots::GC_THRESHOLD` and a restore keeps it (capped by what the restoring cap allows,
+`min(stored, recomputed)`, so a smaller limit still collects in time). For a given script
+and limit, the OOM point is the same with any fuel slicing and any snapshot/restore
+points (vm/tests.rs `the_out_of_memory_point_is_deterministic`); `--gc-stress` is a
+different policy and differs.
