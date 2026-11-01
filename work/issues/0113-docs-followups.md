@@ -1,7 +1,7 @@
 # 0113: Docs follow-ups: stale reference docs, status numbers, search, live disassembly
 
-status: open
-agent: -
+status: in-progress
+agent: docs
 branch: issue/0113-docs-followups
 depends-on: 0103
 guide: docs/guide/ (status numbers, search), ARCH.md, docs/compiler.md
@@ -25,6 +25,21 @@ touches: ARCH.md, docs/*.md, docs/guide/, crates/djs-docs/, crates/djs-wasm/ (a 
       size.
 
 ## Log
+
+- Part 1 (stale reference docs, drift pass):
+  - ARCH "Interpreter": the fast paths are `run_hot` (D1930/D1931), `fast_step`/
+    `fast_more` only in tests; the `@fast` entry runs after `run_hot` declines a call.
+    ARCH's performance table: `vm_new` about 40 us (D1990).
+  - docs/compiler.md 7.1: the 6-word frame header with `prev_hp` (D1151, frame.rs),
+    `6 + LOCALS + STACK`; 2.1/2.2 and 3.1/3.7 note the as-built names
+    (`FuncState` fields, `scan::is_arrow_head`, `Parser::lvalue` + `truncate_last`).
+  - Drift pass, mechanical: every repository path in ARCH, README, TESTING, AGENTS,
+    work/README, builtins/README, docs/*.md and the guide exists (fixed TESTING's bgen
+    golden path); every backticked Rust-like identifier there was grepped in the code.
+    The leftovers are QuickJS names, the original design sketches in compiler.md (now
+    marked as such) and ARCH's illustrative `array_map`/`vm_restore`.
+  - Numbers in prose (README status, ARCH tables, corpus and test262 counts) are left
+    for part 2, which generates them.
 
 ## Follow-ups
 
