@@ -182,10 +182,12 @@ entry to `parse_statement`, `parse_assign`, `parse_unary` and `parse_primary` (f
 fails with SyntaxError `stack overflow` (QuickJS wording; qjs fails at about 920
 nested parentheses).
 
-- `MAX_DEPTH` starts at 500 and is tuned by a test that compiles the deepest accepted
-  nesting of each recursive construct (parens, arrays, objects, arrows, unary chains,
-  ternary chains, blocks, functions) on a thread with a 1 MiB stack, the wasm32
-  default. The test sets the limit; the limit does not guess.
+- `MAX_DEPTH` is 1000 (0014). It is pinned by a test that compiles the deepest accepted
+  nesting of each recursive construct (parens, arrays, objects, unary chains,
+  ternary chains, blocks, `if`, assignments, `new`) on a thread with a 1 MiB stack,
+  the wasm32 default. Natively that depth needs under 512 KiB, so there is a 2x
+  margin. One parenthesis level costs 3 depth units (assignment, unary, primary), so
+  about 330 nested parentheses compile.
 - Constructs that are naturally chains are loops, so they do not count: comma
   lists, binary operator chains (precedence climbing), member/call chains, and
   `else if` chains (`parse_if` loops on `else if`).
@@ -682,8 +684,11 @@ lexical `x` is the same error. Lookup by name during parsing uses a per-function
 Every identifier reference emits a `name_*` op with an index into `FuncState::refs`:
 
 ```rust
-struct NameRef { atom: Atom, scope: ScopeId, src_pos: u32 }
+struct NameRef { atom: Atom, scope: ScopeId, src_pos: u32, init: bool }
 ```
+
+(`init`: the reference of a `name_init`. It is never TDZ-checked and does not by
+itself require the uninitialized marker at scope entry.)
 
 `scope` is the innermost scope at the reference. `src_pos` is used for the TDZ
 elision (5.6) and for errors. QuickJS puts atom and scope in the instruction
@@ -810,7 +815,8 @@ scope, created only if referenced, like QuickJS. Arrow functions do not declare 
 so a reference inside an arrow resolves outward and becomes an ordinary capture. That
 handles arrows' lexical `this` with no special case.
 
-- `this`: the frame's `this` slot for normal functions. In derived constructors it is
+- `this`: the frame's `this` slot for normal functions, copied to a local in the
+  prologue (`special_object THIS; put_loc n`, 0014). In derived constructors it is
   a local in TDZ until `super()` returns (checked access, ReferenceError `this is not
   initialized`).
 - `arguments`: `special_object arguments` at entry (always unmapped, strict).
@@ -833,7 +839,10 @@ handles arrows' lexical `this` with no special case.
 
 The global lexical record is a realm heap cell (atom → value, flags `const`), shared by
 all scripts of the realm. Global accesses go through it first, so TDZ for global
-`let` is a runtime check inside `get_global`.
+`let` is a runtime check inside `get_global` (and `get_global_typeof`: `typeof x` of an
+uninitialized global `let` throws). The `global_decls` declaration list is a run of
+int32 constants (`bytecode::global_decls`). An assignment to any `const`, local or
+global, compiles to a TDZ read (when needed) followed by `throw_const_assign`.
 
 ### 5.9 Per-iteration bindings
 
