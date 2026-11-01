@@ -65,6 +65,12 @@ compare exactly what the model sees (D1100). The native glue only uses the host-
   the proxies, rest-destructures the guarded tools). Object.prototype.__proto__ and
   callable-proxy toString (D1441), case builtins/proto-accessor.js. test262 unchanged
   (annexB is skipped; no active test changed).
+- Rebased onto main 2d08a6c (0040 classes, 0046 BigInt; 0046's BigInt additions to the
+  native glue are moot now). Against main's ratchet: 52 -> 38, 14 fixed, 0 new; the
+  extra four over the first count are console/cycles.js, console/errors.js,
+  console/functions-classes.js and console/levels-and-text.js (classes made them
+  runnable, the native formatter still differed). test262: one more pass,
+  TypedArrayConstructors/ctors/no-species.js (reads `buffer.__proto__`).
 - djs-difftest's runner test: tools/fail now compared with qjs instead of djs-only
   expectations, plus slow-path JSON values and a stalled case.
 
@@ -80,8 +86,8 @@ compare exactly what the model sees (D1100). The native glue only uses the host-
 ## Result
 djs-difftest's djs engine runs tests/corpus/prelude.js and the case exactly like the qjs
 driver (D1440, superseding D1160): only `host.output`/`host.done` are host functions, the
-native formatter and its `<djs: ...>` markers are gone. Ratchet 59 -> 49 (10 fixed, none
-new), all cases stress-identical. Also Object.prototype.__proto__ (Annex B) and
+native formatter and its `<djs: ...>` markers are gone. Ratchet 52 -> 38 on main 2d08a6c
+(14 fixed, none new), all cases stress-identical. Also Object.prototype.__proto__ (Annex B) and
 Function.prototype.toString of callable proxies (D1441), with corpus cases. Known gaps:
 the prelude's split workaround until 0033 lands; tools stay JS (promise jobs) on both
 engines.

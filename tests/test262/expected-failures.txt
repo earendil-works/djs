@@ -549,7 +549,6 @@ built-ins/TypedArray/prototype/findLastIndex/predicate-is-not-callable-throws.js
 built-ins/TypedArray/prototype/sort/comparefn-nonfunction-call-throws.js: parse: Unsupported: regular expressions are not supported yet
 built-ins/TypedArray/prototype/toSorted/comparefn-not-a-function.js: parse: Unsupported: regular expressions are not supported yet
 built-ins/TypedArrayConstructors/BigUint64Array/is-a-constructor.js: TypeError: not supported yet: BigInt typed arrays
-built-ins/TypedArrayConstructors/ctors/no-species.js: Test262Error: Expected SameValue(«undefined», «[object ArrayBuffer]») to be true
 built-ins/decodeURI/S15.1.3.1_A1.10_T1.js: Test262Error: #1: If B = 110xxxxx (n = 2) and (string.charAt(k + 4) and string.charAt(k + 5)) do not represent hexadecimal digits, throw URIError
 built-ins/decodeURI/S15.1.3.1_A1.11_T1.js: Test262Error: #1: If B = 1110xxxx (n = 3) and (string.charAt(k + 4) and string.charAt(k + 5)) do not represent hexadecimal digits, throw URIError
 built-ins/decodeURI/S15.1.3.1_A1.11_T2.js: Test262Error: #1: If B = 1110xxxx (n = 3) and (string.charAt(k + 7) and string.charAt(k + 8)) do not represent hexadecimal digits, throw URIError
