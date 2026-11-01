@@ -402,15 +402,18 @@ fn installation_forms() {
     let p = &out.prelude;
     assert!(p.contains("function F(a, ...rest) {"), "{p}");
     assert!(p.contains("return new.target;"), "{p}");
-    // Globals first, in source order; then the rest.
+    // Globals first, in source order, a constructor followed by its statics and then
+    // its prototype (D2052); then the rest.
     let expected = "%InstallConstructor(\"globalThis\", \"A\", C, 1, undefined);\n\
-        %InstallConstructor(\"globalThis\", \"B\", D, 0, \"A\");\n\
-        %InstallMethod(\"globalThis\", \"f\", P, 1);\n\
         %InstallMethod(\"A\", \"f\", F, 1);\n\
-        %InstallAccessor(\"A.prototype\", \"x\", G, false);\n\
-        %InstallAccessor(\"A.prototype\", \"x\", S, true);\n\
         %InstallValue(\"A\", \"K\", K(), 5);\n\
         %InstallMethod(\"A\", \"g\", P, 1);\n\
+        %InstallPrototype(\"globalThis\", \"A\", undefined);\n\
+        %InstallConstructor(\"globalThis\", \"B\", D, 0, \"A\");\n\
+        %InstallPrototype(\"globalThis\", \"B\", \"A\");\n\
+        %InstallMethod(\"globalThis\", \"f\", P, 1);\n\
+        %InstallAccessor(\"A.prototype\", \"x\", G, false);\n\
+        %InstallAccessor(\"A.prototype\", \"x\", S, true);\n\
         %InstallMethod(\"A.prototype\", %WellKnownSymbol(\"iterator\"), It, 0);\n\
         %InstallMethod(\"%AP%\", \"next\", N, 0);\n\
         %InstallMethod(\"%IP%\", %WellKnownSymbol(\"iterator\"), N, 0);\n";
