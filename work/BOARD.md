@@ -20,6 +20,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| 0031 | Core builtins wave 1 (Object, Function, Error, Boolean, Symbol, Number, Math, globals) | 0028 (num, after 0026) |
 
 ## Done
 
