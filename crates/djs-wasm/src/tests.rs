@@ -36,6 +36,22 @@ fn call(vm: u32, f: u32, args: &[u32]) {
     assert_eq!(vm_call(vm, f, 0, args.len()), 0);
 }
 
+/// The outcome of a finished body run: a body is an async function (D008), so DONE
+/// hands over its promise. Returns whether it was fulfilled, and a handle to the value
+/// or reason (THREW: the thrown value).
+fn outcome(vm: u32, st: u32) -> (bool, u32) {
+    let r = vm_result(vm);
+    match st {
+        status::DONE => match vm_promise_state(vm, r) {
+            2 => (true, out_words()[0]),
+            3 => (false, out_words()[0]),
+            s => panic!("body promise state {s}"),
+        },
+        status::THREW => (false, r),
+        st => panic!("status {st}"),
+    }
+}
+
 fn display(vm: u32, h: u32) -> String {
     vm_display(vm, h);
     out_text()
@@ -49,7 +65,9 @@ fn compile_and_run() {
     assert_ne!(f, 0, "{}", out_text());
     call(vm, f, &[]);
     assert_eq!(vm_run(vm, 1_000_000), status::DONE);
-    let r = vm_result(vm);
+    let p = vm_result(vm);
+    assert_eq!(vm_promise_state(vm, p), 2);
+    let r = out_words()[0];
     assert_eq!(display(vm, r), "42");
     vm_handle_bits(vm, r);
     assert_eq!(out_words(), [42, 0xFFF8_0004]);
@@ -109,7 +127,8 @@ fn host_calls_and_fuel() {
             }
         }
     }
-    let r = vm_result(vm);
+    let (ok, r) = outcome(vm, status::DONE);
+    assert!(ok);
     assert_eq!(display(vm, r), "499500");
     vm_free(vm);
 }
@@ -133,8 +152,9 @@ fn host_errors_are_thrown() {
     stage(b"nope");
     let err = vm_new_error(vm, 1, 4);
     assert_eq!(vm_resolve_host_call(vm, id, 0, err), 0);
-    assert_eq!(vm_run(vm, 1_000_000), status::THREW);
-    let r = vm_result(vm);
+    let st = vm_run(vm, 1_000_000);
+    let (ok, r) = outcome(vm, st);
+    assert!(!ok);
     assert_eq!(display(vm, r), "TypeError: nope");
     vm_free(vm);
 }
@@ -148,8 +168,9 @@ fn wire_values_and_images() {
     assert_ne!(v, 0, "{}", out_text());
     let f = compile_body(vm, "v", "return v.length + v[1]");
     call(vm, f, &[v]);
-    assert_eq!(vm_run(vm, 1_000_000), status::DONE);
-    let r = vm_result(vm);
+    let st = vm_run(vm, 1_000_000);
+    let (ok, r) = outcome(vm, st);
+    assert!(ok);
     assert_eq!(display(vm, r), "2x");
     // Corrupt wire data is an error, not a trap.
     stage(b"DJW\x01\x99");
@@ -181,8 +202,8 @@ fn out_of_memory_is_a_thrown_error() {
             st => break st,
         }
     };
-    assert_eq!(st, status::THREW);
-    let r = vm_result(vm);
+    let (ok, r) = outcome(vm, st);
+    assert!(!ok);
     let msg = display(vm, r);
     assert!(
         msg.contains("out of memory") || msg.contains("RangeError"),
@@ -286,8 +307,9 @@ fn host_clock() {
         "const d = new Date(); return d.toISOString() + ' ' + d.getHours()",
     );
     call(vm, f, &[]);
-    assert_eq!(vm_run(vm, 1_000_000), status::DONE);
-    let r = vm_result(vm);
+    let st = vm_run(vm, 1_000_000);
+    let (ok, r) = outcome(vm, st);
+    assert!(ok);
     assert_eq!(display(vm, r), "2022-03-01T23:30:00.000Z 1");
     vm_free(vm);
 }
