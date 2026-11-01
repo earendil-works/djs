@@ -4498,3 +4498,19 @@ and without the native push-pop ran 2.0x the instructions and pi-like 1.1% more.
 
 Rule for later: a builtin is `@native` only if the cases its `@fast` leaf declines are
 hot in a benchmark.
+
+## D2021: The number parsers have one instance; two-byte input is narrowed
+date: 2026-11-03 · by: num · issue: 0104
+`num::string_to_number`, `parse_float` and `parse_int` were instantiated for `u8` and
+`u16` input. Callers with two-byte strings now pass them through `num::narrow_units`
+first:
+- JS whitespace and line terminators become a space;
+- any other unit above 0x7F becomes 0x80, which no number syntax accepts and which is not
+  whitespace.
+
+Numbers are ASCII, so every result is the same; `num::tests::narrowed_units_parse_the_same`
+checks this on 50k random strings, for all three functions and five radixes. The callers
+are conv.rs `string_to_number`, number.rs `parseInt`/`parseFloat`,
+heap/typed.rs element conversion and compiler/ts_decl.rs enum values.
+
+Saved: 3.2 KB raw. Narrowing costs a byte copy, only for two-byte strings.

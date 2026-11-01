@@ -631,8 +631,8 @@ impl Heap {
             return Some(if b { 1.0 } else { 0.0 });
         }
         let s = v.as_string()?;
-        let units: alloc::vec::Vec<u16> = self.str_units(s).collect();
-        Some(crate::num::string_to_number(&units[..]))
+        let b = crate::num::narrow_units(self.str_units(s));
+        Some(crate::num::string_to_number(&b[..]))
     }
 
     /// Whether Number `n` is a valid integer index of `o`.
