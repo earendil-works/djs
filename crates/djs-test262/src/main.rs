@@ -38,6 +38,7 @@ run options:
   --qjs PATH          qjs binary (default: $DJS_QJS, else ~/Development/dquickts/qjs)
   --timeout SECS      wall-clock limit per test (default 20)
   --memory-limit N    memory limit per test in bytes, K/M/G suffixes allowed
+                      (default 512M; 0 means no limit)
   --failures          list failing tests with a one-line reason
   --slowest N         list the N slowest tests
   --expected FILE     compare against a failures file (`path: reason` lines);
@@ -96,7 +97,7 @@ fn parse_args() -> Result<Args, String> {
         engine: "qjs".into(),
         qjs: Qjs::default_binary(),
         timeout: Duration::from_secs(20),
-        memory_limit: None,
+        memory_limit: Some(512 << 20),
         failures: false,
         slowest: 0,
         expected: None,
@@ -130,7 +131,10 @@ fn parse_args() -> Result<Args, String> {
                     .map_err(|_| format!("--timeout: bad number `{v}`"))?;
                 args.timeout = Duration::from_secs_f64(secs);
             }
-            "--memory-limit" => args.memory_limit = Some(parse_size(&value(&a)?)?),
+            "--memory-limit" => {
+                let n = parse_size(&value(&a)?)?;
+                args.memory_limit = (n > 0).then_some(n);
+            }
             "--failures" => args.failures = true,
             "--slowest" => args.slowest = number(value(&a)?, &a)?,
             "--expected" => args.expected = Some(value(&a)?.into()),

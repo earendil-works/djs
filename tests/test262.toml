@@ -37,6 +37,7 @@ paths = [
   "built-ins/AbstractModuleSource", # source phase imports (modules)
   "language/module-code",          # modules
   "language/import",               # modules
+  "language/comments/hashbang/use-strict.js", # raw test that needs sloppy mode (`with`)
 ]
 features = [
   "Intl-*",                      # Intl is a non-goal
@@ -60,6 +61,9 @@ features = [
   "source-phase-imports*",       # modules
   "top-level-await",             # modules
   "host-gc-required",            # needs a real $262.gc
+]
+scan = [
+  "$262.createRealm(",  # a few realm tests lack the cross-realm feature tag
 ]
 
 [[group]]

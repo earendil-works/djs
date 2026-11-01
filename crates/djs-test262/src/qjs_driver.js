@@ -22,6 +22,7 @@ const apply = Reflect.apply;
 const charCodeAt = String.prototype.charCodeAt;
 const defineProperty = Object.defineProperty;
 const transfer = ArrayBuffer.prototype.transfer;
+const isDetached = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, "detached").get;
 const HEX = "0123456789abcdef";
 
 const spec = JSON.parse(scriptArgs[scriptArgs.length - 1]);
@@ -72,8 +73,9 @@ const $262 = {
   evalScript(src) {
     return evalScript(prefix + toStr(src));
   },
+  // DetachArrayBuffer is a no-op on a detached buffer; transfer() would throw.
   detachArrayBuffer(buffer) {
-    apply(transfer, buffer, []);
+    if (!apply(isDetached, buffer, [])) apply(transfer, buffer, []);
   },
   gc() {},
 };
