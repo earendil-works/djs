@@ -527,8 +527,8 @@ fn base_is_decoded_or_injected() {
 
 #[test]
 fn vms_take_the_decoded_base_as_their_arena() {
-    // D2060: the decoded base becomes the first VM's arena; a second VM, or the base read
-    // again, decodes it anew; both VMs work and start from the same bytes.
+    // D2060: the decoded base becomes the first VM's arena; a second VM decodes it anew
+    // and the instance keeps that copy; all VMs start from the same bytes.
     let expect = in_instance(base_copy);
     in_instance(move || {
         let p = djs_base_ptr();
@@ -537,14 +537,17 @@ fn vms_take_the_decoded_base_as_their_arena() {
         let b = vm_new(0);
         assert_ne!(b, 0);
         assert_ne!(vm_arena_ptr(b), vm_arena_ptr(a));
+        // From the second VM on, the instance keeps a decoded base and copies it.
+        let kept = djs_base_ptr();
+        assert_ne!(kept, vm_arena_ptr(b));
+        assert_eq!(djs_base_ptr(), kept, "kept, not decoded again");
         for vm in [a, b] {
             let bytes = unsafe {
                 std::slice::from_raw_parts(vm_arena_ptr(vm) as *const u8, vm_arena_len(vm))
             };
             assert_eq!(bytes, &expect[..]);
         }
-        assert_eq!(base_copy(), expect, "decoded again");
-        // A VM made without reading the base first decodes it into its arena.
+        assert_eq!(base_copy(), expect);
         let c = vm_new_reserved(0, 1 << 20);
         assert_ne!(c, 0);
         for vm in [a, b, c] {

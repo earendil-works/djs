@@ -94,10 +94,13 @@ instance_locals! {
         out: Vec::new(),
     });
     /// The base snapshot, decoded from djs-prelude's coded image at the first use (D2252)
-    /// or written by the host (`djs_base_inject`): the next `vm_new` takes it as its
-    /// arena, growing it in place to the arena's capacity (at memory's end, D2053), and a
-    /// later use decodes it again (D2060).
+    /// or written by the host (`djs_base_inject`). The first `vm_new` takes it as its
+    /// arena, growing it in place to the arena's capacity (at memory's end, D2053). After
+    /// that, a use decodes it again and the instance keeps it, for later VMs to copy
+    /// (D2060).
     static BASE: RefCell<Option<Vec<u8>>> = RefCell::new(None);
+    /// A VM took the base as its arena: from now on the instance keeps a decoded base.
+    static BASE_TAKEN: core::cell::Cell<bool> = core::cell::Cell::new(false);
     /// A copy of the base the host is writing (`djs_base_inject_ptr`), until checked.
     static INJECTED: RefCell<Option<Vec<u8>>> = RefCell::new(None);
     /// The message of the last panic. Separate from `STATE`, which may be left borrowed by
@@ -176,11 +179,24 @@ fn base_ptr() -> usize {
     })
 }
 
-/// The base snapshot as a buffer for a new VM's arena: the instance's (decoded or
-/// injected), which it gives up, or a fresh decode (D2060).
+/// The base snapshot as a buffer for a new VM's arena (D2060). The first VM of an
+/// instance takes the instance's bytes (decoded or injected; decoded straight into the
+/// arena's buffer if there are none). Later VMs copy the base, which the instance then
+/// keeps: a host that makes several VMs in one instance decodes twice, not each time.
 fn take_base() -> Vec<u8> {
-    BASE.with(|b| b.borrow_mut().take())
-        .unwrap_or_else(|| djs_prelude::unpack_base_into(base_buffer()))
+    if !BASE_TAKEN.with(|t| t.replace(true)) {
+        return BASE
+            .with(|b| b.borrow_mut().take())
+            .unwrap_or_else(|| djs_prelude::unpack_base_into(base_buffer()));
+    }
+    base_ptr();
+    BASE.with(|b| {
+        let b = b.borrow();
+        let base = b.as_ref().expect("the base was just decoded");
+        let mut v = base_buffer();
+        v.extend_from_slice(base);
+        v
+    })
 }
 
 /// Natively, a panic hook records the message (and the default hook still prints). On
