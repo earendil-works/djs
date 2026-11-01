@@ -577,7 +577,7 @@ mod tests {
                 1 => (r % 1_000_000_000_000) as f64 / [1e0, 1e2, 1e5, 1e8][(r >> 60) as usize % 4],
                 2 => {
                     let b = ((r % 100_000_000) as f64 / 1e8).to_bits();
-                    f64::from_bits(b.wrapping_add((r >> 62) as u64).wrapping_sub(2))
+                    f64::from_bits(b.wrapping_add(r >> 62).wrapping_sub(2))
                 }
                 _ => (r % 10_000) as f64 * [1e-8, 1e-3, 1e3, 1e9][(r >> 60) as usize % 4],
             };
