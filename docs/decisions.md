@@ -1035,3 +1035,51 @@ a 525k-case qjs corpus. Effects:
 - `num/to_string(short decimal)`: 32 to 11 ns;
 - stringify of 500k numbers: 12.3 to 8.4 ms natively, 24.9 to 13.3 ms in wasm;
 - random doubles pay about 1 ns for the failed tries.
+## D1310: Builtin installation forms
+date: 2026-11-01 · by: infra · issue: 0031
+Extends D1172. JSDoc tags on builtins (crates/djs-bgen/src/check.rs, emitted by
+emit_js.rs as leaf intrinsic calls declared in intrinsics.d.ts):
+- `@builtin A.b.c` (repeatable, so `Number.parseInt` can be the global `parseInt`):
+  `%InstallMethod`. A bare name or `globalThis.x` targets the global object.
+- `@constructor Name` (+ `@extends Parent`): `%InstallConstructor(target, key, f, length,
+  parent)` defines the global, reuses the realm's prototype for that name if it has one
+  (Object, Function, Array, the error prototypes) or creates one inheriting from the
+  parent's prototype (or Object.prototype), sets `f.prototype` (all attributes false),
+  `prototype.constructor`, `name`, `length`, and with a parent f's [[Prototype]].
+  `new.target` is an expression of type Value, allowed only in `@constructor` builtins.
+- `@getter A.b.k` / `@setter A.b.k`: `%InstallAccessor(target, key, f, isSetter)`, one
+  half of a configurable, non-enumerable accessor, named `get k` / `set k`.
+- `@value A.b.k` (+ `@attributes writable enumerable configurable`, default none): the
+  zero-parameter function is called once at install time, `%InstallValue(target, key,
+  f(), attrs)`. Namespace objects (`globalThis.Math`) are values too.
+- Builtins may take a rest parameter `...args: Value[]` (a local of type Obj: an array).
+Installs onto the global object come first (in source order), then the rest, so dotted
+paths resolve. Symbol keys and `%Name%` targets come with 0029/0030.
+
+## D1311: Builtins are not constructors; bound functions
+date: 2026-11-01 · by: infra · issue: 0031
+Prelude functions are ordinary functions, so `%InstallMethod`/`%InstallAccessor` strip
+their `prototype` (a heap-internal removal; it is non-configurable) and flag them
+`OBJ_BUILTIN`. `IsConstructor` of an `OBJ_BUILTIN` function is true only with
+`OBJ_BUILTIN_CTOR` (set by `%InstallConstructor`). `Function.prototype.bind` creates an
+`ObjectClass::BoundFunction` (7; slots: target, bound this, an Array of bound arguments).
+`call` and `construct` unwrap it on the stack (bound arguments inserted before the
+caller's); constructing one constructs the target with new.target = the target, which is
+what the spec does when new.target is the bound function itself (no Reflect.construct
+yet). `instanceof` uses the target. Name and length are set by the builtin, since reading
+the target's may run getters. `Function` exists as a constructor that throws a TypeError
+("not supported yet"), so that `Function.prototype` and `constructor` links work.
+
+## D1312: Error constructors and stacks
+date: 2026-11-01 · by: infra · issue: 0031
+The Error constructors are builtins (builtins/error.ts): GetPrototypeFromConstructor
+(`%RealmIntrinsic("TypeErrorPrototype")` as the fallback), `%ErrorCreate(proto)` (an
+`ObjectClass::Error` object), `message` (ToString), InstallErrorCause, then
+`%CaptureStack(o)`. The stack follows D1282 but leaves out the prelude frames at the top
+of the stack (the constructor itself), as qjs does, and is defined last, so own keys come
+in qjs's order apart from `stack` itself (qjs has an accessor on Error.prototype). The
+VM's own errors already use the same realm prototypes, so `e.constructor === TypeError`.
+EvalError, URIError and AggregateError prototypes are new realm intrinsics.
+AggregateError itself waits for iteration (IterableToList). djs-test262's
+`$262.evalScript` now calls the compiled Script with `this` = the global object (D1070's
+one difference is gone).

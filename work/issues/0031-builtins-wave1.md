@@ -80,6 +80,59 @@ intrinsic. Document the pattern in builtins/README.md with one worked example.
 
 ## Log
 
+### Baseline (main 2312924, before any change)
+- difftest (djs): 51 pass / 165 cases (103 expected failures, 11 skipped).
+- test262 active: 2,961 / 20,124 (built-ins 140 / 9,049, language 2,802, harness 19).
+  Per dir (active pass): Object 1/3197, Function 1/242, Error 0/50, NativeErrors 0/82,
+  AggregateError 0/19, Boolean 0/45, Symbol 0 active (77 later), Number 6/324,
+  Math 0/284, Array 129/2680, String 0/1040, global 2/21, NaN 1/4, Infinity 0/4,
+  undefined 0/4, isNaN/isFinite 0/8, parseInt 0/54, parseFloat 0/53.
+
+### Part 1: bgen forms, Error constructors, the propertyHelper set
+- bgen (D1310): `@constructor` (+ `@extends`, `new.target`), `@getter`/`@setter`,
+  `@value` (+ `@attributes`), repeatable `@builtin`, bare/globalThis targets, rest
+  params in builtins. Globals are installed first. Checker tests + golden fixture.
+- Rust: new module `crates/djs-core/src/builtins/` (object.rs: descriptors, keys,
+  attributes; function.rs: bound functions, toString); dispatch and the install
+  intrinsics in interp/run/intrinsics.rs; realm: EvalError/URIError/AggregateError
+  prototypes, `Intrinsic::prototype_of`/`by_name` (for `%RealmIntrinsic`).
+- Builtins: error.ts (Error + 6 NativeErrors, Error.prototype.toString), object.ts
+  (Object ctor, defineProperty, getOwnPropertyDescriptor, getOwnPropertyNames,
+  hasOwnProperty, propertyIsEnumerable, ToPropertyDescriptor), function.ts (call, apply,
+  bind, toString, a throwing `Function` ctor so Function.prototype links work),
+  array.ts (Array ctor, isArray, push), math.ts (Math namespace, pow), string.ts
+  (String(); `new String` throws "not supported yet"), conversion.ts (ToPropertyKey,
+  GetPrototypeFromConstructor). behavior.js compares all of them with qjs natives
+  (stand-ins for the new intrinsics): no mismatches.
+- **Outside touches (minimal, announced to the coordinator):** heap/object.rs
+  (`ObjectClass::BoundFunction = 7`, `remove_own_property_unchecked`), heap/cells.rs
+  (`OBJ_BUILTIN_CTOR`), js/src/layout.generated.ts (regenerated), interp/run.rs (bound
+  function unwrap in call/construct/instance_of, `is_constructor` for builtins,
+  `stack_trace_from` that can skip the prelude frames at the top), and
+  crates/djs-test262/src/djs.rs (`$262.evalScript` uses `.call($262.global)`).
+- **Pre-existing GC bug fixed** (on main too): `construct` wrote the callee it had read
+  before `call`, whose safepoint may move it, into the frame's NEW_TARGET slot. Any
+  `new F()` whose body reached a GC with gc-stress panicked in the arena (e.g.
+  `function F(){ [1].map(x => x) }; new F()`). It now re-reads the callee.
+- Tests: tests/corpus/builtins/{error-constructors,function-call-bind,
+  object-descriptors}.js (two are ratcheted until Object.getPrototypeOf / Symbol land),
+  tests/data/e2e/builtins_wave1.js (three modes).
+- Intrinsic table: regenerated with work/scratch/0031/regen-table.py (mirrors the
+  drift test, which stays the authority; needed because the crate does not compile
+  while the table lacks a name used by `id()`).
+- Results: difftest 55 / 168 pass (102 expected failures). test262 active 5,108 /
+  20,124 (25.4%): built-ins 1,765, language 3,305, harness 38. Per dir: Object 825,
+  Function 87, Error 19, NativeErrors 7, Array 692, String 89, Math 20, Number 8,
+  Boolean 2, global 10.
+- Startup: `Vm::new` with the prelude 210 µs native release (was 92 µs per D1281),
+  without 3 µs; heap 74 KB (was 36 KB). Below the ~300 µs flag, but it doubled with
+  this part; the base snapshot (0032) matters.
+- Remaining stack-position difference: `new X(...)` stacks point at `new`, qjs at the
+  `(` (compiler line table; follow-up for the compiler).
+
 ## Follow-ups
+- Compiler: stack position of `new F()` (qjs: the call's `(`), see Log.
+- Setting an array index past a non-writable `length` says "object is not extensible"
+  (interp set_property), qjs says "'length' is read-only".
 
 ## Result

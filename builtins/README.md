@@ -18,7 +18,8 @@ bgen does not need node and is stricter than tsc.
 ## The subset
 
 - Files are scripts with top-level `function` declarations only, each with explicit
-  parameter and return types. Optional parameters (`x?: Value`) are allowed at the end.
+  parameter and return types. Optional parameters (`x?: Value`) are allowed at the end,
+  and a rest parameter `...args: Value[]` last (an array; its local type is `Obj`).
   A builtin that uses `this` declares it as the first parameter (`this: Value`).
 - Types: `Value`, `Obj`, `Fn`, `Str`, `Sym`, `boolean`, `i32`, `u32`, `f64`, `void`,
   `never`. `Fn` widens to `Obj`, and everything widens to `Value`. Narrowing is
@@ -41,14 +42,60 @@ bgen does not need node and is stricter than tsc.
   generators, `async`, classes, `switch`, labels, `typeof`/`in`/`instanceof`,
   templates, spread. If something is awkward without them, add an intrinsic.
 
+## The pattern: coercions in the builtin language, work in leaf intrinsics
+
+Almost every builtin may run user code: ToPrimitive of an argument calls `valueOf`,
+`Get` calls getters. Hand-written Rust never calls back into JS (ARCH.md "The leaf
+rule"), so a builtin is written here: it does the conversions and checks in spec order
+and then calls **leaf intrinsics** (Rust in `crates/djs-core/src/builtins/` and
+`interp/run/intrinsics.rs`) that do the actual work on values that can no longer run
+user code. Worked example, `Object.defineProperty` (builtins/object.ts):
+
+```ts
+/**
+ * Object.defineProperty ( O, P, Attributes ), 20.1.2.4.
+ * @builtin Object.defineProperty
+ */
+function ObjectDefineProperty(o: Value, p: Value, attributes: Value): Value {
+  if (!IsObject(o)) {
+    throw NewTypeError("not an object");
+  }
+  const key: Value = ToPropertyKey(p); // may call toString/valueOf/@@toPrimitive
+  const desc: Obj = ToPropertyDescriptor(attributes); // HasProperty/Get: proxies, getters
+  DefinePropertyOrThrow(AsObj(o), key, desc); // ends in the leaf %DefineOwnPropertyFromRecord
+  return o;
+}
+```
+
+`ToPropertyDescriptor` reads the six fields with `HasProperty`/`Get` (each a resume
+point) into a descriptor record (a prototype-less object holding only the present
+fields), and the leaf `DefineOwnPropertyFromRecord(o, key, desc)` turns that into a
+`PropertyDescriptor` and calls the heap's `[[DefineOwnProperty]]`. Even a "pure" builtin
+like `Math.pow` is a thin wrapper: `NumberPow(ToNumber(base), ToNumber(exponent))`.
+When a new builtin needs an operation no intrinsic offers, add a leaf to
+`intrinsics.d.ts` (and its Rust), keep it free of user code, and let the builtin do the
+rest. Messages follow QuickJS; `crates/djs-bgen/tests/behavior.js` checks the builtins
+against qjs's natives, including proxy trap order.
+
 ## Tags
 
 On builtin functions (JSDoc):
 
 - `@builtin Array.prototype.map`: install the function as a method of the object at
   that path (writable, configurable, not enumerable; `name` is the last component).
+  Repeatable (one function in several places). A bare name or `globalThis.x` installs
+  on the global object.
+- `@constructor Error` (+ `@extends Error` for subclasses): install a global
+  constructor with its prototype object (the realm's intrinsic one if there is one).
+  `new.target` is available in its body; it is `undefined` for a plain call. Other
+  builtins are not constructors and have no `prototype`.
+- `@getter X.prototype.y` / `@setter X.prototype.y`: one half of an accessor
+  (configurable, not enumerable).
+- `@value Math.PI` (+ `@attributes writable enumerable configurable`, default none): a
+  data property whose value the function (no parameters) returns once at install time.
+  Namespace objects are values: `@value globalThis.Math`.
 - `@length N`: the `length` property (default: the parameters before the first
-  optional one).
+  optional or rest one).
 - `@intrinsic`: register it so that privileged code and the interpreter can call it
   as `%Name(...)` (for example `%ToPrimitive`).
 - `@native`: also compile it with the Rust backend (once that exists).
