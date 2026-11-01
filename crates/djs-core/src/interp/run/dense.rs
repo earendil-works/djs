@@ -126,6 +126,53 @@ impl Exec<'_> {
         Ok(true)
     }
 
+    /// `%EnumerableOwnDataProperties(o, kind)`: Object.values (kind 1) / entries (2)
+    /// in one step when no enumerable string-keyed property of `o` is an accessor and
+    /// `o` has no exotic [[GetOwnProperty]] that could run code (a Proxy): then the
+    /// per-key Get runs no user code and the enumerable checks cannot change in
+    /// between. Undefined, for the general loop, otherwise.
+    pub(super) fn enumerable_own_data(&mut self, o: Obj, kind: i32) -> Result<Value, Fault> {
+        if !matches!(
+            self.heap.object_class(o),
+            ObjectClass::Ordinary
+                | ObjectClass::Array
+                | ObjectClass::Function
+                | ObjectClass::Error
+                | ObjectClass::TypedArray
+        ) {
+            return Ok(Value::UNDEFINED);
+        }
+        let keys = self.heap.own_keys(o);
+        let mut props = Vec::with_capacity(keys.len());
+        for k in keys {
+            if k.is_symbol() {
+                continue;
+            }
+            match self.heap.get_own_property_alloc(o, k)? {
+                Some(Property::Data { value, flags }) if flags.enumerable() => {
+                    props.push((k, value))
+                }
+                Some(Property::Accessor { flags, .. }) if flags.enumerable() => {
+                    return Ok(Value::UNDEFINED);
+                }
+                _ => {}
+            }
+        }
+        let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
+        let mut out = Vec::with_capacity(props.len());
+        for (k, v) in props {
+            out.push(if kind == 1 {
+                v
+            } else {
+                let key = self.heap.atom_to_value(k)?;
+                Value::object(self.heap.new_array_from_values(Some(proto), &[key, v])?)
+            });
+        }
+        Ok(Value::object(
+            self.heap.new_array_from_values(Some(proto), &out)?,
+        ))
+    }
+
     /// `%ArrayJoinDense(o, len, sep)`: the joined string, or undefined.
     pub(super) fn array_join_dense(&mut self, o: Obj, len: f64, sep: Str) -> Result<Value, Fault> {
         let Some(len) = index(len) else {

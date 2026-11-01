@@ -108,6 +108,28 @@ const log = (...a) => out.push(a.map(String).join(" "));
   log("mutate", [...new S(src)]);
 }
 
+// Object.values / entries: plain data in one step; accessors and exotics in order.
+{
+  const s = Symbol("s");
+  const o = { b: 1, a: 2, 1: "one", 0: "zero", [s]: 3 };
+  Object.defineProperty(o, "hidden", { value: 4, enumerable: false });
+  Object.defineProperty(o, "hget", { get() { throw new Error("no"); }, enumerable: false });
+  log("values", Object.values(o), JSON.stringify(Object.entries(o)));
+  const g = { x: 1, get y() { delete this.z; return 2; }, z: 3 };
+  log("getter", JSON.stringify(Object.entries(g)), Object.values({ get q() { return "Q"; } }));
+  log("arrays", Object.values([1, , 3]), JSON.stringify(Object.entries(["a"])));
+  log("ta", Object.values(new Int8Array([5, 6])), JSON.stringify(Object.entries(new Float32Array([0.5]))));
+  function f() {}
+  f.k = "v";
+  log("fn", Object.values(f), Object.values("ab"), Object.values(new String("xy")), Object.entries(3).length);
+  const p = new Proxy({ a: 1 }, { get(t, k) { return "trap-" + String(k); } });
+  log("proxy", Object.values(p));
+  const e = new Error("m");
+  e.extra = 1;
+  log("error", Object.values(e));
+  (function () { log("arguments", Object.values(arguments)); })(1, 2);
+}
+
 // Promise.all over an array.
 Promise.all([1, Promise.resolve(2), 3]).then((v) => {
   log("all", v);

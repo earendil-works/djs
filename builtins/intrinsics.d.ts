@@ -448,6 +448,12 @@ declare function ArraySliceDense(o: Obj, k: f64, fin: f64, a: Obj): boolean;
  * general loop. @leaf
  */
 declare function ArrayJoinDense(o: Obj, len: f64, sep: Str): Value;
+/**
+ * EnumerableOwnProperties ( o, kind ) for kind 1 (values) and 2 (entries) in one step
+ * when no enumerable string-keyed own property is an accessor and `o` is not exotic
+ * (no Proxy): the array, or undefined for the general loop (0080). @leaf
+ */
+declare function EnumerableOwnDataProperties(o: Obj, kind: i32): Value;
 // ---- Strings (0034): leaves on the heap representation -------------------------------
 
 /**

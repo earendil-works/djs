@@ -251,6 +251,7 @@ const ARRAY_SEARCH_DENSE: u16 = id("ArraySearchDense");
 const ARRAY_SLICE_DENSE: u16 = id("ArraySliceDense");
 const ARRAY_JOIN_DENSE: u16 = id("ArrayJoinDense");
 const ITERATOR_FAST_READY: u16 = id("IteratorFastReady");
+const ENUMERABLE_OWN_DATA_PROPERTIES: u16 = id("EnumerableOwnDataProperties");
 const ITERATOR_FAST_VALUE: u16 = id("IteratorFastValue");
 const INSTALL_CONSTRUCTOR: u16 = id("InstallConstructor");
 const INSTALL_ACCESSOR: u16 = id("InstallAccessor");
@@ -1045,6 +1046,12 @@ impl Exec<'_> {
                     return bad_argument(info.name);
                 };
                 self.array_join_dense(o, len, sep)?
+            }
+            ENUMERABLE_OWN_DATA_PROPERTIES => {
+                let (Some(o), Some(kind)) = (a0.as_object(), arg(self, 1).as_int()) else {
+                    return bad_argument(info.name);
+                };
+                self.enumerable_own_data(o, kind)?
             }
             ITERATOR_FAST_READY => Value::bool(self.iter_fast_ready(a0, arg(self, 1))),
             ITERATOR_FAST_VALUE => match self.iter_fast_next(a0, arg(self, 1))? {

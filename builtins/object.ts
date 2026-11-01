@@ -286,6 +286,10 @@ function EnumerableOwnProperties(o: Obj, kind: i32): Obj {
   if (kind === 0) {
     return OwnPropertyKeys(o, 3);
   }
+  const plain: Value = EnumerableOwnDataProperties(o, kind);
+  if (plain !== undefined) {
+    return AsObj(plain);
+  }
   const keys: Obj = OwnPropertyKeys(o, 0);
   const n: f64 = LengthOfArrayLike(keys);
   const result: Obj = ArrayCreate(0);
