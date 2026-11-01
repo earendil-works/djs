@@ -1,6 +1,6 @@
 # 0079: Integration and test efficiency (investigation + proposals, then implementation)
 
-status: in-progress
+status: done
 agent: devflow
 branch: issue/0079-integration-efficiency
 depends-on: 0053
@@ -39,10 +39,10 @@ structural changes.
   it cost? Are dev builds at opt-level 1 the right trade-off?
 
 ## Deliverables
-- [ ] Measurements and a ranked list of proposals (expected saving, risk to main's health,
+- [x] Measurements and a ranked list of proposals (expected saving, risk to main's health,
       effort). Send them to the coordinator **before implementing anything that changes
       the gate or the merge script**.
-- [ ] Then implement the approved ones.
+- [x] Then implement the approved ones.
 
 ## Log
 - devflow: measured (tools in `work/scratch/0079/`: `lockwatch.sh` samples the merge lock
@@ -120,3 +120,34 @@ structural changes.
 ## Proposals
 
 ## Result
+Landed (each merged on its own; decisions D1790–D1793):
+1. Fuel decides timeouts in the gate's runners (test262 djs 2e9, difftest 1e9, e2e 20M);
+   the djs wall clock is a 120 s hang guard; `--fuel N` in both runners (D1790).
+2. `.gitattributes`: `union` for docs/decisions.md, builtins/intrinsics.d.ts and both
+   ratchets; `scripts/merge-driver.py` for the generated files (prelude.js,
+   resume-points.txt, layout.generated.ts, the INTRINSICS table); merge-to-main runs
+   `scripts/setup-merge-drivers.sh` before and `scripts/regen.sh` (bgen,
+   `scripts/gen-intrinsics.py`, the layout test) after the rebase and commits the result
+   (D1791, work/README.md "Merging and generated files"). merge-to-main fails right away
+   on a dirty primary checkout.
+3. The gate runs in the persistent `.worktrees/gate` at the rebased sha, and main is
+   fast-forwarded to that sha (D1792).
+4. `scripts/timeout.sh` nices agents' runs; the gate is not niced (D1793, AGENTS.md).
+5. Measurement: merge-to-main logs every attempt to `work/scratch/merge-log.tsv`, and
+   gate.sh's per-step wall/CPU times go to `work/scratch/gate-steps.tsv`.
+
+Effect: before, 10 merges/h with the lock held 89 %, gates 209–322 s under load, and
+load-induced gate failures (wall-clock timeouts). After (first hour): ~11 merges/h,
+all first-try, lock held ~47 %, lock wait 0 for most merges, gates 77–198 s (median
+~130), 530–740 CPU-s.
+
+Held, by decision: 5 (merge train) and 6 (post-merge checks): the gate is no longer the
+throughput limit; revisit if merge-log.tsv shows lock waits growing. Not done: scope-based
+skipping (coverage kept; the expensive tests get fixed instead) and a test262 result
+cache (nearly every merge changes djs-core, so it would never hit).
+
+Handed on by the coordinator: test262 RegExp property-escapes (~190 of ~250 test262
+CPU-s per gate) to num; the slow djs-core unit tests (OOM limit sweep 21.5 s, strong weak
+refs 6.1 s, allocation retry 4.1 s) to heap and `backends_agree_in_every_mode` (18.3 s)
+to infra; decodeURI A2.5_T1 (11 s) and the copyWithin "detached" tests (7 s) to infra at
+low priority.
