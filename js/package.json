@@ -2,11 +2,15 @@
   "name": "@djs/host",
   "version": "0.0.0",
   "private": true,
-  "description": "Host-side helpers for the djs VM: the inbound wire format encoder.",
+  "description": "The djs host package: the Sandbox API over djs-wasm, the wire encoder and the heap reader.",
   "type": "module",
   "license": "MIT OR Apache-2.0",
   "engines": { "node": ">=20" },
-  "exports": { "./wire": "./src/wire.ts" },
+  "exports": {
+    ".": "./src/sandbox.ts",
+    "./wire": "./src/wire.ts",
+    "./reader": "./src/reader.ts"
+  },
   "scripts": {
     "test": "node --test test/*.test.ts"
   }

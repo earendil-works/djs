@@ -83,6 +83,8 @@ interface Exports {
 }
 
 const modules = new Map<string, Promise<WebAssembly.Module>>();
+/** The default module once loaded, for the synchronous constructor. */
+let loadedDefault: WebAssembly.Module | undefined;
 
 /** The default location of djs-wasm: `$DJS_WASM`, else the `wasm` profile build output. */
 export function defaultWasmPath(): string | URL {
@@ -111,7 +113,13 @@ export function loadModule(location: string | URL = defaultWasmPath()): Promise<
       return WebAssembly.compile(bytes as Uint8Array<ArrayBuffer>);
     })();
     modules.set(key, m);
-    m.catch(() => modules.delete(key));
+    const isDefault = key === String(defaultWasmPath());
+    m.then(
+      (mod) => {
+        if (isDefault) loadedDefault = mod;
+      },
+      () => modules.delete(key),
+    );
   }
   return m;
 }
@@ -130,14 +138,9 @@ export class Sandbox {
   private readonly atomCache: (string | undefined)[] = [];
   private dead: string | null = null;
 
-  /** A new sandbox (its own wasm instance and VM). */
+  /** A new sandbox; loads (and caches) the default module unless `opts.module` is given. */
   static async create(opts: SandboxOptions = {}): Promise<Sandbox> {
-    const module = opts.module ?? (await loadModule());
-    const instance = await WebAssembly.instantiate(module, {});
-    const x = instance.exports as unknown as Exports;
-    const vm = x.vm_new(opts.memoryLimit ?? 0);
-    if (vm === 0) throw new SandboxError("memory", outText(x));
-    return new Sandbox(x, vm, opts, []);
+    return new Sandbox({ ...opts, module: opts.module ?? (await loadModule()) });
   }
 
   /**
@@ -145,26 +148,41 @@ export class Sandbox {
    * must provide every function the snapshot's VM refers to.
    */
   static async fromBytes(snapshot: Uint8Array, opts: SandboxOptions = {}): Promise<Sandbox> {
-    const view = new DataView(snapshot.buffer, snapshot.byteOffset, snapshot.byteLength);
-    if (snapshot.length < 12 || view.getUint32(0, true) !== SNAPSHOT_MAGIC || view.getUint32(4, true) !== 1) {
-      throw new SandboxError("misuse", "not a sandbox snapshot");
-    }
-    const metaLen = view.getUint32(8, true);
-    const meta = JSON.parse(textDecoder.decode(snapshot.subarray(12, 12 + metaLen))) as { functions: string[] };
-    const image = snapshot.subarray(12 + metaLen);
-    const module = opts.module ?? (await loadModule());
-    const instance = await WebAssembly.instantiate(module, {});
-    const x = instance.exports as unknown as Exports;
-    const at = x.djs_staging(image.length); // may grow memory: take the buffer afterwards
-    new Uint8Array(x.memory.buffer).set(image, at);
-    const vm = x.vm_from_bytes(image.length, opts.memoryLimit ?? 0);
-    if (vm === 0) throw new SandboxError("misuse", outText(x));
-    return new Sandbox(x, vm, opts, meta.functions);
+    return new Sandbox({ ...opts, module: opts.module ?? (await loadModule()) }, snapshot);
   }
 
-  private constructor(x: Exports, vm: number, opts: SandboxOptions, restoredFns: string[]) {
+  /**
+   * A new sandbox (its own wasm instance and VM), synchronously: needs a compiled module,
+   * `opts.module` or one `loadModule()` has finished loading. With `snapshot`, restores
+   * it like `fromBytes`.
+   */
+  constructor(opts: SandboxOptions = {}, snapshot?: Uint8Array) {
+    const module = opts.module ?? loadedDefault;
+    if (module === undefined) {
+      throw new SandboxError("misuse", "no compiled module: pass opts.module or await loadModule() first");
+    }
+    const x = new WebAssembly.Instance(module, {}).exports as unknown as Exports;
     if (x.djs_abi_version() !== ABI_VERSION) {
       throw new SandboxError("misuse", `djs-wasm ABI ${x.djs_abi_version()}, expected ${ABI_VERSION}`);
+    }
+    let vm: number;
+    let restoredFns: string[] = [];
+    if (snapshot === undefined) {
+      vm = x.vm_new(opts.memoryLimit ?? 0);
+      if (vm === 0) throw new SandboxError("memory", "memory limit too small for the realm");
+    } else {
+      const view = new DataView(snapshot.buffer, snapshot.byteOffset, snapshot.byteLength);
+      if (snapshot.length < 12 || view.getUint32(0, true) !== SNAPSHOT_MAGIC || view.getUint32(4, true) !== 1) {
+        throw new SandboxError("misuse", "not a sandbox snapshot");
+      }
+      const metaLen = view.getUint32(8, true);
+      restoredFns = (JSON.parse(textDecoder.decode(snapshot.subarray(12, 12 + metaLen))) as { functions: string[] })
+        .functions;
+      const image = snapshot.subarray(12 + metaLen);
+      const at = x.djs_staging(image.length); // may grow memory: take the buffer afterwards
+      new Uint8Array(x.memory.buffer).set(image, at);
+      vm = x.vm_from_bytes(image.length, opts.memoryLimit ?? 0);
+      if (vm === 0) throw new SandboxError("misuse", outText(x));
     }
     this.x = x;
     this.vm = vm;
@@ -172,7 +190,7 @@ export class Sandbox {
     const cons = opts.console ?? (globalThis.console as ConsoleLike);
     const builtins: Record<string, HostFunction> = {};
     for (const m of CONSOLE_METHODS) builtins[`console.${m}`] = (...a) => cons[m](...a);
-    if (restoredFns.length > 0) {
+    if (snapshot !== undefined) {
       // The VM already has its host functions; bind the ids to the given implementations.
       restoredFns.forEach((name, i) => {
         const f = builtins[name] ?? opts.functions?.[name];

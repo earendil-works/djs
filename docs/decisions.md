@@ -730,3 +730,50 @@ default under `is_undefined`, the new `rest index` op for `...r`), with TDZ betw
 them. `for (let ...)` loops emit the phase-1 pseudo-op `iter_scope s` after the init and
 before each update. The resolver turns it into `rebox` for each captured binding of the
 scope, and into nothing otherwise.
+
+## D1230: The djs-wasm ABI: integer exports, staging/out buffers, numbered handles
+date: 2026-11-01 · by: num · issue: 0023
+djs-wasm exports only i32 functions and imports nothing; there is no wasm-bindgen. Data
+crosses the boundary through two buffers in linear memory:
+- host → wasm: the *staging* buffer (`djs_staging(len) -> ptr`) carries sources, names,
+  wire data, JSON, images and argument handle lists;
+- wasm → host: the *out* buffer (`djs_out_ptr/len`) carries error messages, display text,
+  value bits and host call records.
+
+VMs and heap handles are numbered from 1 (handle index + 1). 0 means `undefined` as an
+argument and failure as a result, with the reason in the out buffer. Misusing the ABI (a
+freed VM or handle, an out-of-range staging length) is a panic, and so a trap. The
+version is `djs_abi_version()` = 1, and the host checks it. Instead of a `vm_bytes` copy,
+the image is the arena at `vm_arena_ptr/len`; the reader uses the same view.
+`vm_from_bytes` takes over the staging Vec as the new arena, without a copy. Panics
+record their message through a hook (`djs_panic_ptr/len`), then trap. The host discards
+the instance, which is one per sandbox (`new WebAssembly.Instance` costs about 30 µs), so
+a trap never takes other sandboxes down. Full table: docs/host.md.
+
+## D1231: djs-wasm uses std and its built-in dlmalloc
+date: 2026-11-01 · by: num · issue: 0023
+djs-core stays no_std. The export layer uses std on wasm32-unknown-unknown, for
+`thread_local!` state, the panic hook and the default allocator (Rust's bundled dlmalloc).
+This adds no dependency, dlmalloc is about 6 KB of code, and the engine's own
+allocation is one `Vec<u8>` arena per VM, so allocator speed hardly matters. `talc` would
+save a few KB but adds a dependency; revisit if size gets tight. On wasm32 the panic
+hook does not chain to std's default hook, which keeps the formatting machinery for
+stderr out of the module (11 KB).
+
+## D1232: The wasm profile uses opt-level "s", not "z"
+date: 2026-11-01 · by: num · issue: 0023
+At `z`, LLVM stops inlining the tiny arena accessors (`Arena::write::<u32>`,
+`layout::read_array`), and they dominate every profile. djs-wasm in node 25, medians:
+
+| opt-level | stripped | gzip -9 | interpreter loop | wire decode 10k objects | JSON parse 10k objects |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| z | 304 KB | 116 KB | 135 ms | 15.7 ms | 24.0 ms |
+| s | 359 KB | 132 KB | 80 ms | 5.4 ms | 9.0 ms |
+| 2 | 393 KB | 143 KB | 80 ms | 4.5 ms | 7.6 ms |
+| 3 | 403 KB | 145 KB | 81 ms | 4.4 ms | 7.4 ms |
+
+`s` costs 16 KB of gzip over `z` and makes the interpreter 1.7x faster and decoding
+about 2.9x faster. Speed is part of G2. Follow-up: `#[inline(always)]` on the hot
+accessors, then re-measure at `z` and `s`; if `z` gets close in speed, `z` may come back.
+The 400 KB size budget is meant after `wasm-opt -Oz`, which is not installed here yet.
+Until it is, the size track reports the size without custom sections and the gzip size.

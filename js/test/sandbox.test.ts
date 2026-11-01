@@ -37,6 +37,18 @@ test("the module is compiled once", async () => {
   b.dispose();
 });
 
+test("the synchronous constructor", async () => {
+  const module = await loadModule();
+  const sb = new Sandbox({ module });
+  assert.equal(sb.run("return 'sync'"), "sync");
+  // After loadModule() of the default location, the module is optional.
+  const sb2 = new Sandbox();
+  assert.equal(sb2.run("return 2"), 2);
+  const restored = new Sandbox({}, sb.bytes());
+  assert.equal(restored.run("return 3"), 3);
+  for (const s of [sb, sb2, restored]) s.dispose();
+});
+
 test("console and parameters", async () => {
   const c = collect();
   const sb = await Sandbox.create({ console: c.console });
