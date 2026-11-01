@@ -52,19 +52,6 @@ built-ins/ArrayBuffer/isView/arg-is-typedarray.js: TypeError: not supported yet:
 built-ins/ArrayBuffer/isView/invoked-as-a-fn.js: TypeError: not supported yet: BigInt typed arrays (Testing with BigInt64Array and makePassthrough.)
 built-ins/ArrayBuffer/options-non-object.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/ArrayIteratorPrototype/next/detach-typedarray-in-progress.js: TypeError: not supported yet: BigInt typed arrays (Testing with BigInt64Array and makePassthrough.)
-built-ins/AsyncFunction/AsyncFunction-is-extensible.js: parse: Unsupported: async functions are not supported yet
-built-ins/AsyncFunction/AsyncFunction-is-subclass.js: parse: Unsupported: async functions are not supported yet
-built-ins/AsyncFunction/AsyncFunction-length.js: parse: Unsupported: async functions are not supported yet
-built-ins/AsyncFunction/AsyncFunction-name.js: parse: Unsupported: async functions are not supported yet
-built-ins/AsyncFunction/AsyncFunction-prototype.js: parse: Unsupported: async functions are not supported yet
-built-ins/AsyncFunction/AsyncFunction.js: parse: Unsupported: async functions are not supported yet
-built-ins/AsyncFunction/AsyncFunctionPrototype-is-extensible.js: parse: Unsupported: async functions are not supported yet
-built-ins/AsyncFunction/AsyncFunctionPrototype-is-not-callable.js: parse: Unsupported: async functions are not supported yet
-built-ins/AsyncFunction/AsyncFunctionPrototype-prototype.js: parse: Unsupported: async functions are not supported yet
-built-ins/AsyncFunction/AsyncFunctionPrototype-to-string.js: parse: Unsupported: async functions are not supported yet
-built-ins/AsyncFunction/instance-has-name.js: parse: Unsupported: async functions are not supported yet
-built-ins/AsyncFunction/instance-length.js: parse: Unsupported: async functions are not supported yet
-built-ins/AsyncFunction/instance-prototype-property.js: parse: Unsupported: async functions are not supported yet
 built-ins/DataView/prototype/getBigInt64/resizable-buffer.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/DataView/prototype/getBigUint64/resizable-buffer.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/DataView/prototype/setBigInt64/resizable-buffer.js: parse: Unsupported: BigInt literals are not supported yet
@@ -259,12 +246,12 @@ built-ins/Object/prototype/toString/symbol-tag-override-instances.js: parse: Uns
 built-ins/Object/seal/object-seal-o-is-a-reg-exp-object.js: ReferenceError: 'RegExp' is not defined
 built-ins/Object/seal/object-seal-p-is-own-property-of-a-reg-exp-object-that-uses-object-s-get-own-property.js: ReferenceError: 'RegExp' is not defined
 built-ins/Object/seal/seal-arrowfunction.js: TypeError: not supported yet: the Function constructor
-built-ins/Object/seal/seal-asyncarrowfunction.js: parse: Unsupported: async arrow functions are not supported yet
-built-ins/Object/seal/seal-asyncfunction.js: parse: Unsupported: async functions are not supported yet
-built-ins/Object/seal/seal-asyncgeneratorfunction.js: parse: Unsupported: async functions are not supported yet
+built-ins/Object/seal/seal-asyncarrowfunction.js: TypeError: not supported yet: the AsyncFunction constructor
+built-ins/Object/seal/seal-asyncfunction.js: TypeError: not supported yet: the AsyncFunction constructor
+built-ins/Object/seal/seal-asyncgeneratorfunction.js: TypeError: not supported yet: the AsyncGeneratorFunction constructor
 built-ins/Object/seal/seal-bigint64array.js: TypeError: not supported yet: BigInt typed arrays
 built-ins/Object/seal/seal-biguint64array.js: TypeError: not supported yet: BigInt typed arrays
-built-ins/Object/seal/seal-generatorfunction.js: parse: Unsupported: generators are not supported yet
+built-ins/Object/seal/seal-generatorfunction.js: TypeError: not supported yet: the GeneratorFunction constructor
 built-ins/Object/seal/seal-proxy.js: ReferenceError: 'Proxy' is not defined
 built-ins/Object/seal/seal-regexp.js: ReferenceError: 'RegExp' is not defined
 built-ins/Object/seal/throws-when-false.js: ReferenceError: 'Proxy' is not defined
@@ -315,76 +302,59 @@ built-ins/Promise/try/ctx-non-ctor.js: Test262Error: Expected a TypeError but go
 built-ins/Promise/withResolvers/ctx-ctor.js: parse: Unsupported: classes are not supported yet
 built-ins/Promise/withResolvers/ctx-non-ctor.js: Test262Error: Expected a TypeError but got a ReferenceError
 built-ins/Set/prototype/difference/allows-set-like-class.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/difference/allows-set-like-object.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/difference/called-with-object.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/Set/prototype/difference/has-is-callable.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/difference/receiver-not-set.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/difference/require-internal-slot.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/difference/set-like-class-order.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/difference/size-is-a-number.js: parse: Unsupported: generators are not supported yet
+built-ins/Set/prototype/difference/size-is-a-number.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/difference/subclass-receiver-methods.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/difference/subclass-symbol-species.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/difference/subclass.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/intersection/allows-set-like-class.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/intersection/allows-set-like-object.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/intersection/called-with-object.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/Set/prototype/intersection/has-is-callable.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/intersection/receiver-not-set.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/intersection/require-internal-slot.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/intersection/set-like-class-order.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/intersection/size-is-a-number.js: parse: Unsupported: generators are not supported yet
+built-ins/Set/prototype/intersection/size-is-a-number.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/intersection/subclass-receiver-methods.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/intersection/subclass-symbol-species.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/intersection/subclass.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/isDisjointFrom/allows-set-like-class.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/isDisjointFrom/allows-set-like-object.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/isDisjointFrom/called-with-object.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/Set/prototype/isDisjointFrom/has-is-callable.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/isDisjointFrom/receiver-not-set.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/isDisjointFrom/require-internal-slot.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/Set/prototype/isDisjointFrom/set-like-class-mutation.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/isDisjointFrom/set-like-class-order.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/isDisjointFrom/size-is-a-number.js: parse: Unsupported: generators are not supported yet
+built-ins/Set/prototype/isDisjointFrom/size-is-a-number.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/isDisjointFrom/subclass-receiver-methods.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/isSubsetOf/allows-set-like-class.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/isSubsetOf/allows-set-like-object.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/isSubsetOf/called-with-object.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/Set/prototype/isSubsetOf/has-is-callable.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/isSubsetOf/receiver-not-set.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/isSubsetOf/require-internal-slot.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/Set/prototype/isSubsetOf/set-like-class-mutation.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/isSubsetOf/set-like-class-order.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/isSubsetOf/size-is-a-number.js: parse: Unsupported: generators are not supported yet
+built-ins/Set/prototype/isSubsetOf/size-is-a-number.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/isSubsetOf/subclass-receiver-methods.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/isSupersetOf/allows-set-like-class.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/isSupersetOf/allows-set-like-object.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/isSupersetOf/called-with-object.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/Set/prototype/isSupersetOf/has-is-callable.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/isSupersetOf/receiver-not-set.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/isSupersetOf/require-internal-slot.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/Set/prototype/isSupersetOf/set-like-class-mutation.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/isSupersetOf/set-like-class-order.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/isSupersetOf/size-is-a-number.js: parse: Unsupported: generators are not supported yet
+built-ins/Set/prototype/isSupersetOf/size-is-a-number.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/isSupersetOf/subclass-receiver-methods.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/symmetricDifference/allows-set-like-class.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/symmetricDifference/allows-set-like-object.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/symmetricDifference/called-with-object.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/Set/prototype/symmetricDifference/has-is-callable.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/symmetricDifference/receiver-not-set.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/symmetricDifference/require-internal-slot.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/symmetricDifference/set-like-class-order.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/symmetricDifference/size-is-a-number.js: parse: Unsupported: generators are not supported yet
+built-ins/Set/prototype/symmetricDifference/size-is-a-number.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/symmetricDifference/subclass-receiver-methods.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/symmetricDifference/subclass-symbol-species.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/symmetricDifference/subclass.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/union/allows-set-like-class.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/union/allows-set-like-object.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/union/called-with-object.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/Set/prototype/union/has-is-callable.js: parse: Unsupported: generators are not supported yet
 built-ins/Set/prototype/union/receiver-not-set.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/union/require-internal-slot.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/union/set-like-class-order.js: parse: Unsupported: classes are not supported yet
-built-ins/Set/prototype/union/size-is-a-number.js: parse: Unsupported: generators are not supported yet
+built-ins/Set/prototype/union/size-is-a-number.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/Set/prototype/union/subclass-receiver-methods.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/union/subclass-symbol-species.js: parse: Unsupported: classes are not supported yet
 built-ins/Set/prototype/union/subclass.js: parse: Unsupported: classes are not supported yet
@@ -671,7 +641,6 @@ built-ins/TypedArray/prototype/toSorted/comparefn-not-a-function.js: parse: Unsu
 built-ins/TypedArray/prototype/toSorted/this-value-invalid.js: parse: Unsupported: BigInt literals are not supported yet
 built-ins/TypedArrayConstructors/BigUint64Array/is-a-constructor.js: TypeError: not supported yet: BigInt typed arrays
 built-ins/TypedArrayConstructors/ctors/no-species.js: parse: Unsupported: classes are not supported yet
-built-ins/TypedArrayConstructors/ctors/object-arg/as-generator-iterable-returns.js: parse: Unsupported: generators are not supported yet
 built-ins/Uint8Array/fromBase64/ignores-receiver.js: parse: Unsupported: classes are not supported yet
 built-ins/Uint8Array/fromHex/ignores-receiver.js: parse: Unsupported: classes are not supported yet
 built-ins/decodeURI/S15.1.3.1_A1.10_T1.js: Test262Error: #1: If B = 110xxxxx (n = 2) and (string.charAt(k + 4) and string.charAt(k + 5)) do not represent hexadecimal digits, throw URIError
@@ -848,25 +817,6 @@ built-ins/global/S10.2.3_A1.1_T3.js: ReferenceError: 'RegExp' is not defined
 built-ins/global/S10.2.3_A1.2_T2.js: ReferenceError: 'eval' is not defined
 built-ins/global/S10.2.3_A1.2_T3.js: ReferenceError: 'RegExp' is not defined
 built-ins/global/global-object.js: ReferenceError: 'RegExp' is not defined
-harness/assert-notsamevalue-tostring.js: parse: Unsupported: async functions are not supported yet
-harness/assert-samevalue-tostring.js: parse: Unsupported: async functions are not supported yet
-harness/assert-tostring.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-asyncTest-returns-undefined.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-asyncTest-then-rejects.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-asyncTest-then-resolves.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-throwsAsync-custom-typeerror.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-throwsAsync-custom.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-throwsAsync-func-never-settles.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-throwsAsync-func-throws-sync.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-throwsAsync-incorrect-ctor.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-throwsAsync-invalid-func.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-throwsAsync-native.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-throwsAsync-no-arg.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-throwsAsync-no-error.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-throwsAsync-null.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-throwsAsync-primitive.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-throwsAsync-resolved-error.js: parse: Unsupported: async functions are not supported yet
-harness/asyncHelpers-throwsAsync-single-arg.js: parse: Unsupported: async functions are not supported yet
 harness/deepEqual-array.js: harness deepEqual.js: Unsupported: regular expressions are not supported yet
 harness/deepEqual-circular.js: harness deepEqual.js: Unsupported: regular expressions are not supported yet
 harness/deepEqual-deep.js: harness deepEqual.js: Unsupported: regular expressions are not supported yet
@@ -921,37 +871,24 @@ language/arguments-object/cls-expr-private-meth-static-args-trailing-comma-null.
 language/arguments-object/cls-expr-private-meth-static-args-trailing-comma-single-args.js: parse: Unsupported: classes are not supported yet
 language/arguments-object/cls-expr-private-meth-static-args-trailing-comma-spread-operator.js: parse: Unsupported: classes are not supported yet
 language/arguments-object/cls-expr-private-meth-static-args-trailing-comma-undefined.js: parse: Unsupported: classes are not supported yet
-language/block-scope/syntax/redeclaration/async-function-name-redeclaration-attempt-with-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/block-scope/syntax/redeclaration/async-function-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/block-scope/syntax/redeclaration/async-function-name-redeclaration-attempt-with-const.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/block-scope/syntax/redeclaration/async-function-name-redeclaration-attempt-with-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/block-scope/syntax/redeclaration/async-function-name-redeclaration-attempt-with-let.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/block-scope/syntax/redeclaration/async-function-name-redeclaration-attempt-with-var.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
+language/block-scope/syntax/redeclaration/async-function-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/block-scope/syntax/redeclaration/class-name-redeclaration-attempt-with-async-function.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/block-scope/syntax/redeclaration/class-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/block-scope/syntax/redeclaration/class-name-redeclaration-attempt-with-const.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/block-scope/syntax/redeclaration/class-name-redeclaration-attempt-with-function.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/block-scope/syntax/redeclaration/class-name-redeclaration-attempt-with-let.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/block-scope/syntax/redeclaration/class-name-redeclaration-attempt-with-var.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/block-scope/syntax/redeclaration/const-name-redeclaration-attempt-with-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/block-scope/syntax/redeclaration/const-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/block-scope/syntax/redeclaration/fn-scope-var-name-redeclaration-attempt-with-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/block-scope/syntax/redeclaration/fn-scope-var-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/block-scope/syntax/redeclaration/function-name-redeclaration-attempt-with-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/block-scope/syntax/redeclaration/function-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/block-scope/syntax/redeclaration/inner-block-var-name-redeclaration-attempt-with-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/block-scope/syntax/redeclaration/inner-block-var-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/block-scope/syntax/redeclaration/inner-block-var-redeclaration-attempt-after-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/block-scope/syntax/redeclaration/inner-block-var-redeclaration-attempt-after-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/block-scope/syntax/redeclaration/let-name-redeclaration-attempt-with-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/block-scope/syntax/redeclaration/let-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/block-scope/syntax/redeclaration/var-name-redeclaration-attempt-with-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/block-scope/syntax/redeclaration/var-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/block-scope/syntax/redeclaration/var-redeclaration-attempt-after-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/block-scope/syntax/redeclaration/var-redeclaration-attempt-after-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/comments/S7.4_A4_T1.js: expected parse SyntaxError, got parse Unsupported: regular expressions are not supported yet
 language/comments/S7.4_A4_T4.js: expected parse SyntaxError, got parse Unsupported: regular expressions are not supported yet
-language/comments/hashbang/function-constructor.js: parse: Unsupported: async functions are not supported yet
+language/comments/hashbang/function-constructor.js: Test262Error: Function Call argument Expected a SyntaxError but got a TypeError
 language/computed-property-names/class/accessor/getter-duplicates.js: parse: Unsupported: classes are not supported yet
 language/computed-property-names/class/accessor/getter.js: parse: Unsupported: classes are not supported yet
 language/computed-property-names/class/accessor/setter-duplicates.js: parse: Unsupported: classes are not supported yet
@@ -983,12 +920,9 @@ language/computed-property-names/class/static/setter-constructor.js: parse: Unsu
 language/computed-property-names/class/static/setter-prototype.js: parse: Unsupported: classes are not supported yet
 language/computed-property-names/object/accessor/getter-super.js: parse: Unsupported: super is not supported yet
 language/computed-property-names/object/accessor/setter-super.js: parse: Unsupported: super is not supported yet
-language/computed-property-names/object/method/generator.js: parse: Unsupported: generators are not supported yet
 language/computed-property-names/object/method/super.js: parse: Unsupported: super is not supported yet
 language/computed-property-names/to-name-side-effects/class.js: parse: Unsupported: classes are not supported yet
 language/computed-property-names/to-name-side-effects/numbers-class.js: parse: Unsupported: classes are not supported yet
-language/destructuring/binding/syntax/destructuring-array-parameters-function-arguments-length.js: parse: Unsupported: generators are not supported yet
-language/destructuring/binding/syntax/destructuring-object-parameters-function-arguments-length.js: parse: Unsupported: generators are not supported yet
 language/expressions/arrow-function/dstr/ary-ptrn-elem-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/expressions/arrow-function/dstr/dflt-ary-ptrn-elem-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/expressions/arrow-function/dstr/dflt-obj-ptrn-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
@@ -1010,167 +944,11 @@ language/expressions/assignment/fn-name-lhs-cover.js: Test262Error: name descrip
 language/expressions/assignment/target-super-computed-reference-null.js: parse: Unsupported: classes are not supported yet
 language/expressions/assignment/target-super-computed-reference.js: parse: Unsupported: classes are not supported yet
 language/expressions/assignment/target-super-identifier-reference-null.js: parse: Unsupported: classes are not supported yet
-language/expressions/assignmenttargettype/direct-asyncarrowfunction-0.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/assignmenttargettype/direct-asyncarrowfunction-1.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/assignmenttargettype/direct-asyncarrowfunction-2.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/assignmenttargettype/direct-asyncarrowfunction-3.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/assignmenttargettype/direct-asyncarrowfunction-4.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/assignmenttargettype/direct-asyncarrowfunction-5.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/assignmenttargettype/direct-asyncarrowfunction-6.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/assignmenttargettype/direct-primaryexpression-asyncfunctionexpression.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/assignmenttargettype/direct-primaryexpression-asyncgeneratorexpression.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/expressions/assignmenttargettype/direct-primaryexpression-classexpression.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/expressions/assignmenttargettype/direct-primaryexpression-generatorexpression.js: expected parse SyntaxError, got parse Unsupported: generators are not supported yet
 language/expressions/assignmenttargettype/direct-primaryexpression-regularexpressionliteral.js: expected parse SyntaxError, got parse Unsupported: regular expressions are not supported yet
-language/expressions/assignmenttargettype/parenthesized-asyncarrowfunction-0.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/assignmenttargettype/parenthesized-asyncarrowfunction-1.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/assignmenttargettype/parenthesized-asyncarrowfunction-2.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/assignmenttargettype/parenthesized-asyncarrowfunction-3.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/assignmenttargettype/parenthesized-asyncarrowfunction-4.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/assignmenttargettype/parenthesized-asyncarrowfunction-5.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/assignmenttargettype/parenthesized-asyncarrowfunction-6.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
 language/expressions/assignmenttargettype/parenthesized-import.meta.js: expected parse SyntaxError, got parse Unsupported: import() is not supported yet
-language/expressions/assignmenttargettype/parenthesized-primaryexpression-asyncfunctionexpression.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/assignmenttargettype/parenthesized-primaryexpression-asyncgeneratorexpression.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/expressions/assignmenttargettype/parenthesized-primaryexpression-classexpression.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/expressions/assignmenttargettype/parenthesized-primaryexpression-generatorexpression.js: expected parse SyntaxError, got parse Unsupported: generators are not supported yet
 language/expressions/assignmenttargettype/parenthesized-primaryexpression-regularexpressionliteral.js: expected parse SyntaxError, got parse Unsupported: regular expressions are not supported yet
-language/expressions/async-arrow-function/array-destructuring-param-strict-body.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/arrow-returns-promise.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/await-as-binding-identifier-escaped.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/await-as-binding-identifier.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/await-as-identifier-reference-escaped.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/await-as-identifier-reference.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/await-as-label-identifier-escaped.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/await-as-label-identifier.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/await-as-param-ident-nested-arrow-parameter-position.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/await-as-param-nested-arrow-body-position.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/await-as-param-nested-arrow-parameter-position.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/await-as-param-rest-nested-arrow-parameter-position.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/dflt-params-abrupt.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/dflt-params-arg-val-not-undefined.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/dflt-params-arg-val-undefined.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/dflt-params-duplicates.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/dflt-params-ref-later.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/dflt-params-ref-prior.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/dflt-params-ref-self.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/dflt-params-rest.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/dflt-params-trailing-comma.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/early-errors-arrow-NSPL-with-USD.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/early-errors-arrow-arguments-in-formal-parameters.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/early-errors-arrow-await-in-formals-default.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/early-errors-arrow-await-in-formals.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/early-errors-arrow-body-contains-super-call.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/early-errors-arrow-body-contains-super-property.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/early-errors-arrow-duplicate-parameters.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/early-errors-arrow-eval-in-formal-parameters.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/early-errors-arrow-formals-body-duplicate.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/early-errors-arrow-formals-contains-super-call.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/early-errors-arrow-formals-contains-super-property.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/name.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/object-destructuring-param-strict-body.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/params-trailing-comma-multiple.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/params-trailing-comma-single.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/rest-param-strict-body.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/rest-params-trailing-comma-early-error.js: expected parse SyntaxError, got parse Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/try-reject-finally-reject.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/try-reject-finally-return.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/try-reject-finally-throw.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/try-return-finally-reject.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/try-return-finally-return.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/try-return-finally-throw.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/try-throw-finally-reject.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/try-throw-finally-return.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-arrow-function/try-throw-finally-throw.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/async-function/await-as-binding-identifier-escaped.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/await-as-binding-identifier.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/await-as-identifier-reference-escaped.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/await-as-identifier-reference.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/await-as-label-identifier-escaped.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/await-as-label-identifier.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/early-errors-expression-NSPL-with-USD.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/early-errors-expression-binding-identifier-arguments.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/early-errors-expression-binding-identifier-eval.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/early-errors-expression-body-contains-super-call.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/early-errors-expression-body-contains-super-property.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/early-errors-expression-eval-in-formal-parameters.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/early-errors-expression-formals-body-duplicate.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/early-errors-expression-formals-contains-super-call.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/early-errors-expression-formals-contains-super-property.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/early-errors-expression-not-simple-assignment-target.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/expression-returns-promise.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/name.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-array-destructuring-param-strict-body.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/named-await-as-binding-identifier-escaped.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/named-await-as-binding-identifier.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/named-await-as-identifier-reference-escaped.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/named-await-as-identifier-reference.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/named-await-as-label-identifier-escaped.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/named-await-as-label-identifier.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/named-dflt-params-abrupt.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-dflt-params-arg-val-not-undefined.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-dflt-params-arg-val-undefined.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-dflt-params-duplicates.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/named-dflt-params-ref-later.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-dflt-params-ref-prior.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-dflt-params-ref-self.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-dflt-params-rest.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/named-dflt-params-trailing-comma.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-object-destructuring-param-strict-body.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/named-params-trailing-comma-multiple.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-params-trailing-comma-single.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-rest-param-strict-body.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/named-rest-params-trailing-comma-early-error.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/named-returns-async-arrow-returns-arguments-from-parent-function.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-returns-async-arrow-returns-newtarget.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-returns-async-arrow.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-returns-async-function-returns-arguments-from-own-function.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-returns-async-function-returns-newtarget.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-returns-async-function.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-strict-error-reassign-fn-name-in-body-in-arrow.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/named-strict-error-reassign-fn-name-in-body.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/nameless-array-destructuring-param-strict-body.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/nameless-dflt-params-abrupt.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/nameless-dflt-params-arg-val-not-undefined.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/nameless-dflt-params-arg-val-undefined.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/nameless-dflt-params-duplicates.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/nameless-dflt-params-ref-later.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/nameless-dflt-params-ref-prior.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/nameless-dflt-params-ref-self.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/nameless-dflt-params-rest.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/nameless-dflt-params-trailing-comma.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/nameless-object-destructuring-param-strict-body.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/nameless-params-trailing-comma-multiple.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/nameless-params-trailing-comma-single.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/nameless-rest-param-strict-body.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/nameless-rest-params-trailing-comma-early-error.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/async-function/syntax-expression-is-PrimaryExpression.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/try-reject-finally-reject.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/try-reject-finally-return.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/try-reject-finally-throw.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/try-return-finally-reject.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/try-return-finally-return.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/try-return-finally-throw.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/try-throw-finally-reject.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/try-throw-finally-return.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-function/try-throw-finally-throw.js: parse: Unsupported: async functions are not supported yet
-language/expressions/async-generator/name.js: parse: Unsupported: async functions are not supported yet
-language/expressions/await/async-await-interleaved.js: parse: Unsupported: async functions are not supported yet
-language/expressions/await/await-BindingIdentifier-in-global.js: parse: Unsupported: async functions are not supported yet
-language/expressions/await/await-BindingIdentifier-nested.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/await/await-awaits-thenable-not-callable.js: parse: Unsupported: async functions are not supported yet
-language/expressions/await/await-awaits-thenables-that-throw.js: parse: Unsupported: async functions are not supported yet
-language/expressions/await/await-awaits-thenables.js: parse: Unsupported: async functions are not supported yet
-language/expressions/await/await-in-nested-function.js: parse: Unsupported: async functions are not supported yet
-language/expressions/await/await-monkey-patched-promise.js: parse: Unsupported: async functions are not supported yet
-language/expressions/await/await-non-promise-thenable.js: parse: Unsupported: async functions are not supported yet
-language/expressions/await/await-non-promise.js: parse: Unsupported: async functions are not supported yet
-language/expressions/await/await-throws-rejections.js: parse: Unsupported: async functions are not supported yet
-language/expressions/await/early-errors-await-not-simple-assignment-target.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/await/no-operand.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/expressions/await/syntax-await-has-UnaryExpression-with-MultiplicativeExpression.js: parse: Unsupported: async functions are not supported yet
-language/expressions/await/syntax-await-has-UnaryExpression.js: parse: Unsupported: async functions are not supported yet
-language/expressions/await/syntax-await-in-ConditionalExpression.js: parse: Unsupported: async functions are not supported yet
 language/expressions/bitwise-and/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/expressions/bitwise-or/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/expressions/bitwise-xor/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
@@ -1300,7 +1078,7 @@ language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-
 language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-expression-logical-or.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-function-expression.js: parse: Unsupported: classes are not supported yet
-language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: generators are not supported yet
+language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-identifier.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-integer-e-notational-literal.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-integer-separators.js: parse: Unsupported: classes are not supported yet
@@ -1310,7 +1088,7 @@ language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-
 language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-null.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-numeric-literal.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-string-literal.js: parse: Unsupported: classes are not supported yet
-language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-yield-expression.js: parse: Unsupported: generators are not supported yet
+language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-yield-expression.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-computed-property-name-from-additive-expression-add.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-computed-property-name-from-additive-expression-subtract.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-computed-property-name-from-arrow-function-expression.js: parse: Unsupported: classes are not supported yet
@@ -1330,7 +1108,7 @@ language/expressions/class/cpn-class-expr-computed-property-name-from-expression
 language/expressions/class/cpn-class-expr-computed-property-name-from-expression-logical-or.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-computed-property-name-from-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-computed-property-name-from-function-expression.js: parse: Unsupported: classes are not supported yet
-language/expressions/class/cpn-class-expr-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: generators are not supported yet
+language/expressions/class/cpn-class-expr-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-computed-property-name-from-identifier.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-computed-property-name-from-integer-e-notational-literal.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-computed-property-name-from-integer-separators.js: parse: Unsupported: classes are not supported yet
@@ -1340,7 +1118,7 @@ language/expressions/class/cpn-class-expr-computed-property-name-from-multiplica
 language/expressions/class/cpn-class-expr-computed-property-name-from-null.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-computed-property-name-from-numeric-literal.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-computed-property-name-from-string-literal.js: parse: Unsupported: classes are not supported yet
-language/expressions/class/cpn-class-expr-computed-property-name-from-yield-expression.js: parse: Unsupported: generators are not supported yet
+language/expressions/class/cpn-class-expr-computed-property-name-from-yield-expression.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-computed-property-name-from-additive-expression-add.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-computed-property-name-from-additive-expression-subtract.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-computed-property-name-from-arrow-function-expression.js: parse: Unsupported: classes are not supported yet
@@ -1360,7 +1138,7 @@ language/expressions/class/cpn-class-expr-fields-computed-property-name-from-exp
 language/expressions/class/cpn-class-expr-fields-computed-property-name-from-expression-logical-or.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-computed-property-name-from-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-computed-property-name-from-function-expression.js: parse: Unsupported: classes are not supported yet
-language/expressions/class/cpn-class-expr-fields-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: generators are not supported yet
+language/expressions/class/cpn-class-expr-fields-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-computed-property-name-from-identifier.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-computed-property-name-from-integer-e-notational-literal.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-computed-property-name-from-integer-separators.js: parse: Unsupported: classes are not supported yet
@@ -1370,7 +1148,7 @@ language/expressions/class/cpn-class-expr-fields-computed-property-name-from-mul
 language/expressions/class/cpn-class-expr-fields-computed-property-name-from-null.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-computed-property-name-from-numeric-literal.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-computed-property-name-from-string-literal.js: parse: Unsupported: classes are not supported yet
-language/expressions/class/cpn-class-expr-fields-computed-property-name-from-yield-expression.js: parse: Unsupported: generators are not supported yet
+language/expressions/class/cpn-class-expr-fields-computed-property-name-from-yield-expression.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-additive-expression-add.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-additive-expression-subtract.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-arrow-function-expression.js: parse: Unsupported: classes are not supported yet
@@ -1390,7 +1168,7 @@ language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-
 language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-expression-logical-or.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-function-expression.js: parse: Unsupported: classes are not supported yet
-language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: generators are not supported yet
+language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-identifier.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-integer-e-notational-literal.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-integer-separators.js: parse: Unsupported: classes are not supported yet
@@ -1400,7 +1178,7 @@ language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-
 language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-null.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-numeric-literal.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-string-literal.js: parse: Unsupported: classes are not supported yet
-language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-yield-expression.js: parse: Unsupported: generators are not supported yet
+language/expressions/class/cpn-class-expr-fields-methods-computed-property-name-from-yield-expression.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/dstr/meth-ary-init-iter-close.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/dstr/meth-ary-init-iter-get-err-array-prototype.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/dstr/meth-ary-init-iter-get-err.js: parse: Unsupported: classes are not supported yet
@@ -3069,7 +2847,6 @@ language/expressions/in/private-field-rhs-non-object.js: parse: Unsupported: cla
 language/expressions/in/private-field-rhs-unresolvable.js: parse: Unsupported: classes are not supported yet
 language/expressions/in/private-field-rhs-yield-absent.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/expressions/in/private-field-rhs-yield-present.js: parse: Unsupported: classes are not supported yet
-language/expressions/in/rhs-yield-present.js: parse: Unsupported: generators are not supported yet
 language/expressions/instanceof/S11.8.6_A7_T3.js: TypeError: not supported yet: the Function constructor
 language/expressions/instanceof/S15.3.5.3_A2_T2.js: TypeError: not supported yet: the Function constructor
 language/expressions/instanceof/S15.3.5.3_A2_T6.js: TypeError: not supported yet: the Function constructor
@@ -3113,13 +2890,9 @@ language/expressions/logical-assignment/lgcl-or-assignment-operator-namedevaluat
 language/expressions/member-expression/computed-reference-null-or-undefined.js: Test262Error: Expected a TypeError but got a Test262Error
 language/expressions/modulus/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/expressions/multiplication/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
-language/expressions/new.target/unary-expr.js: parse: Unsupported: async functions are not supported yet
 language/expressions/new.target/value-via-super-call.js: parse: Unsupported: classes are not supported yet
 language/expressions/new.target/value-via-super-property.js: parse: Unsupported: classes are not supported yet
 language/expressions/object/computed-property-name-topropertykey-before-value-evaluation.js: Test262Error: Expected SameValue(«"bad"», «"ok"») to be true
-language/expressions/object/cpn-obj-lit-computed-property-name-from-async-arrow-function-expression.js: parse: Unsupported: async arrow functions are not supported yet
-language/expressions/object/cpn-obj-lit-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: generators are not supported yet
-language/expressions/object/cpn-obj-lit-computed-property-name-from-yield-expression.js: parse: Unsupported: generators are not supported yet
 language/expressions/object/dstr/meth-ary-ptrn-elem-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/expressions/object/dstr/meth-dflt-ary-ptrn-elem-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/expressions/object/dstr/meth-dflt-obj-ptrn-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
@@ -3130,45 +2903,15 @@ language/expressions/object/getter-super-prop.js: parse: Unsupported: super is n
 language/expressions/object/ident-name-prop-name-literal-await-static-init.js: parse: Unsupported: classes are not supported yet
 language/expressions/object/identifier-shorthand-static-init-await-invalid.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/expressions/object/identifier-shorthand-static-init-await-valid.js: parse: Unsupported: classes are not supported yet
-language/expressions/object/method-definition/async-await-as-binding-identifier-escaped.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-await-as-binding-identifier.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-await-as-identifier-reference-escaped.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-await-as-identifier-reference.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-await-as-label-identifier-escaped.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-await-as-label-identifier.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-meth-dflt-params-abrupt.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-meth-dflt-params-arg-val-not-undefined.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-meth-dflt-params-arg-val-undefined.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-meth-dflt-params-ref-later.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-meth-dflt-params-ref-prior.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-meth-dflt-params-ref-self.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-meth-dflt-params-trailing-comma.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-meth-params-trailing-comma-multiple.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-meth-params-trailing-comma-single.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-returns-async-arrow-returns-arguments-from-parent-function.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-returns-async-arrow-returns-newtarget.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-returns-async-arrow.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-returns-async-function-returns-arguments-from-own-function.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-returns-async-function-returns-newtarget.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-returns-async-function.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-super-call-body.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/async-super-call-param.js: parse: Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/early-errors-object-async-method-duplicate-parameters.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/early-errors-object-method-arguments-in-formal-parameters.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/early-errors-object-method-async-lineterminator.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/early-errors-object-method-await-in-formals-default.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/early-errors-object-method-await-in-formals.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/early-errors-object-method-body-contains-super-call.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/early-errors-object-method-eval-in-formal-parameters.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/early-errors-object-method-formals-body-duplicate.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
-language/expressions/object/method-definition/early-errors-object-method-formals-contains-super-call.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
+language/expressions/object/method-definition/async-super-call-body.js: parse: Unsupported: super is not supported yet
+language/expressions/object/method-definition/async-super-call-param.js: parse: Unsupported: super is not supported yet
+language/expressions/object/method-definition/early-errors-object-method-body-contains-super-call.js: expected parse SyntaxError, got parse Unsupported: super is not supported yet
+language/expressions/object/method-definition/early-errors-object-method-formals-contains-super-call.js: expected parse SyntaxError, got parse Unsupported: super is not supported yet
 language/expressions/object/method-definition/name-super-call-body.js: expected parse SyntaxError, got parse Unsupported: super is not supported yet
 language/expressions/object/method-definition/name-super-call-param.js: expected parse SyntaxError, got parse Unsupported: super is not supported yet
 language/expressions/object/method-definition/name-super-prop-body.js: parse: Unsupported: super is not supported yet
 language/expressions/object/method-definition/name-super-prop-param.js: parse: Unsupported: super is not supported yet
-language/expressions/object/method-definition/object-method-returns-promise.js: parse: Unsupported: async methods are not supported yet
 language/expressions/object/method-definition/private-name-early-error-async-fn-inside-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/expressions/object/method-definition/private-name-early-error-async-fn.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
 language/expressions/object/method-definition/private-name-early-error-get-method-inside-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/expressions/object/method-definition/private-name-early-error-method-inside-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/expressions/object/method-definition/private-name-early-error-set-method-inside-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
@@ -3179,22 +2922,14 @@ language/expressions/object/method-definition/static-init-await-reference-access
 language/expressions/object/method-definition/static-init-await-reference-generator.js: parse: Unsupported: classes are not supported yet
 language/expressions/object/method-definition/static-init-await-reference-normal.js: parse: Unsupported: classes are not supported yet
 language/expressions/object/method.js: parse: Unsupported: super is not supported yet
-language/expressions/object/prop-def-invalid-async-prefix.js: expected parse SyntaxError, got parse Unsupported: async methods are not supported yet
-language/expressions/object/prop-def-invalid-star-prefix.js: expected parse SyntaxError, got parse Unsupported: generators are not supported yet
 language/expressions/object/scope-meth-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/object/scope-setter-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/expressions/object/setter-super-prop.js: parse: Unsupported: super is not supported yet
 language/expressions/optional-chaining/call-expression-super-no-base.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/expressions/optional-chaining/call-expression.js: parse: Unsupported: classes are not supported yet
 language/expressions/optional-chaining/eval-optional-call.js: ReferenceError: 'eval' is not defined
-language/expressions/optional-chaining/iteration-statement-for-await-of.js: parse: Unsupported: async functions are not supported yet
-language/expressions/optional-chaining/member-expression-async-identifier.js: parse: Unsupported: async functions are not supported yet
-language/expressions/optional-chaining/member-expression-async-literal.js: parse: Unsupported: async functions are not supported yet
-language/expressions/optional-chaining/member-expression-async-this.js: parse: Unsupported: async functions are not supported yet
 language/expressions/optional-chaining/member-expression.js: parse: Unsupported: classes are not supported yet
 language/expressions/optional-chaining/optional-call-preserves-this.js: TypeError: cannot read property '_b' of undefined
-language/expressions/optional-chaining/optional-chain-async-optional-chain-square-brackets.js: parse: Unsupported: async functions are not supported yet
-language/expressions/optional-chaining/optional-chain-async-square-brackets.js: parse: Unsupported: async functions are not supported yet
 language/expressions/optional-chaining/super-property-optional-call.js: parse: Unsupported: classes are not supported yet
 language/expressions/postfix-decrement/S11.3.2_A6_T1.js: Test262Error: Expected a TypeError but got a Test262Error
 language/expressions/postfix-decrement/S11.3.2_A6_T2.js: Test262Error: Expected a TypeError but got a Test262Error
@@ -3400,67 +3135,6 @@ language/statementList/class-regexp-literal-flags.js: parse: Unsupported: classe
 language/statementList/class-regexp-literal.js: parse: Unsupported: classes are not supported yet
 language/statementList/fn-regexp-literal-flags.js: parse: Unsupported: regular expressions are not supported yet
 language/statementList/fn-regexp-literal.js: parse: Unsupported: regular expressions are not supported yet
-language/statements/async-function/array-destructuring-param-strict-body.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/await-as-binding-identifier-escaped.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/await-as-binding-identifier.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/await-as-identifier-reference-escaped.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/await-as-identifier-reference.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/await-as-label-identifier-escaped.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/await-as-label-identifier.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/declaration-returns-promise.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/dflt-params-abrupt.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/dflt-params-arg-val-not-undefined.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/dflt-params-arg-val-undefined.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/dflt-params-duplicates.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/dflt-params-ref-later.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/dflt-params-ref-prior.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/dflt-params-ref-self.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/dflt-params-rest.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/dflt-params-trailing-comma.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/early-errors-declaration-NSPL-with-USD.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/early-errors-declaration-arguments-in-formal-parameters.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/early-errors-declaration-await-in-formals-default.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/early-errors-declaration-await-in-formals.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/early-errors-declaration-binding-identifier-arguments.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/early-errors-declaration-binding-identifier-eval.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/early-errors-declaration-body-contains-super-call.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/early-errors-declaration-body-contains-super-property.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/early-errors-declaration-duplicate-parameters.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/early-errors-declaration-eval-in-formal-parameters.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/early-errors-declaration-formals-body-duplicate.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/early-errors-declaration-formals-contains-super-call.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/early-errors-declaration-formals-contains-super-property.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/evaluation-body-that-returns-after-await.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/evaluation-body-that-returns.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/evaluation-body-that-throws-after-await.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/evaluation-body-that-throws.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/evaluation-body.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/evaluation-default-that-throws.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/evaluation-this-value-passed.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/evaluation-unmapped-arguments.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/let-newline-await-in-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/object-destructuring-param-strict-body.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/params-trailing-comma-multiple.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/params-trailing-comma-single.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/rest-param-strict-body.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/rest-params-trailing-comma-early-error.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/async-function/returns-async-arrow-returns-arguments-from-parent-function.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/returns-async-arrow-returns-newtarget.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/returns-async-arrow.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/returns-async-function-returns-arguments-from-own-function.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/returns-async-function-returns-newtarget.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/returns-async-function.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/syntax-declaration-line-terminators-allowed.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/syntax-declaration.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/try-reject-finally-reject.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/try-reject-finally-return.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/try-reject-finally-throw.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/try-return-finally-reject.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/try-return-finally-return.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/try-return-finally-throw.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/try-throw-finally-reject.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/try-throw-finally-return.js: parse: Unsupported: async functions are not supported yet
-language/statements/async-function/try-throw-finally-throw.js: parse: Unsupported: async functions are not supported yet
 language/statements/block/early-errors/invalid-names-call-expression-bad-reference.js: expected parse SyntaxError, got parse Unsupported: private names are not supported yet
 language/statements/block/early-errors/invalid-names-call-expression-this.js: expected parse SyntaxError, got parse Unsupported: private names are not supported yet
 language/statements/block/early-errors/invalid-names-member-expression-bad-reference.js: expected parse SyntaxError, got parse Unsupported: private names are not supported yet
@@ -3593,7 +3267,7 @@ language/statements/class/cpn-class-decl-accessors-computed-property-name-from-e
 language/statements/class/cpn-class-decl-accessors-computed-property-name-from-expression-logical-or.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-accessors-computed-property-name-from-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-accessors-computed-property-name-from-function-expression.js: parse: Unsupported: classes are not supported yet
-language/statements/class/cpn-class-decl-accessors-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: generators are not supported yet
+language/statements/class/cpn-class-decl-accessors-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-accessors-computed-property-name-from-identifier.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-accessors-computed-property-name-from-integer-e-notational-literal.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-accessors-computed-property-name-from-integer-separators.js: parse: Unsupported: classes are not supported yet
@@ -3603,7 +3277,7 @@ language/statements/class/cpn-class-decl-accessors-computed-property-name-from-m
 language/statements/class/cpn-class-decl-accessors-computed-property-name-from-null.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-accessors-computed-property-name-from-numeric-literal.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-accessors-computed-property-name-from-string-literal.js: parse: Unsupported: classes are not supported yet
-language/statements/class/cpn-class-decl-accessors-computed-property-name-from-yield-expression.js: parse: Unsupported: generators are not supported yet
+language/statements/class/cpn-class-decl-accessors-computed-property-name-from-yield-expression.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-computed-property-name-from-additive-expression-add.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-computed-property-name-from-additive-expression-subtract.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-computed-property-name-from-arrow-function-expression.js: parse: Unsupported: classes are not supported yet
@@ -3623,7 +3297,7 @@ language/statements/class/cpn-class-decl-computed-property-name-from-expression-
 language/statements/class/cpn-class-decl-computed-property-name-from-expression-logical-or.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-computed-property-name-from-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-computed-property-name-from-function-expression.js: parse: Unsupported: classes are not supported yet
-language/statements/class/cpn-class-decl-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: generators are not supported yet
+language/statements/class/cpn-class-decl-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-computed-property-name-from-identifier.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-computed-property-name-from-integer-e-notational-literal.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-computed-property-name-from-integer-separators.js: parse: Unsupported: classes are not supported yet
@@ -3633,7 +3307,7 @@ language/statements/class/cpn-class-decl-computed-property-name-from-multiplicat
 language/statements/class/cpn-class-decl-computed-property-name-from-null.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-computed-property-name-from-numeric-literal.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-computed-property-name-from-string-literal.js: parse: Unsupported: classes are not supported yet
-language/statements/class/cpn-class-decl-computed-property-name-from-yield-expression.js: parse: Unsupported: generators are not supported yet
+language/statements/class/cpn-class-decl-computed-property-name-from-yield-expression.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-computed-property-name-from-additive-expression-add.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-computed-property-name-from-additive-expression-subtract.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-computed-property-name-from-arrow-function-expression.js: parse: Unsupported: classes are not supported yet
@@ -3653,7 +3327,7 @@ language/statements/class/cpn-class-decl-fields-computed-property-name-from-expr
 language/statements/class/cpn-class-decl-fields-computed-property-name-from-expression-logical-or.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-computed-property-name-from-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-computed-property-name-from-function-expression.js: parse: Unsupported: classes are not supported yet
-language/statements/class/cpn-class-decl-fields-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: generators are not supported yet
+language/statements/class/cpn-class-decl-fields-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-computed-property-name-from-identifier.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-computed-property-name-from-integer-e-notational-literal.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-computed-property-name-from-integer-separators.js: parse: Unsupported: classes are not supported yet
@@ -3663,7 +3337,7 @@ language/statements/class/cpn-class-decl-fields-computed-property-name-from-mult
 language/statements/class/cpn-class-decl-fields-computed-property-name-from-null.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-computed-property-name-from-numeric-literal.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-computed-property-name-from-string-literal.js: parse: Unsupported: classes are not supported yet
-language/statements/class/cpn-class-decl-fields-computed-property-name-from-yield-expression.js: parse: Unsupported: generators are not supported yet
+language/statements/class/cpn-class-decl-fields-computed-property-name-from-yield-expression.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-additive-expression-add.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-additive-expression-subtract.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-arrow-function-expression.js: parse: Unsupported: classes are not supported yet
@@ -3683,7 +3357,7 @@ language/statements/class/cpn-class-decl-fields-methods-computed-property-name-f
 language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-expression-logical-or.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-function-expression.js: parse: Unsupported: classes are not supported yet
-language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: generators are not supported yet
+language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-generator-function-declaration.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-identifier.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-integer-e-notational-literal.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-integer-separators.js: parse: Unsupported: classes are not supported yet
@@ -3693,7 +3367,7 @@ language/statements/class/cpn-class-decl-fields-methods-computed-property-name-f
 language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-null.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-numeric-literal.js: parse: Unsupported: classes are not supported yet
 language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-string-literal.js: parse: Unsupported: classes are not supported yet
-language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-yield-expression.js: parse: Unsupported: generators are not supported yet
+language/statements/class/cpn-class-decl-fields-methods-computed-property-name-from-yield-expression.js: parse: Unsupported: classes are not supported yet
 language/statements/class/definition/accessors.js: parse: Unsupported: classes are not supported yet
 language/statements/class/definition/basics.js: parse: Unsupported: classes are not supported yet
 language/statements/class/definition/class-method-returns-promise.js: parse: Unsupported: classes are not supported yet
@@ -5334,7 +5008,7 @@ language/statements/class/static-init-await-binding-valid.js: parse: Unsupported
 language/statements/class/static-init-expr-new-target.js: parse: Unsupported: classes are not supported yet
 language/statements/class/static-init-expr-this.js: parse: Unsupported: classes are not supported yet
 language/statements/class/static-init-invalid-arguments.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/statements/class/static-init-invalid-await.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
+language/statements/class/static-init-invalid-await.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/class/static-init-invalid-label-dup.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/class/static-init-invalid-lex-dup.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/class/static-init-invalid-lex-var.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
@@ -5342,7 +5016,7 @@ language/statements/class/static-init-invalid-return.js: expected parse SyntaxEr
 language/statements/class/static-init-invalid-super-call.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/class/static-init-invalid-undefined-break-target.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/class/static-init-invalid-undefined-continue-target.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/statements/class/static-init-invalid-yield.js: expected parse SyntaxError, got parse Unsupported: generators are not supported yet
+language/statements/class/static-init-invalid-yield.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/class/static-init-scope-lex-close.js: parse: Unsupported: classes are not supported yet
 language/statements/class/static-init-scope-lex-derived.js: parse: Unsupported: classes are not supported yet
 language/statements/class/static-init-scope-lex-open.js: parse: Unsupported: classes are not supported yet
@@ -5410,11 +5084,11 @@ language/statements/class/subclass/builtin-objects/Function/instance-length.js: 
 language/statements/class/subclass/builtin-objects/Function/instance-name.js: parse: Unsupported: classes are not supported yet
 language/statements/class/subclass/builtin-objects/Function/regular-subclassing.js: parse: Unsupported: classes are not supported yet
 language/statements/class/subclass/builtin-objects/Function/super-must-be-called.js: parse: Unsupported: classes are not supported yet
-language/statements/class/subclass/builtin-objects/GeneratorFunction/instance-length.js: parse: Unsupported: generators are not supported yet
-language/statements/class/subclass/builtin-objects/GeneratorFunction/instance-name.js: parse: Unsupported: generators are not supported yet
-language/statements/class/subclass/builtin-objects/GeneratorFunction/instance-prototype.js: parse: Unsupported: generators are not supported yet
-language/statements/class/subclass/builtin-objects/GeneratorFunction/regular-subclassing.js: parse: Unsupported: generators are not supported yet
-language/statements/class/subclass/builtin-objects/GeneratorFunction/super-must-be-called.js: parse: Unsupported: generators are not supported yet
+language/statements/class/subclass/builtin-objects/GeneratorFunction/instance-length.js: parse: Unsupported: classes are not supported yet
+language/statements/class/subclass/builtin-objects/GeneratorFunction/instance-name.js: parse: Unsupported: classes are not supported yet
+language/statements/class/subclass/builtin-objects/GeneratorFunction/instance-prototype.js: parse: Unsupported: classes are not supported yet
+language/statements/class/subclass/builtin-objects/GeneratorFunction/regular-subclassing.js: parse: Unsupported: classes are not supported yet
+language/statements/class/subclass/builtin-objects/GeneratorFunction/super-must-be-called.js: parse: Unsupported: classes are not supported yet
 language/statements/class/subclass/builtin-objects/Map/regular-subclassing.js: parse: Unsupported: classes are not supported yet
 language/statements/class/subclass/builtin-objects/Map/super-must-be-called.js: parse: Unsupported: classes are not supported yet
 language/statements/class/subclass/builtin-objects/NativeError/EvalError-message.js: parse: Unsupported: classes are not supported yet
@@ -5522,9 +5196,6 @@ language/statements/const/static-init-await-binding-invalid.js: expected parse S
 language/statements/const/static-init-await-binding-valid.js: parse: Unsupported: classes are not supported yet
 language/statements/continue/static-init-with-label.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/continue/static-init-without-label.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/statements/do-while/decl-async-fun.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/for-in/decl-async-fun.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/for-of/decl-async-fun.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/statements/for-of/dstr/array-elem-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/statements/for-of/dstr/const-ary-ptrn-elem-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/statements/for-of/dstr/const-obj-ptrn-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
@@ -5535,14 +5206,12 @@ language/statements/for-of/dstr/obj-prop-elem-init-fn-name-class.js: parse: Unsu
 language/statements/for-of/dstr/var-ary-ptrn-elem-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/statements/for-of/dstr/var-obj-ptrn-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/statements/for-of/iterator-next-result-type.js: parse: Unsupported: regular expressions are not supported yet
-language/statements/for/decl-async-fun.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/statements/for/dstr/const-ary-ptrn-elem-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/statements/for/dstr/const-obj-ptrn-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/statements/for/dstr/let-ary-ptrn-elem-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/statements/for/dstr/let-obj-ptrn-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/statements/for/dstr/var-ary-ptrn-elem-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/statements/for/dstr/var-obj-ptrn-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
-language/statements/for/head-init-async-of.js: parse: Unsupported: async arrow functions are not supported yet
 language/statements/function/S13.2.2_A8_T3.js: TypeError: not supported yet: the Function constructor
 language/statements/function/dstr/ary-ptrn-elem-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/statements/function/dstr/dflt-ary-ptrn-elem-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
@@ -5556,40 +5225,23 @@ language/statements/function/invalid-function-body-1.js: expected parse SyntaxEr
 language/statements/function/scope-paramsbody-var-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/statements/function/static-init-await-binding-invalid.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/function/static-init-await-binding-valid.js: parse: Unsupported: classes are not supported yet
-language/statements/if/if-async-fun-else-async-fun.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/if/if-async-fun-else-stmt.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/if/if-async-fun-no-else.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/if/if-stmt-else-async-fun.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/labeled/decl-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/statements/labeled/static-init-invalid-await.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/let/dstr/ary-ptrn-elem-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/statements/let/dstr/obj-ptrn-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/statements/let/fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/statements/let/static-init-await-binding-invalid.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/let/static-init-await-binding-valid.js: parse: Unsupported: classes are not supported yet
-language/statements/switch/scope-lex-async-function.js: expected runtime ReferenceError, got parse Unsupported: async functions are not supported yet
-language/statements/switch/scope-lex-async-generator.js: expected runtime ReferenceError, got parse Unsupported: async functions are not supported yet
 language/statements/switch/scope-lex-class.js: expected runtime ReferenceError, got parse Unsupported: classes are not supported yet
-language/statements/switch/scope-lex-generator.js: expected runtime ReferenceError, got parse Unsupported: generators are not supported yet
-language/statements/switch/syntax/redeclaration/async-function-name-redeclaration-attempt-with-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/switch/syntax/redeclaration/async-function-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/switch/syntax/redeclaration/async-function-name-redeclaration-attempt-with-const.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/switch/syntax/redeclaration/async-function-name-redeclaration-attempt-with-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/switch/syntax/redeclaration/async-function-name-redeclaration-attempt-with-let.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
-language/statements/switch/syntax/redeclaration/async-function-name-redeclaration-attempt-with-var.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
+language/statements/switch/syntax/redeclaration/async-function-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/switch/syntax/redeclaration/class-name-redeclaration-attempt-with-async-function.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/switch/syntax/redeclaration/class-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/switch/syntax/redeclaration/class-name-redeclaration-attempt-with-const.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/switch/syntax/redeclaration/class-name-redeclaration-attempt-with-function.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/switch/syntax/redeclaration/class-name-redeclaration-attempt-with-let.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/switch/syntax/redeclaration/class-name-redeclaration-attempt-with-var.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/statements/switch/syntax/redeclaration/const-name-redeclaration-attempt-with-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/statements/switch/syntax/redeclaration/const-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/statements/switch/syntax/redeclaration/function-name-redeclaration-attempt-with-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/statements/switch/syntax/redeclaration/function-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/statements/switch/syntax/redeclaration/let-name-redeclaration-attempt-with-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/statements/switch/syntax/redeclaration/let-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
-language/statements/switch/syntax/redeclaration/var-name-redeclaration-attempt-with-async-function.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/statements/switch/syntax/redeclaration/var-name-redeclaration-attempt-with-class.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/statements/try/dstr/obj-ptrn-id-init-fn-name-class.js: parse: Unsupported: classes are not supported yet
@@ -5610,7 +5262,6 @@ language/statements/variable/dstr/obj-ptrn-id-init-fn-name-class.js: parse: Unsu
 language/statements/variable/fn-name-class.js: parse: Unsupported: classes are not supported yet
 language/statements/variable/static-init-await-binding-invalid.js: expected parse SyntaxError, got parse Unsupported: classes are not supported yet
 language/statements/variable/static-init-await-binding-valid.js: parse: Unsupported: classes are not supported yet
-language/statements/while/decl-async-fun.js: expected parse SyntaxError, got parse Unsupported: async functions are not supported yet
 language/white-space/after-regular-expression-literal-carriage-return.js: parse: Unsupported: regular expressions are not supported yet
 language/white-space/after-regular-expression-literal-em-quad.js: parse: Unsupported: regular expressions are not supported yet
 language/white-space/after-regular-expression-literal-em-space.js: parse: Unsupported: regular expressions are not supported yet
