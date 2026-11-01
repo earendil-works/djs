@@ -68,7 +68,12 @@ impl<'a> Parser<'a, '_> {
     /// A for-in/of loop after `for (`, with the current token at the start of the
     /// head. `for_pos` is the `for` keyword (errors from the iteration report there,
     /// as in QuickJS).
-    pub(super) fn parse_for_in_of(&mut self, labels: Vec<Atom>, for_pos: u32) -> PResult<()> {
+    pub(super) fn parse_for_in_of(
+        &mut self,
+        labels: Vec<Atom>,
+        for_pos: u32,
+        is_await: bool,
+    ) -> PResult<()> {
         let base = self.stmt_depth;
         let outer = self.scope;
         let mut scoped = false;
@@ -124,7 +129,7 @@ impl<'a> Parser<'a, '_> {
                 }
             }
             _ => {
-                let is_of = self.for_expr_head_is_of()?;
+                let is_of = is_await || self.for_expr_head_is_of()?;
                 let l_rhs = self.new_label();
                 self.code().jump(l_rhs);
                 self.place(l_assign);
@@ -165,6 +170,9 @@ impl<'a> Parser<'a, '_> {
             return self.for_initializer_error();
         }
         let is_of = self.tok.is_contextual(Kw::Of);
+        if is_await && !is_of {
+            return syntax(self.tok.start, "'for await' loop should be used with 'of'");
+        }
         if !is_of && !self.is(TokenKind::In) {
             return syntax(
                 self.tok.start,
@@ -193,7 +201,12 @@ impl<'a> Parser<'a, '_> {
         }
         self.mark(for_pos);
         if is_of {
-            let get_iterator = intrinsic_id("GetIterator").expect("%GetIterator");
+            let name = if is_await {
+                "GetAsyncIterator"
+            } else {
+                "GetIterator"
+            };
+            let get_iterator = intrinsic_id(name).expect("%GetIterator");
             self.code().call_intrinsic(get_iterator, 1);
             self.code().dup();
             self.code().get_field(atoms::NEXT);
@@ -209,8 +222,15 @@ impl<'a> Parser<'a, '_> {
             self.place(l_throw);
             self.code().nip();
             self.code().swap();
-            let close = intrinsic_id("IteratorCloseThrow").expect("%IteratorCloseThrow");
-            self.code().call_intrinsic(close, 1);
+            if is_await {
+                // A promise that always fulfills (errors from `return()` are dropped).
+                let close = intrinsic_id("AsyncIteratorCloseThrow").expect("intrinsic");
+                self.code().call_intrinsic(close, 1);
+                self.code().await_(0);
+            } else {
+                let close = intrinsic_id("IteratorCloseThrow").expect("%IteratorCloseThrow");
+                self.code().call_intrinsic(close, 1);
+            }
             self.code().drop();
             self.code().throw();
         }
@@ -312,6 +332,9 @@ impl<'a> Parser<'a, '_> {
             self.code().dup2();
             self.code().swap();
             self.code().call(0);
+            if is_await {
+                self.code().await_(0);
+            }
             self.code().iter_check_object();
             self.code().dup();
             self.code().get_field(atoms::DONE);
@@ -333,7 +356,12 @@ impl<'a> Parser<'a, '_> {
                 self.code().drop();
                 self.code().dup();
                 self.mark(for_pos);
-                self.code().call_intrinsic(close, 1);
+                if is_await {
+                    self.emit_async_close_normal();
+                    self.code().undefined();
+                } else {
+                    self.code().call_intrinsic(close, 1);
+                }
                 self.code().rot3l();
                 self.code().ret();
             }
@@ -342,8 +370,12 @@ impl<'a> Parser<'a, '_> {
                 self.place(l_break);
                 self.code().drop();
                 self.mark(for_pos);
-                self.code().call_intrinsic(close, 1);
-                self.code().drop();
+                if is_await {
+                    self.emit_async_close_normal();
+                } else {
+                    self.code().call_intrinsic(close, 1);
+                    self.code().drop();
+                }
             }
             self.place(l_end);
         } else {

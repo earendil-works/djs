@@ -303,15 +303,16 @@ impl Parser<'_, '_> {
     fn parse_for(&mut self, labels: Vec<Atom>) -> PResult<()> {
         let for_pos = self.tok.start;
         self.next()?;
-        if self.tok.is_contextual(Kw::Await) {
-            return self.unsupported(self.tok.start, "for await loops are");
+        let is_await = self.f.is_async && self.tok.is_contextual(Kw::Await);
+        if is_await {
+            self.next()?;
         }
         if !self.is(TokenKind::LParen) {
             return syntax(self.tok.start, "expecting '('");
         }
-        if !super::scan::for_head_is_c_style(self.lx, self.tok) {
+        if is_await || !super::scan::for_head_is_c_style(self.lx, self.tok) {
             self.next()?;
-            return self.parse_for_in_of(labels, for_pos);
+            return self.parse_for_in_of(labels, for_pos, is_await);
         }
         self.expect(TokenKind::LParen, "(")?;
         let outer = self.scope;

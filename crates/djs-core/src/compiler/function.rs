@@ -24,7 +24,7 @@ impl Parser<'_, '_> {
     pub(super) fn parse_function_declaration(&mut self, start: u32, is_async: bool) -> PResult<()> {
         self.next()?;
         let is_gen = self.eat(TokenKind::Star)?;
-        if !self.is(TokenKind::Ident) {
+        if !self.is(TokenKind::Ident) || self.tok.kw == Kw::Yield {
             return syntax(self.tok.start, "function name expected");
         }
         let pos = self.tok.start;
