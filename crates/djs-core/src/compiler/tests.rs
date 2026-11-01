@@ -200,6 +200,13 @@ fn errors() {
         ("f(1, 2", "expecting ')'", 1, 7),
         ("({a = 1})", "expecting '}'", 1, 5),
         (
+            "({a = 1} = b)",
+            "destructuring assignment is not supported yet",
+            1,
+            3,
+        ),
+        ("({1n: 1})", "BigInt literals are not supported yet", 1, 3),
+        (
             "'\\08'",
             "octal escape sequences are not allowed in strict mode",
             1,
@@ -391,4 +398,100 @@ fn depth_limit_fits_wasm_stack() {
         .unwrap()
         .join()
         .unwrap();
+}
+
+fn test262_dir() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("DJS_TEST262") {
+        return Some(dir.into());
+    }
+    let out = std::process::Command::new("git")
+        .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .ok()?;
+    let common = PathBuf::from(String::from_utf8(out.stdout).ok()?.trim());
+    let dir = common.parent()?.join("vendor/test262/test");
+    dir.is_dir().then_some(dir)
+}
+
+fn collect_js(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_js(&path, out);
+        } else if path.extension().is_some_and(|e| e == "js") {
+            out.push(path);
+        }
+    }
+}
+
+/// Compiles every test262 test (without its harness). Must not panic. Lists the
+/// non-negative tests that fail with something other than "not supported yet":
+/// candidates for parser bugs. `cargo test -p djs-core --release compile_test262 --
+/// --ignored --nocapture`
+#[test]
+#[ignore]
+fn compile_test262() {
+    let Some(root) = test262_dir() else {
+        std::println!("vendor/test262 not found; skipping");
+        return;
+    };
+    let mut files = Vec::new();
+    collect_js(&root, &mut files);
+    files.sort();
+    let (mut ok, mut unsupported, mut negative, mut sloppy) = (0, 0, 0, 0);
+    let mut other: Vec<String> = Vec::new();
+    // Negative parse tests that compile: missing early errors.
+    let mut missed: Vec<String> = Vec::new();
+    for path in &files {
+        let src = std::fs::read(path).unwrap();
+        let text = String::from_utf8_lossy(&src);
+        let mut heap = Heap::new().unwrap();
+        let r = std::panic::catch_unwind(core::panic::AssertUnwindSafe(|| {
+            compile(&mut heap, &src, &CompileOptions::script("t.js"))
+        }));
+        let Ok(r) = r else {
+            panic!("compiler panicked on {}", path.display());
+        };
+        match r {
+            Ok(_) if text.contains("phase: parse") => {
+                let rel = path.strip_prefix(&root).unwrap_or(path);
+                missed.push(alloc::format!("{}", rel.display()));
+            }
+            Ok(_) => ok += 1,
+            Err(e) if e.message.ends_with("not supported yet") => unsupported += 1,
+            Err(_) if text.contains("negative:") => negative += 1,
+            Err(_) if text.contains("noStrict") || text.contains("flags: [raw]") => sloppy += 1,
+            // Modules are not supported (TESTING.md skips them).
+            Err(_) if text.contains("module]") || text.contains(", module") => sloppy += 1,
+            Err(e) => {
+                let rel = path.strip_prefix(&root).unwrap_or(path);
+                other.push(alloc::format!(
+                    "{}:{}:{}: {}",
+                    rel.display(),
+                    e.line,
+                    e.col,
+                    e.message
+                ));
+            }
+        }
+    }
+    std::println!(
+        "{} files: {ok} ok, {unsupported} not supported yet, {negative} negative, {sloppy} sloppy or module, {} other errors",
+        files.len(),
+        other.len()
+    );
+    for o in &other {
+        std::println!("  {o}");
+    }
+    std::println!(
+        "{} negative parse tests compile (missing early errors):",
+        missed.len()
+    );
+    for m in &missed {
+        std::println!("  missed {m}");
+    }
 }

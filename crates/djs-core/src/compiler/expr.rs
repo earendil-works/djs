@@ -497,6 +497,8 @@ impl Parser<'_, '_> {
                     self.code().dec();
                 }
                 self.emit_store(lv, true);
+                // An UpdateExpression, not a UnaryExpression: `++a ** 2` is valid.
+                return Ok((Expr::Value, false));
             }
             TokenKind::Ident
                 if tok.is_contextual(Kw::Await) && self.f.kind == FuncKind::AsyncBody =>
@@ -983,6 +985,9 @@ impl Parser<'_, '_> {
                     TokenKind::Star => {
                         return self.unsupported(tok.start, "methods are");
                     }
+                    TokenKind::BigInt => {
+                        return self.unsupported(tok.start, "BigInt literals are");
+                    }
                     k if k.is_identifier_name() => {
                         let a = self.ident_atom()?;
                         self.next()?;
@@ -1035,6 +1040,13 @@ impl Parser<'_, '_> {
                         self.mark(tok.start);
                         self.code().name_get(r);
                         self.code().define_field(a);
+                    }
+                    TokenKind::Assign if shorthand_ok => {
+                        // `{ a = 1 }` is only valid as a destructuring pattern.
+                        if super::scan::closes_before_assign(self.lx, b'{') {
+                            return self.unsupported(tok.start, "destructuring assignment is");
+                        }
+                        return syntax(self.tok.start, "expecting '}'");
                     }
                     _ => return syntax(self.tok.start, "expecting '}'"),
                 }

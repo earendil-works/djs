@@ -106,6 +106,29 @@ pub(super) fn is_arrow_head(lx: Lexer<'_>, open: Token) -> bool {
     matches!(s.lx.next_token(), Ok(t) if t.kind == TokenKind::Arrow && !t.newline_before())
 }
 
+/// Inside a literal opened by `open` (`{` or `[`), with `lx` somewhere directly in it:
+/// is the literal's closing bracket followed by `=`? That makes it a destructuring
+/// pattern (docs/compiler.md 3.3).
+pub(super) fn closes_before_assign(lx: Lexer<'_>, open: u8) -> bool {
+    let mut s = Scanner {
+        lx,
+        prev: Token {
+            kind: TokenKind::Comma,
+            kw: Kw::None,
+            flags: 0,
+            start: 0,
+            end: 0,
+        },
+        stack: alloc::vec![open],
+    };
+    while !s.stack.is_empty() {
+        if s.next().is_none() {
+            return false;
+        }
+    }
+    matches!(s.lx.next_token(), Ok(t) if t.kind == TokenKind::Assign)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
