@@ -3428,3 +3428,14 @@ checks out the rebased commit (detached, forced, `git clean` of untracked files)
 target/ is always one merge behind. The agent's worktree only does the rebase and the
 regeneration commit; its target/ is not rebuilt at gate width. The gate worktree is
 created on the first merge (one cold build).
+
+## D1793: Agents' runs are niced; the gate is not
+date: 2026-11-01 · by: devflow · issue: 0079
+The merge lock was held ~89 % of the time (10 merges/h), so the gate's cycle time is the
+throughput of the whole project, while it competed for the CPU with every agent's own
+test runs at the same priority. `scripts/timeout.sh` (which every engine run already
+goes through) now runs its command under `nice -n 10`, except when `DJS_GATE=1` (gate.sh
+exports it, so nested timeout.sh calls in the gate stay at normal priority) or the
+command is merge-to-main.sh, gate.sh or with-merge-lock.sh (a niced process cannot
+lower its niceness again). AGENTS.md asks agents to run cargo builds and test loops
+through timeout.sh or `nice -n 10` as well.

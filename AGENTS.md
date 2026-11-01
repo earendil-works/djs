@@ -113,6 +113,10 @@ before merging; while iterating, run only what your change can break (0047, D012
 - Leave cores for the others: the repo's `.cargo/config.toml` caps cargo at 6 jobs and 6
   test threads; pass `-j 6` to the test262/difftest runners. Everything that runs an
   engine goes under `scripts/timeout.sh`.
+- Yield to the gate: `scripts/timeout.sh` runs its command under `nice -n 10` (D1793),
+  so the gate, the serial bottleneck of every merge, gets the CPU first. Run your cargo
+  builds and test loops through it too (`scripts/timeout.sh 900 cargo test -p djs-core
+  ...`), or prefix them with `nice -n 10`. merge-to-main.sh and the gate are not niced.
 
 ## Coordinator
 

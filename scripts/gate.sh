@@ -8,6 +8,8 @@ cd "$(dirname "$0")/.."
 # .cargo/config.toml caps everything else at 6 (D012).
 ncpu=$(sysctl -n hw.ncpu 2>/dev/null || nproc)
 export CARGO_BUILD_JOBS="$ncpu" RUST_TEST_THREADS="$ncpu" DJS_JOBS="$ncpu"
+# Not niced by scripts/timeout.sh: everything else yields to the gate (D1793).
+export DJS_GATE=1
 
 echo "== fmt";   cargo fmt --all --check
 echo "== clippy"; cargo clippy --workspace --all-targets --quiet -- -D warnings
