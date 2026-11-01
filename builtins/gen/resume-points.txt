@@ -517,17 +517,17 @@ BigIntConstructor: reentrant (constructor BigInt)
   builtins/bigint.ts:31:23  ToPrimitive (builtin)
 
 BigIntAsIntNBuiltin: reentrant (BigInt.asIntN)
-  builtins/bigint.ts:43:18  ToIndex (builtin)
-  builtins/bigint.ts:44:26  ToBigInt (builtin)
+  builtins/bigint.ts:47:18  ToIndex (builtin)
+  builtins/bigint.ts:48:26  ToBigInt (builtin)
 
 BigIntAsUintNBuiltin: reentrant (BigInt.asUintN)
-  builtins/bigint.ts:52:18  ToIndex (builtin)
-  builtins/bigint.ts:53:27  ToBigInt (builtin)
+  builtins/bigint.ts:56:18  ToIndex (builtin)
+  builtins/bigint.ts:57:27  ToBigInt (builtin)
 
 ThisBigIntValue: leaf
 
 BigIntPrototypeToString: reentrant (BigInt.prototype.toString)
-  builtins/bigint.ts:73:9  ToIntegerOrInfinity (builtin)
+  builtins/bigint.ts:77:9  ToIntegerOrInfinity (builtin)
 
 BigIntPrototypeToLocaleString: leaf (BigInt.prototype.toLocaleString)
 

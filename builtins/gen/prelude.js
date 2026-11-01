@@ -1422,22 +1422,25 @@ function BigIntConstructor(value) {
   if (%IsNumber(prim)) {
     return %NumberToBigInt(%AsNumber(prim));
   }
+  if (prim === undefined || prim === null || %IsSymbol(prim)) {
+    throw %NewTypeError("cannot convert to BigInt");
+  }
   return %ToBigIntPrimitive(prim);
 }
 
-// builtins/bigint.ts:42 BigInt.asIntN
+// builtins/bigint.ts:46 BigInt.asIntN
 function BigIntAsIntNBuiltin(bits, bigint) {
   const n = ToIndex(bits);
   return %BigIntAsIntN(n, ToBigInt(bigint));
 }
 
-// builtins/bigint.ts:51 BigInt.asUintN
+// builtins/bigint.ts:55 BigInt.asUintN
 function BigIntAsUintNBuiltin(bits, bigint) {
   const n = ToIndex(bits);
   return %BigIntAsUintN(n, ToBigInt(bigint));
 }
 
-// builtins/bigint.ts:57
+// builtins/bigint.ts:61
 function ThisBigIntValue(value) {
   const b = %PrimitiveValue(value);
   if (!%IsBigInt(b)) {
@@ -1446,7 +1449,7 @@ function ThisBigIntValue(value) {
   return b;
 }
 
-// builtins/bigint.ts:69 BigInt.prototype.toString
+// builtins/bigint.ts:73 BigInt.prototype.toString
 function BigIntPrototypeToString(radix) {
   const x = ThisBigIntValue(this);
   let r = 10;
@@ -1459,17 +1462,17 @@ function BigIntPrototypeToString(radix) {
   return %BigIntToString(x, %F64ToI32(r));
 }
 
-// builtins/bigint.ts:86 BigInt.prototype.toLocaleString
+// builtins/bigint.ts:90 BigInt.prototype.toLocaleString
 function BigIntPrototypeToLocaleString() {
   return %BigIntToString(ThisBigIntValue(this), 10);
 }
 
-// builtins/bigint.ts:94 BigInt.prototype.valueOf
+// builtins/bigint.ts:98 BigInt.prototype.valueOf
 function BigIntPrototypeValueOf() {
   return ThisBigIntValue(this);
 }
 
-// builtins/bigint.ts:103 value BigInt.prototype[Symbol.toStringTag]
+// builtins/bigint.ts:107 value BigInt.prototype[Symbol.toStringTag]
 function BigIntPrototypeToStringTag() {
   return "BigInt";
 }

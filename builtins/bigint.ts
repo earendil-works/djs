@@ -32,6 +32,10 @@ function BigIntConstructor(value: Value): Value {
   if (IsNumber(prim)) {
     return NumberToBigInt(AsNumber(prim));
   }
+  // qjs's constructor says "BigInt" where its ToBigInt says "bigint".
+  if (prim === undefined || prim === null || IsSymbol(prim)) {
+    throw NewTypeError("cannot convert to BigInt");
+  }
   return ToBigIntPrimitive(prim);
 }
 

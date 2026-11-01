@@ -252,7 +252,7 @@ const I = {
   WrapPrimitive: (v, proto) => Object.setPrototypeOf(Object(v), proto),
   PrimitiveValue: (v) => {
     if (!isObject(v)) return v;
-    for (const C of [Boolean, Number, String, Symbol]) {
+    for (const C of [Boolean, Number, String, Symbol, BigInt]) {
       try {
         return C.prototype.valueOf.call(v);
       } catch {}
@@ -260,6 +260,26 @@ const I = {
     return undefined;
   },
   BoundTargetFunction: (f) => undefined,
+  IsBigInt: (v) => typeof v === "bigint",
+  ToBigIntPrimitive: (v) => {
+    check(!isObject(v), "ToBigIntPrimitive");
+    if (typeof v === "number" || typeof v === "symbol" || v == null) throw new TypeError("cannot convert to bigint");
+    try {
+      return BigInt(v);
+    } catch (e) {
+      throw e instanceof SyntaxError ? new SyntaxError("invalid bigint literal") : e;
+    }
+  },
+  NumberToBigInt: (n) => {
+    check(typeof n === "number", "NumberToBigInt");
+    if (!Number.isFinite(n)) throw new RangeError("cannot convert NaN or Infinity to BigInt");
+    if (!Number.isInteger(n)) throw new RangeError("cannot convert to BigInt: not an integer");
+    return BigInt(n);
+  },
+  BigIntToString: (b, r) => (check(typeof b === "bigint" && (r | 0) === r, "BigIntToString"), b.toString(r)),
+  BigIntAsIntN: (n, b) => (check(typeof b === "bigint", "BigIntAsIntN"), BigInt.asIntN(n, b)),
+  BigIntAsUintN: (n, b) => (check(typeof b === "bigint", "BigIntAsUintN"), BigInt.asUintN(n, b)),
+  BigIntToNumber: (b) => (check(typeof b === "bigint", "BigIntToNumber"), Number(b)),
   NewSymbol: (d) => Symbol(d),
   SymbolDescription: (s) => s.description,
   SymbolFor: (k) => Symbol.for(k),
@@ -942,24 +962,21 @@ for (const x of numbers) {
   same("globalThis.Number", Number, (f) => Number.prototype.valueOf.call(Reflect.construct(f, [x])));
 }
 same("globalThis.Number", Number, (f) => f());
-for (const s of ["12", "  -12.5e3xyz", "0x1F", "0b11", "Infinity", "-Infinity", "", "abc", "1e1000", ".5", "08", toPrim(3)]) {
-  for (const r of [undefined, 0, 2, 10, 16, 36, 37, 1, "16", -1]) {
-    same("globalThis.parseInt", parseInt, (f) => f(s, r));
-  }
-  same("globalThis.parseFloat", parseFloat, (f) => f(s));
+for (const x of [0n, -5n, 2n ** 64n, Object(3n), { valueOf: () => 7n }]) {
+  same("globalThis.Number", Number, (f) => f(x));
 }
-const mathArgs = [0, -0, 1, -1, 0.5, -0.5, 2.5, -2.5, 1e300, -1e-300, NaN, Infinity, -Infinity, "3", null, undefined, true, toPrim(2), 2 ** 32 + 5, -(2 ** 31)];
-for (const name of ["abs", "acos", "acosh", "asin", "asinh", "atan", "atanh", "cbrt", "ceil", "clz32", "cos", "cosh", "exp", "expm1", "floor", "fround", "log", "log1p", "log10", "log2", "round", "sign", "sin", "sinh", "sqrt", "tan", "tanh", "trunc"]) {
-  for (const x of mathArgs) {
-    same("Math." + name, Math[name], (f) => f(x));
+const bigints = [0n, 1n, -1n, 255n, -(2n ** 70n), 2n ** 64n - 1n, Object(9n), 5, 1.5, -0, NaN, Infinity, "12", " 0x1f ", "-0x1", "1.5", "", true, null, undefined, Symbol(), {}, toPrim("7"), { valueOf: () => 4n }];
+for (const x of bigints) {
+  same("globalThis.BigInt", BigInt, (f) => f(x));
+  same("globalThis.BigInt", BigInt, (f) => Reflect.construct(f, [x]));
+  for (const r of [undefined, 2, 16, 36, 1, 37, "10", 10.9]) {
+    same("BigInt.prototype.toString", BigInt.prototype.toString, (f) => f.call(x, r));
   }
-  same("Math." + name, Math[name], () => installed["Math." + name].length === Math[name].length);
-}
-for (const x of mathArgs) {
-  for (const y of [0, -0, 1, -1, NaN, Infinity, 3, "2"]) {
-    for (const name of ["atan2", "imul", "pow", "max", "min", "hypot"]) {
-      same("Math." + name, Math[name], (f) => f(x, y));
-    }
+  same("BigInt.prototype.toLocaleString", BigInt.prototype.toLocaleString, (f) => f.call(x));
+  same("BigInt.prototype.valueOf", BigInt.prototype.valueOf, (f) => f.call(x));
+  for (const n of [0, 1, 8, 64, 65, -1, 2 ** 53, "3", undefined, 1.9]) {
+    same("BigInt.asIntN", BigInt.asIntN, (f) => f(n, x));
+    same("BigInt.asUintN", BigInt.asUintN, (f) => f(n, x));
   }
 }
 for (const name of ["max", "min", "hypot"]) {

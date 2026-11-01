@@ -234,7 +234,7 @@ impl Exec<'_> {
                 self.fuel -= bigint::mul_cost(b.mag.len(), b.mag.len()) as i64 / 2;
                 self.heap.alloc_bigint(&b)?
             }
-            _ => return type_error("cannot convert to BigInt"),
+            _ => return type_error("cannot convert to bigint"),
         })
     }
 }
