@@ -43,6 +43,23 @@ Date, typed arrays, …), and the code is about 590 KB.
 - [ ] No behavior change: gate green, ratchets unchanged, and `vm_new` time recorded.
 
 ## Log
+- Baseline (branch start, main fb6327d; `work/scratch/0043/measure.sh`): file 1,280,740;
+  code 612,593; data 512,335 (base image 457,952); name 152,656; stripped 1,127,850;
+  stripped gzip -9 343,719. `vm_new` (node, js/bench/sandbox.bench.ts) 5.3 µs,
+  instantiate 49 µs.
+- Attribution tools: `scripts/wasm-size.py` (sections, code per crate / path / function
+  from the name section, demangled with rustfilt when present) and
+  `cargo run -p djs-prelude --example image-size [-- --detail]` (base image per cell kind
+  and role).
+- Code: djs_core 469 KB (interp::run 142 KB: `Exec::run` 45 KB, `call_intrinsic` 36 KB;
+  compiler::parser 82 KB; Heap 59 KB; json::parse 25 KB; resolve::finish 15 KB), core
+  45 KB (slice::sort 20 KB: monomorphized sorts), alloc 42 KB (btree 18 KB), libm 19 KB,
+  std 13 KB, dlmalloc 8 KB.
+- Base image 457,952 bytes: PropTable 121 KB (889 tables, 4168 entry slots for 2268
+  entries: 46 KB of slack), bytecode 71 KB, Str8 62 KB (1888 strings), FuncTemplate 43 KB
+  (599 x 72), line tables 38 KB, ValueArray 27 KB (value stack 8 KB, atom entries 16 KB
+  for 1251 atoms), Function objects 25 KB, U32Array 22 KB (atom index 16 KB), local names
+  17 KB, constant pools 11 KB, capture descriptors 8 KB. 60.6% of the bytes are zero.
 
 ## Follow-ups
 
