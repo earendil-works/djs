@@ -225,7 +225,103 @@ fn errors() {
             1,
             6,
         ),
-        // Not supported yet in P0.
+        // Functions (0024).
+        (
+            "function f(a, a) {}",
+            "duplicate argument names not allowed in this context",
+            1,
+            16,
+        ),
+        (
+            "(a, a) => 1",
+            "duplicate argument names not allowed in this context",
+            1,
+            6,
+        ),
+        (
+            "function f(a = 1) { \"use strict\" }",
+            "\"use strict\" not allowed in function with default or destructuring parameter",
+            1,
+            21,
+        ),
+        (
+            "function eval() {}",
+            "invalid function name in strict code",
+            1,
+            10,
+        ),
+        (
+            "function f(eval) {}",
+            "invalid argument name in strict code",
+            1,
+            12,
+        ),
+        (
+            "(arguments) => 1",
+            "invalid argument name in strict code",
+            1,
+            2,
+        ),
+        ("function f(...a, b) {}", "expecting ')'", 1, 16),
+        ("function f(...a = 1) {}", "expecting ')'", 1, 17),
+        ("function f(,) {}", "missing formal parameter", 1, 12),
+        (
+            "() => new.target",
+            "new.target only allowed within functions",
+            1,
+            7,
+        ),
+        (
+            "function f() { let a; var a }",
+            "invalid redefinition of lexical identifier",
+            1,
+            29,
+        ),
+        (
+            "function f(a) { let a }",
+            "invalid redefinition of parameter name",
+            1,
+            23,
+        ),
+        (
+            "{ function f(){} let f }",
+            "invalid redefinition of lexical identifier",
+            1,
+            24,
+        ),
+        (
+            "{ let f; function f(){} }",
+            "invalid redefinition of lexical identifier",
+            1,
+            19,
+        ),
+        (
+            "if (1) function f(){}",
+            "function declarations can't appear in single-statement context",
+            1,
+            8,
+        ),
+        (
+            "label: function f(){}",
+            "function declarations can't appear in single-statement context",
+            1,
+            8,
+        ),
+        ("function () {}", "function name expected", 1, 10),
+        ("function* g() {}", "generators are not supported yet", 1, 1),
+        (
+            "let f = function* () {}",
+            "generators are not supported yet",
+            1,
+            9,
+        ),
+        (
+            "function f() { x\n=> 1 }",
+            "unexpected token in expression: '=>'",
+            2,
+            1,
+        ),
+        // Not supported yet.
         (
             "async function f() {}",
             "async functions are not supported yet",
@@ -607,6 +703,117 @@ fn end_to_end() {
         ("let a = 7; return a >> 1 | a << 2 & 0xff ^ 3", "=> 31"),
         ("return 0.1 + 0.2", "=> 0.30000000000000004"),
         ("return 1_000_000 + 0x10 + 0b11 + 0o7", "=> 1000026"),
+    ];
+    let mut bad = Vec::new();
+    for &(src, want) in cases {
+        let got = run_body(src);
+        if got != want {
+            bad.push(alloc::format!("{src}\n  got:  {got:?}\n  want: {want:?}"));
+        }
+    }
+    assert!(bad.is_empty(), "\n{}", bad.join("\n"));
+}
+
+/// Functions and closures end to end (docs/compiler.md 5.3 to 5.9). Outputs checked
+/// against qjs.
+#[test]
+fn end_to_end_functions() {
+    let cases: &[(&str, &str)] = &[
+        (
+            "function counter() { let n = 0; return () => ++n } const c = counter(); c(); c(); return c()",
+            "=> 3",
+        ),
+        (
+            "const fs = []; for (let i = 0; i < 3; i++) fs[i] = () => i; return fs[0]() + fs[1]() * 10 + fs[2]() * 100",
+            "=> 210",
+        ),
+        (
+            "var fs = []; for (var i = 0; i < 3; i++) fs[i] = () => i; return fs[0]()",
+            "=> 3",
+        ),
+        (
+            "const fs = []; for (let i = 0; i < 3; i++) { let j = i * 2; fs[i] = () => j } return fs[2]()",
+            "=> 4",
+        ),
+        (
+            "function a(x) { return function (y) { return (z) => x + y + z } } return a(1)(2)(3)",
+            "=> 6",
+        ),
+        (
+            "function fact(n) { return n <= 1 ? 1 : n * fact(n - 1) } return fact(10)",
+            "=> 3628800",
+        ),
+        (
+            "return isEven(10); function isEven(n) { return n == 0 ? true : isOdd(n - 1) } function isOdd(n) { return n == 0 ? false : isEven(n - 1) }",
+            "=> true",
+        ),
+        (
+            "const o = { v: 42, m: function () { return this.v } }; return o.m()",
+            "=> 42",
+        ),
+        (
+            "const o = { v: 7, m: function () { const f = () => this.v + arguments[0]; return f(100) } }; return o.m(1)",
+            "=> 8",
+        ),
+        (
+            "function f(a, b = a * 2) { return a + b } return f(3) + f(3, 1)",
+            "=> 13",
+        ),
+        (
+            "function f(a = b, b) {} f()",
+            "throw ReferenceError: b is not initialized",
+        ),
+        (
+            "function f(x) { const g = () => x; x = 5; return g() } return f(1)",
+            "=> 5",
+        ),
+        (
+            "const f = function g(n) { return n ? g(n - 1) + 1 : 0 }; return f(3)",
+            "=> 3",
+        ),
+        (
+            "function foo(a, b = 1, c) {} return foo.name + foo.length",
+            "=> foo1",
+        ),
+        (
+            "const bar = () => 1; let baz; baz = function () {}; return bar.name + baz.name",
+            "=> barbaz",
+        ),
+        ("function P(x) { this.x = x } return new P(4).x", "=> 4"),
+        (
+            "function F() { return new.target } return F()",
+            "=> undefined",
+        ),
+        (
+            "function F() { this.t = new.target === F } return new F().t",
+            "=> true",
+        ),
+        (
+            "function f() { return arguments.length } return f(1, 2, 3)",
+            "=> 3",
+        ),
+        (
+            "const c = 1; const f = () => { c = 2 }; f()",
+            "throw TypeError: 'c' is read-only",
+        ),
+        (
+            "{ function inner() { return 9 } } return typeof inner",
+            "=> undefined",
+        ),
+        ("{ function inner() { return 9 } return inner() }", "=> 9"),
+        (
+            "const f = () => x; f(); let x = 1",
+            "throw ReferenceError: x is not initialized",
+        ),
+        ("const add = (a, b) => a + b; return add(2, 3)", "=> 5"),
+        (
+            "let x = 1; function setX(v) { x = v } setX(5); return x",
+            "=> 5",
+        ),
+        (
+            "function mk() { let a = 0; return { inc: () => ++a, get: () => a } } const m = mk(); m.inc(); m.inc(); return m.get()",
+            "=> 2",
+        ),
     ];
     let mut bad = Vec::new();
     for &(src, want) in cases {

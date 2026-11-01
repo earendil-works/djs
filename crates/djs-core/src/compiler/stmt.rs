@@ -531,7 +531,10 @@ impl Parser<'_, '_> {
                     continue_label: None,
                 });
                 if self.is(TokenKind::Function) {
-                    return self.unsupported(self.tok.start, "functions are");
+                    return syntax(
+                        self.tok.start,
+                        "function declarations can't appear in single-statement context",
+                    );
                 }
                 self.parse_statement()?;
                 self.place(l_break);

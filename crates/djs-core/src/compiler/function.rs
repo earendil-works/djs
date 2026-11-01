@@ -101,10 +101,14 @@ impl Parser<'_, '_> {
             if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
                 return self.unsupported(self.tok.start, "destructuring parameters are");
             }
+            if self.tok.kind != TokenKind::Ident {
+                return syntax(self.tok.start, "missing formal parameter");
+            }
             let pos = self.tok.start;
             let name = self.function_binding_name("invalid argument name in strict code")?;
             self.next()?;
-            let v = self.declare_param(name, pos)?;
+            // qjs reports duplicates at the token after the name.
+            let v = self.declare_param(name, self.tok.start)?;
             let index = self.f.vars[v as usize].param;
             let has_default = !rest && self.is(TokenKind::Assign);
             if (rest || has_default) && self.f.simple_params {
@@ -146,9 +150,6 @@ impl Parser<'_, '_> {
                 self.f.length += 1;
             }
             if rest {
-                if !self.is(close) {
-                    return syntax(self.tok.start, "rest element must be the last one");
-                }
                 break;
             }
             if !self.eat(TokenKind::Comma)? {
@@ -211,10 +212,9 @@ impl Parser<'_, '_> {
         self.f.name = hint;
         self.f.src_start = start;
         if self.is(TokenKind::Ident) {
-            let pos = self.tok.start;
             let name = self.function_binding_name("invalid argument name in strict code")?;
             self.next()?;
-            let v = self.declare_param(name, pos)?;
+            let v = self.declare_param(name, self.tok.start)?;
             self.f.vars[v as usize].init_end = self.prev_end;
             self.f.length = 1;
         } else {

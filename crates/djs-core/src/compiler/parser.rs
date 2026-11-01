@@ -477,7 +477,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         if let Some(v) = self.f.find_in_scope(self.scope, name) {
             let msg = match self.f.vars[v as usize].kind {
                 VarKind::Var => self.var_conflict_message(),
-                VarKind::Param => "invalid redefinition of a variable",
+                VarKind::Param => "invalid redefinition of parameter name",
                 _ => "invalid redefinition of lexical identifier",
             };
             return syntax(pos, msg);
