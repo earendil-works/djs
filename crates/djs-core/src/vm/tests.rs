@@ -3100,13 +3100,20 @@ fn a_fuel_budget_stops_at_the_same_point_for_any_slice() {
                  a.sort((p, q) => p - q);\n\
                  k += a[2];\n\
                }\n";
-    budget_stops_at_the_same_point(src).unwrap();
+    budget_stops_at_the_same_point(src, &ALL_SCHEDULES, 8).unwrap();
 }
 
-/// Runs `src` (an endless loop) with a budget of k * B fuel for k = 1..8, given as one run
-/// or as B/s runs of s fuel (some with an image restore at every stop), and compares the
-/// state (canonical hash and backtrace) after each budget.
-fn budget_stops_at_the_same_point(src: &str) -> Result<(), alloc::string::String> {
+/// Slices of the budget B (some with an image restore at every stop).
+const ALL_SCHEDULES: [(u64, bool); 4] = [(30_030, false), (4620, true), (143, false), (13, false)];
+
+/// Runs `src` (an endless loop) with a budget of k * B fuel for k = 1..`budgets`, given as
+/// one run or as B/s runs of s fuel for each `(s, restore)` of `schedules`, and compares
+/// the state (canonical hash and backtrace) after each budget.
+fn budget_stops_at_the_same_point(
+    src: &str,
+    schedules: &[(u64, bool)],
+    budgets: usize,
+) -> Result<(), alloc::string::String> {
     const B: u64 = 60_060;
     let states = |slice: u64, suspend: bool| {
         let mut vm = vm();
@@ -3119,7 +3126,7 @@ fn budget_stops_at_the_same_point(src: &str) -> Result<(), alloc::string::String
         let this = Value::object(vm.global());
         vm.call(f, this, &[]).unwrap();
         let mut states = Vec::new();
-        for _ in 0..8 {
+        for _ in 0..budgets {
             for _ in 0..B / slice {
                 assert_eq!(vm.run(slice), Status::OutOfFuel);
                 if suspend {
@@ -3132,7 +3139,7 @@ fn budget_stops_at_the_same_point(src: &str) -> Result<(), alloc::string::String
         states
     };
     let reference = states(B, false);
-    for (slice, suspend) in [(30_030, false), (4620, true), (143, false), (13, false)] {
+    for &(slice, suspend) in schedules {
         if states(slice, suspend) != reference {
             return Err(alloc::format!("slice {slice}, suspend {suspend}"));
         }
@@ -3143,20 +3150,34 @@ fn budget_stops_at_the_same_point(src: &str) -> Result<(), alloc::string::String
 /// The exceptions 0074 found: append buffers and JSON/Array.from depended on the
 /// collection at the start of `run` (removed, D1710), and suspended regexps lost their
 /// dispatch refund at the end of a slice (now a credit, D1712).
-#[test]
-fn budgets_with_collections_and_suspended_regexps() {
-    let srcs = [
-        "globalThis.t = ''; const s = 'ab'.repeat(200); for (let i = 0; ; i++) { t += s.slice(i % 300, i % 300 + 50); }",
-        "for (;;) { globalThis.j = JSON.stringify(Array.from({ length: 500 }, (_, i) => ({ i, s: 'x' + i }))); }",
-        "globalThis.s = 'ab'.repeat(5000); for (;;) { globalThis.m = /abc|bab?x|q/.exec(s); }",
-        "globalThis.s = 'ab'.repeat(5000); for (;;) { globalThis.m = /(?:ab){3}x/.exec(s); }",
-        "globalThis.s = 'ab'.repeat(2000); for (;;) { globalThis.m = /(?:a|b)*c/.exec(s); }",
-    ];
+const BUDGET_CASES: [&str; 5] = [
+    "globalThis.t = ''; const s = 'ab'.repeat(200); for (let i = 0; ; i++) { t += s.slice(i % 300, i % 300 + 50); }",
+    "for (;;) { globalThis.j = JSON.stringify(Array.from({ length: 500 }, (_, i) => ({ i, s: 'x' + i }))); }",
+    "globalThis.s = 'ab'.repeat(5000); for (;;) { globalThis.m = /abc|bab?x|q/.exec(s); }",
+    "globalThis.s = 'ab'.repeat(5000); for (;;) { globalThis.m = /(?:ab){3}x/.exec(s); }",
+    "globalThis.s = 'ab'.repeat(2000); for (;;) { globalThis.m = /(?:a|b)*c/.exec(s); }",
+];
+
+fn budget_cases(schedules: &[(u64, bool)], budgets: usize) {
     let mut errs = alloc::vec::Vec::new();
-    for (n, src) in srcs.iter().enumerate() {
-        if let Err(e) = budget_stops_at_the_same_point(src) {
+    for (n, src) in BUDGET_CASES.iter().enumerate() {
+        if let Err(e) = budget_stops_at_the_same_point(src, schedules, budgets) {
             errs.push(alloc::format!("{n}: {e}"));
         }
     }
     assert!(errs.is_empty(), "{errs:?}");
+}
+
+/// A sample (6 s per gate in full): the slice that showed each failure (30030 for the
+/// regexps, 143 for the collections) and a restoring schedule, for four budgets.
+#[test]
+fn budgets_with_collections_and_suspended_regexps() {
+    budget_cases(&[(30_030, false), (4620, true), (143, false)], 4);
+}
+
+/// Every schedule and eight budgets (`cargo test -p djs-core --lib -- --ignored budgets`).
+#[test]
+#[ignore]
+fn budgets_with_collections_and_suspended_regexps_all_schedules() {
+    budget_cases(&ALL_SCHEDULES, 8);
 }
