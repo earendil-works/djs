@@ -24,8 +24,6 @@ built-ins/Function/prototype/S15.3.4_A2_T1.js: Test262Error: #1.1: The Function 
 built-ins/Function/prototype/S15.3.4_A2_T2.js: Test262Error: #1.1: The Function prototype object is itself a Function object that, when invoked, accepts any arguments and returns undefined: TypeError: not a…
 built-ins/Function/prototype/S15.3.4_A2_T3.js: TypeError: not a function
 built-ins/Object/freeze/typedarray-backed-by-resizable-buffer.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
-built-ins/Object/prototype/setPrototypeOf-with-non-circular-values-__proto__.js: Test262Error: Object.setPrototypeOf(ObjProto, { __proto__: null }) throws a TypeError Expected a TypeError to be thrown but no exception was thrown at all
-built-ins/Object/prototype/setPrototypeOf-with-non-circular-values.js: Test262Error: Object.setPrototypeOf(ObjProto, Object.create(null)) throws a TypeError Expected a TypeError to be thrown but no exception was thrown at all
 built-ins/TypedArray/prototype/subarray/resizable-buffer.js: Test262Error: Expected a RangeError to be thrown but no exception was thrown at all
 language/eval-code/indirect/always-non-strict.js: SyntaxError: variable name expected
 language/eval-code/indirect/non-definable-global-function.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all

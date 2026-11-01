@@ -710,7 +710,14 @@ impl Exec<'_> {
                 if proto.as_object().is_none() && !proto.is_null() {
                     return bad_argument(info.name);
                 }
-                Value::bool(self.heap.set_prototype_of(o, proto.as_object()))
+                // Object.prototype is an immutable prototype exotic object (10.4.7).
+                if o == intrinsic_obj(self.heap, Intrinsic::ObjectProto)
+                    && self.heap.get_prototype_of(o) != proto.as_object()
+                {
+                    Value::FALSE
+                } else {
+                    Value::bool(self.heap.set_prototype_of(o, proto.as_object()))
+                }
             }
             SET_INTEGRITY_LEVEL | TEST_INTEGRITY_LEVEL => {
                 let Some(o) = a0.as_object() else {
