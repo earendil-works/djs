@@ -4615,3 +4615,57 @@ Cost: generated natives are 2.7 KB larger in wasm. The extra code is register co
 (phis) across the state loop; it buys back far fewer slot calls.
 First merged as D2030 (3ff54985), which infra's Error.stackTraceLimit decision had
 taken; renumbered, so older commits citing D2030 for the guide mean this one.
+
+## D2050: Error.prepareStackTrace and CallSite objects, as qjs has them
+date: 2026-11-03 · by: infra · issue: 0106
+Like qjs (and V8), a stack recorded while `Error.prepareStackTrace` is set comes from
+calling it with `(error, callsites)` and `this` = Error. Its result, whatever it is,
+becomes the stack. If it throws, the stack is the default string. The function is an own
+data property of the realm's original Error constructor, read without running code (an
+accessor is ignored). It does not apply while a call of it is on the stack, so errors made
+inside it get the default trace. The callsites follow Error.stackTraceLimit and
+constructorOpt like the default trace (D2030, D2010).
+CallSite objects are a new heap class, `ObjectClass::CallSite = 34`, with 7 slots:
+function, name, file, line, column, native, constructor. Their prototype,
+%CallSitePrototype% (a new realm intrinsic, no constructor), has qjs's methods
+`isNative`, `isConstructor`, `getFileName`, `getFunction`, `getFunctionName`,
+`getLineNumber` and `getColumnNumber` (null without a position), plus `@@toStringTag`
+"CallSite". On anything else they throw "CallSite object expected".
+The VM cannot call JS while it creates an error, so the stack is first a *pending*
+internal Record of [callsites, default string, function, Error]
+(interp/run/stack.rs). The prelude finishes it (`FinishErrorStack`, builtins/error.ts):
+- the Error constructors and `Error.captureStackTrace` finish it at once;
+- a VM error (or any error thrown with a pending stack, such as the builtins' `throw
+  NewTypeError(...)`) is finished when it is thrown. `Exec::throw_fault` calls
+  `%ThrowWithStack(e)` as if from the faulting instruction, with a `Retry` continuation
+  at its pc, so unwinding uses that pc's handlers in bytecode and native frames alike.
+  That function runs the prepare function and rethrows;
+- any other error is finished on the first read of `stack`.
+While the function runs, the error's stack reads undefined, as in qjs. Rust readers
+(`Vm::error_stack`, the REPL, `error_stack_slot`) show a pending stack's default string.
+The only timing difference from qjs: an error made by a builtin and never thrown (a
+rejection reason) calls the function when its stack is first read, not when it is
+created.
+
+## D2051: SyntaxErrors from dynamic code start their stack at `<input>:line:col`
+date: 2026-11-03 · by: infra · issue: 0106
+Indirect eval, the Function constructors and JSON.parse report the position of a
+SyntaxError as the first stack line, `    at <input>:line:col`, as qjs does. With
+prepareStackTrace it is a CallSite whose function and name are null and whose file is
+"<input>". The line counts against Error.stackTraceLimit. The compile leaves now return
+the position (builtins/eval.rs `SyntaxAt`). The Function constructor's source has no
+leading `(`, which qjs's has, so a column on line 1 is shifted by one to match. Messages
+are unchanged; where they differ from qjs's, that is listed as a follow-up of 0106.
+
+## D2052: A constructor's `prototype` is its last own property
+date: 2026-11-03 · by: infra · issue: 0106
+qjs defines `prototype` after a constructor's static properties, so
+`Object.getOwnPropertyNames(Error)` ends with it. bgen now emits a constructor's
+installs in this order: `%InstallConstructor`, then the constructor's statics (installs
+whose target is the constructor), then `%InstallPrototype(target, key, parent)`, which
+creates or looks up the prototype and defines `prototype` and `prototype.constructor`.
+The install stays in one straight pass, with no reordering afterwards. Methods on
+`X.prototype` come after, as before. Error's statics are in qjs's order (isError,
+captureStackTrace, stackTraceLimit). Other constructors' statics keep source order, which
+can differ from qjs's (follow-up). The base image changes accordingly: property order on
+every constructor, a new realm intrinsic and the CallSite class (D2050).
