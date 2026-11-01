@@ -541,6 +541,10 @@ declare function F64Expm1(x: f64): f64;
 declare function F64Floor(x: f64): f64;
 /** Rounds to the nearest f32. @leaf */
 declare function F64Fround(x: f64): f64;
+/** Rounds to the nearest binary16 value (Math.f16round). @leaf */
+declare function F64F16round(x: f64): f64;
+/** The exactly rounded sum of the Numbers of the dense Array list (Math.sumPrecise). @leaf */
+declare function F64SumPrecise(list: Obj): f64;
 /** Math.imul of two numbers (ToUint32 inside). @leaf */
 declare function F64Imul(a: f64, b: f64): f64;
 /** @leaf */

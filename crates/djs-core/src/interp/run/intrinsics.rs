@@ -205,6 +205,8 @@ const F64_EXP: u16 = id("F64Exp");
 const F64_EXPM1: u16 = id("F64Expm1");
 const F64_FLOOR: u16 = id("F64Floor");
 const F64_FROUND: u16 = id("F64Fround");
+const F64_F16ROUND: u16 = id("F64F16round");
+const F64_SUM_PRECISE: u16 = id("F64SumPrecise");
 const F64_IMUL: u16 = id("F64Imul");
 const F64_LOG: u16 = id("F64Log");
 const F64_LOG1P: u16 = id("F64Log1p");
@@ -385,6 +387,7 @@ fn math_leaf(id: u16, x: f64, y: f64) -> Option<f64> {
         F64_EXPM1 => libm::expm1(x),
         F64_FLOOR => libm::floor(x),
         F64_FROUND => crate::heap::typed::f32_bits_to_f64(crate::heap::typed::f64_to_f32_bits(x)),
+        F64_F16ROUND => crate::builtins::math::f16_round(x),
         F64_IMUL => (number::to_uint32(x).wrapping_mul(number::to_uint32(y)) as i32) as f64,
         F64_LOG => libm::log(x),
         F64_LOG1P => libm::log1p(x),
@@ -1826,6 +1829,19 @@ impl Exec<'_> {
                     _ => return bad_argument(info.name),
                 }
                 Value::UNDEFINED
+            }
+            F64_SUM_PRECISE => {
+                let Some(list) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                let n = self.heap.array_length(list);
+                let heap = &*self.heap;
+                let values = (0..n).map(|i| {
+                    heap.get_element_fast(list, i)
+                        .and_then(|v| v.as_number())
+                        .unwrap_or(f64::NAN)
+                });
+                conv::number(crate::builtins::math::sum_precise(values))
             }
             _ if let Some(r) = self.proxy_leaf(id, a0, arg(self, 1)) => r?,
             _ => match math_leaf(

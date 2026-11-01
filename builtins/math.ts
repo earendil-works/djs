@@ -211,6 +211,43 @@ function MathFround(x: Value): f64 {
 }
 
 /**
+ * Math.f16round ( x ), 21.3.2.18.
+ * @builtin Math.f16round
+ */
+function MathF16round(x: Value): f64 {
+  return F64F16round(ToNumber(x));
+}
+
+/**
+ * Math.sumPrecise ( items ) (proposal-math-sum): the exact sum of the Numbers of an
+ * iterable, rounded once.
+ * @builtin Math.sumPrecise
+ */
+function MathSumPrecise(items: Value): f64 {
+  if (items === undefined || items === null) {
+    throw NewTypeError("not an object");
+  }
+  const iterator: Obj = GetIterator(items);
+  const next: Value = Get(iterator, "next");
+  const list: Obj = ArrayCreate(0);
+  let n: f64 = 0;
+  while (true) {
+    const result: Obj = IteratorNextResult(iterator, next);
+    if (ToBoolean(Get(result, "done"))) {
+      break;
+    }
+    const v: Value = Get(result, "value");
+    if (!IsNumber(v)) {
+      IteratorCloseThrow(iterator);
+      throw NewTypeError("not a number");
+    }
+    CreateDataPropertyOrThrow(list, n, v);
+    n = n + 1;
+  }
+  return F64SumPrecise(list);
+}
+
+/**
  * Math.log ( x ), 21.3.2.20.
  * @builtin Math.log
  */

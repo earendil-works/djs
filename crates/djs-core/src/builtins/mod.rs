@@ -12,6 +12,7 @@ pub(crate) mod eval;
 pub(crate) mod function;
 pub(crate) mod r#gen;
 pub(crate) mod json;
+pub(crate) mod math;
 pub(crate) mod number;
 pub(crate) mod object;
 pub(crate) mod regexp;

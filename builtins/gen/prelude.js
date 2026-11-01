@@ -3090,7 +3090,15 @@ function URIErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "URIErrorPrototype", message, options);
 }
 
-// builtins/error.ts:100 Error.prototype.toString
+// builtins/error.ts:101 Error.isError
+function ErrorIsError(arg) {
+  if (!%IsObject(arg) || %IsProxy(arg)) {
+    return false;
+  }
+  return %ObjectClassTag(%AsObj(arg)) === "Error";
+}
+
+// builtins/error.ts:112 Error.prototype.toString
 function ErrorPrototypeToString() {
   if (!%IsObject(this)) {
     throw %NewTypeError("not an object");
@@ -3109,19 +3117,19 @@ function ErrorPrototypeToString() {
   return nameStr + ": " + msgStr;
 }
 
-// builtins/error.ts:124 constructor InternalError
+// builtins/error.ts:136 constructor InternalError
 function InternalErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "InternalErrorPrototype", message, options);
 }
 
-// builtins/error.ts:134 constructor AggregateError
+// builtins/error.ts:146 constructor AggregateError
 function AggregateErrorConstructor(errors, message, options) {
   const o = ErrorConstruct(new.target, "AggregateErrorPrototype", message, options);
   %DefineDataPropertyOrThrow(o, "errors", IterableToList(errors), 5);
   return o;
 }
 
-// builtins/error.ts:145 constructor SuppressedError
+// builtins/error.ts:157 constructor SuppressedError
 function SuppressedErrorConstructor(error, suppressed, message) {
   const o = %ErrorCreate(GetPrototypeFromConstructor(new.target, "SuppressedErrorPrototype"));
   if (message !== undefined) {
@@ -5571,85 +5579,115 @@ function MathFround(x) {
   return %F64Fround(ToNumber(x));
 }
 
-// builtins/math.ts:217 Math.log
+// builtins/math.ts:217 Math.f16round
+function MathF16round(x) {
+  return %F64F16round(ToNumber(x));
+}
+
+// builtins/math.ts:226 Math.sumPrecise
+function MathSumPrecise(items) {
+  if (items === undefined || items === null) {
+    throw %NewTypeError("not an object");
+  }
+  const iterator = GetIterator(items);
+  const next = %Get(iterator, "next");
+  const list = %ArrayCreate(0);
+  let n = 0;
+  while (true) {
+    const result = IteratorNextResult(iterator, next);
+    if (%ToBoolean(%Get(result, "done"))) {
+      break;
+    }
+    const v = %Get(result, "value");
+    if (!%IsNumber(v)) {
+      IteratorCloseThrow(iterator);
+      throw %NewTypeError("not a number");
+    }
+    %CreateDataPropertyOrThrow(list, n, v);
+    n = n + 1;
+  }
+  return %F64SumPrecise(list);
+}
+
+// builtins/math.ts:254 Math.log
 function MathLog(x) {
   return %F64Log(ToNumber(x));
 }
 
-// builtins/math.ts:225 Math.log1p
+// builtins/math.ts:262 Math.log1p
 function MathLog1p(x) {
   return %F64Log1p(ToNumber(x));
 }
 
-// builtins/math.ts:233 Math.log10
+// builtins/math.ts:270 Math.log10
 function MathLog10(x) {
   return %F64Log10(ToNumber(x));
 }
 
-// builtins/math.ts:241 Math.log2
+// builtins/math.ts:278 Math.log2
 function MathLog2(x) {
   return %F64Log2(ToNumber(x));
 }
 
-// builtins/math.ts:249 Math.round
+// builtins/math.ts:286 Math.round
 function MathRound(x) {
   return %F64Round(ToNumber(x));
 }
 
-// builtins/math.ts:257 Math.sign
+// builtins/math.ts:294 Math.sign
 function MathSign(x) {
   return %F64Sign(ToNumber(x));
 }
 
-// builtins/math.ts:265 Math.sin
+// builtins/math.ts:302 Math.sin
 function MathSin(x) {
   return %F64Sin(ToNumber(x));
 }
 
-// builtins/math.ts:273 Math.sinh
+// builtins/math.ts:310 Math.sinh
 function MathSinh(x) {
   return %F64Sinh(ToNumber(x));
 }
 
-// builtins/math.ts:281 Math.sqrt
+// builtins/math.ts:318 Math.sqrt
 function MathSqrt(x) {
   return %F64Sqrt(ToNumber(x));
 }
 
-// builtins/math.ts:289 Math.tan
+// builtins/math.ts:326 Math.tan
 function MathTan(x) {
   return %F64Tan(ToNumber(x));
 }
 
-// builtins/math.ts:297 Math.tanh
+// builtins/math.ts:334 Math.tanh
 function MathTanh(x) {
   return %F64Tanh(ToNumber(x));
 }
 
-// builtins/math.ts:305 Math.trunc
+// builtins/math.ts:342 Math.trunc
 function MathTrunc(x) {
   return %F64Trunc(ToNumber(x));
 }
 
-// builtins/math.ts:313 Math.atan2
+// builtins/math.ts:350 Math.atan2
 function MathAtan2(y, x) {
   const ny = ToNumber(y);
   return %F64Atan2(ny, ToNumber(x));
 }
 
-// builtins/math.ts:322 Math.imul
+// builtins/math.ts:359 Math.imul
 function MathImul(x, y) {
   const a = ToNumber(x);
   return %F64Imul(a, ToNumber(y));
 }
 
-// builtins/math.ts:331 Math.pow
+// builtins/math.ts:368 Math.pow
 function MathPow(base, exponent) {
   const b = ToNumber(base);
   return %NumberPow(b, ToNumber(exponent));
 }
 
-// builtins/math.ts:337
+// builtins/math.ts:374
 function CoerceNumbers(args) {
   const n = LengthOfArrayLike(args);
   if (%AllNumbers(args)) {
@@ -5664,7 +5702,7 @@ function CoerceNumbers(args) {
   return n;
 }
 
-// builtins/math.ts:356 Math.max
+// builtins/math.ts:393 Math.max
 function MathMax(...args) {
   const n = CoerceNumbers(args);
   let highest = -1 / 0;
@@ -5680,7 +5718,7 @@ function MathMax(...args) {
   return highest;
 }
 
-// builtins/math.ts:377 Math.min
+// builtins/math.ts:414 Math.min
 function MathMin(...args) {
   const n = CoerceNumbers(args);
   let lowest = 1 / 0;
@@ -5696,7 +5734,7 @@ function MathMin(...args) {
   return lowest;
 }
 
-// builtins/math.ts:398 Math.hypot
+// builtins/math.ts:435 Math.hypot
 function MathHypot(...args) {
   const n = CoerceNumbers(args);
   let r = 0;
@@ -5706,7 +5744,7 @@ function MathHypot(...args) {
   return r;
 }
 
-// builtins/math.ts:411 Math.random
+// builtins/math.ts:448 Math.random
 function MathRandomBuiltin() {
   return %MathRandom();
 }
@@ -11015,6 +11053,7 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallMethod("%AsyncIteratorPrototype%", %WellKnownSymbol("asyncDispose"), AsyncIteratorPrototypeAsyncDispose, 0);
 %InstallValue("Symbol", "dispose", SymbolDispose(), 0);
 %InstallValue("Symbol", "asyncDispose", SymbolAsyncDispose(), 0);
+%InstallMethod("Error", "isError", ErrorIsError, 1);
 %InstallMethod("Error.prototype", "toString", ErrorPrototypeToString, 0);
 %InstallMethod("Array", "fromAsync", ArrayFromAsync, 1);
 %InstallMethod("Function.prototype", "call", FunctionPrototypeCall, 1);
@@ -11121,6 +11160,8 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallMethod("Math", "expm1", MathExpm1, 1);
 %InstallMethod("Math", "floor", MathFloor, 1);
 %InstallMethod("Math", "fround", MathFround, 1);
+%InstallMethod("Math", "f16round", MathF16round, 1);
+%InstallMethod("Math", "sumPrecise", MathSumPrecise, 1);
 %InstallMethod("Math", "log", MathLog, 1);
 %InstallMethod("Math", "log1p", MathLog1p, 1);
 %InstallMethod("Math", "log10", MathLog10, 1);

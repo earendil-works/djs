@@ -94,6 +94,18 @@ function URIErrorConstructor(message?: Value, options?: Value): Obj {
 }
 
 /**
+ * Error.isError ( arg ) (proposal-is-error): whether arg has an [[ErrorData]] slot
+ * (a proxy has none).
+ * @builtin Error.isError
+ */
+function ErrorIsError(arg: Value): boolean {
+  if (!IsObject(arg) || IsProxy(arg)) {
+    return false;
+  }
+  return ObjectClassTag(AsObj(arg)) === "Error";
+}
+
+/**
  * Error.prototype.toString ( ), 20.5.3.4.
  * @builtin Error.prototype.toString
  */

@@ -1102,26 +1102,28 @@ TypeErrorConstructor: reentrant (constructor TypeError)
 URIErrorConstructor: reentrant (constructor URIError)
   builtins/error.ts:93:10  ErrorConstruct (builtin)
 
+ErrorIsError: leaf (Error.isError)
+
 ErrorPrototypeToString: reentrant (Error.prototype.toString)
-  builtins/error.ts:105:23  Get (intrinsic)
-  builtins/error.ts:106:55  ToString (builtin)
-  builtins/error.ts:107:22  Get (intrinsic)
-  builtins/error.ts:108:48  ToString (builtin)
+  builtins/error.ts:117:23  Get (intrinsic)
+  builtins/error.ts:118:55  ToString (builtin)
+  builtins/error.ts:119:22  Get (intrinsic)
+  builtins/error.ts:120:48  ToString (builtin)
 
 InternalErrorConstructor: reentrant (constructor InternalError)
-  builtins/error.ts:125:10  ErrorConstruct (builtin)
+  builtins/error.ts:137:10  ErrorConstruct (builtin)
 
 AggregateErrorConstructor: reentrant (constructor AggregateError)
-  builtins/error.ts:135:18  ErrorConstruct (builtin)
-  builtins/error.ts:136:42  IterableToList (builtin)
-  builtins/error.ts:136:3  DefineDataPropertyOrThrow (intrinsic)
+  builtins/error.ts:147:18  ErrorConstruct (builtin)
+  builtins/error.ts:148:42  IterableToList (builtin)
+  builtins/error.ts:148:3  DefineDataPropertyOrThrow (intrinsic)
 
 SuppressedErrorConstructor: reentrant (constructor SuppressedError)
-  builtins/error.ts:146:30  GetPrototypeFromConstructor (builtin)
-  builtins/error.ts:148:45  ToString (builtin)
-  builtins/error.ts:148:5  DefineDataPropertyOrThrow (intrinsic)
-  builtins/error.ts:150:3  DefineDataPropertyOrThrow (intrinsic)
-  builtins/error.ts:151:3  DefineDataPropertyOrThrow (intrinsic)
+  builtins/error.ts:158:30  GetPrototypeFromConstructor (builtin)
+  builtins/error.ts:160:45  ToString (builtin)
+  builtins/error.ts:160:5  DefineDataPropertyOrThrow (intrinsic)
+  builtins/error.ts:162:3  DefineDataPropertyOrThrow (intrinsic)
+  builtins/error.ts:163:3  DefineDataPropertyOrThrow (intrinsic)
 
 GlobalEval: reentrant (eval)
   builtins/eval.ts:14:10  Call (intrinsic)
@@ -1945,71 +1947,83 @@ MathFloor: reentrant (Math.floor)
 MathFround: reentrant (Math.fround)
   builtins/math.ts:210:20  ToNumber (builtin)
 
+MathF16round: reentrant (Math.f16round)
+  builtins/math.ts:218:22  ToNumber (builtin)
+
+MathSumPrecise: reentrant (Math.sumPrecise)
+  builtins/math.ts:230:25  GetIterator (builtin)
+  builtins/math.ts:231:23  Get (intrinsic)
+  builtins/math.ts:235:25  IteratorNextResult (builtin)
+  builtins/math.ts:236:19  Get (intrinsic)
+  builtins/math.ts:239:22  Get (intrinsic)
+  builtins/math.ts:241:7  IteratorCloseThrow (builtin)
+  builtins/math.ts:244:5  CreateDataPropertyOrThrow (intrinsic)
+
 MathLog: reentrant (Math.log)
-  builtins/math.ts:218:17  ToNumber (builtin)
+  builtins/math.ts:255:17  ToNumber (builtin)
 
 MathLog1p: reentrant (Math.log1p)
-  builtins/math.ts:226:19  ToNumber (builtin)
+  builtins/math.ts:263:19  ToNumber (builtin)
 
 MathLog10: reentrant (Math.log10)
-  builtins/math.ts:234:19  ToNumber (builtin)
+  builtins/math.ts:271:19  ToNumber (builtin)
 
 MathLog2: reentrant (Math.log2)
-  builtins/math.ts:242:18  ToNumber (builtin)
+  builtins/math.ts:279:18  ToNumber (builtin)
 
 MathRound: reentrant (Math.round)
-  builtins/math.ts:250:19  ToNumber (builtin)
+  builtins/math.ts:287:19  ToNumber (builtin)
 
 MathSign: reentrant (Math.sign)
-  builtins/math.ts:258:18  ToNumber (builtin)
+  builtins/math.ts:295:18  ToNumber (builtin)
 
 MathSin: reentrant (Math.sin)
-  builtins/math.ts:266:17  ToNumber (builtin)
+  builtins/math.ts:303:17  ToNumber (builtin)
 
 MathSinh: reentrant (Math.sinh)
-  builtins/math.ts:274:18  ToNumber (builtin)
+  builtins/math.ts:311:18  ToNumber (builtin)
 
 MathSqrt: reentrant (Math.sqrt)
-  builtins/math.ts:282:18  ToNumber (builtin)
+  builtins/math.ts:319:18  ToNumber (builtin)
 
 MathTan: reentrant (Math.tan)
-  builtins/math.ts:290:17  ToNumber (builtin)
+  builtins/math.ts:327:17  ToNumber (builtin)
 
 MathTanh: reentrant (Math.tanh)
-  builtins/math.ts:298:18  ToNumber (builtin)
+  builtins/math.ts:335:18  ToNumber (builtin)
 
 MathTrunc: reentrant (Math.trunc)
-  builtins/math.ts:306:19  ToNumber (builtin)
+  builtins/math.ts:343:19  ToNumber (builtin)
 
 MathAtan2: reentrant (Math.atan2)
-  builtins/math.ts:314:19  ToNumber (builtin)
-  builtins/math.ts:315:23  ToNumber (builtin)
+  builtins/math.ts:351:19  ToNumber (builtin)
+  builtins/math.ts:352:23  ToNumber (builtin)
 
 MathImul: reentrant (Math.imul)
-  builtins/math.ts:323:18  ToNumber (builtin)
-  builtins/math.ts:324:21  ToNumber (builtin)
+  builtins/math.ts:360:18  ToNumber (builtin)
+  builtins/math.ts:361:21  ToNumber (builtin)
 
 MathPow: reentrant (Math.pow)
-  builtins/math.ts:332:18  ToNumber (builtin)
-  builtins/math.ts:333:23  ToNumber (builtin)
+  builtins/math.ts:369:18  ToNumber (builtin)
+  builtins/math.ts:370:23  ToNumber (builtin)
 
 CoerceNumbers: reentrant
-  builtins/math.ts:338:18  LengthOfArrayLike (builtin)
-  builtins/math.ts:343:22  Get (intrinsic)
-  builtins/math.ts:345:42  ToNumber (builtin)
-  builtins/math.ts:345:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/math.ts:375:18  LengthOfArrayLike (builtin)
+  builtins/math.ts:380:22  Get (intrinsic)
+  builtins/math.ts:382:42  ToNumber (builtin)
+  builtins/math.ts:382:7  CreateDataPropertyOrThrow (intrinsic)
 
 MathMax: reentrant (Math.max)
-  builtins/math.ts:357:18  CoerceNumbers (builtin)
-  builtins/math.ts:360:29  Get (intrinsic)
+  builtins/math.ts:394:18  CoerceNumbers (builtin)
+  builtins/math.ts:397:29  Get (intrinsic)
 
 MathMin: reentrant (Math.min)
-  builtins/math.ts:378:18  CoerceNumbers (builtin)
-  builtins/math.ts:381:29  Get (intrinsic)
+  builtins/math.ts:415:18  CoerceNumbers (builtin)
+  builtins/math.ts:418:29  Get (intrinsic)
 
 MathHypot: reentrant (Math.hypot)
-  builtins/math.ts:399:18  CoerceNumbers (builtin)
-  builtins/math.ts:402:30  Get (intrinsic)
+  builtins/math.ts:436:18  CoerceNumbers (builtin)
+  builtins/math.ts:439:30  Get (intrinsic)
 
 MathRandomBuiltin: leaf (Math.random)
 

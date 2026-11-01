@@ -227,6 +227,8 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("F64Expm1", L, 1, false),
     i("F64Floor", L, 1, false),
     i("F64Fround", L, 1, false),
+    i("F64F16round", L, 1, false),
+    i("F64SumPrecise", L, 1, false),
     i("F64Imul", L, 2, false),
     i("F64Log", L, 1, false),
     i("F64Log1p", L, 1, false),
