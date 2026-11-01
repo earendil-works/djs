@@ -226,11 +226,23 @@ fn options(memory_limit: u32) -> VmOptions {
     }
 }
 
-/// A new VM with a heap cap of `memory_limit` bytes (0: the default). Returns its number,
-/// or 0 if the cap is too small for the realm.
+/// A new VM with a heap cap of `memory_limit` bytes (0: the default): a copy of the base
+/// snapshot (djs-prelude, D1321). Returns its number, or 0 if the cap is too small for
+/// the realm.
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_new(memory_limit: u32) -> u32 {
-    with(|s| match Vm::new(options(memory_limit)) {
+    add_new_vm(djs_prelude::new_vm(options(memory_limit)))
+}
+
+/// Like `vm_new`, but builds the realm and compiles the prelude instead of copying the
+/// base (about 10x slower). For checking the base against the realm built in wasm.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_new_compiled(memory_limit: u32) -> u32 {
+    add_new_vm(Vm::new(options(memory_limit)))
+}
+
+fn add_new_vm(vm: Result<Vm, djs_core::heap::HeapError>) -> u32 {
+    with(|s| match vm {
         Ok(vm) => s.add_vm(vm),
         Err(e) => {
             s.set_out(format!("cannot create a VM: {e:?}").as_bytes());
@@ -251,7 +263,7 @@ pub extern "C" fn vm_from_bytes(len: usize, memory_limit: u32) -> u32 {
         match Vm::from_bytes(bytes, options(memory_limit)) {
             Ok(vm) => s.add_vm(vm),
             Err(e) => {
-                s.set_out(format!("cannot restore the VM image: {e:?}").as_bytes());
+                s.set_out(format!("cannot restore the VM image: {e}").as_bytes());
                 0
             }
         }

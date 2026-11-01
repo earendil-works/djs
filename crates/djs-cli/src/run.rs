@@ -135,7 +135,7 @@ impl RunOptions {
 
 /// A VM with the globals `djs run` provides (`console.log`).
 pub fn new_vm(opts: &RunOptions) -> Vm {
-    let mut vm = Vm::new(opts.vm_options()).expect("out of memory creating the VM");
+    let mut vm = djs_prelude::new_vm(opts.vm_options()).expect("out of memory creating the VM");
     let console = vm.new_object().expect("oom");
     let log = vm.new_host_function(CONSOLE_LOG, "log").expect("oom");
     vm.define(console, "log", log).expect("oom");

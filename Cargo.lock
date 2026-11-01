@@ -19,12 +19,14 @@ name = "djs-cli"
 version = "0.0.0"
 dependencies = [
  "djs-core",
+ "djs-prelude",
 ]
 
 [[package]]
 name = "djs-core"
 version = "0.0.0"
 dependencies = [
+ "djs-prelude",
  "libm",
 ]
 
@@ -33,7 +35,15 @@ name = "djs-difftest"
 version = "0.0.0"
 dependencies = [
  "djs-core",
+ "djs-prelude",
  "djs-test262",
+]
+
+[[package]]
+name = "djs-prelude"
+version = "0.0.0"
+dependencies = [
+ "djs-core",
 ]
 
 [[package]]
@@ -41,6 +51,7 @@ name = "djs-test262"
 version = "0.0.0"
 dependencies = [
  "djs-core",
+ "djs-prelude",
 ]
 
 [[package]]
@@ -48,6 +59,7 @@ name = "djs-wasm"
 version = "0.0.0"
 dependencies = [
  "djs-core",
+ "djs-prelude",
 ]
 
 [[package]]

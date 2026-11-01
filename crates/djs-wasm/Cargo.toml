@@ -12,3 +12,5 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 djs-core = { path = "../djs-core" }
+# The base snapshot: vm_new copies it (D1321).
+djs-prelude = { path = "../djs-prelude" }

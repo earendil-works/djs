@@ -1,0 +1,15 @@
+[package]
+name = "djs-prelude"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The base snapshot: djs-core's realm with the prelude installed, made at build time (D1321)."
+
+[dependencies]
+djs-core = { path = "../djs-core" }
+
+# build.rs creates the base image with a host build of djs-core. Cargo reruns it whenever
+# djs-core changes, which includes builtins/gen/prelude.js (include_str! in vm/).
+[build-dependencies]
+djs-core = { path = "../djs-core" }

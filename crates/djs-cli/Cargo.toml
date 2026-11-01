@@ -11,3 +11,5 @@ path = "src/main.rs"
 
 [dependencies]
 djs-core = { path = "../djs-core" }
+# The base snapshot: VMs start as a copy, not a prelude compile (D1321).
+djs-prelude = { path = "../djs-prelude" }

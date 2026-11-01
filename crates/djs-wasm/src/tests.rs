@@ -225,3 +225,15 @@ fn abort_after_out_of_fuel() {
     assert_eq!(vm_run(vm, 1_000_000), status::DONE);
     vm_free(vm);
 }
+
+#[test]
+fn base_equals_a_compiled_realm() {
+    let base = vm_new(0);
+    let compiled = vm_new_compiled(0);
+    assert_ne!(compiled, 0);
+    assert_eq!(vm_collect(compiled), 0);
+    let bytes = |vm| with(|s| s.slot(vm).vm.bytes().to_vec());
+    assert!(bytes(base) == bytes(compiled));
+    vm_free(base);
+    vm_free(compiled);
+}

@@ -107,7 +107,7 @@ impl Djs {
             },
             ..VmOptions::default()
         };
-        let vm = Vm::new(opts).map_err(|e| format!("Vm::new: {e:?}"))?;
+        let vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;
         let mut s = Session {
             vm,
             output: Vec::new(),

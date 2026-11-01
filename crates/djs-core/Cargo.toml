@@ -7,3 +7,8 @@ publish.workspace = true
 
 [dependencies]
 libm = "0.2.16"
+
+[dev-dependencies]
+# e2e tests start from the base snapshot like the embedders (a dev-dependency cycle,
+# which cargo allows: integration tests link the same djs-core).
+djs-prelude = { path = "../djs-prelude" }

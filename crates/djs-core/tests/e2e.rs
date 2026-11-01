@@ -20,7 +20,7 @@ const LOG: u32 = 1;
 fn base() -> &'static (Vec<u8>, djs_core::value::Obj) {
     static BASE: std::sync::OnceLock<(Vec<u8>, djs_core::value::Obj)> = std::sync::OnceLock::new();
     BASE.get_or_init(|| {
-        let mut vm = Vm::new(VmOptions::default()).unwrap();
+        let mut vm = djs_prelude::new_vm(VmOptions::default()).unwrap();
         let console = vm.new_object().unwrap();
         let log = vm.new_host_function(LOG, "log").unwrap();
         vm.define(console, "log", log).unwrap();
