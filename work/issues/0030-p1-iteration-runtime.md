@@ -61,7 +61,22 @@ dup; get_field done; jump_if_true; get_field value`. for-in uses
       modes.
 
 ## Log
+- 2026-11-01: 0028 leftovers first:
+  - `define_method` / `define_getter` / `define_setter` and their `_elem` forms:
+    DefinePropertyOrThrow, enumerable and configurable (methods also writable); a getter
+    alone keeps an existing setter. Computed keys go through D1280's key conversion.
+  - `array_spread`: arrays (holes read as undefined) and strings (by code points) here;
+    other iterables wait for 0029's `%GetIterator`. A primitive gives qjs's
+    `value is not iterable`.
+  - `compiler::tests::end_to_end_objects_0028` un-ignored (14 cases pass). New e2e
+    cases `object_literals`, `spreads`, in the three modes.
+  - The home object (`define_method` "also sets the home object") is only needed for
+    `super` (P1-7 classes); not stored yet (Follow-ups).
+- Part 1 merged (the commits up to this entry); status stays in-progress for the P1-5 list.
 
 ## Follow-ups
+- Home object for methods (`super`), with classes (P1-7).
+- `return f()` stack positions: qjs reports the `return` keyword; ours, the `(`. A compiler
+  question for the lexer agent (from 0028).
 
 ## Result
