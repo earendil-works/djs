@@ -1845,7 +1845,7 @@ behind native shells against qjs's with logging handlers and invariant-breaking 
 date: 2026-11-01 · by: infra · issue: 0045
 For a bytecode constructor whose new.target has a `prototype` getter or is (or inherits
 from) a proxy, `construct` now calls `%OrdinaryConstructSlow(f, args, newTarget)`:
-GetPrototypeFromConstructor in the builtin language, then the new leaf-ish
+GetPrototypeFromConstructor in the builtin language, then the new reentrant
 `%ConstructWithThis(f, this, args, newTarget)`, which enters f as a constructor with that
 object (the tail of `construct_with`, now `construct_call`). This replaces "not supported
 yet: getter for 'prototype'". GetPrototypeFromConstructor walks proxies for
