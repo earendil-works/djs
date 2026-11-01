@@ -11,53 +11,74 @@ export CARGO_BUILD_JOBS="$ncpu" RUST_TEST_THREADS="$ncpu" DJS_JOBS="$ncpu"
 # Not niced by scripts/timeout.sh: everything else yields to the gate (D1793).
 export DJS_GATE=1
 
-echo "== fmt";   cargo fmt --all --check
-echo "== clippy"; cargo clippy --workspace --all-targets --quiet -- -D warnings
-echo "== test";  cargo test --workspace --quiet
-echo "== no_std/wasm build of djs-core"
+# Each step's wall and CPU seconds (children, from `times`) go to target/gate-steps.tsv,
+# one line per step plus a total, for measuring the gate (0079).
+mkdir -p target
+step_log=target/gate-steps.tsv
+: > "$step_log"
+gate_start=$(date +%s)
+step_name="" step_t=$gate_start step_c=0
+# `times` must run in this shell (not in a $(...) subshell) to see the children's time.
+cpu() { times > target/.gate-times
+  cpu_s=$(tail -1 target/.gate-times | awk '{gsub("m"," ");gsub("s",""); print $1*60+$2+$3*60+$4}'); }
+step() {
+  local now c; now=$(date +%s); cpu; c=$cpu_s
+  if [ -n "$step_name" ]; then
+    printf '%s\t%s\t%s\n' "$step_name" $((now - step_t)) "$(echo "$c - $step_c" | bc)" >> "$step_log"
+  fi
+  step_name="$1" step_t=$now step_c=$c
+  [ "$1" = END ] || echo "== $1"
+}
+
+step "fmt";   cargo fmt --all --check
+step "clippy"; cargo clippy --workspace --all-targets --quiet -- -D warnings
+step "test";  cargo test --workspace --quiet
+step "no_std/wasm build of djs-core"
 cargo build -p djs-core --target wasm32-unknown-unknown --quiet
 # Clippy for wasm32 in release (no debug_assertions), so warnings that only appear in
 # that configuration fail the gate too.
-echo "== clippy (wasm32, release)"
+step "clippy (wasm32, release)"
 cargo clippy -p djs-core -p djs-wasm --target wasm32-unknown-unknown --release --quiet -- -D warnings
 
 # Additional gate steps registered by issues go below this line.
-echo "== builtins/gen is up to date (0017)"
+step "builtins/gen is up to date (0017)"
 ./scripts/bgen.sh --check
 
 # 0018: the host-side JS package (node >= 22.6 for type stripping), and the wire format
 # across languages: node encodes a corpus, djs decodes it.
 # 0023: djs-wasm, which the js tests (sandbox.test.ts) load. A debug build is enough.
-echo "== djs-wasm"
+step "djs-wasm"
 cargo build -p djs-wasm --target wasm32-unknown-unknown --features compiled-prelude --quiet
 export DJS_WASM="$PWD/target/wasm32-unknown-unknown/debug/djs_wasm.wasm"
-echo "== js tests"; node --test js/test/*.test.ts
+step "js tests"; node --test js/test/*.test.ts
 # 0072: native and wasm builds leave byte-identical heap images and spend the same fuel.
-echo "== native vs wasm images"; ./scripts/determinism/native-vs-wasm.sh "$DJS_WASM"
-echo "== wire cross-language"
+step "native vs wasm images"; ./scripts/determinism/native-vs-wasm.sh "$DJS_WASM"
+step "wire cross-language"
 wire_dir=$(mktemp -d)
 node js/test/gen-cross.ts "$wire_dir" > /dev/null
 DJS_WIRE_CROSS="$wire_dir" cargo test -p djs-core --quiet wire_cross -- --ignored
 # 0021: the outbound reader, on heap images of the same corpus plus hand-built cases.
-echo "== heap reader cross-language"
+step "heap reader cross-language"
 heap_dir=$(mktemp -d)
 DJS_WIRE_CROSS="$wire_dir" DJS_READER_DIR="$heap_dir" \
   cargo test -p djs-core --quiet reader_images -- --ignored
 node js/test/reader-cross.ts "$wire_dir" "$heap_dir"
 rm -rf "$wire_dir" "$heap_dir"
-echo "== difftest on djs: ratchet, plus suspension and GC stress (0016), heap images (0072)"
+step "difftest on djs: ratchet, plus suspension and GC stress (0016), heap images (0072)"
 cargo run --quiet -p djs-difftest -- --engine djs --ratchet --suspend-every 97 --gc-stress --determinism --quiet --no-diff > target/difftest-djs.log \
   || { cat target/difftest-djs.log; exit 1; }
 grep -E '^(stress|ratchet):' target/difftest-djs.log
 # 0063: the same corpus with the @native builtins as bytecode; both backends must pass.
-echo "== difftest on djs, bytecode backend (0063)"
+step "difftest on djs, bytecode backend (0063)"
 cargo run --quiet -p djs-difftest -- --engine djs --backend bytecode --ratchet --quiet --no-diff > target/difftest-djs-bytecode.log \
   || { cat target/difftest-djs-bytecode.log; exit 1; }
 grep -E '^ratchet:' target/difftest-djs-bytecode.log
-echo "== test262 on djs: the active group against the ratchet (0007)"
+step "test262 on djs: the active group against the ratchet (0007)"
 ./scripts/fetch-test262.sh > /dev/null
 cargo run --quiet -p djs-test262 -- run --engine djs --group active --quiet \
   --expected tests/test262/expected-failures.txt > target/test262-djs.log \
   || { cat target/test262-djs.log; exit 1; }
 grep -E '^ratchet:|^\| active' target/test262-djs.log
+step END
+cpu; printf 'total\t%s\t%s\n' $(($(date +%s) - gate_start)) "$cpu_s" >> "$step_log"
 echo "gate: OK"

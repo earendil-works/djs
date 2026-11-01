@@ -33,6 +33,11 @@ log_merge() {
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date -r "$t_start" '+%F %T')" "$branch" \
     $((t_lock - t_start)) $((t_rebased - t_lock)) $((t_gated - t_rebased)) \
     $(($(date +%s) - t_start)) "$outcome" >> "$main_root/work/scratch/merge-log.tsv"
+  # The gate's per-step times (gate.sh writes them), one line per step.
+  if [ "$t_rebased" != "$t_lock" ] && [ -f "${gate_wt:-}/target/gate-steps.tsv" ]; then
+    sed "s|^|$(date -r "$t_start" '+%F %T')\t$branch\t|" "$gate_wt/target/gate-steps.tsv" \
+      >> "$main_root/work/scratch/gate-steps.tsv"
+  fi
 }
 
 lock="$main_root/work/scratch/merge.lock"
