@@ -85,10 +85,11 @@ pub fn run_one(
         .unwrap_or(0.0);
     let timeout = case.meta.timeout.unwrap_or(opts.timeout);
     let result = execute(engine, case, prelude_file, prelude, opts, now, timeout);
-    let actual = transcript(&result);
+    let stacks = case.meta.stacks.then_some(case.name.as_str());
+    let actual = transcript(&result, stacks);
     let verdict = match fs::read_to_string(&case.expected_file) {
         Ok(expected) => {
-            let mut expected = crate::engine::normalize(&expected);
+            let mut expected = crate::engine::normalize(&expected, stacks);
             if opts.is_djs && !case.meta.djs_expect.is_empty() {
                 expected = expect_djs(&expected, &case.meta.djs_expect);
             }
@@ -129,7 +130,7 @@ pub fn run_one(
             now,
             stress_timeout,
         );
-        let t = transcript(&r);
+        let t = transcript(&r, stacks);
         if t == actual {
             // `--determinism`: the same heap image, as left and after a collection (D1720,
             // D1725). A variant that collects on another policy (GC stress) does not hash

@@ -1215,14 +1215,16 @@ impl Exec<'_> {
             STACK_TRACE_STRING => {
                 // The caller's frames (the builtin calling this is left out), below the
                 // topmost call of `a0` if it is a function (D2010).
-                let trace = self.stack_trace_from(self.pc, true, a0.as_object());
+                let limit = realm::stack_trace_limit(self.heap);
+                let trace = self.stack_trace_from(self.pc, true, a0.as_object(), limit);
                 Value::string(self.heap.alloc_str(&trace)?)
             }
             CAPTURE_STACK => {
                 let Some(o) = a0.as_object() else {
                     return bad_argument(info.name);
                 };
-                let trace = self.stack_trace_from(self.pc, true, None);
+                let limit = realm::stack_trace_limit(self.heap);
+                let trace = self.stack_trace_from(self.pc, true, None, limit);
                 let s = self.heap.alloc_str(&trace)?;
                 realm::set_error_stack(self.heap, o, s)?;
                 Value::UNDEFINED

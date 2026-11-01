@@ -684,6 +684,32 @@ impl Parser<'_, '_> {
             .any(|b| matches!(b.kind, BlockKind::Finally | BlockKind::Iter))
     }
 
+    /// `return f()`: qjs makes a call that a plain return follows into a tail call,
+    /// which reports the position of the `return` statement instead of the call's
+    /// (D2031). Matches its conditions: a normal function (not async, generator or
+    /// derived constructor), no finally, iterator, `using` or try/catch to leave first.
+    fn mark_tail_call(&mut self, pos: u32) {
+        let Some(insn) = self.f.code.last_insn() else {
+            return;
+        };
+        if self.f.tail_call != Some(insn.pc)
+            || self.f.is_async
+            || self.f.is_generator
+            || self.f.ctor_return.is_some()
+            || self.f.open_trys > 0
+            || self.has_unwind()
+        {
+            return;
+        }
+        // The entry for the call: it is the last instruction, so no later entry exists
+        // but one for the position after it (a `mark` with nothing emitted yet).
+        let lines = &mut self.f.lines;
+        match lines.iter().rposition(|&(pc, _)| pc <= insn.pc) {
+            Some(i) if lines[i].0 == insn.pc => lines[i].1 = pos,
+            i => lines.insert(i.map_or(0, |i| i + 1), (insn.pc, pos)),
+        }
+    }
+
     fn parse_return(&mut self) -> PResult<()> {
         let pos = self.tok.start;
         if matches!(self.f.kind, FuncKind::Script | FuncKind::Eval) || self.f.ns.is_some() {
@@ -704,6 +730,7 @@ impl Parser<'_, '_> {
                 self.code().undefined();
             } else {
                 self.parse_expr(false)?;
+                self.mark_tail_call(pos);
                 if self.f.is_async && self.f.is_generator {
                     // An async generator awaits the operand of `return`.
                     self.mark(pos);
@@ -761,7 +788,9 @@ impl Parser<'_, '_> {
         let l_try_end = self.new_label();
         self.reset_completion();
         self.place(l_try);
+        self.f.open_trys += 1;
         self.parse_block()?;
+        self.f.open_trys -= 1;
         self.place(l_try_end);
         normal_exit(self);
         let mut exc_region = (l_try, l_try_end);
@@ -813,12 +842,14 @@ impl Parser<'_, '_> {
             }
             self.reset_completion();
             let using = self.begin_using_list(true);
+            self.f.open_trys += 1;
             while !self.is(TokenKind::RBrace) {
                 if self.is(TokenKind::Eof) {
                     return syntax(self.tok.start, "expecting '}'");
                 }
                 self.parse_statement_list_item()?;
             }
+            self.f.open_trys -= 1;
             self.next()?;
             self.end_using_list(using);
             if body_scope {

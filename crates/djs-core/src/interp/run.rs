@@ -209,7 +209,8 @@ enum Got {
     Proxy(Obj),
 }
 
-/// Frames in a stack trace (QuickJS's default `Error.stackTraceLimit`).
+/// Frames in a stack trace: the default `Error.stackTraceLimit` (qjs's and V8's), which
+/// errors follow (`realm::stack_trace_limit`, D2030), and the limit of `Vm::backtrace`.
 pub const STACK_TRACE_LIMIT: u32 = 10;
 
 pub(crate) struct Exec<'h> {
@@ -872,17 +873,18 @@ impl<'h> Exec<'h> {
         let Some(o) = e.as_object() else {
             return Ok(());
         };
-        let trace = self.stack_trace(pc);
+        let limit = realm::stack_trace_limit(self.heap);
+        let trace = self.stack_trace(pc, limit);
         let s = self.heap.alloc_str(&trace)?;
         realm::set_error_stack(self.heap, o, s)
     }
 
     /// The stack trace in QuickJS's format: one `    at name (file:line:col)` line per
-    /// frame, innermost first, at most [`STACK_TRACE_LIMIT`] lines. Callers are
-    /// positioned at their call (`ret_pc - 1`). Prelude frames are hidden, except
-    /// installed builtin methods, which show as `at name (native)`.
-    pub(crate) fn stack_trace(&self, pc: u32) -> String {
-        self.stack_trace_from(pc, false, None)
+    /// frame, innermost first, at most `limit` lines (`Error.stackTraceLimit`, D2030).
+    /// Callers are positioned at their call (`ret_pc - 1`). Prelude frames are hidden,
+    /// except installed builtin methods, which show as `at name (native)`.
+    pub(crate) fn stack_trace(&self, pc: u32, limit: u32) -> String {
+        self.stack_trace_from(pc, false, None, limit)
     }
 
     /// [`Exec::stack_trace`]; with `skip_prelude`, frames of the prelude at the top of the
@@ -896,13 +898,14 @@ impl<'h> Exec<'h> {
         pc: u32,
         mut skip_prelude: bool,
         mut below: Option<Obj>,
+        limit: u32,
     ) -> String {
         use crate::heap::cells::{Object, Script, flags::OBJ_BUILTIN};
         let prelude = intrinsic(self.heap, Intrinsic::PreludeScript).as_internal();
         let mut out = String::new();
         let (mut bp, mut hp, mut pc) = (self.bp, self.hp, pc);
         let mut lines = 0;
-        if !self.has_frame() {
+        if !self.has_frame() || limit == 0 {
             return out;
         }
         loop {
@@ -961,7 +964,7 @@ impl<'h> Exec<'h> {
             }
             let _ = Object::CLASS;
             let cont = Continuation::from_flags(self.get(hp + frame::FLAGS).as_int().unwrap_or(0));
-            if cont.is_bottom() || lines >= STACK_TRACE_LIMIT {
+            if cont.is_bottom() || lines >= limit {
                 break;
             }
             let ret_pc = self.get(hp + frame::RET_PC).as_int().unwrap_or(1) as u32;

@@ -5,7 +5,7 @@ use alloc::string::String;
 use crate::bytecode::intrinsics::INTRINSICS;
 use crate::heap::cells::{Realm, Roots};
 use crate::heap::{
-    Atom, CellKind, Heap, HeapError, ObjectClass, PropFlags, PropertyDescriptor, atoms,
+    Atom, CellKind, Heap, HeapError, ObjectClass, PropFlags, Property, PropertyDescriptor, atoms,
 };
 use crate::value::{Obj, Value};
 
@@ -640,6 +640,39 @@ pub fn set_error_stack(heap: &mut Heap, o: Obj, stack: crate::value::Str) -> Res
         return Ok(());
     }
     define_hidden(heap, o, atoms::STACK, Value::string(stack))
+}
+
+/// The number of frames a stack trace records: the realm's `Error.stackTraceLimit`
+/// (D2030), as qjs reads it: an own data property of the original Error constructor,
+/// read without running code. A number is truncated and clamped to `0..=i32::MAX`
+/// (NaN is 0); anything else, an accessor or no property gives 0.
+pub fn stack_trace_limit(heap: &mut Heap) -> u32 {
+    let ctors = intrinsic_obj(heap, Intrinsic::Constructors);
+    let Some(ctor) = heap
+        .get_own_property(ctors, atoms::ERROR)
+        .and_then(|p| p.value())
+        .and_then(|v| v.as_object())
+    else {
+        return crate::interp::run::STACK_TRACE_LIMIT;
+    };
+    // Interned while the property exists; failing to intern means it cannot.
+    let Ok(key) = heap.atom_str("stackTraceLimit") else {
+        return 0;
+    };
+    let v = match heap.get_own_property(ctor, key) {
+        Some(Property::Data { value, .. }) => value,
+        _ => return 0,
+    };
+    match v.as_number() {
+        Some(d) if d > 0.0 => {
+            if d >= i32::MAX as f64 {
+                i32::MAX as u32
+            } else {
+                d as u32
+            }
+        }
+        _ => 0,
+    }
 }
 
 /// The stack trace an Error recorded (`undefined` for anything else, D1971).

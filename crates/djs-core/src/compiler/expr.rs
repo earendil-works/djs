@@ -810,9 +810,16 @@ impl Parser<'_, '_> {
                     e = self.parse_index(tok.start)?;
                 }
                 TokenKind::LParen => {
+                    // qjs compiles a call of the name `eval` to its own opcode, never
+                    // a tail call.
+                    let eval = matches!(e, Expr::Name { r, restricted: true, .. }
+                        if self.heap.atom_name(self.f.refs[r as usize].atom) == "eval");
                     self.prepare_call(e);
                     let args = self.parse_args()?;
                     self.mark(tok.start);
+                    if matches!(args, Args::Count(_)) && !eval {
+                        self.f.tail_call = Some(self.f.code.pos());
+                    }
                     self.emit_call(args);
                     e = Expr::Value;
                 }
@@ -870,6 +877,7 @@ impl Parser<'_, '_> {
                     self.prepare_call(e);
                     let argc = self.parse_tagged_template()?;
                     self.mark(tok.start);
+                    self.f.tail_call = Some(self.f.code.pos());
                     self.code().call(argc);
                     e = Expr::Value;
                 }
@@ -1115,12 +1123,15 @@ impl Parser<'_, '_> {
                 _ => break,
             }
         }
+        // The position of `new` is the token after the constructor: its `(`, or what
+        // follows `new X` (as in qjs).
+        let at = self.tok.start;
         let args = if self.is(TokenKind::LParen) {
             self.parse_args()?
         } else {
             Args::Count(0)
         };
-        self.mark(pos);
+        self.mark(at);
         match args {
             Args::Count(n) => self.code().construct(n),
             Args::Array => self.code().construct_spread(),

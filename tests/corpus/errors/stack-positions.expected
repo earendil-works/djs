@@ -1,0 +1,275 @@
+plain:
+    at thrower (case:5:37)
+    at plain (case:15:13)
+    at <anonymous> (case:71:6)
+
+local:
+    at thrower (case:5:37)
+    at local (case:16:30)
+    at <anonymous> (case:71:6)
+
+statement:
+    at thrower (case:5:37)
+    at statement (case:17:24)
+    at <anonymous> (case:71:6)
+
+operand:
+    at thrower (case:5:37)
+    at operand (case:18:33)
+    at <anonymous> (case:71:6)
+
+method:
+    at thrower (case:5:37)
+    at m (case:7:19)
+    at method (case:19:14)
+    at <anonymous> (case:71:6)
+
+nested:
+    at thrower (case:5:37)
+    at k (case:7:58)
+    at nested (case:20:14)
+    at <anonymous> (case:71:6)
+
+computed:
+    at thrower (case:5:37)
+    at m (case:7:19)
+    at computed (case:21:16)
+    at <anonymous> (case:71:6)
+
+getter:
+    at thrower (case:5:37)
+    at get g (case:7:77)
+    at getter (case:22:22)
+    at <anonymous> (case:71:6)
+
+superCall:
+    at thrower (case:5:37)
+    at m (case:8:17)
+    at m (case:9:27)
+    at superCall (case:23:17)
+    at <anonymous> (case:71:6)
+
+multiLine:
+    at thrower (case:5:37)
+    at multiLine (case:24:17)
+    at <anonymous> (case:71:6)
+
+paren:
+    at thrower (case:5:37)
+    at paren (case:26:13)
+    at <anonymous> (case:71:6)
+
+comma:
+    at thrower (case:5:37)
+    at comma (case:27:13)
+    at <anonymous> (case:71:6)
+
+commaFirst:
+    at thrower (case:5:37)
+    at commaFirst (case:28:32)
+    at <anonymous> (case:71:6)
+
+indirect:
+    at thrower (case:5:37)
+    at indirect (case:29:16)
+    at <anonymous> (case:71:6)
+
+viaCall:
+    at thrower (case:5:37)
+    at call (native)
+    at viaCall (case:30:15)
+    at <anonymous> (case:71:6)
+
+spread:
+    at thrower (case:5:37)
+    at spread (case:31:32)
+    at <anonymous> (case:71:6)
+
+optional:
+    at thrower (case:5:37)
+    at optional (case:32:32)
+    at <anonymous> (case:71:6)
+
+optionalMember:
+    at thrower (case:5:37)
+    at m (case:7:19)
+    at optionalMember (case:33:33)
+    at <anonymous> (case:71:6)
+
+conditional:
+    at thrower (case:5:37)
+    at conditional (case:34:40)
+    at <anonymous> (case:71:6)
+
+conditionalElse:
+    at thrower (case:5:37)
+    at conditionalElse (case:35:49)
+    at <anonymous> (case:71:6)
+
+logical:
+    at thrower (case:5:37)
+    at logical (case:36:29)
+    at <anonymous> (case:71:6)
+
+tagged:
+    at thrower (case:5:37)
+    at tagged (case:37:14)
+    at <anonymous> (case:71:6)
+
+template:
+    at thrower (case:5:37)
+    at template (case:38:33)
+    at <anonymous> (case:71:6)
+
+voided:
+    at thrower (case:5:37)
+    at voided (case:39:33)
+    at <anonymous> (case:71:6)
+
+ifReturn:
+    at thrower (case:5:37)
+    at ifReturn (case:40:26)
+    at <anonymous> (case:71:6)
+
+ownLine:
+    at thrower (case:5:37)
+    at ownLine (case:42:5)
+    at <anonymous> (case:71:6)
+
+inTry:
+    at thrower (case:5:37)
+    at inTry (case:44:33)
+    at <anonymous> (case:71:6)
+
+inCatch:
+    at thrower (case:5:37)
+    at inCatch (case:45:58)
+    at <anonymous> (case:71:6)
+
+inFinally:
+    at thrower (case:5:37)
+    at inFinally (case:46:35)
+    at <anonymous> (case:71:6)
+
+afterTry:
+    at thrower (case:5:37)
+    at afterTry (case:47:38)
+    at <anonymous> (case:71:6)
+
+forOf:
+    at thrower (case:5:37)
+    at forOf (case:48:50)
+    at <anonymous> (case:71:6)
+
+forIn:
+    at thrower (case:5:37)
+    at forIn (case:49:41)
+    at <anonymous> (case:71:6)
+
+switched:
+    at thrower (case:5:37)
+    at switched (case:50:37)
+    at <anonymous> (case:71:6)
+
+labeled:
+    at thrower (case:5:37)
+    at labeled (case:51:22)
+    at <anonymous> (case:71:6)
+
+block:
+    at thrower (case:5:37)
+    at block (case:52:45)
+    at <anonymous> (case:71:6)
+
+using:
+    at thrower (case:5:37)
+    at using (case:53:43)
+    at <anonymous> (case:71:6)
+
+arrowBody:
+    at thrower (case:5:37)
+    at <anonymous> (case:54:33)
+    at arrowBody (case:54:17)
+    at <anonymous> (case:71:6)
+
+arrowExpr:
+    at thrower (case:5:37)
+    at <anonymous> (case:55:38)
+    at arrowExpr (case:55:17)
+    at <anonymous> (case:71:6)
+
+functionExpr:
+    at thrower (case:5:37)
+    at <anonymous> (case:56:42)
+    at functionExpr (case:56:20)
+    at <anonymous> (case:71:6)
+
+generator:
+    at thrower (case:5:37)
+    at <anonymous> (case:57:54)
+    at next (native)
+    at generator (case:57:17)
+    at <anonymous> (case:71:6)
+
+callback:
+    at thrower (case:5:37)
+    at <anonymous> (case:58:45)
+    at map (native)
+    at callback (case:58:16)
+    at <anonymous> (case:71:6)
+
+newCall:
+    at thrower (case:5:37)
+    at Thrower (case:6:29)
+    at newCall (case:59:33)
+    at <anonymous> (case:71:6)
+
+newBare:
+    at thrower (case:5:37)
+    at Thrower (case:6:29)
+    at newBare (case:60:33)
+    at <anonymous> (case:71:6)
+
+newStatement:
+    at thrower (case:5:37)
+    at Thrower (case:6:29)
+    at newStatement (case:61:31)
+    at <anonymous> (case:71:6)
+
+newLocal:
+    at thrower (case:5:37)
+    at Thrower (case:6:29)
+    at newLocal (case:62:37)
+    at <anonymous> (case:71:6)
+
+newMultiLine:
+    at thrower (case:5:37)
+    at Thrower (case:6:29)
+    at newMultiLine (case:64:12)
+    at <anonymous> (case:71:6)
+
+baseCtor:
+    at thrower (case:5:37)
+    at K (case:10:27)
+    at baseCtor (case:65:28)
+    at <anonymous> (case:71:6)
+
+derivedCtor:
+    at thrower (case:5:37)
+    at K2 (case:11:66)
+    at derivedCtor (case:66:32)
+    at <anonymous> (case:71:6)
+
+superCtor:
+    at thrower (case:5:37)
+    at S (case:12:34)
+    at T (case:13:42)
+    at superCtor (case:67:29)
+    at <anonymous> (case:71:6)
+
+async:
+    at thrower (case:5:37)
+    at asyncReturn (case:76:46)
+    at <anonymous> (case:77:24)
+
+=== completed

@@ -46,7 +46,9 @@ const host = {
   },
 };
 
-const setup = evalScript(read(spec.prelude));
+// loadScript, not evalScript: the prelude's frames carry its path, so that a
+// `difftest: stacks` case can tell them from its own (`<evalScript>`).
+const setup = std.loadScript(spec.prelude);
 const api = setup(host);
 let fn;
 try {

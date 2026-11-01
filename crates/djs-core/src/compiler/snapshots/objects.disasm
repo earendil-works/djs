@@ -58,7 +58,7 @@ function 0 <anonymous>: params=0 locals=1 stack=4 captures=0
   204  array_from 0
   207  get_global "o" ic12  ; 17:10
   214  array_spread
-  215  construct_spread  ; 17:1
+  215  construct_spread  ; 17:6
   216  put_loc loc0 (<completion>)
   219  get_global "o" ic13  ; 18:8
   226  dup

@@ -586,7 +586,8 @@ impl Vm {
     /// For debuggers (0064).
     pub fn backtrace(&mut self) -> String {
         let ex = Exec::new(&mut self.heap, self.opts.exec);
-        ex.stack_trace(ex.pc())
+        // Not the program's Error.stackTraceLimit: a debugger's view.
+        ex.stack_trace(ex.pc(), run::STACK_TRACE_LIMIT)
     }
 
     /// The pending host call `call_id` (parked or async).

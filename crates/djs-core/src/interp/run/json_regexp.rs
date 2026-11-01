@@ -94,12 +94,18 @@ impl Exec<'_> {
                     Err(e) => {
                         // qjs puts the position in the stack, as a first `<input>` frame.
                         let err = realm::new_error(self.heap, ErrorKind::SyntaxError, &e.message)?;
-                        let trace = format!(
-                            "    at <input>:{}:{}\n{}",
-                            e.line,
-                            e.column,
-                            self.stack_trace(self.pc)
-                        );
+                        // The `<input>` line counts against the limit, as in qjs.
+                        let limit = realm::stack_trace_limit(self.heap);
+                        let trace = if limit == 0 {
+                            String::new()
+                        } else {
+                            format!(
+                                "    at <input>:{}:{}\n{}",
+                                e.line,
+                                e.column,
+                                self.stack_trace(self.pc, limit - 1)
+                            )
+                        };
                         if let Some(o) = err.as_object() {
                             let st = self.heap.alloc_str(&trace)?;
                             realm::set_error_stack(self.heap, o, st)?;

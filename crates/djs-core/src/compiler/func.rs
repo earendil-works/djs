@@ -245,6 +245,14 @@ pub(super) struct FuncState {
     pub handlers: Vec<HandlerLabels>,
     /// `(phase-1 code position, source offset)`, in increasing code position.
     pub lines: Vec<(u32, u32)>,
+    /// The phase-1 position of the last `call` that qjs would turn into a tail call
+    /// when a `return` follows it directly (`f(x)`, `o.m(x)`, a tagged template; not
+    /// spread, optional or `eval` calls). `parse_return` gives it the statement's
+    /// position, as qjs's tail calls report (D2031).
+    pub tail_call: Option<u32>,
+    /// Try blocks and catch clauses being parsed: a `return` there is no tail call in
+    /// qjs (it pops the catch offset first).
+    pub open_trys: u32,
     /// `var` declarations as `(name, scope where the declaration appeared)`, for
     /// var/let conflicts.
     pub var_decls: Vec<(Atom, ScopeId)>,
@@ -407,6 +415,8 @@ impl FuncState {
             ctor_return: None,
             is_async: false,
             is_generator: false,
+            tail_call: None,
+            open_trys: 0,
             state_var: None,
             in_params: false,
             async_region: None,

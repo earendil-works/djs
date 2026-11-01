@@ -60,7 +60,10 @@ pub trait Engine: Sync {
 /// Renders a result as the transcript stored in `.expected`: the output items, then a
 /// status line (`=== completed`, `=== return`, `=== throw`, ...) followed by the value or
 /// error text. The status is always the last `=== ` line.
-pub fn transcript(result: &RunResult) -> String {
+///
+/// `stacks`: the case's file name with `difftest: stacks`, which keeps its frame lines
+/// (see [`normalize`]).
+pub fn transcript(result: &RunResult, stacks: Option<&str>) -> String {
     let mut s = String::new();
     for item in &result.output {
         s.push_str(item);
@@ -85,15 +88,32 @@ pub fn transcript(result: &RunResult) -> String {
             s.push('\n');
         }
     }
-    normalize(&s)
+    normalize(&s, stacks)
 }
 
-/// Normalizes a transcript for comparison: stack frame lines (`    at ...`) are dropped,
-/// because stack trace formats are not compared yet (D1100), and line endings are `\n`.
-pub fn normalize(text: &str) -> String {
+/// Normalizes a transcript for comparison: line endings are `\n`, and stack frame lines
+/// (`    at ...`) are dropped (D1100), except with `stacks` (the case's file name, for
+/// cases marked `difftest: stacks`, D2032). Then a frame in the case, which djs names
+/// by the case's file and qjs `<evalScript>`, reads `(case:line:col)`, a `(native)`
+/// frame stays, and frames of the harness (the prelude, qjs's driver) are dropped:
+/// they differ by engine.
+pub fn normalize(text: &str, stacks: Option<&str>) -> String {
     let mut out = String::with_capacity(text.len());
     for line in text.replace("\r\n", "\n").split_inclusive('\n') {
-        if line.starts_with("    at ") {
+        if let Some(frame) = line.strip_prefix("    at ") {
+            let Some(case) = stacks else {
+                continue;
+            };
+            match case_frame(frame, case) {
+                Some(f) => {
+                    out.push_str("    at ");
+                    out.push_str(&f);
+                    if line.ends_with('\n') {
+                        out.push('\n');
+                    }
+                }
+                None => continue,
+            }
             continue;
         }
         out.push_str(line);
@@ -102,6 +122,27 @@ pub fn normalize(text: &str) -> String {
         out.push('\n');
     }
     out
+}
+
+/// A frame line (after `    at `) as `normalize` keeps it, or `None` for a harness
+/// frame.
+fn case_frame(frame: &str, case: &str) -> Option<String> {
+    let frame = frame.trim_end_matches('\n');
+    let Some((name, loc)) = frame.rsplit_once(" (") else {
+        return Some(frame.to_string());
+    };
+    let loc = loc.strip_suffix(')')?;
+    if loc == "native" {
+        return Some(frame.to_string());
+    }
+    // `file:line:col`; the file may contain `:` (qjs's driver frames are `<cmdline>`).
+    let mut parts = loc.rsplitn(3, ':');
+    let (col, line, file) = (parts.next()?, parts.next()?, parts.next()?);
+    if file == case || file == "<evalScript>" || file == "case" {
+        Some(format!("{name} (case:{line}:{col})"))
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -118,24 +159,30 @@ mod tests {
             done: Done::Return("{\"v\":1}".into()),
             image: None,
         };
-        assert_eq!(transcript(&r), "a\nError: x\n=== return\n{\"v\":1}\n");
+        assert_eq!(transcript(&r, None), "a\nError: x\n=== return\n{\"v\":1}\n");
         let r = RunResult {
             output: vec![],
             done: Done::Throw("TypeError: no\n    at <eval>".into()),
             image: None,
         };
-        assert_eq!(transcript(&r), "=== throw\nTypeError: no\n");
+        assert_eq!(transcript(&r, None), "=== throw\nTypeError: no\n");
         let r = RunResult {
             output: vec!["".into()],
             done: Done::Completed,
             image: None,
         };
-        assert_eq!(transcript(&r), "\n=== completed\n");
+        assert_eq!(transcript(&r, None), "\n=== completed\n");
     }
 
     #[test]
     fn normalizing() {
-        assert_eq!(normalize("x\r\n    at y\n  at z"), "x\n  at z\n");
-        assert_eq!(normalize(""), "");
+        assert_eq!(normalize("x\r\n    at y\n  at z", None), "x\n  at z\n");
+        assert_eq!(normalize("", None), "");
+        let qjs = "    at f (<evalScript>:3:8)\n    at map (native)\n    at run (/c/prelude.js:181:21)\n    at <anonymous> (<cmdline>:64:30)\n";
+        let djs = "    at f (a/b.js:3:8)\n    at map (native)\n    at run (prelude.js:181:21)\n";
+        let want = "    at f (case:3:8)\n    at map (native)\n";
+        assert_eq!(normalize(qjs, Some("a/b.js")), want);
+        assert_eq!(normalize(djs, Some("a/b.js")), want);
+        assert_eq!(normalize(want, Some("a/b.js")), want);
     }
 }

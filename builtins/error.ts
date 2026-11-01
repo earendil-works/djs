@@ -66,6 +66,17 @@ function ErrorCaptureStackTrace(object: Value, constructorOpt: Value): void {
 }
 
 /**
+ * Error.stackTraceLimit (V8, qjs; D2030): the number of frames a stack trace records.
+ * A plain data property that the VM reads without running code; a value that is not a
+ * number records none.
+ * @value Error.stackTraceLimit
+ * @attributes writable configurable
+ */
+function ErrorStackTraceLimit(): i32 {
+  return 10;
+}
+
+/**
  * The steps shared by Error ( message [ , options ] ), 20.5.1.1, and the
  * NativeError constructors, 20.5.6.1.1. `fallback` names the realm prototype.
  */

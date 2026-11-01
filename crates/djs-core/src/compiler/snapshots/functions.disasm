@@ -22,7 +22,7 @@ function 0 <anonymous>: params=0 locals=1 stack=2 captures=0
   100  put_global "obj" ic5  ; 8:5
   107  get_global "f" ic6  ; 9:5
   114  push_i8 1
-  116  construct 1  ; 9:1
+  116  construct 1  ; 9:6
   119  put_loc loc0 (<completion>)
   122  get_loc loc0 (<completion>)
   125  return
@@ -68,7 +68,7 @@ function 0.3 k: params=0 locals=4 stack=2 captures=0
    15  fclosure child0
    20  set_loc loc0 (arrow)  ; 5:74
    23  undefined
-   24  call 0  ; 5:79
+   24  call 0  ; 5:67
    27  return
    28  return_undef
 function 0.3.0 arrow: params=0 locals=0 stack=3 captures=3

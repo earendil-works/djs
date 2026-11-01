@@ -60,20 +60,20 @@ function 0 <anonymous>: params=0 locals=1 stack=5 captures=0
   240  call 0  ; 4:61
   243  put_loc loc0 (<completion>)
   246  get_global "X" ic22  ; 5:5
-  253  construct 0  ; 5:1
+  253  construct 0  ; 5:6
   256  put_loc loc0 (<completion>)
   259  get_global "X" ic23  ; 5:12
   266  push_i8 1
   268  push_i8 2
-  270  construct 2  ; 5:8
+  270  construct 2  ; 5:13
   273  put_loc loc0 (<completion>)
   276  get_global "o" ic24  ; 5:25
   283  get_field "C" ic25  ; 5:26
-  290  construct 0  ; 5:21
+  290  construct 0  ; 5:28
   293  put_loc loc0 (<completion>)
   296  get_global "X" ic26  ; 5:40
-  303  construct 0  ; 5:36
-  306  construct 0  ; 5:32
+  303  construct 0  ; 5:41
+  306  construct 0  ; 5:43
   309  put_loc loc0 (<completion>)
   312  get_global "o" ic27  ; 6:1
   319  dup

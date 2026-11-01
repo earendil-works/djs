@@ -14,6 +14,9 @@
 //! // difftest: djs-expect <a> => <b>  an expected difference: with djs, `.expected` lines
 //!                                     equal to `a` must read `b` (D013: stack overflow)
 //! // difftest: no-stress <reason>  skip the stress variants (--suspend-every, --gc-stress)
+//! // difftest: stacks              compare stack frame lines too (0105, D2032): frames in
+//!                                     the case show as `(case:line:col)`, `(native)`
+//!                                     frames stay, the harness's frames are dropped
 //! ```
 
 use std::fs;
@@ -35,6 +38,8 @@ pub struct Meta {
     pub djs_expect: Vec<(String, String)>,
     /// Why the stress variants do not run this case (D1530).
     pub no_stress: Option<String>,
+    /// Compare stack frame lines (`engine::normalize`).
+    pub stacks: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -81,6 +86,7 @@ pub fn parse_meta(source: &str, is_ts_file: bool) -> Result<Meta, String> {
             "no-stress" if !rest.is_empty() => meta.no_stress = Some(rest.to_string()),
             "no-stress" => return Err("`no-stress` needs a reason".into()),
             "ts" if rest.is_empty() => meta.ts = true,
+            "stacks" if rest.is_empty() => meta.stacks = true,
             "experimental-decorators" if rest.is_empty() => meta.legacy_decorators = true,
             "emit-decorator-metadata" if rest.is_empty() => {
                 meta.legacy_decorators = true;

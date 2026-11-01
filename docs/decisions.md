@@ -4514,3 +4514,45 @@ are conv.rs `string_to_number`, number.rs `parseInt`/`parseFloat`,
 heap/typed.rs element conversion and compiler/ts_decl.rs enum values.
 
 Saved: 3.2 KB raw. Narrowing costs a byte copy, only for two-byte strings.
+
+## D2030: Error.stackTraceLimit as in qjs
+date: 2026-11-03 · by: infra · issue: 0105
+`Error.stackTraceLimit` is a plain data property of Error (10, writable, configurable,
+not enumerable; `@value` in builtins/error.ts). Like qjs (and V8), the VM reads it
+without running code whenever it records a trace (`realm::stack_trace_limit`): the own
+data property of the realm's original Error constructor (`%Constructors%.Error`, so
+`MyError.stackTraceLimit` and a reassigned `Error` global do not count). A number is
+truncated and clamped to `0..=2^31-1` (NaN and negatives are 0, Infinity is all frames);
+any other value, an accessor (its getter is not called) or no property records no
+frames, giving an empty `stack`. It applies to Error construction, the VM's own errors,
+`Error.captureStackTrace` (frames left out by constructorOpt or as the builtin's own do
+not count) and the `<input>` line of an eval SyntaxError, which counts as one frame.
+`Vm::backtrace` (debuggers) keeps the fixed 10 (`STACK_TRACE_LIMIT`), whatever the
+program set. `Error.prepareStackTrace` is not added (qjs has it; a follow-up).
+
+## D2031: Call positions follow qjs: tail calls at the `return`, `new` after the callee
+date: 2026-11-03 · by: infra · issue: 0105
+qjs turns `call`/`call_method` that a plain return follows into a tail call, which
+reports the position of the `return` statement; every other call reports its `(`.
+djs has no tail calls but records the same position: `parse_return` re-marks the call's
+line-table entry when the call is the last instruction of the operand and a plain return
+follows in qjs's terms: a normal function (not async, generator or derived constructor),
+no finally, for-of iterator or `using` scope to leave (`has_unwind`), and not inside a
+try block or catch clause (`FuncState::open_trys`; qjs pops the catch offset first).
+Eligible calls (`FuncState::tail_call`) are plain and member calls with an argument list
+and tagged templates; not spread or optional calls, nor a call of the name `eval` (qjs
+has an `eval` opcode). Concise arrow bodies keep the call's position (no `return`
+statement, as in qjs). `new X(...)` and `new X` report the token after the constructor
+expression (its `(`, or whatever follows), as qjs does, instead of the `new` keyword.
+Codegen is unchanged; only the line table moves.
+
+## D2032: `difftest: stacks` compares stack frames
+date: 2026-11-03 · by: infra · issue: 0105
+Difftest normally drops `    at ...` lines (D1100). A case marked `// difftest: stacks`
+keeps them, normalized on both sides and in its `.expected`: a frame located in the case
+(djs names it by the case path, qjs `<evalScript>`) reads `name (case:line:col)`,
+`(native)` frames stay, and frames elsewhere (the prelude, qjs's `<cmdline>` driver) are
+dropped. The qjs driver now loads the prelude with `std.loadScript`, so its frames carry
+its path and differ from the case's `<evalScript>`; no other transcript changes (the
+whole corpus still passes under qjs). The wrappers put different prefixes on line 1, and
+line 1 of such a case is always its directive comment.

@@ -86,14 +86,14 @@ fn multi_line_input() {
 fn errors() {
     check(
         "throw new TypeError('bad')\nnull.x\nlet 5\n1\n",
-        "Uncaught TypeError: bad\n    at <eval> (repl:1:7)\n\
+        "Uncaught TypeError: bad\n    at <eval> (repl:1:20)\n\
          Uncaught TypeError: cannot read property 'x' of null\n    at <eval> (repl:1:5)\n\
          SyntaxError: variable name expected at repl:1:5\n1\n",
     );
     check(
         "Promise.reject(new Error('no'))\n",
         "Promise { <rejected> [Error: no] }\n\
-         Possibly unhandled promise rejection: Error: no\n    at <eval> (repl:1:16)\n",
+         Possibly unhandled promise rejection: Error: no\n    at <eval> (repl:1:25)\n",
     );
 }
 
@@ -106,7 +106,7 @@ fn top_level_await() {
     // The value of a promise is not adopted: `await` gives what the expression does.
     check(
         "Promise.resolve(3)\nawait Promise.reject(new RangeError('r'))\n",
-        "Promise { 3 }\nUncaught RangeError: r\n    at <eval> (repl:1:31)\n",
+        "Promise { 3 }\nUncaught RangeError: r\n    at <eval> (repl:1:45)\n",
     );
     // Closures in the body see the globals, not copies.
     check(

@@ -211,8 +211,13 @@ transcript in `<name>.expected` is:
   the script with that TypeError, and waiting on a promise nothing can settle fails
   with pi's "can never settle" error.
 
-Stack frame lines (`    at ...`) are dropped on both sides before comparing; stack
-formats are a separate topic. Leading comment lines can carry directives:
+Stack frame lines (`    at ...`) are dropped on both sides before comparing, except in
+cases marked `// difftest: stacks` (D2032): there a frame in the case reads
+`name (case:line:col)` for both engines, `(native)` frames stay and the harness's own
+frames (prelude, qjs driver) are dropped, so names and positions are compared
+(tests/corpus/errors/stack-positions.js, stack-trace-limit.js). Line 1 of a case is a
+directive comment, so the wrappers' different first-line prefixes do not show. Leading
+comment lines can carry directives:
 `// difftest: skip-djs <reason>` (a djs non-goal, such as direct eval), `// difftest: ts` (a
 `.js` file parsed as TypeScript), `// difftest: experimental-decorators` and
 `// difftest: emit-decorator-metadata` (TypeScript legacy decorators, D1651),
