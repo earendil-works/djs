@@ -15,7 +15,7 @@ use crate::value::Value;
 
 /// Nesting limit for the recursive descent (docs/compiler.md 2.4). The value is pinned
 /// by the `depth_limit_fits_wasm_stack` test.
-pub(super) const MAX_DEPTH: u32 = 500;
+pub(super) const MAX_DEPTH: u32 = 1000;
 
 /// A break/continue target (QuickJS's `BlockEnv`, docs/compiler.md 4.3).
 pub(super) struct BlockEnv {

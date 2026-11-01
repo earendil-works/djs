@@ -299,3 +299,96 @@ fn display() {
     );
     let _: String = e.message;
 }
+
+/// Nested constructs, `n` levels deep.
+fn nested(kind: &str, n: usize) -> String {
+    let (open, mid, close) = match kind {
+        "paren" => ("(", "1", ")"),
+        "array" => ("[", "1", "]"),
+        "object" => ("{a:", "1", "}"),
+        "unary" => ("!", "x", ""),
+        "ternary" => ("a ? b : ", "c", ""),
+        "block" => ("{", "", "}"),
+        "if" => ("if (a) ", "x;", ""),
+        "assign" => ("a = ", "1", ""),
+        "member" => ("", "a", ".b"),
+        "new" => ("new ", "X", ""),
+        _ => unreachable!(),
+    };
+    let mut s = String::from("x = ");
+    if matches!(kind, "block" | "if") {
+        s.clear();
+    }
+    for _ in 0..n {
+        s.push_str(open);
+    }
+    s.push_str(mid);
+    for _ in 0..n {
+        s.push_str(close);
+    }
+    s
+}
+
+const KINDS: &[&str] = &[
+    "paren", "array", "object", "unary", "ternary", "block", "if", "assign", "member", "new",
+];
+
+/// The deepest nesting of each construct that compiles: run on a thread with the wasm
+/// default stack (1 MiB; debug builds get more, their frames are larger), so hitting
+/// the depth limit is a SyntaxError, never a stack overflow (docs/compiler.md 2.4).
+#[test]
+fn depth_limit_fits_wasm_stack() {
+    let stack = match std::env::var("DJS_DEPTH_STACK") {
+        // For measuring the headroom: DJS_DEPTH_STACK=262144 cargo test --release ...
+        Ok(s) => s.parse().unwrap(),
+        Err(_) if cfg!(debug_assertions) => 8 << 20,
+        Err(_) => 1 << 20,
+    };
+    std::thread::Builder::new()
+        .stack_size(stack)
+        .spawn(|| {
+            for kind in KINDS {
+                // Find the largest n that compiles, by doubling then bisecting.
+                let ok = |n: usize| {
+                    let mut heap = Heap::new().unwrap();
+                    compile(
+                        &mut heap,
+                        nested(kind, n).as_bytes(),
+                        &CompileOptions::script("t"),
+                    )
+                    .is_ok()
+                };
+                let (mut lo, mut hi) = (1, 2);
+                while ok(hi) && hi < 1 << 13 {
+                    lo = hi;
+                    hi *= 2;
+                }
+                while hi - lo > 1 {
+                    let m = (lo + hi) / 2;
+                    if ok(m) {
+                        lo = m;
+                    } else {
+                        hi = m;
+                    }
+                }
+                std::println!("{kind}: max depth {lo}");
+                // Chains that loop rather than recurse have no limit.
+                if *kind == "member" {
+                    assert!(lo >= 1 << 12, "{kind}: {lo}");
+                    continue;
+                }
+                assert!(lo >= 300, "{kind}: {lo}");
+                let mut heap = Heap::new().unwrap();
+                let e = compile(
+                    &mut heap,
+                    nested(kind, hi).as_bytes(),
+                    &CompileOptions::script("t"),
+                )
+                .unwrap_err();
+                assert_eq!(e.message, "stack overflow", "{kind}");
+            }
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
