@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0023 | djs-wasm + JS host package | num | .worktrees/0023-djs-wasm-host |
 | 0022 | E2E wiring: Vm::compile, djs run, missing P0 interp ops | heap | .worktrees/0022-e2e-wiring |
-| 0024 | P1-1 Functions and closures (compiler) | lexer | .worktrees/0024-p1-functions-closures |
+| 0025 | P1-3 Exceptions + P1-4 leftovers (compiler) | lexer | .worktrees/0025-p1-exceptions |
 
 ## Open (ready)
 
@@ -29,6 +29,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0001 | Workspace skeleton and process | initial commit |
 | 0003 | Lexer | e4a42c3 (agent lexer; parser follow-ups listed in the issue) |
 | 0005 | Values, arena heap, strings, atoms, objects | dc751e2 (agent heap; follow-ups in the issue) |
+| 0024 | P1-1 Functions and closures (compiler) | ad6c70f (agent lexer; test262 compiling 11.4k -> 23.5k) |
 | 0014 | P0 compiler | 5c5ce95 (agent lexer; 31 e2e programs match qjs; test262 sweep no panics) |
 | 0021 | Outbound direct heap reader | 91b5ae5 (agent num; 1 MiB string at memcpy speed; 1.9-5.9x faster than JSON path) |
 | 0015 | P0 interpreter and embedding | 2373382 (agent heap; P0 + most builtin-free P1 ops; e2e left to 0022) |
