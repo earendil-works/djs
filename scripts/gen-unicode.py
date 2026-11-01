@@ -648,27 +648,51 @@ def generate_norm(vendor):
     ccc_keys = [(s << LEN_BITS) | (n - 1) for s, n, _ in runs]
     ccc_vals = [v for _, _, v in runs]
 
-    # Decompositions (single level, as in UnicodeData), as a varint stream sorted by code
-    # point: delta from the previous entry's code point, then `len << 1 | compat`, then the
-    # mapping as zigzag deltas (the first from the source code point). Every
+    # Decompositions (single level, as in UnicodeData), as a varint stream of entries
+    # sorted by code point. An entry is: the gap from the previous entry's last code point
+    # (0 at an index point), a header `len << 1 | compat`, then the mapping as zigzag
+    # deltas, the first from the previous entry's first mapped code point (from the entry's
+    # own code point at an index point), the rest from the previous mapped code point.
+    # len 0 is a run: a count n follows, and the n + 1 code points from the entry's on map
+    # to one code point each, consecutive from the delta-coded first. Every
     # NORM_INDEX_STEP entries, the index records (code point, stream offset).
     stream = []
     index = []
-    prev = 0
-    for i, cp in enumerate(sorted(decomp)):
-        if i % NORM_INDEX_STEP == 0:
-            index.append((cp, len(stream)))
-            prev = cp
-            varint(0, stream)
-        else:
-            varint(cp - prev, stream)
-            prev = cp
+    keys = sorted(decomp)
+    prev_cp = 0
+    prev_target = 0
+    i = 0
+    n = 0
+    while i < len(keys):
+        cp = keys[i]
         compat, m = decomp[cp]
-        varint(len(m) << 1 | (1 if compat else 0), stream)
-        last = cp
+        j = i
+        while (
+            j + 1 < len(keys)
+            and keys[j + 1] == keys[j] + 1
+            and len(decomp[keys[j]][1]) == 1
+            and len(decomp[keys[j + 1]][1]) == 1
+            and decomp[keys[j + 1]][1][0] == decomp[keys[j]][1][0] + 1
+            and decomp[keys[j + 1]][0] == compat
+        ):
+            j += 1
+        if n % NORM_INDEX_STEP == 0:
+            index.append((cp, len(stream)))
+            varint(0, stream)
+            last = cp
+        else:
+            varint(cp - prev_cp, stream)
+            last = prev_target
+        varint((0 if j > i else len(m)) << 1 | (1 if compat else 0), stream)
+        if j > i:
+            varint(j - i, stream)
         for c in m:
             varint(zigzag(c - last), stream)
             last = c
+        prev_target = m[0]
+        prev_cp = keys[j]
+        i = j + 1
+        n += 1
 
     # Primary composites: canonical pairs not excluded; key first << 7 | second index.
     pairs = []
@@ -678,8 +702,8 @@ def generate_norm(vendor):
     seconds = sorted(set(p[1] for p in pairs))
     assert len(seconds) < 128
     sidx = {s: i for i, s in enumerate(seconds)}
-    comp = sorted(((a << 7) | sidx[b], cp) for a, b, cp in pairs)
-    assert all(k < (1 << 32) for k, _ in comp)
+    comp = sorted(((a << 7) | sidx[b], cp - a) for a, b, cp in pairs)
+    assert all(k < (1 << 32) and -(1 << 15) <= d < (1 << 15) for k, d in comp)
 
     def u32s(name, doc, words):
         return emit_table(name, doc, words)
@@ -711,8 +735,11 @@ def generate_norm(vendor):
         plain("COMPOSE_SECONDS", "The second code points of primary composites.", "u32",
               [f"0x{s:x}" for s in seconds], 10),
         "",
-        plain("COMPOSE", "Primary composites: (first << 7 | second index, composite), sorted.",
-              "(u32, u32)", [f"(0x{k:x}, 0x{c:x})" for k, c in comp], 4),
+        plain("COMPOSE_KEYS", "Primary composites: first << 7 | index in COMPOSE_SECONDS, sorted.",
+              "u32", [f"0x{k:x}" for k, _ in comp], 8),
+        "",
+        plain("COMPOSE_DELTAS", "The composite of each COMPOSE_KEYS entry, minus its first.",
+              "i16", [d for _, d in comp], 12),
         "",
     ]
     for name, prop, val, doc in [

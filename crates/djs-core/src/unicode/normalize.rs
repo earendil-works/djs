@@ -8,8 +8,8 @@
 use alloc::vec::Vec;
 
 use super::norm_tables::{
-    CCC_RUNS, CCC_VALUES, COMPOSE, COMPOSE_SECONDS, DECOMP, DECOMP_INDEX, INDEX_STEP,
-    NFC_QC_MAYBE, NFC_QC_NO, NFD_QC_NO, NFKC_QC_MAYBE, NFKC_QC_NO, NFKD_QC_NO,
+    CCC_RUNS, CCC_VALUES, COMPOSE_DELTAS, COMPOSE_KEYS, COMPOSE_SECONDS, DECOMP, DECOMP_INDEX,
+    INDEX_STEP, NFC_QC_MAYBE, NFC_QC_NO, NFD_QC_NO, NFKC_QC_MAYBE, NFKC_QC_NO, NFKD_QC_NO,
 };
 use super::tables::LEN_BITS;
 
@@ -75,8 +75,9 @@ fn varint(p: &mut usize) -> u32 {
     }
 }
 
-/// The single-level decomposition of `c` from the tables: whether it is a compatibility
-/// mapping, and the mapping appended to `out`. False if `c` has none (Hangul excluded).
+/// The single-level decomposition of `c` from the tables (Hangul excluded), appended to
+/// `out`: whether it is a compatibility mapping, or `None` if `c` has none. The stream
+/// format is described in `scripts/gen-unicode.py`.
 fn table_decomposition(c: u32, out: &mut Vec<u32>) -> Option<bool> {
     let i = DECOMP_INDEX.partition_point(|&(cp, _)| cp <= c);
     if i == 0 {
@@ -84,37 +85,58 @@ fn table_decomposition(c: u32, out: &mut Vec<u32>) -> Option<bool> {
     }
     let (mut cp, off) = DECOMP_INDEX[i - 1];
     let mut p = off as usize;
+    let mut prev_target = 0;
     for k in 0..INDEX_STEP {
         if p >= DECOMP.len() {
             return None;
         }
-        let delta = varint(&mut p);
-        if k > 0 {
-            cp += delta;
-        }
-        let header = varint(&mut p);
-        let (len, compat) = (header >> 1, header & 1 != 0);
+        let gap = varint(&mut p);
+        let base = if k == 0 {
+            cp
+        } else {
+            cp += gap;
+            prev_target
+        };
         if cp > c {
             return None;
         }
-        let mut last = cp;
-        for _ in 0..len {
-            let z = varint(&mut p);
-            let d = if z & 1 == 0 {
-                (z >> 1) as i64
-            } else {
-                -(((z + 1) >> 1) as i64)
-            };
-            last = (last as i64 + d) as u32;
-            if cp == c {
+        let header = varint(&mut p);
+        let (len, compat) = (header >> 1, header & 1 != 0);
+        if len == 0 {
+            // A run of one-to-one mappings onto consecutive code points.
+            let n = varint(&mut p);
+            prev_target = unzigzag(base, varint(&mut p));
+            if c <= cp + n {
+                out.push(prev_target + (c - cp));
+                return Some(compat);
+            }
+            cp += n;
+            continue;
+        }
+        let hit = cp == c;
+        let mut last = base;
+        for m in 0..len {
+            last = unzigzag(last, varint(&mut p));
+            if m == 0 {
+                prev_target = last;
+            }
+            if hit {
                 out.push(last);
             }
         }
-        if cp == c {
+        if hit {
             return Some(compat);
         }
     }
     None
+}
+
+fn unzigzag(base: u32, z: u32) -> u32 {
+    if z & 1 == 0 {
+        base + (z >> 1)
+    } else {
+        base - ((z + 1) >> 1)
+    }
 }
 
 /// Appends the full decomposition of `c` (canonical, or also compatibility) to `out`.
@@ -151,17 +173,14 @@ fn compose_pair(a: u32, b: u32) -> Option<u32> {
         return Some(S_BASE + ((a - L_BASE) * V_COUNT + (b - V_BASE)) * T_COUNT);
     }
     if (S_BASE..S_BASE + S_COUNT).contains(&a)
-        && (a - S_BASE) % T_COUNT == 0
+        && (a - S_BASE).is_multiple_of(T_COUNT)
         && (T_BASE + 1..T_BASE + T_COUNT).contains(&b)
     {
         return Some(a + (b - T_BASE));
     }
     let si = COMPOSE_SECONDS.binary_search(&b).ok()? as u32;
-    let key = (a << 7) | si;
-    COMPOSE
-        .binary_search_by_key(&key, |&(k, _)| k)
-        .ok()
-        .map(|i| COMPOSE[i].1)
+    let i = COMPOSE_KEYS.binary_search(&((a << 7) | si)).ok()?;
+    Some(a.wrapping_add_signed(COMPOSE_DELTAS[i] as i32))
 }
 
 fn in_table(table: &[u32], c: u32) -> bool {
@@ -323,7 +342,10 @@ mod tests {
             .output()
             .expect("git");
         let common = String::from_utf8(common.stdout).unwrap();
-        let root = std::path::Path::new(common.trim()).parent().unwrap().to_path_buf();
+        let root = std::path::Path::new(common.trim())
+            .parent()
+            .unwrap()
+            .to_path_buf();
         let path = root.join("vendor/unicode/17.0.0/NormalizationTest.txt");
         let text = std::fs::read_to_string(&path)
             .unwrap_or_else(|_| panic!("{} missing: run scripts/gen-unicode.py", path.display()));
@@ -368,10 +390,9 @@ mod tests {
                     assert_eq!(x, c5, "NFKD quick check {line}");
                 }
             }
-            if c1.len() <= 2 {
-                if let Some(Ok(ch)) = char::decode_utf16(c1.iter().copied()).next() {
-                    listed.insert(ch as u32);
-                }
+            let cps = code_points(c1);
+            if cps.len() == 1 {
+                listed.insert(cps[0]);
             }
             lines += 1;
         }
@@ -381,7 +402,11 @@ mod tests {
             if listed.contains(&c) {
                 continue;
             }
-            let s: Vec<u16> = char::from_u32(c).unwrap().to_string().encode_utf16().collect();
+            let s: Vec<u16> = char::from_u32(c)
+                .unwrap()
+                .to_string()
+                .encode_utf16()
+                .collect();
             for f in [Form::Nfc, Form::Nfd, Form::Nfkc, Form::Nfkd] {
                 assert_eq!(normalize(&s, f), s, "{c:x} {f:?}");
             }

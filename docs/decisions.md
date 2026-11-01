@@ -2933,3 +2933,55 @@ unrelated benchmarks between builds of nearly the same source (and of the same s
 another directory), from code layout. Compare builds made with
 `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 CARGO_PROFILE_RELEASE_LTO=fat`, from the same
 directory.
+
+## D1760: Unicode normalization, on by default
+date: 2026-11-01 · by: num · issue: 0076
+Supersedes D1342's "normalize has no tables" and its code-point-only `localeCompare`.
+`String.prototype.normalize` implements NFC, NFD, NFKC and NFKD (UAX #15) from UCD 17 in
+`unicode/normalize.rs`: full decomposition of the single-level UnicodeData mappings
+(recursively), canonical ordering (a stable insertion sort of each run of nonzero
+classes), and canonical composition with Full_Composition_Exclusion; Hangul syllables
+are decomposed and composed algorithmically. Lone surrogates pass through unchanged.
+`localeCompare` NFC-normalizes both strings before its code-point compare, as qjs does.
+
+`scripts/gen-unicode.py` generates `unicode/norm_tables.rs`:
+
+| part | bytes |
+| --- | ---: |
+| decompositions: a varint stream + an index every 32 entries | 21.2K |
+| primary composites: (first, second index) keys + i16 deltas | 6.1K |
+| Canonical_Combining_Class runs | 2.0K |
+| NFC/NFD/NFKC/NFKD quick-check No/Maybe ranges | 4.3K |
+
+The stream codes each mapping's first code point as a delta from the previous entry's
+(neighbouring compatibility characters map to neighbouring targets), and runs of
+one-to-one mappings onto consecutive code points (the mathematical alphanumerics, the
+fullwidth forms) as one entry: 32.1K → 20.1K raw. Lookup is a binary search in the index
+and a scan of at most 32 entries.
+
+The fast paths: a string whose code units are all below U+0300 (NFC) or U+00A0 (other
+forms) is returned as is after an in-place scan, without copying; otherwise the UAX #15
+quick check (ordering of classes, No/Maybe lists) returns the input for YES, and a
+normalization whose result equals the input also returns the original string. 1 MB of
+mixed Latin/Hangul through NFD, NFC and NFKC takes about the time qjs takes.
+
+djs-wasm, `wasm` profile (stripped), on the 0076 branch:
+
+| | bytes | gzip -9 |
+| --- | ---: | ---: |
+| without | 1,261,895 | 435,191 |
+| with | 1,300,133 | 455,727 |
+| difference | +38.2K (+3.0%) | +20.5K (+4.7%) |
+
+The `unicode-normalization` feature is **on by default**, for D1500's reasons: qjs
+normalizes, codemode programs normalize and compare user and tool text, and a TypeError
+for any accented input breaks them. Without the feature, `normalize` keeps D1342's
+behavior (strings below the limits above come back, others throw "not supported yet")
+and `localeCompare` compares code points.
+
+Tests: a unit test runs every line of UCD's NormalizationTest.txt (all five columns in
+all four forms, plus the quick check never answering YES for a string that changes)
+and checks that every code point not listed in part 1 is invariant; it reads the file
+from `vendor/unicode/17.0.0/` of the primary checkout, which `scripts/gen-unicode.py`
+fetches. qjs and djs both pass all 400,680 of these checks (a scratch script), and
+`tests/corpus/builtins/normalize.js` compares them on selected cases.

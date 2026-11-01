@@ -283,6 +283,14 @@ pub(crate) fn from_codes(heap: &mut Heap, list: Obj, points: bool) -> Result<Str
 /// below U+0300 (for NFD/NFKD/NFKC below U+00A0) are known to be normalized; `None` for
 /// anything else (D1760).
 pub(crate) fn normalize(heap: &mut Heap, s: Str, form: u8) -> Result<Option<Str>, Fault> {
+    // Nothing below U+0300 (NFC) or U+00A0 (other forms) changes: checked in place,
+    // without copying the units out.
+    let limit = if form == 0 { 0x300 } else { 0xA0 };
+    if heap.str_view_flat(s)?.units().all(|u| u < limit) {
+        return Ok(Some(s));
+    }
+    #[cfg(not(feature = "unicode-normalization"))]
+    return Ok(None);
     #[cfg(feature = "unicode-normalization")]
     {
         use crate::unicode::normalize::{self as norm, Form};
@@ -300,13 +308,9 @@ pub(crate) fn normalize(heap: &mut Heap, s: Str, form: u8) -> Result<Option<Str>
         if out == u {
             return Ok(Some(s));
         }
-        Ok(Some(crate::builtins::regexp::string_from_units(heap, &out)?))
-    }
-    #[cfg(not(feature = "unicode-normalization"))]
-    {
-        let limit = if form == 0 { 0x300 } else { 0xA0 };
-        let ok = heap.str_view_flat(s)?.units().all(|u| u < limit);
-        Ok(ok.then_some(s))
+        Ok(Some(crate::builtins::regexp::string_from_units(
+            heap, &out,
+        )?))
     }
 }
 
