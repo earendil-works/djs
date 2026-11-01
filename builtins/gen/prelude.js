@@ -2190,6 +2190,355 @@ function DatePrototypeToPrimitive(hint) {
   throw %NewTypeError("invalid hint");
 }
 
+// builtins/disposable.ts:15
+function NewSuppressedError(error, suppressed) {
+  const o = %ErrorCreate(%RealmIntrinsic("SuppressedErrorPrototype"));
+  %DefineDataPropertyOrThrow(o, "error", error, 5);
+  %DefineDataPropertyOrThrow(o, "suppressed", suppressed, 5);
+  %CaptureStack(o);
+  return o;
+}
+
+// builtins/disposable.ts:24
+function PendingDisposableStack(v, isAsync) {
+  const stack = %ThisDisposableStack(v, isAsync);
+  if (%F64ToI32(%AsNumber(%RecordGet(stack, 1))) !== 0) {
+    throw %NewReferenceError(isAsync ? "AsyncDisposableStack is disposed" : "DisposableStack is disposed");
+  }
+  return stack;
+}
+
+// builtins/disposable.ts:33
+function AddResource(stack, value, method, kind) {
+  const resources = %AsObj(%RecordGet(stack, 2));
+  const n = LengthOfArrayLike(resources);
+  %CreateDataPropertyOrThrow(resources, n, value);
+  %CreateDataPropertyOrThrow(resources, n + 1, method);
+  %CreateDataPropertyOrThrow(resources, n + 2, kind);
+}
+
+// builtins/disposable.ts:45
+function AddDisposableValue(stack, v, isAsync) {
+  if (v === undefined || v === null) {
+    if (isAsync) {
+      AddResource(stack, undefined, undefined, 3);
+    }
+    return;
+  }
+  if (!%IsObject(v)) {
+    throw %NewTypeError("using: value is not an object");
+  }
+  let kind = 0;
+  let method = undefined;
+  if (isAsync) {
+    method = %GetV(v, %WellKnownSymbol("asyncDispose"));
+  }
+  if (method === undefined || method === null) {
+    method = %GetV(v, %WellKnownSymbol("dispose"));
+    if (isAsync) {
+      kind = 2;
+    }
+    if (method === undefined || method === null) {
+      throw %NewTypeError(isAsync ? "using: value has no Symbol.asyncDispose or Symbol.dispose method" : "using: value has no Symbol.dispose method");
+    }
+  }
+  if (!%IsCallable(method)) {
+    throw %NewTypeError("using: dispose method is not a function");
+  }
+  AddResource(stack, v, method, kind);
+}
+
+// builtins/disposable.ts:76
+function CallDisposeMethod(resources, i) {
+  const value = %Get(resources, i);
+  const method = %Get(resources, i + 1);
+  if (%F64ToI32(%AsNumber(%Get(resources, i + 2))) === 1) {
+    return %Call(method, undefined, value);
+  }
+  return %Call(method, value);
+}
+
+// builtins/disposable.ts:89 constructor DisposableStack
+function DisposableStackConstructor() {
+  if (new.target === undefined) {
+    throw %NewTypeError("must be called with new");
+  }
+  return %DisposableStackCreate(GetPrototypeFromConstructor(new.target, "DisposableStackPrototype"), false);
+}
+
+// builtins/disposable.ts:100 get DisposableStack.prototype.disposed
+function DisposableStackPrototypeDisposed() {
+  return %F64ToI32(%AsNumber(%RecordGet(%ThisDisposableStack(this, false), 1))) === 1;
+}
+
+// builtins/disposable.ts:110 DisposableStack.prototype.dispose DisposableStack.prototype[Symbol.dispose]
+function DisposableStackPrototypeDispose() {
+  const stack = %ThisDisposableStack(this, false);
+  if (%F64ToI32(%AsNumber(%RecordGet(stack, 1))) === 1) {
+    return;
+  }
+  %RecordSet(stack, 1, 1);
+  const resources = %AsObj(%RecordGet(stack, 2));
+  %RecordSet(stack, 2, %ArrayCreate(0));
+  let hasError = false;
+  let error = undefined;
+  for (let i = LengthOfArrayLike(resources) - 3; i >= 0; i = i - 3) {
+    try {
+      CallDisposeMethod(resources, i);
+    } catch (e) {
+      error = hasError ? NewSuppressedError(e, error) : e;
+      hasError = true;
+    }
+  }
+  if (hasError) {
+    throw error;
+  }
+}
+
+// builtins/disposable.ts:137 DisposableStack.prototype.use
+function DisposableStackPrototypeUse(value) {
+  AddDisposableValue(PendingDisposableStack(this, false), value, false);
+  return value;
+}
+
+// builtins/disposable.ts:146 DisposableStack.prototype.adopt
+function DisposableStackPrototypeAdopt(value, onDispose) {
+  const stack = PendingDisposableStack(this, false);
+  if (!%IsCallable(onDispose)) {
+    throw %NewTypeError("not a function");
+  }
+  AddResource(stack, value, onDispose, 1);
+  return value;
+}
+
+// builtins/disposable.ts:159 DisposableStack.prototype.defer
+function DisposableStackPrototypeDefer(onDispose) {
+  const stack = PendingDisposableStack(this, false);
+  if (!%IsCallable(onDispose)) {
+    throw %NewTypeError("not a function");
+  }
+  AddResource(stack, undefined, onDispose, 0);
+}
+
+// builtins/disposable.ts:168
+function DisposableStackMove(thisValue, isAsync) {
+  const stack = PendingDisposableStack(thisValue, isAsync);
+  const proto = %RealmIntrinsic(isAsync ? "AsyncDisposableStackPrototype" : "DisposableStackPrototype");
+  const newStack = %DisposableStackCreate(proto, isAsync);
+  %RecordSet(newStack, 2, %RecordGet(stack, 2));
+  %RecordSet(stack, 2, %ArrayCreate(0));
+  %RecordSet(stack, 1, 1);
+  return newStack;
+}
+
+// builtins/disposable.ts:182 DisposableStack.prototype.move
+function DisposableStackPrototypeMove() {
+  return DisposableStackMove(this, false);
+}
+
+// builtins/disposable.ts:191 value DisposableStack.prototype[Symbol.toStringTag]
+function DisposableStackPrototypeToStringTag() {
+  return "DisposableStack";
+}
+
+// builtins/disposable.ts:199 constructor AsyncDisposableStack
+function AsyncDisposableStackConstructor() {
+  if (new.target === undefined) {
+    throw %NewTypeError("must be called with new");
+  }
+  return %DisposableStackCreate(GetPrototypeFromConstructor(new.target, "AsyncDisposableStackPrototype"), true);
+}
+
+// builtins/disposable.ts:210 get AsyncDisposableStack.prototype.disposed
+function AsyncDisposableStackPrototypeDisposed() {
+  return %F64ToI32(%AsNumber(%RecordGet(%ThisDisposableStack(this, true), 1))) === 1;
+}
+
+// builtins/disposable.ts:218 AsyncDisposableStack.prototype.use
+function AsyncDisposableStackPrototypeUse(value) {
+  AddDisposableValue(PendingDisposableStack(this, true), value, true);
+  return value;
+}
+
+// builtins/disposable.ts:227 AsyncDisposableStack.prototype.adopt
+function AsyncDisposableStackPrototypeAdopt(value, onDisposeAsync) {
+  const stack = PendingDisposableStack(this, true);
+  if (!%IsCallable(onDisposeAsync)) {
+    throw %NewTypeError("not a function");
+  }
+  AddResource(stack, value, onDisposeAsync, 1);
+  return value;
+}
+
+// builtins/disposable.ts:240 AsyncDisposableStack.prototype.defer
+function AsyncDisposableStackPrototypeDefer(onDisposeAsync) {
+  const stack = PendingDisposableStack(this, true);
+  if (!%IsCallable(onDisposeAsync)) {
+    throw %NewTypeError("not a function");
+  }
+  AddResource(stack, undefined, onDisposeAsync, 0);
+}
+
+// builtins/disposable.ts:252 AsyncDisposableStack.prototype.move
+function AsyncDisposableStackPrototypeMove() {
+  return DisposableStackMove(this, true);
+}
+
+// builtins/disposable.ts:261 value AsyncDisposableStack.prototype[Symbol.toStringTag]
+function AsyncDisposableStackPrototypeToStringTag() {
+  return "AsyncDisposableStack";
+}
+
+// builtins/disposable.ts:278 AsyncDisposableStack.prototype.disposeAsync AsyncDisposableStack.prototype[Symbol.asyncDispose]
+function AsyncDisposableStackPrototypeDisposeAsync() {
+  const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
+  let stack = promise;
+  try {
+    stack = %ThisDisposableStack(this, true);
+  } catch (e) {
+    %RejectPromise(promise, e);
+    return promise;
+  }
+  if (%F64ToI32(%AsNumber(%RecordGet(stack, 1))) === 1) {
+    ResolvePromise(promise, undefined);
+    return promise;
+  }
+  %RecordSet(stack, 1, 1);
+  const s = %NewRecord(8);
+  %RecordSet(s, 0, promise);
+  const resources = %AsObj(%RecordGet(stack, 2));
+  %RecordSet(stack, 2, %ArrayCreate(0));
+  %RecordSet(s, 1, resources);
+  %RecordSet(s, 2, LengthOfArrayLike(resources) - 3);
+  %RecordSet(s, 4, false);
+  %RecordSet(s, 5, false);
+  %RecordSet(s, 6, false);
+  %RecordSet(s, 7, undefined);
+  AsyncDisposeContinue(s);
+  return promise;
+}
+
+// builtins/disposable.ts:307
+function AsyncDisposeError(s, e) {
+  if (%RecordGet(s, 4) === true) {
+    %RecordSet(s, 3, NewSuppressedError(e, %RecordGet(s, 3)));
+  } else {
+    %RecordSet(s, 3, e);
+    %RecordSet(s, 4, true);
+  }
+}
+
+// builtins/disposable.ts:317
+function AsyncDisposeAwait(s, v) {
+  const promise = PromiseResolve(%IntrinsicPromise(), v);
+  %PerformPromiseThen(%AsObj(promise), %NewBuiltinClosure(18, s, 1), %NewBuiltinClosure(19, s, 1), undefined);
+}
+
+// builtins/disposable.ts:326
+function AsyncDisposeContinue(s) {
+  const resources = %AsObj(%RecordGet(s, 1));
+  while (true) {
+    const i = %AsNumber(%RecordGet(s, 2));
+    if (i < 0) {
+      break;
+    }
+    %RecordSet(s, 2, i - 3);
+    const kind = %F64ToI32(%AsNumber(%Get(resources, i + 2)));
+    if (kind === 3) {
+      %RecordSet(s, 5, true);
+      continue;
+    }
+    let result = undefined;
+    try {
+      result = CallDisposeMethod(resources, i);
+    } catch (e) {
+      if (kind !== 2) {
+        AsyncDisposeError(s, e);
+        continue;
+      }
+      %RecordSet(s, 7, e);
+      result = undefined;
+    }
+    %RecordSet(s, 6, true);
+    if (kind === 2) {
+      result = undefined;
+    }
+    try {
+      AsyncDisposeAwait(s, result);
+    } catch (e) {
+      AsyncDisposeError(s, e);
+      continue;
+    }
+    return;
+  }
+  if (%RecordGet(s, 5) === true && %RecordGet(s, 6) !== true) {
+    %RecordSet(s, 6, true);
+    AsyncDisposeAwait(s, undefined);
+    return;
+  }
+  const promise = %AsObj(%RecordGet(s, 0));
+  if (%RecordGet(s, 4) === true) {
+    %RejectPromise(promise, %RecordGet(s, 3));
+  } else {
+    ResolvePromise(promise, undefined);
+  }
+}
+
+// builtins/disposable.ts:380 %AsyncDisposeFulfilled
+function AsyncDisposeFulfilled(value) {
+  const s = %AsObj(this);
+  const pending = %RecordGet(s, 7);
+  if (pending !== undefined) {
+    %RecordSet(s, 7, undefined);
+    AsyncDisposeError(s, pending);
+  }
+  AsyncDisposeContinue(s);
+}
+
+// builtins/disposable.ts:394 %AsyncDisposeRejected
+function AsyncDisposeRejected(reason) {
+  const s = %AsObj(this);
+  AsyncDisposeError(s, reason);
+  AsyncDisposeContinue(s);
+}
+
+// builtins/disposable.ts:404 Iterator.prototype[Symbol.dispose]
+function IteratorPrototypeDispose() {
+  const method = GetMethod(this, "return");
+  if (method !== undefined) {
+    %Call(method, this);
+  }
+}
+
+// builtins/disposable.ts:415 %AsyncIteratorPrototype%[Symbol.asyncDispose]
+function AsyncIteratorPrototypeAsyncDispose() {
+  const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
+  let wrapper = undefined;
+  try {
+    const method = GetMethod(this, "return");
+    if (method === undefined) {
+      ResolvePromise(promise, undefined);
+      return promise;
+    }
+    wrapper = PromiseResolve(%IntrinsicPromise(), %Call(method, this));
+  } catch (e) {
+    %RejectPromise(promise, e);
+    return promise;
+  }
+  %PerformPromiseThen(%AsObj(wrapper), %NewBuiltinClosure(9, undefined, 1), undefined, promise);
+  return promise;
+}
+
+// builtins/disposable.ts:438 value Symbol.dispose
+function SymbolDispose() {
+  return %WellKnownSymbol("dispose");
+}
+
+// builtins/disposable.ts:446 value Symbol.asyncDispose
+function SymbolAsyncDispose() {
+  return %WellKnownSymbol("asyncDispose");
+}
+
 // builtins/error.ts:4
 function InstallErrorCause(o, options) {
   if (%IsObject(options)) {
@@ -2274,6 +2623,18 @@ function InternalErrorConstructor(message, options) {
 function AggregateErrorConstructor(errors, message, options) {
   const o = ErrorConstruct(new.target, "AggregateErrorPrototype", message, options);
   %DefineDataPropertyOrThrow(o, "errors", IterableToList(errors), 5);
+  return o;
+}
+
+// builtins/error.ts:145 constructor SuppressedError
+function SuppressedErrorConstructor(error, suppressed, message) {
+  const o = %ErrorCreate(GetPrototypeFromConstructor(new.target, "SuppressedErrorPrototype"));
+  if (message !== undefined) {
+    %DefineDataPropertyOrThrow(o, "message", ToString(message), 5);
+  }
+  %DefineDataPropertyOrThrow(o, "error", error, 5);
+  %DefineDataPropertyOrThrow(o, "suppressed", suppressed, 5);
+  %CaptureStack(o);
   return o;
 }
 
@@ -9692,6 +10053,8 @@ function WeakSetPrototypeToStringTag() {
 %InstallConstructor("globalThis", "Boolean", BooleanConstructor, 1, undefined);
 %InstallConstructor("globalThis", "DataView", DataViewConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Date", DateConstructor, 7, undefined);
+%InstallConstructor("globalThis", "DisposableStack", DisposableStackConstructor, 0, undefined);
+%InstallConstructor("globalThis", "AsyncDisposableStack", AsyncDisposableStackConstructor, 0, undefined);
 %InstallConstructor("globalThis", "Error", ErrorConstructor, 1, undefined);
 %InstallConstructor("globalThis", "EvalError", EvalErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "RangeError", RangeErrorConstructor, 1, "Error");
@@ -9701,6 +10064,7 @@ function WeakSetPrototypeToStringTag() {
 %InstallConstructor("globalThis", "URIError", URIErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "InternalError", InternalErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "AggregateError", AggregateErrorConstructor, 2, "Error");
+%InstallConstructor("globalThis", "SuppressedError", SuppressedErrorConstructor, 3, "Error");
 %InstallConstructor("globalThis", "Function", FunctionConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Iterator", IteratorConstructor, 0, undefined);
 %InstallValue("globalThis", "JSON", JSONObject(), 5);
@@ -9877,6 +10241,26 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("Date.prototype", "toJSON", DatePrototypeToJSON, 1);
 %InstallMethod("Date.prototype", %WellKnownSymbol("toPrimitive"), DatePrototypeToPrimitive, 1);
 %InstallValue("Date.prototype", %WellKnownSymbol("toPrimitive"), DatePrototypeToPrimitive, 4);
+%InstallAccessor("DisposableStack.prototype", "disposed", DisposableStackPrototypeDisposed, false);
+%InstallMethod("DisposableStack.prototype", "dispose", DisposableStackPrototypeDispose, 0);
+%InstallMethod("DisposableStack.prototype", %WellKnownSymbol("dispose"), DisposableStackPrototypeDispose, 0);
+%InstallMethod("DisposableStack.prototype", "use", DisposableStackPrototypeUse, 1);
+%InstallMethod("DisposableStack.prototype", "adopt", DisposableStackPrototypeAdopt, 2);
+%InstallMethod("DisposableStack.prototype", "defer", DisposableStackPrototypeDefer, 1);
+%InstallMethod("DisposableStack.prototype", "move", DisposableStackPrototypeMove, 0);
+%InstallValue("DisposableStack.prototype", %WellKnownSymbol("toStringTag"), DisposableStackPrototypeToStringTag(), 4);
+%InstallAccessor("AsyncDisposableStack.prototype", "disposed", AsyncDisposableStackPrototypeDisposed, false);
+%InstallMethod("AsyncDisposableStack.prototype", "use", AsyncDisposableStackPrototypeUse, 1);
+%InstallMethod("AsyncDisposableStack.prototype", "adopt", AsyncDisposableStackPrototypeAdopt, 2);
+%InstallMethod("AsyncDisposableStack.prototype", "defer", AsyncDisposableStackPrototypeDefer, 1);
+%InstallMethod("AsyncDisposableStack.prototype", "move", AsyncDisposableStackPrototypeMove, 0);
+%InstallValue("AsyncDisposableStack.prototype", %WellKnownSymbol("toStringTag"), AsyncDisposableStackPrototypeToStringTag(), 4);
+%InstallMethod("AsyncDisposableStack.prototype", "disposeAsync", AsyncDisposableStackPrototypeDisposeAsync, 0);
+%InstallMethod("AsyncDisposableStack.prototype", %WellKnownSymbol("asyncDispose"), AsyncDisposableStackPrototypeDisposeAsync, 0);
+%InstallMethod("Iterator.prototype", %WellKnownSymbol("dispose"), IteratorPrototypeDispose, 0);
+%InstallMethod("%AsyncIteratorPrototype%", %WellKnownSymbol("asyncDispose"), AsyncIteratorPrototypeAsyncDispose, 0);
+%InstallValue("Symbol", "dispose", SymbolDispose(), 0);
+%InstallValue("Symbol", "asyncDispose", SymbolAsyncDispose(), 0);
 %InstallMethod("Error.prototype", "toString", ErrorPrototypeToString, 0);
 %InstallMethod("Array", "fromAsync", ArrayFromAsync, 1);
 %InstallMethod("Function.prototype", "call", FunctionPrototypeCall, 1);
@@ -10273,6 +10657,8 @@ function WeakSetPrototypeToStringTag() {
 %InstallIntrinsic("ToNumber", ToNumber);
 %InstallIntrinsic("ToString", ToString);
 %InstallIntrinsic("ToPropertyKey", ToPropertyKey);
+%InstallIntrinsic("AsyncDisposeFulfilled", AsyncDisposeFulfilled);
+%InstallIntrinsic("AsyncDisposeRejected", AsyncDisposeRejected);
 %InstallIntrinsic("FromAsyncFulfilled", FromAsyncFulfilled);
 %InstallIntrinsic("FromAsyncRejected", FromAsyncRejected);
 %InstallIntrinsic("InstanceofOperator", InstanceofOperator);

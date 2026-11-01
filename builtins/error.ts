@@ -136,3 +136,19 @@ function AggregateErrorConstructor(errors: Value, message: Value, options?: Valu
   DefineDataPropertyOrThrow(o, "errors", IterableToList(errors), 5);
   return o;
 }
+
+/**
+ * SuppressedError ( error, suppressed, message ), 20.5.8.1.1.
+ * @constructor SuppressedError
+ * @extends Error
+ */
+function SuppressedErrorConstructor(error: Value, suppressed: Value, message: Value): Obj {
+  const o: Obj = ErrorCreate(GetPrototypeFromConstructor(new.target, "SuppressedErrorPrototype"));
+  if (message !== undefined) {
+    DefineDataPropertyOrThrow(o, "message", ToString(message), 5);
+  }
+  DefineDataPropertyOrThrow(o, "error", error, 5);
+  DefineDataPropertyOrThrow(o, "suppressed", suppressed, 5);
+  CaptureStack(o);
+  return o;
+}

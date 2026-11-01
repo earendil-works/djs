@@ -107,9 +107,14 @@ pub enum Intrinsic {
     /// %IteratorPrototype%, 0051).
     IteratorHelperProto,
     WrapForValidIteratorProto,
+    /// %DisposableStack.prototype%, %AsyncDisposableStack.prototype% and
+    /// %SuppressedError.prototype% (0051).
+    DisposableStackProto,
+    AsyncDisposableStackProto,
+    SuppressedErrorProto,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::WrapForValidIteratorProto as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::SuppressedErrorProto as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -158,6 +163,9 @@ impl Intrinsic {
             "Iterator" => Intrinsic::IteratorProto,
             "IteratorHelper" => Intrinsic::IteratorHelperProto,
             "WrapForValidIterator" => Intrinsic::WrapForValidIteratorProto,
+            "DisposableStack" => Intrinsic::DisposableStackProto,
+            "AsyncDisposableStack" => Intrinsic::AsyncDisposableStackProto,
+            "SuppressedError" => Intrinsic::SuppressedErrorProto,
             _ => return None,
         })
     }
@@ -320,6 +328,8 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
         Intrinsic::WeakSetProto,
         Intrinsic::DateProto,
         Intrinsic::RegExpProto,
+        Intrinsic::DisposableStackProto,
+        Intrinsic::AsyncDisposableStackProto,
     ] {
         let p = heap.new_object(Some(object_proto))?;
         set(heap, i, Value::object(p));
@@ -347,6 +357,7 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
         (Intrinsic::EvalErrorProto, "EvalError"),
         (Intrinsic::UriErrorProto, "URIError"),
         (Intrinsic::AggregateErrorProto, "AggregateError"),
+        (Intrinsic::SuppressedErrorProto, "SuppressedError"),
     ] {
         let p = heap.new_object(Some(error_proto))?;
         let name = heap.alloc_str(name)?;

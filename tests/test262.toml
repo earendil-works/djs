@@ -103,13 +103,28 @@ description = "Phases P3 to P5 of ARCH.md: on the roadmap, not in the current mi
 # Moved to active in 0045: built-ins/Proxy and the features Proxy, proxy-missing-checks.
 # Moved to active in 0051: built-ins/Iterator and the features iterator-helpers,
 # iterator-sequencing, iterator-chunking, iterator-includes, Iterator.prototype.join,
-# joint-iteration, upsert, Array.fromAsync.
+# joint-iteration, upsert, Array.fromAsync, and built-ins/DisposableStack,
+# AsyncDisposableStack, SuppressedError with the runtime half of the feature
+# explicit-resource-management (the `using` tests stay later, by path).
 paths = [
   "built-ins/WeakRef",                        # GC-observable
   "built-ins/FinalizationRegistry",           # GC-observable
-  "built-ins/DisposableStack",                # explicit resource management
-  "built-ins/AsyncDisposableStack",           # explicit resource management
-  "built-ins/SuppressedError",                # explicit resource management
+  # `using` declarations (explicit-resource-management syntax, after P5; the runtime
+  # parts are active since 0051).
+  "language/statements/using",
+  "language/statements/await-using",
+  "language/statements/for-await-of/head-await-using-init.js",
+  "language/statements/for-await-of/head-using-init.js",
+  "language/statements/for-of/head-await-using-bound-names-fordecl-tdz.js",
+  "language/statements/for-of/head-await-using-bound-names-in-stmt.js",
+  "language/statements/for-of/head-await-using-bound-names-let.js",
+  "language/statements/for-of/head-await-using-fresh-binding-per-iteration.js",
+  "language/statements/for-of/head-await-using-init.js",
+  "language/statements/for-of/head-using-bound-names-fordecl-tdz.js",
+  "language/statements/for-of/head-using-bound-names-in-stmt.js",
+  "language/statements/for-of/head-using-bound-names-let.js",
+  "language/statements/for-of/head-using-fresh-binding-per-iteration.js",
+  "language/statements/for-of/head-using-init.js",
 ]
 features = [
   "immutable-arraybuffer",      # binary data
@@ -117,7 +132,6 @@ features = [
   "WeakRef",                    # GC-observable
   "FinalizationRegistry",       # GC-observable
   "decorators",                 # decorators come after P5
-  "explicit-resource-management", # `using` comes after P5
   "error-stack-accessor",       # error stack traces (P5)
   "json-parse-with-source",     # JSON.parse source text access
   "await-dictionary",           # proposal

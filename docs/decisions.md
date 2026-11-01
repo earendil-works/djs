@@ -2381,3 +2381,18 @@ assignments after the parameters; derived class: both right after `super()` retu
 around the field initializers), matching tsc's output with useDefineForClassFields and
 dquickts. The names are found by a lookahead before the parameters are parsed.
 
+## D1512: Disposable stacks: one slot class, resources as triples, async disposal as a state machine
+date: 2026-11-03 · by: heap · issue: 0051
+DisposableStack and AsyncDisposableStack are one heap class, `ObjectClass::DisposableStack`
+(33): slot 0 whether it is async (the brand), 1 the state, 2 an internal Array of
+[value, method, kind] triples. The spec's closures never reach user code, so they are
+kinds instead of functions: 0 calls method with `this` = value, 1 calls method(value)
+(`adopt`), 2 an async stack's resource that only has Symbol.dispose (GetDisposeMethod's
+wrapper: the call's outcome is awaited, a throw becomes a rejection after the await), 3
+an async stack's null/undefined resource (only forces the final await).
+`disposeAsync` runs DisposeResources as a Record state machine resumed by builtin
+closures 18/19, as Array.fromAsync does (D1511); the tick order matches qjs
+(tests/data/e2e/disposable_stack.js). Symbol.dispose and Symbol.asyncDispose are
+well-known symbol atoms (heap/atom.rs), so the `using` compiler work can use them.
+test262: the explicit-resource-management feature stays later only for the `using`
+syntax tests, listed by path in tests/test262.toml.

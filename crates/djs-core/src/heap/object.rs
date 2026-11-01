@@ -133,6 +133,10 @@ pub enum ObjectClass {
     /// wrapper, told apart by slot 0 (the kind). The builtins keep their state in slots
     /// 0..8 with `%RecordGet`/`%RecordSet`.
     IteratorHelper = 28,
+    /// A DisposableStack or AsyncDisposableStack (0051, builtins/disposable.ts): slot 0
+    /// true for an AsyncDisposableStack, slot 1 the state (0 pending, 1 disposed), slot 2
+    /// the resources (an internal Array of [value, method, kind] triples).
+    DisposableStack = 33,
     /// A BigInt wrapper (`[[BigIntData]]`, 0046): slot 0 is the BigInt, like the other
     /// primitive wrappers.
     BigInt = 30,
@@ -170,6 +174,7 @@ impl ObjectClass {
             26 => Some(ObjectClass::RegExpStringIterator),
             27 => Some(ObjectClass::Proxy),
             28 => Some(ObjectClass::IteratorHelper),
+            33 => Some(ObjectClass::DisposableStack),
             30 => Some(ObjectClass::BigInt),
             _ => None,
         }
@@ -202,6 +207,7 @@ impl ObjectClass {
             ObjectClass::RegExp | ObjectClass::RegExpStringIterator => 3,
             ObjectClass::Proxy => 3,
             ObjectClass::IteratorHelper => 8,
+            ObjectClass::DisposableStack => 3,
         }
     }
 

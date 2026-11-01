@@ -1,0 +1,23 @@
+symbol Symbol(Symbol.dispose) Symbol(Symbol.asyncDispose)
+null 5 undefined
+false undefined true undefined ["dispose a","defer","adopt 5"]
+ReferenceError: DisposableStack is disposed
+TypeError: using: value is not an object
+TypeError: using: value has no Symbol.dispose method
+TypeError: must be called with new
+TypeError: DisposableStack object expected
+SuppressedError true x z ["dispose z","dispose y","dispose x"]
+[] true false
+["dispose moved"] [object DisposableStack]
+msg e s true SuppressedError 3
+true false
+{"done":true}
+["deferred async","dispose sync in async","async dispose"] 1,2,3,4,disposed,5 true
+undefined
+SuppressedError sync fail SuppressedError async fail sync throw
+["dispose sync fail"]
+ReferenceError: AsyncDisposableStack is disposed
+TypeError: using: value has no Symbol.asyncDispose or Symbol.dispose method
+TypeError: using: value is not an object
+TypeError: AsyncDisposableStack object expected
+undefined ["gen closed"]

@@ -1,4 +1,5 @@
-//! Leaf intrinsics of the remaining builtins (0051): iterator helpers. The intrinsic
+//! Leaf intrinsics of the remaining builtins (0051): iterator helpers, disposable
+//! stacks. The intrinsic
 //! fallback chain runs `call_intrinsic` → `json_regexp_intrinsic` → `bigint_intrinsic` →
 //! [`Exec::late_intrinsic`].
 
@@ -7,6 +8,8 @@ use super::*;
 
 const CREATE_ITERATOR_HELPER: u16 = id("CreateIteratorHelper");
 const THIS_ITERATOR_HELPER: u16 = id("ThisIteratorHelper");
+const DISPOSABLE_STACK_CREATE: u16 = id("DisposableStackCreate");
+const THIS_DISPOSABLE_STACK: u16 = id("ThisDisposableStack");
 
 /// The kind (slot 0) of `Iterator.from`'s wrapper; the other kinds are helpers
 /// (builtins/iterator.ts).
@@ -64,6 +67,38 @@ impl Exec<'_> {
                         "Iterator Wrap object expected"
                     } else {
                         "Iterator Helper object expected"
+                    };
+                    return type_error(msg);
+                }
+                a0
+            }
+            DISPOSABLE_STACK_CREATE => {
+                let Some(proto) = a0.as_object() else {
+                    return bad_argument(name);
+                };
+                let o = self
+                    .heap
+                    .alloc_object(ObjectClass::DisposableStack, Some(proto), 3)?;
+                let resources = self
+                    .heap
+                    .new_array(Some(intrinsic_obj(self.heap, Intrinsic::ArrayProto)), 0)?;
+                self.heap
+                    .set_object_slot(o, 0, Value::bool(arg(self, 1) == Value::TRUE));
+                self.heap.set_object_slot(o, 1, Value::int(0));
+                self.heap.set_object_slot(o, 2, Value::object(resources));
+                Value::object(o)
+            }
+            THIS_DISPOSABLE_STACK => {
+                let is_async = arg(self, 1) == Value::TRUE;
+                let ok = a0.as_object().is_some_and(|o| {
+                    self.heap.object_class(o) == ObjectClass::DisposableStack
+                        && self.heap.object_slot(o, 0) == Value::bool(is_async)
+                });
+                if !ok {
+                    let msg = if is_async {
+                        "AsyncDisposableStack object expected"
+                    } else {
+                        "DisposableStack object expected"
                     };
                     return type_error(msg);
                 }

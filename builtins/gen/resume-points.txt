@@ -818,6 +818,116 @@ DatePrototypeToPrimitive: reentrant (Date.prototype[Symbol.toPrimitive])
   builtins/date.ts:498:12  OrdinaryToPrimitive (builtin)
   builtins/date.ts:501:12  OrdinaryToPrimitive (builtin)
 
+NewSuppressedError: reentrant
+  builtins/disposable.ts:17:3  DefineDataPropertyOrThrow (intrinsic)
+  builtins/disposable.ts:18:3  DefineDataPropertyOrThrow (intrinsic)
+
+PendingDisposableStack: leaf
+
+AddResource: reentrant
+  builtins/disposable.ts:35:18  LengthOfArrayLike (builtin)
+  builtins/disposable.ts:36:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/disposable.ts:37:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/disposable.ts:38:3  CreateDataPropertyOrThrow (intrinsic)
+
+AddDisposableValue: reentrant
+  builtins/disposable.ts:48:7  AddResource (builtin)
+  builtins/disposable.ts:58:14  GetV (intrinsic)
+  builtins/disposable.ts:61:14  GetV (intrinsic)
+  builtins/disposable.ts:72:3  AddResource (builtin)
+
+CallDisposeMethod: reentrant
+  builtins/disposable.ts:77:24  Get (intrinsic)
+  builtins/disposable.ts:78:25  Get (intrinsic)
+  builtins/disposable.ts:79:25  Get (intrinsic)
+  builtins/disposable.ts:80:12  Call (intrinsic)
+  builtins/disposable.ts:82:10  Call (intrinsic)
+
+DisposableStackConstructor: reentrant (constructor DisposableStack)
+  builtins/disposable.ts:93:32  GetPrototypeFromConstructor (builtin)
+
+DisposableStackPrototypeDisposed: leaf (get DisposableStack.prototype.disposed)
+
+DisposableStackPrototypeDispose: reentrant (DisposableStack.prototype.dispose, DisposableStack.prototype[Symbol.dispose])
+  builtins/disposable.ts:120:21  LengthOfArrayLike (builtin)
+  builtins/disposable.ts:122:7  CallDisposeMethod (builtin)
+  builtins/disposable.ts:124:26  NewSuppressedError (builtin)
+
+DisposableStackPrototypeUse: reentrant (DisposableStack.prototype.use)
+  builtins/disposable.ts:138:3  AddDisposableValue (builtin)
+
+DisposableStackPrototypeAdopt: reentrant (DisposableStack.prototype.adopt)
+  builtins/disposable.ts:151:3  AddResource (builtin)
+
+DisposableStackPrototypeDefer: reentrant (DisposableStack.prototype.defer)
+  builtins/disposable.ts:164:3  AddResource (builtin)
+
+DisposableStackMove: leaf
+
+DisposableStackPrototypeMove: leaf (DisposableStack.prototype.move)
+
+DisposableStackPrototypeToStringTag: leaf (value DisposableStack.prototype[Symbol.toStringTag])
+
+AsyncDisposableStackConstructor: reentrant (constructor AsyncDisposableStack)
+  builtins/disposable.ts:203:32  GetPrototypeFromConstructor (builtin)
+
+AsyncDisposableStackPrototypeDisposed: leaf (get AsyncDisposableStack.prototype.disposed)
+
+AsyncDisposableStackPrototypeUse: reentrant (AsyncDisposableStack.prototype.use)
+  builtins/disposable.ts:219:3  AddDisposableValue (builtin)
+
+AsyncDisposableStackPrototypeAdopt: reentrant (AsyncDisposableStack.prototype.adopt)
+  builtins/disposable.ts:232:3  AddResource (builtin)
+
+AsyncDisposableStackPrototypeDefer: reentrant (AsyncDisposableStack.prototype.defer)
+  builtins/disposable.ts:245:3  AddResource (builtin)
+
+AsyncDisposableStackPrototypeMove: leaf (AsyncDisposableStack.prototype.move)
+
+AsyncDisposableStackPrototypeToStringTag: leaf (value AsyncDisposableStack.prototype[Symbol.toStringTag])
+
+AsyncDisposableStackPrototypeDisposeAsync: reentrant (AsyncDisposableStack.prototype.disposeAsync, AsyncDisposableStack.prototype[Symbol.asyncDispose])
+  builtins/disposable.ts:288:5  ResolvePromise (builtin)
+  builtins/disposable.ts:297:19  LengthOfArrayLike (builtin)
+  builtins/disposable.ts:302:3  AsyncDisposeContinue (builtin)
+
+AsyncDisposeError: reentrant
+  builtins/disposable.ts:309:21  NewSuppressedError (builtin)
+
+AsyncDisposeAwait: reentrant
+  builtins/disposable.ts:318:26  PromiseResolve (builtin)
+
+AsyncDisposeContinue: reentrant
+  builtins/disposable.ts:334:41  Get (intrinsic)
+  builtins/disposable.ts:341:16  CallDisposeMethod (builtin)
+  builtins/disposable.ts:344:9  AsyncDisposeError (builtin)
+  builtins/disposable.ts:356:7  AsyncDisposeAwait (builtin)
+  builtins/disposable.ts:358:7  AsyncDisposeError (builtin)
+  builtins/disposable.ts:365:5  AsyncDisposeAwait (builtin)
+  builtins/disposable.ts:372:5  ResolvePromise (builtin)
+
+AsyncDisposeFulfilled: reentrant (%AsyncDisposeFulfilled)
+  builtins/disposable.ts:385:5  AsyncDisposeError (builtin)
+  builtins/disposable.ts:387:3  AsyncDisposeContinue (builtin)
+
+AsyncDisposeRejected: reentrant (%AsyncDisposeRejected)
+  builtins/disposable.ts:396:3  AsyncDisposeError (builtin)
+  builtins/disposable.ts:397:3  AsyncDisposeContinue (builtin)
+
+IteratorPrototypeDispose: reentrant (Iterator.prototype[Symbol.dispose])
+  builtins/disposable.ts:405:25  GetMethod (builtin)
+  builtins/disposable.ts:407:5  Call (intrinsic)
+
+AsyncIteratorPrototypeAsyncDispose: reentrant (%AsyncIteratorPrototype%[Symbol.asyncDispose])
+  builtins/disposable.ts:419:27  GetMethod (builtin)
+  builtins/disposable.ts:421:7  ResolvePromise (builtin)
+  builtins/disposable.ts:424:50  Call (intrinsic)
+  builtins/disposable.ts:424:15  PromiseResolve (builtin)
+
+SymbolDispose: leaf (value Symbol.dispose)
+
+SymbolAsyncDispose: leaf (value Symbol.asyncDispose)
+
 InstallErrorCause: reentrant
   builtins/error.ts:7:9  HasProperty (intrinsic)
   builtins/error.ts:8:45  Get (intrinsic)
@@ -863,6 +973,13 @@ AggregateErrorConstructor: reentrant (constructor AggregateError)
   builtins/error.ts:135:18  ErrorConstruct (builtin)
   builtins/error.ts:136:42  IterableToList (builtin)
   builtins/error.ts:136:3  DefineDataPropertyOrThrow (intrinsic)
+
+SuppressedErrorConstructor: reentrant (constructor SuppressedError)
+  builtins/error.ts:146:30  GetPrototypeFromConstructor (builtin)
+  builtins/error.ts:148:45  ToString (builtin)
+  builtins/error.ts:148:5  DefineDataPropertyOrThrow (intrinsic)
+  builtins/error.ts:150:3  DefineDataPropertyOrThrow (intrinsic)
+  builtins/error.ts:151:3  DefineDataPropertyOrThrow (intrinsic)
 
 ArrayFromAsync: reentrant (Array.fromAsync)
   builtins/fromasync.ts:23:5  FromAsyncStart (builtin)

@@ -118,6 +118,8 @@ declare function NewTypeError(message: Str): Obj;
 declare function NewNotConstructorError(f: Value): Obj;
 /** A new SyntaxError of the current realm (0039). @leaf */
 declare function NewSyntaxError(message: Str): Obj;
+/** A new ReferenceError of the current realm (0051). @leaf */
+declare function NewReferenceError(message: Str): Obj;
 /** A new RangeError of the current realm. @leaf */
 declare function NewRangeError(message: Str): Obj;
 /** The well-known symbol Symbol.<name>. @leaf */
@@ -623,8 +625,9 @@ declare function RecordSet(r: Obj, i: i32, v: Value): void;
  * PromiseCatchFinally, 9 PromiseValueThunk, 10 PromiseThrower, 11
  * AsyncGeneratorAwaitReturnFulfilled, 12 AsyncGeneratorAwaitReturnRejected, 13
  * AsyncFromSyncIteratorUnwrap, 14 AsyncFromSyncIteratorCloseThrow, 15
- * ProxyRevokeFunction, 16 FromAsyncFulfilled, 17 FromAsyncRejected) with `this` = data
- * and its own arguments.
+ * ProxyRevokeFunction, 16 FromAsyncFulfilled, 17 FromAsyncRejected, 18
+ * AsyncDisposeFulfilled, 19 AsyncDisposeRejected) with `this` = data and its own
+ * arguments.
  * @leaf
  */
 declare function NewBuiltinClosure(kind: i32, data: Value, length: i32): Fn;
@@ -687,6 +690,19 @@ declare function CreateIteratorHelper(kind: i32, iterator: Value, next: Value): 
  * else TypeError "Iterator Helper object expected" / "Iterator Wrap object expected". @leaf
  */
 declare function ThisIteratorHelper(v: Value, wrap: boolean): Obj;
+
+// ---- Disposable stacks (0051, builtins/disposable.ts) -----------------------------------
+
+/**
+ * A new DisposableStack (isAsync false) or AsyncDisposableStack with prototype proto:
+ * slot 0 isAsync, 1 state 0 (pending), 2 a new empty Array of resources. @leaf
+ */
+declare function DisposableStackCreate(proto: Obj, isAsync: boolean): Obj;
+/**
+ * v if it is a DisposableStack (isAsync false) or an AsyncDisposableStack, else TypeError
+ * "DisposableStack object expected" / "AsyncDisposableStack object expected". @leaf
+ */
+declare function ThisDisposableStack(v: Value, isAsync: boolean): Obj;
 // ---- JSON (0033, builtins/json.rs over crate::json) -------------------------------------
 
 /** JSON.parse of text without a reviver; qjs's SyntaxError for invalid JSON. @leaf */

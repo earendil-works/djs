@@ -64,7 +64,16 @@ exists (generators/iterators from 0029/0037/0042, the ephemeron GC from 0038):
 - Part 4, Array.fromAsync (D1511): builtins/fromasync.ts, a Record state machine with
   builtin closures 16/17 as the await continuations. 93/93; promoted: active 34,666
   tests. No behavior.js cases (its comparisons are synchronous); e2e covers results,
-  closing and the tick order against qjs.
+  closing and the tick order against qjs. Merged (main 8c23512).
+- Part 5, explicit resource management runtime (D1512): builtins/disposable.ts
+  (DisposableStack, AsyncDisposableStack, Iterator.prototype[Symbol.dispose],
+  %AsyncIteratorPrototype%[Symbol.asyncDispose], Symbol.dispose/asyncDispose),
+  SuppressedError in error.ts (it extends Error, so it must install after it). New
+  leaf NewReferenceError; ObjectClass 33; atoms SYM_DISPOSE/SYM_ASYNC_DISPOSE
+  (heap/atom.rs). Built-in ERM tests 226/226 (baseline 59). The `using` syntax tests
+  (language/statements/using, await-using and 12 for-of/for-await-of head-using files;
+  59/169 pass by accident) stay later by path. Active after promotion (with main's
+  0050 regexp promotion): 37,084 tests, 36,680 passing.
 
 ## Follow-ups
 

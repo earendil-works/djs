@@ -67,6 +67,7 @@ const ARRAY_CREATE: u16 = id("ArrayCreate");
 const NEW_TYPE_ERROR: u16 = id("NewTypeError");
 const NEW_NOT_CONSTRUCTOR_ERROR: u16 = id("NewNotConstructorError");
 const NEW_RANGE_ERROR: u16 = id("NewRangeError");
+const NEW_REFERENCE_ERROR: u16 = id("NewReferenceError");
 const NEW_SYNTAX_ERROR: u16 = id("NewSyntaxError");
 const WELL_KNOWN_SYMBOL: u16 = id("WellKnownSymbol");
 const REALM_INTRINSIC: u16 = id("RealmIntrinsic");
@@ -276,12 +277,15 @@ const PROMISE_RESOLVE_THENABLE_JOB: u16 = id("PromiseResolveThenableJob");
 /// The classes whose slots `%RecordGet`/`%RecordSet` reach: Records, and the objects
 /// whose builtins keep all their state in slots (0051). Their builtins check the brand.
 fn is_slot_object(class: ObjectClass) -> bool {
-    matches!(class, ObjectClass::Record | ObjectClass::IteratorHelper)
+    matches!(
+        class,
+        ObjectClass::Record | ObjectClass::IteratorHelper | ObjectClass::DisposableStack
+    )
 }
 
 /// The builtins a `%NewBuiltinClosure(kind, ..)` calls, by kind (D1372; the list in
 /// builtins/intrinsics.d.ts).
-const BUILTIN_CLOSURES: [u16; 18] = [
+const BUILTIN_CLOSURES: [u16; 20] = [
     id("PromiseResolveFunction"),
     id("PromiseRejectFunction"),
     id("GetCapabilitiesExecutor"),
@@ -300,6 +304,8 @@ const BUILTIN_CLOSURES: [u16; 18] = [
     id("ProxyRevokeFunction"),
     id("FromAsyncFulfilled"),
     id("FromAsyncRejected"),
+    id("AsyncDisposeFulfilled"),
+    id("AsyncDisposeRejected"),
 ];
 
 /// The function-kind constructors, wired to their prototypes when installed (D1420).
@@ -598,7 +604,7 @@ impl Exec<'_> {
                 self.heap.define_own_property(a, atoms::LENGTH, &d)?;
                 Value::object(a)
             }
-            NEW_TYPE_ERROR | NEW_RANGE_ERROR | NEW_SYNTAX_ERROR => {
+            NEW_TYPE_ERROR | NEW_RANGE_ERROR | NEW_SYNTAX_ERROR | NEW_REFERENCE_ERROR => {
                 let msg = match a0.as_string() {
                     Some(s) => self.heap.str_to_string(s),
                     None => return bad_argument(info.name),
@@ -606,6 +612,7 @@ impl Exec<'_> {
                 let kind = match id {
                     NEW_TYPE_ERROR => ErrorKind::TypeError,
                     NEW_SYNTAX_ERROR => ErrorKind::SyntaxError,
+                    NEW_REFERENCE_ERROR => ErrorKind::ReferenceError,
                     _ => ErrorKind::RangeError,
                 };
                 self.new_error_here(kind, &msg)?
@@ -633,6 +640,8 @@ impl Exec<'_> {
                     "replace" => atoms::SYM_REPLACE,
                     "search" => atoms::SYM_SEARCH,
                     "split" => atoms::SYM_SPLIT,
+                    "dispose" => atoms::SYM_DISPOSE,
+                    "asyncDispose" => atoms::SYM_ASYNC_DISPOSE,
                     _ => return bad_argument(info.name),
                 };
                 Value::symbol(self.heap.atom_symbol(atom).expect("well-known symbol"))

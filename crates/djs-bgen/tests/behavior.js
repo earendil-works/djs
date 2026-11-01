@@ -160,6 +160,19 @@ const I = {
   },
   NewTypeError: (m) => new TypeError(m),
   NewRangeError: (m) => new RangeError(m),
+  NewReferenceError: (m) => new ReferenceError(m),
+  DisposableStackCreate: (proto, isAsync) => {
+    const o = Object.create(proto);
+    helperSlots.set(o, [isAsync, 0, []]);
+    return o;
+  },
+  ThisDisposableStack: (v, isAsync) => {
+    const slots = isObject(v) ? helperSlots.get(v) : undefined;
+    if (!slots || slots.length !== 3 || slots[0] !== isAsync) {
+      throw new TypeError(isAsync ? "AsyncDisposableStack object expected" : "DisposableStack object expected");
+    }
+    return v;
+  },
   NewNotConstructorError: (f) => new TypeError(f.name ? f.name + " is not a constructor" : "not a constructor"),
   WellKnownSymbol: (name) => Symbol[name],
   InstallMethod: (target, key, f, length) => {
@@ -1837,6 +1850,44 @@ for (const [name, native, mk, key] of [
   same(name + ".getOrInsertComputed", native.getOrInsertComputed, (f) => { const m = mk(); return f.call(m, key, (k) => { m.set(k, "in"); return "out"; }); });
   same(name + ".getOrInsertComputed", native.getOrInsertComputed, (f) => f.call(mk(), 2, 1));
   same(name + ".getOrInsertComputed", native.getOrInsertComputed, (f) => f.call(mk(), -0, (k) => Object.is(k, -0)));
+}
+
+// DisposableStack (0051): each case builds its stack with the native constructor or
+// with ours, and drives it with the methods of the same side.
+const DSP = DisposableStack.prototype;
+function dsKit(f, native) {
+  if (f === native) {
+    return {
+      make: () => new DisposableStack(),
+      m: (name) => (name === "disposed" ? Object.getOwnPropertyDescriptor(DSP, name).get : DSP[name]),
+    };
+  }
+  return {
+    make: () => I.DisposableStackCreate(DSP, false),
+    m: (name) => installed[name === "disposed" ? "get DisposableStack.prototype.disposed" : "DisposableStack.prototype." + name].f,
+  };
+}
+const res = (log, name, fail) => ({ [Symbol.dispose]() { log.push("dispose " + name); if (fail) throw new Error(name); } });
+const showErr = (e) => (e instanceof SuppressedError ? "Suppressed(" + showErr(e.error) + ", " + showErr(e.suppressed) + ")" : String(e));
+const dsCases = [
+  ["use", (k, log) => { const st = k.make(); k.m("use").call(st, res(log, "a")); k.m("use").call(st, null); k.m("use").call(st, res(log, "b")); k.m("dispose").call(st); return k.m("use").call(st, {}); }],
+  ["use", (k) => k.m("use").call(k.make(), 1)],
+  ["use", (k) => k.m("use").call(k.make(), {})],
+  ["use", (k) => k.m("use").call(k.make(), { [Symbol.dispose]: 1 })],
+  ["use", (k) => k.m("use").call({}, null)],
+  ["adopt", (k, log) => { const st = k.make(); k.m("adopt").call(st, 7, function (v) { log.push("adopted " + v + " " + arguments.length + " " + this); }); k.m("dispose").call(st); return k.m("disposed").call(st); }],
+  ["adopt", (k) => k.m("adopt").call(k.make(), 7, 1)],
+  ["defer", (k, log) => { const st = k.make(); k.m("defer").call(st, function () { log.push("deferred " + this); }); return [k.m("defer").call(st, () => 1), k.m("dispose").call(st)]; }],
+  ["dispose", (k, log) => { const st = k.make(); k.m("use").call(st, res(log, "a", true)); k.m("use").call(st, res(log, "b")); k.m("use").call(st, res(log, "c", true)); try { k.m("dispose").call(st); } catch (e) { return showErr(e); } }],
+  ["dispose", (k, log) => { const st = k.make(); k.m("defer").call(st, () => { throw 1; }); k.m("defer").call(st, () => { throw 2; }); k.m("defer").call(st, () => { throw 3; }); try { k.m("dispose").call(st); } catch (e) { return showErr(e); } }],
+  ["move", (k, log) => { const st = k.make(); k.m("use").call(st, res(log, "a")); const moved = k.m("move").call(st); k.m("dispose").call(st); log.push("old disposed"); k.m("dispose").call(moved); return [k.m("disposed").call(st), k.m("disposed").call(moved)]; }],
+  ["move", (k) => { const st = k.make(); k.m("dispose").call(st); return k.m("move").call(st); }],
+];
+for (const [name, run] of dsCases) {
+  const native = DSP[name];
+  same("DisposableStack.prototype." + name, native, (f, log) => {
+    return run(dsKit(f, native), log);
+  });
 }
 
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));
