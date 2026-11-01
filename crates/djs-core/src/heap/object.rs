@@ -57,6 +57,13 @@ pub enum ObjectClass {
     Ordinary = 0,
     /// An Array exotic object: dense elements and a `length` in slot 0.
     Array = 1,
+    /// A JS closure: slot 0 is an internal reference to its `FuncTemplate`, slots 1.. the
+    /// internal references to its captured Boxes.
+    Function = 2,
+    /// A function implemented by the embedder: slot 0 is its host function id (int32).
+    HostFunction = 3,
+    /// An Error instance (`[[ErrorData]]`).
+    Error = 4,
 }
 
 impl ObjectClass {
@@ -64,6 +71,9 @@ impl ObjectClass {
         match c {
             0 => Some(ObjectClass::Ordinary),
             1 => Some(ObjectClass::Array),
+            2 => Some(ObjectClass::Function),
+            3 => Some(ObjectClass::HostFunction),
+            4 => Some(ObjectClass::Error),
             _ => None,
         }
     }
@@ -71,9 +81,14 @@ impl ObjectClass {
     /// Number of internal slots the class needs.
     pub const fn slots(self) -> u32 {
         match self {
-            ObjectClass::Ordinary => 0,
-            ObjectClass::Array => 1,
+            ObjectClass::Ordinary | ObjectClass::Error => 0,
+            ObjectClass::Array | ObjectClass::Function | ObjectClass::HostFunction => 1,
         }
+    }
+
+    /// Callable objects.
+    pub const fn is_callable(self) -> bool {
+        matches!(self, ObjectClass::Function | ObjectClass::HostFunction)
     }
 }
 

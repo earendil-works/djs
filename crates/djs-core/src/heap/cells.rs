@@ -118,8 +118,9 @@ cells! {
         /// The [`HandleTable`] (values the embedder or Rust code hold across a GC). Null
         /// until the first handle is created.
         HANDLES: Ref = 40,
-        /// Reserved, 0.
-        RESERVED: u32 = 44,
+        /// The [`Interp`] cell: interpreter registers and run state. Null until a VM
+        /// exists.
+        INTERP: Ref = 44,
     };
 
     /// A flat one-byte (Latin-1) string. Holds only strings with every code unit <= 0xFF;
@@ -292,6 +293,51 @@ cells! {
         /// Entries in use.
         LEN: u32 = 8,
     } tail REFS: [Ref] = 12;
+
+    // ---- Interpreter state (docs/compiler.md 7; ids 17-19 follow 0013's code cells) ----
+
+    /// The interpreter's registers and run state, flushed here whenever `run` returns
+    /// (D1086), so a suspended VM is entirely in the arena.
+    17 => Interp {
+        /// `interp::RunState`.
+        STATE: u32 = 8,
+        /// Base of the current frame (index into the value stack).
+        BP: u32 = 12,
+        /// Header of the current frame.
+        HP: u32 = 16,
+        /// Stack top: slots in use.
+        SP: u32 = 20,
+        /// Next instruction of the current frame.
+        PC: u32 = 24,
+        /// Id of the host call the VM is parked on, 0 for none.
+        HOST_CALL: u32 = 28,
+        /// The next host call id to hand out.
+        NEXT_CALL_ID: u32 = 32,
+        /// Reserved, 0.
+        RESERVED: u32 = 36,
+        /// The completion value (`Done`) or the exception (`Threw`, or pending to be
+        /// thrown at the parked call).
+        RESULT: Value = 40,
+    };
+
+    /// A realm record: the global object and the intrinsics, indexed by
+    /// `interp::Intrinsic`.
+    18 => Realm {
+        /// The global lexical record (P1, Script mode); null for now.
+        GLOBAL_LEX: Ref = 8,
+    } tail INTRINSICS: [Value] = 16;
+
+    /// A pending host call (docs/compiler.md 7.5).
+    19 => HostCall {
+        /// The call id handed to the embedder.
+        ID: u32 = 8,
+        /// The host function id.
+        FN: u32 = 12,
+        /// [`ValueArray`] of the arguments.
+        ARGS: Ref = 16,
+        /// The `this` value of the call.
+        THIS: Value = 24,
+    };
 }
 
 // The GC stores the forwarding offset in the first payload word, so every cell needs one.
@@ -318,13 +364,19 @@ mod tests {
 
     #[test]
     fn kinds_match_table() {
-        for (i, l) in LAYOUTS.iter().enumerate() {
-            assert_eq!(l.kind as usize, i + 1);
+        // Kind ids are unique and round-trip; they may have gaps (issues working in
+        // parallel take separate ranges).
+        let mut seen = alloc::vec::Vec::new();
+        for l in LAYOUTS {
+            assert!(!seen.contains(&l.kind), "duplicate kind {}", l.kind);
+            seen.push(l.kind);
             let k = CellKind::from_u8(l.kind).unwrap();
             assert_eq!(k.layout().name, l.name);
         }
+        for b in 0..=255u8 {
+            assert_eq!(CellKind::from_u8(b).is_some(), seen.contains(&b));
+        }
         assert_eq!(CellKind::from_u8(0), None);
-        assert_eq!(CellKind::from_u8(LAYOUTS.len() as u8 + 1), None);
     }
 
     #[test]
