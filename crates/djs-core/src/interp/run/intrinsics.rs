@@ -64,6 +64,7 @@ const NEW_SYNTAX_ERROR: u16 = id("NewSyntaxError");
 const WELL_KNOWN_SYMBOL: u16 = id("WellKnownSymbol");
 const REALM_INTRINSIC: u16 = id("RealmIntrinsic");
 const ERROR_CREATE: u16 = id("ErrorCreate");
+const ERROR_STACK: u16 = id("ErrorStack");
 const CAPTURE_STACK: u16 = id("CaptureStack");
 const DEFINE_DATA_PROPERTY_OR_THROW: u16 = id("DefineDataPropertyOrThrow");
 const DEFINE_OWN_PROPERTY_FROM_RECORD: u16 = id("DefineOwnPropertyFromRecord");
@@ -1203,15 +1204,20 @@ impl Exec<'_> {
                 let Some(proto) = a0.as_object() else {
                     return bad_argument(info.name);
                 };
-                Value::object(self.heap.alloc_object(ObjectClass::Error, Some(proto), 0)?)
+                Value::object(self.heap.alloc_object(
+                    ObjectClass::Error,
+                    Some(proto),
+                    ObjectClass::Error.slots(),
+                )?)
             }
+            ERROR_STACK => realm::error_stack_slot(self.heap, a0),
             CAPTURE_STACK => {
                 let Some(o) = a0.as_object() else {
                     return bad_argument(info.name);
                 };
                 let trace = self.stack_trace_from(self.pc, true);
                 let s = self.heap.alloc_str(&trace)?;
-                realm::define_hidden(self.heap, o, atoms::STACK, Value::string(s))?;
+                realm::set_error_stack(self.heap, o, s)?;
                 Value::UNDEFINED
             }
             DEFINE_DATA_PROPERTY_OR_THROW => {
@@ -1989,10 +1995,11 @@ impl Exec<'_> {
                 ) else {
                     return bad_argument(info.name);
                 };
-                // An Error with two slots: nothing else allocates one (D1840).
-                let o = self.heap.alloc_object(ObjectClass::Error, Some(proto), 2)?;
-                self.heap.set_object_slot(o, 0, Value::string(name));
-                self.heap.set_object_slot(o, 1, Value::string(msg));
+                // An Error with three slots (the stack, then name and message): nothing
+                // else allocates one (D1840, D1971).
+                let o = self.heap.alloc_object(ObjectClass::Error, Some(proto), 3)?;
+                self.heap.set_object_slot(o, 1, Value::string(name));
+                self.heap.set_object_slot(o, 2, Value::string(msg));
                 Value::object(o)
             }
             DOM_EXCEPTION_FIELD => {
@@ -2001,9 +2008,9 @@ impl Exec<'_> {
                     (Some(o), Some(i))
                         if i < 2
                             && self.heap.object_class(o) == ObjectClass::Error
-                            && self.heap.object_slot_count(o) == 2 =>
+                            && self.heap.object_slot_count(o) == 3 =>
                     {
-                        self.heap.object_slot(o, i)
+                        self.heap.object_slot(o, i + 1)
                     }
                     _ => Value::UNDEFINED,
                 }

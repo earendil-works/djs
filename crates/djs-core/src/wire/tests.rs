@@ -913,7 +913,11 @@ fn reader_images() {
 
     // An object of another class (an Error) inside plain data.
     let err = h
-        .alloc_object(crate::heap::ObjectClass::Error, None, 0)
+        .alloc_object(
+            crate::heap::ObjectClass::Error,
+            None,
+            crate::heap::ObjectClass::Error.slots(),
+        )
         .unwrap();
     let msg = h.alloc_str("boom").unwrap();
     let mk = atom(&mut h, "message");

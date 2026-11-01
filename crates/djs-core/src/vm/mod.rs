@@ -718,14 +718,14 @@ impl Vm {
         format::display(&mut self.heap, v)
     }
 
-    /// The `stack` of an Error object (own data property), if it has one.
+    /// The `stack` of an Error object, if it has one: an own data property `stack` (a
+    /// script assigned one) or else the trace it recorded (D1971). Never runs JS.
     pub fn error_stack(&self, v: Value) -> Option<String> {
         let o = v.as_object()?;
-        let s = self
-            .heap
-            .get_own_property(o, atoms::STACK)?
-            .value()?
-            .as_string()?;
+        let s = match self.heap.get_own_property(o, atoms::STACK) {
+            Some(p) => p.value()?.as_string()?,
+            None => crate::interp::realm::error_stack_slot(&self.heap, v).as_string()?,
+        };
         Some(self.heap.str_to_string(s))
     }
 

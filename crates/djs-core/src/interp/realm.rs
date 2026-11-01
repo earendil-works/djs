@@ -626,10 +626,30 @@ pub(crate) fn primitive_proto(heap: &Heap, v: Value) -> Option<Obj> {
 /// A new Error object of `kind` with `message`.
 pub fn new_error(heap: &mut Heap, kind: ErrorKind, message: &str) -> Result<Value, HeapError> {
     let proto = intrinsic_obj(heap, kind.proto());
-    let e = heap.alloc_object(ObjectClass::Error, Some(proto), 0)?;
+    let e = heap.alloc_object(ObjectClass::Error, Some(proto), ObjectClass::Error.slots())?;
     let m = heap.alloc_str(message)?;
     define_hidden(heap, e, atoms::MESSAGE, Value::string(m))?;
     Ok(Value::object(e))
+}
+
+/// Records the stack trace of an Error in its slot, which `Error.prototype.stack` reads
+/// (D1971); another object gets a non-enumerable own `stack` as before.
+pub fn set_error_stack(heap: &mut Heap, o: Obj, stack: crate::value::Str) -> Result<(), HeapError> {
+    if heap.object_class(o) == ObjectClass::Error && heap.object_slot_count(o) > 0 {
+        heap.set_object_slot(o, 0, Value::string(stack));
+        return Ok(());
+    }
+    define_hidden(heap, o, atoms::STACK, Value::string(stack))
+}
+
+/// The stack trace an Error recorded (`undefined` for anything else, D1971).
+pub fn error_stack_slot(heap: &Heap, v: Value) -> Value {
+    match v.as_object() {
+        Some(o) if heap.object_class(o) == ObjectClass::Error && heap.object_slot_count(o) > 0 => {
+            heap.object_slot(o, 0)
+        }
+        _ => Value::UNDEFINED,
+    }
 }
 
 /// The name of the first native error prototype on `o`'s prototype chain.

@@ -4332,3 +4332,20 @@ immutable result (from, of, map, filter, slice); subarray and the copying method
 dquickts' test_immutable_array_buffer.js also needs SharedArrayBuffer and Atomics (a
 non-goal) and sloppy `Function` code, so it stays in the corpus ratchet;
 tests/corpus/builtins/immutable-arraybuffer.js is the same test without those lines.
+
+## D1971: Error.prototype.stack is an accessor
+date: 2026-11-03 · by: infra · issue: 0097
+As qjs and the error-stack-accessor proposal at the pinned test262 commit have it: an
+Error object records its trace in a slot (ObjectClass::Error has one slot now; a
+DOMException three: the stack, then name and message, D1840) and has no own `stack`.
+`Error.prototype.stack` is a getter (TypeError for a non-object, undefined for an object
+without [[ErrorData]], including a proxy, without traps) and a setter
+(SetterThatIgnoresPrototypeProperties: TypeError for a non-object, a non-string value or
+Error.prototype itself; else an own data property, created or [[Set]]). This replaces
+D1282's own non-enumerable data property. Effects: `Object.getOwnPropertyNames(err)` no
+longer lists `stack` (as qjs); `JSON.stringify` and the reader's `Opaque` are unchanged
+(the property was non-enumerable); `Vm::error_stack` (host display, `djs run`) reads an own
+`stack` a script assigned, else the slot, without running JS; pi's prelude reads `stack`
+through the getter (js/test/pi-vm.test.ts's stack assertions pass), and the difftest
+corpus is unchanged. Objects that are not Errors (`%CaptureStack` of something else) still
+get an own `stack`.

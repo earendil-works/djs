@@ -151,6 +151,8 @@ declare function Atob(s: Str): Value;
  * top: an Error constructor does not show itself. @leaf
  */
 declare function CaptureStack(o: Obj): void;
+/** The stack trace an Error object recorded, or undefined for any other value (D1971). @leaf */
+declare function ErrorStack(v: Value): Value;
 /**
  * DefinePropertyOrThrow ( O, P, desc ) with a complete data descriptor; `attrs` are
  * writable 1, enumerable 2, configurable 4. @reentrant

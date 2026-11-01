@@ -3139,7 +3139,35 @@ function InstallErrorCause(o, options) {
   }
 }
 
-// builtins/error.ts:17
+// builtins/error.ts:18 get Error.prototype.stack
+function ErrorPrototypeGetStack() {
+  if (!%IsObject(this)) {
+    throw %NewTypeError("not an object");
+  }
+  return %ErrorStack(this);
+}
+
+// builtins/error.ts:30 set Error.prototype.stack
+function ErrorPrototypeSetStack(v) {
+  if (!%IsObject(this)) {
+    throw %NewTypeError("not an object");
+  }
+  if (!%IsString(v)) {
+    throw %NewTypeError("not a string");
+  }
+  const o = %AsObj(this);
+  if (o === %RealmIntrinsic("ErrorPrototype")) {
+    throw %NewTypeError("cannot set stack of Error.prototype");
+  }
+  if (!%HasOwnProperty(o, "stack")) {
+    %CreateDataPropertyOrThrow(o, "stack", v);
+  } else {
+    %Set(o, "stack", v);
+  }
+  return undefined;
+}
+
+// builtins/error.ts:53
 function ErrorConstruct(newTarget, fallback, message, options) {
   const o = %ErrorCreate(GetPrototypeFromConstructor(newTarget, fallback));
   if (message !== undefined) {
@@ -3150,42 +3178,42 @@ function ErrorConstruct(newTarget, fallback, message, options) {
   return o;
 }
 
-// builtins/error.ts:32 constructor Error
+// builtins/error.ts:68 constructor Error
 function ErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "ErrorPrototype", message, options);
 }
 
-// builtins/error.ts:42 constructor EvalError
+// builtins/error.ts:78 constructor EvalError
 function EvalErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "EvalErrorPrototype", message, options);
 }
 
-// builtins/error.ts:52 constructor RangeError
+// builtins/error.ts:88 constructor RangeError
 function RangeErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "RangeErrorPrototype", message, options);
 }
 
-// builtins/error.ts:62 constructor ReferenceError
+// builtins/error.ts:98 constructor ReferenceError
 function ReferenceErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "ReferenceErrorPrototype", message, options);
 }
 
-// builtins/error.ts:72 constructor SyntaxError
+// builtins/error.ts:108 constructor SyntaxError
 function SyntaxErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "SyntaxErrorPrototype", message, options);
 }
 
-// builtins/error.ts:82 constructor TypeError
+// builtins/error.ts:118 constructor TypeError
 function TypeErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "TypeErrorPrototype", message, options);
 }
 
-// builtins/error.ts:92 constructor URIError
+// builtins/error.ts:128 constructor URIError
 function URIErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "URIErrorPrototype", message, options);
 }
 
-// builtins/error.ts:101 Error.isError
+// builtins/error.ts:137 Error.isError
 function ErrorIsError(arg) {
   if (!%IsObject(arg) || %IsProxy(arg)) {
     return false;
@@ -3193,7 +3221,7 @@ function ErrorIsError(arg) {
   return %ObjectClassTag(%AsObj(arg)) === "Error";
 }
 
-// builtins/error.ts:112 Error.prototype.toString
+// builtins/error.ts:148 Error.prototype.toString
 function ErrorPrototypeToString() {
   if (!%IsObject(this)) {
     throw %NewTypeError("not an object");
@@ -3212,19 +3240,19 @@ function ErrorPrototypeToString() {
   return nameStr + ": " + msgStr;
 }
 
-// builtins/error.ts:136 constructor InternalError
+// builtins/error.ts:172 constructor InternalError
 function InternalErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "InternalErrorPrototype", message, options);
 }
 
-// builtins/error.ts:146 constructor AggregateError
+// builtins/error.ts:182 constructor AggregateError
 function AggregateErrorConstructor(errors, message, options) {
   const o = ErrorConstruct(new.target, "AggregateErrorPrototype", message, options);
   %DefineDataPropertyOrThrow(o, "errors", IterableToList(errors), 5);
   return o;
 }
 
-// builtins/error.ts:157 constructor SuppressedError
+// builtins/error.ts:193 constructor SuppressedError
 function SuppressedErrorConstructor(error, suppressed, message) {
   const o = %ErrorCreate(GetPrototypeFromConstructor(new.target, "SuppressedErrorPrototype"));
   if (message !== undefined) {
@@ -11358,6 +11386,8 @@ function GlobalAtob(...args) {
 %InstallMethod("%AsyncIteratorPrototype%", %WellKnownSymbol("asyncDispose"), AsyncIteratorPrototypeAsyncDispose, 0);
 %InstallValue("Symbol", "dispose", SymbolDispose(), 0);
 %InstallValue("Symbol", "asyncDispose", SymbolAsyncDispose(), 0);
+%InstallAccessor("Error.prototype", "stack", ErrorPrototypeGetStack, false);
+%InstallAccessor("Error.prototype", "stack", ErrorPrototypeSetStack, true);
 %InstallMethod("Error", "isError", ErrorIsError, 1);
 %InstallMethod("Error.prototype", "toString", ErrorPrototypeToString, 0);
 %InstallMethod("Array", "fromAsync", ArrayFromAsync, 1);

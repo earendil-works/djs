@@ -102,12 +102,7 @@ impl Exec<'_> {
                         );
                         if let Some(o) = err.as_object() {
                             let st = self.heap.alloc_str(&trace)?;
-                            realm::define_hidden(
-                                self.heap,
-                                o,
-                                crate::heap::atoms::STACK,
-                                Value::string(st),
-                            )?;
+                            realm::set_error_stack(self.heap, o, st)?;
                         }
                         return Err(Fault::throw(err));
                     }

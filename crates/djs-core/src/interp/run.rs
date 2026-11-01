@@ -874,7 +874,7 @@ impl<'h> Exec<'h> {
         };
         let trace = self.stack_trace(pc);
         let s = self.heap.alloc_str(&trace)?;
-        realm::define_hidden(self.heap, o, crate::heap::atoms::STACK, Value::string(s))
+        realm::set_error_stack(self.heap, o, s)
     }
 
     /// The stack trace in QuickJS's format: one `    at name (file:line:col)` line per

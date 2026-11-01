@@ -198,13 +198,14 @@ impl ObjectClass {
     pub const fn slots(self) -> u32 {
         match self {
             ObjectClass::Ordinary
-            | ObjectClass::Error
             | ObjectClass::Arguments
             | ObjectClass::Record
             | ObjectClass::RawJSON => 0,
             ObjectClass::Promise => 4,
             ObjectClass::BuiltinClosure => 2,
             ObjectClass::Array | ObjectClass::Function | ObjectClass::HostFunction => 1,
+            // The stack trace (D1971); a DOMException has two more (D1840).
+            ObjectClass::Error => 1,
             ObjectClass::ArrayIterator => 3,
             ObjectClass::BoundFunction => 3,
             ObjectClass::Boolean

@@ -97,6 +97,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("Btoa", L, 1, false),
     i("Atob", L, 1, false),
     i("CaptureStack", L, 1, false),
+    i("ErrorStack", L, 1, false),
     i("DefineDataPropertyOrThrow", R, 4, false),
     i("DefineOwnPropertyFromRecord", R, 3, false),
     i("GetOwnPropertyDescriptorObject", R, 2, false),

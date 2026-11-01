@@ -11,6 +11,42 @@ function InstallErrorCause(o: Obj, options: Value): void {
 }
 
 /**
+ * get Error.prototype.stack (the error stack accessor proposal, D1971): the trace an
+ * Error recorded at its creation, undefined for an object without [[ErrorData]].
+ * @getter Error.prototype.stack
+ */
+function ErrorPrototypeGetStack(this: Value): Value {
+  if (!IsObject(this)) {
+    throw NewTypeError("not an object");
+  }
+  return ErrorStack(this);
+}
+
+/**
+ * set Error.prototype.stack: SetterThatIgnoresPrototypeProperties ( this,
+ * %Error.prototype%, "stack", v ) for a string v.
+ * @setter Error.prototype.stack
+ */
+function ErrorPrototypeSetStack(this: Value, v: Value): Value {
+  if (!IsObject(this)) {
+    throw NewTypeError("not an object");
+  }
+  if (!IsString(v)) {
+    throw NewTypeError("not a string");
+  }
+  const o: Obj = AsObj(this);
+  if (o === RealmIntrinsic("ErrorPrototype")) {
+    throw NewTypeError("cannot set stack of Error.prototype");
+  }
+  if (!HasOwnProperty(o, "stack")) {
+    CreateDataPropertyOrThrow(o, "stack", v);
+  } else {
+    Set(o, "stack", v);
+  }
+  return undefined;
+}
+
+/**
  * The steps shared by Error ( message [ , options ] ), 20.5.1.1, and the
  * NativeError constructors, 20.5.6.1.1. `fallback` names the realm prototype.
  */
