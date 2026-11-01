@@ -264,8 +264,7 @@ function ArrayOf(this: Value, ...items: Value[]): Obj {
 }
 
 /**
- * Array.from ( items [ , mapfn [ , thisArg ] ] ), 23.1.2.1. Iterables other than arrays
- * with the default iterator wait for %GetIterator%; array-likes are complete.
+ * Array.from ( items [ , mapfn [ , thisArg ] ] ), 23.1.2.1.
  * @builtin Array.from
  */
 function ArrayFrom(this: Value, items: Value, mapfn?: Value, thisArg?: Value): Obj {
@@ -275,11 +274,12 @@ function ArrayFrom(this: Value, items: Value, mapfn?: Value, thisArg?: Value): O
   }
   const usingIterator: Value = GetMethod(items, WellKnownSymbol("iterator"));
   if (usingIterator !== undefined && !IsArray(items) && !IsString(items)) {
-    throw NewTypeError("not supported yet: Array.from of an iterable");
+    const target: Obj = IsConstructor(this) ? Construct(this) : ArrayCreate(0);
+    return ArrayFromIterator(target, items, usingIterator, mapfn, thisArg);
   }
-  // Arrays (with the default iterator, which visits holes as undefined) and strings
-  // (code points) are iterables, read like array-likes here; the constructor gets no
-  // length for them.
+  // Arrays and strings are read directly until the Array and String iterators exist
+  // (0030 part 4): like their default iterators, holes read as undefined and strings
+  // go by code points. The constructor gets no length for them, as for iterables.
   const iterable: boolean = usingIterator !== undefined;
   const arrayLike: Obj = IsString(items) ? StringCodePoints(AsStr(items)) : ToObject(items);
   const len: f64 = LengthOfArrayLike(arrayLike);

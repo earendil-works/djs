@@ -222,7 +222,7 @@ function ArrayOf(...items) {
   return a;
 }
 
-// builtins/array.ts:271 Array.from
+// builtins/array.ts:270 Array.from
 function ArrayFrom(items, mapfn, thisArg) {
   const mapping = mapfn !== undefined;
   if (mapping && !%IsCallable(mapfn)) {
@@ -230,7 +230,8 @@ function ArrayFrom(items, mapfn, thisArg) {
   }
   const usingIterator = GetMethod(items, %WellKnownSymbol("iterator"));
   if (usingIterator !== undefined && !%IsArray(items) && !%IsString(items)) {
-    throw %NewTypeError("not supported yet: Array.from of an iterable");
+    const target = %IsConstructor(this) ? %Construct(this) : %ArrayCreate(0);
+    return ArrayFromIterator(target, items, usingIterator, mapfn, thisArg);
   }
   const iterable = usingIterator !== undefined;
   const arrayLike = %IsString(items) ? %StringCodePoints(%AsStr(items)) : %ToObject(items);
@@ -1147,6 +1148,13 @@ function InternalErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "InternalErrorPrototype", message, options);
 }
 
+// builtins/error.ts:134 constructor AggregateError
+function AggregateErrorConstructor(errors, message, options) {
+  const o = ErrorConstruct(new.target, "AggregateErrorPrototype", message, options);
+  %DefineDataPropertyOrThrow(o, "errors", IterableToList(errors), 5);
+  return o;
+}
+
 // builtins/function.ts:9 Function.prototype.call
 function FunctionPrototypeCall(thisArg, ...args) {
   if (!%IsCallable(this)) {
@@ -1351,6 +1359,132 @@ function ArrayIteratorPrototypeNext() {
 // builtins/iter.ts:112 %IteratorPrototype%[Symbol.iterator]
 function IteratorPrototypeIterator() {
   return this;
+}
+
+// builtins/iterable.ts:5
+function GetIteratorFromMethod(obj, method) {
+  const iterator = %Call(method, obj);
+  if (!%IsObject(iterator)) {
+    throw %NewTypeError("not an object");
+  }
+  return %AsObj(iterator);
+}
+
+// builtins/iterable.ts:16
+function IteratorNextResult(iterator, next) {
+  const result = %Call(next, iterator);
+  if (!%IsObject(result)) {
+    throw %NewTypeError("iterator must return an object");
+  }
+  return %AsObj(result);
+}
+
+// builtins/iterable.ts:25
+function IterableToList(items) {
+  const iterator = GetIterator(items);
+  const next = %Get(iterator, "next");
+  const list = %ArrayCreate(0);
+  let n = 0;
+  while (true) {
+    const result = IteratorNextResult(iterator, next);
+    if (%ToBoolean(%Get(result, "done"))) {
+      return list;
+    }
+    %CreateDataPropertyOrThrow(list, n, %Get(result, "value"));
+    n++;
+  }
+}
+
+// builtins/iterable.ts:44
+function ArrayFromIterator(a, items, method, mapfn, thisArg) {
+  const iterator = GetIteratorFromMethod(items, method);
+  const next = %Get(iterator, "next");
+  let k = 0;
+  while (true) {
+    if (k >= 9007199254740991) {
+      const error = %NewTypeError("Array loo long");
+      IteratorCloseThrow(iterator);
+      throw error;
+    }
+    const result = IteratorNextResult(iterator, next);
+    if (%ToBoolean(%Get(result, "done"))) {
+      %Set(a, "length", k);
+      return a;
+    }
+    const nextValue = %Get(result, "value");
+    try {
+      const mappedValue = mapfn === undefined ? nextValue : %Call(mapfn, thisArg, nextValue, k);
+      %CreateDataPropertyOrThrow(a, k, mappedValue);
+    } catch (e) {
+      IteratorCloseThrow(iterator);
+      throw e;
+    }
+    k++;
+  }
+}
+
+// builtins/iterable.ts:75 Object.fromEntries
+function ObjectFromEntries(iterable) {
+  const obj = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+  const iterator = GetIterator(iterable);
+  const next = %Get(iterator, "next");
+  while (true) {
+    const result = IteratorNextResult(iterator, next);
+    if (%ToBoolean(%Get(result, "done"))) {
+      return obj;
+    }
+    const nextItem = %Get(result, "value");
+    try {
+      if (!%IsObject(nextItem)) {
+        throw %NewTypeError("not an object");
+      }
+      const item = %AsObj(nextItem);
+      const k = %Get(item, "0");
+      const v = %Get(item, "1");
+      %CreateDataPropertyOrThrow(obj, ToPropertyKey(k), v);
+    } catch (e) {
+      IteratorCloseThrow(iterator);
+      throw e;
+    }
+  }
+}
+
+// builtins/iterable.ts:107
+function GroupByProperty(items, callback) {
+  if (!%IsCallable(callback)) {
+    throw %NewTypeError("not a function");
+  }
+  const groups = %ObjectCreate(null);
+  const iterator = GetIterator(items);
+  const next = %Get(iterator, "next");
+  let k = 0;
+  while (true) {
+    const result = IteratorNextResult(iterator, next);
+    if (%ToBoolean(%Get(result, "done"))) {
+      return groups;
+    }
+    const value = %Get(result, "value");
+    let key = undefined;
+    try {
+      key = ToPropertyKey(%Call(callback, undefined, value, k));
+    } catch (e) {
+      IteratorCloseThrow(iterator);
+      throw e;
+    }
+    let group = %Get(groups, key);
+    if (group === undefined) {
+      group = %ArrayCreate(0);
+      %CreateDataPropertyOrThrow(groups, key, group);
+    }
+    const g = %AsObj(group);
+    %CreateDataPropertyOrThrow(g, LengthOfArrayLike(g), value);
+    k++;
+  }
+}
+
+// builtins/iterable.ts:146 Object.groupBy
+function ObjectGroupBy(items, callback) {
+  return GroupByProperty(items, callback);
 }
 
 // builtins/math.ts:8 value Math
@@ -2664,6 +2798,7 @@ function SymbolUnscopables() {
 %InstallConstructor("globalThis", "TypeError", TypeErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "URIError", URIErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "InternalError", InternalErrorConstructor, 1, "Error");
+%InstallConstructor("globalThis", "AggregateError", AggregateErrorConstructor, 2, "Error");
 %InstallConstructor("globalThis", "Function", FunctionConstructor, 1, undefined);
 %InstallValue("globalThis", "Math", MathObject(), 5);
 %InstallConstructor("globalThis", "Number", NumberConstructor, 1, undefined);
@@ -2733,6 +2868,8 @@ function SymbolUnscopables() {
 %InstallMethod("Array.prototype", "entries", ArrayPrototypeEntries, 0);
 %InstallMethod("%ArrayIteratorPrototype%", "next", ArrayIteratorPrototypeNext, 0);
 %InstallMethod("%IteratorPrototype%", %WellKnownSymbol("iterator"), IteratorPrototypeIterator, 0);
+%InstallMethod("Object", "fromEntries", ObjectFromEntries, 1);
+%InstallMethod("Object", "groupBy", ObjectGroupBy, 2);
 %InstallValue("Math", %WellKnownSymbol("toStringTag"), MathToStringTag(), 4);
 %InstallValue("Math", "E", MathE(), 0);
 %InstallValue("Math", "LN10", MathLN10(), 0);

@@ -1,0 +1,11 @@
+[["3","c"],["a",1],["b",2]]
+null ["odd","even"] [1,3,5] [2,4,6]
+[2,4,6] ["x"]
+many 2 2 c true true AggregateError: many 2
+TypeError: not an object closed
+Error: map 1 closed,closed
+RangeError: cb closed,closed,closed
+TypeError: value is not iterable
+TypeError: value is not iterable
+TypeError: iterator must return an object
+=== completed

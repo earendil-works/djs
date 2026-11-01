@@ -124,3 +124,15 @@ function ErrorPrototypeToString(this: Value): Str {
 function InternalErrorConstructor(message?: Value, options?: Value): Obj {
   return ErrorConstruct(new.target, "InternalErrorPrototype", message, options);
 }
+
+/**
+ * AggregateError ( errors, message [ , options ] ), 20.5.7.1.1.
+ * @constructor AggregateError
+ * @extends Error
+ * @length 2
+ */
+function AggregateErrorConstructor(errors: Value, message: Value, options?: Value): Obj {
+  const o: Obj = ErrorConstruct(new.target, "AggregateErrorPrototype", message, options);
+  DefineDataPropertyOrThrow(o, "errors", IterableToList(errors), 5);
+  return o;
+}

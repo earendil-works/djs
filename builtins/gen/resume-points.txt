@@ -68,7 +68,9 @@ ArrayOf: reentrant (Array.of)
   builtins/array.ts:262:3  Set (intrinsic)
 
 ArrayFrom: reentrant (Array.from)
-  builtins/array.ts:276:32  GetMethod (builtin)
+  builtins/array.ts:275:32  GetMethod (builtin)
+  builtins/array.ts:277:47  Construct (intrinsic)
+  builtins/array.ts:278:12  ArrayFromIterator (builtin)
   builtins/array.ts:285:20  LengthOfArrayLike (builtin)
   builtins/array.ts:288:20  Construct (intrinsic)
   builtins/array.ts:288:38  Construct (intrinsic)
@@ -447,6 +449,10 @@ ErrorPrototypeToString: reentrant (Error.prototype.toString)
 InternalErrorConstructor: reentrant (constructor InternalError)
   builtins/error.ts:125:10  ErrorConstruct (builtin)
 
+AggregateErrorConstructor: reentrant (constructor AggregateError)
+  builtins/error.ts:135:18  ErrorConstruct (builtin)
+  builtins/error.ts:136:42  IterableToList (builtin)
+
 FunctionPrototypeCall: reentrant (Function.prototype.call)
   builtins/function.ts:13:10  CallWithArray (intrinsic)
 
@@ -506,6 +512,61 @@ ArrayIteratorPrototypeNext: reentrant (%ArrayIteratorPrototype%.next)
   builtins/iter.ts:101:24  Get (intrinsic)
 
 IteratorPrototypeIterator: leaf (%IteratorPrototype%[Symbol.iterator])
+
+GetIteratorFromMethod: reentrant
+  builtins/iterable.ts:6:27  Call (intrinsic)
+
+IteratorNextResult: reentrant
+  builtins/iterable.ts:17:25  Call (intrinsic)
+
+IterableToList: reentrant
+  builtins/iterable.ts:26:25  GetIterator (builtin)
+  builtins/iterable.ts:27:23  Get (intrinsic)
+  builtins/iterable.ts:31:25  IteratorNextResult (builtin)
+  builtins/iterable.ts:32:19  Get (intrinsic)
+  builtins/iterable.ts:35:40  Get (intrinsic)
+  builtins/iterable.ts:35:5  CreateDataPropertyOrThrow (intrinsic)
+
+ArrayFromIterator: reentrant
+  builtins/iterable.ts:45:25  GetIteratorFromMethod (builtin)
+  builtins/iterable.ts:46:23  Get (intrinsic)
+  builtins/iterable.ts:51:7  IteratorCloseThrow (builtin)
+  builtins/iterable.ts:54:25  IteratorNextResult (builtin)
+  builtins/iterable.ts:55:19  Get (intrinsic)
+  builtins/iterable.ts:56:7  Set (intrinsic)
+  builtins/iterable.ts:59:30  Get (intrinsic)
+  builtins/iterable.ts:61:68  Call (intrinsic)
+  builtins/iterable.ts:62:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterable.ts:64:7  IteratorCloseThrow (builtin)
+
+ObjectFromEntries: reentrant (Object.fromEntries)
+  builtins/iterable.ts:79:25  GetIterator (builtin)
+  builtins/iterable.ts:80:23  Get (intrinsic)
+  builtins/iterable.ts:82:25  IteratorNextResult (builtin)
+  builtins/iterable.ts:83:19  Get (intrinsic)
+  builtins/iterable.ts:86:29  Get (intrinsic)
+  builtins/iterable.ts:92:24  Get (intrinsic)
+  builtins/iterable.ts:93:24  Get (intrinsic)
+  builtins/iterable.ts:94:38  ToPropertyKey (builtin)
+  builtins/iterable.ts:94:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterable.ts:96:7  IteratorCloseThrow (builtin)
+
+GroupByProperty: reentrant
+  builtins/iterable.ts:113:25  GetIterator (builtin)
+  builtins/iterable.ts:114:23  Get (intrinsic)
+  builtins/iterable.ts:117:25  IteratorNextResult (builtin)
+  builtins/iterable.ts:118:19  Get (intrinsic)
+  builtins/iterable.ts:121:26  Get (intrinsic)
+  builtins/iterable.ts:124:27  Call (intrinsic)
+  builtins/iterable.ts:124:13  ToPropertyKey (builtin)
+  builtins/iterable.ts:126:7  IteratorCloseThrow (builtin)
+  builtins/iterable.ts:131:24  Get (intrinsic)
+  builtins/iterable.ts:134:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterable.ts:137:34  LengthOfArrayLike (builtin)
+  builtins/iterable.ts:137:5  CreateDataPropertyOrThrow (intrinsic)
+
+ObjectGroupBy: reentrant (Object.groupBy)
+  builtins/iterable.ts:147:10  GroupByProperty (builtin)
 
 MathObject: leaf (value Math)
 

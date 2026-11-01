@@ -947,4 +947,44 @@ same("%IteratorPrototype%[Symbol.iterator]", nativeIterProtoIter, (f) => {
   return f.call(o) === o && f.call(5);
 });
 
+// ---- 0034: iterables --------------------------------------------------------------------
+
+const userIter = (values, log, opts = {}) => ({
+  [Symbol.iterator]() {
+    let i = 0;
+    log.push("iter");
+    return {
+      next() {
+        log.push("next");
+        if (opts.badResult) return 1;
+        return i < values.length ? { value: values[i++], done: false } : { value: undefined, done: true };
+      },
+      return() {
+        log.push("return");
+        return {};
+      },
+    };
+  },
+});
+for (const values of [[["a", 1], ["b", 2]], [[1, "x"], [toPrim("k"), 2]], [5], [[Symbol.iterator, 1]], []]) {
+  same("Object.fromEntries", Object.fromEntries, (f, log) => f(userIter(values, log)));
+  same("Array.from", Array.from, (f, log) => f(userIter(values, log)));
+  same("Array.from", Array.from, (f, log) => f(userIter(values, log), (v, k) => [v, k]));
+  same("Array.from", Array.from, (f, log) => f.call(Object, userIter(values, log)));
+  same("Object.groupBy", Object.groupBy, (f, log) => f(userIter(values, log), (v, k) => (k % 2 ? "odd" : "even")));
+  same("globalThis.AggregateError", AggregateError, (f, log) => {
+    const e = Reflect.construct(f, [userIter(values, log), "m", { cause: 1 }]);
+    return [e.message, e.errors, e.cause, Object.keys(e)];
+  });
+}
+// A non-object from next(): the spec throws without closing; qjs closes the iterator.
+same("Object.fromEntries", Object.fromEntries, (f) => f(userIter([], [], { badResult: true })));
+same("Array.from", Array.from, (f, log) => f(userIter([1], log), () => { throw new RangeError("m"); }));
+same("Object.groupBy", Object.groupBy, (f, log) => f(userIter([1], log), () => { throw new RangeError("cb"); }));
+same("Object.groupBy", Object.groupBy, (f, log) => f(userIter([1], log), 5));
+same("Object.groupBy", Object.groupBy, (f) => f(null, () => 1));
+same("Object.fromEntries", Object.fromEntries, (f) => f(undefined));
+same("Object.fromEntries", Object.fromEntries, (f) => f(5));
+same("globalThis.AggregateError", AggregateError, (f) => f(5));
+
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));
