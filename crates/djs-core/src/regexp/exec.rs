@@ -21,7 +21,16 @@ const UNSET: u32 = u32::MAX;
 const K_SPLIT: u32 = 0;
 const K_LOOK: u32 = 1;
 const K_NEG_LOOK: u32 = 2;
+/// A `STAR` loop that can give back (greedy) or take (lazy) one more character; its pc
+/// is the `STAR` instruction.
+const K_STAR: u32 = 3;
 const FRAME: usize = 4;
+
+/// The instruction after the `STAR` at `pc` (D1501).
+fn star_next(code: &[u32], pc: usize) -> u32 {
+    let lead = (code[pc] & F_LEAD != 0) as usize;
+    (pc + 6 + code[pc + 4] as usize + 2 * code[pc + 5] as usize + lead) as u32
+}
 
 /// Binary search in sorted inclusive `(lo, hi)` pairs.
 fn in_ranges(ranges: &[u32], c: u32) -> bool {
@@ -341,10 +350,152 @@ impl Machine<'_> {
             }
             // A failed positive lookahead keeps failing; a failed negative one succeeds
             // (its frame's pc is the continuation).
-            if self.pop_frame() != K_LOOK {
-                return true;
+            match self.pop_frame() {
+                K_LOOK => {}
+                K_STAR => {
+                    if self.star_retry() {
+                        return true;
+                    }
+                }
+                _ => return true,
             }
         }
+    }
+
+    /// The character matcher at `pc` (`CHAR`, `CLASS`, `DOT` or `ANY`) at the current
+    /// position: the position after the character if it matches.
+    #[inline]
+    fn single(&self, pc: usize, back: bool) -> Option<u32> {
+        let word = self.code[pc];
+        let pos = self.s.pos as usize;
+        let (mut c, next) = if back {
+            self.prev_char(pos)?
+        } else {
+            self.next_char(pos)?
+        };
+        if word & F_ICASE != 0 {
+            c = canonicalize(c, self.unicode);
+        }
+        let ok = match word & OP_MASK {
+            CHAR => c == self.code[pc + 1],
+            CLASS => {
+                let n = self.code[pc + 1] as usize;
+                in_ranges(&self.code[pc + 2..pc + 2 + 2 * n], c)
+            }
+            DOT => !is_line_terminator(c),
+            _ => true,
+        };
+        ok.then_some(next as u32)
+    }
+
+    /// One position back towards the loop's start `start` (the other way for a backward
+    /// loop): a whole code point, unless that would cross `start`.
+    fn give_back(&self, back: bool, start: u32) -> u32 {
+        let pos = self.s.pos as usize;
+        if back {
+            match self.next_char(pos) {
+                Some((_, p)) if p as u32 <= start => p as u32,
+                _ => pos as u32 + 1,
+            }
+        } else {
+            match self.prev_char(pos) {
+                Some((_, p)) if p as u32 >= start => p as u32,
+                _ => pos as u32 - 1,
+            }
+        }
+    }
+
+    /// Whether the character at the current position can start the continuation of the
+    /// `STAR` at `pc` (always, without a follow set).
+    fn star_follows(&self, pc: usize) -> bool {
+        let code = self.code;
+        if code[pc] & F_CHECK == 0 {
+            return true;
+        }
+        let n = code[pc + 5] as usize;
+        let at = pc + 6 + code[pc + 4] as usize;
+        match self.next_char(self.s.pos as usize) {
+            Some((c, _)) => in_ranges(&code[at..at + 2 * n], c),
+            None => false,
+        }
+    }
+
+    /// Moves a `STAR` loop with `n` iterations to the next count whose position can start
+    /// the continuation: giving back characters (greedy) or taking more (lazy). Writes the
+    /// count register if it changed; `None` if there is no such count.
+    fn star_settle(&mut self, pc: usize, mut n: u32) -> Option<u32> {
+        let code = self.code;
+        let r = self.regs + code[pc + 1] as usize;
+        let (min, max) = (code[pc + 2], code[pc + 3]);
+        let back = code[pc] & F_BACK != 0;
+        let n0 = n;
+        while !self.star_follows(pc) {
+            if code[pc] & F_GREEDY != 0 {
+                if n <= min {
+                    return None;
+                }
+                self.s.pos = self.give_back(back, self.s.slots[r + 1]);
+                n -= 1;
+            } else {
+                if n >= max {
+                    return None;
+                }
+                self.s.pos = self.single(pc + 6, back)?;
+                n += 1;
+            }
+        }
+        if n != n0 && self.write_slot(r, n).is_err() {
+            return None;
+        }
+        Some(n)
+    }
+
+    /// Backtracking into a `STAR` frame (D1501): greedy gives back one character, lazy
+    /// takes one more; then the continuation runs again with a frame for the next retry.
+    /// False if the loop has no choices left.
+    fn star_retry(&mut self) -> bool {
+        let pc = self.s.pc as usize;
+        let word = self.code[pc];
+        let r = self.regs + self.code[pc + 1] as usize;
+        let (min, max) = (self.code[pc + 2], self.code[pc + 3]);
+        let next = star_next(self.code, pc);
+        let back = word & F_BACK != 0;
+        let n = self.s.slots[r];
+        let n = if word & F_GREEDY != 0 {
+            if n <= min {
+                return false;
+            }
+            self.s.pos = self.give_back(back, self.s.slots[r + 1]);
+            n - 1
+        } else {
+            if n >= max {
+                return false;
+            }
+            match self.single(pc + 6, back) {
+                Some(p) => self.s.pos = p,
+                None => return false,
+            }
+            n + 1
+        };
+        // Retries that cannot work are skipped without a frame.
+        let Some(n) = self.star_settle(pc, n) else {
+            return false;
+        };
+        // Logged under the frame below, so a later retry sees this count. Overflow is
+        // impossible here: the frame just popped freed more than this needs.
+        if self.write_slot(r, n).is_err() {
+            return false;
+        }
+        let more = if word & F_GREEDY != 0 {
+            n > min
+        } else {
+            n < max
+        };
+        if more && self.push_frame(pc as u32, K_STAR).is_err() {
+            return false;
+        }
+        self.s.pc = next;
+        true
     }
 
     /// The body of a positive lookaround matched: drop the frames back to and including the
@@ -535,6 +686,62 @@ impl Machine<'_> {
                     }
                     *fuel -= 1;
                 }
+            }
+            STAR => {
+                let r = self.regs + code[pc + 1] as usize;
+                let (min, max) = (code[pc + 2], code[pc + 3]);
+                let greedy = word & F_GREEDY != 0;
+                // Greedy matches all it can, lazy only the minimum. Resumable: the count
+                // is in a register (written when the loop stops) and the position in the
+                // state.
+                let limit = if greedy { max } else { min };
+                let start = self.s.slots[r];
+                let mut n = start;
+                let mut stopped = false;
+                while n < limit {
+                    match self.single(pc + 6, back) {
+                        Some(p) => {
+                            self.s.pos = p;
+                            n += 1;
+                        }
+                        None => break,
+                    }
+                    if *fuel == 0 {
+                        stopped = true;
+                        break;
+                    }
+                    *fuel -= 1;
+                }
+                if n != start {
+                    self.write_slot(r, n)?;
+                }
+                if stopped {
+                    return Ok(false);
+                }
+                if word & F_LEAD != 0 {
+                    // Not logged: the search loop reads it after this attempt failed.
+                    let at = star_next(code, pc) as usize - 1;
+                    self.s.slots[self.regs + code[at] as usize] = self.s.pos;
+                }
+                if n < min {
+                    return fail;
+                }
+                let Some(n) = self.star_settle(pc, n) else {
+                    return fail;
+                };
+                let more = if greedy { n > min } else { n < max };
+                if more {
+                    self.push_frame(pc as u32, K_STAR)?;
+                }
+                self.s.pc = star_next(code, pc);
+            }
+            SKIP => {
+                let r = self.regs + code[pc + 1] as usize;
+                let to = self.s.slots[r];
+                if to != UNSET && to > self.s.pos {
+                    self.s.pos = to;
+                }
+                self.s.pc += 2;
             }
             GOTO => self.s.pc = code[pc + 1],
             SPLIT_NEXT => {

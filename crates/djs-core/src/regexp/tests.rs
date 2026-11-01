@@ -384,6 +384,13 @@ fn suspend_and_resume_give_the_same_result() {
         ("(?:(\\w)(?:\\1)?)+$", "i", "aAbBcC"),
         ("\\b\\w+(?=,)", "g", "one, two, three"),
         (".+", "su", "😀\n😀"),
+        // STAR loops (D1501): greedy, lazy, bounded, with follow sets and SKIP.
+        ("[\\w.+-]+@[\\w-]+\\.[\\w.]+", "", "see a.b@c.de and x@y.z"),
+        ("\\d{2,4}?5", "", "1234512345"),
+        ("x*?y", "", "xxxxxxy"),
+        ("(?<=a+)b", "", "aaab"),
+        ("[^\"]*\"", "", "abc\"def\""),
+        ("\\s+$", "", "a  b   "),
     ];
     for (p, f, i) in cases {
         let prog = re(p, f);
@@ -421,6 +428,47 @@ fn stack_limit() {
     let prog = re("(a){10000}", "");
     let r = exec(&prog, Input::Utf16(&input), 0, &mut fuel, limits);
     assert!(matches!(r, ExecResult::Match(_)));
+}
+
+#[test]
+fn star_loops() {
+    // Greedy and lazy, bounded and not, giving back to reach the continuation.
+    assert_eq!(first("a+ab", "", "xaaaab"), Some("aaaab".into()));
+    assert_eq!(first("a{2,3}a", "", "aaaaa"), Some("aaaa".into()));
+    assert_eq!(first("a{2,3}?a", "", "aaaaa"), Some("aaa".into()));
+    assert_eq!(first("<.*?>", "", "<a><b>"), Some("<a>".into()));
+    assert_eq!(first("<.*>", "", "<a><b>"), Some("<a><b>".into()));
+    assert_eq!(first("[a-z]*1", "", "abc abc1"), Some("abc1".into()));
+    assert_eq!(first("\\d*x", "", "123 45x"), Some("45x".into()));
+    assert_eq!(first("a*", "", "bbb"), Some("".into()));
+    assert_eq!(first("A*a", "i", "AAa"), Some("AAa".into()));
+    // Code points in unicode mode, code units otherwise; a lone low surrogate after a
+    // match start is not glued to the high surrogate before it.
+    assert_eq!(first(".*?b", "u", "😀b"), Some("😀b".into()));
+    assert_eq!(m("^.{1}$", "u", "😀").is_some(), true);
+    assert_eq!(m("^.{1}$", "", "😀").is_some(), false);
+    assert_eq!(first("(?<=\\d+)x", "", "a12x"), Some("x".into()));
+    // Leading loops skip the rest of a failed run, but not when bounded.
+    assert_eq!(first("\\d+x", "", "1234 56x"), Some("56x".into()));
+    assert_eq!(first("\\d{1,2}5", "", "12345"), Some("345".into()));
+    assert_eq!(first("[ab]+c", "", "abab abc"), Some("abc".into()));
+}
+
+#[test]
+fn star_loops_keep_the_stack_flat() {
+    let limits = ExecLimits { max_stack: 64 };
+    let text = "x".repeat(100_000);
+    for (p, input) in [
+        (".*y", text.clone()),
+        ("[^y]*?y", text.clone() + "y"),
+        ("x+$", text),
+    ] {
+        let prog = re(p, "");
+        let input = u16s(&input);
+        let mut fuel = u64::MAX;
+        let r = exec(&prog, Input::Utf16(&input), 0, &mut fuel, limits);
+        assert!(!matches!(r, ExecResult::StackOverflow), "/{p}/");
+    }
 }
 
 #[test]
