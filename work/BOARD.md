@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0075 | Build identity (features + libm in BUILD_HASH) + Float32 NaN | num | .worktrees/num |
+| 0071 | GC points and raw images independent of slice size | num | .worktrees/num |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0063 | D015 sloppy this + bgen Rust backend v1 | infra | .worktrees/infra |
 | 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
@@ -27,7 +27,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0068 | Deterministic mode for VM and Sandbox | 0067 (done) |
 | 0069 | Running out of host memory is not a JS out-of-memory error | - |
 | 0070 | Collect and retry at a failing allocation | 0069 |
-| 0071 | GC points and raw images independent of fuel slice size | - |
 | 0072 | Determinism checks in the gate | part 2: 0067, 0071 |
 | 0073 | Replay journal and image hash | 0067 (done) |
 | 0074 | Carry fuel overshoot across runs | - |
@@ -56,6 +55,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0033 | JSON + RegExp builtins, regex literals | 8b5ccfb (agent num; active 32,303 / 32,718) |
 | 0040 | P1-7 Classes | 2d08a6c (agent lexer; test262 active 97.1%) |
 | 0058 | Compiler: using, completion values + Goal::Eval, import() | 8bc39dd (agent lexer; strip-types 4,085/4,802, 0 differ) |
+| 0075 | Build identity + Float32 NaN | df34400 (agent num; D1750; libm pinned =0.2.16) |
 | 0076 | Unicode normalization | 9825c90 (agent num; +20.5 KB gz, feature on by default D1760; 400,680/400,680 conformance) |
 | 0061 | String append + JSON source text | dbd2e8d (agent num; 10M appends 574 -> 150 MB RSS; JSON 142/142) |
 | 0059 | Indirect eval, Function ctors, queueMicrotask | 4435b3b (agent infra; active 37,464 / 37,722 = 99.3%; pi 215/226) |
