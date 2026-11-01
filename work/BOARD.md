@@ -13,6 +13,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0065 | accessor + decorators (TC39, then TS legacy) | lexer | .worktrees/lexer |
 | 0062 | Property access performance (shapes/ICs: design first) | heap | .worktrees/heap |
 | 0067 | Host inbox (async host results as macrotasks) | determinism | .worktrees/determinism |
+| 0077 | deser's speedup crates: quick wins? (brief report) | deps | .worktrees/deps |
 
 ## Open (ready)
 
