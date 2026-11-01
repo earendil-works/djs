@@ -300,7 +300,7 @@ impl Heap {
     }
 
     #[inline]
-    fn atom_table(&self) -> u32 {
+    pub(super) fn atom_table(&self) -> u32 {
         self.arena().get(0, Roots::ATOMS).0
     }
 

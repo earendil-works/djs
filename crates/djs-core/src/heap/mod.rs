@@ -36,6 +36,7 @@ mod arrays;
 pub mod atom;
 pub mod cells;
 pub mod collection;
+mod compact;
 pub mod gc;
 pub mod handle;
 pub mod layout;

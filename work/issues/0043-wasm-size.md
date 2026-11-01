@@ -62,7 +62,15 @@ Date, typed arrays, …), and the code is about 590 KB.
   17 KB, constant pools 11 KB, capture descriptors 8 KB. 60.6% of the bytes are zero.
 - R1 (D1430) privileged code without line tables and local names: base 457,952 ->
   403,056 (-54,896); stripped 1,127,850 -> 1,072,960; gzip 343,719 -> 320,112.
+- R2 (D1431) `Heap::compact_for_image` in djs-prelude's build: base 403,056 -> 296,200
+  (tables + atom entries -51,976; the value stack and the dead templates its stale
+  slots kept alive -54,880). stripped 966,096; gzip 305,089. vm_new 3.6 µs, instantiate
+  41.5 µs (node).
 
 ## Follow-ups
+- `Vm::collect` (vm_collect) does not clear the value stack above `sp` the way the
+  interpreter's safepoint does, so an embedder-triggered collection keeps popped values
+  alive (found through the base image, where it kept 74 dead templates). vm/ is outside
+  0043's touches.
 
 ## Result

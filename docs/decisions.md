@@ -1777,3 +1777,14 @@ frames are hidden from stack traces or shown as `at name (native)`, and builtins
 TDZ errors, so neither is ever read. This saves 55 KB of the 458 KB base image (line
 tables 38 KB, names 17 KB). A TDZ error inside privileged code would say `variable is
 not initialized`.
+
+## D1431: The base image is compacted before it is collected
+date: 2026-11-01 · by: heap · issue: 0043
+`Heap::compact_for_image` (heap/compact.rs), called by djs-prelude's build script before
+the final collection, reallocates every property table at its live entry count (tables
+double as they grow: 46% of the slots were empty), the atom table's entries at their
+length, and the value stack at 256 slots without contents. The stack mattered most: it
+is traced to its full capacity, so values left above `sp` by the prelude's install run
+kept 74 dead templates and their code alive in the image. Base image 403 KB -> 296 KB
+(property tables and atoms -52 KB, the stack and what it held -55 KB). Growth after a
+restore works as usual (a full table grows on the next insert).

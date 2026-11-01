@@ -8,6 +8,10 @@ use djs_core::vm::{Vm, VmOptions};
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     let mut vm = Vm::new(VmOptions::default()).expect("out of memory making the base");
+    // Without growth slack: the image is copied into every VM (0043).
+    vm.heap_mut()
+        .compact_for_image()
+        .expect("out of memory compacting the base");
     vm.collect().expect("out of memory collecting the base");
     let image = vm.bytes().to_vec();
     // Full verification (cell structure, references, build hash) at build time.

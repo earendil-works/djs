@@ -790,6 +790,10 @@ impl Heap {
     }
 
     /// Builds a hash index for table `t`, sized for its full capacity.
+    pub(super) fn build_table_index(&mut self, t: u32) -> Result<(), HeapError> {
+        self.build_index(t)
+    }
+
     fn build_index(&mut self, t: u32) -> Result<(), HeapError> {
         let buckets = (self.table_capacity(t) * 2).next_power_of_two();
         let index = self.alloc_u32_array(buckets)?;

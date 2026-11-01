@@ -37,6 +37,7 @@ mod tests {
 
     fn fresh_image() -> Vec<u8> {
         let mut vm = Vm::new(VmOptions::default()).unwrap();
+        vm.heap_mut().compact_for_image().unwrap();
         vm.collect().unwrap();
         vm.bytes().to_vec()
     }
