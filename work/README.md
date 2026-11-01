@@ -42,12 +42,14 @@ Filled in when done: what landed, how to use it, known gaps.
 ## Lifecycle
 
 1. The coordinator writes the issue (`status: open`) and adds it to the board.
-2. The coordinator creates a worktree, `git worktree add .worktrees/NNNN-slug -b
-   issue/NNNN-slug main`, and assigns an agent.
+2. The coordinator creates the branch `issue/NNNN-slug` from `main` and assigns an agent.
+   Each agent has one permanent worktree, `.worktrees/<agent>`, which the coordinator
+   switches to the issue's branch, so its warm `target/` is reused across issues (D012).
+   `.worktrees/gate` belongs to merge-to-main (D1792).
 3. The agent works, commits on the branch and merges with `scripts/merge-to-main.sh`
    (rebase, regenerate, gate, fast-forward).
-4. The coordinator reviews the result on `main`, updates the board and removes the
-   worktree (`git worktree remove`, `git branch -d`).
+4. The coordinator reviews the result on `main`, updates the board and deletes the
+   merged branch (`git branch -d`).
 
 ## Parallel work
 
