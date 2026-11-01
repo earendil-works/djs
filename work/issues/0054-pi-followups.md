@@ -69,5 +69,6 @@ decision; `import()` → compiler).
   `unescape` match qjs's results and URIError messages (D1541). Function.prototype has
   `length` and `name`. test262 active: +175.
 - Errors display their native name after pi's lockdown (D1542).
-- pi's own suite on djs: 207/226 (from 204). The remaining failures are listed in
+- pi's own suite on djs: 213/226 at the merge (from 204). 0054 fixed the recursion test;
+  the two large-image tests pass thanks to 0050. The remaining failures are listed in
   docs/host.md "pi codemode".

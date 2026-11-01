@@ -306,15 +306,14 @@ benefit. The in-thread and remote launchers benefit as they are.
 swaps `src/runtime/vm.ts` for a three-line wrapper around js/pi/vm.ts and `src/wasm.ts` for
 the djs-wasm loader, and runs pi's installed vitest on the copy. node_modules are symlinks
 and vite's cache stays in the copy, so nothing is written to pi-private. The run writes
-`report.md` with pass/fail per test and the failure messages. At pi d65de9db942d: **207 of
-226 pass** after 0054 (204 in 0049; the stack overflow test passes now). Declarations,
-source, portable and worker-lifetime pass completely; sandbox 138/153; deterministic 26/30.
+`report.md` with pass/fail per test and the failure messages. At pi d65de9db942d: **213 of
+226 pass** at 0054's merge (204 in 0049). Since then the stack overflow test passes (0054),
+and so do the two large-image tests (0050's regexp work). Declarations, source, portable
+and worker-lifetime pass completely; sandbox 144/153; deterministic 26/30.
 Each failing test fails on every backend it runs on (worker, inline, remote):
 
 | test | why |
 | --- | --- |
-| accepts wrapped and large base64 image data | the prelude's `/^[A-Za-z0-9+/]+={0,2}$/.test(data)` on 1 MB of base64: djs's regexp runs out of backtrack memory (`InternalError: out of memory in regexp execution`). Engine gap (with num) |
-| fails a script whose output passes the limits | the same regexp, in the `image()` case: every call throws, the script catches it, and the output limit is never reached (it ends as a timeout). The `text()` and `console.log` cases pass |
 | keeps eval and Function inside the VM | no global `eval`. The Function and AsyncFunction constructors throw "not supported yet" (ARCH: no direct eval; indirect eval and `Function` may come later) |
 | rejects dynamic import | `import()` is a compile-time SyntaxError, so the whole script fails instead of the `await import()` rejecting |
 | ignores patches to built-ins and built-in globals | djs is always strict (ARCH). Assigning to a frozen built-in throws a TypeError where sloppy QuickJS ignores it. The protection itself works: the prelude's JSON and promises are intact |
@@ -356,8 +355,7 @@ Besides the failures above:
 4. Optionally, for fast starts in the worker launcher: keep prelude images in the parent
    thread, or keep warm workers. Splitting the lockdown out of the argument-dependent part of
    the prelude would let one image serve every tool table and store.
-5. Before the flag is the default, close these engine gaps: regexp backtracking on large
-   inputs, `eval`/`Function`, `import()` as a runtime rejection, WeakRef/
+5. Before the flag is the default, close these engine gaps: `eval`/`Function`, `import()` as a runtime rejection, WeakRef/
    FinalizationRegistry, and the remaining globals. Stack overflow is a `RangeError` since
    0054 (D013).
    Interpreter speed matters for heavier scripts (see below).
