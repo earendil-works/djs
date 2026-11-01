@@ -1,7 +1,7 @@
 # 0104: wasm size pass 2
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0104-size-pass-2
 depends-on: 0099
 touches: crates/ (code-size changes anywhere, coordinated: heap is in heap/ (0098), perf in bgen/natives/hot.rs (0100), infra in js/pi + cli + error builtins (0102)), Cargo.toml profiles only with a recorded decision
