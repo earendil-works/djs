@@ -3,7 +3,7 @@
 use alloc::vec::Vec;
 
 use super::PResult;
-use super::func::{FuncKind, ScopeKind, VarKind};
+use super::func::{FuncKind, HandlerLabels, ScopeKind, VarKind};
 use super::parser::{BlockEnv, BlockKind, Parser, syntax};
 use crate::heap::Atom;
 use crate::lexer::{Kw, TokenKind};
@@ -48,7 +48,7 @@ impl Parser<'_, '_> {
             TokenKind::Return => self.parse_return(),
             TokenKind::Throw => self.parse_throw(),
             TokenKind::Switch => self.parse_switch(Vec::new()),
-            TokenKind::Try => self.unsupported(tok.start, "try statements are"),
+            TokenKind::Try => self.parse_try(),
             TokenKind::Debugger => {
                 self.next()?;
                 self.code().debugger();
@@ -218,6 +218,7 @@ impl Parser<'_, '_> {
             kind: BlockKind::Loop,
             break_label: l_break,
             continue_label: Some(l_cont),
+            depth: self.stmt_depth,
         });
         (l_break, l_cont)
     }
@@ -361,32 +362,29 @@ impl Parser<'_, '_> {
         } else {
             None
         };
-        let mut target = None;
-        for b in self.blocks.iter().rev() {
-            match label {
-                Some(l) => {
-                    if b.labels.contains(&l) {
-                        target = if is_break {
-                            Some(b.break_label)
-                        } else {
-                            b.continue_label
-                        };
-                        break;
-                    }
-                }
-                None => {
-                    if is_break && b.kind != BlockKind::Labeled {
-                        target = Some(b.break_label);
-                        break;
-                    }
-                    if !is_break && b.kind == BlockKind::Loop {
-                        target = b.continue_label;
-                        break;
-                    }
-                }
+        let mut found = None;
+        for (i, b) in self.blocks.iter().enumerate().rev() {
+            if b.kind == BlockKind::Finally {
+                continue;
             }
+            let target = match label {
+                Some(l) if b.labels.contains(&l) => {
+                    if is_break {
+                        Some(b.break_label)
+                    } else {
+                        // `continue L` to a non-loop label is not found.
+                        b.continue_label
+                    }
+                }
+                Some(_) => continue,
+                None if is_break && b.kind != BlockKind::Labeled => Some(b.break_label),
+                None if !is_break && b.kind == BlockKind::Loop => b.continue_label,
+                None => continue,
+            };
+            found = target.map(|t| (i, t, b.depth));
+            break;
         }
-        let Some(target) = target else {
+        let Some((index, target, depth)) = found else {
             let msg = match (label, is_break) {
                 (Some(_), _) => "break/continue label not found",
                 (None, true) => "break must be inside loop or switch",
@@ -394,8 +392,53 @@ impl Parser<'_, '_> {
             };
             return syntax(pos, msg);
         };
+        // Run the finally blocks being left, innermost first (docs/compiler.md 7.4).
+        let mut cur = self.stmt_depth;
+        let finallies: Vec<(crate::bytecode::Label, u32)> = self.blocks[index + 1..]
+            .iter()
+            .rev()
+            .filter(|b| b.kind == BlockKind::Finally)
+            .map(|b| (b.break_label, b.depth))
+            .collect();
+        for (l_fin, base) in finallies {
+            while cur > base {
+                self.code().drop();
+                cur -= 1;
+            }
+            self.code().undefined();
+            self.code().gosub(l_fin);
+            self.code().drop();
+        }
+        while cur > depth {
+            self.code().drop();
+            cur -= 1;
+        }
         self.code().jump(target);
         self.expect_semicolon()
+    }
+
+    /// Before a `return`: with the value on the stack, runs every enclosing finally
+    /// block, innermost first, cutting the stack to each try's base under the value.
+    fn emit_finally_for_return(&mut self) {
+        let mut cur = self.stmt_depth;
+        let finallies: Vec<(crate::bytecode::Label, u32)> = self
+            .blocks
+            .iter()
+            .rev()
+            .filter(|b| b.kind == BlockKind::Finally)
+            .map(|b| (b.break_label, b.depth))
+            .collect();
+        for (l_fin, base) in finallies {
+            while cur > base {
+                self.code().nip();
+                cur -= 1;
+            }
+            self.code().gosub(l_fin);
+        }
+    }
+
+    fn has_finally(&self) -> bool {
+        self.blocks.iter().any(|b| b.kind == BlockKind::Finally)
     }
 
     fn parse_return(&mut self) -> PResult<()> {
@@ -404,17 +447,139 @@ impl Parser<'_, '_> {
             return syntax(pos, "return not in a function");
         }
         self.next()?;
-        if self.is(TokenKind::Semicolon)
+        let bare = self.is(TokenKind::Semicolon)
             || self.is(TokenKind::RBrace)
             || self.is(TokenKind::Eof)
-            || self.tok.newline_before()
-        {
+            || self.tok.newline_before();
+        if bare && !self.has_finally() {
             self.code().return_undef();
         } else {
-            self.parse_expr(false)?;
+            if bare {
+                self.code().undefined();
+            } else {
+                self.parse_expr(false)?;
+            }
+            self.emit_finally_for_return();
             self.code().return_();
         }
         self.expect_semicolon()
+    }
+
+    /// `try` (docs/compiler.md 7.4, D1084). With `base` the operand depth here:
+    ///
+    /// ```text
+    /// L_try:   <try block>
+    /// L_try_end:
+    ///          [undefined; gosub L_fin; drop]; jump L_end
+    /// L_catch: (handler for [L_try, L_try_end), stack: exc) <bind or drop>; <catch block>
+    /// L_catch_end:
+    ///          [undefined; gosub L_fin; drop]; jump L_end
+    /// L_exc:   (handler for the try or catch region, if there is a finally)
+    ///          gosub L_fin; throw
+    /// L_fin:   (stack: value slot, return address) <finally block>; ret
+    /// L_end:
+    /// ```
+    fn parse_try(&mut self) -> PResult<()> {
+        self.next()?;
+        if !self.is(TokenKind::LBrace) {
+            return syntax(self.tok.start, "expecting '{'");
+        }
+        let base = self.stmt_depth;
+        let has_finally = super::scan::try_has_finally(self.lx, self.tok);
+        let l_fin = self.new_label();
+        let l_end = self.new_label();
+        if has_finally {
+            self.blocks.push(BlockEnv {
+                labels: Vec::new(),
+                kind: BlockKind::Finally,
+                break_label: l_fin,
+                continue_label: None,
+                depth: base,
+            });
+        }
+        let normal_exit = |p: &mut Self| {
+            if has_finally {
+                p.code().undefined();
+                p.code().gosub(l_fin);
+                p.code().drop();
+            }
+            p.code().jump(l_end);
+        };
+        let l_try = self.new_label();
+        let l_try_end = self.new_label();
+        self.place(l_try);
+        self.parse_block()?;
+        self.place(l_try_end);
+        normal_exit(self);
+        let mut exc_region = (l_try, l_try_end);
+        if self.is(TokenKind::Catch) {
+            self.next()?;
+            let l_catch = self.new_label();
+            self.place(l_catch);
+            self.f.handlers.push(HandlerLabels {
+                start: l_try,
+                end: l_try_end,
+                target: l_catch,
+                depth: base,
+            });
+            self.push_scope(ScopeKind::Catch)?;
+            if self.eat(TokenKind::LParen)? {
+                if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
+                    return self.unsupported(self.tok.start, "destructuring catch parameters are");
+                }
+                if self.tok.kind != TokenKind::Ident {
+                    return syntax(self.tok.start, "identifier expected");
+                }
+                let pos = self.tok.start;
+                let name = self.binding_name()?;
+                self.next()?;
+                let v = self.f.add_var(name, VarKind::CatchParam, self.scope);
+                let _ = v;
+                self.expect(TokenKind::RParen, ")")?;
+                let r = self.init_ref(name, pos);
+                self.code().name_init(r);
+            } else {
+                self.code().drop();
+            }
+            // The catch block's declarations share the clause's scope, so they
+            // conflict with the parameter (`catch (e) { let e }`).
+            self.expect(TokenKind::LBrace, "{")?;
+            while !self.is(TokenKind::RBrace) {
+                if self.is(TokenKind::Eof) {
+                    return syntax(self.tok.start, "expecting '}'");
+                }
+                self.parse_statement_list_item()?;
+            }
+            self.next()?;
+            self.pop_scope();
+            let l_catch_end = self.new_label();
+            self.place(l_catch_end);
+            normal_exit(self);
+            exc_region = (l_catch, l_catch_end);
+        } else if !has_finally {
+            return syntax(self.tok.start, "expecting catch or finally");
+        }
+        if has_finally {
+            self.blocks.pop();
+            let l_exc = self.new_label();
+            self.place(l_exc);
+            self.f.handlers.push(HandlerLabels {
+                start: exc_region.0,
+                end: exc_region.1,
+                target: l_exc,
+                depth: base,
+            });
+            self.code().gosub(l_fin);
+            self.code().throw();
+            self.expect(TokenKind::Finally, "finally")?;
+            self.place(l_fin);
+            self.stmt_depth = base + 2;
+            self.parse_block()?;
+            self.stmt_depth = base;
+            self.code().ret();
+        }
+        self.place(l_end);
+        Ok(())
     }
 
     fn parse_throw(&mut self) -> PResult<()> {
@@ -445,6 +610,7 @@ impl Parser<'_, '_> {
             kind: BlockKind::Switch,
             break_label: l_break,
             continue_label: None,
+            depth: self.stmt_depth,
         });
         let mut next_test = self.new_label();
         let mut next_body: Option<crate::bytecode::Label> = None;
@@ -529,6 +695,7 @@ impl Parser<'_, '_> {
                     kind: BlockKind::Labeled,
                     break_label: l_break,
                     continue_label: None,
+                    depth: self.stmt_depth,
                 });
                 if self.is(TokenKind::Function) {
                     return syntax(

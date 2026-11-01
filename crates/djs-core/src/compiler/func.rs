@@ -24,6 +24,8 @@ pub(super) enum ScopeKind {
     For,
     /// A `switch` case block: jumps land in its middle, so TDZ checks are never elided.
     Switch,
+    /// A `catch` clause: the parameter and the declarations of the catch block.
+    Catch,
 }
 
 pub(super) struct Scope {
@@ -52,6 +54,8 @@ pub(super) enum VarKind {
     NewTarget,
     /// A named function expression's own name (immutable).
     FuncName,
+    /// A `catch (e)` parameter, initialized by the handler.
+    CatchParam,
 }
 
 impl VarKind {
@@ -125,6 +129,16 @@ pub(super) enum Capture {
     Outer(u16),
 }
 
+/// A try region `[start, end)` whose exceptions go to `target` with the operand stack
+/// cut to `depth` (then the exception is pushed).
+#[derive(Clone, Copy, Debug)]
+pub(super) struct HandlerLabels {
+    pub start: crate::bytecode::Label,
+    pub end: crate::bytecode::Label,
+    pub target: crate::bytecode::Label,
+    pub depth: u32,
+}
+
 pub(super) struct FuncState {
     pub id: FuncId,
     pub kind: FuncKind,
@@ -144,6 +158,8 @@ pub(super) struct FuncState {
     pub consts: Vec<Value>,
     pub str_consts: BTreeMap<Vec<u16>, u32>,
     pub num_consts: BTreeMap<u64, u32>,
+    /// Try regions in phase-1 labels, innermost first (docs/compiler.md 7.4).
+    pub handlers: Vec<HandlerLabels>,
     /// `(phase-1 code position, source offset)`, in increasing code position.
     pub lines: Vec<(u32, u32)>,
     /// `var` declarations as `(name, scope where the declaration appeared)`, for
@@ -192,6 +208,7 @@ impl FuncState {
             consts: Vec::new(),
             str_consts: BTreeMap::new(),
             num_consts: BTreeMap::new(),
+            handlers: Vec::new(),
             lines: Vec::new(),
             var_decls: Vec::new(),
             params: Vec::new(),

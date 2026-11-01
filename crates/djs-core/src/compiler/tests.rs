@@ -842,3 +842,100 @@ fn run_cases(cases: &[(&str, &str)]) {
     }
     assert!(bad.is_empty(), "\n{}", bad.join("\n"));
 }
+
+/// Exceptions end to end (docs/compiler.md 7.4). Outputs checked against qjs
+/// (`work/scratch/0025/qjs_check.py end_to_end_exceptions`).
+#[test]
+fn end_to_end_exceptions() {
+    run_cases(&[
+        ("try { throw 1 } catch (e) { return e + 1 }", "=> 2"),
+        ("try { throw 'x' } catch { return 'caught' }", "=> caught"),
+        (
+            "let log = ''; try { log += 'a' } finally { log += 'b' } return log",
+            "=> ab",
+        ),
+        (
+            "let log = ''; try { throw 1 } catch (e) { log += 'c' + e } finally { log += 'f' } return log",
+            "=> c1f",
+        ),
+        (
+            "function f() { try { return 'try' } finally { console.log('fin') } } return f()",
+            "fin\n=> try",
+        ),
+        (
+            "function f() { try { return 1 } finally { return 2 } } return f()",
+            "=> 2",
+        ),
+        (
+            "function f() { try { throw 1 } finally { return 3 } } return f()",
+            "=> 3",
+        ),
+        (
+            "let log = ''; for (let i = 0; i < 4; i++) { try { if (i == 1) continue; if (i == 3) break; log += i } finally { log += 'f' } } return log",
+            "=> 0ff2ff",
+        ),
+        (
+            "let log = ''; outer: for (let i = 0; i < 3; i++) { for (;;) { try { try { continue outer } finally { log += 'a' } } finally { log += 'b' + i } } } return log",
+            "=> ab0ab1ab2",
+        ),
+        (
+            "function f() { let log = ''; try { try { return log += 'r' } finally { log += 'x' } } finally { console.log(log) } } return f()",
+            "rx\n=> r",
+        ),
+        (
+            "let n = 0; while (true) { try { break } finally { n++ } } return n",
+            "=> 1",
+        ),
+        (
+            "let n = 0; while (true) { try { continue } finally { n++; if (n > 2) break } } return n",
+            "=> 3",
+        ),
+        (
+            "L: try { break L } finally { console.log('f') } return 'after'",
+            "f\n=> after",
+        ),
+        (
+            "try { try { throw 1 } finally { console.log('inner') } } catch (e) { return 'outer ' + e }",
+            "inner\n=> outer 1",
+        ),
+        (
+            "try { try { throw 1 } catch (e) { throw e + 1 } } catch (e) { return e }",
+            "=> 2",
+        ),
+        (
+            "try { try { throw 1 } finally { throw 2 } } catch (e) { return e }",
+            "=> 2",
+        ),
+        (
+            "function f() { throw 'deep' } function g() { return f() } try { g() } catch (e) { return e }",
+            "=> deep",
+        ),
+        (
+            "try { null.x } catch (e) { return e.message }",
+            "=> cannot read property 'x' of null",
+        ),
+        (
+            "try { undefinedName } catch (e) { return e.name + ': ' + e.message }",
+            "=> ReferenceError: 'undefinedName' is not defined",
+        ),
+        (
+            "let e = 'outer'; try { throw 'inner' } catch (e) { } return e",
+            "=> outer",
+        ),
+        ("try { throw 1 } catch (e) { var v = e } return v", "=> 1"),
+        (
+            "const fs = []; for (let i = 0; i < 2; i++) { try { throw i } catch (e) { fs[i] = () => e } } return fs[0]() + fs[1]()",
+            "=> 1",
+        ),
+        (
+            "function f() { try { return 'a' } catch (e) { return 'b' } finally { } } return f()",
+            "=> a",
+        ),
+        ("let x = 0; try { x = 1 } catch { x = 2 } return x", "=> 1"),
+        (
+            "switch (1) { case 1: try { break } finally { console.log('f') } } return 'ok'",
+            "f\n=> ok",
+        ),
+        ("throw 'top'", "throw top"),
+    ]);
+}

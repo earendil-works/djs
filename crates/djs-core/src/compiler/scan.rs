@@ -129,6 +129,49 @@ pub(super) fn closes_before_assign(lx: Lexer<'_>, open: u8) -> bool {
     matches!(s.lx.next_token(), Ok(t) if t.kind == TokenKind::Assign)
 }
 
+/// With `open` the `{` of a try block and `lx` after it: does the statement have a
+/// `finally` clause? (`break`/`return` inside the try block must know before it is
+/// parsed, D1080.)
+pub(super) fn try_has_finally(lx: Lexer<'_>, open: Token) -> bool {
+    let mut s = Scanner {
+        lx,
+        prev: open,
+        stack: alloc::vec![b'{'],
+    };
+    let skip_group = |s: &mut Scanner<'_>| -> Option<()> {
+        while !s.stack.is_empty() {
+            s.next()?;
+        }
+        Some(())
+    };
+    if skip_group(&mut s).is_none() {
+        return false;
+    }
+    let Some(mut t) = s.next() else { return false };
+    if t.kind == TokenKind::Catch {
+        let Some(n) = s.next() else { return false };
+        if n.kind == TokenKind::LParen && skip_group(&mut s).is_none() {
+            return false;
+        }
+        if n.kind == TokenKind::LParen {
+            match s.next() {
+                Some(b) if b.kind == TokenKind::LBrace => {}
+                _ => return false,
+            }
+        } else if n.kind != TokenKind::LBrace {
+            return false;
+        }
+        if skip_group(&mut s).is_none() {
+            return false;
+        }
+        match s.lx.next_token() {
+            Ok(n) => t = n,
+            Err(_) => return false,
+        }
+    }
+    t.kind == TokenKind::Finally
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,6 +181,22 @@ mod tests {
         let open = lx.next_token().unwrap();
         assert_eq!(open.kind, TokenKind::LParen);
         is_arrow_head(lx, open)
+    }
+
+    #[test]
+    fn finally_lookahead() {
+        let has = |src: &str| {
+            let mut lx = Lexer::new(src.as_bytes()).unwrap();
+            assert_eq!(lx.next_token().unwrap().kind, TokenKind::Try);
+            let open = lx.next_token().unwrap();
+            try_has_finally(lx, open)
+        };
+        assert!(has("try {} finally {}"));
+        assert!(has("try { a({b: [1]}) } catch (e) { `${e}` } finally {}"));
+        assert!(has("try {} catch { /}/ } finally {}"));
+        assert!(!has("try {} catch (e) {}"));
+        assert!(!has("try { } catch (e) { } x; finally"));
+        assert!(!has("try {"));
     }
 
     #[test]

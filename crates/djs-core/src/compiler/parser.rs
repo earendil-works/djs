@@ -23,8 +23,12 @@ pub(super) const MAX_DEPTH: u32 = 1000;
 pub(super) struct BlockEnv {
     pub labels: Vec<Atom>,
     pub kind: BlockKind,
+    /// The break target (for `Finally`: the finally block, entered with `gosub`).
     pub break_label: Label,
     pub continue_label: Option<Label>,
+    /// Operand stack depth at the statement: what a jump to this env's targets
+    /// unwinds to (for `Finally`: the try statement's base depth).
+    pub depth: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -33,6 +37,9 @@ pub(super) enum BlockKind {
     Switch,
     /// A labeled statement that is not a loop: only `break label` targets it.
     Labeled,
+    /// A `try` with a `finally` block: `break`, `continue` and `return` that leave it
+    /// run the finally block first (docs/compiler.md 7.4).
+    Finally,
 }
 
 /// The state of an enclosing function while a nested one is parsed.
@@ -40,6 +47,7 @@ pub(super) struct Suspended {
     pub f: FuncState,
     pub scope: ScopeId,
     pub blocks: Vec<BlockEnv>,
+    pub stmt_depth: u32,
 }
 
 pub(super) struct Parser<'a, 'h> {
@@ -60,6 +68,9 @@ pub(super) struct Parser<'a, 'h> {
     pub depth: u32,
     /// Break/continue targets of `f` (they never cross functions).
     pub blocks: Vec<BlockEnv>,
+    /// Operand stack depth at statement boundaries of `f` (2 inside a finally block:
+    /// the value slot and the return address).
+    pub stmt_depth: u32,
     pub buf8: Vec<u8>,
     pub atom_undefined: Atom,
     pub atom_this: Atom,
@@ -107,6 +118,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             scope: BODY_SCOPE,
             depth: 0,
             blocks: Vec::new(),
+            stmt_depth: 0,
             buf8: Vec::new(),
             atom_undefined,
             atom_this,
@@ -155,6 +167,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             f: parent,
             scope: self.scope,
             blocks: core::mem::take(&mut self.blocks),
+            stmt_depth: core::mem::take(&mut self.stmt_depth),
         });
         self.scope = BODY_SCOPE;
         Ok(())
@@ -170,6 +183,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         let child = core::mem::replace(&mut self.f, s.f);
         self.scope = s.scope;
         self.blocks = s.blocks;
+        self.stmt_depth = s.stmt_depth;
         let id = child.id;
         self.done[id as usize] = Some(child);
         self.f.children.push(id);

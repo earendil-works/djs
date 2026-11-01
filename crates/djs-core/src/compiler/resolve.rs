@@ -377,13 +377,19 @@ fn emit_function(
                 for &v in &scope.vars {
                     let var = &f.vars[v as usize];
                     // Parameters, `var`s and the pseudo-bindings are set up in the prologue.
-                    if !matches!(var.kind, VarKind::Let | VarKind::Const | VarKind::Func)
-                        || var.global
+                    if !matches!(
+                        var.kind,
+                        VarKind::Let | VarKind::Const | VarKind::Func | VarKind::CatchParam
+                    ) || var.global
                     {
                         continue;
                     }
                     match storage[v as usize] {
-                        Storage::Box(slot) if var.kind.is_lexical() => out.new_box(slot),
+                        Storage::Box(slot)
+                            if var.kind.is_lexical() || var.kind == VarKind::CatchParam =>
+                        {
+                            out.new_box(slot)
+                        }
                         Storage::Box(slot) => {
                             out.undefined();
                             out.new_box_init(slot);
@@ -416,6 +422,19 @@ fn emit_function(
         }
     }
     let code = out.finish().map_err(|e| internal(&format!("{e:?}")))?;
+    let mut handlers = Vec::with_capacity(f.handlers.len());
+    for h in &f.handlers {
+        let pos = |l| {
+            code.label_pos(l)
+                .ok_or_else(|| internal("unplaced handler label"))
+        };
+        handlers.push(crate::bytecode::Handler {
+            start: pos(h.start)?,
+            end: pos(h.end)?,
+            target: pos(h.target)?,
+            depth: h.depth,
+        });
+    }
 
     // ---- Captures, children, line table, template.
     let mut capture_words = Vec::with_capacity(f.captures.len());
@@ -454,6 +473,7 @@ fn emit_function(
         code: &code.code,
         consts: &consts,
         children: &children,
+        handlers: &handlers,
         lines: &line_bytes,
         names: &all_names,
         script,
