@@ -2741,3 +2741,16 @@ identifier as in any Script. builtins/eval.rs compiles indirect eval with it. Si
 is always strict, test262's indirect-eval tests that need sloppy eval code (vars leaking
 to the global object, global function declarations) now fail; they passed only because
 eval code was a Script.
+
+## D1582: `import()` without modules: compiled, rejected in a job
+date: 2026-11-03 · by: lexer · issue: 0058
+`import(specifier [, options])` compiles everywhere (with the import attributes argument
+and a trailing comma) to `call_intrinsic %DynamicImport 2` (builtins/import.ts), which
+follows EvaluateImportCall up to the host load: ToString of the specifier and the
+`options`/`with` checks reject the promise with qjs's TypeErrors, and then, since djs has
+no module loader, the promise is rejected one job later with qjs's no-loader error
+(`ReferenceError: could not load module '<specifier>'`, the specifier not normalized).
+`import.meta` stays a SyntaxError (module code only). pi needs the runtime rejection
+(0049); a SyntaxError would fail the whole script. The test262 `dynamic-import` feature
+stays skipped (modules): with this, 354 of its 682 tests would pass (syntax and
+rejection-path tests), the rest need module fixtures.
