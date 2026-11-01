@@ -821,7 +821,7 @@ fn reader_images() {
     add(&mut h, "rope-flattened", Value::string(flat_src), true);
     // Append ropes (D1610): `s += piece` chains share one buffer; an older, shorter value
     // stays a prefix, and a two-byte piece moves to a two-byte buffer.
-    let mut s = h.alloc_str(&"line ".repeat(8)).unwrap();
+    let mut s = h.alloc_str(&"line ".repeat(60)).unwrap();
     let mut older = s;
     for i in 0..300 {
         let piece = h.alloc_str(&format!("{i},")).unwrap();

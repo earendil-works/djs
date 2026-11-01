@@ -40,6 +40,10 @@ pub const ROPE_MIN_LEN: u32 = 32;
 /// Smallest append buffer, in code units.
 const APPEND_MIN_CAP: u32 = 64;
 
+/// A concatenation chain gets an append buffer once its left side is this long: shorter
+/// strings (the pieces of an expression like `"id " + i + "\n"`) stay ropes or copies.
+const APPEND_START_LEN: u32 = 256;
+
 // The three string kinds share LEN and HASH offsets, so code that only needs those does not
 // have to dispatch on the kind.
 const _: () =
@@ -612,11 +616,11 @@ impl Heap {
     }
 
     /// Whether `a + b` looks like a step of `s += piece` in a loop: `a` is already an
-    /// append rope, or a concatenation rope whose right part is short, and `b` is not
-    /// longer than `a`. Such chains get a buffer (D1610); other concatenations stay O(1)
+    /// append rope, or a concatenation rope of at least `APPEND_START_LEN` units whose
+    /// right part is short, and `b` is not longer than `a`. Such chains get a buffer (D1610); other concatenations stay O(1)
     /// ropes.
     fn appending(&self, a: Str, la: u32, lb: u32) -> bool {
-        if lb > la || self.cell_kind(a.0) != CellKind::Rope {
+        if lb > la || la < APPEND_START_LEN || self.cell_kind(a.0) != CellKind::Rope {
             return false;
         }
         let fl = self.cell_flags(a.0);

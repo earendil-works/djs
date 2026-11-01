@@ -27,9 +27,9 @@ fn appendable(h: &Heap, buf: u32) -> bool {
 #[test]
 fn appends_share_one_buffer() {
     let mut h = Heap::new().unwrap();
-    let mut acc = s(&mut h, &"#".repeat(40));
+    let mut acc = s(&mut h, &"#".repeat(300));
     let x = s(&mut h, "x");
-    let mut expect = "#".repeat(40);
+    let mut expect = "#".repeat(300);
     let mut buffers = Vec::new();
     for _ in 0..10_000 {
         acc = h.concat(acc, x).unwrap();
@@ -56,7 +56,7 @@ fn appends_share_one_buffer() {
 fn an_older_shorter_rope_never_writes_into_the_buffer() {
     // (b): two ropes over one buffer; only the one at the buffer's end extends it.
     let mut h = Heap::new().unwrap();
-    let base = s(&mut h, &"a".repeat(40));
+    let base = s(&mut h, &"a".repeat(300));
     let b = s(&mut h, "b");
     let c = s(&mut h, "c");
     let r1 = h.concat(base, b).unwrap(); // a plain rope
@@ -67,16 +67,16 @@ fn an_older_shorter_rope_never_writes_into_the_buffer() {
     // r2 is now shorter than the buffer's used part: appending to it must copy.
     let fork = h.concat(r2, c).unwrap();
     assert_ne!(buffer(&h, fork), Some(buf));
-    assert_eq!(h.str_to_string(r2), format!("{}bb", "a".repeat(40)));
-    assert_eq!(h.str_to_string(r3), format!("{}bbb", "a".repeat(40)));
-    assert_eq!(h.str_to_string(fork), format!("{}bbc", "a".repeat(40)));
+    assert_eq!(h.str_to_string(r2), format!("{}bb", "a".repeat(300)));
+    assert_eq!(h.str_to_string(r3), format!("{}bbb", "a".repeat(300)));
+    assert_eq!(h.str_to_string(fork), format!("{}bbc", "a".repeat(300)));
     // The newest still extends in place, and the fork has its own buffer.
     let r4 = h.concat(r3, c).unwrap();
     assert_eq!(buffer(&h, r4), Some(buf));
     let fork2 = h.concat(fork, c).unwrap();
     assert_eq!(buffer(&h, fork2), buffer(&h, fork));
-    assert_eq!(h.str_to_string(r3), format!("{}bbb", "a".repeat(40)));
-    assert_eq!(h.str_to_string(fork2), format!("{}bbcc", "a".repeat(40)));
+    assert_eq!(h.str_to_string(r3), format!("{}bbb", "a".repeat(300)));
+    assert_eq!(h.str_to_string(fork2), format!("{}bbcc", "a".repeat(300)));
     h.verify().unwrap();
 }
 
@@ -84,7 +84,7 @@ fn an_older_shorter_rope_never_writes_into_the_buffer() {
 fn a_frozen_buffer_is_never_appended_to() {
     // (c): flatten hands out the buffer only after freezing it.
     let mut h = Heap::new().unwrap();
-    let base = s(&mut h, &"q".repeat(40));
+    let base = s(&mut h, &"q".repeat(300));
     let d = s(&mut h, "d");
     let mut r = h.concat(base, d).unwrap();
     r = h.concat(r, d).unwrap();
@@ -96,10 +96,10 @@ fn a_frozen_buffer_is_never_appended_to() {
     assert!(!appendable(&h, buf), "and frozen");
     let more = h.concat(r, d).unwrap();
     assert_ne!(buffer(&h, more), Some(buf));
-    assert_eq!(h.str_len(flat), 43);
-    assert_eq!(h.str_to_string(flat), format!("{}ddd", "q".repeat(40)));
-    assert_eq!(h.str_to_string(more), format!("{}dddd", "q".repeat(40)));
-    assert_eq!(h.str_to_string(older), format!("{}d", "q".repeat(40)));
+    assert_eq!(h.str_len(flat), 303);
+    assert_eq!(h.str_to_string(flat), format!("{}ddd", "q".repeat(300)));
+    assert_eq!(h.str_to_string(more), format!("{}dddd", "q".repeat(300)));
+    assert_eq!(h.str_to_string(older), format!("{}d", "q".repeat(300)));
     // A shorter rope over a buffer flattens to a copy.
     let mut p = h.concat(base, d).unwrap();
     p = h.concat(p, d).unwrap();
@@ -116,7 +116,7 @@ fn a_frozen_buffer_is_never_appended_to() {
 #[test]
 fn widening_moves_to_a_two_byte_buffer() {
     let mut h = Heap::new().unwrap();
-    let mut acc = s(&mut h, &"z".repeat(40));
+    let mut acc = s(&mut h, &"z".repeat(300));
     let x = s(&mut h, "x");
     for _ in 0..3 {
         acc = h.concat(acc, x).unwrap();
@@ -128,9 +128,9 @@ fn widening_moves_to_a_two_byte_buffer() {
     assert!(!h.str_is_two_byte(acc));
     assert_eq!(
         h.str_to_string(wide),
-        format!("{}xxx\u{2603}x", "z".repeat(40))
+        format!("{}xxx\u{2603}x", "z".repeat(300))
     );
-    assert_eq!(h.str_to_string(acc), format!("{}xxx", "z".repeat(40)));
+    assert_eq!(h.str_to_string(acc), format!("{}xxx", "z".repeat(300)));
     let wbuf = buffer(&h, wide).unwrap();
     assert_eq!(h.cell_kind(wbuf), CellKind::Str16);
     h.verify().unwrap();
@@ -140,7 +140,7 @@ fn widening_moves_to_a_two_byte_buffer() {
 fn verify_rejects_a_buffer_outside_an_append_rope() {
     // (a): a value, or any other ref, pointing at an unfrozen buffer is a broken heap.
     let mut h = Heap::new().unwrap();
-    let base = s(&mut h, &"v".repeat(40));
+    let base = s(&mut h, &"v".repeat(300));
     let e = s(&mut h, "e");
     let r = h.concat(base, e).unwrap();
     let r = h.concat(r, e).unwrap();
@@ -167,7 +167,7 @@ fn verify_rejects_a_buffer_outside_an_append_rope() {
 /// Builds the same strings in a fresh heap.
 fn build(h: &mut Heap) -> Vec<super::handle::Handle> {
     let mut hs = Vec::new();
-    let mut acc = s(h, &"line\n".repeat(10));
+    let mut acc = s(h, &"line\n".repeat(60));
     for i in 0..2000 {
         let piece = s(h, &format!("{i}:{}\n", "*".repeat(i % 7)));
         acc = h.concat(acc, piece).unwrap();
