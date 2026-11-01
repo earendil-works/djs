@@ -572,7 +572,13 @@ impl Msg {
             Msg::UnexpectedChar(None) => "Unexpected token '",
             Msg::UnexpectedChar(Some(c)) => {
                 let mut s = String::from("Unexpected token '");
-                s.push(char::from_u32(c).unwrap_or(char::REPLACEMENT_CHARACTER));
+                // QuickJS prints the first UTF-8 byte, which decodes to U+FFFD.
+                let c = if c < 0x80 {
+                    c as u8 as char
+                } else {
+                    char::REPLACEMENT_CHARACTER
+                };
+                s.push(c);
                 s.push('\'');
                 return s;
             }
