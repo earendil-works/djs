@@ -1,6 +1,6 @@
 # 0058: Compiler: `using`, decorators, `accessor`, Script completion values, `import()`
 
-status: in-progress
+status: done
 agent: lexer
 branch: issue/0058-compiler-remaining
 depends-on: 0048, 0051 (disposables runtime, SYM_DISPOSE/SYM_ASYNC_DISPOSE)
