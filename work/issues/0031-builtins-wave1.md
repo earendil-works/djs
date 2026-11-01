@@ -1,6 +1,6 @@
 # 0031: Core builtins wave 1: Object, Function, Error, Boolean, Symbol, Number, Math, globals
 
-status: in-progress
+status: done
 agent: infra
 branch: issue/0031-builtins-wave1
 depends-on: 0028

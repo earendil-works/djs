@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0033 | JSON + RegExp builtins, regex literals | num | .worktrees/0033-json-regexp-builtins |
 | 0030 | P1-5 runtime + 0028 leftovers (define_method etc.) | heap | .worktrees/0030-p1-iteration-runtime |
-| 0031 | Core builtins wave 1 | infra | .worktrees/0031-builtins-wave1 |
+| 0034 | Core builtins wave 2 (Array, String, leftovers) | infra | .worktrees/0034-builtins-wave2 |
 | 0029 | P1-5 Loops and iteration (compiler + iterator builtins) | lexer | .worktrees/0029-p1-iteration-compiler |
 
 ## Open (ready)
@@ -30,6 +30,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0005 | Values, arena heap, strings, atoms, objects | dc751e2 (agent heap; follow-ups in the issue) |
 | 0023 | djs-wasm + JS host package | d4fb4a4 (agent num; djs runs in node; vm_new 11 us; 132 KB gz at opt s) |
 | 0028 | P1-2 runtime | 468f874 (agent heap; prelude at Vm::new: 92 us native / 146 us wasm; Error stack) |
+| 0031 | Core builtins wave 1 | 25fdfa7 (agent infra; test262 active 2,961 -> 7,687; leftovers to 0034) |
 | 0032 | Base snapshot | 60a816e (agent num; vm_new 144 us -> 0.4 us in wasm) |
 | 0026 | Leaf performance sweep | 04fc8fa (agent num; stringify -24..-54%, GC -11..-19%; opt-level stays s) |
 | 0007 | test262 on djs + ratchet in gate | 2312924 (agent infra; 2,961/20,124 active; gate runs all active in 4.2 s) |
@@ -74,6 +75,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- |
 | 2026-11-01 | 50 / 154 (11 skipped) | 2,961 / 20,124 (14.7%) |
 | 2026-11-01 (0031 part 1) | 55 / 168 | 5,108 / 20,124 (25.4%) |
+| 2026-11-01 (0031 part 2) | 74 / 171 | 7,687 / 20,124 (38.2%) |
 
 ## Parallelism notes
 
