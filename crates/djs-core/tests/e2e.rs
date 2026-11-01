@@ -79,11 +79,11 @@ fn run_case(src: &str, name: &str, mode: Mode) -> String {
     let mut out = String::new();
     let mut stops: u64 = 0;
     loop {
-        // Suspension: fuel 1 (a stop at every instruction) for the first 5000 stops, then
+        // Suspension: fuel 1 (a stop at every instruction) for the first 1000 stops, then
         // larger slices, so long-running cases stay fast while every case still gets
         // thousands of image round trips.
         let fuel = match mode {
-            Mode::Suspend if stops < 5000 => 1,
+            Mode::Suspend if stops < 1000 => 1,
             Mode::Suspend => 997,
             _ => u64::MAX,
         };

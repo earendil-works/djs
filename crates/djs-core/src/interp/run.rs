@@ -270,7 +270,12 @@ impl<'h> Exec<'h> {
                 self.sp = lp + locals;
                 self.pc = 0;
                 self.load_frame();
-                self.safepoint();
+                // Frame entry is a safepoint, except for the entry call: `Vm::call` must
+                // not collect, so the embedder's raw values stay valid until `run`
+                // (whose start is a safepoint anyway).
+                if !entry {
+                    self.safepoint();
+                }
                 Ok(None)
             }
             ObjectClass::HostFunction => {

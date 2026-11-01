@@ -1255,3 +1255,38 @@ fn for_in_order_shadowing_and_deletion() {
     let v = for_in_keys(&mut vm, "n", None);
     assert_eq!(vm.display(v), "");
 }
+
+#[test]
+fn vm_call_never_collects() {
+    // With GC stress, frame entry is a safepoint, but not for the entry call: the
+    // embedder's raw values must stay valid until `run`.
+    let mut vm = vm_with(VmOptions {
+        exec: ExecOptions {
+            gc_stress: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    let f = vm
+        .compile(
+            b"return 1 + 1",
+            &crate::compiler::CompileOptions::async_body("c.js", &[]),
+        )
+        .unwrap();
+    for _ in 0..100 {
+        vm.heap_mut().alloc_str("garbage before the call").unwrap();
+    }
+    let len = vm.heap().arena().len();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    assert_eq!(vm.heap().arena().len(), len, "Vm::call must not collect");
+    assert_eq!(
+        vm.heap().cell_kind(f.as_object().unwrap().offset()),
+        crate::heap::CellKind::Object
+    );
+    assert_eq!(vm.run(1 << 20), Status::Done(Value::int(2)));
+    assert!(
+        vm.heap().arena().len() < len,
+        "run collects at its first safepoint"
+    );
+}

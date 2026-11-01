@@ -329,7 +329,8 @@ impl Vm {
     }
 
     /// Starts a call of `f`: pushes the entry frame (or parks on a host function). `run`
-    /// executes it.
+    /// executes it. Never collects, so `f`, `this` and the arguments the embedder holds
+    /// stay valid until the next `run`.
     pub fn call(&mut self, f: Value, this: Value, args: &[Value]) -> Result<(), VmError> {
         match self.state() {
             RunState::Running | RunState::HostCall | RunState::ThrowPending => {
