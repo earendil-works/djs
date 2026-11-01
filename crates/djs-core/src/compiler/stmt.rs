@@ -96,6 +96,12 @@ impl Parser<'_, '_> {
                 self.emit_completion();
                 self.expect_semicolon()
             }
+            // `import(...)` and `import.meta` start expression statements.
+            TokenKind::Import if matches!(self.peek().kind, TokenKind::LParen | TokenKind::Dot) => {
+                self.parse_expr(false)?;
+                self.emit_completion();
+                self.expect_semicolon()
+            }
             TokenKind::Import | TokenKind::Export | TokenKind::Enum => {
                 let text = self.tok_text();
                 syntax(tok.start, alloc::format!("unsupported keyword: {text}"))

@@ -1183,6 +1183,14 @@ AsyncGeneratorFunctionConstructor: reentrant (%AsyncGeneratorFunctionConstructor
 AsyncFunctionConstructor: reentrant (%AsyncFunctionConstructor)
   builtins/generator.ts:164:10  CreateDynamicFunction (builtin)
 
+DynamicImport: reentrant (%DynamicImport)
+  builtins/import.ts:14:23  ToString (builtin)
+  builtins/import.ts:19:33  Get (intrinsic)
+  builtins/import.ts:24:30  EnumerableOwnProperties (builtin)
+  builtins/import.ts:25:24  LengthOfArrayLike (builtin)
+  builtins/import.ts:27:25  Get (intrinsic)
+  builtins/import.ts:36:26  PromiseResolve (builtin)
+
 GetIterator: reentrant (%GetIterator)
   builtins/iter.ts:11:25  GetV (intrinsic)
   builtins/iter.ts:15:27  Call (intrinsic)

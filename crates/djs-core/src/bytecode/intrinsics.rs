@@ -359,6 +359,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("GeneratorFunctionConstructor", B, 0, true),
     i("AsyncGeneratorFunctionConstructor", B, 0, true),
     i("AsyncFunctionConstructor", B, 0, true),
+    i("DynamicImport", B, 2, false),
     i("GetIterator", B, 1, false),
     i("IteratorClose", B, 1, false),
     i("IteratorCloseThrow", B, 1, false),

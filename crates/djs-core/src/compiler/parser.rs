@@ -534,10 +534,6 @@ impl<'a, 'h> Parser<'a, 'h> {
         )
     }
 
-    pub fn unsupported<T>(&self, pos: u32, what: &str) -> PResult<T> {
-        syntax(pos, format!("{what} not supported yet"))
-    }
-
     // ---- Code ---------------------------------------------------------------------
 
     pub fn code(&mut self) -> &mut CodeBuf<Phase1> {

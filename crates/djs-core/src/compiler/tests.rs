@@ -1129,6 +1129,12 @@ fn errors() {
             7,
         ),
         ("// goal: body\nvar await", "variable name expected", 2, 5),
+        // `import()` (0058).
+        ("import.meta", "import.meta only valid in module code", 1, 8),
+        ("import.foo", "meta expected", 1, 8),
+        ("import(a, b, c)", "expecting ')'", 1, 14),
+        ("new import(a)", "invalid use of 'import()'", 1, 5),
+        ("x = import", "expecting '('", 1, 11),
         // `using` declarations (0058).
         (
             "using x = null;",

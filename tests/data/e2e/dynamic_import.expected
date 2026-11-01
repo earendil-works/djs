@@ -1,0 +1,11 @@
+true
+options TypeError: options must be an object
+with TypeError: options.with must be an object
+value TypeError: module attribute values must be strings
+specifier Error: toString
+tick1
+load ReferenceError
+attrs ReferenceError
+trailing comma ReferenceError
+tick2
+await ReferenceError

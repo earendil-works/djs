@@ -1046,6 +1046,9 @@ impl Parser<'_, '_> {
             self.code().name_get(r);
             return Ok(Expr::Value);
         }
+        if self.is(TokenKind::Import) && self.peek().kind == TokenKind::LParen {
+            return syntax(self.tok.start, "invalid use of 'import()'");
+        }
         self.enter()?;
         let mut e = if self.is(TokenKind::New) {
             self.parse_new()?
@@ -1256,10 +1259,37 @@ impl Parser<'_, '_> {
                 }
                 Ok(Expr::Value)
             }
-            TokenKind::Import => self.unsupported(tok.start, "import() is"),
+            TokenKind::Import => self.parse_import_call(),
             TokenKind::Percent if self.opts.privileged => self.parse_intrinsic_call(),
             _ => self.unexpected(),
         }
+    }
+
+    /// `import(specifier [, options])` (ImportCall, with import attributes): the call
+    /// returns a promise that djs always rejects, having no module loader
+    /// (builtins/import.ts). `import.meta` is module code only.
+    fn parse_import_call(&mut self) -> PResult<Expr> {
+        let pos = self.tok.start;
+        self.next()?;
+        if self.eat(TokenKind::Dot)? {
+            if self.tok.is_contextual(Kw::Meta) {
+                return syntax(self.tok.start, "import.meta only valid in module code");
+            }
+            return syntax(self.tok.start, "meta expected");
+        }
+        self.expect(TokenKind::LParen, "(")?;
+        self.parse_assign(false)?;
+        if self.eat(TokenKind::Comma)? && !self.is(TokenKind::RParen) {
+            self.parse_assign(false)?;
+            self.eat(TokenKind::Comma)?;
+        } else {
+            self.code().undefined();
+        }
+        self.expect(TokenKind::RParen, ")")?;
+        self.mark(pos);
+        let id = crate::bytecode::intrinsics::intrinsic_id("DynamicImport").expect("intrinsic");
+        self.code().call_intrinsic(id, 2);
+        Ok(Expr::Value)
     }
 
     /// `super(args)`, `super.x`, `super[k]` (docs/compiler.md 7.9).

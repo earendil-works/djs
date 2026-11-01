@@ -3,8 +3,9 @@
 //! Scope so far: expressions and statements (0014), functions, arrows and closures
 //! (0024), objects (0027), exceptions (0025), for-in/of (0029), destructuring and
 //! tagged templates (0036), async functions, generators and `for await` (0041), classes
-//! (0040). Constructs that come later (regex literals, ...) are rejected with a
-//! "... not supported yet" SyntaxError.
+//! (0040), TypeScript (0048), `using` declarations, completion values, eval code and
+//! `import()` (0058). Decorators and `accessor` fields are not there yet (a plain
+//! SyntaxError).
 //!
 //! ```ignore
 //! let template = compile(&mut heap, src, &CompileOptions::script("main.js"))?;

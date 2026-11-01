@@ -3263,6 +3263,38 @@ function AsyncFunctionConstructor(...args) {
   return CreateDynamicFunction(new.target, 2, "AsyncFunctionPrototype", args);
 }
 
+// builtins/import.ts:11 %DynamicImport
+function DynamicImport(specifier, options) {
+  const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
+  try {
+    const name = ToString(specifier);
+    if (options !== undefined) {
+      if (!%IsObject(options)) {
+        throw %NewTypeError("options must be an object");
+      }
+      const attributes = %Get(%AsObj(options), "with");
+      if (attributes !== undefined) {
+        if (!%IsObject(attributes)) {
+          throw %NewTypeError("options.with must be an object");
+        }
+        const entries = EnumerableOwnProperties(%AsObj(attributes), 1);
+        const n = LengthOfArrayLike(entries);
+        for (let i = 0; i < n; i++) {
+          if (!%IsString(%Get(entries, i))) {
+            throw %NewTypeError("module attribute values must be strings");
+          }
+        }
+      }
+    }
+    const error = %NewReferenceError("could not load module '" + name + "'");
+    const ready = PromiseResolve(%IntrinsicPromise(), undefined);
+    %PerformPromiseThen(%AsObj(ready), %NewBuiltinClosure(10, error, 0), undefined, promise);
+  } catch (e) {
+    %RejectPromise(promise, e);
+  }
+  return promise;
+}
+
 // builtins/iter.ts:10 %GetIterator
 function GetIterator(obj) {
   const method = %GetV(obj, %WellKnownSymbol("iterator"));
@@ -10992,6 +11024,7 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallIntrinsic("GeneratorFunctionConstructor", GeneratorFunctionConstructor);
 %InstallIntrinsic("AsyncGeneratorFunctionConstructor", AsyncGeneratorFunctionConstructor);
 %InstallIntrinsic("AsyncFunctionConstructor", AsyncFunctionConstructor);
+%InstallIntrinsic("DynamicImport", DynamicImport);
 %InstallIntrinsic("GetIterator", GetIterator);
 %InstallIntrinsic("IteratorClose", IteratorClose);
 %InstallIntrinsic("IteratorCloseThrow", IteratorCloseThrow);
