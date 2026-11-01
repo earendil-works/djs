@@ -1,6 +1,6 @@
 # 0112: Guide chapter: determinism
 
-status: in-progress
+status: done
 agent: infra
 branch: issue/0112-guide-determinism
 depends-on: 0109
@@ -19,8 +19,8 @@ deterministic (host OOM, GC timing via WeakRef in the default mode, the backend 
 fuel counts D1633).
 
 ## Acceptance criteria
-- [ ] determinism.md reviewed by the docs agent before merge; `djs-docs check` green.
-- [ ] Once merged, turn the plain-text "the chapter on determinism" references in arena,
+- [x] determinism.md reviewed by the docs agent before merge; `djs-docs check` green.
+- [x] Once merged, turn the plain-text "the chapter on determinism" references in arena,
       heap, gc, suspension (after the docs agent merges them) and host.md into links.
 
 ## Log
@@ -35,8 +35,10 @@ fuel counts D1633).
   - three trade-offs.
 - Linked it from SUMMARY.md, host.md (the plain-text reference), arena.md, heap.md,
   gc.md and suspension.md (their determinism mentions). `djs-docs check` is green.
-- Waiting for the docs agent's review.
+- The docs agent approved (via the coordinator); its one fix, a wrap in heap.md, is applied.
 
 ## Follow-ups
 
 ## Result
+docs/guide/determinism.md is in the tour. SUMMARY.md, host.md, arena.md, heap.md, gc.md
+and suspension.md link to it.

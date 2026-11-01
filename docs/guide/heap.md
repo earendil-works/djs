@@ -180,8 +180,8 @@ is what keeps data entries at 16 bytes (D1830).
 > worst). Weak transitions would make the tree, and so the heap image, depend on when
 > collections ran, and [deterministic runs](determinism.md) need images to be a function
 > of the program alone. The cost: a script that creates thousands of distinct key
-> sequences gets dictionaries after the budget. Measured: real scripts create 0 to 16 shapes, the
-> difftest corpus at most 59 per case.
+> sequences gets dictionaries after the budget. Measured: real scripts create 0 to 16
+> shapes, the difftest corpus at most 59 per case.
 
 > **Trade-off.** The prototype stays in the object, not in the shape. Changing a
 > prototype then touches no shape, and objects with the same keys share a shape whatever
