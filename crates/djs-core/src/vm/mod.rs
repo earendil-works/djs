@@ -245,7 +245,7 @@ impl Vm {
             let g = self.global();
             for name in ["WeakRef", "FinalizationRegistry"] {
                 let key = self.heap.atom_str(name)?;
-                self.heap.delete_own_property(g, key);
+                self.heap.delete_own_property(g, key)?;
             }
         }
         Ok(())

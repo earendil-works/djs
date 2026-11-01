@@ -224,7 +224,7 @@ fn build_random(h: &mut Heap, seed: u64, ops: usize, gc_every: Option<usize>) ->
                     let keys = h.own_keys(o);
                     if !keys.is_empty() {
                         let k = keys[rng.below(keys.len())];
-                        h.delete_own_property(o, k);
+                        h.delete_own_property(o, k).unwrap();
                     }
                 }
             }

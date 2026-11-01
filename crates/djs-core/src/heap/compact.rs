@@ -4,7 +4,8 @@
 //! their used size; the next collection drops the old cells. Growth works as before
 //! afterwards: a full table or array grows on the next insert.
 
-use super::cells::{AtomTable, Object, PropEntry, PropTable, Roots, ValueArray};
+use super::cells::flags::OBJ_DICTIONARY;
+use super::cells::{AtomTable, Object, PropEntry, PropTable, PropValues, Roots, ValueArray};
 use super::object::LINEAR_MAX;
 use super::{CellKind, Heap, HeapError, Ref};
 
@@ -22,8 +23,10 @@ impl Heap {
             .collect();
         for o in objects {
             let t: Ref = self.arena().get(o, Object::PROPS);
-            if let Some(t) = t.get() {
-                self.shrink_table(o, t)?;
+            match t.get() {
+                Some(t) if self.cell_flags(o) & OBJ_DICTIONARY != 0 => self.shrink_table(o, t)?,
+                Some(v) => self.shrink_values(o, v)?,
+                None => {}
             }
         }
         // The atom table's entries (slot 0 unused, then one per atom).
@@ -55,6 +58,27 @@ impl Heap {
         }
         self.arena_mut().set(new, ValueArray::LEN, len);
         Ok(new)
+    }
+
+    /// Replaces object `o`'s values block `v` by one of exactly its length.
+    fn shrink_values(&mut self, o: u32, v: u32) -> Result<(), HeapError> {
+        let len: u32 = self.arena().get(v, PropValues::LEN);
+        if len == PropValues::LAYOUT.tail_capacity(self.cell_size(v)) {
+            return Ok(());
+        }
+        let size = PropValues::VALUES
+            .cell_size(len)
+            .ok_or(HeapError::OutOfMemory)?;
+        let new = self.alloc_cell(CellKind::PropValues, size)?;
+        let src = PropValues::VALUES.at(v, 0);
+        let dst = PropValues::VALUES.at(new, 0);
+        self.arena_mut().copy_within(src, 8 * len, dst);
+        let shape: Ref = self.arena().get(v, PropValues::SHAPE);
+        let a = self.arena_mut();
+        a.set(new, PropValues::LEN, len);
+        a.set(new, PropValues::SHAPE, shape);
+        a.set(o, Object::PROPS, Ref(new));
+        Ok(())
     }
 
     /// Replaces object `o`'s table `t` by one with exactly its live entries.

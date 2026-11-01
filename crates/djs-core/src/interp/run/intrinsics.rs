@@ -642,7 +642,7 @@ impl Exec<'_> {
                     return bad_argument(info.name);
                 };
                 let key = conv::to_property_key(self.heap, arg(self, 1))?;
-                if !self.heap.delete_own_property(o, key) {
+                if !self.heap.delete_own_property(o, key)? {
                     return type_error("could not delete property");
                 }
                 Value::UNDEFINED
@@ -1759,7 +1759,7 @@ impl Exec<'_> {
                     return bad_argument(info.name);
                 };
                 let key = object::key(self.heap, arg(self, 1))?;
-                Value::bool(self.heap.delete_own_property(o, key))
+                Value::bool(self.heap.delete_own_property(o, key)?)
             }
             BOUND_FUNCTION_CREATE => {
                 let (Some(target), Some(args)) = (a0.as_object(), arg(self, 2).as_object()) else {
@@ -2114,7 +2114,7 @@ impl Exec<'_> {
             return Ok(());
         }
         self.name_and_length(fo, name, length.as_number().unwrap_or(0.0))?;
-        self.mark_builtin(fo, OBJ_BUILTIN);
+        self.mark_builtin(fo, OBJ_BUILTIN)?;
         Ok(())
     }
 
@@ -2232,22 +2232,23 @@ impl Exec<'_> {
         let n = self.heap.alloc_str(name)?;
         self.name_and_length(fo, Value::string(n), 1.0)?;
         self.heap
-            .remove_own_property_unchecked(fo, atoms::PROTOTYPE);
+            .remove_own_property_unchecked(fo, atoms::PROTOTYPE)?;
         let d = PropertyDescriptor::data(Value::object(p), PropFlags::NONE);
         self.heap.define_own_property(fo, atoms::PROTOTYPE, &d)?;
         let d = PropertyDescriptor::data(f, PropFlags::CONFIGURABLE);
         self.heap.define_own_property(p, atoms::CONSTRUCTOR, &d)?;
-        self.mark_builtin(fo, OBJ_BUILTIN | OBJ_BUILTIN_CTOR);
+        self.mark_builtin(fo, OBJ_BUILTIN | OBJ_BUILTIN_CTOR)?;
         Ok(())
     }
 
-    fn mark_builtin(&mut self, fo: Obj, flag: u16) {
+    fn mark_builtin(&mut self, fo: Obj, flag: u16) -> Result<(), HeapError> {
         let flags = self.heap.cell_flags(fo.offset());
         self.heap.set_cell_flags(fo.offset(), flags | flag);
         if flag & OBJ_BUILTIN_CTOR == 0 {
             self.heap
-                .remove_own_property_unchecked(fo, atoms::PROTOTYPE);
+                .remove_own_property_unchecked(fo, atoms::PROTOTYPE)?;
         }
+        Ok(())
     }
 
     /// `name` and `length` of an installed builtin (configurable only).
@@ -2330,7 +2331,7 @@ impl Exec<'_> {
             self.heap.define_own_property(fo, atoms::PROTOTYPE, &d)?;
             realm::define_hidden(self.heap, proto, atoms::CONSTRUCTOR, f)?;
         }
-        self.mark_builtin(fo, OBJ_BUILTIN | OBJ_BUILTIN_CTOR);
+        self.mark_builtin(fo, OBJ_BUILTIN | OBJ_BUILTIN_CTOR)?;
         Ok(())
     }
 
@@ -2372,14 +2373,14 @@ impl Exec<'_> {
                 let d = PropertyDescriptor::data(v, PropFlags::NONE);
                 self.heap.define_own_property(fo, k, &d)?;
             }
-            self.mark_builtin(fo, OBJ_BUILTIN);
+            self.mark_builtin(fo, OBJ_BUILTIN)?;
             self.heap.prevent_extensions(fo);
             return Ok(());
         }
         let name = format!("{} {key_name}", if setter { "set" } else { "get" });
         let name = Value::string(self.heap.alloc_str(&name)?);
         self.name_and_length(fo, name, if setter { 1.0 } else { 0.0 })?;
-        self.mark_builtin(fo, OBJ_BUILTIN);
+        self.mark_builtin(fo, OBJ_BUILTIN)?;
         Ok(())
     }
 
@@ -2431,11 +2432,17 @@ impl Exec<'_> {
             match next {
                 Some(n) => o = n,
                 None => match realm_object(path) {
-                    Some(i) => return Ok(intrinsic_obj(self.heap, i)),
+                    Some(i) => {
+                        o = intrinsic_obj(self.heap, i);
+                        break;
+                    }
                     None => return unknown(),
                 },
             }
         }
+        // Install targets (namespaces, prototypes, constructors) are one-off objects:
+        // dictionaries are smaller than a chain of unshared shapes (0083).
+        self.heap.make_dictionary(o)?;
         Ok(o)
     }
 }

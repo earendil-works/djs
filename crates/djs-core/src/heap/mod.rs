@@ -43,6 +43,7 @@ pub mod handle;
 pub mod layout;
 pub mod object;
 pub mod proxy;
+pub mod shape;
 pub mod string;
 pub mod typed;
 pub mod walk;

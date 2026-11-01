@@ -330,6 +330,7 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     set(heap, Intrinsic::Registries, Value::UNDEFINED);
     set(heap, Intrinsic::GlobalLexEpoch, Value::int(0));
     let ctors = heap.new_object(None)?;
+    heap.make_dictionary(ctors)?;
     set(heap, Intrinsic::Constructors, Value::object(ctors));
     let typed_array_proto = intrinsic_obj(heap, Intrinsic::TypedArrayProto);
     for i in [
@@ -476,6 +477,7 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     }
     tag(heap, async_generator_proto, "AsyncGenerator")?;
     let registry = heap.new_object(None)?;
+    heap.make_dictionary(registry)?;
     set(heap, Intrinsic::SymbolRegistry, Value::object(registry));
     let random = heap.alloc_value_array(2)?;
     heap.arena_mut()
@@ -483,6 +485,9 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     set(heap, Intrinsic::RandomState, Value::internal(random));
     crate::builtins::number::set_seed(heap, crate::builtins::number::DEFAULT_RANDOM_SEED);
     let global = heap.new_object(Some(object_proto))?;
+    // The global object and the lexical record are dictionaries (0083): one-off, with
+    // many keys, and the global caches (D1620) keep their table indexes.
+    heap.make_dictionary(global)?;
     set(heap, Intrinsic::Global, Value::object(global));
     define_hidden(heap, global, atoms::GLOBAL_THIS, Value::object(global))?;
     // The value properties of the global object: non-writable, non-configurable.
@@ -508,6 +513,7 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     heap.arena_mut()
         .set(r, Realm::INSTALLED, crate::heap::Ref(installed));
     let lex = heap.new_object(None)?;
+    heap.make_dictionary(lex)?;
     heap.arena_mut()
         .set(r, Realm::GLOBAL_LEX, crate::heap::Ref(lex.offset()));
     let oom = new_error(heap, ErrorKind::InternalError, "out of memory")?;

@@ -890,7 +890,7 @@ fn reader_images() {
         h.create_data_property(o, key, Value::int(v)).unwrap();
     }
     let gone = atom(&mut h, "gone");
-    assert!(h.delete_own_property(o, gone));
+    assert!(h.delete_own_property(o, gone).unwrap());
     let hidden = atom(&mut h, "hidden");
     let desc = PropertyDescriptor::data(Value::int(6), PropFlags::new(true, false, true));
     h.define_own_property(o, hidden, &desc).unwrap();

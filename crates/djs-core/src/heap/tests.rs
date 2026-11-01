@@ -395,10 +395,10 @@ fn basic_properties() {
     assert!(h.create_data_property(o, x, Value::int(2)).unwrap());
     assert_eq!(get(&h, o, x), Some(Value::int(2)));
     assert_eq!(h.own_keys(o), vec![x, y]);
-    assert!(h.delete_own_property(o, x));
+    assert!(h.delete_own_property(o, x).unwrap());
     assert!(!h.has_own_property(o, x));
     assert!(
-        h.delete_own_property(o, x),
+        h.delete_own_property(o, x).unwrap(),
         "deleting a missing key succeeds"
     );
     assert_eq!(h.own_keys(o), vec![y]);
@@ -444,7 +444,7 @@ fn hashed_tables() {
     }
     // Delete every other key; order of the rest is preserved.
     for &k in keys.iter().step_by(2) {
-        assert!(h.delete_own_property(o, k));
+        assert!(h.delete_own_property(o, k).unwrap());
     }
     let rest: Vec<Atom> = keys.iter().copied().skip(1).step_by(2).collect();
     assert_eq!(h.own_keys(o), rest);
@@ -475,7 +475,7 @@ fn linear_delete_preserves_order() {
     for &k in &keys {
         h.create_data_property(o, k, Value::NULL).unwrap();
     }
-    assert!(h.delete_own_property(o, keys[1]));
+    assert!(h.delete_own_property(o, keys[1]).unwrap());
     assert_eq!(h.own_keys(o), vec![keys[0], keys[2], keys[3]]);
     h.create_data_property(o, keys[1], Value::NULL).unwrap();
     assert_eq!(h.own_keys(o), vec![keys[0], keys[2], keys[3], keys[1]]);
@@ -576,7 +576,7 @@ fn define_validation() {
         ..Default::default()
     };
     assert!(!h.define_own_property(o, k, &to_accessor).unwrap());
-    assert!(!h.delete_own_property(o, k));
+    assert!(!h.delete_own_property(o, k).unwrap());
     assert!(
         h.define_own_property(o, k, &PropertyDescriptor::default())
             .unwrap()
@@ -701,7 +701,7 @@ fn array_fast_paths() {
     // A gap is not a fast path.
     assert!(!h.set_element_fast(a, 102, Value::NULL).unwrap());
     // Holes.
-    assert!(h.delete_own_property(a, idx(7)));
+    assert!(h.delete_own_property(a, idx(7)).unwrap());
     assert_eq!(h.get_element_fast(a, 7), None);
     assert!(!h.has_own_property(a, idx(7)));
     assert!(
@@ -711,7 +711,7 @@ fn array_fast_paths() {
     assert_eq!(h.array_length(a), 100);
 
     // A prototype with index properties disables adding elements on the fast path.
-    assert!(h.delete_own_property(a, idx(8)));
+    assert!(h.delete_own_property(a, idx(8)).unwrap());
     h.create_data_property(proto, idx(8), Value::FALSE).unwrap();
     assert!(!h.set_element_fast(a, 8, Value::NULL).unwrap());
     assert!(!h.set_element_fast(a, 100, Value::NULL).unwrap());
@@ -742,7 +742,7 @@ fn array_length_property() {
         Some(Property::data(Value::number(3.0), PropFlags::WRITABLE))
     );
     assert_eq!(h.own_keys(a), vec![idx(0), idx(2), atoms::LENGTH]);
-    assert!(!h.delete_own_property(a, atoms::LENGTH));
+    assert!(!h.delete_own_property(a, atoms::LENGTH).unwrap());
 
     // Sparse writes go to the table; keys stay sorted.
     h.create_data_property(a, idx(1000), Value::NULL).unwrap();
@@ -903,7 +903,7 @@ fn index_keys_on_ordinary_objects() {
     assert_eq!(h.dense_len(o), 0);
     assert_eq!(get(&h, o, idx(1)), Some(Value::int(1)));
     assert_eq!(h.own_keys(o), vec![idx(1), idx(3)]);
-    assert!(h.delete_own_property(o, idx(1)));
+    assert!(h.delete_own_property(o, idx(1)).unwrap());
     assert_eq!(h.own_keys(o), vec![idx(3)]);
 }
 
@@ -1032,7 +1032,18 @@ fn tracing_follows_layouts() {
     // An object references its prototype and property table.
     let refs = h.cell_refs(o.0);
     assert_eq!(refs.len(), 2);
+    // Every slot of a values block is visited, used or not, plus its shape.
+    let v = h.arena().get(o.0, cells::Object::PROPS).0;
+    assert_eq!(h.cell_kind(v), CellKind::PropValues);
+    let cap = cells::PropValues::LAYOUT.tail_capacity(h.cell_size(v));
+    let (mut values, mut refs) = (0, 0);
+    h.trace_cell(v, |slot| match slot {
+        Slot::Value(_) => values += 1,
+        Slot::Ref(_) => refs += 1,
+    });
+    assert_eq!((values, refs), (cap, 1), "VALUES, SHAPE");
     // Every slot of a PropTable entry tail is visited, used or not.
+    h.make_dictionary(o).unwrap();
     let t = h.arena().get(o.0, cells::Object::PROPS).0;
     let cap = cells::PropTable::LAYOUT.tail_capacity(h.cell_size(t));
     let mut values = 0;

@@ -8,7 +8,8 @@ use alloc::vec::Vec;
 
 use super::cells::{
     AtomTable, BigInt, EphemeronArray, HANDLE_LIVE, HandleSlot, HandleTable, Header, Object,
-    PropTable, Roots, Rope, Str8, Str16, Symbol, U32Array, ValueArray, flags,
+    PropTable, PropValues, RefArray, Roots, Rope, Shape, Str8, Str16, Symbol, U32Array, ValueArray,
+    flags,
 };
 use super::layout::{FieldTy, Ref};
 use super::object::ObjectClass;
@@ -266,7 +267,15 @@ impl Heap {
                 class.is_some_and(|c| {
                     Object::LAYOUT.tail_capacity(self.cell_size(cell)) >= c.slots()
                 }) && fits(a.get(cell, Object::PROTO), true, &[CellKind::Object])
-                    && fits(a.get(cell, Object::PROPS), true, &[CellKind::PropTable])
+                    && fits(
+                        a.get(cell, Object::PROPS),
+                        true,
+                        if self.cell_flags(cell) & flags::OBJ_DICTIONARY != 0 {
+                            &[CellKind::PropTable]
+                        } else {
+                            &[CellKind::PropValues]
+                        },
+                    )
                     && fits(a.get(cell, Object::ELEMENTS), true, &[CellKind::ValueArray])
             }
             CellKind::PropTable => {
@@ -286,6 +295,51 @@ impl Heap {
                         !accessor
                             || a.get(e, super::cells::PropEntry::KEY) == 0
                             || v.as_internal().and_then(kind_at) == Some(CellKind::AccessorPair)
+                    })
+            }
+            // A values block: its shape's COUNT slots, accessors pointing at pairs.
+            CellKind::PropValues => {
+                let len = a.get(cell, PropValues::LEN);
+                let shape = a.get(cell, PropValues::SHAPE);
+                let descs = |s: Ref| a.get(s.0, Shape::DESCS);
+                len <= PropValues::LAYOUT.tail_capacity(self.cell_size(cell))
+                    && fits(shape, false, &[CellKind::Shape])
+                    && a.get(shape.0, Shape::COUNT) == len
+                    && (len == 0
+                        || (fits(descs(shape), false, &[CellKind::U32Array])
+                            && self.u32_array_len(descs(shape).0) > 2 * len))
+                    && (0..len).all(|i| {
+                        let fl: u32 = a.read(U32Array::DATA.at(descs(shape).0, 2 + 2 * i));
+                        let v: Value = a.read(PropValues::VALUES.at(cell, i));
+                        fl & super::object::STORE_ACCESSOR == 0
+                            || v.as_internal().and_then(kind_at) == Some(CellKind::AccessorPair)
+                    })
+            }
+            // COUNT grows by one from the parent (so PARENT chains end), the descriptors
+            // cover it, and children point back.
+            CellKind::Shape => {
+                let parent = a.get(cell, Shape::PARENT);
+                let descs = a.get(cell, Shape::DESCS);
+                let count = a.get(cell, Shape::COUNT);
+                let tr = a.get(cell, Shape::TRANSITIONS);
+                let tree = if parent.is_null() {
+                    count == 0 && descs.is_null()
+                } else {
+                    fits(parent, false, &[CellKind::Shape])
+                        && a.get(parent.0, Shape::COUNT).checked_add(1) == Some(count)
+                        && fits(descs, false, &[CellKind::U32Array])
+                        && self.u32_array_len(descs.0) > 2 * count
+                        && self.u32_array_get(descs.0, 0) >= count
+                };
+                tree && fits(tr, true, &[CellKind::RefArray])
+                    && (tr.is_null() || {
+                        let n = a.get(tr.0, RefArray::LEN);
+                        n <= RefArray::LAYOUT.tail_capacity(self.cell_size(tr.0))
+                            && (0..n).all(|i| {
+                                let c: Ref = a.read(RefArray::REFS.at(tr.0, i));
+                                fits(c, false, &[CellKind::Shape])
+                                    && a.get(c.0, Shape::PARENT) == Ref(cell)
+                            })
                     })
             }
             CellKind::Rope => {

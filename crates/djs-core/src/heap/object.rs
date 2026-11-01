@@ -30,10 +30,11 @@ use alloc::vec::Vec;
 
 use super::atom::{Atom, atoms};
 use super::cells::{
-    AccessorPair, Object, PropEntry, PropTable, Roots, ValueArray,
-    flags::{OBJ_EXTENSIBLE, OBJ_INDEXED_PROPS, OBJ_IS_PROTO, OBJ_LENGTH_READONLY},
+    AccessorPair, Object, PropEntry, PropTable, PropValues, Roots, ValueArray,
+    flags::{OBJ_DICTIONARY, OBJ_EXTENSIBLE, OBJ_INDEXED_PROPS, OBJ_IS_PROTO, OBJ_LENGTH_READONLY},
 };
 use super::layout::Ref;
+use super::shape::SHAPE_MAX;
 use super::{CellKind, Heap, HeapError};
 use crate::value::{Obj, Value};
 
@@ -395,7 +396,8 @@ pub enum Lookup {
 enum Loc {
     None,
     Dense(u32),
-    Table(u32),
+    /// A named property slot (`prop_*`).
+    Prop(u32),
     ArrayLength,
 }
 
@@ -468,24 +470,62 @@ impl Heap {
             return Ok(o);
         }
         let n = u32::try_from(keys.len()).map_err(|_| HeapError::OutOfMemory)?;
+        if n <= SHAPE_MAX
+            && !keys.iter().any(|&k| self.atom_array_index(k).is_some())
+            && self.shaped_from_entries(o, keys, values)?
+        {
+            return Ok(o);
+        }
+        self.set_obj_flag(o, OBJ_DICTIONARY, true);
         let t = self.alloc_table(n.max(4))?;
         self.arena_mut().set(o.0, Object::PROPS, Ref(t));
-        let mut indexed = false;
         for (&key, &value) in keys.iter().zip(values) {
             let p = Property::data(value, PropFlags::ALL);
             let t = self.props(o);
             match self.table_find(t, key) {
                 Some(i) => self.write_entry(t, i, key, &p)?,
-                None => {
-                    self.table_insert(o, key, &p)?;
-                    indexed |= self.atom_array_index(key).is_some();
-                }
+                None => self.prop_insert(o, key, &p)?,
             }
         }
-        if indexed {
-            self.set_obj_flag(o, OBJ_INDEXED_PROPS, true);
-        }
         Ok(o)
+    }
+
+    /// [`Heap::new_object_from_entries`] in shape mode (at most [`SHAPE_MAX`] keys, none
+    /// an array index): one walk down the shape tree, and the values block at its exact
+    /// size. False, with `o` unchanged, if a shape limit is reached.
+    fn shaped_from_entries(
+        &mut self,
+        o: Obj,
+        keys: &[Atom],
+        values: &[Value],
+    ) -> Result<bool, HeapError> {
+        let mut slots = [0u32; SHAPE_MAX as usize];
+        let mut s = self.root_shape()?;
+        for (k, &key) in keys.iter().enumerate() {
+            slots[k] = match self.shape_find(s, key) {
+                Some(i) => i,
+                None => {
+                    let flags = PropFlags::ALL.bits() as u32;
+                    let Some(c) = self.shape_child(s, key, flags)? else {
+                        return Ok(false);
+                    };
+                    let i = self.shape_count(s);
+                    s = c;
+                    i
+                }
+            };
+        }
+        let count = self.shape_count(s);
+        let v = self.alloc_values(count)?;
+        let a = self.arena_mut();
+        // A repeated key keeps its first slot and its last value.
+        for (&i, &value) in slots.iter().zip(values) {
+            a.write(PropValues::VALUES.at(v, i), value);
+        }
+        a.set(v, PropValues::LEN, count);
+        a.set(v, PropValues::SHAPE, Ref(s));
+        a.set(o.0, Object::PROPS, Ref(v));
+        Ok(true)
     }
 
     /// A new array with `values` as its dense elements (`length` = `values.len()`).
@@ -749,7 +789,7 @@ impl Heap {
             self.dense_put(o, i as u32, v)?;
         }
         if new_len < len {
-            self.truncate_elements(o, new_len);
+            self.truncate_elements(o, new_len)?;
         }
         self.set_array_length_raw(o, new_len);
         Ok(true)
@@ -824,12 +864,286 @@ impl Heap {
             && i <= self.dense_len(o).saturating_add(DENSE_GAP)
     }
 
-    // ---------------------------------------------------------------- property table
+    // ---------------------------------------------------------------- property storage
+    //
+    // Named properties live in one of two modes (0083, docs/objects.md 7):
+    // - shape mode: `PROPS` is a `PropValues` block (or null, the root shape); keys and
+    //   flags are the block's shape's descriptors;
+    // - dictionary mode (`OBJ_DICTIONARY`): `PROPS` is a `PropTable` (or null, empty).
+    // The `prop_*` functions address properties by slot in either mode: a shape slot is
+    // a descriptor index, a dictionary slot a table entry (deleted ones included).
+    // Converting to dictionary mode keeps the slots.
 
     #[inline]
     fn props(&self, o: Obj) -> u32 {
         self.arena().get(o.0, Object::PROPS).0
     }
+
+    #[inline]
+    fn is_dictionary(&self, o: Obj) -> bool {
+        self.obj_flags(o) & OBJ_DICTIONARY != 0
+    }
+
+    /// The flags word a property is stored with (shape descriptor or table entry).
+    #[inline]
+    fn stored_flags(p: &Property) -> u32 {
+        match *p {
+            Property::Data { flags, .. } => flags.bits() as u32,
+            // Accessors have no writable attribute.
+            Property::Accessor { flags, .. } => {
+                (flags.bits() & !PropFlags::WRITABLE.bits()) as u32 | STORE_ACCESSOR
+            }
+        }
+    }
+
+    /// A property from its stored flags and value slot.
+    #[inline]
+    fn decode_property(&self, fl: u32, v: Value) -> Property {
+        let flags = PropFlags::from_bits(fl as u8);
+        if fl & STORE_ACCESSOR != 0 {
+            let pair = v.as_internal().expect("accessor pair");
+            let a = self.arena();
+            Property::Accessor {
+                getter: a.get(pair, AccessorPair::GETTER),
+                setter: a.get(pair, AccessorPair::SETTER),
+                flags,
+            }
+        } else {
+            Property::Data { value: v, flags }
+        }
+    }
+
+    /// Property slots of `o` (dictionary slots include deleted entries).
+    #[inline]
+    fn prop_slots(&self, o: Obj) -> u32 {
+        match self.props(o) {
+            0 => 0,
+            p if self.is_dictionary(o) => self.arena().get(p, PropTable::COUNT),
+            p => self.arena().get(p, PropValues::LEN),
+        }
+    }
+
+    /// The key of slot `i` (null for a deleted dictionary entry).
+    #[inline]
+    fn prop_key(&self, o: Obj, i: u32) -> Atom {
+        let p = self.props(o);
+        if self.is_dictionary(o) {
+            self.entry_key(p, i)
+        } else {
+            self.shape_desc(self.arena().get(p, PropValues::SHAPE).0, i)
+                .0
+        }
+    }
+
+    fn prop_read(&self, o: Obj, i: u32) -> Property {
+        let p = self.props(o);
+        if self.is_dictionary(o) {
+            return self.read_entry(p, i);
+        }
+        let (_, fl) = self.shape_desc(self.arena().get(p, PropValues::SHAPE).0, i);
+        self.decode_property(fl, self.arena().read(PropValues::VALUES.at(p, i)))
+    }
+
+    #[inline]
+    fn prop_find(&self, o: Obj, key: Atom) -> Option<u32> {
+        match self.props(o) {
+            0 => None,
+            t if self.is_dictionary(o) => self.table_find(t, key),
+            v => self.shape_find(self.arena().get(v, PropValues::SHAPE).0, key),
+        }
+    }
+
+    /// Replaces the value of slot `i` if it is a writable data property; false with
+    /// nothing changed otherwise.
+    #[inline]
+    fn prop_set_value(&mut self, o: Obj, i: u32, v: Value) -> bool {
+        let p = self.props(o);
+        let (fl, at) = if self.is_dictionary(o) {
+            let e = PropTable::ENTRIES.at(p, i);
+            (
+                self.arena().get(e, PropEntry::FLAGS),
+                e + PropEntry::VALUE.offset,
+            )
+        } else {
+            let s = self.arena().get(p, PropValues::SHAPE).0;
+            (self.shape_desc(s, i).1, PropValues::VALUES.at(p, i))
+        };
+        if fl & STORE_ACCESSOR != 0 || !PropFlags::from_bits(fl as u8).writable() {
+            return false;
+        }
+        self.arena_mut().write(at, v);
+        true
+    }
+
+    /// Writes slot `i` (holding `key`). In shape mode a change of the attributes (or of
+    /// data to accessor) makes the object a dictionary first.
+    fn prop_write(&mut self, o: Obj, i: u32, key: Atom, p: &Property) -> Result<(), HeapError> {
+        if !self.is_dictionary(o) {
+            let v = self.props(o);
+            let (_, fl) = self.shape_desc(self.arena().get(v, PropValues::SHAPE).0, i);
+            if fl == Self::stored_flags(p) {
+                let at = PropValues::VALUES.at(v, i);
+                match *p {
+                    Property::Data { value, .. } => self.arena_mut().write(at, value),
+                    Property::Accessor { getter, setter, .. } => {
+                        let pair = self
+                            .arena()
+                            .read::<Value>(at)
+                            .as_internal()
+                            .expect("accessor pair");
+                        let a = self.arena_mut();
+                        a.set(pair, AccessorPair::GETTER, getter);
+                        a.set(pair, AccessorPair::SETTER, setter);
+                    }
+                }
+                return Ok(());
+            }
+            self.become_dictionary(o, 0)?;
+        }
+        self.write_entry(self.props(o), i, key, p)
+    }
+
+    /// Adds a property (the key must not be present): a shape transition, or a table
+    /// entry in dictionary mode. Array-index keys make the object a dictionary and set
+    /// `OBJ_INDEXED_PROPS`.
+    fn prop_insert(&mut self, o: Obj, key: Atom, p: &Property) -> Result<(), HeapError> {
+        self.proto_changed(o);
+        let index = self.atom_array_index(key).is_some();
+        if !self.is_dictionary(o) {
+            if !index && self.shape_insert(o, key, p)? {
+                return Ok(());
+            }
+            self.become_dictionary(o, 1)?;
+        }
+        self.table_insert(o, key, p)?;
+        if index {
+            self.set_obj_flag(o, OBJ_INDEXED_PROPS, true);
+        }
+        Ok(())
+    }
+
+    /// Adds a property to a shape-mode object; false (nothing changed) when a shape
+    /// limit says it should become a dictionary. Allocates before it commits (D1700).
+    fn shape_insert(&mut self, o: Obj, key: Atom, p: &Property) -> Result<bool, HeapError> {
+        let v = self.props(o);
+        let s = match v {
+            0 => self.root_shape()?,
+            v => self.arena().get(v, PropValues::SHAPE).0,
+        };
+        let Some(child) = self.shape_child(s, key, Self::stored_flags(p))? else {
+            return Ok(false);
+        };
+        let len = if v == 0 {
+            0
+        } else {
+            self.arena().get(v, PropValues::LEN)
+        };
+        let nv = if v != 0 && len < PropValues::LAYOUT.tail_capacity(self.cell_size(v)) {
+            v
+        } else {
+            let nv = self.alloc_values((2 * len).max(4))?;
+            if len > 0 {
+                let src = PropValues::VALUES.at(v, 0);
+                let dst = PropValues::VALUES.at(nv, 0);
+                self.arena_mut().copy_within(src, 8 * len, dst);
+            }
+            nv
+        };
+        let value = self.store_value(p)?;
+        let a = self.arena_mut();
+        a.write(PropValues::VALUES.at(nv, len), value);
+        a.set(nv, PropValues::LEN, len + 1);
+        a.set(nv, PropValues::SHAPE, Ref(child));
+        a.set(o.0, Object::PROPS, Ref(nv));
+        Ok(true)
+    }
+
+    /// The value slot of a new property: the value, or a new accessor pair.
+    fn store_value(&mut self, p: &Property) -> Result<Value, HeapError> {
+        Ok(match *p {
+            Property::Data { value, .. } => value,
+            Property::Accessor { getter, setter, .. } => {
+                let pair =
+                    self.alloc_cell(CellKind::AccessorPair, AccessorPair::LAYOUT.min_size)?;
+                let a = self.arena_mut();
+                a.set(pair, AccessorPair::GETTER, getter);
+                a.set(pair, AccessorPair::SETTER, setter);
+                Value::internal(pair)
+            }
+        })
+    }
+
+    fn alloc_values(&mut self, cap: u32) -> Result<u32, HeapError> {
+        let size = PropValues::VALUES
+            .cell_size(cap)
+            .ok_or(HeapError::OutOfMemory)?;
+        self.alloc_cell(CellKind::PropValues, size)
+    }
+
+    /// Removes slot `i`. A shape-mode object goes back to the parent shape if `i` is its
+    /// last property, else it becomes a dictionary first.
+    fn prop_remove(&mut self, o: Obj, i: u32) -> Result<(), HeapError> {
+        if !self.is_dictionary(o) {
+            let v = self.props(o);
+            let len = self.arena().get(v, PropValues::LEN);
+            if i + 1 == len {
+                let s = self.arena().get(v, PropValues::SHAPE).0;
+                let parent = self.shape_parent(s);
+                let a = self.arena_mut();
+                a.write(PropValues::VALUES.at(v, i), Value::ZERO);
+                a.set(v, PropValues::LEN, i);
+                a.set(v, PropValues::SHAPE, Ref(parent));
+                return Ok(());
+            }
+            self.become_dictionary(o, 0)?;
+        }
+        self.table_remove(o, i);
+        Ok(())
+    }
+
+    /// Makes `o` a dictionary-mode object (builtin namespaces and prototypes: one-off
+    /// objects, for which a private table is smaller than a chain of unshared shapes).
+    pub(crate) fn make_dictionary(&mut self, o: Obj) -> Result<(), HeapError> {
+        if self.is_dictionary(o) {
+            return Ok(());
+        }
+        self.become_dictionary(o, 0)
+    }
+
+    /// Converts a shape-mode object to dictionary mode with room for `extra` more
+    /// entries. The slots stay the same.
+    fn become_dictionary(&mut self, o: Obj, extra: u32) -> Result<(), HeapError> {
+        debug_assert!(!self.is_dictionary(o));
+        let v = self.props(o);
+        let n = if v == 0 {
+            0
+        } else {
+            self.arena().get(v, PropValues::LEN)
+        };
+        let mut t = 0;
+        if n > 0 {
+            t = self.alloc_table((n + extra).max(4))?;
+            let s = self.arena().get(v, PropValues::SHAPE).0;
+            for i in 0..n {
+                let (key, fl) = self.shape_desc(s, i);
+                let value: Value = self.arena().read(PropValues::VALUES.at(v, i));
+                let e = PropTable::ENTRIES.at(t, i);
+                let a = self.arena_mut();
+                a.set(e, PropEntry::KEY, key.id());
+                a.set(e, PropEntry::FLAGS, fl);
+                a.set(e, PropEntry::VALUE, value);
+            }
+            self.arena_mut().set(t, PropTable::COUNT, n);
+            if n > LINEAR_MAX {
+                self.build_index(t)?;
+            }
+        }
+        self.arena_mut().set(o.0, Object::PROPS, Ref(t));
+        self.set_obj_flag(o, OBJ_DICTIONARY, true);
+        Ok(())
+    }
+
+    // ---------------------------------------------------------------- dictionaries
 
     #[inline]
     fn entry_key(&self, t: u32, i: u32) -> Atom {
@@ -859,116 +1173,90 @@ impl Heap {
 
     // ---------------------------------------------------------------- inline caches
 
-    /// The table entry of own property `key` of `o`, if it is stored in the property
-    /// table (not a dense element, not an array's `length`): the index an inline cache
-    /// remembers (D1620). Only ordinary storage: callers check the class.
+    /// The slot of own property `key` of `o`, if it is stored as a named property (not a
+    /// dense element, not an array's `length`): the index an inline cache remembers
+    /// (D1620). Only ordinary storage: callers check the class.
     #[inline]
     pub fn own_entry_index(&self, o: Obj, key: Atom) -> Option<u32> {
-        match self.props(o) {
-            0 => None,
-            t => self.table_find(t, key),
-        }
+        self.prop_find(o, key)
     }
 
-    /// The value of entry `i` of `o`'s property table if that entry is the data property
-    /// `key` (an inline cache hit, D1620); `None` for anything else, including a stale
-    /// index. Entry keys are never array indexes of arrays here, since those callers
-    /// only cache non-index atoms.
+    /// The value of slot `i` of `o` if that slot is the data property `key` (an inline
+    /// cache hit, D1620); `None` for anything else, including a stale index. Keys are
+    /// never array indexes of arrays here, since those callers only cache non-index atoms.
     #[inline(always)]
     pub fn data_at(&self, o: Obj, i: u32, key: Atom) -> Option<Value> {
-        let t = self.props(o);
-        if t == 0 || i >= self.arena().get(t, PropTable::COUNT) {
+        let p = self.props(o);
+        if p == 0 {
             return None;
         }
-        let e = PropTable::ENTRIES.at(t, i);
         let a = self.arena();
-        if a.get(e, PropEntry::KEY) != key.id() || a.get(e, PropEntry::FLAGS) & STORE_ACCESSOR != 0
-        {
+        let (k, fl, at) = if self.is_dictionary(o) {
+            if i >= a.get(p, PropTable::COUNT) {
+                return None;
+            }
+            let e = PropTable::ENTRIES.at(p, i);
+            (
+                a.get(e, PropEntry::KEY),
+                a.get(e, PropEntry::FLAGS),
+                e + PropEntry::VALUE.offset,
+            )
+        } else {
+            if i >= a.get(p, PropValues::LEN) {
+                return None;
+            }
+            let (k, fl) = self.shape_desc(a.get(p, PropValues::SHAPE).0, i);
+            (k.id(), fl, PropValues::VALUES.at(p, i))
+        };
+        if k != key.id() || fl & STORE_ACCESSOR != 0 {
             return None;
         }
-        Some(a.get(e, PropEntry::VALUE))
+        Some(a.read(at))
     }
 
-    /// Writes `v` to entry `i` of `o`'s table if it is the writable data property `key`
-    /// (an inline cache hit of a store, D1620); false with nothing changed otherwise.
+    /// Writes `v` to slot `i` of `o` if it is the writable data property `key` (an inline
+    /// cache hit of a store, D1620); false with nothing changed otherwise.
     #[inline(always)]
     pub fn set_data_at(&mut self, o: Obj, i: u32, key: Atom, v: Value) -> bool {
-        let t = self.props(o);
-        if t == 0 || i >= self.arena().get(t, PropTable::COUNT) {
+        if i >= self.prop_slots(o) || self.prop_key(o, i) != key {
             return false;
         }
-        let e = PropTable::ENTRIES.at(t, i);
-        let fl = self.arena().get(e, PropEntry::FLAGS);
-        if self.arena().get(e, PropEntry::KEY) != key.id()
-            || fl & STORE_ACCESSOR != 0
-            || !PropFlags::from_bits(fl as u8).writable()
-        {
-            return false;
-        }
-        self.arena_mut().set(e, PropEntry::VALUE, v);
-        true
+        self.prop_set_value(o, i, v)
     }
 
     fn read_entry(&self, t: u32, i: u32) -> Property {
         let e = PropTable::ENTRIES.at(t, i);
         let a = self.arena();
-        let fl = a.get(e, PropEntry::FLAGS);
-        let flags = PropFlags::from_bits(fl as u8);
-        if fl & STORE_ACCESSOR != 0 {
-            let pair = a
-                .get::<Value>(e, PropEntry::VALUE)
-                .as_internal()
-                .expect("accessor pair");
-            Property::Accessor {
-                getter: a.get(pair, AccessorPair::GETTER),
-                setter: a.get(pair, AccessorPair::SETTER),
-                flags,
-            }
-        } else {
-            Property::Data {
-                value: a.get(e, PropEntry::VALUE),
-                flags,
-            }
-        }
+        self.decode_property(a.get(e, PropEntry::FLAGS), a.get(e, PropEntry::VALUE))
     }
 
     /// Writes entry i. An accessor reuses the entry's pair if it has one, else allocates
     /// one first, so a failed allocation changes nothing (D1700).
     fn write_entry(&mut self, t: u32, i: u32, key: Atom, p: &Property) -> Result<(), HeapError> {
         let e = PropTable::ENTRIES.at(t, i);
-        match *p {
-            Property::Data { value, flags } => {
-                let a = self.arena_mut();
-                a.set(e, PropEntry::KEY, key.id());
-                a.set(e, PropEntry::FLAGS, flags.bits() as u32);
-                a.set(e, PropEntry::VALUE, value);
-            }
-            Property::Accessor {
-                getter,
-                setter,
-                flags,
-            } => {
+        let value = match *p {
+            Property::Data { value, .. } => value,
+            Property::Accessor { getter, setter, .. } => {
                 let a = self.arena();
                 let old = (a.get(e, PropEntry::KEY) == key.id()
                     && a.get(e, PropEntry::FLAGS) & STORE_ACCESSOR != 0)
                     .then(|| a.get::<Value>(e, PropEntry::VALUE).as_internal())
                     .flatten();
-                let pair = match old {
-                    Some(pair) => pair,
-                    None => {
-                        self.alloc_cell(CellKind::AccessorPair, AccessorPair::LAYOUT.min_size)?
+                match old {
+                    Some(pair) => {
+                        let a = self.arena_mut();
+                        a.set(pair, AccessorPair::GETTER, getter);
+                        a.set(pair, AccessorPair::SETTER, setter);
+                        Value::internal(pair)
                     }
-                };
-                // Accessors have no writable attribute.
-                let bits = (flags.bits() & !PropFlags::WRITABLE.bits()) as u32;
-                let a = self.arena_mut();
-                a.set(pair, AccessorPair::GETTER, getter);
-                a.set(pair, AccessorPair::SETTER, setter);
-                a.set(e, PropEntry::KEY, key.id());
-                a.set(e, PropEntry::FLAGS, bits | STORE_ACCESSOR);
-                a.set(e, PropEntry::VALUE, Value::internal(pair));
+                    None => self.store_value(p)?,
+                }
             }
-        }
+        };
+        let a = self.arena_mut();
+        a.set(e, PropEntry::KEY, key.id());
+        a.set(e, PropEntry::FLAGS, Self::stored_flags(p));
+        a.set(e, PropEntry::VALUE, value);
         Ok(())
     }
 
@@ -1031,7 +1319,6 @@ impl Heap {
 
     /// Appends a property (the key must not be present).
     fn table_insert(&mut self, o: Obj, key: Atom, p: &Property) -> Result<(), HeapError> {
-        self.proto_changed(o);
         let mut t = self.props(o);
         if t == 0 || self.arena().get(t, PropTable::COUNT) == self.table_capacity(t) {
             t = self.grow_table(o, t)?;
@@ -1091,10 +1378,7 @@ impl Heap {
         } else if key == atoms::LENGTH && self.object_class(o) == ObjectClass::Array {
             return Loc::ArrayLength;
         }
-        match self.props(o) {
-            0 => Loc::None,
-            t => self.table_find(t, key).map_or(Loc::None, Loc::Table),
-        }
+        self.prop_find(o, key).map_or(Loc::None, Loc::Prop)
     }
 
     fn read_loc(&self, o: Obj, loc: Loc) -> Option<Property> {
@@ -1104,7 +1388,7 @@ impl Heap {
                 self.value_array_get(self.elements(o), i),
                 PropFlags::ALL,
             )),
-            Loc::Table(i) => Some(self.read_entry(self.props(o), i)),
+            Loc::Prop(i) => Some(self.prop_read(o, i)),
             Loc::ArrayLength => Some(self.array_length_property(o)),
         }
     }
@@ -1139,15 +1423,7 @@ impl Heap {
                 self.value_array_set(el, i, v);
                 true
             }
-            Loc::Table(i) => {
-                let e = PropTable::ENTRIES.at(self.props(o), i);
-                let fl = self.arena().get(e, PropEntry::FLAGS);
-                if fl & STORE_ACCESSOR != 0 || !PropFlags::from_bits(fl as u8).writable() {
-                    return false;
-                }
-                self.arena_mut().set(e, PropEntry::VALUE, v);
-                true
-            }
+            Loc::Prop(i) => self.prop_set_value(o, i, v),
             Loc::None | Loc::ArrayLength => false,
         }
     }
@@ -1250,15 +1526,11 @@ impl Heap {
                     self.value_array_set(self.elements(o), i, value);
                 } else {
                     // Non-default attributes: move the element to the table.
-                    self.table_insert(o, key, &p)?;
-                    self.set_obj_flag(o, OBJ_INDEXED_PROPS, true);
+                    self.prop_insert(o, key, &p)?;
                     self.value_array_set(self.elements(o), i, Value::HOLE);
                 }
             }
-            Loc::Table(i) => {
-                let t = self.props(o);
-                self.write_entry(t, i, key, &p)?;
-            }
+            Loc::Prop(i) => self.prop_write(o, i, key, &p)?,
             Loc::ArrayLength => unreachable!("array length is written by array_set_length"),
             Loc::None => {
                 if let (true, Some(i), Property::Data { value, .. }) = (dense_ok, key.as_int(), p)
@@ -1266,10 +1538,7 @@ impl Heap {
                 {
                     self.dense_put(o, i, value)?;
                 } else {
-                    self.table_insert(o, key, &p)?;
-                    if self.atom_array_index(key).is_some() {
-                        self.set_obj_flag(o, OBJ_INDEXED_PROPS, true);
-                    }
+                    self.prop_insert(o, key, &p)?;
                 }
             }
         }
@@ -1461,10 +1730,7 @@ impl Heap {
             && self.find_own(o, key) == Loc::None
             && self.is_extensible(o)
         {
-            self.table_insert(o, key, &Property::data(value, PropFlags::ALL))?;
-            if self.atom_array_index(key).is_some() {
-                self.set_obj_flag(o, OBJ_INDEXED_PROPS, true);
-            }
+            self.prop_insert(o, key, &Property::data(value, PropFlags::ALL))?;
             return Ok(true);
         }
         self.define_own_property(o, key, &PropertyDescriptor::data(value, PropFlags::ALL))
@@ -1514,7 +1780,7 @@ impl Heap {
         if let Outcome::Reject = self.validate_descriptor(Some(current), true, &nd) {
             return Ok(false);
         }
-        let (ok, final_len) = self.truncate_elements(o, new_len);
+        let (ok, final_len) = self.truncate_elements(o, new_len)?;
         self.set_array_length_raw(o, final_len);
         if !new_writable {
             self.set_obj_flag(o, OBJ_LENGTH_READONLY, true);
@@ -1525,21 +1791,20 @@ impl Heap {
     /// Deletes every element at or above `new_len`, as ArraySetLength does from the top
     /// down: it stops above the highest non-configurable one. Returns whether everything
     /// was deleted, and the resulting length.
-    fn truncate_elements(&mut self, o: Obj, new_len: u32) -> (bool, u32) {
+    fn truncate_elements(&mut self, o: Obj, new_len: u32) -> Result<(bool, u32), HeapError> {
         let mut stop = new_len;
         let mut ok = true;
-        if self.obj_flags(o) & OBJ_INDEXED_PROPS != 0 && self.props(o) != 0 {
-            let t = self.props(o);
+        if self.obj_flags(o) & OBJ_INDEXED_PROPS != 0 {
             let mut doomed = Vec::new();
-            for i in 0..self.arena().get(t, PropTable::COUNT) {
-                let key = self.entry_key(t, i);
+            for i in 0..self.prop_slots(o) {
+                let key = self.prop_key(o, i);
                 if key.is_null() {
                     continue;
                 }
                 if let Some(idx) = self.atom_array_index(key)
                     && idx >= new_len
                 {
-                    if !self.read_entry(t, i).flags().configurable() && idx + 1 > stop {
+                    if !self.prop_read(o, i).flags().configurable() && idx + 1 > stop {
                         stop = idx + 1;
                         ok = false;
                     }
@@ -1548,9 +1813,9 @@ impl Heap {
             }
             for (idx, key) in doomed {
                 if idx >= stop
-                    && let Some(i) = self.table_find(self.props(o), key)
+                    && let Some(i) = self.prop_find(o, key)
                 {
-                    self.table_remove(o, i);
+                    self.prop_remove(o, i)?;
                 }
             }
         }
@@ -1563,7 +1828,7 @@ impl Heap {
                 self.arena_mut().set(el, ValueArray::LEN, stop);
             }
         }
-        (ok, stop)
+        Ok((ok, stop))
     }
 
     /// Array.prototype.pop's moves in one step (0080): for an Array with only dense
@@ -1609,13 +1874,17 @@ impl Heap {
     }
 
     /// `[[Delete]]`: `false` if the property is non-configurable.
-    pub fn delete_own_property(&mut self, o: Obj, key: Atom) -> bool {
+    ///
+    /// Deleting a property of a shape-mode object other than its last may allocate (the
+    /// object becomes a dictionary), so this can fail with `OutOfMemory`, with nothing
+    /// changed.
+    pub fn delete_own_property(&mut self, o: Obj, key: Atom) -> Result<bool, HeapError> {
         if self.object_class(o) == ObjectClass::TypedArray
             && let Some(r) = self.ta_numeric_get(o, key)
         {
-            return r.is_none();
+            return Ok(r.is_none());
         }
-        match self.find_own(o, key) {
+        Ok(match self.find_own(o, key) {
             Loc::None => true,
             Loc::Dense(i) => {
                 let el = self.elements(o);
@@ -1623,22 +1892,27 @@ impl Heap {
                 true
             }
             Loc::ArrayLength => false,
-            Loc::Table(i) => {
-                if !self.read_entry(self.props(o), i).flags().configurable() {
-                    return false;
+            Loc::Prop(i) => {
+                if !self.prop_read(o, i).flags().configurable() {
+                    return Ok(false);
                 }
-                self.table_remove(o, i);
+                self.prop_remove(o, i)?;
                 true
             }
-        }
+        })
     }
 
     /// Removes an own table property even if it is non-configurable. Only for setting up
     /// builtins (a prelude function loses the `prototype` every ordinary function gets).
-    pub(crate) fn remove_own_property_unchecked(&mut self, o: Obj, key: Atom) {
-        if let Loc::Table(i) = self.find_own(o, key) {
-            self.table_remove(o, i);
+    pub(crate) fn remove_own_property_unchecked(
+        &mut self,
+        o: Obj,
+        key: Atom,
+    ) -> Result<(), HeapError> {
+        if let Loc::Prop(i) = self.find_own(o, key) {
+            self.prop_remove(o, i)?;
         }
+        Ok(())
     }
 
     /// For an ordinary object whose own properties are exactly its property table entries
@@ -1652,22 +1926,18 @@ impl Heap {
         {
             return None;
         }
-        Some(match self.props(o) {
-            0 => 0,
-            t => self.arena().get(t, PropTable::COUNT),
-        })
+        Some(self.prop_slots(o))
     }
 
     /// Entry slot `i` of a plain object (see [`Heap::plain_entry_slots`]): its key and
     /// property, or `None` for a deleted slot. Symbol keys are included; string keys come
     /// in creation order.
     pub fn plain_entry(&self, o: Obj, i: u32) -> Option<(Atom, Property)> {
-        let t = self.props(o);
-        let key = self.entry_key(t, i);
+        let key = self.prop_key(o, i);
         if key.is_null() {
             None
         } else {
-            Some((key, self.read_entry(t, i)))
+            Some((key, self.prop_read(o, i)))
         }
     }
 
@@ -1681,7 +1951,7 @@ impl Heap {
         p: &Property,
     ) -> Result<(), HeapError> {
         debug_assert!(self.is_private_atom(key) && self.find_own(o, key) == Loc::None);
-        self.table_insert(o, key, p)
+        self.prop_insert(o, key, p)
     }
 
     /// `[[OwnPropertyKeys]]` in spec order: array indexes ascending, then string keys in
@@ -1710,9 +1980,9 @@ impl Heap {
         }
         let indexed = self.obj_flags(o) & OBJ_INDEXED_PROPS != 0;
         let mut sort = false;
-        if let t @ 1.. = self.props(o) {
-            for i in 0..self.arena().get(t, PropTable::COUNT) {
-                let key = self.entry_key(t, i);
+        {
+            for i in 0..self.prop_slots(o) {
+                let key = self.prop_key(o, i);
                 if key.is_null() {
                     continue;
                 }

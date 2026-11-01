@@ -86,6 +86,10 @@ pub mod flags {
     /// Object: on the prototype chain of a cached prototype property (D1621): adding a
     /// key or changing its prototype bumps `Roots::PROTO_EPOCH`. Never cleared.
     pub const OBJ_IS_PROTO: u16 = 64;
+    /// Object: dictionary mode (0083): `PROPS` is a [`PropTable`](super::PropTable) (or
+    /// null, an empty dictionary). Without it `PROPS` is a
+    /// [`PropValues`](super::PropValues) block (or null, the root shape). One-way.
+    pub const OBJ_DICTIONARY: u16 = 128;
     /// BigInt: the value is negative.
     pub const BIGINT_NEG: u16 = 1;
     /// Symbol: a private name (`#x`, D1400). Never an own key of [[OwnPropertyKeys]],
@@ -179,6 +183,12 @@ cells! {
         /// The prototype epoch of the inline caches (D1621): bumped by key additions and
         /// prototype changes of objects marked [`flags::OBJ_IS_PROTO`].
         PROTO_EPOCH: u32 = 60,
+        /// The root [`Shape`] (no properties, 0083), or null until the first shape-mode
+        /// property addition.
+        ROOT_SHAPE: Ref = 64,
+        /// Shapes created so far: the global shape budget (`object::SHAPE_BUDGET`).
+        /// Shapes never die (strong transitions, D1831), so this only grows.
+        SHAPES: u32 = 68,
     };
 
     /// A flat one-byte (Latin-1) string. Holds only strings with every code unit <= 0xFF;
@@ -228,7 +238,8 @@ cells! {
         CLASS: u32 = 8,
         /// The prototype object, or null.
         PROTO: Ref = 12,
-        /// The [`PropTable`], or null when there are no properties.
+        /// The named properties: a [`PropValues`] block (shape mode), a [`PropTable`]
+        /// ([`flags::OBJ_DICTIONARY`]), or null when there are none.
         PROPS: Ref = 16,
         /// The dense elements: a [`ValueArray`] (`LEN` = dense length; slots may be
         /// holes), or null.
@@ -456,6 +467,34 @@ cells! {
         SETTER: Value = 16,
     };
 
+    /// A hidden class (0083, docs/objects.md 7): the keys and attributes of a shape-mode
+    /// object's properties, in insertion order. Shapes form a tree from
+    /// [`Roots::ROOT_SHAPE`] by property additions; they are shared by every object with
+    /// the same key sequence and never die (D1831).
+    26 => Shape {
+        /// The shape without the last property; null for the root.
+        PARENT: Ref = 8,
+        /// [`U32Array`] `[used, key0, flags0, key1, flags1, ...]`: the descriptors, shared
+        /// along a chain. A shape uses the first `COUNT` pairs; `used` is how many pairs
+        /// are written (by the longest shape sharing it). Null for the root.
+        DESCS: Ref = 12,
+        /// Number of properties (= value slots).
+        COUNT: u32 = 16,
+        /// [`RefArray`] of the child shapes (`LEN` in use), or null. A child's key and
+        /// flags are its last descriptor.
+        TRANSITIONS: Ref = 20,
+    };
+
+    /// The property values of a shape-mode object (0083): `VALUES[i]` belongs to
+    /// descriptor `i` of `SHAPE`. An accessor's value is an internal ref to its
+    /// [`AccessorPair`]. Slots at and beyond `LEN` are 0.
+    27 => PropValues {
+        /// The object's [`Shape`].
+        SHAPE: Ref = 8,
+        /// Slots in use: always the shape's `COUNT`.
+        LEN: u32 = 12,
+    } tail VALUES: [Value] = 16;
+
     24 => BigInt {
         /// Limb count.
         LEN: u32 = 8,
@@ -509,7 +548,9 @@ mod tests {
         assert_eq!(Rope::LAYOUT.min_size, 24);
         assert_eq!(Symbol::LAYOUT.min_size, 24);
         assert_eq!(Object::LAYOUT.min_size, 24);
-        assert_eq!(Roots::LAYOUT.min_size, 64);
+        assert_eq!(Roots::LAYOUT.min_size, 72);
+        assert_eq!(Shape::LAYOUT.min_size, 24);
+        assert_eq!(PropValues::VALUES.cell_size(4), Some(48));
         let t = PropTable::LAYOUT.tail.unwrap();
         assert_eq!(t.elem.size, 16);
         assert_eq!(t.elem.name, "PropEntry");

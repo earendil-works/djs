@@ -3571,7 +3571,7 @@ impl<'h> Exec<'h> {
         }
         let key = self.property_key(o, k)?;
         let deleted = match (o.as_object(), o.as_string()) {
-            (Some(obj), _) => self.heap.delete_own_property(obj, key),
+            (Some(obj), _) => self.heap.delete_own_property(obj, key)?,
             // A string's `length` and its index properties are not configurable.
             (None, Some(s)) => {
                 !(key == crate::heap::atoms::LENGTH
