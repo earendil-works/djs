@@ -495,3 +495,128 @@ fn compile_test262() {
         std::println!("  missed {m}");
     }
 }
+
+// ---------------------------------------------------------------------------------
+// End to end: compiled code on the interpreter (0015), in async-body mode with a host
+// `console.log`. Expected outputs were checked against qjs.
+
+/// Runs `src` as a codemode body with `console` as its parameter. Returns the printed
+/// lines and the completion (`=> value` or `throw error`).
+fn run_body(src: &str) -> String {
+    use crate::vm::{Status, Vm, VmOptions};
+    const LOG: u32 = 1;
+    let mut vm = Vm::new(VmOptions::default()).unwrap();
+    let console = vm.new_object().unwrap();
+    let log = vm.new_host_function(LOG, "log").unwrap();
+    vm.define(console, "log", log).unwrap();
+    let opts = CompileOptions::async_body("e2e.js", &["console"]);
+    let template = match compile(vm.heap_mut(), src.as_bytes(), &opts) {
+        Ok(t) => t,
+        Err(e) => return alloc::format!("compile error: {e}"),
+    };
+    let main = vm.instantiate(template).unwrap();
+    let this = crate::value::Value::object(vm.global());
+    vm.call(main, this, &[crate::value::Value::object(console)])
+        .unwrap();
+    let mut out = String::new();
+    loop {
+        match vm.run(1_000_000) {
+            Status::Done(v) => {
+                let s = vm.display(v);
+                out.push_str(&alloc::format!("=> {s}"));
+                return out;
+            }
+            Status::Threw(e) => {
+                let s = vm.display(e);
+                out.push_str(&alloc::format!("throw {s}"));
+                return out;
+            }
+            Status::HostCall { call_id, fn_id } => {
+                assert_eq!(fn_id, LOG);
+                let info = vm.host_call(call_id).unwrap();
+                let parts: Vec<String> = info.args.iter().map(|&a| vm.display(a)).collect();
+                out.push_str(&parts.join(" "));
+                out.push('\n');
+                vm.resolve_host_call(call_id, Ok(crate::value::Value::UNDEFINED))
+                    .unwrap();
+            }
+            Status::OutOfFuel => return out + "out of fuel",
+            Status::Idle => return out + "idle",
+        }
+    }
+}
+
+#[test]
+fn end_to_end() {
+    let cases: &[(&str, &str)] = &[
+        ("return 1 + 2 * 3", "=> 7"),
+        ("let s = 'a'; s += 'b' + 1; return s", "=> ab1"),
+        (
+            "let x = 0; for (let i = 0; i < 10; i++) { if (i % 2) continue; x += i } return x",
+            "=> 20",
+        ),
+        (
+            "let n = 0; while (true) { n++; if (n > 4) break } return n",
+            "=> 5",
+        ),
+        ("let n = 10; do { n -= 3 } while (n > 0); return n", "=> -2"),
+        (
+            "let i = 0; for (;;) { if (++i == 3) break } return i",
+            "=> 3",
+        ),
+        ("let j = 0; for (; j < 3;) j++; return j", "=> 3"),
+        (
+            "let r = ''; outer: for (let i = 0; i < 3; i++) { for (let j = 0; j < 3; j++) { if (j == 2) continue outer; if (i == 2) break outer; r += `${i}${j},` } } return r",
+            "=> 00,01,10,11,",
+        ),
+        (
+            "let out = ''; for (let v = 0; v < 5; v++) { switch (v) { case 0: out += 'zero '; case 1: out += 'one '; break; default: out += 'd' + v + ' '; break; case 3: out += 'three ' } } return out",
+            "=> zero one one d2 three d4 ",
+        ),
+        (
+            "let o = {a: 1, b: {c: 2}}; o.a += 10; o.b.c++; return o.a + o.b.c",
+            "=> 14",
+        ),
+        (
+            "let a = [1, 2, 3]; a[1] = 20; return a.length + a[1]",
+            "=> 23",
+        ),
+        ("let o = null; return o?.x ?? 'none'", "=> none"),
+        ("let o = {f: {g: 5}}; return o?.f?.g", "=> 5"),
+        ("let x; x ??= 4; x ||= 5; x &&= x + 1; return x", "=> 5"),
+        (
+            "return typeof undeclared + ' ' + typeof 1 + ' ' + typeof 'a'",
+            "=> undefined number string",
+        ),
+        ("let t = `a${1 + 1}b${'c'}`; return t", "=> a2bc"),
+        (
+            "console.log('hello', 1, true); console.log(); return",
+            "hello 1 true\n\n=> undefined",
+        ),
+        (
+            "let x = 1; { let x = 2; console.log(x) } return x",
+            "2\n=> 1",
+        ),
+        ("return 2 ** 3 ** 2", "=> 512"),
+        ("return (1, 2, 3)", "=> 3"),
+        ("return 5 > 3 ? 'yes' : 'no'", "=> yes"),
+        ("let a = 5; return -a + +'3' + ~1 + !a", "=> -4"),
+        ("return 'x' in {x: 1}", "=> true"),
+        ("x; let x = 1", "throw ReferenceError: x is not initialized"),
+        ("const c = 1; c = 2", "throw TypeError: 'c' is read-only"),
+        ("return nope", "throw ReferenceError: 'nope' is not defined"),
+        ("throw 'boom'", "throw boom"),
+        ("let n = 0; n++; n--; ++n; return n", "=> 1"),
+        ("let a = 7; return a >> 1 | a << 2 & 0xff ^ 3", "=> 31"),
+        ("return 0.1 + 0.2", "=> 0.30000000000000004"),
+        ("return 1_000_000 + 0x10 + 0b11 + 0o7", "=> 1000026"),
+    ];
+    let mut bad = Vec::new();
+    for &(src, want) in cases {
+        let got = run_body(src);
+        if got != want {
+            bad.push(alloc::format!("{src}\n  got:  {got:?}\n  want: {want:?}"));
+        }
+    }
+    assert!(bad.is_empty(), "\n{}", bad.join("\n"));
+}
