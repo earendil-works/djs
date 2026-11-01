@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0026 | Leaf performance sweep | num | .worktrees/0026-leaf-perf-sweep |
+| 0032 | Base snapshot | num | .worktrees/0032-base-snapshot |
 | 0030 | P1-5 runtime + 0028 leftovers (define_method etc.) | heap | .worktrees/0030-p1-iteration-runtime |
 | 0031 | Core builtins wave 1 | infra | .worktrees/0031-builtins-wave1 |
 | 0029 | P1-5 Loops and iteration (compiler + iterator builtins) | lexer | .worktrees/0029-p1-iteration-compiler |
@@ -20,7 +20,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0032 | Base snapshot (prelude at build time) | 0028 (num, after 0026) |
 
 ## Done
 
@@ -31,6 +30,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0005 | Values, arena heap, strings, atoms, objects | dc751e2 (agent heap; follow-ups in the issue) |
 | 0023 | djs-wasm + JS host package | d4fb4a4 (agent num; djs runs in node; vm_new 11 us; 132 KB gz at opt s) |
 | 0028 | P1-2 runtime | 468f874 (agent heap; prelude at Vm::new: 92 us native / 146 us wasm; Error stack) |
+| 0026 | Leaf performance sweep | 04fc8fa (agent num; stringify -24..-54%, GC -11..-19%; opt-level stays s) |
 | 0007 | test262 on djs + ratchet in gate | 2312924 (agent infra; 2,961/20,124 active; gate runs all active in 4.2 s) |
 | 0016 | djs in difftest + gate | b01a03a (agent infra; 50/154 pass; djs 4-9x slower than qjs on calls/loops/props) |
 | 0027 | P1-2 Objects/privileged mode (compiler) | 2e11de2 (agent lexer; test262 compiling 26.0k) |
