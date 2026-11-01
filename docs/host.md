@@ -60,8 +60,9 @@ sb.dispose();
   - `fuel`: `maxFuel` ran out. `trap`: the module trapped (a djs bug), with the panic
     message. `misuse`: a bad snapshot, a missing host function, a disposed sandbox.
 
-  After `fuel` and `trap` the sandbox is unusable (see Gaps). Every other error leaves it
-  usable.
+  After a `trap` the sandbox is unusable. Every other error leaves it usable. A failed
+  run that left the VM mid-call (`fuel`, or a host-side error escaping the run loop) is
+  abandoned with `vm_abort`, and globals set earlier stay intact.
 - Snapshots: `bytes()` is `"DJSS"`, version 1 (u32 LE), the length of a JSON header,
   `{"functions": [names by fn_id]}`, then the VM image. `fromBytes` binds the host function
   ids to the implementations by name. It refuses a snapshot whose functions are not all
@@ -201,7 +202,5 @@ host code and runs at the same speed.
   VM is parked, so `Promise.all([f(), g()])` in the sandbox runs the calls one after the
   other. Concurrent host calls need the VM's pending call table and async functions (later
   phases). The ABI already has call ids for that.
-- **Abandoning a run.** When `maxFuel` runs out, the VM stays mid-call: there is no
-  `Vm::abort` yet. The Sandbox marks itself unusable.
 - **Base snapshot.** `vm_new` builds the realm from scratch (11 µs). ARCH's target is
   < 100 µs from a base snapshot, so it is met without one.

@@ -155,8 +155,24 @@ test("out of memory is a clean error", async () => {
 
 test("fuel budget", async () => {
   const sb = await Sandbox.create({ fuelSlice: 10_000, maxFuel: 200_000 });
+  sb.setGlobal("kept", 41);
   assert.throws(() => sb.run("for (;;) {}"), (e: unknown) => e instanceof SandboxError && e.kind === "fuel");
-  assert.throws(() => sb.run("return 1"), /unusable: out of fuel/);
+  // The call was abandoned (vm_abort): the sandbox is usable, its globals intact.
+  assert.equal(sb.run("return kept + 1"), 42);
+  assert.throws(() => sb.run("let a = 0; for (;;) a++"), (e: unknown) => e instanceof SandboxError && e.kind === "fuel");
+  assert.equal(sb.run("return 'again'"), "again");
+  sb.dispose();
+});
+
+test("an abandoned async run leaves the sandbox usable", async () => {
+  const sb = await Sandbox.create({
+    fuelSlice: 10_000,
+    maxFuel: 200_000,
+    functions: { later: async () => 1 },
+  });
+  await assert.rejects(sb.runAsync("later(); for (;;) {}"), (e: unknown) => e instanceof SandboxError && e.kind === "fuel");
+  assert.equal(await sb.runAsync("return later() + 1"), 2);
+  sb.dispose();
 });
 
 test("a trap is a clean error and kills the sandbox", async () => {

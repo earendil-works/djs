@@ -21,7 +21,10 @@ export interface SandboxOptions {
   memoryLimit?: number;
   /** Fuel per `vm_run` call: how often the host gets control back. Default 1,000,000. */
   fuelSlice?: number;
-  /** Fuel budget of one `run`, after which it fails with "out of fuel". Default: none. */
+  /**
+   * Fuel budget of one `run`, after which it fails with "out of fuel" (the call is
+   * abandoned; the sandbox stays usable). Default: none.
+   */
   maxFuel?: number;
   /** Global host functions, by name. */
   functions?: Record<string, HostFunction>;
@@ -80,6 +83,7 @@ interface Exports {
   vm_result(vm: number): number;
   vm_host_call(vm: number): number;
   vm_resolve_host_call(vm: number, callId: number, ok: number, value: number): number;
+  vm_abort(vm: number): void;
 }
 
 const modules = new Map<string, Promise<WebAssembly.Module>>();
@@ -244,18 +248,38 @@ export class Sandbox {
    */
   run(code: string, params: Record<string, unknown> = {}): unknown {
     this.start(code, params);
-    // In sync mode the loop never yields: a promise from a host function is an error.
-    const r = this.drive(false).next();
-    return r.value;
+    try {
+      // In sync mode the loop never yields: a promise from a host function is an error.
+      return this.drive(false).next().value;
+    } catch (e) {
+      this.abandon(e);
+      throw e;
+    }
   }
 
   /** Like `run`, but awaits host functions that return promises (the VM stays parked). */
   async runAsync(code: string, params: Record<string, unknown> = {}): Promise<unknown> {
     this.start(code, params);
-    const it = this.drive(true);
-    let r = it.next();
-    while (!r.done) r = it.next(await r.value);
-    return r.value;
+    try {
+      const it = this.drive(true);
+      let r = it.next();
+      while (!r.done) r = it.next(await r.value);
+      return r.value;
+    } catch (e) {
+      this.abandon(e);
+      throw e;
+    }
+  }
+
+  /**
+   * After a failed run: drops the VM's call if it is still in one (out of fuel, or a host
+   * side error escaped the loop), so the next run starts clean. Not after a trap: the
+   * instance is gone then.
+   */
+  private abandon(e: unknown): void {
+    if (this.dead === null && !(e instanceof SandboxError && e.kind === "trap")) {
+      this.guard(() => this.x.vm_abort(this.vm));
+    }
   }
 
   /** The VM image plus the host function table, for `Sandbox.fromBytes`. */
@@ -432,8 +456,7 @@ export class Sandbox {
       if (st === STATUS_OUT_OF_FUEL) {
         used += slice;
         if (used >= maxFuel) {
-          // The call cannot be abandoned yet: the VM stays mid-call.
-          this.dead = "out of fuel";
+          // `run` abandons the call (vm_abort), so the sandbox stays usable.
           throw new SandboxError("fuel", `out of fuel after ${used} units`);
         }
         continue;
