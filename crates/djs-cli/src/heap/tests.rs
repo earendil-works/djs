@@ -163,3 +163,131 @@ fn a_container_reads_like_its_image() {
     let all = super::to_json(&r);
     assert!(all.contains("\"summary\"") && all.contains("\"session\""));
 }
+
+// ---- A pi session waiting on a tool ------------------------------------------------------
+
+/// scripts/snapshot-research's Rust copy of js/pi/vm.ts's session logic.
+#[allow(dead_code, clippy::all)]
+#[path = "../../../../scripts/snapshot-research/src/pi.rs"]
+mod pi;
+
+const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
+
+/// pi's prelude source from tests/pi/prelude-source.ts, evaluated by djs itself (the
+/// file is TypeScript with constants interpolated into a template literal).
+fn pi_prelude() -> String {
+    let ts = std::fs::read_to_string(format!("{ROOT}/tests/pi/prelude-source.ts")).unwrap();
+    let body = format!(
+        "{}\nreturn PRELUDE_SOURCE;",
+        ts.replace("export const", "const")
+    );
+    let mut vm = vm();
+    let f = vm
+        .compile(
+            body.as_bytes(),
+            &CompileOptions::async_body("prelude-source.ts", &[]).ts(),
+        )
+        .unwrap();
+    vm.call(f, Value::UNDEFINED, &[]).unwrap();
+    let Status::Done(p) = vm.run(u64::MAX) else {
+        panic!("prelude-source.ts did not run")
+    };
+    let Some(Some(Ok(v))) = vm.promise_state(p) else {
+        panic!("no prelude source")
+    };
+    vm.heap().str_to_string(v.as_string().unwrap())
+}
+
+#[test]
+fn a_pi_session_waiting_on_a_tool() {
+    // As js/pi/vm.ts: the prelude, sealed (the reference image), then the script until it
+    // waits; the snapshot collects first.
+    let tools = r#"[{"name":"ask","jsName":"ask","description":"Ask."},{"name":"shell","jsName":"shell","description":"Run."}]"#;
+    let mut s = pi::Session::prepare(&pi_prelude(), tools, 1_762_000_000_000.0);
+    s.vm.seal().unwrap();
+    let prelude = s.vm.bytes().to_vec();
+    let code =
+        std::fs::read_to_string(format!("{ROOT}/scripts/snapshot-research/cases/ask.js")).unwrap();
+    s.start(&code, 42);
+    assert_eq!(s.ev.calls.len(), 1, "waiting on tools.ask");
+    s.vm.collect().unwrap();
+    let image = s.vm.bytes().to_vec();
+    let r = analyze_image(
+        &image,
+        Some(("pi's prelude image", &prelude)),
+        &Options::default(),
+    )
+    .unwrap();
+    let session = json(&r, "session");
+    assert_eq!(
+        session.at(&["activations", "0", "kind"]).str(),
+        "async function"
+    );
+    assert_eq!(
+        session.at(&["activations", "0", "state"]).str(),
+        "at an await"
+    );
+    assert!(
+        session
+            .at(&["activations", "0", "at"])
+            .str()
+            .starts_with("codemode.js:3:"),
+        "{:?}",
+        session.at(&["activations", "0"])
+    );
+    assert_eq!(
+        session.at(&["activations", "0", "locals", "plan"]).str(),
+        "Ordinary"
+    );
+    assert!(session.at(&["promises", "pending"]).num() >= 1.0);
+    // What the session adds to its prelude image: its script and its pending call.
+    let d = json(&r, "diff");
+    let words = d.at(&["words"]).num();
+    assert!(
+        d.at(&["same_words"]).num() > 0.9 * words,
+        "{:?}",
+        d.at(&["same_words"])
+    );
+    let new = d.at(&["new", "bytes"]).num();
+    assert!(new > 1000.0 && new < 16384.0, "{new} new bytes");
+    assert!(
+        d.at(&["new_subtrees", "0", "path"])
+            .str()
+            .contains("~pending"),
+        "{:?}",
+        d.at(&["new_subtrees"])
+    );
+    assert!(d.at(&["gone", "bytes"]).num() < 1024.0, "{:?}", d.at(&["gone"]));
+    // The same through a container against the prelude image, given as the reference.
+    let c = container::write(
+        container::APP_PI_SESSION,
+        djs_core::vm::BUILD_HASH,
+        "{}",
+        &image,
+        Some((container::REFERENCE_PI_PRELUDE, &prelude)),
+        3,
+    )
+    .unwrap();
+    let dir = std::env::temp_dir().join(format!("djs-heap-pi-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let (cpath, rpath) = (dir.join("session.djsn"), dir.join("prelude.img"));
+    std::fs::write(&cpath, &c).unwrap();
+    std::fs::write(&rpath, &prelude).unwrap();
+    let missing = super::run(cpath.to_str().unwrap(), None, None, &Options::default())
+        .err()
+        .unwrap();
+    assert!(missing.contains("pi's prelude image"), "{missing}");
+    let r2 = super::run(
+        cpath.to_str().unwrap(),
+        rpath.to_str(),
+        None,
+        &Options::default(),
+    )
+    .unwrap();
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(json(&r2, "diff").at(&["new", "bytes"]).num(), new);
+    assert_eq!(
+        json(&r2, "summary").at(&["container", "reference"]).str(),
+        "pi's prelude image"
+    );
+}
