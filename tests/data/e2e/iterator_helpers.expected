@@ -1,0 +1,38 @@
+[30,40]
+[1,1.5,2,2.5]
+["a","b","c"]
+6
+16
+[[5,0],[6,1]]
+true false
+2
+["3:0","4:1"]
+[1,2] ["next","next","return"]
+true ["next","next","return"]
+undefined ["next","next","next","next","next","next"]
+{"done":true} ["next","return"] {"done":true}
+{"done":true} ["return"]
+Error: boom
+["next","return"]
+RangeError: must be positive
+["return"]
+TypeError: not a function
+TypeError: empty iterator
+["next","next","return","return"]
+TypeError: not an object
+TypeError: cannot invoke a running iterator
+TypeError: Iterator Helper object expected
+[object Iterator Helper]
+["a","b"]
+true [0,1]
+true
+TypeError: not an object
+TypeError: abstract class not constructable
+TypeError: constructor requires 'new'
+[6,4,2]
+true Iterator
+[object Mine] Iterator
+TypeError: Cannot assign to read only property
+[1,2,3,"x","y"]
+TypeError: not an object
+["next","return"]

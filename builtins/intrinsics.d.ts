@@ -611,7 +611,7 @@ declare function PerformPromiseThen(p: Obj, onFulfilled: Value, onRejected: Valu
 declare function EnqueuePromiseResolveThenableJob(p: Obj, thenable: Obj, then: Value): void;
 /** A new internal Record with n slots, all undefined. @leaf */
 declare function NewRecord(n: i32): Obj;
-/** Slot i of a Record. @leaf */
+/** Slot i of a Record, or of an object that keeps its state in slots (IteratorHelper, 0051). @leaf */
 declare function RecordGet(r: Obj, i: i32): Value;
 /** @leaf */
 declare function RecordSet(r: Obj, i: i32, v: Value): void;
@@ -672,6 +672,20 @@ declare function AsyncGeneratorDequeue(g: Obj): Value;
  * @leaf
  */
 declare function CreateAsyncFromSyncIterator(iterator: Obj, next: Value): Obj;
+
+// ---- Iterator helpers (0051, builtins/iterator.ts, D1510) -------------------------------
+
+/**
+ * A new IteratorHelper object of `kind` (0: Iterator.from's wrapper, with
+ * %WrapForValidIteratorPrototype%; else a helper, with %IteratorHelperPrototype%):
+ * slot 0 kind, 1 state 0, 2 iterator, 3 next, the others undefined. @leaf
+ */
+declare function CreateIteratorHelper(kind: i32, iterator: Value, next: Value): Obj;
+/**
+ * v if it is an iterator helper (wrap false) or Iterator.from's wrapper (wrap true),
+ * else TypeError "Iterator Helper object expected" / "Iterator Wrap object expected". @leaf
+ */
+declare function ThisIteratorHelper(v: Value, wrap: boolean): Obj;
 // ---- JSON (0033, builtins/json.rs over crate::json) -------------------------------------
 
 /** JSON.parse of text without a reviver; qjs's SyntaxError for invalid JSON. @leaf */

@@ -268,6 +268,8 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("AsyncGeneratorFirstRequest", L, 1, false),
     i("AsyncGeneratorDequeue", L, 1, false),
     i("CreateAsyncFromSyncIterator", L, 2, false),
+    i("CreateIteratorHelper", L, 3, false),
+    i("ThisIteratorHelper", L, 2, false),
     i("JsonParse", L, 1, false),
     i("JsonStringifyFast", L, 2, false),
     i("JsonQuote", L, 1, false),

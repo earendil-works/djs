@@ -71,6 +71,7 @@ mod bigint;
 mod class;
 mod intrinsics;
 mod json_regexp;
+mod late;
 pub(crate) mod promise;
 mod proxy;
 pub(crate) mod suspend;

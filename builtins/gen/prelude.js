@@ -2793,6 +2793,553 @@ function StringIteratorToStringTag() {
   return "String Iterator";
 }
 
+// builtins/iterator.ts:19
+function HelperState(o) {
+  return %F64ToI32(%AsNumber(%RecordGet(o, 1)));
+}
+
+// builtins/iterator.ts:24
+function GetIteratorDirectNext(o) {
+  return %Get(o, "next");
+}
+
+// builtins/iterator.ts:32
+function IteratorStepResult(iterator, next) {
+  const result = IteratorNextResult(iterator, next);
+  if (%ToBoolean(%Get(result, "done"))) {
+    return undefined;
+  }
+  return result;
+}
+
+// builtins/iterator.ts:44
+function GetIteratorFlattenable(obj, strings) {
+  if (!%IsObject(obj)) {
+    if (!strings || !%IsString(obj)) {
+      throw %NewTypeError("not an object");
+    }
+  }
+  const method = GetMethod(obj, %WellKnownSymbol("iterator"));
+  let iterator = obj;
+  if (method !== undefined) {
+    iterator = %Call(method, obj);
+  }
+  if (!%IsObject(iterator)) {
+    throw %NewTypeError("not an object");
+  }
+  return %AsObj(iterator);
+}
+
+// builtins/iterator.ts:62
+function ThisIteratorObject(v) {
+  if (!%IsObject(v)) {
+    throw %NewTypeError("not an object");
+  }
+  return %AsObj(v);
+}
+
+// builtins/iterator.ts:73
+function HelperCallable(o, f) {
+  if (!%IsCallable(f)) {
+    const error = %NewTypeError("not a function");
+    IteratorCloseThrow(o);
+    throw error;
+  }
+}
+
+// builtins/iterator.ts:85
+function HelperLimit(o, limit) {
+  let numLimit = 0;
+  try {
+    numLimit = ToNumber(limit);
+  } catch (e) {
+    IteratorCloseThrow(o);
+    throw e;
+  }
+  if (numLimit !== numLimit || (numLimit > 9007199254740991 && numLimit !== 1 / 0)) {
+    const error = %NewRangeError("must be positive");
+    IteratorCloseThrow(o);
+    throw error;
+  }
+  const integerLimit = %ToIntegerOrInfinityNumber(numLimit);
+  if (integerLimit < 0) {
+    const error = %NewRangeError("must be positive");
+    IteratorCloseThrow(o);
+    throw error;
+  }
+  return integerLimit;
+}
+
+// builtins/iterator.ts:109
+function NewIteratorHelper(kind, o, data) {
+  const next = GetIteratorDirectNext(o);
+  const helper = %CreateIteratorHelper(kind, o, next);
+  %RecordSet(helper, 4, data);
+  %RecordSet(helper, 5, 0);
+  return helper;
+}
+
+// builtins/iterator.ts:118
+function HelperYield(o, value) {
+  %RecordSet(o, 1, 1);
+  return value;
+}
+
+// builtins/iterator.ts:127
+function HelperCallFunction(o, iterator, value) {
+  const counter = %AsNumber(%RecordGet(o, 5));
+  let result = undefined;
+  try {
+    result = %Call(%RecordGet(o, 4), undefined, value, counter);
+  } catch (e) {
+    IteratorCloseThrow(iterator);
+    throw e;
+  }
+  %RecordSet(o, 5, counter + 1);
+  return result;
+}
+
+// builtins/iterator.ts:141
+function IteratorHelperStep(o) {
+  const kind = %F64ToI32(%AsNumber(%RecordGet(o, 0)));
+  if (kind === 6) {
+    return ConcatStep(o);
+  }
+  const iterator = %AsObj(%RecordGet(o, 2));
+  const next = %RecordGet(o, 3);
+  if (kind === 1) {
+    const result = IteratorStepResult(iterator, next);
+    if (result === undefined) {
+      return undefined;
+    }
+    const value = %Get(%AsObj(result), "value");
+    return HelperYield(o, HelperCallFunction(o, iterator, value));
+  }
+  if (kind === 2) {
+    while (true) {
+      const result = IteratorStepResult(iterator, next);
+      if (result === undefined) {
+        return undefined;
+      }
+      const value = %Get(%AsObj(result), "value");
+      if (%ToBoolean(HelperCallFunction(o, iterator, value))) {
+        return HelperYield(o, value);
+      }
+    }
+  }
+  if (kind === 3) {
+    const remaining = %AsNumber(%RecordGet(o, 4));
+    if (remaining === 0) {
+      IteratorClose(iterator);
+      return undefined;
+    }
+    if (remaining !== 1 / 0) {
+      %RecordSet(o, 4, remaining - 1);
+    }
+    const result = IteratorStepResult(iterator, next);
+    if (result === undefined) {
+      return undefined;
+    }
+    return HelperYield(o, %Get(%AsObj(result), "value"));
+  }
+  if (kind === 4) {
+    let remaining = %AsNumber(%RecordGet(o, 4));
+    while (remaining > 0) {
+      if (remaining !== 1 / 0) {
+        remaining = remaining - 1;
+        %RecordSet(o, 4, remaining);
+      }
+      if (IteratorStepResult(iterator, next) === undefined) {
+        return undefined;
+      }
+    }
+    const result = IteratorStepResult(iterator, next);
+    if (result === undefined) {
+      return undefined;
+    }
+    return HelperYield(o, %Get(%AsObj(result), "value"));
+  }
+  return FlatMapStep(o, iterator, next);
+}
+
+// builtins/iterator.ts:204
+function FlatMapStep(o, iterator, next) {
+  while (true) {
+    const inner = %RecordGet(o, 6);
+    if (inner !== undefined) {
+      let result = undefined;
+      let value = undefined;
+      try {
+        result = IteratorStepResult(%AsObj(inner), %RecordGet(o, 7));
+        if (result !== undefined) {
+          value = %Get(%AsObj(result), "value");
+        }
+      } catch (e) {
+        IteratorCloseThrow(iterator);
+        throw e;
+      }
+      if (result !== undefined) {
+        return HelperYield(o, value);
+      }
+      %RecordSet(o, 6, undefined);
+      %RecordSet(o, 7, undefined);
+    }
+    const outer = IteratorStepResult(iterator, next);
+    if (outer === undefined) {
+      return undefined;
+    }
+    const mapped = HelperCallFunction(o, iterator, %Get(%AsObj(outer), "value"));
+    try {
+      const innerIterator = GetIteratorFlattenable(mapped, false);
+      const innerNext = GetIteratorDirectNext(innerIterator);
+      %RecordSet(o, 6, innerIterator);
+      %RecordSet(o, 7, innerNext);
+    } catch (e) {
+      IteratorCloseThrow(iterator);
+      throw e;
+    }
+  }
+}
+
+// builtins/iterator.ts:243
+function ConcatStep(o) {
+  while (true) {
+    const current = %RecordGet(o, 2);
+    if (current !== undefined) {
+      const result = IteratorStepResult(%AsObj(current), %RecordGet(o, 3));
+      if (result !== undefined) {
+        return HelperYield(o, %Get(%AsObj(result), "value"));
+      }
+      %RecordSet(o, 2, undefined);
+      %RecordSet(o, 3, undefined);
+    }
+    const iterables = %AsObj(%RecordGet(o, 4));
+    const index = %AsNumber(%RecordGet(o, 5));
+    if (index >= LengthOfArrayLike(iterables)) {
+      return undefined;
+    }
+    %RecordSet(o, 5, index + 1);
+    const pair = %AsObj(%Get(iterables, index));
+    const iter = %Call(%Get(pair, 0), %Get(pair, 1));
+    if (!%IsObject(iter)) {
+      throw %NewTypeError("not an object");
+    }
+    const next = GetIteratorDirectNext(%AsObj(iter));
+    %RecordSet(o, 2, iter);
+    %RecordSet(o, 3, next);
+  }
+}
+
+// builtins/iterator.ts:276
+function IteratorHelperReturnAtYield(o) {
+  const kind = %F64ToI32(%AsNumber(%RecordGet(o, 0)));
+  if (kind === 5) {
+    const inner = %RecordGet(o, 6);
+    if (inner !== undefined) {
+      try {
+        IteratorClose(%AsObj(inner));
+      } catch (e) {
+        IteratorCloseThrow(%AsObj(%RecordGet(o, 2)));
+        throw e;
+      }
+    }
+  }
+  IteratorClose(%AsObj(%RecordGet(o, 2)));
+}
+
+// builtins/iterator.ts:296 %IteratorHelperPrototype%.next
+function IteratorHelperPrototypeNext() {
+  const o = %ThisIteratorHelper(this, false);
+  const state = HelperState(o);
+  if (state === 2) {
+    throw %NewTypeError("cannot invoke a running iterator");
+  }
+  if (state === 3) {
+    return %CreateIterResultObject(undefined, true);
+  }
+  %RecordSet(o, 1, 2);
+  let value = undefined;
+  try {
+    value = IteratorHelperStep(o);
+  } catch (e) {
+    %RecordSet(o, 1, 3);
+    throw e;
+  }
+  if (HelperState(o) === 1) {
+    return %CreateIterResultObject(value, false);
+  }
+  %RecordSet(o, 1, 3);
+  return %CreateIterResultObject(undefined, true);
+}
+
+// builtins/iterator.ts:324 %IteratorHelperPrototype%.return
+function IteratorHelperPrototypeReturn() {
+  const o = %ThisIteratorHelper(this, false);
+  const state = HelperState(o);
+  if (state === 2) {
+    throw %NewTypeError("cannot invoke a running iterator");
+  }
+  if (state === 3) {
+    return %CreateIterResultObject(undefined, true);
+  }
+  if (state === 0) {
+    %RecordSet(o, 1, 3);
+    const iterator = %RecordGet(o, 2);
+    if (iterator !== undefined) {
+      IteratorClose(%AsObj(iterator));
+    }
+    return %CreateIterResultObject(undefined, true);
+  }
+  %RecordSet(o, 1, 2);
+  try {
+    IteratorHelperReturnAtYield(o);
+  } finally {
+    %RecordSet(o, 1, 3);
+  }
+  return %CreateIterResultObject(undefined, true);
+}
+
+// builtins/iterator.ts:356 value %IteratorHelperPrototype%[Symbol.toStringTag]
+function IteratorHelperPrototypeToStringTag() {
+  return "Iterator Helper";
+}
+
+// builtins/iterator.ts:364 constructor Iterator
+function IteratorConstructor() {
+  if (new.target === undefined) {
+    throw %NewTypeError("constructor requires 'new'");
+  }
+  if (new.target === %RealmConstructor("Iterator")) {
+    throw %NewTypeError("abstract class not constructable");
+  }
+  return %ObjectCreate(GetPrototypeFromConstructor(new.target, "IteratorPrototype"));
+}
+
+// builtins/iterator.ts:378 Iterator.from
+function IteratorFrom(o) {
+  const iterator = GetIteratorFlattenable(o, true);
+  const next = GetIteratorDirectNext(iterator);
+  if (OrdinaryHasInstance(%RealmConstructor("Iterator"), iterator)) {
+    return iterator;
+  }
+  return %CreateIteratorHelper(0, iterator, next);
+}
+
+// builtins/iterator.ts:391 %WrapForValidIteratorPrototype%.next
+function WrapForValidIteratorPrototypeNext() {
+  const o = %ThisIteratorHelper(this, true);
+  return %Call(%RecordGet(o, 3), %RecordGet(o, 2));
+}
+
+// builtins/iterator.ts:400 %WrapForValidIteratorPrototype%.return
+function WrapForValidIteratorPrototypeReturn() {
+  const o = %ThisIteratorHelper(this, true);
+  const iterator = %AsObj(%RecordGet(o, 2));
+  const method = GetMethod(iterator, "return");
+  if (method === undefined) {
+    return %CreateIterResultObject(undefined, true);
+  }
+  return %Call(method, iterator);
+}
+
+// builtins/iterator.ts:414 Iterator.concat
+function IteratorConcat(...items) {
+  const n = LengthOfArrayLike(items);
+  const iterables = %ArrayCreate(0);
+  for (let i = 0; i < n; i++) {
+    const item = %Get(items, i);
+    if (!%IsObject(item)) {
+      throw %NewTypeError("not an object");
+    }
+    const method = GetMethod(item, %WellKnownSymbol("iterator"));
+    if (method === undefined) {
+      throw %NewTypeError("not a function");
+    }
+    %CreateDataPropertyOrThrow(iterables, i, %CreateArrayFromPair(method, item));
+  }
+  const helper = %CreateIteratorHelper(6, undefined, undefined);
+  %RecordSet(helper, 4, iterables);
+  %RecordSet(helper, 5, 0);
+  return helper;
+}
+
+// builtins/iterator.ts:438 Iterator.prototype.map
+function IteratorPrototypeMap(mapper) {
+  const o = ThisIteratorObject(this);
+  HelperCallable(o, mapper);
+  return NewIteratorHelper(1, o, mapper);
+}
+
+// builtins/iterator.ts:448 Iterator.prototype.filter
+function IteratorPrototypeFilter(predicate) {
+  const o = ThisIteratorObject(this);
+  HelperCallable(o, predicate);
+  return NewIteratorHelper(2, o, predicate);
+}
+
+// builtins/iterator.ts:458 Iterator.prototype.take
+function IteratorPrototypeTake(limit) {
+  const o = ThisIteratorObject(this);
+  return NewIteratorHelper(3, o, HelperLimit(o, limit));
+}
+
+// builtins/iterator.ts:467 Iterator.prototype.drop
+function IteratorPrototypeDrop(limit) {
+  const o = ThisIteratorObject(this);
+  return NewIteratorHelper(4, o, HelperLimit(o, limit));
+}
+
+// builtins/iterator.ts:476 Iterator.prototype.flatMap
+function IteratorPrototypeFlatMap(mapper) {
+  const o = ThisIteratorObject(this);
+  HelperCallable(o, mapper);
+  return NewIteratorHelper(5, o, mapper);
+}
+
+// builtins/iterator.ts:487 Iterator.prototype.reduce
+function IteratorPrototypeReduce(reducer, ...rest) {
+  const o = ThisIteratorObject(this);
+  HelperCallable(o, reducer);
+  const next = GetIteratorDirectNext(o);
+  let accumulator = undefined;
+  let counter = 0;
+  if (LengthOfArrayLike(rest) === 0) {
+    const first = IteratorStepResult(o, next);
+    if (first === undefined) {
+      throw %NewTypeError("empty iterator");
+    }
+    accumulator = %Get(%AsObj(first), "value");
+    counter = 1;
+  } else {
+    accumulator = %Get(rest, 0);
+  }
+  while (true) {
+    const result = IteratorStepResult(o, next);
+    if (result === undefined) {
+      return accumulator;
+    }
+    const value = %Get(%AsObj(result), "value");
+    try {
+      accumulator = %Call(reducer, undefined, accumulator, value, counter);
+    } catch (e) {
+      IteratorCloseThrow(o);
+      throw e;
+    }
+    counter++;
+  }
+}
+
+// builtins/iterator.ts:523 Iterator.prototype.toArray
+function IteratorPrototypeToArray() {
+  const o = ThisIteratorObject(this);
+  const next = GetIteratorDirectNext(o);
+  const items = %ArrayCreate(0);
+  let n = 0;
+  while (true) {
+    const result = IteratorStepResult(o, next);
+    if (result === undefined) {
+      return items;
+    }
+    %CreateDataPropertyOrThrow(items, n, %Get(%AsObj(result), "value"));
+    n++;
+  }
+}
+
+// builtins/iterator.ts:543
+function IteratorConsume(thisValue, fn, mode) {
+  const o = ThisIteratorObject(thisValue);
+  HelperCallable(o, fn);
+  const next = GetIteratorDirectNext(o);
+  let counter = 0;
+  while (true) {
+    const result = IteratorStepResult(o, next);
+    if (result === undefined) {
+      if (mode === 1) {
+        return false;
+      }
+      if (mode === 2) {
+        return true;
+      }
+      return undefined;
+    }
+    const value = %Get(%AsObj(result), "value");
+    let r = undefined;
+    try {
+      r = %Call(fn, undefined, value, counter);
+    } catch (e) {
+      IteratorCloseThrow(o);
+      throw e;
+    }
+    if (mode !== 0) {
+      const b = %ToBoolean(r);
+      if (mode === 2 ? !b : b) {
+        IteratorClose(o);
+        if (mode === 3) {
+          return value;
+        }
+        return mode === 1;
+      }
+    }
+    counter++;
+  }
+}
+
+// builtins/iterator.ts:585 Iterator.prototype.forEach
+function IteratorPrototypeForEach(procedure) {
+  return IteratorConsume(this, procedure, 0);
+}
+
+// builtins/iterator.ts:593 Iterator.prototype.some
+function IteratorPrototypeSome(predicate) {
+  return IteratorConsume(this, predicate, 1);
+}
+
+// builtins/iterator.ts:601 Iterator.prototype.every
+function IteratorPrototypeEvery(predicate) {
+  return IteratorConsume(this, predicate, 2);
+}
+
+// builtins/iterator.ts:609 Iterator.prototype.find
+function IteratorPrototypeFind(predicate) {
+  return IteratorConsume(this, predicate, 3);
+}
+
+// builtins/iterator.ts:616
+function SetterThatIgnoresPrototypeProperties(thisValue, home, p, v) {
+  if (!%IsObject(thisValue)) {
+    throw %NewTypeError("not an object");
+  }
+  const o = %AsObj(thisValue);
+  if (o === home) {
+    throw %NewTypeError("Cannot assign to read only property");
+  }
+  if (%OwnPropertyAttributes(o, p) < 0) {
+    %CreateDataPropertyOrThrow(o, p, v);
+  } else {
+    %Set(o, p, v);
+  }
+}
+
+// builtins/iterator.ts:635 get Iterator.prototype.constructor
+function IteratorPrototypeConstructorGet() {
+  return %RealmConstructor("Iterator");
+}
+
+// builtins/iterator.ts:643 set Iterator.prototype.constructor
+function IteratorPrototypeConstructorSet(v) {
+  SetterThatIgnoresPrototypeProperties(this, %RealmIntrinsic("IteratorPrototype"), "constructor", v);
+}
+
+// builtins/iterator.ts:651 get Iterator.prototype[Symbol.toStringTag]
+function IteratorPrototypeToStringTagGet() {
+  return "Iterator";
+}
+
+// builtins/iterator.ts:659 set Iterator.prototype[Symbol.toStringTag]
+function IteratorPrototypeToStringTagSet(v) {
+  SetterThatIgnoresPrototypeProperties(this, %RealmIntrinsic("IteratorPrototype"), %WellKnownSymbol("toStringTag"), v);
+}
+
 // builtins/json.ts:9 value JSON
 function JSONObject() {
   return %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
@@ -8396,6 +8943,7 @@ function WeakSetPrototypeToStringTag() {
 %InstallConstructor("globalThis", "InternalError", InternalErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "AggregateError", AggregateErrorConstructor, 2, "Error");
 %InstallConstructor("globalThis", "Function", FunctionConstructor, 1, undefined);
+%InstallConstructor("globalThis", "Iterator", IteratorConstructor, 0, undefined);
 %InstallValue("globalThis", "JSON", JSONObject(), 5);
 %InstallConstructor("globalThis", "Map", MapConstructor, 0, undefined);
 %InstallValue("globalThis", "Math", MathObject(), 5);
@@ -8597,6 +9145,28 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("String.prototype", %WellKnownSymbol("iterator"), StringPrototypeIterator, 0);
 %InstallMethod("%StringIteratorPrototype%", "next", StringIteratorPrototypeNext, 0);
 %InstallValue("%StringIteratorPrototype%", %WellKnownSymbol("toStringTag"), StringIteratorToStringTag(), 4);
+%InstallMethod("%IteratorHelperPrototype%", "next", IteratorHelperPrototypeNext, 0);
+%InstallMethod("%IteratorHelperPrototype%", "return", IteratorHelperPrototypeReturn, 0);
+%InstallValue("%IteratorHelperPrototype%", %WellKnownSymbol("toStringTag"), IteratorHelperPrototypeToStringTag(), 4);
+%InstallMethod("Iterator", "from", IteratorFrom, 1);
+%InstallMethod("%WrapForValidIteratorPrototype%", "next", WrapForValidIteratorPrototypeNext, 0);
+%InstallMethod("%WrapForValidIteratorPrototype%", "return", WrapForValidIteratorPrototypeReturn, 0);
+%InstallMethod("Iterator", "concat", IteratorConcat, 0);
+%InstallMethod("Iterator.prototype", "map", IteratorPrototypeMap, 1);
+%InstallMethod("Iterator.prototype", "filter", IteratorPrototypeFilter, 1);
+%InstallMethod("Iterator.prototype", "take", IteratorPrototypeTake, 1);
+%InstallMethod("Iterator.prototype", "drop", IteratorPrototypeDrop, 1);
+%InstallMethod("Iterator.prototype", "flatMap", IteratorPrototypeFlatMap, 1);
+%InstallMethod("Iterator.prototype", "reduce", IteratorPrototypeReduce, 1);
+%InstallMethod("Iterator.prototype", "toArray", IteratorPrototypeToArray, 0);
+%InstallMethod("Iterator.prototype", "forEach", IteratorPrototypeForEach, 1);
+%InstallMethod("Iterator.prototype", "some", IteratorPrototypeSome, 1);
+%InstallMethod("Iterator.prototype", "every", IteratorPrototypeEvery, 1);
+%InstallMethod("Iterator.prototype", "find", IteratorPrototypeFind, 1);
+%InstallAccessor("Iterator.prototype", "constructor", IteratorPrototypeConstructorGet, false);
+%InstallAccessor("Iterator.prototype", "constructor", IteratorPrototypeConstructorSet, true);
+%InstallAccessor("Iterator.prototype", %WellKnownSymbol("toStringTag"), IteratorPrototypeToStringTagGet, false);
+%InstallAccessor("Iterator.prototype", %WellKnownSymbol("toStringTag"), IteratorPrototypeToStringTagSet, true);
 %InstallValue("JSON", %WellKnownSymbol("toStringTag"), JSONToStringTag(), 4);
 %InstallMethod("JSON", "parse", JSONParse, 2);
 %InstallMethod("JSON", "stringify", JSONStringify, 3);

@@ -2093,3 +2093,22 @@ erased type, recorded after the skipper committed, never during speculation. The
 blanking writes one space per UTF-16 unit and keeps `\n` and `\r`, as ts-blank-space's
 `getSpace` does, so `djs strip-types` can be compared byte for byte.
 
+## D1510: Iterator helpers are slot objects with a hand-written state machine
+date: 2026-11-03 · by: heap · issue: 0051
+The objects of `Iterator.prototype.map/filter/take/drop/flatMap`, `Iterator.concat` and
+`Iterator.from`'s wrapper are one heap class, `ObjectClass::IteratorHelper` (28), with 8
+slots: the kind (0 wrapper, 1 map, 2 filter, 3 take, 4 drop, 5 flatMap, 6 concat, more
+for the proposals), the generator state (0 suspended-start, 1 suspended-yield, 2
+executing, 3 completed), the underlying iterator and its `next`, and per-kind state.
+Instead of a generator closure, `%IteratorHelperPrototype%.next` runs one step of a
+per-kind state machine in builtins/iterator.ts: a step yields (state 1) or returns,
+which completes the helper; an exception completes it too. `return` at a yield closes
+what the closure would (flatMap: the inner iterator, then the outer one). The builtins
+read and write the slots with `%RecordGet`/`%RecordSet`, which now accept Records and
+these slot objects (`is_slot_object` in interp/run/intrinsics.rs), after checking the
+brand with the leaf `%ThisIteratorHelper(v, wrap)`. New leaf groups of 0051 live in
+interp/run/late.rs, at the end of the intrinsic fallback chain.
+
+Where qjs deviates from the spec, djs follows the spec and node: qjs closes the iterator
+before reduce's "empty iterator" TypeError and closes an exhausted inner iterator of
+flatMap (vm/tests.rs `iterator_helpers_follow_the_spec_where_qjs_differs`).

@@ -128,6 +128,11 @@ pub enum ObjectClass {
     /// properties, not extensible as far as the heap is concerned: the interpreter and
     /// the builtins send every internal method to the traps (builtins/proxy.ts).
     Proxy = 27,
+    /// An iterator helper object (0051, builtins/iterator.ts): the objects of
+    /// `Iterator.prototype.map` and friends, `Iterator.concat` and `Iterator.from`'s
+    /// wrapper, told apart by slot 0 (the kind). The builtins keep their state in slots
+    /// 0..8 with `%RecordGet`/`%RecordSet`.
+    IteratorHelper = 28,
     /// A BigInt wrapper (`[[BigIntData]]`, 0046): slot 0 is the BigInt, like the other
     /// primitive wrappers.
     BigInt = 30,
@@ -164,6 +169,7 @@ impl ObjectClass {
             25 => Some(ObjectClass::RegExp),
             26 => Some(ObjectClass::RegExpStringIterator),
             27 => Some(ObjectClass::Proxy),
+            28 => Some(ObjectClass::IteratorHelper),
             30 => Some(ObjectClass::BigInt),
             _ => None,
         }
@@ -195,6 +201,7 @@ impl ObjectClass {
             ObjectClass::DataView => 3,
             ObjectClass::RegExp | ObjectClass::RegExpStringIterator => 3,
             ObjectClass::Proxy => 3,
+            ObjectClass::IteratorHelper => 8,
         }
     }
 

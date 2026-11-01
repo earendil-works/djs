@@ -273,6 +273,12 @@ const CREATE_ASYNC_FROM_SYNC_ITERATOR: u16 = id("CreateAsyncFromSyncIterator");
 pub(super) const PROMISE_CONSTRUCTOR: u16 = id("PromiseConstructor");
 const PROMISE_RESOLVE_THENABLE_JOB: u16 = id("PromiseResolveThenableJob");
 
+/// The classes whose slots `%RecordGet`/`%RecordSet` reach: Records, and the objects
+/// whose builtins keep all their state in slots (0051). Their builtins check the brand.
+fn is_slot_object(class: ObjectClass) -> bool {
+    matches!(class, ObjectClass::Record | ObjectClass::IteratorHelper)
+}
+
 /// The builtins a `%NewBuiltinClosure(kind, ..)` calls, by kind (D1372; the list in
 /// builtins/intrinsics.d.ts).
 const BUILTIN_CLOSURES: [u16; 16] = [
@@ -1672,7 +1678,7 @@ impl Exec<'_> {
             RECORD_GET | RECORD_SET => {
                 let r = a0
                     .as_object()
-                    .filter(|&o| self.heap.object_class(o) == ObjectClass::Record);
+                    .filter(|&o| is_slot_object(self.heap.object_class(o)));
                 let i = arg(self, 1).as_int().and_then(|i| u32::try_from(i).ok());
                 let (Some(r), Some(i)) = (r, i) else {
                     return bad_argument(info.name);
@@ -2056,6 +2062,8 @@ impl Exec<'_> {
             "%MapIteratorPrototype%" => Some(Intrinsic::MapIteratorProto),
             "%SetIteratorPrototype%" => Some(Intrinsic::SetIteratorProto),
             "%RegExpStringIteratorPrototype%" => Some(Intrinsic::RegExpStringIteratorProto),
+            "%IteratorHelperPrototype%" => Some(Intrinsic::IteratorHelperProto),
+            "%WrapForValidIteratorPrototype%" => Some(Intrinsic::WrapForValidIteratorProto),
             "%TypedArray%" => Some(Intrinsic::TypedArrayCtor),
             // `X.prototype` of a constructor the prelude has not installed yet.
             _ => Intrinsic::prototype_of(name.strip_suffix(".prototype")?),

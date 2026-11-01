@@ -1,0 +1,21 @@
+1 9 get next,created,next 0,next 1,next 2,next 3
+true true get return,return
+[2,3] get next,next 0,next 1,next 2,next 3,next 4
+true get next,get return,return
+TypeError: not an object get next,next 0,get return,return
+RangeError: stop get next,next 0,get return,return
+gen finally
+[2,3]
+gen finally
+2
+gen finally
+15
+before
+opened
+[1]
+function 0 Iterator 0
+[3]
+h
+é
+o
+=== completed

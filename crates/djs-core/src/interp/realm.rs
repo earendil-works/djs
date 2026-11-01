@@ -103,9 +103,13 @@ pub enum Intrinsic {
     /// %RegExp.prototype% and %RegExpStringIteratorPrototype% (0033).
     RegExpProto,
     RegExpStringIteratorProto,
+    /// %IteratorHelperPrototype% and %WrapForValidIteratorPrototype% ([[Prototype]]
+    /// %IteratorPrototype%, 0051).
+    IteratorHelperProto,
+    WrapForValidIteratorProto,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::RegExpStringIteratorProto as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::WrapForValidIteratorProto as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -151,6 +155,9 @@ impl Intrinsic {
             "BigUint64Array" => Intrinsic::BigUint64ArrayProto,
             "DataView" => Intrinsic::DataViewProto,
             "RegExp" => Intrinsic::RegExpProto,
+            "Iterator" => Intrinsic::IteratorProto,
+            "IteratorHelper" => Intrinsic::IteratorHelperProto,
+            "WrapForValidIterator" => Intrinsic::WrapForValidIteratorProto,
             _ => return None,
         })
     }
@@ -269,6 +276,8 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
         Intrinsic::MapIteratorProto,
         Intrinsic::SetIteratorProto,
         Intrinsic::RegExpStringIteratorProto,
+        Intrinsic::IteratorHelperProto,
+        Intrinsic::WrapForValidIteratorProto,
     ] {
         let p = heap.new_object(Some(iterator_proto))?;
         set(heap, i, Value::object(p));

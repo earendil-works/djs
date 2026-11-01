@@ -71,6 +71,23 @@ function ourArrayIteratorPrototype() {
   return ourAIP;
 }
 const isObject = (v) => v !== null && (typeof v === "object" || typeof v === "function");
+// Iterator helpers (0051): the slots of our helper objects, and their prototypes built
+// from the installed methods.
+const helperSlots = new WeakMap();
+const helperProtos = [];
+function helperProto(wrap) {
+  if (!helperProtos.length) {
+    for (const name of ["%WrapForValidIteratorPrototype%", "%IteratorHelperPrototype%"]) {
+      const p = Object.create(Iterator.prototype);
+      for (const m of ["next", "return"]) {
+        Object.defineProperty(p, m, { value: installed[name + "." + m].f, writable: true, configurable: true });
+      }
+      helperProtos.push(p);
+    }
+    Object.defineProperty(helperProtos[1], Symbol.toStringTag, { value: "Iterator Helper", configurable: true });
+  }
+  return helperProtos[wrap ? 0 : 1];
+}
 function check(cond, what) {
   if (!cond) throw new Error("intrinsic misuse: " + what);
 }
@@ -169,6 +186,26 @@ const I = {
   },
   ArrayIteratorKind: (it) => arrayIterators.get(it).kind,
   CreateIterResultObject: (value, done) => ({ value, done }),
+  CreateIteratorHelper: (kind, iterator, next) => {
+    const o = Object.create(helperProto(kind === 0));
+    helperSlots.set(o, [kind, 0, iterator, next, undefined, undefined, undefined, undefined]);
+    return o;
+  },
+  ThisIteratorHelper: (v, wrap) => {
+    const slots = isObject(v) ? helperSlots.get(v) : undefined;
+    if (!slots || (slots[0] === 0) !== wrap) {
+      throw new TypeError(wrap ? "Iterator Wrap object expected" : "Iterator Helper object expected");
+    }
+    return v;
+  },
+  RecordGet: (r, i) => {
+    check(helperSlots.has(r) && i < 8, "RecordGet");
+    return helperSlots.get(r)[i];
+  },
+  RecordSet: (r, i, v) => {
+    check(helperSlots.has(r) && i < 8, "RecordSet");
+    helperSlots.get(r)[i] = v;
+  },
   CreateArrayFromPair: (a, b) => [a, b],
   InstallIntrinsic: (name, f) => {
     installed["%" + name] = { f };
@@ -1680,5 +1717,79 @@ for (const op of proxyOps.filter((op) => !/isArray|p\(1\)|apply|new p/.test(Stri
 }
 
 sameSetFailures = false;
+
+// Iterator helpers (0051): the results and the trap order on a logging iterator, drained
+// through the helper's own `next` (native or ours) and closed through `return`.
+function logIter(n, log) {
+  let i = 0;
+  return Object.create(Iterator.prototype, Object.getOwnPropertyDescriptors({
+    get next() {
+      log.push("get next");
+      return () => {
+        log.push("next");
+        return i < n ? { value: i++, done: false } : { value: "end", done: true };
+      };
+    },
+    get return() {
+      log.push("get return");
+      return () => {
+        log.push("return");
+        return {};
+      };
+    },
+  }));
+}
+function drain(h, max = 10) {
+  const out = [];
+  for (let k = 0; k < max; k++) {
+    const r = h.next();
+    out.push(r.done ? "done" : r.value);
+    if (r.done) break;
+  }
+  return out;
+}
+const IP = Iterator.prototype;
+const helperCases = [
+  ["map", (f, log) => drain(f.call(logIter(3, log), (x, i) => x * 10 + i))],
+  ["map", (f, log) => drain(f.call(logIter(3, log), (x) => { if (x === 1) throw new RangeError("m"); return x; }))],
+  ["map", (f, log) => f.call(logIter(3, log), 1)],
+  ["map", (f, log) => f.call(1, () => 0)],
+  ["map", (f, log) => { const h = f.call(logIter(3, log), (x) => x); h.next(); return [h.return(), h.next(), h.return()]; }],
+  ["map", (f, log) => { const h = f.call(logIter(3, log), (x) => x); return [h.return(), h.next()]; }],
+  ["filter", (f, log) => drain(f.call(logIter(6, log), (x) => x % 2))],
+  ["take", (f, log) => drain(f.call(logIter(6, log), 2))],
+  ["take", (f, log) => drain(f.call(logIter(2, log), Infinity))],
+  ["take", (f, log) => f.call(logIter(6, log), valueOfObj(-1, log))],
+  ["take", (f, log) => f.call(logIter(6, log), NaN)],
+  ["drop", (f, log) => drain(f.call(logIter(4, log), 2))],
+  ["drop", (f, log) => drain(f.call(logIter(4, log), 9))],
+  ["drop", (f, log) => f.call(logIter(4, log), 2 ** 53)],
+  ["flatMap", (f, log) => drain(f.call(logIter(3, log), (x) => [x, -x]))],
+// (qjs closes an exhausted inner iterator of flatMap and closes the iterator before
+// reduce's "empty iterator" TypeError; the spec does neither, and djs follows it and
+// node: vm/tests.rs iterator_helpers_follow_the_spec_where_qjs_differs.)
+  ["flatMap", (f, log) => drain(f.call(logIter(3, log), (x) => "s"))],
+  ["flatMap", (f, log) => { const h = f.call(logIter(3, log), (x) => logIter(2, log)); h.next(); h.next(); return h.return(); }],
+  ["reduce", (f, log) => f.call(logIter(4, log), (a, b, i) => a + b * i)],
+  ["reduce", (f, log) => f.call(logIter(4, log), (a, b) => a + b, "s")],
+  ["reduce", (f, log) => f.call(logIter(3, log), () => { throw new Error("r"); }, 0)],
+  ["toArray", (f, log) => f.call(logIter(3, log))],
+  ["forEach", (f, log) => f.call(logIter(3, log), (x, i) => log.push("fe " + x + i))],
+  ["some", (f, log) => f.call(logIter(3, log), (x) => x === 1)],
+  ["some", (f, log) => f.call(logIter(3, log), (x) => false)],
+  ["every", (f, log) => f.call(logIter(3, log), (x) => x < 1)],
+  ["every", (f, log) => f.call(logIter(3, log), (x) => true)],
+  ["find", (f, log) => f.call(logIter(3, log), (x) => x === 2)],
+  ["find", (f, log) => f.call(logIter(3, log), "nope")],
+];
+for (const [m, run] of helperCases) same("Iterator.prototype." + m, IP[m], run);
+same("Iterator.from", Iterator.from, (f, log) => drain(f({ next() { log.push("next"); return { value: 1, done: false }; } }), 2));
+same("Iterator.from", Iterator.from, (f, log) => { const w = f({ next() { return {}; } }); return [w.return(), w instanceof Iterator]; });
+same("Iterator.from", Iterator.from, (f, log) => drain(f("ab")));
+same("Iterator.from", Iterator.from, (f, log) => { const it = logIter(1, log); return f(it) === it; });
+same("Iterator.from", Iterator.from, (f) => f(5));
+same("Iterator.concat", Iterator.concat, (f, log) => drain(f([1, 2], { [Symbol.iterator]: () => logIter(2, log) })));
+same("Iterator.concat", Iterator.concat, (f, log) => { const h = f({ [Symbol.iterator]: () => logIter(2, log) }); h.next(); return h.return(); });
+same("Iterator.concat", Iterator.concat, (f) => f({}));
 
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));

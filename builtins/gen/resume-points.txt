@@ -1037,6 +1037,185 @@ StringIteratorPrototypeNext: leaf (%StringIteratorPrototype%.next, %StringIterat
 
 StringIteratorToStringTag: leaf (value %StringIteratorPrototype%[Symbol.toStringTag])
 
+HelperState: leaf
+
+GetIteratorDirectNext: reentrant
+  builtins/iterator.ts:25:10  Get (intrinsic)
+
+IteratorStepResult: reentrant
+  builtins/iterator.ts:33:23  IteratorNextResult (builtin)
+  builtins/iterator.ts:34:17  Get (intrinsic)
+
+GetIteratorFlattenable: reentrant
+  builtins/iterator.ts:50:25  GetMethod (builtin)
+  builtins/iterator.ts:53:16  Call (intrinsic)
+
+ThisIteratorObject: leaf
+
+HelperCallable: reentrant
+  builtins/iterator.ts:76:5  IteratorCloseThrow (builtin)
+
+HelperLimit: reentrant
+  builtins/iterator.ts:88:16  ToNumber (builtin)
+  builtins/iterator.ts:90:5  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:96:5  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:102:5  IteratorCloseThrow (builtin)
+
+NewIteratorHelper: reentrant
+  builtins/iterator.ts:110:23  GetIteratorDirectNext (builtin)
+
+HelperYield: leaf
+
+HelperCallFunction: reentrant
+  builtins/iterator.ts:131:14  Call (intrinsic)
+  builtins/iterator.ts:133:5  IteratorCloseThrow (builtin)
+
+IteratorHelperStep: reentrant
+  builtins/iterator.ts:144:12  ConcatStep (builtin)
+  builtins/iterator.ts:149:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:153:26  Get (intrinsic)
+  builtins/iterator.ts:154:27  HelperCallFunction (builtin)
+  builtins/iterator.ts:158:29  IteratorStepResult (builtin)
+  builtins/iterator.ts:162:28  Get (intrinsic)
+  builtins/iterator.ts:163:21  HelperCallFunction (builtin)
+  builtins/iterator.ts:171:7  IteratorClose (builtin)
+  builtins/iterator.ts:177:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:181:27  Get (intrinsic)
+  builtins/iterator.ts:190:11  IteratorStepResult (builtin)
+  builtins/iterator.ts:194:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:198:27  Get (intrinsic)
+  builtins/iterator.ts:200:10  FlatMapStep (builtin)
+
+FlatMapStep: reentrant
+  builtins/iterator.ts:211:18  IteratorStepResult (builtin)
+  builtins/iterator.ts:213:19  Get (intrinsic)
+  builtins/iterator.ts:216:9  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:225:26  IteratorStepResult (builtin)
+  builtins/iterator.ts:229:59  Get (intrinsic)
+  builtins/iterator.ts:229:27  HelperCallFunction (builtin)
+  builtins/iterator.ts:231:34  GetIteratorFlattenable (builtin)
+  builtins/iterator.ts:232:32  GetIteratorDirectNext (builtin)
+  builtins/iterator.ts:236:7  IteratorCloseThrow (builtin)
+
+ConcatStep: reentrant
+  builtins/iterator.ts:247:29  IteratorStepResult (builtin)
+  builtins/iterator.ts:249:31  Get (intrinsic)
+  builtins/iterator.ts:256:18  LengthOfArrayLike (builtin)
+  builtins/iterator.ts:260:29  Get (intrinsic)
+  builtins/iterator.ts:261:30  Get (intrinsic)
+  builtins/iterator.ts:261:44  Get (intrinsic)
+  builtins/iterator.ts:261:25  Call (intrinsic)
+  builtins/iterator.ts:265:25  GetIteratorDirectNext (builtin)
+
+IteratorHelperReturnAtYield: reentrant
+  builtins/iterator.ts:282:9  IteratorClose (builtin)
+  builtins/iterator.ts:284:9  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:289:3  IteratorClose (builtin)
+
+IteratorHelperPrototypeNext: reentrant (%IteratorHelperPrototype%.next)
+  builtins/iterator.ts:308:13  IteratorHelperStep (builtin)
+
+IteratorHelperPrototypeReturn: reentrant (%IteratorHelperPrototype%.return)
+  builtins/iterator.ts:338:7  IteratorClose (builtin)
+  builtins/iterator.ts:344:5  IteratorHelperReturnAtYield (builtin)
+
+IteratorHelperPrototypeToStringTag: leaf (value %IteratorHelperPrototype%[Symbol.toStringTag])
+
+IteratorConstructor: reentrant (constructor Iterator)
+  builtins/iterator.ts:371:23  GetPrototypeFromConstructor (builtin)
+
+IteratorFrom: reentrant (Iterator.from)
+  builtins/iterator.ts:379:25  GetIteratorFlattenable (builtin)
+  builtins/iterator.ts:380:23  GetIteratorDirectNext (builtin)
+  builtins/iterator.ts:381:7  OrdinaryHasInstance (builtin)
+
+WrapForValidIteratorPrototypeNext: reentrant (%WrapForValidIteratorPrototype%.next)
+  builtins/iterator.ts:393:10  Call (intrinsic)
+
+WrapForValidIteratorPrototypeReturn: reentrant (%WrapForValidIteratorPrototype%.return)
+  builtins/iterator.ts:403:25  GetMethod (builtin)
+  builtins/iterator.ts:407:10  Call (intrinsic)
+
+IteratorConcat: reentrant (Iterator.concat)
+  builtins/iterator.ts:415:18  LengthOfArrayLike (builtin)
+  builtins/iterator.ts:418:25  Get (intrinsic)
+  builtins/iterator.ts:422:27  GetMethod (builtin)
+  builtins/iterator.ts:426:5  CreateDataPropertyOrThrow (intrinsic)
+
+IteratorPrototypeMap: reentrant (Iterator.prototype.map)
+  builtins/iterator.ts:440:3  HelperCallable (builtin)
+  builtins/iterator.ts:441:10  NewIteratorHelper (builtin)
+
+IteratorPrototypeFilter: reentrant (Iterator.prototype.filter)
+  builtins/iterator.ts:450:3  HelperCallable (builtin)
+  builtins/iterator.ts:451:10  NewIteratorHelper (builtin)
+
+IteratorPrototypeTake: reentrant (Iterator.prototype.take)
+  builtins/iterator.ts:460:34  HelperLimit (builtin)
+  builtins/iterator.ts:460:10  NewIteratorHelper (builtin)
+
+IteratorPrototypeDrop: reentrant (Iterator.prototype.drop)
+  builtins/iterator.ts:469:34  HelperLimit (builtin)
+  builtins/iterator.ts:469:10  NewIteratorHelper (builtin)
+
+IteratorPrototypeFlatMap: reentrant (Iterator.prototype.flatMap)
+  builtins/iterator.ts:478:3  HelperCallable (builtin)
+  builtins/iterator.ts:479:10  NewIteratorHelper (builtin)
+
+IteratorPrototypeReduce: reentrant (Iterator.prototype.reduce)
+  builtins/iterator.ts:489:3  HelperCallable (builtin)
+  builtins/iterator.ts:490:23  GetIteratorDirectNext (builtin)
+  builtins/iterator.ts:493:7  LengthOfArrayLike (builtin)
+  builtins/iterator.ts:494:26  IteratorStepResult (builtin)
+  builtins/iterator.ts:498:19  Get (intrinsic)
+  builtins/iterator.ts:501:19  Get (intrinsic)
+  builtins/iterator.ts:504:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:508:26  Get (intrinsic)
+  builtins/iterator.ts:510:21  Call (intrinsic)
+  builtins/iterator.ts:512:7  IteratorCloseThrow (builtin)
+
+IteratorPrototypeToArray: reentrant (Iterator.prototype.toArray)
+  builtins/iterator.ts:525:23  GetIteratorDirectNext (builtin)
+  builtins/iterator.ts:529:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:533:41  Get (intrinsic)
+  builtins/iterator.ts:533:5  CreateDataPropertyOrThrow (intrinsic)
+
+IteratorConsume: reentrant
+  builtins/iterator.ts:545:3  HelperCallable (builtin)
+  builtins/iterator.ts:546:23  GetIteratorDirectNext (builtin)
+  builtins/iterator.ts:549:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:559:26  Get (intrinsic)
+  builtins/iterator.ts:562:11  Call (intrinsic)
+  builtins/iterator.ts:564:7  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:570:9  IteratorClose (builtin)
+
+IteratorPrototypeForEach: reentrant (Iterator.prototype.forEach)
+  builtins/iterator.ts:586:10  IteratorConsume (builtin)
+
+IteratorPrototypeSome: reentrant (Iterator.prototype.some)
+  builtins/iterator.ts:594:10  IteratorConsume (builtin)
+
+IteratorPrototypeEvery: reentrant (Iterator.prototype.every)
+  builtins/iterator.ts:602:10  IteratorConsume (builtin)
+
+IteratorPrototypeFind: reentrant (Iterator.prototype.find)
+  builtins/iterator.ts:610:10  IteratorConsume (builtin)
+
+SetterThatIgnoresPrototypeProperties: reentrant
+  builtins/iterator.ts:624:7  OwnPropertyAttributes (intrinsic)
+  builtins/iterator.ts:625:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:627:5  Set (intrinsic)
+
+IteratorPrototypeConstructorGet: leaf (get Iterator.prototype.constructor)
+
+IteratorPrototypeConstructorSet: reentrant (set Iterator.prototype.constructor)
+  builtins/iterator.ts:644:3  SetterThatIgnoresPrototypeProperties (builtin)
+
+IteratorPrototypeToStringTagGet: leaf (get Iterator.prototype[Symbol.toStringTag])
+
+IteratorPrototypeToStringTagSet: reentrant (set Iterator.prototype[Symbol.toStringTag])
+  builtins/iterator.ts:660:3  SetterThatIgnoresPrototypeProperties (builtin)
+
 JSONObject: leaf (value JSON)
 
 JSONToStringTag: leaf (value JSON[Symbol.toStringTag])

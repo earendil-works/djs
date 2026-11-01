@@ -1,6 +1,6 @@
 //! BigInt operators and leaf intrinsics (0046, D1460-D1462). Kept apart from the main
 //! dispatch: `exec` calls [`Exec::bigint_operands`] for the numeric operators, and the
-//! intrinsic fallback chain ends in [`Exec::bigint_intrinsic`].
+//! intrinsic fallback chain continues in [`Exec::bigint_intrinsic`].
 //!
 //! Relational operators, `==`, `===`, `typeof`, ToBoolean and ToString handle BigInts in
 //! `conv`, since they need no fuel or new errors.
@@ -132,7 +132,7 @@ impl Exec<'_> {
         Ok(())
     }
 
-    /// `call_intrinsic` for the BigInt leaves; the end of the fallback chain.
+    /// `call_intrinsic` for the BigInt leaves; falls back to `late_intrinsic`.
     pub(super) fn bigint_intrinsic(
         &mut self,
         id: u16,
@@ -199,12 +199,7 @@ impl Exec<'_> {
                 }
                 conv::number(self.heap.bigint(a0).to_f64())
             }
-            _ => {
-                return Err(Fault::Error(
-                    ErrorKind::InternalError,
-                    format!("not supported yet: %{name}"),
-                ));
-            }
+            _ => return self.late_intrinsic(id, name, base, argc, next),
         };
         self.sp = base;
         self.push(v);

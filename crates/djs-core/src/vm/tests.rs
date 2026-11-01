@@ -894,6 +894,21 @@ fn error_stack_traces() {
     assert_eq!(deep.lines().count(), STACK_TRACE_LIMIT as usize, "{deep}");
 }
 
+#[test]
+fn iterator_helpers_follow_the_spec_where_qjs_differs() {
+    // qjs closes the iterator before reduce's "empty iterator" TypeError and closes an
+    // exhausted inner iterator of flatMap; the spec (and node) do neither (0051).
+    let out = run_js(
+        "const log = [];\n\
+         function it(n) { let i = 0; return Iterator.from({ next() { log.push('next'); return i < n ? { value: i++, done: false } : { done: true }; }, return() { log.push('return'); return {}; } }); }\n\
+         try { it(0).reduce((a, b) => a); } catch (e) { log.push(e.message); }\n\
+         console.log(log.join());\n\
+         log.length = 0;\n\
+         console.log([1].values().flatMap(() => it(1)).toArray().join(), log.join());\n",
+    );
+    assert_eq!(out.log, ["next,empty iterator", "0 next,next"]);
+}
+
 /// `Vm::new` with and without the prelude. Run with
 /// `cargo test -p djs-core --release vm_new_cost -- --ignored --nocapture`.
 #[test]
