@@ -11,12 +11,13 @@
 //! to it, never during speculation, for `djs strip-types` (the parse-only oracle against
 //! ts-blank-space, TESTING.md).
 
+use alloc::borrow::Cow;
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use super::PResult;
 use super::parser::{Parser, syntax};
+use super::{PErr, PResult};
 use crate::lexer::{Kw, Token, TokenKind};
 
 /// Precedence levels of the type grammar (`|` binds loosest).
@@ -94,16 +95,26 @@ impl<'a> Parser<'a, '_> {
     // ---- Errors, speculation, erasure ------------------------------------------------
 
     pub(super) fn ts_error<T>(&mut self) -> PResult<T> {
+        Err(self.ts_error_value())
+    }
+
+    /// The error of `ts_error`, out of line (0092: one copy, not one per result type).
+    #[cold]
+    #[inline(never)]
+    fn ts_error_value(&self) -> PErr {
         if self.spec > 0 {
-            return syntax(self.tok.start, "");
+            return PErr::syntax(self.tok.start, Cow::Borrowed(""));
         }
         if self.tok.kind == TokenKind::Eof {
-            return syntax(self.tok.start, "unexpected end of input in type");
+            return PErr::syntax(
+                self.tok.start,
+                Cow::Borrowed("unexpected end of input in type"),
+            );
         }
         let text = String::from_utf8_lossy(self.lx.text(&self.tok)).into_owned();
-        syntax(
+        PErr::syntax(
             self.tok.start,
-            format!("unexpected token in type: '{text}'"),
+            Cow::Owned(format!("unexpected token in type: '{text}'")),
         )
     }
 
