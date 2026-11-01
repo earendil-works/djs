@@ -1,6 +1,6 @@
 # 0030: P1-5 runtime: for-in ops, array iterators, symbol-keyed installation
 
-status: in-progress
+status: done
 agent: heap
 branch: issue/0030-p1-iteration-runtime
 depends-on: 0028 (done), 0029 (for the .d.ts declarations and the iteration ops)
@@ -121,3 +121,6 @@ dup; get_field done; jump_if_true; get_field value`. for-in uses
 - djs has no global `JSON` yet (noticed while testing; probably 0031's).
 
 ## Result
+
+## Result (coordinator)
+Parts 1-4 merged (bb3075d..9f35b6f). The final un-ignore was done by 0029 part 2 (8cc5aa2), so no fifth part was needed.
