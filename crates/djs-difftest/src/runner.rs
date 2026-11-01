@@ -16,6 +16,18 @@ pub struct Options {
     pub progress: bool,
     /// Engine is djs: honor `skip-djs`.
     pub is_djs: bool,
+    /// Stress variants of the engine (label, engine): each case also runs on them, and
+    /// their transcripts must equal the main run's (a hard failure, independent of the
+    /// `.expected` comparison).
+    pub stress: Vec<(String, Box<dyn Engine>)>,
+}
+
+/// A stress variant whose transcript differs from the main run's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StressMismatch {
+    pub label: String,
+    pub reason: String,
+    pub diff: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,6 +47,7 @@ pub struct Outcome {
     pub transcript: String,
     pub done: Option<Done>,
     pub elapsed: Duration,
+    pub stress: Vec<StressMismatch>,
 }
 
 pub fn run_one(
@@ -53,9 +66,71 @@ pub fn run_one(
             transcript: String::new(),
             done: None,
             elapsed: start.elapsed(),
+            stress: Vec::new(),
         };
     }
-    let result = match fs::read_to_string(&case.file) {
+    let result = execute(engine, case, prelude_file, prelude, opts);
+    let actual = transcript(&result);
+    let verdict = match fs::read_to_string(&case.expected_file) {
+        Ok(expected) => {
+            let expected = crate::engine::normalize(&expected);
+            if expected == actual {
+                Verdict::Pass
+            } else if let Some(reason) =
+                engine_failure(&result.done, case.meta.timeout.unwrap_or(opts.timeout))
+            {
+                // Not a behavior difference: say so instead of pointing at a line.
+                Verdict::Fail {
+                    reason,
+                    diff: diff::line_diff(&expected, &actual, 3),
+                }
+            } else {
+                Verdict::Fail {
+                    reason: failure_reason(&expected, &actual, &result.done),
+                    diff: diff::line_diff(&expected, &actual, 3),
+                }
+            }
+        }
+        Err(_) => Verdict::Fail {
+            reason: "no .expected file (run --update)".into(),
+            diff: String::new(),
+        },
+    };
+    let mut stress = Vec::new();
+    for (label, variant) in &opts.stress {
+        let t = transcript(&execute(
+            variant.as_ref(),
+            case,
+            prelude_file,
+            prelude,
+            opts,
+        ));
+        if t != actual {
+            stress.push(StressMismatch {
+                label: label.clone(),
+                reason: diff::first_difference(&actual, &t),
+                diff: diff::line_diff(&actual, &t, 3),
+            });
+        }
+    }
+    Outcome {
+        verdict,
+        transcript: actual,
+        done: Some(result.done),
+        elapsed: start.elapsed(),
+        stress,
+    }
+}
+
+/// Runs one case on one engine (engine panics become crashes).
+fn execute(
+    engine: &dyn Engine,
+    case: &Case,
+    prelude_file: &Path,
+    prelude: &str,
+    opts: &Options,
+) -> RunResult {
+    match fs::read_to_string(&case.file) {
         Ok(source) => {
             let job = Job {
                 name: &case.name,
@@ -86,39 +161,20 @@ pub fn run_one(
             output: Vec::new(),
             done: Done::Crash(format!("cannot read case: {e}")),
         },
-    };
-    let actual = transcript(&result);
-    let verdict = match fs::read_to_string(&case.expected_file) {
-        Ok(expected) => {
-            let expected = crate::engine::normalize(&expected);
-            if expected == actual {
-                Verdict::Pass
-            } else if let Some(reason) =
-                engine_failure(&result.done, case.meta.timeout.unwrap_or(opts.timeout))
-            {
-                // Not a behavior difference: say so instead of pointing at a line.
-                Verdict::Fail {
-                    reason,
-                    diff: diff::line_diff(&expected, &actual, 3),
-                }
-            } else {
-                Verdict::Fail {
-                    reason: diff::first_difference(&expected, &actual),
-                    diff: diff::line_diff(&expected, &actual, 3),
-                }
-            }
-        }
-        Err(_) => Verdict::Fail {
-            reason: "no .expected file (run --update)".into(),
-            diff: String::new(),
-        },
-    };
-    Outcome {
-        verdict,
-        transcript: actual,
-        done: Some(result.done),
-        elapsed: start.elapsed(),
     }
+}
+
+/// The one-line reason for a transcript difference: the uncaught error when the engine
+/// threw one the expectation does not have (that is what needs fixing), else the first
+/// differing line.
+fn failure_reason(expected: &str, actual: &str, done: &Done) -> String {
+    if let Done::Throw(msg) = done {
+        let first = msg.lines().next().unwrap_or("");
+        if !expected.lines().any(|l| l == first) {
+            return format!("throws {first}");
+        }
+    }
+    diff::first_difference(expected, actual)
 }
 
 /// A timeout or crash is reported as such rather than as a transcript difference.

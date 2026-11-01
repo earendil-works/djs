@@ -32,6 +32,7 @@ dependencies = [
 name = "djs-difftest"
 version = "0.0.0"
 dependencies = [
+ "djs-core",
  "djs-test262",
 ]
 

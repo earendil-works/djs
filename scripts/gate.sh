@@ -36,4 +36,8 @@ DJS_WIRE_CROSS="$wire_dir" DJS_READER_DIR="$heap_dir" \
   cargo test -p djs-core --quiet reader_images -- --ignored
 node js/test/reader-cross.ts "$wire_dir" "$heap_dir"
 rm -rf "$wire_dir" "$heap_dir"
+echo "== difftest on djs: ratchet, plus suspension and GC stress (0016)"
+cargo run --quiet -p djs-difftest -- --engine djs --ratchet --suspend-every 97 --gc-stress --quiet --no-diff > target/difftest-djs.log \
+  || { cat target/difftest-djs.log; exit 1; }
+grep -E '^(stress|ratchet):' target/difftest-djs.log
 echo "gate: OK"

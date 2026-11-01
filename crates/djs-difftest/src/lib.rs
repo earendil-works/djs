@@ -3,6 +3,7 @@
 
 pub mod case;
 pub mod diff;
+pub mod djs;
 pub mod engine;
 pub mod qjs;
 pub mod runner;

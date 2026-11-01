@@ -5,6 +5,7 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use djs_difftest::case::{self, Case};
+use djs_difftest::djs::Djs;
 use djs_difftest::engine::{Done, Engine};
 use djs_difftest::qjs::Qjs;
 use djs_difftest::runner::{self, Outcome, Verdict};
@@ -19,7 +20,12 @@ model and compares each transcript with <name>.expected. Filters select cases by
 relative to the corpus: a prefix (console) or a glob (dquickts/*/test_op*.js).
 
 options:
-  --engine NAME       qjs (default) or djs (not available yet)
+  --engine NAME       qjs (default) or djs (in-process)
+  --suspend-every N   djs only: also run every case suspending every N fuel through
+                      heap images; its output must equal the plain run (hard failure)
+  --gc-stress         djs only: also run every case collecting at every safepoint;
+                      its output must equal the plain run (hard failure)
+  --clusters          group the failures by the first line of what went wrong
   --qjs PATH          qjs binary (default: $DJS_QJS, else ~/Development/dquickts/qjs)
   --update            rewrite .expected files from qjs (never from djs)
   --ratchet           compare failures with tests/corpus/expected-failures.txt;
@@ -48,6 +54,9 @@ struct Args {
     jobs: usize,
     corpus: PathBuf,
     quiet: bool,
+    suspend_every: Option<u64>,
+    gc_stress: bool,
+    clusters: bool,
 }
 
 fn workspace_root() -> PathBuf {
@@ -84,6 +93,9 @@ fn parse_args() -> Result<Args, String> {
             .unwrap_or(4),
         corpus,
         quiet: false,
+        suspend_every: None,
+        gc_stress: false,
+        clusters: false,
     };
     let mut it = std::env::args().skip(1);
     while let Some(a) = it.next() {
@@ -122,6 +134,17 @@ fn parse_args() -> Result<Args, String> {
                     .max(1);
             }
             "--corpus" => args.corpus = value(&a)?.into(),
+            "--suspend-every" => {
+                let v = value(&a)?;
+                let n = v
+                    .parse::<u64>()
+                    .ok()
+                    .filter(|&n| n > 0)
+                    .ok_or_else(|| format!("--suspend-every: bad number `{v}`"))?;
+                args.suspend_every = Some(n);
+            }
+            "--gc-stress" => args.gc_stress = true,
+            "--clusters" => args.clusters = true,
             "-q" | "--quiet" => args.quiet = true,
             // `run` is accepted for symmetry with djs-test262.
             "run" if args.filters.is_empty() => {}
@@ -137,6 +160,9 @@ fn parse_args() -> Result<Args, String> {
     }
     if args.update_ratchet && args.ratchet.is_none() {
         args.ratchet = Some(args.corpus.join("expected-failures.txt"));
+    }
+    if (args.suspend_every.is_some() || args.gc_stress) && args.engine != "djs" {
+        return Err("--suspend-every and --gc-stress need --engine djs".into());
     }
     if args.update && args.engine != "qjs" {
         return Err("--update records the oracle; it only works with --engine qjs".into());
@@ -174,7 +200,7 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
                 binary: args.qjs.clone(),
             })
         }
-        "djs" => return Err("the djs engine is not available yet (issue 0006)".into()),
+        "djs" => Box::new(Djs::default()),
         e => return Err(format!("unknown engine `{e}`")),
     };
     let cases = case::discover(&args.corpus, &args.filters)?;
@@ -187,6 +213,7 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         memory_limit: args.memory_limit,
         progress: !args.quiet,
         is_djs: args.engine == "djs",
+        stress: stress_variants(args),
     };
     let prelude = args.corpus.join("prelude.js");
     let start = Instant::now();
@@ -197,9 +224,15 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         return update_expected(&cases, &outcomes);
     }
 
+    let labels: Vec<&str> = opts.stress.iter().map(|(l, _)| l.as_str()).collect();
     println!(
-        "difftest · engine {} · {} cases in {:.2}s\n",
+        "difftest · engine {}{} · {} cases in {:.2}s\n",
         engine.name(),
+        if labels.is_empty() {
+            String::new()
+        } else {
+            format!(" (+ {})", labels.join(", "))
+        },
         cases.len(),
         elapsed.as_secs_f64()
     );
@@ -228,8 +261,41 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         }
     }
 
+    if args.clusters && !failures.is_empty() {
+        print!("\nfailure clusters:\n{}", clusters(&cases, &outcomes));
+    }
+    // Stress variants must behave exactly like the plain run: always a hard failure.
+    let mismatches: Vec<(&Case, &runner::StressMismatch)> = cases
+        .iter()
+        .zip(&outcomes)
+        .flat_map(|(c, o)| o.stress.iter().map(move |m| (c, m)))
+        .collect();
+    if !labels.is_empty() {
+        if mismatches.is_empty() {
+            println!(
+                "\nstress: OK, {} identical to the plain run",
+                labels.join(" and ")
+            );
+        } else {
+            println!(
+                "\nstress: {} transcripts differ from the plain run:",
+                mismatches.len()
+            );
+            for (c, m) in &mismatches {
+                println!(
+                    "\n--- {} [{}]: {} (- plain, + stressed)\n{}",
+                    c.name,
+                    m.label,
+                    m.reason,
+                    m.diff.trim_end()
+                );
+            }
+        }
+    }
+    let stress_failed = !mismatches.is_empty();
+
     let Some(ratchet_file) = &args.ratchet else {
-        return Ok(if failures.is_empty() {
+        return Ok(if failures.is_empty() && !stress_failed {
             ExitCode::SUCCESS
         } else {
             ExitCode::from(1)
@@ -254,7 +320,11 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
             updated.len(),
             ratchet_file.display()
         );
-        return Ok(ExitCode::SUCCESS);
+        return Ok(if stress_failed {
+            ExitCode::from(1)
+        } else {
+            ExitCode::SUCCESS
+        });
     }
     let cmp = ratchet::compare(&expected, &results);
     println!();
@@ -269,7 +339,11 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
     }
     if cmp.new_failures.is_empty() {
         println!("ratchet: OK, no new failures ({} expected)", failures.len());
-        Ok(ExitCode::SUCCESS)
+        Ok(if stress_failed {
+            ExitCode::from(1)
+        } else {
+            ExitCode::SUCCESS
+        })
     } else {
         println!(
             "ratchet: {} new failures (not in {}):",
@@ -361,4 +435,59 @@ fn row(name: &str, r: &[usize; 4]) -> Vec<String> {
     let mut v = vec![name.to_string()];
     v.extend(r.iter().map(|n| n.to_string()));
     v
+}
+
+/// The stress variants requested on the command line.
+fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
+    let mut v: Vec<(String, Box<dyn Engine>)> = Vec::new();
+    if let Some(n) = args.suspend_every {
+        let e = Djs {
+            suspend_every: Some(n),
+            gc_stress: false,
+        };
+        v.push((e.label(), Box::new(e)));
+    }
+    if args.gc_stress {
+        let e = Djs {
+            suspend_every: None,
+            gc_stress: true,
+        };
+        v.push((e.label(), Box::new(e)));
+    }
+    v
+}
+
+/// What went wrong in a failing case, as a cluster key: the first line of the uncaught
+/// error the engine reported, or the kind of failure.
+fn cluster_key(o: &Outcome) -> String {
+    match &o.done {
+        Some(Done::Throw(msg)) => format!("throws {}", msg.lines().next().unwrap_or("")),
+        Some(Done::Crash(msg)) => format!("crash: {}", msg.lines().next().unwrap_or("")),
+        Some(Done::Timeout) => "timeout".into(),
+        Some(Done::Return(_) | Done::Completed) => "completes with different output".into(),
+        None => "skipped".into(),
+    }
+}
+
+/// Failures grouped by `cluster_key`, largest first, with a few example cases.
+fn clusters(cases: &[Case], outcomes: &[Outcome]) -> String {
+    let mut groups: BTreeMap<String, Vec<&str>> = BTreeMap::new();
+    for (c, o) in cases.iter().zip(outcomes) {
+        if matches!(o.verdict, Verdict::Fail { .. }) {
+            groups.entry(cluster_key(o)).or_default().push(&c.name);
+        }
+    }
+    let mut groups: Vec<(String, Vec<&str>)> = groups.into_iter().collect();
+    groups.sort_by(|a, b| b.1.len().cmp(&a.1.len()).then(a.0.cmp(&b.0)));
+    let rows: Vec<Vec<String>> = groups
+        .iter()
+        .map(|(k, names)| {
+            let mut ex = names.iter().take(3).copied().collect::<Vec<_>>().join(", ");
+            if names.len() > 3 {
+                ex.push_str(", ...");
+            }
+            vec![names.len().to_string(), k.clone(), ex]
+        })
+        .collect();
+    table(&["cases", "cluster", "examples"], &rows)
 }

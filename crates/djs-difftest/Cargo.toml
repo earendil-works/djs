@@ -10,5 +10,6 @@ name = "djs-difftest"
 path = "src/main.rs"
 
 [dependencies]
+djs-core = { path = "../djs-core" }
 # Shared runner utilities (parallel map, ratchet file, globs, tables); see D1101.
 djs-test262 = { path = "../djs-test262" }

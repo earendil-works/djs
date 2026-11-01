@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use djs_difftest::case;
+use djs_difftest::djs::Djs;
 use djs_difftest::engine::{Done, Engine, Job, RunResult};
 use djs_difftest::qjs::Qjs;
 use djs_difftest::runner::{self, Options, Verdict};
@@ -36,6 +37,7 @@ fn opts(is_djs: bool) -> Options {
         memory_limit: None,
         progress: false,
         is_djs,
+        stress: Vec::new(),
     }
 }
 
@@ -175,5 +177,147 @@ fn fake_engine_skips_and_panics() {
     fs::remove_file(dir.join("area/a.ts")).unwrap();
     assert_eq!(case::discover(&dir, &["area/s*".into()]).unwrap().len(), 1);
     assert_eq!(case::discover(&dir, &["area".into()]).unwrap().len(), 3);
+    fs::remove_dir_all(&dir).unwrap();
+}
+
+/// Cases that djs can already run, whose transcripts must be the same on qjs (with the
+/// shared prelude) and on djs (with its native codemode globals, D1160).
+const GLUE_CASES: &[(&str, &str)] = &[
+    (
+        "console.js",
+        "console.log(\"str\", 1, -0, 1.5, NaN, true, null, undefined, [1, \"a\", null], {a: 1, b: [2]});\nconsole.info(\"info\"); console.warn(\"w\", 2); console.error(); console.debug(\"d\");",
+    ),
+    (
+        "text.js",
+        "text(\"s\"); text(-0); text(NaN); text(undefined); text(null); text(false); text([1, NaN]); text({x: \"y\"});",
+    ),
+    (
+        "ret-string.js",
+        "console.log(\"before\");\nreturn \"the\\nresult\";",
+    ),
+    ("ret-object.js", "return {a: [1, 2], b: null, c: \"x\"};"),
+    ("ret-undefined.js", "let x = 1;"),
+    ("ret-function.js", "return function f() {};"),
+    ("ret-number.js", "return -0;"),
+    ("throw-string.js", "throw \"boom\";"),
+    ("throw-number.js", "throw 42;"),
+    ("throw-object.js", "throw {code: 1};"),
+    ("reference.js", "missingName + 1;"),
+    (
+        "exit.js",
+        "console.log(\"a\");\nexit();\nconsole.log(\"never\");",
+    ),
+    (
+        "store.js",
+        "store(\"k\", {v: [1, 2]});\nconsole.log(load(\"k\"), load(\"nope\"));\nstore(\"k\", undefined);\nconsole.log(load(\"k\"));",
+    ),
+    ("syntax.js", "let = ;"),
+];
+
+fn glue_corpus(name: &str) -> (PathBuf, Vec<case::Case>) {
+    let dir = scratch(name);
+    for (name, src) in GLUE_CASES {
+        write(&dir, &format!("area/{name}"), src);
+    }
+    // djs-only expectations: tools return directly until djs has promises.
+    write(
+        &dir,
+        "area/tools.js",
+        "console.log(tools.echo({p: \"x\", n: [1, true]}), ALL_TOOLS.length);",
+    );
+    write(&dir, "area/fail.js", "tools.fail({message: \"denied\"});");
+    write(
+        &dir,
+        "area/fuel.js",
+        "// difftest: fuel 5000\n// difftest: timeout 0.5\nfor (;;) {}",
+    );
+    let cases = case::discover(&dir, &[]).unwrap();
+    (dir, cases)
+}
+
+#[test]
+fn djs_glue_matches_qjs() {
+    let (dir, cases) = glue_corpus("glue-qjs");
+    let prelude = dir.join("prelude.js");
+    let djs_out = runner::run_all(&Djs::default(), &cases, &prelude, &opts(true)).unwrap();
+    let by_name = |name: &str| {
+        let i = cases
+            .iter()
+            .position(|c| c.name == format!("area/{name}"))
+            .unwrap();
+        &djs_out[i]
+    };
+    assert_eq!(
+        by_name("tools.js").transcript,
+        "{\"p\":\"x\",\"n\":[1,true]} 2\n=== completed\n"
+    );
+    assert_eq!(by_name("fail.js").transcript, "=== throw\nError: denied\n");
+    assert_eq!(by_name("fuel.js").done, Some(Done::Timeout));
+
+    let qjs = Qjs::default_binary();
+    if !qjs.is_file() {
+        eprintln!("skipping the qjs half: qjs not found at {}", qjs.display());
+        return;
+    }
+    let qjs_out = runner::run_all(&Qjs { binary: qjs }, &cases, &prelude, &opts(false)).unwrap();
+    let mut problems = Vec::new();
+    for (i, c) in cases.iter().enumerate() {
+        let name = c.name.trim_start_matches("area/");
+        if GLUE_CASES.iter().any(|(n, _)| *n == name)
+            && qjs_out[i].transcript != djs_out[i].transcript
+        {
+            problems.push(format!(
+                "{name}:\n  qjs: {:?}\n  djs: {:?}",
+                qjs_out[i].transcript, djs_out[i].transcript
+            ));
+        }
+    }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
+    fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn djs_stress_variants_agree() {
+    let (dir, cases) = glue_corpus("glue-stress");
+    let mut o = opts(true);
+    o.stress = vec![
+        (
+            "suspend".into(),
+            Box::new(Djs {
+                suspend_every: Some(7),
+                gc_stress: false,
+            }),
+        ),
+        (
+            "gc".into(),
+            Box::new(Djs {
+                suspend_every: None,
+                gc_stress: true,
+            }),
+        ),
+    ];
+    let out = runner::run_all(&Djs::default(), &cases, &dir.join("prelude.js"), &o).unwrap();
+    for (c, o) in cases.iter().zip(&out) {
+        // A fuel limit of 5000 at 7 per slice still ends in a timeout: same transcript.
+        assert!(o.stress.is_empty(), "{}: {:?}", c.name, o.stress);
+    }
+    // A stressed engine that behaves differently is reported.
+    struct Liar;
+    impl Engine for Liar {
+        fn name(&self) -> &str {
+            "liar"
+        }
+        fn run(&self, _: &Job<'_>) -> RunResult {
+            RunResult {
+                output: vec!["lie".into()],
+                done: Done::Completed,
+            }
+        }
+    }
+    let mut o = opts(true);
+    o.stress = vec![("liar".into(), Box::new(Liar))];
+    let out = runner::run_all(&Djs::default(), &cases[..1], &dir.join("prelude.js"), &o).unwrap();
+    assert_eq!(out[0].stress.len(), 1);
+    assert_eq!(out[0].stress[0].label, "liar");
     fs::remove_dir_all(&dir).unwrap();
 }
