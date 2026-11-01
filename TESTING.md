@@ -372,6 +372,11 @@ SharedArrayBuffer and Atomics (ARCH non-goals) and sloppy `Function` code. The i
 ArrayBuffer proposal itself is implemented (0097, D1970): the same test without those
 lines is tests/corpus/builtins/immutable-arraybuffer.js, and test_typed_array.js passes.
 
+**Oracle bug** (5 difftest cases): codemode-harvest/h075, h082, h084, h124 and h150
+spread a tool's string result into an object (`{query, ...await tools.bash(...)}`). The
+spec's CopyDataProperties copies a string primitive's characters as index properties,
+as djs and V8 do; qjs copies nothing (`{...'ab'}` is `{}`). No fix in djs (0118, D2280).
+
 Fixed since 0082 (0084, D1840): Function.prototype is a function (9 tests), [[Set]] of
 an array's `length` converts non-Number values (4), and `atob`/`btoa` and
 `DOMException` are native globals as in qjs (2 difftest cases).

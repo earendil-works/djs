@@ -1,6 +1,6 @@
 # 0118: Harvest a redacted codemode corpus from pi sessions
 
-status: in-progress
+status: done
 agent: infra
 branch: issue/0118-codemode-corpus-harvest
 depends-on: 0044
@@ -28,16 +28,16 @@ tool results through fake tools, compared against qjs.
   the merge.
 
 ## Acceptance criteria
-- [ ] A harvester script: finds codemode executions in the session format (read pi's
+- [x] A harvester script: finds codemode executions in the session format (read pi's
       session schema from the files and from pi-private's codemode code, read-only),
       extracts script + tool calls + results, deduplicates, buckets by what the scripts
       exercise, and selects a representative set (for example 100–300 cases).
-- [ ] The redaction pass as above, with a report of what was redacted per case
+- [x] The redaction pass as above, with a report of what was redacted per case
       (committed, without the original values).
-- [ ] The cases as difftest cases (codemode body + fake tools replaying the redacted
+- [x] The cases as difftest cases (codemode body + fake tools replaying the redacted
       results), expected output recorded from qjs; the djs results go into the ratchet
       with failures clustered and reported to the coordinator.
-- [ ] TESTING.md and the guide's testing.md mention the harvested corpus.
+- [x] TESTING.md and the guide's testing.md mention the harvested corpus.
 
 ## Log
 - Session format (read from the files, structure only, and from pi-private's coding-agent
@@ -83,3 +83,10 @@ tool results through fake tools, compared against qjs.
   in djs-difftest would help.
 
 ## Result
+- tests/corpus/codemode-harvest/: 150 redacted cases from pi sessions, with synthetic
+  tool results, and REDACTION.md (per-case report).
+- scripts/harvest/: the harvester.
+- 145/150 match qjs; the other 5 are a qjs bug (string spread), in the ratchet and in
+  TESTING.md "Known differences".
+- D2280, D2281.
+- The coordinator spot-checked the cases and approved them.
