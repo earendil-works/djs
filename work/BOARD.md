@@ -13,7 +13,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0079 | Integration efficiency: items 1-4 landed (D1790-D1793), measuring for train/post-merge | devflow | .worktrees/devflow |
 | 0084 | Long tail part 2 (Function.prototype callable, array length set, atob/btoa) | lexer | .worktrees/lexer |
 | 0083 | Shapes + leaner object/image layout (design first) | heap | .worktrees/heap |
-| 0074 | Carry fuel overshoot across runs | determinism | .worktrees/determinism |
+| 0072 | Determinism gate checks part 2 (waits for 0071) | determinism (idle until 0071) | .worktrees/determinism |
 | 0085 | Leaf fast paths for everyday builtins (0081 P1) | perf | .worktrees/perf |
 
 ## Open (ready)
@@ -28,7 +28,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0086 | Bytecode quality + dispatch (0081 P4) | lexer, after 0084 |
 | 0087 | Allocation churn + wasm memory (0081 P5) | num, after 0071 |
 | 0078 | Leaf quick wins from 0077 (ASCII check, UTF-8 in transcode, short_decimal) | num, after 0075 |
-| 0072 | Determinism checks in the gate, part 2 (part 1 done: 6ab3968) | 0071 |
 
 ## Done
 
@@ -63,6 +62,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0064 | djs repl | 31797b6 (agent repl, archived; docs/cli.md; follow-ups: tab completion, interactive .step) |
 | 0077 | deser deps investigation | report (agent deps, archived): no new deps; quick wins -> 0078 |
 | 0081 | Perf anatomy | report (agent perf): plain bytecode at par in wasm; gap is builtins/iteration; P1-P10 |
+| 0074 | Fuel overshoot carried across runs | 793e29d (agent determinism; D1740) |
 | 0073 | Replay journal + canonical hash | 37e6172 (agent determinism; D1730) |
 | 0068 | Deterministic mode for VM and Sandbox | 971036e (agent determinism; D1680) |
 | 0067 | Host inbox (async host results as macrotasks) | 7988b76 (agent determinism; D1670) |
