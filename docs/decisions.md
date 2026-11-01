@@ -3414,3 +3414,17 @@ new failure the merged code has, i.e. hide exactly the regressions the gate is f
 union keeps both sides' lines; the cost is that a line one side removed in a conflicting
 hunk comes back as a stale entry (reported, not failing) and could hide a regression of
 that one test until the next `--update`.
+
+## D1792: The gate runs in one persistent gate worktree
+date: 2026-11-01 · by: devflow · issue: 0079
+merge-to-main.sh used to run the gate in the merging agent's worktree, whose target/
+was built for its own branch (often hours and 100+ commits behind main) and, for the
+gate's other profiles (wasm32 debug, wasm32 release clippy, clippy), was as old as that
+agent's previous merge. Measured with a target 106 commits behind vs one at the previous
+merge: clippy 7.0 vs 2.1 s, wasm32 release clippy 5.8 vs 0.2 s, ~40 CPU-s and 20–30 s of
+wall time per gate under load, more after longer gaps. Now, under the lock, merge-to-main
+checks out the rebased commit (detached, forced, `git clean` of untracked files) in
+`.worktrees/gate` and runs the gate there, then fast-forwards main to that same sha. Its
+target/ is always one merge behind. The agent's worktree only does the rebase and the
+regeneration commit; its target/ is not rebuilt at gate width. The gate worktree is
+created on the first merge (one cold build).

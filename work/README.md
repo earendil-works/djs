@@ -57,7 +57,10 @@ on unmerged work of the other. When in doubt, run them one after another.
 ## Merging and generated files
 
 `scripts/merge-to-main.sh` takes the merge lock, rebases the branch onto `main`,
-regenerates the generated files, runs the gate and fast-forwards `main` (D1791):
+regenerates the generated files (D1791), runs the gate on the resulting commit in the
+shared gate worktree `.worktrees/gate` and fast-forwards `main` to that commit (D1792).
+The gate worktree is detached, belongs to merge-to-main (never work in it, never remove
+it: its warm `target/` is the point), and is created on first use.
 
 - `docs/decisions.md`, `builtins/intrinsics.d.ts` and the two ratchet files
   (`tests/test262/expected-failures.txt`, `tests/corpus/expected-failures.txt`) merge

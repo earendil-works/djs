@@ -2,7 +2,9 @@
 # Merge the current issue branch into main. Run from inside an issue worktree.
 #
 # Takes a lock (so two agents never merge at the same time), rebases the branch onto
-# main, runs the gate, then fast-forwards main in the primary checkout.
+# main, regenerates the generated files (D1791), runs the gate on that commit in the
+# shared gate worktree .worktrees/gate (D1792), then fast-forwards main in the primary
+# checkout to the gated commit.
 set -euo pipefail
 
 branch=$(git branch --show-current)
@@ -65,9 +67,22 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "merge-to-main: committed regenerated files"
 fi
 
-echo "== gate"
-./scripts/gate.sh
+# The gate runs in one persistent worktree (D1792): its target/ was last built for the
+# previous merge, so the build is incremental against main instead of against this
+# worktree's target/, which may be hours behind and lacks the gate's other profiles
+# (wasm32, release clippy). This worktree is not touched.
+sha=$(git rev-parse HEAD)
+gate_wt="$main_root/.worktrees/gate"
+if [ ! -e "$gate_wt/.git" ]; then
+  echo "== creating the gate worktree $gate_wt"
+  git worktree add -q --detach "$gate_wt" "$sha"
+fi
+git -C "$gate_wt" checkout -q --detach --force "$sha"
+git -C "$gate_wt" clean -fdq   # untracked files only; target/ is ignored and stays
+
+echo "== gate (in $gate_wt at $(git rev-parse --short "$sha"))"
+(cd "$gate_wt" && ./scripts/gate.sh)
 
 echo "== fast-forward main"
-git -C "$main_root" merge --ff-only "$branch"
+git -C "$main_root" merge --ff-only "$sha"
 echo "merge-to-main: main is now at $(git rev-parse --short main)"
