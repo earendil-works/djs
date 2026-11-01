@@ -1,7 +1,7 @@
 # 0136: Keep a VM's first changes from shifting the base image (atom table, growable cells)
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0136-base-layout-stability
 depends-on: 0117, 0133 (analyzer), 0134
 guide: docs/guide/snapshots.md (why snapshots are small), gc.md if compaction changes
