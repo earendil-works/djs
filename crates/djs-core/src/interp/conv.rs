@@ -31,6 +31,14 @@ pub(crate) enum FaultKind {
 }
 
 impl Fault {
+    /// The arena reached its cap (a JS out-of-memory error, not the host's, D1690).
+    pub(crate) fn is_out_of_memory(&self) -> bool {
+        matches!(
+            *self.0,
+            FaultKind::Heap(crate::heap::HeapError::OutOfMemory)
+        )
+    }
+
     #[cold]
     #[inline(never)]
     pub(crate) fn throw(v: Value) -> Fault {

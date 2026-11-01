@@ -131,6 +131,28 @@ mod fast {
     pub const PUT_FIELD: u8 = Op::PutField as u8;
 }
 
+/// The instructions `Exec::retry_operands` retries after a collection (D1700), besides
+/// `put_elem` and `put_field`.
+mod retry {
+    use super::intrinsics::id;
+    use crate::bytecode::Op;
+    pub const DEFINE_FIELD: u8 = Op::DefineField as u8;
+    pub const ADD: u8 = Op::Add as u8;
+    pub const OBJECT: u8 = Op::Object as u8;
+    /// Intrinsics that allocate before they change anything (and take at most 4
+    /// arguments).
+    pub const INTRINSICS: [u16; 8] = [
+        id("Set"),
+        id("CreateDataPropertyOrThrow"),
+        id("DefineDataPropertyOrThrow"),
+        id("ArrayCreate"),
+        id("ObjectCreate"),
+        id("NewRecord"),
+        id("CreateIterResultObject"),
+        id("CreateArrayFromPair"),
+    ];
+}
+
 pub(crate) type Step = Result<Option<Status>, Fault>;
 
 /// What a property lookup found (`Exec::lookup`).
@@ -170,7 +192,14 @@ pub(crate) struct Exec<'h> {
     slow_call_flags: u32,
     /// The host refused memory (D1690): the run stops at the next instruction boundary.
     host_oom: bool,
+    /// The operands of the instruction being executed, if it can be retried after a
+    /// collection when it runs out of memory (D1700): their count, or `NO_RETRY`.
+    retry_len: u32,
+    retry_ops: [Value; 4],
 }
+
+/// `Exec::retry_len` when the current instruction is not retried.
+const NO_RETRY: u32 = u32::MAX;
 
 impl<'h> Exec<'h> {
     /// Loads the registers from the `Interp` cell.
@@ -206,6 +235,8 @@ impl<'h> Exec<'h> {
                     0
                 },
             host_oom: false,
+            retry_len: NO_RETRY,
+            retry_ops: [Value::UNDEFINED; 4],
         }
     }
 
@@ -955,10 +986,15 @@ impl<'h> Exec<'h> {
                 continue;
             }
             let pc0 = self.pc;
+            let sp0 = self.sp;
+            let retry = self.retry_operands();
             match self.step() {
                 Ok(None) => {}
                 Ok(Some(st)) => return st,
                 Err(f) => {
+                    if retry && f.is_out_of_memory() && self.retry_after_collect(pc0, sp0) {
+                        continue;
+                    }
                     let exc = self.fault_value(f, Some(pc0));
                     if let Some(st) = self.throw_value(exc, pc0) {
                         return st;
@@ -966,6 +1002,64 @@ impl<'h> Exec<'h> {
                 }
             }
         }
+    }
+
+    /// Before `step`: if the instruction at `pc` may be retried once after a collection
+    /// when an allocation fails (D1700), saves its operands (an instruction may overwrite
+    /// them before it allocates) and returns true. Only instructions that change nothing
+    /// observable before their allocations qualify: they allocate first and commit
+    /// after, so running them again from the start is the same as running them once.
+    #[inline(always)]
+    fn retry_operands(&mut self) -> bool {
+        if self.retry_len == 0 || self.pc >= self.code_len {
+            // `retry_len` 0: this instruction was just retried; a second failure is real.
+            self.retry_len = NO_RETRY;
+            return false;
+        }
+        let n = match self.byte(self.pc) {
+            fast::PUT_ELEM => 3,
+            fast::PUT_FIELD => 2,
+            retry::DEFINE_FIELD | retry::ADD => 2,
+            retry::OBJECT => 0,
+            fast::CALL_INTRINSIC => {
+                let (id, argc) = (self.imm_u16(1) as u16, self.imm_u16(3));
+                if !retry::INTRINSICS.contains(&id) || argc > 4 {
+                    return false;
+                }
+                argc
+            }
+            _ => return false,
+        };
+        for i in 0..n {
+            self.retry_ops[i as usize] = self.get(self.sp - n + i);
+        }
+        self.retry_len = n;
+        true
+    }
+
+    /// An allocation of the instruction at `pc0` failed: puts its operands back, collects
+    /// and lets the loop run it again (D1700). False if the collection could not run.
+    #[cold]
+    #[inline(never)]
+    fn retry_after_collect(&mut self, pc0: u32, sp0: u32) -> bool {
+        let n = self.retry_len;
+        if n == NO_RETRY || self.host_oom {
+            return false;
+        }
+        self.pc = pc0;
+        self.sp = sp0;
+        for i in 0..n {
+            self.set(sp0 - n + i, self.retry_ops[i as usize]);
+        }
+        // The values are rooted in the stack now; the copies would go stale.
+        self.retry_ops = [Value::UNDEFINED; 4];
+        self.safepoint_collect();
+        if self.host_oom {
+            return false;
+        }
+        // Marks the retry: `retry_operands` gives up on a second failure.
+        self.retry_len = 0;
+        true
     }
 
     #[inline(always)]

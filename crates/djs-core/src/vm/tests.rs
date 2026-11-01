@@ -2954,3 +2954,19 @@ fn canonical_hash_ignores_collection_points() {
     let (vm2, _) = finish_script(vm(), "globalThis.n = 1;\n", u64::MAX, false);
     assert_ne!(vm2.canonical_hash().unwrap(), h);
 }
+
+#[test]
+fn a_failing_allocation_collects_and_retries() {
+    // Garbage, then a big array near the cap: the allocation that fails collects and
+    // runs again instead of throwing (D1700), at every slice and with restores.
+    let src = include_str!("../../../../scripts/determinism/js/oom.js");
+    let dots = ".".repeat(40);
+    for limit in [2_000_000usize, 2_500_000] {
+        let plain = run_limited(src, limit, 1 << 40, false).unwrap();
+        assert_eq!(plain.log, [dots.as_str()], "{limit}");
+        let sliced = run_limited(src, limit, 7919, false).unwrap();
+        let restored = run_limited(src, limit, 300_000, true).unwrap();
+        assert_eq!(plain, sliced, "{limit}");
+        assert_eq!(plain, restored, "{limit}");
+    }
+}

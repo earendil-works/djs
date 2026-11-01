@@ -3292,3 +3292,26 @@ has a matching point in the replay. Host calls are counted without the console, 
 `issued` is, and console output is not journaled (it is output, not input). A mismatch is
 a SandboxError of the new kind `diverged`, saying where. pi keeps its own protocol (seq,
 now), which maps onto the async entries one to one.
+## D1700: A failing allocation collects and retries its instruction once
+date: 2026-11-03 · by: heap · issue: 0070
+Allocation still never collects inside Rust code (D1090: raw values would go stale).
+Instead the interpreter retries at instruction granularity. Before `step` runs one of a
+few instructions that allocate before they change anything observable, the run loop
+copies its operands (at most 4) aside: `put_elem`, `put_field`, `define_field`, `add`,
+`object`, and `call_intrinsic` of `Set`, `CreateDataPropertyOrThrow`,
+`DefineDataPropertyOrThrow`, `ArrayCreate`, `ObjectCreate`, `NewRecord`,
+`CreateIterResultObject` and `CreateArrayFromPair`. If the instruction then fails with
+`OutOfMemory` (the cap, not the host's, D1690), the loop:
+1. puts `pc` and `sp` back and writes the operands back into their stack slots (the
+   instruction may have overwritten them), so every live value is rooted;
+2. collects at that safepoint;
+3. runs the instruction again.
+
+A second failure is the real out-of-memory error (D1600). The retry happens at a
+deterministic point, so the out-of-memory point stays a function of the program and the
+cap at any slicing and across restores (vm/tests.rs `a_failing_allocation_collects_and_
+retries`, D1601's test unchanged). `scripts/determinism/js/oom.js` at a 2 MB cap now
+prints all dots (it printed `.EEEE…`).
+
+Native builtins (0063) are not retried: an allocation failure inside a native frame is
+still an immediate out-of-memory error.
