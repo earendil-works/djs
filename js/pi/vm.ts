@@ -64,11 +64,12 @@ export interface StartVmOptions extends VmHooks {
 }
 
 /**
- * Fuel per poll: about the work QuickJS does between two interrupt-handler polls, so pi's
- * interrupt budgets mean roughly the same amount of computation on both engines
- * (measured: docs/host.md "pi codemode").
+ * Fuel per poll. With 10,000, a tight loop polls about as often per second as pi's quickjs VM
+ * (about 33,000 polls/s), so pi's interrupt budgets mean about the same CPU time; code that
+ * allocates or calls builtins polls far more often than on QuickJS, whose poll counter does
+ * not count that work (docs/host.md "pi codemode").
  */
-export const FUEL_PER_POLL = 100_000;
+export const FUEL_PER_POLL = 10_000;
 
 /** Bumped whenever this module changes what a deterministic script observes. */
 const DETERMINISTIC_VERSION = 1;
@@ -213,6 +214,8 @@ class Session implements VmSession {
   private readonly engine: Engine;
   private readonly hooks: VmHooks;
   private readonly state: SessionState;
+  private zoneOffset = 0;
+  private zoneCheckedAt = -Infinity;
 
   constructor(engine: Engine, hooks: VmHooks, state: SessionState) {
     this.engine = engine;
@@ -342,7 +345,12 @@ class Session implements VmSession {
     if (clock) this.engine.setClock(clock.now, 0);
     else {
       const now = Date.now();
-      this.engine.setClock(now, -new Date(now).getTimezoneOffset());
+      // The offset only changes with DST; reading it every slice would cost more than the slice.
+      if (now - this.zoneCheckedAt > 1000) {
+        this.zoneOffset = -new Date(now).getTimezoneOffset();
+        this.zoneCheckedAt = now;
+      }
+      this.engine.setClock(now, this.zoneOffset);
     }
   }
 

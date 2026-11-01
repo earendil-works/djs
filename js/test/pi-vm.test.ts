@@ -234,11 +234,11 @@ test("pi: exit() ends the script with its output and store writes", async () => 
 
 test("pi: an interrupt budget stops loops, including microtask loops", async () => {
   for (const code of ["while (true) {}", "for (;;) await null", "let n = 0; for (;;) { try { n++; } catch {} }"]) {
-    const outcome = await run(code, { interruptBudget: 50 });
+    const outcome = await run(code, { interruptBudget: 300 });
     assert.deepEqual(outcome.end, { type: "crash", message: "Error: Execution interrupted" }, code);
   }
-  // Work below the budget is not interrupted (the prelude takes about 12 polls).
-  assert.equal(value(await run("let n = 0; for (let i = 0; i < 1000; i++) n += i; return n", { interruptBudget: 50 })), 499500);
+  // Work below the budget is not interrupted (the prelude takes about 120 polls).
+  assert.equal(value(await run("let n = 0; for (let i = 0; i < 1000; i++) n += i; return n", { interruptBudget: 300 })), 499500);
 });
 
 test("pi: the memory limit", async () => {
