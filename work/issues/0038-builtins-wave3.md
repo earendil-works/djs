@@ -1,7 +1,7 @@
 # 0038: Builtins wave 3: Map, Set, WeakMap, WeakSet, Reflect, Date; promote finished features to active
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0038-builtins-wave3
 depends-on: 0034
 touches: builtins/ (map.ts, set.ts, weak.ts, reflect.ts, date.ts …), builtins/gen/, crates/djs-core/src/builtins/, crates/djs-core/src/heap/ (new cell kinds for ordered hash tables, additive), crates/djs-core/src/bytecode/intrinsics.rs (regenerated), crates/djs-core/src/interp/realm.rs (additive), crates/djs-core/src/vm/ (only the host time hook for Date), tests/test262.toml (moving features from later to active, as listed below), ratchets
