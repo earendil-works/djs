@@ -314,6 +314,10 @@ const I = {
     }
   },
   CaptureStack: (o) => {},
+  // No Error.prepareStackTrace here: stacks are never pending (D2050).
+  ErrorStack: (v) => undefined,
+  IsPendingStack: (v) => false,
+  SetErrorStack: (o, v) => {},
   DefineDataPropertyOrThrow: (o, k, v, attrs) => {
     check(isObject(o) && !isObject(k), "DefineDataPropertyOrThrow");
     Object.defineProperty(o, k, {
