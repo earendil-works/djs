@@ -66,6 +66,35 @@ impl Default for ExecOptions {
 
 mod intrinsics;
 
+/// The opcodes `Exec::fast_step` handles, as bytes for its `match`.
+mod fast {
+    use crate::bytecode::Op;
+    pub const GET_LOC: u8 = Op::GetLoc as u8;
+    pub const PUT_LOC: u8 = Op::PutLoc as u8;
+    pub const SET_LOC: u8 = Op::SetLoc as u8;
+    pub const GET_ARG: u8 = Op::GetArg as u8;
+    pub const PUSH_I8: u8 = Op::PushI8 as u8;
+    pub const PUSH_I32: u8 = Op::PushI32 as u8;
+    pub const UNDEFINED: u8 = Op::Undefined as u8;
+    pub const DROP: u8 = Op::Drop as u8;
+    pub const DUP: u8 = Op::Dup as u8;
+    pub const TO_NUMERIC: u8 = Op::ToNumeric as u8;
+    pub const INC: u8 = Op::Inc as u8;
+    pub const DEC: u8 = Op::Dec as u8;
+    pub const ADD: u8 = Op::Add as u8;
+    pub const SUB: u8 = Op::Sub as u8;
+    pub const LT: u8 = Op::Lt as u8;
+    pub const LE: u8 = Op::Le as u8;
+    pub const GT: u8 = Op::Gt as u8;
+    pub const GE: u8 = Op::Ge as u8;
+    pub const JUMP: u8 = Op::Jump as u8;
+    pub const JUMP_IF_FALSE: u8 = Op::JumpIfFalse as u8;
+    pub const JUMP_IF_TRUE: u8 = Op::JumpIfTrue as u8;
+    pub const CALL: u8 = Op::Call as u8;
+    pub const RETURN: u8 = Op::Return as u8;
+    pub const RETURN_UNDEF: u8 = Op::ReturnUndef as u8;
+}
+
 type Step = Result<Option<Status>, Fault>;
 
 /// Frames in a stack trace (QuickJS's default `Error.stackTraceLimit`).
@@ -212,9 +241,9 @@ impl<'h> Exec<'h> {
 
     // ---------------------------------------------------------------- frames
 
-    /// The template of the closure at `stack[bp]`.
-    fn frame_template(&self) -> u32 {
-        let f = self.get(self.bp).as_object().expect("frame callee");
+    /// The template of a closure (slot 0 of a Function object).
+    #[inline(always)]
+    fn template_of(&self, f: Obj) -> u32 {
         self.heap
             .object_slot(f, 0)
             .as_internal()
@@ -223,14 +252,74 @@ impl<'h> Exec<'h> {
 
     /// Re-derives the cached frame data from `stack[bp]`.
     fn load_frame(&mut self) {
-        let t = self.frame_template();
+        let f = self.get(self.bp).as_object().expect("frame callee");
+        let t = self.template_of(f);
+        self.enter_template(t);
+    }
+
+    /// Sets the cached frame data for template `t` (with `hp` already set).
+    #[inline(always)]
+    fn enter_template(&mut self, t: u32) {
+        use crate::heap::cells::Bytes;
         let a = self.heap.arena();
         let code: Ref = a.get(t, FuncTemplate::CODE);
         self.template = t;
-        self.code = crate::heap::cells::Bytes::DATA.at(code.0, 0);
-        self.code_len = bytes_of(self.heap, code).len() as u32;
+        self.code = Bytes::DATA.at(code.0, 0);
+        self.code_len = code.get().map_or(0, |c| a.get(c, Bytes::LEN));
         self.consts = a.get(t, FuncTemplate::CONSTS).0;
         self.lp = self.hp + HEADER;
+    }
+
+    /// The stack top a frame for template `t` called with `argc` arguments at `base`
+    /// needs: arguments padded to the parameter count, header, locals, operand stack.
+    #[inline(always)]
+    fn frame_top(&self, t: u32, base: u32, argc: u32) -> u32 {
+        let a = self.heap.arena();
+        let params = a.get(t, FuncTemplate::PARAMS) as u32;
+        let locals = a.get(t, FuncTemplate::LOCALS) as u32;
+        let stack = a.get(t, FuncTemplate::STACK) as u32;
+        base + 2 + argc.max(params) + HEADER + locals + stack
+    }
+
+    /// Pushes the frame for closure template `t` (room checked by the caller with
+    /// `frame_top`) and enters it at pc 0.
+    #[inline(always)]
+    fn push_frame(&mut self, t: u32, base: u32, argc: u32, cont: Continuation, ret_pc: u32) {
+        let a = self.heap.arena();
+        let params = a.get(t, FuncTemplate::PARAMS) as u32;
+        let locals = a.get(t, FuncTemplate::LOCALS) as u32;
+        let n = argc.max(params);
+        let hp = base + 2 + n;
+        let lp = hp + HEADER;
+        for i in argc..n {
+            self.set(base + 2 + i, Value::UNDEFINED);
+        }
+        let entry = cont == Continuation::Entry;
+        let header = [
+            Value::int(if entry { 0 } else { self.bp as i32 }),
+            Value::int(if entry { 0 } else { self.hp as i32 }),
+            Value::int(ret_pc as i32),
+            Value::int(argc as i32),
+            Value::int(cont.to_flags()),
+            Value::UNDEFINED,
+        ];
+        for (k, v) in header.into_iter().enumerate() {
+            self.set(hp + k as u32, v);
+        }
+        for i in 0..locals {
+            self.set(lp + i, Value::UNDEFINED);
+        }
+        self.bp = base;
+        self.hp = hp;
+        self.sp = lp + locals;
+        self.pc = 0;
+        self.enter_template(t);
+        // Frame entry is a safepoint, except for the entry call: `Vm::call` must
+        // not collect, so the embedder's raw values stay valid until `run`
+        // (whose start is a safepoint anyway).
+        if !entry {
+            self.safepoint();
+        }
     }
 
     fn locals(&self) -> u32 {
@@ -246,44 +335,9 @@ impl<'h> Exec<'h> {
         };
         match self.heap.object_class(o) {
             ObjectClass::Function => {
-                let t = self.heap.object_slot(o, 0).as_internal().expect("template");
-                let a = self.heap.arena();
-                let params = a.get(t, FuncTemplate::PARAMS) as u32;
-                let locals = a.get(t, FuncTemplate::LOCALS) as u32;
-                let stack = a.get(t, FuncTemplate::STACK) as u32;
-                let n = argc.max(params);
-                let hp = base + 2 + n;
-                let lp = hp + HEADER;
-                self.ensure(lp + locals + stack)?;
-                for i in argc..n {
-                    self.set(base + 2 + i, Value::UNDEFINED);
-                }
-                let entry = cont == Continuation::Entry;
-                let header = [
-                    Value::int(if entry { 0 } else { self.bp as i32 }),
-                    Value::int(if entry { 0 } else { self.hp as i32 }),
-                    Value::int(ret_pc as i32),
-                    Value::int(argc as i32),
-                    Value::int(cont.to_flags()),
-                    Value::UNDEFINED,
-                ];
-                for (k, v) in header.into_iter().enumerate() {
-                    self.set(hp + k as u32, v);
-                }
-                for i in 0..locals {
-                    self.set(lp + i, Value::UNDEFINED);
-                }
-                self.bp = base;
-                self.hp = hp;
-                self.sp = lp + locals;
-                self.pc = 0;
-                self.load_frame();
-                // Frame entry is a safepoint, except for the entry call: `Vm::call` must
-                // not collect, so the embedder's raw values stay valid until `run`
-                // (whose start is a safepoint anyway).
-                if !entry {
-                    self.safepoint();
-                }
+                let t = self.template_of(o);
+                self.ensure(self.frame_top(t, base, argc))?;
+                self.push_frame(t, base, argc, cont, ret_pc);
                 Ok(None)
             }
             ObjectClass::HostFunction => {
@@ -355,16 +409,7 @@ impl<'h> Exec<'h> {
             self.flush();
             return Ok(Some(Status::Done(v)));
         }
-        let (prev_bp, prev_hp, ret_pc) = (
-            self.header_int(frame::PREV_BP),
-            self.header_int(frame::PREV_HP),
-            self.header_int(frame::RET_PC),
-        );
-        self.sp = self.bp;
-        self.bp = prev_bp;
-        self.hp = prev_hp;
-        self.pc = ret_pc;
-        self.load_frame();
+        self.pop_frame();
         match cont {
             Continuation::PushResult => self.push(v),
             Continuation::DiscardResult => {}
@@ -376,6 +421,21 @@ impl<'h> Exec<'h> {
         }
         self.safepoint();
         Ok(None)
+    }
+
+    /// Pops the current (non-entry) frame and resumes the caller at its return pc.
+    #[inline(always)]
+    fn pop_frame(&mut self) {
+        let (prev_bp, prev_hp, ret_pc) = (
+            self.header_int(frame::PREV_BP),
+            self.header_int(frame::PREV_HP),
+            self.header_int(frame::RET_PC),
+        );
+        self.sp = self.bp;
+        self.bp = prev_bp;
+        self.hp = prev_hp;
+        self.pc = ret_pc;
+        self.load_frame();
     }
 
     /// Throws `exc`: finds the innermost handler, unwinding frames. `key` is the pc
@@ -646,104 +706,180 @@ impl<'h> Exec<'h> {
         if pc >= self.code_len {
             return false;
         }
-        let Some(op) = Op::from_u8(self.byte(pc)) else {
-            return false;
-        };
-        #[cfg(debug_assertions)]
         let sp0 = self.sp;
-        let next = pc + OPS[op as usize].size as u32;
-        match op {
-            Op::GetLoc => {
+        // Matching the raw byte (not `Op::from_u8`) and constant sizes and fuel per arm
+        // keep the dispatch to one jump table.
+        match self.byte(pc) {
+            fast::GET_LOC => {
                 let v = self.get(self.lp + self.imm_u16(1));
                 self.push(v);
+                self.advance(Op::GetLoc, sp0);
             }
-            Op::PutLoc => {
+            fast::PUT_LOC => {
                 let v = self.pop();
                 self.set(self.lp + self.imm_u16(1), v);
+                self.advance(Op::PutLoc, sp0);
             }
-            Op::SetLoc => {
+            fast::SET_LOC => {
                 let v = self.top(0);
                 self.set(self.lp + self.imm_u16(1), v);
+                self.advance(Op::SetLoc, sp0);
             }
-            Op::GetArg => {
+            fast::GET_ARG => {
                 let v = self.get(self.bp + 2 + self.imm_u16(1));
                 self.push(v);
+                self.advance(Op::GetArg, sp0);
             }
-            Op::PushI8 => {
+            fast::PUSH_I8 => {
                 let v = self.heap.arena().read::<u8>(self.code + pc + 1) as i8;
                 self.push(Value::int(v as i32));
+                self.advance(Op::PushI8, sp0);
             }
-            Op::PushI32 => {
+            fast::PUSH_I32 => {
                 let v = self.imm_i32(1);
                 self.push(Value::int(v));
+                self.advance(Op::PushI32, sp0);
             }
-            Op::Undefined => self.push(Value::UNDEFINED),
-            Op::Drop => self.sp -= 1,
-            Op::Dup => {
+            fast::UNDEFINED => {
+                self.push(Value::UNDEFINED);
+                self.advance(Op::Undefined, sp0);
+            }
+            fast::DROP => {
+                self.sp -= 1;
+                self.advance(Op::Drop, sp0);
+            }
+            fast::DUP => {
                 let v = self.top(0);
                 self.push(v);
+                self.advance(Op::Dup, sp0);
             }
             // Number operands only: these never need `primitive_operands` (D1280).
-            Op::ToNumeric if self.top(0).is_number() => {}
-            Op::Inc | Op::Dec => {
-                let d = if op == Op::Inc { 1 } else { -1 };
-                match self.top(0).as_int().and_then(|i| i.checked_add(d)) {
-                    Some(i) => self.set(self.sp - 1, Value::int(i)),
-                    None => return false,
-                }
+            fast::TO_NUMERIC if self.top(0).is_number() => self.advance(Op::ToNumeric, sp0),
+            fast::INC => return self.fast_inc(Op::Inc, 1, sp0),
+            fast::DEC => return self.fast_inc(Op::Dec, -1, sp0),
+            fast::ADD => {
+                return self.fast_int(Op::Add, sp0, |x, y| x.checked_add(y).map(Value::int));
             }
-            Op::Add | Op::Sub | Op::Lt | Op::Le | Op::Gt | Op::Ge => {
-                let (Some(x), Some(y)) = (self.top(1).as_int(), self.top(0).as_int()) else {
+            fast::SUB => {
+                return self.fast_int(Op::Sub, sp0, |x, y| x.checked_sub(y).map(Value::int));
+            }
+            fast::LT => return self.fast_int(Op::Lt, sp0, |x, y| Some(Value::bool(x < y))),
+            fast::LE => return self.fast_int(Op::Le, sp0, |x, y| Some(Value::bool(x <= y))),
+            fast::GT => return self.fast_int(Op::Gt, sp0, |x, y| Some(Value::bool(x > y))),
+            fast::GE => return self.fast_int(Op::Ge, sp0, |x, y| Some(Value::bool(x >= y))),
+            fast::JUMP => self.fast_jump(Op::Jump, true),
+            fast::JUMP_IF_FALSE | fast::JUMP_IF_TRUE => {
+                let Some(b) = self.top(0).as_bool() else {
                     return false;
                 };
-                let v = match op {
-                    Op::Add => x.checked_add(y).map(Value::int),
-                    Op::Sub => x.checked_sub(y).map(Value::int),
-                    Op::Lt => Some(Value::bool(x < y)),
-                    Op::Le => Some(Value::bool(x <= y)),
-                    Op::Gt => Some(Value::bool(x > y)),
-                    _ => Some(Value::bool(x >= y)),
-                };
-                let Some(v) = v else { return false };
                 self.sp -= 1;
-                self.set(self.sp - 1, v);
-            }
-            Op::Jump | Op::JumpIfFalse | Op::JumpIfTrue => {
-                let taken = match op {
-                    Op::Jump => true,
-                    _ => {
-                        let Some(b) = self.top(0).as_bool() else {
-                            return false;
-                        };
-                        self.sp -= 1;
-                        b == (op == Op::JumpIfTrue)
-                    }
-                };
-                self.fuel -= OPS[op as usize].cost.fuel() as i64;
-                if taken {
-                    self.pc = self.jump_target(next);
-                    if self.pc < next {
-                        self.safepoint();
-                    }
+                if self.byte(pc) == fast::JUMP_IF_TRUE {
+                    self.fast_jump(Op::JumpIfTrue, b);
                 } else {
-                    self.pc = next;
+                    self.fast_jump(Op::JumpIfFalse, !b);
                 }
-                return true;
             }
+            // The common cases of `call` and `do_return`.
+            fast::CALL => return self.fast_call(),
+            fast::RETURN => return self.fast_return(Op::Return),
+            fast::RETURN_UNDEF => return self.fast_return(Op::ReturnUndef),
             _ => return false,
         }
-        #[cfg(debug_assertions)]
-        {
-            let info = &OPS[op as usize];
-            debug_assert_eq!(
-                self.sp + info.pop as u32,
-                sp0 + info.push as u32,
-                "fast {} stack effect disagrees with the table",
-                info.name
-            );
+        true
+    }
+
+    /// Charges `op` (a constant at each call site, so this folds) and falls through.
+    #[inline(always)]
+    fn advance(&mut self, op: Op, sp0: u32) {
+        let info = &OPS[op as usize];
+        debug_assert_eq!(
+            self.sp + info.pop as u32,
+            sp0 + info.push as u32,
+            "fast {} stack effect disagrees with the table",
+            info.name
+        );
+        let _ = sp0;
+        self.fuel -= info.cost.fuel() as i64;
+        self.pc += info.size as u32;
+    }
+
+    #[inline(always)]
+    fn fast_jump(&mut self, op: Op, taken: bool) {
+        let info = &OPS[op as usize];
+        self.fuel -= info.cost.fuel() as i64;
+        let next = self.pc + info.size as u32;
+        if taken {
+            self.pc = self.jump_target(next);
+            if self.pc < next {
+                self.safepoint();
+            }
+        } else {
+            self.pc = next;
         }
+    }
+
+    #[inline(always)]
+    fn fast_inc(&mut self, op: Op, d: i32, sp0: u32) -> bool {
+        match self.top(0).as_int().and_then(|i| i.checked_add(d)) {
+            Some(i) => {
+                self.set(self.sp - 1, Value::int(i));
+                self.advance(op, sp0);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// A binary op on two int32 operands; `f` returns `None` when the result needs the
+    /// general path (an overflow).
+    #[inline(always)]
+    fn fast_int(&mut self, op: Op, sp0: u32, f: impl Fn(i32, i32) -> Option<Value>) -> bool {
+        let (Some(x), Some(y)) = (self.top(1).as_int(), self.top(0).as_int()) else {
+            return false;
+        };
+        let Some(v) = f(x, y) else { return false };
+        self.sp -= 1;
+        self.set(self.sp - 1, v);
+        self.advance(op, sp0);
+        true
+    }
+
+    /// `fast_step` for `call`: a JS closure with the stack already big enough.
+    #[inline(always)]
+    fn fast_call(&mut self) -> bool {
+        let next = self.pc + OPS[Op::Call as usize].size as u32;
+        let argc = self.imm_u16(1);
+        let base = self.sp - 2 - argc;
+        let Some(o) = self.get(base).as_object() else {
+            return false;
+        };
+        if self.heap.object_class(o) != ObjectClass::Function {
+            return false;
+        }
+        let t = self.template_of(o);
+        if self.frame_top(t, base, argc) > self.heap.value_array_capacity(self.stack) {
+            return false;
+        }
+        self.fuel -= OPS[Op::Call as usize].cost.fuel() as i64;
+        self.push_frame(t, base, argc, Continuation::PushResult, next);
+        true
+    }
+
+    /// `fast_step` for `return` / `return_undef` into a frame that pushes the result.
+    #[inline(always)]
+    fn fast_return(&mut self, op: Op) -> bool {
+        if self.header_int(frame::FLAGS) as i32 != Continuation::PushResult.to_flags() {
+            return false;
+        }
+        let v = if op == Op::Return {
+            self.pop()
+        } else {
+            Value::UNDEFINED
+        };
         self.fuel -= OPS[op as usize].cost.fuel() as i64;
-        self.pc = next;
+        self.pop_frame();
+        self.push(v);
+        self.safepoint();
         true
     }
 

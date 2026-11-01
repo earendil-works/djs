@@ -72,6 +72,43 @@ properties.
      CONSTS, plus `object_slot`'s bounds assert computing the slot count from the cell
      size); the header is six writes and the return reads four.
   4. Numeric ops through `to_number` / `binary_int` instead of int32 fast paths.
+- 2026-11-01: Step 1 (committed): `inline(always)` on step/exec and the stack/imm
+  helpers, the cold `grow_stack`, code reads through `Arena::read` (Vec bounds only), and
+  int32 fast paths in binary_num/binary_int/compare/to_numeric (the -0 cases checked
+  against qjs). Loop 731 to 555 ms, calls 253 to 205 ms.
+  Tried and dropped: a `NEEDS_PRIMITIVE[op]` table in front of `primitive_operands`. It
+  was *slower* (loop 605 to 720, reproducibly), probably register allocation.
+- Step 2, D1350 (committed): `fast_step` runs the hottest simple ops before `step`.
+  - Root cause: every exec arm merges its result through a `Step` held in a stack slot,
+    because non-inlined helpers return it via sret. The store/reload stall alone was
+    ~12% of loop samples. Loop 555 to 385 ms.
+  - Calls: `call` was split into `frame_top`/`push_frame`/`enter_template` (no
+    re-derivation through `load_frame`), and `fast_step` takes `call` of a closure with
+    room on the stack and a `return` into PushResult frames.
+  - `fast_step` matches the raw byte (the `fast::` consts), with constant size and fuel
+    per arm (`advance`). This removed the `Op::from_u8` lookup and the `OPS` loads.
+- Timings with `work/scratch/0035/ab.sh` (interleaved, min of 7; load ~4.5 from other
+  agents, so only same-run comparisons count):
+
+  | build | calls | loop | props | sort | map |
+  | --- | ---: | ---: | ---: | ---: | ---: |
+  | d1350 | 187 | 364 | 327 | 1367 | 191 |
+  | bytes (WIP head) | 113 | 306 | 243 | 800 | 111 |
+
+  The baseline was 253 / 731 / 395 / 1807 / 247.
+- Tools in `work/scratch/0035/`:
+  - `prof.sh <js>`: samply plus a dSYM; self samples by inlined source line and by
+    function.
+  - `ab.sh save <label>` / `ab.sh cmp <labels..>`: kept binaries, interleaved runs.
+  - `wasm-bench.ts`: times djs-wasm through the Sandbox (`DJS_WASM=…`); with
+    `--cpu-prof` it profiles.
+- Paused here for 0030 part 4. Next:
+  - commit-level verification: difftest stress and the test262 ratchet were not rerun
+    after the bytes change;
+  - profile props (get_field/define_field) and sort/map (comparator calls through
+    `call_intrinsic` / the non-fast call path);
+  - wasm numbers;
+  - `scripts/bench.sh --record` and the ratios.
 
 ## Follow-ups
 
