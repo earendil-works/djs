@@ -1,6 +1,6 @@
 # 0049: pi codemode on djs: an adapter and pi's own tests (read-only use of pi-private)
 
-status: in-progress
+status: done
 agent: infra
 branch: issue/0049-pi-codemode-adapter
 depends-on: 0044
@@ -26,16 +26,16 @@ that it works:
   pass and which fail, and why.
 
 ## Acceptance criteria
-- [ ] A written comparison of pi's VM contract with what djs provides (docs/host.md "pi"
+- [x] A written comparison of pi's VM contract with what djs provides (docs/host.md "pi"
       section): the matches, the gaps, and what pi would need to change to use djs
       behind a flag. That is the input for the owner's decision on the actual pi
       integration.
-- [ ] The adapter, with tests in this repo (node --test), running representative
+- [x] The adapter, with tests in this repo (node --test), running representative
       codemode scripts: tool calls (concurrent), store/load, text/image output, errors,
       fuel exhaustion, snapshots, and Date/Math.random determinism if pi relies on it
       ("deterministic" in vm.ts).
-- [ ] pi's own tests run against the adapter: pass/fail per test with reasons.
-- [ ] Performance: script start and a typical tool-heavy script, djs vs quickjs-wasi in
+- [x] pi's own tests run against the adapter: pass/fail per test with reasons.
+- [x] Performance: script start and a typical tool-heavy script, djs vs quickjs-wasi in
       node (if quickjs-wasi is installed in pi-private's node_modules, use it read-only).
 
 ## Notes
@@ -70,6 +70,8 @@ that it works:
   store/load, errors and line numbers, exit, interrupts, memory limit, host globals,
   determinism incl. the pinned QuickJS values, snapshot → resume in a new instance equal to
   an uninterrupted run). Pass on the 0033 build, release and debug wasm.
+- Rebased onto main after 0033 merged: js tests 40/40 on the debug wasm, pi's suite still
+  204/226.
 - js/bench/pi.bench.ts: djs vs quickjs-wasi through the same contract (pi's vm.ts imported
   read-only). docs/host.md "pi codemode" has the comparison, gaps, what pi would change,
   numbers.
@@ -100,3 +102,20 @@ that it works:
   prelude images in the worker launcher (docs/host.md "What pi would change").
 
 ## Result
+- **Adapter** `js/pi/vm.ts` (`startVm`, `resumeVm`; export `@djs/host/pi`) on
+  `js/pi/engine.ts`. It implements pi's VM contract and runs pi's prelude unmodified
+  (`tests/pi/prelude-source.ts`, copied at pi d65de9db942d). Beyond pi's contract:
+  `session.snapshot()` / `resumeVm()` and prelude image reuse (D1495).
+- **djs-wasm**: three additive exports, `vm_compile_file`, `vm_set_random_seed` and
+  `djs_build_hash` (D1491).
+- **Tests**: `js/test/pi-vm.test.ts` (12, in the gate's js tests). `node js/pi/pi-tests.ts`
+  runs pi's own suite on djs: 204/226. The failures are engine gaps or inherent, listed
+  per test in docs/host.md "pi codemode".
+- **Numbers** (`node js/bench/pi.bench.ts`, quiet machine): start 0.49 ms with prelude
+  images vs 3.2 ms on quickjs-wasi (9.8 ms without images). The tool-heavy script takes
+  7.1 ms vs 5.0 ms; the interpreter is slower.
+- **Docs**: docs/host.md "pi codemode" covers the contract mapping, pi's test results,
+  differences for scripts (strict mode, globals, budgets), what pi would change for a flag,
+  and the numbers. Decisions D1490-D1495.
+- **Known gaps**: see Follow-ups. The regexp backtrack limit (pi's `image()` on large
+  images) matters most in practice. Strict mode is by design.
