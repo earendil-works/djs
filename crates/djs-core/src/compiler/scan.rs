@@ -190,7 +190,7 @@ impl PatternScan {
             Err(_) => Follow::Other,
         };
         self.entries.push((open.start, follow));
-        self.entries.sort_unstable_by_key(|e| e.0);
+        crate::sort::sort_by(&mut self.entries, |a, b| a.0 < b.0);
         self.start = open.start;
         self.end = end;
         follow

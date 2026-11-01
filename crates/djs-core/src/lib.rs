@@ -14,6 +14,7 @@ pub mod json;
 pub mod lexer;
 pub mod num;
 pub mod regexp;
+mod sort;
 pub mod unicode;
 pub mod value;
 pub mod vm;

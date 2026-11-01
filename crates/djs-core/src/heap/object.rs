@@ -1450,7 +1450,7 @@ impl Heap {
             }
         }
         if sort {
-            indexes.sort_unstable_by_key(|&(i, _)| i);
+            crate::sort::sort_by(&mut indexes, |a, b| a.0 < b.0);
         }
         let mut out = Vec::with_capacity(indexes.len() + strings.len() + symbols.len() + 1);
         out.extend(indexes.into_iter().map(|(_, k)| k));

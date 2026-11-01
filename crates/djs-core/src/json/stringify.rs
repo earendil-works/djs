@@ -16,7 +16,6 @@
 //! limit and the heap's remaining room (the result has to fit there anyway), so transient
 //! memory stays bounded by the memory cap.
 
-use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 
 use super::DEFAULT_MAX_DEPTH;
@@ -96,7 +95,7 @@ pub fn stringify_fast(
         gap,
         stack: Vec::new(),
         keys: Vec::new(),
-        deep: BTreeSet::new(),
+        deep: Vec::new(),
         clean_protos: Vec::new(),
         key_cache: alloc::vec![(Atom::NULL, Vec::new()); KEY_CACHE],
     };
@@ -364,7 +363,8 @@ struct Ser<'h, 'g> {
     gap: &'g [u16],
     stack: Vec<Frame>,
     keys: Vec<Atom>,
-    deep: BTreeSet<u32>,
+    /// Sorted offsets of the frames beyond the first [`LINEAR_CYCLE_CHECK`].
+    deep: Vec<u32>,
     /// Prototypes whose chain is known to have no (object-valued) `toJSON`. Nothing can
     /// change during one call, so the answer stays valid.
     clean_protos: Vec<Obj>,
@@ -511,7 +511,7 @@ impl Ser<'_, '_> {
         if self.stack[..n.min(LINEAR_CYCLE_CHECK)]
             .iter()
             .any(|f| f.obj() == o)
-            || self.deep.contains(&o.offset())
+            || self.deep.binary_search(&o.offset()).is_ok()
         {
             return Err(StringifyError::Circular);
         }
@@ -519,7 +519,9 @@ impl Ser<'_, '_> {
             return Err(StringifyError::StackOverflow);
         }
         if n >= LINEAR_CYCLE_CHECK {
-            self.deep.insert(o.offset());
+            if let Err(i) = self.deep.binary_search(&o.offset()) {
+                self.deep.insert(i, o.offset());
+            }
         }
         // Containers without primitives (`[[],[]]` with a long gap) must not grow the
         // output unchecked either.
@@ -559,7 +561,9 @@ impl Ser<'_, '_> {
     fn pop(&mut self) {
         let f = self.stack.pop().unwrap();
         if self.stack.len() >= LINEAR_CYCLE_CHECK {
-            self.deep.remove(&f.obj().offset());
+            if let Ok(i) = self.deep.binary_search(&f.obj().offset()) {
+                self.deep.remove(i);
+            }
         }
         if let Frame::Obj { start, end, .. } = f {
             // Keys of nested frames were pushed after ours and are gone already.

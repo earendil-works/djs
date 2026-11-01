@@ -33,7 +33,7 @@ pub(crate) fn sort_primitives(heap: &mut Heap, list: Obj) -> Result<bool, Fault>
         keyed.push((heap.str_units(s).collect(), v));
     }
     // A stable sort by code units, as IsLessThan compares strings.
-    keyed.sort_by(|a, b| a.0.cmp(&b.0));
+    crate::sort::sort_by(&mut keyed, |a, b| a.0 < b.0);
     let mut i = 0;
     for (_, v) in keyed {
         heap.set_element_fast(list, i, v)?;

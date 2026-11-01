@@ -450,11 +450,11 @@ impl<'a, 'h> Parser<'a, 'h> {
             return;
         }
         let bits = n.to_bits();
-        let idx = match self.f.num_consts.get(&bits) {
-            Some(&i) => i,
-            None => {
+        let idx = match self.f.num_consts.binary_search_by_key(&bits, |e| e.0) {
+            Ok(k) => self.f.num_consts[k].1,
+            Err(k) => {
                 let i = self.add_const(Value::number(n));
-                self.f.num_consts.insert(bits, i);
+                self.f.num_consts.insert(k, (bits, i));
                 i
             }
         };
@@ -468,12 +468,17 @@ impl<'a, 'h> Parser<'a, 'h> {
 
     /// The constant index of a string (deduplicated per function).
     pub fn string_const(&mut self, units: &[u16]) -> PResult<u32> {
-        if let Some(&i) = self.f.str_consts.get(units) {
-            return Ok(i);
-        }
+        let k = match self
+            .f
+            .str_consts
+            .binary_search_by(|e| e.0.as_slice().cmp(units))
+        {
+            Ok(k) => return Ok(self.f.str_consts[k].1),
+            Err(k) => k,
+        };
         let s = self.alloc_units(units)?;
         let i = self.add_const(Value::string(s));
-        self.f.str_consts.insert(units.to_vec(), i);
+        self.f.str_consts.insert(k, (units.to_vec(), i));
         Ok(i)
     }
 

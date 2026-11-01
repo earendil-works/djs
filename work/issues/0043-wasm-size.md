@@ -66,6 +66,17 @@ Date, typed arrays, …), and the code is about 590 KB.
   (tables + atom entries -51,976; the value stack and the dead templates its stale
   slots kept alive -54,880). stripped 966,096; gzip 305,089. vm_new 3.6 µs, instantiate
   41.5 µs (node).
+- Rejected: a compact image encoding (decoded at vm_new). On the 351 KB image, zero-run
+  coding gives 73% (42K runs), a byte mask 54%; both decode byte- or run-wise, about
+  50-300 µs per VM in wasm, against a 3.6 µs memcpy today. Transport gzip already gets
+  the image to ~84 KB.
+- Rejected: opt-level "z" for everything: code -88 KB, but 15-60% slower (loop 330 ->
+  380 ms, calls 147 -> 213, props 463 -> 699, arrays 2292 -> 3747; perf.ts in scratch).
+  Per-package opt-levels do nothing under LTO (libm at z: -300 bytes).
+- R3 (D1432) no BTree collections (-16.4 KB code) and one small stable sort instead of
+  core's (-14.4 KB): code 612,581 -> 581,874. Edits outside `touches:` (small): compiler
+  func.rs/parser.rs/scan.rs, json/stringify.rs, interp/run.rs (for-in), heap/object.rs
+  (own keys sort), builtins/array.rs (sort_primitives), new src/sort.rs.
 
 ## Follow-ups
 - `Vm::collect` (vm_collect) does not clear the value stack above `sp` the way the

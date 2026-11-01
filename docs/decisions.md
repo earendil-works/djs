@@ -1788,3 +1788,13 @@ is traced to its full capacity, so values left above `sp` by the prelude's insta
 kept 74 dead templates and their code alive in the image. Base image 403 KB -> 296 KB
 (property tables and atoms -52 KB, the stack and what it held -55 KB). Growth after a
 restore works as usual (a full table grows on the next insert).
+
+## D1432: No BTree collections and no core slice sorts in djs-core
+date: 2026-11-01 · by: heap · issue: 0043
+In wasm, `alloc::collections::btree` cost 17 KB of code and `core`'s slice sorts 20 KB
+(small-sort networks per element type). djs-core uses neither now: the compiler's
+constant dedup and JSON.stringify's deep cycle set are sorted Vecs with binary search;
+for-in shadowing checks the objects already visited instead of keeping a set; and the
+three sorts go through `crate::sort::sort_by`, one stable merge sort of indexes (a few
+hundred bytes per use). Code 612,581 -> 581,874 bytes. Prefer these over new uses of
+BTreeMap/BTreeSet and `sort*` in djs-core.

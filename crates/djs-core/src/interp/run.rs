@@ -2663,11 +2663,14 @@ impl<'h> Exec<'h> {
                 keys.push(self.heap.atom_to_value(Atom::int(i).unwrap())?);
             }
         } else if let Some(o) = v.as_object() {
-            let mut seen = alloc::collections::BTreeSet::new();
+            // Objects already visited: their keys (enumerable or not) shadow the same
+            // keys further up. Checked by lookup rather than kept in a set (0043: a set
+            // type costs code size, and chains are short).
+            let mut below: alloc::vec::Vec<Obj> = alloc::vec::Vec::new();
             let mut cur = Some(o);
             while let Some(c) = cur {
                 for k in self.heap.own_keys(c) {
-                    if k.is_symbol() || !seen.insert(k.id()) {
+                    if k.is_symbol() || below.iter().any(|&b| self.heap.has_own_property(b, k)) {
                         continue;
                     }
                     if self
@@ -2678,6 +2681,7 @@ impl<'h> Exec<'h> {
                         keys.push(self.heap.atom_to_value(k)?);
                     }
                 }
+                below.push(c);
                 cur = self.heap.get_prototype_of(c);
             }
         }
