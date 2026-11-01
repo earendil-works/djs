@@ -1,7 +1,7 @@
 # 0081: Why is djs an order of magnitude slower than QuickJS? (disassembly-level investigation)
 
-status: open
-agent: -
+status: in-progress
+agent: perf
 branch: issue/0081-perf-anatomy
 depends-on: -
 touches: work/issues/0081-perf-anatomy.md (the report), work/scratch/0081/, scripts/ or crates/djs-bench/ (new measurement tools only). No engine changes.
