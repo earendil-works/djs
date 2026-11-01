@@ -340,7 +340,8 @@ figure.diagram figcaption { margin-block-start: var(--semantic-dimension-space-g
 }
 div.live-pane { padding: var(--semantic-dimension-space-padding-small) var(--semantic-dimension-space-padding-x-large); overflow-x: auto; }
 div.live-pane p { margin-block: var(--semantic-dimension-space-flow-x-small); }
-pre.live-pane { max-block-size: 22rem; }
+/* Output and bytecode on the canvas, set apart from the source above. */
+pre.live-pane { max-block-size: 22rem; background: var(--semantic-color-background-canvas); }
 .muted { color: var(--semantic-color-text-secondary); }
 div.live-pane:has(table.bars) { overflow-x: auto; }
 table.bars { margin-block: var(--semantic-dimension-space-flow-x-small); }
