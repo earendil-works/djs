@@ -39,24 +39,11 @@
     hostDone(kind, text);
   }
 
-  // `s.split("\n")` (pi's errorText): djs has no String.prototype.split until 0033's
-  // RegExp work lands (D1440). Remove this then.
-  function splitLines(s) {
-    const lines = [];
-    let start = 0;
-    for (let i = s.indexOf("\n"); i !== -1; i = s.indexOf("\n", start)) {
-      lines.push(s.slice(start, i));
-      start = i + 1;
-    }
-    lines.push(s.slice(start));
-    return lines;
-  }
-
   // From pi: "Name: message" like V8, then the stack frames. (The difftest runner drops
   // frame lines before comparing; stack formats are a separate topic.)
   function errorText(error) {
     const head = error.message ? error.name + ": " + error.message : StringCtor(error.name);
-    const frames = typeof error.stack === "string" ? splitLines(error.stack).filter((line) => line.trim()) : [];
+    const frames = typeof error.stack === "string" ? error.stack.split("\n").filter((line) => line.trim()) : [];
     return [head, ...frames].join("\n");
   }
 
