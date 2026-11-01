@@ -1,7 +1,7 @@
 # 0031: Core builtins wave 1: Object, Function, Error, Boolean, Symbol, Number, Math, globals
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0031-builtins-wave1
 depends-on: 0028
 touches: builtins/ (new *.ts files; intrinsics.d.ts additions), builtins/gen/, crates/djs-core/src/builtins/ (new: leaf intrinsic implementations, one module per area) or wherever 0028 put intrinsics (follow its pattern), crates/djs-core/src/bytecode/intrinsics.rs (the table), crates/djs-bgen/ (installation forms only), crates/djs-core/src/interp/realm.rs (additive: intrinsic objects), tests/corpus/expected-failures.txt + tests/test262/expected-failures.txt (ratchet updates)
