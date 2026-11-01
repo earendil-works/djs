@@ -1,7 +1,7 @@
 # 0084: Long tail, part 2 (routed leftovers of 0082)
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0084-long-tail-2
 depends-on: 0082
 touches: crates/djs-core/src/interp/ (realm: Function.prototype; the array length set path), builtins/ (atob/btoa, DOMException), crates/djs-core/src/builtins/, js/pi/ (drop the adapter's atob/btoa polyfill), ratchets
