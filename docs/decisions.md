@@ -5799,3 +5799,41 @@ tests unchanged). `alloc::fmt::format` leaves the module; what remains of core::
 (~6.5 KB raw) is held by core's own panics (`unwrap` on `Result`s with Debug errors,
 `assert_eq!`, bounds checks), which stable cannot avoid. Module 455,263 -> 454,583 bytes
 gzip (−0.7 KB); Date string formatting runs 9% faster (no Formatter).
+## D2264: `djs heap` analyzes dumps through djs-core's heap code; djs-cli reads and writes snapshot containers
+date: 2026-11-03 · by: snapshot · issue: 0133
+`djs heap <dump>` (crates/djs-cli/src/heap/) reports what is in a raw heap image, a
+snapshot container or an older DJSS/DJPI snapshot: a summary (live and garbage, old
+region and young), cells by kind and object class, a diff against a reference image,
+the largest cells and retained sizes with a path from the roots, strings, shapes,
+functions and bytecode, and what a waiting session holds (host calls, promises,
+suspended activations with their locals). Text by default, `--json` for scripts,
+`--only` for sections; `heap::analyze_image` does the same for an image in memory.
+
+- **No second parser.** The image is loaded with `Heap::from_bytes` (verified), cells
+  come from `Heap::cells`, references from `Heap::trace_cell` (the layout table decides
+  what a reference is), and every path label is a field name of the layout table, a
+  property key from the object's shape or table, or a local name from the template.
+  Liveness follows the collector's rules: ephemeron pairs live through their key, value
+  stack slots above `SP` do not count. Retained sizes come from a dominator tree
+  (Cooper, Harvey and Kennedy) over the live graph.
+- **The diff** matches the image's cells to the reference's by a parallel breadth-first
+  walk from both roots cells, pairing the targets of the same slot. Immutable cells
+  (strings, bytecode, BigInts) pair only with the same content, a shape's transition list
+  pairs its children by the key they add (an inserted transition shifts the rest), and a
+  cell is unchanged when its bytes match with references compared through the pairing.
+  It reports unchanged cells in place and moved, changed cells (differing 8-byte words),
+  new cells grouped into subtrees with the new bytes only they keep alive, and the
+  reference's cells that are gone: what a snapshot compressed against the reference has
+  to encode.
+- **Containers in Rust.** crates/djs-cli/src/container.rs reads and writes the layout
+  of js/src/snapshot.ts (D2260) and the formats before it, with the `zstd` crate:
+  compression at level 3 with the reference as a raw-content dictionary, a window covering
+  both and a content checksum. The C library is the decoder that takes raw-content
+  dictionaries (the pure Rust ruzstd only takes zstd-format ones); djs-cli is a std tool
+  crate, and the shipped module is unaffected. A container against the base uses this
+  build's `djs_prelude::BASE` when the hash matches; others need their reference given:
+  `node scripts/heap/reference.ts base|pi-prelude` writes a module's base or pi's prelude
+  image for a session's start data (`preludeImage` of js/pi/vm.ts). Checked against the
+  JS host in both directions by hand (a Rust container restores in `Sandbox.fromBytes`,
+  JS containers read in Rust); the Rust tests cover the layout, the older formats and the
+  refusals.

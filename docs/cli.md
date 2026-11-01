@@ -4,6 +4,8 @@
 cargo run -p djs-cli -- run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
     [--gc-stress] [--suspend-every N] [--backend bytecode|native] file.js
 cargo run -p djs-cli -- disasm [--body] file.js
+cargo run -p djs-cli -- heap [--json] [--top N] [--only SECTIONS] [--diff FILE|base|none]
+    [--reference FILE] dump
 cargo run -p djs-cli -- strip-types file.ts
 cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history]
 ```
@@ -13,7 +15,41 @@ cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history]
 TypeScript's legacy decorators (D1651). `--backend` runs the `@native` builtins as their
 generated Rust state machines (`native`, the default) or as bytecode (D1635).
 `disasm` prints the bytecode. `strip-types` erases TypeScript types like ts-blank-space
-(TESTING.md). This file documents the REPL.
+(TESTING.md). `heap` analyzes a heap dump (below). This file documents `heap` and the
+REPL.
+
+## `djs heap`
+
+What is in a heap dump (D2264): a raw image (`.snapshot` of the REPL, `Vm::bytes`), a
+snapshot container (`Sandbox.bytes()`, pi's `snapshot()`, D2260) or an older DJSS/DJPI
+snapshot. Sections (`--only summary,kinds,...` picks some; `--json` prints one object with
+a key per section):
+
+| section | shows |
+| --- | --- |
+| `summary` | format, build, image size, live vs garbage (and what a collection leaves), old region (`OLD_END`) vs young |
+| `kinds` | cells and bytes per cell kind (garbage, old) and per object class |
+| `diff` | against the reference image: unchanged cells in place or moved, changed, new (grouped into subtrees with their path and the new bytes only they keep alive), gone; how much of the image sits at the reference's offsets. This is what a snapshot compressed against the reference costs |
+| `largest` | the largest cells and the largest retained sizes (dominator tree), with paths like `globalThis.cache[3].body` |
+| `strings` | flat strings and ropes, duplicated contents, the largest strings |
+| `shapes` | shapes, objects with a shape or in dictionary mode, the most common key lists |
+| `functions` | templates and bytecode per script, closures, builtin closures by intrinsic, boxes |
+| `session` | run state, queued jobs, the inbox, pending host calls, promises, suspended async functions and generators with their locals |
+
+The diff compares with a container's reference by default, or with this build's base
+for a raw image of this build; `--diff FILE` picks another image, `--diff none` skips it.
+A container compressed against the base decompresses with this build's base when the
+hashes match. Anything else needs its reference: `node scripts/heap/reference.ts base
+[--wasm MODULE] -o base.img` writes a module's base, and `node scripts/heap/reference.ts
+pi-prelude --data START.json -o prelude.img` pi's prelude image for a session's start
+data (tools, globals, store, memory limit, deterministic mode;
+scripts/snapshot-research/wasm.ts writes its cases' as `start.json`). Then `djs heap
+--reference prelude.img session.djsn`.
+
+Paths read like JavaScript where the heap allows: `.name` for properties (from the
+object's shape or table), `[i]` for elements, `~name` for captured variables, `<frame>.x`
+for a suspended function's locals, `<proto>`, `handle[n]` for the embedder's handles,
+and the layout's field names in brackets for internal cells (`<atoms><entries>`).
 
 ## `djs repl`
 
