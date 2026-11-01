@@ -204,7 +204,7 @@ impl Exec<'_> {
     /// Marks the current frame (template `t`, already entered) as native.
     #[inline]
     pub(super) fn enter_native(&mut self, t: u32) {
-        self.native = self.heap.arena().get(t, FuncTemplate::NATIVE) + 1;
+        self.native = self.heap.arena().get(t, FuncTemplate::NATIVE) as u32 + 1;
         self.code_len = 0;
     }
 
@@ -279,7 +279,8 @@ impl Exec<'_> {
         let a = self.heap.arena_mut();
         let flags = a.get(t, FuncTemplate::FLAGS);
         a.set(t, FuncTemplate::FLAGS, flags | func_flags::NATIVE);
-        a.set(t, FuncTemplate::NATIVE, i as u32);
+        // The table is far below 2^16 entries (a u16 field, D1980).
+        a.set(t, FuncTemplate::NATIVE, i as u16);
         Ok(())
     }
 

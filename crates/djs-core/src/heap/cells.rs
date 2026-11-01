@@ -298,6 +298,10 @@ cells! {
 
     /// An immutable compiled function, one per source function. The meaning of `FLAGS`
     /// belongs to the compiler.
+    ///
+    /// The debug fields from `LINES` on are optional (D1980): a privileged (prelude)
+    /// template has none of them and is 56 bytes instead of 80. Read them through
+    /// `bytecode::template::debug_info`, which checks the cell size.
     12 => FuncTemplate {
         /// Function kind and properties (async, generator, simple params, ...).
         FLAGS: u32 = 8,
@@ -326,26 +330,27 @@ cells! {
         CAPTURE_DESC: Ref = 40,
         /// [`Bytes`]: the handler table (16-byte records), or null.
         HANDLERS: Ref = 44,
-        /// [`Bytes`]: the line table, or null.
-        LINES: Ref = 48,
-        /// The [`Script`] the function comes from.
-        SCRIPT: Ref = 52,
-        /// Source span of the function in the script (`Function.prototype.toString`).
-        SRC_START: u32 = 56,
-        SRC_END: u32 = 60,
-        /// [`U32Array`] of atom ids: local names, then capture names (TDZ messages,
-        /// disassembler). Null if not recorded.
-        NAMES: Ref = 64,
-        /// A `@native` builtin's index into the generated table (with
-        /// `func_flags::NATIVE`), else 0.
-        NATIVE: u32 = 68,
         /// [`U32Array`] of `IC_COUNT` inline cache slots (`interp::run::ic`), allocated
         /// the first time one is filled; null before.
-        IC: Ref = 72,
+        IC: Ref = 48,
+        /// A `@native` builtin's index into the generated table (with
+        /// `func_flags::NATIVE`), else 0.
+        NATIVE: u16 = 52,
         /// A `@fast` builtin's index into `builtins::fast::FAST` (with
-        /// `func_flags::FAST`, D1850), else 0. In the padding of the 8-aligned cell.
-        FAST: u32 = 76,
-    };
+        /// `func_flags::FAST`, D1850), else 0.
+        FAST: u16 = 54,
+        // ---- optional: absent from privileged templates (56 bytes) ----
+        /// [`Bytes`]: the line table, or null.
+        LINES: Ref = 56,
+        /// The [`Script`] the function comes from.
+        SCRIPT: Ref = 60,
+        /// Source span of the function in the script (`Function.prototype.toString`).
+        SRC_START: u32 = 64,
+        SRC_END: u32 = 68,
+        /// [`U32Array`] of atom ids: local names, then capture names (TDZ messages,
+        /// disassembler). Null if not recorded.
+        NAMES: Ref = 72,
+    } min 56;
 
     /// One compiled source.
     13 => Script {

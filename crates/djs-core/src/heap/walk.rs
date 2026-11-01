@@ -489,6 +489,10 @@ impl Heap {
 pub fn for_each_slot(kind: CellKind, cell: u32, size: u32, mut f: impl FnMut(Slot)) {
     let layout = kind.layout();
     for field in layout.fields {
+        // Optional fields (`CellLayout::with_min_size`) a smaller cell does not have.
+        if field.offset >= size {
+            break;
+        }
         visit(field.ty, cell + field.offset, &mut f);
     }
     if let Some(tail) = &layout.tail {

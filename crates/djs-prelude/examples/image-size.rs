@@ -17,16 +17,29 @@ fn main() {
     for c in heap.cells() {
         match c.kind {
             CellKind::FuncTemplate => {
-                for (f, name) in [
-                    (FuncTemplate::CODE, "Bytes: bytecode"),
-                    (FuncTemplate::HANDLERS, "Bytes: handler tables"),
-                    (FuncTemplate::LINES, "Bytes: line tables"),
-                    (FuncTemplate::CONSTS, "ValueArray: constant pools"),
-                    (FuncTemplate::CHILDREN, "RefArray: child templates"),
-                    (FuncTemplate::CAPTURE_DESC, "U32Array: capture descriptors"),
-                    (FuncTemplate::NAMES, "U32Array: local names"),
+                let debug = djs_core::bytecode::template::debug_info(heap, c.offset);
+                for (r, name) in [
+                    (a.get(c.offset, FuncTemplate::CODE), "Bytes: bytecode"),
+                    (
+                        a.get(c.offset, FuncTemplate::HANDLERS),
+                        "Bytes: handler tables",
+                    ),
+                    (debug.lines, "Bytes: line tables"),
+                    (
+                        a.get(c.offset, FuncTemplate::CONSTS),
+                        "ValueArray: constant pools",
+                    ),
+                    (
+                        a.get(c.offset, FuncTemplate::CHILDREN),
+                        "RefArray: child templates",
+                    ),
+                    (
+                        a.get(c.offset, FuncTemplate::CAPTURE_DESC),
+                        "U32Array: capture descriptors",
+                    ),
+                    (debug.names, "U32Array: local names"),
                 ] {
-                    let r: Ref = a.get(c.offset, f);
+                    let r: Ref = r;
                     if let Some(r) = r.get() {
                         role.insert(r, name);
                     }

@@ -2,7 +2,7 @@
 // Regenerate: DJS_UPDATE_LAYOUT=1 cargo test -p djs-core layout_generated
 
 export const LAYOUT = {
-  "layoutHash": 3240989622,
+  "layoutHash": 3731387496,
   "magic": 5458500,
   "headerSize": 8,
   "header": { "KIND": 0, "GC": 1, "FLAGS": 2, "SIZE": 4 },
@@ -194,7 +194,7 @@ export const LAYOUT = {
     },
     "FuncTemplate": {
       "kind": 12,
-      "minSize": 80,
+      "minSize": 56,
       "fields": {
         "FLAGS": { "offset": 8, "type": "u32" },
         "NAME": { "offset": 12, "type": "u32" },
@@ -209,14 +209,14 @@ export const LAYOUT = {
         "CHILDREN": { "offset": 36, "type": "Ref" },
         "CAPTURE_DESC": { "offset": 40, "type": "Ref" },
         "HANDLERS": { "offset": 44, "type": "Ref" },
-        "LINES": { "offset": 48, "type": "Ref" },
-        "SCRIPT": { "offset": 52, "type": "Ref" },
-        "SRC_START": { "offset": 56, "type": "u32" },
-        "SRC_END": { "offset": 60, "type": "u32" },
-        "NAMES": { "offset": 64, "type": "Ref" },
-        "NATIVE": { "offset": 68, "type": "u32" },
-        "IC": { "offset": 72, "type": "Ref" },
-        "FAST": { "offset": 76, "type": "u32" }
+        "IC": { "offset": 48, "type": "Ref" },
+        "NATIVE": { "offset": 52, "type": "u16" },
+        "FAST": { "offset": 54, "type": "u16" },
+        "LINES": { "offset": 56, "type": "Ref" },
+        "SCRIPT": { "offset": 60, "type": "Ref" },
+        "SRC_START": { "offset": 64, "type": "u32" },
+        "SRC_END": { "offset": 68, "type": "u32" },
+        "NAMES": { "offset": 72, "type": "Ref" }
       },
       "tail": null
     },

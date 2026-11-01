@@ -82,7 +82,8 @@ impl Exec<'_> {
         let a = self.heap.arena_mut();
         let flags = a.get(t, FuncTemplate::FLAGS);
         a.set(t, FuncTemplate::FLAGS, flags | func_flags::FAST);
-        a.set(t, FuncTemplate::FAST, i as u32);
+        // The table is far below 2^16 entries (a u16 field, D1980).
+        a.set(t, FuncTemplate::FAST, i as u16);
         Ok(())
     }
 

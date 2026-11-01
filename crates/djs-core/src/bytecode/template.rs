@@ -145,7 +145,16 @@ pub fn alloc_template_in(
     let lines = nonempty(p.lines, |l| alloc_bytes(heap, l))?;
     let ids: Vec<u32> = p.names.iter().map(|a| a.id()).collect();
     let names = nonempty(&ids, |n| alloc_u32_array(heap, n))?;
-    let off = heap.alloc_cell(CellKind::FuncTemplate, FuncTemplate::LAYOUT.min_size)?;
+    // A privileged (prelude) function has no debug info: its frames are hidden or
+    // `(native)` in traces, its source is `[native code]`, and its locals are never named
+    // (D1980). Its template stops before the optional fields.
+    let slim = p.flags & func_flags::PRIVILEGED != 0 && lines.is_null() && names.is_null();
+    let size = if slim {
+        FuncTemplate::LAYOUT.min_size
+    } else {
+        FULL_SIZE
+    };
+    let off = heap.alloc_cell(CellKind::FuncTemplate, size)?;
     let a = heap.arena_mut();
     a.set(off, FuncTemplate::FLAGS, p.flags);
     a.set(off, FuncTemplate::NAME, p.name.id());
@@ -160,12 +169,48 @@ pub fn alloc_template_in(
     a.set(off, FuncTemplate::CHILDREN, children);
     a.set(off, FuncTemplate::CAPTURE_DESC, capture_desc);
     a.set(off, FuncTemplate::HANDLERS, handlers);
-    a.set(off, FuncTemplate::LINES, lines);
-    a.set(off, FuncTemplate::SCRIPT, p.script);
-    a.set(off, FuncTemplate::SRC_START, p.src_start);
-    a.set(off, FuncTemplate::SRC_END, p.src_end);
-    a.set(off, FuncTemplate::NAMES, names);
+    if !slim {
+        a.set(off, FuncTemplate::LINES, lines);
+        a.set(off, FuncTemplate::SCRIPT, p.script);
+        a.set(off, FuncTemplate::SRC_START, p.src_start);
+        a.set(off, FuncTemplate::SRC_END, p.src_end);
+        a.set(off, FuncTemplate::NAMES, names);
+    }
     Ok(Ref(off))
+}
+
+/// The size of a template with its debug fields.
+pub const FULL_SIZE: u32 = crate::heap::align8(FuncTemplate::NAMES.offset + 4);
+
+/// The optional debug fields of template `t` (D1980): null and 0 for a privileged one,
+/// which has none.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DebugInfo {
+    pub lines: Ref,
+    pub script: Ref,
+    pub src_start: u32,
+    pub src_end: u32,
+    pub names: Ref,
+}
+
+pub fn debug_info(heap: &Heap, t: u32) -> DebugInfo {
+    let a = heap.arena();
+    if heap.cell_size(t) < FULL_SIZE {
+        return DebugInfo {
+            lines: Ref::NULL,
+            script: Ref::NULL,
+            src_start: 0,
+            src_end: 0,
+            names: Ref::NULL,
+        };
+    }
+    DebugInfo {
+        lines: a.get(t, FuncTemplate::LINES),
+        script: a.get(t, FuncTemplate::SCRIPT),
+        src_start: a.get(t, FuncTemplate::SRC_START),
+        src_end: a.get(t, FuncTemplate::SRC_END),
+        names: a.get(t, FuncTemplate::NAMES),
+    }
 }
 
 /// The `Cache` immediate of a function with more cache sites than slots (D1620).
@@ -319,7 +364,8 @@ pub fn disasm_template(heap: &Heap, template: Ref) -> String {
         let name = Atom::from_id(a.get(off, FuncTemplate::NAME));
         let locals = a.get(off, FuncTemplate::LOCALS);
         let consts = value_array(heap, a.get(off, FuncTemplate::CONSTS));
-        let names: Vec<Atom> = u32_array(heap, a.get(off, FuncTemplate::NAMES))
+        let debug = debug_info(heap, off);
+        let names: Vec<Atom> = u32_array(heap, debug.names)
             .into_iter()
             .map(Atom::from_id)
             .collect();
@@ -350,7 +396,7 @@ pub fn disasm_template(heap: &Heap, template: Ref) -> String {
             names: &names,
             locals: locals as usize,
             phase1: false,
-            lines: bytes_of(heap, a.get(off, FuncTemplate::LINES)),
+            lines: bytes_of(heap, debug.lines),
         };
         out.push_str(&disasm(bytes_of(heap, a.get(off, FuncTemplate::CODE)), &cx));
         let children = a.get(off, FuncTemplate::CHILDREN);

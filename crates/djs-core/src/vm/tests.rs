@@ -2712,6 +2712,42 @@ fn warm_and_cold_addition_caches_behave_the_same() {
     );
 }
 
+#[test]
+fn privileged_templates_have_no_debug_fields() {
+    // D1980: the prelude's templates stop before the optional debug fields; user code
+    // keeps them (line numbers, source text, local names).
+    use crate::bytecode::template::{FULL_SIZE, debug_info};
+    use crate::heap::CellKind;
+    use crate::heap::cells::FuncTemplate;
+    let (vm, out) = run_script(
+        vm(),
+        "function f(a) { return a; }\nconsole.log(String(f), String(Array.prototype.map));\n",
+    );
+    assert_eq!(
+        out.log,
+        ["function f(a) { return a; } function map() {\n    [native code]\n}"]
+    );
+    let h = vm.heap();
+    let (mut slim, mut full) = (0, 0);
+    for c in h.cells().filter(|c| c.kind == CellKind::FuncTemplate) {
+        let privileged = h.arena().get(c.offset, FuncTemplate::FLAGS)
+            & crate::bytecode::template::func_flags::PRIVILEGED
+            != 0;
+        assert_eq!(c.size < FULL_SIZE, privileged, "template at {}", c.offset);
+        if privileged {
+            slim += 1;
+            assert_eq!(c.size, FuncTemplate::LAYOUT.min_size);
+            assert!(debug_info(h, c.offset).script.is_null());
+        } else {
+            full += 1;
+            assert!(!debug_info(h, c.offset).script.is_null());
+        }
+    }
+    assert!(slim > 500 && full >= 2, "{slim} {full}");
+    assert!(crate::builtins::fast::FAST.len() < u16::MAX as usize);
+    assert!(crate::builtins::r#gen::natives::NATIVES.len() < u16::MAX as usize);
+}
+
 // ---- The host inbox (D1670) --------------------------------------------------------------
 
 /// When the "embedder" of [`run_inbox`] delivers async results.

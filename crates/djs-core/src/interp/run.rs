@@ -909,9 +909,13 @@ impl<'h> Exec<'h> {
             let f = self.get(bp).as_object().expect("frame callee");
             let t = self.heap.object_slot(f, 0).as_internal().expect("template");
             let a = self.heap.arena();
-            let script: Ref = a.get(t, FuncTemplate::SCRIPT);
+            let debug = crate::bytecode::template::debug_info(self.heap, t);
+            let script = debug.script;
             let builtin = self.heap.cell_flags(f.offset()) & OBJ_BUILTIN != 0;
-            skip_prelude &= prelude.is_some() && prelude == script.get();
+            // Prelude frames: privileged templates (D1980), or the prelude's script.
+            let in_prelude = a.get(t, FuncTemplate::FLAGS) & func_flags::PRIVILEGED != 0
+                || (prelude.is_some() && prelude == script.get());
+            skip_prelude &= in_prelude;
             let skipping = below.is_some();
             if below == Some(f) {
                 below = None;
@@ -936,7 +940,7 @@ impl<'h> Exec<'h> {
                     .unwrap_or_default();
                 out += &format!("    at {name} (native)\n");
                 lines += 1;
-            } else if prelude != script.get() {
+            } else if !in_prelude {
                 let kind = func_flags::kind(a.get(t, FuncTemplate::FLAGS));
                 let name = if matches!(kind, func_flags::KIND_SCRIPT | func_flags::KIND_ASYNC_BODY)
                 {
@@ -949,8 +953,7 @@ impl<'h> Exec<'h> {
                     .and_then(|s| a.get(s, Script::NAME).get())
                     .map(|n| self.heap.str_to_string(crate::value::Str(n)))
                     .unwrap_or_default();
-                let lines_ref: Ref = a.get(t, FuncTemplate::LINES);
-                match crate::bytecode::lookup_line(bytes_of(self.heap, lines_ref), pc) {
+                match crate::bytecode::lookup_line(bytes_of(self.heap, debug.lines), pc) {
                     Some((l, c)) => out += &format!("    at {name} ({file}:{l}:{c})\n"),
                     None => out += &format!("    at {name} ({file})\n"),
                 }
@@ -1754,7 +1757,7 @@ impl<'h> Exec<'h> {
 
     /// The local or capture name `i` from the template's `NAMES` (for TDZ messages).
     fn name_of(&self, i: u32) -> String {
-        let names: Ref = self.heap.arena().get(self.template, FuncTemplate::NAMES);
+        let names = crate::bytecode::template::debug_info(self.heap, self.template).names;
         match names.get() {
             Some(n) if i < self.heap.arena().get(n, U32Array::LEN) => {
                 let id = self.heap.arena().read::<u32>(U32Array::DATA.at(n, i));

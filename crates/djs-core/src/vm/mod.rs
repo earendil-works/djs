@@ -169,15 +169,17 @@ impl Vm {
             }
             Err(e) => panic!("the prelude does not compile: {e}"),
         };
-        let script: Ref = self
-            .heap
-            .arena()
-            .get(template.0, crate::heap::cells::FuncTemplate::SCRIPT);
-        let r = realm::realm(&self.heap);
-        self.heap.arena_mut().write(
-            crate::heap::cells::Realm::INTRINSICS.at(r, Intrinsic::PreludeScript as u32),
-            Value::internal(script.0),
-        );
+        // Privileged templates carry no script (D1980); traces know them by their flag.
+        if let Some(script) = crate::bytecode::template::debug_info(&self.heap, template.0)
+            .script
+            .get()
+        {
+            let r = realm::realm(&self.heap);
+            self.heap.arena_mut().write(
+                crate::heap::cells::Realm::INTRINSICS.at(r, Intrinsic::PreludeScript as u32),
+                Value::internal(script),
+            );
+        }
         let f = self.instantiate(template)?;
         let this = Value::object(self.global());
         self.call(f, this, &[])
