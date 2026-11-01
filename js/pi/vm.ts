@@ -68,7 +68,7 @@ export interface StartVmOptions extends VmHooks {
  * interrupt budgets mean roughly the same amount of computation on both engines
  * (measured: docs/host.md "pi codemode").
  */
-export const FUEL_PER_POLL = 10_000;
+export const FUEL_PER_POLL = 100_000;
 
 /** Bumped whenever this module changes what a deterministic script observes. */
 const DETERMINISTIC_VERSION = 1;
