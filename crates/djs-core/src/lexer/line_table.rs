@@ -10,15 +10,28 @@ use alloc::vec::Vec;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LineTable {
     starts: Vec<u32>,
+    /// No byte above 0x7F: a column is a byte count.
+    ascii: bool,
 }
 
 impl LineTable {
     pub fn new(src: &[u8]) -> Self {
-        let mut starts = Vec::new();
+        let mut starts = Vec::with_capacity(src.len() / 32 + 1);
         starts.push(0);
+        let mut ascii = true;
         let mut p = 0;
         while p < src.len() {
-            match src[p] {
+            // Eight bytes at a time while none is LF, CR or above 0x7F (0092).
+            while let Some(w) = src.get(p..p + 8) {
+                let w = u64::from_le_bytes([w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7]]);
+                if w & HIGH != 0 || has_byte(w, b'\n') || has_byte(w, b'\r') {
+                    break;
+                }
+                p += 8;
+            }
+            let Some(&b) = src.get(p) else { break };
+            ascii &= b < 0x80;
+            match b {
                 b'\n' => starts.push((p + 1) as u32),
                 b'\r' if src.get(p + 1) != Some(&b'\n') => starts.push((p + 1) as u32),
                 // U+2028 / U+2029 are E2 80 A8 / E2 80 A9.
@@ -32,7 +45,7 @@ impl LineTable {
             }
             p += 1;
         }
-        LineTable { starts }
+        LineTable { starts, ascii }
     }
 
     /// The number of lines (at least 1).
@@ -62,7 +75,7 @@ impl LineTable {
         let line = self.line(pos);
         let start = self.line_start(line) as usize;
         let end = (pos as usize).min(src.len()).max(start);
-        (line, count_chars(&src[start..end]) + 1)
+        (line, self.count_chars(&src[start..end]) + 1)
     }
 
     /// `line_col` for a run of mostly increasing offsets (the line table of a function,
@@ -71,7 +84,7 @@ impl LineTable {
     pub fn line_col_from(&self, src: &[u8], pos: u32, c: &mut LineCursor) -> (u32, u32) {
         if c.line != 0 && pos >= c.end && pos < c.next_start {
             let end = (pos as usize).min(src.len());
-            c.col += count_chars(&src[(c.end as usize).min(end)..end]);
+            c.col += self.count_chars(&src[(c.end as usize).min(end)..end]);
             c.end = end as u32;
             return (c.line, c.col + 1);
         }
@@ -82,7 +95,7 @@ impl LineTable {
             line,
             end: end as u32,
             next_start: self.starts.get(line as usize).copied().unwrap_or(u32::MAX),
-            col: count_chars(&src[start..end]),
+            col: self.count_chars(&src[start..end]),
         };
         (line, c.col + 1)
     }
@@ -100,7 +113,22 @@ pub struct LineCursor {
     next_start: u32,
 }
 
-/// Code points in UTF-8 `b`: the bytes that are not continuation bytes.
-fn count_chars(b: &[u8]) -> u32 {
-    b.iter().filter(|&&b| b & 0xC0 != 0x80).count() as u32
+impl LineTable {
+    /// Code points in UTF-8 `b` (of this source): the bytes that are not continuation
+    /// bytes.
+    fn count_chars(&self, b: &[u8]) -> u32 {
+        if self.ascii {
+            return b.len() as u32;
+        }
+        b.iter().filter(|&&b| b & 0xC0 != 0x80).count() as u32
+    }
+}
+
+const HIGH: u64 = 0x8080_8080_8080_8080;
+
+/// Whether a byte of `w` is `b` (`b` < 0x80, and no byte of `w` above 0x7F).
+fn has_byte(w: u64, b: u8) -> bool {
+    const LOW: u64 = 0x0101_0101_0101_0101;
+    let x = w ^ (LOW * u64::from(b));
+    x.wrapping_sub(LOW) & !x & HIGH != 0
 }

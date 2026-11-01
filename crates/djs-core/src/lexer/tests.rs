@@ -1371,6 +1371,37 @@ fn line_table() {
 }
 
 #[test]
+fn line_table_word_scan() {
+    // Line breaks at every offset of the eight-byte words the scan skips by, in ASCII
+    // and non-ASCII sources: the same lines and columns as a byte-by-byte scan.
+    for unit in ["abcdefghij", "aé€😀bcdefg"] {
+        for k in 1..20 {
+            let mut src = String::new();
+            for i in 0..40 {
+                src.push_str(&unit[..unit.char_indices().nth(i % 7).map_or(unit.len(), |c| c.0)]);
+                src.push_str(["\n", "\r", "\r\n", "\u{2028}"][(i * k) % 4]);
+            }
+            let b = src.as_bytes();
+            let t = LineTable::new(b);
+            let mut line = 1;
+            let mut col = 1;
+            let mut p = 0;
+            while p <= b.len() {
+                assert_eq!(t.line_col(b, p as u32), (line, col), "{k} at {p}");
+                let c = src[p..].chars().next();
+                let n = c.map_or(1, char::len_utf8);
+                match c {
+                    Some('\n' | '\u{2028}') => (line, col) = (line + 1, 1),
+                    Some('\r') if b.get(p + 1) != Some(&b'\n') => (line, col) = (line + 1, 1),
+                    _ => col += 1,
+                }
+                p += n;
+            }
+        }
+    }
+}
+
+#[test]
 fn line_cursor_matches_line_col() {
     use crate::lexer::LineCursor;
     let src = "ab\ncd\r\nef\rgh\u{2028}ij\u{2029}k\n\"😀😀\"; @ x\n\nlast";
