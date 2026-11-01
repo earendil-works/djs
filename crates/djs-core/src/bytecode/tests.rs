@@ -106,7 +106,7 @@ fn every_op_round_trips() {
     for (line, e) in text.lines().zip(&expected) {
         if e.op != Op::Label {
             assert!(
-                line.trim_start().split_whitespace().nth(1) == Some(e.op.name()),
+                line.split_whitespace().nth(1) == Some(e.op.name()),
                 "{line}"
             );
         }
