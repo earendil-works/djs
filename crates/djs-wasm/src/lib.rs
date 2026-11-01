@@ -370,10 +370,11 @@ pub extern "C" fn vm_new(memory_limit: u32) -> u32 {
 #[cfg(feature = "compiled-prelude")]
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_new_compiled(memory_limit: u32) -> u32 {
-    // Compacted like djs-prelude's build compacts the base (D1431), so that after a
-    // collection the two images can be compared byte for byte.
+    // Compacted and collected like djs-prelude's build makes the base (D1431; by copying,
+    // 0101), so that the two images can be compared byte for byte.
     let vm = Vm::new(options(memory_limit)).and_then(|mut vm| {
         vm.heap_mut().compact_for_image()?;
+        vm.collect_canonical()?;
         Ok(vm)
     });
     add_new_vm(vm)
