@@ -89,8 +89,17 @@ pub fn first_difference(expected: &str, actual: &str) -> String {
         .zip(&b)
         .position(|(x, y)| x != y)
         .unwrap_or(a.len().min(b.len()));
+    // Both lines from a little before the first differing character, at most
+    // `EXCERPT` characters: the reason goes into the ratchet file (0121, D2282).
+    let from = match (a.get(i), b.get(i)) {
+        (Some(x), Some(y)) => {
+            let common = x.chars().zip(y.chars()).take_while(|(c, d)| c == d).count();
+            common.saturating_sub(CONTEXT)
+        }
+        _ => 0,
+    };
     let show = |l: Option<&&str>| match l {
-        Some(l) => format!("`{l}`"),
+        Some(l) => format!("`{}`", excerpt(l, from)),
         None => "end".to_string(),
     };
     format!(
@@ -99,6 +108,25 @@ pub fn first_difference(expected: &str, actual: &str) -> String {
         show(a.get(i)),
         show(b.get(i))
     )
+}
+
+/// Characters shown before the first difference in a line.
+const CONTEXT: usize = 20;
+/// The most characters of a line a reason shows.
+const EXCERPT: usize = 80;
+
+/// `line` from character `from`, at most `EXCERPT` characters, with `…` where it was cut.
+pub fn excerpt(line: &str, from: usize) -> String {
+    let total = line.chars().count();
+    let mut out = String::new();
+    if from > 0 {
+        out.push('…');
+    }
+    out.extend(line.chars().skip(from).take(EXCERPT));
+    if from + EXCERPT < total {
+        out.push('…');
+    }
+    out
 }
 
 #[cfg(test)]
@@ -130,6 +158,20 @@ mod tests {
         assert_eq!(
             first_difference("a\n", "a\nb\n"),
             "line 2: expected end, got `b`"
+        );
+        // Long lines: an excerpt around the first differing character.
+        let long_a = format!("{}x{}", "p".repeat(100), "q".repeat(200));
+        let long_b = format!("{}y{}", "p".repeat(100), "q".repeat(200));
+        let d = first_difference(&long_a, &long_b);
+        assert_eq!(
+            d,
+            format!(
+                "line 1: expected `…{}x{}…`, got `…{}y{}…`",
+                "p".repeat(20),
+                "q".repeat(59),
+                "p".repeat(20),
+                "q".repeat(59)
+            )
         );
     }
 }

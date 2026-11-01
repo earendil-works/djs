@@ -253,7 +253,7 @@ fn failure_reason(expected: &str, actual: &str, done: &Done) -> String {
     if let Done::Throw(msg) = done {
         let first = msg.lines().next().unwrap_or("");
         if !expected.lines().any(|l| l == first) {
-            return format!("throws {first}");
+            return format!("throws {}", diff::excerpt(first, 0));
         }
     }
     diff::first_difference(expected, actual)
