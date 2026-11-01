@@ -1,6 +1,6 @@
 # 0126: Size: run-length Unicode tables, panics without formatting
 
-status: in-progress
+status: done
 agent: bloat
 branch: issue/0126-size-tables-panics
 depends-on: 0123
@@ -19,10 +19,10 @@ disjoint from perf's 0122 work:
    strings; measure what's reachable with twiggy.
 
 ## Acceptance criteria
-- [ ] Both cuts landed with sizes measured via scripts/size; no workload slower than +1%.
-- [ ] Panics remain diagnosable in native/dev builds (messages kept there; only the shipped
+- [x] Both cuts landed with sizes measured via scripts/size; no workload slower than +1%.
+- [x] Panics remain diagnosable in native/dev builds (messages kept there; only the shipped
       wasm drops them), and a wasm trap still maps to a clear host error.
-- [ ] Decisions recorded.
+- [x] Decisions recorded.
 
 ## Log
 - Priority item (coordinator, from perf): the shipped module carried absolute paths of
@@ -61,9 +61,32 @@ disjoint from perf's 0122 work:
   471,983 -> 465,290 gzip (−6.7 KB), raw 1,121,445 -> 1,082,157. Not done: the
   decomposition stream (11.6 KB gzip; a libunicode-style recoding might save 2–3 KB for
   real complexity) and the composition tables (deriving them needs a runtime cache).
+- Debug details (D2336): internal errors and invariant panics show `Debug` details only
+  natively and in debug builds (`crate::detail::detail`); wire/djs-wasm heap errors use
+  Display. 465,294 -> 464,043 gzip (−1.25 KB). Full core::fmt removal is not possible on
+  stable (core's panics build fmt::Arguments at call sites); replacing the ~100 `format!`
+  sites of JS-visible messages would give ~2–3 KB more (follow-up).
+- Perf (wmeasure, wasm instructions, base before the Unicode work vs after Unicode+Debug,
+  n=3/5): every workload within ±0.6% (json re-measured at n=5: −0.4%). The lexer's ID
+  tables, case tables and NFC tables are untouched.
 - js/test sandbox trap test accepts the release module's fixed message too. Guide:
   docs/guide/host.md (trap paragraph) updated; docs/host.md too.
 
 ## Follow-ups
+- core::fmt from JS-visible messages: a small non-formatting string builder for the ~100
+  `format!` sites (interp/run.rs, date.rs, compiler, intrinsics): ~2–3 KB gzip, touches
+  files several agents work in.
+- The normalization decomposition stream (11.6 KB gzip): a libunicode-style recoding
+  (per-type codings, CJK compatibility ideographs as a table) might save 2–3 KB gzip.
+- The composition tables (3 KB gzip) could be derived from the decompositions, but need
+  a runtime cache (no global state in djs-core) to stay fast for localeCompare.
 
 ## Result
+Landed in five merges (D2331–D2336). The shipped module went 509,489 -> 464,043 bytes
+gzip (−45.4 KB, of which perf's 0127 merged in between is part; this issue's own cuts,
+each measured against its baseline: path remap −0.1, no_std panic handler −3.4, no panic
+locations −8.5, Unicode tables −6.7, Debug details −1.25: −20 KB gzip), raw 1,186,680 ->
+1,078,802. Build-machine paths are gone from the module and the gate checks for them.
+Panic messages remain natively and in debug wasm builds; the shipped module reports a
+fixed trap message. DJS_STABLE_ONLY=1 builds the module without the one unstable flag.
+Known gaps: core::fmt stays reachable on stable (see D2336 and the follow-ups).

@@ -9,6 +9,7 @@ pub mod bigint;
 pub(crate) mod builtins;
 pub mod bytecode;
 pub mod compiler;
+mod detail;
 pub mod heap;
 pub mod interp;
 pub mod json;

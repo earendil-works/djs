@@ -13,7 +13,10 @@ pub(crate) fn bad_cell_kind(k: u8, off: u32) -> ! {
 #[cold]
 #[inline(never)]
 pub(crate) fn not_a_string(k: CellKind, off: u32) -> ! {
-    panic!("not a string cell: {k:?} at {off}")
+    panic!(
+        "{} at {off}",
+        crate::detail::detail("not a string cell", &k)
+    )
 }
 
 #[cold]
@@ -31,16 +34,16 @@ pub(crate) fn slot_out_of_range(i: u32) -> ! {
 #[cold]
 #[inline(never)]
 pub(crate) fn invalid_atom(a: Atom) -> ! {
-    panic!("invalid atom {a:?}")
+    panic!("{}", crate::detail::detail("invalid atom", &a))
 }
 
 #[cold]
 #[inline(never)]
 pub(crate) fn invalid_handle(h: Handle, dropped: bool) -> ! {
     if dropped {
-        panic!("handle {h:?} was dropped")
+        panic!("{}", crate::detail::detail("dropped handle", &h))
     }
-    panic!("invalid handle {h:?}")
+    panic!("{}", crate::detail::detail("invalid handle", &h))
 }
 
 #[cold]

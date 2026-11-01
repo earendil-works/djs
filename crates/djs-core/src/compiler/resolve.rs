@@ -114,7 +114,7 @@ pub(super) fn finish(
     for f in funcs.iter_mut() {
         let code = core::mem::take(&mut f.code)
             .finish()
-            .map_err(|e| internal(&format!("{e:?}")))?;
+            .map_err(|e| internal(&crate::detail::detail("bytecode", &e)))?;
         phase1.push(code);
     }
     let mut templates: Vec<Ref> = vec![Ref::NULL; funcs.len()];
@@ -306,7 +306,7 @@ fn resolve_relative_depths(
         .collect();
     while !pending.is_empty() {
         let depths = crate::bytecode::stack_depths(&code.code, handlers)
-            .map_err(|e| internal(&format!("{e:?}")))?;
+            .map_err(|e| internal(&crate::detail::detail("stack depths", &e)))?;
         let before = pending.len();
         pending.retain(|&i| {
             let h = &f.handlers[i];
@@ -727,7 +727,12 @@ fn emit_function(
             Capture::Outer(i) => capture_desc::outer(i),
             Capture::Local(v) => match parent_storage.map(|p| p[v as usize]) {
                 Some(Storage::Box(slot)) => capture_desc::local(slot),
-                other => return Err(internal(&format!("capture of a non-Box binding {other:?}"))),
+                other => {
+                    return Err(internal(&crate::detail::detail(
+                        "capture of a non-Box binding",
+                        &other,
+                    )));
+                }
             },
         });
     }
@@ -796,7 +801,7 @@ fn emit_function(
     };
     let t = alloc_template_in(heap, &parts, &mut scratch.stack).map_err(|e| match e {
         TemplateError::Heap(e) => e.into(),
-        e => internal(&format!("{e:?}")),
+        e => internal(&crate::detail::detail("template", &e)),
     });
     scratch.lines = lines;
     t

@@ -527,7 +527,7 @@ fn add_new_vm(vm: Result<Vm, djs_core::heap::HeapError>) -> u32 {
     with(|s| match vm {
         Ok(vm) => s.add_vm(vm),
         Err(e) => {
-            s.set_out(format!("cannot create a VM: {e:?}").as_bytes());
+            s.set_out(format!("cannot create a VM: {e}").as_bytes());
             0
         }
     })

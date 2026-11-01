@@ -5637,3 +5637,19 @@ Measured natively, per call:
 `toLowerCase`/`toUpperCase`, so dropping them saves nothing. The everyday string entries
 (charAt, charCodeAt, fromCharCode, codePointAt, repeat, lastIndexOf, replaceAll,
 trimStart, fill) stay.
+
+## D2336: Debug details of internal failures only outside the shipped module
+date: 2026-11-07 · by: bloat · issue: 0126
+Internal compiler errors (`{e:?}` of CodeError, StackError, TemplateError, Storage), a
+corrupt heap image's VerifyError and the heap's invariant panics (CellKind, Atom,
+Handle) formatted `Debug` values, which kept those impls and core::fmt's struct/tuple
+builders in the module. `crate::detail::detail(what, &value)` gives `"{what}:
+{value:?}"` natively and in debug builds and only `what` in the shipped module (wasm32
+without debug_assertions, whose panic handler records no messages anyway, D2332). The
+wire error and djs-wasm's "cannot create a VM" use HeapError's Display ("out of
+memory") instead of its Debug name. −3.4 KB raw, −1.25 KB gzip. What stays on stable:
+core's own panics (indexing, `expect`, RefCell) build `fmt::Arguments` with integer
+Display impls at their call sites, and JS-visible messages use `format!`, so
+core::fmt::write, integer formatting and `format_inner` remain reachable (~9 KB raw).
+Removing them would take a non-formatting replacement for ~100 `format!` sites (≈2–3 KB
+gzip more).

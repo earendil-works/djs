@@ -82,7 +82,7 @@ impl fmt::Display for WireError {
             WireError::Invalid { offset, reason } => {
                 write!(f, "invalid wire data at offset {offset}: {reason}")
             }
-            WireError::Heap(e) => write!(f, "{e:?}"),
+            WireError::Heap(e) => write!(f, "{e}"),
         }
     }
 }

@@ -121,7 +121,7 @@ impl fmt::Display for LoadError {
         match self {
             LoadError::BadHeader => f.write_str("not a djs heap image of this layout"),
             LoadError::TooLarge => f.write_str("the image is larger than the memory limit"),
-            LoadError::Corrupt(e) => write!(f, "corrupt heap image: {e:?}"),
+            LoadError::Corrupt(e) => f.write_str(&crate::detail::detail("corrupt heap image", e)),
             LoadError::BuildMismatch { found, expected } => write!(
                 f,
                 "the image is from another djs build (build hash {found:08x}, this build \
