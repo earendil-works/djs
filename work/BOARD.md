@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0033 | JSON + RegExp builtins, regex literals | num | .worktrees/0033-json-regexp-builtins |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
-| 0038 | Builtins wave 3 (Map/Set/Weak*/Reflect/Date; promote to active) | infra | .worktrees/0038-builtins-wave3 |
+| 0039 | Binary data: ArrayBuffer, typed arrays, DataView, base64 | infra | .worktrees/0039-binary-data |
 | 0036 | P1-6 Destructuring + tagged templates | lexer | .worktrees/0036-p1-destructuring-templates |
 
 ## Open (ready)
@@ -32,6 +32,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0028 | P1-2 runtime | 468f874 (agent heap; prelude at Vm::new: 92 us native / 146 us wasm; Error stack) |
 | 0029 | P1-5 Loops and iteration (compiler + iter builtins) | 8cc5aa2 (agent lexer; +1,774 test262) |
 | 0030 | P1-5 runtime + 0028 leftovers + GC audit | 9f35b6f (agent heap; 4 parts) |
+| 0038 | Builtins wave 3 | e43d075 (agent infra; Map/Set/Weak*/Reflect/Date; test262 active 64.8%) |
 | 0034 | Core builtins wave 2 | a05575b (agent infra; Array 2,461/2,680, String 688/1,040; gate back to 60 s) |
 | 0035 | Interpreter call-path performance | 2779e53 (agent heap; calls 7.5x -> 3.35x qjs, loop 9.6x -> 3.8x) |
 | 0031 | Core builtins wave 1 | 25fdfa7 (agent infra; test262 active 2,961 -> 7,687; leftovers to 0034) |
@@ -85,6 +86,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 2026-11-01 (0029 done) | ~95 / 175 | 11,773 / 20,124 (58.5%) |
 | 2026-11-01 (0038 p1: promotion to active, +2,018 tests) | | 12,354 / 22,142 (55.8%) |
 | 2026-11-01 (0038 p2: Map/Set/Weak*) | | 13,049 / 22,142 (58.9%) |
+| 2026-11-01 (0038 done + 0037 p1) | 96 / 182 | 14,367 / 22,142 (64.8%) |
 
 ## Parallelism notes
 
