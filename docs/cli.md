@@ -63,7 +63,7 @@ suspending every 300 fuel
   adopting it). Statement inputs (`a; b`, `if`, declarations) print nothing, and runtime
   errors in an expression input are 9 columns off on its first line. When 0058 lands,
   `SCRIPT_COMPLETION_VALUES` in `repl/input.rs` switches to printing the Script's own
-  value, and only `await` expressions keep the wrapper.
+  value (unless it is `undefined`), and only `await` expressions keep the wrapper.
 - **Top-level `await`** (D1641). An input that is not a valid Script but contains `await`
   is rewritten into an async body whose declarations are globals:
   - `let`/`const`/`var` → `0,` padded to the keyword's width: `let {a} = await f()`
