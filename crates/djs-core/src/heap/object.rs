@@ -401,6 +401,23 @@ enum Loc {
     ArrayLength,
 }
 
+/// Why an object became a dictionary (test statistics, `Heap::dict_reasons`).
+#[derive(Clone, Copy)]
+enum Dict {
+    /// More than `SHAPE_MAX` properties.
+    TooMany = 0,
+    /// The shape budget is spent.
+    Budget = 1,
+    /// A key other than the last was deleted.
+    Delete = 2,
+    /// An attribute change.
+    Attributes = 3,
+    /// An array-index key.
+    Index = 4,
+    /// A builtin namespace or prototype, the global object.
+    Builtin = 5,
+}
+
 /// The result of ValidateAndApplyPropertyDescriptor.
 enum Outcome {
     Reject,
@@ -470,11 +487,18 @@ impl Heap {
             return Ok(o);
         }
         let n = u32::try_from(keys.len()).map_err(|_| HeapError::OutOfMemory)?;
-        if n <= SHAPE_MAX
-            && !keys.iter().any(|&k| self.atom_array_index(k).is_some())
-            && self.shaped_from_entries(o, keys, values)?
-        {
+        let index = keys.iter().any(|&k| self.atom_array_index(k).is_some());
+        if n <= SHAPE_MAX && !index && self.shaped_from_entries(o, keys, values)? {
             return Ok(o);
+        }
+        #[cfg(test)]
+        {
+            let why = match () {
+                _ if index => Dict::Index,
+                _ if n > SHAPE_MAX => Dict::TooMany,
+                _ => Dict::Budget,
+            };
+            self.dict_reasons[why as usize] += 1;
         }
         self.set_obj_flag(o, OBJ_DICTIONARY, true);
         let t = self.alloc_table(n.max(4))?;
@@ -998,7 +1022,7 @@ impl Heap {
                 }
                 return Ok(());
             }
-            self.become_dictionary(o, 0)?;
+            self.become_dictionary(o, 0, Dict::Attributes)?;
         }
         self.write_entry(self.props(o), i, key, p)
     }
@@ -1013,7 +1037,14 @@ impl Heap {
             if !index && self.shape_insert(o, key, p)? {
                 return Ok(());
             }
-            self.become_dictionary(o, 1)?;
+            let why = if index {
+                Dict::Index
+            } else if self.prop_slots(o) >= SHAPE_MAX {
+                Dict::TooMany
+            } else {
+                Dict::Budget
+            };
+            self.become_dictionary(o, 1, why)?;
         }
         self.table_insert(o, key, p)?;
         if index {
@@ -1095,7 +1126,7 @@ impl Heap {
                 a.set(v, PropValues::SHAPE, Ref(parent));
                 return Ok(());
             }
-            self.become_dictionary(o, 0)?;
+            self.become_dictionary(o, 0, Dict::Delete)?;
         }
         self.table_remove(o, i);
         Ok(())
@@ -1107,13 +1138,18 @@ impl Heap {
         if self.is_dictionary(o) {
             return Ok(());
         }
-        self.become_dictionary(o, 0)
+        self.become_dictionary(o, 0, Dict::Builtin)
     }
 
     /// Converts a shape-mode object to dictionary mode with room for `extra` more
     /// entries. The slots stay the same.
-    fn become_dictionary(&mut self, o: Obj, extra: u32) -> Result<(), HeapError> {
+    fn become_dictionary(&mut self, o: Obj, extra: u32, why: Dict) -> Result<(), HeapError> {
         debug_assert!(!self.is_dictionary(o));
+        #[cfg(test)]
+        {
+            self.dict_reasons[why as usize] += 1;
+        }
+        let _ = why;
         let v = self.props(o);
         let n = if v == 0 {
             0

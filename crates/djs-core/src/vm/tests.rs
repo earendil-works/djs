@@ -3113,6 +3113,73 @@ fn failing_allocation_retries(limits: &[usize]) {
     }
 }
 
+/// Shape statistics of scripts (0083, the limits): `DJS_SHAPE_STATS=a.js:b.js cargo test
+/// -p djs-core --lib shape_stats -- --ignored --nocapture`. Per script: shapes created
+/// (the base image's excluded), and the live ordinary objects in shape and dictionary mode
+/// with their property counts.
+#[test]
+#[ignore]
+fn shape_stats_report() {
+    extern crate std;
+    use crate::heap::cells::{Object, PropTable, PropValues, Roots, flags::OBJ_DICTIONARY};
+    use crate::heap::{CellKind, ObjectClass};
+    let base = vm();
+    let base_shapes = base.heap().arena().get(0, Roots::SHAPES);
+    let paths = std::env::var("DJS_SHAPE_STATS").unwrap_or_default();
+    for path in paths.split(':').filter(|p| !p.is_empty()) {
+        // Codemode bodies: an async function body.
+        let src = std::fs::read_to_string(path).unwrap();
+        let src = format!("globalThis.result = (async () => {{\n{src}\n}})();");
+        let (mut vm, out) = finish_script(vm(), &src, 1 << 40, false);
+        vm.collect().unwrap();
+        let h = vm.heap();
+        let a = h.arena();
+        let shapes = a.get(0, Roots::SHAPES) - base_shapes;
+        let (mut shaped, mut dicts, mut big) = (0u32, 0u32, 0u32);
+        let mut counts = std::collections::BTreeMap::<u32, u32>::new();
+        for c in h.cells() {
+            if c.kind != CellKind::Object
+                || ObjectClass::from_u32(a.get(c.offset, Object::CLASS))
+                    != Some(ObjectClass::Ordinary)
+            {
+                continue;
+            }
+            let p = a.get(c.offset, Object::PROPS).0;
+            let dict = h.cell_flags(c.offset) & OBJ_DICTIONARY != 0;
+            let n = match p {
+                0 => 0,
+                p if dict => a.get(p, PropTable::COUNT),
+                p => a.get(p, PropValues::LEN),
+            };
+            if dict {
+                dicts += 1;
+                if n > 32 {
+                    big += 1;
+                }
+            } else {
+                shaped += 1;
+            }
+            *counts.entry(n.min(40)).or_default() += 1;
+        }
+        let r: Vec<u32> = h
+            .dict_reasons
+            .iter()
+            .zip(base.heap().dict_reasons)
+            .map(|(a, b)| a - b)
+            .collect();
+        std::println!(
+            "{path}: {shapes} shapes created; dictionaries made: {} > 32 keys, {} budget, {} delete, {} attributes, {} index keys, {} builtin; live ordinary objects at the end: {shaped} shape mode, {dicts} dictionaries ({big} with > 32 keys); by key count {counts:?}; result {}",
+            r[0],
+            r[1],
+            r[2],
+            r[3],
+            r[4],
+            r[5],
+            out.result.chars().take(60).collect::<String>()
+        );
+    }
+}
+
 /// Bytes per object for some shapes of data (0083): run with
 /// `cargo test -p djs-core --lib memory_per_object -- --ignored --nocapture`.
 #[test]

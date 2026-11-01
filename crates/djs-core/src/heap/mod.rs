@@ -151,6 +151,9 @@ pub struct Heap {
     /// Test hook: make the next collection fail to reserve its to-space.
     #[cfg(test)]
     pub(crate) fail_next_gc_reserve: bool,
+    /// Test statistics (0083): conversions to dictionary mode by reason (`object::Dict`).
+    #[cfg(test)]
+    pub(crate) dict_reasons: [u32; 6],
 }
 
 impl Heap {
@@ -213,6 +216,8 @@ impl Heap {
             reserve: reserve_for(hard_limit),
             #[cfg(test)]
             fail_next_gc_reserve: false,
+            #[cfg(test)]
+            dict_reasons: [0; 6],
         };
         heap.apply_reserve();
         heap
