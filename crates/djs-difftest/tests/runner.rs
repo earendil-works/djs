@@ -125,6 +125,7 @@ impl Engine for Echo {
         RunResult {
             output: vec![job.source.trim().to_string()],
             done: Done::Completed,
+            image: None,
         }
     }
 }
@@ -289,6 +290,7 @@ fn djs_stress_variants_agree() {
             Box::new(Djs {
                 suspend_every: Some(7),
                 gc_stress: false,
+                image: true,
             }),
         ),
         (
@@ -296,10 +298,16 @@ fn djs_stress_variants_agree() {
             Box::new(Djs {
                 suspend_every: None,
                 gc_stress: true,
+                image: false,
             }),
         ),
     ];
-    let out = runner::run_all(&Djs::default(), &cases, &dir.join("prelude.js"), &o).unwrap();
+    // `--determinism`: the plain and suspended runs also hash their heap images.
+    let plain = Djs {
+        image: true,
+        ..Djs::default()
+    };
+    let out = runner::run_all(&plain, &cases, &dir.join("prelude.js"), &o).unwrap();
     for (c, o) in cases.iter().zip(&out) {
         // A fuel limit of 5000 at 7 per slice still ends in a timeout: same transcript.
         assert!(o.stress.is_empty(), "{}: {:?}", c.name, o.stress);
@@ -314,6 +322,7 @@ fn djs_stress_variants_agree() {
             RunResult {
                 output: vec!["lie".into()],
                 done: Done::Completed,
+                image: None,
             }
         }
     }
@@ -322,5 +331,28 @@ fn djs_stress_variants_agree() {
     let out = runner::run_all(&Djs::default(), &cases[..1], &dir.join("prelude.js"), &o).unwrap();
     assert_eq!(out[0].stress.len(), 1);
     assert_eq!(out[0].stress[0].label, "liar");
+    // So is one with the same transcript but another heap image (D1720).
+    struct ImageLiar;
+    impl Engine for ImageLiar {
+        fn name(&self) -> &str {
+            "image liar"
+        }
+        fn run(&self, job: &Job<'_>) -> RunResult {
+            let mut r = plain_djs().run(job);
+            r.image = r.image.map(|h| h ^ 1);
+            r
+        }
+    }
+    fn plain_djs() -> Djs {
+        Djs {
+            image: true,
+            ..Djs::default()
+        }
+    }
+    let mut o = opts(true);
+    o.stress = vec![("image liar".into(), Box::new(ImageLiar))];
+    let out = runner::run_all(&plain_djs(), &cases[..1], &dir.join("prelude.js"), &o).unwrap();
+    assert_eq!(out[0].stress.len(), 1, "{:?}", out[0].stress);
+    assert!(out[0].stress[0].reason.contains("heap image"));
     fs::remove_dir_all(&dir).unwrap();
 }
