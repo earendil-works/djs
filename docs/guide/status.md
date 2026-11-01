@@ -69,7 +69,7 @@ Module sizes measured at d780463b0d, 2026-11-01.
 | intrinsics ([reference](ref-intrinsics.md)) | 450 |
 | builtins in `builtins/*.ts` | 455 |
 | of them `@native` (also compiled to Rust) | 18 |
-| of them `@fast` (a Rust leaf entry) | 76 |
+| of them `@fast` (a Rust leaf entry) | 71 |
 | difftest corpus cases | 540 |
 | base snapshot, bytes | 321,960 |
 <!-- /gen -->

@@ -37,8 +37,9 @@ via cuts 0122 didn't take:
 | `-inline-threshold=40` plus hot helpers `#[inline]` | D2255 | −2.6 KB | all 22 workloads at or below main |
 | URI functions and `substr` without @fast | D2256 | −0.2 KB | those calls 1.3–3.3x slower (rare) |
 
-- Main after the first landing (34eb668e): 472.0 KB. This branch: **469.2 KB gzip =
-  1.637x** quickjs-wasi (286.7 KB). Ceiling 470,209.
+- Main after the first landing (34eb668e): 472.0 KB. This branch: 469.2 KB on that tree.
+  Rebased onto bloat's 0126 Unicode work (main 465.3 KB), the merged tree is **462.0 KB
+  gzip = 1.612x** quickjs-wasi (286.7 KB). Ceiling 463,066.
 - D2253 is vm/image.rs and `Heap::forget_string_atoms` (heap/atom.rs).
 - D2255 adds `#[inline]` on three small heap/object.rs accessors (heap's file, attributes
   only) and puts the flag in bloat's wasm-build-env.sh (told bloat first).
@@ -60,10 +61,10 @@ via cuts 0122 didn't take:
   docs/host.md.
 
 ### Where we are, and what 1.5x takes
-**469.2 KB = 1.637x**; 1.5x is 430.0 KB, −39 KB away.
+**462.0 KB = 1.612x** (with 0126's Unicode tables, D2334/D2335); 1.5x is 430.0 KB,
+−32 KB away.
 - In my lane: the container rewrite, about −3 to −5 KB.
-- bloat (0126): the Unicode table encoding, ~−13 KB per its report. That would land at
-  ~452 KB, ≈1.58x.
+- bloat (0126): the Unicode table encoding has landed (included above).
 - The rest takes owner trades (measured in 0122):
   1. **Unicode \p and normalization tables out of the module** (host-loaded on first use):
      about −34 KB, less whatever 0126's encoding takes first.
@@ -74,8 +75,9 @@ via cuts 0122 didn't take:
   3. **opt-level z for cold code** (compiler, regexp compiler) via a crate split: about
      −9 KB, slower compiles. Whole-module z is −35 KB but +30–70% instructions.
 
-So after 0126: 1 alone (≈ −20 KB beyond its RLE) gets close to 1.5x; 1 and 3 together
-reach it.
+So from here, 1 (Unicode out of the module, now less than −34 KB since 0126 shrank the
+tables; re-measure) and 3 together are the realistic path to 1.5x, with the container
+follow-up chipping in.
 
 ## Follow-ups
 - Containers: out-of-line push/extend helpers and fewer temporary Vecs in the size-hot
@@ -84,12 +86,11 @@ reach it.
 - One JSON input path (UTF-16 through a WTF-8 mode of the UTF-8 lexer): about −1.5 KB gz.
 
 ## Result
-The shipped module is at 469.2 KB gzip, **1.637x** quickjs-wasi (from 1.777x at the
-start of 0127, 498.6 → 469.2 KB on main's tree). The cuts:
+The shipped module is at 462.0 KB gzip, **1.612x** quickjs-wasi with bloat's Unicode
+work merged (469.2 KB on the tree before it; 1.777x at the start of 0127). The cuts:
 - the base image keeps no internal names (D2253);
 - 13 natives and two rare @fast paths are gone (D2254, D2256);
 - the module inlines less, with hot helpers marked (D2255).
 
 Workloads are equal or faster. Bytecode density was measured and dropped. Containers and
-one-JSON-path are follow-ups. Reaching 1.5x needs bloat's Unicode encoding plus an owner
-trade (Log).
+one-JSON-path are follow-ups. Reaching 1.5x (−32 KB) needs owner trades (Log).
