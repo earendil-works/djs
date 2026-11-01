@@ -1,0 +1,26 @@
+{"a":[1,2.5,0,1000,"sA\n"],"b":{"c":null,"d":true,"e":false},"":0} true true true
+42 x null 0 7
+1 1,b,a
+SyntaxError expecting property name
+SyntaxError unexpected token: ']'
+SyntaxError Unexpected end of JSON input
+SyntaxError Unexpected number
+SyntaxError unexpected token: 'tru'
+SyntaxError Bad escaped character
+SyntaxError unexpected data at the end
+SyntaxError expecting ']'
+SyntaxError Bad control character in string literal
+SyntaxError expecting ':'
+SyntaxError unexpected token: 'undefined'
+SyntaxError Exponent part is missing a number
+SyntaxError Unexpected token '
+SyntaxError Unexpected end of JSON input
+0=1:object | b=2:object | 1={"b":20}:object | a=[10,{"b":20}]:object | c=3:object | d="x":object | ={"a":[10,{"b":20}],"d":"x"}:object
+{"a":[10,{"b":20}],"d":"x"} false
+3 false
+,5,5
+1 1
+{"a":{"b":2}}
+RangeError: boom
+1 [object JSON] 2 parse
+=== completed

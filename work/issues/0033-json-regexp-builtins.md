@@ -61,6 +61,29 @@ following 0031's pattern (builtin-language wrappers around leaf intrinsics):
   not cover realm slot order, object class ids, flag bits or the prelude. Now
   djs-core/build.rs hashes the non-test sources and prelude.js into BUILD_HASH (D1330).
 
+### Part 1: JSON
+- builtins/json.ts (JSON object, parse + reviver, stringify: fast leaf first, then the
+  full algorithm), builtins/json.rs leaves, interp/run/json_regexp.rs (my intrinsics are
+  dispatched from the `_` arm of `call_intrinsic`, so the big match there is untouched
+  apart from one line). D1331.
+- Intrinsic table regenerated with work/scratch/0033/regen-table.py (mirrors the
+  table_matches_sources test).
+- Tests: tests/corpus/builtins/json-{parse,stringify}.js (identical to qjs, also with
+  --suspend-every 97 --gc-stress), tests/data/e2e/json.js (three modes).
+- test262 built-ins/JSON active: 117/119 (the two left need String.prototype.split and
+  regex literals: part 2). Later group: 44 (Proxy, BigInt, json-parse-with-source).
+  Whole active run: 16,355 → 16,542 passing (ratchet −189 +2 changed reasons).
+- difftest: test_json.js and test_optional_chaining.js now get further (new reasons in
+  the ratchet). console/{tojson,objects,numbers-in-json}.js still fail: the difftest
+  harness's console glue (crates/djs-difftest/src/djs.rs `format`) calls
+  `stringify_fast` from the host and prints a marker on Slow.
+- Base snapshot (debug build): 351,696 → 373,488 bytes (+21.8 KB for json.ts).
+
 ## Follow-ups
+- Host console glue (djs-difftest `format`/`output_text`, and the Sandbox in js/) formats
+  objects with the host-side fast stringify only. For toJSON, accessors or wrappers it
+  should run JSON.stringify in the VM (or the prelude should format console arguments).
+- JSON.parse source text access (reviver `{ source }`, JSON.rawJSON/isRawJSON): test262
+  "later" (json-parse-with-source), qjs has it.
 
 ## Result

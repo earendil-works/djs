@@ -1,0 +1,23 @@
+djs 2 true true
+{"name":"djs","tags":["a","b"],"n":[2,3.5,-2],"nested":{"ok":true,"none":null}}
+{
+ "name": "djs",
+ "n": [
+  1,
+  2.5,
+  -3
+ ]
+}
+{"d":"1970-01-01T00:00:00.000Z","w":[1,"s",true]}
+{
+	"g": {
+		"h": [
+			1,
+			2
+		]
+	}
+}
+3967 [{"i":0,"s":"x0"},{"i":1,"s":"x1"},{"i": late
+SyntaxError expecting property name
+TypeError circular reference
+TypeError circular reference

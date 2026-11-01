@@ -1682,3 +1682,32 @@ djs-prelude's build script whenever djs-core is rebuilt, which was checked by ha
 so the base cannot go stale. The "Function" for `typeof` that agents saw in djs-cli output
 was not an engine bug. The agent tool display capitalizes the first character of a
 command's output (`echo function` shows `Function`); `od -c` shows the real bytes.
+
+## D1331: JSON builtins: leaf parse and fast stringify, the rest in the builtin language
+date: 2026-11-01 · by: num · issue: 0033
+builtins/json.ts implements JSON.parse and JSON.stringify over four leaves
+(builtins/json.rs, dispatched from interp/run/json_regexp.rs):
+- `%JsonParse(text)`: `json::parse` with the realm's prototypes.
+- `%JsonStringifyFast(v, gap)`: `json::stringify_fast`. It returns `null` for `Slow`, a
+  value that can never be a stringify result.
+- `%JsonQuote(s)`: QuoteJSONString via the fast path on a string.
+- `%CreateDataProperty(o, k, v)`: the non-throwing form, for the reviver.
+
+JSON.parse without a callable reviver is one leaf call. The reviver
+(InternalizeJSONProperty) runs in the builtin language.
+
+JSON.stringify computes the gap, then tries the fast path when there is no replacer.
+Only when that says Slow does it run the spec algorithm (SerializeJSONProperty, Object,
+Array, with an internal stack array for cycles) from the start, which is safe because
+the fast path has had no observable effect. Wrapper objects are unwrapped with
+`%PrimitiveValue`.
+
+Errors keep qjs's messages: the parser's SyntaxErrors, `TypeError: circular reference`,
+and `InternalError: stack overflow` from the fast path's depth limit or the VM stack. The
+leaves pay fuel afterwards, one unit per 16 code units of input or output, because they
+run to completion.
+
+Not done:
+- The reviver's third argument `{ source }` and `JSON.rawJSON`/`isRawJSON`
+  (json-parse-with-source, test262 "later" group).
+- BigInt.
