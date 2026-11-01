@@ -1,7 +1,7 @@
 # 0124: Every file reference in the guide links to GitHub
 
-status: open
-agent: -
+status: in-progress
+agent: docs
 branch: issue/0124-file-refs-linked
 depends-on: 0115
 guide: all pages
