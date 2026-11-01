@@ -1,7 +1,7 @@
 # 0122: wasm size toward the D020 budget (gzip <= 1.5x quickjs-wasi)
 
-status: open
-agent: -
+status: in-progress
+agent: perf
 branch: issue/0122-size-budget
 depends-on: 0098, 0116
 guide: docs/guide/goals.md and any page quoting sizes (generated numbers regenerate)
