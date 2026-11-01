@@ -41,13 +41,14 @@ echo "== rebase onto main"
 old_base=$(git merge-base main HEAD)
 git rebase main
 
-# Regenerate what both main and the branch changed the sources of, plus every file a
-# merge driver kept one side of, and commit it, so the gate sees a consistent tree.
-both=$(comm -12 <(git diff --name-only "$old_base" main | sort) \
-                <(git diff --name-only main HEAD | sort))
+# Regenerate the generated files (and the heap layout when both main and the branch
+# changed heap/), plus every file a merge driver kept one side of, and commit the
+# result, so the gate sees a consistent tree.
 regen=()
-if echo "$both" | grep -qE '^builtins/'; then regen+=(--intrinsics); fi
-if echo "$both" | grep -qE '^crates/djs-core/src/heap/'; then regen+=(--layout); fi
+if git diff --name-only "$old_base" main | grep -q '^crates/djs-core/src/heap/' &&
+   git diff --name-only main HEAD | grep -q '^crates/djs-core/src/heap/'; then
+  regen+=(--layout)
+fi
 echo "== regenerate generated files ${regen[*]:-}"
 ./scripts/regen.sh ${regen[@]+"${regen[@]}"}
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
