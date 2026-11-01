@@ -284,6 +284,25 @@ pub extern "C" fn djs_build_hash() -> u32 {
     djs_core::vm::BUILD_HASH
 }
 
+/// Like `djs_staging`, for a VM image about to be restored with `vm_from_bytes` with a heap
+/// cap of `memory_limit`: the buffer gets the capacity the restored arena will reserve, so
+/// handing it over grows nothing. Restoring through `djs_staging` copies the arena once
+/// more and leaves the staging block behind as a hole (D1942).
+#[unsafe(no_mangle)]
+pub extern "C" fn djs_image_staging(len: usize, memory_limit: u32) -> usize {
+    let cap = djs_core::heap::Heap::restore_capacity(len, options(memory_limit).memory_limit);
+    with(|s| {
+        if s.staging.capacity() < cap {
+            // Free the old buffer first, so the new one can take its place.
+            s.staging = Vec::new();
+            s.staging.reserve_exact(cap);
+        }
+        s.staging.clear();
+        s.staging.resize(len, 0);
+        s.staging.as_mut_ptr() as usize
+    })
+}
+
 /// Makes the staging buffer at least `len` bytes and returns its address. Valid until the
 /// next call.
 #[unsafe(no_mangle)]

@@ -73,6 +73,18 @@ impl Arena {
         self.target = target;
     }
 
+    /// Reserves capacity up to the target now (best effort: a refusal leaves the arena as
+    /// it is, and growth asks again later). A restored arena's buffer is exactly the image,
+    /// and its first allocation would reallocate it to the target anyway; right after the
+    /// restore it is usually the allocator's last block, so it grows in place instead of
+    /// being copied and leaving its old block behind as a hole (D1942).
+    pub(crate) fn reserve_target(&mut self) {
+        let want = (self.target.min(self.limit) as usize).saturating_sub(self.bytes.len());
+        if self.target as usize > self.bytes.capacity() {
+            let _ = self.bytes.try_reserve_exact(want);
+        }
+    }
+
     /// Bytes reserved from the host.
     pub fn capacity(&self) -> usize {
         self.bytes.capacity()

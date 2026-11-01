@@ -148,6 +148,8 @@ interface Exports {
   memory: WebAssembly.Memory;
   djs_abi_version(): number;
   djs_staging(len: number): number;
+  /** Since 0094 (D1942); older modules lack it. */
+  djs_image_staging?(len: number, memoryLimit: number): number;
   djs_out_ptr(): number;
   djs_out_len(): number;
   djs_panic_ptr(): number;
@@ -296,7 +298,10 @@ export class Sandbox {
       restoredFns = meta.functions;
       if (opts.deterministic) this.clock = meta.clock ?? opts.deterministic.startedAt;
       const image = snapshot.subarray(12 + metaLen);
-      const at = x.djs_staging(image.length); // may grow memory: take the buffer afterwards
+      // May grow memory: take the buffer afterwards. The image's buffer becomes the arena,
+      // so it is staged with the arena's capacity (D1942).
+      const limit = opts.memoryLimit ?? 0;
+      const at = x.djs_image_staging ? x.djs_image_staging(image.length, limit) : x.djs_staging(image.length);
       new Uint8Array(x.memory.buffer).set(image, at);
       vm = x.vm_from_bytes(image.length, opts.memoryLimit ?? 0);
       if (vm === 0) throw new SandboxError("misuse", outText(x));

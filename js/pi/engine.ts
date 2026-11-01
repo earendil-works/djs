@@ -21,6 +21,8 @@ interface Exports {
   djs_abi_version(): number;
   djs_build_hash(): number;
   djs_staging(len: number): number;
+  /** Since 0094 (D1942); older modules lack it. */
+  djs_image_staging?(len: number, memoryLimit: number): number;
   djs_out_ptr(): number;
   djs_out_len(): number;
   djs_panic_ptr(): number;
@@ -73,7 +75,8 @@ export class Engine {
   /** A VM restored from `image()` of the same build. */
   static restore(module: WebAssembly.Module, image: Uint8Array, memoryLimit: number | undefined): Engine {
     const x = instantiate(module);
-    const at = x.djs_staging(image.length);
+    // The image's buffer becomes the arena: stage it with the arena's capacity (D1942).
+    const at = x.djs_image_staging ? x.djs_image_staging(image.length, memoryLimit ?? 0) : x.djs_staging(image.length);
     new Uint8Array(x.memory.buffer).set(image, at);
     const vm = x.vm_from_bytes(image.length, memoryLimit ?? 0);
     if (vm === 0) throw new Error(outText(x));

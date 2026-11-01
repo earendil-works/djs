@@ -218,7 +218,14 @@ impl Vm {
     /// pending calls. Per-VM state is set up after the copy (see `after_copy`).
     pub fn from_base(base: &[u8], opts: VmOptions) -> Result<Vm, LoadError> {
         Vm::check_image(base)?;
-        let heap = Heap::from_bytes_trusted(base.to_vec(), opts.memory_limit)?;
+        // Copied into a buffer with the arena's capacity, so the heap does not reallocate
+        // it right away (D1942).
+        let mut bytes = Vec::new();
+        bytes
+            .try_reserve_exact(Heap::restore_capacity(base.len(), opts.memory_limit))
+            .map_err(|_| LoadError::TooLarge)?;
+        bytes.extend_from_slice(base);
+        let heap = Heap::from_bytes_trusted(bytes, opts.memory_limit)?;
         let mut vm = Vm::over(heap, opts)?;
         if vm.state() != RunState::Idle || vm.heap.handle_count() != 0 {
             return Err(LoadError::BadHeader);

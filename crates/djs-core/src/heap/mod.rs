@@ -206,6 +206,16 @@ impl Heap {
         Ok(heap)
     }
 
+    /// The arena capacity a heap restored from an image of `image_len` bytes reserves
+    /// (D1942): at most this, so a host can stage the image in a buffer that becomes the
+    /// arena without growing again (`djs_image_staging`).
+    pub fn restore_capacity(image_len: usize, limit: usize) -> usize {
+        let hard = (limit.min(arena::MAX_ARENA as usize) as u32) & !7;
+        let len = u32::try_from(image_len).unwrap_or(u32::MAX);
+        let t = gc::next_threshold(len, hard - reserve_for(hard));
+        (t as usize).max(image_len)
+    }
+
     fn over(arena: Arena) -> Heap {
         let hard_limit = arena.limit();
         let mut heap = Heap {
@@ -220,6 +230,9 @@ impl Heap {
             dict_reasons: [0; 6],
         };
         heap.apply_reserve();
+        if heap.arena.len() >= Roots::LAYOUT.min_size {
+            heap.arena.reserve_target();
+        }
         heap
     }
 
