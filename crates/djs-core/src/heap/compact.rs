@@ -272,3 +272,104 @@ impl Heap {
         Ok(())
     }
 }
+
+impl Heap {
+    /// The slots that reference the cells a VM replaces first once it runs (D2057), in
+    /// the order they go at the end of an image: Map/Set entries and indexes (in address
+    /// order), the root shape's transitions, the global object's property index and
+    /// table, the atom index and, last and largest, the atom entries, which the first new
+    /// atom replaces. A dying cell shifts only the cells after it.
+    ///
+    /// Each entry is a slot offset; bit 0 set for a `Value` slot (else a `Ref`), bit 1 for
+    /// a Map/Set's entries array, whose old copy must forward to a new one for iterators.
+    pub(crate) fn first_grown(&self, global: crate::value::Obj) -> Vec<u32> {
+        use super::ObjectClass;
+        use super::cells::{AtomTable, PropTable, Shape};
+        let a = self.arena();
+        let mut out = Vec::new();
+        let mut c = 0;
+        while c < a.len() {
+            let h: u64 = a.read(c);
+            if h as u8 == CellKind::Object as u8 {
+                let class: u32 = a.get(c, Object::CLASS);
+                if (ObjectClass::Map as u32..=ObjectClass::WeakSet as u32).contains(&class) {
+                    let forward = if class < ObjectClass::WeakMap as u32 {
+                        2
+                    } else {
+                        0
+                    };
+                    let at = Object::SLOTS.at(c, 0);
+                    out.extend_from_slice(&[at | 1 | forward, at + 8 | 1]);
+                }
+            }
+            c += (h >> 32) as u32;
+        }
+        // Null refs are skipped by the users (`first_grown_target` is 0).
+        let shape = a.get::<Ref>(0, Roots::ROOT_SHAPE).0;
+        let props = a.get::<Ref>(global.0, Object::PROPS).0;
+        let table = props != 0 && self.cell_kind(props) == CellKind::PropTable;
+        let t = self.atom_table();
+        out.extend_from_slice(&[
+            if shape != 0 {
+                shape + Shape::TRANSITIONS.offset
+            } else {
+                0
+            },
+            if table {
+                props + PropTable::INDEX.offset
+            } else {
+                0
+            },
+            if table {
+                global.0 + Object::PROPS.offset
+            } else {
+                0
+            },
+            t + AtomTable::INDEX.offset,
+            t + AtomTable::ENTRIES.offset,
+        ]);
+        out
+    }
+
+    /// The cell a [`Heap::first_grown`] entry references (0 for none).
+    pub(crate) fn first_grown_target(&self, e: u32) -> u32 {
+        let s = e & !3;
+        if s == 0 {
+            0
+        } else if e & 1 != 0 {
+            let v: crate::value::Value = self.arena().read(s);
+            v.ref_offset().unwrap_or(0)
+        } else {
+            self.arena().read::<u32>(s)
+        }
+    }
+
+    /// Copies the cells of [`Heap::first_grown`] to the end of the arena and points their
+    /// slots at the copies; the next full collection drops the originals and slides the
+    /// copies down to the end of the heap. For `Vm::seal`: the session's first changes
+    /// then leave the sealed image in place (D2057).
+    pub(crate) fn move_to_end(&mut self, global: crate::value::Obj) -> Result<(), HeapError> {
+        for e in self.first_grown(global) {
+            let t = self.first_grown_target(e);
+            if t == 0 {
+                continue;
+            }
+            let size = self.cell_size(t);
+            let new = self.alloc_cell(self.cell_kind(t), size)?;
+            // The whole cell, header flags included.
+            self.arena_mut().copy_within(t, size, new);
+            let s = e & !3;
+            if e & 1 != 0 {
+                let v: u64 = self.arena().read(s);
+                self.arena_mut().write(s, (v & !0xFFFF_FFFF) | new as u64);
+            } else {
+                self.arena_mut().write(s, new);
+            }
+            if e & 2 != 0 {
+                // Like a grown Map/Set: an iterator on the old array moves to the new one.
+                self.value_array_set(t, 0, crate::value::Value::internal(new));
+            }
+        }
+        Ok(())
+    }
+}

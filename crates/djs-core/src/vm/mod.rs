@@ -769,6 +769,9 @@ impl Vm {
     /// collections while scripts run leave it alone. For the end of the embedder's setup
     /// (pi calls it after its prelude).
     pub fn seal(&mut self) -> Result<(), HeapError> {
+        // The cells the session grows first go to the end of the sealed image (D2057).
+        let g = self.global();
+        self.heap.move_to_end(g)?;
         self.collect_as(Collection::Seal)
     }
 
@@ -796,37 +799,14 @@ impl Vm {
         // Without the prelude's internal names (D2253).
         image::drop_internal_names(&mut self.heap)?;
         self.collect_canonical()?;
-        let last = self.first_grown_cells();
+        let h = &self.heap;
+        let last: Vec<u32> = h
+            .first_grown(self.global())
+            .into_iter()
+            .map(|e| h.first_grown_target(e))
+            .filter(|&t| t != 0)
+            .collect();
         self.heap.order_for_image(&last)
-    }
-
-    /// The base cells a VM replaces first, as soon as a script adds a global or an atom
-    /// (D2057): the atom table's entries and index, the global object's property table
-    /// and index, and the root shape's transitions. `order_for_image` puts them at the
-    /// end of the base, so the dead copies a full collection drops shift nothing before
-    /// them.
-    fn first_grown_cells(&self) -> Vec<u32> {
-        use crate::heap::Ref;
-        use crate::heap::cells::{AtomTable, Object, PropTable, Roots, Shape};
-        let a = self.heap.arena();
-        let atoms: Ref = a.get(0, Roots::ATOMS);
-        let props: Ref = a.get(self.global().0, Object::PROPS);
-        let shape: Ref = a.get(0, Roots::ROOT_SHAPE);
-        let mut out = Vec::new();
-        if let Some(t) = atoms.get() {
-            out.push(a.get::<Ref>(t, AtomTable::ENTRIES));
-            out.push(a.get::<Ref>(t, AtomTable::INDEX));
-        }
-        if let Some(p) = props.get()
-            && self.heap.cell_kind(p) == crate::heap::CellKind::PropTable
-        {
-            out.push(Ref(p));
-            out.push(a.get::<Ref>(p, PropTable::INDEX));
-        }
-        if let Some(s) = shape.get() {
-            out.push(a.get::<Ref>(s, Shape::TRANSITIONS));
-        }
-        out.into_iter().filter_map(|r| r.get()).collect()
     }
 
     /// A collection of `heap` alone (no finalization scheduling).

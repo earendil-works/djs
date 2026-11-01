@@ -3715,3 +3715,38 @@ fn reserved_bases_start_with_room() {
     assert!(big.heap().arena().capacity() >= 8 << 20);
     assert_eq!(plain.bytes(), big.bytes());
 }
+
+#[test]
+fn seal_puts_the_first_grown_cells_last() {
+    // D2057: after a seal, the atom entries are the last cell, and a session's first atoms
+    // and globals leave everything before the moved cells in place, through a full
+    // collection too. A Map iterator alive across the seal still sees later additions.
+    let mut v = vm();
+    eval(
+        &mut v,
+        "globalThis.m = new Map([[1, 1]]); globalThis.it = m.keys(); it.next(); return 0",
+    );
+    v.seal().unwrap();
+    let a = v.heap().arena();
+    let atoms: crate::heap::Ref = a.get(0, crate::heap::cells::Roots::ATOMS);
+    let entries: crate::heap::Ref = a.get(atoms.0, crate::heap::cells::AtomTable::ENTRIES);
+    assert_eq!(
+        entries.0 + v.heap().cell_size(entries.0),
+        a.len(),
+        "entries last"
+    );
+    let sealed = v.bytes().to_vec();
+    assert_eq!(
+        eval(
+            &mut v,
+            "globalThis.fresh_name_1 = 1; m.set(2, 2); m.set(3, 3); return [...it].join()"
+        ),
+        "2,3"
+    );
+    v.collect().unwrap();
+    // Nearly every word of the sealed image is where the seal put it.
+    let words = |b: &[u8]| b.chunks(8).map(|w| w.to_vec()).collect::<Vec<_>>();
+    let (x, y) = (words(&sealed), words(v.bytes()));
+    let same = x.iter().zip(&y).filter(|(a, b)| a == b).count();
+    assert!(same * 100 > x.len() * 90, "{same} of {} words", x.len());
+}
