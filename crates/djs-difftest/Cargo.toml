@@ -4,6 +4,8 @@ edition.workspace = true
 version.workspace = true
 license.workspace = true
 publish.workspace = true
+# `cargo run -p djs-difftest` (scripts, the gate) runs the difftest, not djs-abidrive.
+default-run = "djs-difftest"
 
 [[bin]]
 name = "djs-difftest"
