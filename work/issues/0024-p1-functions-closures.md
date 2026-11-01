@@ -1,6 +1,6 @@
 # 0024: P1-1 Functions and closures (compiler side)
 
-status: in-progress
+status: done
 agent: lexer
 branch: issue/0024-p1-functions-closures
 depends-on: 0014, 0015
@@ -15,19 +15,19 @@ executes the closure/Box/capture ops (0015). 0022 (heap agent, running in parall
 adds the missing interp ops for P0 and `Vm::compile`.
 
 ## Acceptance criteria
-- [ ] All the constructs above compile per the note (sections 5.3 to 5.7, 6.3), with
+- [x] All the constructs above compile per the note (sections 5.3 to 5.7, 6.3), with
       early errors (duplicate params with defaults or rest, strict reserved names,
       `arguments`/`eval` as binding names, `new.target` outside functions, …).
-- [ ] Per-iteration `let` bindings in `for` loops with closures (`rebox`, 5.9).
-- [ ] Function objects get `name` and `length`, and `prototype` for constructors (decide
+- [x] Per-iteration `let` bindings in `for` loops with closures (`rebox`, 5.9).
+- [x] Function objects get `name` and `length`, and `prototype` for constructors (decide
       where: the compiler emits a `make_closure` flag and the interpreter creates them;
       coordinate with 0022 via the log if interp changes are needed, and keep those
       changes minimal and additive).
-- [ ] Disassembly snapshots and e2e programs (through the interpreter) for closures:
+- [x] Disassembly snapshots and e2e programs (through the interpreter) for closures:
       counters, captured loop variables, nested captures across three levels, recursion,
       mutual recursion via hoisting, `this` in methods called via `obj.f()`, arrows
       capturing `this` and `arguments`, default params referencing earlier params, rest.
-- [ ] The test262 compile sweep: the number of "not supported yet" files drops; record
+- [x] The test262 compile sweep: the number of "not supported yet" files drops; record
       before and after.
 
 ## Notes
@@ -68,6 +68,40 @@ adds the missing interp ops for P0 and `Vm::compile`.
   26 programs, all cross-checked with qjs (`work/scratch/0024/qjs_check.py`). Pure
   closure cases pass on the current interpreter; the rest need 0022.
 
+- Per the coordinator, landing before 0022: the cases that need 0022's interpreter
+  pieces are in the ignored test `compiler::tests::end_to_end_functions_0022`.
+
 ## Follow-ups
 
+- 0022 (heap agent): implement `rest` and un-ignore
+  `compiler::tests::end_to_end_functions_0022` (11 cases: `this` in methods, arrows
+  capturing `this`/`arguments`, `name`/`length`, `new`, `new.target`,
+  `arguments.length`, rest parameters, a named function expression).
+- Computed-key function names (`{ [k]: () => 1 }`) need a runtime `set_name`.
+- Spec gap (compiler.md 5.5): a body `var` named like a parameter shares the parameter's
+  binding even with parameter expressions.
+- Still "not supported yet": methods, getters and setters in object literals (P1-2),
+  classes (P1-7), destructuring parameters (P1-6), async functions and generators
+  (P2/P5), spread arguments.
+
 ## Result
+
+Functions compile: declarations (hoisted per scope, block-level ones lexical), function
+expressions (named ones bind their own name), arrows (expression and block bodies),
+default and rest parameters with TDZ between them, `return`, calls and `new`, `this`,
+`arguments` and `new.target` (arrows capture them from the enclosing function),
+closures over any binding through Boxes (resolution walks enclosing functions, D1081,
+D1083), and per-iteration `let` copies in `for` loops (`iter_scope` → `rebox`). Templates
+carry `KIND_NORMAL`/`KIND_ARROW`, `NAME` (with NamedEvaluation), `LENGTH`, `PARAMS`
+and capture descriptors. The interpreter creates `name`/`length`/`prototype` (D1240).
+Parameters follow D1241.
+
+Tests: snapshots `closures.js` and `functions.js`, about 25 new error cases, and
+`end_to_end_functions` (18 programs: counters, captured loop variables, three-level
+captures, recursion, mutual recursion via hoisting, defaults, TDZ through closures, block
+functions). **Un-ignore `compiler::tests::end_to_end_functions_0022` (11 programs) when
+0022 lands.** All outputs are checked against qjs (`work/scratch/0024/qjs_check.py`
+<test fn name>).
+
+test262 compile sweep: 11,438 → 23,482 files compile; "not supported yet" 39,903 →
+27,156. The only negative parse tests that compile are module-only.

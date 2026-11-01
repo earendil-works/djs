@@ -715,10 +715,10 @@ fn end_to_end() {
 }
 
 /// Functions and closures end to end (docs/compiler.md 5.3 to 5.9). Outputs checked
-/// against qjs.
+/// against qjs (`work/scratch/0024/qjs_check.py`).
 #[test]
 fn end_to_end_functions() {
-    let cases: &[(&str, &str)] = &[
+    run_cases(&[
         (
             "function counter() { let n = 0; return () => ++n } const c = counter(); c(); c(); return c()",
             "=> 3",
@@ -748,14 +748,6 @@ fn end_to_end_functions() {
             "=> true",
         ),
         (
-            "const o = { v: 42, m: function () { return this.v } }; return o.m()",
-            "=> 42",
-        ),
-        (
-            "const o = { v: 7, m: function () { const f = () => this.v + arguments[0]; return f(100) } }; return o.m(1)",
-            "=> 8",
-        ),
-        (
             "function f(a, b = a * 2) { return a + b } return f(3) + f(3, 1)",
             "=> 13",
         ),
@@ -766,31 +758,6 @@ fn end_to_end_functions() {
         (
             "function f(x) { const g = () => x; x = 5; return g() } return f(1)",
             "=> 5",
-        ),
-        (
-            "const f = function g(n) { return n ? g(n - 1) + 1 : 0 }; return f(3)",
-            "=> 3",
-        ),
-        (
-            "function foo(a, b = 1, c) {} return foo.name + foo.length",
-            "=> foo1",
-        ),
-        (
-            "const bar = () => 1; let baz; baz = function () {}; return bar.name + baz.name",
-            "=> barbaz",
-        ),
-        ("function P(x) { this.x = x } return new P(4).x", "=> 4"),
-        (
-            "function F() { return new.target } return F()",
-            "=> undefined",
-        ),
-        (
-            "function F() { this.t = new.target === F } return new F().t",
-            "=> true",
-        ),
-        (
-            "function f() { return arguments.length } return f(1, 2, 3)",
-            "=> 3",
         ),
         (
             "const c = 1; const f = () => { c = 2 }; f()",
@@ -814,7 +781,58 @@ fn end_to_end_functions() {
             "function mk() { let a = 0; return { inc: () => ++a, get: () => a } } const m = mk(); m.inc(); m.inc(); return m.get()",
             "=> 2",
         ),
-    ];
+    ]);
+}
+
+/// The function cases that need 0022's interpreter pieces (`special_object`,
+/// `construct`, function `name`/`length`/`prototype`, `rest`). Un-ignore when 0022
+/// lands. Checked against qjs too.
+#[test]
+#[ignore = "un-ignore when 0022 lands (special_object, construct, function properties, rest)"]
+fn end_to_end_functions_0022() {
+    run_cases(&[
+        (
+            "const o = { v: 42, m: function () { return this.v } }; return o.m()",
+            "=> 42",
+        ),
+        (
+            "const o = { v: 7, m: function () { const f = () => this.v + arguments[0]; return f(100) } }; return o.m(1)",
+            "=> 8",
+        ),
+        (
+            "function foo(a, b = 1, c) {} return foo.name + foo.length",
+            "=> foo1",
+        ),
+        (
+            "const bar = () => 1; let baz; baz = function () {}; return bar.name + baz.name",
+            "=> barbaz",
+        ),
+        ("function P(x) { this.x = x } return new P(4).x", "=> 4"),
+        (
+            "function F() { return new.target } return F()",
+            "=> undefined",
+        ),
+        (
+            "function F() { this.t = new.target === F } return new F().t",
+            "=> true",
+        ),
+        (
+            "function f() { return arguments.length } return f(1, 2, 3)",
+            "=> 3",
+        ),
+        (
+            "function f(a, ...r) { return a + r.length } return f(1, 2, 3)",
+            "=> 3",
+        ),
+        ("function f(...r) { return r.length } return f()", "=> 0"),
+        (
+            "const f = function g(n) { return n ? g(n - 1) + 1 : 0 }; return f(3)",
+            "=> 3",
+        ),
+    ]);
+}
+
+fn run_cases(cases: &[(&str, &str)]) {
     let mut bad = Vec::new();
     for &(src, want) in cases {
         let got = run_body(src);
