@@ -38,6 +38,10 @@ pub struct Ctx {
     op_docs: BTreeMap<String, String>,
     intrinsic_docs: BTreeMap<String, String>,
     pub errors: Vec<String>,
+    /// Problems that keep a region's old text without failing (no test262 checkout).
+    pub warnings: Vec<String>,
+    /// Status numbers, computed on the first `gen:status` region (D2101).
+    status: Option<crate::status::Status>,
     /// Rewrite `run` regions too.
     pub examples: bool,
     /// `run` regions whose output changed (page names).
@@ -52,6 +56,8 @@ impl Ctx {
             op_docs: parse_op_docs(&src.ops_rs),
             intrinsic_docs: parse_intrinsic_docs(&src.intrinsics_dts),
             errors: Vec::new(),
+            warnings: Vec::new(),
+            status: None,
             examples,
             changed_examples: Vec::new(),
         }
@@ -245,6 +251,28 @@ fn generate(
             s
         }
         "excerpt" => excerpt(args, page, cx),
+        "status" => {
+            let st = cx
+                .status
+                .get_or_insert_with(|| crate::status::Status::compute(&crate::repo()));
+            if let (["conformance"], Err(e)) = (args, &st.test262) {
+                cx.warnings.push(format!(
+                    "{page}: gen:status conformance kept as it was: {e}"
+                ));
+                return old.to_string();
+            }
+            match args {
+                [what] => crate::status::generate(st, what).unwrap_or_else(|e| {
+                    cx.errors.push(format!("{page}: {e}"));
+                    String::new()
+                }),
+                _ => {
+                    cx.errors
+                        .push(format!("{page}: gen:status takes one argument"));
+                    String::new()
+                }
+            }
+        }
         "run" | "disasm" => {
             let Some(src) = last_js else {
                 cx.errors

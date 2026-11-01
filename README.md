@@ -26,50 +26,67 @@ messages.
 
 ## Status
 
-Measured at issue 0095 (main after 0091). TESTING.md and docs/host.md have the details.
+The numbers below are generated (`djs-docs regen`, D2101): counts from the repository
+(test262 grouping and ratchets, the corpus) on every merge, measurements from
+`tests/scores/status.tsv`, which `scripts/status.py` records with the commit they were
+measured at. TESTING.md and docs/host.md have the details.
 
 **Conformance.**
+
+<!-- gen:status conformance -->
 - test262 (at dquickts' pinned commit): djs passes **38,069 of the 38,109** tests in the
-  active group (99.9%; at 0097 every test outside the skip groups is active). The 40 failures are listed with reasons in
-  `tests/test262/expected-failures.txt`; 35 of them follow from djs being always strict
-  (TESTING.md "Known differences").
-  dquickts' qjs fails 4 active tests under the same runner. Skipped by design: Intl,
-  Temporal, SharedArrayBuffer/Atomics, Annex B, sloppy mode, direct eval, modules.
+  active group (99.9%; 53,597 tests in all, the rest skipped by design). The 40 known
+  failures are listed with reasons in `tests/test262/expected-failures.txt` (TESTING.md
+  "Known differences"); dquickts' qjs fails 4 active tests under the same runner.
 - The differential corpus (codemode scripts, console and result formatting, error
-  messages, TypeScript, dquickts' own tests): **224 of 230** cases match qjs; 1 known
-  failure (a dquickts test that needs SharedArrayBuffer/Atomics, a non-goal) and 5
-  skipped as non-goals.
-- pi's codemode test suite on djs: 221 of 226 tests pass (last run at 0066). The
-  failures follow from djs being always strict, or from tests that expect the
-  quickjs-wasi fingerprint.
+  messages, TypeScript, dquickts' own tests): **234 of 240** cases match qjs; 1 known
+  failure (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
+- pi's codemode test suite on djs: 221 of 226 tests pass (measured at 0066, 2026-11-01).
+<!-- /gen -->
 
-**Speed in wasm** (node, V8's wasm tier). Machine instructions per workload, djs-wasm vs
-quickjs-wasi (pi's engine), from `scripts/perf/wmeasure.py`; lower is better:
+Skipped by design: Intl, Temporal, SharedArrayBuffer/Atomics, Annex B, sloppy mode,
+direct eval, modules. Most known failures follow from djs being always strict (TESTING.md
+"Known differences"); pi's failures from that, or from tests that expect the quickjs-wasi
+fingerprint.
 
+**Speed in wasm** (node, V8's wasm tier). djs-wasm vs quickjs-wasi (pi's engine), from
+`scripts/perf/wmeasure.py`:
+
+<!-- gen:status speed -->
 | workload | djs-wasm | quickjs-wasi | ratio |
 | --- | ---: | ---: | ---: |
-| tight loop | 8.8G | 15.7G | 0.56 |
-| property access (prop1) | 3.5G | 5.5G | 0.63 |
-| strings (split, slice, join, ...) | 3.3G | 6.0G | 0.56 |
-| arrays | 13.6G | 16.9G | 0.81 |
-| JSON round trips | 1.3G | 2.2G | 0.61 |
-| JSON with Dates | 1.0G | 1.9G | 0.52 |
-| for-of | 7.5G | 7.2G | 1.05 |
-| calls | 5.1G | 4.1G | 1.26 |
-| push/pop | 6.0G | 4.8G | 1.26 |
-| a pi-like script | 10.8G | 7.3G | 1.48 |
-| forEach | 12.5G | 6.1G | 2.06 |
-| map/filter/reduce (higher-order) | 18.1G | 4.8G | 3.80 |
+| tight loop | 6.6G | 15.7G | 0.42 |
+| property access (prop1) | 2.7G | 5.5G | 0.49 |
+| strings (split, slice, join, ...) | 3.1G | 6.0G | 0.51 |
+| arrays | 10.8G | 16.8G | 0.64 |
+| JSON round trips | 1.3G | 2.2G | 0.57 |
+| JSON with Dates | 0.9G | 1.9G | 0.48 |
+| for-of | 5.8G | 7.2G | 0.81 |
+| calls | 3.3G | 4.0G | 0.81 |
+| push/pop and string methods | 4.3G | 3.1G | 1.40 |
+| a pi-like script | 10.0G | 7.3G | 1.38 |
+| forEach | 9.0G | 6.1G | 1.49 |
+| map/filter/reduce (higher-order) | 13.9G | 4.8G | 2.92 |
+
+Machine instructions per workload (`scripts/perf/w/`), measured at d780463b0d,
+2026-11-01; lower is better.
+<!-- /gen -->
 
 pi's own benchmark (`js/bench/pi.bench.ts`, a tool-heavy script with 61 calls, through
 pi's adapter): 4.2 ms on djs (reusing the prelude image) vs 5.3 ms on quickjs-wasi; a
-script start is 1.0 ms vs 3.9 ms. Callback-heavy builtin code is the main remaining gap
-(work/issues/0081-perf-anatomy.md).
+script start is 1.0 ms vs 3.9 ms (at 0095). Callback-heavy builtin code is the main
+remaining gap (work/issues/0081-perf-anatomy.md).
 
-**Size and startup.** `djs_wasm.wasm` is 1,515 KB (531 KB gzip, 426 KB brotli): 935 KB
-of code and 576 KB of data, of which 398 KB is the base snapshot (the initialized realm
-with all builtins). Creating a VM copies that snapshot: a few µs. A `Sandbox` (instance
-plus VM) takes about 60-140 µs.
+**Size and startup.**
+
+<!-- gen:status size -->
+`djs_wasm.wasm` is 1,471 KB (525 KB gzip, 423 KB brotli): 901 KB of code and 566 KB of
+data, of which 385 KB is the base snapshot (the initialized realm with all builtins).
+Module sizes measured at d780463b0d, 2026-11-01.
+<!-- /gen -->
+
+Creating a VM copies the base snapshot: about 40 µs in wasm (D1990). A `Sandbox`
+(instance plus VM) takes about 60-140 µs.
 
 ## Building and running
 

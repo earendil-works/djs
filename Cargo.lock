@@ -53,6 +53,7 @@ version = "0.0.0"
 dependencies = [
  "djs-core",
  "djs-prelude",
+ "djs-test262",
  "pulldown-cmark",
 ]
 

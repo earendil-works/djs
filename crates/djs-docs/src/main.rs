@@ -17,6 +17,7 @@ mod regions;
 mod render;
 mod run;
 mod site;
+mod status;
 mod svg;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -43,10 +44,17 @@ pub struct Guide {
     pub cx: regions::Ctx,
     /// Pages and diagrams whose checked-in text differs from the regenerated one.
     pub stale: Vec<String>,
+    /// Repository files outside the guide with generated regions (README.md), by path
+    /// from the repository root, after regeneration, and those that changed.
+    pub extra: BTreeMap<String, String>,
+    pub stale_extra: Vec<String>,
     /// Diagrams in gen/ that nothing generates any more.
     pub orphans: Vec<String>,
     pub decisions_md: String,
 }
+
+/// Repository files outside docs/guide whose generated regions djs-docs maintains.
+const EXTRA: &[&str] = &["README.md"];
 
 fn load(examples: bool) -> Guide {
     let root = repo();
@@ -73,6 +81,18 @@ fn load(examples: bool) -> Guide {
         }
         pages.insert(p.clone(), new);
     }
+    // Files outside the guide that use generated regions (status numbers, D2101). They
+    // are not rendered: their links are relative to the repository root.
+    let mut extra = BTreeMap::new();
+    let mut stale_extra = Vec::new();
+    for p in EXTRA {
+        let old = read(&root.join(p));
+        let new = regions::regen(p, &old, &mut cx);
+        if new != old {
+            stale_extra.push(p.to_string());
+        }
+        extra.insert(p.to_string(), new);
+    }
     for (f, svg) in &cx.files {
         if std::fs::read_to_string(dir.join(f)).ok().as_deref() != Some(svg.as_str()) {
             stale.push(f.clone());
@@ -92,6 +112,8 @@ fn load(examples: bool) -> Guide {
         dir,
         summary,
         pages,
+        extra,
+        stale_extra,
         cx,
         stale,
         orphans,
@@ -122,9 +144,16 @@ fn main() -> ExitCode {
                 eprintln!("djs-docs: stale: docs/guide/{s}");
                 bad = true;
             }
+            for s in &g.stale_extra {
+                eprintln!("djs-docs: stale: {s}");
+                bad = true;
+            }
             for s in &g.orphans {
                 eprintln!("djs-docs: no longer generated: docs/guide/{s}");
                 bad = true;
+            }
+            for w in &g.cx.warnings {
+                eprintln!("djs-docs: warning: {w}");
             }
             if bad {
                 eprintln!("  run `cargo run -p djs-docs -- regen` (scripts/regen.sh does it too)");
@@ -163,6 +192,13 @@ fn main() -> ExitCode {
                 std::fs::create_dir_all(g.dir.join(p).parent().expect("parent")).expect("mkdir");
                 std::fs::write(g.dir.join(p), text).expect("write");
                 println!("djs-docs: rewrote docs/guide/{p}");
+            }
+            for p in &g.stale_extra {
+                std::fs::write(repo().join(p), &g.extra[p]).expect("write");
+                println!("djs-docs: rewrote {p}");
+            }
+            for w in &g.cx.warnings {
+                eprintln!("djs-docs: warning: {w}");
             }
             for o in &g.orphans {
                 std::fs::remove_file(g.dir.join(o)).expect("remove");

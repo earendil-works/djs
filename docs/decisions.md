@@ -4780,3 +4780,23 @@ What still differs are keys djs does not have: Annex B's HTML methods of
 String.prototype, `setYear`, `RegExp.prototype.compile`, the `__defineGetter__` family,
 and qjs's `Function.prototype.fileName`/`lineNumber`/`columnNumber`. The base image
 changes with the new order.
+
+## D2101: Status numbers are generated: counted from the repository or recorded with their commit
+date: 2026-11-01 · by: docs · issue: 0113
+README.md's status section and the guide's "Status in numbers" page are `gen:status`
+regions of djs-docs (README.md is now maintained by `regen`/`check` too; it is not
+rendered). Two kinds of numbers, so that `check` gives the same answer on every machine
+and never measures:
+- **Counted** on every regen from the repository: test262's active group and total (the
+  runner's own grouping over vendor/test262; without a pinned checkout the region keeps
+  its text and `check` warns), the djs and qjs ratchets, difftest cases and `skip-djs`
+  cases, the base snapshot's size, `@builtin`/`@native`/`@fast` tags, opcodes, cell kinds
+  and intrinsics.
+- **Recorded** in `tests/scores/status.tsv` by `scripts/status.py`: the wasm module's
+  size (`size`: bytes, gzip -9, brotli -q 11, code and data), the speed table against
+  quickjs-wasi (`speed`: scripts/perf/wmeasure.py, instructions, n = 3), and numbers
+  measured elsewhere (`set --at WHEN`, pi's test suite). Each row carries the commit or
+  issue it was measured at, and the generated text shows it, so a stale measurement is
+  visible instead of silent.
+The README's speed workloads are now named after their files; push/pop is
+`push-pop.js` (with string methods) and JSON with Dates `json-date.js`.

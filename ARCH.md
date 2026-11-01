@@ -626,8 +626,8 @@ objects up to 9x on one big string inbound, and the reader by 3x to 130x outboun
 
 ## Performance Budget
 
-The initial targets, and where djs stands (0095; README.md has the details and the
-commands, D016 says why wasm numbers come first):
+The initial targets, and where djs stood at 0095 (README.md "Status" has the current
+numbers, generated, D2101; D016 says why wasm numbers come first):
 
 | Metric | Target | Measured |
 | --- | --- | --- |
@@ -655,12 +655,14 @@ QuickJS verbatim, because models read them (D1100).
 
 Corpora, as they turned out:
 
-1. **The difftest corpus** (`tests/corpus/`, about 230 cases): codemode-style scripts
-   with fake tools, console and result formatting, builtins, errors, language and
-   TypeScript cases, and dquickts' own `test_*.js` split into cases (D1102). Real pi
-   session scripts were not harvested; pi's own tests run on djs instead (docs/host.md).
+1. **The difftest corpus** (`tests/corpus/`; README.md "Status" has the counts):
+   codemode-style scripts with fake tools, console and result formatting, builtins,
+   errors, language and TypeScript cases, and dquickts' own `test_*.js` split into cases
+   (D1102). Real pi session scripts were not harvested; pi's own tests run on djs instead
+   (docs/host.md).
 2. **test262**, grouped by `tests/test262.toml` into skip / later / active (D1022); the
-   active group (about 37,900 tests) is in the gate with a ratchet of known failures.
+   active group (README.md "Status" has the counts) is in the gate with a ratchet of
+   known failures.
 3. Generated cases (fuzzing): **Not built.**
 
 The loop, as practiced (work/README.md, D012):

@@ -19,3 +19,4 @@
 - [Opcodes](ref-opcodes.md)
 - [Cell layouts](ref-cells.md)
 - [Intrinsics](ref-intrinsics.md)
+- [Status in numbers](status.md)

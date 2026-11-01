@@ -41,6 +41,19 @@ touches: ARCH.md, docs/*.md, docs/guide/, crates/djs-docs/, crates/djs-wasm/ (a 
   - Numbers in prose (README status, ARCH tables, corpus and test262 counts) are left
     for part 2, which generates them.
 
+- Part 2 (status numbers, D2101): `gen:status conformance|speed|size|inventory` in
+  djs-docs (crates/djs-docs/src/status.rs). Counted on every regen: test262 active/total
+  (djs-test262's grouping over vendor/test262; no checkout: the region keeps its text,
+  `check` warns), both test262 ratchets, corpus cases/skip-djs/ratchet, the base
+  snapshot, builtin tags, opcodes/cells/intrinsics. Recorded by `scripts/status.py`
+  (size, speed, `set --at`) in `tests/scores/status.tsv`, shown with their commit.
+  README.md is now a djs-docs file (regions only, not rendered): its Status section is
+  generated. New guide page "Status in numbers" (Reference). ARCH points to README for
+  current counts. Recorded now: size and speed at d780463b0d (wmeasure n=3), pi 221/226
+  at 0066. `check` takes ~2 s more (the test262 listing).
+  The README's speed rows now name their workload files; two rows changed meaning
+  (push/pop is push-pop.js with string methods; JSON with Dates is json-date.js).
+
 ## Follow-ups
 
 ## Result
