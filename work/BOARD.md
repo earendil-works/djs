@@ -7,7 +7,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
-| 0101 | Mark-compact (approved D018): finishing + merging | heap | .worktrees/heap |
+| 0120 | Old generation phase 1 (sticky base prefix) | heap | .worktrees/heap |
 | 0117 | Compact snapshot images (D019) | snapshot | .worktrees/snapshot |
 | 0118 | Codemode corpus harvest, redacted (D021) | infra | .worktrees/infra |
 | 0119 | Live editor with syntax highlighting for guide examples | docs | .worktrees/docs |
@@ -99,6 +99,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0090 | Natives retry, resizable TA, JSON slow path | dee4dc9b (agent infra; JSON with a Date 18.1G -> 1.2G wasm instr) |
 | 0080 | for-of/iteration fast paths + natives wave 2 | fd5a6d1 (agent infra; for-of 5,433 -> 738 instr/elem) |
 | 0063 | D015 + bgen Rust backend v1 (35 natives) | 9f662b7 (agent infra; higher-order 6.8x -> 2.3x qjs; +80 KB code) |
+| 0101 | Mark-compact collector (D018, D2040) | 1a41ac7b (agent heap; peak memory -3..-52%; Cheney kept for canonical_hash) |
 | 0098 | Base image + shapes code size | 87c5e0ce (agent heap; base.img -21.5 KB; module -25.6 KB; atom 3/4 load rejected) |
 | 0083 | Shapes (parts 1-3) | 9e7bcfd5 (agent heap; D1831-D1832; objects -27..-33% bytes; literals/ctors ~3x faster) |
 | 0069 | Host OOM status | 893495f (agent heap; D1690) |
