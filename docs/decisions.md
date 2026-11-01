@@ -5087,9 +5087,19 @@ reference (kind, hash, length), then zstd's content checksum ("corrupt snapshot"
 the image's own verification as before. A host that must restore snapshots of older builds
 has to keep those builds (an engine registry: not built). The formats before the container
 (the Sandbox's `DJSS` and the adapter's `DJPI`, version 1: header, JSON, raw image) still
-load. Measured on wasm: a pi session waiting on a tool is 42–48 KB instead of 546–567 KB
-(its collected image; 936 KB before D1890), a new Sandbox 33 KB instead of 395 KB; a
-restore costs 0.25–0.3 ms more for light sessions.
+load. Measured on wasm: a pi session waiting on a tool is 2–9 KB instead of 546–566 KB
+(its collected image; 936 KB before D1890), sessions holding tool data 63–404 KB (their
+data, compressed), a new Sandbox 33 KB instead of 395 KB; a restore costs 0.1–0.3 ms more
+for a waiting session, 1–1.6 ms more for one holding megabytes.
+
+The small sizes depend on in-VM collections being mark-compact (D2040): sliding
+compaction keeps cells in allocation order, so the cells a session inherited from the
+reference stay at the reference's offsets (99.9% of a waiting session's 8-byte words), and
+zstd encodes them as one long match; what is left is what the session changed. Under the
+copying collector the same snapshot was 40 KB (one word in eight in place). Growing a cell
+of the reference early in the heap undoes it: a new Sandbox's console grows the root
+shape's transition list and the atom table, whose old cells sit near the start of the base
+image, and the compaction then shifts everything after them (33 KB).
 
 ## D2261: Snapshot compression runs in the host: node's zstd at level 3; none without it
 date: 2026-11-01 · by: snapshot · issue: 0117
@@ -5101,21 +5111,24 @@ says so) and a compressed one cannot be read; `snapshotCodec` (SandboxOptions, V
 plugs in any zstd with raw-content dictionaries, `null` turns compression off, and
 `bytes({ compression: "none" })` does it per snapshot.
 
-Measured on a waiting pi session (546 KB image, prelude reference): level 1 132 KB, level
-3 40 KB in 1.4 ms (decompression 0.2 ms), level 6 37 KB in 2.2 ms, level 9 34 KB in 3.3 ms,
-level 19 30 KB in 106 ms; a window covering both changed nothing at these sizes, long
-distance matching made it 2% worse. Level 3 keeps `snapshot()` under 2 ms while a script
-waits. Compressing in wasm instead was measured with zstd-rs 0.1 (pure Rust, no_std,
-interoperable with C zstd both ways): sizes within 10% of node's at level 3, compression
-1.1–1.8x and decompression 1.5–1.8x slower, and +141 KB of module (57 KB gzip; 54 KB, 24 KB gzip
-for the decoder alone). The module is already over its size budget (D020), and a 0.1
+Measured (prelude reference): a waiting pi session (546 KB image) is 126 KB at level 1,
+1.8 KB at level 3 in 1.2 ms (0.09 ms to decompress), 1.6 KB at levels 6 and 9, 1.5 KB at
+19 in 40 ms; one holding 1500 records (1.8 MB) is 324 KB at level 3 in 4–6 ms, 301 KB at 6
+in 11–13 ms, 265 KB at 19 in 300–400 ms. A window covering both changed nothing; long
+distance matching made it worse (2.5 KB). Level 3 keeps `snapshot()` around 2 ms for a
+waiting session and under 8 ms for one holding megabytes. Compressing in wasm instead was
+measured with zstd-rs 0.1 (pure Rust, no_std, interoperable with C zstd both ways): sizes
+within 1% of node's at level 3 (3% at 19), faster on small deltas (0.95 vs 1.26 ms) and
+1.6–1.8x slower on megabytes, decompression 0.5–1.9x node's time, and +141 KB of module
+(57 KB gzip; 54 KB, 24 KB gzip for the decoder alone). The module is already over its size budget (D020), and a 0.1
 crate in the shipped engine is a risk, so it is not built in: a browser host that wants
 compact snapshots can load such a codec as a separate module.
 
 ## D2262: pi's prelude image is the reference of the adapter's snapshots and is recomputable
 date: 2026-11-01 · by: snapshot · issue: 0117
 A session's snapshots are compressed against the prelude image it started from (a cached
-one, or the one its cold start cached): 40 KB instead of 70 KB against the base. Sessions
+one, or the one its cold start cached): 1.8 KB instead of 66 KB against the base for a
+session waiting on a tool. Sessions
 started without prelude images (`reuseImages: false`) use the base. To make the prelude
 image a function of its inputs (the prelude, tools, globals, store, heap limit,
 deterministic mode, and the build), the adapter runs the host globals and the prelude with

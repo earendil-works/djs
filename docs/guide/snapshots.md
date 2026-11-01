@@ -14,7 +14,7 @@ cost.
 > **base snapshot**, an image of the initialized realm with all builtins compiled, made
 > at build time, which is why creating a VM takes microseconds. A stored snapshot is the
 > collected image compressed against an image both sides can rebuild, such as the base
-> snapshot: a session waiting on a tool takes about 45 KB instead of half a megabyte.
+> snapshot: a session waiting on a tool takes a few KB instead of half a megabyte.
 
 ## An image is the arena
 
@@ -145,19 +145,29 @@ The realm does not have to be stored at all, because both sides can rebuild it. 
 snapshot is fixed by the engine build, and ships inside the module. pi's prelude image is
 fixed by the build and the prelude's inputs: the prelude source, the tool list, the
 globals, the store, the memory limit. So a snapshot is compressed with zstd using such a
-**reference image** as its dictionary, and stores only a description of the reference.
-Matches against the reference are cheap to encode, and what remains is mostly what the
-script did (D2260):
+**reference image** as its dictionary, and stores only a description of the reference
+(D2260).
+
+That works far better than one might expect, because of how the heap is collected. A
+collection slides the live cells down in their allocation order ([the garbage
+collector](gc.md)), so the cells a session inherited from its reference stay exactly where
+they were: in a session waiting on a tool, 99.9% of the image's words sit at the same
+offset as in the prelude image. zstd encodes all of that as one long match, and what is
+left is what the script did:
 
 | a snapshot of | image | compressed against the reference |
 | --- | ---: | ---: |
-| a pi session waiting on a tool | 546–560 KB | 42–47 KB |
-| a pi session holding 60 files it read | 718 KB | 96 KB |
-| a pi session holding a 1.5 MB log | 2.2 MB | 445 KB |
+| a pi session waiting on a tool | 546–560 KB | 2–9 KB |
+| a pi session holding 60 files it read | 748 KB | 63 KB |
+| a pi session holding a 1.5 MB log | 2.2 MB | 403 KB |
 | a new sandbox | 395 KB | 33 KB |
 
-Against the base image instead of pi's prelude image, the waiting session is 70 KB.
-Compressing costs about 1.4 ms and restoring about 0.3 ms more than an uncompressed image.
+Against the base image instead of pi's prelude image, the waiting session is 66 KB, and
+with the copying collector the heap used before, it was 40 KB: one word in eight stayed
+in place. A new sandbox shows the same effect: its first definitions grow two cells near
+the start of the base image, the root shape's list of transitions and the atom table,
+and everything after their old places moves down. Compressing a waiting session takes
+about 1.2 ms, and restoring costs 0.1 to 0.3 ms more than an uncompressed image.
 
 A snapshot is a small container: a 40-byte header, the host's own metadata (the
 `Sandbox`'s host function names, the adapter's session state) as JSON, and the image,
@@ -178,20 +188,21 @@ among the prelude images of its process, or recomputes it from the session's pre
 start data, refusing data that make a different image.
 
 > **Trade-off.** Compressing in the host, not in the engine. node has zstd built in, so
-> the adapter and the `Sandbox` use it, at level 3 (D2261): level 19 saves a quarter more
-> but takes 100 ms, which is too long while a script waits. A pure-Rust zstd compiled
-> into the module was measured too: about the same sizes, up to twice as slow, and 57 KB
-> more of gzipped module. The cost of keeping it out: a browser has no zstd that takes a
-> dictionary, so there snapshots are written uncompressed unless the page brings its own
-> codec.
+> the adapter and the `Sandbox` use it, at level 3 (D2261). Higher levels save little on
+> a waiting session and a fifth on one holding megabytes, at up to a hundred times the
+> time, which is too long while a script waits. A pure-Rust zstd compiled into the module
+> was measured too: the same sizes, as fast on small snapshots and up to twice as slow on
+> large ones, and 57 KB more of gzipped module. The cost of keeping it out: a browser has
+> no zstd that takes a dictionary, so there snapshots are written uncompressed unless the
+> page brings its own codec.
 
-> **Trade-off.** Whole images over deltas. A delta against the reference or a previous
-> snapshot would be smaller still: the actual changes of a waiting session are a few KB.
-> But a moving collector changes the offsets of everything after the first change, so
-> only about one word in eight of a session's image sits where it sat in the reference,
-> and byte-level deltas are fragile. A non-moving region for the reference's cells would
-> fix that, at the price of a second collector mode. Compressing a whole image against
-> the reference gets most of the size back with no engine change.
+> **Trade-off.** Whole compressed images over deltas. A delta format would have to track
+> which cells changed since the reference and encode them on its own. Compressing the
+> whole image against the reference gets the same result without any of that, because
+> the collector keeps the reference's cells in place. The cost: every snapshot reads and
+> compresses the whole image (1 to 8 ms), and the size depends on that layout property.
+> A change that grows a cell near the start of the reference moves everything after it,
+> and the snapshot grows from a few KB to tens of KB.
 
 ## Where to look
 
@@ -209,6 +220,7 @@ start data, refusing data that make a different image.
 Decisions on this page:
 
 <!-- gen:decisions D2040 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 -->
+- D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D1091: Handle table
 - D1890: pi adapter: snapshot() and the prelude image collect first
 - D1725: The determinism checks compare raw images too

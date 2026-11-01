@@ -189,8 +189,8 @@ What the adapter adds over QuickJS:
   quickjs-wasi.
 - **Snapshots of a waiting session.** `snapshot()` and `resumeVm()` save and restore a
   session while it waits for a tool, which QuickJS cannot do. The image is compressed
-  against the prelude image the session started from, so a waiting session takes about
-  45 KB; another process can rebuild that prelude image from the session's inputs to
+  against the prelude image the session started from, so a waiting session takes a few
+  KB; another process can rebuild that prelude image from the session's inputs to
   restore it ([snapshots](snapshots.md), D2262). pi uses deterministic replay for
   durability today; snapshots would be an alternative.
 
