@@ -1,7 +1,7 @@
 # 0072: Determinism checks in the gate
 
-status: open
-agent: -
+status: in-progress
+agent: determinism
 branch: issue/0072-determinism-gate
 depends-on: part 2: 0067, 0071
 touches: crates/djs-core/tests/e2e.rs, crates/djs-difftest/, scripts/determinism/, scripts/gate.sh
