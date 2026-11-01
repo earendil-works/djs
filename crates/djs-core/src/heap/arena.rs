@@ -13,16 +13,27 @@ use super::layout::{Field, FieldType};
 pub const MAX_ARENA: u32 = !7;
 
 /// A growable byte buffer with a memory cap. Allocation only bumps; it never collects.
+///
+/// `bytes.len()` is the *zeroed frontier*: everything in `bytes[len..]` is zero, so an
+/// allocation below the frontier is a bounds check and a bump (D1261). Zeroing happens
+/// ahead in chunks of [`ZERO_AHEAD`]. An allocation with data at the frontier (strings,
+/// GC copies) appends the data instead, so those bytes are written once.
 pub struct Arena {
     bytes: Vec<u8>,
+    len: u32,
     limit: u32,
 }
+
+/// How far ahead of an allocation the frontier is zeroed: big enough that small cells
+/// rarely touch the Vec, small enough not to matter for memory or the GC.
+const ZERO_AHEAD: u32 = 16 << 10;
 
 impl Arena {
     /// An empty arena that may grow to `limit` bytes (clamped to [`MAX_ARENA`]).
     pub fn new(limit: usize) -> Arena {
         Arena {
             bytes: Vec::new(),
+            len: 0,
             limit: clamp_limit(limit),
         }
     }
@@ -36,6 +47,7 @@ impl Arena {
             .map_err(|_| HeapError::OutOfMemory)?;
         Ok(Arena {
             bytes,
+            len: 0,
             limit: clamp_limit(limit),
         })
     }
@@ -47,13 +59,16 @@ impl Arena {
 
     /// Returns reserved memory beyond `keep` bytes (at least the length) to the host.
     pub fn shrink_capacity(&mut self, keep: usize) {
-        self.bytes.shrink_to(keep.max(self.bytes.len()));
+        let keep = keep.max(self.len as usize);
+        self.bytes.truncate(keep);
+        self.bytes.shrink_to(keep);
     }
 
     /// An arena over existing bytes (for restoring a heap image). The caller validates the
     /// contents.
     pub fn from_bytes(bytes: Vec<u8>, limit: usize) -> Arena {
         Arena {
+            len: bytes.len() as u32,
             bytes,
             limit: clamp_limit(limit),
         }
@@ -62,12 +77,12 @@ impl Arena {
     /// Bytes in use. This is also the offset of the next allocation.
     #[inline(always)]
     pub fn len(&self) -> u32 {
-        self.bytes.len() as u32
+        self.len
     }
 
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.bytes.is_empty()
+        self.len == 0
     }
 
     /// The memory cap in bytes.
@@ -78,75 +93,106 @@ impl Arena {
     /// All bytes in use.
     #[inline]
     pub fn bytes(&self) -> &[u8] {
-        &self.bytes
+        &self.bytes[..self.len as usize]
     }
 
     /// Allocates `size` zeroed bytes (rounded up to 8) at the end and returns their offset.
     /// Fails with [`HeapError::OutOfMemory`] when the cap would be exceeded or the host
     /// allocator fails. Never panics on exhaustion.
+    #[inline]
     pub fn alloc(&mut self, size: u32) -> Result<u32, HeapError> {
-        let (start, end) = self.reserve(size)?;
-        self.extend_zeros(end - start);
+        let (start, end) = self.bounds(size)?;
+        if end as usize > self.bytes.len() {
+            self.zero_ahead(end)?;
+        }
+        self.len = end;
         Ok(start)
     }
 
     /// Like [`Arena::alloc`], but the `data.len()` bytes at offset `at` of the new block
-    /// are `data` instead of zeros: they are written once, not zeroed and then copied (the
-    /// bulk of strings and GC copies). Panics if `data` does not fit in `size` at `at`.
+    /// are `data` instead of zeros. At the frontier they are appended, so they are written
+    /// once rather than zeroed and then copied (the bulk of strings and GC copies). Panics
+    /// if `data` does not fit in `size` at `at`.
     pub fn alloc_init(&mut self, size: u32, at: u32, data: &[u8]) -> Result<u32, HeapError> {
-        let tail = (size as usize).checked_sub(at as usize + data.len());
-        assert!(tail.is_some(), "alloc_init: data does not fit");
-        let (start, end) = self.reserve(size)?;
-        self.extend_zeros(at);
-        self.bytes.extend_from_slice(data);
-        self.extend_zeros(end - self.len());
+        let fits = (size as usize).checked_sub(at as usize + data.len());
+        assert!(fits.is_some(), "alloc_init: data does not fit");
+        let (start, end) = self.bounds(size)?;
+        let at_us = (start + at) as usize;
+        if end as usize > self.bytes.len() {
+            // Past the frontier: append instead of zeroing and then copying. The bytes
+            // from `at_us` to the frontier are zeros, so dropping them keeps the invariant.
+            self.reserve(end)?;
+            self.bytes.truncate(at_us.max(self.len as usize));
+            zero_to(&mut self.bytes, at_us);
+            self.bytes.extend_from_slice(data);
+            zero_to(&mut self.bytes, end as usize);
+        } else {
+            self.bytes[at_us..at_us + data.len()].copy_from_slice(data);
+        }
+        self.len = end;
         Ok(start)
     }
 
-    /// Checks the cap and reserves room for `size` bytes (rounded up to 8) at the end;
-    /// returns the block's start and end.
-    #[inline]
-    fn reserve(&mut self, size: u32) -> Result<(u32, u32), HeapError> {
+    /// The start and end of a block of `size` bytes (rounded up to 8) at the end, if it is
+    /// under the cap.
+    #[inline(always)]
+    fn bounds(&self, size: u32) -> Result<(u32, u32), HeapError> {
         let size = size.checked_add(7).ok_or(HeapError::OutOfMemory)? & !7;
-        let start = self.len();
-        let end = start
+        let end = self
+            .len
             .checked_add(size)
             .filter(|&e| e <= self.limit)
             .ok_or(HeapError::OutOfMemory)?;
-        let end_us = end as usize;
-        if end_us > self.bytes.capacity() {
-            // Amortized doubling, but never past the cap.
+        Ok((self.len, end))
+    }
+
+    /// Moves the zeroed frontier to at least `end` (up to [`ZERO_AHEAD`] beyond it, within
+    /// the cap and the reserved capacity).
+    #[cold]
+    fn zero_ahead(&mut self, end: u32) -> Result<(), HeapError> {
+        self.reserve(end)?;
+        let ahead = end
+            .saturating_add(ZERO_AHEAD)
+            .min(self.limit)
+            .min(self.bytes.capacity() as u32)
+            .max(end);
+        zero_to(&mut self.bytes, ahead as usize);
+        Ok(())
+    }
+
+    /// Makes the Vec's capacity at least `end`: amortized doubling, never past the cap.
+    fn reserve(&mut self, end: u32) -> Result<(), HeapError> {
+        let end = end as usize;
+        if end > self.bytes.capacity() {
             let want = (self.bytes.capacity() * 2)
-                .max(end_us)
+                .max(end)
                 .max(4096)
                 .min(self.limit as usize);
             self.bytes
                 .try_reserve_exact(want - self.bytes.len())
                 .map_err(|_| HeapError::OutOfMemory)?;
         }
-        Ok((start, end))
+        Ok(())
     }
 
-    /// Appends `n` zero bytes (room is reserved). Copies from a static zero block rather
-    /// than `resize(_, 0)`, which opt-level "z" compiles to a byte-at-a-time loop; a copy
-    /// is one `memory.copy` in wasm at every opt-level (D1261).
-    #[inline]
-    fn extend_zeros(&mut self, mut n: u32) {
-        static ZEROS: [u8; 256] = [0; 256];
-        while n > 0 {
-            let k = n.min(ZEROS.len() as u32);
-            self.bytes.extend_from_slice(&ZEROS[..k as usize]);
-            n -= k;
-        }
-    }
-
+    // Field accesses are checked against the Vec (the zeroed frontier), not `len`: one
+    // compare less on the hottest path, and still memory safe. Debug builds also check
+    // `len`, so a stray access past the end is caught in tests (D1261).
     #[inline(always)]
     pub fn read<T: FieldType>(&self, off: u32) -> T {
+        debug_assert!(
+            off as usize + T::TY.size() as usize <= self.len as usize,
+            "read past the arena end"
+        );
         T::read(&self.bytes, off as usize)
     }
 
     #[inline(always)]
     pub fn write<T: FieldType>(&mut self, off: u32, v: T) {
+        debug_assert!(
+            off as usize + T::TY.size() as usize <= self.len as usize,
+            "write past the arena end"
+        );
         T::write(&mut self.bytes, off as usize, v)
     }
 
@@ -164,19 +210,19 @@ impl Arena {
 
     #[inline]
     pub fn slice(&self, off: u32, len: u32) -> &[u8] {
-        &self.bytes[off as usize..off as usize + len as usize]
+        &self.bytes()[off as usize..off as usize + len as usize]
     }
 
     #[inline]
     pub fn slice_mut(&mut self, off: u32, len: u32) -> &mut [u8] {
-        &mut self.bytes[off as usize..off as usize + len as usize]
+        &mut self.bytes[..self.len as usize][off as usize..off as usize + len as usize]
     }
 
     /// Splits the arena at `at`: everything before it read-only, everything from it on
     /// writable. Used to copy from older cells into a freshly allocated one.
     #[inline]
     pub fn split_mut(&mut self, at: u32) -> (&[u8], &mut [u8]) {
-        let (a, b) = self.bytes.split_at_mut(at as usize);
+        let (a, b) = self.bytes[..self.len as usize].split_at_mut(at as usize);
         (a, b)
     }
 
@@ -184,13 +230,24 @@ impl Arena {
     #[inline]
     pub fn copy_within(&mut self, src: u32, len: u32, dst: u32) {
         let s = src as usize;
-        self.bytes.copy_within(s..s + len as usize, dst as usize);
+        self.bytes[..self.len as usize].copy_within(s..s + len as usize, dst as usize);
     }
 
     /// Zeroes `len` bytes at `off`.
     #[inline]
     pub fn zero(&mut self, off: u32, len: u32) {
         self.slice_mut(off, len).fill(0);
+    }
+}
+
+/// Appends zero bytes up to length `len` (nothing if already that long). `resize` is a
+/// memset natively and at opt-level "s" and up (`memory.fill` in wasm). At "z" it is a
+/// byte loop; no safe way to extend a Vec is better there (static-block or doubling
+/// copies cost 15% natively), and `alloc_init` avoids zeroing where it matters most.
+#[inline]
+fn zero_to(bytes: &mut Vec<u8>, len: usize) {
+    if len > bytes.len() {
+        bytes.resize(len, 0);
     }
 }
 
@@ -252,6 +309,64 @@ mod tests {
         assert_eq!(small.len(), 0);
     }
 
+    /// Random allocations against a plain Vec model: whatever the frontier does, new
+    /// blocks read as zeros (or their data), and `bytes()` is exactly what was allocated.
+    #[test]
+    fn frontier_model() {
+        let mut seed = 0x2545_F491_4F6C_DD1Du64;
+        let mut next = |n: u32| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % n as u64) as u32
+        };
+        for round in 0..20 {
+            let mut a = if round % 2 == 0 {
+                Arena::new(1 << 22)
+            } else {
+                Arena::with_capacity(1 << 16, 1 << 22).unwrap()
+            };
+            let mut model: Vec<u8> = Vec::new();
+            for _ in 0..300 {
+                let size = match next(4) {
+                    0 => next(64),
+                    1 => next(600),
+                    2 => next(40_000),
+                    _ => 8,
+                };
+                let padded = (size + 7) & !7;
+                match next(4) {
+                    0 | 1 => {
+                        let off = a.alloc(size).unwrap();
+                        assert_eq!(off as usize, model.len());
+                        model.resize(model.len() + padded as usize, 0);
+                        // Dirty the block like a caller would.
+                        if size >= 8 {
+                            a.write::<u64>(off, 0xAAAA_AAAA_AAAA_AAAA);
+                            model[off as usize..off as usize + 8].fill(0xAA);
+                        }
+                    }
+                    2 => {
+                        let at = next(size + 1);
+                        let n = next(size - at + 1);
+                        let data: Vec<u8> = (0..n).map(|i| i as u8 | 1).collect();
+                        let off = a.alloc_init(size, at, &data).unwrap();
+                        assert_eq!(off as usize, model.len());
+                        model.resize(model.len() + padded as usize, 0);
+                        let d = off as usize + at as usize;
+                        model[d..d + n as usize].copy_from_slice(&data);
+                    }
+                    _ => a.shrink_capacity(next(1 << 20) as usize),
+                }
+                assert_eq!(a.bytes(), &model[..]);
+            }
+            // A restored image continues the same way.
+            let mut b = Arena::from_bytes(a.bytes().to_vec(), 1 << 22);
+            let off = b.alloc(100).unwrap();
+            assert!(b.slice(off, 100).iter().all(|&x| x == 0));
+        }
+    }
+
     #[test]
     #[should_panic(expected = "does not fit")]
     fn alloc_init_checks_the_fit() {
@@ -261,6 +376,18 @@ mod tests {
     #[test]
     #[should_panic]
     fn out_of_bounds_panics() {
+        let mut a = Arena::new(1 << 20);
+        a.alloc(8).unwrap();
+        // Past the zeroed frontier: a panic in every build.
+        a.read::<u32>(1 << 20);
+    }
+
+    /// Just past the end but below the frontier: release builds read zeros (memory safe;
+    /// D1261), debug builds catch it.
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "past the arena end")]
+    fn past_the_end_panics_in_debug_builds() {
         let mut a = Arena::new(1 << 20);
         a.alloc(8).unwrap();
         a.read::<u32>(6);
