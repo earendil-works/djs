@@ -111,8 +111,9 @@ fn decode_string(units: &[u16], i: &mut usize) -> Vec<u16> {
                 b'u' => {
                     let hex = &units[*i..*i + 4];
                     *i += 4;
-                    hex.iter()
-                        .fold(0u16, |acc, &h| acc * 16 + (h as u8 as char).to_digit(16).unwrap_or(0) as u16)
+                    hex.iter().fold(0u16, |acc, &h| {
+                        acc * 16 + (h as u8 as char).to_digit(16).unwrap_or(0) as u16
+                    })
                 }
                 _ => e, // `"`, `\`, `/`
             };
@@ -174,7 +175,10 @@ pub(crate) fn source_records(heap: &mut Heap, text: Str, root: Value) -> Result<
                 }
                 let src = heap.alloc_utf16(&units[start..i])?;
                 let src = Value::string(src);
-                Some(record(heap, [current, src, Value::UNDEFINED, Value::UNDEFINED])?)
+                Some(record(
+                    heap,
+                    [current, src, Value::UNDEFINED, Value::UNDEFINED],
+                )?)
             }
         };
         let mut finished = finished;
@@ -208,11 +212,24 @@ pub(crate) fn source_records(heap: &mut Heap, text: Str, root: Value) -> Result<
                         Open::Array { value, items } => {
                             let proto = realm::intrinsic_obj(heap, Intrinsic::ArrayProto);
                             let elems = heap.new_array_from_values(Some(proto), &items)?;
-                            record(heap, [value, Value::UNDEFINED, Value::object(elems), Value::UNDEFINED])?
+                            record(
+                                heap,
+                                [
+                                    value,
+                                    Value::UNDEFINED,
+                                    Value::object(elems),
+                                    Value::UNDEFINED,
+                                ],
+                            )?
                         }
                         Open::Object { value, entries, .. } => record(
                             heap,
-                            [value, Value::UNDEFINED, Value::UNDEFINED, Value::object(entries)],
+                            [
+                                value,
+                                Value::UNDEFINED,
+                                Value::UNDEFINED,
+                                Value::object(entries),
+                            ],
                         )?,
                     });
                 }
@@ -250,7 +267,12 @@ pub(crate) fn source_records(heap: &mut Heap, text: Str, root: Value) -> Result<
 /// `text`, which must be a JSON primitive without surrounding whitespace (qjs's
 /// SyntaxError "invalid rawJSON string" otherwise).
 pub(crate) fn raw_json(heap: &mut Heap, text: Str) -> Result<Value, Fault> {
-    let invalid = || Err(Fault::Error(ErrorKind::SyntaxError, String::from("invalid rawJSON string")));
+    let invalid = || {
+        Err(Fault::Error(
+            ErrorKind::SyntaxError,
+            String::from("invalid rawJSON string"),
+        ))
+    };
     let len = heap.str_len(text);
     let ws = |u: Option<u16>| matches!(u, Some(0x09 | 0x0A | 0x0D | 0x20));
     if len == 0 || ws(heap.char_code_at(text, 0)) || ws(heap.char_code_at(text, len - 1)) {

@@ -121,7 +121,9 @@ scaled by the 8-byte alignment.
 - **Strings:** JS semantics are WTF-16 (UTF-16 code units, lone surrogates allowed).
   Strings are stored like V8 stores them: **one-byte (Latin-1)** or **two-byte (UTF-16LE)**,
   plus **ropes** for concatenation (codemode builds output with `+=` a lot). Ropes are
-  flattened lazily. Atoms (interned strings used as property keys) live in a heap hash table.
+  flattened lazily. Append chains (`s += piece` once `s` is a few hundred units long) use
+  **append ropes** over a growable flat buffer that is written in place, so the live
+  string is one buffer instead of a rope node per append (D1610). Atoms (interned strings used as property keys) live in a heap hash table.
 - **Objects:** start simple, with a small inline property list (atom → slot, plus flags)
   that switches to a heap hash table above N entries. Shapes / hidden classes come later,
   when benchmarks justify them. Arrays get a dense elements fast path.

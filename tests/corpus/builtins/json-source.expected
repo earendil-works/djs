@@ -1,0 +1,33 @@
+"a"=1.5 {"source":"1.50"}
+"0"=true {"source":"true"}
+"1"=null {"source":"null"}
+"2"="xA" {"source":"\"x\\u0041\""}
+"b"=[true,null,"xA"] {}
+"d"=0 {"source":"-0"}
+"e"=100 {"source":"1e2"}
+"c"={"d":0,"e":100} {}
+"f"=2 {"source":"2"}
+""={"a":1.5,"b":[true,null,"xA"],"c":{"d":0,"e":100},"f":2} {}
+{"a":1.5,"b":[true,null,"xA"],"c":{"d":0,"e":100},"f":2}
+0:1 0:undefined 1:undefined p:undefined 2:undefined :undefined
+[12345678901234567000,"12345678901234567890"] 0 true
+"1" 1 true null true rawJSON
+"-1.5e3" -1.5e3 true null true rawJSON
+"null" null true null true rawJSON
+"true" true true null true rawJSON
+"\"s\\n\"" "s\n" true null true rawJSON
+"" SyntaxError invalid rawJSON string
+" 1" SyntaxError invalid rawJSON string
+"1 " SyntaxError invalid rawJSON string
+"{}" SyntaxError invalid rawJSON string
+"[1]" SyntaxError invalid rawJSON string
+"x" SyntaxError invalid rawJSON string
+"\"a" SyntaxError invalid rawJSON string
+"\t2" SyntaxError invalid rawJSON string
+{"a":1e1000,"b":["x",12345678901234567890]}
+7 [
+  1
+] {"x":99}
+false false false [object Object]
+1 1 rawJSON string
+=== completed

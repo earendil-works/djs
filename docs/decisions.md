@@ -2754,3 +2754,101 @@ no module loader, the promise is rejected one job later with qjs's no-loader err
 (0049); a SyntaxError would fail the whole script. The test262 `dynamic-import` feature
 stays skipped (modules): with this, 354 of its 682 tests would pass (syntax and
 rejection-path tests), the rest need module fixtures.
+
+
+## D1610: Append ropes: `s += x` writes into a growable buffer
+date: 2026-11-01 · by: num · issue: 0061
+Amends ARCH "Strings" (ropes for `+=`).
+
+Before, a loop of `s += piece` built a left-deep rope with one node per append. The live
+string was millions of nodes that every GC copied and traced, and flattening walked them
+all: 924 MB RSS for 20M single-character appends.
+
+**Layout.** No new cell kind:
+- A Rope with flag `ROPE_APPEND` (4) is the first `LEN` code units of the flat cell in
+  its `LEFT`. `RIGHT` is null.
+- That cell is an *append buffer*: a Str8/Str16 with flag `STR_APPEND_BUF` (1), spare
+  capacity past `LEN` (its used length), and zeroed slack.
+
+**Append.** `concat(a, b)` writes b into a's buffer in place, then returns a new
+24-byte append rope, when all of these hold:
+- a is an append rope;
+- the buffer is not frozen;
+- a's `LEN` equals the buffer's used length (no other string sees the units past it);
+- there is room;
+- the width fits (a one-byte buffer takes only one-byte pieces).
+
+Otherwise:
+- An append chain gets a new buffer, about twice the length, with the string copied
+  (doubling, so amortized O(1) per unit). A chain means a is already an append rope, or
+  a concatenation rope of at least 256 units whose right part is short, and b is not
+  longer than a.
+- A two-byte piece moves the chain to a Str16 buffer.
+- Everything else (short expression temporaries like `"id " + i + "\n"`, big + big)
+  stays an O(1) rope or a short copy.
+
+**Invariants** (verify() enforces the first):
+- **(a)** Only an append rope's `LEFT` may reference an unfrozen buffer. No Value and no
+  other ref does.
+- **(b)** Only the rope at the buffer's end writes into it. An older, shorter rope over
+  the same buffer that is appended to copies, and keeps its value.
+- **(c)** A frozen buffer is never written again. `flatten()` of an append rope that
+  covers its whole buffer freezes the buffer (clears the flag) and redirects the rope to
+  it, so the buffer may then be referenced directly. A shorter rope flattens to a copy.
+
+**Reads.** `str_view`, `str_view_flat`, the chunk iterator and the matcher read the
+prefix in place, without freezing.
+
+**GC.** Unchanged:
+- Buffers are copied with their capacity; walk.rs already allows slack.
+- Dead intermediate append ropes are garbage and are not traced.
+- The FLATTENED short-circuit applies to frozen buffers.
+- Collecting twice gives identical bytes.
+
+**Determinism.** Buffers, capacities and slack depend only on the sequence of
+operations; a test builds the same strings in two heaps and compares the images.
+
+**Images and readers.** Images round-trip, and a restored buffer keeps appending in
+place. js/src/reader.ts slices `LEFT` to the rope's `LEN` (docs/wire.md;
+layout.generated.ts exports the new flags). Images from before this change contain no
+append ropes, so they read the same.
+
+**Numbers** (release djs-cli; min of 3 runs; user+sys):
+
+| case | before | after | qjs |
+| --- | ---: | ---: | ---: |
+| 10M `s += "x"` in a function | 1.13 s, 574 MB RSS | 0.93 s, 150 MB | 0.6 s |
+| 20M at the top level | 924 MB RSS | about 180-290 MB | 32 MB |
+| 300k template literals `html += \`<li…>\`` | 0.21 s, 172 MB | 0.17 s, 107 MB | 0.15 s |
+| engine/djs/string-append | 65 ms | 60 ms (qjs 35 ms) | |
+
+The rest of the engine track moves within the ±10% that a one-atom change also produces
+in code layout (checked with a probe build).
+
+## D1611: JSON.parse source text access
+date: 2026-11-01 · by: num · issue: 0061
+`json-parse-with-source`, as of the test262 commit, is promoted to active.
+
+**Parse with a reviver.** `%JsonParse(text, true)` parses as before, then walks the
+source text next to the parsed values (builtins/json.rs `source_records`, an explicit
+stack). It builds the JSON Parse Record tree as internal 4-element Arrays
+`[value, source, elements, entries]`:
+- `source` is the exact source text of a primitive;
+- `elements` is an Array of the element records;
+- `entries` is a null-prototype object from key to record. The last of duplicate keys
+  wins, as the proposal says; qjs instead gives no source there.
+
+InternalizeJSONProperty (builtins/json.ts) passes each record down. While SameValue of
+the record's value and the current value holds, it creates the reviver's third argument,
+a plain object with `source` for primitives and empty for objects and arrays, and uses
+the element and entry records. Values replaced or added by the reviver get no source.
+Without a reviver nothing changes, and there are no records.
+
+**JSON.rawJSON(text)** returns a frozen, null-prototype `ObjectClass::RawJSON` (29)
+object with an enumerable `rawJSON` string. `text` must be a JSON primitive without
+leading or trailing tab, LF, CR or space; otherwise it throws qjs's SyntaxError "invalid
+rawJSON string".
+
+**JSON.isRawJSON** checks the class. **JSON.stringify** emits a RawJSON object's text
+verbatim. The leaf fast path sees an unknown class and falls back to the full
+algorithm, which does it.

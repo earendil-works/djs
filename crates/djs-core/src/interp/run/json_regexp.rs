@@ -128,10 +128,11 @@ impl Exec<'_> {
                 };
                 json::raw_json(self.heap, s)?
             }
-            IS_RAW_JSON => Value::bool(
-                a0.as_object()
-                    .is_some_and(|o| self.heap.object_class(o) == crate::heap::ObjectClass::RawJSON),
-            ),
+            IS_RAW_JSON => {
+                Value::bool(a0.as_object().is_some_and(|o| {
+                    self.heap.object_class(o) == crate::heap::ObjectClass::RawJSON
+                }))
+            }
             JSON_QUOTE => {
                 let Some(s) = a0.as_string() else {
                     return bad_argument(name);
