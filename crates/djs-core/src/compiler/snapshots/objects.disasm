@@ -6,93 +6,93 @@ function 0 <anonymous>: params=0 locals=1 stack=4 captures=0
    14  init_global_lex "k"
    19  object
    20  push_i8 1
-   22  define_field "a"
-   27  fclosure child0
-   32  define_method "m"
-   37  fclosure child1
-   42  define_getter "g"
-   47  fclosure child2
-   52  define_setter "s"
-   57  get_global "k" ic0  ; 8:4
-   64  to_propkey
-   65  fclosure child3
-   70  set_function_name 0
-   72  define_elem
-   73  get_global "k" ic1  ; 9:4
-   80  push_const #1 ("m")
-   85  add  ; 9:6
-   86  fclosure child4
-   91  set_function_name 0
-   93  define_method_elem
-   94  get_global "k" ic2  ; 10:8
-  101  fclosure child5
-  106  set_function_name 1
-  108  define_getter_elem
-  109  null
-  110  set_proto
-  111  push_i8 1
-  113  define_field "__proto__x"
-  118  get_global "k" ic3  ; 13:6
-  125  copy_data_props 0
-  127  init_global_lex "o"
-  132  get_global "f" ic4  ; 15:1
-  139  undefined
-  140  array_from 0
-  143  get_global "o" ic5  ; 15:6
-  150  array_spread
-  151  push_i8 1
-  153  array_push
-  154  get_global "o" ic6  ; 15:15
-  161  array_spread
-  162  call_spread  ; 15:2
-  163  put_loc loc0 (<completion>)
-  166  get_global "o" ic7  ; 16:1
-  173  get_method "m" ic8  ; 16:2
-  180  array_from 0
-  183  push_i8 1
-  185  array_from 1
-  188  array_spread
-  189  call_spread  ; 16:4
-  190  put_loc loc0 (<completion>)
-  193  get_global "F" ic9  ; 17:5
-  200  array_from 0
-  203  get_global "o" ic10  ; 17:10
-  210  array_spread
-  211  construct_spread  ; 17:1
-  212  put_loc loc0 (<completion>)
-  215  get_global "o" ic11  ; 18:8
-  222  dup
-  223  is_nullish
-  224  jump_if_true -> 240
-  229  push_atom "a"  ; 18:9
-  234  delete
-  235  jump -> 242
-  240  drop
-  241  push_true
-  242  put_loc loc0 (<completion>)
-  245  get_global "o" ic12  ; 19:8
-  252  dup
-  253  is_nullish
-  254  jump_if_true -> 277
-  259  get_field "b" ic13  ; 19:9
-  266  push_atom "c"  ; 19:12
-  271  delete
-  272  jump -> 279
-  277  drop
-  278  push_true
-  279  put_loc loc0 (<completion>)
-  282  get_global "o" ic14  ; 20:8
-  289  dup
-  290  is_nullish
-  291  jump_if_true -> 309
-  296  get_global "k" ic15  ; 20:12
-  303  delete  ; 20:11
-  304  jump -> 311
-  309  drop
-  310  push_true
-  311  put_loc loc0 (<completion>)
-  314  get_loc loc0 (<completion>)
-  317  return
+   22  define_field "a" ic0
+   29  fclosure child0
+   34  define_method "m"
+   39  fclosure child1
+   44  define_getter "g"
+   49  fclosure child2
+   54  define_setter "s"
+   59  get_global "k" ic1  ; 8:4
+   66  to_propkey
+   67  fclosure child3
+   72  set_function_name 0
+   74  define_elem
+   75  get_global "k" ic2  ; 9:4
+   82  push_const #1 ("m")
+   87  add  ; 9:6
+   88  fclosure child4
+   93  set_function_name 0
+   95  define_method_elem
+   96  get_global "k" ic3  ; 10:8
+  103  fclosure child5
+  108  set_function_name 1
+  110  define_getter_elem
+  111  null
+  112  set_proto
+  113  push_i8 1
+  115  define_field "__proto__x" ic4
+  122  get_global "k" ic5  ; 13:6
+  129  copy_data_props 0
+  131  init_global_lex "o"
+  136  get_global "f" ic6  ; 15:1
+  143  undefined
+  144  array_from 0
+  147  get_global "o" ic7  ; 15:6
+  154  array_spread
+  155  push_i8 1
+  157  array_push
+  158  get_global "o" ic8  ; 15:15
+  165  array_spread
+  166  call_spread  ; 15:2
+  167  put_loc loc0 (<completion>)
+  170  get_global "o" ic9  ; 16:1
+  177  get_method "m" ic10  ; 16:2
+  184  array_from 0
+  187  push_i8 1
+  189  array_from 1
+  192  array_spread
+  193  call_spread  ; 16:4
+  194  put_loc loc0 (<completion>)
+  197  get_global "F" ic11  ; 17:5
+  204  array_from 0
+  207  get_global "o" ic12  ; 17:10
+  214  array_spread
+  215  construct_spread  ; 17:1
+  216  put_loc loc0 (<completion>)
+  219  get_global "o" ic13  ; 18:8
+  226  dup
+  227  is_nullish
+  228  jump_if_true -> 244
+  233  push_atom "a"  ; 18:9
+  238  delete
+  239  jump -> 246
+  244  drop
+  245  push_true
+  246  put_loc loc0 (<completion>)
+  249  get_global "o" ic14  ; 19:8
+  256  dup
+  257  is_nullish
+  258  jump_if_true -> 281
+  263  get_field "b" ic15  ; 19:9
+  270  push_atom "c"  ; 19:12
+  275  delete
+  276  jump -> 283
+  281  drop
+  282  push_true
+  283  put_loc loc0 (<completion>)
+  286  get_global "o" ic16  ; 20:8
+  293  dup
+  294  is_nullish
+  295  jump_if_true -> 313
+  300  get_global "k" ic17  ; 20:12
+  307  delete  ; 20:11
+  308  jump -> 315
+  313  drop
+  314  push_true
+  315  put_loc loc0 (<completion>)
+  318  get_loc loc0 (<completion>)
+  321  return
 function 0.0 m: params=1 locals=1 stack=2 captures=0
     0  special_object 4
     2  put_loc loc0 (this)

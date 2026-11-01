@@ -72,23 +72,23 @@ function 0 <anonymous>: params=0 locals=2 stack=17 captures=0
   232  init_global_lex "holes"
   237  object
   238  push_i8 1
-  240  define_field "a"
-  245  push_i8 2
-  247  define_field "b c"
-  252  push_i8 3
-  254  define_field "3"
-  259  push_i8 4
-  261  define_field "1.5"
-  266  get_global "k" ic5  ; 7:42
-  273  to_propkey
-  274  push_i8 5
-  276  define_elem
-  277  get_global "n" ic6  ; 7:49
-  284  define_field "n"
-  289  get_global "s" ic7  ; 7:55
-  296  copy_data_props 0
-  298  push_i8 6
-  300  define_field "if"
-  305  init_global_lex "o"
-  310  get_loc loc0 (<completion>)
-  313  return
+  240  define_field "a" ic5
+  247  push_i8 2
+  249  define_field "b c" ic6
+  256  push_i8 3
+  258  define_field "3" ic7
+  265  push_i8 4
+  267  define_field "1.5" ic8
+  274  get_global "k" ic9  ; 7:42
+  281  to_propkey
+  282  push_i8 5
+  284  define_elem
+  285  get_global "n" ic10  ; 7:49
+  292  define_field "n" ic11
+  299  get_global "s" ic12  ; 7:55
+  306  copy_data_props 0
+  308  push_i8 6
+  310  define_field "if" ic13
+  317  init_global_lex "o"
+  322  get_loc loc0 (<completion>)
+  325  return

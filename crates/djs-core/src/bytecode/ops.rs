@@ -497,7 +497,7 @@ ops! {
     /// `obj key v ->`
     PutElem put_elem() pop 3 push 0 cost Access flags THROWS | CALLS | ALLOC;
     /// `obj v -> obj`: CreateDataProperty (literals).
-    DefineField define_field(atom: Atom) pop 2 push 1 cost Access flags THROWS | ALLOC;
+    DefineField define_field(atom: Atom, ic: Cache) pop 2 push 1 cost Access flags THROWS | ALLOC;
     /// `obj key v -> obj`: computed keys.
     DefineElem define_elem() pop 3 push 1 cost Access flags THROWS | CALLS | ALLOC;
     /// `obj f -> obj`

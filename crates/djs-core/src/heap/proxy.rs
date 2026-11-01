@@ -12,7 +12,7 @@
 //! [`Heap::has_property_or_proxy`]) and the internal-method intrinsics hand it to the
 //! traps in builtins/proxy.ts.
 
-use super::cells::flags::OBJ_INDEXED_PROPS;
+use super::cells::flags::{OBJ_DICTIONARY, OBJ_INDEXED_PROPS};
 use super::{Heap, HeapError, ObjectClass};
 use crate::value::{Obj, Value};
 
@@ -29,7 +29,8 @@ impl Heap {
         self.set_object_slot(p, 0, Value::object(target));
         self.set_object_slot(p, 1, Value::object(handler));
         self.set_object_slot(p, 2, Value::int(flags));
-        self.set_cell_flags(p.0, OBJ_INDEXED_PROPS);
+        // A dictionary without properties (0083): no inline cache ever matches its shape.
+        self.set_cell_flags(p.0, OBJ_INDEXED_PROPS | OBJ_DICTIONARY);
         Ok(p)
     }
 

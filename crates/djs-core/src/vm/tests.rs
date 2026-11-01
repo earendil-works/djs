@@ -347,7 +347,7 @@ fn console_log_is_a_host_call() {
         f.b.get_method(log, 0);
         f.b.object();
         f.b.push_i8(1);
-        f.b.define_field(crate::heap::atoms::VALUE);
+        f.b.define_field(crate::heap::atoms::VALUE, 0);
         f.b.push_i8(1);
         f.b.push_i8(2);
         f.b.array_from(2);

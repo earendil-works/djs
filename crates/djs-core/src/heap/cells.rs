@@ -105,8 +105,9 @@ pub mod flags {
 /// `"DJS\0"` little-endian, in [`Roots::MAGIC`].
 pub const MAGIC: u32 = u32::from_le_bytes(*b"DJS\0");
 
-/// Words per inline cache slot in `FuncTemplate::IC` (D1620).
-pub const IC_WORDS: u32 = 3;
+/// Words per inline cache slot in `FuncTemplate::IC` (D1620; 5 since 0083's addition
+/// caches).
+pub const IC_WORDS: u32 = 5;
 /// Inline cache slot word 0: the slot holds an arena offset (a prototype property slot,
 /// D1621); the collector empties such slots.
 pub const IC_OFFSET_SLOT: u32 = 1 << 30;

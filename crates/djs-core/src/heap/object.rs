@@ -48,6 +48,10 @@ pub const DENSE_GAP: u32 = 64;
 /// Bucket value for a deleted entry in a property hash index.
 const TOMBSTONE: u32 = u32::MAX;
 
+/// [`Heap::receiver_shape`] of a shape-mode object without a values block (no cell is
+/// at offset 1).
+pub const EMPTY_SHAPE: u32 = 1;
+
 /// Storage-only flag bit: the entry is an accessor.
 pub(crate) const STORE_ACCESSOR: u32 = 8;
 
@@ -1309,6 +1313,87 @@ impl Heap {
         let i = self.shape_find(s, key)?;
         let fl = self.shape_desc(s, i).1;
         (fl & STORE_ACCESSOR == 0).then(|| (s, i, PropFlags::from_bits(fl as u8).writable()))
+    }
+
+    /// The receiver shape word of an inline cache (0083): 0 for a dictionary-mode object
+    /// (nothing to compare), [`EMPTY_SHAPE`] for a shape-mode object without a values
+    /// block, else its shape. Equal words mean equal named keys and attributes.
+    #[inline(always)]
+    pub fn receiver_shape(&self, o: Obj) -> u32 {
+        if self.is_dictionary(o) {
+            return 0;
+        }
+        match self.props(o) {
+            0 => EMPTY_SHAPE,
+            v => self.arena().get(v, PropValues::SHAPE).0,
+        }
+    }
+
+    /// After a slow path added `key` to `o`, whose receiver shape word was `old`: the new
+    /// shape if the addition was the transition from `old` by `key` as a writable,
+    /// enumerable, configurable data property, the one a cached addition can repeat.
+    /// `None` for anything else, and for objects marked as prototypes (their additions
+    /// must bump the prototype epoch).
+    pub fn added_shape(&self, o: Obj, key: Atom, old: u32) -> Option<u32> {
+        if old == 0 || self.obj_flags(o) & OBJ_IS_PROTO != 0 {
+            return None;
+        }
+        let new = self.receiver_shape(o);
+        if new <= EMPTY_SHAPE {
+            return None;
+        }
+        let count = self.shape_count(new);
+        let from_old = if old == EMPTY_SHAPE {
+            count == 1
+        } else {
+            self.shape_parent(new) == old
+        };
+        (from_old && self.shape_desc(new, count - 1) == (key, PropFlags::ALL.bits() as u32))
+            .then_some(new)
+    }
+
+    /// A cached addition (0083): gives `o` the shape `new` (a child of `old` by one
+    /// writable, enumerable, configurable data property) with value `v` in the new slot,
+    /// if `o` has receiver shape word `old`, is extensible and not marked as a prototype.
+    /// The caller has checked what lies outside the object (the prototype chain for
+    /// [[Set]]). Grows the values block if it is full; false, with nothing changed, if
+    /// that allocation fails (the slow path then fails and retries, D1700) or `o` does not
+    /// match.
+    #[inline]
+    pub fn shaped_add(&mut self, o: Obj, old: u32, new: u32, v: Value) -> bool {
+        let f = self.obj_flags(o);
+        if f & (OBJ_DICTIONARY | OBJ_IS_PROTO) != 0 || f & OBJ_EXTENSIBLE == 0 {
+            return false;
+        }
+        let p = self.props(o);
+        let (len, cur) = if p == 0 {
+            (0, EMPTY_SHAPE)
+        } else {
+            let a = self.arena();
+            (a.get(p, PropValues::LEN), a.get(p, PropValues::SHAPE).0)
+        };
+        if cur != old {
+            return false;
+        }
+        let nv = if p != 0 && len < PropValues::LAYOUT.tail_capacity(self.cell_size(p)) {
+            p
+        } else {
+            let Ok(nv) = self.alloc_values((2 * len).max(4)) else {
+                return false;
+            };
+            if len > 0 {
+                let src = PropValues::VALUES.at(p, 0);
+                let dst = PropValues::VALUES.at(nv, 0);
+                self.arena_mut().copy_within(src, 8 * len, dst);
+            }
+            nv
+        };
+        let a = self.arena_mut();
+        a.write(PropValues::VALUES.at(nv, len), v);
+        a.set(nv, PropValues::LEN, len + 1);
+        a.set(nv, PropValues::SHAPE, Ref(new));
+        a.set(o.0, Object::PROPS, Ref(nv));
+        true
     }
 
     /// The values block of `o` if it is in shape mode with shape `shape`.

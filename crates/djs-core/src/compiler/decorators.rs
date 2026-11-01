@@ -307,16 +307,16 @@ impl Parser<'_, '_> {
         if kind != DEC_SETTER {
             self.emit_synth_fn(Synth::AccessGet, name, Atom::NULL, pos)?;
             let a = self.heap.atom_str("get")?;
-            self.code().define_field(a);
+            self.code().define_field(a, 0);
         }
         if matches!(kind, DEC_SETTER | DEC_FIELD | DEC_ACCESSOR) {
             self.emit_synth_fn(Synth::AccessSet, name, Atom::NULL, pos)?;
             let a = self.heap.atom_str("set")?;
-            self.code().define_field(a);
+            self.code().define_field(a, 0);
         }
         self.emit_synth_fn(Synth::AccessHas, name, Atom::NULL, pos)?;
         let a = self.heap.atom_str("has")?;
-        self.code().define_field(a);
+        self.code().define_field(a, 0);
         Ok(())
     }
 
@@ -397,7 +397,7 @@ impl Parser<'_, '_> {
                 let r = self.name_ref(h, pos);
                 self.code().name_get(r);
                 let a = self.heap.atom_str(w)?;
-                self.code().define_field(a);
+                self.code().define_field(a, 0);
             }
         }
         let r = self.name_ref(d.decs, pos);

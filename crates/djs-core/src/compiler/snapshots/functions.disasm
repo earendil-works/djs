@@ -16,16 +16,16 @@ function 0 <anonymous>: params=0 locals=1 stack=2 captures=0
    70  init_global_lex "named"
    75  object
    76  fclosure child6
-   81  define_field "m"
-   86  fclosure child7
-   91  define_field "a"
-   96  put_global "obj" ic3  ; 8:5
-  103  get_global "f" ic4  ; 9:5
-  110  push_i8 1
-  112  construct 1  ; 9:1
-  115  put_loc loc0 (<completion>)
-  118  get_loc loc0 (<completion>)
-  121  return
+   81  define_field "m" ic3
+   88  fclosure child7
+   93  define_field "a" ic4
+  100  put_global "obj" ic5  ; 8:5
+  107  get_global "f" ic6  ; 9:5
+  114  push_i8 1
+  116  construct 1  ; 9:1
+  119  put_loc loc0 (<completion>)
+  122  get_loc loc0 (<completion>)
+  125  return
 function 0.0 f: params=2 locals=3 stack=2 captures=0
     0  get_arg arg0
     3  put_loc loc0 (a)

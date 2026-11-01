@@ -137,6 +137,7 @@ mod fast {
     pub const GET_FIELD: u8 = Op::GetField as u8;
     pub const GET_METHOD: u8 = Op::GetMethod as u8;
     pub const PUT_FIELD: u8 = Op::PutField as u8;
+    pub const DEFINE_FIELD: u8 = Op::DefineField as u8;
     // `fast_more` (0086)
     pub const NULL: u8 = Op::Null as u8;
     pub const PUSH_TRUE: u8 = Op::PushTrue as u8;
@@ -1298,7 +1299,9 @@ impl<'h> Exec<'h> {
             fast::RETURN_UNDEF => return self.fast_return(Op::ReturnUndef),
             fast::CALL_INTRINSIC => return self.fast_intrinsic(),
             fast::GET_ELEM | fast::GET_ELEM2 | fast::PUT_ELEM => return self.fast_elem(sp0),
-            fast::GET_FIELD | fast::GET_METHOD | fast::PUT_FIELD => return self.fast_field(sp0),
+            fast::GET_FIELD | fast::GET_METHOD | fast::PUT_FIELD | fast::DEFINE_FIELD => {
+                return self.fast_field(sp0);
+            }
             _ => return false,
         }
         true
@@ -2243,6 +2246,16 @@ impl<'h> Exec<'h> {
                     self.sp -= 2;
                     return Ok(None);
                 }
+                if self.plain_addition(obj, key) {
+                    // [[Set]] of a key that no object on the chain has: CreateDataProperty
+                    // on the receiver, which an addition cache can repeat (0083).
+                    let old = self.heap.receiver_shape(obj);
+                    if self.heap.create_data_property(obj, key, v)? {
+                        self.ic_add_fill(obj, key, old, true, ic);
+                        self.sp -= 2;
+                        return Ok(None);
+                    }
+                }
                 return self.set_property(obj, key, v, 2);
             }
             Op::GetElem => {
@@ -2314,9 +2327,12 @@ impl<'h> Exec<'h> {
             }
             Op::DefineField => {
                 let key = self.imm_atom();
+                let ic = self.imm_u16(5);
                 let v = self.pop();
                 let o = self.top(0).as_object().expect("object literal");
+                let old = self.heap.receiver_shape(o);
                 self.heap.create_data_property(o, key, v)?;
+                self.ic_add_fill(o, key, old, false, ic);
             }
             Op::In => {
                 let (k, o) = (self.top(1), self.top(0));

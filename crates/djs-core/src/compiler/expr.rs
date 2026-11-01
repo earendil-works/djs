@@ -1855,7 +1855,7 @@ impl Parser<'_, '_> {
                 }
                 self.parse_assign(false)?;
                 match key {
-                    Some(a) => self.code().define_field(a),
+                    Some(a) => self.code().define_field(a, 0),
                     None => {
                         // NamedEvaluation with a computed key happens at run time.
                         if self.last_anon_fn == Some((value_start, self.prev_end)) {
@@ -1882,7 +1882,7 @@ impl Parser<'_, '_> {
                 let r = self.name_ref(a, key_tok.start);
                 self.mark(key_tok.start);
                 self.code().name_get(r);
-                self.code().define_field(a);
+                self.code().define_field(a, 0);
             }
             _ => return syntax(self.tok.start, "expecting '}'"),
         }
