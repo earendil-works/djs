@@ -11,7 +11,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0097 | Finish the later group (immutable ArrayBuffer, inventory) | infra | .worktrees/infra |
 | 0096 | Compiler structural speedups (0092 follow-ups) | lexer | .worktrees/lexer |
 | 0098 | Base image + shapes code size (0083 part 4) | heap | .worktrees/heap |
-| 0093 | Run-loop state in locals + compact call protocol (design first) | perf | .worktrees/perf |
+| 0100 | Native codegen: values in Rust locals (0081 P8) + more run_hot ops | perf | .worktrees/perf |
 
 ## Open (ready)
 
@@ -60,6 +60,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0077 | deser deps investigation | report (agent deps, archived): no new deps; quick wins -> 0078 |
 | 0089 | pi snapshot collect fix | 68343b1 (agent snapshot, archived; snapshots 936 -> 498 KB; DETERMINISTIC_VERSION 2) |
 | 0088 | Snapshot design research | 6c0e381 (agent snapshot; recommends A now, B long-term, defer C; owner decision pending) |
+| 0093 | run_hot: tier-0 loop + compact calls | 22495ce3 (agent perf; plain bytecode 0.44-0.63x quickjs-wasi; calls ~1x) |
 | 0085 | @fast leaf entries (57) | 0dd2c96 (agent perf; pi-like 3.6x -> 1.8x quickjs-wasi in wasm instructions) |
 | 0081 | Perf anatomy | report (agent perf): plain bytecode at par in wasm; gap is builtins/iteration; P1-P10 |
 | 0072 | Determinism checks in the gate (both parts) | 38f0c91 (agent determinism, archived; D1720, D1725) |
@@ -133,9 +134,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
   namespaces, parameter properties.
 - P4: snapshot/restore API, deltas, old generation.
 - P5: regex engine, generators, Map/Set/WeakMap, Symbol, iterators, typed arrays, …
-- Perf track: (shapes now 0083). 0081 structural proposals, each needing a decision: run-loop
-  state in locals (P6), bounds checks per cell (P7, with 0052 S3), generated builtins
-  keeping values in Rust locals (P8), a compact call protocol (P9). After 0083 and 0085-0087. A one-codegen-unit LTO
+- Perf track: (shapes now 0083). 0081 structural proposals: P6+P9 done (0093), P8 in progress (0100), P7 (bounds checks
+  per cell) open. A one-codegen-unit LTO
   profile for `bench.sh --record` (D1620: default release layouts vary +-15%).
 - Perf track: the bgen Rust backend, benchmarks. **Interpreter call path is ~10x slower
   than qjs** (0034: 3.4M plain JS calls 0.6 s vs 0.06 s; sort with comparator 30x): the
