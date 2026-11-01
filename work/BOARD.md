@@ -22,6 +22,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| 0101 | In-place mark-compact collection (design first) | 0098, 0099 (heap) |
 
 ## Done
 
