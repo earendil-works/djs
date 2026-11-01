@@ -91,14 +91,21 @@ pub enum HeapError {
     InvalidArrayLength,
 }
 
-impl fmt::Display for HeapError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
+impl HeapError {
+    /// The Display form.
+    pub fn as_str(self) -> &'static str {
+        match self {
             HeapError::OutOfMemory => "out of memory",
             HeapError::HostOutOfMemory => "out of host memory",
             HeapError::StringTooLong => "invalid string length",
             HeapError::InvalidArrayLength => "invalid array length",
-        })
+        }
+    }
+}
+
+impl fmt::Display for HeapError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
@@ -116,18 +123,27 @@ pub enum LoadError {
     BuildMismatch { found: u32, expected: u32 },
 }
 
-impl fmt::Display for LoadError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl LoadError {
+    /// The Display form, built without core::fmt (D2339).
+    pub fn text(&self) -> alloc::string::String {
         match self {
-            LoadError::BadHeader => f.write_str("not a djs heap image of this layout"),
-            LoadError::TooLarge => f.write_str("the image is larger than the memory limit"),
-            LoadError::Corrupt(e) => f.write_str(&crate::detail::detail("corrupt heap image", e)),
-            LoadError::BuildMismatch { found, expected } => write!(
-                f,
-                "the image is from another djs build (build hash {found:08x}, this build \
-                 {expected:08x})"
+            LoadError::BadHeader => "not a djs heap image of this layout".into(),
+            LoadError::TooLarge => "the image is larger than the memory limit".into(),
+            LoadError::Corrupt(e) => crate::detail::detail("corrupt heap image", e),
+            LoadError::BuildMismatch { found, expected } => crate::text::cat!(
+                "the image is from another djs build (build hash ",
+                crate::text::hex(*found, 8),
+                ", this build ",
+                crate::text::hex(*expected, 8),
+                ")"
             ),
         }
+    }
+}
+
+impl fmt::Display for LoadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.text())
     }
 }
 

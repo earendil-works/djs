@@ -14,6 +14,7 @@
 #[cfg(test)]
 mod tests;
 
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
 
@@ -76,14 +77,21 @@ impl From<HeapError> for WireError {
     }
 }
 
-impl fmt::Display for WireError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl WireError {
+    /// The Display form, built without core::fmt (D2339).
+    pub fn text(&self) -> String {
         match self {
             WireError::Invalid { offset, reason } => {
-                write!(f, "invalid wire data at offset {offset}: {reason}")
+                crate::text::cat!("invalid wire data at offset ", offset, ": ", reason)
             }
-            WireError::Heap(e) => write!(f, "{e}"),
+            WireError::Heap(e) => String::from(e.as_str()),
         }
+    }
+}
+
+impl fmt::Display for WireError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.text())
     }
 }
 

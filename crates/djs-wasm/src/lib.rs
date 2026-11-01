@@ -27,8 +27,7 @@ extern crate alloc;
 
 use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
-use alloc::format;
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::{OnceCell, RefCell};
@@ -168,7 +167,7 @@ fn init() {
         ONCE.call_once(|| {
             let previous = std::panic::take_hook();
             std::panic::set_hook(Box::new(move |info| {
-                let msg = info.to_string();
+                let msg = std::string::ToString::to_string(info);
                 record_panic(|| msg);
                 previous(info);
             }));
@@ -527,7 +526,7 @@ fn add_new_vm(vm: Result<Vm, djs_core::heap::HeapError>) -> u32 {
     with(|s| match vm {
         Ok(vm) => s.add_vm(vm),
         Err(e) => {
-            s.set_out(format!("cannot create a VM: {e}").as_bytes());
+            s.set_out(&[b"cannot create a VM: ", e.as_str().as_bytes()].concat());
             0
         }
     })
@@ -545,7 +544,7 @@ pub extern "C" fn vm_from_bytes(len: usize, memory_limit: u32) -> u32 {
         match Vm::from_bytes(bytes, options(memory_limit)) {
             Ok(vm) => s.add_vm(vm),
             Err(e) => {
-                s.set_out(format!("cannot restore the VM image: {e}").as_bytes());
+                s.set_out(&[b"cannot restore the VM image: ", e.text().as_bytes()].concat());
                 0
             }
         }
@@ -647,7 +646,7 @@ fn compile(vm: u32, goal: u32, name_len: usize, params_len: usize, src_len: usiz
             experimental_decorators: goal & 12 != 0,
             emit_decorator_metadata: goal & 8 != 0,
         };
-        let result = slot.vm.compile(&src, &opts).map_err(|e| e.to_string());
+        let result = slot.vm.compile(&src, &opts).map_err(|e| e.text());
         match result {
             Ok(f) => {
                 let h = slot.handle(f);
@@ -691,11 +690,11 @@ pub extern "C" fn djs_disasm(goal: u32, params_len: usize, src_len: usize) -> u3
             emit_decorator_metadata: goal & 8 != 0,
         };
         let listing = djs_core::heap::Heap::new()
-            .map_err(|e| format!("{e}"))
+            .map_err(|e| String::from(e.as_str()))
             .and_then(|mut heap| {
                 djs_core::compiler::compile(&mut heap, &src, &opts)
                     .map(|t| disasm_template(&heap, t))
-                    .map_err(|e| e.to_string())
+                    .map_err(|e| e.text())
             });
         match listing {
             Ok(text) => {
@@ -797,10 +796,10 @@ pub extern "C" fn vm_decode_wire(vm: u32, len: usize) -> u32 {
         };
         let msg = match wire::decode(heap, input, &opts) {
             Ok(v) => match slot.handle(v) {
-                0 => "out of memory".to_string(),
+                0 => String::from("out of memory"),
                 h => return h,
             },
-            Err(e) => e.to_string(),
+            Err(e) => e.text(),
         };
         s.set_out(msg.as_bytes());
         0
@@ -823,11 +822,11 @@ pub extern "C" fn vm_parse_json(vm: u32, len: usize) -> u32 {
         };
         let msg = match json::parse_utf8(heap, input, &opts) {
             Ok(v) => match slot.handle(v) {
-                0 => "out of memory".to_string(),
+                0 => String::from("out of memory"),
                 h => return h,
             },
-            Err(json::ParseError::Syntax(e)) => e.to_string(),
-            Err(json::ParseError::Heap(_)) => "out of memory".to_string(),
+            Err(json::ParseError::Syntax(e)) => e.text(),
+            Err(json::ParseError::Heap(_)) => String::from("out of memory"),
         };
         s.set_out(msg.as_bytes());
         0

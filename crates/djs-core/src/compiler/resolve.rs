@@ -12,7 +12,6 @@
 //!    template, children before parents.
 
 use alloc::borrow::Cow;
-use alloc::format;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -65,7 +64,10 @@ struct Resolved {
 }
 
 pub(super) fn internal(what: &str) -> PErr {
-    PErr::syntax(0, Cow::Owned(format!("internal compiler error: {what}")))
+    PErr::syntax(
+        0,
+        Cow::Owned(crate::text::cat!("internal compiler error: ", what)),
+    )
 }
 
 /// Resolves all functions of the unit and writes their templates. `funcs` is indexed
@@ -700,7 +702,9 @@ fn emit_function(
             _ => out.emit_insn(&insn),
         }
     }
-    let code = out.finish().map_err(|e| internal(&format!("{e:?}")))?;
+    let code = out
+        .finish()
+        .map_err(|e| internal(&crate::detail::detail("bytecode", &e)))?;
     let mut handlers = Vec::with_capacity(f.handlers.len());
     for h in &f.handlers {
         let pos = |l| {

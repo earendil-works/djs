@@ -3,7 +3,6 @@
 //! `get_date_string`, `js_Date_parse`), so output and parsing match it. Local time is a
 //! fixed offset the host sets (D1383).
 
-use alloc::format;
 use alloc::string::String;
 
 const MONTH_DAYS: [i64; 12] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -196,27 +195,36 @@ pub(crate) fn format(t: f64, fmt: u8, part: u8, offset: i64) -> Option<String> {
     let mut tz = f[8] as i64;
     let year = |y: i64| {
         if y < 0 {
-            format!("-{:04}", -y)
+            crate::text::cat!("-", crate::text::pad(-y, 4))
         } else {
-            format!("{y:04}")
+            crate::text::cat!(crate::text::pad(y, 4))
         }
     };
     let mut out = String::new();
     if part & 1 != 0 {
         match fmt {
             0 => {
-                out += &format!(
-                    "{}, {d:02} {} {} ",
+                crate::text::cat_to!(
+                    &mut out,
                     name(DAY_NAMES, wd),
+                    ", ",
+                    crate::text::pad(d, 2),
+                    " ",
                     name(MONTH_NAMES, mon),
-                    year(y)
+                    " ",
+                    year(y),
+                    " "
                 )
             }
             1 => {
-                out += &format!(
-                    "{} {} {d:02} {}",
+                crate::text::cat_to!(
+                    &mut out,
                     name(DAY_NAMES, wd),
+                    " ",
                     name(MONTH_NAMES, mon),
+                    " ",
+                    crate::text::pad(d, 2),
+                    " ",
                     year(y)
                 );
                 if part == 3 {
@@ -225,16 +233,30 @@ pub(crate) fn format(t: f64, fmt: u8, part: u8, offset: i64) -> Option<String> {
             }
             2 => {
                 if (0..=9999).contains(&y) {
-                    out += &format!("{y:04}");
+                    crate::text::cat_to!(&mut out, crate::text::pad(y, 4));
                 } else if y < 0 {
-                    out += &format!("-{:06}", -y);
+                    crate::text::cat_to!(&mut out, "-", crate::text::pad(-y, 6));
                 } else {
-                    out += &format!("+{y:06}");
+                    crate::text::cat_to!(&mut out, "+", crate::text::pad(y, 6));
                 }
-                out += &format!("-{:02}-{d:02}T", mon + 1);
+                crate::text::cat_to!(
+                    &mut out,
+                    "-",
+                    crate::text::pad(mon as i64 + 1, 2),
+                    "-",
+                    crate::text::pad(d, 2),
+                    "T"
+                );
             }
             _ => {
-                out += &format!("{:02}/{d:02}/{}", mon + 1, year(y));
+                crate::text::cat_to!(
+                    &mut out,
+                    crate::text::pad(mon as i64 + 1, 2),
+                    "/",
+                    crate::text::pad(d, 2),
+                    "/",
+                    year(y)
+                );
                 if part == 3 {
                     out += ", ";
                 }
@@ -243,23 +265,59 @@ pub(crate) fn format(t: f64, fmt: u8, part: u8, offset: i64) -> Option<String> {
     }
     if part & 2 != 0 {
         match fmt {
-            0 => out += &format!("{h:02}:{m:02}:{s:02} GMT"),
+            0 => crate::text::cat_to!(
+                &mut out,
+                crate::text::pad(h, 2),
+                ":",
+                crate::text::pad(m, 2),
+                ":",
+                crate::text::pad(s, 2),
+                " GMT"
+            ),
             1 => {
-                out += &format!("{h:02}:{m:02}:{s:02} GMT");
+                crate::text::cat_to!(
+                    &mut out,
+                    crate::text::pad(h, 2),
+                    ":",
+                    crate::text::pad(m, 2),
+                    ":",
+                    crate::text::pad(s, 2),
+                    " GMT"
+                );
                 if tz < 0 {
                     out.push('-');
                     tz = -tz;
                 } else {
                     out.push('+');
                 }
-                out += &format!("{:02}{:02}", tz / 60, tz % 60);
+                crate::text::cat_to!(
+                    &mut out,
+                    crate::text::pad(tz / 60, 2),
+                    crate::text::pad(tz % 60, 2)
+                );
             }
-            2 => out += &format!("{h:02}:{m:02}:{s:02}.{ms:03}Z"),
+            2 => crate::text::cat_to!(
+                &mut out,
+                crate::text::pad(h, 2),
+                ":",
+                crate::text::pad(m, 2),
+                ":",
+                crate::text::pad(s, 2),
+                ".",
+                crate::text::pad(ms, 3),
+                "Z"
+            ),
             _ => {
-                out += &format!(
-                    "{:02}:{m:02}:{s:02} {}M",
-                    (h + 11) % 12 + 1,
-                    if h < 12 { 'A' } else { 'P' }
+                crate::text::cat_to!(
+                    &mut out,
+                    crate::text::pad((h + 11) % 12 + 1, 2),
+                    ":",
+                    crate::text::pad(m, 2),
+                    ":",
+                    crate::text::pad(s, 2),
+                    " ",
+                    if h < 12 { 'A' } else { 'P' },
+                    "M"
                 )
             }
         }

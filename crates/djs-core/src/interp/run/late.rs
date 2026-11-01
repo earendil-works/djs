@@ -249,7 +249,7 @@ impl Exec<'_> {
             _ => {
                 return Err(Fault::error(
                     ErrorKind::InternalError,
-                    format!("not supported yet: %{name}"),
+                    crate::text::cat!("not supported yet: %", name),
                 ));
             }
         };

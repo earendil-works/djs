@@ -7,8 +7,6 @@
 //! read and write the table directly: never the prototype chain, and never a proxy
 //! trap (a private name on a proxy is the proxy object's own).
 
-use alloc::format;
-
 use super::{Exec, Got, Step};
 use crate::bytecode::Op;
 use crate::bytecode::template::func_flags;
@@ -87,9 +85,10 @@ impl Exec<'_> {
                 self.private_add_check(obj)?;
                 if self.heap.has_own_property(obj, key) {
                     return type_error(&if kind == 0 {
-                        format!(
-                            "private class field '{}' already exists",
-                            conv::describe_key(self.heap, key)
+                        crate::text::cat!(
+                            "private class field '",
+                            conv::describe_key(self.heap, key),
+                            "' already exists"
                         )
                     } else {
                         "private method is already present".into()
@@ -323,9 +322,10 @@ impl Exec<'_> {
         if self.heap.symbol_private_flags(sym) & SYM_PRIVATE_METHOD != 0 {
             return type_error("invalid brand on object");
         }
-        type_error(&format!(
-            "private class field '{}' does not exist",
-            conv::describe_key(self.heap, key)
+        type_error(&crate::text::cat!(
+            "private class field '",
+            conv::describe_key(self.heap, key),
+            "' does not exist"
         ))
     }
 
@@ -341,9 +341,10 @@ impl Exec<'_> {
     }
 
     fn private_read_only<T>(&self, key: Atom) -> Result<T, Fault> {
-        type_error(&format!(
-            "'{}' is read-only",
-            conv::describe_key(self.heap, key)
+        type_error(&crate::text::cat!(
+            "'",
+            conv::describe_key(self.heap, key),
+            "' is read-only"
         ))
     }
 
@@ -409,7 +410,11 @@ impl Exec<'_> {
             return type_error("not an object");
         };
         let read_only = |heap: &crate::heap::Heap| {
-            type_error(&format!("'{}' is read-only", conv::describe_key(heap, key)))
+            type_error(&crate::text::cat!(
+                "'",
+                conv::describe_key(heap, key),
+                "' is read-only"
+            ))
         };
         let found = match self.heap.lookup_property(b, key) {
             Lookup::Found(h, p) => Some((h, p)),

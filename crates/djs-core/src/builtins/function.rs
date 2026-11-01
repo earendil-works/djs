@@ -1,6 +1,5 @@
 //! Function leaf intrinsics: bound functions and `Function.prototype.toString`.
 
-use alloc::format;
 use alloc::string::String;
 
 use crate::bytecode::template::func_flags;
@@ -46,7 +45,11 @@ pub(crate) fn to_string(heap: &mut Heap, f: Value) -> Result<Str, Fault> {
         .and_then(|v| v.as_string())
         .map(|s| heap.str_to_string(s))
         .unwrap_or_default();
-    Ok(heap.alloc_str(&format!("function {name}() {{\n    [native code]\n}}"))?)
+    Ok(heap.alloc_str(&crate::text::cat!(
+        "function ",
+        name,
+        "() {\n    [native code]\n}"
+    ))?)
 }
 
 fn source_slice(heap: &Heap, f: Obj) -> Option<String> {

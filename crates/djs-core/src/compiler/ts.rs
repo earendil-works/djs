@@ -12,7 +12,6 @@
 //! ts-blank-space, TESTING.md).
 
 use alloc::borrow::Cow;
-use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -114,7 +113,7 @@ impl<'a> Parser<'a, '_> {
         let text = String::from_utf8_lossy(self.lx.text(&self.tok)).into_owned();
         PErr::syntax(
             self.tok.start,
-            Cow::Owned(format!("unexpected token in type: '{text}'")),
+            Cow::Owned(crate::text::cat!("unexpected token in type: '", text, "'")),
         )
     }
 

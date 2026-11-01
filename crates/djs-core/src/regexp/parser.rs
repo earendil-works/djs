@@ -6,7 +6,6 @@
 //! and Charlie Gordon) closely, so that valid/invalid decisions and messages match qjs.
 
 use alloc::boxed::Box;
-use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -262,7 +261,11 @@ impl Parser<'_> {
 
     fn expect(&mut self, c: u8) -> Result<(), SyntaxError> {
         if self.at_end() || self.cur() != c as u32 {
-            return Err(SyntaxError::new(format!("expecting '{}'", c as char)));
+            return Err(SyntaxError::new(crate::text::cat!(
+                "expecting '",
+                c as char,
+                "'"
+            )));
         }
         self.pos += 1;
         Ok(())
@@ -650,9 +653,10 @@ impl Parser<'_> {
                 _ => return Ok(mask),
             };
             if mask & bit != 0 {
-                return Err(SyntaxError::new(format!(
-                    "duplicate modifier: '{}'",
-                    char::from_u32(self.cur()).unwrap()
+                return Err(SyntaxError::new(crate::text::cat!(
+                    "duplicate modifier: '",
+                    char::from_u32(self.cur()).unwrap(),
+                    "'"
                 )));
             }
             mask |= bit;

@@ -161,14 +161,26 @@ pub struct CompileError {
     pub col: u32,
 }
 
+impl CompileError {
+    /// The error as text: `SyntaxError: <message> at <line>:<col>` (the Display form,
+    /// built without core::fmt for the shipped module, D2339).
+    pub fn text(&self) -> String {
+        let mut out = String::from(match self.kind {
+            CompileErrorKind::Syntax => "SyntaxError: ",
+            CompileErrorKind::OutOfMemory => "out of memory",
+            CompileErrorKind::HostOutOfMemory => "out of host memory",
+        });
+        if self.kind == CompileErrorKind::Syntax {
+            out.push_str(&self.message);
+        }
+        crate::text::cat_to!(&mut out, " at ", self.line, ":", self.col);
+        out
+    }
+}
+
 impl fmt::Display for CompileError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.kind {
-            CompileErrorKind::Syntax => write!(f, "SyntaxError: {}", self.message)?,
-            CompileErrorKind::OutOfMemory => f.write_str("out of memory")?,
-            CompileErrorKind::HostOutOfMemory => f.write_str("out of host memory")?,
-        }
-        write!(f, " at {}:{}", self.line, self.col)
+        f.write_str(&self.text())
     }
 }
 

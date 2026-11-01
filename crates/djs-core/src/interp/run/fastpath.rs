@@ -1,7 +1,6 @@
 //! Calls of `@fast` builtins (D1850): the leaf fast path of `builtins::fast` runs in
 //! place of the call when it accepts the arguments.
 
-use alloc::format;
 use alloc::string::String;
 
 use super::Exec;
@@ -75,8 +74,10 @@ impl Exec<'_> {
             .heap
             .atom_name(Atom::from_id(self.heap.arena().get(t, FuncTemplate::NAME)));
         let Some(i) = crate::builtins::fast::index(&name) else {
-            return bad(format!(
-                "%MarkFast: no fast path for {name} (builtins/fast.rs)"
+            return bad(crate::text::cat!(
+                "%MarkFast: no fast path for ",
+                name,
+                " (builtins/fast.rs)"
             ));
         };
         let a = self.heap.arena_mut();

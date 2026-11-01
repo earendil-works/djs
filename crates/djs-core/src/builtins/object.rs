@@ -40,9 +40,10 @@ pub(crate) fn define_data_or_throw(
 }
 
 pub(crate) fn cannot_define<T>(heap: &Heap, key: Atom) -> Result<T, Fault> {
-    type_error(&alloc::format!(
-        "cannot define property '{}'",
-        conv::describe_key(heap, key)
+    type_error(&crate::text::cat!(
+        "cannot define property '",
+        conv::describe_key(heap, key),
+        "'"
     ))
 }
 

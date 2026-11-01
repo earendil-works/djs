@@ -112,7 +112,7 @@ impl Exec<'_> {
             let name = crate::bytecode::intrinsics::intrinsic(id).map_or("?", |i| i.name);
             return Err(Fault::error(
                 ErrorKind::InternalError,
-                format!("%{name} is not installed"),
+                crate::text::cat!("%", name, " is not installed"),
             ));
         }
         self.ensure(self.sp + 2)?;

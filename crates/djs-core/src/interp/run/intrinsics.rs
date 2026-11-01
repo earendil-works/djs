@@ -457,7 +457,10 @@ pub(super) fn bad_argument<T>(name: &str) -> Result<T, Fault> {
 #[cold]
 #[inline(never)]
 fn bad_argument_fault(name: &str) -> Fault {
-    Fault::error(ErrorKind::InternalError, format!("bad argument to %{name}"))
+    Fault::error(
+        ErrorKind::InternalError,
+        crate::text::cat!("bad argument to %", name),
+    )
 }
 
 impl Exec<'_> {
@@ -466,7 +469,7 @@ impl Exec<'_> {
         let Some(info) = intrinsic(id) else {
             return Err(Fault::error(
                 ErrorKind::InternalError,
-                format!("bad bytecode: intrinsic {id}"),
+                crate::text::cat!("bad bytecode: intrinsic ", id),
             ));
         };
         let base = self.sp - argc;
@@ -1816,7 +1819,7 @@ impl Exec<'_> {
                     Some(d) => self.heap.str_to_string(d),
                     None => String::new(),
                 };
-                Value::string(self.heap.alloc_str(&format!("Symbol({d})"))?)
+                Value::string(self.heap.alloc_str(&crate::text::cat!("Symbol(", d, ")"))?)
             }
             INSTALL_CONSTRUCTOR => {
                 self.install_constructor(
@@ -2251,7 +2254,7 @@ impl Exec<'_> {
             Some(d) => self.heap.str_to_string(d),
             None => String::new(),
         };
-        let name = self.heap.alloc_str(&format!("[{d}]"))?;
+        let name = self.heap.alloc_str(&crate::text::cat!("[", d, "]"))?;
         Ok((self.heap.symbol_atom(sym), Value::string(name)))
     }
 
@@ -2503,7 +2506,7 @@ impl Exec<'_> {
             self.heap.prevent_extensions(fo);
             return Ok(());
         }
-        let name = format!("{} {key_name}", if setter { "set" } else { "get" });
+        let name = crate::text::cat!(if setter { "set" } else { "get" }, " ", key_name);
         let name = Value::string(self.heap.alloc_str(&name)?);
         self.name_and_length(fo, name, if setter { 1.0 } else { 0.0 })?;
         self.mark_builtin(fo, OBJ_BUILTIN)?;
@@ -2517,7 +2520,7 @@ impl Exec<'_> {
         let unknown = || {
             Err(Fault::error(
                 ErrorKind::InternalError,
-                format!("%InstallMethod: no object at {path}"),
+                crate::text::cat!("%InstallMethod: no object at ", path),
             ))
         };
         let realm_object = |name: &str| match name {

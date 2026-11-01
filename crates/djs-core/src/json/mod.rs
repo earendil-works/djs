@@ -49,13 +49,24 @@ pub struct SyntaxError {
     pub column: u32,
 }
 
+impl SyntaxError {
+    /// `SyntaxError: <message> at <input>:<line>:<column>` (the Display form, built
+    /// without core::fmt, D2339).
+    pub fn text(&self) -> String {
+        crate::text::cat!(
+            "SyntaxError: ",
+            self.message,
+            " at <input>:",
+            self.line,
+            ":",
+            self.column
+        )
+    }
+}
+
 impl fmt::Display for SyntaxError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "SyntaxError: {} at <input>:{}:{}",
-            self.message, self.line, self.column
-        )
+        f.write_str(&self.text())
     }
 }
 

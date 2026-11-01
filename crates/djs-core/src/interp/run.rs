@@ -13,7 +13,6 @@
 //! re-derived from the roots and `stack[bp]`. Everything live is in the arena, so the
 //! collector needs nothing else.
 
-use alloc::format;
 use alloc::string::String;
 
 use super::conv::{self, Fault, FaultKind, type_error};
@@ -1630,7 +1629,7 @@ impl<'h> Exec<'h> {
         let Some(op) = Op::from_u8(b) else {
             return Err(Fault::error(
                 ErrorKind::InternalError,
-                format!("bad bytecode: opcode {b}"),
+                crate::text::cat!("bad bytecode: opcode ", b),
             ));
         };
         let info = &OPS[op as usize];
@@ -1709,7 +1708,7 @@ impl<'h> Exec<'h> {
     fn uninitialized<T>(&self, name_index: u32) -> Result<T, Fault> {
         Err(Fault::error(
             ErrorKind::ReferenceError,
-            format!("{} is not initialized", self.name_of(name_index)),
+            crate::text::cat!(self.name_of(name_index), " is not initialized"),
         ))
     }
 
@@ -2102,7 +2101,7 @@ impl<'h> Exec<'h> {
                     None if op == Op::GetGlobal => {
                         return Err(Fault::error(
                             ErrorKind::ReferenceError,
-                            format!("'{}' is not defined", self.heap.atom_name(key)),
+                            crate::text::cat!("'", self.heap.atom_name(key), "' is not defined"),
                         ));
                     }
                     None => self.push(Value::UNDEFINED),
@@ -2133,7 +2132,11 @@ impl<'h> Exec<'h> {
                     if !flags.writable() {
                         return Err(Fault::error(
                             ErrorKind::TypeError,
-                            format!("'{}' is read-only", conv::describe_key(self.heap, key)),
+                            crate::text::cat!(
+                                "'",
+                                conv::describe_key(self.heap, key),
+                                "' is read-only"
+                            ),
                         ));
                     }
                     let v = self.pop();
@@ -2146,7 +2149,7 @@ impl<'h> Exec<'h> {
                 if !self.heap.has_property(g, key) {
                     return Err(Fault::error(
                         ErrorKind::ReferenceError,
-                        format!("'{}' is not defined", self.heap.atom_name(key)),
+                        crate::text::cat!("'", self.heap.atom_name(key), "' is not defined"),
                     ));
                 }
                 // The cache is filled for the next store if this one is a plain write.
@@ -2192,9 +2195,10 @@ impl<'h> Exec<'h> {
             Op::ThrowConstAssign => {
                 return Err(Fault::error(
                     ErrorKind::TypeError,
-                    format!(
-                        "'{}' is read-only",
-                        conv::describe_key(self.heap, self.imm_atom())
+                    crate::text::cat!(
+                        "'",
+                        conv::describe_key(self.heap, self.imm_atom()),
+                        "' is read-only"
                     ),
                 ));
             }
@@ -2457,7 +2461,7 @@ impl<'h> Exec<'h> {
                 if mode != 0 {
                     return Err(Fault::error(
                         ErrorKind::InternalError,
-                        format!("not supported yet: copy_data_props {mode}"),
+                        crate::text::cat!("not supported yet: copy_data_props ", mode),
                     ));
                 }
                 let (o, src) = (self.top(1), self.top(0));
@@ -2756,13 +2760,13 @@ impl<'h> Exec<'h> {
             | Op::Label => {
                 return Err(Fault::error(
                     ErrorKind::InternalError,
-                    format!("bad bytecode: phase-1 op {}", op.name()),
+                    crate::text::cat!("bad bytecode: phase-1 op ", op.name()),
                 ));
             }
             _ => {
                 return Err(Fault::error(
                     ErrorKind::InternalError,
-                    format!("not supported yet: {}", op.name()),
+                    crate::text::cat!("not supported yet: ", op.name()),
                 ));
             }
         }
@@ -3093,9 +3097,13 @@ impl<'h> Exec<'h> {
 
     fn nullish_base<T>(&self, o: Value, key: Atom, verb: &str) -> Result<T, Fault> {
         let what = if o.is_null() { "null" } else { "undefined" };
-        type_error(&format!(
-            "cannot {verb} property '{}' of {what}",
-            conv::describe_key(self.heap, key)
+        type_error(&crate::text::cat!(
+            "cannot ",
+            verb,
+            " property '",
+            conv::describe_key(self.heap, key),
+            "' of ",
+            what
         ))
     }
 
@@ -3272,7 +3280,7 @@ impl<'h> Exec<'h> {
         {
             return Err(Fault::error(
                 ErrorKind::TypeError,
-                format!("'{}' is read-only", conv::describe_key(self.heap, key)),
+                crate::text::cat!("'", conv::describe_key(self.heap, key), "' is read-only"),
             ));
         }
         // A typed array element whose value needs ToNumber / ToBigInt (user code): the
@@ -3313,7 +3321,7 @@ impl<'h> Exec<'h> {
         let readonly = |heap: &Heap| {
             Err(Fault::error(
                 ErrorKind::TypeError,
-                format!("'{}' is read-only", conv::describe_key(heap, key)),
+                crate::text::cat!("'", conv::describe_key(heap, key), "' is read-only"),
             ))
         };
         match found {
@@ -3408,9 +3416,10 @@ impl<'h> Exec<'h> {
             && (key == crate::heap::atoms::LENGTH
                 || key.as_int().is_some_and(|i| i < self.heap.str_len(s)))
         {
-            return type_error(&format!(
-                "'{}' is read-only",
-                conv::describe_key(self.heap, key)
+            return type_error(&crate::text::cat!(
+                "'",
+                conv::describe_key(self.heap, key),
+                "' is read-only"
             ));
         }
         type_error("not an object")
@@ -3423,7 +3432,7 @@ impl<'h> Exec<'h> {
         match self.heap.get_own_property(lex, key) {
             Some(Property::Data { value, .. }) if value.is_uninitialized() => Err(Fault::error(
                 ErrorKind::ReferenceError,
-                format!("{} is not initialized", self.heap.atom_name(key)),
+                crate::text::cat!(self.heap.atom_name(key), " is not initialized"),
             )),
             Some(p) => Ok(p.value()),
             None => Ok(None),
@@ -3445,7 +3454,7 @@ impl<'h> Exec<'h> {
         let redeclaration = |heap: &Heap, k: Atom| {
             Err(Fault::error(
                 ErrorKind::SyntaxError,
-                format!("redeclaration of '{}'", heap.atom_name(k)),
+                crate::text::cat!("redeclaration of '", heap.atom_name(k), "'"),
             ))
         };
         for &k in decls.lets.iter().chain(&decls.consts) {
@@ -3470,7 +3479,7 @@ impl<'h> Exec<'h> {
             if !ok {
                 return Err(Fault::error(
                     ErrorKind::TypeError,
-                    format!("cannot define variable '{}'", self.heap.atom_name(k)),
+                    crate::text::cat!("cannot define variable '", self.heap.atom_name(k), "'"),
                 ));
             }
             if self.heap.has_own_property(lex, k) {
@@ -3554,7 +3563,7 @@ impl<'h> Exec<'h> {
             _ => {
                 return Err(Fault::error(
                     ErrorKind::InternalError,
-                    format!("not supported yet: special_object {kind}"),
+                    crate::text::cat!("not supported yet: special_object ", kind),
                 ));
             }
         })
@@ -3830,15 +3839,15 @@ impl<'h> Exec<'h> {
         let base = if key.is_symbol() {
             let sym = self.heap.atom_symbol(key).unwrap();
             match self.heap.symbol_description(sym).as_string() {
-                Some(d) => format!("[{}]", self.heap.str_to_string(d)),
+                Some(d) => crate::text::cat!("[", self.heap.str_to_string(d), "]"),
                 None => String::new(),
             }
         } else {
             self.heap.atom_name(key)
         };
         let name = match prefix {
-            1 => format!("get {base}"),
-            2 => format!("set {base}"),
+            1 => crate::text::cat!("get ", base),
+            2 => crate::text::cat!("set ", base),
             _ => base,
         };
         let s = self.heap.alloc_str(&name)?;
@@ -3899,7 +3908,7 @@ impl<'h> Exec<'h> {
             .and_then(|v| v.as_string())
             .map(|s| self.heap.str_to_string(s));
         match name {
-            Some(n) => format!("{n} is not a constructor"),
+            Some(n) => crate::text::cat!(n, " is not a constructor"),
             None => String::from("not a constructor"),
         }
     }

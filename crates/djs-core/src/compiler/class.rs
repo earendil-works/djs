@@ -24,7 +24,6 @@
 //! constructors call: a base constructor at entry, a derived one after `super()`.
 //! Static blocks are functions of their own, called by the static initializer.
 
-use alloc::format;
 use alloc::vec::Vec;
 
 use super::PResult;
@@ -231,9 +230,9 @@ impl Parser<'_, '_> {
             self.ts_erase(start);
         }
         let scope = self.push_scope(super::func::ScopeKind::Class)?;
-        let fields_atom = self
-            .heap
-            .atom_str(&format!("<fields {}>", self.classes.len()))?;
+        let fields_atom =
+            self.heap
+                .atom_str(&crate::text::cat!("<fields ", self.classes.len(), ">"))?;
         self.f.add_var(fields_atom, VarKind::Hidden, scope);
         self.classes.push(ClassCtx {
             privates: Vec::new(),
@@ -453,7 +452,10 @@ impl Parser<'_, '_> {
                 Some(outer) => outer.refs.push((atom, pos)),
                 None => {
                     let name = self.heap.atom_name(atom);
-                    return syntax(pos, format!("undefined private field '{name}'"));
+                    return syntax(
+                        pos,
+                        crate::text::cat!("undefined private field '", name, "'"),
+                    );
                 }
             }
         }
@@ -468,7 +470,10 @@ impl Parser<'_, '_> {
             Some(c) => c.refs.push((atom, pos)),
             None => {
                 let name = self.heap.atom_name(atom);
-                return syntax(pos, format!("undefined private field '{name}'"));
+                return syntax(
+                    pos,
+                    crate::text::cat!("undefined private field '", name, "'"),
+                );
             }
         }
         Ok(self.name_ref(atom, pos))
@@ -675,7 +680,7 @@ impl Parser<'_, '_> {
         let fname = match key {
             Key::Atom(a) | Key::Private(a) if prefix == 0 => a,
             Key::Atom(a) | Key::Private(a) => {
-                let n = format!("{word}{}", self.heap.atom_name(a));
+                let n = crate::text::cat!(word, self.heap.atom_name(a));
                 self.heap.atom_str(&n)?
             }
             Key::Computed => Atom::NULL,
@@ -907,7 +912,9 @@ impl Parser<'_, '_> {
                 let atom = if auto {
                     self.dec_hidden(b.scope, &mut b.hidden)?
                 } else {
-                    let atom = self.heap.atom_str(&format!("<key {}>", b.keys))?;
+                    let atom = self
+                        .heap
+                        .atom_str(&crate::text::cat!("<key ", b.keys, ">"))?;
                     b.keys += 1;
                     self.f.add_var(atom, VarKind::Hidden, b.scope);
                     atom
@@ -1053,7 +1060,7 @@ impl Parser<'_, '_> {
             let word = if prefix == 1 { "get " } else { "set " };
             match key {
                 Key::Atom(a) => {
-                    let n = format!("{word}{}", self.heap.atom_name(a));
+                    let n = crate::text::cat!(word, self.heap.atom_name(a));
                     let fname = self.heap.atom_str(&n)?;
                     self.emit_synth_fn(synth, storage, fname, pos)?;
                     self.code().define_class_method(a, prefix);
@@ -1066,7 +1073,7 @@ impl Parser<'_, '_> {
                     self.code().define_class_method_elem(prefix);
                 }
                 Key::Private(a) => {
-                    let n = format!("{word}{}", self.heap.atom_name(a));
+                    let n = crate::text::cat!(word, self.heap.atom_name(a));
                     let fname = self.heap.atom_str(&n)?;
                     self.emit_synth_fn(synth, storage, fname, pos)?;
                     self.install_private(b, a, kind, is_static, pos)?;

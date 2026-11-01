@@ -374,7 +374,7 @@ impl Vm {
                 } else {
                     crate::compiler::CompileErrorKind::OutOfMemory
                 },
-                message: alloc::format!("{e}"),
+                message: String::from(e.as_str()),
                 pos: 0,
                 line: 0,
                 col: 0,

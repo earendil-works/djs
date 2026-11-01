@@ -1495,7 +1495,10 @@ impl Parser<'_, '_> {
         let name = self.lx.text(&self.tok);
         let name = core::str::from_utf8(name).unwrap_or("");
         let Some(id) = crate::bytecode::intrinsics::intrinsic_id(name) else {
-            return syntax(self.tok.start, alloc::format!("unknown intrinsic %{name}"));
+            return syntax(
+                self.tok.start,
+                crate::text::cat!("unknown intrinsic %", name),
+            );
         };
         let info = crate::bytecode::intrinsics::intrinsic(id).expect("intrinsic id");
         self.next()?;
@@ -1512,7 +1515,7 @@ impl Parser<'_, '_> {
         if !ok {
             return syntax(
                 paren,
-                alloc::format!("wrong number of arguments for %{}", info.name),
+                crate::text::cat!("wrong number of arguments for %", info.name),
             );
         }
         self.mark(pos);

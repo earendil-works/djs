@@ -175,16 +175,32 @@ impl Exec<'_> {
         for fr in frames {
             match (&fr.func, &fr.file, fr.pos) {
                 (None, file, Some((l, c))) => {
-                    out += &format!("    at {}:{l}:{c}\n", file.as_deref().unwrap_or(""))
+                    crate::text::cat_to!(
+                        &mut out,
+                        "    at ",
+                        file.as_deref().unwrap_or(""),
+                        ":",
+                        l,
+                        ":",
+                        c,
+                        "\n"
+                    )
                 }
                 (_, None, _) => {
-                    out += &format!("    at {} (native)\n", fr.name.as_deref().unwrap_or(""))
+                    crate::text::cat_to!(
+                        &mut out,
+                        "    at ",
+                        fr.name.as_deref().unwrap_or(""),
+                        " (native)\n"
+                    )
                 }
                 (_, Some(file), pos) => {
                     let name = fr.name.as_deref().unwrap_or("<anonymous>");
                     match pos {
-                        Some((l, c)) => out += &format!("    at {name} ({file}:{l}:{c})\n"),
-                        None => out += &format!("    at {name} ({file})\n"),
+                        Some((l, c)) => crate::text::cat_to!(
+                            &mut out, "    at ", name, " (", file, ":", l, ":", c, ")\n"
+                        ),
+                        None => crate::text::cat_to!(&mut out, "    at ", name, " (", file, ")\n"),
                     }
                 }
             }

@@ -17,6 +17,8 @@ pub mod lexer;
 pub mod num;
 pub mod regexp;
 mod sort;
+#[macro_use]
+pub(crate) mod text;
 pub mod unicode;
 pub mod value;
 pub mod vm;

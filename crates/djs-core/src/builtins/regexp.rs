@@ -359,7 +359,6 @@ pub(crate) fn input(view: StrView<'_>) -> regexp::Input<'_> {
 
 /// RegExp.escape ( S ) of a string, as QuickJS writes it (lowercase hex).
 pub(crate) fn escape(heap: &mut Heap, s: Str) -> Result<Str, Fault> {
-    use core::fmt::Write;
     let units = heap.str_to_utf16(s);
     let mut out = String::new();
     let mut i = 0;
@@ -378,7 +377,7 @@ pub(crate) fn escape(heap: &mut Heap, s: Str) -> Result<Str, Fault> {
                 || (c as u8).is_ascii_alphanumeric() && i0 == 0
                 || b",-=<>#&!%:;@~'`\"".contains(&(c as u8)));
         if hex2 {
-            let _ = write!(out, "\\x{c:02x}");
+            crate::text::cat_to!(&mut out, "\\x", crate::text::hex(c, 2));
         } else if (9..=13).contains(&c) {
             out.push('\\');
             out.push(b"tnvfr"[c as usize - 9] as char);
@@ -393,7 +392,7 @@ pub(crate) fn escape(heap: &mut Heap, s: Str) -> Result<Str, Fault> {
                 0x1680 | 0x2000..=0x200A | 0x2028 | 0x2029 | 0x202F | 0x205F | 0x3000 | 0xFEFF
             )
         {
-            let _ = write!(out, "\\u{c:04x}");
+            crate::text::cat_to!(&mut out, "\\u", crate::text::hex(c, 4));
         } else {
             out.push(char::from_u32(c).unwrap_or('\u{FFFD}'));
         }

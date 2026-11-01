@@ -24,7 +24,6 @@
 //! thunks evaluated after the class (`Thunk`), parameter decorators (`DecParams`) and
 //! tsc's `__decorate` (`emit_legacy_apply`); the metadata types are in ts_meta.rs.
 
-use alloc::format;
 use alloc::vec::Vec;
 
 use super::PResult;
@@ -233,7 +232,7 @@ impl Parser<'_, '_> {
     /// A new hidden binding `<dec>N` of the class body scope, numbered like qjs's (an
     /// auto-accessor's storage name shows in its messages).
     pub(super) fn dec_hidden(&mut self, scope: ScopeId, n: &mut u32) -> PResult<Atom> {
-        let atom = self.heap.atom_str(&format!("<dec>{n}"))?;
+        let atom = self.heap.atom_str(&crate::text::cat!("<dec>", n))?;
         *n += 1;
         self.f.add_var(atom, VarKind::Hidden, scope);
         Ok(atom)
@@ -263,7 +262,7 @@ impl Parser<'_, '_> {
             Synth::AccessSet => 2,
         };
         for i in 0..params {
-            let a = self.heap.atom_str(&format!("<arg {i}>"))?;
+            let a = self.heap.atom_str(&crate::text::cat!("<arg ", i, ">"))?;
             let v = self.declare_param(a, pos)?;
             self.f.vars[v as usize].init_end = 0;
             self.f.length += 1;
@@ -324,7 +323,7 @@ impl Parser<'_, '_> {
 
     /// The hidden binding of a private method's closure (compiler/class.rs).
     pub(super) fn private_closure_atom(&mut self, word: &str, name: Atom) -> PResult<Atom> {
-        let hidden = format!("<{word}{}>", self.heap.atom_name(name));
+        let hidden = crate::text::cat!("<", word, self.heap.atom_name(name), ">");
         Ok(self.heap.atom_str(&hidden)?)
     }
 

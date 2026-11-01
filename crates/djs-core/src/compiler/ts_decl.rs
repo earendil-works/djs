@@ -147,7 +147,7 @@ impl<'a> Parser<'a, '_> {
             return Ok(d);
         }
         let id = self.ts_decls.len() as u32;
-        let param = self.heap.atom_str(&alloc::format!("<ns {id}>"))?;
+        let param = self.heap.atom_str(&crate::text::cat!("<ns ", id, ">"))?;
         self.ts_decls.push(TsDecl {
             name,
             kind,

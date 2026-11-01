@@ -127,7 +127,7 @@ impl Parser<'_, '_> {
             }
             TokenKind::Import | TokenKind::Export | TokenKind::Enum => {
                 let text = self.tok_text();
-                syntax(tok.start, alloc::format!("unsupported keyword: {text}"))
+                syntax(tok.start, crate::text::cat!("unsupported keyword: ", text))
             }
             TokenKind::Const => syntax(
                 tok.start,

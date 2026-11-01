@@ -273,14 +273,23 @@ impl Exec<'_> {
         match usize::try_from(i).ok().and_then(|i| NATIVES.get(i)) {
             Some(nf) if nf.name == name => {}
             Some(nf) => {
-                return bad(format!(
-                    "%MarkNative: native {i} is {}, not {name} (run scripts/bgen.sh)",
-                    nf.name
+                return bad(crate::text::cat!(
+                    "%MarkNative: native ",
+                    i,
+                    " is ",
+                    nf.name,
+                    ", not ",
+                    name,
+                    " (run scripts/bgen.sh)"
                 ));
             }
             None => {
-                return bad(format!(
-                    "%MarkNative: no native {i} for {name} (run scripts/bgen.sh)"
+                return bad(crate::text::cat!(
+                    "%MarkNative: no native ",
+                    i,
+                    " for ",
+                    name,
+                    " (run scripts/bgen.sh)"
                 ));
             }
         }
@@ -784,6 +793,7 @@ impl Exec<'_> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
     use alloc::string::String;
     use alloc::vec::Vec;
 

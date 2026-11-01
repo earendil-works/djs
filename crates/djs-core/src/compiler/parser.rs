@@ -2,7 +2,6 @@
 //! (docs/compiler.md 2). Statements are in `stmt.rs`, expressions in `expr.rs`.
 
 use alloc::borrow::Cow;
-use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -584,7 +583,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         if self.tok.kind == kind {
             self.next()
         } else {
-            syntax(self.tok.start, format!("expecting '{text}'"))
+            syntax(self.tok.start, crate::text::cat!("expecting '", text, "'"))
         }
     }
 
@@ -650,7 +649,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         let text = self.tok_text();
         syntax(
             self.tok.start,
-            format!("unexpected token in expression: '{text}'"),
+            crate::text::cat!("unexpected token in expression: '", text, "'"),
         )
     }
 

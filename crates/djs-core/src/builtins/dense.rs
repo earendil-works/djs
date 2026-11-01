@@ -191,9 +191,8 @@ pub(crate) fn join(heap: &mut Heap, o: Obj, len: u32, sep: Str) -> Result<Option
         if let Some(s) = v.as_string() {
             out.extend(units_of(heap, s)?);
         } else if let Some(n) = v.as_int() {
-            use core::fmt::Write;
             buf.clear();
-            let _ = write!(buf, "{n}");
+            crate::text::cat_to!(&mut buf, n);
             out.extend(buf.bytes().map(u16::from));
         } else if !v.is_nullish() {
             let s = conv::to_string(heap, v)?;

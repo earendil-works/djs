@@ -743,7 +743,7 @@ pub fn error_summary(heap: &Heap, v: Value) -> Option<String> {
         return Some(if message.is_empty() {
             name
         } else {
-            alloc::format!("{name}: {message}")
+            crate::text::cat!(name, ": ", message)
         });
     }
     let name = get(atoms::NAME)
@@ -753,6 +753,6 @@ pub fn error_summary(heap: &Heap, v: Value) -> Option<String> {
     Some(if message.is_empty() {
         name
     } else {
-        alloc::format!("{name}: {message}")
+        crate::text::cat!(name, ": ", message)
     })
 }

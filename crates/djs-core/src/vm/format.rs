@@ -34,7 +34,7 @@ pub(crate) fn display(heap: &mut Heap, v: Value) -> String {
                 .as_string()
                 .map(|s| heap.str_to_string(s))
                 .unwrap_or_default();
-            return alloc::format!("Symbol({d})");
+            return crate::text::cat!("Symbol(", d, ")");
         }
         Kind::Object => {
             let o = v.as_object().unwrap();
@@ -43,7 +43,7 @@ pub(crate) fn display(heap: &mut Heap, v: Value) -> String {
             }
         }
         // As qjs's console.log prints a BigInt.
-        Kind::BigInt => return alloc::format!("{}n", heap.bigint(v).to_string_radix(10)),
+        Kind::BigInt => return crate::text::cat!(heap.bigint(v).to_string_radix(10), "n"),
         _ => {}
     }
     match stringify_fast(heap, v, &[]) {

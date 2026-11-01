@@ -5785,3 +5785,17 @@ runs. Nothing is changed for it.
   arrays, higher-order and strbuild and pi-like 3.70 → 2.81 MiB.
 - **Not built:** letting a collection's shrinking realloc move the arena down into a lower
   free run (0132's follow-up).
+## D2339: Messages and formatted strings without core::fmt
+date: 2026-11-07 · by: bloat · issue: 0131
+`crate::text` (`cat!`, `cat_to!`, `pad`, `hex`) concatenates strings, characters and
+integers (zero-padded or hexadecimal) without core::fmt. The ~100 `format!`/`write!`
+sites the shipped module reaches use it: the interpreter's and compiler's error
+messages, Date's string forms, stack traces, `Function.prototype.toString` of natives,
+RegExp source escapes, error summaries. CompileError, json::SyntaxError, WireError and
+LoadError get a `text()` method (their Display impls call it; djs-wasm uses `text()`),
+HeapError an `as_str()`. Output is byte for byte what `format!` produced (a unit test
+compares the integer forms with `format!` over edge values; Date and error-message
+tests unchanged). `alloc::fmt::format` leaves the module; what remains of core::fmt
+(~6.5 KB raw) is held by core's own panics (`unwrap` on `Result`s with Debug errors,
+`assert_eq!`, bounds checks), which stable cannot avoid. Module 455,263 -> 454,583 bytes
+gzip (−0.7 KB); Date string formatting runs 9% faster (no Formatter).
