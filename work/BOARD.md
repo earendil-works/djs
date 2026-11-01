@@ -6,7 +6,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0018 | Inbound wire format | num | .worktrees/0018-wire-inbound |
+| 0021 | Outbound direct heap reader | num | .worktrees/0021-outbound-reader |
+| 0020 | Flaky difftest timeout under load | infra | .worktrees/0020-flaky-difftest-timeout |
 | 0015 | P0 interpreter and embedding | heap | .worktrees/0015-p0-interpreter |
 | 0014 | P0 compiler | lexer | .worktrees/0014-p0-compiler |
 
@@ -29,6 +30,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0001 | Workspace skeleton and process | initial commit |
 | 0003 | Lexer | e4a42c3 (agent lexer; parser follow-ups listed in the issue) |
 | 0005 | Values, arena heap, strings, atoms, objects | dc751e2 (agent heap; follow-ups in the issue) |
+| 0018 | Inbound wire format | 95afebe (agent num; beats JSON path on all datasets; node tests in gate) |
 | 0019 | Benchmark harness | 0bb9d9b (agent infra; baseline in tests/scores/bench.tsv; wasm 181 KB stripped, 85 KB gz) |
 | 0017 | djs-bgen v0 | 8496b74 (agent infra; Rust, no deps; D1170-D1173; --check in gate) |
 | 0011 | Regex engine core | d57c4a9 (agent num; 13.6k qjs cases; \p{} deferred, D1112) |
