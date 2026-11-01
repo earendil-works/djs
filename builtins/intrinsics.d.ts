@@ -711,7 +711,7 @@ declare function JsonParse(text: Str): Value;
  * JSON.stringify(v, undefined, space) with gap already computed, for plain data: the
  * string, undefined for an undefined result, or null when the value needs the full
  * algorithm (accessors, toJSON, wrappers, exotic objects; nothing observable happened).
- * TypeError "circular reference" and InternalError "stack overflow" are final. @leaf
+ * TypeError "circular reference" and RangeError "Maximum call stack size exceeded" are final. @leaf
  */
 declare function JsonStringifyFast(v: Value, gap: Str): Value;
 /** QuoteJSONString ( value ), 25.5.2.3. @leaf */

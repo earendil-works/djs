@@ -13,7 +13,7 @@
 //! return. The caller checks [`Heap::gc_pending`](crate::heap::Heap::gc_pending) afterwards.
 //!
 //! Messages match QuickJS (`SyntaxError` for parse errors, `TypeError: circular reference`,
-//! `InternalError: stack overflow`).
+//! `RangeError: Maximum call stack size exceeded` for nesting, D013).
 
 mod parse;
 mod stringify;

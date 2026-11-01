@@ -19,5 +19,5 @@ pub mod state;
 
 pub use frame::Continuation;
 pub use realm::{ErrorKind, Intrinsic, error_summary, intrinsic, new_error};
-pub use run::{ExecOptions, Status};
+pub use run::{ExecOptions, STACK_OVERFLOW, Status};
 pub use state::RunState;

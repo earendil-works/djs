@@ -32,7 +32,8 @@ pub enum StringifyError {
     Slow,
     /// `TypeError: circular reference`.
     Circular,
-    /// `InternalError: stack overflow` (nesting deeper than [`DEFAULT_MAX_DEPTH`]).
+    /// `RangeError: Maximum call stack size exceeded` (nesting deeper than
+    /// [`DEFAULT_MAX_DEPTH`]; D013).
     StackOverflow,
     /// Out of memory, or the result would be longer than the string limit
     /// (`RangeError: invalid string length`).
@@ -49,7 +50,9 @@ impl StringifyError {
         match self {
             StringifyError::Slow => None,
             StringifyError::Circular => Some(("TypeError", "circular reference")),
-            StringifyError::StackOverflow => Some(("InternalError", "stack overflow")),
+            StringifyError::StackOverflow => {
+                Some(("RangeError", "Maximum call stack size exceeded"))
+            }
             StringifyError::Heap(HeapError::OutOfMemory) => {
                 Some(("InternalError", "out of memory"))
             }

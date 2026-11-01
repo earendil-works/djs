@@ -116,7 +116,7 @@ function ErrorPrototypeToString(this: Value): Str {
 }
 
 /**
- * InternalError (QuickJS's, for stack overflow and out of memory).
+ * InternalError (QuickJS's, for out of memory; stack overflow is a RangeError, D013).
  * @constructor InternalError
  * @extends Error
  * @length 1

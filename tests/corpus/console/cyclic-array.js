@@ -1,3 +1,4 @@
+// difftest: djs-expect InternalError: stack overflow => RangeError: Maximum call stack size exceeded
 // A cyclic array falls back to String(), i.e. join. QuickJS's join has no cycle
 // detection and overflows the stack (V8 prints the cycle as an empty string).
 const a = [1];

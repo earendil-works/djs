@@ -40,8 +40,8 @@ pub(crate) fn stringify_fast(heap: &mut Heap, v: Value, gap: Str) -> Result<Valu
             String::from("circular reference"),
         )),
         Err(StringifyError::StackOverflow) => Err(Fault::Error(
-            ErrorKind::InternalError,
-            String::from("stack overflow"),
+            ErrorKind::RangeError,
+            String::from(crate::interp::STACK_OVERFLOW),
         )),
     }
 }

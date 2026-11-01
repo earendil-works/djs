@@ -76,7 +76,10 @@ pub fn run_one(
     let actual = transcript(&result);
     let verdict = match fs::read_to_string(&case.expected_file) {
         Ok(expected) => {
-            let expected = crate::engine::normalize(&expected);
+            let mut expected = crate::engine::normalize(&expected);
+            if opts.is_djs && !case.meta.djs_expect.is_empty() {
+                expected = expect_djs(&expected, &case.meta.djs_expect);
+            }
             if expected == actual {
                 Verdict::Pass
             } else if let Some(reason) =
@@ -172,6 +175,24 @@ fn execute(
 /// The one-line reason for a transcript difference: the uncaught error when the engine
 /// threw one the expectation does not have (that is what needs fixing), else the first
 /// differing line.
+/// The oracle's transcript with the case's expected differences applied: whole lines
+/// equal to an oracle line are replaced by the djs line.
+fn expect_djs(expected: &str, rules: &[(String, String)]) -> String {
+    let mut out = String::with_capacity(expected.len());
+    for line in expected.split_inclusive('\n') {
+        let (text, end) = match line.strip_suffix('\n') {
+            Some(t) => (t, "\n"),
+            None => (line, ""),
+        };
+        match rules.iter().find(|(a, _)| a == text) {
+            Some((_, b)) => out.push_str(b),
+            None => out.push_str(text),
+        }
+        out.push_str(end);
+    }
+    out
+}
+
 fn failure_reason(expected: &str, actual: &str, done: &Done) -> String {
     if let Done::Throw(msg) = done {
         let first = msg.lines().next().unwrap_or("");

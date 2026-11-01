@@ -9,6 +9,8 @@
 //! // difftest: ts                  parse a .js file as TypeScript
 //! // difftest: fuel <n>            djs fuel limit for this case
 //! // difftest: timeout <secs>      wall-clock limit for this case
+//! // difftest: djs-expect <a> => <b>  an expected difference: with djs, `.expected` lines
+//!                                     equal to `a` must read `b` (D013: stack overflow)
 //! ```
 
 use std::fs;
@@ -23,6 +25,8 @@ pub struct Meta {
     pub ts: bool,
     pub fuel: Option<u64>,
     pub timeout: Option<Duration>,
+    /// `djs-expect` directives: transcript lines that differ from the oracle on purpose.
+    pub djs_expect: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone)]
@@ -71,6 +75,13 @@ pub fn parse_meta(source: &str, is_ts_file: bool) -> Result<Meta, String> {
             "timeout" => {
                 let secs: f64 = rest.parse().map_err(|_| format!("bad timeout `{rest}`"))?;
                 meta.timeout = Some(Duration::from_secs_f64(secs));
+            }
+            "djs-expect" => {
+                let (a, b) = rest.split_once(" => ").ok_or_else(|| {
+                    format!("`djs-expect` needs `<oracle line> => <djs line>`: `{rest}`")
+                })?;
+                meta.djs_expect
+                    .push((a.trim().to_string(), b.trim().to_string()));
             }
             _ => return Err(format!("unknown directive `difftest: {directive}`")),
         }
@@ -154,6 +165,8 @@ mod tests {
         assert!(!m.ts);
         assert!(parse_meta("// difftest: ts\n", false).unwrap().ts);
         assert!(parse_meta("", true).unwrap().ts);
+        let m = parse_meta("// difftest: djs-expect A: x => B: y\n", false).unwrap();
+        assert_eq!(m.djs_expect, [("A: x".to_string(), "B: y".to_string())]);
     }
 
     #[test]
@@ -161,5 +174,6 @@ mod tests {
         assert!(parse_meta("// difftest: skip-djs\n", false).is_err());
         assert!(parse_meta("// difftest: frobnicate\n", false).is_err());
         assert!(parse_meta("// difftest: fuel lots\n", false).is_err());
+        assert!(parse_meta("// difftest: djs-expect no arrow\n", false).is_err());
     }
 }

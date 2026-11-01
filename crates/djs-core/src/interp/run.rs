@@ -49,12 +49,16 @@ pub enum Status {
     Idle,
 }
 
+/// The message of a stack overflow (a RangeError, D013).
+pub const STACK_OVERFLOW: &str = "Maximum call stack size exceeded";
+
 /// Interpreter options that are not VM state.
 #[derive(Clone, Copy, Debug)]
 pub struct ExecOptions {
     /// Collect at every safepoint (a stress mode for tests).
     pub gc_stress: bool,
-    /// Maximum value stack size in slots (`InternalError: stack overflow` beyond).
+    /// Maximum value stack size in slots (`RangeError: Maximum call stack size exceeded`
+    /// beyond, D013).
     pub max_stack: u32,
 }
 
@@ -243,9 +247,10 @@ impl<'h> Exec<'h> {
     fn grow_stack(&mut self, top: u32) -> Result<(), Fault> {
         let cap = self.heap.value_array_capacity(self.stack);
         if top > self.opts.max_stack {
+            // V8's and quickjs-ng's error, which pi's codemode expects (D013).
             return Err(Fault::Error(
-                ErrorKind::InternalError,
-                String::from("stack overflow"),
+                ErrorKind::RangeError,
+                String::from(STACK_OVERFLOW),
             ));
         }
         let new_cap = top

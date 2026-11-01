@@ -730,7 +730,10 @@ fn stack_overflow() {
     vm.define_global("f", func).unwrap();
     vm.call(func, Value::UNDEFINED, &[]).unwrap();
     let (vm, out) = finish(vm, 1 << 30, false);
-    assert_eq!(out.result, "throw InternalError: stack overflow");
+    assert_eq!(
+        out.result,
+        "throw RangeError: Maximum call stack size exceeded"
+    );
     // The VM is usable again.
     let mut vm = vm;
     let t = mul_template(&mut vm);
