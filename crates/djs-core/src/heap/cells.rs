@@ -480,8 +480,8 @@ cells! {
         DESCS: Ref = 12,
         /// Number of properties (= value slots).
         COUNT: u32 = 16,
-        /// [`RefArray`] of the child shapes (`LEN` in use), or null. A child's key and
-        /// flags are its last descriptor.
+        /// [`RefArray`] of the child shapes (`LEN` in use), or null, sorted by the key and
+        /// flags of the child's last descriptor.
         TRANSITIONS: Ref = 20,
     };
 

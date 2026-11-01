@@ -41,7 +41,24 @@ fn main() {
             CellKind::Object => {
                 let props: Ref = a.get(c.offset, Object::PROPS);
                 if let Some(r) = props.get() {
-                    role.insert(r, "PropTable: object properties");
+                    role.insert(
+                        r,
+                        if heap.cell_kind(r) == CellKind::PropTable {
+                            "PropTable: dictionary properties"
+                        } else {
+                            "PropValues: shape-mode property values"
+                        },
+                    );
+                }
+            }
+            CellKind::Shape => {
+                let d: Ref = a.get(c.offset, djs_core::heap::cells::Shape::DESCS);
+                if let Some(r) = d.get() {
+                    role.insert(r, "U32Array: shape descriptors");
+                }
+                let t: Ref = a.get(c.offset, djs_core::heap::cells::Shape::TRANSITIONS);
+                if let Some(r) = t.get() {
+                    role.insert(r, "RefArray: shape transitions");
                 }
             }
             _ => {}
@@ -99,7 +116,7 @@ pub fn detail(heap: &Heap) {
         match c.kind {
             CellKind::PropTable => {
                 let count: u32 = a.get(c.offset, PropTable::COUNT);
-                let cap = (c.size - 24) / 24;
+                let cap = (c.size - 24) / 16;
                 cap_total += cap as u64;
                 used_total += count as u64;
                 *by_count.entry(count).or_default() += 1;

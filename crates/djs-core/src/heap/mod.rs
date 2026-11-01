@@ -440,3 +440,5 @@ mod gc_tests;
 
 #[cfg(test)]
 mod append_tests;
+#[cfg(test)]
+mod shape_tests;

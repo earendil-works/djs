@@ -10,8 +10,9 @@
 //! Transitions are strong, so shapes never die (D1831). That keeps the tree a function of
 //! the program's history alone, never of when collections ran, which the canonical hash
 //! (D1730) needs. Its growth is bounded instead: at most [`SHAPE_MAX`] properties per
-//! shape, [`TRANSITIONS_MAX`] children per shape and [`SHAPE_BUDGET`] shapes per heap.
-//! Past any of them the object goes to dictionary mode.
+//! shape and [`SHAPE_BUDGET`] shapes per heap. Past either the object goes to dictionary
+//! mode. A shape's children are sorted by key and flags, so finding a transition is a
+//! binary search however wide the tree is (the root has a child for every first key).
 //!
 //! Descriptors (`DESCS`, a [`U32Array`] `[used, key0, flags0, ...]`) are shared along a
 //! chain: a child of the shape that wrote the last used pair appends in place (if there is
@@ -25,10 +26,6 @@ use super::{CellKind, Heap, HeapError};
 
 /// Shapes have at most this many properties; more go to dictionary mode.
 pub const SHAPE_MAX: u32 = 32;
-
-/// A shape has at most this many children; another key set goes to dictionary mode
-/// (dynamic keys like `o[id] = v` must not grow the tree without bound).
-pub const TRANSITIONS_MAX: u32 = 32;
 
 /// Shapes per heap, the root included (D1831). Once spent, new key sets go to dictionary
 /// mode. A shape costs about 40 bytes (cell, its parent's transition slot, its share of
@@ -104,14 +101,21 @@ impl Heap {
         } else {
             self.arena().get(tr, RefArray::LEN)
         };
-        for i in 0..len {
-            let c = self.arena().read::<Ref>(RefArray::REFS.at(tr, i)).0;
-            if self.shape_desc(c, count) == (key, flags) {
-                return Ok(Some(c));
+        // Children are sorted by (key, flags) of their last descriptor.
+        let want = (key.id(), flags);
+        let (mut lo, mut hi) = (0, len);
+        while lo < hi {
+            let mid = (lo + hi) / 2;
+            let c = self.arena().read::<Ref>(RefArray::REFS.at(tr, mid)).0;
+            let (k, f) = self.shape_desc(c, count);
+            match (k.id(), f).cmp(&want) {
+                core::cmp::Ordering::Equal => return Ok(Some(c)),
+                core::cmp::Ordering::Less => lo = mid + 1,
+                core::cmp::Ordering::Greater => hi = mid,
             }
         }
         let shapes = self.arena().get(0, Roots::SHAPES);
-        if count >= SHAPE_MAX || len >= TRANSITIONS_MAX || shapes >= SHAPE_BUDGET {
+        if count >= SHAPE_MAX || shapes >= SHAPE_BUDGET {
             return Ok(None);
         }
         // The descriptors: shared if `s` wrote the last used pair and there is room.
@@ -162,7 +166,11 @@ impl Heap {
         a.set(c, Shape::PARENT, Ref(s));
         a.set(c, Shape::DESCS, Ref(new_d));
         a.set(c, Shape::COUNT, count + 1);
-        a.write(RefArray::REFS.at(new_tr, len), Ref(c));
+        if lo < len {
+            let at = RefArray::REFS.at(new_tr, lo);
+            a.copy_within(at, 4 * (len - lo), at + 4);
+        }
+        a.write(RefArray::REFS.at(new_tr, lo), Ref(c));
         a.set(new_tr, RefArray::LEN, len + 1);
         a.set(s, Shape::TRANSITIONS, Ref(new_tr));
         a.set(0, Roots::SHAPES, shapes + 1);

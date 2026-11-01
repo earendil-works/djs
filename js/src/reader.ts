@@ -41,6 +41,12 @@ const ENTRY_SIZE = cells.PropTable.tail.elemSize;
 const ENTRY_KEY = cells.PropTable.tail.fields.KEY.offset;
 const ENTRY_FLAGS = cells.PropTable.tail.fields.FLAGS.offset;
 const ENTRY_VALUE = cells.PropTable.tail.fields.VALUE.offset;
+const OBJ_DICTIONARY = LAYOUT.flags.OBJ_DICTIONARY;
+const PV_SHAPE = cells.PropValues.fields.SHAPE.offset;
+const PV_LEN = cells.PropValues.fields.LEN.offset;
+const PV_VALUES = cells.PropValues.tail.offset;
+const SHAPE_DESCS = cells.Shape.fields.DESCS.offset;
+const U32_DATA = cells.U32Array.tail.offset;
 const VA_LEN = cells.ValueArray.fields.LEN.offset;
 const VA_VALUES = cells.ValueArray.tail.offset;
 const ATOMS_ENTRIES = cells.AtomTable.fields.ENTRIES.offset;
@@ -481,17 +487,21 @@ class Reader {
       }
       const t = view.getUint32(off + OBJ_PROPS, true);
       if (t === 0) return o;
-      const count = view.getUint32(t + TAB_COUNT, true);
+      // Dictionary mode: a table of (key, flags, value) entries. Shape mode: a values
+      // block whose shape's descriptors hold (key, flags) pairs (docs/objects.md 7).
+      const dict = (view.getUint16(off + HDR_FLAGS, true) & OBJ_DICTIONARY) !== 0;
+      const count = view.getUint32(t + (dict ? TAB_COUNT : PV_LEN), true);
+      const descs = dict ? 0 : view.getUint32(view.getUint32(t + PV_SHAPE, true) + SHAPE_DESCS, true) + U32_DATA + 4;
       this.spend(count + 1);
       for (let i = 0; i < count; i++) {
-        const e = t + TAB_ENTRIES + ENTRY_SIZE * i;
-        const atom = view.getUint32(e + ENTRY_KEY, true);
+        const e = dict ? t + TAB_ENTRIES + ENTRY_SIZE * i : descs + 8 * i;
+        const atom = view.getUint32(e + (dict ? ENTRY_KEY : 0), true);
         if (atom === 0) continue; // deleted
-        const flags = view.getUint32(e + ENTRY_FLAGS, true);
+        const flags = view.getUint32(e + (dict ? ENTRY_FLAGS : 4), true);
         if (flags & P_ACCESSOR || !(flags & P_ENUMERABLE)) continue;
         key = this.key(atom);
         if (key === undefined) continue;
-        const v = this.slot(e + ENTRY_VALUE);
+        const v = this.slot(dict ? e + ENTRY_VALUE : t + PV_VALUES + 8 * i);
         // Assigning "__proto__" would set the prototype instead of defining a property.
         if (key === "__proto__") {
           Object.defineProperty(o, key, { value: v, writable: true, enumerable: true, configurable: true });
@@ -539,8 +549,10 @@ class Reader {
           }
         }
       }
-      if (view.getUint16(off + HDR_FLAGS, true) & OBJ_INDEXED_PROPS) {
-        // Elements beyond the dense part live in the property table.
+      const hf = view.getUint16(off + HDR_FLAGS, true);
+      if (hf & OBJ_INDEXED_PROPS && hf & OBJ_DICTIONARY) {
+        // Elements beyond the dense part live in the property table (index keys always
+        // make an object a dictionary).
         const t = view.getUint32(off + OBJ_PROPS, true);
         const count = t === 0 ? 0 : view.getUint32(t + TAB_COUNT, true);
         for (let k = 0; k < count; k++) {

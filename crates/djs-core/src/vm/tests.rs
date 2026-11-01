@@ -2993,6 +2993,75 @@ fn a_refused_to_space_stops_the_run() {
 
 // ---- The canonical hash (D1730) --------------------------------------------------------------
 
+/// 0083: the shape tree, including the budget's overflow into dictionaries, is a function
+/// of the program, not of when collections ran (strong transitions, D1831): the canonical
+/// hash is the same with no collections, with one after every slice of 997 or 5000
+/// instructions, and across image restores.
+#[test]
+fn shapes_do_not_depend_on_collection_points() {
+    let src = "globalThis.keep = [];\n\
+               for (let i = 0; i < 400; i++) {\n\
+                 const o = {}; o['f' + (i % 32)] = i;\n\
+                 for (let j = 0; j < 12; j++) o['u' + i + '_' + j] = j;\n\
+                 if (i % 5 == 0) keep.push(o);\n\
+               }\n\
+               for (let i = 0; i < 2000; i++) {\n\
+                 const p = { a: i, b: i, ['c' + (i % 40)]: i };\n\
+                 if (i % 9 == 0) { delete p.b; keep.push(p); }\n\
+               }\n\
+               globalThis.late = { late: 1, comer: 2 };\n";
+    let run = |fuel: u64, collect: bool, suspend: bool| {
+        let mut vm = vm();
+        let f = vm
+            .compile(
+                src.as_bytes(),
+                &crate::compiler::CompileOptions::script("t.js"),
+            )
+            .unwrap();
+        let this = Value::object(vm.global());
+        vm.call(f, this, &[]).unwrap();
+        loop {
+            match vm.run(fuel) {
+                Status::Done(_) => break,
+                Status::OutOfFuel => {
+                    if collect {
+                        vm.collect().unwrap();
+                    }
+                    if suspend {
+                        let opts = vm.options();
+                        vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();
+                    }
+                }
+                s => panic!("{s:?}"),
+            }
+        }
+        vm.heap().verify().unwrap();
+        vm
+    };
+    let mut plain = run(u64::MAX, false, false);
+    // The budget was spent: the late key set is a dictionary.
+    let key = plain.heap_mut().atom_str("late").unwrap();
+    let late = plain
+        .heap()
+        .get_own_property(plain.global(), key)
+        .and_then(|p| p.value())
+        .and_then(|v| v.as_object())
+        .unwrap();
+    assert_ne!(
+        plain.heap().cell_flags(late.offset()) & crate::heap::cells::flags::OBJ_DICTIONARY,
+        0
+    );
+    let shapes = plain
+        .heap()
+        .arena()
+        .get(0, crate::heap::cells::Roots::SHAPES);
+    assert_eq!(shapes, crate::heap::shape::SHAPE_BUDGET);
+    let h = plain.canonical_hash().unwrap();
+    assert_eq!(run(997, true, false).canonical_hash().unwrap(), h);
+    assert_eq!(run(5000, true, false).canonical_hash().unwrap(), h);
+    assert_eq!(run(20_000, true, true).canonical_hash().unwrap(), h);
+}
+
 #[test]
 fn canonical_hash_ignores_collection_points() {
     let src = "globalThis.keep = [];\n\
