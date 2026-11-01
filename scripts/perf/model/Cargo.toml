@@ -1,0 +1,13 @@
+[package]
+name = "dispatch-model"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = 1

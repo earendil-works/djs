@@ -1,0 +1,33 @@
+# Performance anatomy tools (0081)
+
+Tools for counting where djs spends machine instructions, natively and in wasm (D016:
+wasm32 is the primary target). Instruction counts (`/usr/bin/time -l`: "instructions
+retired", per process, all threads) repeat to <0.5% even on a loaded machine; cycles
+and wall time do not, so compare instructions first. Everything is macOS/arm64 and uses
+only what is installed (lldb, samply, node, llvm-objdump from Xcode, wasm-objdump).
+
+Builds and outputs go to `$DJS_PERF_DIR` (default `work/scratch/perf`, gitignored).
+Run `scripts/perf/setup.sh` first. Workloads are `scripts/perf/w/*.js` (codemode bodies).
+qjs is `~/Development/dquickts/qjs`; quickjs-wasi (pi's engine) is imported read-only
+from `~/Development/pi-private/node_modules/quickjs-wasi`.
+
+| tool | what |
+| --- | --- |
+| `measure.py [--djs BIN]... names` | native djs vs qjs per workload (instructions, cycles, peak memory) |
+| `wmeasure.py [--wasm X]... [--node-flag=--no-liftoff] names` | djs-wasm vs quickjs-wasi in node, minus an empty run |
+| `micro.py` / `wmicro.py` | instructions per JS-level operation (loop body x10 minus x0); wmicro reuses micro's files |
+| `perelem.py` | instructions per array element of the iteration builtins |
+| `wasm-run.ts`, `qjs-wasm-run.mjs` | run a workload in the wasm engines (`ONCE=1`, `FUEL`, `REPS`); `node --cpu-prof` on them profiles |
+| `cpuprof.py file.cpuprofile` | self time by function of a node CPU profile (wasm function names) |
+| `prof.py name` | samply profile of the native build: self time by inlined function and line, buckets, malloc/memcpy by caller |
+| `instr.py` | builds an instrumented copy of the engine: `DJS_PROF=1 djs run --body x.js` prints bytecodes per op and function (fast/slow path, user/prelude), intrinsic calls, native state arms, frames, allocations, collections |
+| `trace.sh case.js skip n out` + `trace_report.py out [--show OP]` | exact instruction trace through lldb (300 steps/s), split per bytecode: instructions, loads, stores, branches and categories per op; `BYFUNC=op` breaks one op down by function; `libsym.sh` names system-library code in a trace |
+| `wasm_arm.py func.dis table entry` | reads one `br_table` arm of a wasm function (e.g. a `fast_step` arm of `run_loop`) |
+| `nobounds.py` | experiment copy with unchecked arena accesses (native + wasm), to measure the checks |
+| `model/` | a standalone dispatch-cost model of the run loop in three styles (`cargo run --release -- a|b|c N`) |
+
+Build-specific constants: `trace.py`'s `TRACE_BOUNDARY` is the address of the `b.lt`
+after the run loop's fuel check (`if self.fuel <= 0`, run.rs `run_loop`), and it reads
+`Exec.pc`/`code`/`code_len` at offsets 0x28/0x30/0x34 and the arena Vec pointer at
+heap+8. Find them in `llvm-objdump -d -l --dsym=$DJS_PERF_DIR/djs.dSYM` of `run_loop`
+after a rebuild (the fast_step entry loads pc and code_len right after the check).
