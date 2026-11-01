@@ -712,6 +712,30 @@ fn split(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
         }
         return new_array(heap, &parts);
     }
+    // One-byte string and separator: find every piece in one pass over the bytes, then
+    // copy them (0110: a search per piece repeated the setup of `index_of`).
+    heap.str_view_flat(s)?;
+    let r = heap.flatten(r)?;
+    if let (Some(StrView::Latin1(h)), Some(StrView::Latin1(t))) =
+        (heap.str_view(s), heap.str_view(r))
+    {
+        let mut cuts: Vec<(u32, u32)> = Vec::new();
+        let mut p = 0;
+        while let Some(q) = string::find_latin1(h, t, p) {
+            cuts.push((p as u32, q as u32));
+            if cuts.len() as u32 == lim {
+                break;
+            }
+            p = q + t.len();
+        }
+        if (cuts.len() as u32) < lim {
+            cuts.push((p as u32, n));
+        }
+        for (a, b) in cuts {
+            parts.push(Value::string(string::substring(heap, s, a, b)?));
+        }
+        return new_array(heap, &parts);
+    }
     let mut p = 0;
     let mut q = string::index_of(heap, s, r, 0, false)?;
     while q >= 0.0 {

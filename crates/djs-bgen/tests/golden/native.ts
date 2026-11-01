@@ -124,3 +124,24 @@ function Ctor(v: Value): Value {
   }
   return Make();
 }
+
+/**
+ * The fused dense HasProperty + Get (D2090): fused when the true branch starts with the
+ * Get of the same operands, not when it does something else first.
+ * @intrinsic
+ * @native
+ */
+function NativeHasGet(o: Value, f: Value): f64 {
+  const n: f64 = LengthOfArrayLike(o);
+  let sum: f64 = 0;
+  for (let k: f64 = 0; k < n; k++) {
+    if (HasProperty(o, k)) {
+      User(f, Get(o, k), k);
+    }
+    if (HasProperty(o, k)) {
+      User(f, k);
+      sum += Leaf(Get(o, k)) ? 1 : 0;
+    }
+  }
+  return sum;
+}

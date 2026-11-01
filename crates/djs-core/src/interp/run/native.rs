@@ -670,6 +670,24 @@ impl Exec<'_> {
         self.n_call(const { iid("Get") }, args, next)
     }
 
+    /// The fused `if (HasProperty(o, k)) { .. Get(o, k)` of djs-bgen (D2090): for an
+    /// element of an Array, what both fast paths answer, with the element left as the
+    /// Get's result (`n_res`, taken by its resume state right after).
+    #[cfg_attr(target_arch = "wasm32", inline(never))]
+    #[cfg_attr(not(target_arch = "wasm32"), inline(always))]
+    pub(crate) fn n_dense_pre(&mut self, o: Value, k: Value) -> bool {
+        if let Some(o) = o.as_object()
+            && self.is_class(o, ObjectClass::Array)
+            && let Some(i) = index_of(k)
+            && let Some(v) = self.heap.get_element_fast(o, i)
+        {
+            debug_assert!(self.n_res.is_none(), "an inline result was not taken");
+            self.n_res = Some(v);
+            return true;
+        }
+        false
+    }
+
     /// `%HasProperty(o, k)`: true for a dense element of an Array (an own property).
     pub(crate) fn n_has_property(&mut self, args: &[Value; 2], next: u32) -> Result<Flow, Fault> {
         if let Some(o) = args[0]

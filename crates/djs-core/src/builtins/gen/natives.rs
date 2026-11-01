@@ -119,7 +119,7 @@ fn native_ArrayPrototypeForEach(ex: &mut Exec<'_>) -> Step {
     let mut l2f: f64 = 0.0;
     match st {
         3 => { l1f = f64_of(ex.n_slot(1)); }
-        4 | 5 | 6 | 8 | 9 | 10 | 11 => { l1f = f64_of(ex.n_slot(1)); l2f = f64_of(ex.n_slot(2)); }
+        4 | 5 | 7 | 8 | 9 | 10 | 11 | 12 => { l1f = f64_of(ex.n_slot(1)); l2f = f64_of(ex.n_slot(2)); }
         _ => {}
     }
     loop {
@@ -142,35 +142,38 @@ fn native_ArrayPrototypeForEach(ex: &mut Exec<'_>) -> Step {
                 st = 4; continue;
             }
             4 => {
-                if (l2f < l1f) { st = 5; continue; } else { st = 7; continue; }
+                if (l2f < l1f) { st = 7; continue; } else { st = 6; continue; }
             }
             5 => {
-                // resume point: HasProperty
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(2); ex.n_has_property(&[a0, a1], 8) }? { Flow::Inline => { st = 8; continue } Flow::Leave(s) => return Ok(s) }
-            }
-            6 => {
                 let rv = (l2f + 1.0_f64); l2f = rv; ex.n_set_slot(2, num(rv));
                 if ex.n_backedge(4) { return Ok(None); } st = 4; continue;
             }
-            7 => {
+            6 => {
                 let v = Value::UNDEFINED; return ex.n_ret(v);
             }
+            7 => {
+                if { let a0 = ex.n_slot(0); let a1 = ex.n_slot(2); ex.n_dense_pre(a0, a1) } { st = 11; continue; } else { st = 8; continue; }
+            }
             8 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                if bool_of(ex.n_slot(3)) { st = 9; continue; } else { st = 6; continue; }
+                // resume point: HasProperty
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(2); ex.n_has_property(&[a0, a1], 9) }? { Flow::Inline => { st = 9; continue } Flow::Leave(s) => return Ok(s) }
             }
             9 => {
-                // resume point: Get
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(2); ex.n_get(&[a0, a1], 10) }? { Flow::Inline => { st = 10; continue } Flow::Leave(s) => return Ok(s) }
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                if bool_of(ex.n_slot(3)) { st = 10; continue; } else { st = 5; continue; }
             }
             10 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                // resume point: Call
-                match { let a0 = ex.n_arg(0); let a1 = ex.n_arg(1); let a2 = ex.n_slot(3); let a3 = ex.n_slot(2); let a4 = ex.n_slot(0); ex.n_call(I_CALL, &[a0, a1, a2, a3, a4], 11) }? { Flow::Inline => { st = 11; continue } Flow::Leave(s) => return Ok(s) }
+                // resume point: Get
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(2); ex.n_get(&[a0, a1], 11) }? { Flow::Inline => { st = 11; continue } Flow::Leave(s) => return Ok(s) }
             }
             11 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                // resume point: Call
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_arg(1); let a2 = ex.n_slot(3); let a3 = ex.n_slot(2); let a4 = ex.n_slot(0); ex.n_call(I_CALL, &[a0, a1, a2, a3, a4], 12) }? { Flow::Inline => { st = 12; continue } Flow::Leave(s) => return Ok(s) }
+            }
+            12 => {
                 ex.n_result();
-                st = 6; continue;
+                st = 5; continue;
             }
             _ => return Err(bad_state()),
         }
@@ -190,7 +193,7 @@ fn native_ArrayPrototypeMap(ex: &mut Exec<'_>) -> Step {
     let mut l3f: f64 = 0.0;
     match st {
         3 | 4 => { l1f = f64_of(ex.n_slot(1)); }
-        5 | 6 | 7 | 9 | 10 | 11 | 12 | 13 => { l1f = f64_of(ex.n_slot(1)); l3f = f64_of(ex.n_slot(3)); }
+        5 | 6 | 8 | 9 | 10 | 11 | 12 | 13 | 14 => { l1f = f64_of(ex.n_slot(1)); l3f = f64_of(ex.n_slot(3)); }
         _ => {}
     }
     loop {
@@ -218,40 +221,43 @@ fn native_ArrayPrototypeMap(ex: &mut Exec<'_>) -> Step {
                 st = 5; continue;
             }
             5 => {
-                if (l3f < l1f) { st = 6; continue; } else { st = 8; continue; }
+                if (l3f < l1f) { st = 8; continue; } else { st = 7; continue; }
             }
             6 => {
-                // resume point: HasProperty
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(3); ex.n_has_property(&[a0, a1], 9) }? { Flow::Inline => { st = 9; continue } Flow::Leave(s) => return Ok(s) }
-            }
-            7 => {
                 let rv = (l3f + 1.0_f64); l3f = rv; ex.n_set_slot(3, num(rv));
                 if ex.n_backedge(5) { return Ok(None); } st = 5; continue;
             }
-            8 => {
+            7 => {
                 let v = ex.n_slot(2); return ex.n_ret(v);
             }
+            8 => {
+                if { let a0 = ex.n_slot(0); let a1 = ex.n_slot(3); ex.n_dense_pre(a0, a1) } { st = 12; continue; } else { st = 9; continue; }
+            }
             9 => {
-                let r = ex.n_result(); ex.n_set_slot(4, r);
-                if bool_of(ex.n_slot(4)) { st = 10; continue; } else { st = 7; continue; }
+                // resume point: HasProperty
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(3); ex.n_has_property(&[a0, a1], 10) }? { Flow::Inline => { st = 10; continue } Flow::Leave(s) => return Ok(s) }
             }
             10 => {
-                // resume point: Get
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(3); ex.n_get(&[a0, a1], 11) }? { Flow::Inline => { st = 11; continue } Flow::Leave(s) => return Ok(s) }
+                let r = ex.n_result(); ex.n_set_slot(4, r);
+                if bool_of(ex.n_slot(4)) { st = 11; continue; } else { st = 6; continue; }
             }
             11 => {
-                let r = ex.n_result(); ex.n_set_slot(5, r);
-                // resume point: Call
-                match { let a0 = ex.n_arg(0); let a1 = ex.n_arg(1); let a2 = ex.n_slot(5); let a3 = ex.n_slot(3); let a4 = ex.n_slot(0); ex.n_call(I_CALL, &[a0, a1, a2, a3, a4], 12) }? { Flow::Inline => { st = 12; continue } Flow::Leave(s) => return Ok(s) }
+                // resume point: Get
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(3); ex.n_get(&[a0, a1], 12) }? { Flow::Inline => { st = 12; continue } Flow::Leave(s) => return Ok(s) }
             }
             12 => {
-                let r = ex.n_result(); ex.n_set_slot(6, r);
-                // resume point: CreateDataPropertyOrThrow
-                match { let a0 = ex.n_slot(2); let a1 = ex.n_slot(3); let a2 = ex.n_slot(6); ex.n_create_data_property_or_throw(&[a0, a1, a2], 13) }? { Flow::Inline => { st = 13; continue } Flow::Leave(s) => return Ok(s) }
+                let r = ex.n_result(); ex.n_set_slot(5, r);
+                // resume point: Call
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_arg(1); let a2 = ex.n_slot(5); let a3 = ex.n_slot(3); let a4 = ex.n_slot(0); ex.n_call(I_CALL, &[a0, a1, a2, a3, a4], 13) }? { Flow::Inline => { st = 13; continue } Flow::Leave(s) => return Ok(s) }
             }
             13 => {
+                let r = ex.n_result(); ex.n_set_slot(6, r);
+                // resume point: CreateDataPropertyOrThrow
+                match { let a0 = ex.n_slot(2); let a1 = ex.n_slot(3); let a2 = ex.n_slot(6); ex.n_create_data_property_or_throw(&[a0, a1, a2], 14) }? { Flow::Inline => { st = 14; continue } Flow::Leave(s) => return Ok(s) }
+            }
+            14 => {
                 ex.n_result();
-                st = 7; continue;
+                st = 6; continue;
             }
             _ => return Err(bad_state()),
         }
@@ -471,8 +477,8 @@ fn native_EveryOrSome(ex: &mut Exec<'_>) -> Step {
     let mut l1f: f64 = 0.0;
     let mut l3b: bool = false;
     match st {
-        2 | 3 | 4 | 6 | 7 | 8 | 9 => { l0f = f64_of(ex.n_slot(0)); l1f = f64_of(ex.n_slot(1)); }
-        10 => { l3b = bool_of(ex.n_slot(3)); }
+        2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 => { l0f = f64_of(ex.n_slot(0)); l1f = f64_of(ex.n_slot(1)); }
+        11 => { l3b = bool_of(ex.n_slot(3)); }
         _ => {}
     }
     loop {
@@ -489,38 +495,41 @@ fn native_EveryOrSome(ex: &mut Exec<'_>) -> Step {
                 st = 2; continue;
             }
             2 => {
-                if (l1f < l0f) { st = 3; continue; } else { st = 5; continue; }
+                if (l1f < l0f) { st = 5; continue; } else { st = 4; continue; }
             }
             3 => {
-                // resume point: HasProperty
-                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(1); ex.n_has_property(&[a0, a1], 6) }? { Flow::Inline => { st = 6; continue } Flow::Leave(s) => return Ok(s) }
-            }
-            4 => {
                 let rv = (l1f + 1.0_f64); l1f = rv; ex.n_set_slot(1, num(rv));
                 if ex.n_backedge(2) { return Ok(None); } st = 2; continue;
             }
-            5 => {
+            4 => {
                 let v = Value::bool(bool_of(ex.n_arg(3))); return ex.n_ret(v);
             }
+            5 => {
+                if { let a0 = ex.n_arg(0); let a1 = ex.n_slot(1); ex.n_dense_pre(a0, a1) } { st = 9; continue; } else { st = 6; continue; }
+            }
             6 => {
-                let r = ex.n_result(); ex.n_set_slot(2, r);
-                if bool_of(ex.n_slot(2)) { st = 7; continue; } else { st = 4; continue; }
+                // resume point: HasProperty
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(1); ex.n_has_property(&[a0, a1], 7) }? { Flow::Inline => { st = 7; continue } Flow::Leave(s) => return Ok(s) }
             }
             7 => {
-                // resume point: Get
-                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(1); ex.n_get(&[a0, a1], 8) }? { Flow::Inline => { st = 8; continue } Flow::Leave(s) => return Ok(s) }
+                let r = ex.n_result(); ex.n_set_slot(2, r);
+                if bool_of(ex.n_slot(2)) { st = 8; continue; } else { st = 3; continue; }
             }
             8 => {
-                let r = ex.n_result(); ex.n_set_slot(4, r);
-                // resume point: Call
-                match { let a0 = ex.n_arg(1); let a1 = ex.n_arg(2); let a2 = ex.n_slot(4); let a3 = ex.n_slot(1); let a4 = ex.n_arg(0); ex.n_call(I_CALL, &[a0, a1, a2, a3, a4], 9) }? { Flow::Inline => { st = 9; continue } Flow::Leave(s) => return Ok(s) }
+                // resume point: Get
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(1); ex.n_get(&[a0, a1], 9) }? { Flow::Inline => { st = 9; continue } Flow::Leave(s) => return Ok(s) }
             }
             9 => {
-                let r = ex.n_result(); ex.n_set_slot(2, r);
-                let rv = { let a0 = ex.n_slot(2); ex.n_to_boolean(a0) }; l3b = rv; ex.n_set_slot(3, Value::bool(rv));
-                if (l3b != bool_of(ex.n_arg(3))) { st = 10; continue; } else { st = 4; continue; }
+                let r = ex.n_result(); ex.n_set_slot(4, r);
+                // resume point: Call
+                match { let a0 = ex.n_arg(1); let a1 = ex.n_arg(2); let a2 = ex.n_slot(4); let a3 = ex.n_slot(1); let a4 = ex.n_arg(0); ex.n_call(I_CALL, &[a0, a1, a2, a3, a4], 10) }? { Flow::Inline => { st = 10; continue } Flow::Leave(s) => return Ok(s) }
             }
             10 => {
+                let r = ex.n_result(); ex.n_set_slot(2, r);
+                let rv = { let a0 = ex.n_slot(2); ex.n_to_boolean(a0) }; l3b = rv; ex.n_set_slot(3, Value::bool(rv));
+                if (l3b != bool_of(ex.n_arg(3))) { st = 11; continue; } else { st = 3; continue; }
+            }
+            11 => {
                 let v = Value::bool(l3b); return ex.n_ret(v);
             }
             _ => return Err(bad_state()),
@@ -590,7 +599,7 @@ fn native_ArrayPrototypeFilter(ex: &mut Exec<'_>) -> Step {
     let mut l4f: f64 = 0.0;
     match st {
         2 => { l1f = f64_of(ex.n_slot(1)); }
-        3 | 4 | 5 | 7 | 8 | 9 | 10 | 11 | 12 => { l1f = f64_of(ex.n_slot(1)); l3f = f64_of(ex.n_slot(3)); l4f = f64_of(ex.n_slot(4)); }
+        3 | 4 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 => { l1f = f64_of(ex.n_slot(1)); l3f = f64_of(ex.n_slot(3)); l4f = f64_of(ex.n_slot(4)); }
         _ => {}
     }
     loop {
@@ -614,44 +623,47 @@ fn native_ArrayPrototypeFilter(ex: &mut Exec<'_>) -> Step {
                 st = 3; continue;
             }
             3 => {
-                if (l4f < l1f) { st = 4; continue; } else { st = 6; continue; }
+                if (l4f < l1f) { st = 6; continue; } else { st = 5; continue; }
             }
             4 => {
-                // resume point: HasProperty
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(4); ex.n_has_property(&[a0, a1], 7) }? { Flow::Inline => { st = 7; continue } Flow::Leave(s) => return Ok(s) }
-            }
-            5 => {
                 let rv = (l4f + 1.0_f64); l4f = rv; ex.n_set_slot(4, num(rv));
                 if ex.n_backedge(3) { return Ok(None); } st = 3; continue;
             }
-            6 => {
+            5 => {
                 let v = ex.n_slot(2); return ex.n_ret(v);
             }
+            6 => {
+                if { let a0 = ex.n_slot(0); let a1 = ex.n_slot(4); ex.n_dense_pre(a0, a1) } { st = 10; continue; } else { st = 7; continue; }
+            }
             7 => {
-                let r = ex.n_result(); ex.n_set_slot(5, r);
-                if bool_of(ex.n_slot(5)) { st = 8; continue; } else { st = 5; continue; }
+                // resume point: HasProperty
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(4); ex.n_has_property(&[a0, a1], 8) }? { Flow::Inline => { st = 8; continue } Flow::Leave(s) => return Ok(s) }
             }
             8 => {
-                // resume point: Get
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(4); ex.n_get(&[a0, a1], 9) }? { Flow::Inline => { st = 9; continue } Flow::Leave(s) => return Ok(s) }
+                let r = ex.n_result(); ex.n_set_slot(5, r);
+                if bool_of(ex.n_slot(5)) { st = 9; continue; } else { st = 4; continue; }
             }
             9 => {
-                let r = ex.n_result(); ex.n_set_slot(6, r);
-                // resume point: Call
-                match { let a0 = ex.n_arg(0); let a1 = ex.n_arg(1); let a2 = ex.n_slot(6); let a3 = ex.n_slot(4); let a4 = ex.n_slot(0); ex.n_call(I_CALL, &[a0, a1, a2, a3, a4], 10) }? { Flow::Inline => { st = 10; continue } Flow::Leave(s) => return Ok(s) }
+                // resume point: Get
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(4); ex.n_get(&[a0, a1], 10) }? { Flow::Inline => { st = 10; continue } Flow::Leave(s) => return Ok(s) }
             }
             10 => {
-                let r = ex.n_result(); ex.n_set_slot(5, r);
-                if { let a0 = ex.n_slot(5); ex.n_to_boolean(a0) } { st = 11; continue; } else { st = 5; continue; }
+                let r = ex.n_result(); ex.n_set_slot(6, r);
+                // resume point: Call
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_arg(1); let a2 = ex.n_slot(6); let a3 = ex.n_slot(4); let a4 = ex.n_slot(0); ex.n_call(I_CALL, &[a0, a1, a2, a3, a4], 11) }? { Flow::Inline => { st = 11; continue } Flow::Leave(s) => return Ok(s) }
             }
             11 => {
-                // resume point: CreateDataPropertyOrThrow
-                match { let a0 = ex.n_slot(2); let a1 = ex.n_slot(3); let a2 = ex.n_slot(6); ex.n_create_data_property_or_throw(&[a0, a1, a2], 12) }? { Flow::Inline => { st = 12; continue } Flow::Leave(s) => return Ok(s) }
+                let r = ex.n_result(); ex.n_set_slot(5, r);
+                if { let a0 = ex.n_slot(5); ex.n_to_boolean(a0) } { st = 12; continue; } else { st = 4; continue; }
             }
             12 => {
+                // resume point: CreateDataPropertyOrThrow
+                match { let a0 = ex.n_slot(2); let a1 = ex.n_slot(3); let a2 = ex.n_slot(6); ex.n_create_data_property_or_throw(&[a0, a1, a2], 13) }? { Flow::Inline => { st = 13; continue } Flow::Leave(s) => return Ok(s) }
+            }
+            13 => {
                 ex.n_result();
                 let rv = (l3f + 1.0_f64); l3f = rv; ex.n_set_slot(3, num(rv));
-                st = 5; continue;
+                st = 4; continue;
             }
             _ => return Err(bad_state()),
         }
@@ -673,8 +685,8 @@ fn native_Reduce(ex: &mut Exec<'_>) -> Step {
     let mut l5f: f64 = 0.0;
     let mut l6f: f64 = 0.0;
     match st {
-        2 | 3 | 4 | 5 | 10 | 12 | 14 | 15 | 16 | 18 | 19 | 20 | 21 => { l0f = f64_of(ex.n_slot(0)); l1f = f64_of(ex.n_slot(1)); }
-        6 | 7 | 8 | 9 | 11 => { l0f = f64_of(ex.n_slot(0)); l1f = f64_of(ex.n_slot(1)); l4b = bool_of(ex.n_slot(4)); }
+        2 | 3 | 4 | 5 | 12 | 14 | 16 | 17 | 18 | 20 | 21 | 22 | 23 | 24 | 25 => { l0f = f64_of(ex.n_slot(0)); l1f = f64_of(ex.n_slot(1)); }
+        6 | 7 | 8 | 9 | 10 | 11 | 13 => { l0f = f64_of(ex.n_slot(0)); l1f = f64_of(ex.n_slot(1)); l4b = bool_of(ex.n_slot(4)); }
         _ => {}
     }
     loop {
@@ -706,70 +718,82 @@ fn native_Reduce(ex: &mut Exec<'_>) -> Step {
             }
             5 => {
                 let r = ex.n_result(); ex.n_set_slot(2, r);
-                st = 14; continue;
+                st = 16; continue;
             }
             6 => {
                 if ((!l4b) && (l1f < l0f)) { st = 7; continue; } else { st = 8; continue; }
             }
             7 => {
                 let rv = (if bool_of(ex.n_arg(3)) { ((l0f - 1.0_f64) - l1f) } else { l1f }); l5f = rv; ex.n_set_slot(5, num(rv));
-                // resume point: HasProperty
-                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(5); ex.n_has_property(&[a0, a1], 9) }? { Flow::Inline => { st = 9; continue } Flow::Leave(s) => return Ok(s) }
+                st = 9; continue;
             }
             8 => {
-                if (!l4b) { st = 13; continue; } else { st = 14; continue; }
+                if (!l4b) { st = 15; continue; } else { st = 16; continue; }
             }
             9 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                if bool_of(ex.n_slot(3)) { st = 10; continue; } else { st = 11; continue; }
+                if { let a0 = ex.n_arg(0); let a1 = ex.n_slot(5); ex.n_dense_pre(a0, a1) } { st = 14; continue; } else { st = 10; continue; }
             }
             10 => {
-                // resume point: Get
-                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(5); ex.n_get(&[a0, a1], 12) }? { Flow::Inline => { st = 12; continue } Flow::Leave(s) => return Ok(s) }
+                // resume point: HasProperty
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(5); ex.n_has_property(&[a0, a1], 11) }? { Flow::Inline => { st = 11; continue } Flow::Leave(s) => return Ok(s) }
             }
             11 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                if bool_of(ex.n_slot(3)) { st = 12; continue; } else { st = 13; continue; }
+            }
+            12 => {
+                // resume point: Get
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(5); ex.n_get(&[a0, a1], 14) }? { Flow::Inline => { st = 14; continue } Flow::Leave(s) => return Ok(s) }
+            }
+            13 => {
                 let rv = (l1f + 1.0_f64); l1f = rv; ex.n_set_slot(1, num(rv));
                 if ex.n_backedge(6) { return Ok(None); } st = 6; continue;
             }
-            12 => {
+            14 => {
                 let r = ex.n_result(); ex.n_set_slot(2, r);
                 let rv = true; l4b = rv; ex.n_set_slot(4, Value::bool(rv));
-                st = 11; continue;
-            }
-            13 => {
-                let v = { let a0 = ex.n_str("empty array")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
-            }
-            14 => {
-                if (l1f < l0f) { st = 15; continue; } else { st = 17; continue; }
+                st = 13; continue;
             }
             15 => {
-                let rv = (if bool_of(ex.n_arg(3)) { ((l0f - 1.0_f64) - l1f) } else { l1f }); l6f = rv; ex.n_set_slot(6, num(rv));
-                // resume point: HasProperty
-                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(6); ex.n_has_property(&[a0, a1], 18) }? { Flow::Inline => { st = 18; continue } Flow::Leave(s) => return Ok(s) }
+                let v = { let a0 = ex.n_str("empty array")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
             }
             16 => {
-                let rv = (l1f + 1.0_f64); l1f = rv; ex.n_set_slot(1, num(rv));
-                if ex.n_backedge(14) { return Ok(None); } st = 14; continue;
+                if (l1f < l0f) { st = 17; continue; } else { st = 19; continue; }
             }
             17 => {
-                let v = ex.n_slot(2); return ex.n_ret(v);
+                let rv = (if bool_of(ex.n_arg(3)) { ((l0f - 1.0_f64) - l1f) } else { l1f }); l6f = rv; ex.n_set_slot(6, num(rv));
+                st = 20; continue;
             }
             18 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                if bool_of(ex.n_slot(3)) { st = 19; continue; } else { st = 16; continue; }
+                let rv = (l1f + 1.0_f64); l1f = rv; ex.n_set_slot(1, num(rv));
+                if ex.n_backedge(16) { return Ok(None); } st = 16; continue;
             }
             19 => {
-                // resume point: Get
-                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(6); ex.n_get(&[a0, a1], 20) }? { Flow::Inline => { st = 20; continue } Flow::Leave(s) => return Ok(s) }
+                let v = ex.n_slot(2); return ex.n_ret(v);
             }
             20 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                // resume point: Call
-                match { let a0 = ex.n_arg(1); let a1 = Value::UNDEFINED; let a2 = ex.n_slot(2); let a3 = ex.n_slot(3); let a4 = ex.n_slot(6); let a5 = ex.n_arg(0); ex.n_call(I_CALL, &[a0, a1, a2, a3, a4, a5], 21) }? { Flow::Inline => { st = 21; continue } Flow::Leave(s) => return Ok(s) }
+                if { let a0 = ex.n_arg(0); let a1 = ex.n_slot(6); ex.n_dense_pre(a0, a1) } { st = 24; continue; } else { st = 21; continue; }
             }
             21 => {
+                // resume point: HasProperty
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(6); ex.n_has_property(&[a0, a1], 22) }? { Flow::Inline => { st = 22; continue } Flow::Leave(s) => return Ok(s) }
+            }
+            22 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                if bool_of(ex.n_slot(3)) { st = 23; continue; } else { st = 18; continue; }
+            }
+            23 => {
+                // resume point: Get
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(6); ex.n_get(&[a0, a1], 24) }? { Flow::Inline => { st = 24; continue } Flow::Leave(s) => return Ok(s) }
+            }
+            24 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                // resume point: Call
+                match { let a0 = ex.n_arg(1); let a1 = Value::UNDEFINED; let a2 = ex.n_slot(2); let a3 = ex.n_slot(3); let a4 = ex.n_slot(6); let a5 = ex.n_arg(0); ex.n_call(I_CALL, &[a0, a1, a2, a3, a4, a5], 25) }? { Flow::Inline => { st = 25; continue } Flow::Leave(s) => return Ok(s) }
+            }
+            25 => {
                 let r = ex.n_result(); ex.n_set_slot(2, r);
-                st = 16; continue;
+                st = 18; continue;
             }
             _ => return Err(bad_state()),
         }

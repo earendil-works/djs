@@ -1153,6 +1153,59 @@ impl<'a, 'c> Fsm<'a, 'c> {
         t
     }
 
+    /// The fused dense HasProperty + Get (D2090). `pre` holds the lowered
+    /// `HasProperty(o, k)` call, and the branch `bt` its true side. If that side starts with
+    /// `Get(o, k)` on the same operands, the check state `chk` runs `n_dense_pre`. When
+    /// `o` is an Array with an element at `k`, both calls are what their own fast paths
+    /// would answer (true, the element), so `chk` jumps straight to the Get's resume state
+    /// with the element as its result. Otherwise `chk` just goes on to `pre`.
+    fn fuse_has_get(&mut self, chk: usize, pre: usize, bt: usize) {
+        let blank = |code: &[String]| code.iter().all(|c| c.starts_with("//"));
+        let norm = |c: &str| -> String {
+            let mut out = String::new();
+            let mut rest = c;
+            while let Some(i) = rest.find("__BB") {
+                out.push_str(&rest[..i]);
+                let tail = &rest[i + 4..];
+                let end = tail.find("__").map_or(tail.len(), |j| j + 2);
+                rest = &tail[end..];
+            }
+            out.push_str(rest);
+            out
+        };
+        let has = match &self.bbs[pre] {
+            Bb {
+                code,
+                term: Some(Term::Call(c, _)),
+                ..
+            } if blank(code) => c.clone(),
+            _ => return,
+        };
+        let get_next = match &self.bbs[bt] {
+            Bb {
+                code,
+                term: Some(Term::Call(c, next)),
+                ..
+            } if blank(code)
+                && has.contains("ex.n_has_property(")
+                && norm(c) == norm(&has).replace("ex.n_has_property(", "ex.n_get(") =>
+            {
+                *next
+            }
+            _ => return,
+        };
+        // `{ let a0 = ..; let a1 = ..; ex.n_has_property(&[a0, a1], ..) }` with the call
+        // replaced: the operands are evaluated the same way.
+        let Some(i) = has.find("ex.n_has_property(") else {
+            return;
+        };
+        let cond = format!("{}ex.n_dense_pre(a0, a1) }}", &has[..i]);
+        if !has.starts_with("{ let a0 = ") {
+            return;
+        }
+        self.bbs[chk].term = Some(Term::If(cond, (get_next, false), (pre, false)));
+    }
+
     fn end_statement(&mut self) {
         self.free_temps.append(&mut self.used_temps);
     }
@@ -1520,12 +1573,27 @@ impl<'a, 'c> Fsm<'a, 'c> {
             Stmt::If {
                 cond, then, els, ..
             } => {
+                // `if (HasProperty(o, k)) { .. Get(o, k) ..`: a check state in front (D2090),
+                // patched below once the branch is lowered.
+                let fuse = matches!(&cond.kind, ExprKind::Call { callee, args, .. }
+                    if callee == "HasProperty" && args.len() == 2);
+                let chk = if fuse {
+                    let (chk, pre) = (self.new_bb(), self.new_bb());
+                    self.term_to(Term::Goto(chk, false), chk);
+                    self.term_to(Term::Goto(pre, false), pre);
+                    Some((chk, pre))
+                } else {
+                    None
+                };
                 let c = self.lower(cond, Rep::Bool);
                 let (bt, join) = (self.new_bb(), self.new_bb());
                 let be = if els.is_some() { self.new_bb() } else { join };
                 self.end_statement();
                 self.term_to(Term::If(c.s, (bt, false), (be, false)), bt);
                 self.sub(then, sources);
+                if let Some((chk, pre)) = chk {
+                    self.fuse_has_get(chk, pre, bt);
+                }
                 self.term(Term::Goto(join, false));
                 if let Some(e) = els {
                     self.cur = be;

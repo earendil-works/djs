@@ -57,12 +57,9 @@ pub(crate) fn substring(heap: &mut Heap, s: Str, start: u32, end: u32) -> Result
     join(heap, &mut [(s, start, end)])
 }
 
-/// Short pieces are gathered on the stack: no Rust heap allocation (0081 F6).
-const STACK_UNITS: usize = 256;
-
 /// The concatenation of the pieces `s[start .. end)` as one flat string, written once
-/// (no ropes and no intermediate strings). Pieces are read like `str_view_flat` reads
-/// them (an append rope in place).
+/// (no ropes and no intermediate strings). One-byte pieces are copied within the arena;
+/// pieces are read like `str_view_flat` reads them (an append rope in place).
 pub(crate) fn join(heap: &mut Heap, pieces: &mut [(Str, u32, u32)]) -> Result<Str, Fault> {
     let mut total: u64 = 0;
     let mut two_byte = false;
@@ -75,21 +72,13 @@ pub(crate) fn join(heap: &mut Heap, pieces: &mut [(Str, u32, u32)]) -> Result<St
     }
     let total = total as usize;
     if !two_byte {
-        let mut stack = [0u8; STACK_UNITS];
-        let mut vec = Vec::new();
-        let buf: &mut [u8] = if total <= STACK_UNITS {
-            &mut stack[..total]
-        } else {
-            vec.resize(total, 0);
-            &mut vec
-        };
-        let mut at = 0;
-        for &(s, a, b) in pieces.iter() {
-            let (a, b) = (a as usize, b as usize);
-            buf[at..at + b - a].copy_from_slice(&heap.str_view_flat(s)?.bytes()[a..b]);
-            at += b - a;
+        for &(s, _, _) in pieces.iter() {
+            // (Flat pieces need nothing; ropes are flattened, append ropes read in place.)
+            if heap.str_view(s).is_none() {
+                heap.str_view_flat(s)?;
+            }
         }
-        return Ok(heap.alloc_latin1(buf)?);
+        return Ok(heap.alloc_latin1_pieces(pieces, total as u32)?);
     }
     let mut units: Vec<u16> = Vec::with_capacity(total);
     for &(s, a, b) in pieces.iter() {
@@ -97,6 +86,43 @@ pub(crate) fn join(heap: &mut Heap, pieces: &mut [(Str, u32, u32)]) -> Result<St
         units.extend((a as usize..b as usize).map(|i| v.get(i)));
     }
     Ok(heap.alloc_utf16(&units)?)
+}
+
+/// The index of the first `b` in `h`, eight bytes at a time: wasm has no SIMD by default
+/// (D016), and a byte loop was most of `includes` (0110). The zero-byte test
+/// `(x - 0x01..) & !x & 0x80..` can flag bytes above a real match, never below it, so its
+/// lowest flag is exact.
+#[inline]
+pub(crate) fn find_byte(h: &[u8], b: u8) -> Option<usize> {
+    const LO: u64 = 0x0101_0101_0101_0101;
+    const HI: u64 = 0x8080_8080_8080_8080;
+    let pat = LO * b as u64;
+    let (chunks, rest) = h.as_chunks::<8>();
+    for (k, c) in chunks.iter().enumerate() {
+        let x = u64::from_le_bytes(*c) ^ pat;
+        let z = x.wrapping_sub(LO) & !x & HI;
+        if z != 0 {
+            return Some(8 * k + (z.trailing_zeros() / 8) as usize);
+        }
+    }
+    let at = 8 * chunks.len();
+    rest.iter().position(|&c| c == b).map(|k| at + k)
+}
+
+/// The first index ≥ `from` of the non-empty `needle` in `h` (one-byte strings).
+pub(crate) fn find_latin1(h: &[u8], needle: &[u8], from: usize) -> Option<usize> {
+    let (first, rest) = needle.split_first()?;
+    let m = needle.len();
+    let mut i = from;
+    while i + m <= h.len() {
+        i += find_byte(&h[i..=h.len() - m], *first)?;
+        // A loop, not `==`: that is a `memcmp` call, dear for short needles.
+        if h[i + 1..i + m].iter().zip(rest).all(|(a, b)| a == b) {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
 }
 
 /// The first index ≥ `from` (or, with `last`, the last index ≤ `from`) where `search`
@@ -108,8 +134,20 @@ pub(crate) fn index_of(
     from: u32,
     last: bool,
 ) -> Result<f64, Fault> {
-    // The needle on the stack when short (no Rust heap allocation, 0081 F6).
+    // Both flat, then both read in place (0110: no copy of the needle).
+    heap.str_view_flat(s)?;
     let search = heap.flatten(search)?;
+    let from = from as usize;
+    if !last
+        && let (Some(StrView::Latin1(h)), Some(StrView::Latin1(t))) =
+            (heap.str_view(s), heap.str_view(search))
+    {
+        if t.is_empty() {
+            return Ok(if from > h.len() { -1.0 } else { from as f64 });
+        }
+        return Ok(find_latin1(h, t, from).map_or(-1.0, |i| i as f64));
+    }
+    // The needle on the stack when short (no Rust heap allocation, 0081 F6).
     let m = heap.str_len(search) as usize;
     let mut stack = [0u16; 64];
     let vec: Vec<u16>;
@@ -126,33 +164,6 @@ pub(crate) fn index_of(
     let hay = heap.str_view_flat(s)?;
     let n = hay.len();
     if m > n {
-        return Ok(-1.0);
-    }
-    let from = from as usize;
-    // One-byte haystack and needle, forward: compare bytes.
-    if let StrView::Latin1(h) = hay
-        && !last
-        && needle.iter().all(|&u| u < 256)
-    {
-        if m == 0 {
-            return Ok(if from > n { -1.0 } else { from as f64 });
-        }
-        let first = needle[0] as u8;
-        let mut i = from;
-        while i + m <= n {
-            match h[i..=n - m].iter().position(|&b| b == first) {
-                None => break,
-                Some(k) => i += k,
-            }
-            if needle[1..]
-                .iter()
-                .zip(&h[i + 1..i + m])
-                .all(|(&u, &b)| u == b as u16)
-            {
-                return Ok(i as f64);
-            }
-            i += 1;
-        }
         return Ok(-1.0);
     }
     let matches = |i: usize| (0..m).all(|j| hay.get(i + j) == needle[j]);
@@ -484,4 +495,42 @@ pub(crate) fn locale_compare(heap: &mut Heap, a: Str, b: Str) -> Result<f64, Fau
         core::cmp::Ordering::Equal => 0.0,
         core::cmp::Ordering::Greater => 1.0,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{find_byte, find_latin1};
+
+    /// Against the naive searches, on random strings over small alphabets (so that
+    /// matches, near misses and bytes with the high bit set all occur) at every
+    /// alignment and length around the 8-byte chunks.
+    #[test]
+    fn word_at_a_time_search_matches_the_naive_one() {
+        let mut seed = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = |n: u64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % n) as u8
+        };
+        let alphabets: [&[u8]; 3] = [b"ab", b"abc\x80\xff\x00", b"\x01\x02\x7f\x80\x81"];
+        for round in 0..4000 {
+            let al = alphabets[round % 3];
+            let n = next(40) as usize;
+            let h: alloc::vec::Vec<u8> =
+                (0..n).map(|_| al[next(al.len() as u64) as usize]).collect();
+            let b = al[next(al.len() as u64) as usize];
+            assert_eq!(
+                find_byte(&h, b),
+                h.iter().position(|&c| c == b),
+                "{h:?} {b}"
+            );
+            let m = 1 + next(4) as usize;
+            let t: alloc::vec::Vec<u8> =
+                (0..m).map(|_| al[next(al.len() as u64) as usize]).collect();
+            let from = next(n as u64 + 2) as usize;
+            let naive = (from..(n + 1).saturating_sub(m)).find(|&i| h[i..i + m] == t[..]);
+            assert_eq!(find_latin1(&h, &t, from), naive, "{h:?} {t:?} {from}");
+        }
+    }
 }

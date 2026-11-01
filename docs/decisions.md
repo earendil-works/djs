@@ -4800,3 +4800,41 @@ and never measures:
   visible instead of silent.
 The README's speed workloads are now named after their files; push/pop is
 `push-pop.js` (with string methods) and JSON with Dates `json-date.js`.
+## D2090: Fused dense HasProperty + Get in natives; one-pass string search and in-arena joins
+date: 2026-11-03 · by: perf · issue: 0110
+**Fused HasProperty + Get.** The iteration builtins do
+`if (HasProperty(o, k)) { .. Get(o, k) ..`. djs-bgen now puts a check state in front of
+such an `if` (`Fsm::fuse_has_get`), but only when two conditions hold:
+- the true branch starts with exactly the Get on the same operands (the code text of the
+  two calls agrees);
+- that branch has nothing before it.
+
+The check runs `n_dense_pre(o, k)`:
+- for an Array with an element at `k`, both calls give what their own fast paths would
+  (true, the element);
+- it leaves the element in `Exec::n_res` (D2000) and jumps straight to the Get's resume
+  state, skipping both call states;
+- otherwise it goes on to the HasProperty call as before.
+
+Fuel, heap and resume states are unchanged: those fast paths charge nothing and write
+nothing. Six natives use it: forEach, map, filter, every/some, both loops of reduce.
+The golden fixture `NativeHasGet` has one fused and one unfused case.
+
+**Strings.**
+- `index_of` reads both strings in place. One-byte search uses a word-at-a-time scan for
+  the first byte (`find_byte`; wasm has no SIMD, D016), then an inline compare. Before,
+  it was a byte loop plus a `memcmp` call, and the needle was copied.
+- `split` with a one-byte separator finds all pieces in one pass, instead of an
+  `index_of` setup per piece.
+- heap/string.rs (cleared by the coordinator): `str_view`, `str_view_flat` and
+  `flatten` answer flat cells from one kind-byte read (`flat_fast`). Ropes and append
+  ropes take the old code, and a view borrows the heap, so D1610's append buffers are
+  untouched.
+- `alloc_latin1_pieces`: one-byte joins and substrings copy within the arena once,
+  rather than through a Rust buffer.
+- Array `join` of strings builds its result from the pieces. Each element no longer
+  becomes a Vec of units.
+
+**Tried and dropped:** running small blocks in place at forward jumps (tail
+duplication, "fewer states per element"). It cost +13 KB of wasm for 0–1% on most
+iteration builtins (find −6%); state transitions in the wasm loop are cheap.

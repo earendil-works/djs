@@ -104,6 +104,22 @@ function Ctor(v) {
   return %Make();
 }
 
+// golden/native.ts:134 %NativeHasGet
+function NativeHasGet(o, f) {
+  const n = %LengthOfArrayLike(o);
+  let sum = 0;
+  for (let k = 0; k < n; k++) {
+    if (%HasProperty(o, k)) {
+      %User(f, %Get(o, k), k);
+    }
+    if (%HasProperty(o, k)) {
+      %User(f, k);
+      sum += %Leaf(%Get(o, k)) ? 1 : 0;
+    }
+  }
+  return sum;
+}
+
 %InstallMethod("globalThis", "Fin", Fin, 1);
 %InstallConstructor("globalThis", "Ctor", Ctor, 1, undefined);
 %InstallPrototype("globalThis", "Ctor", undefined);
@@ -111,8 +127,10 @@ function Ctor(v) {
 %InstallPrototypeConstructor("Ctor");
 %InstallIntrinsic("NativeTry", NativeTry);
 %InstallIntrinsic("Count", Count);
+%InstallIntrinsic("NativeHasGet", NativeHasGet);
 %MarkNative(NativeLoops, 0);
 %MarkNative(NativeTry, 1);
 %MarkNative(Fin, 2);
 %MarkNative(Ctor, 3);
+%MarkNative(NativeHasGet, 4);
 })();

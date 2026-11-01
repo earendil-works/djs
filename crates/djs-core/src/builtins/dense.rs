@@ -13,6 +13,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::builtins::string;
 use crate::heap::atom::MAX_INT_ATOM;
 use crate::heap::{Heap, ObjectClass, StrView};
 use crate::interp::conv::{self, Fault};
@@ -161,6 +162,24 @@ pub(crate) fn join(heap: &mut Heap, o: Obj, len: u32, sep: Str) -> Result<Option
         .any(|v| v.as_object().is_some() || v.as_symbol().is_some())
     {
         return Ok(None);
+    }
+    // Strings and holes only (the common case): the result written once from the
+    // pieces (0110: each element went through its own Vec of units before).
+    if values
+        .iter()
+        .all(|v| v.as_string().is_some() || v.is_nullish())
+    {
+        let sep_len = heap.str_len(sep);
+        let mut pieces: Vec<(Str, u32, u32)> = Vec::with_capacity(2 * values.len());
+        for (i, v) in values.iter().enumerate() {
+            if i > 0 && sep_len > 0 {
+                pieces.push((sep, 0, sep_len));
+            }
+            if let Some(s) = v.as_string() {
+                pieces.push((s, 0, heap.str_len(s)));
+            }
+        }
+        return Ok(Some(string::join(heap, &mut pieces)?));
     }
     let sep = units_of(heap, sep)?;
     let mut out: Vec<u16> = Vec::new();

@@ -19,6 +19,7 @@ pub(crate) static NATIVES: &[NativeFn] = &[
     NativeFn { name: "NativeTry", params: 1, locals: 4, run: native_NativeTry, handler: handler_NativeTry },
     NativeFn { name: "Fin", params: 1, locals: 5, run: native_Fin, handler: handler_Fin },
     NativeFn { name: "Ctor", params: 1, locals: 1, run: native_Ctor, handler: handler_Ctor },
+    NativeFn { name: "NativeHasGet", params: 2, locals: 5, run: native_NativeHasGet, handler: handler_NativeHasGet },
 ];
 
 // golden/native.ts:9 (Example.prototype.loops)
@@ -308,6 +309,108 @@ fn native_Ctor(ex: &mut Exec<'_>) -> Step {
 }
 
 fn handler_Ctor(state: u32) -> Option<(u32, u32)> {
+    let _ = state;
+    None
+}
+
+// golden/native.ts:134
+#[allow(unused_assignments)]
+fn native_NativeHasGet(ex: &mut Exec<'_>) -> Step {
+    let mut st = ex.n_state();
+    let mut l0f: f64 = 0.0;
+    let mut l1f: f64 = 0.0;
+    let mut l2f: f64 = 0.0;
+    match st {
+        2 | 3 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 => { l0f = f64_of(ex.n_slot(0)); l1f = f64_of(ex.n_slot(1)); l2f = f64_of(ex.n_slot(2)); }
+        4 => { l1f = f64_of(ex.n_slot(1)); }
+        _ => {}
+    }
+    loop {
+        ex.n_goto(st);
+        match st {
+            0 => {
+                // resume point: LengthOfArrayLike
+                match { let a0 = ex.n_arg(0); ex.n_length_of_array_like(&[a0], 1) }? { Flow::Inline => { st = 1; continue } Flow::Leave(s) => return Ok(s) }
+            }
+            1 => {
+                let r = ex.n_result(); ex.n_set_slot(0, r); l0f = f64_of(r);
+                let rv = 0.0_f64; l1f = rv; ex.n_set_slot(1, num(rv));
+                let rv = 0.0_f64; l2f = rv; ex.n_set_slot(2, num(rv));
+                st = 2; continue;
+            }
+            2 => {
+                if (l2f < l0f) { st = 5; continue; } else { st = 4; continue; }
+            }
+            3 => {
+                let rv = (l2f + 1.0_f64); l2f = rv; ex.n_set_slot(2, num(rv));
+                if ex.n_backedge(2) { return Ok(None); } st = 2; continue;
+            }
+            4 => {
+                let v = num(l1f); return ex.n_ret(v);
+            }
+            5 => {
+                if { let a0 = ex.n_arg(0); let a1 = ex.n_slot(2); ex.n_dense_pre(a0, a1) } { st = 9; continue; } else { st = 6; continue; }
+            }
+            6 => {
+                // resume point: HasProperty
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(2); ex.n_has_property(&[a0, a1], 7) }? { Flow::Inline => { st = 7; continue } Flow::Leave(s) => return Ok(s) }
+            }
+            7 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                if bool_of(ex.n_slot(3)) { st = 8; continue; } else { st = 11; continue; }
+            }
+            8 => {
+                // resume point: Get
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(2); ex.n_get(&[a0, a1], 9) }? { Flow::Inline => { st = 9; continue } Flow::Leave(s) => return Ok(s) }
+            }
+            9 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                // resume point: User
+                match { let a0 = ex.n_arg(1); let a1 = ex.n_slot(3); let a2 = ex.n_slot(2); ex.n_call(I_USER, &[a0, a1, a2], 10) }? { Flow::Inline => { st = 10; continue } Flow::Leave(s) => return Ok(s) }
+            }
+            10 => {
+                ex.n_result();
+                st = 11; continue;
+            }
+            11 => {
+                // resume point: HasProperty
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(2); ex.n_has_property(&[a0, a1], 12) }? { Flow::Inline => { st = 12; continue } Flow::Leave(s) => return Ok(s) }
+            }
+            12 => {
+                let r = ex.n_result(); ex.n_set_slot(3, r);
+                if bool_of(ex.n_slot(3)) { st = 13; continue; } else { st = 3; continue; }
+            }
+            13 => {
+                // resume point: User
+                match { let a0 = ex.n_arg(1); let a1 = ex.n_slot(2); ex.n_call(I_USER, &[a0, a1], 14) }? { Flow::Inline => { st = 14; continue } Flow::Leave(s) => return Ok(s) }
+            }
+            14 => {
+                ex.n_result();
+                // resume point: Get
+                match { let a0 = ex.n_arg(0); let a1 = ex.n_slot(2); ex.n_get(&[a0, a1], 15) }? { Flow::Inline => { st = 15; continue } Flow::Leave(s) => return Ok(s) }
+            }
+            15 => {
+                let r = ex.n_result(); ex.n_set_slot(4, r);
+                if bool_of({ let a0 = ex.n_slot(4); ex.n_leaf(I_LEAF, &[a0])? }) { st = 16; continue; } else { st = 17; continue; }
+            }
+            16 => {
+                let v = num(1.0_f64); ex.n_set_slot(3, v);
+                st = 18; continue;
+            }
+            17 => {
+                let v = num(0.0_f64); ex.n_set_slot(3, v);
+                st = 18; continue;
+            }
+            18 => {
+                let rv = (l1f + f64_of(ex.n_slot(3))); l1f = rv; ex.n_set_slot(1, num(rv));
+                st = 3; continue;
+            }
+            _ => return Err(bad_state()),
+        }
+    }
+}
+
+fn handler_NativeHasGet(state: u32) -> Option<(u32, u32)> {
     let _ = state;
     None
 }

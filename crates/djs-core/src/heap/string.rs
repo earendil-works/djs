@@ -26,7 +26,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 
-use super::cells::{Rope, Str8, Str16, flags};
+use super::cells::{Header, Rope, Str8, Str16, flags};
 use super::layout::Ref;
 use super::{CellKind, Heap, HeapError};
 use crate::value::Str;
@@ -333,6 +333,40 @@ impl Heap {
         Ok(Str(off))
     }
 
+    /// A one-byte string of the pieces `s[a .. b)`, copied within the arena once (no
+    /// bounce through a Rust buffer, 0110). Each piece must be flat or an append rope
+    /// (`str_view_flat` first) and one-byte; `total` is the sum of the lengths.
+    pub fn alloc_latin1_pieces(
+        &mut self,
+        pieces: &[(Str, u32, u32)],
+        total: u32,
+    ) -> Result<Str, HeapError> {
+        let dst = self.alloc_flat(total, false)?;
+        let mut at = dst + Str8::DATA.offset;
+        for &(s, a, b) in pieces {
+            // A flat one-byte cell from one kind read (most pieces); else the rope cases.
+            let cell = if self.arena().get(s.0, Header::KIND) == CellKind::Str8 as u8 {
+                s.0
+            } else {
+                let s = self.resolve_str(s);
+                let cell = self.append_rope_buffer(s).unwrap_or(s.0);
+                assert!(
+                    self.cell_kind(cell) == CellKind::Str8,
+                    "alloc_latin1_pieces: not a flat one-byte piece"
+                );
+                cell
+            };
+            assert!(
+                a <= b && b <= self.str_len(Str(cell)),
+                "alloc_latin1_pieces: piece out of range"
+            );
+            self.arena_mut()
+                .copy_within(cell + Str8::DATA.offset + a, b - a, at);
+            at += b - a;
+        }
+        Ok(Str(dst))
+    }
+
     /// A string from UTF-16 code units (lone surrogates allowed). Stored one-byte if every
     /// unit fits.
     pub fn alloc_utf16(&mut self, units: &[u16]) -> Result<Str, HeapError> {
@@ -413,6 +447,27 @@ impl Heap {
         }
     }
 
+    /// The view of `s` if it is a flat cell (`Str8`/`Str16`), from one read of its kind
+    /// byte; `None` for a rope. What `str_view` returns for a flat cell, without its
+    /// repeated kind checks (0110: four or five per call, ~300 instructions of an
+    /// `includes`). The view borrows the heap, so it cannot outlive an append (D1610).
+    #[inline]
+    fn flat_fast(&self, s: Str) -> Option<StrView<'_>> {
+        let a = self.arena();
+        let k = a.get(s.0, Header::KIND);
+        let one_byte = k == CellKind::Str8 as u8;
+        if !one_byte && k != CellKind::Str16 as u8 {
+            return None;
+        }
+        let len = a.get(s.0, Str8::LEN);
+        let data = s.0 + Str8::DATA.offset;
+        Some(if one_byte {
+            StrView::Latin1(a.slice(data, len))
+        } else {
+            StrView::Utf16(a.slice(data, len * 2))
+        })
+    }
+
     /// The view of a flat string cell. `s` must be a `Str8` or `Str16`.
     fn flat_view(&self, s: Str) -> StrView<'_> {
         self.prefix_view(s.0, self.str_len(s))
@@ -421,6 +476,9 @@ impl Heap {
     /// The code units of `s` if it is flat (a flattened rope or an append rope too), else
     /// `None`.
     pub fn str_view(&self, s: Str) -> Option<StrView<'_>> {
+        if let Some(v) = self.flat_fast(s) {
+            return Some(v);
+        }
         let s = self.resolve_str(s);
         if let Some(buf) = self.append_rope_buffer(s) {
             return Some(self.prefix_view(buf, self.str_len(s)));
@@ -434,6 +492,10 @@ impl Heap {
     /// The code units of `s`, flattening it first if it is a concatenation rope. An append
     /// rope is read in place (no copy, and its buffer stays appendable).
     pub fn str_view_flat(&mut self, s: Str) -> Result<StrView<'_>, HeapError> {
+        // (Two lookups: the borrow checker does not let the first one's view escape.)
+        if self.flat_fast(s).is_some() {
+            return Ok(self.flat_fast(s).expect("flat"));
+        }
         let s = self.resolve_str(s);
         if let Some(buf) = self.append_rope_buffer(s) {
             return Ok(self.prefix_view(buf, self.str_len(s)));
@@ -703,6 +765,10 @@ impl Heap {
     /// whole buffer hands out the buffer itself, frozen first (from then on it may be
     /// referenced directly, so it is never written again); a shorter one is copied.
     pub fn flatten(&mut self, s: Str) -> Result<Str, HeapError> {
+        if self.arena().get(s.0, Header::KIND) != CellKind::Rope as u8 {
+            // Flat already (a flat cell's kind is checked where it is read).
+            return Ok(s);
+        }
         let s = self.resolve_str(s);
         if self.cell_kind(s.0) != CellKind::Rope {
             return Ok(s);
