@@ -1,7 +1,7 @@
 # 0013: Bytecode table and tools
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0013-bytecode-table
 depends-on: 0005, 0008
 touches: crates/djs-core/src/bytecode/, crates/djs-core/src/lib.rs (mod lines only), crates/djs-cli/ (disasm subcommand only)
