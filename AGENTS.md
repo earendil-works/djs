@@ -84,4 +84,5 @@ Rules:
 The coordinator (the main agent) owns `work/BOARD.md`, creates issues and worktrees,
 assigns agents, reviews merged work and keeps ARCH/TESTING/decisions coherent. It works
 directly on `main` only for coordination files (issues, board, docs) and commits right
-away, so `main` is never left dirty.
+away, so `main` is never left dirty. It commits through `scripts/with-merge-lock.sh`, so
+that main never moves while an agent is between rebase and fast-forward.
