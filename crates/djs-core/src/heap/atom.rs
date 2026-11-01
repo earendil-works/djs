@@ -31,9 +31,9 @@ use super::string::{StrHasher, hash_units};
 use super::{CellKind, Heap, HeapError};
 use crate::value::{Str, Sym, Value};
 
-const INT_BIT: u32 = 1 << 31;
-const SYM_BIT: u32 = 1 << 30;
-const INDEX_MASK: u32 = SYM_BIT - 1;
+pub(crate) const INT_BIT: u32 = 1 << 31;
+pub(crate) const SYM_BIT: u32 = 1 << 30;
+pub(crate) const INDEX_MASK: u32 = SYM_BIT - 1;
 
 /// The largest integer index atom.
 pub const MAX_INT_ATOM: u32 = INT_BIT - 1;

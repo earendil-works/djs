@@ -48,7 +48,7 @@ pub const DENSE_GAP: u32 = 64;
 const TOMBSTONE: u32 = u32::MAX;
 
 /// Storage-only flag bit: the entry is an accessor.
-const STORE_ACCESSOR: u32 = 8;
+pub(crate) const STORE_ACCESSOR: u32 = 8;
 
 /// The object class, stored in [`Object::CLASS`]. Issue 0006 adds more.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

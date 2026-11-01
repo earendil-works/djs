@@ -582,3 +582,227 @@ macro_rules! cells {
 }
 
 pub(crate) use {cells, opt, records};
+
+// ---- Layout export for the host-side reader (js/src/reader.ts) -------------------------
+
+impl FieldTy {
+    /// The name used in the exported description.
+    pub const fn export_name(self) -> &'static str {
+        match self {
+            FieldTy::U8 => "u8",
+            FieldTy::U16 => "u16",
+            FieldTy::U32 => "u32",
+            FieldTy::I32 => "i32",
+            FieldTy::U64 => "u64",
+            FieldTy::F64 => "f64",
+            FieldTy::Value => "Value",
+            FieldTy::Ref => "Ref",
+        }
+    }
+}
+
+/// The value tags, by name, for the export. A test checks that every valid tag is listed.
+const EXPORTED_TAGS: &[(&str, u16)] = {
+    use crate::value::tag::*;
+    &[
+        ("UNDEFINED", UNDEFINED),
+        ("NULL", NULL),
+        ("BOOL", BOOL),
+        ("INT", INT),
+        ("HOLE", HOLE),
+        ("UNINITIALIZED", UNINITIALIZED),
+        ("STRING", STRING),
+        ("OBJECT", OBJECT),
+        ("SYMBOL", SYMBOL),
+        ("BIGINT", BIGINT),
+        ("HOST_REF", HOST_REF),
+    ]
+};
+
+fn export_fields(out: &mut alloc::string::String, fields: &[FieldInfo], indent: &str) {
+    use core::fmt::Write;
+    out.push_str("{\n");
+    for (i, f) in fields.iter().enumerate() {
+        let _ = writeln!(
+            out,
+            "{indent}  \"{}\": {{ \"offset\": {}, \"type\": \"{}\" }}{}",
+            f.name,
+            f.offset,
+            f.ty.export_name(),
+            if i + 1 < fields.len() { "," } else { "" }
+        );
+    }
+    let _ = write!(out, "{indent}}}");
+}
+
+/// The heap layout as JSON, for the host-side reader: every cell kind (by name) with its
+/// fields and tail, the header, the value encoding, atom id bits, header flags, object
+/// classes and stored property flags, and `LAYOUT_HASH`. `js/src/layout.generated.ts` is
+/// this text; a test keeps it current.
+pub fn layout_json() -> alloc::string::String {
+    use super::cells::{self, Header, LAYOUT_HASH, LAYOUTS};
+    use core::fmt::Write;
+    let mut o = alloc::string::String::new();
+    let _ = writeln!(o, "{{\n  \"layoutHash\": {LAYOUT_HASH},");
+    let _ = writeln!(o, "  \"magic\": {},", cells::MAGIC);
+    let _ = writeln!(o, "  \"headerSize\": {},", super::HEADER_SIZE);
+    let _ = writeln!(
+        o,
+        "  \"header\": {{ \"KIND\": {}, \"GC\": {}, \"FLAGS\": {}, \"SIZE\": {} }},",
+        Header::KIND.offset,
+        Header::GC.offset,
+        Header::FLAGS.offset,
+        Header::SIZE.offset
+    );
+    let _ = write!(
+        o,
+        "  \"value\": {{\n    \"tagPrefix\": {},\n    \"firstRef\": {},\n    \"tags\": {{ ",
+        crate::value::TAG_PREFIX >> 48,
+        crate::value::tag::FIRST_REF
+    );
+    for (i, (name, t)) in EXPORTED_TAGS.iter().enumerate() {
+        let sep = if i + 1 < EXPORTED_TAGS.len() {
+            ", "
+        } else {
+            ""
+        };
+        let _ = write!(o, "\"{name}\": {t}{sep}");
+    }
+    o.push_str(" }\n  },\n");
+    let _ = writeln!(
+        o,
+        "  \"atom\": {{ \"intBit\": {}, \"symbolBit\": {}, \"indexMask\": {} }},",
+        super::atom::INT_BIT,
+        super::atom::SYM_BIT,
+        super::atom::INDEX_MASK
+    );
+    {
+        use cells::flags::*;
+        let _ = writeln!(
+            o,
+            "  \"flags\": {{ \"ROPE_TWO_BYTE\": {ROPE_TWO_BYTE}, \"ROPE_FLATTENED\": \
+             {ROPE_FLATTENED}, \"OBJ_EXTENSIBLE\": {OBJ_EXTENSIBLE}, \"OBJ_INDEXED_PROPS\": \
+             {OBJ_INDEXED_PROPS}, \"OBJ_LENGTH_READONLY\": {OBJ_LENGTH_READONLY} }},"
+        );
+    }
+    o.push_str("  \"objectClasses\": { ");
+    let classes: alloc::vec::Vec<_> = (0..256).filter_map(super::ObjectClass::from_u32).collect();
+    for (i, c) in classes.iter().enumerate() {
+        let sep = if i + 1 < classes.len() { ", " } else { "" };
+        let _ = write!(o, "\"{c:?}\": {}{sep}", *c as u32);
+    }
+    o.push_str(" },\n");
+    {
+        use super::PropFlags;
+        let _ = writeln!(
+            o,
+            "  \"propFlags\": {{ \"WRITABLE\": {}, \"ENUMERABLE\": {}, \"CONFIGURABLE\": {}, \
+             \"ACCESSOR\": {} }},",
+            PropFlags::WRITABLE.bits(),
+            PropFlags::ENUMERABLE.bits(),
+            PropFlags::CONFIGURABLE.bits(),
+            super::object::STORE_ACCESSOR
+        );
+    }
+    o.push_str("  \"cells\": {\n");
+    for (i, l) in LAYOUTS.iter().enumerate() {
+        let _ = write!(
+            o,
+            "    \"{}\": {{\n      \"kind\": {},\n      \"minSize\": {},\n      \"fields\": ",
+            l.name, l.kind, l.min_size
+        );
+        export_fields(&mut o, l.fields, "      ");
+        o.push_str(",\n      \"tail\": ");
+        match &l.tail {
+            None => o.push_str("null"),
+            Some(t) => {
+                let _ = write!(
+                    o,
+                    "{{\n        \"name\": \"{}\",\n        \"offset\": {},\n        \"elem\": \
+                     \"{}\",\n        \"elemSize\": {},\n        \"fields\": ",
+                    t.name, t.offset, t.elem.name, t.elem.size
+                );
+                export_fields(&mut o, t.elem.fields, "        ");
+                o.push_str("\n      }");
+            }
+        }
+        let sep = if i + 1 < LAYOUTS.len() { "," } else { "" };
+        let _ = writeln!(o, "\n    }}{sep}");
+    }
+    o.push_str("  }\n}\n");
+    o
+}
+
+#[cfg(test)]
+mod export_tests {
+    extern crate std;
+    use super::*;
+    use crate::value::{TAG_PREFIX, tag};
+    use std::string::String;
+
+    const GENERATED: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../js/src/layout.generated.ts"
+    );
+
+    fn generated_text() -> String {
+        let mut s = String::from(
+            "// Generated from djs-core's heap layout (`heap::layout::layout_json`). Do not edit.\n\
+             // Regenerate: DJS_UPDATE_LAYOUT=1 cargo test -p djs-core layout_generated\n\n\
+             export const LAYOUT = ",
+        );
+        s.push_str(layout_json().trim_end());
+        s.push_str(" as const;\n");
+        s
+    }
+
+    /// `js/src/layout.generated.ts` must match the current layout. With
+    /// `DJS_UPDATE_LAYOUT=1` the test rewrites it instead.
+    #[test]
+    fn layout_generated_ts_is_current() {
+        let want = generated_text();
+        if std::env::var_os("DJS_UPDATE_LAYOUT").is_some() {
+            std::fs::write(GENERATED, &want).unwrap();
+            return;
+        }
+        let have = std::fs::read_to_string(GENERATED).unwrap_or_default();
+        assert!(
+            have == want,
+            "js/src/layout.generated.ts is out of date: run \
+             DJS_UPDATE_LAYOUT=1 cargo test -p djs-core layout_generated"
+        );
+    }
+
+    #[test]
+    fn every_valid_tag_is_exported() {
+        for t in 0..64u16 {
+            // A tag is valid if some payload (0 for constants, 1 for true, an offset for
+            // references) is accepted.
+            let valid = [0u64, 1, 8].iter().any(|&p| {
+                crate::value::Value::from_bits(TAG_PREFIX | (t as u64) << 32 | p).is_some()
+            });
+            let listed = EXPORTED_TAGS.iter().any(|&(_, x)| x == t);
+            assert_eq!(valid, listed, "tag {t}");
+        }
+        assert!(
+            EXPORTED_TAGS
+                .iter()
+                .any(|&(n, t)| n == "STRING" && t == tag::STRING)
+        );
+    }
+
+    #[test]
+    fn export_is_json_with_every_cell() {
+        let j = layout_json();
+        for l in super::super::cells::LAYOUTS {
+            assert!(j.contains(&std::format!(
+                "\"{}\": {{\n      \"kind\": {}",
+                l.name,
+                l.kind
+            )));
+        }
+        // Balanced braces, no trailing commas before a closing brace.
+        assert_eq!(j.matches('{').count(), j.matches('}').count());
+        assert!(!j.contains(",\n}") && !j.contains(", }"));
+    }
+}
