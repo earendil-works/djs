@@ -1,0 +1,55 @@
+date	commit	machine	benchmark	value	unit
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	lex/synthetic	688.3	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	lex/typescript.js	682.5	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	num/to_string(int)	5.917	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	num/to_string(short decimal)	28.44	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	num/to_string(random bits)	30.42	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	num/to_fixed(short decimal, 2)	31.17	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	num/to_precision(random bits, 6)	135.6	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	num/to_string_radix(random bits, 16)	107.1	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	num/string_to_number(int)	5.104	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	num/string_to_number(short decimal)	6.125	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	num/string_to_number(shortest of random)	21.29	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	num/string_to_number(31 digits)	84.96	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	num/string_to_number(u16, shortest)	23.12	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/compile /\d+/	188.8	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/compile /[\w.+-]+@[\w-]+\.[\w.]+/	689.3	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/compile /https?://([^/\s]+)(/[^\s?#]*)?/	1092	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/compile /(?<y>\d{4})-(?<m>\d{2})-(?<d>\d{2})/	694.4	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/compile /\bfox\b/i	298.0	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/compile /^\s+|\s+$/g	776.6	ns/op
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/scan /[\w.+-]+@[\w-]+\.[\w.]+/g utf16	34.98	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/scan /[\w.+-]+@[\w-]+\.[\w.]+/g latin1	34.17	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/scan /\d+/g utf16	253.3	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/scan /\d+/g latin1	241.0	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/scan /(?<y>\d{4})-(?<m>\d{2})-(?<d>\d{2})/g utf16	381.6	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/scan /(?<y>\d{4})-(?<m>\d{2})-(?<d>\d{2})/g latin1	355.8	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/scan /\bfox\b/gi utf16	459.3	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/scan /\bfox\b/gi latin1	406.4	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/scan /lazy dog/g utf16	482.1	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/scan /lazy dog/g latin1	431.6	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/scan /zebra/g utf16	1013	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/scan /zebra/g latin1	836.8	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/scan /\s+/g utf16	65.44	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	regexp/scan /\s+/g latin1	65.66	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	json/parse records	499.9	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	json/parse_utf8 records	489.0	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	json/stringify records	910.7	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	json/parse string	1293	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	json/parse_utf8 string	1140	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	json/stringify string	2162	MB/s
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	gc/records per MiB live	0.204	ms/MiB
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	gc/linked list per MiB live	0.286	ms/MiB
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	engine/qjs/empty	1.923	ms
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	engine/qjs/arrays	91.97	ms
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	engine/qjs/calls	31.23	ms
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	engine/qjs/float	71.40	ms
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	engine/qjs/higher-order	89.51	ms
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	engine/qjs/json	21.89	ms
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	engine/qjs/loop	65.14	ms
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	engine/qjs/props	83.22	ms
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	engine/qjs/regexp	24.18	ms
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	engine/qjs/strings	49.98	ms
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	size/wasm file	222858	bytes
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	size/wasm without custom sections	180610	bytes
+2026-11-01T01:34:33Z	515ad6774f	Mac17,7-aarch64-18cpu	size/wasm gzip -9	85190	bytes
