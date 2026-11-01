@@ -37,6 +37,12 @@ pub struct Diff {
     pub same_words: u64,
     /// The image's cells line up with the reference's (offset, kind, size) up to here.
     pub aligned_prefix: u32,
+    /// The reference's cell where they stop lining up.
+    pub first_misaligned: Option<u32>,
+    /// Of an unchanged cell that moved: its 8-byte words whose raw bytes differ from the
+    /// reference's, i.e. references whose targets moved. What a moved cell costs a
+    /// compressor that matches against the reference.
+    pub moved_words: Vec<u32>,
 }
 
 fn slots(g: &Graph, cell: u32) -> Vec<Slot> {
@@ -144,6 +150,7 @@ pub fn diff(rg: &Graph, hg: &Graph) -> Diff {
         }
     }
     let mut status = vec![Status::New; n];
+    let mut moved_words = vec![0u32; n];
     let mut changed_words = vec![0u32; n];
     for h in 0..n {
         let hc = hg.cells[h];
@@ -155,6 +162,9 @@ pub fn diff(rg: &Graph, hg: &Graph) -> Diff {
         let rc = rg.cell(r);
         let words = differing_words(rg, rc.offset, rc.size, hg, hc.offset, hc.size, &img_to_ref);
         changed_words[h] = words;
+        if words == 0 && rc.size == hc.size {
+            moved_words[h] = raw_differing_words(rg, rc.offset, hg, hc.offset, hc.size);
+        }
         status[h] = if words > 0 {
             Status::Changed
         } else if rc.offset == hc.offset && same_bytes(rg, hg, hc.offset, hc.size) {
@@ -175,8 +185,10 @@ pub fn diff(rg: &Graph, hg: &Graph) -> Diff {
         .filter(|(x, y)| x == y)
         .count() as u64;
     let mut aligned_prefix = 0;
-    for (rc, hc) in rg.cells.iter().zip(hg.cells.iter()) {
+    let mut first_misaligned = None;
+    for (i, (rc, hc)) in rg.cells.iter().zip(hg.cells.iter()).enumerate() {
         if rc.offset != hc.offset || rc.kind != hc.kind || rc.size != hc.size {
+            first_misaligned = Some(i as u32);
             break;
         }
         aligned_prefix = hc.offset + hc.size;
@@ -187,7 +199,28 @@ pub fn diff(rg: &Graph, hg: &Graph) -> Diff {
         removed,
         same_words,
         aligned_prefix,
+        first_misaligned,
+        moved_words,
     }
+}
+
+/// 8-byte words of two equally sized cells whose raw bytes differ (the GC byte aside).
+fn raw_differing_words(rg: &Graph, r: u32, hg: &Graph, h: u32, size: u32) -> u32 {
+    let (rb, hb) = (
+        rg.heap.arena().slice(r, size),
+        hg.heap.arena().slice(h, size),
+    );
+    let mut n = 0;
+    for w in 0..(size / 8) as usize {
+        let (x, y) = (&rb[w * 8..w * 8 + 8], &hb[w * 8..w * 8 + 8]);
+        let differs = if w == 0 {
+            x[0] != y[0] || x[2..] != y[2..]
+        } else {
+            x != y
+        };
+        n += differs as u32;
+    }
+    n
 }
 
 fn same_bytes(rg: &Graph, hg: &Graph, off: u32, size: u32) -> bool {

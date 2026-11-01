@@ -257,7 +257,11 @@ fn a_pi_session_waiting_on_a_tool() {
         "{:?}",
         d.at(&["new_subtrees"])
     );
-    assert!(d.at(&["gone", "bytes"]).num() < 1024.0, "{:?}", d.at(&["gone"]));
+    assert!(
+        d.at(&["gone", "bytes"]).num() < 1024.0,
+        "{:?}",
+        d.at(&["gone"])
+    );
     // The same through a container against the prelude image, given as the reference.
     let c = container::write(
         container::APP_PI_SESSION,

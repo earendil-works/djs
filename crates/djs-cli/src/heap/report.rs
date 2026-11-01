@@ -400,6 +400,15 @@ pub fn diff_section(name: &str, rg: &Graph, g: &Graph, d: &Diff, o: &Options) ->
         kb(d.aligned_prefix as usize),
         pct(d.aligned_prefix as u64, len),
     ));
+    let first = d.first_misaligned.map(|r| {
+        let (size, kind, path) = (rg.cell(r).size, rg.kind_name(r), rg.path(r));
+        t.push_str(&format!(
+            "  the first cell out of line is the reference's {kind} of {} KB at {path}: what follows sits elsewhere\n",
+            kb(size as usize)
+        ));
+        J::obj(vec![("kind", kind.into()), ("size", size.into()), ("path", path.into())])
+    });
+    let moved_refs: u64 = d.moved_words.iter().map(|&w| w as u64 * 8).sum();
     let rows = vec![
         vec![
             "unchanged, in place".into(),
@@ -411,7 +420,7 @@ pub fn diff_section(name: &str, rg: &Graph, g: &Graph, d: &Diff, o: &Options) ->
             "unchanged, moved".into(),
             mv.0.to_string(),
             kbu(mv.1),
-            String::new(),
+            kbu(moved_refs),
         ],
         vec!["changed".into(), ch.0.to_string(), kbu(ch.1), kbu(ch.2 * 8)],
         vec!["new".into(), nw.0.to_string(), kbu(nw.1), kbu(nw.2 * 8)],
@@ -423,6 +432,7 @@ pub fn diff_section(name: &str, rg: &Graph, g: &Graph, d: &Diff, o: &Options) ->
         ],
     ];
     t.push_str(&table(&["cells", "count", "KB", "differing KB"], &rows));
+    t.push_str("  (the differing KB of moved cells are references to cells that moved)\n");
     t.push_str("\n  new and changed, by kind:\n");
     let krows: Vec<Vec<String>> = by_kind
         .sorted()
@@ -484,6 +494,8 @@ pub fn diff_section(name: &str, rg: &Graph, g: &Graph, d: &Diff, o: &Options) ->
         ("same_words", d.same_words.into()),
         ("words", (len / 8).into()),
         ("aligned_prefix", d.aligned_prefix.into()),
+        ("first_misaligned", first.unwrap_or(J::Null)),
+        ("moved_reference_bytes", moved_refs.into()),
         ("in_place", status_json(ip)),
         ("moved", status_json(mv)),
         ("changed", status_json(ch)),

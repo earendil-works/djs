@@ -118,6 +118,10 @@ thread_local! {
     static CORPUS: (Vec<(String, String)>, Vec<String>, Vec<String>) = load_corpus();
 }
 
+fn gcd(a: usize, b: usize) -> usize {
+    if b == 0 { a } else { gcd(b, a % b) }
+}
+
 struct Tools {
     failed_page2: bool,
 }
@@ -175,7 +179,10 @@ impl Tools {
                 let items: Vec<String> = CORPUS.with(|c| {
                     (0..limit)
                         .map(|i| {
-                            let f = &c.0[(i * 7 + 3) % c.0.len()].0;
+                            // A step coprime with the file count, so the hits are distinct files (0133).
+                            let n = c.0.len();
+                            let stride = (7..).find(|&s| gcd(s, n) == 1).unwrap();
+                            let f = &c.0[(i * stride + 3) % n].0;
                             format!(
                                 r#"{{"path":{},"score":{:.4}}}"#,
                                 js(f),

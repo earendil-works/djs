@@ -34,6 +34,14 @@ function walk(dir: string): string[] {
     });
 }
 const files = walk(join(root, "crates/djs-core/src")).map((p) => ({ path: relative(root, p), text: readFileSync(p, "utf8") }));
+/**
+ * The search tool's step through `files`: coprime with their count, so the hits are
+ * distinct files. A fixed 7 repeated every file three times in tool-heavy's 60 hits
+ * whenever djs-core had 147 source files (0133 found it with `djs heap`'s duplicates).
+ */
+const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+let STRIDE = 7;
+while (gcd(STRIDE, files.length) !== 1) STRIDE++;
 const prose = ["docs/decisions.md", "ARCH.md", "TESTING.md", "docs/host.md"].flatMap((f) =>
   readFileSync(join(root, f), "utf8")
     .split("\n")
@@ -70,7 +78,7 @@ function tool(name: string, a: Record<string, unknown>): { ok: boolean; value: u
   const r = new Rng((0x9e3779b9 ^ (JSON.stringify(a ?? null).length * 0x1000001)) >>> 0 || 1);
   switch (name) {
     case "search":
-      return { ok: true, value: Array.from({ length: Number(a.limit ?? 10) }, (_, i) => ({ path: files[(i * 7 + 3) % files.length].path, score: 1 / (i + 1) })) };
+      return { ok: true, value: Array.from({ length: Number(a.limit ?? 10) }, (_, i) => ({ path: files[(i * STRIDE + 3) % files.length].path, score: 1 / (i + 1) })) };
     case "read": {
       const f = files.find((f) => f.path === a.path);
       return { ok: true, value: { path: a.path, text: (f?.text ?? "").split("\n").slice(0, 150).join("\n") } };
