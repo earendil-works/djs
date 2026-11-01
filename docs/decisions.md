@@ -1762,3 +1762,11 @@ emits the state ops with `Loc` 0 and resolution rewrites them to the local's slo
 the name ops. Async arrows have their own state; `await` in a nested arrow body is an
 identifier (qjs, ECMA-262 ExpressionBody[~Await]) and in nested arrow parameters a
 SyntaxError.
+
+## D011: Promote generators and async iteration to active
+date: 2026-11-01 · by: coordinator · issue: 0041
+With 0037/0041/0042 landed, `built-ins/{GeneratorFunction, GeneratorPrototype,
+AsyncGeneratorFunction, AsyncGeneratorPrototype, AsyncIteratorPrototype,
+AsyncFromSyncIteratorPrototype}` and the features `generators`, `async-iteration`,
+`Symbol.asyncIterator` move from later to active. Active went from 18,833 / 24,120 to
+22,605 / 32,333 (+8,213 tests, +3,772 passing).

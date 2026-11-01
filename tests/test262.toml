@@ -105,12 +105,6 @@ paths = [
   "language/literals/regexp",                 # regex
   "built-ins/WeakRef",                        # GC-observable
   "built-ins/FinalizationRegistry",           # GC-observable
-  "built-ins/GeneratorFunction",              # generators
-  "built-ins/GeneratorPrototype",             # generators
-  "built-ins/AsyncGeneratorFunction",         # async generators
-  "built-ins/AsyncGeneratorPrototype",        # async generators
-  "built-ins/AsyncIteratorPrototype",         # async iteration
-  "built-ins/AsyncFromSyncIteratorPrototype", # async iteration
   "built-ins/Iterator",                       # iterator helpers
   "built-ins/DisposableStack",                # explicit resource management
   "built-ins/AsyncDisposableStack",           # explicit resource management
@@ -121,9 +115,6 @@ features = [
   "Proxy",                      # Proxy
   "proxy-missing-checks",       # Proxy
   "immutable-arraybuffer",      # binary data
-  "generators",                 # generators
-  "async-iteration",            # async generators, for await
-  "Symbol.asyncIterator",       # async iteration
   "Array.fromAsync",            # async iteration
   "iterator-helpers",           # iterator helpers
   "iterator-*",                 # iterator proposals (sequencing, chunking, includes)

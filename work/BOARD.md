@@ -9,8 +9,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0033 | JSON + RegExp builtins, regex literals | num | .worktrees/0033-json-regexp-builtins |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0045 | Proxy | infra | .worktrees/0045-proxy |
-| 0041 | Async functions, await, generators (compiler) | lexer | .worktrees/0041-async-generators-compiler |
-| 0040 | P1-7 Classes (paused for 0041) | lexer (parked) | .worktrees/0040-p1-classes |
+| 0040 | P1-7 Classes | lexer | .worktrees/0040-p1-classes |
 | 0043 | wasm size audit and reduction | heap | .worktrees/0043-wasm-size |
 
 ## Open (ready)
@@ -22,7 +21,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0044 | djs runs the shared difftest prelude (retire D1160) | 0041 (+0040 if needed) |
+| 0044 | djs runs the shared difftest prelude (retire D1160) | (infra, after 0045) |
 
 ## Done
 
@@ -35,6 +34,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0028 | P1-2 runtime | 468f874 (agent heap; prelude at Vm::new: 92 us native / 146 us wasm; Error stack) |
 | 0029 | P1-5 Loops and iteration (compiler + iter builtins) | 8cc5aa2 (agent lexer; +1,774 test262) |
 | 0030 | P1-5 runtime + 0028 leftovers + GC audit | 9f35b6f (agent heap; 4 parts) |
+| 0041 | Async/await, generators (compiler) | f93fa30 (agent lexer; codemode body is a real async function) |
 | 0042 | Async generator runtime, function kinds, host rejections | 6e3c965 (agent heap) |
 | 0037 | P2 Promises, jobs, async host calls, suspendable frames | bd6f974 (agent heap; 3 parts) |
 | 0036 | P1-6 Destructuring + tagged templates | 234fd3c (agent lexer; +~1,940 test262) |
@@ -95,6 +95,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 2026-11-01 (0038 p2: Map/Set/Weak*) | | 13,049 / 22,142 (58.9%) |
 | 2026-11-01 (0038 done + 0037 p1) | 96 / 182 | 14,367 / 22,142 (64.8%) |
 | 2026-11-01 (0039 done; binary data promoted, +1,978 tests) | | 18,484 / 24,120 (76.6%) |
+| 2026-11-01 (0041 done) | 62 expected failures | 18,833 / 24,120 (78.1%) |
+| 2026-11-01 (D011: generators + async iteration promoted, +8,213 tests) | | 22,605 / 32,333 (69.9%) |
 
 ## Parallelism notes
 
