@@ -10,7 +10,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0114 | Guide design aligned with Elanor (research first) | design | .worktrees/design |
 | 0115 | The guide must be self-contained (owner rule; enforced by check) | docs | .worktrees/docs |
 | 0101 | Mark-compact collection (design first) | heap | .worktrees/heap |
-| 0110 | pi-like's library hot spots + dense element access in natives | perf | .worktrees/perf |
+| 0116 | JSON output in place, flat_fast inline, next hot spots | perf | .worktrees/perf |
 
 ## Open (ready)
 
@@ -60,6 +60,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0077 | deser deps investigation | report (agent deps, archived): no new deps; quick wins -> 0078 |
 | 0089 | pi snapshot collect fix | 68343b1 (agent snapshot, archived; snapshots 936 -> 498 KB; DETERMINISTIC_VERSION 2) |
 | 0088 | Snapshot design research | 6c0e381 (agent snapshot; recommends A now, B long-term, defer C; owner decision pending) |
+| 0110 | pi-like library hot spots | 51a775b8 (agent perf; pi-like -14.3% wasm instr; D2090) |
 | 0107 | Direct native-to-closure calls | 86e9ef07 (agent perf; higher-order -13%, forEach -12.8% wasm; D2060) |
 | 0100 | Native codegen: typed locals in Rust | 740803ce (agent perf; forEach -34%/elem wasm, higher-order -10%) |
 | 0093 | run_hot: tier-0 loop + compact calls | 22495ce3 (agent perf; plain bytecode 0.44-0.63x quickjs-wasi; calls ~1x) |
