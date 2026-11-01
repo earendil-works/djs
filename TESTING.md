@@ -60,10 +60,13 @@ Initial skip set (from ARCH non-goals):
   whose source has an `eval(` call. djs treats `eval(x)` as indirect eval (0059). Indirect
   eval (`(0, eval)(`) and the Function constructors are active.
 
-The initial `later` set covers everything in phases P3 to P5 (BigInt, Proxy, Reflect, typed
+The initial `later` set covered everything in phases P3 to P5 (BigInt, Proxy, Reflect, typed
 arrays, ArrayBuffer/DataView, generators, regexp features, WeakRef/FinalizationRegistry,
-decorators, explicit-resource-management, Symbol-heavy features, …). Moving a feature from
-`later` to `active` is a coordinator decision, made when its phase starts.
+decorators, explicit-resource-management, Symbol-heavy features, …). Those phases are done
+and their features are active. At 0095 the groups are: 37,930 active, 179 later (proposals
+such as immutable ArrayBuffers, and the error-stack accessor tests), 525 direct-eval and
+14,963 skipped, of 53,597 tests (`djs-test262 list`). Moving tests from `later` to
+`active` is a coordinator decision; `tests/test262.toml` says why each rule exists.
 
 ### Execution model
 
@@ -85,7 +88,9 @@ decorators, explicit-resource-management, Symbol-heavy features, …). Moving a 
 - Async tests pass when `Test262:AsyncTestComplete` is printed and fail on
   `Test262:AsyncTestFailure`.
 - Every test runs with a fuel limit and a memory limit. Hitting either one is a failure
-  (`timeout` / `oom`), never a hang.
+  (`timeout` / `oom`), never a hang. For djs the fuel budget decides (`--fuel`), so a
+  loaded machine cannot turn a pass into a timeout; the wall-clock `--timeout` is only a
+  hang guard (D1790).
 
 ### Runner
 
@@ -140,24 +145,26 @@ $T run --expected tests/test262/oracle-failures.txt
 $T run --expected tests/test262/oracle-failures.txt --update
 ```
 
-The summary is printed as Markdown tables. `--timeout SECS` (default 20) and
-`--memory-limit N` (default 512M) bound each test; `--slowest N` lists the slowest
-tests. `--qjs PATH` / `$DJS_QJS` select the qjs binary and `--test262 DIR` /
-`$DJS_TEST262` the checkout. With qjs, the full active + later run (about 37,600
-tests) takes about 10 s on an 18-core machine.
+The summary is printed as Markdown tables. `--fuel N` (djs), `--timeout SECS` (20 for qjs;
+for djs a hang guard of 120, D1790) and `--memory-limit N` (default 512M) bound each test;
+`--slowest N` lists the slowest tests. `--qjs PATH` / `$DJS_QJS` select the qjs binary
+and `--test262 DIR` / `$DJS_TEST262` the checkout. qjs results are cached (D1531), so a
+repeated qjs run of active + later (about 38,100 tests) takes seconds; djs runs the active
+group in about a minute of CPU (release, `-j` workers).
+
+Status at 0095: djs passes 37,890 of the 37,930 active tests (99.8%); the 40 failures are
+listed with reasons in `tests/test262/expected-failures.txt`. qjs fails 4 active tests
+under our runner (`tests/test262/oracle-failures.txt`).
 
 `cargo test -p djs-test262` includes a fixture suite run with qjs that checks failures
 are detected (skipped if qjs is missing). `cargo test -p djs-test262 --test
 frontmatter_all -- --ignored` parses the frontmatter of every test in the checkout.
 
-### Milestones
+### Milestones (reached)
 
-1. **The harness loads.** `assert.js`, `sta.js`, `compareArray.js` and
-   `propertyHelper.js` run. `test/harness/*` is the first directory to go green.
-2. `language/` (expressions, statements, the generated `dstr` destructuring cases), and
-   the negative syntax tests (early errors).
-3. `built-ins/` in the order codemode needs them: Object, Function, Array, String, JSON,
-   Promise, Math, Number, Boolean, Error, Map/Set, Symbol, iterators.
+The original order was: the harness, then `language/` and the negative syntax tests,
+then `built-ins/` in the order codemode needs them. All three are done; what is left is
+the ratchet's list.
 
 ## Differential tests (dquickts oracle)
 
@@ -166,16 +173,21 @@ execution model (async function body, strict). The expected output is checked in
 the case (`case.expected`) and regenerated from qjs with a script. We compare the
 output, the uncaught error (type + message) and the return value.
 
-Sources, in order of importance:
+Sources (about 230 cases at 0095, in `builtins/`, `codemode/`, `console/`, `dquickts/`,
+`errors/`, `language/`, `result/` and `ts/`):
 
-1. Harvested pi codemode scripts with recorded tool results, replayed through a fake
-   `tools` object.
+1. Codemode-style scripts with fake tools (`codemode/`, `result/`, `console/`). The plan
+   was to harvest real pi session scripts; that was not done. pi's own codemode tests run
+   on djs instead (docs/host.md "pi's own tests on djs").
 2. dquickts' `tests/test_language.js`, `test_builtin.js`, `test_closure.js`,
-   `test_loop.js` and `test_typescript.ts`, split into one case per test function.
-3. Hand-written cases for formatting and error messages.
+   `test_loop.js` and `test_typescript.ts`, split into one case per test function
+   (D1102).
+3. Hand-written cases for builtins, formatting, error messages and the engine's fast
+   paths (each fast path's corpus case covers the cases where it must decline).
 
-Error message texts: we match QuickJS messages verbatim where that is cheap, and
-otherwise normalize them in the comparison (see `docs/decisions.md`).
+Error message texts: djs matches QuickJS's messages verbatim. A deliberate difference is
+declared per case with `djs-expect` (below, D1540). Status at 0095: 220 pass, 2 known
+failures (`tests/corpus/expected-failures.txt`), 5 skipped as djs non-goals.
 
 ### The codemode model (D1100)
 
@@ -227,6 +239,7 @@ scripts/difftest-import-dquickts.py  # re-split the dquickts tests (then --updat
 
 $D --engine djs --clusters           # djs in-process; failures grouped by error
 $D --engine djs --ratchet --suspend-every 97 --gc-stress --determinism   # what the gate runs
+                                     # (--suspend-every 97 also runs 1009)
 $D --engine djs --backend bytecode --ratchet               # the gate, too (0063)
 $D --engine djs --update-ratchet     # after fixing cases: rewrite expected-failures.txt
 ```
@@ -269,7 +282,10 @@ behave the same in every mode; only the fuel spent differs (D1633).
 - The test262 active group with the bytecode backend is a periodic check, not in the
   gate: `djs-test262 run --engine djs --backend bytecode --group active --expected
   tests/test262/expected-failures.txt` (run it when changing a `@native` builtin, bgen's
-  Rust backend or `interp/run/native.rs`). At 0063 both backends pass 37,504/37,722.
+  Rust backend or `interp/run/native.rs`). At 0063 both backends passed 37,504/37,722;
+  at 0091 the bytecode backend passes the active group with the same ratchet (40).
+- `@fast` entries (D1850, D1910) run only with the native backend, so the gate's bytecode
+  run keeps testing the TS paths they bypass.
 - Unit tests: `interp::run::native::tests` (both backends in plain, suspension and GC
   stress modes, a backend switch between runs, fuel; `backends_agree` samples the modes
   in about a second, the exhaustive `backends_agree_in_every_mode` is `#[ignore]`d:
@@ -311,8 +327,8 @@ At 0048: 4053/4802 compared files match, 0 differ, 749 are djs syntax errors.
 
 ## Known differences (0082)
 
-What is left in the ratchets (`tests/test262/expected-failures.txt`, 43 active tests;
-`tests/corpus/expected-failures.txt`, 2 cases) and why. Everything else in the active
+What is left in the ratchets (`tests/test262/expected-failures.txt`, 40 active tests at
+0095; `tests/corpus/expected-failures.txt`, 2 cases) and why. Everything else in the active
 group passes. Update this list when an entry goes away or a new one is accepted.
 
 **By design** (no fix planned; 40 test262 tests):
@@ -336,10 +352,8 @@ group passes. Update this list when an entry goes away or a new one is accepted.
   before the right side runs. djs resolves it at the store, as qjs does (also in
   tests/test262/oracle-failures.txt).
 
-**Open, owned by infra** (3 test262 tests): typed arrays on resizable buffers that
-shrink during the operation: Array/prototype/fill/typed-array-resize,
-Object/freeze/typedarray-backed-by-resizable-buffer and
-TypedArray/prototype/subarray/resizable-buffer.
+Fixed in 0090: the 3 typed-array tests on resizable buffers (Array.prototype.fill with an
+object value, Object.freeze of a non-fixed-length view, subarray of an out-of-bounds view).
 
 **Later** (2 difftest cases): the immutable ArrayBuffer proposal
 (`transferToImmutable`, `sliceToImmutable`) in dquickts/builtin/test_immutable_array_buffer.js
@@ -351,6 +365,13 @@ an array's `length` converts non-Number values (4), and `atob`/`btoa` and
 
 ## The gate
 
-`scripts/gate.sh` must pass before anything merges into `main`: fmt, clippy, unit tests,
-the no_std wasm build of djs-core, and, once they exist, the test262 ratchet and the
-differential corpus. Issues that add a test suite also add it to the gate.
+`scripts/gate.sh` must pass before anything merges into `main` (`scripts/merge-to-main.sh`
+runs it in the shared gate worktree after rebasing, D1792). Its steps: fmt; clippy
+(workspace, and wasm32 release for djs-core and djs-wasm); the workspace's unit and
+integration tests; the no_std wasm32 build of djs-core; `scripts/bgen.sh --check`; the
+djs-wasm build and the JS host package's tests (`node --test js/test/*.test.ts`); native
+versus wasm heap images (`scripts/determinism/native-vs-wasm.sh`); the wire and reader
+cross-language checks; difftest on djs with the ratchet, suspension, GC stress and
+heap-image determinism; difftest with the bytecode backend; and the test262 active group
+against its ratchet. It prints the slowest unit and test262 tests. Issues that add a test
+suite also add it to the gate; agents do not run the gate's steps by hand (AGENTS.md).
