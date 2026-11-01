@@ -1,7 +1,7 @@
 # 0114: Align the guide's design with Elanor (Earendil's design system), using its published packages
 
-status: open
-agent: -
+status: in-progress
+agent: design
 branch: issue/0114-docs-elanor
 depends-on: 0103
 guide: all pages (visual only; no content changes)
