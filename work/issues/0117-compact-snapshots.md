@@ -1,7 +1,7 @@
 # 0117: Compact snapshot images (snapshot direction A, D019)
 
-status: open
-agent: -
+status: in-progress
+agent: snapshot
 branch: issue/0117-compact-snapshots
 depends-on: 0088, 0089
 guide: docs/guide/snapshots.md, docs/guide/host.md
