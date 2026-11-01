@@ -1,7 +1,7 @@
 # 0015: P0 interpreter and embedding API
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0015-p0-interpreter
 depends-on: 0013
 touches: crates/djs-core/src/{interp,vm}/, crates/djs-core/src/value.rs + heap/gc + heap/walk (only for the D007 tag), crates/djs-cli/
