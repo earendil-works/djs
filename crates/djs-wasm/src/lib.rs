@@ -26,11 +26,10 @@
 extern crate alloc;
 
 use alloc::borrow::ToOwned;
-use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
-use core::cell::{OnceCell, RefCell};
+use core::cell::RefCell;
 
 mod allocator;
 
@@ -95,10 +94,12 @@ instance_locals! {
         out: Vec::new(),
     });
     /// The base snapshot, decoded from djs-prelude's coded image at the first use (D2252)
-    /// and kept for the instance's lifetime.
-    static BASE: OnceCell<&'static [u8]> = OnceCell::new();
+    /// or written by the host (`djs_base_inject`): the next `vm_new` takes it as its
+    /// arena, growing it in place to the arena's capacity (at memory's end, D2053), and a
+    /// later use decodes it again (D2060).
+    static BASE: RefCell<Option<Vec<u8>>> = RefCell::new(None);
     /// A copy of the base the host is writing (`djs_base_inject_ptr`), until checked.
-    static INJECTED: RefCell<Option<Box<[u8]>>> = RefCell::new(None);
+    static INJECTED: RefCell<Option<Vec<u8>>> = RefCell::new(None);
     /// The message of the last panic. Separate from `STATE`, which may be left borrowed by
     /// the call that trapped.
     static PANIC: RefCell<String> = RefCell::new(String::new());
@@ -153,9 +154,33 @@ mod wasm {
     }
 }
 
-/// The base snapshot (D1321), decoded once per instance (D2252).
-fn base() -> &'static [u8] {
-    BASE.with(|b| *b.get_or_init(|| Box::leak(djs_prelude::unpack_base().into_boxed_slice())))
+/// A buffer with the capacity a VM's arena starts with (`Heap::restore_capacity` at the
+/// default cap), for the base to be decoded into when a VM needs it at once.
+fn base_buffer() -> Vec<u8> {
+    let cap = djs_core::heap::Heap::restore_capacity(
+        djs_prelude::base_len(),
+        djs_core::heap::DEFAULT_LIMIT,
+    );
+    Vec::with_capacity(cap)
+}
+
+/// The base snapshot (D1321), decoded now unless the instance holds it (D2252), and its
+/// address (valid until the next `vm_new` or `djs_base_inject_ptr`).
+fn base_ptr() -> usize {
+    // Exactly the base's size: an instance that only reads it (to restore a snapshot
+    // against it) does not hold the arena's room.
+    BASE.with(|b| {
+        b.borrow_mut()
+            .get_or_insert_with(djs_prelude::unpack_base)
+            .as_ptr() as usize
+    })
+}
+
+/// The base snapshot as a buffer for a new VM's arena: the instance's (decoded or
+/// injected), which it gives up, or a fresh decode (D2060).
+fn take_base() -> Vec<u8> {
+    BASE.with(|b| b.borrow_mut().take())
+        .unwrap_or_else(|| djs_prelude::unpack_base_into(base_buffer()))
 }
 
 /// Natively, a panic hook records the message (and the default hook still prints). On
@@ -371,12 +396,14 @@ pub extern "C" fn djs_build_hash() -> u32 {
     djs_core::vm::BUILD_HASH
 }
 
-/// The address of the base snapshot (D1321, decoded at the first use, D2252) in this module's memory,
-/// read-only and valid for the instance's lifetime. Hosts compress snapshots against it
-/// (D2260): it is the image every `vm_new` starts from, and the build hash fixes its bytes.
+/// The address of the base snapshot (D1321, decoded at the first use, D2252) in this
+/// module's memory, read-only. Hosts compress snapshots against it (D2260): it is the
+/// image every `vm_new` starts from, and the build hash fixes its bytes. Valid until the
+/// next `vm_new`, which takes the bytes as its arena (D2060): a host that keeps the base
+/// reads it first (a later call decodes it again).
 #[unsafe(no_mangle)]
 pub extern "C" fn djs_base_ptr() -> usize {
-    base().as_ptr() as usize
+    base_ptr()
 }
 
 /// Room for the base snapshot a host decoded before (in another instance of this
@@ -385,10 +412,11 @@ pub extern "C" fn djs_base_ptr() -> usize {
 /// the base's length.
 #[unsafe(no_mangle)]
 pub extern "C" fn djs_base_inject_ptr(len: usize) -> usize {
-    if BASE.with(|b| b.get().is_some()) || len != djs_prelude::base_len() {
+    if BASE.with(|b| b.borrow().is_some()) || len != djs_prelude::base_len() {
         return 0;
     }
-    let mut buf = vec![0u8; len].into_boxed_slice();
+    // The next `vm_new` takes it as its arena (D2060).
+    let mut buf = vec![0u8; len];
     let p = buf.as_mut_ptr() as usize;
     INJECTED.with(|i| *i.borrow_mut() = Some(buf));
     p
@@ -405,13 +433,20 @@ pub extern "C" fn djs_base_inject() -> u32 {
     if !djs_prelude::is_base(&buf) {
         return 0;
     }
-    BASE.with(|b| b.set(Box::leak(buf)).is_ok() as u32)
+    BASE.with(|b| {
+        let mut b = b.borrow_mut();
+        if b.is_some() {
+            return 0;
+        }
+        *b = Some(buf);
+        1
+    })
 }
 
 /// The length of the base snapshot in bytes (see `djs_base_ptr`).
 #[unsafe(no_mangle)]
 pub extern "C" fn djs_base_len() -> usize {
-    base().len()
+    djs_prelude::base_len()
 }
 
 /// Like `djs_staging`, for a VM image about to be restored with `vm_from_bytes` with a heap
@@ -491,7 +526,11 @@ fn options(memory_limit: u32) -> VmOptions {
 /// the realm.
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_new(memory_limit: u32) -> u32 {
-    add_new_vm(djs_prelude::new_vm_from(base(), options(memory_limit)))
+    add_new_vm(djs_prelude::new_vm_owned(
+        take_base(),
+        options(memory_limit),
+        0,
+    ))
 }
 
 /// Like `vm_new`, with the arena capacity a heap of `live` bytes gets (its next GC
@@ -500,8 +539,8 @@ pub extern "C" fn vm_new(memory_limit: u32) -> u32 {
 /// arena and leave its old block behind as a hole in wasm memory.
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_new_reserved(memory_limit: u32, live: u32) -> u32 {
-    add_new_vm(djs_prelude::new_vm_from_reserved(
-        base(),
+    add_new_vm(djs_prelude::new_vm_owned(
+        take_base(),
         options(memory_limit),
         live as usize,
     ))

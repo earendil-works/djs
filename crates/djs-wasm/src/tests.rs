@@ -484,21 +484,29 @@ fn in_instance<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
     std::thread::spawn(f).join().unwrap()
 }
 
+/// The instance's base, decoded now (a copy).
+fn base_copy() -> Vec<u8> {
+    let p = djs_base_ptr();
+    unsafe { std::slice::from_raw_parts(p as *const u8, djs_base_len()) }.to_vec()
+}
+
 #[test]
 fn base_is_decoded_or_injected() {
-    let decoded: Vec<u8> = in_instance(|| base().to_vec());
+    let decoded: Vec<u8> = in_instance(base_copy);
     assert_eq!(decoded.len(), djs_prelude::base_len());
-    // A second instance takes the host's copy and never decodes.
+    // A second instance takes the host's copy and never decodes; the first VM takes it as
+    // its arena, without a copy (D2060).
     let copy = decoded.clone();
-    let (ok, same, vm) = in_instance(move || {
+    let (ok, p, arena, vm) = in_instance(move || {
         let p = djs_base_inject_ptr(copy.len());
         assert_ne!(p, 0);
         unsafe { std::ptr::copy_nonoverlapping(copy.as_ptr(), p as *mut u8, copy.len()) };
         let ok = djs_base_inject();
-        let same = BASE.with(|b| b.get().map(|b| b.as_ptr() as usize)) == Some(p);
-        (ok, same, vm_new(0))
+        let vm = vm_new(0);
+        (ok, p, vm_arena_ptr(vm), vm)
     });
-    assert_eq!((ok, same), (1, true));
+    assert_eq!(ok, 1);
+    assert_eq!(arena, p, "the injected bytes are the arena");
     assert_ne!(vm, 0);
     // A wrong length gets no room; a corrupted copy is refused and the instance decodes.
     let mut bad = decoded.clone();
@@ -511,8 +519,36 @@ fn base_is_decoded_or_injected() {
         unsafe { std::ptr::copy_nonoverlapping(bad.as_ptr(), p as *mut u8, bad.len()) };
         assert_eq!(djs_base_inject(), 0);
         assert_eq!(djs_base_inject(), 0, "nothing left to take");
-        assert_eq!(base(), &expect[..]);
+        assert_eq!(base_copy(), expect);
         // The base is set now: no more injection.
         assert_eq!(djs_base_inject_ptr(expect.len()), 0);
+    });
+}
+
+#[test]
+fn vms_take_the_decoded_base_as_their_arena() {
+    // D2060: the decoded base becomes the first VM's arena; a second VM, or the base read
+    // again, decodes it anew; both VMs work and start from the same bytes.
+    let expect = in_instance(base_copy);
+    in_instance(move || {
+        let p = djs_base_ptr();
+        let a = vm_new(0);
+        assert_eq!(vm_arena_ptr(a), p, "no copy");
+        let b = vm_new(0);
+        assert_ne!(b, 0);
+        assert_ne!(vm_arena_ptr(b), vm_arena_ptr(a));
+        for vm in [a, b] {
+            let bytes = unsafe {
+                std::slice::from_raw_parts(vm_arena_ptr(vm) as *const u8, vm_arena_len(vm))
+            };
+            assert_eq!(bytes, &expect[..]);
+        }
+        assert_eq!(base_copy(), expect, "decoded again");
+        // A VM made without reading the base first decodes it into its arena.
+        let c = vm_new_reserved(0, 1 << 20);
+        assert_ne!(c, 0);
+        for vm in [a, b, c] {
+            vm_free(vm);
+        }
     });
 }

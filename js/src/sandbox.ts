@@ -346,14 +346,16 @@ export class Sandbox {
     if (x.djs_abi_version() !== ABI_VERSION) {
       throw new SandboxError("misuse", `djs-wasm ABI ${x.djs_abi_version()}, expected ${ABI_VERSION}`);
     }
-    // The module's base, decoded once by its first instance, not by each (D2252).
-    provideBase(module, x);
     let vm: number;
     let restoredFns: string[] = [];
     if (snapshot === undefined) {
+      // The module's base, decoded once by its first instance, not by each (D2252), and
+      // kept for later instances before `vm_new` takes this instance's bytes as its arena
+      // (D2060).
+      provideBase(module, x);
+      rememberBase(module, x);
       vm = x.vm_new(opts.memoryLimit ?? 0);
       if (vm === 0) throw new SandboxError("memory", "memory limit too small for the realm");
-      rememberBase(module, x);
     } else {
       const { meta, image } = unpackSnapshot(snapshot, module, x, opts.snapshotCodec);
       restoredFns = meta.functions;

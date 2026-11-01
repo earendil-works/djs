@@ -247,6 +247,21 @@ impl Vm {
             ))
             .map_err(|_| LoadError::TooLarge)?;
         bytes.extend_from_slice(base);
+        Vm::from_base_vec(bytes, opts, live)
+    }
+
+    /// [`Vm::from_base_reserved`] on a buffer the caller owns, which becomes the arena:
+    /// no copy (D2060). A wasm instance decodes or receives the base straight into it.
+    pub fn from_base_vec(
+        mut bytes: Vec<u8>,
+        opts: VmOptions,
+        live: usize,
+    ) -> Result<Vm, LoadError> {
+        Vm::check_image(&bytes)?;
+        let cap = Heap::restore_capacity(bytes.len().max(live), opts.memory_limit);
+        bytes
+            .try_reserve_exact(cap.saturating_sub(bytes.len()))
+            .map_err(|_| LoadError::TooLarge)?;
         let heap = Heap::from_bytes_trusted(bytes, opts.memory_limit)?;
         let mut vm = Vm::over(heap, opts)?;
         if vm.state() != RunState::Idle || vm.heap.handle_count() != 0 {

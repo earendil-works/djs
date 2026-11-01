@@ -45,7 +45,10 @@ test("the coded base: decoded by the first instance, injected into later ones (D
   };
   const arena = (x: any, vm: number) => new Uint8Array(x.memory.buffer, x.vm_arena_ptr(vm), x.vm_arena_len(vm)).slice();
   const base = read(first);
+  const baseAt = first.djs_base_ptr();
   const vm1 = first.vm_new(0);
+  // The decoded bytes became the VM's arena, grown in place: no second copy (D2060).
+  assert.equal(first.vm_arena_ptr(vm1), baseAt, "the decoded base is the arena");
   // An instance given the bytes takes them and creates the same VM.
   const second = new WebAssembly.Instance(module, {}).exports as any;
   const at = second.djs_base_inject_ptr(base.length);
@@ -55,7 +58,13 @@ test("the coded base: decoded by the first instance, injected into later ones (D
   assert.equal(second.djs_base_ptr(), at, "the injected copy is the base");
   assert.equal(second.djs_base_inject_ptr(base.length), 0, "a base is set: no more room");
   const vm2 = second.vm_new(0);
+  assert.equal(second.vm_arena_ptr(vm2), at, "the injected base is the arena");
   assert.ok(Buffer.from(arena(first, vm1)).equals(Buffer.from(arena(second, vm2))));
+  // The base was given up: reading it again decodes a fresh copy, and a second VM in the
+  // same instance starts from the same bytes.
+  assert.ok(Buffer.from(read(second)).equals(Buffer.from(base)));
+  const vm2b = second.vm_new(0);
+  assert.ok(Buffer.from(arena(second, vm2b)).equals(Buffer.from(arena(second, vm2))));
   // A damaged copy (or the wrong length) is refused, and the instance decodes its own.
   const third = new WebAssembly.Instance(module, {}).exports as any;
   assert.equal(third.djs_base_inject_ptr(base.length + 8), 0);

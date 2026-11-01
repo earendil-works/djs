@@ -28,8 +28,15 @@ pub static BASE_PACKED: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/base.l
 /// The base image, decoded from [`BASE_PACKED`].
 #[cfg(feature = "packed")]
 pub fn unpack_base() -> alloc::vec::Vec<u8> {
+    unpack_base_into(alloc::vec::Vec::new())
+}
+
+/// [`unpack_base`] into `out` (cleared first), keeping its capacity: a buffer sized for
+/// the arena it will become (D2060).
+#[cfg(feature = "packed")]
+pub fn unpack_base_into(out: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8> {
     // Coded and decoded by this build's build.rs: a failure is a build bug.
-    djs_lzrc::decode(BASE_PACKED, usize::MAX)
+    djs_lzrc::decode_into(BASE_PACKED, usize::MAX, out)
         .unwrap_or_else(|e| panic!("the embedded base snapshot does not decode: {e:?}"))
 }
 
@@ -72,6 +79,20 @@ pub fn new_vm_from_reserved(base: &[u8], opts: VmOptions, live: usize) -> Result
         Ok(vm) => Ok(vm),
         Err(LoadError::TooLarge) => Err(HeapError::OutOfMemory),
         // Made by this build's build.rs and verified there: anything else is a build bug.
+        Err(e) => panic!("the embedded base snapshot does not load: {e}"),
+    }
+}
+
+/// A new VM whose arena is `base`, this build's base image in a buffer the caller owns
+/// (D2060): no copy. With the arena capacity of a heap of `live` bytes.
+pub fn new_vm_owned(
+    base: alloc::vec::Vec<u8>,
+    opts: VmOptions,
+    live: usize,
+) -> Result<Vm, HeapError> {
+    match Vm::from_base_vec(base, opts, live) {
+        Ok(vm) => Ok(vm),
+        Err(LoadError::TooLarge) => Err(HeapError::OutOfMemory),
         Err(e) => panic!("the embedded base snapshot does not load: {e}"),
     }
 }
