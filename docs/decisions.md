@@ -2681,3 +2681,11 @@ date: 2026-11-03 · by: bloat · issue: 0057
 returned through memory and each `?` (~800 in the compiler) copied it out and tested a
 tag in memory; boxed, `PResult<()>` is one i32. Code 743,536 -> 712,176 in wasm. An
 error costs one allocation, once per failed compile.
+
+## D1573: Arena out-of-bounds panics carry no offsets in release builds
+date: 2026-11-03 · by: bloat · issue: 0057
+The heap field accessors are inlined everywhere, and each failed check called
+`out_of_bounds(off, n, len)`: three arguments materialized at ~1,300 sites. Release
+builds now call an argument-less `out_of_bounds_release()` ("arena access out of
+bounds"); builds with debug_assertions keep the offsets in the message. The checks are
+unchanged (no unsafe). Code 712,176 -> 699,863 in wasm.

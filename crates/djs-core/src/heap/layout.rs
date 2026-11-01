@@ -200,10 +200,33 @@ fn write_array<const N: usize>(bytes: &mut [u8], off: usize, v: [u8; N]) {
     }
 }
 
+// Release builds report no offsets: passing three arguments from each of the ~1,300
+// inlined accessor sites was ~16 KB of wasm (D1573). The bounds check itself stays.
+#[inline(always)]
+fn out_of_bounds(off: usize, n: usize, len: usize) -> ! {
+    #[cfg(debug_assertions)]
+    {
+        out_of_bounds_at(off, n, len)
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        let _ = (off, n, len);
+        out_of_bounds_release()
+    }
+}
+
+#[cfg(debug_assertions)]
 #[cold]
 #[inline(never)]
-fn out_of_bounds(off: usize, n: usize, len: usize) -> ! {
+fn out_of_bounds_at(off: usize, n: usize, len: usize) -> ! {
     panic!("arena access {off}+{n} out of bounds (length {len})")
+}
+
+#[cfg(not(debug_assertions))]
+#[cold]
+#[inline(never)]
+fn out_of_bounds_release() -> ! {
+    panic!("arena access out of bounds")
 }
 
 macro_rules! prim_field {
