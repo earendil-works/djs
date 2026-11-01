@@ -1718,3 +1718,13 @@ job queue is empty (DONE, and IDLE before waiting on async host calls) and, per
 collects the reasons (`collect`). Settled `vm_promise_state` (and
 `Vm::mark_promise_handled`) marks the promise handled, as a `then` would: an embedder that
 consumes an async body's result promise must not see its rejection reported twice.
+## D1393: Builtin constructors do not read newTarget.prototype in the interpreter
+date: 2026-11-01 · by: infra · issue: 0039
+`construct` used to look up `newTarget.prototype` for the `this` object before calling
+any function, including a builtin constructor, which ignores that `this` and calls
+GetPrototypeFromConstructor itself at the step the spec gives. With a `prototype` getter
+on newTarget that ran user code too early (or threw "not supported yet: getter for
+'prototype'"), so argument validation that precedes the prototype lookup (the typed array
+`ToIndex`, DataView's checks) came in the wrong order. For an `OBJ_BUILTIN` callee the
+interpreter now skips the lookup and passes a plain object; bytecode constructors are
+unchanged.
