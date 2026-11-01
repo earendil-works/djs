@@ -7,7 +7,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0033 | JSON + RegExp builtins, regex literals | num | .worktrees/0033-json-regexp-builtins |
-| 0030 | P1-5 runtime + 0028 leftovers (define_method etc.) | heap | .worktrees/0030-p1-iteration-runtime |
+| 0035 | Interpreter call-path performance | heap | .worktrees/0035-interp-call-perf |
+| 0030 | P1-5 runtime (parked: parts 1-3 merged, waits for 0029) | heap (parked) | .worktrees/0030-p1-iteration-runtime |
 | 0034 | Core builtins wave 2 (Array, String, leftovers) | infra | .worktrees/0034-builtins-wave2 |
 | 0029 | P1-5 Loops and iteration (compiler + iterator builtins) | lexer | .worktrees/0029-p1-iteration-compiler |
 
