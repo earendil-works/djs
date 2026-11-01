@@ -77,3 +77,15 @@ fn suspended_match_resumes_from_the_image() {
     assert_eq!(r, "false");
     assert!(stops > 1000, "{stops} stops");
 }
+
+#[test]
+fn base64_check_on_megabytes() {
+    // pi's image(): `/^[A-Za-z0-9+/]+={0,2}$/` on 5 MB of base64 (D1504).
+    let src = r#"(() => { const s = "QUJD".repeat(1310720); const re = /^[A-Za-z0-9+/]+={0,2}$/; return [re.test(s + "=="), re.test(s + "==!"), re.test("")].join() })()"#;
+    let (r, _) = run_sliced(src, u64::MAX, false);
+    assert_eq!(r, "true,false,false");
+    // Suspended mid-match and restored from images, in large slices.
+    let (r, stops) = run_sliced(src, 20_000_000, true);
+    assert_eq!(r, "true,false,false");
+    assert!(stops > 0);
+}

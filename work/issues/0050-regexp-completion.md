@@ -74,6 +74,11 @@ Finish RegExp so it can move to the active group: the 0033 follow-ups.
   - bytecode/intrinsics.rs: regenerated;
   - crates/djs-core/Cargo.toml: the feature;
   - regexp/tests.rs and tests/regexp_fuel.rs: tests.
+- Immediate follow-up after the merge (requested by the coordinator for pi's image()).
+  `/^[A-Za-z0-9+/]+={0,2}$/` still overflowed on non-matching megabytes: STAR retries
+  leaked log entries when a later loop shared the registers. Fixed by restoring
+  slot_gen on undo (D1504). There is a unit test, and a 5 MB test in regexp_fuel.rs
+  (plain and image-restored).
 
 ## Follow-ups
 - JSON.parse source text access (json-parse-with-source: the reviver's `{source}`,

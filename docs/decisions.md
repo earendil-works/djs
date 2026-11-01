@@ -2336,3 +2336,18 @@ FromAsyncFulfilled and 17 FromAsyncRejected of `NewBuiltinClosure`) whose `this`
 Record; a phase slot says where to resume. One reaction job per await, as the spec's
 Await, so the tick order matches qjs (tests/data/e2e/array_from_async.js). The same
 pattern fits other async builtins (AsyncDisposableStack).
+
+
+## D1504: Undoing a log entry restores the slot's generation
+date: 2026-11-01 · by: num · issue: 0050
+The matcher's undo log entries are now `slot, old value, old slot_gen` triples (they were
+pairs), and undoing an entry restores `slot_gen` too.
+
+Without that, a write under a frame whose inner frames had logged the same slot and then
+been popped was logged again. A `STAR` retry writes its count under the frame below
+(D1501). When the continuation's own loop shares those registers, which happens because
+the compiler reuses them after a loop, every retry added an entry.
+
+pi's base64 check `/^[A-Za-z0-9+/]+={0,2}$/` on non-matching megabytes overflowed the
+backtrack stack that way. Now 5 MB pass and fail in constant stack. Log entries cost one
+word more.

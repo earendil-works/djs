@@ -3,8 +3,11 @@
 //! All state is integers: the program counter, the position, capture and register slots,
 //! and a backtrack stack of `u32` words. The stack holds frames (`pc, pos, prev_bp << 2 |
 //! kind, generation`, pushed at choice points and lookarounds) with an undo log of slot
-//! writes above each frame. A slot is logged at most once per frame: `slot_gen` records the
-//! generation of the frame that last logged it. Nothing lives on the Rust stack between
+//! writes above each frame (`slot, old value, old slot_gen` triples). A slot is logged at
+//! most once per frame: `slot_gen` records the generation of the frame that last logged
+//! it, and undoing an entry restores that too, so writes under a frame whose inner frames
+//! were popped are not logged again (a `STAR` retry writing its count under the frame
+//! below would otherwise grow the stack by an entry per retry). Nothing lives on the Rust stack between
 //! instructions, so running out of fuel at any instruction returns an [`ExecState`] that
 //! [`resume`] continues exactly where it stopped.
 
@@ -320,7 +323,8 @@ impl Machine<'_> {
             let g = self.s.stack[bp - 1];
             if self.s.slot_gen[slot] != g {
                 let old = self.s.slots[slot];
-                self.push(&[slot as u32, old])?;
+                let old_gen = self.s.slot_gen[slot];
+                self.push(&[slot as u32, old, old_gen])?;
                 self.s.slot_gen[slot] = g;
             }
         }
@@ -333,9 +337,14 @@ impl Machine<'_> {
         let bp = self.s.bp as usize;
         while self.s.stack.len() > bp {
             let n = self.s.stack.len();
-            let (slot, old) = (self.s.stack[n - 2], self.s.stack[n - 1]);
+            let (slot, old, old_gen) = (
+                self.s.stack[n - 3],
+                self.s.stack[n - 2],
+                self.s.stack[n - 1],
+            );
             self.s.slots[slot as usize] = old;
-            self.s.stack.truncate(n - 2);
+            self.s.slot_gen[slot as usize] = old_gen;
+            self.s.stack.truncate(n - 3);
         }
     }
 

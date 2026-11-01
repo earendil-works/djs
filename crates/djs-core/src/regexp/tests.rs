@@ -567,3 +567,27 @@ fn bench_regexp() {
         }
     }
 }
+
+#[test]
+fn star_retries_do_not_grow_the_stack() {
+    // pi's image() check on base64 data: the loop gives back every character while the
+    // `={0,2}` loop after it (sharing its registers) writes under its frame (D1504).
+    let limits = ExecLimits { max_stack: 64 };
+    let data = "QUJD".repeat(250_000);
+    for (p, tail, want) in [
+        ("^[A-Za-z0-9+/]+={0,2}$", "==", true),
+        ("^[A-Za-z0-9+/]+={0,2}$", "==!", false),
+        ("^A*?=?!$", "", false),
+        ("[A-Z]+=?\\d*=?$", "!", false),
+    ] {
+        let prog = re(p, "");
+        let input = u16s(&(data.clone() + tail));
+        let mut fuel = u64::MAX;
+        let r = exec(&prog, Input::Utf16(&input), 0, &mut fuel, limits);
+        match r {
+            ExecResult::Match(_) => assert!(want, "/{p}/ matched"),
+            ExecResult::NoMatch => assert!(!want, "/{p}/ did not match"),
+            _ => panic!("/{p}/: stack overflow or out of fuel"),
+        }
+    }
+}
