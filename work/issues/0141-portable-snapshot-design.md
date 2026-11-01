@@ -1,7 +1,7 @@
 # 0141: Deep dive: a heap snapshot design that is portable across djs versions
 
-status: open
-agent: -
+status: in-progress
+agent: portable
 branch: issue/0141-portable-snapshots
 depends-on: 0088, 0140
 guide: - (a guide chapter may follow)
