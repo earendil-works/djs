@@ -1813,3 +1813,61 @@ date: 2026-11-01 · by: heap · issue: 0043
 The compiler deduplicated string constants per function; it now keeps one pool per
 compilation unit (strings are immutable, so sharing a cell is invisible). The prelude
 repeats messages ("not a function" 26 times) and keys across functions: base -8 KB.
+## D1450: Proxies: an empty heap cell, traps in builtins/proxy.ts, same-signature redirects
+date: 2026-11-01 · by: infra · issue: 0045
+A proxy is `ObjectClass::Proxy` (27; heap/proxy.rs): slots target, handler (both null
+once revoked) and flags (callable 1, constructor 2, fixed at creation). The heap cell has
+no prototype, no own properties, is not extensible and has `OBJ_INDEXED_PROPS`, so heap
+code that does not know proxies sees an empty frozen object: it can never store into
+one, and the element fast paths never look past one on a prototype chain.
+The interpreter finds proxies with class tests on its slow paths only:
+`Heap::lookup_property` / `has_property_or_proxy` report a proxy on the chain (the old
+`find_property` / `has_property` treat it as the end of the chain), and `lookup()`
+returns `Got::Proxy`. Get, Set, `in`, `delete`, calls, `new`, for-in, object spread and
+`instanceof` then call the `@intrinsic` builtins of builtins/proxy.ts (`%ProxyGet(p, key,
+receiver)`, `%ProxySetOrThrow`, `%ProxyHas`, `%ProxyCall`, `%ProxyConstruct`, ...) with a
+continuation that completes the op (D1085). The internal-method intrinsics
+(OwnPropertyKeys, GetOwnPropertyDescriptorObject, DefineOwnPropertyFromRecord,
+GetPrototypeOf, IsExtensible, SetIntegrityLevel, DeleteProperty, ...) check their first
+argument: on a proxy they become a call of a builtin with the same parameters
+(`REDIRECTS` in interp/run/proxy.rs), so every builtin written over them works on proxies
+unchanged; they are tagged `@reentrant` now. Get/Set/HasProperty and the WithReceiver
+forms also meet proxies further up the chain. The 13 traps follow 10.5.1-10.5.13 with
+every invariant check; trap keys are strings or symbols (index keys, Numbers in the
+intrinsics, become strings). Messages are qjs's ("revoked proxy", "proxy: inconsistent
+get", ...). Leaves that need no user code stay in Rust: IsArray (now through proxies, a
+TypeError for a revoked one), IsCallable/IsConstructor from the flags, the
+Object.prototype.toString builtinTag, `typeof`, and `JsonStringifyFast` (Slow on a proxy,
+or a proxy on the chain of a `toJSON` lookup or array hole). behavior.js runs our proxies
+behind native shells against qjs's with logging handlers and invariant-breaking traps.
+
+## D1451: `new` when reading new.target.prototype runs user code
+date: 2026-11-01 · by: infra · issue: 0045
+For a bytecode constructor whose new.target has a `prototype` getter or is (or inherits
+from) a proxy, `construct` now calls `%OrdinaryConstructSlow(f, args, newTarget)`:
+GetPrototypeFromConstructor in the builtin language, then the new leaf-ish
+`%ConstructWithThis(f, this, args, newTarget)`, which enters f as a constructor with that
+object (the tail of `construct_with`, now `construct_call`). This replaces "not supported
+yet: getter for 'prototype'". GetPrototypeFromConstructor walks proxies for
+GetFunctionRealm, so a revoked proxy as new.target is a TypeError.
+
+## D1452: for-in through proxies is lazy, in qjs's trap order
+date: 2026-11-01 · by: infra · issue: 0045
+When the object or its prototype chain has a proxy, ForInStart makes a Record that
+`%ForInStep` (builtins/proxy.ts) walks: an object's keys are read when the walk reaches
+it ([[OwnPropertyKeys]], then [[GetOwnProperty]] per key for enumerability), each key
+is checked again with [[GetOwnProperty]] just before it is visited (a deleted key is
+skipped, as dquickts' test_for_in_proxy requires), and [[GetPrototypeOf]] runs when the
+object's keys are used up. That is qjs's order for a proxy as the object itself. (For a
+proxy further up the chain qjs reads its keys twice; we do not.) ForInNext on the Record
+calls the step and runs again to push its result. Plain objects keep the eager Rust
+snapshot. Other differences from qjs we keep because they are the spec's:
+Object.isFrozen/isSealed ask IsExtensible before the keys (7.3.16).
+
+## D1453: Primitive bases: [[Set]] through setters and proxies on the prototype chain
+date: 2026-11-01 · by: infra · issue: 0045
+`v.x = 1` / `v[k] = 1` for a primitive v (strict) used to be a TypeError outright. It is
+OrdinarySet on the wrapper with v as the receiver: a setter on the prototype chain now
+runs with `this` = v, and a proxy on the chain gets its `set` trap
+(`%ProxySetOrThrow(p, key, v, receiver)`); anything else is still the TypeError
+(test262 language/types/reference/put-value-prop-base-primitive.js).

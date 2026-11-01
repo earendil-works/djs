@@ -201,7 +201,7 @@ loop {
   continues the loop. Returning pops it. The Rust stack depth stays constant.
 - **Re-entrant operations without recursion:** an opcode that may invoke user code (getter,
   setter, `valueOf`/`toString` during `+`, iterator protocol in `for-of` / spread /
-  destructuring, `instanceof` with `Symbol.hasInstance`, Proxy traps later) pushes a frame
+  destructuring, `instanceof` with `Symbol.hasInstance`, Proxy traps, D1450) pushes a frame
   for the callee with one of a few fixed *continuations* (push the result, discard it,
   the construct result rule, return from `run`). **An op never resumes mid-way** (D1085):
   it runs its fast path inline, and when user code is needed it either calls the user
@@ -315,7 +315,7 @@ export function map(this: Value, callback: Value, thisArg: Value): Obj {
   if (!isCallable(callback)) throw typeError("not a function");
   const a: Obj = arraySpeciesCreate(o, len);   // reentrant: constructor, species
   for (let k: u32 = 0; k < len; k++) {
-    if (hasProperty(o, k)) {                   // reentrant: proxy trap (later)
+    if (hasProperty(o, k)) {                   // reentrant: proxy trap
       const v: Value = get(o, k);              // reentrant: getter
       createDataProperty(a, k, call(callback, thisArg, v, k, o));
     }
