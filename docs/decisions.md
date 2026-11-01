@@ -1911,3 +1911,62 @@ ToString handle BigInt in `conv`. The builtins add `%ToBigInt` and `%ToNumeric`
 (builtins/bigint.ts) and BigInt leaves at the end of the intrinsic fallback chain
 (`json_regexp_intrinsic` -> `bigint_intrinsic`). `BigInt.prototype.toLocaleString`
 ignores its arguments like node (qjs takes the locale as a radix and throws).
+## D1400: Private names are private symbols in the object's own property table
+date: 2026-11-02 · by: lexer · issue: 0040
+Each private name of a class evaluation is a new symbol cell flagged `SYM_PRIVATE`
+(heap/cells.rs flags; `SYM_PRIVATE_METHOD` marks methods and accessors for the brand
+message, `SYM_PRIVATE_READONLY` methods and getter-only accessors, whose assignment
+throws before the brand check, as in qjs). It is the value of a binding `#x` in the
+class body scope, created by `private_symbol` at scope entry, so it exists before the
+heritage and computed keys run. Private elements are ordinary entries of the object's
+own property table under that key: `ordinary_own_keys` skips private symbols, so
+[[OwnPropertyKeys]] and everything built on it (reflection, Object.assign, spread,
+JSON, for-in, freeze/seal) never see them, and no user code can get hold of the
+symbol. The private ops (`get_private_field` ...) read the own table only: never the
+prototype chain, never a proxy trap (a proxy's private elements are its own, in the
+proxy cell's table). Brand checks are presence checks: private methods are installed
+per instance, as the spec has it. Cost: an atom table entry per private name per class
+evaluation (atoms are not collected yet).
+
+## D1401: Private elements need an extensible object (nonextensible-applies-to-private)
+date: 2026-11-02 · by: lexer · issue: 0040
+PrivateFieldAdd and PrivateMethodOrAccessorAdd throw `TypeError: object is not
+extensible` on a non-extensible object, as test262's nonextensible-applies-to-private
+tests require. qjs still adds them. A proxy is exempt (its heap cell is non-extensible;
+its [[IsExtensible]] trap is not consulted). Freezing after the fact does not affect
+private fields: they stay writable.
+
+## D1402: Home objects are a closure slot after the captures
+date: 2026-11-02 · by: lexer · issue: 0040
+A function whose code (or an arrow in it) uses `super.x` has the `<home>` pseudo-binding
+and `func_flags::HOME` (bit 6); `closure()` allocates one more object slot after the
+captures, which `define_class`, `define_class_method[_elem]`, `define_method`/
+`define_getter`/`define_setter` (and their `_elem` forms) and `set_home_object` set, and
+`special_object HOME_OBJECT` reads. Functions without `super` pay nothing. `super.x`
+pushes `this` and `home.[[GetPrototypeOf]]()` (`get_super`) before the key, in
+MakeSuperPropertyReference order; the get/put ops take the base, not the home.
+
+## D1403: Field initializers are two parked functions per class
+date: 2026-11-02 · by: lexer · issue: 0040
+All instance field initializers of a class compile into one `FieldInit` function, all
+static ones (and the calls of the static blocks, each its own function) into another,
+parsed by resuming the parked function state for each field. Each begins with a jump to
+the private method installation emitted at its end, which jumps back, so
+PrivateMethodOrAccessorAdd runs before the first field. The instance one is the hidden
+binding `<fields N>` (`undefined` without instance elements) that a base constructor
+calls at entry and `super()` calls after binding `this`; the static one runs once with
+`this` = the class after the inner binding is initialized. Computed field keys are
+converted at definition time into hidden bindings. One closure per class instead of one
+per field; field initializer functions are never visible to user code.
+
+## D1404: Derived constructors: `this` is a local, the result is checked after the body
+date: 2026-11-02 · by: lexer · issue: 0040
+`construct` gives a `KIND_DERIVED_CTOR` closure `this` = `undefined` and no prototype
+lookup. Its `this` binding is the ordinary `this` pseudo-binding (a local or Box);
+reads in the constructor and its arrows go through `check_this`, `super()` writes it
+once (`check_this_uninit`). Returns store the value in an internal local and jump to an
+epilogue after the body (`check_ctor_return`; `undefined` → the checked `this`), so the
+result checks run outside the body's try statements, as [[Construct]] does them.
+`super()` constructs `[[GetPrototypeOf]]` of the active function (`<active>`
+pseudo-binding) with the frame's new.target. `new` of a non-constructor object now says
+`<name> is not a constructor` (or `not a constructor` without a `name` string), like qjs.

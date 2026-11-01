@@ -393,8 +393,8 @@ a reference kind:
 | `name_get r` | `Name(r)` | nothing |
 | `get_field atom` | `Field(atom)` | `obj` |
 | `get_elem` | `Elem` | `obj key` |
-| `get_private atom` (P1) | `Private(atom)` | `obj` |
-| `get_super_field` / `get_super_elem` (P1) | `Super...` | `this home key` |
+| `get_private_field` (0040) | `Private` | `obj sym` |
+| `get_super_field atom` / `get_super_elem` (0040) | `SuperField(atom)` / `SuperElem` | `this base` / `this base key` |
 | anything else | error `invalid assignment left-hand side` (`++`: `invalid increment/decrement operand`) | |
 
 Removing the last instruction is safe because nothing can refer to its position: no
@@ -699,8 +699,17 @@ Properties (P0 field access on plain objects, P1 the rest):
 | `require_object_coercible` | | v → v | TypeError for null/undefined (`const {} = null`), P1 |
 | `delete` | | o k → b | P1 |
 | `in` | | k o → b | (in the binary table) |
-| `get_private` `put_private` `define_private` `private_in` | `atom` | as fields | P1 classes (brand checks inside) |
-| `get_super_field` `put_super_field` `get_super_elem` `put_super_elem` | | this home k ... | P1 classes |
+| `private_symbol` | `atom`, `u8` flags | → sym | a new private name (7.9, D1400) |
+| `get_private_field` / `put_private_field` | | o sym → v / o sym v → | own properties only, never a proxy trap; brand checks inside |
+| `define_private_field` / `define_private_accessor` | `u8` kind / | o sym v → o / o sym g s → o | PrivateFieldAdd / PrivateMethodOrAccessorAdd |
+| `private_in` | | sym o → b | `#x in o` |
+| `get_super` | | o → proto | the super base (from the home object) or the super constructor (from the active function) |
+| `get_super_field` `put_super_field` | `atom` | this base → v / this base v → | `super.x`, receiver `this` |
+| `get_super_elem` `put_super_elem` | | this base k → v / this base k v → | `super[k]` |
+| `set_home_object` | | home f → home f | field initializers, private methods, static blocks |
+| `define_class` | `u8` flags | parent protoParent ctor → ctor proto | 7.9 |
+| `define_class_method` / `_elem` | `atom`, `u8` kind / `u8` kind | o f → o / o k f → o | non-enumerable method/getter/setter, sets the home object |
+| `define_class_field` | | o k v → o | CreateDataPropertyOrThrow (a proxy's trap) |
 
 Operators (P0): `neg`, `plus` (ToNumber), `bnot` (`~`), `not` (`!`), `typeof`, `inc`,
 `dec`, `to_numeric` (postfix forms), `to_string` (template substitutions), `add`
@@ -723,13 +732,16 @@ Control flow:
 | `call` | `u16` argc | f this a1..an → r | CALL, P0 |
 | `construct` | `u16` argc | f a1..an → r | `new f(...)`, new.target = f, P1 |
 | `call_spread` / `construct_spread` | | f this arr → r / f arr → r | P1 |
-| `super_call` | `u16` argc | a1..an → r | derived constructors, P1 |
+| `super_call` / `super_call_spread` | `u16` argc / | f a1..an nt → r / f arr nt → r | derived constructors (7.9) |
 | `call_intrinsic` | `u16` id, `u16` argc | a1..an → r | privileged code only (7.3), P1 |
 | `get_iterator` | | o → iter | R (`%GetIterator` slow path), P1 |
 | `iter_check_object` | | v → v | TypeError if not an object, P1 |
 | `for_in_start` / `for_in_next` | | o → it / it → it key done | leaf (snapshot of keys), P1 |
 | `iterator_close` | | iter → | R (calls `return`), P1 |
-| `check_ctor` | | | class constructor called without `new`: TypeError, P1 |
+| `check_ctor` | | | class constructor called without `new`: TypeError |
+| `check_this` / `check_this_uninit` | | v → v / v → | a derived constructor's `this` (7.9) |
+| `check_ctor_return` | | v → v | a derived constructor's result: an object or `undefined` |
+| `throw_error` | `atom`, `u8` kind | | throws a TypeError/ReferenceError (`delete super.x`), TERM |
 | `debugger`, `nop` | | | |
 
 For-of has no dedicated loop opcodes. Setup is `call_intrinsic %GetIterator 1; dup;
@@ -1328,6 +1340,51 @@ What the compiler emits:
   an `await` after each `next()` call, `%AsyncIteratorCloseThrow` + `await` in the throw
   close handler and AsyncIteratorClose (`emit_async_close_normal`) in the break/return
   paths.
+
+### 7.9 Classes (0040, compiler/class.rs)
+
+- **Scopes.** A class compiles in its enclosing function, in two nested `Class` scopes:
+  the outer one holds the inner class binding (const, in TDZ until the class is
+  defined); the inner one holds the private names (`#x`, one binding each, holding a
+  private symbol made by `private_symbol` at scope entry, D1400) and the hidden
+  bindings: `<fields N>` (the instance initializer, N = class nesting depth, so a
+  `super()` in a nested class's computed key still finds its own), `<key N>`
+  (converted computed field keys) and `<#m>` / `<get #m>` / `<set #m>` (private method
+  closures). The heritage is evaluated in the outer scope only, so its private name
+  references belong to the enclosing class. Undeclared private names are collected per
+  class and checked at its end (passed outward).
+- **Definition.** `[heritage; dup; call_intrinsic %ClassHeritage 1 | undefined;
+  undefined]; fclosure ctor; define_class flags` leaves `ctor proto`. The constructor's
+  child index is reserved first (it may appear anywhere in the body, or is synthesized
+  at the end); its source span is the whole class. Methods go on `proto` (static ones
+  and computed keys of static elements: `swap; ...; swap`). At the end: `.fields` =
+  the instance initializer closure (`set_home_object` to `proto`) or `undefined`; drop
+  `proto`; the inner binding; the static initializer is called with `this` = the class
+  (home object the class).
+- **Initializers.** Instance and static field initializers each compile into one
+  `FieldInit` function, parked while the class body is parsed and resumed per field
+  (`Parser::resume_function` / `park_function`). Each starts with a jump to its end,
+  where the private methods and accessors are installed once all are known, then jumps
+  back: PrivateMethodOrAccessorAdd before the fields. A static block is its own
+  `StaticBlock` function (its own var scope), created and called by the static
+  initializer at its position. `arguments` in either is an early error; `await` is
+  reserved in static blocks.
+- **Constructors.** `check_ctor` first. A base constructor then calls `.fields` with
+  `this` (a runtime `undefined` check), before the parameters. A derived constructor
+  gets no `this` from `construct` (it is `undefined`, read through `check_this`);
+  `super(args)` is `<active>; get_super; args; new.target; super_call n`, then binds
+  `this` (`check_this_uninit`) and calls `.fields`. Its returns store the value in a
+  local and jump to an epilogue after the body, outside every try region (the result
+  check belongs to [[Construct]]): `check_ctor_return`, and `undefined` → the checked
+  `this`. Default constructors: `{}`, or `super(...args)` with `rest 0;
+  super_call_spread` (no iteration).
+- **Home objects.** A function that uses `super.x` (itself or in arrows) declares the
+  `<home>` pseudo-binding (`special_object HOME_OBJECT`); its template gets
+  `func_flags::HOME`, and its closures a home slot after the captures, set by
+  `define_class`, `define_class_method`, `define_method`/`getter`/`setter` (object
+  literals too) and `set_home_object`. `super.x` is `this; <home>; get_super;
+  get_super_field x` (MakeSuperPropertyReference order: `this`, then the base, then the
+  key); `super.m()` reads `this` again for the call.
 
 ## 8. Error reporting and early errors
 
