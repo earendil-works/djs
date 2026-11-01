@@ -1,0 +1,23 @@
+["2","10","b","a"] ["two","ten",2,1] [["2","two"],["10","ten"],["b",2],["a",1]]
+{"x":1,"y":2,"z":3}
+["own"] true 2 true
+null true
+true true false
+2 false true
+false false false true
+write frozen -> TypeError: 'f' is read-only
+extend non-extensible -> TypeError: object is not extensible
+setPrototypeOf cycle -> TypeError: circular prototype chain
+setPrototypeOf non-extensible -> TypeError: object is not extensible
+setPrototypeOf primitive -> 1
+create bad proto -> TypeError: not a prototype
+getPrototypeOf null -> TypeError: not an object
+keys undefined -> TypeError: cannot convert to object
+true false true true false
+1 true
+1 true function true
+one two ["2","10","b","a","d1"]
+[object Undefined] [object Null] [object Array] [object Number] [object String] [object Boolean] [object Function] [object Error] [object Math] [object Custom] [object Symbol]
+[object Object] [object Object] object true
+["0","1","2"] [["0",7],["1",8]] ["h","i"]
+=== completed

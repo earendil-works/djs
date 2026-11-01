@@ -508,6 +508,14 @@ for (const [b, e] of [[2, 10], [2, -1], [NaN, 0], [1, Infinity], [-8, 1 / 3], ["
 }
 for (const args of [[], [undefined], [null], [5], [Symbol("d")], [Symbol()], [toPrim("v")], [{}], [[1, 2]]]) {
   same("globalThis.String", String, (f) => f(...args));
+  same("globalThis.String", String, (f) => {
+    const o = Reflect.construct(f, args);
+    return [typeof o, String.prototype.valueOf.call(o), Object.keys(o)];
+  });
+}
+for (const v of ["s", new String("w"), 5, {}, null]) {
+  same("String.prototype.toString", String.prototype.toString, (f) => f.call(v));
+  same("String.prototype.valueOf", String.prototype.valueOf, (f) => f.call(v));
 }
 
 // ---- 0031 part 2 ---------------------------------------------------------------------

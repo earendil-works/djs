@@ -1305,7 +1305,7 @@ function ObjectPrototypeIsPrototypeOf(v) {
   return false;
 }
 
-// builtins/string.ts:9 constructor String
+// builtins/string.ts:8 constructor String
 function StringConstructor(...args) {
   let s = "";
   if (LengthOfArrayLike(args) > 0) {
@@ -1315,10 +1315,29 @@ function StringConstructor(...args) {
     }
     s = ToString(value);
   }
-  if (new.target !== undefined) {
-    throw %NewTypeError("not supported yet: String objects");
+  if (new.target === undefined) {
+    return s;
   }
-  return s;
+  return %WrapPrimitive(s, GetPrototypeFromConstructor(new.target, "StringPrototype"));
+}
+
+// builtins/string.ts:24
+function ThisStringValue(value) {
+  const s = %PrimitiveValue(value);
+  if (!%IsString(s)) {
+    throw %NewTypeError("not a string");
+  }
+  return %AsStr(s);
+}
+
+// builtins/string.ts:36 String.prototype.toString
+function StringPrototypeToString() {
+  return ThisStringValue(this);
+}
+
+// builtins/string.ts:44 String.prototype.valueOf
+function StringPrototypeValueOf() {
+  return ThisStringValue(this);
 }
 
 // builtins/symbol.ts:7 constructor Symbol
@@ -1571,6 +1590,8 @@ function SymbolUnscopables() {
 %InstallMethod("Object.prototype", "toLocaleString", ObjectPrototypeToLocaleString, 0);
 %InstallMethod("Object.prototype", "valueOf", ObjectPrototypeValueOf, 0);
 %InstallMethod("Object.prototype", "isPrototypeOf", ObjectPrototypeIsPrototypeOf, 1);
+%InstallMethod("String.prototype", "toString", StringPrototypeToString, 0);
+%InstallMethod("String.prototype", "valueOf", StringPrototypeValueOf, 0);
 %InstallMethod("Symbol", "for", SymbolForBuiltin, 1);
 %InstallMethod("Symbol", "keyFor", SymbolKeyForBuiltin, 1);
 %InstallAccessor("Symbol.prototype", "description", SymbolPrototypeDescription, false);

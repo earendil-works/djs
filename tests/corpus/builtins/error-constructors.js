@@ -21,4 +21,7 @@ try { null.x; } catch (e) { console.log(e.constructor === TypeError, e instanceo
 try { undefinedVariable; } catch (e) { console.log(e.constructor === ReferenceError, String(e)); }
 try { new Array(-1); } catch (e) { console.log(e.constructor === RangeError, String(e)); }
 try { throw new TypeError("thrown"); } catch (e) { console.log(String(e), e.stack.length > 0); }
-console.log(Object.getOwnPropertyNames(new Error("a", { cause: 1 })).filter((k) => k !== "stack"));
+const ownNames = Object.getOwnPropertyNames(new Error("a", { cause: 1 }));
+const withoutStack = [];
+for (let i = 0; i < ownNames.length; i++) if (ownNames[i] !== "stack") withoutStack.push(ownNames[i]);
+console.log(withoutStack);

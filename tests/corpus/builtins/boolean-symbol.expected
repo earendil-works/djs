@@ -1,0 +1,13 @@
+false true true object false true false
+[object Boolean] true
+TypeError: not a boolean
+symbol Symbol(desc) desc undefined  Symbol(desc)
+true app undefined false
+symbol Symbol(Symbol.iterator) Symbol.hasInstance true
+TypeError: Symbol is not a constructor
+TypeError: not a symbol
+TypeError: cannot convert symbol to string
+object true desc [object Symbol]
+1 ["plain"] 1
+true false
+=== completed

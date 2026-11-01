@@ -494,9 +494,16 @@ ObjectPrototypeValueOf: leaf (Object.prototype.valueOf)
 ObjectPrototypeIsPrototypeOf: leaf (Object.prototype.isPrototypeOf)
 
 StringConstructor: reentrant (constructor String)
-  builtins/string.ts:11:7  LengthOfArrayLike (builtin)
-  builtins/string.ts:12:26  Get (intrinsic)
-  builtins/string.ts:16:9  ToString (builtin)
+  builtins/string.ts:10:7  LengthOfArrayLike (builtin)
+  builtins/string.ts:11:26  Get (intrinsic)
+  builtins/string.ts:15:9  ToString (builtin)
+  builtins/string.ts:20:27  GetPrototypeFromConstructor (builtin)
+
+ThisStringValue: leaf
+
+StringPrototypeToString: leaf (String.prototype.toString)
+
+StringPrototypeValueOf: leaf (String.prototype.valueOf)
 
 SymbolConstructor: reentrant (constructor Symbol)
   builtins/symbol.ts:14:20  ToString (builtin)
