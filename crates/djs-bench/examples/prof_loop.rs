@@ -36,7 +36,7 @@ fn main() {
             }
         }
         n += 1;
-        if n % 8 == 0 {
+        if n.is_multiple_of(8) {
             h.collect().unwrap();
         }
     }
