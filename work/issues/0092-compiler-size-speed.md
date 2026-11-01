@@ -1,7 +1,7 @@
 # 0092: Compiler code size and compile throughput in wasm
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0092-compiler-size-speed
 depends-on: 0086
 touches: crates/djs-core/src/compiler/, crates/djs-core/src/lexer/, crates/djs-bench/ (compile benchmarks)
