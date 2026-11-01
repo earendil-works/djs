@@ -20,6 +20,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| 0128 | Page allocator in djs-wasm (in-place arena growth) | 0125, 0126 part 1 (heap next) |
 
 ## Done
 
