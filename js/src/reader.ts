@@ -48,16 +48,33 @@ const C_ORDINARY = LAYOUT.objectClasses.Ordinary;
 const C_ARRAY = LAYOUT.objectClasses.Array;
 const TAG_PREFIX = LAYOUT.value.tagPrefix;
 const HI_HOLE = ((TAG_PREFIX << 16) | tags.HOLE) >>> 0;
+const HI_INT = ((TAG_PREFIX << 16) | tags.INT) >>> 0;
 
 const tagNames: string[] = [];
 for (const [name, t] of Object.entries(tags)) tagNames[t] = name;
 const classNames: string[] = [];
 for (const [name, c] of Object.entries(LAYOUT.objectClasses)) classNames[c] = name;
 
-/** Strings shorter than this are built with String.fromCharCode instead of a TextDecoder. */
+/** Strings up to this length are built character by character. */
+const TINY = 4;
+/** Without Buffer, strings shorter than this use String.fromCharCode, not a TextDecoder. */
 const SHORT = 48;
 /** String.fromCharCode.apply argument chunk. */
 const CHUNK = 0x2000;
+
+// Node's Buffer decodes both representations exactly at memcpy speed: `latin1Slice` is
+// ISO-8859-1 (unlike TextDecoder's "latin1") and `ucs2Slice` keeps lone surrogates.
+interface NodeBuffer {
+  latin1Slice(start: number, end: number): string;
+  ucs2Slice(start: number, end: number): string;
+}
+interface NodeBufferCtor {
+  from(buffer: ArrayBufferLike, byteOffset: number, length: number): NodeBuffer;
+}
+const NodeBuffer = (globalThis as { Buffer?: NodeBufferCtor }).Buffer;
+const hasNodeBuffer =
+  NodeBuffer !== undefined &&
+  typeof (NodeBuffer.from(new ArrayBuffer(2), 0, 2) as Partial<NodeBuffer>).latin1Slice === "function";
 
 const utf16Decoder = new TextDecoder("utf-16le", { fatal: true, ignoreBOM: true });
 // "latin1" is windows-1252 in the Encoding standard. It agrees with Latin-1 everywhere but
@@ -84,12 +101,43 @@ export class Opaque {
 }
 
 export interface ReadOptions {
+  /** Use only standard APIs (TextDecoder, String.fromCharCode), not node's Buffer. */
+  portable?: boolean;
+  /**
+   * The most values (containers and elements) to produce. Shared references are read
+   * once per occurrence, so a heap with sharing at every level could otherwise expand
+   * exponentially. Default: four times the arena's value slots, plus a million.
+   */
+  maxValues?: number;
   /**
    * Atom index -> key string, filled while reading. Reusing one array across reads of the
    * same VM is safe: atoms are never freed and their strings never change.
    */
   atomCache?: (string | undefined)[];
 }
+
+/** A value that cannot be read as a tree: `path` says where (`$.a[3]`). */
+class ReadError extends TypeError {
+  segments: (string | number)[] = [];
+  reason: string;
+  constructor(reason: string) {
+    super(reason);
+    this.reason = reason;
+  }
+}
+
+function formatPath(segments: (string | number)[]): string {
+  let p = "$";
+  for (const s of segments) {
+    if (typeof s === "number") p += `[${s}]`;
+    else if (/^[A-Za-z_$][\w$]*$/.test(s)) p += `.${s}`;
+    else p += `[${JSON.stringify(s)}]`;
+  }
+  return p;
+}
+
+/** Cycles are looked for once nesting is this deep (a cycle eventually gets there). */
+const CYCLE_CHECK_DEPTH = 32;
 
 /** Thrown when the memory does not hold a heap of this build's layout. */
 export class LayoutMismatch extends Error {}
@@ -119,8 +167,8 @@ export function checkHeap(memory: Uint8Array): void {
  * Primitives map to themselves; strings (flat or ropes) to strings; arrays to arrays (holes
  * stay holes); ordinary objects to plain objects with their own enumerable string-keyed data
  * properties in property order. Accessors, non-enumerable and symbol-keyed properties are
- * left out. Everything else becomes an {@link Opaque}. Each heap object is read once, so
- * shared references stay shared and cycles become cycles.
+ * left out. Everything else becomes an {@link Opaque}. The result is a tree, as with JSON:
+ * a shared object is read once per reference, and a cycle is a TypeError naming its path.
  */
 export function readValue(
   memory: Uint8Array,
@@ -135,29 +183,49 @@ export function readValue(
   } else {
     [lo, hi] = value;
   }
-  const r = new Reader(memory, opts.atomCache ?? []);
+  const budget = opts.maxValues ?? 4 * (memory.length >>> 3) + 1_000_000;
+  const r = new Reader(memory, opts.atomCache ?? [], opts.portable === true, budget);
   if (hi >>> 16 !== TAG_PREFIX) {
     const scratch = new DataView(new ArrayBuffer(8));
     scratch.setUint32(0, lo, true);
     scratch.setUint32(4, hi, true);
     return scratch.getFloat64(0, true);
   }
-  return r.tagged(hi & 0xffff, lo >>> 0);
+  try {
+    return r.tagged(hi & 0xffff, lo >>> 0);
+  } catch (e) {
+    if (e instanceof ReadError) throw new TypeError(`${e.reason} at ${formatPath(e.segments)}`);
+    throw e;
+  }
 }
 
 class Reader {
   mem: Uint8Array;
   view: DataView;
   u16: Uint16Array | null;
+  /** u32 and f64 views over the arena when its base is 8-aligned (for element loops). */
+  w32: Uint32Array | null;
+  f64: Float64Array | null;
+  /** A Buffer over the arena, when running on node. */
+  buf: NodeBuffer | null;
   atoms: (string | undefined)[];
   atomEntries: number;
-  memo = new Map<number, unknown>();
+  /** Offsets of the containers being read (cycle detection). */
+  stack: number[] = [];
+  depth = 0;
+  /** Values left in the budget. */
+  budget: number;
 
-  constructor(mem: Uint8Array, atoms: (string | undefined)[]) {
+  constructor(mem: Uint8Array, atoms: (string | undefined)[], portable: boolean, budget: number) {
+    this.budget = budget;
     this.mem = mem;
     this.view = new DataView(mem.buffer, mem.byteOffset, mem.byteLength);
     // Two-byte string data is 2-aligned within the arena; a view needs the base aligned too.
     this.u16 = mem.byteOffset % 2 === 0 ? new Uint16Array(mem.buffer, mem.byteOffset, mem.length >> 1) : null;
+    const aligned = mem.byteOffset % 8 === 0;
+    this.w32 = aligned ? new Uint32Array(mem.buffer, mem.byteOffset, mem.length >>> 2) : null;
+    this.f64 = aligned ? new Float64Array(mem.buffer, mem.byteOffset, mem.length >>> 3) : null;
+    this.buf = hasNodeBuffer && !portable ? NodeBuffer!.from(mem.buffer, mem.byteOffset, mem.byteLength) : null;
     this.atoms = atoms;
     const table = this.view.getUint32(ROOTS_ATOMS, true);
     this.atomEntries = table === 0 ? 0 : this.view.getUint32(table + ATOMS_ENTRIES, true);
@@ -232,9 +300,13 @@ class Reader {
 
   latin1(at: number, n: number): string {
     const mem = this.mem;
-    if (n < SHORT) {
-      return String.fromCharCode.apply(null, mem.subarray(at, at + n) as unknown as number[]);
+    if (n <= TINY) {
+      let s = "";
+      for (let i = 0; i < n; i++) s += String.fromCharCode(mem[at + i]);
+      return s;
     }
+    if (this.buf !== null) return this.buf.latin1Slice(at, at + n);
+    if (n < SHORT) return fromCodes(mem, at, n);
     const bytes = mem.subarray(at, at + n);
     // Without bytes in 0x80..0x9F, windows-1252 is Latin-1.
     let c1 = false;
@@ -249,14 +321,15 @@ class Reader {
   }
 
   utf16(at: number, n: number): string {
+    if (this.buf !== null && n > TINY) return this.buf.ucs2Slice(at, at + 2 * n);
     const u16 = this.u16;
     if (u16 === null) {
       const copy = new Uint16Array(n);
       for (let i = 0; i < n; i++) copy[i] = this.view.getUint16(at + 2 * i, true);
       return chunked(copy);
     }
+    if (n < SHORT) return fromCodes(u16, at >> 1, n);
     const units = u16.subarray(at >> 1, (at >> 1) + n);
-    if (n < SHORT) return String.fromCharCode.apply(null, units as unknown as number[]);
     try {
       return utf16Decoder.decode(units);
     } catch {
@@ -280,83 +353,127 @@ class Reader {
   }
 
   object(off: number): unknown {
-    const seen = this.memo.get(off);
-    if (seen !== undefined) return seen;
     const cls = this.view.getUint32(off + OBJ_CLASS, true);
-    if (cls === C_ARRAY) return this.array(off);
-    if (cls === C_ORDINARY) return this.plain(off);
-    const o = new Opaque("object", off, classNames[cls] ?? `class ${cls}`);
-    this.memo.set(off, o);
-    return o;
+    if (cls !== C_ARRAY && cls !== C_ORDINARY) {
+      return new Opaque("object", off, classNames[cls] ?? `class ${cls}`);
+    }
+    // A cycle reaches any depth, so only deep nesting needs the (linear) check.
+    const depth = this.depth;
+    if (depth >= CYCLE_CHECK_DEPTH) {
+      const stack = this.stack;
+      for (let i = 0; i < depth; i++) {
+        if (stack[i] === off) throw new ReadError("cyclic value");
+      }
+    }
+    this.stack[depth] = off;
+    this.depth = depth + 1;
+    const v = cls === C_ARRAY ? this.array(off) : this.plain(off);
+    this.depth = depth;
+    return v;
+  }
+
+  spend(n: number): void {
+    this.budget -= n;
+    if (this.budget < 0) throw new RangeError("djs heap read: value too large (maxValues)");
   }
 
   plain(off: number): Record<string, unknown> {
-    const view = this.view;
     const o: Record<string, unknown> = {};
-    this.memo.set(off, o);
-    const el = view.getUint32(off + OBJ_ELEMENTS, true);
-    if (el !== 0) {
-      const n = view.getUint32(el + VA_LEN, true);
-      for (let i = 0; i < n; i++) {
-        const at = el + VA_VALUES + 8 * i;
-        if (view.getUint32(at + 4, true) !== HI_HOLE) o[i] = this.slot(at);
+    let key: string | number | undefined = undefined;
+    try {
+      const view = this.view;
+      const el = view.getUint32(off + OBJ_ELEMENTS, true);
+      if (el !== 0) {
+        const n = view.getUint32(el + VA_LEN, true);
+        this.spend(n);
+        for (let i = 0; i < n; i++) {
+          const at = el + VA_VALUES + 8 * i;
+          key = i;
+          if (view.getUint32(at + 4, true) !== HI_HOLE) o[i] = this.slot(at);
+        }
       }
-    }
-    const t = view.getUint32(off + OBJ_PROPS, true);
-    if (t === 0) return o;
-    const count = view.getUint32(t + TAB_COUNT, true);
-    for (let i = 0; i < count; i++) {
-      const e = t + TAB_ENTRIES + ENTRY_SIZE * i;
-      const atom = view.getUint32(e + ENTRY_KEY, true);
-      if (atom === 0) continue; // deleted
-      const flags = view.getUint32(e + ENTRY_FLAGS, true);
-      if (flags & P_ACCESSOR || !(flags & P_ENUMERABLE)) continue;
-      const key = this.key(atom);
-      if (key === undefined) continue;
-      const v = this.slot(e + ENTRY_VALUE);
-      // Assigning "__proto__" would set the prototype instead of defining a property.
-      if (key === "__proto__") {
-        Object.defineProperty(o, key, { value: v, writable: true, enumerable: true, configurable: true });
-      } else {
-        o[key] = v;
+      const t = view.getUint32(off + OBJ_PROPS, true);
+      if (t === 0) return o;
+      const count = view.getUint32(t + TAB_COUNT, true);
+      this.spend(count + 1);
+      for (let i = 0; i < count; i++) {
+        const e = t + TAB_ENTRIES + ENTRY_SIZE * i;
+        const atom = view.getUint32(e + ENTRY_KEY, true);
+        if (atom === 0) continue; // deleted
+        const flags = view.getUint32(e + ENTRY_FLAGS, true);
+        if (flags & P_ACCESSOR || !(flags & P_ENUMERABLE)) continue;
+        key = this.key(atom);
+        if (key === undefined) continue;
+        const v = this.slot(e + ENTRY_VALUE);
+        // Assigning "__proto__" would set the prototype instead of defining a property.
+        if (key === "__proto__") {
+          Object.defineProperty(o, key, { value: v, writable: true, enumerable: true, configurable: true });
+        } else {
+          o[key] = v;
+        }
       }
+    } catch (e) {
+      if (e instanceof ReadError && key !== undefined) e.segments.unshift(key);
+      throw e;
     }
     return o;
   }
 
   array(off: number): unknown[] {
-    const view = this.view;
     const a: unknown[] = [];
-    this.memo.set(off, a);
-    const length = this.slot(off + OBJ_SLOTS) as number;
-    const el = view.getUint32(off + OBJ_ELEMENTS, true);
-    if (el !== 0) {
-      const n = view.getUint32(el + VA_LEN, true);
-      for (let i = 0; i < n; i++) {
-        const at = el + VA_VALUES + 8 * i;
-        if (view.getUint32(at + 4, true) === HI_HOLE) {
-          a.length = i + 1; // keep the hole
-        } else {
-          a.push(this.slot(at));
+    let i = 0;
+    try {
+      const view = this.view;
+      const length = this.slot(off + OBJ_SLOTS) as number;
+      const el = view.getUint32(off + OBJ_ELEMENTS, true);
+      if (el !== 0) {
+        const n = view.getUint32(el + VA_LEN, true);
+        this.spend(n + 1);
+        const w32 = this.w32;
+        const f64 = this.f64;
+        for (; i < n; i++) {
+          const at = el + VA_VALUES + 8 * i;
+          if (w32 !== null) {
+            // Numbers (the common element) straight from typed views.
+            const hi = w32[(at >> 2) + 1];
+            if (hi >>> 16 !== TAG_PREFIX) {
+              a.push(f64![at >> 3]);
+              continue;
+            }
+            if (hi === HI_INT) {
+              a.push(w32[at >> 2] | 0);
+              continue;
+            }
+          }
+          if (view.getUint32(at + 4, true) === HI_HOLE) {
+            a.length = i + 1; // keep the hole
+          } else {
+            a.push(this.slot(at));
+          }
         }
       }
-    }
-    if (view.getUint16(off + HDR_FLAGS, true) & OBJ_INDEXED_PROPS) {
-      // Elements beyond the dense part live in the property table.
-      const t = view.getUint32(off + OBJ_PROPS, true);
-      const count = t === 0 ? 0 : view.getUint32(t + TAB_COUNT, true);
-      for (let i = 0; i < count; i++) {
-        const e = t + TAB_ENTRIES + ENTRY_SIZE * i;
-        const atom = view.getUint32(e + ENTRY_KEY, true);
-        const flags = view.getUint32(e + ENTRY_FLAGS, true);
-        if (atom === 0 || flags & P_ACCESSOR || !(flags & P_ENUMERABLE)) continue;
-        const key = this.key(atom);
-        if (typeof key === "number" || (typeof key === "string" && isArrayIndex(key))) {
-          a[Number(key)] = this.slot(e + ENTRY_VALUE);
+      if (view.getUint16(off + HDR_FLAGS, true) & OBJ_INDEXED_PROPS) {
+        // Elements beyond the dense part live in the property table.
+        const t = view.getUint32(off + OBJ_PROPS, true);
+        const count = t === 0 ? 0 : view.getUint32(t + TAB_COUNT, true);
+        for (let k = 0; k < count; k++) {
+          const e = t + TAB_ENTRIES + ENTRY_SIZE * k;
+          const atom = view.getUint32(e + ENTRY_KEY, true);
+          const flags = view.getUint32(e + ENTRY_FLAGS, true);
+          if (atom === 0 || flags & P_ACCESSOR || !(flags & P_ENUMERABLE)) continue;
+          const key = this.key(atom);
+          if (typeof key === "number" || (typeof key === "string" && isArrayIndex(key))) {
+            i = Number(key);
+            this.spend(1);
+            a[i] = this.slot(e + ENTRY_VALUE);
+          }
         }
       }
+      if (a.length < length) a.length = length;
+    } catch (e) {
+      if (e instanceof ReadError) e.segments.unshift(i);
+      throw e;
     }
-    if (a.length < length) a.length = length;
     return a;
   }
 }
@@ -365,6 +482,15 @@ class Reader {
 function isArrayIndex(s: string): boolean {
   const n = Number(s);
   return n >= 0 && n < 4294967295 && Number.isInteger(n) && String(n) === s;
+}
+
+const codes: number[] = [];
+
+/** `n` code units from `at`, via a reused plain array (faster than applying a subarray). */
+function fromCodes(units: ArrayLike<number>, at: number, n: number): string {
+  codes.length = n;
+  for (let i = 0; i < n; i++) codes[i] = units[at + i];
+  return String.fromCharCode.apply(null, codes);
 }
 
 function chunked(units: ArrayLike<number> & { subarray(a: number, b: number): ArrayLike<number> }): string {

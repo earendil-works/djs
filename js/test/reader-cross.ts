@@ -32,6 +32,11 @@ for (const [name, hex] of tsv(join(heapDir, "corpus.tsv"))) {
 }
 assert.ok(n > 1000);
 
+// The portable path (no node Buffer).
+for (const [name, hex] of tsv(join(heapDir, "corpus.tsv"))) {
+  assert.equal(dump(readValue(corpus, bits(hex), { portable: true })), expected.get(name), `case ${name} portable`);
+}
+
 // The arena at an offset within a larger buffer (as in wasm memory), aligned and not.
 for (const base of [1024, 3]) {
   const big = new Uint8Array(corpus.length + base + 8);
@@ -45,7 +50,8 @@ for (const base of [1024, 3]) {
 // ---- Hand-built cases. ------------------------------------------------------------------
 const extra = heap("extra.heap");
 const cases = new Map(tsv(join(heapDir, "extra.tsv")).map(([name, hex, d]) => [name, { hex, d }]));
-const read = (name: string) => readValue(extra, bits(cases.get(name)!.hex));
+for (const portable of [false, true]) {
+const read = (name: string) => readValue(extra, bits(cases.get(name)!.hex), { portable });
 for (const [name, { d }] of cases) {
   if (d !== "-") assert.equal(dump(read(name)), d, name);
 }
@@ -74,14 +80,15 @@ assert.equal(Object.getOwnPropertyDescriptor(props, "__proto__")!.value, 4);
 assert.deepEqual([props["2"], props["10"], props.b, props.a], [3, 10, 1, 2]);
 assert.ok(props.sym instanceof Opaque && (props.sym as Opaque).type === "symbol");
 
+// Sharing is copied (a tree, as with JSON); cycles are an error naming the path.
 const shared = read("shared") as Record<string, unknown>[];
-assert.equal(shared[0], shared[1]);
-assert.equal(shared[0].x, 1);
-
-const cyc = read("cycle") as Record<string, unknown> & { list: unknown[] };
-assert.equal(cyc.self, cyc);
-assert.equal(cyc.list[0], cyc);
-assert.equal(cyc.list[1], cyc.list);
+assert.notEqual(shared[0], shared[1]);
+assert.deepEqual(shared, [{ x: 1 }, { x: 1 }]);
+assert.throws(() => read("cycle"), { name: "TypeError", message: /^cyclic value at \$(\.self)+$/ });
+assert.throws(() => read("cycle-array"), { name: "TypeError", message: /^cyclic value at \$\.list\[1\]/ });
+// The value budget stops exponential expansion of shared references.
+assert.throws(() => read("blowup"), RangeError);
+assert.throws(() => readValue(extra, bits(cases.get("shared")!.hex), { portable, maxValues: 3 }), RangeError);
 
 const sparse = read("sparse") as unknown[];
 assert.equal(sparse.length, 1000);
@@ -93,6 +100,7 @@ assert.equal(readValue(extra, [0, 0]), 0);
 assert.equal(readValue(extra, [0, 0x40040000]), 2.5);
 assert.deepEqual(read("negzero"), -0);
 assert.ok(Number.isNaN(read("nan")));
+}
 
 // ---- The layout check. ------------------------------------------------------------------
 const bad = extra.slice(0, 4096);

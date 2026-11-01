@@ -879,14 +879,21 @@ fn reader_images() {
     let selfk = atom(&mut h, "self");
     h.create_data_property(cyc, selfk, Value::object(cyc))
         .unwrap();
-    let arr = h
-        .new_array_from_values(None, &[Value::object(cyc)])
-        .unwrap();
+    add(&mut h, "cycle", Value::object(cyc), false);
+    let cyc2 = h.new_object(None).unwrap();
+    let arr = h.new_array_from_values(None, &[Value::int(0)]).unwrap();
     let listk = atom(&mut h, "list");
-    h.create_data_property(cyc, listk, Value::object(arr))
+    h.create_data_property(cyc2, listk, Value::object(arr))
         .unwrap();
     h.set_element_fast(arr, 1, Value::object(arr)).unwrap();
-    add(&mut h, "cycle", Value::object(cyc), false);
+    add(&mut h, "cycle-array", Value::object(cyc2), false);
+    // Sharing at every level: 2^40 paths through 40 small arrays.
+    let mut level = h.new_array_from_values(None, &[Value::int(1)]).unwrap();
+    for _ in 0..40 {
+        let l = Value::object(level);
+        level = h.new_array_from_values(None, &[l, l]).unwrap();
+    }
+    add(&mut h, "blowup", Value::object(level), false);
 
     // Arrays: holes, an element far beyond the dense part, a non-index property, length.
     let sparse = h
@@ -930,4 +937,82 @@ fn reader_images() {
     }
     std::fs::write(format!("{out}/extra.heap"), h.bytes()).unwrap();
     std::fs::write(format!("{out}/extra.tsv"), tsv).unwrap();
+}
+
+/// Heap images for the reader benchmark (js/bench/reader.bench.ts): the datasets of
+/// 0018's benchmark (`DJS_WIRE_BENCH`, written by js/bench/wire.bench.ts) plus Latin-1
+/// strings, each decoded into a heap together with its `json::stringify_fast` result.
+/// Writes `DJS_READER_BENCH/<name>.heap` and `index.tsv` (`name \t value bits \t JSON bits
+/// \t stringify ms`).
+#[test]
+#[ignore]
+fn reader_bench_images() {
+    use crate::json::stringify_fast;
+    use std::time::Instant;
+    let src = std::env::var("DJS_WIRE_BENCH").expect("set DJS_WIRE_BENCH");
+    let out = std::env::var("DJS_READER_BENCH").expect("set DJS_READER_BENCH");
+    std::fs::create_dir_all(&out).unwrap();
+    let mut index = String::new();
+    let mut names: Vec<String> = std::fs::read_dir(&src)
+        .unwrap()
+        .filter_map(|e| {
+            let n = e.unwrap().file_name().into_string().unwrap();
+            n.strip_suffix(".wire").map(String::from)
+        })
+        .collect();
+    names.sort();
+    names.push("1mib-latin1".into());
+    names.push("1mib-latin1-c1".into());
+    for name in names {
+        let mut h = Heap::with_limit(1 << 30).unwrap();
+        let v = match name.as_str() {
+            "1mib-latin1" => {
+                let b: Vec<u8> = (0..1 << 20)
+                    .map(|i| {
+                        if i % 7 == 0 {
+                            0xE9
+                        } else {
+                            b'a' + (i % 26) as u8
+                        }
+                    })
+                    .collect();
+                Value::string(h.alloc_latin1(&b).unwrap())
+            }
+            "1mib-latin1-c1" => {
+                let b: Vec<u8> = (0..1 << 20)
+                    .map(|i| {
+                        if i % 7 == 0 {
+                            0x85
+                        } else {
+                            b'a' + (i % 26) as u8
+                        }
+                    })
+                    .collect();
+                Value::string(h.alloc_latin1(&b).unwrap())
+            }
+            _ => {
+                let wire = std::fs::read(format!("{src}/{name}.wire")).unwrap();
+                decode(&mut h, &wire, &DecodeOptions::default()).unwrap()
+            }
+        };
+        let json = stringify_fast(&mut h, v, &[]).unwrap().unwrap();
+        // Time stringify_fast on a copy of the heap each round (it allocates its result).
+        let image = h.bytes().to_vec();
+        let mut runs = Vec::new();
+        for _ in 0..20 {
+            let mut hc = Heap::from_bytes(image.clone(), 1 << 30).unwrap();
+            let t = Instant::now();
+            core::hint::black_box(stringify_fast(&mut hc, v, &[]).unwrap());
+            runs.push(t.elapsed().as_secs_f64() * 1e3);
+        }
+        runs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        std::fs::write(format!("{out}/{name}.heap"), h.bytes()).unwrap();
+        index.push_str(&format!(
+            "{name}\t{:016x}\t{:016x}\t{:.3}\n",
+            v.to_bits(),
+            Value::string(json).to_bits(),
+            runs[runs.len() / 2]
+        ));
+    }
+    std::fs::write(format!("{out}/index.tsv"), index).unwrap();
 }
