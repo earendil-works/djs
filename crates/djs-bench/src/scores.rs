@@ -122,6 +122,51 @@ pub fn baseline<'a>(rows: &'a [Row], machine: &str, rev: Option<&str>) -> Vec<&'
         .collect()
 }
 
+/// The names of the results that are worse than the baseline beyond the threshold.
+pub fn compare_rows(
+    base: &[&Row],
+    now: &[Measurement],
+    threshold_pct: f64,
+) -> (usize, Vec<String>) {
+    let mut names = Vec::new();
+    for m in now {
+        let Some(b) = base.iter().find(|r| r.benchmark == m.name) else {
+            continue;
+        };
+        if is_worse(b.value, m, threshold_pct) {
+            names.push(m.name.clone());
+        }
+    }
+    (names.len(), names)
+}
+
+fn limit(unit: Unit, threshold_pct: f64) -> f64 {
+    // Sizes are deterministic: any real change matters.
+    if unit == Unit::Bytes {
+        0.5
+    } else {
+        threshold_pct
+    }
+}
+
+fn change_pct(base: f64, now: f64) -> f64 {
+    if base == 0.0 {
+        0.0
+    } else {
+        (now - base) / base * 100.0
+    }
+}
+
+fn is_worse(base: f64, m: &Measurement, threshold_pct: f64) -> bool {
+    let pct = change_pct(base, m.value);
+    let better = if m.unit.higher_is_better() {
+        pct > 0.0
+    } else {
+        pct < 0.0
+    };
+    pct.abs() > limit(m.unit, threshold_pct) && !better
+}
+
 /// A table of baseline vs now with the change in percent; changes beyond the noise
 /// threshold are flagged better/worse. Returns the table and the number of regressions.
 pub fn compare(base: &[&Row], now: &[Measurement], threshold_pct: f64) -> (String, usize) {
@@ -140,29 +185,14 @@ pub fn compare(base: &[&Row], now: &[Measurement], threshold_pct: f64) -> (Strin
             ]);
             continue;
         };
-        let pct = if b.value == 0.0 {
-            0.0
-        } else {
-            (m.value - b.value) / b.value * 100.0
-        };
-        // Sizes are deterministic: any real change matters.
-        let limit = if m.unit == Unit::Bytes {
-            0.5
-        } else {
-            threshold_pct
-        };
-        let better = if m.unit.higher_is_better() {
-            pct > 0.0
-        } else {
-            pct < 0.0
-        };
-        let flag = if pct.abs() <= limit {
-            ""
-        } else if better {
-            "better"
-        } else {
+        let pct = change_pct(b.value, m.value);
+        let flag = if is_worse(b.value, m, threshold_pct) {
             worse += 1;
             "WORSE"
+        } else if pct.abs() > limit(m.unit, threshold_pct) {
+            "better"
+        } else {
+            ""
         };
         rows.push(vec![
             m.name.clone(),
@@ -362,6 +392,11 @@ mod tests {
         assert!(t.contains("better"), "{t}");
         assert!(t.contains("new"), "{t}");
         assert!(parse("a\tb\n").is_err());
+        let (n, names) = compare_rows(&base, &now, 10.0);
+        assert_eq!(
+            (n, names),
+            (2, vec!["fast".to_string(), "size".to_string()])
+        );
     }
 
     #[test]

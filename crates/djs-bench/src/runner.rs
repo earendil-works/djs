@@ -57,6 +57,7 @@ pub struct Measurement {
     pub samples: usize,
 }
 
+#[derive(Clone)]
 pub struct Config {
     /// Run each measurement once with no warmup (smoke test).
     pub quick: bool,
