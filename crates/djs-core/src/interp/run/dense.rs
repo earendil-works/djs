@@ -28,7 +28,7 @@ fn dense_range(heap: &Heap, o: Obj, from: u32, to: u32) -> Option<Vec<Value>> {
 
 /// An integral Number in [0, 2^32) as a u32.
 fn index(v: f64) -> Option<u32> {
-    (v >= 0.0 && v < 4294967296.0 && (v as u32) as f64 == v).then_some(v as u32)
+    ((0.0..4294967296.0).contains(&v) && (v as u32) as f64 == v).then_some(v as u32)
 }
 
 impl Exec<'_> {
