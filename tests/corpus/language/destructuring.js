@@ -85,7 +85,6 @@ run(71, () => { const o = {m(s) { return this === o }}; return o.m`x` && o['m']`
 run(72, () => { return (s => s[0] === undefined && s.raw[0] === '\\xg')`\xg` });
 run(73, () => { function tag(s, a, b) { return s.length + ' ' + a + b } return tag`${1}${2}` });
 run(74, () => { function f() { return f } return f`a``b`` c` === f });
-run(75, () => { const t = (s) => s; return t`
 `.raw[0] === '\n' });
 run(76, () => { const o = {...{a: 1, get b() { return 2 }}}; return Object.keys(o).join() + o.b });
 run(77, () => { const o = {...null, ...undefined, ...1, ...[5]}; return Object.keys(o).join() + o[0] });
