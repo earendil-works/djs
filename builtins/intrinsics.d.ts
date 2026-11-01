@@ -685,6 +685,23 @@ declare function JsonQuote(s: Str): Str;
 /** CreateDataProperty ( O, P, V ): false if refused. @reentrant */
 declare function CreateDataProperty(o: Obj, key: Value, v: Value): boolean;
 
+// ---- BigInt (0046) ---------------------------------------------------------------------
+
+/** @leaf */
+declare function IsBigInt(v: Value): boolean;
+/** ToBigInt of a primitive: TypeError for undefined, null, numbers and symbols; SyntaxError for a bad string. @leaf */
+declare function ToBigIntPrimitive(v: Value): Value;
+/** NumberToBigInt ( number ), 21.2.1.1.1: RangeError unless integral. @leaf */
+declare function NumberToBigInt(n: f64): Value;
+/** The digits of a BigInt in radix 2..36. @leaf */
+declare function BigIntToString(b: Value, radix: i32): Str;
+/** BigInt.asIntN on an index and a BigInt. @leaf */
+declare function BigIntAsIntN(bits: f64, b: Value): Value;
+/** BigInt.asUintN on an index and a BigInt. @leaf */
+declare function BigIntAsUintN(bits: f64, b: Value): Value;
+/** The Number value of a BigInt (rounded to nearest). @leaf */
+declare function BigIntToNumber(b: Value): f64;
+
 // ---- Used by the generated code (crates/djs-bgen/src/emit_js.rs) ------------------------
 
 /**

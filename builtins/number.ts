@@ -1,14 +1,19 @@
 // Number (ECMA-262 21.1) and the global number functions (19.2).
 
 /**
- * Number ( value ), 21.1.1.1 (no BigInt yet: ToNumeric is ToNumber).
+ * Number ( value ), 21.1.1.1.
  * @constructor Number
  * @length 1
  */
 function NumberConstructor(...args: Value[]): Value {
   let n: f64 = 0;
   if (LengthOfArrayLike(args) > 0) {
-    n = ToNumber(Get(args, 0));
+    const prim: Value = ToNumeric(Get(args, 0));
+    if (IsBigInt(prim)) {
+      n = BigIntToNumber(prim);
+    } else {
+      n = AsNumber(prim);
+    }
   }
   if (new.target === undefined) {
     return n;

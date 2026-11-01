@@ -507,6 +507,34 @@ AsyncFromSyncIteratorThrow: reentrant (%AsyncFromSyncIteratorPrototype%.throw)
   builtins/asyncgen.ts:357:14  CallWithArray (intrinsic)
   builtins/asyncgen.ts:365:10  AsyncFromSyncIteratorContinuation (builtin)
 
+ToBigInt: reentrant (%ToBigInt)
+  builtins/bigint.ts:8:28  ToPrimitive (builtin)
+
+ToNumeric: reentrant (%ToNumeric)
+  builtins/bigint.ts:16:23  ToPrimitive (builtin)
+
+BigIntConstructor: reentrant (constructor BigInt)
+  builtins/bigint.ts:31:23  ToPrimitive (builtin)
+
+BigIntAsIntNBuiltin: reentrant (BigInt.asIntN)
+  builtins/bigint.ts:43:18  ToIndex (builtin)
+  builtins/bigint.ts:44:26  ToBigInt (builtin)
+
+BigIntAsUintNBuiltin: reentrant (BigInt.asUintN)
+  builtins/bigint.ts:52:18  ToIndex (builtin)
+  builtins/bigint.ts:53:27  ToBigInt (builtin)
+
+ThisBigIntValue: leaf
+
+BigIntPrototypeToString: reentrant (BigInt.prototype.toString)
+  builtins/bigint.ts:73:9  ToIntegerOrInfinity (builtin)
+
+BigIntPrototypeToLocaleString: leaf (BigInt.prototype.toLocaleString)
+
+BigIntPrototypeValueOf: leaf (BigInt.prototype.valueOf)
+
+BigIntPrototypeToStringTag: leaf (value BigInt.prototype[Symbol.toStringTag])
+
 BooleanConstructor: reentrant (constructor Boolean)
   builtins/boolean.ts:12:27  GetPrototypeFromConstructor (builtin)
 
@@ -1048,33 +1076,33 @@ SerializeJSONProperty: reentrant
   builtins/json.ts:170:13  Call (intrinsic)
   builtins/json.ts:175:15  ToNumber (builtin)
   builtins/json.ts:177:15  ToString (builtin)
-  builtins/json.ts:201:9  JSONStackIncludes (builtin)
-  builtins/json.ts:204:24  LengthOfArrayLike (builtin)
-  builtins/json.ts:205:5  CreateDataPropertyOrThrow (intrinsic)
-  builtins/json.ts:207:9  SerializeJSONArray (builtin)
-  builtins/json.ts:208:9  SerializeJSONObject (builtin)
-  builtins/json.ts:209:5  Set (intrinsic)
+  builtins/json.ts:204:9  JSONStackIncludes (builtin)
+  builtins/json.ts:207:24  LengthOfArrayLike (builtin)
+  builtins/json.ts:208:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/json.ts:210:9  SerializeJSONArray (builtin)
+  builtins/json.ts:211:9  SerializeJSONObject (builtin)
+  builtins/json.ts:212:5  Set (intrinsic)
 
 JSONStackIncludes: reentrant
-  builtins/json.ts:217:18  LengthOfArrayLike (builtin)
-  builtins/json.ts:219:9  Get (intrinsic)
+  builtins/json.ts:220:18  LengthOfArrayLike (builtin)
+  builtins/json.ts:222:9  Get (intrinsic)
 
 JSONJoin: reentrant
-  builtins/json.ts:237:16  Get (intrinsic)
+  builtins/json.ts:240:16  Get (intrinsic)
 
 SerializeJSONObject: reentrant
-  builtins/json.ts:252:50  OwnPropertyKeys (intrinsic)
-  builtins/json.ts:253:20  LengthOfArrayLike (builtin)
-  builtins/json.ts:257:26  Get (intrinsic)
-  builtins/json.ts:258:25  SerializeJSONProperty (builtin)
-  builtins/json.ts:261:7  CreateDataPropertyOrThrow (intrinsic)
-  builtins/json.ts:265:10  JSONJoin (builtin)
+  builtins/json.ts:255:50  OwnPropertyKeys (intrinsic)
+  builtins/json.ts:256:20  LengthOfArrayLike (builtin)
+  builtins/json.ts:260:26  Get (intrinsic)
+  builtins/json.ts:261:25  SerializeJSONProperty (builtin)
+  builtins/json.ts:264:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/json.ts:268:10  JSONJoin (builtin)
 
 SerializeJSONArray: reentrant
-  builtins/json.ts:278:20  LengthOfArrayLike (builtin)
-  builtins/json.ts:281:25  SerializeJSONProperty (builtin)
-  builtins/json.ts:290:5  CreateDataPropertyOrThrow (intrinsic)
-  builtins/json.ts:292:10  JSONJoin (builtin)
+  builtins/json.ts:281:20  LengthOfArrayLike (builtin)
+  builtins/json.ts:284:25  SerializeJSONProperty (builtin)
+  builtins/json.ts:293:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/json.ts:295:10  JSONJoin (builtin)
 
 ThisMap: leaf
 
@@ -1272,27 +1300,27 @@ MathRandomBuiltin: leaf (Math.random)
 
 NumberConstructor: reentrant (constructor Number)
   builtins/number.ts:10:7  LengthOfArrayLike (builtin)
-  builtins/number.ts:11:18  Get (intrinsic)
-  builtins/number.ts:11:9  ToNumber (builtin)
-  builtins/number.ts:16:27  GetPrototypeFromConstructor (builtin)
+  builtins/number.ts:11:35  Get (intrinsic)
+  builtins/number.ts:11:25  ToNumeric (builtin)
+  builtins/number.ts:21:27  GetPrototypeFromConstructor (builtin)
 
 ThisNumberValue: leaf
 
 NumberPrototypeToString: reentrant (Number.prototype.toString)
-  builtins/number.ts:36:9  ToIntegerOrInfinity (builtin)
+  builtins/number.ts:41:9  ToIntegerOrInfinity (builtin)
 
 NumberPrototypeToLocaleString: leaf (Number.prototype.toLocaleString)
 
 NumberPrototypeValueOf: leaf (Number.prototype.valueOf)
 
 NumberPrototypeToFixed: reentrant (Number.prototype.toFixed)
-  builtins/number.ts:63:27  ToIntegerOrInfinity (builtin)
+  builtins/number.ts:68:27  ToIntegerOrInfinity (builtin)
 
 NumberPrototypeToExponential: reentrant (Number.prototype.toExponential)
-  builtins/number.ts:72:18  ToIntegerOrInfinity (builtin)
+  builtins/number.ts:77:18  ToIntegerOrInfinity (builtin)
 
 NumberPrototypeToPrecision: reentrant (Number.prototype.toPrecision)
-  builtins/number.ts:88:31  ToIntegerOrInfinity (builtin)
+  builtins/number.ts:93:31  ToIntegerOrInfinity (builtin)
 
 IsFiniteNumber: leaf
 
@@ -1321,17 +1349,17 @@ NumberNegativeInfinity: leaf (value Number.NEGATIVE_INFINITY)
 NumberPositiveInfinity: leaf (value Number.POSITIVE_INFINITY)
 
 GlobalParseFloat: reentrant (parseFloat, Number.parseFloat)
-  builtins/number.ts:210:27  ToString (builtin)
+  builtins/number.ts:215:27  ToString (builtin)
 
 GlobalParseInt: reentrant (parseInt, Number.parseInt)
-  builtins/number.ts:219:18  ToString (builtin)
-  builtins/number.ts:220:42  ToNumber (builtin)
+  builtins/number.ts:224:18  ToString (builtin)
+  builtins/number.ts:225:42  ToNumber (builtin)
 
 GlobalIsNaN: reentrant (isNaN)
-  builtins/number.ts:228:18  ToNumber (builtin)
+  builtins/number.ts:233:18  ToNumber (builtin)
 
 GlobalIsFinite: reentrant (isFinite)
-  builtins/number.ts:237:25  ToNumber (builtin)
+  builtins/number.ts:242:25  ToNumber (builtin)
 
 ObjectConstructor: reentrant (constructor Object)
   builtins/object.ts:10:25  GetPrototypeFromConstructor (builtin)

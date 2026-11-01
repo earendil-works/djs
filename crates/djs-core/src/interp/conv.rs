@@ -7,6 +7,7 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 
 use super::realm::ErrorKind;
+use crate::bigint::BigInt;
 use crate::heap::{Atom, Heap, HeapError, StrView, atoms};
 use crate::num;
 use crate::value::{Kind, Str, Value};
@@ -56,6 +57,7 @@ pub(crate) fn to_boolean(heap: &Heap, v: Value) -> bool {
             !(n == 0.0 || n.is_nan())
         }
         Kind::String => heap.str_len(v.as_string().unwrap()) > 0,
+        Kind::BigInt => !heap.bigint_is_zero(v),
         _ => true,
     }
 }
@@ -85,6 +87,7 @@ pub(crate) fn to_number(heap: &mut Heap, v: Value) -> Result<f64, Fault> {
         Kind::Bool => Ok(if v.as_bool().unwrap() { 1.0 } else { 0.0 }),
         Kind::String => string_to_number(heap, v.as_string().unwrap()),
         Kind::Symbol => type_error("cannot convert symbol to number"),
+        Kind::BigInt => type_error("cannot convert bigint to number"),
         Kind::Object => to_primitive_unsupported(),
         _ => type_error("cannot convert value to number"),
     }
@@ -117,10 +120,23 @@ pub(crate) fn to_string(heap: &mut Heap, v: Value) -> Result<Str, Fault> {
             }
         }
         Kind::Symbol => return type_error("cannot convert symbol to string"),
+        Kind::BigInt => return bigint_to_string(heap, v, 10),
         Kind::Object => return to_primitive_unsupported(),
         _ => return type_error("cannot convert value to string"),
     };
     Ok(heap.atom_string(atom)?)
+}
+
+/// The digits of a BigInt in `radix`.
+pub(crate) fn bigint_to_string(heap: &mut Heap, v: Value, radix: u32) -> Result<Str, Fault> {
+    let s = heap.bigint(v).to_string_radix(radix);
+    Ok(heap.alloc_latin1(s.as_bytes())?)
+}
+
+/// StringToBigInt: `None` if the string is not a StringIntegerLiteral.
+pub(crate) fn string_to_bigint(heap: &mut Heap, s: Str) -> Result<Option<BigInt>, Fault> {
+    let u = units(heap, s)?;
+    Ok(BigInt::parse_string(&u))
 }
 
 /// ToPropertyKey for primitives.
@@ -200,6 +216,9 @@ pub(crate) fn strict_equals(heap: &Heap, a: Value, b: Value) -> bool {
     if let (Some(x), Some(y)) = (a.as_string(), b.as_string()) {
         return heap.str_eq(x, y);
     }
+    if a.as_bigint().is_some() && b.as_bigint().is_some() {
+        return heap.bigint_eq(a, b);
+    }
     a == b
 }
 
@@ -217,6 +236,18 @@ pub(crate) fn loose_equals(heap: &mut Heap, a: Value, b: Value) -> Result<bool, 
         }
         (Kind::String, Kind::Number) => {
             string_to_number(heap, a.as_string().unwrap())? == b.as_number().unwrap()
+        }
+        (Kind::BigInt, Kind::Number) => {
+            heap.bigint(a).cmp_f64(b.as_number().unwrap()) == Some(Ordering::Equal)
+        }
+        (Kind::Number, Kind::BigInt) => {
+            heap.bigint(b).cmp_f64(a.as_number().unwrap()) == Some(Ordering::Equal)
+        }
+        (Kind::BigInt, Kind::String) => {
+            string_to_bigint(heap, b.as_string().unwrap())?.is_some_and(|y| heap.bigint(a) == y)
+        }
+        (Kind::String, Kind::BigInt) => {
+            string_to_bigint(heap, a.as_string().unwrap())?.is_some_and(|x| heap.bigint(b) == x)
         }
         (Kind::Bool, _) => {
             let n = number(to_number(heap, a)?);
@@ -243,6 +274,9 @@ pub(crate) fn less_than(heap: &mut Heap, a: Value, b: Value) -> Result<Option<bo
     if a.kind() == Kind::Object || b.kind() == Kind::Object {
         return to_primitive_unsupported();
     }
+    if a.as_bigint().is_some() || b.as_bigint().is_some() {
+        return bigint_less_than(heap, a, b);
+    }
     let x = to_number(heap, a)?;
     let y = to_number(heap, b)?;
     if x.is_nan() || y.is_nan() {
@@ -250,6 +284,31 @@ pub(crate) fn less_than(heap: &mut Heap, a: Value, b: Value) -> Result<Option<bo
     } else {
         Ok(Some(x < y))
     }
+}
+
+/// IsLessThan when one side is a BigInt (exact, no rounding through f64).
+fn bigint_less_than(heap: &mut Heap, a: Value, b: Value) -> Result<Option<bool>, Fault> {
+    // A string against a BigInt is StringToBigInt; anything else is ToNumeric.
+    let side = |heap: &mut Heap, v: Value| -> Result<Option<Result<BigInt, f64>>, Fault> {
+        Ok(Some(match v.kind() {
+            Kind::BigInt => Ok(heap.bigint(v)),
+            Kind::String => match string_to_bigint(heap, v.as_string().unwrap())? {
+                Some(b) => Ok(b),
+                None => return Ok(None),
+            },
+            _ => Err(to_number(heap, v)?),
+        }))
+    };
+    let (Some(x), Some(y)) = (side(heap, a)?, side(heap, b)?) else {
+        return Ok(None);
+    };
+    let ord = match (x, y) {
+        (Ok(x), Ok(y)) => Some(x.cmp(&y)),
+        (Ok(x), Err(y)) => x.cmp_f64(y),
+        (Err(x), Ok(y)) => y.cmp_f64(x).map(Ordering::reverse),
+        (Err(_), Err(_)) => unreachable!("one side is a BigInt"),
+    };
+    Ok(ord.map(|o| o == Ordering::Less))
 }
 
 /// Number::exponentiate. C's pow disagrees with the spec for a NaN exponent and for

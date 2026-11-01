@@ -43,6 +43,22 @@ of difftest cases (0016: 6 BigInt literal cases).
   longer keeps popped values alive; test `collect_drops_popped_stack_values` (fails
   without the fix: 365 KB -> 589 KB kept).
 
+- test262 baseline (built-ins/BigInt + feature BigInt, 1142 tests, measured with a
+  scratch group): djs 161 pass (14.0%), qjs 1142 (100%). Failures: 638 BigInt literals
+  unsupported, 258+ BigInt typed arrays, 26 `BigInt` not defined.
+- Part 1: D1460 (always-heap cell kind 24, ObjectClass 30, compared by value), D1461
+  (`crate::bigint`: schoolbook/Knuth D, 2^20-bit cap, fuel after the fact), D1462 (slow
+  path beside exec, qjs messages). Literals as constants (`{1n: x}` keys too), operators,
+  comparisons/equality with Number and String, typeof/ToBoolean/ToString, `BigInt()`,
+  asIntN/asUintN, toString(radix)/toLocaleString/valueOf, the wrapper (ToPrimitive works
+  through the generic path), JSON.stringify TypeError (and BigInt.prototype.toJSON),
+  Number(bigint), SameValue/Map/Set keys by value. My qjs probe scripts (~150 cases)
+  match except toLocaleString("de"), where qjs throws (uses the locale as a radix).
+- Asymptotics: add/sub/bitwise/shifts O(n); mul O(n m); div O((n-m) m); pow O(r^2) for
+  an r-limb result (squarings dominate); toString O(n^2) (O(n) for power-of-two radixes);
+  parse O(n^2). With the 32768-limb cap the worst single operation is ~2.7e8 limb
+  products (16k x 16k), uninterruptible but charged as fuel afterwards.
+
 ## Follow-ups
 
 ## Result

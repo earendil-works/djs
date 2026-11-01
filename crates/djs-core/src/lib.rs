@@ -5,6 +5,7 @@
 
 extern crate alloc;
 
+pub mod bigint;
 pub(crate) mod builtins;
 pub mod bytecode;
 pub mod compiler;

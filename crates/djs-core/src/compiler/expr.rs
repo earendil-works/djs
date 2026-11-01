@@ -903,7 +903,11 @@ impl Parser<'_, '_> {
                 self.emit_number(n);
                 Ok(Expr::Value)
             }
-            TokenKind::BigInt => self.unsupported(tok.start, "BigInt literals are"),
+            TokenKind::BigInt => {
+                self.emit_bigint_literal()?;
+                self.next()?;
+                Ok(Expr::Value)
+            }
             TokenKind::String => {
                 let units = self.cooked_string();
                 let idx = self.string_const(&units)?;
@@ -1256,7 +1260,12 @@ impl Parser<'_, '_> {
                 self.next()?;
                 Ok(Some(a))
             }
-            TokenKind::BigInt => self.unsupported(tok.start, "BigInt literals are"),
+            TokenKind::BigInt => {
+                let s = self.bigint_literal()?.to_string_radix(10);
+                let a = self.heap.atom_str(s.as_str())?;
+                self.next()?;
+                Ok(Some(a))
+            }
             k if k.is_identifier_name() => {
                 let a = self.ident_atom()?;
                 self.next()?;

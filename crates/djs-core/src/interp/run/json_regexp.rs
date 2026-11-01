@@ -68,12 +68,7 @@ impl Exec<'_> {
                 let key = conv::to_property_key(self.heap, arg(self, 1))?;
                 Value::bool(self.heap.create_data_property(o, key, arg(self, 2))?)
             }
-            _ => {
-                return Err(Fault::Error(
-                    ErrorKind::InternalError,
-                    format!("not supported yet: %{name}"),
-                ));
-            }
+            _ => return self.bigint_intrinsic(id, name, base, argc, next),
         };
         self.sp = base;
         self.push(v);

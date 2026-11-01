@@ -160,7 +160,7 @@ function SerializeJSONProperty(
   holder: Obj,
 ): Value {
   let value: Value = Get(holder, key);
-  if (IsObject(value)) {
+  if (IsObject(value) || IsBigInt(value)) {
     const toJSON: Value = GetV(value, "toJSON");
     if (IsCallable(toJSON)) {
       value = Call(toJSON, value, key);
@@ -175,7 +175,7 @@ function SerializeJSONProperty(
       value = ToNumber(value);
     } else if (IsString(p)) {
       value = ToString(value);
-    } else if (IsBoolean(p)) {
+    } else if (IsBoolean(p) || IsBigInt(p)) {
       value = p;
     }
   }
@@ -195,6 +195,9 @@ function SerializeJSONProperty(
     const n: f64 = AsNumber(value);
     // Finite numbers only: NaN and the infinities give NaN here.
     return n - n === 0 ? ToStringPrimitive(value) : "null";
+  }
+  if (IsBigInt(value)) {
+    throw NewTypeError("Do not know how to serialize a BigInt");
   }
   if (IsObject(value) && !IsCallable(value)) {
     const o: Obj = AsObj(value);

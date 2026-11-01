@@ -76,6 +76,8 @@ pub mod flags {
     /// HostFunction: async (D1374). A call returns a promise and leaves a pending host
     /// call for the embedder instead of parking the VM.
     pub const OBJ_HOST_ASYNC: u16 = 32;
+    /// BigInt: the value is negative.
+    pub const BIGINT_NEG: u16 = 1;
 }
 
 /// `"DJS\0"` little-endian, in [`Roots::MAGIC`].
@@ -377,6 +379,14 @@ cells! {
         /// Slots in use (two per pair).
         LEN: u32 = 8,
     } tail VALUES: [Value] = 16;
+
+    /// A BigInt primitive (0046, D1460): immutable, the magnitude in little-endian
+    /// `u32` limbs without high zero limbs (zero has none). Header flag
+    /// [`flags::BIGINT_NEG`]: negative (never set for zero).
+    24 => BigInt {
+        /// Limb count.
+        LEN: u32 = 8,
+    } tail LIMBS: [u32] = 12;
 }
 
 // The GC stores the forwarding offset in the first payload word, so every cell needs one.

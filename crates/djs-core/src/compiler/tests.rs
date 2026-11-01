@@ -200,7 +200,6 @@ fn errors() {
         ("f(1, 2", "expecting ')'", 1, 7),
         ("({a = 1})", "expecting '}'", 1, 5),
         ("({a: 1} = c)", "invalid destructuring target", 1, 7),
-        ("({1n: 1})", "BigInt literals are not supported yet", 1, 3),
         (
             "'\\08'",
             "octal escape sequences are not allowed in strict mode",
@@ -562,7 +561,6 @@ fn errors() {
         ("({ m() { super.x } })", "super is not supported yet", 1, 10),
         ("({ #x: 1 })", "invalid property name", 1, 4),
         ("({ get #x() {} })", "invalid property name", 1, 8),
-        ("1n", "BigInt literals are not supported yet", 1, 1),
         // Async functions and generators (0041); messages and positions as qjs.
         (
             "async function f(a = await 1) {}",

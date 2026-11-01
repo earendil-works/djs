@@ -94,7 +94,7 @@ impl Heap {
         self.object_slot(o, LIVE).as_int().unwrap_or(0) as u32
     }
 
-    /// The hash of a normalized key. Strings hash by content; objects and symbols by
+    /// The hash of a normalized key. Strings and BigInts hash by content; objects and symbols by
     /// offset (rebuilt after every collection).
     fn key_hash(&self, k: Value) -> u32 {
         if let Some(s) = k.as_string() {
@@ -102,6 +102,9 @@ impl Heap {
         }
         if let Some(n) = k.as_number() {
             return mix(n.to_bits());
+        }
+        if k.as_bigint().is_some() {
+            return mix(self.bigint_hash(k));
         }
         mix(k.to_bits())
     }
@@ -112,6 +115,9 @@ impl Heap {
         }
         if let (Some(x), Some(y)) = (a.as_string(), b.as_string()) {
             return self.str_eq(x, y);
+        }
+        if a.as_bigint().is_some() && b.as_bigint().is_some() {
+            return self.bigint_eq(a, b);
         }
         a == b
     }

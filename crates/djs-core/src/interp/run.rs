@@ -67,6 +67,7 @@ impl Default for ExecOptions {
     }
 }
 
+mod bigint;
 mod intrinsics;
 mod json_regexp;
 pub(crate) mod promise;
@@ -1301,6 +1302,11 @@ impl<'h> Exec<'h> {
     fn exec(&mut self, op: Op, next: u32) -> Step {
         if let Some(step) = self.primitive_operands(op) {
             return step;
+        }
+        if let Some(r) = self.bigint_operands(op) {
+            r?;
+            self.pc = next;
+            return Ok(None);
         }
         match op {
             // ---- constants ----

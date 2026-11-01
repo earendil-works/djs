@@ -29,7 +29,7 @@
 //! | 8 | string | arena offset of a string cell |
 //! | 9 | object | arena offset of an object cell |
 //! | 10 | symbol | arena offset of a symbol cell |
-//! | 11 | bigint (reserved) | arena offset of a bigint cell |
+//! | 11 | bigint | arena offset of a bigint cell (D1460) |
 //! | 12 | host ref (reserved) | arena offset of a host-ref cell |
 //! | 13 | internal (D007) | arena offset of a non-JS cell (function template, Box, realm, ...) |
 //!
@@ -175,6 +175,12 @@ impl Value {
     #[inline]
     pub const fn symbol(s: Sym) -> Value {
         Value::tagged(tag::SYMBOL, s.0)
+    }
+
+    /// A BigInt: the arena offset of a `BigInt` cell (nonzero).
+    #[inline]
+    pub const fn bigint(cell: u32) -> Value {
+        Value::tagged(tag::BIGINT, cell)
     }
 
     /// A reference to the internal cell at arena offset `cell` (nonzero).
@@ -361,6 +367,15 @@ impl Value {
     pub const fn as_internal(self) -> Option<u32> {
         match self.tag() {
             Some(tag::INTERNAL) => Some(self.payload()),
+            _ => None,
+        }
+    }
+
+    /// The cell offset of a BigInt.
+    #[inline]
+    pub const fn as_bigint(self) -> Option<u32> {
+        match self.tag() {
+            Some(tag::BIGINT) => Some(self.payload()),
             _ => None,
         }
     }

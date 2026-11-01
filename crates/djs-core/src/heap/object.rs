@@ -123,6 +123,9 @@ pub enum ObjectClass {
     /// properties, not extensible as far as the heap is concerned: the interpreter and
     /// the builtins send every internal method to the traps (builtins/proxy.ts).
     Proxy = 27,
+    /// A BigInt wrapper (`[[BigIntData]]`, 0046): slot 0 is the BigInt, like the other
+    /// primitive wrappers.
+    BigInt = 30,
 }
 
 impl ObjectClass {
@@ -154,6 +157,7 @@ impl ObjectClass {
             23 => Some(ObjectClass::TypedArray),
             24 => Some(ObjectClass::DataView),
             27 => Some(ObjectClass::Proxy),
+            30 => Some(ObjectClass::BigInt),
             _ => None,
         }
     }
@@ -173,7 +177,8 @@ impl ObjectClass {
             ObjectClass::Boolean
             | ObjectClass::Number
             | ObjectClass::String
-            | ObjectClass::Symbol => 1,
+            | ObjectClass::Symbol
+            | ObjectClass::BigInt => 1,
             ObjectClass::Map | ObjectClass::Set | ObjectClass::WeakMap | ObjectClass::WeakSet => 3,
             ObjectClass::CollectionIterator => 6,
             ObjectClass::Date => 1,
@@ -1113,6 +1118,9 @@ impl Heap {
         }
         if let (Some(x), Some(y)) = (a.as_string(), b.as_string()) {
             return self.str_eq(x, y);
+        }
+        if a.as_bigint().is_some() && b.as_bigint().is_some() {
+            return self.bigint_eq(a, b);
         }
         a == b
     }

@@ -98,9 +98,11 @@ pub enum Intrinsic {
     AsyncIteratorProto,
     AsyncGeneratorProto,
     AsyncFromSyncIteratorProto,
+    /// %BigInt.prototype% (an ordinary object, 0046).
+    BigIntProto,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::AsyncFromSyncIteratorProto as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::BigIntProto as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -123,6 +125,7 @@ impl Intrinsic {
             "Number" => Intrinsic::NumberProto,
             "String" => Intrinsic::StringProto,
             "Symbol" => Intrinsic::SymbolProto,
+            "BigInt" => Intrinsic::BigIntProto,
             "Map" => Intrinsic::MapProto,
             "Set" => Intrinsic::SetProto,
             "WeakMap" => Intrinsic::WeakMapProto,
@@ -349,6 +352,8 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     heap.define_own_property(string_proto, atoms::LENGTH, &d)?;
     let symbol_proto = heap.new_object(Some(object_proto))?;
     set(heap, Intrinsic::SymbolProto, Value::object(symbol_proto));
+    let bigint_proto = heap.new_object(Some(object_proto))?;
+    set(heap, Intrinsic::BigIntProto, Value::object(bigint_proto));
     let promise_proto = heap.new_object(Some(object_proto))?;
     set(heap, Intrinsic::PromiseProto, Value::object(promise_proto));
     let iterator_proto = intrinsic_obj(heap, Intrinsic::IteratorProto);
@@ -495,7 +500,7 @@ pub(crate) fn set_global_lexical(heap: &mut Heap, key: Atom, v: Value) -> Result
 }
 
 /// ToObject of a primitive (`proto` None: the realm's prototype for its type): a
-/// Boolean, Number, String or Symbol wrapper. `None` for undefined and null.
+/// Boolean, Number, String, Symbol or BigInt wrapper. `None` for undefined and null.
 pub(crate) fn wrap_primitive(
     heap: &mut Heap,
     v: Value,
@@ -506,6 +511,7 @@ pub(crate) fn wrap_primitive(
         crate::value::Kind::Number => (ObjectClass::Number, Intrinsic::NumberProto),
         crate::value::Kind::String => (ObjectClass::String, Intrinsic::StringProto),
         crate::value::Kind::Symbol => (ObjectClass::Symbol, Intrinsic::SymbolProto),
+        crate::value::Kind::BigInt => (ObjectClass::BigInt, Intrinsic::BigIntProto),
         _ => return Ok(None),
     };
     let proto = proto.unwrap_or_else(|| intrinsic_obj(heap, default));
@@ -535,6 +541,7 @@ pub(crate) fn primitive_proto(heap: &Heap, v: Value) -> Option<Obj> {
         crate::value::Kind::Number => Intrinsic::NumberProto,
         crate::value::Kind::String => Intrinsic::StringProto,
         crate::value::Kind::Symbol => Intrinsic::SymbolProto,
+        crate::value::Kind::BigInt => Intrinsic::BigIntProto,
         _ => return None,
     };
     Some(intrinsic_obj(heap, i))

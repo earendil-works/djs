@@ -7,8 +7,8 @@
 use alloc::vec::Vec;
 
 use super::cells::{
-    AtomTable, EphemeronArray, HANDLE_LIVE, HandleSlot, HandleTable, Header, Object, PropTable,
-    Roots, Rope, Str8, Str16, Symbol, U32Array, ValueArray, flags,
+    AtomTable, BigInt, EphemeronArray, HANDLE_LIVE, HandleSlot, HandleTable, Header, Object,
+    PropTable, Roots, Rope, Str8, Str16, Symbol, U32Array, ValueArray, flags,
 };
 use super::layout::{FieldTy, Ref};
 use super::object::ObjectClass;
@@ -292,6 +292,15 @@ impl Heap {
                         && two == (two_of(left.0, kl) || two_of(right.0, kr))
                 }
             }
+            // Normalized: no high zero limb, zero is not negative.
+            CellKind::BigInt => {
+                let len = a.get(cell, BigInt::LEN);
+                if len == 0 {
+                    self.cell_flags(cell) & flags::BIGINT_NEG == 0
+                } else {
+                    a.read::<u32>(BigInt::LIMBS.at(cell, len - 1)) != 0
+                }
+            }
             CellKind::Symbol => {
                 let d: Value = a.get(cell, Symbol::DESCRIPTION);
                 d.is_undefined() || d.as_string().is_some()
@@ -354,6 +363,7 @@ impl Heap {
                 EphemeronArray::VALUES.cell_size(a.get(cell, EphemeronArray::LEN))
             }
             CellKind::U32Array => U32Array::DATA.cell_size(a.get(cell, U32Array::LEN)),
+            CellKind::BigInt => BigInt::LIMBS.cell_size(a.get(cell, BigInt::LEN)),
             _ => Some(0),
         };
         matches!(need, Some(n) if n <= size)
@@ -401,6 +411,7 @@ fn ref_fits(tag: Option<u16>, kind: Option<CellKind>) -> bool {
             Some(CellKind::Str8 | CellKind::Str16 | CellKind::Rope)
         ) | (Some(tag::OBJECT), Some(CellKind::Object))
             | (Some(tag::SYMBOL), Some(CellKind::Symbol))
+            | (Some(tag::BIGINT), Some(CellKind::BigInt))
     ) || (tag == Some(tag::INTERNAL)
         && kind.is_some_and(|k| {
             !matches!(
@@ -411,6 +422,7 @@ fn ref_fits(tag: Option<u16>, kind: Option<CellKind>) -> bool {
                     | CellKind::Rope
                     | CellKind::Object
                     | CellKind::Symbol
+                    | CellKind::BigInt
             )
         }))
 }

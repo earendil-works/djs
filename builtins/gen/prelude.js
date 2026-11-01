@@ -1399,6 +1399,81 @@ function AsyncFromSyncIteratorThrow(...args) {
   return AsyncFromSyncIteratorContinuation(%AsObj(result), iterator, true);
 }
 
+// builtins/bigint.ts:7 %ToBigInt
+function ToBigInt(v) {
+  return %ToBigIntPrimitive(ToPrimitive(v, "number"));
+}
+
+// builtins/bigint.ts:15 %ToNumeric
+function ToNumeric(v) {
+  const prim = ToPrimitive(v, "number");
+  if (%IsBigInt(prim)) {
+    return prim;
+  }
+  return %ToNumberPrimitive(prim);
+}
+
+// builtins/bigint.ts:27 constructor BigInt
+function BigIntConstructor(value) {
+  if (new.target !== undefined) {
+    throw %NewTypeError("BigInt is not a constructor");
+  }
+  const prim = ToPrimitive(value, "number");
+  if (%IsNumber(prim)) {
+    return %NumberToBigInt(%AsNumber(prim));
+  }
+  return %ToBigIntPrimitive(prim);
+}
+
+// builtins/bigint.ts:42 BigInt.asIntN
+function BigIntAsIntNBuiltin(bits, bigint) {
+  const n = ToIndex(bits);
+  return %BigIntAsIntN(n, ToBigInt(bigint));
+}
+
+// builtins/bigint.ts:51 BigInt.asUintN
+function BigIntAsUintNBuiltin(bits, bigint) {
+  const n = ToIndex(bits);
+  return %BigIntAsUintN(n, ToBigInt(bigint));
+}
+
+// builtins/bigint.ts:57
+function ThisBigIntValue(value) {
+  const b = %PrimitiveValue(value);
+  if (!%IsBigInt(b)) {
+    throw %NewTypeError("not a BigInt");
+  }
+  return b;
+}
+
+// builtins/bigint.ts:69 BigInt.prototype.toString
+function BigIntPrototypeToString(radix) {
+  const x = ThisBigIntValue(this);
+  let r = 10;
+  if (radix !== undefined) {
+    r = ToIntegerOrInfinity(radix);
+  }
+  if (r < 2 || r > 36) {
+    throw %NewRangeError("radix must be between 2 and 36");
+  }
+  return %BigIntToString(x, %F64ToI32(r));
+}
+
+// builtins/bigint.ts:86 BigInt.prototype.toLocaleString
+function BigIntPrototypeToLocaleString() {
+  return %BigIntToString(ThisBigIntValue(this), 10);
+}
+
+// builtins/bigint.ts:94 BigInt.prototype.valueOf
+function BigIntPrototypeValueOf() {
+  return ThisBigIntValue(this);
+}
+
+// builtins/bigint.ts:103 value BigInt.prototype[Symbol.toStringTag]
+function BigIntPrototypeToStringTag() {
+  return "BigInt";
+}
+
 // builtins/boolean.ts:7 constructor Boolean
 function BooleanConstructor(value) {
   const b = %ToBoolean(value);
@@ -2820,7 +2895,7 @@ function JSONListIncludes(list, n, v) {
 // builtins/json.ts:153
 function SerializeJSONProperty(replacer, propertyList, gap, stack, indent, key, holder) {
   let value = %Get(holder, key);
-  if (%IsObject(value)) {
+  if (%IsObject(value) || %IsBigInt(value)) {
     const toJSON = %GetV(value, "toJSON");
     if (%IsCallable(toJSON)) {
       value = %Call(toJSON, value, key);
@@ -2835,7 +2910,7 @@ function SerializeJSONProperty(replacer, propertyList, gap, stack, indent, key, 
       value = ToNumber(value);
     } else if (%IsString(p)) {
       value = ToString(value);
-    } else if (%IsBoolean(p)) {
+    } else if (%IsBoolean(p) || %IsBigInt(p)) {
       value = p;
     }
   }
@@ -2855,6 +2930,9 @@ function SerializeJSONProperty(replacer, propertyList, gap, stack, indent, key, 
     const n = %AsNumber(value);
     return n - n === 0 ? %ToStringPrimitive(value) : "null";
   }
+  if (%IsBigInt(value)) {
+    throw %NewTypeError("Do not know how to serialize a BigInt");
+  }
   if (%IsObject(value) && !%IsCallable(value)) {
     const o = %AsObj(value);
     if (JSONStackIncludes(stack, o)) {
@@ -2869,7 +2947,7 @@ function SerializeJSONProperty(replacer, propertyList, gap, stack, indent, key, 
   return undefined;
 }
 
-// builtins/json.ts:216
+// builtins/json.ts:219
 function JSONStackIncludes(stack, o) {
   const n = LengthOfArrayLike(stack);
   for (let i = 0; i < n; i++) {
@@ -2880,7 +2958,7 @@ function JSONStackIncludes(stack, o) {
   return false;
 }
 
-// builtins/json.ts:227
+// builtins/json.ts:230
 function JSONJoin(open, close, partial, n, gap, stepback, indent) {
   if (n === 0) {
     return open + close;
@@ -2896,7 +2974,7 @@ function JSONJoin(open, close, partial, n, gap, stepback, indent) {
   return gap === "" ? r + close : r + "\n" + stepback + close;
 }
 
-// builtins/json.ts:243
+// builtins/json.ts:246
 function SerializeJSONObject(replacer, propertyList, gap, stack, stepback, value) {
   const indent = stepback + gap;
   const keys = propertyList === undefined ? %OwnPropertyKeys(value, 3) : %AsObj(propertyList);
@@ -2915,7 +2993,7 @@ function SerializeJSONObject(replacer, propertyList, gap, stack, stepback, value
   return JSONJoin("{", "}", partial, n, gap, stepback, indent);
 }
 
-// builtins/json.ts:269
+// builtins/json.ts:272
 function SerializeJSONArray(replacer, propertyList, gap, stack, stepback, value) {
   const indent = stepback + gap;
   const len = LengthOfArrayLike(value);
@@ -3359,7 +3437,12 @@ function MathRandomBuiltin() {
 function NumberConstructor(...args) {
   let n = 0;
   if (LengthOfArrayLike(args) > 0) {
-    n = ToNumber(%Get(args, 0));
+    const prim = ToNumeric(%Get(args, 0));
+    if (%IsBigInt(prim)) {
+      n = %BigIntToNumber(prim);
+    } else {
+      n = %AsNumber(prim);
+    }
   }
   if (new.target === undefined) {
     return n;
@@ -3367,7 +3450,7 @@ function NumberConstructor(...args) {
   return %WrapPrimitive(n, GetPrototypeFromConstructor(new.target, "NumberPrototype"));
 }
 
-// builtins/number.ts:20
+// builtins/number.ts:25
 function ThisNumberValue(value) {
   const n = %PrimitiveValue(value);
   if (!%IsNumber(n)) {
@@ -3376,7 +3459,7 @@ function ThisNumberValue(value) {
   return %AsNumber(n);
 }
 
-// builtins/number.ts:32 Number.prototype.toString
+// builtins/number.ts:37 Number.prototype.toString
 function NumberPrototypeToString(radix) {
   const x = ThisNumberValue(this);
   let r = 10;
@@ -3386,23 +3469,23 @@ function NumberPrototypeToString(radix) {
   return %NumberToString(x, r);
 }
 
-// builtins/number.ts:45 Number.prototype.toLocaleString
+// builtins/number.ts:50 Number.prototype.toLocaleString
 function NumberPrototypeToLocaleString() {
   return %NumberToString(ThisNumberValue(this), 10);
 }
 
-// builtins/number.ts:53 Number.prototype.valueOf
+// builtins/number.ts:58 Number.prototype.valueOf
 function NumberPrototypeValueOf() {
   return ThisNumberValue(this);
 }
 
-// builtins/number.ts:61 Number.prototype.toFixed
+// builtins/number.ts:66 Number.prototype.toFixed
 function NumberPrototypeToFixed(fractionDigits) {
   const x = ThisNumberValue(this);
   return %NumberToFixed(x, ToIntegerOrInfinity(fractionDigits));
 }
 
-// builtins/number.ts:70 Number.prototype.toExponential
+// builtins/number.ts:75 Number.prototype.toExponential
 function NumberPrototypeToExponential(fractionDigits) {
   const x = ThisNumberValue(this);
   const f = ToIntegerOrInfinity(fractionDigits);
@@ -3412,7 +3495,7 @@ function NumberPrototypeToExponential(fractionDigits) {
   return %NumberToExponential(x, f);
 }
 
-// builtins/number.ts:83 Number.prototype.toPrecision
+// builtins/number.ts:88 Number.prototype.toPrecision
 function NumberPrototypeToPrecision(precision) {
   const x = ThisNumberValue(this);
   if (precision === undefined) {
@@ -3421,17 +3504,17 @@ function NumberPrototypeToPrecision(precision) {
   return %NumberToPrecision(x, ToIntegerOrInfinity(precision));
 }
 
-// builtins/number.ts:92
+// builtins/number.ts:97
 function IsFiniteNumber(n) {
   return n === n && n !== 1 / 0 && n !== -1 / 0;
 }
 
-// builtins/number.ts:100 Number.isFinite
+// builtins/number.ts:105 Number.isFinite
 function NumberIsFinite(number) {
   return %IsNumber(number) && IsFiniteNumber(%AsNumber(number));
 }
 
-// builtins/number.ts:108 Number.isInteger
+// builtins/number.ts:113 Number.isInteger
 function NumberIsInteger(number) {
   if (!%IsNumber(number)) {
     return false;
@@ -3440,7 +3523,7 @@ function NumberIsInteger(number) {
   return IsFiniteNumber(n) && %ToIntegerOrInfinityNumber(n) === n;
 }
 
-// builtins/number.ts:120 Number.isNaN
+// builtins/number.ts:125 Number.isNaN
 function NumberIsNaN(number) {
   if (!%IsNumber(number)) {
     return false;
@@ -3449,7 +3532,7 @@ function NumberIsNaN(number) {
   return n !== n;
 }
 
-// builtins/number.ts:132 Number.isSafeInteger
+// builtins/number.ts:137 Number.isSafeInteger
 function NumberIsSafeInteger(number) {
   if (!NumberIsInteger(number)) {
     return false;
@@ -3458,64 +3541,64 @@ function NumberIsSafeInteger(number) {
   return n <= 9007199254740991 && n >= -9007199254740991;
 }
 
-// builtins/number.ts:144 value Number.EPSILON
+// builtins/number.ts:149 value Number.EPSILON
 function NumberEpsilon() {
   return 2.220446049250313e-16;
 }
 
-// builtins/number.ts:152 value Number.MAX_SAFE_INTEGER
+// builtins/number.ts:157 value Number.MAX_SAFE_INTEGER
 function NumberMaxSafeInteger() {
   return 9007199254740991;
 }
 
-// builtins/number.ts:160 value Number.MAX_VALUE
+// builtins/number.ts:165 value Number.MAX_VALUE
 function NumberMaxValue() {
   return 1.7976931348623157e308;
 }
 
-// builtins/number.ts:168 value Number.MIN_SAFE_INTEGER
+// builtins/number.ts:173 value Number.MIN_SAFE_INTEGER
 function NumberMinSafeInteger() {
   return -9007199254740991;
 }
 
-// builtins/number.ts:176 value Number.MIN_VALUE
+// builtins/number.ts:181 value Number.MIN_VALUE
 function NumberMinValue() {
   return 5e-324;
 }
 
-// builtins/number.ts:184 value Number.NaN
+// builtins/number.ts:189 value Number.NaN
 function NumberNaN() {
   return 0 / 0;
 }
 
-// builtins/number.ts:192 value Number.NEGATIVE_INFINITY
+// builtins/number.ts:197 value Number.NEGATIVE_INFINITY
 function NumberNegativeInfinity() {
   return -1 / 0;
 }
 
-// builtins/number.ts:200 value Number.POSITIVE_INFINITY
+// builtins/number.ts:205 value Number.POSITIVE_INFINITY
 function NumberPositiveInfinity() {
   return 1 / 0;
 }
 
-// builtins/number.ts:209 parseFloat Number.parseFloat
+// builtins/number.ts:214 parseFloat Number.parseFloat
 function GlobalParseFloat(string) {
   return %StringParseFloat(ToString(string));
 }
 
-// builtins/number.ts:218 parseInt Number.parseInt
+// builtins/number.ts:223 parseInt Number.parseInt
 function GlobalParseInt(string, radix) {
   const s = ToString(string);
   return %StringParseInt(s, %NumberToInt32(ToNumber(radix)));
 }
 
-// builtins/number.ts:227 isNaN
+// builtins/number.ts:232 isNaN
 function GlobalIsNaN(number) {
   const n = ToNumber(number);
   return n !== n;
 }
 
-// builtins/number.ts:236 isFinite
+// builtins/number.ts:241 isFinite
 function GlobalIsFinite(number) {
   return IsFiniteNumber(ToNumber(number));
 }
@@ -7493,6 +7576,7 @@ function WeakSetPrototypeToStringTag() {
 
 %InstallConstructor("globalThis", "Array", ArrayConstructor, 1, undefined);
 %InstallConstructor("globalThis", "ArrayBuffer", ArrayBufferConstructor, 1, undefined);
+%InstallConstructor("globalThis", "BigInt", BigIntConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Boolean", BooleanConstructor, 1, undefined);
 %InstallConstructor("globalThis", "DataView", DataViewConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Date", DateConstructor, 7, undefined);
@@ -7595,6 +7679,12 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("%AsyncFromSyncIteratorPrototype%", "next", AsyncFromSyncIteratorNext, 1);
 %InstallMethod("%AsyncFromSyncIteratorPrototype%", "return", AsyncFromSyncIteratorReturn, 1);
 %InstallMethod("%AsyncFromSyncIteratorPrototype%", "throw", AsyncFromSyncIteratorThrow, 1);
+%InstallMethod("BigInt", "asIntN", BigIntAsIntNBuiltin, 2);
+%InstallMethod("BigInt", "asUintN", BigIntAsUintNBuiltin, 2);
+%InstallMethod("BigInt.prototype", "toString", BigIntPrototypeToString, 0);
+%InstallMethod("BigInt.prototype", "toLocaleString", BigIntPrototypeToLocaleString, 0);
+%InstallMethod("BigInt.prototype", "valueOf", BigIntPrototypeValueOf, 0);
+%InstallValue("BigInt.prototype", %WellKnownSymbol("toStringTag"), BigIntPrototypeToStringTag(), 4);
 %InstallMethod("Boolean.prototype", "toString", BooleanPrototypeToString, 0);
 %InstallMethod("Boolean.prototype", "valueOf", BooleanPrototypeValueOf, 0);
 %InstallAccessor("DataView.prototype", "buffer", DataViewPrototypeBuffer, false);
@@ -8000,6 +8090,8 @@ function WeakSetPrototypeToStringTag() {
 %InstallIntrinsic("AsyncIteratorCloseThrow", AsyncIteratorCloseThrow);
 %InstallIntrinsic("AsyncFromSyncIteratorUnwrap", AsyncFromSyncIteratorUnwrap);
 %InstallIntrinsic("AsyncFromSyncIteratorCloseThrow", AsyncFromSyncIteratorCloseThrow);
+%InstallIntrinsic("ToBigInt", ToBigInt);
+%InstallIntrinsic("ToNumeric", ToNumeric);
 %InstallIntrinsic("ToPrimitive", ToPrimitive);
 %InstallIntrinsic("ToNumber", ToNumber);
 %InstallIntrinsic("ToString", ToString);

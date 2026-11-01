@@ -1871,3 +1871,43 @@ OrdinarySet on the wrapper with v as the receiver: a setter on the prototype cha
 runs with `this` = v, and a proxy on the chain gets its `set` trap
 (`%ProxySetOrThrow(p, key, v, receiver)`); anything else is still the TypeError
 (test262 language/types/reference/put-value-prop-base-primitive.js).
+
+## D1460: BigInt values are always heap cells, compared by value
+date: 2026-11-02 · by: heap · issue: 0046
+A BigInt is value tag 11 pointing at an immutable `BigInt` cell (kind 24): `LEN` u32
+limbs, then little-endian `u32` limbs, normalized (no high zero limb; zero has no limbs
+and is never negative), the sign in header flag `BIGINT_NEG`. One limb costs 16 bytes.
+There is no inline small form: BigInt is rare in codemode, and a second representation
+would double every BigInt path (and the reader's) for little gain; tag 7 stays free if
+benchmarks ever want it. Equality is by value everywhere (`strict_equals`, `same_value`,
+Map/Set keys hash the limbs), never by cell offset. The wrapper object is
+`ObjectClass::BigInt` (30, slot 0 the primitive) with `%BigInt.prototype%` an ordinary
+object (`Intrinsic::BigIntProto`). BigInt literals are constants in the pool.
+
+## D1461: Arbitrary-precision arithmetic in `crate::bigint`, capped at 2^20 bits
+date: 2026-11-02 · by: heap · issue: 0046
+`crates/djs-core/src/bigint/` is heap-free sign-magnitude arithmetic on `Vec<u32>`
+(u32 limbs so every product fits a u64, which wasm has natively): schoolbook
+multiplication, Knuth D division, square-and-multiply powers (powers of two are shifts),
+two's-complement bitwise ops, quadratic radix conversion (linear for power-of-two
+radixes), and exact comparison with f64. Magnitudes are capped at `MAX_BITS` = 2^20 - 1
+bits, QuickJS's limit, with its RangeErrors ("BigInt is too large to allocate"; "BigInt
+is too large" for a power of two with a huge exponent). Size checks happen before the
+work where the result size is known (mul, shl, pow), so `2n ** 10000000n` fails at once.
+Operations run to completion and pay fuel afterwards (`mul_cost` = n*m/16 limb
+products, linear passes n/16); the worst single operation (a 16k x 16k limb product or
+quotient, or a decimal conversion of a 1 Mi-bit value) is a few hundred ms natively.
+Karatsuba or divide-and-conquer radix conversion can come later if it ever matters.
+
+## D1462: BigInt operators are a slow path beside `exec`
+date: 2026-11-02 · by: heap · issue: 0046
+The numeric operators check for a BigInt operand in `Exec::bigint_operands`
+(interp/run/bigint.rs) right after `primitive_operands`, before the main match; the fast
+paths stay Number-only. Mixed BigInt/Number arithmetic throws QuickJS's "cannot convert
+bigint to number" after ToNumeric of both operands (so a symbol throws its own error
+first), `>>>` "bigint operands are forbidden for >>>", unary `+` "bigint argument with
+unary +". Relational operators, `==` (with Number and String: exact), ToBoolean and
+ToString handle BigInt in `conv`. The builtins add `%ToBigInt` and `%ToNumeric`
+(builtins/bigint.ts) and BigInt leaves at the end of the intrinsic fallback chain
+(`json_regexp_intrinsic` -> `bigint_intrinsic`). `BigInt.prototype.toLocaleString`
+ignores its arguments like node (qjs takes the locale as a radix and throws).

@@ -535,6 +535,32 @@ impl<'a, 'h> Parser<'a, 'h> {
     }
 
     /// The atom of a number used as a property key (`{ 1.5: x }`).
+    /// The value of the current BigInt literal token (D1460: a constant).
+    pub fn bigint_literal(&mut self) -> PResult<crate::bigint::BigInt> {
+        let tok = self.tok;
+        let lit = self.lx.number_literal(&tok);
+        let mut digits = Vec::new();
+        crate::lexer::strip_separators(lit.digits, &mut digits);
+        let b = crate::bigint::BigInt::parse_digits(
+            digits.iter().map(|&d| u32::from(d)),
+            lit.base.radix(),
+        );
+        match b {
+            Some(b) if b.bits() <= crate::bigint::MAX_BITS => Ok(b),
+            Some(_) => syntax(tok.start, "BigInt literal is too large"),
+            None => syntax(tok.start, "invalid number literal"),
+        }
+    }
+
+    /// Pushes the current BigInt literal token from the constant pool.
+    pub fn emit_bigint_literal(&mut self) -> PResult<()> {
+        let b = self.bigint_literal()?;
+        let v = self.heap.alloc_bigint(&b)?;
+        let idx = self.add_const(v);
+        self.code().push_const(idx);
+        Ok(())
+    }
+
     pub fn atom_of_number(&mut self, n: f64) -> PResult<Atom> {
         let s = crate::num::to_string(n);
         Ok(self.heap.atom_str(s.as_str())?)

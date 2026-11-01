@@ -34,6 +34,7 @@
 pub mod arena;
 mod arrays;
 pub mod atom;
+pub mod bigint;
 pub mod cells;
 pub mod collection;
 mod compact;

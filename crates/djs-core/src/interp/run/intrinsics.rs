@@ -687,7 +687,8 @@ impl Exec<'_> {
                     ObjectClass::Boolean
                     | ObjectClass::Number
                     | ObjectClass::String
-                    | ObjectClass::Symbol => self.heap.object_slot(o, 0),
+                    | ObjectClass::Symbol
+                    | ObjectClass::BigInt => self.heap.object_slot(o, 0),
                     _ => Value::UNDEFINED,
                 },
             },
