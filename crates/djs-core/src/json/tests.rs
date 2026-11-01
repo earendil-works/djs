@@ -842,23 +842,28 @@ fn json_throughput() {
     );
     for (name, text) in [("records", &records), ("1 MiB string", &big_string)] {
         let mb = text.len() as f64 / 1e6;
-        let n = 20;
+        let n: usize = std::env::var("DJS_JSON_BENCH_N")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(20);
         let mut h = Heap::new().unwrap();
         let s = h.alloc_str(text).unwrap();
         let hs = h.new_handle(Value::string(s)).unwrap();
+        // Parse n times without collecting in between (allocation only bumps), then free.
         let t = Instant::now();
         for _ in 0..n {
             let s = h.get_handle(hs).as_string().unwrap();
             parse(&mut h, s, &ParseOptions::default()).unwrap();
-            h.collect().unwrap();
         }
         let parse_s = t.elapsed().as_secs_f64() / n as f64;
+        let heap_mb = h.arena().len() as f64 / n as f64 / 1e6;
+        h.collect().unwrap();
         let t = Instant::now();
         for _ in 0..n {
             parse_utf8(&mut h, text.as_bytes(), &ParseOptions::default()).unwrap();
-            h.collect().unwrap();
         }
         let utf8_s = t.elapsed().as_secs_f64() / n as f64;
+        h.collect().unwrap();
         let s = h.get_handle(hs).as_string().unwrap();
         let v = parse(&mut h, s, &ParseOptions::default()).unwrap();
         let hv = h.new_handle(v).unwrap();
@@ -872,7 +877,7 @@ fn json_throughput() {
         }
         let sfy_s = t.elapsed().as_secs_f64() / n as f64;
         std::println!(
-            "{name}: {mb:.2} MB; parse {:.0} MB/s (utf8 {:.0} MB/s), stringify {:.0} MB/s ({} units out)",
+            "{name}: {mb:.2} MB -> {heap_mb:.1} MB heap; parse {:.0} MB/s (utf8 {:.0} MB/s), stringify {:.0} MB/s ({} units out)",
             mb / parse_s,
             mb / utf8_s,
             mb / sfy_s,

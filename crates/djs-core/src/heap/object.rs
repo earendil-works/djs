@@ -1078,6 +1078,36 @@ impl Heap {
         }
     }
 
+    /// For an ordinary object whose own properties are exactly its property table entries
+    /// in `[[OwnPropertyKeys]]` order (no elements, no array-index keys), the number of
+    /// entry slots to pass to [`Heap::plain_entry`]; `None` otherwise. Lets hot loops (JSON
+    /// stringify) walk properties without collecting keys and looking each one up.
+    pub fn plain_entry_slots(&self, o: Obj) -> Option<u32> {
+        if self.object_class(o) != ObjectClass::Ordinary
+            || self.obj_flags(o) & OBJ_INDEXED_PROPS != 0
+            || self.dense_len(o) != 0
+        {
+            return None;
+        }
+        Some(match self.props(o) {
+            0 => 0,
+            t => self.arena().get(t, PropTable::COUNT),
+        })
+    }
+
+    /// Entry slot `i` of a plain object (see [`Heap::plain_entry_slots`]): its key and
+    /// property, or `None` for a deleted slot. Symbol keys are included; string keys come
+    /// in creation order.
+    pub fn plain_entry(&self, o: Obj, i: u32) -> Option<(Atom, Property)> {
+        let t = self.props(o);
+        let key = self.entry_key(t, i);
+        if key.is_null() {
+            None
+        } else {
+            Some((key, self.read_entry(t, i)))
+        }
+    }
+
     /// `[[OwnPropertyKeys]]` in spec order: array indexes ascending, then string keys in
     /// creation order, then symbols in creation order.
     pub fn own_keys(&self, o: Obj) -> Vec<Atom> {

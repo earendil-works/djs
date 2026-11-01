@@ -97,6 +97,8 @@ pub fn stringify_fast(
         stack: Vec::new(),
         keys: Vec::new(),
         deep: BTreeSet::new(),
+        clean_protos: Vec::new(),
+        key_cache: alloc::vec![(Atom::NULL, Vec::new()); KEY_CACHE],
     };
     if !s.run(value)? {
         return Ok(None);
@@ -208,12 +210,22 @@ impl Out {
         match v {
             StrView::Latin1(b) => {
                 let mut run = 0;
-                for (i, &c) in b.iter().enumerate() {
+                let mut i = 0;
+                while i < b.len() {
+                    // Skip 8 bytes at a time while none needs escaping.
+                    if let Some(w) = b.get(i..i + 8)
+                        && !needs_escape8(u64::from_le_bytes(w.try_into().unwrap()))
+                    {
+                        i += 8;
+                        continue;
+                    }
+                    let c = b[i];
                     if c < 0x20 || c == b'"' || c == b'\\' {
                         self.latin1(&b[run..i]);
                         self.escape_ascii(c);
                         run = i + 1;
                     }
+                    i += 1;
                 }
                 self.latin1(&b[run..]);
             }
@@ -240,6 +252,17 @@ impl Out {
     }
 }
 
+/// Whether any of the 8 bytes in `w` is below 0x20, `"` or `\\` (SWAR: a byte is zero
+/// after the subtraction or xor exactly when it matched).
+#[inline]
+fn needs_escape8(w: u64) -> bool {
+    const ONES: u64 = 0x0101_0101_0101_0101;
+    const HIGH: u64 = 0x8080_8080_8080_8080;
+    let lt = |x: u64, n: u64| x.wrapping_sub(ONES * n) & !x & HIGH;
+    let zero = |x: u64| x.wrapping_sub(ONES) & !x & HIGH;
+    (lt(w, 0x20) | zero(w ^ (ONES * 0x22)) | zero(w ^ (ONES * 0x5C))) != 0
+}
+
 /// Writes `n` in decimal.
 fn write_int(out: &mut Out, n: i64) {
     let mut buf = [0u8; 20];
@@ -262,6 +285,14 @@ fn write_int(out: &mut Out, n: i64) {
 
 #[derive(Clone, Copy)]
 enum Frame {
+    /// A plain object (see `Heap::plain_entry_slots`): serializing its entry slots
+    /// `next..count` directly.
+    Plain {
+        o: Obj,
+        next: u32,
+        count: u32,
+        any: bool,
+    },
     /// Serializing the keys `next..end` of `keys`; the frame owns `start..end`.
     Obj {
         o: Obj,
@@ -280,7 +311,7 @@ enum Frame {
 impl Frame {
     fn obj(&self) -> Obj {
         match *self {
-            Frame::Obj { o, .. } | Frame::Arr { o, .. } => o,
+            Frame::Plain { o, .. } | Frame::Obj { o, .. } | Frame::Arr { o, .. } => o,
         }
     }
 }
@@ -304,10 +335,53 @@ struct Ser<'h, 'g> {
     stack: Vec<Frame>,
     keys: Vec<Atom>,
     deep: BTreeSet<u32>,
+    /// Prototypes whose chain is known to have no (object-valued) `toJSON`. Nothing can
+    /// change during one call, so the answer stays valid.
+    clean_protos: Vec<Obj>,
+    /// Quoted Latin-1 keys by atom, direct-mapped: arrays of similar objects repeat keys.
+    key_cache: Vec<(Atom, Vec<u8>)>,
+}
+
+const KEY_CACHE: usize = 128;
+const CLEAN_PROTOS: usize = 8;
+
+/// Whether a `toJSON` lookup result means user code might run.
+fn to_json_blocks(p: Option<Property>) -> bool {
+    match p {
+        None => false,
+        Some(Property::Data { value, .. }) => value.as_object().is_some(),
+        Some(Property::Accessor { .. }) => true,
+    }
 }
 
 impl Ser<'_, '_> {
-    fn classify(&self, v: Value) -> Result<Class, StringifyError> {
+    /// Fails with `Slow` if `toJSON` on `o` (own or inherited) might be callable.
+    fn check_to_json(&mut self, o: Obj) -> Result<(), StringifyError> {
+        let own = self.heap.get_own_property(o, atoms::TO_JSON);
+        if own.is_some() {
+            return if to_json_blocks(own) {
+                Err(StringifyError::Slow)
+            } else {
+                Ok(())
+            };
+        }
+        let Some(p) = self.heap.get_prototype_of(o) else {
+            return Ok(());
+        };
+        if self.clean_protos.contains(&p) {
+            return Ok(());
+        }
+        let found = self.heap.find_property(p, atoms::TO_JSON).map(|(_, p)| p);
+        if to_json_blocks(found) {
+            return Err(StringifyError::Slow);
+        }
+        if self.clean_protos.len() < CLEAN_PROTOS {
+            self.clean_protos.push(p);
+        }
+        Ok(())
+    }
+
+    fn classify(&mut self, v: Value) -> Result<Class, StringifyError> {
         Ok(match v.kind() {
             Kind::Undefined | Kind::Symbol => Class::Skip,
             Kind::Null | Kind::Bool | Kind::Number | Kind::String => Class::Primitive,
@@ -321,11 +395,7 @@ impl Ser<'_, '_> {
                     _ => return Err(StringifyError::Slow),
                 };
                 // A toJSON that might be callable means calling user code.
-                match self.heap.find_property(o, atoms::TO_JSON) {
-                    None => {}
-                    Some((_, Property::Data { value, .. })) if value.as_object().is_none() => {}
-                    Some(_) => return Err(StringifyError::Slow),
-                }
+                self.check_to_json(o)?;
                 Class::Object(o, is_array)
             }
             Kind::BigInt | Kind::HostRef | Kind::Hole | Kind::Uninitialized => {
@@ -373,12 +443,30 @@ impl Ser<'_, '_> {
             write_int(&mut self.out, i as i64);
             self.out.byte(b'"');
         } else {
+            let slot = k.id() as usize % KEY_CACHE;
+            if self.key_cache[slot].0 == k {
+                self.out.latin1(&self.key_cache[slot].1);
+                return;
+            }
             let s = self
                 .heap
                 .atom_string(k)
                 .expect("string atoms do not allocate");
             let view = self.heap.str_view(s).expect("atom strings are flat");
-            self.out.quote(view);
+            if let StrView::Latin1(_) = view {
+                let mut q = Out {
+                    buf: Buf::Narrow(Vec::new()),
+                    max_len: usize::MAX,
+                    room: usize::MAX,
+                };
+                q.quote(view);
+                if let Buf::Narrow(b) = q.buf {
+                    self.out.latin1(&b);
+                    self.key_cache[slot] = (k, b);
+                }
+            } else {
+                self.out.quote(view);
+            }
         }
     }
 
@@ -407,6 +495,14 @@ impl Ser<'_, '_> {
             self.out.byte(b'[');
             let len = self.heap.array_length(o);
             self.stack.push(Frame::Arr { o, next: 0, len });
+        } else if let Some(count) = self.heap.plain_entry_slots(o) {
+            self.out.byte(b'{');
+            self.stack.push(Frame::Plain {
+                o,
+                next: 0,
+                count,
+                any: false,
+            });
         } else {
             self.out.byte(b'{');
             let start = self.keys.len();
@@ -452,6 +548,43 @@ impl Ser<'_, '_> {
         }
     }
 
+    /// The value of an own property as an object member: `None` if it is skipped
+    /// (non-enumerable, or serializes to `undefined`), `Slow` for an enumerable accessor.
+    fn member_value(&mut self, p: Property) -> Result<Option<(Value, Class)>, StringifyError> {
+        let value = match p {
+            Property::Data { value, flags } if flags.enumerable() => value,
+            Property::Accessor { flags, .. } if flags.enumerable() => {
+                return Err(StringifyError::Slow);
+            }
+            _ => return Ok(None),
+        };
+        Ok(match self.classify(value)? {
+            Class::Skip => None,
+            c => Some((value, c)),
+        })
+    }
+
+    /// Writes `,`, the indentation, `"key":` and the value.
+    fn member(
+        &mut self,
+        key: Atom,
+        any: bool,
+        depth: usize,
+        value: Value,
+        c: Class,
+    ) -> Result<(), StringifyError> {
+        if any {
+            self.out.byte(b',');
+        }
+        self.newline(depth);
+        self.key(key);
+        self.out.byte(b':');
+        if !self.gap.is_empty() {
+            self.out.byte(b' ');
+        }
+        self.emit(value, c)
+    }
+
     /// Serializes `v`; `false` if the result is `undefined`.
     fn run(&mut self, v: Value) -> Result<bool, StringifyError> {
         match self.classify(v)? {
@@ -462,6 +595,43 @@ impl Ser<'_, '_> {
             let top = self.stack.len() - 1;
             let depth = self.stack.len();
             match frame {
+                Frame::Plain {
+                    o,
+                    next,
+                    count,
+                    any,
+                } => {
+                    if next == count {
+                        if any {
+                            self.newline(depth - 1);
+                        }
+                        self.out.byte(b'}');
+                        self.pop();
+                        continue;
+                    }
+                    self.stack[top] = Frame::Plain {
+                        o,
+                        next: next + 1,
+                        count,
+                        any,
+                    };
+                    let Some((key, p)) = self.heap.plain_entry(o, next) else {
+                        continue;
+                    };
+                    if key.is_symbol() {
+                        continue;
+                    }
+                    let Some((value, c)) = self.member_value(p)? else {
+                        continue;
+                    };
+                    self.stack[top] = Frame::Plain {
+                        o,
+                        next: next + 1,
+                        count,
+                        any: true,
+                    };
+                    self.member(key, any, depth, value, c)?;
+                }
                 Frame::Obj {
                     o,
                     start,
@@ -485,20 +655,12 @@ impl Ser<'_, '_> {
                         end,
                         any,
                     };
-                    let value = match self.heap.get_own_property(o, key) {
-                        Some(Property::Data { value, flags }) if flags.enumerable() => value,
-                        Some(Property::Accessor { flags, .. }) if flags.enumerable() => {
-                            return Err(StringifyError::Slow);
-                        }
-                        _ => continue,
-                    };
-                    let c = self.classify(value)?;
-                    if let Class::Skip = c {
+                    let Some(p) = self.heap.get_own_property(o, key) else {
                         continue;
-                    }
-                    if any {
-                        self.out.byte(b',');
-                    }
+                    };
+                    let Some((value, c)) = self.member_value(p)? else {
+                        continue;
+                    };
                     self.stack[top] = Frame::Obj {
                         o,
                         start,
@@ -506,13 +668,7 @@ impl Ser<'_, '_> {
                         end,
                         any: true,
                     };
-                    self.newline(depth);
-                    self.key(key);
-                    self.out.byte(b':');
-                    if !self.gap.is_empty() {
-                        self.out.byte(b' ');
-                    }
-                    self.emit(value, c)?;
+                    self.member(key, any, depth, value, c)?;
                 }
                 Frame::Arr { o, next, len } => {
                     if next == len {
@@ -544,5 +700,34 @@ impl Ser<'_, '_> {
             }
         }
         Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::needs_escape8;
+
+    #[test]
+    fn swar_escape_scan_is_exact() {
+        for b in 0..=255u8 {
+            for pos in 0..8 {
+                let mut w = [b'a'; 8];
+                w[pos] = b;
+                let want = b < 0x20 || b == b'"' || b == b'\\';
+                assert_eq!(
+                    needs_escape8(u64::from_le_bytes(w)),
+                    want,
+                    "{b:#x} at {pos}"
+                );
+                // With high Latin-1 bytes around it.
+                let mut w = [0xE9; 8];
+                w[pos] = b;
+                assert_eq!(
+                    needs_escape8(u64::from_le_bytes(w)),
+                    want,
+                    "{b:#x} at {pos}"
+                );
+            }
+        }
     }
 }
