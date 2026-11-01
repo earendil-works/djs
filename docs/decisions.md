@@ -1276,6 +1276,7 @@ A `@builtin` path may start with a `%Name%` segment (`%ArrayIteratorPrototype%.n
 through as the `%InstallMethod` target string, which the runtime resolves to the realm
 intrinsic (0030). Only the first segment may be `%Name%`.
 
+
 ## D1345: Builtins over iterables
 date: 2026-11-01 · by: infra · issue: 0034
 builtins/iterable.ts builds on 0029's `%GetIterator`: IterableToList, Array.from's
@@ -1338,6 +1339,7 @@ pointer. The store/reload chain cost more than the ops themselves (loop.js: 555 
 385 ms). Fuel, `pc` and safepoints are charged exactly as `step` charges them, so fuel
 counts, suspension points and GC stress are unchanged. A new op belongs in `fast_step`
 only if it is simple and stack-only. Keep its semantics identical to its `exec` arm.
+
 
 ## D1292: for-in/of code layout and iterator close
 date: 2026-11-01 · by: lexer · issue: 0029
@@ -2000,6 +2002,7 @@ prototype" for a refusing proxy). Object literals keep their own `__proto__: v` 
 of a callable proxy is `function <name>() { [native code] }` with the name read by
 [[Get]] (a trap call), as qjs does.
 
+
 ## D1332: RegExp objects, suspendable matching and regex literals
 date: 2026-11-01 · by: num · issue: 0033
 
@@ -2334,6 +2337,7 @@ Record; a phase slot says where to resume. One reaction job per await, as the sp
 Await, so the tick order matches qjs (tests/data/e2e/array_from_async.js). The same
 pattern fits other async builtins (AsyncDisposableStack).
 
+
 ## D1504: Undoing a log entry restores the slot's generation
 date: 2026-11-01 · by: num · issue: 0050
 The matcher's undo log entries are now `slot, old value, old slot_gen` triples (they were
@@ -2347,6 +2351,7 @@ the compiler reuses them after a loop, every retry added an entry.
 pi's base64 check `/^[A-Za-z0-9+/]+={0,2}$/` on non-matching megabytes overflowed the
 backtrack stack that way. Now 5 MB pass and fail in constant stack. Log entries cost one
 word more.
+
 
 ## D1482: Enums and namespaces are closures; their members resolve after parsing
 date: 2026-11-03 · by: lexer · issue: 0048
@@ -2434,6 +2439,7 @@ modules, so `compiler::strip_types` sets `Parser::strip`, which accepts `import`
 run) and erases type-only imports, exports and specifiers as ts-blank-space does. Normal
 compilation is unchanged: `import`/`export` stay "unsupported keyword" errors.
 
+
 ## D1513: WeakRef and FinalizationRegistry on ephemeron tables; cleanup jobs after a collection
 date: 2026-11-03 · by: heap · issue: 0051
 No collector changes: the weakness comes from D1382's EphemeronArray (a pair whose key
@@ -2466,6 +2472,7 @@ pi's suite expects `eval`/`Function` to exist, and the compiler ships in the VM 
 implements indirect (global) eval and the four dynamic function constructors. A call
 `eval(x)` behaves as indirect eval. Direct eval (access to the caller's scope) stays a
 non-goal (ARCH non-goals), and test262 tests that need it stay skipped.
+
 
 ## D1560: RegExp exec and test without protocol overhead
 date: 2026-11-01 · by: num · issue: 0056
@@ -2747,6 +2754,7 @@ no module loader, the promise is rejected one job later with qjs's no-loader err
 (0049); a SyntaxError would fail the whole script. The test262 `dynamic-import` feature
 stays skipped (modules): with this, 354 of its 682 tests would pass (syntax and
 rejection-path tests), the rest need module fixtures.
+
 
 ## D1610: Append ropes: `s += x` writes into a growable buffer
 date: 2026-11-01 · by: num · issue: 0061
