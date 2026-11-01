@@ -23,11 +23,11 @@ for name, mk in cons.items():
     while lo < hi:
         mid = (lo + hi + 1) // 2
         open("/tmp/deep.js", "w").write(src(mid))
-        good, _ = ok(["../../target/debug/abidrive", "/tmp/deep.js", "1000000"])
+        good, _ = ok(["../../target/debug/djs-abidrive", "/tmp/deep.js", "1000000"])
         if good: lo = mid
         else: hi = mid - 1
     open("/tmp/deep.js", "w").write(src(lo))
-    wgood, wout = ok(["node", "probe/abidrive.mjs", W, "/tmp/deep.js", "1000000"])
+    wgood, wout = ok(["node", "abidrive.mjs", W, "/tmp/deep.js", "1000000"])
     open("/tmp/deep.js", "w").write(src(lo + 1))
-    _, nout = ok(["../../target/debug/abidrive", "/tmp/deep.js", "1000000"])
+    _, nout = ok(["../../target/debug/djs-abidrive", "/tmp/deep.js", "1000000"])
     print(f"{name:14} native max {lo:5}  wasm at that depth: {'ok' if wgood else 'FAIL ' + wout.strip().splitlines()[-1][:120]} | native at +1: {nout.strip().splitlines()[-3][:80] if nout.strip() else ''}")
