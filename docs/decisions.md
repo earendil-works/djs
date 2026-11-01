@@ -1083,3 +1083,62 @@ EvalError, URIError and AggregateError prototypes are new realm intrinsics.
 AggregateError itself waits for iteration (IterableToList). djs-test262's
 `$262.evalScript` now calls the compiled Script with `this` = the global object (D1070's
 one difference is gone).
+
+## D1320: VM images carry a build hash (Roots::BUILD)
+date: 2026-11-01 · by: num · issue: 0032
+`vm::BUILD_HASH = build_hash(build_hash(LAYOUT_HASH, OPS_HASH), INTRINSICS_HASH)`.
+`Vm::new` writes it into a new `Roots::BUILD` field (offset 48; bare heaps keep 0).
+`Vm::from_bytes` and `Vm::from_base` check it first and fail with
+`LoadError::BuildMismatch { found, expected }` ("the image is from another djs build"):
+images hold bytecode and intrinsic ids, which mean nothing to another build.
+
+`Roots::VERSION` stays the layout hash, which the JS reader checks. If VERSION carried the
+build hash, every new op or intrinsic would change `layout.generated.ts`. `LoadError`
+gained a `Display` impl.
+
+## D1321: The base snapshot (djs-prelude)
+date: 2026-11-01 · by: num · issue: 0032
+`crates/djs-prelude` has a `build.rs` that uses a host build of djs-core: `Vm::new` (realm
+plus prelude), `collect`, a full `Vm::from_bytes` verification, then it writes
+`$OUT_DIR/base.img`. The library embeds it as `djs_prelude::BASE`, and
+`djs_prelude::new_vm(opts)` returns `Vm::from_base(BASE, opts)`.
+
+Cargo reruns the build script whenever djs-core is rebuilt, and that includes
+`builtins/gen/prelude.js` (via `include_str!`).
+
+`Vm::from_base` copies the image into a fresh arena with `Heap::from_bytes_trusted`:
+header and build-hash checks, but no walk over every cell. It also requires an idle VM
+with no handles. Skipping the walk is safe enough: the base was verified at build time,
+and a bad cell would still be a panic, not UB.
+
+The image is deterministic. Tests check that building it twice gives the same bytes, and
+that `BASE` equals a fresh build. A node test checks that the host-built base is
+byte-identical to the realm djs-wasm compiles inside wasm32 (so nothing depends on pointer
+width). That export, `vm_new_compiled`, sits behind the `compiled-prelude` feature, which
+only the gate's debug build turns on.
+
+The embedders use the base: djs-wasm `vm_new`, djs-cli, difftest, test262 and the e2e tests.
+`Vm::new` (compile at startup) stays for unit tests and for making the image.
+
+What lives in the base:
+- the atoms;
+- the realm: the global object, intrinsics and builtins;
+- the compiled prelude;
+- an idle interpreter state.
+
+Nothing per VM. Host functions, globals and handles are added after the copy. `after_copy`
+is the hook for per-VM state such as a future `Math.random` seed.
+
+Startup, medians:
+
+| | before | after |
+| --- | ---: | ---: |
+| `vm_new`, native | 74 µs | 0.5 µs |
+| `vm_new`, wasm (node 25) | 144 µs | 0.4 µs |
+| base size | | 36 KB |
+
+The release djs-wasm shrank from 578 to 564 KB even with the base embedded, because the
+code that builds the realm is no longer linked. After 0031 part 1 the base is 72 KB:
+compiling takes 216 µs natively and the copy 0.8 µs.
+
+Instantiating the wasm module (about 35 µs) is now most of a sandbox's startup.
