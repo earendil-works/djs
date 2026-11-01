@@ -145,7 +145,8 @@ restriction real codemode would meet.
 
 ### 2. Measurements
 
-Per script, the first and the last idle point (sizes in KB):
+Selected idle points (sizes in KB; the first idle point of every script is within 5 KB of
+`tool-heavy, start`; points.csv has all 144):
 
 | point | pi `snapshot()` today (raw) | collected | zstd -19 | zstd vs post-prelude ¹ | old-gen delta vs post-prelude ² | logical vs post-prelude ³ raw / zstd | logical vs base ⁴ zstd | journal raw / zstd | restore: image / replay ⁵ (ms) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -154,7 +155,7 @@ Per script, the first and the last idle point (sizes in KB):
 | tool-heavy, after 61 results (60 files kept) | 1022 | 891 | 201 | 119 | 482 | 341 / 89 | 106 | 331 / 85 | 0.6 / 14–19 |
 | sequential, after 41 results (data dropped) | 791 | 521 | 112 | 29.7 | 101 | 8.5 / **3.8** | 22.0 | 217 / 58 | 0.8 / 19–27 |
 | big-log, 1.5 MB log kept | 4706 | 2205 | 418 | 334 | 1781 | 1660 / 306 | 323 | 1518 / 296 | 0.8 / 38–43 |
-| records, 1500 records + 5 frames | 3768 | 1889 | 329 | 246 | 1465 | 652 / 167 | 185 | 789 / 151 | 2.7 / 14–20 |
+| records, after 20 results (1500 records kept) | 3768 | 1889 | 329 | 246 | 1465 | 652 / 167 | 185 | 789 / 151 | 2.7 / 14–20 |
 | agent-loop, after 10 results | 705 | 515 | 111 | 27.1 | 91 | 3.7 / 2.2 | 20.6 | 11 / 2.4 | 0.5 / 2.6–7.1 |
 
 ¹ `zstd -19 --patch-from post-prelude.img` of the collected image. node 25's built-in zstd does
