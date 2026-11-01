@@ -204,12 +204,18 @@ Open questions for the owner:
 
 ## Result
 
+- GitHub Pages (owner's request, Pages already enabled with source "GitHub Actions"):
+  `.github/workflows/docs.yml` (outside `touches:`, new file only). On a push to main or
+  by hand it builds djs-wasm (scripts/build-wasm.sh), runs `djs-docs build --out _site`
+  (node 24 for strip.mjs) and deploys with actions/deploy-pages. No `check` there: the
+  gate ran it before main moved. Tested locally by serving the site under `/djs/` (the
+  Pages path): the live examples load the wasm relative to the page and run.
+
 ## Follow-ups
 
 - Live bytecode for edited examples: a `djs_disasm` export behind a docs-only feature
   of djs-wasm (the Bytecode tab now shows the build-time listing of the original).
 - Search on the site (a JSON index and a little JS), if wanted.
-- Publishing: a GitHub Pages workflow running `djs-docs build` (the owner sets it up;
-  agents do not push).
+- ~~Publishing: a GitHub Pages workflow~~ done: `.github/workflows/docs.yml`.
 - Generated status numbers (test262 and corpus counts, wasm size, bench scores) for an
   introduction or status page.

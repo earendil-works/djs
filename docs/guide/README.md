@@ -22,6 +22,9 @@ types stripped by node, for the live examples. Open it over HTTP
 (`python3 -m http.server -d target/docs-site`); from `file://` the pages work but the
 examples show only their build-time output.
 
+`.github/workflows/docs.yml` publishes the site to GitHub Pages on every push to main:
+it builds djs-wasm, runs `build --out _site` with node 24, and deploys that directory.
+
 ## Generated regions
 
 Content between `<!-- gen:NAME ARGS -->` and `<!-- /gen -->` is generated and checked
