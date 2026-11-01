@@ -13,6 +13,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0048 | P3 TypeScript (type skipper, enums/namespaces, strip-types oracle) | lexer | .worktrees/0048-typescript |
 | 0051 | Remaining builtins (iterator helpers, WeakRef/FR, disposables, fromAsync, upsert) | heap | .worktrees/0051-remaining-builtins |
 | 0052 | Code bloat investigation (report only) | bloat | .worktrees/0052-bloat-investigation |
+| 0055 | Determinism investigation (report only; proposes issues) | determinism | .worktrees/determinism |
 
 ## Open (ready)
 
