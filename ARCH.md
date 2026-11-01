@@ -173,8 +173,15 @@ scaled by the 8-byte alignment.
   use ephemeron tables (D1382, D1513).
 - **Code:** function templates (bytecode, constants, line table, scope info) are heap cells.
   That way compiled code is part of snapshots and can be cached as a snapshot.
-- **GC:** a **copying (Cheney) collector** (D1090). It compacts for free, which snapshots
-  want; it is simple; and it fits offset-based references. **Allocation never collects**:
+- **GC:** two collectors over one layout-driven trace (D1090, D2040).
+  - **In-VM collections slide in place** (mark-compact, D018/D2040). The four passes are
+    mark, block table, update and slide. The side tables are allocated up front: a
+    live-word bitmap and a block table, about 2.3% of the arena. There is no to-space, so
+    a collection's peak is the arena itself. Survivors keep their allocation order.
+  - **Cheney copying** (breadth-first, a function of the graph alone) is
+    `collect_canonical`. It makes the canonical hash (on a copy, D1730) and the base image.
+  - Both keep the same cells, so live sizes and collection points don't depend on which
+    one runs. **Allocation never collects**:
   it bumps (growing the arena) and sets `gc_pending` once the threshold is crossed; the
   collection runs at the next safepoint (an instruction boundary, a frame entry, a
   backward jump, a native builtin's state transition). Native Rust code therefore keeps
@@ -190,8 +197,10 @@ scaled by the 8-byte alignment.
     operations of native builtins (D1900), and `@fast` entries, which decline so the
     builtin's path retries (D1910). A refusal by the host allocator below the cap is
     different: it stops the run with `Status::HostOutOfMemory` (D1690).
-  - **Not built:** a non-moving large-object space for big strings and buffers. A 1 MiB
-    tool output is still copied on every collection (0081 F6).
+  - **Not built:** a non-moving large-object space for big strings and buffers; a 1 MiB
+    tool output still slides when garbage lies below it (0081 F6). There is also no old
+    generation for the base image, which every collection traces again (designed in
+    docs/old-generation.md).
 - **Roots:** the realm, the value stack and frames, the job queue, the pending host call
   table, the host inbox (D1670), unhandled rejections, and a host handle table (values the
   embedder holds, D1091). Every root lives in the arena.

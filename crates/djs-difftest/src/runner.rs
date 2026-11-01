@@ -132,14 +132,14 @@ pub fn run_one(
         );
         let t = transcript(&r, stacks);
         if t == actual {
-            // `--determinism`: the same heap image, as left and after a collection (D1720,
-            // D1725). A variant that collects on another policy (GC stress) does not hash
+            // `--determinism`: the same heap image, raw and by canonical hash (D1720, D1725,
+            // D2040). A variant that collects on another policy (GC stress) does not hash
             // its image.
             if let (Some(a), Some(b)) = (result.image, r.image)
                 && a != b
             {
                 let which = if a.1 != b.1 {
-                    "after a collection"
+                    "canonical hash"
                 } else {
                     "as left (raw)"
                 };

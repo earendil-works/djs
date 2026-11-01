@@ -157,8 +157,8 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 3. **Bugs trap instead of corrupting memory.** Every access is bounds-checked slice
    indexing, with no `unsafe`. A bad offset from a VM bug or a corrupt image is a panic
    (a wasm trap) or a corrupt JS heap, never undefined behavior in the host.
-4. **The heap can move.** The collector compacts by copying into a fresh arena, and the
-   arena can be reallocated, without any reference outside it going stale: the embedder
+4. **The heap can move.** The collector compacts the arena by sliding live cells down,
+   and the arena can be reallocated, without any reference outside it going stale: the embedder
    holds values through handles (D1091), slot numbers in a table inside the arena, never
    through offsets.
 

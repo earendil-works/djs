@@ -50,8 +50,10 @@ console.log(tagged.join(" "), [...seen.values()].join(""));
 ```
 <!-- /gen -->
 
-Taking an image right after a collection makes it small and canonical: no garbage, and a
-layout that depends only on the object graph ([the garbage collector](gc.md)). The
+Taking an image right after a collection makes it small: no garbage, the live cells
+packed in their allocation order ([the garbage collector](gc.md)). The base image is
+made with the copying collector instead, so its layout depends only on the object graph,
+not on how the prelude allocated. The
 embedders do that when they keep an image (D1890); the stress tests also compare raw
 images taken at arbitrary stops, which must be identical too (D1725).
 
@@ -141,9 +143,9 @@ and lost to the dictionary by a factor of four; it is superseded. The owner's de
 on the rest is pending, so none of it is built yet.
 
 > **Trade-off.** Whole images over deltas. A delta against the base or a previous
-> snapshot would be smaller, but a moving collector changes the offsets of everything it
-> copies, so byte-level deltas of a copying heap are fragile, and a non-moving old
-> generation would need a second collector mode. Compressing a whole image against a
+> snapshot would be smaller, but a collection moves everything above the first garbage it
+> frees, so byte-level deltas of a compacted heap are fragile, and a non-moving old
+> generation would need its own write tracking. Compressing a whole image against a
 > recomputable reference gets most of the size back with no engine change.
 
 ## Where to look
@@ -158,7 +160,8 @@ on the rest is pending, so none of it is built yet.
 
 Decisions on this page:
 
-<!-- gen:decisions D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 -->
+<!-- gen:decisions D2040 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 -->
+- D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D1091: Handle table
 - D1890: pi adapter: snapshot() and the prelude image collect first
 - D1725: The determinism checks compare raw images too

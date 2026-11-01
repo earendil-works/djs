@@ -90,10 +90,13 @@ for (;;) {
 }
 const raw = arena(vm);
 const rawh = fnv(raw);
+if (x.vm_canonical_hash(vm) !== 0) throw new Error("canonical hash");
+const [lo, hi] = words();
+const canon = hi.toString(16).padStart(8, "0") + lo.toString(16).padStart(8, "0");
 x.vm_collect(vm);
 const col = fnv(arena(vm));
 console.log(`build ${(x.djs_build_hash() >>> 0).toString(16).padStart(8, "0")}`);
 console.log(`logs ${fnv(enc.encode(logs))}`);
-console.log(`raw ${rawh} len ${raw.length} collected ${col} stops ${stops}`);
+console.log(`raw ${rawh} len ${raw.length} collected ${col} canonical ${canon} stops ${stops}`);
 console.log(`result ${result}`);
 if (rawOut) writeFileSync(rawOut, raw);

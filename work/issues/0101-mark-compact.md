@@ -1,6 +1,6 @@
 # 0101: In-place mark-compact collection (design first; ARCH-level)
 
-status: in-progress
+status: done
 agent: heap
 branch: issue/0101-mark-compact
 depends-on: 0098, 0099
@@ -50,6 +50,29 @@ MiB (estimate). See work/issues/0099-cold-start-memory.md (Result) for the numbe
   - Measured with vm `base_region_scan_cost`: the walk costs 0.050 ms per 456 KB, against
     0.14-0.15 ms for a collection of the same heap by either collector.
 
+- Owner approved (D018). Finished:
+  - rebased onto main;
+  - the gate's "after a final collection" checks compare canonical_hash: e2e,
+    difftest --determinism, and the abidrive drivers, which print canonical next to the
+    in-place collected hash;
+  - ARCH Heap/GC paragraph and decision D2040 recorded;
+  - guide: gc.md (rewritten around the two collectors), determinism.md, snapshots.md and
+    testing.md updated; one line each in arena.md and introduction.md, which said
+    "copying collector".
+
 ## Follow-ups
 
+- Old generation phase 1 (docs/old-generation.md): the next issue, per the coordinator.
+- Cold pi starts: dlmalloc holes from the prelude compile interleaving with arena growth
+  (peak live 1.1 MiB vs 2.9 MiB of memory); size the arena once before compiling.
+
 ## Result
+
+In-VM collections are an in-place sliding mark-compact (heap/compactor.rs, `Heap::collect`
+/ `Vm::collect` / `vm_collect`). Cheney is `collect_canonical`: canonical_hash, the base
+image, vm_new_compiled. The gate compares raw images and canonical hashes.
+- Peak wasm memory is −3..−52% on 0081/0087's workloads, and pi warm tool-heavy is −1 MiB.
+- Wasm instructions are ±0..+5.5%, and code is +6.0 KB (+2.0 KB gzip).
+
+Numbers are in docs/mark-compact.md §10. Known gap: every collection still traces the base
+image again (old generation, next).

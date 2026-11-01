@@ -63,7 +63,7 @@ and pi's tests expect them.
   frames, the promise job queue, the pending tool calls. Values refer to each other by
   `u32` offsets, never by pointers, so the arena can move, be copied and be read from
   the outside.
-- The **copying garbage collector** compacts the arena, which keeps snapshots small and
+- The **garbage collector** compacts the arena in place, which keeps snapshots small and
   makes the heap image of a program a deterministic function of the program.
 - The **builtins** (`Array.prototype.map`, `JSON.parse`, ...) are written in a strict
   subset of TypeScript and compiled twice: to bytecode that ships in the base snapshot,

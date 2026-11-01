@@ -1,6 +1,7 @@
 # In-place mark-compact collection (0101)
 
-Status: proposal for review (0101). ARCH change. Decision ids D2040+.
+Status: approved (D018) and built (D2040). Sections 1–9 are the design as proposed;
+section 10 has the prototype's numbers.
 
 ## 1. Why
 

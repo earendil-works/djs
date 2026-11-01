@@ -85,8 +85,10 @@ parts of the engine exists to keep it:
 - **Collections** happen at the same instructions under any slicing and restore. The
   threshold lives in the heap (D1601), and nothing about a stop allocates or collects
   (D1710; [The garbage collector](gc.md)).
-- **The collector's layout** is a function of the object graph: it copies breadth-first
-  from the roots in field order, so equal graphs give equal bytes (D1090).
+- **The collector's layout** is a function of what the program did. A collection slides
+  the live cells down in their allocation order, so the same allocations give the same
+  bytes, whenever the collections came (D2040). For a layout that depends on the object
+  graph alone, the canonical hash collects a copy breadth-first (D1090).
 - **Nothing depends on addresses or timing.** Map and Set rehash after every collection
   instead of hashing by a per-object id that would vary, and shape transitions are
   strong so that the shape tree does not depend on when collections ran (D1831; [Cells,
@@ -96,7 +98,8 @@ parts of the engine exists to keep it:
   separate (D1690; [One arena](arena.md)).
 
 Byte-identical images make the strongest possible check: if two runs left the same
-image, they built the same graph, with no need to compare outputs.
+raw image, they did the same allocations and built the same graph, with no need to
+compare outputs.
 
 > **Trade-off.** Byte-identical heaps over equal outputs only. Equal images make
 > suspension bugs visible even when they do not change the output yet, and make "did
@@ -126,9 +129,10 @@ the snapshot).
 ## Canonical hashes and journals
 
 To check that two runs agree, a host compares **canonical hashes** (D1730):
-`vm_canonical_hash` is a 64-bit FNV-1a hash of the image a collection would leave,
-computed on a copy so that the VM itself is not touched. Garbage and the moment of the
-last collection do not affect it, so it identifies the object graph.
+`vm_canonical_hash` is a 64-bit FNV-1a hash of the image a copying collection leaves,
+computed on a copy so that the VM itself is not touched. The copying collector lays the
+heap out breadth-first from the roots, so garbage, the order of allocation and the moment
+of the last collection do not affect it: it identifies the object graph.
 
 On top of that, a deterministic `Sandbox` can record a run as a **journal**: the start
 (engine build, code, parameters, hash), every sync call and its outcome, every async
@@ -152,11 +156,12 @@ tested](testing.md)):
 
 - **Across schedules.** The end-to-end tests and the difftest corpus run each case in
   one go and again in slices (1 and 997 fuel in the end-to-end tests, 97 and 1009 in the
-  corpus), restoring a fresh VM from its image at every stop. The raw image at the end,
-  and the image after a final collection, must equal the plain run's.
+  corpus), restoring a fresh VM from its image at every stop. The raw image at the end, and
+  the canonical hash, must equal the plain run's (D2040).
 - **Across builds.** The same programs run in a native build and in djs-wasm, driven
-  through the same export calls. The build hash, the raw and collected images at every
-  slice, the number of stops and the results must all match. This is why djs avoids
+  through the same export calls. The build hash, the raw images at every slice, the
+  images after a final collection, the canonical hash, the number of stops and the
+  results must all match. This is why djs avoids
   float operations whose bits differ between platforms: wasm leaves the NaN bits of
   `f64` to `f32` conversion open, so djs canonicalizes them (D1750).
 
@@ -202,7 +207,8 @@ Some things are deliberately outside the guarantee:
 
 Decisions on this page:
 
-<!-- gen:decisions D1314 D1383 D1670 D1680 D1690 D1090 D1601 D1710 D1740 D1831 D1730 D1720 D1725 D1750 D1633 -->
+<!-- gen:decisions D2040 D1314 D1383 D1670 D1680 D1690 D1090 D1601 D1710 D1740 D1831 D1730 D1720 D1725 D1750 D1633 -->
+- D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D1314: Math.random
 - D1383: Date reads the host's clock and a fixed local offset
 - D1670: Async host results are macrotasks: the host inbox

@@ -2,7 +2,7 @@
 //! djs-wasm's exports natively, with exactly the export calls of
 //! `scripts/determinism/abidrive.mjs` (which makes them in the wasm build), and prints the
 //! build hash, a hash of the console.log arguments' raw bits, the raw and collected heap
-//! image hashes, the number of `vm_run` stops and the result. The gate compares the two
+//! image hashes, the canonical hash (D1730), the number of `vm_run` stops and the result. The gate compares the two
 //! outputs (scripts/determinism/native-vs-wasm.sh, 0072): native and wasm builds must
 //! produce byte-identical heaps and spend the same fuel.
 //!
@@ -130,13 +130,17 @@ fn main() {
     }
     let raw = arena(vm);
     let rawh = fnv(&raw);
+    assert_eq!(vm_canonical_hash(vm), 0);
+    let canon = words();
     vm_collect(vm);
     let col = fnv(&arena(vm));
     println!("build {:08x}", djs_build_hash());
     println!("logs {:08x}", fnv(logs.as_bytes()));
     println!(
-        "raw {rawh:08x} len {} collected {col:08x} stops {stops}",
-        raw.len()
+        "raw {rawh:08x} len {} collected {col:08x} canonical {:08x}{:08x} stops {stops}",
+        raw.len(),
+        canon[1],
+        canon[0]
     );
     println!("result {result}");
     if let Some(p) = a.get(4) {

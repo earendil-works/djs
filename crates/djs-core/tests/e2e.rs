@@ -7,13 +7,13 @@
 //!    continues in a fresh one restored from its heap image;
 //! 3. GC stress: a collection at every safepoint.
 //!
-//! The plain and suspension modes must also leave identical heap images, both as they are
-//! at the end and after a final collection (0072, D1720, D1725): collections happen at the
-//! same instructions under any slicing and restore (D1601, D1710), and the copying GC lays
-//! the heap out as a function of the object graph (D1090), so a stop or an image round
-//! trip that changes anything shows. GC stress is a different collection policy: weak
-//! tables lose their dead entries at other times (and compact differently), so its images
-//! are not compared.
+//! The plain and suspension modes must also leave identical heap images, both the raw
+//! image at the end and its canonical hash (0072, D1720, D1725; 0101, D2040): collections
+//! happen at the same instructions under any slicing and restore (D1601, D1710), so the raw
+//! arenas are byte-identical, and the canonical hash (a copying collection of a copy,
+//! D1730) is a function of the object graph alone, so a stop or an image round trip that
+//! changes anything shows. GC stress is a different collection policy: weak tables lose
+//! their dead entries at other times, so its images are not compared.
 //!
 //! Cases run in parallel (`DJS_JOBS` threads, else one per CPU). Each run has a fuel
 //! budget and a time limit: a case that loops forever fails its plain run within seconds
@@ -79,7 +79,8 @@ fn fnv64(bytes: &[u8]) -> u64 {
     h
 }
 
-/// The hashes of a run's final heap image: as it is, and after a collection.
+/// The hashes of a run's final heap image: as it is (raw), and its canonical hash (the
+/// graph alone, `Vm::canonical_hash`, D1730).
 type Images = (u64, u64);
 
 /// Runs one case and returns its output (console.log lines, then `Uncaught ...` or a
@@ -183,8 +184,7 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
     }
     vm.heap().verify().unwrap();
     let raw = fnv64(vm.bytes());
-    vm.collect().unwrap();
-    (out, Some((raw, fnv64(vm.bytes()))))
+    (out, Some((raw, vm.canonical_hash().unwrap())))
 }
 
 #[test]
@@ -241,7 +241,7 @@ fn e2e_cases() {
         if images.iter().any(|(_, h)| *h != images[0].1) {
             let name = path.file_name().unwrap().to_string_lossy();
             failures.push(format!(
-                "{name}: the heap images (as left, and after a collection) differ between the plain and suspension modes: {images:x?}"
+                "{name}: the heap images (raw, and the canonical hash) differ between the plain and suspension modes: {images:x?}"
             ));
         }
     }

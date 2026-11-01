@@ -27,8 +27,8 @@ options:
                       its output must equal the plain run (hard failure)
   --determinism       djs only: also run every case suspending every 1009 fuel (and 97
                       without --suspend-every) through heap images, and require the
-                      suspended runs to leave the same heap image as the plain run after
-                      a final collection (hard failure; GC stress is not compared, D1720)
+                      suspended runs to leave the same heap image as the plain run, raw
+                      and by canonical hash (hard failure; GC stress is not compared, D1720)
                       The stressed runs get 3x the time limit; cases marked
                       `difftest: no-stress` skip them
   --backend B         djs only: run the @native builtins as `native` code (default)

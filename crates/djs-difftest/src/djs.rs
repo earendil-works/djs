@@ -40,7 +40,7 @@ pub struct Djs {
     pub suspend_every: Option<u64>,
     /// Collect garbage at every safepoint.
     pub gc_stress: bool,
-    /// Report a hash of the heap image after a final collection (`--determinism`).
+    /// Report the raw heap image's hash and the canonical hash (`--determinism`).
     pub image: bool,
     /// Run the `@native` builtins as bytecode (`--backend bytecode`, 0063).
     pub bytecode_builtins: bool,
@@ -86,8 +86,10 @@ impl Engine for Djs {
             Err(Stop::Crash(msg)) => Done::Crash(msg),
         };
         let image = if self.image && !matches!(done, Done::Timeout | Done::Crash(_)) {
+            // The raw image, and the graph's canonical hash (D1730, 0101): what a final
+            // collection used to compare, without depending on the collector's layout.
             let raw = fnv64(s.vm.bytes());
-            s.vm.collect().ok().map(|()| (raw, fnv64(s.vm.bytes())))
+            s.vm.canonical_hash().ok().map(|h| (raw, h))
         } else {
             None
         };

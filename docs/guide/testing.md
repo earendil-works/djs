@@ -140,9 +140,10 @@ tests almost never hit. So the tests make stops happen everywhere:
 - **GC stress** (`--gc-stress`): a collection at every safepoint, so every place that
   holds a heap value across an allocation is exercised.
 - **Determinism** (`--determinism`, D1720, D1725): the suspended runs must leave exactly
-  the same heap image as the plain run. Collections happen at the same instructions
-  under any slicing, and the copying collector lays the heap out as a function of the
-  object graph, so any difference means a stop or a restore changed something.
+  the same heap image as the plain run, byte for byte, and the same canonical hash (the
+  graph alone, D2040). Collections happen at the same instructions under any slicing,
+  and the in-place collector keeps cells in allocation order, so any difference means a
+  stop or a restore changed something.
 - **Native and wasm**: `scripts/determinism/native-vs-wasm.sh` runs the same programs in
   a native build and in djs-wasm and compares their images stop for stop.
 - **Both builtin backends** (D1635): the corpus runs again with the builtins as bytecode
@@ -214,7 +215,8 @@ gate, and the gate runs at full priority while everything else on the machine ru
 
 Decisions on this page:
 
-<!-- gen:decisions D008 D012 D1022 D1023 D1100 D1102 D1161 D1440 D1530 D1540 D1635 D1720 D1725 D1790 D1791 D1792 D1793 D2032 -->
+<!-- gen:decisions D2040 D008 D012 D1022 D1023 D1100 D1102 D1161 D1440 D1530 D1540 D1635 D1720 D1725 D1790 D1791 D1792 D1793 D2032 -->
+- D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D008: Codemode top level is a function body
 - D012: Development flow: per-agent job caps, iteration habits, worktree slots
 - D1022: test262 grouping rules

@@ -6,19 +6,77 @@ decides what a snapshot contains and whether two runs of a program leave identic
 images. This chapter explains the collector, when it runs, what happens when memory runs
 out, and what it costs.
 
-> **In short.** djs uses a copying (Cheney) collector: it copies everything reachable
-> from the roots into a fresh arena, in breadth-first order, and drops the old one. The
-> result is compact, and its layout is a function of the object graph alone. Collections
-> happen only at safepoints, when allocation has crossed a threshold that is itself part
-> of the heap, so collection points depend on the program and never on how it was
-> sliced. Running into the memory cap is a catchable error, with a collect-and-retry
-> before it.
+> **In short.** djs has two collectors over one trace. A VM's own collections are
+> **in place** (mark-compact): they mark everything reachable from the roots, then slide
+> the survivors down over the garbage, keeping their order. No second arena is needed,
+> so a collection costs no more memory than the heap itself. A **copying** (Cheney)
+> collector lays a heap out breadth-first from the roots, a function of the object graph
+> alone; it makes the canonical hash and the base image. Collections happen only at
+> safepoints, when allocation has crossed a threshold that is itself part of the heap, so
+> collection points depend on the program and never on how it was sliced. Running into
+> the memory cap is a catchable error, with a collect-and-retry before it.
 
-## Copying, breadth-first
+## What is traced
 
-A collection reserves a new arena as large as the old one's used part (which bounds what
-can be live), copies the `Roots` cell to offset 0, and then scans the new arena from the
-start, cell by cell (D1090):
+What counts as a traced field comes from the layout table alone: a field declared as
+`Value` or `Ref` in `cells!` is traced, nothing else is (D1052). There is no per-kind
+tracing code to forget when a cell kind is added, and both collectors use the same
+description. A few kinds get extra treatment:
+
+- a reference to a **flattened rope** is redirected to its flat string, so the rope
+  dies;
+- **Map and Set** tables, whose object keys hash by offset, are rehashed in place after
+  the cells have moved (D1381);
+- **ephemeron tables** (WeakMap, WeakSet, WeakRef, FinalizationRegistry) are not traced
+  like other cells. Once everything else reachable is found, every pair whose key is
+  reachable gets its value traced too, and this repeats until nothing changes; pairs
+  with dead keys are then cleared (D1382, D1513);
+- inline cache slots that hold arena offsets are emptied (D1621).
+
+## Sliding in place
+
+A VM's collection runs in four passes over the arena (D2040):
+
+1. **Mark.** Starting at the `Roots` cell, every reachable cell gets a mark bit in its
+   header, and its words are set in a **live bitmap**, one bit per 8 bytes. The marker
+   keeps a stack of cells still to scan, which grows on demand; if it cannot grow, a
+   cell stays marked but unscanned, and a walk over the marked cells finds it later.
+   Only the *set* of marked cells reaches the result, so the order of marking cannot
+   change it.
+2. **Count.** A table with one entry per 512 bytes of arena records how many live bytes
+   lie before that block. The new address of a live cell is that entry plus the live
+   words before it in its block, which one population count of a bitmap word gives.
+   Nothing is written into the cells.
+3. **Update.** Every traced field of every marked cell is rewritten with its target's
+   new address. Nothing below the first dead word moves, so fields pointing there stay
+   as they are.
+4. **Slide.** The marked cells move down in address order, a run of adjacent live cells
+   at a time, and the freed tail is zeroed. Map and Set tables are rehashed last.
+
+The bitmap, the table and the stack take about 2.3% of the arena. They are allocated
+before anything is touched, so a host that cannot provide them gets an error with the
+heap unchanged.
+
+Because cells keep their order, the heap after a collection is the live cells in the
+order they were allocated. Collecting along the way and collecting once at the end leave
+the same bytes for the same allocations. That is what the [determinism
+checks](determinism.md) build on, together with collection points that don't depend on
+slicing. Collecting a collected heap changes nothing.
+
+> **Trade-off.** In-place over copying for a VM's own collections (D018). A copying
+> collector needs the old and the new arena at once, about twice the live data, plus
+> what the host allocator fragments when the arena moves. In wasm, memory never shrinks,
+> so that peak is what every run costs. Sliding in place has no second arena: peak
+> memory dropped by 3–52% on allocation-heavy workloads, and by 1 MiB for a pi session
+> with tool calls. The price is two traversals instead of one, plus the bitmap work:
+> collections take 1.1–1.6 times as long, programs 0–5.5% more instructions, and the
+> second collector adds 6 KB of code.
+
+## Copying, for canonical layouts
+
+The copying collector reserves a new arena as large as the old one's used part, copies
+the `Roots` cell to offset 0, and then scans the new arena from the start, cell by cell
+(D1090):
 
 ![A Cheney collection: live cells are copied from the old arena into a new one, which is scanned from offset 0 until the scan catches up with the copy point](img/cheney.svg)
 
@@ -28,34 +86,13 @@ cell gets the `FORWARDED` bit in its old header and its new offset in its old fi
 payload word, which is why every cell kind has at least one. When the scan catches up
 with the copy point, everything reachable has been copied, and the old arena is dropped.
 
-What counts as a traced field comes from the layout table alone: a field declared as
-`Value` or `Ref` in `cells!` is traced, nothing else is (D1052). There is no per-kind
-tracing code to forget when a cell kind is added. A few kinds get extra treatment on the
-way:
-
-- a reference to a **flattened rope** is redirected to its flat string, so the rope
-  dies;
-- **Map and Set** tables, whose object keys hash by offset, are rehashed in place after
-  the copy (D1381);
-- **ephemeron tables** (WeakMap, WeakSet, WeakRef, FinalizationRegistry) are not traced
-  by the scan. When the scan catches up, every pair whose key was copied gets its value
-  copied, the scan resumes, and this repeats until nothing changes; pairs with dead keys
-  are then cleared (D1382, D1513);
-- inline cache slots that hold arena offsets are emptied (D1621).
-
-The order is breadth-first from the roots, in field order, so the new layout depends
-only on the object graph. Collecting a collected heap reproduces it byte for byte. That
-is the property snapshots and the [determinism checks](determinism.md) build on.
-
-> **Trade-off.** Copying over mark-sweep. A copying collector compacts for free: the
-> image after a collection has no holes, which keeps snapshots small, and its layout is
-> canonical, which makes images comparable. It is also short: one loop over the
-> to-space, driven by the layout table. The costs are memory and copying. During a
-> collection the old and the new arena both exist, so the peak is about twice the live
-> data, plus what the host allocator fragments (D1990). And every live cell is copied
-> every time, including a 1 MiB tool result that never changes: there is no non-moving
-> space for large strings and buffers yet. An in-place mark-compact collector, which
-> would remove the doubled peak, is being designed.
+The order is breadth-first from the roots, in field order, so the layout depends only
+on the object graph, not on the order in which cells were allocated. djs uses it where
+that matters:
+- the **canonical hash** collects a copy of the heap this way and hashes the result, so
+  two VMs with the same graph have the same hash whatever their history;
+- the **base image** is made this way, so it doesn't depend on how the prelude
+  allocated.
 
 ## When it runs
 
@@ -140,8 +177,8 @@ garbage, so djs does three things (D1600, D1700):
    the error opens the reserve and collects when the handler is reached, so a handler
    that formats the error and reports it has room to run.
 
-A refusal by the *host* allocator below the cap (the backing store cannot grow, the new
-arena cannot be reserved) is different: it is not a function of the program, so it is
+A refusal by the *host* allocator below the cap (the backing store cannot grow, the
+collector's side tables cannot be allocated) is different: it is not a function of the program, so it is
 not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D1690).
 
 > **Trade-off.** Retry at instruction granularity over collecting inside allocation.
@@ -159,8 +196,10 @@ not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D16
 
 ## Where to look
 
-- [`crates/djs-core/src/heap/gc.rs`](../../crates/djs-core/src/heap/gc.rs): the
-  collector and `next_threshold`;
+- [`crates/djs-core/src/heap/compactor.rs`](../../crates/djs-core/src/heap/compactor.rs):
+  the in-place collector;
+  [`crates/djs-core/src/heap/gc.rs`](../../crates/djs-core/src/heap/gc.rs): the copying
+  collector, the shared bookkeeping and `next_threshold`;
   [`gc_tests.rs`](../../crates/djs-core/src/heap/gc_tests.rs): its tests, including
   "collecting twice gives identical bytes".
 - [`crates/djs-core/src/heap/walk.rs`](../../crates/djs-core/src/heap/walk.rs): tracing
@@ -170,7 +209,9 @@ not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D16
 
 Decisions on this page:
 
-<!-- gen:decisions D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 -->
+<!-- gen:decisions D2040 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 -->
+- D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
+- D018: Adopt mark-compact for in-VM collections
 - D1090: Copying collector
 - D1052: Layout description macro
 - D1381: Map and Set are ordered hash tables rehashed by the collector

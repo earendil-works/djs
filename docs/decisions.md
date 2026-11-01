@@ -4925,3 +4925,47 @@ Wiring djs into pi-private is deferred to later. The owner allows harvesting cod
 from ~/.pi/agent/sessions into the difftest corpus, provided everything committed is
 redacted (no secrets, credentials, personal data or private content in scripts or recorded
 tool results).
+
+## D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
+date: 2026-11-03 · by: heap · issue: 0101
+The implementation of the owner's D018 (design and numbers in docs/mark-compact.md).
+`Heap::collect`, and with it every in-VM collection, is a sliding mark-compact in four
+passes (heap/compactor.rs). The passes run over side tables allocated before anything is
+touched: a live-word bitmap (len/64 bytes) and a block table (u32 per 512 B, len/128),
+plus a mark stack that grows on demand up to len/64 entries. A refusal from the host
+returns `HostOutOfMemory` with the heap unchanged (D1690).
+1. **Mark:** `gc_bits::MARK` in the header and the cell's words in the bitmap.
+   - Leaf kinds (strings, Bytes, U32Array, BigInt) are not pushed.
+   - On stack overflow a cell stays marked but unpushed; a rescan from the lowest such
+     cell traces it.
+   - References to flattened ropes are rewritten to the flat string while marking.
+   - Ephemeron tables go to a fixpoint; dead pairs are then cleared in place.
+2. **Block table:** a prefix sum of popcounts. A live cell at `a` moves to
+   `table[a/512] + 8·popcount(bits below a in its word)`.
+3. **Update:** every traced slot of every marked cell is rewritten. Nothing below the
+   first dead word moves, so slots pointing there are left alone. Templates get
+   `clear_offset_caches` before their IC ref is updated. Map/Set cells are remembered for
+   the rehash.
+4. **Slide:** runs of adjacent live cells move with one `copy_within`. The freed tail is
+   zeroed (`Arena::truncate`), then the remembered Map/Set are rehashed (D1381).
+
+Both collectors keep exactly the same cells at the same sizes, so live bytes, thresholds
+and GC points don't depend on the collector. Surviving cells keep their address
+(allocation) order: collecting along the way and collecting once at the end leave the same
+bytes for the same mutations.
+
+**Cheney** stays as `Heap::collect_canonical` (and `Vm::collect_canonical`). It is used by
+`Vm::canonical_hash` on its copy (D1730), the base image (djs-prelude's build.rs and its
+test), and `vm_new_compiled`.
+
+**The gate:** the "after a final collection" comparisons of D1720/D1725 now compare
+`canonical_hash`. That covers e2e plain vs suspension, difftest `--determinism`, and the
+native-vs-wasm drivers, which print it next to the in-place collected hash. The raw-image
+comparisons are unchanged.
+
+**Measured against Cheney:**
+- peak wasm memory −3% to −52% on 0081/0087's workloads;
+- pi warm tool-heavy 3.13 → 2.13 MiB, cold `return 1` 3.56 → 2.94 MiB;
+- wasm instructions ±0 to +5.5%;
+- collection time 1.1–1.6×;
+- code +6.0 KB (+2.0 KB gzip).
