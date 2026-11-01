@@ -14,7 +14,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0086 | Bytecode quality + dispatch (0081 P4) | lexer | .worktrees/lexer |
 | 0083 | Shapes + leaner object/image layout (design first) | heap | .worktrees/heap |
 | 0085 | Leaf fast paths for everyday builtins (0081 P1) | perf | .worktrees/perf |
-| 0089 | pi adapter: collect before snapshot()/prelude cache | snapshot | .worktrees/snapshot |
 
 ## Open (ready)
 
@@ -60,6 +59,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0059 | Indirect eval, Function ctors, queueMicrotask | 4435b3b (agent infra; active 37,464 / 37,722 = 99.3%; pi 215/226) |
 | 0064 | djs repl | 31797b6 (agent repl, archived; docs/cli.md; follow-ups: tab completion, interactive .step) |
 | 0077 | deser deps investigation | report (agent deps, archived): no new deps; quick wins -> 0078 |
+| 0089 | pi snapshot collect fix | 68343b1 (agent snapshot, archived; snapshots 936 -> 498 KB; DETERMINISTIC_VERSION 2) |
 | 0088 | Snapshot design research | 6c0e381 (agent snapshot; recommends A now, B long-term, defer C; owner decision pending) |
 | 0081 | Perf anatomy | report (agent perf): plain bytecode at par in wasm; gap is builtins/iteration; P1-P10 |
 | 0072 | Determinism checks in the gate (both parts) | 38f0c91 (agent determinism, archived; D1720, D1725) |
