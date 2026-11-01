@@ -168,6 +168,9 @@ returns `1` and is bumped on any incompatible change. The Sandbox checks it.
 **Buffers.** Data crosses the boundary through two buffers in linear memory.
 - `djs_staging(len) -> ptr` makes the *staging* buffer at least `len` bytes. The host writes
   into it, then calls the export that consumes it.
+- `djs_image_staging(len, memoryLimit) -> ptr` is `djs_staging` for an image about to go to
+  `vm_from_bytes`: the buffer gets the capacity the restored arena reserves, so handing it
+  over grows nothing (D1942). Hosts check for it (modules before 0094 lack it).
 - The *out* buffer is filled by exports that return data, at `djs_out_ptr()` /
   `djs_out_len()`.
 

@@ -119,7 +119,20 @@ impl Heap {
     pub fn verify(&self) -> Result<(), VerifyError> {
         let a = self.arena();
         let end = a.len();
-        let mut starts: Vec<(u32, CellKind)> = Vec::new();
+        // Sized by a first walk that only follows the size fields: restoring an image is
+        // a memory peak, and a doubling Vec of 8-byte entries left up to 3x the list in
+        // wasm memory (D1942).
+        let mut count = 0usize;
+        let mut p = 0;
+        while p < end && end - p >= 8 {
+            let size = a.get(p, Header::SIZE);
+            if size == 0 {
+                break;
+            }
+            count += 1;
+            p = p.saturating_add(size);
+        }
+        let mut starts: Vec<(u32, CellKind)> = Vec::with_capacity(count);
         let mut pos = 0;
         while pos < end {
             if end - pos < 8 {
@@ -407,11 +420,17 @@ impl Heap {
 
     /// Prototype chains must end in null.
     fn check_proto_cycles(&self, starts: &[(u32, CellKind)]) -> Result<(), VerifyError> {
-        let objects: Vec<u32> = starts
+        let n = starts
             .iter()
             .filter(|&&(_, k)| k == CellKind::Object)
-            .map(|&(o, _)| o)
-            .collect();
+            .count();
+        let mut objects: Vec<u32> = Vec::with_capacity(n);
+        objects.extend(
+            starts
+                .iter()
+                .filter(|&&(_, k)| k == CellKind::Object)
+                .map(|&(o, _)| o),
+        );
         // 0 = unvisited, 1 = on the current path, 2 = known to reach null.
         let mut state = alloc::vec![0u8; objects.len()];
         let mut path = Vec::new();

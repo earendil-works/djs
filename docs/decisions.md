@@ -4144,3 +4144,90 @@ date: 2026-11-01 · by: coordinator · issue: 0095
 docs/decisions-index.md (0095) found that D1783 appears twice in this log, under two
 titles (from parallel branches). Both entries stand. References to "D1783" mean the entry
 whose title matches the context; docs/decisions-index.md lists both.
+
+## D1940: Where a pi VM's baseline wasm memory goes
+date: 2026-11-03 · by: num · issue: 0094
+I measured pi's `return 1` per export call with `djs_alloc_stats`. That is a new
+`alloc-stats` feature of djs-wasm: a counting wrapper around the system allocator that
+reports live, peak and largest allocation. The script was
+`work/scratch/0094/account.ts`. Linear memory grows in 64 KiB pages and never shrinks,
+and dlmalloc's realloc grows a block in place only if the top chunk already has room.
+Otherwise it moves the block and leaves the old one behind as a hole.
+
+| part (start reusing the prelude image) | before | after |
+| --- | ---: | ---: |
+| shadow stack (rustc's default) | 1024 KiB | 256 KiB (D1941) |
+| data segment (base image 389 KiB of it) | 561 KiB | 561 KiB |
+| staging buffer holding the image | 546 KiB | becomes the arena (D1942) |
+| arena: the image reallocated to its GC target on the first allocation | +1093 KiB, old block a hole | one 1152 KiB block (D1942) |
+| `verify`'s transient cell list | 137 KiB | 80 KiB (sized exactly) |
+| memory after the run | 3.50 MiB | 2.13 MiB |
+
+The pi bench (`js/bench/pi.bench.ts` with instance memory recorded; quickjs-wasi uses
+1.56–1.69 MiB):
+
+| case | before | after |
+| --- | ---: | ---: |
+| start reusing the prelude image (`return 1`, tool-heavy) | 3.50 MiB | 2.13 MiB |
+| cold start that runs the prelude | 3.88 MiB | 3.81 MiB |
+
+The cold start's peak is the collection after the prelude: from-space plus to-space.
+
+**Rejected: a compressed base image.** A byte-level LZ in djs-prelude took the 398 KB
+base to 159 KB and would have saved 239 KB of every instance's data segment. Decoding
+cost 7.5 M wasm instructions (~0.5 ms) per `vm_new`, against 85 k for the copy. So
+`Sandbox` creation and pi's cold start would have paid about half a millisecond each.
+Left out; a faster codec is a possible follow-up.
+
+## D1941: A 256 KiB wasm stack; the parser's deep paths fit it
+date: 2026-11-03 · by: num · issue: 0094
+rustc gives wasm32 a 1 MiB shadow stack. It is part of every instance's memory from
+the start, so `crates/djs-wasm/build.rs` now links with `-zstack-size=262144`
+(`DJS_WASM_STACK` overrides it for measurements). The only deep Rust recursion is the
+parser, which counts nesting depth (`MAX_DEPTH` 1000, docs/compiler.md 2.4). Runtime
+recursion (JS calls, proxies, bound functions, getters, JSON, the GC, `join`) uses the
+heap or loops; ten such probes behave the same at 1 MiB and at 256 KiB.
+
+I measured the wasm stack per nesting level by finding the deepest nesting that does not
+trap at a 128 KiB stack:
+- 130–160 B for statements;
+- 230 B for patterns;
+- 460–510 B for parentheses, arrays and objects;
+- 1.4 KiB for classes.
+
+At 1000 units, three constructs did not fit 256 KiB, and nested classes did not even fit
+the old 1 MiB: a trap at the 498 levels the parser accepted. Fixes:
+- **Smaller frames on the recursion paths:**
+  - Decorator thunks and parked field initializers box their `FuncState`. `ClassBuild`
+    went from 2.4 KB to 248 B, and `parse_class` from 3.8 KiB to 384 B of wasm stack.
+  - The declaration arms of `parse_statement_list_item` moved out of line
+    (`parse_declaration_item`). They had made its frame 368 B, 70% of a block level.
+  - A C-style `for`'s init clause and `parse_for_in_of` are out of line.
+- **Depth weights** for what is still big: a class body costs 7 extra units (about 110
+  nested classes), a C-style `for` and a destructuring pattern level 1 extra each.
+
+The deepest accepted nesting of every construct now needs at most ~170 KiB in wasm.
+`js/test/nesting.test.ts` (gate, debug wasm) bisects each construct and requires the
+limit's SyntaxError, never a trap. It fails at a 128 KiB stack.
+
+## D1942: Restored arenas reserve their target up front; `djs_image_staging`
+date: 2026-11-03 · by: num · issue: 0094
+A restored arena's buffer was exactly the image, and its first allocation reallocated
+it to the GC target, D1870's growth cap. In dlmalloc that is a move: a new block, plus
+the old one left as a hole.
+
+What changed:
+- `Heap::over` now reserves up to the target right away; the reservation is best effort.
+- `Vm::from_base` copies the base into a buffer that already has the arena's capacity.
+- The new export `djs_image_staging(len, memoryLimit)` stages an image in a buffer with
+  the capacity the restored arena will have (`Heap::restore_capacity`), so
+  `vm_from_bytes` grows nothing. js/src/sandbox.ts and js/pi/engine.ts use it when the
+  module has it.
+- `verify` sizes its cell list exactly.
+
+Results:
+- Start reusing the prelude image: 2.75 → 2.13 MiB, on top of D1941.
+- Base copy for `vm_new`: 1.69 MiB instead of 2.13.
+
+Images, collection points and determinism are unchanged: capacity is never part of
+the image.
