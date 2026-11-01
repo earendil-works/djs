@@ -119,20 +119,16 @@ impl Heap {
     pub fn verify(&self) -> Result<(), VerifyError> {
         let a = self.arena();
         let end = a.len();
-        // Sized by a first walk that only follows the size fields: restoring an image is
-        // a memory peak, and a doubling Vec of 8-byte entries left up to 3x the list in
-        // wasm memory (D1942).
-        let mut count = 0usize;
-        let mut p = 0;
-        while p < end && end - p >= 8 {
-            let size = a.get(p, Header::SIZE);
-            if size == 0 {
-                break;
-            }
-            count += 1;
-            p = p.saturating_add(size);
-        }
-        let mut starts: Vec<(u32, CellKind)> = Vec::with_capacity(count);
+        // Cell starts as a bitmap, one bit per 8-byte word (D1991): restoring an image is
+        // a memory peak in wasm, and a list of (offset, kind) cost 8 bytes per cell; this
+        // is len / 64. The kind of a start is read from its (checked) header.
+        let words = end.div_ceil(8) as usize;
+        let mut starts = alloc::vec![0u64; words.div_ceil(64)];
+        let is_start = |bits: &[u64], t: u32| {
+            t.is_multiple_of(8)
+                && t < end
+                && bits[(t / 8) as usize / 64] & (1 << ((t / 8) % 64)) != 0
+        };
         let mut pos = 0;
         while pos < end {
             if end - pos < 8 {
@@ -161,19 +157,26 @@ impl Heap {
             if !self.length_fits(pos, kind, size) {
                 return Err(VerifyError::BadLength { offset: pos });
             }
-            starts.push((pos, kind));
+            starts[(pos / 8) as usize / 64] |= 1 << ((pos / 8) % 64);
             pos += size;
         }
-        if starts.is_empty() {
+        if end == 0 {
             return Err(VerifyError::Roots { offset: 0 });
         }
-        let kind_at = |t: u32| -> Option<CellKind> {
-            starts
-                .binary_search_by_key(&t, |&(o, _)| o)
-                .ok()
-                .map(|i| starts[i].1)
+        let kind_at =
+            |t: u32| -> Option<CellKind> { is_start(&starts, t).then(|| self.cell_kind(t)) };
+        // The cells in address order (their headers are checked above).
+        let cells = || {
+            let mut pos = 0;
+            core::iter::from_fn(move || {
+                (pos < end).then(|| {
+                    let cell = pos;
+                    pos += a.get(cell, Header::SIZE);
+                    (cell, self.cell_kind(cell))
+                })
+            })
         };
-        for &(cell, _) in &starts {
+        for (cell, _) in cells() {
             let mut err = None;
             self.trace_cell(cell, |slot| {
                 if err.is_some() {
@@ -224,12 +227,12 @@ impl Heap {
                 return Err(e);
             }
         }
-        for &(cell, kind) in &starts {
+        for (cell, kind) in cells() {
             if !self.cell_invariants(cell, kind, &kind_at) {
                 return Err(VerifyError::Invalid { offset: cell });
             }
         }
-        self.check_proto_cycles(&starts)
+        self.check_proto_cycles(cells())
     }
 
     /// Kind-specific invariants that the rest of the heap code relies on to terminate:
@@ -418,41 +421,39 @@ impl Heap {
         }
     }
 
-    /// Prototype chains must end in null.
-    fn check_proto_cycles(&self, starts: &[(u32, CellKind)]) -> Result<(), VerifyError> {
-        let n = starts
-            .iter()
-            .filter(|&&(_, k)| k == CellKind::Object)
-            .count();
-        let mut objects: Vec<u32> = Vec::with_capacity(n);
-        objects.extend(
-            starts
-                .iter()
-                .filter(|&&(_, k)| k == CellKind::Object)
-                .map(|&(o, _)| o),
-        );
-        // 0 = unvisited, 1 = on the current path, 2 = known to reach null.
-        let mut state = alloc::vec![0u8; objects.len()];
-        let mut path = Vec::new();
-        for start in 0..objects.len() {
-            let mut cur = Some(start);
-            while let Some(i) = cur {
-                match state[i] {
-                    2 => break,
-                    1 => return Err(VerifyError::ProtoCycle { offset: objects[i] }),
-                    _ => {}
-                }
-                state[i] = 1;
-                path.push(i);
-                // Already checked: PROTO is null or an object cell.
-                cur = self
-                    .arena()
-                    .get(objects[i], Object::PROTO)
-                    .get()
-                    .and_then(|p| objects.binary_search(&p).ok());
+    /// Prototype chains must end in null. Two bits per 8-byte word mark objects on the
+    /// current path and objects known to reach null (D1991).
+    fn check_proto_cycles(
+        &self,
+        cells: impl Iterator<Item = (u32, CellKind)>,
+    ) -> Result<(), VerifyError> {
+        let words = self.arena().len().div_ceil(8) as usize;
+        let mut on_path = alloc::vec![0u64; words.div_ceil(64)];
+        let mut done = alloc::vec![0u64; words.div_ceil(64)];
+        let bit = |o: u32| ((o / 8) as usize / 64, 1u64 << ((o / 8) % 64));
+        let mut path: Vec<u32> = Vec::new();
+        for (start, kind) in cells {
+            if kind != CellKind::Object {
+                continue;
             }
-            for i in path.drain(..) {
-                state[i] = 2;
+            let mut cur = Some(start);
+            while let Some(o) = cur {
+                let (w, m) = bit(o);
+                if done[w] & m != 0 {
+                    break;
+                }
+                if on_path[w] & m != 0 {
+                    return Err(VerifyError::ProtoCycle { offset: o });
+                }
+                on_path[w] |= m;
+                path.push(o);
+                // Already checked: PROTO is null or an object cell.
+                cur = self.arena().get(o, Object::PROTO).get();
+            }
+            for o in path.drain(..) {
+                let (w, m) = bit(o);
+                on_path[w] &= !m;
+                done[w] |= m;
             }
         }
         Ok(())

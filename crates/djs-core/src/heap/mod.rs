@@ -134,6 +134,14 @@ fn reserve_for(limit: u32) -> u32 {
     (limit / 32).min(1 << 20) & !7
 }
 
+/// The arena capacity for a GC threshold `t` (D1990): the threshold plus a slack for
+/// what is allocated between crossing it and the next safepoint, where the collection
+/// runs. Without it that overshoot reallocated the whole arena, and in wasm the moved
+/// block left its old place behind as a hole during the collection.
+fn capacity_target(t: u32) -> u32 {
+    t.saturating_add((t / 16).max(64 << 10))
+}
+
 /// The default memory cap: the whole `u32` offset space.
 pub const DEFAULT_LIMIT: usize = arena::MAX_ARENA as usize;
 
@@ -213,7 +221,7 @@ impl Heap {
         let hard = (limit.min(arena::MAX_ARENA as usize) as u32) & !7;
         let len = u32::try_from(image_len).unwrap_or(u32::MAX);
         let t = gc::next_threshold(len, hard - reserve_for(hard));
-        (t as usize).max(image_len)
+        (capacity_target(t) as usize).max(image_len)
     }
 
     fn over(arena: Arena) -> Heap {
@@ -275,7 +283,7 @@ impl Heap {
     /// Sets the GC threshold, in the roots cell too (D1601).
     pub(crate) fn set_gc_threshold(&mut self, t: u32) {
         self.gc_threshold = t;
-        self.arena.set_target(t);
+        self.arena.set_target(capacity_target(t));
         if self.arena.len() >= Roots::LAYOUT.min_size {
             self.arena.set(0, Roots::GC_THRESHOLD, t);
         }
