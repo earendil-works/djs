@@ -1,7 +1,7 @@
 # 0108: Function-name inference bug, syntax messages, static property order
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0108-naming-and-messages
 depends-on: 0106
 guide: -
