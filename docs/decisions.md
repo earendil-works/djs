@@ -3439,3 +3439,30 @@ exports it, so nested timeout.sh calls in the gate stay at normal priority) or t
 command is merge-to-main.sh, gate.sh or with-merge-lock.sh (a niced process cannot
 lower its niceness again). AGENTS.md asks agents to run cargo builds and test loops
 through timeout.sh or `nice -n 10` as well.
+
+## D1740: Fuel overshoot carries to the next run; a suspended intrinsic is charged once
+date: 2026-11-03 · by: determinism · issue: 0074
+An instruction is charged before it runs, so a slice ends with negative fuel when its last
+instruction cost more than was left (a long string op, a large copy). The next run used
+to start from the full slice, so small slices got further than large ones for the same
+total. Now `Interp::FUEL_DEBT` (a Number, heap state) holds the overshoot when a run
+stops mid-call (OutOfFuel, or parked on a host call). The next run that executes
+instructions subtracts it first: with a debt larger than the slice it stops at once and
+the rest carries on. When the VM is quiescent (Done, Threw, Idle) the debt is 0. The next
+run starts a fresh slice anyway, and canonical hashes at those points (D1730 journal
+checks) must not depend on the slicing. `Vm::call` and `Vm::abort` reset it.
+`Vm::run_metered`'s `used` counts the fuel spent on instructions, without the debt paid.
+
+A builtin that suspends mid-work (`suspend_in`: regexp exec/split/replace, D1332) is
+dispatched again when it resumes and charged again. `suspend_in` now gives back that
+dispatch's charge (the `call_intrinsic` op cost, or a native builtin's `CALL_FUEL`), so a
+suspension costs nothing extra.
+
+Result: a budget of k·B fuel, given in any slices that divide B, stops at the same
+instruction in the same state (vm test, with and without image restores). Still not
+slice-independent:
+- fuel that depends on collection points (append buffers, D1610): `run` collects at
+  its start (0071 removes that);
+- regexp scans: the matcher charges one unit per character after the first, so a scan
+  that stops for lack of fuel gets its first character free again when it resumes.
+  Exact accounting needs a change in regexp/exec.rs (a follow-up).

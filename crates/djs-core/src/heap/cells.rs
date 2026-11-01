@@ -402,7 +402,8 @@ cells! {
         INBOX_HEAD: u32 = 76,
         /// Fuel the last run overshot by (D1740): its last instruction cost more than was
         /// left. The next run that executes instructions starts that much shorter, so a
-        /// call's total fuel does not depend on how it was sliced. A Number, 0 for none.
+        /// call's total fuel does not depend on how it was sliced. A Number, 0 for none,
+        /// and 0 whenever the VM is quiescent (done, threw, idle).
         FUEL_DEBT: Value = 80,
     };
 

@@ -948,10 +948,17 @@ impl<'h> Exec<'h> {
     /// Runs with `fuel`.
     pub fn run(&mut self, fuel: u64) -> Status {
         let st = self.run_loop(fuel);
-        // D1740: a run that executed instructions carries its overshoot to the next one
-        // (and has paid the debt it started with).
-        if self.fuel_start.is_some() {
-            state::set_fuel_debt(self.heap, -self.fuel);
+        // D1740: a run that stops mid-call (out of fuel, or parked on a host call) carries
+        // its overshoot to the next one (having paid the debt it started with). Once the
+        // VM is quiescent (done, threw, idle) nothing is owed: the next run starts a fresh
+        // slice anyway, and the state at those points does not depend on the slicing.
+        match st {
+            Status::OutOfFuel | Status::HostCall { .. } => {
+                if self.fuel_start.is_some() {
+                    state::set_fuel_debt(self.heap, -self.fuel);
+                }
+            }
+            _ => state::set_fuel_debt(self.heap, 0),
         }
         if self.host_oom {
             self.flush();
