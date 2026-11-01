@@ -1,7 +1,7 @@
 # 0055: Determinism investigation (report only; becomes longer-term issues)
 
-status: open
-agent: -
+status: in-progress
+agent: determinism
 branch: issue/0055-determinism
 depends-on: -
 touches: work/issues/0055-determinism-investigation.md (the report), work/scratch/0055/ (experiments), scripts/ or tests/ (new experiment scripts only). No changes to engine code.
