@@ -285,10 +285,10 @@ but pi keeps the prelude's `settle`/`run`/`stalled` alive across calls).
 | `bridge`: a sync host function called with primitives | a sync host function (`vm_new_host_function`): the VM parks, the adapter reads the arguments with the reader, `post`s, and resolves the call with `undefined` |
 | `(async (tools, console) => {code\n})` as `codemode.js` | the same text after `return `, so line numbers match. Compile errors become pi's script-error JSON with a `codemode.js:line:col` frame |
 | `drain()`: run jobs one by one, poll `shouldInterrupt` every 50 jobs, then `stalled()` | `vm_run` runs the job queue to empty itself (D1370). `stalled()` is called after it |
-| QuickJS polls `interruptHandler` while it runs; true throws an uncatchable error | `shouldInterrupt` is polled after every fuel slice (`fuelPerPoll`, default 10,000). True → `vm_abort` and a `crash`, which pi's launchers turn into `timeout` or `aborted` as before |
-| deterministic: WASI clocks read virtual time, `random_get` a PRNG, UTC, no WeakRef | `vm_set_now(clock.now)` before every slice, time zone 0, `vm_set_random_seed`. djs reads no clock or entropy of its own (ARCH "Nondeterminism") and has no WeakRef at all |
+| QuickJS polls `interruptHandler` while it runs; true throws an uncatchable error | `shouldInterrupt` is polled after every fuel slice (`fuelPerPoll`, default 10,000) of the script's work, not while the host globals and the prelude run (D1660: a start that reuses a prelude image skips that work, so a budget means the same on cold and warm starts). True → `vm_abort` and a `crash`, which pi's launchers turn into `timeout` or `aborted` as before |
+| deterministic: WASI clocks read virtual time, `random_get` a PRNG, UTC, no WeakRef | `vm_set_now(clock.now)` before every slice, time zone 0, `vm_set_random_seed`. djs reads no clock or entropy of its own (ARCH "Nondeterminism"). The adapter deletes `WeakRef` and `FinalizationRegistry` in deterministic runs (0059) |
 | `Math.random` seeded by QuickJS from its first clock read (seed + 1), one draw used up while creating the context | djs's `Math.random` is the same xorshift64*, so the adapter seeds it one step after seed + 1. **The same seed gives the same numbers on both engines**; pi's pinned values pass |
-| fingerprint `quickjs-wasi X, quickjs Y, prelude H, deterministic 1, stack S, heap M, budget B` | `djs <build hash>, prelude H, deterministic 1, fuel per poll F, heap M, budget B` (`djs_build_hash`) |
+| fingerprint `quickjs-wasi X, quickjs Y, prelude H, deterministic 1, stack S, heap M, budget B` | `djs <build hash>, prelude H, host G, deterministic 1, fuel per poll F, heap M, budget B` (`djs_build_hash`; G hashes the adapter's own globals, D1660) |
 | quickjs-wasi's host globals `performance`, `atob`, `btoa` (`queueMicrotask` is native since 0059) | defined by the adapter in JS before the prelude, so the lockdown freezes them too. `performance.now()` counts from the run's start on the VM clock (deterministic: from `startedAt`, as on quickjs). Deterministic runs also lose `WeakRef` and `FinalizationRegistry` there, as on quickjs |
 | no snapshots: durability by deterministic replay | `snapshot()` / `resumeVm()` in addition: the VM image plus the adapter's few numbers, taken while the script waits. A resumed session continues with no replay (tested against an uninterrupted run) |
 
@@ -340,8 +340,9 @@ Besides the failures above:
   per second as QuickJS makes (34,000/s vs 32,000/s; a budget of 20,000 lasts 0.58 s vs
   0.62 s). Code that allocates or calls builtins polls far more often than on QuickJS,
   which does not count that work. A push loop with a budget of 20,000 lasts 1.2 s on djs
-  and 10 s on QuickJS; string keys with JSON take 3.4 s and 55 s. pi's prelude itself takes
-  about 120 polls on djs and 4 on QuickJS.
+  and 10 s on QuickJS; string keys with JSON take 3.4 s and 55 s. pi's prelude uses no polls
+  on djs (about 4 on QuickJS): it is not polled, so cold and warm starts count the same
+  (D1660).
 - **Memory limit.** djs caps its arena. Running out is a catchable
   `InternalError: out of memory`, as on QuickJS. With a limit of 256 KB or less, `startVm`
   rejects because the VM cannot be created; 512 KB is enough for pi's prelude.

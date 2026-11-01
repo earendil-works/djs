@@ -12,7 +12,8 @@
  * - `shouldInterrupt` is polled between fuel slices (every `fuelPerPoll` units of fuel, which
  *   also covers promise jobs: djs charges fuel for every instruction wherever it runs).
  *   Returning true abandons the VM's call (`vm_abort`, which the script cannot catch) and
- *   the VM reports `crash`.
+ *   the VM reports `crash`. Not while the host globals and pi's prelude run: a start that
+ *   reuses a prelude image skips them, and a budget must mean the same either way.
  * - The VM never decides on its own when it is finished.
  *
  * Deterministic mode (`data.deterministic`): djs reads no clock and no entropy itself
@@ -147,7 +148,7 @@ define("atob", { atob(data) {
 return (time) => { origin = time; };
 `;
 
-/** FNV-1a over UTF-16 code units, as 8 hex digits: identifies the prelude in the fingerprint. */
+/** FNV-1a over UTF-16 code units, as 8 hex digits: identifies the prelude and the host globals in the fingerprint. */
 function fnv1a(text: string): string {
   let hash = 0x811c9dc5;
   for (let index = 0; index < text.length; index++) {
@@ -156,6 +157,9 @@ function fnv1a(text: string): string {
   }
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
+
+/** The adapter's own globals change what scripts observe, so they are part of the fingerprint. */
+const HOST_GLOBALS_HASH = fnv1a(HOST_GLOBALS);
 
 /** The deterministic VM's clock: virtual time, moved by delivered results. */
 interface VirtualClock {
@@ -223,6 +227,12 @@ class Session implements VmSession {
   private readonly state: SessionState;
   private zoneOffset = 0;
   private zoneCheckedAt = -Infinity;
+  /**
+   * Whether fuel slices poll `shouldInterrupt`. Off while the host globals and pi's prelude
+   * run (trusted, bounded code): a start that reuses a prelude image skips that work, so
+   * polling it would make the budget a cold start has left differ from a warm one (D1660).
+   */
+  polling = true;
 
   constructor(engine: Engine, hooks: VmHooks, state: SessionState) {
     this.engine = engine;
@@ -314,7 +324,7 @@ class Session implements VmSession {
       const status = engine.run(this.fuel);
       switch (status) {
         case STATUS_OUT_OF_FUEL:
-          if (this.hooks.shouldInterrupt()) {
+          if (this.polling && this.hooks.shouldInterrupt()) {
             engine.abort();
             throw new Error("Execution interrupted");
           }
@@ -440,6 +450,15 @@ const MAX_CACHE_KEY = 64 * 1024;
 
 /** Evaluates the host globals and pi's prelude in a fresh VM. */
 function prepare(session: Session, engine: Engine, prelude: string, data: VmStartData): Prepared {
+  session.polling = false;
+  try {
+    return prepareUnpolled(session, engine, prelude, data);
+  } finally {
+    session.polling = true;
+  }
+}
+
+function prepareUnpolled(session: Session, engine: Engine, prelude: string, data: VmStartData): Prepared {
   // Handles live as long as the VM, which the caller disposes as a whole.
   const bridge = engine.hostFunction(BRIDGE_FN, "bridge");
   const getter = compileOrThrow(engine, "codemode-prelude.js", ["o", "k"], "return o[k]");
@@ -525,7 +544,7 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
       const fuel = options.fuelPerPoll ?? FUEL_PER_POLL;
       post({
         type: "started",
-        fingerprint: `djs ${engine.buildHash}, prelude ${fnv1a(prelude)}, deterministic ${DETERMINISTIC_VERSION}, fuel per poll ${fuel}, heap ${data.memoryLimitBytes ?? "none"}, budget ${budget}`,
+        fingerprint: `djs ${engine.buildHash}, prelude ${fnv1a(prelude)}, host ${HOST_GLOBALS_HASH}, deterministic ${DETERMINISTIC_VERSION}, fuel per poll ${fuel}, heap ${data.memoryLimitBytes ?? "none"}, budget ${budget}`,
       });
     }
 

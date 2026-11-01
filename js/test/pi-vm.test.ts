@@ -237,8 +237,57 @@ test("pi: an interrupt budget stops loops, including microtask loops", async () 
     const outcome = await run(code, { interruptBudget: 300 });
     assert.deepEqual(outcome.end, { type: "crash", message: "Error: Execution interrupted" }, code);
   }
-  // Work below the budget is not interrupted (the prelude takes about 120 polls).
+  // Work below the budget is not interrupted (the prelude does not count, D1660).
   assert.equal(value(await run("let n = 0; for (let i = 0; i < 1000; i++) n += i; return n", { interruptBudget: 300 })), 499500);
+});
+
+test("pi: a budget means the same on cold and warm starts (prelude images)", async () => {
+  // A start that reuses a prelude image skips the prelude, so the prelude must not use up
+  // interrupt polls (D1660): otherwise a replay after a restart (cold) could time out where
+  // the original run (warm) did not.
+  const code = "let s = 0; for (let i = 0; i < 100000; i++) s += i; const r = await tools.echo(s); return r";
+  // A store no other test uses, so the first start below really is cold.
+  const store = { "0066": JSON.stringify(Math.random()) };
+  const once = async (reuseImages: boolean, budget: number) => {
+    let polls = 0;
+    let session: VmSession | undefined;
+    const ended = new Promise<WorkerToHostMessage>((resolve) => {
+      startVm({
+        wasm,
+        prelude: PRELUDE_SOURCE,
+        reuseImages,
+        interruptBudget: budget,
+        data: {
+          code,
+          tools: [{ name: "echo", jsName: "echo", description: "" }],
+          globals: [],
+          memoryLimitBytes: undefined,
+          store,
+          deterministic: { startedAt: STARTED_AT, seed: 3 },
+        },
+        post: (message) =>
+          setTimeout(() => {
+            if (message.type === "done" || message.type === "crash") resolve(message);
+            if (message.type === "call") session!.deliver({ type: "result", id: message.id, ok: true, payload: message.args, seq: 1, now: STARTED_AT });
+          }),
+        shouldInterrupt: () => ++polls > budget,
+      }).then((s) => (session = s));
+    });
+    const end = await ended;
+    session!.dispose();
+    return { polls, end: end.type === "done" && end.ok ? end.value : end.type };
+  };
+  const cold = await once(false, Infinity);
+  const filling = await once(true, Infinity);
+  const warm = await once(true, Infinity);
+  assert.equal(cold.end, "4999950000");
+  assert.ok(cold.polls > 10, `${cold.polls} polls`);
+  assert.deepEqual([filling, warm], [cold, cold]);
+  // At the exact budget all three finish; one poll less, all three are interrupted.
+  for (const reuse of [false, true, true]) {
+    assert.equal((await once(reuse, cold.polls)).end, "4999950000");
+    assert.equal((await once(reuse, cold.polls - 1)).end, "crash");
+  }
 });
 
 test("pi: the memory limit", async () => {
@@ -298,7 +347,7 @@ test("pi: deterministic runs repeat exactly, with QuickJS's random numbers", asy
   assert.deepEqual(JSON.parse((one.output[0] as { text: string }).text).slice(0, 2), [STARTED_AT + 1000, 1000]);
   const started = one.messages[0];
   assert.equal(started.type, "started");
-  assert.match((started as { fingerprint: string }).fingerprint, /^djs [0-9a-f]{8}, prelude [0-9a-f]{8}, deterministic 1/);
+  assert.match((started as { fingerprint: string }).fingerprint, /^djs [0-9a-f]{8}, prelude [0-9a-f]{8}, host [0-9a-f]{8}, deterministic 1/);
   assert.deepEqual(
     one.messages.filter((m) => m.type === "idle"),
     [

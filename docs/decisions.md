@@ -2852,3 +2852,16 @@ rawJSON string".
 **JSON.isRawJSON** checks the class. **JSON.stringify** emits a RawJSON object's text
 verbatim. The leaf fast path sees an unknown class and falls back to the full
 algorithm, which does it.
+## D1660: pi adapter: the prelude is not polled; the fingerprint hashes the host globals
+date: 2026-11-03 · by: determinism · issue: 0066
+pi's launchers count `shouldInterrupt` polls over a whole execution, and a start that
+reuses a prelude image (D1495) skips the host globals and the prelude. While the adapter
+polled that work too, a cold start used about 136 polls more than a warm one, so a
+deterministic replay after a restart (cold) could time out where the original run (warm)
+did not (0055). The adapter now does not poll while the host globals and pi's prelude
+run (trusted, bounded code, about 10 ms). Polling starts with the per-run work that both
+paths share (the performance origin, the script), and cold, cache-filling and warm
+starts count the same polls (js/test/pi-vm.test.ts). A stop request during the prelude
+waits until it has finished. The deterministic fingerprint adds `host <fnv1a of
+HOST_GLOBALS>` after the prelude hash, because the adapter's own globals are part of
+what a script observes; `DETERMINISTIC_VERSION` stays for other changes to the adapter.
