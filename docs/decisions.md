@@ -3769,6 +3769,8 @@ date: 2026-11-05 · by: lexer · issue: 0086
   `fast_step`. As arms of `fast_step` itself they made the hottest ops slower in wasm
   (tight +6%, prop1 +5%: D1352's register allocation), after it they cost only the ops
   that take the general path (props +3%, a loop of slow ops).
+- `get_field length` of an Array (its slot 0) or a string primitive is on the fast path
+  (`fast_field`): the IC has no table entry to cache for it (arrays -11%).
 - Fuel per iteration drops with the instruction count (D1633: fuel is not semantics).
 - wasm (wmeasure, instructions vs 5459e97): tight -38%, loop -35%, call1 -22%, prop1
   -33%, calls -17%, forof -10%, arrays -9%, props -8%, strbuild -5%, pi-like -4%,

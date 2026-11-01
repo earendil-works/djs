@@ -294,6 +294,22 @@ impl Exec<'_> {
             return true;
         }
         let o = self.top(0);
+        if key == crate::heap::atoms::LENGTH && op == fast::GET_FIELD {
+            // `a.length` of an Array (a non-configurable own data property, its slot 0)
+            // and of a string primitive have no table entry for the IC (0086).
+            let len = match (o.as_object(), o.as_string()) {
+                (Some(a), _) if self.heap.object_class(a) == ObjectClass::Array => {
+                    Some(self.heap.object_slot(a, 0))
+                }
+                (_, Some(s)) => i32::try_from(self.heap.str_len(s)).ok().map(Value::int),
+                _ => None,
+            };
+            if let Some(v) = len {
+                self.set(self.sp - 1, v);
+                self.advance(Op::GetField, sp0);
+                return true;
+            }
+        }
         let own = match o.as_object() {
             Some(obj) => self.ic_own_get(obj, key, ic),
             None => None,
