@@ -1,4 +1,5 @@
 // Uint8Array base64/hex (0039): codemode moves images as base64.
+// difftest: no-stress 7 s suspended, 13 s under GC stress (debug, 0053)
 function q(s) {
   let out = "'";
   for (const c of s) out += c === "\n" ? "\\n" : c === "\t" ? "\\t" : c;

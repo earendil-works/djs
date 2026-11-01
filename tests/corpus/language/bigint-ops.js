@@ -1,5 +1,6 @@
 // BigInt operators on pseudo-random operands (0046), checked against qjs. Comparisons of
 // a negative BigInt with a negative Number are left out: qjs gets them wrong.
+// difftest: no-stress 9 s suspended, 14 s under GC stress (debug, 0053)
 let seed = 0x9e3779b9;
 function rand32() {
   seed = (seed + 0x6d2b79f5) | 0;

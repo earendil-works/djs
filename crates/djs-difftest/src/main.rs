@@ -29,6 +29,8 @@ options:
                       without --suspend-every) through heap images, and require the
                       suspended runs to leave the same heap image as the plain run after
                       a final collection (hard failure; GC stress is not compared, D1720)
+                      The stressed runs get 3x the time limit; cases marked
+                      `difftest: no-stress` skip them
   --backend B         djs only: run the @native builtins as `native` code (default)
                       or as `bytecode` (both must behave the same, 0063)
   --clusters          group the failures by the first line of what went wrong
@@ -42,7 +44,7 @@ options:
   --timeout SECS      wall-clock limit per case (default 10)
   --memory-limit N    memory limit per case in bytes, K/M/G suffixes (default 256M,
                       as in pi's codemode; 0 means no limit)
-  -j, --jobs N        worker threads (default: number of CPUs)
+  -j, --jobs N        worker threads (default: $DJS_JOBS, else the number of CPUs)
   --corpus DIR        corpus root (default: tests/corpus)
   -q, --quiet         no progress line
 ";
@@ -96,9 +98,7 @@ fn parse_args() -> Result<Args, String> {
         diff: true,
         timeout: Duration::from_secs(10),
         memory_limit: Some(256 << 20),
-        jobs: std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(4),
+        jobs: djs_test262::par::default_jobs(),
         corpus,
         quiet: false,
         suspend_every: None,
@@ -285,29 +285,25 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
     if args.clusters && !failures.is_empty() {
         print!("\nfailure clusters:\n{}", clusters(&cases, &outcomes));
     }
-    // Stress variants must behave exactly like the plain run: always a hard failure,
-    // except a stressed run that only ran out of time (reported, D1347).
+    // Stress variants must behave exactly like the plain run: any difference, a timeout
+    // included, is a hard failure (D1161, D1530).
     let mismatches: Vec<(&Case, &runner::StressMismatch)> = cases
         .iter()
         .zip(&outcomes)
         .flat_map(|(c, o)| o.stress.iter().map(move |m| (c, m)))
-        .filter(|(_, m)| !m.timed_out)
-        .collect();
-    let slow: Vec<String> = cases
-        .iter()
-        .zip(&outcomes)
-        .flat_map(|(c, o)| {
-            o.stress
-                .iter()
-                .filter(|m| m.timed_out)
-                .map(move |m| format!("{} [{}]", c.name, m.label))
-        })
         .collect();
     if !labels.is_empty() {
-        let note = if slow.is_empty() {
+        let unstressed = cases
+            .iter()
+            .zip(&outcomes)
+            .filter(|(c, o)| {
+                c.meta.no_stress.is_some() && !matches!(o.verdict, Verdict::Skipped(_))
+            })
+            .count();
+        let note = if unstressed == 0 {
             String::new()
         } else {
-            format!(" (timed out, not compared: {})", slow.join(", "))
+            format!(" ({unstressed} cases marked no-stress)")
         };
         if mismatches.is_empty() {
             println!(

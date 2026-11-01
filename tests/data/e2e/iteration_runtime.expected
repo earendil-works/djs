@@ -10,7 +10,7 @@ TypeError: Array Iterator object expected
 7:1-2-3-2-1-h-é 9
 3
 [0,1,2] iter next done value done value done value done
-2000 0 1999
+300 0 299
 TypeError: cannot read property 'Symbol.iterator' of null
 TypeError: value is not iterable
 TypeError: value is not iterable

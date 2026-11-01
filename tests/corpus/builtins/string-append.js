@@ -1,5 +1,6 @@
 // `s += x` builds strings in a buffer in place (D1610): values must stay immutable when an
 // older, shorter string over the same buffer is extended, read, or flattened.
+// difftest: no-stress 5 s suspended, 14 s under GC stress (debug, 0053)
 let s = "start:";
 const kept = [];
 for (let i = 0; i < 3000; i++) {

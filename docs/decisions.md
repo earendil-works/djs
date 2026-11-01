@@ -3208,3 +3208,30 @@ Sandbox no longer sets the clock per fuel slice in this mode. The clock is in th
 snapshot meta. Sync host functions don't move the clock: their position is deterministic,
 but their time would be another input. A test shows the same results at fuel slices
 1e6/1000/97.
+
+## D1530: difftest `no-stress`; a stressed timeout is a failure again
+date: 2026-11-01 · by: devflow · issue: 0053
+Amends D1347. Eight corpus cases took 3–120+ s per stress mode in the debug gate (deep
+recursion to a stack overflow, 200k rope operations, big arrays and BigInt loops: every
+suspension copies the heap image and every GC-stress safepoint copies all live cells), so
+they timed out under `--suspend-every`/`--gc-stress`. D1347 let such timeouts pass as
+"not compared", which burned ~10 s of CPU per pair in every gate, made the compared set
+depend on machine load, and would also have hidden a stress-only hang. Now those cases
+carry `// difftest: no-stress <reason>` (the measured times) and skip the stress
+variants; the plain run still compares them with qjs. All other cases get three times
+their time limit under stress (`runner::STRESS_TIMEOUT_FACTOR`), and a stressed run that
+still times out is a hard failure whose message suggests `no-stress`. The dquickts
+importer writes the directive for the cases in its `NO_STRESS` table.
+
+## D1531: qjs test262 results are cached
+date: 2026-11-01 · by: devflow · issue: 0053
+qjs is the oracle and fixed: for one qjs binary, test262 commit and runner driver, a
+test always gives the same result, but a qjs run of the active group took ~25 s and
+~130 CPU-s of subprocesses. `djs-test262 run --engine qjs` now answers from a cache file
+in `vendor/qjs-cache/` (next to the test262 checkout, so all worktrees share it), named by
+a hash of the qjs binary's bytes, the checkout's commit, the driver source and the memory
+limit; entries are keyed by test path, strictness and harness files. Timeouts and crashes
+are not cached (they can depend on load). A repeated active-group run takes 3.7 s (1 s of
+it the run) and ~11 CPU-s. `--no-cache` reruns everything and rewrites the entries. A
+checkout with local modifications at the pinned commit would be served stale results;
+fetch-test262.sh refuses such a checkout.

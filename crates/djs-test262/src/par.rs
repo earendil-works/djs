@@ -4,6 +4,21 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::thread;
 
+/// The default worker count of the runners: `$DJS_JOBS` when set (the repo's
+/// `.cargo/config.toml` sets 6 so parallel agents share the machine, the gate sets full
+/// width; D012), else the number of CPUs.
+pub fn default_jobs() -> usize {
+    std::env::var("DJS_JOBS")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or_else(|| {
+            thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4)
+        })
+}
+
 /// Maps `f` over `items` on `jobs` threads, returning results in input order.
 pub fn map<T, R, F>(items: Vec<T>, jobs: usize, f: F) -> Vec<R>
 where

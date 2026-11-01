@@ -39,12 +39,13 @@ const counter = {
 };
 console.log([...counter], steps.join(" "));
 
-// Big spreads collect across GC safepoints.
+// Big spreads collect across GC safepoints (at every one in the GC stress mode, whose
+// cost grows with the square of this size: 2000 took 10-20 s there, 0053).
 const big = [];
-for (let i = 0; i < 2000; i++) big.push({ i });
+for (let i = 0; i < 300; i++) big.push({ i });
 const gen = { [Symbol.iterator]() { let i = 0; return { next: () => (i < big.length ? { value: big[i++].i, done: false } : { done: true }) }; } };
 const out = [...gen];
-console.log(out.length, out[0], out[1999]);
+console.log(out.length, out[0], out[299]);
 
 // Errors.
 [null, 5, {}, { [Symbol.iterator]: () => 1 }, { [Symbol.iterator]: () => ({ next: () => 1 }) }].forEach((bad) => {

@@ -1,6 +1,7 @@
 // Proxy (0045): every trap with a logging handler, the invariant checks, revocation,
 // proxies as prototypes and handlers, callable and constructible proxies, and the
 // builtins that reach internal methods.
+// difftest: no-stress 3 s suspended, 8 s under GC stress (debug, 0053)
 function t(label, f) { try { console.log(label, f()); } catch (e) { console.log(label, String(e)); } }
 const TRAPS = ["get", "set", "has", "deleteProperty", "ownKeys", "getOwnPropertyDescriptor", "defineProperty", "getPrototypeOf", "setPrototypeOf", "isExtensible", "preventExtensions", "apply", "construct"];
 let log = [];

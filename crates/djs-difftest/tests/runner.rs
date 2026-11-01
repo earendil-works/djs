@@ -353,5 +353,32 @@ fn djs_stress_variants_agree() {
     let out = runner::run_all(&plain_djs(), &cases[..1], &dir.join("prelude.js"), &o).unwrap();
     assert_eq!(out[0].stress.len(), 1, "{:?}", out[0].stress);
     assert!(out[0].stress[0].reason.contains("heap image"));
+    // A case marked `no-stress` does not run on the stress variants (D1530).
+    let mut unstressed = cases[..1].to_vec();
+    unstressed[0].meta.no_stress = Some("too slow".into());
+    let out = runner::run_all(&Djs::default(), &unstressed, &dir.join("prelude.js"), &o).unwrap();
+    assert!(out[0].stress.is_empty());
+    // A stressed run that times out is a mismatch, not a skipped comparison.
+    struct Sleeper;
+    impl Engine for Sleeper {
+        fn name(&self) -> &str {
+            "sleeper"
+        }
+        fn run(&self, _: &Job<'_>) -> RunResult {
+            RunResult {
+                output: Vec::new(),
+                done: Done::Timeout,
+                image: None,
+            }
+        }
+    }
+    o.stress = vec![("sleeper".into(), Box::new(Sleeper))];
+    let out = runner::run_all(&Djs::default(), &cases[..1], &dir.join("prelude.js"), &o).unwrap();
+    assert_eq!(out[0].stress.len(), 1);
+    assert!(
+        out[0].stress[0].reason.contains("timed out after 180s"),
+        "{:?}",
+        out[0].stress
+    );
     fs::remove_dir_all(&dir).unwrap();
 }

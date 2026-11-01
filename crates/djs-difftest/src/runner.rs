@@ -22,15 +22,18 @@ pub struct Options {
     pub stress: Vec<(String, Box<dyn Engine>)>,
 }
 
+/// Stressed runs get this many times the case's time limit: a stress mode is several
+/// times slower than the plain run, and a timeout must not depend on machine load. A
+/// stressed run that still times out is a failure; cases that cannot finish under stress
+/// carry `difftest: no-stress` instead (D1530).
+pub const STRESS_TIMEOUT_FACTOR: u32 = 3;
+
 /// A stress variant whose transcript differs from the main run's.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StressMismatch {
     pub label: String,
     pub reason: String,
     pub diff: String,
-    /// The stressed run hit its time limit while the plain run finished: reported, but
-    /// not a failure (a stress mode can be orders of magnitude slower, D1347).
-    pub timed_out: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,7 +80,8 @@ pub fn run_one(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as f64)
         .unwrap_or(0.0);
-    let result = execute(engine, case, prelude_file, prelude, opts, now);
+    let timeout = case.meta.timeout.unwrap_or(opts.timeout);
+    let result = execute(engine, case, prelude_file, prelude, opts, now, timeout);
     let actual = transcript(&result);
     let verdict = match fs::read_to_string(&case.expected_file) {
         Ok(expected) => {
@@ -87,9 +91,7 @@ pub fn run_one(
             }
             if expected == actual {
                 Verdict::Pass
-            } else if let Some(reason) =
-                engine_failure(&result.done, case.meta.timeout.unwrap_or(opts.timeout))
-            {
+            } else if let Some(reason) = engine_failure(&result.done, timeout) {
                 // Not a behavior difference: say so instead of pointing at a line.
                 Verdict::Fail {
                     reason,
@@ -108,8 +110,22 @@ pub fn run_one(
         },
     };
     let mut stress = Vec::new();
-    for (label, variant) in &opts.stress {
-        let r = execute(variant.as_ref(), case, prelude_file, prelude, opts, now);
+    let variants = if case.meta.no_stress.is_some() {
+        &[][..]
+    } else {
+        &opts.stress[..]
+    };
+    let stress_timeout = timeout * STRESS_TIMEOUT_FACTOR;
+    for (label, variant) in variants {
+        let r = execute(
+            variant.as_ref(),
+            case,
+            prelude_file,
+            prelude,
+            opts,
+            now,
+            stress_timeout,
+        );
         let t = transcript(&r);
         if t == actual {
             // `--determinism`: the same graph, so the same heap image after a collection
@@ -124,7 +140,6 @@ pub fn run_one(
                         "the same transcript, but the heap image after a collection differs ({a:016x} vs {b:016x})"
                     ),
                     diff: String::new(),
-                    timed_out: false,
                 });
             }
         } else {
@@ -133,12 +148,15 @@ pub fn run_one(
             stress.push(StressMismatch {
                 label: label.clone(),
                 reason: if timed_out {
-                    "timed out, not compared".into()
+                    format!(
+                        "timed out after {:.0}s (mark it `difftest: no-stress <reason>` if it \
+                         cannot finish under stress)",
+                        stress_timeout.as_secs_f64()
+                    )
                 } else {
                     diff::first_difference(&actual, &t)
                 },
                 diff: diff::line_diff(&actual, &t, 3),
-                timed_out,
             });
         }
     }
@@ -159,6 +177,7 @@ fn execute(
     prelude: &str,
     opts: &Options,
     now: f64,
+    timeout: Duration,
 ) -> RunResult {
     match fs::read_to_string(&case.file) {
         Ok(source) => {
@@ -169,7 +188,7 @@ fn execute(
                 ts: case.meta.ts,
                 prelude_file,
                 prelude,
-                timeout: case.meta.timeout.unwrap_or(opts.timeout),
+                timeout,
                 fuel: case.meta.fuel,
                 memory_limit: opts.memory_limit,
                 now,

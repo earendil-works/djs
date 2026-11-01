@@ -1,5 +1,6 @@
 // Imported from dquickts tests/test_builtin.js (test_rope) by
 // scripts/difftest-import-dquickts.py; edit the script, not this file.
+// difftest: no-stress 200k rope operations: over 120 s in each stress mode (0053)
 
 var status = 0;
 

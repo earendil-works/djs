@@ -2,8 +2,10 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
+use djs_test262::cache::{Cached, QjsCache};
 use djs_test262::config::{Config, Kind};
 use djs_test262::engine::{Engine, Verdict};
+use djs_test262::par;
 use djs_test262::qjs::Qjs;
 use djs_test262::ratchet;
 use djs_test262::report::{self, ReportOptions};
@@ -25,7 +27,7 @@ options:
                       active and later groups; for list: all groups
   --depth N           directory depth of the per-dir table (default 1)
   --features          also print the per-feature table
-  -j, --jobs N        worker threads (default: number of CPUs)
+  -j, --jobs N        worker threads (default: $DJS_JOBS, else the number of CPUs)
   --test262 DIR       test262 checkout (default: $DJS_TEST262, else vendor/test262
                       in the primary checkout)
   --config FILE       grouping file (default: tests/test262.toml)
@@ -38,6 +40,9 @@ run options:
   --backend B         djs only: run the @native builtins as `native` code (default)
                       or as `bytecode` (0063)
   --qjs PATH          qjs binary (default: $DJS_QJS, else ~/Development/dquickts/qjs)
+  --no-cache          qjs: run every test instead of reusing cached results (the
+                      cache sits next to the test262 checkout, keyed by the qjs
+                      binary, the test262 commit and the driver; D1531)
   --timeout SECS      wall-clock limit per test (default 20)
   --memory-limit N    memory limit per test in bytes, K/M/G suffixes allowed
                       (default 512M; 0 means no limit)
@@ -66,6 +71,7 @@ struct Args {
     timeout: Duration,
     memory_limit: Option<u64>,
     failures: bool,
+    no_cache: bool,
     clusters: bool,
     slowest: usize,
     expected: Option<PathBuf>,
@@ -93,9 +99,7 @@ fn parse_args() -> Result<Args, String> {
         groups: Vec::new(),
         depth: 1,
         features: false,
-        jobs: std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(4),
+        jobs: par::default_jobs(),
         test262: None,
         config: suite::workspace_root().join("tests/test262.toml"),
         paths: false,
@@ -105,6 +109,7 @@ fn parse_args() -> Result<Args, String> {
         timeout: Duration::from_secs(20),
         memory_limit: Some(512 << 20),
         failures: false,
+        no_cache: false,
         clusters: false,
         slowest: 0,
         expected: None,
@@ -147,6 +152,7 @@ fn parse_args() -> Result<Args, String> {
                 let n = parse_size(&value(&a)?)?;
                 args.memory_limit = (n > 0).then_some(n);
             }
+            "--no-cache" => args.no_cache = true,
             "--failures" => args.failures = true,
             "--clusters" => args.clusters = true,
             "--slowest" => args.slowest = number(value(&a)?, &a)?,
@@ -275,6 +281,29 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         }),
         e => return Err(format!("unknown engine `{e}`")),
     };
+    // qjs results only change with the binary, the test262 commit or the driver (D1531).
+    let cache = match (args.engine.as_str(), &commit) {
+        ("qjs", Some(commit)) => Some(QjsCache::open(
+            &root.parent().unwrap_or(&root).join("qjs-cache"),
+            &args.qjs,
+            commit,
+            djs_test262::qjs::DRIVER,
+            args.memory_limit,
+            !args.no_cache,
+        )?),
+        _ => None,
+    };
+    let cached;
+    let engine: &dyn Engine = match &cache {
+        Some(cache) => {
+            cached = Cached {
+                inner: engine.as_ref(),
+                cache,
+            };
+            &cached
+        }
+        None => engine.as_ref(),
+    };
     let (run_tests, other): (Vec<TestCase>, Vec<TestCase>) =
         all.into_iter().partition(|t| selected[t.group]);
     if run_tests.is_empty() {
@@ -290,8 +319,15 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
     };
     let start = Instant::now();
     let refs: Vec<&TestCase> = run_tests.iter().collect();
-    let outcomes = runner::run_all(engine.as_ref(), &suite, &refs, &opts);
+    let outcomes = runner::run_all(engine, &suite, &refs, &opts);
     let elapsed = start.elapsed();
+    let cache_note = match &cache {
+        Some(c) => {
+            c.save()?;
+            format!(" ({} cached)", c.hits())
+        }
+        None => String::new(),
+    };
 
     // The tables also count the unselected tests (as not run), so skip shows up.
     let mut tests = run_tests;
@@ -301,7 +337,7 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
     outs.resize(tests.len(), None);
 
     println!(
-        "test262 @{short} · engine {} · {ran} tests in {:.1}s (-j {})\n",
+        "test262 @{short} · engine {} · {ran} tests{cache_note} in {:.1}s (-j {})\n",
         engine.name(),
         elapsed.as_secs_f64(),
         args.jobs

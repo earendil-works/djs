@@ -11,6 +11,7 @@
 //! // difftest: timeout <secs>      wall-clock limit for this case
 //! // difftest: djs-expect <a> => <b>  an expected difference: with djs, `.expected` lines
 //!                                     equal to `a` must read `b` (D013: stack overflow)
+//! // difftest: no-stress <reason>  skip the stress variants (--suspend-every, --gc-stress)
 //! ```
 
 use std::fs;
@@ -27,6 +28,8 @@ pub struct Meta {
     pub timeout: Option<Duration>,
     /// `djs-expect` directives: transcript lines that differ from the oracle on purpose.
     pub djs_expect: Vec<(String, String)>,
+    /// Why the stress variants do not run this case (D1530).
+    pub no_stress: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -70,6 +73,8 @@ pub fn parse_meta(source: &str, is_ts_file: bool) -> Result<Meta, String> {
         match word {
             "skip-djs" if !rest.is_empty() => meta.skip_djs = Some(rest.to_string()),
             "skip-djs" => return Err("`skip-djs` needs a reason".into()),
+            "no-stress" if !rest.is_empty() => meta.no_stress = Some(rest.to_string()),
+            "no-stress" => return Err("`no-stress` needs a reason".into()),
             "ts" if rest.is_empty() => meta.ts = true,
             "fuel" => meta.fuel = Some(rest.parse().map_err(|_| format!("bad fuel `{rest}`"))?),
             "timeout" => {
@@ -156,9 +161,10 @@ mod tests {
 
     #[test]
     fn directives() {
-        let src = "// Some description.\n// difftest: skip-djs needs eval\n//difftest: fuel 1000\n\n// difftest: timeout 2.5\nlet x = 1;\n// difftest: ts\n";
+        let src = "// Some description.\n// difftest: skip-djs needs eval\n//difftest: fuel 1000\n\n// difftest: timeout 2.5\n// difftest: no-stress too slow\nlet x = 1;\n// difftest: ts\n";
         let m = parse_meta(src, false).unwrap();
         assert_eq!(m.skip_djs.as_deref(), Some("needs eval"));
+        assert_eq!(m.no_stress.as_deref(), Some("too slow"));
         assert_eq!(m.fuel, Some(1000));
         assert_eq!(m.timeout, Some(Duration::from_millis(2500)));
         // Directives after the first code line are ignored.
@@ -172,6 +178,7 @@ mod tests {
     #[test]
     fn bad_directives() {
         assert!(parse_meta("// difftest: skip-djs\n", false).is_err());
+        assert!(parse_meta("// difftest: no-stress\n", false).is_err());
         assert!(parse_meta("// difftest: frobnicate\n", false).is_err());
         assert!(parse_meta("// difftest: fuel lots\n", false).is_err());
         assert!(parse_meta("// difftest: djs-expect no arrow\n", false).is_err());

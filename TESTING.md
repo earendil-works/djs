@@ -93,7 +93,9 @@ decorators, explicit-resource-management, Symbol-heavy features, …). Moving a 
 handling can run:
 
 - `--engine qjs`: dquickts' `qjs` as a subprocess. This validates the runner and gives
-  the oracle baseline before djs exists.
+  the oracle baseline before djs exists. Its results are cached in `vendor/qjs-cache/`
+  next to the test262 checkout, keyed by the qjs binary, the test262 commit and the
+  driver, so a repeated qjs run takes seconds; `--no-cache` runs everything (D1531).
 - `--engine djs`: djs in-process. Its own `$262` implementation is provided by the
   runner.
 
@@ -202,7 +204,8 @@ formats are a separate topic. Leading comment lines can carry directives:
 `.js` file parsed as TypeScript), `// difftest: fuel <n>`, `// difftest: timeout <secs>`,
 `// difftest: djs-expect <oracle line> => <djs line>` (a deliberate difference from qjs, such
 as D013's RangeError for stack overflow: with djs, that `.expected` line must read the
-second text; D1540).
+second text; D1540), `// difftest: no-stress <reason>` (the stress variants skip a
+case that cannot finish under them, D1530).
 
 ### How to run difftest
 
@@ -230,7 +233,9 @@ With `--engine djs` the case runs exactly as with qjs: djs evaluates the shared 
 and the case Script in-process, and only `host.output`/`host.done` are host functions
 (D1440). `--suspend-every N` and `--gc-stress` run
 every case a second (third) time; a transcript that differs from the plain djs run is a
-hard failure, separate from the oracle comparison and the ratchet (D1161).
+hard failure, separate from the oracle comparison and the ratchet (D1161). Stressed runs
+get three times the case's time limit, and a stressed run that still times out is a
+failure too: mark such a case `no-stress` with the measured reason (D1530).
 `--determinism` adds a second suspension slice (1009) and requires the suspended runs to
 leave the same heap image as the plain run after a final collection (D1720). The e2e
 test compares its plain and suspension modes the same way, and

@@ -1,5 +1,6 @@
 // Messages of RangeErrors, SyntaxErrors from JSON.parse, and friends.
 // difftest: djs-expect recursion -> InternalError: stack overflow => recursion -> RangeError: Maximum call stack size exceeded
+// difftest: no-stress recurses to a stack overflow: over 120 s in each stress mode (0053)
 function attempt(label, fn) {
   try {
     const v = fn();

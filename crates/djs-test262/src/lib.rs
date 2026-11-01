@@ -2,6 +2,7 @@
 //! (`qjs` as a subprocess now, djs in-process later), reporting and the ratchet.
 //! See TESTING.md.
 
+pub mod cache;
 pub mod config;
 pub mod djs;
 pub mod engine;

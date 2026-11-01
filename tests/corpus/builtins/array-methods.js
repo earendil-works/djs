@@ -1,4 +1,5 @@
 // Array.prototype in full (0034), checked against qjs.
+// difftest: no-stress 7 s suspended, 23 s under GC stress (debug, 0053)
 function attempt(label, fn) {
   try {
     console.log(label, "->", fn());

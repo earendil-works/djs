@@ -11,7 +11,7 @@ use std::thread;
 
 use crate::engine::{Engine, ErrorInfo, Job, RunResult, Status};
 
-const DRIVER: &str = include_str!("qjs_driver.js");
+pub const DRIVER: &str = include_str!("qjs_driver.js");
 const MARKER: &str = "\u{1}T262 ";
 
 pub struct Qjs {

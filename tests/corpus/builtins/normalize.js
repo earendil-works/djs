@@ -1,4 +1,5 @@
 // String.prototype.normalize in all four forms, and localeCompare's NFC step.
+// difftest: no-stress 2 s suspended, 7 s under GC stress (debug, 0053)
 const hex = (s) => Array.from(s, (c) => c.codePointAt(0).toString(16)).join(" ");
 const samples = [
   "abc",

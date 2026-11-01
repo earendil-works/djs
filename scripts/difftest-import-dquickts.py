@@ -16,6 +16,7 @@ Tests that cannot work in the codemode model are left out (EXCLUDE, with the rea
 Cases that read the caller's locals through eval (direct eval, a djs non-goal, D014) get
 `// difftest: skip-djs` (DIRECT_EVAL, kept by hand: indirect eval and the Function
 constructors work since 0059).
+Cases in NO_STRESS get `// difftest: no-stress` (too slow for the stress modes, D1530).
 Only the Python standard library is used.
 """
 
@@ -33,6 +34,12 @@ SOURCES = [
     ("test_decorators.js", "decorators"),
     ("test_typescript.ts", "typescript"),
 ]
+
+# (file, test) -> why the stress modes skip it (`difftest: no-stress`, D1530).
+NO_STRESS = {
+    ("test_builtin.js", "test_map"): "over 120 s suspended, 65 s under GC stress (debug, 0053)",
+    ("test_builtin.js", "test_rope"): "200k rope operations: over 120 s in each stress mode (0053)",
+}
 
 # (file, test) -> why it is not imported. Found by running every candidate with qjs in
 # the codemode model (strict async function body): these fail there by design.
@@ -384,6 +391,8 @@ def main():
                 header.append(
                     "// difftest: skip-djs direct eval: access to the caller's scope is a non-goal (D014)"
                 )
+            if (filename, name) in NO_STRESS:
+                header.append(f"// difftest: no-stress {NO_STRESS[(filename, name)]}")
             case_path = os.path.join(out_dir, name + (case_ext or ext))
             with open(case_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(header) + "\n\n" + text)

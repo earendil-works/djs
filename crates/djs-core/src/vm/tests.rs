@@ -86,11 +86,24 @@ struct Outcome {
     log: Vec<String>,
 }
 
+/// Stops at the requested (small) fuel before a suspending run switches to slices of
+/// `SUSPEND_SLICE`, as in the e2e test: every image round trip copies the whole heap, so
+/// fuel 1 throughout made a few tests take seconds each (0053).
+const SUSPEND_FINE_STOPS: u32 = 1000;
+const SUSPEND_SLICE: u64 = 97;
+
 /// Runs until the call finishes, serving `console.log` and rebuilding the VM from its
 /// image whenever it runs out of fuel when `suspend` is set.
 fn finish(mut vm: Vm, fuel: u64, suspend: bool) -> (Vm, Outcome) {
     let mut log = Vec::new();
+    let mut stops = 0;
     loop {
+        stops += 1;
+        let fuel = if suspend && stops > SUSPEND_FINE_STOPS {
+            fuel.max(SUSPEND_SLICE)
+        } else {
+            fuel
+        };
         match vm.run(fuel) {
             Status::Done(v) => {
                 let result = vm.display(v);
@@ -123,8 +136,8 @@ fn finish(mut vm: Vm, fuel: u64, suspend: bool) -> (Vm, Outcome) {
 }
 
 /// Builds `main` with `f`, calls it, and runs it to the end in several modes, checking
-/// they all agree: plenty of fuel, one unit of fuel at a time with suspension through the
-/// image, and GC stress.
+/// they all agree: plenty of fuel, one unit of fuel at a time (for the first 1000 stops,
+/// see `finish`) with suspension through the image, and GC stress.
 fn run_main(build: impl Fn(&mut Vm) -> Ref) -> Outcome {
     let mut outcomes = Vec::new();
     for (fuel, suspend, gc_stress) in [(1 << 40, false, false), (1, true, false), (7, false, true)]

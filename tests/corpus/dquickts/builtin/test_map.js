@@ -1,5 +1,6 @@
 // Imported from dquickts tests/test_builtin.js (test_map) by
 // scripts/difftest-import-dquickts.py; edit the script, not this file.
+// difftest: no-stress over 120 s suspended, 65 s under GC stress (debug, 0053)
 
 var status = 0;
 
