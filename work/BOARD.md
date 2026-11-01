@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0071 | GC points and raw images independent of slice size | num | .worktrees/num |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
-| 0063 | D015 sloppy this + bgen Rust backend v1 | infra | .worktrees/infra |
+| 0080 | for-of/iteration fast paths + natives wave 2 | infra | .worktrees/infra |
 | 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
 | 0079 | Integration and test efficiency (investigate first) | devflow, after 0053 | .worktrees/devflow |
 | 0065 | accessor + decorators (TC39, then TS legacy) | lexer | .worktrees/lexer |
@@ -63,6 +63,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0067 | Host inbox (async host results as macrotasks) | 7988b76 (agent determinism; D1670) |
 | 0066 | pi adapter determinism fixes | 6c523da (agent determinism; equal polls cold/warm; pi suite 221/226) |
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
+| 0063 | D015 + bgen Rust backend v1 (35 natives) | 9f662b7 (agent infra; higher-order 6.8x -> 2.3x qjs; +80 KB code) |
 | 0062 | Property access ICs (part 1) | 5671e8c (agent heap; global read 10.4 -> 1.3 ns; props -14..-18%) |
 | 0060 | Out-of-memory recovery | b7c83a8 (agent heap; D1600 reserve, D1601 GC threshold in image) |
 | 0056 | String/regex hot paths | 6d24f26 (agent num; test262 active run 250 -> 90 CPU-s, 61 -> 17 s wall) |
