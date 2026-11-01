@@ -15,6 +15,9 @@ crate-type = ["cdylib", "rlib"]
 # checking the base snapshot in wasm. Off by default, so release modules do not carry
 # the prelude source next to its compiled base. The gate's debug build turns it on.
 compiled-prelude = []
+# Exports `djs_alloc_stats`: live and peak bytes of Rust heap allocations and their count,
+# through a counting wrapper around the system allocator (memory accounting, 0094).
+alloc-stats = []
 
 [dependencies]
 djs-core = { path = "../djs-core" }

@@ -140,13 +140,14 @@ impl<'a> Parser<'a, '_> {
 
     /// A pattern at the current token (`{` or `[`), consuming the value on the stack.
     pub(super) fn parse_pattern(&mut self, b: Binding) -> PResult<()> {
-        self.enter()?;
+        let w = 1 + super::parser::PATTERN_WEIGHT;
+        self.enter_n(w)?;
         let r = if self.is(TokenKind::LBrace) {
             self.parse_object_pattern(b)
         } else {
             self.parse_array_pattern(b)
         };
-        self.leave();
+        self.leave_n(w);
         r
     }
 

@@ -19,6 +19,14 @@ use crate::value::Value;
 /// by the `depth_limit_fits_wasm_stack` test.
 pub(super) const MAX_DEPTH: u32 = 1000;
 
+/// Extra depth units of a class body, a C-style `for` and a destructuring pattern level:
+/// in wasm one nesting level of each takes ~1.4 KiB, ~210 B and ~230 B of stack, against
+/// 130–160 B for a plain statement level. With them the deepest accepted nesting of every
+/// construct fits in djs-wasm's 256 KiB stack with a third to spare (D1941).
+pub(super) const CLASS_WEIGHT: u32 = 7;
+pub(super) const FOR_WEIGHT: u32 = 1;
+pub(super) const PATTERN_WEIGHT: u32 = 1;
+
 /// A break/continue target (QuickJS's `BlockEnv`, docs/compiler.md 4.3).
 pub(super) struct BlockEnv {
     pub labels: Vec<Atom>,
@@ -537,15 +545,25 @@ impl<'a, 'h> Parser<'a, 'h> {
     }
 
     pub fn enter(&mut self) -> PResult<()> {
-        self.depth += 1;
+        self.enter_n(1)
+    }
+
+    pub fn leave(&mut self) {
+        self.leave_n(1);
+    }
+
+    /// Like [`Parser::enter`] for `n` depth units: a construct whose recursion takes
+    /// several times the stack of a plain level (docs/compiler.md 2.4, D1941).
+    pub fn enter_n(&mut self, n: u32) -> PResult<()> {
+        self.depth += n;
         if self.depth > MAX_DEPTH {
             return syntax(self.tok.start, "stack overflow");
         }
         Ok(())
     }
 
-    pub fn leave(&mut self) {
-        self.depth -= 1;
+    pub fn leave_n(&mut self, n: u32) {
+        self.depth -= n;
     }
 
     /// The token text for messages: the cooked name for identifiers and keywords,

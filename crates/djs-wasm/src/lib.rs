@@ -192,6 +192,83 @@ impl Slot {
     }
 }
 
+// ---- Allocation statistics (feature `alloc-stats`) -------------------------------------
+
+#[cfg(feature = "alloc-stats")]
+mod alloc_stats {
+    use std::alloc::{GlobalAlloc, Layout, System};
+    use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+
+    pub static LIVE: AtomicUsize = AtomicUsize::new(0);
+    pub static PEAK: AtomicUsize = AtomicUsize::new(0);
+    pub static COUNT: AtomicUsize = AtomicUsize::new(0);
+    pub static LARGEST: AtomicUsize = AtomicUsize::new(0);
+
+    pub struct Counting;
+
+    fn grew(by: usize) {
+        let live = LIVE.fetch_add(by, Relaxed) + by;
+        PEAK.fetch_max(live, Relaxed);
+    }
+
+    // SAFETY: forwards every call to the system allocator unchanged; only counts.
+    unsafe impl GlobalAlloc for Counting {
+        unsafe fn alloc(&self, l: Layout) -> *mut u8 {
+            COUNT.fetch_add(1, Relaxed);
+            LARGEST.fetch_max(l.size(), Relaxed);
+            grew(l.size());
+            // SAFETY: the caller's contract is passed on.
+            unsafe { System.alloc(l) }
+        }
+        unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
+            LIVE.fetch_sub(l.size(), Relaxed);
+            // SAFETY: as above.
+            unsafe { System.dealloc(p, l) }
+        }
+        unsafe fn realloc(&self, p: *mut u8, l: Layout, n: usize) -> *mut u8 {
+            COUNT.fetch_add(1, Relaxed);
+            LARGEST.fetch_max(n, Relaxed);
+            if n >= l.size() {
+                grew(n - l.size());
+            } else {
+                LIVE.fetch_sub(l.size() - n, Relaxed);
+            }
+            // SAFETY: as above.
+            unsafe { System.realloc(p, l, n) }
+        }
+    }
+
+    #[global_allocator]
+    static A: Counting = Counting;
+}
+
+/// Allocation statistics: the address of four u32, valid until the next call: live
+/// bytes, peak live bytes, allocation count, the largest single allocation. `reset`
+/// nonzero restarts the peak at the live size and the count and largest at 0. Leaves the
+/// out buffer alone.
+#[cfg(feature = "alloc-stats")]
+#[unsafe(no_mangle)]
+pub extern "C" fn djs_alloc_stats(reset: u32) -> usize {
+    use alloc_stats::*;
+    use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
+    static OUT: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
+    let v = [
+        LIVE.load(Relaxed),
+        PEAK.load(Relaxed),
+        COUNT.load(Relaxed),
+        LARGEST.load(Relaxed),
+    ];
+    if reset != 0 {
+        PEAK.store(v[0], Relaxed);
+        COUNT.store(0, Relaxed);
+        LARGEST.store(0, Relaxed);
+    }
+    for (o, x) in OUT.iter().zip(v) {
+        o.store(x as u32, Relaxed);
+    }
+    OUT.as_ptr() as usize
+}
+
 // ---- Buffers -------------------------------------------------------------------------
 
 /// The ABI version ([`ABI_VERSION`]).

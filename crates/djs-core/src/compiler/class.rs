@@ -74,7 +74,8 @@ struct Install {
 
 /// A parked field initializer function.
 struct Init {
-    f: FuncState,
+    /// Boxed, like a decorator thunk's (D1941).
+    f: alloc::boxed::Box<FuncState>,
     /// Where the initializers continue after the private method installation.
     body: Label,
     /// The jump target at the end: the private method installation.
@@ -145,6 +146,13 @@ impl Parser<'_, '_> {
     /// expression (the class on the stack), with the current token at `class`.
     /// `hint` names an anonymous class expression.
     pub(super) fn parse_class(&mut self, decl: bool, hint: Atom) -> PResult<()> {
+        self.enter_n(super::parser::CLASS_WEIGHT)?;
+        let r = self.parse_class_inner(decl, hint);
+        self.leave_n(super::parser::CLASS_WEIGHT);
+        r
+    }
+
+    fn parse_class_inner(&mut self, decl: bool, hint: Atom) -> PResult<()> {
         self.enter()?;
         let decorated = self.class_decs.take();
         let mut class_thunk = self.class_thunk.take();
@@ -960,7 +968,7 @@ impl Parser<'_, '_> {
             Some(i) => i,
             None => self.new_init(b.start)?,
         };
-        self.resume_function(init.f);
+        self.resume_function(*init.f);
         self.emit_this(pos);
         match (storage, key) {
             (Some(s), _) => {
@@ -1005,7 +1013,7 @@ impl Parser<'_, '_> {
         if let Some(rec) = rec {
             self.emit_run_rec_extras(rec, pos);
         }
-        let f = self.park_function()?;
+        let f = alloc::boxed::Box::new(self.park_function()?);
         let init = Init {
             f,
             body: init.body,
@@ -1069,7 +1077,7 @@ impl Parser<'_, '_> {
         let methods = self.new_label();
         self.code().jump(methods);
         self.place(body);
-        let f = self.park_function()?;
+        let f = alloc::boxed::Box::new(self.park_function()?);
         Ok(Init { f, body, methods })
     }
 
@@ -1083,7 +1091,7 @@ impl Parser<'_, '_> {
         extras: Option<Atom>,
     ) -> PResult<u32> {
         let pos = self.prev_end;
-        self.resume_function(init.f);
+        self.resume_function(*init.f);
         self.f.src_end = pos;
         self.code().return_undef();
         self.place(init.methods);
@@ -1132,7 +1140,7 @@ impl Parser<'_, '_> {
             Some(i) => i,
             None => self.new_init(b.start)?,
         };
-        self.resume_function(init.f);
+        self.resume_function(*init.f);
         self.emit_this(start);
         self.enter()?;
         self.begin_function(FuncKind::StaticBlock)?;
@@ -1147,7 +1155,7 @@ impl Parser<'_, '_> {
         self.mark(start);
         self.code().call(0);
         self.code().drop();
-        let f = self.park_function()?;
+        let f = alloc::boxed::Box::new(self.park_function()?);
         b.stat = Some(Init {
             f,
             body: init.body,

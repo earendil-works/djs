@@ -78,7 +78,9 @@ pub(super) struct DecElem {
 /// element (or of the class) and returns their array (qjs's DecThunk). It is created
 /// and called in the class's scope after the class is defined, as tsc evaluates them.
 pub(super) struct Thunk {
-    pub f: FuncState,
+    /// Boxed: thunks sit by value in the class parser's locals, and a FuncState inline
+    /// made a nested class level ~7 KiB of wasm stack (D1941).
+    pub f: alloc::boxed::Box<FuncState>,
     /// The decorators pushed so far.
     pub count: u32,
     /// The first `@`.
@@ -535,7 +537,11 @@ impl Parser<'_, '_> {
         self.f.src_start = start;
         self.f.src_end = start;
         let f = self.park_function()?;
-        Ok(Thunk { f, count: 0, start })
+        Ok(Thunk {
+            f: alloc::boxed::Box::new(f),
+            count: 0,
+            start,
+        })
     }
 
     /// Legacy decorators at `@`: their expressions go into `thunk` (a new one if
@@ -545,12 +551,12 @@ impl Parser<'_, '_> {
             Some(t) => t,
             None => self.new_thunk(self.tok.start)?,
         };
-        self.resume_function(t.f);
+        self.resume_function(*t.f);
         while self.is(TokenKind::At) {
             self.parse_decorator(false)?;
             t.count += 1;
         }
-        t.f = self.park_function()?;
+        *t.f = self.park_function()?;
         Ok(t)
     }
 
@@ -583,7 +589,7 @@ impl Parser<'_, '_> {
             Some(t) => t,
             None => self.new_thunk(self.tok.start)?,
         };
-        self.resume_function(t.f);
+        self.resume_function(*t.f);
         let id = intrinsic("DecoratorParam");
         while self.is(TokenKind::At) {
             let pos = self.tok.start;
@@ -593,7 +599,7 @@ impl Parser<'_, '_> {
             self.code().call_intrinsic(id, 2);
             t.count += 1;
         }
-        t.f = self.park_function()?;
+        *t.f = self.park_function()?;
         dp.thunk = Some(t);
         self.resume_function(method);
         self.scope = scope;
@@ -605,7 +611,7 @@ impl Parser<'_, '_> {
         if t.count > u16::MAX as u32 {
             return syntax(t.start, "too many decorators");
         }
-        self.resume_function(t.f);
+        self.resume_function(*t.f);
         self.code().array_from(t.count as u16);
         self.code().return_();
         let child = self.end_function()?;
@@ -618,7 +624,7 @@ impl Parser<'_, '_> {
 
     /// Drops an unused thunk (the decorators of a TypeScript member without code).
     pub(super) fn discard_thunk(&mut self, t: Thunk) -> PResult<()> {
-        self.resume_function(t.f);
+        self.resume_function(*t.f);
         // Its template is still written: it must be complete.
         self.code().array_from(t.count.min(u16::MAX as u32) as u16);
         self.code().return_();
@@ -635,7 +641,7 @@ impl Parser<'_, '_> {
         list: bool,
     ) -> PResult<Thunk> {
         let pos = t.start;
-        self.resume_function(t.f);
+        self.resume_function(*t.f);
         let a = self.heap.atom_str(key)?;
         self.code().push_atom(a);
         for m in ms {
@@ -651,7 +657,7 @@ impl Parser<'_, '_> {
         self.code()
             .call_intrinsic(intrinsic("DecoratorMetadata"), 2);
         t.count += 1;
-        t.f = self.park_function()?;
+        *t.f = self.park_function()?;
         Ok(t)
     }
 

@@ -70,6 +70,9 @@ impl<'a> Parser<'a, '_> {
     /// A for-in/of loop after `for (`, with the current token at the start of the
     /// head. `for_pos` is the `for` keyword (errors from the iteration report there,
     /// as in QuickJS).
+    // Out of line: its frame is not on the stack while a C-style loop's body nests
+    // (D1941).
+    #[inline(never)]
     pub(super) fn parse_for_in_of(
         &mut self,
         labels: Vec<Atom>,

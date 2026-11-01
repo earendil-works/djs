@@ -13,6 +13,28 @@ impl Parser<'_, '_> {
     /// StatementListItem: declarations are allowed here, not in single-statement
     /// positions.
     pub(super) fn parse_statement_list_item(&mut self) -> PResult<()> {
+        // Statements that cannot be declarations (TS ones included) go straight to
+        // `parse_statement`: nested blocks recurse through here, and the declaration
+        // parsers inlined below made this frame 368 bytes in wasm, 70% of a nesting level
+        // (D1941).
+        if !matches!(
+            self.tok.kind,
+            TokenKind::Const
+                | TokenKind::Function
+                | TokenKind::Class
+                | TokenKind::At
+                | TokenKind::Import
+                | TokenKind::Export
+                | TokenKind::Enum
+                | TokenKind::Ident
+        ) {
+            return self.parse_statement();
+        }
+        self.parse_declaration_item()
+    }
+
+    #[inline(never)]
+    fn parse_declaration_item(&mut self) -> PResult<()> {
         if self.ts && self.ts_statement()? {
             if !self.ts_type_only {
                 self.ts_note_stmt_end();
@@ -405,6 +427,13 @@ impl Parser<'_, '_> {
     /// L_body`). The parts are emitted in source order, then the body is moved in
     /// front of the update and the test.
     fn parse_for(&mut self, labels: Vec<Atom>) -> PResult<()> {
+        self.enter_n(super::parser::FOR_WEIGHT)?;
+        let r = self.parse_for_inner(labels);
+        self.leave_n(super::parser::FOR_WEIGHT);
+        r
+    }
+
+    fn parse_for_inner(&mut self, labels: Vec<Atom>) -> PResult<()> {
         let for_pos = self.tok.start;
         self.next()?;
         self.reset_completion();
@@ -421,45 +450,7 @@ impl Parser<'_, '_> {
         }
         self.expect(TokenKind::LParen, "(")?;
         let outer = self.scope;
-        let mut scoped = false;
-        let mut using = None;
-        match self.tok.kind {
-            TokenKind::Semicolon => {}
-            TokenKind::Ident if self.at_using(false) || self.at_await_using() => {
-                // The resources are disposed when the whole loop ends.
-                let is_await = self.tok.kw == Kw::Await;
-                if is_await {
-                    self.next()?;
-                }
-                self.next()?;
-                self.push_scope(ScopeKind::For)?;
-                scoped = true;
-                let r = self.using_region_start(self.stmt_depth, is_await);
-                self.using_env(&r);
-                using = Some(r);
-                self.parse_using_bindings(is_await, true)?;
-            }
-            TokenKind::Var => {
-                self.next()?;
-                self.parse_var_declarations(true)?;
-            }
-            TokenKind::Const => {
-                self.next()?;
-                self.push_scope(ScopeKind::For)?;
-                scoped = true;
-                self.parse_lexical_bindings(VarKind::Const, true)?;
-            }
-            TokenKind::Ident if self.tok.is_contextual(Kw::Let) => {
-                self.next()?;
-                self.push_scope(ScopeKind::For)?;
-                scoped = true;
-                self.parse_lexical_bindings(VarKind::Let, true)?;
-            }
-            _ => {
-                self.parse_expr(true)?;
-                self.code().drop();
-            }
-        }
+        let (scoped, using) = self.parse_for_init()?;
         self.expect(TokenKind::Semicolon, ";")?;
         // Per-iteration copies of `let` bindings (CreatePerIterationEnvironment) only
         // matter for captured bindings, which need closures (P1-1: `rebox`).
@@ -519,6 +510,53 @@ impl Parser<'_, '_> {
         }
         debug_assert_eq!(self.scope, outer);
         Ok(())
+    }
+
+    /// The init clause of a C-style `for`: whether it opened a scope, and its `using`
+    /// region. Out of line, so its locals are not part of `parse_for`'s frame while the
+    /// loop body nests (D1941).
+    #[inline(never)]
+    fn parse_for_init(&mut self) -> PResult<(bool, Option<super::using::UsingRegion>)> {
+        let mut scoped = false;
+        let mut using = None;
+        match self.tok.kind {
+            TokenKind::Semicolon => {}
+            TokenKind::Ident if self.at_using(false) || self.at_await_using() => {
+                // The resources are disposed when the whole loop ends.
+                let is_await = self.tok.kw == Kw::Await;
+                if is_await {
+                    self.next()?;
+                }
+                self.next()?;
+                self.push_scope(ScopeKind::For)?;
+                scoped = true;
+                let r = self.using_region_start(self.stmt_depth, is_await);
+                self.using_env(&r);
+                using = Some(r);
+                self.parse_using_bindings(is_await, true)?;
+            }
+            TokenKind::Var => {
+                self.next()?;
+                self.parse_var_declarations(true)?;
+            }
+            TokenKind::Const => {
+                self.next()?;
+                self.push_scope(ScopeKind::For)?;
+                scoped = true;
+                self.parse_lexical_bindings(VarKind::Const, true)?;
+            }
+            TokenKind::Ident if self.tok.is_contextual(Kw::Let) => {
+                self.next()?;
+                self.push_scope(ScopeKind::For)?;
+                scoped = true;
+                self.parse_lexical_bindings(VarKind::Let, true)?;
+            }
+            _ => {
+                self.parse_expr(true)?;
+                self.code().drop();
+            }
+        }
+        Ok((scoped, using))
     }
 
     fn parse_break_continue(&mut self) -> PResult<()> {
