@@ -4,6 +4,7 @@
 "use strict";
 
 const installed = {};
+const ourProxies = new WeakMap();
 const TA_CTORS = [Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, Float16Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array];
 const TA_PROTO = Object.getPrototypeOf(Int8Array.prototype);
 const DV_NAMES = ["Int8", "Uint8", "Uint8", "Int16", "Uint16", "Int32", "Uint32", "Float16", "Float32", "Float64", "BigInt64", "BigUint64"];
@@ -87,7 +88,11 @@ const I = {
       return false;
     }
   },
-  IsArray: (v) => Array.isArray(v),
+  IsArray: (v) => {
+    const st = ourProxies.get(v);
+    if (st !== undefined && st.target === null) throw new TypeError("revoked proxy");
+    return Array.isArray(st !== undefined ? st.target : v);
+  },
   IsString: (v) => typeof v === "string",
   IsNumber: (v) => typeof v === "number",
   IsSymbol: (v) => typeof v === "symbol",
@@ -279,6 +284,54 @@ const I = {
     throw new Error("intrinsic misuse: StringIteratorTarget is not stood in");
   },
   StrCodePointString: (s, i) => String.fromCodePoint(s.codePointAt(i)),
+  // Proxies (0045): ours are native proxy shells whose traps run our internal methods
+  // (installed %Proxy... builtins), as the interpreter dispatches to them.
+  IsProxy: (v) => ourProxies.has(v),
+  NewProxy: (target, handler) => {
+    const ours = (name) => (...args) => installed["%" + name].f(shell, ...args);
+    const shell = new Proxy(target, {
+      get: (t, k, r) => ours("ProxyGet")(k, r),
+      set: (t, k, v, r) => ours("ProxySet")(k, v, r),
+      has: (t, k) => ours("ProxyHas")(k),
+      deleteProperty: (t, k) => ours("ProxyDeleteProperty")(k),
+      ownKeys: () => ours("ProxyOwnPropertyKeys")(2),
+      getOwnPropertyDescriptor: (t, k) => ours("ProxyGetOwnPropertyDescriptorObject")(k),
+      defineProperty: (t, k, d) => ours("ProxyDefineOwnPropertyFromRecord")(k, Object.assign(Object.create(null), d)),
+      getPrototypeOf: () => ours("ProxyGetPrototypeOf")(),
+      setPrototypeOf: (t, v) => ours("ProxySetPrototypeOf")(v),
+      isExtensible: () => ours("ProxyIsExtensible")(),
+      preventExtensions: () => ours("ProxyPreventExtensions")(),
+      apply: (t, self, args) => ours("ProxyCall")(self, args),
+      construct: (t, args, nt) => ours("ProxyConstruct")(args, nt),
+    });
+    ourProxies.set(shell, { target, handler });
+    return shell;
+  },
+  ProxyTarget: (p) => {
+    const st = ourProxies.get(p);
+    check(st !== undefined, "ProxyTarget");
+    if (st.target === null) throw new TypeError("revoked proxy");
+    return st.target;
+  },
+  ProxyHandler: (p) => {
+    const st = ourProxies.get(p);
+    check(st !== undefined, "ProxyHandler");
+    if (st.handler === null) throw new TypeError("revoked proxy");
+    return st.handler;
+  },
+  ProxyRevoke: (p) => {
+    const st = ourProxies.get(p);
+    st.target = st.handler = null;
+  },
+  NewBuiltinClosure: (kind, data, length) => {
+    check(kind === 15, "NewBuiltinClosure kind");
+    const f = () => installed["%ProxyRevokeFunction"].f.call(data);
+    Object.defineProperty(f, "name", { value: "" });
+    return f;
+  },
+  ConstructWithThis: () => {
+    throw new Error("intrinsic misuse: ConstructWithThis is not stood in");
+  },
   ConstructWithArray: (f, args, nt) => (check(Array.isArray(args), "ConstructWithArray"), Reflect.construct(f, args, nt)),
   GetWithReceiver: (o, k, r) => (check(isObject(o) && !isObject(k), "GetWithReceiver"), Reflect.get(o, k, r)),
   SetWithReceiver: (o, k, v, r) => (check(isObject(o) && !isObject(k), "SetWithReceiver"), Reflect.set(o, k, v, r)),
@@ -479,6 +532,7 @@ function show(v, seen = new Set()) {
 // Get of a missing element (JS_TryGetPropertyInt64): their trap logs are not compared,
 // only the results.
 let ignoreHas = false;
+let sameSetFailures = false;
 function outcome(fn) {
   const log = [];
   let result;
@@ -488,6 +542,11 @@ function outcome(fn) {
     result = "throw " + (isObject(e) ? e.constructor.name + ": " + e.message : show(e));
   }
   const shown = ignoreHas ? [] : log;
+  if (sameSetFailures) {
+    // A failed [[Set]] (strict) of a proxy without a set trap: qjs reports the target's
+    // reason; ours (behind a native shell, and djs) report the proxy's.
+    result = result.replace(/TypeError: (object is not extensible|'\w+' is read-only|proxy: cannot set property|proxy: defineProperty exception)$/, "TypeError: <set failed>");
+  }
   return shown.join(" ") + " => " + result;
 }
 
@@ -1440,5 +1499,134 @@ for (const s of ["", "00ff", "0", "zz", "ABcd", "a b"]) {
   same("Uint8Array.fromHex", Uint8Array.fromHex, (f) => Array.from(f(s)));
 }
 same("Uint8Array.fromBase64", Uint8Array.fromBase64, (f) => Array.from(f(blob.toBase64())).join() === Array.from(blob).join());
+
+// ---- 0045: Proxy ----------------------------------------------------------------------
+// The same operations on a native proxy and on ours (installed builtins behind a native
+// shell), with handlers that log every trap: the trap order and the invariant checks.
+
+sameSetFailures = true;
+const TRAPS = ["get", "set", "has", "deleteProperty", "ownKeys", "getOwnPropertyDescriptor", "defineProperty", "getPrototypeOf", "setPrototypeOf", "isExtensible", "preventExtensions", "apply", "construct"];
+const showKey = (k) => (typeof k === "symbol" ? k.toString() : String(k));
+// A handler that logs each trap and forwards it (or returns `override[trap]`'s result).
+function loggingHandler(log, override = {}) {
+  const h = {};
+  for (const trap of TRAPS) {
+    h[trap] = function (t, ...rest) {
+      log.push(trap + (typeof rest[0] === "string" || typeof rest[0] === "symbol" ? ":" + showKey(rest[0]) : ""));
+      return trap in override ? override[trap](t, ...rest) : Reflect[trap](t, ...rest);
+    };
+  }
+  return h;
+}
+const frozenTarget = () => Object.freeze({ fixed: 1 });
+const proxyTargets = () => [
+  { a: 1, b: 2, [Symbol.iterator]: 3 },
+  [1, 2, 3],
+  function f(x) { return [typeof this, x]; },
+  frozenTarget(),
+  Object.preventExtensions({ n: 1 }),
+  Object.defineProperty({}, "ro", { value: 5, configurable: false, writable: false }),
+];
+const proxyOps = [
+  (p) => p.a,
+  (p) => p.fixed,
+  (p) => p[0],
+  (p) => { p.a = 9; return p.a; },
+  (p) => { p.ro = 6; return p.ro; },
+  (p) => "a" in p,
+  (p) => "zz" in p,
+  (p) => delete p.a,
+  (p) => delete p.fixed,
+  (p) => Object.keys(p),
+  (p) => Object.values(p),
+  (p) => Object.entries(p),
+  (p) => Reflect.ownKeys(p),
+  (p) => Object.getOwnPropertyNames(p),
+  (p) => Object.getOwnPropertySymbols(p),
+  (p) => Object.getOwnPropertyDescriptor(p, "a"),
+  (p) => Object.getOwnPropertyDescriptors(p),
+  (p) => Object.defineProperty(p, "x", { value: 1, configurable: true }),
+  (p) => Reflect.defineProperty(p, "y", { get() {}, enumerable: true }),
+  (p) => Object.getPrototypeOf(p) === Object.prototype,
+  (p) => Object.setPrototypeOf(p, null),
+  (p) => Object.isExtensible(p),
+  (p) => Object.preventExtensions(p),
+  (p) => Object.freeze(p),
+  (p) => Object.seal(p),
+  (p) => Object.isFrozen(p),
+  (p) => Object.isSealed(p),
+  (p) => Object.assign({}, p),
+  (p) => Object.prototype.hasOwnProperty.call(p, "a"),
+  (p) => Object.prototype.propertyIsEnumerable.call(p, "b"),
+  (p) => Object.prototype.toString.call(p),
+  (p) => Array.isArray(p),
+  (p) => JSON.stringify(p),
+  (p) => Array.prototype.slice.call(p),
+  (p) => Array.prototype.concat.call([], p),
+  (p) => p(1),
+  (p) => Reflect.apply(p, 1, [2]),
+  (p) => new p(3) instanceof Object,
+  (p) => Function.prototype.bind.call(p, null).name,
+];
+for (let i = 0; i < proxyTargets().length; i++) {
+  for (const op of proxyOps) {
+    same("globalThis.Proxy", Proxy, (P, log) => op(new P(proxyTargets()[i], loggingHandler(log))));
+    same("globalThis.Proxy", Proxy, (P, log) => op(new P(proxyTargets()[i], {})));
+  }
+}
+// Traps that break the invariants (each in turn): the checks and their order.
+const lies = {
+  get: () => 42,
+  set: () => true,
+  has: () => false,
+  deleteProperty: () => true,
+  ownKeys: () => ["a", "a"],
+  getOwnPropertyDescriptor: () => ({ value: 7, configurable: false }),
+  defineProperty: () => true,
+  getPrototypeOf: () => Array.prototype,
+  setPrototypeOf: () => true,
+  isExtensible: () => true,
+  preventExtensions: () => true,
+  apply: () => 1,
+  construct: () => 1,
+};
+const otherLies = { ownKeys: [() => [1], () => [], () => ["fixed", "extra"], () => 5], getOwnPropertyDescriptor: [() => undefined, () => 5, () => ({ value: 1, configurable: true })], getPrototypeOf: [() => 5] };
+for (let i = 0; i < proxyTargets().length; i++) {
+  for (const trap of TRAPS) {
+    for (const lie of [lies[trap], ...(otherLies[trap] || [])]) {
+      for (const op of proxyOps) {
+        same("globalThis.Proxy", Proxy, (P, log) => op(new P(proxyTargets()[i], loggingHandler(log, { [trap]: lie }))));
+      }
+    }
+  }
+}
+same("globalThis.Proxy", Proxy, (P) => P({}, {}));
+same("globalThis.Proxy", Proxy, (P) => new P(1, {}));
+same("globalThis.Proxy", Proxy, (P) => new P({}, null));
+// (Proxies of proxies are in tests/corpus/builtins/proxy.js: behind native shells, the
+// shells' own invariant checks would run the inner traps once more.)
+same("globalThis.Proxy", Proxy, (P, log) => Object.create(new P({ a: 1 }, loggingHandler(log))).a);
+same("globalThis.Proxy", Proxy, (P, log) => { const o = Object.create(new P({}, loggingHandler(log))); o.q = 1; return Object.keys(o); });
+same("globalThis.Proxy", Proxy, (P, log) => "q" in Object.create(new P({}, loggingHandler(log))));
+// A handler that is itself a proxy: every trap lookup is a `get`.
+same("globalThis.Proxy", Proxy, (P, log) => { const p = new P({ a: 1 }, new P({}, loggingHandler(log))); return [p.a, "a" in p, Object.keys(p)]; });
+same("Proxy.revocable", Proxy.revocable, (f, log) => {
+  const r = f({ a: 1 }, loggingHandler(log));
+  const before = r.proxy.a;
+  r.revoke();
+  r.revoke();
+  return [before, Object.keys(r), r.revoke.name, r.revoke.length];
+});
+// (A shell is not revoked itself: its natively answered IsArray and IsCallable are left
+// out.)
+for (const op of proxyOps.filter((op) => !/isArray|p\(1\)|apply|new p/.test(String(op)))) {
+  same("Proxy.revocable", Proxy.revocable, (f) => {
+    const r = f([1], {});
+    r.revoke();
+    return op(r.proxy);
+  });
+}
+
+sameSetFailures = false;
 
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));

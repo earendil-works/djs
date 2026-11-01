@@ -611,7 +611,7 @@ function ProxyOwnKeys(p: Obj): Obj {
   const trapResultArray: Value = Call(trap, handler, target);
   // CreateListFromArrayLike ( obj, « String, Symbol » ), with the duplicate check.
   if (!IsObject(trapResultArray)) {
-    throw NewTypeError("not an object");
+    throw NewTypeError("proxy: ownKeys must return an object");
   }
   const arr: Obj = AsObj(trapResultArray);
   const len: f64 = LengthOfArrayLike(arr);
@@ -667,7 +667,7 @@ function ProxyOwnKeys(p: Obj): Obj {
     remaining--;
   }
   if (remaining !== 0) {
-    throw NewTypeError("proxy: target is non-extensible");
+    throw NewTypeError("proxy: property not present in target were returned by non extensible proxy");
   }
   return trapResult;
 }
