@@ -71,7 +71,7 @@ djs-test262).
   (qjs only; refuses timeouts and crashes), the ratchet (`--ratchet`,
   `--update-ratchet`, `tests/corpus/expected-failures.txt`, currently empty). It reuses
   djs-test262's library for par/ratchet/glob/table (D1101).
-- Hand-written corpus (69 cases): `console/` (the JSON-style output of every value kind:
+- Hand-written corpus (71 cases): `console/` (the JSON-style output of every value kind:
   primitives, -0/NaN, strings, nesting, key order, dropped values, toJSON, dates, cycles
   and the String() fallback, functions/classes, collections, sparse arrays, errors,
   `text()`), `result/` (return values, unserializable values, exit()), `errors/`
@@ -88,10 +88,12 @@ djs-test262).
   one assertSyntaxError that is valid in a function body). 11 cases use eval/Function and
   carry `skip-djs`. Every imported test function completes and every syntax case throws a
   SyntaxError with qjs (checked).
-- All 163 cases pass with qjs, also under other time zones and locales; the full run
+- All 165 cases pass with qjs, also under other time zones and locales; the full run
   takes about 0.3 s. Runner tests: `crates/djs-difftest/tests/runner.rs` (scratch corpus
   with qjs: pass, diff, missing .expected, timeout, ignored stack frames, TS; fake engine:
   skip-djs, panics, filters, .expected collisions).
+- Rebase onto main brought D008 (pi passes `tools`/`console` as parameters): the wrapper
+  is now `async (tools, console) => {...}` too, with two cases for that.
 - TESTING.md: besides the "How to run difftest" section I added a short "The codemode
   model" subsection and changed `case.js.expected` to `case.expected` in the intro of
   "Differential tests", since the issue asks for the model to be defined there.
@@ -115,7 +117,7 @@ djs-test262).
   with `tests/corpus/expected-failures.txt`, parallel. Usage: TESTING.md, "How to run
   difftest".
 - `tests/corpus/prelude.js`: the shared codemode prelude (pi's formatting).
-- Corpus: 163 cases (69 hand-written, 94 imported from dquickts), all passing with qjs.
+- Corpus: 165 cases (71 hand-written, 94 imported from dquickts), all passing with qjs.
 - `scripts/difftest-import-dquickts.py`: regenerates `tests/corpus/dquickts/`.
 - Decisions D1100 to D1102.
 - Known gaps: no djs engine yet; stack frames are not compared; no harvested pi scripts;
