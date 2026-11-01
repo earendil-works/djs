@@ -45,8 +45,11 @@ impl Heap {
     /// A pair table of `kind`: an EphemeronArray (weak keys) or, in strong mode, a
     /// ValueArray with the same layout (D1680).
     fn alloc_pairs_of(&mut self, kind: CellKind, pairs: u32) -> Result<u32, HeapError> {
-        debug_assert!(EphemeronArray::VALUES.offset == ValueArray::VALUES.offset);
-        debug_assert!(EphemeronArray::LEN.offset == ValueArray::LEN.offset);
+        // Strong tables rely on the two layouts being the same.
+        const {
+            assert!(EphemeronArray::VALUES.offset == ValueArray::VALUES.offset);
+            assert!(EphemeronArray::LEN.offset == ValueArray::LEN.offset);
+        }
         let size = EphemeronArray::VALUES
             .cell_size(pairs * 2)
             .ok_or(HeapError::OutOfMemory)?;
