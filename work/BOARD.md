@@ -9,6 +9,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0128 | Page allocator in djs-wasm (in-place arena growth) | heap | .worktrees/heap |
 | 0129 | pi-like hot spots (interpreter, native calls, JSON) | perf | .worktrees/perf |
+| 0130 | Codemode feature usage across all sessions (research) | infra | .worktrees/infra |
 | 0126 | Size: run-length Unicode tables, panics without fmt | bloat | .worktrees/bloat |
 
 ## Open (ready)
