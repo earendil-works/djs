@@ -10,7 +10,7 @@
 use super::PResult;
 use super::expr::Expr;
 use super::func::HandlerLabels;
-use super::parser::{Parser, syntax};
+use super::parser::{OpenIter, Parser, syntax};
 use crate::bytecode::intrinsics::intrinsic_id;
 use crate::heap::atoms;
 use crate::lexer::TokenKind;
@@ -71,6 +71,54 @@ impl Parser<'_, '_> {
     /// Returns the value on top of the stack from inside an expression: see the module
     /// docs.
     pub(super) fn emit_return_from_expr(&mut self) {
+        // Close the open iterators, innermost first: each throws `x` to a handler that
+        // cuts the stack down to its iterator.
+        let open: alloc::vec::Vec<OpenIter> = self.open_iters.iter().rev().copied().collect();
+        for it in open {
+            let (l_throw, l_end, l_close) = (self.new_label(), self.new_label(), self.new_label());
+            self.place(l_throw);
+            self.code().throw();
+            self.place(l_end);
+            self.place(l_close);
+            let (depth, depth_from) = match it {
+                OpenIter::Pattern(base) => (0, Some(base)),
+                OpenIter::ForOf(depth, _) => (depth, None),
+            };
+            self.f.handlers.insert(
+                0,
+                HandlerLabels {
+                    start: l_throw,
+                    end: l_end,
+                    target: l_close,
+                    depth,
+                    depth_from,
+                },
+            );
+            match it {
+                OpenIter::Pattern(_) => {
+                    // `next it x` -> `next x`, closing a not-done iterator.
+                    let l_skip = self.new_label();
+                    self.code().swap();
+                    self.code().dup();
+                    self.code().is_undefined();
+                    self.code().jump_if_true(l_skip);
+                    self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
+                    self.place(l_skip);
+                    self.code().drop();
+                }
+                OpenIter::ForOf(_, is_await) => {
+                    // `it next x` -> `x`.
+                    self.code().rot3r();
+                    self.code().drop();
+                    if is_await {
+                        self.emit_async_close_normal();
+                    } else {
+                        self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
+                        self.code().drop();
+                    }
+                }
+            }
+        }
         let (l_throw, l_end, l_ret) = (self.new_label(), self.new_label(), self.new_label());
         self.place(l_throw);
         self.code().throw();
@@ -129,11 +177,13 @@ impl Parser<'_, '_> {
         self.code().get_field(atoms::DONE);
         self.code().jump_if_true(l_done);
         self.place(l_yield);
-        self.place(r_start);
+        // Only the yield itself is covered: errors from reading `value` propagate.
         if is_async {
             self.code().get_field(atoms::VALUE);
+            self.place(r_start);
             self.code().yield_(0);
         } else {
+            self.place(r_start);
             self.code().yield_star(0);
         }
         self.place(r_end);

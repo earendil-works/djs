@@ -45,7 +45,7 @@ use alloc::vec::Vec;
 
 use super::PResult;
 use super::func::{HandlerLabels, ScopeKind, VarKind};
-use super::parser::{BlockEnv, BlockKind, Checkpoint, Parser, syntax};
+use super::parser::{BlockEnv, BlockKind, Checkpoint, OpenIter, Parser, syntax};
 use super::pattern::Binding;
 use super::scan::Follow;
 use crate::bytecode::Label;
@@ -139,6 +139,9 @@ impl<'a> Parser<'a, '_> {
                 let start = self.new_label();
                 let end = self.new_label();
                 self.place(start);
+                if is_of {
+                    self.open_iters.push(OpenIter::ForOf(base + 2, is_await));
+                }
                 if self.starts_assignment_pattern(Follow::InOf) {
                     // `for ([a, b] of xs)`: the pattern takes the value.
                     self.parse_pattern(Binding::Assign)?;
@@ -156,6 +159,9 @@ impl<'a> Parser<'a, '_> {
                         super::expr::LValue::Elem { .. } => self.code().rot3l(),
                     }
                     self.emit_store(lv, false);
+                }
+                if is_of {
+                    self.open_iters.pop();
                 }
                 self.place(end);
                 regions.push((start, end));
@@ -273,7 +279,13 @@ impl<'a> Parser<'a, '_> {
                 let mark = self.pattern_vars.len();
                 let end = self.checkpoint();
                 self.rewind(cp);
+                if is_of {
+                    self.open_iters.push(OpenIter::ForOf(base + 2, is_await));
+                }
                 self.parse_pattern(b)?;
+                if is_of {
+                    self.open_iters.pop();
+                }
                 self.rewind(end);
                 // Initialized per iteration before the body runs.
                 self.end_pattern_bindings(mark, head_end);

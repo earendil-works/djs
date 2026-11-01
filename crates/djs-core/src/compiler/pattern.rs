@@ -399,6 +399,8 @@ impl<'a> Parser<'a, '_> {
         // `next it`: the close handler's depth is the depth here.
         let l_base = self.new_label();
         self.place(l_base);
+        self.open_iters
+            .push(super::parser::OpenIter::Pattern(l_base));
         let mut regions = Regions {
             list: Vec::new(),
             start: l_base,
@@ -454,6 +456,7 @@ impl<'a> Parser<'a, '_> {
             }
         }
         self.expect(TokenKind::RBracket, "]")?;
+        self.open_iters.pop();
         self.region_end(&mut regions);
         // Close a not-done iterator: `next it` -> ``.
         let l_skip = self.new_label();

@@ -55,6 +55,19 @@ pub(super) struct Suspended {
     pub scope: ScopeId,
     pub blocks: Vec<BlockEnv>,
     pub stmt_depth: u32,
+    pub open_iters: Vec<OpenIter>,
+}
+
+/// An iterator that a `return` from inside an expression must close (a resumed
+/// `yield`, compiler/generator.rs): one being destructured, or a for-of iterator while
+/// its head's target is stored. Breaks and returns at statement level use `BlockEnv`
+/// instead.
+#[derive(Clone, Copy)]
+pub(super) enum OpenIter {
+    /// An array pattern: `next it` on top at the label (`it` is `undefined` once done).
+    Pattern(Label),
+    /// A for-of loop: `it next` on top at this absolute depth; `true` for `for await`.
+    ForOf(u32, bool),
 }
 
 pub(super) struct Parser<'a, 'h> {
@@ -96,6 +109,8 @@ pub(super) struct Parser<'a, 'h> {
     /// Bindings declared by destructuring patterns, for their callers to set
     /// `init_end` (a stack: nested patterns in defaults push and take their own).
     pub pattern_vars: Vec<VarId>,
+    /// Iterators to close on a return from inside an expression, innermost last.
+    pub open_iters: Vec<OpenIter>,
 }
 
 /// Parser position for emission-free lookahead and deferred parsing (docs/compiler.md
@@ -161,6 +176,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             delete_operand: false,
             pat_scan: Default::default(),
             pattern_vars: Vec::new(),
+            open_iters: Vec::new(),
         };
         p.f.src_end = src.len() as u32;
         if kind == FuncKind::AsyncBody {
@@ -208,6 +224,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             scope: self.scope,
             blocks: core::mem::take(&mut self.blocks),
             stmt_depth: core::mem::take(&mut self.stmt_depth),
+            open_iters: core::mem::take(&mut self.open_iters),
         });
         self.scope = BODY_SCOPE;
         Ok(())
@@ -225,6 +242,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         self.scope = s.scope;
         self.blocks = s.blocks;
         self.stmt_depth = s.stmt_depth;
+        self.open_iters = s.open_iters;
         let id = child.id;
         self.done[id as usize] = Some(child);
         self.f.children.push(id);
