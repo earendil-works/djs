@@ -1,7 +1,7 @@
 # 0083: Shapes (hidden classes) and a leaner object/image layout
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0083-shapes
 depends-on: 0062, 0063
 touches: crates/djs-core/src/heap/ (object layout, property tables, shapes as cells), crates/djs-core/src/interp/ (the 0062 IC hit checks), crates/djs-core/src/heap/gc.rs + walk.rs, js/src/layout.generated.ts + js/src/reader.ts (the reader must read the new layout), docs/objects.md, docs/wire.md, ARCH.md "Heap" (objects paragraph)
