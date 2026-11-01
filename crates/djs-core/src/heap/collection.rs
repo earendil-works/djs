@@ -60,6 +60,29 @@ pub fn normalize_key(v: Value) -> Value {
     }
 }
 
+/// Whether the collection object `o` (Map/Set/WeakMap/WeakSet) has an object or symbol
+/// key at or above `old`: a key that a minor collection may move or (in a weak
+/// collection) clear, so the index needs a rebuild (0120). Strings and BigInts hash by
+/// content and do not count.
+pub(super) fn has_young_keys(arena: &super::Arena, o: u32, old: u32) -> bool {
+    let entries: Value = arena.read(super::cells::Object::SLOTS.at(o, ENTRIES));
+    let Some(e) = entries.as_internal() else {
+        return false;
+    };
+    let weak = matches!(
+        ObjectClass::from_u32(arena.get(o, super::cells::Object::CLASS)),
+        Some(ObjectClass::WeakMap | ObjectClass::WeakSet)
+    );
+    let base = if weak { 0 } else { MAP_BASE };
+    let len = arena.get(e, ValueArray::LEN);
+    (base..len).step_by(2).any(|i| {
+        let k: Value = arena.read(ValueArray::VALUES.at(e, i));
+        k.ref_offset().is_some_and(|t| t >= old)
+            && k.as_string().is_none()
+            && k.as_bigint().is_none()
+    })
+}
+
 impl Heap {
     fn is_weak_collection(&self, o: Obj) -> bool {
         matches!(

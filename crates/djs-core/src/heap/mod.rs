@@ -358,6 +358,11 @@ impl Heap {
     pub(crate) fn release_top(&mut self, start: u32, end: u32) {
         if self.arena.len() == end && start <= end {
             self.arena.truncate(start);
+            // A full collection between the two runs made the record old: the old region
+            // must not end past the arena.
+            if self.arena.get(0, Roots::OLD_END) > start {
+                self.arena.set(0, Roots::OLD_END, start);
+            }
             self.gc_pending = self.arena.len() >= self.gc_threshold;
         }
     }

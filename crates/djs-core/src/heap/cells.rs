@@ -46,12 +46,13 @@ impl Header {
 
 /// GC bits in header byte 1. Reserved for the collector; always 0 between collections.
 pub mod gc_bits {
-    /// Mark bit (for a future mark phase over the old generation).
+    /// Mark bit (the in-place collector, compactor.rs).
     pub const MARK: u8 = 1;
     /// The cell has been copied; the new offset is stored in the first payload word.
     pub const FORWARDED: u8 = 2;
-    /// The cell belongs to the non-moving old generation (ARCH "Deltas").
-    pub const OLD: u8 = 4;
+    /// A Map/Set/WeakMap/WeakSet object in the old region whose keys include young cells:
+    /// a minor collection rehashes it (set by the mark walk, cleared by the update walk).
+    pub const REHASH: u8 = 4;
 }
 
 /// Per-kind header flags.
@@ -190,6 +191,14 @@ cells! {
         /// Shapes created so far: the global shape budget (`object::SHAPE_BUDGET`).
         /// Shapes never die (strong transitions, D1831), so this only grows.
         SHAPES: u32 = 68,
+        /// The end of the old region (0120, D2041): the cells in `[0, OLD_END)` are live
+        /// for minor collections, which neither mark nor move them. A full collection
+        /// sets it to the arena size it leaves (everything live becomes old). 0 for a
+        /// fresh heap (no old region yet).
+        OLD_END: u32 = 72,
+        /// Minor collections since the last full one: the schedule of full collections
+        /// (`gc::FULL_EVERY`), in the image so that a restored VM collects the same way.
+        MINORS: u32 = 76,
     };
 
     /// A flat one-byte (Latin-1) string. Holds only strings with every code unit <= 0xFF;
@@ -554,7 +563,7 @@ mod tests {
         assert_eq!(Rope::LAYOUT.min_size, 24);
         assert_eq!(Symbol::LAYOUT.min_size, 24);
         assert_eq!(Object::LAYOUT.min_size, 24);
-        assert_eq!(Roots::LAYOUT.min_size, 72);
+        assert_eq!(Roots::LAYOUT.min_size, 80);
         assert_eq!(Shape::LAYOUT.min_size, 24);
         assert_eq!(PropValues::VALUES.cell_size(4), Some(48));
         let t = PropTable::LAYOUT.tail.unwrap();

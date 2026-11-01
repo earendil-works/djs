@@ -938,7 +938,7 @@ impl<'h> Exec<'h> {
         for i in self.sp..cap {
             self.set(i, Value::UNDEFINED);
         }
-        let collected = self.heap.collect();
+        let collected = self.heap.collect_auto();
         if let Err(HeapError::HostOutOfMemory) = collected {
             // Never a silently skipped collection (D1690).
             self.host_out_of_memory();

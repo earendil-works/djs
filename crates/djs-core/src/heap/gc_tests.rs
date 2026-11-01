@@ -161,18 +161,34 @@ fn random_value(h: &mut Heap, rng: &mut Rng, hs: &[Handle]) -> Value {
 /// Runs `ops` random mutations, holding everything through handles. With `gc_every`,
 /// collects every that many ops. Returns the live handles.
 fn build_random(h: &mut Heap, seed: u64, ops: usize, gc_every: Option<usize>) -> Vec<Handle> {
-    let mut rng = Rng(seed | 1);
     let base = h.new_object(None).unwrap();
     let mut hs = alloc::vec![h.new_handle(Value::object(base)).unwrap()];
+    grow_random(h, seed, ops, &mut hs, gc_every, |h| {
+        h.collect().unwrap();
+    });
+    hs
+}
+
+/// [`build_random`] on the graph of the handles `hs` (mutating and dropping them too),
+/// collecting with `collect` every `gc_every` ops.
+fn grow_random(
+    h: &mut Heap,
+    seed: u64,
+    ops: usize,
+    hs: &mut Vec<Handle>,
+    gc_every: Option<usize>,
+    mut collect: impl FnMut(&mut Heap),
+) {
+    let mut rng = Rng(seed | 1);
     for op in 0..ops {
         if let Some(n) = gc_every
             && op % n == n - 1
         {
-            h.collect().unwrap();
+            collect(h);
         }
         match rng.below(14) {
             0 | 1 => {
-                let proto = pick(h, &mut rng, &hs, is_obj)
+                let proto = pick(h, &mut rng, hs, is_obj)
                     .filter(|_| rng.chance(70))
                     .map(|p| h.get_handle(p).as_object().unwrap());
                 let o = h.new_object(proto).unwrap();
@@ -198,8 +214,8 @@ fn build_random(h: &mut Heap, seed: u64, ops: usize, gc_every: Option<usize>) ->
             }
             4 => {
                 // Ropes, sometimes flattened.
-                let a = pick(h, &mut rng, &hs, |v| v.as_string().is_some());
-                let b = pick(h, &mut rng, &hs, |v| v.as_string().is_some());
+                let a = pick(h, &mut rng, hs, |v| v.as_string().is_some());
+                let b = pick(h, &mut rng, hs, |v| v.as_string().is_some());
                 if let (Some(a), Some(b)) = (a, b) {
                     let sa = h.get_handle(a).as_string().unwrap();
                     let sb = h.get_handle(b).as_string().unwrap();
@@ -211,15 +227,15 @@ fn build_random(h: &mut Heap, seed: u64, ops: usize, gc_every: Option<usize>) ->
                 }
             }
             5..=7 => {
-                if let Some(o) = pick(h, &mut rng, &hs, is_obj) {
-                    let k = random_key(h, &mut rng, &hs);
-                    let v = random_value(h, &mut rng, &hs);
+                if let Some(o) = pick(h, &mut rng, hs, is_obj) {
+                    let k = random_key(h, &mut rng, hs);
+                    let v = random_value(h, &mut rng, hs);
                     let o = h.get_handle(o).as_object().unwrap();
                     let _ = h.create_data_property(o, k, v);
                 }
             }
             8 => {
-                if let Some(o) = pick(h, &mut rng, &hs, is_obj) {
+                if let Some(o) = pick(h, &mut rng, hs, is_obj) {
                     let o = h.get_handle(o).as_object().unwrap();
                     let keys = h.own_keys(o);
                     if !keys.is_empty() {
@@ -235,9 +251,9 @@ fn build_random(h: &mut Heap, seed: u64, ops: usize, gc_every: Option<usize>) ->
                 }
             }
             10 => {
-                if let Some(o) = pick(h, &mut rng, &hs, is_obj) {
-                    let k = random_key(h, &mut rng, &hs);
-                    let g = random_value(h, &mut rng, &hs);
+                if let Some(o) = pick(h, &mut rng, hs, is_obj) {
+                    let k = random_key(h, &mut rng, hs);
+                    let g = random_value(h, &mut rng, hs);
                     let g = if is_obj(g) { g } else { Value::UNDEFINED };
                     let fl = PropFlags::from_bits(rng.below(8) as u8);
                     let o = h.get_handle(o).as_object().unwrap();
@@ -260,10 +276,10 @@ fn build_random(h: &mut Heap, seed: u64, ops: usize, gc_every: Option<usize>) ->
             }
             12 => {
                 // Array elements: dense appends, holes, sparse.
-                if let Some(a) = pick(h, &mut rng, &hs, |v| v.as_object().is_some()) {
+                if let Some(a) = pick(h, &mut rng, hs, |v| v.as_object().is_some()) {
                     let o = h.get_handle(a).as_object().unwrap();
                     if h.object_class(o) == ObjectClass::Array {
-                        let v = random_value(h, &mut rng, &hs);
+                        let v = random_value(h, &mut rng, hs);
                         let i = if rng.chance(80) {
                             h.array_length(o)
                         } else {
@@ -277,8 +293,8 @@ fn build_random(h: &mut Heap, seed: u64, ops: usize, gc_every: Option<usize>) ->
             }
             _ => {
                 if let (Some(x), Some(y)) = (
-                    pick(h, &mut rng, &hs, |_| true),
-                    pick(h, &mut rng, &hs, |_| true),
+                    pick(h, &mut rng, hs, |_| true),
+                    pick(h, &mut rng, hs, |_| true),
                 ) {
                     let v = h.get_handle(y);
                     h.set_handle(x, v);
@@ -286,7 +302,6 @@ fn build_random(h: &mut Heap, seed: u64, ops: usize, gc_every: Option<usize>) ->
             }
         }
     }
-    hs
 }
 
 #[test]
@@ -1049,4 +1064,203 @@ fn iterators_survive_deletes_compaction_and_clear() {
     let it2 = coll(&h, h2);
     assert_eq!(h.collection_iterator_next(it2).unwrap().0, Value::int(7));
     assert!(h.collection_iterator_next(it2).is_none());
+}
+
+// ------------------------------------------------------------------ old region (0120)
+
+/// A heap whose first `ops` random mutations are old (collected fully), then `more`
+/// mutations of the same graph (old cells included) that are young.
+fn old_and_young(seed: u64, ops: usize, more: usize) -> (Heap, Vec<Handle>) {
+    let mut h = Heap::new().unwrap();
+    let mut hs = build_random(&mut h, seed, ops, None);
+    h.collect().unwrap();
+    assert_eq!(h.old_end(), h.arena().len());
+    grow_random(&mut h, seed ^ 0x55, more, &mut hs, None, |_| {});
+    (h, hs)
+}
+
+#[test]
+fn minor_collections_keep_the_graph() {
+    // A minor collection keeps the old cells where they are and everything reachable;
+    // a full collection afterwards leaves exactly what a full one alone would (sliding
+    // keeps allocation order), also with a tiny mark stack.
+    for cap in [0, 3] {
+        super::compactor::TEST_STACK_CAP.with(|c| c.set(cap));
+        for seed in 1..=30u64 {
+            let seed = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            let (mut a, hs) = old_and_young(seed, 300, 400);
+            let mut b = Heap::from_bytes_trusted(a.bytes().to_vec(), DEFAULT_LIMIT).unwrap();
+            let old = a.old_end();
+            let old_bytes = a.bytes()[..old as usize].to_vec();
+            let d0 = dump(&a, &hs);
+            let sa = a.collect_minor().unwrap();
+            a.verify().unwrap();
+            assert_eq!(dump(&a, &hs), d0, "seed {seed} cap {cap}");
+            assert_eq!(a.old_end(), old);
+            assert!(sa.after >= old && sa.after <= sa.before);
+            // Old cells do not move; only reference slots to young cells and the roots'
+            // counters change.
+            let same = a.bytes()[..old as usize]
+                .chunks(8)
+                .zip(old_bytes.chunks(8))
+                .filter(|(x, y)| x == y)
+                .count();
+            assert!(same * 8 > old as usize * 9 / 10, "seed {seed}");
+            // A second minor collection finds nothing more.
+            let image = a.bytes().len();
+            a.collect_minor().unwrap();
+            assert_eq!(a.bytes().len(), image, "seed {seed} cap {cap}");
+            let sb = b.collect().unwrap();
+            assert!(sb.after <= sa.after, "seed {seed}");
+            a.collect().unwrap();
+            assert_eq!(a.bytes(), b.bytes(), "seed {seed} cap {cap}");
+        }
+    }
+    super::compactor::TEST_STACK_CAP.with(|c| c.set(0));
+}
+
+#[test]
+fn scheduled_collections_do_not_change_compacted_images() {
+    // Collecting on the schedule (mostly minor) along the way ends, after a final full
+    // collection, in the same bytes as collecting once at the end.
+    for seed in 1..=20u64 {
+        let seed = seed.wrapping_mul(0xA24B_AED4_963E_E407);
+        let mut a = Heap::new().unwrap();
+        let mut b = Heap::new().unwrap();
+        let mut ha = build_random(&mut a, seed, 300, None);
+        let mut hb = build_random(&mut b, seed, 300, None);
+        a.collect().unwrap();
+        b.collect().unwrap();
+        grow_random(&mut a, seed, 900, &mut ha, None, |_| {});
+        let mut minors = 0;
+        grow_random(&mut b, seed, 900, &mut hb, Some(7), |h| {
+            let full = h.arena().get(0, Roots::MINORS) + 1 >= gc::FULL_EVERY;
+            h.collect_auto().unwrap();
+            minors += usize::from(!full);
+            h.verify().unwrap();
+        });
+        assert!(minors > 0);
+        assert_eq!(dump(&a, &ha), dump(&b, &hb), "seed {seed}");
+        a.collect().unwrap();
+        b.collect().unwrap();
+        assert_eq!(a.bytes(), b.bytes(), "seed {seed}");
+    }
+}
+
+#[test]
+fn the_schedule_is_image_state() {
+    // Restoring the image at every step collects exactly as continuing does.
+    let (mut a, mut ha) = old_and_young(7, 200, 200);
+    let mut hb = ha.clone();
+    let mut b = Heap::from_bytes(a.bytes().to_vec(), DEFAULT_LIMIT).unwrap();
+    let mut kinds = Vec::new();
+    for i in 0..2 * gc::FULL_EVERY as usize {
+        grow_random(&mut a, i as u64, 50, &mut ha, None, |_| {});
+        grow_random(&mut b, i as u64, 50, &mut hb, None, |_| {});
+        let full = a.arena().get(0, Roots::MINORS) + 1 >= gc::FULL_EVERY;
+        kinds.push(full);
+        a.collect_auto().unwrap();
+        b.collect_auto().unwrap();
+        b = Heap::from_bytes(b.bytes().to_vec(), DEFAULT_LIMIT).unwrap();
+        assert_eq!(a.bytes(), b.bytes(), "step {i}");
+    }
+    // Every FULL_EVERY-th at least (more when the young survivors outgrow the old).
+    assert!(kinds.iter().filter(|&&f| f).count() >= 2, "{kinds:?}");
+    assert!(kinds.iter().filter(|&&f| !f).count() >= 16, "{kinds:?}");
+}
+
+#[test]
+fn dead_old_cells_keep_young_cells_until_a_full_collection() {
+    let mut h = Heap::new().unwrap();
+    let holder = h.new_object(None).unwrap();
+    let hh = h.new_handle(Value::object(holder)).unwrap();
+    h.collect().unwrap();
+    // A young string, referenced only by the old holder; then the holder dies.
+    let s = Value::string(h.alloc_str(&"young".repeat(100)).unwrap());
+    let holder = h.get_handle(hh).as_object().unwrap();
+    let k = h.atom_str("s").unwrap();
+    h.create_data_property(holder, k, s).unwrap();
+    h.drop_handle(hh);
+    let old = h.old_end();
+    // The minor collection keeps it (the dead holder is old)...
+    let minor = h.collect_minor().unwrap();
+    assert!(minor.after >= old + 500, "{minor:?} {old}");
+    // ... and a full one frees both (what is left are the shapes the holder's property
+    // made: they never die).
+    let full = h.collect().unwrap();
+    assert!(full.after + 500 < minor.after, "{full:?} {minor:?}");
+}
+
+#[test]
+fn old_collections_with_young_keys() {
+    // An old Map with young object keys is rehashed (they move); an old WeakMap's pairs
+    // with young keys take part in the fixpoint and are cleared when the key dies.
+    let mut h = Heap::new().unwrap();
+    let hm = weak(&mut h, ObjectClass::Map);
+    let hw = weak(&mut h, ObjectClass::WeakMap);
+    let old_key = h.new_object(None).unwrap();
+    let hok = h.new_handle(Value::object(old_key)).unwrap();
+    h.collect().unwrap();
+    let mut keep = Vec::new();
+    for i in 0..30 {
+        h.new_object(None).unwrap(); // garbage, so the keys move
+        let k = Value::object(h.new_object(None).unwrap());
+        let m = coll(&h, hm);
+        h.collection_set(m, k, Value::int(i)).unwrap();
+        let w = coll(&h, hw);
+        let v = obj_with(&mut h, "i", Value::int(i));
+        h.collection_set(w, k, v).unwrap();
+        if i % 3 == 0 {
+            keep.push(h.new_handle(k).unwrap());
+        }
+        // A pair with a dead young key.
+        let dead = Value::object(h.new_object(None).unwrap());
+        h.collection_set(w, dead, Value::int(-1)).unwrap();
+    }
+    // An old key with a young value.
+    let ok = h.get_handle(hok);
+    let v = obj_with(&mut h, "old", Value::TRUE);
+    let w = coll(&h, hw);
+    h.collection_set(w, ok, v).unwrap();
+    let old = h.old_end();
+    h.collect_minor().unwrap();
+    h.verify().unwrap();
+    assert_eq!(h.old_end(), old);
+    let (m, w) = (coll(&h, hm), coll(&h, hw));
+    assert!(m.0 < old && w.0 < old);
+    assert_eq!(h.collection_size(m), 30);
+    // The Map keeps the keys alive; the pairs with dead keys are gone.
+    assert_eq!(h.collection_size(w), 31);
+    for (j, &hk) in keep.iter().enumerate() {
+        let k = h.get_handle(hk);
+        assert_eq!(h.collection_get(m, k), Some(Value::int(3 * j as i32)));
+        let v = h.collection_get(w, k).unwrap();
+        assert_eq!(prop(&mut h, v, "i"), Value::int(3 * j as i32));
+    }
+    let ok = h.get_handle(hok);
+    let v = h.collection_get(w, ok).unwrap();
+    assert_eq!(prop(&mut h, v, "old"), Value::TRUE);
+}
+
+#[test]
+fn old_ropes_flattened_later() {
+    // A rope made old, then flattened: its flat string is young, kept through the rope.
+    let mut h = Heap::new().unwrap();
+    let a = h.alloc_str(&"a".repeat(40)).unwrap();
+    let b = h.alloc_str(&"b".repeat(40)).unwrap();
+    let r = h.concat(a, b).unwrap();
+    let hr = h.new_handle(Value::string(r)).unwrap();
+    h.collect().unwrap();
+    let r = h.get_handle(hr).as_string().unwrap();
+    h.flatten(r).unwrap();
+    // A young reference to the old rope too.
+    let o = obj_with(&mut h, "r", Value::string(r));
+    let ho = h.new_handle(o).unwrap();
+    h.collect_minor().unwrap();
+    h.verify().unwrap();
+    let r = h.get_handle(hr).as_string().unwrap();
+    assert_eq!(h.str_to_string(r), "a".repeat(40) + &"b".repeat(40));
+    let o = h.get_handle(ho);
+    let r2 = prop(&mut h, o, "r").as_string().unwrap();
+    assert_eq!(h.str_to_string(r2), "a".repeat(40) + &"b".repeat(40));
 }

@@ -63,8 +63,11 @@ const BLOCK: u32 = 512;
 
 struct Marker<'a> {
     arena: &'a mut Arena,
-    /// One bit per 8-byte word of a marked cell.
-    live: Vec<u64>,
+    /// The end of the old region: 0 for a full collection. Cells below it are live and
+    /// are neither marked nor moved.
+    old: u32,
+    /// One bit per 8-byte word of a marked cell, from `old`.
+    live: Live,
     stack: Vec<u32>,
     overflow: bool,
     /// The lowest cell marked but not pushed since the last rescan.
@@ -73,19 +76,24 @@ struct Marker<'a> {
     cap: usize,
     /// Marked ephemeron tables (their pairs need the fixpoint).
     ephemerons: u32,
+    /// Ephemeron tables in the old region (found by the old walk).
+    old_ephemerons: u32,
 }
 
 impl Marker<'_> {
+    /// Whether the cell at `off` is live: old, or marked.
     #[inline]
     fn is_marked(&self, off: u32) -> bool {
-        self.arena.get(off, Header::GC) & gc_bits::MARK != 0
+        off < self.old || self.arena.get(off, Header::GC) & gc_bits::MARK != 0
     }
 
     /// The cell a reference to `off` keeps alive: a flattened rope stands for its flat
-    /// string.
+    /// string (an old one stands for itself: it is not resolved, see `mark`).
     #[inline]
-    fn resolve(arena: &Arena, off: u32) -> u32 {
-        if arena.get(off, Header::KIND) == CellKind::Rope as u8
+    fn resolve(&self, off: u32) -> u32 {
+        let arena = &*self.arena;
+        if off >= self.old
+            && arena.get(off, Header::KIND) == CellKind::Rope as u8
             && arena.get(off, Header::FLAGS) & flags::ROPE_FLATTENED != 0
         {
             arena.get(off, Rope::LEFT).0
@@ -98,10 +106,18 @@ impl Marker<'_> {
     /// flat string of a flattened rope (the caller rewrites its slot, so the update pass
     /// needs no rope check).
     fn mark(&mut self, mut off: u32) -> u32 {
+        if off < self.old {
+            // Old: live, not marked, not moved (an old flattened rope stays, and keeps its
+            // flat string through its own slot, which the old walk traces).
+            return off;
+        }
         // The whole header in one read: kind, gc bits, flags, size.
         let mut h: u64 = self.arena.read(off);
         if h as u8 == CellKind::Rope as u8 && (h >> 16) as u16 & flags::ROPE_FLATTENED != 0 {
             off = self.arena.get(off, Rope::LEFT).0;
+            if off < self.old {
+                return off;
+            }
             h = self.arena.read(off);
         }
         let gc = (h >> 8) as u8;
@@ -109,23 +125,14 @@ impl Marker<'_> {
             return off;
         }
         self.arena.set(off, Header::GC, gc | gc_bits::MARK);
-        set_bits(&mut self.live, off / 8, (h >> 32) as u32 / 8);
+        self.live.set(off, (h >> 32) as u32);
         let kind = h as u8;
         if kind == CellKind::EphemeronArray as u8 {
             // A pair lives only through its key (the fixpoint below).
             self.ephemerons += 1;
             return off;
         }
-        if matches!(
-            CellKind::from_u8(kind),
-            Some(
-                CellKind::Str8
-                    | CellKind::Str16
-                    | CellKind::Bytes
-                    | CellKind::U32Array
-                    | CellKind::BigInt
-            )
-        ) {
+        if is_leaf(kind) {
             // No traced slots: nothing to push.
             return off;
         }
@@ -184,6 +191,58 @@ impl Marker<'_> {
         }
     }
 
+    /// The old walk of a minor collection: every traced slot of every old cell is a root
+    /// for the young cells it references (no write barrier: the walk reads them all). Old
+    /// ephemeron tables are counted for the fixpoint instead, and old collections with
+    /// young keys are flagged for a rehash.
+    fn mark_old(&mut self) {
+        let mut c = 0;
+        while c < self.old {
+            let h: u64 = self.arena.read(c);
+            let (kb, size) = (h as u8, (h >> 32) as u32);
+            if kb == CellKind::EphemeronArray as u8 {
+                self.old_ephemerons += 1;
+            } else if !is_leaf(kb) {
+                let kind =
+                    CellKind::from_u8(kb).unwrap_or_else(|| super::fail::bad_cell_kind(kb, c));
+                if kind == CellKind::Object
+                    && is_collection(self.arena, c)
+                    && super::collection::has_young_keys(self.arena, c, self.old)
+                {
+                    let gc = (h >> 8) as u8;
+                    self.arena.set(c, Header::GC, gc | gc_bits::REHASH);
+                }
+                walk::for_each_slot(kind, c, size, |slot| self.mark_slot(slot));
+                self.drain();
+            }
+            c += size;
+        }
+    }
+
+    /// The first ephemeron table to resolve at or after `from`, in address order: old
+    /// ones (by a walk over the old region, only if it has any), then marked young ones.
+    fn next_ephemeron(&self, mut from: u32) -> Option<u32> {
+        if from < self.old {
+            if self.old_ephemerons > 0 {
+                while from < self.old {
+                    if self.arena.get(from, Header::KIND) == CellKind::EphemeronArray as u8 {
+                        return Some(from);
+                    }
+                    from += self.arena.get(from, Header::SIZE);
+                }
+            }
+            from = self.old;
+        }
+        let mut at = self.live.next_live(from);
+        while let Some(c) = at {
+            if self.arena.get(c, Header::KIND) == CellKind::EphemeronArray as u8 {
+                return Some(c);
+            }
+            at = self.live.next_live(c + self.arena.get(c, Header::SIZE));
+        }
+        None
+    }
+
     /// Marks everything reachable: the stack, overflow rescans and the ephemeron
     /// fixpoint, until nothing new is marked.
     fn mark_all(&mut self) {
@@ -193,15 +252,15 @@ impl Marker<'_> {
                 self.overflow = false;
                 // Cells below the first one left unpushed were all traced.
                 let from = core::mem::replace(&mut self.overflow_from, u32::MAX);
-                let mut at = next_live(&self.live, from);
+                let mut at = self.live.next_live(from);
                 while let Some(c) = at {
                     self.trace(c);
                     self.drain();
-                    at = next_live(&self.live, c + self.arena.get(c, Header::SIZE));
+                    at = self.live.next_live(c + self.arena.get(c, Header::SIZE));
                 }
                 continue;
             }
-            if self.ephemerons == 0 || !self.ephemeron_round() {
+            if self.ephemerons + self.old_ephemerons == 0 || !self.ephemeron_round() {
                 break;
             }
         }
@@ -211,50 +270,59 @@ impl Marker<'_> {
     /// key is marked. True if that marked anything.
     fn ephemeron_round(&mut self) -> bool {
         let mut progress = false;
-        let mut at = next_live(&self.live, 0);
+        let mut at = self.next_ephemeron(0);
         while let Some(c) = at {
-            let size = self.arena.get(c, Header::SIZE);
-            if self.arena.get(c, Header::KIND) == CellKind::EphemeronArray as u8 {
-                let len = self.arena.get(c, EphemeronArray::LEN);
-                for i in (0..len).step_by(2) {
-                    let k: Value = self.arena.read(EphemeronArray::VALUES.at(c, i));
-                    let Some(k) = k.ref_offset() else { continue };
-                    if !self.is_marked(k) {
-                        continue;
-                    }
-                    let vs = EphemeronArray::VALUES.at(c, i + 1);
-                    let v: Value = self.arena.read(vs);
-                    if let Some(t) = v.ref_offset() {
-                        let fresh = !self.is_marked(Self::resolve(self.arena, t));
-                        self.mark_slot(Slot::Value(vs));
-                        progress |= fresh;
-                    }
+            let len = self.arena.get(c, EphemeronArray::LEN);
+            for i in (0..len).step_by(2) {
+                let k: Value = self.arena.read(EphemeronArray::VALUES.at(c, i));
+                let Some(k) = k.ref_offset() else { continue };
+                if !self.is_marked(k) {
+                    continue;
+                }
+                let vs = EphemeronArray::VALUES.at(c, i + 1);
+                let v: Value = self.arena.read(vs);
+                if let Some(t) = v.ref_offset() {
+                    let fresh = !self.is_marked(self.resolve(t));
+                    self.mark_slot(Slot::Value(vs));
+                    progress |= fresh;
                 }
             }
-            at = next_live(&self.live, c + size);
+            at = self.next_ephemeron(c + self.arena.get(c, Header::SIZE));
         }
         progress
     }
 
     /// Clears the pairs whose key died (HOLE key, undefined value), as Cheney does.
     fn clear_dead_pairs(&mut self) {
-        let mut at = next_live(&self.live, 0);
+        let mut at = self.next_ephemeron(0);
         while let Some(c) = at {
-            let size = self.arena.get(c, Header::SIZE);
-            if self.arena.get(c, Header::KIND) == CellKind::EphemeronArray as u8 {
-                let len = self.arena.get(c, EphemeronArray::LEN);
-                for i in (0..len).step_by(2) {
-                    let ks = EphemeronArray::VALUES.at(c, i);
-                    let k: Value = self.arena.read(ks);
-                    if k.ref_offset().is_some_and(|k| !self.is_marked(k)) {
-                        self.arena.write(ks, Value::HOLE);
-                        self.arena.write(ks + 8, Value::UNDEFINED);
-                    }
+            let len = self.arena.get(c, EphemeronArray::LEN);
+            for i in (0..len).step_by(2) {
+                let ks = EphemeronArray::VALUES.at(c, i);
+                let k: Value = self.arena.read(ks);
+                if k.ref_offset().is_some_and(|k| !self.is_marked(k)) {
+                    self.arena.write(ks, Value::HOLE);
+                    self.arena.write(ks + 8, Value::UNDEFINED);
                 }
             }
-            at = next_live(&self.live, c + size);
+            at = self.next_ephemeron(c + self.arena.get(c, Header::SIZE));
         }
     }
+}
+
+/// Kinds without traced slots.
+#[inline]
+fn is_leaf(kind: u8) -> bool {
+    matches!(
+        CellKind::from_u8(kind),
+        Some(
+            CellKind::Str8
+                | CellKind::Str16
+                | CellKind::Bytes
+                | CellKind::U32Array
+                | CellKind::BigInt
+        )
+    )
 }
 
 /// Whether the object cell `c` is a Map, Set, WeakMap or WeakSet (offset-hashed keys).
@@ -265,6 +333,43 @@ fn is_collection(arena: &Arena, c: u32) -> bool {
             ObjectClass::Map | ObjectClass::Set | ObjectClass::WeakMap | ObjectClass::WeakSet
         )
     })
+}
+
+/// The live-word bitmap of the cells from `base` (the old region's end) on: one bit per
+/// 8-byte word.
+struct Live {
+    base: u32,
+    bits: Vec<u64>,
+}
+
+impl Live {
+    /// Marks the `size` bytes of the cell at `off`.
+    fn set(&mut self, off: u32, size: u32) {
+        set_bits(&mut self.bits, (off - self.base) / 8, size / 8);
+    }
+
+    /// The first live word at or after `from` (`>= base`): the next marked cell when
+    /// `from` is a cell boundary.
+    fn next_live(&self, from: u32) -> Option<u32> {
+        next_live(&self.bits, from - self.base).map(|r| r + self.base)
+    }
+
+    /// The first dead word at or after `from` (`u32::MAX` if none).
+    fn next_dead(&self, from: u32) -> u32 {
+        match next_dead(&self.bits, from - self.base) {
+            u32::MAX => u32::MAX,
+            r => r + self.base,
+        }
+    }
+
+    /// The new address of the live cell at `a`, from the block table.
+    #[inline]
+    fn forward(&self, table: &[u32], a: u32) -> u32 {
+        let r = a - self.base;
+        let b = (r / BLOCK) as usize;
+        let below = self.bits[b] & ((1u64 << ((r / 8) % 64)) - 1);
+        table[b] + 8 * below.count_ones()
+    }
 }
 
 /// Sets `n` bits from bit `first`.
@@ -325,19 +430,14 @@ fn next_dead(bits: &[u64], from: u32) -> u32 {
     }
 }
 
-/// The new address of the live cell at `a`.
-#[inline]
-fn forward(live: &[u64], table: &[u32], a: u32) -> u32 {
-    let b = (a / BLOCK) as usize;
-    let below = live[b] & ((1u64 << ((a / 8) % 64)) - 1);
-    table[b] + 8 * below.count_ones()
-}
-
 impl Heap {
-    /// The in-place collection (see the module docs and [`Heap::collect`]).
-    pub(super) fn mark_compact(&mut self) -> Result<(u32, u32), HeapError> {
+    /// The in-place collection (see the module docs and [`Heap::collect`]) of the cells
+    /// from `old` on: 0 for a full collection, the old region's end for a minor one, where
+    /// the cells below `old` count as live and stay where they are.
+    pub(super) fn mark_compact(&mut self, old: u32) -> Result<(u32, u32), HeapError> {
         let before = self.arena.len();
-        let blocks = before.div_ceil(BLOCK) as usize;
+        debug_assert!(old <= before);
+        let blocks = (before - old).div_ceil(BLOCK) as usize;
         let mut live: Vec<u64> = Vec::new();
         let mut table: Vec<u32> = Vec::new();
         let mut stack: Vec<u32> = Vec::new();
@@ -346,19 +446,28 @@ impl Heap {
             .and_then(|()| stack.try_reserve_exact(STACK_CAP.min(stack_cap(before))))
             .map_err(|_| HeapError::HostOutOfMemory)?;
         live.resize(blocks, 0);
-        // 1. Mark.
+        // 1. Mark: from the roots cell, or (minor) from every old cell.
         let mut m = Marker {
             arena: &mut self.arena,
-            live,
+            old,
+            live: Live {
+                base: old,
+                bits: live,
+            },
             stack,
             overflow: false,
             overflow_from: u32::MAX,
             cap: stack_cap(before),
             ephemerons: 0,
+            old_ephemerons: 0,
         };
-        m.mark(0);
+        if old == 0 {
+            m.mark(0);
+        } else {
+            m.mark_old();
+        }
         m.mark_all();
-        if m.ephemerons > 0 {
+        if m.ephemerons + m.old_ephemerons > 0 {
             m.clear_dead_pairs();
         }
         let live = m.live;
@@ -366,17 +475,62 @@ impl Heap {
         let mut collections = m.stack;
         let mut all_collections = true;
         // 2. Block table.
-        let mut sum = 0;
-        for &w in &live {
+        let mut sum = old;
+        for &w in &live.bits {
             table.push(sum);
             sum += 8 * w.count_ones();
         }
         let after = sum;
         // Nothing below the first dead word moves (usually the base image's cells).
-        let dense = next_dead(&live, 0).min(before);
-        // 3. Update every traced slot of the marked cells.
+        let dense = live.next_dead(old).min(before);
+        // 3. Update every traced slot of the old and the marked cells.
         let arena = &mut self.arena;
-        let mut at = next_live(&live, 0);
+        let update = |arena: &mut Arena, kind: CellKind, c: u32, size: u32| {
+            walk::for_each_slot(kind, c, size, |slot| match slot {
+                Slot::Value(s) => {
+                    let v: Value = arena.read(s);
+                    if let Some(t) = v.ref_offset()
+                        && t >= dense
+                    {
+                        let n = live.forward(&table, t);
+                        arena.write(s, Value::from_raw((v.to_bits() & !0xFFFF_FFFF) | n as u64));
+                    }
+                }
+                Slot::Ref(s) => {
+                    if let Some(t) = arena.read::<Ref>(s).get()
+                        && t >= dense
+                    {
+                        arena.write(s, Ref(live.forward(&table, t)));
+                    }
+                }
+            });
+        };
+        // The old region: references to young cells (any of its cells may hold one).
+        let mut c = 0;
+        while c < old {
+            let h: u64 = arena.read(c);
+            let (kb, size) = (h as u8, (h >> 32) as u32);
+            if !is_leaf(kb) {
+                let kind =
+                    CellKind::from_u8(kb).unwrap_or_else(|| super::fail::bad_cell_kind(kb, c));
+                if kind == CellKind::FuncTemplate {
+                    // Offsets of young shapes and prototypes may move (D1621).
+                    super::gc::clear_offset_caches(arena, c);
+                }
+                let gc = (h >> 8) as u8;
+                if gc & gc_bits::REHASH != 0 {
+                    arena.set(c, Header::GC, gc & !gc_bits::REHASH);
+                    if collections.len() < collections.capacity() {
+                        collections.push(c);
+                    } else {
+                        all_collections = false;
+                    }
+                }
+                update(arena, kind, c, size);
+            }
+            c += size;
+        }
+        let mut at = live.next_live(old);
         while let Some(c) = at {
             let kb = arena.get(c, Header::KIND);
             let kind = CellKind::from_u8(kb).unwrap_or_else(|| super::fail::bad_cell_kind(kb, c));
@@ -389,46 +543,29 @@ impl Heap {
                 super::gc::clear_offset_caches(arena, c);
             } else if kind == CellKind::Object && is_collection(arena, c) {
                 if collections.len() < collections.capacity() {
-                    collections.push(forward(&live, &table, c));
+                    collections.push(live.forward(&table, c));
                 } else {
                     all_collections = false;
                 }
             }
             // Marking rewrote references to flattened ropes: every target is marked.
-            walk::for_each_slot(kind, c, size, |slot| match slot {
-                Slot::Value(s) => {
-                    let v: Value = arena.read(s);
-                    if let Some(t) = v.ref_offset()
-                        && t >= dense
-                    {
-                        let n = forward(&live, &table, t);
-                        arena.write(s, Value::from_raw((v.to_bits() & !0xFFFF_FFFF) | n as u64));
-                    }
-                }
-                Slot::Ref(s) => {
-                    if let Some(t) = arena.read::<Ref>(s).get()
-                        && t >= dense
-                    {
-                        arena.write(s, Ref(forward(&live, &table, t)));
-                    }
-                }
-            });
-            at = next_live(&live, c + size);
+            update(arena, kind, c, size);
+            at = live.next_live(c + size);
         }
         // 4. Slide down in address order (never onto a cell not yet moved), a run of
         // adjacent live cells at a time: they all move by the same distance.
-        let mut at = next_live(&live, 0);
+        let mut at = live.next_live(old);
         while let Some(c) = at {
-            let end = next_dead(&live, c).min(before);
-            let to = forward(&live, &table, c);
+            let end = live.next_dead(c).min(before);
+            let to = live.forward(&table, c);
             if to != c {
                 arena.copy_within(c, end - c, to);
             }
-            at = next_live(&live, end);
+            at = live.next_live(end);
         }
         arena.truncate(after);
         // Map/Set indexes hash object keys by offset (D1381): the ones remembered, or (if
-        // there were more than the stack holds) a walk over the dense heap.
+        // there were more than the stack holds) a walk over the whole heap.
         if all_collections {
             for &c in &collections {
                 self.collection_rehash(Obj(c));

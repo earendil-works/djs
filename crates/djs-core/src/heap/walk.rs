@@ -54,6 +54,8 @@ pub enum VerifyError {
     Invalid { offset: u32 },
     /// The prototype chain through the object at `offset` is cyclic.
     ProtoCycle { offset: u32 },
+    /// `Roots::OLD_END` is not a cell boundary within the arena.
+    OldEnd { offset: u32 },
 }
 
 /// Iterator over all cells, in address order. Panics on a malformed header; use
@@ -161,6 +163,11 @@ impl Heap {
         }
         if end == 0 {
             return Err(VerifyError::Roots { offset: 0 });
+        }
+        // The old region ends at a cell boundary (0120): minor collections walk it.
+        let old = a.get(0, super::cells::Roots::OLD_END);
+        if old != end && !is_start(&starts, old) {
+            return Err(VerifyError::OldEnd { offset: old });
         }
         let kind_at =
             |t: u32| -> Option<CellKind> { is_start(&starts, t).then(|| self.cell_kind(t)) };
