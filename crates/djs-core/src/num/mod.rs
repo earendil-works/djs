@@ -9,7 +9,8 @@
 //! Parsing:
 //! - [`string_to_number`] is `StringToNumber` (what `Number(str)` and `+str` do).
 //! - [`parse_float`] and [`parse_int`] are the global functions.
-//! - [`literal_value`] is the value of a numeric literal the lexer has already validated.
+//! - [`literal_value`] and [`literal_digits_value`] give the value of a numeric literal the
+//!   lexer has already validated.
 //!
 //! The formatters return a small stack buffer ([`NumStr`]) and never allocate. The parsers take
 //! Latin-1 (`&[u8]`) or UTF-16 (`&[u16]`) code units, the two string representations of the
@@ -32,7 +33,7 @@ mod corpus_tests;
 mod tests;
 
 pub use format::{to_exponential, to_fixed, to_precision, to_string, to_string_radix};
-pub use parse::{literal_value, parse_float, parse_int, string_to_number};
+pub use parse::{literal_digits_value, literal_value, parse_float, parse_int, string_to_number};
 
 /// Longest output of [`to_string`]: `-0.0000012345678901234567`.
 pub const MAX_SHORT_LEN: usize = 25;

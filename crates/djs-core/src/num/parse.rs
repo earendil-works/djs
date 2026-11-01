@@ -573,17 +573,27 @@ pub fn parse_int<T: CodeUnit>(s: &[T], radix: i32) -> f64 {
 /// (correctly rounded). Legacy octal (`017`) and `08` are not valid in strict code and are
 /// read as decimal. Returns NaN for input that is not a numeric literal.
 pub fn literal_value(s: &[u8]) -> f64 {
-    if let Some(radix) = radix_prefix(s, true) {
-        let end = scan_radix_digits(s, 2, radix, true);
-        if end == 2 || end != s.len() {
-            return f64::NAN;
-        }
-        return radix_int_value(s, 2, end, radix);
+    match radix_prefix(s, true) {
+        Some(radix) => literal_digits_value(radix, &s[2..]),
+        None => literal_digits_value(10, s),
     }
-    match scan_decimal(s, 0, true, false) {
-        Some(d) if d.end == s.len() => decimal_value(s, &d),
-        _ => f64::NAN,
+}
+
+/// [`literal_value`] for a literal already split by the lexer (`lexer::NumberLiteral`):
+/// `radix` is 10, 16, 8 or 2 and `digits` excludes the `0x`/`0o`/`0b` prefix. Decimal digits
+/// include the fraction and exponent.
+pub fn literal_digits_value(radix: u32, digits: &[u8]) -> f64 {
+    if radix == 10 {
+        return match scan_decimal(digits, 0, true, false) {
+            Some(d) if d.end == digits.len() => decimal_value(digits, &d),
+            _ => f64::NAN,
+        };
     }
+    let end = scan_radix_digits(digits, 0, radix, true);
+    if end == 0 || end != digits.len() || !matches!(radix, 2 | 8 | 16) {
+        return f64::NAN;
+    }
+    radix_int_value(digits, 0, end, radix)
 }
 
 #[cfg(test)]

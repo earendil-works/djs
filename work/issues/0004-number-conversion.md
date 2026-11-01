@@ -113,6 +113,8 @@ Eisel-Lemire parsing). Output must match QuickJS (`qjs`) exactly.
 - console.log prints `-0` for negative zero (qjs' JS_DTOA_MINUS_ZERO); `to_string` returns
   `"0"` as the spec requires, the printer checks the sign itself.
 - BigInt <-> string conversion is not covered here.
+- After rebasing onto main (lexer from 0003 merged), added `literal_digits_value` to match
+  `lexer::NumberLiteral` and a test that lexes literals and converts them.
 
 ## Result
 `djs_core::num` (crates/djs-core/src/num/), no dependencies, no allocation, no unsafe:
@@ -126,7 +128,10 @@ Eisel-Lemire parsing). Output must match QuickJS (`qjs`) exactly.
 - Parsing (generic over `CodeUnit` = `u8` Latin-1 / `u16` UTF-16): `string_to_number(s)`
   (Number(str)), `parse_float(s)`, `parse_int(s, radix)` (radix = ToInt32 result),
   `literal_value(bytes)` for lexer-validated numeric literals with `_` separators (decimal,
-  0x, 0o, 0b; legacy octal is not handled since strict code rejects it).
+  0x, 0o, 0b; legacy octal is not handled since strict code rejects it), and
+  `literal_digits_value(radix, digits)` taking the lexer's split form directly:
+  `num::literal_digits_value(lit.base.radix(), lit.digits)` for a `lexer::NumberLiteral`
+  (not for BigInt literals).
 - Output matches qjs on the checked-in corpus and 2.1M further random cases. Known
   intentional difference: decimal input with more than 38 significant digits is correctly
   rounded where qjs truncates (D1041).

@@ -466,6 +466,14 @@ fn literals() {
     for &(input, expect) in cases {
         assert!(same(literal_value(input.as_bytes()), expect), "{input}");
     }
+    // The lexer's split form.
+    assert_eq!(literal_digits_value(16, b"1F_FF"), 8191.0);
+    assert_eq!(literal_digits_value(8, b"17"), 15.0);
+    assert_eq!(literal_digits_value(2, b"1_0"), 2.0);
+    assert_eq!(literal_digits_value(10, b"1_000.5e-3"), 1.0005);
+    assert_eq!(literal_digits_value(10, b".5"), 0.5);
+    assert!(literal_digits_value(16, b"").is_nan());
+    assert!(literal_digits_value(8, b"8").is_nan());
 }
 
 /// The exact decimal expansion of finite non-zero `|x|` as (digits, point position).
@@ -830,4 +838,36 @@ fn bench_conversions() {
     time("string_to_number(u16, shortest)", &wide, |t| {
         black_box(string_to_number(black_box(&t[..])));
     });
+}
+
+/// Literals as the lexer splits them.
+#[test]
+fn literals_from_lexer() {
+    use crate::lexer::{Lexer, TokenKind};
+    let src = b"0 1_000.5e-3 .5 5. 0x1F_FF 0o17 0B1_0 9007199254740993 1e400 0x20000000000003";
+    let expect = [
+        0.0,
+        1.0005,
+        0.5,
+        5.0,
+        8191.0,
+        15.0,
+        2.0,
+        9007199254740992.0,
+        f64::INFINITY,
+        9007199254740996.0,
+    ];
+    let mut lx = Lexer::new(src).unwrap();
+    let mut got = Vec::new();
+    loop {
+        let tok = lx.next_token().unwrap();
+        if tok.kind == TokenKind::Eof {
+            break;
+        }
+        assert_eq!(tok.kind, TokenKind::Number);
+        let lit = lx.number_literal(&tok);
+        got.push(literal_digits_value(lit.base.radix(), lit.digits));
+        assert!(same(literal_value(lx.text(&tok)), got[got.len() - 1]));
+    }
+    assert_eq!(got, expect);
 }
