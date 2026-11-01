@@ -1,0 +1,14 @@
+Error: plain
+TypeError: typed
+RangeError
+Error
+prefix SyntaxError: in the middle
+MyError: custom
+Renamed: renamed
+Error: with cause
+AggregateError: aggregate
+{"err":{}} [{}]
+[{"code":42}]
+Error: multi
+line message
+=== completed

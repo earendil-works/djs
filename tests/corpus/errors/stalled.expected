@@ -1,0 +1,3 @@
+waiting
+=== throw
+Error: The script is waiting on a promise that can never settle: no tool call is pending, and timers do not exist here.

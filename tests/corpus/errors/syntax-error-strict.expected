@@ -1,0 +1,2 @@
+=== throw
+SyntaxError: octal literals are deprecated in strict mode

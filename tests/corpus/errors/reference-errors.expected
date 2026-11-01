@@ -1,0 +1,11 @@
+undefined variable -> ReferenceError: 'missingName' is not defined
+undefined variable call -> ReferenceError: 'missingFunction' is not defined
+undefined
+typeof undefined variable -> no error
+let before declaration -> ReferenceError: value is not initialized
+const before declaration -> ReferenceError: value is not initialized
+class before declaration -> ReferenceError: K is not initialized
+this before super -> ReferenceError: this is not initialized
+assign to undeclared -> ReferenceError: 'undeclared' is not defined
+closure over TDZ -> ReferenceError: later is not initialized
+=== completed

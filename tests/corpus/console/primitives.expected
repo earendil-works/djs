@@ -1,0 +1,10 @@
+plain string
+1 1.5 -1 0 0 1e+21 1e-7 9007199254740992 -2147483648
+null null null
+true false null undefined
+10 -5
+Symbol(desc) Symbol() Symbol(Symbol.iterator)
+
+
+a  b
+=== completed

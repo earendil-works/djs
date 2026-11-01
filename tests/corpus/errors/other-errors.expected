@@ -1,0 +1,23 @@
+invalid array length -> RangeError: invalid array length
+set invalid length -> RangeError: invalid array length
+toFixed digits -> RangeError: invalid number of digits
+toPrecision digits -> RangeError: invalid number of digits
+toString radix -> RangeError: radix must be between 2 and 36
+repeat negative -> RangeError: invalid repeat count
+repeat infinity -> RangeError: invalid repeat count
+normalize form -> RangeError: bad normalization form
+fromCodePoint -> RangeError: invalid code point
+invalid date toISOString -> RangeError: Date value is NaN
+recursion -> InternalError: stack overflow
+JSON.parse empty -> SyntaxError: Unexpected end of JSON input
+JSON.parse trailing comma -> SyntaxError: unexpected token: ']'
+JSON.parse single quotes -> SyntaxError: expecting property name
+JSON.parse unterminated -> SyntaxError: Unexpected end of JSON input
+JSON.parse garbage -> SyntaxError: unexpected token: 'nope'
+JSON.parse ok -> no error: null
+decodeURIComponent -> URIError: expecting hex digit
+encodeURIComponent lone surrogate -> URIError: expecting surrogate pair
+BigInt from float -> RangeError: cannot convert to BigInt: not an integer
+BigInt division by zero -> RangeError: BigInt division by zero
+new Symbol -> TypeError: Symbol is not a constructor
+=== completed

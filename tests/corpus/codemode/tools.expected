@@ -1,0 +1,8 @@
+{"path":"a.txt","n":1,"nested":[true,null]}
+just a string
+undefined
+string 1970-01-01T00:00:00.000Z
+echo,fail
+caught: Error: file not found
+=== return
+["echo","fail"]

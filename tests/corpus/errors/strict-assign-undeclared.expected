@@ -1,0 +1,2 @@
+=== throw
+ReferenceError: 'undeclaredVariable' is not defined

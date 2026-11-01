@@ -1,0 +1,3 @@
+after await
+=== throw
+TypeError: cannot read property 'x' of null

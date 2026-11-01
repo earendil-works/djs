@@ -1,0 +1,7 @@
+a.ts: 10 lines
+b.ts: 20 lines
+c.ts: 30 lines
+["fulfilled:1","rejected:bad"]
+fast
+=== return
+{"total":60,"count":3}

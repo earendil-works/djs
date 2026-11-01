@@ -1,0 +1,41 @@
+property of undefined -> TypeError: cannot read property 'x' of undefined
+property of null -> TypeError: cannot read property 'x' of null
+nested property -> TypeError: cannot read property 'b' of undefined
+set property of undefined -> TypeError: cannot set property 'x' of undefined
+call undefined -> TypeError: not a function
+call non-function -> TypeError: not a function
+call missing method -> TypeError: not a function
+call property of string -> TypeError: not a function
+new non-constructor -> TypeError:  is not a constructor
+new number -> TypeError: not a function
+assign to const -> TypeError: 'c' is read-only
+in on primitive -> TypeError: invalid 'in' operand
+instanceof non-callable -> TypeError: invalid 'instanceof' right operand
+frozen object -> TypeError: 'a' is read-only
+non-writable -> TypeError: 'p' is read-only
+getter only -> TypeError: no setter for property
+non-extensible -> TypeError: object is not extensible
+delete non-configurable -> TypeError: could not delete property
+define on non-extensible -> TypeError: object is not extensible
+symbol to string -> TypeError: cannot convert symbol to string
+symbol to number -> TypeError: cannot convert symbol to number
+bigint mix -> TypeError: cannot convert bigint to number
+bigint to number -> TypeError: bigint argument with unary +
+class without new -> TypeError: class constructors must be invoked with 'new'
+super property before super() -> ReferenceError: this is not initialized
+not iterable -> TypeError: value is not iterable
+spread non-iterable -> TypeError: value is not iterable
+for-of non-iterable -> TypeError: value is not iterable
+destructure undefined -> TypeError: cannot convert to object
+destructure null -> TypeError: cannot convert to object
+Object.defineProperty on primitive -> TypeError: not an object
+Object.create bad proto -> TypeError: not a prototype
+setPrototypeOf cycle -> TypeError: circular prototype chain
+Array.prototype.map bad callback -> TypeError: not a function
+reduce empty -> TypeError: empty array
+JSON.stringify cycle -> TypeError: circular reference
+JSON.stringify bigint -> TypeError: Do not know how to serialize a BigInt
+private field on wrong object -> TypeError: private class field '#x' does not exist
+String.prototype.repeat on null -> TypeError: null or undefined are forbidden
+Function.prototype.call on non-function -> TypeError: not a function
+=== completed

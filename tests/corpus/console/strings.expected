@@ -1,0 +1,9 @@
+quotes " and ' and `
+multi
+line	and tab
+["quotes \" and '","back\\slash","nl\n","tab\t","nul\u0000","\u001f"]
+{"key with space":1,"quote\"key":2,"":3}
+unicode: é ü ß 漢字 😀 ["é","😀","  "]
+["lone \ud800 surrogate","\udc00"]
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+=== completed

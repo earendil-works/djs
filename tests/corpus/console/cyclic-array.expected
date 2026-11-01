@@ -1,0 +1,3 @@
+before
+=== throw
+InternalError: stack overflow

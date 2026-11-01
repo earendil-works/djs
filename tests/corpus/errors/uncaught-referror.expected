@@ -1,0 +1,2 @@
+=== throw
+ReferenceError: 'notDefined' is not defined

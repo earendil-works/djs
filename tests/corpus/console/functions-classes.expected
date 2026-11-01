@@ -1,0 +1,15 @@
+function named(a, b) { return a + b; }
+(x) => x * 2
+async function af() {}
+class Point {
+  constructor(x, y) { this.x = x; this.y = y; }
+  get len() { return Math.hypot(this.x, this.y); }
+}
+{"x":3,"y":4}
+{"a":1}
+function max() {
+    [native code]
+} function push() {
+    [native code]
+}
+=== completed

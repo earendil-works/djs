@@ -1,0 +1,3 @@
+printed before the failure
+=== throw
+TypeError: circular reference

@@ -1,0 +1,1 @@
+return { toJSON() { return "custom"; } };
