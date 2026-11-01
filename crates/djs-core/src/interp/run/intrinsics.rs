@@ -65,6 +65,7 @@ const WELL_KNOWN_SYMBOL: u16 = id("WellKnownSymbol");
 const REALM_INTRINSIC: u16 = id("RealmIntrinsic");
 const ERROR_CREATE: u16 = id("ErrorCreate");
 const ERROR_STACK: u16 = id("ErrorStack");
+const STACK_TRACE_STRING: u16 = id("StackTraceString");
 const CAPTURE_STACK: u16 = id("CaptureStack");
 const DEFINE_DATA_PROPERTY_OR_THROW: u16 = id("DefineDataPropertyOrThrow");
 const DEFINE_OWN_PROPERTY_FROM_RECORD: u16 = id("DefineOwnPropertyFromRecord");
@@ -1211,11 +1212,17 @@ impl Exec<'_> {
                 )?)
             }
             ERROR_STACK => realm::error_stack_slot(self.heap, a0),
+            STACK_TRACE_STRING => {
+                // The caller's frames (the builtin calling this is left out), below the
+                // topmost call of `a0` if it is a function (D2010).
+                let trace = self.stack_trace_from(self.pc, true, a0.as_object());
+                Value::string(self.heap.alloc_str(&trace)?)
+            }
             CAPTURE_STACK => {
                 let Some(o) = a0.as_object() else {
                     return bad_argument(info.name);
                 };
-                let trace = self.stack_trace_from(self.pc, true);
+                let trace = self.stack_trace_from(self.pc, true, None);
                 let s = self.heap.alloc_str(&trace)?;
                 realm::set_error_stack(self.heap, o, s)?;
                 Value::UNDEFINED

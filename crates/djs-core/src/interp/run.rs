@@ -882,12 +882,21 @@ impl<'h> Exec<'h> {
     /// positioned at their call (`ret_pc - 1`). Prelude frames are hidden, except
     /// installed builtin methods, which show as `at name (native)`.
     pub(crate) fn stack_trace(&self, pc: u32) -> String {
-        self.stack_trace_from(pc, false)
+        self.stack_trace_from(pc, false, None)
     }
 
     /// [`Exec::stack_trace`]; with `skip_prelude`, frames of the prelude at the top of the
     /// stack are left out too (an Error constructor does not show itself, as in qjs).
-    pub(crate) fn stack_trace_from(&self, pc: u32, mut skip_prelude: bool) -> String {
+    /// `skip_prelude`: leave out the prelude frames at the top (the calling builtin).
+    /// `below`: leave out every frame up to and including the topmost call of that
+    /// function (Error.captureStackTrace's constructorOpt, D2010); the trace is empty
+    /// if it is not on the stack.
+    pub(crate) fn stack_trace_from(
+        &self,
+        pc: u32,
+        mut skip_prelude: bool,
+        mut below: Option<Obj>,
+    ) -> String {
         use crate::heap::cells::{Object, Script, flags::OBJ_BUILTIN};
         let prelude = intrinsic(self.heap, Intrinsic::PreludeScript).as_internal();
         let mut out = String::new();
@@ -903,6 +912,10 @@ impl<'h> Exec<'h> {
             let script: Ref = a.get(t, FuncTemplate::SCRIPT);
             let builtin = self.heap.cell_flags(f.offset()) & OBJ_BUILTIN != 0;
             skip_prelude &= prelude.is_some() && prelude == script.get();
+            let skipping = below.is_some();
+            if below == Some(f) {
+                below = None;
+            }
             let name_of = |fallback: &str| {
                 let name = Atom::from_id(a.get(t, FuncTemplate::NAME));
                 if name.is_null() {
@@ -911,7 +924,7 @@ impl<'h> Exec<'h> {
                     self.heap.atom_name(name)
                 }
             };
-            if skip_prelude {
+            if skip_prelude || skipping {
             } else if builtin {
                 // The installed name, not the prelude's internal function name.
                 let name = self
@@ -957,6 +970,10 @@ impl<'h> Exec<'h> {
             let prev_bp = self.get(hp + frame::PREV_BP).as_int().unwrap_or(0) as u32;
             hp = self.get(hp + frame::PREV_HP).as_int().unwrap_or(0) as u32;
             bp = prev_bp;
+        }
+        if below.is_some() {
+            // constructorOpt was not on the stack.
+            out.clear();
         }
         out
     }

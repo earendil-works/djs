@@ -4420,3 +4420,14 @@ by their size fields. The cycle check uses two more bitmaps, "on the current pat
 "known to reach null", plus the path itself. For pi's 549 KiB prelude image that is
 about 26 KiB instead of 80, and `vm_from_bytes` no longer grows wasm memory. The
 binary search per reference also becomes a bit test.
+## D2010: Error.captureStackTrace
+date: 2026-11-03 · by: infra · issue: 0102
+As qjs (and V8) have it: `Error.captureStackTrace(object, constructorOpt)` defines an own
+`stack` on `object` (writable, configurable, not enumerable; on an Error it shadows the
+D1971 accessor) holding the current trace without the builtin's own frame. With a
+callable `constructorOpt`, the frames up to and including its topmost call are left out,
+and the trace is the empty string when it is not on the stack. A non-object is a
+TypeError ("not an object"), a non-extensible object without an own `stack` too ("object
+is not extensible"). The trace comes from `Exec::stack_trace_from(pc, skip_prelude,
+below)` through the leaf `%StackTraceString`. `Error.stackTraceLimit` (qjs has it, set to
+10) is not added: the limit stays the constant of D1282.

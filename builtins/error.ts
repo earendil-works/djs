@@ -47,6 +47,25 @@ function ErrorPrototypeSetStack(this: Value, v: Value): Value {
 }
 
 /**
+ * Error.captureStackTrace ( object [ , constructorOpt ] ) (V8, qjs; D2010): an own
+ * non-enumerable `stack` with the current trace, from below the topmost call of
+ * constructorOpt if given.
+ * @builtin Error.captureStackTrace
+ */
+function ErrorCaptureStackTrace(object: Value, constructorOpt: Value): void {
+  if (!IsObject(object)) {
+    throw NewTypeError("not an object");
+  }
+  const o: Obj = AsObj(object);
+  const below: Value = IsCallable(constructorOpt) ? constructorOpt : undefined;
+  const stack: Str = StackTraceString(below);
+  if (!HasOwnProperty(o, "stack") && !IsExtensible(o)) {
+    throw NewTypeError("object is not extensible");
+  }
+  DefineDataPropertyOrThrow(o, "stack", stack, 5);
+}
+
+/**
  * The steps shared by Error ( message [ , options ] ), 20.5.1.1, and the
  * NativeError constructors, 20.5.6.1.1. `fallback` names the realm prototype.
  */

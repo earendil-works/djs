@@ -3167,7 +3167,21 @@ function ErrorPrototypeSetStack(v) {
   return undefined;
 }
 
-// builtins/error.ts:53
+// builtins/error.ts:55 Error.captureStackTrace
+function ErrorCaptureStackTrace(object, constructorOpt) {
+  if (!%IsObject(object)) {
+    throw %NewTypeError("not an object");
+  }
+  const o = %AsObj(object);
+  const below = %IsCallable(constructorOpt) ? constructorOpt : undefined;
+  const stack = %StackTraceString(below);
+  if (!%HasOwnProperty(o, "stack") && !%IsExtensible(o)) {
+    throw %NewTypeError("object is not extensible");
+  }
+  %DefineDataPropertyOrThrow(o, "stack", stack, 5);
+}
+
+// builtins/error.ts:72
 function ErrorConstruct(newTarget, fallback, message, options) {
   const o = %ErrorCreate(GetPrototypeFromConstructor(newTarget, fallback));
   if (message !== undefined) {
@@ -3178,42 +3192,42 @@ function ErrorConstruct(newTarget, fallback, message, options) {
   return o;
 }
 
-// builtins/error.ts:68 constructor Error
+// builtins/error.ts:87 constructor Error
 function ErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "ErrorPrototype", message, options);
 }
 
-// builtins/error.ts:78 constructor EvalError
+// builtins/error.ts:97 constructor EvalError
 function EvalErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "EvalErrorPrototype", message, options);
 }
 
-// builtins/error.ts:88 constructor RangeError
+// builtins/error.ts:107 constructor RangeError
 function RangeErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "RangeErrorPrototype", message, options);
 }
 
-// builtins/error.ts:98 constructor ReferenceError
+// builtins/error.ts:117 constructor ReferenceError
 function ReferenceErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "ReferenceErrorPrototype", message, options);
 }
 
-// builtins/error.ts:108 constructor SyntaxError
+// builtins/error.ts:127 constructor SyntaxError
 function SyntaxErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "SyntaxErrorPrototype", message, options);
 }
 
-// builtins/error.ts:118 constructor TypeError
+// builtins/error.ts:137 constructor TypeError
 function TypeErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "TypeErrorPrototype", message, options);
 }
 
-// builtins/error.ts:128 constructor URIError
+// builtins/error.ts:147 constructor URIError
 function URIErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "URIErrorPrototype", message, options);
 }
 
-// builtins/error.ts:137 Error.isError
+// builtins/error.ts:156 Error.isError
 function ErrorIsError(arg) {
   if (!%IsObject(arg) || %IsProxy(arg)) {
     return false;
@@ -3221,7 +3235,7 @@ function ErrorIsError(arg) {
   return %ObjectClassTag(%AsObj(arg)) === "Error";
 }
 
-// builtins/error.ts:148 Error.prototype.toString
+// builtins/error.ts:167 Error.prototype.toString
 function ErrorPrototypeToString() {
   if (!%IsObject(this)) {
     throw %NewTypeError("not an object");
@@ -3240,19 +3254,19 @@ function ErrorPrototypeToString() {
   return nameStr + ": " + msgStr;
 }
 
-// builtins/error.ts:172 constructor InternalError
+// builtins/error.ts:191 constructor InternalError
 function InternalErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "InternalErrorPrototype", message, options);
 }
 
-// builtins/error.ts:182 constructor AggregateError
+// builtins/error.ts:201 constructor AggregateError
 function AggregateErrorConstructor(errors, message, options) {
   const o = ErrorConstruct(new.target, "AggregateErrorPrototype", message, options);
   %DefineDataPropertyOrThrow(o, "errors", IterableToList(errors), 5);
   return o;
 }
 
-// builtins/error.ts:193 constructor SuppressedError
+// builtins/error.ts:212 constructor SuppressedError
 function SuppressedErrorConstructor(error, suppressed, message) {
   const o = %ErrorCreate(GetPrototypeFromConstructor(new.target, "SuppressedErrorPrototype"));
   if (message !== undefined) {
@@ -11457,6 +11471,7 @@ function GlobalAtob(...args) {
 %InstallValue("Symbol", "asyncDispose", SymbolAsyncDispose(), 0);
 %InstallAccessor("Error.prototype", "stack", ErrorPrototypeGetStack, false);
 %InstallAccessor("Error.prototype", "stack", ErrorPrototypeSetStack, true);
+%InstallMethod("Error", "captureStackTrace", ErrorCaptureStackTrace, 2);
 %InstallMethod("Error", "isError", ErrorIsError, 1);
 %InstallMethod("Error.prototype", "toString", ErrorPrototypeToString, 0);
 %InstallMethod("Array", "fromAsync", ArrayFromAsync, 1);
