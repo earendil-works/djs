@@ -1385,3 +1385,17 @@ the wall-clock limit was only checked between 10M-fuel slices. Now GC stress run
 times out while the plain run finished is listed in the `stress:` line ("timed out, not
 compared") instead of failing. Any other difference from the plain run stays a hard
 failure.
+
+## D1380: Reflect and construct with an explicit new.target
+date: 2026-11-01 · by: infra · issue: 0038
+builtins/reflect.ts implements the 13 Reflect functions on the ordinary (and exotic)
+internal methods; there is no Proxy yet. New intrinsics: `%ConstructWithArray(f, args,
+newTarget)`, `%GetWithReceiver` and `%SetWithReceiver` (OrdinarySet with a receiver;
+getters and setters run with the receiver as `this`), and `%DeleteProperty`.
+`Exec::construct_with(argc, next, newTarget)` generalizes `construct`: the new object
+gets its prototype from new.target, a bound new.target equal to the bound callee becomes
+its target, and the explicit new.target is held in a heap handle across the call's
+safepoint (D1281's GC hazard) before it is written to the frame. Builtin constructors
+already read new.target; `Array` now gives a non-Array new.target's prototype to its
+result. Error messages follow qjs: a primitive target is "not a function", a non-callable
+object "not a constructor", a callable one "<name> is not a constructor".

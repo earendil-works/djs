@@ -55,6 +55,20 @@ counts them.
 
 ## Log
 
+### Part 1: test262.toml promotion, Reflect
+- test262 before the move (main 3c2e9b6): active 11,773 / 20,124 (58.5%), later
+  518 / 17,445.
+- Move (coordinator decision; all the listed paths and features): active 12,187 /
+  22,142 (55.0%), later 104 / 15,427. The move alone added 2,018 active tests, 414 of
+  them already passing.
+- Reflect (D1380): all 13 functions; `construct_with` in interp/run.rs (outside touches:
+  an explicit new.target for Reflect.construct, held in a handle across the safepoint).
+  Array honours new.target's prototype. behavior.js compares Reflect with qjs (8 targets
+  × 8 keys, receivers, constructors with new.target): clean except an arrow as
+  newTarget (qjs prints " is not a constructor" with an empty name). difftest
+  builtins/reflect.js.
+- After part 1: active 12,354 / 22,142 (55.8%); Reflect 140 / 142, Symbol 64 / 68.
+
 ## Follow-ups
 
 ## Result
