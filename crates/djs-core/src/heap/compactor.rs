@@ -94,20 +94,27 @@ impl Marker<'_> {
         }
     }
 
-    fn mark(&mut self, off: u32) {
-        let off = Self::resolve(self.arena, off);
-        if self.is_marked(off) {
-            return;
+    /// Marks the cell a reference to `off` keeps alive and returns it: `off`, or the
+    /// flat string of a flattened rope (the caller rewrites its slot, so the update pass
+    /// needs no rope check).
+    fn mark(&mut self, mut off: u32) -> u32 {
+        // The whole header in one read: kind, gc bits, flags, size.
+        let mut h: u64 = self.arena.read(off);
+        if h as u8 == CellKind::Rope as u8 && (h >> 16) as u16 & flags::ROPE_FLATTENED != 0 {
+            off = self.arena.get(off, Rope::LEFT).0;
+            h = self.arena.read(off);
         }
-        let gc = self.arena.get(off, Header::GC);
+        let gc = (h >> 8) as u8;
+        if gc & gc_bits::MARK != 0 {
+            return off;
+        }
         self.arena.set(off, Header::GC, gc | gc_bits::MARK);
-        let size = self.arena.get(off, Header::SIZE);
-        set_bits(&mut self.live, off / 8, size / 8);
-        let kind = self.arena.get(off, Header::KIND);
+        set_bits(&mut self.live, off / 8, (h >> 32) as u32 / 8);
+        let kind = h as u8;
         if kind == CellKind::EphemeronArray as u8 {
             // A pair lives only through its key (the fixpoint below).
             self.ephemerons += 1;
-            return;
+            return off;
         }
         if matches!(
             CellKind::from_u8(kind),
@@ -120,7 +127,7 @@ impl Marker<'_> {
             )
         ) {
             // No traced slots: nothing to push.
-            return;
+            return off;
         }
         // The stack grows on demand (a refusal is only an overflow, handled by a rescan).
         if self.stack.len() == self.stack.capacity()
@@ -128,9 +135,36 @@ impl Marker<'_> {
         {
             self.overflow = true;
             self.overflow_from = self.overflow_from.min(off);
-            return;
+            return off;
         }
         self.stack.push(off);
+        off
+    }
+
+    /// Marks the target of the traced slot `s`, rewriting a reference to a flattened
+    /// rope to its flat string.
+    #[inline]
+    fn mark_slot(&mut self, slot: Slot) {
+        match slot {
+            Slot::Value(s) => {
+                let v: Value = self.arena.read(s);
+                if let Some(t) = v.ref_offset() {
+                    let n = self.mark(t);
+                    if n != t {
+                        let bits = (v.to_bits() & !0xFFFF_FFFF) | n as u64;
+                        self.arena.write(s, Value::from_raw(bits));
+                    }
+                }
+            }
+            Slot::Ref(s) => {
+                if let Some(t) = self.arena.read::<Ref>(s).get() {
+                    let n = self.mark(t);
+                    if n != t {
+                        self.arena.write(s, Ref(n));
+                    }
+                }
+            }
+        }
     }
 
     /// Marks the targets of `cell`'s traced slots.
@@ -141,15 +175,7 @@ impl Marker<'_> {
             return;
         }
         let size = self.arena.get(cell, Header::SIZE);
-        walk::for_each_slot(kind, cell, size, |slot| {
-            let t = match slot {
-                Slot::Value(s) => self.arena.read::<Value>(s).ref_offset(),
-                Slot::Ref(s) => self.arena.read::<Ref>(s).get(),
-            };
-            if let Some(t) = t {
-                self.mark(t);
-            }
-        });
+        walk::for_each_slot(kind, cell, size, |slot| self.mark_slot(slot));
     }
 
     fn drain(&mut self) {
@@ -196,12 +222,12 @@ impl Marker<'_> {
                     if !self.is_marked(k) {
                         continue;
                     }
-                    let v: Value = self.arena.read(EphemeronArray::VALUES.at(c, i + 1));
-                    if let Some(t) = v.ref_offset()
-                        && !self.is_marked(Self::resolve(self.arena, t))
-                    {
-                        self.mark(t);
-                        progress = true;
+                    let vs = EphemeronArray::VALUES.at(c, i + 1);
+                    let v: Value = self.arena.read(vs);
+                    if let Some(t) = v.ref_offset() {
+                        let fresh = !self.is_marked(Self::resolve(self.arena, t));
+                        self.mark_slot(Slot::Value(vs));
+                        progress |= fresh;
                     }
                 }
             }
@@ -279,6 +305,26 @@ fn next_live(bits: &[u64], from: u32) -> Option<u32> {
     }
 }
 
+/// The offset of the first dead word at or after `from` (`u32::MAX` if none).
+fn next_dead(bits: &[u64], from: u32) -> u32 {
+    let i = (from / 8) as usize;
+    let mut w = i / 64;
+    if w >= bits.len() {
+        return u32::MAX;
+    }
+    let mut word = !bits[w] & (u64::MAX << (i % 64));
+    loop {
+        if word != 0 {
+            return ((w * 64) as u32 + word.trailing_zeros()) * 8;
+        }
+        w += 1;
+        if w >= bits.len() {
+            return u32::MAX;
+        }
+        word = !bits[w];
+    }
+}
+
 /// The new address of the live cell at `a`.
 #[inline]
 fn forward(live: &[u64], table: &[u32], a: u32) -> u32 {
@@ -326,6 +372,8 @@ impl Heap {
             sum += 8 * w.count_ones();
         }
         let after = sum;
+        // Nothing below the first dead word moves (usually the base image's cells).
+        let dense = next_dead(&live, 0).min(before);
         // 3. Update every traced slot of the marked cells.
         let arena = &mut self.arena;
         let mut at = next_live(&live, 0);
@@ -346,32 +394,37 @@ impl Heap {
                     all_collections = false;
                 }
             }
+            // Marking rewrote references to flattened ropes: every target is marked.
             walk::for_each_slot(kind, c, size, |slot| match slot {
                 Slot::Value(s) => {
                     let v: Value = arena.read(s);
-                    if let Some(t) = v.ref_offset() {
-                        let n = forward(&live, &table, Marker::resolve(arena, t));
+                    if let Some(t) = v.ref_offset()
+                        && t >= dense
+                    {
+                        let n = forward(&live, &table, t);
                         arena.write(s, Value::from_raw((v.to_bits() & !0xFFFF_FFFF) | n as u64));
                     }
                 }
                 Slot::Ref(s) => {
-                    if let Some(t) = arena.read::<Ref>(s).get() {
-                        let n = forward(&live, &table, Marker::resolve(arena, t));
-                        arena.write(s, Ref(n));
+                    if let Some(t) = arena.read::<Ref>(s).get()
+                        && t >= dense
+                    {
+                        arena.write(s, Ref(forward(&live, &table, t)));
                     }
                 }
             });
             at = next_live(&live, c + size);
         }
-        // 4. Slide down in address order (never onto a cell not yet moved).
+        // 4. Slide down in address order (never onto a cell not yet moved), a run of
+        // adjacent live cells at a time: they all move by the same distance.
         let mut at = next_live(&live, 0);
         while let Some(c) = at {
-            let size = arena.get(c, Header::SIZE);
+            let end = next_dead(&live, c).min(before);
             let to = forward(&live, &table, c);
             if to != c {
-                arena.copy_within(c, size, to);
+                arena.copy_within(c, end - c, to);
             }
-            at = next_live(&live, c + size);
+            at = next_live(&live, end);
         }
         arena.truncate(after);
         // Map/Set indexes hash object keys by offset (D1381): the ones remembered, or (if
