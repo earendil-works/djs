@@ -2616,12 +2616,14 @@ impl<'h> Exec<'h> {
             | Op::Le
             | Op::Ge => &[(1, NUMBER), (0, NUMBER)],
             Op::Neg | Op::Plus | Op::BNot | Op::Inc | Op::Dec | Op::ToNumeric => &[(0, NUMBER)],
-            Op::GetElem | Op::GetElem2 | Op::GetElemMethod | Op::Delete
+            Op::GetElem | Op::GetElem2 | Op::GetElemMethod
                 if self.top(1).is_nullish() && self.top(0).as_object().is_some() =>
             {
                 // RequireObjectCoercible(base) comes before ToPropertyKey(key) (qjs's
-                // message: the key is not converted).
-                let msg = if self.top(1).is_undefined() {
+                // messages: the key is not converted).
+                let msg = if op == Op::GetElem2 {
+                    "value has no property"
+                } else if self.top(1).is_undefined() {
                     "cannot read property of undefined"
                 } else {
                     "cannot read property of null"

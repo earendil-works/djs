@@ -1,0 +1,20 @@
+2 4
++= TypeError value has no property
+++ TypeError value has no property
+||= TypeError value has no property
+TypeError cannot read property of null
+TypeError l
+fa fb fc
+outside inside
+[1,2,1]
+outside inside
+42 42 42
+ok
+function true false false
+TypeError
+0.1 -0 0.30000000000000004
+1.3369140625 Infinity 5.960464477539063e-8
+true false
+TypeError
+undefined true
+false 1
