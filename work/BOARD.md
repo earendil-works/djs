@@ -10,7 +10,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0109 | Guide chapters: builtins, host interface, testing | infra | .worktrees/infra |
 | 0103 | Human-facing documentation: option A (own generator + live examples, owner's choice), implementing | docs | .worktrees/docs |
 | 0101 | Mark-compact collection (design first) | heap | .worktrees/heap |
-| 0107 | Direct native-to-closure calls; cold arms out of line | perf | .worktrees/perf |
+| 0110 | pi-like's library hot spots + dense element access in natives | perf | .worktrees/perf |
 
 ## Open (ready)
 
@@ -60,6 +60,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0077 | deser deps investigation | report (agent deps, archived): no new deps; quick wins -> 0078 |
 | 0089 | pi snapshot collect fix | 68343b1 (agent snapshot, archived; snapshots 936 -> 498 KB; DETERMINISTIC_VERSION 2) |
 | 0088 | Snapshot design research | 6c0e381 (agent snapshot; recommends A now, B long-term, defer C; owner decision pending) |
+| 0107 | Direct native-to-closure calls | 86e9ef07 (agent perf; higher-order -13%, forEach -12.8% wasm; D2060) |
 | 0100 | Native codegen: typed locals in Rust | 740803ce (agent perf; forEach -34%/elem wasm, higher-order -10%) |
 | 0093 | run_hot: tier-0 loop + compact calls | 22495ce3 (agent perf; plain bytecode 0.44-0.63x quickjs-wasi; calls ~1x) |
 | 0085 | @fast leaf entries (57) | 0dd2c96 (agent perf; pi-like 3.6x -> 1.8x quickjs-wasi in wasm instructions) |
