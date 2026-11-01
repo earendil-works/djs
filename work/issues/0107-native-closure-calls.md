@@ -1,7 +1,7 @@
 # 0107: Direct native-to-closure calls; cold arms out of line
 
-status: open
-agent: -
+status: in-progress
+agent: perf
 branch: issue/0107-native-closure-calls
 depends-on: 0100
 guide: - (the interpreter chapter, once docs writes it: tell the coordinator what changed)
