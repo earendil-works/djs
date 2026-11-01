@@ -63,6 +63,9 @@ destructuring constantly, and test262 has ~1,500 tests behind it (0007 clusters)
   left); the remaining dstr failures are all classes. Corpus: 3 more passing
   (test_function_length, test_template, test_template_skip) plus the new
   `language/destructuring.js` (clean under --suspend-every 97 and --gc-stress).
+- Fix after the first merge (1447e1c): removing the CR test case from the corpus file
+  left half a line behind, so `destructuring.expected` held qjs's SyntaxError and the
+  case tested nothing. Fixed; it now has 107 lines of results.
 
 ## Follow-ups
 
