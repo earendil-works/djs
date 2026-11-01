@@ -8,7 +8,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0120 | Old generation phase 1 (sticky base prefix) | heap | .worktrees/heap |
-| 0121 | Codemode corpus expansion; shorter ratchet reasons | infra | .worktrees/infra |
 | 0122 | wasm size toward the D020 budget | perf | .worktrees/perf |
 
 ## Open (ready)
@@ -80,6 +79,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0121 | Corpus expansion to 300 cases; short ratchet reasons (D2282-D2284) | e06e0d20 (agent infra; 295/300 vs qjs; follow-ups: fake tool discovery +404 runs, generic results +429) |
 | 0117 | Compact snapshot images (D019, D2260-D2263) | ff1048b1 (agent snapshot; waiting pi session 546 KB -> 2-9 KB) |
 | 0119 | Live editor for guide examples (D2103) | 541b30cb (agent docs; textarea overlay + JS port of highlight.rs, tested for parity) |
 | 0116 | JSON in place, flat_fast, search (D2250) | 5c73183d (agent perf; pi-like -4.3%, json-indent -13%) |
