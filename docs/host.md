@@ -368,7 +368,7 @@ but pi keeps the prelude's `settle`/`run`/`stalled` alive across calls).
 | deterministic: WASI clocks read virtual time, `random_get` a PRNG, UTC, no WeakRef | `vm_set_now(clock.now)` before every slice, time zone 0, `vm_set_random_seed`. djs reads no clock or entropy of its own (ARCH "Nondeterminism"). In deterministic runs the VM deletes `WeakRef` and `FinalizationRegistry` (`vm_set_weak_refs`, D1680) before the prelude's lockdown |
 | `Math.random` seeded by QuickJS from its first clock read (seed + 1), one draw used up while creating the context | djs's `Math.random` is the same xorshift64*, so the adapter seeds it one step after seed + 1. **The same seed gives the same numbers on both engines**; pi's pinned values pass |
 | fingerprint `quickjs-wasi X, quickjs Y, prelude H, deterministic 1, stack S, heap M, budget B` | `djs <build hash>, prelude H, host G, deterministic 1, fuel per poll F, heap M, budget B` (`djs_build_hash`; G hashes the adapter's own globals, D1660) |
-| quickjs-wasi's host globals `performance`, `atob`, `btoa` (`queueMicrotask` is native since 0059) | defined by the adapter in JS before the prelude, so the lockdown freezes them too. `performance.now()` counts from the run's start on the VM clock (deterministic: from `startedAt`, as on quickjs) |
+| quickjs-wasi's host global `performance` (`queueMicrotask` is native since 0059, `atob`, `btoa` and `DOMException` since 0084) | defined by the adapter in JS before the prelude, so the lockdown freezes it too. `performance.now()` counts from the run's start on the VM clock (deterministic: from `startedAt`, as on quickjs) |
 | no snapshots: durability by deterministic replay | `snapshot()` / `resumeVm()` in addition: the VM image plus the adapter's few numbers, taken while the script waits. A resumed session continues with no replay (tested against an uninterrupted run) |
 
 **Prelude images.** Running pi's prelude is most of a start: its lockdown walks and freezes
@@ -406,11 +406,11 @@ Besides the failures above:
 - **Strict mode.** pi evaluates scripts sloppy on QuickJS. On djs they are strict: an
   assignment to an undeclared variable is a ReferenceError instead of creating a global,
   and writes to read-only properties throw. Model-written code rarely relies on either.
-- **Globals djs lacks** (quickjs-wasi has them; compared again after 0059): `DOMException`
-  and `SharedArrayBuffer` (an ARCH non-goal). `Iterator` (D1510), the disposables (D1512),
+- **Globals djs lacks** (quickjs-wasi has them; compared again after 0059):
+  `SharedArrayBuffer` (an ARCH non-goal). `Iterator` (D1510), the disposables (D1512),
   WeakRef and FinalizationRegistry (D1513), the URI functions and `escape`/`unescape`
-  (0054), `eval`, the Function constructors and `queueMicrotask` (0059) are there now. The
-  adapter supplies `performance`, `atob` and `btoa`.
+  (0054), `eval`, the Function constructors and `queueMicrotask` (0059), `atob`, `btoa`
+  and `DOMException` (0084, D1840) are there now. The adapter supplies `performance`.
 - **Dynamic code.** `eval(x)` is always indirect eval (D014): it sees globals, not the
   caller's locals. Functions made by `Function(...)` are strict like everything else, so
   `Function("return this")()` is `undefined`, not the global object.

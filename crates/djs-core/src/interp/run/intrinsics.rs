@@ -207,6 +207,12 @@ const F64_FLOOR: u16 = id("F64Floor");
 const F64_FROUND: u16 = id("F64Fround");
 const F64_F16ROUND: u16 = id("F64F16round");
 const F64_SUM_PRECISE: u16 = id("F64SumPrecise");
+const DOM_EXCEPTION_CREATE: u16 = id("DOMExceptionCreate");
+const DOM_EXCEPTION_FIELD: u16 = id("DOMExceptionField");
+const DOM_EXCEPTION_CODE: u16 = id("DOMExceptionCode");
+const DOM_EXCEPTION_CONSTANT: u16 = id("DOMExceptionConstant");
+const BTOA: u16 = id("Btoa");
+const ATOB: u16 = id("Atob");
 const F64_IMUL: u16 = id("F64Imul");
 const F64_LOG: u16 = id("F64Log");
 const F64_LOG1P: u16 = id("F64Log1p");
@@ -1616,7 +1622,11 @@ impl Exec<'_> {
                         self.sp = base;
                         self.pc = next;
                         let args = [Value::object(a), v, Value::FALSE];
-                        return self.call_prelude(ARRAY_SET_LENGTH, &args, Continuation::PushResult);
+                        return self.call_prelude(
+                            ARRAY_SET_LENGTH,
+                            &args,
+                            Continuation::PushResult,
+                        );
                     }
                 }
             }
@@ -1851,6 +1861,66 @@ impl Exec<'_> {
                     _ => return bad_argument(info.name),
                 }
                 Value::UNDEFINED
+            }
+            DOM_EXCEPTION_CREATE => {
+                let (Some(proto), Some(name), Some(msg)) = (
+                    a0.as_object(),
+                    arg(self, 1).as_string(),
+                    arg(self, 2).as_string(),
+                ) else {
+                    return bad_argument(info.name);
+                };
+                // An Error with two slots: nothing else allocates one (D1840).
+                let o = self.heap.alloc_object(ObjectClass::Error, Some(proto), 2)?;
+                self.heap.set_object_slot(o, 0, Value::string(name));
+                self.heap.set_object_slot(o, 1, Value::string(msg));
+                Value::object(o)
+            }
+            DOM_EXCEPTION_FIELD => {
+                let i = arg(self, 1).as_int().and_then(|i| u32::try_from(i).ok());
+                match (a0.as_object(), i) {
+                    (Some(o), Some(i))
+                        if i < 2
+                            && self.heap.object_class(o) == ObjectClass::Error
+                            && self.heap.object_slot_count(o) == 2 =>
+                    {
+                        self.heap.object_slot(o, i)
+                    }
+                    _ => Value::UNDEFINED,
+                }
+            }
+            DOM_EXCEPTION_CODE => {
+                let Some(s) = a0.as_string() else {
+                    return bad_argument(info.name);
+                };
+                let units: alloc::vec::Vec<u16> = self.heap.str_units(s).collect();
+                Value::int(crate::builtins::dom::code_of(&units))
+            }
+            DOM_EXCEPTION_CONSTANT => {
+                let i = a0.as_int().and_then(|i| usize::try_from(i).ok());
+                let Some(&(_, name)) =
+                    i.and_then(|i| crate::builtins::dom::NAMES.get(i.wrapping_sub(1)))
+                else {
+                    return bad_argument(info.name);
+                };
+                Value::string(self.heap.alloc_str(name)?)
+            }
+            BTOA | ATOB => {
+                let Some(s) = a0.as_string() else {
+                    return bad_argument(info.name);
+                };
+                if id == BTOA {
+                    match crate::builtins::dom::btoa(self.heap.str_units(s)) {
+                        Some(out) => Value::string(self.heap.alloc_str(&out)?),
+                        None => Value::UNDEFINED,
+                    }
+                } else {
+                    let units: alloc::vec::Vec<u16> = self.heap.str_units(s).collect();
+                    match crate::builtins::dom::atob(&units) {
+                        Some(bytes) => Value::string(self.heap.alloc_latin1(&bytes)?),
+                        None => Value::UNDEFINED,
+                    }
+                }
             }
             F64_SUM_PRECISE => {
                 let Some(list) = a0.as_object() else {
@@ -2102,7 +2172,11 @@ impl Exec<'_> {
                 self.heap.new_object(Some(base))?
             }
         };
-        if let Some(p) = parent {
+        // WebIDL: DOMException.prototype inherits from Error.prototype, but the
+        // constructor itself from Function.prototype.
+        if let Some(p) = parent
+            && name != "DOMException"
+        {
             self.heap.set_prototype_of(fo, Some(p));
         }
         let ctors = intrinsic_obj(self.heap, Intrinsic::Constructors);

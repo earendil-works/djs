@@ -3896,3 +3896,47 @@ FinalizationRegistryPrototypeToStringTag: leaf (value FinalizationRegistry.proto
 
 FinalizationRegistryCleanupJob: reentrant (%FinalizationRegistryCleanupJob)
   builtins/weakref.ts:109:7  Call (intrinsic)
+
+DOMExceptionPrototypeObject: reentrant
+  builtins/web.ts:9:16  Get (intrinsic)
+
+NewDOMException: reentrant
+  builtins/web.ts:14:37  DOMExceptionPrototypeObject (builtin)
+
+DOMExceptionConstructor: reentrant (constructor DOMException)
+  builtins/web.ts:30:49  ToString (builtin)
+  builtins/web.ts:31:50  ToString (builtin)
+  builtins/web.ts:32:22  Get (intrinsic)
+  builtins/web.ts:34:13  DOMExceptionPrototypeObject (builtin)
+
+DOMExceptionThisField: leaf
+
+DOMExceptionPrototypeName: leaf (get DOMException.prototype.name)
+
+DOMExceptionPrototypeMessage: leaf (get DOMException.prototype.message)
+
+DOMExceptionPrototypeCode: leaf (get DOMException.prototype.code)
+
+DOMExceptionEnumerable: reentrant
+  builtins/web.ts:77:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/web.ts:78:3  DefineOwnPropertyFromRecord (intrinsic)
+
+DOMExceptionToStringTag: reentrant (value DOMException.prototype[Symbol.toStringTag])
+  builtins/web.ts:90:22  DOMExceptionPrototypeObject (builtin)
+  builtins/web.ts:91:3  DOMExceptionEnumerable (builtin)
+  builtins/web.ts:92:3  DOMExceptionEnumerable (builtin)
+  builtins/web.ts:93:3  DOMExceptionEnumerable (builtin)
+  builtins/web.ts:96:5  DefineDataPropertyOrThrow (intrinsic)
+  builtins/web.ts:97:5  DefineDataPropertyOrThrow (intrinsic)
+
+GlobalBtoa: reentrant (btoa)
+  builtins/web.ts:108:7  LengthOfArrayLike (builtin)
+  builtins/web.ts:111:34  Get (intrinsic)
+  builtins/web.ts:111:25  ToString (builtin)
+  builtins/web.ts:113:11  NewDOMException (builtin)
+
+GlobalAtob: reentrant (atob)
+  builtins/web.ts:124:7  LengthOfArrayLike (builtin)
+  builtins/web.ts:127:34  Get (intrinsic)
+  builtins/web.ts:127:25  ToString (builtin)
+  builtins/web.ts:129:11  NewDOMException (builtin)

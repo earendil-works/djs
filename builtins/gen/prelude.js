@@ -10855,6 +10855,104 @@ function FinalizationRegistryCleanupJob(r) {
   }
 }
 
+// builtins/web.ts:8
+function DOMExceptionPrototypeObject() {
+  return %AsObj(%Get(%RealmConstructor("DOMException"), "prototype"));
+}
+
+// builtins/web.ts:13
+function NewDOMException(message, name) {
+  const o = %DOMExceptionCreate(DOMExceptionPrototypeObject(), name, message);
+  %CaptureStack(o);
+  return o;
+}
+
+// builtins/web.ts:26 constructor DOMException
+function DOMExceptionConstructor(message, name) {
+  if (new.target === undefined) {
+    throw %NewTypeError("must be called with new");
+  }
+  const msg = message === undefined ? "" : ToString(message);
+  const nm = name === undefined ? "Error" : ToString(name);
+  let proto = %Get(%AsObj(new.target), "prototype");
+  if (!%IsObject(proto)) {
+    proto = DOMExceptionPrototypeObject();
+  }
+  const o = %DOMExceptionCreate(%AsObj(proto), nm, msg);
+  %CaptureStack(o);
+  return o;
+}
+
+// builtins/web.ts:42
+function DOMExceptionThisField(v, i) {
+  const f = %DOMExceptionField(v, i);
+  if (f === undefined) {
+    throw %NewTypeError("DOMException object expected");
+  }
+  return %AsStr(f);
+}
+
+// builtins/web.ts:54 get DOMException.prototype.name
+function DOMExceptionPrototypeName() {
+  return DOMExceptionThisField(this, 0);
+}
+
+// builtins/web.ts:62 get DOMException.prototype.message
+function DOMExceptionPrototypeMessage() {
+  return DOMExceptionThisField(this, 1);
+}
+
+// builtins/web.ts:70 get DOMException.prototype.code
+function DOMExceptionPrototypeCode() {
+  return %DOMExceptionCode(DOMExceptionThisField(this, 0));
+}
+
+// builtins/web.ts:75
+function DOMExceptionEnumerable(o, key) {
+  const desc = %ObjectCreate(null);
+  %CreateDataPropertyOrThrow(desc, "enumerable", true);
+  %DefineOwnPropertyFromRecord(o, key, desc);
+}
+
+// builtins/web.ts:88 value DOMException.prototype[Symbol.toStringTag]
+function DOMExceptionToStringTag() {
+  const ctor = %RealmConstructor("DOMException");
+  const proto = DOMExceptionPrototypeObject();
+  DOMExceptionEnumerable(proto, "name");
+  DOMExceptionEnumerable(proto, "message");
+  DOMExceptionEnumerable(proto, "code");
+  for (let i = 1; i <= 25; i++) {
+    const key = %DOMExceptionConstant(i);
+    %DefineDataPropertyOrThrow(ctor, key, i, 2);
+    %DefineDataPropertyOrThrow(proto, key, i, 2);
+  }
+  return "DOMException";
+}
+
+// builtins/web.ts:107 btoa
+function GlobalBtoa(...args) {
+  if (LengthOfArrayLike(args) === 0) {
+    throw %NewTypeError("1 argument required");
+  }
+  const r = %Btoa(ToString(%Get(args, 0)));
+  if (r === undefined) {
+    throw NewDOMException("string contains an invalid character", "InvalidCharacterError");
+  }
+  return %AsStr(r);
+}
+
+// builtins/web.ts:123 atob
+function GlobalAtob(...args) {
+  if (LengthOfArrayLike(args) === 0) {
+    throw %NewTypeError("1 argument required");
+  }
+  const r = %Atob(ToString(%Get(args, 0)));
+  if (r === undefined) {
+    throw NewDOMException("string is not correctly encoded", "InvalidCharacterError");
+  }
+  return %AsStr(r);
+}
+
 %InstallConstructor("globalThis", "Array", ArrayConstructor, 1, undefined);
 %InstallConstructor("globalThis", "ArrayBuffer", ArrayBufferConstructor, 1, undefined);
 %InstallConstructor("globalThis", "BigInt", BigIntConstructor, 1, undefined);
@@ -10916,6 +11014,9 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallConstructor("globalThis", "WeakSet", WeakSetConstructor, 0, undefined);
 %InstallConstructor("globalThis", "WeakRef", WeakRefConstructor, 1, undefined);
 %InstallConstructor("globalThis", "FinalizationRegistry", FinalizationRegistryConstructor, 1, undefined);
+%InstallConstructor("globalThis", "DOMException", DOMExceptionConstructor, 0, "Error");
+%InstallMethod("globalThis", "btoa", GlobalBtoa, 1);
+%InstallMethod("globalThis", "atob", GlobalAtob, 1);
 %InstallMethod("Array.prototype", "forEach", ArrayPrototypeForEach, 1);
 %InstallMethod("Array.prototype", "map", ArrayPrototypeMap, 1);
 %InstallMethod("Array.prototype", "indexOf", ArrayPrototypeIndexOf, 1);
@@ -11474,6 +11575,10 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallMethod("FinalizationRegistry.prototype", "register", FinalizationRegistryPrototypeRegister, 2);
 %InstallMethod("FinalizationRegistry.prototype", "unregister", FinalizationRegistryPrototypeUnregister, 1);
 %InstallValue("FinalizationRegistry.prototype", %WellKnownSymbol("toStringTag"), FinalizationRegistryPrototypeToStringTag(), 4);
+%InstallAccessor("DOMException.prototype", "name", DOMExceptionPrototypeName, false);
+%InstallAccessor("DOMException.prototype", "message", DOMExceptionPrototypeMessage, false);
+%InstallAccessor("DOMException.prototype", "code", DOMExceptionPrototypeCode, false);
+%InstallValue("DOMException.prototype", %WellKnownSymbol("toStringTag"), DOMExceptionToStringTag(), 4);
 %InstallIntrinsic("ArraySpeciesCreate", ArraySpeciesCreate);
 %InstallIntrinsic("FindViaPredicate", FindViaPredicate);
 %InstallIntrinsic("EveryOrSome", EveryOrSome);

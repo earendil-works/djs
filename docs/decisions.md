@@ -3486,3 +3486,30 @@ D1351) and `%IteratorClose` of an ArrayIterator with no `return` on its chain (l
 without a Proxy, data `undefined`/`null` or absent) skip their frames
 (`interp/run/iter.rs`). Fuel per step drops accordingly (D1633: fuel is not part of the
 semantics). wasm: for-of over 200k numbers 1361 → 189 ms; +2.7 KB of wasm.
+## D1840: Function.prototype is a builtin closure; ArraySetLength in [[Set]]; native DOMException, atob, btoa
+date: 2026-11-05 · by: lexer · issue: 0084
+- Function.prototype is created by the realm as a BuiltinClosure of
+  `%FunctionPrototypeBehavior` (builtins/function.ts), a builtin that returns undefined.
+  So it is callable (`typeof` "function", "[object Function]", `instanceof` with it as the
+  right operand), not a constructor, and its properties are unchanged. It can be called
+  once the prelude has installed the builtin.
+- [[Set]] of an array's own writable `length` (interpreter `set_property`, and
+  `ordinary_set` for Reflect.set and the builtins) converts a non-Number value as
+  ArraySetLength does. A primitive converts inline (a RangeError for a non-length, a
+  TypeError for a Symbol). An object goes to `%ArraySetLength(a, v, strict)`
+  (builtins/array.ts), which converts it twice, ToUint32 and ToNumber, as the spec does
+  (both call ToPrimitive), and then defines `length`. A `length` that became read-only
+  meanwhile is a TypeError (strict) or false (Reflect.set).
+- `DOMException`, `atob` and `btoa` are native globals with qjs's behavior and messages.
+  The code is in builtins/web.ts, which sorts after error.ts so that Error is installed
+  first; the Rust is in crates/djs-core/src/builtins/dom.rs.
+  - A DOMException is an `ObjectClass::Error` object (so `Error.isError` is true) with
+    two slots, name and message. Nothing else allocates an Error with slots, which is how
+    the getters and `error_summary` recognize one. `name`, `message` and `code` are
+    enumerable prototype getters.
+  - The 25 legacy code constants are on the constructor and the prototype, enumerable and
+    read-only. The constructor inherits from Function.prototype, not Error (WebIDL).
+  - `atob` is FromBase64's loose mode on ASCII, `btoa` base64 of code units up to 0xFF.
+    Both throw an InvalidCharacterError DOMException; a missing argument is a TypeError.
+  - The pi adapter's JS polyfill of atob/btoa is gone (js/pi/vm.ts).
+

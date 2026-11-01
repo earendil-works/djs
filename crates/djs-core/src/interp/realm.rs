@@ -278,10 +278,9 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     // Function.prototype is itself a function that returns undefined (20.2.3): a
     // builtin closure of %FunctionPrototypeBehavior%, callable once the prelude has
     // installed it (D1840).
-    let function_proto =
-        heap.alloc_object(ObjectClass::BuiltinClosure, Some(object_proto), 2)?;
-    let behavior = crate::bytecode::intrinsics::intrinsic_id("FunctionPrototypeBehavior")
-        .expect("intrinsic");
+    let function_proto = heap.alloc_object(ObjectClass::BuiltinClosure, Some(object_proto), 2)?;
+    let behavior =
+        crate::bytecode::intrinsics::intrinsic_id("FunctionPrototypeBehavior").expect("intrinsic");
     heap.set_object_slot(function_proto, 0, Value::int(i32::from(behavior)));
     set(
         heap,
@@ -671,6 +670,22 @@ pub fn error_summary(heap: &Heap, v: Value) -> Option<String> {
             .and_then(|v| v.as_string())
             .map(|s| heap.str_to_string(s))
     };
+    // A DOMException keeps them in its two slots (D1840): its `name` and `message`
+    // are getters.
+    if heap.object_slot_count(o) == 2 {
+        let slot = |i| {
+            heap.object_slot(o, i)
+                .as_string()
+                .map(|s| heap.str_to_string(s))
+                .unwrap_or_default()
+        };
+        let (name, message) = (slot(0), slot(1));
+        return Some(if message.is_empty() {
+            name
+        } else {
+            alloc::format!("{name}: {message}")
+        });
+    }
     let name = get(atoms::NAME)
         .or_else(|| native_error_name(heap, o).map(String::from))
         .unwrap_or_default();

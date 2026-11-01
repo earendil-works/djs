@@ -134,6 +134,18 @@ declare function WellKnownSymbol(name: Str): Sym;
 declare function RealmIntrinsic(name: Str): Obj;
 /** An object with [[ErrorData]] and prototype `proto`. @leaf */
 declare function ErrorCreate(proto: Obj): Obj;
+/** A DOMException: an object with [[ErrorData]], its name and message in slots (D1840). @leaf */
+declare function DOMExceptionCreate(proto: Obj, name: Str, message: Str): Obj;
+/** Slot i (0 name, 1 message) of a DOMException; undefined if v is not one. @leaf */
+declare function DOMExceptionField(v: Value, i: i32): Value;
+/** The legacy code of a DOMException name, 0 if it has none. @leaf */
+declare function DOMExceptionCode(name: Str): i32;
+/** The name of the legacy code constant i, 1 to 25 (`INDEX_SIZE_ERR`, ...). @leaf */
+declare function DOMExceptionConstant(i: i32): Str;
+/** btoa's base64 of the code units of s; undefined if one is above 0xFF. @leaf */
+declare function Btoa(s: Str): Value;
+/** atob's forgiving-base64 decoding of s into a string of bytes; undefined if invalid. @leaf */
+declare function Atob(s: Str): Value;
 /**
  * Defines `o.stack` (D1282) from the current frames, without the prelude frames at the
  * top: an Error constructor does not show itself. @leaf

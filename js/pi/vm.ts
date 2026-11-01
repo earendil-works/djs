@@ -96,7 +96,7 @@ const SCRIPT_PREFIX = "return (async (tools, console) => {";
 
 /**
  * Globals quickjs-wasi's host layer gives pi's scripts that djs does not have (`queueMicrotask`
- * is native since 0059), defined before
+ * is native since 0059, `atob`/`btoa` since 0084), defined before
  * pi's prelude so its lockdown freezes them too. `performance.now()` counts from the VM's
  * start on the VM clock (deterministic mode: from `startedAt`, as pi's quickjs VM does).
  */
@@ -108,45 +108,6 @@ let origin = 0;
 const performance = {};
 Object.defineProperty(performance, "now", { value: { now() { return now() - origin; } }.now, writable: true, configurable: true });
 define("performance", performance);
-const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-const invalidCharacter = (message) => {
-  const error = new Error(message);
-  Object.defineProperty(error, "name", { value: "InvalidCharacterError", writable: true, configurable: true });
-  return error;
-};
-define("btoa", { btoa(data) {
-  if (arguments.length === 0) throw new TypeError("btoa: 1 argument required");
-  const s = String(data);
-  let out = "";
-  for (let i = 0; i < s.length; i += 3) {
-    const a = s.charCodeAt(i), b = s.charCodeAt(i + 1), c = s.charCodeAt(i + 2);
-    if (a > 255 || b > 255 || c > 255) throw invalidCharacter("btoa: the string contains characters outside of Latin1");
-    const n = (a << 16) | ((b || 0) << 8) | (c || 0);
-    out += ALPHABET[n >> 18] + ALPHABET[(n >> 12) & 63] +
-      (i + 1 < s.length ? ALPHABET[(n >> 6) & 63] : "=") + (i + 2 < s.length ? ALPHABET[n & 63] : "=");
-  }
-  return out;
-} }.btoa);
-define("atob", { atob(data) {
-  if (arguments.length === 0) throw new TypeError("atob: 1 argument required");
-  let s = "";
-  for (const ch of String(data)) if (ch !== " " && ch !== "\\t" && ch !== "\\n" && ch !== "\\f" && ch !== "\\r") s += ch;
-  if (s.length % 4 === 0 && s.endsWith("==")) s = s.slice(0, -2);
-  else if (s.length % 4 === 0 && s.endsWith("=")) s = s.slice(0, -1);
-  if (s.length % 4 === 1) throw invalidCharacter("atob: the string is not correctly encoded");
-  let out = "", bits = 0, count = 0;
-  for (let i = 0; i < s.length; i++) {
-    const v = ALPHABET.indexOf(s[i]);
-    if (v === -1) throw invalidCharacter("atob: the string is not correctly encoded");
-    bits = (bits << 6) | v;
-    count += 6;
-    if (count >= 8) {
-      count -= 8;
-      out += String.fromCharCode((bits >> count) & 255);
-    }
-  }
-  return out;
-} }.atob);
 // The host sets the origin per run, after a VM image with the prelude may have been reused.
 return (time) => { origin = time; };
 `;

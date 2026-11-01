@@ -307,8 +307,8 @@ At 0048: 4053/4802 compared files match, 0 differ, 749 are djs syntax errors.
 
 ## Known differences (0082)
 
-What is left in the ratchets (`tests/test262/expected-failures.txt`, 56 active tests;
-`tests/corpus/expected-failures.txt`, 4 cases) and why. Everything else in the active
+What is left in the ratchets (`tests/test262/expected-failures.txt`, 43 active tests;
+`tests/corpus/expected-failures.txt`, 2 cases) and why. Everything else in the active
 group passes. Update this list when an entry goes away or a new one is accepted.
 
 **By design** (no fix planned; 40 test262 tests):
@@ -332,26 +332,18 @@ group passes. Update this list when an entry goes away or a new one is accepted.
   before the right side runs. djs resolves it at the store, as qjs does (also in
   tests/test262/oracle-failures.txt).
 
-**Open, belongs to another area** (16 test262 tests, sent to the coordinator):
+**Open, owned by infra** (3 test262 tests): typed arrays on resizable buffers that
+shrink during the operation: Array/prototype/fill/typed-array-resize,
+Object/freeze/typedarray-backed-by-resizable-buffer and
+TypedArray/prototype/subarray/resizable-buffer.
 
-- Function.prototype is an ordinary object, not a function that returns undefined (heap
-  and realm): built-ins/Function/prototype/S15.3.3.1_A1, S15.3.4_A1, S15.3.4_A2_T1-T3,
-  language/expressions/property-accessors/S11.2.1_A4_T3, and
-  language/expressions/instanceof/primitive-prototype-with-primitive and
-  prototype-getter-with-object{,-throws} (9 tests).
-- Setting an array's `length` to a value that is not a Number (`a.length = true`, `new
-  Number(6)`, an object with `Symbol.toPrimitive`): the interpreter's [[Set]] skips
-  ArraySetLength's ToUint32/ToNumber and throws RangeError. Tests:
-  built-ins/Array/S15.4.5.2_A3_T2, length/S15.4.5.1_A1.3_T1/T2 and
-  length/define-own-prop-length-coercion-order-set (4).
-- Typed arrays on resizable buffers that shrink during the operation:
-  Array/prototype/fill/typed-array-resize, Object/freeze/typedarray-backed-by-resizable-buffer
-  and TypedArray/prototype/subarray/resizable-buffer (3).
+**Later** (2 difftest cases): the immutable ArrayBuffer proposal
+(`transferToImmutable`, `sliceToImmutable`) in dquickts/builtin/test_immutable_array_buffer.js
+and test_typed_array.js.
 
-**difftest** (4 cases): `btoa`/`atob` (dquickts/builtin/test_base64.js) and
-`DOMException` (test_dom_exception.js) are qjs host extensions, not ECMAScript. The
-immutable ArrayBuffer proposal (`transferToImmutable`, `sliceToImmutable`) is missing
-in test_immutable_array_buffer.js and test_typed_array.js. Their routing is open.
+Fixed since 0082 (0084, D1840): Function.prototype is a function (9 tests), [[Set]] of
+an array's `length` converts non-Number values (4), and `atob`/`btoa` and
+`DOMException` are native globals as in qjs (2 difftest cases).
 
 ## The gate
 

@@ -1,0 +1,15 @@
+aGVsbG8= hello hello /w==
+true true InvalidCharacterError 5 string is not correctly encoded
+true true InvalidCharacterError 5 string contains an invalid character
+TypeError 1 argument required
+NotFoundError: gone 8 true 0 8
+[object DOMException] true
+TypeError DOMException object expected
+20 true
+function undefined [object Function]
+TypeError
+2
+1 [1]
+0 number,number
+RangeError
+true 3
