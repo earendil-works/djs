@@ -187,6 +187,17 @@ declare function WrapPrimitive(v: Value, proto: Obj): Obj;
  */
 declare function PrimitiveValue(v: Value): Value;
 
+// ---- Reflect (0038) ----------------------------------------------------------------------
+
+/** Construct ( F, args, newTarget ) with the arguments in a dense array. @reentrant */
+declare function ConstructWithArray(f: Value, args: Obj, newTarget: Value): Obj;
+/** [[Get]] ( P, Receiver ): a getter runs with `receiver` as this. @reentrant */
+declare function GetWithReceiver(o: Obj, key: Value, receiver: Value): Value;
+/** OrdinarySet ( O, P, V, Receiver ): false when refused; a setter runs with receiver. @reentrant */
+declare function SetWithReceiver(o: Obj, key: Value, v: Value, receiver: Value): boolean;
+/** [[Delete]] ( P ): false for a non-configurable property. @leaf */
+declare function DeleteProperty(o: Obj, key: Value): boolean;
+
 // ---- Functions (0031) -----------------------------------------------------------------
 
 /** Call ( F, V, args ) with the arguments in a dense array. @reentrant */

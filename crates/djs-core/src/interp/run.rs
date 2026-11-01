@@ -2620,7 +2620,18 @@ impl<'h> Exec<'h> {
     }
 
     /// `new f(args)`: `f a1 .. an` on the stack.
-    fn construct(&mut self, mut argc: u32, next: u32) -> Step {
+    fn construct(&mut self, argc: u32, next: u32) -> Step {
+        self.construct_with(argc, next, None)
+    }
+
+    /// [[Construct]] of `f a1 .. an` with an explicit new.target (Reflect.construct);
+    /// `None` means new.target is `f`.
+    pub(super) fn construct_with(
+        &mut self,
+        mut argc: u32,
+        next: u32,
+        mut new_target: Option<Value>,
+    ) -> Step {
         let base = self.sp - 1 - argc;
         let mut f = self.get(base);
         let Some(mut fo) = f.as_object() else {
@@ -2635,6 +2646,7 @@ impl<'h> Exec<'h> {
         // A bound function constructs its target (new.target is the target too, as
         // the spec has it when new.target is the bound function itself).
         while self.heap.object_class(fo) == ObjectClass::BoundFunction {
+            let bound = f;
             // `f a1 .. an` gets a `this` slot for unwrap_bound, which construct fills
             // again below.
             self.ensure(self.sp + 1)?;
@@ -2651,8 +2663,16 @@ impl<'h> Exec<'h> {
             self.sp -= 1;
             f = self.get(base);
             fo = f.as_object().expect("bound target");
+            // A new.target that is the bound function itself becomes its target.
+            if new_target == Some(bound) {
+                new_target = Some(f);
+            }
         }
-        let proto = match self.heap.find_property(fo, crate::heap::atoms::PROTOTYPE) {
+        let proto_source = new_target.and_then(|v| v.as_object()).unwrap_or(fo);
+        let proto = match self
+            .heap
+            .find_property(proto_source, crate::heap::atoms::PROTOTYPE)
+        {
             Some((_, Property::Data { value, .. })) => value.as_object(),
             None => None,
             Some(_) => return type_error("not supported yet: getter for 'prototype'"),
@@ -2667,11 +2687,22 @@ impl<'h> Exec<'h> {
         }
         self.set(base + 1, this);
         self.sp += 1;
-        let r = self.call(base, argc, Continuation::ConstructResult, next)?;
+        // An explicit new.target is held in a handle across `call`, whose safepoint may
+        // move it; without one it is the callee, read back from the frame.
+        let held = match new_target {
+            Some(v) => Some(self.heap.new_handle(v)?),
+            None => None,
+        };
+        let r = self.call(base, argc, Continuation::ConstructResult, next);
+        let nt = held.map(|h| {
+            let v = self.heap.get_handle(h);
+            self.heap.drop_handle(h);
+            v
+        });
+        let r = r?;
         let flags = self.header_int(frame::FLAGS) as i32 | frame::FLAG_CONSTRUCT;
         self.set(self.hp + frame::FLAGS, Value::int(flags));
-        // The callee as it is now: `call` ends at a safepoint, which may have moved `f`.
-        let f = self.get(self.bp);
+        let f = nt.unwrap_or_else(|| self.get(self.bp));
         self.set(self.hp + frame::NEW_TARGET, f);
         Ok(r)
     }

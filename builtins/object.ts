@@ -59,10 +59,10 @@ function ToPropertyDescriptor(attributes: Value): Obj {
 }
 
 /**
- * DefinePropertyOrThrow ( O, P, desc ), 7.3.8, with a descriptor record. An array's
- * `length` value goes through ArraySetLength's conversions first (10.4.2.4).
+ * [[DefineOwnProperty]] with a descriptor record. An array's `length` value goes
+ * through ArraySetLength's conversions first (10.4.2.4).
  */
-function DefinePropertyOrThrow(o: Obj, key: Value, desc: Obj): void {
+function DefineOwnProperty(o: Obj, key: Value, desc: Obj): boolean {
   if (IsArray(o) && key === "length" && HasOwnProperty(desc, "value")) {
     const v: Value = Get(desc, "value");
     const newLen: f64 = ToNumber(v);
@@ -75,7 +75,12 @@ function DefinePropertyOrThrow(o: Obj, key: Value, desc: Obj): void {
     }
     CreateDataPropertyOrThrow(desc, "value", newLen);
   }
-  if (!DefineOwnPropertyFromRecord(o, key, desc)) {
+  return DefineOwnPropertyFromRecord(o, key, desc);
+}
+
+/** DefinePropertyOrThrow ( O, P, desc ), 7.3.8, with a descriptor record. */
+function DefinePropertyOrThrow(o: Obj, key: Value, desc: Obj): void {
+  if (!DefineOwnProperty(o, key, desc)) {
     if (OwnPropertyAttributes(o, key) < 0) {
       throw NewTypeError("object is not extensible");
     }

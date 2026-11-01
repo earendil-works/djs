@@ -1,0 +1,20 @@
+construct [1,true,"g",true]
+construct plain 3
+construct Error ["m",true]
+construct Array [3,true]
+construct bad nt TypeError: max is not a constructor
+apply 5
+apply bad TypeError: not a function
+get [1,9,5]
+set [true,7,true,1,false,true,3]
+set receiver nonwritable false
+has [true,true,false]
+define [true,false,true]
+delete [true,false,false]
+ownKeys 4
+proto [true,true,false]
+ext [true,true,false]
+gopd 1
+non-object TypeError: not an object
+tag ["[object Reflect]",0,3,2,2,3]
+=== completed

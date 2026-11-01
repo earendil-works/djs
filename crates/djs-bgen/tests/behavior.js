@@ -92,7 +92,7 @@ const I = {
   },
   NewTypeError: (m) => new TypeError(m),
   NewRangeError: (m) => new RangeError(m),
-  NewNotConstructorError: (f) => new TypeError(f.name + " is not a constructor"),
+  NewNotConstructorError: (f) => new TypeError(f.name ? f.name + " is not a constructor" : "not a constructor"),
   WellKnownSymbol: (name) => Symbol[name],
   InstallMethod: (target, key, f, length) => {
     installed[target + (typeof key === "symbol" ? "[" + key.description + "]" : "." + key)] = { f, length };
@@ -228,6 +228,10 @@ const I = {
     throw new Error("intrinsic misuse: StringIteratorTarget is not stood in");
   },
   StrCodePointString: (s, i) => String.fromCodePoint(s.codePointAt(i)),
+  ConstructWithArray: (f, args, nt) => (check(Array.isArray(args), "ConstructWithArray"), Reflect.construct(f, args, nt)),
+  GetWithReceiver: (o, k, r) => (check(isObject(o) && !isObject(k), "GetWithReceiver"), Reflect.get(o, k, r)),
+  SetWithReceiver: (o, k, v, r) => (check(isObject(o) && !isObject(k), "SetWithReceiver"), Reflect.set(o, k, v, r)),
+  DeleteProperty: (o, k) => (check(isObject(o) && !isObject(k), "DeleteProperty"), Reflect.deleteProperty(o, k)),
   StrLocaleCompare: (a, b) => a.localeCompare(b),
   StrCharCodeAt: (s, i) => (check(typeof s === "string" && Number.isInteger(i) || !isFinite(i), "StrCharCodeAt"), i >= 0 && i < s.length ? s.charCodeAt(i) : NaN),
   StrCodePointAt: (s, i) => (i >= 0 && i < s.length ? s.codePointAt(i) : undefined),
@@ -993,5 +997,45 @@ same("Object.groupBy", Object.groupBy, (f) => f(null, () => 1));
 same("Object.fromEntries", Object.fromEntries, (f) => f(undefined));
 same("Object.fromEntries", Object.fromEntries, (f) => f(5));
 same("globalThis.AggregateError", AggregateError, (f) => f(5));
+
+// ---- 0038: Reflect ---------------------------------------------------------------------
+
+const reflectTargets = (log) => [{ a: 1, get g() { log.push("getter:" + String(this.tag)); return 2; } }, [1, 2], logged({ p: 1 }, log), Object.freeze({ f: 1 }), function fn(a) { return [this === undefined ? "u" : typeof this, a]; }, 5, null, "s"];
+const nReflect = reflectTargets([]).length;
+for (let i = 0; i < nReflect; i++) {
+  for (const key of ["a", "g", "p", "f", "length", 0, toPrim("a"), Symbol.iterator]) {
+    same("Reflect.get", Reflect.get, (f, log) => f(reflectTargets(log)[i], key));
+    same("Reflect.get", Reflect.get, (f, log) => f(reflectTargets(log)[i], key, { tag: "recv" }));
+    same("Reflect.has", Reflect.has, (f, log) => f(reflectTargets(log)[i], key));
+    same("Reflect.set", Reflect.set, (f, log) => { const t = reflectTargets(log)[i]; return [f(t, key, 9), t]; });
+    same("Reflect.set", Reflect.set, (f, log) => { const r = {}; return [f(reflectTargets(log)[i], key, 9, r), r]; });
+    same("Reflect.deleteProperty", Reflect.deleteProperty, (f, log) => f(reflectTargets(log)[i], key));
+    same("Reflect.getOwnPropertyDescriptor", Reflect.getOwnPropertyDescriptor, (f, log) => f(reflectTargets(log)[i], key));
+    same("Reflect.defineProperty", Reflect.defineProperty, (f, log) => f(reflectTargets(log)[i], key, { value: 3 }));
+  }
+  for (const name of ["getPrototypeOf", "isExtensible", "preventExtensions", "ownKeys"]) {
+    same("Reflect." + name, Reflect[name], (f, log) => f(reflectTargets(log)[i]));
+  }
+  same("Reflect.setPrototypeOf", Reflect.setPrototypeOf, (f, log) => f(reflectTargets(log)[i], null));
+  same("Reflect.apply", Reflect.apply, (f, log) => f(reflectTargets(log)[i], 1, [2]));
+  same("Reflect.apply", Reflect.apply, (f, log) => f(Math.max, null, reflectTargets(log)[i]));
+  same("Reflect.construct", Reflect.construct, (f, log) => f(reflectTargets(log)[i], []));
+}
+// (An arrow as newTarget: qjs says " is not a constructor" with an empty name; djs
+// says "not a constructor".)
+function RC(a) { this.a = a; this.nt = new.target === RD; }
+function RD() {}
+for (const [args, nt] of [[[1], undefined], [[2], RD], [{ length: 1, 0: 3 }, RD], [5, RD], [[1], 5]]) {
+  same("Reflect.construct", Reflect.construct, (f) => {
+    const o = nt === undefined ? f(RC, args) : f(RC, args, nt);
+    return [o.a, o.nt, Object.getPrototypeOf(o) === (nt === RD ? RD.prototype : RC.prototype)];
+  });
+}
+for (const C of [Error, TypeError, Array, Object, Boolean, Number, String, Date]) {
+  same("Reflect.construct", Reflect.construct, (f) => Object.getPrototypeOf(f(C, [], RD)) === RD.prototype);
+}
+for (const name of Object.getOwnPropertyNames(Reflect)) {
+  same("Reflect." + name, Reflect[name], () => installed["Reflect." + name].length === Reflect[name].length);
+}
 
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));

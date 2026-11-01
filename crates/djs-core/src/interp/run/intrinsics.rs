@@ -78,6 +78,10 @@ const HAS_OWN_PROPERTY: u16 = id("HasOwnProperty");
 const OWN_PROPERTY_ATTRIBUTES: u16 = id("OwnPropertyAttributes");
 const OWN_PROPERTY_KEYS: u16 = id("OwnPropertyKeys");
 const CALL_WITH_ARRAY: u16 = id("CallWithArray");
+const CONSTRUCT_WITH_ARRAY: u16 = id("ConstructWithArray");
+const GET_WITH_RECEIVER: u16 = id("GetWithReceiver");
+const SET_WITH_RECEIVER: u16 = id("SetWithReceiver");
+const DELETE_PROPERTY: u16 = id("DeleteProperty");
 const BOUND_FUNCTION_CREATE: u16 = id("BoundFunctionCreate");
 const FUNCTION_TO_STRING: u16 = id("FunctionToString");
 const NUMBER_POW: u16 = id("NumberPow");
@@ -898,6 +902,60 @@ impl Exec<'_> {
                 self.sp = base + 2 + n;
                 return self.call(base, n, Continuation::PushResult, next);
             }
+            CONSTRUCT_WITH_ARRAY => {
+                // `f args newTarget` becomes `f a1 .. an`.
+                let Some(args) = arg(self, 1).as_object() else {
+                    return bad_argument(info.name);
+                };
+                let new_target = arg(self, 2);
+                let n = self.heap.array_length(args);
+                self.ensure(base + 1 + n)?;
+                for i in 0..n {
+                    let v = self
+                        .heap
+                        .get_element_fast(args, i)
+                        .unwrap_or(Value::UNDEFINED);
+                    self.set(base + 1 + i, v);
+                }
+                self.sp = base + 1 + n;
+                return self.construct_with(n, next, Some(new_target));
+            }
+            GET_WITH_RECEIVER => {
+                let key = object::key(self.heap, arg(self, 1))?;
+                let receiver = arg(self, 2);
+                match self.lookup(a0, key)? {
+                    Ok(v) => v,
+                    Err(getter) => {
+                        self.sp = base;
+                        self.pc = next;
+                        return self.call_accessor(getter, receiver, None);
+                    }
+                }
+            }
+            SET_WITH_RECEIVER => {
+                let Some(o) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                let key = object::key(self.heap, arg(self, 1))?;
+                let (v, receiver) = (arg(self, 2), arg(self, 3));
+                match self.ordinary_set(o, key, v, receiver)? {
+                    Ok(done) => Value::bool(done),
+                    Err(setter) => {
+                        // `true` goes below the setter's frame; its result is dropped.
+                        self.sp = base;
+                        self.push(Value::TRUE);
+                        self.pc = next;
+                        return self.call_accessor(setter, receiver, Some(v));
+                    }
+                }
+            }
+            DELETE_PROPERTY => {
+                let Some(o) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                let key = object::key(self.heap, arg(self, 1))?;
+                Value::bool(self.heap.delete_own_property(o, key))
+            }
             BOUND_FUNCTION_CREATE => {
                 let (Some(target), Some(args)) = (a0.as_object(), arg(self, 2).as_object()) else {
                     return bad_argument(info.name);
@@ -1020,6 +1078,43 @@ impl Exec<'_> {
         self.name_and_length(fo, name, length.as_number().unwrap_or(0.0))?;
         self.mark_builtin(fo, OBJ_BUILTIN);
         Ok(())
+    }
+
+    /// OrdinarySet ( O, P, V, Receiver ), 10.1.9.2, without calling a setter:
+    /// `Ok(result)`, or `Err(setter)` for the caller to call with the receiver.
+    fn ordinary_set(
+        &mut self,
+        o: Obj,
+        key: Atom,
+        v: Value,
+        receiver: Value,
+    ) -> Result<Result<bool, Value>, Fault> {
+        match self.heap.find_property(o, key) {
+            Some((_, Property::Accessor { setter, .. })) => {
+                return Ok(if setter.is_undefined() {
+                    Ok(false)
+                } else {
+                    Err(setter)
+                });
+            }
+            Some((_, Property::Data { flags, .. })) if !flags.writable() => return Ok(Ok(false)),
+            _ => {}
+        }
+        let Some(r) = receiver.as_object() else {
+            return Ok(Ok(false));
+        };
+        Ok(Ok(match self.heap.get_own_property(r, key) {
+            Some(Property::Accessor { .. }) => false,
+            Some(Property::Data { flags, .. }) if !flags.writable() => false,
+            Some(_) => {
+                let d = PropertyDescriptor {
+                    value: Some(v),
+                    ..Default::default()
+                };
+                self.heap.define_own_property(r, key, &d)?
+            }
+            None => self.heap.create_data_property(r, key, v)?,
+        }))
     }
 
     /// The property key of an install call (a string or a symbol) and the function name

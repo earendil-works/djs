@@ -157,25 +157,31 @@ function ArrayPrototypeIncludes(this: Value, searchElement: Value, fromIndex?: V
 }
 
 /**
- * Array ( ...values ), 23.1.1.1. Subclassing (a new.target other than Array) is not
- * supported yet: the result always has %Array.prototype%.
+ * Array ( ...values ), 23.1.1.1.
  * @constructor Array
  * @length 1
  */
 function ArrayConstructor(...values: Value[]): Obj {
+  let a: Obj = values;
   if (LengthOfArrayLike(values) === 1) {
     const len: Value = Get(values, 0);
-    if (!IsNumber(len)) {
-      return values;
+    if (IsNumber(len)) {
+      const n: f64 = AsNumber(len);
+      if (!(n >= 0 && n <= 4294967295 && ToIntegerOrInfinityNumber(n) === n)) {
+        throw NewRangeError("invalid array length");
+      }
+      a = ArrayCreate(n);
     }
-    const n: f64 = AsNumber(len);
-    if (!(n >= 0 && n <= 4294967295 && ToIntegerOrInfinityNumber(n) === n)) {
-      throw NewRangeError("invalid array length");
-    }
-    return ArrayCreate(n);
   }
-  // The rest parameter is a fresh array of the values.
-  return values;
+  // The rest parameter is already a fresh array of the values; a new.target other than
+  // Array (Reflect.construct, subclasses) gives it that constructor's prototype.
+  if (new.target !== undefined) {
+    const proto: Obj = GetPrototypeFromConstructor(new.target, "ArrayPrototype");
+    if (proto !== RealmIntrinsic("ArrayPrototype")) {
+      SetPrototypeOf(a, proto);
+    }
+  }
+  return a;
 }
 
 /**
