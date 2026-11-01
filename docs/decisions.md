@@ -1276,7 +1276,6 @@ A `@builtin` path may start with a `%Name%` segment (`%ArrayIteratorPrototype%.n
 through as the `%InstallMethod` target string, which the runtime resolves to the realm
 intrinsic (0030). Only the first segment may be `%Name%`.
 
-
 ## D1345: Builtins over iterables
 date: 2026-11-01 · by: infra · issue: 0034
 builtins/iterable.ts builds on 0029's `%GetIterator`: IterableToList, Array.from's
@@ -1339,7 +1338,6 @@ pointer. The store/reload chain cost more than the ops themselves (loop.js: 555 
 385 ms). Fuel, `pc` and safepoints are charged exactly as `step` charges them, so fuel
 counts, suspension points and GC stress are unchanged. A new op belongs in `fast_step`
 only if it is simple and stack-only. Keep its semantics identical to its `exec` arm.
-
 
 ## D1292: for-in/of code layout and iterator close
 date: 2026-11-01 · by: lexer · issue: 0029
@@ -2002,7 +2000,6 @@ prototype" for a refusing proxy). Object literals keep their own `__proto__: v` 
 of a callable proxy is `function <name>() { [native code] }` with the name read by
 [[Get]] (a trap call), as qjs does.
 
-
 ## D1332: RegExp objects, suspendable matching and regex literals
 date: 2026-11-01 · by: num · issue: 0033
 
@@ -2337,7 +2334,6 @@ Record; a phase slot says where to resume. One reaction job per await, as the sp
 Await, so the tick order matches qjs (tests/data/e2e/array_from_async.js). The same
 pattern fits other async builtins (AsyncDisposableStack).
 
-
 ## D1504: Undoing a log entry restores the slot's generation
 date: 2026-11-01 · by: num · issue: 0050
 The matcher's undo log entries are now `slot, old value, old slot_gen` triples (they were
@@ -2351,7 +2347,6 @@ the compiler reuses them after a loop, every retry added an entry.
 pi's base64 check `/^[A-Za-z0-9+/]+={0,2}$/` on non-matching megabytes overflowed the
 backtrack stack that way. Now 5 MB pass and fail in constant stack. Log entries cost one
 word more.
-
 
 ## D1482: Enums and namespaces are closures; their members resolve after parsing
 date: 2026-11-03 · by: lexer · issue: 0048
@@ -2439,7 +2434,6 @@ modules, so `compiler::strip_types` sets `Parser::strip`, which accepts `import`
 run) and erases type-only imports, exports and specifiers as ts-blank-space does. Normal
 compilation is unchanged: `import`/`export` stay "unsupported keyword" errors.
 
-
 ## D1513: WeakRef and FinalizationRegistry on ephemeron tables; cleanup jobs after a collection
 date: 2026-11-03 · by: heap · issue: 0051
 No collector changes: the weakness comes from D1382's EphemeronArray (a pair whose key
@@ -2472,7 +2466,6 @@ pi's suite expects `eval`/`Function` to exist, and the compiler ships in the VM 
 implements indirect (global) eval and the four dynamic function constructors. A call
 `eval(x)` behaves as indirect eval. Direct eval (access to the caller's scope) stays a
 non-goal (ARCH non-goals), and test262 tests that need it stay skipped.
-
 
 ## D1560: RegExp exec and test without protocol overhead
 date: 2026-11-01 · by: num · issue: 0056
@@ -2755,7 +2748,6 @@ no module loader, the promise is rejected one job later with qjs's no-loader err
 stays skipped (modules): with this, 354 of its 682 tests would pass (syntax and
 rejection-path tests), the rest need module fixtures.
 
-
 ## D1610: Append ropes: `s += x` writes into a growable buffer
 date: 2026-11-01 · by: num · issue: 0061
 Amends ARCH "Strings" (ropes for `+=`).
@@ -2865,3 +2857,45 @@ starts count the same polls (js/test/pi-vm.test.ts). A stop request during the p
 waits until it has finished. The deterministic fingerprint adds `host <fnv1a of
 HOST_GLOBALS>` after the prelude hash, because the adapter's own globals are part of
 what a script observes; `DETERMINISTIC_VERSION` stays for other changes to the adapter.
+
+## D1640: The REPL's line editor is hand-rolled, on `stty`
+date: 2026-11-01 · by: repl · issue: 0064
+`djs repl` edits lines itself (crates/djs-cli/src/repl/term.rs, about 300 lines) instead
+of using rustyline or similar. A crate would bring a dependency tree (nix, unicode
+tables, ...) and would still not solve the hard part: stopping a running input on
+Ctrl-C needs a signal handler, which std does not have. Instead the terminal goes to
+non-canonical mode without echo or signal keys (`stty -icanon -echo -isig -iexten`, the
+saved settings restored on drop), so Ctrl-C is a byte. One thread reads stdin into a
+channel; the editor reads keys from it, and the run loop polls it between fuel slices
+(djs can always stop between slices) and calls `vm.abort()`. No `unsafe`, no libc. Without
+a terminal, or without `stty`, the REPL reads plain lines (line mode, used by the tests).
+
+## D1641: REPL inputs: expressions, Scripts, and a rewrite for top-level await
+date: 2026-11-01 · by: repl · issue: 0064
+Each input is compiled in this order (crates/djs-cli/src/repl/input.rs, docs/cli.md):
+1. As an expression, unless it starts with `function`/`async function`/`class`: the async
+   body `return [(input\n)];`, whose value is printed. The one-element array keeps a
+   promise value from being adopted. This stands in for Script completion values until
+   0058; `SCRIPT_COMPLETION_VALUES` switches the REPL to the Script's value then, and the
+   wrapper remains only for `await` expressions.
+2. As a Script (D004), so declarations persist as globals. No value is printed.
+3. If it contains `await`: rewritten into an async body whose top-level declarations
+   assign globals, which a Script declares first: `let`/`const`/`var` keywords become
+   `0,` padded to the same width (so `let {a} = o` is the destructuring assignment
+   `0,  {a} = o`), `class C` becomes `C = class C …;`, and a function declaration is
+   followed by `globalThis.f = f`. Assigning globals (instead of copying the body's
+   locals out at the end, as the alternative was) keeps closures made in the input
+   bound to the globals, as node's REPL does. Gaps: `const` becomes `let`, statements with
+   `await` print no value, a throw leaves the declared names `undefined`.
+4. Otherwise, if a compile error is at the end of the input (or is an unterminated
+   template or comment), the REPL reads another line; else it reports the error.
+The top-level declarations are found with djs's own lexer, a bracket stack, and the
+previous token to tell a regex from a division.
+
+## D1642: `Vm::run_metered` and `Vm::backtrace`
+date: 2026-11-01 · by: repl · issue: 0064
+Two additive accessors for debuggers: `run_metered(fuel) -> (Status, used)` (the REPL's
+fuel accounting and limit; `used` can exceed `fuel` by the cost of the last instruction),
+and `backtrace()`, the `Error.stack`-style trace of a suspended call (out of fuel or
+parked), empty without frames. They need two one-line `pub(crate)` getters on `Exec`
+(`fuel_left`, `pc`); `Vm::run` is unchanged.

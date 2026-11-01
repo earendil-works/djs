@@ -1,0 +1,239 @@
+//! `djs repl` driven through stdin in line mode (stdin is not a terminal: no prompts, no
+//! editing), with scripted inputs and the expected output.
+
+use std::io::Write;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
+
+/// Runs the REPL on `input` and returns its stdout. Killed after 60 s.
+fn repl_with(args: &[&str], input: &str) -> String {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_djs"))
+        .arg("repl")
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("djs runs");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.as_bytes())
+        .unwrap();
+    let start = Instant::now();
+    while child.try_wait().unwrap().is_none() {
+        if start.elapsed() > Duration::from_secs(60) {
+            child.kill().unwrap();
+            panic!("djs repl hung on:\n{input}");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let out = child.wait_with_output().unwrap();
+    assert!(out.status.success(), "exit status {:?}", out.status);
+    String::from_utf8(out.stdout).unwrap()
+}
+
+fn repl(input: &str) -> String {
+    repl_with(&[], input)
+}
+
+#[track_caller]
+fn check(input: &str, expected: &str) {
+    assert_eq!(repl(input), expected, "input:\n{input}");
+}
+
+#[test]
+fn expressions_print_their_value() {
+    check(
+        "1 + 1\n'a' + 'b'\n-0\n10n ** 20n\n[1, , 'x']\nnull\nundefined\nSymbol('s')\n",
+        "2\n'ab'\n-0\n100000000000000000000n\n[ 1, <1 empty item>, 'x' ]\nnull\nundefined\nSymbol(s)\n",
+    );
+    // A statement prints nothing (until Script completion values, issue 0058).
+    check("if (true) { 1 }\n", "");
+}
+
+#[test]
+fn declarations_persist() {
+    check(
+        "let x = 2\nconst y = 3\nfunction f(a) { return a * x + y }\nclass P { constructor() { this.v = f(1) } }\nvar z = 'z'\nf(10)\nnew P()\nz\nx = 5\nf(1)\n",
+        "23\nP { v: 5 }\n'z'\n5\n8\n",
+    );
+    // Scripts redeclare as Scripts do.
+    check(
+        "let x = 1\nlet x = 2\nx\n",
+        "Uncaught SyntaxError: redeclaration of 'x'\n    at <eval> (repl)\n1\n",
+    );
+}
+
+#[test]
+fn multi_line_input() {
+    check(
+        "function add(a,\n  b) {\n  return a + b\n}\nadd(1,\n2)\n`one\ntwo`\n/* a\ncomment */ 7\n[\n1,\n2\n]\n",
+        "3\n'one\\ntwo'\n7\n[ 1, 2 ]\n",
+    );
+    // An input still incomplete at the end of input is an error.
+    check(
+        "let a = (1 +\n",
+        "SyntaxError: unexpected token in expression: 'end of input' at repl:1:13\n",
+    );
+}
+
+#[test]
+fn errors() {
+    check(
+        "throw new TypeError('bad')\nnull.x\nlet 5\n1\n",
+        "Uncaught TypeError: bad\n    at <eval> (repl:1:7)\n\
+         Uncaught TypeError: cannot read property 'x' of null\n    at <eval> (repl:1:14)\n\
+         SyntaxError: variable name expected at repl:1:5\n1\n",
+    );
+    check(
+        "Promise.reject(new Error('no'))\n",
+        "Promise { <rejected> [Error: no] }\n\
+         Possibly unhandled promise rejection: Error: no\n    at <eval> (repl:1:25)\n",
+    );
+}
+
+#[test]
+fn top_level_await() {
+    check(
+        "await Promise.resolve(1)\nlet a = await Promise.resolve(2), {b, c: [d]} = await Promise.resolve({b: 3, c: [4]})\n[a, b, d]\nasync function af() { return a + (await 10) }\nawait af()\nclass K { k = 1 }; await 0\nnew K()\nconst p = await new Promise(r => r(Promise.resolve(5)))\np\n",
+        "1\n[ 2, 3, 4 ]\n12\nK { k: 1 }\n5\n",
+    );
+    // The value of a promise is not adopted: `await` gives what the expression does.
+    check(
+        "Promise.resolve(3)\nawait Promise.reject(new RangeError('r'))\n",
+        "Promise { 3 }\nUncaught RangeError: r\n    at <eval> (repl:1:31)\n",
+    );
+    // Closures in the body see the globals, not copies.
+    check(
+        "let n = 0; const inc = () => ++n; await 0\ninc(), inc()\nn\n",
+        "2\n2\n",
+    );
+}
+
+#[test]
+fn printer() {
+    check(
+        "let o = {a: 1, 'b-c': [1, {d: {e: {f: {}}}}], [Symbol.iterator]: 2}; o.self = o\no\n",
+        "<ref *1> {\n  a: 1,\n  'b-c': [ 1, { d: { e: [Object] } } ],\n  self: [Circular *1],\n  [Symbol(Symbol.iterator)]: 2\n}\n",
+    );
+    check(
+        "new Map([[1, {a: 1}]])\nnew Set(['x'])\nnew WeakMap()\nnew Uint8Array([1, 2])\nnew BigInt64Array([5n])\nnew ArrayBuffer(3)\n",
+        "Map(1) { 1 => { a: 1 } }\nSet(1) { 'x' }\nWeakMap { <items unknown> }\nUint8Array(2) [ 1, 2 ]\nBigInt64Array(1) [ 5n ]\nArrayBuffer { [Uint8Contents]: <00 00 00>, byteLength: 3 }\n",
+    );
+    check(
+        "function f() {}\nf\n(() => 1)\nasync function* g() {}\ng\nclass A {}\nclass B extends A {}\nB\nf.bind(null)\nMath.max\n",
+        "[Function: f]\n[Function (anonymous)]\n[AsyncGeneratorFunction: g]\n[class B extends A]\n[Function: bound f]\n[Function: max]\n",
+    );
+    check(
+        "new Promise(() => {})\nObject.create(null)\nnew Date(0)\n/a+/gi\n({get x() { return 1 }, set y(v) {}})\nnew Number(3)\n[new Error('e')]\n",
+        "Promise { <pending> }\n[Object: null prototype] {}\n1970-01-01T00:00:00.000Z\n/a+/gi\n{ x: [Getter], y: [Setter] }\n[Number: 3]\n[ [Error: e] ]\n",
+    );
+    // Long values break into lines.
+    check(
+        "({alpha: 'aaaaaaaaaaaaaaaa', beta: 'bbbbbbbbbbbbbbbbbbbb', gamma: ['cccccccccccccccccc', 1]})\n",
+        "{\n  alpha: 'aaaaaaaaaaaaaaaa',\n  beta: 'bbbbbbbbbbbbbbbbbbbb',\n  gamma: [ 'cccccccccccccccccc', 1 ]\n}\n",
+    );
+    check(
+        "console.log('raw', 'strings', {a: 'quoted'}, [1])\n",
+        "raw strings { a: 'quoted' } [ 1 ]\nundefined\n",
+    );
+}
+
+#[test]
+fn fuel_and_suspension() {
+    check(
+        "function spin(n) { let s = 0; for (let i = 0; i < n; i++) s += i; return s }\n.fuel 10000\nspin(1e9)\nspin(10)\n.fuel off\n",
+        "fuel limit: 10000 per input\nStopped: the fuel limit (10000) ran out\n45\nfuel limit: none\n",
+    );
+    let out = repl(
+        "function spin(n) { let s = 0; for (let i = 0; i < n; i++) s += i; return s }\n.suspend-every 200\nspin(30)\n",
+    );
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines[0], "suspending every 200 fuel");
+    assert!(
+        lines[1].starts_with("[suspended, 200 fuel] at spin (repl:1:"),
+        "{out}"
+    );
+    assert_eq!(*lines.last().unwrap(), "435", "{out}");
+    // The state survives the image round trips.
+    let out = repl(
+        ".suspend-every 50\nlet acc = []; for (let i = 0; i < 3; i++) acc.push({i})\n.suspend-every off\nacc\n",
+    );
+    assert!(out.contains("\n[suspended, "), "{out}");
+    assert!(
+        out.ends_with("suspending: off\n[ { i: 0 }, { i: 1 }, { i: 2 } ]\n"),
+        "{out}"
+    );
+}
+
+#[test]
+fn snapshot_and_restore() {
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let snap = format!("{dir}/repl-test-{}.img", std::process::id());
+    let out = repl(&format!(
+        "let kept = {{v: [1, 2]}}\nfunction twice(x) {{ return 2 * x }}\n.snapshot {snap}\n.clear\ntypeof kept\n.restore {snap}\nkept\ntwice(21)\n"
+    ));
+    let lines: Vec<&str> = out.lines().collect();
+    assert!(
+        lines[0].starts_with("wrote ") && lines[0].ends_with(&snap),
+        "{out}"
+    );
+    assert_eq!(lines[1], "a fresh VM");
+    assert_eq!(lines[2], "'undefined'");
+    assert!(lines[3].starts_with("restored "), "{out}");
+    assert_eq!(&lines[4..], ["{ v: [ 1, 2 ] }", "42"]);
+    // A new process restores it too.
+    let out = repl(&format!(".restore {snap}\ntwice(kept.v[1])\n"));
+    assert!(out.ends_with("\n4\n"), "{out}");
+    std::fs::remove_file(&snap).unwrap();
+    check(
+        ".restore /nonexistent/x.img\n",
+        "cannot read /nonexistent/x.img: No such file or directory (os error 2)\n",
+    );
+}
+
+#[test]
+fn meta_commands() {
+    let out = repl(".gc\n.heap\n.time on\n1\n.fuel\n");
+    assert!(out.starts_with("arena: "), "{out}");
+    assert!(out.contains("\nFuncTemplate "), "{out}");
+    assert!(out.contains("\ntiming: on\n1\n("), "{out}");
+    assert!(out.contains("fuel)\nlast input: "), "{out}");
+    let out = repl("function f(a) { return a + 1 }\n.disasm f\n.disasm let q = 1\n");
+    assert!(out.starts_with("function 0 f: params=1"), "{out}");
+    assert!(out.contains("init_global_lex \"q\""), "{out}");
+    check(
+        ".nope\n.exit\n1\n",
+        "unknown command or missing argument: .nope (.help lists them)\n",
+    );
+    assert!(repl(".help\n").contains(".snapshot <file>"));
+}
+
+#[test]
+fn typescript() {
+    check(
+        ".ts on\nlet t: number = 3\nt as number + 1\nenum E { A, B }\nE.B\nlet s: string = await Promise.resolve('ok')\ns\n",
+        "TypeScript: on\n4\n1\n'ok'\n",
+    );
+    check(
+        "let t: number = 3\n",
+        "SyntaxError: expecting ';' at repl:1:6\n",
+    );
+    assert_eq!(repl_with(&["--ts"], "let n: number = 1\nn\n"), "1\n");
+}
+
+#[test]
+fn load_a_file() {
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let path = format!("{dir}/repl-load-{}.js", std::process::id());
+    std::fs::write(
+        &path,
+        "let loaded = await Promise.resolve(7);\nfunction g() { return loaded }\n",
+    )
+    .unwrap();
+    let out = repl(&format!(".load {path}\ng()\n"));
+    std::fs::remove_file(&path).unwrap();
+    assert_eq!(out, "7\n");
+}
