@@ -1,7 +1,7 @@
 # 0125: GC aging promotion and peak-memory stability
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0125-gc-aging
 depends-on: 0120
 guide: docs/guide/gc.md
