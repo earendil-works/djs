@@ -44,6 +44,30 @@ has a bytes tag that decodes to a placeholder). ARCH G1 wants bytes in and out c
 
 ## Log
 
+### Part 1: ArrayBuffer, typed arrays (core), base64/hex, wire and reader
+- test262 before (main 510fec3): active 16,355 / 22,142 (73.8%), later 128 / 15,427.
+  The move to active alone (main's engine, this toml): active 16,355 / 24,120 (67.8%),
+  later 128 / 13,449: +1,978 active tests, none passing yet.
+- ArrayBuffer (resizable, transfer, transferToFixedLength, slice, isView, detached) and
+  typed arrays of all twelve kinds (BigInt ones throw "not supported yet"), with the
+  integer-indexed exotic behavior in heap/typed.rs (D1390). Outside touches: heap/object.rs
+  hooks (isolated `if TypedArray` branches), interp/run.rs `primitive_operands` (ToNumber
+  before an element write), djs-test262 (`$262.detachArrayBuffer`).
+- %TypedArray% as a realm constructor, a realm constructors table (D1391); core methods:
+  from, of, species, buffer/byteLength/byteOffset/length/toStringTag, set, subarray, slice,
+  fill. The rest of the prototype comes in part 2.
+- Uint8Array base64/hex in Rust (D1392); wire bytes → Uint8Array; the reader returns typed
+  arrays and buffers as copies (docs/wire.md); a 1 MiB image benchmark (bytes: decode
+  0.017 ms, read 0.022 ms in wasm).
+- behavior.js: ArrayBuffer, typed array constructors and core methods, base64/hex vs qjs
+  (behavior.rs keeps `% ` remainders now that builtins use them). difftest
+  builtins/base64.js (every lastChunkHandling edge case, setFromBase64 partial writes),
+  builtins/typed-arrays.js; e2e typed_arrays.js (three modes).
+- After part 1: active 17,276 / 24,120 (71.6%); ArrayBuffer 161/179, TypedArray 323/849,
+  TypedArrayConstructors 340/360, Uint8Array 66/68, DataView 0/449. difftest 102 / 185.
+- Surprise: the release wasm module is 1.2 MB (D1321 said 564 KB): the prelude has grown
+  a lot since (it is compiled into the embedded base); worth a look by the coordinator.
+
 ## Follow-ups
 
 ## Result

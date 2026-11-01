@@ -1585,3 +1585,43 @@ hand it to the job that resumed the frame, with nothing special in either.
 which settle and return the promise. A throw resumed into a frame with no handler at the
 suspension point is thrown by `%GeneratorResume` itself, without restoring the frame.
 Fuel: the copies charge one unit per 8 slots.
+## D1390: ArrayBuffers and typed arrays in the heap
+date: 2026-11-01 · by: infra · issue: 0039
+An ArrayBuffer (`ObjectClass::ArrayBuffer`) keeps its bytes in a `Bytes` cell (untraced
+data), slot 0 an internal reference (`undefined` once detached), slot 1 the maxByteLength
+of a resizable buffer. A resizable buffer's cell is allocated at its maximum, so `resize`
+only changes `LEN` and never moves data under live views. A typed array
+(`ObjectClass::TypedArray`, one class for all twelve kinds) has the buffer, the kind, the
+byte offset and the length (-1: length-tracking); a DataView is its own class. Copying
+GC: buffers are copied like every other cell, so a 1 MiB buffer costs a 1 MiB copy per
+collection; no large-object space yet (a follow-up if images dominate heaps).
+The integer-indexed exotic behavior (10.4.5) lives in the heap's property functions
+(`heap/typed.rs`, hooked into `get_own_property`, `find_property`, `has_property`,
+`define_own_property`, `delete_own_property`, `own_keys`, `set_own_data_value` and the
+element fast paths): a canonical numeric key never reaches a property table or the
+prototype chain, element writes convert primitives with ToNumber (the heap has no user
+code), and the interpreter's PutElem/PutField first run `%ToNumber` on an object or symbol
+value written to a typed array element (the D1280 slow path, isolated in
+`primitive_operands`). BigInt64Array/BigUint64Array exist but their constructors throw
+"not supported yet" until BigInt.
+
+## D1391: %TypedArray% and the realm's constructors table
+date: 2026-11-01 · by: infra · issue: 0039
+`@constructor %TypedArray%` installs a constructor that is a realm intrinsic, not a global
+(bgen accepts a bare `%Name%`; `%InstallConstructor` stores it in the realm and names it
+`TypedArray`), and the concrete constructors `@extends %TypedArray%`. Every installed
+constructor is also recorded in a realm table (`Intrinsic::Constructors`), read with
+`%RealmConstructor(name)`: the spec's %Name% defaults (SpeciesConstructor, ArrayBuffer for
+transfer and slice, the kind constructor of TypedArraySpeciesCreate) must not follow a
+replaced global.
+
+## D1392: Bytes on the boundary are Uint8Arrays, read back as copies
+date: 2026-11-01 · by: infra · issue: 0039
+Wire bytes (`0x30`) decode into a real Uint8Array over a fresh ArrayBuffer (one copy into
+a byte cell). The JS reader returns a typed array as a copy of its elements in the host's
+typed array of the same kind, and an ArrayBuffer as a copy, never a view of the arena:
+collections move cells and wasm memory growth detaches the host's buffer. 1 MiB both ways
+costs 0.017 ms to decode and 0.022 ms to read (docs/wire.md); a base64 string of the same
+image decodes in 0.1 ms. Uint8Array.fromBase64/toBase64/fromHex/toHex/setFrom* are leaf
+code (builtins/typed.rs) and match qjs on every edge case of the corpus case
+builtins/base64.js.
