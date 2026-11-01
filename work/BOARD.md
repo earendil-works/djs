@@ -22,6 +22,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| 0043 | wasm size audit and reduction (1.22 MB now; budget 400 KB) | next free agent |
 
 ## Done
 
