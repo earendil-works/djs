@@ -14,6 +14,11 @@ mod case_tables;
 mod props;
 #[cfg(feature = "regexp-unicode-props")]
 pub mod property;
+#[cfg(feature = "unicode-normalization")]
+#[rustfmt::skip]
+mod norm_tables;
+#[cfg(feature = "unicode-normalization")]
+pub mod normalize;
 
 pub mod case;
 

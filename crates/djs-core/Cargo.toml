@@ -9,10 +9,14 @@ publish.workspace = true
 libm = "0.2.16"
 
 [features]
-default = ["regexp-unicode-props"]
+default = ["regexp-unicode-props", "unicode-normalization"]
 # `\p{..}` / `\P{..}` in regular expressions: about 58 KB of Unicode property tables
 # (D1500). Without it they are a SyntaxError (D1112).
 regexp-unicode-props = []
+# String.prototype.normalize for every string, and localeCompare normalizing to NFC like
+# qjs: about 48 KB of tables (D1760). Without it normalize throws for strings that would
+# need them, and localeCompare compares code points.
+unicode-normalization = []
 
 [dev-dependencies]
 # e2e tests start from the base snapshot like the embedders (a dev-dependency cycle,
