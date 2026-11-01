@@ -46,7 +46,7 @@ the way:
 
 The order is breadth-first from the roots, in field order, so the new layout depends
 only on the object graph. Collecting a collected heap reproduces it byte for byte. That
-is the property snapshots and the determinism checks build on.
+is the property snapshots and the [determinism checks](determinism.md) build on.
 
 > **Trade-off.** Copying over mark-sweep. A copying collector compacts for free: the
 > image after a collection has no holes, which keeps snapshots small, and its layout is

@@ -24,6 +24,18 @@ fuel counts D1633).
       heap, gc, suspension (after the docs agent merges them) and host.md into links.
 
 ## Log
+- Wrote docs/guide/determinism.md:
+  - the inputs table (clock, time zone, Math.random, weak refs, results) with a gen:run
+    example (clock 0, the default seed);
+  - results as macrotasks (linking host.md);
+  - "the same program, the same heap", which links suspension, gc, heap and arena for
+    fuel debt, GC points, layout, rehash/shapes and OOM instead of repeating them;
+  - deterministic mode, canonical hash and journals, what the gate compares, and where
+    determinism ends;
+  - three trade-offs.
+- Linked it from SUMMARY.md, host.md (the plain-text reference), arena.md, heap.md,
+  gc.md and suspension.md (their determinism mentions). `djs-docs check` is green.
+- Waiting for the docs agent's review.
 
 ## Follow-ups
 

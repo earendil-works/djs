@@ -178,9 +178,9 @@ is what keeps data entries at 16 bytes (D1830).
 > unused shapes die. In djs a parent keeps its children alive, so shapes never die, and
 > the tree is capped at 4096 shapes per heap instead (about 160 KB typically, 2.3 MB at
 > worst). Weak transitions would make the tree, and so the heap image, depend on when
-> collections ran, and deterministic runs need images to be a function of the
-> program alone. The cost: a script that creates thousands of distinct key sequences
-> gets dictionaries after the budget. Measured: real scripts create 0 to 16 shapes, the
+> collections ran, and [deterministic runs](determinism.md) need images to be a function
+> of the program alone. The cost: a script that creates thousands of distinct key
+> sequences gets dictionaries after the budget. Measured: real scripts create 0 to 16 shapes, the
 > difftest corpus at most 59 per case.
 
 > **Trade-off.** The prototype stays in the object, not in the shape. Changing a

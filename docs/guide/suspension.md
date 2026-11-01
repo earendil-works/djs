@@ -100,7 +100,7 @@ code keep heap values in local variables.
 Collection points depend only on the program, not on how it was sliced: the threshold
 is in the heap and the arena's growth does not depend on fuel (D1710). That is why the
 images of two runs with different slicing are byte for byte the same, which the gate
-checks (D1720).
+checks (D1720; [Determinism](determinism.md)).
 
 ## Host calls
 

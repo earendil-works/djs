@@ -151,7 +151,7 @@ That property is what deterministic mode builds on (D1680): with a seeded `Math.
 a virtual clock that moves only when a result is delivered, and weak references made
 strong or absent, the same code and the same results in the same order give the same
 run. A run can be recorded as a journal and replayed, checked by canonical heap hashes
-at every idle point (D1730). The chapter on determinism covers this in depth;
+at every idle point (D1730). [Determinism](determinism.md) covers this in depth;
 docs/host.md has the journal format.
 
 > **Trade-off.** Results as macrotasks over delivering them immediately. Ordering by

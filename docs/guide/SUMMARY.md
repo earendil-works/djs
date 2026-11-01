@@ -10,7 +10,7 @@
 - [The garbage collector](gc.md)
 - [Snapshots and images](snapshots.md)
 - [Builtins: the TypeScript subset and the leaf rule](builtins.md)
-- [Determinism]()
+- [Determinism](determinism.md)
 - [The host interface: wire in, reader out](host.md)
 - [How djs is tested](testing.md)
 
