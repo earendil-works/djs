@@ -571,7 +571,26 @@ impl<'h> Exec<'h> {
         // The synchronous run of a job (or of the entry call) is over: ClearKeptObjects
         // (9.10.3), which lets dereferenced WeakRef targets die again.
         late::clear_kept_objects(self.heap);
-        let Some(job) = promise::dequeue(self.heap) else {
+        let mut job = promise::dequeue(self.heap);
+        if job.is_none() {
+            // A microtask checkpoint. Then the next host result, as a macrotask of its own
+            // (D1670): results are applied only here, one at a time, whenever the embedder
+            // delivered them.
+            promise::rejection_checkpoint(self.heap);
+            match promise::inbox_apply(self.heap) {
+                Ok(true) => job = promise::dequeue(self.heap),
+                Ok(false) => {}
+                Err(e) => {
+                    // No room for the settle job: the result stays in the inbox.
+                    let e = self.fault_value(Fault::from(e), None);
+                    self.sp = 0;
+                    state::set_outcome(self.heap, RunState::Threw, e);
+                    self.flush();
+                    return Some(Status::Threw(e));
+                }
+            }
+        }
+        let Some(job) = job else {
             let outcome = state::outcome(self.heap);
             state::set_state(self.heap, outcome);
             self.flush();

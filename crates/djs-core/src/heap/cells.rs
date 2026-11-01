@@ -372,6 +372,15 @@ cells! {
         THROW: Value = 56,
         /// [`ValueArray`] of the rejected promises without a handler (D1373), or null.
         REJECTIONS: Ref = 64,
+        /// How many of the first [`Interp::REJECTIONS`] were still unhandled at a
+        /// microtask checkpoint (D1670): reported, so a later `then` does not withdraw them.
+        REPORTED: u32 = 68,
+        /// The host inbox (D1670): a [`ValueArray`] of 4-value entries `[promise, ok,
+        /// value, now]` of completed async host calls, from `INBOX_HEAD` to `LEN`, applied
+        /// one at a time when the job queue is empty. Null until the first result.
+        INBOX: Ref = 72,
+        /// Index of the first unapplied entry in [`Interp::INBOX`].
+        INBOX_HEAD: u32 = 76,
     };
 
     /// A realm record: the global object and the intrinsics, indexed by

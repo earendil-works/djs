@@ -2,7 +2,7 @@
 // Regenerate: DJS_UPDATE_LAYOUT=1 cargo test -p djs-core layout_generated
 
 export const LAYOUT = {
-  "layoutHash": 3492952080,
+  "layoutHash": 546587596,
   "magic": 5458500,
   "headerSize": 8,
   "header": { "KIND": 0, "GC": 1, "FLAGS": 2, "SIZE": 4 },
@@ -268,7 +268,7 @@ export const LAYOUT = {
     },
     "Interp": {
       "kind": 17,
-      "minSize": 72,
+      "minSize": 80,
       "fields": {
         "STATE": { "offset": 8, "type": "u32" },
         "BP": { "offset": 12, "type": "u32" },
@@ -282,7 +282,10 @@ export const LAYOUT = {
         "OUTCOME": { "offset": 48, "type": "u32" },
         "JOB_HEAD": { "offset": 52, "type": "u32" },
         "THROW": { "offset": 56, "type": "Value" },
-        "REJECTIONS": { "offset": 64, "type": "Ref" }
+        "REJECTIONS": { "offset": 64, "type": "Ref" },
+        "REPORTED": { "offset": 68, "type": "u32" },
+        "INBOX": { "offset": 72, "type": "Ref" },
+        "INBOX_HEAD": { "offset": 76, "type": "u32" }
       },
       "tail": null
     },

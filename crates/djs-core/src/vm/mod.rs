@@ -457,7 +457,7 @@ impl Vm {
 
     /// Abandons the current call, if any (running, out of fuel, or parked on a host
     /// call): its frames, pending host calls, queued jobs and tracked rejections are
-    /// dropped and the VM is `Idle` again,
+    /// dropped (and delivered results not applied yet) and the VM is `Idle` again,
     /// with its realm and globals intact. For hosts that stop a run that used up its fuel
     /// budget.
     pub fn abort(&mut self) {
@@ -486,6 +486,7 @@ impl Vm {
         }
         self.heap.arena_mut().set(calls, ValueArray::LEN, 0);
         run::promise::clear_jobs(&mut self.heap);
+        run::promise::clear_inbox(&mut self.heap);
         run::promise::clear_rejections(&mut self.heap);
         state::set_pending_throw(&mut self.heap, Value::UNDEFINED);
         state::set_outcome(&mut self.heap, RunState::Idle, Value::UNDEFINED);
@@ -531,18 +532,42 @@ impl Vm {
 
     /// Completes the host call `call_id` with a value (`Ok`) or an exception (`Err`).
     /// The call the VM is parked on returns or throws at the call; `run` continues
-    /// afterwards. An async call (D1374) settles its promise in a job (in any state:
-    /// the job runs at the next `run`); a value is adopted like a resolve function's
-    /// argument (thenables too), an exception rejects.
+    /// afterwards. An async call (D1374) goes into the host inbox (D1670), in any VM
+    /// state: `run` applies it as a macrotask of its own once the job queue is empty
+    /// (oldest result first, the job queue drained after each), so the script sees the
+    /// same thing whenever the embedder delivers it. Its value is adopted like a resolve
+    /// function's argument (thenables too); an exception rejects.
     pub fn resolve_host_call(
         &mut self,
         call_id: u32,
         result: Result<Value, Value>,
     ) -> Result<(), VmError> {
+        self.complete_host_call(call_id, result, None)
+    }
+
+    /// [`Vm::resolve_host_call`] with the clock `Date.now()` reads from when the result is
+    /// applied (ms since the epoch, as [`Vm::set_now`]): for an async call, when `run`
+    /// takes it from the inbox; for the parked call, now. Lets a host give every result
+    /// its own virtual time (a replay) without running the VM between results.
+    pub fn resolve_host_call_at(
+        &mut self,
+        call_id: u32,
+        result: Result<Value, Value>,
+        now_ms: f64,
+    ) -> Result<(), VmError> {
+        self.complete_host_call(call_id, result, Some(now_ms))
+    }
+
+    fn complete_host_call(
+        &mut self,
+        call_id: u32,
+        result: Result<Value, Value>,
+        now: Option<f64>,
+    ) -> Result<(), VmError> {
         if let Some(c) = run::host_call_cell(&self.heap, call_id) {
             let p: Value = self.heap.arena().get(c, HostCall::PROMISE);
             if let Some(p) = p.as_object() {
-                run::promise::enqueue_host_settle(&mut self.heap, p, result)?;
+                run::promise::inbox_push(&mut self.heap, p, result, now)?;
                 run::remove_host_call(&mut self.heap, call_id);
                 return Ok(());
             }
@@ -552,6 +577,9 @@ impl Vm {
             || self.heap.arena().get(i, Interp::HOST_CALL) != call_id
         {
             return Err(VmError::UnknownHostCall);
+        }
+        if let Some(ms) = now {
+            self.set_now(ms);
         }
         let (cont, entry) = run::parked(&self.heap);
         run::remove_host_call(&mut self.heap, call_id);

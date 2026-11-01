@@ -245,7 +245,7 @@ pub(crate) fn perform_then(
             let v = result_of(heap, p);
             enqueue(heap, job, [cap, handler, v, Value::bool(fulfilled)])?;
             if !fulfilled && f & FLAG_HANDLED == 0 {
-                untrack_rejection(heap, p);
+                untrack_rejection(heap, p, false);
             }
         }
     }
@@ -253,23 +253,130 @@ pub(crate) fn perform_then(
     Ok(())
 }
 
-/// Queues the settlement of an async host call's promise (D1374): a job, so that a
-/// thenable result is adopted the way a resolve function would.
-pub(crate) fn enqueue_host_settle(
+// ---------------------------------------------------------------- the host inbox
+
+/// Values per inbox entry: the promise, ok (bool), the value or reason, and the clock
+/// (`undefined`: leave it).
+pub(crate) const INBOX_SIZE: u32 = 4;
+
+/// Appends a completed async host call to the host inbox (D1670). The run loop applies it
+/// as its own macrotask once the job queue is empty, so where a result lands does not
+/// depend on when the embedder delivered it.
+pub(crate) fn inbox_push(
     heap: &mut Heap,
     p: Obj,
     result: Result<Value, Value>,
+    now: Option<f64>,
 ) -> Result<(), HeapError> {
+    let i = state::interp(heap);
+    let q = heap.arena().get::<Ref>(i, Interp::INBOX).0;
+    if q != 0 {
+        // Move the live entries to the front before growing.
+        let head = heap.arena().get(i, Interp::INBOX_HEAD);
+        let len = heap.value_array_len(q);
+        if head > 0 && len + INBOX_SIZE > heap.value_array_capacity(q) {
+            for k in head..len {
+                let v = heap.value_array_get(q, k);
+                heap.value_array_set(q, k - head, v);
+            }
+            for k in len - head..len {
+                heap.value_array_set(q, k, Value::UNDEFINED);
+            }
+            heap.arena_mut().set(q, ValueArray::LEN, len - head);
+            heap.arena_mut().set(i, Interp::INBOX_HEAD, 0);
+        }
+    }
+    let len = if q == 0 { 0 } else { heap.value_array_len(q) };
+    let q2 = heap.value_array_reserve(q, len + INBOX_SIZE)?;
+    let (ok, v) = match result {
+        Ok(v) => (true, v),
+        Err(e) => (false, e),
+    };
+    let now = now.map_or(Value::UNDEFINED, Value::number);
+    for (k, x) in [Value::object(p), Value::bool(ok), v, now]
+        .into_iter()
+        .enumerate()
+    {
+        heap.value_array_set(q2, len + k as u32, x);
+    }
+    heap.arena_mut().set(q2, ValueArray::LEN, len + INBOX_SIZE);
+    let i = state::interp(heap);
+    heap.arena_mut().set(i, Interp::INBOX, Ref(q2));
+    Ok(())
+}
+
+/// Takes the oldest inbox entry: `(promise, result, now)`.
+fn inbox_take(heap: &mut Heap) -> Option<(Obj, Result<Value, Value>, Option<f64>)> {
+    let i = state::interp(heap);
+    let q = heap.arena().get::<Ref>(i, Interp::INBOX).0;
+    if q == 0 {
+        return None;
+    }
+    let head = heap.arena().get(i, Interp::INBOX_HEAD);
+    if head >= heap.value_array_len(q) {
+        return None;
+    }
+    let mut e = [Value::UNDEFINED; INBOX_SIZE as usize];
+    for (k, x) in e.iter_mut().enumerate() {
+        *x = heap.value_array_get(q, head + k as u32);
+        // A taken entry must not keep its values alive.
+        heap.value_array_set(q, head + k as u32, Value::UNDEFINED);
+    }
+    let head = head + INBOX_SIZE;
+    if head >= heap.value_array_len(q) {
+        heap.arena_mut().set(q, ValueArray::LEN, 0);
+        heap.arena_mut().set(i, Interp::INBOX_HEAD, 0);
+    } else {
+        heap.arena_mut().set(i, Interp::INBOX_HEAD, head);
+    }
+    let p = e[0].as_object().expect("an inbox entry's promise");
+    let result = if e[1] == Value::TRUE {
+        Ok(e[2])
+    } else {
+        Err(e[2])
+    };
+    Some((p, result, e[3].as_number()))
+}
+
+/// Applies the oldest inbox entry, if any: sets the clock it carries and queues the job
+/// that settles its promise (D1374: a job, so that a thenable result is adopted the way a
+/// resolve function would). The job slot is reserved first, so running out of memory
+/// leaves the entry in the inbox.
+pub(crate) fn inbox_apply(heap: &mut Heap) -> Result<bool, HeapError> {
+    if !has_inbox(heap) {
+        return Ok(false);
+    }
+    let q = reserve_jobs(heap, 1)?;
+    let (p, result, now) = inbox_take(heap).expect("checked above");
+    if let Some(ms) = now {
+        realm::set_intrinsic(heap, realm::Intrinsic::Clock, Value::number(ms));
+    }
     let job = realm::installed_intrinsic(heap, HOST_CALL_SETTLE);
     let (ok, v) = match result {
         Ok(v) => (true, v),
         Err(e) => (false, e),
     };
-    enqueue(
+    push_job(
         heap,
+        q,
         job,
         [Value::object(p), Value::bool(ok), v, Value::UNDEFINED],
-    )
+    );
+    Ok(true)
+}
+
+/// Whether the host inbox holds results.
+pub(crate) fn has_inbox(heap: &Heap) -> bool {
+    let i = state::interp(heap);
+    let q = heap.arena().get::<Ref>(i, Interp::INBOX).0;
+    q != 0 && heap.arena().get(i, Interp::INBOX_HEAD) < heap.value_array_len(q)
+}
+
+/// Drops the host inbox (`Vm::abort`).
+pub(crate) fn clear_inbox(heap: &mut Heap) {
+    let i = state::interp(heap);
+    heap.arena_mut().set(i, Interp::INBOX, Ref(0));
+    heap.arena_mut().set(i, Interp::INBOX_HEAD, 0);
 }
 
 // ---------------------------------------------------------------- rejection tracking
@@ -293,22 +400,31 @@ pub(crate) fn mark_handled(heap: &mut Heap, p: Obj) {
     let f = flags(heap, p);
     if f & FLAG_HANDLED == 0 {
         if state_of(heap, p) == REJECTED {
-            untrack_rejection(heap, p);
+            // The embedder consumes the outcome itself: withdrawn even when reported.
+            untrack_rejection(heap, p, true);
         }
         set_flags(heap, p, f | FLAG_HANDLED);
     }
 }
 
-fn untrack_rejection(heap: &mut Heap, p: Obj) {
+/// HostPromiseRejectionTracker ( promise, "handle" ). A JS handler added after a
+/// microtask checkpoint does not withdraw a rejection the checkpoint reported (D1670);
+/// the embedder (`reported`) can.
+fn untrack_rejection(heap: &mut Heap, p: Obj, reported: bool) {
     let i = state::interp(heap);
     let r = heap.arena().get::<Ref>(i, Interp::REJECTIONS).0;
     if r == 0 {
         return;
     }
     let len = heap.value_array_len(r);
-    let Some(pos) = (0..len).find(|&k| heap.value_array_get(r, k) == Value::object(p)) else {
+    let done = heap.arena().get(i, Interp::REPORTED).min(len);
+    let from = if reported { 0 } else { done };
+    let Some(pos) = (from..len).find(|&k| heap.value_array_get(r, k) == Value::object(p)) else {
         return;
     };
+    if pos < done {
+        heap.arena_mut().set(i, Interp::REPORTED, done - 1);
+    }
     for k in pos + 1..len {
         let v = heap.value_array_get(r, k);
         heap.value_array_set(r, k - 1, v);
@@ -328,11 +444,23 @@ pub(crate) fn take_rejections(heap: &mut Heap) -> Vec<Obj> {
         .filter_map(|k| heap.value_array_get(r, k).as_object())
         .collect();
     heap.arena_mut().set(i, Interp::REJECTIONS, Ref(0));
+    heap.arena_mut().set(i, Interp::REPORTED, 0);
     out
+}
+
+/// A microtask checkpoint (the job queue ran empty, D1670): the rejections that are still
+/// unhandled now count as reported, whether the embedder takes them now or after more
+/// macrotasks ran (HTML's "notify about rejected promises").
+pub(crate) fn rejection_checkpoint(heap: &mut Heap) {
+    let i = state::interp(heap);
+    let r = heap.arena().get::<Ref>(i, Interp::REJECTIONS).0;
+    let len = if r == 0 { 0 } else { heap.value_array_len(r) };
+    heap.arena_mut().set(i, Interp::REPORTED, len);
 }
 
 /// Forgets the tracked rejections (`Vm::abort`).
 pub(crate) fn clear_rejections(heap: &mut Heap) {
     let i = state::interp(heap);
     heap.arena_mut().set(i, Interp::REJECTIONS, Ref(0));
+    heap.arena_mut().set(i, Interp::REPORTED, 0);
 }

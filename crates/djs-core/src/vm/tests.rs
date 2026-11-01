@@ -2488,3 +2488,225 @@ fn warm_and_cold_inline_caches_behave_the_same() {
     let (_, cold_out) = run_script(cold, GLOBAL_CHANGES_2);
     assert_eq!(warm_out, cold_out);
 }
+
+// ---- The host inbox (D1670) --------------------------------------------------------------
+
+/// When the "embedder" of [`run_inbox`] delivers async results.
+#[derive(Clone, Copy, Debug)]
+enum Delivery {
+    /// At the first stop after the call (any status: out of fuel, a sync host call).
+    Eager,
+    /// One result per IDLE, oldest first.
+    OneAtIdle,
+    /// Every pending result at IDLE, in one batch.
+    BatchAtIdle,
+}
+
+/// Runs a Script with `console.log` and `tool(x)`, an async host function the embedder
+/// completes with `x` (or rejects with `x` when it is a string starting with "fail"),
+/// delivered per `delivery`, with the clock `1000 * call_id` when `clock` is set. The
+/// unhandled rejections are taken at every IDLE and at the end, and listed after the
+/// console output; `suspend` continues in a VM restored from the image at every stop.
+fn run_inbox(src: &str, fuel: u64, suspend: bool, delivery: Delivery, clock: bool) -> Outcome {
+    let mut vm = vm();
+    let tool = vm.new_async_host_function(TOOL, "tool").unwrap();
+    vm.define_global("tool", tool).unwrap();
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("t.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    let mut log = Vec::new();
+    let mut unhandled = Vec::new();
+    let mut pending: Vec<u32> = Vec::new();
+    let take_rejections = |vm: &mut Vm, log: &mut Vec<String>| {
+        for r in vm.take_unhandled_rejections() {
+            log.push(format!("unhandled {}", vm.display(r)));
+        }
+    };
+    loop {
+        let status = vm.run(fuel);
+        pending.extend(vm.new_host_calls());
+        let deliver = |vm: &mut Vm, id: u32| {
+            let arg = vm.host_call(id).unwrap().args[0];
+            let fail = vm.display(arg).starts_with("fail");
+            let result = if fail { Err(arg) } else { Ok(arg) };
+            if clock {
+                vm.resolve_host_call_at(id, result, 1000.0 * id as f64)
+                    .unwrap();
+            } else {
+                vm.resolve_host_call(id, result).unwrap();
+            }
+        };
+        let idle = status == Status::Idle;
+        match delivery {
+            Delivery::Eager => pending.drain(..).for_each(|id| deliver(&mut vm, id)),
+            Delivery::OneAtIdle if idle => deliver(&mut vm, pending.remove(0)),
+            Delivery::BatchAtIdle if idle => pending.drain(..).for_each(|id| deliver(&mut vm, id)),
+            _ => {}
+        }
+        match status {
+            Status::Done(v) | Status::Threw(v) => {
+                assert!(pending.is_empty());
+                let result = match status {
+                    Status::Done(_) => vm.display(v),
+                    _ => format!("throw {}", vm.display(v)),
+                };
+                take_rejections(&mut vm, &mut unhandled);
+                vm.heap().verify().unwrap();
+                log.extend(unhandled);
+                return Outcome { result, log };
+            }
+            Status::Idle => take_rejections(&mut vm, &mut unhandled),
+            Status::OutOfFuel => {}
+            Status::HostCall { call_id, fn_id } => {
+                assert_eq!(fn_id, LOG);
+                let info = vm.host_call(call_id).unwrap();
+                let line: Vec<String> = info.args.iter().map(|&a| vm.display(a)).collect();
+                log.push(line.join(" "));
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+        }
+        if suspend {
+            let opts = vm.options();
+            vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();
+        }
+    }
+}
+
+/// The outcome of `src` must not depend on when results are delivered, the fuel slice or
+/// restores; returns it.
+fn inbox_outcome(src: &str, clock: bool) -> Outcome {
+    let reference = run_inbox(src, u64::MAX, false, Delivery::OneAtIdle, clock);
+    for delivery in [Delivery::Eager, Delivery::OneAtIdle, Delivery::BatchAtIdle] {
+        for fuel in [u64::MAX, 1000, 37] {
+            for suspend in [false, true] {
+                if suspend && fuel == u64::MAX {
+                    continue;
+                }
+                let got = run_inbox(src, fuel, suspend, delivery, clock);
+                assert_eq!(
+                    got, reference,
+                    "{delivery:?}, fuel {fuel}, suspend {suspend}"
+                );
+            }
+        }
+    }
+    reference
+}
+
+#[test]
+fn host_results_apply_at_microtask_checkpoints() {
+    // 0055's async_interleave.js: resolved while the loop runs, the result used to land
+    // between b1 and b2.
+    let out = inbox_outcome(
+        r#"
+        tool(1).then(v => console.log("a", v));
+        let x = 0;
+        for (let i = 0; i < 2000; i++) x += i;
+        Promise.resolve().then(() => { console.log("b1"); Promise.resolve().then(() => console.log("b2")); });
+        "#,
+        false,
+    );
+    assert_eq!(out.log, ["b1", "b2", "a 1"]);
+}
+
+#[test]
+fn host_results_are_macrotasks_one_at_a_time() {
+    // Two results delivered together run as two macrotasks: the first one's reactions
+    // (and their microtasks) all run before the second result is applied.
+    let out = inbox_outcome(
+        r#"
+        const a = tool("a"), b = tool("b");
+        a.then(v => { console.log("a", v); Promise.resolve().then(() => console.log("a micro")); });
+        b.then(v => console.log("b", v));
+        "#,
+        false,
+    );
+    assert_eq!(out.log, ["a a", "a micro", "b b"]);
+}
+
+#[test]
+fn rejections_are_judged_after_each_host_result() {
+    // A rejection still unhandled when its macrotask ends is reported, even if a later
+    // macrotask handles it, whether the host takes the reports in between or not.
+    let out = inbox_outcome(
+        r#"
+        let late;
+        tool("fail early").catch(() => {}).then(() => { late = Promise.reject(new Error("late")); });
+        tool("x").then(() => { late.catch(() => console.log("handled late")); });
+        Promise.reject(new Error("sync")).catch(() => console.log("handled in time"));
+        "#,
+        false,
+    );
+    assert_eq!(
+        out.log,
+        ["handled in time", "handled late", "unhandled Error: late"]
+    );
+}
+
+#[test]
+fn host_results_carry_their_clock() {
+    let out = inbox_outcome(
+        r#"
+        const log = [];
+        tool(1).then(() => log.push(Date.now()));
+        tool(2).then(() => { log.push(Date.now()); console.log(log.join()); });
+        "#,
+        true,
+    );
+    // Call ids start at 1, but console.log's sync calls take ids too; the clock is
+    // 1000 * the async call's id.
+    assert_eq!(out.log.len(), 1);
+    let times: Vec<f64> = out.log[0].split(',').map(|t| t.parse().unwrap()).collect();
+    assert!(times[0] < times[1] && times[0] >= 1000.0, "{times:?}");
+}
+
+#[test]
+fn delivered_results_survive_images() {
+    // Results delivered but not applied yet are in the image.
+    let mut vm = vm();
+    let tool = vm.new_async_host_function(TOOL, "tool").unwrap();
+    vm.define_global("tool", tool).unwrap();
+    let src = r#"
+        const log = [];
+        tool(1).then(v => log.push("one " + v));
+        tool(2).then(v => { log.push("two " + v); console.log(log.join()); });
+    "#;
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("t.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    assert_eq!(vm.run(1 << 20), Status::Idle);
+    let ids = vm.new_host_calls();
+    vm.resolve_host_call(ids[0], Ok(Value::int(10))).unwrap();
+    vm.resolve_host_call_at(ids[1], Ok(Value::int(20)), 5.0)
+        .unwrap();
+    assert!(vm.pending_host_calls().is_empty());
+    vm.collect().unwrap();
+    let moved = Vm::from_bytes(vm.bytes().to_vec(), VmOptions::default()).unwrap();
+    drop(vm);
+    let (_, out) = finish(moved, 1 << 20, false);
+    assert_eq!(out.log, ["one 10,two 20"]);
+}
+
+#[test]
+fn abort_drops_delivered_results() {
+    let mut vm = vm();
+    let tool = vm.new_async_host_function(TOOL, "tool").unwrap();
+    vm.call(tool, Value::UNDEFINED, &[Value::int(1)]).unwrap();
+    assert_eq!(vm.run(100), Status::Idle);
+    let [id] = vm.new_host_calls()[..] else {
+        panic!()
+    };
+    vm.resolve_host_call(id, Ok(Value::int(5))).unwrap();
+    vm.abort();
+    assert_eq!(vm.run(100), Status::Idle);
+}
