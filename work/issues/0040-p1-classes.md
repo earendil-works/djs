@@ -1,7 +1,7 @@
 # 0040: P1-7 Classes
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0040-p1-classes
 depends-on: 0036
 touches: crates/djs-core/src/compiler/, crates/djs-core/src/bytecode/ (additive), crates/djs-core/src/interp/ (class-specific ops: small, additive, logged; heap is in interp for 0037 part 3), builtins/ (helpers if needed), docs/compiler.md, ratchets
