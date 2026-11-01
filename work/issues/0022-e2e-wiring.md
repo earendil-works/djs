@@ -1,7 +1,7 @@
 # 0022: End-to-end wiring: Vm::compile, `djs run`, e2e tests
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0022-e2e-wiring
 depends-on: 0014, 0015
 touches: crates/djs-core/src/vm/, crates/djs-core/src/interp/ (ops the compiler emits: special_object THIS, global_decls, init_global_lex + global lexical record cell, construct, define_elem, copy_data_props, delete), crates/djs-cli/, crates/djs-core/tests/ (or an e2e test module)
