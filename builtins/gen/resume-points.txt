@@ -1259,6 +1259,8 @@ FunctionPrototypeHasInstance: reentrant (Function.prototype[Symbol.hasInstance])
 
 ThrowTypeError: leaf (get Function.prototype.caller, set Function.prototype.caller, get Function.prototype.arguments, set Function.prototype.arguments, %ThrowTypeError)
 
+FunctionPrototypeBehavior: leaf (%FunctionPrototypeBehavior)
+
 FunctionPrototypeLength: leaf (value Function.prototype.length)
 
 FunctionPrototypeName: leaf (value Function.prototype.name)

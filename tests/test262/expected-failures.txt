@@ -18,11 +18,6 @@ built-ins/Function/length/S15.3.5.1_A1_T3.js: SyntaxError: duplicate argument na
 built-ins/Function/length/S15.3.5.1_A2_T3.js: SyntaxError: duplicate argument names not allowed in this context
 built-ins/Function/length/S15.3.5.1_A3_T3.js: SyntaxError: duplicate argument names not allowed in this context
 built-ins/Function/length/S15.3.5.1_A4_T3.js: SyntaxError: duplicate argument names not allowed in this context
-built-ins/Function/prototype/S15.3.3.1_A1.js: Test262Error: #2.1: the Function.prototype property has the attributes ReadOnly: TypeError: not a function
-built-ins/Function/prototype/S15.3.4_A1.js: Test262Error: Object.prototype.toString.call(Function.prototype) must return "[object Function]" Expected SameValue(«"[object Object]"», «"[object Function]"»)…
-built-ins/Function/prototype/S15.3.4_A2_T1.js: Test262Error: #1.1: The Function prototype object is itself a Function object that, when invoked, accepts any arguments and returns undefined: TypeError: not a…
-built-ins/Function/prototype/S15.3.4_A2_T2.js: Test262Error: #1.1: The Function prototype object is itself a Function object that, when invoked, accepts any arguments and returns undefined: TypeError: not a…
-built-ins/Function/prototype/S15.3.4_A2_T3.js: TypeError: not a function
 built-ins/Object/freeze/typedarray-backed-by-resizable-buffer.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
 built-ins/TypedArray/prototype/subarray/resizable-buffer.js: Test262Error: Expected a RangeError to be thrown but no exception was thrown at all
 language/eval-code/indirect/always-non-strict.js: SyntaxError: variable name expected
@@ -39,10 +34,6 @@ language/eval-code/indirect/var-env-var-init-global-new.js: Test262Error: x shou
 language/eval-code/indirect/var-env-var-non-strict.js: ReferenceError: 'x' is not defined
 language/expressions/class/elements/private-getter-is-not-a-own-property.js: TypeError: not a function
 language/expressions/class/elements/private-setter-is-not-a-own-property.js: TypeError: not a function
-language/expressions/instanceof/primitive-prototype-with-primitive.js: TypeError: invalid 'instanceof' right operand
-language/expressions/instanceof/prototype-getter-with-object-throws.js: Test262Error: Expected a DummyError to be thrown but no exception was thrown at all
-language/expressions/instanceof/prototype-getter-with-object.js: Test262Error: [] should be instance of Function.prototype
-language/expressions/property-accessors/S11.2.1_A4_T3.js: Test262Error: #1: typeof Function.prototype === "function". Actual: object
 language/identifier-resolution/assign-to-global-undefined.js: expected runtime ReferenceError, but no error was thrown
 language/statements/class/elements/private-getter-is-not-a-own-property.js: TypeError: not a function
 language/statements/class/elements/private-setter-is-not-a-own-property.js: TypeError: not a function

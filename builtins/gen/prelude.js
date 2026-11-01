@@ -3532,12 +3532,17 @@ function ThrowTypeError(v) {
   throw %NewTypeError("invalid property access");
 }
 
-// builtins/function.ts:201 value Function.prototype.length
+// builtins/function.ts:201 %FunctionPrototypeBehavior
+function FunctionPrototypeBehavior() {
+  return;
+}
+
+// builtins/function.ts:210 value Function.prototype.length
 function FunctionPrototypeLength() {
   return 0;
 }
 
-// builtins/function.ts:210 value Function.prototype.name
+// builtins/function.ts:219 value Function.prototype.name
 function FunctionPrototypeName() {
   return "";
 }
@@ -11498,6 +11503,7 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallIntrinsic("InstanceofOperator", InstanceofOperator);
 %InstallIntrinsic("ClassHeritage", ClassHeritage);
 %InstallIntrinsic("ThrowTypeError", ThrowTypeError);
+%InstallIntrinsic("FunctionPrototypeBehavior", FunctionPrototypeBehavior);
 %InstallIntrinsic("AsyncAwait", AsyncAwait);
 %InstallIntrinsic("AsyncFunctionReturn", AsyncFunctionReturn);
 %InstallIntrinsic("AsyncFunctionThrow", AsyncFunctionThrow);

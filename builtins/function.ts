@@ -194,6 +194,15 @@ function ThrowTypeError(this: Value, v?: Value): void {
 }
 
 /**
+ * Function.prototype itself (20.2.3): a builtin function that accepts any arguments and
+ * returns undefined. The realm creates Function.prototype as a builtin closure of it.
+ * @intrinsic
+ */
+function FunctionPrototypeBehavior(this: Value): void {
+  return;
+}
+
+/**
  * Function.prototype.length, 20.2.3: Function.prototype is a function of no parameters.
  * @value Function.prototype.length
  * @attributes configurable
