@@ -12,7 +12,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
 | 0065 | accessor + decorators (TC39, then TS legacy) | lexer | .worktrees/lexer |
 | 0062 | Property access performance (shapes/ICs: design first) | heap | .worktrees/heap |
-| 0067 | Host inbox (async host results as macrotasks) | determinism | .worktrees/determinism |
+| 0072 | Determinism checks in the gate (part 1) | determinism | .worktrees/determinism |
 | 0077 | deser's speedup crates: quick wins? (brief report) | deps | .worktrees/deps |
 
 ## Open (ready)
@@ -24,12 +24,12 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0068 | Deterministic mode for VM and Sandbox | 0067 |
+| 0068 | Deterministic mode for VM and Sandbox | 0067 (done) |
 | 0069 | Running out of host memory is not a JS out-of-memory error | - |
 | 0070 | Collect and retry at a failing allocation | 0069 |
 | 0071 | GC points and raw images independent of fuel slice size | - |
 | 0072 | Determinism checks in the gate | part 2: 0067, 0071 |
-| 0073 | Replay journal and image hash | 0067 |
+| 0073 | Replay journal and image hash | 0067 (done) |
 | 0074 | Carry fuel overshoot across runs | - |
 
 ## Done
@@ -60,6 +60,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0061 | String append + JSON source text | dbd2e8d (agent num; 10M appends 574 -> 150 MB RSS; JSON 142/142) |
 | 0059 | Indirect eval, Function ctors, queueMicrotask | 4435b3b (agent infra; active 37,464 / 37,722 = 99.3%; pi 215/226) |
 | 0064 | djs repl | 31797b6 (agent repl, archived; docs/cli.md; follow-ups: tab completion, interactive .step) |
+| 0067 | Host inbox (async host results as macrotasks) | 7988b76 (agent determinism; D1670) |
 | 0066 | pi adapter determinism fixes | 6c523da (agent determinism; equal polls cold/warm; pi suite 221/226) |
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0060 | Out-of-memory recovery | b7c83a8 (agent heap; D1600 reserve, D1601 GC threshold in image) |

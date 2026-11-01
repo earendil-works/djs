@@ -419,7 +419,9 @@ Status = Done(value) | Threw(value) | OutOfFuel
 - **Async host functions** (`tools.*`, `models.*`): calling one creates a promise and an
   entry `{call_id, fn_id, args, promise}` in the heap's pending host call table. Execution
   continues, and the host reads all new pending calls whenever `run` returns. Resolving one
-  enqueues the reaction jobs.
+  puts the result into the VM's inbox (heap state); it is applied as a macrotask once the
+  job queue is empty, one result at a time (D1670), so behavior depends only on the order
+  of results, not on when the host delivers them.
 - **Sync host functions** (`text()`, `console.log`, `store`/`load`): the VM returns
   `HostCall` with the frame parked mid-instruction. The host handles it (possibly
   asynchronously on its side), resolves it, and calls `run` again. This is dquickts'
