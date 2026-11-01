@@ -1141,6 +1141,25 @@ impl<'h> Exec<'h> {
                 self.sp -= 2;
                 self.push(Value::bool(r));
             }
+            Op::DefineMethod | Op::DefineGetter | Op::DefineSetter => {
+                let key = self.imm_atom();
+                let f = self.pop();
+                let o = self.top(0).as_object().expect("object literal");
+                self.define_literal_member(o, key, f, op)?;
+            }
+            Op::DefineMethodElem | Op::DefineGetterElem | Op::DefineSetterElem => {
+                let (o, k, f) = (self.top(2), self.top(1), self.top(0));
+                let key = self.property_key(o, k)?;
+                let obj = o.as_object().expect("object literal");
+                self.define_literal_member(obj, key, f, op)?;
+                self.sp -= 2;
+            }
+            Op::ArraySpread => {
+                let (a, src) = (self.top(1), self.top(0));
+                let arr = a.as_object().expect("array literal");
+                self.array_spread(arr, src)?;
+                self.sp -= 1;
+            }
             Op::DefineElem => {
                 let (o, k, v) = (self.top(2), self.top(1), self.top(0));
                 let key = self.property_key(o, k)?;
@@ -1470,7 +1489,13 @@ impl<'h> Exec<'h> {
             | Op::Ge => &[(1, NUMBER), (0, NUMBER)],
             Op::Neg | Op::Plus | Op::BNot | Op::Inc | Op::Dec | Op::ToNumeric => &[(0, NUMBER)],
             Op::ToString | Op::GetElem | Op::GetElemMethod | Op::Delete => &[(0, STRING)],
-            Op::PutElem | Op::DefineElem | Op::In | Op::SetFunctionName => &[(1, STRING)],
+            Op::PutElem
+            | Op::DefineElem
+            | Op::DefineMethodElem
+            | Op::DefineGetterElem
+            | Op::DefineSetterElem
+            | Op::In
+            | Op::SetFunctionName => &[(1, STRING)],
             Op::Eq | Op::Ne => {
                 // Only an object compared with a non-nullish primitive is converted.
                 let (a, b) = (self.top(1), self.top(0));
@@ -1812,6 +1837,83 @@ impl<'h> Exec<'h> {
             return type_error("could not delete property");
         }
         Ok(true)
+    }
+
+    /// A method, getter or setter of an object literal: DefinePropertyOrThrow with
+    /// enumerable and configurable set (methods are also writable). A getter or setter
+    /// alone keeps the other half of an existing accessor.
+    fn define_literal_member(&mut self, o: Obj, key: Atom, f: Value, op: Op) -> Result<(), Fault> {
+        let d = match op {
+            Op::DefineMethod | Op::DefineMethodElem => PropertyDescriptor::data(f, PropFlags::ALL),
+            Op::DefineGetter | Op::DefineGetterElem => PropertyDescriptor {
+                get: Some(f),
+                enumerable: Some(true),
+                configurable: Some(true),
+                ..Default::default()
+            },
+            _ => PropertyDescriptor {
+                set: Some(f),
+                enumerable: Some(true),
+                configurable: Some(true),
+                ..Default::default()
+            },
+        };
+        if !self.heap.define_own_property(o, key, &d)? {
+            return type_error("could not define property");
+        }
+        Ok(())
+    }
+
+    /// `[...src]`: appends the elements of an iterable. Arrays (holes read as undefined)
+    /// and strings (by code points) are done here; other iterables need the iterator
+    /// protocol (0029's %GetIterator).
+    fn array_spread(&mut self, arr: Obj, src: Value) -> Result<(), Fault> {
+        let mut vals = alloc::vec::Vec::new();
+        if let Some(s) = src.as_string() {
+            let units = self.heap.str_to_utf16(s);
+            let mut i = 0;
+            while i < units.len() {
+                let pair = (0xD800..0xDC00).contains(&units[i])
+                    && units
+                        .get(i + 1)
+                        .is_some_and(|u| (0xDC00..0xE000).contains(u));
+                let n = if pair { 2 } else { 1 };
+                vals.push(Value::string(self.heap.alloc_utf16(&units[i..i + n])?));
+                i += n;
+            }
+        } else if let Some(a) = src
+            .as_object()
+            .filter(|&a| self.heap.object_class(a) == ObjectClass::Array)
+        {
+            for i in 0..self.heap.array_length(a) {
+                let v = match self.heap.get_element_fast(a, i) {
+                    Some(v) => v,
+                    None => {
+                        let key = self.heap.atom_from_index(i)?;
+                        match self.heap.find_property(a, key) {
+                            None => Value::UNDEFINED,
+                            Some((_, Property::Data { value, .. })) => value,
+                            Some(_) => {
+                                return type_error("not supported yet: getter in an array spread");
+                            }
+                        }
+                    }
+                };
+                vals.push(v);
+            }
+        } else if src.as_object().is_some() {
+            return type_error("not supported yet: spreading a non-array iterable");
+        } else {
+            return type_error("value is not iterable");
+        }
+        for v in vals {
+            let len = self.heap.array_length(arr);
+            if !self.heap.set_element_fast(arr, len, v)? {
+                let k = self.heap.atom_from_index(len)?;
+                self.heap.create_data_property(arr, k, v)?;
+            }
+        }
+        Ok(())
     }
 
     /// Replaces the array at the top of the stack by its elements; returns their count.

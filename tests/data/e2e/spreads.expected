@@ -1,0 +1,4 @@
+6 13 [1,2,3] 3
+42 [1,null,3]
+{"a":1,"b":3,"c":4}
+TypeError value is not iterable

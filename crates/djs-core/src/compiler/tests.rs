@@ -1158,7 +1158,6 @@ fn end_to_end_objects() {
 /// Object cases that need 0028 (method/accessor definitions, `set_proto`,
 /// `set_function_name`, spread calls). Un-ignore when 0028 lands. Checked against qjs.
 #[test]
-#[ignore = "un-ignore when 0028 lands (define_method/getter/setter, set_proto, set_function_name, call_spread)"]
 fn end_to_end_objects_0028() {
     run_cases(&[
         (
