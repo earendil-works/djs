@@ -6,14 +6,14 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0071 | GC points and raw images independent of slice size | num | .worktrees/num |
+| 0078 | Leaf quick wins (ASCII check, UTF-8 in transcode, short_decimal), then 0087 | num | .worktrees/num |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0080 | for-of/iteration fast paths + natives wave 2 | infra | .worktrees/infra |
 | 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
 | 0079 | Integration efficiency: items 1-4 landed (D1790-D1793), measuring for train/post-merge | devflow | .worktrees/devflow |
 | 0086 | Bytecode quality + dispatch (0081 P4) | lexer | .worktrees/lexer |
 | 0083 | Shapes + leaner object/image layout (design first) | heap | .worktrees/heap |
-| 0072 | Determinism gate checks part 2 (waits for 0071) | determinism (idle until 0071) | .worktrees/determinism |
+| 0072 | Determinism gate checks part 2 (raw images; fix detprobe) | determinism | .worktrees/determinism |
 | 0085 | Leaf fast paths for everyday builtins (0081 P1) | perf | .worktrees/perf |
 | 0088 | Snapshot design research: long-lived, cross-version, small (report only) | snapshot | .worktrees/snapshot |
 
@@ -27,7 +27,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | depends-on |
 | --- | --- | --- |
 | 0087 | Allocation churn + wasm memory (0081 P5) | num, after 0071 |
-| 0078 | Leaf quick wins from 0077 (ASCII check, UTF-8 in transcode, short_decimal) | num, after 0075 |
 
 ## Done
 
@@ -63,6 +62,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0064 | djs repl | 31797b6 (agent repl, archived; docs/cli.md; follow-ups: tab completion, interactive .step) |
 | 0077 | deser deps investigation | report (agent deps, archived): no new deps; quick wins -> 0078 |
 | 0081 | Perf anatomy | report (agent perf): plain bytecode at par in wasm; gap is builtins/iteration; P1-P10 |
+| 0071 | GC points + raw images slice-independent | f14da99 (agent num; D1710, D1711) |
 | 0074 | Fuel overshoot carried across runs | 793e29d (agent determinism; D1740) |
 | 0073 | Replay journal + canonical hash | 37e6172 (agent determinism; D1730) |
 | 0068 | Deterministic mode for VM and Sandbox | 971036e (agent determinism; D1680) |
