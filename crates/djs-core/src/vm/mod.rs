@@ -496,6 +496,23 @@ impl Vm {
         Exec::new(&mut self.heap, self.opts.exec).run(fuel)
     }
 
+    /// [`Vm::run`], also returning the fuel used. It can exceed `fuel` by the cost of the
+    /// instruction that ran out (for debuggers and fuel accounting, 0064).
+    pub fn run_metered(&mut self, fuel: u64) -> (Status, u64) {
+        let mut ex = Exec::new(&mut self.heap, self.opts.exec);
+        let st = ex.run(fuel);
+        let given = fuel.min(i64::MAX as u64) as i64;
+        (st, given.saturating_sub(ex.fuel_left()).max(0) as u64)
+    }
+
+    /// The stack trace of the current call while it is suspended (out of fuel or parked
+    /// on a host call), in the format of `Error.prototype.stack`; empty without frames.
+    /// For debuggers (0064).
+    pub fn backtrace(&mut self) -> String {
+        let ex = Exec::new(&mut self.heap, self.opts.exec);
+        ex.stack_trace(ex.pc())
+    }
+
     /// The pending host call `call_id` (parked or async).
     pub fn host_call(&self, call_id: u32) -> Option<HostCallInfo> {
         let c = run::host_call_cell(&self.heap, call_id)?;

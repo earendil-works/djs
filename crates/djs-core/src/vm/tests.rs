@@ -2381,3 +2381,31 @@ fn the_out_of_memory_point_is_deterministic() {
         assert!(plain.log[0].ends_with("out of memory"), "{:?}", plain.log);
     }
 }
+
+#[test]
+fn run_metered_and_backtrace() {
+    // 0064: the REPL's fuel accounting and "where did it stop".
+    let mut vm = Vm::new(VmOptions::default()).unwrap();
+    let opts = crate::compiler::CompileOptions::script("t.js");
+    let f = vm
+        .compile(
+            b"let n = 0;\nfunction spin() {\n  for (;;) { n++; }\n}\nspin();",
+            &opts,
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    let (st, used) = vm.run_metered(1000);
+    assert_eq!(st, Status::OutOfFuel);
+    assert!(used >= 1000, "{used}");
+    let bt = vm.backtrace();
+    assert!(bt.starts_with("    at spin (t.js:3:"), "{bt}");
+    assert!(bt.contains("at <eval> (t.js:5:"), "{bt}");
+    vm.abort();
+    assert_eq!(vm.backtrace(), "");
+    let f = vm.compile(b"1 + 1;", &opts).unwrap();
+    vm.call(f, this, &[]).unwrap();
+    let (st, used) = vm.run_metered(1_000_000);
+    assert!(matches!(st, Status::Done(_)));
+    assert!(used > 0 && used < 1000, "{used}");
+}

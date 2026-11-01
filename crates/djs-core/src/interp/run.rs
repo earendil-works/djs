@@ -179,6 +179,16 @@ impl<'h> Exec<'h> {
         }
     }
 
+    /// The fuel left after `run` (negative by the overshoot of the last instruction).
+    pub(crate) fn fuel_left(&self) -> i64 {
+        self.fuel
+    }
+
+    /// The current pc (for `Vm::backtrace`).
+    pub(crate) fn pc(&self) -> u32 {
+        self.pc
+    }
+
     /// Writes the registers to the `Interp` cell.
     pub(crate) fn flush(&mut self) {
         let i = state::interp(self.heap);
