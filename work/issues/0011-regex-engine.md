@@ -1,7 +1,7 @@
 # 0011: Regex engine core (parser, compiler, resumable backtracking matcher)
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0011-regex-engine
 depends-on: 0001
 touches: crates/djs-core/src/regexp/, crates/djs-core/src/unicode/ (new case-mapping tables + generator changes), scripts/gen-unicode*, tests/data/regexp/, crates/djs-core/src/lib.rs (mod lines only)
