@@ -837,3 +837,17 @@ stays the single source of truth. A unit test checks the hand-maintained Rust ta
 against it and prints the replacement on drift, so no generator step is needed.
 `INTRINSICS_HASH` belongs in the build hash: ids are part of the bytecode format.
 Privileged code checks intrinsic names and arities at compile time.
+
+## D1271: Object literal compilation
+date: 2026-11-01 · by: lexer · issue: 0027
+Methods, getters and setters are separate function kinds (`KIND_METHOD`/`KIND_GETTER`/
+`KIND_SETTER`: no `prototype`, not constructors) defined with `define_method`/
+`define_getter`/`define_setter`. Static keys name the function at compile time (getters
+"get x", setters "set x"). Computed keys emit `set_function_name prefix` before the
+`_elem` define, as does a computed data property whose value is an anonymous function or
+arrow. A literal `__proto__: v` (identifier or string key, not computed, not shorthand)
+compiles to `set_proto`. Duplicates are an early error, except in destructuring
+patterns. `super` inside methods stays "not supported yet" until classes add home
+objects (P1-7). `delete a?.b` deletes the chain's last reference and yields `true` when
+the chain short-circuits. Spread arguments build an array (`array_from k`, then
+`array_spread`/`array_push`) for `call_spread`/`construct_spread`.

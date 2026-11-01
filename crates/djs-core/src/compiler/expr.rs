@@ -1243,6 +1243,15 @@ impl Parser<'_, '_> {
                 if is_proto {
                     self.parse_assign(false)?;
                     if *seen_proto {
+                        // Duplicates are fine in a destructuring pattern.
+                        let pattern = if self.is(TokenKind::RBrace) {
+                            self.peek().kind == TokenKind::Assign
+                        } else {
+                            super::scan::closes_before_assign(self.lx, b'{')
+                        };
+                        if pattern {
+                            return self.unsupported(key_tok.start, "destructuring assignment is");
+                        }
                         return syntax(self.tok.start, "duplicate __proto__ property name");
                     }
                     *seen_proto = true;

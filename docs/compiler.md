@@ -607,6 +607,8 @@ Properties (P0 field access on plain objects, P1 the rest):
 | `define_getter` / `define_setter` | `atom` | o f → o | P1; `_elem` variants for computed keys |
 | `define_method` | `atom` | o f → o | sets the home object, P1; `define_method_elem` for computed keys |
 | `copy_data_props` | `u8` flags | o src → o | object spread, rest with excluded keys, R, P1 |
+| `set_proto` | | o v → o | literal `__proto__: v` (objects and null only; 0027) |
+| `set_function_name` | `u8` prefix | key f → key f | SetFunctionName for computed keys (prefix none/"get"/"set"), R (ToPropertyKey); 0027 |
 | `require_object_coercible` | | v → v | TypeError for null/undefined (`const {} = null`), P1 |
 | `delete` | | o k → b | P1 |
 | `in` | | k o → b | (in the binary table) |
@@ -1016,6 +1018,10 @@ Examples:
 
 So the interpreter needs no per-op state machines, and the leaf rule holds: Rust only
 runs fast paths.
+
+As implemented (0027): `CompileOptions { privileged: true }`
+(`CompileOptions::privileged_script`) enables `%Name(args)`. The id is the index into
+`bytecode::intrinsics::INTRINSICS` (D1270), and the compiler checks names and arities.
 
 **[ARCH timing]** This needs privileged JS builtins already in P1 (getters, ToPrimitive
 on objects: the test262 harness uses `toString` all over). ARCH plans the builtin

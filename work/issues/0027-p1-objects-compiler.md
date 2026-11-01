@@ -1,6 +1,6 @@
 # 0027: P1-2 Objects, arrays and privileged mode (compiler side)
 
-status: in-progress
+status: done
 agent: lexer
 branch: issue/0027-p1-objects-compiler
 depends-on: 0025
@@ -16,26 +16,26 @@ dispatch, prelude installation, ToPrimitive slow paths) follows in interp/ by th
 agent.
 
 ## Acceptance criteria
-- [ ] Object literals: methods (including `super` placeholders? No: that is classes,
+- [x] Object literals: methods (including `super` placeholders? No: that is classes,
       P1-7; methods only need a home object if `super` is used, so reject `super` in
       object methods for now), getters/setters, computed keys (with runtime function
       naming, a 0024 follow-up), shorthand, `__proto__: x` in literals (the spec's
       non-Annex-B part: a literal `__proto__` key sets the prototype), and spread
       properties.
-- [ ] Spread arguments in calls and `new` (`f(...a)`); spread in array literals already
+- [x] Spread arguments in calls and `new` (`f(...a)`); spread in array literals already
       works. If iteration is needed for non-arrays, emit the iterator path per the note,
       which the interpreter may report as "not supported yet" until P1-5.
-- [ ] `in`, `delete` in all forms, and `instanceof` (the compiler side is probably done;
+- [x] `in`, `delete` in all forms, and `instanceof` (the compiler side is probably done;
       check it).
-- [ ] Privileged mode: a compile option (not reachable from user code) that enables
+- [x] Privileged mode: a compile option (not reachable from user code) that enables
       `%Name(args)` in primary-expression position, compiling to `call_intrinsic id,
       argc`. Intrinsic ids come from a single table shared with the runtime (bgen's
       list of intrinsic names, from 0017's follow-up: emit it, or a Rust table generated
       from `builtins/intrinsics.d.ts`; coordinate the format in the Log). Compile
       `builtins/gen/prelude.js` successfully in privileged mode as a test.
-- [ ] e2e programs (checked against qjs). Cases needing 0028 go into an ignored `_0028`
+- [x] e2e programs (checked against qjs). Cases needing 0028 go into an ignored `_0028`
       test.
-- [ ] The test262 compile sweep before/after.
+- [x] The test262 compile sweep before/after.
 
 ## Log
 
@@ -72,6 +72,38 @@ agent.
   Touched `crates/djs-wasm/src/lib.rs` (outside `touches:`) by one line: its
   `CompileOptions` literal needs `privileged: false`.
 
+- Part 2:
+  - Object literal methods, getters/setters, and computed keys with runtime naming
+    (`set_function_name`), D1271.
+  - `__proto__: v` → `set_proto`. Duplicates are an early error except in patterns,
+    which the test262 sweep caught.
+  - `delete` of optional chains; `super` in methods rejected as not supported yet.
+  - `in`/`instanceof` were already right. `delete` now works in all forms.
+  - Snapshot `objects.js`, about 12 new error cases (qjs positions), `end_to_end_objects`
+    (11, passing now) and the ignored `end_to_end_objects_0028` (14, needs 0028). All
+    are checked against qjs (`work/scratch/0027/qjs_check.py <test fn>`).
+- test262 compile sweep: 24,742 → 25,999 compile; "not supported yet" 25,786 → 24,330.
+  No new missing early errors.
+
 ## Follow-ups
 
+- 0028 (heap agent): implement `call_intrinsic` (D1270), `define_method[_elem]`,
+  `define_getter[_elem]`, `define_setter[_elem]`, `set_proto`, `set_function_name`,
+  `array_spread` (iterables), `call_spread`, `construct_spread`; then un-ignore
+  `compiler::tests::end_to_end_objects_0028`.
+- `super` in object methods (home objects) with classes, P1-7.
+- `delete (a?.b)` (parenthesized chain) yields true without deleting; the spec deletes.
+  Rare.
+
 ## Result
+
+Part 1 (merged early, ac51f50): the intrinsic id table (D1270), privileged mode
+(`CompileOptions { privileged: true }`: `%Name(args)` → `call_intrinsic`; the
+generated prelude compiles), and spread arguments.
+
+Part 2: object literals are complete except for `super`: methods, getters/setters,
+computed keys with runtime function naming, shorthand, `__proto__:`, spread; `delete`
+in all forms (D1271).
+
+**Un-ignore `compiler::tests::end_to_end_objects_0028` when 0028 lands.**
+test262 compile sweep: 24,742 → 25,999 compile; "not supported yet" 25,786 → 24,330.
