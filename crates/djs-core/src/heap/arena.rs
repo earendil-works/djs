@@ -297,6 +297,14 @@ impl Arena {
     pub fn zero(&mut self, off: u32, len: u32) {
         self.slice_mut(off, len).fill(0);
     }
+
+    /// Frees everything from `to` on (`to <= len`): the bytes are zeroed again, so the
+    /// frontier invariant holds and the next allocation there starts from zeros.
+    pub(crate) fn truncate(&mut self, to: u32) {
+        assert!(to <= self.len, "truncate past the end");
+        self.bytes[to as usize..self.len as usize].fill(0);
+        self.len = to;
+    }
 }
 
 /// Appends zero bytes up to length `len` (nothing if already that long). `resize` is a

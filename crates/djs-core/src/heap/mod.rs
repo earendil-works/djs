@@ -304,6 +304,34 @@ impl Heap {
         }
     }
 
+    /// Starts allocating a suspension record (D1710): until [`Heap::end_unbudgeted`],
+    /// allocations ignore the memory cap and do not make a collection pending. A record
+    /// exists only when a fuel slice ends inside an intrinsic, so if it counted, the GC
+    /// and out-of-memory points would depend on the slice size. Returns what `end`
+    /// restores.
+    pub(crate) fn begin_unbudgeted(&mut self) -> (u32, bool) {
+        let saved = (self.arena.limit(), self.gc_pending);
+        self.arena.set_limit(arena::MAX_ARENA);
+        saved
+    }
+
+    /// Ends [`Heap::begin_unbudgeted`].
+    pub(crate) fn end_unbudgeted(&mut self, (limit, pending): (u32, bool)) {
+        self.arena.set_limit(limit);
+        self.gc_pending = pending;
+    }
+
+    /// Frees the cells from `start` to `end` if they are the last ones in the arena: a
+    /// suspension record that its intrinsic has read back on resuming (D1710). Then the
+    /// arena is exactly as if the slice had not ended there. If anything was allocated
+    /// after them (the host, between two `run`s), they stay as garbage.
+    pub(crate) fn release_top(&mut self, start: u32, end: u32) {
+        if self.arena.len() == end && start <= end {
+            self.arena.truncate(start);
+            self.gc_pending = self.arena.len() >= self.gc_threshold;
+        }
+    }
+
     /// The arena bytes: a complete, position-independent image of the heap.
     #[inline]
     pub fn bytes(&self) -> &[u8] {

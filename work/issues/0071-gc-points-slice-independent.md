@@ -1,7 +1,7 @@
 # 0071: GC points and raw images independent of fuel slice size
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0071-gc-points-slice-independent
 depends-on: -
 touches: crates/djs-core/src/vm/ (run start), crates/djs-core/src/interp/ + regexp/builtins (progress records), crates/djs-core/src/heap/ (threshold accounting)

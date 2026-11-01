@@ -319,6 +319,27 @@ impl Exec<'_> {
         ExecState::from_words(&words)
     }
 
+    /// Allocates a suspension record with `f` outside the memory cap and the GC threshold
+    /// (D1710): it exists only because the slice ended here.
+    fn unbudgeted<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<T, Fault>) -> Result<T, Fault> {
+        let saved = self.heap.begin_unbudgeted();
+        let r = f(self);
+        self.heap.end_unbudgeted(saved);
+        r
+    }
+
+    /// Frees the suspension record in `slot` once the resumed intrinsic has read it
+    /// (D1710): `first` is its first cell (the matcher state), the slot's value its last.
+    /// Nothing else was allocated since, unless the host did between the two `run`s, so
+    /// the arena ends up as if the slice had not ended inside the intrinsic.
+    fn release_progress(&mut self, slot: u32, first: Value) {
+        if let (Some(a), Some(b)) = (first.as_internal(), self.get(slot).as_internal()) {
+            self.set(slot, Value::UNDEFINED);
+            let end = b + self.heap.cell_size(b);
+            self.heap.release_top(a, end);
+        }
+    }
+
     /// Stops `run` with the intrinsic's progress in its `state` argument slot; the next
     /// `run` executes the same `call_intrinsic` again and continues from there (D1332).
     fn suspend_in(&mut self, slot: u32, progress: Value) -> Step {
@@ -389,11 +410,13 @@ impl Exec<'_> {
             if test { Value::FALSE } else { Value::NULL }
         } else {
             let prog = re::program(self.heap, r);
-            let pending = self.load_exec_state(self.get(state_slot));
+            let state = self.get(state_slot);
+            let pending = self.load_exec_state(state);
+            self.release_progress(state_slot, state);
             let sticky = flags.contains(Flags::STICKY);
             match self.run_matcher(&prog, flat, last as usize, sticky, pending) {
                 ExecResult::OutOfFuel(st) => {
-                    let saved = self.save_exec_state(&st)?;
+                    let saved = self.unbudgeted(|ex| ex.save_exec_state(&st))?;
                     return self.suspend_in(state_slot, saved);
                 }
                 ExecResult::StackOverflow => return regexp_overflow(),
@@ -507,6 +530,7 @@ impl Exec<'_> {
                 (self.heap.new_array(Some(proto), 0)?, 0, 0, None)
             }
         };
+        self.release_progress(state_slot, self.progress(state, 3));
         let mut len = self.heap.array_length(a);
         let push = |ex: &mut Self, len: &mut u32, v: Value| -> Result<bool, Fault> {
             let key = crate::heap::Atom::int(*len)
@@ -521,13 +545,15 @@ impl Exec<'_> {
             }
             match self.run_matcher(&prog, flat, q, false, pending.take()) {
                 ExecResult::OutOfFuel(st) => {
-                    let saved = self.save_exec_state(&st)?;
-                    let rec = self.save_progress(&[
-                        Value::object(a),
-                        Value::int(p as i32),
-                        Value::int(q as i32),
-                        saved,
-                    ])?;
+                    let rec = self.unbudgeted(|ex| {
+                        let saved = ex.save_exec_state(&st)?;
+                        ex.save_progress(&[
+                            Value::object(a),
+                            Value::int(p as i32),
+                            Value::int(q as i32),
+                            saved,
+                        ])
+                    })?;
                     return self.suspend_in(state_slot, rec);
                 }
                 ExecResult::StackOverflow => return regexp_overflow(),
@@ -603,17 +629,22 @@ impl Exec<'_> {
             ),
             None => (alloc::vec::Vec::new(), 0, 0, None),
         };
+        self.release_progress(state_slot, self.progress(state, 3));
         while last <= size {
             match self.run_matcher(&prog, flat, last, sticky, pending.take()) {
                 ExecResult::OutOfFuel(st) => {
-                    let saved = self.save_exec_state(&st)?;
-                    let acc = re::string_from_units(self.heap, &out)?;
-                    let rec = self.save_progress(&[
-                        Value::string(acc),
-                        Value::int(next_pos as i32),
-                        Value::int(last as i32),
-                        saved,
-                    ])?;
+                    let rec = self.unbudgeted(|ex| {
+                        let saved = ex.save_exec_state(&st)?;
+                        // A fresh cell (never a shared one-character string): it is freed
+                        // with the record.
+                        let acc = ex.heap.alloc_utf16(&out)?;
+                        ex.save_progress(&[
+                            Value::string(acc),
+                            Value::int(next_pos as i32),
+                            Value::int(last as i32),
+                            saved,
+                        ])
+                    })?;
                     return self.suspend_in(state_slot, rec);
                 }
                 ExecResult::StackOverflow => return regexp_overflow(),

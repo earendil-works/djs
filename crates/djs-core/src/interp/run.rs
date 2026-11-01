@@ -459,8 +459,7 @@ impl<'h> Exec<'h> {
         self.pc = 0;
         self.enter_template(t);
         // Frame entry is a safepoint, except for the entry call: `Vm::call` must
-        // not collect, so the embedder's raw values stay valid until `run`
-        // (whose start is a safepoint anyway).
+        // not collect, so the embedder's raw values stay valid until `run`.
         if !entry {
             self.safepoint();
         }
@@ -993,7 +992,8 @@ impl<'h> Exec<'h> {
                 return st;
             }
         }
-        self.safepoint();
+        // No safepoint here (D1710): a collection that became pending waits for the next
+        // natural safepoint, so where it runs does not depend on where a slice ended.
         // Pay the overshoot of the previous run first (D1740): with a debt larger than
         // the fuel, the run stops at once and the rest of the debt carries on.
         self.fuel = self.fuel.saturating_sub(state::fuel_debt(self.heap));
