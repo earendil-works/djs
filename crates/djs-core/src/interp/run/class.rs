@@ -22,6 +22,9 @@ use crate::interp::frame::Continuation;
 use crate::interp::realm::{ErrorKind, Intrinsic, intrinsic_obj};
 use crate::value::{Obj, Value};
 
+const PROXY_CREATE_DATA_PROPERTY_OR_THROW: u16 =
+    super::intrinsics::id("ProxyCreateDataPropertyOrThrow");
+
 fn reference_error<T>(msg: &str) -> Result<T, Fault> {
     Err(Fault::Error(ErrorKind::ReferenceError, msg.into()))
 }
@@ -219,6 +222,17 @@ impl Exec<'_> {
                 let (o, k, v) = (self.top(2), self.top(1), self.top(0));
                 let key = self.property_key(o, k)?;
                 let obj = o.as_object().expect("class field target");
+                if self.heap.is_proxy(obj) {
+                    // The proxy's defineProperty trap.
+                    self.sp -= 2;
+                    self.pc = next;
+                    let k = self.heap.atom_to_value(key)?;
+                    return self.call_prelude(
+                        PROXY_CREATE_DATA_PROPERTY_OR_THROW,
+                        &[o, k, v],
+                        Continuation::DiscardResult,
+                    );
+                }
                 // CreateDataPropertyOrThrow.
                 if !self.heap.create_data_property(obj, key, v)? {
                     return type_error(if self.heap.has_own_property(obj, key) {
@@ -317,8 +331,10 @@ impl Exec<'_> {
 
     /// PrivateFieldAdd and PrivateMethodOrAccessorAdd: a non-extensible object takes
     /// no new private elements (nonextensible-applies-to-private; qjs still adds them).
+    /// A proxy keeps them on the proxy object itself, which the heap marks
+    /// non-extensible (its [[IsExtensible]] would be the trap: not consulted).
     fn private_add_check(&self, obj: Obj) -> Result<(), Fault> {
-        if !self.heap.is_extensible(obj) {
+        if !self.heap.is_proxy(obj) && !self.heap.is_extensible(obj) {
             return type_error("object is not extensible");
         }
         Ok(())
@@ -428,6 +444,17 @@ impl Exec<'_> {
         let Some(r) = this.as_object() else {
             return type_error("not an object");
         };
+        if self.heap.is_proxy(r) {
+            // Its getOwnPropertyDescriptor and defineProperty traps. (A false result is
+            // not a TypeError here yet.)
+            self.sp -= n;
+            let k = self.heap.atom_to_value(key)?;
+            return self.call_prelude(
+                super::proxy::PROXY_SET_ON_RECEIVER,
+                &[this, k, v],
+                Continuation::DiscardResult,
+            );
+        }
         match self.heap.get_own_property(r, key) {
             Some(Property::Accessor { .. }) => return read_only(self.heap),
             Some(Property::Data { flags, .. }) => {

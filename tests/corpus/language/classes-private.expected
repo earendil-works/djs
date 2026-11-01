@@ -1,0 +1,23 @@
+15 after 1 12 after 2 2 s2
+true false [] {}
+[] [] ["length","name","prototype","count","has","peek","reveal"]
+TypeError: private class field '#balance' does not exist
+TypeError: not an object
+TypeError: invalid 'in' operand
+1
+TypeError: invalid brand on object
+TypeError: '#m' is read-only
+TypeError: '#g' is read-only
+TypeError: '#s' is read-only
+true
+7 []
+TypeError: private class field '#id' already exists
+true
+TypeError: private method is already present
+TypeError: private class field '#v' does not exist
+2
+[101,["a","b"]]
+outer undefined ["inner","outer",true,false] outer
+TypeError: private class field '#x' does not exist
+[5,true,6] ["pub"] ["pub"]
+=== completed

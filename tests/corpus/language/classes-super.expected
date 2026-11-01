@@ -1,0 +1,31 @@
+Rex makes a sound (woof) dog/animal ["sit"] true true
+true true
+Bit makes a sound (woof) Puppy 0
+[1,2,3] Derived
+Derived
+ReferenceError: this is not initialized
+ReferenceError: 'this' can be initialized only once
+ReferenceError: this is not initialized
+{"custom":true}
+TypeError: derived class constructor must return an object or undefined
+TypeError: derived class constructor must return an object or undefined
+object
+[7]
+["late"]
+TypeError: parent class must be constructor
+TypeError: parent prototype must be an object or null
+[true,null]
+true
+TypeError: not a constructor
+[5,6,7,["seen","w","x1"]] null
+ReferenceError: unsupported reference to 'super'
+TypeError: object is not extensible
+TypeError: cannot read property 'x' of null
+proto hi o! greet proto hi o
+proto hi moved!
+10 4 true true true
+MyError: bad true bad [object Error]
+a z 1
+true true
+my promise 1
+=== completed

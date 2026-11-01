@@ -176,3 +176,36 @@ class Outer {
   }
 }
 console.log(Outer.read(new Outer()), Outer.read(null), new Outer().inner(), new Outer().arrow());
+
+// Proxies: private names never trap and live on the proxy object itself; public fields
+// go through its defineProperty trap.
+class PA {
+  #x = 1;
+  static g(o) {
+    return o.#x;
+  }
+}
+t(() => PA.g(new Proxy(new PA(), {})));
+const traps = [];
+class PB {
+  constructor() {
+    return new Proxy(
+      {},
+      {
+        defineProperty(t, k, d) {
+          traps.push(String(k));
+          return Reflect.defineProperty(t, k, d);
+        },
+      },
+    );
+  }
+}
+class PC extends PB {
+  #y = 5;
+  pub = 6;
+  static g(o) {
+    return [o.#y, #y in o, o.pub];
+  }
+}
+const pc = new PC();
+console.log(PC.g(pc), traps, Reflect.ownKeys(pc));

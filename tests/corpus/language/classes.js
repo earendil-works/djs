@@ -169,8 +169,8 @@ class G {
   }
 }
 console.log([...new G().gen()], [...G]);
-new G().am().then((v) => console.log("async method", v));
-G.ag().next().then((r) => console.log("async gen", r.value));
+console.log("async method", await new G().am());
+console.log("async gen", (await G.ag().next()).value);
 console.log(typeof G.prototype.gen.prototype, G.prototype.am.prototype);
 
 // Accessor pairs and statics merge; static and instance names may repeat.

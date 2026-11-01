@@ -18,3 +18,5 @@ TypeError: private class field '#v' does not exist
 2
 [101,["a","b"]]
 outer undefined ["inner","outer",true,false] outer
+TypeError: private class field '#x' does not exist
+[5,true,6] ["pub"] ["pub"]
