@@ -639,8 +639,9 @@ impl<'a, 'h> Parser<'a, 'h> {
             let v = self.lx.ident_value(&self.tok, &mut self.buf8);
             return String::from_utf8_lossy(v).into_owned();
         }
+        // qjs shows the end of input as an empty token (D2071).
         if self.tok.kind == TokenKind::Eof {
-            return String::from("end of input");
+            return String::new();
         }
         String::from_utf8_lossy(self.lx.text(&self.tok)).into_owned()
     }

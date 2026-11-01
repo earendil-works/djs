@@ -1,0 +1,17 @@
+decl=["c1","c2","c3","c4","c5","c6"]
+member=["","","","","",""]
+call=["","","bound ","bound call"]
+operators=["","","","","",""]
+let/var=["l1","","v1",0]
+assign=["a1","","bound ","a4",""]
+params=["p1","",""]
+destructuring=["d1","","d3",0,"d5",""]
+object=["p","","",""]
+fields=["f1","","f3","","#f5"]
+    at <anonymous> (case:58:30)
+    at <anonymous> (case:58:42)
+
+    at <anonymous> (case:60:46)
+    at <anonymous> (case:60:61)
+
+=== completed

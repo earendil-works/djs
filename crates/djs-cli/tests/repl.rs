@@ -78,7 +78,7 @@ fn multi_line_input() {
     // An input still incomplete at the end of input is an error.
     check(
         "let a = (1 +\n",
-        "SyntaxError: unexpected token in expression: 'end of input' at repl:1:13\n",
+        "SyntaxError: unexpected token in expression: '' at repl:1:13\n",
     );
 }
 

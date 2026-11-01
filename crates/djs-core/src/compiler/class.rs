@@ -279,7 +279,8 @@ impl Parser<'_, '_> {
                 continue;
             }
             if self.is(TokenKind::Eof) {
-                return syntax(self.tok.start, "expecting '}'");
+                // qjs: a member expected at the end of input (D2071).
+                return syntax(self.tok.start, "invalid property name");
             }
             let mut dec_start = None;
             if self.is(TokenKind::At) {

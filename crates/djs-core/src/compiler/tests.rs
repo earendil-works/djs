@@ -78,7 +78,7 @@ fn errors() {
     let cases: &[(&str, &str, u32, u32)] = &[
         (
             "1 +",
-            "unexpected token in expression: 'end of input'",
+            "unexpected token in expression: ''",
             1,
             4,
         ),
@@ -1267,7 +1267,7 @@ fn display() {
     let e = err("1 +");
     assert_eq!(
         alloc::format!("{e}"),
-        "SyntaxError: unexpected token in expression: 'end of input' at 1:4"
+        "SyntaxError: unexpected token in expression: '' at 1:4"
     );
     let _: String = e.message;
 }

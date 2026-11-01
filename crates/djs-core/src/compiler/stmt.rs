@@ -205,7 +205,8 @@ impl Parser<'_, '_> {
         let using = self.begin_using_list(true);
         while !self.is(TokenKind::RBrace) {
             if self.is(TokenKind::Eof) {
-                return syntax(self.tok.start, "expecting '}'");
+                // qjs: a statement expected at the end of input (D2071).
+                return self.unexpected();
             }
             self.parse_statement_list_item()?;
         }
@@ -843,7 +844,8 @@ impl Parser<'_, '_> {
             self.f.open_trys += 1;
             while !self.is(TokenKind::RBrace) {
                 if self.is(TokenKind::Eof) {
-                    return syntax(self.tok.start, "expecting '}'");
+                    // qjs: a statement expected at the end of input (D2071).
+                    return self.unexpected();
                 }
                 self.parse_statement_list_item()?;
             }
@@ -967,7 +969,8 @@ impl Parser<'_, '_> {
                 TokenKind::Case | TokenKind::Default | TokenKind::RBrace
             ) {
                 if self.is(TokenKind::Eof) {
-                    return syntax(self.tok.start, "expecting '}'");
+                    // qjs: a statement expected at the end of input (D2071).
+                    return self.unexpected();
                 }
                 self.parse_statement_list_item()?;
             }

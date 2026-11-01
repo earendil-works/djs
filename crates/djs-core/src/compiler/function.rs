@@ -356,7 +356,8 @@ impl Parser<'_, '_> {
         let using = self.begin_using_list(true);
         while !self.is(TokenKind::RBrace) {
             if self.is(TokenKind::Eof) {
-                return syntax(self.tok.start, "expecting '}'");
+                // qjs: a statement expected at the end of input (D2071).
+                return self.unexpected();
             }
             if directives {
                 if self.is(TokenKind::String) {

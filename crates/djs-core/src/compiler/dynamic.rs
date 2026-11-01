@@ -50,6 +50,11 @@ impl Parser<'_, '_> {
         self.parse_params()?;
         let paren = self.prev_end - 1;
         if paren != params_close {
+            // qjs parses the wrapped source as one function expression: the parameter
+            // list ended, so it expects the body (D2071).
+            if !self.is(TokenKind::LBrace) {
+                return syntax(self.tok.start, "expecting '{'");
+            }
             return syntax(paren, "parameters end before the parameter list");
         }
         self.parse_function_body()?;
@@ -59,6 +64,16 @@ impl Parser<'_, '_> {
         let child = self.end_function()?;
         self.leave();
         if !self.is(TokenKind::Eof) {
+            // The body closed the function early. qjs's source is `(function ...)`, so
+            // it expects the `)` next; after one, the wrapper's own `}` is the
+            // unexpected token (D2071).
+            if !self.is(TokenKind::RParen) {
+                return syntax(self.tok.start, "expecting ')'");
+            }
+            self.next()?;
+            if self.is(TokenKind::RBrace) {
+                return syntax(self.tok.start, "unexpected token in expression: '}'");
+            }
             return syntax(self.tok.start, "unexpected token after the function body");
         }
         self.code().fclosure(child);
