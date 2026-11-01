@@ -344,7 +344,6 @@ pub(crate) fn repeat(heap: &mut Heap, s: Str, n: u32) -> Result<Str, Fault> {
 /// (already validated) in the dense array `list`.
 pub(crate) fn from_codes(heap: &mut Heap, list: Obj, points: bool) -> Result<Str, Fault> {
     let n = heap.array_length(list);
-    let mut out = Vec::with_capacity(n as usize);
     let code = |v: Value| match v.as_int() {
         Some(i) => i as u32,
         None => {
@@ -356,29 +355,68 @@ pub(crate) fn from_codes(heap: &mut Heap, list: Obj, points: bool) -> Result<Str
             }
         }
     };
+    let emit = |out: &mut Units, v: Value| {
+        if points {
+            let c = code(v);
+            if c >= 0x10000 {
+                let c = c - 0x10000;
+                out.push(0xD800 + (c >> 10) as u16);
+                out.push(0xDC00 + (c & 0x3FF) as u16);
+                return;
+            }
+            out.push(c as u16);
+        } else {
+            out.push(code(v) as u16);
+        }
+    };
+    // A few units (`String.fromCharCode(c)` in a loop) go through a stack buffer: no Rust
+    // allocation per call (D1871).
+    let mut out = if n <= 32 {
+        Units::Small([0; 64], 0)
+    } else {
+        Units::Big(Vec::with_capacity(n as usize))
+    };
     match heap.dense_array_values(list) {
         // One pass over the dense store (D1784).
-        Some(vs) => {
-            for v in vs {
-                if points {
-                    push_code_point(&mut out, code(v));
-                } else {
-                    out.push(code(v) as u16);
-                }
-            }
-        }
+        Some(vs) => vs.for_each(|v| emit(&mut out, v)),
         None => {
             for i in 0..n {
                 let v = heap.get_element_fast(list, i).unwrap_or(Value::int(0));
-                if points {
-                    push_code_point(&mut out, code(v));
-                } else {
-                    out.push(code(v) as u16);
-                }
+                emit(&mut out, v);
             }
         }
     }
-    Ok(heap.alloc_utf16(&out)?)
+    Ok(heap.alloc_utf16(out.as_slice())?)
+}
+
+/// Code units collected on the stack while there are few, else in a Vec.
+enum Units {
+    Small([u16; 64], usize),
+    Big(Vec<u16>),
+}
+
+impl Units {
+    fn push(&mut self, u: u16) {
+        match self {
+            Units::Small(buf, n) if *n < buf.len() => {
+                buf[*n] = u;
+                *n += 1;
+            }
+            Units::Small(buf, n) => {
+                let mut v = buf[..*n].to_vec();
+                v.push(u);
+                *self = Units::Big(v);
+            }
+            Units::Big(v) => v.push(u),
+        }
+    }
+
+    fn as_slice(&self) -> &[u16] {
+        match self {
+            Units::Small(buf, n) => &buf[..*n],
+            Units::Big(v) => v,
+        }
+    }
 }
 
 /// `normalize(form)` (form 0 NFC, 1 NFD, 2 NFKC, 3 NFKD). With the
