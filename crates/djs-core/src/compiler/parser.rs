@@ -164,6 +164,67 @@ pub(super) struct Parser<'a, 'h> {
     /// The local holding the completion value of Script and eval code
     /// (`Parser::emit_completion`).
     pub completion: Option<Atom>,
+    /// The atoms of the identifiers seen so far, by source text (0096).
+    pub ident_atoms: IdentAtoms,
+}
+
+/// The atoms of unescaped identifiers by their text in the source: most names repeat,
+/// and interning through the heap's table (hash, array-index check, probe, compare
+/// through the heap) cost 5% of a compile (0096). Open addressing, keyed by the hash of
+/// the bytes; an entry is `(hash, start, len, atom)` with the text at `src[start..]`.
+#[derive(Default)]
+pub struct IdentAtoms {
+    slots: Vec<(u32, u32, u32, Atom)>,
+    len: usize,
+}
+
+impl IdentAtoms {
+    fn hash(b: &[u8]) -> u32 {
+        let mut h: u32 = 0x811C_9DC5;
+        for &c in b {
+            h = (h ^ u32::from(c)).wrapping_mul(0x0100_0193);
+        }
+        h | 1
+    }
+
+    fn get(&self, src: &[u8], b: &[u8], h: u32) -> Option<Atom> {
+        if self.slots.is_empty() {
+            return None;
+        }
+        let mask = self.slots.len() - 1;
+        let mut i = h as usize & mask;
+        loop {
+            let (k, start, len, a) = self.slots[i];
+            if k == 0 {
+                return None;
+            }
+            if k == h && src.get(start as usize..(start + len) as usize) == Some(b) {
+                return Some(a);
+            }
+            i = (i + 1) & mask;
+        }
+    }
+
+    fn insert(&mut self, h: u32, start: u32, len: u32, a: Atom) {
+        if (self.len + 1) * 2 > self.slots.len() {
+            let cap = (self.slots.len() * 2).max(256);
+            let old = core::mem::replace(&mut self.slots, alloc::vec![(0, 0, 0, Atom::NULL); cap]);
+            for e in old.into_iter().filter(|e| e.0 != 0) {
+                self.put(e);
+            }
+        }
+        self.put((h, start, len, a));
+        self.len += 1;
+    }
+
+    fn put(&mut self, e: (u32, u32, u32, Atom)) {
+        let mask = self.slots.len() - 1;
+        let mut i = e.0 as usize & mask;
+        while self.slots[i].0 != 0 {
+            i = (i + 1) & mask;
+        }
+        self.slots[i] = e;
+    }
 }
 
 /// Erased TypeScript ranges: `start..end` byte offsets and the kind (`ts::ER_*`).
@@ -260,6 +321,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             ts_params_end: 0,
             using: Default::default(),
             completion: None,
+            ident_atoms: IdentAtoms::default(),
         };
         p.f.src_end = src.len() as u32;
         if kind == FuncKind::AsyncBody {
@@ -756,6 +818,17 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// name with its `#`).
     pub fn ident_atom(&mut self) -> PResult<Atom> {
         let tok = self.tok;
+        if !tok.has_escape() {
+            let b = self.lx.text(&tok);
+            let h = IdentAtoms::hash(b);
+            if let Some(a) = self.ident_atoms.get(self.src, b, h) {
+                return Ok(a);
+            }
+            let s = core::str::from_utf8(b).unwrap_or("\u{FFFD}");
+            let a = self.heap.atom_str(s)?;
+            self.ident_atoms.insert(h, tok.start, b.len() as u32, a);
+            return Ok(a);
+        }
         let bytes = self.lx.ident_value(&tok, &mut self.buf8);
         let s = core::str::from_utf8(bytes).unwrap_or("\u{FFFD}");
         Ok(self.heap.atom_str(s)?)
