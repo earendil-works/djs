@@ -32,7 +32,17 @@ step() {
 
 step "fmt";   cargo fmt --all --check
 step "clippy"; cargo clippy --workspace --all-targets --quiet -- -D warnings
-step "test";  cargo test --workspace --quiet
+step "test"
+# Through scripts/test-runner.sh, which records each test's time (0079): the slowest are
+# printed below and kept in target/gate-slowest-tests.tsv, so a slow new test shows at
+# once; merge-to-main collects them in work/scratch/slow-tests.tsv.
+host=$(rustc -vV | sed -n 's/^host: //p' | tr 'a-z-' 'A-Z_')
+: > target/test-times.tsv
+env "CARGO_TARGET_${host}_RUNNER=$PWD/scripts/test-runner.sh" \
+  DJS_TEST_TIMES="$PWD/target/test-times.tsv" cargo test --workspace --quiet
+echo "slowest tests:"
+sort -rn target/test-times.tsv | head -10 | tee target/gate-slowest-tests.tsv |
+  awk -F'\t' '{printf "  %7.2fs  %s  %s\n", $1, $2, $3}'
 step "no_std/wasm build of djs-core"
 cargo build -p djs-core --target wasm32-unknown-unknown --quiet
 # Clippy for wasm32 in release (no debug_assertions), so warnings that only appear in
@@ -75,10 +85,13 @@ cargo run --quiet -p djs-difftest -- --engine djs --backend bytecode --ratchet -
 grep -E '^ratchet:' target/difftest-djs-bytecode.log
 step "test262 on djs: the active group against the ratchet (0007)"
 ./scripts/fetch-test262.sh > /dev/null
-cargo run --quiet -p djs-test262 -- run --engine djs --group active --quiet \
+cargo run --quiet -p djs-test262 -- run --engine djs --group active --quiet --slowest 10 \
   --expected tests/test262/expected-failures.txt > target/test262-djs.log \
   || { cat target/test262-djs.log; exit 1; }
 grep -E '^ratchet:|^\| active' target/test262-djs.log
+echo "slowest test262 tests:"
+sed -n '/^slowest:/,/^$/p' target/test262-djs.log | { grep -E '^ +[0-9]' || true; } |
+  tee target/gate-slowest-test262.txt
 step END
 cpu; printf 'total\t%s\t%s\n' $(($(date +%s) - gate_start)) "$cpu_s" >> "$step_log"
 echo "gate: OK"

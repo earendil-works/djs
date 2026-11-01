@@ -38,6 +38,14 @@ log_merge() {
     sed "s|^|$(date -r "$t_start" '+%F %T')\t$branch\t|" "$gate_wt/target/gate-steps.tsv" \
       >> "$main_root/work/scratch/gate-steps.tsv"
   fi
+  # The gate's 10 slowest unit tests and test262 tests (gate.sh writes them).
+  if [ "$outcome" = merged ]; then
+    local when; when=$(date -r "$t_start" '+%F %T')
+    awk -F'\t' -v p="$when\t$branch" '{print p "\ttest\t" $1 "\t" $2 "::" $3}' \
+      "$gate_wt/target/gate-slowest-tests.tsv" >> "$main_root/work/scratch/slow-tests.tsv" 2>/dev/null || true
+    awk -v p="$when\t$branch" '{sub("s$", "", $1); print p "\ttest262\t" $1 "\t" $2}' OFS='\t' \
+      "$gate_wt/target/gate-slowest-test262.txt" >> "$main_root/work/scratch/slow-tests.tsv" 2>/dev/null || true
+  fi
 }
 
 lock="$main_root/work/scratch/merge.lock"

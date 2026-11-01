@@ -81,3 +81,8 @@ it: its warm `target/` is the point), and is created on first use.
   resolving by hand: resolve, `git rebase --continue`, run merge-to-main again.
 - merge-to-main fails right away if the primary checkout has uncommitted changes (the
   coordinator edits there only under the lock).
+- Every attempt is logged in `work/scratch/` of the primary checkout: `merge-log.tsv`
+  (lock wait, rebase, gate, outcome), `gate-steps.tsv` (each gate step's wall and CPU
+  seconds) and `slow-tests.tsv` (the gate's 10 slowest unit tests and test262 tests).
+  `scripts/merge-stats.sh [HOURS]` summarizes them per hour. The gate prints its slowest
+  tests too (via `scripts/test-runner.sh`), so a slow new test shows in its own merge.
