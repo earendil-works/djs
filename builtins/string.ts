@@ -99,7 +99,6 @@ function ClampPosition(v: Value, len: f64): f64 {
 /**
  * String.prototype.at ( index ), 22.1.3.1.
  * @builtin String.prototype.at
- * @native
  * @fast
  */
 function StringPrototypeAt(this: Value, index: Value): Value {
@@ -116,7 +115,6 @@ function StringPrototypeAt(this: Value, index: Value): Value {
 /**
  * String.prototype.charAt ( pos ), 22.1.3.2.
  * @builtin String.prototype.charAt
- * @native
  * @fast
  */
 function StringPrototypeCharAt(this: Value, pos: Value): Str {
@@ -131,7 +129,6 @@ function StringPrototypeCharAt(this: Value, pos: Value): Str {
 /**
  * String.prototype.charCodeAt ( pos ), 22.1.3.3.
  * @builtin String.prototype.charCodeAt
- * @native
  * @fast
  */
 function StringPrototypeCharCodeAt(this: Value, pos: Value): f64 {
@@ -142,7 +139,6 @@ function StringPrototypeCharCodeAt(this: Value, pos: Value): f64 {
 /**
  * String.prototype.codePointAt ( pos ), 22.1.3.4.
  * @builtin String.prototype.codePointAt
- * @native
  * @fast
  */
 function StringPrototypeCodePointAt(this: Value, pos: Value): Value {
@@ -155,7 +151,6 @@ function StringPrototypeCodePointAt(this: Value, pos: Value): Value {
 /**
  * String.prototype.indexOf ( searchString [ , position ] ), 22.1.3.9.
  * @builtin String.prototype.indexOf
- * @native
  * @fast
  */
 function StringPrototypeIndexOf(this: Value, searchString: Value, position?: Value): f64 {
@@ -202,7 +197,6 @@ function StringPrototypeIncludes(this: Value, searchString: Value, position?: Va
 /**
  * String.prototype.startsWith ( searchString [ , position ] ), 22.1.3.24.
  * @builtin String.prototype.startsWith
- * @native
  * @fast
  */
 function StringPrototypeStartsWith(this: Value, searchString: Value, position?: Value): boolean {
@@ -254,7 +248,6 @@ function StringPrototypeLocaleCompare(this: Value, that: Value): f64 {
 /**
  * String.prototype.slice ( start, end ), 22.1.3.22.
  * @builtin String.prototype.slice
- * @native
  * @fast
  */
 function StringPrototypeSlice(this: Value, start: Value, end: Value): Str {
@@ -271,7 +264,6 @@ function StringPrototypeSlice(this: Value, start: Value, end: Value): Str {
 /**
  * String.prototype.substring ( start, end ), 22.1.3.25.
  * @builtin String.prototype.substring
- * @native
  * @fast
  */
 function StringPrototypeSubstring(this: Value, start: Value, end: Value): Str {

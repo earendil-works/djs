@@ -8,18 +8,13 @@ use crate::interp::run::native::*;
 use crate::value::Value;
 
 const I_ADD_ENTRIES_FROM_ITERABLE: u16 = iid("AddEntriesFromIterable");
-const I_ARRAY_CAN_POP_DENSE: u16 = iid("ArrayCanPopDense");
 const I_ARRAY_CREATE: u16 = iid("ArrayCreate");
 const I_ARRAY_ITERATOR_FINISH: u16 = iid("ArrayIteratorFinish");
 const I_ARRAY_ITERATOR_INDEX: u16 = iid("ArrayIteratorIndex");
 const I_ARRAY_ITERATOR_KIND: u16 = iid("ArrayIteratorKind");
 const I_ARRAY_ITERATOR_SET_INDEX: u16 = iid("ArrayIteratorSetIndex");
 const I_ARRAY_ITERATOR_TARGET: u16 = iid("ArrayIteratorTarget");
-const I_ARRAY_JOIN_DENSE: u16 = iid("ArrayJoinDense");
-const I_ARRAY_POP_DENSE: u16 = iid("ArrayPopDense");
 const I_ARRAY_PUSH_DENSE: u16 = iid("ArrayPushDense");
-const I_ARRAY_SEARCH_DENSE: u16 = iid("ArraySearchDense");
-const I_ARRAY_SLICE_DENSE: u16 = iid("ArraySliceDense");
 const I_ARRAY_SPECIES_CREATE: u16 = iid("ArraySpeciesCreate");
 const I_AS_BOOL: u16 = iid("AsBool");
 const I_AS_FN: u16 = iid("AsFn");
@@ -53,7 +48,6 @@ const I_IS_ORIGINAL_COLLECTION_ADDER: u16 = iid("IsOriginalCollectionAdder");
 const I_IS_PROMISE: u16 = iid("IsPromise");
 const I_IS_PROXY: u16 = iid("IsProxy");
 const I_IS_RAW_J_S_O_N: u16 = iid("IsRawJSON");
-const I_IS_REG_EXP_OBJECT: u16 = iid("IsRegExpObject");
 const I_IS_TYPED_ARRAY: u16 = iid("IsTypedArray");
 const I_ITERATOR_CLOSE_THROW: u16 = iid("IteratorCloseThrow");
 const I_ITERATOR_FAST_READY: u16 = iid("IteratorFastReady");
@@ -79,12 +73,6 @@ const I_SERIALIZE_J_S_O_N_OBJECT: u16 = iid("SerializeJSONObject");
 const I_SERIALIZE_J_S_O_N_PROPERTY: u16 = iid("SerializeJSONProperty");
 const I_SORT_LIST: u16 = iid("SortList");
 const I_SORT_PRIMITIVES: u16 = iid("SortPrimitives");
-const I_STR_CHAR_CODE_AT: u16 = iid("StrCharCodeAt");
-const I_STR_CODE_POINT_AT: u16 = iid("StrCodePointAt");
-const I_STR_INDEX_OF: u16 = iid("StrIndexOf");
-const I_STR_LENGTH: u16 = iid("StrLength");
-const I_STR_SUBSTRING: u16 = iid("StrSubstring");
-const I_TO_INTEGER_OR_INFINITY_NUMBER: u16 = iid("ToIntegerOrInfinityNumber");
 const I_TO_NUMBER_PRIMITIVE: u16 = iid("ToNumberPrimitive");
 const I_TO_PRIMITIVE: u16 = iid("ToPrimitive");
 const I_TO_STRING_PRIMITIVE: u16 = iid("ToStringPrimitive");
@@ -95,9 +83,6 @@ const I_WELL_KNOWN_SYMBOL: u16 = iid("WellKnownSymbol");
 pub(crate) static NATIVES: &[NativeFn] = &[
     NativeFn { name: "ArrayPrototypeForEach", params: 2, locals: 4, run: native_ArrayPrototypeForEach, handler: handler_ArrayPrototypeForEach },
     NativeFn { name: "ArrayPrototypeMap", params: 2, locals: 7, run: native_ArrayPrototypeMap, handler: handler_ArrayPrototypeMap },
-    NativeFn { name: "ArrayPrototypeIndexOf", params: 2, locals: 9, run: native_ArrayPrototypeIndexOf, handler: handler_ArrayPrototypeIndexOf },
-    NativeFn { name: "ArrayPrototypeJoin", params: 1, locals: 10, run: native_ArrayPrototypeJoin, handler: handler_ArrayPrototypeJoin },
-    NativeFn { name: "ArrayPrototypeIncludes", params: 2, locals: 9, run: native_ArrayPrototypeIncludes, handler: handler_ArrayPrototypeIncludes },
     NativeFn { name: "ArrayPrototypePush", params: 0, locals: 5, run: native_ArrayPrototypePush, handler: handler_ArrayPrototypePush },
     NativeFn { name: "FindViaPredicate", params: 6, locals: 4, run: native_FindViaPredicate, handler: handler_FindViaPredicate },
     NativeFn { name: "ArrayPrototypeFind", params: 2, locals: 3, run: native_ArrayPrototypeFind, handler: handler_ArrayPrototypeFind },
@@ -109,8 +94,6 @@ pub(crate) static NATIVES: &[NativeFn] = &[
     NativeFn { name: "Reduce", params: 4, locals: 7, run: native_Reduce, handler: handler_Reduce },
     NativeFn { name: "ArrayPrototypeReduce", params: 1, locals: 2, run: native_ArrayPrototypeReduce, handler: handler_ArrayPrototypeReduce },
     NativeFn { name: "ArrayPrototypeReduceRight", params: 1, locals: 2, run: native_ArrayPrototypeReduceRight, handler: handler_ArrayPrototypeReduceRight },
-    NativeFn { name: "ArrayPrototypeSlice", params: 2, locals: 16, run: native_ArrayPrototypeSlice, handler: handler_ArrayPrototypeSlice },
-    NativeFn { name: "ArrayPrototypePop", params: 0, locals: 4, run: native_ArrayPrototypePop, handler: handler_ArrayPrototypePop },
     NativeFn { name: "SortList", params: 3, locals: 27, run: native_SortList, handler: handler_SortList },
     NativeFn { name: "CollectPresent", params: 3, locals: 5, run: native_CollectPresent, handler: handler_CollectPresent },
     NativeFn { name: "ArrayPrototypeSort", params: 1, locals: 7, run: native_ArrayPrototypeSort, handler: handler_ArrayPrototypeSort },
@@ -129,14 +112,6 @@ pub(crate) static NATIVES: &[NativeFn] = &[
     NativeFn { name: "PromiseReactionJob", params: 4, locals: 8, run: native_PromiseReactionJob, handler: handler_PromiseReactionJob },
     NativeFn { name: "SetConstructor", params: 1, locals: 11, run: native_SetConstructor, handler: handler_SetConstructor },
     NativeFn { name: "SetPrototypeForEach", params: 2, locals: 3, run: native_SetPrototypeForEach, handler: handler_SetPrototypeForEach },
-    NativeFn { name: "StringPrototypeAt", params: 1, locals: 8, run: native_StringPrototypeAt, handler: handler_StringPrototypeAt },
-    NativeFn { name: "StringPrototypeCharAt", params: 1, locals: 6, run: native_StringPrototypeCharAt, handler: handler_StringPrototypeCharAt },
-    NativeFn { name: "StringPrototypeCharCodeAt", params: 1, locals: 6, run: native_StringPrototypeCharCodeAt, handler: handler_StringPrototypeCharCodeAt },
-    NativeFn { name: "StringPrototypeCodePointAt", params: 1, locals: 6, run: native_StringPrototypeCodePointAt, handler: handler_StringPrototypeCodePointAt },
-    NativeFn { name: "StringPrototypeIndexOf", params: 2, locals: 10, run: native_StringPrototypeIndexOf, handler: handler_StringPrototypeIndexOf },
-    NativeFn { name: "StringPrototypeStartsWith", params: 2, locals: 12, run: native_StringPrototypeStartsWith, handler: handler_StringPrototypeStartsWith },
-    NativeFn { name: "StringPrototypeSlice", params: 2, locals: 12, run: native_StringPrototypeSlice, handler: handler_StringPrototypeSlice },
-    NativeFn { name: "StringPrototypeSubstring", params: 2, locals: 13, run: native_StringPrototypeSubstring, handler: handler_StringPrototypeSubstring },
 ];
 
 // builtins/array.ts:37 (Array.prototype.forEach)
@@ -271,308 +246,7 @@ fn handler_ArrayPrototypeMap(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:78 (Array.prototype.indexOf)
-fn native_ArrayPrototypeIndexOf(ex: &mut Exec<'_>) -> Step {
-    loop {
-        match ex.n_state() {
-            0 => {
-                let v = { let a0 = ex.n_this(); ex.n_to_object(a0)? }; ex.n_set_slot(0, v);
-                // resume point: LengthOfArrayLike
-                match { let a0 = ex.n_slot(0); ex.n_length_of_array_like(&[a0], 1) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            1 => {
-                let r = ex.n_result(); ex.n_set_slot(1, r);
-                if (f64_of(ex.n_slot(1)) == 0.0_f64) { ex.n_goto(2); continue; } else { ex.n_goto(3); continue; }
-            }
-            2 => {
-                let v = num((-1.0_f64)); return ex.n_ret(v);
-            }
-            3 => {
-                // inlined: ToIntegerOrInfinity
-                let v = ex.n_arg(1); ex.n_set_slot(3, v);
-                // inlined: ToNumber
-                let v = ex.n_slot(3); ex.n_set_slot(5, v);
-                if { let a0 = ex.n_slot(5); a0.as_object().is_some() } { ex.n_goto(6); continue; } else { ex.n_goto(7); continue; }
-            }
-            4 => {
-                if (f64_of(ex.n_slot(2)) >= f64_of(ex.n_slot(1))) { ex.n_goto(9); continue; } else { ex.n_goto(10); continue; }
-            }
-            5 => {
-                let v = num(f64_of({ let a0 = num(f64_of(ex.n_slot(4))); ex.n_leaf(I_TO_INTEGER_OR_INFINITY_NUMBER, &[a0])? })); ex.n_set_slot(2, v);
-                ex.n_goto(4); continue;
-            }
-            6 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(5); let a1 = ex.n_str("number")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 8) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            7 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(5); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(4, v);
-                ex.n_goto(5); continue;
-            }
-            8 => {
-                let r = ex.n_result(); ex.n_set_slot(6, r);
-                let v = num(f64_of({ let a0 = ex.n_slot(6); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(4, v);
-                ex.n_goto(5); continue;
-            }
-            9 => {
-                let v = num((-1.0_f64)); return ex.n_ret(v);
-            }
-            10 => {
-                if (f64_of(ex.n_slot(2)) < 0.0_f64) { ex.n_goto(11); continue; } else { ex.n_goto(12); continue; }
-            }
-            11 => {
-                let v = num((f64_of(ex.n_slot(1)) + f64_of(ex.n_slot(2)))); ex.n_set_slot(2, v);
-                if (f64_of(ex.n_slot(2)) < 0.0_f64) { ex.n_goto(13); continue; } else { ex.n_goto(12); continue; }
-            }
-            12 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(0); let a1 = ex.n_arg(0); let a2 = ex.n_slot(2); let a3 = ex.n_slot(1); let a4 = Value::int(0); ex.n_leaf(I_ARRAY_SEARCH_DENSE, &[a0, a1, a2, a3, a4])? })); ex.n_set_slot(7, v);
-                if (f64_of(ex.n_slot(7)) != (-2.0_f64)) { ex.n_goto(14); continue; } else { ex.n_goto(15); continue; }
-            }
-            13 => {
-                let v = num(0.0_f64); ex.n_set_slot(2, v);
-                ex.n_goto(12); continue;
-            }
-            14 => {
-                let v = num(f64_of(ex.n_slot(7))); return ex.n_ret(v);
-            }
-            15 => {
-                let v = num(f64_of(ex.n_slot(2))); ex.n_set_slot(8, v);
-                ex.n_goto(16); continue;
-            }
-            16 => {
-                if (f64_of(ex.n_slot(8)) < f64_of(ex.n_slot(1))) { ex.n_goto(17); continue; } else { ex.n_goto(19); continue; }
-            }
-            17 => {
-                // resume point: HasProperty
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(8); ex.n_has_property(&[a0, a1], 20) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            18 => {
-                let v = num((f64_of(ex.n_slot(8)) + 1.0_f64)); ex.n_set_slot(8, v);
-                if ex.n_backedge(16) { return Ok(None); } continue;
-            }
-            19 => {
-                let v = num((-1.0_f64)); return ex.n_ret(v);
-            }
-            20 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                if bool_of(ex.n_slot(3)) { ex.n_goto(21); continue; } else { ex.n_goto(18); continue; }
-            }
-            21 => {
-                // resume point: Get
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(8); ex.n_get(&[a0, a1], 22) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            22 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                if { let a0 = ex.n_slot(3); let a1 = ex.n_arg(0); ex.n_strict_eq(a0, a1) } { ex.n_goto(23); continue; } else { ex.n_goto(18); continue; }
-            }
-            23 => {
-                let v = num(f64_of(ex.n_slot(8))); return ex.n_ret(v);
-            }
-            _ => return Err(bad_state()),
-        }
-    }
-}
-
-fn handler_ArrayPrototypeIndexOf(state: u32) -> Option<(u32, u32)> {
-    let _ = state;
-    None
-}
-
-// builtins/array.ts:114 (Array.prototype.join)
-fn native_ArrayPrototypeJoin(ex: &mut Exec<'_>) -> Step {
-    loop {
-        match ex.n_state() {
-            0 => {
-                let v = { let a0 = ex.n_this(); ex.n_to_object(a0)? }; ex.n_set_slot(0, v);
-                // resume point: LengthOfArrayLike
-                match { let a0 = ex.n_slot(0); ex.n_length_of_array_like(&[a0], 1) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            1 => {
-                let r = ex.n_result(); ex.n_set_slot(1, r);
-                let v = ex.n_str(",")?; ex.n_set_slot(2, v);
-                if !ex.n_arg(0).is_undefined() { ex.n_goto(2); continue; } else { ex.n_goto(3); continue; }
-            }
-            2 => {
-                // inlined: ToString
-                let v = ex.n_arg(0); ex.n_set_slot(3, v);
-                if { let a0 = ex.n_slot(3); a0.as_object().is_some() } { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
-            }
-            3 => {
-                let v = { let a0 = ex.n_slot(0); let a1 = ex.n_slot(1); let a2 = ex.n_slot(2); ex.n_leaf(I_ARRAY_JOIN_DENSE, &[a0, a1, a2])? }; ex.n_set_slot(5, v);
-                if !ex.n_slot(5).is_undefined() { ex.n_goto(7); continue; } else { ex.n_goto(8); continue; }
-            }
-            4 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(3); let a1 = ex.n_str("string")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            5 => {
-                let v = { let a0 = ex.n_slot(3); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(2, v);
-                ex.n_goto(3); continue;
-            }
-            6 => {
-                let r = ex.n_result(); ex.n_set_slot(4, r);
-                let v = { let a0 = ex.n_slot(4); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(2, v);
-                ex.n_goto(3); continue;
-            }
-            7 => {
-                let v = { let a0 = ex.n_slot(5); ex.n_leaf(I_AS_STR, &[a0])? }; return ex.n_ret(v);
-            }
-            8 => {
-                let v = ex.n_str("")?; ex.n_set_slot(6, v);
-                let v = num(0.0_f64); ex.n_set_slot(7, v);
-                ex.n_goto(9); continue;
-            }
-            9 => {
-                if (f64_of(ex.n_slot(7)) < f64_of(ex.n_slot(1))) { ex.n_goto(10); continue; } else { ex.n_goto(12); continue; }
-            }
-            10 => {
-                if (f64_of(ex.n_slot(7)) > 0.0_f64) { ex.n_goto(13); continue; } else { ex.n_goto(14); continue; }
-            }
-            11 => {
-                let v = num((f64_of(ex.n_slot(7)) + 1.0_f64)); ex.n_set_slot(7, v);
-                if ex.n_backedge(9) { return Ok(None); } continue;
-            }
-            12 => {
-                let v = ex.n_slot(6); return ex.n_ret(v);
-            }
-            13 => {
-                let v = { let a0 = ex.n_slot(6); let a1 = ex.n_slot(2); ex.n_concat_gc(a0, a1)? }; ex.n_set_slot(6, v);
-                ex.n_goto(14); continue;
-            }
-            14 => {
-                // resume point: Get
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(7); ex.n_get(&[a0, a1], 15) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            15 => {
-                let r = ex.n_result(); ex.n_set_slot(8, r);
-                if (!ex.n_slot(8).is_undefined() && !ex.n_slot(8).is_null()) { ex.n_goto(16); continue; } else { ex.n_goto(11); continue; }
-            }
-            16 => {
-                // inlined: ToString
-                let v = ex.n_slot(8); ex.n_set_slot(4, v);
-                if { let a0 = ex.n_slot(4); a0.as_object().is_some() } { ex.n_goto(18); continue; } else { ex.n_goto(19); continue; }
-            }
-            17 => {
-                let v = { let a0 = ex.n_slot(6); let a1 = ex.n_slot(3); ex.n_concat_gc(a0, a1)? }; ex.n_set_slot(6, v);
-                ex.n_goto(11); continue;
-            }
-            18 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(4); let a1 = ex.n_str("string")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 20) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            19 => {
-                let v = { let a0 = ex.n_slot(4); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(3, v);
-                ex.n_goto(17); continue;
-            }
-            20 => {
-                let r = ex.n_result(); ex.n_set_slot(9, r);
-                let v = { let a0 = ex.n_slot(9); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(3, v);
-                ex.n_goto(17); continue;
-            }
-            _ => return Err(bad_state()),
-        }
-    }
-}
-
-fn handler_ArrayPrototypeJoin(state: u32) -> Option<(u32, u32)> {
-    let _ = state;
-    None
-}
-
-// builtins/array.ts:155 (Array.prototype.includes)
-fn native_ArrayPrototypeIncludes(ex: &mut Exec<'_>) -> Step {
-    loop {
-        match ex.n_state() {
-            0 => {
-                let v = { let a0 = ex.n_this(); ex.n_to_object(a0)? }; ex.n_set_slot(0, v);
-                // resume point: LengthOfArrayLike
-                match { let a0 = ex.n_slot(0); ex.n_length_of_array_like(&[a0], 1) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            1 => {
-                let r = ex.n_result(); ex.n_set_slot(1, r);
-                if (f64_of(ex.n_slot(1)) == 0.0_f64) { ex.n_goto(2); continue; } else { ex.n_goto(3); continue; }
-            }
-            2 => {
-                let v = Value::bool(false); return ex.n_ret(v);
-            }
-            3 => {
-                // inlined: ToIntegerOrInfinity
-                let v = ex.n_arg(1); ex.n_set_slot(3, v);
-                // inlined: ToNumber
-                let v = ex.n_slot(3); ex.n_set_slot(5, v);
-                if { let a0 = ex.n_slot(5); a0.as_object().is_some() } { ex.n_goto(6); continue; } else { ex.n_goto(7); continue; }
-            }
-            4 => {
-                if (f64_of(ex.n_slot(2)) < 0.0_f64) { ex.n_goto(9); continue; } else { ex.n_goto(10); continue; }
-            }
-            5 => {
-                let v = num(f64_of({ let a0 = num(f64_of(ex.n_slot(4))); ex.n_leaf(I_TO_INTEGER_OR_INFINITY_NUMBER, &[a0])? })); ex.n_set_slot(2, v);
-                ex.n_goto(4); continue;
-            }
-            6 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(5); let a1 = ex.n_str("number")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 8) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            7 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(5); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(4, v);
-                ex.n_goto(5); continue;
-            }
-            8 => {
-                let r = ex.n_result(); ex.n_set_slot(6, r);
-                let v = num(f64_of({ let a0 = ex.n_slot(6); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(4, v);
-                ex.n_goto(5); continue;
-            }
-            9 => {
-                let v = num((f64_of(ex.n_slot(1)) + f64_of(ex.n_slot(2)))); ex.n_set_slot(2, v);
-                if (f64_of(ex.n_slot(2)) < 0.0_f64) { ex.n_goto(11); continue; } else { ex.n_goto(10); continue; }
-            }
-            10 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(0); let a1 = ex.n_arg(0); let a2 = ex.n_slot(2); let a3 = ex.n_slot(1); let a4 = Value::int(2); ex.n_leaf(I_ARRAY_SEARCH_DENSE, &[a0, a1, a2, a3, a4])? })); ex.n_set_slot(7, v);
-                if (f64_of(ex.n_slot(7)) != (-2.0_f64)) { ex.n_goto(12); continue; } else { ex.n_goto(13); continue; }
-            }
-            11 => {
-                let v = num(0.0_f64); ex.n_set_slot(2, v);
-                ex.n_goto(10); continue;
-            }
-            12 => {
-                let v = Value::bool((f64_of(ex.n_slot(7)) != (-1.0_f64))); return ex.n_ret(v);
-            }
-            13 => {
-                let v = num(f64_of(ex.n_slot(2))); ex.n_set_slot(8, v);
-                ex.n_goto(14); continue;
-            }
-            14 => {
-                if (f64_of(ex.n_slot(8)) < f64_of(ex.n_slot(1))) { ex.n_goto(15); continue; } else { ex.n_goto(17); continue; }
-            }
-            15 => {
-                // resume point: Get
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(8); ex.n_get(&[a0, a1], 18) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            16 => {
-                let v = num((f64_of(ex.n_slot(8)) + 1.0_f64)); ex.n_set_slot(8, v);
-                if ex.n_backedge(14) { return Ok(None); } continue;
-            }
-            17 => {
-                let v = Value::bool(false); return ex.n_ret(v);
-            }
-            18 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                if { let a0 = ex.n_slot(3); let a1 = ex.n_arg(0); leaf_SameValueZero(ex, a0, a1)? } { ex.n_goto(19); continue; } else { ex.n_goto(16); continue; }
-            }
-            19 => {
-                let v = Value::bool(true); return ex.n_ret(v);
-            }
-            _ => return Err(bad_state()),
-        }
-    }
-}
-
-fn handler_ArrayPrototypeIncludes(state: u32) -> Option<(u32, u32)> {
-    let _ = state;
-    None
-}
-
-// builtins/array.ts:225 (Array.prototype.push)
+// builtins/array.ts:222 (Array.prototype.push)
 fn native_ArrayPrototypePush(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -637,7 +311,7 @@ fn handler_ArrayPrototypePush(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:410
+// builtins/array.ts:407
 fn native_FindViaPredicate(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -689,7 +363,7 @@ fn handler_FindViaPredicate(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:430 (Array.prototype.find)
+// builtins/array.ts:427 (Array.prototype.find)
 fn native_ArrayPrototypeFind(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -717,7 +391,7 @@ fn handler_ArrayPrototypeFind(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:440 (Array.prototype.findIndex)
+// builtins/array.ts:437 (Array.prototype.findIndex)
 fn native_ArrayPrototypeFindIndex(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -745,7 +419,7 @@ fn handler_ArrayPrototypeFindIndex(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:468
+// builtins/array.ts:465
 fn native_EveryOrSome(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -804,7 +478,7 @@ fn handler_EveryOrSome(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:487 (Array.prototype.every)
+// builtins/array.ts:484 (Array.prototype.every)
 fn native_ArrayPrototypeEvery(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -826,7 +500,7 @@ fn handler_ArrayPrototypeEvery(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:496 (Array.prototype.some)
+// builtins/array.ts:493 (Array.prototype.some)
 fn native_ArrayPrototypeSome(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -848,7 +522,7 @@ fn handler_ArrayPrototypeSome(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:505 (Array.prototype.filter)
+// builtins/array.ts:502 (Array.prototype.filter)
 fn native_ArrayPrototypeFilter(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -919,7 +593,7 @@ fn handler_ArrayPrototypeFilter(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:528
+// builtins/array.ts:525
 fn native_Reduce(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1024,7 +698,7 @@ fn handler_Reduce(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:564 (Array.prototype.reduce)
+// builtins/array.ts:561 (Array.prototype.reduce)
 fn native_ArrayPrototypeReduce(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1047,7 +721,7 @@ fn handler_ArrayPrototypeReduce(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:574 (Array.prototype.reduceRight)
+// builtins/array.ts:571 (Array.prototype.reduceRight)
 fn native_ArrayPrototypeReduceRight(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1070,239 +744,7 @@ fn handler_ArrayPrototypeReduceRight(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:630 (Array.prototype.slice)
-fn native_ArrayPrototypeSlice(ex: &mut Exec<'_>) -> Step {
-    loop {
-        match ex.n_state() {
-            0 => {
-                let v = { let a0 = ex.n_this(); ex.n_to_object(a0)? }; ex.n_set_slot(0, v);
-                // resume point: LengthOfArrayLike
-                match { let a0 = ex.n_slot(0); ex.n_length_of_array_like(&[a0], 1) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            1 => {
-                let r = ex.n_result(); ex.n_set_slot(1, r);
-                // inlined: RelativeIndex
-                let v = ex.n_arg(0); ex.n_set_slot(3, v);
-                let v = ex.n_slot(1); ex.n_set_slot(4, v);
-                let v = Value::int(0); ex.n_set_slot(5, v);
-                if ex.n_slot(3).is_undefined() { ex.n_goto(3); continue; } else { ex.n_goto(4); continue; }
-            }
-            2 => {
-                // inlined: RelativeIndex
-                let v = ex.n_arg(1); ex.n_set_slot(7, v);
-                let v = ex.n_slot(1); ex.n_set_slot(6, v);
-                let v = ex.n_slot(1); ex.n_set_slot(5, v);
-                if ex.n_slot(7).is_undefined() { ex.n_goto(13); continue; } else { ex.n_goto(14); continue; }
-            }
-            3 => {
-                let v = num(f64_of(ex.n_slot(5))); ex.n_set_slot(2, v);
-                ex.n_goto(2); continue;
-            }
-            4 => {
-                // inlined: ToIntegerOrInfinity
-                let v = ex.n_slot(3); ex.n_set_slot(7, v);
-                // inlined: ToNumber
-                let v = ex.n_slot(7); ex.n_set_slot(9, v);
-                if { let a0 = ex.n_slot(9); a0.as_object().is_some() } { ex.n_goto(7); continue; } else { ex.n_goto(8); continue; }
-            }
-            5 => {
-                if (f64_of(ex.n_slot(6)) < 0.0_f64) { ex.n_goto(10); continue; } else { ex.n_goto(11); continue; }
-            }
-            6 => {
-                let v = num(f64_of({ let a0 = num(f64_of(ex.n_slot(8))); ex.n_leaf(I_TO_INTEGER_OR_INFINITY_NUMBER, &[a0])? })); ex.n_set_slot(6, v);
-                ex.n_goto(5); continue;
-            }
-            7 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(9); let a1 = ex.n_str("number")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 9) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            8 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(9); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(8, v);
-                ex.n_goto(6); continue;
-            }
-            9 => {
-                let r = ex.n_result(); ex.n_set_slot(10, r);
-                let v = num(f64_of({ let a0 = ex.n_slot(10); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(8, v);
-                ex.n_goto(6); continue;
-            }
-            10 => {
-                let v = num((f64_of(ex.n_slot(4)) + f64_of(ex.n_slot(6)))); ex.n_set_slot(7, v);
-                let v = num((if (f64_of(ex.n_slot(7)) < 0.0_f64) { 0.0_f64 } else { f64_of(ex.n_slot(7)) })); ex.n_set_slot(2, v);
-                ex.n_goto(2); continue;
-            }
-            11 => {
-                let v = num((if (f64_of(ex.n_slot(6)) < f64_of(ex.n_slot(4))) { f64_of(ex.n_slot(6)) } else { f64_of(ex.n_slot(4)) })); ex.n_set_slot(2, v);
-                ex.n_goto(2); continue;
-            }
-            12 => {
-                let v = num((if (f64_of(ex.n_slot(11)) > f64_of(ex.n_slot(2))) { (f64_of(ex.n_slot(11)) - f64_of(ex.n_slot(2))) } else { 0.0_f64 })); ex.n_set_slot(12, v);
-                // resume point: ArraySpeciesCreate
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(12); ex.n_call(I_ARRAY_SPECIES_CREATE, &[a0, a1], 22) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            13 => {
-                let v = num(f64_of(ex.n_slot(5))); ex.n_set_slot(11, v);
-                ex.n_goto(12); continue;
-            }
-            14 => {
-                // inlined: ToIntegerOrInfinity
-                let v = ex.n_slot(7); ex.n_set_slot(3, v);
-                // inlined: ToNumber
-                let v = ex.n_slot(3); ex.n_set_slot(9, v);
-                if { let a0 = ex.n_slot(9); a0.as_object().is_some() } { ex.n_goto(17); continue; } else { ex.n_goto(18); continue; }
-            }
-            15 => {
-                if (f64_of(ex.n_slot(4)) < 0.0_f64) { ex.n_goto(20); continue; } else { ex.n_goto(21); continue; }
-            }
-            16 => {
-                let v = num(f64_of({ let a0 = num(f64_of(ex.n_slot(8))); ex.n_leaf(I_TO_INTEGER_OR_INFINITY_NUMBER, &[a0])? })); ex.n_set_slot(4, v);
-                ex.n_goto(15); continue;
-            }
-            17 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(9); let a1 = ex.n_str("number")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 19) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            18 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(9); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(8, v);
-                ex.n_goto(16); continue;
-            }
-            19 => {
-                let r = ex.n_result(); ex.n_set_slot(10, r);
-                let v = num(f64_of({ let a0 = ex.n_slot(10); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(8, v);
-                ex.n_goto(16); continue;
-            }
-            20 => {
-                let v = num((f64_of(ex.n_slot(6)) + f64_of(ex.n_slot(4)))); ex.n_set_slot(3, v);
-                let v = num((if (f64_of(ex.n_slot(3)) < 0.0_f64) { 0.0_f64 } else { f64_of(ex.n_slot(3)) })); ex.n_set_slot(11, v);
-                ex.n_goto(12); continue;
-            }
-            21 => {
-                let v = num((if (f64_of(ex.n_slot(4)) < f64_of(ex.n_slot(6))) { f64_of(ex.n_slot(4)) } else { f64_of(ex.n_slot(6)) })); ex.n_set_slot(11, v);
-                ex.n_goto(12); continue;
-            }
-            22 => {
-                let r = ex.n_result(); ex.n_set_slot(13, r);
-                if bool_of({ let a0 = ex.n_slot(0); let a1 = ex.n_slot(2); let a2 = ex.n_slot(11); let a3 = ex.n_slot(13); ex.n_leaf(I_ARRAY_SLICE_DENSE, &[a0, a1, a2, a3])? }) { ex.n_goto(23); continue; } else { ex.n_goto(24); continue; }
-            }
-            23 => {
-                // resume point: Set
-                match { let a0 = ex.n_slot(13); let a1 = ex.n_str("length")?; let a2 = ex.n_slot(12); ex.n_set(&[a0, a1, a2], 25) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            24 => {
-                let v = num(0.0_f64); ex.n_set_slot(14, v);
-                let v = num(f64_of(ex.n_slot(2))); ex.n_set_slot(15, v);
-                ex.n_goto(26); continue;
-            }
-            25 => {
-                ex.n_result();
-                let v = ex.n_slot(13); return ex.n_ret(v);
-            }
-            26 => {
-                if (f64_of(ex.n_slot(15)) < f64_of(ex.n_slot(11))) { ex.n_goto(27); continue; } else { ex.n_goto(29); continue; }
-            }
-            27 => {
-                // resume point: HasProperty
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(15); ex.n_has_property(&[a0, a1], 30) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            28 => {
-                let v = num((f64_of(ex.n_slot(15)) + 1.0_f64)); ex.n_set_slot(15, v);
-                if ex.n_backedge(26) { return Ok(None); } continue;
-            }
-            29 => {
-                // resume point: Set
-                match { let a0 = ex.n_slot(13); let a1 = ex.n_str("length")?; let a2 = ex.n_slot(14); ex.n_set(&[a0, a1, a2], 35) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            30 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                if bool_of(ex.n_slot(3)) { ex.n_goto(31); continue; } else { ex.n_goto(32); continue; }
-            }
-            31 => {
-                // resume point: Get
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(15); ex.n_get(&[a0, a1], 33) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            32 => {
-                let v = num((f64_of(ex.n_slot(14)) + 1.0_f64)); ex.n_set_slot(14, v);
-                ex.n_goto(28); continue;
-            }
-            33 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                // resume point: CreateDataPropertyOrThrow
-                match { let a0 = ex.n_slot(13); let a1 = ex.n_slot(14); let a2 = ex.n_slot(3); ex.n_create_data_property_or_throw(&[a0, a1, a2], 34) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            34 => {
-                ex.n_result();
-                ex.n_goto(32); continue;
-            }
-            35 => {
-                ex.n_result();
-                let v = ex.n_slot(13); return ex.n_ret(v);
-            }
-            _ => return Err(bad_state()),
-        }
-    }
-}
-
-fn handler_ArrayPrototypeSlice(state: u32) -> Option<(u32, u32)> {
-    let _ = state;
-    None
-}
-
-// builtins/array.ts:813 (Array.prototype.pop)
-fn native_ArrayPrototypePop(ex: &mut Exec<'_>) -> Step {
-    loop {
-        match ex.n_state() {
-            0 => {
-                let v = { let a0 = ex.n_this(); ex.n_to_object(a0)? }; ex.n_set_slot(0, v);
-                if bool_of({ let a0 = ex.n_slot(0); ex.n_leaf(I_ARRAY_CAN_POP_DENSE, &[a0])? }) { ex.n_goto(1); continue; } else { ex.n_goto(2); continue; }
-            }
-            1 => {
-                let v = { let a0 = ex.n_slot(0); ex.n_leaf(I_ARRAY_POP_DENSE, &[a0])? }; return ex.n_ret(v);
-            }
-            2 => {
-                // resume point: LengthOfArrayLike
-                match { let a0 = ex.n_slot(0); ex.n_length_of_array_like(&[a0], 3) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            3 => {
-                let r = ex.n_result(); ex.n_set_slot(1, r);
-                if (f64_of(ex.n_slot(1)) == 0.0_f64) { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
-            }
-            4 => {
-                // resume point: Set
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_str("length")?; let a2 = Value::int(0); ex.n_set(&[a0, a1, a2], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            5 => {
-                let v = num((f64_of(ex.n_slot(1)) - 1.0_f64)); ex.n_set_slot(2, v);
-                // resume point: Get
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(2); ex.n_get(&[a0, a1], 7) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            6 => {
-                ex.n_result();
-                let v = Value::UNDEFINED; return ex.n_ret(v);
-            }
-            7 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                // resume point: DeletePropertyOrThrow
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(2); ex.n_call(I_DELETE_PROPERTY_OR_THROW, &[a0, a1], 8) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            8 => {
-                ex.n_result();
-                // resume point: Set
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_str("length")?; let a2 = ex.n_slot(2); ex.n_set(&[a0, a1, a2], 9) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            9 => {
-                ex.n_result();
-                let v = ex.n_slot(3); return ex.n_ret(v);
-            }
-            _ => return Err(bad_state()),
-        }
-    }
-}
-
-fn handler_ArrayPrototypePop(state: u32) -> Option<(u32, u32)> {
-    let _ = state;
-    None
-}
-
-// builtins/array.ts:929
+// builtins/array.ts:924
 fn native_SortList(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1607,7 +1049,7 @@ fn handler_SortList(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:1006
+// builtins/array.ts:1001
 fn native_CollectPresent(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1667,7 +1109,7 @@ fn handler_CollectPresent(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:1023 (Array.prototype.sort)
+// builtins/array.ts:1018 (Array.prototype.sort)
 fn native_ArrayPrototypeSort(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1754,7 +1196,7 @@ fn handler_ArrayPrototypeSort(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:1047 (Array.prototype.toSorted)
+// builtins/array.ts:1042 (Array.prototype.toSorted)
 fn native_ArrayPrototypeToSorted(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -2896,802 +2338,7 @@ fn handler_SetPrototypeForEach(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/string.ts:105 (String.prototype.at)
-fn native_StringPrototypeAt(ex: &mut Exec<'_>) -> Step {
-    loop {
-        match ex.n_state() {
-            0 => {
-                // inlined: ThisToString
-                let v = ex.n_this(); ex.n_set_slot(1, v);
-                if (ex.n_slot(1).is_undefined() || ex.n_slot(1).is_null()) { ex.n_goto(2); continue; } else { ex.n_goto(3); continue; }
-            }
-            1 => {
-                let v = num({ let a0 = ex.n_slot(0); leaf_StrLen(ex, a0)? }); ex.n_set_slot(4, v);
-                // inlined: ToIntegerOrInfinity
-                let v = ex.n_arg(0); ex.n_set_slot(1, v);
-                // inlined: ToNumber
-                let v = ex.n_slot(1); ex.n_set_slot(3, v);
-                if { let a0 = ex.n_slot(3); a0.as_object().is_some() } { ex.n_goto(9); continue; } else { ex.n_goto(10); continue; }
-            }
-            2 => {
-                let v = { let a0 = ex.n_str("null or undefined are forbidden")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
-            }
-            3 => {
-                // inlined: ToString
-                let v = ex.n_slot(1); ex.n_set_slot(2, v);
-                if { let a0 = ex.n_slot(2); a0.as_object().is_some() } { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
-            }
-            4 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(2); let a1 = ex.n_str("string")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            5 => {
-                let v = { let a0 = ex.n_slot(2); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            6 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                let v = { let a0 = ex.n_slot(3); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            7 => {
-                let v = num((if (f64_of(ex.n_slot(5)) >= 0.0_f64) { f64_of(ex.n_slot(5)) } else { (f64_of(ex.n_slot(4)) + f64_of(ex.n_slot(5))) })); ex.n_set_slot(7, v);
-                if ((f64_of(ex.n_slot(7)) < 0.0_f64) || (f64_of(ex.n_slot(7)) >= f64_of(ex.n_slot(4)))) { ex.n_goto(12); continue; } else { ex.n_goto(13); continue; }
-            }
-            8 => {
-                let v = num(f64_of({ let a0 = num(f64_of(ex.n_slot(2))); ex.n_leaf(I_TO_INTEGER_OR_INFINITY_NUMBER, &[a0])? })); ex.n_set_slot(5, v);
-                ex.n_goto(7); continue;
-            }
-            9 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(3); let a1 = ex.n_str("number")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 11) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            10 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(3); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(2, v);
-                ex.n_goto(8); continue;
-            }
-            11 => {
-                let r = ex.n_result(); ex.n_set_slot(6, r);
-                let v = num(f64_of({ let a0 = ex.n_slot(6); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(2, v);
-                ex.n_goto(8); continue;
-            }
-            12 => {
-                let v = Value::UNDEFINED; return ex.n_ret(v);
-            }
-            13 => {
-                let v = { let a0 = ex.n_slot(0); let a1 = ex.n_slot(7); let a2 = num((f64_of(ex.n_slot(7)) + 1.0_f64)); ex.n_leaf(I_STR_SUBSTRING, &[a0, a1, a2])? }; return ex.n_ret(v);
-            }
-            _ => return Err(bad_state()),
-        }
-    }
-}
-
-fn handler_StringPrototypeAt(state: u32) -> Option<(u32, u32)> {
-    let _ = state;
-    None
-}
-
-// builtins/string.ts:122 (String.prototype.charAt)
-fn native_StringPrototypeCharAt(ex: &mut Exec<'_>) -> Step {
-    loop {
-        match ex.n_state() {
-            0 => {
-                // inlined: ThisToString
-                let v = ex.n_this(); ex.n_set_slot(1, v);
-                if (ex.n_slot(1).is_undefined() || ex.n_slot(1).is_null()) { ex.n_goto(2); continue; } else { ex.n_goto(3); continue; }
-            }
-            1 => {
-                // inlined: ToIntegerOrInfinity
-                let v = ex.n_arg(0); ex.n_set_slot(1, v);
-                // inlined: ToNumber
-                let v = ex.n_slot(1); ex.n_set_slot(3, v);
-                if { let a0 = ex.n_slot(3); a0.as_object().is_some() } { ex.n_goto(9); continue; } else { ex.n_goto(10); continue; }
-            }
-            2 => {
-                let v = { let a0 = ex.n_str("null or undefined are forbidden")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
-            }
-            3 => {
-                // inlined: ToString
-                let v = ex.n_slot(1); ex.n_set_slot(2, v);
-                if { let a0 = ex.n_slot(2); a0.as_object().is_some() } { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
-            }
-            4 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(2); let a1 = ex.n_str("string")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            5 => {
-                let v = { let a0 = ex.n_slot(2); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            6 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                let v = { let a0 = ex.n_slot(3); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            7 => {
-                if ((f64_of(ex.n_slot(4)) < 0.0_f64) || (f64_of(ex.n_slot(4)) >= { let a0 = ex.n_slot(0); leaf_StrLen(ex, a0)? })) { ex.n_goto(12); continue; } else { ex.n_goto(13); continue; }
-            }
-            8 => {
-                let v = num(f64_of({ let a0 = num(f64_of(ex.n_slot(2))); ex.n_leaf(I_TO_INTEGER_OR_INFINITY_NUMBER, &[a0])? })); ex.n_set_slot(4, v);
-                ex.n_goto(7); continue;
-            }
-            9 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(3); let a1 = ex.n_str("number")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 11) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            10 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(3); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(2, v);
-                ex.n_goto(8); continue;
-            }
-            11 => {
-                let r = ex.n_result(); ex.n_set_slot(5, r);
-                let v = num(f64_of({ let a0 = ex.n_slot(5); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(2, v);
-                ex.n_goto(8); continue;
-            }
-            12 => {
-                let v = ex.n_str("")?; return ex.n_ret(v);
-            }
-            13 => {
-                let v = { let a0 = ex.n_slot(0); let a1 = ex.n_slot(4); let a2 = num((f64_of(ex.n_slot(4)) + 1.0_f64)); ex.n_leaf(I_STR_SUBSTRING, &[a0, a1, a2])? }; return ex.n_ret(v);
-            }
-            _ => return Err(bad_state()),
-        }
-    }
-}
-
-fn handler_StringPrototypeCharAt(state: u32) -> Option<(u32, u32)> {
-    let _ = state;
-    None
-}
-
-// builtins/string.ts:137 (String.prototype.charCodeAt)
-fn native_StringPrototypeCharCodeAt(ex: &mut Exec<'_>) -> Step {
-    loop {
-        match ex.n_state() {
-            0 => {
-                // inlined: ThisToString
-                let v = ex.n_this(); ex.n_set_slot(1, v);
-                if (ex.n_slot(1).is_undefined() || ex.n_slot(1).is_null()) { ex.n_goto(2); continue; } else { ex.n_goto(3); continue; }
-            }
-            1 => {
-                // inlined: ToIntegerOrInfinity
-                let v = ex.n_arg(0); ex.n_set_slot(2, v);
-                // inlined: ToNumber
-                let v = ex.n_slot(2); ex.n_set_slot(4, v);
-                if { let a0 = ex.n_slot(4); a0.as_object().is_some() } { ex.n_goto(9); continue; } else { ex.n_goto(10); continue; }
-            }
-            2 => {
-                let v = { let a0 = ex.n_str("null or undefined are forbidden")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
-            }
-            3 => {
-                // inlined: ToString
-                let v = ex.n_slot(1); ex.n_set_slot(2, v);
-                if { let a0 = ex.n_slot(2); a0.as_object().is_some() } { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
-            }
-            4 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(2); let a1 = ex.n_str("string")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            5 => {
-                let v = { let a0 = ex.n_slot(2); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            6 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                let v = { let a0 = ex.n_slot(3); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            7 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(0); let a1 = num(f64_of(ex.n_slot(1))); ex.n_leaf(I_STR_CHAR_CODE_AT, &[a0, a1])? })); return ex.n_ret(v);
-            }
-            8 => {
-                let v = num(f64_of({ let a0 = num(f64_of(ex.n_slot(3))); ex.n_leaf(I_TO_INTEGER_OR_INFINITY_NUMBER, &[a0])? })); ex.n_set_slot(1, v);
-                ex.n_goto(7); continue;
-            }
-            9 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(4); let a1 = ex.n_str("number")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 11) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            10 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(4); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(3, v);
-                ex.n_goto(8); continue;
-            }
-            11 => {
-                let r = ex.n_result(); ex.n_set_slot(5, r);
-                let v = num(f64_of({ let a0 = ex.n_slot(5); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(3, v);
-                ex.n_goto(8); continue;
-            }
-            _ => return Err(bad_state()),
-        }
-    }
-}
-
-fn handler_StringPrototypeCharCodeAt(state: u32) -> Option<(u32, u32)> {
-    let _ = state;
-    None
-}
-
-// builtins/string.ts:148 (String.prototype.codePointAt)
-fn native_StringPrototypeCodePointAt(ex: &mut Exec<'_>) -> Step {
-    loop {
-        match ex.n_state() {
-            0 => {
-                // inlined: ThisToString
-                let v = ex.n_this(); ex.n_set_slot(1, v);
-                if (ex.n_slot(1).is_undefined() || ex.n_slot(1).is_null()) { ex.n_goto(2); continue; } else { ex.n_goto(3); continue; }
-            }
-            1 => {
-                // inlined: ToIntegerOrInfinity
-                let v = ex.n_arg(0); ex.n_set_slot(2, v);
-                // inlined: ToNumber
-                let v = ex.n_slot(2); ex.n_set_slot(4, v);
-                if { let a0 = ex.n_slot(4); a0.as_object().is_some() } { ex.n_goto(9); continue; } else { ex.n_goto(10); continue; }
-            }
-            2 => {
-                let v = { let a0 = ex.n_str("null or undefined are forbidden")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
-            }
-            3 => {
-                // inlined: ToString
-                let v = ex.n_slot(1); ex.n_set_slot(2, v);
-                if { let a0 = ex.n_slot(2); a0.as_object().is_some() } { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
-            }
-            4 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(2); let a1 = ex.n_str("string")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            5 => {
-                let v = { let a0 = ex.n_slot(2); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            6 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                let v = { let a0 = ex.n_slot(3); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            7 => {
-                let v = { let a0 = ex.n_slot(0); let a1 = num(f64_of(ex.n_slot(1))); ex.n_leaf(I_STR_CODE_POINT_AT, &[a0, a1])? }; return ex.n_ret(v);
-            }
-            8 => {
-                let v = num(f64_of({ let a0 = num(f64_of(ex.n_slot(3))); ex.n_leaf(I_TO_INTEGER_OR_INFINITY_NUMBER, &[a0])? })); ex.n_set_slot(1, v);
-                ex.n_goto(7); continue;
-            }
-            9 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(4); let a1 = ex.n_str("number")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 11) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            10 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(4); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(3, v);
-                ex.n_goto(8); continue;
-            }
-            11 => {
-                let r = ex.n_result(); ex.n_set_slot(5, r);
-                let v = num(f64_of({ let a0 = ex.n_slot(5); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(3, v);
-                ex.n_goto(8); continue;
-            }
-            _ => return Err(bad_state()),
-        }
-    }
-}
-
-fn handler_StringPrototypeCodePointAt(state: u32) -> Option<(u32, u32)> {
-    let _ = state;
-    None
-}
-
-// builtins/string.ts:161 (String.prototype.indexOf)
-fn native_StringPrototypeIndexOf(ex: &mut Exec<'_>) -> Step {
-    loop {
-        match ex.n_state() {
-            0 => {
-                // inlined: ThisToString
-                let v = ex.n_this(); ex.n_set_slot(1, v);
-                if (ex.n_slot(1).is_undefined() || ex.n_slot(1).is_null()) { ex.n_goto(2); continue; } else { ex.n_goto(3); continue; }
-            }
-            1 => {
-                // inlined: ToString
-                let v = ex.n_arg(0); ex.n_set_slot(1, v);
-                if { let a0 = ex.n_slot(1); a0.as_object().is_some() } { ex.n_goto(8); continue; } else { ex.n_goto(9); continue; }
-            }
-            2 => {
-                let v = { let a0 = ex.n_str("null or undefined are forbidden")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
-            }
-            3 => {
-                // inlined: ToString
-                let v = ex.n_slot(1); ex.n_set_slot(2, v);
-                if { let a0 = ex.n_slot(2); a0.as_object().is_some() } { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
-            }
-            4 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(2); let a1 = ex.n_str("string")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            5 => {
-                let v = { let a0 = ex.n_slot(2); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            6 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                let v = { let a0 = ex.n_slot(3); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            7 => {
-                // inlined: ClampPosition
-                let v = ex.n_arg(1); ex.n_set_slot(1, v);
-                let v = num({ let a0 = ex.n_slot(0); leaf_StrLen(ex, a0)? }); ex.n_set_slot(2, v);
-                // inlined: ToIntegerOrInfinity
-                let v = ex.n_slot(1); ex.n_set_slot(6, v);
-                // inlined: ToNumber
-                let v = ex.n_slot(6); ex.n_set_slot(8, v);
-                if { let a0 = ex.n_slot(8); a0.as_object().is_some() } { ex.n_goto(14); continue; } else { ex.n_goto(15); continue; }
-            }
-            8 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(1); let a1 = ex.n_str("string")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 10) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            9 => {
-                let v = { let a0 = ex.n_slot(1); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(4, v);
-                ex.n_goto(7); continue;
-            }
-            10 => {
-                let r = ex.n_result(); ex.n_set_slot(2, r);
-                let v = { let a0 = ex.n_slot(2); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(4, v);
-                ex.n_goto(7); continue;
-            }
-            11 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(0); let a1 = ex.n_slot(4); let a2 = ex.n_slot(5); ex.n_leaf(I_STR_INDEX_OF, &[a0, a1, a2])? })); return ex.n_ret(v);
-            }
-            12 => {
-                if (f64_of(ex.n_slot(3)) < 0.0_f64) { ex.n_goto(17); continue; } else { ex.n_goto(18); continue; }
-            }
-            13 => {
-                let v = num(f64_of({ let a0 = num(f64_of(ex.n_slot(7))); ex.n_leaf(I_TO_INTEGER_OR_INFINITY_NUMBER, &[a0])? })); ex.n_set_slot(3, v);
-                ex.n_goto(12); continue;
-            }
-            14 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(8); let a1 = ex.n_str("number")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 16) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            15 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(8); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(7, v);
-                ex.n_goto(13); continue;
-            }
-            16 => {
-                let r = ex.n_result(); ex.n_set_slot(9, r);
-                let v = num(f64_of({ let a0 = ex.n_slot(9); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(7, v);
-                ex.n_goto(13); continue;
-            }
-            17 => {
-                let v = num(0.0_f64); ex.n_set_slot(5, v);
-                ex.n_goto(11); continue;
-            }
-            18 => {
-                let v = num((if (f64_of(ex.n_slot(3)) > f64_of(ex.n_slot(2))) { f64_of(ex.n_slot(2)) } else { f64_of(ex.n_slot(3)) })); ex.n_set_slot(5, v);
-                ex.n_goto(11); continue;
-            }
-            _ => return Err(bad_state()),
-        }
-    }
-}
-
-fn handler_StringPrototypeIndexOf(state: u32) -> Option<(u32, u32)> {
-    let _ = state;
-    None
-}
-
-// builtins/string.ts:208 (String.prototype.startsWith)
-fn native_StringPrototypeStartsWith(ex: &mut Exec<'_>) -> Step {
-    loop {
-        match ex.n_state() {
-            0 => {
-                // inlined: ThisToString
-                let v = ex.n_this(); ex.n_set_slot(1, v);
-                if (ex.n_slot(1).is_undefined() || ex.n_slot(1).is_null()) { ex.n_goto(2); continue; } else { ex.n_goto(3); continue; }
-            }
-            1 => {
-                // inlined: IsRegExp
-                let v = ex.n_arg(0); ex.n_set_slot(2, v);
-                if (!{ let a0 = ex.n_slot(2); a0.as_object().is_some() }) { ex.n_goto(8); continue; } else { ex.n_goto(9); continue; }
-            }
-            2 => {
-                let v = { let a0 = ex.n_str("null or undefined are forbidden")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
-            }
-            3 => {
-                // inlined: ToString
-                let v = ex.n_slot(1); ex.n_set_slot(2, v);
-                if { let a0 = ex.n_slot(2); a0.as_object().is_some() } { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
-            }
-            4 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(2); let a1 = ex.n_str("string")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            5 => {
-                let v = { let a0 = ex.n_slot(2); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            6 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                let v = { let a0 = ex.n_slot(3); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            7 => {
-                if bool_of(ex.n_slot(1)) { ex.n_goto(13); continue; } else { ex.n_goto(14); continue; }
-            }
-            8 => {
-                let v = Value::bool(false); ex.n_set_slot(1, v);
-                ex.n_goto(7); continue;
-            }
-            9 => {
-                // resume point: Get
-                match { let a0 = { let a0 = ex.n_slot(2); ex.n_as_obj(a0)? }; let a1 = { let a0 = ex.n_str("match")?; ex.n_leaf(I_WELL_KNOWN_SYMBOL, &[a0])? }; ex.n_get(&[a0, a1], 10) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            10 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                if !ex.n_slot(3).is_undefined() { ex.n_goto(11); continue; } else { ex.n_goto(12); continue; }
-            }
-            11 => {
-                let v = Value::bool({ let a0 = ex.n_slot(3); ex.n_to_boolean(a0) }); ex.n_set_slot(1, v);
-                ex.n_goto(7); continue;
-            }
-            12 => {
-                let v = Value::bool(bool_of({ let a0 = ex.n_slot(2); ex.n_leaf(I_IS_REG_EXP_OBJECT, &[a0])? })); ex.n_set_slot(1, v);
-                ex.n_goto(7); continue;
-            }
-            13 => {
-                let v = { let a0 = ex.n_str("regexp not supported")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
-            }
-            14 => {
-                // inlined: ToString
-                let v = ex.n_arg(0); ex.n_set_slot(1, v);
-                if { let a0 = ex.n_slot(1); a0.as_object().is_some() } { ex.n_goto(16); continue; } else { ex.n_goto(17); continue; }
-            }
-            15 => {
-                let v = num({ let a0 = ex.n_slot(0); leaf_StrLen(ex, a0)? }); ex.n_set_slot(5, v);
-                // inlined: ClampPosition
-                let v = ex.n_arg(1); ex.n_set_slot(1, v);
-                let v = ex.n_slot(5); ex.n_set_slot(3, v);
-                // inlined: ToIntegerOrInfinity
-                let v = ex.n_slot(1); ex.n_set_slot(7, v);
-                // inlined: ToNumber
-                let v = ex.n_slot(7); ex.n_set_slot(9, v);
-                if { let a0 = ex.n_slot(9); a0.as_object().is_some() } { ex.n_goto(22); continue; } else { ex.n_goto(23); continue; }
-            }
-            16 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(1); let a1 = ex.n_str("string")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 18) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            17 => {
-                let v = { let a0 = ex.n_slot(1); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(4, v);
-                ex.n_goto(15); continue;
-            }
-            18 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                let v = { let a0 = ex.n_slot(3); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(4, v);
-                ex.n_goto(15); continue;
-            }
-            19 => {
-                let v = num({ let a0 = ex.n_slot(4); leaf_StrLen(ex, a0)? }); ex.n_set_slot(11, v);
-                if ((f64_of(ex.n_slot(6)) + f64_of(ex.n_slot(11))) > f64_of(ex.n_slot(5))) { ex.n_goto(27); continue; } else { ex.n_goto(28); continue; }
-            }
-            20 => {
-                if (f64_of(ex.n_slot(2)) < 0.0_f64) { ex.n_goto(25); continue; } else { ex.n_goto(26); continue; }
-            }
-            21 => {
-                let v = num(f64_of({ let a0 = num(f64_of(ex.n_slot(8))); ex.n_leaf(I_TO_INTEGER_OR_INFINITY_NUMBER, &[a0])? })); ex.n_set_slot(2, v);
-                ex.n_goto(20); continue;
-            }
-            22 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(9); let a1 = ex.n_str("number")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 24) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            23 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(9); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(8, v);
-                ex.n_goto(21); continue;
-            }
-            24 => {
-                let r = ex.n_result(); ex.n_set_slot(10, r);
-                let v = num(f64_of({ let a0 = ex.n_slot(10); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(8, v);
-                ex.n_goto(21); continue;
-            }
-            25 => {
-                let v = num(0.0_f64); ex.n_set_slot(6, v);
-                ex.n_goto(19); continue;
-            }
-            26 => {
-                let v = num((if (f64_of(ex.n_slot(2)) > f64_of(ex.n_slot(3))) { f64_of(ex.n_slot(3)) } else { f64_of(ex.n_slot(2)) })); ex.n_set_slot(6, v);
-                ex.n_goto(19); continue;
-            }
-            27 => {
-                let v = Value::bool(false); return ex.n_ret(v);
-            }
-            28 => {
-                let v = Value::bool({ let a0 = { let a0 = ex.n_slot(0); let a1 = ex.n_slot(6); let a2 = num((f64_of(ex.n_slot(6)) + f64_of(ex.n_slot(11)))); ex.n_leaf(I_STR_SUBSTRING, &[a0, a1, a2])? }; let a1 = ex.n_slot(4); ex.n_strict_eq(a0, a1) }); return ex.n_ret(v);
-            }
-            _ => return Err(bad_state()),
-        }
-    }
-}
-
-fn handler_StringPrototypeStartsWith(state: u32) -> Option<(u32, u32)> {
-    let _ = state;
-    None
-}
-
-// builtins/string.ts:260 (String.prototype.slice)
-fn native_StringPrototypeSlice(ex: &mut Exec<'_>) -> Step {
-    loop {
-        match ex.n_state() {
-            0 => {
-                // inlined: ThisToString
-                let v = ex.n_this(); ex.n_set_slot(1, v);
-                if (ex.n_slot(1).is_undefined() || ex.n_slot(1).is_null()) { ex.n_goto(2); continue; } else { ex.n_goto(3); continue; }
-            }
-            1 => {
-                let v = num({ let a0 = ex.n_slot(0); leaf_StrLen(ex, a0)? }); ex.n_set_slot(4, v);
-                // inlined: RelativeIndex
-                let v = ex.n_arg(0); ex.n_set_slot(1, v);
-                let v = ex.n_slot(4); ex.n_set_slot(2, v);
-                let v = Value::int(0); ex.n_set_slot(3, v);
-                if ex.n_slot(1).is_undefined() { ex.n_goto(8); continue; } else { ex.n_goto(9); continue; }
-            }
-            2 => {
-                let v = { let a0 = ex.n_str("null or undefined are forbidden")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
-            }
-            3 => {
-                // inlined: ToString
-                let v = ex.n_slot(1); ex.n_set_slot(2, v);
-                if { let a0 = ex.n_slot(2); a0.as_object().is_some() } { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
-            }
-            4 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(2); let a1 = ex.n_str("string")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            5 => {
-                let v = { let a0 = ex.n_slot(2); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            6 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                let v = { let a0 = ex.n_slot(3); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            7 => {
-                // inlined: RelativeIndex
-                let v = ex.n_arg(1); ex.n_set_slot(7, v);
-                let v = ex.n_slot(4); ex.n_set_slot(6, v);
-                let v = ex.n_slot(4); ex.n_set_slot(3, v);
-                if ex.n_slot(7).is_undefined() { ex.n_goto(18); continue; } else { ex.n_goto(19); continue; }
-            }
-            8 => {
-                let v = num(f64_of(ex.n_slot(3))); ex.n_set_slot(5, v);
-                ex.n_goto(7); continue;
-            }
-            9 => {
-                // inlined: ToIntegerOrInfinity
-                let v = ex.n_slot(1); ex.n_set_slot(7, v);
-                // inlined: ToNumber
-                let v = ex.n_slot(7); ex.n_set_slot(9, v);
-                if { let a0 = ex.n_slot(9); a0.as_object().is_some() } { ex.n_goto(12); continue; } else { ex.n_goto(13); continue; }
-            }
-            10 => {
-                if (f64_of(ex.n_slot(6)) < 0.0_f64) { ex.n_goto(15); continue; } else { ex.n_goto(16); continue; }
-            }
-            11 => {
-                let v = num(f64_of({ let a0 = num(f64_of(ex.n_slot(8))); ex.n_leaf(I_TO_INTEGER_OR_INFINITY_NUMBER, &[a0])? })); ex.n_set_slot(6, v);
-                ex.n_goto(10); continue;
-            }
-            12 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(9); let a1 = ex.n_str("number")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 14) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            13 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(9); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(8, v);
-                ex.n_goto(11); continue;
-            }
-            14 => {
-                let r = ex.n_result(); ex.n_set_slot(10, r);
-                let v = num(f64_of({ let a0 = ex.n_slot(10); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(8, v);
-                ex.n_goto(11); continue;
-            }
-            15 => {
-                let v = num((f64_of(ex.n_slot(2)) + f64_of(ex.n_slot(6)))); ex.n_set_slot(7, v);
-                let v = num((if (f64_of(ex.n_slot(7)) < 0.0_f64) { 0.0_f64 } else { f64_of(ex.n_slot(7)) })); ex.n_set_slot(5, v);
-                ex.n_goto(7); continue;
-            }
-            16 => {
-                let v = num((if (f64_of(ex.n_slot(6)) < f64_of(ex.n_slot(2))) { f64_of(ex.n_slot(6)) } else { f64_of(ex.n_slot(2)) })); ex.n_set_slot(5, v);
-                ex.n_goto(7); continue;
-            }
-            17 => {
-                if (f64_of(ex.n_slot(5)) >= f64_of(ex.n_slot(11))) { ex.n_goto(27); continue; } else { ex.n_goto(28); continue; }
-            }
-            18 => {
-                let v = num(f64_of(ex.n_slot(3))); ex.n_set_slot(11, v);
-                ex.n_goto(17); continue;
-            }
-            19 => {
-                // inlined: ToIntegerOrInfinity
-                let v = ex.n_slot(7); ex.n_set_slot(1, v);
-                // inlined: ToNumber
-                let v = ex.n_slot(1); ex.n_set_slot(9, v);
-                if { let a0 = ex.n_slot(9); a0.as_object().is_some() } { ex.n_goto(22); continue; } else { ex.n_goto(23); continue; }
-            }
-            20 => {
-                if (f64_of(ex.n_slot(2)) < 0.0_f64) { ex.n_goto(25); continue; } else { ex.n_goto(26); continue; }
-            }
-            21 => {
-                let v = num(f64_of({ let a0 = num(f64_of(ex.n_slot(8))); ex.n_leaf(I_TO_INTEGER_OR_INFINITY_NUMBER, &[a0])? })); ex.n_set_slot(2, v);
-                ex.n_goto(20); continue;
-            }
-            22 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(9); let a1 = ex.n_str("number")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 24) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            23 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(9); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(8, v);
-                ex.n_goto(21); continue;
-            }
-            24 => {
-                let r = ex.n_result(); ex.n_set_slot(10, r);
-                let v = num(f64_of({ let a0 = ex.n_slot(10); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(8, v);
-                ex.n_goto(21); continue;
-            }
-            25 => {
-                let v = num((f64_of(ex.n_slot(6)) + f64_of(ex.n_slot(2)))); ex.n_set_slot(1, v);
-                let v = num((if (f64_of(ex.n_slot(1)) < 0.0_f64) { 0.0_f64 } else { f64_of(ex.n_slot(1)) })); ex.n_set_slot(11, v);
-                ex.n_goto(17); continue;
-            }
-            26 => {
-                let v = num((if (f64_of(ex.n_slot(2)) < f64_of(ex.n_slot(6))) { f64_of(ex.n_slot(2)) } else { f64_of(ex.n_slot(6)) })); ex.n_set_slot(11, v);
-                ex.n_goto(17); continue;
-            }
-            27 => {
-                let v = ex.n_str("")?; return ex.n_ret(v);
-            }
-            28 => {
-                let v = { let a0 = ex.n_slot(0); let a1 = ex.n_slot(5); let a2 = ex.n_slot(11); ex.n_leaf(I_STR_SUBSTRING, &[a0, a1, a2])? }; return ex.n_ret(v);
-            }
-            _ => return Err(bad_state()),
-        }
-    }
-}
-
-fn handler_StringPrototypeSlice(state: u32) -> Option<(u32, u32)> {
-    let _ = state;
-    None
-}
-
-// builtins/string.ts:277 (String.prototype.substring)
-fn native_StringPrototypeSubstring(ex: &mut Exec<'_>) -> Step {
-    loop {
-        match ex.n_state() {
-            0 => {
-                // inlined: ThisToString
-                let v = ex.n_this(); ex.n_set_slot(1, v);
-                if (ex.n_slot(1).is_undefined() || ex.n_slot(1).is_null()) { ex.n_goto(2); continue; } else { ex.n_goto(3); continue; }
-            }
-            1 => {
-                let v = num({ let a0 = ex.n_slot(0); leaf_StrLen(ex, a0)? }); ex.n_set_slot(4, v);
-                // inlined: ClampPosition
-                let v = ex.n_arg(0); ex.n_set_slot(1, v);
-                let v = ex.n_slot(4); ex.n_set_slot(2, v);
-                // inlined: ToIntegerOrInfinity
-                let v = ex.n_slot(1); ex.n_set_slot(6, v);
-                // inlined: ToNumber
-                let v = ex.n_slot(6); ex.n_set_slot(8, v);
-                if { let a0 = ex.n_slot(8); a0.as_object().is_some() } { ex.n_goto(10); continue; } else { ex.n_goto(11); continue; }
-            }
-            2 => {
-                let v = { let a0 = ex.n_str("null or undefined are forbidden")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
-            }
-            3 => {
-                // inlined: ToString
-                let v = ex.n_slot(1); ex.n_set_slot(2, v);
-                if { let a0 = ex.n_slot(2); a0.as_object().is_some() } { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
-            }
-            4 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(2); let a1 = ex.n_str("string")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 6) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            5 => {
-                let v = { let a0 = ex.n_slot(2); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            6 => {
-                let r = ex.n_result(); ex.n_set_slot(3, r);
-                let v = { let a0 = ex.n_slot(3); ex.n_leaf(I_TO_STRING_PRIMITIVE, &[a0])? }; ex.n_set_slot(0, v);
-                ex.n_goto(1); continue;
-            }
-            7 => {
-                if ex.n_arg(1).is_undefined() { ex.n_goto(15); continue; } else { ex.n_goto(16); continue; }
-            }
-            8 => {
-                if (f64_of(ex.n_slot(3)) < 0.0_f64) { ex.n_goto(13); continue; } else { ex.n_goto(14); continue; }
-            }
-            9 => {
-                let v = num(f64_of({ let a0 = num(f64_of(ex.n_slot(7))); ex.n_leaf(I_TO_INTEGER_OR_INFINITY_NUMBER, &[a0])? })); ex.n_set_slot(3, v);
-                ex.n_goto(8); continue;
-            }
-            10 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(8); let a1 = ex.n_str("number")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 12) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            11 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(8); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(7, v);
-                ex.n_goto(9); continue;
-            }
-            12 => {
-                let r = ex.n_result(); ex.n_set_slot(9, r);
-                let v = num(f64_of({ let a0 = ex.n_slot(9); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(7, v);
-                ex.n_goto(9); continue;
-            }
-            13 => {
-                let v = num(0.0_f64); ex.n_set_slot(5, v);
-                ex.n_goto(7); continue;
-            }
-            14 => {
-                let v = num((if (f64_of(ex.n_slot(3)) > f64_of(ex.n_slot(2))) { f64_of(ex.n_slot(2)) } else { f64_of(ex.n_slot(3)) })); ex.n_set_slot(5, v);
-                ex.n_goto(7); continue;
-            }
-            15 => {
-                let v = num(f64_of(ex.n_slot(4))); ex.n_set_slot(3, v);
-                ex.n_goto(17); continue;
-            }
-            16 => {
-                // inlined: ClampPosition
-                let v = ex.n_arg(1); ex.n_set_slot(1, v);
-                let v = ex.n_slot(4); ex.n_set_slot(6, v);
-                // inlined: ToIntegerOrInfinity
-                let v = ex.n_slot(1); ex.n_set_slot(8, v);
-                // inlined: ToNumber
-                let v = ex.n_slot(8); ex.n_set_slot(11, v);
-                if { let a0 = ex.n_slot(11); a0.as_object().is_some() } { ex.n_goto(21); continue; } else { ex.n_goto(22); continue; }
-            }
-            17 => {
-                let v = num(f64_of(ex.n_slot(3))); ex.n_set_slot(10, v);
-                let v = (if (f64_of(ex.n_slot(5)) < f64_of(ex.n_slot(10))) { { let a0 = ex.n_slot(0); let a1 = ex.n_slot(5); let a2 = ex.n_slot(10); ex.n_leaf(I_STR_SUBSTRING, &[a0, a1, a2])? } } else { { let a0 = ex.n_slot(0); let a1 = ex.n_slot(10); let a2 = ex.n_slot(5); ex.n_leaf(I_STR_SUBSTRING, &[a0, a1, a2])? } }); return ex.n_ret(v);
-            }
-            18 => {
-                let v = num(f64_of(ex.n_slot(2))); ex.n_set_slot(3, v);
-                ex.n_goto(17); continue;
-            }
-            19 => {
-                if (f64_of(ex.n_slot(7)) < 0.0_f64) { ex.n_goto(24); continue; } else { ex.n_goto(25); continue; }
-            }
-            20 => {
-                let v = num(f64_of({ let a0 = num(f64_of(ex.n_slot(9))); ex.n_leaf(I_TO_INTEGER_OR_INFINITY_NUMBER, &[a0])? })); ex.n_set_slot(7, v);
-                ex.n_goto(19); continue;
-            }
-            21 => {
-                // resume point: ToPrimitive
-                match { let a0 = ex.n_slot(11); let a1 = ex.n_str("number")?; ex.n_call(I_TO_PRIMITIVE, &[a0, a1], 23) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
-            }
-            22 => {
-                let v = num(f64_of({ let a0 = ex.n_slot(11); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(9, v);
-                ex.n_goto(20); continue;
-            }
-            23 => {
-                let r = ex.n_result(); ex.n_set_slot(12, r);
-                let v = num(f64_of({ let a0 = ex.n_slot(12); ex.n_leaf(I_TO_NUMBER_PRIMITIVE, &[a0])? })); ex.n_set_slot(9, v);
-                ex.n_goto(20); continue;
-            }
-            24 => {
-                let v = num(0.0_f64); ex.n_set_slot(2, v);
-                ex.n_goto(18); continue;
-            }
-            25 => {
-                let v = num((if (f64_of(ex.n_slot(7)) > f64_of(ex.n_slot(6))) { f64_of(ex.n_slot(6)) } else { f64_of(ex.n_slot(7)) })); ex.n_set_slot(2, v);
-                ex.n_goto(18); continue;
-            }
-            _ => return Err(bad_state()),
-        }
-    }
-}
-
-fn handler_StringPrototypeSubstring(state: u32) -> Option<(u32, u32)> {
-    let _ = state;
-    None
-}
-
-// builtins/array.ts:281 (leaf)
+// builtins/array.ts:278 (leaf)
 fn leaf_ArrayCreateChecked(ex: &mut Exec<'_>, mut l_len: f64) -> Result<Value, Fault> {
     if (l_len > 4294967295.0_f64) {
         return Err(Fault::throw({ let a0 = ex.n_str("invalid array length")?; ex.n_leaf(I_NEW_RANGE_ERROR, &[a0])? }));
@@ -3725,31 +2372,12 @@ fn leaf_RejectWithData(ex: &mut Exec<'_>, mut l_data: Value, mut l_reason: Value
     Ok(())
 }
 
-// builtins/array.ts:266 (leaf)
+// builtins/array.ts:263 (leaf)
 fn leaf_RequireCallable(ex: &mut Exec<'_>, mut l_f: Value) -> Result<Value, Fault> {
     if (!{ let a0 = l_f; ex.n_is_callable(a0) }) {
         return Err(Fault::throw({ let a0 = ex.n_str("not a function")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }));
     }
     return Ok({ let a0 = l_f; ex.n_leaf(I_AS_FN, &[a0])? });
-    #[allow(unreachable_code)]
-    Err(bad_state())
-}
-
-// builtins/array.ts:139 (leaf)
-fn leaf_SameValueZero(ex: &mut Exec<'_>, mut l_x: Value, mut l_y: Value) -> Result<bool, Fault> {
-    if ({ let a0 = l_x; a0.is_number() } && { let a0 = l_y; a0.is_number() }) {
-        let mut l_a: f64 = f64_of({ let a0 = l_x; ex.n_leaf(I_AS_NUMBER, &[a0])? });
-        let mut l_b: f64 = f64_of({ let a0 = l_y; ex.n_leaf(I_AS_NUMBER, &[a0])? });
-        return Ok(((l_a == l_b) || ((l_a != l_a) && (l_b != l_b))));
-    }
-    return Ok({ let a0 = l_x; let a1 = l_y; ex.n_strict_eq(a0, a1) });
-    #[allow(unreachable_code)]
-    Err(bad_state())
-}
-
-// builtins/string.ts:55 (leaf)
-fn leaf_StrLen(ex: &mut Exec<'_>, mut l_s: Value) -> Result<f64, Fault> {
-    return Ok((u32_of({ let a0 = l_s; ex.n_leaf(I_STR_LENGTH, &[a0])? }) as f64));
     #[allow(unreachable_code)]
     Err(bad_state())
 }

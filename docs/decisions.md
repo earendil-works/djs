@@ -4474,3 +4474,27 @@ the prelude's ~1,880 string atoms (2,048 buckets would be 92% full). So 0098 tri
 but atom lookups of non-atom strings (`o[k]` with computed keys) were about 10% slower and
 new atoms 8% slower (release builds, interleaved). Not adopted: the index stays a
 power of two at load ≤ 1/2. The patch is in work/scratch/0098/atom-load-34.diff.
+
+## D2020: `@fast` builtins are not also `@native`, except Array.prototype.push
+date: 2026-11-03 · by: num · issue: 0104
+Fourteen builtins carried both a `@fast` leaf (D1850) and a generated `@native` state
+machine (D1634). The leaf covers their common cases, so the native copy only ran when
+the leaf declined:
+- unusual receivers;
+- conversions that run user code;
+- holes.
+
+13 of them now leave those rare cases to the bytecode version:
+- array: indexOf, join, includes, slice, pop;
+- string: at, charAt, charCodeAt, codePointAt, indexOf, startsWith, slice, substring.
+
+Saved in djs-wasm: 26.2 KB raw, 4.2 KB gzip, 3.8 KB brotli (code 922,759 → 897,001).
+
+Effect on the 22 perf workloads (wasm instructions, min of 2 runs): all within ±0.6%,
+the noise.
+
+Array.prototype.push keeps its native. `push(a, b)` and `push(...xs)` decline the leaf,
+and without the native push-pop ran 2.0x the instructions and pi-like 1.1% more.
+
+Rule for later: a builtin is `@native` only if the cases its `@fast` leaf declines are
+hot in a benchmark.

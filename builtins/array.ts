@@ -72,7 +72,6 @@ function ArrayPrototypeMap(this: Value, callbackfn: Value, thisArg?: Value): Obj
 /**
  * Array.prototype.indexOf ( searchElement [ , fromIndex ] ), 23.1.3.17.
  * @builtin Array.prototype.indexOf
- * @native
  * @fast
  */
 function ArrayPrototypeIndexOf(this: Value, searchElement: Value, fromIndex?: Value): f64 {
@@ -108,7 +107,6 @@ function ArrayPrototypeIndexOf(this: Value, searchElement: Value, fromIndex?: Va
 /**
  * Array.prototype.join ( separator ), 23.1.3.18.
  * @builtin Array.prototype.join
- * @native
  * @fast
  */
 function ArrayPrototypeJoin(this: Value, separator: Value): Str {
@@ -149,7 +147,6 @@ function SameValueZero(x: Value, y: Value): boolean {
 /**
  * Array.prototype.includes ( searchElement [ , fromIndex ] ), 23.1.3.16.
  * @builtin Array.prototype.includes
- * @native
  * @fast
  */
 function ArrayPrototypeIncludes(this: Value, searchElement: Value, fromIndex?: Value): boolean {
@@ -624,7 +621,6 @@ function ArrayPrototypeConcat(this: Value, ...items: Value[]): Obj {
 /**
  * Array.prototype.slice ( start, end ), 23.1.3.28.
  * @builtin Array.prototype.slice
- * @native
  * @fast
  */
 function ArrayPrototypeSlice(this: Value, start: Value, end: Value): Obj {
@@ -807,7 +803,6 @@ function ArrayPrototypeReverse(this: Value): Obj {
 /**
  * Array.prototype.pop ( ), 23.1.3.22.
  * @builtin Array.prototype.pop
- * @native
  * @fast
  */
 function ArrayPrototypePop(this: Value): Value {
