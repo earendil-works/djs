@@ -82,6 +82,7 @@ fn every_op_round_trips() {
     let mut buf = CodeBuf::phase1();
     let label = buf.new_label();
     let mut expected = Vec::new();
+    let mut byte_pc = 0;
     for op in Op::ALL {
         let imms: Vec<u32> = op
             .info()
@@ -92,14 +93,22 @@ fn every_op_round_trips() {
         let pc = buf.pos();
         let mut raw = [0u32; 2];
         raw[..imms.len()].copy_from_slice(&imms);
-        let insn = encode_raw(op, pc, raw);
-        buf.emit_insn(&insn);
-        assert_eq!(buf.pos() - pc, op.size() as u32, "{}", op.name());
-        expected.push(insn);
+        buf.emit_insn(&encode_raw(op, pc, raw));
+        // Phase-1 positions are instruction indices.
+        assert_eq!(buf.pos() - pc, 1, "{}", op.name());
+        expected.push(encode_raw(op, byte_pc, raw));
+        byte_pc += op.size() as u32;
     }
     buf.place_label(label);
     let code = buf.finish().unwrap();
-    let decoded: Vec<Insn> = insns(&code.code).map(|r| r.unwrap()).collect();
+    for (i, (insn, e)) in code.insns.iter().zip(&expected).enumerate() {
+        assert_eq!(
+            (insn.op, insn.pc, insn.imm(0), insn.imm(1)),
+            (e.op, i as u32, e.imm(0), e.imm(1))
+        );
+    }
+    let bytes = code.bytes();
+    let decoded: Vec<Insn> = insns(&bytes).map(|r| r.unwrap()).collect();
     // The trailing `label` pseudo-op from place_label.
     assert_eq!(decoded.len(), expected.len() + 1);
     for (d, e) in decoded.iter().zip(&expected) {
@@ -108,7 +117,7 @@ fn every_op_round_trips() {
     assert_eq!(decoded[1].imm_i32(0), 0); // `null` has no immediates
     // Every line of the listing starts with the op's name.
     let text = disasm(
-        &code.code,
+        &bytes,
         &DisasmContext {
             phase1: true,
             ..Default::default()
@@ -257,8 +266,9 @@ fn phase1_reemit() {
     p.place_label(l_end);
     p.return_();
     let p1 = p.finish().unwrap();
+    let p1_bytes = p1.bytes();
     let listing = disasm(
-        &p1.code,
+        &p1_bytes,
         &DisasmContext {
             phase1: true,
             ..Default::default()
@@ -267,11 +277,10 @@ fn phase1_reemit() {
     assert!(listing.contains("jump_if_false L0"), "{listing}");
     assert!(listing.contains("L1:"), "{listing}");
     assert!(listing.contains("name_get r0"), "{listing}");
-    assert!(check_stack(&p1.code, &[]).is_err());
+    assert!(check_stack(&p1_bytes, &[]).is_err());
 
     let mut out = CodeBuf::with_labels(p1.label_count);
-    for insn in insns(&p1.code) {
-        let insn = insn.unwrap();
+    for &insn in &p1.insns {
         match insn.op {
             Op::Label => out.place_label(Label(insn.imm(0))),
             Op::NameGet => out.get_loc(0),

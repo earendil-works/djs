@@ -79,17 +79,37 @@ impl Code {
     }
 }
 
-/// Finished phase-1 code.
+/// Finished phase-1 code: the instructions, decoded (0096: phase-1 code is never
+/// stored as bytes, the re-emit reads the instructions directly). An instruction's `pc`
+/// is its index.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Phase1Code {
-    pub code: Vec<u8>,
+    pub insns: Vec<Insn>,
     /// Number of labels; pass it to [`CodeBuf::with_labels`] for the re-emit.
     pub label_count: u32,
 }
 
+impl Phase1Code {
+    /// The instructions encoded as bytes (label ids in the jumps), for listings and
+    /// tests.
+    pub fn bytes(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        for insn in &self.insns {
+            out.push(insn.op as u8);
+            for (i, &k) in insn.op.info().imms.iter().enumerate() {
+                out.extend_from_slice(&insn.imm(i).to_le_bytes()[..k.width() as usize]);
+            }
+        }
+        out
+    }
+}
+
 /// A bytecode buffer with typed emitters.
 pub struct CodeBuf<M: LabelMode = Final> {
+    /// Final mode: the code.
     code: Vec<u8>,
+    /// Phase-1 mode: the instructions (`pc` = index).
+    insns: Vec<Insn>,
     /// Final: label positions (`UNPLACED` until placed). Phase 1: 0/1 placed flags.
     labels: Vec<u32>,
     /// Positions of `Target` immediates, which hold the label id (until `finish` patches
@@ -124,8 +144,8 @@ impl CodeBuf<Phase1> {
     /// An empty buffer for phase-1 code.
     pub fn phase1() -> Self {
         let mut b = Self::make(0);
-        // Most functions are small: start where doubling from 8 would take four steps.
-        b.code.reserve(128);
+        // Most functions are small: start where doubling from 4 would take three steps.
+        b.insns.reserve(32);
         b
     }
 }
@@ -135,6 +155,7 @@ impl<M: LabelMode> CodeBuf<M> {
         let init = if M::SYMBOLIC { 0 } else { UNPLACED };
         CodeBuf {
             code: Vec::new(),
+            insns: Vec::new(),
             labels: alloc::vec![init; count as usize],
             fixups: Vec::new(),
             last: None,
@@ -152,7 +173,11 @@ impl<M: LabelMode> CodeBuf<M> {
     /// Room for `bytes` more code (0092: the re-emit knows its size roughly, so it
     /// does not grow the buffer step by step).
     pub fn reserve(&mut self, bytes: usize) {
-        self.code.reserve(bytes);
+        if M::SYMBOLIC {
+            self.insns.reserve(bytes / 3);
+        } else {
+            self.code.reserve(bytes);
+        }
     }
 
     pub fn label_count(&self) -> u32 {
@@ -180,21 +205,31 @@ impl<M: LabelMode> CodeBuf<M> {
     }
 
     /// The current position (where the next instruction starts).
+    /// The current position (where the next instruction starts): a byte offset in
+    /// final code, an instruction index in phase-1 code.
     pub fn pos(&self) -> u32 {
-        self.code.len() as u32
+        if M::SYMBOLIC {
+            self.insns.len() as u32
+        } else {
+            self.code.len() as u32
+        }
     }
 
+    /// The final code so far (empty in phase-1 mode).
     pub fn code(&self) -> &[u8] {
         &self.code
     }
 
     pub fn is_empty(&self) -> bool {
-        self.code.is_empty()
+        self.pos() == 0
     }
 
     /// The last instruction, unless a label was placed after it.
     pub fn last_insn(&self) -> Option<Insn> {
         let start = self.last?;
+        if M::SYMBOLIC {
+            return self.insns.get(start as usize).copied();
+        }
         decode(&self.code, start).ok()
     }
 
@@ -203,6 +238,11 @@ impl<M: LabelMode> CodeBuf<M> {
     pub fn truncate_last(&mut self) -> Option<Insn> {
         let insn = self.last_insn()?;
         let start = insn.pc;
+        if M::SYMBOLIC {
+            self.insns.truncate(start as usize);
+            self.last = None;
+            return Some(insn);
+        }
         self.code.truncate(start as usize);
         while self.fixups.last().is_some_and(|&f| f >= start) {
             self.fixups.pop();
@@ -227,6 +267,18 @@ impl<M: LabelMode> CodeBuf<M> {
     /// values is the smallest call site (0092).
     #[inline(never)]
     pub(super) fn encode(&mut self, op: Op, a: u32, b: u32) {
+        if M::SYMBOLIC {
+            // Phase 1: the instruction itself, and its label id checked.
+            let insn = Insn::raw(op, self.insns.len() as u32, [a, b]);
+            if let Some(l) = insn.label()
+                && (l.0 as usize) >= self.labels.len()
+            {
+                self.fail(CodeError::UnknownLabel(l));
+            }
+            self.last = Some(insn.pc);
+            self.insns.push(insn);
+            return;
+        }
         let start = self.code.len() as u32;
         self.last = Some(start);
         // The instruction in a local buffer, then one append.
@@ -285,14 +337,14 @@ impl CodeBuf<Phase1> {
     /// Nothing before `end` can be truncated afterwards, so the fixups need not stay
     /// sorted: `truncate_last` only pops the ones of instructions emitted later.
     pub fn rotate(&mut self, start: u32, mid: u32, end: u32) {
-        debug_assert!(start <= mid && mid <= end && end as usize <= self.code.len());
+        debug_assert!(start <= mid && mid <= end && end as usize <= self.insns.len());
         let (start, mid, end) = (start as usize, mid as usize, end as usize);
         // (A copy, not `rotate_left`: less code in the wasm build.)
-        let moved = self.code[mid..end].to_vec();
-        self.code.copy_within(start..mid, start + moved.len());
-        self.code[start..start + moved.len()].copy_from_slice(&moved);
-        for f in &mut self.fixups {
-            *f = rotated(*f, start as u32, mid as u32, end as u32);
+        let moved = self.insns[mid..end].to_vec();
+        self.insns.copy_within(start..mid, start + moved.len());
+        self.insns[start..start + moved.len()].copy_from_slice(&moved);
+        for (i, insn) in self.insns[start..end].iter_mut().enumerate() {
+            insn.pc = (start + i) as u32;
         }
         self.last = None;
     }
@@ -302,28 +354,14 @@ impl CodeBuf<Phase1> {
         if let Some(e) = self.error {
             return Err(e);
         }
-        for &at in &self.fixups {
-            let at = at as usize;
-            let id = u32::from_le_bytes(self.code[at..at + 4].try_into().unwrap_or([0; 4]));
-            if self.labels[id as usize] == 0 {
-                return Err(CodeError::UnplacedLabel(Label(id)));
+        for l in self.insns.iter().filter_map(|i| i.label()) {
+            if self.labels[l.0 as usize] == 0 {
+                return Err(CodeError::UnplacedLabel(l));
             }
         }
         Ok(Phase1Code {
-            code: self.code,
+            insns: self.insns,
             label_count: self.labels.len() as u32,
         })
-    }
-}
-
-/// Where position `p` goes when [`CodeBuf::rotate`] moves `mid..end` in front of
-/// `start..mid`.
-fn rotated(p: u32, start: u32, mid: u32, end: u32) -> u32 {
-    if p < start || p >= end {
-        p
-    } else if p < mid {
-        p + (end - mid)
-    } else {
-        p - (mid - start)
     }
 }

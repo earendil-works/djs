@@ -10,7 +10,7 @@ use crate::heap::Atom;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Insn {
     pub op: Op,
-    /// Position of the opcode byte.
+    /// Position of the opcode byte (in phase-1 code: the instruction's index).
     pub pc: u32,
     /// Raw immediates: unsigned kinds zero-extended, signed kinds as `i32` bits.
     imms: [u32; 2],
@@ -40,6 +40,24 @@ impl Insn {
     pub fn with_op(self, op: Op) -> Insn {
         debug_assert_eq!(op.info().imms, self.op.info().imms);
         Insn { op, ..self }
+    }
+
+    /// An instruction from raw immediates as `CodeBuf` encodes them (their low bytes);
+    /// normalized as `decode` reads them back (narrow kinds masked, `I8` sign-extended).
+    pub(crate) fn raw(op: Op, pc: u32, mut imms: [u32; 2]) -> Insn {
+        let mut layout = LAYOUT[op as usize];
+        let mut i = 0;
+        while layout != 0 {
+            imms[i] = match layout & 0xF {
+                1 => imms[i] & 0xFF,
+                2 => imms[i] as u8 as i8 as i32 as u32,
+                3 => imms[i] & 0xFFFF,
+                _ => imms[i],
+            };
+            layout >>= 4;
+            i += 1;
+        }
+        Insn { op, pc, imms }
     }
 
     /// An instruction without immediates (`return` in place of a jump to one).

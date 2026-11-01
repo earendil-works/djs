@@ -125,7 +125,7 @@ pub(super) fn finish(
         let t = emit_function(
             heap,
             f,
-            &phase1[id],
+            &mut phase1[id],
             &resolved[id],
             &storages[id],
             parent_storage,
@@ -342,7 +342,7 @@ fn emit_init(out: &mut CodeBuf, storage: Storage, atom: Atom, lexical: bool) {
 fn emit_function(
     heap: &mut Heap,
     f: &FuncState,
-    phase1: &crate::bytecode::Phase1Code,
+    phase1: &mut crate::bytecode::Phase1Code,
     resolved: &[Resolved],
     (storage, names): &(Vec<Storage>, Vec<Atom>),
     parent_storage: Option<&Vec<Storage>>,
@@ -363,19 +363,12 @@ fn emit_function(
         }
     }
 
-    let mut all = core::mem::take(&mut scratch.insns);
-    all.clear();
-    let mut pc = 0;
-    while (pc as usize) < phase1.code.len() {
-        let insn = crate::bytecode::decode::decode(&phase1.code, pc)
-            .map_err(|e| internal(&format!("{e:?}")))?;
-        pc = insn.next_pc();
-        all.push(insn);
-    }
+    let all = core::mem::take(&mut phase1.insns);
+    let estimate = all.len() * 3;
     let mut label_count = phase1.label_count;
     let all = super::peephole::simplify(all, &mut label_count);
     let mut out = CodeBuf::with_labels(label_count);
-    out.reserve(phase1.code.len() + 16);
+    out.reserve(estimate + 16);
 
     // ---- Prologue (docs/compiler.md 5.5, 5.7).
     if f.kind == FuncKind::Script {
@@ -801,7 +794,6 @@ fn emit_function(
         TemplateError::Heap(e) => e.into(),
         e => internal(&format!("{e:?}")),
     });
-    scratch.insns = all;
     scratch.lines = lines;
     t
 }
@@ -810,7 +802,6 @@ fn emit_function(
 /// a tenth of a compile).
 #[derive(Default)]
 struct Scratch {
-    insns: Vec<crate::bytecode::Insn>,
     lines: Vec<(u32, u32)>,
     stack: crate::bytecode::StackScratch,
 }
