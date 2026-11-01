@@ -378,3 +378,27 @@ call `std.evalScript`, each single-line `assertSyntaxError(src)` in
 `test_typescript.ts` becomes its own case whose source is `src` (expected: a
 SyntaxError), and other `evalTS` lines are dropped. Cases that use eval or Function get
 `// difftest: skip-djs` (a non-goal for now).
+
+## D1120: Native JSON leaf (parse and stringify fast path)
+date: 2026-11-01 · by: heap · issue: 0012
+`json::parse` (heap string) and `json::parse_utf8` (host bytes) implement JSON.parse without
+a reviver. The lexer is monomorphized per encoding (Latin-1, UTF-16, UTF-8). It reads heap
+input in place through a borrow that is re-taken after each allocation, so the input is
+never copied. Containers use an explicit stack: the pending keys and values of all open
+containers live in Rust vectors, and each object or array is created in one allocation
+when it closes (`Heap::new_object_from_entries` / `new_array_from_values`). Intermediate
+values in Rust memory are safe because allocation never collects. Small integral numbers
+use the int32 form. Errors use QuickJS' messages and positions (line at `\n`, column in code
+points). Where qjs prints a raw UTF-8 byte (`Unexpected token '…'` after `-`) we print
+U+FFFD, which is what qjs's message decodes to. Nesting deeper than 5000 levels is
+`SyntaxError: stack overflow` for parse and `InternalError: stack overflow` for stringify;
+qjs's limits depend on its C stack. `json::stringify_fast` handles plain data only and
+returns `Slow` before any observable effect for:
+- enumerable accessors,
+- an object-valued `toJSON` anywhere on the chain (functions do not exist yet, so any
+  object might be callable; primitive `toJSON` values are ignored, as the spec does),
+- any object class other than ordinary or array,
+- BigInt and host refs.
+Cycle and depth errors found by the fast path are final, because everything before them
+was plain data. Its output buffer is bounded by the string limit and the heap's remaining
+room.
