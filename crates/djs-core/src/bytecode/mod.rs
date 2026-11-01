@@ -19,6 +19,7 @@ pub mod decode;
 pub mod disasm;
 pub mod handlers;
 pub mod imm;
+pub mod intrinsics;
 pub mod lines;
 pub mod ops;
 pub mod stack;

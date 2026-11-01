@@ -826,3 +826,14 @@ each must match the `.expected` file exactly:
 - GC stress.
 `DJS_E2E_MODE=plain|suspend|gc` runs one mode. Uncaught non-Error values should be thrown
 in body cases: qjs's stderr printer formats objects differently from the shim.
+
+## D1270: Intrinsic ids
+date: 2026-11-01 · by: lexer · issue: 0027
+`call_intrinsic id, argc` takes `id` as the index into `bytecode::intrinsics::INTRINSICS`.
+The table lists the `declare function`s of `builtins/intrinsics.d.ts` in declaration
+order (kind Leaf/Reentrant by tag), then the `@intrinsic` builtins of `builtins/*.ts` in
+prelude order (kind Builtin: JS functions registered by `%InstallIntrinsic`). The .d.ts
+stays the single source of truth. A unit test checks the hand-maintained Rust table
+against it and prints the replacement on drift, so no generator step is needed.
+`INTRINSICS_HASH` belongs in the build hash: ids are part of the bytecode format.
+Privileged code checks intrinsic names and arities at compile time.
