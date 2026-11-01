@@ -103,7 +103,13 @@ before merging; while iterating, run only what your change can break (0047, D012
   for the cases you touched.
 - qjs results don't change: read `tests/test262/oracle-failures.txt` and the corpus
   `.expected` files instead of re-running qjs.
-- Use `--release` only for benchmarks (`scripts/bench.sh`) and timing work.
+- Never re-run gate steps by hand: the full stress difftest (`--ratchet --suspend-every 97
+  --gc-stress` over the whole corpus) and the full active test262 run are exactly what the
+  gate does at merge time (0047/0053 measured them as a third of all agent CPU). Run the
+  cases or directories your change touches instead.
+- Use `--release` only for benchmarks (`scripts/bench.sh`) and timing work, and
+  `scripts/bench.sh --record` only on a quiet machine (load below ~4): numbers recorded
+  under load are not comparable.
 - Leave cores for the others: the repo's `.cargo/config.toml` caps cargo at 6 jobs and 6
   test threads; pass `-j 6` to the test262/difftest runners. Everything that runs an
   engine goes under `scripts/timeout.sh`.
