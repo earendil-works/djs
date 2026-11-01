@@ -19,6 +19,7 @@ agent: <sub-agent name or ->
 branch: issue/NNNN-slug
 depends-on: NNNN, NNNN
 touches: paths/or/areas, that/this/issue/may/change
+guide: docs/guide pages this issue may affect, or -
 
 ## Goal
 What and why, with links into ARCH.md / TESTING.md.

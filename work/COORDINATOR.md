@@ -9,6 +9,9 @@ Notes for the coordinator (the main agent), learned the hard way.
   merge holds the lock, and its fast-forward fails after a full gate (happened with D016).
 
 ## Assigning an issue
+0. Every issue gets a `guide:` line (pages under docs/guide it may affect, or `-`) and
+   **a decision ID range for the agent** (forgetting this made docs and infra both use
+   D2030).
 1. Write the issue file, update BOARD.md, and commit with
    `scripts/with-merge-lock.sh git commit ...`.
 2. Per D012 each agent has one permanent worktree, `.worktrees/<agent>`. Switch it to the
