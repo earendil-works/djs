@@ -152,7 +152,7 @@ The ARCH budget (400 KB) is meant after `wasm-opt`, which is not installed here 
 | --- | ---: |
 | `WebAssembly.compile` (once per process) | 0.6 ms |
 | instantiate | 31 µs |
-| `vm_new` (realm built from scratch; no base snapshot yet) | 11 µs |
+| `vm_new` (realm built from scratch, prelude compiled and run; no base snapshot yet, D1281) | 146 µs (11 µs before the prelude) |
 | `Sandbox.create` (instance + VM + console) | 48 µs |
 | `run("return 1")` (compile + call + run) | 3.5 µs |
 | `Sandbox.create` + first run | 59 µs |

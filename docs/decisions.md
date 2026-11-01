@@ -879,3 +879,56 @@ GC stress) may need to change as more cases pass. Out-of-process engines get no 
 variants. Ratchet reasons name the uncaught error (`throws ReferenceError: ...`) when
 the engine threw one the expectation does not contain; `--clusters` groups failures by
 the same key.
+
+## D1280: Slow paths replace an operand and re-execute the instruction
+date: 2026-11-01 · by: heap · issue: 0028
+A new continuation `Replace(slot)` (in frame flags: kind in bits 0-3, slot in bits 8-30;
+parked host calls use the same encoding with the entry marker in bit 31) stores the
+callee's result into an absolute stack slot of the caller and resumes at `ret_pc`.
+Before dispatch, `primitive_operands` checks every operand that an op converts with
+ToPrimitive (arithmetic, bitwise and relational: `number`; `+` and loose equality with a
+non-nullish primitive: `default`; `to_string`, `concat` and property keys: `string`).
+It goes left to right, which is the spec's evaluation order. For the first operand that
+is an object, the interpreter calls the installed `%ToPrimitive(operand, hint)` with
+`Replace(operand slot)` and `ret_pc` = the same instruction. When it returns, the
+instruction runs again with a primitive in place. The op itself never sees objects there,
+so no per-op resume state exists (D1085 holds), and only `%ToPrimitive` is needed from
+the prelude. `get_method` / `get_elem_method` through a getter use the same continuation
+to fill a placeholder below the receiver, resuming after the instruction. Without a
+prelude (`VmOptions::prelude = false`), an object operand is a TypeError.
+
+## D1281: Prelude installation
+date: 2026-11-01 · by: heap · issue: 0028
+`Vm::new` compiles `builtins/gen/prelude.js` (included at build time) with
+`CompileOptions::privileged_script("<prelude>")` and runs it to completion before
+returning; `VmOptions::prelude` (default true) turns that off. Dispatch:
+- `call_intrinsic id, argc` dispatches on the D1270 table, using ids computed at compile
+  time from names.
+- Leaf and reentrant intrinsics are Rust in `interp/run/intrinsics.rs`. `Call` and
+  `Construct` reuse the stack layout of `call`/`construct`; `Get`/`Set` call an accessor
+  with `PushResult` (Set pushes its `undefined` result below the setter frame).
+- Builtin-kind ids call the function registered by `%InstallIntrinsic`, from a
+  `Realm::INSTALLED` table indexed by id. Calling one that isn't installed is an
+  InternalError.
+
+`%InstallMethod` resolves its dotted target from the global object, falling back to the
+realm's prototypes for `Object/Function/Array/Error.prototype` while those constructors
+don't exist. It defines the method (writable, configurable, not enumerable), sets
+`name`/`length`, and flags the function `OBJ_BUILTIN`. Cost, `Vm::new` with vs without
+the prelude: native release 92 vs 7 µs; djs-wasm in node 25 146 vs 11 µs; heap
+36 KB vs 17 KB. That is at ARCH's 100 µs budget before the prelude has grown, so the
+base snapshot (copy an image instead of compiling) is the next step for startup. The e2e
+test already starts every case from one shared base image.
+
+## D1282: Error stack traces
+date: 2026-11-01 · by: heap · issue: 0028
+Errors the VM creates (runtime errors, `%NewTypeError` / `%NewRangeError` /
+`%NewNotConstructorError`) get an own, non-enumerable data property `stack` at creation,
+in QuickJS's format. It has one line per frame, `    at name (file:line:col)\n`, innermost
+first, at most 10 (qjs's default `Error.stackTraceLimit`). The current frame is
+positioned at the faulting pc, callers at `ret_pc - 1`, through the template's line
+table. Names: the template `NAME`, `<anonymous>` when null, `<eval>` for the top level.
+Prelude frames are hidden, except functions installed by `%InstallMethod`, which show as
+`    at map (native)` like qjs's C builtins. qjs exposes `stack` through an accessor; an
+own data property is simpler and prints the same. `djs run` prints the stack after
+`Uncaught Name: message`.
