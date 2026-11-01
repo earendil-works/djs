@@ -63,7 +63,7 @@ pub(super) fn finish(p: Parser<'_, '_>) -> PResult<Ref> {
         .iter()
         .map(|r| {
             let var = f.lookup(r.scope, r.atom);
-            let check = var.is_some_and(|v| needs_check(&f, v, r.pos));
+            let check = !r.init && var.is_some_and(|v| needs_check(&f, v, r.pos));
             Resolved { var, check }
         })
         .collect();

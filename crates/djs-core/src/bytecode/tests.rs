@@ -783,10 +783,10 @@ fn template_cells() {
     let expect = [
         "function 0 <anonymous>: params=0 locals=1 stack=2 captures=0",
         "  handler [0, 5) -> 28 depth 0",
-        "    0  push_const #0 (\"hi\")",
+        "    0  push_const #0 (\"hi\")  ; 1:1",
         "    5  put_loc loc0 (x)",
         "    8  get_loc loc0 (x)",
-        "   11  get_field \"length\"",
+        "   11  get_field \"length\"  ; 1:9",
         "   16  push_const #1 (1.5)",
         "   21  add",
         "   22  fclosure child0",

@@ -1,0 +1,58 @@
+function 0 <anonymous>: params=2 locals=7 stack=4 captures=0
+    0  special_object 4
+    2  put_loc loc6 (this)
+    5  set_loc_uninit loc2 (late)
+    8  push_i8 0
+   10  put_loc loc0 (total)
+   13  get_arg arg0  ; 4:15
+   16  get_method "list"  ; 4:20
+   21  call 0  ; 4:25
+   24  put_loc loc1 (items)
+   27  get_arg arg1  ; 5:1
+   30  get_method "log"  ; 5:8
+   35  get_loc loc1 (items)  ; 5:13
+   38  get_loc loc0 (total)  ; 5:20
+   41  call 2  ; 5:12
+   44  drop
+   45  get_loc_chk loc2 (late)  ; 6:1
+   48  drop
+   49  push_i8 1
+   51  put_loc loc2 (late)
+   54  push_i8 2  ; 8:18
+   56  set_loc loc2 (late)
+   59  drop
+   60  get_loc loc0 (total)  ; 9:9
+   63  set_loc_uninit loc3 (y)
+   66  jump -> 71
+   71  dup
+   72  push_i8 0
+   74  strict_eq
+   75  jump_if_false -> 101
+   80  drop
+   81  push_i8 1
+   83  put_loc loc3 (y)
+   86  get_loc_chk loc3 (y)  ; 10:22
+   89  to_numeric
+   90  dup
+   91  inc  ; 10:23
+   92  put_loc_chk loc3 (y)  ; 10:22
+   95  drop
+   96  jump -> 111
+  101  dup
+  102  push_i8 1
+  104  strict_eq
+  105  jump_if_false -> 120
+  110  drop
+  111  get_loc_chk loc3 (y)  ; 11:11
+  114  drop
+  115  jump -> 126
+  120  drop
+  121  jump -> 126
+  126  push_i8 1  ; 13:1
+  128  throw_const_assign "items"
+  133  drop
+  134  get_loc loc6 (this)
+  137  put_loc loc5 (v2)  ; 15:7
+  140  get_loc loc0 (total)  ; 16:8
+  143  return
+  144  return_undef

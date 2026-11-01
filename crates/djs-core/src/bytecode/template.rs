@@ -302,6 +302,7 @@ pub fn disasm_template(heap: &Heap, template: Ref) -> String {
             names: &names,
             locals: locals as usize,
             phase1: false,
+            lines: bytes_of(heap, a.get(off, FuncTemplate::LINES)),
         };
         out.push_str(&disasm(bytes_of(heap, a.get(off, FuncTemplate::CODE)), &cx));
         let children = a.get(off, FuncTemplate::CHILDREN);

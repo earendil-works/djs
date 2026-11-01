@@ -254,8 +254,16 @@ impl<'a, 'h> Parser<'a, 'h> {
             atom,
             scope: self.scope,
             pos,
+            init: false,
         });
         (self.f.refs.len() - 1) as u32
+    }
+
+    /// A reference that initializes a declaration (`name_init`).
+    pub fn init_ref(&mut self, atom: Atom, pos: u32) -> u32 {
+        let r = self.name_ref(atom, pos);
+        self.f.refs[r as usize].init = true;
+        r
     }
 
     // ---- Constants -----------------------------------------------------------------
@@ -424,6 +432,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             atom: self.atom_this,
             scope: BODY_SCOPE,
             pos,
+            init: false,
         });
         (self.f.refs.len() - 1) as u32
     }

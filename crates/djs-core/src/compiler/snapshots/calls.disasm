@@ -1,0 +1,163 @@
+function 0 <anonymous>: params=0 locals=0 stack=5 captures=0
+    0  global_decls #5 let "o"
+    5  object
+    6  object
+    7  push_i8 1
+    9  define_field "b"
+   14  define_field "a"
+   19  init_global_lex "o"
+   24  get_global "o"  ; 3:1
+   29  get_field "a"  ; 3:2
+   34  get_field "b"  ; 3:4
+   39  drop
+   40  get_global "o"  ; 3:8
+   45  get_field "a"  ; 3:9
+   50  get_field "b"  ; 3:14
+   55  drop
+   56  get_global "o"  ; 3:21
+   61  push_i8 1
+   63  get_elem  ; 3:22
+   64  drop
+   65  get_global "o"  ; 3:27
+   70  get_field "0"  ; 3:28
+   75  drop
+   76  get_global "f"  ; 4:1
+   81  undefined
+   82  call 0  ; 4:2
+   85  drop
+   86  get_global "f"  ; 4:6
+   91  undefined
+   92  push_i8 1
+   94  push_i8 2
+   96  push_i8 3
+   98  call 3  ; 4:7
+  101  drop
+  102  get_global "o"  ; 4:18
+  107  get_method "m"  ; 4:19
+  112  call 0  ; 4:21
+  115  drop
+  116  get_global "o"  ; 4:25
+  121  get_method "m"  ; 4:26
+  126  push_i8 1
+  128  call 1  ; 4:31
+  131  drop
+  132  get_global "o"  ; 4:36
+  137  push_i8 0
+  139  get_elem_method  ; 4:37
+  140  call 0  ; 4:40
+  143  drop
+  144  get_global "o"  ; 4:45
+  149  get_method "m"  ; 4:46
+  154  call 0  ; 4:49
+  157  drop
+  158  push_i8 0
+  160  drop
+  161  get_global "o"  ; 4:57
+  166  get_field "m"  ; 4:58
+  171  undefined
+  172  call 0  ; 4:61
+  175  drop
+  176  get_global "X"  ; 5:5
+  181  construct 0  ; 5:1
+  184  drop
+  185  get_global "X"  ; 5:12
+  190  push_i8 1
+  192  push_i8 2
+  194  construct 2  ; 5:8
+  197  drop
+  198  get_global "o"  ; 5:25
+  203  get_field "C"  ; 5:26
+  208  construct 0  ; 5:21
+  211  drop
+  212  get_global "X"  ; 5:40
+  217  construct 0  ; 5:36
+  220  construct 0  ; 5:32
+  223  drop
+  224  get_global "o"  ; 6:1
+  229  dup
+  230  is_nullish
+  231  jump_if_true -> 246
+  236  get_field "a"  ; 6:2
+  241  jump -> 248
+  246  drop
+  247  undefined
+  248  drop
+  249  get_global "o"  ; 6:7
+  254  dup
+  255  is_nullish
+  256  jump_if_true -> 269
+  261  push_i8 1
+  263  get_elem  ; 6:10
+  264  jump -> 271
+  269  drop
+  270  undefined
+  271  drop
+  272  get_global "o"  ; 6:15
+  277  dup
+  278  is_nullish
+  279  jump_if_true -> 297
+  284  get_method "m"  ; 6:16
+  289  call 0  ; 6:19
+  292  jump -> 299
+  297  drop
+  298  undefined
+  299  drop
+  300  get_global "o"  ; 6:23
+  305  get_method "m"  ; 6:24
+  310  swap
+  311  dup
+  312  is_nullish
+  313  jump_if_true -> 327
+  318  swap
+  319  call 0  ; 6:28
+  322  jump -> 330
+  327  drop
+  328  drop
+  329  undefined
+  330  drop
+  331  get_global "f"  ; 6:32
+  336  undefined
+  337  swap
+  338  dup
+  339  is_nullish
+  340  jump_if_true -> 354
+  345  swap
+  346  call 0  ; 6:35
+  349  jump -> 357
+  354  drop
+  355  drop
+  356  undefined
+  357  drop
+  358  get_global "o"  ; 6:39
+  363  dup
+  364  is_nullish
+  365  jump_if_true -> 395
+  370  get_field "a"  ; 6:40
+  375  get_field "b"  ; 6:43
+  380  get_method "c"  ; 6:45
+  385  push_i8 1
+  387  call 1  ; 6:47
+  390  jump -> 397
+  395  drop
+  396  undefined
+  397  drop
+  398  get_global "console"  ; 7:1
+  403  get_method "log"  ; 7:8
+  408  push_const #4 ("hello")
+  413  get_global "o"  ; 7:22
+  418  get_field "a"  ; 7:23
+  423  dup
+  424  is_nullish
+  425  jump_if_true -> 440
+  430  get_field "b"  ; 7:25
+  435  jump -> 442
+  440  drop
+  441  undefined
+  442  dup
+  443  is_nullish
+  444  jump_if_false -> 452
+  449  drop
+  450  push_i8 2
+  452  call 2  ; 7:12
+  455  drop
+  456  return_undef

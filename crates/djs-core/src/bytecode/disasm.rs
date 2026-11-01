@@ -29,15 +29,28 @@ pub struct DisasmContext<'a> {
     pub locals: usize,
     /// Phase-1 code: jump targets are label ids.
     pub phase1: bool,
+    /// An encoded line table: instructions where an entry starts get a `; line:col`
+    /// comment.
+    pub lines: &'a [u8],
 }
 
 /// Disassembles `code`. Decoding errors end the listing with an `<invalid ...>` line.
 pub fn disasm(code: &[u8], cx: &DisasmContext<'_>) -> String {
     let mut out = String::new();
+    let mut positions = super::lines::line_entries(cx.lines).peekable();
     for r in insns(code) {
         match r {
             Ok(insn) => {
                 line(&mut out, &insn, cx);
+                let mut at = None;
+                while let Some(e) = positions.next_if(|e| e.pc <= insn.pc) {
+                    if e.pc == insn.pc {
+                        at = Some(e);
+                    }
+                }
+                if let Some(e) = at {
+                    let _ = write!(out, "  ; {}:{}", e.line, e.col);
+                }
                 out.push('\n');
             }
             Err(e) => {
@@ -84,6 +97,27 @@ fn operand(out: &mut String, insn: &Insn, i: usize, kind: ImmKind, cx: &DisasmCo
         }
         ImmKind::Scope => write!(out, "s{raw}"),
         ImmKind::Intrinsic => write!(out, "%{raw}"),
+        ImmKind::Const if insn.op == super::Op::GlobalDecls => {
+            let _ = write!(out, "#{raw}");
+            if let Some(d) = super::global_decls::GlobalDecls::decode(cx.consts, raw as usize) {
+                let lists = [
+                    ("var", &d.vars),
+                    ("function", &d.funcs),
+                    ("let", &d.lets),
+                    ("const", &d.consts),
+                ];
+                for (kw, list) in lists {
+                    if !list.is_empty() {
+                        let _ = write!(out, " {kw}");
+                        for &a in list.iter() {
+                            out.push(' ');
+                            atom(out, a, cx);
+                        }
+                    }
+                }
+            }
+            Ok(())
+        }
         ImmKind::Const => {
             let _ = write!(out, "#{raw}");
             if let Some(&v) = cx.consts.get(raw as usize) {

@@ -126,7 +126,7 @@ impl Parser<'_, '_> {
             } else {
                 self.code().undefined();
             }
-            let r = self.name_ref(name, pos);
+            let r = self.init_ref(name, pos);
             self.code().name_init(r);
             self.f.vars[v as usize].init_end = self.prev_end;
             if !self.eat(TokenKind::Comma)? {
@@ -253,7 +253,8 @@ impl Parser<'_, '_> {
     /// `for (init; test; update) body`, laid out as
     /// `init; L_test: test; jump_if_false L_break; jump L_body; L_cont: update; jump
     /// L_test; L_body: body; jump L_cont; L_break:` so everything is emitted in source
-    /// order.
+    /// order. Without an update: `L_test: test; jump_if_false L_break; body; L_cont:
+    /// jump L_test; L_break:`.
     fn parse_for(&mut self, labels: Vec<Atom>) -> PResult<()> {
         let for_pos = self.tok.start;
         self.next()?;
@@ -304,11 +305,8 @@ impl Parser<'_, '_> {
             self.code().jump_if_false(l_break);
         }
         self.expect(TokenKind::Semicolon, ";")?;
-        if self.is(TokenKind::RParen) {
-            // No update: `continue` goes straight to the test.
-            self.place(l_cont);
-            self.code().jump(l_test);
-        } else {
+        let has_update = !self.is(TokenKind::RParen);
+        if has_update {
             self.code().jump(l_body);
             self.place(l_cont);
             self.parse_expr(false)?;
@@ -318,7 +316,13 @@ impl Parser<'_, '_> {
         self.expect(TokenKind::RParen, ")")?;
         self.place(l_body);
         self.parse_statement()?;
-        self.code().jump(l_cont);
+        if !has_update {
+            // No update: `continue` goes straight to the test.
+            self.place(l_cont);
+            self.code().jump(l_test);
+        } else {
+            self.code().jump(l_cont);
+        }
         self.place(l_break);
         self.blocks.pop();
         if scoped {

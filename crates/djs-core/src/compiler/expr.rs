@@ -215,7 +215,7 @@ impl Parser<'_, '_> {
         match tok.kind {
             TokenKind::Ident => {
                 let next = self.peek();
-                if next.kind == TokenKind::Arrow {
+                if next.kind == TokenKind::Arrow && !next.newline_before() {
                     return self.unsupported(tok.start, "arrow functions are");
                 }
                 if tok.is_contextual(Kw::Async) && !next.newline_before() {

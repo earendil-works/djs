@@ -66,6 +66,8 @@ pub(super) struct NameRef {
     pub scope: ScopeId,
     /// Source offset of the identifier.
     pub pos: u32,
+    /// The reference initializes its binding (`name_init`): never TDZ-checked.
+    pub init: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
