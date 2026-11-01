@@ -233,7 +233,7 @@ fn short_decimal(a: f64) -> Option<(u64, i32)> {
         }
         if d / p == a {
             // Not a multiple of 10, or a smaller k would have matched.
-            return if m % 10 == 0 {
+            return if m.is_multiple_of(10) {
                 None
             } else {
                 Some((m, k as i32))

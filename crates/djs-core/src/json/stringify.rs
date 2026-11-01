@@ -163,13 +163,25 @@ impl Out {
         if u <= 0xFF {
             return self.byte(u as u8);
         }
+        self.widen();
+        if let Buf::Wide(w) = &mut self.buf {
+            w.push(u);
+        }
+    }
+
+    /// Switches to the wide buffer (the result will have a unit above 0xFF).
+    fn widen(&mut self) {
         if let Buf::Narrow(b) = &mut self.buf {
             let mut w = Vec::with_capacity(b.len() * 2 + 16);
             w.extend(b.iter().map(|&c| c as u16));
             self.buf = Buf::Wide(w);
         }
+    }
+
+    /// Appends little-endian units; the buffer must be wide.
+    fn wide_run(&mut self, units: &[[u8; 2]]) {
         if let Buf::Wide(w) = &mut self.buf {
-            w.push(u);
+            w.extend(units.iter().map(|p| u16::from_le_bytes(*p)));
         }
     }
 
@@ -232,23 +244,38 @@ impl Out {
                 }
                 self.latin1(&b[run..]);
             }
-            StrView::Utf16(_) => {
-                let n = v.len();
+            StrView::Utf16(bytes) => {
+                // A two-byte string has a unit above 0xFF (the width invariant), so the
+                // output becomes wide anyway: switch once, then copy unescaped runs in
+                // bulk instead of unit by unit.
+                self.widen();
+                let units = bytes.as_chunks::<2>().0;
+                let mut run = 0;
                 let mut i = 0;
-                while i < n {
-                    let u = v.get(i);
+                while i < units.len() {
+                    let u = u16::from_le_bytes(units[i]);
+                    if !matches!(u, 0..=0x1F | 0x22 | 0x5C | 0xD800..=0xDFFF) {
+                        i += 1;
+                        continue;
+                    }
+                    self.wide_run(&units[run..i]);
                     i += 1;
                     match u {
-                        0..=0x1F | 0x22 | 0x5C => self.escape_ascii(u as u8),
-                        0xD800..=0xDBFF if i < n && (0xDC00..=0xDFFF).contains(&v.get(i)) => {
-                            self.unit(u);
-                            self.unit(v.get(i));
+                        0xD800..=0xDBFF
+                            if i < units.len()
+                                && (0xDC00..=0xDFFF).contains(&u16::from_le_bytes(units[i])) =>
+                        {
+                            // A valid pair is copied as is; the run continues after it.
+                            run = i - 1;
                             i += 1;
+                            continue;
                         }
                         0xD800..=0xDFFF => self.escape_u(u),
-                        _ => self.unit(u),
+                        _ => self.escape_ascii(u as u8),
                     }
+                    run = i;
                 }
+                self.wide_run(&units[run..]);
             }
         }
         self.byte(b'"');

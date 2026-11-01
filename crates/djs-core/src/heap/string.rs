@@ -238,20 +238,22 @@ impl Heap {
     /// unit fits.
     pub fn alloc_utf16(&mut self, units: &[u16]) -> Result<Str, HeapError> {
         let len = u32::try_from(units.len()).map_err(|_| HeapError::StringTooLong)?;
-        let two_byte = units.iter().any(|&u| u > 0xFF);
-        let off = self.alloc_flat(len, two_byte)?;
-        let data = off + Str8::DATA.offset;
-        if two_byte {
-            let dst = self.arena_mut().slice_mut(data, len * 2);
-            for (d, &u) in dst.as_chunks_mut::<2>().0.iter_mut().zip(units) {
-                d.copy_from_slice(&u.to_le_bytes());
-            }
-        } else {
-            let dst = self.arena_mut().slice_mut(data, len);
-            for (d, &u) in dst.iter_mut().zip(units) {
-                *d = u as u8;
-            }
+        if len > MAX_LEN {
+            return Err(HeapError::StringTooLong);
         }
+        let two_byte = units.iter().any(|&u| u > 0xFF);
+        // The data is converted straight into the new cell (written once, not zeroed
+        // first); `flat_map` over arrays is TrustedLen, so the append is one tight loop.
+        let off = if two_byte {
+            let size = Str16::DATA.cell_size(len).ok_or(HeapError::StringTooLong)?;
+            let data = units.iter().flat_map(|u| u.to_le_bytes());
+            self.alloc_cell_from_iter(CellKind::Str16, size, Str16::DATA.offset, len * 2, data)?
+        } else {
+            let size = Str8::DATA.cell_size(len).ok_or(HeapError::StringTooLong)?;
+            let data = units.iter().map(|&u| u as u8);
+            self.alloc_cell_from_iter(CellKind::Str8, size, Str8::DATA.offset, len, data)?
+        };
+        self.arena_mut().set(off, Str8::LEN, len);
         Ok(Str(off))
     }
 

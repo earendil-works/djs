@@ -406,6 +406,44 @@ fn stringify_escapes() {
     );
 }
 
+/// Two-byte strings are quoted in runs; compare with the independent quoter on random
+/// mixes of escapes, surrogates (paired, lone, at either end) and wide text, after narrow
+/// output (so the buffer switches mid-way).
+#[test]
+fn stringify_two_byte_runs() {
+    const ALPHABET: [u16; 14] = [
+        0x41, 0x22, 0x5C, 0x0A, 0x1F, 0xE9, 0x2028, 0x4E2D, 0xD800, 0xDBFF, 0xDC00, 0xDFFF, 0xD83D,
+        0xDE00,
+    ];
+    let mut h = Heap::new().unwrap();
+    let mut x = 0x9E37_79B9_7F4A_7C15u64;
+    for _ in 0..3000 {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        let n = 1 + (x % 12) as usize;
+        let mut units: Vec<u16> = (0..n)
+            .map(|i| ALPHABET[((x >> (4 + 4 * i)) % ALPHABET.len() as u64) as usize])
+            .collect();
+        // The width invariant: a two-byte string has a unit above 0xFF.
+        if units.iter().all(|&u| u <= 0xFF) {
+            units.push(0x4E2D);
+        }
+        let s = h.alloc_utf16(&units).unwrap();
+        let narrow = h.alloc_str("narrow \"first\"").unwrap();
+        let arr = h
+            .new_array_from_values(None, &[Value::string(narrow), Value::string(s)])
+            .unwrap();
+        let got = sfy(&mut h, Value::object(arr), "").unwrap().unwrap();
+        let want = format!(
+            "[{},{}]",
+            quote_units(&"narrow \"first\"".encode_utf16().collect::<Vec<_>>()),
+            quote_units(&units)
+        );
+        assert_eq!(got, want, "{units:x?}");
+    }
+}
+
 #[test]
 fn stringify_gap() {
     let mut h = Heap::new().unwrap();

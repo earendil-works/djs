@@ -133,6 +133,45 @@ impl Arena {
         Ok(start)
     }
 
+    /// Like [`Arena::alloc_init`] with the data from an iterator of exactly `n` bytes,
+    /// for data that needs converting on the way in (UTF-16 units to little-endian pairs).
+    /// Panics if the iterator yields a different number of bytes or `n` does not fit.
+    #[inline]
+    pub fn alloc_from_iter(
+        &mut self,
+        size: u32,
+        at: u32,
+        n: u32,
+        data: impl Iterator<Item = u8>,
+    ) -> Result<u32, HeapError> {
+        let fits = (size as usize).checked_sub(at as usize + n as usize);
+        assert!(fits.is_some(), "alloc_from_iter: data does not fit");
+        let (start, end) = self.bounds(size)?;
+        let at_us = (start + at) as usize;
+        if end as usize > self.bytes.len() {
+            self.reserve(end)?;
+            self.bytes.truncate(at_us.max(self.len as usize));
+            zero_to(&mut self.bytes, at_us);
+            self.bytes.extend(data);
+            assert_eq!(
+                self.bytes.len(),
+                at_us + n as usize,
+                "alloc_from_iter: wrong length"
+            );
+            zero_to(&mut self.bytes, end as usize);
+        } else {
+            let dst = &mut self.bytes[at_us..at_us + n as usize];
+            let mut written = 0;
+            for (d, b) in dst.iter_mut().zip(data) {
+                *d = b;
+                written += 1;
+            }
+            assert_eq!(written, n as usize, "alloc_from_iter: wrong length");
+        }
+        self.len = end;
+        Ok(start)
+    }
+
     /// The start and end of a block of `size` bytes (rounded up to 8) at the end, if it is
     /// under the cap.
     #[inline(always)]
@@ -365,6 +404,33 @@ mod tests {
             let off = b.alloc(100).unwrap();
             assert!(b.slice(off, 100).iter().all(|&x| x == 0));
         }
+    }
+
+    #[test]
+    fn alloc_from_iter_both_paths() {
+        let mut a = Arena::new(1 << 20);
+        // At the frontier (fresh arena): appended.
+        let units = [0x1234u16, 0xABCD, 0x0041];
+        let it = units.iter().flat_map(|u| u.to_le_bytes());
+        let o = a.alloc_from_iter(16, 4, 6, it).unwrap();
+        assert_eq!(
+            a.slice(o, 16),
+            &[
+                0, 0, 0, 0, 0x34, 0x12, 0xCD, 0xAB, 0x41, 0, 0, 0, 0, 0, 0, 0
+            ]
+        );
+        // Below the frontier (zeroed ahead by a small alloc): written in place.
+        a.alloc(8).unwrap();
+        let o = a.alloc_from_iter(8, 1, 3, b"xyz".iter().copied()).unwrap();
+        assert_eq!(a.slice(o, 8), b"\0xyz\0\0\0\0");
+    }
+
+    #[test]
+    #[should_panic(expected = "wrong length")]
+    fn alloc_from_iter_checks_the_length() {
+        Arena::new(1 << 20)
+            .alloc_from_iter(8, 0, 4, b"ab".iter().copied())
+            .unwrap();
     }
 
     #[test]

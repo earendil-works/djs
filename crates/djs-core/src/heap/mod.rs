@@ -210,6 +210,26 @@ impl Heap {
         Ok(off)
     }
 
+    /// Like [`Heap::alloc_cell_init`] with `n` bytes of data from an iterator (see
+    /// [`Arena::alloc_from_iter`]).
+    pub fn alloc_cell_from_iter(
+        &mut self,
+        kind: CellKind,
+        size: u32,
+        at: u32,
+        n: u32,
+        data: impl Iterator<Item = u8>,
+    ) -> Result<u32, HeapError> {
+        let size = align8(size.max(kind.layout().min_size));
+        let off = self.arena.alloc_from_iter(size, at, n, data)?;
+        if self.arena.len() >= self.gc_threshold {
+            self.gc_pending = true;
+        }
+        self.arena.set(off, Header::KIND, kind as u8);
+        self.arena.set(off, Header::SIZE, size);
+        Ok(off)
+    }
+
     /// The kind of the cell at `off`. Panics if the header is invalid.
     #[inline]
     pub fn cell_kind(&self, off: u32) -> CellKind {
