@@ -25,6 +25,16 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
   exit 1
 fi
 
+# One line per merge attempt in work/scratch/merge-log.tsv (0079): when it started, the
+# lock wait, rebase + regeneration, gate and total seconds, and how it ended.
+t_start=$(date +%s); t_lock=$t_start; t_rebased=$t_start; t_gated=$t_start
+outcome=failed-before-lock
+log_merge() {
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date -r "$t_start" '+%F %T')" "$branch" \
+    $((t_lock - t_start)) $((t_rebased - t_lock)) $((t_gated - t_rebased)) \
+    $(($(date +%s) - t_start)) "$outcome" >> "$main_root/work/scratch/merge-log.tsv"
+}
+
 lock="$main_root/work/scratch/merge.lock"
 mkdir -p "$main_root/work/scratch"
 waited=0
@@ -35,7 +45,8 @@ until mkdir "$lock" 2>/dev/null; do
   sleep 5
 done
 echo "$branch $(date)" > "$lock/owner"
-trap 'rm -rf "$lock"' EXIT
+t_lock=$(date +%s); t_rebased=$t_lock; t_gated=$t_lock; outcome=failed-rebase
+trap 'log_merge; rm -rf "$lock"' EXIT
 
 # The fast-forward at the end needs a clean primary checkout: check now, not after a
 # full gate (0079).
@@ -80,9 +91,12 @@ fi
 git -C "$gate_wt" checkout -q --detach --force "$sha"
 git -C "$gate_wt" clean -fdq   # untracked files only; target/ is ignored and stays
 
+t_rebased=$(date +%s); t_gated=$t_rebased; outcome=failed-gate
 echo "== gate (in $gate_wt at $(git rev-parse --short "$sha"))"
 (cd "$gate_wt" && ./scripts/gate.sh)
 
+t_gated=$(date +%s); outcome=failed-ff
 echo "== fast-forward main"
 git -C "$main_root" merge --ff-only "$sha"
+outcome=merged
 echo "merge-to-main: main is now at $(git rev-parse --short main)"
