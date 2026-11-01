@@ -1,7 +1,7 @@
 # 0118: Harvest a redacted codemode corpus from pi sessions
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0118-codemode-corpus-harvest
 depends-on: 0044
 guide: docs/guide/testing.md (the corpus sources)
