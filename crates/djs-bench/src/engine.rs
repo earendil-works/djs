@@ -1,6 +1,6 @@
 //! The engine track: JS microbenchmarks (`tests/bench/*.js`) run in the codemode model
-//! through djs-difftest's `Engine` trait and prelude, on qjs now and on djs once it runs
-//! JS (D1191). Each script starts with `// bench: expect <result>` (the returned value
+//! through djs-difftest's `Engine` trait, on qjs (with the shared prelude) and on djs
+//! in-process (D1191), with the djs/qjs time ratio per script. Each script starts with `// bench: expect <result>` (the returned value
 //! as the model sees it, or `completed`), which every run is checked against.
 //!
 //! A sample is one whole run (process start included for qjs). `empty.js` measures that
@@ -9,10 +9,11 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use djs_difftest::djs::Djs;
 use djs_difftest::engine::{Done, Engine, Job};
 use djs_difftest::qjs::Qjs;
 
-use crate::runner::Runner;
+use crate::runner::{Runner, Unit};
 
 pub struct Script {
     pub name: String,
@@ -99,7 +100,9 @@ pub fn engine(r: &mut Runner) {
     } else {
         r.skip("engine/qjs", format!("qjs not found at {}", qjs.display()));
     }
-    // djs joins here once it runs JS (0014/0015), and the ratio djs/qjs is reported.
+    // djs in-process (the difftest djs engine, D1160). Scripts it cannot run yet are
+    // skipped with the reason.
+    engines.push(("djs", Box::new(Djs::default())));
     let scripts = match load_scripts(&root.join("tests/bench")) {
         Ok(s) => s,
         Err(e) => return r.skip("engine", e),
@@ -124,6 +127,18 @@ pub fn engine(r: &mut Runner) {
             {
                 startup = Duration::from_secs_f64(m.value / 1e3);
             }
+        }
+    }
+    // djs time / qjs time per script that ran on both (lower is better; 1.0 is parity).
+    for s in scripts.iter().filter(|s| s.name != "empty") {
+        let value = |engine: &str| {
+            let name = format!("engine/{engine}/{}", s.name);
+            r.results.iter().find(|m| m.name == name).map(|m| m.value)
+        };
+        if let (Some(d), Some(q)) = (value("djs"), value("qjs"))
+            && q > 0.0
+        {
+            r.value(&format!("engine/djs÷qjs/{}", s.name), Unit::Ratio, d / q);
         }
     }
 }

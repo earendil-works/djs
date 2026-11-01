@@ -15,6 +15,8 @@ pub enum Unit {
     MsPerMiB,
     /// bytes (sizes)
     Bytes,
+    /// a dimensionless ratio (djs time / qjs time)
+    Ratio,
 }
 
 impl Unit {
@@ -25,6 +27,7 @@ impl Unit {
             Unit::Ms => "ms",
             Unit::MsPerMiB => "ms/MiB",
             Unit::Bytes => "bytes",
+            Unit::Ratio => "x",
         }
     }
 
