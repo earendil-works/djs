@@ -57,15 +57,12 @@ pub(crate) fn sort_numbers(heap: &mut Heap, list: Obj) -> Result<(), Fault> {
                 .unwrap_or(f64::NAN)
         })
         .collect();
-    values.sort_by(|a, b| {
-        use core::cmp::Ordering::*;
-        match (a.is_nan(), b.is_nan()) {
-            (true, true) => Equal,
-            (true, false) => Greater,
-            (false, true) => Less,
-            _ if a == b && *a == 0.0 => a.is_sign_negative().cmp(&b.is_sign_negative()).reverse(),
-            _ => a.partial_cmp(b).unwrap_or(Equal),
-        }
+    // crate::sort, not core's sorts (D1432).
+    crate::sort::sort_by(&mut values, |a, b| match (a.is_nan(), b.is_nan()) {
+        (_, true) => !a.is_nan(),
+        (true, false) => false,
+        _ if a == b && *a == 0.0 => a.is_sign_negative() && !b.is_sign_negative(),
+        _ => a < b,
     });
     for (i, x) in values.into_iter().enumerate() {
         heap.set_element_fast(list, i as u32, crate::interp::conv::number(x))?;

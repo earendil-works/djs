@@ -87,6 +87,15 @@ Date, typed arrays, …), and the code is about 590 KB.
   the `with` instantiations are mostly the export bodies).
 - Code: no big remaining generic sink; the largest items are inherent (`Exec::run` 45 KB,
   `call_intrinsic` 36 KB, the parser 82 KB). core::fmt is ~6 KB in total, panics ~2 KB.
+- Rebased onto main after 0041 (async/generators compiler) and 0039 (typed arrays),
+  same build, main vs branch: stripped 1,200,328 -> 948,113 (-21%); code 640,526 ->
+  603,729; data 556,783 -> 341,467; base image 501,760 -> 288,024; names 158,577 ->
+  139,189; stripped gzip -9 362,806 -> 301,160. vm_new (node) 6.2 -> 3.7 µs,
+  instantiate ~66 -> ~55 µs. Engine scripts in the Sandbox unchanged or slightly faster
+  (loop 300 -> 295 ms, calls 160 -> 143, props 499 -> 457, arrays ~2330, json ~25).
+  0039's typed array sort had brought core's sort back (-6 KB code by moving it to
+  crate::sort too).
+- wasm-opt: not installed (the user has not decided); numbers above are without it.
 
 ## Follow-ups
 - `Vm::collect` (vm_collect) does not clear the value stack above `sp` the way the
