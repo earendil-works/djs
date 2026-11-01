@@ -4,6 +4,7 @@
 /**
  * decodeURI ( encodedURI ), 19.2.6.1.
  * @builtin globalThis.decodeURI
+ * @fast
  */
 function GlobalDecodeURI(encodedURI: Value): Str {
   return UriDecode(ToString(encodedURI), false);
@@ -12,6 +13,7 @@ function GlobalDecodeURI(encodedURI: Value): Str {
 /**
  * decodeURIComponent ( encodedURIComponent ), 19.2.6.2.
  * @builtin globalThis.decodeURIComponent
+ * @fast
  */
 function GlobalDecodeURIComponent(encodedURIComponent: Value): Str {
   return UriDecode(ToString(encodedURIComponent), true);
@@ -20,6 +22,7 @@ function GlobalDecodeURIComponent(encodedURIComponent: Value): Str {
 /**
  * encodeURI ( uri ), 19.2.6.3.
  * @builtin globalThis.encodeURI
+ * @fast
  */
 function GlobalEncodeURI(uri: Value): Str {
   return UriEncode(ToString(uri), false);
@@ -28,6 +31,7 @@ function GlobalEncodeURI(uri: Value): Str {
 /**
  * encodeURIComponent ( uriComponent ), 19.2.6.4.
  * @builtin globalThis.encodeURIComponent
+ * @fast
  */
 function GlobalEncodeURIComponent(uriComponent: Value): Str {
   return UriEncode(ToString(uriComponent), true);

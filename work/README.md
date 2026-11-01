@@ -77,6 +77,12 @@ it: its warm `target/` is the point), and is created on first use.
 - The drivers are registered in the repository's git config by
   `scripts/setup-merge-drivers.sh` (merge-to-main runs it). Run it once before rebasing
   by hand; after a manual rebase, run `scripts/regen.sh` too.
+- Always run `scripts/regen.sh` after a manual `git rebase main` (or a merge), before
+  you build, test or commit: the driver kept one side of each generated file, so until
+  then the prelude, the INTRINSICS table or the layout can lack your branch's changes
+  (or main's) while everything still compiles. Commit what it changes. (0090: a branch
+  commit carried a stale prelude without `%TypedArraySetElementSlow` until the next
+  regen.)
 - Conflicts in sources (Rust, `builtins/*.ts`, docs other than decisions.md) still need
   resolving by hand: resolve, `git rebase --continue`, run merge-to-main again.
 - merge-to-main fails right away if the primary checkout has uncommitted changes (the

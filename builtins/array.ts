@@ -73,6 +73,7 @@ function ArrayPrototypeMap(this: Value, callbackfn: Value, thisArg?: Value): Obj
  * Array.prototype.indexOf ( searchElement [ , fromIndex ] ), 23.1.3.17.
  * @builtin Array.prototype.indexOf
  * @native
+ * @fast
  */
 function ArrayPrototypeIndexOf(this: Value, searchElement: Value, fromIndex?: Value): f64 {
   const o: Obj = ToObject(this);
@@ -108,6 +109,7 @@ function ArrayPrototypeIndexOf(this: Value, searchElement: Value, fromIndex?: Va
  * Array.prototype.join ( separator ), 23.1.3.18.
  * @builtin Array.prototype.join
  * @native
+ * @fast
  */
 function ArrayPrototypeJoin(this: Value, separator: Value): Str {
   const o: Obj = ToObject(this);
@@ -148,6 +150,7 @@ function SameValueZero(x: Value, y: Value): boolean {
  * Array.prototype.includes ( searchElement [ , fromIndex ] ), 23.1.3.16.
  * @builtin Array.prototype.includes
  * @native
+ * @fast
  */
 function ArrayPrototypeIncludes(this: Value, searchElement: Value, fromIndex?: Value): boolean {
   const o: Obj = ToObject(this);
@@ -217,6 +220,7 @@ function ArrayIsArray(arg: Value): boolean {
  * @builtin Array.prototype.push
  * @length 1
  * @native
+ * @fast
  */
 function ArrayPrototypePush(this: Value, ...items: Value[]): f64 {
   const o: Obj = ToObject(this);
@@ -362,6 +366,7 @@ function ArrayPrototypeAt(this: Value, index: Value): Value {
 /**
  * Array.prototype.lastIndexOf ( searchElement [ , fromIndex ] ), 23.1.3.20.
  * @builtin Array.prototype.lastIndexOf
+ * @fast
  */
 function ArrayPrototypeLastIndexOf(this: Value, searchElement: Value, ...rest: Value[]): f64 {
   const o: Obj = ToObject(this);
@@ -620,6 +625,7 @@ function ArrayPrototypeConcat(this: Value, ...items: Value[]): Obj {
  * Array.prototype.slice ( start, end ), 23.1.3.28.
  * @builtin Array.prototype.slice
  * @native
+ * @fast
  */
 function ArrayPrototypeSlice(this: Value, start: Value, end: Value): Obj {
   const o: Obj = ToObject(this);
@@ -751,6 +757,7 @@ function ArrayPrototypeCopyWithin(this: Value, target: Value, start: Value, end?
 /**
  * Array.prototype.fill ( value [ , start [ , end ] ] ), 23.1.3.7.
  * @builtin Array.prototype.fill
+ * @fast
  */
 function ArrayPrototypeFill(this: Value, value: Value, start?: Value, end?: Value): Obj {
   const o: Obj = ToObject(this);
@@ -801,6 +808,7 @@ function ArrayPrototypeReverse(this: Value): Obj {
  * Array.prototype.pop ( ), 23.1.3.22.
  * @builtin Array.prototype.pop
  * @native
+ * @fast
  */
 function ArrayPrototypePop(this: Value): Value {
   const o: Obj = ToObject(this);

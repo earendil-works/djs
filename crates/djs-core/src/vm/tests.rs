@@ -3334,3 +3334,20 @@ fn native_builtins_collect_and_retry() {
         assert_eq!(plain, restored, "{limit}");
     }
 }
+
+#[test]
+fn fast_entries_decline_at_the_cap() {
+    // @fast entries (D1910): slice and join of a large array after garbage. An entry
+    // that reaches the cap declines and the builtin's own allocations collect and retry;
+    // when entries threw instead, these caps printed `.EEEEEEE`.
+    let src = include_str!("../../../../scripts/determinism/js/oom_fast.js");
+    let dots = ".".repeat(8);
+    for limit in [2_800_000usize, 3_200_000] {
+        let plain = run_limited(src, limit, 1 << 40, false).unwrap();
+        assert_eq!(plain.log, [dots.as_str()], "{limit}");
+        let sliced = run_limited(src, limit, 7919, false).unwrap();
+        let restored = run_limited(src, limit, 300_000, true).unwrap();
+        assert_eq!(plain, sliced, "{limit}");
+        assert_eq!(plain, restored, "{limit}");
+    }
+}

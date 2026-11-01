@@ -120,14 +120,12 @@ impl Exec<'_> {
         let v = match ff.call(self.heap, this, &args[..argc as usize]) {
             Ok(Some(v)) => v,
             Ok(None) => return Ok(false),
-            // Out of memory is out of memory either way; any other error is the builtin's
-            // to throw, with its own frame in the stack trace.
-            Err(f)
-                if matches!(
-                    &*f.0,
-                    FaultKind::Heap(HeapError::OutOfMemory | HeapError::HostOutOfMemory)
-                ) =>
-            {
+            // A host refusal stops the run (D1690). At the heap cap the entry declines
+            // (D1910): the builtin's own allocations then collect and retry (D1700,
+            // D1900). Entries allocate before they change anything, or only make stores
+            // the builtin repeats. Any other error is the builtin's to throw, with its own
+            // frame in the stack trace.
+            Err(f) if matches!(&*f.0, FaultKind::Heap(HeapError::HostOutOfMemory)) => {
                 return Err(f);
             }
             Err(_) => return Ok(false),

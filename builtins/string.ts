@@ -490,6 +490,7 @@ function StringPrototypeNormalize(this: Value, form?: Value): Str {
  * String.fromCharCode ( ...codeUnits ), 22.1.2.1.
  * @builtin String.fromCharCode
  * @length 1
+ * @fast
  */
 function StringFromCharCode(...codeUnits: Value[]): Str {
   CoerceNumbers(codeUnits);

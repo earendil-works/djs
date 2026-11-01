@@ -4068,3 +4068,26 @@ The full algorithm's functions are `@native` (10.5 KB of wasm, -20% on replacer
 functions). wasm instructions (wmeasure.py, before → after, quickjs-wasi): one Date in
 2000 records 18.1G → 1.2G (1.9G), indent + a getter 14.8G → 2.8G (1.8G), replacer
 function + array replacer 8.9G → 4.1G (1.4G), plain 1.5G unchanged (2.2G).
+
+## D1910: Dense-array loops, fromCharCode and the URI functions as `@fast`; entries decline at the heap cap
+date: 2026-11-03 · by: infra · issue: 0091
+- The dense-array loops of D1801 move to builtins/dense.rs (heap-level, shared by the
+  leaf intrinsics of the builtin language and builtins/fast.rs) and become `@fast`
+  entries: push of one item, pop, indexOf, lastIndexOf, includes, slice (through the
+  ArraySpeciesCreate entry), join with a primitive separator, fill; plus
+  String.fromCharCode of primitives and decodeURI/decodeURIComponent/encodeURI/
+  encodeURIComponent of a primitive (a malformed URI declines, so the builtin throws).
+  `this` must be an Array; any other case declines. Like D1850's entries they cost 2
+  fuel per call, not per element.
+- A `@fast` entry that reaches the heap cap declines instead of throwing (D1850 had it
+  propagate): the builtin then runs and its own allocations collect and retry (D1700,
+  D1900), so an entry never makes an out-of-memory error that the builtin would not
+  have. The host's refusal still stops the run (D1690). The contract for entries: they
+  allocate before they change anything, or make only stores the builtin repeats
+  (fill's plain stores, slice into its fresh array). Test
+  `fast_entries_decline_at_the_cap` (scripts/determinism/js/oom_fast.js).
+- Numbers (main → this, Minstr; native measure.py / wasm wmeasure.py; qjs, qjs-wasi):
+  pushpop native 4,935 → 2,720 (1,267), wasm 10,553 → 5,826 (4,744); indexof wasm
+  1,043 → 731 (578); arrays wasm 18,172 → 13,382 (16,853); strings wasm 6,036 → 3,334
+  (5,982). Per call natively: push+pop 6.1k → 3.9k, indexOf(len 8) 4.5k → 2.6k,
+  fromCharCode(2) 8.6k → 2.8k, decodeURI 4.7k → 3.6k instructions. wasm +5 KB.

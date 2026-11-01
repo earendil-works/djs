@@ -16,13 +16,13 @@
 
 use alloc::vec::Vec;
 
-use crate::builtins::{number, object, string};
+use crate::builtins::{dense, number, object, string};
 use crate::bytecode::intrinsics::INTRINSICS;
 use crate::heap::string::MAX_LEN;
 use crate::heap::{Heap, ObjectClass, Property, PropertyDescriptor, StrView, atoms};
 use crate::interp::conv::{self, Fault};
 use crate::interp::{Intrinsic, realm};
-use crate::value::{Kind, Str, Value};
+use crate::value::{Kind, Obj, Str, Value};
 
 /// The result of an entry: `None` declines.
 pub(crate) type Fast = Result<Option<Value>, Fault>;
@@ -141,6 +141,21 @@ pub(crate) static FAST: &[FastFn] = &[
     f("ObjectHasOwn", object_has_own),
     f("ArrayIsArray", array_is_array),
     f("ArraySpeciesCreate", array_species_create),
+    // ---- Array element loops over dense arrays (0091, builtins/dense.rs) ----
+    f("ArrayPrototypePush", array_push),
+    f("ArrayPrototypePop", array_pop),
+    f("ArrayPrototypeIndexOf", array_index_of),
+    f("ArrayPrototypeLastIndexOf", array_last_index_of),
+    f("ArrayPrototypeIncludes", array_includes),
+    f("ArrayPrototypeSlice", array_slice),
+    f("ArrayPrototypeJoin", array_join),
+    f("ArrayPrototypeFill", array_fill),
+    // ---- String.fromCharCode and the URI functions (0091) ----
+    f("StringFromCharCode", from_char_code),
+    f("GlobalDecodeURI", decode_uri),
+    f("GlobalDecodeURIComponent", decode_uri_component),
+    f("GlobalEncodeURI", encode_uri),
+    f("GlobalEncodeURIComponent", encode_uri_component),
 ];
 
 // ---- argument helpers ----------------------------------------------------------------
@@ -976,4 +991,222 @@ fn array_species_create(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
     };
     heap.define_own_property(a, atoms::LENGTH, &d)?;
     Ok(Some(Value::object(a)))
+}
+
+// ---- Array element loops (0091) ------------------------------------------------------
+// `this` must be an Array (ToObject is the identity, LengthOfArrayLike its length);
+// the loops are builtins/dense.rs's, which decline at a hole, a non-dense element or
+// anything else that could run user code.
+
+/// An Array `this` and its length.
+fn this_array(heap: &Heap, this: Value) -> Option<(Obj, u32)> {
+    let o = this.as_object()?;
+    (heap.object_class(o) == ObjectClass::Array).then(|| (o, heap.array_length(o)))
+}
+
+/// Array.prototype.push ( item ): one item as a plain append.
+fn array_push(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
+    let (Some((o, _)), [v]) = (this_array(heap, this), args) else {
+        return Ok(None);
+    };
+    Ok(dense::push(heap, o, *v)?.map(|n| conv::number(n as f64)))
+}
+
+/// Array.prototype.pop ( ) of an array `Heap::array_pop_dense` takes.
+fn array_pop(heap: &mut Heap, this: Value, _: &[Value]) -> Fast {
+    let Some((o, _)) = this_array(heap, this) else {
+        return Ok(None);
+    };
+    Ok(heap.array_pop_dense(o))
+}
+
+/// A search result of `dense::search` as the builtin's Number, `None` to decline.
+fn found(r: f64) -> Option<f64> {
+    (r != dense::DECLINE).then_some(r)
+}
+
+/// Array.prototype.indexOf ( searchElement [ , fromIndex ] ).
+fn array_index_of(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
+    let Some((o, len)) = this_array(heap, this) else {
+        return Ok(None);
+    };
+    if len == 0 {
+        return Ok(Some(Value::int(-1)));
+    }
+    let Some(mut n) = int_arg(heap, arg(args, 1))? else {
+        return Ok(None);
+    };
+    let len_f = len as f64;
+    if n >= len_f {
+        return Ok(Some(Value::int(-1)));
+    }
+    if n < 0.0 {
+        n = (len_f + n).max(0.0);
+    }
+    let (r, _) = dense::search(heap, o, arg(args, 0), n as u32, len, 0);
+    Ok(found(r).map(conv::number))
+}
+
+/// Array.prototype.includes ( searchElement [ , fromIndex ] ).
+fn array_includes(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
+    let Some((o, len)) = this_array(heap, this) else {
+        return Ok(None);
+    };
+    if len == 0 {
+        return Ok(Some(Value::FALSE));
+    }
+    let Some(mut n) = int_arg(heap, arg(args, 1))? else {
+        return Ok(None);
+    };
+    let len_f = len as f64;
+    if n >= len_f {
+        return Ok(Some(Value::FALSE));
+    }
+    if n < 0.0 {
+        n = (len_f + n).max(0.0);
+    }
+    let (r, _) = dense::search(heap, o, arg(args, 0), n as u32, len, 2);
+    Ok(found(r).map(|r| Value::bool(r >= 0.0)))
+}
+
+/// Array.prototype.lastIndexOf ( searchElement [ , fromIndex ] ).
+fn array_last_index_of(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
+    let Some((o, len)) = this_array(heap, this) else {
+        return Ok(None);
+    };
+    if len == 0 {
+        return Ok(Some(Value::int(-1)));
+    }
+    let len_f = len as f64;
+    let n = if args.len() > 1 {
+        match int_arg(heap, args[1])? {
+            Some(n) => n,
+            None => return Ok(None),
+        }
+    } else {
+        len_f - 1.0
+    };
+    let k = if n >= 0.0 {
+        n.min(len_f - 1.0)
+    } else {
+        len_f + n
+    };
+    if k < 0.0 {
+        return Ok(Some(Value::int(-1)));
+    }
+    let (r, _) = dense::search(heap, o, arg(args, 0), k as u32, len, 1);
+    Ok(found(r).map(conv::number))
+}
+
+/// Array.prototype.slice ( start, end ) with an Array result (ArraySpeciesCreate's
+/// entry) that takes plain appends.
+fn array_slice(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
+    let Some((o, len)) = this_array(heap, this) else {
+        return Ok(None);
+    };
+    let len_f = len as f64;
+    let (Some(k), Some(fin)) = (
+        relative(heap, arg(args, 0), len_f, 0.0)?,
+        relative(heap, arg(args, 1), len_f, len_f)?,
+    ) else {
+        return Ok(None);
+    };
+    let count = (fin - k).max(0.0);
+    let Some(a) = array_species_create(heap, Value::UNDEFINED, &[this, conv::number(count)])?
+        .and_then(|a| a.as_object())
+    else {
+        return Ok(None);
+    };
+    // A fresh `a` of length `count`: slice's final Set of `length` changes nothing.
+    if fin > k && !dense::slice(heap, o, k as u32, fin as u32, a)? {
+        return Ok(None);
+    }
+    Ok(Some(Value::object(a)))
+}
+
+/// Array.prototype.join ( separator ) with a primitive separator.
+fn array_join(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
+    let Some((o, len)) = this_array(heap, this) else {
+        return Ok(None);
+    };
+    let sep = match arg(args, 0) {
+        v if v.is_undefined() => heap.alloc_latin1(b",")?,
+        v => match str(heap, v)? {
+            Some(s) => s,
+            None => return Ok(None),
+        },
+    };
+    Ok(dense::join(heap, o, len, sep)?.map(Value::string))
+}
+
+/// Array.prototype.fill ( value [ , start [ , end ] ] ) while each Set is a plain
+/// store. A partial fill declines: the builtin's loop repeats the same stores.
+fn array_fill(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
+    let Some((o, len)) = this_array(heap, this) else {
+        return Ok(None);
+    };
+    let len_f = len as f64;
+    let (Some(k), Some(fin)) = (
+        relative(heap, arg(args, 1), len_f, 0.0)?,
+        relative(heap, arg(args, 2), len_f, len_f)?,
+    ) else {
+        return Ok(None);
+    };
+    let (k, fin) = (k as u32, fin as u32);
+    if fin > k && dense::fill(heap, o, arg(args, 0), k, fin)? < fin {
+        return Ok(None);
+    }
+    Ok(Some(this))
+}
+
+// ---- String.fromCharCode, the URI functions (0091) ------------------------------------
+
+/// String.fromCharCode ( ...codeUnits ) of primitives (ToUint16 of ToNumber).
+fn from_char_code(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
+    let mut units: Vec<u16> = Vec::with_capacity(args.len());
+    for &v in args {
+        let Some(n) = num(heap, v)? else {
+            return Ok(None);
+        };
+        units.push(conv::to_int32(n) as u16);
+    }
+    let s = if units.iter().all(|&u| u < 256) {
+        let bytes: Vec<u8> = units.iter().map(|&u| u as u8).collect();
+        heap.alloc_latin1(&bytes)?
+    } else {
+        heap.alloc_utf16(&units)?
+    };
+    some_str(s)
+}
+
+/// The URI functions of a primitive: a malformed URI declines (the builtin throws).
+fn uri(heap: &mut Heap, v: Value, f: fn(&mut Heap, Str) -> Result<Str, Fault>) -> Fast {
+    match str(heap, v)? {
+        Some(s) => Ok(Some(Value::string(f(heap, s)?))),
+        None => Ok(None),
+    }
+}
+
+fn decode_uri(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
+    uri(heap, arg(args, 0), |h, s| {
+        crate::builtins::uri::decode(h, s, false)
+    })
+}
+
+fn decode_uri_component(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
+    uri(heap, arg(args, 0), |h, s| {
+        crate::builtins::uri::decode(h, s, true)
+    })
+}
+
+fn encode_uri(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
+    uri(heap, arg(args, 0), |h, s| {
+        crate::builtins::uri::encode(h, s, false)
+    })
+}
+
+fn encode_uri_component(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
+    uri(heap, arg(args, 0), |h, s| {
+        crate::builtins::uri::encode(h, s, true)
+    })
 }
