@@ -38,6 +38,7 @@ pub mod bigint;
 pub mod cells;
 pub mod collection;
 mod compact;
+mod compactor;
 mod fail;
 pub mod gc;
 pub mod handle;

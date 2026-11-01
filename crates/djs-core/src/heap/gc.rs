@@ -112,7 +112,7 @@ fn trace(from: &mut Arena, to: &mut Arena, slot: Slot) {
 /// (prototype property slots, D1621): the offsets are stale now. Everything else in a
 /// slot is offset-free. Clearing (rather than bumping an epoch) keeps a collection of a
 /// collected heap byte-identical (D1090).
-fn clear_offset_caches(to: &mut Arena, template: u32) {
+pub(super) fn clear_offset_caches(to: &mut Arena, template: u32) {
     use super::cells::{FuncTemplate, IC_OFFSET_SLOT, IC_WORDS, U32Array};
     let Some(ic) = to.get::<Ref>(template, FuncTemplate::IC).get() else {
         return;
@@ -165,14 +165,43 @@ impl Heap {
         self.gc_threshold
     }
 
-    /// Collects garbage. Must only be called at a safepoint: every `Obj`, `Str`, `Sym` and
+    /// Collects garbage in place (mark-compact, `compactor.rs`, 0101): the VM's own
+    /// collections. Must only be called at a safepoint: every `Obj`, `Str`, `Sym` and
     /// `Value` held outside the heap is invalid afterwards; keep [`Handle`]s instead.
     ///
-    /// On `Err(OutOfMemory)` (the host could not provide the to-space) the heap is
-    /// unchanged.
+    /// The surviving cells keep their address order. On `Err(HostOutOfMemory)` (the host
+    /// could not provide the side tables) the heap is unchanged.
     ///
     /// [`Handle`]: super::Handle
     pub fn collect(&mut self) -> Result<GcStats, HeapError> {
+        #[cfg(test)]
+        if core::mem::take(&mut self.fail_next_gc_reserve) {
+            return Err(HeapError::HostOutOfMemory);
+        }
+        let (before, after) = self.mark_compact()?;
+        self.after_collect(after);
+        Ok(GcStats { before, after })
+    }
+
+    /// The threshold, the pending flag, the reserve and the capacity after a collection.
+    fn after_collect(&mut self, after: u32) {
+        self.set_gc_threshold(next_threshold(after, self.arena.limit()));
+        self.gc_pending = false;
+        self.maybe_close_reserve();
+        // A to-space sized for a mostly-garbage heap gives the excess back (in wasm to the
+        // allocator, for the Rust side); close to the threshold it is kept, so the arena
+        // does not regrow (and copy) right away.
+        let t = self.gc_threshold as usize;
+        if self.arena.capacity() > 2 * t {
+            self.arena.shrink_capacity(t);
+        }
+    }
+
+    /// Collects garbage by copying (Cheney): the heap comes out breadth-first from the
+    /// roots, a function of the object graph alone (D1090). For canonical images: the
+    /// canonical hash (D1730, on a copy) and the base image. Needs a to-space as big as
+    /// the arena; on `Err(HostOutOfMemory)` the heap is unchanged.
+    pub fn collect_canonical(&mut self) -> Result<GcStats, HeapError> {
         let before = self.arena.len();
         #[cfg(test)]
         if core::mem::take(&mut self.fail_next_gc_reserve) {
@@ -263,16 +292,7 @@ impl Heap {
         // was measured and rejected (D1870): in wasm a freed from-space also serves the
         // Rust allocations between collections, and pinning it raised peak memory.
         self.arena = to;
-        self.set_gc_threshold(next_threshold(after, self.arena.limit()));
-        self.gc_pending = false;
-        self.maybe_close_reserve();
-        // A to-space sized for a mostly-garbage heap gives the excess back (in wasm to the
-        // allocator, for the Rust side); close to the threshold it is kept, so the arena
-        // does not regrow (and copy) right away.
-        let t = self.gc_threshold as usize;
-        if self.arena.capacity() > 2 * t {
-            self.arena.shrink_capacity(t);
-        }
+        self.after_collect(after);
         for o in collections {
             self.collection_rehash(crate::value::Obj(o));
         }

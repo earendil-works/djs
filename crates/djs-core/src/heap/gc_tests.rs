@@ -333,6 +333,52 @@ fn collecting_during_construction_changes_nothing() {
     }
 }
 
+#[test]
+fn both_collectors_keep_the_same_graph() {
+    // 0101: mark-compact (in place, address order) and Cheney (BFS) keep the same cells:
+    // the same graph and the same live bytes, also with a tiny mark stack (overflow
+    // rescans), and a mark-compact heap collects to itself.
+    for cap in [0, 3] {
+        super::compactor::TEST_STACK_CAP.with(|c| c.set(cap));
+        for seed in 1..=30u64 {
+            let seed = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            let mut a = Heap::new().unwrap();
+            let ha = build_random(&mut a, seed, 500, None);
+            let mut b = Heap::from_bytes_trusted(a.bytes().to_vec(), DEFAULT_LIMIT).unwrap();
+            let d0 = dump(&a, &ha);
+            let sa = a.collect().unwrap();
+            let sb = b.collect_canonical().unwrap();
+            assert_eq!(sa.after, sb.after, "seed {seed} cap {cap}");
+            a.verify().unwrap();
+            assert_eq!(dump(&a, &ha), d0, "seed {seed} cap {cap}");
+            assert_eq!(dump(&b, &ha), d0, "seed {seed} cap {cap}");
+            let image = a.bytes().to_vec();
+            a.collect().unwrap();
+            assert_eq!(a.bytes(), &image[..], "seed {seed} cap {cap}");
+            // Cheney of the compacted heap is Cheney of the original.
+            a.collect_canonical().unwrap();
+            assert_eq!(a.bytes(), b.bytes(), "seed {seed} cap {cap}");
+        }
+    }
+    super::compactor::TEST_STACK_CAP.with(|c| c.set(0));
+}
+
+#[test]
+fn collection_points_do_not_change_compacted_images() {
+    // Sliding keeps allocation order, so collecting along the way (in place) ends in the
+    // same bytes as collecting once at the end.
+    for seed in 1..=20u64 {
+        let seed = seed.wrapping_mul(0xA24B_AED4_963E_E407);
+        let mut a = Heap::new().unwrap();
+        let mut b = Heap::new().unwrap();
+        build_random(&mut a, seed, 600, None);
+        build_random(&mut b, seed, 600, Some(11));
+        a.collect().unwrap();
+        b.collect().unwrap();
+        assert_eq!(a.bytes(), b.bytes(), "seed {seed}");
+    }
+}
+
 // ------------------------------------------------------------------ focused tests
 
 #[test]
@@ -617,6 +663,104 @@ fn gc_throughput() {
         h.set_handle(head, Value::object(o));
     }
     report("linked list", &mut h);
+}
+
+/// Milliseconds per collection of copies of `h` by both collectors (0101).
+fn compare(name: &str, h: &Heap) {
+    extern crate std;
+    use std::time::Instant;
+    let n = 10;
+    let mut times = [0.0f64; 2];
+    let mut after = [0u32; 2];
+    for (i, t) in times.iter_mut().enumerate() {
+        for _ in 0..n {
+            let mut c = Heap::from_bytes_trusted(h.bytes().to_vec(), DEFAULT_LIMIT).unwrap();
+            let start = Instant::now();
+            let s = if i == 0 {
+                c.collect_canonical()
+            } else {
+                c.collect()
+            }
+            .unwrap();
+            *t += start.elapsed().as_secs_f64() / n as f64;
+            after[i] = s.after;
+        }
+    }
+    assert_eq!(after[0], after[1], "both collectors keep the same bytes");
+    std::println!(
+        "{name}: {:.1} MiB -> {:.1} MiB live; cheney {:.2} ms, mark-compact {:.2} ms ({:.2}x)",
+        h.arena().len() as f64 / (1 << 20) as f64,
+        after[0] as f64 / (1 << 20) as f64,
+        times[0] * 1e3,
+        times[1] * 1e3,
+        times[1] / times[0]
+    );
+}
+
+/// Both collectors on live and half-garbage heaps: `cargo test --release -p djs-core --lib
+/// gc_collectors_compared -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn gc_collectors_compared() {
+    for garbage in [false, true] {
+        let mut h = Heap::new().unwrap();
+        let root = h.new_array(None, 0).unwrap();
+        let hr = h.new_handle(Value::object(root)).unwrap();
+        let keys: Vec<Atom> = ["id", "name", "path", "size", "tags"]
+            .iter()
+            .map(|k| h.atom_str(k).unwrap())
+            .collect();
+        let mut n = 0;
+        for i in 0..200_000u32 {
+            let o = h.new_object(None).unwrap();
+            for (j, &k) in keys.iter().enumerate() {
+                let v = if j % 2 == 0 {
+                    Value::int(i as i32)
+                } else {
+                    Value::string(h.alloc_str(&format!("value {i} {j}")).unwrap())
+                };
+                h.create_data_property(o, k, v).unwrap();
+            }
+            if !garbage || i % 2 == 0 {
+                let root = h.get_handle(hr).as_object().unwrap();
+                h.set_element_fast(root, n, Value::object(o)).unwrap();
+                n += 1;
+            }
+        }
+        compare(
+            if garbage {
+                "records, half garbage"
+            } else {
+                "records"
+            },
+            &h,
+        );
+        let mut h = Heap::new().unwrap();
+        let k = h.atom_str("next").unwrap();
+        let head = h.new_handle(Value::NULL).unwrap();
+        let piece = h.alloc_str(&"x".repeat(40)).unwrap();
+        let hp = h.new_handle(Value::string(piece)).unwrap();
+        for i in 0..500_000 {
+            let o = h.new_object(None).unwrap();
+            let p = h.get_handle(hp).as_string().unwrap();
+            let r = h.concat(p, p).unwrap();
+            h.create_data_property(o, atoms::VALUE, Value::string(r))
+                .unwrap();
+            if !garbage || i % 2 == 0 {
+                let next = h.get_handle(head);
+                h.create_data_property(o, k, next).unwrap();
+                h.set_handle(head, Value::object(o));
+            }
+        }
+        compare(
+            if garbage {
+                "linked list, half garbage"
+            } else {
+                "linked list"
+            },
+            &h,
+        );
+    }
 }
 
 fn report(name: &str, h: &mut Heap) {

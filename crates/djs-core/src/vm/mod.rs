@@ -741,15 +741,27 @@ impl Vm {
 
     /// Collects garbage now. Raw values held outside the heap are invalid afterwards.
     pub fn collect(&mut self) -> Result<(), HeapError> {
-        Self::collect_heap(&mut self.heap)?;
+        Self::collect_heap(&mut self.heap, false)?;
         if self.opts.exec.finalization_after_gc {
             self.schedule_finalization_cleanup()?;
         }
         Ok(())
     }
 
-    /// A collection of `heap` alone (no finalization scheduling).
-    fn collect_heap(heap: &mut Heap) -> Result<(), HeapError> {
+    /// [`Vm::collect`] by copying (Cheney, `Heap::collect_canonical`): the heap comes out
+    /// as a function of its object graph alone. For images that should not depend on how
+    /// they were built (the base image, 0101).
+    pub fn collect_canonical(&mut self) -> Result<(), HeapError> {
+        Self::collect_heap(&mut self.heap, true)?;
+        if self.opts.exec.finalization_after_gc {
+            self.schedule_finalization_cleanup()?;
+        }
+        Ok(())
+    }
+
+    /// A collection of `heap` alone (no finalization scheduling): in place, or by copying
+    /// with `canonical`.
+    fn collect_heap(heap: &mut Heap, canonical: bool) -> Result<(), HeapError> {
         // Popped values above `sp` must not keep garbage alive (as at the interpreter's
         // safepoints): the stack is traced to its full capacity.
         let i = state::interp(heap);
@@ -758,7 +770,11 @@ impl Vm {
         for k in sp..heap.value_array_capacity(stack) {
             heap.value_array_set(stack, k, Value::UNDEFINED);
         }
-        heap.collect().map(|_| ())
+        if canonical {
+            heap.collect_canonical().map(|_| ())
+        } else {
+            heap.collect().map(|_| ())
+        }
     }
 
     /// A hash of the VM's state that does not depend on when it last collected (D1730):
@@ -771,7 +787,7 @@ impl Vm {
         let limit = (self.heap.bytes().len()).max(self.opts.memory_limit);
         let mut copy = Heap::from_bytes_trusted(self.heap.bytes().to_vec(), limit)
             .map_err(|_| HeapError::OutOfMemory)?;
-        Self::collect_heap(&mut copy)?;
+        Self::collect_heap(&mut copy, true)?;
         Ok(fnv64(copy.bytes()))
     }
 

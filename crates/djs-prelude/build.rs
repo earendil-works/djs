@@ -12,7 +12,9 @@ fn main() {
     vm.heap_mut()
         .compact_for_image()
         .expect("out of memory compacting the base");
-    vm.collect().expect("out of memory collecting the base");
+    // Cheney: the base image is laid out by its graph, not the prelude's history (0101).
+    vm.collect_canonical()
+        .expect("out of memory collecting the base");
     let image = vm.bytes().to_vec();
     // Full verification (cell structure, references, build hash) at build time.
     if let Err(e) = Vm::from_bytes(image.clone(), VmOptions::default()) {
