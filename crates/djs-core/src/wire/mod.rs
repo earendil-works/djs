@@ -360,13 +360,22 @@ impl<'a> Decoder<'a, '_> {
         }
         let start = self.pos;
         let bytes = self.take(nbytes as usize)?;
-        let Ok(text) = core::str::from_utf8(bytes) else {
+        // Valid UTF-8 has as many bytes as UTF-16 units only if it is ASCII, which is much
+        // cheaper to check than full UTF-8 validation (most strings are short).
+        let ascii = units == nbytes;
+        let valid = if ascii {
+            bytes.is_ascii()
+        } else {
+            core::str::from_utf8(bytes).is_ok()
+        };
+        if !valid {
             self.pos = start;
             return self.invalid("invalid UTF-8");
-        };
+        }
         if as_key {
+            let text = core::str::from_utf8(bytes).unwrap_or_default();
             // `units` must still be right, for a consistent definition of valid input.
-            if text.encode_utf16().count() != units as usize {
+            if !ascii && text.encode_utf16().count() != units as usize {
                 self.pos = start;
                 return self.invalid("string lengths do not match");
             }
@@ -375,7 +384,6 @@ impl<'a> Decoder<'a, '_> {
         if units == 0 {
             return Ok((self.empty_string()?, Atom::NULL));
         }
-        let ascii = units == nbytes;
         // A code point above U+00FF starts with a lead byte of 0xC4 or more.
         let two_byte = !ascii && bytes.iter().any(|&b| b >= 0xC4);
         let s = self.heap.alloc_str_uninit(units, two_byte)?;
@@ -389,26 +397,13 @@ impl<'a> Decoder<'a, '_> {
             true
         } else if two_byte {
             let dst = self.heap.arena_mut().slice_mut(data, units * 2);
-            let dst = dst.as_chunks_mut::<2>().0;
-            let mut n = 0usize;
-            for u in text.encode_utf16() {
-                if let Some(d) = dst.get_mut(n) {
-                    *d = u.to_le_bytes();
-                }
-                n += 1;
-            }
-            n == units as usize
+            transcode(bytes, dst.as_chunks_mut::<2>().0, |d, u| {
+                *d = u.to_le_bytes()
+            })
         } else {
             // Every code point is at most U+00FF: one byte each.
             let dst = self.heap.arena_mut().slice_mut(data, units);
-            let mut n = 0usize;
-            for c in text.chars() {
-                if let Some(d) = dst.get_mut(n) {
-                    *d = c as u32 as u8;
-                }
-                n += 1;
-            }
-            n == units as usize
+            transcode(bytes, dst, |d, u| *d = u as u8)
         };
         if !ok {
             self.pos = start;
@@ -430,4 +425,58 @@ fn number_value(n: f64) -> Value {
     } else {
         Value::number(n)
     }
+}
+
+/// Transcodes valid UTF-8 into exactly `dst.len()` UTF-16 code units, written with `put`.
+/// Returns false if the unit count does not match. ASCII runs go eight bytes at a time.
+fn transcode<D>(src: &[u8], dst: &mut [D], put: impl Fn(&mut D, u16)) -> bool {
+    let (mut i, mut n) = (0, 0);
+    while i < src.len() {
+        if i + 8 <= src.len() && n + 8 <= dst.len() {
+            let w = u64::from_le_bytes(src[i..i + 8].try_into().unwrap());
+            if w & 0x8080_8080_8080_8080 == 0 {
+                for (d, &b) in dst[n..n + 8].iter_mut().zip(&src[i..i + 8]) {
+                    put(d, b as u16);
+                }
+                i += 8;
+                n += 8;
+                continue;
+            }
+        }
+        let b = src[i];
+        let (cp, len) = match b {
+            0x00..=0x7F => (b as u32, 1),
+            0xC0..=0xDF => (((b as u32 & 0x1F) << 6) | (src[i + 1] as u32 & 0x3F), 2),
+            0xE0..=0xEF => (
+                ((b as u32 & 0x0F) << 12)
+                    | ((src[i + 1] as u32 & 0x3F) << 6)
+                    | (src[i + 2] as u32 & 0x3F),
+                3,
+            ),
+            _ => (
+                ((b as u32 & 0x07) << 18)
+                    | ((src[i + 1] as u32 & 0x3F) << 12)
+                    | ((src[i + 2] as u32 & 0x3F) << 6)
+                    | (src[i + 3] as u32 & 0x3F),
+                4,
+            ),
+        };
+        i += len;
+        if cp > 0xFFFF {
+            let v = cp - 0x10000;
+            if n + 2 > dst.len() {
+                return false;
+            }
+            put(&mut dst[n], 0xD800 | (v >> 10) as u16);
+            put(&mut dst[n + 1], 0xDC00 | (v & 0x3FF) as u16);
+            n += 2;
+        } else {
+            match dst.get_mut(n) {
+                Some(d) => put(d, cp as u16),
+                None => return false,
+            }
+            n += 1;
+        }
+    }
+    n == dst.len()
 }

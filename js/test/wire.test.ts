@@ -115,6 +115,8 @@ test("containers and the key table", () => {
   const bytes = encode([{ k: 1 }, { k: 2 }]);
   assert.deepEqual([...bytes].slice(4), [Tag.ARRAY, 2, Tag.OBJECT, 1, 0, Tag.STR_UTF8, 1, 1, 0x6b,
     Tag.INT8, 1, Tag.OBJECT, 1, 1, Tag.INT8, 2]);
+  // Different key sets at the same depth.
+  roundTrip([{ a: 1, b: 2 }, { a: 1, c: 3 }, { c: 1 }, { b: 1, a: 2, c: 3 }, {}, { a: [{ a: 1 }, { b: 1 }] }]);
   assert.deepStrictEqual(decode(encode(Object.assign(Object.create(null), { x: 1 }))), { x: 1 });
 });
 
@@ -202,4 +204,32 @@ test("random values round-trip", () => {
     }
   };
   for (let i = 0; i < 2000; i++) roundTrip(gen(0));
+});
+
+test("plain object detection", () => {
+  roundTrip({ constructor: "a string", x: 1 });
+  roundTrip({ constructor: Object.prototype.constructor === Object ? 5 : 0 });
+  class A { constructor() {} }
+  assert.throws(() => encode(new A()), { message: "cannot encode A at $" });
+  const tricky = Object.create(A.prototype);
+  assert.throws(() => encode(tricky), { message: "cannot encode A at $" });
+  // An instance whose class has an own enumerable "constructor" key is still rejected.
+  const withKey = Object.assign(new A(), { constructor: Object });
+  assert.throws(() => encode(withKey), /cannot encode/);
+});
+
+test("a polluted Object.prototype does not leak into objects", () => {
+  (Object.prototype as Record<string, unknown>).polluted = 1;
+  try {
+    roundTrip({ a: 1, b: { c: 2 } });
+    assert.deepEqual(Object.keys(decode(encode({ a: 1 })) as object), ["a"]);
+  } finally {
+    delete (Object.prototype as Record<string, unknown>).polluted;
+  }
+});
+
+test("many properties", () => {
+  const o: Record<string, number> = {};
+  for (let i = 0; i < 20000; i++) o["k" + i] = i;
+  roundTrip(o);
 });

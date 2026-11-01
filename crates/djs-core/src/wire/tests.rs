@@ -686,3 +686,61 @@ fn wire_cross() {
     assert!(n > 1000 && with_json > 300, "{n} {with_json}");
     std::println!("{n} cases match ({with_json} also via JSON)");
 }
+
+/// Decoder benchmark against `json::parse_utf8` on the datasets js/bench/wire.bench.ts
+/// writes into `DJS_WIRE_BENCH`.
+#[test]
+#[ignore]
+fn bench_wire() {
+    use crate::json::{ParseOptions, parse_utf8};
+    use std::time::Instant;
+    let dir = std::env::var("DJS_WIRE_BENCH").expect("set DJS_WIRE_BENCH");
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| {
+            let n = e.unwrap().file_name().into_string().unwrap();
+            n.strip_suffix(".wire").map(String::from)
+        })
+        .collect();
+    names.sort();
+    fn time(mut f: impl FnMut()) -> f64 {
+        for _ in 0..2 {
+            f();
+        }
+        let mut runs = Vec::new();
+        let start = Instant::now();
+        while runs.len() < 5 || (start.elapsed().as_secs_f64() < 1.0 && runs.len() < 200) {
+            let t = Instant::now();
+            f();
+            runs.push(t.elapsed().as_secs_f64() * 1e3);
+        }
+        runs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        runs[runs.len() / 2]
+    }
+    std::println!("dataset              decode ms   parse_utf8 ms");
+    for name in names {
+        let wire = std::fs::read(format!("{dir}/{name}.wire")).unwrap();
+        let json = std::fs::read(format!("{dir}/{name}.json")).unwrap();
+        // Same result both ways.
+        let mut h = Heap::with_limit(1 << 30).unwrap();
+        let a = decode(&mut h, &wire, &DecodeOptions::default()).unwrap();
+        let b = parse_utf8(&mut h, &json, &ParseOptions::default()).unwrap();
+        assert_eq!(dump(&mut h, a).len(), dump(&mut h, b).len());
+        let t_wire = time(|| {
+            let mut h = Heap::with_limit(1 << 30).unwrap();
+            core::hint::black_box(decode(&mut h, &wire, &DecodeOptions::default()).unwrap());
+        });
+        let t_json = time(|| {
+            let mut h = Heap::with_limit(1 << 30).unwrap();
+            core::hint::black_box(parse_utf8(&mut h, &json, &ParseOptions::default()).unwrap());
+        });
+        let t_heap = time(|| {
+            core::hint::black_box(Heap::with_limit(1 << 30).unwrap());
+        });
+        std::println!(
+            "{name:20} {:9.2} {:15.2}   (heap creation {t_heap:.3} ms included)",
+            t_wire,
+            t_json
+        );
+    }
+}

@@ -166,13 +166,38 @@ class Encoder {
     const data = lenAt + lenWidth;
     let written = -1;
     if (n <= SHORT_STRING) {
+      // By hand: cheaper than a TextEncoder call for short strings.
+      let p = data;
       let i = 0;
       for (; i < n; i++) {
-        const c = s.charCodeAt(i);
-        if (c >= 0x80) break;
-        buf[data + i] = c;
+        let c = s.charCodeAt(i);
+        if (c < 0x80) {
+          buf[p++] = c;
+        } else if (c < 0x800) {
+          buf[p++] = 0xc0 | (c >> 6);
+          buf[p++] = 0x80 | (c & 0x3f);
+        } else if ((c & 0xf800) !== 0xd800) {
+          buf[p++] = 0xe0 | (c >> 12);
+          buf[p++] = 0x80 | ((c >> 6) & 0x3f);
+          buf[p++] = 0x80 | (c & 0x3f);
+        } else {
+          const d = i + 1 < n ? s.charCodeAt(i + 1) : 0;
+          if (c >= 0xdc00 || (d & 0xfc00) !== 0xdc00) break; // lone surrogate
+          c = 0x10000 + ((c - 0xd800) << 10) + (d - 0xdc00);
+          i++;
+          buf[p++] = 0xf0 | (c >> 18);
+          buf[p++] = 0x80 | ((c >> 12) & 0x3f);
+          buf[p++] = 0x80 | ((c >> 6) & 0x3f);
+          buf[p++] = 0x80 | (c & 0x3f);
+        }
       }
-      if (i === n) written = n;
+      if (i === n) {
+        written = p - data;
+      } else {
+        this.pos = start;
+        this.stringUtf16(s);
+        return;
+      }
     }
     if (written < 0) {
       if (!s.isWellFormed()) {
