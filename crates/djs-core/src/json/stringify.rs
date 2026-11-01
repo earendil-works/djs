@@ -560,10 +560,10 @@ impl Ser<'_, '_> {
 
     fn pop(&mut self) {
         let f = self.stack.pop().unwrap();
-        if self.stack.len() >= LINEAR_CYCLE_CHECK {
-            if let Ok(i) = self.deep.binary_search(&f.obj().offset()) {
-                self.deep.remove(i);
-            }
+        if self.stack.len() >= LINEAR_CYCLE_CHECK
+            && let Ok(i) = self.deep.binary_search(&f.obj().offset())
+        {
+            self.deep.remove(i);
         }
         if let Frame::Obj { start, end, .. } = f {
             // Keys of nested frames were pushed after ours and are gone already.
