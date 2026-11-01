@@ -790,3 +790,39 @@ operand depth (`stmt_depth`) for handler depths and for unwinding jumps. The cat
 parameter shares its scope with the catch block (redeclaring it with `let`/`const`/
 function is an error). `var` of the same name is allowed and assigns the parameter, as in
 qjs, which implements Annex B.3.4 here.
+
+## D1220: Script-mode globals at run time
+date: 2026-11-01 · by: heap · issue: 0022
+The global lexical record (D1141) is a hidden ordinary object without a prototype at
+`Realm::GLOBAL_LEX`, never visible to JS. Each `let`/`const` is a data property whose
+value is `UNINITIALIZED` until `init_global_lex`. Bindings are configurable, so the init
+can overwrite them through the normal define path; `writable` is false for `const`.
+`get_global`, `get_global_typeof` and `put_global` look there first. While a binding is
+uninitialized they throw `ReferenceError: x is not initialized`; writing to a const throws
+`TypeError: 'x' is read-only`. Then they fall through to the global object.
+`global_decls` follows QuickJS (`JS_CheckDefineGlobalVar`) rather than the spec's
+VarNames list:
+- a lexical name conflicts with a non-configurable own property of the global object, or
+  with an existing lexical binding (`SyntaxError: redeclaration of 'x'`);
+- a var name conflicts with a lexical binding, and needs the global object to be
+  extensible if it is new (`TypeError: cannot define variable 'x'`).
+All checks run before any binding is created. Vars become `{undefined, writable,
+enumerable, non-configurable}` properties of the global object. Variables created by
+`var` are non-configurable, so "previous script had `var x`" is caught the same way as in
+qjs.
+
+## D1221: End-to-end corpus with qjs-generated expectations
+date: 2026-11-01 · by: heap · issue: 0022
+`tests/data/e2e/*.js` are small programs, Script mode by default; a first line
+`// mode: body` makes a codemode body with params `(tools, console)`.
+`gen-expected.sh` runs each case in qjs, in strict mode, with a `console.log` shim that
+formats values like `vm::display` (strings raw, Errors `Name: message`, `-0` / `NaN` /
+`Infinity` via `String`, everything else `JSON.stringify`). Uncaught exceptions become a
+last line `Uncaught ...`. `crates/djs-core/tests/e2e.rs` runs every case three ways and
+each must match the `.expected` file exactly:
+- plain;
+- suspension: fuel 1 for the first 5000 stops, then 997-fuel slices, with a
+  `Vm::from_bytes(vm.bytes())` round trip at every stop and host call;
+- GC stress.
+`DJS_E2E_MODE=plain|suspend|gc` runs one mode. Uncaught non-Error values should be thrown
+in body cases: qjs's stderr printer formats objects differently from the shim.
