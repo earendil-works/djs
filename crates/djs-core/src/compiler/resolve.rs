@@ -677,6 +677,9 @@ fn emit_function(
     if f.is_generator {
         flags |= func_flags::GENERATOR;
     }
+    if f.sloppy_this {
+        flags |= func_flags::SLOPPY_THIS;
+    }
     // Functions that use `super.x` (themselves or in arrows) get a home object slot.
     if f.home_var.is_some() {
         flags |= func_flags::HOME;

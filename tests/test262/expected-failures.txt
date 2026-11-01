@@ -24,13 +24,6 @@ built-ins/Function/15.3.2.1-11-6-s.js: SyntaxError: duplicate argument names not
 built-ins/Function/15.3.2.1-11-7-s.js: SyntaxError: invalid argument name in strict code
 built-ins/Function/15.3.2.1-11-8-s.js: SyntaxError: duplicate argument names not allowed in this context
 built-ins/Function/15.3.2.1-11-9-s.js: SyntaxError: duplicate argument names not allowed in this context
-built-ins/Function/S15.3.2.1_A3_T8.js: Test262Error: f() must return this Expected SameValue(«undefined», «[object Object]») to be true
-built-ins/Function/S15.3.5_A2_T1.js: TypeError: cannot set property 'y' of undefined
-built-ins/Function/S15.3.5_A2_T2.js: TypeError: cannot set property 'y' of undefined
-built-ins/Function/S15.3_A3_T1.js: TypeError: cannot set property 'godname' of undefined
-built-ins/Function/S15.3_A3_T2.js: TypeError: cannot read property 'color' of undefined
-built-ins/Function/S15.3_A3_T5.js: TypeError: cannot read property 'planet' of undefined
-built-ins/Function/S15.3_A3_T6.js: TypeError: cannot read property 'planet' of undefined
 built-ins/Function/length/S15.3.5.1_A1_T3.js: SyntaxError: duplicate argument names not allowed in this context
 built-ins/Function/length/S15.3.5.1_A2_T3.js: SyntaxError: duplicate argument names not allowed in this context
 built-ins/Function/length/S15.3.5.1_A3_T3.js: SyntaxError: duplicate argument names not allowed in this context
@@ -40,32 +33,6 @@ built-ins/Function/prototype/S15.3.4_A1.js: Test262Error: Object.prototype.toStr
 built-ins/Function/prototype/S15.3.4_A2_T1.js: Test262Error: #1.1: The Function prototype object is itself a Function object that, when invoked, accepts any arguments and returns undefined: TypeError: not a…
 built-ins/Function/prototype/S15.3.4_A2_T2.js: Test262Error: #1.1: The Function prototype object is itself a Function object that, when invoked, accepts any arguments and returns undefined: TypeError: not a…
 built-ins/Function/prototype/S15.3.4_A2_T3.js: TypeError: not a function
-built-ins/Function/prototype/apply/S15.3.4.3_A3_T1.js: TypeError: cannot set property 'field' of undefined
-built-ins/Function/prototype/apply/S15.3.4.3_A3_T2.js: TypeError: cannot set property 'field' of null
-built-ins/Function/prototype/apply/S15.3.4.3_A3_T3.js: TypeError: cannot set property 'field' of undefined
-built-ins/Function/prototype/apply/S15.3.4.3_A3_T4.js: TypeError: cannot set property 'field' of undefined
-built-ins/Function/prototype/apply/S15.3.4.3_A3_T5.js: TypeError: cannot set property 'feat' of undefined
-built-ins/Function/prototype/apply/S15.3.4.3_A3_T7.js: TypeError: cannot set property 'feat' of undefined
-built-ins/Function/prototype/apply/S15.3.4.3_A5_T1.js: TypeError: not an object
-built-ins/Function/prototype/apply/S15.3.4.3_A5_T2.js: TypeError: not an object
-built-ins/Function/prototype/apply/S15.3.4.3_A7_T1.js: TypeError: cannot set property 'shifted' of null
-built-ins/Function/prototype/apply/S15.3.4.3_A7_T2.js: TypeError: cannot set property 'shifted' of null
-built-ins/Function/prototype/apply/S15.3.4.3_A7_T5.js: TypeError: cannot set property 'shifted' of null
-built-ins/Function/prototype/apply/S15.3.4.3_A7_T7.js: TypeError: cannot set property 'shifted' of null
-built-ins/Function/prototype/apply/S15.3.4.3_A7_T8.js: TypeError: cannot set property 'shifted' of undefined
-built-ins/Function/prototype/call/S15.3.4.4_A3_T1.js: TypeError: cannot set property 'field' of undefined
-built-ins/Function/prototype/call/S15.3.4.4_A3_T2.js: TypeError: cannot set property 'field' of null
-built-ins/Function/prototype/call/S15.3.4.4_A3_T3.js: TypeError: cannot set property 'field' of undefined
-built-ins/Function/prototype/call/S15.3.4.4_A3_T4.js: TypeError: cannot set property 'field' of undefined
-built-ins/Function/prototype/call/S15.3.4.4_A3_T5.js: TypeError: cannot set property 'feat' of undefined
-built-ins/Function/prototype/call/S15.3.4.4_A3_T7.js: TypeError: cannot set property 'feat' of undefined
-built-ins/Function/prototype/call/S15.3.4.4_A5_T1.js: TypeError: not an object
-built-ins/Function/prototype/call/S15.3.4.4_A5_T2.js: TypeError: not an object
-built-ins/Function/prototype/call/S15.3.4.4_A6_T1.js: TypeError: cannot set property 'shifted' of null
-built-ins/Function/prototype/call/S15.3.4.4_A6_T2.js: TypeError: cannot set property 'shifted' of null
-built-ins/Function/prototype/call/S15.3.4.4_A6_T5.js: TypeError: cannot set property 'shifted' of null
-built-ins/Function/prototype/call/S15.3.4.4_A6_T7.js: TypeError: cannot set property 'shifted' of null
-built-ins/Function/prototype/call/S15.3.4.4_A6_T8.js: TypeError: cannot set property 'shifted' of undefined
 built-ins/Math/f16round/length.js: TypeError: cannot convert to object
 built-ins/Math/f16round/name.js: TypeError: cannot convert to object
 built-ins/Math/f16round/not-a-constructor.js: Test262Error: isConstructor invoked with a non-function value
@@ -82,12 +49,10 @@ built-ins/Math/sumPrecise/sum.js: TypeError: not a function
 built-ins/Math/sumPrecise/takes-iterable.js: TypeError: not a function
 built-ins/Math/sumPrecise/throws-on-non-number.js: Test262Error: Expected SameValue(«0», «1») to be true
 built-ins/Number/prototype/toString/length.js: Test262Error: length descriptor value should be 1; length value should be 1
-built-ins/Object/entries/tamper-with-global-object.js: TypeError: cannot set property 'Object' of undefined
 built-ins/Object/freeze/typedarray-backed-by-resizable-buffer.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
 built-ins/Object/prototype/setPrototypeOf-with-non-circular-values-__proto__.js: Test262Error: Object.setPrototypeOf(ObjProto, { __proto__: null }) throws a TypeError Expected a TypeError to be thrown but no exception was thrown at all
 built-ins/Object/prototype/setPrototypeOf-with-non-circular-values.js: Test262Error: Object.setPrototypeOf(ObjProto, Object.create(null)) throws a TypeError Expected a TypeError to be thrown but no exception was thrown at all
 built-ins/Object/subclass-object-arg.js: Test262Error: Expected SameValue(«1», «undefined») to be true
-built-ins/Object/values/tamper-with-global-object.js: TypeError: cannot set property 'Object' of undefined
 built-ins/Promise/prototype/finally/rejected-observable-then-calls-argument.js: async: Test262Error: Test262Error: `then` invoked with one argument Expected SameValue(«2», «1») to be true
 built-ins/String/prototype/localeCompare/15.5.4.9_CE.js: Test262Error: String.prototype.localeCompare considers ö (\u006f\u0308) ≠ ö (\u00f6).
 built-ins/String/prototype/normalize/return-normalized-string-from-coerced-form.js: TypeError: not supported yet: normalize of this string (no Unicode normalization tables)
@@ -107,7 +72,6 @@ built-ins/ThrowTypeError/unique-per-realm-function-proto.js: TypeError: cannot r
 built-ins/ThrowTypeError/unique-per-realm-non-simple.js: TypeError: cannot read property 'get' of undefined
 built-ins/ThrowTypeError/unique-per-realm-unmapped-args.js: TypeError: cannot read property 'get' of undefined
 built-ins/TypedArray/prototype/subarray/resizable-buffer.js: Test262Error: Expected a RangeError to be thrown but no exception was thrown at all
-harness/fnGlobalObject.js: Test262Error: Expected true but got false
 language/arguments-object/10.6-13-c-1-s.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
 language/arguments-object/10.6-13-c-2-s.js: Test262Error: Expected SameValue(«undefined», «undefined») to be false
 language/arguments-object/10.6-13-c-3-s.js: TypeError: cannot read property 'configurable' of undefined
@@ -227,10 +191,6 @@ language/expressions/property-accessors/S11.2.1_A4_T3.js: Test262Error: #1: type
 language/expressions/right-shift/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/expressions/subtraction/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/expressions/unsigned-right-shift/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
-language/function-code/10.4.3-1-13-s.js: Test262Error: f() Expected SameValue(«"undefined"», «"undefined"») to be false
-language/function-code/10.4.3-1-13gs.js: string: 'this' had incorrect value!
-language/function-code/10.4.3-1-15-s.js: Test262Error: f() Expected SameValue(«"undefined"», «"undefined"») to be false
-language/function-code/10.4.3-1-15gs.js: string: 'this' had incorrect value!
 language/function-code/10.4.3-1-19-s.js: Test262Error: my_eval("this") Expected SameValue(«undefined», «[object Object]») to be true
 language/function-code/10.4.3-1-19gs.js: string: 'this' had incorrect value!
 language/global-code/script-decl-func-err-non-configurable.js: Test262Error: writable, non-enumerable data property Expected a TypeError to be thrown but no exception was thrown at all

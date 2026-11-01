@@ -314,6 +314,25 @@ impl<'h> Exec<'h> {
         base + 2 + argc.max(params) + HEADER + locals + stack
     }
 
+    /// D015: OrdinaryCallBindThis for a sloppy function, on the `this` slot: undefined
+    /// and null become the global object, primitives their wrapper objects.
+    #[cold]
+    fn bind_sloppy_this(&mut self, slot: u32) -> Result<(), Fault> {
+        let this = self.get(slot);
+        let bound = if this.is_undefined() || this.is_null() {
+            realm::intrinsic(self.heap, Intrinsic::Global)
+        } else if this.as_object().is_none() {
+            match realm::wrap_primitive(self.heap, this, None)? {
+                Some(o) => Value::object(o),
+                None => this,
+            }
+        } else {
+            return Ok(());
+        };
+        self.set(slot, bound);
+        Ok(())
+    }
+
     /// Pushes the frame for closure template `t` (room checked by the caller with
     /// `frame_top`) and enters it at pc 0.
     #[inline(always)]
@@ -370,6 +389,9 @@ impl<'h> Exec<'h> {
         match self.heap.object_class(o) {
             ObjectClass::Function => {
                 let t = self.template_of(o);
+                if self.heap.arena().get(t, FuncTemplate::FLAGS) & func_flags::SLOPPY_THIS != 0 {
+                    self.bind_sloppy_this(base + 1)?;
+                }
                 self.ensure(self.frame_top(t, base, argc))?;
                 self.push_frame(t, base, argc, cont, ret_pc);
                 Ok(None)
@@ -1109,7 +1131,9 @@ impl<'h> Exec<'h> {
             return false;
         }
         let t = self.template_of(o);
-        if self.frame_top(t, base, argc) > self.heap.value_array_capacity(self.stack) {
+        if self.frame_top(t, base, argc) > self.heap.value_array_capacity(self.stack)
+            || self.heap.arena().get(t, FuncTemplate::FLAGS) & func_flags::SLOPPY_THIS != 0
+        {
             return false;
         }
         let info = &OPS[op as usize];

@@ -244,6 +244,10 @@ pub(super) struct FuncState {
     pub length: u16,
     /// Only plain identifiers: parameters stay in their argument slots.
     pub simple_params: bool,
+    /// The body's directive prologue has "use strict".
+    pub use_strict: bool,
+    /// D015: sloppy `this` binding (set by compiler/dynamic.rs).
+    pub sloppy_this: bool,
     /// Index of a rest parameter.
     pub rest: Option<u16>,
     pub this_var: Option<VarId>,
@@ -310,6 +314,8 @@ impl FuncState {
             param_count: 0,
             length: 0,
             simple_params: true,
+            use_strict: false,
+            sloppy_this: false,
             rest: None,
             this_var: None,
             arguments_var: None,

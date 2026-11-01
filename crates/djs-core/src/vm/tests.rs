@@ -924,6 +924,24 @@ fn dynamic_code() {
     );
 }
 
+/// D015: functions from the Function constructors without "use strict" bind `this`
+/// sloppily (undefined/null: the global object; primitives: wrappers), nothing else.
+#[test]
+fn sloppy_this_for_dynamic_functions() {
+    let out = run_js(
+        "const r = [];\n\
+         r.push(Function('return this')() === globalThis);\n\
+         r.push(Function('return this').call(null) === globalThis);\n\
+         r.push(Function('return this').call(5) instanceof Number);\n\
+         r.push(Function('\"use strict\"; return this')() === undefined);\n\
+         const o = {}; r.push(Function('return this').call(o) === o);\n\
+         r.push((function () { return this; })() === undefined);\n\
+         try { Function('undeclared = 1')(); r.push('implicit global'); } catch (e) { r.push(e.name); }\n\
+         console.log(r.join());\n",
+    );
+    assert_eq!(out.log[0], "true,true,true,true,true,true,ReferenceError");
+}
+
 #[test]
 fn error_stack_traces() {
     // Positions checked against qjs.

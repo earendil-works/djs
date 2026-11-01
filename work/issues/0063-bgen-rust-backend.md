@@ -37,6 +37,13 @@ iterator's `next`, and the Promise reaction job).
       code size per @native function (ARCH: each one adds size; report it).
 
 ## Log
+- Part 1, D015 (D1630): `func_flags::SLOPPY_THIS` is set by compiler/dynamic.rs when the
+  body has no "use strict" (`FuncState::use_strict`, recorded in the body's directive
+  prologue). `Exec::call` binds `this` sloppily before the frame; `fast_call_at` declines
+  such templates. test262 active 37,464 → 37,504 (40 stale entries removed, all sloppy
+  `this`: Function 7, apply 13, call 13, function-code 4, Object.entries/values, harness
+  fnGlobalObject). 16 of the 56 sloppy failures stay: duplicate parameters and
+  `eval`/`arguments` as names. Unit test `vm::tests::sloppy_this_for_dynamic_functions`.
 
 ## Follow-ups
 

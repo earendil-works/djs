@@ -2644,3 +2644,14 @@ by the four `Function` constructors whose body has no `"use strict"` directive t
 get sloppy `this` binding (OrdinaryCallBindThis: undefined/null → the global object,
 primitives → wrapper objects). Nothing else of sloppy mode: no implicit globals, no
 mapped arguments, no `with`. Everything else stays strict.
+
+## D1630: D015 as a template flag, bound on the slow call path
+date: 2026-11-01 · by: infra · issue: 0063
+compiler/dynamic.rs sets `func_flags::SLOPPY_THIS` on a Function-constructor function
+whose body has no "use strict" directive. The body parser now records the directive in
+`FuncState::use_strict`. `Exec::call` binds `this` for such a template before pushing the
+frame: undefined and null become the global object, primitives their wrappers (which can
+allocate, so it can fail like any call). The inline fast call path declines these templates
+and falls back to `call`, so `push_frame` stays as it was. Nothing else of sloppy mode
+changes. test262: 40 of the 56 sloppy failures from 0059 pass. The other 16 need sloppy
+syntax (duplicate parameters, `eval`/`arguments` as names), which D015 leaves out.

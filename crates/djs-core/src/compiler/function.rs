@@ -313,11 +313,10 @@ impl Parser<'_, '_> {
                         next.kind,
                         TokenKind::Semicolon | TokenKind::RBrace | TokenKind::Eof
                     ) || next.newline_before();
-                    if ends
-                        && !tok.has_escape()
-                        && self.lx.string_content(&tok) == b"use strict"
-                        && !self.f.simple_params
-                    {
+                    let use_strict =
+                        ends && !tok.has_escape() && self.lx.string_content(&tok) == b"use strict";
+                    self.f.use_strict |= use_strict;
+                    if use_strict && !self.f.simple_params {
                         return syntax(
                             tok.start,
                             "\"use strict\" not allowed in function with default or destructuring parameter",

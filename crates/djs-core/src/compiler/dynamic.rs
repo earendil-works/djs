@@ -53,6 +53,8 @@ impl Parser<'_, '_> {
             return syntax(paren, "parameters end before the parameter list");
         }
         self.parse_function_body()?;
+        // D015: without "use strict", `this` binding is sloppy (only that).
+        self.f.sloppy_this = !self.f.use_strict;
         self.f.src_end = self.prev_end;
         let child = self.end_function()?;
         self.leave();

@@ -37,6 +37,10 @@ pub mod func_flags {
     /// `prototype`, since the `%Install*` intrinsics define them on the builtins that
     /// user code can see (D1433).
     pub const PRIVILEGED: u32 = 1 << 8;
+    /// D015: a function from a Function constructor whose body has no "use strict":
+    /// OrdinaryCallBindThis is sloppy (undefined/null become the global object,
+    /// primitives their wrappers). Nothing else of sloppy mode.
+    pub const SLOPPY_THIS: u32 = 1 << 9;
 
     pub const fn kind(flags: u32) -> u32 {
         flags & KIND_MASK
