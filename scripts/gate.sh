@@ -16,6 +16,10 @@ echo "== builtins/gen is up to date (0017)"
 
 # 0018: the host-side JS package (node >= 22.6 for type stripping), and the wire format
 # across languages: node encodes a corpus, djs decodes it.
+# 0023: djs-wasm, which the js tests (sandbox.test.ts) load. A debug build is enough.
+echo "== djs-wasm"
+cargo build -p djs-wasm --target wasm32-unknown-unknown --quiet
+export DJS_WASM="$PWD/target/wasm32-unknown-unknown/debug/djs_wasm.wasm"
 echo "== js tests"; node --test js/test/*.test.ts
 echo "== wire cross-language"
 wire_dir=$(mktemp -d)

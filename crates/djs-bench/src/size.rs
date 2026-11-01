@@ -19,9 +19,24 @@ pub fn size(r: &mut Runner) {
     }
     let root = workspace_root();
     let target_dir = root.join("target/bench-size");
+    // The probe keeps its result names (`size/wasm ...`) so its history stays comparable.
+    let probe = ["--manifest-path", "tests/bench/size/Cargo.toml"];
+    measure(r, "size/wasm", &probe, &target_dir, "djs_size_probe.wasm");
+    // The real module (0023).
+    let module = ["-p", "djs-wasm"];
+    measure(r, "size/djs-wasm", &module, &target_dir, "djs_wasm.wasm");
+}
+
+/// Builds a wasm32 cdylib with the `wasm` profile and reports its sizes under `prefix`.
+fn measure(r: &mut Runner, prefix: &str, what: &[&str], target_dir: &Path, file: &str) {
+    if !r.wants(prefix) {
+        return;
+    }
+    let root = workspace_root();
     let status = Command::new(env!("CARGO"))
-        .args(["build", "--quiet", "--manifest-path"])
-        .arg(root.join("tests/bench/size/Cargo.toml"))
+        .current_dir(&root)
+        .args(["build", "--quiet"])
+        .args(what)
         .args([
             "--target",
             "wasm32-unknown-unknown",
@@ -29,36 +44,43 @@ pub fn size(r: &mut Runner) {
             "wasm",
             "--target-dir",
         ])
-        .arg(&target_dir)
+        .arg(target_dir)
         .status();
     if !matches!(status, Ok(s) if s.success()) {
         return r.skip(
-            "size/wasm",
-            "building the size probe failed (is the wasm32-unknown-unknown target installed?)",
+            prefix,
+            "building failed (is the wasm32-unknown-unknown target installed?)",
         );
     }
-    let wasm = target_dir.join("wasm32-unknown-unknown/wasm/djs_size_probe.wasm");
+    let wasm = target_dir.join("wasm32-unknown-unknown/wasm").join(file);
     let Ok(bytes) = std::fs::read(&wasm) else {
         return r.skip(
-            "size/wasm",
+            prefix,
             format!("{} missing after the build", wasm.display()),
         );
     };
-    r.value("size/wasm file", Unit::Bytes, bytes.len() as f64);
+    let name = |what: &str| format!("{prefix} {what}");
+    r.value(&name("file"), Unit::Bytes, bytes.len() as f64);
     match without_custom_sections(&bytes) {
-        Some(n) => r.value("size/wasm without custom sections", Unit::Bytes, n as f64),
+        Some(n) => r.value(&name("without custom sections"), Unit::Bytes, n as f64),
         None => r.skip(
-            "size/wasm without custom sections",
+            &name("without custom sections"),
             "could not parse the wasm file",
         ),
     }
     match gzip_size(&bytes) {
-        Some(n) => r.value("size/wasm gzip -9", Unit::Bytes, n as f64),
-        None => r.skip("size/wasm gzip -9", "gzip not available"),
+        Some(n) => r.value(&name("gzip -9"), Unit::Bytes, n as f64),
+        None => r.skip(&name("gzip -9"), "gzip not available"),
     }
+    // `size/wasm-opt -Oz` is the probe's historical name.
+    let opt_name = if prefix == "size/wasm" {
+        "size/wasm-opt -Oz".to_string()
+    } else {
+        name("wasm-opt -Oz")
+    };
     match wasm_opt_size(&wasm) {
-        Some(n) => r.value("size/wasm-opt -Oz", Unit::Bytes, n as f64),
-        None => r.skip("size/wasm-opt -Oz", "wasm-opt not installed"),
+        Some(n) => r.value(&opt_name, Unit::Bytes, n as f64),
+        None => r.skip(&opt_name, "wasm-opt not installed"),
     }
 }
 

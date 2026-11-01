@@ -63,6 +63,9 @@ thread_local! {
 fn init() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
+        // Natively (tests) the default hook still prints; on wasm32 there is no stderr, and
+        // leaving it out keeps its code out of the module.
+        #[cfg(not(target_arch = "wasm32"))]
         let previous = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
             let msg = info.to_string();
@@ -71,6 +74,7 @@ fn init() {
                     *p = msg;
                 }
             });
+            #[cfg(not(target_arch = "wasm32"))]
             previous(info);
         }));
     });
