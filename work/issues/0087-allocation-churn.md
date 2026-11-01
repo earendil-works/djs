@@ -1,7 +1,7 @@
 # 0087: Allocation churn and wasm memory (0081 proposal 5)
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0087-allocation-churn
 depends-on: 0081, 0071
 touches: crates/djs-core/src/heap/ (gc to-space reuse, the threshold), crates/djs-core/src/ (transient Rust Vecs on hot paths), crates/djs-wasm/ (allocator interaction)
