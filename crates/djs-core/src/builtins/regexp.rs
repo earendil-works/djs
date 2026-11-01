@@ -9,7 +9,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::heap::{Heap, ObjectClass, PropFlags, Property, PropertyDescriptor, StrView};
+use crate::heap::{Heap, HeapError, ObjectClass, PropFlags, Property, PropertyDescriptor, StrView};
 use crate::interp::conv::{Fault, type_error};
 use crate::interp::{ErrorKind, Intrinsic, realm};
 use crate::regexp::{self, Captures, Flags, Program};
@@ -56,30 +56,45 @@ pub(crate) fn compile(pattern: &[u16], flags: &[u16]) -> Result<Program, regexp:
     regexp::compile(pattern, f)
 }
 
-/// RegExpCreate: a new RegExp object with prototype `proto` (%RegExp.prototype% if
-/// `None`), `lastIndex` 0.
-pub(crate) fn create(
-    heap: &mut Heap,
-    proto: Option<Obj>,
-    pattern: Str,
-    flags: Str,
-) -> Result<Obj, Fault> {
-    let p = heap.str_to_utf16(pattern);
-    let f = heap.str_to_utf16(flags);
-    let prog = match compile(&p, &f) {
-        Ok(prog) => prog,
-        Err(e) => return syntax_error(e.message()),
-    };
+/// A U32Array cell holding `prog`'s words.
+pub(crate) fn program_cell(heap: &mut Heap, prog: &Program) -> Result<u32, HeapError> {
     let words = prog.words();
     let cell = heap.alloc_u32_array(words.len() as u32)?;
     for (i, &w) in words.iter().enumerate() {
         heap.u32_array_set(cell, i as u32, w);
     }
+    Ok(cell)
+}
+
+/// RegExpCreate: a new RegExp object with prototype `proto` (%RegExp.prototype% if
+/// `None`), `lastIndex` 0. `cell` is an already compiled program of `pattern` and
+/// `flags` (a regex literal's, D1502).
+pub(crate) fn create(
+    heap: &mut Heap,
+    proto: Option<Obj>,
+    pattern: Str,
+    flags: Str,
+    cell: Option<u32>,
+) -> Result<Obj, Fault> {
+    let cell = match cell {
+        Some(c) => c,
+        None => {
+            let p = heap.str_to_utf16(pattern);
+            let f = heap.str_to_utf16(flags);
+            let prog = match compile(&p, &f) {
+                Ok(prog) => prog,
+                Err(e) => return syntax_error(e.message()),
+            };
+            program_cell(heap, &prog)?
+        }
+    };
+    // The flag bits are the program's header word (`compiler::H_FLAGS`).
+    let bits = heap.u32_array_get(cell, 0);
     let proto = proto.unwrap_or_else(|| realm::intrinsic_obj(heap, Intrinsic::RegExpProto));
     let o = heap.alloc_object(ObjectClass::RegExp, Some(proto), 3)?;
     heap.set_object_slot(o, SLOT_PROGRAM, Value::internal(cell));
     heap.set_object_slot(o, SLOT_SOURCE, Value::string(pattern));
-    heap.set_object_slot(o, SLOT_FLAGS, Value::int(prog.flags().bits() as i32));
+    heap.set_object_slot(o, SLOT_FLAGS, Value::int(bits as i32));
     let key = heap.atom_str("lastIndex")?;
     let d = PropertyDescriptor::data(Value::int(0), PropFlags::WRITABLE);
     heap.define_own_property(o, key, &d)?;
@@ -174,7 +189,7 @@ pub(crate) fn escaped_source(heap: &mut Heap, o: Obj) -> Result<Str, Fault> {
     Ok(alloc_units(heap, &out)?)
 }
 
-fn alloc_units(heap: &mut Heap, units: &[u16]) -> Result<Str, crate::heap::HeapError> {
+fn alloc_units(heap: &mut Heap, units: &[u16]) -> Result<Str, HeapError> {
     if units.iter().all(|&u| u <= 0xFF) {
         let bytes: Vec<u8> = units.iter().map(|&u| u as u8).collect();
         heap.alloc_latin1(&bytes)
@@ -200,6 +215,16 @@ pub(crate) fn set_last_index(heap: &mut Heap, o: Obj, v: Value) -> Result<(), Fa
             Ok(())
         }
     }
+}
+
+/// The substring `s[start..end)` as a value.
+pub(crate) fn substring_value(
+    heap: &mut Heap,
+    s: Str,
+    start: usize,
+    end: usize,
+) -> Result<Value, Fault> {
+    substring(heap, s, start, end)
 }
 
 /// The substring `s[start..end)` of a flat string view.
@@ -362,4 +387,117 @@ pub(crate) fn escape(heap: &mut Heap, s: Str) -> Result<Str, Fault> {
         }
     }
     Ok(heap.alloc_str(&out)?)
+}
+
+/// AdvanceStringIndex ( S, index, unicode ).
+pub(crate) fn advance(view: StrView<'_>, i: usize, unicode: bool) -> usize {
+    if unicode
+        && i + 1 < view.len()
+        && (0xD800..0xDC00).contains(&view.get(i))
+        && (0xDC00..0xE000).contains(&view.get(i + 1))
+    {
+        i + 2
+    } else {
+        i + 1
+    }
+}
+
+/// GetSubstitution for a match of an unmodified RegExp (D1503): `$$`, `$&`, `` $` ``,
+/// `$'`, `$n`/`$nn` and `$<name>` (only with named groups, else literal), appended to
+/// `out`. `s` is the matched string.
+pub(crate) fn substitute(
+    out: &mut Vec<u16>,
+    template: &[u16],
+    s: StrView<'_>,
+    caps: &Captures,
+    prog: &Program,
+) {
+    let (m0, m1) = caps.get(0).expect("group 0 matched");
+    let m = caps.len() - 1;
+    let push_range = |out: &mut Vec<u16>, a: usize, b: usize| {
+        out.extend((a..b).map(|i| s.get(i)));
+    };
+    let mut i = 0;
+    while i < template.len() {
+        let c = template[i];
+        if c != b'$' as u16 || i + 1 >= template.len() {
+            out.push(c);
+            i += 1;
+            continue;
+        }
+        let d = template[i + 1];
+        match d {
+            0x24 => {
+                out.push(0x24);
+                i += 2;
+            }
+            0x26 => {
+                push_range(out, m0, m1);
+                i += 2;
+            }
+            0x60 => {
+                push_range(out, 0, m0);
+                i += 2;
+            }
+            0x27 => {
+                push_range(out, m1.min(s.len()), s.len());
+                i += 2;
+            }
+            0x30..=0x39 => {
+                let mut index = (d - 0x30) as usize;
+                let mut digits = 1;
+                if let Some(&e) = template.get(i + 2)
+                    && (0x30..=0x39).contains(&e)
+                {
+                    let two = index * 10 + (e - 0x30) as usize;
+                    if (1..=m).contains(&two) {
+                        index = two;
+                        digits = 2;
+                    }
+                }
+                if (1..=m).contains(&index) {
+                    if let Some((a, b)) = caps.get(index) {
+                        push_range(out, a, b);
+                    }
+                    i += 1 + digits;
+                } else {
+                    out.push(0x24);
+                    i += 1;
+                }
+            }
+            0x3C if prog.has_group_names() => {
+                match template[i + 2..].iter().position(|&u| u == b'>' as u16) {
+                    None => {
+                        out.extend_from_slice(&[0x24, 0x3C]);
+                        i += 2;
+                    }
+                    Some(k) => {
+                        let name = &template[i + 2..i + 2 + k];
+                        // The participating group of that name, if any (duplicate names).
+                        let span = (1..caps.len())
+                            .filter(|&g| {
+                                prog.group_name(g).is_some_and(|n| {
+                                    n.len() == name.len()
+                                        && n.iter().zip(name).all(|(&a, &b)| a == b as u32)
+                                })
+                            })
+                            .find_map(|g| caps.get(g));
+                        if let Some((a, b)) = span {
+                            push_range(out, a, b);
+                        }
+                        i += 3 + k;
+                    }
+                }
+            }
+            _ => {
+                out.push(0x24);
+                i += 1;
+            }
+        }
+    }
+}
+
+/// A heap string from UTF-16 units (one byte per unit when possible).
+pub(crate) fn string_from_units(heap: &mut Heap, units: &[u16]) -> Result<Str, HeapError> {
+    alloc_units(heap, units)
 }

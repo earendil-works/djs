@@ -24,7 +24,7 @@ mod tests;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-pub use exec::{Captures, ExecLimits, ExecResult, ExecState, Input, exec, resume};
+pub use exec::{Captures, ExecLimits, ExecResult, ExecState, Input, exec, exec_at, resume};
 
 /// RegExp flags.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]

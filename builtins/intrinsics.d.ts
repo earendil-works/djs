@@ -738,8 +738,8 @@ declare function RegExpHasFlag(r: Obj, flag: Str): boolean;
 /** EscapeRegExpPattern of [[OriginalSource]] (`(?:)` when empty). @leaf */
 declare function RegExpEscapedSource(r: Obj): Str;
 /**
- * RegExpBuiltinExec ( R, S ) once lastIndex is ToLength(Get(R, "lastIndex")): the match
- * array or null, and lastIndex updated for g and y. Pass undefined as state: when the
+ * RegExpBuiltinExec ( R, S ) once lastIndex is Get(R, "lastIndex") as a Number (ToLength
+ * is applied here): the match array or null, and lastIndex updated for g and y. Pass undefined as state: when the
  * fuel runs out mid-match the interpreter suspends here and keeps the matcher's state
  * in that argument. InternalError "out of memory in regexp execution" if the
  * backtracking stack overflows. @leaf
@@ -756,6 +756,22 @@ declare function RegExpStringIteratorSlot(it: Value, i: i32): Value;
 declare function RegExpStringIteratorFinish(it: Value): void;
 /** RegExp.escape of a string (EncodeForRegExpEscape, qjs's lowercase hex). @leaf */
 declare function RegExpEscapeString(s: Str): Str;
+/**
+ * Whether v is a RegExp whose protocol lookups (exec, flags and the flag getters,
+ * constructor, Symbol.species, Symbol.match, lastIndex) are all original data, so that skipping
+ * them is unobservable (D1503). @leaf
+ */
+declare function IsPristineRegExp(v: Value): boolean;
+/**
+ * RegExp.prototype[Symbol.split] of a pristine RegExp on a non-empty string with 0 < lim:
+ * the result array. Suspendable like RegExpExecRaw (pass undefined as state). @leaf
+ */
+declare function RegExpSplitRaw(r: Obj, s: Str, lim: f64, state: Value): Obj;
+/**
+ * RegExp.prototype[Symbol.replace] of a pristine global RegExp with a string replacement
+ * template: the result, and lastIndex 0. Suspendable like RegExpExecRaw. @leaf
+ */
+declare function RegExpReplaceRaw(r: Obj, s: Str, template: Str, state: Value): Str;
 
 // ---- Used by the generated code (crates/djs-bgen/src/emit_js.rs) ------------------------
 

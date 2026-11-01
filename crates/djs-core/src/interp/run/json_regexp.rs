@@ -5,7 +5,8 @@
 use super::intrinsics::{bad_argument, id};
 use super::*;
 use crate::builtins::{json, regexp as re};
-use crate::regexp::{ExecLimits, ExecResult, ExecState, Flags};
+use crate::regexp::{ExecLimits, ExecResult, ExecState, Flags, Program};
+use crate::value::Str;
 
 const JSON_PARSE: u16 = id("JsonParse");
 const JSON_STRINGIFY_FAST: u16 = id("JsonStringifyFast");
@@ -22,6 +23,24 @@ const CREATE_REGEXP_STRING_ITERATOR: u16 = id("CreateRegExpStringIterator");
 const REGEXP_STRING_ITERATOR_SLOT: u16 = id("RegExpStringIteratorSlot");
 const REGEXP_STRING_ITERATOR_FINISH: u16 = id("RegExpStringIteratorFinish");
 const REGEXP_ESCAPE_STRING: u16 = id("RegExpEscapeString");
+const IS_PRISTINE_REGEXP: u16 = id("IsPristineRegExp");
+const REGEXP_SPLIT_RAW: u16 = id("RegExpSplitRaw");
+const REGEXP_REPLACE_RAW: u16 = id("RegExpReplaceRaw");
+const REGEXP_PROTOTYPE_EXEC: u16 = id("RegExpPrototypeExec");
+const REGEXP_PROTOTYPE_MATCH: u16 = id("RegExpPrototypeMatch");
+const REGEXP_SPECIES: u16 = id("RegExpSpecies");
+/// The accessors of %RegExp.prototype% that a pristine RegExp must still have (D1503).
+const REGEXP_GETTERS: [(&str, u16); 9] = [
+    ("flags", id("RegExpPrototypeFlags")),
+    ("hasIndices", id("RegExpPrototypeHasIndices")),
+    ("global", id("RegExpPrototypeGlobal")),
+    ("ignoreCase", id("RegExpPrototypeIgnoreCase")),
+    ("multiline", id("RegExpPrototypeMultiline")),
+    ("dotAll", id("RegExpPrototypeDotAll")),
+    ("unicode", id("RegExpPrototypeUnicode")),
+    ("unicodeSets", id("RegExpPrototypeUnicodeSets")),
+    ("sticky", id("RegExpPrototypeSticky")),
+];
 
 /// Fuel for work proportional to a string's length: one unit per 16 code units (the
 /// leaves run to completion, so they pay afterwards).
@@ -104,12 +123,13 @@ impl Exec<'_> {
             }
             IS_REGEXP_OBJECT => Value::bool(re::as_regexp(self.heap, a0).is_some()),
             REGEXP_CREATE => {
-                let proto = a0.as_object();
+                // The first argument is a prototype, or a literal's compiled program.
+                let (proto, cell) = (a0.as_object(), a0.as_internal());
                 let (Some(p), Some(f)) = (arg(self, 1).as_string(), arg(self, 2).as_string())
                 else {
                     return bad_argument(name);
                 };
-                Value::object(re::create(self.heap, proto, p, f)?)
+                Value::object(re::create(self.heap, proto, p, f, cell)?)
             }
             REGEXP_SOURCE | REGEXP_FLAGS | REGEXP_HAS_FLAG | REGEXP_ESCAPED_SOURCE => {
                 let Some(r) = re::as_regexp(self.heap, a0) else {
@@ -131,6 +151,9 @@ impl Exec<'_> {
                 }
             }
             REGEXP_EXEC_RAW if argc == 4 => return self.regexp_exec_raw(name, base, next),
+            REGEXP_SPLIT_RAW if argc == 4 => return self.regexp_split_raw(name, base, next),
+            REGEXP_REPLACE_RAW if argc == 4 => return self.regexp_replace_raw(name, base, next),
+            IS_PRISTINE_REGEXP => Value::bool(self.regexp_pristine(a0)?),
             CREATE_REGEXP_STRING_ITERATOR => {
                 let (Some(r), Some(s)) = (a0.as_object(), arg(self, 1).as_string()) else {
                     return bad_argument(name);
@@ -185,11 +208,83 @@ impl Exec<'_> {
         Ok(None)
     }
 
-    /// `%RegExpExecRaw(r, s, lastIndex, state)`: RegExpBuiltinExec after `lastIndex` was
-    /// read (ToLength), D1332. Runs the matcher with the remaining fuel. When the fuel
-    /// runs out mid-match, the matcher's state goes into a U32Array in the `state`
-    /// argument slot (callers pass `undefined`) and `run` returns `OutOfFuel` with `pc`
-    /// still at this instruction, so the next `run` executes it again and resumes the
+    /// Runs the matcher on the flat string `flat` with the remaining fuel (at least one
+    /// unit, so a resumed match always makes progress), from `start` or from `pending`.
+    fn run_matcher(
+        &mut self,
+        prog: &Program,
+        flat: Str,
+        start: usize,
+        sticky: bool,
+        pending: Option<ExecState>,
+    ) -> ExecResult {
+        let budget = self.fuel.max(1) as u64;
+        let mut fuel = budget;
+        let limits = ExecLimits::default();
+        let result = {
+            let view = self.heap.str_view(flat).expect("flat string");
+            let input = re::input(view);
+            match pending {
+                Some(st) => crate::regexp::resume(prog, input, st, &mut fuel, limits),
+                None => crate::regexp::exec_at(prog, input, start, sticky, &mut fuel, limits),
+            }
+        };
+        self.fuel -= (budget - fuel) as i64;
+        result
+    }
+
+    /// A suspended matcher state as a U32Array cell.
+    fn save_exec_state(&mut self, st: &ExecState) -> Result<Value, Fault> {
+        let words = st.to_words();
+        let cell = self.heap.alloc_u32_array(words.len() as u32)?;
+        for (i, &w) in words.iter().enumerate() {
+            self.heap.u32_array_set(cell, i as u32, w);
+        }
+        Ok(Value::internal(cell))
+    }
+
+    fn load_exec_state(&self, v: Value) -> Option<ExecState> {
+        let cell = v.as_internal()?;
+        let n = self.heap.u32_array_len(cell);
+        let words: alloc::vec::Vec<u32> =
+            (0..n).map(|i| self.heap.u32_array_get(cell, i)).collect();
+        ExecState::from_words(&words)
+    }
+
+    /// Stops `run` with the intrinsic's progress in its `state` argument slot; the next
+    /// `run` executes the same `call_intrinsic` again and continues from there (D1332).
+    fn suspend_in(&mut self, slot: u32, progress: Value) -> Step {
+        self.set(slot, progress);
+        self.flush();
+        Ok(Some(Status::OutOfFuel))
+    }
+
+    /// A progress record: an internal ValueArray of `values`.
+    fn save_progress(&mut self, values: &[Value]) -> Result<Value, Fault> {
+        let rec = self.heap.alloc_value_array(values.len() as u32)?;
+        for (i, &v) in values.iter().enumerate() {
+            self.heap.value_array_set(rec, i as u32, v);
+        }
+        self.heap.arena_mut().set(
+            rec,
+            crate::heap::cells::ValueArray::LEN,
+            values.len() as u32,
+        );
+        Ok(Value::internal(rec))
+    }
+
+    fn progress(&self, v: Value, i: u32) -> Value {
+        match v.as_internal() {
+            Some(rec) => self.heap.value_array_get(rec, i),
+            None => Value::UNDEFINED,
+        }
+    }
+
+    /// `%RegExpExecRaw(r, s, lastIndex, state)`: RegExpBuiltinExec once `lastIndex` was
+    /// read: a Number, ToLength'd here. Runs the matcher with the remaining fuel. When
+    /// the fuel runs out mid-match, the matcher's state goes into a U32Array in the
+    /// `state` argument slot (callers pass `undefined`) and `run` returns `OutOfFuel` with
+    /// `pc` still at this instruction, so the next `run` executes it again and resumes the
     /// match from that state. Everything is in the arena: a heap image taken while
     /// suspended resumes the same match.
     fn regexp_exec_raw(&mut self, name: &str, base: u32, next: u32) -> Step {
@@ -201,6 +296,8 @@ impl Exec<'_> {
         ) else {
             return bad_argument(name);
         };
+        // ToLength.
+        let last = if last > 0.0 { libm::trunc(last) } else { 0.0 };
         let flags = re::flags(self.heap, r);
         let g_or_y = flags.contains(Flags::GLOBAL) || flags.contains(Flags::STICKY);
         let last = if g_or_y { last } else { 0.0 };
@@ -213,47 +310,14 @@ impl Exec<'_> {
             Value::NULL
         } else {
             let prog = re::program(self.heap, r);
-            let pending = match self.get(state_slot).as_internal() {
-                Some(cell) => {
-                    let n = self.heap.u32_array_len(cell);
-                    let words: alloc::vec::Vec<u32> =
-                        (0..n).map(|i| self.heap.u32_array_get(cell, i)).collect();
-                    match ExecState::from_words(&words) {
-                        Some(st) => Some(st),
-                        None => return bad_argument(name),
-                    }
-                }
-                None => None,
-            };
-            let budget = self.fuel.max(1) as u64;
-            let mut fuel = budget;
-            let limits = ExecLimits::default();
-            let result = {
-                let view = self.heap.str_view(flat).expect("flat string");
-                let input = re::input(view);
-                match pending {
-                    Some(st) => crate::regexp::resume(&prog, input, st, &mut fuel, limits),
-                    None => crate::regexp::exec(&prog, input, last as usize, &mut fuel, limits),
-                }
-            };
-            self.fuel -= (budget - fuel) as i64;
-            match result {
+            let pending = self.load_exec_state(self.get(state_slot));
+            let sticky = flags.contains(Flags::STICKY);
+            match self.run_matcher(&prog, flat, last as usize, sticky, pending) {
                 ExecResult::OutOfFuel(st) => {
-                    let words = st.to_words();
-                    let cell = self.heap.alloc_u32_array(words.len() as u32)?;
-                    for (i, &w) in words.iter().enumerate() {
-                        self.heap.u32_array_set(cell, i as u32, w);
-                    }
-                    self.set(state_slot, Value::internal(cell));
-                    self.flush();
-                    return Ok(Some(Status::OutOfFuel));
+                    let saved = self.save_exec_state(&st)?;
+                    return self.suspend_in(state_slot, saved);
                 }
-                ExecResult::StackOverflow => {
-                    return Err(Fault::Error(
-                        ErrorKind::InternalError,
-                        String::from("out of memory in regexp execution"),
-                    ));
-                }
+                ExecResult::StackOverflow => return regexp_overflow(),
                 ExecResult::NoMatch => {
                     if g_or_y {
                         re::set_last_index(self.heap, r, Value::int(0))?;
@@ -274,4 +338,237 @@ impl Exec<'_> {
         self.pc = next;
         Ok(None)
     }
+
+    /// Whether `v` is a RegExp whose protocol is unobservable (D1503): its own properties
+    /// are just a writable Number `lastIndex`, its prototype is %RegExp.prototype% with the
+    /// original `exec`, `flags`, flag getters, `constructor` and @@match, and %RegExp%'s
+    /// @@species getter is the original. Then RegExpExec, the flags, SpeciesConstructor
+    /// and IsRegExp read only data, and a fast path may skip them.
+    fn regexp_pristine(&mut self, v: Value) -> Result<bool, Fault> {
+        use crate::heap::{Property, atoms};
+        let Some(r) = re::as_regexp(self.heap, v) else {
+            return Ok(false);
+        };
+        let proto = intrinsic_obj(self.heap, Intrinsic::RegExpProto);
+        if self.heap.get_prototype_of(r) != Some(proto) || self.heap.own_keys(r).len() != 1 {
+            return Ok(false);
+        }
+        let last_index = self.heap.atom_str("lastIndex")?;
+        match self.heap.get_own_property(r, last_index) {
+            Some(Property::Data { value, flags }) if flags.writable() && value.is_number() => {}
+            _ => return Ok(false),
+        }
+        let installed = |ex: &Self, id: u16| realm::installed_intrinsic(ex.heap, id);
+        let data = |ex: &Self, o: Obj, key: Atom| match ex.heap.get_own_property(o, key) {
+            Some(Property::Data { value, .. }) => Some(value),
+            _ => None,
+        };
+        let getter = |ex: &Self, o: Obj, key: Atom| match ex.heap.get_own_property(o, key) {
+            Some(Property::Accessor { getter, .. }) => Some(getter),
+            _ => None,
+        };
+        let exec = self.heap.atom_str("exec")?;
+        if data(self, proto, exec) != Some(installed(self, REGEXP_PROTOTYPE_EXEC)) {
+            return Ok(false);
+        }
+        let matcher = installed(self, REGEXP_PROTOTYPE_MATCH);
+        if data(self, proto, atoms::SYM_MATCH) != Some(matcher) {
+            return Ok(false);
+        }
+        for (key, id) in REGEXP_GETTERS {
+            let k = self.heap.atom_str(key)?;
+            if getter(self, proto, k) != Some(installed(self, id)) {
+                return Ok(false);
+            }
+        }
+        let ctors = intrinsic_obj(self.heap, Intrinsic::Constructors);
+        let regexp = self.heap.atom_str("RegExp")?;
+        let Some(ctor) = data(self, ctors, regexp) else {
+            return Ok(false);
+        };
+        if data(self, proto, atoms::CONSTRUCTOR) != Some(ctor) {
+            return Ok(false);
+        }
+        let Some(ctor) = ctor.as_object() else {
+            return Ok(false);
+        };
+        Ok(getter(self, ctor, atoms::SYM_SPECIES) == Some(installed(self, REGEXP_SPECIES)))
+    }
+
+    /// `%RegExpSplitRaw(r, s, lim, state)`: RegExp.prototype[@@split] for a pristine
+    /// RegExp, a non-empty string and lim > 0 (D1503). The spec's sticky splitter tried at
+    /// every position equals a search from that position. Suspendable like
+    /// `RegExpExecRaw`: the progress (result array, p, q, matcher state) is kept in the
+    /// state slot.
+    fn regexp_split_raw(&mut self, name: &str, base: u32, next: u32) -> Step {
+        let state_slot = base + 3;
+        let (Some(r), Some(s), Some(lim)) = (
+            re::as_regexp(self.heap, self.get(base)),
+            self.get(base + 1).as_string(),
+            self.get(base + 2).as_number(),
+        ) else {
+            return bad_argument(name);
+        };
+        let lim = lim as u32;
+        let flat = self.heap.flatten(s)?;
+        let size = self.heap.str_len(flat) as usize;
+        let prog = re::program(self.heap, r);
+        let unicode = prog.flags().unicode_mode();
+        let state = self.get(state_slot);
+        let (a, mut p, mut q, mut pending) = match state.as_internal() {
+            Some(_) => (
+                self.progress(state, 0).as_object().expect("split array"),
+                self.progress(state, 1).as_int().unwrap_or(0) as usize,
+                self.progress(state, 2).as_int().unwrap_or(0) as usize,
+                self.load_exec_state(self.progress(state, 3)),
+            ),
+            None => {
+                let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
+                (self.heap.new_array(Some(proto), 0)?, 0, 0, None)
+            }
+        };
+        let mut len = self.heap.array_length(a);
+        let push = |ex: &mut Self, len: &mut u32, v: Value| -> Result<bool, Fault> {
+            let key = crate::heap::Atom::int(*len)
+                .ok_or(Fault::Heap(crate::heap::HeapError::OutOfMemory))?;
+            ex.heap.create_data_property(a, key, v)?;
+            *len += 1;
+            Ok(*len == lim)
+        };
+        let done = 'outer: loop {
+            if q >= size {
+                break false;
+            }
+            match self.run_matcher(&prog, flat, q, false, pending.take()) {
+                ExecResult::OutOfFuel(st) => {
+                    let saved = self.save_exec_state(&st)?;
+                    let rec = self.save_progress(&[
+                        Value::object(a),
+                        Value::int(p as i32),
+                        Value::int(q as i32),
+                        saved,
+                    ])?;
+                    return self.suspend_in(state_slot, rec);
+                }
+                ExecResult::StackOverflow => return regexp_overflow(),
+                ExecResult::NoMatch => break false,
+                ExecResult::Match(caps) => {
+                    let (at, e) = caps.get(0).expect("group 0 matched");
+                    if at >= size {
+                        break false;
+                    }
+                    if e == p {
+                        let view = self.heap.str_view(flat).expect("flat string");
+                        q = re::advance(view, at, unicode);
+                        continue;
+                    }
+                    let piece = re::substring_value(self.heap, flat, p, at)?;
+                    if push(self, &mut len, piece)? {
+                        break true;
+                    }
+                    for g in 1..caps.len() {
+                        let v = match caps.get(g) {
+                            Some((x, y)) => re::substring_value(self.heap, flat, x, y)?,
+                            None => Value::UNDEFINED,
+                        };
+                        if push(self, &mut len, v)? {
+                            break 'outer true;
+                        }
+                    }
+                    p = e;
+                    q = p;
+                }
+            }
+        };
+        if !done {
+            let tail = re::substring_value(self.heap, flat, p.min(size), size)?;
+            push(self, &mut len, tail)?;
+        }
+        self.sp = base;
+        self.push(Value::object(a));
+        self.pc = next;
+        Ok(None)
+    }
+
+    /// `%RegExpReplaceRaw(r, s, template, state)`: RegExp.prototype[@@replace] for a
+    /// pristine global RegExp and a string replacement (D1503): every match from
+    /// lastIndex 0, GetSubstitution in Rust, lastIndex 0 at the end. Suspendable: the
+    /// output so far (as a string), the next source position, lastIndex and the matcher
+    /// state are kept in the state slot.
+    fn regexp_replace_raw(&mut self, name: &str, base: u32, next: u32) -> Step {
+        let state_slot = base + 3;
+        let (Some(r), Some(s), Some(t)) = (
+            re::as_regexp(self.heap, self.get(base)),
+            self.get(base + 1).as_string(),
+            self.get(base + 2).as_string(),
+        ) else {
+            return bad_argument(name);
+        };
+        let flat = self.heap.flatten(s)?;
+        let size = self.heap.str_len(flat) as usize;
+        let template = self.heap.str_to_utf16(t);
+        let prog = re::program(self.heap, r);
+        let unicode = prog.flags().unicode_mode();
+        let sticky = prog.flags().contains(Flags::STICKY);
+        let state = self.get(state_slot);
+        let (mut out, mut next_pos, mut last, mut pending) = match state.as_internal() {
+            Some(_) => (
+                self.progress(state, 0)
+                    .as_string()
+                    .map(|a| self.heap.str_to_utf16(a))
+                    .unwrap_or_default(),
+                self.progress(state, 1).as_int().unwrap_or(0) as usize,
+                self.progress(state, 2).as_int().unwrap_or(0) as usize,
+                self.load_exec_state(self.progress(state, 3)),
+            ),
+            None => (alloc::vec::Vec::new(), 0, 0, None),
+        };
+        while last <= size {
+            match self.run_matcher(&prog, flat, last, sticky, pending.take()) {
+                ExecResult::OutOfFuel(st) => {
+                    let saved = self.save_exec_state(&st)?;
+                    let acc = re::string_from_units(self.heap, &out)?;
+                    let rec = self.save_progress(&[
+                        Value::string(acc),
+                        Value::int(next_pos as i32),
+                        Value::int(last as i32),
+                        saved,
+                    ])?;
+                    return self.suspend_in(state_slot, rec);
+                }
+                ExecResult::StackOverflow => return regexp_overflow(),
+                ExecResult::NoMatch => break,
+                ExecResult::Match(caps) => {
+                    let (m0, m1) = caps.get(0).expect("group 0 matched");
+                    let view = self.heap.str_view(flat).expect("flat string");
+                    out.extend((next_pos..m0).map(|i| view.get(i)));
+                    re::substitute(&mut out, &template, view, &caps, &prog);
+                    next_pos = m1;
+                    last = if m1 == m0 {
+                        re::advance(view, m1, unicode)
+                    } else {
+                        m1
+                    };
+                }
+            }
+        }
+        {
+            let view = self.heap.str_view(flat).expect("flat string");
+            out.extend((next_pos.min(size)..size).map(|i| view.get(i)));
+        }
+        re::set_last_index(self.heap, r, Value::int(0))?;
+        self.fuel -= length_fuel(out.len() as u32);
+        let result = re::string_from_units(self.heap, &out)?;
+        self.sp = base;
+        self.push(Value::string(result));
+        self.pc = next;
+        Ok(None)
+    }
+}
+
+fn regexp_overflow<T>() -> Result<T, Fault> {
+    Err(Fault::Error(
+        ErrorKind::InternalError,
+        String::from("out of memory in regexp execution"),
+    ))
 }

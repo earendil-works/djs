@@ -1096,9 +1096,10 @@ impl Parser<'_, '_> {
         Ok(Expr::Value)
     }
 
-    /// A regular expression literal (0033): the pattern is compiled here for its early
-    /// errors (qjs reports them at the literal), and each evaluation creates a fresh
-    /// RegExp: `undefined pattern flags; call_intrinsic %RegExpCreate 3`.
+    /// A regular expression literal (0033): the pattern is compiled here, for its early
+    /// errors (qjs reports them at the literal) and once for all evaluations, each of
+    /// which creates a fresh RegExp: `program pattern flags; call_intrinsic %RegExpCreate
+    /// 3`.
     fn parse_regex_literal(&mut self) -> PResult<Expr> {
         let tok = self.lx.rescan_as_regex(self.tok)?;
         let text = self.lx.text(&tok);
@@ -1111,14 +1112,19 @@ impl Parser<'_, '_> {
         };
         let pattern = utf16(&text[1..close.max(1)]);
         let flags = utf16(&text[close + 1..]);
-        if let Err(e) = crate::builtins::regexp::compile(&pattern, &flags) {
-            return syntax(tok.start, alloc::string::String::from(e.message()));
-        }
+        let program = match crate::builtins::regexp::compile(&pattern, &flags) {
+            Ok(program) => program,
+            Err(e) => return syntax(tok.start, alloc::string::String::from(e.message())),
+        };
+        // The program is compiled once per literal and shared by the RegExp objects of
+        // every evaluation (D1502); its cell sits in the constant pool.
+        let cell = crate::builtins::regexp::program_cell(self.heap, &program)?;
+        let prog = self.add_const(crate::value::Value::internal(cell));
         self.tok = tok;
         let p = self.string_const(&pattern)?;
         let f = self.string_const(&flags)?;
         self.next()?;
-        self.code().undefined();
+        self.code().push_const(prog);
         self.code().push_const(p);
         self.code().push_const(f);
         let create =

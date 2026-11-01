@@ -52,6 +52,7 @@ function RegExpEscape(s: Value): Str {
 /**
  * get RegExp [ %Symbol.species% ], 22.2.5.2.
  * @getter RegExp[Symbol.species]
+ * @intrinsic
  */
 function RegExpSpecies(this: Value): Value {
   return this;
@@ -82,6 +83,7 @@ function RegExpFlagGetter(r: Value, flag: Str): Value {
 /**
  * get RegExp.prototype.hasIndices, 22.2.6.6.
  * @getter RegExp.prototype.hasIndices
+ * @intrinsic
  */
 function RegExpPrototypeHasIndices(this: Value): Value {
   return RegExpFlagGetter(this, "d");
@@ -90,6 +92,7 @@ function RegExpPrototypeHasIndices(this: Value): Value {
 /**
  * get RegExp.prototype.global, 22.2.6.6.
  * @getter RegExp.prototype.global
+ * @intrinsic
  */
 function RegExpPrototypeGlobal(this: Value): Value {
   return RegExpFlagGetter(this, "g");
@@ -98,6 +101,7 @@ function RegExpPrototypeGlobal(this: Value): Value {
 /**
  * get RegExp.prototype.ignoreCase, 22.2.6.7.
  * @getter RegExp.prototype.ignoreCase
+ * @intrinsic
  */
 function RegExpPrototypeIgnoreCase(this: Value): Value {
   return RegExpFlagGetter(this, "i");
@@ -106,6 +110,7 @@ function RegExpPrototypeIgnoreCase(this: Value): Value {
 /**
  * get RegExp.prototype.multiline, 22.2.6.9.
  * @getter RegExp.prototype.multiline
+ * @intrinsic
  */
 function RegExpPrototypeMultiline(this: Value): Value {
   return RegExpFlagGetter(this, "m");
@@ -114,6 +119,7 @@ function RegExpPrototypeMultiline(this: Value): Value {
 /**
  * get RegExp.prototype.dotAll, 22.2.6.3.
  * @getter RegExp.prototype.dotAll
+ * @intrinsic
  */
 function RegExpPrototypeDotAll(this: Value): Value {
   return RegExpFlagGetter(this, "s");
@@ -122,6 +128,7 @@ function RegExpPrototypeDotAll(this: Value): Value {
 /**
  * get RegExp.prototype.unicode, 22.2.6.17.
  * @getter RegExp.prototype.unicode
+ * @intrinsic
  */
 function RegExpPrototypeUnicode(this: Value): Value {
   return RegExpFlagGetter(this, "u");
@@ -130,6 +137,7 @@ function RegExpPrototypeUnicode(this: Value): Value {
 /**
  * get RegExp.prototype.unicodeSets, 22.2.6.18.
  * @getter RegExp.prototype.unicodeSets
+ * @intrinsic
  */
 function RegExpPrototypeUnicodeSets(this: Value): Value {
   return RegExpFlagGetter(this, "v");
@@ -138,6 +146,7 @@ function RegExpPrototypeUnicodeSets(this: Value): Value {
 /**
  * get RegExp.prototype.sticky, 22.2.6.15.
  * @getter RegExp.prototype.sticky
+ * @intrinsic
  */
 function RegExpPrototypeSticky(this: Value): Value {
   return RegExpFlagGetter(this, "y");
@@ -146,6 +155,7 @@ function RegExpPrototypeSticky(this: Value): Value {
 /**
  * get RegExp.prototype.flags, 22.2.6.4.
  * @getter RegExp.prototype.flags
+ * @intrinsic
  */
 function RegExpPrototypeFlags(this: Value): Str {
   const r: Obj = ThisRegExpObject(this);
@@ -205,8 +215,8 @@ function RegExpPrototypeToString(this: Value): Str {
 
 /** RegExpBuiltinExec ( R, S ), 22.2.7.2: lastIndex here, the rest in the leaf. */
 function RegExpBuiltinExec(r: Obj, s: Str): Value {
-  const lastIndex: f64 = ToLength(Get(r, "lastIndex"));
-  return RegExpExecRaw(r, s, lastIndex, undefined);
+  const lastIndex: Value = Get(r, "lastIndex");
+  return RegExpExecRaw(r, s, IsNumber(lastIndex) ? AsNumber(lastIndex) : ToLength(lastIndex), undefined);
 }
 
 /**
@@ -281,6 +291,7 @@ function AdvanceAfterEmptyMatch(rx: Obj, s: Str, fullUnicode: boolean): void {
 /**
  * RegExp.prototype [ %Symbol.match% ] ( string ), 22.2.6.8.
  * @builtin RegExp.prototype[Symbol.match]
+ * @intrinsic
  */
 function RegExpPrototypeMatch(this: Value, string: Value): Value {
   const rx: Obj = ThisRegExpObject(this);
@@ -373,6 +384,10 @@ function RegExpPrototypeReplace(this: Value, string: Value, replaceValue: Value)
   let replaceStr: Str = "";
   if (!functionalReplace) {
     replaceStr = ToString(replaceValue);
+  }
+  // An unmodified global RegExp and a string replacement: the leaf (D1503).
+  if (!functionalReplace && IsPristineRegExp(rx) && RegExpHasFlag(rx, "g")) {
+    return RegExpReplaceRaw(rx, s, replaceStr, undefined);
   }
   const flags: Str = ToString(Get(rx, "flags"));
   const global: boolean = FlagsInclude(flags, "g");
@@ -571,6 +586,14 @@ function RegExpPrototypeSearch(this: Value, string: Value): Value {
 function RegExpPrototypeSplit(this: Value, string: Value, limit: Value): Obj {
   const rx: Obj = ThisRegExpObject(this);
   const s: Str = ToString(string);
+  // An unmodified RegExp and a limit that runs no user code: the leaf (D1503).
+  if ((limit === undefined || IsNumber(limit)) && StrLen(s) > 0 && IsPristineRegExp(rx)) {
+    const fastLim: f64 = limit === undefined ? 4294967295 : NumberToUint32(AsNumber(limit));
+    if (fastLim === 0) {
+      return ArrayCreate(0);
+    }
+    return RegExpSplitRaw(rx, s, fastLim, undefined);
+  }
   const c: Value = SpeciesConstructor(rx, RealmConstructor("RegExp"));
   const flags: Str = ToString(Get(rx, "flags"));
   const unicodeMatching: boolean = FlagsInclude(flags, "u") || FlagsInclude(flags, "v");

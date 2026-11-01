@@ -402,13 +402,7 @@ impl Compiler {
                 self.emit2(BACKREF | dir | icase(*i), groups.len() as u32);
                 self.code.extend_from_slice(groups);
             }
-            Node::Repeat {
-                min,
-                max,
-                greedy,
-                body,
-                caps,
-            } => self.repeat(*min, *max, *greedy, body, *caps, back, follow),
+            Node::Repeat { .. } => self.repeat(node, back, follow),
             Node::Concat(v) => {
                 if back {
                     v.iter().rev().for_each(|n| self.node(n, back));
@@ -507,16 +501,19 @@ impl Compiler {
         self.alternatives(alts.iter(), back, None);
     }
 
-    fn repeat(
-        &mut self,
-        min: u32,
-        max: u32,
-        greedy: bool,
-        body: &Node,
-        caps: (u32, u32),
-        back: bool,
-        follow: Option<CharSet>,
-    ) {
+    /// A `Node::Repeat`.
+    fn repeat(&mut self, node: &Node, back: bool, follow: Option<CharSet>) {
+        let Node::Repeat {
+            min,
+            max,
+            greedy,
+            body,
+            caps,
+        } = node
+        else {
+            unreachable!("not a repeat")
+        };
+        let (min, max, greedy, caps) = (*min, *max, *greedy, *caps);
         if max == 0 {
             return;
         }

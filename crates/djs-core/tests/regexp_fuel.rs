@@ -59,6 +59,10 @@ fn suspended_match_resumes_from_the_image() {
         r#"/(a|ab)*c$/.exec("ab".repeat(12) + "c").index"#,
         r#"JSON.stringify("xaaay aay".replace(/(a+)(?=y)/g, "<$1>"))"#,
         r#"JSON.stringify(/(?<x>b+)\1/d.exec("abbbbbbc"))"#,
+        // The split and replace leaves (D1503) suspend between and inside matches.
+        r#"JSON.stringify("a1b22c333d".repeat(20).split(/(\d)\d*/))"#,
+        r#""ab".repeat(60).replace(/(a)(b)/g, "$2$1-$&")"#,
+        r#"JSON.stringify("x".repeat(40).split(/(?:)/))"#,
     ] {
         let (plain, _) = run_sliced(src, u64::MAX, false);
         let (sliced, stops) = run_sliced(src, 97, false);

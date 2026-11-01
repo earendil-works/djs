@@ -445,8 +445,8 @@ fn star_loops() {
     // Code points in unicode mode, code units otherwise; a lone low surrogate after a
     // match start is not glued to the high surrogate before it.
     assert_eq!(first(".*?b", "u", "😀b"), Some("😀b".into()));
-    assert_eq!(m("^.{1}$", "u", "😀").is_some(), true);
-    assert_eq!(m("^.{1}$", "", "😀").is_some(), false);
+    assert!(m("^.{1}$", "u", "😀").is_some());
+    assert!(m("^.{1}$", "", "😀").is_none());
     assert_eq!(first("(?<=\\d+)x", "", "a12x"), Some("x".into()));
     // Leading loops skip the rest of a failed run, but not when bounded.
     assert_eq!(first("\\d+x", "", "1234 56x"), Some("56x".into()));

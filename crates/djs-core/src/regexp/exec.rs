@@ -180,6 +180,20 @@ pub fn exec(
     fuel: &mut u64,
     limits: ExecLimits,
 ) -> ExecResult {
+    let sticky = prog.flags().contains(super::Flags::STICKY);
+    exec_at(prog, input, start, sticky, fuel, limits)
+}
+
+/// [`exec`] with stickiness chosen by the caller: `sticky` false searches even for a
+/// sticky program (RegExp.prototype[@@split] on an unmodified RegExp, D1503).
+pub fn exec_at(
+    prog: &Program,
+    input: Input<'_>,
+    start: usize,
+    sticky: bool,
+    fuel: &mut u64,
+    limits: ExecLimits,
+) -> ExecResult {
     let w = prog.words();
     if start > input.len() {
         return ExecResult::NoMatch;
@@ -195,11 +209,7 @@ pub fn exec(
         }
     }
     let nslots = 2 * w[H_CAPTURES] as usize + w[H_REGISTERS] as usize;
-    let entry = if prog.flags().contains(super::Flags::STICKY) {
-        w[H_ANCHORED]
-    } else {
-        w[H_SEARCH]
-    };
+    let entry = if sticky { w[H_ANCHORED] } else { w[H_SEARCH] };
     let state = ExecState {
         pc: entry,
         pos: start as u32,
