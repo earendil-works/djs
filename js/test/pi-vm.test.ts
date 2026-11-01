@@ -347,7 +347,7 @@ test("pi: deterministic runs repeat exactly, with QuickJS's random numbers", asy
   assert.deepEqual(JSON.parse((one.output[0] as { text: string }).text).slice(0, 2), [STARTED_AT + 1000, 1000]);
   const started = one.messages[0];
   assert.equal(started.type, "started");
-  assert.match((started as { fingerprint: string }).fingerprint, /^djs [0-9a-f]{8}, prelude [0-9a-f]{8}, host [0-9a-f]{8}, deterministic 1/);
+  assert.match((started as { fingerprint: string }).fingerprint, /^djs [0-9a-f]{8}, prelude [0-9a-f]{8}, host [0-9a-f]{8}, deterministic 2/);
   assert.deepEqual(
     one.messages.filter((m) => m.type === "idle"),
     [
@@ -416,4 +416,76 @@ test("pi: a snapshot of a waiting session resumes in a new instance", async () =
   await done;
   resumed.dispose();
   assert.deepEqual(messages, reference.messages);
+});
+
+test("pi: snapshot() collects first; continuing or resuming the session changes nothing", async () => {
+  // D1890: a snapshot holds only live cells. The collection it makes is invisible to the
+  // script: the same messages and the same number of interrupt polls (fuel) whether the
+  // session is not snapshotted, snapshotted and continued, or snapshotted and resumed.
+  const garbage = `let junk = 0;
+for (let i = 0; i < 3000; i++) junk += JSON.stringify({ i, s: "x".repeat(i % 50) }).length;
+const kept = Array.from({ length: 50 }, (_, i) => ({ i }));
+const r = await tools.echo(junk);
+let more = 0;
+for (let i = 0; i < 3000; i++) more += JSON.stringify({ i, kept: kept.length }).length;
+return [r, more];`;
+  const once = async (code: string, mode: "none" | "continue" | "resume") => {
+    let polls = 0;
+    let size = 0;
+    const messages: WorkerToHostMessage[] = [];
+    let session!: VmSession;
+    const hooks = {
+      wasm,
+      interruptBudget: Infinity,
+      shouldInterrupt: () => ++polls < 0,
+      post: (message: WorkerToHostMessage) => {
+        messages.push(message);
+        if (message.type !== "call") return;
+        setTimeout(() => {
+          if (mode !== "none") {
+            const bytes = session.snapshot();
+            size = bytes.length;
+            if (mode === "resume") {
+              session.dispose();
+              session = resumeVm(bytes, hooks);
+            }
+          }
+          session.deliver({ type: "result", id: message.id, ok: true, payload: message.args, seq: 1, now: STARTED_AT + 1000 });
+        });
+      },
+    };
+    const ended = new Promise<void>((resolve) => {
+      const post = hooks.post;
+      hooks.post = (message) => {
+        post(message);
+        if (message.type === "done" || message.type === "crash") setTimeout(resolve);
+      };
+    });
+    session = await startVm({
+      ...hooks,
+      prelude: PRELUDE_SOURCE,
+      data: {
+        code,
+        tools: [{ name: "echo", jsName: "echo", description: "" }],
+        globals: [],
+        memoryLimitBytes: undefined,
+        store: {},
+        deterministic: { startedAt: STARTED_AT, seed: 5 },
+      },
+    });
+    await ended;
+    session.dispose();
+    return { messages, polls, size };
+  };
+  const plain = await once(garbage, "none");
+  assert.ok(plain.messages.some((m) => m.type === "done" && m.ok), JSON.stringify(plain.messages));
+  assert.ok(plain.polls > 10, `${plain.polls} polls`);
+  const continued = await once(garbage, "continue");
+  const resumed = await once(garbage, "resume");
+  assert.deepEqual([continued.messages, continued.polls], [plain.messages, plain.polls]);
+  assert.deepEqual([resumed.messages, resumed.polls], [plain.messages, plain.polls]);
+  // The garbage of the first loop is not in the image: it is about as large as the image of
+  // a script that made none (they differ by the source text and `kept`).
+  const small = await once("return await tools.echo(1)", "continue");
+  assert.ok(continued.size - small.size < 16 * 1024, `${continued.size} vs ${small.size} bytes`);
 });

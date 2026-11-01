@@ -3718,3 +3718,33 @@ In djs-wasm, `JSON.stringify` of 3 × 100k random floats went from 276 to 251 ms
 
 djs-wasm for D1780–D1782 together: +118 bytes (+34 gzip). A port of zmij's core (0077's
 optional item) is not done; it remains a follow-up.
+## D1890: pi adapter: snapshot() and the prelude image collect first
+date: 2026-11-03 · by: snapshot · issue: 0089
+`VmSession.snapshot()` and the prelude image (D1495) took `engine.image()` without a
+collection: 936 KB for a session waiting on its first call and 933 KB per cached prelude
+image, of which about 500 KB were live (0088). Now (js/pi/vm.ts, `Engine.collect` over
+`vm_collect`):
+- **Every cold start collects right after the prelude**, whether or not the image is
+  cached. Cold and warm starts go on from the same heap, as before; the image is 496 KB.
+- **`snapshot()` collects the session itself**, not a copy, then takes the image (498 KB).
+  Continuing the session and resuming the snapshot then go on from the same heap, byte for
+  byte. A collection that cannot reserve its to-space leaves the heap unchanged and the
+  snapshot is just larger.
+
+What a collection can change: later collection points. A deterministic script cannot
+observe them (no WeakRef/FinalizationRegistry, D1680; fuel is charged for instructions and
+their work, never for collections or layouts; a pi-vm test compares messages and interrupt
+polls without a snapshot, snapshotted and continued, and resumed), except through the out-of-memory point of an allocation that is not retried
+(D1700: native builtins and most leaf intrinsics fail at the cap without a collection). So
+a run that was snapshotted can reach the memory cap at another point than its replay
+without snapshots, and starts made before and after this change can too:
+`DETERMINISTIC_VERSION` is 2 (the fingerprint's `deterministic 2`). In non-deterministic
+sessions with weak references collected, a snapshot is an ordinary collection that may
+clear WeakRef targets and queue FinalizationRegistry callbacks, which run with the next
+delivered result.
+
+Rejected: collecting a copy (restore the image into a scratch instance, collect, take its
+image). The live session would stay untouched, but the resumed one would differ from it in
+the same out-of-memory edge case, and every snapshot would pay a second restore.
+Cost: `snapshot()` 0.05–0.1 → 0.4 ms; `resumeVm` of a waiting session 1.5 → 0.8 ms
+(half the bytes to verify).

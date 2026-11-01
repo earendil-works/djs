@@ -371,15 +371,16 @@ but pi keeps the prelude's `settle`/`run`/`stalled` alive across calls).
 | QuickJS polls `interruptHandler` while it runs; true throws an uncatchable error | `shouldInterrupt` is polled after every fuel slice (`fuelPerPoll`, default 10,000) of the script's work, not while the host globals and the prelude run (D1660: a start that reuses a prelude image skips that work, so a budget means the same on cold and warm starts). True → `vm_abort` and a `crash`, which pi's launchers turn into `timeout` or `aborted` as before |
 | deterministic: WASI clocks read virtual time, `random_get` a PRNG, UTC, no WeakRef | `vm_set_now(clock.now)` before every slice, time zone 0, `vm_set_random_seed`. djs reads no clock or entropy of its own (ARCH "Nondeterminism"). In deterministic runs the VM deletes `WeakRef` and `FinalizationRegistry` (`vm_set_weak_refs`, D1680) before the prelude's lockdown |
 | `Math.random` seeded by QuickJS from its first clock read (seed + 1), one draw used up while creating the context | djs's `Math.random` is the same xorshift64*, so the adapter seeds it one step after seed + 1. **The same seed gives the same numbers on both engines**; pi's pinned values pass |
-| fingerprint `quickjs-wasi X, quickjs Y, prelude H, deterministic 1, stack S, heap M, budget B` | `djs <build hash>, prelude H, host G, deterministic 1, fuel per poll F, heap M, budget B` (`djs_build_hash`; G hashes the adapter's own globals, D1660) |
+| fingerprint `quickjs-wasi X, quickjs Y, prelude H, deterministic 1, stack S, heap M, budget B` | `djs <build hash>, prelude H, host G, deterministic 2, fuel per poll F, heap M, budget B` (`djs_build_hash`; G hashes the adapter's own globals, D1660; the adapter's version is 2 since it collects after the prelude, D1890) |
 | quickjs-wasi's host global `performance` (`queueMicrotask` is native since 0059, `atob`, `btoa` and `DOMException` since 0084) | defined by the adapter in JS before the prelude, so the lockdown freezes it too. `performance.now()` counts from the run's start on the VM clock (deterministic: from `startedAt`, as on quickjs) |
-| no snapshots: durability by deterministic replay | `snapshot()` / `resumeVm()` in addition: the VM image plus the adapter's few numbers, taken while the script waits. A resumed session continues with no replay (tested against an uninterrupted run) |
+| no snapshots: durability by deterministic replay | `snapshot()` / `resumeVm()` in addition: the VM image plus the adapter's few numbers, taken while the script waits. The session collects first (D1890), so the image holds only live data: 498 KB for a session waiting on its first call (936 KB uncollected before 0089). A resumed session continues with no replay (tested against an uninterrupted run, with the same messages and interrupt polls) |
 
 **Prelude images.** Running pi's prelude is most of a start: its lockdown walks and freezes
 about 700 objects, and the djs interpreter is still several times slower than QuickJS
 (the board's perf track). The adapter keeps the VM image taken right after the prelude,
 keyed by everything the prelude saw (prelude, tools, globals, store, heap limit, deterministic mode; at most
-16 images per module, 450 KB each). A start with the same inputs restores the image
+16 images per module, 496 KB each: every cold start collects after the prelude, D1890; they
+were 933 KB of mostly garbage before 0089). A start with the same inputs restores the image
 (0.6 ms) instead. Only `performance`'s origin and the seed are set per run, after the
 restore. `reuseImages: false` turns it off. pi's worker launcher creates a worker per
 execution, so it would need to keep the image in the parent (or keep workers warm) to

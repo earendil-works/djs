@@ -46,7 +46,8 @@ export interface VmSession {
   dispose(): void;
   /**
    * The session as bytes, for `resumeVm`: only while the VM waits (not from inside `post`).
-   * Results the host has not delivered yet must be delivered to the resumed session.
+   * Results the host has not delivered yet must be delivered to the resumed session. It
+   * collects the session's garbage first (D1890), so the session may go on either way.
    */
   snapshot(): Uint8Array;
 }
@@ -86,8 +87,12 @@ export interface StartVmOptions extends VmHooks {
  */
 export const FUEL_PER_POLL = 10_000;
 
-/** Bumped whenever this module changes what a deterministic script observes. */
-const DETERMINISTIC_VERSION = 1;
+/**
+ * Bumped whenever this module changes what a deterministic script observes. 2: every start
+ * collects after the prelude (D1890), which moves later collection points, and with them
+ * the out-of-memory points of allocations that are not retried (D1700).
+ */
+const DETERMINISTIC_VERSION = 2;
 
 const SNAPSHOT_MAGIC = 0x49504a44; // "DJPI"
 const SNAPSHOT_VERSION = 1;
@@ -242,6 +247,10 @@ class Session implements VmSession {
 
   snapshot(): Uint8Array {
     if (this.disposed) throw new Error("The session is disposed");
+    // The image holds only live cells (D1890): the session itself collects, so continuing
+    // it and resuming the snapshot go on from the same heap. A collection that cannot get
+    // memory leaves the heap as it was, and the snapshot is merely larger.
+    this.engine.collect();
     const header = new TextEncoder().encode(JSON.stringify({ ...this.state, early: [...this.early] }));
     const image = this.engine.image();
     const out = new Uint8Array(12 + header.length + image.length);
@@ -491,6 +500,9 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
     let prepared = cached?.prepared;
     if (!prepared) {
       prepared = prepare(session, engine, prelude, data);
+      // Every cold start collects after the prelude (D1890), cached or not: the prelude
+      // image then holds only live cells, and cold and warm starts go on from the same heap.
+      engine.collect();
       if (options.reuseImages !== false && key.length <= MAX_CACHE_KEY) {
         if (cache.size >= IMAGE_CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
         cache.set(key, { image: engine.image(), prepared });

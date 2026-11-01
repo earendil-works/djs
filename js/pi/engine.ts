@@ -30,6 +30,7 @@ interface Exports {
   vm_free(vm: number): void;
   vm_arena_ptr(vm: number): number;
   vm_arena_len(vm: number): number;
+  vm_collect(vm: number): number;
   vm_compile_file(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
   vm_new_host_function(vm: number, fnId: number, nameLen: number): number;
   vm_decode_wire(vm: number, len: number): number;
@@ -93,6 +94,14 @@ export class Engine {
   image(): Uint8Array {
     const { x, vm } = this;
     return new Uint8Array(x.memory.buffer, x.vm_arena_ptr(vm), x.vm_arena_len(vm)).slice();
+  }
+
+  /**
+   * Collects garbage; false if the heap could not reserve the to-space (it is unchanged
+   * then). Raw values are invalid afterwards; handles stay valid.
+   */
+  collect(): boolean {
+    return this.trap(() => this.x.vm_collect(this.vm)) === 0;
   }
 
   get heapSize(): number {
