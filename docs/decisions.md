@@ -1325,3 +1325,17 @@ Fast paths that skip the protocol check identity first, as D1351 does for arrays
 checks it too, and `Array.from` reads arrays (without a mapping function, which could
 grow the array the iterator re-reads) and strings directly only then
 (`%HasOriginalIteration`).
+## D1350: an interpreter fast path for the hottest simple ops
+date: 2026-11-01 · by: heap · issue: 0035
+`Exec::run` tries `fast_step` before `step`. It handles get/put/set_loc, get_arg,
+push_i8/i32, undefined, drop, dup, inc/dec, to_numeric on a Number, add/sub and the four
+relational ops on two int32s, and jump/jump_if_false/jump_if_true on a Bool, then
+`continue`s. Anything else returns false with nothing changed, and `step` runs it with
+the full semantics. That includes an int overflow, a non-int or object operand (so D1280's
+`primitive_operands` is never bypassed), or a non-Bool condition. The reason: every
+`exec` arm merges its result through a `Step` (`Result<Option<Status>, Fault>`) that
+LLVM keeps in a stack slot, because non-inlined helpers return it through an sret
+pointer. The store/reload chain cost more than the ops themselves (loop.js: 555 to
+385 ms). Fuel, `pc` and safepoints are charged exactly as `step` charges them, so fuel
+counts, suspension points and GC stress are unchanged. A new op belongs in `fast_step`
+only if it is simple and stack-only. Keep its semantics identical to its `exec` arm.

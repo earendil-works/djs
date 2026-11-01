@@ -527,10 +527,16 @@ impl<'h> Exec<'h> {
     }
 
     /// Collects if the heap asks for it (or always under `gc_stress`).
+    #[inline(always)]
     fn safepoint(&mut self) {
-        if !(self.opts.gc_stress || self.heap.gc_pending()) {
-            return;
+        if self.opts.gc_stress || self.heap.gc_pending() {
+            self.safepoint_collect();
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn safepoint_collect(&mut self) {
         self.flush();
         // Popped values above `sp` must not keep garbage alive.
         let cap = self.heap.value_array_capacity(self.stack);
@@ -585,6 +591,9 @@ impl<'h> Exec<'h> {
                 self.flush();
                 return Status::OutOfFuel;
             }
+            if self.fast_step() {
+                continue;
+            }
             let pc0 = self.pc;
             match self.step() {
                 Ok(None) => {}
@@ -624,6 +633,118 @@ impl<'h> Exec<'h> {
     #[inline(always)]
     fn imm_atom(&self) -> Atom {
         Atom::from_id(self.imm_u32(1))
+    }
+
+    /// Executes one of the hottest simple instructions without building a [`Step`]
+    /// (D1350): the general path merges every op's result through a `Step` in memory,
+    /// which costs more than these ops themselves. Returns false, with nothing changed,
+    /// when the next instruction is not one of them or needs the general path (a slow
+    /// operand, an overflow); `step` then executes it with the full semantics.
+    #[inline(always)]
+    fn fast_step(&mut self) -> bool {
+        let pc = self.pc;
+        if pc >= self.code_len {
+            return false;
+        }
+        let Some(op) = Op::from_u8(self.byte(pc)) else {
+            return false;
+        };
+        #[cfg(debug_assertions)]
+        let sp0 = self.sp;
+        let next = pc + OPS[op as usize].size as u32;
+        match op {
+            Op::GetLoc => {
+                let v = self.get(self.lp + self.imm_u16(1));
+                self.push(v);
+            }
+            Op::PutLoc => {
+                let v = self.pop();
+                self.set(self.lp + self.imm_u16(1), v);
+            }
+            Op::SetLoc => {
+                let v = self.top(0);
+                self.set(self.lp + self.imm_u16(1), v);
+            }
+            Op::GetArg => {
+                let v = self.get(self.bp + 2 + self.imm_u16(1));
+                self.push(v);
+            }
+            Op::PushI8 => {
+                let v = self.heap.arena().read::<u8>(self.code + pc + 1) as i8;
+                self.push(Value::int(v as i32));
+            }
+            Op::PushI32 => {
+                let v = self.imm_i32(1);
+                self.push(Value::int(v));
+            }
+            Op::Undefined => self.push(Value::UNDEFINED),
+            Op::Drop => self.sp -= 1,
+            Op::Dup => {
+                let v = self.top(0);
+                self.push(v);
+            }
+            // Number operands only: these never need `primitive_operands` (D1280).
+            Op::ToNumeric if self.top(0).is_number() => {}
+            Op::Inc | Op::Dec => {
+                let d = if op == Op::Inc { 1 } else { -1 };
+                match self.top(0).as_int().and_then(|i| i.checked_add(d)) {
+                    Some(i) => self.set(self.sp - 1, Value::int(i)),
+                    None => return false,
+                }
+            }
+            Op::Add | Op::Sub | Op::Lt | Op::Le | Op::Gt | Op::Ge => {
+                let (Some(x), Some(y)) = (self.top(1).as_int(), self.top(0).as_int()) else {
+                    return false;
+                };
+                let v = match op {
+                    Op::Add => x.checked_add(y).map(Value::int),
+                    Op::Sub => x.checked_sub(y).map(Value::int),
+                    Op::Lt => Some(Value::bool(x < y)),
+                    Op::Le => Some(Value::bool(x <= y)),
+                    Op::Gt => Some(Value::bool(x > y)),
+                    _ => Some(Value::bool(x >= y)),
+                };
+                let Some(v) = v else { return false };
+                self.sp -= 1;
+                self.set(self.sp - 1, v);
+            }
+            Op::Jump | Op::JumpIfFalse | Op::JumpIfTrue => {
+                let taken = match op {
+                    Op::Jump => true,
+                    _ => {
+                        let Some(b) = self.top(0).as_bool() else {
+                            return false;
+                        };
+                        self.sp -= 1;
+                        b == (op == Op::JumpIfTrue)
+                    }
+                };
+                self.fuel -= OPS[op as usize].cost.fuel() as i64;
+                if taken {
+                    self.pc = self.jump_target(next);
+                    if self.pc < next {
+                        self.safepoint();
+                    }
+                } else {
+                    self.pc = next;
+                }
+                return true;
+            }
+            _ => return false,
+        }
+        #[cfg(debug_assertions)]
+        {
+            let info = &OPS[op as usize];
+            debug_assert_eq!(
+                self.sp + info.pop as u32,
+                sp0 + info.push as u32,
+                "fast {} stack effect disagrees with the table",
+                info.name
+            );
+        }
+        self.fuel -= OPS[op as usize].cost.fuel() as i64;
+        self.pc = next;
+        true
     }
 
     /// Executes one instruction.
