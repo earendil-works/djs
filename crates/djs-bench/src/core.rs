@@ -342,7 +342,7 @@ fn scan(prog: &djs_core::regexp::Program, input: Input<'_>) -> usize {
     let mut start = 0;
     let mut count = 0;
     loop {
-        let mut fuel = u64::MAX;
+        let mut fuel = i64::MAX;
         match exec(prog, input, start, &mut fuel, ExecLimits::default()) {
             ExecResult::Match(c) => {
                 let (s, e) = c.get(0).unwrap();
