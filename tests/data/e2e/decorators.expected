@@ -1,0 +1,48 @@
+kind,access,static,private,name,addInitializer,metadata accessor s get/1/,set/2/,has/1/ 1
+kind,access,static,private,name,addInitializer,metadata method m get/1/,has/1/ 1
+kind,access,static,private,name,addInitializer,metadata setter #w set/2/,has/1/ 1
+kind,access,static,private,name,addInitializer,metadata field #f get/1/,set/2/,has/1/ 1
+null true
+true
+bf:field:bf:false:false
+sm:method:sm:true:false
+sa:accessor:sa:true:false
+m:method:m:false:false
+g:getter:g:false:false
+df:field:df:false:false
+cls:class:Derived:undefined:undefined
+init sm:function
+sa value
+init sa:function
+init cls:function
+defined
+before super
+bf value
+init bf:object
+init m:object
+init g:object
+df value
+init df:object
+after super
+#sm(sm),#sg(sg),60
+g(g),8,40,get
+sub,true,true,true
+E
+,Anon
+b,true,true
+TypeError: invalid parent class metadata
+host
+TypeError: method decorator must return a function or undefined
+TypeError: field decorator must return a function or undefined
+TypeError: accessor decorator must return an object or undefined
+TypeError: accessor decorator: 'init' must be a function
+TypeError: class decorator must return a function or undefined
+TypeError: initializer must be a function
+TypeError: addInitializer() called after the decoration
+TypeError: invalid brand on object
+TypeError: not an object
+RangeError: from x
+ReferenceError: C is not initialized
+accessor,x,method,2,3
+constructor,y
+TypeError: private class field '<dec>1' does not exist

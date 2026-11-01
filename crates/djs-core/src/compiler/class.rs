@@ -250,7 +250,7 @@ impl Parser<'_, '_> {
             }
             if self.is(TokenKind::At) {
                 let pos = self.tok.start;
-                let a = self.dec_hidden(b.scope, &mut b.hidden, "decs")?;
+                let a = self.dec_hidden(b.scope, &mut b.hidden)?;
                 self.parse_decorators()?;
                 let r = self.init_ref(a, pos);
                 self.code().name_init(r);
@@ -278,7 +278,7 @@ impl Parser<'_, '_> {
         }
 
         if b.class_decs.is_some() || !b.decs.is_empty() {
-            let state = self.dec_hidden(b.scope, &mut b.hidden, "state")?;
+            let state = self.dec_hidden(b.scope, &mut b.hidden)?;
             let elems = core::mem::take(&mut b.decs);
             self.emit_decorate_elements(&elems, state, derived, start)?;
             b.state = Some(state);
@@ -495,7 +495,7 @@ impl Parser<'_, '_> {
         self.ts_eat_marker(TokenKind::Question)?;
         let is_method = self.is(TokenKind::LParen) || (self.ts && self.is(TokenKind::Lt));
         if auto && is_method {
-            return syntax(self.tok.start, "invalid property name");
+            return syntax(self.tok.start, "expecting ';'");
         }
         let swapped = early_swap || (is_static && (is_method || auto));
         if swapped && !early_swap {
@@ -610,7 +610,7 @@ impl Parser<'_, '_> {
                 Key::Private(a) => DecKey::Private(a),
                 Key::Computed => {
                     // The decorators need the key again.
-                    let v = self.dec_hidden(b.scope, &mut b.hidden, "method key")?;
+                    let v = self.dec_hidden(b.scope, &mut b.hidden)?;
                     self.code().call_intrinsic(intrinsic("ToPropertyKey"), 1);
                     self.code().dup();
                     let r = self.init_ref(v, start);
@@ -761,12 +761,22 @@ impl Parser<'_, '_> {
         self.ts_eat_marker(TokenKind::Bang)?;
         self.ts_annotation()?;
         let pos = self.tok.start;
+        // The hidden bindings in qjs's order (the storage name shows in messages).
+        let rec = match decs {
+            Some(_) => Some(self.dec_hidden(b.scope, &mut b.hidden)?),
+            None => None,
+        };
         let key_var = match key {
             Key::Computed => {
                 self.code().call_intrinsic(intrinsic("ToPropertyKey"), 1);
-                let atom = self.heap.atom_str(&format!("<key {}>", b.keys))?;
-                b.keys += 1;
-                self.f.add_var(atom, VarKind::Hidden, b.scope);
+                let atom = if auto {
+                    self.dec_hidden(b.scope, &mut b.hidden)?
+                } else {
+                    let atom = self.heap.atom_str(&format!("<key {}>", b.keys))?;
+                    b.keys += 1;
+                    self.f.add_var(atom, VarKind::Hidden, b.scope);
+                    atom
+                };
                 let r = self.init_ref(atom, pos);
                 self.code().name_init(r);
                 Some(atom)
@@ -783,17 +793,16 @@ impl Parser<'_, '_> {
             Key::Atom(_) => None,
         };
         let storage = if auto {
-            let storage = self.heap.atom_str(&format!("<accessor {}>", b.hidden))?;
-            b.hidden += 1;
-            self.f.add_var(storage, VarKind::PrivateName, b.scope);
+            let storage = self.dec_hidden(b.scope, &mut b.hidden)?;
+            let v = self.f.vars.len() - 1;
+            self.f.vars[v].kind = VarKind::PrivateName;
             self.emit_auto_accessor(b, key, key_var, storage, is_static, pos)?;
             Some(storage)
         } else {
             None
         };
-        let rec = match decs {
-            Some(decs) => {
-                let rec = self.dec_hidden(b.scope, &mut b.hidden, "rec")?;
+        let rec = match (decs, rec) {
+            (Some(decs), Some(rec)) => {
                 b.decs.push(DecElem {
                     kind: if auto { DEC_ACCESSOR } else { DEC_FIELD },
                     is_static,
@@ -807,7 +816,7 @@ impl Parser<'_, '_> {
                 });
                 Some(rec)
             }
-            None => None,
+            _ => None,
         };
         let init = match if is_static {
             b.stat.take()

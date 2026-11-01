@@ -164,14 +164,10 @@ impl Parser<'_, '_> {
         Ok(())
     }
 
-    /// A new hidden binding `<prefix N>` of the class body scope.
-    pub(super) fn dec_hidden(
-        &mut self,
-        scope: ScopeId,
-        n: &mut u32,
-        prefix: &str,
-    ) -> PResult<Atom> {
-        let atom = self.heap.atom_str(&format!("<{prefix} {n}>"))?;
+    /// A new hidden binding `<dec>N` of the class body scope, numbered like qjs's (an
+    /// auto-accessor's storage name shows in its messages).
+    pub(super) fn dec_hidden(&mut self, scope: ScopeId, n: &mut u32) -> PResult<Atom> {
+        let atom = self.heap.atom_str(&format!("<dec>{n}"))?;
         *n += 1;
         self.f.add_var(atom, VarKind::Hidden, scope);
         Ok(atom)

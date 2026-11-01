@@ -105,12 +105,13 @@ description = "Phases P3 to P5 of ARCH.md: on the roadmap, not in the current mi
 # explicit-resource-management, and
 # built-ins/WeakRef, FinalizationRegistry with the features WeakRef, FinalizationRegistry,
 # and __proto__ (0044's accessor; the error-stack-accessor tests among them stay later).
+# Moved to active in 0065: the feature decorators (the decorator syntax tests and the
+# `accessor` fields).
 paths = [
 ]
 features = [
   "immutable-arraybuffer",      # binary data
   "Symbol.unscopables",         # Symbol-heavy (mostly `with`)
-  "decorators",                 # decorators come after P5
   "error-stack-accessor",       # error stack traces (P5)
   "await-dictionary",           # proposal
 ]

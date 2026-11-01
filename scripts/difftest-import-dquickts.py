@@ -3,7 +3,7 @@
 
     scripts/difftest-import-dquickts.py [--dquickts DIR]
 
-Reads tests/test_{language,builtin,closure,loop}.js and tests/test_typescript.ts from
+Reads tests/test_{language,builtin,closure,loop,decorators}.js and tests/test_typescript.ts from
 dquickts (read-only, default ~/Development/dquickts) and writes
 tests/corpus/dquickts/<file>/<test>.{js,ts}. Each case holds the helpers the test needs
 (found by name, transitively), the test function and its call, as the body of a codemode
@@ -30,6 +30,7 @@ SOURCES = [
     ("test_builtin.js", "builtin"),
     ("test_closure.js", "closure"),
     ("test_loop.js", "loop"),
+    ("test_decorators.js", "decorators"),
     ("test_typescript.ts", "typescript"),
 ]
 
@@ -62,6 +63,7 @@ DIRECT_EVAL = {
     ("test_closure.js", "test_arrow_function"),
     ("test_closure.js", "test_eval_closure"),
     ("test_closure.js", "test_eval_const"),
+    ("test_decorators.js", "test_misc"),
 }
 
 IDENT = re.compile(r"[A-Za-z_$][\w$]*")

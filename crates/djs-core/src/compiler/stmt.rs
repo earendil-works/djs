@@ -127,7 +127,7 @@ impl Parser<'_, '_> {
                 tok.start,
                 "function declarations can't appear in single-statement context",
             ),
-            TokenKind::Class => syntax(
+            TokenKind::Class | TokenKind::At => syntax(
                 tok.start,
                 "class declarations can't appear in single-statement context",
             ),
