@@ -452,10 +452,12 @@ impl<'a, 'h> Parser<'a, 'h> {
         // A `var` must not cross a scope with a lexical binding of the same name.
         let mut s = self.scope;
         loop {
-            if let Some(v) = self.f.find_in_scope(s, name)
-                && self.f.vars[v as usize].kind.is_lexical()
-            {
-                return syntax(pos, "invalid redefinition of lexical identifier");
+            if let Some(v) = self.f.find_in_scope(s, name) {
+                let kind = self.f.vars[v as usize].kind;
+                // Block-level function declarations are lexical too.
+                if kind.is_lexical() || (kind == VarKind::Func && s != BODY_SCOPE) {
+                    return syntax(pos, "invalid redefinition of lexical identifier");
+                }
             }
             match self.f.scopes[s as usize].parent {
                 Some(p) => s = p,
