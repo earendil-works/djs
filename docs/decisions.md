@@ -4285,3 +4285,31 @@ and rejected: a seventh header word with the caller's template (a store per call
 per frame, an image format change); packing the header (its words are int32 Values so
 that the GC traces the stack without frame knowledge). Native call+return
 631 → 458 instructions (micro.py `call+return f(i)`).
+## D1960: Phase-1 code as packed instructions; identifier atom cache (0096)
+date: 2026-11-05 · by: lexer · issue: 0096
+- Phase-1 code (`CodeBuf<Phase1>`, `Phase1Code`) is a `Vec<P1>` of instructions, 9 bytes
+  each (opcode plus two raw immediates, `repr(C, packed)`), not bytes: the parser no
+  longer encodes it and the resolution no longer decodes it. Phase-1 positions (`pos()`,
+  the line entries, loop rotation, `Insn::pc` of phase-1 instructions) are instruction
+  indices. `Phase1Code::bytes` encodes for listings and tests. Packed because the whole
+  unit's phase-1 code lives until resolution: with 16-byte `Insn`s a fresh-instance
+  compile of typescript.js was 17% slower (memory growth); packed it is 4% faster than
+  before, at a 19% higher native peak (106 → 126 MB for 9 MB of source).
+- The parser caches identifier atoms by their source text for the compile
+  (`IdentAtoms`, open addressing over the bytes' hash): interning every identifier
+  through the heap's atom table cost ~5%.
+- The stack check's and the re-emit's per-function buffers are reused (`StackScratch`,
+  `Scratch` in resolve.rs): ~1%.
+- Measured and dropped: recording the final instructions during the re-emit so the
+  stack check need not decode (+2%: the record costs more than the decode); a faster
+  `encode` (neutral); the lexer has no re-lexing waste (about one `next_token` per
+  token). Not done because each would gain less than ~3% or needs a format change:
+  line/column computed lazily from the source at error time (~3.6%: a line-table format
+  change plus a per-Script line cache), the remaining allocation (~10% spread over many
+  small vectors), the peephole passes' bookkeeping (~1-2% each), the phase-1
+  `finish` label check (1.7%).
+Results, wasm instructions per compile (base 33ecb01 → now; quickjs-wasi), steady
+state in one Sandbox: highlight.js 29.1M → 26.1M (21.3M), codemode 8.13M → 7.43M (6.24M),
+dquickts tests 140M → 129M, typescript.js 4,479M → 4,058M (4,595M); a fresh Sandbox per
+compile: highlight.js 50.4M → 47.5M, codemode 20.8M → 20.0M, typescript.js 5,234M →
+5,044M. Disassembly of all inputs identical.
