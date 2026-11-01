@@ -14,6 +14,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0062 | Property access performance (shapes/ICs: design first) | heap | .worktrees/heap |
 | 0057 | Size quick wins Q1-Q6 (after merging the 0052 report) | bloat | .worktrees/0052-bloat-investigation |
 | 0055 | Determinism investigation (report only; proposes issues) | determinism | .worktrees/determinism |
+| 0064 | Interactive REPL in djs-cli | repl | .worktrees/repl |
 
 ## Open (ready)
 
