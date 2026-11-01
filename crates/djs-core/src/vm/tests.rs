@@ -1150,6 +1150,7 @@ fn math_random_is_seeded_per_vm_and_survives_snapshots() {
     assert_eq!(eval(&mut a, draw), eval(&mut e, draw));
     let r = eval(&mut e, "const r = Math.random(); return r >= 0 && r < 1");
     assert_eq!(r, "true");
+}
 
 /// `acc = ""; for (k in <global name>) { acc += k + ","; [delete obj.<del> on the first
 /// step] } return acc`, hand-assembled (the compiler side is 0029).
