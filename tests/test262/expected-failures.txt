@@ -14,7 +14,6 @@ built-ins/Array/S15.4.5.2_A3_T2.js: RangeError: invalid array length
 built-ins/Array/from/Array.from-descriptor.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/from/Array.from-name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/from/Array.from_arity.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/Array/from/elements-deleted-after.js: Test262Error: The value of a.length is expected to be originalArray.length / 2 Expected SameValue(«6», «3») to be true
 built-ins/Array/from/items-is-arraybuffer.js: ReferenceError: 'ArrayBuffer' is not defined
 built-ins/Array/from/source-object-length-set-elem-prop-non-writable.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/isArray/15.4.3.2-1-10.js: ReferenceError: 'RegExp' is not defined
@@ -2635,7 +2634,6 @@ built-ins/String/prototype/S15.5.3.1_A4.js: harness propertyHelper.js: Unsupport
 built-ins/String/prototype/Symbol.iterator/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/Symbol.iterator/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/Symbol.iterator/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/Symbol.iterator/this-val-to-str-err.js: Test262Error: Expected a Test262Error but got a TypeError
 built-ins/String/prototype/at/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/at/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/at/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
@@ -2972,12 +2970,8 @@ built-ins/String/raw/return-the-string-value-from-template.js: parse: Unsupporte
 built-ins/String/raw/special-characters.js: parse: Unsupported: tagged templates are not supported yet
 built-ins/String/raw/template-substitutions-are-appended-on-same-index.js: parse: Unsupported: tagged templates are not supported yet
 built-ins/String/raw/zero-literal-segments.js: parse: Unsupported: tagged templates are not supported yet
-built-ins/StringIteratorPrototype/ancestry.js: TypeError: not a function
 built-ins/StringIteratorPrototype/next/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/StringIteratorPrototype/next/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/StringIteratorPrototype/next/next-iteration-surrogate-pairs.js: TypeError: not a function
-built-ins/StringIteratorPrototype/next/next-iteration.js: TypeError: not a function
-built-ins/StringIteratorPrototype/next/next-missing-internal-slots.js: TypeError: not a function
 built-ins/ThrowTypeError/extensible.js: TypeError: cannot read property 'get' of undefined
 built-ins/ThrowTypeError/forbidden-arguments.js: TypeError: cannot read property 'get' of undefined
 built-ins/ThrowTypeError/forbidden-caller.js: TypeError: cannot read property 'get' of undefined

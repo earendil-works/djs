@@ -1309,3 +1309,19 @@ class with kind 3 (infra).
 Error messages show a symbol key by its bare description, as qjs does (`cannot read
 property 'Symbol.iterator' of null`, `'q' is read-only`). This is `conv::describe_key`;
 function names keep `[desc]`.
+
+## D1346: The String iterator reuses Array Iterator objects
+date: 2026-11-01 · by: infra · issue: 0034
+A String Iterator is an `ObjectClass::ArrayIterator` object of kind 3 whose target slot
+is the string primitive, with the realm's %StringIteratorPrototype% ([[Prototype]]
+%IteratorPrototype%, @@toStringTag "String Iterator"). `%CreateStringIterator(s)` makes
+one; `%StringIteratorTarget(it)` accepts only kind 3 (TypeError "String Iterator object
+expected"), and heap's `ArrayIteratorTarget` rejects kind 3 ("Array Iterator object
+expected"), so neither `next` accepts the other's iterators. The index, finish and
+iteration logic (by code points) are the shared leaves plus `%StrCodePointString`.
+Fast paths that skip the protocol check identity first, as D1351 does for arrays:
+`Exec::iteration_unmodified(v)` is true for an Array or a string whose @@iterator and
+`next` are the installed originals (data properties only). Spread's string path now
+checks it too, and `Array.from` reads arrays (without a mapping function, which could
+grow the array the iterator re-reads) and strings directly only then
+(`%HasOriginalIteration`).

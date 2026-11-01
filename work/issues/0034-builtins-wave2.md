@@ -1,6 +1,6 @@
 # 0034: Core builtins wave 2: Array and String in full, 0031 leftovers
 
-status: in-progress
+status: done
 agent: infra
 branch: issue/0034-builtins-wave2
 depends-on: 0031
@@ -110,6 +110,20 @@ the 0031 leftovers.
   documented spec difference). difftest builtins/iterables.js.
 - Results: AggregateError 0 → 6 / 19, Object 1,882, Array 2,448; built-ins 5,844.
 
+### Part 5: String iterator (on 0030 part 4)
+- Part 4 merged: main ..acaa611.
+- String iterator (D1346) with kind 3 on heap's Array Iterator class, as agreed with the
+  coordinator. Small edit in heap's code (interp/run/intrinsics.rs): `ArrayIteratorTarget`
+  rejects kind 3. `Exec::iteration_unmodified` (interp/run.rs) replaces
+  `array_iteration_unmodified` and covers strings, so spread over a string with a patched
+  String.prototype[@@iterator] or %StringIteratorPrototype%.next runs the protocol
+  (heap's D1351 follow-up). Array.from: iterator path unless the iteration is the
+  original (arrays only without a mapping function).
+- difftest builtins/string-iterator.js (patched iterator and next, spread and
+  Array.from; stress OK).
+- Results: test262 Array 2,461, String 688, Object 1,891, AggregateError 9 / 19;
+  built-ins 5,877, language 4,077, harness 45. difftest 85 / 176.
+
 ## Follow-ups
 - Unicode normalization tables (NFC/NFD/NFKC/NFKD): size them (qjs's libunicode has
   them) and decide; localeCompare should then compare NFC forms like qjs.
@@ -120,3 +134,20 @@ the 0031 leftovers.
   map/filter/forEach.
 
 ## Result
+Landed in five merged parts (D1340-D1346):
+- The prelude keeps no source text (base 174 → 127 KB). The e2e slowdown was per-cell
+  verification in suspension mode; D010 (djs-core at opt-level 1 in dev) fixed it.
+- Array.prototype complete (ES2025), Array.of / from (iterables, array-likes), species,
+  unscopables; leaf fast paths (dense splice, primitive sort, element access).
+- String.prototype except num's six regex methods, plus substr/trimLeft/trimRight,
+  fromCharCode/fromCodePoint/raw, and the String iterator.
+- Object.fromEntries, Object.groupBy, AggregateError.
+- instanceof honours Symbol.hasInstance and prototype getters; %ThrowTypeError% unnamed
+  and frozen.
+- djs-bgen's behavior test has a 60 s timeout (D1344).
+Numbers (start → end of 0034): test262 Array 809 → 2,461 / 2,680, String 156 → 688 /
+1,040, Object 1,838 → 1,891 / 3,197, AggregateError 0 → 9 / 19; built-ins 3,617 →
+5,877, language 4,027 → 4,077, harness 43 → 45. difftest 74 → 85 / 176.
+Known gaps: normalize without tables (and localeCompare without NFC), Map.groupBy (no
+Map yet), builtin-language loops at interpreter speed (sort with a comparator), the
+interpreter's `arr.length = v` conversion, and the regex String methods (0033).
