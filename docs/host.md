@@ -278,7 +278,7 @@ but pi keeps the prelude's `settle`/`run`/`stalled` alive across calls).
 
 | pi on quickjs-wasi (vm.ts) | djs (js/pi/vm.ts) |
 | --- | --- |
-| `QuickJS.create({ memoryLimit, maxStackSize, interruptHandler, wasi })` | `vm_new(memoryLimit)` in a new instance of the djs-wasm module. Frames live in the heap, so there is no host-stack guard and `maxStackSize` is ignored. Deep recursion fails at about 131,000 frames, inside the heap limit |
+| `QuickJS.create({ memoryLimit, maxStackSize, interruptHandler, wasi })` | `vm_new(memoryLimit)` in a new instance of the djs-wasm module. Frames live in the heap, so there is no host-stack guard and `maxStackSize` is ignored. Deep recursion fails at about 131,000 frames, inside the heap limit, with `RangeError: Maximum call stack size exceeded`, as on quickjs-wasi (D013) |
 | `evalCode(PRELUDE_SOURCE, "codemode-prelude.js")`, then calling it with `bridge` and JSON | the same, as `return <prelude>` compiled with `vm_compile_file` (an async body; djs Scripts have no completion value, D004) |
 | `bridge`: a sync host function called with primitives | a sync host function (`vm_new_host_function`): the VM parks, the adapter reads the arguments with the reader, `post`s, and resolves the call with `undefined` |
 | `(async (tools, console) => {code\n})` as `codemode.js` | the same text after `return `, so line numbers match. Compile errors become pi's script-error JSON with a `codemode.js:line:col` frame |
@@ -306,20 +306,19 @@ benefit. The in-thread and remote launchers benefit as they are.
 swaps `src/runtime/vm.ts` for a three-line wrapper around js/pi/vm.ts and `src/wasm.ts` for
 the djs-wasm loader, and runs pi's installed vitest on the copy. node_modules are symlinks
 and vite's cache stays in the copy, so nothing is written to pi-private. The run writes
-`report.md` with pass/fail per test and the failure messages. At pi d65de9db942d, on a djs
-with 0033's regexps: **204 of 226 pass** (declarations, source, portable and worker-lifetime:
-all; sandbox 135/153; deterministic 26/30). Each failing test fails on every backend it
-runs on (worker, inline, remote):
+`report.md` with pass/fail per test and the failure messages. At pi d65de9db942d: **207 of
+226 pass** after 0054 (204 in 0049; the stack overflow test passes now). Declarations,
+source, portable and worker-lifetime pass completely; sandbox 138/153; deterministic 26/30.
+Each failing test fails on every backend it runs on (worker, inline, remote):
 
 | test | why |
 | --- | --- |
-| accepts wrapped and large base64 image data | the prelude's `/^[A-Za-z0-9+/]+={0,2}$/.test(data)` on 1 MB of base64: djs's regexp runs out of backtrack memory (`InternalError: out of memory in regexp execution`). Engine gap (follow-up) |
+| accepts wrapped and large base64 image data | the prelude's `/^[A-Za-z0-9+/]+={0,2}$/.test(data)` on 1 MB of base64: djs's regexp runs out of backtrack memory (`InternalError: out of memory in regexp execution`). Engine gap (with num) |
 | fails a script whose output passes the limits | the same regexp, in the `image()` case: every call throws, the script catches it, and the output limit is never reached (it ends as a timeout). The `text()` and `console.log` cases pass |
-| turns deep recursion into a catchable RangeError | djs throws `InternalError: stack overflow`, as qjs (dquickts) does. quickjs-wasi (quickjs-ng) throws `RangeError`. The error is catchable; only its class differs |
 | keeps eval and Function inside the VM | no global `eval`. The Function and AsyncFunction constructors throw "not supported yet" (ARCH: no direct eval; indirect eval and `Function` may come later) |
 | rejects dynamic import | `import()` is a compile-time SyntaxError, so the whole script fails instead of the `await import()` rejecting |
 | ignores patches to built-ins and built-in globals | djs is always strict (ARCH). Assigning to a frozen built-in throws a TypeError where sloppy QuickJS ignores it. The protection itself works: the prelude's JSON and promises are intact |
-| runs in UTC … without WeakRef or FinalizationRegistry | the deterministic half passes. `execute()` expects WeakRef and FinalizationRegistry to exist, and djs has neither |
+| runs in UTC … without WeakRef or FinalizationRegistry | the deterministic half passes. `execute()` expects WeakRef and FinalizationRegistry to exist, and djs has neither yet (0051) |
 | reports the fingerprint … | the test matches `/^quickjs-wasi /`. Inherent: a different engine must have a different fingerprint |
 
 ### What differs for scripts
@@ -328,12 +327,11 @@ Besides the failures above:
 - **Strict mode.** pi evaluates scripts sloppy on QuickJS. On djs they are strict: an
   assignment to an undeclared variable is a ReferenceError instead of creating a global,
   and writes to read-only properties throw. Model-written code rarely relies on either.
-- **Globals djs lacks** (quickjs-wasi has them; `Iterator` arrived with D1510 after this
-  was measured): `WeakRef`,
-  `FinalizationRegistry`, `DisposableStack`, `AsyncDisposableStack`, `SuppressedError`,
-  `DOMException`, `encodeURI`/`decodeURI` (+`Component`), `escape`/`unescape`, `eval`, and
-  `SharedArrayBuffer` (an ARCH non-goal). The adapter supplies `performance`,
-  `queueMicrotask`, `atob` and `btoa`.
+- **Globals djs lacks** (quickjs-wasi has them; compared again after 0054): `WeakRef`,
+  `FinalizationRegistry`, `DisposableStack`, `AsyncDisposableStack`, `SuppressedError`
+  (0051), `DOMException`, `eval`, and `SharedArrayBuffer` (an ARCH non-goal). `Iterator`
+  (D1510), the URI functions and `escape`/`unescape` (0054) are there now. The adapter
+  supplies `performance`, `queueMicrotask`, `atob` and `btoa`.
 - **Interrupt budgets.** A poll is 10,000 fuel. On a tight loop that is about as many polls
   per second as QuickJS makes (34,000/s vs 32,000/s; a budget of 20,000 lasts 0.58 s vs
   0.62 s). Code that allocates or calls builtins polls far more often than on QuickJS,
@@ -359,8 +357,9 @@ Besides the failures above:
    thread, or keep warm workers. Splitting the lockdown out of the argument-dependent part of
    the prelude would let one image serve every tool table and store.
 5. Before the flag is the default, close these engine gaps: regexp backtracking on large
-   inputs, `RangeError` for stack overflow (or pi accepts both), `eval`/`Function`,
-   `import()` as a runtime rejection, WeakRef/FinalizationRegistry, and the missing globals.
+   inputs, `eval`/`Function`, `import()` as a runtime rejection, WeakRef/
+   FinalizationRegistry, and the remaining globals. Stack overflow is a `RangeError` since
+   0054 (D013).
    Interpreter speed matters for heavier scripts (see below).
 
 ### Numbers
