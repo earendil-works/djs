@@ -1,7 +1,7 @@
 # 0096: Compiler structural speedups (0092 follow-ups)
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0096-compiler-structural
 depends-on: 0092
 touches: crates/djs-core/src/compiler/, crates/djs-core/src/lexer/, crates/djs-core/src/bytecode/ (encoder/decoder internals only)
