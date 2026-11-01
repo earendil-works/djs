@@ -3,6 +3,10 @@
 version = 4
 
 [[package]]
+name = "djs-bgen"
+version = "0.0.0"
+
+[[package]]
 name = "djs-cli"
 version = "0.0.0"
 dependencies = [
