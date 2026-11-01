@@ -1,7 +1,7 @@
 # 0049: pi codemode on djs: an adapter and pi's own tests (read-only use of pi-private)
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0049-pi-codemode-adapter
 depends-on: 0044
 touches: js/ (a new `pi/` adapter module and tests), docs/host.md (a pi section), crates/djs-wasm/ (only additive exports the adapter needs), tests/ (fixtures copied from pi-private, with their source noted)
