@@ -52,6 +52,15 @@ disjoint from perf's 0122 work:
   crates/djs-wasm/src/allocator.rs (`Base`: dlmalloc on wasm32, std's System natively for
   alloc-stats; the global allocator unless alloc-stats wraps it). Named `allocator`, not
   `alloc`, which is the alloc crate. Module unchanged (1,159,910 raw).
+- Unicode (D2334, D2335): props.rs coded by structure (General_Category as a partition,
+  binary properties as a base of GC leaves / an earlier property XOR a difference, emoji
+  sequences by their structure as libunicode does): 57,820 -> 20,477 bytes; a scratch
+  comparison of all 976 property lookups against the old tables is identical, test262
+  property-escapes 613/613. Then the NFD/NFKD/NFKC quick-check tables replaced by exact
+  derivations (asserted in the generator; a unit test over every code point). Module
+  471,983 -> 465,290 gzip (−6.7 KB), raw 1,121,445 -> 1,082,157. Not done: the
+  decomposition stream (11.6 KB gzip; a libunicode-style recoding might save 2–3 KB for
+  real complexity) and the composition tables (deriving them needs a runtime cache).
 - js/test sandbox trap test accepts the release module's fixed message too. Guide:
   docs/guide/host.md (trap paragraph) updated; docs/host.md too.
 
