@@ -16,6 +16,7 @@ mod highlight;
 mod regions;
 mod render;
 mod run;
+mod search;
 mod site;
 mod status;
 mod svg;

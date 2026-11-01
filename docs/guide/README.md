@@ -22,6 +22,9 @@ types stripped by node, for the live examples. Open it over HTTP
 (`python3 -m http.server -d target/docs-site`); from `file://` the pages work but the
 examples show only their build-time output.
 
+The site has a search box (`/` focuses it): `build` writes `search.json`, one entry per
+section of every page and the decision log, which the browser loads on first use.
+
 `.github/workflows/docs.yml` publishes the site to GitHub Pages on every push to main:
 it builds djs-wasm, runs `build --out _site` with node 24, and deploys that directory.
 

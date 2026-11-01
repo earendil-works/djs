@@ -54,6 +54,14 @@ touches: ARCH.md, docs/*.md, docs/guide/, crates/djs-docs/, crates/djs-wasm/ (a 
   The README's speed rows now name their workload files; two rows changed meaning
   (push/pop is push-pop.js with string methods; JSON with Dates is json-date.js).
 
+- Part 3 (search): `build` writes `search.json` (crates/djs-docs/src/search.rs: one
+  entry per h1/h2/h3 section of every page and the decision log, plain text, diagrams
+  and the live bytecode pane left out; 428 sections, 530 KB, 190 KB gzipped, fetched on
+  the first focus of the box). assets/search.js: all query words must occur, headings
+  and page titles rank first, snippets with highlights, arrows/Enter/Escape, `/` to
+  focus, `#search=words` in the URL opens with results. Checked in headless Chrome,
+  light and dark, wide and narrow.
+
 ## Follow-ups
 
 ## Result

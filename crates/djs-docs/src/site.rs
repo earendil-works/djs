@@ -9,6 +9,7 @@ use crate::{Guide, page_set, repo};
 
 const STYLE: &str = include_str!("../assets/style.css");
 const LIVE: &str = include_str!("../assets/live.js");
+const SEARCH: &str = include_str!("../assets/search.js");
 const STRIP: &str = include_str!("../assets/strip.mjs");
 
 /// One line of SUMMARY.md: `# Part`, `- [Title](page.md)`, or a draft `- [Title]()`.
@@ -89,6 +90,8 @@ pub fn build(g: &mut Guide, out: &Path, wasm: &Path) -> Result<(), String> {
     }
     write("style.css", STYLE)?;
     write("live.js", LIVE)?;
+    write("search.js", SEARCH)?;
+    write("search.json", &crate::search::index(&rendered, html_name))?;
     if let Some(first) = order.first().and_then(|e| e.path.as_deref()) {
         let to = html_name(first);
         write(
@@ -214,7 +217,7 @@ fn template(
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="top"><a class="brand" href="index.html">djs</a><span class="sub">How djs works</span><span class="spacer"></span><a class="src" href="{repo}/blob/main/{edit}">page source</a></header>
+<header class="top"><a class="brand" href="index.html">djs</a><span class="sub">How djs works</span><span class="spacer"></span><div class="search"><input type="search" id="search" placeholder="Search  /" aria-label="Search the guide" autocomplete="off"><ol id="search-results" hidden></ol></div><a class="src" href="{repo}/blob/main/{edit}">page source</a></header>
 <div class="layout">
 <nav class="book" aria-label="Chapters">{nav}</nav>
 <main><article>
@@ -223,6 +226,7 @@ fn template(
 <aside class="toc">{toc}</aside>
 </div>
 <script type="module" src="live.js"></script>
+<script type="module" src="search.js"></script>
 </body>
 </html>
 "#,
