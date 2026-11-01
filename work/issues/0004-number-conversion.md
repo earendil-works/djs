@@ -1,7 +1,7 @@
 # 0004: Number <-> string conversion
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0004-number-conversion
 depends-on: 0001
 touches: crates/djs-core/src/num/, crates/djs-core/src/lib.rs (mod lines only), tests/data/num/
