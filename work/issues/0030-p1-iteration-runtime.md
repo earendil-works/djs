@@ -76,7 +76,21 @@ dup; get_field done; jump_if_true; get_field value`. for-in uses
   list. The difftest ratchet reported 1 stale entry (a case that passes now); left for
   the coordinator to `--update-ratchet`.
 
-## Follow-ups
+- Part 2 (merged early at the coordinator's request, to shrink the conflict window with
+  0031):
+  - `for_in_start` / `for_in_next`: a key snapshot in an internal `ValueArray`
+    `[object, index, keys...]` (D007: never visible to JS). Spec order, shadowing by
+    keys already seen (even non-enumerable ones), symbols skipped, and keys deleted
+    since the snapshot skipped. Checked against qjs (`1,2,b,a,inherited,gone,` and the
+    deletion variant).
+  - `iter_check_object` with qjs's message.
+  - Realm intrinsics `%IteratorPrototype%` and `%ArrayIteratorPrototype%`, and
+    `ObjectClass::ArrayIterator = 6` (slots target / index / kind).
+  - `%InstallMethod`: the key may be a symbol (name `[desc]`), a function installed twice
+    keeps its first name, and a first path segment `%Name%` names a realm object.
+  - The array iterator leaf intrinsics are drafted in
+    `work/scratch/0030/iter_intrinsics.rs`; they need 0029's ids, so they wait for it.
+
 - Home object for methods (`super`), with classes (P1-7).
 - `return f()` stack positions: qjs reports the `return` keyword; ours, the `(`. A compiler
   question for the lexer agent (from 0028).
