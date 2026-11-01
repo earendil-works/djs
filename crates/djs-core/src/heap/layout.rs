@@ -616,6 +616,7 @@ const EXPORTED_TAGS: &[(&str, u16)] = {
         ("SYMBOL", SYMBOL),
         ("BIGINT", BIGINT),
         ("HOST_REF", HOST_REF),
+        ("INTERNAL", INTERNAL),
     ]
 };
 

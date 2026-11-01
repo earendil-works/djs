@@ -867,6 +867,18 @@ fn reader_images() {
         .unwrap();
     add(&mut h, "props", Value::object(o), false);
 
+    // An object of another class (an Error) inside plain data.
+    let err = h
+        .alloc_object(crate::heap::ObjectClass::Error, None, 0)
+        .unwrap();
+    let msg = h.alloc_str("boom").unwrap();
+    let mk = atom(&mut h, "message");
+    h.create_data_property(err, mk, Value::string(msg)).unwrap();
+    let holder2 = h
+        .new_array_from_values(None, &[Value::object(err)])
+        .unwrap();
+    add(&mut h, "error", Value::object(holder2), false);
+
     // Sharing and cycles.
     let shared = h.new_object(None).unwrap();
     let x = atom(&mut h, "x");

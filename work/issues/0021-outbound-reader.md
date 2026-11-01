@@ -93,6 +93,12 @@ The reader is generated from (or driven by) the same layout description as the R
   1 MiB: 0.02 ms). 10k objects: 3.0 ms vs 5.6 ms for `stringify_fast` + JSON read +
   `JSON.parse`; tool results 0.46 vs 2.0; 500k numbers 2.85 vs 16.8.
 
+- Rebased onto 0015. Its cell kinds 17-19 (Interp, Realm, HostCall) and object classes
+  (Function, HostFunction, Error) came through the export unchanged. The drift test flagged
+  its new value tag 13 (`INTERNAL`), which I added to the exported tag list (internal
+  values read as `Opaque { type: "internal" }`). Added an Error-class object to the
+  hand-built cases.
+
 ## Follow-ups
 - djs-wasm: export the arena pointer and length (and value bits of results and host-call
   arguments) so the host can build the view; the view must be re-derived after every VM call.

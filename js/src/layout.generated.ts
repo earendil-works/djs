@@ -2,18 +2,18 @@
 // Regenerate: DJS_UPDATE_LAYOUT=1 cargo test -p djs-core layout_generated
 
 export const LAYOUT = {
-  "layoutHash": 103704136,
+  "layoutHash": 2168310655,
   "magic": 5458500,
   "headerSize": 8,
   "header": { "KIND": 0, "GC": 1, "FLAGS": 2, "SIZE": 4 },
   "value": {
     "tagPrefix": 65528,
     "firstRef": 8,
-    "tags": { "UNDEFINED": 1, "NULL": 2, "BOOL": 3, "INT": 4, "HOLE": 5, "UNINITIALIZED": 6, "STRING": 8, "OBJECT": 9, "SYMBOL": 10, "BIGINT": 11, "HOST_REF": 12 }
+    "tags": { "UNDEFINED": 1, "NULL": 2, "BOOL": 3, "INT": 4, "HOLE": 5, "UNINITIALIZED": 6, "STRING": 8, "OBJECT": 9, "SYMBOL": 10, "BIGINT": 11, "HOST_REF": 12, "INTERNAL": 13 }
   },
   "atom": { "intBit": 2147483648, "symbolBit": 1073741824, "indexMask": 1073741823 },
   "flags": { "ROPE_TWO_BYTE": 1, "ROPE_FLATTENED": 2, "OBJ_EXTENSIBLE": 1, "OBJ_INDEXED_PROPS": 2, "OBJ_LENGTH_READONLY": 4 },
-  "objectClasses": { "Ordinary": 0, "Array": 1 },
+  "objectClasses": { "Ordinary": 0, "Array": 1, "Function": 2, "HostFunction": 3, "Error": 4 },
   "propFlags": { "WRITABLE": 1, "ENUMERABLE": 2, "CONFIGURABLE": 4, "ACCESSOR": 8 },
   "cells": {
     "Roots": {
@@ -28,7 +28,7 @@ export const LAYOUT = {
         "JOBS": { "offset": 32, "type": "Ref" },
         "HOST_CALLS": { "offset": 36, "type": "Ref" },
         "HANDLES": { "offset": 40, "type": "Ref" },
-        "RESERVED": { "offset": 44, "type": "u32" }
+        "INTERP": { "offset": 44, "type": "Ref" }
       },
       "tail": null
     },
@@ -261,6 +261,49 @@ export const LAYOUT = {
           "": { "offset": 0, "type": "Ref" }
         }
       }
+    },
+    "Interp": {
+      "kind": 17,
+      "minSize": 48,
+      "fields": {
+        "STATE": { "offset": 8, "type": "u32" },
+        "BP": { "offset": 12, "type": "u32" },
+        "HP": { "offset": 16, "type": "u32" },
+        "SP": { "offset": 20, "type": "u32" },
+        "PC": { "offset": 24, "type": "u32" },
+        "HOST_CALL": { "offset": 28, "type": "u32" },
+        "NEXT_CALL_ID": { "offset": 32, "type": "u32" },
+        "FLAGS": { "offset": 36, "type": "u32" },
+        "RESULT": { "offset": 40, "type": "Value" }
+      },
+      "tail": null
+    },
+    "Realm": {
+      "kind": 18,
+      "minSize": 16,
+      "fields": {
+        "GLOBAL_LEX": { "offset": 8, "type": "Ref" }
+      },
+      "tail": {
+        "name": "INTRINSICS",
+        "offset": 16,
+        "elem": "Value",
+        "elemSize": 8,
+        "fields": {
+          "": { "offset": 0, "type": "Value" }
+        }
+      }
+    },
+    "HostCall": {
+      "kind": 19,
+      "minSize": 32,
+      "fields": {
+        "ID": { "offset": 8, "type": "u32" },
+        "FN": { "offset": 12, "type": "u32" },
+        "ARGS": { "offset": 16, "type": "Ref" },
+        "THIS": { "offset": 24, "type": "Value" }
+      },
+      "tail": null
     }
   }
 } as const;

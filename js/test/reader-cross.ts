@@ -73,6 +73,9 @@ assert.equal(read("big-lone-surrogate"), fromUnits((i) => (i === mib / 2 ? 0xdc0
 const sym = read("symbol");
 assert.ok(sym instanceof Opaque && sym.type === "symbol" && sym.description === "tag");
 
+const [err] = read("error") as Opaque[];
+assert.ok(err instanceof Opaque && err.type === "object" && err.className === "Error" && err.ref > 0);
+
 const props = read("props") as Record<string, unknown>;
 assert.deepEqual(Object.keys(props), ["2", "10", "b", "a", "__proto__", "sym"]);
 assert.equal(Object.getPrototypeOf(props), Object.prototype);
