@@ -1,0 +1,20 @@
+{value:1,writable:false,enumerable:false,configurable:false} {value:2,writable:true,enumerable:true,configurable:true}
+{get:fn,set:undefined,enumerable:true,configurable:false} undefined
+1 2 3 five ["5","a","b","c"]
+true false true false true
+true {value:2,writable:true,enumerable:true,configurable:true}
+redefine non-configurable -> TypeError: property is not configurable
+same value is fine -> true
+not an object -> TypeError: not an object
+bad descriptor -> TypeError: not an object
+bad getter -> TypeError: invalid getter
+mixed -> TypeError: cannot have setter/getter and value or writable
+getOwnPropertyNames(null) -> TypeError: cannot convert to object
+1 undefined ["0","length"]
+bad length -> RangeError: invalid array length
+true false 2
+3 2 1 0
+ undefined null 12.5 Symbol(sym) true
+1.4142135623730951 null 1 true
+true true object true
+=== completed

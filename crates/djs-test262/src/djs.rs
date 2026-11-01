@@ -28,8 +28,7 @@ const DETACH: u32 = 2;
 const GC: u32 = 3;
 
 /// Defines `$262.evalScript` on top of the host compile function.
-const SETUP: &str =
-    "$262.evalScript = function evalScript(src) { return $262.__compileScript(src)(); };";
+const SETUP: &str = "$262.evalScript = function evalScript(src) { return $262.__compileScript(src).call($262.global); };";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Djs {

@@ -1,0 +1,32 @@
+Error Error 1 m0 0 Error Error: m0
+true true true true true true
+ false false Error
+TypeError TypeError 1 m1 1 TypeError TypeError: m1
+true true true true true true
+ false false TypeError
+RangeError RangeError 1 m2 2 RangeError RangeError: m2
+true true true true true true
+ false false RangeError
+ReferenceError ReferenceError 1 m3 3 ReferenceError ReferenceError: m3
+true true true true true true
+ false false ReferenceError
+SyntaxError SyntaxError 1 m4 4 SyntaxError SyntaxError: m4
+true true true true true true
+ false false SyntaxError
+EvalError EvalError 1 m5 5 EvalError EvalError: m5
+true true true true true true
+ false false EvalError
+URIError URIError 1 m6 6 URIError URIError: m6
+true true true true true true
+ false false URIError
+false 5 false
+true false
+a true false true
+N: M Error only only
+TypeError: not an object
+true true TypeError
+true ReferenceError: 'undefinedVariable' is not defined
+true RangeError: invalid array length
+TypeError: thrown true
+["message","cause"]
+=== completed

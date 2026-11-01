@@ -81,3 +81,13 @@ function FunctionPrototypeBind(this: Value, thisArg?: Value, ...args: Value[]): 
 function FunctionPrototypeToString(this: Value): Str {
   return FunctionToString(this);
 }
+
+/**
+ * Function ( ...parameterArgs, bodyArg ), 20.2.1.1: not supported (it compiles source
+ * text, like eval). It exists for `Function.prototype` and `constructor` links.
+ * @constructor Function
+ * @length 1
+ */
+function FunctionConstructor(...args: Value[]): Value {
+  throw NewTypeError("not supported yet: the Function constructor");
+}

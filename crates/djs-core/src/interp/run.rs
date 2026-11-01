@@ -2098,6 +2098,8 @@ impl<'h> Exec<'h> {
         let r = self.call(base, argc, Continuation::ConstructResult, next)?;
         let flags = self.header_int(frame::FLAGS) as i32 | frame::FLAG_CONSTRUCT;
         self.set(self.hp + frame::FLAGS, Value::int(flags));
+        // The callee as it is now: `call` ends at a safepoint, which may have moved `f`.
+        let f = self.get(self.bp);
         self.set(self.hp + frame::NEW_TARGET, f);
         Ok(r)
     }

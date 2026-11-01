@@ -141,6 +141,8 @@ FunctionPrototypeBind: reentrant (Function.prototype.bind)
 
 FunctionPrototypeToString: leaf (Function.prototype.toString)
 
+FunctionConstructor: leaf (constructor Function)
+
 MathObject: leaf (value Math)
 
 MathPow: reentrant (Math.pow)

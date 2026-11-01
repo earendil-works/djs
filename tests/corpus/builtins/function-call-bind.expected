@@ -1,0 +1,20 @@
+["undefined",null,null,0] [1,2,null,1] ["t",2,3,3]
+["undefined",null,null,0] [1,2,3,2] [null,"a",null,2]
+["bound",1,2,2] ["bound",1,2,3] bound probe 1 function ["length","name"]
+["bound",1,9,2] bound bound probe 0
+1 2 true true false
+TypeError: not a object
+TypeError: not a function
+TypeError: not a function
+function probe(a, b) {
+  return [this === undefined ? "undefined" : this, a, b, arguments.length];
+}
+function () { return 1; } (a) => a * 2
+function pow() {
+    [native code]
+}
+1 2 1
+call ["length","name"]
+TypeError: call is not a constructor
+TypeError: pow is not a constructor
+=== completed

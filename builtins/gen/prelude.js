@@ -421,6 +421,11 @@ function FunctionPrototypeToString() {
   return %FunctionToString(this);
 }
 
+// builtins/function.ts:91 constructor Function
+function FunctionConstructor(...args) {
+  throw %NewTypeError("not supported yet: the Function constructor");
+}
+
 // builtins/math.ts:8 value Math
 function MathObject() {
   const m = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
@@ -567,6 +572,7 @@ function StringConstructor(...args) {
 %InstallConstructor("globalThis", "SyntaxError", SyntaxErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "TypeError", TypeErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "URIError", URIErrorConstructor, 1, "Error");
+%InstallConstructor("globalThis", "Function", FunctionConstructor, 1, undefined);
 %InstallValue("globalThis", "Math", MathObject(), 5);
 %InstallConstructor("globalThis", "Object", ObjectConstructor, 1, undefined);
 %InstallConstructor("globalThis", "String", StringConstructor, 1, undefined);

@@ -1,0 +1,15 @@
+["t",1,5,2] ["t",1,2,2] ["t",1,2,3] bound probe bound bound probe 1 0
+[3,4,null,1] [null,5,6,2] [1,null,null,0]
+10 20 true true
+50 0 49
+RangeError: r c true true true
+TypeError: t Error Error: s X
+true TypeError: cannot read property 'f' of null
+42 ["x"] true true
+function undefined true false
+3 [1,2,3] true 2 [1,2]
+ 1.5 256
+TypeError: call is not a constructor
+92 function pow() {
+    [native code]
+}
