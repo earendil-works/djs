@@ -1,7 +1,7 @@
 # 0003: Lexer
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0003-lexer
 depends-on: 0001
 touches: crates/djs-core/src/lexer/, crates/djs-core/src/unicode/, scripts/gen-unicode*, crates/djs-core/src/lib.rs (mod lines only)
