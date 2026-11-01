@@ -42,8 +42,8 @@ decision; `import()` → compiler).
   base got bigger, and OOM recovery is layout-dependent (see Follow-ups). The test now
   accepts a crash with "out of memory".
 - pi's suite: 207/226 (was 204), and the deep recursion test passes. Globals still missing vs
-  quickjs-wasi: WeakRef, FinalizationRegistry, DisposableStack, AsyncDisposableStack,
-  SuppressedError (0051), DOMException, eval, SharedArrayBuffer. docs/host.md updated.
+  quickjs-wasi: WeakRef, FinalizationRegistry (0051), DOMException, eval, SharedArrayBuffer
+  (the disposables landed with D1512 meanwhile). docs/host.md updated.
 
 ## Follow-ups
 - qjs (dquickts) has `queueMicrotask` as a global and djs does not. The pi adapter

@@ -328,9 +328,9 @@ Besides the failures above:
   assignment to an undeclared variable is a ReferenceError instead of creating a global,
   and writes to read-only properties throw. Model-written code rarely relies on either.
 - **Globals djs lacks** (quickjs-wasi has them; compared again after 0054): `WeakRef`,
-  `FinalizationRegistry`, `DisposableStack`, `AsyncDisposableStack`, `SuppressedError`
-  (0051), `DOMException`, `eval`, and `SharedArrayBuffer` (an ARCH non-goal). `Iterator`
-  (D1510), the URI functions and `escape`/`unescape` (0054) are there now. The adapter
+  `FinalizationRegistry` (0051), `DOMException`, `eval`, and `SharedArrayBuffer` (an ARCH
+  non-goal). `Iterator` (D1510), the disposables (D1512), the URI functions and
+  `escape`/`unescape` (0054) are there now. The adapter
   supplies `performance`, `queueMicrotask`, `atob` and `btoa`.
 - **Interrupt budgets.** A poll is 10,000 fuel. On a tight loop that is about as many polls
   per second as QuickJS makes (34,000/s vs 32,000/s; a budget of 20,000 lasts 0.58 s vs
