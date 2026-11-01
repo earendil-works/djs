@@ -87,6 +87,9 @@ scan = [
 name = "later"
 kind = "later"
 description = "Phases P3 to P5 of ARCH.md: on the roadmap, not in the current milestone."
+# Moved to active in 0050 (RegExp completion): built-ins/RegExp,
+# RegExpStringIteratorPrototype, language/literals/regexp, and the features regexp-*,
+# RegExp.escape, String.prototype.matchAll and Symbol.match/matchAll/replace/search/split.
 # Moved to active by the coordinator in 0038: built-ins/Reflect, Map, Set, WeakMap,
 # WeakSet, their iterator prototypes, Symbol and Date, and the features Reflect,
 # Reflect.*, Map, Set, set-methods, array-grouping, WeakMap, WeakSet,
@@ -102,9 +105,6 @@ description = "Phases P3 to P5 of ARCH.md: on the roadmap, not in the current mi
 # iterator-sequencing, iterator-chunking, iterator-includes, Iterator.prototype.join,
 # joint-iteration.
 paths = [
-  "built-ins/RegExp",                         # our own regex engine comes in P5
-  "built-ins/RegExpStringIteratorPrototype",  # regex
-  "language/literals/regexp",                 # regex
   "built-ins/WeakRef",                        # GC-observable
   "built-ins/FinalizationRegistry",           # GC-observable
   "built-ins/DisposableStack",                # explicit resource management
@@ -114,14 +114,6 @@ paths = [
 features = [
   "immutable-arraybuffer",      # binary data
   "Array.fromAsync",            # async iteration
-  "regexp-*",                   # regex features
-  "RegExp.escape",              # regex
-  "String.prototype.matchAll",  # regex
-  "Symbol.match",               # regex protocol symbols
-  "Symbol.matchAll",            # regex protocol symbols
-  "Symbol.replace",             # regex protocol symbols
-  "Symbol.search",              # regex protocol symbols
-  "Symbol.split",               # regex protocol symbols
   "Symbol.unscopables",         # Symbol-heavy (mostly `with`)
   "upsert",                     # Map.prototype.getOrInsert
   "WeakRef",                    # GC-observable
