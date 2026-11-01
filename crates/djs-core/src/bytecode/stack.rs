@@ -60,8 +60,28 @@ pub enum StackError {
 
 const UNKNOWN: u32 = u32::MAX;
 
+/// A handler depth that [`stack_depths`] skips: to be computed from the code.
+pub const UNKNOWN_DEPTH: u32 = u32::MAX;
+
 /// Checks final code and returns its maximum operand stack depth.
 pub fn check_stack(code: &[u8], handlers: &[Handler]) -> Result<u16, StackError> {
+    walk(code, handlers, false).map(|(_, max)| max)
+}
+
+/// The operand stack depth before each instruction (indexed by pc; [`UNKNOWN_DEPTH`]
+/// for unreachable code and for positions inside instructions), with the same checks
+/// as [`check_stack`]. Handlers whose depth is [`UNKNOWN_DEPTH`] are skipped, so code
+/// reachable only through them stays unknown. The compiler uses this to find handler
+/// depths it only knows relative to the code (array destructuring inside expressions).
+pub fn stack_depths(code: &[u8], handlers: &[Handler]) -> Result<Vec<u32>, StackError> {
+    walk(code, handlers, true).map(|(depth, _)| depth)
+}
+
+fn walk(
+    code: &[u8],
+    handlers: &[Handler],
+    skip_unknown: bool,
+) -> Result<(Vec<u32>, u16), StackError> {
     // Instruction starts; the code must decode linearly from 0 to the end.
     let mut is_start = vec![false; code.len() + 1];
     let mut pc = 0u32;
@@ -111,10 +131,13 @@ pub fn check_stack(code: &[u8], handlers: &[Handler]) -> Result<u16, StackError>
     };
 
     if len == 0 {
-        return Ok(0);
+        return Ok((depth, 0));
     }
     reach(&mut depth, &mut work, 0, 0, 0)?;
     for (index, h) in handlers.iter().enumerate() {
+        if skip_unknown && h.depth == UNKNOWN_DEPTH {
+            continue;
+        }
         let start_ok = (h.start as usize) < is_start.len() && is_start[h.start as usize];
         let end_ok =
             h.end == len || ((h.end as usize) < is_start.len() && is_start[h.end as usize]);
@@ -158,5 +181,5 @@ pub fn check_stack(code: &[u8], handlers: &[Handler]) -> Result<u16, StackError>
             reach(&mut depth, &mut work, pc, insn.next_pc(), after)?;
         }
     }
-    Ok(max as u16)
+    Ok((depth, max as u16))
 }

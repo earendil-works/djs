@@ -1121,15 +1121,21 @@ impl<'h> Exec<'h> {
         // (A bottom frame's return can enter a job's frame at the same `bp`.)
         if matches!(r, Ok(None)) && self.bp == bp0 && self.template == t0 {
             use crate::bytecode::flags as opflags;
-            let pops = info.pop as u32
-                + info.pop_imm.map_or(0, |k| {
-                    // Count immediates are u16; skip the immediates before them.
-                    let skip: u32 = info.imms[..k as usize]
-                        .iter()
-                        .map(|i| i.width() as u32)
-                        .sum();
-                    self.heap.arena().read::<u16>(self.code + pc0 + 1 + skip) as u32
-                });
+            // The value of immediate k (a u16 count or a u8).
+            let imm = |k: u8| {
+                let skip: u32 = info.imms[..k as usize]
+                    .iter()
+                    .map(|i| i.width() as u32)
+                    .sum();
+                let at = self.code + pc0 + 1 + skip;
+                if info.imms[k as usize].width() == 1 {
+                    self.heap.arena().bytes()[at as usize] as u32
+                } else {
+                    self.heap.arena().read::<u16>(at) as u32
+                }
+            };
+            let pops = info.pop as u32 + info.pop_imm.map_or(0, imm);
+            let pushes = info.push as u32 + info.push_imm.map_or(0, imm);
             if info.flags & (opflags::JUMP | opflags::BRANCH | opflags::TERM | opflags::GOSUB) == 0
             {
                 debug_assert_eq!(
@@ -1140,7 +1146,7 @@ impl<'h> Exec<'h> {
             }
             debug_assert_eq!(
                 self.sp + pops,
-                sp0 + info.push as u32,
+                sp0 + pushes,
                 "{} stack effect disagrees with the table",
                 info.name
             );

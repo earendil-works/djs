@@ -249,6 +249,40 @@ fn assign_storage(f: &FuncState) -> (Vec<Storage>, Vec<Atom>) {
     (storage, names)
 }
 
+/// Handlers whose depth is relative to a label (`HandlerLabels::depth_from`) get their
+/// absolute depth from the final code. A region may sit in code that only another such
+/// handler reaches (a pattern in a catch block of a pattern default...), so this
+/// repeats until nothing changes.
+fn resolve_relative_depths(
+    f: &FuncState,
+    code: &crate::bytecode::Code,
+    handlers: &mut [crate::bytecode::Handler],
+) -> PResult<()> {
+    let mut pending: Vec<usize> = (0..handlers.len())
+        .filter(|&i| f.handlers[i].depth_from.is_some())
+        .collect();
+    while !pending.is_empty() {
+        let depths = crate::bytecode::stack_depths(&code.code, handlers)
+            .map_err(|e| internal(&format!("{e:?}")))?;
+        let before = pending.len();
+        pending.retain(|&i| {
+            let h = &f.handlers[i];
+            let at = h.depth_from.and_then(|l| code.label_pos(l));
+            match at.map(|pc| depths.get(pc as usize).copied()) {
+                Some(Some(d)) if d != crate::bytecode::UNKNOWN_DEPTH => {
+                    handlers[i].depth = d + h.depth;
+                    false
+                }
+                _ => true,
+            }
+        });
+        if pending.len() == before {
+            return Err(internal("unreachable relative handler depth"));
+        }
+    }
+    Ok(())
+}
+
 /// Stores the value on top of the stack into a binding being initialized.
 fn emit_init(out: &mut CodeBuf, storage: Storage, atom: Atom, lexical: bool) {
     match storage {
@@ -434,9 +468,14 @@ fn emit_function(
             start: pos(h.start)?,
             end: pos(h.end)?,
             target: pos(h.target)?,
-            depth: h.depth,
+            depth: if h.depth_from.is_some() {
+                crate::bytecode::UNKNOWN_DEPTH
+            } else {
+                h.depth
+            },
         });
     }
+    resolve_relative_depths(f, &code, &mut handlers)?;
 
     // ---- Captures, children, line table, template.
     let mut capture_words = Vec::with_capacity(f.captures.len());

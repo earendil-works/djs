@@ -5,6 +5,7 @@ use super::PResult;
 use super::expr::Expr;
 use super::func::{BODY_SCOPE, FuncKind, ScopeKind, VarKind};
 use super::parser::{Parser, syntax};
+use super::pattern::Binding;
 use crate::heap::Atom;
 use crate::lexer::{Kw, TokenKind};
 
@@ -128,12 +129,16 @@ impl Parser<'_, '_> {
         let close = TokenKind::RParen;
         let mut seen_default = false;
         while !self.is(close) {
-            if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
-                return self.unsupported(self.tok.start, "destructuring parameters are");
-            }
             let rest = self.eat(TokenKind::Ellipsis)?;
             if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
-                return self.unsupported(self.tok.start, "destructuring parameters are");
+                self.parse_pattern_param(rest, &mut seen_default)?;
+                if rest {
+                    break;
+                }
+                if !self.eat(TokenKind::Comma)? {
+                    break;
+                }
+                continue;
             }
             if self.tok.kind != TokenKind::Ident {
                 return syntax(self.tok.start, "missing formal parameter");
@@ -145,17 +150,8 @@ impl Parser<'_, '_> {
             let v = self.declare_param(name, self.tok.start)?;
             let index = self.f.vars[v as usize].param;
             let has_default = !rest && self.is(TokenKind::Assign);
-            if (rest || has_default) && self.f.simple_params {
-                // The list turns non-simple: the parameters so far are copied from
-                // their argument slots now, in order.
-                self.f.simple_params = false;
-                for i in 0..index {
-                    let p = self.f.params[i as usize];
-                    let pname = self.f.vars[p as usize].name;
-                    self.code().get_arg(i);
-                    let r = self.init_ref(pname, pos);
-                    self.code().name_init(r);
-                }
+            if rest || has_default {
+                self.make_params_non_simple(index, pos);
             }
             if rest {
                 self.f.rest = Some(index);
@@ -163,15 +159,9 @@ impl Parser<'_, '_> {
             } else if has_default {
                 seen_default = true;
                 self.next()?;
-                let l = self.new_label();
                 self.code().get_arg(index);
-                self.code().dup();
-                self.code().is_undefined();
-                self.code().jump_if_false(l);
-                self.code().drop();
                 self.name_hint = Some((name, self.tok.start));
-                self.parse_assign(false)?;
-                self.place(l);
+                self.parse_param_default()?;
             } else if !self.f.simple_params {
                 self.code().get_arg(index);
             }
@@ -191,6 +181,69 @@ impl Parser<'_, '_> {
             }
         }
         self.expect(close, ")")
+    }
+
+    /// The list turns non-simple at parameter `index`: the parameters before it are
+    /// copied from their argument slots now, in order.
+    fn make_params_non_simple(&mut self, index: u16, pos: u32) {
+        if !self.f.simple_params {
+            return;
+        }
+        self.f.simple_params = false;
+        for i in 0..index {
+            let p = self.f.params[i as usize];
+            let pname = self.f.vars[p as usize].name;
+            self.code().get_arg(i);
+            let r = self.init_ref(pname, pos);
+            self.code().name_init(r);
+        }
+    }
+
+    /// `= default` of a parameter whose argument is on the stack.
+    fn parse_param_default(&mut self) -> PResult<()> {
+        let l = self.new_label();
+        self.code().dup();
+        self.code().is_undefined();
+        self.code().jump_if_false(l);
+        self.code().drop();
+        self.parse_assign(false)?;
+        self.place(l);
+        Ok(())
+    }
+
+    /// A destructuring parameter (`{a, b}`, `[x] = []`, `...[y]`): an argument slot
+    /// without a binding of its own; the pattern binds parameters.
+    fn parse_pattern_param(&mut self, rest: bool, seen_default: &mut bool) -> PResult<()> {
+        if self.f.param_count == u16::MAX {
+            return syntax(self.tok.start, "too many parameters");
+        }
+        let index = self.f.param_count;
+        self.f.param_count += 1;
+        let pos = self.tok.start;
+        self.make_params_non_simple(index, pos);
+        let mark = self.pattern_vars.len();
+        if rest {
+            self.f.rest = Some(index);
+            self.code().rest(index);
+            self.parse_pattern(Binding::Param)?;
+        } else {
+            let cp = self.skip_pattern(Binding::Param)?;
+            self.code().get_arg(index);
+            if self.eat(TokenKind::Assign)? {
+                *seen_default = true;
+                self.parse_param_default()?;
+            }
+            let end = self.checkpoint();
+            self.rewind(cp);
+            self.parse_pattern(Binding::Param)?;
+            self.rewind(end);
+            if !*seen_default {
+                self.f.length += 1;
+            }
+        }
+        let end = self.prev_end;
+        self.end_pattern_bindings(mark, end);
+        Ok(())
     }
 
     /// `{ body }` of a function: the directive prologue, then the statements.

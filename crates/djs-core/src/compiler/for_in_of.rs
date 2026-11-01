@@ -45,7 +45,9 @@ use alloc::vec::Vec;
 
 use super::PResult;
 use super::func::{HandlerLabels, ScopeKind, VarKind};
-use super::parser::{BlockEnv, BlockKind, Parser, syntax};
+use super::parser::{BlockEnv, BlockKind, Checkpoint, Parser, syntax};
+use super::pattern::Binding;
+use super::scan::Follow;
 use crate::bytecode::Label;
 use crate::bytecode::intrinsics::intrinsic_id;
 use crate::heap::{Atom, atoms};
@@ -53,14 +55,16 @@ use crate::lexer::{Kw, TokenKind};
 
 /// The left side of a for-in/of head, as far as the store needs it.
 #[derive(Clone, Copy)]
-enum Target {
+enum Target<'a> {
     /// `var x` or `let x` / `const x`: a store to a declared name.
     Decl { name: Atom, pos: u32, lexical: bool },
+    /// `var [x]` or `let {x}`: a pattern, skipped; it is parsed at the store.
+    Pattern { cp: Checkpoint<'a>, b: Binding },
     /// An expression target: the store was emitted at `L_assign` already.
     Expr,
 }
 
-impl Parser<'_, '_> {
+impl<'a> Parser<'a, '_> {
     /// A for-in/of loop after `for (`, with the current token at the start of the
     /// head. `for_pos` is the `for` keyword (errors from the iteration report there,
     /// as in QuickJS).
@@ -75,36 +79,48 @@ impl Parser<'_, '_> {
         let target = match self.tok.kind {
             TokenKind::Var => {
                 self.next()?;
-                let (name, pos) = self.for_binding()?;
-                self.declare_var(name, self.tok.start)?;
-                Target::Decl {
-                    name,
-                    pos,
-                    lexical: false,
+                if let Some(t) = self.for_pattern(Binding::Var)? {
+                    t
+                } else {
+                    let (name, pos) = self.for_binding()?;
+                    self.declare_var(name, self.tok.start)?;
+                    Target::Decl {
+                        name,
+                        pos,
+                        lexical: false,
+                    }
                 }
             }
             TokenKind::Const => {
                 self.next()?;
                 self.push_scope(ScopeKind::For)?;
                 scoped = true;
-                let (name, pos) = self.for_binding()?;
-                self.declare_lexical(name, VarKind::Const, pos)?;
-                Target::Decl {
-                    name,
-                    pos,
-                    lexical: true,
+                if let Some(t) = self.for_pattern(Binding::Lexical(VarKind::Const))? {
+                    t
+                } else {
+                    let (name, pos) = self.for_binding()?;
+                    self.declare_lexical(name, VarKind::Const, pos)?;
+                    Target::Decl {
+                        name,
+                        pos,
+                        lexical: true,
+                    }
                 }
             }
             TokenKind::Ident if self.tok.is_contextual(Kw::Let) => {
                 self.next()?;
                 self.push_scope(ScopeKind::For)?;
                 scoped = true;
-                let (name, pos) = self.for_binding()?;
-                self.declare_lexical(name, VarKind::Let, pos)?;
-                Target::Decl {
-                    name,
-                    pos,
-                    lexical: true,
+                if let Some(t) = self.for_pattern(Binding::Lexical(VarKind::Let))? {
+                    t
+                } else {
+                    let (name, pos) = self.for_binding()?;
+                    self.declare_lexical(name, VarKind::Let, pos)?;
+                    Target::Decl {
+                        name,
+                        pos,
+                        lexical: true,
+                    }
                 }
             }
             _ => {
@@ -118,19 +134,24 @@ impl Parser<'_, '_> {
                 let start = self.new_label();
                 let end = self.new_label();
                 self.place(start);
-                // `it next value` (for-in: `it key`): the reference goes on top of the
-                // value, and the store wants the value on top of the reference.
-                let e = self.parse_lhs(false)?;
-                if self.is(TokenKind::Assign) {
-                    return self.for_initializer_error();
+                if self.starts_assignment_pattern(Follow::InOf) {
+                    // `for ([a, b] of xs)`: the pattern takes the value.
+                    self.parse_pattern(Binding::Assign)?;
+                } else {
+                    // `it next value` (for-in: `it key`): the reference goes on top of
+                    // the value, and the store wants the value on top of the reference.
+                    let e = self.parse_lhs(false)?;
+                    if self.is(TokenKind::Assign) {
+                        return self.for_initializer_error();
+                    }
+                    let lv = self.lvalue(e, "invalid for in/of left hand-side")?;
+                    match lv {
+                        super::expr::LValue::Name { .. } => {}
+                        super::expr::LValue::Field { .. } => self.code().swap(),
+                        super::expr::LValue::Elem { .. } => self.code().rot3l(),
+                    }
+                    self.emit_store(lv, false);
                 }
-                let lv = self.lvalue(e, "invalid for in/of left hand-side")?;
-                match lv {
-                    super::expr::LValue::Name { .. } => {}
-                    super::expr::LValue::Field { .. } => self.code().swap(),
-                    super::expr::LValue::Elem { .. } => self.code().rot3l(),
-                }
-                self.emit_store(lv, false);
                 self.place(end);
                 regions.push((start, end));
                 self.code().jump(l_body);
@@ -138,7 +159,9 @@ impl Parser<'_, '_> {
                 Target::Expr
             }
         };
-        if matches!(target, Target::Decl { .. }) && self.is(TokenKind::Assign) {
+        if matches!(target, Target::Decl { .. } | Target::Pattern { .. })
+            && self.is(TokenKind::Assign)
+        {
             return self.for_initializer_error();
         }
         let is_of = self.tok.is_contextual(Kw::Of);
@@ -157,6 +180,7 @@ impl Parser<'_, '_> {
             self.parse_expr(false)?;
         }
         self.expect(TokenKind::RParen, ")")?;
+        let head_end = self.prev_end;
         if let Target::Decl {
             name,
             lexical: true,
@@ -214,6 +238,28 @@ impl Parser<'_, '_> {
                 regions.push((start, l_step));
                 self.place(l_body);
             }
+            Target::Pattern { cp, b } => {
+                self.place(l_assign);
+                if is_of {
+                    self.code().get_field(atoms::VALUE);
+                }
+                let start = self.new_label();
+                self.place(start);
+                if matches!(b, Binding::Lexical(_)) {
+                    // Fresh bindings (Boxes) per iteration.
+                    let s = self.scope as u16;
+                    self.code().enter_scope(s);
+                }
+                let mark = self.pattern_vars.len();
+                let end = self.checkpoint();
+                self.rewind(cp);
+                self.parse_pattern(b)?;
+                self.rewind(end);
+                // Initialized per iteration before the body runs.
+                self.end_pattern_bindings(mark, head_end);
+                regions.push((start, l_step));
+                self.place(l_body);
+            }
             Target::Expr => {
                 self.place(l_body);
                 let start = self.new_label();
@@ -259,6 +305,7 @@ impl Parser<'_, '_> {
                     end,
                     target: l_throw,
                     depth: base + 2,
+                    depth_from: None,
                 });
             }
             self.mark(for_pos);
@@ -313,11 +360,18 @@ impl Parser<'_, '_> {
         Ok(())
     }
 
+    /// A pattern in a declaration head (`for (const [k, v] of ...)`): skipped, as it
+    /// runs after the right side.
+    fn for_pattern(&mut self, b: Binding) -> PResult<Option<Target<'a>>> {
+        if !matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
+            return Ok(None);
+        }
+        let cp = self.skip_pattern(b)?;
+        Ok(Some(Target::Pattern { cp, b }))
+    }
+
     /// The binding of a declaration in a for-in/of head and its position.
     fn for_binding(&mut self) -> PResult<(Atom, u32)> {
-        if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
-            return self.unsupported(self.tok.start, "destructuring is");
-        }
         let pos = self.tok.start;
         let name = self.binding_name()?;
         self.next()?;

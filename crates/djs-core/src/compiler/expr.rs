@@ -3,6 +3,8 @@
 use super::PResult;
 use super::func::FuncKind;
 use super::parser::{Parser, syntax};
+use super::pattern::Binding;
+use super::scan::Follow;
 use crate::bytecode::{CodeBuf, Label, Phase1};
 use crate::heap::Atom;
 use crate::lexer::{Kw, TokenKind};
@@ -162,6 +164,16 @@ impl Parser<'_, '_> {
         if let Some(arrow) = self.try_arrow(no_in)? {
             return Ok(arrow);
         }
+        if self.starts_assignment_pattern(Follow::Assign) {
+            // `[a, b] = [b, a]`: the right side runs first; its value is the result.
+            self.deferred_pattern(Binding::Assign, |p| {
+                p.next()?;
+                p.parse_assign(no_in)?;
+                p.code().dup();
+                Ok(())
+            })?;
+            return Ok(Expr::Value);
+        }
         let lhs = self.parse_conditional(no_in)?;
         let op = self.tok;
         if op.kind == TokenKind::Assign {
@@ -280,9 +292,6 @@ impl Parser<'_, '_> {
             }
             Expr::Field { atom, pos } => LValue::Field { atom, pos },
             Expr::Elem { pos } => LValue::Elem { pos },
-            Expr::ObjectLit | Expr::ArrayLit => {
-                return self.unsupported(pos, "destructuring assignment is");
-            }
             _ => return syntax(pos, msg),
         };
         self.truncate_last();
@@ -1117,7 +1126,7 @@ impl Parser<'_, '_> {
 
     /// A property name: `Some(atom)` for a static one, `None` for a computed one (the
     /// key is then on the stack).
-    fn parse_property_key(&mut self) -> PResult<Option<Atom>> {
+    pub(super) fn parse_property_key(&mut self) -> PResult<Option<Atom>> {
         let tok = self.tok;
         match tok.kind {
             TokenKind::LBracket => {
@@ -1243,15 +1252,8 @@ impl Parser<'_, '_> {
                 if is_proto {
                     self.parse_assign(false)?;
                     if *seen_proto {
-                        // Duplicates are fine in a destructuring pattern.
-                        let pattern = if self.is(TokenKind::RBrace) {
-                            self.peek().kind == TokenKind::Assign
-                        } else {
-                            super::scan::closes_before_assign(self.lx, b'{')
-                        };
-                        if pattern {
-                            return self.unsupported(key_tok.start, "destructuring assignment is");
-                        }
+                        // (Duplicates are fine in a destructuring pattern, which is
+                        // parsed by compiler/pattern.rs instead.)
                         return syntax(self.tok.start, "duplicate __proto__ property name");
                     }
                     *seen_proto = true;
@@ -1292,13 +1294,6 @@ impl Parser<'_, '_> {
                 self.mark(key_tok.start);
                 self.code().name_get(r);
                 self.code().define_field(a);
-            }
-            TokenKind::Assign if key_tok.kind == TokenKind::Ident => {
-                // `{ a = 1 }` is only valid as a destructuring pattern.
-                if super::scan::closes_before_assign(self.lx, b'{') {
-                    return self.unsupported(key_tok.start, "destructuring assignment is");
-                }
-                return syntax(self.tok.start, "expecting '}'");
             }
             _ => return syntax(self.tok.start, "expecting '}'"),
         }

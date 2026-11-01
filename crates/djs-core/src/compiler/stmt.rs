@@ -5,6 +5,7 @@ use alloc::vec::Vec;
 use super::PResult;
 use super::func::{FuncKind, HandlerLabels, ScopeKind, VarKind};
 use super::parser::{BlockEnv, BlockKind, Parser, syntax};
+use super::pattern::Binding;
 use crate::heap::Atom;
 use crate::lexer::{Kw, TokenKind};
 
@@ -111,7 +112,11 @@ impl Parser<'_, '_> {
     pub(super) fn parse_lexical_bindings(&mut self, kind: VarKind, in_for: bool) -> PResult<()> {
         loop {
             if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
-                return self.unsupported(self.tok.start, "destructuring is");
+                self.parse_pattern_declarator(Binding::Lexical(kind), in_for)?;
+                if !self.eat(TokenKind::Comma)? {
+                    return Ok(());
+                }
+                continue;
             }
             let pos = self.tok.start;
             let name = self.binding_name()?;
@@ -140,7 +145,11 @@ impl Parser<'_, '_> {
     pub(super) fn parse_var_declarations(&mut self, in_for: bool) -> PResult<()> {
         loop {
             if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
-                return self.unsupported(self.tok.start, "destructuring is");
+                self.parse_pattern_declarator(Binding::Var, in_for)?;
+                if !self.eat(TokenKind::Comma)? {
+                    return Ok(());
+                }
+                continue;
             }
             let pos = self.tok.start;
             let name = self.binding_name()?;
@@ -157,6 +166,24 @@ impl Parser<'_, '_> {
                 return Ok(());
             }
         }
+    }
+
+    /// `PATTERN = value` in a declaration: the value runs first (compiler/pattern.rs).
+    fn parse_pattern_declarator(&mut self, b: Binding, in_for: bool) -> PResult<()> {
+        let mark = self.pattern_vars.len();
+        let start = self.tok.start;
+        self.deferred_pattern(b, |p| {
+            if !p.is(TokenKind::Assign) {
+                // As qjs: without an initializer the pattern is not one.
+                return syntax(start, "variable name expected");
+            }
+            p.next()?;
+            p.parse_assign(in_for)?;
+            Ok(())
+        })?;
+        let end = self.prev_end;
+        self.end_pattern_bindings(mark, end);
+        Ok(())
     }
 
     // ---- Control flow ---------------------------------------------------------------
@@ -550,23 +577,29 @@ impl Parser<'_, '_> {
                 end: l_try_end,
                 target: l_catch,
                 depth: base,
+                depth_from: None,
             });
             self.push_scope(ScopeKind::Catch)?;
             if self.eat(TokenKind::LParen)? {
                 if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
-                    return self.unsupported(self.tok.start, "destructuring catch parameters are");
+                    // A pattern binds like `let` (in its TDZ until initialized).
+                    let mark = self.pattern_vars.len();
+                    self.parse_pattern(Binding::Lexical(VarKind::Let))?;
+                    let end = self.prev_end;
+                    self.end_pattern_bindings(mark, end);
+                    self.expect(TokenKind::RParen, ")")?;
+                } else {
+                    if self.tok.kind != TokenKind::Ident {
+                        return syntax(self.tok.start, "identifier expected");
+                    }
+                    let pos = self.tok.start;
+                    let name = self.binding_name()?;
+                    self.next()?;
+                    self.f.add_var(name, VarKind::CatchParam, self.scope);
+                    self.expect(TokenKind::RParen, ")")?;
+                    let r = self.init_ref(name, pos);
+                    self.code().name_init(r);
                 }
-                if self.tok.kind != TokenKind::Ident {
-                    return syntax(self.tok.start, "identifier expected");
-                }
-                let pos = self.tok.start;
-                let name = self.binding_name()?;
-                self.next()?;
-                let v = self.f.add_var(name, VarKind::CatchParam, self.scope);
-                let _ = v;
-                self.expect(TokenKind::RParen, ")")?;
-                let r = self.init_ref(name, pos);
-                self.code().name_init(r);
             } else {
                 self.code().drop();
             }
@@ -597,6 +630,7 @@ impl Parser<'_, '_> {
                 end: exc_region.1,
                 target: l_exc,
                 depth: base,
+                depth_from: None,
             });
             self.code().gosub(l_fin);
             self.code().throw();

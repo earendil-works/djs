@@ -91,6 +91,26 @@ pub(super) struct Parser<'a, 'h> {
     pub last_anon_fn: Option<(u32, u32)>,
     /// The next unary operand is the operand of `delete`.
     pub delete_operand: bool,
+    /// The memoized pattern-or-literal scan (docs/compiler.md 3.3).
+    pub pat_scan: super::scan::PatternScan,
+    /// Bindings declared by destructuring patterns, for their callers to set
+    /// `init_end` (a stack: nested patterns in defaults push and take their own).
+    pub pattern_vars: Vec<VarId>,
+}
+
+/// Parser position for emission-free lookahead and deferred parsing (docs/compiler.md
+/// 3, D1080): the lexer state and the current token.
+#[derive(Clone, Copy)]
+pub(super) struct Checkpoint<'a> {
+    lx: Lexer<'a>,
+    tok: Token,
+    prev_end: u32,
+}
+
+impl Checkpoint<'_> {
+    pub fn tok_start(&self) -> u32 {
+        self.tok.start
+    }
 }
 
 pub(super) fn syntax<T>(pos: u32, msg: impl Into<Cow<'static, str>>) -> PResult<T> {
@@ -139,6 +159,8 @@ impl<'a, 'h> Parser<'a, 'h> {
             name_hint: None,
             last_anon_fn: None,
             delete_operand: false,
+            pat_scan: Default::default(),
+            pattern_vars: Vec::new(),
         };
         p.f.src_end = src.len() as u32;
         if kind == FuncKind::AsyncBody {
@@ -221,6 +243,20 @@ impl<'a, 'h> Parser<'a, 'h> {
     }
 
     // ---- Tokens ---------------------------------------------------------------------
+
+    pub fn checkpoint(&self) -> Checkpoint<'a> {
+        Checkpoint {
+            lx: self.lx,
+            tok: self.tok,
+            prev_end: self.prev_end,
+        }
+    }
+
+    pub fn rewind(&mut self, cp: Checkpoint<'a>) {
+        self.lx = cp.lx;
+        self.tok = cp.tok;
+        self.prev_end = cp.prev_end;
+    }
 
     pub fn next(&mut self) -> PResult<()> {
         self.prev_end = self.tok.end;

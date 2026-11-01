@@ -106,27 +106,131 @@ pub(super) fn is_arrow_head(lx: Lexer<'_>, open: Token) -> bool {
     matches!(s.lx.next_token(), Ok(t) if t.kind == TokenKind::Arrow && !t.newline_before())
 }
 
-/// Inside a literal opened by `open` (`{` or `[`), with `lx` somewhere directly in it:
-/// is the literal's closing bracket followed by `=`? That makes it a destructuring
-/// pattern (docs/compiler.md 3.3).
-pub(super) fn closes_before_assign(lx: Lexer<'_>, open: u8) -> bool {
+/// What follows the closing bracket of a `{...}` or `[...]` (docs/compiler.md 3.3).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum Follow {
+    /// `=`: a destructuring assignment pattern.
+    Assign,
+    /// `,`, `]` or `}`: inside a pattern, a nested pattern.
+    ElemEnd,
+    /// `of` or `in`: in a for-in/of head, a pattern.
+    InOf,
+    Other,
+}
+
+fn classify(t: &Token) -> Follow {
+    match t.kind {
+        TokenKind::Assign => Follow::Assign,
+        TokenKind::Comma | TokenKind::RBracket | TokenKind::RBrace => Follow::ElemEnd,
+        TokenKind::In => Follow::InOf,
+        _ if t.is_contextual(Kw::Of) => Follow::InOf,
+        _ => Follow::Other,
+    }
+}
+
+/// The memoized bracket scan (docs/compiler.md 3.3): one scan of a literal records what
+/// follows every `{`/`[` group closed inside it, so nested literals are not rescanned.
+#[derive(Default)]
+pub(super) struct PatternScan {
+    start: u32,
+    end: u32,
+    /// `(start offset of the bracket, what follows its closer)`, sorted.
+    entries: Vec<(u32, Follow)>,
+}
+
+impl PatternScan {
+    /// With `open` the current `{` or `[` token and `lx` positioned after it.
+    pub fn follow(&mut self, lx: Lexer<'_>, open: Token) -> Follow {
+        if self.start <= open.start && open.start < self.end {
+            if let Ok(i) = self.entries.binary_search_by_key(&open.start, |e| e.0) {
+                return self.entries[i].1;
+            }
+        }
+        self.scan(lx, open)
+    }
+
+    fn scan(&mut self, lx: Lexer<'_>, open: Token) -> Follow {
+        self.start = 0;
+        self.end = 0;
+        self.entries.clear();
+        let kind = if open.kind == TokenKind::LBrace {
+            b'{'
+        } else {
+            b'['
+        };
+        let mut s = Scanner {
+            lx,
+            prev: open,
+            stack: alloc::vec![kind],
+        };
+        // Parallel to `s.stack`: the start of each open `{`/`[`.
+        let mut opens: Vec<Option<u32>> = alloc::vec![Some(open.start)];
+        let mut pending: Option<u32> = None;
+        let mut end = open.end;
+        while !s.stack.is_empty() {
+            let before = s.stack.len();
+            let Some(tok) = s.next() else {
+                self.entries.clear();
+                return Follow::Other;
+            };
+            if let Some(p) = pending.take() {
+                self.entries.push((p, classify(&tok)));
+            }
+            if s.stack.len() > before {
+                let bracket = matches!(tok.kind, TokenKind::LBrace | TokenKind::LBracket);
+                opens.push(bracket.then_some(tok.start));
+            } else if s.stack.len() < before {
+                pending = opens.pop().flatten();
+            }
+            end = tok.end;
+        }
+        let follow = match s.lx.next_token() {
+            Ok(t) => classify(&t),
+            Err(_) => Follow::Other,
+        };
+        self.entries.push((open.start, follow));
+        self.entries.sort_unstable_by_key(|e| e.0);
+        self.start = open.start;
+        self.end = end;
+        follow
+    }
+}
+
+/// With `open` the current `{` or `[` and `lx` after it: the lexer after the matching
+/// closer and the closer's end offset, or `None` if the group does not scan.
+pub(super) fn skip_group<'a>(lx: Lexer<'a>, open: Token) -> Option<(Lexer<'a>, u32)> {
+    let kind = if open.kind == TokenKind::LBrace {
+        b'{'
+    } else {
+        b'['
+    };
     let mut s = Scanner {
         lx,
-        prev: Token {
-            kind: TokenKind::Comma,
-            kw: Kw::None,
-            flags: 0,
-            start: 0,
-            end: 0,
-        },
-        stack: alloc::vec![open],
+        prev: open,
+        stack: alloc::vec![kind],
+    };
+    let mut end = open.end;
+    while !s.stack.is_empty() {
+        end = s.next()?.end;
+    }
+    Some((s.lx, end))
+}
+
+/// With `open` a `{` and `lx` after it: does the object pattern have a rest property
+/// (`...` directly inside)?
+pub(super) fn object_has_rest(lx: Lexer<'_>, open: Token) -> bool {
+    let mut s = Scanner {
+        lx,
+        prev: open,
+        stack: alloc::vec![b'{'],
     };
     while !s.stack.is_empty() {
-        if s.next().is_none() {
-            return false;
+        let Some(t) = s.next() else { return false };
+        if t.kind == TokenKind::Ellipsis && s.stack.len() == 1 {
+            return true;
         }
     }
-    matches!(s.lx.next_token(), Ok(t) if t.kind == TokenKind::Assign)
+    false
 }
 
 /// With `open` the `{` of a try block and `lx` after it: does the statement have a
@@ -284,6 +388,53 @@ mod tests {
         ] {
             assert!(!arrow(src), "{src}");
         }
+    }
+
+    #[test]
+    fn pattern_follow() {
+        let src = "[a, {b: [c]}, [d] = e] = f; ({x} = y); [g] + 1";
+        let mut lx = Lexer::new(src.as_bytes()).unwrap();
+        let mut memo = PatternScan::default();
+        let mut found = Vec::new();
+        loop {
+            let t = lx.next_token().unwrap();
+            match t.kind {
+                TokenKind::Eof => break,
+                TokenKind::LBracket | TokenKind::LBrace => {
+                    found.push((t.start, memo.follow(lx, t)));
+                }
+                _ => {}
+            }
+        }
+        use Follow::*;
+        assert_eq!(
+            found,
+            [
+                (0, Assign),
+                (4, ElemEnd),
+                (8, ElemEnd),
+                (14, Assign),
+                (29, Assign),
+                (39, Other),
+            ]
+        );
+        // The first scan covered the nested groups: they come from the memo.
+        let mut lx = Lexer::new(b"[[[1], 2]] = x").unwrap();
+        let open = lx.next_token().unwrap();
+        assert_eq!(memo.follow(lx, open), Assign);
+        assert_eq!(memo.entries.len(), 3);
+        let inner = lx.next_token().unwrap();
+        assert_eq!(memo.follow(lx, inner), ElemEnd);
+        assert_eq!(memo.entries.len(), 3);
+        let mut lx = Lexer::new(b"for ([a] of b)").unwrap();
+        lx.next_token().unwrap();
+        lx.next_token().unwrap();
+        let open = lx.next_token().unwrap();
+        assert_eq!(memo.follow(lx, open), InOf);
+        let mut lx = Lexer::new(b"[a, `${[b]}`] = c").unwrap();
+        let open = lx.next_token().unwrap();
+        assert_eq!(memo.follow(lx, open), Assign);
+        assert!(memo.entries.iter().any(|&(p, f)| p == 7 && f == Other));
     }
 
     #[test]

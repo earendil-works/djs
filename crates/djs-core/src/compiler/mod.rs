@@ -18,6 +18,7 @@ mod for_in_of;
 mod func;
 mod function;
 mod parser;
+mod pattern;
 mod resolve;
 mod scan;
 mod stmt;

@@ -138,13 +138,16 @@ pub(super) enum Capture {
 }
 
 /// A try region `[start, end)` whose exceptions go to `target` with the operand stack
-/// cut to `depth` (then the exception is pushed).
+/// cut to `depth` (then the exception is pushed). With `depth_from`, `depth` is
+/// relative: it is added to the operand depth at that label, which resolution finds
+/// from the final code (expressions do not track their absolute depth).
 #[derive(Clone, Copy, Debug)]
 pub(super) struct HandlerLabels {
     pub start: crate::bytecode::Label,
     pub end: crate::bytecode::Label,
     pub target: crate::bytecode::Label,
     pub depth: u32,
+    pub depth_from: Option<crate::bytecode::Label>,
 }
 
 pub(super) struct FuncState {
