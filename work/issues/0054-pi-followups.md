@@ -1,7 +1,7 @@
 # 0054: pi codemode follow-ups (from 0049)
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0054-pi-followups
 depends-on: 0049
 touches: builtins/ (global functions, error), crates/djs-core/src/builtins/, crates/djs-core/src/interp/ (stack overflow error type only), js/pi/, tests/corpus/ (expected-difference markers), docs/host.md
