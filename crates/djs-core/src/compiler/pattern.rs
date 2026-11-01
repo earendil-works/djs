@@ -246,9 +246,10 @@ impl<'a> Parser<'a, '_> {
         self.code().jump_if_false(l);
         self.code().drop();
         if name != Atom::NULL {
-            self.name_hint = Some((name, self.tok.start));
+            self.parse_named(name, |p| p.parse_assign(false))?;
+        } else {
+            self.parse_assign(false)?;
         }
-        self.parse_assign(false)?;
         self.place(l);
         Ok(true)
     }

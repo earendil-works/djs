@@ -212,8 +212,7 @@ impl Parser<'_, '_> {
             if !self.eat(TokenKind::Assign)? {
                 return syntax(self.tok.start, "missing initializer for using declaration");
             }
-            self.name_hint = Some((name, self.tok.start));
-            self.parse_assign(no_in)?;
+            self.parse_named(name, |p| p.parse_assign(no_in))?;
             self.mark(pos);
             self.emit_using_add(is_await);
             let r = self.init_ref(name, pos);

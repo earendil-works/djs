@@ -432,6 +432,9 @@ impl Parser<'_, '_> {
             self.f.vars[v as usize].init_end = end;
         } else if name.is_null() {
             self.last_anon_fn = Some((decorated_at.unwrap_or(start), end));
+            if !hint.is_null() {
+                self.named_fn = Some(self.f.children[b.ctor_slot as usize]);
+            }
         }
         self.leave();
         Ok(())
@@ -987,10 +990,14 @@ impl Parser<'_, '_> {
         }
         if self.eat(TokenKind::Assign)? {
             let value_start = self.tok.start;
-            if let Key::Atom(a) | Key::Private(a) = key {
-                self.name_hint = Some((a, value_start));
+            match key {
+                Key::Atom(a) | Key::Private(a) => {
+                    self.parse_named(a, |p| p.parse_assign(false))?;
+                }
+                _ => {
+                    self.parse_assign(false)?;
+                }
             }
-            self.parse_assign(false)?;
             if key == Key::Computed
                 && !auto
                 && self.last_anon_fn == Some((value_start, self.prev_end))

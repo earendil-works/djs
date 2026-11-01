@@ -241,8 +241,7 @@ impl Parser<'_, '_> {
             self.ts_annotation()?;
             let v = self.declare_lexical(name, kind, self.tok.start)?;
             if self.eat(TokenKind::Assign)? {
-                self.name_hint = Some((name, self.tok.start));
-                self.parse_assign(in_for)?;
+                self.parse_named(name, |p| p.parse_assign(in_for))?;
             } else if in_for && (self.is(TokenKind::In) || self.tok.is_contextual(Kw::Of)) {
                 return Ok(());
             } else if kind == VarKind::Const {
@@ -276,8 +275,7 @@ impl Parser<'_, '_> {
             self.ts_annotation()?;
             self.declare_var(name, self.tok.start)?;
             if self.eat(TokenKind::Assign)? {
-                self.name_hint = Some((name, self.tok.start));
-                self.parse_assign(in_for)?;
+                self.parse_named(name, |p| p.parse_assign(in_for))?;
                 let r = self.name_ref(name, pos);
                 self.mark(pos);
                 self.code().name_put(r);

@@ -69,6 +69,9 @@ impl Parser<'_, '_> {
         self.code().fclosure(child);
         if !own {
             self.last_anon_fn = Some((start, self.prev_end));
+            if !hint.is_null() {
+                self.named_fn = Some(self.f.children[child as usize]);
+            }
         }
         Ok(Expr::Value)
     }
@@ -237,8 +240,7 @@ impl Parser<'_, '_> {
                 seen_default = true;
                 self.next()?;
                 self.code().get_arg(index);
-                self.name_hint = Some((name, self.tok.start));
-                self.parse_param_default()?;
+                self.parse_named(name, |p| p.parse_param_default())?;
             } else if !self.f.simple_params {
                 self.code().get_arg(index);
             }
@@ -564,6 +566,9 @@ impl Parser<'_, '_> {
         self.leave();
         self.code().fclosure(child);
         self.last_anon_fn = Some((start, self.prev_end));
+        if !hint.is_null() {
+            self.named_fn = Some(self.f.children[child as usize]);
+        }
         Ok(Expr::Value)
     }
 }

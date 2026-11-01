@@ -730,8 +730,7 @@ impl<'a> Parser<'a, '_> {
                 self.ts_annotation()?;
                 self.ts_add_member(d, name, None, None);
                 if self.eat(TokenKind::Assign)? {
-                    self.name_hint = Some((name, self.tok.start));
-                    self.parse_assign(false)?;
+                    self.parse_named(name, |p| p.parse_assign(false))?;
                     let r = self.name_ref(name, pos);
                     self.mark(pos);
                     self.code().name_put(r);

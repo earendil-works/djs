@@ -235,9 +235,11 @@ impl Parser<'_, '_> {
                 && !parenthesized
             {
                 // NamedEvaluation: `f = function () {}` names the function `f`.
-                self.name_hint = Some((self.f.refs[r as usize].atom, self.tok.start));
+                let name = self.f.refs[r as usize].atom;
+                self.parse_named(name, |p| p.parse_assign(no_in))?;
+            } else {
+                self.parse_assign(no_in)?;
             }
-            self.parse_assign(no_in)?;
             self.emit_store(lv, true);
             return Ok(Expr::Value);
         }
@@ -275,9 +277,11 @@ impl Parser<'_, '_> {
                 && !parenthesized
             {
                 // NamedEvaluation, as for `=`.
-                self.name_hint = Some((self.f.refs[r as usize].atom, self.tok.start));
+                let name = self.f.refs[r as usize].atom;
+                self.parse_named(name, |p| p.parse_assign(no_in))?;
+            } else {
+                self.parse_assign(no_in)?;
             }
-            self.parse_assign(no_in)?;
             self.emit_store(lv, true);
             self.code().jump(l_end);
             self.place(l_keep);
@@ -539,6 +543,7 @@ impl Parser<'_, '_> {
                 self.next()?;
                 self.ts_skip_type()?;
                 self.ts_erase_kind(start, self.prev_end, super::ts::ER_AS);
+                self.extend_anon_fn(start);
                 lhs_unary = false;
                 continue;
             }
@@ -756,7 +761,17 @@ impl Parser<'_, '_> {
                 }
                 self.next()?;
                 self.ts_erase(tok.start);
+                // NamedEvaluation sees through the assertion, as through parentheses.
+                let operand = self.tok.start;
+                if let Some((a, p)) = self.name_hint
+                    && p == tok.start
+                {
+                    self.name_hint = Some((a, operand));
+                }
                 let (e, _) = self.parse_unary()?;
+                if self.last_anon_fn == Some((operand, self.prev_end)) {
+                    self.last_anon_fn = Some((tok.start, self.prev_end));
+                }
                 return Ok((e, true));
             }
             _ => return Ok((self.parse_postfix(delete_operand)?, false)),
@@ -858,8 +873,10 @@ impl Parser<'_, '_> {
                 }
                 // A non-null assertion `x!` (TypeScript).
                 TokenKind::Bang if self.ts && !tok.newline_before() => {
+                    let end = self.prev_end;
                     self.next()?;
                     self.ts_erase(tok.start);
+                    self.extend_anon_fn(end);
                 }
                 // Type arguments: `f<T>(x)`, `` f<T>`t` ``, `f<T>` (or a comparison).
                 k if self.ts && super::ts::is_lt(k) => {
@@ -1015,6 +1032,17 @@ impl Parser<'_, '_> {
         self.mark(pos);
         self.code().get_elem();
         Ok(Expr::Elem { pos })
+    }
+
+    /// A TypeScript assertion after an expression ending at `end` (`x as T`, `x!`): an
+    /// anonymous function that was the whole expression still is (tsc erases the
+    /// assertion, so NamedEvaluation names it).
+    fn extend_anon_fn(&mut self, end: u32) {
+        if let Some((s, e)) = self.last_anon_fn
+            && e == end
+        {
+            self.last_anon_fn = Some((s, self.prev_end));
+        }
     }
 
     /// `( args )`: the arguments are pushed one by one, or, from the first spread
@@ -1861,10 +1889,14 @@ impl Parser<'_, '_> {
                 }
                 let value_start = self.tok.start;
                 match key {
-                    Some(a) => self.name_hint = Some((a, value_start)),
-                    None => self.code().to_propkey(),
+                    Some(a) => {
+                        self.parse_named(a, |p| p.parse_assign(false))?;
+                    }
+                    None => {
+                        self.code().to_propkey();
+                        self.parse_assign(false)?;
+                    }
                 }
-                self.parse_assign(false)?;
                 match key {
                     Some(a) => self.code().define_field(a, 0),
                     None => {

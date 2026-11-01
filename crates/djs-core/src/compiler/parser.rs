@@ -115,6 +115,9 @@ pub(super) struct Parser<'a, 'h> {
     /// The span of the last anonymous function or arrow expression, so a computed
     /// property can tell whether its value is one (runtime naming).
     pub last_anon_fn: Option<(u32, u32)>,
+    /// The function (or class constructor) that took the current name hint, for
+    /// [`Parser::parse_named`] to take the name back if the initializer goes on.
+    pub named_fn: Option<FuncId>,
     /// Decorators were parsed for the next class (their array is on the stack): the
     /// offset of the first `@` (compiler/decorators.rs).
     pub class_decs: Option<u32>,
@@ -302,6 +305,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             classes: Vec::new(),
             name_hint: None,
             last_anon_fn: None,
+            named_fn: None,
             class_decs: None,
             class_thunk: None,
             delete_operand: false,
@@ -1093,6 +1097,35 @@ impl<'a, 'h> Parser<'a, 'h> {
             }
         }
         false
+    }
+
+    /// NamedEvaluation (D2070): parses an initializer with `name` for an anonymous
+    /// function, arrow or class that *is* the initializer, parenthesized or not. The
+    /// name hint is taken by a function at the initializer's start (or inside its
+    /// parentheses) before it is known what follows; if the initializer goes on
+    /// (`(function () {}).name`, `function () {}.bind(x)`, `(() => 0)()`, `f || x`),
+    /// the function loses the name again: it is not the whole initializer.
+    pub fn parse_named<T>(
+        &mut self,
+        name: Atom,
+        parse: impl FnOnce(&mut Self) -> PResult<T>,
+    ) -> PResult<T> {
+        let start = self.tok.start;
+        let outer = self.named_fn.take();
+        self.name_hint = Some((name, start));
+        let r = parse(self);
+        let named = core::mem::replace(&mut self.named_fn, outer);
+        if self.name_hint.is_some_and(|(_, p)| p == start) {
+            self.name_hint = None;
+        }
+        let r = r?;
+        if let Some(id) = named
+            && self.last_anon_fn != Some((start, self.prev_end))
+            && let Some(f) = self.done[id as usize].as_mut()
+        {
+            f.name = Atom::NULL;
+        }
+        Ok(r)
     }
 
     /// The hinted name if the function or arrow at `pos` is the hinted expression.
