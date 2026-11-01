@@ -13,7 +13,7 @@ export const LAYOUT = {
   },
   "atom": { "intBit": 2147483648, "symbolBit": 1073741824, "indexMask": 1073741823 },
   "flags": { "ROPE_TWO_BYTE": 1, "ROPE_FLATTENED": 2, "OBJ_EXTENSIBLE": 1, "OBJ_INDEXED_PROPS": 2, "OBJ_LENGTH_READONLY": 4 },
-  "objectClasses": { "Ordinary": 0, "Array": 1, "Function": 2, "HostFunction": 3, "Error": 4, "Arguments": 5, "BoundFunction": 7 },
+  "objectClasses": { "Ordinary": 0, "Array": 1, "Function": 2, "HostFunction": 3, "Error": 4, "Arguments": 5, "BoundFunction": 7, "Boolean": 8, "Number": 9, "String": 10, "Symbol": 11 },
   "propFlags": { "WRITABLE": 1, "ENUMERABLE": 2, "CONFIGURABLE": 4, "ACCESSOR": 8 },
   "cells": {
     "Roots": {

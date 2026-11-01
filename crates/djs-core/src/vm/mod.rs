@@ -53,6 +53,10 @@ pub struct VmOptions {
     /// Install the builtins of `builtins/gen/prelude.js` at creation (default). Off gives
     /// a bare realm (interpreter tests, measuring the prelude's cost).
     pub prelude: bool,
+    /// The seed of `Math.random` (ARCH "Nondeterminism": the host decides; 0 means the
+    /// fixed default). Applied by `Vm::new` and after copying a base (`from_base`); a
+    /// restored snapshot (`from_bytes`) continues its own sequence.
+    pub random_seed: u64,
 }
 
 impl Default for VmOptions {
@@ -61,6 +65,7 @@ impl Default for VmOptions {
             memory_limit: crate::heap::DEFAULT_LIMIT,
             exec: ExecOptions::default(),
             prelude: true,
+            random_seed: crate::builtins::number::DEFAULT_RANDOM_SEED,
         }
     }
 }
@@ -104,6 +109,7 @@ impl Vm {
         state::init(&mut heap)?;
         realm::init(&mut heap)?;
         let mut vm = Vm { heap, opts };
+        crate::builtins::number::set_seed(&mut vm.heap, opts.random_seed);
         if opts.prelude {
             vm.install_prelude()?;
         }
@@ -182,8 +188,11 @@ impl Vm {
     }
 
     /// Per-VM initialization after copying a base: state that must not be shared between
-    /// VMs or baked into the base. There is none yet; a `Math.random` seed goes here.
-    fn after_copy(&mut self) {}
+    /// VMs or baked into the base: the `Math.random` seed.
+    fn after_copy(&mut self) {
+        let seed = self.opts.random_seed;
+        crate::builtins::number::set_seed(&mut self.heap, seed);
+    }
 
     /// The build hash, before anything else: an image from another build must be
     /// rejected with a clear error, not fail verification somewhere in the middle.
@@ -309,9 +318,8 @@ impl Vm {
     }
 
     /// A new Error object of `kind`.
-    /// Seeds `Math.random` (ARCH "Nondeterminism": the host decides). The state lives
-    /// in the heap, so a snapshot continues the same sequence; without a seed every VM
-    /// starts from the same fixed one.
+    /// Reseeds `Math.random` (see `VmOptions::random_seed`). The state lives in the
+    /// heap, so a snapshot continues the same sequence.
     pub fn set_random_seed(&mut self, seed: u64) {
         crate::builtins::number::set_seed(&mut self.heap, seed);
     }

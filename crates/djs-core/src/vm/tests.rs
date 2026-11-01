@@ -473,11 +473,9 @@ fn runtime_errors() {
         f.b.push_i8(1);
         f.b.add();
     });
-    assert_eq!(
-        r,
-        // %ToPrimitive finds no valueOf/toString (Object.prototype has none yet).
-        "throw TypeError: toPrimitive"
-    );
+    // %ToPrimitive now finds Object.prototype.toString (0031): no error, and error_of
+    // reports the (discarded) completion.
+    assert_eq!(r, "undefined");
     let r = error_of(|_, f| {
         f.b.push_i8(1);
         f.b.throw();
@@ -1128,4 +1126,28 @@ fn from_base_needs_an_idle_vm_and_room() {
         Vm::from_base(&base_image(), small).err(),
         Some(LoadError::TooLarge)
     );
+}
+
+#[test]
+fn math_random_is_seeded_per_vm_and_survives_snapshots() {
+    let base = base_image();
+    let seeded = |seed| VmOptions {
+        random_seed: seed,
+        ..Default::default()
+    };
+    let draw = "return [Math.random(), Math.random(), Math.random()].join()";
+    let mut a = Vm::from_base(&base, seeded(42)).unwrap();
+    let mut b = Vm::from_base(&base, seeded(42)).unwrap();
+    let mut c = Vm::from_base(&base, seeded(43)).unwrap();
+    let first = eval(&mut a, draw);
+    assert_eq!(first, eval(&mut b, draw));
+    assert_ne!(first, eval(&mut c, draw));
+    // Vm::new applies the seed too.
+    let mut d = Vm::new(seeded(42)).unwrap();
+    assert_eq!(first, eval(&mut d, draw));
+    // A snapshot continues the sequence instead of restarting it.
+    let mut e = Vm::from_bytes(a.bytes().to_vec(), seeded(42)).unwrap();
+    assert_eq!(eval(&mut a, draw), eval(&mut e, draw));
+    let r = eval(&mut e, "const r = Math.random(); return r >= 0 && r < 1");
+    assert_eq!(r, "true");
 }
