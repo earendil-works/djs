@@ -1,0 +1,30 @@
+# 0112: Guide chapter: determinism
+
+status: open
+agent: -
+branch: issue/0112-guide-determinism
+depends-on: 0109
+guide: docs/guide/determinism.md (new); links from arena.md, heap.md, gc.md, suspension.md, host.md
+touches: docs/guide/ only
+
+## Goal
+The determinism tour chapter, under docs/guide/README.md, linking the related material in
+the docs agent's chapters (suspension.md: fuel, debt, safepoints D1740/D1712; gc.md:
+D1601/D1710/D1090; heap.md: D1831, Map rehash, weak refs D1680; arena.md: D1690) rather than
+repeating it. The chapter itself covers: the sources of nondeterminism and how each became
+host input (clock, time zone, Math.random, weak refs: D1383/D1314/D1680), results as
+macrotasks (link host.md), the canonical hash and journals (D1730), what the gate compares
+(images across schedules, raw images, native vs wasm: D1720/D1725), and what is *not*
+deterministic (host OOM, GC timing via WeakRef in the default mode, the backend choice in
+fuel counts D1633).
+
+## Acceptance criteria
+- [ ] determinism.md reviewed by the docs agent before merge; `djs-docs check` green.
+- [ ] Once merged, turn the plain-text "the chapter on determinism" references in arena,
+      heap, gc, suspension (after the docs agent merges them) and host.md into links.
+
+## Log
+
+## Follow-ups
+
+## Result
