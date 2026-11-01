@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0021 | Outbound direct heap reader | num | .worktrees/0021-outbound-reader |
+| 0023 | djs-wasm + JS host package | num | .worktrees/0023-djs-wasm-host |
 | 0014 | P0 compiler | lexer | .worktrees/0014-p0-compiler |
 
 ## Open (ready)
@@ -29,6 +29,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0001 | Workspace skeleton and process | initial commit |
 | 0003 | Lexer | e4a42c3 (agent lexer; parser follow-ups listed in the issue) |
 | 0005 | Values, arena heap, strings, atoms, objects | dc751e2 (agent heap; follow-ups in the issue) |
+| 0021 | Outbound direct heap reader | 91b5ae5 (agent num; 1 MiB string at memcpy speed; 1.9-5.9x faster than JSON path) |
 | 0015 | P0 interpreter and embedding | 2373382 (agent heap; P0 + most builtin-free P1 ops; e2e left to 0022) |
 | 0020 | Flaky difftest timeout | 6818440 (agent infra; D1200 timeout convention) |
 | 0018 | Inbound wire format | 95afebe (agent num; beats JSON path on all datasets; node tests in gate) |
