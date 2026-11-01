@@ -395,7 +395,7 @@ impl P<'_> {
     fn matches(&mut self, word: &str) -> bool {
         let w = word.as_bytes();
         for (i, &c) in w.iter().enumerate() {
-            if self.at(self.p + i).to_ascii_uppercase() != c.to_ascii_uppercase() {
+            if !self.at(self.p + i).eq_ignore_ascii_case(&c) {
                 return false;
             }
         }
@@ -405,9 +405,7 @@ impl P<'_> {
     fn month(&mut self) -> Option<i64> {
         for n in 0..12 {
             let abbr = &MONTH_NAMES[n * 3..n * 3 + 3];
-            if (0..3)
-                .all(|i| self.at(self.p + i).to_ascii_uppercase() == abbr[i].to_ascii_uppercase())
-            {
+            if (0..3).all(|i| self.at(self.p + i).eq_ignore_ascii_case(&abbr[i])) {
                 self.p += 3;
                 return Some(n as i64 + 1);
             }
