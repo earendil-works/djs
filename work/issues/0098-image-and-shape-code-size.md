@@ -1,7 +1,7 @@
 # 0098: Base image and shapes code size (0083 part 4 + D016 follow-ups)
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0098-image-and-shape-code-size
 depends-on: 0083
 touches: crates/djs-core/src/heap/ (compact_for_image, shapes, the atom index), crates/djs-core/src/bytecode/template.rs (slim privileged templates), crates/djs-prelude/, crates/djs-core/src/interp/run/ic.rs (code size only)
