@@ -147,18 +147,32 @@ declare function Btoa(s: Str): Value;
 /** atob's forgiving-base64 decoding of s into a string of bytes; undefined if invalid. @leaf */
 declare function Atob(s: Str): Value;
 /**
- * Defines `o.stack` (D1282) from the current frames, without the prelude frames at the
- * top: an Error constructor does not show itself. @leaf
+ * Records `o.stack` (D1282) from the current frames, without the prelude frames at the
+ * top: an Error constructor does not show itself. With Error.prepareStackTrace it is
+ * pending until FinishErrorStack (D2050). @leaf
  */
 declare function CaptureStack(o: Obj): void;
-/** The stack trace an Error object recorded, or undefined for any other value (D1971). @leaf */
+/**
+ * The stack an Error object recorded (D1971), a pending one too (D2050), or undefined
+ * for any other value. @leaf
+ */
 declare function ErrorStack(v: Value): Value;
 /**
- * The stack trace of the current frames as a string (the calling builtin left out); with
- * a function `below`, only the frames below its topmost call, empty if it is not on
- * the stack (Error.captureStackTrace, D2010). @leaf
+ * The stack trace of the current frames (the calling builtin left out): a string, or a
+ * pending stack with Error.prepareStackTrace (D2050). With a function `below`, only the
+ * frames below its topmost call, none if it is not on the stack (Error.captureStackTrace,
+ * D2010). @leaf
  */
-declare function StackTraceString(below: Value): Str;
+declare function StackTraceValue(below: Value): Value;
+/** Whether v is a stack waiting for Error.prepareStackTrace (D2050). @leaf */
+declare function IsPendingStack(v: Value): boolean;
+/** Sets the stack slot of an Error (an own `stack` of anything else). @leaf */
+declare function SetErrorStack(o: Obj, v: Value): void;
+/**
+ * Slot i of a CallSite (0 function, 1 name, 2 file, 3 line, 4 column, 5 native,
+ * 6 constructor); TypeError "CallSite object expected" for anything else. @leaf
+ */
+declare function CallSiteSlot(v: Value, i: i32): Value;
 /**
  * DefinePropertyOrThrow ( O, P, desc ) with a complete data descriptor; `attrs` are
  * writable 1, enumerable 2, configurable 4. @reentrant

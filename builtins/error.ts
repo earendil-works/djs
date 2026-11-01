@@ -19,7 +19,66 @@ function ErrorPrototypeGetStack(this: Value): Value {
   if (!IsObject(this)) {
     throw NewTypeError("not an object");
   }
-  return ErrorStack(this);
+  return FinishErrorStack(AsObj(this));
+}
+
+/**
+ * Error.prepareStackTrace (V8, qjs; D2050): a stack recorded while it was set is
+ * pending, a record of the CallSites, the default string, the function and the Error
+ * constructor. This calls the function with (error, callsites) and `this` the Error
+ * constructor; its result, whatever it is, becomes the stack, and the default string if
+ * it throws.
+ */
+function FinishStack(err: Obj, v: Value): Value {
+  if (!IsPendingStack(v)) {
+    return v;
+  }
+  const r: Obj = AsObj(v);
+  try {
+    return CallPrepareStackTrace(RecordGet(r, 2), RecordGet(r, 3), err, RecordGet(r, 0));
+  } catch (e) {
+    return RecordGet(r, 1);
+  }
+}
+
+/**
+ * The call of Error.prepareStackTrace. Errors made while a call of it is on the stack
+ * get the default trace (crates/djs-core/src/interp/run/stack.rs).
+ * @intrinsic
+ */
+function CallPrepareStackTrace(f: Value, ctor: Value, err: Obj, sites: Value): Value {
+  return Call(f, ctor, err, sites);
+}
+
+/**
+ * The stack of an Error, finished if it was pending (D2050). While the prepare function
+ * runs, the error's stack reads undefined, as in qjs.
+ */
+function FinishErrorStack(o: Obj): Value {
+  const v: Value = ErrorStack(o);
+  if (!IsPendingStack(v)) {
+    return v;
+  }
+  SetErrorStack(o, undefined);
+  const s: Value = FinishStack(o, v);
+  SetErrorStack(o, s);
+  return s;
+}
+
+/** Records the stack of a new error object made by a builtin (D1282, D2050). */
+function RecordStack(o: Obj): void {
+  CaptureStack(o);
+  FinishErrorStack(o);
+}
+
+/**
+ * A VM error whose stack is pending is thrown through this (Exec::throw_fault): it runs
+ * Error.prepareStackTrace, then throws the error as if from the faulting instruction.
+ * @intrinsic
+ */
+function ThrowWithStack(e: Obj): void {
+  FinishErrorStack(e);
+  throw e;
 }
 
 /**
@@ -70,7 +129,7 @@ function ErrorCaptureStackTrace(object: Value, constructorOpt: Value): void {
   }
   const o: Obj = AsObj(object);
   const below: Value = IsCallable(constructorOpt) ? constructorOpt : undefined;
-  const stack: Str = StackTraceString(below);
+  const stack: Value = FinishStack(o, StackTraceValue(below));
   if (!HasOwnProperty(o, "stack") && !IsExtensible(o)) {
     throw NewTypeError("object is not extensible");
   }
@@ -98,7 +157,7 @@ function ErrorConstruct(newTarget: Value, fallback: Str, message: Value, options
     DefineDataPropertyOrThrow(o, "message", ToString(message), 5);
   }
   InstallErrorCause(o, options);
-  CaptureStack(o);
+  RecordStack(o);
   return o;
 }
 
@@ -227,6 +286,76 @@ function SuppressedErrorConstructor(error: Value, suppressed: Value, message: Va
   }
   DefineDataPropertyOrThrow(o, "error", error, 5);
   DefineDataPropertyOrThrow(o, "suppressed", suppressed, 5);
-  CaptureStack(o);
+  RecordStack(o);
   return o;
+}
+
+// CallSite (qjs, V8; D2050): the frames Error.prepareStackTrace is called with. The
+// objects have no constructor and no own properties; their data is in slots.
+
+/**
+ * CallSite.prototype.isNative ( ): whether the frame is a builtin.
+ * @builtin %CallSitePrototype%.isNative
+ */
+function CallSiteIsNative(this: Value): Value {
+  return CallSiteSlot(this, 5);
+}
+
+/**
+ * CallSite.prototype.isConstructor ( ): whether the function was called with `new`.
+ * @builtin %CallSitePrototype%.isConstructor
+ */
+function CallSiteIsConstructor(this: Value): Value {
+  return CallSiteSlot(this, 6);
+}
+
+/**
+ * CallSite.prototype.getFileName ( ): null for a native frame.
+ * @builtin %CallSitePrototype%.getFileName
+ */
+function CallSiteGetFileName(this: Value): Value {
+  return CallSiteSlot(this, 2);
+}
+
+/**
+ * CallSite.prototype.getFunction ( ): null for the position of a parse error.
+ * @builtin %CallSitePrototype%.getFunction
+ */
+function CallSiteGetFunction(this: Value): Value {
+  return CallSiteSlot(this, 0);
+}
+
+/**
+ * CallSite.prototype.getFunctionName ( ): null for an anonymous function.
+ * @builtin %CallSitePrototype%.getFunctionName
+ */
+function CallSiteGetFunctionName(this: Value): Value {
+  return CallSiteSlot(this, 1);
+}
+
+/**
+ * CallSite.prototype.getLineNumber ( ): null without a source position.
+ * @builtin %CallSitePrototype%.getLineNumber
+ */
+function CallSiteGetLineNumber(this: Value): Value {
+  const line: Value = CallSiteSlot(this, 3);
+  return line === 0 ? null : line;
+}
+
+/**
+ * CallSite.prototype.getColumnNumber ( ): null without a source position.
+ * @builtin %CallSitePrototype%.getColumnNumber
+ */
+function CallSiteGetColumnNumber(this: Value): Value {
+  const line: Value = CallSiteSlot(this, 3);
+  return line === 0 ? null : CallSiteSlot(this, 4);
+}
+
+/**
+ * CallSite.prototype [ %Symbol.toStringTag% ].
+ * @value %CallSitePrototype%[Symbol.toStringTag]
+ * @attributes configurable
+ */
+function CallSiteToStringTag(): Str {
+  return "CallSite";
 }

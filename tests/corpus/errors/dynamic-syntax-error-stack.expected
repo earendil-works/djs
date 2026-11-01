@@ -1,0 +1,117 @@
+SyntaxError "("
+    at <input>:1:2
+    at eval (native)
+    at <anonymous> (case:8:17)
+
+SyntaxError "let x = ;\nfoo"
+    at <input>:1:9
+    at eval (native)
+    at <anonymous> (case:8:17)
+
+SyntaxError "a b"
+    at <input>:1:3
+    at eval (native)
+    at <anonymous> (case:8:17)
+
+SyntaxError "\n\n  )"
+    at <input>:3:3
+    at eval (native)
+    at <anonymous> (case:8:17)
+
+SyntaxError "{"
+    at <input>:1:2
+    at eval (native)
+    at <anonymous> (case:8:17)
+
+SyntaxError "x = 1 +* 2"
+    at <input>:1:8
+    at eval (native)
+    at <anonymous> (case:8:17)
+
+SyntaxError ["("]
+    at <input>:4:1
+    at Function (native)
+    at <anonymous> (case:12:17)
+
+SyntaxError
+    at <input>:4:1
+    at Function (native)
+    at <anonymous> (case:13:21)
+
+SyntaxError ["a","b",")"]
+    at <input>:3:1
+    at Function (native)
+    at <anonymous> (case:12:17)
+
+SyntaxError
+    at <input>:3:1
+    at Function (native)
+    at <anonymous> (case:13:21)
+
+SyntaxError ["return 1 +"]
+    at <input>:4:1
+    at Function (native)
+    at <anonymous> (case:12:17)
+
+SyntaxError
+    at <input>:4:1
+    at Function (native)
+    at <anonymous> (case:13:21)
+
+SyntaxError ["a b"]
+    at <input>:3:3
+    at Function (native)
+    at <anonymous> (case:12:17)
+
+SyntaxError
+    at <input>:3:3
+    at Function (native)
+    at <anonymous> (case:13:21)
+
+SyntaxError ["a,","b c","return 1"]
+    at <input>:1:23
+    at Function (native)
+    at <anonymous> (case:12:17)
+
+SyntaxError
+    at <input>:1:23
+    at Function (native)
+    at <anonymous> (case:13:21)
+
+SyntaxError ["x","1 +* 2"]
+    at <input>:3:4
+    at Function (native)
+    at <anonymous> (case:12:17)
+
+SyntaxError
+    at <input>:3:4
+    at Function (native)
+    at <anonymous> (case:13:21)
+
+SyntaxError
+    at <input>:3:3
+    at AsyncFunction (native)
+    at <anonymous> (case:18:10)
+
+SyntaxError
+    at <input>:3:3
+    at GeneratorFunction (native)
+    at <anonymous> (case:18:10)
+
+    at <input>:1:2
+    at eval (native)
+    at viaFunction (case:20:26)
+    at <anonymous> (case:21:18)
+
+    at eval (native)
+    at <anonymous> (case:22:15)
+
+SyntaxError expecting property name
+    at <input>:1:2
+    at parse (native)
+    at <anonymous> (case:23:17)
+
+    at <input>:4:1
+
+""
+=== completed

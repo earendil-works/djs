@@ -16,7 +16,7 @@ function NewSuppressedError(error: Value, suppressed: Value): Obj {
   const o: Obj = ErrorCreate(RealmIntrinsic("SuppressedErrorPrototype"));
   DefineDataPropertyOrThrow(o, "error", error, 5);
   DefineDataPropertyOrThrow(o, "suppressed", suppressed, 5);
-  CaptureStack(o);
+  RecordStack(o);
   return o;
 }
 

@@ -122,6 +122,9 @@ pub enum Intrinsic {
     /// The live FinalizationRegistries: an internal EphemeronArray of `[registry,
     /// true]`, or undefined (heap/weakref.rs).
     Registries,
+    /// %CallSitePrototype%: the [[Prototype]] of the CallSite objects given to
+    /// `Error.prepareStackTrace` (0106, D2050).
+    CallSiteProto,
     /// An int bumped whenever a Script declares a global lexical binding: global
     /// inline caches of global object properties check it (D1620).
     GlobalLexEpoch,
@@ -321,6 +324,7 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
         Intrinsic::ArrayBufferProto,
         Intrinsic::DataViewProto,
         Intrinsic::TypedArrayProto,
+        Intrinsic::CallSiteProto,
     ] {
         let p = heap.new_object(Some(object_proto))?;
         set(heap, i, Value::object(p));
@@ -634,12 +638,12 @@ pub fn new_error(heap: &mut Heap, kind: ErrorKind, message: &str) -> Result<Valu
 
 /// Records the stack trace of an Error in its slot, which `Error.prototype.stack` reads
 /// (D1971); another object gets a non-enumerable own `stack` as before.
-pub fn set_error_stack(heap: &mut Heap, o: Obj, stack: crate::value::Str) -> Result<(), HeapError> {
+pub fn set_error_stack(heap: &mut Heap, o: Obj, stack: Value) -> Result<(), HeapError> {
     if heap.object_class(o) == ObjectClass::Error && heap.object_slot_count(o) > 0 {
-        heap.set_object_slot(o, 0, Value::string(stack));
+        heap.set_object_slot(o, 0, stack);
         return Ok(());
     }
-    define_hidden(heap, o, atoms::STACK, Value::string(stack))
+    define_hidden(heap, o, atoms::STACK, stack)
 }
 
 /// The number of frames a stack trace records: the realm's `Error.stackTraceLimit`
@@ -675,8 +679,16 @@ pub fn stack_trace_limit(heap: &mut Heap) -> u32 {
     }
 }
 
-/// The stack trace an Error recorded (`undefined` for anything else, D1971).
+/// The stack trace an Error recorded (`undefined` for anything else, D1971), as Rust
+/// readers show it: a stack waiting for `Error.prepareStackTrace` reads as its default
+/// string (D2050).
 pub fn error_stack_slot(heap: &Heap, v: Value) -> Value {
+    super::run::settled_stack(heap, error_stack_raw(heap, v))
+}
+
+/// The value in an Error's stack slot, a pending record included (`undefined` for
+/// anything else).
+pub(crate) fn error_stack_raw(heap: &Heap, v: Value) -> Value {
     match v.as_object() {
         Some(o) if heap.object_class(o) == ObjectClass::Error && heap.object_slot_count(o) > 0 => {
             heap.object_slot(o, 0)

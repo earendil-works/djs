@@ -65,7 +65,10 @@ const WELL_KNOWN_SYMBOL: u16 = id("WellKnownSymbol");
 const REALM_INTRINSIC: u16 = id("RealmIntrinsic");
 const ERROR_CREATE: u16 = id("ErrorCreate");
 const ERROR_STACK: u16 = id("ErrorStack");
-const STACK_TRACE_STRING: u16 = id("StackTraceString");
+const STACK_TRACE_VALUE: u16 = id("StackTraceValue");
+const IS_PENDING_STACK: u16 = id("IsPendingStack");
+const SET_ERROR_STACK: u16 = id("SetErrorStack");
+const CALL_SITE_SLOT: u16 = id("CallSiteSlot");
 const CAPTURE_STACK: u16 = id("CaptureStack");
 const DEFINE_DATA_PROPERTY_OR_THROW: u16 = id("DefineDataPropertyOrThrow");
 const DEFINE_OWN_PROPERTY_FROM_RECORD: u16 = id("DefineOwnPropertyFromRecord");
@@ -875,13 +878,22 @@ impl Exec<'_> {
                 let len =
                     self.heap.str_len(s) + body.as_string().map_or(0, |b| self.heap.str_len(b));
                 self.fuel -= COMPILE_FUEL_PER_UNIT * i64::from(len);
-                match kind {
+                let compiled = match kind {
                     None => eval::compile_eval(self.heap, s)?,
                     Some(kind) => {
                         let Some(b) = body.as_string() else {
                             return bad_argument(info.name);
                         };
                         eval::compile_function(self.heap, kind, s, b)?
+                    }
+                };
+                match compiled {
+                    Ok(f) => f,
+                    Err(e) => {
+                        // qjs's stack starts with the position: `at <input>:line:col`.
+                        let err = realm::new_error(self.heap, ErrorKind::SyntaxError, &e.message)?;
+                        self.set_stack_at(err, self.pc, Some((e.line, e.col)))?;
+                        return Err(Fault::throw(err));
                     }
                 }
             }
@@ -1212,23 +1224,31 @@ impl Exec<'_> {
                     ObjectClass::Error.slots(),
                 )?)
             }
-            ERROR_STACK => realm::error_stack_slot(self.heap, a0),
-            STACK_TRACE_STRING => {
+            ERROR_STACK => realm::error_stack_raw(self.heap, a0),
+            STACK_TRACE_VALUE => {
                 // The caller's frames (the builtin calling this is left out), below the
                 // topmost call of `a0` if it is a function (D2010).
-                let limit = realm::stack_trace_limit(self.heap);
-                let trace = self.stack_trace_from(self.pc, true, a0.as_object(), limit);
-                Value::string(self.heap.alloc_str(&trace)?)
+                self.new_stack(self.pc, true, a0.as_object(), None)?
             }
             CAPTURE_STACK => {
                 let Some(o) = a0.as_object() else {
                     return bad_argument(info.name);
                 };
-                let limit = realm::stack_trace_limit(self.heap);
-                let trace = self.stack_trace_from(self.pc, true, None, limit);
-                let s = self.heap.alloc_str(&trace)?;
-                realm::set_error_stack(self.heap, o, s)?;
+                let v = self.new_stack(self.pc, true, None, None)?;
+                realm::set_error_stack(self.heap, o, v)?;
                 Value::UNDEFINED
+            }
+            IS_PENDING_STACK => Value::bool(super::stack::is_pending_stack(self.heap, a0)),
+            SET_ERROR_STACK => {
+                let Some(o) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                realm::set_error_stack(self.heap, o, arg(self, 1))?;
+                Value::UNDEFINED
+            }
+            CALL_SITE_SLOT => {
+                let i = arg(self, 1).as_int().unwrap_or(-1);
+                super::stack::callsite_slot(self.heap, a0, i as u32)?
             }
             DEFINE_DATA_PROPERTY_OR_THROW => {
                 let Some(o) = a0.as_object() else {
@@ -2293,7 +2313,11 @@ impl Exec<'_> {
         }
         let ctors = intrinsic_obj(self.heap, Intrinsic::Constructors);
         let ckey = self.heap.intern(k)?;
-        let Some(f) = self.heap.get_own_property(ctors, ckey).and_then(|p| p.value()) else {
+        let Some(f) = self
+            .heap
+            .get_own_property(ctors, ckey)
+            .and_then(|p| p.value())
+        else {
             return bad_argument("InstallPrototype");
         };
         let Some(fo) = f.as_object() else {
@@ -2451,6 +2475,7 @@ impl Exec<'_> {
             "%IteratorHelperPrototype%" => Some(Intrinsic::IteratorHelperProto),
             "%WrapForValidIteratorPrototype%" => Some(Intrinsic::WrapForValidIteratorProto),
             "%TypedArray%" => Some(Intrinsic::TypedArrayCtor),
+            "%CallSitePrototype%" => Some(Intrinsic::CallSiteProto),
             // `X.prototype` of a constructor the prelude has not installed yet.
             _ => Intrinsic::prototype_of(name.strip_suffix(".prototype")?),
         };

@@ -240,8 +240,7 @@ impl Exec<'_> {
             Ok(st) => Ok(st),
             Err(f) => {
                 let pc = self.pc;
-                let exc = self.fault_value(f, Some(pc));
-                Ok(self.throw_value(exc, pc))
+                Ok(self.throw_fault(f, pc))
             }
         }
     }

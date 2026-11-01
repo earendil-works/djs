@@ -1,0 +1,34 @@
+length,name,isError,captureStackTrace,stackTraceLimit,prototype
+length,name,isError,captureStackTrace,stackTraceLimit,prototype
+Array length name false
+ArrayBuffer length name false
+BigInt length name true
+Boolean length name true
+DataView length name true
+Date length name true
+Error length name true
+EvalError length name true
+Function length name true
+Int8Array length name true
+Iterator length name true
+Map length name false
+Number length name true
+Object length name true
+Promise length name false
+RangeError length name true
+RegExp length name false
+Set length name false
+String length name true
+Symbol length name true
+TypeError length name true
+Uint8Array length name true
+WeakMap length name true
+WeakRef length name true
+AggregateError length name true
+SuppressedError length name true
+TypedArray length name false
+AsyncFunction length name true
+GeneratorFunction length name true
+length,name,revocable
+{"value":{},"writable":false,"enumerable":false,"configurable":false} true
+=== completed

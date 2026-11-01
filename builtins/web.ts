@@ -12,7 +12,7 @@ function DOMExceptionPrototypeObject(): Obj {
 /** A new DOMException (the errors of atob and btoa). */
 function NewDOMException(message: Str, name: Str): Obj {
   const o: Obj = DOMExceptionCreate(DOMExceptionPrototypeObject(), name, message);
-  CaptureStack(o);
+  RecordStack(o);
   return o;
 }
 
@@ -34,7 +34,7 @@ function DOMExceptionConstructor(message?: Value, name?: Value): Obj {
     proto = DOMExceptionPrototypeObject();
   }
   const o: Obj = DOMExceptionCreate(AsObj(proto), nm, msg);
-  CaptureStack(o);
+  RecordStack(o);
   return o;
 }
 

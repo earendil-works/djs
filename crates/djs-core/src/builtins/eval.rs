@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use crate::compiler::{self, CompileErrorKind, CompileOptions, DynamicKind};
 use crate::heap::{Heap, HeapError, ObjectClass};
 use crate::interp::conv::Fault;
-use crate::interp::{ErrorKind, Intrinsic, realm};
+use crate::interp::{Intrinsic, realm};
 use crate::value::{Str, Value};
 
 /// The file name of dynamic code in stack traces, as qjs names it.
@@ -20,11 +20,33 @@ fn utf8(heap: &Heap, s: Str) -> Vec<u8> {
     heap.str_to_string(s).into_bytes()
 }
 
-fn compile_error(e: compiler::CompileError) -> Fault {
+/// A SyntaxError in dynamic code: its message and position (line, column) in the
+/// source as qjs numbers it, which the caller puts in the stack as qjs's first
+/// `<input>:line:col` frame (0106).
+pub(crate) struct SyntaxAt {
+    pub message: alloc::string::String,
+    pub line: u32,
+    pub col: u32,
+}
+
+/// What compiling dynamic code gives: the closure, or a SyntaxError with its position.
+pub(crate) type Compiled = Result<Result<Value, SyntaxAt>, Fault>;
+
+/// `col_shift`: what qjs's source has more at the start of line 1 (the Function
+/// constructor's source starts with `(`).
+fn compile_error(e: compiler::CompileError, col_shift: u32) -> Compiled {
     match e.kind {
-        CompileErrorKind::Syntax => Fault::error(ErrorKind::SyntaxError, e.message),
-        CompileErrorKind::OutOfMemory => Fault::heap(HeapError::OutOfMemory),
-        CompileErrorKind::HostOutOfMemory => Fault::heap(HeapError::HostOutOfMemory),
+        CompileErrorKind::Syntax => Ok(Err(SyntaxAt {
+            message: e.message,
+            line: e.line,
+            col: if e.line == 1 {
+                e.col + col_shift
+            } else {
+                e.col
+            },
+        })),
+        CompileErrorKind::OutOfMemory => Err(Fault::heap(HeapError::OutOfMemory)),
+        CompileErrorKind::HostOutOfMemory => Err(Fault::heap(HeapError::HostOutOfMemory)),
     }
 }
 
@@ -40,11 +62,12 @@ fn instantiate(heap: &mut Heap, template: crate::heap::layout::Ref) -> Result<Va
 /// (`Goal::Eval`: top-level declarations are locals of the call, strict eval steps
 /// 16-17), returned as a closure that the builtin calls with `this` = the global object;
 /// the call returns the completion value.
-pub(crate) fn compile_eval(heap: &mut Heap, src: Str) -> Result<Value, Fault> {
+pub(crate) fn compile_eval(heap: &mut Heap, src: Str) -> Compiled {
     let bytes = utf8(heap, src);
-    let template =
-        compiler::compile(heap, &bytes, &CompileOptions::eval(FILE)).map_err(compile_error)?;
-    instantiate(heap, template)
+    match compiler::compile(heap, &bytes, &CompileOptions::eval(FILE)) {
+        Ok(template) => Ok(Ok(instantiate(heap, template)?)),
+        Err(e) => compile_error(e, 0),
+    }
 }
 
 /// CreateDynamicFunction's parse (20.2.1.1.1, steps 6-17): builds the sourceText from the
@@ -55,7 +78,7 @@ pub(crate) fn compile_function(
     kind: DynamicKind,
     params: Str,
     body: Str,
-) -> Result<Value, Fault> {
+) -> Compiled {
     let mut src = Vec::new();
     src.extend_from_slice(kind.prefix().as_bytes());
     src.extend_from_slice(b" anonymous(");
@@ -64,13 +87,14 @@ pub(crate) fn compile_function(
     src.extend_from_slice(b"\n) {\n");
     src.extend_from_slice(&utf8(heap, body));
     src.extend_from_slice(b"\n}");
-    let template = compiler::compile_dynamic_function(
+    match compiler::compile_dynamic_function(
         heap,
         &src,
         &CompileOptions::script(FILE),
         kind,
         params_close,
-    )
-    .map_err(compile_error)?;
-    instantiate(heap, template)
+    ) {
+        Ok(template) => Ok(Ok(instantiate(heap, template)?)),
+        Err(e) => compile_error(e, 1),
+    }
 }

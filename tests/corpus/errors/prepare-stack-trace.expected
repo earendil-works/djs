@@ -1,0 +1,33 @@
+true,a,true,2 ["f|string|17|32|false|false|function","|string|18|13|false|false|function"]
+true,cannot read property 'x' of null,true,1 ["|string|20|11|false|false|function"]
+true,empty array,true,2 ["reduce|object|||true|false|function","|string|21|16|false|false|function"]
+true,object,true,1 ["|string|23|24|false|false|function"]
+["C|string|25|45|false|true|function","|string|26|33|false|false|function"]
+["|string|1|2|false|false|object","eval|object|||true|false|function","|string|28|15|false|false|function"]
+["|string|3|3|false|false|object","Function|object|||true|false|function","|string|29|15|false|false|function"]
+["<eval>|string|1|5|false|false|function","eval|object|||true|false|function","|string|30|15|false|false|function"]
+["anonymous|string|3|5|false|false|function","|string|31|25|false|false|function"]
+["thrower|string|32|41|false|false|function","|string|33|49|false|false|function","map|object|||true|false|function","middle|string|33|21|false|false|function","|string|34|13|false|false|function"]
+["af|string|35|51|false|false|function"]
+[object CallSite] isNative,isConstructor,getFileName,getFunction,getFunctionName,getLineNumber,getColumnNumber 0 true
+{"value":"CallSite","writable":false,"enumerable":false,"configurable":true} 0
+TypeError CallSite object expected
+TypeError CallSite object expected
+m s bf true
+arrow null
+    at <anonymous> (case:57:22)
+
+42 number
+undefined true
+outer:undefined:string:4
+    at <anonymous> (case:68:22)
+
+p1
+p0 2
+3 p1 3 p1 3
+set
+    at <anonymous> (case:81:22)
+ 
+    at <anonymous> (case:83:22)
+
+=== completed

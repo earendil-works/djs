@@ -98,6 +98,7 @@ mod fastpath;
 mod hot;
 #[cfg(test)]
 pub(crate) use hot::HOT_BACKEDGES;
+pub(crate) use stack::settled_stack;
 mod ic;
 mod intrinsics;
 mod iter;
@@ -106,6 +107,7 @@ pub(crate) mod late;
 pub(crate) mod native;
 pub(crate) mod promise;
 mod proxy;
+mod stack;
 pub(crate) mod suspend;
 
 /// The opcodes `Exec::fast_step` handles, as bytes for its `match`.
@@ -919,122 +921,6 @@ impl<'h> Exec<'h> {
         e
     }
 
-    /// Defines `e.stack` from the current frames, the innermost at `pc`.
-    pub(crate) fn set_stack(&mut self, e: Value, pc: u32) -> Result<(), HeapError> {
-        let Some(o) = e.as_object() else {
-            return Ok(());
-        };
-        let limit = realm::stack_trace_limit(self.heap);
-        let trace = self.stack_trace(pc, limit);
-        let s = self.heap.alloc_str(&trace)?;
-        realm::set_error_stack(self.heap, o, s)
-    }
-
-    /// The stack trace in QuickJS's format: one `    at name (file:line:col)` line per
-    /// frame, innermost first, at most `limit` lines (`Error.stackTraceLimit`, D2030).
-    /// Callers are positioned at their call (`ret_pc - 1`). Prelude frames are hidden,
-    /// except installed builtin methods, which show as `at name (native)`.
-    pub(crate) fn stack_trace(&self, pc: u32, limit: u32) -> String {
-        self.stack_trace_from(pc, false, None, limit)
-    }
-
-    /// [`Exec::stack_trace`]; with `skip_prelude`, frames of the prelude at the top of the
-    /// stack are left out too (an Error constructor does not show itself, as in qjs).
-    /// `skip_prelude`: leave out the prelude frames at the top (the calling builtin).
-    /// `below`: leave out every frame up to and including the topmost call of that
-    /// function (Error.captureStackTrace's constructorOpt, D2010); the trace is empty
-    /// if it is not on the stack.
-    pub(crate) fn stack_trace_from(
-        &self,
-        pc: u32,
-        mut skip_prelude: bool,
-        mut below: Option<Obj>,
-        limit: u32,
-    ) -> String {
-        use crate::heap::cells::{Object, Script, flags::OBJ_BUILTIN};
-        let prelude = intrinsic(self.heap, Intrinsic::PreludeScript).as_internal();
-        let mut out = String::new();
-        let (mut bp, mut hp, mut pc) = (self.bp, self.hp, pc);
-        let mut lines = 0;
-        if !self.has_frame() || limit == 0 {
-            return out;
-        }
-        loop {
-            let f = self.get(bp).as_object().expect("frame callee");
-            let t = self.heap.object_slot(f, 0).as_internal().expect("template");
-            let a = self.heap.arena();
-            let debug = crate::bytecode::template::debug_info(self.heap, t);
-            let script = debug.script;
-            let builtin = self.heap.cell_flags(f.offset()) & OBJ_BUILTIN != 0;
-            // Prelude frames: privileged templates (D1980), or the prelude's script.
-            let in_prelude = a.get(t, FuncTemplate::FLAGS) & func_flags::PRIVILEGED != 0
-                || (prelude.is_some() && prelude == script.get());
-            skip_prelude &= in_prelude;
-            let skipping = below.is_some();
-            if below == Some(f) {
-                below = None;
-            }
-            let name_of = |fallback: &str| {
-                let name = Atom::from_id(a.get(t, FuncTemplate::NAME));
-                if name.is_null() {
-                    String::from(fallback)
-                } else {
-                    self.heap.atom_name(name)
-                }
-            };
-            if skip_prelude || skipping {
-            } else if builtin {
-                // The installed name, not the prelude's internal function name.
-                let name = self
-                    .heap
-                    .get_own_property(f, crate::heap::atoms::NAME)
-                    .and_then(|p| p.value())
-                    .and_then(|v| v.as_string())
-                    .map(|s| self.heap.str_to_string(s))
-                    .unwrap_or_default();
-                out += &format!("    at {name} (native)\n");
-                lines += 1;
-            } else if !in_prelude {
-                let kind = func_flags::kind(a.get(t, FuncTemplate::FLAGS));
-                let name = if matches!(kind, func_flags::KIND_SCRIPT | func_flags::KIND_ASYNC_BODY)
-                {
-                    String::from("<eval>")
-                } else {
-                    name_of("<anonymous>")
-                };
-                let file = script
-                    .get()
-                    .and_then(|s| a.get(s, Script::NAME).get())
-                    .map(|n| self.heap.str_to_string(crate::value::Str(n)))
-                    .unwrap_or_default();
-                match crate::bytecode::lookup_line(bytes_of(self.heap, debug.lines), pc) {
-                    Some((l, c)) => out += &format!("    at {name} ({file}:{l}:{c})\n"),
-                    None => out += &format!("    at {name} ({file})\n"),
-                }
-                lines += 1;
-            }
-            let _ = Object::CLASS;
-            let cont = Continuation::from_flags(self.get(hp + frame::FLAGS).as_int().unwrap_or(0));
-            if cont.is_bottom() || lines >= limit {
-                break;
-            }
-            let ret_pc = self.get(hp + frame::RET_PC).as_int().unwrap_or(1) as u32;
-            pc = if cont.is_retry() {
-                ret_pc
-            } else {
-                ret_pc.saturating_sub(1)
-            };
-            let prev_bp = self.get(hp + frame::PREV_BP).as_int().unwrap_or(0) as u32;
-            hp = self.get(hp + frame::PREV_HP).as_int().unwrap_or(0) as u32;
-            bp = prev_bp;
-        }
-        if below.is_some() {
-            // constructorOpt was not on the stack.
-            out.clear();
-        }
-        out
-    }
-
     /// Collects if the heap asks for it (or always under `gc_stress`).
     #[inline(always)]
     fn safepoint(&mut self) {
@@ -1190,8 +1076,7 @@ impl<'h> Exec<'h> {
                 if retry && f.is_out_of_memory() && self.retry_after_collect(pc0, sp0) {
                     return None;
                 }
-                let exc = self.fault_value(f, Some(pc0));
-                self.throw_value(exc, pc0)
+                self.throw_fault(f, pc0)
             }
         }
     }

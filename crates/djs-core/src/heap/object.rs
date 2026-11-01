@@ -151,6 +151,12 @@ pub enum ObjectClass {
     /// A raw JSON object (`[[IsRawJSON]]`, JSON.rawJSON, D1611): frozen, null prototype,
     /// one own `rawJSON` string property, no slots.
     RawJSON = 29,
+    /// A stack frame given to `Error.prepareStackTrace` (qjs's CallSite, 0106, D2050):
+    /// slot 0 the function (null for a parse error position), 1 its name (a string or
+    /// null), 2 the file name (a string, null for a native frame), 3 the line and 4 the
+    /// column (int32, line 0 without a position), 5 whether it is native and 6 whether
+    /// it was called as a constructor (booleans).
+    CallSite = 34,
 }
 
 impl ObjectClass {
@@ -190,6 +196,7 @@ impl ObjectClass {
             33 => Some(ObjectClass::DisposableStack),
             30 => Some(ObjectClass::BigInt),
             29 => Some(ObjectClass::RawJSON),
+            34 => Some(ObjectClass::CallSite),
             _ => None,
         }
     }
@@ -226,6 +233,7 @@ impl ObjectClass {
             ObjectClass::DisposableStack => 3,
             ObjectClass::WeakRef => 1,
             ObjectClass::FinalizationRegistry => 5,
+            ObjectClass::CallSite => 7,
         }
     }
 
