@@ -1,15 +1,15 @@
 # Builtins: the TypeScript subset and the leaf rule
 
 `Array.prototype.map`, `JSON.stringify`, `Promise.all`, `Object.defineProperty`: a
-JavaScript engine is mostly its standard library, and most of a codemode script's time is
-spent in it. This page explains how djs writes its builtins, why almost none of them are
-hand-written Rust, and how the hot ones still run as compiled Rust.
+JavaScript engine is mostly its standard library, and most of a codemode script's time
+is spent in it. This page explains how djs writes its builtins, why almost none of them
+are hand-written Rust, and how the hot ones still run as compiled Rust.
 
 > **In short.** Hand-written Rust never calls back into JavaScript. It only provides
 > *leaf intrinsics*, operations that cannot run user code. Every builtin that might run
 > user code is written in a strict subset of TypeScript and compiled by djs-bgen to
-> bytecode that ships in the base snapshot, and, for the hot ones, also to resumable Rust
-> state machines (`@native`). Everyday calls with plain arguments skip both through
+> bytecode that ships in the base snapshot, and, for the hot ones, also to resumable
+> Rust state machines (`@native`). Everyday calls with plain arguments skip both through
 > `@fast` leaf entries.
 
 ## Why builtins cannot be ordinary Rust
@@ -23,10 +23,10 @@ every property read a possible call.
 In a conventional engine, such a builtin is a C or Rust function that calls the
 interpreter recursively whenever it reaches user code. djs cannot do that. A codemode
 script must be stoppable after any instruction, including the instructions of a `map`
-callback (G5, [what djs is for](introduction.md)). When the interpreter stops, everything
-it was doing must be in the arena, so that the VM can be copied into an image and
-resumed elsewhere. A Rust function halfway through its loop has state on the Rust stack,
-and that state cannot be saved.
+callback (the goal to [suspend anywhere](goals.md#suspend-anywhere)). When the
+interpreter stops, everything it was doing must be in the arena, so that the VM can be
+copied into an image and resumed elsewhere. A Rust function halfway through its loop has
+state on the Rust stack, and that state cannot be saved.
 
 So djs has one rule:
 
@@ -34,8 +34,6 @@ So djs has one rule:
 > limited to leaf intrinsics (`%ArrayPush`, `%StringIndexOf`,
 > `%DefineOwnPropertyFromRecord`, ...), which never run user code. Every builtin that
 > may run user code is written in the builtin language.
-
-ARCH.md ("The leaf rule") has the full statement.
 
 ## The builtin language
 
@@ -82,14 +80,15 @@ dense storage in Rust in one go when every element it looks at is a plain data e
 and returns `-2` when it cannot answer (a hole, an accessor, an object that is not an
 Array), so the loop below it handles the general case.
 
-The subset is small on purpose (builtins/README.md, D1171):
+The subset is small on purpose (D1171):
 
 - Only top-level functions with explicit types: `Value`, `Obj`, `Str`, `Sym`, `Fn`,
   `boolean`, and the numeric types `i32`, `u32` and `f64`. Numbers never mix types
   implicitly, so both backends (below) agree on every result.
-- No property access, object literals, closures, `new`, `switch`, `typeof` or generators.
-  `o.x` is `Get(o, "x")`, and user functions are called through `Call(f, thisArg, ...)`.
-  If something is awkward without them, the answer is a new intrinsic.
+- No property access, object literals, closures, `new`, `switch`, `typeof` or
+  generators. `o.x` is `Get(o, "x")`, and user functions are called through
+  `Call(f, thisArg, ...)`. If something is awkward without them, the answer is a new
+  intrinsic.
 - Conditions are booleans: there is no truthiness.
 
 Intrinsics are declared in `builtins/intrinsics.d.ts`, each tagged `@leaf` (never runs
@@ -105,11 +104,11 @@ them in `builtins/gen/resume-points.txt`, which is checked in, so a review shows
 builtin starts calling user code.
 
 > **Trade-off.** A subset of TypeScript over hand-written Rust builtins. The subset
-> keeps every builtin resumable: its state lives in frames in the arena, never on the Rust
-> stack. Builtins read like the spec they implement, and editors type-check them with
-> plain `tsc`. The cost: a compiler to maintain (djs-bgen), a style without property
-> syntax or closures, and builtins that run as interpreted bytecode unless they get one of
-> the faster paths below.
+> keeps every builtin resumable: its state lives in frames in the arena, never on the
+> Rust stack. Builtins read like the spec they implement, and editors type-check them
+> with plain `tsc`. The cost: a compiler to maintain (djs-bgen), a style without
+> property syntax or closures, and builtins that run as interpreted bytecode unless they
+> get one of the faster paths below.
 
 > **Trade-off.** Our own parser for the subset over the TypeScript compiler or oxc
 > (D1170). djs-bgen is a dependency-free Rust crate with a hand-written parser and type
@@ -119,36 +118,35 @@ builtin starts calling user code.
 
 ## Two backends from one source
 
-djs-bgen compiles every builtin twice (ARCH.md "The builtin language").
+djs-bgen compiles every builtin twice.
 
 **The bytecode backend** covers every builtin. bgen erases the types and writes
 `builtins/gen/prelude.js`: plain JavaScript with `%Name(...)` intrinsic calls, an
 installation call per builtin (`%InstallMethod`, `%InstallConstructor`, ..., D1172,
-D1310), and the list of `@native` and `@fast` builtins. djs compiles it in
-*privileged mode*, the only mode in which `%Name(...)` compiles: to the `call_intrinsic`
-opcode.
+D1310), and the list of `@native` and `@fast` builtins. djs compiles it in *privileged
+mode*, the only mode in which `%Name(...)` compiles: to the `call_intrinsic` opcode.
 
 <!-- gen:ops call_intrinsic -->
 | opcode | byte | immediates | size | pop → push | cost | description |
 | --- | ---: | --- | ---: | --- | --- | --- |
-| `call_intrinsic` | 157 | Intrinsic, Argc | 5 | imm1 → 1 | Call | `a1 .. an -> r`: privileged code only (docs/compiler.md 7.3). |
+| `call_intrinsic` | 157 | Intrinsic, Argc | 5 | imm1 → 1 | Call | `a1 .. an -> r`: privileged code only. |
 <!-- /gen -->
 
 The prelude runs once, when the base snapshot is built (D1321). Every VM starts as a
-copy of that image, with all builtins installed and compiled, so no VM ever compiles
-the prelude. Privileged templates keep no line tables or local names, which saves space
-in that image (D1430, D1980).
+copy of that image, with all builtins installed and compiled, so no VM ever compiles the
+prelude. Privileged templates keep no line tables or local names, which saves space in
+that image (D1430, D1980).
 
 **The Rust backend** is opt-in. A builtin tagged `@native` (about 30 of them: `map`,
-`forEach`, `filter`, the iteration helpers, `JSON.stringify`'s slow path, the Map and Set
-constructors, ...) is also compiled to a Rust state machine in
+`forEach`, `filter`, the iteration helpers, `JSON.stringify`'s slow path, the Map and
+Set constructors, ...) is also compiled to a Rust state machine in
 `crates/djs-core/src/builtins/gen/natives.rs` (D1632). bgen splits the function into
 basic blocks, and each block becomes one arm of a `match` on the state. A resume point
 ends a block. Here is the loop of `Array.prototype.map`, excerpted from the generated
-file. The source is the plain loop `for (let k = 0; k < len; k++) { if (HasProperty(o,
-k)) { ... } }`:
+file. The source is the plain loop
+`for (let k = 0; k < len; k++) { if (HasProperty(o, k)) { ... } }`:
 
-<!-- gen:excerpt crates/djs-core/src/builtins/gen/natives.rs "fn native_ArrayPrototypeMap(" "5 => {" 11 -->
+<!-- gen:excerpt crates/djs-core/src/builtins/gen/natives.rs "fn native_ArrayPrototypeMap(" "5 => {" 17 -->
 ```rust
 5 => {
     if (l3f < l1f) { st = 8; continue; } else { st = 7; continue; }
@@ -161,6 +159,12 @@ k)) { ... } }`:
     let v = ex.n_slot(2); return ex.n_ret(v);
 }
 8 => {
+    if { let a0 = ex.n_slot(0); let a1 = ex.n_slot(3); ex.n_dense_pre(a0, a1) } { st = 12; continue; } else { st = 9; continue; }
+}
+9 => {
+    // resume point: HasProperty
+    match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(3); ex.n_has_property(&[a0, a1], 10) }? { Flow::Inline => { st = 10; continue } Flow::Leave(s) => return Ok(s) }
+}
 ```
 <!-- /gen -->
 
@@ -168,15 +172,18 @@ A native builtin runs in a **native frame**: an ordinary frame record in the are
 a header bit set, its state in place of the program counter and its locals in the
 frame's slots (D1631). A typed local such as the counter `k` (`l3f` above) also lives in
 a Rust variable, but every write goes to the slot too (D2000), so the frame always holds
-the whole state. When the common case completes inline (`Flow::Inline`, for example
-`HasProperty` on a dense element), the arm continues in the same Rust loop. When a call
-needs a JavaScript frame (the callback, a getter), the native writes the callee's frame
-(for a plain closure in place, D2060) and returns to the interpreter (`Flow::Leave`),
-which runs it and later re-enters the state machine at the resume state. A loop
-back-edge (`n_backedge`) charges fuel and is a safepoint, so a `map` over a million
-elements can stop and be saved in the middle, like bytecode.
+the whole state. The common case stays in the same Rust loop. State 8 is a fused check
+(`n_dense_pre`, D2090): when `o` is an Array with an element at `k`, both
+`HasProperty(o, k)` and `Get(o, k)` would just answer from the dense storage, so it
+takes the element and jumps past both call states. Otherwise state 9 makes the
+`HasProperty` call, a resume point, which still completes inline (`Flow::Inline`) when
+no user code is involved. When a call needs a JavaScript frame (the callback, a getter),
+the native writes the callee's frame (for a plain closure in place, D2060) and returns
+to the interpreter (`Flow::Leave`), which runs it and later re-enters the state machine
+at the resume state. A loop back-edge (`n_backedge`) charges fuel and is a safepoint, so
+a `map` over a million elements can stop and be saved in the middle, like bytecode.
 
-Two rules keep this safe (ARCH.md "Generated state machines"):
+Two rules keep this safe:
 
 - **No collection inside a state arm.** An allocation never collects; it only sets a
   pending flag. The collector runs at state transitions (back-edges, and calls that
@@ -189,17 +196,18 @@ Two rules keep this safe (ARCH.md "Generated state machines"):
   backend. Results do not.
 
 Both backends must behave the same, and they are tested against each other: `djs run`,
-the difftest runner and the test262 runner take `--backend bytecode|native`, and the gate
-runs the corpus with both (D1635, [How djs is tested](testing.md)).
+the difftest runner and the test262 runner take `--backend bytecode|native`, and the
+gate runs the corpus with both (D1635, [How djs is tested](testing.md)).
 
 > **Trade-off.** An opt-in Rust backend over making every builtin native. Generated Rust
-> runs much faster than the same builtin as bytecode (when it landed, 3.4 times for `map`
-> and 5.3 times on the higher-order benchmark), but every native function adds wasm
-> code, and wasm size is part of startup (G2). The native API is kept out of line in
-> wasm to limit that cost (D1634), and `scripts/native-sizes.sh` prints the size per
-> function. A builtin becomes `@native` only when a benchmark shows
-> that it is hot. The cost of having the option: two implementations of every native
-> builtin's semantics to keep equal, which is why both are tested in the gate.
+> runs much faster than the same builtin as bytecode (when it landed, 3.4 times for
+> `map` and 5.3 times on the higher-order benchmark), but every native function adds
+> wasm code, and wasm size is part of startup ([fast startup in
+> wasm](goals.md#fast-startup-in-wasm)). The native API is kept out of line in wasm to
+> limit that cost (D1634), and `scripts/native-sizes.sh` prints the size per function. A
+> builtin becomes `@native` only when a benchmark shows that it is hot. The cost of
+> having the option: two implementations of every native builtin's semantics to keep
+> equal, which is why both are tested in the gate.
 
 ## `@fast`: leaf entries for everyday calls
 
@@ -213,11 +221,11 @@ builtin runs as usual. About 80 builtins have one.
 
 An entry is allowed to answer only when nothing observable can happen: primitive
 arguments, dense arrays whose elements are plain data, no proxies. Every case that would
-throw declines, so errors and their stack traces always come from the builtin itself.
-An entry that reaches the heap cap declines too (D1910), so that the builtin's own
+throw declines, so errors and their stack traces always come from the builtin itself. An
+entry that reaches the heap cap declines too (D1910), so that the builtin's own
 allocations collect and retry. A builtin is `@fast` or `@native`, not both, except
-`Array.prototype.push` (D2020): the leaf covers the common case, and the bytecode version
-handles the rest.
+`Array.prototype.push` (D2020): the leaf covers the common case, and the bytecode
+version handles the rest.
 
 Here is the slow path at work. The array has a getter at index 1, so `includes` cannot
 use its fast entry or its dense leaf and runs the getter from its loop. The `map`
@@ -249,26 +257,26 @@ true
 > calls codemode scripts make most. The cost: each entry duplicates its builtin's logic
 > for the cases it accepts, and nothing but tests keeps them in sync. The corpus checks
 > the entries against QuickJS, including every case where they must decline, and the
-> gate's bytecode-backend run, which never takes them, keeps testing the TypeScript path.
+> gate's bytecode-backend run, which never takes them, keeps testing the TypeScript
+> path.
 
 ## Where to look
 
-- [builtins/README.md](../../builtins/README.md): the subset, the tags and the leaf
-  pattern, with a worked example.
 - `builtins/*.ts` and [builtins/intrinsics.d.ts](../../builtins/intrinsics.d.ts): the
   sources and the intrinsic declarations ([reference](ref-intrinsics.md)).
-- `crates/djs-bgen/`: the parser, checker, resume-point analysis (`analysis.rs`) and the
-  two emitters (`emit_js.rs`, `emit_rust.rs`).
-- `builtins/gen/`: the generated prelude and resume-point report;
-  `crates/djs-core/src/builtins/gen/natives.rs`: the generated state machines.
-- `crates/djs-core/src/interp/run/native.rs`: native frames;
-  `crates/djs-core/src/builtins/fast.rs` and `dense.rs`: the `@fast` entries and dense
-  leaves.
-- ARCH.md, "Builtins".
+- [`crates/djs-bgen/`](../../crates/djs-bgen/): the parser, checker, resume-point
+  analysis (`analysis.rs`) and the two emitters (`emit_js.rs`, `emit_rust.rs`).
+- [`builtins/gen/`](../../builtins/gen/): the generated prelude and resume-point report;
+  [`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs):
+  the generated state machines.
+- [`crates/djs-core/src/interp/run/native.rs`](../../crates/djs-core/src/interp/run/native.rs):
+  native frames;
+  [`crates/djs-core/src/builtins/fast.rs`](../../crates/djs-core/src/builtins/fast.rs)
+  and `dense.rs`: the `@fast` entries and dense leaves.
 
 Decisions on this page:
 
-<!-- gen:decisions D1170 D1171 D1172 D1270 D1310 D1321 D1430 D1631 D1632 D1633 D1634 D1635 D1801 D1850 D1900 D1910 D2000 D2020 D2060 -->
+<!-- gen:decisions D1170 D1171 D1172 D1270 D1310 D1321 D1430 D1631 D1632 D1633 D1634 D1635 D1801 D1850 D1900 D1910 D2000 D2020 D2060 D2090 -->
 - D1170: djs-bgen is Rust with its own parser for the subset
 - D1171: Builtin subset rules
 - D1172: Generated prelude format and installation
@@ -288,4 +296,5 @@ Decisions on this page:
 - D2000: Typed locals of native builtins live in Rust variables, written through
 - D2020: `@fast` builtins are not also `@native`, except Array.prototype.push
 - D2060: Natives call plain closures by writing the frame in place
+- D2090: Fused dense HasProperty + Get in natives; one-pass string search and in-arena joins
 <!-- /gen -->

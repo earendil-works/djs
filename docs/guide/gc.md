@@ -1,10 +1,10 @@
 # The garbage collector
 
-Everything a djs VM keeps is in the arena, and the arena only grows by bumping. Something
-has to give the memory of dead objects back, and in djs that same thing decides what a
-snapshot contains and whether two runs of a program leave identical images. This
-chapter explains the collector, when it runs, what happens when memory runs out, and
-what it costs.
+Everything a djs VM keeps is in the arena, and the arena only grows by bumping.
+Something has to give the memory of dead objects back, and in djs that same thing
+decides what a snapshot contains and whether two runs of a program leave identical
+images. This chapter explains the collector, when it runs, what happens when memory runs
+out, and what it costs.
 
 > **In short.** djs uses a copying (Cheney) collector: it copies everything reachable
 > from the roots into a fresh arena, in breadth-first order, and drops the old one. The
@@ -16,9 +16,9 @@ what it costs.
 
 ## Copying, breadth-first
 
-A collection reserves a new arena as large as the old one's used part (which bounds
-what can be live), copies the `Roots` cell to offset 0, and then scans the new arena
-from the start, cell by cell (D1090):
+A collection reserves a new arena as large as the old one's used part (which bounds what
+can be live), copies the `Roots` cell to offset 0, and then scans the new arena from the
+start, cell by cell (D1090):
 
 ![A Cheney collection: live cells are copied from the old arena into a new one, which is scanned from offset 0 until the scan catches up with the copy point](img/cheney.svg)
 
@@ -26,13 +26,12 @@ For every traced field of a scanned cell, the target is copied to the end of the
 arena unless it already was, and the field is rewritten with the new offset. A copied
 cell gets the `FORWARDED` bit in its old header and its new offset in its old first
 payload word, which is why every cell kind has at least one. When the scan catches up
-with the copy point, everything reachable has been copied, and the old arena is
-dropped.
+with the copy point, everything reachable has been copied, and the old arena is dropped.
 
 What counts as a traced field comes from the layout table alone: a field declared as
 `Value` or `Ref` in `cells!` is traced, nothing else is (D1052). There is no per-kind
-tracing code to forget when a cell kind is added. A few kinds get extra treatment on
-the way:
+tracing code to forget when a cell kind is added. A few kinds get extra treatment on the
+way:
 
 - a reference to a **flattened rope** is redirected to its flat string, so the rope
   dies;
@@ -54,9 +53,9 @@ is the property snapshots and the [determinism checks](determinism.md) build on.
 > to-space, driven by the layout table. The costs are memory and copying. During a
 > collection the old and the new arena both exist, so the peak is about twice the live
 > data, plus what the host allocator fragments (D1990). And every live cell is copied
-> every time, including a 1 MiB tool result that never changes: there is no
-> non-moving space for large strings and buffers yet. Issue 0101 is designing an
-> in-place mark-compact collector to remove the doubled peak.
+> every time, including a 1 MiB tool result that never changes: there is no non-moving
+> space for large strings and buffers yet. An in-place mark-compact collector, which
+> would remove the doubled peak, is being designed.
 
 ## When it runs
 
@@ -95,8 +94,8 @@ Three rules make the collection points a function of the program alone:
   where the original would have (D1601);
 - the threshold is computed from the live size and the cap only, never from what the
   host allocator happened to reserve;
-- `run` does not collect when it starts, and nothing a stop does allocates in a way
-  that counts (D1710).
+- `run` does not collect when it starts, and nothing a stop does allocates in a way that
+  counts (D1710).
 
 So a program run in one go, in slices of 97 fuel, or with a snapshot and restore at
 every slice collects at the same instructions and leaves the same bytes. The gate checks
@@ -119,8 +118,7 @@ console.log(kept.length, kept[49].label, kept[49].round);
 
 On the docs site, the *Heap* tab shows this example's arena by cell kind after the run,
 and its *Collect now* button runs a collection in the page: most of the ten thousand
-objects disappear, and the fifty kept ones are packed in with the rest of the live
-heap.
+objects disappear, and the fifty kept ones are packed in with the rest of the live heap.
 
 ## Out of memory
 
@@ -129,13 +127,13 @@ script can catch, as in QuickJS, and it must happen at the same point in every r
 Since allocation never collects, the heap at the moment of failure may be mostly
 garbage, so djs does three things (D1600, D1700):
 
-1. **Collect and retry.** Before an out-of-memory error reaches JavaScript, the
-   failing step collects and runs once more. For bytecode, the step is the instruction:
-   instructions that allocate before they change anything (`put_field`, `add`,
-   `object`, a few intrinsic calls) have their operands put back on the stack, the heap
-   collects, and the instruction runs again (D1700). Native builtins do the same at the
-   points where their generated code holds no heap value outside the frame (D1900), and
-   `@fast` entries decline, so the builtin's own path retries (D1910).
+1. **Collect and retry.** Before an out-of-memory error reaches JavaScript, the failing
+   step collects and runs once more. For bytecode, the step is the instruction:
+   instructions that allocate before they change anything (`put_field`, `add`, `object`,
+   a few intrinsic calls) have their operands put back on the stack, the heap collects,
+   and the instruction runs again (D1700). Native builtins do the same at the points
+   where their generated code holds no heap value outside the frame (D1900), and `@fast`
+   entries decline, so the builtin's own path retries (D1910).
 2. **A preallocated error.** If the retry fails too, the realm's one
    `InternalError: out of memory` object is thrown. It is never allocated at the throw.
 3. **A reserve.** The arena's limit is the cap minus `min(cap / 32, 1 MiB)`. Throwing
@@ -147,11 +145,11 @@ arena cannot be reserved) is different: it is not a function of the program, so 
 not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D1690).
 
 > **Trade-off.** Retry at instruction granularity over collecting inside allocation.
-> Collecting on an allocation failure would rescue every allocation site, but every
-> Rust function that holds a heap value across an allocation would then need to root
-> it, in hundreds of places. Retrying the whole instruction needs a list of the
-> instructions that may retry and nothing else, at the price of an instruction that
-> runs twice when memory is tight.
+> Collecting on an allocation failure would rescue every allocation site, but every Rust
+> function that holds a heap value across an allocation would then need to root it, in
+> hundreds of places. Retrying the whole instruction needs a list of the instructions
+> that may retry and nothing else, at the price of an instruction that runs twice when
+> memory is tight.
 
 > **Trade-off.** Strong shapes and atoms that never die. Two kinds of heap data are
 > never collected: shapes, because weak transitions would make the shape tree depend on
@@ -169,7 +167,6 @@ not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D16
   from the layout table, and the verifier.
 - [`crates/djs-core/src/interp/run.rs`](../../crates/djs-core/src/interp/run.rs):
   safepoints and the retry of D1700.
-- ARCH.md, "Heap" (GC and the memory cap).
 
 Decisions on this page:
 

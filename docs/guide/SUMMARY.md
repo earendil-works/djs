@@ -1,6 +1,7 @@
 # The tour
 
 - [What djs is for](introduction.md)
+- [What djs optimizes for](goals.md)
 - [One arena: all state in a byte array](arena.md)
 - [Values and NaN-boxing](values.md)
 - [Cells, strings and objects](heap.md)

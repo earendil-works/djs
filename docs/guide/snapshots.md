@@ -1,11 +1,12 @@
 # Snapshots and images
 
 A codemode script that waits for a tool may wait for minutes, or for a human. Keeping a
-VM in memory all that time is wasteful, and a process restart would lose it. Goal G4 is
-that the whole VM can be saved at any point and continued later, in another process.
-After the previous chapters, there is not much left to explain: the state is one byte
-array without pointers. This chapter covers what an image is, how one is loaded
-safely, the one image every VM starts from, and what images cost.
+VM in memory all that time is wasteful, and a process restart would lose it. The goal of
+[snapshots](goals.md#snapshots) is that the whole VM can be saved at any point and
+continued later, in another process. After the previous chapters, there is not much left
+to explain: the state is one byte array without pointers. This chapter covers what an
+image is, how one is loaded safely, the one image every VM starts from, and what images
+cost.
 
 > **In short.** An image is the arena's bytes. Taking one is a copy; restoring one is a
 > check and a copy, with no fixups. An image loads only into the exact build that wrote
@@ -21,8 +22,8 @@ offset 0 to its end. It can be taken whenever `run` has returned: after `Done`, 
 tools pending. Nothing is serialized, because nothing needs to be:
 
 - every reference is an offset into the same bytes ([the arena](arena.md));
-- the interpreter's registers, the value stack and the frames are cells
-  ([the interpreter](interpreter.md));
+- the interpreter's registers, the value stack and the frames are cells ([the
+  interpreter](interpreter.md));
 - pending host calls, queued jobs, the inbox of tool results and the fuel debt are heap
   state ([suspension](suspension.md));
 - native code is referred to by index (builtins) or by host-assigned id (host
@@ -49,8 +50,8 @@ console.log(tagged.join(" "), [...seen.values()].join(""));
 ```
 <!-- /gen -->
 
-Taking an image right after a collection makes it small and canonical: no garbage, and
-a layout that depends only on the object graph ([the garbage collector](gc.md)). The
+Taking an image right after a collection makes it small and canonical: no garbage, and a
+layout that depends only on the object graph ([the garbage collector](gc.md)). The
 embedders do that when they keep an image (D1890); the stress tests also compare raw
 images taken at arbitrary stops, which must be identical too (D1725).
 
@@ -72,16 +73,16 @@ A mismatch is a `LoadError::BuildMismatch`, not an attempt. After the hashes,
 `from_bytes` **verifies** the image (D1056): it walks every cell, checks every traced
 field (a valid value pointing at the start of a cell of a fitting kind), the invariants
 of each kind, and that prototype chains and ropes are acyclic. A corrupt image is an
-error at load time. One that slipped past could still only cause a panic (a trap) or
-a wrong result, never undefined behavior, because every access is bounds-checked.
+error at load time. One that slipped past could still only cause a panic (a trap) or a
+wrong result, never undefined behavior, because every access is bounds-checked.
 
 > **Trade-off.** Raw images over a versioned serialization format. Images cost no code
-> to write or read and restore in a copy, and they capture everything, including
-> frames in the middle of a builtin. The cost: they are tied to one build. A VM saved
-> before a deploy cannot resume on the new engine. The durable record across versions is
-> a different mechanism: a journal of the run's external inputs, replayed on the new
-> engine and checked against canonical hashes (D1730, see
-> [the host interface](host.md)).
+> to write or read and restore in a copy, and they capture everything, including frames
+> in the middle of a builtin. The cost: they are tied to one build. A VM saved before a
+> deploy cannot resume on the new engine. The durable record across versions is a
+> different mechanism: a journal of the run's external inputs, replayed on the new
+> engine and checked against canonical hashes (D1730, see [the host
+> interface](host.md)).
 
 ## The base snapshot
 
@@ -89,8 +90,8 @@ Creating a realm means building a few thousand objects: the global object, every
 constructor and prototype, a thousand builtins compiled from the prelude. Doing that per
 VM would cost milliseconds, and codemode creates a VM per script. So it is done once, at
 build time. `crates/djs-prelude` has a build script that creates a VM with a host build
-of djs-core, runs the prelude that bgen generated ([builtins](builtins.md)), compacts and
-collects the heap, verifies the result, and writes it out; the library embeds it as
+of djs-core, runs the prelude that bgen generated ([builtins](builtins.md)), compacts
+and collects the heap, verifies the result, and writes it out; the library embeds it as
 `djs_prelude::BASE` (D1321). The wasm module carries it in its data section.
 
 `vm_new` copies the base into a fresh arena (`Vm::from_base`, which checks the header
@@ -98,8 +99,8 @@ and the build hash but skips the full walk, since the base was verified when it 
 built). That copy **is** startup: about 40 µs in wasm (D1990), most of it the copy of
 the base's bytes.
 
-Because it ships in every wasm module and is copied into every VM, the base has been
-put on a diet:
+Because it ships in every wasm module and is copied into every VM, the base has been put
+on a diet:
 
 - property tables, the atom table and the value stack are shrunk to their used size
   before the final collection (D1431);
@@ -128,16 +129,16 @@ pi's adapter uses images in two places (D1495, D1890):
 - **Waiting sessions.** `snapshot()` collects the session and takes its image while it
   waits for a tool; `resumeVm()` continues it, possibly in another process.
 
-How large are such images, and how should they be stored? Issue 0088 measured six
-realistic pi scripts at all 144 of their idle points. A collected image of a light
-session is about 500 KB, nearly all of it the base realm and pi's prelude, which are a
+How large are such images, and how should they be stored? A study measured six realistic
+pi scripts at all 144 of their idle points. A collected image of a light session is
+about 500 KB, nearly all of it the base realm and pi's prelude, which are a
 deterministic function of the engine build and the prelude's inputs. Compressed with
 that reference image as a dictionary, the same snapshot is 22 to 30 KB. The
 recommendation: keep raw images for same-build use, store them compressed against the
-reference, and rely on journal replay for durability across engine versions. ARCH's
-original plan of page-level deltas against a non-moving old generation was measured
-too and lost to the dictionary by a factor of four; it is superseded. The owner's
-decision on the rest is pending, so none of it is built yet.
+reference, and rely on journal replay for durability across engine versions. The
+original plan of page-level deltas against a non-moving old generation was measured too
+and lost to the dictionary by a factor of four; it is superseded. The owner's decision
+on the rest is pending, so none of it is built yet.
 
 > **Trade-off.** Whole images over deltas. A delta against the base or a previous
 > snapshot would be smaller, but a moving collector changes the offsets of everything it
@@ -154,9 +155,6 @@ decision on the rest is pending, so none of it is built yet.
   for the base image.
 - [`crates/djs-prelude/build.rs`](../../crates/djs-prelude/build.rs): how the base
   snapshot is made.
-- [work/issues/0088-snapshot-design-research.md](../../work/issues/0088-snapshot-design-research.md):
-  the measurements and designs for storing snapshots.
-- ARCH.md, "Snapshots (G4)".
 
 Decisions on this page:
 

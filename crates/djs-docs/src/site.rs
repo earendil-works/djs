@@ -58,13 +58,22 @@ pub fn summary(s: &str) -> Vec<Entry> {
 pub fn render_all(g: &mut Guide) -> Vec<(String, Page)> {
     let pages = page_set(g);
     let repo = repo();
+    let rev = source_rev(&repo);
     let mut out = Vec::new();
     let mut all: Vec<(String, &str, bool)> = g
         .pages
         .iter()
         .map(|(k, v)| (k.clone(), v.as_str(), true))
         .collect();
-    all.push(("decisions.md".into(), g.decisions_md.as_str(), false));
+    // The log's own preamble addresses contributors (format, append-only); on the site it
+    // gets an introduction for readers instead (D2102).
+    let entries = g
+        .decisions_md
+        .match_indices("\n## D")
+        .find(|(i, _)| g.decisions_md[i + 5..].starts_with(|c: char| c.is_ascii_digit()))
+        .map_or(g.decisions_md.as_str(), |(i, _)| &g.decisions_md[i + 1..]);
+    let log = format!("{DECISIONS_INTRO}\n{entries}");
+    all.push(("decisions.md".into(), log.as_str(), false));
     for (name, src, strict) in all {
         let mut env = render::Env {
             files: &g.cx.files,
@@ -72,12 +81,46 @@ pub fn render_all(g: &mut Guide) -> Vec<(String, Page)> {
             pages: &pages,
             repo: &repo,
             strict,
+            rev: &rev,
             errors: &mut g.cx.errors,
         };
         let page = render::render(&name, src, &mut env);
         out.push((name, page));
     }
     out
+}
+
+/// The top of the decision log page.
+const DECISIONS_INTRO: &str = "# Decision log
+
+While djs was built, every decision that others needed to know about was recorded, in the
+order it was made: what was decided and why, often with the measurements behind it. The
+chapters of this guide explain the decisions that matter for understanding djs; each
+mention of an ID such as D1050 links to its entry here.
+
+The entries are a working record, written for the people building djs: they name files
+of the repository and the issues in which the work happened, and a later entry may
+refine or replace an earlier one, saying so.
+";
+
+/// The commit source links point at: the one being deployed (`$GITHUB_SHA` in the Pages
+/// workflow), else the checkout's HEAD, else `main`.
+fn source_rev(repo: &Path) -> String {
+    if let Ok(sha) = std::env::var("GITHUB_SHA")
+        && !sha.is_empty()
+    {
+        return sha;
+    }
+    std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "main".to_string())
 }
 
 pub fn build(g: &mut Guide, out: &Path, wasm: &Path) -> Result<(), String> {

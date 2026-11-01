@@ -46,9 +46,9 @@ The tags in use, generated from the engine's layout export:
 A few of these deserve a word:
 
 - **`INT`** is a second form of Number: an `i32` in the payload. Loop counters, array
-  indices and lengths stay in this form, and the interpreter has fast paths for it.
-  `1` as `INT` and `1.0` as `f64` are different bits for the same JavaScript value, which
-  is why `==` on a Rust `Value` means *bit identity*, never JavaScript equality.
+  indices and lengths stay in this form, and the interpreter has fast paths for it. `1`
+  as `INT` and `1.0` as `f64` are different bits for the same JavaScript value, which is
+  why `==` on a Rust `Value` means *bit identity*, never JavaScript equality.
 - **`HOLE`** and **`UNINITIALIZED`** are internal markers: an empty slot in a sparse
   array literal, and a `let` binding still in its temporal dead zone. Neither can reach
   JavaScript code.
@@ -123,8 +123,8 @@ function 0 <anonymous>: params=2 locals=4 stack=1 captures=0
 
 A reference payload is a `u32` byte offset into the VM's **arena**, the single byte
 array that holds all VM state (D1051). Offset 0 is the `Roots` cell, so 0 doubles as
-"null", and the all-zero bit pattern is the number `+0`, not a reference. Freshly
-zeroed memory is therefore always safe for the garbage collector to scan.
+"null", and the all-zero bit pattern is the number `+0`, not a reference. Freshly zeroed
+memory is therefore always safe for the garbage collector to scan.
 
 Every offset points at a **cell**: an 8-byte header (kind, GC bits, flags, size)
 followed by the fields of that kind. A one-byte string, for example:
@@ -142,10 +142,10 @@ follows, and whose tail of value slots it scans:
 
 <!-- /gen -->
 
-These diagrams are drawn from `LAYOUTS`, the table the `cells!` macro generates
-(D1052). The same table drives the collector's tracing, the image verifier (D1056), the
-layout hash in every image's build hash, and the host's reader
-(`js/src/layout.generated.ts`, D1210).
+These diagrams are drawn from `LAYOUTS`, the table the `cells!` macro generates (D1052).
+The same table drives the collector's tracing, the image verifier (D1056), the layout
+hash in every image's build hash, and the host's reader (`js/src/layout.generated.ts`,
+D1210).
 
 ## How the host reads a value
 
@@ -161,9 +161,10 @@ if (hi >>> 16 !== TAG_PREFIX) {
 }
 ```
 
-That is what makes passing data out of the sandbox cheap (goal G1): a tool result that
-became a large array of objects in the VM is read by walking cells in wasm memory, with
-no serialization step inside the VM.
+That is what makes passing data out of the sandbox cheap (the goal of [cheap data
+passing](goals.md#cheap-data-passing)): a tool result that became a large array of
+objects in the VM is read by walking cells in wasm memory, with no serialization step
+inside the VM.
 
 ## Trade-offs
 
@@ -175,21 +176,23 @@ no serialization step inside the VM.
 
 > **Trade-off.** NaN-boxing over pointer tagging (V8's small integers). With a tagged
 > pointer word, every double that is not a small integer becomes a heap allocation.
-> Codemode scripts handle JSON with many non-integral numbers, and boxing them would
-> put pressure on the collector. NaN-boxing keeps every Number inline.
+> Codemode scripts handle JSON with many non-integral numbers, and boxing them would put
+> pressure on the collector. NaN-boxing keeps every Number inline.
 
 > **Trade-off.** `u32` offsets instead of pointers. Offsets make the heap position
 > independent: a snapshot is a copy of the arena, the arena can grow and move without
 > fixups, the host can read it, and a corrupt offset is a bounds-checked panic (a wasm
 > trap), never undefined behavior. The price is an add and a bounds check on every
-> access, and a 4 GiB limit per arena (offsets could be scaled by the 8-byte alignment if
-> that ever matters).
+> access, and a 4 GiB limit per arena (offsets could be scaled by the 8-byte alignment
+> if that ever matters).
 
 ## Where to look
 
-- `crates/djs-core/src/value.rs`: the `Value` type and the encoding.
-- `crates/djs-core/src/heap/cells.rs`: every cell kind ([all layouts](ref-cells.md)).
-- `js/src/reader.ts`: the host-side decoder.
+- [`crates/djs-core/src/value.rs`](../../crates/djs-core/src/value.rs): the `Value` type
+  and the encoding.
+- [`crates/djs-core/src/heap/cells.rs`](../../crates/djs-core/src/heap/cells.rs): every
+  cell kind ([all layouts](ref-cells.md)).
+- [`js/src/reader.ts`](../../js/src/reader.ts): the host-side decoder.
 
 Decisions on this page:
 

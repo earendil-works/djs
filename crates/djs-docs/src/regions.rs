@@ -376,6 +376,45 @@ fn dedent(lines: &[&str]) -> String {
     s
 }
 
+/// A word that points into the development records: a `.md` document or an issue number
+/// (`0080`).
+fn is_dev_ref(w: &str) -> bool {
+    let w = w.trim_end_matches(['.', ':', ';']);
+    w.ends_with(".md")
+        || (w.len() == 4 && w.starts_with('0') && w.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// Drops references to developer records from a quoted source comment, so that the
+/// guide stays self-contained (D2102): in each parenthesized group, the comma-separated
+/// parts that name a `.md` file or an issue go, and a group left empty goes with them
+/// (`only (docs/compiler.md 7.3).` -> `only.`, `(IteratorHelper, 0051)` ->
+/// `(IteratorHelper)`).
+fn without_dev_refs(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(open) = rest.find('(') {
+        let Some(len) = rest[open..].find(')') else {
+            break;
+        };
+        let inner = &rest[open + 1..open + len];
+        let kept: Vec<&str> = inner
+            .split(", ")
+            .filter(|part| !part.split_whitespace().any(is_dev_ref))
+            .collect();
+        if kept.is_empty() {
+            out.push_str(rest[..open].trim_end());
+        } else {
+            out.push_str(&rest[..open]);
+            out.push('(');
+            out.push_str(&kept.join(", "));
+            out.push(')');
+        }
+        rest = &rest[open + len + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
 fn fenced(lang: &str, body: &str) -> String {
     format!("```{lang}\n{}\n```\n", body.trim_end())
 }
@@ -427,7 +466,7 @@ fn ops_table(names: &[&str], page: &str, cx: &mut Ctx) -> String {
         let doc = cx
             .op_docs
             .get(o.name)
-            .map(|d| cell_text(d))
+            .map(|d| cell_text(&without_dev_refs(d)))
             .unwrap_or_default();
         let _ = writeln!(
             s,
@@ -460,7 +499,7 @@ fn intrinsics_table(cx: &mut Ctx) -> String {
         let doc = cx
             .intrinsic_docs
             .get(e.name)
-            .map(|d| cell_text(d))
+            .map(|d| cell_text(&without_dev_refs(d)))
             .unwrap_or_default();
         let _ = writeln!(s, "| {i} | `{}` | {kind} | {params} | {doc} |", e.name);
     }
@@ -470,6 +509,19 @@ fn intrinsics_table(cx: &mut Ctx) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn doc_refs_are_dropped_from_quoted_comments() {
+        assert_eq!(without_dev_refs("only (docs/compiler.md 7.3)."), "only.");
+        assert_eq!(
+            without_dev_refs("A label (symbolic labels, docs/compiler.md 4.3), more (x)."),
+            "A label (symbolic labels), more (x)."
+        );
+        assert_eq!(
+            without_dev_refs("of the realm (0039). Slot i (IteratorHelper, 0051)."),
+            "of the realm. Slot i (IteratorHelper)."
+        );
+    }
 
     #[test]
     fn args_may_be_quoted() {

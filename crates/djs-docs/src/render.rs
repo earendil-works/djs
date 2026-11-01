@@ -29,7 +29,10 @@ pub struct Env<'a> {
     /// The repository root, for checking links to its files.
     pub repo: &'a Path,
     /// Unknown references are errors (the guide); the decision log is rendered leniently.
+    /// Strict pages are also held to the self-containment rule (D2102, `check_prose`).
     pub strict: bool,
+    /// The commit source links point at (`source_url`).
+    pub rev: &'a str,
     pub errors: &'a mut Vec<String>,
 }
 
@@ -70,6 +73,9 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
     let mut toc = Vec::new();
     let mut title = String::new();
     let mut live_n = 0;
+    // For the rule that code paths under "Where to look" are source links (D2102).
+    let mut where_to_look = false;
+    let mut in_link = false;
     let mut i = 0;
     while i < events.len() {
         match &events[i] {
@@ -82,6 +88,12 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
                         text.push_str(t);
                     }
                     j += 1;
+                }
+                if env.strict {
+                    check_prose(&text, page, env);
+                }
+                if lvl == 2 {
+                    where_to_look = text == "Where to look";
                 }
                 // Decision headings (`D1050: Value encoding`) are anchored by their ID.
                 let id = match text.split_once(':') {
@@ -187,6 +199,7 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
                 title,
                 id,
             }) => {
+                in_link = true;
                 let dest = resolve_link(page, dest_url, env);
                 out.push(Event::Start(Tag::Link {
                     link_type: *link_type,
@@ -198,9 +211,24 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
                 continue;
             }
             Event::Text(t) => {
+                if env.strict {
+                    check_prose(t, page, env);
+                }
                 link_decisions(t, &mut out, env, page);
                 i += 1;
                 continue;
+            }
+            Event::End(TagEnd::Link) => in_link = false,
+            Event::Code(t) if env.strict => {
+                check_prose(t, page, env);
+                // Code a page points readers at is a link to the published source, made
+                // by `source_url`, never a bare path.
+                let path = t.trim_end_matches('/');
+                if where_to_look && !in_link && path.contains('/') && env.repo.join(path).exists() {
+                    env.errors.push(format!(
+                        "{page}: `{t}` under \"Where to look\": link it ([`{t}`](../../{t})) so it goes to the published source (D2102)"
+                    ));
+                }
             }
             _ => {}
         }
@@ -209,6 +237,11 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
     }
     let mut body = String::new();
     html::push_html(&mut body, out.into_iter());
+    // Source links (`source_url`) are marked, so that readers can tell them from pages.
+    let body = body.replace(
+        &format!("<a href=\"{REPO_URL}/"),
+        &format!("<a class=\"source\" href=\"{REPO_URL}/"),
+    );
     // "> **Trade-off.** ..." and "> **In short.** ...": plain quotes on GitHub, asides here.
     let body = body
         .replace(
@@ -286,8 +319,50 @@ fn resolve_link(page: &str, dest: &str, env: &mut Env) -> String {
         }
         return dest.to_string();
     }
-    let kind = if full.is_dir() { "tree" } else { "blob" };
-    format!("{REPO_URL}/{kind}/main/{rel}{frag}")
+    // The guide is self-contained (D2102): it may point at code, never at other
+    // documents of the repository as the place where something is explained.
+    if env.strict && rel.ends_with(".md") {
+        env.errors.push(format!(
+            "{page}: link to {rel}, a document outside the guide: explain it in the guide instead (D2102)"
+        ));
+    }
+    source_url(&rel, full.is_dir(), &frag, env.rev)
+}
+
+/// The one place source links are made: a repository path on GitHub, at the commit the
+/// site is built from, so that the code a page points at is the code it describes.
+pub fn source_url(rel: &str, dir: bool, frag: &str, rev: &str) -> String {
+    let kind = if dir { "tree" } else { "blob" };
+    format!("{REPO_URL}/{kind}/{rev}/{rel}{frag}")
+}
+
+/// The self-containment rule for prose (D2102): no bare goal numbers (`G2`: name the
+/// goal and link goals.md), no issue numbers (`0088`), and no mentions of documents
+/// outside the guide (`ARCH.md`, `docs/host.md`, `work/...`), in text or inline code.
+/// Code blocks are not prose.
+fn check_prose(text: &str, page: &str, env: &mut Env) {
+    for word in text.split(|c: char| c.is_whitespace() || "()[]{},;:\"'`“”‘’".contains(c)) {
+        let word = word.trim_end_matches(['.', '!', '?']);
+        if word.len() == 2 && word.starts_with('G') && matches!(word.as_bytes()[1], b'1'..=b'5') {
+            env.errors.push(format!(
+                "{page}: bare goal number {word}: name the goal and link it (goals.md) (D2102)"
+            ));
+        } else if word.len() == 4
+            && word.starts_with('0')
+            && word.bytes().all(|b| b.is_ascii_digit())
+        {
+            env.errors.push(format!(
+                "{page}: issue number {word}: the guide cannot point at work/issues; say what was found (D2102)"
+            ));
+        } else if word.starts_with("work/")
+            || matches!(word, "ARCH" | "TESTING")
+            || (word.ends_with(".md") && word.len() > 3 && !env.pages.contains(word))
+        {
+            env.errors.push(format!(
+                "{page}: mentions {word}, a document outside the guide: explain it in the guide instead (D2102)"
+            ));
+        }
+    }
 }
 
 /// `D1050` in prose becomes a link to the decision, with its title as the tooltip. In
@@ -353,6 +428,7 @@ mod tests {
             pages: &pages,
             repo,
             strict,
+            rev: "main",
             errors: &mut errors,
         });
         (r, errors)
@@ -360,7 +436,7 @@ mod tests {
 
     #[test]
     fn decisions_and_links() {
-        let md = "# Title\n\nSee D1050 and D9999, [values](values.md#x), [ARCH](../../ARCH.md), [log](../decisions.md#d1050), [gone](nope.md).\n\n## Sub `code`\n";
+        let md = "# Title\n\nSee D1050 and D9999, [values](values.md#x), [code](../../crates/djs-core/src/value.rs), [log](../decisions.md#d1050), [gone](nope.md).\n\n## Sub `code`\n";
         let (p, errors) = with_env(true, |env| render("p.md", md, env));
         assert_eq!(p.title, "Title");
         assert!(
@@ -368,10 +444,9 @@ mod tests {
                 .contains("href=\"decisions.html#d1050\" title=\"Value encoding\">D1050</a>")
         );
         assert!(p.html.contains("href=\"values.html#x\""));
-        assert!(
-            p.html
-                .contains(&format!("href=\"{REPO_URL}/blob/main/ARCH.md\""))
-        );
+        assert!(p.html.contains(&format!(
+            "<a class=\"source\" href=\"{REPO_URL}/blob/main/crates/djs-core/src/value.rs\""
+        )));
         assert!(p.html.contains("href=\"decisions.html#d1050\">log"));
         assert_eq!(p.toc, [(2, "sub-code".to_string(), "Sub code".to_string())]);
         assert_eq!(
@@ -382,6 +457,32 @@ mod tests {
         let (_, errors) = with_env(false, |env| {
             render("decisions.md", "D9999 [x](nope.md)", env)
         });
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn the_guide_is_self_contained() {
+        let md = "# T\n\nGoal G2 (see ARCH.md, `docs/host.md`, work/issues/x, 0088 and values.md); \
+                  [arch](../../ARCH.md).\n\n## Heading G4\n\n```js\nconst f = \"README.md\";\n```\n";
+        let (_, errors) = with_env(true, |env| render("p.md", md, env));
+        let short: Vec<&str> = errors
+            .iter()
+            .map(|e| e.split(':').nth(1).unwrap_or("").trim())
+            .collect();
+        assert_eq!(
+            short,
+            [
+                "bare goal number G2",
+                "mentions ARCH.md, a document outside the guide",
+                "mentions docs/host.md, a document outside the guide",
+                "mentions work/issues/x, a document outside the guide",
+                "issue number 0088",
+                "link to ARCH.md, a document outside the guide",
+                "bare goal number G4",
+            ]
+        );
+        // The decision log is a record, not explanation: exempt.
+        let (_, errors) = with_env(false, |env| render("decisions.md", md, env));
         assert!(errors.is_empty());
     }
 

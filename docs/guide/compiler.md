@@ -3,9 +3,9 @@
 A codemode script is compiled once, run once, and thrown away. Whatever the compiler
 does before the first instruction runs is pure latency, so djs compiles the way QuickJS
 does: a recursive-descent parser that emits bytecode *while* it parses, with no syntax
-tree in between. This page explains how that works for a language whose grammar
-is full of constructs that only make sense once you have read past them, and what the
-missing tree costs.
+tree in between. This page explains how that works for a language whose grammar is full
+of constructs that only make sense once you have read past them, and what the missing
+tree costs.
 
 > **In short.** The parser reads tokens and writes stack-machine bytecode directly.
 > Ambiguities (arrow heads, destructuring, TypeScript generics) are settled by scanning
@@ -93,50 +93,50 @@ lists every instruction; this page uses a handful:
 ## Ambiguity without backtracking
 
 JavaScript's grammar does not always say what a token starts until much later. Is
-`(a, b)` a parenthesized expression or the parameters of an arrow function? Is
-`[a, b]` an array literal or the target of a destructuring assignment `[a, b] = pair`?
-A parser that builds a tree can parse a "cover" form and reinterpret it afterwards. A
-parser that emits code as it goes has already committed to bytecode.
+`(a, b)` a parenthesized expression or the parameters of an arrow function? Is `[a, b]`
+an array literal or the target of a destructuring assignment `[a, b] = pair`? A parser
+that builds a tree can parse a "cover" form and reinterpret it afterwards. A parser that
+emits code as it goes has already committed to bytecode.
 
-djs follows one rule (D1080): **speculation never emits bytecode.** Every ambiguity
-is decided before anything is emitted for it:
+djs follows one rule (D1080): **speculation never emits bytecode.** Every ambiguity is
+decided before anything is emitted for it:
 
-- **Token scans.** For `(`, a scan on a copy of the lexer skips the balanced
-  parentheses and checks for `=>`. It bails out at the first token that cannot be in a
-  parameter list, so `(a + b) * c` costs a token or two. For `[` and `{`, a scan checks
-  whether the matching closer is followed by `=`, and remembers the answer for every
-  nested bracket it passed, so a large data literal is scanned once, not once per
-  nesting level.
+- **Token scans.** For `(`, a scan on a copy of the lexer skips the balanced parentheses
+  and checks for `=>`. It bails out at the first token that cannot be in a parameter
+  list, so `(a + b) * c` costs a token or two. For `[` and `{`, a scan checks whether
+  the matching closer is followed by `=`, and remembers the answer for every nested
+  bracket it passed, so a large data literal is scanned once, not once per nesting
+  level.
 - **Rewinding the lexer.** A checkpoint is the lexer state plus the current token, a
-  small struct that is copied. TypeScript's `f<T>(x)` versus `f < T > (x)` is decided by skipping a type
-  argument list speculatively and looking at what follows; if it was not one, the
-  lexer is put back. Nothing else needs to be restored, because nothing else changed.
-- **Deferred patterns.** In `let [a, b] = pair`, the pattern comes before its value,
-  but its code must run after. The parser skips the pattern with a bracket scan,
-  parses and emits the value, rewinds the lexer to the pattern and emits it, then jumps
-  forward past the value again (D1360).
+  small struct that is copied. TypeScript's `f<T>(x)` versus `f < T > (x)` is decided by
+  skipping a type argument list speculatively and looking at what follows; if it was not
+  one, the lexer is put back. Nothing else needs to be restored, because nothing else
+  changed.
+- **Deferred patterns.** In `let [a, b] = pair`, the pattern comes before its value, but
+  its code must run after. The parser skips the pattern with a bracket scan, parses and
+  emits the value, rewinds the lexer to the pattern and emits it, then jumps forward
+  past the value again (D1360).
 
 The one place where emitted code is rewritten is assignment: `a.b.c = v` has already
 emitted `get_field c` when the parser sees `=`, so it turns that last instruction into
 the matching store. That is a rewrite of one instruction, at the end of the buffer.
 
-> **Trade-off.** Lexer-only speculation over truncating emitted code. ARCH originally
-> planned checkpoints that would truncate the bytecode, constants and scope state back
-> to a saved point. Every piece of compiler state added later (child functions,
-> captures, handler entries, line entries) would have had to be part of that
-> checkpoint, and forgetting one is a bug that shows up only on unusual input. With
-> lexer-only checkpoints there is nothing to forget. The cost: some constructs are
-> scanned twice, once to decide and once to parse.
+> **Trade-off.** Lexer-only speculation over truncating emitted code. The original
+> design planned checkpoints that would truncate the bytecode, constants and scope state
+> back to a saved point. Every piece of compiler state added later (child functions,
+> captures, handler entries, line entries) would have had to be part of that checkpoint,
+> and forgetting one is a bug that shows up only on unusual input. With lexer-only
+> checkpoints there is nothing to forget. The cost: some constructs are scanned twice,
+> once to decide and once to parse.
 
 ## Names are resolved after parsing
 
 When the parser meets an identifier, it often cannot know what it refers to. `x` in an
-inner function may be a `var` its parent declares further down, a `let` that is still
-in its temporal dead zone, or a global. So the parser emits a scope-generic placeholder
-and records the name and scope in a side table. After the whole compilation unit is
-parsed, a **resolution pass** walks the functions in reverse creation order, which
-visits children before parents without recursion (D1081). For each name it decides the
-storage:
+inner function may be a `var` its parent declares further down, a `let` that is still in
+its temporal dead zone, or a global. So the parser emits a scope-generic placeholder and
+records the name and scope in a side table. After the whole compilation unit is parsed,
+a **resolution pass** walks the functions in reverse creation order, which visits
+children before parents without recursion (D1081). For each name it decides the storage:
 
 | binding | storage |
 | --- | --- |
@@ -190,21 +190,20 @@ function 0.0 bump: params=0 locals=0 stack=1 captures=1
 ```
 <!-- /gen -->
 
-`count` is captured by the arrow function, so the body keeps it in a box
-(`new_box`, then `put_box` and `get_box`), and `fclosure` copies the box reference into
-the new closure, where `bump` reaches it as capture 0 (`get_cap_chk`). Through a
-capture the TDZ check stays, because a closure can run before the declaration it
-captures has; in the body, where the read comes textually after the declaration, the
-resolver dropped it. `bump` itself is not captured, so it stays a plain local, and its
-store followed by a load became one `set_loc`.
+`count` is captured by the arrow function, so the body keeps it in a box (`new_box`,
+then `put_box` and `get_box`), and `fclosure` copies the box reference into the new
+closure, where `bump` reaches it as capture 0 (`get_cap_chk`). Through a capture the TDZ
+check stays, because a closure can run before the declaration it captures has; in the
+body, where the read comes textually after the declaration, the resolver dropped it.
+`bump` itself is not captured, so it stays a plain local, and its store followed by a
+load became one `set_loc`.
 
-> **Trade-off.** Boxes for every captured binding over closing over the stack.
-> QuickJS's closures point into the frame's variables until the frame returns, then
-> copy them out (`close_var`). djs pays an allocation per captured binding per scope
-> entry instead. In return no frame ever holds something a closure points into, so a
-> frame can be suspended, copied into a generator object or snapshotted as plain
-> values, and per-iteration `let` bindings in loops come for free: each iteration gets a
-> new box.
+> **Trade-off.** Boxes for every captured binding over closing over the stack. QuickJS's
+> closures point into the frame's variables until the frame returns, then copy them out
+> (`close_var`). djs pays an allocation per captured binding per scope entry instead. In
+> return no frame ever holds something a closure points into, so a frame can be
+> suspended, copied into a generator object or snapshotted as plain values, and
+> per-iteration `let` bindings in loops come for free: each iteration gets a new box.
 
 ## TypeScript is skipped while parsing
 
@@ -232,13 +231,12 @@ ts-blank-space so line and column numbers stay where they were (D1481).
 The bytecode is stack-based, with variable-length instructions: a `u8` opcode followed
 by little-endian immediates (local slots, atom ids, constant indexes, relative jump
 offsets). The instruction set is declared once, in the `ops!` table in
-`bytecode/ops.rs`, with each instruction's immediates, stack effect, fuel cost and
-flags (D1082, D1130). The emitter, the decoder, the disassembler, the stack-depth
-checker, the build hash and the [opcode reference](ref-opcodes.md) are all generated
-from that table.
+`bytecode/ops.rs`, with each instruction's immediates, stack effect, fuel cost and flags
+(D1082, D1130). The emitter, the decoder, the disassembler, the stack-depth checker, the
+build hash and the [opcode reference](ref-opcodes.md) are all generated from that table.
 
-There are no general superinstructions. What the compiler does instead is a small set
-of layout changes and peepholes over the phase-1 code (D1860):
+There are no general superinstructions. What the compiler does instead is a small set of
+layout changes and peepholes over the phase-1 code (D1860):
 
 - loops are **rotated**: the condition is tested at the bottom, so an iteration costs
   one conditional jump;
@@ -284,16 +282,16 @@ function 0 <anonymous>: params=2 locals=3 stack=3 captures=0
 
 The loop is entered with one jump to the condition at the bottom; every iteration after
 that is the body, `inc_loc`, the comparison and one backward conditional jump. Two more
-details show up here: `console` is the codemode body's second parameter (`get_arg
-arg1`), and `get_method "log" ic0` carries the number of its inline cache slot (D1620).
-Measured in wasm, rotation, the peepholes and the matching interpreter fast paths cut
-the instructions executed by the tightest benchmark loops by 35 to 38%.
+details show up here: `console` is the codemode body's second parameter
+(`get_arg arg1`), and `get_method "log" ic0` carries the number of its inline cache slot
+(D1620). Measured in wasm, rotation, the peepholes and the matching interpreter fast
+paths cut the instructions executed by the tightest benchmark loops by 35 to 38%.
 
 > **Trade-off.** A stack machine over registers. A register VM executes fewer
 > instructions, but allocating registers well needs either a syntax tree or a much
-> smarter single-pass allocator. A stack machine is the natural target for code
-> emitted in parse order. The cost is instruction count, which the peepholes, the
-> interpreter's fast paths and inline caches claw back where it matters.
+> smarter single-pass allocator. A stack machine is the natural target for code emitted
+> in parse order. The cost is instruction count, which the peepholes, the interpreter's
+> fast paths and inline caches claw back where it matters.
 
 ## Limits
 
@@ -309,20 +307,19 @@ REPL (D004, D1581).
 > whole functions: no constant folding across statements, no escape analysis, no
 > inlining. For code that runs once, that is the right trade: the compiler allocates
 > almost nothing, and compiling TypeScript's own `typescript.js` takes fewer wasm
-> instructions in djs than in quickjs-wasi (0096). What it costs is cleverness the
-> bytecode cannot have, and a parser that has to answer every ambiguity before it
-> emits.
+> instructions in djs than in quickjs-wasi, the QuickJS build pi uses today. What it
+> costs is cleverness the bytecode cannot have, and a parser that has to answer every
+> ambiguity before it emits.
 
 ## Where to look
 
-- [docs/compiler.md](../compiler.md): the full design: parser structure, every
-  ambiguity, the resolution pass, the encoding.
 - [`crates/djs-core/src/compiler/`](../../crates/djs-core/src/compiler/mod.rs): the
   parser (`parser.rs`, `expr.rs`, `stmt.rs`), the scans (`scan.rs`), resolution
   (`resolve.rs`), peepholes (`peephole.rs`), TypeScript (`ts.rs`).
 - [`crates/djs-core/src/bytecode/ops.rs`](../../crates/djs-core/src/bytecode/ops.rs):
   the instruction table.
-- `djs disasm file.js` prints the bytecode of any script ([docs/cli.md](../cli.md)).
+- `djs disasm file.js`, a command of djs's command-line tool, prints the bytecode of any
+  script, as the listings on this page show it.
 
 Decisions on this page:
 

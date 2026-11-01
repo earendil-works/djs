@@ -44,8 +44,8 @@ result completes it) and JS builtins tagged `@intrinsic`. The id is the immediat
 | 31 | `ArrayCreate` | leaf | 1 | ArrayCreate ( length ): RangeError above 2**32 - 1. |
 | 32 | `NewTypeError` | leaf | 1 | A new TypeError of the current realm. |
 | 33 | `NewNotConstructorError` | leaf | 1 | A TypeError "<name> is not a constructor" with f's internal name, as QuickJS words it. |
-| 34 | `NewSyntaxError` | leaf | 1 | A new SyntaxError of the current realm (0039). |
-| 35 | `NewReferenceError` | leaf | 1 | A new ReferenceError of the current realm (0051). |
+| 34 | `NewSyntaxError` | leaf | 1 | A new SyntaxError of the current realm. |
+| 35 | `NewReferenceError` | leaf | 1 | A new ReferenceError of the current realm. |
 | 36 | `NewRangeError` | leaf | 1 | A new RangeError of the current realm. |
 | 37 | `WellKnownSymbol` | leaf | 1 | The well-known symbol Symbol.<name>. |
 | 38 | `RealmIntrinsic` | leaf | 1 | A realm intrinsic object by name: ObjectPrototype, FunctionPrototype, ArrayPrototype, ErrorPrototype and the native error prototypes (TypeErrorPrototype, ...). |
@@ -98,7 +98,7 @@ result completes it) and JS builtins tagged `@intrinsic`. The id is the immediat
 | 85 | `CollectionSize` | leaf | 1 | The number of entries. |
 | 86 | `CollectionIterator` | leaf | 2 | A Map Iterator or Set Iterator over m (kind 0 keys, 1 values, 2 entries): it visits entries added while iterating and skips deleted ones. |
 | 87 | `CollectionIteratorNext` | leaf | 2 | %MapIteratorPrototype%.next / %SetIteratorPrototype%.next: the iterator result. TypeError "Map Iterator object expected" (or Set) for anything else. |
-| 88 | `IsOriginalCollectionAdder` | leaf | 2 | Whether `adder` is the installed Map.prototype.set (kind 0) or Set.prototype.add (1): the constructors then store directly (0080). |
+| 88 | `IsOriginalCollectionAdder` | leaf | 2 | Whether `adder` is the installed Map.prototype.set (kind 0) or Set.prototype.add (1): the constructors then store directly. |
 | 89 | `CollectionIteratorStep` | leaf | 1 | Advances an iterator to the next entry; false when done. |
 | 90 | `CollectionIteratorKey` | leaf | 1 | The key of the entry the last step reached. |
 | 91 | `CollectionIteratorValue` | leaf | 1 | The value of the entry the last step reached. |
@@ -147,15 +147,15 @@ result completes it) and JS builtins tagged `@intrinsic`. The id is the immediat
 | 134 | `StringCodePoints` | leaf | 1 | The code points of s as an array of strings (the string iterator's values). |
 | 135 | `SortPrimitives` | leaf | 1 | Sorts the dense array `list` in place by SortCompare without a comparefn (undefined last, then ToString order; stable) if every element is a primitive other than a symbol. Returns false, leaving it unchanged, otherwise. |
 | 136 | `ArraySpliceDense` | leaf | 4 | Splice's element moves in one step on a plain dense Array (no holes, default attributes, extensible, writable length, no index properties on the prototype chain): o[start .. start + deleteCount) becomes itemCount undefined slots and `length` follows. False, with nothing changed, for any other object. |
-| 137 | `ArrayCanPopDense` | leaf | 1 | Whether `ArrayPopDense(o)` applies: an Array with only dense elements, a writable length, its last element present and no index properties on its prototype chain, where pop's Get, DeletePropertyOrThrow and Set observe nothing else (0080). |
+| 137 | `ArrayCanPopDense` | leaf | 1 | Whether `ArrayPopDense(o)` applies: an Array with only dense elements, a writable length, its last element present and no index properties on its prototype chain, where pop's Get, DeletePropertyOrThrow and Set observe nothing else. |
 | 138 | `ArrayPopDense` | leaf | 1 | Array.prototype.pop of an array `ArrayCanPopDense` accepts. |
-| 139 | `ArrayFillDense` | leaf | 4 | fill's Sets on an Array while each is a plain store (an existing dense element, or an append or hole fill of an extensible Array without index properties on its prototype chain), from k up to fin: the index the general loop continues from (0080). |
-| 140 | `ArrayPushDense` | leaf | 2 | push(v)'s Set and length update in one step when the Set is a plain append to the Array `o` (extensible, writable length, no holes at its end, no index properties on its prototype chain). The new length, or -1 with nothing changed (0080). |
+| 139 | `ArrayFillDense` | leaf | 4 | fill's Sets on an Array while each is a plain store (an existing dense element, or an append or hole fill of an extensible Array without index properties on its prototype chain), from k up to fin: the index the general loop continues from. |
+| 140 | `ArrayPushDense` | leaf | 2 | push(v)'s Set and length update in one step when the Set is a plain append to the Array `o` (extensible, writable length, no holes at its end, no index properties on its prototype chain). The new length, or -1 with nothing changed. |
 | 141 | `ArraySearchDense` | leaf | 5 | The search loops of indexOf (mode 0: `from` up to len, strict equality), lastIndexOf (1: `from` down to 0) and includes (2: up to len, SameValueZero) over an Array whose elements in the range are all present in dense storage, where HasProperty and Get observe nothing: the index found or -1. -2, for the general loop, for anything else (a hole, a shorter array, another object). |
 | 142 | `ArraySliceDense` | leaf | 4 | slice's copy loop: `a[0 .. fin - k) = o[k .. fin)` when every element of `o` in the range is present in dense storage and `a` is an extensible Array without index properties (a fresh ArraySpeciesCreate result), so HasProperty, Get and CreateDataPropertyOrThrow observe nothing. False, with nothing changed, otherwise. |
 | 143 | `ArrayJoinDense` | leaf | 3 | join over o[0 .. len) when every element is present in dense storage and a primitive other than a symbol (ToString runs no user code): the string, or undefined for the general loop. |
-| 144 | `EnumerableOwnDataProperties` | leaf | 2 | EnumerableOwnProperties ( o, kind ) for kind 1 (values) and 2 (entries) in one step when no enumerable string-keyed own property is an accessor and `o` is not exotic (no Proxy): the array, or undefined for the general loop (0080). |
-| 145 | `TypedArraySetFromDense` | leaf | 2 | Writes values[0 .. length) into the typed array `o` (at least that long) when `values` is an Array whose elements are all present in dense storage and primitives of `o`'s content type (ToNumber / ToBigInt run no user code). False, with nothing written, otherwise (0080). |
+| 144 | `EnumerableOwnDataProperties` | leaf | 2 | EnumerableOwnProperties ( o, kind ) for kind 1 (values) and 2 (entries) in one step when no enumerable string-keyed own property is an accessor and `o` is not exotic (no Proxy): the array, or undefined for the general loop. |
+| 145 | `TypedArraySetFromDense` | leaf | 2 | Writes values[0 .. length) into the typed array `o` (at least that long) when `values` is an Array whose elements are all present in dense storage and primitives of `o`'s content type (ToNumber / ToBigInt run no user code). False, with nothing written, otherwise. |
 | 146 | `StrLocaleCompare` | leaf | 2 | localeCompare without Intl (as qjs): the difference of the first differing code points, else -1, 0 or 1 by length. |
 | 147 | `StrCharCodeAt` | leaf | 2 | The code unit at i as a Number, NaN out of range. |
 | 148 | `StrCodePointAt` | leaf | 2 | The code point at i (a surrogate pair combined), undefined out of range. |
@@ -249,7 +249,7 @@ result completes it) and JS builtins tagged `@intrinsic`. The id is the immediat
 | 236 | `PerformPromiseThen` | leaf | 4 | PerformPromiseThen ( promise, onFulfilled, onRejected, resultCapability ), 27.2.5.4.1, without the result: handlers that are not callable count as empty. |
 | 237 | `EnqueuePromiseResolveThenableJob` | leaf | 3 | Queues NewPromiseResolveThenableJob ( promise, thenable, then ), 27.2.2.2. |
 | 238 | `NewRecord` | leaf | 1 | A new internal Record with n slots, all undefined. |
-| 239 | `RecordGet` | leaf | 2 | Slot i of a Record, or of an object that keeps its state in slots (IteratorHelper, 0051). |
+| 239 | `RecordGet` | leaf | 2 | Slot i of a Record, or of an object that keeps its state in slots (IteratorHelper). |
 | 240 | `RecordSet` | leaf | 3 |  |
 | 241 | `NewBuiltinClosure` | leaf | 3 | A function (name "", `length`) that calls the builtin `kind` (the table in interp/run/intrinsics.rs: 0 PromiseResolveFunction, 1 PromiseRejectFunction, 2 GetCapabilitiesExecutor, 3 PromiseAllResolveElement, 4 PromiseAllSettledResolveElement, 5 PromiseAllSettledRejectElement, 6 PromiseAnyRejectElement, 7 PromiseThenFinally, 8 PromiseCatchFinally, 9 PromiseValueThunk, 10 PromiseThrower, 11 AsyncGeneratorAwaitReturnFulfilled, 12 AsyncGeneratorAwaitReturnRejected, 13 AsyncFromSyncIteratorUnwrap, 14 AsyncFromSyncIteratorCloseThrow, 15 ProxyRevokeFunction, 16 FromAsyncFulfilled, 17 FromAsyncRejected, 18 AsyncDisposeFulfilled, 19 AsyncDisposeRejected, 20 DecoratorAddInitializer, 21 DecoratorAccessGet, 22 DecoratorAccessSet, 23 DecoratorAccessHas, 24 DecoratorParamCall) with `this` = data and its own arguments. |
 | 242 | `GeneratorState` | leaf | 1 | The state of a generator object (not an async state), or -1 for anything else. |
@@ -279,7 +279,7 @@ result completes it) and JS builtins tagged `@intrinsic`. The id is the immediat
 | 266 | `JsonRawJSON` | leaf | 1 | JSON.rawJSON's work after ToString: a frozen, null-prototype RawJSON object with the own property rawJSON = text; SyntaxError "invalid rawJSON string" unless text is a JSON primitive without leading or trailing whitespace. |
 | 267 | `IsRawJSON` | leaf | 1 | Whether v has [[IsRawJSON]] (a JSON.rawJSON object). |
 | 268 | `JsonStringifyFast` | leaf | 2 | JSON.stringify(v, undefined, space) with gap already computed, for plain data: the string, undefined for an undefined result, or null when the value needs the full algorithm (accessors, toJSON, wrappers, exotic objects; nothing observable happened). TypeError "circular reference" and RangeError "Maximum call stack size exceeded" are final. |
-| 269 | `JsonStringifyFastAt` | leaf | 4 | JsonStringifyFast for an object the full algorithm reached, after its toJSON and replacer (its own toJSON is not looked at again), nested in the objects of the algorithm's `stack` (a cycle back to one throws; they set the indentation), with an array replacer's PropertyList or undefined: the string, or null when it is not plain data (0090). |
+| 269 | `JsonStringifyFastAt` | leaf | 4 | JsonStringifyFast for an object the full algorithm reached, after its toJSON and replacer (its own toJSON is not looked at again), nested in the objects of the algorithm's `stack` (a cycle back to one throws; they set the indentation), with an array replacer's PropertyList or undefined: the string, or null when it is not plain data. |
 | 270 | `JsonQuote` | leaf | 1 | QuoteJSONString ( value ), 25.5.2.3. |
 | 271 | `CreateDataProperty` | reentrant | 3 | CreateDataProperty ( O, P, V ): false if refused. |
 | 272 | `IsBigInt` | leaf | 1 |  |
@@ -315,7 +315,7 @@ result completes it) and JS builtins tagged `@intrinsic`. The id is the immediat
 | 302 | `InstallAccessor` | leaf | 4 | `@getter`/`@setter`: one half of an accessor (configurable, not enumerable). |
 | 303 | `InstallValue` | leaf | 4 | `@value`: a data property with `attrs` (writable 1, enumerable 2, configurable 4). |
 | 304 | `InstallIntrinsic` | leaf | 2 | Registers f so that privileged code can call it as %name(...). |
-| 305 | `MarkNative` | leaf | 2 | Makes the builtin f native builtin `index` of the generated table (0063): with native builtins on, its calls run the Rust state machine. |
+| 305 | `MarkNative` | leaf | 2 | Makes the builtin f native builtin `index` of the generated table: with native builtins on, its calls run the Rust state machine. |
 | 306 | `MarkFast` | leaf | 1 | Gives the builtin f its leaf fast path (`@fast`, D1850): with native builtins on, a call first tries the Rust function of the same name in builtins/fast.rs. |
 | 307 | `ArraySpeciesCreate` | builtin (JS) | 2 |  |
 | 308 | `ArrayConstructor` | builtin (JS) | 0 + rest |  |

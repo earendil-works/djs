@@ -1,16 +1,17 @@
 # The interpreter: frames in the heap
 
-The interpreter runs bytecode, and its shape is dictated by goal G5: execution must be
-able to stop between any two instructions and continue later, possibly in another
-process. An interpreter that calls itself recursively for every JavaScript call keeps
-half of the program's state on the Rust stack, where no snapshot can reach it. djs's
-interpreter never does. This page shows how calls, getters, conversions and exceptions
-work under that rule, and how the interpreter stays fast anyway.
+The interpreter runs bytecode, and its shape is dictated by the goal to [suspend
+anywhere](goals.md#suspend-anywhere): execution must be able to stop between any two
+instructions and continue later, possibly in another process. An interpreter that calls
+itself recursively for every JavaScript call keeps half of the program's state on the
+Rust stack, where no snapshot can reach it. djs's interpreter never does. This page
+shows how calls, getters, conversions and exceptions work under that rule, and how the
+interpreter stays fast anyway.
 
 > **In short.** The interpreter is one loop. A JavaScript call pushes a frame record
 > onto a value stack that lives in the arena and continues the loop; a return pops it.
-> An instruction that needs to run user code (a getter, `valueOf`, an iterator) pushes
-> a frame for it with a fixed *continuation* that says what to do with the result, and
+> An instruction that needs to run user code (a getter, `valueOf`, an iterator) pushes a
+> frame for it with a fixed *continuation* that says what to do with the result, and
 > finishes; it never resumes half-way. So the Rust stack is the same depth whatever
 > JavaScript does, and the arena alone describes where execution is.
 
@@ -71,13 +72,13 @@ console.log(depth(10000));
 <!-- /gen -->
 
 Ten thousand nested JavaScript calls use ten thousand frames in the arena and one Rust
-stack frame. The limit is the size of the value stack, 2²⁰ slots by default; beyond it
-a call throws `RangeError: Maximum call stack size exceeded`, the message pi's QuickJS
+stack frame. The limit is the size of the value stack, 2²⁰ slots by default; beyond it a
+call throws `RangeError: Maximum call stack size exceeded`, the message pi's QuickJS
 build and V8 give (D013).
 
 > **Trade-off.** A stackless interpreter over a recursive one. A recursive interpreter
-> gets its frames for free from the native stack and can call back into JavaScript
-> from anywhere in Rust. djs writes every frame into the arena instead, a few stores per
+> gets its frames for free from the native stack and can call back into JavaScript from
+> anywhere in Rust. djs writes every frame into the arena instead, a few stores per
 > call, and gives up calling JavaScript from Rust entirely (next section). What it gets
 > is that any instruction boundary is a complete, copyable state: suspension, snapshots
 > and fuel limits cost nothing extra.
@@ -91,8 +92,8 @@ instruction and wait. djs's rule is that **an instruction never resumes in the m
 (D1085):
 
 1. It runs its fast path, in plain Rust that runs no user code.
-2. If user code is needed, it pushes a frame for the callee, with a continuation in
-   the frame's flags, and is finished.
+2. If user code is needed, it pushes a frame for the callee, with a continuation in the
+   frame's flags, and is finished.
 3. When that frame returns, the continuation completes the instruction's job.
 
 There are only a few continuations:
@@ -133,10 +134,10 @@ pushes a frame for `%ToPrimitive` with `Retry`, which calls `valueOf` with `Push
 Three frames deep, and the Rust stack never grew. Each of those calls is an instruction
 boundary at which the VM could have stopped and been snapshotted.
 
-> **Trade-off.** Re-entry through frames over per-op resume states. ARCH first allowed
-> an instruction to keep "a small numbered resume state" so it could pick up in the
-> middle. Every such instruction would have needed its state saved somewhere a snapshot
-> can see, and a test for every state. Pushing a frame and finishing keeps the
+> **Trade-off.** Re-entry through frames over per-op resume states. The original design
+> allowed an instruction to keep "a small numbered resume state" so it could pick up in
+> the middle. Every such instruction would have needed its state saved somewhere a
+> snapshot can see, and a test for every state. Pushing a frame and finishing keeps the
 > interpreter free of that. The cost is speed on the slow path: an object operand to `+`
 > takes a call into a builtin and a second execution of the instruction, which is fine
 > because the fast path covers the common cases.
@@ -151,8 +152,8 @@ the call instruction. An `Entry` frame without a handler makes `run` return
 `Threw(value)`.
 
 `finally` blocks are compiled once and entered with `gosub`, which pushes a return
-address, and left with `ret` (D1084, D1250). Normal exit, `return`, `break` and a
-thrown exception all reach the same code, each with one value slot holding what to do
+address, and left with `ret` (D1084, D1250). Normal exit, `return`, `break` and a thrown
+exception all reach the same code, each with one value slot holding what to do
 afterwards:
 
 ```js
@@ -215,28 +216,28 @@ number where a bytecode frame has its `pc`, and the builtin's locals in the fram
 slots (D1631, D1632). When `map` calls its callback, it does not call it from Rust: it
 writes the callee's frame on top of its own, saves the state to resume at, and leaves.
 The loop runs the callback like any other closure, and its return re-enters the native
-frame at the saved state, one native run per callback call (D2060). A native builtin
-in the middle of a loop is therefore as suspendable as bytecode.
+frame at the saved state, one native run per callback call (D2060). A native builtin in
+the middle of a loop is therefore as suspendable as bytecode.
 
-Errors carry QuickJS-style stack traces, with the function names and source positions
-of the frames, read from the frame records and the templates' line tables (D1282).
+Errors carry QuickJS-style stack traces, with the function names and source positions of
+the frames, read from the frame records and the templates' line tables (D1282).
 
 ## Making it fast
 
 A straightforward loop that decodes an instruction, dispatches through a large `match`
 and returns a `Result` from every arm spends more time on its own bookkeeping than on
-simple instructions. djs keeps the general loop for the full semantics and puts a
-faster one in front of it:
+simple instructions. djs keeps the general loop for the full semantics and puts a faster
+one in front of it:
 
-- **The tier-0 loop** (`run_hot`, D1930) is the main loop. It keeps `pc`, `sp`, the
-  fuel and the current frame's data in Rust locals and handles the hottest cases
-  itself: locals, constants, int32 and float arithmetic, comparisons, jumps, calls of
-  plain closures and returns (D1931), inline-cache hits and dense array elements.
-  Anything else, and any case it declines (an int overflow, an object operand), it
-  hands to the general path (`step_once`), which runs that one instruction in place,
-  with identical fuel and safepoints, after the locals have been written back. Nothing
-  the tier-0 loop does itself can collect or run user code, which is why it may hold
-  the state in locals.
+- **The tier-0 loop** (`run_hot`, D1930) is the main loop. It keeps `pc`, `sp`, the fuel
+  and the current frame's data in Rust locals and handles the hottest cases itself:
+  locals, constants, int32 and float arithmetic, comparisons, jumps, calls of plain
+  closures and returns (D1931), inline-cache hits and dense array elements. Anything
+  else, and any case it declines (an int overflow, an object operand), it hands to the
+  general path (`step_once`), which runs that one instruction in place, with identical
+  fuel and safepoints, after the locals have been written back. Nothing the tier-0 loop
+  does itself can collect or run user code, which is why it may hold the state in
+  locals.
 - **Inline caches.** Property and global accesses carry a cache slot number (the `ic0`
   in the disassembly). A slot remembers where a property was found: a shape, a table
   index, or a prototype holder validated by an epoch (D1620, D1621). A hit is a compare
@@ -252,10 +253,8 @@ instructions slower (D1352).
 
 ## Where to look
 
-- [docs/compiler.md](../compiler.md) section 7: frames, calls, continuations,
-  exceptions, host calls, generators.
-- [`crates/djs-core/src/interp/frame.rs`](../../crates/djs-core/src/interp/frame.rs): the
-  frame layout and the continuations.
+- [`crates/djs-core/src/interp/frame.rs`](../../crates/djs-core/src/interp/frame.rs):
+  the frame layout and the continuations.
 - [`crates/djs-core/src/interp/run.rs`](../../crates/djs-core/src/interp/run.rs): the
   run loop and `step`; [`run/hot.rs`](../../crates/djs-core/src/interp/run/hot.rs): the
   tier-0 loop; [`run/ic.rs`](../../crates/djs-core/src/interp/run/ic.rs): inline caches.

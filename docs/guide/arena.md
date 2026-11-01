@@ -31,8 +31,8 @@ past the point where the VM could suspend. Native code is never referenced by po
 either: a native builtin is a `u16` index into a static table and a host function is a
 `u32` id that the host assigned.
 
-The arena starts with the **`Roots`** cell at offset 0. Everything live is reachable from
-it:
+The arena starts with the **`Roots`** cell at offset 0. Everything live is reachable
+from it:
 
 <!-- gen:cell Roots -->
 ![The Roots cell](gen/cell-Roots.svg)
@@ -52,10 +52,10 @@ header, and the cells sit back to back with no gaps:
 ![The arena: cells back to back from offset 0, the zeroed frontier, the GC threshold and the memory cap](img/arena.svg)
 
 The header's `size` is the size of the whole cell, so `offset + size` is the next cell,
-and anyone holding the bytes can walk the heap from 0 without knowing any cell kind.
-The garbage collector, the image verifier (D1056) and the host all do. On the docs site,
-the *Heap* tab of a live example walks the arena of the wasm VM in your browser this way,
-in a short loop of JavaScript, and counts the cells by kind:
+and anyone holding the bytes can walk the heap from 0 without knowing any cell kind. The
+garbage collector, the image verifier (D1056) and the host all do. On the docs site, the
+*Heap* tab of a live example walks the arena of the wasm VM in your browser this way, in
+a short loop of JavaScript, and counts the cells by kind:
 
 ```js live
 const rows = [];
@@ -70,15 +70,15 @@ console.log(rows.length, "rows,", text.length, "characters");
 ```
 <!-- /gen -->
 
-Offset 0 doubles as "null", because nothing ever refers to the roots cell. The
-all-zero bit pattern is also a valid "nothing" for every traced field: as a `Value`
-it is the number `+0`, and as a `Ref` it is null. Freshly zeroed memory is therefore
-always safe for the collector to scan, which is what lets allocation hand out zeroed
-bytes and fill them in later.
+Offset 0 doubles as "null", because nothing ever refers to the roots cell. The all-zero
+bit pattern is also a valid "nothing" for every traced field: as a `Value` it is the
+number `+0`, and as a `Ref` it is null. Freshly zeroed memory is therefore always safe
+for the collector to scan, which is what lets allocation hand out zeroed bytes and fill
+them in later.
 
 What the cell kinds are and what their fields mean comes from one declaration, the
-`cells!` macro in `heap/cells.rs` (D1052). The next chapter, and the
-[cell layouts reference](ref-cells.md), go through them.
+`cells!` macro in `heap/cells.rs` (D1052). The next chapter, and the [cell layouts
+reference](ref-cells.md), go through them.
 
 ## Allocation is a bump
 
@@ -98,8 +98,8 @@ pub fn alloc_cell(&mut self, kind: CellKind, size: u32) -> Result<u32, HeapError
 }
 ```
 
-The arena keeps a **zeroed frontier** up to 16 KiB beyond `len`, so most allocations
-are a compare and an add and never touch the `Vec` (D1261). Data that arrives with the
+The arena keeps a **zeroed frontier** up to 16 KiB beyond `len`, so most allocations are
+a compare and an add and never touch the `Vec` (D1261). Data that arrives with the
 allocation (a string's bytes, a cell the collector copies) is appended at the frontier
 instead of zeroed first and copied afterwards, so it is written once.
 
@@ -107,8 +107,8 @@ The important line is the one that is missing: **allocation never collects.** Cr
 the GC threshold only sets `gc_pending`. The collection runs at the next **safepoint**:
 an instruction boundary, a frame entry, a backward jump, a state transition of a native
 builtin. Between safepoints, Rust code can keep raw offsets in local variables without
-rooting them, because nothing moves them. This is what keeps the native builtins and
-the interpreter's slow paths simple; [the garbage collector](gc.md) has the rest of the
+rooting them, because nothing moves them. This is what keeps the native builtins and the
+interpreter's slow paths simple; [the garbage collector](gc.md) has the rest of the
 story.
 
 > **Trade-off.** Collect only at safepoints, not on allocation failure. A Rust function
@@ -134,8 +134,8 @@ The arena grows like a `Vec`, by reallocating, with two twists:
 
 When the *host* refuses memory below the cap (the `Vec` cannot grow), that is not the
 program's doing, so it is not a JavaScript error: the run stops with
-`Status::HostOutOfMemory` and the VM stays valid and idle (D1690). Keeping the two
-apart keeps the out-of-memory point a function of the program and the cap, which
+`Status::HostOutOfMemory` and the VM stays valid and idle (D1690). Keeping the two apart
+keeps the out-of-memory point a function of the program and the cap, which
 [deterministic runs](determinism.md) rely on.
 
 Because the arena can be reallocated, nothing outside it may keep a pointer into it
@@ -144,9 +144,8 @@ which wasm hosts do anyway, since linear memory itself can grow.
 
 ## Offsets, not pointers
 
-Every reference in the arena is a `u32` offset from its start: in a
-[value](values.md) the payload, in a `Ref` field the whole word. This one rule buys four
-things:
+Every reference in the arena is a `u32` offset from its start: in a [value](values.md)
+the payload, in a `Ref` field the whole word. This one rule buys four things:
 
 1. **Snapshots are a copy.** After a compacting collection, the arena bytes *are* the
    VM. There is no serializer to write or keep in sync with the object model, and a
@@ -159,23 +158,24 @@ things:
    indexing, with no `unsafe`. A bad offset from a VM bug or a corrupt image is a panic
    (a wasm trap) or a corrupt JS heap, never undefined behavior in the host.
 4. **The heap can move.** The collector compacts by copying into a fresh arena, and the
-   arena can be reallocated, without any reference outside it going stale: the
-   embedder holds values through handles (D1091), slot numbers in a table inside the
-   arena, never through offsets.
+   arena can be reallocated, without any reference outside it going stale: the embedder
+   holds values through handles (D1091), slot numbers in a table inside the arena, never
+   through offsets.
 
 > **Trade-off.** One arena of offsets over Rust-managed objects. The model for djs's
 > execution side, piccolo, keeps JavaScript objects as Rust allocations behind `Gc`
 > pointers (`gc-arena`), with the borrow checker guarding them. That gives type safety
 > for free, but the host cannot read such a heap and a snapshot needs a full graph
-> serializer: goals G1 and G4 again. djs gives up typed references: a cell offset is a
-> number, and code that reads the wrong field of the wrong cell is a logic bug the
+> serializer: the goals of [cheap data passing](goals.md#cheap-data-passing) and
+> [snapshots](goals.md#snapshots) again. djs gives up typed references: a cell offset is
+> a number, and code that reads the wrong field of the wrong cell is a logic bug the
 > verifier and the stress tests have to catch, not the compiler.
 
 > **Trade-off.** Bounds checks on every access. In wasm, every load is already checked
 > against linear memory, so the arena's checks are a second check (D016). They cost an
 > add and a compare per field access. Hoisting them to one check per cell or frame is an
-> open performance item (0081); skipping them would need `unsafe` and a decision of its
-> own. Release builds keep the checks but drop the offsets from the panic message, which
+> open performance item; skipping them would need `unsafe` and a decision of its own.
+> Release builds keep the checks but drop the offsets from the panic message, which
 > saved code size at the about 1,300 inlined access sites (D1573).
 
 > **Trade-off.** `u32` offsets limit an arena to 4 GiB. That is the whole wasm32 address
@@ -192,7 +192,6 @@ things:
   header and every cell kind.
 - [`crates/djs-core/src/heap/walk.rs`](../../crates/djs-core/src/heap/walk.rs): the cell
   walker and the verifier.
-- ARCH.md, "The Core Idea" and "Heap".
 
 Decisions on this page:
 

@@ -47,7 +47,7 @@ with them.
 | `enter_scope` | 35 | Scope | 3 | 0 → 0 | Free | Scope entry: TDZ setup, Boxes, hoisted block functions. |
 | `leave_scope` | 36 | Scope | 3 | 0 → 0 | Free | Scope exit. |
 | `iter_scope` | 37 | Scope | 3 | 0 → 0 | Free | Start of a `for (let ...)` iteration: fresh copies of the scope's captured bindings (`rebox`, CreatePerIterationEnvironment). |
-| `label` | 38 | LabelId | 5 | 0 → 0 | Free | A label position (symbolic labels, docs/compiler.md 4.3). |
+| `label` | 38 | LabelId | 5 | 0 → 0 | Free | A label position (symbolic labels). |
 | `get_loc` | 39 | Loc | 3 | 0 → 1 | Basic | `-> v` |
 | `put_loc` | 40 | Loc | 3 | 1 → 0 | Basic | `v ->` |
 | `set_loc` | 41 | Loc | 3 | 1 → 1 | Basic | `v -> v` |
@@ -55,7 +55,7 @@ with them.
 | `put_loc_chk` | 43 | Loc | 3 | 1 → 0 | Basic | `v ->`, ReferenceError if uninitialized. |
 | `set_loc_chk` | 44 | Loc | 3 | 1 → 1 | Basic | `v -> v`, ReferenceError if uninitialized. |
 | `set_loc_uninit` | 45 | Loc | 3 | 0 → 0 | Basic | Store the uninitialized marker. |
-| `inc_loc` | 46 | Loc | 3 | 0 → 0 | Basic | `loc = loc + 1` (`i++;`, `++i;` on an unchecked local, 0086): `inc` in place. An object takes `%ToNumeric` into the local first, then the instruction runs again. |
+| `inc_loc` | 46 | Loc | 3 | 0 → 0 | Basic | `loc = loc + 1` (`i++;`, `++i;` on an unchecked local): `inc` in place. An object takes `%ToNumeric` into the local first, then the instruction runs again. |
 | `dec_loc` | 47 | Loc | 3 | 0 → 0 | Basic | `loc = loc - 1`, as `inc_loc`. |
 | `get_arg` | 48 | Arg | 3 | 0 → 1 | Basic | `-> v` |
 | `put_arg` | 49 | Arg | 3 | 1 → 0 | Basic | `v ->` |
@@ -102,7 +102,7 @@ with them.
 | `copy_data_props` | 90 | U8 | 2 | 2 → 1 | Access | `obj src -> obj`: object spread / rest (flags select the variant). |
 | `delete` | 91 | – | 1 | 2 → 1 | Access | `obj key -> bool` |
 | `in` | 92 | – | 1 | 2 → 1 | Access | `key obj -> bool` |
-| `private_symbol` | 93 | Atom, U8 | 6 | 0 → 1 | Alloc | `-> sym`: a new private name (a private symbol described `#x`, docs/compiler.md 7.9). `flags`: `heap::cells::flags::SYM_PRIVATE_METHOD` (a method or accessor) and `SYM_PRIVATE_READONLY` (no setter). |
+| `private_symbol` | 93 | Atom, U8 | 6 | 0 → 1 | Alloc | `-> sym`: a new private name (a private symbol described `#x`). `flags`: `heap::cells::flags::SYM_PRIVATE_METHOD` (a method or accessor) and `SYM_PRIVATE_READONLY` (no setter). |
 | `get_private_field` | 94 | – | 1 | 2 → 1 | Access | `obj sym -> v`: `obj.#x` (own properties only, never a proxy trap; a getter is called). |
 | `put_private_field` | 95 | – | 1 | 3 → 0 | Access | `obj sym v ->`: `obj.#x = v` (a setter is called). |
 | `define_private_field` | 96 | U8 | 2 | 3 → 1 | Access | `obj sym v -> obj`: adds a private field (`kind` 0) or method (1), ignoring extensibility; TypeError if `obj` has it already. |
@@ -166,7 +166,7 @@ with them.
 | `construct_spread` | 154 | – | 1 | 2 → 1 | Call | `f args -> r` |
 | `super_call` | 155 | Argc | 3 | 2+imm0 → 1 | Call | `f a1 .. an newTarget -> r`: `super(...)` in a derived constructor: constructs `f` (the super constructor) with that new.target. |
 | `super_call_spread` | 156 | – | 1 | 3 → 1 | Call | `f args newTarget -> r`: `super(...args)` with an argument array (spread). |
-| `call_intrinsic` | 157 | Intrinsic, Argc | 5 | imm1 → 1 | Call | `a1 .. an -> r`: privileged code only (docs/compiler.md 7.3). |
+| `call_intrinsic` | 157 | Intrinsic, Argc | 5 | imm1 → 1 | Call | `a1 .. an -> r`: privileged code only. |
 | `generator_start` | 158 | Loc | 3 | 0 → 0 | Alloc | Generator function entry: creates the generator object, stores it in local `generator`, suspends the frame (to resume at the next instruction) and returns the object to the caller. |
 | `yield` | 159 | Loc | 3 | 1 → 2 | Alloc | `v -> received isReturn`: suspends the generator in local `generator`, handing `v` to the resumer. Resumed by `next(x)`: `x false`; by `return(x)`: `x true` (the code returns `x`, running finally blocks); `throw(e)` throws `e` here. |
 | `yield_star` | 160 | Loc | 3 | 1 → 2 | Alloc | `innerResult -> received isReturn`: `yield` for `yield*` in a sync generator: the resumer hands `innerResult` (the inner iterator's result object) on as it is, without reading `value` or wrapping it (GeneratorYield ( innerResult )). |

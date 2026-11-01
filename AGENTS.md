@@ -100,8 +100,15 @@ Rules:
   or `docs/guide/ref-*.md` by hand: `cargo run -q -p djs-docs -- regen` rewrites them,
   and merge-to-main does it after the rebase (scripts/regen.sh).
 - `cargo run -q -p djs-docs -- check` (part of the gate) fails on stale generated parts,
-  broken links, unknown decision IDs, and an example whose output changed. If the new
-  output is right, accept it with `regen --examples` and reread the text around it.
+  broken links, unknown decision IDs, the self-containment rule below, and an example
+  whose output changed. If the new output is right, accept it with `regen --examples`
+  and reread the text around it.
+- The guide is self-contained (owner's rule, D2102): a page explains what it needs in its
+  own words. No mentions of or links to ARCH.md, TESTING.md, docs/*.md, work/… or issue
+  numbers; goals by name with a link to goals.md, never "G2"; decisions explained in
+  words, the ID only as a citation (it links to the site's decision log); code only as
+  links to repository files, which the site turns into source links. `check` enforces
+  this; docs/guide/README.md has the details.
 - If a change makes a whole chapter wrong or calls for a new one, do not rewrite it as a
   side job: list it under `## Follow-ups`; the coordinator schedules it.
 

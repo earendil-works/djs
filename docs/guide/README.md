@@ -1,8 +1,29 @@
 # Writing the guide
 
 The guide explains djs to a human reader: how it works and why it is built that way. It
-is not a second ARCH.md. ARCH.md, docs/*.md and the decision log stay the detailed
-reference for people changing the code; the guide tells the story and links to them.
+is not a second ARCH.md: ARCH.md, docs/*.md and the decision log stay the detailed
+reference for people changing the code, and the guide tells the story in its own words.
+
+## The guide is self-contained (D2102)
+
+A reader of the site has the guide and nothing else, so a page never sends them to a
+document they don't have:
+
+- **Explain, don't refer.** Whatever a page needs from ARCH.md, TESTING.md, docs/*.md,
+  builtins/README.md or work/ is written in the page (or another guide page). Never
+  mention or link those files, or issue numbers (`0088`); say what was found instead.
+- **Goals by name.** The goals are explained in goals.md. Refer to one by its name and
+  link its section (`[snapshots](goals.md#snapshots)`), never by number ("G4").
+- **Decisions in words.** State what was decided and why. The ID (D1050) may follow as a
+  citation: on the site it links to the decision log page, which is part of the site.
+- **Source as source.** Pages may point at code, as links to repository files
+  (`[`crates/djs-core/src/value.rs`](../../crates/djs-core/src/value.rs)`). The site
+  turns them into links to the published source at the commit it was built from, marked
+  as source links. Under "Where to look", every path is such a link.
+
+`djs-docs check` enforces all of it on the pages in SUMMARY.md (code blocks are exempt,
+and so is the decision log, which is a record).
+
 
 `SUMMARY.md` lists the pages in reading order (mdBook's format). A `- [Title]()` entry
 is a chapter not written yet.
@@ -18,10 +39,10 @@ cargo run -q -p djs-docs -- build             # the site: target/docs-site/
 
 `build` renders every page plus the decision log, copies djs-wasm (the docs build from
 `scripts/build-wasm.sh --docs`, whose `djs_disasm` export gives edited examples their
-own bytecode listing; else the shipping build from `scripts/build-wasm.sh`; or `--wasm
-FILE`) and the host package with its types stripped by node, for the live examples.
-Open it over HTTP (`python3 -m http.server -d target/docs-site`); from `file://` the
-pages work but the examples show only their build-time output.
+own bytecode listing; else the shipping build from `scripts/build-wasm.sh`; or
+`--wasm FILE`) and the host package with its types stripped by node, for the live
+examples. Open it over HTTP (`python3 -m http.server -d target/docs-site`); from
+`file://` the pages work but the examples show only their build-time output.
 
 The site has a search box (`/` focuses it): `build` writes `search.json`, one entry per
 section of every page and the decision log, which the browser loads on first use.
@@ -57,8 +78,8 @@ in, so the Markdown reads the same on GitHub. Never edit it by hand.
 Examples (`js` blocks) are codemode async function bodies: `await` and `return` work at
 the top level and `console.log` prints. `run` executes them in a VM from the base
 snapshot, suspended and restored from its heap image every 50 fuel units. A `run` region
-is only rewritten by `regen --examples`: a changed output fails the gate, because it is a
-behavior change that someone should look at.
+is only rewritten by `regen --examples`: a changed output fails the gate, because it is
+a behavior change that someone should look at.
 
 A block marked ```` ```js live ```` becomes a live example on the site: edit and run it in
 djs-wasm in the browser, with its bytecode, a walk over the VM's heap, and its fuel slices
@@ -67,8 +88,8 @@ the widget.
 
 ## Checks
 
-`check` also renders every page, so it catches: a link to a page or repository file
-that does not exist (relative links are resolved from `docs/guide/`; links to
+`check` also renders every page, so it catches: a link to a page or repository file that
+does not exist (relative links are resolved from `docs/guide/`; links to
 `../decisions.md` go to the site's copy of the log), a decision ID in prose (D1050) that
 is not in the log, an unknown opcode, cell kind or generator, a missing diagram, a
 diagram in `gen/` that nothing generates.
@@ -81,8 +102,9 @@ diagram in `gen/` that nothing generates.
   (generated), not paraphrases.
 - Give every design choice its cost: `> **Trade-off.** X over Y. Why ... The cost: ...`.
   These are what the guide is for.
-- End with "Where to look" (files) and the page's decisions (`gen:decisions`).
-- Plain, direct sentences. Cite decisions by ID instead of retelling their history.
+- End with "Where to look" (source links) and the page's decisions (`gen:decisions`).
+- Plain, direct sentences. Explain a decision's substance, then cite its ID; leave its
+  history to the log.
 - Diagrams: generated from data where the data exists; otherwise hand-drawn SVG in
   `img/`, drawn with the classes of the generated ones (`text`, `.small`, `.mono`,
   `.box`, `.host`, `.engine`, `.arena`, `.cell`, `.arrow`, ...: `RULES` in

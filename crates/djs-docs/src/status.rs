@@ -233,7 +233,15 @@ fn provenance(st: &Status, keys: &[&str]) -> String {
     let mut at: Vec<String> = keys
         .iter()
         .filter_map(|k| st.get(k))
-        .map(|(_, c, d)| format!("{c}, {d}"))
+        // An issue number (`set --at 0066`) means nothing to a reader of the guide (D2102):
+        // only the date is shown then.
+        .map(|(_, c, d)| {
+            if c.len() == 4 && c.bytes().all(|b| b.is_ascii_digit()) {
+                d.clone()
+            } else {
+                format!("{c}, {d}")
+            }
+        })
         .collect();
     at.sort();
     at.dedup();
@@ -261,8 +269,8 @@ fn conformance(st: &Status) -> Result<String, String> {
         &format!(
             "test262 (at dquickts' pinned commit): djs passes **{} of the {}** tests in the \
              active group ({pct:.1}%; {} tests in all, the rest skipped by design). The {} \
-             are listed with reasons in `tests/test262/expected-failures.txt` (TESTING.md \
-             \"Known differences\"); dquickts' qjs fails {} under the same runner.",
+             are listed with reasons in `tests/test262/expected-failures.txt`; dquickts' qjs \
+             fails {} under the same runner.",
             thousands(pass),
             thousands(t.active),
             thousands(t.total),

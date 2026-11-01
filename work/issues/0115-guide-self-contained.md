@@ -1,7 +1,7 @@
 # 0115: The guide must be self-contained
 
-status: open
-agent: -
+status: done
+agent: docs
 branch: issue/0115-guide-self-contained
 depends-on: 0113
 guide: all pages
@@ -31,16 +31,58 @@ and ~135 links that leave docs/guide via ../../.
   lives.
 
 ## Acceptance criteria
-- [ ] All pages fixed per the rule; the goals explained in the guide.
-- [ ] `djs-docs check` enforces it: it fails on links/mentions of repo markdown files
+- [x] All pages fixed per the rule; the goals explained in the guide.
+- [x] `djs-docs check` enforces it: it fails on links/mentions of repo markdown files
       outside docs/guide, bare goal numbers, and decision IDs that don't resolve to a page in
       the site; source links go through one helper so their target is consistent.
-- [ ] docs/guide/README.md and AGENTS.md "Keeping the guide current" state the rule.
-- [ ] Coordinate with the design agent (0114), who is restyling the site in djs-docs at the
+- [x] docs/guide/README.md and AGENTS.md "Keeping the guide current" state the rule.
+- [x] Coordinate with the design agent (0114), who is restyling the site in djs-docs at the
       same time: this issue changes prose and the checker, not the look.
 
 ## Log
 
+- Proposal (sent to the coordinator): keep the generated decision-log page
+  (decisions.html, already in the nav, per-decision anchors `#dNNNN`) as the target of
+  every D-ID; give it a reader's introduction; goals on a new page goals.md linked by
+  name; one source-link helper at the build's commit; check enforces it all. D2102.
+- Checker (render.rs): on SUMMARY pages, strict mode now also fails on links to `.md`
+  files outside docs/guide (the log, `../decisions.md`, stays allowed), mentions of
+  `*.md` files that are not guide pages, `work/…`, `ARCH`/`TESTING` and issue numbers
+  (`0088`) in prose and inline code, bare `G1`–`G5`, and code paths under "Where to
+  look" that are not links. Code blocks and the decision log are exempt. Tests:
+  `the_guide_is_self_contained`, `decisions_and_links` (source link with class).
+- `render::source_url`: every repository link is `blob|tree/<rev>/<path>` with
+  `class="source"`; `<rev>` is `$GITHUB_SHA`, else HEAD, else main (site.rs
+  `source_rev`).
+- Generated text: opcode and intrinsic descriptions drop parenthesized references to
+  documents and issue numbers (`without_dev_refs`); the status text no longer names
+  TESTING.md, and an issue-number provenance shows only its date.
+- Decision log page: its contributor preamble is replaced by an introduction for readers
+  (site.rs `DECISIONS_INTRO`; the first entry is found as the first `## D<digit>`).
+- New page goals.md ("What djs optimizes for", after the introduction): the five goals
+  with why and where in the guide, the two constraints, the non-goals. introduction.md
+  links the goals by name and points to it.
+- Prose fixed on every page (mine and infra's): goals by name and link; ARCH/TESTING/
+  docs/*.md/work references removed, with what the page needed written in (testing.md
+  now lists the known differences; host.md the export count; determinism.md the
+  wasm32 cap); "Where to look" paths are source links; issue numbers replaced by what
+  they found. Paragraphs rewrapped to 88 columns (inline code kept whole).
+- On request (perf's 0110, D2090): builtins.md's natives excerpt widened to 17 lines
+  (the fused `n_dense_pre` check and the HasProperty resume point), the prose describes
+  the fused check, D2090 added to the page's decisions.
+- Rule text: docs/guide/README.md ("The guide is self-contained") and AGENTS.md "Keeping
+  the guide current". D2102 in the log and the index.
+- Not mine to change (template, design's 0114): the header's "page source" link still
+  points at `blob/main/docs/guide/<page>.md`; it could use `source_url` at the build's
+  commit too.
+
 ## Follow-ups
 
 ## Result
+
+The guide is self-contained and `djs-docs check` enforces it (D2102): no links to or
+mentions of documents outside the guide, no issue numbers, goals by name (new page
+goals.md), decision IDs only as links to the site's decision log (which now opens with a
+reader's introduction), code only as source links made by one helper
+(`render::source_url`, at the build's commit, `class="source"`). The rule is in
+docs/guide/README.md and AGENTS.md.

@@ -4877,3 +4877,23 @@ that copy, and the build copies it into the site.
   the token's resolved value from `assets/elanor/colors.tsv`, which the update script
   writes from the tokens catalog. After an Elanor update, `regen` refreshes the fallbacks
   and `check` flags any it missed.
+## D2102: The guide is self-contained; checked by djs-docs
+date: 2026-11-01 · by: docs · issue: 0115
+Owner's rule: the guide (docs/guide, D2100) is read on its own site, so it never sends
+the reader to something they don't have. `djs-docs check` enforces, on the pages listed
+in SUMMARY.md (code blocks exempt, the decision log exempt as a record):
+- no links to markdown files outside docs/guide (the log itself, `../decisions.md`, is
+  a site page and stays allowed), and no mentions in prose or inline code of `*.md` files
+  other than guide pages, of `work/…`, of `ARCH`/`TESTING`, or of issue numbers (`0088`);
+- no bare goal numbers (`G1`–`G5`): the goals have a page, goals.md, linked by name;
+- every decision ID resolves (as before) and links to its anchor on the decision log
+  page, which now opens with an introduction for readers instead of the log's
+  contributor preamble;
+- repository files are linked only as source: one helper (`render::source_url`) makes
+  every such link, to `blob|tree/<commit>/<path>` on GitHub at the commit the site was
+  built from (`$GITHUB_SHA`, else HEAD), marked `class="source"`; under "Where to look"
+  a code path that is not a link is an error.
+Quoted developer comments in generated tables (opcode and intrinsic descriptions) drop
+parenthesized references to documents and issues; generated status text names no
+documents. Alternatives considered for decisions: per-page decision footnotes (would
+duplicate the log) or no IDs at all (loses the trail to the measurements).

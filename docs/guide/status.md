@@ -6,28 +6,28 @@ ratchet, the difftest corpus, the base snapshot, the builtin tags, the engine's 
 are recomputed whenever the guide is regenerated, which the merge flow does on every
 merge. Measurements that need a build or a benchmark (the wasm module's size, the speed
 against quickjs-wasi, pi's test suite) are recorded in `tests/scores/status.tsv` by
-`scripts/status.py`, with the commit they were measured at, and shown with it.
-README.md's status section shows the same numbers.
+`scripts/status.py`, with the commit they were measured at, and shown with it. The
+repository's front page shows the same numbers.
 
 ## Conformance
 
 <!-- gen:status conformance -->
 - test262 (at dquickts' pinned commit): djs passes **38,069 of the 38,109** tests in the
   active group (99.9%; 53,597 tests in all, the rest skipped by design). The 40 known
-  failures are listed with reasons in `tests/test262/expected-failures.txt` (TESTING.md
-  "Known differences"); dquickts' qjs fails 4 active tests under the same runner.
+  failures are listed with reasons in `tests/test262/expected-failures.txt`; dquickts'
+  qjs fails 4 active tests under the same runner.
 - The differential corpus (codemode scripts, console and result formatting, error
   messages, TypeScript, dquickts' own tests): **234 of 240** cases match qjs; 1 known
   failure (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
-- pi's codemode test suite on djs: 221 of 226 tests pass (measured at 0066, 2026-11-01).
+- pi's codemode test suite on djs: 221 of 226 tests pass (measured at 2026-11-01).
 <!-- /gen -->
 
 [How djs is tested](testing.md) explains the suites and the ratchets.
 
 ## Speed in wasm
 
-Machine instructions retired by node running each workload once, minus an empty run,
-for djs-wasm and for quickjs-wasi, pi's current engine (`scripts/perf/wmeasure.py`).
+Machine instructions retired by node running each workload once, minus an empty run, for
+djs-wasm and for quickjs-wasi, pi's current engine (`scripts/perf/wmeasure.py`).
 Instructions repeat to within a fraction of a percent even on a loaded machine, unlike
 time.
 

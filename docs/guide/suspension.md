@@ -1,12 +1,12 @@
 # Suspending anywhere: fuel and host calls
 
-A codemode script may loop forever by mistake, wait minutes for a tool, or be
-cancelled. The host must be able to take control back at any moment, and, while the
-script waits, to save it and continue it later somewhere else. Goal G5 is that
-execution can stop **between any two instructions**: in the middle of a `map`
-callback, inside a getter, in a promise job, three generators deep. This chapter shows
-what stops a run, what a stop looks like, and how generators, async functions and
-builtins fit in.
+A codemode script may loop forever by mistake, wait minutes for a tool, or be cancelled.
+The host must be able to take control back at any moment, and, while the script waits,
+to save it and continue it later somewhere else. The goal to [suspend
+anywhere](goals.md#suspend-anywhere) is that execution can stop **between any two
+instructions**: in the middle of a `map` callback, inside a getter, in a promise job,
+three generators deep. This chapter shows what stops a run, what a stop looks like, and
+how generators, async functions and builtins fit in.
 
 > **In short.** `run` executes until its fuel is used up, a sync host function is
 > called, or there is nothing left to do, and then returns a status. Because the
@@ -68,37 +68,37 @@ costs come in five classes, in the instruction table:
 Work that is not one instruction is charged in proportion to what it does: a leaf
 intrinsic that copies a string charges for the units it copies, `JSON.parse` for the
 bytes it reads, the regex matcher for every step it takes (D1711). A `@native` builtin
-charges 4 per loop iteration and 2 per call it makes (D1633). So fuel bounds the
-*work* a slice does, not just its instruction count: one instruction that parses a
-large tool result costs as much fuel as the work it does.
+charges 4 per loop iteration and 2 per call it makes (D1633). So fuel bounds the *work*
+a slice does, not just its instruction count: one instruction that parses a large tool
+result costs as much fuel as the work it does.
 
 An instruction is charged before it runs, so a slice can end with the fuel below zero
-when its last instruction was expensive. That overshoot is stored in the heap as a
-debt (`Interp::FUEL_DEBT`) and paid first by the next run (D1740, D1712). The result:
-a budget of a million fuel stops at the same instruction whether it was given as one
-run or as a thousand slices of a thousand, with or without snapshots in between.
+when its last instruction was expensive. That overshoot is stored in the heap as a debt
+(`Interp::FUEL_DEBT`) and paid first by the next run (D1740, D1712). The result: a
+budget of a million fuel stops at the same instruction whether it was given as one run
+or as a thousand slices of a thousand, with or without snapshots in between.
 
 > **Trade-off.** Fuel over wall-clock time. Time is what the host cares about, but a
-> time limit makes the stopping point depend on the machine, its load, and V8's mood,
-> so the same script with the same inputs could time out on one run and not the next.
-> Fuel makes the stopping point a function of the program. The cost: fuel only
-> approximates time, the weights are coarse, and every new native operation has to
-> charge for its work or it becomes a way to stall the host. Hosts that need a time
-> limit (pi does) poll the clock between slices: pi runs 10,000 fuel per poll (D1492).
+> time limit makes the stopping point depend on the machine, its load, and V8's mood, so
+> the same script with the same inputs could time out on one run and not the next. Fuel
+> makes the stopping point a function of the program. The cost: fuel only approximates
+> time, the weights are coarse, and every new native operation has to charge for its
+> work or it becomes a way to stall the host. Hosts that need a time limit (pi does)
+> poll the clock between slices: pi runs 10,000 fuel per poll (D1492).
 
 ## Safepoints
 
-Stopping for fuel can happen at any instruction boundary. Collecting garbage can
-happen only at **safepoints**, the subset of boundaries where the interpreter checks
-whether a collection is pending: backward jumps, frame entry and return, the start of
-a run, and the state transitions of native builtins (D1152). At a safepoint, every live
-value is on the value stack or in a heap cell, the interpreter's cached offsets into
-the code are re-derived afterwards, and Rust code holds no raw values. Between
-safepoints allocation only bumps (see [the arena](arena.md)), which is what lets Rust
-code keep heap values in local variables.
+Stopping for fuel can happen at any instruction boundary. Collecting garbage can happen
+only at **safepoints**, the subset of boundaries where the interpreter checks whether a
+collection is pending: backward jumps, frame entry and return, the start of a run, and
+the state transitions of native builtins (D1152). At a safepoint, every live value is on
+the value stack or in a heap cell, the interpreter's cached offsets into the code are
+re-derived afterwards, and Rust code holds no raw values. Between safepoints allocation
+only bumps (see [the arena](arena.md)), which is what lets Rust code keep heap values in
+local variables.
 
-Collection points depend only on the program, not on how it was sliced: the threshold
-is in the heap and the arena's growth does not depend on fuel (D1710). That is why the
+Collection points depend only on the program, not on how it was sliced: the threshold is
+in the heap and the arena's growth does not depend on fuel (D1710). That is why the
 images of two runs with different slicing are byte for byte the same, which the gate
 checks (D1720; [Determinism](determinism.md)).
 
@@ -125,14 +125,13 @@ recorded results. [The host interface](host.md) has the protocol from the host's
 
 ## Generators and async functions
 
-A generator's frame must outlive the call that created it, and an async function's
-frame must survive every `await`. djs does not give them separate stacks. When a
-generator yields or an async function awaits, the interpreter copies the frame's slice
-of the value stack (arguments, header, locals, operand stack) into a `Generator` object
-in the heap, and pops the frame. Resuming copies the slice back onto the top of the
-stack and rewrites the four header words that link it to its new caller (D1375). A
-frame contains no absolute positions besides those links, so it can be resumed at any
-depth.
+A generator's frame must outlive the call that created it, and an async function's frame
+must survive every `await`. djs does not give them separate stacks. When a generator
+yields or an async function awaits, the interpreter copies the frame's slice of the
+value stack (arguments, header, locals, operand stack) into a `Generator` object in the
+heap, and pops the frame. Resuming copies the slice back onto the top of the stack and
+rewrites the four header words that link it to its new caller (D1375). A frame contains
+no absolute positions besides those links, so it can be resumed at any depth.
 
 ```js
 async function twice(p) {
@@ -175,12 +174,12 @@ function 0.0 twice: params=1 locals=2 stack=2 captures=0
 ```
 <!-- /gen -->
 
-In `twice`, `async_start` creates the async state object in a hidden local (`<state>`). `await` saves the frame
-into it and replaces itself with a call of the builtin `%AsyncAwait`, a tail call that
-subscribes the state to the promise and returns the function's result promise to the
-caller. When the promise settles, a promise job resumes the state, and `await` pushes
-the value. Since closures capture boxes and never point into frames (D1083), nothing
-else needs to happen.
+In `twice`, `async_start` creates the async state object in a hidden local (`<state>`).
+`await` saves the frame into it and replaces itself with a call of the builtin
+`%AsyncAwait`, a tail call that subscribes the state to the promise and returns the
+function's result promise to the caller. When the promise settles, a promise job resumes
+the state, and `await` pushes the value. Since closures capture boxes and never point
+into frames (D1083), nothing else needs to happen.
 
 ```js live
 function* counter() {
@@ -204,23 +203,22 @@ console.log(squares.join(" "));
 
 > **Trade-off.** Copying frames over a stack per generator. Separate stacks would make
 > yield and resume free, but a stack is a large growable region per generator, and the
-> collector and snapshots would need to know about many of them. Copying keeps one
-> value stack and makes a suspended generator an ordinary heap object. The cost is a
-> copy of the frame on every `yield` and `await` and back on every resume, proportional
-> to the frame's size, which is small for the generators and async functions scripts
-> write.
+> collector and snapshots would need to know about many of them. Copying keeps one value
+> stack and makes a suspended generator an ordinary heap object. The cost is a copy of
+> the frame on every `yield` and `await` and back on every resume, proportional to the
+> frame's size, which is small for the generators and async functions scripts write.
 
 ## Builtins in the middle
 
 The hardest stops are the ones inside builtins: a `map` over a million elements, a
 `sort` with a comparator, a regular expression that backtracks. The [leaf
-rule](builtins.md) handles the first two: hand-written Rust never runs user code, and
-a builtin that does is either bytecode or a generated state machine whose every resume
+rule](builtins.md) handles the first two: hand-written Rust never runs user code, and a
+builtin that does is either bytecode or a generated state machine whose every resume
 point and loop back-edge is a place it can stop (D1631, D1632). The regex engine keeps
-its backtracking stack in the arena and can suspend in the middle of a match (D1332),
-so catastrophic backtracking is a timeout, not a hang. The remaining leaf operations
-(a big `join`, `JSON.parse` of a large tool result) do not stop in the middle, but they
-are bounded by their input and charge fuel for it.
+its backtracking stack in the arena and can suspend in the middle of a match (D1332), so
+catastrophic backtracking is a timeout, not a hang. The remaining leaf operations (a big
+`join`, `JSON.parse` of a large tool result) do not stop in the middle, but they are
+bounded by their input and charge fuel for it.
 
 > **Trade-off.** Long leaf operations are not resumable. A 10 MB `JSON.parse` runs to
 > completion inside one instruction and then charges its fuel, overshooting the slice.
@@ -234,11 +232,11 @@ are bounded by their input and charge fuel for it.
 - [`crates/djs-core/src/interp/run.rs`](../../crates/djs-core/src/interp/run.rs): the
   run loop, statuses, fuel and safepoints.
 - [`crates/djs-core/src/interp/run/suspend.rs`](../../crates/djs-core/src/interp/run/suspend.rs):
-  generators and async functions; [`run/promise.rs`](../../crates/djs-core/src/interp/run/promise.rs):
-  jobs, host calls and the inbox.
+  generators and async functions;
+  [`run/promise.rs`](../../crates/djs-core/src/interp/run/promise.rs): jobs, host calls
+  and the inbox.
 - [`crates/djs-core/src/vm/mod.rs`](../../crates/djs-core/src/vm/mod.rs): the embedder's
   API (`run`, `resolve_host_call`, images).
-- [docs/compiler.md](../compiler.md) sections 7.5 to 7.8.
 
 Decisions on this page:
 
