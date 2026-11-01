@@ -917,7 +917,7 @@ impl Parser<'_, '_> {
     }
 
     /// Before the arguments of a call: the callee and `this` on the stack.
-    fn prepare_call(&mut self, e: Expr) {
+    pub(super) fn prepare_call(&mut self, e: Expr) {
         match e {
             Expr::Field { atom, pos } => {
                 self.truncate_last();
@@ -945,7 +945,7 @@ impl Parser<'_, '_> {
     }
 
     /// The property name after `.` (or `?.`).
-    fn parse_dot_name(&mut self, pos: u32) -> PResult<Expr> {
+    pub(super) fn parse_dot_name(&mut self, pos: u32) -> PResult<Expr> {
         if self.is(TokenKind::PrivateName) {
             let tok = self.tok;
             let r = self.private_ref(tok.start)?;
@@ -986,7 +986,7 @@ impl Parser<'_, '_> {
 
     /// `( args )`: the arguments are pushed one by one, or, from the first spread
     /// on, collected into an array (`f(a, ...b)` -> `array_from 1; array_spread`).
-    fn parse_args(&mut self) -> PResult<Args> {
+    pub(super) fn parse_args(&mut self) -> PResult<Args> {
         self.expect(TokenKind::LParen, "(")?;
         let mut argc: u32 = 0;
         let mut array = false;
@@ -1023,7 +1023,7 @@ impl Parser<'_, '_> {
     }
 
     /// The call after `prepare_call`.
-    fn emit_call(&mut self, args: Args) {
+    pub(super) fn emit_call(&mut self, args: Args) {
         match args {
             Args::Count(n) => self.code().call(n),
             Args::Array => self.code().call_spread(),
@@ -1140,7 +1140,7 @@ impl Parser<'_, '_> {
         Ok(Expr::Value)
     }
 
-    fn parse_primary(&mut self) -> PResult<Expr> {
+    pub(super) fn parse_primary(&mut self) -> PResult<Expr> {
         self.enter()?;
         let r = self.parse_primary_inner();
         self.leave();
@@ -1234,6 +1234,14 @@ impl Parser<'_, '_> {
             }
             TokenKind::Class => {
                 let hint = self.take_name_hint(tok.start);
+                self.parse_class(false, hint)?;
+                Ok(Expr::Value)
+            }
+            TokenKind::At => {
+                let hint = self.take_name_hint(tok.start);
+                self.parse_decorators()?;
+                self.expect_decorated_class(false)?;
+                self.class_decs = Some(tok.start);
                 self.parse_class(false, hint)?;
                 Ok(Expr::Value)
             }
@@ -1447,7 +1455,7 @@ impl Parser<'_, '_> {
     }
 
     /// An identifier reference.
-    fn parse_ident_ref(&mut self) -> PResult<Expr> {
+    pub(super) fn parse_ident_ref(&mut self) -> PResult<Expr> {
         let tok = self.tok;
         if tok.kw == Kw::Yield {
             return syntax(tok.start, "unexpected 'yield' keyword");

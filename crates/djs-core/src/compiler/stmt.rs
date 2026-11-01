@@ -31,6 +31,7 @@ impl Parser<'_, '_> {
                 self.parse_function_declaration(start, true)?
             }
             TokenKind::Class => self.parse_class(true, Atom::NULL)?,
+            TokenKind::At => return self.parse_decorated_statement(),
             TokenKind::Ident if self.at_using(false) => self.parse_using_declaration(false)?,
             TokenKind::Ident if self.at_await_using() => self.parse_using_declaration(true)?,
             TokenKind::Import | TokenKind::Export if self.strip && self.strip_at_module_item() => {

@@ -28,6 +28,9 @@ use alloc::format;
 use alloc::vec::Vec;
 
 use super::PResult;
+use super::decorators::{
+    DEC_ACCESSOR, DEC_FIELD, DEC_GETTER, DEC_METHOD, DEC_SETTER, DecElem, DecKey, Synth,
+};
 use super::func::{FuncKind, FuncState, ScopeId, VarId, VarKind};
 use super::parser::{Parser, syntax};
 use crate::bytecode::Label;
@@ -90,6 +93,30 @@ struct ClassBuild {
     inst_methods: Vec<Install>,
     stat_methods: Vec<Install>,
     keys: u32,
+    /// Decorated elements in source order (compiler/decorators.rs).
+    decs: Vec<DecElem>,
+    /// The hidden binding of the decorators of the element being parsed.
+    pending: Option<Atom>,
+    /// Counter for the decorators' hidden bindings.
+    hidden: u32,
+    /// The hidden binding of the class decorators.
+    class_decs: Option<Atom>,
+    /// The decoration state, once the elements are decorated, and whether the instance
+    /// field initializer runs instance extra initializers.
+    state: Option<Atom>,
+    inst_extras: bool,
+}
+
+/// A method being parsed: its key, start, `static` and decorators.
+struct Elem {
+    key: Key,
+    start: u32,
+    is_static: bool,
+    decs: Option<Atom>,
+}
+
+fn intrinsic(name: &str) -> u16 {
+    crate::bytecode::intrinsics::intrinsic_id(name).expect("intrinsic")
 }
 
 /// The name of an element.
@@ -107,6 +134,7 @@ impl Parser<'_, '_> {
     /// `hint` names an anonymous class expression.
     pub(super) fn parse_class(&mut self, decl: bool, hint: Atom) -> PResult<()> {
         self.enter()?;
+        let decorated = self.class_decs.take();
         let start = self.tok.start;
         self.next()?;
         let mut name = Atom::NULL;
@@ -131,6 +159,17 @@ impl Parser<'_, '_> {
         }
         self.ts_type_params(super::ts::TP_IN_OUT | super::ts::TP_CONST)?;
         let class_scope = self.push_scope(super::func::ScopeKind::Class)?;
+        let class_decs = match decorated {
+            Some(_) => {
+                // The class decorators' array (evaluated before `class`).
+                let a = self.heap.atom_str("<class decs>")?;
+                self.f.add_var(a, VarKind::Hidden, class_scope);
+                let r = self.init_ref(a, start);
+                self.code().name_init(r);
+                Some(a)
+            }
+            None => None,
+        };
         let inner = if name.is_null() {
             None
         } else {
@@ -189,6 +228,12 @@ impl Parser<'_, '_> {
             inst_methods: Vec::new(),
             stat_methods: Vec::new(),
             keys: 0,
+            decs: Vec::new(),
+            pending: None,
+            hidden: 0,
+            class_decs,
+            state: None,
+            inst_extras: false,
         };
         self.expect(TokenKind::LBrace, "{")?;
         if derived {
@@ -203,8 +248,18 @@ impl Parser<'_, '_> {
             if self.is(TokenKind::Eof) {
                 return syntax(self.tok.start, "expecting '}'");
             }
-            // Index signatures, overloads, `declare` and `abstract` members: no code.
+            if self.is(TokenKind::At) {
+                let pos = self.tok.start;
+                let a = self.dec_hidden(b.scope, &mut b.hidden, "decs")?;
+                self.parse_decorators()?;
+                let r = self.init_ref(a, pos);
+                self.code().name_init(r);
+                b.pending = Some(a);
+            }
+            // Index signatures, overloads, `declare` and `abstract` members: no code
+            // (their decorators are ignored).
             if self.ts && self.ts_skip_class_member()? {
+                b.pending = None;
                 continue;
             }
             self.parse_class_element(&mut b)?;
@@ -222,11 +277,25 @@ impl Parser<'_, '_> {
             c.src_end = end;
         }
 
+        if b.class_decs.is_some() || !b.decs.is_empty() {
+            let state = self.dec_hidden(b.scope, &mut b.hidden, "state")?;
+            let elems = core::mem::take(&mut b.decs);
+            self.emit_decorate_elements(&elems, state, derived, start)?;
+            b.state = Some(state);
+            b.inst_extras = elems
+                .iter()
+                .any(|d| !d.is_static && matches!(d.kind, DEC_METHOD | DEC_GETTER | DEC_SETTER));
+            if b.inst_extras && b.inst.is_none() {
+                b.inst = Some(self.new_init(b.start)?);
+            }
+        }
+
         // `ctor proto` -> the instance initializer, the inner binding, the statics.
         let methods = core::mem::take(&mut b.inst_methods);
+        let extras = if b.inst_extras { b.state } else { None };
         match b.inst.take() {
             Some(init) => {
-                let child = self.finish_init(init, &methods)?;
+                let child = self.finish_init(init, &methods, extras)?;
                 self.code().fclosure(child);
                 self.code().set_home_object();
             }
@@ -235,21 +304,45 @@ impl Parser<'_, '_> {
         let r = self.init_ref(fields_atom, end);
         self.code().name_init(r);
         self.code().drop();
+        if let Some(state) = b.state {
+            // `ctor` -> `ctor new_class`.
+            self.emit_decorate_class(b.class_decs, b.name, state, start)?;
+        }
         if let Some(v) = inner {
             self.code().dup();
             let r = self.init_ref(name, end);
             self.code().name_init(r);
             self.f.vars[v as usize].init_end = end;
         }
+        if let Some(state) = b.state {
+            self.emit_state_extras(state, super::decorators::SLOT_STATIC_EXTRAS, start);
+        }
         let methods = core::mem::take(&mut b.stat_methods);
         if let Some(init) = b.stat.take() {
-            let child = self.finish_init(init, &methods)?;
-            self.code().fclosure(child);
-            self.code().set_home_object();
-            self.code().pick(1);
-            self.mark(start);
-            self.code().call(0);
-            self.code().drop();
+            let child = self.finish_init(init, &methods, None)?;
+            if b.state.is_some() {
+                // `this` is the new class, the home object the class.
+                self.code().swap();
+                self.code().fclosure(child);
+                self.code().set_home_object();
+                self.code().pick(2);
+                self.mark(start);
+                self.code().call(0);
+                self.code().drop();
+                self.code().drop();
+            } else {
+                self.code().fclosure(child);
+                self.code().set_home_object();
+                self.code().pick(1);
+                self.mark(start);
+                self.code().call(0);
+                self.code().drop();
+            }
+        } else if b.state.is_some() {
+            self.code().nip();
+        }
+        if let Some(state) = b.state {
+            self.emit_state_extras(state, super::decorators::SLOT_CLASS_EXTRAS, start);
         }
         self.pop_scope();
         self.pop_scope();
@@ -260,7 +353,7 @@ impl Parser<'_, '_> {
             self.code().name_init(r);
             self.f.vars[v as usize].init_end = end;
         } else if name.is_null() {
-            self.last_anon_fn = Some((start, end));
+            self.last_anon_fn = Some((decorated.unwrap_or(start), end));
         }
         self.leave();
         Ok(())
@@ -301,6 +394,7 @@ impl Parser<'_, '_> {
 
     /// One class element (not `;`).
     fn parse_class_element(&mut self, b: &mut ClassBuild) -> PResult<()> {
+        let decs = b.pending.take();
         let first_modifier = if self.ts {
             self.ts_member_modifiers()?
         } else {
@@ -312,6 +406,9 @@ impl Parser<'_, '_> {
             let next = self.peek();
             if next.kind == TokenKind::LBrace {
                 self.next()?;
+                if decs.is_some() {
+                    return syntax(self.tok.start, "decorators are not valid here");
+                }
                 return self.parse_static_block(b);
             }
             let name = matches!(
@@ -345,10 +442,15 @@ impl Parser<'_, '_> {
         let mut is_async = false;
         let mut is_gen = false;
         let mut accessor = None;
+        // An auto-accessor: `accessor` [no LineTerminator here] ClassElementName.
+        let mut auto = false;
         let tok = self.tok;
         if tok.kind == TokenKind::Ident && !tok.has_escape() {
             let next = self.peek();
-            if tok.kw == Kw::Async
+            if tok.kw == Kw::Accessor && !next.newline_before() && name_start(next) {
+                self.next()?;
+                auto = true;
+            } else if tok.kw == Kw::Async
                 && !next.newline_before()
                 && (name_start(next) || next.kind == TokenKind::Star)
             {
@@ -363,7 +465,7 @@ impl Parser<'_, '_> {
                 });
             }
         }
-        if accessor.is_none() && self.is(TokenKind::Star) {
+        if accessor.is_none() && !auto && self.is(TokenKind::Star) {
             self.next()?;
             is_gen = true;
         }
@@ -392,7 +494,10 @@ impl Parser<'_, '_> {
         };
         self.ts_eat_marker(TokenKind::Question)?;
         let is_method = self.is(TokenKind::LParen) || (self.ts && self.is(TokenKind::Lt));
-        let swapped = early_swap || (is_static && is_method);
+        if auto && is_method {
+            return syntax(self.tok.start, "invalid property name");
+        }
+        let swapped = early_swap || (is_static && (is_method || auto));
         if swapped && !early_swap {
             self.code().swap();
         }
@@ -413,6 +518,9 @@ impl Parser<'_, '_> {
                 if !plain {
                     return syntax(self.tok.start, "invalid method name");
                 }
+                if decs.is_some() {
+                    return syntax(self.tok.start, "decorators are not valid here");
+                }
                 if b.has_ctor {
                     return syntax(
                         self.tok.start,
@@ -432,12 +540,18 @@ impl Parser<'_, '_> {
             return syntax(self.tok.start, "invalid method name");
         }
         if is_method {
-            self.parse_class_method(b, key, start, is_static, accessor, (is_async, is_gen))?;
+            let el = Elem {
+                key,
+                start,
+                is_static,
+                decs,
+            };
+            self.parse_class_method(b, el, accessor, (is_async, is_gen))?;
         } else {
             if !plain || self.is(TokenKind::LBrace) {
                 return syntax(self.tok.start, "invalid property name");
             }
-            self.parse_field(b, key, is_static)?;
+            self.parse_field(b, key, is_static, decs, auto)?;
         }
         if swapped {
             self.code().swap();
@@ -447,16 +561,19 @@ impl Parser<'_, '_> {
 
     /// A method, getter or setter after its key (computed keys are on the stack), with
     /// the target object (prototype or constructor) under it.
-    #[allow(clippy::too_many_arguments)]
     fn parse_class_method(
         &mut self,
         b: &mut ClassBuild,
-        key: Key,
-        start: u32,
-        is_static: bool,
+        el: Elem,
         accessor: Option<FuncKind>,
         flavor: (bool, bool),
     ) -> PResult<()> {
+        let Elem {
+            key,
+            start,
+            is_static,
+            decs,
+        } = el;
         let kind = accessor.unwrap_or(FuncKind::Method);
         let (prefix, word) = match kind {
             FuncKind::Getter => (1u8, "get "),
@@ -482,6 +599,33 @@ impl Parser<'_, '_> {
             };
             self.declare_private(a, pk, is_static, self.tok.start)?;
         }
+        if let Some(decs) = decs {
+            let dk = match kind {
+                FuncKind::Getter => DEC_GETTER,
+                FuncKind::Setter => DEC_SETTER,
+                _ => DEC_METHOD,
+            };
+            let key = match key {
+                Key::Atom(a) => DecKey::Atom(a),
+                Key::Private(a) => DecKey::Private(a),
+                Key::Computed => {
+                    // The decorators need the key again.
+                    let v = self.dec_hidden(b.scope, &mut b.hidden, "method key")?;
+                    self.code().call_intrinsic(intrinsic("ToPropertyKey"), 1);
+                    self.code().dup();
+                    let r = self.init_ref(v, start);
+                    self.code().name_init(r);
+                    DecKey::Computed(v)
+                }
+            };
+            b.decs.push(DecElem {
+                kind: dk,
+                is_static,
+                key,
+                decs,
+                rec: Atom::NULL,
+            });
+        }
         let child = self.parse_method_function(kind, fname, start, flavor)?;
         self.code().fclosure(child);
         match key {
@@ -495,53 +639,70 @@ impl Parser<'_, '_> {
                     // qjs reports a duplicate method after its body.
                     self.declare_private(a, PrivKind::Method, is_static, self.tok.start)?;
                 }
-                // The closure goes into a hidden binding until the initializer
-                // installs it (its home object is the prototype or constructor).
-                let hidden = format!("<{word}{}>", self.heap.atom_name(a));
-                let hidden = self.heap.atom_str(&hidden)?;
-                let v = self.f.add_var(hidden, VarKind::Hidden, b.scope);
-                self.code().set_home_object();
-                let r = self.init_ref(hidden, start);
-                self.code().name_init(r);
-                // The initializer function installs it.
-                let has_init = if is_static {
-                    b.stat.is_some()
+                self.install_private(b, a, kind, is_static, start)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// The closure of private method, getter or setter `a` on the stack (its home
+    /// object under it): it goes into a hidden binding until the initializer installs
+    /// it.
+    fn install_private(
+        &mut self,
+        b: &mut ClassBuild,
+        a: Atom,
+        kind: FuncKind,
+        is_static: bool,
+        start: u32,
+    ) -> PResult<()> {
+        let word = match kind {
+            FuncKind::Getter => "get ",
+            FuncKind::Setter => "set ",
+            _ => "",
+        };
+        let hidden = self.private_closure_atom(word, a)?;
+        let v = self.f.add_var(hidden, VarKind::Hidden, b.scope);
+        self.code().set_home_object();
+        let r = self.init_ref(hidden, start);
+        self.code().name_init(r);
+        // The initializer function installs it.
+        let has_init = if is_static {
+            b.stat.is_some()
+        } else {
+            b.inst.is_some()
+        };
+        if !has_init {
+            let init = self.new_init(b.start)?;
+            if is_static {
+                b.stat = Some(init);
+            } else {
+                b.inst = Some(init);
+            }
+        }
+        let list = if is_static {
+            &mut b.stat_methods
+        } else {
+            &mut b.inst_methods
+        };
+        match list.iter_mut().find(|m| m.name == a) {
+            Some(m) => {
+                m.kind = PrivKind::Accessor;
+                if kind == FuncKind::Getter {
+                    m.get = Some(v);
                 } else {
-                    b.inst.is_some()
-                };
-                if !has_init {
-                    let init = self.new_init(b.start)?;
-                    if is_static {
-                        b.stat = Some(init);
-                    } else {
-                        b.inst = Some(init);
-                    }
-                }
-                let list = if is_static {
-                    &mut b.stat_methods
-                } else {
-                    &mut b.inst_methods
-                };
-                match list.iter_mut().find(|m| m.name == a) {
-                    Some(m) => {
-                        m.kind = PrivKind::Accessor;
-                        if kind == FuncKind::Getter {
-                            m.get = Some(v);
-                        } else {
-                            m.set = Some(v);
-                        }
-                    }
-                    None => list.push(Install {
-                        name: a,
-                        kind: match kind {
-                            FuncKind::Getter | FuncKind::Setter => PrivKind::Accessor,
-                            _ => PrivKind::Method,
-                        },
-                        get: (kind != FuncKind::Setter).then_some(v),
-                        set: (kind == FuncKind::Setter).then_some(v),
-                    }),
+                    m.set = Some(v);
                 }
             }
+            None => list.push(Install {
+                name: a,
+                kind: match kind {
+                    FuncKind::Getter | FuncKind::Setter => PrivKind::Accessor,
+                    _ => PrivKind::Method,
+                },
+                get: (kind != FuncKind::Setter).then_some(v),
+                set: (kind == FuncKind::Setter).then_some(v),
+            }),
         }
         Ok(())
     }
@@ -587,16 +748,22 @@ impl Parser<'_, '_> {
 
     /// A field after its key: the initializer goes into the instance or static
     /// initializer function. A computed key is converted now and kept in a hidden
-    /// binding.
-    fn parse_field(&mut self, b: &mut ClassBuild, key: Key, is_static: bool) -> PResult<()> {
+    /// binding. An auto-accessor (`auto`) is a field of a private storage name and a
+    /// getter and setter of it.
+    fn parse_field(
+        &mut self,
+        b: &mut ClassBuild,
+        key: Key,
+        is_static: bool,
+        decs: Option<Atom>,
+        auto: bool,
+    ) -> PResult<()> {
         self.ts_eat_marker(TokenKind::Bang)?;
         self.ts_annotation()?;
         let pos = self.tok.start;
         let key_var = match key {
             Key::Computed => {
-                let id =
-                    crate::bytecode::intrinsics::intrinsic_id("ToPropertyKey").expect("intrinsic");
-                self.code().call_intrinsic(id, 1);
+                self.code().call_intrinsic(intrinsic("ToPropertyKey"), 1);
                 let atom = self.heap.atom_str(&format!("<key {}>", b.keys))?;
                 b.keys += 1;
                 self.f.add_var(atom, VarKind::Hidden, b.scope);
@@ -605,10 +772,42 @@ impl Parser<'_, '_> {
                 Some(atom)
             }
             Key::Private(a) => {
-                self.declare_private(a, PrivKind::Field, is_static, pos)?;
+                let kind = if auto {
+                    PrivKind::Accessor
+                } else {
+                    PrivKind::Field
+                };
+                self.declare_private(a, kind, is_static, pos)?;
                 None
             }
             Key::Atom(_) => None,
+        };
+        let storage = if auto {
+            let storage = self.heap.atom_str(&format!("<accessor {}>", b.hidden))?;
+            b.hidden += 1;
+            self.f.add_var(storage, VarKind::PrivateName, b.scope);
+            self.emit_auto_accessor(b, key, key_var, storage, is_static, pos)?;
+            Some(storage)
+        } else {
+            None
+        };
+        let rec = match decs {
+            Some(decs) => {
+                let rec = self.dec_hidden(b.scope, &mut b.hidden, "rec")?;
+                b.decs.push(DecElem {
+                    kind: if auto { DEC_ACCESSOR } else { DEC_FIELD },
+                    is_static,
+                    key: match key {
+                        Key::Atom(a) => DecKey::Atom(a),
+                        Key::Private(a) => DecKey::Private(a),
+                        Key::Computed => DecKey::Computed(key_var.expect("key binding")),
+                    },
+                    decs,
+                    rec,
+                });
+                Some(rec)
+            }
+            None => None,
         };
         let init = match if is_static {
             b.stat.take()
@@ -620,13 +819,17 @@ impl Parser<'_, '_> {
         };
         self.resume_function(init.f);
         self.emit_this(pos);
-        match key {
-            Key::Atom(a) => self.code().push_atom(a),
-            Key::Private(a) => {
+        match (storage, key) {
+            (Some(s), _) => {
+                let r = self.name_ref(s, pos);
+                self.code().name_get(r);
+            }
+            (None, Key::Atom(a)) => self.code().push_atom(a),
+            (None, Key::Private(a)) => {
                 let r = self.name_ref(a, pos);
                 self.code().name_get(r);
             }
-            Key::Computed => {
+            (None, Key::Computed) => {
                 let r = self.name_ref(key_var.expect("key binding"), pos);
                 self.code().name_get(r);
             }
@@ -637,18 +840,28 @@ impl Parser<'_, '_> {
                 self.name_hint = Some((a, value_start));
             }
             self.parse_assign(false)?;
-            if key == Key::Computed && self.last_anon_fn == Some((value_start, self.prev_end)) {
+            if key == Key::Computed
+                && !auto
+                && self.last_anon_fn == Some((value_start, self.prev_end))
+            {
                 self.code().set_function_name(0);
             }
         } else {
             self.code().undefined();
         }
+        if let Some(rec) = rec {
+            self.emit_run_inits(rec, pos);
+        }
         self.mark(pos);
-        match key {
-            Key::Private(_) => self.code().define_private_field(0),
-            _ => self.code().define_class_field(),
+        if storage.is_some() || matches!(key, Key::Private(_)) {
+            self.code().define_private_field(0);
+        } else {
+            self.code().define_class_field();
         }
         self.code().drop();
+        if let Some(rec) = rec {
+            self.emit_run_rec_extras(rec, pos);
+        }
         let f = self.park_function()?;
         let init = Init {
             f,
@@ -661,6 +874,47 @@ impl Parser<'_, '_> {
             b.inst = Some(init);
         }
         self.expect_semicolon()
+    }
+
+    /// The getter and setter of auto-accessor `key` on private name `storage`, with the
+    /// target object (prototype or constructor) on the stack.
+    fn emit_auto_accessor(
+        &mut self,
+        b: &mut ClassBuild,
+        key: Key,
+        key_var: Option<Atom>,
+        storage: Atom,
+        is_static: bool,
+        pos: u32,
+    ) -> PResult<()> {
+        for (synth, kind, prefix) in [
+            (Synth::AccessorGet, FuncKind::Getter, 1u8),
+            (Synth::AccessorSet, FuncKind::Setter, 2),
+        ] {
+            let word = if prefix == 1 { "get " } else { "set " };
+            match key {
+                Key::Atom(a) => {
+                    let n = format!("{word}{}", self.heap.atom_name(a));
+                    let fname = self.heap.atom_str(&n)?;
+                    self.emit_synth_fn(synth, storage, fname, pos)?;
+                    self.code().define_class_method(a, prefix);
+                }
+                Key::Computed => {
+                    let r = self.name_ref(key_var.expect("key binding"), pos);
+                    self.code().name_get(r);
+                    self.emit_synth_fn(synth, storage, Atom::NULL, pos)?;
+                    self.code().set_function_name(prefix);
+                    self.code().define_class_method_elem(prefix);
+                }
+                Key::Private(a) => {
+                    let n = format!("{word}{}", self.heap.atom_name(a));
+                    let fname = self.heap.atom_str(&n)?;
+                    self.emit_synth_fn(synth, storage, fname, pos)?;
+                    self.install_private(b, a, kind, is_static, pos)?;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// A new parked field initializer function (`FieldInit`): it starts by jumping to
@@ -679,7 +933,12 @@ impl Parser<'_, '_> {
     /// Ends a field initializer function: returns, then the private method
     /// installation (jumped to at the start), then back to the initializers. Returns
     /// its child index.
-    fn finish_init(&mut self, init: Init, methods: &[Install]) -> PResult<u32> {
+    fn finish_init(
+        &mut self,
+        init: Init,
+        methods: &[Install],
+        extras: Option<Atom>,
+    ) -> PResult<u32> {
         let pos = self.prev_end;
         self.resume_function(init.f);
         self.f.src_end = pos;
@@ -714,6 +973,9 @@ impl Parser<'_, '_> {
                 self.code().define_private_accessor();
             }
             self.code().drop();
+        }
+        if let Some(state) = extras {
+            self.emit_instance_extras(state, pos);
         }
         self.code().jump(init.body);
         self.end_function()

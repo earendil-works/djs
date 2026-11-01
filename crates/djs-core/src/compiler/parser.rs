@@ -107,6 +107,9 @@ pub(super) struct Parser<'a, 'h> {
     /// The span of the last anonymous function or arrow expression, so a computed
     /// property can tell whether its value is one (runtime naming).
     pub last_anon_fn: Option<(u32, u32)>,
+    /// Decorators were parsed for the next class (their array is on the stack): the
+    /// offset of the first `@` (compiler/decorators.rs).
+    pub class_decs: Option<u32>,
     /// The next unary operand is the operand of `delete`.
     pub delete_operand: bool,
     /// The memoized pattern-or-literal scan (docs/compiler.md 3.3).
@@ -216,6 +219,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             classes: Vec::new(),
             name_hint: None,
             last_anon_fn: None,
+            class_decs: None,
             delete_operand: false,
             pat_scan: Default::default(),
             pattern_vars: Vec::new(),

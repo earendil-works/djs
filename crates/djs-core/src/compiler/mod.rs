@@ -16,6 +16,7 @@
 //! the parameters.
 
 mod class;
+mod decorators;
 mod dynamic;
 mod expr;
 mod for_in_of;
