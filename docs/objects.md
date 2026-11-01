@@ -1,6 +1,9 @@
 # Property access: measurements and design (0062)
 
-Status: design proposal, not implemented. Decisions D1620+ get recorded when parts land.
+Status: part 1 (B, inline caches) landed in 0062: D1620 (globals and own properties),
+D1621 (prototype properties). Option A (cheaper misses) was not needed for the hot
+sites and is left for the builtin language's `%Get` path, which 0063 mostly replaces.
+Shapes (C) are their own issue, merged with 0052 S2.
 
 ## 1. Measurements
 
@@ -178,3 +181,27 @@ wins, so it is not proposed separately.
 - The epoch's home: Roots (with D1601's threshold) or Interp.
 - Whether to cache misses (absence) for `get_field` of optional properties. Not in the
   first part.
+
+## 6. Results of part 1 (0062)
+
+LTO builds with one codegen unit, interleaved runs, CPU-time minimum of 7. The machine
+was at load 8–30, so engine-track differences under ±10% are noise. Default 16-unit
+release builds vary ±15% between builds just from code layout.
+
+| access | before | after |
+| --- | ---: | ---: |
+| global read (`Infinity`) | 10.4 ns | 1.3 ns |
+| `m.PI` (own, hashed) | 9.4 ns | 2.5 ns |
+| own read, first of 4 | 6.5 ns | ~0–1.7 ns |
+| own read, 4th of 4 | 14.7 ns | 2.4–5.8 ns |
+| own write | 15.7 ns | 1.0–10 ns |
+| prototype read, depth 1 / 3 | 13.7 / 16.3 ns | 2.8 / 2.6 ns |
+| method call `p.f()` | 28.6 ns | 20.1 ns |
+
+Workloads:
+- engine/props: −14 to −18%.
+- engine/arrays and engine/higher-order: −14 to −22% with the prototype caches
+  (`arr.push`, method lookups).
+- test262 decodeURI (Script-mode globals): −13%.
+- The pi-like script and float: within noise, as predicted; their time is in the builtin
+  language.

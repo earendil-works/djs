@@ -1,6 +1,6 @@
 # 0062: Property access performance: shapes / inline caches (design first)
 
-status: in-progress
+status: done
 agent: heap
 branch: issue/0062-property-access-perf
 depends-on: 0060
@@ -68,8 +68,28 @@ and implement it.
   CPU-time min-of-7, load ~8-20): prototype read depth 1 13.7 -> 2.8 ns, depth 3 16.3 ->
   2.6 ns, method call p.f() 28.6 -> 20.1 ns; engine arrays -22%, higher-order -14%,
   calls -9%, loop -21% (the last two do not use properties: layout noise), props/float/
-  strings/pi-like/decodeURI within ±3%.
+  strings/pi-like/decodeURI within ±3%. Merged (main 5c21213).
 
 ## Follow-ups
 
+- Shapes + 0052 S2 (coordinator writes the issue from docs/objects.md), after 0063.
+- `%Get`/`%Set` intrinsic calls from the builtin language have no caches (call-site
+  caches would work the same way) and pay the full lookup; 0063 replaces the hot ones.
+- Caching property additions (`this.x = v` in constructors) needs shapes.
+- Getters on prototypes (`map.size`, `Symbol.toStringTag` accessors) take the slow path.
+- Release-build layout noise of ±15% (D1620 note): benchmark recording might want an
+  LTO/one-unit profile.
+
 ## Result
+
+Landed in three merges (09e5bc2, 6d50b12, 5c21213): verified-index inline caches for
+global reads and writes, own-property reads/writes/method loads, and prototype data
+properties (D1620, D1621), with the `Cache` immediate on six ops (bytecode format
+change), the per-template IC array, the realm's GlobalLexEpoch and Roots::PROTO_EPOCH.
+Caches never change semantics (every hit re-checks the key), live in the heap, and a VM
+restored with warm caches behaves like a cold one (tested). Collections empty the only
+slots with offsets, so images stay byte-identical after collecting twice. Numbers:
+docs/objects.md §6 (property accesses 2-10x faster; engine/props -14..-18%,
+arrays/higher-order -14..-22%, Script-mode test262 -13%; codemode-like scripts within
+noise, as the measurements predicted). Design and measurements for the next step
+(shapes) are in docs/objects.md.
