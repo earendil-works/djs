@@ -23,12 +23,9 @@ built-ins/Function/prototype/S15.3.4_A1.js: Test262Error: Object.prototype.toStr
 built-ins/Function/prototype/S15.3.4_A2_T1.js: Test262Error: #1.1: The Function prototype object is itself a Function object that, when invoked, accepts any arguments and returns undefined: TypeError: not a…
 built-ins/Function/prototype/S15.3.4_A2_T2.js: Test262Error: #1.1: The Function prototype object is itself a Function object that, when invoked, accepts any arguments and returns undefined: TypeError: not a…
 built-ins/Function/prototype/S15.3.4_A2_T3.js: TypeError: not a function
-built-ins/Number/prototype/toString/length.js: Test262Error: length descriptor value should be 1; length value should be 1
 built-ins/Object/freeze/typedarray-backed-by-resizable-buffer.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
 built-ins/Object/prototype/setPrototypeOf-with-non-circular-values-__proto__.js: Test262Error: Object.setPrototypeOf(ObjProto, { __proto__: null }) throws a TypeError Expected a TypeError to be thrown but no exception was thrown at all
 built-ins/Object/prototype/setPrototypeOf-with-non-circular-values.js: Test262Error: Object.setPrototypeOf(ObjProto, Object.create(null)) throws a TypeError Expected a TypeError to be thrown but no exception was thrown at all
-built-ins/Object/subclass-object-arg.js: Test262Error: Expected SameValue(«1», «undefined») to be true
-built-ins/Promise/prototype/finally/rejected-observable-then-calls-argument.js: async: Test262Error: Test262Error: `then` invoked with one argument Expected SameValue(«2», «1») to be true
 built-ins/TypedArray/prototype/subarray/resizable-buffer.js: Test262Error: Expected a RangeError to be thrown but no exception was thrown at all
 language/eval-code/indirect/always-non-strict.js: SyntaxError: variable name expected
 language/eval-code/indirect/non-definable-global-function.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
@@ -48,8 +45,6 @@ language/expressions/instanceof/primitive-prototype-with-primitive.js: TypeError
 language/expressions/instanceof/prototype-getter-with-object-throws.js: Test262Error: Expected a DummyError to be thrown but no exception was thrown at all
 language/expressions/instanceof/prototype-getter-with-object.js: Test262Error: [] should be instance of Function.prototype
 language/expressions/property-accessors/S11.2.1_A4_T3.js: Test262Error: #1: typeof Function.prototype === "function". Actual: object
-language/global-code/script-decl-func-err-non-configurable.js: Test262Error: writable, non-enumerable data property Expected a TypeError to be thrown but no exception was thrown at all
-language/global-code/script-decl-func.js: TypeError: 'configurable' is read-only
 language/identifier-resolution/assign-to-global-undefined.js: expected runtime ReferenceError, but no error was thrown
 language/statements/class/elements/private-getter-is-not-a-own-property.js: TypeError: not a function
 language/statements/class/elements/private-setter-is-not-a-own-property.js: TypeError: not a function

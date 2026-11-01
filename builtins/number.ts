@@ -33,6 +33,7 @@ function ThisNumberValue(value: Value): f64 {
 /**
  * Number.prototype.toString ( [ radix ] ), 21.1.3.6.
  * @builtin Number.prototype.toString
+ * @length 1
  */
 function NumberPrototypeToString(this: Value, radix?: Value): Str {
   const x: f64 = ThisNumberValue(this);

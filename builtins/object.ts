@@ -6,6 +6,10 @@
  * @length 1
  */
 function ObjectConstructor(value?: Value): Obj {
+  // A subclass constructor (`super(value)`) ignores the value.
+  if (new.target !== undefined && new.target !== RealmConstructor("Object")) {
+    return ObjectCreate(GetPrototypeFromConstructor(new.target, "ObjectPrototype"));
+  }
   if (value === undefined || value === null) {
     return ObjectCreate(GetPrototypeFromConstructor(new.target, "ObjectPrototype"));
   }

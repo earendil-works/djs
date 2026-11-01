@@ -629,7 +629,7 @@ function PromiseThenFinally(this: Value, value: Value): Value {
   const data: Obj = AsObj(this);
   const result: Value = Call(RecordGet(data, 0), undefined);
   const p: Value = PromiseResolve(RecordGet(data, 1), result);
-  return InvokeThen(p, NewBuiltinClosure(9, value, 0), undefined);
+  return Call(GetV(p, "then"), p, NewBuiltinClosure(9, value, 0));
 }
 
 /**
@@ -640,7 +640,7 @@ function PromiseCatchFinally(this: Value, reason: Value): Value {
   const data: Obj = AsObj(this);
   const result: Value = Call(RecordGet(data, 0), undefined);
   const p: Value = PromiseResolve(RecordGet(data, 1), result);
-  return InvokeThen(p, NewBuiltinClosure(10, reason, 0), undefined);
+  return Call(GetV(p, "then"), p, NewBuiltinClosure(10, reason, 0));
 }
 
 /**

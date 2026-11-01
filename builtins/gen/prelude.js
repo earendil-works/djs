@@ -5775,7 +5775,7 @@ function ThisNumberValue(value) {
   return %AsNumber(n);
 }
 
-// builtins/number.ts:37 Number.prototype.toString
+// builtins/number.ts:38 Number.prototype.toString
 function NumberPrototypeToString(radix) {
   const x = ThisNumberValue(this);
   let r = 10;
@@ -5785,23 +5785,23 @@ function NumberPrototypeToString(radix) {
   return %NumberToString(x, r);
 }
 
-// builtins/number.ts:50 Number.prototype.toLocaleString
+// builtins/number.ts:51 Number.prototype.toLocaleString
 function NumberPrototypeToLocaleString() {
   return %NumberToString(ThisNumberValue(this), 10);
 }
 
-// builtins/number.ts:58 Number.prototype.valueOf
+// builtins/number.ts:59 Number.prototype.valueOf
 function NumberPrototypeValueOf() {
   return ThisNumberValue(this);
 }
 
-// builtins/number.ts:66 Number.prototype.toFixed
+// builtins/number.ts:67 Number.prototype.toFixed
 function NumberPrototypeToFixed(fractionDigits) {
   const x = ThisNumberValue(this);
   return %NumberToFixed(x, ToIntegerOrInfinity(fractionDigits));
 }
 
-// builtins/number.ts:75 Number.prototype.toExponential
+// builtins/number.ts:76 Number.prototype.toExponential
 function NumberPrototypeToExponential(fractionDigits) {
   const x = ThisNumberValue(this);
   const f = ToIntegerOrInfinity(fractionDigits);
@@ -5811,7 +5811,7 @@ function NumberPrototypeToExponential(fractionDigits) {
   return %NumberToExponential(x, f);
 }
 
-// builtins/number.ts:88 Number.prototype.toPrecision
+// builtins/number.ts:89 Number.prototype.toPrecision
 function NumberPrototypeToPrecision(precision) {
   const x = ThisNumberValue(this);
   if (precision === undefined) {
@@ -5820,17 +5820,17 @@ function NumberPrototypeToPrecision(precision) {
   return %NumberToPrecision(x, ToIntegerOrInfinity(precision));
 }
 
-// builtins/number.ts:97
+// builtins/number.ts:98
 function IsFiniteNumber(n) {
   return n === n && n !== 1 / 0 && n !== -1 / 0;
 }
 
-// builtins/number.ts:105 Number.isFinite
+// builtins/number.ts:106 Number.isFinite
 function NumberIsFinite(number) {
   return %IsNumber(number) && IsFiniteNumber(%AsNumber(number));
 }
 
-// builtins/number.ts:113 Number.isInteger
+// builtins/number.ts:114 Number.isInteger
 function NumberIsInteger(number) {
   if (!%IsNumber(number)) {
     return false;
@@ -5839,7 +5839,7 @@ function NumberIsInteger(number) {
   return IsFiniteNumber(n) && %ToIntegerOrInfinityNumber(n) === n;
 }
 
-// builtins/number.ts:125 Number.isNaN
+// builtins/number.ts:126 Number.isNaN
 function NumberIsNaN(number) {
   if (!%IsNumber(number)) {
     return false;
@@ -5848,7 +5848,7 @@ function NumberIsNaN(number) {
   return n !== n;
 }
 
-// builtins/number.ts:137 Number.isSafeInteger
+// builtins/number.ts:138 Number.isSafeInteger
 function NumberIsSafeInteger(number) {
   if (!NumberIsInteger(number)) {
     return false;
@@ -5857,77 +5857,80 @@ function NumberIsSafeInteger(number) {
   return n <= 9007199254740991 && n >= -9007199254740991;
 }
 
-// builtins/number.ts:149 value Number.EPSILON
+// builtins/number.ts:150 value Number.EPSILON
 function NumberEpsilon() {
   return 2.220446049250313e-16;
 }
 
-// builtins/number.ts:157 value Number.MAX_SAFE_INTEGER
+// builtins/number.ts:158 value Number.MAX_SAFE_INTEGER
 function NumberMaxSafeInteger() {
   return 9007199254740991;
 }
 
-// builtins/number.ts:165 value Number.MAX_VALUE
+// builtins/number.ts:166 value Number.MAX_VALUE
 function NumberMaxValue() {
   return 1.7976931348623157e308;
 }
 
-// builtins/number.ts:173 value Number.MIN_SAFE_INTEGER
+// builtins/number.ts:174 value Number.MIN_SAFE_INTEGER
 function NumberMinSafeInteger() {
   return -9007199254740991;
 }
 
-// builtins/number.ts:181 value Number.MIN_VALUE
+// builtins/number.ts:182 value Number.MIN_VALUE
 function NumberMinValue() {
   return 5e-324;
 }
 
-// builtins/number.ts:189 value Number.NaN
+// builtins/number.ts:190 value Number.NaN
 function NumberNaN() {
   return 0 / 0;
 }
 
-// builtins/number.ts:197 value Number.NEGATIVE_INFINITY
+// builtins/number.ts:198 value Number.NEGATIVE_INFINITY
 function NumberNegativeInfinity() {
   return -1 / 0;
 }
 
-// builtins/number.ts:205 value Number.POSITIVE_INFINITY
+// builtins/number.ts:206 value Number.POSITIVE_INFINITY
 function NumberPositiveInfinity() {
   return 1 / 0;
 }
 
-// builtins/number.ts:214 parseFloat Number.parseFloat
+// builtins/number.ts:215 parseFloat Number.parseFloat
 function GlobalParseFloat(string) {
   return %StringParseFloat(ToString(string));
 }
 
-// builtins/number.ts:223 parseInt Number.parseInt
+// builtins/number.ts:224 parseInt Number.parseInt
 function GlobalParseInt(string, radix) {
   const s = ToString(string);
   return %StringParseInt(s, %NumberToInt32(ToNumber(radix)));
 }
 
-// builtins/number.ts:232 isNaN
+// builtins/number.ts:233 isNaN
 function GlobalIsNaN(number) {
   const n = ToNumber(number);
   return n !== n;
 }
 
-// builtins/number.ts:241 isFinite
+// builtins/number.ts:242 isFinite
 function GlobalIsFinite(number) {
   return IsFiniteNumber(ToNumber(number));
 }
 
 // builtins/object.ts:8 constructor Object
 function ObjectConstructor(value) {
+  if (new.target !== undefined && new.target !== %RealmConstructor("Object")) {
+    return %ObjectCreate(GetPrototypeFromConstructor(new.target, "ObjectPrototype"));
+  }
   if (value === undefined || value === null) {
     return %ObjectCreate(GetPrototypeFromConstructor(new.target, "ObjectPrototype"));
   }
   return %ToObject(value);
 }
 
-// builtins/object.ts:19
+// builtins/object.ts:23
 function ToPropertyDescriptor(attributes) {
   if (!%IsObject(attributes)) {
     throw %NewTypeError("not an object");
@@ -5970,7 +5973,7 @@ function ToPropertyDescriptor(attributes) {
   return desc;
 }
 
-// builtins/object.ts:65
+// builtins/object.ts:69
 function DefineOwnProperty(o, key, desc) {
   if (%IsTypedArray(o) && %HasOwnProperty(desc, "value") && IsCanonicalNumericKey(key)) {
     const value = %Get(desc, "value");
@@ -5998,7 +6001,7 @@ function DefineOwnProperty(o, key, desc) {
   return %DefineOwnPropertyFromRecord(o, key, desc);
 }
 
-// builtins/object.ts:97
+// builtins/object.ts:101
 function DefinePropertyOrThrow(o, key, desc) {
   if (!DefineOwnProperty(o, key, desc)) {
     if (%IsProxy(o)) {
@@ -6011,7 +6014,7 @@ function DefinePropertyOrThrow(o, key, desc) {
   }
 }
 
-// builtins/object.ts:114 Object.defineProperty
+// builtins/object.ts:118 Object.defineProperty
 function ObjectDefineProperty(o, p, attributes) {
   if (!%IsObject(o)) {
     throw %NewTypeError("not an object");
@@ -6022,32 +6025,32 @@ function ObjectDefineProperty(o, p, attributes) {
   return o;
 }
 
-// builtins/object.ts:128 Object.getOwnPropertyDescriptor
+// builtins/object.ts:132 Object.getOwnPropertyDescriptor
 function ObjectGetOwnPropertyDescriptor(o, p) {
   const obj = %ToObject(o);
   const key = ToPropertyKey(p);
   return %GetOwnPropertyDescriptorObject(obj, key);
 }
 
-// builtins/object.ts:138 Object.getOwnPropertyNames
+// builtins/object.ts:142 Object.getOwnPropertyNames
 function ObjectGetOwnPropertyNames(o) {
   return %OwnPropertyKeys(%ToObject(o), 0);
 }
 
-// builtins/object.ts:146 Object.prototype.hasOwnProperty
+// builtins/object.ts:150 Object.prototype.hasOwnProperty
 function ObjectPrototypeHasOwnProperty(v) {
   const key = ToPropertyKey(v);
   return %HasOwnProperty(%ToObject(this), key);
 }
 
-// builtins/object.ts:155 Object.prototype.propertyIsEnumerable
+// builtins/object.ts:159 Object.prototype.propertyIsEnumerable
 function ObjectPrototypePropertyIsEnumerable(v) {
   const key = ToPropertyKey(v);
   const attrs = %OwnPropertyAttributes(%ToObject(this), key);
   return attrs >= 0 && (attrs & 2) !== 0;
 }
 
-// builtins/object.ts:165 Object.getPrototypeOf
+// builtins/object.ts:169 Object.getPrototypeOf
 function ObjectGetPrototypeOf(o) {
   if (o === undefined || o === null) {
     throw %NewTypeError("not an object");
@@ -6055,7 +6058,7 @@ function ObjectGetPrototypeOf(o) {
   return %GetPrototypeOf(%ToObject(o));
 }
 
-// builtins/object.ts:176 Object.setPrototypeOf
+// builtins/object.ts:180 Object.setPrototypeOf
 function ObjectSetPrototypeOf(o, proto) {
   if (o === undefined || o === null) {
     throw %NewTypeError("not an object");
@@ -6070,7 +6073,7 @@ function ObjectSetPrototypeOf(o, proto) {
   return o;
 }
 
-// builtins/object.ts:191
+// builtins/object.ts:195
 function SetPrototypeOrThrow(o, proto) {
   if (!%SetPrototypeOf(o, proto)) {
     if (o === %RealmIntrinsic("ObjectPrototype")) {
@@ -6083,12 +6086,12 @@ function SetPrototypeOrThrow(o, proto) {
   }
 }
 
-// builtins/object.ts:207 get Object.prototype.__proto__
+// builtins/object.ts:211 get Object.prototype.__proto__
 function ObjectPrototypeGetProto() {
   return %GetPrototypeOf(%ToObject(this));
 }
 
-// builtins/object.ts:215 set Object.prototype.__proto__
+// builtins/object.ts:219 set Object.prototype.__proto__
 function ObjectPrototypeSetProto(proto) {
   if (this === undefined || this === null) {
     throw %NewTypeError("not an object");
@@ -6100,7 +6103,7 @@ function ObjectPrototypeSetProto(proto) {
   return undefined;
 }
 
-// builtins/object.ts:230 Object.create
+// builtins/object.ts:234 Object.create
 function ObjectCreateBuiltin(o, properties) {
   if (!%IsObject(o) && o !== null) {
     throw %NewTypeError("not a prototype");
@@ -6112,7 +6115,7 @@ function ObjectCreateBuiltin(o, properties) {
   return obj;
 }
 
-// builtins/object.ts:242
+// builtins/object.ts:246
 function ObjectDefinePropertiesHelper(o, properties) {
   const props = %ToObject(properties);
   const keys = %OwnPropertyKeys(props, 2);
@@ -6136,7 +6139,7 @@ function ObjectDefinePropertiesHelper(o, properties) {
   return o;
 }
 
-// builtins/object.ts:270 Object.defineProperties
+// builtins/object.ts:274 Object.defineProperties
 function ObjectDefineProperties(o, properties) {
   if (!%IsObject(o)) {
     throw %NewTypeError("not an object");
@@ -6144,7 +6147,7 @@ function ObjectDefineProperties(o, properties) {
   return ObjectDefinePropertiesHelper(%AsObj(o), properties);
 }
 
-// builtins/object.ts:281
+// builtins/object.ts:285
 function EnumerableOwnProperties(o, kind) {
   if (kind === 0) {
     return %OwnPropertyKeys(o, 3);
@@ -6172,22 +6175,22 @@ function EnumerableOwnProperties(o, kind) {
   return result;
 }
 
-// builtins/object.ts:312 Object.keys
+// builtins/object.ts:316 Object.keys
 function ObjectKeys(o) {
   return EnumerableOwnProperties(%ToObject(o), 0);
 }
 
-// builtins/object.ts:320 Object.values
+// builtins/object.ts:324 Object.values
 function ObjectValues(o) {
   return EnumerableOwnProperties(%ToObject(o), 1);
 }
 
-// builtins/object.ts:328 Object.entries
+// builtins/object.ts:332 Object.entries
 function ObjectEntries(o) {
   return EnumerableOwnProperties(%ToObject(o), 2);
 }
 
-// builtins/object.ts:337 Object.assign
+// builtins/object.ts:341 Object.assign
 function ObjectAssign(target, ...sources) {
   const to = %ToObject(target);
   const n = LengthOfArrayLike(sources);
@@ -6209,7 +6212,7 @@ function ObjectAssign(target, ...sources) {
   return to;
 }
 
-// builtins/object.ts:362 Object.freeze
+// builtins/object.ts:366 Object.freeze
 function ObjectFreeze(o) {
   if (!%IsObject(o)) {
     return o;
@@ -6220,7 +6223,7 @@ function ObjectFreeze(o) {
   return o;
 }
 
-// builtins/object.ts:376 Object.seal
+// builtins/object.ts:380 Object.seal
 function ObjectSeal(o) {
   if (!%IsObject(o)) {
     return o;
@@ -6231,7 +6234,7 @@ function ObjectSeal(o) {
   return o;
 }
 
-// builtins/object.ts:390 Object.preventExtensions
+// builtins/object.ts:394 Object.preventExtensions
 function ObjectPreventExtensions(o) {
   if (!%IsObject(o)) {
     return o;
@@ -6242,27 +6245,27 @@ function ObjectPreventExtensions(o) {
   return o;
 }
 
-// builtins/object.ts:404 Object.isFrozen
+// builtins/object.ts:408 Object.isFrozen
 function ObjectIsFrozen(o) {
   return !%IsObject(o) || %TestIntegrityLevel(%AsObj(o), true);
 }
 
-// builtins/object.ts:412 Object.isSealed
+// builtins/object.ts:416 Object.isSealed
 function ObjectIsSealed(o) {
   return !%IsObject(o) || %TestIntegrityLevel(%AsObj(o), false);
 }
 
-// builtins/object.ts:420 Object.isExtensible
+// builtins/object.ts:424 Object.isExtensible
 function ObjectIsExtensible(o) {
   return %IsObject(o) && %IsExtensible(%AsObj(o));
 }
 
-// builtins/object.ts:428 Object.getOwnPropertySymbols
+// builtins/object.ts:432 Object.getOwnPropertySymbols
 function ObjectGetOwnPropertySymbols(o) {
   return %OwnPropertyKeys(%ToObject(o), 1);
 }
 
-// builtins/object.ts:436 Object.getOwnPropertyDescriptors
+// builtins/object.ts:440 Object.getOwnPropertyDescriptors
 function ObjectGetOwnPropertyDescriptors(o) {
   const obj = %ToObject(o);
   const keys = %OwnPropertyKeys(obj, 2);
@@ -6278,23 +6281,23 @@ function ObjectGetOwnPropertyDescriptors(o) {
   return descriptors;
 }
 
-// builtins/object.ts:455 Object.hasOwn
+// builtins/object.ts:459 Object.hasOwn
 function ObjectHasOwn(o, p) {
   const obj = %ToObject(o);
   return %HasOwnProperty(obj, ToPropertyKey(p));
 }
 
-// builtins/object.ts:464 Object.is
+// builtins/object.ts:468 Object.is
 function ObjectIs(value1, value2) {
   return %SameValue(value1, value2);
 }
 
-// builtins/object.ts:472 Object.prototype.toString
+// builtins/object.ts:476 Object.prototype.toString
 function ObjectPrototypeToString() {
   return ObjectToString(this);
 }
 
-// builtins/object.ts:477
+// builtins/object.ts:481
 function ObjectToString(v) {
   if (v === undefined) {
     return "[object Undefined]";
@@ -6311,17 +6314,17 @@ function ObjectToString(v) {
   return "[object " + builtinTag + "]";
 }
 
-// builtins/object.ts:498 Object.prototype.toLocaleString
+// builtins/object.ts:502 Object.prototype.toLocaleString
 function ObjectPrototypeToLocaleString() {
   return %Call(%GetV(this, "toString"), this);
 }
 
-// builtins/object.ts:506 Object.prototype.valueOf
+// builtins/object.ts:510 Object.prototype.valueOf
 function ObjectPrototypeValueOf() {
   return %ToObject(this);
 }
 
-// builtins/object.ts:514 Object.prototype.isPrototypeOf
+// builtins/object.ts:518 Object.prototype.isPrototypeOf
 function ObjectPrototypeIsPrototypeOf(v) {
   if (!%IsObject(v)) {
     return false;
@@ -6848,7 +6851,7 @@ function PromiseThenFinally(value) {
   const data = %AsObj(this);
   const result = %Call(%RecordGet(data, 0), undefined);
   const p = PromiseResolve(%RecordGet(data, 1), result);
-  return InvokeThen(p, %NewBuiltinClosure(9, value, 0), undefined);
+  return %Call(%GetV(p, "then"), p, %NewBuiltinClosure(9, value, 0));
 }
 
 // builtins/promise.ts:639 %PromiseCatchFinally
@@ -6856,7 +6859,7 @@ function PromiseCatchFinally(reason) {
   const data = %AsObj(this);
   const result = %Call(%RecordGet(data, 0), undefined);
   const p = PromiseResolve(%RecordGet(data, 1), result);
-  return InvokeThen(p, %NewBuiltinClosure(10, reason, 0), undefined);
+  return %Call(%GetV(p, "then"), p, %NewBuiltinClosure(10, reason, 0));
 }
 
 // builtins/promise.ts:650 %PromiseValueThunk
@@ -11181,7 +11184,7 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallMethod("Math", "min", MathMin, 2);
 %InstallMethod("Math", "hypot", MathHypot, 2);
 %InstallMethod("Math", "random", MathRandomBuiltin, 0);
-%InstallMethod("Number.prototype", "toString", NumberPrototypeToString, 0);
+%InstallMethod("Number.prototype", "toString", NumberPrototypeToString, 1);
 %InstallMethod("Number.prototype", "toLocaleString", NumberPrototypeToLocaleString, 0);
 %InstallMethod("Number.prototype", "valueOf", NumberPrototypeValueOf, 0);
 %InstallMethod("Number.prototype", "toFixed", NumberPrototypeToFixed, 1);
