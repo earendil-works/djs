@@ -2655,3 +2655,13 @@ allocate, so it can fail like any call). The inline fast call path declines thes
 and falls back to `call`, so `push_frame` stays as it was. Nothing else of sloppy mode
 changes. test262: 40 of the 56 sloppy failures from 0059 pass. The other 16 need sloppy
 syntax (duplicate parameters, `eval`/`arguments` as names), which D015 leaves out.
+
+## D1570: The wasm module links with --compress-relocations
+date: 2026-11-03 · by: bloat · issue: 0057
+wasm-ld writes relocated immediates (call targets, data addresses, `__stack_pointer`) as
+padded 5-byte LEBs and nothing compacts them without wasm-opt: 52–58 KB, ~7% of the code
+section (0052). djs-wasm's build.rs passes `--compress-relocations` to the cdylib link
+when the target is wasm32 and the build has no debug info (wasm-ld rejects the flag
+otherwise; the gate's debug build and `CARGO_PROFILE_WASM_DEBUG=1` line-table builds keep
+the padded form). Same instructions, minimal LEBs: code 837,472 -> 779,856. A build.rs
+rather than `.cargo/config.toml` rustflags, which cannot depend on the profile.
