@@ -1,7 +1,7 @@
 //! The djs engine on a fixture suite that only uses what djs runs today
 //! (tests/fixture/djs): every `pass/` test passes and every `fail/` test fails for the
-//! expected reason. Covers Scripts and the harness, negative tests by phase, the
-//! `Unsupported` parse errors, `$262` (global, evalScript, gc, detachArrayBuffer),
+//! expected reason. Covers Scripts and the harness, negative tests by phase, `$262`
+//! (global, evalScript, gc, detachArrayBuffer),
 //! `print` and `$DONE`, and the fuel and memory limits.
 
 use std::path::Path;
@@ -35,10 +35,6 @@ const FAILURES: &[(&str, &str)] = &[
     ("fail/throw-primitive.js", "number: 1"),
     ("fail/throws.js", "Test262Error: boom"),
     ("fail/timeout.js", "timeout: the fuel budget is used up"),
-    (
-        "fail/unsupported-negative.js",
-        "expected parse SyntaxError, got parse Unsupported: import() is not supported yet",
-    ),
 ];
 
 #[test]
