@@ -8,6 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0134 | GC cost in pi-like: old-region walk, young-sized threshold | heap | .worktrees/heap |
+| 0135 | Why REPL heap dumps are ~450 KB and docs heaps ~6000 cells | bloat | .worktrees/bloat |
 | 0133 | Heap dump analyzer | snapshot | .worktrees/snapshot |
 | 0129 | pi-like hot spots (interpreter, native calls, JSON) | perf | .worktrees/perf |
 
