@@ -80,14 +80,15 @@ function 0 <anonymous>: params=0 locals=2 stack=17 captures=0
   259  push_i8 4
   261  define_field "1.5"
   266  get_global "k" ic5  ; 7:42
-  273  push_i8 5
-  275  define_elem
-  276  get_global "n" ic6  ; 7:49
-  283  define_field "n"
-  288  get_global "s" ic7  ; 7:55
-  295  copy_data_props 0
-  297  push_i8 6
-  299  define_field "if"
-  304  init_global_lex "o"
-  309  get_loc loc0 (<completion>)
-  312  return
+  273  to_propkey
+  274  push_i8 5
+  276  define_elem
+  277  get_global "n" ic6  ; 7:49
+  284  define_field "n"
+  289  get_global "s" ic7  ; 7:55
+  296  copy_data_props 0
+  298  push_i8 6
+  300  define_field "if"
+  305  init_global_lex "o"
+  310  get_loc loc0 (<completion>)
+  313  return

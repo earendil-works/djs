@@ -25,6 +25,10 @@ pub(super) enum ScopeKind {
     Switch,
     /// A `catch` clause: the parameter and the declarations of the catch block.
     Catch,
+    /// The block of a `catch` clause with a destructuring parameter: closures in the
+    /// pattern must not see its declarations (D1820). Its lexical names still conflict
+    /// with the parameter's.
+    CatchBody,
     /// A class: the inner class binding (around the heritage), then a nested one for
     /// the private names and the hidden bindings of the class body (compiler/class.rs).
     Class,

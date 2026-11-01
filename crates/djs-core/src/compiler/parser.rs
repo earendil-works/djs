@@ -112,6 +112,9 @@ pub(super) struct Parser<'a, 'h> {
     pub class_decs: Option<u32>,
     /// Legacy decorators were parsed for the next class: their thunk.
     pub class_thunk: Option<super::decorators::Thunk>,
+    /// Where the content of the innermost parentheses being parsed starts (`u32::MAX`:
+    /// none), so an optional chain knows it is all of it (`(a?.b)()`).
+    pub paren_inner: u32,
     /// The next unary operand is the operand of `delete`.
     pub delete_operand: bool,
     /// The memoized pattern-or-literal scan (docs/compiler.md 3.3).
@@ -224,6 +227,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             class_decs: None,
             class_thunk: None,
             delete_operand: false,
+            paren_inner: u32::MAX,
             pat_scan: Default::default(),
             pattern_vars: Vec::new(),
             open_iters: Vec::new(),
@@ -462,6 +466,21 @@ impl<'a, 'h> Parser<'a, 'h> {
             start: self.tok.end,
             end: self.tok.end,
         })
+    }
+
+    /// The two tokens after the current one.
+    pub fn peek2(&self) -> (Token, Token) {
+        let mut lx = self.lx;
+        let eof = Token {
+            kind: TokenKind::Eof,
+            kw: Kw::None,
+            flags: 0,
+            start: self.tok.end,
+            end: self.tok.end,
+        };
+        let t1 = lx.next_token().unwrap_or(eof);
+        let t2 = lx.next_token().unwrap_or(eof);
+        (t1, t2)
     }
 
     pub fn is(&self, kind: TokenKind) -> bool {
@@ -781,6 +800,7 @@ impl<'a, 'h> Parser<'a, 'h> {
                 .flatten()
                 .filter(|&v| self.f.vars[v as usize].kind == VarKind::Param)
         });
+        let found = found.or_else(|| self.catch_param(name));
         if let Some(v) = found {
             let msg = match self.f.vars[v as usize].kind {
                 // Function declarations at the function level behave like `var`.
@@ -803,6 +823,15 @@ impl<'a, 'h> Parser<'a, 'h> {
         let v = self.f.add_var(name, kind, scope);
         self.f.vars[v as usize].global = self.f.kind == FuncKind::Script && scope == BODY_SCOPE;
         Ok(v)
+    }
+
+    /// In the block of a `catch` with a pattern: the parameter's binding `name`.
+    fn catch_param(&self, name: Atom) -> Option<VarId> {
+        let s = &self.f.scopes[self.scope as usize];
+        if s.kind != ScopeKind::CatchBody {
+            return None;
+        }
+        self.f.find_in_scope(s.parent?, name)
     }
 
     fn var_conflict_message(&self) -> &'static str {
@@ -833,6 +862,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         } else {
             // In a block: lexical (strict mode, no Annex B).
             if self.f.find_in_scope(scope, name).is_some()
+                || self.catch_param(name).is_some()
                 || self
                     .f
                     .var_decls

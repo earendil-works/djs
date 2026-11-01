@@ -47,8 +47,6 @@ language/expressions/class/elements/private-setter-is-not-a-own-property.js: Typ
 language/expressions/instanceof/primitive-prototype-with-primitive.js: TypeError: invalid 'instanceof' right operand
 language/expressions/instanceof/prototype-getter-with-object-throws.js: Test262Error: Expected a DummyError to be thrown but no exception was thrown at all
 language/expressions/instanceof/prototype-getter-with-object.js: Test262Error: [] should be instance of Function.prototype
-language/expressions/object/computed-property-name-topropertykey-before-value-evaluation.js: Test262Error: Expected SameValue(«"bad"», «"ok"») to be true
-language/expressions/optional-chaining/optional-call-preserves-this.js: TypeError: cannot read property '_b' of undefined
 language/expressions/property-accessors/S11.2.1_A4_T3.js: Test262Error: #1: typeof Function.prototype === "function". Actual: object
 language/global-code/script-decl-func-err-non-configurable.js: Test262Error: writable, non-enumerable data property Expected a TypeError to be thrown but no exception was thrown at all
 language/global-code/script-decl-func.js: TypeError: 'configurable' is read-only
@@ -57,7 +55,6 @@ language/statements/class/elements/private-getter-is-not-a-own-property.js: Type
 language/statements/class/elements/private-setter-is-not-a-own-property.js: TypeError: not a function
 language/statements/function/13.0-12-s.js: SyntaxError: invalid lvalue in strict mode
 language/statements/function/13.0_4-17gs.js: SyntaxError: invalid lvalue in strict mode
-language/statements/try/scope-catch-block-lex-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true
 language/statements/variable/12.2.1-10-s.js: SyntaxError: invalid lvalue in strict mode
 language/statements/variable/12.2.1-16-s.js: SyntaxError: invalid variable name in strict mode
 language/statements/variable/12.2.1-17-s.js: SyntaxError: invalid lvalue in strict mode

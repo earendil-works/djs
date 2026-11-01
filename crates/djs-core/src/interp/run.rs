@@ -2002,6 +2002,8 @@ impl<'h> Exec<'h> {
                     return self.get_property(o, key);
                 }
             }
+            // Object keys were converted by `primitive_operands`.
+            Op::ToPropKey => {}
             Op::GetElem2 => {
                 let (o, k) = (self.top(1), self.top(0));
                 let key = self.property_key(o, k)?;
@@ -2627,6 +2629,7 @@ impl<'h> Exec<'h> {
                 return Some(type_error(msg));
             }
             Op::ToString
+            | Op::ToPropKey
             | Op::GetElem
             | Op::GetElem2
             | Op::GetElemMethod

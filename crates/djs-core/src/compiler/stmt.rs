@@ -728,8 +728,10 @@ impl Parser<'_, '_> {
                 depth_from: None,
             });
             self.push_scope(ScopeKind::Catch)?;
+            let mut body_scope = false;
             if self.eat(TokenKind::LParen)? {
                 if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
+                    body_scope = true;
                     // A pattern binds like `let` (in its TDZ until initialized).
                     let mark = self.pattern_vars.len();
                     self.parse_pattern(Binding::Lexical(VarKind::Let))?;
@@ -754,8 +756,12 @@ impl Parser<'_, '_> {
                 self.code().drop();
             }
             // The catch block's declarations share the clause's scope, so they
-            // conflict with the parameter (`catch (e) { let e }`).
+            // conflict with the parameter (`catch (e) { let e }`); after a pattern they
+            // get a scope of their own (`ScopeKind::CatchBody`).
             self.expect(TokenKind::LBrace, "{")?;
+            if body_scope {
+                self.push_scope(ScopeKind::CatchBody)?;
+            }
             self.reset_completion();
             let using = self.begin_using_list(true);
             while !self.is(TokenKind::RBrace) {
@@ -766,6 +772,9 @@ impl Parser<'_, '_> {
             }
             self.next()?;
             self.end_using_list(using);
+            if body_scope {
+                self.pop_scope();
+            }
             self.pop_scope();
             let l_catch_end = self.new_label();
             self.place(l_catch_end);

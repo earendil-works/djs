@@ -478,6 +478,9 @@ ops! {
     /// assignment or update, with `key'` = ToPrimitive(key) (one conversion for the get and
     /// the put, after the RequireObjectCoercible of `obj`).
     GetElem2 get_elem2() pop 2 push 3 cost Access flags THROWS | CALLS;
+    /// `key -> key'`: ToPrimitive(key, string) now, for a computed key whose definition
+    /// comes after other code (`{ [k]: v }`: ToPropertyKey before `v`). Primitives stay.
+    ToPropKey to_propkey() pop 1 push 1 cost Basic flags THROWS | CALLS;
     /// `obj key -> f obj`
     GetElemMethod get_elem_method() pop 2 push 2 cost Access flags THROWS | CALLS;
     /// `obj key v ->`

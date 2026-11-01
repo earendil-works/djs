@@ -60,6 +60,9 @@ pub(super) enum Expr {
     OptChain,
     /// An optional chain under `delete` that already did the delete.
     Deleted,
+    /// A parenthesized optional chain that is called (`(a?.b)()`): the callee and
+    /// `this` are on the stack, as `prepare_call` leaves them.
+    Callee,
 }
 
 /// How call arguments ended up on the stack.
@@ -786,6 +789,8 @@ impl Parser<'_, '_> {
 
     /// LeftHandSideExpression: `new`, member access, calls, optional chains.
     pub(super) fn parse_lhs(&mut self, delete_operand: bool) -> PResult<Expr> {
+        // The whole content of parentheses (`(a?.b)()` keeps the reference).
+        let whole = self.paren_inner == self.tok.start;
         let mut e = if self.is(TokenKind::New) {
             self.parse_new()?
         } else {
@@ -872,6 +877,15 @@ impl Parser<'_, '_> {
             }
         }
         if pads.iter().any(|p| p.is_some()) {
+            // `(a?.b)()` and `(a?.b)?.()` call with `this` = `a`.
+            let callee = whole && !delete_operand && self.is(TokenKind::RParen) && {
+                let (t1, t2) = self.peek2();
+                t1.kind == TokenKind::LParen
+                    || (t1.kind == TokenKind::QuestionDot && t2.kind == TokenKind::LParen)
+            };
+            if callee {
+                self.prepare_call(e);
+            }
             if delete_operand {
                 // `delete a?.b.c`: delete the chain's last reference.
                 match e {
@@ -910,10 +924,15 @@ impl Parser<'_, '_> {
                 self.code().push_true();
             } else {
                 self.code().undefined();
+                if callee {
+                    self.code().undefined();
+                }
             }
             self.place(l_end);
             return Ok(if delete_operand {
                 Expr::Deleted
+            } else if callee {
+                Expr::Callee
             } else {
                 Expr::OptChain
             });
@@ -945,6 +964,7 @@ impl Parser<'_, '_> {
             }
             // `super.m()` calls with `this` (read again: nothing can change it).
             Expr::SuperField { pos, .. } | Expr::SuperElem { pos } => self.emit_this(pos),
+            Expr::Callee => {}
             _ => self.code().undefined(),
         }
     }
@@ -1214,7 +1234,10 @@ impl Parser<'_, '_> {
                     self.name_hint = Some((a, self.tok.start));
                 }
                 let inner = self.tok.start;
-                let e = self.parse_expr(false)?;
+                let outer = core::mem::replace(&mut self.paren_inner, inner);
+                let e = self.parse_expr(false);
+                self.paren_inner = outer;
+                let e = e?;
                 self.expect(TokenKind::RParen, ")")?;
                 // A parenthesized anonymous function is still one (computed keys name
                 // it at run time).
@@ -1826,8 +1849,9 @@ impl Parser<'_, '_> {
                     return Ok(());
                 }
                 let value_start = self.tok.start;
-                if let Some(a) = key {
-                    self.name_hint = Some((a, value_start));
+                match key {
+                    Some(a) => self.name_hint = Some((a, value_start)),
+                    None => self.code().to_propkey(),
                 }
                 self.parse_assign(false)?;
                 match key {
