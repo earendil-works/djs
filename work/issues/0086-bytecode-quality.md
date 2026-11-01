@@ -54,6 +54,16 @@ br_tables. Fix the cheap parts.
   18199 (4753), call1 7617 → 5917 (6984), prop1 4761 → 3180 (5510), json 1335 → 1344
   (2182), strings 8500 → 8316 (5982). wasm +9 KB (fast_more 3.3 KB, compiler ~4 KB).
 - scripts/perf/instr.py patches the new `fast_step() || fast_more()` line.
+- Dense renumbering tried (branch `issue/0086-renumber`, 7094b6f, script
+  work/scratch/0086/renumber.py: the 37 fast_step ops first, then the 24 fast_more ops,
+  reorder only). wasm: `fast_step` becomes one `br_table` of 37 entries right after the
+  `load8_u` (was a compare tree `> 71` plus four tables), `fast_more` one table; wasm
+  -0.4 KB. But instructions (wmeasure, -n 3, vs main 8fbd04f) go up: tight +3.2%, loop
+  +2.3%, calls +6.8%, call1 +7.5%, arrays +1.3%, higher-order +1.4%, pi-like +0.5%,
+  json/jsonh/strbuild ±0. Only the fast_step ops first (fast_more ops left in their
+  sections): the same (tight +3.1%, calls +7.8%, call1 +7.8%). So V8's code for the
+  single table is not cheaper than the compare tree, and the move perturbs the run loop
+  (D1352). Not merged; the acceptance item is refuted by measurement.
 - Not done here: the dense opcode renumbering (a separate small merge the coordinator
   schedules, it changes the `ops!` order other branches depend on).
 
