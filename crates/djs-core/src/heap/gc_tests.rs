@@ -637,3 +637,33 @@ fn report(name: &str, h: &mut Heap) {
         per * 1e3 / live
     );
 }
+
+#[test]
+fn internal_refs_are_traced_and_verified() {
+    let mut h = Heap::new().unwrap();
+    for _ in 0..100 {
+        h.alloc_str("garbage before the internal cell").unwrap();
+    }
+    // An internal cell (a ValueArray holding a string) in an object slot.
+    let arr = h.alloc_value_array(2).unwrap();
+    let s = h.alloc_str("inside").unwrap();
+    h.value_array_set(arr, 0, Value::string(s));
+    h.arena_mut().set(arr, cells::ValueArray::LEN, 1);
+    let o = h.alloc_object(ObjectClass::Ordinary, None, 1).unwrap();
+    h.set_object_slot(o, 0, Value::internal(arr));
+    let ho = h.new_handle(Value::object(o)).unwrap();
+    h.verify().unwrap();
+    h.collect().unwrap();
+    h.verify().unwrap();
+    let o = h.get_handle(ho).as_object().unwrap();
+    let arr2 = h.object_slot(o, 0).as_internal().unwrap();
+    assert_ne!(arr2, arr, "moved");
+    assert_eq!(h.cell_kind(arr2), CellKind::ValueArray);
+    let s = h.value_array_get(arr2, 0).as_string().unwrap();
+    assert!(h.str_eq_str(s, "inside"));
+
+    // An internal reference to a JS cell is rejected.
+    let p = h.new_object(None).unwrap();
+    h.set_object_slot(o, 0, Value::internal(p.offset()));
+    assert!(matches!(h.verify(), Err(walk::VerifyError::BadRef { .. })));
+}

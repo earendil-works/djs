@@ -31,9 +31,14 @@
 //! | 10 | symbol | arena offset of a symbol cell |
 //! | 11 | bigint (reserved) | arena offset of a bigint cell |
 //! | 12 | host ref (reserved) | arena offset of a host-ref cell |
+//! | 13 | internal (D007) | arena offset of a non-JS cell (function template, Box, realm, ...) |
 //!
 //! Tags `>= 8` are *references*: the payload is the `u32` arena offset of a heap cell,
 //! never 0. The GC traces exactly those. Tag 0 and the other values are invalid.
+//!
+//! Internal references let VM-internal cells sit in `Value` slots (a closure's template
+//! and Boxes in its object slots, the realm record in the roots). They never reach JS
+//! code: every operation that could expose a value to JS treats them as a VM bug.
 //!
 //! The all-zero bit pattern is the number `+0`, which is not a reference. That is what
 //! makes zero-filled arena memory safe to trace.
@@ -63,8 +68,10 @@ pub mod tag {
     pub const SYMBOL: u16 = 10;
     pub const BIGINT: u16 = 11;
     pub const HOST_REF: u16 = 12;
+    /// A reference to an internal (non-JS) cell (D007).
+    pub const INTERNAL: u16 = 13;
     /// One past the last valid tag.
-    pub const END: u16 = 13;
+    pub const END: u16 = 14;
 }
 
 /// The canonical NaN. Every NaN is stored with these bits.
@@ -115,6 +122,8 @@ pub enum Kind {
     Symbol,
     BigInt,
     HostRef,
+    /// A reference to an internal cell; never visible to JS.
+    Internal,
 }
 
 impl Value {
@@ -166,6 +175,12 @@ impl Value {
     #[inline]
     pub const fn symbol(s: Sym) -> Value {
         Value::tagged(tag::SYMBOL, s.0)
+    }
+
+    /// A reference to the internal cell at arena offset `cell` (nonzero).
+    #[inline]
+    pub const fn internal(cell: u32) -> Value {
+        Value::tagged(tag::INTERNAL, cell)
     }
 
     /// The raw bits.
@@ -241,6 +256,7 @@ impl Value {
             Some(tag::SYMBOL) => Kind::Symbol,
             Some(tag::BIGINT) => Kind::BigInt,
             Some(tag::HOST_REF) => Kind::HostRef,
+            Some(tag::INTERNAL) => Kind::Internal,
             Some(t) => panic!("invalid value tag {t}"),
         }
     }
@@ -340,6 +356,15 @@ impl Value {
         }
     }
 
+    /// The cell offset of an internal reference.
+    #[inline]
+    pub const fn as_internal(self) -> Option<u32> {
+        match self.tag() {
+            Some(tag::INTERNAL) => Some(self.payload()),
+            _ => None,
+        }
+    }
+
     #[inline]
     pub const fn as_symbol(self) -> Option<Sym> {
         match self.tag() {
@@ -400,6 +425,7 @@ impl fmt::Debug for Value {
             Some(tag::SYMBOL) => write!(f, "symbol@{}", self.payload()),
             Some(tag::BIGINT) => write!(f, "bigint@{}", self.payload()),
             Some(tag::HOST_REF) => write!(f, "hostref@{}", self.payload()),
+            Some(tag::INTERNAL) => write!(f, "internal@{}", self.payload()),
             Some(t) => write!(f, "<invalid tag {t}: {:#018x}>", self.0),
         }
     }
@@ -500,7 +526,15 @@ mod tests {
         // Invalid tags.
         assert_eq!(Value::from_bits(TAG_PREFIX), None);
         assert_eq!(Value::from_bits(TAG_PREFIX | (7 << 32)), None);
-        assert_eq!(Value::from_bits(TAG_PREFIX | (13 << 32) | 8), None);
+        assert_eq!(Value::from_bits(TAG_PREFIX | (14 << 32) | 8), None);
+        let i = Value::internal(40);
+        assert_eq!(i.kind(), Kind::Internal);
+        assert!(i.is_ref());
+        assert_eq!(i.ref_offset(), Some(40));
+        assert_eq!(i.as_internal(), Some(40));
+        assert_eq!(i.as_object(), None);
+        assert_eq!(Value::from_bits(i.to_bits()), Some(i));
+        assert_eq!(Value::from_bits(Value::internal(0).to_bits()), None);
         assert_eq!(Value::from_bits(Value::TRUE.to_bits() + 1), None);
     }
 

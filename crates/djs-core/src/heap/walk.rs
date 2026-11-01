@@ -379,7 +379,8 @@ fn visit(ty: FieldTy, off: u32, f: &mut impl FnMut(Slot)) {
     }
 }
 
-/// Whether a reference value with `tag` may point at a cell of `kind`.
+/// Whether a reference value with `tag` may point at a cell of `kind`. Internal references
+/// (D007) may point at any cell that is not a JS value or the roots.
 fn ref_fits(tag: Option<u16>, kind: Option<CellKind>) -> bool {
     matches!(
         (tag, kind),
@@ -388,5 +389,16 @@ fn ref_fits(tag: Option<u16>, kind: Option<CellKind>) -> bool {
             Some(CellKind::Str8 | CellKind::Str16 | CellKind::Rope)
         ) | (Some(tag::OBJECT), Some(CellKind::Object))
             | (Some(tag::SYMBOL), Some(CellKind::Symbol))
-    )
+    ) || (tag == Some(tag::INTERNAL)
+        && kind.is_some_and(|k| {
+            !matches!(
+                k,
+                CellKind::Roots
+                    | CellKind::Str8
+                    | CellKind::Str16
+                    | CellKind::Rope
+                    | CellKind::Object
+                    | CellKind::Symbol
+            )
+        }))
 }

@@ -398,7 +398,7 @@ impl Ser<'_, '_> {
                 self.check_to_json(o)?;
                 Class::Object(o, is_array)
             }
-            Kind::BigInt | Kind::HostRef | Kind::Hole | Kind::Uninitialized => {
+            Kind::BigInt | Kind::HostRef | Kind::Hole | Kind::Uninitialized | Kind::Internal => {
                 return Err(StringifyError::Slow);
             }
         })
