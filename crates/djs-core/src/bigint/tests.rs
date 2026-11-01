@@ -316,6 +316,11 @@ fn floats() {
     assert_eq!(i(2).cmp_f64(1.5), Some(Ordering::Greater));
     assert_eq!(i(-2).cmp_f64(-1.5), Some(Ordering::Less));
     assert_eq!(i(-1).cmp_f64(-1.5), Some(Ordering::Greater));
+    assert_eq!(i(-1).cmp_f64(-(2f64.powi(63))), Some(Ordering::Greater));
+    assert_eq!(
+        i(-1).shl(&i(100)).unwrap().cmp_f64(-1e20),
+        Some(Ordering::Less)
+    );
     assert_eq!(i(1).cmp_f64(f64::NAN), None);
     assert_eq!(i(1).cmp_f64(f64::INFINITY), Some(Ordering::Less));
     assert_eq!(i(1).cmp_f64(f64::NEG_INFINITY), Some(Ordering::Greater));

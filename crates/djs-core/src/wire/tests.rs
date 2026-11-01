@@ -843,6 +843,23 @@ fn reader_images() {
     let sym = h.new_symbol(Value::string(desc)).unwrap();
     add(&mut h, "symbol", Value::symbol(sym), false);
 
+    // BigInts (0046): zero, small, negative, multi-limb; the reader gives native bigints.
+    for (name, v) in [
+        ("bigint-zero", crate::bigint::BigInt::zero()),
+        ("bigint-small", crate::bigint::BigInt::from_i64(42)),
+        (
+            "bigint-neg",
+            crate::bigint::BigInt::from_i64(-0x1_2345_6789),
+        ),
+        (
+            "bigint-big",
+            crate::bigint::BigInt::from_parts(true, &[1, 2, 3, 0xFFFF_FFFF, 5]),
+        ),
+    ] {
+        let b = h.alloc_bigint(&v).unwrap();
+        add(&mut h, name, b, false);
+    }
+
     // Property kinds: accessor, non-enumerable, symbol key, deleted, __proto__, index order.
     let o = h.new_object(None).unwrap();
     for (k, v) in [

@@ -213,7 +213,8 @@ generated file and throws `LayoutMismatch` on a difference.
 | typed array | a copy of its elements as the host typed array of the same kind (`Uint8Array`, `Float64Array`, ...; `Float16Array` where the host has it, else `Uint16Array` bit patterns); detached or out of bounds: empty (0039, D1392) |
 | ArrayBuffer | an `ArrayBuffer` copy of its bytes (detached: empty) |
 | function, Error, DataView, other object classes | `Opaque { type: "object", ref, className }` |
-| BigInt, host ref, other reference tags | `Opaque { type: <tag name>, ref }` |
+| BigInt | a native `bigint` (0046) |
+| host ref, other reference tags | `Opaque { type: <tag name>, ref }` |
 
 Typed arrays and buffers are copies, not views of the arena: every collection moves cells,
 and wasm memory growth replaces the host's `ArrayBuffer`, so a view would go stale or

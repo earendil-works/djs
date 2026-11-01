@@ -18,6 +18,8 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 
 #[cfg(test)]
+mod corpus_tests;
+#[cfg(test)]
 mod tests;
 
 /// The largest magnitude in bits: `|x| < 2^MAX_BITS`. QuickJS's limit (1 Mi bits

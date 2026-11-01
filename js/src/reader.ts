@@ -25,6 +25,9 @@ const ROPE_LEFT = cells.Rope.fields.LEFT.offset;
 const ROPE_RIGHT = cells.Rope.fields.RIGHT.offset;
 const ROPE_FLATTENED = LAYOUT.flags.ROPE_FLATTENED;
 const SYM_DESCRIPTION = cells.Symbol.fields.DESCRIPTION.offset;
+const BIG_LEN = cells.BigInt.fields.LEN.offset;
+const BIG_LIMBS = cells.BigInt.tail.offset;
+const BIGINT_NEG = LAYOUT.flags.BIGINT_NEG;
 const OBJ_CLASS = cells.Object.fields.CLASS.offset;
 const OBJ_PROPS = cells.Object.fields.PROPS.offset;
 const OBJ_ELEMENTS = cells.Object.fields.ELEMENTS.offset;
@@ -97,7 +100,7 @@ const win1252Decoder = new TextDecoder("windows-1252");
 
 /**
  * A VM value with no host equivalent: a symbol, a function or other non-plain object, a
- * BigInt, a host ref or an internal value. `ref` is the arena offset of its cell (0 if none).
+ * host ref or an internal value (BigInts are read as native bigints). `ref` is the arena offset of its cell (0 if none).
  */
 export class Opaque {
   readonly type: string;
@@ -267,6 +270,8 @@ class Reader {
         return this.string(payload);
       case tags.OBJECT:
         return this.object(payload);
+      case tags.BIGINT:
+        return this.bigint(payload);
       case tags.SYMBOL: {
         const d = this.slotIfString(payload + SYM_DESCRIPTION);
         return new Opaque("symbol", payload, undefined, d);
@@ -279,6 +284,16 @@ class Reader {
         return new Opaque(name.toLowerCase(), payload);
       }
     }
+  }
+
+  /** A BigInt cell as a native bigint (0046: u32 limbs, little-endian, sign flag). */
+  bigint(off: number): bigint {
+    const len = this.view.getUint32(off + BIG_LEN, true);
+    let v = 0n;
+    for (let i = len - 1; i >= 0; i--) {
+      v = (v << 32n) | BigInt(this.view.getUint32(off + BIG_LIMBS + 4 * i, true));
+    }
+    return this.view.getUint16(off + HDR_FLAGS, true) & BIGINT_NEG ? -v : v;
   }
 
   slotIfString(off: number): string | undefined {

@@ -1,6 +1,6 @@
 # 0046: BigInt
 
-status: in-progress
+status: done
 agent: heap
 branch: issue/0046-bigint
 depends-on: 0043
@@ -12,25 +12,25 @@ blocks the BigInt test262 directory and features, the BigInt typed arrays, and a
 of difftest cases (0016: 6 BigInt literal cases).
 
 ## Acceptance criteria
-- [ ] A BigInt heap cell (sign + magnitude limbs, immutable), small-value fast path if
+- [x] A BigInt heap cell (sign + magnitude limbs, immutable), small-value fast path if
       cheap (record a decision: for example an inline tag for |x| < 2^31, or always heap).
-- [ ] Arithmetic: `+ - * / % **`, unary `-`, `~`, `& | ^ << >>` (`>>>` throws), comparisons
+- [x] Arithmetic: `+ - * / % **`, unary `-`, `~`, `& | ^ << >>` (`>>>` throws), comparisons
       with BigInt and with Number and String (exact, no float rounding), `==` with
       Number/String, `typeof`, ToBoolean, ToString/ToNumber rules (TypeError when mixing
       with Number in arithmetic, qjs messages), `BigInt()` conversion from strings and
       numbers, `asIntN`/`asUintN`, `toString(radix)`, `toLocaleString`, `valueOf`, the
       BigInt wrapper object and Symbol.toPrimitive interaction, JSON.stringify throwing
       TypeError, and Map/Set SameValueZero keys by value.
-- [ ] Division and multiplication: schoolbook is fine at first, with fuel charged in
+- [x] Division and multiplication: schoolbook is fine at first, with fuel charged in
       proportion to the limb work. Note the asymptotics in the Log; huge exponents must
       hit the memory cap or fuel cleanly (`2n ** 10000000n`).
-- [ ] Literals: decimal/hex/octal/binary with separators, compiled into constants.
-- [ ] BigInt64Array, BigUint64Array, and DataView get/setBigInt64/BigUint64 (replacing
+- [x] Literals: decimal/hex/octal/binary with separators, compiled into constants.
+- [x] BigInt64Array, BigUint64Array, and DataView get/setBigInt64/BigUint64 (replacing
       the 0039 stubs; coordinate with infra via the coordinator if its code needs
       restructuring).
-- [ ] Promote built-ins/BigInt and the `BigInt` feature to active; report the numbers
+- [x] Promote built-ins/BigInt and the `BigInt` feature to active; report the numbers
       before and after.
-- [ ] A difftest/qjs corpus for arithmetic (randomized, like 0004's num corpus), e2e in
+- [x] A difftest/qjs corpus for arithmetic (randomized, like 0004's num corpus), e2e in
       the three modes, and the ratchets.
 
 ## Notes
@@ -93,6 +93,47 @@ of difftest cases (0016: 6 BigInt literal cases).
   JSON.rawJSON, Error.isError, Array.fromAsync, harness deepEqual (regexp). Promoted to
   active: active 23,007 / 32,718 (70.3%) -> 24,139 / 33,854 (71.3%).
 
+- Corpus: `tests/data/bigint/gen-corpus.js` (qjs, seeded, ~19k cases: all operators,
+  asIntN/asUintN, toString radixes, StringToBigInt, Number <-> BigInt, exact compares)
+  checked by `bigint/corpus_tests.rs`; difftest case `language/bigint-ops.js`
+  (pseudo-random operands, also in the stress modes); e2e `bigint_typed.js`. qjs's
+  negative-BigInt-vs-negative-Number compare bug is broader than fractions
+  (`-1n < -(2**63)` is true in qjs): the corpus skips all negative/negative compares.
+- Reader: a BigInt reads as a native `bigint` (js/src/reader.ts, layout flag
+  `BIGINT_NEG` exported); reader-cross extra cases. docs/wire.md updated.
+- Size: wasm code +34.7 KB (614,735 -> 649,477 against 7427f4f; `bigint::BigInt` 14.6
+  KB of it), base image data +6.4 KB.
+- Timing (native release, `djs run`): `3n ** 600000n` 0.23 s, a 16k x 16k limb product
+  0.19 s, a 32k / 16k limb division 0.25 s, parsing 300k decimal digits 0.25 s; the
+  decimal toString of a 1 Mi-bit value 1.7 s (qjs 1.26 s): the quadratic radix
+  conversion is the slowest operation. All of them run to completion, then pay fuel.
+
 ## Follow-ups
+- Decimal conversion: divide and conquer (or at least 10^18 chunks with u64 math) would
+  cut the 1.7 s worst case; Karatsuba for very large products. Neither matters for
+  codemode-sized values.
+- The inbound wire format (host -> VM) has no BigInt tag; `encode` still rejects
+  bigints with a TypeError.
+- Builtins' generic `Set(o, k, v)` on a typed array (Array.prototype methods called on a
+  typed array) writes nothing when v needs a conversion with user code, for Number
+  arrays too (pre-existing in `ordinary_set`); BigInt arrays add ToBigInt of numbers.
+- A small inline BigInt form (tag 7) only if benchmarks ever show BigInt allocation.
 
 ## Result
+BigInt is a full primitive. Values are always-heap `BigInt` cells (kind 24) compared by
+value (D1460); `crate::bigint` does the arithmetic with QuickJS's 2^20-bit cap and its
+RangeErrors (D1461); operators run in a slow path beside `exec` with qjs's messages
+(D1462); literals (all radixes, separators) are constants; `BigInt()`, asIntN/asUintN,
+toString/toLocaleString/valueOf, the wrapper and Symbol.toPrimitive, JSON.stringify's
+TypeError (and toJSON), Number(bigint), exact comparisons and `==` with Number/String,
+Map/Set/SameValue by value. BigInt64Array/BigUint64Array and DataView
+get/setBigInt64/BigUint64 replace the 0039 stubs (D1463; new heap read/write signatures
+in the Log). `djs run` prints `10n`; the JS reader returns native bigints.
+
+test262: the BigInt group (built-ins/BigInt + feature BigInt, 1142 tests) went from 161
+(14.0%) to 1121 (98.1%) and is promoted to active: 24,139 / 33,854 (71.3%), was 23,007 /
+32,718 (70.3%). The rest fail on classes, regexp and unrelated proposals.
+
+Known gaps: see Follow-ups (radix conversion speed, inbound wire tag, builtin Set on
+typed arrays). `BigInt.prototype.toLocaleString(locale)` ignores the locale like node
+(qjs throws).

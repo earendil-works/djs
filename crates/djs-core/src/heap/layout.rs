@@ -702,7 +702,8 @@ pub fn layout_json() -> alloc::string::String {
             o,
             "  \"flags\": {{ \"ROPE_TWO_BYTE\": {ROPE_TWO_BYTE}, \"ROPE_FLATTENED\": \
              {ROPE_FLATTENED}, \"OBJ_EXTENSIBLE\": {OBJ_EXTENSIBLE}, \"OBJ_INDEXED_PROPS\": \
-             {OBJ_INDEXED_PROPS}, \"OBJ_LENGTH_READONLY\": {OBJ_LENGTH_READONLY} }},"
+             {OBJ_INDEXED_PROPS}, \"OBJ_LENGTH_READONLY\": {OBJ_LENGTH_READONLY}, \
+             \"BIGINT_NEG\": {BIGINT_NEG} }},"
         );
     }
     o.push_str("  \"objectClasses\": { ");

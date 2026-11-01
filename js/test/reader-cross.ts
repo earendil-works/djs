@@ -70,6 +70,11 @@ assert.equal(read("big-latin1-c1"), fromUnits((i) => i % 256));
 assert.equal(read("big-two-byte"), fromUnits((i) => 0x400 + (i % 0x400)));
 assert.equal(read("big-lone-surrogate"), fromUnits((i) => (i === mib / 2 ? 0xdc00 : 0x400 + (i % 0x400))));
 
+assert.equal(read("bigint-zero"), 0n);
+assert.equal(read("bigint-small"), 42n);
+assert.equal(read("bigint-neg"), -0x123456789n);
+assert.equal(read("bigint-big"), -((5n << 128n) | (0xffffffffn << 96n) | (3n << 64n) | (2n << 32n) | 1n));
+
 const sym = read("symbol");
 assert.ok(sym instanceof Opaque && sym.type === "symbol" && sym.description === "tag");
 
