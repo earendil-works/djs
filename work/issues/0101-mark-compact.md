@@ -43,6 +43,13 @@ MiB (estimate). See work/issues/0099-cold-start-memory.md (Result) for the numbe
   - Then: rope slots rewritten while marking, slides by runs, the dense prefix.
   - Numbers in docs/mark-compact.md section 10.
 
+- Follow-up design (coordinator): docs/old-generation.md. It proposes a sticky, non-moving
+  base region (Roots::OLD_END, Vm::seal) with a linear walk for old->young references
+  (Phase 1, no barrier), full collections at seal/snapshot points and on a deterministic
+  schedule, and cards as an optional Phase 2.
+  - Measured with vm `base_region_scan_cost`: the walk costs 0.050 ms per 456 KB, against
+    0.14-0.15 ms for a collection of the same heap by either collector.
+
 ## Follow-ups
 
 ## Result

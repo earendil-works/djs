@@ -2748,6 +2748,73 @@ fn privileged_templates_have_no_debug_fields() {
     assert!(crate::builtins::r#gen::natives::NATIVES.len() < u16::MAX as usize);
 }
 
+/// 0101 follow-up (docs/old-generation.md): what a collection of a VM made from the base
+/// costs, against a linear scan of the base region for references out of it (the work a
+/// sticky base region would do instead of tracing it). `cargo test --release -p djs-core
+/// --lib base_region_scan_cost -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn base_region_scan_cost() {
+    extern crate std;
+    use crate::heap::walk::{self, Slot};
+    use std::time::Instant;
+    let base_len = vm().heap().bytes().len() as u32;
+    let (vm, _) = run_script(
+        vm(),
+        "globalThis.keep = []; for (let i = 0; i < 2000; i++) { const t = { x: i, y: [i] }; if (i % 10 == 0) keep.push(t); }",
+    );
+    let image = vm.heap().bytes().to_vec();
+    let base_len = base_len.min(image.len() as u32);
+    let n = 50;
+    let mut copies: Vec<Heap> = (0..n)
+        .map(|_| Heap::from_bytes_trusted(image.clone(), 1 << 30).unwrap())
+        .collect();
+    let t = Instant::now();
+    for h in &mut copies {
+        h.collect().unwrap();
+    }
+    let mc = t.elapsed().as_secs_f64() / n as f64;
+    let mut copies: Vec<Heap> = (0..n)
+        .map(|_| Heap::from_bytes_trusted(image.clone(), 1 << 30).unwrap())
+        .collect();
+    let t = Instant::now();
+    for h in &mut copies {
+        h.collect_canonical().unwrap();
+    }
+    let cheney = t.elapsed().as_secs_f64() / n as f64;
+    let h = Heap::from_bytes_trusted(image.clone(), 1 << 30).unwrap();
+    let t = Instant::now();
+    let mut out = 0u32;
+    for _ in 0..n {
+        let a = h.arena();
+        let mut c = 0;
+        while c < base_len {
+            let kind = h.cell_kind(c);
+            let size = h.cell_size(c);
+            walk::for_each_slot(kind, c, size, |slot| {
+                let t = match slot {
+                    Slot::Value(s) => a.read::<Value>(s).ref_offset(),
+                    Slot::Ref(s) => a.read::<crate::heap::Ref>(s).get(),
+                };
+                if t.is_some_and(|t| t >= base_len) {
+                    out += 1;
+                }
+            });
+            c += size;
+        }
+    }
+    let scan = t.elapsed().as_secs_f64() / n as f64;
+    std::println!(
+        "base {base_len} B, arena {} B: cheney {:.3} ms, mark-compact {:.3} ms, linear scan of the base {:.3} ms ({:.1}x less than mark-compact), {} refs out per scan",
+        image.len(),
+        cheney * 1e3,
+        mc * 1e3,
+        scan * 1e3,
+        mc / scan,
+        out / n
+    );
+}
+
 // ---- The host inbox (D1670) --------------------------------------------------------------
 
 /// When the "embedder" of [`run_inbox`] delivers async results.
