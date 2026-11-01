@@ -1,7 +1,7 @@
 # 0027: P1-2 Objects, arrays and privileged mode (compiler side)
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0027-p1-objects-compiler
 depends-on: 0025
 touches: crates/djs-core/src/compiler/, docs/compiler.md (corrections), crates/djs-core/src/bytecode/ (additive only)
