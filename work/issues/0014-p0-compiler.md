@@ -30,6 +30,38 @@ async-body mode as far as P0 needs them (D004, D008).
 
 ## Log
 
+- 2026-11-01: `crates/djs-core/src/compiler/`: `mod.rs` (API), `parser.rs` (state,
+  tokens, constants, declarations), `stmt.rs`, `expr.rs`, `scan.rs` (arrow-head
+  scan, pattern-closer scan), `func.rs` (scopes, bindings, name refs), `resolve.rs`
+  (classification, TDZ, storage, re-emit, line table, template), `tests.rs` plus
+  `snapshots/*.js` → `*.disasm`.
+- Scope of P0 (D1142): everything without functions. Object/array literals and
+  untagged templates are in (the ops existed), while methods, accessors, spread
+  arguments, tagged templates, destructuring, for-in/of, try, regex literals, BigInt,
+  classes and functions give "... not supported yet". Arrow heads are detected with
+  the bailing scan from the note, so `(a, b) => 1` gets the right message.
+- Shared surface, additive only (mentioned to 0015): `bytecode::special::THIS` (4),
+  `bytecode::global_decls` (encode/decode of the declaration list),
+  `bytecode::func_flags`, a `lines` field in `DisasmContext` (listings show
+  `; line:col`) and a decoded `global_decls` operand in the disassembler. No changes
+  to `ops!` or the cell layouts.
+- Found by the snapshots: `for (;;)` without an update jumped to itself (`continue`
+  label placed after the test). Fixed and the layout documented in `parse_for`.
+- Messages/positions checked against qjs (`errors` test, about 70 cases). qjs
+  reports declaration conflicts at the token after the name, member errors at the `.`
+  or `[`, call errors at the `(`; the line table follows that.
+- Depth limit raised from 500 to 1000: depth 1000 needs under 512 KiB natively
+  (measured with `DJS_DEPTH_STACK`), and the test runs it on a 1 MiB thread.
+- test262 sweep (`compile_test262`, ignored, release): 53,891 files, no panics; 11,443
+  compile, 39,903 hit "not supported yet", the remaining errors are negative tests,
+  sloppy/module tests and module fixtures (`import`/`export`, top-level await,
+  `using`). Negative parse tests that compile: 5, all module-only (`await` as an
+  identifier is valid in Scripts).
+- docs/compiler.md corrections: depth limit, `init` name refs, `this` prologue, global
+  TDZ in `get_global_typeof`, the `global_decls` format.
+- `djs disasm [--body] file.js` in djs-cli (`disasm.rs` plus a one-arm dispatch in
+  `main.rs`).
+
 ## Follow-ups
 
 ## Result
