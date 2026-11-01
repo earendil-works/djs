@@ -374,6 +374,9 @@ test("legacy decorators", async () => {
   standard.dispose();
 });
 
+/** An uncompressed snapshot (the image is in the container as is). */
+const uncompressed = (sb: Sandbox) => sb.bytes({ compression: "none" });
+
 test("snapshots", async () => {
   const c = collect();
   const sb = await Sandbox.create({ console: c.console, functions: { add: (a, b) => (a as number) + (b as number) } });
@@ -387,10 +390,11 @@ test("snapshots", async () => {
   assert.deepEqual(c2.lines, ["hello"]);
   await assert.rejects(Sandbox.fromBytes(snap), /snapshot needs host function add/);
   await assert.rejects(Sandbox.fromBytes(new Uint8Array(20)), /not a sandbox snapshot/);
-  // A damaged image is refused (the heap verifies images on load).
-  const broken = snap.slice();
-  const meta = new DataView(broken.buffer).getUint32(8, true);
-  broken[12 + meta + 12] ^= 0xff; // Roots.VERSION
+  // A damaged image is refused (the heap verifies images on load). Uncompressed, so the
+  // damage reaches the image: the container is 40 bytes of header, the metadata, the image.
+  const broken = uncompressed(restored);
+  const meta = new DataView(broken.buffer).getUint32(32, true);
+  broken[40 + meta + 12] ^= 0xff; // Roots.VERSION
   await assert.rejects(Sandbox.fromBytes(broken, { functions: { add: () => 0 } }), /cannot restore the VM image/);
   restored.dispose();
 });

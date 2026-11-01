@@ -6,6 +6,7 @@
 
 import { encode } from "../src/wire.ts";
 import { readValue } from "../src/reader.ts";
+import { baseReference, type Reference } from "../src/snapshot.ts";
 
 export const STATUS_DONE = 0;
 export const STATUS_THREW = 1;
@@ -50,6 +51,30 @@ interface Exports {
   vm_set_time_zone_offset(vm: number, minutes: number): void;
   vm_set_random_seed(vm: number, lo: number, hi: number): void;
   vm_set_weak_refs(vm: number, mode: number): number;
+  /** Since 0117 (D2260); older modules lack them and write uncompressed snapshots. */
+  djs_base_ptr?(): number;
+  djs_base_len?(): number;
+}
+
+/** An instance of the module, before a VM is created in it (`Engine.restore`). */
+export interface Instance {
+  readonly module: WebAssembly.Module;
+  readonly exports: Exports;
+}
+
+/** A new instance of `module`, checked to be djs-wasm. */
+export function instance(module: WebAssembly.Module): Instance {
+  return { module, exports: instantiate(module) };
+}
+
+/** The module's build hash, from an instance (`buildHash` as a number). */
+export function instanceBuild(i: Instance): number {
+  return i.exports.djs_build_hash();
+}
+
+/** The base snapshot of the instance's module, as a snapshot reference (D2260). */
+export function instanceBase(i: Instance): Reference | undefined {
+  return baseReference(i.module, i.exports);
 }
 
 const textEncoder = new TextEncoder();
@@ -61,6 +86,7 @@ export class EngineTrap extends Error {}
 /** One djs VM in its own wasm instance. */
 export class Engine {
   private readonly x: Exports;
+  private readonly module: WebAssembly.Module;
   readonly vm: number;
   private readonly atomCache: (string | undefined)[] = [];
 
@@ -69,23 +95,39 @@ export class Engine {
     const x = instantiate(module);
     const vm = x.vm_new(memoryLimit ?? 0);
     if (vm === 0) throw new Error(`Cannot create a djs VM: ${outText(x) || "memory limit too small"}`);
-    return new Engine(x, vm);
+    return new Engine(module, x, vm);
   }
 
-  /** A VM restored from `image()` of the same build. */
-  static restore(module: WebAssembly.Module, image: Uint8Array, memoryLimit: number | undefined): Engine {
-    const x = instantiate(module);
+  /** A VM restored from `image()` of the same build, in `into` (default: a new instance). */
+  static restore(
+    module: WebAssembly.Module,
+    image: Uint8Array,
+    memoryLimit: number | undefined,
+    into: Instance = instance(module),
+  ): Engine {
+    const x = into.exports;
     // The image's buffer becomes the arena: stage it with the arena's capacity (D1942).
     const at = x.djs_image_staging ? x.djs_image_staging(image.length, memoryLimit ?? 0) : x.djs_staging(image.length);
     new Uint8Array(x.memory.buffer).set(image, at);
     const vm = x.vm_from_bytes(image.length, memoryLimit ?? 0);
     if (vm === 0) throw new Error(outText(x));
-    return new Engine(x, vm);
+    return new Engine(module, x, vm);
   }
 
-  private constructor(x: Exports, vm: number) {
+  private constructor(module: WebAssembly.Module, x: Exports, vm: number) {
+    this.module = module;
     this.x = x;
     this.vm = vm;
+  }
+
+  /** The build hash as a number (`djs_build_hash`). */
+  get build(): number {
+    return this.x.djs_build_hash();
+  }
+
+  /** The module's base snapshot as a snapshot reference (D2260); undefined for old modules. */
+  baseReference(): Reference | undefined {
+    return baseReference(this.module, this.x);
   }
 
   /** The engine's build hash, as 8 hex digits: identifies the engine build. */

@@ -284,6 +284,20 @@ pub extern "C" fn djs_build_hash() -> u32 {
     djs_core::vm::BUILD_HASH
 }
 
+/// The address of the base snapshot (`djs_prelude::BASE`, D1321) in this module's memory,
+/// read-only and valid for the instance's lifetime. Hosts compress snapshots against it
+/// (D2260): it is the image every `vm_new` starts from, and the build hash fixes its bytes.
+#[unsafe(no_mangle)]
+pub extern "C" fn djs_base_ptr() -> usize {
+    djs_prelude::BASE.as_ptr() as usize
+}
+
+/// The length of the base snapshot in bytes (see `djs_base_ptr`).
+#[unsafe(no_mangle)]
+pub extern "C" fn djs_base_len() -> usize {
+    djs_prelude::BASE.len()
+}
+
 /// Like `djs_staging`, for a VM image about to be restored with `vm_from_bytes` with a heap
 /// cap of `memory_limit`: the buffer gets the capacity the restored arena will reserve, so
 /// handing it over grows nothing. Restoring through `djs_staging` copies the arena once

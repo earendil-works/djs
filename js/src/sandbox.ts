@@ -3,6 +3,19 @@
 
 import { encode } from "./wire.ts";
 import { Opaque, readValue } from "./reader.ts";
+import {
+  APP_SANDBOX,
+  baseReference,
+  checkSnapshot,
+  encodeSnapshot,
+  readSnapshotHeader,
+  REFERENCE_BASE,
+  type SnapshotCodec,
+  SnapshotError,
+  snapshotImage,
+} from "./snapshot.ts";
+
+export { DEFAULT_ZSTD_LEVEL, nodeZstd, type SnapshotCodec, SnapshotError } from "./snapshot.ts";
 
 /** A host function callable from the sandbox. Arguments and the result are host values. */
 export type HostFunction = (...args: unknown[]) => unknown;
@@ -92,6 +105,23 @@ export interface SandboxOptions {
    * `Reflect.metadata`); implies `experimentalDecorators`. Default false.
    */
   emitDecoratorMetadata?: boolean;
+  /**
+   * zstd for snapshots (`bytes()`, `fromBytes()`): node's built-in one by default
+   * (`nodeZstd()`). `null` writes uncompressed snapshots; a browser can pass a zstd built
+   * for wasm (D2260).
+   */
+  snapshotCodec?: SnapshotCodec | null;
+}
+
+/** Options of `Sandbox.bytes()`. */
+export interface BytesOptions {
+  /**
+   * `"zstd"` (default when a codec is available): compressed against the module's base
+   * image; `"none"`: the collected image as is.
+   */
+  compression?: "zstd" | "none";
+  /** zstd level, default `DEFAULT_ZSTD_LEVEL` (3). */
+  level?: number;
 }
 
 export type SandboxErrorKind = "threw" | "syntax" | "fuel" | "trap" | "memory" | "misuse" | "diverged";
@@ -189,6 +219,9 @@ interface Exports {
   vm_resolve_host_call_at(vm: number, callId: number, ok: number, value: number, now: number): number;
   vm_canonical_hash(vm: number): number;
   djs_build_hash(): number;
+  /** Since 0117 (D2260); older modules lack them and write uncompressed snapshots. */
+  djs_base_ptr?(): number;
+  djs_base_len?(): number;
 }
 
 const modules = new Map<string, Promise<WebAssembly.Module>>();
@@ -235,10 +268,39 @@ export function loadModule(location: string | URL = defaultWasmPath()): Promise<
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
-const SNAPSHOT_MAGIC = 0x53534a44; // "DJSS"
+/** The sandbox snapshot format before the container (D2260): magic, version 1, meta, image. */
+const SNAPSHOT_MAGIC_V1 = 0x53534a44; // "DJSS"
+
+/** The metadata and image of a sandbox snapshot: a container, or the older "DJSS" format. */
+function unpackSnapshot(
+  snapshot: Uint8Array,
+  module: WebAssembly.Module,
+  x: Exports,
+  codec: SnapshotCodec | null | undefined,
+): { meta: { functions: string[]; clock?: number }; image: Uint8Array } {
+  try {
+    const header = readSnapshotHeader(snapshot);
+    if (header !== undefined) {
+      checkSnapshot(header, APP_SANDBOX, x.djs_build_hash());
+      const reference = header.referenceKind === REFERENCE_BASE ? baseReference(module, x) : undefined;
+      return { meta: header.meta as { functions: string[]; clock?: number }, image: snapshotImage(header, reference, codec) };
+    }
+  } catch (e) {
+    if (e instanceof SnapshotError) throw new SandboxError("misuse", e.message);
+    throw e;
+  }
+  const view = new DataView(snapshot.buffer, snapshot.byteOffset, snapshot.byteLength);
+  if (snapshot.length < 12 || view.getUint32(0, true) !== SNAPSHOT_MAGIC_V1 || view.getUint32(4, true) !== 1) {
+    throw new SandboxError("misuse", "not a sandbox snapshot");
+  }
+  const metaLen = view.getUint32(8, true);
+  const meta = JSON.parse(textDecoder.decode(snapshot.subarray(12, 12 + metaLen)));
+  return { meta, image: snapshot.subarray(12 + metaLen) };
+}
 
 export class Sandbox {
   private readonly x: Exports;
+  private readonly module: WebAssembly.Module;
   private readonly vm: number;
   private readonly opts: SandboxOptions;
   /** Host function names by id - 1. */
@@ -286,18 +348,9 @@ export class Sandbox {
       vm = x.vm_new(opts.memoryLimit ?? 0);
       if (vm === 0) throw new SandboxError("memory", "memory limit too small for the realm");
     } else {
-      const view = new DataView(snapshot.buffer, snapshot.byteOffset, snapshot.byteLength);
-      if (snapshot.length < 12 || view.getUint32(0, true) !== SNAPSHOT_MAGIC || view.getUint32(4, true) !== 1) {
-        throw new SandboxError("misuse", "not a sandbox snapshot");
-      }
-      const metaLen = view.getUint32(8, true);
-      const meta = JSON.parse(textDecoder.decode(snapshot.subarray(12, 12 + metaLen))) as {
-        functions: string[];
-        clock?: number;
-      };
+      const { meta, image } = unpackSnapshot(snapshot, module, x, opts.snapshotCodec);
       restoredFns = meta.functions;
       if (opts.deterministic) this.clock = meta.clock ?? opts.deterministic.startedAt;
-      const image = snapshot.subarray(12 + metaLen);
       // May grow memory: take the buffer afterwards. The image's buffer becomes the arena,
       // so it is staged with the arena's capacity (D1942).
       const limit = opts.memoryLimit ?? 0;
@@ -307,6 +360,7 @@ export class Sandbox {
       if (vm === 0) throw new SandboxError("misuse", outText(x));
     }
     this.x = x;
+    this.module = module;
     this.vm = vm;
     this.opts = opts;
     const cons = opts.console ?? (globalThis.console as ConsoleLike);
@@ -485,19 +539,26 @@ export class Sandbox {
     }
   }
 
-  /** The VM image plus the host function table, for `Sandbox.fromBytes`. */
-  bytes(): Uint8Array {
+  /**
+   * The sandbox as bytes, for `Sandbox.fromBytes` (D2260): the VM image, collected first,
+   * zstd-compressed against the module's base image, in a container that names the engine
+   * build, plus the host function table. Restores only into the same djs build.
+   */
+  bytes(opts: BytesOptions = {}): Uint8Array {
     this.alive();
-    const meta = textEncoder.encode(JSON.stringify({ functions: this.fnNames, clock: this.clock }));
-    const image = this.arena();
-    const out = new Uint8Array(12 + meta.length + image.length);
-    const view = new DataView(out.buffer);
-    view.setUint32(0, SNAPSHOT_MAGIC, true);
-    view.setUint32(4, 1, true);
-    view.setUint32(8, meta.length, true);
-    out.set(meta, 12);
-    out.set(image, 12 + meta.length);
-    return out;
+    // Only live cells (as pi's adapter, D1890): the sandbox itself collects, so going on
+    // with it and restoring the bytes continue from the same heap. A collection that cannot
+    // get memory leaves the heap as it was; the snapshot is then just larger.
+    this.guard(() => this.x.vm_collect(this.vm));
+    return encodeSnapshot({
+      app: APP_SANDBOX,
+      build: this.x.djs_build_hash(),
+      meta: { functions: this.fnNames, clock: this.clock },
+      image: this.arena(),
+      reference: baseReference(this.module, this.x),
+      codec: opts.compression === "none" ? null : this.opts.snapshotCodec,
+      level: opts.level,
+    });
   }
 
   /**
