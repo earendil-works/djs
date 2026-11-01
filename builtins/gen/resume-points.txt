@@ -513,6 +513,8 @@ ArrayIteratorPrototypeNext: reentrant (%ArrayIteratorPrototype%.next, %ArrayIter
 
 IteratorPrototypeIterator: leaf (%IteratorPrototype%[Symbol.iterator])
 
+ArrayIteratorPrototypeToStringTag: leaf (value %ArrayIteratorPrototype%[Symbol.toStringTag])
+
 GetIteratorFromMethod: reentrant
   builtins/iterable.ts:7:27  Call (intrinsic)
 

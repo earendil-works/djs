@@ -1570,10 +1570,9 @@ fn end_to_end_iteration() {
     );
 }
 
-/// Iteration over arrays: needs the Array Iterator leaves (CreateArrayIterator & co.,
-/// D1290) in the interpreter. Outputs checked against qjs.
+/// Iteration over arrays (the Array Iterator leaves of 0030, D1290). Outputs checked
+/// against qjs.
 #[test]
-#[ignore = "un-ignore when 0030's Array Iterator leaf intrinsics land"]
 fn end_to_end_iteration_rt() {
     run_cases(&[
         (
@@ -1637,13 +1636,16 @@ fn end_to_end_iteration_rt() {
             "=> true",
         ),
         ("return [].values === [][Symbol.iterator]", "=> true"),
+        (
+            "const d = Object.getOwnPropertyDescriptor(Object.getPrototypeOf([].values()), Symbol.toStringTag); return Object.prototype.toString.call([].values()) + ' ' + d.value + d.writable + d.enumerable + d.configurable",
+            "=> [object Array Iterator] Array Iteratorfalsefalsetrue",
+        ),
     ]);
 }
 
-/// qjs names a symbol key `Symbol.iterator` in "cannot read property" messages; djs
-/// says `[Symbol.iterator]` (`conv::describe_key`).
+/// Messages from %GetIterator on nullish values (a symbol key in "cannot read
+/// property", as qjs names it).
 #[test]
-#[ignore = "un-ignore when nullish-base messages describe symbol keys as qjs does"]
 fn end_to_end_iteration_messages() {
     run_cases(&[(
         "try { for (const x of undefined) ; } catch (e) { return String(e); }",

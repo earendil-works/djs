@@ -1362,6 +1362,11 @@ function IteratorPrototypeIterator() {
   return this;
 }
 
+// builtins/iter.ts:123 value %ArrayIteratorPrototype%[Symbol.toStringTag]
+function ArrayIteratorPrototypeToStringTag() {
+  return "Array Iterator";
+}
+
 // builtins/iterable.ts:6
 function GetIteratorFromMethod(obj, method) {
   const iterator = %Call(method, obj);
@@ -2914,6 +2919,7 @@ function SymbolUnscopables() {
 %InstallMethod("Array.prototype", "entries", ArrayPrototypeEntries, 0);
 %InstallMethod("%ArrayIteratorPrototype%", "next", ArrayIteratorPrototypeNext, 0);
 %InstallMethod("%IteratorPrototype%", %WellKnownSymbol("iterator"), IteratorPrototypeIterator, 0);
+%InstallValue("%ArrayIteratorPrototype%", %WellKnownSymbol("toStringTag"), ArrayIteratorPrototypeToStringTag(), 4);
 %InstallMethod("Object", "fromEntries", ObjectFromEntries, 1);
 %InstallMethod("Object", "groupBy", ObjectGroupBy, 2);
 %InstallMethod("String.prototype", %WellKnownSymbol("iterator"), StringPrototypeIterator, 0);

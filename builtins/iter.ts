@@ -114,3 +114,12 @@ function ArrayIteratorPrototypeNext(this: Value): Obj {
 function IteratorPrototypeIterator(this: Value): Value {
   return this;
 }
+
+/**
+ * %ArrayIteratorPrototype% [ %Symbol.toStringTag% ], 23.1.5.2.2.
+ * @value %ArrayIteratorPrototype%[Symbol.toStringTag]
+ * @attributes configurable
+ */
+function ArrayIteratorPrototypeToStringTag(): Str {
+  return "Array Iterator";
+}

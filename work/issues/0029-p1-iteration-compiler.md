@@ -85,8 +85,14 @@ like) are routed through the coordinator to the heap agent (0028 in flight).
     yet / 1,742 negative / 607 other; after 27,531 ok / 22,670 / 1,810 / 607 (3 new
     "other": `for (using x of ...)` heads, explicit resource management). Missed early
     errors unchanged (8).
-  - Ratchets: test262 active 10,222 -> 8,494 expected failures (1,729 pass now, no new
-    failures); difftest 80 -> 78 (test_for_in2, test_try_catch8).
+  - Ratchets (after the rebase onto 0030 part 4): test262 active 10,131 -> 8,365
+    expected failures (1,766 pass now, no new failures); difftest 80 -> 78
+    (test_for_in2, test_try_catch8).
+  - After the rebase onto 0030 part 4 (Array Iterator leaves, qjs symbol-key messages):
+    `end_to_end_iteration_rt` and `end_to_end_iteration_messages` pass and are no
+    longer ignored; the corpus case covers arrays too.
+    `%ArrayIteratorPrototype%[Symbol.toStringTag]` ("Array Iterator", configurable
+    only) added to iter.ts as asked by the coordinator.
 
 ## Follow-ups
 - Array fast path for for-of (docs/compiler.md 4.5 calls it a later optimization): a
@@ -94,11 +100,6 @@ like) are routed through the coordinator to the heap agent (0028 in flight).
   the originals, then index directly.
 - Destructuring heads (`for (const [k, v] of m)`), with destructuring in general.
 - `for await` (P2).
-- Interp: "cannot read property" messages print symbol keys as `[Symbol.iterator]`, qjs
-  as `Symbol.iterator` (`conv::describe_key` in `nullish_base`); then un-ignore
-  `compiler::tests::end_to_end_iteration_messages`.
-- Un-ignore `compiler::tests::end_to_end_iteration_rt` when 0030's Array Iterator leaf
-  intrinsics land.
 - Empty handler regions (an expression-head for-of with an empty body) are harmless
   but could be dropped in resolve.
 
@@ -108,9 +109,6 @@ like) are routed through the coordinator to the heap agent (0028 in flight).
   `%ArrayIteratorPrototype%.next`, `%IteratorPrototype%[Symbol.iterator]`), the Array
   Iterator leaf declarations (implemented by 0030), `%Name%` install targets in bgen.
 - Part 2: for-of and for-in in the compiler with per-iteration bindings, labels and the
-  full close protocol (D1292). Works with any iterable that is not an array today;
-  arrays (and spread through %GetIterator) need 0030's leaves.
-- Un-ignore when their dependencies land: `compiler::tests::end_to_end_iteration_rt`
-  (0030 Array Iterator leaves), `compiler::tests::end_to_end_iteration_messages`
-  (symbol-key messages).
+  full close protocol (D1292), over any iterable including arrays (with 0030).
+  `%ArrayIteratorPrototype%[Symbol.toStringTag]`. No ignored tests left from 0029.
 - Known gaps: destructuring heads, `for await`, no array fast path.

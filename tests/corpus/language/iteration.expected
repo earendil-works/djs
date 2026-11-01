@@ -34,31 +34,48 @@
 32 TypeError: value is not iterable
 33 TypeError: not an object
 34 TypeError: not a function
-35 12
-36 1,2,3
-37 10,20,30
-38 3,3,3
-39 ReferenceError: x is not initialized
-40 TypeError: 'x' is read-onlynr
-41 outer
-42 abc
-43 1,2,b,a
-44 z,x,y
-45 a
-46 0
-47 a,c
-48 string
-49 0
-50 0,1
-51 0
-52 string0,string1
-53 b
-54 a
+35 TypeError: cannot read property 'Symbol.iterator' of undefined
+36 12
+37 1,2,3
+38 10,20,30
+39 3,3,3
+40 ReferenceError: x is not initialized
+41 TypeError: 'x' is read-onlynr
+42 outer
+43 abc
+44 1,2,b,a
+45 z,x,y
+46 a
+47 0
+48 a,c
+49 string
+50 0
+51 0,1
+52 0
+53 string0,string1
+54 b
 55 a
-56 axbx
-57 a1nr
-58 a,b
-59 ReferenceError: k is not initialized
-60 ab
-61 3nnnn
+56 a
+57 axbx
+58 a1nr
+59 a,b
+60 ReferenceError: k is not initialized
+61 ab
+62 3nnnn
+63 6
+64 1undefined3
+65 1234
+66 1
+67 0a1b
+68 01
+69 ab
+70 true
+71 1 false undefined true
+72 TypeError: Array Iterator object expected
+73 ab
+74 1
+75 1
+76 3
+77 true
+78 true
 === completed
