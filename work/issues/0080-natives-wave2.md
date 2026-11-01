@@ -29,7 +29,24 @@ per 10k elements in debug), and the next hot builtins are still bytecode.
       merging).
 
 ## Log
+- Design (D1800): a new op `iter_next L` (`it next -> r`) replaces `swap; call 0` in the
+  for-of step and in array destructuring (compiler/for_in_of.rs, pattern.rs; the
+  compiler is outside `touches:` but the change is two emit sites). The fast path keys on
+  the identity of the cached `next`, not on @@iterator: that is exactly what the spec
+  calls. `%GetIterator`/`%IteratorClose` fast paths in Rust for arrays/strings
+  (interp/run/iter.rs). Corpus case language/for-of-fast.js (holes via proto, getters,
+  mutation, entries/keys, strings, TAs incl. BigInt and resizable, proxies, replacing
+  next mid-loop, `return` on the chain, finished iterators).
+- Numbers (load ~25, noisy). Native release, s: for-of 200k ×20 1.06 → 0.13 (qjs 0.05);
+  string ×200 0.77 → 0.14; TA 1.17 → 0.16; entries+destructuring 1.33 → 0.27 (qjs 0.17);
+  `const [a,b] = [i,1]` ×1M 1.21 → 0.43 (qjs 0.13). wasm (node, median ms): for-of
+  1831 → 196, string 1243 → ~0, TA 2426 → 642, entries 4555 → 378, destructuring
+  1546 → 382, short for-of 1446 → 627. wasm size 1,396,260 → 1,398,951 (+2.7 KB).
+  Scripts: work/scratch/0080/{mb.sh (native), wmb.ts + wsuite.sh (wasm; base.wasm built
+  from ee5b575 in the scratch worktree work/scratch/0080/base)}.
 
 ## Follow-ups
+- (coordinator, from 0082) 3 test262 tests fail on typed arrays over resizable buffers
+  that shrink during `fill`/`freeze`/`subarray` (length-tracking views).
 
 ## Result

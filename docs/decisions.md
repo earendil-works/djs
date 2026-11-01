@@ -3466,3 +3466,23 @@ slice-independent:
 - regexp scans: the matcher charges one unit per character after the first, so a scan
   that stops for lack of fuel gets its first character free again when it resumes.
   Exact accounting needs a change in regexp/exec.rs (a follow-up).
+## D1800: iter_next: iteration steps without result objects
+date: 2026-11-03 · by: infra · issue: 0080
+for-of and array destructuring step with a new op `iter_next L` (`it next -> r`). When
+`next` (the value read once at GetIterator, as the spec calls it) is the installed
+`%ArrayIteratorPrototype%.next` or `%StringIteratorPrototype%.next` and `it` is an
+ArrayIterator object of the matching kind, the result `next` would return is a fresh
+ordinary object with own data properties, so reading `done` and `value` back runs no user
+code. The interpreter then produces the value itself and jumps to `L` (right after
+`get_field value`): a present dense element of an Array, an in-bounds Number element of a
+typed array, a code point of a string (kinds keys/values/entries). Holes, non-dense
+elements, BigInt elements and other targets call the real `next` (its `Get` may reach a
+getter or the prototype chain). At the end it finishes the iterator and pushes one
+`{value: undefined, done: true}` without a call. Unlike D1351 this needs no @@iterator
+check: only the identity of `next` matters, so it also covers `arr.entries()`, a
+user-obtained iterator and `Array.prototype.values.call(ta)`. for-await keeps `call 0`.
+`%GetIterator` of an Array/string whose @@iterator is the original (a data property, as
+D1351) and `%IteratorClose` of an ArrayIterator with no `return` on its chain (lookup
+without a Proxy, data `undefined`/`null` or absent) skip their frames
+(`interp/run/iter.rs`). Fuel per step drops accordingly (D1633: fuel is not part of the
+semantics). wasm: for-of over 200k numbers 1361 → 189 ms; +2.7 KB of wasm.
