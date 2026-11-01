@@ -9,7 +9,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0099 | Cold-start wasm memory + verify bitmap | num | .worktrees/num |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0097 | Finish the later group (immutable ArrayBuffer, inventory) | infra | .worktrees/infra |
-| 0096 | Compiler structural speedups (0092 follow-ups) | lexer | .worktrees/lexer |
 | 0098 | Base image + shapes code size (0083 part 4) | heap | .worktrees/heap |
 | 0100 | Native codegen: values in Rust locals (0081 P8) + more run_hot ops | perf | .worktrees/perf |
 
@@ -47,6 +46,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0046 | BigInt | 63d8468 (agent heap; BigInt 1135/1142; active 98.8%) |
 | 0033 | JSON + RegExp builtins, regex literals | 8b5ccfb (agent num; active 32,303 / 32,718) |
 | 0040 | P1-7 Classes | 2d08a6c (agent lexer; test262 active 97.1%) |
+| 0096 | Compiler structural speedups | 5547d5ec (agent lexer, archived; compiles -8..-10% more; typescript.js now fewer instr than quickjs-wasi) |
 | 0092 | Compiler size + compile speed | 79a2faa8 (agent lexer; typescript.js compile -37% wasm instr; compiler -7% size) |
 | 0086 | Bytecode quality | 8fbd04f (agent lexer; tight -38%, prop1 -33%, call1 -22% wasm instr; renumbering measured slower, not merged) |
 | 0084 | Long tail part 2 | a7a38ed (agent lexer; test262 failures 56 -> 43, all by design or routed) |
