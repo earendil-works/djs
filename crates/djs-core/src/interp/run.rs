@@ -297,8 +297,38 @@ impl<'h> Exec<'h> {
                 self.flush();
                 Ok(Some(Status::HostCall { call_id, fn_id }))
             }
+            ObjectClass::BoundFunction => {
+                let argc = self.unwrap_bound(base, argc, o)?;
+                self.call(base, argc, cont, ret_pc)
+            }
             _ => type_error("not a function"),
         }
+    }
+
+    /// Rewrites `F this a1 .. an` for a bound function F into `target boundThis b1 .. bk
+    /// a1 .. an` (the bound `this` is ignored by `construct`, which puts its own object
+    /// there). Returns the new argument count.
+    fn unwrap_bound(&mut self, base: u32, argc: u32, f: Obj) -> Result<u32, Fault> {
+        let target = self.heap.object_slot(f, 0);
+        let this = self.heap.object_slot(f, 1);
+        let args = self.heap.object_slot(f, 2).as_object().expect("bound args");
+        let k = self.heap.array_length(args);
+        self.ensure(self.sp + k)?;
+        for i in (0..argc).rev() {
+            let v = self.get(base + 2 + i);
+            self.set(base + 2 + k + i, v);
+        }
+        for i in 0..k {
+            let v = self
+                .heap
+                .get_element_fast(args, i)
+                .unwrap_or(Value::UNDEFINED);
+            self.set(base + 2 + i, v);
+        }
+        self.set(base, target);
+        self.set(base + 1, this);
+        self.sp += k;
+        Ok(argc + k)
     }
 
     /// Returns `v` from the current frame.
@@ -408,6 +438,12 @@ impl<'h> Exec<'h> {
     /// positioned at their call (`ret_pc - 1`). Prelude frames are hidden, except
     /// installed builtin methods, which show as `at name (native)`.
     pub(crate) fn stack_trace(&self, pc: u32) -> String {
+        self.stack_trace_from(pc, false)
+    }
+
+    /// [`Exec::stack_trace`]; with `skip_prelude`, frames of the prelude at the top of the
+    /// stack are left out too (an Error constructor does not show itself, as in qjs).
+    pub(crate) fn stack_trace_from(&self, pc: u32, mut skip_prelude: bool) -> String {
         use crate::heap::cells::{Object, Script, flags::OBJ_BUILTIN};
         let prelude = intrinsic(self.heap, Intrinsic::PreludeScript).as_internal();
         let mut out = String::new();
@@ -422,6 +458,7 @@ impl<'h> Exec<'h> {
             let a = self.heap.arena();
             let script: Ref = a.get(t, FuncTemplate::SCRIPT);
             let builtin = self.heap.cell_flags(f.offset()) & OBJ_BUILTIN != 0;
+            skip_prelude &= prelude.is_some() && prelude == script.get();
             let name_of = |fallback: &str| {
                 let name = Atom::from_id(a.get(t, FuncTemplate::NAME));
                 if name.is_null() {
@@ -430,7 +467,8 @@ impl<'h> Exec<'h> {
                     self.heap.atom_name(name)
                 }
             };
-            if builtin {
+            if skip_prelude {
+            } else if builtin {
                 // The installed name, not the prelude's internal function name.
                 let name = self
                     .heap
@@ -1969,6 +2007,16 @@ impl<'h> Exec<'h> {
     /// IsConstructor: ordinary (non-async, non-generator) functions and class
     /// constructors.
     fn is_constructor(&self, fo: Obj) -> bool {
+        use crate::heap::cells::flags::{OBJ_BUILTIN, OBJ_BUILTIN_CTOR};
+        if self.heap.object_class(fo) == ObjectClass::BoundFunction {
+            let target = self.heap.object_slot(fo, 0).as_object().expect("target");
+            return self.is_constructor(target);
+        }
+        // Builtins are constructors only if installed as one (D1310).
+        let flags = self.heap.cell_flags(fo.offset());
+        if flags & OBJ_BUILTIN != 0 {
+            return flags & OBJ_BUILTIN_CTOR != 0;
+        }
         self.heap.object_class(fo) == ObjectClass::Function && {
             let t = self
                 .heap
@@ -2000,10 +2048,10 @@ impl<'h> Exec<'h> {
     }
 
     /// `new f(args)`: `f a1 .. an` on the stack.
-    fn construct(&mut self, argc: u32, next: u32) -> Step {
+    fn construct(&mut self, mut argc: u32, next: u32) -> Step {
         let base = self.sp - 1 - argc;
-        let f = self.get(base);
-        let Some(fo) = f.as_object() else {
+        let mut f = self.get(base);
+        let Some(mut fo) = f.as_object() else {
             return type_error("not a function");
         };
         if !self.is_constructor(fo) {
@@ -2011,6 +2059,26 @@ impl<'h> Exec<'h> {
                 return type_error("not a function");
             }
             return type_error(&self.not_a_constructor_message(f));
+        }
+        // A bound function constructs its target (new.target is the target too, as
+        // the spec has it when new.target is the bound function itself).
+        while self.heap.object_class(fo) == ObjectClass::BoundFunction {
+            // `f a1 .. an` gets a `this` slot for unwrap_bound, which construct fills
+            // again below.
+            self.ensure(self.sp + 1)?;
+            for i in (0..argc).rev() {
+                let v = self.get(base + 1 + i);
+                self.set(base + 2 + i, v);
+            }
+            self.sp += 1;
+            argc = self.unwrap_bound(base, argc, fo)?;
+            for i in 0..argc {
+                let v = self.get(base + 2 + i);
+                self.set(base + 1 + i, v);
+            }
+            self.sp -= 1;
+            f = self.get(base);
+            fo = f.as_object().expect("bound target");
         }
         let proto = match self.heap.find_property(fo, crate::heap::atoms::PROTOTYPE) {
             Some((_, Property::Data { value, .. })) => value.as_object(),
@@ -2045,6 +2113,10 @@ impl<'h> Exec<'h> {
         let Some(mut o) = v.as_object() else {
             return Ok(false);
         };
+        if self.heap.object_class(fo) == ObjectClass::BoundFunction {
+            let target = self.heap.object_slot(fo, 0);
+            return self.instance_of(v, target);
+        }
         let proto = match self.heap.find_property(fo, crate::heap::atoms::PROTOTYPE) {
             Some((_, Property::Data { value, .. })) => value,
             None => Value::UNDEFINED,

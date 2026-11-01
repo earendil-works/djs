@@ -81,6 +81,50 @@ const I = {
   InstallIntrinsic: (name, f) => {
     installed["%" + name] = { f };
   },
+  // The constructor gets the native one's prototype, so instances compare equal.
+  InstallConstructor: (target, key, f, length, parent) => {
+    Object.defineProperty(f, "prototype", { value: globalThis[key].prototype });
+    installed[target + "." + key] = { f, length };
+  },
+  InstallAccessor: (target, key, f, isSetter) => {
+    installed[(isSetter ? "set " : "get ") + target + "." + key] = { f };
+  },
+  InstallValue: (target, key, v, attrs) => {
+    installed[target + "." + key] = { v, attrs };
+  },
+  RealmIntrinsic: (name) => globalThis[name.replace(/Prototype$/, "")].prototype,
+  ErrorCreate: (proto) => Object.setPrototypeOf(new Error(), proto),
+  CaptureStack: (o) => {},
+  DefineDataPropertyOrThrow: (o, k, v, attrs) => {
+    check(isObject(o) && !isObject(k), "DefineDataPropertyOrThrow");
+    Object.defineProperty(o, k, {
+      value: v,
+      writable: (attrs & 1) !== 0,
+      enumerable: (attrs & 2) !== 0,
+      configurable: (attrs & 4) !== 0,
+    });
+  },
+  DefineOwnPropertyFromRecord: (o, k, d) => {
+    check(isObject(o) && !isObject(k) && Object.getPrototypeOf(d) === null, "DefineOwnPropertyFromRecord");
+    return Reflect.defineProperty(o, k, d);
+  },
+  GetOwnPropertyDescriptorObject: (o, k) => (check(!isObject(k), "GetOwnPropertyDescriptorObject"), Object.getOwnPropertyDescriptor(o, k)),
+  HasOwnProperty: (o, k) => (check(!isObject(k), "HasOwnProperty"), Object.prototype.hasOwnProperty.call(o, k)),
+  OwnPropertyAttributes: (o, k) => {
+    check(!isObject(k), "OwnPropertyAttributes");
+    const d = Reflect.getOwnPropertyDescriptor(o, k);
+    if (d === undefined) return -1;
+    return (d.writable ? 1 : 0) | (d.enumerable ? 2 : 0) | (d.configurable ? 4 : 0) | ("get" in d ? 8 : 0);
+  },
+  OwnPropertyKeys: (o, kind) =>
+    Reflect.ownKeys(o).filter((k) =>
+      kind === 0 ? typeof k === "string" : kind === 1 ? typeof k === "symbol" : kind === 2 ? true
+        : typeof k === "string" && Object.getOwnPropertyDescriptor(o, k).enumerable),
+  CallWithArray: (f, t, args) => (check(Array.isArray(args), "CallWithArray"), Reflect.apply(f, t, args)),
+  BoundFunctionCreate: (target, t, args) => Function.prototype.bind.call(target, t, ...args),
+  FunctionToString: (f) => Function.prototype.toString.call(f),
+  NumberPow: (b, e) => (check(typeof b === "number" && typeof e === "number", "NumberPow"), Math.pow(b, e)),
+  SymbolDescriptiveString: (s) => s.toString(),
 };
 
 PRELUDE;
@@ -262,5 +306,148 @@ same("Array.prototype.map", AP.map, (f) => {
   return f.call(a, (v) => v);
 });
 same("Array.prototype.map", AP.map, (f) => f.call({ length: 4294967296 }, (v) => v));
+
+// ---- 0031: Object, Function, Error, Array, Math, String -------------------------------
+
+const keyish = (log) => [
+  "x",
+  1,
+  Symbol.iterator,
+  valueOfObj("k", log),
+  toPrim("p"),
+  { toString: () => ({}), valueOf: () => ({}) },
+];
+const descs = (log) => [
+  { value: 1 },
+  { value: 2, writable: true, enumerable: 1, configurable: "" },
+  { get() {} },
+  { get: undefined, set: undefined },
+  { get: 5 },
+  { set: {} },
+  { get() {}, value: 1 },
+  { set() {}, writable: false },
+  logged({ value: 3, enumerable: true }, log),
+  logged({ get() {}, configurable: true }, log),
+  5,
+  null,
+];
+for (let i = 0; i < keyish([]).length; i++) {
+  for (let j = 0; j < descs([]).length; j++) {
+    same("Object.defineProperty", Object.defineProperty, (f, log) => {
+      const o = {};
+      return [f(o, keyish(log)[i], descs(log)[j]), Object.getOwnPropertyDescriptor(o, "x")];
+    });
+  }
+  same("Object.getOwnPropertyDescriptor", Object.getOwnPropertyDescriptor, (f, log) =>
+    f({ x: 1, 1: 2, [Symbol.iterator]: 3, kk: 4 }, keyish(log)[i]),
+  );
+  same("Object.prototype.hasOwnProperty", Object.prototype.hasOwnProperty, (f, log) =>
+    f.call({ x: 1, 1: 2, [Symbol.iterator]: 3 }, keyish(log)[i]),
+  );
+  same("Object.prototype.propertyIsEnumerable", Object.prototype.propertyIsEnumerable, (f, log) =>
+    f.call(Object.defineProperty({ x: 1 }, 1, { value: 1 }), keyish(log)[i]),
+  );
+}
+for (const o of [{}, [1, 2], { b: 1, a: 2, 1: 3, [Symbol.iterator]: 4 }, Object.freeze({ x: 1 })]) {
+  same("Object.getOwnPropertyNames", Object.getOwnPropertyNames, (f) => f(o));
+  same("Object.defineProperty", Object.defineProperty, (f) => f(o, "x", { value: 9 }));
+  same("Object.defineProperty", Object.defineProperty, (f) => f(o, "length", { value: 1 }));
+}
+for (const v of [undefined, null, 1]) {
+  same("Object.getOwnPropertyNames", Object.getOwnPropertyNames, (f) => f(v));
+  same("Object.defineProperty", Object.defineProperty, (f) => f(v, "x", {}));
+  same("Object.prototype.hasOwnProperty", Object.prototype.hasOwnProperty, (f) => f.call(v, "x"));
+}
+// Array lengths through defineProperty.
+for (const len of [0, 2, 5, -1, 1.5, 4294967295, 4294967296, "3", toPrim("x")]) {
+  same("Object.defineProperty", Object.defineProperty, (f) => f([1, 2, 3], "length", { value: len }));
+}
+same("Object.defineProperty", Object.defineProperty, (f) =>
+  f(Object.defineProperty([1, 2, 3], "length", { writable: false }), "length", { value: 1 }),
+);
+
+const FP = Function.prototype;
+function probe(a, b) {
+  return [this === undefined ? "u" : show(this), a, b, arguments.length];
+}
+for (const [thisArg, args] of [
+  [undefined, []],
+  [1, [2]],
+  [{ o: 1 }, [3, 4, 5]],
+]) {
+  same("Function.prototype.call", FP.call, (f) => f.call(probe, thisArg, ...args));
+  same("Function.prototype.apply", FP.apply, (f) => f.call(probe, thisArg, args));
+  same("Function.prototype.bind", FP.bind, (f) => {
+    const b = f.call(probe, thisArg, ...args);
+    return [b(7, 8), b.name, b.length, Reflect.ownKeys(b)];
+  });
+}
+for (const argArray of [null, undefined, { length: 2, 0: "a" }, "str", 5, logged([1, 2], [])]) {
+  same("Function.prototype.apply", FP.apply, (f) => f.call(probe, null, argArray));
+}
+for (const target of [5, {}, null]) {
+  same("Function.prototype.call", FP.call, (f) => f.call(target));
+  same("Function.prototype.apply", FP.apply, (f) => f.call(target));
+  same("Function.prototype.bind", FP.bind, (f) => f.call(target));
+}
+same("Function.prototype.bind", FP.bind, (f) => {
+  const g = function () {};
+  Object.defineProperty(g, "length", { value: Infinity });
+  Object.defineProperty(g, "name", { value: 42 });
+  const b = f.call(g, null, 1, 2);
+  return [b.length, b.name];
+});
+same("Function.prototype.bind", FP.bind, (f) => {
+  const g = function () {};
+  Object.defineProperty(g, "length", { value: 2.5 });
+  return f.call(g, null).length;
+});
+same("Function.prototype.bind", FP.bind, (f) => {
+  function C(a, b) {
+    this.ab = [a, b];
+  }
+  const B = f.call(C, null, 1);
+  const o = new B(2);
+  return [o.ab, o instanceof C, o instanceof B];
+});
+
+for (const C of ["Error", "TypeError", "RangeError", "ReferenceError", "SyntaxError", "EvalError", "URIError"]) {
+  const native = globalThis[C];
+  const full = "globalThis." + C;
+  for (const args of [[], ["m"], [undefined], [5, { cause: 1 }], ["m", { x: 1 }], ["m", logged({ cause: 2 }, [])], [toPrim("t")]]) {
+    same(full, native, (f) => f(...args));
+    same(full, native, (f) => Reflect.construct(f, args));
+  }
+  same(full, native, () => installed[full].length === native.length);
+}
+for (const o of [new Error("x"), new TypeError(), { name: "N" }, { message: "M" }, { name: "", message: "m" }, { name: toPrim("n"), message: 5 }, 5]) {
+  same("Error.prototype.toString", Error.prototype.toString, (f) => f.call(o));
+}
+
+same("Array.isArray", Array.isArray, (f) => [f([]), f({}), f(5), f(new Proxy([], {}))]);
+for (const args of [[], [3], [0], [-1], [1.5], ["3"], [1, 2], [4294967295]]) {
+  same("globalThis.Array", Array, (f) => f(...args));
+  same("globalThis.Array", Array, (f) => Reflect.construct(f, args));
+}
+const pushTargets = (log) => [[], [1], { length: 2 }, { length: "x" }, logged([5], log), 5, null];
+for (let i = 0; i < pushTargets([]).length; i++) {
+  same("Array.prototype.push", AP.push, (f, log) => {
+    const t = pushTargets(log)[i];
+    return [f.call(t, 1, 2), t];
+  });
+  same("Array.prototype.push", AP.push, (f, log) => {
+    const t = pushTargets(log)[i];
+    return [f.call(t), t];
+  });
+}
+same("Array.prototype.push", AP.push, (f) => f.call({ length: 2 ** 53 - 1 }, 1));
+same("Array.prototype.push", AP.push, (f) => f.call(Object.freeze([1]), 1));
+
+for (const [b, e] of [[2, 10], [2, -1], [NaN, 0], [1, Infinity], [-8, 1 / 3], ["3", "2"], [toPrim("x"), 1], [Symbol(), 1]]) {
+  same("Math.pow", Math.pow, (f) => f(b, e));
+}
+for (const args of [[], [undefined], [null], [5], [Symbol("d")], [Symbol()], [toPrim("v")], [{}], [[1, 2]]]) {
+  same("globalThis.String", String, (f) => f(...args));
+}
 
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));

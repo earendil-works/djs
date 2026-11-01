@@ -138,6 +138,43 @@ function ArrayPrototypeIncludes(searchElement, fromIndex) {
   return false;
 }
 
+// builtins/array.ts:165 constructor Array
+function ArrayConstructor(...values) {
+  if (LengthOfArrayLike(values) === 1) {
+    const len = %Get(values, 0);
+    if (!%IsNumber(len)) {
+      return values;
+    }
+    const n = %AsNumber(len);
+    if (!(n >= 0 && n <= 4294967295 && %ToIntegerOrInfinityNumber(n) === n)) {
+      throw %NewRangeError("invalid array length");
+    }
+    return %ArrayCreate(n);
+  }
+  return values;
+}
+
+// builtins/array.ts:185 Array.isArray
+function ArrayIsArray(arg) {
+  return %IsArray(arg);
+}
+
+// builtins/array.ts:194 Array.prototype.push
+function ArrayPrototypePush(...items) {
+  const o = %ToObject(this);
+  let len = LengthOfArrayLike(o);
+  const argCount = LengthOfArrayLike(items);
+  if (len + argCount > 9007199254740991) {
+    throw %NewTypeError("Array loo long");
+  }
+  for (let i = 0; i < argCount; i++) {
+    %Set(o, len, %Get(items, i));
+    len++;
+  }
+  %Set(o, "length", len);
+  return len;
+}
+
 // builtins/conversion.ts:8 %ToPrimitive
 function ToPrimitive(input, hint) {
   if (!%IsObject(input)) {
@@ -221,11 +258,336 @@ function LengthOfArrayLike(o) {
   return ToLength(%Get(o, "length"));
 }
 
+// builtins/conversion.ts:97
+function ToPropertyKey(v) {
+  const key = ToPrimitive(v, "string");
+  if (%IsSymbol(key) || %IsNumber(key)) {
+    return key;
+  }
+  return %ToStringPrimitive(key);
+}
+
+// builtins/conversion.ts:111
+function GetPrototypeFromConstructor(newTarget, fallback) {
+  if (newTarget === undefined) {
+    return %RealmIntrinsic(fallback);
+  }
+  const proto = %Get(%AsObj(newTarget), "prototype");
+  if (%IsObject(proto)) {
+    return %AsObj(proto);
+  }
+  return %RealmIntrinsic(fallback);
+}
+
+// builtins/error.ts:4
+function InstallErrorCause(o, options) {
+  if (%IsObject(options)) {
+    const opts = %AsObj(options);
+    if (%HasProperty(opts, "cause")) {
+      %DefineDataPropertyOrThrow(o, "cause", %Get(opts, "cause"), 5);
+    }
+  }
+}
+
+// builtins/error.ts:17
+function ErrorConstruct(newTarget, fallback, message, options) {
+  const o = %ErrorCreate(GetPrototypeFromConstructor(newTarget, fallback));
+  if (message !== undefined) {
+    %DefineDataPropertyOrThrow(o, "message", ToString(message), 5);
+  }
+  InstallErrorCause(o, options);
+  %CaptureStack(o);
+  return o;
+}
+
+// builtins/error.ts:32 constructor Error
+function ErrorConstructor(message, options) {
+  return ErrorConstruct(new.target, "ErrorPrototype", message, options);
+}
+
+// builtins/error.ts:42 constructor EvalError
+function EvalErrorConstructor(message, options) {
+  return ErrorConstruct(new.target, "EvalErrorPrototype", message, options);
+}
+
+// builtins/error.ts:52 constructor RangeError
+function RangeErrorConstructor(message, options) {
+  return ErrorConstruct(new.target, "RangeErrorPrototype", message, options);
+}
+
+// builtins/error.ts:62 constructor ReferenceError
+function ReferenceErrorConstructor(message, options) {
+  return ErrorConstruct(new.target, "ReferenceErrorPrototype", message, options);
+}
+
+// builtins/error.ts:72 constructor SyntaxError
+function SyntaxErrorConstructor(message, options) {
+  return ErrorConstruct(new.target, "SyntaxErrorPrototype", message, options);
+}
+
+// builtins/error.ts:82 constructor TypeError
+function TypeErrorConstructor(message, options) {
+  return ErrorConstruct(new.target, "TypeErrorPrototype", message, options);
+}
+
+// builtins/error.ts:92 constructor URIError
+function URIErrorConstructor(message, options) {
+  return ErrorConstruct(new.target, "URIErrorPrototype", message, options);
+}
+
+// builtins/error.ts:100 Error.prototype.toString
+function ErrorPrototypeToString() {
+  if (!%IsObject(this)) {
+    throw %NewTypeError("not an object");
+  }
+  const o = %AsObj(this);
+  const name = %Get(o, "name");
+  const nameStr = name === undefined ? "Error" : ToString(name);
+  const msg = %Get(o, "message");
+  const msgStr = msg === undefined ? "" : ToString(msg);
+  if (nameStr === "") {
+    return msgStr;
+  }
+  if (msgStr === "") {
+    return nameStr;
+  }
+  return nameStr + ": " + msgStr;
+}
+
+// builtins/function.ts:9 Function.prototype.call
+function FunctionPrototypeCall(thisArg, ...args) {
+  if (!%IsCallable(this)) {
+    throw %NewTypeError("not a function");
+  }
+  return %CallWithArray(this, thisArg, args);
+}
+
+// builtins/function.ts:17
+function CreateListFromArrayLike(obj) {
+  if (!%IsObject(obj)) {
+    throw %NewTypeError("not a object");
+  }
+  const o = %AsObj(obj);
+  const len = LengthOfArrayLike(o);
+  const list = %ArrayCreate(0);
+  for (let k = 0; k < len; k++) {
+    %CreateDataPropertyOrThrow(list, k, %Get(o, k));
+  }
+  return list;
+}
+
+// builtins/function.ts:34 Function.prototype.apply
+function FunctionPrototypeApply(thisArg, argArray) {
+  if (!%IsCallable(this)) {
+    throw %NewTypeError("not a function");
+  }
+  if (argArray === undefined || argArray === null) {
+    return %Call(this, thisArg);
+  }
+  return %CallWithArray(this, thisArg, CreateListFromArrayLike(argArray));
+}
+
+// builtins/function.ts:49 Function.prototype.bind
+function FunctionPrototypeBind(thisArg, ...args) {
+  if (!%IsCallable(this)) {
+    throw %NewTypeError("not a function");
+  }
+  const target = %AsFn(this);
+  const f = %BoundFunctionCreate(target, thisArg, args);
+  let l = 0;
+  if (%HasOwnProperty(target, "length")) {
+    const targetLen = %Get(target, "length");
+    if (%IsNumber(targetLen)) {
+      const n = %AsNumber(targetLen);
+      if (n === 1 / 0) {
+        l = n;
+      } else if (n !== -1 / 0) {
+        l = %ToIntegerOrInfinityNumber(n) - LengthOfArrayLike(args);
+        if (l < 0) {
+          l = 0;
+        }
+      }
+    }
+  }
+  %DefineDataPropertyOrThrow(f, "length", l, 4);
+  const name = %Get(target, "name");
+  const nameStr = %IsString(name) ? %AsStr(name) : "";
+  %DefineDataPropertyOrThrow(f, "name", "bound " + nameStr, 4);
+  return f;
+}
+
+// builtins/function.ts:81 Function.prototype.toString
+function FunctionPrototypeToString() {
+  return %FunctionToString(this);
+}
+
+// builtins/math.ts:8 value Math
+function MathObject() {
+  const m = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+  %DefineDataPropertyOrThrow(m, %WellKnownSymbol("toStringTag"), "Math", 4);
+  return m;
+}
+
+// builtins/math.ts:18 Math.pow
+function MathPow(base, exponent) {
+  const b = ToNumber(base);
+  return %NumberPow(b, ToNumber(exponent));
+}
+
+// builtins/object.ts:8 constructor Object
+function ObjectConstructor(value) {
+  if (value === undefined || value === null) {
+    return %ObjectCreate(GetPrototypeFromConstructor(new.target, "ObjectPrototype"));
+  }
+  return %ToObject(value);
+}
+
+// builtins/object.ts:19
+function ToPropertyDescriptor(attributes) {
+  if (!%IsObject(attributes)) {
+    throw %NewTypeError("not an object");
+  }
+  const o = %AsObj(attributes);
+  const desc = %ObjectCreate(null);
+  if (%HasProperty(o, "enumerable")) {
+    %CreateDataPropertyOrThrow(desc, "enumerable", %ToBoolean(%Get(o, "enumerable")));
+  }
+  if (%HasProperty(o, "configurable")) {
+    %CreateDataPropertyOrThrow(desc, "configurable", %ToBoolean(%Get(o, "configurable")));
+  }
+  const hasValue = %HasProperty(o, "value");
+  if (hasValue) {
+    %CreateDataPropertyOrThrow(desc, "value", %Get(o, "value"));
+  }
+  const hasWritable = %HasProperty(o, "writable");
+  if (hasWritable) {
+    %CreateDataPropertyOrThrow(desc, "writable", %ToBoolean(%Get(o, "writable")));
+  }
+  const hasGet = %HasProperty(o, "get");
+  if (hasGet) {
+    const getter = %Get(o, "get");
+    if (!%IsCallable(getter) && getter !== undefined) {
+      throw %NewTypeError("invalid getter");
+    }
+    %CreateDataPropertyOrThrow(desc, "get", getter);
+  }
+  const hasSet = %HasProperty(o, "set");
+  if (hasSet) {
+    const setter = %Get(o, "set");
+    if (!%IsCallable(setter) && setter !== undefined) {
+      throw %NewTypeError("invalid setter");
+    }
+    %CreateDataPropertyOrThrow(desc, "set", setter);
+  }
+  if ((hasGet || hasSet) && (hasValue || hasWritable)) {
+    throw %NewTypeError("cannot have setter/getter and value or writable");
+  }
+  return desc;
+}
+
+// builtins/object.ts:65
+function DefinePropertyOrThrow(o, key, desc) {
+  if (%IsArray(o) && key === "length" && %HasOwnProperty(desc, "value")) {
+    const v = %Get(desc, "value");
+    const newLen = ToNumber(v);
+    const numberLen = ToNumber(v);
+    if (!(newLen >= 0 && newLen <= 4294967295 && %ToIntegerOrInfinityNumber(newLen) === newLen)) {
+      throw %NewRangeError("invalid array length");
+    }
+    if (newLen !== numberLen) {
+      throw %NewRangeError("invalid array length");
+    }
+    %CreateDataPropertyOrThrow(desc, "value", newLen);
+  }
+  if (!%DefineOwnPropertyFromRecord(o, key, desc)) {
+    if (%OwnPropertyAttributes(o, key) < 0) {
+      throw %NewTypeError("object is not extensible");
+    }
+    throw %NewTypeError("property is not configurable");
+  }
+}
+
+// builtins/object.ts:90 Object.defineProperty
+function ObjectDefineProperty(o, p, attributes) {
+  if (!%IsObject(o)) {
+    throw %NewTypeError("not an object");
+  }
+  const key = ToPropertyKey(p);
+  const desc = ToPropertyDescriptor(attributes);
+  DefinePropertyOrThrow(%AsObj(o), key, desc);
+  return o;
+}
+
+// builtins/object.ts:104 Object.getOwnPropertyDescriptor
+function ObjectGetOwnPropertyDescriptor(o, p) {
+  const obj = %ToObject(o);
+  const key = ToPropertyKey(p);
+  return %GetOwnPropertyDescriptorObject(obj, key);
+}
+
+// builtins/object.ts:114 Object.getOwnPropertyNames
+function ObjectGetOwnPropertyNames(o) {
+  return %OwnPropertyKeys(%ToObject(o), 0);
+}
+
+// builtins/object.ts:122 Object.prototype.hasOwnProperty
+function ObjectPrototypeHasOwnProperty(v) {
+  const key = ToPropertyKey(v);
+  return %HasOwnProperty(%ToObject(this), key);
+}
+
+// builtins/object.ts:131 Object.prototype.propertyIsEnumerable
+function ObjectPrototypePropertyIsEnumerable(v) {
+  const key = ToPropertyKey(v);
+  const attrs = %OwnPropertyAttributes(%ToObject(this), key);
+  return attrs >= 0 && (attrs & 2) !== 0;
+}
+
+// builtins/string.ts:9 constructor String
+function StringConstructor(...args) {
+  let s = "";
+  if (LengthOfArrayLike(args) > 0) {
+    const value = %Get(args, 0);
+    if (new.target === undefined && %IsSymbol(value)) {
+      return %SymbolDescriptiveString(%AsSym(value));
+    }
+    s = ToString(value);
+  }
+  if (new.target !== undefined) {
+    throw %NewTypeError("not supported yet: String objects");
+  }
+  return s;
+}
+
+%InstallConstructor("globalThis", "Array", ArrayConstructor, 1, undefined);
+%InstallConstructor("globalThis", "Error", ErrorConstructor, 1, undefined);
+%InstallConstructor("globalThis", "EvalError", EvalErrorConstructor, 1, "Error");
+%InstallConstructor("globalThis", "RangeError", RangeErrorConstructor, 1, "Error");
+%InstallConstructor("globalThis", "ReferenceError", ReferenceErrorConstructor, 1, "Error");
+%InstallConstructor("globalThis", "SyntaxError", SyntaxErrorConstructor, 1, "Error");
+%InstallConstructor("globalThis", "TypeError", TypeErrorConstructor, 1, "Error");
+%InstallConstructor("globalThis", "URIError", URIErrorConstructor, 1, "Error");
+%InstallValue("globalThis", "Math", MathObject(), 5);
+%InstallConstructor("globalThis", "Object", ObjectConstructor, 1, undefined);
+%InstallConstructor("globalThis", "String", StringConstructor, 1, undefined);
 %InstallMethod("Array.prototype", "forEach", ArrayPrototypeForEach, 1);
 %InstallMethod("Array.prototype", "map", ArrayPrototypeMap, 1);
 %InstallMethod("Array.prototype", "indexOf", ArrayPrototypeIndexOf, 1);
 %InstallMethod("Array.prototype", "join", ArrayPrototypeJoin, 1);
 %InstallMethod("Array.prototype", "includes", ArrayPrototypeIncludes, 1);
+%InstallMethod("Array", "isArray", ArrayIsArray, 1);
+%InstallMethod("Array.prototype", "push", ArrayPrototypePush, 1);
+%InstallMethod("Error.prototype", "toString", ErrorPrototypeToString, 0);
+%InstallMethod("Function.prototype", "call", FunctionPrototypeCall, 1);
+%InstallMethod("Function.prototype", "apply", FunctionPrototypeApply, 2);
+%InstallMethod("Function.prototype", "bind", FunctionPrototypeBind, 1);
+%InstallMethod("Function.prototype", "toString", FunctionPrototypeToString, 0);
+%InstallMethod("Math", "pow", MathPow, 2);
+%InstallMethod("Object", "defineProperty", ObjectDefineProperty, 3);
+%InstallMethod("Object", "getOwnPropertyDescriptor", ObjectGetOwnPropertyDescriptor, 2);
+%InstallMethod("Object", "getOwnPropertyNames", ObjectGetOwnPropertyNames, 1);
+%InstallMethod("Object.prototype", "hasOwnProperty", ObjectPrototypeHasOwnProperty, 1);
+%InstallMethod("Object.prototype", "propertyIsEnumerable", ObjectPrototypePropertyIsEnumerable, 1);
 %InstallIntrinsic("ToPrimitive", ToPrimitive);
 %InstallIntrinsic("ToNumber", ToNumber);
 %InstallIntrinsic("ToString", ToString);

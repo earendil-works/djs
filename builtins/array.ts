@@ -155,3 +155,53 @@ function ArrayPrototypeIncludes(this: Value, searchElement: Value, fromIndex?: V
   }
   return false;
 }
+
+/**
+ * Array ( ...values ), 23.1.1.1. Subclassing (a new.target other than Array) is not
+ * supported yet: the result always has %Array.prototype%.
+ * @constructor Array
+ * @length 1
+ */
+function ArrayConstructor(...values: Value[]): Obj {
+  if (LengthOfArrayLike(values) === 1) {
+    const len: Value = Get(values, 0);
+    if (!IsNumber(len)) {
+      return values;
+    }
+    const n: f64 = AsNumber(len);
+    if (!(n >= 0 && n <= 4294967295 && ToIntegerOrInfinityNumber(n) === n)) {
+      throw NewRangeError("invalid array length");
+    }
+    return ArrayCreate(n);
+  }
+  // The rest parameter is a fresh array of the values.
+  return values;
+}
+
+/**
+ * Array.isArray ( arg ), 23.1.2.2.
+ * @builtin Array.isArray
+ */
+function ArrayIsArray(arg: Value): boolean {
+  return IsArray(arg);
+}
+
+/**
+ * Array.prototype.push ( ...items ), 23.1.3.23.
+ * @builtin Array.prototype.push
+ * @length 1
+ */
+function ArrayPrototypePush(this: Value, ...items: Value[]): f64 {
+  const o: Obj = ToObject(this);
+  let len: f64 = LengthOfArrayLike(o);
+  const argCount: f64 = LengthOfArrayLike(items);
+  if (len + argCount > 9007199254740991) {
+    throw NewTypeError("Array loo long");
+  }
+  for (let i: f64 = 0; i < argCount; i++) {
+    Set(o, len, Get(items, i));
+    len++;
+  }
+  Set(o, "length", len);
+  return len;
+}

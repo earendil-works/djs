@@ -29,9 +29,38 @@ pub enum Intrinsic {
     /// The prelude's `Script` cell (an internal reference), or `undefined`: its frames
     /// are builtins in stack traces.
     PreludeScript,
+    EvalErrorProto,
+    UriErrorProto,
+    AggregateErrorProto,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::PreludeScript as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::AggregateErrorProto as u32 + 1;
+
+impl Intrinsic {
+    /// The intrinsic prototype of the constructor `name`, if the realm has one: the
+    /// constructors installed by the prelude (`%InstallConstructor`) reuse it.
+    pub(crate) fn prototype_of(name: &str) -> Option<Intrinsic> {
+        Some(match name {
+            "Object" => Intrinsic::ObjectProto,
+            "Function" => Intrinsic::FunctionProto,
+            "Array" => Intrinsic::ArrayProto,
+            "Error" => Intrinsic::ErrorProto,
+            "TypeError" => Intrinsic::TypeErrorProto,
+            "RangeError" => Intrinsic::RangeErrorProto,
+            "ReferenceError" => Intrinsic::ReferenceErrorProto,
+            "SyntaxError" => Intrinsic::SyntaxErrorProto,
+            "EvalError" => Intrinsic::EvalErrorProto,
+            "URIError" => Intrinsic::UriErrorProto,
+            "AggregateError" => Intrinsic::AggregateErrorProto,
+            _ => return None,
+        })
+    }
+
+    /// `%RealmIntrinsic(name)` of the builtin language: `<Constructor>Prototype`.
+    pub(crate) fn by_name(name: &str) -> Option<Intrinsic> {
+        Intrinsic::prototype_of(name.strip_suffix("Prototype")?)
+    }
+}
 
 /// The native error types the VM throws itself.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -131,6 +160,17 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
         define_hidden(heap, p, atoms::NAME, Value::string(name))?;
         define_hidden(heap, p, atoms::MESSAGE, empty)?;
         set(heap, kind.proto(), Value::object(p));
+    }
+    for (i, name) in [
+        (Intrinsic::EvalErrorProto, "EvalError"),
+        (Intrinsic::UriErrorProto, "URIError"),
+        (Intrinsic::AggregateErrorProto, "AggregateError"),
+    ] {
+        let p = heap.new_object(Some(error_proto))?;
+        let name = heap.alloc_str(name)?;
+        define_hidden(heap, p, atoms::NAME, Value::string(name))?;
+        define_hidden(heap, p, atoms::MESSAGE, empty)?;
+        set(heap, i, Value::object(p));
     }
     let global = heap.new_object(Some(object_proto))?;
     set(heap, Intrinsic::Global, Value::object(global));

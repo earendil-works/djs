@@ -7,8 +7,9 @@
 //! push exactly one call frame whose result completes them.
 
 use super::*;
+use crate::builtins::{function, object};
 use crate::bytecode::intrinsics::{INTRINSICS, IntrinsicKind, intrinsic, intrinsic_id};
-use crate::heap::cells::flags::OBJ_BUILTIN;
+use crate::heap::cells::flags::{OBJ_BUILTIN, OBJ_BUILTIN_CTOR};
 use crate::heap::{ObjectClass, atoms};
 
 /// The id of `name`, at compile time (a typo fails the build).
@@ -67,6 +68,23 @@ const NEW_TYPE_ERROR: u16 = id("NewTypeError");
 const NEW_NOT_CONSTRUCTOR_ERROR: u16 = id("NewNotConstructorError");
 const NEW_RANGE_ERROR: u16 = id("NewRangeError");
 const WELL_KNOWN_SYMBOL: u16 = id("WellKnownSymbol");
+const REALM_INTRINSIC: u16 = id("RealmIntrinsic");
+const ERROR_CREATE: u16 = id("ErrorCreate");
+const CAPTURE_STACK: u16 = id("CaptureStack");
+const DEFINE_DATA_PROPERTY_OR_THROW: u16 = id("DefineDataPropertyOrThrow");
+const DEFINE_OWN_PROPERTY_FROM_RECORD: u16 = id("DefineOwnPropertyFromRecord");
+const GET_OWN_PROPERTY_DESCRIPTOR_OBJECT: u16 = id("GetOwnPropertyDescriptorObject");
+const HAS_OWN_PROPERTY: u16 = id("HasOwnProperty");
+const OWN_PROPERTY_ATTRIBUTES: u16 = id("OwnPropertyAttributes");
+const OWN_PROPERTY_KEYS: u16 = id("OwnPropertyKeys");
+const CALL_WITH_ARRAY: u16 = id("CallWithArray");
+const BOUND_FUNCTION_CREATE: u16 = id("BoundFunctionCreate");
+const FUNCTION_TO_STRING: u16 = id("FunctionToString");
+const NUMBER_POW: u16 = id("NumberPow");
+const SYMBOL_DESCRIPTIVE_STRING: u16 = id("SymbolDescriptiveString");
+const INSTALL_CONSTRUCTOR: u16 = id("InstallConstructor");
+const INSTALL_ACCESSOR: u16 = id("InstallAccessor");
+const INSTALL_VALUE: u16 = id("InstallValue");
 const INSTALL_METHOD: u16 = id("InstallMethod");
 const INSTALL_INTRINSIC: u16 = id("InstallIntrinsic");
 /// The installed `%ToPrimitive`, used by the interpreter's slow paths.
@@ -154,7 +172,7 @@ impl Exec<'_> {
                 if a0.as_object().is_some() {
                     a0
                 } else if a0.is_nullish() {
-                    return type_error("cannot convert undefined or null to object");
+                    return type_error("cannot convert to object");
                 } else {
                     return type_error("not supported yet: primitive wrapper objects");
                 }
@@ -299,6 +317,127 @@ impl Exec<'_> {
                 };
                 Value::symbol(self.heap.atom_symbol(atom).expect("well-known symbol"))
             }
+            REALM_INTRINSIC => {
+                let name = a0
+                    .as_string()
+                    .map(|s| self.heap.str_to_string(s))
+                    .unwrap_or_default();
+                match Intrinsic::by_name(&name) {
+                    Some(i) => realm::intrinsic(self.heap, i),
+                    None => return bad_argument(info.name),
+                }
+            }
+            ERROR_CREATE => {
+                let Some(proto) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                Value::object(self.heap.alloc_object(ObjectClass::Error, Some(proto), 0)?)
+            }
+            CAPTURE_STACK => {
+                let Some(o) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                let trace = self.stack_trace_from(self.pc, true);
+                let s = self.heap.alloc_str(&trace)?;
+                realm::define_hidden(self.heap, o, atoms::STACK, Value::string(s))?;
+                Value::UNDEFINED
+            }
+            DEFINE_DATA_PROPERTY_OR_THROW => {
+                let Some(o) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                let key = object::key(self.heap, arg(self, 1))?;
+                let flags = object::flags(arg(self, 3));
+                object::define_data_or_throw(self.heap, o, key, arg(self, 2), flags)?;
+                Value::UNDEFINED
+            }
+            DEFINE_OWN_PROPERTY_FROM_RECORD => {
+                let (Some(o), Some(rec)) = (a0.as_object(), arg(self, 2).as_object()) else {
+                    return bad_argument(info.name);
+                };
+                let key = object::key(self.heap, arg(self, 1))?;
+                Value::bool(object::define_from_record(self.heap, o, key, rec)?)
+            }
+            GET_OWN_PROPERTY_DESCRIPTOR_OBJECT | HAS_OWN_PROPERTY | OWN_PROPERTY_ATTRIBUTES => {
+                let Some(o) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                let key = object::key(self.heap, arg(self, 1))?;
+                match id {
+                    HAS_OWN_PROPERTY => Value::bool(self.heap.has_own_property(o, key)),
+                    OWN_PROPERTY_ATTRIBUTES => Value::int(object::attributes(self.heap, o, key)),
+                    _ => object::descriptor_object(self.heap, o, key)?,
+                }
+            }
+            OWN_PROPERTY_KEYS => {
+                let Some(o) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                object::own_keys(self.heap, o, arg(self, 1).as_int().unwrap_or(0))?
+            }
+            CALL_WITH_ARRAY => {
+                // `f this args` becomes `f this a1 .. an`.
+                let Some(args) = arg(self, 2).as_object() else {
+                    return bad_argument(info.name);
+                };
+                let n = self.heap.array_length(args);
+                self.ensure(base + 2 + n)?;
+                for i in 0..n {
+                    let v = self
+                        .heap
+                        .get_element_fast(args, i)
+                        .unwrap_or(Value::UNDEFINED);
+                    self.set(base + 2 + i, v);
+                }
+                self.sp = base + 2 + n;
+                return self.call(base, n, Continuation::PushResult, next);
+            }
+            BOUND_FUNCTION_CREATE => {
+                let (Some(target), Some(args)) = (a0.as_object(), arg(self, 2).as_object()) else {
+                    return bad_argument(info.name);
+                };
+                function::bound_function_create(self.heap, target, arg(self, 1), args)?
+            }
+            FUNCTION_TO_STRING => Value::string(function::to_string(self.heap, a0)?),
+            NUMBER_POW => conv::number(conv::pow(
+                a0.as_number().unwrap_or(f64::NAN),
+                arg(self, 1).as_number().unwrap_or(f64::NAN),
+            )),
+            SYMBOL_DESCRIPTIVE_STRING => {
+                let Some(sym) = a0.as_symbol() else {
+                    return bad_argument(info.name);
+                };
+                let d = match self.heap.symbol_description(sym).as_string() {
+                    Some(d) => self.heap.str_to_string(d),
+                    None => String::new(),
+                };
+                Value::string(self.heap.alloc_str(&format!("Symbol({d})"))?)
+            }
+            INSTALL_CONSTRUCTOR => {
+                self.install_constructor(
+                    a0,
+                    arg(self, 1),
+                    arg(self, 2),
+                    arg(self, 3),
+                    arg(self, 4),
+                )?;
+                Value::UNDEFINED
+            }
+            INSTALL_ACCESSOR => {
+                self.install_accessor(a0, arg(self, 1), arg(self, 2), arg(self, 3))?;
+                Value::UNDEFINED
+            }
+            INSTALL_VALUE => {
+                let (Some(t), Some(k)) = (a0.as_string(), arg(self, 1).as_string()) else {
+                    return bad_argument(info.name);
+                };
+                let path = self.heap.str_to_string(t);
+                let holder = self.resolve_path(&path)?;
+                let key = self.heap.intern(k)?;
+                let d = PropertyDescriptor::data(arg(self, 2), object::flags(arg(self, 3)));
+                self.heap.define_own_property(holder, key, &d)?;
+                Value::UNDEFINED
+            }
             INSTALL_METHOD => {
                 self.install_method(a0, arg(self, 1), arg(self, 2), arg(self, 3))?;
                 Value::UNDEFINED
@@ -366,8 +505,116 @@ impl Exec<'_> {
         self.heap.define_own_property(fo, atoms::NAME, &name)?;
         let len = PropertyDescriptor::data(conv::number(length.as_number().unwrap_or(0.0)), ro);
         self.heap.define_own_property(fo, atoms::LENGTH, &len)?;
+        self.mark_builtin(fo, OBJ_BUILTIN);
+        Ok(())
+    }
+
+    /// Flags an installed prelude function; non-constructors lose the `prototype` that
+    /// every ordinary function gets (D1310).
+    fn mark_builtin(&mut self, fo: Obj, flag: u16) {
         let flags = self.heap.cell_flags(fo.offset());
-        self.heap.set_cell_flags(fo.offset(), flags | OBJ_BUILTIN);
+        self.heap.set_cell_flags(fo.offset(), flags | flag);
+        if flag & OBJ_BUILTIN_CTOR == 0 {
+            self.heap
+                .remove_own_property_unchecked(fo, atoms::PROTOTYPE);
+        }
+    }
+
+    /// `name` and `length` of an installed builtin (configurable only).
+    fn name_and_length(&mut self, fo: Obj, name: Value, length: f64) -> Result<(), Fault> {
+        let ro = PropFlags::CONFIGURABLE;
+        let d = PropertyDescriptor::data(name, ro);
+        self.heap.define_own_property(fo, atoms::NAME, &d)?;
+        let d = PropertyDescriptor::data(conv::number(length), ro);
+        self.heap.define_own_property(fo, atoms::LENGTH, &d)?;
+        Ok(())
+    }
+
+    /// `%InstallConstructor(target, key, f, length, parent)` (D1310): `f` becomes the
+    /// constructor `key` with its prototype object (the realm's, or a new one).
+    fn install_constructor(
+        &mut self,
+        target: Value,
+        key: Value,
+        f: Value,
+        length: Value,
+        parent: Value,
+    ) -> Result<(), Fault> {
+        let (Some(t), Some(k), Some(fo)) = (target.as_string(), key.as_string(), f.as_object())
+        else {
+            return bad_argument("InstallConstructor");
+        };
+        let path = self.heap.str_to_string(t);
+        let holder = self.resolve_path(&path)?;
+        let name = self.heap.str_to_string(k);
+        let parent = match parent.as_string() {
+            Some(p) => {
+                let p = self.heap.str_to_string(p);
+                Some(self.resolve_path(&p)?)
+            }
+            None => None,
+        };
+        let proto = match Intrinsic::prototype_of(&name) {
+            Some(i) => intrinsic_obj(self.heap, i),
+            None => {
+                let base = match parent {
+                    Some(p) => self
+                        .heap
+                        .get_own_property(p, atoms::PROTOTYPE)
+                        .and_then(|p| p.value())
+                        .and_then(|v| v.as_object()),
+                    None => None,
+                };
+                let base = base.unwrap_or_else(|| intrinsic_obj(self.heap, Intrinsic::ObjectProto));
+                self.heap.new_object(Some(base))?
+            }
+        };
+        if let Some(p) = parent {
+            self.heap.set_prototype_of(fo, Some(p));
+        }
+        let key = self.heap.intern(k)?;
+        realm::define_hidden(self.heap, holder, key, f)?;
+        let d = PropertyDescriptor::data(Value::object(proto), PropFlags::NONE);
+        self.heap.define_own_property(fo, atoms::PROTOTYPE, &d)?;
+        realm::define_hidden(self.heap, proto, atoms::CONSTRUCTOR, f)?;
+        self.name_and_length(fo, Value::string(k), length.as_number().unwrap_or(0.0))?;
+        self.mark_builtin(fo, OBJ_BUILTIN | OBJ_BUILTIN_CTOR);
+        Ok(())
+    }
+
+    /// `%InstallAccessor(target, key, f, isSetter)` (D1310): the getter or setter half
+    /// of an accessor (configurable, not enumerable), named `get key` / `set key`.
+    fn install_accessor(
+        &mut self,
+        target: Value,
+        key: Value,
+        f: Value,
+        is_setter: Value,
+    ) -> Result<(), Fault> {
+        let (Some(t), Some(k), Some(fo)) = (target.as_string(), key.as_string(), f.as_object())
+        else {
+            return bad_argument("InstallAccessor");
+        };
+        let path = self.heap.str_to_string(t);
+        let holder = self.resolve_path(&path)?;
+        let setter = is_setter.as_bool() == Some(true);
+        let atom = self.heap.intern(k)?;
+        let d = PropertyDescriptor {
+            get: (!setter).then_some(f),
+            set: setter.then_some(f),
+            enumerable: Some(false),
+            configurable: Some(true),
+            ..Default::default()
+        };
+        self.heap.define_own_property(holder, atom, &d)?;
+        let name = format!(
+            "{} {}",
+            if setter { "set" } else { "get" },
+            self.heap.str_to_string(k)
+        );
+        let name = Value::string(self.heap.alloc_str(&name)?);
+        self.name_and_length(fo, name, if setter { 1.0 } else { 0.0 })?;
+        self.mark_builtin(fo, OBJ_BUILTIN);
         Ok(())
     }
 

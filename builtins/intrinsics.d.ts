@@ -121,6 +121,61 @@ declare function NewRangeError(message: Str): Obj;
 /** The well-known symbol Symbol.<name>. @leaf */
 declare function WellKnownSymbol(name: Str): Sym;
 
+// ---- Realm objects, own properties (0031) ------------------------------------------------
+
+/**
+ * A realm intrinsic object by name: ObjectPrototype, FunctionPrototype, ArrayPrototype,
+ * ErrorPrototype and the native error prototypes (TypeErrorPrototype, ...). @leaf
+ */
+declare function RealmIntrinsic(name: Str): Obj;
+/** An object with [[ErrorData]] and prototype `proto`. @leaf */
+declare function ErrorCreate(proto: Obj): Obj;
+/**
+ * Defines `o.stack` (D1282) from the current frames, without the prelude frames at the
+ * top: an Error constructor does not show itself. @leaf
+ */
+declare function CaptureStack(o: Obj): void;
+/**
+ * DefinePropertyOrThrow ( O, P, desc ) with a complete data descriptor; `attrs` are
+ * writable 1, enumerable 2, configurable 4. @leaf
+ */
+declare function DefineDataPropertyOrThrow(o: Obj, key: Value, v: Value, attrs: i32): void;
+/**
+ * [[DefineOwnProperty]] with a descriptor record from ToPropertyDescriptor (an object
+ * whose own data properties are the present fields). False if it was rejected. @leaf
+ */
+declare function DefineOwnPropertyFromRecord(o: Obj, key: Value, desc: Obj): boolean;
+/** FromPropertyDescriptor ( [[GetOwnProperty]](o, key) ): undefined if absent. @leaf */
+declare function GetOwnPropertyDescriptorObject(o: Obj, key: Value): Value;
+/** HasOwnProperty ( O, P ). @leaf */
+declare function HasOwnProperty(o: Obj, key: Value): boolean;
+/**
+ * The attributes of an own property: -1 if absent, else writable 1, enumerable 2,
+ * configurable 4, accessor 8. @leaf
+ */
+declare function OwnPropertyAttributes(o: Obj, key: Value): i32;
+/**
+ * The own keys of o as a new array, in [[OwnPropertyKeys]] order: kind 0 strings,
+ * 1 symbols, 2 both, 3 enumerable strings. @leaf
+ */
+declare function OwnPropertyKeys(o: Obj, kind: i32): Obj;
+
+// ---- Functions (0031) -----------------------------------------------------------------
+
+/** Call ( F, V, args ) with the arguments in a dense array. @reentrant */
+declare function CallWithArray(f: Value, thisArg: Value, args: Obj): Value;
+/** BoundFunctionCreate ( target, boundThis, boundArgs ), without name and length. @leaf */
+declare function BoundFunctionCreate(target: Fn, boundThis: Value, args: Obj): Obj;
+/** The source text of a function (natives: `function name() { [native code] }`). @leaf */
+declare function FunctionToString(f: Value): Str;
+
+// ---- Numbers, symbols (0031) ------------------------------------------------------------
+
+/** Number::exponentiate ( base, exponent ). @leaf */
+declare function NumberPow(base: f64, exponent: f64): f64;
+/** SymbolDescriptiveString ( sym ): `Symbol(description)`. @leaf */
+declare function SymbolDescriptiveString(s: Sym): Str;
+
 // ---- Used by the generated code (crates/djs-bgen/src/emit_js.rs) ------------------------
 
 /**
@@ -129,5 +184,18 @@ declare function WellKnownSymbol(name: Str): Sym;
  * @leaf
  */
 declare function InstallMethod(target: Str, key: Str, f: Value, length: u32): void;
+/**
+ * `@constructor`: defines f as the global constructor `key` (writable, configurable, not
+ * enumerable) with its prototype object: the realm's intrinsic prototype for that name
+ * if there is one, else a new object inheriting from the parent's prototype (or
+ * Object.prototype). Sets `f.prototype`, `prototype.constructor`, `name` and `length`;
+ * with a parent (a dotted path), f's [[Prototype]] is the parent constructor.
+ * @leaf
+ */
+declare function InstallConstructor(target: Str, key: Str, f: Value, length: u32, parent: Value): void;
+/** `@getter`/`@setter`: one half of an accessor (configurable, not enumerable). @leaf */
+declare function InstallAccessor(target: Str, key: Str, f: Value, isSetter: boolean): void;
+/** `@value`: a data property with `attrs` (writable 1, enumerable 2, configurable 4). @leaf */
+declare function InstallValue(target: Str, key: Str, v: Value, attrs: i32): void;
 /** Registers f so that privileged code can call it as %name(...). @leaf */
 declare function InstallIntrinsic(name: Str, f: Value): void;

@@ -67,6 +67,9 @@ pub enum ObjectClass {
     /// An unmapped (strict) arguments object: ordinary storage, its own class for
     /// `Object.prototype.toString`.
     Arguments = 5,
+    /// A bound function exotic object: slot 0 the target function, slot 1 the bound
+    /// `this`, slot 2 an Array of the bound arguments.
+    BoundFunction = 7,
 }
 
 impl ObjectClass {
@@ -78,6 +81,7 @@ impl ObjectClass {
             3 => Some(ObjectClass::HostFunction),
             4 => Some(ObjectClass::Error),
             5 => Some(ObjectClass::Arguments),
+            7 => Some(ObjectClass::BoundFunction),
             _ => None,
         }
     }
@@ -87,12 +91,16 @@ impl ObjectClass {
         match self {
             ObjectClass::Ordinary | ObjectClass::Error | ObjectClass::Arguments => 0,
             ObjectClass::Array | ObjectClass::Function | ObjectClass::HostFunction => 1,
+            ObjectClass::BoundFunction => 3,
         }
     }
 
     /// Callable objects.
     pub const fn is_callable(self) -> bool {
-        matches!(self, ObjectClass::Function | ObjectClass::HostFunction)
+        matches!(
+            self,
+            ObjectClass::Function | ObjectClass::HostFunction | ObjectClass::BoundFunction
+        )
     }
 }
 
@@ -1094,6 +1102,14 @@ impl Heap {
                 self.table_remove(o, i);
                 true
             }
+        }
+    }
+
+    /// Removes an own table property even if it is non-configurable. Only for setting up
+    /// builtins (a prelude function loses the `prototype` every ordinary function gets).
+    pub(crate) fn remove_own_property_unchecked(&mut self, o: Obj, key: Atom) {
+        if let Loc::Table(i) = self.find_own(o, key) {
+            self.table_remove(o, i);
         }
     }
 

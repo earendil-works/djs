@@ -70,6 +70,9 @@ pub mod flags {
     /// Function: a builtin method installed by the prelude (`%InstallMethod`). Stack
     /// traces show its frames as `at name (native)`; other prelude frames are hidden.
     pub const OBJ_BUILTIN: u16 = 8;
+    /// Function: an `OBJ_BUILTIN` that is a constructor (`%InstallConstructor`). Other
+    /// builtins are not constructors (D1310).
+    pub const OBJ_BUILTIN_CTOR: u16 = 16;
 }
 
 /// `"DJS\0"` little-endian, in [`Roots::MAGIC`].

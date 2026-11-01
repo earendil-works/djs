@@ -92,3 +92,29 @@ function ToLength(v: Value): f64 {
 function LengthOfArrayLike(o: Obj): f64 {
   return ToLength(Get(o, "length"));
 }
+
+/** ToPropertyKey ( argument ), 7.1.19: a string, a symbol, or a number key. */
+function ToPropertyKey(v: Value): Value {
+  const key: Value = ToPrimitive(v, "string");
+  if (IsSymbol(key) || IsNumber(key)) {
+    // Numbers are valid keys for the intrinsics (canonical numeric strings).
+    return key;
+  }
+  return ToStringPrimitive(key);
+}
+
+/**
+ * GetPrototypeFromConstructor ( constructor, intrinsicDefaultProto ), 10.1.14.
+ * `newTarget` undefined means the builtin was called as a function, so the active
+ * function is the constructor and its prototype is the realm's.
+ */
+function GetPrototypeFromConstructor(newTarget: Value, fallback: Str): Obj {
+  if (newTarget === undefined) {
+    return RealmIntrinsic(fallback);
+  }
+  const proto: Value = Get(AsObj(newTarget), "prototype");
+  if (IsObject(proto)) {
+    return AsObj(proto);
+  }
+  return RealmIntrinsic(fallback);
+}

@@ -38,6 +38,19 @@ ArrayPrototypeIncludes: reentrant (Array.prototype.includes)
   builtins/array.ts:144:16  ToIntegerOrInfinity (builtin)
   builtins/array.ts:152:23  Get (intrinsic)
 
+ArrayConstructor: reentrant (constructor Array)
+  builtins/array.ts:166:7  LengthOfArrayLike (builtin)
+  builtins/array.ts:167:24  Get (intrinsic)
+
+ArrayIsArray: leaf (Array.isArray)
+
+ArrayPrototypePush: reentrant (Array.prototype.push)
+  builtins/array.ts:196:18  LengthOfArrayLike (builtin)
+  builtins/array.ts:197:25  LengthOfArrayLike (builtin)
+  builtins/array.ts:202:17  Get (intrinsic)
+  builtins/array.ts:202:5  Set (intrinsic)
+  builtins/array.ts:205:3  Set (intrinsic)
+
 ToPrimitive: reentrant (%ToPrimitive)
   builtins/conversion.ts:13:31  GetMethod (builtin)
   builtins/conversion.ts:15:27  Call (intrinsic)
@@ -65,3 +78,121 @@ ToLength: reentrant
 LengthOfArrayLike: reentrant
   builtins/conversion.ts:93:19  Get (intrinsic)
   builtins/conversion.ts:93:10  ToLength (builtin)
+
+ToPropertyKey: reentrant
+  builtins/conversion.ts:98:22  ToPrimitive (builtin)
+
+GetPrototypeFromConstructor: reentrant
+  builtins/conversion.ts:115:24  Get (intrinsic)
+
+InstallErrorCause: reentrant
+  builtins/error.ts:7:9  HasProperty (intrinsic)
+  builtins/error.ts:8:45  Get (intrinsic)
+
+ErrorConstruct: reentrant
+  builtins/error.ts:18:30  GetPrototypeFromConstructor (builtin)
+  builtins/error.ts:20:45  ToString (builtin)
+  builtins/error.ts:22:3  InstallErrorCause (builtin)
+
+ErrorConstructor: reentrant (constructor Error)
+  builtins/error.ts:33:10  ErrorConstruct (builtin)
+
+EvalErrorConstructor: reentrant (constructor EvalError)
+  builtins/error.ts:43:10  ErrorConstruct (builtin)
+
+RangeErrorConstructor: reentrant (constructor RangeError)
+  builtins/error.ts:53:10  ErrorConstruct (builtin)
+
+ReferenceErrorConstructor: reentrant (constructor ReferenceError)
+  builtins/error.ts:63:10  ErrorConstruct (builtin)
+
+SyntaxErrorConstructor: reentrant (constructor SyntaxError)
+  builtins/error.ts:73:10  ErrorConstruct (builtin)
+
+TypeErrorConstructor: reentrant (constructor TypeError)
+  builtins/error.ts:83:10  ErrorConstruct (builtin)
+
+URIErrorConstructor: reentrant (constructor URIError)
+  builtins/error.ts:93:10  ErrorConstruct (builtin)
+
+ErrorPrototypeToString: reentrant (Error.prototype.toString)
+  builtins/error.ts:105:23  Get (intrinsic)
+  builtins/error.ts:106:55  ToString (builtin)
+  builtins/error.ts:107:22  Get (intrinsic)
+  builtins/error.ts:108:48  ToString (builtin)
+
+FunctionPrototypeCall: reentrant (Function.prototype.call)
+  builtins/function.ts:13:10  CallWithArray (intrinsic)
+
+CreateListFromArrayLike: reentrant
+  builtins/function.ts:22:20  LengthOfArrayLike (builtin)
+  builtins/function.ts:25:40  Get (intrinsic)
+  builtins/function.ts:25:5  CreateDataPropertyOrThrow (intrinsic)
+
+FunctionPrototypeApply: reentrant (Function.prototype.apply)
+  builtins/function.ts:39:12  Call (intrinsic)
+  builtins/function.ts:41:39  CreateListFromArrayLike (builtin)
+  builtins/function.ts:41:10  CallWithArray (intrinsic)
+
+FunctionPrototypeBind: reentrant (Function.prototype.bind)
+  builtins/function.ts:57:30  Get (intrinsic)
+  builtins/function.ts:63:44  LengthOfArrayLike (builtin)
+  builtins/function.ts:71:23  Get (intrinsic)
+
+FunctionPrototypeToString: leaf (Function.prototype.toString)
+
+MathObject: leaf (value Math)
+
+MathPow: reentrant (Math.pow)
+  builtins/math.ts:19:18  ToNumber (builtin)
+  builtins/math.ts:20:23  ToNumber (builtin)
+
+ObjectConstructor: reentrant (constructor Object)
+  builtins/object.ts:10:25  GetPrototypeFromConstructor (builtin)
+
+ToPropertyDescriptor: reentrant
+  builtins/object.ts:25:7  HasProperty (intrinsic)
+  builtins/object.ts:26:61  Get (intrinsic)
+  builtins/object.ts:26:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:28:7  HasProperty (intrinsic)
+  builtins/object.ts:29:63  Get (intrinsic)
+  builtins/object.ts:29:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:31:29  HasProperty (intrinsic)
+  builtins/object.ts:33:46  Get (intrinsic)
+  builtins/object.ts:33:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:35:32  HasProperty (intrinsic)
+  builtins/object.ts:37:59  Get (intrinsic)
+  builtins/object.ts:37:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:39:27  HasProperty (intrinsic)
+  builtins/object.ts:41:27  Get (intrinsic)
+  builtins/object.ts:45:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:47:27  HasProperty (intrinsic)
+  builtins/object.ts:49:27  Get (intrinsic)
+  builtins/object.ts:53:5  CreateDataPropertyOrThrow (intrinsic)
+
+DefinePropertyOrThrow: reentrant
+  builtins/object.ts:67:22  Get (intrinsic)
+  builtins/object.ts:68:25  ToNumber (builtin)
+  builtins/object.ts:69:28  ToNumber (builtin)
+  builtins/object.ts:76:5  CreateDataPropertyOrThrow (intrinsic)
+
+ObjectDefineProperty: reentrant (Object.defineProperty)
+  builtins/object.ts:94:22  ToPropertyKey (builtin)
+  builtins/object.ts:95:21  ToPropertyDescriptor (builtin)
+  builtins/object.ts:96:3  DefinePropertyOrThrow (builtin)
+
+ObjectGetOwnPropertyDescriptor: reentrant (Object.getOwnPropertyDescriptor)
+  builtins/object.ts:106:22  ToPropertyKey (builtin)
+
+ObjectGetOwnPropertyNames: leaf (Object.getOwnPropertyNames)
+
+ObjectPrototypeHasOwnProperty: reentrant (Object.prototype.hasOwnProperty)
+  builtins/object.ts:123:22  ToPropertyKey (builtin)
+
+ObjectPrototypePropertyIsEnumerable: reentrant (Object.prototype.propertyIsEnumerable)
+  builtins/object.ts:132:22  ToPropertyKey (builtin)
+
+StringConstructor: reentrant (constructor String)
+  builtins/string.ts:11:7  LengthOfArrayLike (builtin)
+  builtins/string.ts:12:26  Get (intrinsic)
+  builtins/string.ts:16:9  ToString (builtin)
