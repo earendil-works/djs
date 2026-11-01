@@ -321,7 +321,10 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         }
     }
     if args.clusters {
-        let failed: Vec<(&str, &str)> = results.iter().filter_map(|(p, r)| r.map(|r| (*p, r))).collect();
+        let failed: Vec<(&str, &str)> = results
+            .iter()
+            .filter_map(|(p, r)| r.map(|r| (*p, r)))
+            .collect();
         println!("\nfailure clusters ({} failures):", failed.len());
         print!("{}", djs_test262::report::clusters(&failed, 40));
     }

@@ -17,16 +17,31 @@ const FAILURES: &[(&str, &str)] = &[
     ("fail/assert.js", "Test262Error: one is two"),
     ("fail/async-failure.js", "async: bad"),
     ("fail/async-never.js", "async: $DONE was not called"),
-    ("fail/detach.js", "TypeError: $262.detachArrayBuffer is not supported by djs yet"),
-    ("fail/harness-throws.js", "harness broken.js: TypeError: cannot read property 'x' of null"),
-    ("fail/negative-not-thrown.js", "expected runtime TypeError, but no error was thrown"),
-    ("fail/negative-wrong-type.js", "expected runtime TypeError, got runtime ReferenceError"),
+    (
+        "fail/detach.js",
+        "TypeError: $262.detachArrayBuffer is not supported by djs yet",
+    ),
+    (
+        "fail/harness-throws.js",
+        "harness broken.js: TypeError: cannot read property 'x' of null",
+    ),
+    (
+        "fail/negative-not-thrown.js",
+        "expected runtime TypeError, but no error was thrown",
+    ),
+    (
+        "fail/negative-wrong-type.js",
+        "expected runtime TypeError, got runtime ReferenceError",
+    ),
     ("fail/oom.js", "oom"),
     ("fail/parse-error.js", "parse: SyntaxError"),
     ("fail/throw-primitive.js", "number: 1"),
     ("fail/throws.js", "Test262Error: boom"),
     ("fail/timeout.js", "timeout: the fuel budget is used up"),
-    ("fail/unsupported-negative.js", "expected parse SyntaxError, got parse Unsupported: generators are not supported yet"),
+    (
+        "fail/unsupported-negative.js",
+        "expected parse SyntaxError, got parse Unsupported: generators are not supported yet",
+    ),
 ];
 
 #[test]
@@ -37,7 +52,12 @@ fn djs_engine_fixture_suite() {
     let tests = suite.load(&config, suite.discover(&[]).unwrap(), 4);
     // A small fuel budget keeps the infinite loop short; 4 MiB keeps the oom test quick.
     let engine = Djs { fuel: 2_000_000 };
-    let opts = Options { jobs: 4, timeout: Duration::from_secs(60), memory_limit: Some(4 << 20), progress: false };
+    let opts = Options {
+        jobs: 4,
+        timeout: Duration::from_secs(60),
+        memory_limit: Some(4 << 20),
+        progress: false,
+    };
     let refs: Vec<_> = tests.iter().collect();
     let outcomes = runner::run_all(&engine, &suite, &refs, &opts);
 
@@ -46,14 +66,20 @@ fn djs_engine_fixture_suite() {
     for (t, o) in tests.iter().zip(&outcomes) {
         match (&o.verdict, t.path.starts_with("pass/")) {
             (Verdict::Pass, true) => {}
-            (Verdict::Fail(r), true) => problems.push(format!("{} should pass, failed: {r}", t.path)),
+            (Verdict::Fail(r), true) => {
+                problems.push(format!("{} should pass, failed: {r}", t.path))
+            }
             (Verdict::Pass, false) => problems.push(format!("{} should fail, passed", t.path)),
             (Verdict::Fail(r), false) => {
                 failures += 1;
                 match FAILURES.iter().find(|(p, _)| *p == t.path) {
                     Some((_, want)) if r.contains(want) => {}
-                    Some((_, want)) => problems.push(format!("{}: reason `{r}` lacks `{want}`", t.path)),
-                    None => problems.push(format!("{}: no expected reason listed (got `{r}`)", t.path)),
+                    Some((_, want)) => {
+                        problems.push(format!("{}: reason `{r}` lacks `{want}`", t.path))
+                    }
+                    None => {
+                        problems.push(format!("{}: no expected reason listed (got `{r}`)", t.path))
+                    }
                 }
             }
         }

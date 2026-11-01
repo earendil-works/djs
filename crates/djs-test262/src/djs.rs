@@ -28,7 +28,8 @@ const DETACH: u32 = 2;
 const GC: u32 = 3;
 
 /// Defines `$262.evalScript` on top of the host compile function.
-const SETUP: &str = "$262.evalScript = function evalScript(src) { return $262.__compileScript(src)(); };";
+const SETUP: &str =
+    "$262.evalScript = function evalScript(src) { return $262.__compileScript(src)(); };";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Djs {
@@ -75,12 +76,23 @@ impl Engine for Djs {
 impl Djs {
     fn run_job(&self, job: &Job<'_>) -> Result<RunResult, String> {
         let opts = VmOptions {
-            memory_limit: job.memory_limit.map(|n| n as usize).unwrap_or(DEFAULT_LIMIT),
+            memory_limit: job
+                .memory_limit
+                .map(|n| n as usize)
+                .unwrap_or(DEFAULT_LIMIT),
             ..VmOptions::default()
         };
         let vm = Vm::new(opts).map_err(|e| format!("Vm::new: {e:?}"))?;
-        let mut s = Session { vm, printed: Vec::new(), job, fuel_left: self.fuel, start: Instant::now(), limit: String::new() };
-        s.install_host().map_err(|e| format!("installing $262: {e:?}"))?;
+        let mut s = Session {
+            vm,
+            printed: Vec::new(),
+            job,
+            fuel_left: self.fuel,
+            start: Instant::now(),
+            limit: String::new(),
+        };
+        s.install_host()
+            .map_err(|e| format!("installing $262: {e:?}"))?;
         match s.script(SETUP.as_bytes(), "<setup>")? {
             Ok(Outcome::Completed) => {}
             Ok(Outcome::Threw(e)) => return Err(format!("$262 setup threw {e}")),
@@ -92,7 +104,10 @@ impl Djs {
                 Ok(Outcome::Completed) => continue,
                 Ok(Outcome::Threw(error)) => s.harness_status(&h.name, error),
                 Ok(Outcome::Timeout) => Status::Timeout,
-                Err(error) => Status::HarnessError { file: h.name.clone(), error },
+                Err(error) => Status::HarnessError {
+                    file: h.name.clone(),
+                    error,
+                },
             };
             return Ok(s.finish(status));
         }
@@ -116,11 +131,22 @@ type HeapResult<T> = Result<T, djs_core::heap::HeapError>;
 
 impl Session<'_> {
     fn finish(self, status: Status) -> RunResult {
-        RunResult { status, printed: self.printed, diagnostics: self.limit }
+        RunResult {
+            status,
+            printed: self.printed,
+            diagnostics: self.limit,
+        }
     }
 
     fn harness_status(&self, file: &str, error: ErrorInfo) -> Status {
-        if is_oom(&error) { Status::OutOfMemory } else { Status::HarnessError { file: file.into(), error } }
+        if is_oom(&error) {
+            Status::OutOfMemory
+        } else {
+            Status::HarnessError {
+                file: file.into(),
+                error,
+            }
+        }
     }
 
     fn install_host(&mut self) -> HeapResult<()> {
@@ -129,7 +155,11 @@ impl Session<'_> {
         let o = self.vm.new_object()?;
         let global = Value::object(self.vm.global());
         self.vm.define(o, "global", global)?;
-        for (id, name) in [(COMPILE_SCRIPT, "__compileScript"), (DETACH, "detachArrayBuffer"), (GC, "gc")] {
+        for (id, name) in [
+            (COMPILE_SCRIPT, "__compileScript"),
+            (DETACH, "detachArrayBuffer"),
+            (GC, "gc"),
+        ] {
             let f = self.vm.new_host_function(id, name)?;
             self.vm.define(o, name, f)?;
         }
@@ -144,7 +174,9 @@ impl Session<'_> {
             Err(e) => return Ok(Err(compile_error(e.kind, &e.message))),
         };
         let this = Value::object(self.vm.global());
-        self.vm.call(f, this, &[]).map_err(|e| format!("Vm::call: {e:?}"))?;
+        self.vm
+            .call(f, this, &[])
+            .map_err(|e| format!("Vm::call: {e:?}"))?;
         loop {
             let slice = SLICE.min(self.fuel_left.max(1));
             match self.vm.run(slice) {
@@ -156,7 +188,10 @@ impl Session<'_> {
                         self.limit = if self.fuel_left == 0 {
                             "the fuel budget is used up".into()
                         } else {
-                            format!("past the wall-clock limit of {:.1}s", self.job.timeout.as_secs_f64())
+                            format!(
+                                "past the wall-clock limit of {:.1}s",
+                                self.job.timeout.as_secs_f64()
+                            )
                         };
                         self.vm.abort();
                         return Ok(Ok(Outcome::Timeout));
@@ -164,8 +199,12 @@ impl Session<'_> {
                 }
                 VmStatus::HostCall { call_id, fn_id } => {
                     let info = self.vm.host_call(call_id).ok_or("host call vanished")?;
-                    let result = self.host_call(fn_id, &info.args).map_err(|e| format!("host call: {e:?}"))?;
-                    self.vm.resolve_host_call(call_id, result).map_err(|e| format!("resolve_host_call: {e:?}"))?;
+                    let result = self
+                        .host_call(fn_id, &info.args)
+                        .map_err(|e| format!("host call: {e:?}"))?;
+                    self.vm
+                        .resolve_host_call(call_id, result)
+                        .map_err(|e| format!("resolve_host_call: {e:?}"))?;
                 }
             }
         }
@@ -185,22 +224,32 @@ impl Session<'_> {
             COMPILE_SCRIPT => {
                 // Compiling while parked only allocates; the wrapper calls the result.
                 let Some(src) = arg.as_string().map(|s| self.vm.heap().str_to_string(s)) else {
-                    return Ok(Err(self.vm.new_error(ErrorKind::TypeError, "evalScript needs a string")?));
+                    return Ok(Err(self
+                        .vm
+                        .new_error(ErrorKind::TypeError, "evalScript needs a string")?));
                 };
-                match self.vm.compile(src.as_bytes(), &CompileOptions::script("<evalScript>")) {
+                match self
+                    .vm
+                    .compile(src.as_bytes(), &CompileOptions::script("<evalScript>"))
+                {
                     Ok(f) => Ok(Ok(f)),
-                    Err(e) if e.kind == CompileErrorKind::Syntax => {
-                        Ok(Err(self.vm.new_error(ErrorKind::SyntaxError, &e.message)?))
-                    }
-                    Err(_) => Ok(Err(self.vm.new_error(ErrorKind::InternalError, "out of memory")?)),
+                    Err(e) if e.kind == CompileErrorKind::Syntax => Ok(Err(self
+                        .vm
+                        .new_error(ErrorKind::SyntaxError, &e.message)?)),
+                    Err(_) => Ok(Err(self
+                        .vm
+                        .new_error(ErrorKind::InternalError, "out of memory")?)),
                 }
             }
-            DETACH => Ok(Err(self
-                .vm
-                .new_error(ErrorKind::TypeError, "$262.detachArrayBuffer is not supported by djs yet")?)),
+            DETACH => Ok(Err(self.vm.new_error(
+                ErrorKind::TypeError,
+                "$262.detachArrayBuffer is not supported by djs yet",
+            )?)),
             // A collection here would be safe, but nothing needs it yet.
             GC => Ok(Ok(Value::UNDEFINED)),
-            _ => Ok(Err(self.vm.new_error(ErrorKind::TypeError, "unknown host function")?)),
+            _ => Ok(Err(self
+                .vm
+                .new_error(ErrorKind::TypeError, "unknown host function")?)),
         }
     }
 
@@ -217,7 +266,10 @@ impl Session<'_> {
                 Kind::Symbol => "symbol",
                 _ => "value",
             };
-            return ErrorInfo { name: name.into(), message: self.vm.display(e) };
+            return ErrorInfo {
+                name: name.into(),
+                message: self.vm.display(e),
+            };
         };
         let heap = self.vm.heap();
         let string_prop = |obj, key| {
@@ -232,10 +284,11 @@ impl Session<'_> {
             .and_then(|v| v.as_object())
             .and_then(|c| string_prop(c, atoms::NAME))
             .filter(|n| !n.is_empty());
-        let name = ctor_name.or_else(|| string_prop(o, atoms::NAME)).unwrap_or_else(|| "Object".into());
-        let message = string_prop(o, atoms::MESSAGE).unwrap_or_else(|| {
-            error_summary(heap, e).unwrap_or_default()
-        });
+        let name = ctor_name
+            .or_else(|| string_prop(o, atoms::NAME))
+            .unwrap_or_else(|| "Object".into());
+        let message = string_prop(o, atoms::MESSAGE)
+            .unwrap_or_else(|| error_summary(heap, e).unwrap_or_default());
         ErrorInfo { name, message }
     }
 }
@@ -246,11 +299,18 @@ impl Session<'_> {
 /// SyntaxError does not pass by accident (D1071).
 fn compile_error(kind: CompileErrorKind, message: &str) -> ErrorInfo {
     match kind {
-        CompileErrorKind::Syntax if is_unsupported(message) => {
-            ErrorInfo { name: "Unsupported".into(), message: message.into() }
-        }
-        CompileErrorKind::Syntax => ErrorInfo { name: "SyntaxError".into(), message: message.into() },
-        CompileErrorKind::OutOfMemory => ErrorInfo { name: "InternalError".into(), message: "out of memory".into() },
+        CompileErrorKind::Syntax if is_unsupported(message) => ErrorInfo {
+            name: "Unsupported".into(),
+            message: message.into(),
+        },
+        CompileErrorKind::Syntax => ErrorInfo {
+            name: "SyntaxError".into(),
+            message: message.into(),
+        },
+        CompileErrorKind::OutOfMemory => ErrorInfo {
+            name: "InternalError".into(),
+            message: "out of memory".into(),
+        },
     }
 }
 

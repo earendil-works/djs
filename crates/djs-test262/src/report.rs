@@ -213,7 +213,10 @@ pub fn cluster_key(reason: &str) -> String {
             _ if in_value => {}
             // A number on its own (not part of a word like `Test262Error`).
             c if c.is_ascii_digit() && !prev.is_some_and(|p| p.is_alphanumeric() || p == '_') => {
-                while chars.peek().is_some_and(|d| d.is_ascii_digit() || *d == '.') {
+                while chars
+                    .peek()
+                    .is_some_and(|d| d.is_ascii_digit() || *d == '.')
+                {
                     chars.next();
                 }
                 out.push('N');
@@ -246,7 +249,10 @@ pub fn clusters(failures: &[(&str, &str)], top: usize) -> String {
         .collect();
     let mut out = table(&["tests", "cluster", "examples"], &rows);
     if groups.len() > top {
-        out.push_str(&format!("({} smaller clusters not shown)\n", groups.len() - top));
+        out.push_str(&format!(
+            "({} smaller clusters not shown)\n",
+            groups.len() - top
+        ));
     }
     out
 }
@@ -257,7 +263,10 @@ mod tests {
 
     #[test]
     fn cluster_keys() {
-        assert_eq!(cluster_key("Test262Error: Expected SameValue(«1», «\"a\"») to be true"), "Test262Error: Expected SameValue(«…», «…») to be true");
+        assert_eq!(
+            cluster_key("Test262Error: Expected SameValue(«1», «\"a\"») to be true"),
+            "Test262Error: Expected SameValue(«…», «…») to be true"
+        );
         assert_eq!(cluster_key("expected 10 got 200"), "expected N got N");
         let t = clusters(&[("a.js", "x 1"), ("b.js", "x 2"), ("c.js", "y")], 1);
         assert!(t.contains("| 2     | x N     | a.js, b.js |"), "{t}");
