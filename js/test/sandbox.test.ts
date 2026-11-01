@@ -154,6 +154,27 @@ test("async host functions run concurrently", async () => {
   sb.dispose();
 });
 
+test("async results land at the same point for any fuel slice (D1670)", async () => {
+  // A result the host passes back between two fuel slices waits in the VM's inbox until
+  // the job queue is empty, so the slice size does not change the order.
+  const code = `
+    tool(1).then((v) => console.log("a", v));
+    let x = 0;
+    for (let i = 0; i < 20000; i++) x += i;
+    Promise.resolve().then(() => { console.log("b1"); Promise.resolve().then(() => console.log("b2")); });
+    await null; await null; await null;
+  `;
+  for (const fuelSlice of [1_000_000, 1000, 50]) {
+    for (const tool of [(x: unknown) => (x as number) * 2, async (x: unknown) => (x as number) * 2]) {
+      const c = collect();
+      const sb = await Sandbox.create({ console: c.console, fuelSlice, now: 0, asyncFunctions: { tool } });
+      await sb.runAsync(code);
+      assert.deepEqual(c.lines, ["b1", "b2", "a 2"], `fuelSlice ${fuelSlice}`);
+      sb.dispose();
+    }
+  }
+});
+
 test("the clock and time zone come from the host", async () => {
   const sb = await Sandbox.create();
   const t = sb.run("return Date.now()") as number;

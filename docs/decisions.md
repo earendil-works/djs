@@ -2986,3 +2986,30 @@ and checks that every code point not listed in part 1 is invariant; it reads the
 from `vendor/unicode/17.0.0/` of the primary checkout, which `scripts/gen-unicode.py`
 fetches. qjs and djs both pass all 400,680 of these checks (a scratch script), and
 `tests/corpus/builtins/normalize.js` compares them on selected cases.
+
+## D1670: Async host results are macrotasks: the host inbox
+date: 2026-11-03 · by: determinism · issue: 0067
+Amends D1374 and D1370. Before, `resolve_host_call` on an async call queued its
+`%HostCallSettle` job at once, in any VM state, so a result delivered between two fuel
+slices landed in the middle of the microtask queue. The Sandbox passes results back after
+every slice, so its output depended on `fuelSlice` (0055). Now the result goes into the
+host inbox, `Interp::INBOX`: a ValueArray of `[promise, ok, value, now]` entries from
+`INBOX_HEAD`, part of the heap and of images. When the job queue runs empty (`next_job`),
+the run loop takes the oldest entry, reserves a job slot first (out of memory leaves the
+entry where it is), sets the clock if the entry has one, queues the settle job and
+drains the queue before it takes the next one. `Idle` means: no jobs, an empty inbox,
+and async calls pending. A script's behavior then depends only on the order of the
+results, as with I/O callbacks in an event loop and as pi's prelude does by hand
+(settle, drain, next).
+
+Unhandled rejections: every time the queue runs empty is a checkpoint
+(`rejection_checkpoint`). `Interp::REPORTED` counts the leading entries of `REJECTIONS`
+that were unhandled at a checkpoint. A JS handler added later does not withdraw them,
+so taking the reports after several results gives the same list as taking them after
+each one. The embedder's `mark_promise_handled` (`vm_promise_state`, D1423) still
+withdraws them.
+
+`Vm::resolve_host_call_at(id, result, now_ms)` (`vm_resolve_host_call_at`) carries the
+clock `Date` reads from when the result is applied (for the parked sync call: right
+away). A host gets a virtual clock per result without stepping the VM between results.
+`Vm::abort` drops the inbox with the jobs.

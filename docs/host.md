@@ -61,13 +61,16 @@ sb.dispose();
   pending calls are left (IDLE) awaits whichever settles first, passes its result back and
   runs on. The function may return a value or a promise (`run` accepts only values). A
   rejection or a thrown error rejects the VM promise with an Error of the same kind.
+  Results are macrotasks (D1670): the VM applies one only when its job queue is empty,
+  oldest first, and drains the queue before the next, so the output does not depend on
+  `fuelSlice` or on when a result came back.
 - The VM reads no clock (D1383, ARCH "Nondeterminism"): before every fuel slice the
   Sandbox sets `Date.now()` from `opts.now` (default `Date.now`; a number fixes it, for
   replays) and the local time zone from `opts.timeZoneOffset` (minutes east of UTC, no
   DST; default the host's offset at that time). Without a host clock `Date.now()` is 0.
 - Unhandled rejections (D1423): promises rejected with no handler once the VM's job queue
-  is empty (after the run, and whenever it waits on async host calls), as qjs reports
-  them. `unhandledRejections: "warn"` (default) calls `console.warn("Possibly unhandled
+  is empty (after the run, after each async result, and whenever it waits on async host
+  calls), as qjs reports them. `unhandledRejections: "warn"` (default) calls `console.warn("Possibly unhandled
   promise rejection:", "TypeError: x")`; `"throw"` fails the run with a `threw` error
   `Possibly unhandled promise rejection: TypeError: x`; `"collect"` keeps the reasons (host
   values) for `takeUnhandledRejections()`. A rejected result promise is the run's error,
@@ -94,7 +97,7 @@ sb.dispose();
 
 ## The ABI
 
-Exports take and return only `i32`s, except `vm_set_now`'s `f64`. There are no imports: the module needs nothing from
+Exports take and return only `i32`s, except the `f64` clock of `vm_set_now` and `vm_resolve_host_call_at`. There are no imports: the module needs nothing from
 the host, so `WebAssembly.instantiate(module, {})` works anywhere. `djs_abi_version()`
 returns `1` and is bumped on any incompatible change. The Sandbox checks it.
 
@@ -144,7 +147,8 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_host_call(vm) -> argc` | out = `[call_id, fn_id, this lo, hi, (arg lo, hi)*]` |
 | `vm_host_call_info(vm, call_id) -> argc` | `vm_host_call` for any pending call (async ones) |
 | `vm_new_host_calls(vm) -> n` | out = the ids (u32) of the async calls made since the last check |
-| `vm_resolve_host_call(vm, call_id, ok, value) -> 0/-1` | return (`ok` 1) or throw (`ok` 0) `value`; for an async call, fulfill or reject its promise (in a job) |
+| `vm_resolve_host_call(vm, call_id, ok, value) -> 0/-1` | return (`ok` 1) or throw (`ok` 0) `value`; for an async call, fulfill or reject its promise: the result goes into the VM's inbox and `vm_run` applies it when the job queue is empty (D1670) |
+| `vm_resolve_host_call_at(vm, call_id, ok, value, now: f64) -> 0/-1` | the same, and `Date` reads `now` (ms) from when the result is applied: a virtual clock per result (D1670) |
 | `vm_promise_state(vm, h) -> state` | 0 not a promise, 1 pending, 2 fulfilled, 3 rejected; settled: out = a handle (u32) to the result, and the promise counts as handled |
 | `vm_take_unhandled_rejections(vm) -> n` | out = handles (u32) to the reasons of promises rejected with no handler, oldest first (D1423) |
 | `djs_build_hash() -> u32` | the build hash of VM images: identifies the engine build (0049) |
@@ -168,9 +172,22 @@ A run, as the Sandbox does it:
 
 `vm_run` runs the microtask queue too (D1370): after the entry call returns, it runs the
 promise jobs, and DONE comes only once the queue is empty and no async host call is
-pending. An uncaught exception is THREW at once. `vm_take_unhandled_rejections` lists
-rejected promises nobody handled, as qjs reports them; check it after DONE, THREW or
-IDLE.
+pending. An uncaught exception is THREW at once.
+
+**Async results are macrotasks (D1670).** `vm_resolve_host_call` on an async call can come
+at any time (after OUT_OF_FUEL, while parked on a sync call, at IDLE, several at once).
+The result waits in the VM's inbox, part of the heap and of images. Whenever the job
+queue runs empty, `vm_run` takes the oldest result, settles its promise and drains the
+queue again, then takes the next. IDLE means: no jobs, no results waiting, async calls
+pending. So what a script does depends only on the order of the results, not on when the
+host delivered them, the fuel slice, or snapshots in between (as I/O callbacks in an
+event loop).
+
+`vm_take_unhandled_rejections` lists rejected promises nobody handled, as qjs reports
+them; check it after DONE, THREW or IDLE. Each time the job queue runs empty is a
+checkpoint: a rejection still unhandled then stays reported even if a later result's
+code handles it, so taking them after several results gives the same list as taking
+them after each one. (`vm_promise_state` on a settled promise withdraws it, D1423.)
 
 The raw value bits from `vm_host_call` and `vm_handle_bits` stay valid until the next
 `vm_run` or collection (the GC moves objects). Read them right away.

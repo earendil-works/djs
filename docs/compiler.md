@@ -1270,7 +1270,10 @@ parked exactly as for a JS call that has not returned yet.
 throws `e` at the call instruction (handler lookup with `pc - 1`). The next `run`
 continues. Async host functions (D1374) instead return a promise immediately and never
 park: the call goes into the same table with its promise, the embedder reads it with
-`Vm::new_host_calls`, and `resolve_host_call` queues a job that settles the promise.
+`Vm::new_host_calls`, and `resolve_host_call` puts the result into the host inbox
+(`Interp::INBOX`, D1670). When the job queue runs empty (`next_job`), the run loop takes
+the oldest result, queues the job that settles its promise, and drains the queue before
+it takes the next one.
 
 ### 7.6 Fuel and safepoints
 

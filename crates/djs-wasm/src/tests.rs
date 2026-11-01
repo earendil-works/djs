@@ -296,6 +296,30 @@ fn async_host_calls() {
     vm_free(vm);
 }
 
+/// D1670: async results wait in the inbox and apply one at a time with their own clock.
+#[test]
+fn host_results_with_a_clock() {
+    let vm = vm_new(0);
+    stage(b"tool");
+    let tool = vm_new_async_host_function(vm, 3, 4);
+    let f = compile_body(
+        vm,
+        "tool",
+        "const t = []; await Promise.all([tool(1).then(() => t.push(Date.now())), tool(2).then(() => t.push(Date.now()))]); return t.join()",
+    );
+    call(vm, f, &[tool]);
+    assert_eq!(vm_run(vm, 1_000_000), status::IDLE);
+    assert_eq!(vm_new_host_calls(vm), 2);
+    let ids = out_words();
+    assert_eq!(vm_resolve_host_call_at(vm, ids[0], 1, 0, 1000.0), 0);
+    assert_eq!(vm_resolve_host_call_at(vm, ids[1], 1, 0, 2000.0), 0);
+    assert_eq!(vm_run(vm, 1_000_000), status::DONE);
+    let p = vm_result(vm);
+    assert_eq!(vm_promise_state(vm, p), 2);
+    assert_eq!(display(vm, out_words()[0]), "1000,2000");
+    vm_free(vm);
+}
+
 #[test]
 fn host_clock() {
     let vm = vm_new(0);

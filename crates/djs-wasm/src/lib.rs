@@ -666,7 +666,7 @@ pub extern "C" fn vm_run(vm: u32, fuel: u32) -> u32 {
 
 /// Sets the clock `Date.now()` and `new Date()` read, in ms since the epoch
 /// (`Vm::set_now`, D1383). The VM reads no system clock: the host sets it, typically
-/// before every `vm_run`. The only export with an f64 argument.
+/// before every `vm_run`. With `vm_resolve_host_call_at`, the only exports with an f64 argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_set_now(vm: u32, ms: f64) {
     with(|s| s.slot(vm).vm.set_now(ms))
@@ -776,18 +776,36 @@ pub extern "C" fn vm_promise_state(vm: u32, h: u32) -> u32 {
 }
 
 /// Completes host call `call_id` with `value` (a handle, 0 = undefined): returned when
-/// `ok` is 1, thrown when 0. Returns 0, or -1 for an unknown call.
+/// `ok` is 1, thrown when 0. Returns 0, or -1 for an unknown call. An async call's result
+/// waits in the VM's inbox until the job queue is empty (D1670).
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_resolve_host_call(vm: u32, call_id: u32, ok: u32, value: u32) -> i32 {
+    resolve(vm, call_id, ok, value, None)
+}
+
+/// `vm_resolve_host_call` with the clock (`vm_set_now`'s ms) that `Date` reads from when
+/// the result is applied (`Vm::resolve_host_call_at`, D1670).
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_resolve_host_call_at(
+    vm: u32,
+    call_id: u32,
+    ok: u32,
+    value: u32,
+    now: f64,
+) -> i32 {
+    resolve(vm, call_id, ok, value, Some(now))
+}
+
+fn resolve(vm: u32, call_id: u32, ok: u32, value: u32, now: Option<f64>) -> i32 {
     with(|s| {
         let slot = s.slot(vm);
         let v = slot.value(value);
         let r = if ok != 0 { Ok(v) } else { Err(v) };
-        if slot.vm.resolve_host_call(call_id, r).is_ok() {
-            0
-        } else {
-            -1
-        }
+        let done = match now {
+            Some(ms) => slot.vm.resolve_host_call_at(call_id, r, ms),
+            None => slot.vm.resolve_host_call(call_id, r),
+        };
+        if done.is_ok() { 0 } else { -1 }
     })
 }
 
