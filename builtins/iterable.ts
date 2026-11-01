@@ -1,5 +1,6 @@
 // Builtins over the iteration protocol (0034, on 0029's builtins/iter.ts): IterableToList,
-// Array.from of iterables, Object.fromEntries and groupBy, AggregateError's errors.
+// Array.from of iterables, Object.fromEntries and groupBy, AggregateError's errors, and
+// the String iterator (D1346).
 
 /** GetIteratorFromMethod ( obj, method ), 7.4.2: the iterator object. */
 function GetIteratorFromMethod(obj: Value, method: Value): Obj {
@@ -145,4 +146,43 @@ function GroupByProperty(items: Value, callback: Value): Obj {
  */
 function ObjectGroupBy(items: Value, callback: Value): Obj {
   return GroupByProperty(items, callback);
+}
+
+/**
+ * String.prototype [ %Symbol.iterator% ] ( ), 22.1.3.36.
+ * @builtin String.prototype[Symbol.iterator]
+ * @intrinsic
+ */
+function StringPrototypeIterator(this: Value): Obj {
+  return CreateStringIterator(ThisToString(this));
+}
+
+/**
+ * %StringIteratorPrototype%.next ( ), 22.1.5.1.1.
+ * @builtin %StringIteratorPrototype%.next
+ * @intrinsic
+ */
+function StringIteratorPrototypeNext(this: Value): Obj {
+  const target: Value = StringIteratorTarget(this);
+  if (target === undefined) {
+    return CreateIterResultObject(undefined, true);
+  }
+  const s: Str = AsStr(target);
+  const position: f64 = ArrayIteratorIndex(this);
+  if (position >= StrLen(s)) {
+    ArrayIteratorFinish(this);
+    return CreateIterResultObject(undefined, true);
+  }
+  const cp: Str = StrCodePointString(s, position);
+  ArrayIteratorSetIndex(this, position + StrLen(cp));
+  return CreateIterResultObject(cp, false);
+}
+
+/**
+ * %StringIteratorPrototype% [ %Symbol.toStringTag% ], 22.1.5.1.2.
+ * @value %StringIteratorPrototype%[Symbol.toStringTag]
+ * @attributes configurable
+ */
+function StringIteratorToStringTag(): Str {
+  return "String Iterator";
 }

@@ -273,13 +273,16 @@ function ArrayFrom(this: Value, items: Value, mapfn?: Value, thisArg?: Value): O
     throw NewTypeError("not a function");
   }
   const usingIterator: Value = GetMethod(items, WellKnownSymbol("iterator"));
-  if (usingIterator !== undefined && !IsArray(items) && !IsString(items)) {
+  // A mapping function could grow an array while it is read; the iterator re-reads
+  // the length, so only strings keep the direct path then.
+  const direct: boolean = HasOriginalIteration(items) && (IsString(items) || !mapping);
+  if (usingIterator !== undefined && !direct) {
     const target: Obj = IsConstructor(this) ? Construct(this) : ArrayCreate(0);
     return ArrayFromIterator(target, items, usingIterator, mapfn, thisArg);
   }
-  // Arrays and strings are read directly until the Array and String iterators exist
-  // (0030 part 4): like their default iterators, holes read as undefined and strings
-  // go by code points. The constructor gets no length for them, as for iterables.
+  // Arrays and strings with their original iteration are read directly: the same
+  // elements (holes as undefined, strings by code points) without iterator objects.
+  // The constructor gets no length for them, as for iterables.
   const iterable: boolean = usingIterator !== undefined;
   const arrayLike: Obj = IsString(items) ? StringCodePoints(AsStr(items)) : ToObject(items);
   const len: f64 = LengthOfArrayLike(arrayLike);

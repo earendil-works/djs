@@ -44,9 +44,12 @@ pub enum Intrinsic {
     IteratorProto,
     /// %ArrayIteratorPrototype% ([[Prototype]] = %IteratorPrototype%).
     ArrayIteratorProto,
+    /// %StringIteratorPrototype% ([[Prototype]] = %IteratorPrototype%). String Iterators
+    /// are Array Iterator objects of kind 3 (D1346).
+    StringIteratorProto,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::ArrayIteratorProto as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::StringIteratorProto as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -170,6 +173,12 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
         heap,
         Intrinsic::ArrayIteratorProto,
         Value::object(array_iterator_proto),
+    );
+    let string_iterator_proto = heap.new_object(Some(iterator_proto))?;
+    set(
+        heap,
+        Intrinsic::StringIteratorProto,
+        Value::object(string_iterator_proto),
     );
     let error_proto = heap.new_object(Some(object_proto))?;
     set(heap, Intrinsic::ErrorProto, Value::object(error_proto));

@@ -1,0 +1,12 @@
+[object String Iterator] function {"value":"a","done":false} {"value":"😀","done":false} {"value":"b","done":false} {"done":true} {"done":true}
+["x","😀","y"] ["h","é","l","l","o"] ["aa","bb"]
+true true String Iterator next [Symbol.iterator]
+TypeError: String Iterator object expected
+TypeError: Array Iterator object expected
+TypeError: null or undefined are forbidden
+["P"] ["P"]
+[] []
+["o","k"] [1,null,3] [0,2,6]
+[1,2,11,12]
+[1,2] {"k":"v"} {"0":[2],"1":[1,3]}
+=== completed

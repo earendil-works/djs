@@ -2049,15 +2049,21 @@ impl<'h> Exec<'h> {
     }
 
     /// `[...src]` without the iterator protocol where that is not observable: a string
-    /// (by code points; there is no String iterator to replace yet) or an array without
-    /// holes whose iteration is the original Array.prototype[@@iterator] and
-    /// %ArrayIteratorPrototype%.next. Returns false, with nothing changed, otherwise;
-    /// the caller then runs %ArraySpread. Without a prelude every array is spread here
-    /// (holes as undefined) and other values are a TypeError.
+    /// (by code points) or an array without holes, while their iteration is the
+    /// original @@iterator and `next` (D1351, D1346). Returns false, with nothing
+    /// changed, otherwise; the caller then runs %ArraySpread. Without a prelude every
+    /// array and string is spread here (holes as undefined) and other values are a
+    /// TypeError.
     fn array_spread(&mut self, arr: Obj, src: Value) -> Result<bool, Fault> {
         let mut vals = alloc::vec::Vec::new();
         let has_prelude =
             !realm::installed_intrinsic(self.heap, intrinsics::ARRAY_SPREAD).is_undefined();
+        if !has_prelude && src.as_string().is_none() && src.as_object().is_none() {
+            return type_error("value is not iterable");
+        }
+        if has_prelude && !self.iteration_unmodified(src) {
+            return Ok(false);
+        }
         if let Some(s) = src.as_string() {
             let units = self.heap.str_to_utf16(s);
             let mut i = 0;
@@ -2073,7 +2079,6 @@ impl<'h> Exec<'h> {
         } else if let Some(a) = src
             .as_object()
             .filter(|&a| self.heap.object_class(a) == ObjectClass::Array)
-            .filter(|&a| !has_prelude || self.array_iteration_unmodified(a))
         {
             for i in 0..self.heap.array_length(a) {
                 match self.heap.get_element_fast(a, i) {
@@ -2097,19 +2102,31 @@ impl<'h> Exec<'h> {
         Ok(true)
     }
 
-    /// Whether iterating the array `a` would run the original Array.prototype.values
-    /// and %ArrayIteratorPrototype%.next, as found without side effects (data
-    /// properties only).
-    fn array_iteration_unmodified(&self, a: Obj) -> bool {
+    /// Whether iterating `v` (an Array or a string) would run the original @@iterator
+    /// and `next` of its kind, as found without side effects (data properties only):
+    /// then reading it directly is the same as iterating it. False for anything else.
+    pub(super) fn iteration_unmodified(&self, v: Value) -> bool {
+        use crate::heap::atoms::{NEXT, SYM_ITERATOR};
         let data = |o: Obj, key: Atom| match self.heap.find_property(o, key) {
             Some((_, Property::Data { value, .. })) => Some(value),
             _ => None,
         };
-        let values = realm::installed_intrinsic(self.heap, intrinsics::ARRAY_PROTOTYPE_VALUES);
-        let next = realm::installed_intrinsic(self.heap, intrinsics::ARRAY_ITERATOR_NEXT);
-        let proto = realm::intrinsic_obj(self.heap, Intrinsic::ArrayIteratorProto);
-        use crate::heap::atoms::{NEXT, SYM_ITERATOR};
-        data(a, SYM_ITERATOR) == Some(values) && data(proto, NEXT) == Some(next)
+        let installed = |id| realm::installed_intrinsic(self.heap, id);
+        if v.as_string().is_some() {
+            let sp = intrinsic_obj(self.heap, Intrinsic::StringProto);
+            let proto = intrinsic_obj(self.heap, Intrinsic::StringIteratorProto);
+            return data(sp, SYM_ITERATOR)
+                == Some(installed(intrinsics::STRING_PROTOTYPE_ITERATOR))
+                && data(proto, NEXT) == Some(installed(intrinsics::STRING_ITERATOR_NEXT));
+        }
+        match v.as_object() {
+            Some(a) if self.heap.object_class(a) == ObjectClass::Array => {
+                let proto = intrinsic_obj(self.heap, Intrinsic::ArrayIteratorProto);
+                data(a, SYM_ITERATOR) == Some(installed(intrinsics::ARRAY_PROTOTYPE_VALUES))
+                    && data(proto, NEXT) == Some(installed(intrinsics::ARRAY_ITERATOR_NEXT))
+            }
+            _ => false,
+        }
     }
 
     /// Replaces the array at the top of the stack by its elements; returns their count.

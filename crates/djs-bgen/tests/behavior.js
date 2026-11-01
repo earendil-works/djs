@@ -221,6 +221,13 @@ const I = {
   NumberToUint32: (n) => n >>> 0,
   MathRandom: () => 0.5,
   ArraySpliceDense: (o, start, deleteCount, itemCount) => false,
+  // No direct paths in the stand-ins: always the iterator protocol.
+  HasOriginalIteration: (v) => false,
+  CreateStringIterator: (s) => s[Symbol.iterator](),
+  StringIteratorTarget: (it) => {
+    throw new Error("intrinsic misuse: StringIteratorTarget is not stood in");
+  },
+  StrCodePointString: (s, i) => String.fromCodePoint(s.codePointAt(i)),
   StrLocaleCompare: (a, b) => a.localeCompare(b),
   StrCharCodeAt: (s, i) => (check(typeof s === "string" && Number.isInteger(i) || !isFinite(i), "StrCharCodeAt"), i >= 0 && i < s.length ? s.charCodeAt(i) : NaN),
   StrCodePointAt: (s, i) => (i >= 0 && i < s.length ? s.codePointAt(i) : undefined),

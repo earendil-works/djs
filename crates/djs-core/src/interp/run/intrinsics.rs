@@ -179,6 +179,12 @@ pub(super) const ARRAY_SPREAD: u16 = id("ArraySpread");
 /// spread skips the iterator protocol while they are in place.
 pub(super) const ARRAY_PROTOTYPE_VALUES: u16 = id("ArrayPrototypeValues");
 pub(super) const ARRAY_ITERATOR_NEXT: u16 = id("ArrayIteratorPrototypeNext");
+pub(super) const STRING_PROTOTYPE_ITERATOR: u16 = id("StringPrototypeIterator");
+pub(super) const STRING_ITERATOR_NEXT: u16 = id("StringIteratorPrototypeNext");
+const CREATE_STRING_ITERATOR: u16 = id("CreateStringIterator");
+const STRING_ITERATOR_TARGET: u16 = id("StringIteratorTarget");
+const STR_CODE_POINT_STRING: u16 = id("StrCodePointString");
+const HAS_ORIGINAL_ITERATION: u16 = id("HasOriginalIteration");
 
 /// The libm intrinsics (D1150): `F64Sin(x)` and friends.
 fn math_leaf(id: u16, x: f64, y: f64) -> Option<f64> {
@@ -217,6 +223,9 @@ fn math_leaf(id: u16, x: f64, y: f64) -> Option<f64> {
         _ => return None,
     })
 }
+
+/// The Array Iterator kind of String Iterators (kinds 0-2 are keys/values/entries).
+const STRING_ITERATOR_KIND: i32 = 3;
 
 /// An array index key (a non-negative integral Number below 2^31) for the element fast
 /// paths.
@@ -630,7 +639,52 @@ impl Exec<'_> {
                 self.heap.set_object_slot(it, 2, Value::int(kind));
                 Value::object(it)
             }
-            ARRAY_ITERATOR_TARGET => self.heap.object_slot(self.array_iterator(a0)?, 0),
+            ARRAY_ITERATOR_TARGET => {
+                // Kind 3 is a String Iterator (0034): not an Array Iterator for `next`.
+                let it = self.array_iterator(a0)?;
+                if self.heap.object_slot(it, 2).as_int() == Some(STRING_ITERATOR_KIND) {
+                    return type_error("Array Iterator object expected");
+                }
+                self.heap.object_slot(it, 0)
+            }
+            CREATE_STRING_ITERATOR => {
+                let Some(s) = a0.as_string() else {
+                    return bad_argument(info.name);
+                };
+                let proto = realm::intrinsic_obj(self.heap, Intrinsic::StringIteratorProto);
+                let it = self.heap.alloc_object(
+                    ObjectClass::ArrayIterator,
+                    Some(proto),
+                    ObjectClass::ArrayIterator.slots(),
+                )?;
+                self.heap.set_object_slot(it, 0, Value::string(s));
+                self.heap.set_object_slot(it, 1, Value::int(0));
+                self.heap
+                    .set_object_slot(it, 2, Value::int(STRING_ITERATOR_KIND));
+                Value::object(it)
+            }
+            STRING_ITERATOR_TARGET => match a0.as_object() {
+                Some(o)
+                    if self.heap.object_class(o) == ObjectClass::ArrayIterator
+                        && self.heap.object_slot(o, 2).as_int() == Some(STRING_ITERATOR_KIND) =>
+                {
+                    self.heap.object_slot(o, 0)
+                }
+                _ => return type_error("String Iterator object expected"),
+            },
+            STR_CODE_POINT_STRING => {
+                let (Some(s), Some(i)) = (a0.as_string(), arg(self, 1).as_number()) else {
+                    return bad_argument(info.name);
+                };
+                let i = i as u32;
+                let n = match string::code_point_at(self.heap, s, i) {
+                    Some(c) if c >= 65536.0 => 2,
+                    Some(_) => 1,
+                    None => return bad_argument(info.name),
+                };
+                Value::string(string::substring(self.heap, s, i, i + n)?)
+            }
+            HAS_ORIGINAL_ITERATION => Value::bool(self.iteration_unmodified(a0)),
             ARRAY_ITERATOR_INDEX => self.heap.object_slot(self.array_iterator(a0)?, 1),
             ARRAY_ITERATOR_SET_INDEX => {
                 let it = self.array_iterator(a0)?;
@@ -1116,6 +1170,7 @@ impl Exec<'_> {
         let realm_object = |name: &str| match name {
             "%IteratorPrototype%" => Some(Intrinsic::IteratorProto),
             "%ArrayIteratorPrototype%" => Some(Intrinsic::ArrayIteratorProto),
+            "%StringIteratorPrototype%" => Some(Intrinsic::StringIteratorProto),
             // `X.prototype` of a constructor the prelude has not installed yet.
             _ => Intrinsic::prototype_of(name.strip_suffix(".prototype")?),
         };

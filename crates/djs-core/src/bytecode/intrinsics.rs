@@ -179,6 +179,10 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("ArrayIteratorSetIndex", L, 2, false),
     i("ArrayIteratorFinish", L, 1, false),
     i("ArrayIteratorKind", L, 1, false),
+    i("CreateStringIterator", L, 1, false),
+    i("StringIteratorTarget", L, 1, false),
+    i("StrCodePointString", L, 2, false),
+    i("HasOriginalIteration", L, 1, false),
     i("CreateIterResultObject", L, 2, false),
     i("CreateArrayFromPair", L, 2, false),
     i("InstallMethod", L, 4, false),
@@ -195,6 +199,8 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("IteratorCloseThrow", B, 1, false),
     i("ArrayPrototypeValues", B, 0, false),
     i("ArrayIteratorPrototypeNext", B, 0, false),
+    i("StringPrototypeIterator", B, 0, false),
+    i("StringIteratorPrototypeNext", B, 0, false),
     i("ArraySpread", B, 2, false),
 ];
 

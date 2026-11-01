@@ -373,6 +373,24 @@ declare function ArrayIteratorSetIndex(it: Value, index: f64): void;
 declare function ArrayIteratorFinish(it: Value): void;
 /** The kind of an Array Iterator (0: keys, 1: values, 2: entries). @leaf */
 declare function ArrayIteratorKind(it: Value): i32;
+/**
+ * A String Iterator over s (CreateStringIterator, 22.1.5.1): an Array Iterator object of
+ * kind 3 with %StringIteratorPrototype%; ArrayIteratorIndex/SetIndex/Finish apply. @leaf
+ */
+declare function CreateStringIterator(s: Str): Obj;
+/**
+ * The string a String Iterator iterates, or undefined once it is exhausted. TypeError
+ * "String Iterator object expected" otherwise. @leaf
+ */
+declare function StringIteratorTarget(it: Value): Value;
+/** The code point at index i of s as a string (one or two code units). @leaf */
+declare function StrCodePointString(s: Str, i: f64): Str;
+/**
+ * Whether v is an Array or a string whose iteration is the original Symbol.iterator
+ * method and `next` (data properties only): iterating it then equals reading it
+ * directly. @leaf
+ */
+declare function HasOriginalIteration(v: Value): boolean;
 /** CreateIterResultObject ( value, done ), 7.4.14. @leaf */
 declare function CreateIterResultObject(value: Value, done: boolean): Obj;
 /** A new Array [a, b]. @leaf */
