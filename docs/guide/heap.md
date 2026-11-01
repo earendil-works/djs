@@ -147,7 +147,7 @@ The measured effect: a `{a, b, c, d}` literal went from 122.5 to 82.5 bytes per 
 a five-key `JSON.parse` record from 178.5 to 130.5, and loops that create objects
 with literals or constructors got two thirds faster, because property additions now hit
 inline caches
-(docs/objects.md 7.11, 7.12).
+([docs/objects.md](../objects.md) sections 7.11 and 7.12).
 
 ### Dictionary mode
 

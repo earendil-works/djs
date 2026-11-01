@@ -39,7 +39,7 @@
 <text class="small" x="530" y="50">Roots → A, B;  A → C</text>
 <text class="small" x="530" y="66">copied cells: FORWARDED + new offset</text>
 
-<text class="title" x="20" y="124">new arena (to-space)</text>
+<text class="title" x="20" y="196">new arena (to-space)</text>
 <rect class="arena" x="20" y="134" width="60" height="40"/><text x="50" y="158" text-anchor="middle">Roots</text>
 <rect class="cell" x="80" y="134" width="70" height="40"/><text x="115" y="158" text-anchor="middle">A</text>
 <rect class="cell" x="150" y="134" width="80" height="40"/><text x="190" y="158" text-anchor="middle">B</text>

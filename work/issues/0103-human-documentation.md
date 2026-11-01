@@ -211,6 +211,18 @@ Open questions for the owner:
   gate ran it before main moved. Tested locally by serving the site under `/djs/` (the
   Pages path): the live examples load the wasm relative to the page and run.
 
+- Renumbered the guide decision to D2100 (8680046d); Pages workflow (97461df8).
+- Tour chapters written: arena.md, heap.md, compiler.md, interpreter.md, suspension.md,
+  gc.md, snapshots.md (hand-drawn img/arena.svg, img/shapes.svg, img/cheney.svg).
+  Facts checked against ARCH.md, docs/compiler.md, docs/objects.md, the decision log
+  and the code (frame.rs: the header is 6 words, not compiler.md's 5; `run_hot` is the
+  main loop since D1930, ARCH still names fast_step/fast_more; vm_new is ~40 us per
+  D1990, ARCH's table says "a few us"). infra wrote builtins.md, host.md and testing.md
+  (0109, reviewed by me) and takes determinism.md; my chapters refer to it in plain
+  text until it exists.
+- New region `gen:excerpt PATH "ANCHOR" "START" N` (quoted code that cannot drift); the
+  natives.rs excerpt in builtins.md uses it.
+
 ## Follow-ups
 
 - Live bytecode for edited examples: a `djs_disasm` export behind a docs-only feature

@@ -102,7 +102,7 @@ There are only a few continuations:
 | `PushResult` | push the value on the caller's operand stack (calls, getters) |
 | `DiscardResult` | drop it (setters) |
 | `ConstructResult` | use it if it is an object, else the frame's `this` (constructors) |
-| `Entry` | the bottom frame of a host call into the VM: `run` returns `Done` |
+| `Entry` | the bottom frame of the embedder's call (`Vm::call`): `run` returns `Done` |
 | `Job` | the bottom frame of a promise job: drop it and run the next job |
 | `Replace(slot)` | store it in a stack slot of the caller and continue after the instruction |
 | `Retry(slot)` | store it in a stack slot and run the same instruction again |

@@ -1,6 +1,6 @@
 # The garbage collector
 
-Every VM state djs keeps is in the arena, and the arena only grows by bumping. Something
+Everything a djs VM keeps is in the arena, and the arena only grows by bumping. Something
 has to give the memory of dead objects back, and in djs that same thing decides what a
 snapshot contains and whether two runs of a program leave identical images. This
 chapter explains the collector, when it runs, what happens when memory runs out, and
