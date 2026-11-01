@@ -14,7 +14,8 @@ Notes for the coordinator (the main agent), learned the hard way.
 2. Per D012 each agent has one permanent worktree, `.worktrees/<agent>`. Switch it to the
    new branch (`git -C .worktrees/<agent> switch -c issue/NNNN-slug main`, with the
    worktree clean and the old branch merged), or create it once with `git worktree add`.
-   Do this **in its own tool call** and wait for it to finish.
+   Do this **in its own tool call** and wait for it to finish. Check `git status --short`
+   first: `git switch` carries uncommitted edits into the new branch.
 3. `subagent configure` with the **absolute** cwd. Never in the same parallel batch as
    step 2: the configure call races the worktree creation (this happened three times).
 4. Only then `subagent send` the assignment.
