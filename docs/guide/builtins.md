@@ -147,7 +147,7 @@ file. The source is the plain loop
 `for (let k = 0; k < len; k++) { if (HasProperty(o, k)) { ... } }`:
 
 <!-- gen:excerpt crates/djs-core/src/builtins/gen/natives.rs "fn native_ArrayPrototypeMap(" "5 => {" 17 -->
-[`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs#L223-L239), lines 223–239:
+[`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs#L183-L199), lines 183–199:
 
 ```rust
 5 => {
