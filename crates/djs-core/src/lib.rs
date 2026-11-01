@@ -6,6 +6,7 @@
 extern crate alloc;
 
 pub mod bytecode;
+pub mod compiler;
 pub mod heap;
 pub mod interp;
 pub mod json;

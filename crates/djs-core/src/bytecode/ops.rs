@@ -51,6 +51,70 @@ pub mod special {
     pub const NEW_TARGET: u8 = 1;
     pub const HOME_OBJECT: u8 = 2;
     pub const ACTIVE_FUNCTION: u8 = 3;
+    /// The frame's `this` slot (no allocation).
+    pub const THIS: u8 = 4;
+}
+
+/// The declaration list of `global_decls idx` (Script GlobalDeclarationInstantiation):
+/// `CONSTS[idx..]` holds int32 Values `n_var, n_func, n_let, n_const`, then that many
+/// atom ids (as int32) in the same order.
+pub mod global_decls {
+    use alloc::vec::Vec;
+
+    use crate::heap::Atom;
+    use crate::value::Value;
+
+    /// The declared names, by kind.
+    #[derive(Clone, Debug, Default, PartialEq, Eq)]
+    pub struct GlobalDecls {
+        pub vars: Vec<Atom>,
+        pub funcs: Vec<Atom>,
+        pub lets: Vec<Atom>,
+        pub consts: Vec<Atom>,
+    }
+
+    impl GlobalDecls {
+        pub fn is_empty(&self) -> bool {
+            self.vars.is_empty()
+                && self.funcs.is_empty()
+                && self.lets.is_empty()
+                && self.consts.is_empty()
+        }
+
+        /// The constant pool entries.
+        pub fn encode(&self) -> Vec<Value> {
+            let lists = [&self.vars, &self.funcs, &self.lets, &self.consts];
+            let mut out: Vec<Value> = lists.iter().map(|l| Value::int(l.len() as i32)).collect();
+            for l in lists {
+                out.extend(l.iter().map(|a| Value::int(a.id() as i32)));
+            }
+            out
+        }
+
+        /// Reads the list starting at `consts[idx]`; `None` if malformed.
+        pub fn decode(consts: &[Value], idx: usize) -> Option<GlobalDecls> {
+            let count = |i: usize| -> Option<usize> {
+                usize::try_from(consts.get(idx + i)?.as_int()?).ok()
+            };
+            let counts = [count(0)?, count(1)?, count(2)?, count(3)?];
+            let mut at = idx + 4;
+            let mut lists: [Vec<Atom>; 4] = Default::default();
+            for (list, &n) in lists.iter_mut().zip(&counts) {
+                for _ in 0..n {
+                    let id = consts.get(at)?.as_int()?;
+                    list.push(Atom::from_id(id as u32));
+                    at += 1;
+                }
+            }
+            let [vars, funcs, lets, consts] = lists;
+            Some(GlobalDecls {
+                vars,
+                funcs,
+                lets,
+                consts,
+            })
+        }
+    }
 }
 
 /// `FuncTemplate::CAPTURE_DESC` words (docs/compiler.md 5.4): where `fclosure` takes each

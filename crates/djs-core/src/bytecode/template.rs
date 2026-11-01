@@ -12,6 +12,30 @@ use crate::heap::cells::{Bytes, CellKind, FuncTemplate, RefArray, Script, U32Arr
 use crate::heap::{Atom, Heap, HeapError, Ref};
 use crate::value::{Str, Value};
 
+/// `FuncTemplate::FLAGS`: the function kind in the low 4 bits, then flags.
+pub mod func_flags {
+    pub const KIND_MASK: u32 = 0xF;
+    /// A Script's top level (D004): called with `this` = the global object.
+    pub const KIND_SCRIPT: u32 = 0;
+    /// A codemode body (D008): `(async (params) => { body })`, called with `this` = the
+    /// global object and the host's arguments.
+    pub const KIND_ASYNC_BODY: u32 = 1;
+    pub const KIND_NORMAL: u32 = 2;
+    pub const KIND_ARROW: u32 = 3;
+    pub const KIND_METHOD: u32 = 4;
+    pub const KIND_GETTER: u32 = 5;
+    pub const KIND_SETTER: u32 = 6;
+    pub const KIND_CLASS_CTOR: u32 = 7;
+    pub const KIND_DERIVED_CTOR: u32 = 8;
+    pub const KIND_FIELD_INIT: u32 = 9;
+    pub const ASYNC: u32 = 1 << 4;
+    pub const GENERATOR: u32 = 1 << 5;
+
+    pub const fn kind(flags: u32) -> u32 {
+        flags & KIND_MASK
+    }
+}
+
 /// The parts of a function template, for [`alloc_template`].
 #[derive(Clone, Copy, Debug)]
 pub struct TemplateParts<'a> {

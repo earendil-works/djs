@@ -1,0 +1,521 @@
+//! Statements.
+
+use alloc::vec::Vec;
+
+use super::PResult;
+use super::func::{FuncKind, ScopeKind, VarKind};
+use super::parser::{BlockEnv, BlockKind, Parser, syntax};
+use crate::heap::Atom;
+use crate::lexer::{Kw, TokenKind};
+
+impl Parser<'_, '_> {
+    /// StatementListItem: declarations are allowed here, not in single-statement
+    /// positions.
+    pub(super) fn parse_statement_list_item(&mut self) -> PResult<()> {
+        match self.tok.kind {
+            TokenKind::Const => self.parse_lexical_declaration(VarKind::Const),
+            TokenKind::Ident if self.tok.is_contextual(Kw::Let) => {
+                self.parse_lexical_declaration(VarKind::Let)
+            }
+            TokenKind::Function => self.unsupported(self.tok.start, "functions are"),
+            TokenKind::Class => self.unsupported(self.tok.start, "classes are"),
+            _ => self.parse_statement(),
+        }
+    }
+
+    pub(super) fn parse_statement(&mut self) -> PResult<()> {
+        self.enter()?;
+        let r = self.parse_statement_inner();
+        self.leave();
+        r
+    }
+
+    fn parse_statement_inner(&mut self) -> PResult<()> {
+        let tok = self.tok;
+        match tok.kind {
+            TokenKind::LBrace => self.parse_block(),
+            TokenKind::Semicolon => self.next(),
+            TokenKind::Var => {
+                self.next()?;
+                self.parse_var_declarations(false)?;
+                self.expect_semicolon()
+            }
+            TokenKind::If => self.parse_if(),
+            TokenKind::While => self.parse_while(Vec::new()),
+            TokenKind::Do => self.parse_do_while(Vec::new()),
+            TokenKind::For => self.parse_for(Vec::new()),
+            TokenKind::Break | TokenKind::Continue => self.parse_break_continue(),
+            TokenKind::Return => self.parse_return(),
+            TokenKind::Throw => self.parse_throw(),
+            TokenKind::Switch => self.parse_switch(Vec::new()),
+            TokenKind::Try => self.unsupported(tok.start, "try statements are"),
+            TokenKind::Debugger => {
+                self.next()?;
+                self.code().debugger();
+                self.expect_semicolon()
+            }
+            TokenKind::With => syntax(tok.start, "invalid keyword: with"),
+            TokenKind::Import | TokenKind::Export => {
+                let text = self.tok_text();
+                syntax(tok.start, alloc::format!("unsupported keyword: {text}"))
+            }
+            TokenKind::Const => syntax(
+                tok.start,
+                "lexical declarations can't appear in single-statement context",
+            ),
+            TokenKind::Ident if tok.is_contextual(Kw::Let) => syntax(
+                tok.start,
+                "lexical declarations can't appear in single-statement context",
+            ),
+            TokenKind::Function => syntax(
+                tok.start,
+                "function declarations can't appear in single-statement context",
+            ),
+            TokenKind::Class => syntax(
+                tok.start,
+                "class declarations can't appear in single-statement context",
+            ),
+            TokenKind::Ident if self.peek().kind == TokenKind::Colon => self.parse_labeled(),
+            _ => {
+                self.parse_expr(false)?;
+                self.code().drop();
+                self.expect_semicolon()
+            }
+        }
+    }
+
+    fn parse_block(&mut self) -> PResult<()> {
+        self.next()?;
+        self.push_scope(ScopeKind::Block)?;
+        while !self.is(TokenKind::RBrace) {
+            if self.is(TokenKind::Eof) {
+                return syntax(self.tok.start, "expecting '}'");
+            }
+            self.parse_statement_list_item()?;
+        }
+        self.next()?;
+        self.pop_scope();
+        Ok(())
+    }
+
+    // ---- Declarations ---------------------------------------------------------------
+
+    fn parse_lexical_declaration(&mut self, kind: VarKind) -> PResult<()> {
+        self.next()?;
+        self.parse_lexical_bindings(kind, false)?;
+        self.expect_semicolon()
+    }
+
+    /// `let`/`const` bindings after the keyword. In a `for` head, stops before `in`/`of`
+    /// without requiring a `const` initializer (the caller rejects for-in/of in P0).
+    pub(super) fn parse_lexical_bindings(&mut self, kind: VarKind, in_for: bool) -> PResult<()> {
+        loop {
+            if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
+                return self.unsupported(self.tok.start, "destructuring is");
+            }
+            let pos = self.tok.start;
+            let name = self.binding_name()?;
+            self.next()?;
+            let v = self.declare_lexical(name, kind, self.tok.start)?;
+            if self.eat(TokenKind::Assign)? {
+                self.parse_assign(in_for)?;
+            } else if in_for && (self.is(TokenKind::In) || self.tok.is_contextual(Kw::Of)) {
+                return Ok(());
+            } else if kind == VarKind::Const {
+                return syntax(self.tok.start, "missing initializer for const variable");
+            } else {
+                self.code().undefined();
+            }
+            let r = self.name_ref(name, pos);
+            self.code().name_init(r);
+            self.f.vars[v as usize].init_end = self.prev_end;
+            if !self.eat(TokenKind::Comma)? {
+                return Ok(());
+            }
+        }
+    }
+
+    /// `var` bindings after the keyword.
+    pub(super) fn parse_var_declarations(&mut self, in_for: bool) -> PResult<()> {
+        loop {
+            if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
+                return self.unsupported(self.tok.start, "destructuring is");
+            }
+            let pos = self.tok.start;
+            let name = self.binding_name()?;
+            self.next()?;
+            self.declare_var(name, self.tok.start)?;
+            if self.eat(TokenKind::Assign)? {
+                self.parse_assign(in_for)?;
+                let r = self.name_ref(name, pos);
+                self.mark(pos);
+                self.code().name_put(r);
+            }
+            if !self.eat(TokenKind::Comma)? {
+                return Ok(());
+            }
+        }
+    }
+
+    // ---- Control flow ---------------------------------------------------------------
+
+    fn parse_paren_expr(&mut self) -> PResult<()> {
+        self.expect(TokenKind::LParen, "(")?;
+        self.parse_expr(false)?;
+        self.expect(TokenKind::RParen, ")")
+    }
+
+    fn parse_if(&mut self) -> PResult<()> {
+        self.next()?;
+        self.parse_paren_expr()?;
+        let l_else = self.new_label();
+        self.code().jump_if_false(l_else);
+        self.parse_statement()?;
+        if self.eat(TokenKind::Else)? {
+            let l_end = self.new_label();
+            self.code().jump(l_end);
+            self.place(l_else);
+            // `else if` chains loop here instead of recursing (docs/compiler.md 2.4).
+            if self.is(TokenKind::If) {
+                self.parse_if_chain(l_end)?;
+            } else {
+                self.parse_statement()?;
+            }
+            self.place(l_end);
+        } else {
+            self.place(l_else);
+        }
+        Ok(())
+    }
+
+    /// The `if` of an `else if`, sharing the chain's end label.
+    fn parse_if_chain(&mut self, l_end: crate::bytecode::Label) -> PResult<()> {
+        loop {
+            self.next()?;
+            self.parse_paren_expr()?;
+            let l_else = self.new_label();
+            self.code().jump_if_false(l_else);
+            self.parse_statement()?;
+            if !self.eat(TokenKind::Else)? {
+                self.place(l_else);
+                return Ok(());
+            }
+            self.code().jump(l_end);
+            self.place(l_else);
+            if !self.is(TokenKind::If) {
+                return self.parse_statement();
+            }
+        }
+    }
+
+    fn push_loop(&mut self, labels: Vec<Atom>) -> (crate::bytecode::Label, crate::bytecode::Label) {
+        let l_break = self.new_label();
+        let l_cont = self.new_label();
+        self.blocks.push(BlockEnv {
+            labels,
+            kind: BlockKind::Loop,
+            break_label: l_break,
+            continue_label: Some(l_cont),
+        });
+        (l_break, l_cont)
+    }
+
+    fn parse_while(&mut self, labels: Vec<Atom>) -> PResult<()> {
+        self.next()?;
+        let (l_break, l_cont) = self.push_loop(labels);
+        self.place(l_cont);
+        self.parse_paren_expr()?;
+        self.code().jump_if_false(l_break);
+        self.parse_statement()?;
+        self.code().jump(l_cont);
+        self.place(l_break);
+        self.blocks.pop();
+        Ok(())
+    }
+
+    fn parse_do_while(&mut self, labels: Vec<Atom>) -> PResult<()> {
+        self.next()?;
+        let (l_break, l_cont) = self.push_loop(labels);
+        let l_top = self.new_label();
+        self.place(l_top);
+        self.parse_statement()?;
+        self.expect(TokenKind::While, "while")?;
+        self.place(l_cont);
+        self.parse_paren_expr()?;
+        self.code().jump_if_true(l_top);
+        self.place(l_break);
+        self.blocks.pop();
+        // `do ... while (x)` takes an optional `;` even without a newline.
+        self.eat(TokenKind::Semicolon)?;
+        Ok(())
+    }
+
+    /// `for (init; test; update) body`, laid out as
+    /// `init; L_test: test; jump_if_false L_break; jump L_body; L_cont: update; jump
+    /// L_test; L_body: body; jump L_cont; L_break:` so everything is emitted in source
+    /// order.
+    fn parse_for(&mut self, labels: Vec<Atom>) -> PResult<()> {
+        let for_pos = self.tok.start;
+        self.next()?;
+        if self.tok.is_contextual(Kw::Await) {
+            return self.unsupported(self.tok.start, "for await loops are");
+        }
+        self.expect(TokenKind::LParen, "(")?;
+        let outer = self.scope;
+        let mut scoped = false;
+        match self.tok.kind {
+            TokenKind::Semicolon => {}
+            TokenKind::Var => {
+                self.next()?;
+                self.parse_var_declarations(true)?;
+            }
+            TokenKind::Const => {
+                self.next()?;
+                self.push_scope(ScopeKind::For)?;
+                scoped = true;
+                self.parse_lexical_bindings(VarKind::Const, true)?;
+            }
+            TokenKind::Ident if self.tok.is_contextual(Kw::Let) => {
+                self.next()?;
+                self.push_scope(ScopeKind::For)?;
+                scoped = true;
+                self.parse_lexical_bindings(VarKind::Let, true)?;
+            }
+            _ => {
+                self.parse_expr(true)?;
+                if self.is(TokenKind::In) || self.tok.is_contextual(Kw::Of) {
+                    return self.unsupported(for_pos, "for-in and for-of loops are");
+                }
+                self.code().drop();
+            }
+        }
+        if self.is(TokenKind::In) || self.tok.is_contextual(Kw::Of) {
+            return self.unsupported(for_pos, "for-in and for-of loops are");
+        }
+        self.expect(TokenKind::Semicolon, ";")?;
+        // Per-iteration copies of `let` bindings (CreatePerIterationEnvironment) only
+        // matter for captured bindings, which need closures (P1-1: `rebox`).
+        let (l_break, l_cont) = self.push_loop(labels);
+        let l_test = self.new_label();
+        let l_body = self.new_label();
+        self.place(l_test);
+        if !self.is(TokenKind::Semicolon) {
+            self.parse_expr(false)?;
+            self.code().jump_if_false(l_break);
+        }
+        self.expect(TokenKind::Semicolon, ";")?;
+        if self.is(TokenKind::RParen) {
+            // No update: `continue` goes straight to the test.
+            self.place(l_cont);
+            self.code().jump(l_test);
+        } else {
+            self.code().jump(l_body);
+            self.place(l_cont);
+            self.parse_expr(false)?;
+            self.code().drop();
+            self.code().jump(l_test);
+        }
+        self.expect(TokenKind::RParen, ")")?;
+        self.place(l_body);
+        self.parse_statement()?;
+        self.code().jump(l_cont);
+        self.place(l_break);
+        self.blocks.pop();
+        if scoped {
+            self.pop_scope();
+        }
+        debug_assert_eq!(self.scope, outer);
+        Ok(())
+    }
+
+    fn parse_break_continue(&mut self) -> PResult<()> {
+        let is_break = self.is(TokenKind::Break);
+        let pos = self.tok.start;
+        self.next()?;
+        let label = if self.is(TokenKind::Ident) && !self.tok.newline_before() {
+            let a = self.ident_atom()?;
+            self.next()?;
+            Some(a)
+        } else {
+            None
+        };
+        let mut target = None;
+        for b in self.blocks.iter().rev() {
+            match label {
+                Some(l) => {
+                    if b.labels.contains(&l) {
+                        target = if is_break {
+                            Some(b.break_label)
+                        } else {
+                            b.continue_label
+                        };
+                        break;
+                    }
+                }
+                None => {
+                    if is_break && b.kind != BlockKind::Labeled {
+                        target = Some(b.break_label);
+                        break;
+                    }
+                    if !is_break && b.kind == BlockKind::Loop {
+                        target = b.continue_label;
+                        break;
+                    }
+                }
+            }
+        }
+        let Some(target) = target else {
+            let msg = match (label, is_break) {
+                (Some(_), _) => "break/continue label not found",
+                (None, true) => "break must be inside loop or switch",
+                (None, false) => "continue must be inside loop",
+            };
+            return syntax(pos, msg);
+        };
+        self.code().jump(target);
+        self.expect_semicolon()
+    }
+
+    fn parse_return(&mut self) -> PResult<()> {
+        let pos = self.tok.start;
+        if self.f.kind == FuncKind::Script {
+            return syntax(pos, "return not in a function");
+        }
+        self.next()?;
+        if self.is(TokenKind::Semicolon)
+            || self.is(TokenKind::RBrace)
+            || self.is(TokenKind::Eof)
+            || self.tok.newline_before()
+        {
+            self.code().return_undef();
+        } else {
+            self.parse_expr(false)?;
+            self.code().return_();
+        }
+        self.expect_semicolon()
+    }
+
+    fn parse_throw(&mut self) -> PResult<()> {
+        let pos = self.tok.start;
+        self.next()?;
+        if self.tok.newline_before() {
+            return syntax(self.tok.start, "line terminator not allowed after throw");
+        }
+        self.parse_expr(false)?;
+        self.mark(pos);
+        self.code().throw();
+        self.expect_semicolon()
+    }
+
+    /// `switch`: the discriminant stays on the stack during the case tests. Each test
+    /// is placed right before its body in source order:
+    /// `L_test_i: dup; <case>; strict_eq; jump_if_false L_test_i+1; drop; L_body_i:
+    /// <body>; jump L_body_i+1`. When no case matches: `drop` and jump to `default` or
+    /// the end.
+    fn parse_switch(&mut self, labels: Vec<Atom>) -> PResult<()> {
+        self.next()?;
+        self.parse_paren_expr()?;
+        self.expect(TokenKind::LBrace, "{")?;
+        self.push_scope(ScopeKind::Switch)?;
+        let l_break = self.new_label();
+        self.blocks.push(BlockEnv {
+            labels,
+            kind: BlockKind::Switch,
+            break_label: l_break,
+            continue_label: None,
+        });
+        let mut next_test = self.new_label();
+        let mut next_body: Option<crate::bytecode::Label> = None;
+        let mut default_body = None;
+        self.code().jump(next_test);
+        while !self.is(TokenKind::RBrace) {
+            let body = next_body.take().unwrap_or_else(|| self.new_label());
+            match self.tok.kind {
+                TokenKind::Case => {
+                    self.next()?;
+                    self.place(next_test);
+                    next_test = self.new_label();
+                    self.code().dup();
+                    self.parse_expr(false)?;
+                    self.code().strict_eq();
+                    self.code().jump_if_false(next_test);
+                    self.code().drop();
+                    self.expect(TokenKind::Colon, ":")?;
+                }
+                TokenKind::Default => {
+                    if default_body.is_some() {
+                        return syntax(self.tok.start, "duplicate default");
+                    }
+                    self.next()?;
+                    self.expect(TokenKind::Colon, ":")?;
+                    default_body = Some(body);
+                }
+                _ => return syntax(self.tok.start, "invalid switch statement"),
+            }
+            self.place(body);
+            while !matches!(
+                self.tok.kind,
+                TokenKind::Case | TokenKind::Default | TokenKind::RBrace
+            ) {
+                if self.is(TokenKind::Eof) {
+                    return syntax(self.tok.start, "expecting '}'");
+                }
+                self.parse_statement_list_item()?;
+            }
+            // Fall through into the next body, skipping its test.
+            let nb = self.new_label();
+            self.code().jump(nb);
+            next_body = Some(nb);
+        }
+        self.next()?;
+        // No case matched.
+        self.place(next_test);
+        self.code().drop();
+        self.code().jump(default_body.unwrap_or(l_break));
+        if let Some(nb) = next_body {
+            self.place(nb);
+        }
+        self.place(l_break);
+        self.blocks.pop();
+        self.pop_scope();
+        Ok(())
+    }
+
+    fn parse_labeled(&mut self) -> PResult<()> {
+        let mut labels = Vec::new();
+        while self.is(TokenKind::Ident) && self.peek().kind == TokenKind::Colon {
+            let tok = self.tok;
+            if tok.is_escaped_reserved() || tok.kw.is_strict_reserved() {
+                return self.unexpected();
+            }
+            let a = self.ident_atom()?;
+            if labels.contains(&a) || self.blocks.iter().any(|b| b.labels.contains(&a)) {
+                return syntax(tok.start, "duplicate label name");
+            }
+            labels.push(a);
+            self.next()?;
+            self.next()?;
+        }
+        match self.tok.kind {
+            TokenKind::While => self.parse_while(labels),
+            TokenKind::Do => self.parse_do_while(labels),
+            TokenKind::For => self.parse_for(labels),
+            _ => {
+                let l_break = self.new_label();
+                self.blocks.push(BlockEnv {
+                    labels,
+                    kind: BlockKind::Labeled,
+                    break_label: l_break,
+                    continue_label: None,
+                });
+                if self.is(TokenKind::Function) {
+                    return self.unsupported(self.tok.start, "functions are");
+                }
+                self.parse_statement()?;
+                self.place(l_break);
+                self.blocks.pop();
+                Ok(())
+            }
+        }
+    }
+}
