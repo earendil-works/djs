@@ -51,7 +51,7 @@ contract in docs/compiler.md 7.7. This issue is the compiler side.
 - Outside the touches, small: tests/e2e.rs (rejected body promise = `Uncaught`),
   djs-wasm tests, djs-difftest (async tools, glue test), the djs-test262 fixture (a
   different unsupported construct), and in interp/run.rs the debug-only stack-effect
-  check skips the suspending ops: under GC stress a tail call's new frame template can
+  check skips TERM ops and the suspending ops: under GC stress a tail call's new frame template can
   land at the old template's offset, which made the check fire falsely (`async_reject`
   in `tests/data/e2e/async_await.js` with `--gc-stress`).
 - Compile sweep (test262, all files): before 30,606 ok / 19,361 not supported yet /

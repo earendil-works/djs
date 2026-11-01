@@ -1120,20 +1120,17 @@ impl<'h> Exec<'h> {
         // instruction completes in the same frame, it moved `sp` by its stack effect, and
         // fell through unless it jumps.
         #[cfg(debug_assertions)]
-        // (A bottom frame's return can enter a job's frame at the same `bp`. The
-        // suspending ops leave or replace the frame; a collection on the way can move
-        // the new frame's template to the old one's offset, so they are not checked.)
+        // (A bottom frame's return can enter a job's frame at the same `bp`, and the
+        // suspending ops replace the frame. A collection on the way can move the new
+        // frame's template to the old one's offset, so ops that end or replace the frame
+        // (TERM, the suspending ops) are not checked.)
         if matches!(r, Ok(None))
             && self.bp == bp0
             && self.template == t0
+            && !info.has(crate::bytecode::flags::TERM)
             && !matches!(
                 op,
-                Op::Await
-                    | Op::AsyncReturn
-                    | Op::AsyncReject
-                    | Op::Yield
-                    | Op::YieldStar
-                    | Op::GeneratorStart
+                Op::Await | Op::Yield | Op::YieldStar | Op::GeneratorStart
             )
         {
             use crate::bytecode::flags as opflags;
