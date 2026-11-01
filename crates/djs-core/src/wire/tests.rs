@@ -138,7 +138,7 @@ fn quote(units: &[u16]) -> String {
 
 /// A canonical dump: `undefined`, `null`, `true`, `n:<String(x)>`, `s:"..."` (non-printable
 /// ASCII as `\uXXXX`), `[a,<hole>]`, `{"k":v}`. js/test/gen-cross.ts writes the same.
-pub(super) fn dump(h: &Heap, v: Value) -> String {
+pub(super) fn dump(h: &mut Heap, v: Value) -> String {
     match v.kind() {
         Kind::Undefined => "undefined".into(),
         Kind::Null => "null".into(),
@@ -155,23 +155,23 @@ pub(super) fn dump(h: &Heap, v: Value) -> String {
         Kind::Object => {
             let o = v.as_object().unwrap();
             if h.object_class(o) == ObjectClass::Array {
-                let items: Vec<String> = (0..h.array_length(o))
-                    .map(|i| match h.get_own_property(o, Atom::int(i).unwrap()) {
+                let mut items: Vec<String> = Vec::new();
+                for i in 0..h.array_length(o) {
+                    items.push(match h.get_own_property(o, Atom::int(i).unwrap()) {
                         Some(p) => dump(h, p.value().unwrap()),
                         None => "<hole>".into(),
-                    })
-                    .collect();
+                    });
+                }
                 format!("[{}]", items.join(","))
             } else {
-                let items: Vec<String> = h
-                    .own_keys(o)
-                    .into_iter()
-                    .map(|k| {
-                        let name: Vec<u16> = h.atom_name(k).encode_utf16().collect();
-                        let p = h.get_own_property(o, k).unwrap();
-                        format!("{}:{}", quote(&name), dump(h, p.value().unwrap()))
-                    })
-                    .collect();
+                let mut items: Vec<String> = Vec::new();
+                for k in h.own_keys(o) {
+                    // The key's UTF-16 (atom_name would be lossy for lone surrogates).
+                    let name_str = h.atom_string(k).unwrap();
+                    let name = h.str_to_utf16(name_str);
+                    let p = h.get_own_property(o, k).unwrap();
+                    items.push(format!("{}:{}", quote(&name), dump(h, p.value().unwrap())));
+                }
                 format!("{{{}}}", items.join(","))
             }
         }
@@ -241,8 +241,8 @@ fn decode_ok(bytes: &[u8]) -> (Heap, Value) {
 
 fn check(v: T) {
     let bytes = encode(&v);
-    let (h, out) = decode_ok(&bytes);
-    assert_eq!(dump(&h, out), dump_t(&v), "{v:?}");
+    let (mut h, out) = decode_ok(&bytes);
+    assert_eq!(dump(&mut h, out), dump_t(&v), "{v:?}");
 }
 
 fn s(x: &str) -> T {
@@ -401,8 +401,8 @@ fn keys_are_interned_once_and_repeated_keys_follow_js() {
     e.out.extend_from_slice(&[tag::INT8, 1, 0]);
     e.string("b");
     e.out.extend_from_slice(&[tag::INT8, 2, 1, tag::INT8, 3]);
-    let (h, v) = decode_ok(&e.out);
-    assert_eq!(dump(&h, v), "{\"a\":n:3,\"b\":n:2}");
+    let (mut h, v) = decode_ok(&e.out);
+    assert_eq!(dump(&mut h, v), "{\"a\":n:3,\"b\":n:2}");
 }
 
 #[test]
@@ -656,4 +656,33 @@ fn heap_limits_are_errors() {
         decode(&mut h, &b, &DecodeOptions::default()),
         Err(WireError::Heap(_))
     ));
+}
+
+/// Decodes what js/test/gen-cross.ts wrote (into `DJS_WIRE_CROSS`) and compares with the
+/// node-side dump, and with `json::parse_utf8` of the same value where JSON can carry it.
+/// The gate runs it (scripts/gate.sh).
+#[test]
+#[ignore]
+fn wire_cross() {
+    use crate::json::{ParseOptions, parse_utf8};
+    let dir = std::env::var("DJS_WIRE_CROSS").expect("set DJS_WIRE_CROSS");
+    let cases = std::fs::read_to_string(format!("{dir}/cases.tsv")).unwrap();
+    let (mut n, mut with_json) = (0, 0);
+    for line in cases.lines() {
+        let f: Vec<&str> = line.split('\t').collect();
+        let wire = std::fs::read(format!("{dir}/{}.wire", f[0])).unwrap();
+        let (mut h, v) = decode_ok(&wire);
+        let got = dump(&mut h, v);
+        assert_eq!(got, f[1], "case {}", f[0]);
+        if f[2] == "1" {
+            let text = std::fs::read(format!("{dir}/{}.json", f[0])).unwrap();
+            let mut h2 = Heap::new().unwrap();
+            let j = parse_utf8(&mut h2, &text, &ParseOptions::default()).unwrap();
+            assert_eq!(dump(&mut h2, j), got, "case {} via JSON", f[0]);
+            with_json += 1;
+        }
+        n += 1;
+    }
+    assert!(n > 1000 && with_json > 300, "{n} {with_json}");
+    std::println!("{n} cases match ({with_json} also via JSON)");
 }
