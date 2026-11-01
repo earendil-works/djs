@@ -12,6 +12,7 @@ use alloc::vec::Vec;
 
 use super::*;
 use crate::heap::StrView;
+use crate::heap::atom::MAX_INT_ATOM;
 use crate::value::Str;
 
 /// The dense elements `o[from .. to)` of an Array, if all are present.
@@ -196,6 +197,18 @@ impl Exec<'_> {
             self.heap.ta_set(o, i as u32, e);
         }
         true
+    }
+
+    /// `%ArrayPushDense(o, v)`.
+    pub(super) fn array_push_dense(&mut self, o: Obj, v: Value) -> Result<f64, Fault> {
+        if self.heap.object_class(o) != ObjectClass::Array {
+            return Ok(-1.0);
+        }
+        let len = self.heap.array_length(o);
+        if len >= MAX_INT_ATOM || !self.heap.set_element_fast(o, len, v)? {
+            return Ok(-1.0);
+        }
+        Ok((len + 1) as f64)
     }
 
     /// `%ArrayJoinDense(o, len, sep)`: the joined string, or undefined.

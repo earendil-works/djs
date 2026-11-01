@@ -184,6 +184,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("ArraySpliceDense", L, 4, false),
     i("ArrayCanPopDense", L, 1, false),
     i("ArrayPopDense", L, 1, false),
+    i("ArrayPushDense", L, 2, false),
     i("ArraySearchDense", L, 5, false),
     i("ArraySliceDense", L, 4, false),
     i("ArrayJoinDense", L, 3, false),

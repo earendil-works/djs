@@ -432,6 +432,12 @@ declare function ArrayCanPopDense(o: Obj): boolean;
 /** Array.prototype.pop of an array `ArrayCanPopDense` accepts. @leaf */
 declare function ArrayPopDense(o: Obj): Value;
 /**
+ * push(v)'s Set and length update in one step when the Set is a plain append to the
+ * Array `o` (extensible, writable length, no holes at its end, no index properties on
+ * its prototype chain). The new length, or -1 with nothing changed (0080). @leaf
+ */
+declare function ArrayPushDense(o: Obj, v: Value): f64;
+/**
  * The search loops of indexOf (mode 0: `from` up to len, strict equality), lastIndexOf
  * (1: `from` down to 0) and includes (2: up to len, SameValueZero) over an Array whose
  * elements in the range are all present in dense storage, where HasProperty and Get

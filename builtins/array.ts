@@ -222,6 +222,12 @@ function ArrayPrototypePush(this: Value, ...items: Value[]): f64 {
   if (len + argCount > 9007199254740991) {
     throw NewTypeError("Array loo long");
   }
+  if (argCount === 1) {
+    const pushed: f64 = ArrayPushDense(o, Get(items, 0));
+    if (pushed >= 0) {
+      return pushed;
+    }
+  }
   for (let i: f64 = 0; i < argCount; i++) {
     Set(o, len, Get(items, i));
     len++;

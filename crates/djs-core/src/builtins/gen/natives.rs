@@ -17,6 +17,7 @@ const I_ARRAY_ITERATOR_SET_INDEX: u16 = iid("ArrayIteratorSetIndex");
 const I_ARRAY_ITERATOR_TARGET: u16 = iid("ArrayIteratorTarget");
 const I_ARRAY_JOIN_DENSE: u16 = iid("ArrayJoinDense");
 const I_ARRAY_POP_DENSE: u16 = iid("ArrayPopDense");
+const I_ARRAY_PUSH_DENSE: u16 = iid("ArrayPushDense");
 const I_ARRAY_SEARCH_DENSE: u16 = iid("ArraySearchDense");
 const I_ARRAY_SLICE_DENSE: u16 = iid("ArraySliceDense");
 const I_ARRAY_SPECIES_CREATE: u16 = iid("ArraySpeciesCreate");
@@ -85,7 +86,7 @@ pub(crate) static NATIVES: &[NativeFn] = &[
     NativeFn { name: "ArrayPrototypeIndexOf", params: 2, locals: 9, run: native_ArrayPrototypeIndexOf, handler: handler_ArrayPrototypeIndexOf },
     NativeFn { name: "ArrayPrototypeJoin", params: 1, locals: 10, run: native_ArrayPrototypeJoin, handler: handler_ArrayPrototypeJoin },
     NativeFn { name: "ArrayPrototypeIncludes", params: 2, locals: 9, run: native_ArrayPrototypeIncludes, handler: handler_ArrayPrototypeIncludes },
-    NativeFn { name: "ArrayPrototypePush", params: 0, locals: 4, run: native_ArrayPrototypePush, handler: handler_ArrayPrototypePush },
+    NativeFn { name: "ArrayPrototypePush", params: 0, locals: 5, run: native_ArrayPrototypePush, handler: handler_ArrayPrototypePush },
     NativeFn { name: "FindViaPredicate", params: 6, locals: 4, run: native_FindViaPredicate, handler: handler_FindViaPredicate },
     NativeFn { name: "ArrayPrototypeFind", params: 2, locals: 3, run: native_ArrayPrototypeFind, handler: handler_ArrayPrototypeFind },
     NativeFn { name: "ArrayPrototypeFindIndex", params: 2, locals: 3, run: native_ArrayPrototypeFindIndex, handler: handler_ArrayPrototypeFindIndex },
@@ -572,30 +573,40 @@ fn native_ArrayPrototypePush(ex: &mut Exec<'_>) -> Step {
                 let v = { let a0 = ex.n_str("Array loo long")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }; return Err(Fault::throw(v));
             }
             3 => {
-                let v = num(0.0_f64); ex.n_set_slot(3, v);
-                ex.n_goto(4); continue;
+                if (f64_of(ex.n_slot(2)) == 1.0_f64) { ex.n_goto(4); continue; } else { ex.n_goto(5); continue; }
             }
             4 => {
-                if (f64_of(ex.n_slot(3)) < f64_of(ex.n_slot(2))) { ex.n_goto(5); continue; } else { ex.n_goto(7); continue; }
+                let v = num(f64_of({ let a0 = ex.n_slot(0); let a1 = { let a0 = Value::int(0); ex.n_rest_get(0, a0) }; ex.n_leaf(I_ARRAY_PUSH_DENSE, &[a0, a1])? })); ex.n_set_slot(3, v);
+                if (f64_of(ex.n_slot(3)) >= 0.0_f64) { ex.n_goto(6); continue; } else { ex.n_goto(5); continue; }
             }
             5 => {
-                // resume point: Set
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(1); let a2 = { let a0 = ex.n_slot(3); ex.n_rest_get(0, a0) }; ex.n_set(&[a0, a1, a2], 8) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+                let v = num(0.0_f64); ex.n_set_slot(4, v);
+                ex.n_goto(7); continue;
             }
             6 => {
-                let v = num((f64_of(ex.n_slot(3)) + 1.0_f64)); ex.n_set_slot(3, v);
-                if ex.n_backedge(4) { return Ok(None); } continue;
+                let v = num(f64_of(ex.n_slot(3))); return ex.n_ret(v);
             }
             7 => {
-                // resume point: Set
-                match { let a0 = ex.n_slot(0); let a1 = ex.n_str("length")?; let a2 = ex.n_slot(1); ex.n_set(&[a0, a1, a2], 9) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+                if (f64_of(ex.n_slot(4)) < f64_of(ex.n_slot(2))) { ex.n_goto(8); continue; } else { ex.n_goto(10); continue; }
             }
             8 => {
-                ex.n_result();
-                let v = num((f64_of(ex.n_slot(1)) + 1.0_f64)); ex.n_set_slot(1, v);
-                ex.n_goto(6); continue;
+                // resume point: Set
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_slot(1); let a2 = { let a0 = ex.n_slot(4); ex.n_rest_get(0, a0) }; ex.n_set(&[a0, a1, a2], 11) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
             }
             9 => {
+                let v = num((f64_of(ex.n_slot(4)) + 1.0_f64)); ex.n_set_slot(4, v);
+                if ex.n_backedge(7) { return Ok(None); } continue;
+            }
+            10 => {
+                // resume point: Set
+                match { let a0 = ex.n_slot(0); let a1 = ex.n_str("length")?; let a2 = ex.n_slot(1); ex.n_set(&[a0, a1, a2], 12) }? { Flow::Inline => continue, Flow::Leave(st) => return Ok(st) }
+            }
+            11 => {
+                ex.n_result();
+                let v = num((f64_of(ex.n_slot(1)) + 1.0_f64)); ex.n_set_slot(1, v);
+                ex.n_goto(9); continue;
+            }
+            12 => {
                 ex.n_result();
                 let v = num(f64_of(ex.n_slot(1))); return ex.n_ret(v);
             }
@@ -609,7 +620,7 @@ fn handler_ArrayPrototypePush(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:394
+// builtins/array.ts:400
 fn native_FindViaPredicate(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -661,7 +672,7 @@ fn handler_FindViaPredicate(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:414 (Array.prototype.find)
+// builtins/array.ts:420 (Array.prototype.find)
 fn native_ArrayPrototypeFind(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -689,7 +700,7 @@ fn handler_ArrayPrototypeFind(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:424 (Array.prototype.findIndex)
+// builtins/array.ts:430 (Array.prototype.findIndex)
 fn native_ArrayPrototypeFindIndex(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -717,7 +728,7 @@ fn handler_ArrayPrototypeFindIndex(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:452
+// builtins/array.ts:458
 fn native_EveryOrSome(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -776,7 +787,7 @@ fn handler_EveryOrSome(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:471 (Array.prototype.every)
+// builtins/array.ts:477 (Array.prototype.every)
 fn native_ArrayPrototypeEvery(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -798,7 +809,7 @@ fn handler_ArrayPrototypeEvery(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:480 (Array.prototype.some)
+// builtins/array.ts:486 (Array.prototype.some)
 fn native_ArrayPrototypeSome(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -820,7 +831,7 @@ fn handler_ArrayPrototypeSome(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:489 (Array.prototype.filter)
+// builtins/array.ts:495 (Array.prototype.filter)
 fn native_ArrayPrototypeFilter(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -891,7 +902,7 @@ fn handler_ArrayPrototypeFilter(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:512
+// builtins/array.ts:518
 fn native_Reduce(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -996,7 +1007,7 @@ fn handler_Reduce(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:548 (Array.prototype.reduce)
+// builtins/array.ts:554 (Array.prototype.reduce)
 fn native_ArrayPrototypeReduce(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1019,7 +1030,7 @@ fn handler_ArrayPrototypeReduce(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:558 (Array.prototype.reduceRight)
+// builtins/array.ts:564 (Array.prototype.reduceRight)
 fn native_ArrayPrototypeReduceRight(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1042,7 +1053,7 @@ fn handler_ArrayPrototypeReduceRight(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:613 (Array.prototype.slice)
+// builtins/array.ts:619 (Array.prototype.slice)
 fn native_ArrayPrototypeSlice(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1218,7 +1229,7 @@ fn handler_ArrayPrototypeSlice(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:794 (Array.prototype.pop)
+// builtins/array.ts:800 (Array.prototype.pop)
 fn native_ArrayPrototypePop(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1274,7 +1285,7 @@ fn handler_ArrayPrototypePop(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:910
+// builtins/array.ts:916
 fn native_SortList(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1579,7 +1590,7 @@ fn handler_SortList(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:987
+// builtins/array.ts:993
 fn native_CollectPresent(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1639,7 +1650,7 @@ fn handler_CollectPresent(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:1004 (Array.prototype.sort)
+// builtins/array.ts:1010 (Array.prototype.sort)
 fn native_ArrayPrototypeSort(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -1726,7 +1737,7 @@ fn handler_ArrayPrototypeSort(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:1028 (Array.prototype.toSorted)
+// builtins/array.ts:1034 (Array.prototype.toSorted)
 fn native_ArrayPrototypeToSorted(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
@@ -3214,7 +3225,7 @@ fn handler_StringPrototypeSubstring(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:267 (leaf)
+// builtins/array.ts:273 (leaf)
 fn leaf_ArrayCreateChecked(ex: &mut Exec<'_>, mut l_len: f64) -> Result<Value, Fault> {
     if (l_len > 4294967295.0_f64) {
         return Err(Fault::throw({ let a0 = ex.n_str("invalid array length")?; ex.n_leaf(I_NEW_RANGE_ERROR, &[a0])? }));
@@ -3248,7 +3259,7 @@ fn leaf_RejectWithData(ex: &mut Exec<'_>, mut l_data: Value, mut l_reason: Value
     Ok(())
 }
 
-// builtins/array.ts:252 (leaf)
+// builtins/array.ts:258 (leaf)
 fn leaf_RequireCallable(ex: &mut Exec<'_>, mut l_f: Value) -> Result<Value, Fault> {
     if (!{ let a0 = l_f; ex.n_is_callable(a0) }) {
         return Err(Fault::throw({ let a0 = ex.n_str("not a function")?; ex.n_leaf(I_NEW_TYPE_ERROR, &[a0])? }));

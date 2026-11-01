@@ -247,6 +247,7 @@ const STR_NORMALIZE: u16 = id("StrNormalize");
 const ARRAY_SPLICE_DENSE: u16 = id("ArraySpliceDense");
 const ARRAY_CAN_POP_DENSE: u16 = id("ArrayCanPopDense");
 const ARRAY_POP_DENSE: u16 = id("ArrayPopDense");
+const ARRAY_PUSH_DENSE: u16 = id("ArrayPushDense");
 const ARRAY_SEARCH_DENSE: u16 = id("ArraySearchDense");
 const ARRAY_SLICE_DENSE: u16 = id("ArraySliceDense");
 const ARRAY_JOIN_DENSE: u16 = id("ArrayJoinDense");
@@ -1017,6 +1018,10 @@ impl Exec<'_> {
             ),
             ARRAY_POP_DENSE => match a0.as_object().and_then(|o| self.heap.array_pop_dense(o)) {
                 Some(v) => v,
+                None => return bad_argument(info.name),
+            },
+            ARRAY_PUSH_DENSE => match a0.as_object() {
+                Some(o) => conv::number(self.array_push_dense(o, arg(self, 1))?),
                 None => return bad_argument(info.name),
             },
             ARRAY_SEARCH_DENSE => {

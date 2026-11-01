@@ -80,6 +80,30 @@ const log = (...a) => out.push(a.map(String).join(" "));
   log("popsum", t);
 }
 
+// push: plain appends in one step; everything else through Set.
+{
+  const r = [];
+  const a = [1];
+  r.push(a.push(2), a.push(), a.push(3, 4), a.join());
+  try { Object.freeze([1]).push(2); } catch (e) { r.push(e.constructor.name); }
+  try { Object.preventExtensions([1]).push(2); } catch (e) { r.push(e.constructor.name); }
+  const ro = [1];
+  Object.defineProperty(ro, "length", { writable: false });
+  try { ro.push(2); } catch (e) { r.push(e.constructor.name, ro.length, 1 in ro); }
+  Object.defineProperty(Array.prototype, 3, { set(v) { r.push("setter " + v); }, configurable: true });
+  const b = [0, 1, 2];
+  b.push(9);
+  r.push(b.length, 3 in b);
+  delete Array.prototype[3];
+  const h = [1, , ];
+  h.push(5);
+  r.push(h.length, h[2]);
+  const like = { length: 1 };
+  Array.prototype.push.call(like, "x");
+  r.push(like.length, like[1]);
+  log("push", r.join());
+}
+
 // Iterable consumers: arrays (dense, holes), strings, typed arrays, entries.
 {
   const h = [1, , 3];
