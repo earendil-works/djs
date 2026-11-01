@@ -1,6 +1,6 @@
 # 0029: P1-5 Loops and iteration (compiler side + iterator builtins)
 
-status: in-progress
+status: done
 agent: lexer
 branch: issue/0029-p1-iteration-compiler
 depends-on: 0027
@@ -19,22 +19,22 @@ cheap. Interpreter changes (for-in enumeration ops, symbol-keyed installation, a
 like) are routed through the coordinator to the heap agent (0028 in flight).
 
 ## Acceptance criteria
-- [ ] `for (x of y)`, `for (const/let/var x of y)` with per-iteration bindings,
+- [x] `for (x of y)`, `for (const/let/var x of y)` with per-iteration bindings,
       `for-in` (spec order of keys from 0005's own-keys, prototype chain, deleted
       during enumeration, shadowing), all with labels.
-- [ ] Iterator close on abrupt completion, in every exit path, plus the exception
+- [x] Iterator close on abrupt completion, in every exit path, plus the exception
       precedence rules (a throw from the body wins over a throw from `return()`).
-- [ ] The array fast path (if the note specifies one): it must be unobservable, i.e.
+- [x] The array fast path (if the note specifies one): it must be unobservable, i.e.
       only taken when `Array.prototype[Symbol.iterator]` and
       `%ArrayIteratorPrototype%.next` are unmodified.
-- [ ] Iterator builtins in the builtin language, checked by bgen, generated, compiling
+- [x] Iterator builtins in the builtin language, checked by bgen, generated, compiling
       in privileged mode. bgen may need installation forms for symbol keys (the 0017
       follow-up); add them to bgen in a minimal way (log it, since that is infra's code)
       or ask.
-- [ ] e2e programs checked against qjs. Cases that need interpreter work go into an
+- [x] e2e programs checked against qjs. Cases that need interpreter work go into an
       ignored `_0028`/`_rt` test, with the list of interp needs sent to the coordinator
       early.
-- [ ] The test262 compile sweep before/after.
+- [x] The test262 compile sweep before/after.
 
 ## Log
 
@@ -55,7 +55,62 @@ like) are routed through the coordinator to the heap agent (0028 in flight).
   - `INTRINSICS` table regenerated (ids appended after InstanceofOperator).
   - String.prototype[Symbol.iterator] is not in part 1 (StringCodePoints exists; it needs a
     String Iterator object, left to a follow-up or part 2).
+  - Merged as beb2e53. Coordinator: String.prototype[Symbol.iterator] goes to infra (0034).
+- Part 2 (compiler):
+  - `compiler/for_in_of.rs`: for-in/of heads (`var`/`let`/`const` binding, expression
+    targets: name, field, element), QuickJS's source-order layout; declaration heads
+    store next to the body (one jump per iteration). Head scans in scan.rs
+    (`for_head_is_c_style`: `;` directly inside the parens; `for_lhs_ends_with_of`).
+    D1292, docs/compiler.md 3.8 / 4.5 / 5.9 / 7.4 updated.
+  - Iterator close: handler around store + body (`%IteratorCloseThrow`, then rethrow);
+    own `break` closes inline after the loop; leaving jumps `gosub` a close subroutine
+    (`BlockKind::Iter`), unwound with the finally blocks in one innermost-first pass
+    (`emit_unwind`, replaces `emit_finally_for_return`). First attempt had the
+    subroutine consume its operands: the stack checker models `gosub` as depth-neutral,
+    so it now leaves `v it undefined` for the caller to drop.
+  - qjs messages/positions for head errors ("expected 'of' or 'in' in for control
+    expression", "a declaration in the head of a for-in/of loop can't have an
+    initializer", "invalid for in/of left hand-side", "'for of' expression cannot start
+    with 'async'"). Differences: `for (f() in o)` is a SyntaxError here (spec early
+    error; qjs, sloppy, throws at run time).
+  - Tests: `end_to_end_iteration` (61 cases vs qjs: protocol, close on every exit,
+    precedence, TDZ, per-iteration closures, for-in order / prototype chain / shadowing /
+    non-enumerable / deletion), errors, snapshot `iteration.js`, scan unit tests,
+    corpus `language/iteration.js` (also under --suspend-every/--gc-stress).
+  - Ignored: `end_to_end_iteration_rt` (arrays, needs 0030's Array Iterator leaves) and
+    `end_to_end_iteration_messages` (symbol keys in "cannot read property" messages).
+  - Bug found by the sweep: a body error inside a nested function popped the wrong
+    BlockEnv; envs are now popped only on success.
+  - test262 compile sweep (`compile_test262`): before 25,999 ok / 24,330 not supported
+    yet / 1,742 negative / 607 other; after 27,531 ok / 22,670 / 1,810 / 607 (3 new
+    "other": `for (using x of ...)` heads, explicit resource management). Missed early
+    errors unchanged (8).
+  - Ratchets: test262 active 10,222 -> 8,494 expected failures (1,729 pass now, no new
+    failures); difftest 80 -> 78 (test_for_in2, test_try_catch8).
 
 ## Follow-ups
+- Array fast path for for-of (docs/compiler.md 4.5 calls it a later optimization): a
+  guard that `Array.prototype[Symbol.iterator]` and `%ArrayIteratorPrototype%.next` are
+  the originals, then index directly.
+- Destructuring heads (`for (const [k, v] of m)`), with destructuring in general.
+- `for await` (P2).
+- Interp: "cannot read property" messages print symbol keys as `[Symbol.iterator]`, qjs
+  as `Symbol.iterator` (`conv::describe_key` in `nullish_base`); then un-ignore
+  `compiler::tests::end_to_end_iteration_messages`.
+- Un-ignore `compiler::tests::end_to_end_iteration_rt` when 0030's Array Iterator leaf
+  intrinsics land.
+- Empty handler regions (an expression-head for-of with an empty body) are harmless
+  but could be dropped in resolve.
 
 ## Result
+- Part 1 (beb2e53): `builtins/iter.ts` (`%GetIterator`, `%IteratorClose`,
+  `%IteratorCloseThrow`, Array.prototype values/keys/entries/@@iterator,
+  `%ArrayIteratorPrototype%.next`, `%IteratorPrototype%[Symbol.iterator]`), the Array
+  Iterator leaf declarations (implemented by 0030), `%Name%` install targets in bgen.
+- Part 2: for-of and for-in in the compiler with per-iteration bindings, labels and the
+  full close protocol (D1292). Works with any iterable that is not an array today;
+  arrays (and spread through %GetIterator) need 0030's leaves.
+- Un-ignore when their dependencies land: `compiler::tests::end_to_end_iteration_rt`
+  (0030 Array Iterator leaves), `compiler::tests::end_to_end_iteration_messages`
+  (symbol-key messages).
+- Known gaps: destructuring heads, `for await`, no array fast path.
