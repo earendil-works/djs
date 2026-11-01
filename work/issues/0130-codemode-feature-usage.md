@@ -1,7 +1,7 @@
 # 0130: Which JS features does real codemode use? (research: what could be cut)
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0130-feature-usage
 depends-on: 0118, 0121 (harvester)
 guide: -
