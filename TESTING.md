@@ -213,7 +213,16 @@ $D --ratchet                         # exit 1 on failures not in expected-failur
 $D --update-ratchet                  # rewrite tests/corpus/expected-failures.txt
 
 scripts/difftest-import-dquickts.py  # re-split the dquickts tests (then --update dquickts)
+
+$D --engine djs --clusters           # djs in-process; failures grouped by error
+$D --engine djs --ratchet --suspend-every 97 --gc-stress   # what the gate runs
+$D --engine djs --update-ratchet     # after fixing cases: rewrite expected-failures.txt
 ```
+
+With `--engine djs` the codemode globals are host functions with the prelude's formatting
+until djs can run the prelude itself (D1160). `--suspend-every N` and `--gc-stress` run
+every case a second (third) time; a transcript that differs from the plain djs run is a
+hard failure, separate from the oracle comparison and the ratchet (D1161).
 
 `--update` refuses to record timeouts and crashes. Every case must pass with qjs: it is
 the oracle, so a failure there means the case or the runner is wrong. The importer

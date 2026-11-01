@@ -851,3 +851,31 @@ patterns. `super` inside methods stays "not supported yet" until classes add hom
 objects (P1-7). `delete a?.b` deletes the chain's last reference and yields `true` when
 the chain short-circuits. Spread arguments build an array (`array_from k`, then
 `array_spread`/`array_push`) for `call_spread`/`construct_spread`.
+
+## D1160: djs in difftest provides the codemode globals natively for now
+date: 2026-11-01 · by: infra · issue: 0016
+djs cannot run `tests/corpus/prelude.js` yet (it needs JSON, Promise, Map,
+Object.freeze, classes, ...). Splitting the prelude would be churn that disappears once the
+builtins exist, so djs-difftest's djs engine defines `console.*`, `text`, `exit`,
+`store`, `load`, `tools` (`echo`, `fail`) and `ALL_TOOLS` as host functions that follow
+the prelude's formatting rules exactly (pi's `format`, `outputText`, the return value
+and the uncaught error; not `Vm::display`, which prints `-0`, `NaN` and `function`
+differently). A test runs cases djs can already run on both engines and requires
+identical transcripts. Known differences until djs has promises: `tools.*` return their
+result directly instead of a promise, and `tools.fail` throws at the call. Values that
+need JSON.stringify's slow path (toJSON, getters) are shown as visible
+`<djs: ...>` markers. Once djs runs the prelude, the engine switches to it and this
+glue goes away.
+
+## D1161: Stress variants in difftest and the gate
+date: 2026-11-01 · by: infra · issue: 0016
+`djs-difftest --engine djs --suspend-every N` (continue every N fuel in a VM restored
+from the heap image) and `--gc-stress` (collect at every safepoint) run each case again
+next to the plain djs run. A transcript that differs from the plain run is a hard
+failure, independent of `.expected` and the ratchet. The gate runs `--engine djs
+--ratchet --suspend-every 97 --gc-stress` in a debug build: 0.27 s today. The cost grows
+with fuel/N × heap size and with live objects × safepoints, so N (and possibly a subset for
+GC stress) may need to change as more cases pass. Out-of-process engines get no stress
+variants. Ratchet reasons name the uncaught error (`throws ReferenceError: ...`) when
+the engine threw one the expectation does not contain; `--clusters` groups failures by
+the same key.
