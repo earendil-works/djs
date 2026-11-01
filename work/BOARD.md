@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0094 | Baseline wasm memory of a VM (3.9 vs 1.6 MiB) | num | .worktrees/num |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
-| 0095 | Docs coherence pass + project README | infra | .worktrees/infra |
+| 0097 | Finish the later group (immutable ArrayBuffer, inventory) | infra | .worktrees/infra |
 | 0096 | Compiler structural speedups (0092 follow-ups) | lexer | .worktrees/lexer |
 | 0083 | Shapes: parts 1-2 merged (641984c5, D1831); part 3 (addition caches, proto caches) next | heap | .worktrees/heap |
 | 0093 | Run-loop state in locals + compact call protocol (design first) | perf | .worktrees/perf |
@@ -74,6 +74,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0095 | Docs coherence + README | 7a4780bb (agent infra; README, ARCH reviewed, decisions-index) |
 | 0091 | dense leaves -> @fast, fromCharCode/URI | c62bcc01 (agent infra; arrays/strings now ahead of quickjs-wasi in wasm instr; D1910) |
 | 0090 | Natives retry, resizable TA, JSON slow path | dee4dc9b (agent infra; JSON with a Date 18.1G -> 1.2G wasm instr) |
 | 0080 | for-of/iteration fast paths + natives wave 2 | fd5a6d1 (agent infra; for-of 5,433 -> 738 instr/elem) |

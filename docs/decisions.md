@@ -4138,3 +4138,9 @@ kind in bits 24..30 of word 0: 0 own (shape mode), 1..62 prototype depth, 63 add
   for shape-mode objects without a values block. Proxies are created as dictionaries.
 - The hit checks are `ic::cached_get`/`cached_put` (plus `slot_at`), shared by every
   fast path, including 0093's tier-0 loop.
+
+## D017: Note on duplicated decision id D1783
+date: 2026-11-01 · by: coordinator · issue: 0095
+docs/decisions-index.md (0095) found that D1783 appears twice in this log, under two
+titles (from parallel branches). Both entries stand. References to "D1783" mean the entry
+whose title matches the context; docs/decisions-index.md lists both.
