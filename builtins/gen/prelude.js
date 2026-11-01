@@ -75,6 +75,10 @@ function ArrayPrototypeIndexOf(searchElement, fromIndex) {
       n = 0;
     }
   }
+  const found = %ArraySearchDense(o, searchElement, n, len, 0);
+  if (found !== -2) {
+    return found;
+  }
   for (let k = n; k < len; k++) {
     if (%HasProperty(o, k)) {
       if (%Get(o, k) === searchElement) {
@@ -85,13 +89,17 @@ function ArrayPrototypeIndexOf(searchElement, fromIndex) {
   return -1;
 }
 
-// builtins/array.ts:107 Array.prototype.join
+// builtins/array.ts:111 Array.prototype.join
 function ArrayPrototypeJoin(separator) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
   let sep = ",";
   if (separator !== undefined) {
     sep = ToString(separator);
+  }
+  const dense = %ArrayJoinDense(o, len, sep);
+  if (dense !== undefined) {
+    return %AsStr(dense);
   }
   let r = "";
   for (let k = 0; k < len; k++) {
@@ -106,7 +114,7 @@ function ArrayPrototypeJoin(separator) {
   return r;
 }
 
-// builtins/array.ts:128
+// builtins/array.ts:136
 function SameValueZero(x, y) {
   if (%IsNumber(x) && %IsNumber(y)) {
     const a = %AsNumber(x);
@@ -116,7 +124,7 @@ function SameValueZero(x, y) {
   return x === y;
 }
 
-// builtins/array.ts:143 Array.prototype.includes
+// builtins/array.ts:151 Array.prototype.includes
 function ArrayPrototypeIncludes(searchElement, fromIndex) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -130,6 +138,10 @@ function ArrayPrototypeIncludes(searchElement, fromIndex) {
       n = 0;
     }
   }
+  const found = %ArraySearchDense(o, searchElement, n, len, 2);
+  if (found !== -2) {
+    return found !== -1;
+  }
   for (let k = n; k < len; k++) {
     if (SameValueZero(%Get(o, k), searchElement)) {
       return true;
@@ -138,7 +150,7 @@ function ArrayPrototypeIncludes(searchElement, fromIndex) {
   return false;
 }
 
-// builtins/array.ts:169 constructor Array
+// builtins/array.ts:181 constructor Array
 function ArrayConstructor(...values) {
   let a = values;
   if (LengthOfArrayLike(values) === 1) {
@@ -160,18 +172,24 @@ function ArrayConstructor(...values) {
   return a;
 }
 
-// builtins/array.ts:196 Array.isArray
+// builtins/array.ts:208 Array.isArray
 function ArrayIsArray(arg) {
   return %IsArray(arg);
 }
 
-// builtins/array.ts:206 Array.prototype.push
+// builtins/array.ts:218 Array.prototype.push
 function ArrayPrototypePush(...items) {
   const o = %ToObject(this);
   let len = LengthOfArrayLike(o);
   const argCount = LengthOfArrayLike(items);
   if (len + argCount > 9007199254740991) {
     throw %NewTypeError("Array loo long");
+  }
+  if (argCount === 1) {
+    const pushed = %ArrayPushDense(o, %Get(items, 0));
+    if (pushed >= 0) {
+      return pushed;
+    }
   }
   for (let i = 0; i < argCount; i++) {
     %Set(o, len, %Get(items, i));
@@ -181,7 +199,7 @@ function ArrayPrototypePush(...items) {
   return len;
 }
 
-// builtins/array.ts:227
+// builtins/array.ts:245
 function RelativeIndex(v, len, dflt) {
   if (v === undefined) {
     return dflt;
@@ -194,7 +212,7 @@ function RelativeIndex(v, len, dflt) {
   return rel < len ? rel : len;
 }
 
-// builtins/array.ts:240
+// builtins/array.ts:258
 function RequireCallable(f) {
   if (!%IsCallable(f)) {
     throw %NewTypeError("not a function");
@@ -202,14 +220,14 @@ function RequireCallable(f) {
   return %AsFn(f);
 }
 
-// builtins/array.ts:248
+// builtins/array.ts:266
 function CheckLength(len) {
   if (len > 9007199254740991) {
     throw %NewTypeError("Array loo long");
   }
 }
 
-// builtins/array.ts:255
+// builtins/array.ts:273
 function ArrayCreateChecked(len) {
   if (len > 4294967295) {
     throw %NewRangeError("invalid array length");
@@ -217,7 +235,7 @@ function ArrayCreateChecked(len) {
   return %ArrayCreate(len);
 }
 
-// builtins/array.ts:268 Array.of
+// builtins/array.ts:286 Array.of
 function ArrayOf(...items) {
   const len = LengthOfArrayLike(items);
   const a = %IsConstructor(this) ? %Construct(this, len) : %ArrayCreate(len);
@@ -228,7 +246,7 @@ function ArrayOf(...items) {
   return a;
 }
 
-// builtins/array.ts:282 Array.from
+// builtins/array.ts:300 Array.from
 function ArrayFrom(items, mapfn, thisArg) {
   const mapping = mapfn !== undefined;
   if (mapping && !%IsCallable(mapfn)) {
@@ -256,12 +274,12 @@ function ArrayFrom(items, mapfn, thisArg) {
   return a;
 }
 
-// builtins/array.ts:318 get Array[Symbol.species]
+// builtins/array.ts:336 get Array[Symbol.species]
 function ArraySpecies() {
   return this;
 }
 
-// builtins/array.ts:328 Array.prototype.at
+// builtins/array.ts:346 Array.prototype.at
 function ArrayPrototypeAt(index) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -273,7 +291,7 @@ function ArrayPrototypeAt(index) {
   return %Get(o, k);
 }
 
-// builtins/array.ts:343 Array.prototype.lastIndexOf
+// builtins/array.ts:361 Array.prototype.lastIndexOf
 function ArrayPrototypeLastIndexOf(searchElement, ...rest) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -293,6 +311,10 @@ function ArrayPrototypeLastIndexOf(searchElement, ...rest) {
   } else {
     k = len + n;
   }
+  const found = %ArraySearchDense(o, searchElement, k, len, 1);
+  if (found !== -2) {
+    return found;
+  }
   for (; k >= 0; k--) {
     if (%HasProperty(o, k)) {
       if (%Get(o, k) === searchElement) {
@@ -303,7 +325,7 @@ function ArrayPrototypeLastIndexOf(searchElement, ...rest) {
   return -1;
 }
 
-// builtins/array.ts:378 %FindViaPredicate
+// builtins/array.ts:400 %FindViaPredicate
 function FindViaPredicate(o, len, fromEnd, predicate, thisArg, wantIndex) {
   RequireCallable(predicate);
   for (let i = 0; i < len; i++) {
@@ -319,31 +341,31 @@ function FindViaPredicate(o, len, fromEnd, predicate, thisArg, wantIndex) {
   return undefined;
 }
 
-// builtins/array.ts:398 Array.prototype.find
+// builtins/array.ts:420 Array.prototype.find
 function ArrayPrototypeFind(predicate, thisArg) {
   const o = %ToObject(this);
   return FindViaPredicate(o, LengthOfArrayLike(o), false, predicate, thisArg, false);
 }
 
-// builtins/array.ts:408 Array.prototype.findIndex
+// builtins/array.ts:430 Array.prototype.findIndex
 function ArrayPrototypeFindIndex(predicate, thisArg) {
   const o = %ToObject(this);
   return FindViaPredicate(o, LengthOfArrayLike(o), false, predicate, thisArg, true);
 }
 
-// builtins/array.ts:417 Array.prototype.findLast
+// builtins/array.ts:439 Array.prototype.findLast
 function ArrayPrototypeFindLast(predicate, thisArg) {
   const o = %ToObject(this);
   return FindViaPredicate(o, LengthOfArrayLike(o), true, predicate, thisArg, false);
 }
 
-// builtins/array.ts:426 Array.prototype.findLastIndex
+// builtins/array.ts:448 Array.prototype.findLastIndex
 function ArrayPrototypeFindLastIndex(predicate, thisArg) {
   const o = %ToObject(this);
   return FindViaPredicate(o, LengthOfArrayLike(o), true, predicate, thisArg, true);
 }
 
-// builtins/array.ts:436 %EveryOrSome
+// builtins/array.ts:458 %EveryOrSome
 function EveryOrSome(o, callbackfn, thisArg, wantAll) {
   const len = LengthOfArrayLike(o);
   RequireCallable(callbackfn);
@@ -358,17 +380,17 @@ function EveryOrSome(o, callbackfn, thisArg, wantAll) {
   return wantAll;
 }
 
-// builtins/array.ts:455 Array.prototype.every
+// builtins/array.ts:477 Array.prototype.every
 function ArrayPrototypeEvery(callbackfn, thisArg) {
   return EveryOrSome(%ToObject(this), callbackfn, thisArg, true);
 }
 
-// builtins/array.ts:464 Array.prototype.some
+// builtins/array.ts:486 Array.prototype.some
 function ArrayPrototypeSome(callbackfn, thisArg) {
   return EveryOrSome(%ToObject(this), callbackfn, thisArg, false);
 }
 
-// builtins/array.ts:473 Array.prototype.filter
+// builtins/array.ts:495 Array.prototype.filter
 function ArrayPrototypeFilter(callbackfn, thisArg) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -387,7 +409,7 @@ function ArrayPrototypeFilter(callbackfn, thisArg) {
   return a;
 }
 
-// builtins/array.ts:496 %Reduce
+// builtins/array.ts:518 %Reduce
 function Reduce(o, callbackfn, rest, fromEnd) {
   const len = LengthOfArrayLike(o);
   RequireCallable(callbackfn);
@@ -418,17 +440,17 @@ function Reduce(o, callbackfn, rest, fromEnd) {
   return accumulator;
 }
 
-// builtins/array.ts:532 Array.prototype.reduce
+// builtins/array.ts:554 Array.prototype.reduce
 function ArrayPrototypeReduce(callbackfn, ...rest) {
   return Reduce(%ToObject(this), callbackfn, rest, false);
 }
 
-// builtins/array.ts:542 Array.prototype.reduceRight
+// builtins/array.ts:564 Array.prototype.reduceRight
 function ArrayPrototypeReduceRight(callbackfn, ...rest) {
   return Reduce(%ToObject(this), callbackfn, rest, true);
 }
 
-// builtins/array.ts:549
+// builtins/array.ts:571
 function IsConcatSpreadable(o) {
   if (!%IsObject(o)) {
     return false;
@@ -440,7 +462,7 @@ function IsConcatSpreadable(o) {
   return %IsArray(o);
 }
 
-// builtins/array.ts:565 Array.prototype.concat
+// builtins/array.ts:587 Array.prototype.concat
 function ArrayPrototypeConcat(...items) {
   const o = %ToObject(this);
   const a = ArraySpeciesCreate(o, 0);
@@ -468,7 +490,7 @@ function ArrayPrototypeConcat(...items) {
   return a;
 }
 
-// builtins/array.ts:597 Array.prototype.slice
+// builtins/array.ts:619 Array.prototype.slice
 function ArrayPrototypeSlice(start, end) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -476,6 +498,10 @@ function ArrayPrototypeSlice(start, end) {
   const fin = RelativeIndex(end, len, len);
   const count = fin > k ? fin - k : 0;
   const a = ArraySpeciesCreate(o, count);
+  if (%ArraySliceDense(o, k, fin, a)) {
+    %Set(a, "length", count);
+    return a;
+  }
   let n = 0;
   for (let i = k; i < fin; i++) {
     if (%HasProperty(o, i)) {
@@ -487,7 +513,7 @@ function ArrayPrototypeSlice(start, end) {
   return a;
 }
 
-// builtins/array.ts:621 Array.prototype.splice
+// builtins/array.ts:647 Array.prototype.splice
 function ArrayPrototypeSplice(...args) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -521,7 +547,7 @@ function ArrayPrototypeSplice(...args) {
   return a;
 }
 
-// builtins/array.ts:659
+// builtins/array.ts:685
 function MoveElements(o, len, start, deleteCount, itemCount) {
   if (deleteCount !== itemCount && %ArraySpliceDense(o, start, deleteCount, itemCount)) {
     return;
@@ -552,7 +578,7 @@ function MoveElements(o, len, start, deleteCount, itemCount) {
   }
 }
 
-// builtins/array.ts:694 Array.prototype.copyWithin
+// builtins/array.ts:720 Array.prototype.copyWithin
 function ArrayPrototypeCopyWithin(target, start, end) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -579,7 +605,7 @@ function ArrayPrototypeCopyWithin(target, start, end) {
   return o;
 }
 
-// builtins/array.ts:724 Array.prototype.fill
+// builtins/array.ts:750 Array.prototype.fill
 function ArrayPrototypeFill(value, start, end) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -591,7 +617,7 @@ function ArrayPrototypeFill(value, start, end) {
   return o;
 }
 
-// builtins/array.ts:739 Array.prototype.reverse
+// builtins/array.ts:765 Array.prototype.reverse
 function ArrayPrototypeReverse() {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -622,9 +648,12 @@ function ArrayPrototypeReverse() {
   return o;
 }
 
-// builtins/array.ts:774 Array.prototype.pop
+// builtins/array.ts:800 Array.prototype.pop
 function ArrayPrototypePop() {
   const o = %ToObject(this);
+  if (%ArrayCanPopDense(o)) {
+    return %ArrayPopDense(o);
+  }
   const len = LengthOfArrayLike(o);
   if (len === 0) {
     %Set(o, "length", 0);
@@ -637,7 +666,7 @@ function ArrayPrototypePop() {
   return element;
 }
 
-// builtins/array.ts:792 Array.prototype.shift
+// builtins/array.ts:821 Array.prototype.shift
 function ArrayPrototypeShift() {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -651,7 +680,7 @@ function ArrayPrototypeShift() {
   return first;
 }
 
-// builtins/array.ts:810 Array.prototype.unshift
+// builtins/array.ts:839 Array.prototype.unshift
 function ArrayPrototypeUnshift(...items) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -667,7 +696,7 @@ function ArrayPrototypeUnshift(...items) {
   return len + argCount;
 }
 
-// builtins/array.ts:826
+// builtins/array.ts:855
 function FlattenIntoArray(target, source, sourceLen, start, depth, mapper, thisArg) {
   let targetIndex = start;
   for (let sourceIndex = 0; sourceIndex < sourceLen; sourceIndex++) {
@@ -689,7 +718,7 @@ function FlattenIntoArray(target, source, sourceLen, start, depth, mapper, thisA
   return targetIndex;
 }
 
-// builtins/array.ts:851 Array.prototype.flat
+// builtins/array.ts:880 Array.prototype.flat
 function ArrayPrototypeFlat(depth) {
   const o = %ToObject(this);
   const sourceLen = LengthOfArrayLike(o);
@@ -705,7 +734,7 @@ function ArrayPrototypeFlat(depth) {
   return a;
 }
 
-// builtins/array.ts:870 Array.prototype.flatMap
+// builtins/array.ts:899 Array.prototype.flatMap
 function ArrayPrototypeFlatMap(mapperFunction, thisArg) {
   const o = %ToObject(this);
   const sourceLen = LengthOfArrayLike(o);
@@ -715,7 +744,7 @@ function ArrayPrototypeFlatMap(mapperFunction, thisArg) {
   return a;
 }
 
-// builtins/array.ts:887 %SortList
+// builtins/array.ts:916 %SortList
 function SortList(list, n, comparefn) {
   if (comparefn === undefined && %SortPrimitives(list)) {
     return;
@@ -776,7 +805,7 @@ function SortList(list, n, comparefn) {
   }
 }
 
-// builtins/array.ts:949
+// builtins/array.ts:978
 function SortCompareDefined(x, y, comparefn) {
   if (comparefn !== undefined) {
     const r = %Call(comparefn, undefined, x, y);
@@ -787,7 +816,7 @@ function SortCompareDefined(x, y, comparefn) {
   return %CompareStrings(xs, ToString(y));
 }
 
-// builtins/array.ts:964 %CollectPresent
+// builtins/array.ts:993 %CollectPresent
 function CollectPresent(o, len, skipHoles) {
   const items = %ArrayCreate(0);
   let n = 0;
@@ -800,7 +829,7 @@ function CollectPresent(o, len, skipHoles) {
   return items;
 }
 
-// builtins/array.ts:981 Array.prototype.sort
+// builtins/array.ts:1010 Array.prototype.sort
 function ArrayPrototypeSort(comparefn) {
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
@@ -819,7 +848,7 @@ function ArrayPrototypeSort(comparefn) {
   return o;
 }
 
-// builtins/array.ts:1005 Array.prototype.toSorted
+// builtins/array.ts:1034 Array.prototype.toSorted
 function ArrayPrototypeToSorted(comparefn) {
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
@@ -832,7 +861,7 @@ function ArrayPrototypeToSorted(comparefn) {
   return items;
 }
 
-// builtins/array.ts:1023 Array.prototype.toReversed
+// builtins/array.ts:1052 Array.prototype.toReversed
 function ArrayPrototypeToReversed() {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -843,7 +872,7 @@ function ArrayPrototypeToReversed() {
   return a;
 }
 
-// builtins/array.ts:1038 Array.prototype.toSpliced
+// builtins/array.ts:1067 Array.prototype.toSpliced
 function ArrayPrototypeToSpliced(...args) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -878,7 +907,7 @@ function ArrayPrototypeToSpliced(...args) {
   return a;
 }
 
-// builtins/array.ts:1076 Array.prototype.with
+// builtins/array.ts:1105 Array.prototype.with
 function ArrayPrototypeWith(index, value) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -894,7 +923,7 @@ function ArrayPrototypeWith(index, value) {
   return a;
 }
 
-// builtins/array.ts:1098 Array.prototype.toString %TypedArray%.prototype.toString
+// builtins/array.ts:1127 Array.prototype.toString %TypedArray%.prototype.toString
 function ArrayPrototypeToString() {
   const array = %ToObject(this);
   const func = %Get(array, "join");
@@ -904,7 +933,7 @@ function ArrayPrototypeToString() {
   return ObjectToString(array);
 }
 
-// builtins/array.ts:1111 Array.prototype.toLocaleString
+// builtins/array.ts:1140 Array.prototype.toLocaleString
 function ArrayPrototypeToLocaleString() {
   const array = %ToObject(this);
   const len = LengthOfArrayLike(array);
@@ -921,7 +950,7 @@ function ArrayPrototypeToLocaleString() {
   return r;
 }
 
-// builtins/array.ts:1132 value Array.prototype[Symbol.unscopables]
+// builtins/array.ts:1161 value Array.prototype[Symbol.unscopables]
 function ArrayPrototypeUnscopables() {
   const u = %ObjectCreate(null);
   %CreateDataPropertyOrThrow(u, "at", true);
@@ -943,7 +972,7 @@ function ArrayPrototypeUnscopables() {
   return u;
 }
 
-// builtins/array.ts:1160 %ArraySetLength
+// builtins/array.ts:1189 %ArraySetLength
 function ArraySetLength(a, v, strict) {
   const newLen = ToNumber(v);
   const numberLen = ToNumber(v);
@@ -1616,7 +1645,7 @@ function ToPropertyKey(v) {
   return %ToStringPrimitive(key);
 }
 
-// builtins/conversion.ts:117
+// builtins/conversion.ts:119 %GetPrototypeFromConstructor
 function GetPrototypeFromConstructor(newTarget, fallback) {
   if (newTarget === undefined) {
     return %RealmIntrinsic(fallback);
@@ -3753,34 +3782,38 @@ function IteratorRest(iterator, next) {
   const arr = %ArrayCreate(0);
   let n = 0;
   while (true) {
-    const result = %Call(next, iterator);
-    if (!%IsObject(result)) {
-      throw %NewTypeError("iterator must return an object");
+    if (%IteratorFastReady(iterator, next)) {
+      %CreateDataPropertyOrThrow(arr, n, %IteratorFastValue(iterator, next));
+    } else {
+      const result = %Call(next, iterator);
+      if (!%IsObject(result)) {
+        throw %NewTypeError("iterator must return an object");
+      }
+      if (%ToBoolean(%Get(%AsObj(result), "done"))) {
+        return arr;
+      }
+      %CreateDataPropertyOrThrow(arr, n, %Get(%AsObj(result), "value"));
     }
-    if (%ToBoolean(%Get(%AsObj(result), "done"))) {
-      return arr;
-    }
-    %CreateDataPropertyOrThrow(arr, n, %Get(%AsObj(result), "value"));
     n = n + 1;
   }
 }
 
-// builtins/iter.ts:84 Array.prototype.values Array.prototype[Symbol.iterator] %ArrayPrototypeValues
+// builtins/iter.ts:89 Array.prototype.values Array.prototype[Symbol.iterator] %ArrayPrototypeValues
 function ArrayPrototypeValues() {
   return %CreateArrayIterator(%ToObject(this), 1);
 }
 
-// builtins/iter.ts:92 Array.prototype.keys
+// builtins/iter.ts:97 Array.prototype.keys
 function ArrayPrototypeKeys() {
   return %CreateArrayIterator(%ToObject(this), 0);
 }
 
-// builtins/iter.ts:100 Array.prototype.entries
+// builtins/iter.ts:105 Array.prototype.entries
 function ArrayPrototypeEntries() {
   return %CreateArrayIterator(%ToObject(this), 2);
 }
 
-// builtins/iter.ts:110 %ArrayIteratorPrototype%.next %ArrayIteratorPrototypeNext
+// builtins/iter.ts:115 %ArrayIteratorPrototype%.next %ArrayIteratorPrototypeNext
 function ArrayIteratorPrototypeNext() {
   const target = %ArrayIteratorTarget(this);
   if (target === undefined) {
@@ -3805,12 +3838,12 @@ function ArrayIteratorPrototypeNext() {
   return %CreateIterResultObject(%CreateArrayFromPair(index, value), false);
 }
 
-// builtins/iter.ts:140 %IteratorPrototype%[Symbol.iterator]
+// builtins/iter.ts:145 %IteratorPrototype%[Symbol.iterator]
 function IteratorPrototypeIterator() {
   return this;
 }
 
-// builtins/iter.ts:149 value %ArrayIteratorPrototype%[Symbol.toStringTag]
+// builtins/iter.ts:154 value %ArrayIteratorPrototype%[Symbol.toStringTag]
 function ArrayIteratorPrototypeToStringTag() {
   return "Array Iterator";
 }
@@ -3840,16 +3873,20 @@ function IterableToList(items) {
   const list = %ArrayCreate(0);
   let n = 0;
   while (true) {
-    const result = IteratorNextResult(iterator, next);
-    if (%ToBoolean(%Get(result, "done"))) {
-      return list;
+    if (%IteratorFastReady(iterator, next)) {
+      %CreateDataPropertyOrThrow(list, n, %IteratorFastValue(iterator, next));
+    } else {
+      const result = IteratorNextResult(iterator, next);
+      if (%ToBoolean(%Get(result, "done"))) {
+        return list;
+      }
+      %CreateDataPropertyOrThrow(list, n, %Get(result, "value"));
     }
-    %CreateDataPropertyOrThrow(list, n, %Get(result, "value"));
     n++;
   }
 }
 
-// builtins/iterable.ts:45
+// builtins/iterable.ts:50
 function ArrayFromIterator(a, items, method, mapfn, thisArg) {
   const iterator = GetIteratorFromMethod(items, method);
   const next = %Get(iterator, "next");
@@ -3860,12 +3897,17 @@ function ArrayFromIterator(a, items, method, mapfn, thisArg) {
       IteratorCloseThrow(iterator);
       throw error;
     }
-    const result = IteratorNextResult(iterator, next);
-    if (%ToBoolean(%Get(result, "done"))) {
-      %Set(a, "length", k);
-      return a;
+    let nextValue = undefined;
+    if (%IteratorFastReady(iterator, next)) {
+      nextValue = %IteratorFastValue(iterator, next);
+    } else {
+      const result = IteratorNextResult(iterator, next);
+      if (%ToBoolean(%Get(result, "done"))) {
+        %Set(a, "length", k);
+        return a;
+      }
+      nextValue = %Get(result, "value");
     }
-    const nextValue = %Get(result, "value");
     try {
       const mappedValue = mapfn === undefined ? nextValue : %Call(mapfn, thisArg, nextValue, k);
       %CreateDataPropertyOrThrow(a, k, mappedValue);
@@ -3877,17 +3919,22 @@ function ArrayFromIterator(a, items, method, mapfn, thisArg) {
   }
 }
 
-// builtins/iterable.ts:76 Object.fromEntries
+// builtins/iterable.ts:87 Object.fromEntries
 function ObjectFromEntries(iterable) {
   const obj = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
   const iterator = GetIterator(iterable);
   const next = %Get(iterator, "next");
   while (true) {
-    const result = IteratorNextResult(iterator, next);
-    if (%ToBoolean(%Get(result, "done"))) {
-      return obj;
+    let nextItem = undefined;
+    if (%IteratorFastReady(iterator, next)) {
+      nextItem = %IteratorFastValue(iterator, next);
+    } else {
+      const result = IteratorNextResult(iterator, next);
+      if (%ToBoolean(%Get(result, "done"))) {
+        return obj;
+      }
+      nextItem = %Get(result, "value");
     }
-    const nextItem = %Get(result, "value");
     try {
       if (!%IsObject(nextItem)) {
         throw %NewTypeError("not an object");
@@ -3903,7 +3950,7 @@ function ObjectFromEntries(iterable) {
   }
 }
 
-// builtins/iterable.ts:108
+// builtins/iterable.ts:125
 function GroupByProperty(items, callback) {
   if (!%IsCallable(callback)) {
     throw %NewTypeError("not a function");
@@ -3913,11 +3960,16 @@ function GroupByProperty(items, callback) {
   const next = %Get(iterator, "next");
   let k = 0;
   while (true) {
-    const result = IteratorNextResult(iterator, next);
-    if (%ToBoolean(%Get(result, "done"))) {
-      return groups;
+    let value = undefined;
+    if (%IteratorFastReady(iterator, next)) {
+      value = %IteratorFastValue(iterator, next);
+    } else {
+      const result = IteratorNextResult(iterator, next);
+      if (%ToBoolean(%Get(result, "done"))) {
+        return groups;
+      }
+      value = %Get(result, "value");
     }
-    const value = %Get(result, "value");
     let key = undefined;
     try {
       key = ToPropertyKey(%Call(callback, undefined, value, k));
@@ -3936,17 +3988,17 @@ function GroupByProperty(items, callback) {
   }
 }
 
-// builtins/iterable.ts:147 Object.groupBy
+// builtins/iterable.ts:170 Object.groupBy
 function ObjectGroupBy(items, callback) {
   return GroupByProperty(items, callback);
 }
 
-// builtins/iterable.ts:156 String.prototype[Symbol.iterator] %StringPrototypeIterator
+// builtins/iterable.ts:179 String.prototype[Symbol.iterator] %StringPrototypeIterator
 function StringPrototypeIterator() {
   return %CreateStringIterator(ThisToString(this));
 }
 
-// builtins/iterable.ts:165 %StringIteratorPrototype%.next %StringIteratorPrototypeNext
+// builtins/iterable.ts:188 %StringIteratorPrototype%.next %StringIteratorPrototypeNext
 function StringIteratorPrototypeNext() {
   const target = %StringIteratorTarget(this);
   if (target === undefined) {
@@ -3963,7 +4015,7 @@ function StringIteratorPrototypeNext() {
   return %CreateIterResultObject(cp, false);
 }
 
-// builtins/iterable.ts:186 value %StringIteratorPrototype%[Symbol.toStringTag]
+// builtins/iterable.ts:209 value %StringIteratorPrototype%[Symbol.toStringTag]
 function StringIteratorToStringTag() {
   return "String Iterator";
 }
@@ -5287,16 +5339,22 @@ function ThisMap(v) {
   return %AsObj(v);
 }
 
-// builtins/map.ts:15
+// builtins/map.ts:17 %AddEntriesFromIterable
 function AddEntriesFromIterable(target, iterable, adder) {
+  const direct = %IsOriginalCollectionAdder(adder, 0) && %CollectionClass(target) === 0;
   const iterator = GetIterator(iterable);
   const next = %Get(iterator, "next");
   while (true) {
-    const result = IteratorNextResult(iterator, next);
-    if (%ToBoolean(%Get(result, "done"))) {
-      return;
+    let nextItem = undefined;
+    if (%IteratorFastReady(iterator, next)) {
+      nextItem = %IteratorFastValue(iterator, next);
+    } else {
+      const result = IteratorNextResult(iterator, next);
+      if (%ToBoolean(%Get(result, "done"))) {
+        return;
+      }
+      nextItem = %Get(result, "value");
     }
-    const nextItem = %Get(result, "value");
     try {
       if (!%IsObject(nextItem)) {
         throw %NewTypeError("not an object");
@@ -5304,7 +5362,11 @@ function AddEntriesFromIterable(target, iterable, adder) {
       const item = %AsObj(nextItem);
       const k = %Get(item, "0");
       const v = %Get(item, "1");
-      %Call(adder, target, k, v);
+      if (direct) {
+        %CollectionSet(target, k, v);
+      } else {
+        %Call(adder, target, k, v);
+      }
     } catch (e) {
       IteratorCloseThrow(iterator);
       throw e;
@@ -5312,7 +5374,7 @@ function AddEntriesFromIterable(target, iterable, adder) {
   }
 }
 
-// builtins/map.ts:43 constructor Map
+// builtins/map.ts:58 constructor Map
 function MapConstructor(iterable) {
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
@@ -5329,7 +5391,7 @@ function MapConstructor(iterable) {
   return map;
 }
 
-// builtins/map.ts:63 Map.groupBy
+// builtins/map.ts:78 Map.groupBy
 function MapGroupBy(items, callback) {
   if (!%IsCallable(callback)) {
     throw %NewTypeError("not a function");
@@ -5339,11 +5401,16 @@ function MapGroupBy(items, callback) {
   const next = %Get(iterator, "next");
   let k = 0;
   while (true) {
-    const result = IteratorNextResult(iterator, next);
-    if (%ToBoolean(%Get(result, "done"))) {
-      return map;
+    let value = undefined;
+    if (%IteratorFastReady(iterator, next)) {
+      value = %IteratorFastValue(iterator, next);
+    } else {
+      const result = IteratorNextResult(iterator, next);
+      if (%ToBoolean(%Get(result, "done"))) {
+        return map;
+      }
+      value = %Get(result, "value");
     }
-    const value = %Get(result, "value");
     let key = undefined;
     try {
       key = %Call(callback, undefined, value, k);
@@ -5362,27 +5429,27 @@ function MapGroupBy(items, callback) {
   }
 }
 
-// builtins/map.ts:99 get Map[Symbol.species]
+// builtins/map.ts:120 get Map[Symbol.species]
 function MapSpecies() {
   return this;
 }
 
-// builtins/map.ts:107 Map.prototype.clear
+// builtins/map.ts:128 Map.prototype.clear
 function MapPrototypeClear() {
   %CollectionClear(ThisMap(this));
 }
 
-// builtins/map.ts:115 Map.prototype.delete
+// builtins/map.ts:136 Map.prototype.delete
 function MapPrototypeDelete(key) {
   return %CollectionDelete(ThisMap(this), key);
 }
 
-// builtins/map.ts:124 Map.prototype.entries Map.prototype[Symbol.iterator]
+// builtins/map.ts:145 Map.prototype.entries Map.prototype[Symbol.iterator]
 function MapPrototypeEntries() {
   return %CollectionIterator(ThisMap(this), 2);
 }
 
-// builtins/map.ts:132 Map.prototype.forEach
+// builtins/map.ts:154 Map.prototype.forEach
 function MapPrototypeForEach(callbackfn, thisArg) {
   const m = ThisMap(this);
   if (!%IsCallable(callbackfn)) {
@@ -5394,12 +5461,12 @@ function MapPrototypeForEach(callbackfn, thisArg) {
   }
 }
 
-// builtins/map.ts:147 Map.prototype.get
+// builtins/map.ts:169 Map.prototype.get
 function MapPrototypeGet(key) {
   return %CollectionGet(ThisMap(this), key);
 }
 
-// builtins/map.ts:152
+// builtins/map.ts:174
 function CanonicalizeKeyedCollectionKey(key) {
   if (%IsNumber(key) && %AsNumber(key) === 0) {
     return 0;
@@ -5407,7 +5474,7 @@ function CanonicalizeKeyedCollectionKey(key) {
   return key;
 }
 
-// builtins/map.ts:163 Map.prototype.getOrInsert
+// builtins/map.ts:185 Map.prototype.getOrInsert
 function MapPrototypeGetOrInsert(key, value) {
   const m = ThisMap(this);
   if (%CollectionHas(m, key)) {
@@ -5417,7 +5484,7 @@ function MapPrototypeGetOrInsert(key, value) {
   return value;
 }
 
-// builtins/map.ts:177 Map.prototype.getOrInsertComputed
+// builtins/map.ts:199 Map.prototype.getOrInsertComputed
 function MapPrototypeGetOrInsertComputed(key, callbackfn) {
   const m = ThisMap(this);
   if (!%IsCallable(callbackfn)) {
@@ -5432,43 +5499,43 @@ function MapPrototypeGetOrInsertComputed(key, callbackfn) {
   return value;
 }
 
-// builtins/map.ts:195 Map.prototype.has
+// builtins/map.ts:217 Map.prototype.has
 function MapPrototypeHas(key) {
   return %CollectionHas(ThisMap(this), key);
 }
 
-// builtins/map.ts:203 Map.prototype.keys
+// builtins/map.ts:225 Map.prototype.keys
 function MapPrototypeKeys() {
   return %CollectionIterator(ThisMap(this), 0);
 }
 
-// builtins/map.ts:211 Map.prototype.set
+// builtins/map.ts:234 Map.prototype.set %MapPrototypeSet
 function MapPrototypeSet(key, value) {
   %CollectionSet(ThisMap(this), key, value);
   return this;
 }
 
-// builtins/map.ts:220 get Map.prototype.size
+// builtins/map.ts:243 get Map.prototype.size
 function MapPrototypeSize() {
   return %CollectionSize(ThisMap(this));
 }
 
-// builtins/map.ts:228 Map.prototype.values
+// builtins/map.ts:251 Map.prototype.values
 function MapPrototypeValues() {
   return %CollectionIterator(ThisMap(this), 1);
 }
 
-// builtins/map.ts:237 value Map.prototype[Symbol.toStringTag]
+// builtins/map.ts:260 value Map.prototype[Symbol.toStringTag]
 function MapPrototypeToStringTag() {
   return "Map";
 }
 
-// builtins/map.ts:245 %MapIteratorPrototype%.next
+// builtins/map.ts:269 %MapIteratorPrototype%.next %MapIteratorPrototypeNext
 function MapIteratorPrototypeNext() {
   return %CollectionIteratorNext(this, false);
 }
 
-// builtins/map.ts:254 value %MapIteratorPrototype%[Symbol.toStringTag]
+// builtins/map.ts:278 value %MapIteratorPrototype%[Symbol.toStringTag]
 function MapIteratorToStringTag() {
   return "Map Iterator";
 }
@@ -6176,6 +6243,10 @@ function EnumerableOwnProperties(o, kind) {
   if (kind === 0) {
     return %OwnPropertyKeys(o, 3);
   }
+  const plain = %EnumerableOwnDataProperties(o, kind);
+  if (plain !== undefined) {
+    return %AsObj(plain);
+  }
   const keys = %OwnPropertyKeys(o, 0);
   const n = LengthOfArrayLike(keys);
   const result = %ArrayCreate(0);
@@ -6199,22 +6270,22 @@ function EnumerableOwnProperties(o, kind) {
   return result;
 }
 
-// builtins/object.ts:316 Object.keys
+// builtins/object.ts:320 Object.keys
 function ObjectKeys(o) {
   return EnumerableOwnProperties(%ToObject(o), 0);
 }
 
-// builtins/object.ts:324 Object.values
+// builtins/object.ts:328 Object.values
 function ObjectValues(o) {
   return EnumerableOwnProperties(%ToObject(o), 1);
 }
 
-// builtins/object.ts:332 Object.entries
+// builtins/object.ts:336 Object.entries
 function ObjectEntries(o) {
   return EnumerableOwnProperties(%ToObject(o), 2);
 }
 
-// builtins/object.ts:341 Object.assign
+// builtins/object.ts:345 Object.assign
 function ObjectAssign(target, ...sources) {
   const to = %ToObject(target);
   const n = LengthOfArrayLike(sources);
@@ -6236,7 +6307,7 @@ function ObjectAssign(target, ...sources) {
   return to;
 }
 
-// builtins/object.ts:366 Object.freeze
+// builtins/object.ts:370 Object.freeze
 function ObjectFreeze(o) {
   if (!%IsObject(o)) {
     return o;
@@ -6247,7 +6318,7 @@ function ObjectFreeze(o) {
   return o;
 }
 
-// builtins/object.ts:380 Object.seal
+// builtins/object.ts:384 Object.seal
 function ObjectSeal(o) {
   if (!%IsObject(o)) {
     return o;
@@ -6258,7 +6329,7 @@ function ObjectSeal(o) {
   return o;
 }
 
-// builtins/object.ts:394 Object.preventExtensions
+// builtins/object.ts:398 Object.preventExtensions
 function ObjectPreventExtensions(o) {
   if (!%IsObject(o)) {
     return o;
@@ -6269,27 +6340,27 @@ function ObjectPreventExtensions(o) {
   return o;
 }
 
-// builtins/object.ts:408 Object.isFrozen
+// builtins/object.ts:412 Object.isFrozen
 function ObjectIsFrozen(o) {
   return !%IsObject(o) || %TestIntegrityLevel(%AsObj(o), true);
 }
 
-// builtins/object.ts:416 Object.isSealed
+// builtins/object.ts:420 Object.isSealed
 function ObjectIsSealed(o) {
   return !%IsObject(o) || %TestIntegrityLevel(%AsObj(o), false);
 }
 
-// builtins/object.ts:424 Object.isExtensible
+// builtins/object.ts:428 Object.isExtensible
 function ObjectIsExtensible(o) {
   return %IsObject(o) && %IsExtensible(%AsObj(o));
 }
 
-// builtins/object.ts:432 Object.getOwnPropertySymbols
+// builtins/object.ts:436 Object.getOwnPropertySymbols
 function ObjectGetOwnPropertySymbols(o) {
   return %OwnPropertyKeys(%ToObject(o), 1);
 }
 
-// builtins/object.ts:440 Object.getOwnPropertyDescriptors
+// builtins/object.ts:444 Object.getOwnPropertyDescriptors
 function ObjectGetOwnPropertyDescriptors(o) {
   const obj = %ToObject(o);
   const keys = %OwnPropertyKeys(obj, 2);
@@ -6305,23 +6376,23 @@ function ObjectGetOwnPropertyDescriptors(o) {
   return descriptors;
 }
 
-// builtins/object.ts:459 Object.hasOwn
+// builtins/object.ts:463 Object.hasOwn
 function ObjectHasOwn(o, p) {
   const obj = %ToObject(o);
   return %HasOwnProperty(obj, ToPropertyKey(p));
 }
 
-// builtins/object.ts:468 Object.is
+// builtins/object.ts:472 Object.is
 function ObjectIs(value1, value2) {
   return %SameValue(value1, value2);
 }
 
-// builtins/object.ts:476 Object.prototype.toString
+// builtins/object.ts:480 Object.prototype.toString
 function ObjectPrototypeToString() {
   return ObjectToString(this);
 }
 
-// builtins/object.ts:481
+// builtins/object.ts:485
 function ObjectToString(v) {
   if (v === undefined) {
     return "[object Undefined]";
@@ -6338,17 +6409,17 @@ function ObjectToString(v) {
   return "[object " + builtinTag + "]";
 }
 
-// builtins/object.ts:502 Object.prototype.toLocaleString
+// builtins/object.ts:506 Object.prototype.toLocaleString
 function ObjectPrototypeToLocaleString() {
   return %Call(%GetV(this, "toString"), this);
 }
 
-// builtins/object.ts:510 Object.prototype.valueOf
+// builtins/object.ts:514 Object.prototype.valueOf
 function ObjectPrototypeValueOf() {
   return %ToObject(this);
 }
 
-// builtins/object.ts:518 Object.prototype.isPrototypeOf
+// builtins/object.ts:522 Object.prototype.isPrototypeOf
 function ObjectPrototypeIsPrototypeOf(v) {
   if (!%IsObject(v)) {
     return false;
@@ -6753,18 +6824,23 @@ function PerformPromiseCombinator(thisValue, iterable, kind) {
     }
     while (true) {
       iteratorDone = true;
-      const result = IteratorNextResult(it, next);
-      if (%ToBoolean(%Get(result, "done"))) {
-        if (kind !== 3 && DecrementRemaining(remaining) === 0) {
-          if (kind === 2) {
-            RejectCapability(capability, NewAggregateError(values));
-          } else {
-            ResolveCapability(capability, values);
+      let nextValue = undefined;
+      if (%IteratorFastReady(it, next)) {
+        nextValue = %IteratorFastValue(it, next);
+      } else {
+        const result = IteratorNextResult(it, next);
+        if (%ToBoolean(%Get(result, "done"))) {
+          if (kind !== 3 && DecrementRemaining(remaining) === 0) {
+            if (kind === 2) {
+              RejectCapability(capability, NewAggregateError(values));
+            } else {
+              ResolveCapability(capability, values);
+            }
           }
+          return CapabilityPromise(capability);
         }
-        return CapabilityPromise(capability);
+        nextValue = %Get(result, "value");
       }
-      const nextValue = %Get(result, "value");
       iteratorDone = false;
       if (kind !== 3) {
         %CreateDataPropertyOrThrow(values, index, undefined);
@@ -6794,22 +6870,22 @@ function PerformPromiseCombinator(thisValue, iterable, kind) {
   }
 }
 
-// builtins/promise.ts:522 Promise.all
+// builtins/promise.ts:528 Promise.all
 function PromiseAll(iterable) {
   return PerformPromiseCombinator(this, iterable, 0);
 }
 
-// builtins/promise.ts:530 Promise.allSettled
+// builtins/promise.ts:536 Promise.allSettled
 function PromiseAllSettled(iterable) {
   return PerformPromiseCombinator(this, iterable, 1);
 }
 
-// builtins/promise.ts:538 Promise.any
+// builtins/promise.ts:544 Promise.any
 function PromiseAny(iterable) {
   return PerformPromiseCombinator(this, iterable, 2);
 }
 
-// builtins/promise.ts:547 Promise.try
+// builtins/promise.ts:553 Promise.try
 function PromiseTry(callback, ...args) {
   const c = PromiseThisConstructor(this);
   let result = undefined;
@@ -6823,12 +6899,12 @@ function PromiseTry(callback, ...args) {
   return PromiseResolve(c, result);
 }
 
-// builtins/promise.ts:564 Promise.race
+// builtins/promise.ts:570 Promise.race
 function PromiseRace(iterable) {
   return PerformPromiseCombinator(this, iterable, 3);
 }
 
-// builtins/promise.ts:572 Promise.withResolvers
+// builtins/promise.ts:578 Promise.withResolvers
 function PromiseWithResolvers() {
   const capability = NewPromiseCapability(PromiseThisConstructor(this));
   const o = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
@@ -6838,7 +6914,7 @@ function PromiseWithResolvers() {
   return o;
 }
 
-// builtins/promise.ts:587 Promise.prototype.then
+// builtins/promise.ts:593 Promise.prototype.then
 function PromisePrototypeThen(onFulfilled, onRejected) {
   if (!%IsPromise(this)) {
     throw %NewTypeError("Promise object expected");
@@ -6850,12 +6926,12 @@ function PromisePrototypeThen(onFulfilled, onRejected) {
   return CapabilityPromise(capability);
 }
 
-// builtins/promise.ts:602 Promise.prototype.catch
+// builtins/promise.ts:608 Promise.prototype.catch
 function PromisePrototypeCatch(onRejected) {
   return InvokeThen(this, undefined, onRejected);
 }
 
-// builtins/promise.ts:610 Promise.prototype.finally
+// builtins/promise.ts:616 Promise.prototype.finally
 function PromisePrototypeFinally(onFinally) {
   if (!%IsObject(this)) {
     throw %NewTypeError("not an object");
@@ -6870,7 +6946,7 @@ function PromisePrototypeFinally(onFinally) {
   return InvokeThen(this, %NewBuiltinClosure(7, data, 1), %NewBuiltinClosure(8, data, 1));
 }
 
-// builtins/promise.ts:628 %PromiseThenFinally
+// builtins/promise.ts:634 %PromiseThenFinally
 function PromiseThenFinally(value) {
   const data = %AsObj(this);
   const result = %Call(%RecordGet(data, 0), undefined);
@@ -6878,7 +6954,7 @@ function PromiseThenFinally(value) {
   return %Call(%GetV(p, "then"), p, %NewBuiltinClosure(9, value, 0));
 }
 
-// builtins/promise.ts:639 %PromiseCatchFinally
+// builtins/promise.ts:645 %PromiseCatchFinally
 function PromiseCatchFinally(reason) {
   const data = %AsObj(this);
   const result = %Call(%RecordGet(data, 0), undefined);
@@ -6886,22 +6962,22 @@ function PromiseCatchFinally(reason) {
   return %Call(%GetV(p, "then"), p, %NewBuiltinClosure(10, reason, 0));
 }
 
-// builtins/promise.ts:650 %PromiseValueThunk
+// builtins/promise.ts:656 %PromiseValueThunk
 function PromiseValueThunk() {
   return this;
 }
 
-// builtins/promise.ts:658 %PromiseThrower
+// builtins/promise.ts:664 %PromiseThrower
 function PromiseThrower() {
   throw this;
 }
 
-// builtins/promise.ts:667 value Promise.prototype[Symbol.toStringTag]
+// builtins/promise.ts:673 value Promise.prototype[Symbol.toStringTag]
 function PromisePrototypeToStringTag() {
   return "Promise";
 }
 
-// builtins/promise.ts:679 %HostCallSettle
+// builtins/promise.ts:685 %HostCallSettle
 function HostCallSettle(promise, ok, value) {
   if (!%PromiseClaimResolve(promise)) {
     return;
@@ -8376,7 +8452,7 @@ function ThisSet(v) {
   return %AsObj(v);
 }
 
-// builtins/set.ts:15 constructor Set
+// builtins/set.ts:16 constructor Set
 function SetConstructor(iterable) {
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
@@ -8389,14 +8465,24 @@ function SetConstructor(iterable) {
   if (!%IsCallable(adder)) {
     throw %NewTypeError("not a function");
   }
+  const direct = %IsOriginalCollectionAdder(adder, 1);
   const iterator = GetIterator(iterable);
   const next = %Get(iterator, "next");
   while (true) {
-    const result = IteratorNextResult(iterator, next);
-    if (%ToBoolean(%Get(result, "done"))) {
-      return set;
+    let nextValue = undefined;
+    if (%IteratorFastReady(iterator, next)) {
+      nextValue = %IteratorFastValue(iterator, next);
+    } else {
+      const result = IteratorNextResult(iterator, next);
+      if (%ToBoolean(%Get(result, "done"))) {
+        return set;
+      }
+      nextValue = %Get(result, "value");
     }
-    const nextValue = %Get(result, "value");
+    if (direct) {
+      %CollectionSet(set, nextValue, true);
+      continue;
+    }
     try {
       %Call(adder, set, nextValue);
     } catch (e) {
@@ -8406,33 +8492,33 @@ function SetConstructor(iterable) {
   }
 }
 
-// builtins/set.ts:48 get Set[Symbol.species]
+// builtins/set.ts:61 get Set[Symbol.species]
 function SetSpecies() {
   return this;
 }
 
-// builtins/set.ts:56 Set.prototype.add
+// builtins/set.ts:70 Set.prototype.add %SetPrototypeAdd
 function SetPrototypeAdd(value) {
   %CollectionSet(ThisSet(this), value, true);
   return this;
 }
 
-// builtins/set.ts:65 Set.prototype.clear
+// builtins/set.ts:79 Set.prototype.clear
 function SetPrototypeClear() {
   %CollectionClear(ThisSet(this));
 }
 
-// builtins/set.ts:73 Set.prototype.delete
+// builtins/set.ts:87 Set.prototype.delete
 function SetPrototypeDelete(value) {
   return %CollectionDelete(ThisSet(this), value);
 }
 
-// builtins/set.ts:81 Set.prototype.entries
+// builtins/set.ts:95 Set.prototype.entries
 function SetPrototypeEntries() {
   return %CollectionIterator(ThisSet(this), 2);
 }
 
-// builtins/set.ts:89 Set.prototype.forEach
+// builtins/set.ts:104 Set.prototype.forEach
 function SetPrototypeForEach(callbackfn, thisArg) {
   const s = ThisSet(this);
   if (!%IsCallable(callbackfn)) {
@@ -8445,37 +8531,37 @@ function SetPrototypeForEach(callbackfn, thisArg) {
   }
 }
 
-// builtins/set.ts:105 Set.prototype.has
+// builtins/set.ts:120 Set.prototype.has
 function SetPrototypeHas(value) {
   return %CollectionHas(ThisSet(this), value);
 }
 
-// builtins/set.ts:113 get Set.prototype.size
+// builtins/set.ts:128 get Set.prototype.size
 function SetPrototypeSize() {
   return %CollectionSize(ThisSet(this));
 }
 
-// builtins/set.ts:123 Set.prototype.values Set.prototype.keys Set.prototype[Symbol.iterator]
+// builtins/set.ts:138 Set.prototype.values Set.prototype.keys Set.prototype[Symbol.iterator]
 function SetPrototypeValues() {
   return %CollectionIterator(ThisSet(this), 0);
 }
 
-// builtins/set.ts:132 value Set.prototype[Symbol.toStringTag]
+// builtins/set.ts:147 value Set.prototype[Symbol.toStringTag]
 function SetPrototypeToStringTag() {
   return "Set";
 }
 
-// builtins/set.ts:140 %SetIteratorPrototype%.next
+// builtins/set.ts:156 %SetIteratorPrototype%.next %SetIteratorPrototypeNext
 function SetIteratorPrototypeNext() {
   return %CollectionIteratorNext(this, true);
 }
 
-// builtins/set.ts:149 value %SetIteratorPrototype%[Symbol.toStringTag]
+// builtins/set.ts:165 value %SetIteratorPrototype%[Symbol.toStringTag]
 function SetIteratorToStringTag() {
   return "Set Iterator";
 }
 
-// builtins/set.ts:159
+// builtins/set.ts:175
 function GetSetRecord(obj) {
   if (!%IsObject(obj)) {
     throw %NewTypeError("not an object");
@@ -8506,17 +8592,17 @@ function GetSetRecord(obj) {
   return rec;
 }
 
-// builtins/set.ts:190
+// builtins/set.ts:206
 function RecordSize(rec) {
   return %AsNumber(%Get(rec, "size"));
 }
 
-// builtins/set.ts:195
+// builtins/set.ts:211
 function RecordHas(rec, value) {
   return %ToBoolean(%Call(%Get(rec, "has"), %Get(rec, "set"), value));
 }
 
-// builtins/set.ts:200
+// builtins/set.ts:216
 function RecordKeys(rec) {
   const iterator = %Call(%Get(rec, "keys"), %Get(rec, "set"));
   if (!%IsObject(iterator)) {
@@ -8525,7 +8611,7 @@ function RecordKeys(rec) {
   return %AsObj(iterator);
 }
 
-// builtins/set.ts:209
+// builtins/set.ts:225
 function SetCopy(s) {
   const result = %CollectionCreate(1, %RealmIntrinsic("SetPrototype"));
   const it = %CollectionIterator(s, 0);
@@ -8535,7 +8621,7 @@ function SetCopy(s) {
   return result;
 }
 
-// builtins/set.ts:222
+// builtins/set.ts:238
 function KeysNext(iterator, next, out) {
   const result = IteratorNextResult(iterator, next);
   if (%ToBoolean(%Get(result, "done"))) {
@@ -8545,7 +8631,7 @@ function KeysNext(iterator, next, out) {
   return true;
 }
 
-// builtins/set.ts:235 Set.prototype.union
+// builtins/set.ts:251 Set.prototype.union
 function SetPrototypeUnion(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8559,7 +8645,7 @@ function SetPrototypeUnion(other) {
   return result;
 }
 
-// builtins/set.ts:252 Set.prototype.intersection
+// builtins/set.ts:268 Set.prototype.intersection
 function SetPrototypeIntersection(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8586,7 +8672,7 @@ function SetPrototypeIntersection(other) {
   return result;
 }
 
-// builtins/set.ts:282 Set.prototype.difference
+// builtins/set.ts:298 Set.prototype.difference
 function SetPrototypeDifference(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8610,7 +8696,7 @@ function SetPrototypeDifference(other) {
   return result;
 }
 
-// builtins/set.ts:309 Set.prototype.symmetricDifference
+// builtins/set.ts:325 Set.prototype.symmetricDifference
 function SetPrototypeSymmetricDifference(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8629,7 +8715,7 @@ function SetPrototypeSymmetricDifference(other) {
   return result;
 }
 
-// builtins/set.ts:331 Set.prototype.isSubsetOf
+// builtins/set.ts:347 Set.prototype.isSubsetOf
 function SetPrototypeIsSubsetOf(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8645,7 +8731,7 @@ function SetPrototypeIsSubsetOf(other) {
   return true;
 }
 
-// builtins/set.ts:350 Set.prototype.isSupersetOf
+// builtins/set.ts:366 Set.prototype.isSupersetOf
 function SetPrototypeIsSupersetOf(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8664,7 +8750,7 @@ function SetPrototypeIsSupersetOf(other) {
   return true;
 }
 
-// builtins/set.ts:372 Set.prototype.isDisjointFrom
+// builtins/set.ts:388 Set.prototype.isDisjointFrom
 function SetPrototypeIsDisjointFrom(other) {
   const s = ThisSet(this);
   const rec = GetSetRecord(other);
@@ -8695,19 +8781,23 @@ function ArraySpread(arr, src) {
   const next = %Get(iterator, "next");
   let n = LengthOfArrayLike(arr);
   while (true) {
-    const result = %Call(next, iterator);
-    if (!%IsObject(result)) {
-      throw %NewTypeError("iterator must return an object");
+    if (%IteratorFastReady(iterator, next)) {
+      %CreateDataPropertyOrThrow(arr, n, %IteratorFastValue(iterator, next));
+    } else {
+      const result = %Call(next, iterator);
+      if (!%IsObject(result)) {
+        throw %NewTypeError("iterator must return an object");
+      }
+      if (%ToBoolean(%Get(%AsObj(result), "done"))) {
+        return arr;
+      }
+      %CreateDataPropertyOrThrow(arr, n, %Get(%AsObj(result), "value"));
     }
-    if (%ToBoolean(%Get(%AsObj(result), "done"))) {
-      return arr;
-    }
-    %CreateDataPropertyOrThrow(arr, n, %Get(%AsObj(result), "value"));
     n = n + 1;
   }
 }
 
-// builtins/spread.ts:32 %CopyDataProperties
+// builtins/spread.ts:38 %CopyDataProperties
 function CopyDataProperties(target, src) {
   if (src === undefined || src === null) {
     return target;
@@ -8725,7 +8815,7 @@ function CopyDataProperties(target, src) {
   return target;
 }
 
-// builtins/spread.ts:56 %CopyDataPropertiesExcluding
+// builtins/spread.ts:62 %CopyDataPropertiesExcluding
 function CopyDataPropertiesExcluding(src, excluded) {
   const target = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
   const from = %ToObject(src);
@@ -9595,13 +9685,16 @@ function TypedArrayFromBuffer(kind, proto, buffer, byteOffset, length) {
 function TypedArrayFromValues(kind, proto, values) {
   const len = LengthOfArrayLike(values);
   const o = AllocateTypedArrayOfLength(kind, proto, len);
+  if (%TypedArraySetFromDense(o, values)) {
+    return o;
+  }
   for (let k = 0; k < len; k++) {
     %TypedArraySet(o, k, ToElementValue(o, %Get(values, k)));
   }
   return o;
 }
 
-// builtins/typedarray.ts:167
+// builtins/typedarray.ts:170
 function TypedArrayConstruct(newTarget, kind, args) {
   if (newTarget === undefined) {
     throw %NewTypeError("must be called with new");
@@ -9630,6 +9723,9 @@ function TypedArrayConstruct(newTarget, kind, args) {
     return TypedArrayFromBuffer(kind, proto, src, n > 1 ? %Get(args, 1) : undefined, n > 2 ? %Get(args, 2) : undefined);
   }
   const usingIterator = GetMethod(src, %WellKnownSymbol("iterator"));
+  if (%HasOriginalIteration(src) && %IsDenseArray(src) && %AllNumbers(src)) {
+    return TypedArrayFromValues(kind, proto, src);
+  }
   if (usingIterator !== undefined) {
     const list = %ArrayCreate(0);
     const target = ArrayFromIterator(list, src, usingIterator, undefined, undefined);
@@ -9638,7 +9734,7 @@ function TypedArrayConstruct(newTarget, kind, args) {
   return TypedArrayFromValues(kind, proto, src);
 }
 
-// builtins/typedarray.ts:205
+// builtins/typedarray.ts:213
 function BufferInfoOrUndefined(o) {
   try {
     %BufferInfo(o, 0);
@@ -9648,17 +9744,17 @@ function BufferInfoOrUndefined(o) {
   }
 }
 
-// builtins/typedarray.ts:218 constructor %TypedArray%
+// builtins/typedarray.ts:226 constructor %TypedArray%
 function TypedArrayAbstract() {
   throw %NewTypeError("cannot be called");
 }
 
-// builtins/typedarray.ts:226 get %TypedArray%[Symbol.species]
+// builtins/typedarray.ts:234 get %TypedArray%[Symbol.species]
 function TypedArraySpecies() {
   return this;
 }
 
-// builtins/typedarray.ts:231
+// builtins/typedarray.ts:239
 function TypedArrayCreateWithLength(c, length) {
   const created = %Construct(c, length);
   ValidateTypedArray(created);
@@ -9668,7 +9764,7 @@ function TypedArrayCreateWithLength(c, length) {
   return created;
 }
 
-// builtins/typedarray.ts:241
+// builtins/typedarray.ts:249
 function TypedArraySpeciesCreate(exemplar, length) {
   const c = SpeciesConstructor(exemplar, %RealmConstructor(KindName(KindOf(exemplar))));
   const r = TypedArrayCreateWithLength(c, length);
@@ -9678,7 +9774,7 @@ function TypedArraySpeciesCreate(exemplar, length) {
   return r;
 }
 
-// builtins/typedarray.ts:254 %TypedArray%.from
+// builtins/typedarray.ts:262 %TypedArray%.from
 function TypedArrayFrom(source, mapfn, thisArg) {
   if (!%IsConstructor(this)) {
     throw %NewTypeError("not a constructor");
@@ -9704,7 +9800,7 @@ function TypedArrayFrom(source, mapfn, thisArg) {
   return target;
 }
 
-// builtins/typedarray.ts:283 %TypedArray%.of
+// builtins/typedarray.ts:291 %TypedArray%.of
 function TypedArrayOf(...items) {
   if (!%IsConstructor(this)) {
     throw %NewTypeError("not a constructor");
@@ -9717,27 +9813,27 @@ function TypedArrayOf(...items) {
   return target;
 }
 
-// builtins/typedarray.ts:299 get %TypedArray%.prototype.buffer
+// builtins/typedarray.ts:307 get %TypedArray%.prototype.buffer
 function TypedArrayPrototypeBuffer() {
   return %TypedArrayField(this, 1);
 }
 
-// builtins/typedarray.ts:307 get %TypedArray%.prototype.byteLength
+// builtins/typedarray.ts:315 get %TypedArray%.prototype.byteLength
 function TypedArrayPrototypeByteLength() {
   return %TypedArrayField(this, 4);
 }
 
-// builtins/typedarray.ts:315 get %TypedArray%.prototype.byteOffset
+// builtins/typedarray.ts:323 get %TypedArray%.prototype.byteOffset
 function TypedArrayPrototypeByteOffset() {
   return %TypedArrayField(this, 2);
 }
 
-// builtins/typedarray.ts:323 get %TypedArray%.prototype.length
+// builtins/typedarray.ts:331 get %TypedArray%.prototype.length
 function TypedArrayPrototypeLength() {
   return %TypedArrayField(this, 3);
 }
 
-// builtins/typedarray.ts:331 get %TypedArray%.prototype[Symbol.toStringTag]
+// builtins/typedarray.ts:339 get %TypedArray%.prototype[Symbol.toStringTag]
 function TypedArrayPrototypeToStringTag() {
   if (!%IsTypedArray(this)) {
     return undefined;
@@ -9745,7 +9841,7 @@ function TypedArrayPrototypeToStringTag() {
   return KindName(KindOf(%AsObj(this)));
 }
 
-// builtins/typedarray.ts:342 %TypedArray%.prototype.set
+// builtins/typedarray.ts:350 %TypedArray%.prototype.set
 function TypedArrayPrototypeSet(source, offset) {
   %TypedArrayField(this, 0);
   const target = %AsObj(this);
@@ -9783,7 +9879,7 @@ function TypedArrayPrototypeSet(source, offset) {
   }
 }
 
-// builtins/typedarray.ts:384 %TypedArray%.prototype.subarray
+// builtins/typedarray.ts:392 %TypedArray%.prototype.subarray
 function TypedArrayPrototypeSubarray(start, end) {
   %TypedArrayField(this, 0);
   const o = %AsObj(this);
@@ -9810,7 +9906,7 @@ function TypedArrayPrototypeSubarray(start, end) {
   return %AsObj(created);
 }
 
-// builtins/typedarray.ts:414 %TypedArray%.prototype.slice
+// builtins/typedarray.ts:422 %TypedArray%.prototype.slice
 function TypedArrayPrototypeSlice(start, end) {
   const o = ValidateTypedArray(this);
   const srcLength = TALength(o);
@@ -9841,7 +9937,7 @@ function TypedArrayPrototypeSlice(start, end) {
   return a;
 }
 
-// builtins/typedarray.ts:451 %TypedArray%.prototype.fill
+// builtins/typedarray.ts:459 %TypedArray%.prototype.fill
 function TypedArrayPrototypeFill(value, start, end) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -9859,7 +9955,7 @@ function TypedArrayPrototypeFill(value, start, end) {
   return o;
 }
 
-// builtins/typedarray.ts:471
+// builtins/typedarray.ts:479
 function ValidateUint8Array(v) {
   if (!%IsTypedArray(v) || KindOf(%AsObj(v)) !== 1) {
     throw %NewTypeError("not a Uint8Array");
@@ -9867,7 +9963,7 @@ function ValidateUint8Array(v) {
   return %AsObj(v);
 }
 
-// builtins/typedarray.ts:479
+// builtins/typedarray.ts:487
 function GetOptionsObject(options) {
   if (options === undefined) {
     return undefined;
@@ -9878,7 +9974,7 @@ function GetOptionsObject(options) {
   return options;
 }
 
-// builtins/typedarray.ts:490
+// builtins/typedarray.ts:498
 function Base64Alphabet(opts) {
   if (opts === undefined) {
     return false;
@@ -9893,7 +9989,7 @@ function Base64Alphabet(opts) {
   throw %NewTypeError("invalid alphabet");
 }
 
-// builtins/typedarray.ts:505
+// builtins/typedarray.ts:513
 function LastChunkHandling(opts) {
   if (opts === undefined) {
     return 0;
@@ -9911,14 +10007,14 @@ function LastChunkHandling(opts) {
   throw %NewTypeError("invalid lastChunkHandling option");
 }
 
-// builtins/typedarray.ts:523
+// builtins/typedarray.ts:531
 function Uint8ArrayFromRecord(rec) {
   const bytes = %AsObj(%Get(rec, "bytes"));
   const len = BufferLength(bytes);
   return %TypedArrayCreate(%RealmIntrinsic("Uint8ArrayPrototype"), 1, bytes, 0, len);
 }
 
-// builtins/typedarray.ts:533 Uint8Array.fromBase64
+// builtins/typedarray.ts:541 Uint8Array.fromBase64
 function Uint8ArrayFromBase64(string, options) {
   if (!%IsString(string)) {
     throw %NewTypeError("expected string");
@@ -9933,7 +10029,7 @@ function Uint8ArrayFromBase64(string, options) {
   return Uint8ArrayFromRecord(rec);
 }
 
-// builtins/typedarray.ts:551 Uint8Array.fromHex
+// builtins/typedarray.ts:559 Uint8Array.fromHex
 function Uint8ArrayFromHex(string) {
   if (!%IsString(string)) {
     throw %NewTypeError("expected string");
@@ -9945,7 +10041,7 @@ function Uint8ArrayFromHex(string) {
   return Uint8ArrayFromRecord(rec);
 }
 
-// builtins/typedarray.ts:566 Uint8Array.prototype.toBase64
+// builtins/typedarray.ts:574 Uint8Array.prototype.toBase64
 function Uint8ArrayPrototypeToBase64(options) {
   const o = ValidateUint8Array(this);
   const opts = GetOptionsObject(options);
@@ -9957,12 +10053,12 @@ function Uint8ArrayPrototypeToBase64(options) {
   return %Base64Encode(o, url, omit);
 }
 
-// builtins/typedarray.ts:581 Uint8Array.prototype.toHex
+// builtins/typedarray.ts:589 Uint8Array.prototype.toHex
 function Uint8ArrayPrototypeToHex() {
   return %HexEncode(ValidateUint8Array(this));
 }
 
-// builtins/typedarray.ts:586
+// builtins/typedarray.ts:594
 function WriteDecoded(into, rec, isHex) {
   const bytes = %AsObj(%Get(rec, "bytes"));
   const written = BufferLength(bytes);
@@ -9976,7 +10072,7 @@ function WriteDecoded(into, rec, isHex) {
   return result;
 }
 
-// builtins/typedarray.ts:603 Uint8Array.prototype.setFromBase64
+// builtins/typedarray.ts:611 Uint8Array.prototype.setFromBase64
 function Uint8ArrayPrototypeSetFromBase64(string, options) {
   const into = ValidateUint8Array(this);
   if (!%IsString(string)) {
@@ -9992,7 +10088,7 @@ function Uint8ArrayPrototypeSetFromBase64(string, options) {
   return WriteDecoded(into, rec, false);
 }
 
-// builtins/typedarray.ts:622 Uint8Array.prototype.setFromHex
+// builtins/typedarray.ts:630 Uint8Array.prototype.setFromHex
 function Uint8ArrayPrototypeSetFromHex(string) {
   const into = ValidateUint8Array(this);
   if (!%IsString(string)) {
@@ -10005,187 +10101,187 @@ function Uint8ArrayPrototypeSetFromHex(string) {
   return WriteDecoded(into, rec, true);
 }
 
-// builtins/typedarray.ts:640 constructor Int8Array
+// builtins/typedarray.ts:648 constructor Int8Array
 function Int8ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 0, args);
 }
 
-// builtins/typedarray.ts:648 value Int8Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:656 value Int8Array.BYTES_PER_ELEMENT
 function Int8ArrayBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:656 value Int8Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:664 value Int8Array.prototype.BYTES_PER_ELEMENT
 function Int8ArrayPrototypeBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:666 constructor Uint8Array
+// builtins/typedarray.ts:674 constructor Uint8Array
 function Uint8ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 1, args);
 }
 
-// builtins/typedarray.ts:674 value Uint8Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:682 value Uint8Array.BYTES_PER_ELEMENT
 function Uint8ArrayBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:682 value Uint8Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:690 value Uint8Array.prototype.BYTES_PER_ELEMENT
 function Uint8ArrayPrototypeBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:692 constructor Uint8ClampedArray
+// builtins/typedarray.ts:700 constructor Uint8ClampedArray
 function Uint8ClampedArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 2, args);
 }
 
-// builtins/typedarray.ts:700 value Uint8ClampedArray.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:708 value Uint8ClampedArray.BYTES_PER_ELEMENT
 function Uint8ClampedArrayBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:708 value Uint8ClampedArray.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:716 value Uint8ClampedArray.prototype.BYTES_PER_ELEMENT
 function Uint8ClampedArrayPrototypeBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:718 constructor Int16Array
+// builtins/typedarray.ts:726 constructor Int16Array
 function Int16ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 3, args);
 }
 
-// builtins/typedarray.ts:726 value Int16Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:734 value Int16Array.BYTES_PER_ELEMENT
 function Int16ArrayBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:734 value Int16Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:742 value Int16Array.prototype.BYTES_PER_ELEMENT
 function Int16ArrayPrototypeBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:744 constructor Uint16Array
+// builtins/typedarray.ts:752 constructor Uint16Array
 function Uint16ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 4, args);
 }
 
-// builtins/typedarray.ts:752 value Uint16Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:760 value Uint16Array.BYTES_PER_ELEMENT
 function Uint16ArrayBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:760 value Uint16Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:768 value Uint16Array.prototype.BYTES_PER_ELEMENT
 function Uint16ArrayPrototypeBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:770 constructor Int32Array
+// builtins/typedarray.ts:778 constructor Int32Array
 function Int32ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 5, args);
 }
 
-// builtins/typedarray.ts:778 value Int32Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:786 value Int32Array.BYTES_PER_ELEMENT
 function Int32ArrayBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:786 value Int32Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:794 value Int32Array.prototype.BYTES_PER_ELEMENT
 function Int32ArrayPrototypeBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:796 constructor Uint32Array
+// builtins/typedarray.ts:804 constructor Uint32Array
 function Uint32ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 6, args);
 }
 
-// builtins/typedarray.ts:804 value Uint32Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:812 value Uint32Array.BYTES_PER_ELEMENT
 function Uint32ArrayBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:812 value Uint32Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:820 value Uint32Array.prototype.BYTES_PER_ELEMENT
 function Uint32ArrayPrototypeBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:822 constructor Float16Array
+// builtins/typedarray.ts:830 constructor Float16Array
 function Float16ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 7, args);
 }
 
-// builtins/typedarray.ts:830 value Float16Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:838 value Float16Array.BYTES_PER_ELEMENT
 function Float16ArrayBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:838 value Float16Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:846 value Float16Array.prototype.BYTES_PER_ELEMENT
 function Float16ArrayPrototypeBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:848 constructor Float32Array
+// builtins/typedarray.ts:856 constructor Float32Array
 function Float32ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 8, args);
 }
 
-// builtins/typedarray.ts:856 value Float32Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:864 value Float32Array.BYTES_PER_ELEMENT
 function Float32ArrayBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:864 value Float32Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:872 value Float32Array.prototype.BYTES_PER_ELEMENT
 function Float32ArrayPrototypeBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:874 constructor Float64Array
+// builtins/typedarray.ts:882 constructor Float64Array
 function Float64ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 9, args);
 }
 
-// builtins/typedarray.ts:882 value Float64Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:890 value Float64Array.BYTES_PER_ELEMENT
 function Float64ArrayBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:890 value Float64Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:898 value Float64Array.prototype.BYTES_PER_ELEMENT
 function Float64ArrayPrototypeBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:900 constructor BigInt64Array
+// builtins/typedarray.ts:908 constructor BigInt64Array
 function BigInt64ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 10, args);
 }
 
-// builtins/typedarray.ts:908 value BigInt64Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:916 value BigInt64Array.BYTES_PER_ELEMENT
 function BigInt64ArrayBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:916 value BigInt64Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:924 value BigInt64Array.prototype.BYTES_PER_ELEMENT
 function BigInt64ArrayPrototypeBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:926 constructor BigUint64Array
+// builtins/typedarray.ts:934 constructor BigUint64Array
 function BigUint64ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 11, args);
 }
 
-// builtins/typedarray.ts:934 value BigUint64Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:942 value BigUint64Array.BYTES_PER_ELEMENT
 function BigUint64ArrayBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:942 value BigUint64Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:950 value BigUint64Array.prototype.BYTES_PER_ELEMENT
 function BigUint64ArrayPrototypeBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:953 %TypedArray%.prototype.at
+// builtins/typedarray.ts:961 %TypedArray%.prototype.at
 function TypedArrayPrototypeAt(index) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10197,7 +10293,7 @@ function TypedArrayPrototypeAt(index) {
   return %TypedArrayGet(o, k);
 }
 
-// builtins/typedarray.ts:968 %TypedArray%.prototype.copyWithin
+// builtins/typedarray.ts:976 %TypedArray%.prototype.copyWithin
 function TypedArrayPrototypeCopyWithin(target, start, end) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10223,22 +10319,22 @@ function TypedArrayPrototypeCopyWithin(target, start, end) {
   return o;
 }
 
-// builtins/typedarray.ts:998 %TypedArray%.prototype.entries
+// builtins/typedarray.ts:1006 %TypedArray%.prototype.entries
 function TypedArrayPrototypeEntries() {
   return %CreateArrayIterator(ValidateTypedArray(this), 2);
 }
 
-// builtins/typedarray.ts:1006 %TypedArray%.prototype.keys
+// builtins/typedarray.ts:1014 %TypedArray%.prototype.keys
 function TypedArrayPrototypeKeys() {
   return %CreateArrayIterator(ValidateTypedArray(this), 0);
 }
 
-// builtins/typedarray.ts:1015 %TypedArray%.prototype.values %TypedArray%.prototype[Symbol.iterator]
+// builtins/typedarray.ts:1023 %TypedArray%.prototype.values %TypedArray%.prototype[Symbol.iterator]
 function TypedArrayPrototypeValues() {
   return %CreateArrayIterator(ValidateTypedArray(this), 1);
 }
 
-// builtins/typedarray.ts:1020
+// builtins/typedarray.ts:1028
 function TAEveryOrSome(o, callbackfn, thisArg, wantAll) {
   const len = TALength(o);
   RequireCallable(callbackfn);
@@ -10251,17 +10347,17 @@ function TAEveryOrSome(o, callbackfn, thisArg, wantAll) {
   return wantAll;
 }
 
-// builtins/typedarray.ts:1036 %TypedArray%.prototype.every
+// builtins/typedarray.ts:1044 %TypedArray%.prototype.every
 function TypedArrayPrototypeEvery(callbackfn, thisArg) {
   return TAEveryOrSome(ValidateTypedArray(this), callbackfn, thisArg, true);
 }
 
-// builtins/typedarray.ts:1044 %TypedArray%.prototype.some
+// builtins/typedarray.ts:1052 %TypedArray%.prototype.some
 function TypedArrayPrototypeSome(callbackfn, thisArg) {
   return TAEveryOrSome(ValidateTypedArray(this), callbackfn, thisArg, false);
 }
 
-// builtins/typedarray.ts:1052 %TypedArray%.prototype.filter
+// builtins/typedarray.ts:1060 %TypedArray%.prototype.filter
 function TypedArrayPrototypeFilter(callbackfn, thisArg) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10282,7 +10378,7 @@ function TypedArrayPrototypeFilter(callbackfn, thisArg) {
   return a;
 }
 
-// builtins/typedarray.ts:1073
+// builtins/typedarray.ts:1081
 function TAFind(thisValue, predicate, thisArg, fromEnd, wantIndex) {
   const o = ValidateTypedArray(thisValue);
   const len = TALength(o);
@@ -10300,27 +10396,27 @@ function TAFind(thisValue, predicate, thisArg, fromEnd, wantIndex) {
   return undefined;
 }
 
-// builtins/typedarray.ts:1094 %TypedArray%.prototype.find
+// builtins/typedarray.ts:1102 %TypedArray%.prototype.find
 function TypedArrayPrototypeFind(predicate, thisArg) {
   return TAFind(this, predicate, thisArg, false, false);
 }
 
-// builtins/typedarray.ts:1102 %TypedArray%.prototype.findIndex
+// builtins/typedarray.ts:1110 %TypedArray%.prototype.findIndex
 function TypedArrayPrototypeFindIndex(predicate, thisArg) {
   return TAFind(this, predicate, thisArg, false, true);
 }
 
-// builtins/typedarray.ts:1110 %TypedArray%.prototype.findLast
+// builtins/typedarray.ts:1118 %TypedArray%.prototype.findLast
 function TypedArrayPrototypeFindLast(predicate, thisArg) {
   return TAFind(this, predicate, thisArg, true, false);
 }
 
-// builtins/typedarray.ts:1118 %TypedArray%.prototype.findLastIndex
+// builtins/typedarray.ts:1126 %TypedArray%.prototype.findLastIndex
 function TypedArrayPrototypeFindLastIndex(predicate, thisArg) {
   return TAFind(this, predicate, thisArg, true, true);
 }
 
-// builtins/typedarray.ts:1126 %TypedArray%.prototype.forEach
+// builtins/typedarray.ts:1134 %TypedArray%.prototype.forEach
 function TypedArrayPrototypeForEach(callbackfn, thisArg) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10330,7 +10426,7 @@ function TypedArrayPrototypeForEach(callbackfn, thisArg) {
   }
 }
 
-// builtins/typedarray.ts:1139 %TypedArray%.prototype.includes
+// builtins/typedarray.ts:1147 %TypedArray%.prototype.includes
 function TypedArrayPrototypeIncludes(searchElement, fromIndex) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10355,7 +10451,7 @@ function TypedArrayPrototypeIncludes(searchElement, fromIndex) {
   return false;
 }
 
-// builtins/typedarray.ts:1167 %TypedArray%.prototype.indexOf
+// builtins/typedarray.ts:1175 %TypedArray%.prototype.indexOf
 function TypedArrayPrototypeIndexOf(searchElement, fromIndex) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10381,7 +10477,7 @@ function TypedArrayPrototypeIndexOf(searchElement, fromIndex) {
   return -1;
 }
 
-// builtins/typedarray.ts:1197 %TypedArray%.prototype.lastIndexOf
+// builtins/typedarray.ts:1205 %TypedArray%.prototype.lastIndexOf
 function TypedArrayPrototypeLastIndexOf(searchElement, ...rest) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10405,7 +10501,7 @@ function TypedArrayPrototypeLastIndexOf(searchElement, ...rest) {
   return -1;
 }
 
-// builtins/typedarray.ts:1224 %TypedArray%.prototype.join
+// builtins/typedarray.ts:1232 %TypedArray%.prototype.join
 function TypedArrayPrototypeJoin(separator) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10426,7 +10522,7 @@ function TypedArrayPrototypeJoin(separator) {
   return r;
 }
 
-// builtins/typedarray.ts:1248 %TypedArray%.prototype.map
+// builtins/typedarray.ts:1256 %TypedArray%.prototype.map
 function TypedArrayPrototypeMap(callbackfn, thisArg) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10439,7 +10535,7 @@ function TypedArrayPrototypeMap(callbackfn, thisArg) {
   return a;
 }
 
-// builtins/typedarray.ts:1261
+// builtins/typedarray.ts:1269
 function TAReduce(o, callbackfn, rest, fromEnd) {
   const len = TALength(o);
   RequireCallable(callbackfn);
@@ -10461,17 +10557,17 @@ function TAReduce(o, callbackfn, rest, fromEnd) {
   return accumulator;
 }
 
-// builtins/typedarray.ts:1287 %TypedArray%.prototype.reduce
+// builtins/typedarray.ts:1295 %TypedArray%.prototype.reduce
 function TypedArrayPrototypeReduce(callbackfn, ...rest) {
   return TAReduce(ValidateTypedArray(this), callbackfn, rest, false);
 }
 
-// builtins/typedarray.ts:1296 %TypedArray%.prototype.reduceRight
+// builtins/typedarray.ts:1304 %TypedArray%.prototype.reduceRight
 function TypedArrayPrototypeReduceRight(callbackfn, ...rest) {
   return TAReduce(ValidateTypedArray(this), callbackfn, rest, true);
 }
 
-// builtins/typedarray.ts:1304 %TypedArray%.prototype.reverse
+// builtins/typedarray.ts:1312 %TypedArray%.prototype.reverse
 function TypedArrayPrototypeReverse() {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10485,7 +10581,7 @@ function TypedArrayPrototypeReverse() {
   return o;
 }
 
-// builtins/typedarray.ts:1318
+// builtins/typedarray.ts:1326
 function TASortedList(o, len, comparefn) {
   const list = %ArrayCreate(0);
   for (let k = 0; k < len; k++) {
@@ -10499,7 +10595,7 @@ function TASortedList(o, len, comparefn) {
   return list;
 }
 
-// builtins/typedarray.ts:1335 %TypedArray%.prototype.sort
+// builtins/typedarray.ts:1343 %TypedArray%.prototype.sort
 function TypedArrayPrototypeSort(comparefn) {
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
@@ -10513,7 +10609,7 @@ function TypedArrayPrototypeSort(comparefn) {
   return o;
 }
 
-// builtins/typedarray.ts:1352 %TypedArray%.prototype.toSorted
+// builtins/typedarray.ts:1360 %TypedArray%.prototype.toSorted
 function TypedArrayPrototypeToSorted(comparefn) {
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
@@ -10528,7 +10624,7 @@ function TypedArrayPrototypeToSorted(comparefn) {
   return a;
 }
 
-// builtins/typedarray.ts:1370 %TypedArray%.prototype.toReversed
+// builtins/typedarray.ts:1378 %TypedArray%.prototype.toReversed
 function TypedArrayPrototypeToReversed() {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10539,7 +10635,7 @@ function TypedArrayPrototypeToReversed() {
   return a;
 }
 
-// builtins/typedarray.ts:1384 %TypedArray%.prototype.with
+// builtins/typedarray.ts:1392 %TypedArray%.prototype.with
 function TypedArrayPrototypeWith(index, value) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10556,7 +10652,7 @@ function TypedArrayPrototypeWith(index, value) {
   return a;
 }
 
-// builtins/typedarray.ts:1404 %TypedArray%.prototype.toLocaleString
+// builtins/typedarray.ts:1412 %TypedArray%.prototype.toLocaleString
 function TypedArrayPrototypeToLocaleString() {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10573,7 +10669,7 @@ function TypedArrayPrototypeToLocaleString() {
   return r;
 }
 
-// builtins/typedarray.ts:1421
+// builtins/typedarray.ts:1429
 function IsCanonicalNumericKey(key) {
   if (%IsNumber(key)) {
     return true;
@@ -10584,7 +10680,7 @@ function IsCanonicalNumericKey(key) {
   return key === "-0" || ToString(ToNumber(key)) === key;
 }
 
-// builtins/typedarray.ts:1437
+// builtins/typedarray.ts:1445
 function TASet(o, k, v) {
   %TypedArraySet(o, k, ToElementValue(o, v));
 }
@@ -10734,11 +10830,16 @@ function WeakSetConstructor(iterable) {
   const iterator = GetIterator(iterable);
   const next = %Get(iterator, "next");
   while (true) {
-    const result = IteratorNextResult(iterator, next);
-    if (%ToBoolean(%Get(result, "done"))) {
-      return set;
+    let nextValue = undefined;
+    if (%IteratorFastReady(iterator, next)) {
+      nextValue = %IteratorFastValue(iterator, next);
+    } else {
+      const result = IteratorNextResult(iterator, next);
+      if (%ToBoolean(%Get(result, "done"))) {
+        return set;
+      }
+      nextValue = %Get(result, "value");
     }
-    const nextValue = %Get(result, "value");
     try {
       %Call(adder, set, nextValue);
     } catch (e) {
@@ -10748,7 +10849,7 @@ function WeakSetConstructor(iterable) {
   }
 }
 
-// builtins/weak.ts:165 WeakSet.prototype.add
+// builtins/weak.ts:171 WeakSet.prototype.add
 function WeakSetPrototypeAdd(value) {
   const s = ThisWeakSet(this);
   if (!%CanBeHeldWeakly(value)) {
@@ -10758,19 +10859,19 @@ function WeakSetPrototypeAdd(value) {
   return this;
 }
 
-// builtins/weak.ts:178 WeakSet.prototype.delete
+// builtins/weak.ts:184 WeakSet.prototype.delete
 function WeakSetPrototypeDelete(value) {
   const s = ThisWeakSet(this);
   return %CanBeHeldWeakly(value) && %CollectionDelete(s, value);
 }
 
-// builtins/weak.ts:187 WeakSet.prototype.has
+// builtins/weak.ts:193 WeakSet.prototype.has
 function WeakSetPrototypeHas(value) {
   const s = ThisWeakSet(this);
   return %CanBeHeldWeakly(value) && %CollectionHas(s, value);
 }
 
-// builtins/weak.ts:197 value WeakSet.prototype[Symbol.toStringTag]
+// builtins/weak.ts:203 value WeakSet.prototype[Symbol.toStringTag]
 function WeakSetPrototypeToStringTag() {
   return "WeakSet";
 }
@@ -11601,6 +11702,7 @@ function GlobalAtob(...args) {
 %InstallIntrinsic("ToString", ToString);
 %InstallIntrinsic("LengthOfArrayLike", LengthOfArrayLike);
 %InstallIntrinsic("ToPropertyKey", ToPropertyKey);
+%InstallIntrinsic("GetPrototypeFromConstructor", GetPrototypeFromConstructor);
 %InstallIntrinsic("DecoratorStart", DecoratorStart);
 %InstallIntrinsic("ApplyDecorators", ApplyDecorators);
 %InstallIntrinsic("DecoratorRunInits", DecoratorRunInits);
@@ -11644,6 +11746,9 @@ function GlobalAtob(...args) {
 %InstallIntrinsic("ArrayIteratorPrototypeNext", ArrayIteratorPrototypeNext);
 %InstallIntrinsic("StringPrototypeIterator", StringPrototypeIterator);
 %InstallIntrinsic("StringIteratorPrototypeNext", StringIteratorPrototypeNext);
+%InstallIntrinsic("AddEntriesFromIterable", AddEntriesFromIterable);
+%InstallIntrinsic("MapPrototypeSet", MapPrototypeSet);
+%InstallIntrinsic("MapIteratorPrototypeNext", MapIteratorPrototypeNext);
 %InstallIntrinsic("ResolvePromise", ResolvePromise);
 %InstallIntrinsic("PromiseResolveFunction", PromiseResolveFunction);
 %InstallIntrinsic("PromiseRejectFunction", PromiseRejectFunction);
@@ -11698,6 +11803,8 @@ function GlobalAtob(...args) {
 %InstallIntrinsic("RegExpPrototypeFlags", RegExpPrototypeFlags);
 %InstallIntrinsic("RegExpPrototypeExec", RegExpPrototypeExec);
 %InstallIntrinsic("RegExpPrototypeMatch", RegExpPrototypeMatch);
+%InstallIntrinsic("SetPrototypeAdd", SetPrototypeAdd);
+%InstallIntrinsic("SetIteratorPrototypeNext", SetIteratorPrototypeNext);
 %InstallIntrinsic("ArraySpread", ArraySpread);
 %InstallIntrinsic("CopyDataProperties", CopyDataProperties);
 %InstallIntrinsic("CopyDataPropertiesExcluding", CopyDataPropertiesExcluding);
@@ -11724,15 +11831,21 @@ function GlobalAtob(...args) {
 %MarkNative(CollectPresent, 19);
 %MarkNative(ArrayPrototypeSort, 20);
 %MarkNative(ArrayPrototypeToSorted, 21);
-%MarkNative(GetIterator, 22);
-%MarkNative(ArrayIteratorPrototypeNext, 23);
-%MarkNative(PromiseReactionJob, 24);
-%MarkNative(StringPrototypeAt, 25);
-%MarkNative(StringPrototypeCharAt, 26);
-%MarkNative(StringPrototypeCharCodeAt, 27);
-%MarkNative(StringPrototypeCodePointAt, 28);
-%MarkNative(StringPrototypeIndexOf, 29);
-%MarkNative(StringPrototypeStartsWith, 30);
-%MarkNative(StringPrototypeSlice, 31);
-%MarkNative(StringPrototypeSubstring, 32);
+%MarkNative(GetPrototypeFromConstructor, 22);
+%MarkNative(GetIterator, 23);
+%MarkNative(ArrayIteratorPrototypeNext, 24);
+%MarkNative(AddEntriesFromIterable, 25);
+%MarkNative(MapConstructor, 26);
+%MarkNative(MapPrototypeForEach, 27);
+%MarkNative(PromiseReactionJob, 28);
+%MarkNative(SetConstructor, 29);
+%MarkNative(SetPrototypeForEach, 30);
+%MarkNative(StringPrototypeAt, 31);
+%MarkNative(StringPrototypeCharAt, 32);
+%MarkNative(StringPrototypeCharCodeAt, 33);
+%MarkNative(StringPrototypeCodePointAt, 34);
+%MarkNative(StringPrototypeIndexOf, 35);
+%MarkNative(StringPrototypeStartsWith, 36);
+%MarkNative(StringPrototypeSlice, 37);
+%MarkNative(StringPrototypeSubstring, 38);
 })();
