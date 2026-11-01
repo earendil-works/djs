@@ -873,46 +873,48 @@ impl Exec<'_> {
         Ok(())
     }
 
-    /// The object at a dotted path from the global object. The intrinsic prototypes are
-    /// reachable as `X.prototype` even before their constructors exist.
+    /// The object at a dotted path from the global object. A first segment `%Name%`
+    /// names a realm intrinsic object (`%ArrayIteratorPrototype%`). The intrinsic
+    /// prototypes are reachable as `X.prototype` even before their constructors exist.
     fn resolve_path(&mut self, path: &str) -> Result<Obj, Fault> {
-        let intrinsic_path = match path {
+        let unknown = || {
+            Err(Fault::Error(
+                ErrorKind::InternalError,
+                format!("%InstallMethod: no object at {path}"),
+            ))
+        };
+        let realm_object = |name: &str| match name {
+            "%IteratorPrototype%" => Some(Intrinsic::IteratorProto),
+            "%ArrayIteratorPrototype%" => Some(Intrinsic::ArrayIteratorProto),
             "Object.prototype" => Some(Intrinsic::ObjectProto),
             "Function.prototype" => Some(Intrinsic::FunctionProto),
             "Array.prototype" => Some(Intrinsic::ArrayProto),
             "Error.prototype" => Some(Intrinsic::ErrorProto),
-            "%IteratorPrototype%" => Some(Intrinsic::IteratorProto),
-            "%ArrayIteratorPrototype%" => Some(Intrinsic::ArrayIteratorProto),
             _ => None,
         };
-        // `%Name%` paths name realm intrinsics directly.
-        if path.starts_with('%') {
-            return match intrinsic_path {
-                Some(i) => Ok(intrinsic_obj(self.heap, i)),
-                None => Err(Fault::Error(
-                    ErrorKind::InternalError,
-                    format!("%InstallMethod: unknown intrinsic object {path}"),
-                )),
-            };
-        }
+        let mut parts = path.split('.').peekable();
         let mut o = intrinsic_obj(self.heap, Intrinsic::Global);
-        for part in path.split('.') {
+        if let Some(first) = parts.peek().copied()
+            && first.starts_with('%')
+        {
+            let Some(i) = realm_object(first) else {
+                return unknown();
+            };
+            o = intrinsic_obj(self.heap, i);
+            parts.next();
+        }
+        for part in parts {
             let key = self.heap.atom_str(part)?;
-            match self
+            let next = self
                 .heap
                 .get_own_property(o, key)
                 .and_then(|p| p.value())
-                .and_then(|v| v.as_object())
-            {
-                Some(next) => o = next,
-                None => match intrinsic_path {
+                .and_then(|v| v.as_object());
+            match next {
+                Some(n) => o = n,
+                None => match realm_object(path) {
                     Some(i) => return Ok(intrinsic_obj(self.heap, i)),
-                    None => {
-                        return Err(Fault::Error(
-                            ErrorKind::InternalError,
-                            format!("%InstallMethod: no object at {path}"),
-                        ));
-                    }
+                    None => return unknown(),
                 },
             }
         }
