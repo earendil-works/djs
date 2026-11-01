@@ -129,6 +129,11 @@ pub(super) struct Parser<'a, 'h> {
     /// The next assignment expression is the `b` of `a ? b : c` (TypeScript arrows with
     /// return types, compiler/ts.rs).
     pub after_q: bool,
+    /// TypeScript enums and namespaces (compiler/ts_decl.rs), by id.
+    pub ts_decls: Vec<super::ts_decl::TsDecl>,
+    /// The last statement was a TypeScript declaration without runtime code (for
+    /// type-only namespaces).
+    pub ts_type_only: bool,
 }
 
 /// Erased TypeScript ranges, `start..end` byte offsets.
@@ -208,6 +213,8 @@ impl<'a, 'h> Parser<'a, 'h> {
             spec: 0,
             erased: None,
             after_q: false,
+            ts_decls: Vec::new(),
+            ts_type_only: false,
         };
         p.f.src_end = src.len() as u32;
         if kind == FuncKind::AsyncBody {
@@ -241,7 +248,14 @@ impl<'a, 'h> Parser<'a, 'h> {
             .map(|f| f.ok_or_else(|| super::resolve::internal("unfinished function")))
             .collect::<PResult<Vec<_>>>()?;
         let erased = self.erased.take();
-        let t = super::resolve::finish(self.heap, self.src, self.opts, self.atom_undefined, funcs)?;
+        let t = super::resolve::finish(
+            self.heap,
+            self.src,
+            self.opts,
+            self.atom_undefined,
+            funcs,
+            &self.ts_decls,
+        )?;
         Ok((t, erased))
     }
 
@@ -291,6 +305,24 @@ impl<'a, 'h> Parser<'a, 'h> {
         }
         self.f.children.push(id);
         Ok((self.f.children.len() - 1) as u32)
+    }
+
+    /// Finishes the current function without creating it anywhere (a type-only
+    /// namespace's closure): returns to the parent.
+    pub fn discard_function(&mut self) -> PResult<()> {
+        self.end_async_region();
+        let s = self
+            .stack
+            .pop()
+            .ok_or_else(|| super::resolve::internal("no parent function"))?;
+        let child = core::mem::replace(&mut self.f, s.f);
+        self.scope = s.scope;
+        self.blocks = s.blocks;
+        self.stmt_depth = s.stmt_depth;
+        self.open_iters = s.open_iters;
+        let id = child.id;
+        self.done[id as usize] = Some(child);
+        Ok(())
     }
 
     /// Reserves the child index of a function that is parsed later.

@@ -73,6 +73,16 @@ flag enables the TS grammar.
   that span lines, `this` params blanked with their trailing comma. The corpus files
   are modules, so strip mode must also parse `import`/`export` declarations.
 
+- Part 2 (runtime constructs, compiler/ts_decl.rs): enums (constant evaluation,
+  auto-increment, reverse mapping, string members, merging, block scoping), const enums
+  (constant-only, folded at resolution, D1483), namespaces (nested, `A.B.C`, merged,
+  merged with functions/classes/enums, exported vars as members, type-only namespaces
+  emit nothing, `export declare`), `import X = A.B` (and `export import`), parameter
+  properties (D1484). D1482: members resolve at resolution time. All dquickts TS
+  difftest cases pass except decorators (test_rejected_syntax_5/6) and `using`
+  (test_using*), which djs does not have in JS either. JS fixes: `function f(private)`
+  says `missing formal parameter` like qjs.
+
 ## Follow-ups
 
 ## Result

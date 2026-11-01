@@ -2351,3 +2351,33 @@ the compiler reuses them after a loop, every retry added an entry.
 pi's base64 check `/^[A-Za-z0-9+/]+={0,2}$/` on non-matching megabytes overflowed the
 backtrack stack that way. Now 5 MB pass and fail in constant stack. Log entries cost one
 word more.
+
+
+## D1482: Enums and namespaces are closures; their members resolve after parsing
+date: 2026-11-03 · by: lexer · issue: 0048
+An enum or namespace block compiles to an arrow-like closure called with the object
+(`N || (N = {})`), as tsc emits it. Its parameter has a name no source can write. A
+declaration record per enum or namespace collects the members of all merged blocks, and
+`resolve::classify` turns free names in the closures that are members into property
+accesses on the parameter (`Target::Member`: a synthetic reference to the parameter,
+classified like any other, so nested functions capture it). Doing it at resolution,
+not while parsing, is what makes a block see members that a later merged block
+declares, as tsc does. A type-only namespace's closure is discarded
+(`Parser::discard_function`) and nothing is bound.
+
+## D1483: const enums are folded at resolution
+date: 2026-11-03 · by: lexer · issue: 0048
+tsc inlines same-file const enum members even with isolatedModules, and dquickts does
+too, so djs folds them: a binding that holds an enum or namespace knows its record
+(`Var::ts_decl`), and the re-emit replaces `name_get CE; get_field A` (also
+`N.CE.A`) with the member's constant when `CE` resolves to that binding. The enum
+object is still created (preserveConstEnums); computed keys read it.
+
+## D1484: Parameter properties follow useDefineForClassFields
+date: 2026-11-03 · by: lexer · issue: 0048
+`constructor(public x)` defines `this.x = undefined` before the class's other fields and
+assigns `this.x = x` once the parameters are evaluated (base class: fields at entry,
+assignments after the parameters; derived class: both right after `super()` returns,
+around the field initializers), matching tsc's output with useDefineForClassFields and
+dquickts. The names are found by a lookahead before the parameters are parsed.
+

@@ -739,9 +739,22 @@ impl Parser<'_, '_> {
     /// `constructor(params) { body }` after the key: the reserved child.
     fn parse_ctor(&mut self, b: &mut ClassBuild) -> PResult<()> {
         self.enter()?;
-        self.begin_ctor(b)?;
+        let props = if self.ts {
+            self.ts_scan_param_props()?
+        } else {
+            Vec::new()
+        };
+        self.begin_ctor(b, props)?;
         self.expect(TokenKind::LParen, "(")?;
         self.parse_params()?;
+        if !b.derived {
+            // Parameter properties are assigned once the parameters are (a derived
+            // constructor does it after `super()`).
+            let pos = self.prev_end;
+            self.emit_this(pos);
+            self.emit_param_prop_assigns(pos);
+            self.code().drop();
+        }
         self.parse_function_body()?;
         self.emit_ctor_epilogue();
         self.f.src_end = self.prev_end;
@@ -753,7 +766,7 @@ impl Parser<'_, '_> {
     /// Starts a class constructor: the `new` check, and for a base class the field
     /// initializer, which runs before the parameters (OrdinaryCallEvaluateBody after
     /// InitializeInstanceElements, 10.2.2).
-    fn begin_ctor(&mut self, b: &ClassBuild) -> PResult<()> {
+    fn begin_ctor(&mut self, b: &ClassBuild, props: Vec<Atom>) -> PResult<()> {
         let kind = if b.derived {
             FuncKind::DerivedCtor
         } else {
@@ -763,6 +776,7 @@ impl Parser<'_, '_> {
         self.begin_function(kind)?;
         self.f.name = b.name;
         self.f.fields_atom = b.fields_atom;
+        self.f.param_props = props;
         self.f.src_start = b.start;
         self.mark(pos);
         self.code().check_ctor();
@@ -774,17 +788,54 @@ impl Parser<'_, '_> {
             self.f.ctor_return = Some((l, ret));
         } else {
             self.emit_this(pos);
+            self.emit_param_prop_decls(pos);
             self.emit_init_fields(b.fields_atom, pos);
             self.code().drop();
         }
         Ok(())
     }
 
+    /// `this` on the stack (it stays): defines the fields of the constructor's
+    /// parameter properties as `undefined`, before the other fields
+    /// (`useDefineForClassFields`, as tsc and dquickts).
+    pub(super) fn emit_param_prop_decls(&mut self, pos: u32) {
+        let props = self.ctor_param_props();
+        for a in props {
+            self.code().dup();
+            self.code().push_atom(a);
+            self.code().undefined();
+            self.mark(pos);
+            self.code().define_class_field();
+            self.code().drop();
+        }
+    }
+
+    /// `this` on the stack (it stays): `this.x = x` for the parameter properties.
+    pub(super) fn emit_param_prop_assigns(&mut self, pos: u32) {
+        let props = self.ctor_param_props();
+        for a in props {
+            self.code().dup();
+            let r = self.name_ref(a, pos);
+            self.code().name_get(r);
+            self.mark(pos);
+            self.code().put_field(a);
+        }
+    }
+
+    /// The parameter properties of the constructor that owns `this` here.
+    fn ctor_param_props(&self) -> Vec<Atom> {
+        match self.own_this_function() {
+            Ok(None) => self.f.param_props.clone(),
+            Ok(Some(i)) => self.stack[i].f.param_props.clone(),
+            Err(()) => Vec::new(),
+        }
+    }
+
     /// The default constructor: `constructor() {}`, or for a derived class
     /// `constructor(...args) { super(...args) }` (without iterating `args`).
     fn default_ctor(&mut self, b: &ClassBuild) -> PResult<()> {
         let pos = b.start;
-        self.begin_ctor(b)?;
+        self.begin_ctor(b, Vec::new())?;
         if b.derived {
             self.declare_pseudo(VarKind::ActiveFunc);
             let active = self.atom_active;

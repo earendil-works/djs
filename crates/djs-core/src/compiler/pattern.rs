@@ -48,6 +48,9 @@ pub(super) enum Binding {
     Param,
     /// An assignment pattern: the targets are references.
     Assign,
+    /// `export const {a} = ...` in a TypeScript namespace: the names are members of the
+    /// namespace (compiler/ts_decl.rs), stored like `var`s.
+    Member,
 }
 
 /// An element's target, after its references (if any) are on the stack.
@@ -164,6 +167,10 @@ impl<'a> Parser<'a, '_> {
                 self.f.params.push(v);
                 v
             }
+            Binding::Member => {
+                self.ts_pattern_member(name);
+                return Ok(());
+            }
             Binding::Assign => unreachable!("assignment patterns declare nothing"),
         };
         self.pattern_vars.push(v);
@@ -249,7 +256,7 @@ impl<'a> Parser<'a, '_> {
     fn store_target(&mut self, b: Binding, t: Target<'a>) -> PResult<()> {
         match t {
             Target::Bind { name, pos } => {
-                if b == Binding::Var {
+                if matches!(b, Binding::Var | Binding::Member) {
                     let r = self.name_ref(name, pos);
                     self.mark(pos);
                     self.code().name_put(r);
@@ -407,8 +414,8 @@ impl<'a> Parser<'a, '_> {
         };
         // Only code that can throw needs the close handler: binding stores cannot
         // (except assignments to globals), defaults, references and nested patterns can.
-        let mut may_throw =
-            b == Binding::Assign || (b == Binding::Var && self.f.kind == FuncKind::Script);
+        let mut may_throw = matches!(b, Binding::Assign | Binding::Member)
+            || (b == Binding::Var && self.f.kind == FuncKind::Script);
         let mut first = true;
         loop {
             match self.tok.kind {

@@ -17,6 +17,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use super::func::{Capture, FuncKind, FuncState, ScopeKind, VarId, VarKind};
+use super::ts_decl::{DeclKind, EnumVal, TsDecl};
 use super::{CompileOptions, PErr, PResult};
 use crate::bytecode::global_decls::GlobalDecls;
 use crate::bytecode::{
@@ -45,6 +46,9 @@ enum Target {
     Var(VarId),
     Capture(u16),
     Global,
+    /// A member of a TypeScript enum or namespace (compiler/ts_decl.rs): a property of
+    /// the object that reference `.0` (to the closure's parameter) loads.
+    Member(u32),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -56,6 +60,8 @@ struct Resolved {
     check: bool,
     /// `let`/`const`: initialization of a global one is `init_global_lex`.
     lexical: bool,
+    /// The binding holds this TypeScript enum or namespace (const enum folding).
+    decl: Option<u32>,
 }
 
 pub(super) fn internal(what: &str) -> PErr {
@@ -73,13 +79,17 @@ pub(super) fn finish(
     opts: &CompileOptions<'_>,
     atom_undefined: Atom,
     mut funcs: Vec<FuncState>,
+    decls: &[TsDecl],
 ) -> PResult<Ref> {
-    // 1. Classify references, children first.
+    // 1. Classify references, children first. (Member references add a reference to
+    // their namespace parameter, classified in turn.)
     let mut resolved: Vec<Vec<Resolved>> = (0..funcs.len()).map(|_| Vec::new()).collect();
     for id in (0..funcs.len()).rev() {
-        for r in 0..funcs[id].refs.len() {
-            let res = classify(&mut funcs, id, r);
+        let mut r = 0;
+        while r < funcs[id].refs.len() {
+            let res = classify(&mut funcs, id, r, decls);
             resolved[id].push(res);
+            r += 1;
         }
     }
 
@@ -126,6 +136,7 @@ pub(super) fn finish(
             parent_storage,
             &templates,
             atom_undefined,
+            decls,
             // Privileged code (the prelude) keeps no line tables or local names: its
             // frames show as `(native)` or not at all in stack traces, and it has no
             // TDZ errors to name (D1430).
@@ -141,19 +152,40 @@ pub(super) fn finish(
 
 /// Classifies reference `r` of function `id`, walking into enclosing functions for
 /// free names (adding capture slots on the way).
-fn classify(funcs: &mut [FuncState], id: usize, r: usize) -> Resolved {
+fn classify(funcs: &mut [FuncState], id: usize, r: usize, decls: &[TsDecl]) -> Resolved {
     let nr = funcs[id].refs[r];
+    // A member of the namespace of function `f`'s closure: a property of its
+    // parameter, reached from the reference's own scope.
+    let member = |funcs: &mut [FuncState], f: usize| -> Option<Resolved> {
+        let decl = &decls[funcs[f].ns? as usize];
+        let m = decl.members.iter().find(|m| m.name == nr.atom)?;
+        funcs[id].refs.push(super::func::NameRef {
+            atom: decl.param,
+            scope: nr.scope,
+            pos: nr.pos,
+            init: false,
+        });
+        Some(Resolved {
+            target: Target::Member((funcs[id].refs.len() - 1) as u32),
+            immutable: false,
+            check: false,
+            lexical: false,
+            decl: m.child,
+        })
+    };
     if let Some(v) = funcs[id].lookup(nr.scope, nr.atom) {
         let var = &mut funcs[id].vars[v as usize];
         var.used = true;
         let immutable = var.kind.is_immutable();
         let lexical = var.kind.is_lexical();
+        let decl = var.ts_decl;
         if var.global {
             return Resolved {
                 target: Target::Global,
                 immutable,
                 check: false,
                 lexical,
+                decl,
             };
         }
         let check = !nr.init && needs_check(&funcs[id], v, nr.pos);
@@ -162,14 +194,26 @@ fn classify(funcs: &mut [FuncState], id: usize, r: usize) -> Resolved {
             immutable,
             check,
             lexical,
+            decl,
         };
+    }
+    if let Some(m) = member(funcs, id) {
+        return m;
     }
     // A free name: find the enclosing function that binds it.
     let mut path = vec![id];
     let mut at = funcs[id].parent;
     while let Some((pf, ps)) = at {
         let pf = pf as usize;
-        if let Some(v) = funcs[pf].lookup(ps, nr.atom) {
+        let Some(v) = funcs[pf].lookup(ps, nr.atom) else {
+            if let Some(m) = member(funcs, pf) {
+                return m;
+            }
+            path.push(pf);
+            at = funcs[pf].parent;
+            continue;
+        };
+        {
             let var = &mut funcs[pf].vars[v as usize];
             if var.global {
                 return Resolved {
@@ -177,8 +221,10 @@ fn classify(funcs: &mut [FuncState], id: usize, r: usize) -> Resolved {
                     immutable: var.kind.is_immutable(),
                     check: false,
                     lexical: var.kind.is_lexical(),
+                    decl: var.ts_decl,
                 };
             }
+            let decl = var.ts_decl;
             var.captured = true;
             var.used = true;
             let immutable = var.kind.is_immutable();
@@ -200,16 +246,16 @@ fn classify(funcs: &mut [FuncState], id: usize, r: usize) -> Resolved {
                 immutable,
                 check,
                 lexical: false,
+                decl,
             };
         }
-        path.push(pf);
-        at = funcs[pf].parent;
     }
     Resolved {
         target: Target::Global,
         immutable: false,
         check: false,
         lexical: false,
+        decl: None,
     }
 }
 
@@ -306,6 +352,7 @@ fn emit_function(
     parent_storage: Option<&Vec<Storage>>,
     templates: &[Ref],
     atom_undefined: Atom,
+    decls: &[TsDecl],
     line_table: Option<&LineTable>,
     privileged: bool,
     src: &[u8],
@@ -388,8 +435,13 @@ fn emit_function(
     // ---- Re-emit.
     let mut lines: Vec<(u32, u32)> = Vec::new();
     let mut li = 0;
-    for insn in insns(&phase1.code) {
-        let insn = insn.map_err(|e| internal(&format!("{e:?}")))?;
+    let all: Vec<crate::bytecode::Insn> = insns(&phase1.code)
+        .collect::<Result<_, _>>()
+        .map_err(|e| internal(&format!("{e:?}")))?;
+    let mut i = 0;
+    while i < all.len() {
+        let insn = all[i];
+        i += 1;
         while li < f.lines.len() && f.lines[li].0 <= insn.pc {
             let entry = (out.pos(), f.lines[li].1);
             match lines.last_mut() {
@@ -402,6 +454,52 @@ fn emit_function(
             Op::NameGet | Op::NamePut | Op::NameSet | Op::NameInit | Op::NameTypeof => {
                 let r = insn.imm(0) as usize;
                 let atom = f.refs[r].atom;
+                if insn.op == Op::NameGet
+                    && let Some(d) = resolved[r].decl
+                    && let Some((v, n)) = fold_const_enum(decls, d, &all[i..])
+                {
+                    // `CE.A`, `N.CE.A` of a const enum: the member's value (as tsc).
+                    match v {
+                        EnumVal::Num(x) => emit_number(&mut out, &mut consts, *x),
+                        EnumVal::Str(units) => {
+                            let s = if units.iter().all(|&u| u <= 0xFF) {
+                                let b: Vec<u8> = units.iter().map(|&u| u as u8).collect();
+                                heap.alloc_latin1(&b)?
+                            } else {
+                                heap.alloc_utf16(units)?
+                            };
+                            consts.push(crate::value::Value::string(s));
+                            out.push_const((consts.len() - 1) as u32);
+                        }
+                    }
+                    i += n;
+                    continue;
+                }
+                if let Target::Member(obj) = resolved[r].target {
+                    let obj = obj as usize;
+                    let load = |out: &mut CodeBuf| {
+                        let a = f.refs[obj].atom;
+                        emit_name(out, storage, Op::NameGet, a, resolved[obj], atom_undefined);
+                    };
+                    match insn.op {
+                        Op::NameGet | Op::NameTypeof => {
+                            load(&mut out);
+                            out.get_field(atom);
+                        }
+                        Op::NameSet => {
+                            out.dup();
+                            load(&mut out);
+                            out.swap();
+                            out.put_field(atom);
+                        }
+                        _ => {
+                            load(&mut out);
+                            out.swap();
+                            out.put_field(atom);
+                        }
+                    }
+                    continue;
+                }
                 emit_name(
                     &mut out,
                     storage,
@@ -607,6 +705,44 @@ fn emit_function(
     })
 }
 
+/// A const enum member read through the binding of declaration `d`: the
+/// `get_field` chain at the start of `next` (through namespaces) and its value, with
+/// the number of `get_field`s it replaces.
+fn fold_const_enum<'d>(
+    decls: &'d [TsDecl],
+    d: u32,
+    next: &[crate::bytecode::Insn],
+) -> Option<(&'d EnumVal, usize)> {
+    let mut cur = d as usize;
+    for (n, insn) in next.iter().enumerate() {
+        if insn.op != Op::GetField {
+            return None;
+        }
+        let decl = &decls[cur];
+        let m = decl.members.iter().find(|m| m.name == insn.atom(0))?;
+        match decl.kind {
+            DeclKind::ConstEnum => return m.value.as_ref().map(|v| (v, n + 1)),
+            DeclKind::Namespace => cur = m.child? as usize,
+            DeclKind::Enum => return None,
+        }
+    }
+    None
+}
+
+/// Pushes a number constant (small integers inline).
+fn emit_number(out: &mut CodeBuf, consts: &mut Vec<crate::value::Value>, n: f64) {
+    let i = n as i32;
+    if i as f64 == n && !(n == 0.0 && n.is_sign_negative()) {
+        match i8::try_from(i) {
+            Ok(b) => out.push_i8(b),
+            Err(_) => out.push_i32(i),
+        }
+        return;
+    }
+    consts.push(crate::value::Value::number(n));
+    out.push_const((consts.len() - 1) as u32);
+}
+
 /// The resolved form of one `name_*` op.
 fn emit_name(
     out: &mut CodeBuf,
@@ -632,7 +768,8 @@ fn emit_name(
             Storage::Global | Storage::None => At::Global,
         },
         Target::Capture(c) => At::Cap(c),
-        Target::Global => At::Global,
+        // Handled by the caller (a property access).
+        Target::Global | Target::Member(_) => At::Global,
     };
     let lexical = res.lexical;
     let chk = res.check;

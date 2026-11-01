@@ -937,6 +937,20 @@ impl<'a> Parser<'a, '_> {
             TokenKind::Ident if tok.is_contextual(Kw::Async) && self.at_async_function() => {
                 return self.ts_function_signature();
             }
+            TokenKind::Enum => {
+                self.ts_enum(false, None)?;
+                return Ok(true);
+            }
+            TokenKind::Const if self.peek().kind == TokenKind::Enum => {
+                self.next()?;
+                self.ts_enum(true, None)?;
+                return Ok(true);
+            }
+            TokenKind::Import if self.ts_at_import_alias() => {
+                self.next()?;
+                self.ts_import_alias(None)?;
+                return Ok(true);
+            }
             TokenKind::Ident if !tok.has_escape() => {}
             _ => return Ok(false),
         }
@@ -960,6 +974,7 @@ impl<'a> Parser<'a, '_> {
                 } else {
                     self.ts_interface()?;
                 }
+                self.ts_type_only = true;
             }
             Kw::Declare => {
                 let ok = matches!(
@@ -985,7 +1000,8 @@ impl<'a> Parser<'a, '_> {
                 if !ok {
                     return Ok(false);
                 }
-                self.ts_declare()?;
+                self.ts_declare(None)?;
+                self.ts_type_only = true;
             }
             Kw::Abstract => {
                 if next.kind != TokenKind::Class {
@@ -1001,8 +1017,13 @@ impl<'a> Parser<'a, '_> {
                 if next.kind == TokenKind::String && tok.kw == Kw::Module {
                     self.next()?;
                     self.ts_skip_ambient_body()?;
+                    self.ts_type_only = true;
                 } else if next.kind == TokenKind::Ident {
-                    return self.unsupported(start, "TypeScript namespaces are");
+                    self.next()?;
+                    self.ts_namespace(None)?;
+                    if !self.ts_type_only {
+                        return Ok(true);
+                    }
                 } else {
                     return Ok(false);
                 }
@@ -1046,11 +1067,12 @@ impl<'a> Parser<'a, '_> {
         }
         self.expect_semicolon()?;
         self.ts_erase(start);
+        self.ts_type_only = true;
         Ok(true)
     }
 
     /// `type T<P> = ...;` at `type`.
-    fn ts_type_alias(&mut self) -> PResult<()> {
+    pub(super) fn ts_type_alias(&mut self) -> PResult<()> {
         self.next()?;
         if !self.is(TokenKind::Ident) {
             return syntax(self.tok.start, "identifier expected");
@@ -1063,7 +1085,7 @@ impl<'a> Parser<'a, '_> {
     }
 
     /// `interface I<P> extends J { ... }` at `interface`.
-    fn ts_interface(&mut self) -> PResult<()> {
+    pub(super) fn ts_interface(&mut self) -> PResult<()> {
         self.next()?;
         if !self.is(TokenKind::Ident) {
             return syntax(self.tok.start, "identifier expected");
@@ -1111,8 +1133,10 @@ impl<'a> Parser<'a, '_> {
         self.expect_semicolon()
     }
 
-    /// `declare ...` at `declare`: ambient declarations emit nothing.
-    fn ts_declare(&mut self) -> PResult<()> {
+    /// `declare ...` at `declare`: ambient declarations emit nothing. In namespace
+    /// `ns`, `export declare let x` makes `x` a member (assigned from outside).
+    pub(super) fn ts_declare(&mut self, ns: Option<u32>) -> PResult<()> {
+        self.ts_type_only = true;
         self.next()?;
         let tok = self.tok;
         let is_let = tok.is_contextual(Kw::Let);
@@ -1122,6 +1146,13 @@ impl<'a> Parser<'a, '_> {
                 return self.ts_skip_ambient_enum();
             }
             loop {
+                if let Some(d) = ns
+                    && self.is(TokenKind::Ident)
+                {
+                    let a = self.ident_atom()?;
+                    self.ts_declare_member(d, a);
+                    self.ts_type_only = false;
+                }
                 self.ts_skip_binding()?;
                 if self.is(TokenKind::Bang) {
                     self.next()?;
@@ -1277,6 +1308,53 @@ impl<'a> Parser<'a, '_> {
             self.ts_erase(start);
         }
         Ok(false)
+    }
+
+    /// At the `(` of a class constructor: the names of its parameter properties
+    /// (parameters with a modifier), found before the parameters are parsed: a base
+    /// constructor defines their fields at entry.
+    pub(super) fn ts_scan_param_props(&mut self) -> PResult<Vec<crate::heap::Atom>> {
+        let mut names: Vec<Token> = Vec::new();
+        self.ts_lookahead(|p| {
+            p.ts_expect(TokenKind::LParen)?;
+            while !p.is(TokenKind::RParen) {
+                let mut modifier = false;
+                while p.ts_is_param_modifier() {
+                    modifier = true;
+                    p.next()?;
+                }
+                if p.is(TokenKind::Ellipsis) {
+                    p.next()?;
+                }
+                if modifier && p.is(TokenKind::Ident) {
+                    names.push(p.tok);
+                }
+                p.ts_skip_binding()?;
+                if p.is(TokenKind::Question) {
+                    p.next()?;
+                }
+                if p.is(TokenKind::Colon) {
+                    p.next()?;
+                    p.ts_skip_type()?;
+                }
+                if p.is(TokenKind::Assign) {
+                    p.next()?;
+                    p.ts_skip_expr(false)?;
+                }
+                if !p.is(TokenKind::Comma) {
+                    break;
+                }
+                p.next()?;
+            }
+            Ok(true)
+        });
+        let mut atoms = Vec::with_capacity(names.len());
+        for t in names {
+            let bytes = self.lx.ident_value(&t, &mut self.buf8);
+            let s = core::str::from_utf8(bytes).unwrap_or("\u{FFFD}");
+            atoms.push(self.heap.atom_str(s)?);
+        }
+        Ok(atoms)
     }
 
     /// An accessibility, `readonly` or `override` modifier of a parameter (otherwise it

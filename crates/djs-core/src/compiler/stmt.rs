@@ -539,7 +539,7 @@ impl Parser<'_, '_> {
 
     fn parse_return(&mut self) -> PResult<()> {
         let pos = self.tok.start;
-        if self.f.kind == FuncKind::Script {
+        if self.f.kind == FuncKind::Script || self.f.ns.is_some() {
             return syntax(pos, "return not in a function");
         }
         if self.f.kind == FuncKind::StaticBlock {

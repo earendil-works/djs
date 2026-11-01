@@ -120,6 +120,8 @@ pub(super) struct Var {
     pub captured: bool,
     /// Referenced at all (for the pseudo-bindings, which cost prologue code).
     pub used: bool,
+    /// The TypeScript enum or namespace this binding holds (const enum folding).
+    pub ts_decl: Option<u32>,
 }
 
 /// A name reference in phase-1 code: the `name_*` op's immediate indexes this table.
@@ -269,6 +271,12 @@ pub(super) struct FuncState {
     /// Source span (for `Function.prototype.toString`, D009).
     pub src_start: u32,
     pub src_end: u32,
+    /// TypeScript parameter properties of a class constructor (`constructor(public x)`).
+    pub param_props: Vec<Atom>,
+    /// The closure of a TypeScript enum or namespace block: its declaration record
+    /// (compiler/ts_decl.rs). Free names that are members resolve to properties of the
+    /// closure's parameter.
+    pub ns: Option<u32>,
 }
 
 pub(super) const BODY_SCOPE: ScopeId = 0;
@@ -318,6 +326,8 @@ impl FuncState {
             async_region: None,
             src_start: 0,
             src_end: 0,
+            param_props: Vec::new(),
+            ns: None,
         }
     }
 
@@ -343,6 +353,7 @@ impl FuncState {
             param: 0,
             captured: false,
             used: false,
+            ts_decl: None,
         });
         self.scopes[scope as usize].vars.push(id);
         id

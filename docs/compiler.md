@@ -477,6 +477,32 @@ speculation carry no message (`Parser::spec`).
   parameters of functions, methods, arrows and classes, `extends B<T>`,
   `implements I`, fields (`x?: T`, `x!: T`), catch parameters.
 
+Runtime constructs (compiler/ts_decl.rs, D1482 to D1484):
+
+- `enum` and `namespace` compile like tsc: a binding (`var` at the function level, `let`
+  in a block, none if it merges with an enum, namespace, function or class of the same
+  scope) and an arrow-like closure called with `N || (N = {})` (`P.N || (P.N = {})` for
+  a member of namespace `P`). The closure's one parameter `<ns K>` is the object.
+  A `TsDecl` record per declaration collects the members of all merged blocks
+  (exported names, enum members, nested declarations). Resolution turns a free name
+  in such a closure (or in a function nested in one) that is a member into
+  `<ns K>.name`: `resolve::Target::Member`, a property access on the parameter
+  reached like any other binding. Because resolution runs after the whole unit,
+  merged blocks see each other's exports. `export let x` in a namespace declares no
+  local binding: its stores go through the member.
+- Enum initializers that are constant expressions (literals, members, `E.A` of other
+  enums through namespaces, `+ - * / % ** | & ^ << >> >>> ~`, string `+`) are
+  evaluated at compile time over tokens (speculation); others compile in the closure.
+  `const enum` requires constants, and its member reads `CE.A`, `N.CE.A` are folded at
+  resolution, where the binding is known (`Var::ts_decl`), so a read before the
+  declaration folds too and a shadowing binding does not.
+- A namespace without values (types only) discards its closure and binds nothing.
+- `import X = A.B` is a `const` read like `typeof A` and optional members.
+- Parameter properties (`constructor(public x)`): the names are scanned before the
+  parameters; their fields are defined as `undefined` before the other fields (at
+  entry in a base class, right after `super()` in a derived one) and assigned
+  `this.x = x` after the parameters (after the field initializers in a derived class).
+
 Every erased range is recorded (when `Parser::erased` is on) by the code that commits
 to it, never inside speculation. `compiler::strip_types` blanks them like ts-blank-space
 (one space per UTF-16 unit, line breaks kept) for `djs strip-types`, the parse-only

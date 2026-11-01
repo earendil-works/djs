@@ -174,6 +174,8 @@ impl Parser<'_, '_> {
                 continue;
             }
             if self.tok.kind != TokenKind::Ident
+                || self.tok.is_escaped_reserved()
+                || self.tok.kw.is_strict_reserved()
                 || (self.tok.kw == Kw::Await && self.await_reserved())
             {
                 return syntax(self.tok.start, "missing formal parameter");

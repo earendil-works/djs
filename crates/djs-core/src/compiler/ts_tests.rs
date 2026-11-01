@@ -188,6 +188,93 @@ fn ts_classes() {
     ]);
 }
 
+#[test]
+fn ts_enums() {
+    run_ts_cases(&[
+        (
+            "enum E { A, B, C = 10, D, E = 'e', F = D + 1 } return JSON.stringify(E) + E[11] + E['e']",
+            "=> {\"0\":\"A\",\"1\":\"B\",\"10\":\"C\",\"11\":\"D\",\"12\":\"F\",\"A\":0,\"B\":1,\"C\":10,\"D\":11,\"E\":\"e\",\"F\":12}Dundefined",
+        ),
+        (
+            "let n = 0; function nx() { return ++n * 100 } enum C { X = nx(), Y = X + 1, Z = 'abc'.length, W = Z * 2 } return [C.X, C.Y, C[101], C.W].join()",
+            "=> 100,101,Y,6",
+        ),
+        (
+            "enum M { A = 1 } enum M { B = A + 1, C = B * 2 } enum N { 'a-b' = 1, if = 2, default = N.if + 1 } return M.A + M.B + M.C + N['a-b'] + N.if + N.default",
+            "=> 13",
+        ),
+        (
+            "enum K { A = 1 << 4, B = A | 3, C = ~B, D = -(2 ** 3), E = 'x' + 'y', F = 7 % 4, G = 100 >>> 2, H = (1 + 2) * 3 } return [K.A, K.B, K.C, K.D, K.E, K.F, K.G, K.H].join()",
+            "=> 16,19,-20,-8,xy,3,25,9",
+        ),
+        (
+            "enum Color { Red, Green } namespace Color { export function name(c: Color) { return Color[c] } } { enum Inner { A = 5 } if (Inner.A !== 5) return 'no' } return Color.name(Color.Green) + typeof Inner",
+            "=> Greenundefined",
+        ),
+        // A const enum is folded where it is read (as tsc): redefining a member does
+        // not change the compiled code, computed keys use the object.
+        (
+            "function early() { return Later.A } const enum CE { A = 1, B = A * 10, S = 'str' } const enum Later { A = 5 } function use() { return CE.B + CE['A'] } Object.defineProperty(CE, 'B', { get() { return 99 } }); Object.defineProperty(Later, 'A', { get() { return 99 } }); const key = 'B'; return [use(), early(), CE[key], CE.S, Object.keys(Later).join('/')].join()",
+            "=> 11,5,99,str,5/A",
+        ),
+        (
+            "namespace NS { export const enum K { X = 7 } export const via = K.X } function useNS() { return NS.K.X } Object.defineProperty(NS.K, 'X', { get() { return 0 } }); function shadow(CE: { B: number }) { return CE.B } const enum CE { B = 2 } return useNS() + NS.via + shadow({ B: 3 })",
+            "=> 17",
+        ),
+    ]);
+}
+
+#[test]
+fn ts_namespaces() {
+    run_ts_cases(&[
+        (
+            "namespace A.B.C { export const v = 1 } return A.B.C.v",
+            "=> 1",
+        ),
+        (
+            "namespace Counter { export let count = 0; export function inc() { return ++count } let hidden = 5; export const [first, second] = [hidden, hidden + 1]; export const { prop } = { prop: 'p' } } Counter.inc(); Counter.count += 10; return [Counter.count, Counter.first + Counter.second, Counter.prop, Object.keys(Counter).includes('hidden')].join()",
+            "=> 11,11,p,false",
+        ),
+        (
+            "namespace Merged { export const x = 1 } namespace Merged { export const y = x + 1; export function f() { return z } } namespace Merged { export const z = y + 1 } return Merged.f()",
+            "=> 3",
+        ),
+        (
+            "function Fn() { return 1 } namespace Fn { export const extra = 2 } class Cls { static s = 1 } namespace Cls { export const t = 2 } return Fn() + Fn.extra + Cls.s + Cls.t",
+            "=> 6",
+        ),
+        (
+            "namespace Outer { const secret = 10; export namespace Inner { export const w = secret + 1 } export class K { v = Inner.w } export enum E { A = Inner.w } export import Alias = Inner.w } return Outer.Inner.w + new Outer.K().v + Outer.E.A + Outer.Alias + Outer.E[11]",
+            "=> 44A",
+        ),
+        (
+            "namespace Types { export interface I {} export type T = number; namespace Deep { export type U = string } } namespace Ambient { export declare let late: number; export function read() { return late } } (Ambient as any).late = 8; import Alias = Ambient; import Gone = Types.T; return typeof Types + Alias.read() + typeof Gone",
+            "=> undefined8undefined",
+        ),
+    ]);
+}
+
+/// Parameter properties: defined before the other fields, assigned after the
+/// parameters (after `super()` in a derived class), as tsc with
+/// `useDefineForClassFields`.
+#[test]
+fn ts_parameter_properties() {
+    run_ts_cases(&[
+        (
+            "const log: string[] = []; class Base { constructor(public b: number) { log.push('base:' + Object.keys(this).join()) } } class Derived extends Base { field = (log.push('field:' + Object.keys(this).join() + ':' + this.x), 1); constructor(public x: number, protected readonly y: string = 'dy', private z?: number) { log.push('ctor'); super(x * 2); log.push('after:' + Object.keys(this).join() + ':' + this.x) } } const d = new Derived(5); return log.join('|') + ' ' + JSON.stringify(d)",
+            "=> ctor|base:b|field:b,x,y,z:undefined|after:b,x,y,z,field:5 {\"b\":10,\"x\":5,\"y\":\"dy\",\"field\":1}",
+        ),
+        (
+            "class P { a = this.x; constructor(public x: number = 1, readonly r = this.a) {} } const p = new P(); return [p.a, p.x, Object.keys(p).join()].join()",
+            "=> ,1,x,r,a",
+        ),
+        (
+            "class Base { constructor(public b: number) {} } class Q extends Base { constructor(public q: number) { const init = () => super(q); init() } } return new Q(4).q + new Q(4).b",
+            "=> 8",
+        ),
+    ]);
+}
+
 fn ts_err(src: &str) -> CompileError {
     let mut heap = Heap::new().unwrap();
     match compile(
@@ -246,6 +333,38 @@ fn ts_errors() {
             17,
         ),
         ("let t: (number", "unexpected end of input in type", 1, 15),
+        ("enum E { 1 = 2 }", "invalid enum member name", 1, 10),
+        (
+            "enum E { A = f(), B }",
+            "enum member must have initializer",
+            1,
+            21,
+        ),
+        (
+            "let x = 1; const enum Bad { A = x }",
+            "const enum member initializers must be constant expressions",
+            1,
+            33,
+        ),
+        (
+            "namespace N { return 1 }",
+            "return not in a function",
+            1,
+            15,
+        ),
+        (
+            "namespace N { export foo }",
+            "unsupported export in a namespace",
+            1,
+            22,
+        ),
+        (
+            "import x = require('x');",
+            "'import ... = require()' is not supported (no CommonJS modules), use 'import ... from'",
+            1,
+            12,
+        ),
+        ("function f(private) {}", "missing formal parameter", 1, 12),
     ];
     let mut bad = Vec::new();
     for &(src, msg, line, col) in cases {

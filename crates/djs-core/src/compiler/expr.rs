@@ -1335,7 +1335,9 @@ impl Parser<'_, '_> {
             Ok(Some(i)) => self.stack[i].f.fields_atom,
             Err(()) => Atom::NULL,
         };
+        self.emit_param_prop_decls(pos);
         self.emit_init_fields(fields, pos);
+        self.emit_param_prop_assigns(pos);
     }
 
     /// `this` on the stack: calls the class's instance field initializer (its hidden
