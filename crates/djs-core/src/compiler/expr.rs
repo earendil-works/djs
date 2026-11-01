@@ -388,7 +388,7 @@ impl Parser<'_, '_> {
             LValue::Field { atom, pos } => {
                 self.code().dup();
                 self.mark(pos);
-                self.code().get_field(atom);
+                self.code().get_field(atom, 0);
             }
             LValue::Elem { pos } => {
                 self.code().dup2();
@@ -442,7 +442,7 @@ impl Parser<'_, '_> {
                     self.code().insert2();
                 }
                 self.mark(pos);
-                self.code().put_field(atom);
+                self.code().put_field(atom, 0);
             }
             LValue::Elem { pos } => {
                 if keep {
@@ -922,7 +922,7 @@ impl Parser<'_, '_> {
             Expr::Field { atom, pos } => {
                 self.truncate_last();
                 self.mark(pos);
-                self.code().get_method(atom);
+                self.code().get_method(atom, 0);
             }
             Expr::Elem { pos } => {
                 self.truncate_last();
@@ -961,7 +961,7 @@ impl Parser<'_, '_> {
         let atom = self.ident_atom()?;
         self.next()?;
         self.mark(pos);
-        self.code().get_field(atom);
+        self.code().get_field(atom, 0);
         Ok(Expr::Field { atom, pos })
     }
 
@@ -975,7 +975,7 @@ impl Parser<'_, '_> {
                 self.truncate_last();
                 let atom = self.heap.intern(s)?;
                 self.mark(pos);
-                self.code().get_field(atom);
+                self.code().get_field(atom, 0);
                 return Ok(Expr::Field { atom, pos });
             }
         }

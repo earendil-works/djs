@@ -64,7 +64,12 @@ fn sample_imm(kind: ImmKind, label: Label) -> u32 {
         ImmKind::I8 => (-5i32) as u32,
         ImmKind::I32 => (-100_000i32) as u32,
         ImmKind::Count | ImmKind::Argc => 3,
-        ImmKind::Loc | ImmKind::Arg | ImmKind::Cap | ImmKind::Scope | ImmKind::Intrinsic => 0xBEEF,
+        ImmKind::Loc
+        | ImmKind::Arg
+        | ImmKind::Cap
+        | ImmKind::Scope
+        | ImmKind::Intrinsic
+        | ImmKind::Cache => 0xBEEF,
         ImmKind::Const | ImmKind::Child | ImmKind::NameRef => 0x1234_5678,
         ImmKind::LabelId | ImmKind::Target => label.0,
         ImmKind::Atom => 7,
@@ -135,7 +140,7 @@ fn typed_emitters() {
     b.push_i8(-1);
     b.push_i32(i32::MIN);
     b.get_loc(65535);
-    b.get_field(Atom::from_id(42));
+    b.get_field(Atom::from_id(42), 0);
     b.call(2);
     b.call_intrinsic(9, 4);
     b.return_();
@@ -296,7 +301,7 @@ fn phase1_reemit() {
 fn truncate_last() {
     let mut b = CodeBuf::new();
     b.get_loc(0);
-    b.get_field(Atom::from_id(3));
+    b.get_field(Atom::from_id(3), 0);
     let last = b.last_insn().unwrap();
     assert_eq!((last.op, last.atom(0)), (Op::GetField, Atom::from_id(3)));
     assert_eq!(b.truncate_last().unwrap().op, Op::GetField);
@@ -351,7 +356,7 @@ fn stack_good() {
 
     // f(a, b, c): callee, this, three args.
     let c = final_code(|b| {
-        b.get_global(Atom::from_id(1));
+        b.get_global(Atom::from_id(1), 0);
         b.undefined();
         b.push_i8(1);
         b.push_i8(2);
@@ -405,7 +410,7 @@ fn stack_try_finally() {
     let l_exc = b.new_label();
     let l_try_end = b.new_label();
     let start = b.pos();
-    b.get_global(Atom::from_id(1));
+    b.get_global(Atom::from_id(1), 0);
     b.undefined();
     b.call(0);
     b.gosub(l_fin);
@@ -415,7 +420,7 @@ fn stack_try_finally() {
     b.gosub(l_fin);
     b.throw();
     b.place_label(l_fin);
-    b.get_global(Atom::from_id(2));
+    b.get_global(Atom::from_id(2), 0);
     b.undefined();
     b.call(0);
     b.drop();
@@ -762,7 +767,7 @@ fn template_cells() {
     b.push_const(0);
     b.put_loc(0);
     b.get_loc(0);
-    b.get_field(a_len);
+    b.get_field(a_len, 0);
     b.push_const(1);
     b.add();
     b.fclosure(0);
@@ -775,7 +780,7 @@ fn template_cells() {
         start: 0,
         end: 5,
         // The exception lands where the stack holds one value: the `return`.
-        target: 28,
+        target: 30,
         depth: 0,
     }];
     let name = heap.alloc_str("test.js").unwrap();
@@ -812,16 +817,16 @@ fn template_cells() {
     let text = disasm_template(&heap, parent);
     let expect = [
         "function 0 <anonymous>: params=0 locals=1 stack=2 captures=0",
-        "  handler [0, 5) -> 28 depth 0",
+        "  handler [0, 5) -> 30 depth 0",
         "    0  push_const #0 (\"hi\")  ; 1:1",
         "    5  put_loc loc0 (x)",
         "    8  get_loc loc0 (x)",
-        "   11  get_field \"length\"  ; 1:9",
-        "   16  push_const #1 (1.5)",
-        "   21  add",
-        "   22  fclosure child0",
-        "   27  drop",
-        "   28  return",
+        "   11  get_field \"length\" ic0  ; 1:9",
+        "   18  push_const #1 (1.5)",
+        "   23  add",
+        "   24  fclosure child0",
+        "   29  drop",
+        "   30  return",
         "function 0.0 f: params=0 locals=0 stack=1 captures=0",
         "    0  push_i8 7",
         "    2  return",
@@ -868,7 +873,7 @@ fn capture_descriptors() {
 #[test]
 fn disasm_without_heap() {
     let mut b = CodeBuf::new();
-    b.get_field(Atom::from_id(5));
+    b.get_field(Atom::from_id(5), 0);
     b.get_cap(1);
     b.push_const(3);
     let code = b.finish().unwrap().code;

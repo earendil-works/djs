@@ -77,6 +77,7 @@ impl Default for ExecOptions {
 
 mod bigint;
 mod class;
+mod ic;
 mod intrinsics;
 mod json_regexp;
 pub(crate) mod late;
@@ -1622,7 +1623,14 @@ impl<'h> Exec<'h> {
             // ---- globals ----
             Op::GetGlobal | Op::GetGlobalTypeof => {
                 let key = self.imm_atom();
+                let ic = self.imm_u16(5);
+                if let Some(v) = self.ic_global_get(key, ic) {
+                    self.push(v);
+                    self.pc = next;
+                    return Ok(None);
+                }
                 if let Some(v) = self.global_lexical(key)? {
+                    self.ic_global_fill(key, ic);
                     self.push(v);
                     self.pc = next;
                     return Ok(None);
@@ -1636,7 +1644,12 @@ impl<'h> Exec<'h> {
                         ));
                     }
                     None => self.push(Value::UNDEFINED),
-                    Some((_, Property::Data { value, .. })) => self.push(value),
+                    Some((h, Property::Data { value, .. })) => {
+                        if h == g {
+                            self.ic_global_fill(key, ic);
+                        }
+                        self.push(value)
+                    }
                     Some((_, Property::Accessor { getter, .. })) => {
                         self.pc = next;
                         return self.call_accessor(getter, Value::object(g), None);
@@ -1645,6 +1658,13 @@ impl<'h> Exec<'h> {
             }
             Op::PutGlobal => {
                 let key = self.imm_atom();
+                let ic = self.imm_u16(5);
+                let v = self.top(0);
+                if self.ic_global_put(key, ic, v) {
+                    self.sp -= 1;
+                    self.pc = next;
+                    return Ok(None);
+                }
                 let lex = realm::global_lex(self.heap);
                 if let Some(Property::Data { flags, .. }) = self.heap.get_own_property(lex, key) {
                     self.global_lexical(key)?;
@@ -1656,6 +1676,7 @@ impl<'h> Exec<'h> {
                     }
                     let v = self.pop();
                     realm::set_global_lexical(self.heap, key, v)?;
+                    self.ic_global_fill(key, ic);
                     self.pc = next;
                     return Ok(None);
                 }
@@ -1666,7 +1687,13 @@ impl<'h> Exec<'h> {
                         format!("'{}' is not defined", self.heap.atom_name(key)),
                     ));
                 }
-                let v = self.top(0);
+                // The cache is filled for the next store if this one is a plain write.
+                if matches!(
+                    self.heap.get_own_property(g, key),
+                    Some(Property::Data { flags, .. }) if flags.writable()
+                ) {
+                    self.ic_global_fill(key, ic);
+                }
                 self.pc = next;
                 return self.set_property(g, key, v, 1);
             }

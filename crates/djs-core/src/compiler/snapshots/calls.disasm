@@ -8,159 +8,159 @@ function 0 <anonymous>: params=0 locals=1 stack=5 captures=0
    13  define_field "b"
    18  define_field "a"
    23  init_global_lex "o"
-   28  get_global "o"  ; 3:1
-   33  get_field "a"  ; 3:2
-   38  get_field "b"  ; 3:4
-   43  put_loc loc0 (<completion>)
-   46  get_global "o"  ; 3:8
-   51  get_field "a"  ; 3:9
-   56  get_field "b"  ; 3:14
-   61  put_loc loc0 (<completion>)
-   64  get_global "o"  ; 3:21
-   69  push_i8 1
-   71  get_elem  ; 3:22
-   72  put_loc loc0 (<completion>)
-   75  get_global "o"  ; 3:27
-   80  get_field "0"  ; 3:28
-   85  put_loc loc0 (<completion>)
-   88  get_global "f"  ; 4:1
-   93  undefined
-   94  call 0  ; 4:2
-   97  put_loc loc0 (<completion>)
-  100  get_global "f"  ; 4:6
-  105  undefined
-  106  push_i8 1
-  108  push_i8 2
-  110  push_i8 3
-  112  call 3  ; 4:7
-  115  put_loc loc0 (<completion>)
-  118  get_global "o"  ; 4:18
-  123  get_method "m"  ; 4:19
-  128  call 0  ; 4:21
-  131  put_loc loc0 (<completion>)
-  134  get_global "o"  ; 4:25
-  139  get_method "m"  ; 4:26
-  144  push_i8 1
-  146  call 1  ; 4:31
-  149  put_loc loc0 (<completion>)
-  152  get_global "o"  ; 4:36
-  157  push_i8 0
-  159  get_elem_method  ; 4:37
-  160  call 0  ; 4:40
-  163  put_loc loc0 (<completion>)
-  166  get_global "o"  ; 4:45
-  171  get_method "m"  ; 4:46
-  176  call 0  ; 4:49
+   28  get_global "o" ic0  ; 3:1
+   35  get_field "a" ic1  ; 3:2
+   42  get_field "b" ic2  ; 3:4
+   49  put_loc loc0 (<completion>)
+   52  get_global "o" ic3  ; 3:8
+   59  get_field "a" ic4  ; 3:9
+   66  get_field "b" ic5  ; 3:14
+   73  put_loc loc0 (<completion>)
+   76  get_global "o" ic6  ; 3:21
+   83  push_i8 1
+   85  get_elem  ; 3:22
+   86  put_loc loc0 (<completion>)
+   89  get_global "o" ic7  ; 3:27
+   96  get_field "0" ic8  ; 3:28
+  103  put_loc loc0 (<completion>)
+  106  get_global "f" ic9  ; 4:1
+  113  undefined
+  114  call 0  ; 4:2
+  117  put_loc loc0 (<completion>)
+  120  get_global "f" ic10  ; 4:6
+  127  undefined
+  128  push_i8 1
+  130  push_i8 2
+  132  push_i8 3
+  134  call 3  ; 4:7
+  137  put_loc loc0 (<completion>)
+  140  get_global "o" ic11  ; 4:18
+  147  get_method "m" ic12  ; 4:19
+  154  call 0  ; 4:21
+  157  put_loc loc0 (<completion>)
+  160  get_global "o" ic13  ; 4:25
+  167  get_method "m" ic14  ; 4:26
+  174  push_i8 1
+  176  call 1  ; 4:31
   179  put_loc loc0 (<completion>)
-  182  push_i8 0
-  184  drop
-  185  get_global "o"  ; 4:57
-  190  get_field "m"  ; 4:58
-  195  undefined
-  196  call 0  ; 4:61
-  199  put_loc loc0 (<completion>)
-  202  get_global "X"  ; 5:5
-  207  construct 0  ; 5:1
-  210  put_loc loc0 (<completion>)
-  213  get_global "X"  ; 5:12
-  218  push_i8 1
-  220  push_i8 2
-  222  construct 2  ; 5:8
-  225  put_loc loc0 (<completion>)
-  228  get_global "o"  ; 5:25
-  233  get_field "C"  ; 5:26
-  238  construct 0  ; 5:21
-  241  put_loc loc0 (<completion>)
-  244  get_global "X"  ; 5:40
-  249  construct 0  ; 5:36
-  252  construct 0  ; 5:32
-  255  put_loc loc0 (<completion>)
-  258  get_global "o"  ; 6:1
-  263  dup
-  264  is_nullish
-  265  jump_if_true -> 280
-  270  get_field "a"  ; 6:2
-  275  jump -> 282
-  280  drop
-  281  undefined
-  282  put_loc loc0 (<completion>)
-  285  get_global "o"  ; 6:7
-  290  dup
-  291  is_nullish
-  292  jump_if_true -> 305
-  297  push_i8 1
-  299  get_elem  ; 6:10
-  300  jump -> 307
-  305  drop
-  306  undefined
-  307  put_loc loc0 (<completion>)
-  310  get_global "o"  ; 6:15
+  182  get_global "o" ic15  ; 4:36
+  189  push_i8 0
+  191  get_elem_method  ; 4:37
+  192  call 0  ; 4:40
+  195  put_loc loc0 (<completion>)
+  198  get_global "o" ic16  ; 4:45
+  205  get_method "m" ic17  ; 4:46
+  212  call 0  ; 4:49
+  215  put_loc loc0 (<completion>)
+  218  push_i8 0
+  220  drop
+  221  get_global "o" ic18  ; 4:57
+  228  get_field "m" ic19  ; 4:58
+  235  undefined
+  236  call 0  ; 4:61
+  239  put_loc loc0 (<completion>)
+  242  get_global "X" ic20  ; 5:5
+  249  construct 0  ; 5:1
+  252  put_loc loc0 (<completion>)
+  255  get_global "X" ic21  ; 5:12
+  262  push_i8 1
+  264  push_i8 2
+  266  construct 2  ; 5:8
+  269  put_loc loc0 (<completion>)
+  272  get_global "o" ic22  ; 5:25
+  279  get_field "C" ic23  ; 5:26
+  286  construct 0  ; 5:21
+  289  put_loc loc0 (<completion>)
+  292  get_global "X" ic24  ; 5:40
+  299  construct 0  ; 5:36
+  302  construct 0  ; 5:32
+  305  put_loc loc0 (<completion>)
+  308  get_global "o" ic25  ; 6:1
   315  dup
   316  is_nullish
-  317  jump_if_true -> 335
-  322  get_method "m"  ; 6:16
-  327  call 0  ; 6:19
-  330  jump -> 337
-  335  drop
-  336  undefined
-  337  put_loc loc0 (<completion>)
-  340  get_global "o"  ; 6:23
-  345  get_method "m"  ; 6:24
-  350  swap
-  351  dup
-  352  is_nullish
-  353  jump_if_true -> 367
-  358  swap
-  359  call 0  ; 6:28
-  362  jump -> 370
-  367  drop
-  368  drop
-  369  undefined
-  370  put_loc loc0 (<completion>)
-  373  get_global "f"  ; 6:32
-  378  undefined
-  379  swap
-  380  dup
-  381  is_nullish
-  382  jump_if_true -> 396
-  387  swap
-  388  call 0  ; 6:35
-  391  jump -> 399
-  396  drop
-  397  drop
-  398  undefined
-  399  put_loc loc0 (<completion>)
-  402  get_global "o"  ; 6:39
-  407  dup
-  408  is_nullish
-  409  jump_if_true -> 439
-  414  get_field "a"  ; 6:40
-  419  get_field "b"  ; 6:43
-  424  get_method "c"  ; 6:45
-  429  push_i8 1
-  431  call 1  ; 6:47
-  434  jump -> 441
-  439  drop
-  440  undefined
-  441  put_loc loc0 (<completion>)
-  444  get_global "console"  ; 7:1
-  449  get_method "log"  ; 7:8
-  454  push_const #4 ("hello")
-  459  get_global "o"  ; 7:22
-  464  get_field "a"  ; 7:23
-  469  dup
-  470  is_nullish
-  471  jump_if_true -> 486
-  476  get_field "b"  ; 7:25
-  481  jump -> 488
-  486  drop
-  487  undefined
-  488  dup
-  489  is_nullish
-  490  jump_if_false -> 498
-  495  drop
-  496  push_i8 2
-  498  call 2  ; 7:12
-  501  put_loc loc0 (<completion>)
-  504  get_loc loc0 (<completion>)
-  507  return
+  317  jump_if_true -> 334
+  322  get_field "a" ic26  ; 6:2
+  329  jump -> 336
+  334  drop
+  335  undefined
+  336  put_loc loc0 (<completion>)
+  339  get_global "o" ic27  ; 6:7
+  346  dup
+  347  is_nullish
+  348  jump_if_true -> 361
+  353  push_i8 1
+  355  get_elem  ; 6:10
+  356  jump -> 363
+  361  drop
+  362  undefined
+  363  put_loc loc0 (<completion>)
+  366  get_global "o" ic28  ; 6:15
+  373  dup
+  374  is_nullish
+  375  jump_if_true -> 395
+  380  get_method "m" ic29  ; 6:16
+  387  call 0  ; 6:19
+  390  jump -> 397
+  395  drop
+  396  undefined
+  397  put_loc loc0 (<completion>)
+  400  get_global "o" ic30  ; 6:23
+  407  get_method "m" ic31  ; 6:24
+  414  swap
+  415  dup
+  416  is_nullish
+  417  jump_if_true -> 431
+  422  swap
+  423  call 0  ; 6:28
+  426  jump -> 434
+  431  drop
+  432  drop
+  433  undefined
+  434  put_loc loc0 (<completion>)
+  437  get_global "f" ic32  ; 6:32
+  444  undefined
+  445  swap
+  446  dup
+  447  is_nullish
+  448  jump_if_true -> 462
+  453  swap
+  454  call 0  ; 6:35
+  457  jump -> 465
+  462  drop
+  463  drop
+  464  undefined
+  465  put_loc loc0 (<completion>)
+  468  get_global "o" ic33  ; 6:39
+  475  dup
+  476  is_nullish
+  477  jump_if_true -> 513
+  482  get_field "a" ic34  ; 6:40
+  489  get_field "b" ic35  ; 6:43
+  496  get_method "c" ic36  ; 6:45
+  503  push_i8 1
+  505  call 1  ; 6:47
+  508  jump -> 515
+  513  drop
+  514  undefined
+  515  put_loc loc0 (<completion>)
+  518  get_global "console" ic37  ; 7:1
+  525  get_method "log" ic38  ; 7:8
+  532  push_const #4 ("hello")
+  537  get_global "o" ic39  ; 7:22
+  544  get_field "a" ic40  ; 7:23
+  551  dup
+  552  is_nullish
+  553  jump_if_true -> 570
+  558  get_field "b" ic41  ; 7:25
+  565  jump -> 572
+  570  drop
+  571  undefined
+  572  dup
+  573  is_nullish
+  574  jump_if_false -> 582
+  579  drop
+  580  push_i8 2
+  582  call 2  ; 7:12
+  585  put_loc loc0 (<completion>)
+  588  get_loc loc0 (<completion>)
+  591  return

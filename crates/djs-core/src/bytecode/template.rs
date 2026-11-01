@@ -116,7 +116,9 @@ impl From<HeapError> for TemplateError {
 pub fn alloc_template(heap: &mut Heap, p: &TemplateParts<'_>) -> Result<Ref, TemplateError> {
     let stack = check_stack(p.code, p.handlers).map_err(TemplateError::Stack)?;
     let captures = u16::try_from(p.captures.len()).map_err(|_| TemplateError::TooManyCaptures)?;
-    let code = alloc_bytes(heap, p.code)?;
+    let mut code_bytes = p.code.to_vec();
+    let ic_count = number_caches(&mut code_bytes);
+    let code = alloc_bytes(heap, &code_bytes)?;
     let consts = nonempty(p.consts, |v| alloc_value_array(heap, v))?;
     let children = nonempty(p.children, |c| alloc_ref_array(heap, c))?;
     let capture_desc = nonempty(p.captures, |c| alloc_u32_array(heap, c))?;
@@ -133,6 +135,7 @@ pub fn alloc_template(heap: &mut Heap, p: &TemplateParts<'_>) -> Result<Ref, Tem
     a.set(off, FuncTemplate::LOCALS, p.locals);
     a.set(off, FuncTemplate::STACK, stack);
     a.set(off, FuncTemplate::CAPTURES, captures);
+    a.set(off, FuncTemplate::IC_COUNT, ic_count);
     a.set(off, FuncTemplate::CODE, code);
     a.set(off, FuncTemplate::CONSTS, consts);
     a.set(off, FuncTemplate::CHILDREN, children);
@@ -144,6 +147,36 @@ pub fn alloc_template(heap: &mut Heap, p: &TemplateParts<'_>) -> Result<Ref, Tem
     a.set(off, FuncTemplate::SRC_END, p.src_end);
     a.set(off, FuncTemplate::NAMES, names);
     Ok(Ref(off))
+}
+
+/// The `Cache` immediate of a function with more cache sites than slots (D1620).
+pub const NO_CACHE: u16 = u16::MAX;
+
+/// Numbers the `Cache` immediates of `code` in code order (D1620); returns the count.
+/// Sites beyond `NO_CACHE - 1` get `NO_CACHE` (never cached).
+fn number_caches(code: &mut [u8]) -> u16 {
+    use super::imm::ImmKind;
+    let mut n: u16 = 0;
+    let sites: Vec<u32> = super::insns(code)
+        .map_while(Result::ok)
+        .filter_map(|insn| {
+            let info = insn.info();
+            let mut at = insn.pc + 1;
+            for &k in info.imms {
+                if k == ImmKind::Cache {
+                    return Some(at);
+                }
+                at += k.width() as u32;
+            }
+            None
+        })
+        .collect();
+    for at in sites {
+        let idx = if n < NO_CACHE { n } else { NO_CACHE };
+        code[at as usize..at as usize + 2].copy_from_slice(&idx.to_le_bytes());
+        n = n.saturating_add(1);
+    }
+    n
 }
 
 fn nonempty<T>(

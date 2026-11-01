@@ -13,94 +13,94 @@ function 0 <anonymous>: params=0 locals=1 stack=4 captures=0
    42  define_getter "g"
    47  fclosure child2
    52  define_setter "s"
-   57  get_global "k"  ; 8:4
-   62  fclosure child3
-   67  set_function_name 0
-   69  define_elem
-   70  get_global "k"  ; 9:4
-   75  push_const #1 ("m")
-   80  add  ; 9:6
-   81  fclosure child4
-   86  set_function_name 0
-   88  define_method_elem
-   89  get_global "k"  ; 10:8
-   94  fclosure child5
-   99  set_function_name 1
-  101  define_getter_elem
-  102  null
-  103  set_proto
-  104  push_i8 1
-  106  define_field "__proto__x"
-  111  get_global "k"  ; 13:6
-  116  copy_data_props 0
-  118  init_global_lex "o"
-  123  get_global "f"  ; 15:1
-  128  undefined
-  129  array_from 0
-  132  get_global "o"  ; 15:6
-  137  array_spread
-  138  push_i8 1
-  140  array_push
-  141  get_global "o"  ; 15:15
-  146  array_spread
-  147  call_spread  ; 15:2
-  148  put_loc loc0 (<completion>)
-  151  get_global "o"  ; 16:1
-  156  get_method "m"  ; 16:2
-  161  array_from 0
-  164  push_i8 1
-  166  array_from 1
-  169  array_spread
-  170  call_spread  ; 16:4
-  171  put_loc loc0 (<completion>)
-  174  get_global "F"  ; 17:5
+   57  get_global "k" ic0  ; 8:4
+   64  fclosure child3
+   69  set_function_name 0
+   71  define_elem
+   72  get_global "k" ic1  ; 9:4
+   79  push_const #1 ("m")
+   84  add  ; 9:6
+   85  fclosure child4
+   90  set_function_name 0
+   92  define_method_elem
+   93  get_global "k" ic2  ; 10:8
+  100  fclosure child5
+  105  set_function_name 1
+  107  define_getter_elem
+  108  null
+  109  set_proto
+  110  push_i8 1
+  112  define_field "__proto__x"
+  117  get_global "k" ic3  ; 13:6
+  124  copy_data_props 0
+  126  init_global_lex "o"
+  131  get_global "f" ic4  ; 15:1
+  138  undefined
+  139  array_from 0
+  142  get_global "o" ic5  ; 15:6
+  149  array_spread
+  150  push_i8 1
+  152  array_push
+  153  get_global "o" ic6  ; 15:15
+  160  array_spread
+  161  call_spread  ; 15:2
+  162  put_loc loc0 (<completion>)
+  165  get_global "o" ic7  ; 16:1
+  172  get_method "m" ic8  ; 16:2
   179  array_from 0
-  182  get_global "o"  ; 17:10
+  182  push_i8 1
+  184  array_from 1
   187  array_spread
-  188  construct_spread  ; 17:1
+  188  call_spread  ; 16:4
   189  put_loc loc0 (<completion>)
-  192  get_global "o"  ; 18:8
-  197  dup
-  198  is_nullish
-  199  jump_if_true -> 215
-  204  push_atom "a"  ; 18:9
-  209  delete
-  210  jump -> 217
-  215  drop
-  216  push_true
-  217  put_loc loc0 (<completion>)
-  220  get_global "o"  ; 19:8
-  225  dup
-  226  is_nullish
-  227  jump_if_true -> 248
-  232  get_field "b"  ; 19:9
-  237  push_atom "c"  ; 19:12
-  242  delete
-  243  jump -> 250
-  248  drop
-  249  push_true
-  250  put_loc loc0 (<completion>)
-  253  get_global "o"  ; 20:8
-  258  dup
-  259  is_nullish
-  260  jump_if_true -> 276
-  265  get_global "k"  ; 20:12
-  270  delete  ; 20:11
+  192  get_global "F" ic9  ; 17:5
+  199  array_from 0
+  202  get_global "o" ic10  ; 17:10
+  209  array_spread
+  210  construct_spread  ; 17:1
+  211  put_loc loc0 (<completion>)
+  214  get_global "o" ic11  ; 18:8
+  221  dup
+  222  is_nullish
+  223  jump_if_true -> 239
+  228  push_atom "a"  ; 18:9
+  233  delete
+  234  jump -> 241
+  239  drop
+  240  push_true
+  241  put_loc loc0 (<completion>)
+  244  get_global "o" ic12  ; 19:8
+  251  dup
+  252  is_nullish
+  253  jump_if_true -> 276
+  258  get_field "b" ic13  ; 19:9
+  265  push_atom "c"  ; 19:12
+  270  delete
   271  jump -> 278
   276  drop
   277  push_true
   278  put_loc loc0 (<completion>)
-  281  get_loc loc0 (<completion>)
-  284  return
+  281  get_global "o" ic14  ; 20:8
+  288  dup
+  289  is_nullish
+  290  jump_if_true -> 308
+  295  get_global "k" ic15  ; 20:12
+  302  delete  ; 20:11
+  303  jump -> 310
+  308  drop
+  309  push_true
+  310  put_loc loc0 (<completion>)
+  313  get_loc loc0 (<completion>)
+  316  return
 function 0.0 m: params=1 locals=1 stack=2 captures=0
     0  special_object 4
     2  put_loc loc0 (this)
     5  get_loc loc0 (this)  ; 5:17
-    8  get_field "a"  ; 5:21
-   13  get_arg arg0  ; 5:26
-   16  add  ; 5:24
-   17  return
-   18  return_undef
+    8  get_field "a" ic0  ; 5:21
+   15  get_arg arg0  ; 5:26
+   18  add  ; 5:24
+   19  return
+   20  return_undef
 function 0.1 get g: params=0 locals=0 stack=1 captures=0
     0  push_i8 1
     2  return

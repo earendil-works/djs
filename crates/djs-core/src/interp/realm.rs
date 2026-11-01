@@ -122,9 +122,12 @@ pub enum Intrinsic {
     /// The live FinalizationRegistries: an internal EphemeronArray of `[registry,
     /// true]`, or undefined (heap/weakref.rs).
     Registries,
+    /// An int bumped whenever a Script declares a global lexical binding: global
+    /// inline caches of global object properties check it (D1620).
+    GlobalLexEpoch,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::Registries as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::GlobalLexEpoch as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -319,6 +322,7 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     set(heap, Intrinsic::TypedArrayCtor, Value::UNDEFINED);
     set(heap, Intrinsic::KeptObjects, Value::UNDEFINED);
     set(heap, Intrinsic::Registries, Value::UNDEFINED);
+    set(heap, Intrinsic::GlobalLexEpoch, Value::int(0));
     let ctors = heap.new_object(None)?;
     set(heap, Intrinsic::Constructors, Value::object(ctors));
     let typed_array_proto = intrinsic_obj(heap, Intrinsic::TypedArrayProto);
@@ -536,6 +540,15 @@ pub(crate) fn declare_global_lexical(
     let lex = global_lex(heap);
     let d = PropertyDescriptor::data(Value::UNINITIALIZED, PropFlags::new(writable, true, true));
     heap.define_own_property(lex, key, &d)?;
+    // A new lexical binding may shadow a global object property a cache remembers.
+    let epoch = intrinsic(heap, Intrinsic::GlobalLexEpoch)
+        .as_int()
+        .unwrap_or(0);
+    set_intrinsic(
+        heap,
+        Intrinsic::GlobalLexEpoch,
+        Value::int(epoch.wrapping_add(1)),
+    );
     Ok(())
 }
 

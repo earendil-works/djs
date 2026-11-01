@@ -2,7 +2,7 @@
 // Regenerate: DJS_UPDATE_LAYOUT=1 cargo test -p djs-core layout_generated
 
 export const LAYOUT = {
-  "layoutHash": 3616819451,
+  "layoutHash": 3492952080,
   "magic": 5458500,
   "headerSize": 8,
   "header": { "KIND": 0, "GC": 1, "FLAGS": 2, "SIZE": 4 },
@@ -192,7 +192,7 @@ export const LAYOUT = {
     },
     "FuncTemplate": {
       "kind": 12,
-      "minSize": 72,
+      "minSize": 80,
       "fields": {
         "FLAGS": { "offset": 8, "type": "u32" },
         "NAME": { "offset": 12, "type": "u32" },
@@ -201,7 +201,7 @@ export const LAYOUT = {
         "LOCALS": { "offset": 20, "type": "u16" },
         "STACK": { "offset": 22, "type": "u16" },
         "CAPTURES": { "offset": 24, "type": "u16" },
-        "RESERVED": { "offset": 26, "type": "u16" },
+        "IC_COUNT": { "offset": 26, "type": "u16" },
         "CODE": { "offset": 28, "type": "Ref" },
         "CONSTS": { "offset": 32, "type": "Ref" },
         "CHILDREN": { "offset": 36, "type": "Ref" },
@@ -212,7 +212,8 @@ export const LAYOUT = {
         "SRC_START": { "offset": 56, "type": "u32" },
         "SRC_END": { "offset": 60, "type": "u32" },
         "NAMES": { "offset": 64, "type": "Ref" },
-        "RESERVED2": { "offset": 68, "type": "u32" }
+        "RESERVED2": { "offset": 68, "type": "u32" },
+        "IC": { "offset": 72, "type": "Ref" }
       },
       "tail": null
     },

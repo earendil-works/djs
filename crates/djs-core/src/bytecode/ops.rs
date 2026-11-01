@@ -452,11 +452,11 @@ ops! {
     // ---- Globals ---------------------------------------------------------------------
 
     /// `-> v`: global lexical record, then the global object; ReferenceError if missing.
-    GetGlobal get_global(atom: Atom) pop 0 push 1 cost Access flags THROWS | CALLS;
+    GetGlobal get_global(atom: Atom, ic: Cache) pop 0 push 1 cost Access flags THROWS | CALLS;
     /// `-> v`: like `get_global`, but `undefined` if missing (`typeof`).
-    GetGlobalTypeof get_global_typeof(atom: Atom) pop 0 push 1 cost Access flags THROWS | CALLS;
+    GetGlobalTypeof get_global_typeof(atom: Atom, ic: Cache) pop 0 push 1 cost Access flags THROWS | CALLS;
     /// `v ->`: ReferenceError if missing, TypeError for a global const.
-    PutGlobal put_global(atom: Atom) pop 1 push 0 cost Access flags THROWS | CALLS;
+    PutGlobal put_global(atom: Atom, ic: Cache) pop 1 push 0 cost Access flags THROWS | CALLS;
     /// `v ->`: initialize a Script top-level let/const/class.
     InitGlobalLex init_global_lex(atom: Atom) pop 1 push 0 cost Access flags THROWS | ALLOC;
     /// Script GlobalDeclarationInstantiation from the declaration list in constant `idx`.
@@ -467,11 +467,11 @@ ops! {
     // ---- Properties --------------------------------------------------------------------
 
     /// `obj -> v`
-    GetField get_field(atom: Atom) pop 1 push 1 cost Access flags THROWS | CALLS;
+    GetField get_field(atom: Atom, ic: Cache) pop 1 push 1 cost Access flags THROWS | CALLS;
     /// `obj -> f obj`: callee and `this` for a method call.
-    GetMethod get_method(atom: Atom) pop 1 push 2 cost Access flags THROWS | CALLS;
+    GetMethod get_method(atom: Atom, ic: Cache) pop 1 push 2 cost Access flags THROWS | CALLS;
     /// `obj v ->`
-    PutField put_field(atom: Atom) pop 2 push 0 cost Access flags THROWS | CALLS | ALLOC;
+    PutField put_field(atom: Atom, ic: Cache) pop 2 push 0 cost Access flags THROWS | CALLS | ALLOC;
     /// `obj key -> v`
     GetElem get_elem() pop 2 push 1 cost Access flags THROWS | CALLS;
     /// `obj key -> f obj`

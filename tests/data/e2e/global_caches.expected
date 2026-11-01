@@ -1,0 +1,17 @@
+5
+missing
+1
+2
+missing
+getter
+6 7
+TypeError: 'ro' is read-only
+TypeError: 'ro' is read-only
+8 8 49
+ReferenceError: lex is not initialized
+lexical
+x y y
+TypeError: 'k' is read-only
+TypeError: 'k' is read-only
+6525 object undefined
+ReferenceError: 'undeclaredThing' is not defined

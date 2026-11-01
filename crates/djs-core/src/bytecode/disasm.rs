@@ -96,6 +96,7 @@ fn operand(out: &mut String, insn: &Insn, i: usize, kind: ImmKind, cx: &DisasmCo
             name(out, cx, cx.locals + raw as usize, true)
         }
         ImmKind::Scope => write!(out, "s{raw}"),
+        ImmKind::Cache => write!(out, "ic{raw}"),
         ImmKind::Intrinsic => match super::intrinsics::intrinsic(raw as u16) {
             Some(i) => write!(out, "%{}", i.name),
             None => write!(out, "%{raw}"),

@@ -38,7 +38,17 @@ and implement it.
   the builtin language and property lookup is 3.5% of the time. Proposal: cheaper lookups
   plus verified-index inline caches (globals, own properties, prototype methods with an
   epoch) now; shapes later as their own issue merged with 0052 S2 (memory/image), after
-  0063. Sent to the coordinator for approval before implementing.
+  0063. Sent to the coordinator for approval before implementing. Approved (globals
+  first; caches in the heap; warm = cold restore test; stress modes identical).
+- Part 1a, global caches (D1620): the `Cache` immediate on the six property/global ops
+  (bytecode format, so OPS_HASH and the build hash change), FuncTemplate IC_COUNT/IC,
+  interp/run/ic.rs, Heap::own_entry_index/data_at/set_data_at, realm GlobalLexEpoch.
+  Tests: e2e global_caches.js (one qjs bug avoided: qjs keeps throwing after a
+  read-only global becomes writable), vm/tests.rs global_caches_follow_every_change and
+  warm_and_cold_inline_caches_behave_the_same. Measurements (LTO, cgu=1, interleaved,
+  scratch ab.py/micro_ab.py): global read 10.4 -> 1.3 ns; test262 decodeURI test -13%;
+  engine track within noise (float -4%: its time is the prelude Math functions). Found
+  that default release builds vary ±15% between builds from layout (noted in D1620).
 
 ## Follow-ups
 

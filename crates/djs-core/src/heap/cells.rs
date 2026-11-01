@@ -283,8 +283,8 @@ cells! {
         STACK: u16 = 22,
         /// Number of captures (Boxes in the closure).
         CAPTURES: u16 = 24,
-        /// Reserved, 0.
-        RESERVED: u16 = 26,
+        /// Inline cache slots of the code (the `Cache` immediates, D1620).
+        IC_COUNT: u16 = 26,
         /// [`Bytes`]: the bytecode.
         CODE: Ref = 28,
         /// [`ValueArray`] of constants (numbers, strings, template-object caches), or null.
@@ -308,6 +308,9 @@ cells! {
         NAMES: Ref = 64,
         /// Reserved, 0.
         RESERVED2: u32 = 68,
+        /// [`U32Array`] of `IC_COUNT` inline cache slots (`interp::run::ic`), allocated
+        /// the first time one is filled; null before.
+        IC: Ref = 72,
     };
 
     /// One compiled source.

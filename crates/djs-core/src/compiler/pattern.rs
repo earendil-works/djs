@@ -364,7 +364,7 @@ impl<'a> Parser<'a, '_> {
                 Some(a) => {
                     self.code().pick(s + r);
                     self.mark(key_tok.start);
-                    self.code().get_field(a);
+                    self.code().get_field(a, 0);
                 }
                 None => {
                     self.code().pick(s + 1 + r);
@@ -400,7 +400,7 @@ impl<'a> Parser<'a, '_> {
         self.mark(open.start);
         self.code().call_intrinsic(intrinsic("GetIterator"), 1);
         self.code().dup();
-        self.code().get_field(atoms::NEXT);
+        self.code().get_field(atoms::NEXT, 0);
         self.code().swap();
         // `next it`: the close handler's depth is the depth here.
         let l_base = self.new_label();
@@ -540,9 +540,9 @@ impl<'a> Parser<'a, '_> {
         self.code().call(0);
         self.code().iter_check_object();
         self.code().dup();
-        self.code().get_field(atoms::DONE);
+        self.code().get_field(atoms::DONE, 0);
         self.code().jump_if_true(l_done);
-        self.code().get_field(atoms::VALUE);
+        self.code().get_field(atoms::VALUE, 0);
         self.code().jump(l_end);
         self.place(l_done);
         self.code().drop();

@@ -331,7 +331,7 @@ fn emit_init(out: &mut CodeBuf, storage: Storage, atom: Atom, lexical: bool) {
         Storage::Box(s) => out.put_box(s),
         Storage::Arg(a) => out.put_arg(a),
         Storage::Global if lexical => out.init_global_lex(atom),
-        Storage::Global => out.put_global(atom),
+        Storage::Global => out.put_global(atom, 0),
         Storage::None => out.drop(),
     }
 }
@@ -478,18 +478,18 @@ fn emit_function(
                     match insn.op {
                         Op::NameGet | Op::NameTypeof => {
                             load(&mut out);
-                            out.get_field(atom);
+                            out.get_field(atom, 0);
                         }
                         Op::NameSet => {
                             out.dup();
                             load(&mut out);
                             out.swap();
-                            out.put_field(atom);
+                            out.put_field(atom, 0);
                         }
                         _ => {
                             load(&mut out);
                             out.swap();
-                            out.put_field(atom);
+                            out.put_field(atom, 0);
                         }
                     }
                     continue;
@@ -785,9 +785,9 @@ fn emit_name(
             if atom == atom_undefined && matches!(res.target, Target::Global) {
                 out.undefined()
             } else if typeof_ {
-                out.get_global_typeof(atom)
+                out.get_global_typeof(atom, 0)
             } else {
-                out.get_global(atom)
+                out.get_global(atom, 0)
             }
         }
     };
@@ -835,7 +835,7 @@ fn emit_name(
                     if keep {
                         out.dup();
                     }
-                    out.put_global(atom);
+                    out.put_global(atom, 0);
                 }
             }
         }
@@ -845,7 +845,7 @@ fn emit_name(
             At::Arg(a) => out.put_arg(a),
             At::Cap(c) => out.put_cap(c),
             At::Global if lexical => out.init_global_lex(atom),
-            At::Global => out.put_global(atom),
+            At::Global => out.put_global(atom, 0),
         },
         _ => out.nop(),
     }

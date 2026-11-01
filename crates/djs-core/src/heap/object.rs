@@ -798,6 +798,58 @@ impl Heap {
         })
     }
 
+    // ---------------------------------------------------------------- inline caches
+
+    /// The table entry of own property `key` of `o`, if it is stored in the property
+    /// table (not a dense element, not an array's `length`): the index an inline cache
+    /// remembers (D1620). Only ordinary storage: callers check the class.
+    #[inline]
+    pub fn own_entry_index(&self, o: Obj, key: Atom) -> Option<u32> {
+        match self.props(o) {
+            0 => None,
+            t => self.table_find(t, key),
+        }
+    }
+
+    /// The value of entry `i` of `o`'s property table if that entry is the data property
+    /// `key` (an inline cache hit, D1620); `None` for anything else, including a stale
+    /// index. Entry keys are never array indexes of arrays here, since those callers
+    /// only cache non-index atoms.
+    #[inline(always)]
+    pub fn data_at(&self, o: Obj, i: u32, key: Atom) -> Option<Value> {
+        let t = self.props(o);
+        if t == 0 || i >= self.arena().get(t, PropTable::COUNT) {
+            return None;
+        }
+        let e = PropTable::ENTRIES.at(t, i);
+        let a = self.arena();
+        if a.get(e, PropEntry::KEY) != key.id() || a.get(e, PropEntry::FLAGS) & STORE_ACCESSOR != 0
+        {
+            return None;
+        }
+        Some(a.get(e, PropEntry::VALUE))
+    }
+
+    /// Writes `v` to entry `i` of `o`'s table if it is the writable data property `key`
+    /// (an inline cache hit of a store, D1620); false with nothing changed otherwise.
+    #[inline(always)]
+    pub fn set_data_at(&mut self, o: Obj, i: u32, key: Atom, v: Value) -> bool {
+        let t = self.props(o);
+        if t == 0 || i >= self.arena().get(t, PropTable::COUNT) {
+            return false;
+        }
+        let e = PropTable::ENTRIES.at(t, i);
+        let fl = self.arena().get(e, PropEntry::FLAGS);
+        if self.arena().get(e, PropEntry::KEY) != key.id()
+            || fl & STORE_ACCESSOR != 0
+            || !PropFlags::from_bits(fl as u8).writable()
+        {
+            return false;
+        }
+        self.arena_mut().set(e, PropEntry::VALUE, v);
+        true
+    }
+
     fn read_entry(&self, t: u32, i: u32) -> Property {
         let e = PropTable::ENTRIES.at(t, i);
         let a = self.arena();

@@ -6,211 +6,211 @@ function 0 <anonymous>: params=0 locals=3 stack=3 captures=0
    11  init_global_lex "x"
    16  undefined
    17  put_loc loc0 (<completion>)
-   20  get_global "x"  ; 3:5
-   25  jump_if_false -> 41
-   30  push_i8 1  ; 3:8
-   32  dup
-   33  put_global "x"
-   38  put_loc loc0 (<completion>)
-   41  undefined
+   20  get_global "x" ic0  ; 3:5
+   27  jump_if_false -> 45
+   32  push_i8 1  ; 3:8
+   34  dup
+   35  put_global "x" ic1
    42  put_loc loc0 (<completion>)
-   45  get_global "x"  ; 4:5
-   50  jump_if_false -> 71
-   55  push_i8 2  ; 4:10
-   57  dup
-   58  put_global "x"
-   63  put_loc loc0 (<completion>)
-   66  jump -> 140
-   71  get_global "x"  ; 4:27
-   76  push_i8 1
-   78  gt  ; 4:29
-   79  jump_if_false -> 100
-   84  push_i8 3  ; 4:36
-   86  dup
-   87  put_global "x"
-   92  put_loc loc0 (<completion>)
-   95  jump -> 140
-  100  get_global "x"  ; 4:53
-  105  push_i8 2
-  107  gt  ; 4:55
-  108  jump_if_false -> 129
-  113  push_i8 4  ; 4:60
-  115  dup
-  116  put_global "x"
-  121  put_loc loc0 (<completion>)
-  124  jump -> 140
-  129  push_i8 5  ; 4:72
-  131  dup
-  132  put_global "x"
+   45  undefined
+   46  put_loc loc0 (<completion>)
+   49  get_global "x" ic2  ; 4:5
+   56  jump_if_false -> 79
+   61  push_i8 2  ; 4:10
+   63  dup
+   64  put_global "x" ic3
+   71  put_loc loc0 (<completion>)
+   74  jump -> 158
+   79  get_global "x" ic4  ; 4:27
+   86  push_i8 1
+   88  gt  ; 4:29
+   89  jump_if_false -> 112
+   94  push_i8 3  ; 4:36
+   96  dup
+   97  put_global "x" ic5
+  104  put_loc loc0 (<completion>)
+  107  jump -> 158
+  112  get_global "x" ic6  ; 4:53
+  119  push_i8 2
+  121  gt  ; 4:55
+  122  jump_if_false -> 145
+  127  push_i8 4  ; 4:60
+  129  dup
+  130  put_global "x" ic7
   137  put_loc loc0 (<completion>)
-  140  undefined
-  141  put_loc loc0 (<completion>)
-  144  get_global "x"  ; 5:8
-  149  push_i8 10
-  151  lt  ; 5:10
-  152  jump_if_false -> 178
-  157  get_global "x"  ; 5:16
-  162  to_numeric
-  163  dup
-  164  inc  ; 5:17
-  165  put_global "x"  ; 5:16
-  170  put_loc loc0 (<completion>)
-  173  jump -> 144
-  178  undefined
-  179  put_loc loc0 (<completion>)
-  182  get_global "x"  ; 6:6
-  187  to_numeric
-  188  dup
-  189  dec  ; 6:7
-  190  put_global "x"  ; 6:6
-  195  put_loc loc0 (<completion>)
-  198  get_global "x"  ; 6:19
-  203  push_i8 0
-  205  gt  ; 6:21
-  206  jump_if_true -> 182
-  211  undefined
-  212  put_loc loc0 (<completion>)
-  215  push_i8 0
-  217  put_loc loc1 (i)
-  220  get_loc loc1 (i)  ; 7:17
-  223  push_i8 3
-  225  lt  ; 7:19
-  226  jump_if_false -> 314
-  231  jump -> 251
-  236  get_loc loc1 (i)  ; 7:24
-  239  to_numeric
-  240  dup
-  241  inc  ; 7:25
-  242  put_loc loc1 (i)  ; 7:24
-  245  drop
-  246  jump -> 220
-  251  undefined
-  252  put_loc loc0 (<completion>)
-  255  get_loc loc1 (i)  ; 7:35
-  258  push_i8 1
-  260  eq  ; 7:37
-  261  jump_if_false -> 271
-  266  jump -> 236
-  271  undefined
-  272  put_loc loc0 (<completion>)
-  275  get_loc loc1 (i)  ; 7:57
-  278  push_i8 2
-  280  eq  ; 7:59
-  281  jump_if_false -> 291
-  286  jump -> 314
-  291  get_global "x"  ; 7:72
-  296  get_loc loc1 (i)  ; 7:77
-  299  add  ; 7:74
-  300  dup  ; 7:72
-  301  put_global "x"
-  306  put_loc loc0 (<completion>)
-  309  jump -> 236
-  314  undefined
-  315  put_loc loc0 (<completion>)
-  318  jump -> 328
-  323  jump -> 318
-  328  undefined
-  329  put_loc loc0 (<completion>)
-  332  push_i8 0
-  334  put_global "j"  ; 9:10
-  339  get_global "j"  ; 9:17
-  344  push_i8 2
-  346  lt  ; 9:19
-  347  jump_if_false -> 373
-  352  get_global "j"  ; 9:25
-  357  to_numeric
-  358  dup
-  359  inc  ; 9:26
-  360  put_global "j"  ; 9:25
-  365  put_loc loc0 (<completion>)
-  368  jump -> 339
-  373  undefined
-  374  put_loc loc0 (<completion>)
-  377  push_i8 0
-  379  put_loc loc2 (i)
-  382  get_loc loc2 (i)  ; 10:24
-  385  push_i8 2
-  387  lt  ; 10:26
-  388  jump_if_false -> 455
-  393  jump -> 413
-  398  get_loc loc2 (i)  ; 10:31
-  401  to_numeric
-  402  dup
-  403  inc  ; 10:32
-  404  put_loc loc2 (i)  ; 10:31
-  407  drop
-  408  jump -> 382
-  413  undefined
-  414  put_loc loc0 (<completion>)
-  417  push_true
-  418  jump_if_false -> 450
-  423  undefined
-  424  put_loc loc0 (<completion>)
-  427  get_loc loc2 (i)  ; 10:64
-  430  jump_if_false -> 440
-  435  jump -> 398
-  440  jump -> 450
-  445  jump -> 417
-  450  jump -> 398
+  140  jump -> 158
+  145  push_i8 5  ; 4:72
+  147  dup
+  148  put_global "x" ic8
+  155  put_loc loc0 (<completion>)
+  158  undefined
+  159  put_loc loc0 (<completion>)
+  162  get_global "x" ic9  ; 5:8
+  169  push_i8 10
+  171  lt  ; 5:10
+  172  jump_if_false -> 202
+  177  get_global "x" ic10  ; 5:16
+  184  to_numeric
+  185  dup
+  186  inc  ; 5:17
+  187  put_global "x" ic11  ; 5:16
+  194  put_loc loc0 (<completion>)
+  197  jump -> 162
+  202  undefined
+  203  put_loc loc0 (<completion>)
+  206  get_global "x" ic12  ; 6:6
+  213  to_numeric
+  214  dup
+  215  dec  ; 6:7
+  216  put_global "x" ic13  ; 6:6
+  223  put_loc loc0 (<completion>)
+  226  get_global "x" ic14  ; 6:19
+  233  push_i8 0
+  235  gt  ; 6:21
+  236  jump_if_true -> 206
+  241  undefined
+  242  put_loc loc0 (<completion>)
+  245  push_i8 0
+  247  put_loc loc1 (i)
+  250  get_loc loc1 (i)  ; 7:17
+  253  push_i8 3
+  255  lt  ; 7:19
+  256  jump_if_false -> 348
+  261  jump -> 281
+  266  get_loc loc1 (i)  ; 7:24
+  269  to_numeric
+  270  dup
+  271  inc  ; 7:25
+  272  put_loc loc1 (i)  ; 7:24
+  275  drop
+  276  jump -> 250
+  281  undefined
+  282  put_loc loc0 (<completion>)
+  285  get_loc loc1 (i)  ; 7:35
+  288  push_i8 1
+  290  eq  ; 7:37
+  291  jump_if_false -> 301
+  296  jump -> 266
+  301  undefined
+  302  put_loc loc0 (<completion>)
+  305  get_loc loc1 (i)  ; 7:57
+  308  push_i8 2
+  310  eq  ; 7:59
+  311  jump_if_false -> 321
+  316  jump -> 348
+  321  get_global "x" ic15  ; 7:72
+  328  get_loc loc1 (i)  ; 7:77
+  331  add  ; 7:74
+  332  dup  ; 7:72
+  333  put_global "x" ic16
+  340  put_loc loc0 (<completion>)
+  343  jump -> 266
+  348  undefined
+  349  put_loc loc0 (<completion>)
+  352  jump -> 362
+  357  jump -> 352
+  362  undefined
+  363  put_loc loc0 (<completion>)
+  366  push_i8 0
+  368  put_global "j" ic17  ; 9:10
+  375  get_global "j" ic18  ; 9:17
+  382  push_i8 2
+  384  lt  ; 9:19
+  385  jump_if_false -> 415
+  390  get_global "j" ic19  ; 9:25
+  397  to_numeric
+  398  dup
+  399  inc  ; 9:26
+  400  put_global "j" ic20  ; 9:25
+  407  put_loc loc0 (<completion>)
+  410  jump -> 375
+  415  undefined
+  416  put_loc loc0 (<completion>)
+  419  push_i8 0
+  421  put_loc loc2 (i)
+  424  get_loc loc2 (i)  ; 10:24
+  427  push_i8 2
+  429  lt  ; 10:26
+  430  jump_if_false -> 497
+  435  jump -> 455
+  440  get_loc loc2 (i)  ; 10:31
+  443  to_numeric
+  444  dup
+  445  inc  ; 10:32
+  446  put_loc loc2 (i)  ; 10:31
+  449  drop
+  450  jump -> 424
   455  undefined
   456  put_loc loc0 (<completion>)
-  459  get_global "x"  ; 11:14
-  464  jump_if_false -> 474
-  469  jump -> 485
-  474  push_i8 7  ; 11:30
-  476  dup
-  477  put_global "x"
-  482  put_loc loc0 (<completion>)
-  485  undefined
-  486  put_loc loc0 (<completion>)
-  489  get_global "x"  ; 12:9
-  494  jump -> 499
-  499  dup
-  500  push_i8 1
-  502  strict_eq
-  503  jump_if_false -> 525
-  508  drop
-  509  push_i8 10  ; 13:11
-  511  dup
-  512  put_global "x"
-  517  put_loc loc0 (<completion>)
-  520  jump -> 535
-  525  dup
-  526  push_i8 2
-  528  strict_eq
-  529  jump_if_false -> 572
-  534  drop
-  535  push_i8 20  ; 14:11
-  537  dup
-  538  put_global "x"
-  543  put_loc loc0 (<completion>)
-  546  jump -> 604
-  551  jump -> 556
-  556  push_i8 30  ; 15:12
-  558  dup
-  559  put_global "x"
-  564  put_loc loc0 (<completion>)
-  567  jump -> 582
-  572  dup
-  573  push_i8 3
-  575  strict_eq
-  576  jump_if_false -> 598
-  581  drop
-  582  push_i8 40  ; 16:13
-  584  dup
-  585  put_global "x"
-  590  put_loc loc0 (<completion>)
-  593  jump -> 604
-  598  drop
-  599  jump -> 556
-  604  undefined
-  605  put_loc loc0 (<completion>)
-  608  get_global "x"  ; 18:9
-  613  jump -> 618
-  618  drop
-  619  jump -> 624
-  624  get_global "x"  ; 19:7
-  629  throw  ; 19:1
-  630  debugger
-  631  get_loc loc0 (<completion>)
-  634  return
+  459  push_true
+  460  jump_if_false -> 492
+  465  undefined
+  466  put_loc loc0 (<completion>)
+  469  get_loc loc2 (i)  ; 10:64
+  472  jump_if_false -> 482
+  477  jump -> 440
+  482  jump -> 492
+  487  jump -> 459
+  492  jump -> 440
+  497  undefined
+  498  put_loc loc0 (<completion>)
+  501  get_global "x" ic21  ; 11:14
+  508  jump_if_false -> 518
+  513  jump -> 531
+  518  push_i8 7  ; 11:30
+  520  dup
+  521  put_global "x" ic22
+  528  put_loc loc0 (<completion>)
+  531  undefined
+  532  put_loc loc0 (<completion>)
+  535  get_global "x" ic23  ; 12:9
+  542  jump -> 547
+  547  dup
+  548  push_i8 1
+  550  strict_eq
+  551  jump_if_false -> 575
+  556  drop
+  557  push_i8 10  ; 13:11
+  559  dup
+  560  put_global "x" ic24
+  567  put_loc loc0 (<completion>)
+  570  jump -> 585
+  575  dup
+  576  push_i8 2
+  578  strict_eq
+  579  jump_if_false -> 626
+  584  drop
+  585  push_i8 20  ; 14:11
+  587  dup
+  588  put_global "x" ic25
+  595  put_loc loc0 (<completion>)
+  598  jump -> 660
+  603  jump -> 608
+  608  push_i8 30  ; 15:12
+  610  dup
+  611  put_global "x" ic26
+  618  put_loc loc0 (<completion>)
+  621  jump -> 636
+  626  dup
+  627  push_i8 3
+  629  strict_eq
+  630  jump_if_false -> 654
+  635  drop
+  636  push_i8 40  ; 16:13
+  638  dup
+  639  put_global "x" ic27
+  646  put_loc loc0 (<completion>)
+  649  jump -> 660
+  654  drop
+  655  jump -> 608
+  660  undefined
+  661  put_loc loc0 (<completion>)
+  664  get_global "x" ic28  ; 18:9
+  671  jump -> 676
+  676  drop
+  677  jump -> 682
+  682  get_global "x" ic29  ; 19:7
+  689  throw  ; 19:1
+  690  debugger
+  691  get_loc loc0 (<completion>)
+  694  return

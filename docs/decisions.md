@@ -2908,3 +2908,28 @@ fuel accounting and limit; `used` can exceed `fuel` by the cost of the last inst
 and `backtrace()`, the `Error.stack`-style trace of a suspended call (out of fuel or
 parked), empty without frames. They need two one-line `pub(crate)` getters on `Exec`
 (`fuel_left`, `pc`); `Vm::run` is unchanged.
+
+## D1620: Inline caches: verified table indexes in a per-template array
+date: 2026-11-03 · by: heap · issue: 0062
+Property and global access sites (`get_field`, `get_method`, `put_field`, `get_global`,
+`get_global_typeof`, `put_global`) carry a `Cache` immediate (u16), numbered in code
+order by `alloc_template` (the emitters write 0; `NO_CACHE` = u16::MAX past 65,535
+sites). `FuncTemplate::IC_COUNT` is the number of sites, `FuncTemplate::IC` a U32Array
+of three words per site, allocated when the first slot is filled (so the base image has
+none). A slot remembers the **index of the entry in a property table** where the property
+was found; a hit re-reads that entry and checks the key and that it is a (writable) data
+property (`Heap::data_at`, `set_data_at`), so a stale slot is a miss and caches never
+change semantics. Slots hold no arena offsets that outlive a collection (indexes and
+epochs only), so the GC ignores them, and a VM restored from an image with warm caches
+behaves exactly like one with cold caches (vm/tests.rs
+`warm_and_cold_inline_caches_behave_the_same`). Global slots point into the global
+lexical record or the global object; for the latter, the slot also holds the realm's
+`GlobalLexEpoch`, bumped by every new global lexical binding, which could shadow it.
+docs/objects.md has the measurements and the rest of the plan (own properties, prototype
+methods, then shapes as a separate issue).
+
+Benchmarking note: release builds with the default 16 codegen units vary by ±15% on
+unrelated benchmarks between builds of nearly the same source (and of the same source in
+another directory), from code layout. Compare builds made with
+`CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 CARGO_PROFILE_RELEASE_LTO=fat`, from the same
+directory.

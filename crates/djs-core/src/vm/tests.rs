@@ -243,7 +243,7 @@ fn strings() {
         f.b.add(); // "ab1"
         f.b.push_const(long);
         f.b.add(); // a rope
-        f.b.get_field(crate::heap::atoms::LENGTH);
+        f.b.get_field(crate::heap::atoms::LENGTH, 0);
         f.b.push_const(n);
         f.b.add(); // 43 + "42" -> "4342"
         f.b.push_const(n);
@@ -319,15 +319,15 @@ fn console_log_is_a_host_call() {
         let console = vm.heap_mut().atom_str("console").unwrap();
         let log = vm.heap_mut().atom_str("log").unwrap();
         let hi = f.string(vm, "hi");
-        f.b.get_global(console);
-        f.b.get_method(log);
+        f.b.get_global(console, 0);
+        f.b.get_method(log, 0);
         f.b.push_const(hi);
         f.b.push_i8(42);
         f.b.null();
         f.b.call(3);
         f.b.drop();
-        f.b.get_global(console);
-        f.b.get_method(log);
+        f.b.get_global(console, 0);
+        f.b.get_method(log, 0);
         f.b.object();
         f.b.push_i8(1);
         f.b.define_field(crate::heap::atoms::VALUE);
@@ -352,7 +352,7 @@ fn host_call_results_and_errors() {
     let mut f = F::new();
     let (s, e, t) = (f.b.new_label(), f.b.new_label(), f.b.new_label());
     f.b.place_label(s);
-    f.b.get_global(h);
+    f.b.get_global(h, 0);
     f.b.undefined();
     f.b.push_i8(1);
     f.b.call(1);
@@ -408,18 +408,18 @@ fn error_of(build: impl Fn(&mut Vm, &mut F)) -> String {
 fn runtime_errors() {
     let r = error_of(|vm, f| {
         let a = vm.heap_mut().atom_str("nope").unwrap();
-        f.b.get_global(a);
+        f.b.get_global(a, 0);
     });
     assert_eq!(r, "throw ReferenceError: 'nope' is not defined");
     let r = error_of(|vm, f| {
         let a = vm.heap_mut().atom_str("nope").unwrap();
         f.b.push_i8(1);
-        f.b.put_global(a);
+        f.b.put_global(a, 0);
     });
     assert_eq!(r, "throw ReferenceError: 'nope' is not defined");
     let r = error_of(|_, f| {
         f.b.undefined();
-        f.b.get_field(crate::heap::atoms::NAME);
+        f.b.get_field(crate::heap::atoms::NAME, 0);
     });
     assert_eq!(
         r,
@@ -434,7 +434,7 @@ fn runtime_errors() {
     let r = error_of(|_, f| {
         f.b.undefined();
         f.b.push_i8(1);
-        f.b.put_field(crate::heap::atoms::NAME);
+        f.b.put_field(crate::heap::atoms::NAME, 0);
     });
     assert_eq!(
         r,
@@ -494,24 +494,24 @@ fn objects_and_globals() {
         // globalThis.counter = 1; counter = counter + 1; o = {}; o.x = counter; o[5] = 3;
         // return [o.x, o[5], typeof o, "x" in o, counter]
         f.locals = 1;
-        f.b.get_global(crate::heap::atoms::GLOBAL_THIS);
+        f.b.get_global(crate::heap::atoms::GLOBAL_THIS, 0);
         f.b.push_i8(1);
-        f.b.put_field(g);
-        f.b.get_global(g);
+        f.b.put_field(g, 0);
+        f.b.get_global(g, 0);
         f.b.push_i8(1);
         f.b.add();
-        f.b.put_global(g);
+        f.b.put_global(g, 0);
         f.b.object();
         f.b.put_loc(0);
         f.b.get_loc(0);
-        f.b.get_global(g);
-        f.b.put_field(x);
+        f.b.get_global(g, 0);
+        f.b.put_field(x, 0);
         f.b.get_loc(0);
         f.b.push_i8(5);
         f.b.push_i8(3);
         f.b.put_elem();
         f.b.get_loc(0);
-        f.b.get_field(x);
+        f.b.get_field(x, 0);
         f.b.get_loc(0);
         f.b.push_i8(5);
         f.b.get_elem();
@@ -520,7 +520,7 @@ fn objects_and_globals() {
         f.b.push_atom(x);
         f.b.get_loc(0);
         f.b.in_();
-        f.b.get_global_typeof(g);
+        f.b.get_global_typeof(g, 0);
         f.b.array_from(5);
         f.b.return_();
         f.build(vm)
@@ -612,19 +612,19 @@ fn accessors_run_through_continuations() {
         let v = vm.heap_mut().atom_str("v").unwrap();
         let p = vm.heap_mut().atom_str("p").unwrap();
         let mut getter = F::new();
-        getter.b.get_global(crate::heap::atoms::GLOBAL_THIS);
-        getter.b.get_field(v);
+        getter.b.get_global(crate::heap::atoms::GLOBAL_THIS, 0);
+        getter.b.get_field(v, 0);
         getter.b.push_i8(2);
         getter.b.mul();
         getter.b.return_();
         let getter = getter.build(vm);
         let mut setter = F::new();
         setter.params = 1;
-        setter.b.get_global(crate::heap::atoms::GLOBAL_THIS);
+        setter.b.get_global(crate::heap::atoms::GLOBAL_THIS, 0);
         setter.b.get_arg(0);
         setter.b.push_i8(1);
         setter.b.add();
-        setter.b.put_field(v);
+        setter.b.put_field(v, 0);
         setter.b.push_i8(99);
         setter.b.return_(); // the setter's result is discarded
         let setter = setter.build(vm);
@@ -639,12 +639,12 @@ fn accessors_run_through_continuations() {
             .unwrap();
         // return [p, (p = 20, p), v]
         let mut f = F::new();
-        f.b.get_global(p);
-        f.b.get_global(crate::heap::atoms::GLOBAL_THIS);
+        f.b.get_global(p, 0);
+        f.b.get_global(crate::heap::atoms::GLOBAL_THIS, 0);
         f.b.push_i8(20);
-        f.b.put_field(p);
-        f.b.get_global(p);
-        f.b.get_global(v);
+        f.b.put_field(p, 0);
+        f.b.get_global(p, 0);
+        f.b.get_global(v, 0);
         f.b.array_from(3);
         f.b.return_();
         f.build(vm)
@@ -658,7 +658,7 @@ fn exceptions_unwind_frames() {
     let r = result_of(|vm| {
         let mut t = F::new();
         t.b.null();
-        t.b.get_field(crate::heap::atoms::NAME);
+        t.b.get_field(crate::heap::atoms::NAME, 0);
         t.b.return_();
         let t = t.build(vm);
         let mut f = F::new();
@@ -673,7 +673,7 @@ fn exceptions_unwind_frames() {
         f.b.return_();
         f.b.place_label(e);
         f.b.place_label(h);
-        f.b.get_field(crate::heap::atoms::MESSAGE);
+        f.b.get_field(crate::heap::atoms::MESSAGE, 0);
         f.b.push_const(caught);
         f.b.swap();
         f.b.add();
@@ -697,8 +697,8 @@ fn finally_with_gosub() {
         f.b.gosub(fin);
         f.b.return_();
         f.b.place_label(fin);
-        f.b.get_global(console);
-        f.b.get_method(log);
+        f.b.get_global(console, 0);
+        f.b.get_method(log, 0);
         f.b.push_const(fin_s);
         f.b.call(1);
         f.b.drop();
@@ -721,7 +721,7 @@ fn stack_overflow() {
     // function f() { return f() }
     let name = vm.heap_mut().atom_str("f").unwrap();
     let mut f = F::new();
-    f.b.get_global(name);
+    f.b.get_global(name, 0);
     f.b.undefined();
     f.b.call(0);
     f.b.return_();
@@ -788,8 +788,8 @@ fn image_while_parked() {
     let mut f = F::new();
     let console = vm.heap_mut().atom_str("console").unwrap();
     let log = vm.heap_mut().atom_str("log").unwrap();
-    f.b.get_global(console);
-    f.b.get_method(log);
+    f.b.get_global(console, 0);
+    f.b.get_method(log, 0);
     f.b.push_i8(1);
     f.b.call(1);
     f.b.push_i8(1);
@@ -1348,7 +1348,7 @@ fn for_in_keys(vm: &mut Vm, target: &str, delete_on_first: Option<&str>) -> Valu
     f.b.put_loc(0);
     f.b.push_i8(0);
     f.b.put_loc(1);
-    f.b.get_global(t);
+    f.b.get_global(t, 0);
     f.b.for_in_start();
     f.b.place_label(top);
     f.b.for_in_next();
@@ -1363,7 +1363,7 @@ fn for_in_keys(vm: &mut Vm, target: &str, delete_on_first: Option<&str>) -> Valu
         let d = vm.heap_mut().atom_str(d).unwrap();
         f.b.get_loc(1);
         f.b.jump_if_true(skip);
-        f.b.get_global(t);
+        f.b.get_global(t, 0);
         f.b.push_atom(d);
         f.b.delete();
         f.b.drop();
@@ -1880,7 +1880,7 @@ fn async_entry_awaits_async_host_calls() {
         f.b.async_start(0);
         f.b.place_label(s);
         for (k, arg) in [a, b].into_iter().enumerate() {
-            f.b.get_global(tool);
+            f.b.get_global(tool, 0);
             f.b.undefined();
             f.b.push_const(arg);
             f.b.call(1);
@@ -1989,17 +1989,17 @@ fn yield_star_template(vm: &mut Vm) -> Ref {
     f.b.generator_start(0);
     f.b.place_label(top);
     f.b.get_arg(0);
-    f.b.get_method(next);
+    f.b.get_method(next, 0);
     f.b.call(0);
     f.b.dup();
-    f.b.get_field(crate::heap::atoms::DONE);
+    f.b.get_field(crate::heap::atoms::DONE, 0);
     f.b.jump_if_true(done);
     f.b.yield_star(0);
     f.b.drop();
     f.b.drop();
     f.b.jump(top);
     f.b.place_label(done);
-    f.b.get_field(crate::heap::atoms::VALUE);
+    f.b.get_field(crate::heap::atoms::VALUE, 0);
     f.b.return_();
     f.build(vm)
 }
@@ -2028,14 +2028,14 @@ fn for_await_template(vm: &mut Vm) -> Ref {
     f.b.call_intrinsic(intrinsic_id("GetAsyncIterator").unwrap(), 1);
     f.b.put_loc(1);
     f.b.get_loc(1);
-    f.b.get_field(next);
+    f.b.get_field(next, 0);
     f.b.put_loc(2);
     f.b.place_label(top);
     // limit reached? (arguments.length checks are the compiler's business; here
     // `limit === out.length` with limit undefined never holds)
     f.b.get_arg(1);
     f.b.get_loc(3);
-    f.b.get_field(crate::heap::atoms::LENGTH);
+    f.b.get_field(crate::heap::atoms::LENGTH, 0);
     f.b.strict_eq();
     f.b.jump_if_true(brk);
     f.b.get_loc(2);
@@ -2044,9 +2044,9 @@ fn for_await_template(vm: &mut Vm) -> Ref {
     f.b.await_(0);
     f.b.iter_check_object();
     f.b.dup();
-    f.b.get_field(crate::heap::atoms::DONE);
+    f.b.get_field(crate::heap::atoms::DONE, 0);
     f.b.jump_if_true(done);
-    f.b.get_field(crate::heap::atoms::VALUE);
+    f.b.get_field(crate::heap::atoms::VALUE, 0);
     f.b.get_loc(3);
     f.b.swap();
     f.b.array_push();
@@ -2408,4 +2408,83 @@ fn run_metered_and_backtrace() {
     let (st, used) = vm.run_metered(1_000_000);
     assert!(matches!(st, Status::Done(_)));
     assert!(used > 0 && used < 1000, "{used}");
+}
+
+/// Empties every inline cache of the heap (a "cold" VM in the same state), returning how
+/// many functions had one.
+fn clear_inline_caches(vm: &mut Vm) -> usize {
+    use crate::heap::CellKind;
+    use crate::heap::cells::FuncTemplate;
+    let templates: Vec<u32> = vm
+        .heap()
+        .cells()
+        .filter(|c| c.kind == CellKind::FuncTemplate)
+        .map(|c| c.offset)
+        .collect();
+    let mut warm = 0;
+    for t in templates {
+        let a = vm.heap_mut().arena_mut();
+        if a.get::<Ref>(t, FuncTemplate::IC).get().is_some() {
+            warm += 1;
+            a.set(t, FuncTemplate::IC, Ref::NULL);
+        }
+    }
+    warm
+}
+
+/// Global accesses whose caches were filled before the globals changed under them.
+const GLOBAL_CHANGES: &str = "\
+    globalThis.g = 'obj';\n\
+    Object.defineProperty(globalThis, 'ro', { value: 'ro', writable: false, configurable: true });\n\
+    function readG() { return typeof g === 'undefined' ? 'missing' : g; }\n\
+    function writeG(v) { g = v; return g; }\n\
+    function writeRo(v) { try { ro = v; return ro; } catch (e) { return String(e); } }\n\
+    function readX() { try { return x; } catch (e) { return String(e); } }\n\
+    for (let i = 0; i < 3; i++) { readG(); writeG(i); writeRo(i); readX(); }\n\
+    globalThis.x = 'global x';\n\
+    for (let i = 0; i < 3; i++) readX();\n";
+
+const GLOBAL_CHANGES_2: &str = "\
+    console.log(readG(), writeG('w'), writeRo(1), readX());\n\
+    Object.defineProperty(globalThis, 'ro', { value: 'ro', writable: true, configurable: true });\n\
+    console.log(writeRo(2), writeRo(3));\n\
+    delete globalThis.g;\n\
+    console.log(readG());\n\
+    Object.defineProperty(globalThis, 'g', { get() { return 'getter'; }, configurable: true });\n\
+    console.log(readG());\n";
+
+#[test]
+fn global_caches_follow_every_change() {
+    let (vm, _) = run_script(vm(), GLOBAL_CHANGES);
+    let (vm, out) = run_script(vm, GLOBAL_CHANGES_2);
+    assert_eq!(
+        out.log,
+        [
+            "2 w TypeError: 'ro' is read-only global x",
+            "2 3",
+            "missing",
+            "getter"
+        ]
+    );
+    // A lexical binding of a later Script shadows the global object property a cache
+    // points at.
+    let (_, out) = run_script(vm, "let x = 'lexical x';\nconsole.log(readX());\n");
+    assert_eq!(out.log, ["lexical x"]);
+}
+
+#[test]
+fn warm_and_cold_inline_caches_behave_the_same() {
+    // Warm the caches, take an image, and run the same script in a VM restored from it,
+    // once with the caches as they are and once with all of them emptied (D1620).
+    let (vm, _) = run_script(vm(), GLOBAL_CHANGES);
+    let image = vm.bytes().to_vec();
+    let warm = Vm::from_bytes(image.clone(), VmOptions::default()).unwrap();
+    let mut cold = Vm::from_bytes(image, VmOptions::default()).unwrap();
+    assert!(
+        clear_inline_caches(&mut cold) > 0,
+        "no warm caches in the image"
+    );
+    let (_, warm_out) = run_script(warm, GLOBAL_CHANGES_2);
+    let (_, cold_out) = run_script(cold, GLOBAL_CHANGES_2);
+    assert_eq!(warm_out, cold_out);
 }

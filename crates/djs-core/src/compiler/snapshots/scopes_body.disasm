@@ -1,5 +1,5 @@
 function 0 <anonymous>: params=2 locals=8 stack=4 captures=0
-  handler [8, 153) -> 153 depth 0
+  handler [8, 157) -> 157 depth 0
     0  special_object 4
     2  put_loc loc7 (this)
     5  async_start loc0 (<state>)
@@ -7,56 +7,56 @@ function 0 <anonymous>: params=2 locals=8 stack=4 captures=0
    11  push_i8 0
    13  put_loc loc1 (total)
    16  get_arg arg0  ; 4:15
-   19  get_method "list"  ; 4:20
-   24  call 0  ; 4:25
-   27  put_loc loc2 (items)
-   30  get_arg arg1  ; 5:1
-   33  get_method "log"  ; 5:8
-   38  get_loc loc2 (items)  ; 5:13
-   41  get_loc loc1 (total)  ; 5:20
-   44  call 2  ; 5:12
-   47  drop
-   48  get_loc_chk loc3 (late)  ; 6:1
+   19  get_method "list" ic0  ; 4:20
+   26  call 0  ; 4:25
+   29  put_loc loc2 (items)
+   32  get_arg arg1  ; 5:1
+   35  get_method "log" ic1  ; 5:8
+   42  get_loc loc2 (items)  ; 5:13
+   45  get_loc loc1 (total)  ; 5:20
+   48  call 2  ; 5:12
    51  drop
-   52  push_i8 1
-   54  put_loc loc3 (late)
-   57  push_i8 2  ; 8:18
-   59  set_loc loc3 (late)
-   62  drop
-   63  get_loc loc1 (total)  ; 9:9
-   66  set_loc_uninit loc4 (y)
-   69  jump -> 74
-   74  dup
-   75  push_i8 0
-   77  strict_eq
-   78  jump_if_false -> 104
-   83  drop
-   84  push_i8 1
-   86  put_loc loc4 (y)
-   89  get_loc_chk loc4 (y)  ; 10:22
-   92  to_numeric
-   93  dup
-   94  inc  ; 10:23
-   95  put_loc_chk loc4 (y)  ; 10:22
-   98  drop
-   99  jump -> 114
-  104  dup
-  105  push_i8 1
-  107  strict_eq
-  108  jump_if_false -> 123
-  113  drop
-  114  get_loc_chk loc4 (y)  ; 11:11
+   52  get_loc_chk loc3 (late)  ; 6:1
+   55  drop
+   56  push_i8 1
+   58  put_loc loc3 (late)
+   61  push_i8 2  ; 8:18
+   63  set_loc loc3 (late)
+   66  drop
+   67  get_loc loc1 (total)  ; 9:9
+   70  set_loc_uninit loc4 (y)
+   73  jump -> 78
+   78  dup
+   79  push_i8 0
+   81  strict_eq
+   82  jump_if_false -> 108
+   87  drop
+   88  push_i8 1
+   90  put_loc loc4 (y)
+   93  get_loc_chk loc4 (y)  ; 10:22
+   96  to_numeric
+   97  dup
+   98  inc  ; 10:23
+   99  put_loc_chk loc4 (y)  ; 10:22
+  102  drop
+  103  jump -> 118
+  108  dup
+  109  push_i8 1
+  111  strict_eq
+  112  jump_if_false -> 127
   117  drop
-  118  jump -> 129
-  123  drop
-  124  jump -> 129
-  129  push_i8 1  ; 13:1
-  131  throw_const_assign "items"
-  136  drop
-  137  get_loc loc7 (this)  ; 15:12
-  140  put_loc loc6 (v2)  ; 15:7
-  143  get_loc loc1 (total)  ; 16:8
-  146  async_return loc0 (<state>)
-  149  undefined
+  118  get_loc_chk loc4 (y)  ; 11:11
+  121  drop
+  122  jump -> 133
+  127  drop
+  128  jump -> 133
+  133  push_i8 1  ; 13:1
+  135  throw_const_assign "items"
+  140  drop
+  141  get_loc loc7 (this)  ; 15:12
+  144  put_loc loc6 (v2)  ; 15:7
+  147  get_loc loc1 (total)  ; 16:8
   150  async_return loc0 (<state>)
-  153  async_reject loc0 (<state>)
+  153  undefined
+  154  async_return loc0 (<state>)
+  157  async_reject loc0 (<state>)

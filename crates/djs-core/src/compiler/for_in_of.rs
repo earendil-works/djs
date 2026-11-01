@@ -159,7 +159,7 @@ impl<'a> Parser<'a, '_> {
                 self.code().jump(l_rhs);
                 self.place(l_assign);
                 if is_of {
-                    self.code().get_field(atoms::VALUE);
+                    self.code().get_field(atoms::VALUE, 0);
                 }
                 let start = self.new_label();
                 let end = self.new_label();
@@ -251,7 +251,7 @@ impl<'a> Parser<'a, '_> {
             let get_iterator = intrinsic_id(name).expect("%GetIterator");
             self.code().call_intrinsic(get_iterator, 1);
             self.code().dup();
-            self.code().get_field(atoms::NEXT);
+            self.code().get_field(atoms::NEXT, 0);
         } else {
             self.code().for_in_start();
         }
@@ -282,7 +282,7 @@ impl<'a> Parser<'a, '_> {
             Target::Decl { name, pos, lexical } => {
                 self.place(l_assign);
                 if is_of {
-                    self.code().get_field(atoms::VALUE);
+                    self.code().get_field(atoms::VALUE, 0);
                 }
                 let start = self.new_label();
                 self.place(start);
@@ -311,7 +311,7 @@ impl<'a> Parser<'a, '_> {
             Target::Pattern { cp, b } => {
                 self.place(l_assign);
                 if is_of {
-                    self.code().get_field(atoms::VALUE);
+                    self.code().get_field(atoms::VALUE, 0);
                 }
                 let start = self.new_label();
                 self.place(start);
@@ -400,7 +400,7 @@ impl<'a> Parser<'a, '_> {
             }
             self.code().iter_check_object();
             self.code().dup();
-            self.code().get_field(atoms::DONE);
+            self.code().get_field(atoms::DONE, 0);
             self.code().jump_if_false(l_assign);
             self.code().drop();
             self.code().drop();

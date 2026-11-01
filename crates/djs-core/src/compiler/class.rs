@@ -833,7 +833,7 @@ impl Parser<'_, '_> {
             let r = self.name_ref(a, pos);
             self.code().name_get(r);
             self.mark(pos);
-            self.code().put_field(a);
+            self.code().put_field(a, 0);
         }
     }
 

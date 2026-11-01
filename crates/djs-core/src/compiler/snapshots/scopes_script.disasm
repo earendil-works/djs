@@ -5,39 +5,39 @@ function 0 <anonymous>: params=0 locals=5 stack=2 captures=0
    10  undefined
    11  put_loc loc0 (<completion>)
    14  push_i8 1
-   16  put_global "v"  ; 2:5
-   21  push_i8 2
-   23  init_global_lex "l"
-   28  push_i8 3
-   30  init_global_lex "c"
-   35  set_loc_uninit loc3 (early)
-   38  get_global "v"  ; 6:15
-   43  get_global "l"  ; 6:19
-   48  add  ; 6:17
-   49  get_global "c"  ; 6:23
-   54  add  ; 6:21
-   55  put_loc loc1 (inner)
-   58  get_loc loc1 (inner)  ; 7:11
-   61  push_i8 1
-   63  add  ; 7:17
-   64  set_loc loc1 (inner)  ; 7:3
-   67  put_loc loc0 (<completion>)
-   70  get_loc loc1 (inner)  ; 8:13
-   73  put_loc loc2 (k)
-   76  get_loc_chk loc3 (early)  ; 9:3
-   79  put_loc loc0 (<completion>)
-   82  get_loc loc2 (k)  ; 10:15
-   85  put_loc loc3 (early)
-   88  push_i8 4  ; 12:1
-   90  get_global "c"
-   95  drop
-   96  throw_const_assign "c"
-  101  put_loc loc0 (<completion>)
-  104  get_global "l"  ; 13:5
-  109  dup  ; 13:1
-  110  put_global "v"
-  115  put_loc loc0 (<completion>)
-  118  get_loc loc4 (this)  ; 14:1
-  121  put_loc loc0 (<completion>)
-  124  get_loc loc0 (<completion>)
-  127  return
+   16  put_global "v" ic0  ; 2:5
+   23  push_i8 2
+   25  init_global_lex "l"
+   30  push_i8 3
+   32  init_global_lex "c"
+   37  set_loc_uninit loc3 (early)
+   40  get_global "v" ic1  ; 6:15
+   47  get_global "l" ic2  ; 6:19
+   54  add  ; 6:17
+   55  get_global "c" ic3  ; 6:23
+   62  add  ; 6:21
+   63  put_loc loc1 (inner)
+   66  get_loc loc1 (inner)  ; 7:11
+   69  push_i8 1
+   71  add  ; 7:17
+   72  set_loc loc1 (inner)  ; 7:3
+   75  put_loc loc0 (<completion>)
+   78  get_loc loc1 (inner)  ; 8:13
+   81  put_loc loc2 (k)
+   84  get_loc_chk loc3 (early)  ; 9:3
+   87  put_loc loc0 (<completion>)
+   90  get_loc loc2 (k)  ; 10:15
+   93  put_loc loc3 (early)
+   96  push_i8 4  ; 12:1
+   98  get_global "c" ic4
+  105  drop
+  106  throw_const_assign "c"
+  111  put_loc loc0 (<completion>)
+  114  get_global "l" ic5  ; 13:5
+  121  dup  ; 13:1
+  122  put_global "v" ic6
+  129  put_loc loc0 (<completion>)
+  132  get_loc loc4 (this)  ; 14:1
+  135  put_loc loc0 (<completion>)
+  138  get_loc loc0 (<completion>)
+  141  return

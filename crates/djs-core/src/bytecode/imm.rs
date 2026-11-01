@@ -31,6 +31,10 @@ pub enum ImmKind {
     Scope,
     /// An intrinsic id (privileged code).
     Intrinsic,
+    /// An inline cache slot of the function (D1620): emitted as 0, numbered in code
+    /// order by `alloc_template`; [`NO_CACHE`](super::template::NO_CACHE) when the
+    /// function has too many.
+    Cache,
     /// A constant pool index.
     Const,
     /// A child template index.
@@ -57,7 +61,8 @@ impl ImmKind {
             | ImmKind::Cap
             | ImmKind::Argc
             | ImmKind::Scope
-            | ImmKind::Intrinsic => 2,
+            | ImmKind::Intrinsic
+            | ImmKind::Cache => 2,
             ImmKind::I32
             | ImmKind::Const
             | ImmKind::Child
@@ -108,6 +113,7 @@ plain_imm! {
     Argc: u16 => |v| v.to_le_bytes();
     Scope: u16 => |v| v.to_le_bytes();
     Intrinsic: u16 => |v| v.to_le_bytes();
+    Cache: u16 => |v| v.to_le_bytes();
     Const: u32 => |v| v.to_le_bytes();
     Child: u32 => |v| v.to_le_bytes();
     NameRef: u32 => |v| v.to_le_bytes();

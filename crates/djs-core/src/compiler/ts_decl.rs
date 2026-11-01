@@ -268,7 +268,7 @@ impl<'a> Parser<'a, '_> {
         match parent {
             Some(p) => {
                 self.ts_emit_ns(p, pos);
-                self.code().get_field(name);
+                self.code().get_field(name, 0);
             }
             None => {
                 let r = self.name_ref(name, pos);
@@ -286,7 +286,7 @@ impl<'a> Parser<'a, '_> {
             Some(p) => {
                 self.ts_emit_ns(p, pos);
                 self.code().swap();
-                self.code().put_field(name);
+                self.code().put_field(name, 0);
             }
             None => {
                 let r = self.name_ref(name, pos);
@@ -375,7 +375,7 @@ impl<'a> Parser<'a, '_> {
                     let idx = self.string_const(s)?;
                     self.code().push_const(idx);
                     self.mark(mtok.start);
-                    self.code().put_field(member);
+                    self.code().put_field(member, 0);
                 }
                 _ => {
                     // `E[E["A"] = v] = "A"`
@@ -388,7 +388,7 @@ impl<'a> Parser<'a, '_> {
                     }
                     self.code().insert2();
                     self.mark(mtok.start);
-                    self.code().put_field(member);
+                    self.code().put_field(member, 0);
                     let text: Vec<u16> = self.heap.atom_name(member).encode_utf16().collect();
                     let idx = self.string_const(&text)?;
                     self.code().push_const(idx);
@@ -600,7 +600,7 @@ impl<'a> Parser<'a, '_> {
         let r = self.name_ref(name, pos);
         self.code().name_get(r);
         self.mark(pos);
-        self.code().put_field(name);
+        self.code().put_field(name, 0);
     }
 
     /// One statement of the body of namespace `d`.
@@ -788,7 +788,7 @@ impl<'a> Parser<'a, '_> {
             self.code().is_nullish();
             self.code().jump_if_true(l);
             self.mark(self.tok.start);
-            self.code().get_field(a);
+            self.code().get_field(a, 0);
             self.next()?;
         }
         self.place(l);
@@ -797,7 +797,7 @@ impl<'a> Parser<'a, '_> {
                 self.ts_add_member(d, name, None, None);
                 self.ts_emit_ns(d, pos);
                 self.code().swap();
-                self.code().put_field(name);
+                self.code().put_field(name, 0);
                 self.ts_type_only = false;
             }
             None => {

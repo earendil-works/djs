@@ -84,9 +84,9 @@ function 0.2.0.0 <anonymous>: params=1 locals=0 stack=2 captures=3
     7  get_arg arg0  ; 12:27
    10  add  ; 12:25
    11  get_cap cap2 (middle)  ; 12:31
-   14  get_field "length"  ; 12:37
-   19  add  ; 12:29
-   20  return
+   14  get_field "length" ic0  ; 12:37
+   21  add  ; 12:29
+   22  return
 function 0.3 isEven: params=1 locals=0 stack=4 captures=1
     0  get_arg arg0  ; 16:29
     3  push_i8 0

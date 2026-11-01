@@ -161,7 +161,7 @@ impl Parser<'_, '_> {
         self.mark(pos);
         self.code().call_intrinsic(intrinsic(get_iterator), 1);
         self.code().dup();
-        self.code().get_field(atoms::NEXT);
+        self.code().get_field(atoms::NEXT, 0);
         self.place(l_base);
         // `it next recv` -> `it next next it recv` -> call.
         self.code().undefined();
@@ -174,12 +174,12 @@ impl Parser<'_, '_> {
         self.place(l_check);
         // `it next res`
         self.code().dup();
-        self.code().get_field(atoms::DONE);
+        self.code().get_field(atoms::DONE, 0);
         self.code().jump_if_true(l_done);
         self.place(l_yield);
         // Only the yield itself is covered: errors from reading `value` propagate.
         if is_async {
-            self.code().get_field(atoms::VALUE);
+            self.code().get_field(atoms::VALUE, 0);
             self.place(r_start);
             self.code().yield_(0);
         } else {
@@ -206,9 +206,9 @@ impl Parser<'_, '_> {
         self.emit_inner_method(atoms::RETURN, l_retnone);
         self.emit_inner_result(is_async);
         self.code().dup();
-        self.code().get_field(atoms::DONE);
+        self.code().get_field(atoms::DONE, 0);
         self.code().jump_if_false(l_yield);
-        self.code().get_field(atoms::VALUE);
+        self.code().get_field(atoms::VALUE, 0);
         if is_async {
             self.code().await_(0);
         }
@@ -251,7 +251,7 @@ impl Parser<'_, '_> {
         self.code().throw();
         // Done: the result's value is the value of `yield*`.
         self.place(l_done);
-        self.code().get_field(atoms::VALUE);
+        self.code().get_field(atoms::VALUE, 0);
         self.code().nip();
         self.code().nip();
         self.place(l_end);
@@ -263,7 +263,7 @@ impl Parser<'_, '_> {
     /// `none` with `it next v m`.
     fn emit_inner_method(&mut self, name: crate::heap::Atom, none: crate::bytecode::Label) {
         self.code().pick(2);
-        self.code().get_field(name);
+        self.code().get_field(name, 0);
         self.code().dup();
         self.code().is_nullish();
         self.code().jump_if_true(none);

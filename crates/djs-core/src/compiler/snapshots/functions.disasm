@@ -1,31 +1,31 @@
 function 0 <anonymous>: params=0 locals=1 stack=2 captures=0
     0  global_decls #0 var "obj" function "f" "k" "late" let "named" const "g" "h"
     5  fclosure child0
-   10  put_global "f"
-   15  fclosure child3
-   20  put_global "k"
-   25  fclosure child4
-   30  put_global "late"
-   35  undefined
-   36  put_loc loc0 (<completion>)
-   39  fclosure child1
-   44  init_global_lex "g"
-   49  fclosure child2
-   54  init_global_lex "h"
-   59  fclosure child5
-   64  init_global_lex "named"
-   69  object
-   70  fclosure child6
-   75  define_field "m"
-   80  fclosure child7
-   85  define_field "a"
-   90  put_global "obj"  ; 8:5
-   95  get_global "f"  ; 9:5
-  100  push_i8 1
-  102  construct 1  ; 9:1
-  105  put_loc loc0 (<completion>)
-  108  get_loc loc0 (<completion>)
-  111  return
+   10  put_global "f" ic0
+   17  fclosure child3
+   22  put_global "k" ic1
+   29  fclosure child4
+   34  put_global "late" ic2
+   41  undefined
+   42  put_loc loc0 (<completion>)
+   45  fclosure child1
+   50  init_global_lex "g"
+   55  fclosure child2
+   60  init_global_lex "h"
+   65  fclosure child5
+   70  init_global_lex "named"
+   75  object
+   76  fclosure child6
+   81  define_field "m"
+   86  fclosure child7
+   91  define_field "a"
+   96  put_global "obj" ic3  ; 8:5
+  103  get_global "f" ic4  ; 9:5
+  110  push_i8 1
+  112  construct 1  ; 9:1
+  115  put_loc loc0 (<completion>)
+  118  get_loc loc0 (<completion>)
+  121  return
 function 0.0 f: params=2 locals=3 stack=2 captures=0
     0  get_arg arg0
     3  put_loc loc0 (a)
@@ -44,10 +44,10 @@ function 0.0 f: params=2 locals=3 stack=2 captures=0
    35  get_loc loc1 (b)  ; 2:48
    38  add  ; 2:46
    39  get_loc loc2 (rest)  ; 2:52
-   42  get_field "length"  ; 2:56
-   47  add  ; 2:50
-   48  return
-   49  return_undef
+   42  get_field "length" ic0  ; 2:56
+   49  add  ; 2:50
+   50  return
+   51  return_undef
 function 0.1 g: params=0 locals=1 stack=1 captures=0
     0  special_object 4
     2  put_loc loc0 (this)
@@ -55,9 +55,9 @@ function 0.1 g: params=0 locals=1 stack=1 captures=0
     8  return
     9  return_undef
 function 0.2 h: params=1 locals=0 stack=1 captures=0
-    0  get_global "arguments"  ; 4:27
-    5  return
-    6  return_undef
+    0  get_global "arguments" ic0  ; 4:27
+    7  return
+    8  return_undef
 function 0.3 k: params=0 locals=4 stack=2 captures=0
     0  special_object 4
     2  new_box_init loc1 (this)
@@ -109,9 +109,9 @@ function 0.6 m: params=0 locals=1 stack=1 captures=0
     0  special_object 4
     2  put_loc loc0 (this)
     5  get_loc loc0 (this)  ; 8:37
-    8  get_field "v"  ; 8:41
-   13  return
-   14  return_undef
+    8  get_field "v" ic0  ; 8:41
+   15  return
+   16  return_undef
 function 0.7 a: params=0 locals=0 stack=1 captures=0
     0  push_i8 1
     2  return

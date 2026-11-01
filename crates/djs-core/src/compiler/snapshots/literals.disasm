@@ -36,58 +36,58 @@ function 0 <anonymous>: params=0 locals=2 stack=17 captures=0
   119  init_global_lex "s"
   124  push_const #8 ("plain")
   129  push_const #9 ("x")
-  134  get_global "n"  ; 4:23
-  139  to_string  ; 4:21
-  140  push_const #10 ("y")
-  145  concat 3
-  148  get_global "s"  ; 4:32
-  153  to_string  ; 4:30
-  154  get_global "n"  ; 4:40
-  159  to_string  ; 4:38
-  160  get_global "s"  ; 4:44
-  165  to_string  ; 4:42
-  166  concat 2
-  169  push_const #7 ("")
-  174  push_const #11 ("aA")
-  179  array_from 6
-  182  init_global_lex "t"
-  187  null
-  188  push_true
-  189  push_false
-  190  undefined  ; 5:29
-  191  get_loc loc1 (this)  ; 5:40
-  194  array_from 5
-  197  init_global_lex "k"
-  202  array_from 0
-  205  array_hole
-  206  push_i8 1
-  208  array_push
-  209  array_hole
-  210  push_i8 2
-  212  array_push
-  213  get_global "s"  ; 6:27
-  218  array_spread
-  219  push_i8 3
-  221  array_push
-  222  init_global_lex "holes"
-  227  object
-  228  push_i8 1
-  230  define_field "a"
-  235  push_i8 2
-  237  define_field "b c"
-  242  push_i8 3
-  244  define_field "3"
-  249  push_i8 4
-  251  define_field "1.5"
-  256  get_global "k"  ; 7:42
-  261  push_i8 5
-  263  define_elem
-  264  get_global "n"  ; 7:49
-  269  define_field "n"
-  274  get_global "s"  ; 7:55
-  279  copy_data_props 0
-  281  push_i8 6
-  283  define_field "if"
-  288  init_global_lex "o"
-  293  get_loc loc0 (<completion>)
-  296  return
+  134  get_global "n" ic0  ; 4:23
+  141  to_string  ; 4:21
+  142  push_const #10 ("y")
+  147  concat 3
+  150  get_global "s" ic1  ; 4:32
+  157  to_string  ; 4:30
+  158  get_global "n" ic2  ; 4:40
+  165  to_string  ; 4:38
+  166  get_global "s" ic3  ; 4:44
+  173  to_string  ; 4:42
+  174  concat 2
+  177  push_const #7 ("")
+  182  push_const #11 ("aA")
+  187  array_from 6
+  190  init_global_lex "t"
+  195  null
+  196  push_true
+  197  push_false
+  198  undefined  ; 5:29
+  199  get_loc loc1 (this)  ; 5:40
+  202  array_from 5
+  205  init_global_lex "k"
+  210  array_from 0
+  213  array_hole
+  214  push_i8 1
+  216  array_push
+  217  array_hole
+  218  push_i8 2
+  220  array_push
+  221  get_global "s" ic4  ; 6:27
+  228  array_spread
+  229  push_i8 3
+  231  array_push
+  232  init_global_lex "holes"
+  237  object
+  238  push_i8 1
+  240  define_field "a"
+  245  push_i8 2
+  247  define_field "b c"
+  252  push_i8 3
+  254  define_field "3"
+  259  push_i8 4
+  261  define_field "1.5"
+  266  get_global "k" ic5  ; 7:42
+  273  push_i8 5
+  275  define_elem
+  276  get_global "n" ic6  ; 7:49
+  283  define_field "n"
+  288  get_global "s" ic7  ; 7:55
+  295  copy_data_props 0
+  297  push_i8 6
+  299  define_field "if"
+  304  init_global_lex "o"
+  309  get_loc loc0 (<completion>)
+  312  return
