@@ -898,7 +898,9 @@ impl Exec<'_> {
                             self.consts = consts_ref;
                             self.native = 0;
                             if native {
-                                self.native = ld32(b, t + FuncTemplate::NATIVE.offset) + 1;
+                                // NATIVE is a u16 (D1980); FAST is the next u16.
+                                self.native =
+                                    (ld32(b, t + FuncTemplate::NATIVE.offset) & 0xFFFF) + 1;
                                 self.code_len = 0;
                             }
                             code = self.code;

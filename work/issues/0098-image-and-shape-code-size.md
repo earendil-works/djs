@@ -46,7 +46,7 @@ and transition arrays (~1 KB). The base image is 398 KB of the 1.5 MB module.
 - Tooling: `scripts/build-wasm.sh --keep-names` failed to link (wasm-ld rejects
   --compress-relocations with a name section); crates/djs-wasm/build.rs now skips that
   flag when CARGO_PROFILE_WASM_STRIP=false.
-- Rebased onto 0093's run_hot: its define_field hit uses `ic_define` too (hot.rs, one
+- Rebased onto 0093's run_hot: its define_field hit uses `ic_define` too, and its raw NATIVE read masks to the u16 (hot.rs, two
   line).
 
 ## Follow-ups
