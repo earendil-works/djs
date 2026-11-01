@@ -337,3 +337,18 @@ fn common_prefix(cands: &[String]) -> String {
     }
     first[..n].to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::common_prefix;
+
+    #[test]
+    fn common_prefixes() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(common_prefix(&s(&[])), "");
+        assert_eq!(common_prefix(&s(&["max"])), "max");
+        assert_eq!(common_prefix(&s(&["max", "maxi", "match"])), "ma");
+        assert_eq!(common_prefix(&s(&["abc", "xyz"])), "");
+        assert_eq!(common_prefix(&s(&["éa", "éb"])), "é");
+    }
+}

@@ -399,8 +399,9 @@ benefit. The in-thread and remote launchers benefit as they are.
 swaps `src/runtime/vm.ts` for a three-line wrapper around js/pi/vm.ts and `src/wasm.ts` for
 the djs-wasm loader, and runs pi's installed vitest on the copy. node_modules are symlinks
 and vite's cache stays in the copy, so nothing is written to pi-private. The run writes
-`report.md` with pass/fail per test and the failure messages. At pi d65de9db942d: **221 of
-226 pass** after 0058 and 0066 (204 in 0049, 213 after 0054, 215 after 0059). 0054 fixed the
+`report.md` with pass/fail per test and the failure messages. Rerun at 0102 (main after
+0093 and 0097, pi c1b68f09da5b): **221 of 226 pass**, the same tests as at pi d65de9db942d
+after 0058 and 0066 (204 in 0049, 213 after 0054, 215 after 0059), so no regressions. 0054 fixed the
 stack overflow test, 0050's regexp work the two large-image tests, 0051 plus the adapter's
 deterministic mode the WeakRef test, and 0058 the eval (completion value) and dynamic
 import (a runtime rejection) tests. Declarations, source, portable and worker-lifetime
