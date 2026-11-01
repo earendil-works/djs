@@ -122,6 +122,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_arena_ptr(vm)`, `vm_arena_len(vm)` | the arena (the image, and the reader's view) |
 | `vm_collect(vm) -> 0/-1` | run the GC |
 | `vm_compile(vm, goal, params_len, src_len) -> h` | compile staging: `params_len` bytes of `\n`-separated parameter names (goal 1, async body) then the source; goal 0 is a Script |
+| `vm_compile_file(vm, goal, name_len, params_len, src_len) -> h` | `vm_compile` with the file name stack traces show (staging: name, parameters, source; 0049) |
 | `vm_global(vm) -> h`, `vm_new_object(vm) -> h` | objects |
 | `vm_new_host_function(vm, fn_id, name_len) -> h` | a function that parks the VM with `fn_id` |
 | `vm_new_async_host_function(vm, fn_id, name_len) -> h` | a function that returns a promise and adds a pending call (D1374) |
@@ -137,6 +138,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_run(vm, fuel) -> status` | 0 DONE, 1 THREW, 2 OUT_OF_FUEL, 3 HOST_CALL, 4 IDLE |
 | `vm_set_now(vm, ms: f64)` | the clock `Date` reads, ms since the epoch (D1383); set it before every `vm_run` |
 | `vm_set_time_zone_offset(vm, minutes)` | the local time zone, minutes east of UTC (default 0) |
+| `vm_set_random_seed(vm, lo, hi)` | reseed `Math.random` (xorshift64*, as QuickJS) with `hi << 32 \| lo`; a new VM has a fixed default seed (0049) |
 | `vm_abort(vm)` | abandon the current call (out of fuel or parked): the VM is idle and usable again |
 | `vm_result(vm) -> h` | the DONE/THREW value, once |
 | `vm_host_call(vm) -> argc` | out = `[call_id, fn_id, this lo, hi, (arg lo, hi)*]` |
@@ -145,6 +147,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_resolve_host_call(vm, call_id, ok, value) -> 0/-1` | return (`ok` 1) or throw (`ok` 0) `value`; for an async call, fulfill or reject its promise (in a job) |
 | `vm_promise_state(vm, h) -> state` | 0 not a promise, 1 pending, 2 fulfilled, 3 rejected; settled: out = a handle (u32) to the result, and the promise counts as handled |
 | `vm_take_unhandled_rejections(vm) -> n` | out = handles (u32) to the reasons of promises rejected with no handler, oldest first (D1423) |
+| `djs_build_hash() -> u32` | the build hash of VM images: identifies the engine build (0049) |
 | `djs_panic_ptr()`, `djs_panic_len()` | the last panic message, after a trap |
 | `djs_debug_panic()` | trap on purpose (tests) |
 
@@ -247,3 +250,134 @@ host code and runs at the same speed.
 - **Async.** Concurrent host calls need `asyncFunctions` (sync `functions` still run one
   at a time). Until the compiler supports `async`/`await` (0037 defines the runtime), code
   chains with `.then`.
+
+## pi codemode
+
+pi's codemode (pi-private `packages/codemode`, compared at pi d65de9db942d) runs scripts on
+quickjs-wasi. Everything engine-specific is in one module, `src/runtime/vm.ts`: `startVm`
+drives one VM through one script and talks to the host only through the messages of
+`protocol.ts`. The launchers (a worker thread, the calling thread, a remote isolate) and the
+host side (`execution.ts`: tools, deadlines, output, store writes, deterministic runs) do not
+touch QuickJS. `js/pi/vm.ts` implements the same `startVm` contract on djs, running pi's
+unmodified `PRELUDE_SOURCE`. To try it, swap that one module (issue 0049).
+
+```ts
+import { loadModule } from "@djs/host";
+import { startVm, resumeVm } from "@djs/host/pi";          // js/pi/vm.ts
+const session = await startVm({ data, wasm: await loadModule(), prelude: PRELUDE_SOURCE, post, shouldInterrupt });
+session.deliver({ type: "result", id, ok: true, payload: "42" });
+const bytes = session.snapshot();                        // djs only: the whole session
+const again = resumeVm(bytes, { wasm, post, shouldInterrupt });
+```
+
+`js/pi/engine.ts` is a handle-level client of the exports (the Sandbox runs whole bodies,
+but pi keeps the prelude's `settle`/`run`/`stalled` alive across calls).
+`tests/pi/prelude-source.ts` is a verbatim copy of pi's prelude for the tests here.
+
+### How the contract maps
+
+| pi on quickjs-wasi (vm.ts) | djs (js/pi/vm.ts) |
+| --- | --- |
+| `QuickJS.create({ memoryLimit, maxStackSize, interruptHandler, wasi })` | `vm_new(memoryLimit)` in a new instance of the djs-wasm module. Frames live in the heap, so there is no host-stack guard and `maxStackSize` is ignored. Deep recursion fails at about 131,000 frames, inside the heap limit |
+| `evalCode(PRELUDE_SOURCE, "codemode-prelude.js")`, then calling it with `bridge` and JSON | the same, as `return <prelude>` compiled with `vm_compile_file` (an async body; djs Scripts have no completion value, D004) |
+| `bridge`: a sync host function called with primitives | a sync host function (`vm_new_host_function`): the VM parks, the adapter reads the arguments with the reader, `post`s, and resolves the call with `undefined` |
+| `(async (tools, console) => {code\n})` as `codemode.js` | the same text after `return `, so line numbers match. Compile errors become pi's script-error JSON with a `codemode.js:line:col` frame |
+| `drain()`: run jobs one by one, poll `shouldInterrupt` every 50 jobs, then `stalled()` | `vm_run` runs the job queue to empty itself (D1370). `stalled()` is called after it |
+| QuickJS polls `interruptHandler` while it runs; true throws an uncatchable error | `shouldInterrupt` is polled after every fuel slice (`fuelPerPoll`, default 10,000). True → `vm_abort` and a `crash`, which pi's launchers turn into `timeout` or `aborted` as before |
+| deterministic: WASI clocks read virtual time, `random_get` a PRNG, UTC, no WeakRef | `vm_set_now(clock.now)` before every slice, time zone 0, `vm_set_random_seed`. djs reads no clock or entropy of its own (ARCH "Nondeterminism") and has no WeakRef at all |
+| `Math.random` seeded by QuickJS from its first clock read (seed + 1), one draw used up while creating the context | djs's `Math.random` is the same xorshift64*, so the adapter seeds it one step after seed + 1. **The same seed gives the same numbers on both engines**; pi's pinned values pass |
+| fingerprint `quickjs-wasi X, quickjs Y, prelude H, deterministic 1, stack S, heap M, budget B` | `djs <build hash>, prelude H, deterministic 1, fuel per poll F, heap M, budget B` (`djs_build_hash`) |
+| quickjs-wasi's host globals `performance`, `queueMicrotask`, `atob`, `btoa` | defined by the adapter in JS before the prelude, so the lockdown freezes them too. `performance.now()` counts from the run's start on the VM clock (deterministic: from `startedAt`, as on quickjs) |
+| no snapshots: durability by deterministic replay | `snapshot()` / `resumeVm()` in addition: the VM image plus the adapter's few numbers, taken while the script waits. A resumed session continues with no replay (tested against an uninterrupted run) |
+
+**Prelude images.** Running pi's prelude is most of a start: its lockdown walks and freezes
+about 700 objects, and the djs interpreter is still several times slower than QuickJS
+(the board's perf track). The adapter keeps the VM image taken right after the prelude,
+keyed by everything the prelude saw (prelude, tools, globals, store, heap limit; at most
+16 images per module, 450 KB each). A start with the same inputs restores the image
+(0.6 ms) instead. Only `performance`'s origin and the seed are set per run, after the
+restore. `reuseImages: false` turns it off. pi's worker launcher creates a worker per
+execution, so it would need to keep the image in the parent (or keep workers warm) to
+benefit. The in-thread and remote launchers benefit as they are.
+
+### pi's own tests on djs
+
+`node js/pi/pi-tests.ts` copies pi's package (sources and tests) into `target/pi-codemode`,
+swaps `src/runtime/vm.ts` for a three-line wrapper around js/pi/vm.ts and `src/wasm.ts` for
+the djs-wasm loader, and runs pi's installed vitest on the copy. node_modules are symlinks
+and vite's cache stays in the copy, so nothing is written to pi-private. The run writes
+`report.md` with pass/fail per test and the failure messages. At pi d65de9db942d, on a djs
+with 0033's regexps: **204 of 226 pass** (declarations, source, portable and worker-lifetime:
+all; sandbox 135/153; deterministic 26/30). Each failing test fails on every backend it
+runs on (worker, inline, remote):
+
+| test | why |
+| --- | --- |
+| accepts wrapped and large base64 image data | the prelude's `/^[A-Za-z0-9+/]+={0,2}$/.test(data)` on 1 MB of base64: djs's regexp runs out of backtrack memory (`InternalError: out of memory in regexp execution`). Engine gap (follow-up) |
+| fails a script whose output passes the limits | the same regexp, in the `image()` case: every call throws, the script catches it, and the output limit is never reached (it ends as a timeout). The `text()` and `console.log` cases pass |
+| turns deep recursion into a catchable RangeError | djs throws `InternalError: stack overflow`, as qjs (dquickts) does. quickjs-wasi (quickjs-ng) throws `RangeError`. The error is catchable; only its class differs |
+| keeps eval and Function inside the VM | no global `eval`. The Function and AsyncFunction constructors throw "not supported yet" (ARCH: no direct eval; indirect eval and `Function` may come later) |
+| rejects dynamic import | `import()` is a compile-time SyntaxError, so the whole script fails instead of the `await import()` rejecting |
+| ignores patches to built-ins and built-in globals | djs is always strict (ARCH). Assigning to a frozen built-in throws a TypeError where sloppy QuickJS ignores it. The protection itself works: the prelude's JSON and promises are intact |
+| runs in UTC … without WeakRef or FinalizationRegistry | the deterministic half passes. `execute()` expects WeakRef and FinalizationRegistry to exist, and djs has neither |
+| reports the fingerprint … | the test matches `/^quickjs-wasi /`. Inherent: a different engine must have a different fingerprint |
+
+### What differs for scripts
+
+Besides the failures above:
+- **Strict mode.** pi evaluates scripts sloppy on QuickJS. On djs they are strict: an
+  assignment to an undeclared variable is a ReferenceError instead of creating a global,
+  and writes to read-only properties throw. Model-written code rarely relies on either.
+- **Globals djs lacks** (quickjs-wasi has them): `Iterator`, `WeakRef`,
+  `FinalizationRegistry`, `DisposableStack`, `AsyncDisposableStack`, `SuppressedError`,
+  `DOMException`, `encodeURI`/`decodeURI` (+`Component`), `escape`/`unescape`, `eval`, and
+  `SharedArrayBuffer` (an ARCH non-goal). The adapter supplies `performance`,
+  `queueMicrotask`, `atob` and `btoa`.
+- **Interrupt budgets.** A poll is 10,000 fuel. On a tight loop that is about as many polls
+  per second as QuickJS makes (34,000/s vs 32,000/s; a budget of 20,000 lasts 0.58 s vs
+  0.62 s). Code that allocates or calls builtins polls far more often than on QuickJS,
+  which does not count that work. A push loop with a budget of 20,000 lasts 1.2 s on djs
+  and 10 s on QuickJS; string keys with JSON take 3.4 s and 55 s. pi's prelude itself takes
+  about 120 polls on djs and 4 on QuickJS.
+- **Memory limit.** djs caps its arena. Running out is a catchable
+  `InternalError: out of memory`, as on QuickJS. With a limit of 256 KB or less, `startVm`
+  rejects because the VM cannot be created; 512 KB is enough for pi's prelude.
+
+### What pi would change to run on djs behind a flag
+
+1. An engine option (`engine: "quickjs" | "djs"`) that picks `startVm` (vm.ts or this
+   adapter) and the wasm loader (`loadQuickJSWasm` or djs's `loadModule`). The launchers,
+   `execution.ts`, the protocol and the prelude stay as they are. Ship `djs_wasm.wasm` and the
+   host files the adapter imports (js/src/{sandbox,wire,reader,layout.generated}.ts,
+   js/pi/{vm,engine,protocol}.ts).
+2. Replays must not mix engines. The fingerprints already differ. pi's fingerprint test would
+   accept either prefix.
+3. Optionally, durable runs through `snapshot()`/`resumeVm()` instead of replaying all
+   results after a restart.
+4. Optionally, for fast starts in the worker launcher: keep prelude images in the parent
+   thread, or keep warm workers. Splitting the lockdown out of the argument-dependent part of
+   the prelude would let one image serve every tool table and store.
+5. Before the flag is the default, close these engine gaps: regexp backtracking on large
+   inputs, `RangeError` for stack overflow (or pi accepts both), `eval`/`Function`,
+   `import()` as a runtime rejection, WeakRef/FinalizationRegistry, and the missing globals.
+   Interpreter speed matters for heavier scripts (see below).
+
+### Numbers
+
+`node js/bench/pi.bench.ts`: djs through js/pi/vm.ts and quickjs-wasi 3.6.2 through pi's vm.ts,
+both on the calling thread with pi's prelude, tools answered in a microtask. Medians on
+an Apple M-series machine, node 25, djs-wasm `wasm` profile (opt-level s), on 0033's
+branch:
+
+| case | quickjs-wasi | djs, prelude image reused | djs, prelude run each time |
+| --- | ---: | ---: | ---: |
+| script start (`return 1`) | 3.2 ms | 0.49 ms | 9.8 ms |
+| tool-heavy script (61 calls, 120 KB of results) | 5.0 ms | 7.1 ms | 16.1 ms |
+
+The tool-heavy script searches, reads 60 files in batches of 10 concurrent calls, splits
+and filters the lines, prints a table and stores a summary. With an image, djs starts 6x
+faster than quickjs-wasi, because restoring an image is a copy plus a check. The script
+part is about 4x slower, all in the interpreter (`Exec::run` and builtins in a profile; the
+adapter's own work does not show). opt-level 3 for djs-wasm brings that row to 6.6 ms and
+the cold start to 8.6 ms. pi's whole test suite on djs takes 29 s (100 s without prelude
+images).

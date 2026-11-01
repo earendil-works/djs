@@ -9,7 +9,8 @@
   "exports": {
     ".": "./src/sandbox.ts",
     "./wire": "./src/wire.ts",
-    "./reader": "./src/reader.ts"
+    "./reader": "./src/reader.ts",
+    "./pi": "./pi/vm.ts"
   },
   "scripts": {
     "test": "node --test test/*.test.ts"
