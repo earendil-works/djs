@@ -9,16 +9,17 @@ use crate::interp::{ErrorKind, Intrinsic, realm};
 use crate::json::{self, ParseError, ParseOptions, StringifyError};
 use crate::value::{Str, Value};
 
-/// `%JsonParse(text)`: the parsed value, or qjs's SyntaxError.
-pub(crate) fn parse(heap: &mut Heap, text: Str) -> Result<Value, Fault> {
+/// `%JsonParse(text)`: the parsed value, or the SyntaxError (qjs's message and
+/// position) for the caller to throw.
+pub(crate) fn parse(heap: &mut Heap, text: Str) -> Result<Result<Value, json::SyntaxError>, Fault> {
     let opts = ParseOptions {
         object_proto: Some(realm::intrinsic_obj(heap, Intrinsic::ObjectProto)),
         array_proto: Some(realm::intrinsic_obj(heap, Intrinsic::ArrayProto)),
         ..Default::default()
     };
     match json::parse(heap, text, &opts) {
-        Ok(v) => Ok(v),
-        Err(ParseError::Syntax(e)) => Err(Fault::Error(ErrorKind::SyntaxError, e.message)),
+        Ok(v) => Ok(Ok(v)),
+        Err(ParseError::Syntax(e)) => Ok(Err(e)),
         Err(ParseError::Heap(e)) => Err(Fault::Heap(e)),
     }
 }

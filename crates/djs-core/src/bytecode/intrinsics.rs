@@ -289,6 +289,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("CreateRegExpStringIterator", L, 4, false),
     i("RegExpStringIteratorSlot", L, 2, false),
     i("RegExpStringIteratorFinish", L, 1, false),
+    i("RegExpEscapeString", L, 1, false),
     i("InstallMethod", L, 4, false),
     i("InstallConstructor", L, 5, false),
     i("InstallAccessor", L, 4, false),

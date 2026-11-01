@@ -737,6 +737,8 @@ declare function CreateRegExpStringIterator(r: Obj, s: Str, global: boolean, uni
 declare function RegExpStringIteratorSlot(it: Value, i: i32): Value;
 /** Marks a RegExp String Iterator done. @leaf */
 declare function RegExpStringIteratorFinish(it: Value): void;
+/** RegExp.escape of a string (EncodeForRegExpEscape, qjs's lowercase hex). @leaf */
+declare function RegExpEscapeString(s: Str): Str;
 
 // ---- Used by the generated code (crates/djs-bgen/src/emit_js.rs) ------------------------
 

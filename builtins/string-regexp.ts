@@ -188,12 +188,12 @@ function StringPrototypeReplaceAll(this: Value, searchValue: Value, replaceValue
  * String.prototype.split ( separator, limit ), 22.1.3.23.
  * @builtin String.prototype.split
  */
-function StringPrototypeSplit(this: Value, separator: Value, limit: Value): Obj {
+function StringPrototypeSplit(this: Value, separator: Value, limit: Value): Value {
   RequireThisCoercible(this);
   if (IsObject(separator)) {
     const splitter: Value = GetMethod(separator, WellKnownSymbol("split"));
     if (splitter !== undefined) {
-      return AsObj(Call(splitter, separator, this, limit));
+      return Call(splitter, separator, this, limit);
     }
   }
   const s: Str = ToString(this);

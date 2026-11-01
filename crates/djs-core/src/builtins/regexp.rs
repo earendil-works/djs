@@ -319,3 +319,47 @@ pub(crate) fn input(view: StrView<'_>) -> regexp::Input<'_> {
         StrView::Utf16(b) => regexp::Input::Utf16Le(b),
     }
 }
+
+/// RegExp.escape ( S ) of a string, as QuickJS writes it (lowercase hex).
+pub(crate) fn escape(heap: &mut Heap, s: Str) -> Result<Str, Fault> {
+    use core::fmt::Write;
+    let units = heap.str_to_utf16(s);
+    let mut out = String::new();
+    let mut i = 0;
+    while i < units.len() {
+        let i0 = i;
+        let mut c = units[i] as u32;
+        i += 1;
+        if (0xD800..0xDC00).contains(&c) && i < units.len() && (0xDC00..0xE000).contains(&units[i])
+        {
+            c = 0x10000 + ((c - 0xD800) << 10) + (units[i] as u32 - 0xDC00);
+            i += 1;
+        }
+        let hex2 = c < 256
+            && (c < 33 && !(9..=13).contains(&c)
+                || c >= 128
+                || (c as u8).is_ascii_alphanumeric() && i0 == 0
+                || b",-=<>#&!%:;@~'`\"".contains(&(c as u8)));
+        if hex2 {
+            let _ = write!(out, "\\x{c:02x}");
+        } else if (9..=13).contains(&c) {
+            out.push('\\');
+            out.push(b"tnvfr"[c as usize - 9] as char);
+        } else if c < 128 {
+            if !(c as u8).is_ascii_alphanumeric() && c != b'_' as u32 {
+                out.push('\\');
+            }
+            out.push(c as u8 as char);
+        } else if (0xD800..0xE000).contains(&c)
+            || matches!(
+                c,
+                0x1680 | 0x2000..=0x200A | 0x2028 | 0x2029 | 0x202F | 0x205F | 0x3000 | 0xFEFF
+            )
+        {
+            let _ = write!(out, "\\u{c:04x}");
+        } else {
+            out.push(char::from_u32(c).unwrap_or('\u{FFFD}'));
+        }
+    }
+    Ok(heap.alloc_str(&out)?)
+}

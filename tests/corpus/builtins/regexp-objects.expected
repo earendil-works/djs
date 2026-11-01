@@ -1,0 +1,33 @@
+/a(b)?(?<n>c)/dg a(b)?(?<n>c) dg true true false 0 [object RegExp]
+["abc","b","c"] 2 xxabcac {"n":"c"} [[2,5],[3,4],[4,5]] {"n":[4,5]} 5
+["ac",null,"c"] 7 null 0
+0,index,input,groups null
+false 0 true 2 true false 0
+null 0 1
+true \/ /\n/ (?:) /(?:)/
+(?:) undefined  /(?:)/
+true false i dg 2 RegExp
+[/]\/ true /[\]/]x/ true true false
+07 3 undefined
+true false true true true
+true 42 1
+SyntaxError expecting ')'
+SyntaxError invalid regular expression flags
+SyntaxError invalid regular expression flags
+SyntaxError invalid class range
+SyntaxError nothing to repeat
+SyntaxError unexpected end
+SyntaxError duplicate group name
+TypeError RegExp object expected
+TypeError RegExp object expected
+undefined
+TypeError RegExp object expected
+TypeError not an object
+TypeError 'lastIndex' is read-only
+TypeError not an object
+0 true false false lastIndex
+true function exec [Symbol.replace]
+true null
+\x61\.b\*c\?\(1\)\[2\]\{3\}\|\^\$\\\/\x20\x2d\x3d\x2c \x31x \t\n\x20\xe9\u2028
+false
+=== completed

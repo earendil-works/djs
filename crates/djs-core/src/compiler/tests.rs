@@ -867,7 +867,10 @@ fn errors() {
             18,
         ),
         ("for await (x of y) ;", "expecting '('", 1, 5),
-        ("x = /a/", "regular expressions are not supported yet", 1, 5),
+        // Regex literals (0033): the pattern's early errors at the literal, like qjs.
+        ("x = /a(/", "expecting ')'", 1, 5),
+        ("x = 1;\n  y = /[b-a]/u", "invalid class range", 2, 7),
+        ("x = /a/gg", "invalid regular expression flags", 1, 5),
         (
             "a?.b`x`",
             "template literal cannot appear in an optional chain",

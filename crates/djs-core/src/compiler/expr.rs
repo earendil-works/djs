@@ -1056,7 +1056,8 @@ impl Parser<'_, '_> {
         self.code().undefined();
         self.code().push_const(p);
         self.code().push_const(f);
-        let create = crate::bytecode::intrinsics::intrinsic_id("RegExpCreate").expect("%RegExpCreate");
+        let create =
+            crate::bytecode::intrinsics::intrinsic_id("RegExpCreate").expect("%RegExpCreate");
         self.code().call_intrinsic(create, 3);
         Ok(Expr::Value)
     }

@@ -21,6 +21,7 @@ const REGEXP_EXEC_RAW: u16 = id("RegExpExecRaw");
 const CREATE_REGEXP_STRING_ITERATOR: u16 = id("CreateRegExpStringIterator");
 const REGEXP_STRING_ITERATOR_SLOT: u16 = id("RegExpStringIteratorSlot");
 const REGEXP_STRING_ITERATOR_FINISH: u16 = id("RegExpStringIteratorFinish");
+const REGEXP_ESCAPE_STRING: u16 = id("RegExpEscapeString");
 
 /// Fuel for work proportional to a string's length: one unit per 16 code units (the
 /// leaves run to completion, so they pay afterwards).
@@ -53,7 +54,29 @@ impl Exec<'_> {
                     return bad_argument(name);
                 };
                 self.fuel -= length_fuel(self.heap.str_len(s));
-                json::parse(self.heap, s)?
+                match json::parse(self.heap, s)? {
+                    Ok(v) => v,
+                    Err(e) => {
+                        // qjs puts the position in the stack, as a first `<input>` frame.
+                        let err = realm::new_error(self.heap, ErrorKind::SyntaxError, &e.message)?;
+                        let trace = format!(
+                            "    at <input>:{}:{}\n{}",
+                            e.line,
+                            e.column,
+                            self.stack_trace(self.pc)
+                        );
+                        if let Some(o) = err.as_object() {
+                            let st = self.heap.alloc_str(&trace)?;
+                            realm::define_hidden(
+                                self.heap,
+                                o,
+                                crate::heap::atoms::STACK,
+                                Value::string(st),
+                            )?;
+                        }
+                        return Err(Fault::Throw(err));
+                    }
+                }
             }
             JSON_STRINGIFY_FAST => {
                 let Some(gap) = arg(self, 1).as_string() else {
@@ -123,7 +146,11 @@ impl Exec<'_> {
             }
             REGEXP_STRING_ITERATOR_SLOT => {
                 let it = re::as_string_iterator(self.heap, a0)?;
-                let flags = self.heap.object_slot(it, re::IT_FLAGS).as_int().unwrap_or(0);
+                let flags = self
+                    .heap
+                    .object_slot(it, re::IT_FLAGS)
+                    .as_int()
+                    .unwrap_or(0);
                 match arg(self, 1).as_int() {
                     Some(0) => self.heap.object_slot(it, re::IT_REGEXP),
                     Some(1) => self.heap.object_slot(it, re::IT_STRING),
@@ -133,9 +160,19 @@ impl Exec<'_> {
                     _ => return bad_argument(name),
                 }
             }
+            REGEXP_ESCAPE_STRING => {
+                let Some(s) = a0.as_string() else {
+                    return bad_argument(name);
+                };
+                Value::string(re::escape(self.heap, s)?)
+            }
             REGEXP_STRING_ITERATOR_FINISH => {
                 let it = re::as_string_iterator(self.heap, a0)?;
-                let flags = self.heap.object_slot(it, re::IT_FLAGS).as_int().unwrap_or(0);
+                let flags = self
+                    .heap
+                    .object_slot(it, re::IT_FLAGS)
+                    .as_int()
+                    .unwrap_or(0);
                 self.heap
                     .set_object_slot(it, re::IT_FLAGS, Value::int(flags | re::IT_DONE));
                 Value::UNDEFINED

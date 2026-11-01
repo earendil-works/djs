@@ -2001,3 +2001,58 @@ prototype" for a refusing proxy). Object literals keep their own `__proto__: v` 
 (compiler) and `["__proto__"]` still defines an own property. Function.prototype.toString
 of a callable proxy is `function <name>() { [native code] }` with the name read by
 [[Get]] (a trap call), as qjs does.
+
+
+## D1332: RegExp objects, suspendable matching and regex literals
+date: 2026-11-01 · by: num · issue: 0033
+
+**RegExp objects.** A RegExp object is `ObjectClass::RegExp` (25) with three slots:
+- the compiled program, in a U32Array cell (an internal reference). 0011's program is
+  pointer-free words, so the image carries it as is;
+- the source string;
+- the flag bits.
+
+`lastIndex` is an ordinary own data property: writable, not enumerable, not
+configurable, as in qjs. Leaf intrinsics live in builtins/regexp.rs and are dispatched
+from interp/run/json_regexp.rs. The protocol is in builtins/regexp.ts, in spec order:
+RegExpExec, flags, species, Symbol.match/matchAll/replace/search/split, GetSubstitution.
+The six String methods are in builtins/string-regexp.ts. As in the current spec and in
+qjs, only objects are asked for their Symbol methods. Messages are qjs's:
+- "RegExp object expected";
+- "regexp must have the 'g' flag";
+- "cannot convert to object" for a null `this`;
+- "'lastIndex' is read-only".
+
+The RegExp String Iterator is class 26, with %RegExpStringIteratorPrototype%.
+RegExp.escape follows qjs (lowercase hex).
+
+**Matching.** `%RegExpExecRaw(r, s, lastIndex, state)` is RegExpBuiltinExec once
+`lastIndex` has been read. It runs 0011's matcher in place on the flat string: a new
+`Input::Utf16Le` reads two-byte heap strings without copying them. It gets the remaining
+interpreter fuel, one unit per matcher step.
+
+When the fuel runs out mid-match:
+1. the ExecState words go into a new U32Array in the intrinsic's `state` argument slot
+   (callers pass `undefined`);
+2. `run` returns `OutOfFuel` with `pc` still on the `call_intrinsic`;
+3. the next `run` executes the instruction again and resumes from that state.
+
+Everything is in the arena, so a heap image taken while a match is suspended resumes
+the same match. tests/regexp_fuel.rs checks this: plain, sliced and image-restored runs
+give the same result with the same number of stops. `/(a*)*b/.test("a".repeat(30))`
+simply runs out of fuel; qjs hangs on it.
+
+A suspension costs O(backtrack stack): the state is serialized at every stop. With
+realistic slices that is noise. With tiny slices on a pattern that keeps a deep stack,
+it dominates (an e2e case with `(a|b)*` over 4,000 characters took minutes at fuel 997).
+
+A backtrack stack over `ExecLimits::max_stack` (1M words) throws qjs's `InternalError:
+out of memory in regexp execution`.
+
+**Regex literals.** The compiler (expr.rs, `parse_regex_literal`) rescans `/` as a
+regex token and compiles the pattern once for its early errors, reported at the literal
+as qjs does. It then emits `undefined; push_const pattern; push_const flags;
+call_intrinsic %RegExpCreate 3`, so every evaluation creates a fresh RegExp and
+recompiles. Caching the program per literal is a possible optimization.
+
+**JSON.parse errors** put qjs's `<input>:line:col` first line in `stack`.

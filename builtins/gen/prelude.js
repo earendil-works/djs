@@ -5520,12 +5520,20 @@ function RegExpConstructor(pattern, flags) {
   return %RegExpCreate(proto, pStr, fStr);
 }
 
-// builtins/regexp.ts:45 get RegExp[Symbol.species]
+// builtins/regexp.ts:45 RegExp.escape
+function RegExpEscape(s) {
+  if (!%IsString(s)) {
+    throw %NewTypeError("not a string");
+  }
+  return %RegExpEscapeString(%AsStr(s));
+}
+
+// builtins/regexp.ts:56 get RegExp[Symbol.species]
 function RegExpSpecies() {
   return this;
 }
 
-// builtins/regexp.ts:50
+// builtins/regexp.ts:61
 function ThisRegExpObject(v) {
   if (!%IsObject(v)) {
     throw %NewTypeError("not an object");
@@ -5533,7 +5541,7 @@ function ThisRegExpObject(v) {
   return %AsObj(v);
 }
 
-// builtins/regexp.ts:60
+// builtins/regexp.ts:71
 function RegExpFlagGetter(r, flag) {
   const o = ThisRegExpObject(r);
   if (!%IsRegExpObject(o)) {
@@ -5545,47 +5553,47 @@ function RegExpFlagGetter(r, flag) {
   return %RegExpHasFlag(o, flag);
 }
 
-// builtins/regexp.ts:75 get RegExp.prototype.hasIndices
+// builtins/regexp.ts:86 get RegExp.prototype.hasIndices
 function RegExpPrototypeHasIndices() {
   return RegExpFlagGetter(this, "d");
 }
 
-// builtins/regexp.ts:83 get RegExp.prototype.global
+// builtins/regexp.ts:94 get RegExp.prototype.global
 function RegExpPrototypeGlobal() {
   return RegExpFlagGetter(this, "g");
 }
 
-// builtins/regexp.ts:91 get RegExp.prototype.ignoreCase
+// builtins/regexp.ts:102 get RegExp.prototype.ignoreCase
 function RegExpPrototypeIgnoreCase() {
   return RegExpFlagGetter(this, "i");
 }
 
-// builtins/regexp.ts:99 get RegExp.prototype.multiline
+// builtins/regexp.ts:110 get RegExp.prototype.multiline
 function RegExpPrototypeMultiline() {
   return RegExpFlagGetter(this, "m");
 }
 
-// builtins/regexp.ts:107 get RegExp.prototype.dotAll
+// builtins/regexp.ts:118 get RegExp.prototype.dotAll
 function RegExpPrototypeDotAll() {
   return RegExpFlagGetter(this, "s");
 }
 
-// builtins/regexp.ts:115 get RegExp.prototype.unicode
+// builtins/regexp.ts:126 get RegExp.prototype.unicode
 function RegExpPrototypeUnicode() {
   return RegExpFlagGetter(this, "u");
 }
 
-// builtins/regexp.ts:123 get RegExp.prototype.unicodeSets
+// builtins/regexp.ts:134 get RegExp.prototype.unicodeSets
 function RegExpPrototypeUnicodeSets() {
   return RegExpFlagGetter(this, "v");
 }
 
-// builtins/regexp.ts:131 get RegExp.prototype.sticky
+// builtins/regexp.ts:142 get RegExp.prototype.sticky
 function RegExpPrototypeSticky() {
   return RegExpFlagGetter(this, "y");
 }
 
-// builtins/regexp.ts:139 get RegExp.prototype.flags
+// builtins/regexp.ts:150 get RegExp.prototype.flags
 function RegExpPrototypeFlags() {
   const r = ThisRegExpObject(this);
   let result = "";
@@ -5616,7 +5624,7 @@ function RegExpPrototypeFlags() {
   return result;
 }
 
-// builtins/regexp.ts:173 get RegExp.prototype.source
+// builtins/regexp.ts:184 get RegExp.prototype.source
 function RegExpPrototypeSource() {
   const r = ThisRegExpObject(this);
   if (!%IsRegExpObject(r)) {
@@ -5628,7 +5636,7 @@ function RegExpPrototypeSource() {
   return %RegExpEscapedSource(r);
 }
 
-// builtins/regexp.ts:188 RegExp.prototype.toString
+// builtins/regexp.ts:199 RegExp.prototype.toString
 function RegExpPrototypeToString() {
   const r = ThisRegExpObject(this);
   const pattern = ToString(%Get(r, "source"));
@@ -5636,13 +5644,13 @@ function RegExpPrototypeToString() {
   return "/" + pattern + "/" + flags;
 }
 
-// builtins/regexp.ts:196
+// builtins/regexp.ts:207
 function RegExpBuiltinExec(r, s) {
   const lastIndex = ToLength(%Get(r, "lastIndex"));
   return %RegExpExecRaw(r, s, lastIndex, undefined);
 }
 
-// builtins/regexp.ts:206 RegExp.prototype.exec %RegExpPrototypeExec
+// builtins/regexp.ts:217 RegExp.prototype.exec %RegExpPrototypeExec
 function RegExpPrototypeExec(string) {
   if (!%IsRegExpObject(this)) {
     throw %NewTypeError("RegExp object expected");
@@ -5652,7 +5660,7 @@ function RegExpPrototypeExec(string) {
   return RegExpBuiltinExec(r, s);
 }
 
-// builtins/regexp.ts:216
+// builtins/regexp.ts:227
 function RegExpExec(r, s) {
   const exec = %Get(r, "exec");
   if (%IsCallable(exec)) {
@@ -5668,14 +5676,17 @@ function RegExpExec(r, s) {
   return RegExpBuiltinExec(r, s);
 }
 
-// builtins/regexp.ts:235 RegExp.prototype.test
+// builtins/regexp.ts:246 RegExp.prototype.test
 function RegExpPrototypeTest(s) {
-  const r = ThisRegExpObject(this);
+  if (!%IsObject(this)) {
+    throw %NewTypeError("RegExp object expected");
+  }
+  const r = %AsObj(this);
   const str = ToString(s);
   return RegExpExec(r, str) !== null;
 }
 
-// builtins/regexp.ts:242
+// builtins/regexp.ts:257
 function AdvanceStringIndex(s, index, unicode) {
   if (!unicode || index + 1 >= StrLen(s)) {
     return index + 1;
@@ -5684,23 +5695,23 @@ function AdvanceStringIndex(s, index, unicode) {
   return %IsNumber(cp) && %AsNumber(cp) > 65535 ? index + 2 : index + 1;
 }
 
-// builtins/regexp.ts:251
+// builtins/regexp.ts:266
 function FlagsInclude(flags, c) {
   return %StrIndexOf(flags, c, 0) >= 0;
 }
 
-// builtins/regexp.ts:256
+// builtins/regexp.ts:271
 function MatchString(result) {
   return ToString(%Get(%AsObj(result), 0));
 }
 
-// builtins/regexp.ts:261
+// builtins/regexp.ts:276
 function AdvanceAfterEmptyMatch(rx, s, fullUnicode) {
   const thisIndex = ToLength(%Get(rx, "lastIndex"));
   %Set(rx, "lastIndex", AdvanceStringIndex(s, thisIndex, fullUnicode));
 }
 
-// builtins/regexp.ts:270 RegExp.prototype[Symbol.match]
+// builtins/regexp.ts:285 RegExp.prototype[Symbol.match]
 function RegExpPrototypeMatch(string) {
   const rx = ThisRegExpObject(this);
   const s = ToString(string);
@@ -5729,7 +5740,7 @@ function RegExpPrototypeMatch(string) {
   }
 }
 
-// builtins/regexp.ts:302 RegExp.prototype[Symbol.matchAll]
+// builtins/regexp.ts:317 RegExp.prototype[Symbol.matchAll]
 function RegExpPrototypeMatchAll(string) {
   const r = ThisRegExpObject(this);
   const s = ToString(string);
@@ -5743,7 +5754,7 @@ function RegExpPrototypeMatchAll(string) {
   return %CreateRegExpStringIterator(matcher, s, global, fullUnicode);
 }
 
-// builtins/regexp.ts:319 %RegExpStringIteratorPrototype%.next
+// builtins/regexp.ts:334 %RegExpStringIteratorPrototype%.next
 function RegExpStringIteratorNext() {
   if (%AsBool(%RegExpStringIteratorSlot(this, 4))) {
     return %CreateIterResultObject(undefined, true);
@@ -5765,12 +5776,12 @@ function RegExpStringIteratorNext() {
   return %CreateIterResultObject(match, false);
 }
 
-// builtins/regexp.ts:345 value %RegExpStringIteratorPrototype%[Symbol.toStringTag]
+// builtins/regexp.ts:360 value %RegExpStringIteratorPrototype%[Symbol.toStringTag]
 function RegExpStringIteratorToStringTag() {
   return "RegExp String Iterator";
 }
 
-// builtins/regexp.ts:353 RegExp.prototype[Symbol.replace]
+// builtins/regexp.ts:368 RegExp.prototype[Symbol.replace]
 function RegExpPrototypeReplace(string, replaceValue) {
   const rx = ThisRegExpObject(this);
   const s = ToString(string);
@@ -5856,7 +5867,7 @@ function RegExpPrototypeReplace(string, replaceValue) {
   return accumulatedResult + %StrSubstring(s, nextSourcePosition, lengthS);
 }
 
-// builtins/regexp.ts:442
+// builtins/regexp.ts:457
 function GetSubstitution(matched, str, position, captures, m, namedCaptures, template) {
   let i = %StrIndexOf(template, "$", 0);
   if (i < 0) {
@@ -5936,7 +5947,7 @@ function GetSubstitution(matched, str, position, captures, m, namedCaptures, tem
   return result;
 }
 
-// builtins/regexp.ts:534 RegExp.prototype[Symbol.search]
+// builtins/regexp.ts:549 RegExp.prototype[Symbol.search]
 function RegExpPrototypeSearch(string) {
   const rx = ThisRegExpObject(this);
   const s = ToString(string);
@@ -5955,7 +5966,7 @@ function RegExpPrototypeSearch(string) {
   return %Get(%AsObj(result), "index");
 }
 
-// builtins/regexp.ts:556 RegExp.prototype[Symbol.split]
+// builtins/regexp.ts:571 RegExp.prototype[Symbol.split]
 function RegExpPrototypeSplit(string, limit) {
   const rx = ThisRegExpObject(this);
   const s = ToString(string);
@@ -6555,7 +6566,7 @@ function StringPrototypeSplit(separator, limit) {
   if (%IsObject(separator)) {
     const splitter = GetMethod(separator, %WellKnownSymbol("split"));
     if (splitter !== undefined) {
-      return %AsObj(%Call(splitter, separator, this, limit));
+      return %Call(splitter, separator, this, limit);
     }
   }
   const s = ToString(this);
@@ -8701,6 +8712,7 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("Reflect", "preventExtensions", ReflectPreventExtensions, 1);
 %InstallMethod("Reflect", "set", ReflectSet, 3);
 %InstallMethod("Reflect", "setPrototypeOf", ReflectSetPrototypeOf, 2);
+%InstallMethod("RegExp", "escape", RegExpEscape, 1);
 %InstallAccessor("RegExp", %WellKnownSymbol("species"), RegExpSpecies, false);
 %InstallAccessor("RegExp.prototype", "hasIndices", RegExpPrototypeHasIndices, false);
 %InstallAccessor("RegExp.prototype", "global", RegExpPrototypeGlobal, false);

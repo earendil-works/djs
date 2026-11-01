@@ -79,10 +79,48 @@ following 0031's pattern (builtin-language wrappers around leaf intrinsics):
   `stringify_fast` from the host and prints a marker on Slow.
 - Base snapshot (debug build): 351,696 → 373,488 bytes (+21.8 KB for json.ts).
 
+### Part 2: RegExp, regex literals, String methods
+- builtins/regexp.ts (RegExp ctor, accessors, exec/test/toString, @@match/matchAll/
+  replace/search/split, RegExp.escape, %RegExpStringIteratorPrototype%.next),
+  builtins/string-regexp.ts (String.prototype match/matchAll/replace/replaceAll/search/
+  split), builtins/regexp.rs leaves, the matcher hookup with fuel and suspension in
+  interp/run/json_regexp.rs (D1332). regexp/exec.rs: `Input::Utf16Le` (matching heap
+  strings in place).
+- Outside touches (minimal, additive): heap/object.rs (ObjectClass::RegExp = 25,
+  RegExpStringIterator = 26), interp/realm.rs (RegExpProto, RegExpStringIteratorProto,
+  "RegExp" in prototype_of), interp/run/intrinsics.rs (one dispatch line, `id` made
+  pub(super), the %RegExpStringIteratorPrototype% path), builtins/object.rs (class tag
+  "RegExp"), builtins/string.ts (IsRegExp falls back to [[RegExpMatcher]]),
+  compiler/expr.rs (parse_regex_literal), compiler/tests.rs (the regex error cases).
+- JSON.parse SyntaxErrors now carry qjs's `    at <input>:line:col` stack line
+  (dquickts test_json.js passes).
+- Tests: tests/corpus/builtins/regexp-{objects,string-methods}.js (identical to qjs,
+  stressed too), tests/data/e2e/regexp.js, crates/djs-core/tests/regexp_fuel.rs
+  (catastrophic pattern runs out of fuel; plain, sliced and image-restored runs agree,
+  with the same stop counts), compiler early-error cases.
+- An earlier version of the e2e case (`(a|b)*d` on 4,000 chars) took minutes in the
+  suspension mode (state serialization per stop, D1332) and was left orphaned by
+  scripts/timeout.sh, which killed cargo but not the test binary (the coordinator fixed
+  timeout.sh). The case is 60 repetitions now.
+- test262: active 17,463 → 17,907 passing. Later group: built-ins/RegExp 1,323/1,859
+  (526 of the rest are `\p{...}` property escapes, unsupported by the 0011 engine; the
+  rest BigInt/classes), RegExpStringIteratorPrototype 17/17, language/literals/regexp
+  217/217. String.prototype active: match 39/39, replace 43/43, replaceAll 25/25,
+  search 32/32, split 110/110 (later: 9/11, 6/8, 17/20, 8/11, 7/8; BigInt and
+  Symbol.* features). built-ins/JSON active 119/119.
+- difftest: dquickts test_regexp_skip.js and test_json.js pass now.
+
 ## Follow-ups
 - Host console glue (djs-difftest `format`/`output_text`, and the Sandbox in js/) formats
   objects with the host-side fast stringify only. For toJSON, accessors or wrappers it
   should run JSON.stringify in the VM (or the prelude should format console arguments).
+- Unicode property escapes (`\p{...}`) in the regex engine: 526 test262 RegExp tests.
+- Regex perf: a compact backtrack frame for greedy loops over a single character set
+  (`\D+`, `\s*`): today every iteration pushes a frame, so `/^\D+$/` on a 2M-unit
+  string overflows the 1M-word stack (3 test262 tests) and suspensions copy big states.
+- Regex literal programs could be cached per literal instead of recompiled per
+  evaluation; String.prototype.split/replace with a pristine RegExp could take a leaf
+  fast path (qjs has one for replace) instead of the spec's per-position exec calls.
 - JSON.parse source text access (reviver `{ source }`, JSON.rawJSON/isRawJSON): test262
   "later" (json-parse-with-source), qjs has it.
 

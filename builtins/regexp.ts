@@ -39,6 +39,17 @@ function RegExpConstructor(pattern: Value, flags: Value): Value {
 }
 
 /**
+ * RegExp.escape ( S ), 22.2.5.1.
+ * @builtin RegExp.escape
+ */
+function RegExpEscape(s: Value): Str {
+  if (!IsString(s)) {
+    throw NewTypeError("not a string");
+  }
+  return RegExpEscapeString(AsStr(s));
+}
+
+/**
  * get RegExp [ %Symbol.species% ], 22.2.5.2.
  * @getter RegExp[Symbol.species]
  */
@@ -233,7 +244,11 @@ function RegExpExec(r: Obj, s: Str): Value {
  * @builtin RegExp.prototype.test
  */
 function RegExpPrototypeTest(this: Value, s: Value): boolean {
-  const r: Obj = ThisRegExpObject(this);
+  if (!IsObject(this)) {
+    // qjs looks up `exec` on the primitive and ends in RegExp.prototype.exec.
+    throw NewTypeError("RegExp object expected");
+  }
+  const r: Obj = AsObj(this);
   const str: Str = ToString(s);
   return RegExpExec(r, str) !== null;
 }
