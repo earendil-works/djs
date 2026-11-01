@@ -20,6 +20,8 @@ Notes for the coordinator (the main agent), learned the hard way.
 4. Only then `subagent send` the assignment.
 
 ## When an agent reports done
+- **Never remove `.worktrees/gate`**: merge-to-main's persistent gate worktree with a warm
+  target/ (D1792).
 - Before removing a worktree: `subagent status <name>` must say **idle** (a working agent
   may already have started the next task in it), `git status --short` must be clean, and
   the branch must be merged (`git branch -d`, never `-D`; recover with the commit hash if
