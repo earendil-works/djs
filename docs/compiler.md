@@ -748,6 +748,8 @@ Properties (P0 field access on plain objects, P1 the rest):
 | `get_method` | `atom` | o → f o | callee and `this` for calls, R |
 | `put_field` | `atom` | o v → | R (setter) |
 | `get_elem` | | o k → v | R (getter, ToPropertyKey) |
+| `get_elem2` | | o k → o k' v | compound assignment and update loads (0082): RequireObjectCoercible(o) before ToPropertyKey, which converts `k` in place once for the get and the put, R |
+| `to_propkey` | | k → k' | ToPrimitive(k, string) now (object literal `[k]: v`: before `v`), R |
 | `get_elem_method` | | o k → f o | R |
 | `put_elem` | | o k v → | R |
 | `define_field` | `atom` | o v → o | CreateDataProperty (literals), P1 |
@@ -950,11 +952,15 @@ parent, so this visits children before parents (QuickJS does the same in
 
 As implemented (0024): with a non-simple parameter list, the parameter code runs in the
 phase-1 code before the body's `enter_scope`, so body-level function declarations are
-created after the defaults have run. Simplification: a body `var` named like a parameter
-shares the parameter's binding even with parameter expressions. The spec gives it a
-separate var scope initialized from the parameter (FunctionDeclarationInstantiation
-step 28). The difference is only observable when a closure in a default captures the
-parameter and the body reassigns the `var`.
+created after the defaults have run. Since 0082 (D1820) such a body also gets its own
+var scope (`FuncState::var_scope`, a scope inside the function scope), as
+FunctionDeclarationInstantiation step 28 has it for parameter expressions: closures in
+the parameters do not see the body's `var`s and function declarations, and a body `var`
+named like a parameter is a separate binding that its `enter_scope` initializes from the
+parameter (`Scope::copies`). The body's `let`/`const` still conflict with the
+parameters. Likewise a `catch` with a destructuring parameter gives its block a scope
+of its own (`ScopeKind::CatchBody`), whose lexical names still conflict with the
+parameter's.
 
 ### 5.6 TDZ checks and their elision
 

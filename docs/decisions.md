@@ -3355,3 +3355,42 @@ a case at 1e9 (every corpus case needs < 1e8), and the e2e test a run at 20M (00
 The wall clock stays as a hang guard for time spent outside the interpreter: 120 s per
 test/case for djs (stressed difftest runs 3x), unchanged for the qjs subprocess engines (20 s test262, 10 s difftest), where it is the only limit.
 `--fuel N` overrides the budget in both runners.
+
+## D1820: The long tail: reference evaluation order and parameter scopes
+date: 2026-11-04 · by: lexer · issue: 0082
+- Compound assignment, `++`/`--` and logical assignment on `o[k]` load with the new
+  `get_elem2` (`o k → o k' v`) instead of `dup2; get_elem`. It is one instruction. It
+  throws for a nullish `o` before converting `k` (qjs's "value has no property"). It
+  converts an object `k` in place, so the put reuses the primitive key and the
+  `toString` runs once. Plain `get_elem` / `get_elem_method` on a nullish base also
+  throw before converting an object key. `delete` keeps qjs's order (key first).
+- `{ [k]: v }` converts `k` (`to_propkey`, a no-op for primitives) before `v` is
+  evaluated. Class keys and methods have no user code between the key and the
+  definition, so they keep converting at definition time.
+- Binary numeric operators (not `+` or the relational ones) throw for a Symbol from
+  ToPrimitive(lhs) before the rhs is converted (ApplyStringOrNumericBinaryOperator).
+  This is one check in the interpreter's `primitive_operands` slow path.
+- A function body with a non-simple parameter list gets its own var scope
+  (`FuncState::var_scope`, docs/compiler.md 5.5). Its same-named `var`s are copied
+  from the parameters at the scope's `enter_scope`, by resolution (`Scope::copies`).
+  The criterion is "non-simple" rather than the spec's "has parameter expressions".
+  This differs only when no closure can observe the difference. A `catch` with a
+  pattern gets a separate block scope (`ScopeKind::CatchBody`), with the
+  LexicallyDeclaredNames early error checked across the two scopes.
+- `(a?.b)()` keeps `this`. When an optional chain is the whole content of
+  parentheses followed by a call, it leaves the callee and `this` (`Expr::Callee`).
+- Strict arguments objects have the `callee` %ThrowTypeError% accessor. The function
+  is now an `@intrinsic` (`installed_intrinsic(THROW_TYPE_ERROR)`).
+- Script function declarations follow CanDeclareGlobalFunction and
+  CreateGlobalFunctionBinding, as qjs does.
+- New builtins: `Math.f16round` (direct f64 → binary16 rounding) and
+  `Math.sumPrecise`. The sum is computed exactly in a 72×32-bit fixed-point
+  accumulator of 2^-1074 units and rounded once, so intermediate overflow is exact.
+  Also `Error.isError`, which reads the [[ErrorData]] slot as ObjectClassTag "Error"
+  and is false for proxies.
+- Smaller fixes: `Object.prototype` has an immutable prototype; `Object(v)` with a
+  subclass new.target ignores `v`; Promise.prototype.finally's handlers call `then`
+  with one argument; Number.prototype.toString has `length` 1; "no setter for
+  property" drops the key, as qjs.
+- The remaining failures are classified in TESTING.md "Known differences".
+

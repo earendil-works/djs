@@ -305,6 +305,54 @@ the small curated set in `tests/strip-types/` (compiler test `ts_strip_corpus`).
 
 At 0048: 4053/4802 compared files match, 0 differ, 749 are djs syntax errors.
 
+## Known differences (0082)
+
+What is left in the ratchets (`tests/test262/expected-failures.txt`, 56 active tests;
+`tests/corpus/expected-failures.txt`, 4 cases) and why. Everything else in the active
+group passes. Update this list when an entry goes away or a new one is accepted.
+
+**By design** (no fix planned; 40 test262 tests):
+
+- *Always strict* (ARCH "Semantics stance", D014, D015). djs has no sloppy mode, so
+  code that needs sloppy semantics fails:
+  - `Function()` with duplicate or `eval`/`arguments` parameter names:
+    built-ins/Function/15.3.2.1-11-* (9) and built-ins/Function/length/S15.3.5.1_A*_T3
+    (4).
+  - Sloppy code from `Function()` or indirect eval that assigns to `eval` or
+    `arguments` or declares them: language/statements/variable/12.2.1-* (8) and
+    language/statements/function/13.0-12-s, 13.0_4-17gs (2).
+  - Indirect eval is strict eval code, whose declarations stay local to the eval
+    (D1581). The spec's eval code is sloppy, so its `var`s and functions would become
+    global properties with CanDeclareGlobal* checks: language/eval-code/indirect (12).
+- *Annex B `__lookupGetter__` / `__lookupSetter__`* are not implemented. The
+  `__getter__`/`__setter__` features are skipped, but these 4 tests use them without
+  the tag: {expressions,statements}/class/elements/private-{getter,setter}-is-not-a-own-property.
+- *Same as qjs*: language/identifier-resolution/assign-to-global-undefined.js expects
+  `undeclared = (this.undeclared = 5)` to throw, because the reference is resolved
+  before the right side runs. djs resolves it at the store, as qjs does (also in
+  tests/test262/oracle-failures.txt).
+
+**Open, belongs to another area** (16 test262 tests, sent to the coordinator):
+
+- Function.prototype is an ordinary object, not a function that returns undefined (heap
+  and realm): built-ins/Function/prototype/S15.3.3.1_A1, S15.3.4_A1, S15.3.4_A2_T1-T3,
+  language/expressions/property-accessors/S11.2.1_A4_T3, and
+  language/expressions/instanceof/primitive-prototype-with-primitive and
+  prototype-getter-with-object{,-throws} (9 tests).
+- Setting an array's `length` to a value that is not a Number (`a.length = true`, `new
+  Number(6)`, an object with `Symbol.toPrimitive`): the interpreter's [[Set]] skips
+  ArraySetLength's ToUint32/ToNumber and throws RangeError. Tests:
+  built-ins/Array/S15.4.5.2_A3_T2, length/S15.4.5.1_A1.3_T1/T2 and
+  length/define-own-prop-length-coercion-order-set (4).
+- Typed arrays on resizable buffers that shrink during the operation:
+  Array/prototype/fill/typed-array-resize, Object/freeze/typedarray-backed-by-resizable-buffer
+  and TypedArray/prototype/subarray/resizable-buffer (3).
+
+**difftest** (4 cases): `btoa`/`atob` (dquickts/builtin/test_base64.js) and
+`DOMException` (test_dom_exception.js) are qjs host extensions, not ECMAScript. The
+immutable ArrayBuffer proposal (`transferToImmutable`, `sliceToImmutable`) is missing
+in test_immutable_array_buffer.js and test_typed_array.js. Their routing is open.
+
 ## The gate
 
 `scripts/gate.sh` must pass before anything merges into `main`: fmt, clippy, unit tests,
