@@ -37,6 +37,10 @@ the host-side gap for unhandled rejections.
   behind return() on an unstarted async generator), yield_star, for await over sync,
   async-generator and custom async iterables incl. break-close, function kinds.
   test262: no change yet (the tests need 0041's syntax).
+- Part 2 (D1423): `vm_take_unhandled_rejections`; Sandbox `unhandledRejections: "warn" |
+  "throw" | "collect"` (+ `takeUnhandledRejections()`), checked whenever the job queue is
+  empty; reading a settled result promise (`vm_promise_state`, `Vm::mark_promise_handled`)
+  marks it handled, so a rejected result is not also reported. docs/host.md.
 
 ## Follow-ups
 
