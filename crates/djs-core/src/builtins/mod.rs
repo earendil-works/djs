@@ -7,6 +7,7 @@
 
 pub(crate) mod array;
 pub(crate) mod collection;
+pub(crate) mod date;
 pub(crate) mod function;
 pub(crate) mod number;
 pub(crate) mod object;

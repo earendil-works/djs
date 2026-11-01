@@ -205,6 +205,10 @@ const I = {
     if (Array.isArray(o)) return "Array";
     if (typeof o === "function") return "Function";
     if (o instanceof Error) return "Error";
+    try {
+      Date.prototype.getTime.call(o);
+      return "Date";
+    } catch {}
     for (const [C, n] of [[Boolean, "Boolean"], [Number, "Number"], [String, "String"]]) {
       try {
         C.prototype.valueOf.call(o);
@@ -290,6 +294,33 @@ const I = {
   CollectionIteratorKey: (it) => iterState.get(it).k,
   CollectionIteratorValue: (it) => iterState.get(it).v,
   CanBeHeldWeakly: (v) => isObject(v) || (typeof v === "symbol" && Symbol.keyFor(v) === undefined),
+  DateNow: () => 1646177400000,
+  DateCreate: (proto, t) => Object.setPrototypeOf(new Date(t), proto),
+  DateValue: (v) => Date.prototype.getTime.call(v),
+  DateSetValue: (v, t) => Date.prototype.setTime.call(v, t),
+  DateFromFields: (list, local) => {
+    check(Array.isArray(list) && list.every((x) => typeof x === "number"), "DateFromFields");
+    if (!local) return Date.UTC(...list);
+    const f = [0, 0, 1, 0, 0, 0, 0];
+    list.forEach((x, i) => (f[i] = x));
+    return new Date(f[0], f[1], f[2], f[3], f[4], f[5], f[6]).getTime();
+  },
+  DateGetField: (t, f, local) => {
+    const names = ["FullYear", "Month", "Date", "Hours", "Minutes", "Seconds", "Milliseconds", "Day"];
+    return new Date(t)["get" + (local ? "" : "UTC") + names[f]]();
+  },
+  DateSetFields: (t, first, args, local) => {
+    const names = ["FullYear", "Month", "Date", "Hours", "Minutes", "Seconds", "Milliseconds"];
+    const d = new Date(t);
+    return d["set" + (local ? "" : "UTC") + names[first]](...args);
+  },
+  DateFormat: (t, fmt, part) => {
+    const d = new Date(t);
+    const m = [["toUTCString"], ["toDateString", "toTimeString", "toString"], ["toISOString"], ["toLocaleDateString", "toLocaleTimeString", "toLocaleString"]][fmt];
+    return d[fmt === 1 || fmt === 3 ? m[part - 1] : m[0]]();
+  },
+  DateParse: (s) => (check(typeof s === "string", "DateParse"), Date.parse(s)),
+  DateTimezoneOffset: (t) => new Date(t).getTimezoneOffset(),
   StrLocaleCompare: (a, b) => a.localeCompare(b),
   StrCharCodeAt: (s, i) => (check(typeof s === "string" && Number.isInteger(i) || !isFinite(i), "StrCharCodeAt"), i >= 0 && i < s.length ? s.charCodeAt(i) : NaN),
   StrCodePointAt: (s, i) => (i >= 0 && i < s.length ? s.codePointAt(i) : undefined),
@@ -1158,5 +1189,43 @@ for (const key of [{}, Symbol("s"), Symbol.for("reg"), Symbol.iterator, 1, "s", 
   same("WeakSet.prototype.delete", WSP.delete, (f) => f.call(new WeakSet(), key));
 }
 same("WeakMap.prototype.get", WMP.get, (f) => f.call(new Map(), {}));
+
+// ---- 0038: Date ---------------------------------------------------------------------------
+
+const DP = Date.prototype;
+const dateArgs = [[0], [1e12], [NaN], [8.64e15], [8.64e15 + 1], ["2020-02-29T12:34:56.789Z"], ["Feb 29 2020"], ["nope"], [true], [toPrim(5)], [{ valueOf: () => 9 }], [new Date(77)],
+  [2020, 1], [2020, 1, 29, 12, 34, 56, 789], [99, 0], [2020, 13, 40], [2020, NaN], [2020, 0, 1, 0, 0, 0, 0, 99], [-1, 0], [275760, 8, 13], [Infinity, 0]];
+for (const args of dateArgs) {
+  same("globalThis.Date", Date, (f) => DP.getTime.call(Reflect.construct(f, args)));
+  same("Date.UTC", Date.UTC, (f) => f(...args.map((a) => (a instanceof Date ? 1 : a))));
+}
+same("Date.UTC", Date.UTC, (f) => f());
+for (const t of [0, 1e12, -1e12, NaN, 8.64e15, -8.64e15, 951782400000, -62198755200000]) {
+  for (const name of Object.getOwnPropertyNames(DP).filter((n) => /^(get|to)/.test(n) && n !== "toJSON" && n !== "getYear" && !/Locale/.test(n))) {
+    same("Date.prototype." + name, DP[name], (f) => f.call(new Date(t)));
+  }
+  same("Date.prototype.toJSON", DP.toJSON, (f) => f.call(new Date(t)));
+  for (const name of Object.getOwnPropertyNames(DP).filter((n) => /^set/.test(n) && n !== "setYear")) {
+    for (const args of [[], [5], [1, 2], [1, 2, 3], [-1, 40, 70, 1000], [NaN], [Infinity, 1], [toPrim(3)], ["7"]]) {
+      same("Date.prototype." + name, DP[name], (f) => { const d = new Date(t); return [f.call(d, ...args), d.getTime()]; });
+    }
+  }
+}
+for (const name of ["getTime", "setTime", "toISOString", "setMonth"]) {
+  same("Date.prototype." + name, DP[name], (f) => f.call({}));
+}
+same("Date.prototype.setMonth", DP.setMonth, (f, log) => f.call(new Date(NaN), valueOfObj(1, log), valueOfObj(2, log)));
+for (const s of ["2020-02-29T12:34:56.789Z", "2020-02-29", "2020-02-29T12:34", "2020-13-01", "Sat Feb 29 2020 12:34:56 GMT+0000", "Sat, 29 Feb 2020 12:34:56 GMT", "Feb 29 2020", "29 February 2020 10:00 PM EST", "2020/2/29 1:2:3", "12/31/1999 23:59", "+002020-02-29T00:00:00Z", "-000000-01-01T00:00:00Z", "T", "", "Thu Jan 01 1970 00:00:00 GMT+0100 (CET)", "2020-02-29T24:00", "2020-02-29T24:00:01", "1 Mar 2022 10:00 +0100", 5, toPrim("2000")]) {
+  same("Date.parse", Date.parse, (f) => f(s));
+}
+for (const hint of ["string", "number", "default", "bogus", 1]) {
+  same("Date.prototype[Symbol.toPrimitive]", DP[Symbol.toPrimitive], (f) => f.call(new Date(0), hint));
+}
+same("Date.prototype[Symbol.toPrimitive]", DP[Symbol.toPrimitive], (f) => f.call(1, "number"));
+same("Date.prototype.toJSON", DP.toJSON, (f) => f.call({ valueOf: () => Infinity, toISOString: () => "x" }));
+same("Date.prototype.toJSON", DP.toJSON, (f) => f.call({ valueOf: () => 1, toISOString: () => "iso" }));
+for (const name of Object.getOwnPropertyNames(DP).filter((n) => typeof DP[n] === "function" && n !== "constructor" && installed["Date.prototype." + n])) {
+  same("Date.prototype." + name, DP[name], () => installed["Date.prototype." + name].length === DP[name].length);
+}
 
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));

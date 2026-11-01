@@ -235,6 +235,41 @@ declare function CollectionIteratorValue(it: Obj): Value;
 /** CanBeHeldWeakly ( v ): an object, or a symbol not in the Symbol.for registry. @leaf */
 declare function CanBeHeldWeakly(v: Value): boolean;
 
+// ---- Date (0038, builtins/date.rs; local time is the host's fixed offset, D1383) --------
+
+/** The host's clock (ms since the epoch; Vm::set_now). @leaf */
+declare function DateNow(): f64;
+/** A new Date object with prototype proto and time value t. @leaf */
+declare function DateCreate(proto: Obj, t: f64): Obj;
+/** thisTimeValue: the time value of a Date, TypeError "not a Date object" otherwise. @leaf */
+declare function DateValue(v: Value): f64;
+/** Stores time value t in a Date (TypeError "not a Date object" otherwise); returns t. @leaf */
+declare function DateSetValue(v: Value, t: f64): f64;
+/**
+ * A time value from the Numbers year, month[, date, hours, minutes, seconds, ms] in a
+ * dense array (the constructor's and Date.UTC's form: years 0-99 are 1900-1999). @leaf
+ */
+declare function DateFromFields(fields: Obj, local: boolean): f64;
+/**
+ * Field `field` of t (0 year, 1 month, 2 date, 3 hours, 4 minutes, 5 seconds, 6 ms, 7
+ * weekday), local or UTC; NaN for an invalid date. @leaf
+ */
+declare function DateGetField(t: f64, field: i32, local: boolean): f64;
+/**
+ * A setter's new time value: fields first.. of t replaced by the Numbers in args (a
+ * dense array), local or UTC (qjs's set_date_field). @leaf
+ */
+declare function DateSetFields(t: f64, first: i32, args: Obj, local: boolean): f64;
+/**
+ * Formats t: fmt 0 toUTCString, 1 toString, 2 toISOString (RangeError for NaN), 3
+ * toLocale*; part 1 date, 2 time, 3 both. "Invalid Date" for NaN. @leaf
+ */
+declare function DateFormat(t: f64, fmt: i32, part: i32): Str;
+/** Date.parse of a string (ISO and the formats qjs's toString/toUTCString emit). @leaf */
+declare function DateParse(s: Str): f64;
+/** getTimezoneOffset of t: minutes (UTC - local), NaN for an invalid date. @leaf */
+declare function DateTimezoneOffset(t: f64): f64;
+
 // ---- Functions (0031) -----------------------------------------------------------------
 
 /** Call ( F, V, args ) with the arguments in a dense array. @reentrant */

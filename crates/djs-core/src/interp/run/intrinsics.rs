@@ -7,7 +7,7 @@
 //! push exactly one call frame whose result completes them.
 
 use super::*;
-use crate::builtins::{array, collection, function, number, object, string};
+use crate::builtins::{array, collection, date, function, number, object, string};
 use crate::bytecode::intrinsics::{INTRINSICS, IntrinsicKind, intrinsic, intrinsic_id};
 use crate::heap::cells::flags::{OBJ_BUILTIN, OBJ_BUILTIN_CTOR};
 use crate::heap::{ObjectClass, atoms};
@@ -78,6 +78,17 @@ const HAS_OWN_PROPERTY: u16 = id("HasOwnProperty");
 const OWN_PROPERTY_ATTRIBUTES: u16 = id("OwnPropertyAttributes");
 const OWN_PROPERTY_KEYS: u16 = id("OwnPropertyKeys");
 const CALL_WITH_ARRAY: u16 = id("CallWithArray");
+const DATE_NOW: u16 = id("DateNow");
+const DATE_CREATE: u16 = id("DateCreate");
+const DATE_VALUE: u16 = id("DateValue");
+const DATE_SET_VALUE: u16 = id("DateSetValue");
+const DATE_FROM_FIELDS: u16 = id("DateFromFields");
+const DATE_GET_FIELD: u16 = id("DateGetField");
+const DATE_SET_FIELDS: u16 = id("DateSetFields");
+const DATE_FORMAT: u16 = id("DateFormat");
+const DATE_PARSE: u16 = id("DateParse");
+const DATE_TIMEZONE_OFFSET: u16 = id("DateTimezoneOffset");
+
 const COLLECTION_CREATE: u16 = id("CollectionCreate");
 const COLLECTION_CLASS: u16 = id("CollectionClass");
 const COLLECTION_GET: u16 = id("CollectionGet");
@@ -1006,6 +1017,102 @@ impl Exec<'_> {
                 }
             }
             CAN_BE_HELD_WEAKLY => Value::bool(collection::can_be_held_weakly(self.heap, a0)?),
+            DATE_NOW => realm::intrinsic(self.heap, Intrinsic::Clock),
+            DATE_CREATE => {
+                let Some(proto) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                let o = self.heap.alloc_object(ObjectClass::Date, Some(proto), 1)?;
+                let t = arg(self, 1).as_number().unwrap_or(f64::NAN);
+                self.heap.set_object_slot(o, 0, Value::number(t));
+                Value::object(o)
+            }
+            DATE_VALUE | DATE_SET_VALUE => {
+                let Some(o) = a0
+                    .as_object()
+                    .filter(|&o| self.heap.object_class(o) == ObjectClass::Date)
+                else {
+                    return type_error("not a Date object");
+                };
+                if id == DATE_SET_VALUE {
+                    let t = arg(self, 1).as_number().unwrap_or(f64::NAN);
+                    self.heap.set_object_slot(o, 0, Value::number(t));
+                }
+                conv::number(self.heap.object_slot(o, 0).as_number().unwrap_or(f64::NAN))
+            }
+            DATE_FROM_FIELDS | DATE_SET_FIELDS => {
+                let offset = self.time_zone_offset();
+                let (list, local) = if id == DATE_FROM_FIELDS {
+                    (a0.as_object(), arg(self, 1).as_bool() == Some(true))
+                } else {
+                    (
+                        arg(self, 2).as_object(),
+                        arg(self, 3).as_bool() == Some(true),
+                    )
+                };
+                let Some(list) = list else {
+                    return bad_argument(info.name);
+                };
+                let n = self.heap.array_length(list).min(7);
+                let nums: alloc::vec::Vec<f64> = (0..n)
+                    .map(|i| {
+                        self.heap
+                            .get_element_fast(list, i)
+                            .and_then(|v| v.as_number())
+                            .unwrap_or(f64::NAN)
+                    })
+                    .collect();
+                let t = if id == DATE_FROM_FIELDS {
+                    let mut f = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0];
+                    f[..nums.len()].copy_from_slice(&nums);
+                    date::from_fields_checked(&mut f, local, offset)
+                } else {
+                    let t = a0.as_number().unwrap_or(f64::NAN);
+                    let first = arg(self, 1).as_int().unwrap_or(0).clamp(0, 6) as usize;
+                    let n = nums.len().min(7 - first);
+                    date::set_fields(t, first, &nums[..n], local, offset)
+                };
+                conv::number(t)
+            }
+            DATE_GET_FIELD => {
+                let t = a0.as_number().unwrap_or(f64::NAN);
+                let field = arg(self, 1).as_int().unwrap_or(0).clamp(0, 7) as usize;
+                let local = arg(self, 2).as_bool() == Some(true);
+                match date::fields(t, local, self.time_zone_offset(), false) {
+                    Some(f) => conv::number(f[field]),
+                    None => Value::NAN,
+                }
+            }
+            DATE_FORMAT => {
+                let t = a0.as_number().unwrap_or(f64::NAN);
+                let fmt = arg(self, 1).as_int().unwrap_or(1) as u8;
+                let part = arg(self, 2).as_int().unwrap_or(3) as u8;
+                match date::format(t, fmt, part, self.time_zone_offset()) {
+                    Some(s) => Value::string(self.heap.alloc_str(&s)?),
+                    None if fmt == 2 => {
+                        return Err(Fault::Error(
+                            ErrorKind::RangeError,
+                            String::from("Date value is NaN"),
+                        ));
+                    }
+                    None => Value::string(self.heap.alloc_str("Invalid Date")?),
+                }
+            }
+            DATE_PARSE => {
+                let Some(s) = a0.as_string() else {
+                    return bad_argument(info.name);
+                };
+                let offset = self.time_zone_offset();
+                conv::number(date::parse(self.heap.str_units(s), offset))
+            }
+            DATE_TIMEZONE_OFFSET => {
+                let t = a0.as_number().unwrap_or(f64::NAN);
+                if t.is_nan() {
+                    Value::NAN
+                } else {
+                    conv::number(0.0 - self.time_zone_offset() as f64)
+                }
+            }
             CONSTRUCT_WITH_ARRAY => {
                 // `f args newTarget` becomes `f a1 .. an`.
                 let Some(args) = arg(self, 1).as_object() else {
@@ -1276,6 +1383,13 @@ impl Exec<'_> {
         self.name_and_length(fo, name, length.as_number().unwrap_or(0.0))?;
         self.mark_builtin(fo, OBJ_BUILTIN);
         Ok(())
+    }
+
+    /// The host's local time zone offset (minutes east of UTC, D1383).
+    fn time_zone_offset(&self) -> i64 {
+        realm::intrinsic(self.heap, Intrinsic::TimeZoneOffset)
+            .as_int()
+            .unwrap_or(0) as i64
     }
 
     /// OrdinarySet ( O, P, V, Receiver ), 10.1.9.2, without calling a setter:

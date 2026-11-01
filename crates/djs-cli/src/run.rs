@@ -136,6 +136,8 @@ impl RunOptions {
 /// A VM with the globals `djs run` provides (`console.log`).
 pub fn new_vm(opts: &RunOptions) -> Vm {
     let mut vm = djs_prelude::new_vm(opts.vm_options()).expect("out of memory creating the VM");
+    // The VM reads no clock itself (D1383): give it the wall clock, in UTC.
+    vm.set_now(now_ms());
     let console = vm.new_object().expect("oom");
     let log = vm.new_host_function(CONSOLE_LOG, "log").expect("oom");
     vm.define(console, "log", log).expect("oom");
@@ -200,4 +202,12 @@ pub fn run_main(
             }
         }
     }
+}
+
+/// The system clock in ms since the epoch.
+fn now_ms() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(0.0)
 }

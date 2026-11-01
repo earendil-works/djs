@@ -411,6 +411,150 @@ ToPropertyKey: reentrant
 GetPrototypeFromConstructor: reentrant
   builtins/conversion.ts:115:24  Get (intrinsic)
 
+DateValueFromArgs: reentrant
+  builtins/date.ts:7:18  LengthOfArrayLike (builtin)
+  builtins/date.ts:12:26  Get (intrinsic)
+  builtins/date.ts:16:22  ToPrimitive (builtin)
+  builtins/date.ts:20:21  ToNumber (builtin)
+  builtins/date.ts:25:51  Get (intrinsic)
+  builtins/date.ts:25:42  ToNumber (builtin)
+  builtins/date.ts:25:5  CreateDataPropertyOrThrow (intrinsic)
+
+IsDateObject: leaf
+
+TimeClip: leaf
+
+DateConstructor: reentrant (constructor Date)
+  builtins/date.ts:52:19  DateValueFromArgs (builtin)
+  builtins/date.ts:53:21  GetPrototypeFromConstructor (builtin)
+
+DateNowBuiltin: leaf (Date.now)
+
+DateParseBuiltin: reentrant (Date.parse)
+  builtins/date.ts:69:20  ToString (builtin)
+
+DateUTC: reentrant (Date.UTC)
+  builtins/date.ts:78:18  LengthOfArrayLike (builtin)
+  builtins/date.ts:85:51  Get (intrinsic)
+  builtins/date.ts:85:42  ToNumber (builtin)
+  builtins/date.ts:85:5  CreateDataPropertyOrThrow (intrinsic)
+
+DatePrototypeGetFullYear: leaf (Date.prototype.getFullYear)
+
+DatePrototypeGetUTCFullYear: leaf (Date.prototype.getUTCFullYear)
+
+DatePrototypeGetMonth: leaf (Date.prototype.getMonth)
+
+DatePrototypeGetUTCMonth: leaf (Date.prototype.getUTCMonth)
+
+DatePrototypeGetDate: leaf (Date.prototype.getDate)
+
+DatePrototypeGetUTCDate: leaf (Date.prototype.getUTCDate)
+
+DatePrototypeGetDay: leaf (Date.prototype.getDay)
+
+DatePrototypeGetUTCDay: leaf (Date.prototype.getUTCDay)
+
+DatePrototypeGetHours: leaf (Date.prototype.getHours)
+
+DatePrototypeGetUTCHours: leaf (Date.prototype.getUTCHours)
+
+DatePrototypeGetMinutes: leaf (Date.prototype.getMinutes)
+
+DatePrototypeGetUTCMinutes: leaf (Date.prototype.getUTCMinutes)
+
+DatePrototypeGetSeconds: leaf (Date.prototype.getSeconds)
+
+DatePrototypeGetUTCSeconds: leaf (Date.prototype.getUTCSeconds)
+
+DatePrototypeGetMilliseconds: leaf (Date.prototype.getMilliseconds)
+
+DatePrototypeGetUTCMilliseconds: leaf (Date.prototype.getUTCMilliseconds)
+
+DatePrototypeSetMilliseconds: reentrant (Date.prototype.setMilliseconds)
+  builtins/date.ts:224:10  DateSetter (builtin)
+
+DatePrototypeSetUTCMilliseconds: reentrant (Date.prototype.setUTCMilliseconds)
+  builtins/date.ts:233:10  DateSetter (builtin)
+
+DatePrototypeSetSeconds: reentrant (Date.prototype.setSeconds)
+  builtins/date.ts:242:10  DateSetter (builtin)
+
+DatePrototypeSetUTCSeconds: reentrant (Date.prototype.setUTCSeconds)
+  builtins/date.ts:251:10  DateSetter (builtin)
+
+DatePrototypeSetMinutes: reentrant (Date.prototype.setMinutes)
+  builtins/date.ts:260:10  DateSetter (builtin)
+
+DatePrototypeSetUTCMinutes: reentrant (Date.prototype.setUTCMinutes)
+  builtins/date.ts:269:10  DateSetter (builtin)
+
+DatePrototypeSetHours: reentrant (Date.prototype.setHours)
+  builtins/date.ts:278:10  DateSetter (builtin)
+
+DatePrototypeSetUTCHours: reentrant (Date.prototype.setUTCHours)
+  builtins/date.ts:287:10  DateSetter (builtin)
+
+DatePrototypeSetDate: reentrant (Date.prototype.setDate)
+  builtins/date.ts:296:10  DateSetter (builtin)
+
+DatePrototypeSetUTCDate: reentrant (Date.prototype.setUTCDate)
+  builtins/date.ts:305:10  DateSetter (builtin)
+
+DatePrototypeSetMonth: reentrant (Date.prototype.setMonth)
+  builtins/date.ts:314:10  DateSetter (builtin)
+
+DatePrototypeSetUTCMonth: reentrant (Date.prototype.setUTCMonth)
+  builtins/date.ts:323:10  DateSetter (builtin)
+
+DatePrototypeSetFullYear: reentrant (Date.prototype.setFullYear)
+  builtins/date.ts:332:10  DateSetter (builtin)
+
+DatePrototypeSetUTCFullYear: reentrant (Date.prototype.setUTCFullYear)
+  builtins/date.ts:341:10  DateSetter (builtin)
+
+DateSetter: reentrant
+  builtins/date.ts:350:18  LengthOfArrayLike (builtin)
+  builtins/date.ts:354:49  Get (intrinsic)
+  builtins/date.ts:354:40  ToNumber (builtin)
+  builtins/date.ts:354:5  CreateDataPropertyOrThrow (intrinsic)
+
+DatePrototypeGetTime: leaf (Date.prototype.getTime)
+
+DatePrototypeValueOf: leaf (Date.prototype.valueOf)
+
+DatePrototypeGetTimezoneOffset: leaf (Date.prototype.getTimezoneOffset)
+
+DatePrototypeSetTime: reentrant (Date.prototype.setTime)
+  builtins/date.ts:389:18  ToNumber (builtin)
+
+DatePrototypeToString: leaf (Date.prototype.toString)
+
+DatePrototypeToDateString: leaf (Date.prototype.toDateString)
+
+DatePrototypeToTimeString: leaf (Date.prototype.toTimeString)
+
+DatePrototypeToISOString: leaf (Date.prototype.toISOString)
+
+DatePrototypeToLocaleString: leaf (Date.prototype.toLocaleString)
+
+DatePrototypeToLocaleDateString: leaf (Date.prototype.toLocaleDateString)
+
+DatePrototypeToLocaleTimeString: leaf (Date.prototype.toLocaleTimeString)
+
+DatePrototypeToUTCString: leaf (Date.prototype.toUTCString, Date.prototype.toGMTString)
+
+DatePrototypeGetYear: leaf (Date.prototype.getYear)
+
+DatePrototypeToJSON: reentrant (Date.prototype.toJSON)
+  builtins/date.ts:473:21  ToPrimitive (builtin)
+  builtins/date.ts:480:15  Get (intrinsic)
+  builtins/date.ts:480:10  Call (intrinsic)
+
+DatePrototypeToPrimitive: reentrant (Date.prototype[Symbol.toPrimitive])
+  builtins/date.ts:493:12  OrdinaryToPrimitive (builtin)
+  builtins/date.ts:496:12  OrdinaryToPrimitive (builtin)
+
 InstallErrorCause: reentrant
   builtins/error.ts:7:9  HasProperty (intrinsic)
   builtins/error.ts:8:45  Get (intrinsic)

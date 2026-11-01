@@ -319,6 +319,27 @@ impl Vm {
     }
 
     /// A new Error object of `kind`.
+    /// Sets the clock that `Date.now()` and `new Date()` read, in ms since the epoch
+    /// (ARCH "Nondeterminism", D1383). The VM never reads a system clock: the host sets
+    /// it, typically before each run slice. It is heap data, so restores and replays see
+    /// the value the host set. Until then it is 0.
+    pub fn set_now(&mut self, ms: f64) {
+        let v = Value::number(ms);
+        crate::interp::realm::set_intrinsic(&mut self.heap, crate::interp::Intrinsic::Clock, v);
+    }
+
+    /// Sets the local time zone as a fixed offset in minutes east of UTC (D1383): local
+    /// Date methods and toString use it. Default 0 (UTC). There is no daylight saving
+    /// rule; a host that cares updates it.
+    pub fn set_time_zone_offset(&mut self, minutes: i32) {
+        let v = Value::int(minutes);
+        crate::interp::realm::set_intrinsic(
+            &mut self.heap,
+            crate::interp::Intrinsic::TimeZoneOffset,
+            v,
+        );
+    }
+
     /// Reseeds `Math.random` (see `VmOptions::random_seed`). The state lives in the
     /// heap, so a snapshot continues the same sequence.
     pub fn set_random_seed(&mut self, seed: u64) {

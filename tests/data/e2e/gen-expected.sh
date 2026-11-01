@@ -11,6 +11,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 QJS="${QJS:-$HOME/Development/dquickts/qjs}"
+# Local time is UTC, as in djs without a host offset (D1383).
+export TZ=UTC
 PRELUDE='function __fmt(v) {
   if (typeof v === "string") return v;
   if (v instanceof Error) return v.message ? v.name + ": " + v.message : v.name;

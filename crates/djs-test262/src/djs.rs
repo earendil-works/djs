@@ -81,7 +81,14 @@ impl Djs {
                 .unwrap_or(DEFAULT_LIMIT),
             ..VmOptions::default()
         };
-        let vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;
+        let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;
+        // The wall clock, in UTC (D1383).
+        vm.set_now(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as f64)
+                .unwrap_or(0.0),
+        );
         let mut s = Session {
             vm,
             printed: Vec::new(),

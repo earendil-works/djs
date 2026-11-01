@@ -1298,3 +1298,27 @@ fn vm_call_never_collects() {
         "run collects at its first safepoint"
     );
 }
+
+#[test]
+fn date_uses_the_host_clock_and_offset() {
+    let base = base_image();
+    let mut vm = Vm::from_base(&base, VmOptions::default()).unwrap();
+    // No clock set: the epoch (the VM never reads a system clock).
+    assert_eq!(eval(&mut vm, "return Date.now()"), "0");
+    vm.set_now(1_646_177_400_000.0);
+    assert_eq!(
+        eval(&mut vm, "return new Date().toISOString()"),
+        "2022-03-01T23:30:00.000Z"
+    );
+    // UTC+2, checked against qjs with TZ=Etc/GMT-2.
+    vm.set_time_zone_offset(120);
+    let src = "const d = new Date(Date.UTC(2022, 2, 1, 23, 30));
+        return [d.toString(), d.getDate(), d.getHours(), d.getTimezoneOffset(), d.toLocaleString(),
+          new Date(2022, 0, 1).getTime(), Date.parse('2022-03-01T10:00'), Date.parse('2022-03-01'),
+          new Date(2022, 2, 1).toISOString()].join('|')";
+    assert_eq!(
+        eval(&mut vm, src),
+        "Wed Mar 02 2022 01:30:00 GMT+0200|2|1|-120|03/02/2022, 01:30:00 AM|1640988000000|\
+         1646121600000|1646092800000|2022-02-28T22:00:00.000Z"
+    );
+}

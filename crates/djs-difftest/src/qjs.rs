@@ -41,6 +41,8 @@ impl Engine for Qjs {
             done: Done::Crash(msg),
         };
         let mut cmd = Command::new(&self.binary);
+        // Local time is UTC on both engines (djs has no host offset here, D1383).
+        cmd.env("TZ", "UTC");
         if let Some(limit) = job.memory_limit {
             cmd.arg("--memory-limit").arg(limit.to_string());
         }

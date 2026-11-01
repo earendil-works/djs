@@ -103,6 +103,8 @@ pub enum ObjectClass {
     /// An internal record (D1372): a prototype-less object with only internal slots,
     /// never handed to user code; the builtins read it with `%RecordGet`/`%RecordSet`.
     Record = 19,
+    /// A Date: slot 0 the time value (a Number, NaN for an invalid date).
+    Date = 20,
 }
 
 impl ObjectClass {
@@ -128,6 +130,7 @@ impl ObjectClass {
             17 => Some(ObjectClass::Promise),
             18 => Some(ObjectClass::BuiltinClosure),
             19 => Some(ObjectClass::Record),
+            20 => Some(ObjectClass::Date),
             _ => None,
         }
     }
@@ -150,6 +153,7 @@ impl ObjectClass {
             | ObjectClass::Symbol => 1,
             ObjectClass::Map | ObjectClass::Set | ObjectClass::WeakMap | ObjectClass::WeakSet => 3,
             ObjectClass::CollectionIterator => 6,
+            ObjectClass::Date => 1,
         }
     }
 

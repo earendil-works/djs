@@ -1075,6 +1075,334 @@ function GetPrototypeFromConstructor(newTarget, fallback) {
   return %RealmIntrinsic(fallback);
 }
 
+// builtins/date.ts:6
+function DateValueFromArgs(args) {
+  const n = LengthOfArrayLike(args);
+  if (n === 0) {
+    return %DateNow();
+  }
+  if (n === 1) {
+    const value = %Get(args, 0);
+    if (%IsObject(value) && IsDateObject(%AsObj(value))) {
+      return TimeClip(%DateValue(value));
+    }
+    const v = ToPrimitive(value, "default");
+    if (%IsString(v)) {
+      return TimeClip(%DateParse(%AsStr(v)));
+    }
+    return TimeClip(ToNumber(v));
+  }
+  const fields = %ArrayCreate(0);
+  const count = n < 7 ? n : 7;
+  for (let i = 0; i < count; i++) {
+    %CreateDataPropertyOrThrow(fields, i, ToNumber(%Get(args, i)));
+  }
+  return %DateFromFields(fields, true);
+}
+
+// builtins/date.ts:31
+function IsDateObject(o) {
+  return %ObjectClassTag(o) === "Date";
+}
+
+// builtins/date.ts:36
+function TimeClip(t) {
+  if (!(t >= -8.64e15 && t <= 8.64e15)) {
+    return 0 / 0;
+  }
+  return %ToIntegerOrInfinityNumber(t);
+}
+
+// builtins/date.ts:48 constructor Date
+function DateConstructor(...values) {
+  if (new.target === undefined) {
+    return %DateFormat(%DateNow(), 1, 3);
+  }
+  const tv = DateValueFromArgs(values);
+  return %DateCreate(GetPrototypeFromConstructor(new.target, "DatePrototype"), tv);
+}
+
+// builtins/date.ts:60 Date.now
+function DateNowBuiltin() {
+  return %DateNow();
+}
+
+// builtins/date.ts:68 Date.parse
+function DateParseBuiltin(string) {
+  return %DateParse(ToString(string));
+}
+
+// builtins/date.ts:77 Date.UTC
+function DateUTC(...values) {
+  const n = LengthOfArrayLike(values);
+  if (n === 0) {
+    return 0 / 0;
+  }
+  const fields = %ArrayCreate(0);
+  const count = n < 7 ? n : 7;
+  for (let i = 0; i < count; i++) {
+    %CreateDataPropertyOrThrow(fields, i, ToNumber(%Get(values, i)));
+  }
+  return %DateFromFields(fields, false);
+}
+
+// builtins/date.ts:94 Date.prototype.getFullYear
+function DatePrototypeGetFullYear() {
+  return %DateGetField(%DateValue(this), 0, true);
+}
+
+// builtins/date.ts:102 Date.prototype.getUTCFullYear
+function DatePrototypeGetUTCFullYear() {
+  return %DateGetField(%DateValue(this), 0, false);
+}
+
+// builtins/date.ts:110 Date.prototype.getMonth
+function DatePrototypeGetMonth() {
+  return %DateGetField(%DateValue(this), 1, true);
+}
+
+// builtins/date.ts:118 Date.prototype.getUTCMonth
+function DatePrototypeGetUTCMonth() {
+  return %DateGetField(%DateValue(this), 1, false);
+}
+
+// builtins/date.ts:126 Date.prototype.getDate
+function DatePrototypeGetDate() {
+  return %DateGetField(%DateValue(this), 2, true);
+}
+
+// builtins/date.ts:134 Date.prototype.getUTCDate
+function DatePrototypeGetUTCDate() {
+  return %DateGetField(%DateValue(this), 2, false);
+}
+
+// builtins/date.ts:142 Date.prototype.getDay
+function DatePrototypeGetDay() {
+  return %DateGetField(%DateValue(this), 7, true);
+}
+
+// builtins/date.ts:150 Date.prototype.getUTCDay
+function DatePrototypeGetUTCDay() {
+  return %DateGetField(%DateValue(this), 7, false);
+}
+
+// builtins/date.ts:158 Date.prototype.getHours
+function DatePrototypeGetHours() {
+  return %DateGetField(%DateValue(this), 3, true);
+}
+
+// builtins/date.ts:166 Date.prototype.getUTCHours
+function DatePrototypeGetUTCHours() {
+  return %DateGetField(%DateValue(this), 3, false);
+}
+
+// builtins/date.ts:174 Date.prototype.getMinutes
+function DatePrototypeGetMinutes() {
+  return %DateGetField(%DateValue(this), 4, true);
+}
+
+// builtins/date.ts:182 Date.prototype.getUTCMinutes
+function DatePrototypeGetUTCMinutes() {
+  return %DateGetField(%DateValue(this), 4, false);
+}
+
+// builtins/date.ts:190 Date.prototype.getSeconds
+function DatePrototypeGetSeconds() {
+  return %DateGetField(%DateValue(this), 5, true);
+}
+
+// builtins/date.ts:198 Date.prototype.getUTCSeconds
+function DatePrototypeGetUTCSeconds() {
+  return %DateGetField(%DateValue(this), 5, false);
+}
+
+// builtins/date.ts:206 Date.prototype.getMilliseconds
+function DatePrototypeGetMilliseconds() {
+  return %DateGetField(%DateValue(this), 6, true);
+}
+
+// builtins/date.ts:214 Date.prototype.getUTCMilliseconds
+function DatePrototypeGetUTCMilliseconds() {
+  return %DateGetField(%DateValue(this), 6, false);
+}
+
+// builtins/date.ts:223 Date.prototype.setMilliseconds
+function DatePrototypeSetMilliseconds(...args) {
+  return DateSetter(this, args, 6, 1, true);
+}
+
+// builtins/date.ts:232 Date.prototype.setUTCMilliseconds
+function DatePrototypeSetUTCMilliseconds(...args) {
+  return DateSetter(this, args, 6, 1, false);
+}
+
+// builtins/date.ts:241 Date.prototype.setSeconds
+function DatePrototypeSetSeconds(...args) {
+  return DateSetter(this, args, 5, 2, true);
+}
+
+// builtins/date.ts:250 Date.prototype.setUTCSeconds
+function DatePrototypeSetUTCSeconds(...args) {
+  return DateSetter(this, args, 5, 2, false);
+}
+
+// builtins/date.ts:259 Date.prototype.setMinutes
+function DatePrototypeSetMinutes(...args) {
+  return DateSetter(this, args, 4, 3, true);
+}
+
+// builtins/date.ts:268 Date.prototype.setUTCMinutes
+function DatePrototypeSetUTCMinutes(...args) {
+  return DateSetter(this, args, 4, 3, false);
+}
+
+// builtins/date.ts:277 Date.prototype.setHours
+function DatePrototypeSetHours(...args) {
+  return DateSetter(this, args, 3, 4, true);
+}
+
+// builtins/date.ts:286 Date.prototype.setUTCHours
+function DatePrototypeSetUTCHours(...args) {
+  return DateSetter(this, args, 3, 4, false);
+}
+
+// builtins/date.ts:295 Date.prototype.setDate
+function DatePrototypeSetDate(...args) {
+  return DateSetter(this, args, 2, 1, true);
+}
+
+// builtins/date.ts:304 Date.prototype.setUTCDate
+function DatePrototypeSetUTCDate(...args) {
+  return DateSetter(this, args, 2, 1, false);
+}
+
+// builtins/date.ts:313 Date.prototype.setMonth
+function DatePrototypeSetMonth(...args) {
+  return DateSetter(this, args, 1, 2, true);
+}
+
+// builtins/date.ts:322 Date.prototype.setUTCMonth
+function DatePrototypeSetUTCMonth(...args) {
+  return DateSetter(this, args, 1, 2, false);
+}
+
+// builtins/date.ts:331 Date.prototype.setFullYear
+function DatePrototypeSetFullYear(...args) {
+  return DateSetter(this, args, 0, 3, true);
+}
+
+// builtins/date.ts:340 Date.prototype.setUTCFullYear
+function DatePrototypeSetUTCFullYear(...args) {
+  return DateSetter(this, args, 0, 3, false);
+}
+
+// builtins/date.ts:348
+function DateSetter(date, args, first, maxCount, local) {
+  const t = %DateValue(date);
+  const n = LengthOfArrayLike(args);
+  const count = n < maxCount ? n : maxCount;
+  const nums = %ArrayCreate(0);
+  for (let i = 0; i < count; i++) {
+    %CreateDataPropertyOrThrow(nums, i, ToNumber(%Get(args, i)));
+  }
+  return %DateSetValue(date, %DateSetFields(t, first, nums, local));
+}
+
+// builtins/date.ts:363 Date.prototype.getTime
+function DatePrototypeGetTime() {
+  return %DateValue(this);
+}
+
+// builtins/date.ts:371 Date.prototype.valueOf
+function DatePrototypeValueOf() {
+  return %DateValue(this);
+}
+
+// builtins/date.ts:379 Date.prototype.getTimezoneOffset
+function DatePrototypeGetTimezoneOffset() {
+  return %DateTimezoneOffset(%DateValue(this));
+}
+
+// builtins/date.ts:387 Date.prototype.setTime
+function DatePrototypeSetTime(time) {
+  %DateValue(this);
+  const t = ToNumber(time);
+  return %DateSetValue(this, TimeClip(t));
+}
+
+// builtins/date.ts:397 Date.prototype.toString
+function DatePrototypeToString() {
+  return %DateFormat(%DateValue(this), 1, 3);
+}
+
+// builtins/date.ts:405 Date.prototype.toDateString
+function DatePrototypeToDateString() {
+  return %DateFormat(%DateValue(this), 1, 1);
+}
+
+// builtins/date.ts:413 Date.prototype.toTimeString
+function DatePrototypeToTimeString() {
+  return %DateFormat(%DateValue(this), 1, 2);
+}
+
+// builtins/date.ts:421 Date.prototype.toISOString
+function DatePrototypeToISOString() {
+  return %DateFormat(%DateValue(this), 2, 3);
+}
+
+// builtins/date.ts:429 Date.prototype.toLocaleString
+function DatePrototypeToLocaleString() {
+  return %DateFormat(%DateValue(this), 3, 3);
+}
+
+// builtins/date.ts:437 Date.prototype.toLocaleDateString
+function DatePrototypeToLocaleDateString() {
+  return %DateFormat(%DateValue(this), 3, 1);
+}
+
+// builtins/date.ts:445 Date.prototype.toLocaleTimeString
+function DatePrototypeToLocaleTimeString() {
+  return %DateFormat(%DateValue(this), 3, 2);
+}
+
+// builtins/date.ts:454 Date.prototype.toUTCString Date.prototype.toGMTString
+function DatePrototypeToUTCString() {
+  return %DateFormat(%DateValue(this), 0, 3);
+}
+
+// builtins/date.ts:462 Date.prototype.getYear
+function DatePrototypeGetYear() {
+  const y = %DateGetField(%DateValue(this), 0, true);
+  return y - 1900;
+}
+
+// builtins/date.ts:471 Date.prototype.toJSON
+function DatePrototypeToJSON(key) {
+  const o = %ToObject(this);
+  const tv = ToPrimitive(o, "number");
+  if (%IsNumber(tv)) {
+    const n = %AsNumber(tv);
+    if (n !== n || n === 1 / 0 || n === -1 / 0) {
+      return null;
+    }
+  }
+  return %Call(%Get(o, "toISOString"), o);
+}
+
+// builtins/date.ts:488 Date.prototype[Symbol.toPrimitive]
+function DatePrototypeToPrimitive(hint) {
+  if (!%IsObject(this)) {
+    throw %NewTypeError("not an object");
+  }
+  if (hint === "string" || hint === "default") {
+    return OrdinaryToPrimitive(%AsObj(this), "string");
+  }
+  if (hint === "number") {
+    return OrdinaryToPrimitive(%AsObj(this), "number");
+  }
+  throw %NewTypeError("invalid hint");
+}
+
 // builtins/error.ts:4
 function InstallErrorCause(o, options) {
   if (%IsObject(options)) {
@@ -4115,6 +4443,7 @@ function WeakSetPrototypeToStringTag() {
 
 %InstallConstructor("globalThis", "Array", ArrayConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Boolean", BooleanConstructor, 1, undefined);
+%InstallConstructor("globalThis", "Date", DateConstructor, 7, undefined);
 %InstallConstructor("globalThis", "Error", ErrorConstructor, 1, undefined);
 %InstallConstructor("globalThis", "EvalError", EvalErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "RangeError", RangeErrorConstructor, 1, "Error");
@@ -4182,6 +4511,56 @@ function WeakSetPrototypeToStringTag() {
 %InstallValue("Array.prototype", %WellKnownSymbol("unscopables"), ArrayPrototypeUnscopables(), 4);
 %InstallMethod("Boolean.prototype", "toString", BooleanPrototypeToString, 0);
 %InstallMethod("Boolean.prototype", "valueOf", BooleanPrototypeValueOf, 0);
+%InstallMethod("Date", "now", DateNowBuiltin, 0);
+%InstallMethod("Date", "parse", DateParseBuiltin, 1);
+%InstallMethod("Date", "UTC", DateUTC, 7);
+%InstallMethod("Date.prototype", "getFullYear", DatePrototypeGetFullYear, 0);
+%InstallMethod("Date.prototype", "getUTCFullYear", DatePrototypeGetUTCFullYear, 0);
+%InstallMethod("Date.prototype", "getMonth", DatePrototypeGetMonth, 0);
+%InstallMethod("Date.prototype", "getUTCMonth", DatePrototypeGetUTCMonth, 0);
+%InstallMethod("Date.prototype", "getDate", DatePrototypeGetDate, 0);
+%InstallMethod("Date.prototype", "getUTCDate", DatePrototypeGetUTCDate, 0);
+%InstallMethod("Date.prototype", "getDay", DatePrototypeGetDay, 0);
+%InstallMethod("Date.prototype", "getUTCDay", DatePrototypeGetUTCDay, 0);
+%InstallMethod("Date.prototype", "getHours", DatePrototypeGetHours, 0);
+%InstallMethod("Date.prototype", "getUTCHours", DatePrototypeGetUTCHours, 0);
+%InstallMethod("Date.prototype", "getMinutes", DatePrototypeGetMinutes, 0);
+%InstallMethod("Date.prototype", "getUTCMinutes", DatePrototypeGetUTCMinutes, 0);
+%InstallMethod("Date.prototype", "getSeconds", DatePrototypeGetSeconds, 0);
+%InstallMethod("Date.prototype", "getUTCSeconds", DatePrototypeGetUTCSeconds, 0);
+%InstallMethod("Date.prototype", "getMilliseconds", DatePrototypeGetMilliseconds, 0);
+%InstallMethod("Date.prototype", "getUTCMilliseconds", DatePrototypeGetUTCMilliseconds, 0);
+%InstallMethod("Date.prototype", "setMilliseconds", DatePrototypeSetMilliseconds, 1);
+%InstallMethod("Date.prototype", "setUTCMilliseconds", DatePrototypeSetUTCMilliseconds, 1);
+%InstallMethod("Date.prototype", "setSeconds", DatePrototypeSetSeconds, 2);
+%InstallMethod("Date.prototype", "setUTCSeconds", DatePrototypeSetUTCSeconds, 2);
+%InstallMethod("Date.prototype", "setMinutes", DatePrototypeSetMinutes, 3);
+%InstallMethod("Date.prototype", "setUTCMinutes", DatePrototypeSetUTCMinutes, 3);
+%InstallMethod("Date.prototype", "setHours", DatePrototypeSetHours, 4);
+%InstallMethod("Date.prototype", "setUTCHours", DatePrototypeSetUTCHours, 4);
+%InstallMethod("Date.prototype", "setDate", DatePrototypeSetDate, 1);
+%InstallMethod("Date.prototype", "setUTCDate", DatePrototypeSetUTCDate, 1);
+%InstallMethod("Date.prototype", "setMonth", DatePrototypeSetMonth, 2);
+%InstallMethod("Date.prototype", "setUTCMonth", DatePrototypeSetUTCMonth, 2);
+%InstallMethod("Date.prototype", "setFullYear", DatePrototypeSetFullYear, 3);
+%InstallMethod("Date.prototype", "setUTCFullYear", DatePrototypeSetUTCFullYear, 3);
+%InstallMethod("Date.prototype", "getTime", DatePrototypeGetTime, 0);
+%InstallMethod("Date.prototype", "valueOf", DatePrototypeValueOf, 0);
+%InstallMethod("Date.prototype", "getTimezoneOffset", DatePrototypeGetTimezoneOffset, 0);
+%InstallMethod("Date.prototype", "setTime", DatePrototypeSetTime, 1);
+%InstallMethod("Date.prototype", "toString", DatePrototypeToString, 0);
+%InstallMethod("Date.prototype", "toDateString", DatePrototypeToDateString, 0);
+%InstallMethod("Date.prototype", "toTimeString", DatePrototypeToTimeString, 0);
+%InstallMethod("Date.prototype", "toISOString", DatePrototypeToISOString, 0);
+%InstallMethod("Date.prototype", "toLocaleString", DatePrototypeToLocaleString, 0);
+%InstallMethod("Date.prototype", "toLocaleDateString", DatePrototypeToLocaleDateString, 0);
+%InstallMethod("Date.prototype", "toLocaleTimeString", DatePrototypeToLocaleTimeString, 0);
+%InstallMethod("Date.prototype", "toUTCString", DatePrototypeToUTCString, 0);
+%InstallMethod("Date.prototype", "toGMTString", DatePrototypeToUTCString, 0);
+%InstallMethod("Date.prototype", "getYear", DatePrototypeGetYear, 0);
+%InstallMethod("Date.prototype", "toJSON", DatePrototypeToJSON, 1);
+%InstallMethod("Date.prototype", %WellKnownSymbol("toPrimitive"), DatePrototypeToPrimitive, 1);
+%InstallValue("Date.prototype", %WellKnownSymbol("toPrimitive"), DatePrototypeToPrimitive, 4);
 %InstallMethod("Error.prototype", "toString", ErrorPrototypeToString, 0);
 %InstallMethod("Function.prototype", "call", FunctionPrototypeCall, 1);
 %InstallMethod("Function.prototype", "apply", FunctionPrototypeApply, 2);

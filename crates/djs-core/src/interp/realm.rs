@@ -57,9 +57,14 @@ pub enum Intrinsic {
     SetIteratorProto,
     /// %Promise.prototype% (an ordinary object).
     PromiseProto,
+    DateProto,
+    /// The host's clock for `Date.now()` (ms since the epoch, a Number; D1383).
+    Clock,
+    /// The local time zone offset in minutes east of UTC (an int; D1383).
+    TimeZoneOffset,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::PromiseProto as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::TimeZoneOffset as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -87,6 +92,7 @@ impl Intrinsic {
             "WeakMap" => Intrinsic::WeakMapProto,
             "WeakSet" => Intrinsic::WeakSetProto,
             "Promise" => Intrinsic::PromiseProto,
+            "Date" => Intrinsic::DateProto,
             _ => return None,
         })
     }
@@ -145,6 +151,12 @@ pub fn intrinsic(heap: &Heap, i: Intrinsic) -> Value {
         .read(Realm::INTRINSICS.at(realm(heap), i as u32))
 }
 
+/// Replaces a value intrinsic (the clock, the time zone offset).
+pub(crate) fn set_intrinsic(heap: &mut Heap, i: Intrinsic, v: Value) {
+    let r = realm(heap);
+    heap.arena_mut().write(Realm::INTRINSICS.at(r, i as u32), v)
+}
+
 /// An intrinsic that is an object.
 pub fn intrinsic_obj(heap: &Heap, i: Intrinsic) -> Obj {
     intrinsic(heap, i).as_object().expect("object intrinsic")
@@ -199,11 +211,14 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
         let p = heap.new_object(Some(iterator_proto))?;
         set(heap, i, Value::object(p));
     }
+    set(heap, Intrinsic::Clock, Value::int(0));
+    set(heap, Intrinsic::TimeZoneOffset, Value::int(0));
     for i in [
         Intrinsic::MapProto,
         Intrinsic::SetProto,
         Intrinsic::WeakMapProto,
         Intrinsic::WeakSetProto,
+        Intrinsic::DateProto,
     ] {
         let p = heap.new_object(Some(object_proto))?;
         set(heap, i, Value::object(p));
