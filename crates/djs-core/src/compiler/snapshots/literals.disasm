@@ -1,90 +1,93 @@
-function 0 <anonymous>: params=0 locals=1 stack=17 captures=0
+function 0 <anonymous>: params=0 locals=2 stack=17 captures=0
     0  global_decls #12 let "n" "s" "t" "k" "holes" "o"
     5  special_object 4
-    7  put_loc loc0 (this)
-   10  push_i8 0
-   12  push_i8 1
-   14  push_i8 1
-   16  neg  ; 2:16
-   17  push_i8 127
-   19  push_i32 128
-   24  push_i32 129
-   29  neg  ; 2:30
-   30  push_i32 2147483647
-   35  push_const #0 (2147483648)
-   40  push_const #1 (1.5)
-   45  push_const #2 (0.1)
-   50  push_i8 0
-   52  neg  ; 2:70
-   53  push_i8 31
-   55  push_i8 5
-   57  push_i8 15
-   59  push_i32 1000000
-   64  push_const #3 (1e+21)
-   69  push_const #1 (1.5)
-   74  array_from 17
-   77  init_global_lex "n"
-   82  push_const #4 ("a")
-   87  push_const #4 ("a")
-   92  push_const #5 ("\n\té")
-   97  push_const #6 ("😀")
-  102  push_const #7 ("")
-  107  push_const #4 ("a")
-  112  array_from 6
-  115  init_global_lex "s"
-  120  push_const #8 ("plain")
-  125  push_const #9 ("x")
-  130  get_global "n"  ; 4:23
-  135  to_string  ; 4:21
-  136  push_const #10 ("y")
-  141  concat 3
-  144  get_global "s"  ; 4:32
-  149  to_string  ; 4:30
-  150  get_global "n"  ; 4:40
-  155  to_string  ; 4:38
-  156  get_global "s"  ; 4:44
-  161  to_string  ; 4:42
-  162  concat 2
-  165  push_const #7 ("")
-  170  push_const #11 ("aA")
-  175  array_from 6
-  178  init_global_lex "t"
-  183  null
-  184  push_true
-  185  push_false
-  186  undefined  ; 5:29
-  187  get_loc loc0 (this)  ; 5:40
-  190  array_from 5
-  193  init_global_lex "k"
-  198  array_from 0
-  201  array_hole
-  202  push_i8 1
-  204  array_push
+    7  put_loc loc1 (this)
+   10  undefined
+   11  put_loc loc0 (<completion>)
+   14  push_i8 0
+   16  push_i8 1
+   18  push_i8 1
+   20  neg  ; 2:16
+   21  push_i8 127
+   23  push_i32 128
+   28  push_i32 129
+   33  neg  ; 2:30
+   34  push_i32 2147483647
+   39  push_const #0 (2147483648)
+   44  push_const #1 (1.5)
+   49  push_const #2 (0.1)
+   54  push_i8 0
+   56  neg  ; 2:70
+   57  push_i8 31
+   59  push_i8 5
+   61  push_i8 15
+   63  push_i32 1000000
+   68  push_const #3 (1e+21)
+   73  push_const #1 (1.5)
+   78  array_from 17
+   81  init_global_lex "n"
+   86  push_const #4 ("a")
+   91  push_const #4 ("a")
+   96  push_const #5 ("\n\té")
+  101  push_const #6 ("😀")
+  106  push_const #7 ("")
+  111  push_const #4 ("a")
+  116  array_from 6
+  119  init_global_lex "s"
+  124  push_const #8 ("plain")
+  129  push_const #9 ("x")
+  134  get_global "n"  ; 4:23
+  139  to_string  ; 4:21
+  140  push_const #10 ("y")
+  145  concat 3
+  148  get_global "s"  ; 4:32
+  153  to_string  ; 4:30
+  154  get_global "n"  ; 4:40
+  159  to_string  ; 4:38
+  160  get_global "s"  ; 4:44
+  165  to_string  ; 4:42
+  166  concat 2
+  169  push_const #7 ("")
+  174  push_const #11 ("aA")
+  179  array_from 6
+  182  init_global_lex "t"
+  187  null
+  188  push_true
+  189  push_false
+  190  undefined  ; 5:29
+  191  get_loc loc1 (this)  ; 5:40
+  194  array_from 5
+  197  init_global_lex "k"
+  202  array_from 0
   205  array_hole
-  206  push_i8 2
+  206  push_i8 1
   208  array_push
-  209  get_global "s"  ; 6:27
-  214  array_spread
-  215  push_i8 3
-  217  array_push
-  218  init_global_lex "holes"
-  223  object
-  224  push_i8 1
-  226  define_field "a"
-  231  push_i8 2
-  233  define_field "b c"
-  238  push_i8 3
-  240  define_field "3"
-  245  push_i8 4
-  247  define_field "1.5"
-  252  get_global "k"  ; 7:42
-  257  push_i8 5
-  259  define_elem
-  260  get_global "n"  ; 7:49
-  265  define_field "n"
-  270  get_global "s"  ; 7:55
-  275  copy_data_props 0
-  277  push_i8 6
-  279  define_field "if"
-  284  init_global_lex "o"
-  289  return_undef
+  209  array_hole
+  210  push_i8 2
+  212  array_push
+  213  get_global "s"  ; 6:27
+  218  array_spread
+  219  push_i8 3
+  221  array_push
+  222  init_global_lex "holes"
+  227  object
+  228  push_i8 1
+  230  define_field "a"
+  235  push_i8 2
+  237  define_field "b c"
+  242  push_i8 3
+  244  define_field "3"
+  249  push_i8 4
+  251  define_field "1.5"
+  256  get_global "k"  ; 7:42
+  261  push_i8 5
+  263  define_elem
+  264  get_global "n"  ; 7:49
+  269  define_field "n"
+  274  get_global "s"  ; 7:55
+  279  copy_data_props 0
+  281  push_i8 6
+  283  define_field "if"
+  288  init_global_lex "o"
+  293  get_loc loc0 (<completion>)
+  296  return

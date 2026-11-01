@@ -1,38 +1,41 @@
-function 0 <anonymous>: params=0 locals=5 stack=3 captures=0
+function 0 <anonymous>: params=0 locals=6 stack=3 captures=0
     0  global_decls #0 let "A"
-    5  get_global "Object"  ; 3:17
-   10  dup
-   11  call_intrinsic %ClassHeritage 1
-   16  new_box loc1 (<fields 0>)
-   19  private_symbol "#p" 0
-   25  new_box_init loc2 (#p)
-   28  private_symbol "#m" 6
-   34  new_box_init loc3 (#m)
-   37  new_box loc4 (<#m>)
-   40  fclosure child0
-   45  define_class 1
-   47  fclosure child1
-   52  set_home_object
-   53  put_box loc4 (<#m>)
-   56  fclosure child2
-   61  define_class_method "g" 1
-   67  swap
-   68  fclosure child3
-   73  define_class_method "has" 0
-   79  swap
-   80  fclosure child4
-   85  set_home_object
-   86  put_box loc1 (<fields 0>)
-   89  drop
-   90  dup
-   91  put_loc loc0 (A)
-   94  fclosure child5
-   99  set_home_object
-  100  pick 1
-  102  call 0  ; 3:1
-  105  drop
-  106  init_global_lex "A"
-  111  return_undef
+    5  undefined
+    6  put_loc loc0 (<completion>)
+    9  get_global "Object"  ; 3:17
+   14  dup
+   15  call_intrinsic %ClassHeritage 1
+   20  new_box loc2 (<fields 0>)
+   23  private_symbol "#p" 0
+   29  new_box_init loc3 (#p)
+   32  private_symbol "#m" 6
+   38  new_box_init loc4 (#m)
+   41  new_box loc5 (<#m>)
+   44  fclosure child0
+   49  define_class 1
+   51  fclosure child1
+   56  set_home_object
+   57  put_box loc5 (<#m>)
+   60  fclosure child2
+   65  define_class_method "g" 1
+   71  swap
+   72  fclosure child3
+   77  define_class_method "has" 0
+   83  swap
+   84  fclosure child4
+   89  set_home_object
+   90  put_box loc2 (<fields 0>)
+   93  drop
+   94  dup
+   95  put_loc loc1 (A)
+   98  fclosure child5
+  103  set_home_object
+  104  pick 1
+  106  call 0  ; 3:1
+  109  drop
+  110  init_global_lex "A"
+  115  get_loc loc0 (<completion>)
+  118  return
 function 0.0 A: params=1 locals=4 stack=3 captures=1
     0  special_object 4
     2  put_loc loc3 (this)

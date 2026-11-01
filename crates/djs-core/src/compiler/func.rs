@@ -140,6 +140,8 @@ pub(super) struct NameRef {
 pub(super) enum FuncKind {
     Script,
     AsyncBody,
+    /// Indirect eval code (`Goal::Eval`): top level like a sync codemode body.
+    Eval,
     /// A function declaration or expression.
     Normal,
     Arrow,
@@ -182,7 +184,10 @@ impl FuncKind {
     }
 
     pub fn is_top_level(self) -> bool {
-        matches!(self, FuncKind::Script | FuncKind::AsyncBody)
+        matches!(
+            self,
+            FuncKind::Script | FuncKind::AsyncBody | FuncKind::Eval
+        )
     }
 }
 

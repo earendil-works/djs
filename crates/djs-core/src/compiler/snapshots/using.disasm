@@ -1,10 +1,13 @@
-function 0 <anonymous>: params=0 locals=0 stack=1 captures=0
+function 0 <anonymous>: params=0 locals=1 stack=1 captures=0
     0  global_decls #0 function "f" "g"
     5  fclosure child0
    10  put_global "f"
    15  fclosure child1
    20  put_global "g"
-   25  return_undef
+   25  undefined
+   26  put_loc loc0 (<completion>)
+   29  get_loc loc0 (<completion>)
+   32  return
 function 0.0 f: params=1 locals=3 stack=7 captures=0
   handler [60, 95) -> 108 depth 4
   handler [52, 131) -> 38 depth 3

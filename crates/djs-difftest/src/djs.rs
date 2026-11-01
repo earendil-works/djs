@@ -31,10 +31,6 @@ const STRESS_SLICE: u64 = 20_000;
 /// The host functions of the prelude's `host` object.
 const OUTPUT: u32 = 0;
 const DONE: u32 = 1;
-/// The global the prelude Script leaves its setup function in.
-const SETUP: &str = "__difftestSetup";
-/// The global the case Script leaves its function in.
-const CASE: &str = "__difftestCase";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Djs {
@@ -157,20 +153,17 @@ impl Djs {
 
 impl Session {
     fn run_case(&mut self, job: &Job<'_>) -> Result<(), Stop> {
-        // The prelude: a strict Script evaluating to `(host) => api`. djs scripts have
-        // no completion value, so the Script stores it in a global (on the prelude's
-        // first line, keeping its line numbers), which is read and deleted again.
-        let src = format!("globalThis[{SETUP:?}] = {}", job.prelude);
-        let prelude = match self
-            .vm
-            .compile(src.as_bytes(), &CompileOptions::script("prelude.js"))
-        {
+        // The prelude: a strict Script evaluating to `(host) => api` (its completion
+        // value).
+        let prelude = match self.vm.compile(
+            job.prelude.as_bytes(),
+            &CompileOptions::script("prelude.js"),
+        ) {
             Ok(f) => f,
             Err(e) => return Err(Stop::Crash(format!("prelude: {}", e.message))),
         };
         let global = Value::object(self.vm.global());
-        self.call(prelude, global, &[], "the prelude")?;
-        let setup = self.take_global(SETUP)?;
+        let setup = self.call(prelude, global, &[], "the prelude")?;
         let host = self.vm.new_object().map_err(|e| format!("{e:?}"))?;
         for (id, name) in [(OUTPUT, "output"), (DONE, "done")] {
             let f = self
@@ -191,10 +184,7 @@ impl Session {
         // The case, as the qjs driver builds it: a strict Script evaluating the arrow
         // `async (tools, console) => {...}` (D008), so `this` is the global object. The
         // arrow starts on the case's first line, keeping its line numbers.
-        let src = format!(
-            "globalThis[{CASE:?}] = (async (tools, console) => {{{}\n}})",
-            job.source
-        );
+        let src = format!("(async (tools, console) => {{{}\n}})", job.source);
         match self.vm.compile(
             src.as_bytes(),
             &CompileOptions {
@@ -205,8 +195,7 @@ impl Session {
             Ok(script) => {
                 // (Read again: the global object moves when the heap is collected.)
                 let global = Value::object(self.vm.global());
-                self.call(script, global, &[], "the case script")?;
-                let f = self.take_global(CASE)?;
+                let f = self.call(script, global, &[], "the case script")?;
                 self.call_api(api, "run", &[f])?;
             }
             // The qjs driver hands a function that throws the SyntaxError to api.run,
@@ -222,24 +211,6 @@ impl Session {
             self.call_api(api, "stalled", &[])?;
         }
         Ok(())
-    }
-
-    /// Removes the global `name` and returns its value.
-    fn take_global(&mut self, name: &str) -> Result<Value, Stop> {
-        let g = self.vm.global();
-        let key = self
-            .vm
-            .heap_mut()
-            .atom_str(name)
-            .map_err(|e| format!("{e:?}"))?;
-        let v = self
-            .vm
-            .heap()
-            .get_own_property(g, key)
-            .and_then(|p| p.value())
-            .ok_or_else(|| format!("{name} is missing"))?;
-        self.vm.heap_mut().delete_own_property(g, key);
-        Ok(v)
     }
 
     /// Calls the method `name` of the prelude's api object to completion.

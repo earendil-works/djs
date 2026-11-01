@@ -1,4 +1,4 @@
-function 0 <anonymous>: params=0 locals=0 stack=1 captures=0
+function 0 <anonymous>: params=0 locals=1 stack=1 captures=0
     0  global_decls #0 function "f" "gen" "deleg" "agen" const "h"
     5  fclosure child0
    10  put_global "f"
@@ -8,9 +8,12 @@ function 0 <anonymous>: params=0 locals=0 stack=1 captures=0
    30  put_global "deleg"
    35  fclosure child4
    40  put_global "agen"
-   45  fclosure child1
-   50  init_global_lex "h"
-   55  return_undef
+   45  undefined
+   46  put_loc loc0 (<completion>)
+   49  fclosure child1
+   54  init_global_lex "h"
+   59  get_loc loc0 (<completion>)
+   62  return
 function 0.0 f: params=1 locals=2 stack=4 captures=0
   handler [19, 42) -> 54 depth 0
   handler [3, 75) -> 75 depth 0

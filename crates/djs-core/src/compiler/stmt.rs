@@ -93,7 +93,7 @@ impl Parser<'_, '_> {
                     return self.strip_module_item();
                 }
                 self.parse_expr(false)?;
-                self.code().drop();
+                self.emit_completion();
                 self.expect_semicolon()
             }
             TokenKind::Import | TokenKind::Export | TokenKind::Enum => {
@@ -132,9 +132,41 @@ impl Parser<'_, '_> {
             }
             _ => {
                 self.parse_expr(false)?;
-                self.code().drop();
+                self.emit_completion();
                 self.expect_semicolon()
             }
+        }
+    }
+
+    /// The completion value local, in the top-level code of a Script or eval (not in
+    /// nested functions).
+    fn completion_local(&self) -> Option<Atom> {
+        if self.stack.is_empty() {
+            self.completion
+        } else {
+            None
+        }
+    }
+
+    /// The end of an expression statement: its value becomes the completion value of
+    /// Script and eval code (as qjs's `eval_ret`), elsewhere it is dropped.
+    fn emit_completion(&mut self) {
+        match self.completion_local() {
+            Some(a) => {
+                let r = self.name_ref(a, self.prev_end);
+                self.code().name_put(r);
+            }
+            None => self.code().drop(),
+        }
+    }
+
+    /// `if`, loops, `switch` and `try` complete with `undefined` when their body
+    /// produces no value (UpdateEmpty(…, undefined)): reset before them.
+    pub(super) fn reset_completion(&mut self) {
+        if let Some(a) = self.completion_local() {
+            self.code().undefined();
+            let r = self.name_ref(a, self.prev_end);
+            self.code().name_put(r);
         }
     }
 
@@ -263,6 +295,7 @@ impl Parser<'_, '_> {
 
     fn parse_if(&mut self) -> PResult<()> {
         self.next()?;
+        self.reset_completion();
         self.parse_paren_expr()?;
         let l_else = self.new_label();
         self.code().jump_if_false(l_else);
@@ -320,6 +353,7 @@ impl Parser<'_, '_> {
 
     fn parse_while(&mut self, labels: Vec<Atom>) -> PResult<()> {
         self.next()?;
+        self.reset_completion();
         let (l_break, l_cont) = self.push_loop(labels);
         self.place(l_cont);
         self.parse_paren_expr()?;
@@ -333,6 +367,7 @@ impl Parser<'_, '_> {
 
     fn parse_do_while(&mut self, labels: Vec<Atom>) -> PResult<()> {
         self.next()?;
+        self.reset_completion();
         let (l_break, l_cont) = self.push_loop(labels);
         let l_top = self.new_label();
         self.place(l_top);
@@ -356,6 +391,7 @@ impl Parser<'_, '_> {
     fn parse_for(&mut self, labels: Vec<Atom>) -> PResult<()> {
         let for_pos = self.tok.start;
         self.next()?;
+        self.reset_completion();
         let is_await = self.f.is_async && self.tok.is_contextual(Kw::Await);
         if is_await {
             self.next()?;
@@ -594,7 +630,7 @@ impl Parser<'_, '_> {
 
     fn parse_return(&mut self) -> PResult<()> {
         let pos = self.tok.start;
-        if self.f.kind == FuncKind::Script || self.f.ns.is_some() {
+        if matches!(self.f.kind, FuncKind::Script | FuncKind::Eval) || self.f.ns.is_some() {
             return syntax(pos, "return not in a function");
         }
         if self.f.kind == FuncKind::StaticBlock {
@@ -667,6 +703,7 @@ impl Parser<'_, '_> {
         };
         let l_try = self.new_label();
         let l_try_end = self.new_label();
+        self.reset_completion();
         self.place(l_try);
         self.parse_block()?;
         self.place(l_try_end);
@@ -712,6 +749,7 @@ impl Parser<'_, '_> {
             // The catch block's declarations share the clause's scope, so they
             // conflict with the parameter (`catch (e) { let e }`).
             self.expect(TokenKind::LBrace, "{")?;
+            self.reset_completion();
             let using = self.begin_using_list(true);
             while !self.is(TokenKind::RBrace) {
                 if self.is(TokenKind::Eof) {
@@ -745,7 +783,20 @@ impl Parser<'_, '_> {
             self.expect(TokenKind::Finally, "finally")?;
             self.place(l_fin);
             self.stmt_depth = base + 2;
+            // A normal finally block keeps the completion value of the try statement:
+            // it is saved on the stack (a jump out of the block drops it).
+            let completion = self.completion_local();
+            if let Some(a) = completion {
+                let r = self.name_ref(a, self.prev_end);
+                self.code().name_get(r);
+                self.stmt_depth += 1;
+                self.reset_completion();
+            }
             self.parse_block()?;
+            if let Some(a) = completion {
+                let r = self.name_ref(a, self.prev_end);
+                self.code().name_put(r);
+            }
             self.stmt_depth = base;
             self.code().ret();
         }
@@ -772,6 +823,7 @@ impl Parser<'_, '_> {
     /// the end.
     fn parse_switch(&mut self, labels: Vec<Atom>) -> PResult<()> {
         self.next()?;
+        self.reset_completion();
         self.parse_paren_expr()?;
         self.expect(TokenKind::LBrace, "{")?;
         self.push_scope(ScopeKind::Switch)?;

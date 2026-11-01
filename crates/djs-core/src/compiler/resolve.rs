@@ -650,7 +650,8 @@ fn emit_function(
         None => (Vec::new(), Vec::new()),
     };
     let kind = match f.kind {
-        FuncKind::Script => func_flags::KIND_SCRIPT,
+        // Eval code runs like a Script's top level (the embedder supplies `this`).
+        FuncKind::Script | FuncKind::Eval => func_flags::KIND_SCRIPT,
         FuncKind::AsyncBody => func_flags::KIND_ASYNC_BODY,
         FuncKind::Normal => func_flags::KIND_NORMAL,
         FuncKind::Arrow => func_flags::KIND_ARROW,

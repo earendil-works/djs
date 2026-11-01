@@ -1,4 +1,4 @@
-function 0 <anonymous>: params=0 locals=0 stack=2 captures=0
+function 0 <anonymous>: params=0 locals=1 stack=2 captures=0
     0  global_decls #0 var "obj" function "f" "k" "late" let "named" const "g" "h"
     5  fclosure child0
    10  put_global "f"
@@ -6,23 +6,26 @@ function 0 <anonymous>: params=0 locals=0 stack=2 captures=0
    20  put_global "k"
    25  fclosure child4
    30  put_global "late"
-   35  fclosure child1
-   40  init_global_lex "g"
-   45  fclosure child2
-   50  init_global_lex "h"
-   55  fclosure child5
-   60  init_global_lex "named"
-   65  object
-   66  fclosure child6
-   71  define_field "m"
-   76  fclosure child7
-   81  define_field "a"
-   86  put_global "obj"  ; 8:5
-   91  get_global "f"  ; 9:5
-   96  push_i8 1
-   98  construct 1  ; 9:1
-  101  drop
-  102  return_undef
+   35  undefined
+   36  put_loc loc0 (<completion>)
+   39  fclosure child1
+   44  init_global_lex "g"
+   49  fclosure child2
+   54  init_global_lex "h"
+   59  fclosure child5
+   64  init_global_lex "named"
+   69  object
+   70  fclosure child6
+   75  define_field "m"
+   80  fclosure child7
+   85  define_field "a"
+   90  put_global "obj"  ; 8:5
+   95  get_global "f"  ; 9:5
+  100  push_i8 1
+  102  construct 1  ; 9:1
+  105  put_loc loc0 (<completion>)
+  108  get_loc loc0 (<completion>)
+  111  return
 function 0.0 f: params=2 locals=3 stack=2 captures=0
     0  get_arg arg0
     3  put_loc loc0 (a)

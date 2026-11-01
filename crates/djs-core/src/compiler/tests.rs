@@ -1408,17 +1408,26 @@ fn run_body(src: &str) -> String {
 
 /// [`run_body`], optionally as TypeScript.
 pub(super) fn run_body_opts(src: &str, typescript: bool) -> String {
+    let opts = CompileOptions {
+        typescript,
+        ..CompileOptions::async_body("e2e.js", &["console"])
+    };
+    run_opts(src, &opts)
+}
+
+/// Runs `src` compiled with `opts` (a Script or eval code gets `console` too, as an
+/// ignored argument; it prints through the global `console` there).
+fn run_opts(src: &str, opts: &CompileOptions) -> String {
     use crate::vm::{Status, Vm, VmOptions};
     const LOG: u32 = 1;
     let mut vm = Vm::new(VmOptions::default()).unwrap();
     let console = vm.new_object().unwrap();
     let log = vm.new_host_function(LOG, "log").unwrap();
     vm.define(console, "log", log).unwrap();
-    let opts = CompileOptions {
-        typescript,
-        ..CompileOptions::async_body("e2e.js", &["console"])
-    };
-    let template = match compile(vm.heap_mut(), src.as_bytes(), &opts) {
+    let global = vm.global();
+    vm.define(global, "console", crate::value::Value::object(console))
+        .unwrap();
+    let template = match compile(vm.heap_mut(), src.as_bytes(), opts) {
         Ok(t) => t,
         Err(e) => return alloc::format!("compile error: {e}"),
     };
@@ -2723,4 +2732,95 @@ fn end_to_end_async_generators() {
             "=> 14",
         ),
     ]);
+}
+
+/// Script and eval code evaluate to their completion value (0058; checked with qjs's
+/// `eval`).
+#[test]
+fn completion_values() {
+    let cases: &[(&str, &str)] = &[
+        ("", "=> undefined"),
+        ("1", "=> 1"),
+        ("1; var x = 2;", "=> 1"),
+        ("1; let y = 2; function f() { 3 }", "=> 1"),
+        ("1; ;", "=> 1"),
+        ("1; {}", "=> 1"),
+        ("1; { 2; }", "=> 2"),
+        ("1; if (true) {}", "=> undefined"),
+        ("1; if (true) { 2 }", "=> 2"),
+        ("1; if (false) 2;", "=> undefined"),
+        ("1; if (false) 2; else 3;", "=> 3"),
+        ("1; while (false);", "=> undefined"),
+        ("var i = 0; while (i < 3) i++;", "=> 2"),
+        ("1; do { 2; break; } while (true)", "=> 2"),
+        ("1; for (var j = 0; j < 2; j++) { j; }", "=> 1"),
+        ("1; for (const k of [5, 6]) k * 2;", "=> 12"),
+        ("1; for (const k in {}) k;", "=> undefined"),
+        ("1; switch (1) {}", "=> undefined"),
+        ("1; switch (1) { case 1: 2; case 3: 4; }", "=> 4"),
+        ("1; switch (1) { case 1: 2; break; case 3: 4; }", "=> 2"),
+        ("1; try { 2 } catch (e) {}", "=> 2"),
+        ("1; try { 2; throw 0 } catch (e) {}", "=> undefined"),
+        ("1; try { 2; throw 0 } catch (e) { 3 }", "=> 3"),
+        ("1; try { 2 } finally { 3 }", "=> 2"),
+        ("1; try {} finally { 3 }", "=> undefined"),
+        ("1; L: try { 2 } finally { 3; break L; }", "=> 3"),
+        ("1; L: { 2; break L; }", "=> 2"),
+        ("1; class C {}", "=> 1"),
+        ("1; (function () { 5; })();", "=> undefined"),
+        ("var x = 1; x += 1;", "=> 2"),
+        ("1; { using u = null; 4; }", "=> 4"),
+    ];
+    for goal in [CompileOptions::script("t.js"), CompileOptions::eval("t.js")] {
+        let mut bad = Vec::new();
+        for &(src, want) in cases {
+            let got = run_opts(src, &goal);
+            if got != want {
+                bad.push(alloc::format!("{src:?}: got {got:?}, want {want:?}"));
+            }
+        }
+        assert!(bad.is_empty(), "{:?}:\n{}", goal.goal, bad.join("\n"));
+    }
+}
+
+/// Eval code (0058): top-level declarations are locals of the call, `this` is what the
+/// call gets, and the function-only syntax is rejected.
+#[test]
+fn eval_goal() {
+    let eval = CompileOptions::eval("t.js");
+    let cases: &[(&str, &str)] = &[
+        (
+            "var a = 1; let b = 2; const c = 3; function d() {} typeof globalThis.a",
+            "=> undefined",
+        ),
+        ("var a = 1; a", "=> 1"),
+        ("this === globalThis", "=> true"),
+        ("typeof undefinedName", "=> undefined"),
+        ("Math.max(1, 2)", "=> 2"),
+        ("var await = 1; await", "=> 1"),
+        (
+            "return 1",
+            "compile error: SyntaxError: return not in a function at 1:1",
+        ),
+        (
+            "new.target",
+            "compile error: SyntaxError: new.target only allowed within functions at 1:1",
+        ),
+        (
+            "super.x",
+            "compile error: SyntaxError: 'super' is only valid in a method at 1:6",
+        ),
+        (
+            "using x = null;",
+            "compile error: SyntaxError: using declaration not allowed here at 1:7",
+        ),
+    ];
+    let mut bad = Vec::new();
+    for &(src, want) in cases {
+        let got = run_opts(src, &eval);
+        if got != want {
+            bad.push(alloc::format!("{src:?}: got {got:?}, want {want:?}"));
+        }
+    }
+    assert!(bad.is_empty(), "\n{}", bad.join("\n"));
 }

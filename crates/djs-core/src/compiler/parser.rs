@@ -145,6 +145,9 @@ pub(super) struct Parser<'a, 'h> {
     pub ts_params_end: u32,
     /// The `using` declarations of the statement list being parsed (compiler/using.rs).
     pub using: super::using::UsingList,
+    /// The local holding the completion value of Script and eval code
+    /// (`Parser::emit_completion`).
+    pub completion: Option<Atom>,
 }
 
 /// Erased TypeScript ranges: `start..end` byte offsets and the kind (`ts::ER_*`).
@@ -180,6 +183,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         let kind = match opts.goal {
             Goal::Script => FuncKind::Script,
             Goal::AsyncBody => FuncKind::AsyncBody,
+            Goal::Eval => FuncKind::Eval,
         };
         let atom_undefined = heap.atom_str("undefined")?;
         let atom_this = heap.atom_str("this")?;
@@ -227,6 +231,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             strip: false,
             ts_params_end: 0,
             using: Default::default(),
+            completion: None,
         };
         p.f.src_end = src.len() as u32;
         if kind == FuncKind::AsyncBody {
@@ -236,6 +241,13 @@ impl<'a, 'h> Parser<'a, 'h> {
                 p.f.vars[v as usize].init_end = 0;
             }
             p.f.length = p.f.param_count;
+        }
+        // The prelude's completion value is never used.
+        if kind == FuncKind::Eval || (kind == FuncKind::Script && !opts.privileged) {
+            let atom = p.heap.atom_str("<completion>")?;
+            let v = p.f.add_var(atom, VarKind::Internal, BODY_SCOPE);
+            p.f.vars[v as usize].init_end = 0;
+            p.completion = Some(atom);
         }
         Ok(p)
     }
@@ -247,6 +259,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             self.start_flavor((true, false))?;
         }
         self.code().enter_scope(BODY_SCOPE as u16);
+        self.reset_completion();
         // `using` is not allowed at the top level of a Script, but in a codemode body
         // (an async function's) and a module (strip-types).
         let using = self.begin_using_list(self.f.kind == FuncKind::AsyncBody || self.strip);
@@ -255,7 +268,13 @@ impl<'a, 'h> Parser<'a, 'h> {
         }
         self.end_using_list(using);
         self.code().leave_scope(BODY_SCOPE as u16);
-        self.emit_return_undef();
+        if let Some(a) = self.completion {
+            let r = self.name_ref(a, self.prev_end);
+            self.code().name_get(r);
+            self.code().return_();
+        } else {
+            self.emit_return_undef();
+        }
         self.finish_unit()
     }
 

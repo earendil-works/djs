@@ -54,6 +54,12 @@ pub enum Goal {
     /// A codemode body: pi runs `(async (tools, console) => { <code> })`, so top-level
     /// declarations are locals, the `params` are parameters, `return` ends the run.
     AsyncBody,
+    /// Indirect eval code (strict, PerformEval): a sync body whose top-level
+    /// declarations are locals of the call, free names are globals, `this` is what the
+    /// embedder calls it with (the global object), and the result is the completion
+    /// value. `return`, `new.target` and `super` are errors; `await` is an identifier,
+    /// as in a Script.
+    Eval,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -80,6 +86,14 @@ impl<'a> CompileOptions<'a> {
             params: &[],
             privileged: false,
             typescript: false,
+        }
+    }
+
+    /// Indirect eval code ([`Goal::Eval`]).
+    pub fn eval(filename: &'a str) -> Self {
+        CompileOptions {
+            goal: Goal::Eval,
+            ..Self::script(filename)
         }
     }
 

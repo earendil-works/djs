@@ -1,94 +1,97 @@
-function 0 <anonymous>: params=0 locals=0 stack=4 captures=0
+function 0 <anonymous>: params=0 locals=1 stack=4 captures=0
     0  global_decls #2 const "k" "o"
-    5  push_const #0 ("dyn")
-   10  init_global_lex "k"
-   15  object
-   16  push_i8 1
-   18  define_field "a"
-   23  fclosure child0
-   28  define_method "m"
-   33  fclosure child1
-   38  define_getter "g"
-   43  fclosure child2
-   48  define_setter "s"
-   53  get_global "k"  ; 8:4
-   58  fclosure child3
-   63  set_function_name 0
-   65  define_elem
-   66  get_global "k"  ; 9:4
-   71  push_const #1 ("m")
-   76  add  ; 9:6
-   77  fclosure child4
-   82  set_function_name 0
-   84  define_method_elem
-   85  get_global "k"  ; 10:8
-   90  fclosure child5
-   95  set_function_name 1
-   97  define_getter_elem
-   98  null
-   99  set_proto
-  100  push_i8 1
-  102  define_field "__proto__x"
-  107  get_global "k"  ; 13:6
-  112  copy_data_props 0
-  114  init_global_lex "o"
-  119  get_global "f"  ; 15:1
-  124  undefined
-  125  array_from 0
-  128  get_global "o"  ; 15:6
-  133  array_spread
-  134  push_i8 1
-  136  array_push
-  137  get_global "o"  ; 15:15
-  142  array_spread
-  143  call_spread  ; 15:2
-  144  drop
-  145  get_global "o"  ; 16:1
-  150  get_method "m"  ; 16:2
-  155  array_from 0
-  158  push_i8 1
-  160  array_from 1
-  163  array_spread
-  164  call_spread  ; 16:4
-  165  drop
-  166  get_global "F"  ; 17:5
-  171  array_from 0
-  174  get_global "o"  ; 17:10
-  179  array_spread
-  180  construct_spread  ; 17:1
-  181  drop
-  182  get_global "o"  ; 18:8
-  187  dup
-  188  is_nullish
-  189  jump_if_true -> 205
-  194  push_atom "a"  ; 18:9
-  199  delete
-  200  jump -> 207
-  205  drop
-  206  push_true
-  207  drop
-  208  get_global "o"  ; 19:8
-  213  dup
-  214  is_nullish
-  215  jump_if_true -> 236
-  220  get_field "b"  ; 19:9
-  225  push_atom "c"  ; 19:12
-  230  delete
-  231  jump -> 238
-  236  drop
-  237  push_true
-  238  drop
-  239  get_global "o"  ; 20:8
-  244  dup
-  245  is_nullish
-  246  jump_if_true -> 262
-  251  get_global "k"  ; 20:12
-  256  delete  ; 20:11
-  257  jump -> 264
-  262  drop
-  263  push_true
-  264  drop
-  265  return_undef
+    5  undefined
+    6  put_loc loc0 (<completion>)
+    9  push_const #0 ("dyn")
+   14  init_global_lex "k"
+   19  object
+   20  push_i8 1
+   22  define_field "a"
+   27  fclosure child0
+   32  define_method "m"
+   37  fclosure child1
+   42  define_getter "g"
+   47  fclosure child2
+   52  define_setter "s"
+   57  get_global "k"  ; 8:4
+   62  fclosure child3
+   67  set_function_name 0
+   69  define_elem
+   70  get_global "k"  ; 9:4
+   75  push_const #1 ("m")
+   80  add  ; 9:6
+   81  fclosure child4
+   86  set_function_name 0
+   88  define_method_elem
+   89  get_global "k"  ; 10:8
+   94  fclosure child5
+   99  set_function_name 1
+  101  define_getter_elem
+  102  null
+  103  set_proto
+  104  push_i8 1
+  106  define_field "__proto__x"
+  111  get_global "k"  ; 13:6
+  116  copy_data_props 0
+  118  init_global_lex "o"
+  123  get_global "f"  ; 15:1
+  128  undefined
+  129  array_from 0
+  132  get_global "o"  ; 15:6
+  137  array_spread
+  138  push_i8 1
+  140  array_push
+  141  get_global "o"  ; 15:15
+  146  array_spread
+  147  call_spread  ; 15:2
+  148  put_loc loc0 (<completion>)
+  151  get_global "o"  ; 16:1
+  156  get_method "m"  ; 16:2
+  161  array_from 0
+  164  push_i8 1
+  166  array_from 1
+  169  array_spread
+  170  call_spread  ; 16:4
+  171  put_loc loc0 (<completion>)
+  174  get_global "F"  ; 17:5
+  179  array_from 0
+  182  get_global "o"  ; 17:10
+  187  array_spread
+  188  construct_spread  ; 17:1
+  189  put_loc loc0 (<completion>)
+  192  get_global "o"  ; 18:8
+  197  dup
+  198  is_nullish
+  199  jump_if_true -> 215
+  204  push_atom "a"  ; 18:9
+  209  delete
+  210  jump -> 217
+  215  drop
+  216  push_true
+  217  put_loc loc0 (<completion>)
+  220  get_global "o"  ; 19:8
+  225  dup
+  226  is_nullish
+  227  jump_if_true -> 248
+  232  get_field "b"  ; 19:9
+  237  push_atom "c"  ; 19:12
+  242  delete
+  243  jump -> 250
+  248  drop
+  249  push_true
+  250  put_loc loc0 (<completion>)
+  253  get_global "o"  ; 20:8
+  258  dup
+  259  is_nullish
+  260  jump_if_true -> 276
+  265  get_global "k"  ; 20:12
+  270  delete  ; 20:11
+  271  jump -> 278
+  276  drop
+  277  push_true
+  278  put_loc loc0 (<completion>)
+  281  get_loc loc0 (<completion>)
+  284  return
 function 0.0 m: params=1 locals=1 stack=2 captures=0
     0  special_object 4
     2  put_loc loc0 (this)
