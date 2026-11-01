@@ -371,6 +371,7 @@ fn emit_function(
     let mut label_count = phase1.label_count;
     let all = super::peephole::simplify(all, &mut label_count);
     let mut out = CodeBuf::with_labels(label_count);
+    out.reserve(phase1.code.len() + 16);
 
     // ---- Prologue (docs/compiler.md 5.5, 5.7).
     if f.kind == FuncKind::Script {
@@ -437,7 +438,7 @@ fn emit_function(
     }
 
     // ---- Re-emit.
-    let mut lines: Vec<(u32, u32)> = Vec::new();
+    let mut lines: Vec<(u32, u32)> = Vec::with_capacity(f.lines.len());
     let mut li = 0;
     // The line table entries of phase-1 instructions up to `pc` start at the current
     // position of `out` (the last one wins).

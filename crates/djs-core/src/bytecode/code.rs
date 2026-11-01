@@ -123,7 +123,10 @@ impl CodeBuf<Final> {
 impl CodeBuf<Phase1> {
     /// An empty buffer for phase-1 code.
     pub fn phase1() -> Self {
-        Self::make(0)
+        let mut b = Self::make(0);
+        // Most functions are small: start where doubling from 8 would take four steps.
+        b.code.reserve(128);
+        b
     }
 }
 
@@ -144,6 +147,12 @@ impl<M: LabelMode> CodeBuf<M> {
         let l = Label(self.labels.len() as u32);
         self.labels.push(if M::SYMBOLIC { 0 } else { UNPLACED });
         l
+    }
+
+    /// Room for `bytes` more code (0092: the re-emit knows its size roughly, so it
+    /// does not grow the buffer step by step).
+    pub fn reserve(&mut self, bytes: usize) {
+        self.code.reserve(bytes);
     }
 
     pub fn label_count(&self) -> u32 {

@@ -98,7 +98,7 @@ fn walk(
     // decoded once (0092): `at_pc[pc]` is 1 + its index in `insns`, 0 inside an
     // instruction.
     let mut at_pc = vec![0u32; code.len() + 1];
-    let mut insns = Vec::new();
+    let mut insns = Vec::with_capacity(code.len() / 2);
     let mut pc = 0u32;
     while (pc as usize) < code.len() {
         let insn = decode(code, pc).map_err(StackError::Decode)?;
