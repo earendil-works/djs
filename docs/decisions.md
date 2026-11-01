@@ -2396,3 +2396,37 @@ closures 18/19, as Array.fromAsync does (D1511); the tick order matches qjs
 well-known symbol atoms (heap/atom.rs), so the `using` compiler work can use them.
 test262: the explicit-resource-management feature stays later only for the `using`
 syntax tests, listed by path in tests/test262.toml.
+## D1540: D013 in practice: which overflows are RangeErrors; `djs-expect` in difftest
+date: 2026-11-01 · by: infra · issue: 0054
+`RangeError: Maximum call stack size exceeded` (`interp::STACK_OVERFLOW`) is thrown for
+the interpreter's value stack limit and for JSON.stringify's nesting limit. V8 and
+quickjs-ng report both as call stack overflows, and quickjs-wasi gives the same text for
+both. Parse-time depth limits stay `SyntaxError: stack overflow` (the compiler, as qjs;
+JSON.parse, which reports a position). Out of memory stays `InternalError`. The
+difftest cases that hit the overflow keep qjs's `.expected` and declare the difference
+with a new directive, `// difftest: djs-expect <oracle line> => <djs line>`. With djs,
+`.expected` lines equal to the first text must read the second, and everything else is
+still compared. The ratchet would have hidden the whole case.
+
+## D1541: URI functions and escape/unescape as leaf intrinsics, with QuickJS's messages
+date: 2026-11-01 · by: infra · issue: 0054
+`encodeURI`, `decodeURI`, `encodeURIComponent`, `decodeURIComponent`, `escape` and
+`unescape` are builtins (builtins/uri.ts) that ToString their argument and call four
+leaves (`UriEncode`, `UriDecode`, `StrEscape`, `StrUnescape`; builtins/uri.rs). The leaves
+throw URIErrors with QuickJS's messages (`expecting %`, `expecting hex digit`, `malformed
+UTF-8`, `expecting surrogate pair`, `invalid character`) through a new
+`ErrorKind::UriError`. dquickts and quickjs-wasi agree on all of them, and the leaves
+follow QuickJS's decoder exactly, including which error wins for a truncated sequence.
+escape/unescape are Annex B, which test262 skips for djs. pi's quickjs-wasi has them, so
+djs does too. The leaves charge fuel per 8 code units. While there, Function.prototype
+got its `length` (0) and `name` ("") (20.2.3). Their absence failed four URI tests that
+delete a function's own `length`.
+
+## D1542: Host display of errors never runs JS: accessor names fall back to the native name
+date: 2026-11-01 · by: infra · issue: 0054
+`error_summary` (`vm_display`, the CLI's "Uncaught", the Sandbox's error messages) reads
+`name` and `message` as data properties only, because host formatting must not run user
+code. After pi's lockdown, the native prototypes' `name`s are accessors, so errors
+displayed as ": message". When `name` is not a data string, the summary now uses the
+nearest native error prototype on the chain (TypeError, ..., Error). An own `name`, such as
+one set by a subclass through the lockdown's setter, still wins.
