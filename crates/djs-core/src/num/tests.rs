@@ -871,3 +871,38 @@ fn literals_from_lexer() {
     }
     assert_eq!(got, expect);
 }
+
+/// D2021: parsing two-byte input narrowed to bytes gives what the two-byte instance gives.
+#[test]
+fn narrowed_units_parse_the_same() {
+    use super::narrow_units;
+    let pieces: [&str; 22] = [
+        "1", "2.5", "e7", "-", "+", "0x1F", "0b101", "0o17", "Infinity", ".", " ", "\u{a0}",
+        "\u{2028}", "\u{feff}", "\u{3000}", "\u{1680}", "\u{e9}", "\u{663}", "\u{ff11}", "_", "x",
+        "\t",
+    ];
+    let mut seed = 0x0104_u64;
+    let mut next = |n: usize| {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed % n as u64) as usize
+    };
+    let same = |a: f64, b: f64| a.to_bits() == b.to_bits() || (a.is_nan() && b.is_nan());
+    for _ in 0..50_000 {
+        let s: alloc::string::String = (0..next(5)).map(|_| pieces[next(pieces.len())]).collect();
+        let u: alloc::vec::Vec<u16> = s.encode_utf16().collect();
+        let b = narrow_units(u.iter().copied());
+        assert!(
+            same(string_to_number(&u[..]), string_to_number(&b[..])),
+            "{s:?}"
+        );
+        assert!(same(parse_float(&u[..]), parse_float(&b[..])), "{s:?}");
+        for r in [0, 10, 16, 2, 36] {
+            assert!(
+                same(parse_int(&u[..], r), parse_int(&b[..], r)),
+                "{s:?} {r}"
+            );
+        }
+    }
+}

@@ -488,6 +488,20 @@ fn radix_prefix<T: CodeUnit>(s: &[T], bin_oct: bool) -> Option<u32> {
     }
 }
 
+/// Two-byte input for the parsers below as bytes (D2021): every JS whitespace and line
+/// terminator becomes a space, any other unit above 0x7F a byte that no number syntax
+/// accepts (0x80, which is not whitespace either). Numbers are ASCII, so the parse result
+/// is the same, and the parsers need only their one-byte instance in the module.
+pub fn narrow_units(units: impl Iterator<Item = u16>) -> alloc::vec::Vec<u8> {
+    units
+        .map(|u| match u {
+            0..=0x7F => u as u8,
+            _ if is_space(u as u32) => b' ',
+            _ => 0x80,
+        })
+        .collect()
+}
+
 /// `StringToNumber(str)`: the conversion `Number(str)` and unary `+` do.
 ///
 /// Leading and trailing whitespace and line terminators are ignored, the empty string is 0,

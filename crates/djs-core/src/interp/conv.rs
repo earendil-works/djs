@@ -108,8 +108,8 @@ pub(crate) fn string_to_number(heap: &mut Heap, s: Str) -> Result<f64, Fault> {
     if let Some(StrView::Latin1(b)) = heap.str_view(flat) {
         return Ok(num::string_to_number(b));
     }
-    let u = units(heap, flat)?;
-    Ok(num::string_to_number(&u[..]))
+    let b = num::narrow_units(heap.str_view_flat(flat)?.units());
+    Ok(num::string_to_number(&b[..]))
 }
 
 pub(crate) fn to_number(heap: &mut Heap, v: Value) -> Result<f64, Fault> {

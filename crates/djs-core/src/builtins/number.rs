@@ -1,8 +1,6 @@
 //! Number and Math leaf intrinsics: formatting and parsing through `crate::num`, the
 //! libm functions (D1150), and `Math.random`'s generator.
 
-use alloc::vec::Vec;
-
 use crate::heap::{Heap, StrView};
 use crate::interp::conv::{Fault, to_int32};
 use crate::interp::{ErrorKind, Intrinsic, realm};
@@ -45,11 +43,8 @@ pub(crate) fn parse(heap: &mut Heap, s: Str, radix: Option<i32>) -> Result<f64, 
     if let Some(StrView::Latin1(b)) = heap.str_view(flat) {
         return Ok(run(b));
     }
-    let u: Vec<u16> = heap.str_view_flat(flat)?.units().collect();
-    Ok(match radix {
-        None => num::parse_float(&u[..]),
-        Some(r) => num::parse_int(&u[..], r),
-    })
+    let b = num::narrow_units(heap.str_view_flat(flat)?.units());
+    Ok(run(&b))
 }
 
 /// ToUint32 of a number.

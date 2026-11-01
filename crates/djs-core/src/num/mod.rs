@@ -33,7 +33,9 @@ mod corpus_tests;
 mod tests;
 
 pub use format::{to_exponential, to_fixed, to_precision, to_string, to_string_radix};
-pub use parse::{literal_digits_value, literal_value, parse_float, parse_int, string_to_number};
+pub use parse::{
+    literal_digits_value, literal_value, narrow_units, parse_float, parse_int, string_to_number,
+};
 
 /// Longest output of [`to_string`]: `-0.0000012345678901234567`.
 pub const MAX_SHORT_LEN: usize = 25;

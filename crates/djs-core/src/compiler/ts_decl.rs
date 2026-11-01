@@ -89,7 +89,9 @@ fn const_prec(kind: TokenKind) -> u8 {
 fn to_num(v: &EnumVal) -> f64 {
     match v {
         EnumVal::Num(n) => *n,
-        EnumVal::Str(s) => crate::num::string_to_number(s),
+        EnumVal::Str(s) => {
+            crate::num::string_to_number(&crate::num::narrow_units(s.iter().copied())[..])
+        }
     }
 }
 
