@@ -375,6 +375,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("FromAsyncRejected", B, 1, false),
     i("InstanceofOperator", B, 2, false),
     i("ClassHeritage", B, 1, false),
+    i("ThrowTypeError", B, 1, false),
     i("AsyncAwait", B, 2, false),
     i("AsyncFunctionReturn", B, 2, false),
     i("AsyncFunctionThrow", B, 2, false),

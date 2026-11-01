@@ -54,27 +54,8 @@ built-ins/Object/prototype/setPrototypeOf-with-non-circular-values-__proto__.js:
 built-ins/Object/prototype/setPrototypeOf-with-non-circular-values.js: Test262Error: Object.setPrototypeOf(ObjProto, Object.create(null)) throws a TypeError Expected a TypeError to be thrown but no exception was thrown at all
 built-ins/Object/subclass-object-arg.js: Test262Error: Expected SameValue(«1», «undefined») to be true
 built-ins/Promise/prototype/finally/rejected-observable-then-calls-argument.js: async: Test262Error: Test262Error: `then` invoked with one argument Expected SameValue(«2», «1») to be true
-built-ins/ThrowTypeError/extensible.js: TypeError: cannot read property 'get' of undefined
-built-ins/ThrowTypeError/forbidden-arguments.js: TypeError: cannot read property 'get' of undefined
-built-ins/ThrowTypeError/forbidden-caller.js: TypeError: cannot read property 'get' of undefined
-built-ins/ThrowTypeError/frozen.js: TypeError: cannot read property 'get' of undefined
-built-ins/ThrowTypeError/is-function.js: TypeError: cannot read property 'get' of undefined
-built-ins/ThrowTypeError/length.js: TypeError: cannot read property 'get' of undefined
-built-ins/ThrowTypeError/name.js: TypeError: cannot read property 'get' of undefined
-built-ins/ThrowTypeError/property-order.js: TypeError: cannot read property 'get' of undefined
-built-ins/ThrowTypeError/prototype.js: TypeError: cannot read property 'get' of undefined
-built-ins/ThrowTypeError/throws-type-error.js: TypeError: cannot read property 'get' of undefined
-built-ins/ThrowTypeError/unique-per-realm-function-proto.js: TypeError: cannot read property 'get' of undefined
-built-ins/ThrowTypeError/unique-per-realm-non-simple.js: TypeError: cannot read property 'get' of undefined
-built-ins/ThrowTypeError/unique-per-realm-unmapped-args.js: TypeError: cannot read property 'get' of undefined
+built-ins/ThrowTypeError/property-order.js: Test262Error: The `length` property comes before the `name` property on built-in functions
 built-ins/TypedArray/prototype/subarray/resizable-buffer.js: Test262Error: Expected a RangeError to be thrown but no exception was thrown at all
-language/arguments-object/10.6-13-c-1-s.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
-language/arguments-object/10.6-13-c-2-s.js: Test262Error: Expected SameValue(«undefined», «undefined») to be false
-language/arguments-object/10.6-13-c-3-s.js: TypeError: cannot read property 'configurable' of undefined
-language/arguments-object/10.6-14-c-1-s.js: Test262Error: callee should be an own property
-language/arguments-object/10.6-14-c-4-s.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
-language/arguments-object/10.6-2gs.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
-language/arguments-object/S10.6_A3_T1.js: Test262Error: #1: arguments object doesn't exists
 language/eval-code/indirect/always-non-strict.js: SyntaxError: variable name expected
 language/eval-code/indirect/non-definable-global-function.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
 language/eval-code/indirect/non-definable-global-generator.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
@@ -100,7 +81,6 @@ language/global-code/script-decl-func.js: TypeError: 'configurable' is read-only
 language/identifier-resolution/assign-to-global-undefined.js: expected runtime ReferenceError, but no error was thrown
 language/statements/class/elements/private-getter-is-not-a-own-property.js: TypeError: not a function
 language/statements/class/elements/private-setter-is-not-a-own-property.js: TypeError: not a function
-language/statements/class/strict-mode/arguments-callee.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
 language/statements/function/13.0-12-s.js: SyntaxError: invalid lvalue in strict mode
 language/statements/function/13.0_4-17gs.js: SyntaxError: invalid lvalue in strict mode
 language/statements/try/scope-catch-block-lex-open.js: Test262Error: Expected SameValue(«"inside"», «"outside"») to be true

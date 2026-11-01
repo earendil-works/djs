@@ -187,6 +187,7 @@ function FunctionPrototypeHasInstance(this: Value, v: Value): boolean {
  * @setter Function.prototype.caller
  * @getter Function.prototype.arguments
  * @setter Function.prototype.arguments
+ * @intrinsic
  */
 function ThrowTypeError(this: Value, v?: Value): void {
   throw NewTypeError("invalid property access");

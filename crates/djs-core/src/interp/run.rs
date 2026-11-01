@@ -3142,6 +3142,17 @@ impl<'h> Exec<'h> {
                 if !values.is_undefined() {
                     realm::define_hidden(self.heap, a, crate::heap::atoms::SYM_ITERATOR, values)?;
                 }
+                // ... and `callee` is %ThrowTypeError% as getter and setter.
+                let thrower = realm::installed_intrinsic(self.heap, intrinsics::THROW_TYPE_ERROR);
+                if !thrower.is_undefined() {
+                    let d = crate::heap::PropertyDescriptor::accessor(
+                        thrower,
+                        thrower,
+                        crate::heap::PropFlags::NONE,
+                    );
+                    self.heap
+                        .define_own_property(a, crate::heap::atoms::CALLEE, &d)?;
+                }
                 Value::object(a)
             }
             _ => {

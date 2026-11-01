@@ -257,6 +257,7 @@ pub(super) const COPY_DATA_PROPERTIES: u16 = id("CopyDataProperties");
 /// The original Array.prototype.values and %ArrayIteratorPrototype%.next: an array
 /// spread skips the iterator protocol while they are in place.
 pub(super) const ARRAY_PROTOTYPE_VALUES: u16 = id("ArrayPrototypeValues");
+pub(super) const THROW_TYPE_ERROR: u16 = id("ThrowTypeError");
 pub(super) const ARRAY_ITERATOR_NEXT: u16 = id("ArrayIteratorPrototypeNext");
 pub(super) const STRING_PROTOTYPE_ITERATOR: u16 = id("StringPrototypeIterator");
 pub(super) const STRING_ITERATOR_NEXT: u16 = id("StringIteratorPrototypeNext");
@@ -2120,7 +2121,7 @@ impl Exec<'_> {
             // %ThrowTypeError% (10.2.4.1): an unnamed, frozen function shared by the
             // restricted accessors.
             let empty = Value::string(self.heap.atom_string(atoms::EMPTY)?);
-            for (k, v) in [(atoms::NAME, empty), (atoms::LENGTH, Value::int(0))] {
+            for (k, v) in [(atoms::LENGTH, Value::int(0)), (atoms::NAME, empty)] {
                 let d = PropertyDescriptor::data(v, PropFlags::NONE);
                 self.heap.define_own_property(fo, k, &d)?;
             }

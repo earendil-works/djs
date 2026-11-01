@@ -3519,17 +3519,17 @@ function FunctionPrototypeHasInstance(v) {
   return OrdinaryHasInstance(this, v);
 }
 
-// builtins/function.ts:191 get Function.prototype.caller set Function.prototype.caller get Function.prototype.arguments set Function.prototype.arguments
+// builtins/function.ts:192 get Function.prototype.caller set Function.prototype.caller get Function.prototype.arguments set Function.prototype.arguments %ThrowTypeError
 function ThrowTypeError(v) {
   throw %NewTypeError("invalid property access");
 }
 
-// builtins/function.ts:200 value Function.prototype.length
+// builtins/function.ts:201 value Function.prototype.length
 function FunctionPrototypeLength() {
   return 0;
 }
 
-// builtins/function.ts:209 value Function.prototype.name
+// builtins/function.ts:210 value Function.prototype.name
 function FunctionPrototypeName() {
   return "";
 }
@@ -11453,6 +11453,7 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallIntrinsic("FromAsyncRejected", FromAsyncRejected);
 %InstallIntrinsic("InstanceofOperator", InstanceofOperator);
 %InstallIntrinsic("ClassHeritage", ClassHeritage);
+%InstallIntrinsic("ThrowTypeError", ThrowTypeError);
 %InstallIntrinsic("AsyncAwait", AsyncAwait);
 %InstallIntrinsic("AsyncFunctionReturn", AsyncFunctionReturn);
 %InstallIntrinsic("AsyncFunctionThrow", AsyncFunctionThrow);
