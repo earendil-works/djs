@@ -107,6 +107,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 2026-11-01 (0040 classes done) | 52 expected failures | 31,791 / 32,718 (97.1%) |
 | 2026-11-01 (0044 + 0033 done) | 38 expected failures (before 0033) | 32,303 / 32,718 (98.7%) |
 | 2026-11-01 (0046 BigInt done + promoted) | | 33,450 / 33,854 (98.8%) |
+| 2026-11-01 (0051 p1: iterator helpers promoted) | | 33,879 / 34,283 (98.8%) |
 
 ## Id reservations (in flight; check main for the authoritative list)
 
