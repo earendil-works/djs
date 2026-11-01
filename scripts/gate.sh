@@ -21,5 +21,11 @@ echo "== wire cross-language"
 wire_dir=$(mktemp -d)
 node js/test/gen-cross.ts "$wire_dir" > /dev/null
 DJS_WIRE_CROSS="$wire_dir" cargo test -p djs-core --quiet wire_cross -- --ignored
-rm -rf "$wire_dir"
+# 0021: the outbound reader, on heap images of the same corpus plus hand-built cases.
+echo "== heap reader cross-language"
+heap_dir=$(mktemp -d)
+DJS_WIRE_CROSS="$wire_dir" DJS_READER_DIR="$heap_dir" \
+  cargo test -p djs-core --quiet reader_images -- --ignored
+node js/test/reader-cross.ts "$wire_dir" "$heap_dir"
+rm -rf "$wire_dir" "$heap_dir"
 echo "gate: OK"

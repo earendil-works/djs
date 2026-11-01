@@ -744,3 +744,190 @@ fn bench_wire() {
         );
     }
 }
+
+/// Writes heap images for the outbound reader's cross-language test
+/// (js/test/reader-cross.ts) into `DJS_READER_DIR`:
+/// - `corpus.heap` + `corpus.tsv` (`name \t value bits`): every case of the wire corpus in
+///   `DJS_WIRE_CROSS`, decoded into one heap;
+/// - `extra.heap` + `extra.tsv` (`name \t bits \t dump or -`): ropes, big strings, symbols,
+///   property kinds, sharing and cycles, built directly.
+///
+/// The gate runs it (scripts/gate.sh).
+#[test]
+#[ignore]
+fn reader_images() {
+    use crate::heap::{PropFlags, PropertyDescriptor};
+    let wire_dir = std::env::var("DJS_WIRE_CROSS").expect("set DJS_WIRE_CROSS");
+    let out = std::env::var("DJS_READER_DIR").expect("set DJS_READER_DIR");
+    std::fs::create_dir_all(&out).unwrap();
+
+    // The wire corpus, all in one heap (nothing collects, so every value stays valid).
+    let cases = std::fs::read_to_string(format!("{wire_dir}/cases.tsv")).unwrap();
+    let mut h = Heap::with_limit(1 << 30).unwrap();
+    let mut tsv = String::new();
+    for line in cases.lines() {
+        let name = line.split('\t').next().unwrap();
+        let wire = std::fs::read(format!("{wire_dir}/{name}.wire")).unwrap();
+        let v = decode(&mut h, &wire, &DecodeOptions::default()).unwrap();
+        tsv.push_str(&format!("{name}\t{:016x}\n", v.to_bits()));
+    }
+    h.verify().unwrap();
+    std::fs::write(format!("{out}/corpus.heap"), h.bytes()).unwrap();
+    std::fs::write(format!("{out}/corpus.tsv"), tsv).unwrap();
+
+    // Hand-built values.
+    let mut h = Heap::with_limit(1 << 30).unwrap();
+    let mut extra: Vec<(String, Value, Option<String>)> = Vec::new();
+    let mut add = |h: &mut Heap, name: &str, v: Value, dumped: bool| {
+        let d = dumped.then(|| dump(h, v));
+        extra.push((name.into(), v, d));
+    };
+    let atom = |h: &mut Heap, s: &str| h.atom_str(s).unwrap();
+
+    // Ropes: plain, two-byte with a lone surrogate, deep, and flattened.
+    let a = h.alloc_str(&"left side ".repeat(5)).unwrap();
+    let b = h.alloc_str(&"right side ".repeat(5)).unwrap();
+    let rope = h.concat(a, b).unwrap();
+    assert_eq!(h.cell_kind(rope.offset()), crate::heap::CellKind::Rope);
+    add(&mut h, "rope", Value::string(rope), true);
+    let w = h.alloc_utf16(&[0x65E5, 0xD800, 0x61]).unwrap();
+    let long = h.alloc_str(&"x".repeat(40)).unwrap();
+    let r2 = h.concat(long, w).unwrap();
+    let r2 = h.concat(r2, long).unwrap();
+    add(&mut h, "rope-two-byte", Value::string(r2), true);
+    let mut deep = h.alloc_str(&"0123456789".repeat(4)).unwrap();
+    for i in 0..2000 {
+        let piece = h.alloc_str(&format!("[{i:04}]")).unwrap();
+        deep = if i % 2 == 0 {
+            h.concat(deep, piece).unwrap()
+        } else {
+            h.concat(piece, deep).unwrap()
+        };
+    }
+    add(&mut h, "rope-deep", Value::string(deep), true);
+    let flat_src = h.concat(a, b).unwrap();
+    h.flatten(flat_src).unwrap();
+    add(&mut h, "rope-flattened", Value::string(flat_src), true);
+
+    // Big strings: ASCII, Latin-1 with and without the C1 range, two-byte, lone surrogate.
+    let mib = 1 << 20;
+    let s = h.alloc_str(&"a".repeat(mib)).unwrap();
+    add(&mut h, "big-ascii", Value::string(s), false);
+    let latin: Vec<u8> = (0..mib).map(|i| 0xA0 + (i % 96) as u8).collect();
+    let s = h.alloc_latin1(&latin).unwrap();
+    add(&mut h, "big-latin1", Value::string(s), false);
+    let c1: Vec<u8> = (0..mib).map(|i| (i % 256) as u8).collect();
+    let s = h.alloc_latin1(&c1).unwrap();
+    add(&mut h, "big-latin1-c1", Value::string(s), false);
+    let two: Vec<u16> = (0..mib).map(|i| 0x400 + (i % 0x400) as u16).collect();
+    let s = h.alloc_utf16(&two).unwrap();
+    add(&mut h, "big-two-byte", Value::string(s), false);
+    let mut lone = two.clone();
+    lone[mib / 2] = 0xDC00;
+    let s = h.alloc_utf16(&lone).unwrap();
+    add(&mut h, "big-lone-surrogate", Value::string(s), false);
+
+    // A symbol, alone and as a property key and value.
+    let desc = h.alloc_str("tag").unwrap();
+    let sym = h.new_symbol(Value::string(desc)).unwrap();
+    add(&mut h, "symbol", Value::symbol(sym), false);
+
+    // Property kinds: accessor, non-enumerable, symbol key, deleted, __proto__, index order.
+    let o = h.new_object(None).unwrap();
+    for (k, v) in [
+        ("b", 1),
+        ("10", 10),
+        ("a", 2),
+        ("2", 3),
+        ("__proto__", 4),
+        ("gone", 5),
+    ] {
+        let key = atom(&mut h, k);
+        h.create_data_property(o, key, Value::int(v)).unwrap();
+    }
+    let gone = atom(&mut h, "gone");
+    assert!(h.delete_own_property(o, gone));
+    let hidden = atom(&mut h, "hidden");
+    let desc = PropertyDescriptor::data(Value::int(6), PropFlags::new(true, false, true));
+    h.define_own_property(o, hidden, &desc).unwrap();
+    let getter_obj = h.new_object(None).unwrap();
+    let getter = atom(&mut h, "getter");
+    let acc = PropertyDescriptor {
+        get: Some(Value::object(getter_obj)),
+        set: Some(Value::UNDEFINED),
+        enumerable: Some(true),
+        configurable: Some(true),
+        ..PropertyDescriptor::default()
+    };
+    h.define_own_property(o, getter, &acc).unwrap();
+    let sym_key = h.symbol_atom(sym);
+    h.create_data_property(o, sym_key, Value::int(7)).unwrap();
+    let with_sym = atom(&mut h, "sym");
+    h.create_data_property(o, with_sym, Value::symbol(sym))
+        .unwrap();
+    add(&mut h, "props", Value::object(o), false);
+
+    // Sharing and cycles.
+    let shared = h.new_object(None).unwrap();
+    let x = atom(&mut h, "x");
+    h.create_data_property(shared, x, Value::int(1)).unwrap();
+    let holder = h
+        .new_array_from_values(None, &[Value::object(shared), Value::object(shared)])
+        .unwrap();
+    add(&mut h, "shared", Value::object(holder), false);
+    let cyc = h.new_object(None).unwrap();
+    let selfk = atom(&mut h, "self");
+    h.create_data_property(cyc, selfk, Value::object(cyc))
+        .unwrap();
+    let arr = h
+        .new_array_from_values(None, &[Value::object(cyc)])
+        .unwrap();
+    let listk = atom(&mut h, "list");
+    h.create_data_property(cyc, listk, Value::object(arr))
+        .unwrap();
+    h.set_element_fast(arr, 1, Value::object(arr)).unwrap();
+    add(&mut h, "cycle", Value::object(cyc), false);
+
+    // Arrays: holes, an element far beyond the dense part, a non-index property, length.
+    let sparse = h
+        .new_array_from_values(None, &[Value::int(1), Value::HOLE, Value::int(3)])
+        .unwrap();
+    let k500 = h.atom_from_index(500).unwrap();
+    h.create_data_property(sparse, k500, Value::int(500))
+        .unwrap();
+    let extra_prop = atom(&mut h, "extra");
+    h.create_data_property(sparse, extra_prop, Value::int(9))
+        .unwrap();
+    let len = atom(&mut h, "length");
+    let d = PropertyDescriptor {
+        value: Some(Value::int(1000)),
+        ..PropertyDescriptor::default()
+    };
+    h.define_own_property(sparse, len, &d).unwrap();
+    add(&mut h, "sparse", Value::object(sparse), false);
+
+    // Numbers in both forms, and the other primitives.
+    for (name, v) in [
+        ("int", Value::int(-7)),
+        ("float", Value::number(2.5)),
+        ("negzero", Value::number(-0.0)),
+        ("nan", Value::number(f64::NAN)),
+        ("undefined", Value::UNDEFINED),
+        ("null", Value::NULL),
+        ("true", Value::TRUE),
+    ] {
+        add(&mut h, name, v, true);
+    }
+
+    h.verify().unwrap();
+    let mut tsv = String::new();
+    for (name, v, d) in &extra {
+        tsv.push_str(&format!(
+            "{name}\t{:016x}\t{}\n",
+            v.to_bits(),
+            d.as_deref().unwrap_or("-")
+        ));
+    }
+    std::fs::write(format!("{out}/extra.heap"), h.bytes()).unwrap();
+    std::fs::write(format!("{out}/extra.tsv"), tsv).unwrap();
+}
