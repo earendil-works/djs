@@ -4,10 +4,7 @@ built-ins/AggregateError/cause-property.js: harness propertyHelper.js: Unsupport
 built-ins/AggregateError/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/AggregateError/message-method-prop-cast.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/AggregateError/message-method-prop.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/AggregateError/message-undefined-no-prop.js: InternalError: not supported yet: %CreateArrayIterator
 built-ins/AggregateError/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/AggregateError/newtarget-is-undefined.js: InternalError: not supported yet: %CreateArrayIterator
-built-ins/AggregateError/newtarget-proto.js: InternalError: not supported yet: %CreateArrayIterator
 built-ins/AggregateError/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/AggregateError/prototype/constructor.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/AggregateError/prototype/message.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
@@ -48,13 +45,9 @@ built-ins/Array/prototype/constructor.js: harness propertyHelper.js: Unsupported
 built-ins/Array/prototype/copyWithin/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/copyWithin/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/copyWithin/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/Array/prototype/entries/iteration-mutable.js: InternalError: not supported yet: %CreateArrayIterator
-built-ins/Array/prototype/entries/iteration.js: InternalError: not supported yet: %CreateArrayIterator
 built-ins/Array/prototype/entries/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/entries/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/entries/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/Array/prototype/entries/returns-iterator-from-object.js: InternalError: not supported yet: %CreateArrayIterator
-built-ins/Array/prototype/entries/returns-iterator.js: InternalError: not supported yet: %CreateArrayIterator
 built-ins/Array/prototype/every/15.4.4.16-1-11.js: ReferenceError: 'Date' is not defined
 built-ins/Array/prototype/every/15.4.4.16-1-12.js: ReferenceError: 'RegExp' is not defined
 built-ins/Array/prototype/every/15.4.4.16-1-13.js: ReferenceError: 'JSON' is not defined
@@ -131,13 +124,9 @@ built-ins/Array/prototype/indexOf/prop-desc.js: harness propertyHelper.js: Unsup
 built-ins/Array/prototype/join/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/join/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/join/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/Array/prototype/keys/iteration-mutable.js: InternalError: not supported yet: %CreateArrayIterator
-built-ins/Array/prototype/keys/iteration.js: InternalError: not supported yet: %CreateArrayIterator
 built-ins/Array/prototype/keys/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/keys/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/keys/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/Array/prototype/keys/returns-iterator-from-object.js: InternalError: not supported yet: %CreateArrayIterator
-built-ins/Array/prototype/keys/returns-iterator.js: InternalError: not supported yet: %CreateArrayIterator
 built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-11.js: ReferenceError: 'Date' is not defined
 built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-12.js: ReferenceError: 'RegExp' is not defined
 built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-13.js: ReferenceError: 'JSON' is not defined
@@ -235,22 +224,15 @@ built-ins/Array/prototype/toString/prop-desc.js: harness propertyHelper.js: Unsu
 built-ins/Array/prototype/unshift/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/unshift/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/unshift/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/Array/prototype/values/iteration-mutable.js: InternalError: not supported yet: %CreateArrayIterator
-built-ins/Array/prototype/values/iteration.js: InternalError: not supported yet: %CreateArrayIterator
 built-ins/Array/prototype/values/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/values/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/values/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/Array/prototype/values/returns-iterator-from-object.js: InternalError: not supported yet: %CreateArrayIterator
-built-ins/Array/prototype/values/returns-iterator.js: InternalError: not supported yet: %CreateArrayIterator
 built-ins/Array/prototype/with/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/with/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/with/property-descriptor.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/ArrayIteratorPrototype/Symbol.toStringTag/value-from-to-string.js: InternalError: not supported yet: %CreateArrayIterator
-built-ins/ArrayIteratorPrototype/next/iteration-mutable.js: InternalError: not supported yet: %CreateArrayIterator
-built-ins/ArrayIteratorPrototype/next/iteration.js: InternalError: not supported yet: %CreateArrayIterator
+built-ins/ArrayIteratorPrototype/Symbol.toStringTag/value-from-to-string.js: Test262Error: Expected SameValue(«"[object Array Iterator]"», «"[object Object]"») to be true
 built-ins/ArrayIteratorPrototype/next/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/ArrayIteratorPrototype/next/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/ArrayIteratorPrototype/next/non-own-slots.js: InternalError: not supported yet: %CreateArrayIterator
 built-ins/ArrayIteratorPrototype/next/property-descriptor.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/AsyncFunction/AsyncFunction-is-extensible.js: parse: Unsupported: async functions are not supported yet
 built-ins/AsyncFunction/AsyncFunction-is-subclass.js: parse: Unsupported: async functions are not supported yet
@@ -1776,17 +1758,9 @@ built-ins/Object/freeze/15.2.3.9-2-d-6.js: ReferenceError: 'Date' is not defined
 built-ins/Object/freeze/15.2.3.9-2-d-7.js: ReferenceError: 'RegExp' is not defined
 built-ins/Object/freeze/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Object/freeze/throws-when-false.js: ReferenceError: 'Proxy' is not defined
-built-ins/Object/fromEntries/empty-iterable.js: InternalError: not supported yet: %CreateArrayIterator
-built-ins/Object/fromEntries/key-order.js: InternalError: not supported yet: %CreateArrayIterator
 built-ins/Object/fromEntries/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Object/fromEntries/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/Object/fromEntries/prototype.js: InternalError: not supported yet: %CreateArrayIterator
 built-ins/Object/fromEntries/simple-properties.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/Object/fromEntries/string-entry-object-succeeds.js: InternalError: not supported yet: %CreateArrayIterator
-built-ins/Object/fromEntries/string-entry-primitive-throws.js: Test262Error: Expected a TypeError but got a InternalError
-built-ins/Object/fromEntries/string-entry-string-object-succeeds.js: InternalError: not supported yet: %CreateArrayIterator
-built-ins/Object/fromEntries/supports-symbols.js: InternalError: not supported yet: %CreateArrayIterator
-built-ins/Object/fromEntries/uses-define-semantics.js: InternalError: not supported yet: %CreateArrayIterator
 built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-10.js: TypeError: cannot read property 'value' of undefined
 built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-11.js: TypeError: cannot read property 'value' of undefined
 built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-114.js: ReferenceError: 'Date' is not defined
@@ -2003,7 +1977,6 @@ built-ins/Object/seal/object-seal-p-is-own-property-of-a-string-object-which-imp
 built-ins/Object/seal/object-seal-p-is-own-property-of-an-arguments-object-which-implements-its-own-get-own-property.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Object/seal/object-seal-p-is-own-property-of-an-array-object-that-uses-object-s-get-own-property.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Object/seal/object-seal-p-is-own-property-of-an-error-object-that-uses-object-s-get-own-property.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/Object/seal/seal-aggregateerror.js: InternalError: not supported yet: %CreateArrayIterator
 built-ins/Object/seal/seal-arraybuffer.js: ReferenceError: 'ArrayBuffer' is not defined
 built-ins/Object/seal/seal-arrowfunction.js: TypeError: not supported yet: the Function constructor
 built-ins/Object/seal/seal-asyncarrowfunction.js: parse: Unsupported: async arrow functions are not supported yet
@@ -3411,22 +3384,12 @@ language/destructuring/binding/syntax/property-list-single-name-bindings.js: par
 language/destructuring/binding/syntax/property-list-with-property-list.js: parse: Unsupported: destructuring parameters are not supported yet
 language/destructuring/binding/syntax/recursive-array-and-object-patterns.js: parse: Unsupported: destructuring parameters are not supported yet
 language/expressions/addition/S11.6.1_A2.2_T2.js: ReferenceError: 'Date' is not defined
-language/expressions/array/spread-err-mult-err-itr-get-call.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/array/spread-err-mult-err-itr-get-get.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/array/spread-err-mult-err-itr-step.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/array/spread-err-mult-err-itr-value.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/array/spread-err-sngl-err-itr-get-call.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/array/spread-err-sngl-err-itr-get-get.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/array/spread-err-sngl-err-itr-step.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/array/spread-err-sngl-err-itr-value.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/array/spread-mult-iter.js: TypeError: not supported yet: spreading a non-array iterable
 language/expressions/array/spread-mult-obj-ident.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 language/expressions/array/spread-obj-getter-descriptor.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 language/expressions/array/spread-obj-manipulate-outter-obj-in-getter.js: TypeError: not supported yet: getter in an object spread
 language/expressions/array/spread-obj-mult-spread-getter.js: TypeError: not supported yet: getter in an object spread
 language/expressions/array/spread-obj-override-immutable.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 language/expressions/array/spread-obj-spread-order.js: TypeError: not supported yet: getter in an object spread
-language/expressions/array/spread-sngl-iter.js: TypeError: not supported yet: spreading a non-array iterable
 language/expressions/array/spread-sngl-obj-ident.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 language/expressions/arrow-function/array-destructuring-param-strict-body.js: expected parse SyntaxError, got parse Unsupported: destructuring parameters are not supported yet
 language/expressions/arrow-function/dstr/ary-init-iter-close.js: parse: Unsupported: destructuring parameters are not supported yet
@@ -4051,22 +4014,12 @@ language/expressions/await/syntax-await-in-ConditionalExpression.js: parse: Unsu
 language/expressions/bitwise-and/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/expressions/bitwise-or/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/expressions/bitwise-xor/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
-language/expressions/call/spread-err-mult-err-itr-get-call.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/call/spread-err-mult-err-itr-get-get.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/call/spread-err-mult-err-itr-step.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/call/spread-err-mult-err-itr-value.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/call/spread-err-sngl-err-itr-get-call.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/call/spread-err-sngl-err-itr-get-get.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/call/spread-err-sngl-err-itr-step.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/call/spread-err-sngl-err-itr-value.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/call/spread-mult-iter.js: TypeError: not supported yet: spreading a non-array iterable
 language/expressions/call/spread-mult-obj-ident.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 language/expressions/call/spread-obj-getter-descriptor.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 language/expressions/call/spread-obj-manipulate-outter-obj-in-getter.js: TypeError: not supported yet: getter in an object spread
 language/expressions/call/spread-obj-mult-spread-getter.js: TypeError: not supported yet: getter in an object spread
 language/expressions/call/spread-obj-override-immutable.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 language/expressions/call/spread-obj-spread-order.js: TypeError: not supported yet: getter in an object spread
-language/expressions/call/spread-sngl-iter.js: TypeError: not supported yet: spreading a non-array iterable
 language/expressions/call/spread-sngl-obj-ident.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 language/expressions/class/accessor-name-inst-computed-in.js: parse: Unsupported: classes are not supported yet
 language/expressions/class/accessor-name-inst/computed-err-evaluation.js: parse: Unsupported: classes are not supported yet
@@ -6152,22 +6105,12 @@ language/expressions/new.target/unary-expr.js: parse: Unsupported: async functio
 language/expressions/new.target/value-via-super-call.js: parse: Unsupported: classes are not supported yet
 language/expressions/new.target/value-via-super-property.js: parse: Unsupported: classes are not supported yet
 language/expressions/new.target/value-via-tagged-template.js: parse: Unsupported: tagged templates are not supported yet
-language/expressions/new/spread-err-mult-err-itr-get-call.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/new/spread-err-mult-err-itr-get-get.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/new/spread-err-mult-err-itr-step.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/new/spread-err-mult-err-itr-value.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/new/spread-err-sngl-err-itr-get-call.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/new/spread-err-sngl-err-itr-get-get.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/new/spread-err-sngl-err-itr-step.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/new/spread-err-sngl-err-itr-value.js: Test262Error: Expected a Test262Error but got a TypeError
-language/expressions/new/spread-mult-iter.js: TypeError: not supported yet: spreading a non-array iterable
 language/expressions/new/spread-mult-obj-ident.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 language/expressions/new/spread-obj-getter-descriptor.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 language/expressions/new/spread-obj-manipulate-outter-obj-in-getter.js: TypeError: not supported yet: getter in an object spread
 language/expressions/new/spread-obj-mult-spread-getter.js: TypeError: not supported yet: getter in an object spread
 language/expressions/new/spread-obj-override-immutable.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 language/expressions/new/spread-obj-spread-order.js: TypeError: not supported yet: getter in an object spread
-language/expressions/new/spread-sngl-iter.js: TypeError: not supported yet: spreading a non-array iterable
 language/expressions/new/spread-sngl-obj-ident.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 language/expressions/object/computed-property-name-topropertykey-before-value-evaluation.js: Test262Error: Expected SameValue(«"bad"», «"ok"») to be true
 language/expressions/object/cpn-obj-lit-computed-property-name-from-async-arrow-function-expression.js: parse: Unsupported: async arrow functions are not supported yet
