@@ -216,7 +216,7 @@ pub fn run_main(
 }
 
 /// The system clock in ms since the epoch.
-fn now_ms() -> f64 {
+pub fn now_ms() -> f64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as f64)
