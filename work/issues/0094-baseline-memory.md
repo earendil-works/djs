@@ -1,7 +1,7 @@
 # 0094: Baseline wasm memory of a VM (3.9 MiB vs quickjs-wasi's 1.6 MiB)
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0094-baseline-memory
 depends-on: 0087
 touches: crates/djs-wasm/ (stack size, memory setup), crates/djs-core/src/heap/ (initial arena sizing), crates/djs-prelude/, crates/djs-core/src/compiler/ (only if the nesting limits must change), js/src/sandbox.ts, docs/host.md
