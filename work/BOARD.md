@@ -9,7 +9,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0125 | GC aging promotion, peak-memory stability | heap | .worktrees/heap |
 | 0122 | wasm size toward the D020 budget | perf | .worktrees/perf |
-| 0123 | Why djs is bigger than QuickJS (research) | bloat | .worktrees/bloat |
+| 0126 | Size: run-length Unicode tables, panics without fmt | bloat | .worktrees/bloat |
 
 ## Open (ready)
 
@@ -80,6 +80,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0123 | Why djs is bigger than QuickJS (research) | 36fe5b14 (agent bloat; docs/size-vs-quickjs.md: ~half Rust density, ~half the bytecode image) |
 | 0120 | Old generation phase 1 (D2041-D2044) | 4f407762 (agent heap; GC time -8..-51%, pi-like -5.7% instr, pi cold peak 3.00 -> 2.25 MiB; phase 2 not built) |
 | 0124 | Every file reference in the guide links to GitHub (D2104) | c432fcbf (agent docs; 117/117 guide path mentions linked; check enforces) |
 | 0121 | Corpus expansion to 300 cases; short ratchet reasons (D2282-D2284) | e06e0d20 (agent infra; 295/300 vs qjs; follow-ups: fake tool discovery +404 runs, generic results +429) |
