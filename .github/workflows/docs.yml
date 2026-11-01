@@ -33,8 +33,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      # The docs build of djs-wasm: the shipping module plus `djs_disasm` for the live
+      # examples' Bytecode tab (target/docs-wasm, picked up by `djs-docs build`).
       - name: Build djs-wasm (live examples)
-        run: scripts/build-wasm.sh
+        run: scripts/build-wasm.sh --docs
       - name: Build the site
         run: cargo run -q -p djs-docs -- build --out _site
       - uses: actions/configure-pages@v5

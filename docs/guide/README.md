@@ -16,11 +16,12 @@ cargo run -q -p djs-docs -- regen --examples  # also accept changed example outp
 cargo run -q -p djs-docs -- build             # the site: target/docs-site/
 ```
 
-`build` renders every page plus the decision log, copies djs-wasm (the `wasm` profile
-build from `scripts/build-wasm.sh`, or `--wasm FILE`) and the host package with its
-types stripped by node, for the live examples. Open it over HTTP
-(`python3 -m http.server -d target/docs-site`); from `file://` the pages work but the
-examples show only their build-time output.
+`build` renders every page plus the decision log, copies djs-wasm (the docs build from
+`scripts/build-wasm.sh --docs`, whose `djs_disasm` export gives edited examples their
+own bytecode listing; else the shipping build from `scripts/build-wasm.sh`; or `--wasm
+FILE`) and the host package with its types stripped by node, for the live examples.
+Open it over HTTP (`python3 -m http.server -d target/docs-site`); from `file://` the
+pages work but the examples show only their build-time output.
 
 The site has a search box (`/` focuses it): `build` writes `search.json`, one entry per
 section of every page and the decision log, which the browser loads on first use.

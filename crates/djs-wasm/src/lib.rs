@@ -512,6 +512,52 @@ fn compile(vm: u32, goal: u32, name_len: usize, params_len: usize, src_len: usiz
     })
 }
 
+/// The bytecode listing of a script, as `djs disasm` prints it, for the docs site's live
+/// examples (0113). Staging holds the parameter names (`\n`-separated, `params_len`
+/// bytes), then the source; `goal` as for `vm_compile`. Compiles into a scratch heap, not a
+/// VM. Returns 1 with the listing in the out buffer, or 0 with the compile error. Only
+/// with the `docs` feature, so the shipping module does not carry the disassembler.
+#[cfg(feature = "docs")]
+#[unsafe(no_mangle)]
+pub extern "C" fn djs_disasm(goal: u32, params_len: usize, src_len: usize) -> u32 {
+    use djs_core::bytecode::template::disasm_template;
+    with(|s| {
+        let params_text = staged_str(&s.staging, 0, params_len).to_owned();
+        let src = staged(&s.staging, params_len, src_len).to_vec();
+        let params: Vec<&str> = params_text.split('\n').filter(|p| !p.is_empty()).collect();
+        let opts = CompileOptions {
+            goal: if goal & 1 == 0 {
+                Goal::Script
+            } else {
+                Goal::AsyncBody
+            },
+            filename: "example.js",
+            params: &params,
+            privileged: false,
+            typescript: goal & 2 != 0,
+            experimental_decorators: goal & 12 != 0,
+            emit_decorator_metadata: goal & 8 != 0,
+        };
+        let listing = djs_core::heap::Heap::new()
+            .map_err(|e| format!("{e}"))
+            .and_then(|mut heap| {
+                djs_core::compiler::compile(&mut heap, &src, &opts)
+                    .map(|t| disasm_template(&heap, t))
+                    .map_err(|e| e.to_string())
+            });
+        match listing {
+            Ok(text) => {
+                s.set_out(text.as_bytes());
+                1
+            }
+            Err(msg) => {
+                s.set_out(msg.as_bytes());
+                0
+            }
+        }
+    })
+}
+
 // ---- Values in -----------------------------------------------------------------------
 
 /// A handle to the global object.

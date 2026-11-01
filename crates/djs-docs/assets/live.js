@@ -14,6 +14,27 @@ function module() {
   return modulePromise;
 }
 
+// The Bytecode tab: djs-wasm built with the `docs` feature (scripts/build-wasm.sh --docs)
+// exports `djs_disasm`, the listing `djs disasm` prints, so an edited example shows its
+// own bytecode. With the shipping module the tab keeps the build-time listing.
+let disasmExports;
+async function disasm(src) {
+  const mod = await module();
+  if (!WebAssembly.Module.exports(mod).some((e) => e.name === "djs_disasm")) return null;
+  disasmExports ??= new WebAssembly.Instance(mod, {}).exports;
+  const x = disasmExports;
+  const enc = new TextEncoder();
+  // The parameters of a codemode body, as the guide's build-time listings use them.
+  const params = enc.encode("tools\nconsole");
+  const body = enc.encode(src);
+  const at = x.djs_staging(params.length + body.length);
+  const mem = new Uint8Array(x.memory.buffer);
+  mem.set(params, at);
+  mem.set(body, at + params.length);
+  x.djs_disasm(1, params.length, body.length);
+  return new TextDecoder().decode(new Uint8Array(x.memory.buffer, x.djs_out_ptr(), x.djs_out_len()));
+}
+
 /** Walks the arena cell by cell: the heap is walkable because every header has a size. */
 function walk(sb) {
   const heap = sb.heapView();
@@ -96,6 +117,8 @@ async function runExample(el) {
     }
     const ms = performance.now() - t0;
     pane("out").textContent = lines.join("\n");
+    const listing = await disasm(src);
+    if (listing !== null) pane("bytecode").textContent = listing;
     const after = walk(sb);
     pane("heap").innerHTML = heapHtml(before, after);
     pane("heap").querySelector(".live-gc").onclick = () => {
@@ -142,7 +165,15 @@ for (const el of document.querySelectorAll(".live")) {
     const bc = el.querySelector('[data-pane="bytecode"]');
     if (!ta.hidden && !bc.dataset.note) {
       bc.dataset.note = "1";
-      bc.textContent = "(The bytecode shown is the original example's, generated at build time.)\n\n" + bc.textContent;
+      module()
+        .then((mod) => WebAssembly.Module.exports(mod).some((e) => e.name === "djs_disasm"))
+        .catch(() => false)
+        .then((live) => {
+          const note = live
+            ? "(The original example's bytecode. Run shows the listing of the edited code.)"
+            : "(The bytecode shown is the original example's, generated at build time.)";
+          bc.textContent = `${note}\n\n${bc.textContent}`;
+        });
     }
   };
 }

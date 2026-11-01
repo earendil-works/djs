@@ -18,6 +18,9 @@ compiled-prelude = []
 # Exports `djs_alloc_stats`: live and peak bytes of Rust heap allocations and their count,
 # through a counting wrapper around the system allocator (memory accounting, 0094).
 alloc-stats = []
+# Exports `djs_disasm` (bytecode listings) for the docs site's live examples (0113).
+# Off by default: the shipping module does not carry the disassembler.
+docs = []
 
 [dependencies]
 djs-core = { path = "../djs-core" }

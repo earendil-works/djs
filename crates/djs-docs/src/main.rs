@@ -221,9 +221,17 @@ fn main() -> ExitCode {
             let out = opt("--out")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| repo().join("target/docs-site"));
-            let wasm = opt("--wasm")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| repo().join("target/wasm32-unknown-unknown/wasm/djs_wasm.wasm"));
+            // The docs build of djs-wasm (live bytecode listings) if there is one, else the
+            // shipping module (the Bytecode tab then keeps the build-time listings).
+            let wasm = opt("--wasm").map(PathBuf::from).unwrap_or_else(|| {
+                let docs =
+                    repo().join("target/docs-wasm/wasm32-unknown-unknown/wasm/djs_wasm.wasm");
+                if docs.exists() {
+                    docs
+                } else {
+                    repo().join("target/wasm32-unknown-unknown/wasm/djs_wasm.wasm")
+                }
+            });
             let mut g = load(false);
             if let Err(e) = site::build(&mut g, &out, &wasm) {
                 eprintln!("djs-docs: {e}");

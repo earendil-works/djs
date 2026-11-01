@@ -62,6 +62,19 @@ touches: ARCH.md, docs/*.md, docs/guide/, crates/djs-docs/, crates/djs-wasm/ (a 
   focus, `#search=words` in the URL opens with results. Checked in headless Chrome,
   light and dark, wide and narrow.
 
+- Part 4 (live disassembly): djs-wasm feature `docs` exports `djs_disasm(goal,
+  params_len, src_len)` (compiles into a scratch heap, the listing or the compile error
+  in the out buffer). `scripts/build-wasm.sh --docs` builds it into target/docs-wasm so
+  it never replaces the shipping module (touches scripts/build-wasm.sh: one option);
+  `djs-docs build` prefers it; the Pages workflow builds it. live.js: Run also replaces
+  the Bytecode tab with the listing of the code that ran; with the shipping module the
+  tab keeps the build-time listing (feature detection on the module's exports).
+  Shipping module unchanged: 1,471,134 bytes, the same as recorded at d780463b0d, no
+  `djs_disasm` in it; the docs module is 1,516,619 bytes (+45 KB, the disassembler).
+
 ## Follow-ups
+
+- The gate never compiles djs-wasm's `docs` feature; a break would show first in the
+  Pages workflow. If that matters: add `--features docs` to the gate's wasm32 clippy step.
 
 ## Result
