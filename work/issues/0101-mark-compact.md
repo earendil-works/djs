@@ -1,7 +1,7 @@
 # 0101: In-place mark-compact collection (design first; ARCH-level)
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0101-mark-compact
 depends-on: 0098, 0099
 guide: docs/guide/gc.md, docs/guide/testing.md (the collected-image layout), docs/guide/snapshots.md, docs/guide/determinism.md (the layout bullet, the gate section)
@@ -29,6 +29,10 @@ MiB (estimate). See work/issues/0099-cold-start-memory.md (Result) for the numbe
       the pi bench.
 
 ## Log
+
+- Design note: docs/mark-compact.md (Compressor-style sliding collector: header mark bit,
+  live-word bitmap, 512-byte block table, bounded mark stack with overflow rescan; Cheney
+  kept for canonical_hash and image canonicalization). Sent to the coordinator for review.
 
 ## Follow-ups
 
