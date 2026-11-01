@@ -49,13 +49,12 @@ impl Parser<'_, '_> {
         self.expect(TokenKind::LParen, "(")?;
         self.parse_params()?;
         let paren = self.prev_end - 1;
-        if paren != params_close {
-            // qjs parses the wrapped source as one function expression: the parameter
-            // list ended, so it expects the body (D2071).
-            if !self.is(TokenKind::LBrace) {
-                return syntax(self.tok.start, "expecting '{'");
-            }
-            return syntax(paren, "parameters end before the parameter list");
+        // Parameters that end early are an error (spec), but qjs parses the wrapped
+        // source as one function expression, so its message comes from what follows:
+        // the body it expects, then the `)` after it (D2071).
+        let early = paren != params_close;
+        if early && !self.is(TokenKind::LBrace) {
+            return syntax(self.tok.start, "expecting '{'");
         }
         self.parse_function_body()?;
         // D015: without "use strict", `this` binding is sloppy (only that).
@@ -63,6 +62,9 @@ impl Parser<'_, '_> {
         self.f.src_end = self.prev_end;
         let child = self.end_function()?;
         self.leave();
+        if early && self.is(TokenKind::Eof) {
+            return syntax(paren, "parameters end before the parameter list");
+        }
         if !self.is(TokenKind::Eof) {
             // The body closed the function early. qjs's source is `(function ...)`, so
             // it expects the `)` next; after one, the wrapper's own `}` is the

@@ -932,9 +932,9 @@ fn dynamic_code() {
     );
     assert_eq!(
         out.log[0],
-        "SyntaxError: parameters end before the parameter list|\
+        "SyntaxError: expecting ')'|\
          SyntaxError: parameters end before the parameter list|\
-         SyntaxError: unexpected token after the function body|\
+         SyntaxError: expecting ')'|\
          SyntaxError: unexpected token after the function body|\
          3|\
          SyntaxError: missing formal parameter|\

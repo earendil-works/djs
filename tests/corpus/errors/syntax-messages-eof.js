@@ -13,7 +13,7 @@ for (const src of sources) {
   }
 }
 const argLists = [["x", "}"], ["}"], ["x", "}{"], ["a)", "b"], ["", "})"], ["x", "return 1; }"],
-  ["a = 1)", ""], ["", "} function g() {"]];
+  ["a = 1)", ""], ["", "} function g() {"], ["){}; x = 1; (function(", ""], ["a) { return 1", "2"]];
 for (const args of argLists) {
   try { Function(...args); console.log("no error", JSON.stringify(args)); } catch (e) {
     console.log(e.name + ": " + e.message, JSON.stringify(args));

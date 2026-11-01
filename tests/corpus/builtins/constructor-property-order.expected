@@ -31,4 +31,19 @@ AsyncFunction length name true
 GeneratorFunction length name true
 length,name,revocable
 {"value":{},"writable":false,"enumerable":false,"configurable":false} true
+length,name,isArray,from,fromAsync,of,prototype,Symbol(Symbol.species)
+length,name,asUintN,asIntN,prototype
+length,name,concat,from,zip,zipKeyed,prototype
+length,name,parseInt,parseFloat,isNaN,isFinite,isInteger,isSafeInteger,MAX_VALUE,MIN_VALUE,NaN,NEGATIVE_INFINITY,POSITIVE_INFINITY,EPSILON,MAX_SAFE_INTEGER,MIN_SAFE_INTEGER,prototype
+length,name,create,getPrototypeOf,setPrototypeOf,defineProperty,defineProperties,getOwnPropertyNames,getOwnPropertySymbols,groupBy,keys,values,entries,isExtensible,preventExtensions,getOwnPropertyDescriptor,getOwnPropertyDescriptors,is,assign,seal,freeze,isSealed,isFrozen,fromEntries,hasOwn,prototype
+length,name,resolve,reject,all,allSettled,allKeyed,allSettledKeyed,any,try,race,withResolvers,prototype,Symbol(Symbol.species)
+length,name,for,keyFor,toPrimitive,iterator,match,matchAll,replace,search,split,toStringTag,isConcatSpreadable,hasInstance,species,unscopables,asyncIterator,dispose,asyncDispose,metadata,prototype
+length,name,BYTES_PER_ELEMENT,fromBase64,fromHex,prototype
+length,name,now,parse,UTC,prototype
+length,name,fromCharCode,fromCodePoint,raw,prototype
+length,name,escape,prototype,Symbol(Symbol.species)
+length,name,groupBy,prototype,Symbol(Symbol.species)
+min,max,abs,floor,ceil,round,sqrt,acos,asin,atan,atan2,cos,exp,log,pow,sin,tan,trunc,sign,cosh,sinh,tanh,acosh,asinh,atanh,expm1,log1p,log2,log10,cbrt,hypot,random,f16round,fround,imul,clz32,sumPrecise,E,LN10,LN2,LOG2E,LOG10E,PI,SQRT1_2,SQRT2,Symbol(Symbol.toStringTag)
+isRawJSON,parse,rawJSON,stringify,Symbol(Symbol.toStringTag)
+apply,construct,defineProperty,deleteProperty,get,getOwnPropertyDescriptor,getPrototypeOf,has,isExtensible,ownKeys,preventExtensions,set,setPrototypeOf,Symbol(Symbol.toStringTag)
 === completed

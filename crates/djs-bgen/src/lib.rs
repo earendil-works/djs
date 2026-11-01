@@ -9,6 +9,7 @@ pub mod emit_js;
 pub mod emit_rust;
 pub mod lexer;
 pub mod parser;
+pub mod qjs_order;
 
 use std::fs;
 use std::path::Path;

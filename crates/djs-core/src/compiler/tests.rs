@@ -76,12 +76,7 @@ fn err(src: &str) -> CompileError {
 #[test]
 fn errors() {
     let cases: &[(&str, &str, u32, u32)] = &[
-        (
-            "1 +",
-            "unexpected token in expression: ''",
-            1,
-            4,
-        ),
+        ("1 +", "unexpected token in expression: ''", 1, 4),
         (
             "let x = 1; let x = 2;",
             "invalid redefinition of lexical identifier",

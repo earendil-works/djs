@@ -4669,3 +4669,45 @@ The install stays in one straight pass, with no reordering afterwards. Methods o
 captureStackTrace, stackTraceLimit). Other constructors' statics keep source order, which
 can differ from qjs's (follow-up). The base image changes accordingly: property order on
 every constructor, a new realm intrinsic and the CallSite class (D2050).
+
+## D2070: NamedEvaluation names only a function that is the whole initializer
+date: 2026-11-03 · by: infra · issue: 0108
+A name hint (`const f = …`, assignment, default values, property values, class fields,
+destructuring defaults) used to name any anonymous function that started where the
+initializer started, so `(function () {}).name`, `function () {}.bind(x)`, `(() => 0)()`
+and `(function () {}) || x` named it after the binding. That was wrong in `.name` and in
+stack frames. qjs, and the spec, name it only when the initializer *is* the function,
+parenthesized or not. All hint sites now go through `Parser::parse_named`: it sets the
+hint, parses, and then takes the name back from the function that took it (its
+FuncState in `done`, or a class's constructor) unless `last_anon_fn` covers exactly the
+initializer's span. The function is still parsed and compiled once; the template just
+ends up without a name. TypeScript assertions are transparent, as in tsc's output (and
+qjs): `x as T`, `x satisfies T` and `x!` extend `last_anon_fn` over the type, and
+`<T>x` moves the hint onto its operand, like parentheses do.
+
+## D2071: Syntax messages at the end of input and in dynamic functions follow qjs
+date: 2026-11-03 · by: infra · issue: 0108
+- qjs now shows the end of input as an empty token: `unexpected token in expression:
+  ''`. djs said `'end of input'`.
+- A statement list (block, function body, switch case, catch, static block) that hits
+  the end of input reports the same message, because qjs tries to parse a statement
+  there. It used to say `expecting '}'`. A class body reports `invalid property name`.
+  TypeScript enum/namespace bodies keep `expecting '}'`, as qjs does.
+- The Function constructors parse the parameters and the body apart, as the spec
+  requires, so injected code is still rejected where qjs accepts it. The messages,
+  though, are now what qjs's parse of the wrapped source gives:
+  - parameters that close early: `expecting '{'`, or, when a `{` follows, the body is
+    parsed and the message comes from what follows it;
+  - a body that closes the function early: `expecting ')'`, or `unexpected token in
+    expression: '}'` when the `)` is there and the wrapper's `}` follows.
+
+## D2072: Constructor statics and namespace members in qjs's order
+date: 2026-11-03 · by: infra · issue: 0108
+`Object.getOwnPropertyNames(Array)`, `Number`, `Object`, `Promise`, `Symbol`, `Math`,
+`JSON` and others now list their members in qjs's order. The builtins are spread over
+files by topic, so source order cannot give it. Instead djs-bgen has a table of qjs's
+order for the objects where it differs (crates/djs-bgen/src/qjs_order.rs). The installs
+onto each listed object are sorted into it, in place. A key that is not listed keeps
+source order after the listed ones, so a new builtin lands at the end until someone adds
+it to the table. Prototype objects keep source order, with `constructor` first; qjs
+installs it last. That is a follow-up.

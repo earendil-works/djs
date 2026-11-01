@@ -72,4 +72,8 @@ SyntaxError: expecting '{' ["a = 1)",""]
     at <input>:2:1
 SyntaxError: expecting ')' ["","} function g() {"]
     at <input>:3:3
+SyntaxError: expecting ')' ["){}; x = 1; (function(",""]
+    at <input>:1:24
+SyntaxError: unexpected token in expression: ')' ["a) { return 1","2"]
+    at <input>:2:1
 === completed

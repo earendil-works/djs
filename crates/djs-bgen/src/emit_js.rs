@@ -68,10 +68,16 @@ pub fn emit(p: &Program, sources: &Sources) -> String {
         for i in b.installs.iter().filter(|i| i.on_global()) {
             out.push_str(&install(b, i));
             if let InstallKind::Constructor { parent } = &i.kind {
+                let mut statics = Vec::new();
                 for sb in &p.builtins {
                     for si in sb.installs.iter().filter(|si| si.target == i.key) {
-                        out.push_str(&install(sb, si));
+                        statics.push((si.target.clone(), si.key.clone(), install(sb, si)));
                     }
+                }
+                // qjs's order of the statics (D2072).
+                crate::qjs_order::reorder(&mut statics);
+                for (_, _, line) in statics {
+                    out.push_str(&line);
                 }
                 out.push_str(&format!(
                     "%InstallPrototype({}, {}, {});\n",
@@ -82,14 +88,20 @@ pub fn emit(p: &Program, sources: &Sources) -> String {
             }
         }
     }
+    let mut rest = Vec::new();
     for b in &p.builtins {
         for i in b
             .installs
             .iter()
             .filter(|i| !i.on_global() && !ctor_keys.contains(&i.target.as_str()))
         {
-            out.push_str(&install(b, i));
+            rest.push((i.target.clone(), i.key.clone(), install(b, i)));
         }
+    }
+    // Namespace objects (Math, JSON) in qjs's order too (D2072).
+    crate::qjs_order::reorder(&mut rest);
+    for (_, _, line) in rest {
+        out.push_str(&line);
     }
     for b in p.builtins.iter().filter(|b| b.intrinsic) {
         out.push_str(&format!(
