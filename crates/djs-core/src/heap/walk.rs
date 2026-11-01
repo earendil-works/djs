@@ -299,7 +299,7 @@ impl Heap {
             // Pairs; a live key is an object or a symbol (or a cleared HOLE).
             CellKind::EphemeronArray => {
                 let len = a.get(cell, EphemeronArray::LEN);
-                len % 2 == 0
+                len.is_multiple_of(2)
                     && (0..len).step_by(2).all(|i| {
                         let k: Value = a.read(EphemeronArray::VALUES.at(cell, i));
                         k.is_hole() || k.as_object().is_some() || k.as_symbol().is_some()

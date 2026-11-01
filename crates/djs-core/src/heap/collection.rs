@@ -369,10 +369,7 @@ impl Heap {
     pub fn collection_iterator_next(&mut self, it: Obj) -> Option<(Value, Value)> {
         let mut entries = self.object_slot(it, 0).as_internal()?;
         let mut n = self.object_slot(it, 1).as_int().unwrap_or(0) as u32;
-        loop {
-            let Some(next) = self.value_array_get(entries, FORWARD).as_internal() else {
-                break;
-            };
+        while let Some(next) = self.value_array_get(entries, FORWARD).as_internal() {
             if let Some(r) = self.value_array_get(entries, REMOVED).as_internal() {
                 let len = self.u32_array_len(r);
                 let before = (0..len).filter(|&i| self.u32_array_get(r, i) < n).count();
