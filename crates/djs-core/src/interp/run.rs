@@ -3080,8 +3080,19 @@ impl<'h> Exec<'h> {
                 return redeclaration(self.heap, k);
             }
         }
-        for &k in decls.vars.iter().chain(&decls.funcs) {
-            if !self.heap.has_own_property(g, k) && !self.heap.is_extensible(g) {
+        for (i, &k) in decls.vars.iter().chain(&decls.funcs).enumerate() {
+            let own = self.heap.get_own_property(g, k);
+            let ok = match own {
+                None => self.heap.is_extensible(g),
+                // CanDeclareGlobalFunction: a non-configurable property must be a
+                // writable, enumerable data property.
+                Some(p) if i >= decls.vars.len() => {
+                    let f = p.flags();
+                    f.configurable() || (p.value().is_some() && f.writable() && f.enumerable())
+                }
+                Some(_) => true,
+            };
+            if !ok {
                 return Err(Fault::error(
                     ErrorKind::TypeError,
                     format!("cannot define variable '{}'", self.heap.atom_name(k)),
@@ -3091,8 +3102,15 @@ impl<'h> Exec<'h> {
                 return redeclaration(self.heap, k);
             }
         }
-        for &k in decls.vars.iter().chain(&decls.funcs) {
-            if !self.heap.has_own_property(g, k) {
+        for (i, &k) in decls.vars.iter().chain(&decls.funcs).enumerate() {
+            let own = self.heap.get_own_property(g, k);
+            // CreateGlobalFunctionBinding redefines a configurable property; the
+            // function's value is stored by the hoisted initialization.
+            let define = match own {
+                None => true,
+                Some(p) => i >= decls.vars.len() && p.flags().configurable(),
+            };
+            if define {
                 let d = PropertyDescriptor::data(
                     Value::UNDEFINED,
                     PropFlags::WRITABLE | PropFlags::ENUMERABLE,
