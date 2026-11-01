@@ -28,6 +28,11 @@ djs-core = { path = "../djs-core" }
 # The base snapshot, coded (D2252): vm_new copies it after a decode once per instance.
 djs-prelude = { path = "../djs-prelude", default-features = false, features = ["packed"] }
 
-# On wasm32 the crate is no_std (D2332): std's allocator for that target, named directly.
+# On wasm32 the crate is no_std (D2332): std's allocator for that target, named directly,
+# under the page manager of allocator.rs (D2053).
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-dlmalloc = { version = "0.2.14", features = ["global"] }
+dlmalloc = "0.2.14"
+
+[dev-dependencies]
+# The page allocator's native tests run dlmalloc over a fake memory.
+dlmalloc = "0.2.14"
