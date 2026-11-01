@@ -1,7 +1,7 @@
 # 0041: Async functions, await, generators, yield* (compiler side)
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0041-async-generators-compiler
 depends-on: 0037
 touches: crates/djs-core/src/compiler/, crates/djs-core/src/bytecode/ (additive), docs/compiler.md, ratchets
