@@ -483,3 +483,19 @@ for Final_Sigma. About 6.6 KB in total; the regex engine uses about 4.1 KB of it
 handled in code. Context and language dependent mappings are left to callers (Final_Sigma
 is a String.prototype.toLowerCase rule). `unicode::case` exposes the lookups and in-order
 iteration over mapped code points.
+
+## D1170: djs-bgen is Rust with its own parser for the subset
+date: 2026-11-01 · by: infra · issue: 0017
+djs-bgen is a std Rust crate (`crates/djs-bgen`) with no dependencies: a hand-written
+recursive-descent parser for the builtin subset (and for the declarations in
+`intrinsics.d.ts`), a typed AST, its own type checker, the resume-point analysis and the
+emitters. Reasons: the subset is small and explicitly typed, so its type rules (branded
+numerics, Value/Obj/Str/Sym/Fn, intrinsic signatures) are ours to define anyway, and the
+Rust backend later needs exactly this typed AST. A parser that only accepts the subset is
+itself most of the syntax check, with our own positions and messages. Regenerating needs
+only cargo, so the gate can always run the freshness check. Rejected: oxc (a large
+dependency tree in every workspace build, and full-TS parsing means rejecting most of
+what it parses), and the TypeScript compiler API on node (TypeScript 7, which pi-private
+uses, ships only the native `tsc` with no JS API; we would have to pin 5.x and need node
+and npm to regenerate). `builtins/tsconfig.json` still lets editors and any `tsc`
+type-check the sources, but bgen never depends on it.
