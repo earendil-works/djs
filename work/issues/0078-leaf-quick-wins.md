@@ -1,7 +1,7 @@
 # 0078: Leaf quick wins from 0077 (wasm ASCII check, UTF-8 in transcode, short_decimal early exit)
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0078-leaf-quick-wins
 depends-on: 0077
 touches: crates/djs-core/src/wire/, crates/djs-core/src/heap/ (string construction, atom hashing), crates/djs-core/src/num/format.rs, crates/djs-bench/
