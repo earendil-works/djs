@@ -3242,6 +3242,26 @@ impl<'h> Exec<'h> {
             self.sp -= n;
             return Ok(None);
         }
+        // A typed array element whose value needs ToNumber / ToBigInt (user code): the
+        // conversion and the store in the builtin language (0090).
+        if self.heap.is_typed_array(o)
+            && let Some(i) = self.heap.canonical_numeric_index(key)
+            && self.heap.element_of(self.heap.ta_kind(o), v).is_none()
+        {
+            self.sp -= n;
+            // -0 is not a valid integer index.
+            let i = if i == 0.0 && i.is_sign_negative() {
+                -1.0
+            } else {
+                i
+            };
+            let args = [Value::object(o), Value::number(i), v];
+            return self.call_prelude(
+                intrinsics::TYPED_ARRAY_SET_ELEMENT_SLOW,
+                &args,
+                Continuation::DiscardResult,
+            );
+        }
         let found = match self.heap.lookup_property(o, key) {
             Lookup::Found(h, p) => Some((h, p)),
             Lookup::Absent => None,

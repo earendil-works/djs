@@ -362,7 +362,8 @@ declare function IsTypedArray(v: Value): boolean;
 declare function TypedArrayCreate(proto: Obj, kind: i32, buffer: Obj, byteOffset: f64, length: f64): Obj;
 /**
  * A field of a typed array: 0 kind, 1 buffer, 2 byteOffset, 3 length, 4 byteLength
- * (2-4 are 0 when out of bounds), 5 out of bounds or detached, 6 length-tracking.
+ * (2-4 are 0 when out of bounds), 5 out of bounds or detached, 6 length-tracking, 7
+ * [[ByteOffset]] (also when out of bounds).
  * TypeError "not a TypedArray" for anything else. @leaf
  */
 declare function TypedArrayField(o: Value, field: i32): Value;

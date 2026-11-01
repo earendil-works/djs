@@ -598,7 +598,13 @@ impl Heap {
         self.obj_flags(o) & OBJ_EXTENSIBLE != 0
     }
 
+    /// [[PreventExtensions]]: false for a typed array whose length can change (a view
+    /// of a resizable buffer, 10.4.5.3 / IsTypedArrayFixedLength), which stays
+    /// extensible.
     pub fn prevent_extensions(&mut self, o: Obj) -> bool {
+        if self.object_class(o) == ObjectClass::TypedArray && !self.ta_fixed_length(o) {
+            return false;
+        }
         self.set_obj_flag(o, OBJ_EXTENSIBLE, false);
         true
     }

@@ -600,7 +600,7 @@ const I = {
     const g = (n) => Object.getOwnPropertyDescriptor(TA_PROTO, n).get.call(o);
     const buffer = g("buffer");
     const oob = buffer.detached || (g("length") === 0 && g("byteOffset") === 0 && false);
-    return [kind, buffer, g("byteOffset"), g("length"), g("byteLength"), oob, false][f];
+    return [kind, buffer, g("byteOffset"), g("length"), g("byteLength"), oob, false, g("byteOffset")][f];
   },
   TypedArrayGet: (o, i) => (taKind(o) >= 0 ? o[i] : undefined),
   TypedArraySet: (o, i, n) => {

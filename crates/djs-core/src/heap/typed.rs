@@ -346,6 +346,14 @@ impl Heap {
         true
     }
 
+    /// IsTypedArrayFixedLength: neither length-tracking nor a view of a resizable
+    /// buffer (whose length may change under it).
+    pub fn ta_fixed_length(&self, o: Obj) -> bool {
+        let buffer = self.ta_buffer(o);
+        self.object_slot(o, 3).as_number().is_some_and(|n| n >= 0.0)
+            && self.object_slot(buffer, 1).is_undefined()
+    }
+
     pub fn is_typed_array(&self, o: Obj) -> bool {
         self.object_class(o) == ObjectClass::TypedArray
     }

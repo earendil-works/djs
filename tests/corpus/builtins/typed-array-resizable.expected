@@ -1,0 +1,25 @@
+5,5,0,0 true 9
+3,3
+TypeError
+TypeError
+0 0,0
+2 0,0 0,1
+RangeError 0 0
+RangeError 0 0
+0 1
+TypeError cannot prevent extensions true
+false true
+TypeError
+TypeError cannot prevent extensions true
+false true
+TypeError
+froze true
+true false
+sealed
+TypeError cannot prevent extensions true
+false true
+TypeError
+froze true
+true false
+sealed
+=== completed

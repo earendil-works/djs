@@ -99,6 +99,17 @@ function ToElementValue(o: Obj, v: Value): Value {
   return ToNumber(v);
 }
 
+/**
+ * [[Set]] of element `index` (a Number; -1 for an invalid one) on typed array o with a
+ * value that needs ToNumber / ToBigInt (TypedArraySetElement, 10.4.5.16): the
+ * conversion may run user code that shrinks or detaches the buffer, then the store
+ * happens only if the index is still valid. The interpreter's [[Set]] calls it (0090).
+ * @intrinsic
+ */
+function TypedArraySetElementSlow(o: Obj, index: f64, v: Value): void {
+  TypedArraySet(o, index, ToElementValue(o, v));
+}
+
 /** Whether v needs no conversion to be an element of o. */
 function IsElementValue(o: Obj, v: Value): boolean {
   if (KindOf(o) >= 10) {
@@ -398,7 +409,8 @@ function TypedArrayPrototypeSubarray(this: Value, start: Value, end: Value): Obj
   const size: f64 = ElementSize(kind);
   const beginIndex: f64 = RelativeIndex(start, srcLength, 0);
   const tracking: boolean = AsBool(TypedArrayField(o, 6));
-  const beginByteOffset: f64 = AsNumber(TypedArrayField(o, 2)) + beginIndex * size;
+  // O.[[ByteOffset]] even when out of bounds: the new view then fails its bounds check.
+  const beginByteOffset: f64 = AsNumber(TypedArrayField(o, 7)) + beginIndex * size;
   const c: Value = SpeciesConstructor(o, RealmConstructor(KindName(kind)));
   let created: Value = undefined;
   if (tracking && end === undefined) {

@@ -176,7 +176,9 @@ pub(crate) fn typed_array_field(heap: &Heap, o: Obj, field: i32) -> Value {
         3 => Value::number(len.unwrap_or(0) as f64),
         4 => Value::number(len.map_or(0.0, |n| n as f64 * kind.size() as f64)),
         5 => Value::bool(len.is_none()),
-        _ => Value::bool(heap.object_slot(o, 3).as_number().is_none_or(|n| n < 0.0)),
+        6 => Value::bool(heap.object_slot(o, 3).as_number().is_none_or(|n| n < 0.0)),
+        // [[ByteOffset]] itself, also when out of bounds (subarray, 23.2.3.30 step 13).
+        _ => Value::number(heap.ta_byte_offset(o) as f64),
     }
 }
 

@@ -284,6 +284,7 @@ pub(super) const COPY_DATA_PROPERTIES: u16 = id("CopyDataProperties");
 pub(super) const ARRAY_PROTOTYPE_VALUES: u16 = id("ArrayPrototypeValues");
 pub(super) const THROW_TYPE_ERROR: u16 = id("ThrowTypeError");
 pub(super) const ARRAY_SET_LENGTH: u16 = id("ArraySetLength");
+pub(super) const TYPED_ARRAY_SET_ELEMENT_SLOW: u16 = id("TypedArraySetElementSlow");
 pub(super) const ARRAY_ITERATOR_NEXT: u16 = id("ArrayIteratorPrototypeNext");
 pub(super) const STRING_PROTOTYPE_ITERATOR: u16 = id("StringPrototypeIterator");
 pub(super) const STRING_ITERATOR_NEXT: u16 = id("StringIteratorPrototypeNext");

@@ -479,6 +479,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("ArraySpread", B, 2, false),
     i("CopyDataProperties", B, 2, false),
     i("CopyDataPropertiesExcluding", B, 2, false),
+    i("TypedArraySetElementSlow", B, 3, false),
     i("FinalizationRegistryCleanupJob", B, 1, false),
 ];
 

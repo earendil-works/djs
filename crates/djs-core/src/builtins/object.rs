@@ -148,7 +148,8 @@ pub(crate) fn own_keys(heap: &mut Heap, o: Obj, kind: i32) -> Result<Value, Faul
 /// SetIntegrityLevel ( O, sealed | frozen ), without proxies.
 pub(crate) fn set_integrity_level(heap: &mut Heap, o: Obj, frozen: bool) -> Result<bool, Fault> {
     if !heap.prevent_extensions(o) {
-        return Ok(false);
+        // A typed array of a resizable buffer (qjs's message).
+        return type_error("cannot prevent extensions");
     }
     for k in heap.own_keys(o) {
         let accessor = heap.get_own_property(o, k).is_some_and(|p| p.is_accessor());
