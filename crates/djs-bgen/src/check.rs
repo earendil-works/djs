@@ -40,14 +40,61 @@ pub enum Callee {
     Builtin(usize),
 }
 
+/// How a builtin is installed (D1172, D1310).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InstallKind {
+    /// `@builtin`: a method (writable, configurable, not enumerable).
+    Method,
+    /// `@constructor Name` (+ `@extends Parent`): a global constructor with its
+    /// prototype object.
+    Constructor {
+        parent: Option<String>,
+    },
+    /// `@getter` / `@setter`: one half of an accessor (configurable, not enumerable).
+    Getter,
+    Setter,
+    /// `@value` (+ `@attributes`): a data property whose value is the result of calling
+    /// the function once at install time. `attrs` are PropFlags bits (writable 1,
+    /// enumerable 2, configurable 4).
+    Value {
+        attrs: u32,
+    },
+}
+
 /// Where a builtin is installed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Install {
-    /// Dotted path from the global object, e.g. `Array.prototype`.
+    /// Dotted path from the global object, e.g. `Array.prototype`; `globalThis` is the
+    /// global object itself.
     pub target: String,
     pub key: String,
     /// The function's `length`.
     pub length: u32,
+    pub kind: InstallKind,
+}
+
+impl Install {
+    /// Installs onto the global object run first, so that later paths resolve.
+    pub fn on_global(&self) -> bool {
+        self.target == "globalThis"
+    }
+
+    /// For comments and the report: `Array.prototype.map`, `get Symbol.prototype.description`,
+    /// `constructor Error`, `value Math.PI`.
+    pub fn label(&self) -> String {
+        let path = if self.on_global() {
+            self.key.clone()
+        } else {
+            format!("{}.{}", self.target, self.key)
+        };
+        match self.kind {
+            InstallKind::Method => path,
+            InstallKind::Constructor { .. } => format!("constructor {path}"),
+            InstallKind::Getter => format!("get {path}"),
+            InstallKind::Setter => format!("set {path}"),
+            InstallKind::Value { .. } => format!("value {path}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -55,7 +102,9 @@ pub struct Builtin {
     pub module: usize,
     pub index: usize,
     pub name: String,
-    pub install: Option<Install>,
+    /// Where it is installed: none, one, or several places (`Number.parseInt` is the
+    /// global `parseInt`).
+    pub installs: Vec<Install>,
     /// `@intrinsic`: registered so that privileged code can call it as `%Name(...)`.
     pub intrinsic: bool,
     /// `@native`: also compiled by the Rust backend (later).
@@ -77,7 +126,18 @@ impl Program {
 }
 
 const INTRINSIC_TAGS: &[&str] = &["leaf", "reentrant"];
-const BUILTIN_TAGS: &[&str] = &["builtin", "length", "native", "intrinsic"];
+const BUILTIN_TAGS: &[&str] = &[
+    "builtin",
+    "constructor",
+    "extends",
+    "getter",
+    "setter",
+    "value",
+    "attributes",
+    "length",
+    "native",
+    "intrinsic",
+];
 
 pub fn check(decls: Declarations, modules: Vec<Module>) -> Result<Program, Vec<Diagnostic>> {
     let mut errors = Vec::new();
@@ -129,7 +189,7 @@ pub fn check(decls: Declarations, modules: Vec<Module>) -> Result<Program, Vec<D
     }
 
     let mut builtins = Vec::new();
-    let mut installs: HashMap<(String, String), Span> = HashMap::new();
+    let mut installs: HashMap<(String, String, String), Span> = HashMap::new();
     for (mi, m) in modules.iter().enumerate() {
         for (fi, f) in m.functions.iter().enumerate() {
             if spans.insert(f.name.clone(), f.name_span).is_some() {
@@ -140,20 +200,35 @@ pub fn check(decls: Declarations, modules: Vec<Module>) -> Result<Program, Vec<D
                 continue;
             }
             let b = builtin_info(mi, fi, f, &mut errors);
-            if let Some(i) = &b.install
-                && installs
-                    .insert((i.target.clone(), i.key.clone()), f.name_span)
+            for i in &b.installs {
+                // A getter and a setter share their key.
+                let half = match i.kind {
+                    InstallKind::Getter => "get",
+                    InstallKind::Setter => "set",
+                    _ => "",
+                };
+                if installs
+                    .insert(
+                        (i.target.clone(), i.key.clone(), half.to_string()),
+                        f.name_span,
+                    )
                     .is_some()
-            {
-                errors.push(Diagnostic::new(
-                    f.name_span,
-                    format!("{}.{} is installed twice", i.target, i.key),
-                ));
+                {
+                    errors.push(Diagnostic::new(
+                        f.name_span,
+                        format!("{}.{} is installed twice", i.target, i.key),
+                    ));
+                }
             }
             let sig = Sig {
                 this_ty: f.this_ty.as_ref().map(|t| t.ty),
-                params: f.params.iter().map(|p| (p.ty.ty, p.optional)).collect(),
-                rest: None,
+                params: f
+                    .params
+                    .iter()
+                    .filter(|p| !p.rest)
+                    .map(|p| (p.ty.ty, p.optional))
+                    .collect(),
+                rest: f.params.iter().find(|p| p.rest).map(|p| p.ty.ty),
                 ret: f.ret.ty,
             };
             callees.insert(f.name.clone(), (Callee::Builtin(builtins.len()), sig));
@@ -178,6 +253,22 @@ pub fn check(decls: Declarations, modules: Vec<Module>) -> Result<Program, Vec<D
     }
 }
 
+/// Splits `A.b.c` into (`A.b`, `c`); a bare name `X` is (`globalThis`, `X`).
+fn split_path(path: &str) -> Option<(String, String)> {
+    let ok = path.split('.').all(|s| {
+        !s.is_empty()
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
+    });
+    if !ok {
+        return None;
+    }
+    Some(match path.rsplit_once('.') {
+        Some((t, k)) => (t.into(), k.into()),
+        None => ("globalThis".into(), path.into()),
+    })
+}
+
 fn builtin_info(
     module: usize,
     index: usize,
@@ -188,72 +279,119 @@ fn builtin_info(
         module,
         index,
         name: f.name.clone(),
-        install: None,
+        installs: Vec::new(),
         intrinsic: false,
         native: false,
     };
     let mut length = None;
+    let mut parent = None;
+    let mut attrs = None;
+    let mut err = |msg: String| errors.push(Diagnostic::new(f.name_span, msg));
     for t in &f.tags {
-        match t.name.as_str() {
-            "builtin" => {
-                let ok = t.value.split('.').all(|s| {
-                    !s.is_empty()
-                        && s.chars()
-                            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
-                });
-                match t.value.rsplit_once('.') {
-                    Some((target, key)) if ok && b.install.is_none() => {
-                        b.install = Some(Install {
-                            target: target.into(),
-                            key: key.into(),
-                            length: 0,
-                        });
-                    }
-                    _ if b.install.is_some() => errors.push(Diagnostic::new(
-                        f.name_span,
-                        "only one `@builtin` per function",
-                    )),
-                    _ => errors.push(Diagnostic::new(
-                        f.name_span,
-                        format!(
-                            "`@builtin {}`: expected a dotted path such as Array.prototype.map",
-                            t.value
-                        ),
-                    )),
-                }
+        let kind = match t.name.as_str() {
+            "builtin" => Some(InstallKind::Method),
+            "constructor" => Some(InstallKind::Constructor { parent: None }),
+            "getter" => Some(InstallKind::Getter),
+            "setter" => Some(InstallKind::Setter),
+            "value" => Some(InstallKind::Value { attrs: 0 }),
+            _ => None,
+        };
+        if let Some(kind) = kind {
+            let Some((target, key)) = split_path(&t.value) else {
+                err(format!(
+                    "`@{} {}`: expected a dotted path such as Array.prototype.map",
+                    t.name, t.value
+                ));
+                continue;
+            };
+            if matches!(kind, InstallKind::Constructor { .. }) && target != "globalThis" {
+                err(format!(
+                    "`@constructor {}`: constructors are globals; use a plain name",
+                    t.value
+                ));
             }
+            b.installs.push(Install {
+                target,
+                key,
+                length: 0,
+                kind,
+            });
+            continue;
+        }
+        match t.name.as_str() {
             "length" => match t.value.parse::<u32>() {
                 Ok(n) => length = Some(n),
-                Err(_) => errors.push(Diagnostic::new(
-                    f.name_span,
-                    format!("`@length {}`: expected a number", t.value),
-                )),
+                Err(_) => err(format!("`@length {}`: expected a number", t.value)),
             },
+            "extends" => match split_path(&t.value) {
+                Some(_) => parent = Some(t.value.clone()),
+                None => err(format!("`@extends {}`: expected a path", t.value)),
+            },
+            "attributes" => {
+                let mut a = 0;
+                for w in t.value.split_whitespace() {
+                    a |= match w {
+                        "writable" => 1,
+                        "enumerable" => 2,
+                        "configurable" => 4,
+                        _ => {
+                            err(format!(
+                                "`@attributes`: unknown attribute `{w}` (writable, enumerable, configurable)"
+                            ));
+                            0
+                        }
+                    };
+                }
+                attrs = Some(a);
+            }
             "native" => b.native = true,
             "intrinsic" => b.intrinsic = true,
-            other => errors.push(Diagnostic::new(
-                f.name_span,
-                format!(
-                    "unknown tag `@{other}` (builtin functions know {})",
-                    BUILTIN_TAGS
-                        .iter()
-                        .map(|t| format!("@{t}"))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
+            other => err(format!(
+                "unknown tag `@{other}` (builtin functions know {})",
+                BUILTIN_TAGS
+                    .iter()
+                    .map(|t| format!("@{t}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )),
         }
     }
-    match &mut b.install {
-        // The spec's `length`: the parameters before the first optional one.
-        Some(i) => {
-            i.length =
-                length.unwrap_or_else(|| f.params.iter().take_while(|p| !p.optional).count() as u32)
+    let kinds =
+        |pred: fn(&InstallKind) -> bool| b.installs.iter().filter(|i| pred(&i.kind)).count();
+    let ctors = kinds(|k| matches!(k, InstallKind::Constructor { .. }));
+    let values = kinds(|k| matches!(k, InstallKind::Value { .. }));
+    let accessors = kinds(|k| matches!(k, InstallKind::Getter | InstallKind::Setter));
+    if (ctors > 0 || values > 0 || accessors > 0) && b.installs.len() > 1 {
+        err(
+            "`@constructor`, `@value`, `@getter` and `@setter` install a function once, alone"
+                .into(),
+        );
+    }
+    if parent.is_some() && ctors == 0 {
+        err("`@extends` needs `@constructor`".into());
+    }
+    if attrs.is_some() && values == 0 {
+        err("`@attributes` needs `@value`".into());
+    }
+    if length.is_some() && (b.installs.is_empty() || values > 0) {
+        err("`@length` needs `@builtin`, `@constructor`, `@getter` or `@setter`".into());
+    }
+    if values > 0 && (f.this_ty.is_some() || !f.params.is_empty()) {
+        err("a `@value` function takes no parameters".into());
+    }
+    // The spec's `length`: the parameters before the first optional one (or the rest).
+    let default_length = f
+        .params
+        .iter()
+        .take_while(|p| !p.optional && !p.rest)
+        .count() as u32;
+    for i in &mut b.installs {
+        i.length = length.unwrap_or(default_length);
+        match &mut i.kind {
+            InstallKind::Constructor { parent: p } => *p = parent.clone(),
+            InstallKind::Value { attrs: a } => *a = attrs.unwrap_or(0),
+            _ => {}
         }
-        None if length.is_some() => {
-            errors.push(Diagnostic::new(f.name_span, "`@length` needs `@builtin`"))
-        }
-        None => {}
     }
     b
 }
@@ -321,7 +459,8 @@ impl<'a> FnChecker<'a> {
                 .insert(
                     p.name.clone(),
                     Local {
-                        ty: p.ty.ty,
+                        // `...args: Value[]` is an array object.
+                        ty: if p.rest { Type::Obj } else { p.ty.ty },
                         mutable: true,
                     },
                 )
@@ -608,6 +747,15 @@ impl<'a> FnChecker<'a> {
                     Type::Error
                 }
             },
+            ExprKind::NewTarget => {
+                if !self.f.tags.iter().any(|t| t.name == "constructor") {
+                    self.error(
+                        e.span,
+                        "`new.target` is only available in `@constructor` builtins",
+                    );
+                }
+                Type::Value
+            }
             ExprKind::Undefined => Type::Undefined,
             ExprKind::Null => Type::Null,
             ExprKind::Bool(_) => Type::Bool,

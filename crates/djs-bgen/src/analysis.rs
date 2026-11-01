@@ -87,8 +87,8 @@ pub fn report(p: &Program, analysis: &[FnAnalysis], sources: &Sources) -> String
     for a in analysis {
         let b = &p.builtins[a.builtin];
         let mut notes = Vec::new();
-        if let Some(i) = &b.install {
-            notes.push(format!("{}.{}", i.target, i.key));
+        for i in &b.installs {
+            notes.push(i.label());
         }
         if b.intrinsic {
             notes.push(format!("%{}", b.name));

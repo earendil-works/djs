@@ -91,7 +91,7 @@ pub fn parse_declarations(file: u32, src: &str) -> PResult<Declarations> {
         p.expect_ident("declare")?;
         p.expect_ident("function")?;
         let (name, _) = p.ident()?;
-        let params = p.params(true)?.1;
+        let params = p.params()?.1;
         p.expect(":")?;
         let ret = p.type_ref()?;
         let end = p.expect(";")?;
@@ -270,8 +270,8 @@ impl Parser<'_> {
         )
     }
 
-    /// `(params)`; returns the `this` type and the parameters. `decl` allows `...rest`.
-    fn params(&mut self, decl: bool) -> PResult<(Option<TypeRef>, Vec<Param>)> {
+    /// `(params)`; returns the `this` type and the parameters.
+    fn params(&mut self) -> PResult<(Option<TypeRef>, Vec<Param>)> {
         self.expect("(")?;
         let mut this_ty = None;
         let mut params: Vec<Param> = Vec::new();
@@ -282,10 +282,8 @@ impl Parser<'_> {
                 self.expect(":")?;
                 this_ty = Some(self.type_ref()?);
             } else {
+                // Builtins may take `...args: Value[]` too: the local is an array (Obj).
                 let rest = self.eat("...");
-                if rest && !decl {
-                    return self.err(start, "rest parameters are only allowed in intrinsics.d.ts");
-                }
                 let (name, _) = self.ident()?;
                 let optional = self.eat("?");
                 if self.is("=") {
@@ -375,7 +373,7 @@ impl Parser<'_> {
         if self.is("<") {
             return self.err(self.peek().span, "type parameters are not in the subset");
         }
-        let (this_ty, params) = self.params(false)?;
+        let (this_ty, params) = self.params()?;
         if !self.is(":") {
             return self.err(
                 self.peek().span,
@@ -864,6 +862,18 @@ impl Parser<'_> {
                     self.next();
                     ExprKind::This
                 }
+                "new"
+                    if matches!(self.peek_at(1).tok, Tok::Punct("."))
+                        && matches!(&self.peek_at(2).tok, Tok::Ident(n) if n == "target") =>
+                {
+                    self.next();
+                    self.next();
+                    let end = self.next().span;
+                    return Ok(Expr {
+                        kind: ExprKind::NewTarget,
+                        span: t.span.to(end),
+                    });
+                }
                 "new" => return self.err(t.span, "`new` is not in the subset; use Construct(...)"),
                 "function" | "class" | "async" => {
                     return self.err(
@@ -1087,7 +1097,7 @@ mod tests {
             ("function f() { }", "return type"),
             ("function f(a: number): void {}", "expected a type"),
             ("function f(a: Value[]): void {}", "plain type names"),
-            ("function f(...a: Value): void {}", "rest parameters"),
+            ("function f(...a: Value): void {}", "expected `[`"),
             (
                 "function f(a?: Value, b: Value): void {}",
                 "required parameter",

@@ -273,8 +273,28 @@ fn rejects_control_flow_and_tags() {
         "dotted path",
     );
     reject(
-        "/** @builtin A.b\n * @builtin A.c */ function F(): void {}",
-        "only one `@builtin`",
+        "/** @builtin A.b\n * @getter A.c */ function F(this: Value): void {}",
+        "install a function once",
+    );
+    reject(
+        "/** @extends Error */ function F(): void {}",
+        "needs `@constructor`",
+    );
+    reject(
+        "/** @constructor A.B */ function F(): void {}",
+        "constructors are globals",
+    );
+    reject(
+        "/** @value A.b\n * @attributes writable frozen */ function F(): Value { return 1; }",
+        "unknown attribute `frozen`",
+    );
+    reject(
+        "/** @value A.b */ function F(a: Value): Value { return a; }",
+        "takes no parameters",
+    );
+    reject(
+        "/** @builtin A.b */ function F(): Value { return new.target; }",
+        "only available in `@constructor`",
     );
     reject("/** @length 2 */ function F(): void {}", "needs `@builtin`");
     reject(
@@ -348,4 +368,33 @@ fn length_defaults_to_required_params() {
         out.prelude
     );
     assert!(out.prelude.contains("%InstallMethod(\"A\", \"g\", G, 5);"));
+}
+
+#[test]
+fn installation_forms() {
+    let out = compile(
+        "/** @builtin A.f */ function F(this: Value, a: Value, ...rest: Value[]): Obj { return rest; }\n\
+         /** @constructor A\n * @length 1 */ function C(a?: Value): Value { return new.target; }\n\
+         /** @constructor B\n * @extends A */ function D(): Value { return undefined; }\n\
+         /** @getter A.prototype.x */ function G(this: Value): Value { return this; }\n\
+         /** @setter A.prototype.x */ function S(this: Value, v: Value): void {}\n\
+         /** @value A.K\n * @attributes writable configurable */ function K(): f64 { return 1.5; }\n\
+         /** @builtin globalThis.f\n * @builtin A.g */ function P(a: Value): Value { return a; }\n\
+         function Q(): Value { return F2(1, 2, 3); }\n\
+         function F2(a: Value, ...more: Value[]): Value { return more; }",
+    )
+    .unwrap();
+    let p = &out.prelude;
+    assert!(p.contains("function F(a, ...rest) {"), "{p}");
+    assert!(p.contains("return new.target;"), "{p}");
+    // Globals first, in source order; then the rest.
+    let expected = "%InstallConstructor(\"globalThis\", \"A\", C, 1, undefined);\n\
+        %InstallConstructor(\"globalThis\", \"B\", D, 0, \"A\");\n\
+        %InstallMethod(\"globalThis\", \"f\", P, 1);\n\
+        %InstallMethod(\"A\", \"f\", F, 1);\n\
+        %InstallAccessor(\"A.prototype\", \"x\", G, false);\n\
+        %InstallAccessor(\"A.prototype\", \"x\", S, true);\n\
+        %InstallValue(\"A\", \"K\", K(), 5);\n\
+        %InstallMethod(\"A\", \"g\", P, 1);\n";
+    assert!(p.contains(expected), "{p}");
 }

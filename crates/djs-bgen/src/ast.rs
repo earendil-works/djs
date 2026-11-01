@@ -85,7 +85,7 @@ pub struct Param {
     pub name: String,
     pub ty: TypeRef,
     pub optional: bool,
-    /// `...name: T[]` (declarations only); `ty` is the element type.
+    /// `...name: T[]`; `ty` is the element type. In a builtin the local is an array.
     pub rest: bool,
     pub span: Span,
 }
@@ -355,6 +355,8 @@ pub enum ExprKind {
         args: Vec<Expr>,
     },
     Paren(Box<Expr>),
+    /// `new.target` (only in `@constructor` builtins).
+    NewTarget,
 }
 
 #[derive(Debug, Clone, PartialEq)]

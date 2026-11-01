@@ -15,9 +15,14 @@
 //! builtin methods (writable, configurable, not enumerable) and sets its `name` to
 //! `key` and its `length`. `%InstallIntrinsic(name, fn)` registers a builtin that
 //! privileged code (and the interpreter's slow paths) call as `%name(...)`.
+//!
+//! D1310 adds `%InstallConstructor(target, key, fn, length, parent)` (`@constructor`),
+//! `%InstallAccessor(target, key, fn, isSetter)` (`@getter`/`@setter`) and
+//! `%InstallValue(target, key, fn(), attrs)` (`@value`). Installs onto the global object
+//! come first.
 
 use crate::ast::*;
-use crate::check::{Callee, Program};
+use crate::check::{Builtin, Callee, Install, InstallKind, Program};
 use crate::diag::Sources;
 
 pub const HEADER: &str =
@@ -29,11 +34,14 @@ pub fn emit(p: &Program, sources: &Sources) -> String {
     out.push_str("\"use strict\";\n(function () {\n");
     for b in &p.builtins {
         let f = p.function(b);
-        let what = match &b.install {
-            Some(i) => format!(" {}.{}", i.target, i.key),
-            None if b.intrinsic => format!(" %{}", b.name),
-            None => String::new(),
-        };
+        let mut what: String = b
+            .installs
+            .iter()
+            .map(|i| format!(" {}", i.label()))
+            .collect();
+        if b.intrinsic {
+            what.push_str(&format!(" %{}", b.name));
+        }
         let file = sources.file(f.span);
         let (line, _) = file.line_col(f.span.start);
         out.push_str(&format!("\n// {}:{line}{what}\n", file.name));
@@ -43,15 +51,13 @@ pub fn emit(p: &Program, sources: &Sources) -> String {
         }
     }
     out.push('\n');
-    for b in &p.builtins {
-        if let Some(i) = &b.install {
-            out.push_str(&format!(
-                "%InstallMethod({}, {}, {}, {});\n",
-                js_string(&i.target.encode_utf16().collect::<Vec<_>>()),
-                js_string(&i.key.encode_utf16().collect::<Vec<_>>()),
-                b.name,
-                i.length
-            ));
+    // Installs onto the global object (constructors, namespaces, global functions)
+    // first, so that the paths of the others resolve; then the rest, in source order.
+    for global in [true, false] {
+        for b in &p.builtins {
+            for i in b.installs.iter().filter(|i| i.on_global() == global) {
+                out.push_str(&install(b, i));
+            }
         }
     }
     for b in p.builtins.iter().filter(|b| b.intrinsic) {
@@ -63,6 +69,30 @@ pub fn emit(p: &Program, sources: &Sources) -> String {
     }
     out.push_str("})();\n");
     out
+}
+
+/// The installation call of `b` at `i` (D1172, D1310).
+fn install(b: &Builtin, i: &Install) -> String {
+    let t = js_str(&i.target);
+    let k = js_str(&i.key);
+    let f = &b.name;
+    match &i.kind {
+        InstallKind::Method => format!("%InstallMethod({t}, {k}, {f}, {});\n", i.length),
+        InstallKind::Constructor { parent } => format!(
+            "%InstallConstructor({t}, {k}, {f}, {}, {});\n",
+            i.length,
+            parent.as_deref().map(js_str).unwrap_or("undefined".into())
+        ),
+        InstallKind::Getter | InstallKind::Setter => format!(
+            "%InstallAccessor({t}, {k}, {f}, {});\n",
+            i.kind == InstallKind::Setter
+        ),
+        InstallKind::Value { attrs } => format!("%InstallValue({t}, {k}, {f}(), {attrs});\n"),
+    }
+}
+
+fn js_str(s: &str) -> String {
+    js_string(&s.encode_utf16().collect::<Vec<_>>())
 }
 
 /// A double-quoted JS string; everything outside printable ASCII is escaped, so the
@@ -94,7 +124,17 @@ fn indented(lines: Vec<String>) -> impl Iterator<Item = String> {
 
 impl Emitter<'_> {
     fn function(&self, f: &Function) -> Vec<String> {
-        let params: Vec<&str> = f.params.iter().map(|p| p.name.as_str()).collect();
+        let params: Vec<String> = f
+            .params
+            .iter()
+            .map(|p| {
+                if p.rest {
+                    format!("...{}", p.name)
+                } else {
+                    p.name.clone()
+                }
+            })
+            .collect();
         let mut out = vec![format!("function {}({}) {{", f.name, params.join(", "))];
         out.extend(indented(self.stmts(&f.body.stmts)));
         out.push("}".into());
@@ -244,6 +284,7 @@ impl Emitter<'_> {
         match &e.kind {
             ExprKind::Ident(n) => n.clone(),
             ExprKind::This => "this".into(),
+            ExprKind::NewTarget => "new.target".into(),
             ExprKind::Undefined => "undefined".into(),
             ExprKind::Null => "null".into(),
             ExprKind::Bool(b) => b.to_string(),
