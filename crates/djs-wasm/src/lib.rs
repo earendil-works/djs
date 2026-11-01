@@ -18,7 +18,7 @@
 
 use std::cell::RefCell;
 
-use djs_core::compiler::{CompileOptions, Goal, compile};
+use djs_core::compiler::{CompileOptions, Goal};
 use djs_core::heap::Handle;
 use djs_core::interp::{ErrorKind, Intrinsic, intrinsic};
 use djs_core::json;
@@ -315,11 +315,7 @@ pub extern "C" fn vm_compile(vm: u32, goal: u32, params_len: usize, src_len: usi
             filename: "sandbox.js",
             params: &params,
         };
-        // Until 0022's `Vm::compile`: the compiler plus `instantiate`, as 0014's
-        // end-to-end tests do.
-        let result = compile(slot.vm.heap_mut(), &src, &opts)
-            .map_err(|e| e.to_string())
-            .and_then(|t| slot.vm.instantiate(t).map_err(|e| format!("{e:?}")));
+        let result = slot.vm.compile(&src, &opts).map_err(|e| e.to_string());
         match result {
             Ok(f) => {
                 let h = slot.handle(f);

@@ -24,7 +24,7 @@ use crate::bytecode::decode::{read_i8, read_i32, read_u16, read_u32};
 use crate::bytecode::global_decls::GlobalDecls;
 use crate::bytecode::template::func_flags;
 use crate::bytecode::template::{bytes_of, ref_array_get};
-use crate::bytecode::{HandlerTable, OPS, Op, flags as opflags, special};
+use crate::bytecode::{HandlerTable, OPS, Op, special};
 use crate::heap::cells::{BoxCell, FuncTemplate, HostCall, Interp, Roots, U32Array, ValueArray};
 use crate::heap::{
     Atom, CellKind, Heap, HeapError, ObjectClass, PropFlags, Property, PropertyDescriptor, Ref,
@@ -504,6 +504,7 @@ impl<'h> Exec<'h> {
         // fell through unless it jumps.
         #[cfg(debug_assertions)]
         if matches!(r, Ok(None)) && self.bp == bp0 {
+            use crate::bytecode::flags as opflags;
             let pops = info.pop as u32
                 + info.pop_imm.map_or(0, |k| {
                     // Count immediates are u16; skip the immediates before them.

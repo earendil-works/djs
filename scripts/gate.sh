@@ -9,6 +9,10 @@ echo "== clippy"; cargo clippy --workspace --all-targets --quiet -- -D warnings
 echo "== test";  cargo test --workspace --quiet
 echo "== no_std/wasm build of djs-core"
 cargo build -p djs-core --target wasm32-unknown-unknown --quiet
+# Clippy for wasm32 in release (no debug_assertions), so warnings that only appear in
+# that configuration fail the gate too.
+echo "== clippy (wasm32, release)"
+cargo clippy -p djs-core -p djs-wasm --target wasm32-unknown-unknown --release --quiet -- -D warnings
 
 # Additional gate steps registered by issues go below this line.
 echo "== builtins/gen is up to date (0017)"
