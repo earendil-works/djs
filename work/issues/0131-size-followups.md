@@ -1,7 +1,7 @@
 # 0131: Size follow-ups: message builder, decomposition stream, composition tables
 
-status: open
-agent: -
+status: in-progress
+agent: bloat
 branch: issue/0131-size-followups
 depends-on: 0126
 guide: - (unless a page describes the tables)
