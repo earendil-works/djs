@@ -10,7 +10,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0132 | Initial arena room (json peak regression) | heap | .worktrees/heap |
 | 0133 | Heap dump analyzer | snapshot | .worktrees/snapshot |
 | 0129 | pi-like hot spots (interpreter, native calls, JSON) | perf | .worktrees/perf |
-| 0131 | Size follow-ups: message builder, decomposition, composition | bloat | .worktrees/bloat |
 
 ## Open (ready)
 
@@ -81,6 +80,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0131 | Size: decomposition stream, derived compositions, message builder (D2337-D2339) | ef739b01 (agent bloat; -6.3 KB, 454.6 KB, 1.586x) |
 | 0130 | Codemode feature usage (research) | b0d92946 (agent infra; docs/codemode-feature-usage.md; no Unicode props/normalization -> 420 KB, 1.47x) |
 | 0128 | Page allocator in djs-wasm (D2053) | 0163f92b (agent heap; peak memory halved on big heaps: strbuild 38.6 -> 19.5 MiB) |
 | 0126 | Size: paths, no_std panic handler, location-detail, Unicode recoding (D2331-D2336) | acf388af (agent bloat; ~-20 KB gzip; main 460.9 KB, 1.608x) |
