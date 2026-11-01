@@ -348,7 +348,13 @@ impl Heap {
         if len > INDEX_MASK {
             return Err(HeapError::OutOfMemory);
         }
-        let entries = self.value_array_reserve(entries, len + 1)?;
+        // By a quarter, not doubling: a VM from the base adds its first atoms to a table
+        // of ~2000, and doubling left 15 KB of empty slots in every image (D2057).
+        let entries = if len < self.value_array_capacity(entries) {
+            entries
+        } else {
+            self.value_array_regrow(entries, len, len + len / 4 + 8)?
+        };
         self.arena_mut()
             .set(table, AtomTable::ENTRIES, Ref(entries));
         self.value_array_set(entries, len, v);

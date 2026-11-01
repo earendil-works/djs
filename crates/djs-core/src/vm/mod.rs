@@ -796,7 +796,37 @@ impl Vm {
         // Without the prelude's internal names (D2253).
         image::drop_internal_names(&mut self.heap)?;
         self.collect_canonical()?;
-        self.heap.order_for_image()
+        let last = self.first_grown_cells();
+        self.heap.order_for_image(&last)
+    }
+
+    /// The base cells a VM replaces first, as soon as a script adds a global or an atom
+    /// (D2057): the atom table's entries and index, the global object's property table
+    /// and index, and the root shape's transitions. `order_for_image` puts them at the
+    /// end of the base, so the dead copies a full collection drops shift nothing before
+    /// them.
+    fn first_grown_cells(&self) -> Vec<u32> {
+        use crate::heap::Ref;
+        use crate::heap::cells::{AtomTable, Object, PropTable, Roots, Shape};
+        let a = self.heap.arena();
+        let atoms: Ref = a.get(0, Roots::ATOMS);
+        let props: Ref = a.get(self.global().0, Object::PROPS);
+        let shape: Ref = a.get(0, Roots::ROOT_SHAPE);
+        let mut out = Vec::new();
+        if let Some(t) = atoms.get() {
+            out.push(a.get::<Ref>(t, AtomTable::ENTRIES));
+            out.push(a.get::<Ref>(t, AtomTable::INDEX));
+        }
+        if let Some(p) = props.get()
+            && self.heap.cell_kind(p) == crate::heap::CellKind::PropTable
+        {
+            out.push(Ref(p));
+            out.push(a.get::<Ref>(p, PropTable::INDEX));
+        }
+        if let Some(s) = shape.get() {
+            out.push(a.get::<Ref>(s, Shape::TRANSITIONS));
+        }
+        out.into_iter().filter_map(|r| r.get()).collect()
     }
 
     /// A collection of `heap` alone (no finalization scheduling).

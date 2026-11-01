@@ -62,7 +62,10 @@ impl Heap {
     /// so a canonical image stays canonical. Only for the base image's build: offsets
     /// change, so it updates every traced reference and, as a collection does, clears the
     /// templates' offset caches and rehashes Map/Set indexes.
-    pub fn order_for_image(&mut self) -> Result<(), HeapError> {
+    ///
+    /// The cells at the offsets in `last` go after all others, in that order (D2057): the
+    /// ones a VM made from the image replaces first.
+    pub fn order_for_image(&mut self, last: &[u32]) -> Result<(), HeapError> {
         use super::cells::{Header, Str8};
         use super::walk::{Slot, for_each_slot};
         use crate::value::{Obj, Value};
@@ -78,16 +81,21 @@ impl Heap {
             a.slice(c.offset + Str8::DATA.offset, c.size - Str8::DATA.offset)
         };
         let is_str = |k: CellKind| matches!(k, CellKind::Str8 | CellKind::Str16);
+        let rank = |c: &super::walk::CellInfo| last.iter().position(|&o| o == c.offset);
         let mut order: Vec<usize> = (1..cells.len()).collect();
         order.sort_by(|&x, &y| {
             let (cx, cy) = (&cells[x], &cells[y]);
-            (cx.kind as u8).cmp(&(cy.kind as u8)).then_with(|| {
-                if is_str(cx.kind) {
-                    data(cx).cmp(data(cy)).then(cx.offset.cmp(&cy.offset))
-                } else {
-                    cx.offset.cmp(&cy.offset)
-                }
-            })
+            // `None` (not in `last`) sorts first.
+            rank(cx)
+                .cmp(&rank(cy))
+                .then_with(|| (cx.kind as u8).cmp(&(cy.kind as u8)))
+                .then_with(|| {
+                    if is_str(cx.kind) {
+                        data(cx).cmp(data(cy)).then(cx.offset.cmp(&cy.offset))
+                    } else {
+                        cx.offset.cmp(&cy.offset)
+                    }
+                })
         });
         order.insert(0, 0);
         // New offsets, by old cell index (cells are in address order: binary search).

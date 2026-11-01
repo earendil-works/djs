@@ -48,7 +48,16 @@ impl Heap {
         if min_cap <= cap {
             return Ok(arr);
         }
-        let new_cap = min_cap.max(cap.saturating_mul(2)).max(8);
+        self.value_array_regrow(arr, len, min_cap.max(cap.saturating_mul(2)).max(8))
+    }
+
+    /// A copy of `arr`'s first `len` values in a new array with room for `new_cap`.
+    pub(crate) fn value_array_regrow(
+        &mut self,
+        arr: u32,
+        len: u32,
+        new_cap: u32,
+    ) -> Result<u32, HeapError> {
         let new = self.alloc_value_array(new_cap)?;
         if len > 0 {
             let src = ValueArray::VALUES.at(arr, 0);
