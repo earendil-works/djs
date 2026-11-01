@@ -1,7 +1,7 @@
 # 0014: P0 compiler
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0014-p0-compiler
 depends-on: 0013
 touches: crates/djs-core/src/compiler/, docs/compiler.md (corrections only)
