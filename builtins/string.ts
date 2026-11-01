@@ -412,8 +412,8 @@ function StringPrototypeToWellFormed(this: Value): Str {
 }
 
 /**
- * String.prototype.normalize ( [ form ] ), 22.1.3.15. Without normalization tables
- * yet: strings that are already normalized come back as they are, others throw.
+ * String.prototype.normalize ( [ form ] ), 22.1.3.15. A build without the
+ * `unicode-normalization` feature throws for strings that would need its tables (D1760).
  * @builtin String.prototype.normalize
  */
 function StringPrototypeNormalize(this: Value, form?: Value): Str {

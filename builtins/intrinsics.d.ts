@@ -438,8 +438,9 @@ declare function StrFromCodeUnits(list: Obj): Str;
 /** A string of the (valid) code points in a dense array. @leaf */
 declare function StrFromCodePoints(list: Obj): Str;
 /**
- * String.prototype.normalize for form 0 NFC, 1 NFD, 2 NFKC, 3 NFKD: the string if it is
- * already normalized without tables, undefined when it would need them. @leaf
+ * String.prototype.normalize for form 0 NFC, 1 NFD, 2 NFKC, 3 NFKD: the normalized string;
+ * undefined only when djs is built without the `unicode-normalization` feature and the
+ * string would need its tables. @leaf
  */
 declare function StrNormalize(s: Str, form: i32): Value;
 /** A new symbol; the description is a string or undefined. @leaf */

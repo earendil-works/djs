@@ -277,20 +277,56 @@ pub(crate) fn from_codes(heap: &mut Heap, list: Obj, points: bool) -> Result<Str
     Ok(heap.alloc_utf16(&out)?)
 }
 
-/// `normalize(form)` without the Unicode normalization tables: strings whose code units
-/// are all below U+0300 (no combining marks; for NFD/NFKD/NFKC below U+00A0) are
-/// already normalized; anything else is not supported yet. `None` for that case.
+/// `normalize(form)` (form 0 NFC, 1 NFD, 2 NFKC, 3 NFKD). With the
+/// `unicode-normalization` feature every string normalizes; strings that pass the quick
+/// check come back unchanged. Without the tables only strings whose code units are all
+/// below U+0300 (for NFD/NFKD/NFKC below U+00A0) are known to be normalized; `None` for
+/// anything else (D1760).
 pub(crate) fn normalize(heap: &mut Heap, s: Str, form: u8) -> Result<Option<Str>, Fault> {
-    let limit = if form == 0 { 0x300 } else { 0xA0 };
-    let ok = heap.str_view_flat(s)?.units().all(|u| u < limit);
-    Ok(ok.then_some(s))
+    #[cfg(feature = "unicode-normalization")]
+    {
+        use crate::unicode::normalize::{self as norm, Form};
+        let form = match form {
+            0 => Form::Nfc,
+            1 => Form::Nfd,
+            2 => Form::Nfkc,
+            _ => Form::Nfkd,
+        };
+        let u = units(heap, s)?;
+        if norm::is_normalized_quick(&u, form) {
+            return Ok(Some(s));
+        }
+        let out = norm::normalize(&u, form);
+        if out == u {
+            return Ok(Some(s));
+        }
+        Ok(Some(crate::builtins::regexp::string_from_units(heap, &out)?))
+    }
+    #[cfg(not(feature = "unicode-normalization"))]
+    {
+        let limit = if form == 0 { 0x300 } else { 0xA0 };
+        let ok = heap.str_view_flat(s)?.units().all(|u| u < limit);
+        Ok(ok.then_some(s))
+    }
 }
 
-/// localeCompare without Intl, as QuickJS computes it: the difference of the first
-/// differing code points, else -1/0/1 by length (qjs also NFC-normalizes both first;
-/// djs has no normalization tables yet).
+/// localeCompare without Intl, as QuickJS computes it: both strings NFC-normalized (with
+/// the `unicode-normalization` feature), then the difference of the first differing code
+/// points, else -1/0/1 by length.
 pub(crate) fn locale_compare(heap: &mut Heap, a: Str, b: Str) -> Result<f64, Fault> {
     let (ua, ub) = (units(heap, a)?, units(heap, b)?);
+    #[cfg(feature = "unicode-normalization")]
+    let (ua, ub) = {
+        use crate::unicode::normalize::{self as norm, Form};
+        let nfc = |u: Vec<u16>| {
+            if norm::is_normalized_quick(&u, Form::Nfc) {
+                u
+            } else {
+                norm::normalize(&u, Form::Nfc)
+            }
+        };
+        (nfc(ua), nfc(ub))
+    };
     let (ca, cb) = (code_points_of(&ua), code_points_of(&ub));
     for (x, y) in ca.iter().zip(&cb) {
         if x.1 != y.1 {
