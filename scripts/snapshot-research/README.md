@@ -1,4 +1,4 @@
-# Snapshot design measurements (issues 0088, 0117)
+# Snapshot design measurements (issues 0088, 0117, 0133, 0140)
 
 Two tools on the same six cases (`cases/`), neither part of the workspace or the gate (like
 `scripts/determinism/probe`):
@@ -8,6 +8,15 @@ Two tools on the same six cases (`cases/`), neither part of the workspace or the
   `work/issues/0088-snapshot-design-research.md`.
 - `wasm.ts` (node, djs-wasm) measures the snapshot container that was built (D2260) through
   the real pi adapter: below.
+
+Two more for snapshots across djs versions (docs/snapshot-versioning.md):
+
+- `churn.py [OLD NEW]`: how many merged issues touched each input of a snapshot (build
+  hash, layouts, opcodes, intrinsics, builtins, base image layout, pi adapter, container);
+  with two commits, also which intrinsic ids moved between them.
+- `upgrade.ts OLD [OUT]`: a Sandbox and a pi session suspended on an older build (OLD, a
+  `git archive` of an older commit with its djs-wasm built) and restored on this one:
+  refused; restored with the old build (an engine registry); replayed on this build.
 
 ```sh
 scripts/snapshot-research/run.sh [out-dir] [case.js ...]                # snaplab
