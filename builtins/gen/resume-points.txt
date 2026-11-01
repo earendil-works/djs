@@ -1295,6 +1295,9 @@ PromiseThrower: leaf (%PromiseThrower)
 
 PromisePrototypeToStringTag: leaf (value Promise.prototype[Symbol.toStringTag])
 
+HostCallSettle: reentrant (%HostCallSettle)
+  builtins/promise.ts:673:5  ResolvePromise (builtin)
+
 ReflectObject: leaf (value Reflect)
 
 ReflectToStringTag: leaf (value Reflect[Symbol.toStringTag])

@@ -3357,6 +3357,18 @@ function PromisePrototypeToStringTag() {
   return "Promise";
 }
 
+// builtins/promise.ts:668 %HostCallSettle
+function HostCallSettle(promise, ok, value) {
+  if (!%PromiseClaimResolve(promise)) {
+    return;
+  }
+  if (ok) {
+    ResolvePromise(promise, value);
+  } else {
+    %RejectPromise(promise, value);
+  }
+}
+
 // builtins/reflect.ts:9 value Reflect
 function ReflectObject() {
   return %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
@@ -4831,5 +4843,6 @@ function WeakSetPrototypeToStringTag() {
 %InstallIntrinsic("PromiseCatchFinally", PromiseCatchFinally);
 %InstallIntrinsic("PromiseValueThunk", PromiseValueThunk);
 %InstallIntrinsic("PromiseThrower", PromiseThrower);
+%InstallIntrinsic("HostCallSettle", HostCallSettle);
 %InstallIntrinsic("ArraySpread", ArraySpread);
 })();

@@ -25,6 +25,7 @@ use crate::bytecode::global_decls::GlobalDecls;
 use crate::bytecode::template::func_flags;
 use crate::bytecode::template::{bytes_of, ref_array_get};
 use crate::bytecode::{HandlerTable, OPS, Op, special};
+use crate::heap::cells::flags::OBJ_HOST_ASYNC;
 use crate::heap::cells::{BoxCell, FuncTemplate, HostCall, Interp, Roots, U32Array, ValueArray};
 use crate::heap::{
     Atom, CellKind, Heap, HeapError, ObjectClass, PropFlags, Property, PropertyDescriptor, Ref,
@@ -357,7 +358,10 @@ impl<'h> Exec<'h> {
                 }
                 self.heap.arena_mut().set(args, ValueArray::LEN, argc);
                 let this = self.get(base + 1);
-                let call_id = add_host_call(self.heap, fn_id, args, this)?;
+                if self.heap.cell_flags(o.offset()) & OBJ_HOST_ASYNC != 0 {
+                    return self.async_host_call(fn_id, args, this, base, cont, ret_pc);
+                }
+                let call_id = add_host_call(self.heap, fn_id, args, this, Value::UNDEFINED)?;
                 self.sp = base;
                 self.pc = ret_pc;
                 let i = state::interp(self.heap);
@@ -395,6 +399,37 @@ impl<'h> Exec<'h> {
             }
             _ => type_error("not a function"),
         }
+    }
+
+    /// Calls an async host function (D1374): a new promise is the result, and the call
+    /// waits in the pending host call table until the embedder resolves it.
+    fn async_host_call(
+        &mut self,
+        fn_id: u32,
+        args: u32,
+        this: Value,
+        base: u32,
+        cont: Continuation,
+        ret_pc: u32,
+    ) -> Step {
+        let proto = intrinsic_obj(self.heap, Intrinsic::PromiseProto);
+        let p = Value::object(promise::alloc(self.heap, Some(proto))?);
+        add_host_call(self.heap, fn_id, args, this, p)?;
+        self.sp = base;
+        self.pc = ret_pc;
+        match cont {
+            Continuation::PushResult | Continuation::ConstructResult => self.push(p),
+            Continuation::DiscardResult => {}
+            Continuation::Replace(slot) => self.set(slot, p),
+            // `Vm::call` of an async host function: done at once (it must not run jobs,
+            // which could collect); the next `run` drains the queue.
+            Continuation::Entry => {
+                state::set_outcome(self.heap, RunState::Done, p);
+                self.flush();
+            }
+            Continuation::Job => return Ok(self.bottom_done(cont, Ok(p))),
+        }
+        Ok(None)
     }
 
     /// Rewrites `F this a1 .. an` for a bound function F into `target boundThis b1 .. bk
@@ -2858,7 +2893,13 @@ impl<'h> Exec<'h> {
 // ------------------------------------------------------------------ host calls
 
 /// Adds a pending host call and returns its id.
-fn add_host_call(heap: &mut Heap, fn_id: u32, args: u32, this: Value) -> Result<u32, HeapError> {
+fn add_host_call(
+    heap: &mut Heap,
+    fn_id: u32,
+    args: u32,
+    this: Value,
+    promise: Value,
+) -> Result<u32, HeapError> {
     let i = state::interp(heap);
     let id = heap.arena().get(i, Interp::NEXT_CALL_ID);
     let c = heap.alloc_cell(CellKind::HostCall, HostCall::LAYOUT.min_size)?;
@@ -2870,6 +2911,7 @@ fn add_host_call(heap: &mut Heap, fn_id: u32, args: u32, this: Value) -> Result<
     a.set(c, HostCall::FN, fn_id);
     a.set(c, HostCall::ARGS, Ref(args));
     a.set(c, HostCall::THIS, this);
+    a.set(c, HostCall::PROMISE, promise);
     a.set(0, Roots::HOST_CALLS, Ref(table2));
     a.set(i, Interp::NEXT_CALL_ID, id.wrapping_add(1).max(1));
     heap.value_array_set(table2, len, Value::internal(c));

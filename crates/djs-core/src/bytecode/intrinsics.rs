@@ -257,6 +257,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("PromiseCatchFinally", B, 1, false),
     i("PromiseValueThunk", B, 0, false),
     i("PromiseThrower", B, 0, false),
+    i("HostCallSettle", B, 3, false),
     i("ArraySpread", B, 2, false),
 ];
 

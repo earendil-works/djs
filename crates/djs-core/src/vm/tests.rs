@@ -1322,3 +1322,209 @@ fn date_uses_the_host_clock_and_offset() {
          1646121600000|1646092800000|2022-02-28T22:00:00.000Z"
     );
 }
+
+const TOOL: u32 = 20;
+
+/// Runs a Script with `console.log` and an async host function `tool(x)`, which the
+/// "embedder" completes with `x.toUpperCase()` (or rejects for "fail"), resolving the
+/// pending calls one at a time in reverse order whenever the VM is idle. With `suspend`,
+/// every stop continues in a VM restored from the image; `gc_stress` collects at every
+/// safepoint.
+fn run_tools(src: &str, fuel: u64, suspend: bool, gc_stress: bool) -> Outcome {
+    let mut vm = vm_with(VmOptions {
+        exec: ExecOptions {
+            gc_stress,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    let tool = vm.new_async_host_function(TOOL, "tool").unwrap();
+    vm.define_global("tool", tool).unwrap();
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("t.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    let mut log = Vec::new();
+    let mut pending: Vec<u32> = Vec::new();
+    let reload = |vm: Vm| {
+        let opts = vm.options();
+        Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap()
+    };
+    loop {
+        let status = vm.run(fuel);
+        for id in vm.new_host_calls() {
+            let info = vm.host_call(id).unwrap();
+            assert!(info.is_async);
+            assert_eq!(info.fn_id, TOOL);
+            pending.push(id);
+        }
+        match status {
+            Status::Done(_) | Status::Threw(_) => {
+                assert!(pending.is_empty());
+                let result = match status {
+                    Status::Done(v) => vm.display(v),
+                    Status::Threw(e) => format!("throw {}", vm.display(e)),
+                    _ => unreachable!(),
+                };
+                for r in vm.take_unhandled_rejections() {
+                    log.push(format!("unhandled {}", vm.display(r)));
+                }
+                vm.heap().verify().unwrap();
+                return Outcome { result, log };
+            }
+            Status::OutOfFuel => {}
+            Status::HostCall { call_id, fn_id } => {
+                assert_eq!(fn_id, LOG);
+                let info = vm.host_call(call_id).unwrap();
+                assert!(!info.is_async);
+                let line: Vec<String> = info.args.iter().map(|&a| vm.display(a)).collect();
+                log.push(line.join(" "));
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::Idle => {
+                assert_eq!(vm.pending_host_calls(), pending);
+                let id = pending.pop().expect("idle without pending calls");
+                let arg = vm.host_call(id).unwrap().args[0];
+                let s = vm.display(arg);
+                let result = if s == "fail" {
+                    Err(vm.new_error(ErrorKind::TypeError, "tool failed").unwrap())
+                } else {
+                    let v = vm.heap_mut().alloc_str(&s.to_uppercase()).unwrap();
+                    Ok(Value::string(v))
+                };
+                log.push(format!("resolve {s}"));
+                vm.resolve_host_call(id, result).unwrap();
+            }
+        }
+        if suspend {
+            vm = reload(vm);
+        }
+    }
+}
+
+fn tools_outcome(src: &str) -> Outcome {
+    let plain = run_tools(src, 1 << 40, false, false);
+    assert_eq!(
+        plain,
+        run_tools(src, 1, true, false),
+        "suspension changed it"
+    );
+    assert_eq!(
+        plain,
+        run_tools(src, 13, true, true),
+        "gc stress changed it"
+    );
+    plain
+}
+
+#[test]
+fn async_host_calls_run_concurrently() {
+    let out = tools_outcome(
+        r#"
+        const a = tool("a"), b = tool("b"), c = tool("c");
+        console.log(Object.prototype.toString.call(a), a === b);
+        Promise.all([a, b, c]).then(v => console.log("all", v.join()));
+        b.then(v => console.log("b", v));
+        Promise.resolve().then(() => console.log("microtask first"));
+        console.log("sync end");
+        "#,
+    );
+    assert_eq!(out.result, "undefined");
+    assert_eq!(
+        out.log,
+        [
+            "[object Promise] false",
+            "sync end",
+            "microtask first",
+            "resolve c",
+            "resolve b",
+            "b B",
+            "resolve a",
+            "all A,B,C",
+        ]
+    );
+}
+
+#[test]
+fn async_host_call_errors_and_thenables() {
+    let out = tools_outcome(
+        r#"
+        tool("fail").catch(e => console.log("caught", e.name, e.message));
+        tool("x").then(v => tool(v + "y")).then(v => console.log("chained", v));
+        tool("fail");
+        "#,
+    );
+    assert_eq!(
+        out.log,
+        [
+            "resolve fail",
+            "resolve x",
+            "resolve Xy",
+            "chained XY",
+            "resolve fail",
+            "caught TypeError tool failed",
+            "unhandled TypeError: tool failed",
+        ]
+    );
+}
+
+#[test]
+fn async_host_function_as_the_entry_callee() {
+    let mut vm = vm();
+    let tool = vm.new_async_host_function(TOOL, "tool").unwrap();
+    vm.call(tool, Value::UNDEFINED, &[Value::int(1)]).unwrap();
+    assert_eq!(vm.run(100), Status::Idle);
+    let [id] = vm.new_host_calls()[..] else {
+        panic!()
+    };
+    assert!(vm.new_host_calls().is_empty(), "reported once");
+    vm.resolve_host_call(id, Ok(Value::int(5))).unwrap();
+    let Status::Done(p) = vm.run(1000) else {
+        panic!()
+    };
+    assert_eq!(vm.promise_state(p), Some(Some(Ok(Value::int(5)))));
+    assert_eq!(vm.promise_state(Value::int(5)), None);
+}
+
+#[test]
+fn image_with_pending_host_calls_and_jobs() {
+    // Two async calls pending; one resolved but its job not run yet: the image carries
+    // the pending call, the queued job and the reactions.
+    let mut vm = vm();
+    let tool = vm.new_async_host_function(TOOL, "tool").unwrap();
+    vm.define_global("tool", tool).unwrap();
+    let src = r#"
+        const log = [];
+        tool(1).then(v => log.push("one " + v));
+        tool(2).then(v => { log.push("two " + v); console.log(log.join()); });
+    "#;
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("t.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    assert_eq!(vm.run(1 << 20), Status::Idle);
+    let ids = vm.new_host_calls();
+    assert_eq!(ids.len(), 2);
+    vm.resolve_host_call(ids[0], Ok(Value::int(10))).unwrap();
+    vm.collect().unwrap();
+    let mut moved = Vm::from_bytes(vm.bytes().to_vec(), VmOptions::default()).unwrap();
+    drop(vm);
+    assert_eq!(moved.pending_host_calls(), [ids[1]]);
+    assert!(moved.new_host_calls().is_empty(), "already reported");
+    let info = moved.host_call(ids[1]).unwrap();
+    assert_eq!(info.args, [Value::int(2)]);
+    assert_eq!(moved.run(1 << 20), Status::Idle);
+    moved.resolve_host_call(ids[1], Ok(Value::int(20))).unwrap();
+    let (moved, out) = finish(moved, 1 << 20, true);
+    assert_eq!(out.log, ["one 10,two 20"]);
+    assert!(moved.pending_host_calls().is_empty());
+    moved.heap().verify().unwrap();
+}

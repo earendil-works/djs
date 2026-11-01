@@ -30,6 +30,9 @@ use crate::interp::{Continuation, state};
 pub use crate::interp::{ErrorKind, ExecOptions, RunState, Status};
 use crate::value::{Obj, Value};
 
+/// `HostCall::FLAGS`: returned by `Vm::new_host_calls` already.
+const HOST_CALL_REPORTED: u32 = 1;
+
 /// The generated prelude (`builtins/gen/prelude.js`, D1172).
 const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude.js");
 
@@ -87,12 +90,15 @@ impl From<HeapError> for VmError {
     }
 }
 
-/// A parked host call, as the embedder sees it.
+/// A pending host call, as the embedder sees it: the call the VM is parked on, or an
+/// async call (D1374).
 #[derive(Clone, Debug)]
 pub struct HostCallInfo {
     pub fn_id: u32,
     pub this: Value,
     pub args: Vec<Value>,
+    /// An async host call: the script got a promise and went on.
+    pub is_async: bool,
 }
 
 /// A VM: a heap with a realm and interpreter state. Everything is in the heap; the
@@ -299,6 +305,61 @@ impl Vm {
         Ok(Value::object(f))
     }
 
+    /// An async host function (D1374): calling it returns a promise at once and adds a
+    /// pending call (see [`Vm::new_host_calls`]); the VM goes on running. Resolving the
+    /// call with [`Vm::resolve_host_call`] settles the promise.
+    pub fn new_async_host_function(&mut self, fn_id: u32, name: &str) -> Result<Value, HeapError> {
+        let f = self.new_host_function(fn_id, name)?;
+        let o = f.as_object().expect("a function object");
+        let flags = self.heap.cell_flags(o.offset());
+        self.heap.set_cell_flags(
+            o.offset(),
+            flags | crate::heap::cells::flags::OBJ_HOST_ASYNC,
+        );
+        Ok(f)
+    }
+
+    /// The async host calls made since the last `new_host_calls`, oldest first. Read
+    /// them whenever `run` returns, with [`Vm::host_call`], and start them.
+    pub fn new_host_calls(&mut self) -> Vec<u32> {
+        let calls = self.async_calls();
+        let mut out = Vec::new();
+        for c in calls {
+            let flags = self.heap.arena().get(c, HostCall::FLAGS);
+            if flags & HOST_CALL_REPORTED == 0 {
+                self.heap
+                    .arena_mut()
+                    .set(c, HostCall::FLAGS, flags | HOST_CALL_REPORTED);
+                out.push(self.heap.arena().get(c, HostCall::ID));
+            }
+        }
+        out
+    }
+
+    /// Every async host call that is not resolved yet, oldest first (after a restore,
+    /// the embedder re-issues or replays these).
+    pub fn pending_host_calls(&self) -> Vec<u32> {
+        self.async_calls()
+            .into_iter()
+            .map(|c| self.heap.arena().get(c, HostCall::ID))
+            .collect()
+    }
+
+    /// The `HostCall` cells of the pending async calls.
+    fn async_calls(&self) -> Vec<u32> {
+        let table = state::host_calls(&self.heap);
+        (0..self.heap.value_array_len(table))
+            .map(|i| self.heap.value_array_get(table, i).as_internal().unwrap())
+            .filter(|&c| {
+                self.heap
+                    .arena()
+                    .get::<Value>(c, HostCall::PROMISE)
+                    .as_object()
+                    .is_some()
+            })
+            .collect()
+    }
+
     /// A new ordinary object.
     pub fn new_object(&mut self) -> Result<Obj, HeapError> {
         let proto = intrinsic_obj(&self.heap, Intrinsic::ObjectProto);
@@ -428,7 +489,7 @@ impl Vm {
         Exec::new(&mut self.heap, self.opts.exec).run(fuel)
     }
 
-    /// The parked host call `call_id`.
+    /// The pending host call `call_id` (parked or async).
     pub fn host_call(&self, call_id: u32) -> Option<HostCallInfo> {
         let c = run::host_call_cell(&self.heap, call_id)?;
         let a = self.heap.arena();
@@ -440,16 +501,28 @@ impl Vm {
             args: (0..n)
                 .map(|i| self.heap.value_array_get(args.0, i))
                 .collect(),
+            is_async: a.get::<Value>(c, HostCall::PROMISE).as_object().is_some(),
         })
     }
 
-    /// Completes the parked host call `call_id` with a value (`Ok`) or an exception
-    /// (`Err`, thrown at the call). `run` continues afterwards.
+    /// Completes the host call `call_id` with a value (`Ok`) or an exception (`Err`).
+    /// The call the VM is parked on returns or throws at the call; `run` continues
+    /// afterwards. An async call (D1374) settles its promise in a job (in any state:
+    /// the job runs at the next `run`); a value is adopted like a resolve function's
+    /// argument (thenables too), an exception rejects.
     pub fn resolve_host_call(
         &mut self,
         call_id: u32,
         result: Result<Value, Value>,
     ) -> Result<(), VmError> {
+        if let Some(c) = run::host_call_cell(&self.heap, call_id) {
+            let p: Value = self.heap.arena().get(c, HostCall::PROMISE);
+            if let Some(p) = p.as_object() {
+                run::promise::enqueue_host_settle(&mut self.heap, p, result)?;
+                run::remove_host_call(&mut self.heap, call_id);
+                return Ok(());
+            }
+        }
         let i = state::interp(&self.heap);
         if self.state() != RunState::HostCall
             || self.heap.arena().get(i, Interp::HOST_CALL) != call_id

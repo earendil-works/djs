@@ -73,6 +73,9 @@ pub mod flags {
     /// Function: an `OBJ_BUILTIN` that is a constructor (`%InstallConstructor`). Other
     /// builtins are not constructors (D1310).
     pub const OBJ_BUILTIN_CTOR: u16 = 16;
+    /// HostFunction: async (D1374). A call returns a promise and leaves a pending host
+    /// call for the embedder instead of parking the VM.
+    pub const OBJ_HOST_ASYNC: u16 = 32;
 }
 
 /// `"DJS\0"` little-endian, in [`Roots::MAGIC`].

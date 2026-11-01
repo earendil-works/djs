@@ -656,3 +656,22 @@ function PromiseThrower(this: Value): Value {
 function PromisePrototypeToStringTag(): Str {
   return "Promise";
 }
+
+// ---- Async host calls -------------------------------------------------------------------
+
+/**
+ * Settles the promise of an async host call (D1374): the job that
+ * `Vm::resolve_host_call` queues. A value is resolved like a resolve function would
+ * (thenables are adopted); an error rejects.
+ * @intrinsic
+ */
+function HostCallSettle(promise: Obj, ok: boolean, value: Value): void {
+  if (!PromiseClaimResolve(promise)) {
+    return;
+  }
+  if (ok) {
+    ResolvePromise(promise, value);
+  } else {
+    RejectPromise(promise, value);
+  }
+}

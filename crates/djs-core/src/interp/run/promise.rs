@@ -48,6 +48,7 @@ const FLAGS: u32 = 3;
 pub(crate) const JOB_SIZE: u32 = 5;
 
 pub(super) const PROMISE_REACTION_JOB: u16 = id("PromiseReactionJob");
+const HOST_CALL_SETTLE: u16 = id("HostCallSettle");
 
 /// A new pending promise.
 pub(crate) fn alloc(heap: &mut Heap, proto: Option<Obj>) -> Result<Obj, HeapError> {
@@ -247,6 +248,25 @@ pub(crate) fn perform_then(
     }
     set_flags(heap, p, f | FLAG_HANDLED);
     Ok(())
+}
+
+/// Queues the settlement of an async host call's promise (D1374): a job, so that a
+/// thenable result is adopted the way a resolve function would.
+pub(crate) fn enqueue_host_settle(
+    heap: &mut Heap,
+    p: Obj,
+    result: Result<Value, Value>,
+) -> Result<(), HeapError> {
+    let job = realm::installed_intrinsic(heap, HOST_CALL_SETTLE);
+    let (ok, v) = match result {
+        Ok(v) => (true, v),
+        Err(e) => (false, e),
+    };
+    enqueue(
+        heap,
+        job,
+        [Value::object(p), Value::bool(ok), v, Value::UNDEFINED],
+    )
 }
 
 // ---------------------------------------------------------------- rejection tracking
