@@ -1,7 +1,7 @@
 # 0127: Size: compact image (internal names, bytecode density), containers, fast paths
 
-status: open
-agent: -
+status: in-progress
+agent: perf
 branch: issue/0127-compact-image-code
 depends-on: 0122, 0123
 guide: docs/guide/bytecode.md (if the encoding changes), docs/guide/snapshots.md / builtins.md as affected
