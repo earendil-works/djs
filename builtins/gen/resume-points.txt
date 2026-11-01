@@ -51,6 +51,15 @@ ArrayPrototypePush: reentrant (Array.prototype.push)
   builtins/array.ts:202:5  Set (intrinsic)
   builtins/array.ts:205:3  Set (intrinsic)
 
+BooleanConstructor: reentrant (constructor Boolean)
+  builtins/boolean.ts:12:27  GetPrototypeFromConstructor (builtin)
+
+ThisBooleanValue: leaf
+
+BooleanPrototypeToString: leaf (Boolean.prototype.toString)
+
+BooleanPrototypeValueOf: leaf (Boolean.prototype.valueOf)
+
 ToPrimitive: reentrant (%ToPrimitive)
   builtins/conversion.ts:13:31  GetMethod (builtin)
   builtins/conversion.ts:15:27  Call (intrinsic)
@@ -146,11 +155,216 @@ FunctionPrototypeToString: leaf (Function.prototype.toString)
 
 FunctionConstructor: leaf (constructor Function)
 
+OrdinaryHasInstance: reentrant
+  builtins/function.ts:102:12  InstanceofOperator (builtin)
+  builtins/function.ts:107:20  Get (intrinsic)
+
+InstanceofOperator: reentrant
+  builtins/function.ts:126:32  GetMethod (builtin)
+  builtins/function.ts:128:22  Call (intrinsic)
+  builtins/function.ts:133:10  OrdinaryHasInstance (builtin)
+
+FunctionPrototypeHasInstance: reentrant (Function.prototype[Symbol.hasInstance])
+  builtins/function.ts:142:10  OrdinaryHasInstance (builtin)
+
 MathObject: leaf (value Math)
 
+MathToStringTag: leaf (value Math[Symbol.toStringTag])
+
+MathE: leaf (value Math.E)
+
+MathLN10: leaf (value Math.LN10)
+
+MathLN2: leaf (value Math.LN2)
+
+MathLOG10E: leaf (value Math.LOG10E)
+
+MathLOG2E: leaf (value Math.LOG2E)
+
+MathPI: leaf (value Math.PI)
+
+MathSQRT12: leaf (value Math.SQRT1_2)
+
+MathSQRT2: leaf (value Math.SQRT2)
+
+MathAbs: reentrant (Math.abs)
+  builtins/math.ts:90:17  ToNumber (builtin)
+
+MathAcos: reentrant (Math.acos)
+  builtins/math.ts:98:18  ToNumber (builtin)
+
+MathAcosh: reentrant (Math.acosh)
+  builtins/math.ts:106:19  ToNumber (builtin)
+
+MathAsin: reentrant (Math.asin)
+  builtins/math.ts:114:18  ToNumber (builtin)
+
+MathAsinh: reentrant (Math.asinh)
+  builtins/math.ts:122:19  ToNumber (builtin)
+
+MathAtan: reentrant (Math.atan)
+  builtins/math.ts:130:18  ToNumber (builtin)
+
+MathAtanh: reentrant (Math.atanh)
+  builtins/math.ts:138:19  ToNumber (builtin)
+
+MathCbrt: reentrant (Math.cbrt)
+  builtins/math.ts:146:18  ToNumber (builtin)
+
+MathCeil: reentrant (Math.ceil)
+  builtins/math.ts:154:18  ToNumber (builtin)
+
+MathClz32: reentrant (Math.clz32)
+  builtins/math.ts:162:19  ToNumber (builtin)
+
+MathCos: reentrant (Math.cos)
+  builtins/math.ts:170:17  ToNumber (builtin)
+
+MathCosh: reentrant (Math.cosh)
+  builtins/math.ts:178:18  ToNumber (builtin)
+
+MathExp: reentrant (Math.exp)
+  builtins/math.ts:186:17  ToNumber (builtin)
+
+MathExpm1: reentrant (Math.expm1)
+  builtins/math.ts:194:19  ToNumber (builtin)
+
+MathFloor: reentrant (Math.floor)
+  builtins/math.ts:202:19  ToNumber (builtin)
+
+MathFround: reentrant (Math.fround)
+  builtins/math.ts:210:20  ToNumber (builtin)
+
+MathLog: reentrant (Math.log)
+  builtins/math.ts:218:17  ToNumber (builtin)
+
+MathLog1p: reentrant (Math.log1p)
+  builtins/math.ts:226:19  ToNumber (builtin)
+
+MathLog10: reentrant (Math.log10)
+  builtins/math.ts:234:19  ToNumber (builtin)
+
+MathLog2: reentrant (Math.log2)
+  builtins/math.ts:242:18  ToNumber (builtin)
+
+MathRound: reentrant (Math.round)
+  builtins/math.ts:250:19  ToNumber (builtin)
+
+MathSign: reentrant (Math.sign)
+  builtins/math.ts:258:18  ToNumber (builtin)
+
+MathSin: reentrant (Math.sin)
+  builtins/math.ts:266:17  ToNumber (builtin)
+
+MathSinh: reentrant (Math.sinh)
+  builtins/math.ts:274:18  ToNumber (builtin)
+
+MathSqrt: reentrant (Math.sqrt)
+  builtins/math.ts:282:18  ToNumber (builtin)
+
+MathTan: reentrant (Math.tan)
+  builtins/math.ts:290:17  ToNumber (builtin)
+
+MathTanh: reentrant (Math.tanh)
+  builtins/math.ts:298:18  ToNumber (builtin)
+
+MathTrunc: reentrant (Math.trunc)
+  builtins/math.ts:306:19  ToNumber (builtin)
+
+MathAtan2: reentrant (Math.atan2)
+  builtins/math.ts:314:19  ToNumber (builtin)
+  builtins/math.ts:315:23  ToNumber (builtin)
+
+MathImul: reentrant (Math.imul)
+  builtins/math.ts:323:18  ToNumber (builtin)
+  builtins/math.ts:324:21  ToNumber (builtin)
+
 MathPow: reentrant (Math.pow)
-  builtins/math.ts:19:18  ToNumber (builtin)
-  builtins/math.ts:20:23  ToNumber (builtin)
+  builtins/math.ts:332:18  ToNumber (builtin)
+  builtins/math.ts:333:23  ToNumber (builtin)
+
+CoerceNumbers: reentrant
+  builtins/math.ts:338:18  LengthOfArrayLike (builtin)
+  builtins/math.ts:340:22  Get (intrinsic)
+  builtins/math.ts:342:42  ToNumber (builtin)
+  builtins/math.ts:342:7  CreateDataPropertyOrThrow (intrinsic)
+
+MathMax: reentrant (Math.max)
+  builtins/math.ts:354:18  CoerceNumbers (builtin)
+  builtins/math.ts:357:29  Get (intrinsic)
+
+MathMin: reentrant (Math.min)
+  builtins/math.ts:375:18  CoerceNumbers (builtin)
+  builtins/math.ts:378:29  Get (intrinsic)
+
+MathHypot: reentrant (Math.hypot)
+  builtins/math.ts:396:18  CoerceNumbers (builtin)
+  builtins/math.ts:399:30  Get (intrinsic)
+
+MathRandomBuiltin: leaf (Math.random)
+
+NumberConstructor: reentrant (constructor Number)
+  builtins/number.ts:10:7  LengthOfArrayLike (builtin)
+  builtins/number.ts:11:18  Get (intrinsic)
+  builtins/number.ts:11:9  ToNumber (builtin)
+  builtins/number.ts:16:27  GetPrototypeFromConstructor (builtin)
+
+ThisNumberValue: leaf
+
+NumberPrototypeToString: reentrant (Number.prototype.toString)
+  builtins/number.ts:36:9  ToIntegerOrInfinity (builtin)
+
+NumberPrototypeToLocaleString: leaf (Number.prototype.toLocaleString)
+
+NumberPrototypeValueOf: leaf (Number.prototype.valueOf)
+
+NumberPrototypeToFixed: reentrant (Number.prototype.toFixed)
+  builtins/number.ts:63:27  ToIntegerOrInfinity (builtin)
+
+NumberPrototypeToExponential: reentrant (Number.prototype.toExponential)
+  builtins/number.ts:72:18  ToIntegerOrInfinity (builtin)
+
+NumberPrototypeToPrecision: reentrant (Number.prototype.toPrecision)
+  builtins/number.ts:88:31  ToIntegerOrInfinity (builtin)
+
+IsFiniteNumber: leaf
+
+NumberIsFinite: leaf (Number.isFinite)
+
+NumberIsInteger: leaf (Number.isInteger)
+
+NumberIsNaN: leaf (Number.isNaN)
+
+NumberIsSafeInteger: leaf (Number.isSafeInteger)
+
+NumberEpsilon: leaf (value Number.EPSILON)
+
+NumberMaxSafeInteger: leaf (value Number.MAX_SAFE_INTEGER)
+
+NumberMaxValue: leaf (value Number.MAX_VALUE)
+
+NumberMinSafeInteger: leaf (value Number.MIN_SAFE_INTEGER)
+
+NumberMinValue: leaf (value Number.MIN_VALUE)
+
+NumberNaN: leaf (value Number.NaN)
+
+NumberNegativeInfinity: leaf (value Number.NEGATIVE_INFINITY)
+
+NumberPositiveInfinity: leaf (value Number.POSITIVE_INFINITY)
+
+GlobalParseFloat: reentrant (parseFloat, Number.parseFloat)
+  builtins/number.ts:210:27  ToString (builtin)
+
+GlobalParseInt: reentrant (parseInt, Number.parseInt)
+  builtins/number.ts:219:18  ToString (builtin)
+  builtins/number.ts:220:42  ToNumber (builtin)
+
+GlobalIsNaN: reentrant (isNaN)
+  builtins/number.ts:228:18  ToNumber (builtin)
+
+GlobalIsFinite: reentrant (isFinite)
+  builtins/number.ts:237:25  ToNumber (builtin)
 
 ObjectConstructor: reentrant (constructor Object)
   builtins/object.ts:10:25  GetPrototypeFromConstructor (builtin)
@@ -197,7 +411,135 @@ ObjectPrototypeHasOwnProperty: reentrant (Object.prototype.hasOwnProperty)
 ObjectPrototypePropertyIsEnumerable: reentrant (Object.prototype.propertyIsEnumerable)
   builtins/object.ts:132:22  ToPropertyKey (builtin)
 
+ObjectGetPrototypeOf: leaf (Object.getPrototypeOf)
+
+ObjectSetPrototypeOf: leaf (Object.setPrototypeOf)
+
+ObjectCreateBuiltin: reentrant (Object.create)
+  builtins/object.ts:175:5  ObjectDefinePropertiesHelper (builtin)
+
+ObjectDefinePropertiesHelper: reentrant
+  builtins/object.ts:184:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:190:24  Get (intrinsic)
+  builtins/object.ts:193:30  Get (intrinsic)
+  builtins/object.ts:194:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:195:47  ToPropertyDescriptor (builtin)
+  builtins/object.ts:195:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:200:30  Get (intrinsic)
+  builtins/object.ts:200:54  Get (intrinsic)
+  builtins/object.ts:200:5  DefinePropertyOrThrow (builtin)
+
+ObjectDefineProperties: reentrant (Object.defineProperties)
+  builtins/object.ts:213:10  ObjectDefinePropertiesHelper (builtin)
+
+EnumerableOwnProperties: reentrant
+  builtins/object.ts:225:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:229:24  Get (intrinsic)
+  builtins/object.ts:232:28  Get (intrinsic)
+  builtins/object.ts:234:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:237:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:238:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:239:9  CreateDataPropertyOrThrow (intrinsic)
+
+ObjectKeys: reentrant (Object.keys)
+  builtins/object.ts:252:10  EnumerableOwnProperties (builtin)
+
+ObjectValues: reentrant (Object.values)
+  builtins/object.ts:260:10  EnumerableOwnProperties (builtin)
+
+ObjectEntries: reentrant (Object.entries)
+  builtins/object.ts:268:10  EnumerableOwnProperties (builtin)
+
+ObjectAssign: reentrant (Object.assign)
+  builtins/object.ts:278:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:280:31  Get (intrinsic)
+  builtins/object.ts:284:26  LengthOfArrayLike (builtin)
+  builtins/object.ts:286:28  Get (intrinsic)
+  builtins/object.ts:289:24  Get (intrinsic)
+  builtins/object.ts:289:11  Set (intrinsic)
+
+ObjectFreeze: leaf (Object.freeze)
+
+ObjectSeal: leaf (Object.seal)
+
+ObjectPreventExtensions: leaf (Object.preventExtensions)
+
+ObjectIsFrozen: leaf (Object.isFrozen)
+
+ObjectIsSealed: leaf (Object.isSealed)
+
+ObjectIsExtensible: leaf (Object.isExtensible)
+
+ObjectGetOwnPropertySymbols: leaf (Object.getOwnPropertySymbols)
+
+ObjectGetOwnPropertyDescriptors: reentrant (Object.getOwnPropertyDescriptors)
+  builtins/object.ts:378:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:381:24  Get (intrinsic)
+  builtins/object.ts:384:7  CreateDataPropertyOrThrow (intrinsic)
+
+ObjectHasOwn: reentrant (Object.hasOwn)
+  builtins/object.ts:396:30  ToPropertyKey (builtin)
+
+ObjectIs: leaf (Object.is)
+
+ObjectPrototypeToString: reentrant (Object.prototype.toString)
+  builtins/object.ts:419:22  Get (intrinsic)
+
+ObjectPrototypeToLocaleString: reentrant (Object.prototype.toLocaleString)
+  builtins/object.ts:431:15  GetV (intrinsic)
+  builtins/object.ts:431:10  Call (intrinsic)
+
+ObjectPrototypeValueOf: leaf (Object.prototype.valueOf)
+
+ObjectPrototypeIsPrototypeOf: leaf (Object.prototype.isPrototypeOf)
+
 StringConstructor: reentrant (constructor String)
   builtins/string.ts:11:7  LengthOfArrayLike (builtin)
   builtins/string.ts:12:26  Get (intrinsic)
   builtins/string.ts:16:9  ToString (builtin)
+
+SymbolConstructor: reentrant (constructor Symbol)
+  builtins/symbol.ts:14:20  ToString (builtin)
+
+SymbolForBuiltin: reentrant (Symbol.for)
+  builtins/symbol.ts:22:20  ToString (builtin)
+
+SymbolKeyForBuiltin: leaf (Symbol.keyFor)
+
+ThisSymbolValue: leaf
+
+SymbolPrototypeDescription: leaf (get Symbol.prototype.description)
+
+SymbolPrototypeToString: leaf (Symbol.prototype.toString)
+
+SymbolPrototypeValueOf: leaf (Symbol.prototype.valueOf)
+
+SymbolPrototypeToPrimitive: leaf (Symbol.prototype[Symbol.toPrimitive])
+
+SymbolPrototypeToStringTag: leaf (value Symbol.prototype[Symbol.toStringTag])
+
+SymbolAsyncIterator: leaf (value Symbol.asyncIterator)
+
+SymbolHasInstance: leaf (value Symbol.hasInstance)
+
+SymbolIsConcatSpreadable: leaf (value Symbol.isConcatSpreadable)
+
+SymbolIterator: leaf (value Symbol.iterator)
+
+SymbolMatch: leaf (value Symbol.match)
+
+SymbolMatchAll: leaf (value Symbol.matchAll)
+
+SymbolReplace: leaf (value Symbol.replace)
+
+SymbolSearch: leaf (value Symbol.search)
+
+SymbolSpecies: leaf (value Symbol.species)
+
+SymbolSplit: leaf (value Symbol.split)
+
+SymbolToPrimitive: leaf (value Symbol.toPrimitive)
+
+SymbolToStringTag: leaf (value Symbol.toStringTag)
+
+SymbolUnscopables: leaf (value Symbol.unscopables)

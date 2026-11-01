@@ -7,7 +7,7 @@
 //! push exactly one call frame whose result completes them.
 
 use super::*;
-use crate::builtins::{function, object};
+use crate::builtins::{function, number, object};
 use crate::bytecode::intrinsics::{INTRINSICS, IntrinsicKind, intrinsic, intrinsic_id};
 use crate::heap::cells::flags::{OBJ_BUILTIN, OBJ_BUILTIN_CTOR};
 use crate::heap::{ObjectClass, atoms};
@@ -82,6 +82,61 @@ const BOUND_FUNCTION_CREATE: u16 = id("BoundFunctionCreate");
 const FUNCTION_TO_STRING: u16 = id("FunctionToString");
 const NUMBER_POW: u16 = id("NumberPow");
 const SYMBOL_DESCRIPTIVE_STRING: u16 = id("SymbolDescriptiveString");
+const GET_PROTOTYPE_OF: u16 = id("GetPrototypeOf");
+const SET_PROTOTYPE_OF: u16 = id("SetPrototypeOf");
+const PREVENT_EXTENSIONS: u16 = id("PreventExtensions");
+const IS_EXTENSIBLE: u16 = id("IsExtensible");
+const SET_INTEGRITY_LEVEL: u16 = id("SetIntegrityLevel");
+const TEST_INTEGRITY_LEVEL: u16 = id("TestIntegrityLevel");
+const SAME_VALUE: u16 = id("SameValue");
+const OBJECT_CLASS_TAG: u16 = id("ObjectClassTag");
+const WRAP_PRIMITIVE: u16 = id("WrapPrimitive");
+const PRIMITIVE_VALUE: u16 = id("PrimitiveValue");
+const BOUND_TARGET_FUNCTION: u16 = id("BoundTargetFunction");
+const NEW_SYMBOL: u16 = id("NewSymbol");
+const SYMBOL_DESCRIPTION: u16 = id("SymbolDescription");
+const SYMBOL_FOR: u16 = id("SymbolFor");
+const SYMBOL_KEY_FOR: u16 = id("SymbolKeyFor");
+const NUMBER_TO_STRING: u16 = id("NumberToString");
+const NUMBER_TO_FIXED: u16 = id("NumberToFixed");
+const NUMBER_TO_EXPONENTIAL: u16 = id("NumberToExponential");
+const NUMBER_TO_PRECISION: u16 = id("NumberToPrecision");
+const STRING_PARSE_FLOAT: u16 = id("StringParseFloat");
+const STRING_PARSE_INT: u16 = id("StringParseInt");
+const NUMBER_TO_INT32: u16 = id("NumberToInt32");
+const NUMBER_TO_UINT32: u16 = id("NumberToUint32");
+const MATH_RANDOM: u16 = id("MathRandom");
+const F64_ABS: u16 = id("F64Abs");
+const F64_ACOS: u16 = id("F64Acos");
+const F64_ACOSH: u16 = id("F64Acosh");
+const F64_ASIN: u16 = id("F64Asin");
+const F64_ASINH: u16 = id("F64Asinh");
+const F64_ATAN: u16 = id("F64Atan");
+const F64_ATANH: u16 = id("F64Atanh");
+const F64_ATAN2: u16 = id("F64Atan2");
+const F64_CBRT: u16 = id("F64Cbrt");
+const F64_HYPOT: u16 = id("F64Hypot");
+const F64_CEIL: u16 = id("F64Ceil");
+const F64_CLZ32: u16 = id("F64Clz32");
+const F64_COS: u16 = id("F64Cos");
+const F64_COSH: u16 = id("F64Cosh");
+const F64_EXP: u16 = id("F64Exp");
+const F64_EXPM1: u16 = id("F64Expm1");
+const F64_FLOOR: u16 = id("F64Floor");
+const F64_FROUND: u16 = id("F64Fround");
+const F64_IMUL: u16 = id("F64Imul");
+const F64_LOG: u16 = id("F64Log");
+const F64_LOG1P: u16 = id("F64Log1p");
+const F64_LOG10: u16 = id("F64Log10");
+const F64_LOG2: u16 = id("F64Log2");
+const F64_ROUND: u16 = id("F64Round");
+const F64_SIGN: u16 = id("F64Sign");
+const F64_SIN: u16 = id("F64Sin");
+const F64_SINH: u16 = id("F64Sinh");
+const F64_SQRT: u16 = id("F64Sqrt");
+const F64_TAN: u16 = id("F64Tan");
+const F64_TANH: u16 = id("F64Tanh");
+const F64_TRUNC: u16 = id("F64Trunc");
 const INSTALL_CONSTRUCTOR: u16 = id("InstallConstructor");
 const INSTALL_ACCESSOR: u16 = id("InstallAccessor");
 const INSTALL_VALUE: u16 = id("InstallValue");
@@ -89,6 +144,44 @@ const INSTALL_METHOD: u16 = id("InstallMethod");
 const INSTALL_INTRINSIC: u16 = id("InstallIntrinsic");
 /// The installed `%ToPrimitive`, used by the interpreter's slow paths.
 pub(super) const TO_PRIMITIVE: u16 = id("ToPrimitive");
+
+/// The libm intrinsics (D1150): `F64Sin(x)` and friends.
+fn math_leaf(id: u16, x: f64, y: f64) -> Option<f64> {
+    Some(match id {
+        F64_ABS => libm::fabs(x),
+        F64_ACOS => libm::acos(x),
+        F64_ACOSH => libm::acosh(x),
+        F64_ASIN => libm::asin(x),
+        F64_ASINH => libm::asinh(x),
+        F64_ATAN => libm::atan(x),
+        F64_ATANH => libm::atanh(x),
+        F64_ATAN2 => libm::atan2(x, y),
+        F64_CBRT => libm::cbrt(x),
+        F64_HYPOT => libm::hypot(x, y),
+        F64_CEIL => libm::ceil(x),
+        F64_CLZ32 => number::to_uint32(x).leading_zeros() as f64,
+        F64_COS => libm::cos(x),
+        F64_COSH => libm::cosh(x),
+        F64_EXP => libm::exp(x),
+        F64_EXPM1 => libm::expm1(x),
+        F64_FLOOR => libm::floor(x),
+        F64_FROUND => x as f32 as f64,
+        F64_IMUL => (number::to_uint32(x).wrapping_mul(number::to_uint32(y)) as i32) as f64,
+        F64_LOG => libm::log(x),
+        F64_LOG1P => libm::log1p(x),
+        F64_LOG10 => libm::log10(x),
+        F64_LOG2 => libm::log2(x),
+        F64_ROUND => number::round(x),
+        F64_SIGN => number::sign(x),
+        F64_SIN => libm::sin(x),
+        F64_SINH => libm::sinh(x),
+        F64_SQRT => libm::sqrt(x),
+        F64_TAN => libm::tan(x),
+        F64_TANH => libm::tanh(x),
+        F64_TRUNC => libm::trunc(x),
+        _ => return None,
+    })
+}
 
 fn bad_argument<T>(name: &str) -> Result<T, Fault> {
     Err(Fault::Error(
@@ -171,10 +264,11 @@ impl Exec<'_> {
             TO_OBJECT => {
                 if a0.as_object().is_some() {
                     a0
-                } else if a0.is_nullish() {
-                    return type_error("cannot convert to object");
                 } else {
-                    return type_error("not supported yet: primitive wrapper objects");
+                    match realm::wrap_primitive(self.heap, a0, None)? {
+                        Some(o) => Value::object(o),
+                        None => return type_error("cannot convert to object"),
+                    }
                 }
             }
             TO_INTEGER_OR_INFINITY_NUMBER => {
@@ -317,6 +411,142 @@ impl Exec<'_> {
                 };
                 Value::symbol(self.heap.atom_symbol(atom).expect("well-known symbol"))
             }
+            GET_PROTOTYPE_OF | PREVENT_EXTENSIONS | IS_EXTENSIBLE | OBJECT_CLASS_TAG => {
+                let Some(o) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                match id {
+                    GET_PROTOTYPE_OF => self
+                        .heap
+                        .get_prototype_of(o)
+                        .map_or(Value::NULL, Value::object),
+                    PREVENT_EXTENSIONS => Value::bool(self.heap.prevent_extensions(o)),
+                    IS_EXTENSIBLE => Value::bool(self.heap.is_extensible(o)),
+                    _ => {
+                        let tag = object::class_tag(self.heap, o);
+                        Value::string(self.heap.alloc_str(tag)?)
+                    }
+                }
+            }
+            SET_PROTOTYPE_OF => {
+                let Some(o) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                let proto = arg(self, 1);
+                if proto.as_object().is_none() && !proto.is_null() {
+                    return bad_argument(info.name);
+                }
+                Value::bool(self.heap.set_prototype_of(o, proto.as_object()))
+            }
+            SET_INTEGRITY_LEVEL | TEST_INTEGRITY_LEVEL => {
+                let Some(o) = a0.as_object() else {
+                    return bad_argument(info.name);
+                };
+                let frozen = arg(self, 1).as_bool() == Some(true);
+                Value::bool(if id == SET_INTEGRITY_LEVEL {
+                    object::set_integrity_level(self.heap, o, frozen)?
+                } else {
+                    object::test_integrity_level(self.heap, o, frozen)
+                })
+            }
+            SAME_VALUE => Value::bool(self.heap.same_value(a0, arg(self, 1))),
+            WRAP_PRIMITIVE => {
+                let proto = arg(self, 1).as_object();
+                match realm::wrap_primitive(self.heap, a0, proto)? {
+                    Some(o) if proto.is_some() => Value::object(o),
+                    _ => return bad_argument(info.name),
+                }
+            }
+            PRIMITIVE_VALUE => match a0.as_object() {
+                None => a0,
+                Some(o) => match self.heap.object_class(o) {
+                    ObjectClass::Boolean
+                    | ObjectClass::Number
+                    | ObjectClass::String
+                    | ObjectClass::Symbol => self.heap.object_slot(o, 0),
+                    _ => Value::UNDEFINED,
+                },
+            },
+            BOUND_TARGET_FUNCTION => match a0.as_object() {
+                Some(o) if self.heap.object_class(o) == ObjectClass::BoundFunction => {
+                    self.heap.object_slot(o, 0)
+                }
+                _ => Value::UNDEFINED,
+            },
+            NEW_SYMBOL => {
+                if !a0.is_undefined() && a0.as_string().is_none() {
+                    return bad_argument(info.name);
+                }
+                Value::symbol(self.heap.new_symbol(a0)?)
+            }
+            SYMBOL_DESCRIPTION => match a0.as_symbol() {
+                Some(sym) => self.heap.symbol_description(sym),
+                None => return bad_argument(info.name),
+            },
+            SYMBOL_FOR => {
+                let Some(key) = a0.as_string() else {
+                    return bad_argument(info.name);
+                };
+                let registry = intrinsic_obj(self.heap, Intrinsic::SymbolRegistry);
+                let atom = self.heap.intern(key)?;
+                match self
+                    .heap
+                    .get_own_property(registry, atom)
+                    .and_then(|p| p.value())
+                {
+                    Some(sym) => sym,
+                    None => {
+                        let sym = Value::symbol(self.heap.new_symbol(a0)?);
+                        realm::define_hidden(self.heap, registry, atom, sym)?;
+                        sym
+                    }
+                }
+            }
+            SYMBOL_KEY_FOR => {
+                let Some(sym) = a0.as_symbol() else {
+                    return bad_argument(info.name);
+                };
+                // Registered symbols are described by their key.
+                let desc = self.heap.symbol_description(sym);
+                match desc.as_string() {
+                    Some(d) => {
+                        let registry = intrinsic_obj(self.heap, Intrinsic::SymbolRegistry);
+                        let atom = self.heap.intern(d)?;
+                        let found = self
+                            .heap
+                            .get_own_property(registry, atom)
+                            .and_then(|p| p.value());
+                        if found == Some(a0) {
+                            desc
+                        } else {
+                            Value::UNDEFINED
+                        }
+                    }
+                    None => Value::UNDEFINED,
+                }
+            }
+            NUMBER_TO_STRING | NUMBER_TO_FIXED | NUMBER_TO_EXPONENTIAL | NUMBER_TO_PRECISION => {
+                let x = a0.as_number().unwrap_or(f64::NAN);
+                let op = match id {
+                    NUMBER_TO_STRING => 0,
+                    NUMBER_TO_FIXED => 1,
+                    NUMBER_TO_EXPONENTIAL => 2,
+                    _ => 3,
+                };
+                Value::string(number::format(self.heap, op, x, arg(self, 1))?)
+            }
+            STRING_PARSE_FLOAT | STRING_PARSE_INT => {
+                let Some(s) = a0.as_string() else {
+                    return bad_argument(info.name);
+                };
+                let radix = (id == STRING_PARSE_INT).then(|| arg(self, 1).as_int().unwrap_or(0));
+                conv::number(number::parse(self.heap, s, radix)?)
+            }
+            NUMBER_TO_INT32 => Value::int(conv::to_int32(a0.as_number().unwrap_or(f64::NAN))),
+            NUMBER_TO_UINT32 => {
+                conv::number(number::to_uint32(a0.as_number().unwrap_or(f64::NAN)) as f64)
+            }
+            MATH_RANDOM => Value::number(number::random(self.heap)),
             REALM_INTRINSIC => {
                 let name = a0
                     .as_string()
@@ -428,12 +658,12 @@ impl Exec<'_> {
                 Value::UNDEFINED
             }
             INSTALL_VALUE => {
-                let (Some(t), Some(k)) = (a0.as_string(), arg(self, 1).as_string()) else {
+                let Some(t) = a0.as_string() else {
                     return bad_argument(info.name);
                 };
                 let path = self.heap.str_to_string(t);
                 let holder = self.resolve_path(&path)?;
-                let key = self.heap.intern(k)?;
+                let (key, _) = self.install_key(arg(self, 1))?;
                 let d = PropertyDescriptor::data(arg(self, 2), object::flags(arg(self, 3)));
                 self.heap.define_own_property(holder, key, &d)?;
                 Value::UNDEFINED
@@ -456,12 +686,19 @@ impl Exec<'_> {
                 }
                 Value::UNDEFINED
             }
-            _ => {
-                return Err(Fault::Error(
-                    ErrorKind::InternalError,
-                    format!("not supported yet: %{}", info.name),
-                ));
-            }
+            _ => match math_leaf(
+                id,
+                a0.as_number().unwrap_or(f64::NAN),
+                arg(self, 1).as_number().unwrap_or(f64::NAN),
+            ) {
+                Some(r) => conv::number(r),
+                None => {
+                    return Err(Fault::Error(
+                        ErrorKind::InternalError,
+                        format!("not supported yet: %{}", info.name),
+                    ));
+                }
+            },
         };
         self.sp = base;
         self.push(v);
@@ -492,21 +729,38 @@ impl Exec<'_> {
         f: Value,
         length: Value,
     ) -> Result<(), Fault> {
-        let (Some(t), Some(k), Some(fo)) = (target.as_string(), key.as_string(), f.as_object())
-        else {
+        let (Some(t), Some(fo)) = (target.as_string(), f.as_object()) else {
             return bad_argument("InstallMethod");
         };
         let path = self.heap.str_to_string(t);
         let holder = self.resolve_path(&path)?;
-        let key = self.heap.intern(k)?;
+        let (key, name) = self.install_key(key)?;
         realm::define_hidden(self.heap, holder, key, f)?;
-        let ro = PropFlags::CONFIGURABLE;
-        let name = PropertyDescriptor::data(Value::string(k), ro);
-        self.heap.define_own_property(fo, atoms::NAME, &name)?;
-        let len = PropertyDescriptor::data(conv::number(length.as_number().unwrap_or(0.0)), ro);
-        self.heap.define_own_property(fo, atoms::LENGTH, &len)?;
+        // A function installed twice (`Number.parseInt` is `parseInt`) keeps its first
+        // name, as the spec's builtins do.
+        if self.heap.cell_flags(fo.offset()) & OBJ_BUILTIN != 0 {
+            return Ok(());
+        }
+        self.name_and_length(fo, name, length.as_number().unwrap_or(0.0))?;
         self.mark_builtin(fo, OBJ_BUILTIN);
         Ok(())
+    }
+
+    /// The property key of an install call (a string or a symbol) and the function name
+    /// it gives (`[description]` for a symbol).
+    fn install_key(&mut self, key: Value) -> Result<(Atom, Value), Fault> {
+        if let Some(k) = key.as_string() {
+            return Ok((self.heap.intern(k)?, Value::string(k)));
+        }
+        let Some(sym) = key.as_symbol() else {
+            return bad_argument("Install*");
+        };
+        let d = match self.heap.symbol_description(sym).as_string() {
+            Some(d) => self.heap.str_to_string(d),
+            None => String::new(),
+        };
+        let name = self.heap.alloc_str(&format!("[{d}]"))?;
+        Ok((self.heap.symbol_atom(sym), Value::string(name)))
     }
 
     /// Flags an installed prelude function; non-constructors lose the `prototype` that
@@ -591,14 +845,13 @@ impl Exec<'_> {
         f: Value,
         is_setter: Value,
     ) -> Result<(), Fault> {
-        let (Some(t), Some(k), Some(fo)) = (target.as_string(), key.as_string(), f.as_object())
-        else {
+        let (Some(t), Some(fo)) = (target.as_string(), f.as_object()) else {
             return bad_argument("InstallAccessor");
         };
         let path = self.heap.str_to_string(t);
         let holder = self.resolve_path(&path)?;
         let setter = is_setter.as_bool() == Some(true);
-        let atom = self.heap.intern(k)?;
+        let (atom, key_name) = self.install_key(key)?;
         let d = PropertyDescriptor {
             get: (!setter).then_some(f),
             set: setter.then_some(f),
@@ -607,11 +860,8 @@ impl Exec<'_> {
             ..Default::default()
         };
         self.heap.define_own_property(holder, atom, &d)?;
-        let name = format!(
-            "{} {}",
-            if setter { "set" } else { "get" },
-            self.heap.str_to_string(k)
-        );
+        let key_name = self.heap.str_to_string(key_name.as_string().expect("name"));
+        let name = format!("{} {key_name}", if setter { "set" } else { "get" });
         let name = Value::string(self.heap.alloc_str(&name)?);
         self.name_and_length(fo, name, if setter { 1.0 } else { 0.0 })?;
         self.mark_builtin(fo, OBJ_BUILTIN);

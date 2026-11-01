@@ -43,8 +43,11 @@ pub enum Callee {
 /// How a builtin is installed (D1172, D1310).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InstallKind {
-    /// `@builtin`: a method (writable, configurable, not enumerable).
-    Method,
+    /// `@builtin`: a method (writable, configurable, not enumerable, unless
+    /// `@attributes` says otherwise).
+    Method {
+        attrs: Option<u32>,
+    },
     /// `@constructor Name` (+ `@extends Parent`): a global constructor with its
     /// prototype object.
     Constructor {
@@ -84,11 +87,13 @@ impl Install {
     pub fn label(&self) -> String {
         let path = if self.on_global() {
             self.key.clone()
+        } else if self.key.starts_with('[') {
+            format!("{}{}", self.target, self.key)
         } else {
             format!("{}.{}", self.target, self.key)
         };
         match self.kind {
-            InstallKind::Method => path,
+            InstallKind::Method { .. } => path,
             InstallKind::Constructor { .. } => format!("constructor {path}"),
             InstallKind::Getter => format!("get {path}"),
             InstallKind::Setter => format!("set {path}"),
@@ -253,20 +258,35 @@ pub fn check(decls: Declarations, modules: Vec<Module>) -> Result<Program, Vec<D
     }
 }
 
-/// Splits `A.b.c` into (`A.b`, `c`); a bare name `X` is (`globalThis`, `X`).
+/// Splits `A.b.c` into (`A.b`, `c`); a bare name `X` is (`globalThis`, `X`). The last
+/// component may be a well-known symbol: `A.prototype[Symbol.iterator]` gives the key
+/// `[Symbol.iterator]`.
 fn split_path(path: &str) -> Option<(String, String)> {
-    let ok = path.split('.').all(|s| {
+    let ident = |s: &str| {
         !s.is_empty()
             && s.chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
-    });
-    if !ok {
+    };
+    if let Some(open) = path.find('[') {
+        let (target, key) = path.split_at(open);
+        let name = key.strip_prefix("[Symbol.")?.strip_suffix(']')?;
+        if !ident(name) || !target.split('.').all(ident) {
+            return None;
+        }
+        return Some((target.into(), key.into()));
+    }
+    if !path.split('.').all(ident) {
         return None;
     }
     Some(match path.rsplit_once('.') {
         Some((t, k)) => (t.into(), k.into()),
         None => ("globalThis".into(), path.into()),
     })
+}
+
+/// The well-known symbol name of a `[Symbol.name]` key.
+pub fn symbol_key(key: &str) -> Option<&str> {
+    key.strip_prefix("[Symbol.")?.strip_suffix(']')
 }
 
 fn builtin_info(
@@ -289,7 +309,7 @@ fn builtin_info(
     let mut err = |msg: String| errors.push(Diagnostic::new(f.name_span, msg));
     for t in &f.tags {
         let kind = match t.name.as_str() {
-            "builtin" => Some(InstallKind::Method),
+            "builtin" => Some(InstallKind::Method { attrs: None }),
             "constructor" => Some(InstallKind::Constructor { parent: None }),
             "getter" => Some(InstallKind::Getter),
             "setter" => Some(InstallKind::Setter),
@@ -304,7 +324,9 @@ fn builtin_info(
                 ));
                 continue;
             };
-            if matches!(kind, InstallKind::Constructor { .. }) && target != "globalThis" {
+            if matches!(kind, InstallKind::Constructor { .. })
+                && (target != "globalThis" || symbol_key(&key).is_some())
+            {
                 err(format!(
                     "`@constructor {}`: constructors are globals; use a plain name",
                     t.value
@@ -334,9 +356,12 @@ fn builtin_info(
                         "writable" => 1,
                         "enumerable" => 2,
                         "configurable" => 4,
+                        // Explicitly none (for `@builtin`, whose default is
+                        // writable configurable).
+                        "none" => 0,
                         _ => {
                             err(format!(
-                                "`@attributes`: unknown attribute `{w}` (writable, enumerable, configurable)"
+                                "`@attributes`: unknown attribute `{w}` (writable, enumerable, configurable, none)"
                             ));
                             0
                         }
@@ -370,8 +395,9 @@ fn builtin_info(
     if parent.is_some() && ctors == 0 {
         err("`@extends` needs `@constructor`".into());
     }
-    if attrs.is_some() && values == 0 {
-        err("`@attributes` needs `@value`".into());
+    let methods = kinds(|k| matches!(k, InstallKind::Method { .. }));
+    if attrs.is_some() && values == 0 && methods == 0 {
+        err("`@attributes` needs `@value` or `@builtin`".into());
     }
     if length.is_some() && (b.installs.is_empty() || values > 0) {
         err("`@length` needs `@builtin`, `@constructor`, `@getter` or `@setter`".into());
@@ -390,6 +416,7 @@ fn builtin_info(
         match &mut i.kind {
             InstallKind::Constructor { parent: p } => *p = parent.clone(),
             InstallKind::Value { attrs: a } => *a = attrs.unwrap_or(0),
+            InstallKind::Method { attrs: a } => *a = attrs,
             _ => {}
         }
     }

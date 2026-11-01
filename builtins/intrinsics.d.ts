@@ -160,12 +160,41 @@ declare function OwnPropertyAttributes(o: Obj, key: Value): i32;
  */
 declare function OwnPropertyKeys(o: Obj, kind: i32): Obj;
 
+/** [[GetPrototypeOf]] ( ): an object or null. @leaf */
+declare function GetPrototypeOf(o: Obj): Value;
+/** [[SetPrototypeOf]] ( V ) with an object or null: false if refused. @leaf */
+declare function SetPrototypeOf(o: Obj, proto: Value): boolean;
+/** [[PreventExtensions]] ( ). @leaf */
+declare function PreventExtensions(o: Obj): boolean;
+/** [[IsExtensible]] ( ). @leaf */
+declare function IsExtensible(o: Obj): boolean;
+/** SetIntegrityLevel ( O, level ): sealed, or frozen if `frozen`. @leaf */
+declare function SetIntegrityLevel(o: Obj, frozen: boolean): boolean;
+/** TestIntegrityLevel ( O, level ): sealed, or frozen if `frozen`. @leaf */
+declare function TestIntegrityLevel(o: Obj, frozen: boolean): boolean;
+/** SameValue ( x, y ). @leaf */
+declare function SameValue(x: Value, y: Value): boolean;
+/**
+ * The builtinTag of Object.prototype.toString: Array, Arguments, Function, Error,
+ * Boolean, Number, String, Date, RegExp, else Object. @leaf
+ */
+declare function ObjectClassTag(o: Obj): Str;
+/** A Boolean, Number, String or Symbol wrapper of the primitive v with prototype proto. @leaf */
+declare function WrapPrimitive(v: Value, proto: Obj): Obj;
+/**
+ * The primitive of a wrapper object ([[BooleanData]] and so on), a primitive itself,
+ * or undefined for other objects. @leaf
+ */
+declare function PrimitiveValue(v: Value): Value;
+
 // ---- Functions (0031) -----------------------------------------------------------------
 
 /** Call ( F, V, args ) with the arguments in a dense array. @reentrant */
 declare function CallWithArray(f: Value, thisArg: Value, args: Obj): Value;
 /** BoundFunctionCreate ( target, boundThis, boundArgs ), without name and length. @leaf */
 declare function BoundFunctionCreate(target: Fn, boundThis: Value, args: Obj): Obj;
+/** [[BoundTargetFunction]] of a bound function, or undefined for anything else. @leaf */
+declare function BoundTargetFunction(f: Value): Value;
 /** The source text of a function (natives: `function name() { [native code] }`). @leaf */
 declare function FunctionToString(f: Value): Str;
 
@@ -175,15 +204,110 @@ declare function FunctionToString(f: Value): Str;
 declare function NumberPow(base: f64, exponent: f64): f64;
 /** SymbolDescriptiveString ( sym ): `Symbol(description)`. @leaf */
 declare function SymbolDescriptiveString(s: Sym): Str;
+/** A new symbol; the description is a string or undefined. @leaf */
+declare function NewSymbol(description: Value): Sym;
+/** [[Description]] of a symbol: a string or undefined. @leaf */
+declare function SymbolDescription(s: Sym): Value;
+/** Symbol.for's GlobalSymbolRegistry lookup or insertion. @leaf */
+declare function SymbolFor(key: Str): Sym;
+/** Symbol.keyFor's registry lookup: the key, or undefined. @leaf */
+declare function SymbolKeyFor(s: Sym): Value;
+/**
+ * Number::toString ( x, radix ) for an integral radix (RangeError outside 2..36),
+ * Number.prototype.toString. @leaf
+ */
+declare function NumberToString(x: f64, radix: f64): Str;
+/** Number.prototype.toFixed after ToIntegerOrInfinity(fractionDigits). @leaf */
+declare function NumberToFixed(x: f64, digits: f64): Str;
+/** Number.prototype.toExponential; digits is undefined or an integral Number. @leaf */
+declare function NumberToExponential(x: f64, digits: Value): Str;
+/** Number.prototype.toPrecision; precision is undefined or an integral Number. @leaf */
+declare function NumberToPrecision(x: f64, precision: Value): Str;
+/** The global parseFloat after ToString. @leaf */
+declare function StringParseFloat(s: Str): f64;
+/** The global parseInt after ToString; radix is ToInt32(radix). @leaf */
+declare function StringParseInt(s: Str, radix: i32): f64;
+/** ToInt32 of a number. @leaf */
+declare function NumberToInt32(n: f64): i32;
+/** ToUint32 of a number, as an f64. @leaf */
+declare function NumberToUint32(n: f64): f64;
+
+// ---- Math (0031): the libm functions (D1150) ---------------------------------------------
+
+/** @leaf */
+declare function F64Abs(x: f64): f64;
+/** @leaf */
+declare function F64Acos(x: f64): f64;
+/** @leaf */
+declare function F64Acosh(x: f64): f64;
+/** @leaf */
+declare function F64Asin(x: f64): f64;
+/** @leaf */
+declare function F64Asinh(x: f64): f64;
+/** @leaf */
+declare function F64Atan(x: f64): f64;
+/** @leaf */
+declare function F64Atanh(x: f64): f64;
+/** @leaf */
+declare function F64Atan2(y: f64, x: f64): f64;
+/** @leaf */
+declare function F64Cbrt(x: f64): f64;
+/** @leaf */
+declare function F64Hypot(x: f64, y: f64): f64;
+/** @leaf */
+declare function F64Ceil(x: f64): f64;
+/** Math.clz32 of a number (ToUint32 inside). @leaf */
+declare function F64Clz32(x: f64): f64;
+/** @leaf */
+declare function F64Cos(x: f64): f64;
+/** @leaf */
+declare function F64Cosh(x: f64): f64;
+/** @leaf */
+declare function F64Exp(x: f64): f64;
+/** @leaf */
+declare function F64Expm1(x: f64): f64;
+/** @leaf */
+declare function F64Floor(x: f64): f64;
+/** Rounds to the nearest f32. @leaf */
+declare function F64Fround(x: f64): f64;
+/** Math.imul of two numbers (ToUint32 inside). @leaf */
+declare function F64Imul(a: f64, b: f64): f64;
+/** @leaf */
+declare function F64Log(x: f64): f64;
+/** @leaf */
+declare function F64Log1p(x: f64): f64;
+/** @leaf */
+declare function F64Log10(x: f64): f64;
+/** @leaf */
+declare function F64Log2(x: f64): f64;
+/** Math.round: half up, -0 kept. @leaf */
+declare function F64Round(x: f64): f64;
+/** @leaf */
+declare function F64Sign(x: f64): f64;
+/** @leaf */
+declare function F64Sin(x: f64): f64;
+/** @leaf */
+declare function F64Sinh(x: f64): f64;
+/** @leaf */
+declare function F64Sqrt(x: f64): f64;
+/** @leaf */
+declare function F64Tan(x: f64): f64;
+/** @leaf */
+declare function F64Tanh(x: f64): f64;
+/** @leaf */
+declare function F64Trunc(x: f64): f64;
+/** The next number in [0, 1) of the realm's generator (xorshift128+, seeded by the host). @leaf */
+declare function MathRandom(): f64;
 
 // ---- Used by the generated code (crates/djs-bgen/src/emit_js.rs) ------------------------
 
 /**
  * Defines f as a method of the object at the dotted path `target` (from the global
- * object): writable, configurable, not enumerable, with `name` = key and `length`.
+ * object): writable, configurable, not enumerable, with `name` = key and `length`. The
+ * key is a string or a symbol (`[Symbol.iterator]` paths).
  * @leaf
  */
-declare function InstallMethod(target: Str, key: Str, f: Value, length: u32): void;
+declare function InstallMethod(target: Str, key: Value, f: Value, length: u32): void;
 /**
  * `@constructor`: defines f as the global constructor `key` (writable, configurable, not
  * enumerable) with its prototype object: the realm's intrinsic prototype for that name
@@ -194,8 +318,8 @@ declare function InstallMethod(target: Str, key: Str, f: Value, length: u32): vo
  */
 declare function InstallConstructor(target: Str, key: Str, f: Value, length: u32, parent: Value): void;
 /** `@getter`/`@setter`: one half of an accessor (configurable, not enumerable). @leaf */
-declare function InstallAccessor(target: Str, key: Str, f: Value, isSetter: boolean): void;
+declare function InstallAccessor(target: Str, key: Value, f: Value, isSetter: boolean): void;
 /** `@value`: a data property with `attrs` (writable 1, enumerable 2, configurable 4). @leaf */
-declare function InstallValue(target: Str, key: Str, v: Value, attrs: i32): void;
+declare function InstallValue(target: Str, key: Value, v: Value, attrs: i32): void;
 /** Registers f so that privileged code can call it as %name(...). @leaf */
 declare function InstallIntrinsic(name: Str, f: Value): void;

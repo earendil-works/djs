@@ -6,4 +6,5 @@
 //! `call_intrinsic` to them.
 
 pub(crate) mod function;
+pub(crate) mod number;
 pub(crate) mod object;

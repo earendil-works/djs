@@ -175,6 +175,34 @@ function ArrayPrototypePush(...items) {
   return len;
 }
 
+// builtins/boolean.ts:7 constructor Boolean
+function BooleanConstructor(value) {
+  const b = %ToBoolean(value);
+  if (new.target === undefined) {
+    return b;
+  }
+  return %WrapPrimitive(b, GetPrototypeFromConstructor(new.target, "BooleanPrototype"));
+}
+
+// builtins/boolean.ts:16
+function ThisBooleanValue(value) {
+  const b = %PrimitiveValue(value);
+  if (!%IsBoolean(b)) {
+    throw %NewTypeError("not a boolean");
+  }
+  return %AsBool(b);
+}
+
+// builtins/boolean.ts:28 Boolean.prototype.toString
+function BooleanPrototypeToString() {
+  return ThisBooleanValue(this) ? "true" : "false";
+}
+
+// builtins/boolean.ts:36 Boolean.prototype.valueOf
+function BooleanPrototypeValueOf() {
+  return ThisBooleanValue(this);
+}
+
 // builtins/conversion.ts:8 %ToPrimitive
 function ToPrimitive(input, hint) {
   if (!%IsObject(input)) {
@@ -431,17 +459,482 @@ function FunctionConstructor(...args) {
   throw %NewTypeError("not supported yet: the Function constructor");
 }
 
-// builtins/math.ts:8 value Math
-function MathObject() {
-  const m = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
-  %DefineDataPropertyOrThrow(m, %WellKnownSymbol("toStringTag"), "Math", 4);
-  return m;
+// builtins/function.ts:96
+function OrdinaryHasInstance(c, o) {
+  if (!%IsCallable(c)) {
+    return false;
+  }
+  const target = %BoundTargetFunction(c);
+  if (target !== undefined) {
+    return InstanceofOperator(o, target);
+  }
+  if (!%IsObject(o)) {
+    return false;
+  }
+  const p = %Get(%AsObj(c), "prototype");
+  if (!%IsObject(p)) {
+    throw %NewTypeError("operand 'prototype' property is not an object");
+  }
+  let v = %GetPrototypeOf(%AsObj(o));
+  while (v !== null) {
+    if (v === p) {
+      return true;
+    }
+    v = %GetPrototypeOf(%AsObj(v));
+  }
+  return false;
 }
 
-// builtins/math.ts:18 Math.pow
+// builtins/function.ts:122
+function InstanceofOperator(v, target) {
+  if (!%IsObject(target)) {
+    throw %NewTypeError("invalid 'instanceof' right operand");
+  }
+  const instOfHandler = GetMethod(target, %WellKnownSymbol("hasInstance"));
+  if (instOfHandler !== undefined) {
+    return %ToBoolean(%Call(instOfHandler, target, v));
+  }
+  if (!%IsCallable(target)) {
+    throw %NewTypeError("invalid 'instanceof' right operand");
+  }
+  return OrdinaryHasInstance(target, v);
+}
+
+// builtins/function.ts:141 Function.prototype[Symbol.hasInstance]
+function FunctionPrototypeHasInstance(v) {
+  return OrdinaryHasInstance(this, v);
+}
+
+// builtins/math.ts:8 value Math
+function MathObject() {
+  return %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+}
+
+// builtins/math.ts:17 value Math[Symbol.toStringTag]
+function MathToStringTag() {
+  return "Math";
+}
+
+// builtins/math.ts:25 value Math.E
+function MathE() {
+  return 2.718281828459045;
+}
+
+// builtins/math.ts:33 value Math.LN10
+function MathLN10() {
+  return 2.302585092994046;
+}
+
+// builtins/math.ts:41 value Math.LN2
+function MathLN2() {
+  return 0.6931471805599453;
+}
+
+// builtins/math.ts:49 value Math.LOG10E
+function MathLOG10E() {
+  return 0.4342944819032518;
+}
+
+// builtins/math.ts:57 value Math.LOG2E
+function MathLOG2E() {
+  return 1.4426950408889634;
+}
+
+// builtins/math.ts:65 value Math.PI
+function MathPI() {
+  return 3.141592653589793;
+}
+
+// builtins/math.ts:73 value Math.SQRT1_2
+function MathSQRT12() {
+  return 0.7071067811865476;
+}
+
+// builtins/math.ts:81 value Math.SQRT2
+function MathSQRT2() {
+  return 1.4142135623730951;
+}
+
+// builtins/math.ts:89 Math.abs
+function MathAbs(x) {
+  return %F64Abs(ToNumber(x));
+}
+
+// builtins/math.ts:97 Math.acos
+function MathAcos(x) {
+  return %F64Acos(ToNumber(x));
+}
+
+// builtins/math.ts:105 Math.acosh
+function MathAcosh(x) {
+  return %F64Acosh(ToNumber(x));
+}
+
+// builtins/math.ts:113 Math.asin
+function MathAsin(x) {
+  return %F64Asin(ToNumber(x));
+}
+
+// builtins/math.ts:121 Math.asinh
+function MathAsinh(x) {
+  return %F64Asinh(ToNumber(x));
+}
+
+// builtins/math.ts:129 Math.atan
+function MathAtan(x) {
+  return %F64Atan(ToNumber(x));
+}
+
+// builtins/math.ts:137 Math.atanh
+function MathAtanh(x) {
+  return %F64Atanh(ToNumber(x));
+}
+
+// builtins/math.ts:145 Math.cbrt
+function MathCbrt(x) {
+  return %F64Cbrt(ToNumber(x));
+}
+
+// builtins/math.ts:153 Math.ceil
+function MathCeil(x) {
+  return %F64Ceil(ToNumber(x));
+}
+
+// builtins/math.ts:161 Math.clz32
+function MathClz32(x) {
+  return %F64Clz32(ToNumber(x));
+}
+
+// builtins/math.ts:169 Math.cos
+function MathCos(x) {
+  return %F64Cos(ToNumber(x));
+}
+
+// builtins/math.ts:177 Math.cosh
+function MathCosh(x) {
+  return %F64Cosh(ToNumber(x));
+}
+
+// builtins/math.ts:185 Math.exp
+function MathExp(x) {
+  return %F64Exp(ToNumber(x));
+}
+
+// builtins/math.ts:193 Math.expm1
+function MathExpm1(x) {
+  return %F64Expm1(ToNumber(x));
+}
+
+// builtins/math.ts:201 Math.floor
+function MathFloor(x) {
+  return %F64Floor(ToNumber(x));
+}
+
+// builtins/math.ts:209 Math.fround
+function MathFround(x) {
+  return %F64Fround(ToNumber(x));
+}
+
+// builtins/math.ts:217 Math.log
+function MathLog(x) {
+  return %F64Log(ToNumber(x));
+}
+
+// builtins/math.ts:225 Math.log1p
+function MathLog1p(x) {
+  return %F64Log1p(ToNumber(x));
+}
+
+// builtins/math.ts:233 Math.log10
+function MathLog10(x) {
+  return %F64Log10(ToNumber(x));
+}
+
+// builtins/math.ts:241 Math.log2
+function MathLog2(x) {
+  return %F64Log2(ToNumber(x));
+}
+
+// builtins/math.ts:249 Math.round
+function MathRound(x) {
+  return %F64Round(ToNumber(x));
+}
+
+// builtins/math.ts:257 Math.sign
+function MathSign(x) {
+  return %F64Sign(ToNumber(x));
+}
+
+// builtins/math.ts:265 Math.sin
+function MathSin(x) {
+  return %F64Sin(ToNumber(x));
+}
+
+// builtins/math.ts:273 Math.sinh
+function MathSinh(x) {
+  return %F64Sinh(ToNumber(x));
+}
+
+// builtins/math.ts:281 Math.sqrt
+function MathSqrt(x) {
+  return %F64Sqrt(ToNumber(x));
+}
+
+// builtins/math.ts:289 Math.tan
+function MathTan(x) {
+  return %F64Tan(ToNumber(x));
+}
+
+// builtins/math.ts:297 Math.tanh
+function MathTanh(x) {
+  return %F64Tanh(ToNumber(x));
+}
+
+// builtins/math.ts:305 Math.trunc
+function MathTrunc(x) {
+  return %F64Trunc(ToNumber(x));
+}
+
+// builtins/math.ts:313 Math.atan2
+function MathAtan2(y, x) {
+  const ny = ToNumber(y);
+  return %F64Atan2(ny, ToNumber(x));
+}
+
+// builtins/math.ts:322 Math.imul
+function MathImul(x, y) {
+  const a = ToNumber(x);
+  return %F64Imul(a, ToNumber(y));
+}
+
+// builtins/math.ts:331 Math.pow
 function MathPow(base, exponent) {
   const b = ToNumber(base);
   return %NumberPow(b, ToNumber(exponent));
+}
+
+// builtins/math.ts:337
+function CoerceNumbers(args) {
+  const n = LengthOfArrayLike(args);
+  for (let i = 0; i < n; i++) {
+    const v = %Get(args, i);
+    if (!%IsNumber(v)) {
+      %CreateDataPropertyOrThrow(args, i, ToNumber(v));
+    }
+  }
+  return n;
+}
+
+// builtins/math.ts:353 Math.max
+function MathMax(...args) {
+  const n = CoerceNumbers(args);
+  let highest = -1 / 0;
+  for (let i = 0; i < n; i++) {
+    const x = %AsNumber(%Get(args, i));
+    if (x !== x) {
+      return x;
+    }
+    if (x > highest || (x === 0 && highest === 0 && 1 / x > 0)) {
+      highest = x;
+    }
+  }
+  return highest;
+}
+
+// builtins/math.ts:374 Math.min
+function MathMin(...args) {
+  const n = CoerceNumbers(args);
+  let lowest = 1 / 0;
+  for (let i = 0; i < n; i++) {
+    const x = %AsNumber(%Get(args, i));
+    if (x !== x) {
+      return x;
+    }
+    if (x < lowest || (x === 0 && lowest === 0 && 1 / x < 0)) {
+      lowest = x;
+    }
+  }
+  return lowest;
+}
+
+// builtins/math.ts:395 Math.hypot
+function MathHypot(...args) {
+  const n = CoerceNumbers(args);
+  let r = 0;
+  for (let i = 0; i < n; i++) {
+    r = %F64Hypot(r, %AsNumber(%Get(args, i)));
+  }
+  return r;
+}
+
+// builtins/math.ts:408 Math.random
+function MathRandomBuiltin() {
+  return %MathRandom();
+}
+
+// builtins/number.ts:8 constructor Number
+function NumberConstructor(...args) {
+  let n = 0;
+  if (LengthOfArrayLike(args) > 0) {
+    n = ToNumber(%Get(args, 0));
+  }
+  if (new.target === undefined) {
+    return n;
+  }
+  return %WrapPrimitive(n, GetPrototypeFromConstructor(new.target, "NumberPrototype"));
+}
+
+// builtins/number.ts:20
+function ThisNumberValue(value) {
+  const n = %PrimitiveValue(value);
+  if (!%IsNumber(n)) {
+    throw %NewTypeError("not a number");
+  }
+  return %AsNumber(n);
+}
+
+// builtins/number.ts:32 Number.prototype.toString
+function NumberPrototypeToString(radix) {
+  const x = ThisNumberValue(this);
+  let r = 10;
+  if (radix !== undefined) {
+    r = ToIntegerOrInfinity(radix);
+  }
+  return %NumberToString(x, r);
+}
+
+// builtins/number.ts:45 Number.prototype.toLocaleString
+function NumberPrototypeToLocaleString() {
+  return %NumberToString(ThisNumberValue(this), 10);
+}
+
+// builtins/number.ts:53 Number.prototype.valueOf
+function NumberPrototypeValueOf() {
+  return ThisNumberValue(this);
+}
+
+// builtins/number.ts:61 Number.prototype.toFixed
+function NumberPrototypeToFixed(fractionDigits) {
+  const x = ThisNumberValue(this);
+  return %NumberToFixed(x, ToIntegerOrInfinity(fractionDigits));
+}
+
+// builtins/number.ts:70 Number.prototype.toExponential
+function NumberPrototypeToExponential(fractionDigits) {
+  const x = ThisNumberValue(this);
+  const f = ToIntegerOrInfinity(fractionDigits);
+  if (fractionDigits === undefined) {
+    return %NumberToExponential(x, undefined);
+  }
+  return %NumberToExponential(x, f);
+}
+
+// builtins/number.ts:83 Number.prototype.toPrecision
+function NumberPrototypeToPrecision(precision) {
+  const x = ThisNumberValue(this);
+  if (precision === undefined) {
+    return %NumberToString(x, 10);
+  }
+  return %NumberToPrecision(x, ToIntegerOrInfinity(precision));
+}
+
+// builtins/number.ts:92
+function IsFiniteNumber(n) {
+  return n === n && n !== 1 / 0 && n !== -1 / 0;
+}
+
+// builtins/number.ts:100 Number.isFinite
+function NumberIsFinite(number) {
+  return %IsNumber(number) && IsFiniteNumber(%AsNumber(number));
+}
+
+// builtins/number.ts:108 Number.isInteger
+function NumberIsInteger(number) {
+  if (!%IsNumber(number)) {
+    return false;
+  }
+  const n = %AsNumber(number);
+  return IsFiniteNumber(n) && %ToIntegerOrInfinityNumber(n) === n;
+}
+
+// builtins/number.ts:120 Number.isNaN
+function NumberIsNaN(number) {
+  if (!%IsNumber(number)) {
+    return false;
+  }
+  const n = %AsNumber(number);
+  return n !== n;
+}
+
+// builtins/number.ts:132 Number.isSafeInteger
+function NumberIsSafeInteger(number) {
+  if (!NumberIsInteger(number)) {
+    return false;
+  }
+  const n = %AsNumber(number);
+  return n <= 9007199254740991 && n >= -9007199254740991;
+}
+
+// builtins/number.ts:144 value Number.EPSILON
+function NumberEpsilon() {
+  return 2.220446049250313e-16;
+}
+
+// builtins/number.ts:152 value Number.MAX_SAFE_INTEGER
+function NumberMaxSafeInteger() {
+  return 9007199254740991;
+}
+
+// builtins/number.ts:160 value Number.MAX_VALUE
+function NumberMaxValue() {
+  return 1.7976931348623157e308;
+}
+
+// builtins/number.ts:168 value Number.MIN_SAFE_INTEGER
+function NumberMinSafeInteger() {
+  return -9007199254740991;
+}
+
+// builtins/number.ts:176 value Number.MIN_VALUE
+function NumberMinValue() {
+  return 5e-324;
+}
+
+// builtins/number.ts:184 value Number.NaN
+function NumberNaN() {
+  return 0 / 0;
+}
+
+// builtins/number.ts:192 value Number.NEGATIVE_INFINITY
+function NumberNegativeInfinity() {
+  return -1 / 0;
+}
+
+// builtins/number.ts:200 value Number.POSITIVE_INFINITY
+function NumberPositiveInfinity() {
+  return 1 / 0;
+}
+
+// builtins/number.ts:209 parseFloat Number.parseFloat
+function GlobalParseFloat(string) {
+  return %StringParseFloat(ToString(string));
+}
+
+// builtins/number.ts:218 parseInt Number.parseInt
+function GlobalParseInt(string, radix) {
+  const s = ToString(string);
+  return %StringParseInt(s, %NumberToInt32(ToNumber(radix)));
+}
+
+// builtins/number.ts:227 isNaN
+function GlobalIsNaN(number) {
+  const n = ToNumber(number);
+  return n !== n;
+}
+
+// builtins/number.ts:236 isFinite
+function GlobalIsFinite(number) {
+  return IsFiniteNumber(ToNumber(number));
 }
 
 // builtins/object.ts:8 constructor Object
@@ -553,6 +1046,259 @@ function ObjectPrototypePropertyIsEnumerable(v) {
   return attrs >= 0 && (attrs & 2) !== 0;
 }
 
+// builtins/object.ts:141 Object.getPrototypeOf
+function ObjectGetPrototypeOf(o) {
+  return %GetPrototypeOf(%ToObject(o));
+}
+
+// builtins/object.ts:149 Object.setPrototypeOf
+function ObjectSetPrototypeOf(o, proto) {
+  if (o === undefined || o === null) {
+    throw %NewTypeError("cannot convert to object");
+  }
+  if (!%IsObject(proto) && proto !== null) {
+    throw %NewTypeError("not an object");
+  }
+  if (!%IsObject(o)) {
+    return o;
+  }
+  if (!%SetPrototypeOf(%AsObj(o), proto)) {
+    throw %NewTypeError("cannot set prototype");
+  }
+  return o;
+}
+
+// builtins/object.ts:169 Object.create
+function ObjectCreateBuiltin(o, properties) {
+  if (!%IsObject(o) && o !== null) {
+    throw %NewTypeError("not an object");
+  }
+  const obj = %ObjectCreate(o);
+  if (properties !== undefined) {
+    ObjectDefinePropertiesHelper(obj, properties);
+  }
+  return obj;
+}
+
+// builtins/object.ts:181
+function ObjectDefinePropertiesHelper(o, properties) {
+  const props = %ToObject(properties);
+  const keys = %OwnPropertyKeys(props, 2);
+  const n = LengthOfArrayLike(keys);
+  const descKeys = %ArrayCreate(0);
+  const descs = %ArrayCreate(0);
+  let count = 0;
+  for (let i = 0; i < n; i++) {
+    const key = %Get(keys, i);
+    const attrs = %OwnPropertyAttributes(props, key);
+    if (attrs >= 0 && (attrs & 2) !== 0) {
+      const descObj = %Get(props, key);
+      %CreateDataPropertyOrThrow(descKeys, count, key);
+      %CreateDataPropertyOrThrow(descs, count, ToPropertyDescriptor(descObj));
+      count++;
+    }
+  }
+  for (let i = 0; i < count; i++) {
+    DefinePropertyOrThrow(o, %Get(descKeys, i), %AsObj(%Get(descs, i)));
+  }
+  return o;
+}
+
+// builtins/object.ts:209 Object.defineProperties
+function ObjectDefineProperties(o, properties) {
+  if (!%IsObject(o)) {
+    throw %NewTypeError("not an object");
+  }
+  return ObjectDefinePropertiesHelper(%AsObj(o), properties);
+}
+
+// builtins/object.ts:220
+function EnumerableOwnProperties(o, kind) {
+  const keys = %OwnPropertyKeys(o, 0);
+  if (kind === 0) {
+    return %OwnPropertyKeys(o, 3);
+  }
+  const n = LengthOfArrayLike(keys);
+  const result = %ArrayCreate(0);
+  let count = 0;
+  for (let i = 0; i < n; i++) {
+    const key = %Get(keys, i);
+    const attrs = %OwnPropertyAttributes(o, key);
+    if (attrs >= 0 && (attrs & 2) !== 0) {
+      const value = %Get(o, key);
+      if (kind === 1) {
+        %CreateDataPropertyOrThrow(result, count, value);
+      } else {
+        const entry = %ArrayCreate(0);
+        %CreateDataPropertyOrThrow(entry, 0, key);
+        %CreateDataPropertyOrThrow(entry, 1, value);
+        %CreateDataPropertyOrThrow(result, count, entry);
+      }
+      count++;
+    }
+  }
+  return result;
+}
+
+// builtins/object.ts:251 Object.keys
+function ObjectKeys(o) {
+  return EnumerableOwnProperties(%ToObject(o), 0);
+}
+
+// builtins/object.ts:259 Object.values
+function ObjectValues(o) {
+  return EnumerableOwnProperties(%ToObject(o), 1);
+}
+
+// builtins/object.ts:267 Object.entries
+function ObjectEntries(o) {
+  return EnumerableOwnProperties(%ToObject(o), 2);
+}
+
+// builtins/object.ts:276 Object.assign
+function ObjectAssign(target, ...sources) {
+  const to = %ToObject(target);
+  const n = LengthOfArrayLike(sources);
+  for (let s = 0; s < n; s++) {
+    const nextSource = %Get(sources, s);
+    if (nextSource !== undefined && nextSource !== null) {
+      const from = %ToObject(nextSource);
+      const keys = %OwnPropertyKeys(from, 2);
+      const count = LengthOfArrayLike(keys);
+      for (let i = 0; i < count; i++) {
+        const key = %Get(keys, i);
+        const attrs = %OwnPropertyAttributes(from, key);
+        if (attrs >= 0 && (attrs & 2) !== 0) {
+          %Set(to, key, %Get(from, key));
+        }
+      }
+    }
+  }
+  return to;
+}
+
+// builtins/object.ts:301 Object.freeze
+function ObjectFreeze(o) {
+  if (!%IsObject(o)) {
+    return o;
+  }
+  if (!%SetIntegrityLevel(%AsObj(o), true)) {
+    throw %NewTypeError("cannot freeze");
+  }
+  return o;
+}
+
+// builtins/object.ts:315 Object.seal
+function ObjectSeal(o) {
+  if (!%IsObject(o)) {
+    return o;
+  }
+  if (!%SetIntegrityLevel(%AsObj(o), false)) {
+    throw %NewTypeError("cannot seal");
+  }
+  return o;
+}
+
+// builtins/object.ts:329 Object.preventExtensions
+function ObjectPreventExtensions(o) {
+  if (!%IsObject(o)) {
+    return o;
+  }
+  if (!%PreventExtensions(%AsObj(o))) {
+    throw %NewTypeError("cannot prevent extensions");
+  }
+  return o;
+}
+
+// builtins/object.ts:343 Object.isFrozen
+function ObjectIsFrozen(o) {
+  return !%IsObject(o) || %TestIntegrityLevel(%AsObj(o), true);
+}
+
+// builtins/object.ts:351 Object.isSealed
+function ObjectIsSealed(o) {
+  return !%IsObject(o) || %TestIntegrityLevel(%AsObj(o), false);
+}
+
+// builtins/object.ts:359 Object.isExtensible
+function ObjectIsExtensible(o) {
+  return %IsObject(o) && %IsExtensible(%AsObj(o));
+}
+
+// builtins/object.ts:367 Object.getOwnPropertySymbols
+function ObjectGetOwnPropertySymbols(o) {
+  return %OwnPropertyKeys(%ToObject(o), 1);
+}
+
+// builtins/object.ts:375 Object.getOwnPropertyDescriptors
+function ObjectGetOwnPropertyDescriptors(o) {
+  const obj = %ToObject(o);
+  const keys = %OwnPropertyKeys(obj, 2);
+  const n = LengthOfArrayLike(keys);
+  const descriptors = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
+  for (let i = 0; i < n; i++) {
+    const key = %Get(keys, i);
+    const desc = %GetOwnPropertyDescriptorObject(obj, key);
+    if (desc !== undefined) {
+      %CreateDataPropertyOrThrow(descriptors, key, desc);
+    }
+  }
+  return descriptors;
+}
+
+// builtins/object.ts:394 Object.hasOwn
+function ObjectHasOwn(o, p) {
+  const obj = %ToObject(o);
+  return %HasOwnProperty(obj, ToPropertyKey(p));
+}
+
+// builtins/object.ts:403 Object.is
+function ObjectIs(value1, value2) {
+  return %SameValue(value1, value2);
+}
+
+// builtins/object.ts:411 Object.prototype.toString
+function ObjectPrototypeToString() {
+  if (this === undefined) {
+    return "[object Undefined]";
+  }
+  if (this === null) {
+    return "[object Null]";
+  }
+  const o = %ToObject(this);
+  const tag = %Get(o, %WellKnownSymbol("toStringTag"));
+  if (%IsString(tag)) {
+    return "[object " + %AsStr(tag) + "]";
+  }
+  return "[object " + %ObjectClassTag(o) + "]";
+}
+
+// builtins/object.ts:430 Object.prototype.toLocaleString
+function ObjectPrototypeToLocaleString() {
+  return %Call(%GetV(this, "toString"), this);
+}
+
+// builtins/object.ts:438 Object.prototype.valueOf
+function ObjectPrototypeValueOf() {
+  return %ToObject(this);
+}
+
+// builtins/object.ts:446 Object.prototype.isPrototypeOf
+function ObjectPrototypeIsPrototypeOf(v) {
+  if (!%IsObject(v)) {
+    return false;
+  }
+  const o = %ToObject(this);
+  let p = %GetPrototypeOf(%AsObj(v));
+  while (p !== null) {
+    if (p === o) {
+      return true;
+    }
+    p = %GetPrototypeOf(%AsObj(p));
+  }
+  return false;
+}
+
 // builtins/string.ts:9 constructor String
 function StringConstructor(...args) {
   let s = "";
@@ -569,7 +1315,131 @@ function StringConstructor(...args) {
   return s;
 }
 
+// builtins/symbol.ts:7 constructor Symbol
+function SymbolConstructor(description) {
+  if (new.target !== undefined) {
+    throw %NewTypeError("Symbol is not a constructor");
+  }
+  if (description === undefined) {
+    return %NewSymbol(undefined);
+  }
+  return %NewSymbol(ToString(description));
+}
+
+// builtins/symbol.ts:21 Symbol.for
+function SymbolForBuiltin(key) {
+  return %SymbolFor(ToString(key));
+}
+
+// builtins/symbol.ts:29 Symbol.keyFor
+function SymbolKeyForBuiltin(sym) {
+  if (!%IsSymbol(sym)) {
+    throw %NewTypeError("not a symbol");
+  }
+  return %SymbolKeyFor(%AsSym(sym));
+}
+
+// builtins/symbol.ts:37
+function ThisSymbolValue(value) {
+  const s = %PrimitiveValue(value);
+  if (!%IsSymbol(s)) {
+    throw %NewTypeError("not a symbol");
+  }
+  return %AsSym(s);
+}
+
+// builtins/symbol.ts:49 get Symbol.prototype.description
+function SymbolPrototypeDescription() {
+  return %SymbolDescription(ThisSymbolValue(this));
+}
+
+// builtins/symbol.ts:57 Symbol.prototype.toString
+function SymbolPrototypeToString() {
+  return %SymbolDescriptiveString(ThisSymbolValue(this));
+}
+
+// builtins/symbol.ts:65 Symbol.prototype.valueOf
+function SymbolPrototypeValueOf() {
+  return ThisSymbolValue(this);
+}
+
+// builtins/symbol.ts:74 Symbol.prototype[Symbol.toPrimitive]
+function SymbolPrototypeToPrimitive(hint) {
+  return ThisSymbolValue(this);
+}
+
+// builtins/symbol.ts:83 value Symbol.prototype[Symbol.toStringTag]
+function SymbolPrototypeToStringTag() {
+  return "Symbol";
+}
+
+// builtins/symbol.ts:91 value Symbol.asyncIterator
+function SymbolAsyncIterator() {
+  return %WellKnownSymbol("asyncIterator");
+}
+
+// builtins/symbol.ts:99 value Symbol.hasInstance
+function SymbolHasInstance() {
+  return %WellKnownSymbol("hasInstance");
+}
+
+// builtins/symbol.ts:107 value Symbol.isConcatSpreadable
+function SymbolIsConcatSpreadable() {
+  return %WellKnownSymbol("isConcatSpreadable");
+}
+
+// builtins/symbol.ts:115 value Symbol.iterator
+function SymbolIterator() {
+  return %WellKnownSymbol("iterator");
+}
+
+// builtins/symbol.ts:123 value Symbol.match
+function SymbolMatch() {
+  return %WellKnownSymbol("match");
+}
+
+// builtins/symbol.ts:131 value Symbol.matchAll
+function SymbolMatchAll() {
+  return %WellKnownSymbol("matchAll");
+}
+
+// builtins/symbol.ts:139 value Symbol.replace
+function SymbolReplace() {
+  return %WellKnownSymbol("replace");
+}
+
+// builtins/symbol.ts:147 value Symbol.search
+function SymbolSearch() {
+  return %WellKnownSymbol("search");
+}
+
+// builtins/symbol.ts:155 value Symbol.species
+function SymbolSpecies() {
+  return %WellKnownSymbol("species");
+}
+
+// builtins/symbol.ts:163 value Symbol.split
+function SymbolSplit() {
+  return %WellKnownSymbol("split");
+}
+
+// builtins/symbol.ts:171 value Symbol.toPrimitive
+function SymbolToPrimitive() {
+  return %WellKnownSymbol("toPrimitive");
+}
+
+// builtins/symbol.ts:179 value Symbol.toStringTag
+function SymbolToStringTag() {
+  return %WellKnownSymbol("toStringTag");
+}
+
+// builtins/symbol.ts:187 value Symbol.unscopables
+function SymbolUnscopables() {
+  return %WellKnownSymbol("unscopables");
+}
+
 %InstallConstructor("globalThis", "Array", ArrayConstructor, 1, undefined);
+%InstallConstructor("globalThis", "Boolean", BooleanConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Error", ErrorConstructor, 1, undefined);
 %InstallConstructor("globalThis", "EvalError", EvalErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "RangeError", RangeErrorConstructor, 1, "Error");
@@ -580,8 +1450,14 @@ function StringConstructor(...args) {
 %InstallConstructor("globalThis", "InternalError", InternalErrorConstructor, 1, "Error");
 %InstallConstructor("globalThis", "Function", FunctionConstructor, 1, undefined);
 %InstallValue("globalThis", "Math", MathObject(), 5);
+%InstallConstructor("globalThis", "Number", NumberConstructor, 1, undefined);
+%InstallMethod("globalThis", "parseFloat", GlobalParseFloat, 1);
+%InstallMethod("globalThis", "parseInt", GlobalParseInt, 2);
+%InstallMethod("globalThis", "isNaN", GlobalIsNaN, 1);
+%InstallMethod("globalThis", "isFinite", GlobalIsFinite, 1);
 %InstallConstructor("globalThis", "Object", ObjectConstructor, 1, undefined);
 %InstallConstructor("globalThis", "String", StringConstructor, 1, undefined);
+%InstallConstructor("globalThis", "Symbol", SymbolConstructor, 0, undefined);
 %InstallMethod("Array.prototype", "forEach", ArrayPrototypeForEach, 1);
 %InstallMethod("Array.prototype", "map", ArrayPrototypeMap, 1);
 %InstallMethod("Array.prototype", "indexOf", ArrayPrototypeIndexOf, 1);
@@ -589,17 +1465,127 @@ function StringConstructor(...args) {
 %InstallMethod("Array.prototype", "includes", ArrayPrototypeIncludes, 1);
 %InstallMethod("Array", "isArray", ArrayIsArray, 1);
 %InstallMethod("Array.prototype", "push", ArrayPrototypePush, 1);
+%InstallMethod("Boolean.prototype", "toString", BooleanPrototypeToString, 0);
+%InstallMethod("Boolean.prototype", "valueOf", BooleanPrototypeValueOf, 0);
 %InstallMethod("Error.prototype", "toString", ErrorPrototypeToString, 0);
 %InstallMethod("Function.prototype", "call", FunctionPrototypeCall, 1);
 %InstallMethod("Function.prototype", "apply", FunctionPrototypeApply, 2);
 %InstallMethod("Function.prototype", "bind", FunctionPrototypeBind, 1);
 %InstallMethod("Function.prototype", "toString", FunctionPrototypeToString, 0);
+%InstallMethod("Function.prototype", %WellKnownSymbol("hasInstance"), FunctionPrototypeHasInstance, 1);
+%InstallValue("Function.prototype", %WellKnownSymbol("hasInstance"), FunctionPrototypeHasInstance, 0);
+%InstallValue("Math", %WellKnownSymbol("toStringTag"), MathToStringTag(), 4);
+%InstallValue("Math", "E", MathE(), 0);
+%InstallValue("Math", "LN10", MathLN10(), 0);
+%InstallValue("Math", "LN2", MathLN2(), 0);
+%InstallValue("Math", "LOG10E", MathLOG10E(), 0);
+%InstallValue("Math", "LOG2E", MathLOG2E(), 0);
+%InstallValue("Math", "PI", MathPI(), 0);
+%InstallValue("Math", "SQRT1_2", MathSQRT12(), 0);
+%InstallValue("Math", "SQRT2", MathSQRT2(), 0);
+%InstallMethod("Math", "abs", MathAbs, 1);
+%InstallMethod("Math", "acos", MathAcos, 1);
+%InstallMethod("Math", "acosh", MathAcosh, 1);
+%InstallMethod("Math", "asin", MathAsin, 1);
+%InstallMethod("Math", "asinh", MathAsinh, 1);
+%InstallMethod("Math", "atan", MathAtan, 1);
+%InstallMethod("Math", "atanh", MathAtanh, 1);
+%InstallMethod("Math", "cbrt", MathCbrt, 1);
+%InstallMethod("Math", "ceil", MathCeil, 1);
+%InstallMethod("Math", "clz32", MathClz32, 1);
+%InstallMethod("Math", "cos", MathCos, 1);
+%InstallMethod("Math", "cosh", MathCosh, 1);
+%InstallMethod("Math", "exp", MathExp, 1);
+%InstallMethod("Math", "expm1", MathExpm1, 1);
+%InstallMethod("Math", "floor", MathFloor, 1);
+%InstallMethod("Math", "fround", MathFround, 1);
+%InstallMethod("Math", "log", MathLog, 1);
+%InstallMethod("Math", "log1p", MathLog1p, 1);
+%InstallMethod("Math", "log10", MathLog10, 1);
+%InstallMethod("Math", "log2", MathLog2, 1);
+%InstallMethod("Math", "round", MathRound, 1);
+%InstallMethod("Math", "sign", MathSign, 1);
+%InstallMethod("Math", "sin", MathSin, 1);
+%InstallMethod("Math", "sinh", MathSinh, 1);
+%InstallMethod("Math", "sqrt", MathSqrt, 1);
+%InstallMethod("Math", "tan", MathTan, 1);
+%InstallMethod("Math", "tanh", MathTanh, 1);
+%InstallMethod("Math", "trunc", MathTrunc, 1);
+%InstallMethod("Math", "atan2", MathAtan2, 2);
+%InstallMethod("Math", "imul", MathImul, 2);
 %InstallMethod("Math", "pow", MathPow, 2);
+%InstallMethod("Math", "max", MathMax, 2);
+%InstallMethod("Math", "min", MathMin, 2);
+%InstallMethod("Math", "hypot", MathHypot, 2);
+%InstallMethod("Math", "random", MathRandomBuiltin, 0);
+%InstallMethod("Number.prototype", "toString", NumberPrototypeToString, 0);
+%InstallMethod("Number.prototype", "toLocaleString", NumberPrototypeToLocaleString, 0);
+%InstallMethod("Number.prototype", "valueOf", NumberPrototypeValueOf, 0);
+%InstallMethod("Number.prototype", "toFixed", NumberPrototypeToFixed, 1);
+%InstallMethod("Number.prototype", "toExponential", NumberPrototypeToExponential, 1);
+%InstallMethod("Number.prototype", "toPrecision", NumberPrototypeToPrecision, 1);
+%InstallMethod("Number", "isFinite", NumberIsFinite, 1);
+%InstallMethod("Number", "isInteger", NumberIsInteger, 1);
+%InstallMethod("Number", "isNaN", NumberIsNaN, 1);
+%InstallMethod("Number", "isSafeInteger", NumberIsSafeInteger, 1);
+%InstallValue("Number", "EPSILON", NumberEpsilon(), 0);
+%InstallValue("Number", "MAX_SAFE_INTEGER", NumberMaxSafeInteger(), 0);
+%InstallValue("Number", "MAX_VALUE", NumberMaxValue(), 0);
+%InstallValue("Number", "MIN_SAFE_INTEGER", NumberMinSafeInteger(), 0);
+%InstallValue("Number", "MIN_VALUE", NumberMinValue(), 0);
+%InstallValue("Number", "NaN", NumberNaN(), 0);
+%InstallValue("Number", "NEGATIVE_INFINITY", NumberNegativeInfinity(), 0);
+%InstallValue("Number", "POSITIVE_INFINITY", NumberPositiveInfinity(), 0);
+%InstallMethod("Number", "parseFloat", GlobalParseFloat, 1);
+%InstallMethod("Number", "parseInt", GlobalParseInt, 2);
 %InstallMethod("Object", "defineProperty", ObjectDefineProperty, 3);
 %InstallMethod("Object", "getOwnPropertyDescriptor", ObjectGetOwnPropertyDescriptor, 2);
 %InstallMethod("Object", "getOwnPropertyNames", ObjectGetOwnPropertyNames, 1);
 %InstallMethod("Object.prototype", "hasOwnProperty", ObjectPrototypeHasOwnProperty, 1);
 %InstallMethod("Object.prototype", "propertyIsEnumerable", ObjectPrototypePropertyIsEnumerable, 1);
+%InstallMethod("Object", "getPrototypeOf", ObjectGetPrototypeOf, 1);
+%InstallMethod("Object", "setPrototypeOf", ObjectSetPrototypeOf, 2);
+%InstallMethod("Object", "create", ObjectCreateBuiltin, 2);
+%InstallMethod("Object", "defineProperties", ObjectDefineProperties, 2);
+%InstallMethod("Object", "keys", ObjectKeys, 1);
+%InstallMethod("Object", "values", ObjectValues, 1);
+%InstallMethod("Object", "entries", ObjectEntries, 1);
+%InstallMethod("Object", "assign", ObjectAssign, 2);
+%InstallMethod("Object", "freeze", ObjectFreeze, 1);
+%InstallMethod("Object", "seal", ObjectSeal, 1);
+%InstallMethod("Object", "preventExtensions", ObjectPreventExtensions, 1);
+%InstallMethod("Object", "isFrozen", ObjectIsFrozen, 1);
+%InstallMethod("Object", "isSealed", ObjectIsSealed, 1);
+%InstallMethod("Object", "isExtensible", ObjectIsExtensible, 1);
+%InstallMethod("Object", "getOwnPropertySymbols", ObjectGetOwnPropertySymbols, 1);
+%InstallMethod("Object", "getOwnPropertyDescriptors", ObjectGetOwnPropertyDescriptors, 1);
+%InstallMethod("Object", "hasOwn", ObjectHasOwn, 2);
+%InstallMethod("Object", "is", ObjectIs, 2);
+%InstallMethod("Object.prototype", "toString", ObjectPrototypeToString, 0);
+%InstallMethod("Object.prototype", "toLocaleString", ObjectPrototypeToLocaleString, 0);
+%InstallMethod("Object.prototype", "valueOf", ObjectPrototypeValueOf, 0);
+%InstallMethod("Object.prototype", "isPrototypeOf", ObjectPrototypeIsPrototypeOf, 1);
+%InstallMethod("Symbol", "for", SymbolForBuiltin, 1);
+%InstallMethod("Symbol", "keyFor", SymbolKeyForBuiltin, 1);
+%InstallAccessor("Symbol.prototype", "description", SymbolPrototypeDescription, false);
+%InstallMethod("Symbol.prototype", "toString", SymbolPrototypeToString, 0);
+%InstallMethod("Symbol.prototype", "valueOf", SymbolPrototypeValueOf, 0);
+%InstallMethod("Symbol.prototype", %WellKnownSymbol("toPrimitive"), SymbolPrototypeToPrimitive, 1);
+%InstallValue("Symbol.prototype", %WellKnownSymbol("toPrimitive"), SymbolPrototypeToPrimitive, 4);
+%InstallValue("Symbol.prototype", %WellKnownSymbol("toStringTag"), SymbolPrototypeToStringTag(), 4);
+%InstallValue("Symbol", "asyncIterator", SymbolAsyncIterator(), 0);
+%InstallValue("Symbol", "hasInstance", SymbolHasInstance(), 0);
+%InstallValue("Symbol", "isConcatSpreadable", SymbolIsConcatSpreadable(), 0);
+%InstallValue("Symbol", "iterator", SymbolIterator(), 0);
+%InstallValue("Symbol", "match", SymbolMatch(), 0);
+%InstallValue("Symbol", "matchAll", SymbolMatchAll(), 0);
+%InstallValue("Symbol", "replace", SymbolReplace(), 0);
+%InstallValue("Symbol", "search", SymbolSearch(), 0);
+%InstallValue("Symbol", "species", SymbolSpecies(), 0);
+%InstallValue("Symbol", "split", SymbolSplit(), 0);
+%InstallValue("Symbol", "toPrimitive", SymbolToPrimitive(), 0);
+%InstallValue("Symbol", "toStringTag", SymbolToStringTag(), 0);
+%InstallValue("Symbol", "unscopables", SymbolUnscopables(), 0);
 %InstallIntrinsic("ToPrimitive", ToPrimitive);
 %InstallIntrinsic("ToNumber", ToNumber);
 %InstallIntrinsic("ToString", ToString);

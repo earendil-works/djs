@@ -74,10 +74,20 @@ pub fn emit(p: &Program, sources: &Sources) -> String {
 /// The installation call of `b` at `i` (D1172, D1310).
 fn install(b: &Builtin, i: &Install) -> String {
     let t = js_str(&i.target);
-    let k = js_str(&i.key);
+    let k = match crate::check::symbol_key(&i.key) {
+        Some(name) => format!("%WellKnownSymbol({})", js_str(name)),
+        None => js_str(&i.key),
+    };
     let f = &b.name;
     match &i.kind {
-        InstallKind::Method => format!("%InstallMethod({t}, {k}, {f}, {});\n", i.length),
+        InstallKind::Method { attrs: None } => {
+            format!("%InstallMethod({t}, {k}, {f}, {});\n", i.length)
+        }
+        // Other attributes: install, then redefine the property.
+        InstallKind::Method { attrs: Some(a) } => format!(
+            "%InstallMethod({t}, {k}, {f}, {});\n%InstallValue({t}, {k}, {f}, {a});\n",
+            i.length
+        ),
         InstallKind::Constructor { parent } => format!(
             "%InstallConstructor({t}, {k}, {f}, {}, {});\n",
             i.length,

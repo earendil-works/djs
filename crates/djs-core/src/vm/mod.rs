@@ -309,6 +309,13 @@ impl Vm {
     }
 
     /// A new Error object of `kind`.
+    /// Seeds `Math.random` (ARCH "Nondeterminism": the host decides). The state lives
+    /// in the heap, so a snapshot continues the same sequence; without a seed every VM
+    /// starts from the same fixed one.
+    pub fn set_random_seed(&mut self, seed: u64) {
+        crate::builtins::number::set_seed(&mut self.heap, seed);
+    }
+
     pub fn new_error(&mut self, kind: ErrorKind, message: &str) -> Result<Value, HeapError> {
         realm::new_error(&mut self.heap, kind, message)
     }

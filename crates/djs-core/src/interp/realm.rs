@@ -32,9 +32,17 @@ pub enum Intrinsic {
     EvalErrorProto,
     UriErrorProto,
     AggregateErrorProto,
+    BooleanProto,
+    NumberProto,
+    StringProto,
+    SymbolProto,
+    /// `Symbol.for`'s registry: a prototype-less object from keys to symbols.
+    SymbolRegistry,
+    /// `Math.random`'s state: an internal ValueArray of two int32 halves.
+    RandomState,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::AggregateErrorProto as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::RandomState as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -53,6 +61,10 @@ impl Intrinsic {
             "URIError" => Intrinsic::UriErrorProto,
             "AggregateError" => Intrinsic::AggregateErrorProto,
             "InternalError" => Intrinsic::InternalErrorProto,
+            "Boolean" => Intrinsic::BooleanProto,
+            "Number" => Intrinsic::NumberProto,
+            "String" => Intrinsic::StringProto,
+            "Symbol" => Intrinsic::SymbolProto,
             _ => return None,
         })
     }
@@ -173,6 +185,29 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
         define_hidden(heap, p, atoms::MESSAGE, empty)?;
         set(heap, i, Value::object(p));
     }
+    // Boolean.prototype, Number.prototype and String.prototype are wrapper objects
+    // themselves (false, +0, "").
+    for (i, class, v) in [
+        (Intrinsic::BooleanProto, ObjectClass::Boolean, Value::FALSE),
+        (Intrinsic::NumberProto, ObjectClass::Number, Value::int(0)),
+        (Intrinsic::StringProto, ObjectClass::String, empty),
+    ] {
+        let p = heap.alloc_object(class, Some(object_proto), 1)?;
+        heap.set_object_slot(p, 0, v);
+        set(heap, i, Value::object(p));
+    }
+    let string_proto = intrinsic_obj(heap, Intrinsic::StringProto);
+    let d = PropertyDescriptor::data(Value::int(0), PropFlags::NONE);
+    heap.define_own_property(string_proto, atoms::LENGTH, &d)?;
+    let symbol_proto = heap.new_object(Some(object_proto))?;
+    set(heap, Intrinsic::SymbolProto, Value::object(symbol_proto));
+    let registry = heap.new_object(None)?;
+    set(heap, Intrinsic::SymbolRegistry, Value::object(registry));
+    let random = heap.alloc_value_array(2)?;
+    heap.arena_mut()
+        .set(random, crate::heap::cells::ValueArray::LEN, 2);
+    set(heap, Intrinsic::RandomState, Value::internal(random));
+    crate::builtins::number::set_seed(heap, crate::builtins::number::DEFAULT_RANDOM_SEED);
     let global = heap.new_object(Some(object_proto))?;
     set(heap, Intrinsic::Global, Value::object(global));
     define_hidden(heap, global, atoms::GLOBAL_THIS, Value::object(global))?;
@@ -249,6 +284,52 @@ pub(crate) fn set_global_lexical(heap: &mut Heap, key: Atom, v: Value) -> Result
     };
     heap.define_own_property(lex, key, &d)?;
     Ok(())
+}
+
+/// ToObject of a primitive (`proto` None: the realm's prototype for its type): a
+/// Boolean, Number, String or Symbol wrapper. `None` for undefined and null.
+pub(crate) fn wrap_primitive(
+    heap: &mut Heap,
+    v: Value,
+    proto: Option<Obj>,
+) -> Result<Option<Obj>, HeapError> {
+    let (class, default) = match v.kind() {
+        crate::value::Kind::Bool => (ObjectClass::Boolean, Intrinsic::BooleanProto),
+        crate::value::Kind::Number => (ObjectClass::Number, Intrinsic::NumberProto),
+        crate::value::Kind::String => (ObjectClass::String, Intrinsic::StringProto),
+        crate::value::Kind::Symbol => (ObjectClass::Symbol, Intrinsic::SymbolProto),
+        _ => return Ok(None),
+    };
+    let proto = proto.unwrap_or_else(|| intrinsic_obj(heap, default));
+    let o = heap.alloc_object(class, Some(proto), 1)?;
+    heap.set_object_slot(o, 0, v);
+    if let Some(s) = v.as_string() {
+        // The String exotic object's own properties: the code units (read-only,
+        // enumerable), then `length`.
+        let len = heap.str_len(s);
+        for i in 0..len {
+            let u = heap.char_code_at(s, i).expect("index in range");
+            let c = heap.alloc_utf16(&[u])?;
+            let key = heap.atom_from_index(i)?;
+            let d = PropertyDescriptor::data(Value::string(c), PropFlags::ENUMERABLE);
+            heap.define_own_property(o, key, &d)?;
+        }
+        let d = PropertyDescriptor::data(Value::int(len as i32), PropFlags::NONE);
+        heap.define_own_property(o, atoms::LENGTH, &d)?;
+    }
+    Ok(Some(o))
+}
+
+/// The realm prototype that property lookups on a primitive go through.
+pub(crate) fn primitive_proto(heap: &Heap, v: Value) -> Option<Obj> {
+    let i = match v.kind() {
+        crate::value::Kind::Bool => Intrinsic::BooleanProto,
+        crate::value::Kind::Number => Intrinsic::NumberProto,
+        crate::value::Kind::String => Intrinsic::StringProto,
+        crate::value::Kind::Symbol => Intrinsic::SymbolProto,
+        _ => return None,
+    };
+    Some(intrinsic_obj(heap, i))
 }
 
 /// A new Error object of `kind` with `message`.

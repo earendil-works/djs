@@ -70,6 +70,13 @@ pub enum ObjectClass {
     /// A bound function exotic object: slot 0 the target function, slot 1 the bound
     /// `this`, slot 2 an Array of the bound arguments.
     BoundFunction = 7,
+    /// Primitive wrapper objects (`[[BooleanData]]`, `[[NumberData]]`,
+    /// `[[StringData]]`, `[[SymbolData]]`): slot 0 is the primitive. A String object's
+    /// `length` and index properties are ordinary own properties defined at creation.
+    Boolean = 8,
+    Number = 9,
+    String = 10,
+    Symbol = 11,
 }
 
 impl ObjectClass {
@@ -82,6 +89,10 @@ impl ObjectClass {
             4 => Some(ObjectClass::Error),
             5 => Some(ObjectClass::Arguments),
             7 => Some(ObjectClass::BoundFunction),
+            8 => Some(ObjectClass::Boolean),
+            9 => Some(ObjectClass::Number),
+            10 => Some(ObjectClass::String),
+            11 => Some(ObjectClass::Symbol),
             _ => None,
         }
     }
@@ -92,6 +103,10 @@ impl ObjectClass {
             ObjectClass::Ordinary | ObjectClass::Error | ObjectClass::Arguments => 0,
             ObjectClass::Array | ObjectClass::Function | ObjectClass::HostFunction => 1,
             ObjectClass::BoundFunction => 3,
+            ObjectClass::Boolean
+            | ObjectClass::Number
+            | ObjectClass::String
+            | ObjectClass::Symbol => 1,
         }
     }
 

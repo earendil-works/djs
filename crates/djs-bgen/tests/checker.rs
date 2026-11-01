@@ -285,6 +285,14 @@ fn rejects_control_flow_and_tags() {
         "constructors are globals",
     );
     reject(
+        "/** @builtin A.prototype[Symbol.x.y] */ function F(): void {}",
+        "dotted path",
+    );
+    reject(
+        "/** @builtin A.prototype[foo] */ function F(): void {}",
+        "dotted path",
+    );
+    reject(
         "/** @value A.b\n * @attributes writable frozen */ function F(): Value { return 1; }",
         "unknown attribute `frozen`",
     );
@@ -380,6 +388,7 @@ fn installation_forms() {
          /** @setter A.prototype.x */ function S(this: Value, v: Value): void {}\n\
          /** @value A.K\n * @attributes writable configurable */ function K(): f64 { return 1.5; }\n\
          /** @builtin globalThis.f\n * @builtin A.g */ function P(a: Value): Value { return a; }\n\
+         /** @builtin A.prototype[Symbol.iterator] */ function It(this: Value): Value { return this; }\n\
          function Q(): Value { return F2(1, 2, 3); }\n\
          function F2(a: Value, ...more: Value[]): Value { return more; }",
     )
@@ -395,6 +404,7 @@ fn installation_forms() {
         %InstallAccessor(\"A.prototype\", \"x\", G, false);\n\
         %InstallAccessor(\"A.prototype\", \"x\", S, true);\n\
         %InstallValue(\"A\", \"K\", K(), 5);\n\
-        %InstallMethod(\"A\", \"g\", P, 1);\n";
+        %InstallMethod(\"A\", \"g\", P, 1);\n\
+        %InstallMethod(\"A.prototype\", %WellKnownSymbol(\"iterator\"), It, 0);\n";
     assert!(p.contains(expected), "{p}");
 }

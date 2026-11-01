@@ -144,3 +144,53 @@ pub(crate) fn own_keys(heap: &mut Heap, o: Obj, kind: i32) -> Result<Value, Faul
         heap.new_array_from_values(Some(proto), &values)?,
     ))
 }
+
+/// SetIntegrityLevel ( O, sealed | frozen ), without proxies.
+pub(crate) fn set_integrity_level(heap: &mut Heap, o: Obj, frozen: bool) -> Result<bool, Fault> {
+    if !heap.prevent_extensions(o) {
+        return Ok(false);
+    }
+    for k in heap.own_keys(o) {
+        let accessor = heap.get_own_property(o, k).is_some_and(|p| p.is_accessor());
+        let d = PropertyDescriptor {
+            configurable: Some(false),
+            writable: (frozen && !accessor).then_some(false),
+            ..Default::default()
+        };
+        if !heap.define_own_property(o, k, &d)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+/// TestIntegrityLevel ( O, sealed | frozen ), without proxies.
+pub(crate) fn test_integrity_level(heap: &Heap, o: Obj, frozen: bool) -> bool {
+    if heap.is_extensible(o) {
+        return false;
+    }
+    heap.own_keys(o)
+        .into_iter()
+        .all(|k| match heap.get_own_property(o, k) {
+            None => true,
+            Some(p) => {
+                !p.flags().configurable()
+                    && !(frozen && matches!(p, Property::Data { flags, .. } if flags.writable()))
+            }
+        })
+}
+
+/// The builtinTag of `Object.prototype.toString`.
+pub(crate) fn class_tag(heap: &Heap, o: Obj) -> &'static str {
+    use crate::heap::ObjectClass as C;
+    match heap.object_class(o) {
+        C::Array => "Array",
+        C::Arguments => "Arguments",
+        C::Function | C::HostFunction | C::BoundFunction => "Function",
+        C::Error => "Error",
+        C::Boolean => "Boolean",
+        C::Number => "Number",
+        C::String => "String",
+        _ => "Object",
+    }
+}

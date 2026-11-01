@@ -84,14 +84,16 @@ On builtin functions (JSDoc):
 - `@builtin Array.prototype.map`: install the function as a method of the object at
   that path (writable, configurable, not enumerable; `name` is the last component).
   Repeatable (one function in several places). A bare name or `globalThis.x` installs
-  on the global object.
+  on the global object; a well-known symbol key is written
+  `Symbol.prototype[Symbol.toPrimitive]`. `@attributes` (see `@value`) overrides the
+  method attributes.
 - `@constructor Error` (+ `@extends Error` for subclasses): install a global
   constructor with its prototype object (the realm's intrinsic one if there is one).
   `new.target` is available in its body; it is `undefined` for a plain call. Other
   builtins are not constructors and have no `prototype`.
 - `@getter X.prototype.y` / `@setter X.prototype.y`: one half of an accessor
   (configurable, not enumerable).
-- `@value Math.PI` (+ `@attributes writable enumerable configurable`, default none): a
+- `@value Math.PI` (+ `@attributes writable enumerable configurable` or `none`, default none): a
   data property whose value the function (no parameters) returns once at install time.
   Namespace objects are values: `@value globalThis.Math`.
 - `@length N`: the `length` property (default: the parameters before the first

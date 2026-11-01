@@ -1631,12 +1631,27 @@ impl<'h> Exec<'h> {
                     let c = self.heap.alloc_utf16(&[u])?;
                     return Ok(Ok(Value::string(c)));
                 }
-                // String.prototype does not exist yet.
-                Ok(Ok(Value::UNDEFINED))
+                self.lookup_primitive(o, key)
             }
             Kind::Undefined | Kind::Null => self.nullish_base(o, key, "read"),
-            _ => Ok(Ok(Value::UNDEFINED)),
+            _ => self.lookup_primitive(o, key),
         }
+    }
+
+    /// `o[key]` for a primitive `o`: through its realm prototype (a getter gets the
+    /// primitive as `this`).
+    fn lookup_primitive(&mut self, o: Value, key: Atom) -> Result<Result<Value, Value>, Fault> {
+        let Some(proto) = realm::primitive_proto(self.heap, o) else {
+            return Ok(Ok(Value::UNDEFINED));
+        };
+        Ok(match self.heap.find_property(proto, key) {
+            None => Ok(Value::UNDEFINED),
+            Some((_, Property::Data { value, .. })) => Ok(value),
+            Some((_, Property::Accessor { getter, .. })) if getter.is_undefined() => {
+                Ok(Value::UNDEFINED)
+            }
+            Some((_, Property::Accessor { getter, .. })) => Err(getter),
+        })
     }
 
     /// Replaces the object at `sp - 1` with `o[key]`, calling a getter if needed. `pc` is

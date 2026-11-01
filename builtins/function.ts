@@ -91,3 +91,53 @@ function FunctionPrototypeToString(this: Value): Str {
 function FunctionConstructor(...args: Value[]): Value {
   throw NewTypeError("not supported yet: the Function constructor");
 }
+
+/** OrdinaryHasInstance ( C, O ), 7.3.22. */
+function OrdinaryHasInstance(c: Value, o: Value): boolean {
+  if (!IsCallable(c)) {
+    return false;
+  }
+  const target: Value = BoundTargetFunction(c);
+  if (target !== undefined) {
+    return InstanceofOperator(o, target);
+  }
+  if (!IsObject(o)) {
+    return false;
+  }
+  const p: Value = Get(AsObj(c), "prototype");
+  if (!IsObject(p)) {
+    throw NewTypeError("operand 'prototype' property is not an object");
+  }
+  let v: Value = GetPrototypeOf(AsObj(o));
+  while (v !== null) {
+    if (v === p) {
+      return true;
+    }
+    v = GetPrototypeOf(AsObj(v));
+  }
+  return false;
+}
+
+/** InstanceofOperator ( V, target ), 13.10.2. */
+function InstanceofOperator(v: Value, target: Value): boolean {
+  if (!IsObject(target)) {
+    throw NewTypeError("invalid 'instanceof' right operand");
+  }
+  const instOfHandler: Value = GetMethod(target, WellKnownSymbol("hasInstance"));
+  if (instOfHandler !== undefined) {
+    return ToBoolean(Call(instOfHandler, target, v));
+  }
+  if (!IsCallable(target)) {
+    throw NewTypeError("invalid 'instanceof' right operand");
+  }
+  return OrdinaryHasInstance(target, v);
+}
+
+/**
+ * Function.prototype [ %Symbol.hasInstance% ] ( V ), 20.2.3.6.
+ * @builtin Function.prototype[Symbol.hasInstance]
+ * @attributes none
+ */
+function FunctionPrototypeHasInstance(this: Value, v: Value): boolean {
+  return OrdinaryHasInstance(this, v);
+}
