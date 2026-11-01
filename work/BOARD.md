@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0017 | djs-bgen v0 (checker + JS emitter) | infra | .worktrees/0017-bgen-v0 |
 | 0011 | Regex engine core | num | .worktrees/0011-regex-engine |
-| 0012 | Native JSON (leaf) | heap | .worktrees/0012-json-leaf |
+| 0015 | P0 interpreter and embedding | heap | .worktrees/0015-p0-interpreter |
 | 0013 | Bytecode table and tools | lexer | .worktrees/0013-bytecode-table |
 
 ## Open (ready)
@@ -21,7 +21,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | depends-on |
 | --- | --- | --- |
 | 0014 | P0 compiler | 0013 |
-| 0015 | P0 interpreter and embedding | 0013 (parallel with 0014) |
 | 0016 | djs in difftest + gate | 0010, 0014, 0015 |
 | 0007 | test262 on djs + ratchet in gate | 0014, 0015, P1-8 (script mode) |
 
@@ -32,6 +31,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0001 | Workspace skeleton and process | initial commit |
 | 0003 | Lexer | e4a42c3 (agent lexer; parser follow-ups listed in the issue) |
 | 0005 | Values, arena heap, strings, atoms, objects | dc751e2 (agent heap; follow-ups in the issue) |
+| 0012 | Native JSON (leaf) | 9f437fa (agent heap; parse ~80% of node, stringify ~50%) |
 | 0010 | Differential corpus and difftest runner | c5039b3 (agent infra; 165 cases, all pass on qjs) |
 | 0008 | Compiler and bytecode design note | 977acdd (agent lexer; docs/compiler.md; D006 accepts it) |
 | 0006 | P0 umbrella | split into 0013-0016 |

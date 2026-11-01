@@ -20,7 +20,6 @@ function dump(v) {
 
 const out = [];
 function parseCase(input) {
-  if (input.includes("\t") && false) return;
   try {
     const v = JSON.parse(input);
     out.push(["parse", JSON.stringify(input), "ok", dump(v)].join("\t"));
