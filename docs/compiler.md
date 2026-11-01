@@ -297,12 +297,13 @@ Rule: the bracket is a pattern iff its matching closer is directly followed by a
 nested literal, O(n·depth) for nested data):
 
 ```rust
-struct PatternScan { end: u32, starts: Vec<u32> }  // sorted start offsets
+struct PatternScan { start: u32, end: u32, starts: Vec<u32> }  // sorted start offsets
 ```
 
-- If `tok.start < pattern_scan.end`, a previous scan covered this token: binary
-  search `starts`.
-- Otherwise scan from this bracket to its matching closer. For **every** `{`/`[`
+- If `start <= tok.start < end`, the last scan covered this token: binary search
+  `starts`. (The range check matters after a TS rewind to before the scanned
+  region.)
+- Otherwise scan from this bracket to its matching closer, replacing the memo. For **every** `{`/`[`
   closed during the scan (nested ones included), check whether the next token is
   `Assign`, and if so record its start. Sort, set `end`.
 
@@ -314,7 +315,8 @@ Cover grammar: `({a = 1})` is valid only as a pattern. The pattern decision come
 before parsing, so the literal parser simply rejects `a = 1` shorthand (`expecting
 '}'` like qjs), and the pattern parser accepts it. Duplicate `__proto__` is an error
 only in literals. `({a}) = 1` is an error (`invalid assignment left-hand side`): the
-`(` ends the scan before the `=`.
+`}` is followed by `)`, so `{a}` is a literal, and lvalue conversion (3.7) rejects the
+parenthesized literal.
 
 Binding patterns (`let {a} = o`, parameters, `catch ({a})`) need no scan: the grammar
 position says it is a pattern.
@@ -530,7 +532,7 @@ Literals and constants:
 | op | imm | stack | notes |
 | --- | --- | --- | --- |
 | `undefined` `null` `push_true` `push_false` | | → v | P0 |
-| `push_i8` / `push_i32` | `i8` / `i32` | → n | int32 Values, P0 |
+| `push_i8` / `push_i32` | `i8` / `i32` | → n | integer constants (int32 or f64 Values, whichever 0005/0006 settle on), P0 |
 | `push_const` | `u32` | → v | numbers that are not int32, strings, P0 |
 | `push_atom` | `atom` | → s | the atom's string (property names as values), P1 |
 | `object` | | → o | `{}` with Object.prototype, P1 |
@@ -564,7 +566,7 @@ Resolved variable access (P0 locals/globals, P1 the rest):
 | op | imm | stack | notes |
 | --- | --- | --- | --- |
 | `get_loc` `put_loc` `set_loc` | `u16` | → v / v → / v → v | plain locals |
-| `get_loc_chk` `put_loc_chk` `set_loc_chk` | `u16` | same | TDZ check: ReferenceError `x is not initialized` |
+| `get_loc_chk` `put_loc_chk` `set_loc_chk` | `u16` | same | TDZ check: ReferenceError `x is not initialized` (the name comes from the template's `NAMES`) |
 | `set_loc_uninit` | `u16` | | store the uninitialized marker (0005 tag 6) |
 | `get_arg` `put_arg` `set_arg` | `u16` | same | parameters in the argument area (7.1), P1 |
 | `get_box` `put_box` `set_box` (+ `_chk`) | `u16` loc | same | local slot holds a Box; access its value, P1 |
@@ -629,8 +631,9 @@ Control flow:
 | `check_ctor` | | | class constructor called without `new`: TypeError, P1 |
 | `debugger`, `nop` | | | |
 
-For-of has no dedicated loop opcodes. `next()` is ordinary ops: `dup2; swap; call 0;
-iter_check_object; dup; get_field done; jump_if_true L; get_field value`. That reuses
+For-of has no dedicated loop opcodes. Setup is `get_iterator; dup; get_field next`
+(→ `iter next`). Each step is ordinary ops: `dup2; swap; call 0; iter_check_object;
+dup; get_field done; jump_if_true L; get_field value`. That reuses
 the reentrancy of `call` and `get_field`, so nothing in for-of needs a resume state.
 An array-iterator superinstruction is a later optimization.
 
@@ -732,11 +735,11 @@ parent, so this visits children before parents (QuickJS does the same in
 
 | binding storage | get | put | init | typeof |
 | --- | --- | --- | --- | --- |
-| local | `get_loc[_chk]` | `put_loc[_chk]` | `put_loc` | `get_loc[_chk]` + `typeof` |
-| argument | `get_arg` | `put_arg` | `put_arg` | |
-| box | `get_box[_chk]` | `put_box[_chk]` | `put_box` | |
-| capture | `get_cap[_chk]` | `put_cap[_chk]` | (never) | |
-| global | `get_global` | `put_global` | `init_global_lex` | `get_global_typeof` + `typeof` |
+| local | `get_loc[_chk]` | `put_loc[_chk]` | `put_loc` | the get, then `typeof` |
+| argument | `get_arg` | `put_arg` | `put_arg` | the get, then `typeof` |
+| box | `get_box[_chk]` | `put_box[_chk]` | `put_box` | the get, then `typeof` |
+| capture | `get_cap[_chk]` | `put_cap[_chk]` | (never) | the get, then `typeof` |
+| global | `get_global` | `put_global` | `init_global_lex` | `get_global_typeof`, then `typeof` |
 | const (any storage), put/set | read as above for compound ops, then `throw_const_assign` | | | |
 
 `name_set` maps to `set_*`. For globals, `name_set` maps to `dup; put_global`.
@@ -861,6 +864,9 @@ cells! {
         SCRIPT: Ref = 52,      // Script
         SRC_START: u32 = 56,   // source span of the function (Function.prototype.toString, later)
         SRC_END: u32 = 60,
+        NAMES: Ref = 64,       // U32Array of atoms: locals, then captures (TDZ messages,
+                               // disassembler, debugger)
+        _PAD2: u32 = 68,
     };
     /// One per compiled source: name for stack traces, optionally the source text.
     Script { NAME: Ref = 8 /* Str */, SOURCE: Ref = 12 /* Str or null */ };
@@ -1124,12 +1130,15 @@ Phase 1:
 counter:                         arrow:
   enter_scope s1   ; {n}           name_get r0     ; n @ s_arrow
   push_i8 0                        inc
-  name_init r1     ; n @ s1        name_set r1     ; n
+  name_init r0     ; n @ s1        name_set r1     ; n @ s_arrow
   fclosure 0                       return
   return
-  leave_scope s1
-  return_undef
+  leave_scope s1   ; unreachable: the stack checker only walks reachable code,
+  return_undef     ; and dead-code removal is a later optimization
 ```
+
+(Name refs are numbered per function: `counter`'s `r0` and the arrow's `r0` are
+different entries.)
 
 Resolution (the arrow first): `n` is not in the arrow, so it is found in `counter`
 (captured). The arrow gets `captures = [Local(n)]`, and `n` becomes a Box in
