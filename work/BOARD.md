@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0128 | Page allocator in djs-wasm (in-place arena growth) | heap | .worktrees/heap |
-| 0127 | Size: compact image, bytecode density, containers, fast paths | perf | .worktrees/perf |
+| 0129 | pi-like hot spots (interpreter, native calls, JSON) | perf | .worktrees/perf |
 | 0126 | Size: run-length Unicode tables, panics without fmt | bloat | .worktrees/bloat |
 
 ## Open (ready)
@@ -80,6 +80,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0127 | Size: internal names out of image, natives pruned, inline threshold (D2253-D2256) | f39803d1 (agent perf; 472 -> 462 KB with 0126 Unicode, 1.612x) |
 | 0125 | GC: full first collection; aging rejected; perturbation method (D2045-D2048) | c38968ff (agent heap; strbuild peak back to 25.5 MiB) |
 | 0122 | wasm size: image ordering + codec, size gate (D2251, D2252) | 560008b9 (agent perf; 529.9 -> 509.5 KB gzip, 1.78x) |
 | 0123 | Why djs is bigger than QuickJS (research) | 36fe5b14 (agent bloat; docs/size-vs-quickjs.md: ~half Rust density, ~half the bytecode image) |
