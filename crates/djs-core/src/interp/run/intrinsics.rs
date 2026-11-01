@@ -886,11 +886,8 @@ impl Exec<'_> {
         let realm_object = |name: &str| match name {
             "%IteratorPrototype%" => Some(Intrinsic::IteratorProto),
             "%ArrayIteratorPrototype%" => Some(Intrinsic::ArrayIteratorProto),
-            "Object.prototype" => Some(Intrinsic::ObjectProto),
-            "Function.prototype" => Some(Intrinsic::FunctionProto),
-            "Array.prototype" => Some(Intrinsic::ArrayProto),
-            "Error.prototype" => Some(Intrinsic::ErrorProto),
-            _ => None,
+            // `X.prototype` of a constructor the prelude has not installed yet.
+            _ => Intrinsic::prototype_of(name.strip_suffix(".prototype")?),
         };
         let mut parts = path.split('.').peekable();
         let mut o = intrinsic_obj(self.heap, Intrinsic::Global);
