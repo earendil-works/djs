@@ -253,6 +253,9 @@ pub(super) struct FuncState {
     /// Class constructors: the hidden binding of their class's instance field
     /// initializer (compiler/class.rs).
     pub fields_atom: Atom,
+    /// Derived constructors: the epilogue label and the local its returns store the
+    /// value in (`Parser::emit_ctor_epilogue`).
+    pub ctor_return: Option<(crate::bytecode::Label, Atom)>,
     /// `async` function (or the codemode body): `await` is an operator.
     pub is_async: bool,
     /// Generator function: `yield` is an operator.
@@ -307,6 +310,7 @@ impl FuncState {
             home_var: None,
             active_var: None,
             fields_atom: Atom::NULL,
+            ctor_return: None,
             is_async: false,
             is_generator: false,
             state_var: None,

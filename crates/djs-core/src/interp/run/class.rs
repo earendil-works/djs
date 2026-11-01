@@ -81,6 +81,7 @@ impl Exec<'_> {
                 let kind = self.byte(self.pc + 1);
                 let (o, key, v) = (self.top(2), self.private_key(self.top(1)), self.top(0));
                 let obj = o.as_object().expect("private field target");
+                self.private_add_check(obj)?;
                 if self.heap.has_own_property(obj, key) {
                     return type_error(&if kind == 0 {
                         format!(
@@ -105,6 +106,7 @@ impl Exec<'_> {
                 let (o, key) = (self.top(3), self.private_key(self.top(2)));
                 let (getter, setter) = (self.top(1), self.top(0));
                 let obj = o.as_object().expect("private accessor target");
+                self.private_add_check(obj)?;
                 if self.heap.has_own_property(obj, key) {
                     return type_error("private method is already present");
                 }
@@ -311,6 +313,15 @@ impl Exec<'_> {
             "private class field '{}' does not exist",
             conv::describe_key(self.heap, key)
         ))
+    }
+
+    /// PrivateFieldAdd and PrivateMethodOrAccessorAdd: a non-extensible object takes
+    /// no new private elements (nonextensible-applies-to-private; qjs still adds them).
+    fn private_add_check(&self, obj: Obj) -> Result<(), Fault> {
+        if !self.heap.is_extensible(obj) {
+            return type_error("object is not extensible");
+        }
+        Ok(())
     }
 
     fn private_read_only<T>(&self, key: Atom) -> Result<T, Fault> {

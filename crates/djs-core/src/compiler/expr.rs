@@ -220,12 +220,16 @@ impl Parser<'_, '_> {
             })?;
             return Ok(Expr::Value);
         }
+        // `(f) = function () {}` names nothing: the target is not an identifier.
+        let parenthesized = self.is(TokenKind::LParen);
         let lhs = self.parse_conditional(no_in)?;
         let op = self.tok;
         if op.kind == TokenKind::Assign {
             let lv = self.lvalue(lhs, "invalid assignment left-hand side")?;
             self.next()?;
-            if let LValue::Name { r, .. } = lv {
+            if let LValue::Name { r, .. } = lv
+                && !parenthesized
+            {
                 // NamedEvaluation: `f = function () {}` names the function `f`.
                 self.name_hint = Some((self.f.refs[r as usize].atom, self.tok.start));
             }
@@ -1097,8 +1101,17 @@ impl Parser<'_, '_> {
                 {
                     self.name_hint = Some((a, self.tok.start));
                 }
+                let inner = self.tok.start;
                 let e = self.parse_expr(false)?;
                 self.expect(TokenKind::RParen, ")")?;
+                // A parenthesized anonymous function is still one (computed keys name
+                // it at run time).
+                if self
+                    .last_anon_fn
+                    .is_some_and(|(s, e)| s == inner && e + 1 == self.prev_end)
+                {
+                    self.last_anon_fn = Some((tok.start, self.prev_end));
+                }
                 // Parentheses keep references (`(a.b)()`, `(x) = 1`) but not
                 // literals as patterns (`({a}) = 1` is an error).
                 Ok(match e {

@@ -349,6 +349,9 @@ impl Parser<'_, '_> {
             && ident_like
         {
             let text = self.heap.atom_name(a);
+            if is_static && text == "constructor" && !is_method {
+                return syntax(self.tok.start, "invalid field name");
+            }
             if !is_static && text == "constructor" {
                 if !is_method {
                     return syntax(self.tok.start, "invalid field name");
@@ -699,6 +702,7 @@ impl Parser<'_, '_> {
         self.expect(TokenKind::LParen, "(")?;
         self.parse_params()?;
         self.parse_function_body()?;
+        self.emit_ctor_epilogue();
         self.f.src_end = self.prev_end;
         self.end_function_at(Some(b.ctor_slot))?;
         self.leave();
@@ -721,7 +725,13 @@ impl Parser<'_, '_> {
         self.f.src_start = b.start;
         self.mark(pos);
         self.code().check_ctor();
-        if !b.derived {
+        if b.derived {
+            let ret = self.heap.atom_str("<return>")?;
+            self.f
+                .add_var(ret, VarKind::Internal, super::func::BODY_SCOPE);
+            let l = self.new_label();
+            self.f.ctor_return = Some((l, ret));
+        } else {
             self.emit_this(pos);
             self.emit_init_fields(b.fields_atom, pos);
             self.code().drop();
@@ -749,6 +759,7 @@ impl Parser<'_, '_> {
             self.code().super_call_spread();
             self.emit_bind_this(pos);
             self.code().return_();
+            self.f.ctor_return = None;
         } else {
             self.code().return_undef();
         }

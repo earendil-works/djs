@@ -546,8 +546,8 @@ impl Parser<'_, '_> {
                     self.code().await_(0);
                 }
             }
-            self.emit_unwind(0, true);
-            self.emit_return_value();
+            let depth = self.emit_unwind(0, true);
+            self.emit_return_value_at(depth);
         }
         self.expect_semicolon()
     }

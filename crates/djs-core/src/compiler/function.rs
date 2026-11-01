@@ -363,18 +363,22 @@ impl Parser<'_, '_> {
 
     /// Returns the value on top of the stack (after any finally blocks ran).
     pub(super) fn emit_return_value(&mut self) {
-        if self.f.kind == FuncKind::DerivedCtor {
-            // [[Construct]] of a derived constructor: an object, or `undefined` for
-            // the (checked) `this`.
-            let l = self.new_label();
-            self.code().check_ctor_return();
-            self.code().dup();
-            self.code().is_undefined();
-            self.code().jump_if_false(l);
-            self.code().drop();
-            self.emit_this(self.prev_end);
-            self.place(l);
-            self.code().return_();
+        let depth = self.stmt_depth;
+        self.emit_return_value_at(depth);
+    }
+
+    /// [`Parser::emit_return_value`] with `depth` values under the value (what
+    /// `emit_unwind` left).
+    pub(super) fn emit_return_value_at(&mut self, depth: u32) {
+        if let Some((epilogue, ret)) = self.f.ctor_return {
+            // A derived constructor's result is checked by [[Construct]], outside any
+            // try statement of the body: the epilogue (`emit_ctor_epilogue`).
+            let r = self.name_ref(ret, self.prev_end);
+            self.code().name_put(r);
+            for _ in 0..depth {
+                self.code().drop();
+            }
+            self.code().jump(epilogue);
             return;
         }
         if self.f.is_async && !self.f.is_generator {
@@ -384,11 +388,34 @@ impl Parser<'_, '_> {
         }
     }
 
+    /// The end of a derived constructor, where its returns jump with the value in a
+    /// local: an object is the result, `undefined` means the (checked) `this`, anything
+    /// else is a TypeError.
+    pub(super) fn emit_ctor_epilogue(&mut self) {
+        let Some((epilogue, ret)) = self.f.ctor_return else {
+            return;
+        };
+        let pos = self.prev_end;
+        self.place(epilogue);
+        let r = self.name_ref(ret, pos);
+        self.code().name_get(r);
+        let l = self.new_label();
+        self.mark(pos);
+        self.code().check_ctor_return();
+        self.code().dup();
+        self.code().is_undefined();
+        self.code().jump_if_false(l);
+        self.code().drop();
+        self.emit_this(pos);
+        self.place(l);
+        self.code().return_();
+    }
+
     /// Returns `undefined`.
     pub(super) fn emit_return_undef(&mut self) {
-        if self.f.kind == FuncKind::DerivedCtor {
-            self.emit_this(self.prev_end);
-            self.code().return_();
+        if self.f.ctor_return.is_some() {
+            self.code().undefined();
+            self.emit_return_value();
             return;
         }
         if self.f.is_async && !self.f.is_generator {
