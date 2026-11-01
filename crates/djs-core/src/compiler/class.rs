@@ -248,8 +248,10 @@ impl Parser<'_, '_> {
             if self.is(TokenKind::Eof) {
                 return syntax(self.tok.start, "expecting '}'");
             }
+            let mut dec_start = None;
             if self.is(TokenKind::At) {
                 let pos = self.tok.start;
+                dec_start = Some(pos);
                 let a = self.dec_hidden(b.scope, &mut b.hidden)?;
                 self.parse_decorators()?;
                 let r = self.init_ref(a, pos);
@@ -258,8 +260,15 @@ impl Parser<'_, '_> {
             }
             // Index signatures, overloads, `declare` and `abstract` members: no code
             // (their decorators are ignored).
+            let member = self.tok.start;
             if self.ts && self.ts_skip_class_member()? {
                 b.pending = None;
+                // ts-blank-space erases them with the member.
+                if let (Some(d), Some(e)) = (dec_start, &mut self.erased)
+                    && let Some(r) = e.iter_mut().rev().find(|r| r.0 == member)
+                {
+                    r.0 = d;
+                }
                 continue;
             }
             self.parse_class_element(&mut b)?;
@@ -477,9 +486,11 @@ impl Parser<'_, '_> {
         }
         let key_tok = self.tok;
         if key_tok.kind == TokenKind::LBracket
+            && decs.is_none()
             && let (Some(i), Some(e)) = (first_modifier, &mut self.erased)
         {
-            // ts-blank-space: `private [k]` must not join the line before.
+            // ts-blank-space: `private [k]` must not join the line before (decorators
+            // separate them).
             e[i].2 = super::ts::ER_SEMI;
         }
         let key = if key_tok.kind == TokenKind::PrivateName {
