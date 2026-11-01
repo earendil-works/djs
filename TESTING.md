@@ -158,8 +158,8 @@ frontmatter_all -- --ignored` parses the frontmatter of every test in the checko
 
 `tests/corpus/**/*.{js,ts}`: each case is run by `qjs` and by djs in the codemode
 execution model (async function body, strict). The expected output is checked in next to
-the case (`case.js.expected`) and regenerated from qjs with a script. We compare stdout,
-the uncaught error (type + message) and the return value.
+the case (`case.expected`) and regenerated from qjs with a script. We compare the
+output, the uncaught error (type + message) and the return value.
 
 Sources, in order of importance:
 
@@ -171,6 +171,58 @@ Sources, in order of importance:
 
 Error message texts: we match QuickJS messages verbatim where that is cheap, and
 otherwise normalize them in the comparison (see `docs/decisions.md`).
+
+### The codemode model (D1100)
+
+A case is what the model sees from a pi codemode script, so every engine runs the same
+JS prelude (`tests/corpus/prelude.js`) first. It defines `console.*`, `text()`, `exit()`,
+`store`/`load` and fake `tools` (`echo`, `fail`) with pi's formatting. The case source is
+the body of a strict `async (tools, console) => {...}` evaluated in a global Script, as
+in pi (D008): top-level `await` and `return` work, `this` is the global object, there
+is no `arguments`. The
+transcript in `<name>.expected` is:
+
+- one entry per output item in order: `console.*` arguments joined by spaces, strings
+  as they are, errors as `Name: message` plus stack, everything else
+  `JSON.stringify` (falling back to `String()`); `text()` gives primitives as `String()`
+  and objects as JSON;
+- a status line, then its text: `=== return` and the value (a string as it is,
+  anything else compact JSON); `=== completed` if there is no value to show (undefined,
+  functions, `exit()`); or `=== throw` and the error (`Name: message` for errors,
+  `Error: <console form>` for other thrown values). A value JSON cannot serialize fails
+  the script with that TypeError, and waiting on a promise nothing can settle fails
+  with pi's "can never settle" error.
+
+Stack frame lines (`    at ...`) are dropped on both sides before comparing; stack
+formats are a separate topic. Leading comment lines can carry directives:
+`// difftest: skip-djs <reason>` (a djs non-goal, such as eval), `// difftest: ts` (a
+`.js` file parsed as TypeScript), `// difftest: fuel <n>`, `// difftest: timeout <secs>`.
+
+### How to run difftest
+
+```sh
+cargo build --release -p djs-difftest
+D=target/release/djs-difftest
+
+$D                                   # every case with qjs (the default engine)
+$D console errors/type-errors.js     # path prefixes relative to tests/corpus
+$D 'dquickts/*/test_try*'            # globs
+$D --no-diff                         # failures as one line each instead of diffs
+$D --update [filter...]              # record .expected from qjs (never from djs)
+$D --ratchet                         # exit 1 on failures not in expected-failures.txt
+$D --update-ratchet                  # rewrite tests/corpus/expected-failures.txt
+
+scripts/difftest-import-dquickts.py  # re-split the dquickts tests (then --update dquickts)
+```
+
+`--update` refuses to record timeouts and crashes. Every case must pass with qjs: it is
+the oracle, so a failure there means the case or the runner is wrong. The importer
+writes `tests/corpus/dquickts/<file>/<test>.{js,ts}`, leaves out tests that cannot work
+in the codemode model (listed with reasons in the script), turns each one-line
+`assertSyntaxError` of `test_typescript.ts` into its own parse-error case, and marks
+cases that use eval or Function with `skip-djs`. The full corpus runs in well under a
+second with qjs. `cargo test -p djs-difftest` checks the runner itself on a scratch
+corpus.
 
 ## TypeScript
 

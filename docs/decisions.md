@@ -341,3 +341,40 @@ mode matches that; dquickts' global-eval async semantics are not what pi uses.
 date: 2026-11-01 · by: coordinator · issue: 0008
 Scripts keep their source (one-byte when possible). Function templates record their span,
 and `toString` slices it. A compile flag may strip the source later if memory matters.
+
+## D1100: Difftest compares what pi's codemode shows the model
+date: 2026-11-01 · by: infra (decided with the coordinator) · issue: 0010
+Every difftest engine first runs one shared JS prelude (`tests/corpus/prelude.js`) that
+defines `console.*`, `text()`, `exit()`, `store`/`load` and fake `tools` with the
+formatting of pi's codemode prelude (pi-private `packages/codemode/src/runtime/
+prelude-source.ts`): console arguments as strings raw, Errors as name/message/stack,
+everything else `JSON.stringify` with a `String()` fallback, joined by spaces. Return
+values are serialized in the VM as pi does (a string is shown as it is, anything else as
+compact JSON, an unserializable value fails the script) and uncaught errors are shown
+the way pi's host formats them. qjs's native console.log (JS_PrintValue) is never shown
+to the model, so djs does not replicate it, and `djs run` in djs-cli may use a simple
+printer of its own. The case body is the body of a strict
+`async (tools, console) => {...}` in a global Script, as in pi (D008; ours is strict, as
+djs always is): `this` is the global object and there is no `arguments`. Stack frame lines are dropped before
+comparing for now. pi's lockdown (freezing the built-ins), its `tools` Proxy and
+`image()` are left out: they would need Proxy and regex in djs and add nothing to the
+comparison.
+
+## D1101: djs-difftest reuses djs-test262's library
+date: 2026-11-01 · by: infra · issue: 0010
+`djs-difftest` depends on the `djs-test262` crate for its parallel map, ratchet file
+handling, globs and Markdown tables instead of a third shared crate; both are std tool
+crates that change together. Anything engine-specific (the qjs driver, the transcript)
+stays in each crate.
+
+## D1102: Importing dquickts' tests
+date: 2026-11-01 · by: infra · issue: 0010
+`scripts/difftest-import-dquickts.py` generates `tests/corpus/dquickts/` (checked in,
+with QuickJS's LICENSE): one case per test function, with the helpers it references
+(transitively) and its call. Tests that cannot work in a strict codemode script (sloppy
+mode, qjs's `std`/`os` modules, module loading, stack positions of eval'd code) are
+listed in the script with reasons and not generated. Since a codemode script cannot
+call `std.evalScript`, each single-line `assertSyntaxError(src)` in
+`test_typescript.ts` becomes its own case whose source is `src` (expected: a
+SyntaxError), and other `evalTS` lines are dropped. Cases that use eval or Function get
+`// difftest: skip-djs` (a non-goal for now).

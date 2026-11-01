@@ -13,7 +13,8 @@
 //   host.output(text)        one output item (console.* or text())
 //   host.done(kind, text)    kind: "completed" (no value), "return" (the value as the
 //                            model sees it) or "throw" (the error text); called once
-// and calls api.run(fn) with the compiled case (an async function), and api.stalled()
+// and calls api.run(fn) with the compiled case (`async (tools, console) => {...}`), and
+// api.stalled()
 // once nothing is left to run.
 (function (host) {
   "use strict";
@@ -177,7 +178,8 @@
     run(fn) {
       let promise;
       try {
-        promise = fn();
+        // Like pi: the script is `async (tools, console) => {...}`.
+        promise = fn(tools, console);
       } catch (error) {
         if (error !== EXIT) done("throw", describe(error));
         return;

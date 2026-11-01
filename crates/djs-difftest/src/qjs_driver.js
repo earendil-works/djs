@@ -1,7 +1,8 @@
 // Case driver for difftest with dquickts' qjs (`qjs -m -e <this> <spec>`).
 //
 // <spec> is JSON: {"prelude": path, "case": path, "ts": bool}. The prelude is evaluated
-// as a strict Script; the case becomes the body of a strict async arrow function and is
+// as a strict Script; the case becomes the body of a strict `async (tools, console) =>`
+// arrow function (as in pi, D008) and is
 // run through the prelude's api.run(). Results are written as single lines:
 //
 //   \x01OUT <json string>             one output item
@@ -49,7 +50,7 @@ const api = setup(host);
 let fn;
 try {
   // Same line as the case's first line, so line numbers match the case file.
-  fn = evalScript('"use strict";(async () => {' + read(spec.case) + "\n})", { typescript: spec.ts });
+  fn = evalScript('"use strict";(async (tools, console) => {' + read(spec.case) + "\n})", { typescript: spec.ts });
 } catch (e) {
   api.run(() => {
     throw e;
