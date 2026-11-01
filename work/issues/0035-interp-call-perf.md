@@ -37,6 +37,41 @@ properties.
   first: propose it in the Log and ask.
 
 ## Log
+- 2026-11-01: Baseline (release, Apple M5 Max; medians of 5 interleaved runs of `djs run
+  --body`, scratch script `work/scratch/0035/bench.sh`; qjs single runs):
+
+  | bench | djs native | djs wasm (node 25) | qjs | native ratio |
+  | --- | ---: | ---: | ---: | ---: |
+  | calls.js | 253 ms | 418 ms | 47 ms | 5.4x |
+  | loop.js | 731 ms | 1216 ms | 81 ms | 9.0x |
+  | props.js | 395 ms | 853 ms | 96 ms | 4.1x |
+  | sort 200k with comparator | 1807 ms | 2897 ms | 78 ms | 23x |
+  | map 10x100k | 247 ms | 413 ms | 40 ms | 6.2x |
+
+  Instruction counts (a temporary counter, not committed): loop 153M instructions
+  (4.9 ns each), props 54M (7.3 ns), calls 39M with 2.2M calls (13.6 ns average). If a
+  plain instruction costs ~5 ns, a call/return pair costs ~150 ns. So there are two
+  problems: per-instruction dispatch (~15-20 cycles), and an expensive call path.
+
+  Profiles (`sample` native, `node --cpu-prof` on djs-wasm; self time; calls.js):
+  - native: `exec` (the op bodies) 37%, the run/step loop 17%, `load_frame` 6%, `push`
+    6%, `call` 4%, `imm_u16` 4%, `do_return` 3%, `safepoint` 3%, `imm_i32` 2%,
+    `to_number` 2%, `binary_int` 2%;
+  - wasm: `exec` 30%, `Vm::run` (the loop, inlined) 18%, `push` 6.6%, `call` 5.3%,
+    `load_frame` 4.7%, `imm_u16` 3.6%, `header_int` 3.1%, `do_return` 2.2%,
+    `binary_int` 2.2%, `ensure` 2.0%, `safepoint` 1.9%, `pop` 1.5%.
+
+  Top costs, in order:
+  1. The tiny stack and immediate helpers (`push`, `pop`, `imm_u16`, `imm_i32`,
+     `header_int`, `ensure`) are *not inlined* in either build: every push is a call.
+  2. The per-instruction overhead in `step` / `exec`: bounds checks on the code byte, the
+     opcode lookup, the `OPS` info, fuel, and `primitive_operands` (D1280's check runs a
+     match for *every* instruction).
+  3. The call path: `call` + `load_frame` + `do_return` re-derive everything from the
+     heap on every call and return (callee → slot 0 → template → CODE → `bytes_of` →
+     CONSTS, plus `object_slot`'s bounds assert computing the slot count from the cell
+     size); the header is six writes and the return reads four.
+  4. Numeric ops through `to_number` / `binary_int` instead of int32 fast paths.
 
 ## Follow-ups
 
