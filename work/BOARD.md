@@ -7,7 +7,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
-| 0132 | Initial arena room (json peak regression) | heap | .worktrees/heap |
+| 0134 | GC cost in pi-like: old-region walk, young-sized threshold | heap | .worktrees/heap |
 | 0133 | Heap dump analyzer | snapshot | .worktrees/snapshot |
 | 0129 | pi-like hot spots (interpreter, native calls, JSON) | perf | .worktrees/perf |
 
@@ -80,6 +80,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0132 | json peak regression analysed, accepted (D2054) | 0616aeab (agent heap; + pi-like GC profile: 9.1% of instructions) |
 | 0131 | Size: decomposition stream, derived compositions, message builder (D2337-D2339) | ef739b01 (agent bloat; -6.3 KB, 454.6 KB, 1.586x) |
 | 0130 | Codemode feature usage (research) | b0d92946 (agent infra; docs/codemode-feature-usage.md; no Unicode props/normalization -> 420 KB, 1.47x) |
 | 0128 | Page allocator in djs-wasm (D2053) | 0163f92b (agent heap; peak memory halved on big heaps: strbuild 38.6 -> 19.5 MiB) |
