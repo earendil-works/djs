@@ -78,6 +78,9 @@ Rules:
 - Put scratch files, logs and large outputs in `work/scratch/<issue-id>/`, which is
   gitignored. External checkouts such as test262 go in `vendor/` **of the primary checkout** (the
   repo root, not your worktree), so that all worktrees share one copy; it is gitignored.
+- Run anything that executes an engine (qjs, djs, test suites that shell out) with a
+  timeout (`timeout 600 cargo test ...`). A hung test blocks you silently: one such hang
+  cost two hours.
 - If you are blocked or an issue turns out to be much bigger than described, stop and tell
   the coordinator instead of expanding the scope on your own.
 - Stay inside the areas listed in your issue's `touches:` field. If you need to change
