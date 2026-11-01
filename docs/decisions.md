@@ -3513,3 +3513,65 @@ date: 2026-11-05 · by: lexer · issue: 0084
     Both throw an InvalidCharacterError DOMException; a missing argument is a TypeError.
   - The pi adapter's JS polyfill of atob/btoa is gone (js/pi/vm.ts).
 
+
+## D1710: GC points and raw images do not depend on the fuel slice
+date: 2026-11-03 · by: num · issue: 0071
+From 0055's G6 (P4). Before this change, a run with all its fuel at once and the same run
+cut into slices left the same heap image only after a final collection. The raw arenas
+differed, for two reasons:
+- `run` collected at its start whenever a collection was pending. When a slice ended
+  between the allocation that set `gc_pending` and the next safepoint, the collection
+  came a few instructions earlier.
+- An intrinsic that ran out of fuel mid-work (`suspend_in`: regexp exec, split and
+  replace, D1332) allocated a progress record (the matcher state, plus split's or
+  replace's progress). The record was allocated only when the slice ended inside the
+  intrinsic, and it counted toward the GC threshold and the memory cap.
+
+Now:
+- **No safepoint at the start of `run`.** A pending collection waits for the next
+  natural safepoint: a call, a return, a backward jump, or the handler of D1600.
+  Allocations by the host between runs also just set `gc_pending`. The entry call
+  (`Vm::call`) still does not collect.
+- **Suspension records are unbudgeted and freed on resume.**
+  - They are allocated between `Heap::begin_unbudgeted` and `end_unbudgeted`. The arena
+    cap is lifted for those few allocations, and `gc_pending` keeps its previous value.
+  - When the intrinsic resumes, it reads the record back and clears its state slot.
+    `Heap::release_top` then truncates the arena to the record's first cell, provided the
+    record is still the last thing allocated. The freed bytes are zeroed again, so the
+    arena is byte for byte what it would have been without the stop.
+  - If the host allocated in between, the record stays behind as garbage. Such an
+    allocation already makes the image depend on the schedule.
+  - Replace's partial output goes into a fresh string cell (`alloc_utf16`), never a
+    shared one-character string, so freeing it frees nothing else.
+  - After a restore, `gc_pending` is recomputed from the arena length, and the record
+    counts in that. The resumed intrinsic releases the record before any safepoint and
+    recomputes the flag.
+- **Edge case.** A record allocated past the cap makes the arena briefly exceed it. If
+  the host calls `Vm::collect` while the VM is suspended, the to-space (capped) can then
+  fail. Both conditions are needed at once; it is accepted.
+
+Result: raw images are identical for every e2e case and every scripts/determinism case.
+Tested at slices max/997/101/13, plus 1 for the main cases, with and without a restore
+at every stop. `crates/djs-core/tests/slices.rs` checks the 0055 cases (alloc_only,
+regexp, regexp_props, iteration_runtime) at max/997/101/1 plus a restore schedule; it
+also checks output and total fuel. An ignored test there sweeps all e2e cases. Removing
+either part of the fix makes the test fail. Cost in the wasm build: +387 bytes
+(+158 gzip).
+
+## D1711: Regexp fuel can overdraw; backreferences are charged in full
+date: 2026-11-03 · by: num · issue: 0071
+The regexp matcher's fuel is now an `i64` (`exec`, `exec_at`, `resume`). A backreference
+costs its length, and it used to be charged with `saturating_sub`. Whatever part did not
+fit in the fuel left was forgiven, so the total fuel of a backreference-heavy match
+depended on the slice size: `/(a{500})\1/` cost 4.98 M fuel at slice 997 vs 7.53 M in
+one run. Now the backreference is charged in full, and the fuel may go negative. The
+match stops at the next instruction, and `run_matcher` passes the overdraft on as
+negative `Exec::fuel`, which D1740 carries as debt.
+
+Scans (SCAN) and loops (STAR) were already additive. The character they get for free
+when they stop is paid back on resume, because the instruction is dispatched again
+there. `regexp::tests::chunked_fuel_is_additive` checks total fuel against chunk sizes
+1 to 101 for scans, loops, lazy alternation and backreferences. `tests/slices.rs`
+checks the same at the vm level, together with append-buffer, JSON and Array.from
+workloads. The wasm build of `regexp-scan` runs about 0.7% more instructions (node,
+3 runs each; within about 2x the noise).
