@@ -6,7 +6,7 @@ use djs_core::bytecode::template::func_flags;
 use djs_core::heap::cells::FuncTemplate;
 use djs_core::heap::typed::{self, Elem};
 use djs_core::heap::{Atom, Heap, ObjectClass, Property, atoms};
-use djs_core::interp::{Intrinsic, error_summary, intrinsic};
+use djs_core::interp::{Intrinsic, error_stack_slot, error_summary, intrinsic};
 use djs_core::value::{Kind, Obj, Value};
 
 /// Nested objects deeper than this print as `[Object]`, `[Array]`, ...
@@ -52,7 +52,13 @@ impl<'h> Printer<'h> {
             && self.heap.object_class(o) == ObjectClass::Error
         {
             let mut s = error_summary(self.heap, v).unwrap_or_default();
-            if let Some(stack) = self.own_string(o, atoms::STACK) {
+            // An own `stack` a script assigned, else the trace Error.prototype.stack
+            // reads (D1971).
+            let stack = self.own_string(o, atoms::STACK).or_else(|| {
+                let s = error_stack_slot(self.heap, v).as_string()?;
+                Some(self.heap.str_to_string(s))
+            });
+            if let Some(stack) = stack {
                 s.push('\n');
                 s.push_str(stack.trim_end());
             }
