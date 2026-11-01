@@ -1,7 +1,7 @@
 # 0089: pi adapter: collect before snapshot() and before caching the prelude image
 
-status: open
-agent: -
+status: in-progress
+agent: snapshot
 branch: issue/0089-pi-snapshot-collect
 depends-on: 0088
 touches: js/pi/vm.ts (+ js/pi/engine.ts if needed), js/test/, docs/host.md
