@@ -6404,6 +6404,196 @@ function CopyDataPropertiesExcluding(src, excluded) {
   return target;
 }
 
+// builtins/string-regexp.ts:7
+function RequireThisCoercible(v) {
+  if (v === undefined || v === null) {
+    throw %NewTypeError("cannot convert to object");
+  }
+}
+
+// builtins/string-regexp.ts:14
+function InvokeSymbol(v, name, arg) {
+  return %Call(%GetV(v, %WellKnownSymbol(name)), v, arg);
+}
+
+// builtins/string-regexp.ts:19
+function RequireGlobalFlag(regexp) {
+  if (IsRegExp(regexp)) {
+    const flags = %Get(regexp, "flags");
+    if (flags === undefined || flags === null) {
+      throw %NewTypeError("cannot convert to object");
+    }
+    if (%StrIndexOf(ToString(flags), "g", 0) < 0) {
+      throw %NewTypeError("regexp must have the 'g' flag");
+    }
+  }
+}
+
+// builtins/string-regexp.ts:32
+function RegExpFromPattern(pattern, flags) {
+  return %RegExpCreate(undefined, pattern === undefined ? "" : ToString(pattern), flags);
+}
+
+// builtins/string-regexp.ts:40 String.prototype.match
+function StringPrototypeMatch(regexp) {
+  RequireThisCoercible(this);
+  if (%IsObject(regexp)) {
+    const matcher = GetMethod(regexp, %WellKnownSymbol("match"));
+    if (matcher !== undefined) {
+      return %Call(matcher, regexp, this);
+    }
+  }
+  const s = ToString(this);
+  return InvokeSymbol(RegExpFromPattern(regexp, ""), "match", s);
+}
+
+// builtins/string-regexp.ts:56 String.prototype.matchAll
+function StringPrototypeMatchAll(regexp) {
+  RequireThisCoercible(this);
+  if (%IsObject(regexp)) {
+    RequireGlobalFlag(%AsObj(regexp));
+    const matcher = GetMethod(regexp, %WellKnownSymbol("matchAll"));
+    if (matcher !== undefined) {
+      return %Call(matcher, regexp, this);
+    }
+  }
+  const s = ToString(this);
+  return InvokeSymbol(RegExpFromPattern(regexp, "g"), "matchAll", s);
+}
+
+// builtins/string-regexp.ts:73 String.prototype.search
+function StringPrototypeSearch(regexp) {
+  RequireThisCoercible(this);
+  if (%IsObject(regexp)) {
+    const searcher = GetMethod(regexp, %WellKnownSymbol("search"));
+    if (searcher !== undefined) {
+      return %Call(searcher, regexp, this);
+    }
+  }
+  const s = ToString(this);
+  return InvokeSymbol(RegExpFromPattern(regexp, ""), "search", s);
+}
+
+// builtins/string-regexp.ts:86
+function StringReplacement(functionalReplace, replaceValue, replaceStr, searchString, position, string) {
+  if (functionalReplace) {
+    return ToString(%Call(replaceValue, undefined, searchString, position, string));
+  }
+  return GetSubstitution(searchString, string, position, %ArrayCreate(0), 0, undefined, replaceStr);
+}
+
+// builtins/string-regexp.ts:104 String.prototype.replace
+function StringPrototypeReplace(searchValue, replaceValue) {
+  RequireThisCoercible(this);
+  if (%IsObject(searchValue)) {
+    const replacer = GetMethod(searchValue, %WellKnownSymbol("replace"));
+    if (replacer !== undefined) {
+      return %Call(replacer, searchValue, this, replaceValue);
+    }
+  }
+  const string = ToString(this);
+  const searchString = ToString(searchValue);
+  const functionalReplace = %IsCallable(replaceValue);
+  let replaceStr = "";
+  if (!functionalReplace) {
+    replaceStr = ToString(replaceValue);
+  }
+  const position = %StrIndexOf(string, searchString, 0);
+  if (position < 0) {
+    return string;
+  }
+  const replacement = StringReplacement(functionalReplace, replaceValue, replaceStr, searchString, position, string);
+  const following = position + StrLen(searchString);
+  return %StrSubstring(string, 0, position) + replacement + %StrSubstring(string, following, StrLen(string));
+}
+
+// builtins/string-regexp.ts:139 String.prototype.replaceAll
+function StringPrototypeReplaceAll(searchValue, replaceValue) {
+  RequireThisCoercible(this);
+  if (%IsObject(searchValue)) {
+    RequireGlobalFlag(%AsObj(searchValue));
+    const replacer = GetMethod(searchValue, %WellKnownSymbol("replace"));
+    if (replacer !== undefined) {
+      return %Call(replacer, searchValue, this, replaceValue);
+    }
+  }
+  const string = ToString(this);
+  const searchString = ToString(searchValue);
+  const functionalReplace = %IsCallable(replaceValue);
+  let replaceStr = "";
+  if (!functionalReplace) {
+    replaceStr = ToString(replaceValue);
+  }
+  const searchLength = StrLen(searchString);
+  const advanceBy = searchLength > 1 ? searchLength : 1;
+  const positions = %ArrayCreate(0);
+  let count = 0;
+  let position = %StrIndexOf(string, searchString, 0);
+  while (position >= 0) {
+    %CreateDataPropertyOrThrow(positions, count, position);
+    count++;
+    position = %StrIndexOf(string, searchString, position + advanceBy);
+  }
+  let endOfLastMatch = 0;
+  let result = "";
+  for (let k = 0; k < count; k++) {
+    const p = %AsNumber(%Get(positions, k));
+    const replacement = StringReplacement(functionalReplace, replaceValue, replaceStr, searchString, p, string);
+    result += %StrSubstring(string, endOfLastMatch, p) + replacement;
+    endOfLastMatch = p + searchLength;
+  }
+  const len = StrLen(string);
+  if (endOfLastMatch < len) {
+    result += %StrSubstring(string, endOfLastMatch, len);
+  }
+  return result;
+}
+
+// builtins/string-regexp.ts:191 String.prototype.split
+function StringPrototypeSplit(separator, limit) {
+  RequireThisCoercible(this);
+  if (%IsObject(separator)) {
+    const splitter = GetMethod(separator, %WellKnownSymbol("split"));
+    if (splitter !== undefined) {
+      return %AsObj(%Call(splitter, separator, this, limit));
+    }
+  }
+  const s = ToString(this);
+  const lim = limit === undefined ? 4294967295 : %NumberToUint32(ToNumber(limit));
+  const r = ToString(separator);
+  const a = %ArrayCreate(0);
+  if (lim === 0) {
+    return a;
+  }
+  if (separator === undefined) {
+    %CreateDataPropertyOrThrow(a, 0, s);
+    return a;
+  }
+  const len = StrLen(s);
+  const separatorLength = StrLen(r);
+  if (separatorLength === 0) {
+    const n = len < lim ? len : lim;
+    for (let i = 0; i < n; i++) {
+      %CreateDataPropertyOrThrow(a, i, %StrSubstring(s, i, i + 1));
+    }
+    return a;
+  }
+  let lengthA = 0;
+  let p = 0;
+  let q = %StrIndexOf(s, r, 0);
+  while (q >= 0) {
+    %CreateDataPropertyOrThrow(a, lengthA, %StrSubstring(s, p, q));
+    lengthA++;
+    if (lengthA === lim) {
+      return a;
+    }
+    p = q + separatorLength;
+    q = %StrIndexOf(s, r, p);
+  }
+  %CreateDataPropertyOrThrow(a, lengthA, %StrSubstring(s, p, len));
+  return a;
+}
+
 // builtins/string.ts:8 constructor String
 function StringConstructor(...args) {
   let s = "";
@@ -8553,6 +8743,12 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("Set.prototype", "isSubsetOf", SetPrototypeIsSubsetOf, 1);
 %InstallMethod("Set.prototype", "isSupersetOf", SetPrototypeIsSupersetOf, 1);
 %InstallMethod("Set.prototype", "isDisjointFrom", SetPrototypeIsDisjointFrom, 1);
+%InstallMethod("String.prototype", "match", StringPrototypeMatch, 1);
+%InstallMethod("String.prototype", "matchAll", StringPrototypeMatchAll, 1);
+%InstallMethod("String.prototype", "search", StringPrototypeSearch, 1);
+%InstallMethod("String.prototype", "replace", StringPrototypeReplace, 2);
+%InstallMethod("String.prototype", "replaceAll", StringPrototypeReplaceAll, 2);
+%InstallMethod("String.prototype", "split", StringPrototypeSplit, 2);
 %InstallMethod("String.prototype", "toString", StringPrototypeToString, 0);
 %InstallMethod("String.prototype", "valueOf", StringPrototypeValueOf, 0);
 %InstallMethod("String.prototype", "at", StringPrototypeAt, 1);

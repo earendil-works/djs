@@ -1031,6 +1031,36 @@ impl Parser<'_, '_> {
         Ok(Expr::Value)
     }
 
+    /// A regular expression literal (0033): the pattern is compiled here for its early
+    /// errors (qjs reports them at the literal), and each evaluation creates a fresh
+    /// RegExp: `undefined pattern flags; call_intrinsic %RegExpCreate 3`.
+    fn parse_regex_literal(&mut self) -> PResult<Expr> {
+        let tok = self.lx.rescan_as_regex(self.tok)?;
+        let text = self.lx.text(&tok);
+        let close = text.iter().rposition(|&b| b == b'/').unwrap_or(0);
+        let utf16 = |b: &[u8]| -> alloc::vec::Vec<u16> {
+            core::str::from_utf8(b)
+                .unwrap_or("\u{FFFD}")
+                .encode_utf16()
+                .collect()
+        };
+        let pattern = utf16(&text[1..close.max(1)]);
+        let flags = utf16(&text[close + 1..]);
+        if let Err(e) = crate::builtins::regexp::compile(&pattern, &flags) {
+            return syntax(tok.start, alloc::string::String::from(e.message()));
+        }
+        self.tok = tok;
+        let p = self.string_const(&pattern)?;
+        let f = self.string_const(&flags)?;
+        self.next()?;
+        self.code().undefined();
+        self.code().push_const(p);
+        self.code().push_const(f);
+        let create = crate::bytecode::intrinsics::intrinsic_id("RegExpCreate").expect("%RegExpCreate");
+        self.code().call_intrinsic(create, 3);
+        Ok(Expr::Value)
+    }
+
     fn parse_primary(&mut self) -> PResult<Expr> {
         self.enter()?;
         let r = self.parse_primary_inner();
@@ -1061,9 +1091,7 @@ impl Parser<'_, '_> {
                 Ok(Expr::Str { idx })
             }
             TokenKind::NoSubstTemplate | TokenKind::TemplateHead => self.parse_template(),
-            TokenKind::Slash | TokenKind::SlashAssign => {
-                self.unsupported(tok.start, "regular expressions are")
-            }
+            TokenKind::Slash | TokenKind::SlashAssign => self.parse_regex_literal(),
             TokenKind::Ident if self.at_async_function() => {
                 let hint = self.take_name_hint(tok.start);
                 self.next()?;

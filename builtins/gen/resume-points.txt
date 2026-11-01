@@ -2454,6 +2454,77 @@ CopyDataPropertiesExcluding: reentrant (%CopyDataPropertiesExcluding)
   builtins/spread.ts:78:48  Get (intrinsic)
   builtins/spread.ts:78:9  CreateDataPropertyOrThrow (intrinsic)
 
+RequireThisCoercible: leaf
+
+InvokeSymbol: reentrant
+  builtins/string-regexp.ts:15:15  GetV (intrinsic)
+  builtins/string-regexp.ts:15:10  Call (intrinsic)
+
+RequireGlobalFlag: reentrant
+  builtins/string-regexp.ts:20:7  IsRegExp (builtin)
+  builtins/string-regexp.ts:21:26  Get (intrinsic)
+  builtins/string-regexp.ts:25:20  ToString (builtin)
+
+RegExpFromPattern: reentrant
+  builtins/string-regexp.ts:33:63  ToString (builtin)
+
+StringPrototypeMatch: reentrant (String.prototype.match)
+  builtins/string-regexp.ts:43:28  GetMethod (builtin)
+  builtins/string-regexp.ts:45:14  Call (intrinsic)
+  builtins/string-regexp.ts:48:18  ToString (builtin)
+  builtins/string-regexp.ts:49:23  RegExpFromPattern (builtin)
+  builtins/string-regexp.ts:49:10  InvokeSymbol (builtin)
+
+StringPrototypeMatchAll: reentrant (String.prototype.matchAll)
+  builtins/string-regexp.ts:59:5  RequireGlobalFlag (builtin)
+  builtins/string-regexp.ts:60:28  GetMethod (builtin)
+  builtins/string-regexp.ts:62:14  Call (intrinsic)
+  builtins/string-regexp.ts:65:18  ToString (builtin)
+  builtins/string-regexp.ts:66:23  RegExpFromPattern (builtin)
+  builtins/string-regexp.ts:66:10  InvokeSymbol (builtin)
+
+StringPrototypeSearch: reentrant (String.prototype.search)
+  builtins/string-regexp.ts:76:29  GetMethod (builtin)
+  builtins/string-regexp.ts:78:14  Call (intrinsic)
+  builtins/string-regexp.ts:81:18  ToString (builtin)
+  builtins/string-regexp.ts:82:23  RegExpFromPattern (builtin)
+  builtins/string-regexp.ts:82:10  InvokeSymbol (builtin)
+
+StringReplacement: reentrant
+  builtins/string-regexp.ts:95:21  Call (intrinsic)
+  builtins/string-regexp.ts:95:12  ToString (builtin)
+  builtins/string-regexp.ts:97:10  GetSubstitution (builtin)
+
+StringPrototypeReplace: reentrant (String.prototype.replace)
+  builtins/string-regexp.ts:107:29  GetMethod (builtin)
+  builtins/string-regexp.ts:109:14  Call (intrinsic)
+  builtins/string-regexp.ts:112:23  ToString (builtin)
+  builtins/string-regexp.ts:113:29  ToString (builtin)
+  builtins/string-regexp.ts:117:18  ToString (builtin)
+  builtins/string-regexp.ts:123:28  StringReplacement (builtin)
+
+StringPrototypeReplaceAll: reentrant (String.prototype.replaceAll)
+  builtins/string-regexp.ts:142:5  RequireGlobalFlag (builtin)
+  builtins/string-regexp.ts:143:29  GetMethod (builtin)
+  builtins/string-regexp.ts:145:14  Call (intrinsic)
+  builtins/string-regexp.ts:148:23  ToString (builtin)
+  builtins/string-regexp.ts:149:29  ToString (builtin)
+  builtins/string-regexp.ts:153:18  ToString (builtin)
+  builtins/string-regexp.ts:161:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/string-regexp.ts:168:29  Get (intrinsic)
+  builtins/string-regexp.ts:169:30  StringReplacement (builtin)
+
+StringPrototypeSplit: reentrant (String.prototype.split)
+  builtins/string-regexp.ts:194:29  GetMethod (builtin)
+  builtins/string-regexp.ts:196:20  Call (intrinsic)
+  builtins/string-regexp.ts:199:18  ToString (builtin)
+  builtins/string-regexp.ts:200:70  ToNumber (builtin)
+  builtins/string-regexp.ts:201:18  ToString (builtin)
+  builtins/string-regexp.ts:207:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/string-regexp.ts:215:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/string-regexp.ts:223:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/string-regexp.ts:231:3  CreateDataPropertyOrThrow (intrinsic)
+
 StringConstructor: reentrant (constructor String)
   builtins/string.ts:10:7  LengthOfArrayLike (builtin)
   builtins/string.ts:11:26  Get (intrinsic)
