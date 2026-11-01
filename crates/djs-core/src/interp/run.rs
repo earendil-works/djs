@@ -83,6 +83,8 @@ mod fast {
     pub const DEC: u8 = Op::Dec as u8;
     pub const ADD: u8 = Op::Add as u8;
     pub const SUB: u8 = Op::Sub as u8;
+    pub const MUL: u8 = Op::Mul as u8;
+    pub const DIV: u8 = Op::Div as u8;
     pub const LT: u8 = Op::Lt as u8;
     pub const LE: u8 = Op::Le as u8;
     pub const GT: u8 = Op::Gt as u8;
@@ -758,16 +760,38 @@ impl<'h> Exec<'h> {
             fast::TO_NUMERIC if self.top(0).is_number() => self.advance(Op::ToNumeric, sp0),
             fast::INC => return self.fast_inc(Op::Inc, 1, sp0),
             fast::DEC => return self.fast_inc(Op::Dec, -1, sp0),
+            // Two int32s inline; two Numbers (or an int32 overflow) in `fast_float`.
             fast::ADD => {
-                return self.fast_int(Op::Add, sp0, |x, y| x.checked_add(y).map(Value::int));
+                return self.fast_int(Op::Add, sp0, |x, y| x.checked_add(y).map(Value::int))
+                    || self.fast_float(Op::Add, sp0);
             }
             fast::SUB => {
-                return self.fast_int(Op::Sub, sp0, |x, y| x.checked_sub(y).map(Value::int));
+                return self.fast_int(Op::Sub, sp0, |x, y| x.checked_sub(y).map(Value::int))
+                    || self.fast_float(Op::Sub, sp0);
             }
-            fast::LT => return self.fast_int(Op::Lt, sp0, |x, y| Some(Value::bool(x < y))),
-            fast::LE => return self.fast_int(Op::Le, sp0, |x, y| Some(Value::bool(x <= y))),
-            fast::GT => return self.fast_int(Op::Gt, sp0, |x, y| Some(Value::bool(x > y))),
-            fast::GE => return self.fast_int(Op::Ge, sp0, |x, y| Some(Value::bool(x >= y))),
+            // An int32 product of 0 may be -0 (`-1 * 0`): the f64 path gets it right.
+            fast::MUL => {
+                return self.fast_int(Op::Mul, sp0, |x, y| {
+                    x.checked_mul(y).filter(|&r| r != 0).map(Value::int)
+                }) || self.fast_float(Op::Mul, sp0);
+            }
+            fast::DIV => return self.fast_float(Op::Div, sp0),
+            fast::LT => {
+                return self.fast_int(Op::Lt, sp0, |x, y| Some(Value::bool(x < y)))
+                    || self.fast_float(Op::Lt, sp0);
+            }
+            fast::LE => {
+                return self.fast_int(Op::Le, sp0, |x, y| Some(Value::bool(x <= y)))
+                    || self.fast_float(Op::Le, sp0);
+            }
+            fast::GT => {
+                return self.fast_int(Op::Gt, sp0, |x, y| Some(Value::bool(x > y)))
+                    || self.fast_float(Op::Gt, sp0);
+            }
+            fast::GE => {
+                return self.fast_int(Op::Ge, sp0, |x, y| Some(Value::bool(x >= y)))
+                    || self.fast_float(Op::Ge, sp0);
+            }
             fast::JUMP => self.fast_jump(Op::Jump, true),
             fast::JUMP_IF_FALSE | fast::JUMP_IF_TRUE => {
                 let Some(b) = self.top(0).as_bool() else {
@@ -840,6 +864,30 @@ impl<'h> Exec<'h> {
             return false;
         };
         let Some(v) = f(x, y) else { return false };
+        self.sp -= 1;
+        self.set(self.sp - 1, v);
+        self.advance(op, sp0);
+        true
+    }
+
+    /// The arithmetic and relational ops on two Numbers, as `binary_num` and `compare`
+    /// compute them (NaN compares false). Out of line: the int32 case stays the short one.
+    #[inline(never)]
+    fn fast_float(&mut self, op: Op, sp0: u32) -> bool {
+        let (Some(x), Some(y)) = (self.top(1).as_number(), self.top(0).as_number()) else {
+            return false;
+        };
+        let v = match op {
+            Op::Add => conv::number(x + y),
+            Op::Sub => conv::number(x - y),
+            Op::Mul => conv::number(x * y),
+            Op::Div => conv::number(x / y),
+            Op::Lt => Value::bool(x < y),
+            Op::Le => Value::bool(x <= y),
+            Op::Gt => Value::bool(x > y),
+            Op::Ge => Value::bool(x >= y),
+            _ => return false,
+        };
         self.sp -= 1;
         self.set(self.sp - 1, v);
         self.advance(op, sp0);

@@ -380,3 +380,26 @@ date	commit	machine	benchmark	value	unit
 2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/instantiate	36458	ns/op
 2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/vm_new	401	ns/op
 2026-11-01T03:16:16Z	2b377f30f0-dirty	Mac17,7-aarch64-18cpu	wasm/vm_new compiling the prelude	143833	ns/op
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/qjs/empty	2.202	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/qjs/arrays	101.6	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/qjs/calls	34.38	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/qjs/float	78.21	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/qjs/higher-order	97.24	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/qjs/json	23.93	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/qjs/loop	73.08	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/qjs/props	92.69	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/qjs/regexp	26.61	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/qjs/strings	58.78	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/djs/empty	0.005	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/djs/arrays	1421	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/djs/calls	111.9	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/djs/float	1801	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/djs/higher-order	687.4	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/djs/loop	329.0	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/djs/props	239.4	ms
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/djs÷qjs/arrays	13.99	x
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/djs÷qjs/calls	3.253	x
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/djs÷qjs/float	23.02	x
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/djs÷qjs/higher-order	7.070	x
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/djs÷qjs/loop	4.502	x
+2026-11-01T06:15:54Z	13f97c190a	Mac17,7-aarch64-18cpu	engine/djs÷qjs/props	2.582	x
