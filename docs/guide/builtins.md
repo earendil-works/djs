@@ -80,8 +80,7 @@ It reads like the spec, step by step. `LengthOfArrayLike`, `ToIntegerOrInfinity`
 `Get` may run user code. `ArraySearchDense` is a leaf (D1801): it searches the array's
 dense storage in Rust in one go when every element it looks at is a plain data element,
 and returns `-2` when it cannot answer (a hole, an accessor, an object that is not an
-Array), so the loop below it
-handles the general case.
+Array), so the loop below it handles the general case.
 
 The subset is small on purpose (builtins/README.md, D1171):
 
