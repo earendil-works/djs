@@ -1,7 +1,7 @@
 # 0082: The long tail: the remaining test262 active and difftest failures
 
-status: open
-agent: -
+status: in-progress
+agent: lexer
 branch: issue/0082-long-tail
 depends-on: 0065
 touches: crates/djs-core/src/compiler/, plus small fixes elsewhere where a cluster needs them (logged; coordinate interp/heap/builtins changes through the coordinator, since infra, heap and num are active there)
