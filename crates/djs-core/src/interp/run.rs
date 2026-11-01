@@ -595,7 +595,7 @@ impl<'h> Exec<'h> {
         match cont {
             Continuation::PushResult | Continuation::ConstructResult => self.push(p),
             Continuation::DiscardResult => {}
-            Continuation::Replace(slot) => self.set(slot, p),
+            Continuation::Replace(slot) | Continuation::Retry(slot) => self.set(slot, p),
             // `Vm::call` of an async host function: done at once (it must not run jobs,
             // which could collect); the next `run` drains the queue.
             Continuation::Entry => {
@@ -647,7 +647,7 @@ impl<'h> Exec<'h> {
             Continuation::ConstructResult => {
                 self.push(if v.as_object().is_some() { v } else { this })
             }
-            Continuation::Replace(slot) => self.set(slot, v),
+            Continuation::Replace(slot) | Continuation::Retry(slot) => self.set(slot, v),
             Continuation::Entry | Continuation::Job => unreachable!(),
         }
         self.safepoint();
@@ -801,7 +801,11 @@ impl<'h> Exec<'h> {
             self.bp = self.header_int(frame::PREV_BP);
             self.hp = self.header_int(frame::PREV_HP);
             self.load_frame();
-            key = self.call_site_key(ret_pc);
+            key = if cont.is_retry() && self.native == 0 {
+                ret_pc
+            } else {
+                self.call_site_key(ret_pc)
+            };
         }
     }
 
@@ -924,7 +928,11 @@ impl<'h> Exec<'h> {
                 break;
             }
             let ret_pc = self.get(hp + frame::RET_PC).as_int().unwrap_or(1) as u32;
-            pc = ret_pc.saturating_sub(1);
+            pc = if cont.is_retry() {
+                ret_pc
+            } else {
+                ret_pc.saturating_sub(1)
+            };
             let prev_bp = self.get(hp + frame::PREV_BP).as_int().unwrap_or(0) as u32;
             hp = self.get(hp + frame::PREV_HP).as_int().unwrap_or(0) as u32;
             bp = prev_bp;
@@ -3004,7 +3012,7 @@ impl<'h> Exec<'h> {
         self.push(v);
         self.push(hint);
         let pc = self.pc;
-        self.call(base, 2, Continuation::Replace(slot), pc)
+        self.call(base, 2, Continuation::Retry(slot), pc)
             .inspect_err(|_| self.sp = base)
     }
 
@@ -3036,7 +3044,7 @@ impl<'h> Exec<'h> {
         self.push(Value::UNDEFINED);
         self.push(v);
         let pc = self.pc;
-        self.call(base, 1, Continuation::Replace(slot), pc)
+        self.call(base, 1, Continuation::Retry(slot), pc)
             .inspect_err(|_| self.sp = base)
     }
 

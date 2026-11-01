@@ -2890,3 +2890,137 @@ fn eval_goal() {
     }
     assert!(bad.is_empty(), "\n{}", bad.join("\n"));
 }
+
+/// The opcodes of function `f` in `src` (a Script), in order (0086 peepholes).
+fn ops_of_f(src: &str) -> Vec<String> {
+    let mut heap = Heap::new().unwrap();
+    let t = compile_src(&mut heap, src).unwrap();
+    let text = disasm_template(&heap, t);
+    let body = text.split("function 0.0 f:").nth(1).expect("function f");
+    let body = body.split("\nfunction ").next().unwrap_or(body);
+    body.lines()
+        .skip(1)
+        .filter(|l| !l.trim_start().starts_with("handler"))
+        .filter_map(|l| l.split_whitespace().nth(1).map(String::from))
+        .collect()
+}
+
+#[test]
+fn peepholes() {
+    let cases: &[(&str, &[&str])] = &[
+        // Assignment statements store without keeping the value.
+        (
+            "function f(o, v) { let x; x = v; o.c = v; o[v] = 1; }",
+            &[
+                "undefined",
+                "put_loc",
+                "get_arg",
+                "put_loc",
+                "get_arg",
+                "get_arg",
+                "put_field",
+                "get_arg",
+                "get_arg",
+                "push_i8",
+                "put_elem",
+                "return_undef",
+            ],
+        ),
+        // `i++;`, `--i;` on a local; `o.x++;` without the copy of the old value.
+        (
+            "function f(o) { let i = 0; i++; --i; o.x++; }",
+            &[
+                "push_i8",
+                "put_loc",
+                "inc_loc",
+                "dec_loc",
+                "get_arg",
+                "dup",
+                "get_field",
+                "inc",
+                "put_field",
+                "return_undef",
+            ],
+        ),
+        // A rotated loop: one conditional jump per iteration.
+        (
+            "function f(n) { let s = 0; for (let i = 0; i < n; i++) s += i; return s; }",
+            &[
+                "push_i8",
+                "put_loc",
+                "push_i8",
+                "put_loc",
+                "jump",
+                "get_loc",
+                "get_loc",
+                "add",
+                "put_loc",
+                "inc_loc",
+                "get_loc",
+                "get_arg",
+                "lt",
+                "jump_if_true",
+                "get_loc",
+                "return",
+                "return_undef",
+            ],
+        ),
+        (
+            "function f(n) { while (n) n--; }",
+            &[
+                "jump",
+                "get_arg",
+                "dec",
+                "put_arg",
+                "get_arg",
+                "jump_if_true",
+                "return_undef",
+            ],
+        ),
+        // `while (true)` and `if (c) break;`
+        (
+            "function f(c) { while (true) { if (c) break; } }",
+            &["get_arg", "jump_if_true", "jump", "return_undef"],
+        ),
+        // `!`, `||` in conditions, `=== undefined`, a jump to a return.
+        (
+            "function f(a, b) { if (!a || b === undefined) return 1; return a ? 2 : 3; }",
+            &[
+                "get_arg",
+                "jump_if_false",
+                "get_arg",
+                "is_undefined",
+                "jump_if_false",
+                "push_i8",
+                "return",
+                "get_arg",
+                "jump_if_false",
+                "push_i8",
+                "return",
+                "push_i8",
+                "return",
+                "return_undef",
+            ],
+        ),
+        // A stored value used right away.
+        (
+            "function f(g) { const p = g(); return p; }",
+            &[
+                "get_arg",
+                "undefined",
+                "call",
+                "set_loc",
+                "return",
+                "return_undef",
+            ],
+        ),
+    ];
+    let mut bad = Vec::new();
+    for &(src, want) in cases {
+        let got = ops_of_f(src);
+        if got != want {
+            bad.push(alloc::format!("{src}\n  got:  {got:?}\n  want: {want:?}"));
+        }
+    }
+    assert!(bad.is_empty(), "\n{}", bad.join("\n"));
+}

@@ -50,10 +50,14 @@ pub enum Continuation {
     Entry,
     /// The bottom frame of a job (D1370): drop the value and run the next job.
     Job,
-    /// Store it in the caller's stack slot (an absolute index) and resume at `ret_pc`.
-    /// Slow paths use it to replace an operand with its primitive value and re-execute
-    /// the instruction, or to fill a placeholder (`get_method` through a getter).
+    /// Store it in the caller's stack slot (an absolute index) and resume at `ret_pc`,
+    /// after the calling instruction: fills a placeholder (`get_method` through a getter).
     Replace(u32),
+    /// `Replace`, resuming at the calling instruction itself: slow paths replace an
+    /// operand with its primitive value and re-execute the instruction. The caller's
+    /// `try` regions and line are those of `ret_pc` itself, not of `ret_pc - 1` (0086:
+    /// `inc_loc` can be the first instruction of a `try`).
+    Retry(u32),
 }
 
 /// Continuation kind bits of `flags` (bits 0-3); the `Replace` slot is in bits 8-30.
@@ -68,6 +72,7 @@ impl Continuation {
             2 => Continuation::ConstructResult,
             4 => Continuation::Replace((flags as u32 & 0x7FFF_FFFF) >> SLOT_SHIFT),
             5 => Continuation::Job,
+            6 => Continuation::Retry((flags as u32 & 0x7FFF_FFFF) >> SLOT_SHIFT),
             _ => Continuation::Entry,
         }
     }
@@ -81,11 +86,17 @@ impl Continuation {
             Continuation::Entry => 3,
             Continuation::Replace(slot) => 4 | ((slot << SLOT_SHIFT) & 0x7FFF_FFFF) as i32,
             Continuation::Job => 5,
+            Continuation::Retry(slot) => 6 | ((slot << SLOT_SHIFT) & 0x7FFF_FFFF) as i32,
         }
     }
 
     /// A frame with no caller: the entry call's or a job's.
     pub const fn is_bottom(self) -> bool {
         matches!(self, Continuation::Entry | Continuation::Job)
+    }
+
+    /// The caller re-executes the calling instruction (`Retry`).
+    pub const fn is_retry(self) -> bool {
+        matches!(self, Continuation::Retry(_))
     }
 }

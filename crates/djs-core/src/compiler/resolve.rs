@@ -477,10 +477,14 @@ fn emit_function(
                     i += 2;
                     continue;
                 }
-                // `x = v; ... x`, `const p = f(); if (p ...)`: keep the stored value.
+                // `x = v; ... x`, `const p = f(); if (p ...)`: keep the stored value
+                // (unless the read starts an `inc_loc`).
                 if matches!(insn.op, Op::NamePut | Op::NameInit)
                     && let Some(get) = all.get(i)
                     && get.op == Op::NameGet
+                    && !all
+                        .get(i + 1)
+                        .is_some_and(|u| matches!(u.op, Op::Inc | Op::Dec))
                     && (!resolved[r].immutable || insn.op == Op::NameInit)
                     && let Some(s) = unchecked_local(storage, resolved[r])
                     && unchecked_local(storage, resolved[get.imm(0) as usize]) == Some(s)

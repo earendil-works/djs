@@ -656,7 +656,7 @@ impl Vm {
                 let mut ex = Exec::new(&mut self.heap, self.opts.exec);
                 match cont {
                     Continuation::PushResult => ex.push(v),
-                    Continuation::Replace(slot) => ex.set_slot(slot, v),
+                    Continuation::Replace(slot) | Continuation::Retry(slot) => ex.set_slot(slot, v),
                     _ => {}
                 }
                 ex.flush();
