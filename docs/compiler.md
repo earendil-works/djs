@@ -101,6 +101,7 @@ struct Parser<'a, 'h> {
 | `primary_slash()` | in primary position, `Slash`/`SlashAssign` → `tok = lx.rescan_as_regex(tok)?` |
 | `template_continue()` | after a substitution expression, requires `RBrace` and calls `lx.rescan_template_continuation(tok)?` |
 | `ident_atom(tok)` | `lx.ident_value` → atom (no escapes: borrowed bytes, interned directly) |
+| `number_value(tok)` | `lx.number_literal(&tok)` → `crate::num::literal_digits_value(radix, digits)` (separators allowed); BigInt later |
 
 Lookahead never crosses a position whose meaning depends on parser context without
 applying the same rule the parser would (regex after an operand, `>` merging,
@@ -205,7 +206,7 @@ nested parentheses).
 | `#constructor` | class element names | `invalid method name` |
 | untagged template with `INVALID_ESCAPE` | template parsing; the error comes from `cook_template` | `malformed escape sequence in string literal` |
 | a token directly after a regex literal (`/a/g\u0069`) | nothing special: an identifier after an operand is an ordinary syntax error | `expecting ';'` |
-| regex pattern validity | the regex compiler (P5); until then patterns are accepted unchecked (a known test262 gap) | |
+| regex pattern validity | the regex compiler (0011) at compile time, once it lands; until then patterns are accepted unchecked | |
 
 Directive prologues are still recognized even though everything is strict:
 `"use strict"` in a function with non-simple parameters is an error (`"use strict"
@@ -837,10 +838,14 @@ all scripts of the realm. Global accesses go through it first, so TDZ for global
 
 ## 6. Function templates and heap cells
 
-0005 (heap) is not merged yet, so these are cell sketches in its `cells!` style,
-proposals for 0006 to add. The current 0005 direction provides `Ref` fields, `Value`,
-`ValueArray`, `U32Array`, the object cell with a `SLOTS: [Value]` tail, and stable
-`u32` atom ids.
+0005 (heap) and 0009 (copying GC, handles) have landed. These are sketches in their
+`cells!` style, proposals for 0006 to add to `heap/cells.rs`. They build on what exists:
+`Ref` fields, `Value` (NaN-boxed, tag 6 = uninitialized for TDZ), `ValueArray`,
+`U32Array`, the object cell with a `SLOTS: [Value]` tail, stable `u32` atom ids, and
+tracing derived from field types (D1090), so new kinds are collected automatically.
+The GC runs only at explicit safepoints and invalidates raw references held in Rust
+(D1091). The compiler never reaches a safepoint, so it may hold raw `Str`/atom values
+for the whole compilation.
 
 ### 6.1 Cells
 
@@ -1116,7 +1121,7 @@ enum CompileError {
   and every other active test must compile. Both are cheap enough for the gate and
   feed the ratchet, so early-error regressions show up immediately.
 - `phase: resolution` tests are module-only (skipped). Regex early errors wait for the
-  regex compiler (P5); until then those tests are expected failures.
+  regex compiler (0011); until then those tests are expected failures.
 - One P1 issue (10) walks the negative-test failure clusters after the language
   features land.
 
@@ -1211,7 +1216,7 @@ P0 (replaces the single 0006, whose acceptance criteria can be taken from here):
 | 0006a | Bytecode table and tools | 0005 (atoms) | `ops!` macro, encoders, decoder, disassembler, stack-depth checker, `OPS_HASH`; tests on hand-built code |
 | 0006b | P0 compiler | 0003, 0004, 0005, 0006a | parser + emitter for expressions and statements without functions (literals, operators, `if`, loops, blocks, `let`/`const`/`var` at top level and in blocks), phase-1 names, resolution for locals and globals, labels, line table, templates in the heap, SyntaxErrors with positions |
 | 0006c | P0 interpreter and embedding | 0005, 0006a | value stack, frames, dispatch loop, fuel, `Interp` cell, globals, `console.log` as a sync `HostCall`, `vm_new`/`vm_compile`/`vm_call`/`vm_run`, `djs run`. It can start in parallel with 0006b using hand-assembled bytecode |
-| 0006d | Difftest harness and first corpus | 0006b, 0006c | `djs difftest`, `tests/corpus/` with qjs expectations, in the gate |
+| 0006d | djs in the difftest runner | 0006b, 0006c, 0010 | run 0010's corpus on djs, in the gate |
 
 P1:
 
@@ -1225,7 +1230,7 @@ P1:
 | P1-6 | Templates, spread, destructuring | P1-2, P1-5 | template literals (cooked/raw, tagged, site cache), call/array spread, rest, binding and assignment patterns with defaults (the 3.3 scan) |
 | P1-7 | Classes | P1-1, P1-2, P1-4 | methods, accessors, static members, fields, private names and brand checks, static blocks, `super`, derived constructors |
 | P1-8 | Script mode globals | 0006b, 0006c | `global_decls`, the global lexical record, `init_global_lex`, completion value, `$262.evalScript` hook (feeds 0007) |
-| P1-9 | Copying GC | 0006c, 0005 | Cheney collector, safepoints, the code-offset refresh, a GC-every-N stress mode |
+| P1-9 | GC in the interpreter | 0006c, 0009 | safepoints at back edges/calls/returns, register flush and code-offset refresh, a collect-every-N stress mode |
 | P1-10 | Early-error sweep | 0007, P1-1..P1-7 | `--parse-only` runner mode, walk test262 negative-test clusters |
 
 ## 11. Deviations from ARCH and open questions

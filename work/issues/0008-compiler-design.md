@@ -71,6 +71,10 @@ lexer author, so it builds directly on the lexer API that landed.
   memoized destructuring scan (QuickJS rescans every nested literal), the name-ref side
   table, Boxes instead of stack var_refs, handler tables instead of catch offsets on the
   stack, and no per-op recursion.
+- Rebased onto main after 0005/0009/0004 landed (decisions.md conflict: appended both).
+  Updated the note: §6 builds on the merged heap and GC, number values go through
+  `num::literal_digits_value`, regex validity goes to 0011, 0006d uses 0010's runner, and
+  P1-9 is GC integration (the collector itself is 0009).
 - Also touched `docs/decisions.md` (not in `touches:`) to append D1080-D1086, as the
   coordinator asked.
 
@@ -104,5 +108,6 @@ verified QuickJS messages, the early-error strategy, worked examples, and a P0/P
 split with dependencies (§10, usable as 0006's acceptance criteria). Decisions
 D1080-D1086 are in `docs/decisions.md`.
 
-Known gaps: cell layouts are sketches until 0005 lands; TS is only sketched (P3);
+Known gaps: cell layouts are sketches for 0006 to add (on top of the merged 0005/0009
+heap); TS is only sketched (P3);
 generators/async (P2/P5) are only placed, not designed.
