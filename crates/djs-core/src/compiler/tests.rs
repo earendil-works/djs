@@ -1686,6 +1686,384 @@ fn end_to_end_iteration_rt() {
     ]);
 }
 
+/// Destructuring and tagged templates end to end (compiler/pattern.rs, D1360-D1362).
+/// Outputs checked against qjs (`work/scratch/0036/qjs_check.py`).
+#[test]
+fn end_to_end_destructuring() {
+    run_cases(&[
+        (
+            "let [a, b = 2, , ...c] = [1, undefined, 3, 4, 5]; return a + ' ' + b + ' ' + c.join()",
+            "=> 1 2 4,5",
+        ),
+        (
+            "const {x, y: {z = 9} = {}, ...r} = {x: 1, q: 2, w: 3}; return x + ' ' + z + ' ' + Object.keys(r).join()",
+            "=> 1 9 q,w",
+        ),
+        ("var [p, q] = 'hi'; return p + q", "=> hi"),
+        (
+            "let m = 1, n = 2; [m, n] = [n, m]; return m + ' ' + n",
+            "=> 2 1",
+        ),
+        (
+            "const o = {}; ({a: o.x, b: o['y'] = 5} = {a: 7}); return o.x + ' ' + o.y",
+            "=> 7 5",
+        ),
+        (
+            "try { throw [1, {k: 2}] } catch ([e1, {k}]) { return e1 + k }",
+            "=> 3",
+        ),
+        (
+            "let [a, [b, [c]]] = [1, [2, [3]]]; return a + b + c",
+            "=> 6",
+        ),
+        (
+            "let {a: {b: {c}}} = {a: {b: {c: 'deep'}}}; return c",
+            "=> deep",
+        ),
+        (
+            "let x; const r = ({x} = {x: 3}); return x + ' ' + r.x",
+            "=> 3 3",
+        ),
+        (
+            "let a, b; const r = [a, b] = [1, 2, 3]; return r.length",
+            "=> 3",
+        ),
+        (
+            "const [a = 1, b = a + 1, c = b * 2] = []; return [a, b, c].join()",
+            "=> 1,2,4",
+        ),
+        ("const {length} = 'abc'; return length", "=> 3"),
+        ("const [, , third] = [1, 2, 3]; return third", "=> 3"),
+        ("const [...all] = 'ab'; return all.join('-')", "=> a-b"),
+        ("const [a, ...[b, c]] = [1, 2, 3]; return a + b + c", "=> 6"),
+        ("const {0: a, 1: b} = ['x', 'y']; return a + b", "=> xy"),
+        (
+            "const k = 'dyn'; const {[k]: v, [k + '2']: w = 'def'} = {dyn: 1}; return v + w",
+            "=> 1def",
+        ),
+        (
+            "const {a, ...rest} = {a: 1, b: 2, c: 3}; return a + ' ' + Object.keys(rest).join() + rest.b",
+            "=> 1 b,c2",
+        ),
+        (
+            "const s = Symbol('s'); const {...r} = {[s]: 1, x: 2}; return r[s] + r.x",
+            "=> 3",
+        ),
+        (
+            "const {['a']: x, ...r} = {a: 1, b: 2}; return Object.keys(r).join()",
+            "=> b",
+        ),
+        (
+            "const {0: x, ...r} = ['a', 'b']; return Object.keys(r).join()",
+            "=> 1",
+        ),
+        (
+            "const {...r} = Object.create({inherited: 1}, {own: {value: 2, enumerable: true}, hidden: {value: 3}}); return Object.keys(r).join()",
+            "=> own",
+        ),
+        (
+            "let n = 0; const {a = n++, b = n++} = {a: 0}; return a + ' ' + b + ' ' + n",
+            "=> 0 0 1",
+        ),
+        (
+            "const [f = function () {}, g = () => 1] = []; return f.name + g.name",
+            "=> fg",
+        ),
+        ("const {fn = function () {}} = {}; return fn.name", "=> fn"),
+        ("let fn; [fn = () => 1] = []; return fn.name", "=> fn"),
+        ("let fn; ({fn = () => 1} = {}); return fn.name", "=> fn"),
+        (
+            "try { const {a} = null; } catch (e) { return String(e) }",
+            "=> TypeError: cannot convert to object",
+        ),
+        (
+            "try { const {} = undefined; } catch (e) { return String(e) }",
+            "=> TypeError: cannot convert to object",
+        ),
+        (
+            "try { let [a] = 1; } catch (e) { return String(e) }",
+            "=> TypeError: value is not iterable",
+        ),
+        (
+            "try { let [a] = {}; } catch (e) { return String(e) }",
+            "=> TypeError: value is not iterable",
+        ),
+        (
+            "try { let {a = b, b} = {}; } catch (e) { return e.name }",
+            "=> ReferenceError",
+        ),
+        (
+            "try { let [a = a] = []; } catch (e) { return e.name }",
+            "=> ReferenceError",
+        ),
+        (
+            "function f({a, b = 2}, [c, ...d] = [3, 4, 5], ...[e, g]) { return [a, b, c, d.length, e, g].join(); } return f({a: 1}) + ' ' + f({a: 1, b: 0}, [7], 8, 9) + ' ' + f.length",
+            "=> 1,2,3,2,, 1,0,7,0,8,9 1",
+        ),
+        (
+            "const h = ({x}, [y]) => x + y; return h({x: 1}, [2]) + ' ' + h.length",
+            "=> 3 2",
+        ),
+        (
+            "function f([a] = [1], {b} = {b: 2}) { return a + b } return f() + ' ' + f.length",
+            "=> 3 0",
+        ),
+        (
+            "function f(a, {b}) { return a + b } return f(1, {b: 2}) + f.length",
+            "=> 5",
+        ),
+        (
+            "function f({a}, b = a) { return b } return f({a: 5})",
+            "=> 5",
+        ),
+        (
+            "try { (function ([a = b, b]) {})([]) } catch (e) { return e.name }",
+            "=> ReferenceError",
+        ),
+        (
+            "function f({a}) { return arguments.length } return f({}, 2)",
+            "=> 2",
+        ),
+        (
+            "function f({a}) { return () => a } return f({a: 'cap'})()",
+            "=> cap",
+        ),
+        ("function f([x]) { x = 2; return x } return f([1])", "=> 2"),
+        (
+            "let out = ''; for (const [k, v] of Object.entries({p: 1, q: 2})) out += k + v; return out",
+            "=> p1q2",
+        ),
+        (
+            "let out = ''; for (var {length} in {abc: 1, de: 2}) out += length; return out",
+            "=> 32",
+        ),
+        (
+            "let a, b, out = ''; for ([a, b] of [[1, 2], [3, 4]]) out += a + b; return out",
+            "=> 37",
+        ),
+        ("let a; for ({a} of [{a: 5}]) ; return a", "=> 5"),
+        (
+            "const fs = []; for (let [i] of [[1], [2]]) fs.push(() => i); return fs.map(f => f()).join()",
+            "=> 1,2",
+        ),
+        (
+            "const fs = []; for (const {i} of [{i: 1}, {i: 2}]) fs.push(() => i); return fs[0]() + fs[1]()",
+            "=> 3",
+        ),
+        (
+            "const o = {}; for ([o.a, o.b] of [[1, 2]]) ; return o.a + o.b",
+            "=> 3",
+        ),
+        (
+            "let x = 0; for (const [a = ++x] of [[], [5]]) ; return x",
+            "=> 1",
+        ),
+        (
+            "try { throw {code: 42} } catch ({code, missing = 'm'}) { return code + missing }",
+            "=> 42m",
+        ),
+        (
+            "try { throw null } catch ({a}) { return 1 } finally {}",
+            "throw TypeError: cannot convert to object",
+        ),
+        (
+            "const o = {a: 1}; let a; ({a, ...o.rest} = {a: 1, b: 2}); return Object.keys(o).join() + o.rest.b",
+            "=> a,rest2",
+        ),
+        ("let x; [x = 1] = [null]; return x", "=> null"),
+        ("let x; ({x = 1} = {x: null}); return x", "=> null"),
+        ("const {a: {b} = {b: 'dflt'}} = {}; return b", "=> dflt"),
+        ("const [[a] = [7]] = []; return a", "=> 7"),
+        ("const {a: x = 1, b: y = 2} = {b: 3}; return x + y", "=> 4"),
+        ("let a = 1; [a, a] = [2, 3]; return a", "=> 3"),
+        (
+            "const o = {}; ({__proto__: o.a, __proto__: o.b} = {}); return o.a === o.b",
+            "=> true",
+        ),
+        (
+            "let r; [...r] = []; return Array.isArray(r) + ' ' + r.length",
+            "=> true 0",
+        ),
+        ("let [] = []; const {} = {}; return 'ok'", "=> ok"),
+        ("const [a, b] = 'x'; return a + b", "=> xundefined"),
+        ("return (([a, b] = [1, 2]) => a + b)()", "=> 3"),
+        ("return (({a = 1} = {}) => a)()", "=> 1"),
+        (
+            "let s = ''; const o = {get a() { s += 'a'; return 1 }, get b() { s += 'b'; return 2 }}; const {b, a} = o; return s",
+            "=> ba",
+        ),
+        (
+            "const {length: len, 0: first} = 'abc'; return len + first",
+            "=> 3a",
+        ),
+        (
+            "function tag(s, ...v) { return s.join('|') + '/' + s.raw.join('|') + '/' + v.join(); } return tag`a${1}b${2}c`",
+            "=> a|b|c/a|b|c/1,2",
+        ),
+        (
+            "function tag(s) { return s[0] + ' ' + s.raw[0] } return tag`\\unicode`",
+            "=> undefined \\unicode",
+        ),
+        (
+            "function id(s) { return s } const a = []; for (let i = 0; i < 2; i++) a.push(id`x`); return (a[0] === a[1]) + ' ' + (id`x` === a[0])",
+            "=> true false",
+        ),
+        (
+            "function id(s) { return s } const s = id`a\\nb${0}`; return Object.isFrozen(s) + ' ' + Object.isFrozen(s.raw) + ' ' + s.length + ' ' + s.raw[0] + ' ' + Object.getOwnPropertyDescriptor(s, 'raw').enumerable",
+            "=> true true 2 a\\nb false",
+        ),
+        (
+            "const o = {m(s) { return this === o }}; return o.m`x` && o['m']`y`",
+            "=> true",
+        ),
+        (
+            "return (s => s[0] === undefined && s.raw[0] === '\\\\xg')`\\xg`",
+            "=> true",
+        ),
+        (
+            "function tag(s, a, b) { return s.length + ' ' + a + b } return tag`${1}${2}`",
+            "=> 3 12",
+        ),
+        (
+            "function f() { return f } return f`a``b`` c` === f",
+            "=> true",
+        ),
+        (
+            "const t = (s) => s; return t`\r\n`.raw[0] === '\\n'",
+            "=> true",
+        ),
+        (
+            "const o = {...{a: 1, get b() { return 2 }}}; return Object.keys(o).join() + o.b",
+            "=> a,b2",
+        ),
+        // qjs copies nothing from a string; the spec (and V8) copy its indexes.
+        (
+            "const o = {...'hi'}; return Object.keys(o).join()",
+            "=> 0,1",
+        ),
+        (
+            "const o = {...null, ...undefined, ...1, ...[5]}; return Object.keys(o).join() + o[0]",
+            "=> 05",
+        ),
+    ]);
+}
+
+/// Array destructuring and the iterator protocol: steps, closing on normal and abrupt
+/// completion, and evaluation order (D1361). Outputs checked against qjs
+/// (`work/scratch/0036/qjs_check.py`).
+#[test]
+fn end_to_end_destructuring_iteration() {
+    run_cases_with(
+        ITER_PREFIX,
+        &[
+            ("const [a] = it([1, 2]); return log.join('')", "=> nr"),
+            ("const [a, b] = it([1]); return log.join('')", "=> nn"),
+            (
+                "const [...a] = it([1, 2]); return a.join() + log.join('')",
+                "=> 1,2nnn",
+            ),
+            ("const [] = it([1]); return log.join('')", "=> r"),
+            ("const [, ] = it([1, 2]); return log.join('')", "=> nr"),
+            (
+                "const [a, b, c] = it([1]); return [a, b, c].join() + log.join('')",
+                "=> 1,,nn",
+            ),
+            (
+                "const [a, b, ...c] = it([1]); return c.length + log.join('')",
+                "=> 0nn",
+            ),
+            (
+                "try { const [a = (() => { throw 1 })()] = it([undefined]) } catch (e) { return e + log.join('') }",
+                "=> 1nr",
+            ),
+            (
+                "const o = { set x(v) { throw 'set' } }; try { [o.x] = it([1]) } catch (e) { return e + log.join('') }",
+                "=> setnr",
+            ),
+            (
+                "const bad = { [Symbol.iterator]() { return { next() { throw 'nx' }, return() { log.push('r') } } } }; try { const [a] = bad } catch (e) { return e + log.join('') }",
+                "=> nx",
+            ),
+            (
+                "const bad = { [Symbol.iterator]() { return { next() { return 1 }, return() { log.push('r') } } } }; try { const [a] = bad } catch (e) { return String(e) + log.join('') }",
+                "=> TypeError: iterator must return an object",
+            ),
+            (
+                "const bad = { [Symbol.iterator]() { return { next() { return { get done() { throw 'dn' } } }, return() { log.push('r') } } } }; try { const [a] = bad } catch (e) { return e + log.join('') }",
+                "=> dn",
+            ),
+            (
+                "try { const [a] = it([1, 2], function () { throw 'rt' }) } catch (e) { return e + log.join('') }",
+                "=> rtn",
+            ),
+            (
+                "try { const [a] = it([1, 2], function () { return 1 }) } catch (e) { return String(e) + log.join('') }",
+                "=> TypeError: not an objectn",
+            ),
+            (
+                "try { [{}[(() => { throw 'k' })()]] = it([1], function () { throw 'rt' }) } catch (e) { return e + log.join('') }",
+                "=> k",
+            ),
+            (
+                "const [[a]] = [it([1, 2])]; return a + log.join('')",
+                "=> 1nr",
+            ),
+            (
+                "try { const [[a] = (() => { throw 'inner' })()] = it([undefined, 1]) } catch (e) { return e + log.join('') }",
+                "=> innernr",
+            ),
+            (
+                "try { const [{x}] = it([null, 2]) } catch (e) { return e.name + log.join('') }",
+                "=> TypeErrornr",
+            ),
+            (
+                "try { const [a, [b]] = it([1, 5]) } catch (e) { return e.name + log.join('') }",
+                "=> TypeErrornnr",
+            ),
+            (
+                "const order = []; const o = { get t() { order.push('get t'); return { set x(v) { order.push('set ' + v) } } } }; [o.t.x] = { [Symbol.iterator]() { order.push('iter'); return { next() { order.push('next'); return { done: false, value: 1 } }, return() { order.push('ret'); return {} } } } }; return order.join()",
+                "=> iter,get t,next,set 1,ret",
+            ),
+            (
+                "const order = []; const src = { get a() { order.push('get a'); return 1 } }; const key = { toString() { order.push('key'); return 'a' } }; const t = { set x(v) { order.push('set ' + v) } }; ({ [key]: (order.push('target'), t).x } = src); return order.join()",
+                "=> key,target,get a,set 1",
+            ),
+            (
+                "const order = []; const src = { get a() { order.push('get a'); return undefined } }; const t = { set x(v) { order.push('set ' + v) } }; ({ a: t.x = (order.push('default'), 2) } = src); return order.join()",
+                "=> get a,default,set 2",
+            ),
+            (
+                "const order = []; const k = { toString() { order.push('key'); return 'b' } }; const { [k]: v, ...r } = { a: 1, b: 2, get c() { order.push('get c'); return 3 } }; return order.join() + ' ' + Object.keys(r).join()",
+                "=> key,get c a,c",
+            ),
+            (
+                "for (const [a] of [it([1, 2]), it([3])]) ; return log.join('')",
+                "=> nrnr",
+            ),
+            (
+                "function f([a, b]) { return a } f(it([1, 2, 3])); return log.join('')",
+                "=> nnr",
+            ),
+            (
+                "try { throw it([1, 2]) } catch ([a]) { return a + log.join('') }",
+                "=> 1nr",
+            ),
+            (
+                "let a; for ([a] of [it([1, 2])]) ; return a + log.join('')",
+                "=> 1nr",
+            ),
+            (
+                "label: for (const x of [1]) { const [a] = it([x, 2]); break label; } return log.join('')",
+                "=> nr",
+            ),
+            (
+                "let a; const r = ([a] = it([1, 2])); return (a === 1) + log.join('')",
+                "=> truenr",
+            ),
+        ],
+    );
+}
+
 /// Messages from %GetIterator on nullish values (a symbol key in "cannot read
 /// property", as qjs names it).
 #[test]
