@@ -20,6 +20,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| 0032 | Base snapshot (prelude at build time) | 0028 (num, after 0026) |
 
 ## Done
 
