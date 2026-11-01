@@ -6,6 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0141 | Deep dive: portable heap snapshot design | portable | .worktrees/portable |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 
 ## Open (ready)
