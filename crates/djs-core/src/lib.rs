@@ -5,5 +5,7 @@
 
 extern crate alloc;
 
+pub mod heap;
 pub mod lexer;
 pub mod unicode;
+pub mod value;

@@ -1,0 +1,1091 @@
+//! Objects: properties, dense elements, prototypes. All operations here are leaf: they never
+//! run user code. Getters and setters are returned to the caller, which decides how to call
+//! them.
+//!
+//! # Storage
+//!
+//! An [`Object`] cell has a class, a prototype, a property table ref and an elements ref.
+//!
+//! - The [`PropTable`] keeps entries in insertion order. Up to [`LINEAR_MAX`] entries it is
+//!   searched linearly; above that a hash index over the entries is built (like a
+//!   compact dict). Entry keys are atoms, so lookups compare `u32`s.
+//! - Dense elements (arrays only, for now) are a [`ValueArray`] whose `LEN` is the dense
+//!   length. A dense slot holds a data property with all of writable, enumerable and
+//!   configurable set, or a hole.
+//!
+//! Invariant: an array-index key lives in exactly one place. If its dense slot is not a
+//! hole, the property table has no entry for it. Index keys in the table (sparse elements,
+//! elements with non-default attributes, index keys of non-arrays) set the
+//! [`OBJ_INDEXED_PROPS`] flag, so objects without it never search the table for an index.
+//!
+//! Classes with exotic integer-keyed behavior (String wrappers, typed arrays, proxies,
+//! later) must also set [`OBJ_INDEXED_PROPS`]: the element fast paths rely on it to know
+//! that a prototype chain cannot intercept an index.
+//!
+//! An array's `length` is internal slot 0 (a Number), not a table entry. It is reported as
+//! an own data property `{writable: !OBJ_LENGTH_READONLY, enumerable: false,
+//! configurable: false}`.
+
+use alloc::vec::Vec;
+
+use super::atom::{Atom, atoms};
+use super::cells::{
+    Object, PropEntry, PropTable, ValueArray,
+    flags::{OBJ_EXTENSIBLE, OBJ_INDEXED_PROPS, OBJ_LENGTH_READONLY},
+};
+use super::layout::Ref;
+use super::{CellKind, Heap, HeapError};
+use crate::value::{Obj, Value};
+
+/// Tables with at most this many entries are searched linearly.
+pub const LINEAR_MAX: u32 = 8;
+
+/// A write may extend the dense elements by at most this many holes; writes further out
+/// go to the property table (sparse).
+pub const DENSE_GAP: u32 = 64;
+
+/// Bucket value for a deleted entry in a property hash index.
+const TOMBSTONE: u32 = u32::MAX;
+
+/// Storage-only flag bit: the entry is an accessor.
+const STORE_ACCESSOR: u32 = 8;
+
+/// The object class, stored in [`Object::CLASS`]. Issue 0006 adds more.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u32)]
+pub enum ObjectClass {
+    Ordinary = 0,
+    /// An Array exotic object: dense elements and a `length` in slot 0.
+    Array = 1,
+}
+
+impl ObjectClass {
+    pub const fn from_u32(c: u32) -> Option<ObjectClass> {
+        match c {
+            0 => Some(ObjectClass::Ordinary),
+            1 => Some(ObjectClass::Array),
+            _ => None,
+        }
+    }
+
+    /// Number of internal slots the class needs.
+    pub const fn slots(self) -> u32 {
+        match self {
+            ObjectClass::Ordinary => 0,
+            ObjectClass::Array => 1,
+        }
+    }
+}
+
+/// Property attributes.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct PropFlags(u8);
+
+impl PropFlags {
+    pub const NONE: PropFlags = PropFlags(0);
+    pub const WRITABLE: PropFlags = PropFlags(1);
+    pub const ENUMERABLE: PropFlags = PropFlags(2);
+    pub const CONFIGURABLE: PropFlags = PropFlags(4);
+    /// Writable, enumerable and configurable: what assignment and dense elements use.
+    pub const ALL: PropFlags = PropFlags(7);
+
+    pub const fn new(writable: bool, enumerable: bool, configurable: bool) -> PropFlags {
+        PropFlags(writable as u8 | (enumerable as u8) << 1 | (configurable as u8) << 2)
+    }
+
+    #[inline]
+    pub const fn bits(self) -> u8 {
+        self.0
+    }
+
+    #[inline]
+    pub const fn from_bits(bits: u8) -> PropFlags {
+        PropFlags(bits & 7)
+    }
+
+    /// Meaningless for accessors (always false there).
+    #[inline]
+    pub const fn writable(self) -> bool {
+        self.0 & 1 != 0
+    }
+
+    #[inline]
+    pub const fn enumerable(self) -> bool {
+        self.0 & 2 != 0
+    }
+
+    #[inline]
+    pub const fn configurable(self) -> bool {
+        self.0 & 4 != 0
+    }
+}
+
+impl core::ops::BitOr for PropFlags {
+    type Output = PropFlags;
+    fn bitor(self, o: PropFlags) -> PropFlags {
+        PropFlags(self.0 | o.0)
+    }
+}
+
+/// A complete own property, as stored.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Property {
+    Data {
+        value: Value,
+        flags: PropFlags,
+    },
+    /// `getter`/`setter` are function objects or `undefined`. `flags` has no writable bit.
+    Accessor {
+        getter: Value,
+        setter: Value,
+        flags: PropFlags,
+    },
+}
+
+impl Property {
+    pub const fn data(value: Value, flags: PropFlags) -> Property {
+        Property::Data { value, flags }
+    }
+
+    pub const fn flags(&self) -> PropFlags {
+        match self {
+            Property::Data { flags, .. } | Property::Accessor { flags, .. } => *flags,
+        }
+    }
+
+    pub const fn is_accessor(&self) -> bool {
+        matches!(self, Property::Accessor { .. })
+    }
+
+    /// The value of a data property.
+    pub const fn value(&self) -> Option<Value> {
+        match self {
+            Property::Data { value, .. } => Some(*value),
+            Property::Accessor { .. } => None,
+        }
+    }
+}
+
+/// A property descriptor with optional fields (the spec's Property Descriptor). A
+/// descriptor must not have both data fields (`value`, `writable`) and accessor fields
+/// (`get`, `set`); `ToPropertyDescriptor` (caller side) rejects that.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct PropertyDescriptor {
+    pub value: Option<Value>,
+    pub get: Option<Value>,
+    pub set: Option<Value>,
+    pub writable: Option<bool>,
+    pub enumerable: Option<bool>,
+    pub configurable: Option<bool>,
+}
+
+impl PropertyDescriptor {
+    /// A complete data descriptor.
+    pub const fn data(value: Value, flags: PropFlags) -> PropertyDescriptor {
+        PropertyDescriptor {
+            value: Some(value),
+            get: None,
+            set: None,
+            writable: Some(flags.writable()),
+            enumerable: Some(flags.enumerable()),
+            configurable: Some(flags.configurable()),
+        }
+    }
+
+    /// A complete accessor descriptor.
+    pub const fn accessor(getter: Value, setter: Value, flags: PropFlags) -> PropertyDescriptor {
+        PropertyDescriptor {
+            value: None,
+            get: Some(getter),
+            set: Some(setter),
+            writable: None,
+            enumerable: Some(flags.enumerable()),
+            configurable: Some(flags.configurable()),
+        }
+    }
+
+    pub const fn is_accessor(&self) -> bool {
+        self.get.is_some() || self.set.is_some()
+    }
+
+    pub const fn is_data(&self) -> bool {
+        self.value.is_some() || self.writable.is_some()
+    }
+
+    pub const fn is_generic(&self) -> bool {
+        !self.is_accessor() && !self.is_data()
+    }
+
+    const fn is_empty(&self) -> bool {
+        self.is_generic() && self.enumerable.is_none() && self.configurable.is_none()
+    }
+}
+
+/// Where an own property is stored.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Loc {
+    None,
+    Dense(u32),
+    Table(u32),
+    ArrayLength,
+}
+
+/// The result of ValidateAndApplyPropertyDescriptor.
+enum Outcome {
+    Reject,
+    Keep,
+    Write(Property),
+}
+
+#[inline]
+fn key_hash(a: Atom) -> u32 {
+    let h = a.id().wrapping_mul(0x9E37_79B9);
+    h ^ (h >> 15)
+}
+
+impl Heap {
+    // ---------------------------------------------------------------- objects
+
+    /// Allocates an object with `slots` internal slots (set to `undefined`).
+    pub fn alloc_object(
+        &mut self,
+        class: ObjectClass,
+        proto: Option<Obj>,
+        slots: u32,
+    ) -> Result<Obj, HeapError> {
+        let size = Object::SLOTS
+            .cell_size(slots)
+            .ok_or(HeapError::OutOfMemory)?;
+        let o = self.alloc_cell(CellKind::Object, size)?;
+        let a = self.arena_mut();
+        a.set(o, Object::CLASS, class as u32);
+        a.set(o, Object::PROTO, Ref(proto.map_or(0, |p| p.0)));
+        for i in 0..slots {
+            a.write(Object::SLOTS.at(o, i), Value::UNDEFINED);
+        }
+        self.set_cell_flags(o, OBJ_EXTENSIBLE);
+        Ok(Obj(o))
+    }
+
+    /// A new ordinary object.
+    pub fn new_object(&mut self, proto: Option<Obj>) -> Result<Obj, HeapError> {
+        self.alloc_object(ObjectClass::Ordinary, proto, 0)
+    }
+
+    /// A new empty array with room for `capacity` dense elements.
+    pub fn new_array(&mut self, proto: Option<Obj>, capacity: u32) -> Result<Obj, HeapError> {
+        let o = self.alloc_object(ObjectClass::Array, proto, ObjectClass::Array.slots())?;
+        self.set_array_length_raw(o, 0);
+        if capacity > 0 {
+            let el = self.alloc_value_array(capacity)?;
+            self.arena_mut().set(o.0, Object::ELEMENTS, Ref(el));
+        }
+        Ok(o)
+    }
+
+    pub fn object_class(&self, o: Obj) -> ObjectClass {
+        let c = self.arena().get(o.0, Object::CLASS);
+        ObjectClass::from_u32(c).unwrap_or_else(|| panic!("invalid object class {c}"))
+    }
+
+    /// Number of internal slots.
+    pub fn object_slot_count(&self, o: Obj) -> u32 {
+        Object::LAYOUT.tail_capacity(self.cell_size(o.0))
+    }
+
+    pub fn object_slot(&self, o: Obj, i: u32) -> Value {
+        assert!(i < self.object_slot_count(o), "slot {i} out of range");
+        self.arena().read(Object::SLOTS.at(o.0, i))
+    }
+
+    pub fn set_object_slot(&mut self, o: Obj, i: u32, v: Value) {
+        assert!(i < self.object_slot_count(o), "slot {i} out of range");
+        self.arena_mut().write(Object::SLOTS.at(o.0, i), v)
+    }
+
+    #[inline]
+    fn obj_flags(&self, o: Obj) -> u16 {
+        self.cell_flags(o.0)
+    }
+
+    fn set_obj_flag(&mut self, o: Obj, flag: u16, on: bool) {
+        let f = self.cell_flags(o.0);
+        self.set_cell_flags(o.0, if on { f | flag } else { f & !flag });
+    }
+
+    pub fn get_prototype_of(&self, o: Obj) -> Option<Obj> {
+        self.arena().get(o.0, Object::PROTO).get().map(Obj)
+    }
+
+    /// OrdinarySetPrototypeOf: fails on a non-extensible object or a cycle.
+    pub fn set_prototype_of(&mut self, o: Obj, proto: Option<Obj>) -> bool {
+        if self.get_prototype_of(o) == proto {
+            return true;
+        }
+        if !self.is_extensible(o) {
+            return false;
+        }
+        let mut p = proto;
+        while let Some(q) = p {
+            if q == o {
+                return false;
+            }
+            p = self.get_prototype_of(q);
+        }
+        self.arena_mut()
+            .set(o.0, Object::PROTO, Ref(proto.map_or(0, |p| p.0)));
+        true
+    }
+
+    pub fn is_extensible(&self, o: Obj) -> bool {
+        self.obj_flags(o) & OBJ_EXTENSIBLE != 0
+    }
+
+    pub fn prevent_extensions(&mut self, o: Obj) -> bool {
+        self.set_obj_flag(o, OBJ_EXTENSIBLE, false);
+        true
+    }
+
+    // ---------------------------------------------------------------- arrays
+
+    /// The `length` of an array.
+    pub fn array_length(&self, o: Obj) -> u32 {
+        debug_assert_eq!(self.object_class(o), ObjectClass::Array);
+        let n = self.object_slot(o, 0).as_number().unwrap_or(0.0);
+        n as u32
+    }
+
+    fn set_array_length_raw(&mut self, o: Obj, len: u32) {
+        let v = if len <= i32::MAX as u32 {
+            Value::int(len as i32)
+        } else {
+            Value::number(len as f64)
+        };
+        self.set_object_slot(o, 0, v);
+    }
+
+    #[inline]
+    fn elements(&self, o: Obj) -> u32 {
+        self.arena().get(o.0, Object::ELEMENTS).0
+    }
+
+    /// The dense length (0 without elements).
+    pub fn dense_len(&self, o: Obj) -> u32 {
+        match self.elements(o) {
+            0 => 0,
+            el => self.value_array_len(el),
+        }
+    }
+
+    /// Fast path for reading element `i`: `Some` if it is a dense, non-hole element.
+    /// `None` means "take the generic path" (property table, prototype chain).
+    #[inline]
+    pub fn get_element_fast(&self, o: Obj, i: u32) -> Option<Value> {
+        let el = self.elements(o);
+        if el == 0 || i >= self.value_array_len(el) {
+            return None;
+        }
+        let v = self.value_array_get(el, i);
+        if v.is_hole() { None } else { Some(v) }
+    }
+
+    /// Fast path for `o[i] = v` with `o` as receiver. Returns `Ok(true)` when done:
+    /// overwriting a dense element, or adding one (filling a hole or appending) to an
+    /// extensible array whose prototype chain has no index properties. `Ok(false)` means
+    /// "take the generic [[Set]] path".
+    pub fn set_element_fast(&mut self, o: Obj, i: u32, v: Value) -> Result<bool, HeapError> {
+        let el = self.elements(o);
+        let len = if el == 0 { 0 } else { self.value_array_len(el) };
+        if i < len && !self.value_array_get(el, i).is_hole() {
+            self.value_array_set(el, i, v);
+            return Ok(true);
+        }
+        if i > len || i > atom_int_max() || self.object_class(o) != ObjectClass::Array {
+            return Ok(false);
+        }
+        let f = self.obj_flags(o);
+        if f & OBJ_EXTENSIBLE == 0 || f & OBJ_INDEXED_PROPS != 0 {
+            return Ok(false);
+        }
+        let length = self.array_length(o);
+        if i >= length && f & OBJ_LENGTH_READONLY != 0 {
+            return Ok(false);
+        }
+        let mut p = self.get_prototype_of(o);
+        while let Some(q) = p {
+            if self.dense_len(q) != 0 || self.obj_flags(q) & OBJ_INDEXED_PROPS != 0 {
+                return Ok(false);
+            }
+            p = self.get_prototype_of(q);
+        }
+        self.dense_put(o, i, v)?;
+        if i >= length {
+            self.set_array_length_raw(o, i + 1);
+        }
+        Ok(true)
+    }
+
+    /// Stores `v` in dense slot `i`, growing the elements (with holes) as needed.
+    fn dense_put(&mut self, o: Obj, i: u32, v: Value) -> Result<(), HeapError> {
+        let mut el = self.elements(o);
+        let len = if el == 0 { 0 } else { self.value_array_len(el) };
+        if i >= len {
+            let grown = self.value_array_reserve(el, i + 1)?;
+            if grown != el {
+                el = grown;
+                self.arena_mut().set(o.0, Object::ELEMENTS, Ref(el));
+            }
+            for j in len..i {
+                self.value_array_set(el, j, Value::HOLE);
+            }
+            self.arena_mut().set(el, ValueArray::LEN, i + 1);
+        }
+        self.value_array_set(el, i, v);
+        Ok(())
+    }
+
+    /// Whether a new element at `i` should go into dense storage.
+    fn dense_accepts(&self, o: Obj, i: u32) -> bool {
+        self.object_class(o) == ObjectClass::Array
+            && i <= atom_int_max()
+            && i <= self.dense_len(o).saturating_add(DENSE_GAP)
+    }
+
+    // ---------------------------------------------------------------- property table
+
+    #[inline]
+    fn props(&self, o: Obj) -> u32 {
+        self.arena().get(o.0, Object::PROPS).0
+    }
+
+    #[inline]
+    fn entry_key(&self, t: u32, i: u32) -> Atom {
+        Atom::from_id(
+            self.arena()
+                .get(PropTable::ENTRIES.at(t, i), PropEntry::KEY),
+        )
+    }
+
+    fn table_capacity(&self, t: u32) -> u32 {
+        PropTable::LAYOUT.tail_capacity(self.cell_size(t))
+    }
+
+    fn table_find(&self, t: u32, key: Atom) -> Option<u32> {
+        let a = self.arena();
+        let count = a.get(t, PropTable::COUNT);
+        let index = a.get(t, PropTable::INDEX).0;
+        if index == 0 {
+            return (0..count).find(|&i| self.entry_key(t, i) == key);
+        }
+        let mask = self.u32_array_len(index) - 1;
+        let mut b = key_hash(key) & mask;
+        loop {
+            match self.u32_array_get(index, b) {
+                0 => return None,
+                TOMBSTONE => {}
+                e => {
+                    if self.entry_key(t, e - 1) == key {
+                        return Some(e - 1);
+                    }
+                }
+            }
+            b = (b + 1) & mask;
+        }
+    }
+
+    fn read_entry(&self, t: u32, i: u32) -> Property {
+        let e = PropTable::ENTRIES.at(t, i);
+        let a = self.arena();
+        let fl = a.get(e, PropEntry::FLAGS);
+        let flags = PropFlags::from_bits(fl as u8);
+        if fl & STORE_ACCESSOR != 0 {
+            Property::Accessor {
+                getter: a.get(e, PropEntry::VALUE),
+                setter: a.get(e, PropEntry::SETTER),
+                flags,
+            }
+        } else {
+            Property::Data {
+                value: a.get(e, PropEntry::VALUE),
+                flags,
+            }
+        }
+    }
+
+    fn write_entry(&mut self, t: u32, i: u32, key: Atom, p: &Property) {
+        let e = PropTable::ENTRIES.at(t, i);
+        let a = self.arena_mut();
+        a.set(e, PropEntry::KEY, key.id());
+        match *p {
+            Property::Data { value, flags } => {
+                a.set(e, PropEntry::FLAGS, flags.bits() as u32);
+                a.set(e, PropEntry::VALUE, value);
+                a.set(e, PropEntry::SETTER, Value::ZERO);
+            }
+            Property::Accessor {
+                getter,
+                setter,
+                flags,
+            } => {
+                // Accessors have no writable attribute.
+                let bits = (flags.bits() & !PropFlags::WRITABLE.bits()) as u32;
+                a.set(e, PropEntry::FLAGS, bits | STORE_ACCESSOR);
+                a.set(e, PropEntry::VALUE, getter);
+                a.set(e, PropEntry::SETTER, setter);
+            }
+        }
+    }
+
+    fn alloc_table(&mut self, cap: u32) -> Result<u32, HeapError> {
+        let size = PropTable::ENTRIES
+            .cell_size(cap)
+            .ok_or(HeapError::OutOfMemory)?;
+        self.alloc_cell(CellKind::PropTable, size)
+    }
+
+    /// Builds a hash index for table `t`, sized for its full capacity.
+    fn build_index(&mut self, t: u32) -> Result<(), HeapError> {
+        let buckets = (self.table_capacity(t) * 2).next_power_of_two();
+        let index = self.alloc_u32_array(buckets)?;
+        let mask = buckets - 1;
+        for i in 0..self.arena().get(t, PropTable::COUNT) {
+            let key = self.entry_key(t, i);
+            if key.is_null() {
+                continue;
+            }
+            let mut b = key_hash(key) & mask;
+            while self.u32_array_get(index, b) != 0 {
+                b = (b + 1) & mask;
+            }
+            self.u32_array_set(index, b, i + 1);
+        }
+        self.arena_mut().set(t, PropTable::INDEX, Ref(index));
+        Ok(())
+    }
+
+    /// Copies the live entries of `t` (or nothing) into a new, larger table for `o`.
+    fn grow_table(&mut self, o: Obj, t: u32) -> Result<u32, HeapError> {
+        let (count, deleted) = if t == 0 {
+            (0, 0)
+        } else {
+            let a = self.arena();
+            (a.get(t, PropTable::COUNT), a.get(t, PropTable::DELETED))
+        };
+        let live = count - deleted;
+        let cap = (live * 2).max(4);
+        let new = self.alloc_table(cap)?;
+        let mut n = 0;
+        for i in 0..count {
+            if self.entry_key(t, i).is_null() {
+                continue;
+            }
+            let src = PropTable::ENTRIES.at(t, i);
+            let dst = PropTable::ENTRIES.at(new, n);
+            self.arena_mut()
+                .copy_within(src, PropTable::ENTRIES.elem_size(), dst);
+            n += 1;
+        }
+        self.arena_mut().set(new, PropTable::COUNT, n);
+        if n > LINEAR_MAX {
+            self.build_index(new)?;
+        }
+        self.arena_mut().set(o.0, Object::PROPS, Ref(new));
+        Ok(new)
+    }
+
+    /// Appends a property (the key must not be present).
+    fn table_insert(&mut self, o: Obj, key: Atom, p: &Property) -> Result<(), HeapError> {
+        let mut t = self.props(o);
+        if t == 0 || self.arena().get(t, PropTable::COUNT) == self.table_capacity(t) {
+            t = self.grow_table(o, t)?;
+        }
+        let count = self.arena().get(t, PropTable::COUNT);
+        let mut index = self.arena().get(t, PropTable::INDEX).0;
+        if index == 0 && count + 1 > LINEAR_MAX {
+            self.build_index(t)?;
+            index = self.arena().get(t, PropTable::INDEX).0;
+        }
+        self.write_entry(t, count, key, p);
+        self.arena_mut().set(t, PropTable::COUNT, count + 1);
+        if index != 0 {
+            let mask = self.u32_array_len(index) - 1;
+            let mut b = key_hash(key) & mask;
+            loop {
+                match self.u32_array_get(index, b) {
+                    0 | TOMBSTONE => break,
+                    _ => b = (b + 1) & mask,
+                }
+            }
+            self.u32_array_set(index, b, count + 1);
+        }
+        Ok(())
+    }
+
+    /// Removes entry `i` of `o`'s table.
+    fn table_remove(&mut self, o: Obj, i: u32) {
+        let t = self.props(o);
+        let count = self.arena().get(t, PropTable::COUNT);
+        let index = self.arena().get(t, PropTable::INDEX).0;
+        let esize = PropTable::ENTRIES.elem_size();
+        if index == 0 {
+            // Linear mode stays compact, preserving insertion order.
+            let src = PropTable::ENTRIES.at(t, i + 1);
+            let dst = PropTable::ENTRIES.at(t, i);
+            self.arena_mut()
+                .copy_within(src, (count - i - 1) * esize, dst);
+            self.arena_mut()
+                .zero(PropTable::ENTRIES.at(t, count - 1), esize);
+            self.arena_mut().set(t, PropTable::COUNT, count - 1);
+            return;
+        }
+        let key = self.entry_key(t, i);
+        let mask = self.u32_array_len(index) - 1;
+        let mut b = key_hash(key) & mask;
+        while self.u32_array_get(index, b) != i + 1 {
+            b = (b + 1) & mask;
+        }
+        self.u32_array_set(index, b, TOMBSTONE);
+        self.arena_mut().zero(PropTable::ENTRIES.at(t, i), esize);
+        let deleted = self.arena().get(t, PropTable::DELETED);
+        self.arena_mut().set(t, PropTable::DELETED, deleted + 1);
+    }
+
+    // ---------------------------------------------------------------- own properties
+
+    fn find_own(&self, o: Obj, key: Atom) -> Loc {
+        if let Some(i) = key.as_int() {
+            if self.get_element_fast(o, i).is_some() {
+                return Loc::Dense(i);
+            }
+            if self.obj_flags(o) & OBJ_INDEXED_PROPS == 0 {
+                return Loc::None;
+            }
+        } else if key == atoms::LENGTH && self.object_class(o) == ObjectClass::Array {
+            return Loc::ArrayLength;
+        }
+        match self.props(o) {
+            0 => Loc::None,
+            t => self.table_find(t, key).map_or(Loc::None, Loc::Table),
+        }
+    }
+
+    fn read_loc(&self, o: Obj, loc: Loc) -> Option<Property> {
+        match loc {
+            Loc::None => None,
+            Loc::Dense(i) => Some(Property::data(
+                self.value_array_get(self.elements(o), i),
+                PropFlags::ALL,
+            )),
+            Loc::Table(i) => Some(self.read_entry(self.props(o), i)),
+            Loc::ArrayLength => Some(self.array_length_property(o)),
+        }
+    }
+
+    fn array_length_property(&self, o: Obj) -> Property {
+        let writable = self.obj_flags(o) & OBJ_LENGTH_READONLY == 0;
+        Property::data(
+            Value::number(self.array_length(o) as f64),
+            PropFlags::new(writable, false, false),
+        )
+    }
+
+    /// [[GetOwnProperty]].
+    pub fn get_own_property(&self, o: Obj, key: Atom) -> Option<Property> {
+        self.read_loc(o, self.find_own(o, key))
+    }
+
+    pub fn has_own_property(&self, o: Obj, key: Atom) -> bool {
+        self.find_own(o, key) != Loc::None
+    }
+
+    /// Looks `key` up along the prototype chain. Returns the object that has it and the
+    /// property; for an accessor the caller calls the getter with the original receiver.
+    pub fn find_property(&self, o: Obj, key: Atom) -> Option<(Obj, Property)> {
+        let mut cur = Some(o);
+        while let Some(c) = cur {
+            if let Some(p) = self.get_own_property(c, key) {
+                return Some((c, p));
+            }
+            cur = self.get_prototype_of(c);
+        }
+        None
+    }
+
+    /// [[HasProperty]].
+    pub fn has_property(&self, o: Obj, key: Atom) -> bool {
+        let mut cur = Some(o);
+        while let Some(c) = cur {
+            if self.has_own_property(c, key) {
+                return true;
+            }
+            cur = self.get_prototype_of(c);
+        }
+        false
+    }
+
+    /// Stores a complete property at `loc` (where `key` currently is, or `Loc::None`).
+    fn write_property(
+        &mut self,
+        o: Obj,
+        key: Atom,
+        loc: Loc,
+        p: Property,
+    ) -> Result<(), HeapError> {
+        let dense_ok = matches!(p, Property::Data { flags, .. } if flags == PropFlags::ALL);
+        match loc {
+            Loc::Dense(i) => {
+                if let (true, Property::Data { value, .. }) = (dense_ok, p) {
+                    self.value_array_set(self.elements(o), i, value);
+                } else {
+                    // Non-default attributes: move the element to the table.
+                    self.table_insert(o, key, &p)?;
+                    self.set_obj_flag(o, OBJ_INDEXED_PROPS, true);
+                    self.value_array_set(self.elements(o), i, Value::HOLE);
+                }
+            }
+            Loc::Table(i) => {
+                let t = self.props(o);
+                self.write_entry(t, i, key, &p);
+            }
+            Loc::ArrayLength => unreachable!("array length is written by array_set_length"),
+            Loc::None => {
+                if let (true, Some(i), Property::Data { value, .. }) = (dense_ok, key.as_int(), p)
+                    && self.dense_accepts(o, i)
+                {
+                    self.dense_put(o, i, value)?;
+                } else {
+                    self.table_insert(o, key, &p)?;
+                    if self.atom_array_index(key).is_some() {
+                        self.set_obj_flag(o, OBJ_INDEXED_PROPS, true);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// SameValue.
+    pub fn same_value(&self, a: Value, b: Value) -> bool {
+        if let (Some(x), Some(y)) = (a.as_number(), b.as_number()) {
+            return (x.is_nan() && y.is_nan())
+                || (x == y && x.is_sign_negative() == y.is_sign_negative());
+        }
+        if let (Some(x), Some(y)) = (a.as_string(), b.as_string()) {
+            return self.str_eq(x, y);
+        }
+        a == b
+    }
+
+    /// ValidateAndApplyPropertyDescriptor, without the write.
+    fn validate_descriptor(
+        &self,
+        current: Option<Property>,
+        extensible: bool,
+        d: &PropertyDescriptor,
+    ) -> Outcome {
+        debug_assert!(!(d.is_accessor() && d.is_data()));
+        let undef = Value::UNDEFINED;
+        let Some(cur) = current else {
+            if !extensible {
+                return Outcome::Reject;
+            }
+            let e = d.enumerable.unwrap_or(false);
+            let c = d.configurable.unwrap_or(false);
+            return Outcome::Write(if d.is_accessor() {
+                Property::Accessor {
+                    getter: d.get.unwrap_or(undef),
+                    setter: d.set.unwrap_or(undef),
+                    flags: PropFlags::new(false, e, c),
+                }
+            } else {
+                Property::Data {
+                    value: d.value.unwrap_or(undef),
+                    flags: PropFlags::new(d.writable.unwrap_or(false), e, c),
+                }
+            });
+        };
+        if d.is_empty() {
+            return Outcome::Keep;
+        }
+        let cf = cur.flags();
+        if !cf.configurable() {
+            if d.configurable == Some(true) {
+                return Outcome::Reject;
+            }
+            if d.enumerable.is_some_and(|e| e != cf.enumerable()) {
+                return Outcome::Reject;
+            }
+            if !d.is_generic() && d.is_accessor() != cur.is_accessor() {
+                return Outcome::Reject;
+            }
+            match cur {
+                Property::Accessor { getter, setter, .. } => {
+                    if d.get.is_some_and(|g| !self.same_value(g, getter))
+                        || d.set.is_some_and(|s| !self.same_value(s, setter))
+                    {
+                        return Outcome::Reject;
+                    }
+                }
+                Property::Data { value, flags } if !flags.writable() => {
+                    if d.writable == Some(true)
+                        || d.value.is_some_and(|v| !self.same_value(v, value))
+                    {
+                        return Outcome::Reject;
+                    }
+                }
+                Property::Data { .. } => {}
+            }
+        }
+        let e = d.enumerable.unwrap_or(cf.enumerable());
+        let c = d.configurable.unwrap_or(cf.configurable());
+        Outcome::Write(match cur {
+            Property::Data { .. } if d.is_accessor() => Property::Accessor {
+                getter: d.get.unwrap_or(undef),
+                setter: d.set.unwrap_or(undef),
+                flags: PropFlags::new(false, e, c),
+            },
+            Property::Accessor { .. } if d.is_data() => Property::Data {
+                value: d.value.unwrap_or(undef),
+                flags: PropFlags::new(d.writable.unwrap_or(false), e, c),
+            },
+            Property::Data { value, flags } => Property::Data {
+                value: d.value.unwrap_or(value),
+                flags: PropFlags::new(d.writable.unwrap_or(flags.writable()), e, c),
+            },
+            Property::Accessor { getter, setter, .. } => Property::Accessor {
+                getter: d.get.unwrap_or(getter),
+                setter: d.set.unwrap_or(setter),
+                flags: PropFlags::new(false, e, c),
+            },
+        })
+    }
+
+    /// OrdinaryDefineOwnProperty.
+    fn ordinary_define(
+        &mut self,
+        o: Obj,
+        key: Atom,
+        d: &PropertyDescriptor,
+    ) -> Result<bool, HeapError> {
+        let loc = self.find_own(o, key);
+        let current = self.read_loc(o, loc);
+        match self.validate_descriptor(current, self.is_extensible(o), d) {
+            Outcome::Reject => Ok(false),
+            Outcome::Keep => Ok(true),
+            Outcome::Write(p) => {
+                self.write_property(o, key, loc, p)?;
+                Ok(true)
+            }
+        }
+    }
+
+    /// [[DefineOwnProperty]] (ordinary, plus the Array exotic behavior). `Ok(false)` means
+    /// the spec returns false (the caller throws a TypeError in strict code). For an
+    /// array's `length`, `d.value` must already be a Number (the caller does the
+    /// ToNumber/ToUint32 conversions); a value that is not a `u32` gives
+    /// [`HeapError::InvalidArrayLength`].
+    pub fn define_own_property(
+        &mut self,
+        o: Obj,
+        key: Atom,
+        d: &PropertyDescriptor,
+    ) -> Result<bool, HeapError> {
+        if self.object_class(o) == ObjectClass::Array {
+            if key == atoms::LENGTH {
+                return self.array_set_length(o, d);
+            }
+            if let Some(i) = self.atom_array_index(key) {
+                let len = self.array_length(o);
+                if i >= len && self.obj_flags(o) & OBJ_LENGTH_READONLY != 0 {
+                    return Ok(false);
+                }
+                if !self.ordinary_define(o, key, d)? {
+                    return Ok(false);
+                }
+                if i >= len {
+                    self.set_array_length_raw(o, i + 1);
+                }
+                return Ok(true);
+            }
+        }
+        self.ordinary_define(o, key, d)
+    }
+
+    /// CreateDataProperty: define `key` as a writable, enumerable, configurable data
+    /// property.
+    pub fn create_data_property(
+        &mut self,
+        o: Obj,
+        key: Atom,
+        value: Value,
+    ) -> Result<bool, HeapError> {
+        self.define_own_property(o, key, &PropertyDescriptor::data(value, PropFlags::ALL))
+    }
+
+    /// ArraySetLength.
+    fn array_set_length(&mut self, o: Obj, d: &PropertyDescriptor) -> Result<bool, HeapError> {
+        let current = self.array_length_property(o);
+        let old_len = self.array_length(o);
+        let Some(v) = d.value else {
+            return Ok(match self.validate_descriptor(Some(current), true, d) {
+                Outcome::Reject => false,
+                Outcome::Keep => true,
+                Outcome::Write(p) => {
+                    if !p.flags().writable() {
+                        self.set_obj_flag(o, OBJ_LENGTH_READONLY, true);
+                    }
+                    true
+                }
+            });
+        };
+        let new_len = match v.as_number() {
+            // `as` saturates and maps NaN to 0, so the round trip rejects everything else.
+            Some(n) if (n as u32) as f64 == n => n as u32,
+            _ => return Err(HeapError::InvalidArrayLength),
+        };
+        let mut nd = *d;
+        nd.value = Some(Value::number(new_len as f64));
+        if new_len >= old_len {
+            return Ok(match self.validate_descriptor(Some(current), true, &nd) {
+                Outcome::Reject => false,
+                Outcome::Keep => true,
+                Outcome::Write(p) => {
+                    self.set_array_length_raw(o, new_len);
+                    if !p.flags().writable() {
+                        self.set_obj_flag(o, OBJ_LENGTH_READONLY, true);
+                    }
+                    true
+                }
+            });
+        }
+        if !current.flags().writable() {
+            return Ok(false);
+        }
+        let new_writable = d.writable != Some(false);
+        nd.writable = Some(true);
+        if let Outcome::Reject = self.validate_descriptor(Some(current), true, &nd) {
+            return Ok(false);
+        }
+        let (ok, final_len) = self.truncate_elements(o, new_len);
+        self.set_array_length_raw(o, final_len);
+        if !new_writable {
+            self.set_obj_flag(o, OBJ_LENGTH_READONLY, true);
+        }
+        Ok(ok)
+    }
+
+    /// Deletes every element at or above `new_len`, as ArraySetLength does from the top
+    /// down: it stops above the highest non-configurable one. Returns whether everything
+    /// was deleted, and the resulting length.
+    fn truncate_elements(&mut self, o: Obj, new_len: u32) -> (bool, u32) {
+        let mut stop = new_len;
+        let mut ok = true;
+        if self.obj_flags(o) & OBJ_INDEXED_PROPS != 0 && self.props(o) != 0 {
+            let t = self.props(o);
+            let mut doomed = Vec::new();
+            for i in 0..self.arena().get(t, PropTable::COUNT) {
+                let key = self.entry_key(t, i);
+                if key.is_null() {
+                    continue;
+                }
+                if let Some(idx) = self.atom_array_index(key)
+                    && idx >= new_len
+                {
+                    if !self.read_entry(t, i).flags().configurable() && idx + 1 > stop {
+                        stop = idx + 1;
+                        ok = false;
+                    }
+                    doomed.push((idx, key));
+                }
+            }
+            for (idx, key) in doomed {
+                if idx >= stop
+                    && let Some(i) = self.table_find(self.props(o), key)
+                {
+                    self.table_remove(o, i);
+                }
+            }
+        }
+        let el = self.elements(o);
+        if el != 0 {
+            let len = self.value_array_len(el);
+            if len > stop {
+                let start = ValueArray::VALUES.at(el, stop);
+                self.arena_mut().zero(start, (len - stop) * 8);
+                self.arena_mut().set(el, ValueArray::LEN, stop);
+            }
+        }
+        (ok, stop)
+    }
+
+    /// [[Delete]]: `false` if the property is non-configurable.
+    pub fn delete_own_property(&mut self, o: Obj, key: Atom) -> bool {
+        match self.find_own(o, key) {
+            Loc::None => true,
+            Loc::Dense(i) => {
+                let el = self.elements(o);
+                self.value_array_set(el, i, Value::HOLE);
+                true
+            }
+            Loc::ArrayLength => false,
+            Loc::Table(i) => {
+                if !self.read_entry(self.props(o), i).flags().configurable() {
+                    return false;
+                }
+                self.table_remove(o, i);
+                true
+            }
+        }
+    }
+
+    /// [[OwnPropertyKeys]] in spec order: array indexes ascending, then string keys in
+    /// creation order, then symbols in creation order.
+    pub fn own_keys(&self, o: Obj) -> Vec<Atom> {
+        let mut indexes: Vec<(u32, Atom)> = Vec::new();
+        let mut strings = Vec::new();
+        let mut symbols = Vec::new();
+        let el = self.elements(o);
+        if el != 0 {
+            for i in 0..self.value_array_len(el) {
+                if !self.value_array_get(el, i).is_hole() {
+                    indexes.push((i, Atom::int(i).expect("dense index fits an int atom")));
+                }
+            }
+        }
+        let indexed = self.obj_flags(o) & OBJ_INDEXED_PROPS != 0;
+        let mut sort = false;
+        if let t @ 1.. = self.props(o) {
+            for i in 0..self.arena().get(t, PropTable::COUNT) {
+                let key = self.entry_key(t, i);
+                if key.is_null() {
+                    continue;
+                }
+                if key.is_symbol() {
+                    symbols.push(key);
+                } else if let Some(idx) = indexed.then(|| self.atom_array_index(key)).flatten() {
+                    indexes.push((idx, key));
+                    sort = true;
+                } else {
+                    strings.push(key);
+                }
+            }
+        }
+        if sort {
+            indexes.sort_unstable_by_key(|&(i, _)| i);
+        }
+        let mut out = Vec::with_capacity(indexes.len() + strings.len() + symbols.len() + 1);
+        out.extend(indexes.into_iter().map(|(_, k)| k));
+        if self.object_class(o) == ObjectClass::Array {
+            out.push(atoms::LENGTH);
+        }
+        out.extend(strings);
+        out.extend(symbols);
+        out
+    }
+}
+
+/// Dense elements are addressed by integer atoms, so they stop at the int atom range.
+#[inline]
+const fn atom_int_max() -> u32 {
+    super::atom::MAX_INT_ATOM
+}
