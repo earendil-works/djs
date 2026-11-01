@@ -1,7 +1,7 @@
 # 0129: pi-like hot spots after GC work (interpreter, native calls, JSON)
 
-status: open
-agent: -
+status: in-progress
+agent: perf
 branch: issue/0129-pi-like-hot-spots
 depends-on: 0116, 0120, 0127
 guide: docs/guide/interpreter.md / builtins.md if mechanisms change
