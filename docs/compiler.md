@@ -1488,6 +1488,43 @@ What the compiler emits:
   disposes), closed after the body, inside the for-of close handler (a disposal error
   closes the iterator).
 
+
+### 7.11 Decorators and auto-accessors (0065, compiler/decorators.rs, D1650)
+
+- **Auto-accessors.** `accessor [no LineTerminator] name` (static, private, computed
+  too) is a field of a fresh private name (`<dec>N`, the hidden-binding counter below,
+  as qjs numbers it: it shows in brand-check messages) and a synthesized getter and
+  setter of it (`get name` / `set name`, defined like a method's; a private one's
+  closures are `<get #x>` / `<set #x>` installed like a private accessor's). The field
+  initializer defines the storage with `define_private_field 0`.
+- **Decorators.** A list evaluates to an array of `[decorator, receiver]` pairs:
+  `@` then an identifier or `( expr )`, then `.x`, `.#x` and calls (qjs's subset: no
+  `[`, `?.` or templates); `prepare_call` leaves `dec recv`, so `@a.b` calls with
+  `this` = `a`. An element's list goes into a hidden binding `<dec>N` of the body scope
+  before its key; a decorated computed method key is converted and kept in another;
+  a decorated field or auto-accessor gets one for its Record. Class decorators (a
+  statement or expression starting with `@`, in strip-types also `@dec export class`)
+  are evaluated before `class`; `Parser::class_decs` hands them to `parse_class`, which
+  keeps the array in `<class decs>` of the outer class scope. Decorators of TypeScript
+  members without code are evaluated (as qjs) and erased with the member.
+- **Application.** After the body, with `ctor proto` on the stack: `%DecoratorStart`
+  makes the decoration state (metadata object, three extra-initializer lists) into a
+  hidden binding, then each element is decorated in qjs's order (static non-fields,
+  instance non-fields, static fields, instance fields) by `%ApplyDecorators(target,
+  key, value, decs, state, flags)` (builtins/decorators.ts). Public elements: the
+  target is the home object, which the builtin reads the method/getter/setter/accessor
+  pair from and redefines. Private elements: the target is the access object of
+  synthesized arrows (`(o) => o.#x`, `(o, v) => { o.#x = v; }`, `(o) => #x in o`), the
+  value the hidden closure binding, which `name_init` overwrites with the result before
+  any initializer installs it (an auto-accessor's pair from its Record's slots 2 and 3).
+  The instance initializer runs the instance method extra initializers after the
+  private methods (it is created for that if needed); a field's initializer runs
+  `%DecoratorRunInits` on the value and `%DecoratorRunExtras` after the definition.
+  Then `ctor` → `ctor new_class` (`%ApplyDecorators` kind class, which also defines
+  `Symbol.metadata`), the inner binding, the static extra initializers, the static
+  initializer with `this` = the new class (`swap`: the home object stays the class),
+  `nip`, the class extra initializers.
+
 ## 8. Error reporting and early errors
 
 ### 8.1 Compile errors

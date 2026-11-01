@@ -3045,3 +3045,21 @@ Float16 NaN no longer takes the sign of its input and is always `0x7e00`, which 
 V8 writes. qjs writes `0x7c01`, but the spec leaves the bits implementation-defined, and
 djs already wrote `0x7e00` for every canonical NaN. Observable behavior is unchanged on
 every platform measured in 0055. The change makes it hold by construction on wasm too.
+
+## D1650: Decorators after qjs, the runtime in builtins/decorators.ts
+date: 2026-11-03 · by: lexer · issue: 0065
+TC39 decorators (2023-11) and `accessor` compile like qjs's implementation
+(docs/compiler.md 7.11): the same application order, context objects (property order
+kind, access, static, private, name, addInitializer, metadata), messages, metadata
+inheritance and class replacement semantics (the static initializer and the static
+extra initializers run with `this` = the new class; static private methods are
+installed on it, as the static initializer installs them). The work is in builtins:
+`%DecoratorStart`, `%ApplyDecorators`, `%DecoratorRunInits`, `%DecoratorRunExtras`, and
+four builtin-closure kinds (20 addInitializer, 21-23 the public `access.get/set/has`),
+so the interpreter only gained the closure kinds and the well-known symbol
+`Symbol.metadata` (heap atom `SYM_METADATA`). Private access functions and the
+auto-accessor getter/setter are synthesized bytecode functions instead of intrinsics, so
+no private-field intrinsic is needed. Hidden decorator bindings are named `<dec>N` in
+qjs's allocation order, since an auto-accessor's storage name appears in qjs's brand
+check message. Known divergence: qjs rejects `@dec abstract class` in TypeScript; djs
+accepts it.
