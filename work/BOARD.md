@@ -11,6 +11,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0044 | djs runs the shared difftest prelude (+ small 0045 items) | infra | .worktrees/0044-difftest-shared-prelude |
 | 0040 | P1-7 Classes | lexer | .worktrees/0040-p1-classes |
 | 0046 | BigInt | heap | .worktrees/0046-bigint |
+| 0047 | Dev-flow efficiency investigation (report only) | devflow | .worktrees/0047-devflow |
 
 ## Open (ready)
 
