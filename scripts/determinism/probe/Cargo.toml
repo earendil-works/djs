@@ -1,0 +1,22 @@
+[package]
+name = "detprobe"
+edition = "2024"
+version = "0.0.0"
+publish = false
+
+[workspace]
+
+[dependencies]
+djs-core = { path = "../../../crates/djs-core" }
+djs-prelude = { path = "../../../crates/djs-prelude" }
+djs-wasm = { path = "../../../crates/djs-wasm" }
+
+[profile.dev.package.djs-core]
+opt-level = 1
+[[bin]]
+name = "detprobe"
+path = "src/main.rs"
+
+[[bin]]
+name = "abidrive"
+path = "src/abidrive.rs"
