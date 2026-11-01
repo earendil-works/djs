@@ -469,7 +469,7 @@ const IMAGE_CACHE_ENTRIES = 16;
 const MAX_CACHE_KEY = 64 * 1024;
 /**
  * The heap size the last cold start sealed after its prelude: the next one starts with the
- * room for it (0120). A hint only: 0 before the first.
+ * room for it (D2043). A hint only: 0 before the first.
  */
 let sealedSize = 0;
 
@@ -582,7 +582,7 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
       // Sealed (D2041): the prelude's state is old, so the collections while scripts run
       // only trace and move what they made.
       engine.seal();
-      // The next cold start reserves for this size up front (0120): growing the heap
+      // The next cold start reserves for this size up front (D2043): growing the heap
       // while the prelude runs moved it, and the old block stayed behind as a hole.
       sealedSize = engine.heapSize;
       if (options.reuseImages !== false && key.length <= MAX_CACHE_KEY) {
@@ -649,7 +649,8 @@ function preludeImageOf(module: WebAssembly.Module, prelude: string, data: VmSta
       memoryLimit: data.memoryLimitBytes,
     });
     const prepared = prepare(session, engine, prelude, data);
-    engine.collect();
+    // Sealed as in `startVm`, so that the image is the same byte for byte.
+    engine.seal();
     const entry = { image: engine.image(), prepared };
     if (hooks.reuseImages !== false) cachePreludeImage(module, key, entry);
     return entry;

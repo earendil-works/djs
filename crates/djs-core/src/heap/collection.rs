@@ -62,7 +62,7 @@ pub fn normalize_key(v: Value) -> Value {
 
 /// Whether the collection object `o` (Map/Set/WeakMap/WeakSet) has an object or symbol
 /// key at or above `old`: a key that a minor collection may move or (in a weak
-/// collection) clear, so the index needs a rebuild (0120). Strings and BigInts hash by
+/// collection) clear, so the index needs a rebuild (D2041). Strings and BigInts hash by
 /// content and do not count.
 pub(super) fn has_young_keys(arena: &super::Arena, o: u32, old: u32) -> bool {
     let entries: Value = arena.read(super::cells::Object::SLOTS.at(o, ENTRIES));

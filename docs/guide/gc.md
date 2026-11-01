@@ -9,7 +9,10 @@ out, and what it costs.
 > **In short.** djs has two collectors over one trace. A VM's own collections are
 > **in place** (mark-compact): they mark everything reachable from the roots, then slide
 > the survivors down over the garbage, keeping their order. No second arena is needed,
-> so a collection costs no more memory than the heap itself. A **copying** (Cheney)
+> so a collection costs no more memory than the heap itself. Most of them are **minor**:
+> the heap's prefix that holds the realm and the prelude, the **old region**, is taken as
+> live and left where it is, and only what the program allocated since is traced and
+> moved. A **copying** (Cheney)
 > collector lays a heap out breadth-first from the roots, a function of the object graph
 > alone; it makes the canonical hash and the base image. Collections happen only at
 > safepoints, when allocation has crossed a threshold that is itself part of the heap, so
@@ -72,6 +75,77 @@ slicing. Collecting a collected heap changes nothing.
 > collections take 1.1–1.6 times as long, programs 0–5.5% more instructions, and the
 > second collector adds 6 KB of code.
 
+## The old region
+
+Most of a fresh VM's heap is the base image: the realm, the compiled builtins and the
+prelude, about 400 KB, nearly all of it live for the VM's whole life. A program that
+allocates a lot of short-lived data collects every few hundred kilobytes, and a full
+collection traces that whole base every time again. On a property-heavy benchmark that
+was most of the collector's work.
+
+So the arena has an **old region**: a prefix `[0, B)`, with B stored in the `Roots` cell
+(D2041). A **minor** collection treats every old cell as live. It does not mark them and
+does not move them; it marks and slides only the **young** cells above B. What it needs to
+know is which young cells the old ones keep alive, and the old cells are mutable:
+scripts add globals, patch prototypes, fill caches and grow the realm's tables. Rather
+than track every write, a minor collection reads the whole old region once:
+
+1. **Walk.** It visits the old cells in address order, and every traced field that points
+   at or above B is a root for the young cells. The marker treats it like the `Roots`
+   cell's fields. The field's address goes on a short list.
+2. **Mark, count, update, slide** as before, but only over the young cells: the bitmap and
+   the table start at B, and survivors slide down to B. Of the old cells, only the fields
+   on the list are rewritten (if the list fills up, the update walks the old region
+   again).
+
+A few old cells need more than their fields read:
+- an old **WeakMap**'s pairs with young keys join the ephemeron rounds, and are cleared if
+  the key dies;
+- an old Map or Set with young object keys is rehashed, since those keys move;
+- old function templates get their offset caches emptied, like young ones.
+
+Reading a field is about four times cheaper than tracing it: on a heap holding just the
+base, a minor collection takes 0.08 ms where a full one takes 0.18 ms.
+
+**Where B comes from.** A VM created from the base image starts with B at the image's
+end: the base is made by the copying collector, which seals what it leaves. An embedder
+can seal a heap itself with `Vm::seal` (`vm_seal` in wasm): a full collection, after which
+everything live is old. pi does that after running its own prelude, so its lockdown and
+helpers become old too. Nothing else moves B up.
+
+**Full collections** still trace everything. They run every 16th time, when a minor
+collection left more than half the memory cap in use, whenever the embedder asks
+(`Vm::collect`), and with no old region at all (B = 0). A full collection keeps the old
+region's live cells and drops its dead ones: B shrinks to the live bytes below it, but it
+never grows.
+
+**What it retains.** Between full collections, an old cell that died still holds its
+fields, so the young cells only it reaches survive too: the old value stack after the
+stack grew, the realm's atom table before its first growth. In practice that is a few
+tens of kilobytes, and the next full collection frees it.
+
+**Determinism.** B and the count of minor collections since the last full one are in the
+`Roots` cell, like the threshold. Whether a collection is minor or full is decided from
+the heap alone, so a restored VM collects the same way as the original. A full collection
+slides everything into allocation order, so its result is the same whether minor
+collections ran before it or not.
+
+> **Trade-off.** A walk over the old region over a write barrier. A barrier that records
+> stores into old cells (a card table) would let a minor collection read only the cells
+> written since the last one. But it costs a compare on every traced store in the
+> interpreter's hottest paths, and it has to be complete, raw stack writes included: a
+> forgotten store frees a live cell. The walk has nothing to forget. It costs about
+> 0.04 ms for the 400 KB base, at most 2–2.5% of the workloads that collect most often,
+> so the barrier is not built (D2044).
+
+> **Trade-off.** No promotion. A generational collector moves long-lived young cells into
+> the old region, so later collections stop tracing them. djs tried making every full
+> collection's survivors old. Data that died after its promotion then stayed until the
+> next full collection, and the thresholds were computed over it. Peak memory rose by up
+> to 76% (D2042). The old region is the state of a setup phase, sealed on purpose. A
+> program with a large long-lived young heap gains little: its minor collections still
+> trace that data.
+
 ## Copying, for canonical layouts
 
 The copying collector reserves a new arena as large as the old one's used part, copies
@@ -125,7 +199,9 @@ collections come more often as memory gets tight. The arena's backing store stop
 growing at the threshold, since wasm memory never shrinks and the peak is what a run
 costs (D1870).
 
-Three rules make the collection points a function of the program alone:
+Which collections are minor and which are full is a function of the program in the same
+way (see [the old region](#the-old-region)). Three rules make the collection points a
+function of the program alone:
 
 - the threshold is stored in the `Roots` cell, so a VM restored from an image collects
   where the original would have (D1601);
@@ -197,9 +273,9 @@ not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D16
 ## Where to look
 
 - [`crates/djs-core/src/heap/compactor.rs`](../../crates/djs-core/src/heap/compactor.rs):
-  the in-place collector;
+  the in-place collector, full and minor;
   [`crates/djs-core/src/heap/gc.rs`](../../crates/djs-core/src/heap/gc.rs): the copying
-  collector, the shared bookkeeping and `next_threshold`;
+  collector, the collection schedule (`collect_auto`), `seal` and `next_threshold`;
   [`gc_tests.rs`](../../crates/djs-core/src/heap/gc_tests.rs): its tests, including
   "collecting twice gives identical bytes".
 - [`crates/djs-core/src/heap/walk.rs`](../../crates/djs-core/src/heap/walk.rs): tracing
@@ -209,8 +285,11 @@ not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D16
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 -->
+<!-- gen:decisions D2040 D2041 D2042 D2044 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
+- D2041: An old region that minor collections neither trace nor move
+- D2042: Full collections do not promote; only seal points make cells old
+- D2044: No card table and write barrier (old-generation phase 2) for now
 - D018: Adopt mark-compact for in-VM collections
 - D1090: Copying collector
 - D1052: Layout description macro

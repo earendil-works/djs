@@ -1,7 +1,8 @@
 # A sticky base region: not re-tracing the base image at every collection (0101 follow-up)
 
-Status: design note, for discussion. Not built. It builds on the 0101 mark-compact
-prototype (docs/mark-compact.md); a variant for Cheney is in section 4.
+Status: Phase 1 built in 0120 (D2041–D2044), with the changes listed in section 10.
+Phase 2 (cards) is not built. It builds on the 0101 mark-compact prototype
+(docs/mark-compact.md); a variant for Cheney is in section 4.
 
 ## 1. Why
 
@@ -163,3 +164,38 @@ store path, the card table and its clearing.
 Build Phase 1 after 0101 (it needs the in-place collector's fixed prefix), then measure it
 on 0081/0087's workloads and the pi bench. Decide on Phase 2 with those numbers and with pi
 sealing its post-prelude image.
+
+## 10. As built (0120)
+
+Phase 1 is in heap/compactor.rs and heap/gc.rs. It differs from the design above in these
+points:
+- **No promotion at full collections (D2042).** A full collection shrinks B to the live
+  bytes below it. Only `seal` and canonical collections set B = len.
+  - Making every full collection's survivors old was measured. It raised peak memory by up
+    to 76% (higher-order 28.4 → 45.3 MiB, jsonh 6.8 → 12.0, pi-like 4.2 → 6.3): promoted
+    data that died stayed until the next full collection.
+- **A remembered list.** The mark walk records the old slots that hold young references (a
+  fixed 16 KiB list, reserved with the side tables). The update pass rewrites only those,
+  so the old region is walked once, not twice. A full list falls back to the second
+  walk. Old templates' offset caches are emptied during the mark walk.
+  - On a base-only heap the minor collection took 0.155 ms with two walks and 0.080 ms
+    with the list; a full collection takes 0.177 ms and the bare scan 0.043 ms.
+- **Old collections** are rehashed only if they have object or symbol keys ≥ B. They are
+  flagged with the free `gc_bits::REHASH` (formerly `OLD`).
+- **Schedule:**
+  - Minor collections while B > 0, full every 16th.
+  - A minor collection that leaves more than half the limit in use makes the next one full.
+  - With B = 0 (`Vm::new` before a seal) every collection is full.
+  - `Vm::collect` (and wasm `vm_collect`) is always full; `Vm::seal` / `vm_seal` is full,
+    then B = len.
+- **pi** seals after its prelude, in place of the plain collection of D1890. pi's
+  snapshots still call `collect` (full).
+- **Cold starts (D2043):** `vm_new_reserved(limit, live)` makes a VM from the base with the
+  arena capacity a heap of `live` bytes gets. pi passes the size its previous cold start
+  sealed; cold peak memory drops 3.00 → 2.25 MiB.
+- **Measured:** collection time −8% to −51% (props −51%, pi-like −38%, strings −42%);
+  wasm instructions pi-like −5.7%, props −5.3%, the others about ±0. Peak memory is
+  unchanged except for allocator-placement effects (strbuild +6.4 MiB, strings
+  −1.2 MiB). The numbers are in D2041.
+- **Phase 2 is not built (D2044).** Cards could save at most the old walk, ~2–2.5% of
+  props and pi-like, for a barrier on every traced store.

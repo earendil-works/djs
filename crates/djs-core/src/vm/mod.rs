@@ -232,7 +232,7 @@ impl Vm {
 
     /// [`Vm::from_base`] with the arena capacity a heap of `live` bytes would get (its
     /// next GC threshold plus the slack): for an embedder that knows how big the heap
-    /// gets, such as pi's cold start, which runs its prelude next (0120). Growing later
+    /// gets, such as pi's cold start, which runs its prelude next (D2043). Growing later
     /// would reallocate the arena, and in wasm the old block stays behind as a hole.
     pub fn from_base_reserved(base: &[u8], opts: VmOptions, live: usize) -> Result<Vm, LoadError> {
         Vm::check_image(base)?;

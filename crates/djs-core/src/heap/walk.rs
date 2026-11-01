@@ -164,7 +164,7 @@ impl Heap {
         if end == 0 {
             return Err(VerifyError::Roots { offset: 0 });
         }
-        // The old region ends at a cell boundary (0120): minor collections walk it.
+        // The old region ends at a cell boundary (D2041): minor collections walk it.
         let old = a.get(0, super::cells::Roots::OLD_END);
         if old != end && !is_start(&starts, old) {
             return Err(VerifyError::OldEnd { offset: old });

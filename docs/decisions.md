@@ -5220,3 +5220,97 @@ that still exist and is not checked. Alternative: fail on unlinked mentions and 
 authors and generators write `[`path`](../../path)` everywhere: more noise in the
 Markdown for the same result, and generated text quoted from code comments (intrinsic
 docs) could not be fixed at its source.
+
+## D2041: An old region that minor collections neither trace nor move
+date: 2026-11-03 · by: heap · issue: 0120
+Phase 1 of docs/old-generation.md, built into the in-place collector (heap/compactor.rs).
+`Roots::OLD_END` (B) and `Roots::MINORS` are in the image. Cells in `[0, B)` are old.
+- **Minor collection** (`Heap::collect_minor`, `mark_compact(B)`):
+  - Old cells count as live; they are not marked and do not move.
+  - One linear walk over the old region reads every traced slot. A slot with a target
+    ≥ B marks it as a root and is put on a *remembered list* (u32 per slot, a fixed 16 KiB
+    reserved with the other side tables). The update pass rewrites only those slots.
+  - If the list overflows, the update pass walks the old region again.
+  - During the walk, old templates get `clear_offset_caches`. Old Map/Set/WeakMap/WeakSet
+    with object or symbol keys ≥ B are flagged (`gc_bits::REHASH`, the unused `OLD` bit)
+    and rehashed.
+  - Old ephemeron tables are counted and joined to the fixpoint and the dead-pair
+    clearing by a hop walk (headers only). Their slots are updated by another hop walk.
+  - The bitmap and block table cover `[B, len)`; compaction starts at B.
+- **Full collection** (`Heap::collect`, every explicit `Vm::collect`): the whole-heap
+  mark-compact as before. B becomes the live bytes below the old B: the old region keeps
+  its live cells and drops its dead ones.
+- **Seal** (`Heap::seal`, `Vm::seal`, wasm `vm_seal`): a full collection, then B = len.
+  `collect_canonical` also sets B = len and MINORS = 0, so canonical images are sealed:
+  the base image's old region is all of it, and the canonical hash does not depend on the
+  B a VM had.
+- **Schedule** (`Heap::collect_auto`, the interpreter's safepoints): minor while
+  B > 0, full every `FULL_EVERY` = 16th collection. A minor collection that leaves more
+  than half the limit in use makes the next one full. Without an old region (B = 0, e.g.
+  `Vm::new` before a seal) every collection is full, as before.
+- **Determinism:** B and MINORS are image state, so whether a collection is minor or
+  full is a function of the image (D1601). Sliding keeps allocation order, so after a full
+  collection the bytes do not depend on where minor collections ran (gc_tests
+  `scheduled_collections_do_not_change_compacted_images`).
+- **Retention:** dead old cells, and the young cells only they reach, survive until the
+  next full collection. `Heap::verify` checks that B is a cell boundary.
+- **Measured** (main → branch; native collection time, min of 5, under load):
+  props 20.4 → 10.0 ms, pi-like 29.3 → 18.1, strings 4.2 → 2.5, strbuild 6.0 → 4.2,
+  forof 1.4 → 1.1, jsonh 5.4 → 4.5, higher-order 10.0 → 8.4, arrays 4.9 → 4.5,
+  json 2.8 → 2.6.
+  - Base-only heap (vm/tests.rs `base_region_scan_cost`): full 0.177 ms, minor 0.080 ms
+    (0.155 ms before the remembered list), the bare scan 0.043 ms.
+  - Wasm instructions: pi-like −5.7%, props −5.3%, strings −1.4%, the others within
+    ±0.4%, except json +1–2%. A control build that only collects in full shows half of
+    that json delta too: it is not collector work.
+  - pi bench tool-heavy (prelude image reused) 3.65 → 3.28 ms.
+  - Peak wasm memory is unchanged on 17 of 22 workloads, +0.1–0.2 MiB on four (the
+    retained cells). strbuild went 25.5 → 31.9 MiB and strings 14.1 → 12.9.
+    - Those two are placement effects in the host allocator: strbuild's arena sizes are
+      within 0.6% of main's.
+    - A variant whose first collection is full gives strbuild 25.5 but strings 18.6.
+  - Code: +5.3 KB wasm (+2.1 KB gzip).
+
+## D2042: Full collections do not promote; only seal points make cells old
+date: 2026-11-03 · by: heap · issue: 0120
+Measured alternative, rejected: every full collection sets B = len, so all survivors
+become old (a generational scheme with promotion at full collections, plus a full
+collection whenever the young survivors outgrew B). It cut collection time further on
+workloads with large young survivor sets. It also raised peak wasm memory:
+- higher-order 28.4 → 45.3 MiB;
+- jsonh 6.8 → 12.0 MiB;
+- pi-like 4.2 → 6.3 MiB.
+Promoted data that died stayed in the arena until the next full collection, and
+thresholds were computed over it. So B moves up only at explicit seal points (`seal`,
+canonical collections) and shrinks at full collections. Promotion after surviving two
+minor collections (aging) would limit that; it is not built.
+
+## D2043: pi's later cold starts size the arena for the sealed prelude heap
+date: 2026-11-03 · by: heap · issue: 0120
+`Vm::from_base_reserved(base, opts, live)` / `djs_prelude::new_vm_reserved` / wasm
+`vm_new_reserved(limit, live)` create a VM from the base whose arena already has the
+capacity a heap of `live` bytes gets: its threshold plus slack, `Heap::restore_capacity`.
+js/pi/vm.ts remembers the heap size of its last sealed cold start (module state, a hint
+only) and passes it to the next cold start's `Engine.create`. The arena then never grows
+while the prelude runs.
+- **Before:** the arena grew while the prelude ran, and in wasm the moved block stayed
+  behind as a hole.
+- **Measured:** pi cold start peak memory 3.00 → 2.25 MiB, for `return 1` and for
+  tool-heavy.
+- **Limits:** the first cold start in a process has no hint and is unchanged.
+- **Rejected:** reserving after `vm_new` moves the arena, which is the very hole the hint
+  avoids (2.9–4.1 MiB).
+
+## D2044: No card table and write barrier (old-generation phase 2) for now
+date: 2026-11-03 · by: heap · issue: 0120
+Phase 2 would mark dirty cards on traced stores into the old region, so a minor
+collection scans only the dirty cards. With D2041 that can save at most the old walk,
+about 0.04 ms per minor collection for the 400 KB base:
+- props: ≤ 6 ms of its ~10 ms of collection time, ~2.5% of the run;
+- pi-like: ≤ 6.5 ms of ~18 ms, ~2%.
+Against that, a compare on every traced store of the interpreter, the hot path of the
+same workloads (props is mostly property stores), and a barrier that must be complete,
+raw stack writes included. Not worth it at today's base size. Revisit when the old region
+gets much bigger, e.g. sealed pi images of several MB, since the walk is linear in B.
+Aging/promotion (D2042) would help the young-dominated workloads (arrays, higher-order,
+json), where a minor collection still costs about a full one.

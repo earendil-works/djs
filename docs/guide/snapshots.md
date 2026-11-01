@@ -52,12 +52,18 @@ console.log(tagged.join(" "), [...seen.values()].join(""));
 ```
 <!-- /gen -->
 
-Taking an image right after a collection makes it small: no garbage, the live cells
-packed in their allocation order ([the garbage collector](gc.md)). The base image is
-made with the copying collector instead, so its layout depends only on the object graph,
-not on how the prelude allocated. The
-embedders do that when they keep an image (D1890); the stress tests also compare raw
-images taken at arbitrary stops, which must be identical too (D1725).
+Taking an image right after a full collection makes it small: no garbage, the live cells
+packed in their allocation order ([the garbage collector](gc.md)). Embedders collect
+before they keep an image (D1890). The stress tests also compare raw images taken at
+arbitrary stops, which must be identical too (D1725). The base image is made with the
+copying collector instead, so its layout depends only on the object graph, not on how the
+prelude allocated.
+
+An image also holds the collector's state: the next collection threshold, where the
+[old region](gc.md#the-old-region) ends and how many minor collections ran since the last
+full one. A restored VM goes on collecting exactly as the original would have. The old
+region is part of the image like any other bytes; it is a collector feature, not a
+separate layer of the format (D2041).
 
 ## Loading only what this build wrote
 
@@ -101,7 +107,8 @@ and collects the heap, verifies the result, and writes it out; the library embed
 `vm_new` copies the base into a fresh arena (`Vm::from_base`, which checks the header
 and the build hash but skips the full walk, since the base was verified when it was
 built). That copy **is** startup: about 40 µs in wasm (D1990), most of it the copy of
-the base's bytes.
+the base's bytes. The whole base is the new VM's old region, so the collections while a
+script runs don't trace it again.
 
 Because it ships in every wasm module and is copied into every VM, the base has been put
 on a diet:
@@ -127,9 +134,14 @@ checks, so nothing in it depends on the platform.
 pi's adapter uses images in two places (D1495, D1890):
 
 - **The prelude image.** pi runs its own prelude (helpers, a lockdown that freezes about
-  700 objects) before every script. The adapter keeps the image taken right after it,
-  collected, keyed by everything the prelude saw, and restores it for the next script
-  with the same inputs. A start then takes about a millisecond instead of several.
+  700 objects) before every script. The adapter seals the heap right after it (a full
+  collection that makes everything live old) and keeps the image, keyed by everything
+  the prelude saw. It restores the image for the next script with the same inputs; a
+  start then takes about a millisecond instead of several.
+  - A start that does run the prelude creates its VM with room for the heap size the
+    last sealed prelude left (D2043). Growing the arena while the prelude runs would move
+    it, and in wasm its old block stays behind as a hole: the hint lowers such a start's
+    peak memory from 3.0 to 2.25 MiB.
 - **Waiting sessions.** `snapshot()` collects the session and takes its image while it
   waits for a tool; `resumeVm()` continues it, possibly in another process. The `Sandbox`
   does the same with `bytes()` and `fromBytes()`.
@@ -219,8 +231,10 @@ start data, refusing data that make a different image.
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 -->
+<!-- gen:decisions D2040 D2041 D2043 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
+- D2041: An old region that minor collections neither trace nor move
+- D2043: pi's later cold starts size the arena for the sealed prelude heap
 - D1091: Handle table
 - D1890: pi adapter: snapshot() and the prelude image collect first
 - D1725: The determinism checks compare raw images too

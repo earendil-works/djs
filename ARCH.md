@@ -178,10 +178,21 @@ scaled by the 8-byte alignment.
     mark, block table, update and slide. The side tables are allocated up front: a
     live-word bitmap and a block table, about 2.3% of the arena. There is no to-space, so
     a collection's peak is the arena itself. Survivors keep their allocation order.
+  - **An old region** `[0, Roots::OLD_END)` (D2041): the cells below it are live for
+    **minor** collections, which neither mark nor move them. A linear walk over the old
+    cells finds every reference to a young cell (no write barrier); those slots are the
+    roots of the young cells and the only old slots the update pass rewrites. The old end
+    is the base image's length after `vm_new`, and `Vm::seal` (pi calls it after its
+    prelude) sets it to the arena size after a full collection. Full collections shrink
+    the old region to its live cells but never extend it (D2042). The safepoints'
+    collections are minor, and every 16th is full; the schedule is image state, like the
+    threshold. Dead old cells, and young cells only they reach, wait for a full collection.
+    No card table (D2044).
   - **Cheney copying** (breadth-first, a function of the graph alone) is
-    `collect_canonical`. It makes the canonical hash (on a copy, D1730) and the base image.
-  - Both keep the same cells, so live sizes and collection points don't depend on which
-    one runs. **Allocation never collects**:
+    `collect_canonical`. It makes the canonical hash (on a copy, D1730) and the base image,
+    and leaves a sealed heap.
+  - A full collection keeps the same cells as Cheney, so live sizes and collection points
+    don't depend on which collector runs. **Allocation never collects**:
   it bumps (growing the arena) and sets `gc_pending` once the threshold is crossed; the
   collection runs at the next safepoint (an instruction boundary, a frame entry, a
   backward jump, a native builtin's state transition). Native Rust code therefore keeps
@@ -198,9 +209,8 @@ scaled by the 8-byte alignment.
     builtin's path retries (D1910). A refusal by the host allocator below the cap is
     different: it stops the run with `Status::HostOutOfMemory` (D1690).
   - **Not built:** a non-moving large-object space for big strings and buffers; a 1 MiB
-    tool output still slides when garbage lies below it (0081 F6). There is also no old
-    generation for the base image, which every collection traces again (designed in
-    docs/old-generation.md).
+    tool output still slides when garbage lies below it (0081 F6). Promotion of long-lived
+    young cells into the old region (D2042) and card marking (D2044) are not built.
 - **Roots:** the realm, the value stack and frames, the job queue, the pending host call
   table, the host inbox (D1670), unhandled rejections, and a host handle table (values the
   embedder holds, D1091). Every root lives in the arena.
@@ -625,11 +635,13 @@ objects up to 9x on one big string inbound, and the reader by 3x to 130x outboun
 - **Deltas: Superseded (not built).** The proposal planned page-level deltas against the
   base: the base-derived region would become a non-moving **old generation**, collected
   only on a full snapshot, so that "big prelude + small user state" deltas stay small.
+  (The GC's old region of D2041 is a collector feature, not a snapshot format: images
+  stay the raw arena, old region included.)
   0088's research measured the alternatives on real pi sessions and recommends instead:
   raw images for same-build use, made small by compressing against a reference image
   (a dictionary), and journal replay with pinned engine versions for durability across
   versions; no logical format for now. The owner's decision is pending, so neither the
-  old generation nor the dictionary compression is built.
+  delta format nor the dictionary compression is built.
 - **Restore:** validate, copy the bytes, re-bind host functions by id and native builtins
   by index. There are no fixups because there are no pointers.
 
@@ -703,8 +715,9 @@ The original phases, with their status:
 - **P3, TypeScript:** done (the type skipper, enums, namespaces, parameter properties,
   decorators).
 - **P4, durability:** snapshot/restore of whole images, deterministic images, journals and
-  canonical hashes are done. Deltas and the old generation are **Superseded** (see
-  "Snapshots"); the follow-up depends on the owner's decision on 0088.
+  canonical hashes are done. Deltas are **Superseded** (see "Snapshots"); the follow-up
+  depends on the owner's decision on 0088. The GC has an old region (D2041), but images
+  stay whole.
 - **P5, long tail:** done for the listed areas (regex, generators, collections, symbols,
   iterators, typed arrays, BigInt, Proxy, Reflect, stack traces, WeakRef, disposables);
   the test262 active group passes 99.8%.

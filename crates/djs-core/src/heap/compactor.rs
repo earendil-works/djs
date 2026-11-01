@@ -16,11 +16,19 @@
 //! 4. **Slide** the marked cells down in address order, clear their marks, and zero the
 //!    freed tail. Map/Set indexes are rehashed afterwards (D1381).
 //!
+//! A **minor** collection (D2041) leaves the old region `[0, Roots::OLD_END)` alone: its
+//! cells count as live and are neither marked nor moved. The mark pass starts from a
+//! linear walk over them instead of the roots cell: every traced slot with a young target
+//! is a root, and is remembered, so the update pass rewrites only those old slots. Old
+//! ephemeron tables join the fixpoint, old collections with young keys are rehashed, and
+//! the bitmap, the block table and the slide cover only the young cells.
+//!
 //! Only the *set* of marked cells reaches the result, so the mark order (stack,
-//! overflow rescans, the ephemeron fixpoint) cannot make it nondeterministic, and both
-//! collectors keep the same cells at the same sizes: live bytes, thresholds and GC points
-//! do not depend on which one runs. The side tables (len/64 + len/128 bytes and a fixed
-//! stack) are allocated before anything is touched: a refusal leaves the heap as it was.
+//! overflow rescans, the ephemeron fixpoint) cannot make it nondeterministic, and a full
+//! collection keeps the same cells at the same sizes as Cheney: live bytes, thresholds
+//! and GC points do not depend on which collector runs. The side tables (len/64 + len/128
+//! bytes, a fixed stack, and in a minor collection the remembered list) are allocated
+//! before anything is touched: a refusal leaves the heap as it was.
 
 use alloc::vec::Vec;
 

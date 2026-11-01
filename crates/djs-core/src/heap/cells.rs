@@ -191,7 +191,7 @@ cells! {
         /// Shapes created so far: the global shape budget (`object::SHAPE_BUDGET`).
         /// Shapes never die (strong transitions, D1831), so this only grows.
         SHAPES: u32 = 68,
-        /// The end of the old region (0120, D2041): the cells in `[0, OLD_END)` are live
+        /// The end of the old region (D2041): the cells in `[0, OLD_END)` are live
         /// for minor collections, which neither mark nor move them. A full collection
         /// sets it to the arena size it leaves (everything live becomes old). 0 for a
         /// fresh heap (no old region yet).

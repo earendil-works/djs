@@ -1,7 +1,11 @@
-//! The copying collector (Cheney).
+//! The collection entry points and the copying collector (Cheney).
 //!
-//! [`Heap::collect`] copies everything reachable from the [`Roots`] cell into a fresh
-//! arena and drops the old one:
+//! The VM's own collections are in place (`compactor.rs`): [`Heap::collect`] (full),
+//! [`Heap::collect_minor`] (the old region stays, D2041), [`Heap::collect_auto`] (the
+//! schedule between the two) and [`Heap::seal`].
+//!
+//! [`Heap::collect_canonical`] copies everything reachable from the [`Roots`] cell into a
+//! fresh arena and drops the old one:
 //!
 //! 1. Reserve the to-space: as many bytes as the from-space holds, which bounds the live
 //!    data. If the host cannot provide them, the collection fails with
@@ -53,7 +57,7 @@ use crate::value::Value;
 /// The smallest growth between collections.
 pub const MIN_GROWTH: u32 = 256 * 1024;
 
-/// Every this many collections, [`Heap::collect_auto`] makes a full one (0120): it
+/// Every this many collections, [`Heap::collect_auto`] makes a full one (D2041): it
 /// bounds how long dead old cells are retained.
 pub const FULL_EVERY: u32 = 16;
 
@@ -174,7 +178,7 @@ impl Heap {
     /// and `Value` held outside the heap is invalid afterwards; keep [`Handle`]s instead.
     ///
     /// The surviving cells keep their address order; the old region (`Roots::OLD_END`,
-    /// 0120) shrinks to its live cells. On `Err(HostOutOfMemory)` (the host could not
+    /// D2041) shrinks to its live cells. On `Err(HostOutOfMemory)` (the host could not
     /// provide the side tables) the heap is unchanged.
     ///
     /// [`Handle`]: super::Handle

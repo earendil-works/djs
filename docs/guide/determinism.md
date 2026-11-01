@@ -84,11 +84,17 @@ parts of the engine exists to keep it:
   anywhere](suspension.md)).
 - **Collections** happen at the same instructions under any slicing and restore. The
   threshold lives in the heap (D1601), and nothing about a stop allocates or collects
-  (D1710; [The garbage collector](gc.md)).
+  (D1710; [The garbage collector](gc.md)). So does the choice between a minor and a full
+  collection: where the old region ends and how many minor collections ran since the last
+  full one are in the heap too (D2041).
 - **The collector's layout** is a function of what the program did. A collection slides
   the live cells down in their allocation order, so the same allocations give the same
-  bytes, whenever the collections came (D2040). For a layout that depends on the object
-  graph alone, the canonical hash collects a copy breadth-first (D1090).
+  bytes, whenever the collections came (D2040). A minor collection keeps dead cells of the
+  old region until the next full one, but a full collection drops them, and its result
+  doesn't depend on whether minor ones ran before it. For a layout that depends on the
+  object graph alone, the canonical hash collects a copy breadth-first (D1090). The copy
+  also ends up with the whole heap as its old region, so the hash does not depend on
+  where a VM's old region ended.
 - **Nothing depends on addresses or timing.** Map and Set rehash after every collection
   instead of hashing by a per-object id that would vary, and shape transitions are
   strong so that the shape tree does not depend on when collections ran (D1831; [Cells,
@@ -207,8 +213,9 @@ Some things are deliberately outside the guarantee:
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D1314 D1383 D1670 D1680 D1690 D1090 D1601 D1710 D1740 D1831 D1730 D1720 D1725 D1750 D1633 -->
+<!-- gen:decisions D2040 D2041 D1314 D1383 D1670 D1680 D1690 D1090 D1601 D1710 D1740 D1831 D1730 D1720 D1725 D1750 D1633 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
+- D2041: An old region that minor collections neither trace nor move
 - D1314: Math.random
 - D1383: Date reads the host's clock and a fixed local offset
 - D1670: Async host results are macrotasks: the host inbox
