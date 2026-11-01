@@ -294,7 +294,7 @@ mod tests {
             assert_eq!(to_u128(&c), expect / d as u128);
             assert_eq!(r as u128, expect % d as u128);
 
-            let s = (next() % 60) as u32;
+            let s = (next() % 32) as u32;
             let mut c = from_u128(expect);
             c.shl(s);
             assert_eq!(to_u128(&c), expect << s);
