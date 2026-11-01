@@ -1,7 +1,7 @@
 # 0085: Leaf fast paths for everyday builtins (0081 proposal 1)
 
-status: open
-agent: -
+status: in-progress
+agent: perf
 branch: issue/0085-everyday-builtin-fast-paths
 depends-on: 0081
 touches: builtins/ (string.ts, math.ts, number.ts, object.ts: the fast-path dispatch only), crates/djs-core/src/builtins/ (new leaf intrinsics), crates/djs-core/src/bytecode/intrinsics.rs (regenerated), crates/djs-bench/ + scripts/perf/ (measurements)
