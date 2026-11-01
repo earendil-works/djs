@@ -10,5 +10,6 @@ pub mod heap;
 pub mod json;
 pub mod lexer;
 pub mod num;
+pub mod regexp;
 pub mod unicode;
 pub mod value;
