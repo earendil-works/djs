@@ -1,7 +1,7 @@
 # 0005: Values, arena heap, strings, atoms, objects
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0005-values-heap
 depends-on: 0001
 touches: crates/djs-core/src/value.rs, crates/djs-core/src/heap/, crates/djs-core/src/lib.rs (mod lines only)
