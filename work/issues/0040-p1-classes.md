@@ -76,7 +76,7 @@ included, private names must bypass proxies (0045). Landed in steps on the branc
   compiler/tests.rs; snapshot classes.js.
 - Compile sweep: before 34745 ok / 14281 not supported; after 42900 ok / 4707 not
   supported (negatives detected 2682 -> 4067).
-- test262 active: 31,758 / 32,718 (main before: 23,007 / 32,718). Class dirs
+- test262 active: 31,791 / 32,718 after rebasing onto BigInt (main's ratchet listed 9,711 failures; now 927). Class dirs
   (language/{statements,expressions}/class): all active pass except decorators/auto
   accessors, RegExp/BigInt/Function-ctor subclassing, the known 0024 param/body var
   scope simplification, `__lookupGetter__` and strict `arguments.callee`.
