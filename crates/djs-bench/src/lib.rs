@@ -21,6 +21,7 @@ pub type Group = fn(&mut Runner);
 /// Benchmark groups in run order. Result names start with the group name.
 pub const GROUPS: &[(&str, Group)] = &[
     ("lex", core::lexer),
+    ("compile", core::compiler),
     ("num", core::num),
     ("regexp", core::regexp),
     ("json", core::json),

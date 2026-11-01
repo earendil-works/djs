@@ -56,6 +56,44 @@ pub fn lexer(r: &mut Runner) {
     }
 }
 
+// ---- compiler ---------------------------------------------------------------------------
+
+/// Compile throughput (0092): the synthetic lexer input as a Script, and typescript.js
+/// (9 MB, one huge closure). Each compile gets a fresh heap, created untimed.
+pub fn compiler(r: &mut Runner) {
+    use djs_core::compiler::{CompileOptions, compile};
+    use std::cell::RefCell;
+    let run = |r: &mut Runner, name: &str, src: &[u8]| {
+        let heap = RefCell::new(Heap::new().unwrap());
+        let opts = CompileOptions::script("bench.js");
+        r.bytes_with_setup(
+            name,
+            src.len(),
+            || *heap.borrow_mut() = Heap::new().unwrap(),
+            || {
+                black_box(compile(&mut heap.borrow_mut(), src, &opts).unwrap());
+            },
+        );
+    };
+    // (Without `export`: a Script, not a module.)
+    let synthetic = String::from_utf8(synthetic_js(r.scale(1_000_000, 20_000)))
+        .unwrap()
+        .replace("export ", "");
+    run(r, "compile/synthetic", synthetic.as_bytes());
+    let name = "compile/typescript.js";
+    if !r.wants(name) {
+        return;
+    }
+    match vendor_dir().and_then(|d| std::fs::read(d.join(TYPESCRIPT_JS)).ok()) {
+        Some(src) if !r.config.quick => run(r, name, &src),
+        Some(_) => r.skip(name, "not in quick mode"),
+        None => r.skip(
+            name,
+            format!("{TYPESCRIPT_JS} not in vendor/bench (run scripts/bench.sh)"),
+        ),
+    }
+}
+
 /// Generated JS with a realistic token mix (identifiers, keywords, numbers, strings,
 /// templates, regexes, comments), about `size` bytes.
 pub fn synthetic_js(size: usize) -> Vec<u8> {
