@@ -914,13 +914,26 @@ def generate_norm(vendor):
               "i16", [d for _, d in comp], 12),
         "",
     ]
+    # Only NFC's quick-check tables (localeCompare's hot path). The other forms' quick
+    # checks follow from the decompositions (D2335): NFD_QC=No is "has a canonical
+    # decomposition", NFKD_QC=No "has any", and NFKC_QC=No/Maybe is NFC's plus "the full
+    # compatibility decomposition differs from the canonical one". Checked here.
+    hangul = set(range(0xAC00, 0xAC00 + 11172))
+
+    def full(c, compat):
+        if c in decomp and (compat or not decomp[c][0]):
+            return [x for y in decomp[c][1] for x in full(y, compat)]
+        return [c]
+
+    assert qc[("NFD_QC", "N")] == {c for c, (k, _) in decomp.items() if not k} | hangul
+    assert qc[("NFKD_QC", "N")] == set(decomp) | hangul
+    assert qc[("NFKC_QC", "M")] == qc[("NFC_QC", "M")]
+    assert qc[("NFKC_QC", "N")] | qc[("NFKC_QC", "M")] == (
+        qc[("NFC_QC", "N")] | qc[("NFC_QC", "M")]
+        | {c for c in decomp if full(c, True) != full(c, False)})
     for name, prop, val, doc in [
         ("NFC_QC_NO", "NFC_QC", "N", "NFC_QC = No."),
         ("NFC_QC_MAYBE", "NFC_QC", "M", "NFC_QC = Maybe."),
-        ("NFD_QC_NO", "NFD_QC", "N", "NFD_QC = No."),
-        ("NFKC_QC_NO", "NFKC_QC", "N", "NFKC_QC = No."),
-        ("NFKC_QC_MAYBE", "NFKC_QC", "M", "NFKC_QC = Maybe."),
-        ("NFKD_QC_NO", "NFKD_QC", "N", "NFKD_QC = No."),
     ]:
         parts.append(u32s(name, doc, packed(qc.get((prop, val), set()))))
         parts.append("")

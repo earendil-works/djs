@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 
 use super::norm_tables::{
     CCC_RUNS, CCC_VALUES, COMPOSE_DELTAS, COMPOSE_KEYS, COMPOSE_SECONDS, DECOMP, DECOMP_INDEX,
-    INDEX_STEP, NFC_QC_MAYBE, NFC_QC_NO, NFD_QC_NO, NFKC_QC_MAYBE, NFKC_QC_NO, NFKD_QC_NO,
+    INDEX_STEP, NFC_QC_MAYBE, NFC_QC_NO,
 };
 use super::tables::LEN_BITS;
 
@@ -187,6 +187,34 @@ fn in_table(table: &[u32], c: u32) -> bool {
     find_run(table, c).is_some()
 }
 
+/// Whether the quick-check property of `form` is Yes for `c`. Only NFC's is a table
+/// (localeCompare's hot path); the others follow from the decompositions (D2335).
+fn quick_yes(c: u32, form: Form) -> bool {
+    let nfc = || !in_table(&NFC_QC_NO, c) && !in_table(&NFC_QC_MAYBE, c);
+    match form {
+        Form::Nfc => nfc(),
+        Form::Nfd | Form::Nfkd => {
+            if (S_BASE..S_BASE + S_COUNT).contains(&c) {
+                return false;
+            }
+            let mut map = Vec::new();
+            match table_decomposition(c, &mut map) {
+                Some(compat) => compat && form == Form::Nfd,
+                None => true,
+            }
+        }
+        Form::Nfkc => {
+            if !nfc() {
+                return false;
+            }
+            let (mut full, mut canonical) = (Vec::new(), Vec::new());
+            decompose_char(c, true, &mut full);
+            decompose_char(c, false, &mut canonical);
+            full == canonical
+        }
+    }
+}
+
 /// Code points of UTF-16 units (lone surrogates as themselves).
 fn code_points(units: &[u16]) -> Vec<u32> {
     char::decode_utf16(units.iter().copied())
@@ -206,12 +234,6 @@ pub fn is_normalized_quick(units: &[u16], form: Form) -> bool {
     if units.iter().all(|&u| u < fast_limit) {
         return true;
     }
-    let (no, maybe): (&[u32], &[u32]) = match form {
-        Form::Nfc => (&NFC_QC_NO, &NFC_QC_MAYBE),
-        Form::Nfd => (&NFD_QC_NO, &[]),
-        Form::Nfkc => (&NFKC_QC_NO, &NFKC_QC_MAYBE),
-        Form::Nfkd => (&NFKD_QC_NO, &[]),
-    };
     let mut last = 0u8;
     for r in char::decode_utf16(units.iter().copied()) {
         let c = match r {
@@ -229,7 +251,7 @@ pub fn is_normalized_quick(units: &[u16], form: Form) -> bool {
         if k != 0 && last > k {
             return false;
         }
-        if in_table(no, c) || in_table(maybe, c) {
+        if !quick_yes(c, form) {
             return false;
         }
         last = k;
@@ -327,6 +349,21 @@ mod tests {
         assert_eq!(n("a\u{307}\u{323}", Form::Nfc), "\u{1ea1}\u{307}");
         assert_eq!(n("\u{212b}", Form::Nfc), "\u{c5}");
         assert_eq!(ccc(0x301), 230);
+    }
+
+    /// The quick check never says YES for a code point that changes, in any form: the
+    /// derived checks of NFD, NFKD and NFKC (D2335) included.
+    #[test]
+    fn quick_yes_is_safe_for_every_code_point() {
+        let mut buf = [0u16; 2];
+        for c in (0..0x110000u32).filter(|c| !(0xD800..0xE000).contains(c)) {
+            let u = char::from_u32(c).unwrap().encode_utf16(&mut buf);
+            for f in [Form::Nfc, Form::Nfd, Form::Nfkc, Form::Nfkd] {
+                if quick_yes(c, f) {
+                    assert_eq!(normalize(u, f), u.to_vec(), "{c:x} {f:?}");
+                }
+            }
+        }
     }
 
     /// UCD's NormalizationTest.txt (fetched by scripts/gen-unicode.py into vendor/ of the

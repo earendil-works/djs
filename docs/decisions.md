@@ -5583,3 +5583,16 @@ Scripts stay range lists (a partition was larger). Every lookup decodes exactly 
 did before: a scratch comparison of all 976 property names and values against the old
 tables, and test262's property-escapes tests (613/613). Decoding is cold (regexp
 compilation of `\p{..}`); the lexer's ID tables and the case tables are unchanged.
+
+## D2335: Only NFC keeps quick-check tables; the other forms' checks follow from the decompositions
+date: 2026-11-07 · by: bloat · issue: 0126
+String.prototype.normalize's quick check had six range tables. NFC's two stay (localeCompare
+checks NFC on every call). The other four are derived (exactly, asserted by
+scripts/gen-unicode.py against DerivedNormalizationProps.txt): NFD_QC=No is "has a
+canonical decomposition" (Hangul syllables included), NFKD_QC=No "has any
+decomposition", and NFKC_QC is No/Maybe exactly where NFC's is or where the full
+compatibility decomposition differs from the canonical one. These forms only reach the
+check through an explicit normalize("NFD"/"NFKC"/"NFKD") on text beyond Latin-1, so the
+per-code-point decomposition lookup costs nothing that matters. −3.6 KB raw, −1.0 KB
+gzip. A unit test checks every code point: the quick check never says Yes for one that a
+form changes.
