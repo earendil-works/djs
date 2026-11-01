@@ -17,13 +17,16 @@ function ArraySpeciesCreate(original, length) {
   if (c === undefined) {
     return %ArrayCreate(length);
   }
+  if (!%IsCallable(c)) {
+    throw %NewTypeError("not a function");
+  }
   if (!%IsConstructor(c)) {
-    throw %NewTypeError("not a constructor");
+    throw %NewNotConstructorError(c);
   }
   return %Construct(c, length);
 }
 
-// builtins/array.ts:29 Array.prototype.forEach
+// builtins/array.ts:33 Array.prototype.forEach
 function ArrayPrototypeForEach(callbackfn, thisArg) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -37,7 +40,7 @@ function ArrayPrototypeForEach(callbackfn, thisArg) {
   }
 }
 
-// builtins/array.ts:47 Array.prototype.map
+// builtins/array.ts:51 Array.prototype.map
 function ArrayPrototypeMap(callbackfn, thisArg) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -55,7 +58,7 @@ function ArrayPrototypeMap(callbackfn, thisArg) {
   return a;
 }
 
-// builtins/array.ts:68 Array.prototype.indexOf
+// builtins/array.ts:72 Array.prototype.indexOf
 function ArrayPrototypeIndexOf(searchElement, fromIndex) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -82,7 +85,7 @@ function ArrayPrototypeIndexOf(searchElement, fromIndex) {
   return -1;
 }
 
-// builtins/array.ts:99 Array.prototype.join
+// builtins/array.ts:103 Array.prototype.join
 function ArrayPrototypeJoin(separator) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
@@ -103,7 +106,7 @@ function ArrayPrototypeJoin(separator) {
   return r;
 }
 
-// builtins/array.ts:120
+// builtins/array.ts:124
 function SameValueZero(x, y) {
   if (%IsNumber(x) && %IsNumber(y)) {
     const a = %AsNumber(x);
@@ -113,7 +116,7 @@ function SameValueZero(x, y) {
   return x === y;
 }
 
-// builtins/array.ts:134 Array.prototype.includes
+// builtins/array.ts:138 Array.prototype.includes
 function ArrayPrototypeIncludes(searchElement, fromIndex) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);

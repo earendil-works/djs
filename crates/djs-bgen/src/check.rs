@@ -273,7 +273,7 @@ struct FnChecker<'a> {
 
 /// Whether `from` can be used where `to` is expected.
 pub fn assignable(from: Type, to: Type) -> bool {
-    if from == to || from == Type::Never {
+    if from == to || from == Type::Never || from == Type::Error || to == Type::Error {
         return true;
     }
     match (from, to) {
@@ -598,14 +598,14 @@ impl<'a> FnChecker<'a> {
                 }
                 None => {
                     self.error(e.span, format!("unknown name `{name}`"));
-                    Type::Value
+                    Type::Error
                 }
             },
             ExprKind::This => match &self.f.this_ty {
                 Some(t) => t.ty,
                 None => {
                     self.error(e.span, "`this` needs a `this: T` parameter");
-                    Type::Value
+                    Type::Error
                 }
             },
             ExprKind::Undefined => Type::Undefined,
@@ -617,6 +617,7 @@ impl<'a> FnChecker<'a> {
             ExprKind::Unary(op, inner) => {
                 let t = self.expr(inner);
                 match (op, t) {
+                    (_, Type::Error) => Type::Error,
                     (UnOp::Not, Type::Bool) => Type::Bool,
                     (UnOp::Neg, Type::IntLit(v)) => Type::IntLit(-v),
                     (UnOp::Neg, Type::NumLit | Type::I32 | Type::F64) => t,
@@ -629,7 +630,7 @@ impl<'a> FnChecker<'a> {
                             UnOp::BitNot => "`~` needs i32",
                         };
                         self.error(e.span, format!("{why}, found {}", t.name()));
-                        Type::Value
+                        Type::Error
                     }
                 }
             }
@@ -678,7 +679,7 @@ impl<'a> FnChecker<'a> {
                     for a in args {
                         self.expr(a);
                     }
-                    return Type::Value;
+                    return Type::Error;
                 };
                 let sig = sig.clone();
                 if sig.this_ty.is_some() {
@@ -722,6 +723,25 @@ impl<'a> FnChecker<'a> {
     /// The result type of a binary operation, or None after reporting an error.
     fn binary_type(&mut self, op: BinOp, l: Type, r: Type, ls: Span, rs: Span) -> Option<Type> {
         let span = ls.to(rs);
+        if l == Type::Error || r == Type::Error {
+            return Some(
+                if matches!(
+                    op,
+                    BinOp::Lt
+                        | BinOp::Le
+                        | BinOp::Gt
+                        | BinOp::Ge
+                        | BinOp::StrictEq
+                        | BinOp::StrictNe
+                        | BinOp::And
+                        | BinOp::Or
+                ) {
+                    Type::Bool
+                } else {
+                    Type::Error
+                },
+            );
+        }
         let fail = |this: &mut Self, why: String| {
             this.error(span, format!("`{}` {why}", op.as_str()));
             None

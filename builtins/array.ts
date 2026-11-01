@@ -15,8 +15,12 @@ function ArraySpeciesCreate(original: Obj, length: f64): Obj {
   if (c === undefined) {
     return ArrayCreate(length);
   }
+  // QuickJS's messages: it calls the constructor without checking first.
+  if (!IsCallable(c)) {
+    throw NewTypeError("not a function");
+  }
   if (!IsConstructor(c)) {
-    throw NewTypeError("not a constructor");
+    throw NewNotConstructorError(c);
   }
   return Construct(c, length);
 }

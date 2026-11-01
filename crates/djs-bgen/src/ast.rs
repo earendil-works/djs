@@ -21,6 +21,9 @@ pub enum Type {
     Null,
     IntLit(f64),
     NumLit,
+    /// The type of an expression that already has an error: compatible with
+    /// everything, so one mistake gives one message.
+    Error,
 }
 
 impl Type {
@@ -59,6 +62,7 @@ impl Type {
             Type::Null => "null",
             Type::IntLit(_) => "integer literal",
             Type::NumLit => "number literal",
+            Type::Error => "<error>",
         }
     }
 

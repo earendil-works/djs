@@ -114,6 +114,8 @@ declare function ObjectCreate(proto: Value): Obj;
 declare function ArrayCreate(length: f64): Obj;
 /** A new TypeError of the current realm. @leaf */
 declare function NewTypeError(message: Str): Obj;
+/** A TypeError "<name> is not a constructor" with f's internal name, as QuickJS words it. @leaf */
+declare function NewNotConstructorError(f: Value): Obj;
 /** A new RangeError of the current realm. @leaf */
 declare function NewRangeError(message: Str): Obj;
 /** The well-known symbol Symbol.<name>. @leaf */
