@@ -229,6 +229,9 @@ pub(crate) struct Exec<'h> {
     /// collection when it runs out of memory (D1700): their count, or `NO_RETRY`.
     retry_len: u32,
     retry_ops: [Value; 4],
+    /// A native builtin's operation is being retried after a collection (D1900): an
+    /// operation inside it does not retry again.
+    n_retrying: bool,
     /// The fuel the run started its instructions with (after paying the debt, D1740);
     /// `None` while it has not executed any (it returned a status right away).
     fuel_start: Option<i64>,
@@ -273,6 +276,7 @@ impl<'h> Exec<'h> {
             host_oom: false,
             retry_len: NO_RETRY,
             retry_ops: [Value::UNDEFINED; 4],
+            n_retrying: false,
             fuel_start: None,
         }
     }

@@ -34,7 +34,8 @@ W=../../target/wasm32-unknown-unknown/wasm/djs_wasm.wasm
   natively, then the same source in wasm.
 
 Cases in `js/`: `async_interleave.js` (delivery position), `oom.js` (`--limit 1500000` /
-`2000000`: OOM depends on restores), `alloc_only.js` (pure interpreter allocation: raw
+`2000000`: OOM depends on restores), `oom_native.js` (the same through native builtins: map's growth near the
+cap, D1900), `alloc_only.js` (pure interpreter allocation: raw
 images vs slice size and restore), `general.js` / `general_body.js` (mixed workload with
 GC), `floats_body.js` (libm, number formatting, NaN bytes, Date, sort), `deep_body.js`
 (deep data structures and promise chains), `weakref.js` (WeakRef/FinalizationRegistry under slicing and restore).

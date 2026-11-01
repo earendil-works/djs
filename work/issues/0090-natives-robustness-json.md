@@ -20,7 +20,7 @@ touches: crates/djs-core/src/interp/run/native.rs + builtins/gen/ (generated), c
    to the slow path; measure first (JSON is already 0.5–0.6x qjs on plain data).
 
 ## Acceptance criteria
-- [ ] 1 with a test like 0070's oom.js but going through native builtins (map/filter/
+- [x] 1 with a test like 0070's oom.js but going through native builtins (map/filter/
       push in a loop at a tight cap), identical sliced and restored; D1601's test passes.
 - [x] 2 with the test262 tests passing.
 - [ ] 3 with wasm instruction counts before/after on toJSON-heavy and replacer data.
@@ -40,6 +40,19 @@ touches: crates/djs-core/src/interp/run/native.rs + builtins/gen/ (generated), c
     (heap `prevent_extensions` + `ta_fixed_length`, heap/object.rs and heap/typed.rs;
     told the coordinator); SetIntegrityLevel throws qjs's "cannot prevent extensions".
   Corpus case builtins/typed-array-resizable.js; ratchet lines removed.
+- 1 (D1900): retry in the native API (`n_retry`): the final call of a state (n_set,
+  n_create_data_property_or_throw, n_call of D1700's intrinsics) and whole-statement
+  leaf calls of D1700's allocating leaves / string concat (bgen `take_root` →
+  `n_leaf_gc`, `n_concat_gc`). Test `native_builtins_collect_and_retry` with
+  scripts/determinism/js/oom_native.js (map's doubling growth while the callback makes
+  garbage): at caps 4.8 MB and 5.2 MB it printed `.EEEEE` / `..E.E.` before and all dots
+  now, identical sliced (7919) and restored. Below ~4.6 MB the live data itself no
+  longer fits (the retry collects and still fails: a real OOM). D1601's test passes.
+  Not covered: OOM inside a perf `@fast` entry (fastpath.rs) is thrown, not retried
+  (0085's concern).
+- Rebase note: after a plain `git rebase main` the merge driver keeps one side of the
+  generated files; run scripts/regen.sh (my first commit's prelude was stale until the
+  regen in this one).
 
 ## Follow-ups
 

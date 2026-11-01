@@ -3905,3 +3905,24 @@ Other measurements:
 - djs-wasm size: +1.2 KB (+0.4 KB gzip).
 
 The rest is the interpreter's per-op cost on the harness loop.
+## D1900: Native builtins collect and retry at the heap cap
+date: 2026-11-03 · by: infra · issue: 0090
+D1700 retries an instruction after a collection when it reaches the heap cap; native
+builtins (0063) now do the same for the same operations, at the native API level
+(`Exec::n_retry` in interp/run/native.rs): on `OutOfMemory` the operation's arguments
+are pushed onto the stack (rooted), the heap collects at that point, and the operation
+runs once more with the arguments read back; a second failure is the real error. A GC
+inside a state is safe only where no other heap Value lives in a Rust local of the
+generated code, so the retrying forms are used in two places:
+- a state's final call: `n_set`, `n_create_data_property_or_throw` and `n_call` of the
+  intrinsics D1700 retries (Set, CreateDataPropertyOrThrow, DefineDataPropertyOrThrow,
+  ...): their arguments are all the generated code holds at that point;
+- a call that is a whole statement (`x = ArrayCreate(0)`, `return
+  CreateIterResultObject(v, false)`, `r += s`): djs-bgen marks the outermost call of a
+  statement (`Pure::take_root`) and emits `n_leaf_gc` for the leaf intrinsics in D1700's
+  list and `n_concat_gc` for string concatenation; nested calls stay plain.
+Nested retrying operations (a retrying `n_set` whose slow path is a retrying `n_call`)
+retry only at the outermost level, so one failure costs at most one collection. As in
+D1700 the retry point is a function of the program and the cap, so sliced and restored
+runs agree (vm/tests.rs `native_builtins_collect_and_retry`,
+scripts/determinism/js/oom_native.js).

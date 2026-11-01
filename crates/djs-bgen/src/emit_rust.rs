@@ -514,8 +514,16 @@ trait Pure<'a> {
     fn cx(&mut self) -> &mut Cx<'a>;
     fn cx_ref(&self) -> &Cx<'a>;
 
+    /// Whether the expression being lowered is a whole statement (its value assigned,
+    /// returned or dropped), and clears that: then no other heap Value is live in a Rust
+    /// local while its outermost call runs, so that call may collect (D1900).
+    fn take_root(&mut self) -> bool {
+        false
+    }
+
     /// `e` (no reentrant calls) as Rust code of representation `want`.
     fn pure(&mut self, e: &Expr, want: Rep) -> Code {
+        let root = self.take_root();
         match &e.kind {
             ExprKind::Ident(n) => {
                 let l = self.env().lookup(n).clone();
@@ -564,6 +572,11 @@ trait Pure<'a> {
                 let (ca, cb, ty) = self.binary_operands(*op, a, b);
                 let effect = ca.effect || cb.effect;
                 let (s, r) = combine(*op, ty, ca.s, cb.s);
+                let s = if root && matches!(ty, OpType::Str) {
+                    concat_gc(s)
+                } else {
+                    s
+                };
                 Code {
                     s: coerce(s, r, want),
                     effect,
@@ -600,7 +613,7 @@ trait Pure<'a> {
                     return Code::pure(coerce(decode(s, ret), rep(ret), want));
                 }
                 let codes = self.call_args(callee, args, e.span);
-                self.leaf_call(callee, codes, want, e.span)
+                self.leaf_call(callee, codes, want, e.span, root)
             }
         }
     }
@@ -692,7 +705,14 @@ trait Pure<'a> {
     }
 
     /// A call of a leaf intrinsic or leaf builtin with its argument codes.
-    fn leaf_call(&mut self, callee: &str, args: Vec<Code>, want: Rep, span: Span) -> Code {
+    fn leaf_call(
+        &mut self,
+        callee: &str,
+        args: Vec<Code>,
+        want: Rep,
+        span: Span,
+        root: bool,
+    ) -> Code {
         let (kind, sig) = self.cx_ref().callee(callee);
         let strs: Vec<String> = args.iter().map(|c| c.s.clone()).collect();
         let ret = sig.ret;
@@ -709,8 +729,14 @@ trait Pure<'a> {
                     return Code::effect(coerce(s, natural, want));
                 }
                 let id = self.cx().id(callee);
+                // As a whole statement, an intrinsic D1700 retries is retried (D1900).
+                let f = if root && RETRY_LEAVES.contains(&callee) {
+                    "n_leaf_gc"
+                } else {
+                    "n_leaf"
+                };
                 decode(
-                    with_args(&strs, |n| format!("ex.n_leaf({id}, &[{}])?", n.join(", "))),
+                    with_args(&strs, |n| format!("ex.{f}({id}, &[{}])?", n.join(", "))),
                     ret,
                 )
             }
@@ -870,6 +896,8 @@ struct Fsm<'a, 'c> {
     try_ctx: Option<usize>,
     /// Inlined builtin calls being lowered, innermost last.
     inlines: Vec<Inline>,
+    /// The next expression lowered is a whole statement (`Pure::take_root`).
+    root: bool,
 }
 
 /// An enclosing `finally` block: its statements and the try region outside it.
@@ -901,6 +929,9 @@ impl<'a> Pure<'a> for Fsm<'a, '_> {
     fn lower_operand(&mut self, e: &Expr, want: Rep) -> Code {
         self.lower(e, want)
     }
+    fn take_root(&mut self) -> bool {
+        core::mem::take(&mut self.root)
+    }
 }
 
 impl<'a, 'c> Fsm<'a, 'c> {
@@ -925,6 +956,7 @@ impl<'a, 'c> Fsm<'a, 'c> {
             used_temps: Vec::new(),
             loops: Vec::new(),
             finallys: Vec::new(),
+            root: false,
             tries: Vec::new(),
             try_ctx: None,
             inlines: vec![Inline {
@@ -1102,6 +1134,7 @@ impl<'a, 'c> Fsm<'a, 'c> {
         if !self.cx.contains_reentrant(e) {
             return self.pure(e, want);
         }
+        let root = self.take_root();
         match &e.kind {
             ExprKind::Paren(x) => self.lower(x, want),
             ExprKind::Call { callee, args, .. } if self.cx.resume_call(callee, args) => {
@@ -1116,7 +1149,7 @@ impl<'a, 'c> Fsm<'a, 'c> {
             }
             ExprKind::Call { callee, args, .. } => {
                 let codes = self.spilled_args(callee, args);
-                self.leaf_call(callee, codes, want, e.span)
+                self.leaf_call(callee, codes, want, e.span, root)
             }
             ExprKind::Unary(..) => {
                 // Lower the operand to a temporary, then apply the operator purely.
@@ -1162,6 +1195,11 @@ impl<'a, 'c> Fsm<'a, 'c> {
                 let _ = &mut ca;
                 let effect = ca.effect || cb.effect;
                 let (s, r) = combine(*op, ty, ca.s, cb.s);
+                let s = if root && matches!(ty, OpType::Str) {
+                    concat_gc(s)
+                } else {
+                    s
+                };
                 Code {
                     s: coerce(s, r, want),
                     effect,
@@ -1310,7 +1348,9 @@ impl<'a, 'c> Fsm<'a, 'c> {
             // The Value goes straight into the slot (an integer stays an int32 Value).
             return self.call(callee, args, value.span, Some(at));
         }
+        self.root = true;
         let c = self.lower(value, rep(ty));
+        self.root = false;
         self.store(&at, ty, c);
     }
 
@@ -1389,7 +1429,9 @@ impl<'a, 'c> Fsm<'a, 'c> {
                 {
                     self.call(callee, args, e.span, None);
                 } else {
+                    self.root = true;
                     let c = self.lower(e, Rep::Val);
+                    self.root = false;
                     self.push(format!("let _ = {};", c.s));
                 }
             }
@@ -1495,7 +1537,9 @@ impl<'a, 'c> Fsm<'a, 'c> {
                         } else {
                             rep(t)
                         };
+                        self.root = true;
                         let c = self.lower(v, want);
+                        self.root = false;
                         coerce(c.s, want, Rep::Val)
                     }
                     None => "Value::UNDEFINED".into(),
@@ -1758,6 +1802,30 @@ impl<'a, 'c> Fsm<'a, 'c> {
             locals: self.slots,
             text,
         }
+    }
+}
+
+/// The leaf intrinsics the interpreter retries after a collection when they reach the
+/// heap cap (djs-core interp/run.rs `retry::INTRINSICS`, D1700): they allocate before
+/// they change anything.
+const RETRY_LEAVES: [&str; 5] = [
+    "ArrayCreate",
+    "ObjectCreate",
+    "NewRecord",
+    "CreateIterResultObject",
+    "CreateArrayFromPair",
+];
+
+/// The outermost string concatenation in `s` (the last one: operands come first) as
+/// the retrying `n_concat_gc` (D1900).
+fn concat_gc(s: String) -> String {
+    match s.rfind("ex.n_concat(") {
+        Some(i) => format!(
+            "{}ex.n_concat_gc({}",
+            &s[..i],
+            &s[i + "ex.n_concat(".len()..]
+        ),
+        None => s,
     }
 }
 

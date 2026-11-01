@@ -394,9 +394,71 @@ impl Exec<'_> {
         }
     }
 
+    /// Runs `f(args)`; if it reaches the heap cap, collects with `args` rooted on the
+    /// stack and runs it once more with them (D1900, as D1700 retries an instruction).
+    /// Only for operations that allocate before they change anything, called where
+    /// `args` are the only heap values the generated code holds in Rust locals: a
+    /// state's final call, or a call that is a whole statement (djs-bgen marks those).
+    fn n_retry<T>(
+        &mut self,
+        args: &[Value],
+        f: impl Fn(&mut Self, &[Value]) -> Result<T, Fault>,
+    ) -> Result<T, Fault> {
+        // Nested in another retrying operation: that one retries the whole.
+        if self.n_retrying {
+            return f(self, args);
+        }
+        self.n_retrying = true;
+        let r = f(self, args);
+        self.n_retrying = false;
+        match r {
+            Err(e) if e.is_out_of_memory() && !self.host_oom => {
+                let base = self.sp;
+                let n = args.len() as u32;
+                // Room for the arguments, within the frame's reserved operand stack.
+                if base + n > self.heap.value_array_capacity(self.stack) {
+                    return Err(e);
+                }
+                for &a in args {
+                    self.push(a);
+                }
+                self.safepoint_collect();
+                let again: alloc::vec::Vec<Value> = (0..n).map(|i| self.get(base + i)).collect();
+                self.sp = base;
+                if self.host_oom {
+                    return Err(e);
+                }
+                self.n_retrying = true;
+                let r = f(self, &again);
+                self.n_retrying = false;
+                r
+            }
+            r => r,
+        }
+    }
+
+    /// `n_leaf` of an intrinsic that allocates before it changes anything, called as a
+    /// whole statement: retried once after a collection at the heap cap (D1900).
+    pub(crate) fn n_leaf_gc(&mut self, id: u16, args: &[Value]) -> Result<Value, Fault> {
+        debug_assert!(super::retry::INTRINSICS.contains(&id), "n_leaf_gc {id}");
+        self.n_retry(args, |ex, a| ex.n_leaf(id, a))
+    }
+
+    /// `Str + Str` as a whole statement (`r += s`): retried as `n_leaf_gc` is.
+    pub(crate) fn n_concat_gc(&mut self, a: Value, b: Value) -> Result<Value, Fault> {
+        self.n_retry(&[a, b], |ex, v| ex.n_concat(v[0], v[1]))
+    }
+
     /// A reentrant intrinsic or an `@intrinsic` builtin through `call_intrinsic`,
-    /// resuming at state `next`.
+    /// resuming at state `next`. The intrinsics D1700 retries are retried here too.
     pub(crate) fn n_call(&mut self, id: u16, args: &[Value], next: u32) -> Result<Flow, Fault> {
+        if super::retry::INTRINSICS.contains(&id) {
+            return self.n_retry(args, |ex, a| ex.n_call_once(id, a, next));
+        }
+        self.n_call_once(id, args, next)
+    }
+
+    fn n_call_once(&mut self, id: u16, args: &[Value], next: u32) -> Result<Flow, Fault> {
         self.fuel -= CALL_FUEL;
         let base = self.sp;
         let n = args.len() as u32;
@@ -537,6 +599,10 @@ impl Exec<'_> {
         args: &[Value; 3],
         next: u32,
     ) -> Result<Flow, Fault> {
+        self.n_retry(args, |ex, a| ex.n_cdp_once(a, next))
+    }
+
+    fn n_cdp_once(&mut self, args: &[Value], next: u32) -> Result<Flow, Fault> {
         if let Some(o) = args[0]
             .as_object()
             .filter(|&o| self.heap.object_class(o) == ObjectClass::Array)
@@ -551,6 +617,10 @@ impl Exec<'_> {
     /// `%Set(o, k, v)` on an Array: an index through the heap's [[Set]] fast path, and
     /// `length` set to its current value (writable) is a no-op.
     pub(crate) fn n_set(&mut self, args: &[Value; 3], next: u32) -> Result<Flow, Fault> {
+        self.n_retry(args, |ex, a| ex.n_set_once(a, next))
+    }
+
+    fn n_set_once(&mut self, args: &[Value], next: u32) -> Result<Flow, Fault> {
         if let Some(o) = args[0]
             .as_object()
             .filter(|&o| self.heap.object_class(o) == ObjectClass::Array)

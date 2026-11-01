@@ -3181,3 +3181,20 @@ fn budgets_with_collections_and_suspended_regexps() {
 fn budgets_with_collections_and_suspended_regexps_all_schedules() {
     budget_cases(&ALL_SCHEDULES, 8);
 }
+
+#[test]
+fn native_builtins_collect_and_retry() {
+    // The same through native builtins (D1900): map's result array grows by doubling
+    // while its callback makes garbage, so a growth reaches the cap between two
+    // collections. Without the retry, rounds failed at these caps ("..E.E.").
+    let src = include_str!("../../../../scripts/determinism/js/oom_native.js");
+    let dots = ".".repeat(6);
+    for limit in [4_800_000usize, 5_200_000] {
+        let plain = run_limited(src, limit, 1 << 40, false).unwrap();
+        assert_eq!(plain.log, [dots.as_str()], "{limit}");
+        let sliced = run_limited(src, limit, 7919, false).unwrap();
+        let restored = run_limited(src, limit, 300_000, true).unwrap();
+        assert_eq!(plain, sliced, "{limit}");
+        assert_eq!(plain, restored, "{limit}");
+    }
+}

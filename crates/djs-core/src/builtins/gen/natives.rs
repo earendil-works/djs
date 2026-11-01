@@ -419,7 +419,7 @@ fn native_ArrayPrototypeJoin(ex: &mut Exec<'_>) -> Step {
                 let v = ex.n_slot(6); return ex.n_ret(v);
             }
             13 => {
-                let v = { let a0 = ex.n_slot(6); let a1 = ex.n_slot(2); ex.n_concat(a0, a1)? }; ex.n_set_slot(6, v);
+                let v = { let a0 = ex.n_slot(6); let a1 = ex.n_slot(2); ex.n_concat_gc(a0, a1)? }; ex.n_set_slot(6, v);
                 ex.n_goto(14); continue;
             }
             14 => {
@@ -436,7 +436,7 @@ fn native_ArrayPrototypeJoin(ex: &mut Exec<'_>) -> Step {
                 if { let a0 = ex.n_slot(4); a0.as_object().is_some() } { ex.n_goto(18); continue; } else { ex.n_goto(19); continue; }
             }
             17 => {
-                let v = { let a0 = ex.n_slot(6); let a1 = ex.n_slot(3); ex.n_concat(a0, a1)? }; ex.n_set_slot(6, v);
+                let v = { let a0 = ex.n_slot(6); let a1 = ex.n_slot(3); ex.n_concat_gc(a0, a1)? }; ex.n_set_slot(6, v);
                 ex.n_goto(11); continue;
             }
             18 => {
@@ -1347,7 +1347,7 @@ fn native_SortList(ex: &mut Exec<'_>) -> Step {
             }
             15 => {
                 let v = ex.n_arg(0); ex.n_set_slot(4, v);
-                let v = { let a0 = ex.n_slot(0); ex.n_leaf(I_ARRAY_CREATE, &[a0])? }; ex.n_set_slot(5, v);
+                let v = { let a0 = ex.n_slot(0); ex.n_leaf_gc(I_ARRAY_CREATE, &[a0])? }; ex.n_set_slot(5, v);
                 let v = num(1.0_f64); ex.n_set_slot(6, v);
                 ex.n_goto(17); continue;
             }
@@ -1595,7 +1595,7 @@ fn native_CollectPresent(ex: &mut Exec<'_>) -> Step {
     loop {
         match ex.n_state() {
             0 => {
-                let v = { let a0 = Value::int(0); ex.n_leaf(I_ARRAY_CREATE, &[a0])? }; ex.n_set_slot(0, v);
+                let v = { let a0 = Value::int(0); ex.n_leaf_gc(I_ARRAY_CREATE, &[a0])? }; ex.n_set_slot(0, v);
                 let v = num(0.0_f64); ex.n_set_slot(1, v);
                 let v = num(0.0_f64); ex.n_set_slot(2, v);
                 ex.n_goto(1); continue;
@@ -1870,7 +1870,7 @@ fn native_ArrayIteratorPrototypeNext(ex: &mut Exec<'_>) -> Step {
                 if ex.n_slot(0).is_undefined() { ex.n_goto(1); continue; } else { ex.n_goto(2); continue; }
             }
             1 => {
-                let v = { let a0 = Value::UNDEFINED; let a1 = Value::bool(true); ex.n_leaf(I_CREATE_ITER_RESULT_OBJECT, &[a0, a1])? }; return ex.n_ret(v);
+                let v = { let a0 = Value::UNDEFINED; let a1 = Value::bool(true); ex.n_leaf_gc(I_CREATE_ITER_RESULT_OBJECT, &[a0, a1])? }; return ex.n_ret(v);
             }
             2 => {
                 let v = { let a0 = ex.n_slot(0); ex.n_as_obj(a0)? }; ex.n_set_slot(1, v);
@@ -1896,7 +1896,7 @@ fn native_ArrayIteratorPrototypeNext(ex: &mut Exec<'_>) -> Step {
             }
             7 => {
                 let _ = { let a0 = ex.n_this(); ex.n_leaf(I_ARRAY_ITERATOR_FINISH, &[a0])? };
-                let v = { let a0 = Value::UNDEFINED; let a1 = Value::bool(true); ex.n_leaf(I_CREATE_ITER_RESULT_OBJECT, &[a0, a1])? }; return ex.n_ret(v);
+                let v = { let a0 = Value::UNDEFINED; let a1 = Value::bool(true); ex.n_leaf_gc(I_CREATE_ITER_RESULT_OBJECT, &[a0, a1])? }; return ex.n_ret(v);
             }
             8 => {
                 let _ = { let a0 = ex.n_this(); let a1 = num((f64_of(ex.n_slot(2)) + 1.0_f64)); ex.n_leaf(I_ARRAY_ITERATOR_SET_INDEX, &[a0, a1])? };
@@ -1904,7 +1904,7 @@ fn native_ArrayIteratorPrototypeNext(ex: &mut Exec<'_>) -> Step {
                 if (i32_of(ex.n_slot(6)) == 0_i32) { ex.n_goto(9); continue; } else { ex.n_goto(10); continue; }
             }
             9 => {
-                let v = { let a0 = ex.n_slot(2); let a1 = Value::bool(false); ex.n_leaf(I_CREATE_ITER_RESULT_OBJECT, &[a0, a1])? }; return ex.n_ret(v);
+                let v = { let a0 = ex.n_slot(2); let a1 = Value::bool(false); ex.n_leaf_gc(I_CREATE_ITER_RESULT_OBJECT, &[a0, a1])? }; return ex.n_ret(v);
             }
             10 => {
                 // resume point: Get
@@ -1915,10 +1915,10 @@ fn native_ArrayIteratorPrototypeNext(ex: &mut Exec<'_>) -> Step {
                 if (i32_of(ex.n_slot(6)) == 1_i32) { ex.n_goto(12); continue; } else { ex.n_goto(13); continue; }
             }
             12 => {
-                let v = { let a0 = ex.n_slot(7); let a1 = Value::bool(false); ex.n_leaf(I_CREATE_ITER_RESULT_OBJECT, &[a0, a1])? }; return ex.n_ret(v);
+                let v = { let a0 = ex.n_slot(7); let a1 = Value::bool(false); ex.n_leaf_gc(I_CREATE_ITER_RESULT_OBJECT, &[a0, a1])? }; return ex.n_ret(v);
             }
             13 => {
-                let v = { let a0 = { let a0 = ex.n_slot(2); let a1 = ex.n_slot(7); ex.n_leaf(I_CREATE_ARRAY_FROM_PAIR, &[a0, a1])? }; let a1 = Value::bool(false); ex.n_leaf(I_CREATE_ITER_RESULT_OBJECT, &[a0, a1])? }; return ex.n_ret(v);
+                let v = { let a0 = { let a0 = ex.n_slot(2); let a1 = ex.n_slot(7); ex.n_leaf(I_CREATE_ARRAY_FROM_PAIR, &[a0, a1])? }; let a1 = Value::bool(false); ex.n_leaf_gc(I_CREATE_ITER_RESULT_OBJECT, &[a0, a1])? }; return ex.n_ret(v);
             }
             _ => return Err(bad_state()),
         }
