@@ -1,6 +1,6 @@
 # 0086: Bytecode quality and dispatch (0081 proposal 4)
 
-status: in-progress
+status: done
 agent: lexer
 branch: issue/0086-bytecode-quality
 depends-on: 0081, 0084
@@ -17,7 +17,7 @@ br_tables. Fix the cheap parts.
 - [x] Peepholes: `inc_loc`/`dec_loc`, assignment statements without set+drop, the loop
       condition at the bottom (one jump per iteration), cheaper `insert2` uses.
 - [x] More simple ops on the fast path (fast_step).
-- [ ] The fast opcodes renumbered into one dense range, so wasm gets a single br_table
+- [ ] (rejected, D1862: measured slower) The fast opcodes renumbered into one dense range, so wasm gets a single br_table
       (check the wasm code). The OPS_HASH and build hash change.
 - [x] Bytecode counts (scripts/perf/instr.py) and instruction counts (wasm primary)
       before/after on the 0081 workloads; ratchets, stress modes and determinism
@@ -63,12 +63,11 @@ br_tables. Fix the cheap parts.
   json/jsonh/strbuild ±0. Only the fast_step ops first (fast_more ops left in their
   sections): the same (tight +3.1%, calls +7.8%, call1 +7.8%). So V8's code for the
   single table is not cheaper than the compare tree, and the move perturbs the run loop
-  (D1352). Not merged; the acceptance item is refuted by measurement.
+  (D1352). Not merged; the acceptance item is refuted by measurement (D1862).
 - Not done here: the dense opcode renumbering (a separate small merge the coordinator
   schedules, it changes the `ops!` order other branches depend on).
 
 ## Follow-ups
-- Dense opcode renumbering (acceptance item 3), separate merge.
 - `add_loc` (`s += x` with a simple right side: `get_loc x; add_loc s`) would save two
   ops per accumulation; its slow path needs a generic `%Add` call into the local
   (object operands), so it was left out.
@@ -79,3 +78,11 @@ br_tables. Fix the cheap parts.
   run-loop restructuring (0081 P6, state in locals) is the real fix for D1352's fragility.
 
 ## Result
+Landed (main 70a1807..8fbd04f, D1860, D1861, docs/compiler.md 5.10): loop rotation for
+`while`/`for`; phase-1 peepholes (compiler/peephole.rs) and re-emit fusions (resolve.rs);
+`inc_loc`/`dec_loc`; `fast_more` after `fast_step` for 24 more simple ops; `a.length` of
+an Array or string in `fast_field`; `Continuation::Retry` for the re-executing slow
+paths (fixes throws from the first instruction of a `try` escaping it). wasm instructions
+vs 5459e97: tight -38%, loop -35%, prop1 -33%, call1 -22%, calls -17%, arrays -19%,
+forof -10%, props -8%, pi-like -4%, json/jsonh +1%. The dense opcode renumbering was
+measured slower and rejected (D1862). Tests: compiler::tests::peepholes, e2e peepholes.

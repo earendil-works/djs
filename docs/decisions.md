@@ -3830,3 +3830,16 @@ testing the TS path, and fast paths are part of the backend identity (D1633).
 Measured (wasm, node 25, instructions, 0085 Log): pi-like −50% (3.6x → 1.8x quickjs-wasi),
 native −57%; per call `includes` 23.5k → 3.0k (qjs-wasi 3.2k), `Math.max` 25.8k → 1.8k,
 `String(i)` 21.5k → 2.7k. Cost: +24 KB of wasm code (+2.9%).
+
+## D1862: No dense opcode range
+date: 2026-11-05 · by: lexer · issue: 0086
+Rejected: renumbering the opcodes so that the `fast_step` ops (then the `fast_more` ops)
+form one range from 0. It works as intended: wasm's `fast_step` dispatch becomes one
+37-entry `br_table` right after the opcode load (instead of a compare tree plus four
+tables), `fast_more` one table, and the wasm is 0.4 KB smaller. But node runs more
+instructions (wmeasure, 3 runs, against 8fbd04f): call1 +7.5%, calls +6.8%, tight +3.2%,
+loop +2.3%, higher-order +1.4%, arrays +1.3%, pi-like +0.5%, the rest unchanged. Moving
+only the `fast_step` ops measured the same. TurboFan's code for the single table is not
+cheaper than the compare tree, and the move perturbs the run loop (D1352). The `ops!`
+order stays semantic; work/scratch/0086/renumber.py (not committed) redoes the reorder
+for a later measurement, e.g. after the run-loop restructuring (0081 P6).
