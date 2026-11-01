@@ -841,7 +841,6 @@ fn end_to_end_functions() {
 /// `construct`, function `name`/`length`/`prototype`, `rest`). Un-ignore when 0022
 /// lands. Checked against qjs too.
 #[test]
-#[ignore = "un-ignore when 0022 lands (special_object, construct, function properties, rest)"]
 fn end_to_end_functions_0022() {
     run_cases(&[
         (

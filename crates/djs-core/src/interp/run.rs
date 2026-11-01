@@ -914,6 +914,17 @@ impl<'h> Exec<'h> {
                 let idx = self.imm_u32(1);
                 self.global_decls(idx)?;
             }
+            Op::Rest => {
+                let index = self.imm_u16(1);
+                let argc = self.header_int(frame::ARGC);
+                let mut vals = alloc::vec::Vec::new();
+                for i in index..argc.max(index) {
+                    vals.push(self.get(self.bp + 2 + i));
+                }
+                let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
+                let a = self.heap.new_array_from_values(Some(proto), &vals)?;
+                self.push(Value::object(a));
+            }
             Op::SpecialObject => {
                 let kind = self.heap.arena().bytes()[(self.code + self.pc + 1) as usize];
                 let v = self.special_object(kind)?;
