@@ -1,7 +1,7 @@
 # 0097: Finish the later group: immutable ArrayBuffer and the rest
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0097-later-group-finish
 depends-on: 0095
 touches: builtins/ (arraybuffer.ts, typedarray.ts, …), crates/djs-core/src/builtins/, crates/djs-core/src/heap/typed.rs (immutable flag, small), tests/test262.toml (promotion), ratchets
@@ -22,6 +22,14 @@ example `error-stack-accessor` or anything proposal-stage we choose not to do).
 - [ ] Promotions with numbers, ratchets updated, both backends.
 
 ## Log
+- Inventory (djs-test262 list/run --group later, at 8287580d): 179 tests, qjs passes all
+  179, djs 12.
+  | feature | tests | djs passes | what |
+  | --- | ---: | ---: | --- |
+  | await-dictionary | 89 | 0 | `Promise.allKeyed` / `allSettledKeyed` (proposal) |
+  | immutable-arraybuffer | ~49 | 2 | `transferToImmutable`, `sliceToImmutable`, `immutable` and the checks in every TA/DataView writer |
+  | error-stack-accessor | 33 | 0 | `Error.prototype.stack` as an accessor; instances get no own `stack` |
+  | Symbol.unscopables | 8 | 8 | already passes (the `with` tests are skipped anyway) |
 
 ## Follow-ups
 
