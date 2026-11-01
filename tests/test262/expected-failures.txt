@@ -37,9 +37,6 @@ built-ins/Function/prototype/S15.3.4_A2_T1.js: Test262Error: #1.1: The Function 
 built-ins/Function/prototype/S15.3.4_A2_T2.js: Test262Error: #1.1: The Function prototype object is itself a Function object that, when invoked, accepts any arguments and returns undefined: TypeError: not a…
 built-ins/Function/prototype/S15.3.4_A2_T3.js: TypeError: not a function
 built-ins/Function/prototype/call/S15.3.4.4_A2_T2.js: TypeError: not supported yet: the Function constructor
-built-ins/Function/prototype/length.js: Test262Error: length should be an own property
-built-ins/Function/prototype/name.js: Test262Error: name should be an own property
-built-ins/Function/prototype/property-order.js: Test262Error: The `length` property comes before the `name` property on built-in functions
 built-ins/Function/prototype/toString/AsyncGenerator.js: TypeError: not supported yet: the AsyncGeneratorFunction constructor
 built-ins/Math/f16round/length.js: TypeError: cannot convert to object
 built-ins/Math/f16round/name.js: TypeError: cannot convert to object
@@ -57,10 +54,7 @@ built-ins/Math/sumPrecise/sum.js: TypeError: not a function
 built-ins/Math/sumPrecise/takes-iterable.js: TypeError: not a function
 built-ins/Math/sumPrecise/throws-on-non-number.js: Test262Error: Expected SameValue(«0», «1») to be true
 built-ins/Number/prototype/toString/length.js: Test262Error: length descriptor value should be 1; length value should be 1
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-10.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-11.js: TypeError: cannot read property 'value' of undefined
 built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-4.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-9.js: TypeError: cannot read property 'value' of undefined
 built-ins/Object/getOwnPropertyNames/15.2.3.4-4-1.js: Test262Error: result1[expResult[p1]] !== true
 built-ins/Object/prototype/setPrototypeOf-with-non-circular-values-__proto__.js: Test262Error: Object.setPrototypeOf(ObjProto, { __proto__: null }) throws a TypeError Expected a TypeError to be thrown but no exception was thrown at all
 built-ins/Object/prototype/setPrototypeOf-with-non-circular-values.js: Test262Error: Object.setPrototypeOf(ObjProto, Object.create(null)) throws a TypeError Expected a TypeError to be thrown but no exception was thrown at all
@@ -97,175 +91,6 @@ built-ins/ThrowTypeError/throws-type-error.js: TypeError: cannot read property '
 built-ins/ThrowTypeError/unique-per-realm-function-proto.js: TypeError: cannot read property 'get' of undefined
 built-ins/ThrowTypeError/unique-per-realm-non-simple.js: TypeError: cannot read property 'get' of undefined
 built-ins/ThrowTypeError/unique-per-realm-unmapped-args.js: TypeError: cannot read property 'get' of undefined
-built-ins/decodeURI/S15.1.3.1_A1.10_T1.js: Test262Error: #1: If B = 110xxxxx (n = 2) and (string.charAt(k + 4) and string.charAt(k + 5)) do not represent hexadecimal digits, throw URIError
-built-ins/decodeURI/S15.1.3.1_A1.11_T1.js: Test262Error: #1: If B = 1110xxxx (n = 3) and (string.charAt(k + 4) and string.charAt(k + 5)) do not represent hexadecimal digits, throw URIError
-built-ins/decodeURI/S15.1.3.1_A1.11_T2.js: Test262Error: #1: If B = 1110xxxx (n = 3) and (string.charAt(k + 7) and string.charAt(k + 8)) do not represent hexadecimal digits, throw URIError
-built-ins/decodeURI/S15.1.3.1_A1.12_T1.js: Test262Error: #1: If B = 11110xxx (n = 4) and (string.charAt(k + 4) and string.charAt(k + 5)) do not represent hexadecimal digits, throw URIError
-built-ins/decodeURI/S15.1.3.1_A1.12_T2.js: Test262Error: #1: If B = 11110xxx (n = 4) and (string.charAt(k + 7) and string.charAt(k + 8)) do not represent hexadecimal digits, throw URIError
-built-ins/decodeURI/S15.1.3.1_A1.12_T3.js: Test262Error: #1: If B = 11110xxx (n = 4) and (string.charAt(k + 10) and string.charAt(k + 11)) do not represent hexadecimal digits, throw URIError
-built-ins/decodeURI/S15.1.3.1_A1.13_T1.js: Test262Error: #00C0-00DF
-built-ins/decodeURI/S15.1.3.1_A1.13_T2.js: Test262Error: #00C0-00DF
-built-ins/decodeURI/S15.1.3.1_A1.14_T1.js: Test262Error: #00E0-00EF
-built-ins/decodeURI/S15.1.3.1_A1.14_T2.js: Test262Error: #00E0-00EF
-built-ins/decodeURI/S15.1.3.1_A1.14_T3.js: Test262Error: #00E0-00EF
-built-ins/decodeURI/S15.1.3.1_A1.14_T4.js: Test262Error: #00E0-00EF
-built-ins/decodeURI/S15.1.3.1_A1.15_T1.js: Test262Error: #00F0-00F7
-built-ins/decodeURI/S15.1.3.1_A1.15_T2.js: Test262Error: #00F0-00F7
-built-ins/decodeURI/S15.1.3.1_A1.15_T3.js: Test262Error: #00F0-00F7
-built-ins/decodeURI/S15.1.3.1_A1.15_T4.js: Test262Error: #00F0-00F7
-built-ins/decodeURI/S15.1.3.1_A1.15_T5.js: Test262Error: #00F0-00F7
-built-ins/decodeURI/S15.1.3.1_A1.15_T6.js: Test262Error: #00F0-00F7
-built-ins/decodeURI/S15.1.3.1_A1.1_T1.js: Test262Error: #1: If string.charAt(k) equal "%" and k + 2 >= string.length, throw URIError
-built-ins/decodeURI/S15.1.3.1_A1.2_T1.js: Test262Error: #1: If string.charAt(k+1) does not represent hexadecimal digits, throw URIError
-built-ins/decodeURI/S15.1.3.1_A1.2_T2.js: Test262Error: #1: If string.charAt(k+2) does not represent hexadecimal digits, throw URIError
-built-ins/decodeURI/S15.1.3.1_A1.3_T1.js: Test262Error: #0080-00BF
-built-ins/decodeURI/S15.1.3.1_A1.3_T2.js: Test262Error: #00F8-00FF
-built-ins/decodeURI/S15.1.3.1_A1.4_T1.js: Test262Error: #00C0-00DF
-built-ins/decodeURI/S15.1.3.1_A1.5_T1.js: Test262Error: #00E0-00EF
-built-ins/decodeURI/S15.1.3.1_A1.6_T1.js: Test262Error: #00F0-00F7
-built-ins/decodeURI/S15.1.3.1_A1.7_T1.js: Test262Error: #00C0-00DF
-built-ins/decodeURI/S15.1.3.1_A1.8_T1.js: Test262Error: #00E0-00EF
-built-ins/decodeURI/S15.1.3.1_A1.8_T2.js: Test262Error: #00E0-00EF
-built-ins/decodeURI/S15.1.3.1_A1.9_T1.js: Test262Error: #00F0-00F7
-built-ins/decodeURI/S15.1.3.1_A1.9_T2.js: Test262Error: #00F0-00F7
-built-ins/decodeURI/S15.1.3.1_A1.9_T3.js: Test262Error: #00F0-00F7
-built-ins/decodeURI/S15.1.3.1_A2.1_T1.js: Test262Error: #0000 throws
-built-ins/decodeURI/S15.1.3.1_A2.2_T1.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A2.3_T1.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A2.4_T1.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A2.5_T1.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A3_T1.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A3_T2.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A3_T3.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A4_T1.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A4_T2.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A4_T3.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A4_T4.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A5.1.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A5.2.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A5.3.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A5.4.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A5.6.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A5.7.js: Test262Error: #1.2: new decodeURI() throw TypeError. Actual: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/S15.1.3.1_A6_T1.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/name.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/not-a-constructor.js: ReferenceError: 'decodeURI' is not defined
-built-ins/decodeURI/prop-desc.js: Test262Error: decodeURI should be an own property
-built-ins/decodeURIComponent/S15.1.3.2_A1.10_T1.js: Test262Error: #1: If B = 110xxxxx (n = 2) and (string.charAt(k + 4) and string.charAt(k + 5)) do not represent hexadecimal digits, throw URIError
-built-ins/decodeURIComponent/S15.1.3.2_A1.11_T1.js: Test262Error: #1: If B = 1110xxxx (n = 3) and (string.charAt(k + 4) and string.charAt(k + 5)) do not represent hexadecimal digits, throw URIError
-built-ins/decodeURIComponent/S15.1.3.2_A1.11_T2.js: Test262Error: #1: If B = 1110xxxx (n = 3) and (string.charAt(k + 7) and string.charAt(k + 8)) do not represent hexadecimal digits, throw URIError
-built-ins/decodeURIComponent/S15.1.3.2_A1.12_T1.js: Test262Error: #1: If B = 11110xxx (n = 4) and (string.charAt(k + 4) and string.charAt(k + 5)) do not represent hexadecimal digits, throw URIError
-built-ins/decodeURIComponent/S15.1.3.2_A1.12_T2.js: Test262Error: #1: If B = 11110xxx (n = 4) and (string.charAt(k + 7) and string.charAt(k + 8)) do not represent hexadecimal digits, throw URIError
-built-ins/decodeURIComponent/S15.1.3.2_A1.12_T3.js: Test262Error: #1: If B = 11110xxx (n = 4) and (string.charAt(k + 10) and string.charAt(k + 11)) do not represent hexadecimal digits, throw URIError
-built-ins/decodeURIComponent/S15.1.3.2_A1.13_T1.js: Test262Error: #00C0-00DF
-built-ins/decodeURIComponent/S15.1.3.2_A1.13_T2.js: Test262Error: #00C0-00DF
-built-ins/decodeURIComponent/S15.1.3.2_A1.14_T1.js: Test262Error: #00E0-00EF
-built-ins/decodeURIComponent/S15.1.3.2_A1.14_T2.js: Test262Error: #00E0-00EF
-built-ins/decodeURIComponent/S15.1.3.2_A1.14_T3.js: Test262Error: #00E0-00EF
-built-ins/decodeURIComponent/S15.1.3.2_A1.14_T4.js: Test262Error: #00E0-00EF
-built-ins/decodeURIComponent/S15.1.3.2_A1.15_T1.js: Test262Error: #00F0-00F7
-built-ins/decodeURIComponent/S15.1.3.2_A1.15_T2.js: Test262Error: #00F0-00F7
-built-ins/decodeURIComponent/S15.1.3.2_A1.15_T3.js: Test262Error: #00F0-00F7
-built-ins/decodeURIComponent/S15.1.3.2_A1.15_T4.js: Test262Error: #00F0-00F7
-built-ins/decodeURIComponent/S15.1.3.2_A1.15_T5.js: Test262Error: #00F0-00F7
-built-ins/decodeURIComponent/S15.1.3.2_A1.15_T6.js: Test262Error: #00F0-00F7
-built-ins/decodeURIComponent/S15.1.3.2_A1.1_T1.js: Test262Error: #1: If string.charAt(k) equal "%" and k + 2 >= string.length, throw URIError
-built-ins/decodeURIComponent/S15.1.3.2_A1.2_T1.js: Test262Error: #1: If string.charAt(k+1) does not represent hexadecimal digits, throw URIError
-built-ins/decodeURIComponent/S15.1.3.2_A1.2_T2.js: Test262Error: #1: If string.charAt(k+2) does not represent hexadecimal digits, throw URIError
-built-ins/decodeURIComponent/S15.1.3.2_A1.3_T1.js: Test262Error: #0080-00BF
-built-ins/decodeURIComponent/S15.1.3.2_A1.3_T2.js: Test262Error: #00F8-00FF
-built-ins/decodeURIComponent/S15.1.3.2_A1.4_T1.js: Test262Error: #00C0-00DF
-built-ins/decodeURIComponent/S15.1.3.2_A1.5_T1.js: Test262Error: #00E0-00EF
-built-ins/decodeURIComponent/S15.1.3.2_A1.6_T1.js: Test262Error: #00F0-00F7
-built-ins/decodeURIComponent/S15.1.3.2_A1.7_T1.js: Test262Error: #00C0-00DF
-built-ins/decodeURIComponent/S15.1.3.2_A1.8_T1.js: Test262Error: #00E0-00EF
-built-ins/decodeURIComponent/S15.1.3.2_A1.8_T2.js: Test262Error: #00E0-00EF
-built-ins/decodeURIComponent/S15.1.3.2_A1.9_T1.js: Test262Error: #00F0-00F7
-built-ins/decodeURIComponent/S15.1.3.2_A1.9_T2.js: Test262Error: #00F0-00F7
-built-ins/decodeURIComponent/S15.1.3.2_A1.9_T3.js: Test262Error: #00F0-00F7
-built-ins/decodeURIComponent/S15.1.3.2_A2.1_T1.js: Test262Error: #0000 throws
-built-ins/decodeURIComponent/S15.1.3.2_A2.2_T1.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A2.3_T1.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A2.4_T1.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A2.5_T1.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A3_T1.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A3_T2.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A3_T3.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A4_T1.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A4_T2.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A4_T3.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A4_T4.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A5.1.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A5.2.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A5.3.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A5.4.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A5.6.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A5.7.js: Test262Error: #1.2: new decodeURIComponent() throw TypeError. Actual: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/S15.1.3.2_A6_T1.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/name.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/not-a-constructor.js: ReferenceError: 'decodeURIComponent' is not defined
-built-ins/decodeURIComponent/prop-desc.js: Test262Error: decodeURIComponent should be an own property
-built-ins/decodeURIComponent/throw-URIError.js: Test262Error: #1: %ED%BF%BF (surrogate pair) should throw URIError Expected a URIError but got a ReferenceError
-built-ins/encodeURI/S15.1.3.3_A1.1_T1.js: Test262Error: #DC00-DFFF
-built-ins/encodeURI/S15.1.3.3_A1.1_T2.js: Test262Error: #DC00-DFFF
-built-ins/encodeURI/S15.1.3.3_A1.2_T1.js: Test262Error: #D800-DBFF
-built-ins/encodeURI/S15.1.3.3_A1.2_T2.js: Test262Error: #D800-DBFF
-built-ins/encodeURI/S15.1.3.3_A1.3_T1.js: Test262Error: #D800-DBFF
-built-ins/encodeURI/S15.1.3.3_A2.1_T1.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A2.2_T1.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A2.3_T1.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A2.4_T1.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A2.4_T2.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A2.5_T1.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A3.1_T1.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A3.2_T1.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A3.2_T2.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A3.2_T3.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A3.3_T1.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A4_T1.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A4_T2.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A4_T3.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A4_T4.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A5.1.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A5.2.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A5.3.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A5.4.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A5.6.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A5.7.js: Test262Error: #1.2: new encodeURI() throw TypeError. Actual: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/S15.1.3.3_A6_T1.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/name.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/not-a-constructor.js: ReferenceError: 'encodeURI' is not defined
-built-ins/encodeURI/prop-desc.js: Test262Error: encodeURI should be an own property
-built-ins/encodeURIComponent/S15.1.3.4_A1.1_T1.js: Test262Error: #DC00-DFFF
-built-ins/encodeURIComponent/S15.1.3.4_A1.1_T2.js: Test262Error: #DC00-DFFF
-built-ins/encodeURIComponent/S15.1.3.4_A1.2_T1.js: Test262Error: #D800-DBFF
-built-ins/encodeURIComponent/S15.1.3.4_A1.2_T2.js: Test262Error: #D800-DBFF
-built-ins/encodeURIComponent/S15.1.3.4_A1.3_T1.js: Test262Error: #D800-DBFF
-built-ins/encodeURIComponent/S15.1.3.4_A2.1_T1.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A2.2_T1.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A2.3_T1.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A2.4_T1.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A2.4_T2.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A2.5_T1.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A3.1_T1.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A3.2_T1.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A3.2_T2.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A3.2_T3.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A3.3_T1.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A4_T1.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A4_T2.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A4_T3.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A4_T4.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A5.1.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A5.2.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A5.3.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A5.4.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A5.6.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A5.7.js: Test262Error: #1.2: new encodeURIComponent() throw TypeError. Actual: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/S15.1.3.4_A6_T1.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/name.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/not-a-constructor.js: ReferenceError: 'encodeURIComponent' is not defined
-built-ins/encodeURIComponent/prop-desc.js: Test262Error: encodeURIComponent should be an own property
 built-ins/global/S10.2.3_A1.1_T2.js: ReferenceError: 'eval' is not defined
 built-ins/global/S10.2.3_A1.2_T2.js: ReferenceError: 'eval' is not defined
 language/arguments-object/10.6-13-c-1-s.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all

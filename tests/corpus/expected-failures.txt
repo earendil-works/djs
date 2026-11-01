@@ -9,5 +9,4 @@ dquickts/typescript/test_rejected_syntax_5.ts: throws SyntaxError: missing forma
 dquickts/typescript/test_rejected_syntax_6.ts: throws SyntaxError: unexpected token in expression: '@'
 dquickts/typescript/test_using.ts: throws SyntaxError: expecting ';'
 dquickts/typescript/test_using_syntax_2.ts: throws SyntaxError: expecting ';'
-errors/other-errors.js: line 18: expected `decodeURIComponent -> URIError: expecting hex digit`, got `decodeURIComponent -> ReferenceError: 'decodeURIComponent' is not defined`
 errors/type-errors.js: line 16: expected `getter only -> TypeError: no setter for property`, got `getter only -> TypeError: no setter for property 'g'`
