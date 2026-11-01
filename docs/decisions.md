@@ -4362,3 +4362,48 @@ settles, the result is a null-prototype object with the same keys
 (CreateKeyedPromiseCombinatorResultObject). A non-object argument and every abrupt step
 reject the returned promise. With 0097, test262's later group is empty (D1970, D1971,
 this, and Symbol.unscopables, whose tests passed already).
+
+## D1990: Arena capacity is the GC threshold plus a slack
+date: 2026-11-03 · by: num · issue: 0099
+The cold-start peak of a pi VM (3.81 MiB) was not the collection after the prelude. It
+came from an ordinary collection inside the prelude run:
+1. The arena crossed its threshold. It was sized exactly to the threshold (D1870,
+   D1942), and allocation went on until the next safepoint.
+2. That overshoot reallocated the whole arena. In dlmalloc a reallocation is a move,
+   so the old block was left behind as a hole.
+3. The collection then allocated its to-space on top of both.
+
+Now the arena's capacity target is `t + max(64 KiB, t/16)` for a threshold `t`
+(`capacity_target`), and `restore_capacity` uses the same. Only capacity changes, so
+images, GC points and determinism stay the same.
+
+| | before | after |
+| --- | ---: | ---: |
+| pi cold start, `return 1` | 3.81 MiB | 2.81 MiB |
+| warm start | 2.13 MiB | 2.06 MiB (with D1991) |
+| `Sandbox` creation | 1.69 MiB | 1.75 MiB |
+| pi cold start, tool-heavy script | 3.81 MiB | 4.06 MiB |
+| `vm_new` | 47–58 µs | 47–53 µs |
+
+The tool-heavy cold start got worse only through where dlmalloc happens to place the
+blocks. The in-run collection now runs before the arena grew, so its to-space is smaller
+and the later growth moves the arena once more. The slack itself costs 64 KiB.
+
+Measured and rejected (dlmalloc never returns memory, and its realloc grows a block in
+place only if the top chunk already has room):
+- a to-space sized for the next threshold: 5.5 MiB;
+- reserving the new target right after the from-space is freed: 4.0 MiB.
+
+The rest of the cold peak is Cheney itself: from-space plus to-space, about twice the
+live data. Only an in-place (sliding) collector removes that (see 0099's follow-ups).
+
+## D1991: `verify` keeps cell starts in a bitmap
+date: 2026-11-03 · by: num · issue: 0099
+`Heap::verify` runs when an image is restored. It used to build a list of
+`(offset, kind)` per cell (8 bytes per cell) and a list of objects for the prototype-cycle
+check. Now it keeps a bitmap of cell starts, one bit per 8-byte word (len/64 bytes); the
+kinds are read from the headers, which are already checked. The cells are walked again
+by their size fields. The cycle check uses two more bitmaps, "on the current path" and
+"known to reach null", plus the path itself. For pi's 549 KiB prelude image that is
+about 26 KiB instead of 80, and `vm_from_bytes` no longer grows wasm memory. The
+binary search per reference also becomes a bit test.
