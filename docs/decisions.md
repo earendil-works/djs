@@ -2697,3 +2697,13 @@ Heap(HeapError)`), built by the cold `Fault::throw` / `Fault::error` / `Fault::h
 `Result<(), Fault>` is then one i32 and `?` moves a pointer; `Result<Value, Fault>`
 stays two words. Code 699,863 -> 686,908 in wasm. A fault costs one extra small
 allocation; throw-heavy loops show no measurable change (0057).
+
+## D1575: The wasm profile strips the custom sections
+date: 2026-11-03 · by: bloat · issue: 0057
+`[profile.wasm] strip = true`: the module comes out without its name section (175 KB)
+and producers section, byte-identical to `wasm-strip` of the old output, so every
+consumer of the `wasm` profile (scripts/build-wasm.sh, the Sandbox's default path,
+djs-bench) gets the shipping module. `scripts/build-wasm.sh --keep-names` sets
+`CARGO_PROFILE_WASM_STRIP=false` for profiling and scripts/wasm-funcs.py (a rebuild
+when switching; `--strip` is accepted as a no-op). The size track adds `brotli -q 11`;
+its `names` value is 0 from now on.

@@ -7,7 +7,7 @@ usage: scripts/wasm-funcs.py [module.wasm] [--areas] [--generic] [--top N]
   --areas    sum code by functional area (parser, interpreter, builtins, ...): see AREAS.
   --generic  group functions by their name without generic arguments, to find code that
              is monomorphized many times (count > 1).
-The module needs its name section (the unstripped build of scripts/build-wasm.sh).
+The module needs its name section: `scripts/build-wasm.sh --keep-names`.
 """
 import re
 import shutil

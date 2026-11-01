@@ -5,8 +5,10 @@ Unlike the name section, the line table attributes inlined code to the source it
 from, so this answers "which source makes Exec::run 56 KB" or "how much code comes from
 core/alloc generics inlined into djs functions".
 
-Build a module with line tables first (the code is the same as without them):
+Build a module with line tables first (the same code as without them, except that the
+relocations stay padded: D1570 applies only to builds without debug info):
   CARGO_TARGET_DIR=work/scratch/dbg CARGO_PROFILE_WASM_DEBUG=1 \
+    CARGO_PROFILE_WASM_STRIP=false \
     cargo build -p djs-wasm --target wasm32-unknown-unknown --profile wasm
 then: llvm-dwarfdump --debug-line module.wasm > lines.txt (homebrew llvm has it)
 

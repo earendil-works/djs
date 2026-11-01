@@ -1,7 +1,7 @@
 //! The size track: a release wasm32 build (the `wasm` profile) of the size probe in
 //! tests/bench/size, a cdylib that references djs-core's main entry points. Reports the
-//! file size, the size without custom sections (names, producers), the gzip -9 size,
-//! and the `wasm-opt -Oz` size when wasm-opt is installed.
+//! file size, the size without custom sections (names, producers), the gzip -9 and
+//! brotli -q 11 sizes, and the `wasm-opt -Oz` size when wasm-opt is installed.
 
 use std::io::Write;
 use std::path::Path;
@@ -80,9 +80,15 @@ fn measure(r: &mut Runner, prefix: &str, what: &[&str], target_dir: &Path, file:
             r.value(&name(what), Unit::Bytes, n as f64);
         }
     }
-    match gzip_size(&bytes) {
+    // Transport sizes. The wasm profile strips the custom sections (D1575), so for
+    // djs-wasm these are the shipped module's.
+    match compressed_size("gzip", &["-9c"], &bytes) {
         Some(n) => r.value(&name("gzip -9"), Unit::Bytes, n as f64),
         None => r.skip(&name("gzip -9"), "gzip not available"),
+    }
+    match compressed_size("brotli", &["-c", "-q", "11"], &bytes) {
+        Some(n) => r.value(&name("brotli -q 11"), Unit::Bytes, n as f64),
+        None => r.skip(&name("brotli -q 11"), "brotli not available"),
     }
     // `size/wasm-opt -Oz` is the probe's historical name.
     let opt_name = if prefix == "size/wasm" {
@@ -156,9 +162,10 @@ fn leb128(b: &[u8]) -> Option<(u32, usize)> {
     None
 }
 
-fn gzip_size(bytes: &[u8]) -> Option<usize> {
-    let mut child = Command::new("gzip")
-        .arg("-9c")
+/// The output size of `cmd args` with `bytes` on stdin (a compressor writing to stdout).
+fn compressed_size(cmd: &str, args: &[&str], bytes: &[u8]) -> Option<usize> {
+    let mut child = Command::new(cmd)
+        .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()

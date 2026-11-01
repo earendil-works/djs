@@ -7,8 +7,8 @@ TypeScript client. Values go in through the wire format and come out through dir
 reads (docs/wire.md, both halves).
 
 ```sh
-scripts/build-wasm.sh            # target/wasm32-unknown-unknown/wasm/djs_wasm.wasm
-scripts/build-wasm.sh --strip    # also drop the custom sections (names) for shipping
+scripts/build-wasm.sh              # target/wasm32-unknown-unknown/wasm/djs_wasm.wasm, stripped
+scripts/build-wasm.sh --keep-names # with the name section (profiling, scripts/wasm-funcs.py)
 node --test js/test/*.test.ts    # sandbox.test.ts needs a build ($DJS_WASM overrides the path)
 ```
 
@@ -189,10 +189,12 @@ memory. A freed VM's memory is reused but not returned: wasm memory cannot shrin
 
 Node 25, Apple M-series, the `wasm` profile at opt-level `s` (D1232), medians.
 
-**Size.** 564 KB as built, 450 KB without the name section, 158 KB gzip -9 stripped, including
-the 36 KB base snapshot (0032; the module no longer needs the code that builds the realm). The
-size track (`scripts/bench.sh size`) records `size/djs-wasm ...` next to the old probe.
-The ARCH budget (400 KB) is meant after `wasm-opt`, which is not installed here yet.
+**Size.** 1,209 KB (0057, after 0051): code 687 KB, data 519 KB of which the base snapshot
+is 387 KB; 416 KB gzip -9, 336 KB brotli -q 11. The `wasm` profile strips the name section
+(D1575) and links with `--compress-relocations` (D1570). Where the bytes go and what could
+shrink them: work/issues/0052-bloat-investigation.md. The size track (`scripts/bench.sh
+size`) records `size/djs-wasm ...` (file, code, data, names, gzip, brotli) next to the old
+probe. The ARCH budget (400 KB) is meant after `wasm-opt`, which is not installed here.
 
 **Startup** (`node js/bench/sandbox.bench.ts`):
 
