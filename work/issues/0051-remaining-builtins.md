@@ -50,7 +50,13 @@ exists (generators/iterators from 0029/0037/0042, the ephemeron GC from 0038):
   the iterator in qjs; qjs closes an exhausted flatMap inner iterator. Unit test in
   vm/tests.rs (outside `touches`, additive).
 - Promoted built-ins/Iterator, iterator-helpers, iterator-sequencing: active
-  33,854 → 34,283 tests, 33,450 → 33,879 passing (+429, no new failures).
+  33,854 → 34,283 tests, 33,450 → 33,879 passing (+429, no new failures). Merged
+  (main ca3f95e).
+- Part 2, the iterator proposals qjs has (coordinator: in this issue): chunks, windows,
+  includes, join, Iterator.zip/zipKeyed (kinds 7-9 of D1510). x-iter 649/655 (the 6
+  left are Iterator.prototype[Symbol.dispose], with the disposables). Promoted
+  iterator-chunking, iterator-includes, Iterator.prototype.join, joint-iteration:
+  active 34,283 → 34,503 tests, 34,099 passing (+220, no new failures).
 
 ## Follow-ups
 

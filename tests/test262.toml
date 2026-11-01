@@ -99,7 +99,8 @@ description = "Phases P3 to P5 of ARCH.md: on the roadmap, not in the current mi
 # stable-typedarray-sort (immutable-arraybuffer stays later: a proposal).
 # Moved to active in 0045: built-ins/Proxy and the features Proxy, proxy-missing-checks.
 # Moved to active in 0051: built-ins/Iterator and the features iterator-helpers,
-# iterator-sequencing.
+# iterator-sequencing, iterator-chunking, iterator-includes, Iterator.prototype.join,
+# joint-iteration.
 paths = [
   "built-ins/RegExp",                         # our own regex engine comes in P5
   "built-ins/RegExpStringIteratorPrototype",  # regex
@@ -113,10 +114,6 @@ paths = [
 features = [
   "immutable-arraybuffer",      # binary data
   "Array.fromAsync",            # async iteration
-  "iterator-chunking",          # iterator proposals
-  "iterator-includes",          # iterator proposals
-  "Iterator.prototype.join",    # iterator proposals
-  "joint-iteration",            # iterator proposals
   "regexp-*",                   # regex features
   "RegExp.escape",              # regex
   "String.prototype.matchAll",  # regex

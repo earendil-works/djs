@@ -4,13 +4,19 @@
 // a hand-written state machine instead of a generator closure:
 //
 //   0 kind: 0 Iterator.from's wrapper, 1 map, 2 filter, 3 take, 4 drop, 5 flatMap,
-//     6 concat
+//     6 concat, 7 chunks, 8 windows, 9 zip and zipKeyed
 //   1 state: 0 suspended-start, 1 suspended-yield, 2 executing, 3 completed
 //   2 the underlying iterator (concat: the current one), 3 its `next` method
 //   4 the function (map, filter, flatMap), the remaining count (take, drop), the
-//     iterables (concat: an array of [method, iterable] pairs)
-//   5 the counter (concat: the index of the next iterable)
-//   6 flatMap's inner iterator, 7 its `next` method
+//     iterables (concat: an array of [method, iterable] pairs), the size (chunks,
+//     windows)
+//   5 the counter (concat: the index of the next iterable; windows: allow-partial)
+//   6 flatMap's inner iterator, 7 its `next` method; chunks and windows: 6 is true
+//     once the underlying iterator is done (a last partial array was yielded), 7 the
+//     window
+//   zip: 2 the iterators (null once done in longest mode), 3 their `next` methods,
+//   4 the padding, 5 the mode (0 shortest, 1 longest, 2 strict), 6 which iterators
+//   are open (booleans), 7 zipKeyed's keys (undefined for zip)
 //
 // A step either yields (sets state 1 and returns the value) or returns with the state
 // still executing, which completes the helper.
@@ -143,6 +149,9 @@ function IteratorHelperStep(o: Obj): Value {
   if (kind === 6) {
     return ConcatStep(o);
   }
+  if (kind === 9) {
+    return ZipStep(o);
+  }
   const iterator: Obj = AsObj(RecordGet(o, 2));
   const next: Value = RecordGet(o, 3);
   if (kind === 1) {
@@ -197,7 +206,199 @@ function IteratorHelperStep(o: Obj): Value {
     }
     return HelperYield(o, Get(AsObj(result), "value"));
   }
-  return FlatMapStep(o, iterator, next);
+  if (kind === 5) {
+    return FlatMapStep(o, iterator, next);
+  }
+  if (kind === 7) {
+    return ChunksStep(o, iterator, next);
+  }
+  return WindowsStep(o, iterator, next);
+}
+
+/** A copy of the first n elements of the internal array a, as a new Array. */
+function ArrayPrefixCopy(a: Obj, from: f64, n: f64): Obj {
+  const copy: Obj = ArrayCreate(0);
+  for (let i: f64 = 0; i < n; i++) {
+    CreateDataPropertyOrThrow(copy, i, Get(a, from + i));
+  }
+  return copy;
+}
+
+/** A step of chunks (iterator-chunking): the next full chunk, or the partial last one. */
+function ChunksStep(o: Obj, iterator: Obj, next: Value): Value {
+  if (RecordGet(o, 6) === true) {
+    return undefined;
+  }
+  const size: f64 = AsNumber(RecordGet(o, 4));
+  const buffer: Obj = ArrayCreate(0);
+  let n: f64 = 0;
+  while (true) {
+    const result: Value = IteratorStepResult(iterator, next);
+    if (result === undefined) {
+      if (n > 0) {
+        RecordSet(o, 6, true);
+        return HelperYield(o, buffer);
+      }
+      return undefined;
+    }
+    CreateDataPropertyOrThrow(buffer, n, Get(AsObj(result), "value"));
+    n++;
+    if (n === size) {
+      return HelperYield(o, buffer);
+    }
+  }
+}
+
+/**
+ * A step of windows (iterator-chunking): the next full window; with allow-partial, a
+ * short last one if the iterator ended before the first window filled.
+ */
+function WindowsStep(o: Obj, iterator: Obj, next: Value): Value {
+  if (RecordGet(o, 6) === true) {
+    return undefined;
+  }
+  const size: f64 = AsNumber(RecordGet(o, 4));
+  let window: Value = RecordGet(o, 7);
+  if (window === undefined) {
+    window = ArrayCreate(0);
+    RecordSet(o, 7, window);
+  }
+  const w: Obj = AsObj(window);
+  while (true) {
+    let n: f64 = LengthOfArrayLike(w);
+    const result: Value = IteratorStepResult(iterator, next);
+    if (result === undefined) {
+      if (RecordGet(o, 5) === true && n > 0 && n < size) {
+        RecordSet(o, 6, true);
+        return HelperYield(o, ArrayPrefixCopy(w, 0, n));
+      }
+      return undefined;
+    }
+    const value: Value = Get(AsObj(result), "value");
+    if (n === size) {
+      // Drop the oldest element: shift the window down by one.
+      for (let i: f64 = 1; i < n; i++) {
+        CreateDataPropertyOrThrow(w, i - 1, Get(w, i));
+      }
+      n = n - 1;
+    }
+    CreateDataPropertyOrThrow(w, n, value);
+    Set(w, "length", n + 1);
+    if (n + 1 === size) {
+      return HelperYield(o, ArrayPrefixCopy(w, 0, size));
+    }
+  }
+}
+
+/**
+ * IteratorCloseAll ( iters, completion ) (joint-iteration): closes the open iterators
+ * of the list in reverse order, then completes with `error` if `isThrow` or if a
+ * `return` threw (the first such error; later ones are ignored).
+ */
+function IteratorCloseAll(iters: Obj, open: Obj, error: Value, isThrow: boolean): void {
+  let threw: boolean = isThrow;
+  let err: Value = error;
+  for (let i: f64 = LengthOfArrayLike(iters) - 1; i >= 0; i--) {
+    if (Get(open, i) === true) {
+      const iter: Obj = AsObj(Get(iters, i));
+      if (threw) {
+        IteratorCloseThrow(iter);
+      } else {
+        try {
+          IteratorClose(iter);
+        } catch (e) {
+          threw = true;
+          err = e;
+        }
+      }
+    }
+  }
+  if (threw) {
+    throw err;
+  }
+}
+
+/** A step of IteratorZip (joint-iteration): the next results array or object. */
+function ZipStep(o: Obj): Value {
+  const iters: Obj = AsObj(RecordGet(o, 2));
+  const nexts: Obj = AsObj(RecordGet(o, 3));
+  const padding: Obj = AsObj(RecordGet(o, 4));
+  const mode: i32 = F64ToI32(AsNumber(RecordGet(o, 5)));
+  const open: Obj = AsObj(RecordGet(o, 6));
+  const n: f64 = LengthOfArrayLike(iters);
+  if (n === 0) {
+    return undefined;
+  }
+  const results: Obj = ArrayCreate(0);
+  for (let i: f64 = 0; i < n; i++) {
+    const iter: Value = Get(iters, i);
+    let value: Value = undefined;
+    if (iter === null) {
+      value = Get(padding, i);
+    } else {
+      let result: Value = undefined;
+      try {
+        result = IteratorStepResult(AsObj(iter), Get(nexts, i));
+        if (result !== undefined) {
+          value = Get(AsObj(result), "value");
+        }
+      } catch (e) {
+        CreateDataPropertyOrThrow(open, i, false);
+        IteratorCloseAll(iters, open, e, true);
+      }
+      if (result === undefined) {
+        CreateDataPropertyOrThrow(open, i, false);
+        if (mode === 0) {
+          IteratorCloseAll(iters, open, undefined, false);
+          return undefined;
+        }
+        if (mode === 2) {
+          if (i !== 0) {
+            IteratorCloseAll(iters, open, NewTypeError("iterators have different lengths"), true);
+          }
+          for (let k: f64 = 1; k < n; k++) {
+            let rest: Value = undefined;
+            try {
+              rest = IteratorStepResult(AsObj(Get(iters, k)), Get(nexts, k));
+            } catch (e) {
+              CreateDataPropertyOrThrow(open, k, false);
+              IteratorCloseAll(iters, open, e, true);
+            }
+            if (rest !== undefined) {
+              IteratorCloseAll(iters, open, NewTypeError("iterators have different lengths"), true);
+            }
+            CreateDataPropertyOrThrow(open, k, false);
+          }
+          return undefined;
+        }
+        if (!ZipAnyOpen(open, n)) {
+          return undefined;
+        }
+        CreateDataPropertyOrThrow(iters, i, null);
+        value = Get(padding, i);
+      }
+    }
+    CreateDataPropertyOrThrow(results, i, value);
+  }
+  const keys: Value = RecordGet(o, 7);
+  if (keys === undefined) {
+    return HelperYield(o, results);
+  }
+  const obj: Obj = ObjectCreate(null);
+  for (let i: f64 = 0; i < n; i++) {
+    CreateDataPropertyOrThrow(obj, Get(AsObj(keys), i), Get(results, i));
+  }
+  return HelperYield(o, obj);
+}
+
+/** Whether one of the n iterators of a zip is still open. */
+function ZipAnyOpen(open: Obj, n: f64): boolean {
+  for (let i: f64 = 0; i < n; i++) {
+    if (Get(open, i) === true) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** A step of flatMap, 27.1.4.7: the inner iterator's next value, or the next mapping. */
@@ -275,6 +476,14 @@ function ConcatStep(o: Obj): Value {
  */
 function IteratorHelperReturnAtYield(o: Obj): void {
   const kind: i32 = F64ToI32(AsNumber(RecordGet(o, 0)));
+  if (kind === 9) {
+    IteratorCloseAll(AsObj(RecordGet(o, 2)), AsObj(RecordGet(o, 6)), undefined, false);
+    return;
+  }
+  // The yield of a last partial chunk or window ignores the completion.
+  if ((kind === 7 || kind === 8) && RecordGet(o, 6) === true) {
+    return;
+  }
   if (kind === 5) {
     const inner: Value = RecordGet(o, 6);
     if (inner !== undefined) {
@@ -332,6 +541,10 @@ function IteratorHelperPrototypeReturn(this: Value): Obj {
   }
   if (state === 0) {
     RecordSet(o, 1, 3);
+    if (F64ToI32(AsNumber(RecordGet(o, 0))) === 9) {
+      IteratorCloseAll(AsObj(RecordGet(o, 2)), AsObj(RecordGet(o, 6)), undefined, false);
+      return CreateIterResultObject(undefined, true);
+    }
     // concat has no underlying iterator before it starts.
     const iterator: Value = RecordGet(o, 2);
     if (iterator !== undefined) {
@@ -658,4 +871,331 @@ function IteratorPrototypeToStringTagGet(this: Value): Value {
  */
 function IteratorPrototypeToStringTagSet(this: Value, v: Value): void {
   SetterThatIgnoresPrototypeProperties(this, RealmIntrinsic("IteratorPrototype"), WellKnownSymbol("toStringTag"), v);
+}
+
+/**
+ * The size argument of chunks and windows (iterator-chunking): an integral Number in
+ * [1, 2**32 - 1], else the receiver is closed and a TypeError or RangeError thrown.
+ */
+function ChunkingSize(o: Obj, size: Value, name: Str): f64 {
+  let error: Value = undefined;
+  // Integral means finite too.
+  if (!IsNumber(size) || ToIntegerOrInfinityNumber(AsNumber(size)) !== AsNumber(size) || AsNumber(size) - AsNumber(size) !== 0) {
+    error = NewTypeError(name + " is not an integral number");
+  } else if (AsNumber(size) < 1 || AsNumber(size) > 4294967295) {
+    error = NewRangeError(name + " out of range");
+  }
+  if (error !== undefined) {
+    IteratorCloseThrow(o);
+    throw error;
+  }
+  return AsNumber(size);
+}
+
+/**
+ * Iterator.prototype.chunks ( chunkSize ) (iterator-chunking).
+ * @builtin Iterator.prototype.chunks
+ */
+function IteratorPrototypeChunks(this: Value, chunkSize: Value): Obj {
+  const o: Obj = ThisIteratorObject(this);
+  return NewIteratorHelper(7, o, ChunkingSize(o, chunkSize, "chunkSize"));
+}
+
+/**
+ * Iterator.prototype.windows ( windowSize [ , undersized ] ) (iterator-chunking).
+ * @builtin Iterator.prototype.windows
+ * @length 1
+ */
+function IteratorPrototypeWindows(this: Value, windowSize: Value, undersized?: Value): Obj {
+  const o: Obj = ThisIteratorObject(this);
+  const size: f64 = ChunkingSize(o, windowSize, "windowSize");
+  if (undersized !== undefined && undersized !== "only-full" && undersized !== "allow-partial") {
+    const error: Obj = NewTypeError("bad undersized option");
+    IteratorCloseThrow(o);
+    throw error;
+  }
+  const helper: Obj = NewIteratorHelper(8, o, size);
+  RecordSet(helper, 5, undersized === "allow-partial");
+  return helper;
+}
+
+/**
+ * Iterator.prototype.includes ( searchElement [ , skippedElements ] ) (iterator-includes).
+ * @builtin Iterator.prototype.includes
+ * @length 1
+ */
+function IteratorPrototypeIncludes(this: Value, searchElement: Value, skippedElements?: Value): boolean {
+  const o: Obj = ThisIteratorObject(this);
+  let toSkip: f64 = 0;
+  if (skippedElements !== undefined) {
+    let error: Value = undefined;
+    if (!IsNumber(skippedElements)) {
+      error = NewTypeError("not a number");
+    } else {
+      toSkip = AsNumber(skippedElements);
+      if (toSkip !== toSkip || ToIntegerOrInfinityNumber(toSkip) !== toSkip) {
+        error = NewTypeError("not an integral number");
+      } else if (toSkip < 0 || (toSkip > 9007199254740991 && toSkip !== 1 / 0)) {
+        error = NewRangeError("must be positive");
+      }
+    }
+    if (error !== undefined) {
+      IteratorCloseThrow(o);
+      throw error;
+    }
+  }
+  const next: Value = GetIteratorDirectNext(o);
+  let skipped: f64 = 0;
+  while (true) {
+    const result: Value = IteratorStepResult(o, next);
+    if (result === undefined) {
+      return false;
+    }
+    const value: Value = Get(AsObj(result), "value");
+    if (skipped < toSkip) {
+      skipped++;
+    } else if (SameValueZero(value, searchElement)) {
+      IteratorClose(o);
+      return true;
+    }
+  }
+}
+
+/**
+ * Iterator.prototype.join ( separator ) (Iterator.prototype.join).
+ * @builtin Iterator.prototype.join
+ */
+function IteratorPrototypeJoin(this: Value, separator: Value): Str {
+  const o: Obj = ThisIteratorObject(this);
+  let sep: Str = ",";
+  if (separator !== undefined) {
+    try {
+      sep = ToString(separator);
+    } catch (e) {
+      IteratorCloseThrow(o);
+      throw e;
+    }
+  }
+  const next: Value = GetIteratorDirectNext(o);
+  let r: Str = "";
+  let first: boolean = true;
+  while (true) {
+    const result: Value = IteratorStepResult(o, next);
+    if (result === undefined) {
+      return r;
+    }
+    const value: Value = Get(AsObj(result), "value");
+    if (!first) {
+      r += sep;
+    }
+    first = false;
+    if (value !== undefined && value !== null) {
+      try {
+        r += ToString(value);
+      } catch (e) {
+        IteratorCloseThrow(o);
+        throw e;
+      }
+    }
+  }
+}
+
+/**
+ * The options of Iterator.zip and zipKeyed (joint-iteration): a Record [mode (0
+ * shortest, 1 longest, 2 strict), padding option].
+ */
+function ZipOptions(options: Value): Obj {
+  let opts: Obj = ObjectCreate(null);
+  if (options !== undefined) {
+    if (!IsObject(options)) {
+      throw NewTypeError("options must be an object");
+    }
+    opts = AsObj(options);
+  }
+  const mode: Value = Get(opts, "mode");
+  let m: i32 = 0;
+  if (mode === "longest") {
+    m = 1;
+  } else if (mode === "strict") {
+    m = 2;
+  } else if (mode !== undefined && mode !== "shortest") {
+    throw NewTypeError("invalid mode");
+  }
+  let padding: Value = undefined;
+  if (m === 1) {
+    padding = Get(opts, "padding");
+    if (padding !== undefined && !IsObject(padding)) {
+      throw NewTypeError("padding must be an object");
+    }
+  }
+  const r: Obj = NewRecord(2);
+  RecordSet(r, 0, m);
+  RecordSet(r, 1, padding);
+  return r;
+}
+
+/**
+ * Appends the iterator of `value` (GetIteratorFlattenable, reject-primitives, and its
+ * `next`) to the zip lists; on an exception, closes `outer` (if any) after the
+ * iterators so far and rethrows.
+ */
+function ZipAddIterator(iters: Obj, nexts: Obj, open: Obj, value: Value, outer: Value): void {
+  const n: f64 = LengthOfArrayLike(iters);
+  try {
+    const iter: Obj = GetIteratorFlattenable(value, false);
+    const next: Value = GetIteratorDirectNext(iter);
+    CreateDataPropertyOrThrow(iters, n, iter);
+    CreateDataPropertyOrThrow(nexts, n, next);
+    CreateDataPropertyOrThrow(open, n, true);
+  } catch (e) {
+    // IfAbruptCloseIterators over « outer » followed by the iterators: in reverse.
+    try {
+      IteratorCloseAll(iters, open, e, true);
+    } finally {
+      if (outer !== undefined) {
+        IteratorCloseThrow(AsObj(outer));
+      }
+    }
+  }
+}
+
+/** The helper of IteratorZip ( iters, mode, padding, finishResults ). */
+function ZipCreate(iters: Obj, nexts: Obj, open: Obj, padding: Obj, mode: i32, keys: Value): Obj {
+  const helper: Obj = CreateIteratorHelper(9, iters, nexts);
+  RecordSet(helper, 4, padding);
+  RecordSet(helper, 5, mode);
+  RecordSet(helper, 6, open);
+  RecordSet(helper, 7, keys);
+  return helper;
+}
+
+/**
+ * Iterator.zip ( iterables [ , options ] ) (joint-iteration).
+ * @builtin Iterator.zip
+ * @length 1
+ */
+function IteratorZip(iterables: Value, options?: Value): Obj {
+  if (!IsObject(iterables)) {
+    throw NewTypeError("not an object");
+  }
+  const opts: Obj = ZipOptions(options);
+  const mode: i32 = F64ToI32(AsNumber(RecordGet(opts, 0)));
+  const paddingOption: Value = RecordGet(opts, 1);
+  const iters: Obj = ArrayCreate(0);
+  const nexts: Obj = ArrayCreate(0);
+  const open: Obj = ArrayCreate(0);
+  const inputIter: Obj = GetIterator(iterables);
+  const inputNext: Value = Get(inputIter, "next");
+  while (true) {
+    let result: Value = undefined;
+    let value: Value = undefined;
+    try {
+      result = IteratorStepResult(inputIter, inputNext);
+      if (result !== undefined) {
+        value = Get(AsObj(result), "value");
+      }
+    } catch (e) {
+      IteratorCloseAll(iters, open, e, true);
+    }
+    if (result === undefined) {
+      break;
+    }
+    ZipAddIterator(iters, nexts, open, value, inputIter);
+  }
+  const n: f64 = LengthOfArrayLike(iters);
+  const padding: Obj = ArrayCreate(0);
+  if (mode === 1) {
+    if (paddingOption === undefined) {
+      for (let i: f64 = 0; i < n; i++) {
+        CreateDataPropertyOrThrow(padding, i, undefined);
+      }
+    } else {
+      let paddingIter: Obj = iters;
+      let paddingNext: Value = undefined;
+      try {
+        paddingIter = GetIterator(paddingOption);
+        paddingNext = Get(paddingIter, "next");
+      } catch (e) {
+        IteratorCloseAll(iters, open, e, true);
+      }
+      let usingIterator: boolean = true;
+      for (let i: f64 = 0; i < n; i++) {
+        let value: Value = undefined;
+        if (usingIterator) {
+          try {
+            const result: Value = IteratorStepResult(paddingIter, paddingNext);
+            if (result === undefined) {
+              usingIterator = false;
+            } else {
+              value = Get(AsObj(result), "value");
+            }
+          } catch (e) {
+            IteratorCloseAll(iters, open, e, true);
+          }
+        }
+        CreateDataPropertyOrThrow(padding, i, value);
+      }
+      if (usingIterator) {
+        try {
+          IteratorClose(paddingIter);
+        } catch (e) {
+          IteratorCloseAll(iters, open, e, true);
+        }
+      }
+    }
+  }
+  return ZipCreate(iters, nexts, open, padding, mode, undefined);
+}
+
+/**
+ * Iterator.zipKeyed ( iterables [ , options ] ) (joint-iteration).
+ * @builtin Iterator.zipKeyed
+ * @length 1
+ */
+function IteratorZipKeyed(iterables: Value, options?: Value): Obj {
+  if (!IsObject(iterables)) {
+    throw NewTypeError("not an object");
+  }
+  const source: Obj = AsObj(iterables);
+  const opts: Obj = ZipOptions(options);
+  const mode: i32 = F64ToI32(AsNumber(RecordGet(opts, 0)));
+  const paddingOption: Value = RecordGet(opts, 1);
+  const iters: Obj = ArrayCreate(0);
+  const nexts: Obj = ArrayCreate(0);
+  const open: Obj = ArrayCreate(0);
+  const keys: Obj = ArrayCreate(0);
+  const allKeys: Obj = OwnPropertyKeys(source, 2);
+  const count: f64 = LengthOfArrayLike(allKeys);
+  for (let k: f64 = 0; k < count; k++) {
+    const key: Value = Get(allKeys, k);
+    let value: Value = undefined;
+    try {
+      const attrs: i32 = OwnPropertyAttributes(source, key);
+      if (attrs >= 0 && (attrs & 2) !== 0) {
+        value = Get(source, key);
+      }
+    } catch (e) {
+      IteratorCloseAll(iters, open, e, true);
+    }
+    if (value !== undefined) {
+      ZipAddIterator(iters, nexts, open, value, undefined);
+      CreateDataPropertyOrThrow(keys, LengthOfArrayLike(keys), key);
+    }
+  }
+  const n: f64 = LengthOfArrayLike(iters);
+  const padding: Obj = ArrayCreate(0);
+  if (mode === 1) {
+    for (let i: f64 = 0; i < n; i++) {
+      let value: Value = undefined;
+      if (paddingOption !== undefined) {
+        try {
+          value = Get(AsObj(paddingOption), Get(keys, i));
+        } catch (e) {
+          IteratorCloseAll(iters, open, e, true);
+        }
+      }
+      CreateDataPropertyOrThrow(padding, i, value);
+    }
+  }
+  return ZipCreate(iters, nexts, open, padding, mode, keys);
 }

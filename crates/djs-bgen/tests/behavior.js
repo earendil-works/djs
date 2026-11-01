@@ -71,7 +71,7 @@ function ourArrayIteratorPrototype() {
   return ourAIP;
 }
 const isObject = (v) => v !== null && (typeof v === "object" || typeof v === "function");
-// Iterator helpers (0051): the slots of our helper objects, and their prototypes built
+// Iterator helpers (0051): the slots of our helper objects (and Records), and their prototypes built
 // from the installed methods.
 const helperSlots = new WeakMap();
 const helperProtos = [];
@@ -198,12 +198,17 @@ const I = {
     }
     return v;
   },
+  NewRecord: (n) => {
+    const r = Object.create(null);
+    helperSlots.set(r, new Array(n).fill(undefined));
+    return r;
+  },
   RecordGet: (r, i) => {
-    check(helperSlots.has(r) && i < 8, "RecordGet");
+    check(helperSlots.has(r) && i < helperSlots.get(r).length, "RecordGet");
     return helperSlots.get(r)[i];
   },
   RecordSet: (r, i, v) => {
-    check(helperSlots.has(r) && i < 8, "RecordSet");
+    check(helperSlots.has(r) && i < helperSlots.get(r).length, "RecordSet");
     helperSlots.get(r)[i] = v;
   },
   CreateArrayFromPair: (a, b) => [a, b],
@@ -1781,6 +1786,24 @@ const helperCases = [
   ["every", (f, log) => f.call(logIter(3, log), (x) => true)],
   ["find", (f, log) => f.call(logIter(3, log), (x) => x === 2)],
   ["find", (f, log) => f.call(logIter(3, log), "nope")],
+  ["chunks", (f, log) => drain(f.call(logIter(5, log), 2))],
+  ["chunks", (f, log) => f.call(logIter(5, log), "2")],
+  ["chunks", (f, log) => f.call(logIter(5, log), 2 ** 32)],
+  ["chunks", (f, log) => { const h = f.call(logIter(1, log), 3); h.next(); return h.return(); }],
+  ["windows", (f, log) => drain(f.call(logIter(4, log), 2))],
+  ["windows", (f, log) => drain(f.call(logIter(2, log), 3, "allow-partial"))],
+  ["windows", (f, log) => drain(f.call(logIter(2, log), 3, "only-full"))],
+  ["windows", (f, log) => f.call(logIter(2, log), 3, "partial")],
+  ["windows", (f, log) => { const h = f.call(logIter(4, log), 2); h.next(); return h.return(); }],
+  ["includes", (f, log) => f.call(logIter(5, log), 2)],
+  ["includes", (f, log) => f.call(logIter(5, log), 2, 3)],
+  ["includes", (f, log) => f.call(logIter(5, log), 7, Infinity)],
+  ["includes", (f, log) => f.call(logIter(5, log), 2, -1)],
+  ["includes", (f, log) => f.call(logIter(5, log), 2, NaN)],
+  ["includes", (f, log) => f.call(logIter(5, log), 2, "1")],
+  ["join", (f, log) => f.call(logIter(3, log))],
+  ["join", (f, log) => f.call(logIter(3, log), valueOfObj(1, log))],
+  ["join", (f, log) => f.call(logIter(3, log), { toString() { throw new Error("j"); } })],
 ];
 for (const [m, run] of helperCases) same("Iterator.prototype." + m, IP[m], run);
 same("Iterator.from", Iterator.from, (f, log) => drain(f({ next() { log.push("next"); return { value: 1, done: false }; } }), 2));
@@ -1791,5 +1814,15 @@ same("Iterator.from", Iterator.from, (f) => f(5));
 same("Iterator.concat", Iterator.concat, (f, log) => drain(f([1, 2], { [Symbol.iterator]: () => logIter(2, log) })));
 same("Iterator.concat", Iterator.concat, (f, log) => { const h = f({ [Symbol.iterator]: () => logIter(2, log) }); h.next(); return h.return(); });
 same("Iterator.concat", Iterator.concat, (f) => f({}));
+for (const mode of [undefined, "shortest", "longest", "strict"]) {
+  same("Iterator.zip", Iterator.zip, (f, log) => drain(f([logIter(2, log), logIter(3, log)], { mode })));
+  same("Iterator.zip", Iterator.zip, (f, log) => drain(f([logIter(2, log), logIter(2, log)], { mode, padding: ["a"] })));
+  same("Iterator.zipKeyed", Iterator.zipKeyed, (f, log) => drain(f({ x: logIter(2, log), y: logIter(1, log), z: undefined }, { mode, padding: { y: "p" } })));
+}
+same("Iterator.zip", Iterator.zip, (f, log) => { const h = f([logIter(2, log), logIter(2, log)]); h.next(); return h.return(); });
+same("Iterator.zip", Iterator.zip, (f, log) => f([logIter(2, log), 1]));
+same("Iterator.zip", Iterator.zip, (f) => f([], { mode: 1 }));
+same("Iterator.zip", Iterator.zip, (f) => f([], { mode: "longest", padding: 1 }));
+same("Iterator.zipKeyed", Iterator.zipKeyed, (f) => f(1));
 
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));
