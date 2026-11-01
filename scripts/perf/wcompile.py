@@ -12,11 +12,13 @@ ap.add_argument("-n", type=int, default=3)
 ap.add_argument("--reps", type=int, default=3)
 ap.add_argument("--wasm", action="append", default=[])
 ap.add_argument("--qjs", action="store_true")
+ap.add_argument("--same", action="store_true", help="all compiles in one Sandbox (steady state)")
 ap.add_argument("files", nargs="+")
 a = ap.parse_args()
 def run(args):
+    env = dict(os.environ, SAME="1") if a.same else None
     r = subprocess.run(["/usr/bin/time", "-l", "node", os.path.join(here, "wasm-compile.ts"), "--reps", str(a.reps)] + args,
-                       capture_output=True, text=True, cwd=here, timeout=900)
+                       capture_output=True, text=True, cwd=here, timeout=900, env=env)
     m = re.search(r"(\d+)\s+instructions retired", r.stderr)
     if r.returncode != 0 or not m:
         raise SystemExit(r.stdout + r.stderr)
