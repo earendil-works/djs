@@ -9,7 +9,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0078 | Leaf quick wins (ASCII check, UTF-8 in transcode, short_decimal), then 0087 | num | .worktrees/num |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0090 | Natives: collect-and-retry, resizable TA, JSON slow path | infra | .worktrees/infra |
-| 0086 | Bytecode quality + dispatch (0081 P4) | lexer | .worktrees/lexer |
+| 0092 | Compiler code size + compile throughput in wasm | lexer | .worktrees/lexer |
 | 0083 | Shapes + leaner object/image layout (design first) | heap | .worktrees/heap |
 | 0085 | Leaf fast paths for everyday builtins (0081 P1) | perf | .worktrees/perf |
 
@@ -48,6 +48,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0046 | BigInt | 63d8468 (agent heap; BigInt 1135/1142; active 98.8%) |
 | 0033 | JSON + RegExp builtins, regex literals | 8b5ccfb (agent num; active 32,303 / 32,718) |
 | 0040 | P1-7 Classes | 2d08a6c (agent lexer; test262 active 97.1%) |
+| 0086 | Bytecode quality | 8fbd04f (agent lexer; tight -38%, prop1 -33%, call1 -22% wasm instr; renumbering measured slower, not merged) |
 | 0084 | Long tail part 2 | a7a38ed (agent lexer; test262 failures 56 -> 43, all by design or routed) |
 | 0082 | The long tail | 5a4ba6a (agent lexer; test262 failures 203 -> 56; Known differences in TESTING.md) |
 | 0065 | Decorators (TC39 + accessor + TS legacy) | f4894f5 (agent lexer; strip-types 4,316/4,802, 0 differ) |
