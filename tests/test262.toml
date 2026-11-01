@@ -99,7 +99,6 @@ description = "Phases P3 to P5 of ARCH.md: on the roadmap, not in the current mi
 # stable-typedarray-sort (immutable-arraybuffer stays later: a proposal).
 paths = [
   "built-ins/BigInt",                         # BigInt
-  "built-ins/Proxy",                          # Proxy
   "built-ins/RegExp",                         # our own regex engine comes in P5
   "built-ins/RegExpStringIteratorPrototype",  # regex
   "language/literals/regexp",                 # regex
@@ -112,8 +111,6 @@ paths = [
 ]
 features = [
   "BigInt",                     # BigInt
-  "Proxy",                      # Proxy
-  "proxy-missing-checks",       # Proxy
   "immutable-arraybuffer",      # binary data
   "Array.fromAsync",            # async iteration
   "iterator-helpers",           # iterator helpers
