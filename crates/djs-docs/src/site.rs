@@ -11,6 +11,14 @@ const STYLE: &str = include_str!("../assets/style.css");
 const LIVE: &str = include_str!("../assets/live.js");
 const SEARCH: &str = include_str!("../assets/search.js");
 const STRIP: &str = include_str!("../assets/strip.mjs");
+const PAGE: &str = include_str!("../assets/page.js");
+/// Elanor's published files, vendored by scripts/elanor-update.sh (D2200).
+const ELANOR_DIR: &str = "crates/djs-docs/assets/elanor";
+const ELANOR_VERSION: &str = include_str!("../assets/elanor/VERSION");
+const ICON_SEARCH: &str = include_str!("../assets/elanor/icons/search.svg");
+const ICON_DARK: &str = include_str!("../assets/elanor/icons/dark-mode.svg");
+const ICON_LIGHT: &str = include_str!("../assets/elanor/icons/light-mode.svg");
+const ICON_MENU: &str = include_str!("../assets/elanor/icons/menu.svg");
 
 /// One line of SUMMARY.md: `# Part`, `- [Title](page.md)`, or a draft `- [Title]()`.
 pub struct Entry {
@@ -89,6 +97,8 @@ pub fn build(g: &mut Guide, out: &Path, wasm: &Path) -> Result<(), String> {
         )?;
     }
     write("style.css", STYLE)?;
+    write("page.js", PAGE)?;
+    copy_dir(&repo().join(ELANOR_DIR), &out.join("elanor"))?;
     write("live.js", LIVE)?;
     write("search.js", SEARCH)?;
     write("search.json", &crate::search::index(&rendered, html_name))?;
@@ -129,6 +139,42 @@ pub fn build(g: &mut Guide, out: &Path, wasm: &Path) -> Result<(), String> {
     }
     println!("djs-docs: {} pages in {}", rendered.len(), out.display());
     Ok(())
+}
+
+/// Copies the vendored Elanor files (tokens, fonts and their licenses, icons, logos).
+fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(to).map_err(|e| format!("{}: {e}", to.display()))?;
+    let rd = std::fs::read_dir(from).map_err(|e| format!("{}: {e}", from.display()))?;
+    for e in rd.flatten() {
+        let (src, dst) = (e.path(), to.join(e.file_name()));
+        if src.is_dir() {
+            copy_dir(&src, &dst)?;
+        } else {
+            std::fs::copy(&src, &dst).map_err(|e| format!("{}: {e}", src.display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// An Elanor icon inline, so that it takes the text color (`.icon` in style.css).
+fn icon(svg: &str, class: &str) -> String {
+    let at = svg.find("<svg").unwrap_or(0);
+    svg[at..].trim_end().replacen(
+        "<svg ",
+        &format!("<svg class=\"icon {class}\" aria-hidden=\"true\" focusable=\"false\" "),
+        1,
+    )
+}
+
+/// The pinned Elanor commit and the token brand, from assets/elanor/VERSION.
+fn elanor_version() -> (&'static str, &'static str) {
+    let field = |k: &str| {
+        ELANOR_VERSION
+            .lines()
+            .find_map(|l| l.strip_prefix(k)?.strip_prefix(' '))
+            .unwrap_or("?")
+    };
+    (field("elanor"), field("brand"))
 }
 
 fn template(
@@ -207,38 +253,86 @@ fn template(
     } else {
         format!("docs/guide/{current}")
     };
+    let (sha, brand) = elanor_version();
     format!(
-        r#"<!doctype html>
+        r##"<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title} · How djs works</title>
+<link rel="icon" href="elanor/logos/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="elanor/tokens.css">
+<link rel="stylesheet" href="elanor/fonts/mallos-serif.css">
+<link rel="stylesheet" href="elanor/fonts/commit-mono.css">
 <link rel="stylesheet" href="style.css">
+<script>try{{const s=localStorage.getItem("djs-color-scheme");if(s)document.documentElement.dataset.colorScheme=s}}catch{{}}</script>
 </head>
 <body>
-<header class="top"><a class="brand" href="index.html">djs</a><span class="sub">How djs works</span><span class="spacer"></span><div class="search"><input type="search" id="search" placeholder="Search  /" aria-label="Search the guide" autocomplete="off"><ol id="search-results" hidden></ol></div><a class="src" href="{repo}/blob/main/{edit}">page source</a></header>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+<button class="icon-button menu-button" type="button" aria-label="Chapters" aria-expanded="false">{menu}</button>
+<div class="identity"><a class="mark" href="https://earendil.com" title="Earendil"><img class="on-light" src="elanor/logos/earendil-logo-on-light.svg" alt="Earendil"><img class="on-dark" src="elanor/logos/earendil-logo-on-dark.svg" alt="Earendil"></a><a class="brand" href="index.html"><b>djs</b><span>How djs works</span></a></div>
+<span class="spacer"></span>
+<div class="search">{search_icon}<input type="search" id="search" placeholder="Search  /" aria-label="Search the guide" autocomplete="off"><ol id="search-results" hidden></ol></div>
+<div class="actions"><a class="icon-button src" href="{repo}/blob/main/{edit}" title="This page's source">Source</a><button class="icon-button scheme" type="button" aria-label="Switch between light and dark">{to_dark}{to_light}</button></div>
+</header>
 <div class="layout">
 <nav class="book" aria-label="Chapters">{nav}</nav>
-<main><article>
+<main id="main" tabindex="-1"><div class="page"><article data-text-context="prose">
 {body}
-</article>{pager}</main>
-<aside class="toc">{toc}</aside>
+</article>{pager}
+<footer class="foot"><p>djs is built by <a href="https://earendil.com">Earendil</a>. <a href="{repo}">Source on GitHub</a>.</p><p>Designed with Elanor, Earendil's design system (<a href="https://github.com/earendil-works/elanor/commit/{sha}">{short}</a>, {brand} tokens). Fonts: Mallos Serif and Commit Mono, <a href="elanor/fonts/licenses/mallos-serif.txt">SIL Open Font License 1.1</a>. Icons: Material Symbols, <a href="elanor/icons/LICENSE">Apache License 2.0</a>.</p></footer></div>
+<aside class="toc">{toc}</aside></main>
 </div>
+<script type="module" src="page.js"></script>
 <script type="module" src="live.js"></script>
 <script type="module" src="search.js"></script>
 </body>
 </html>
-"#,
+"##,
         title = esc(&page.title),
         body = page.html,
         repo = render::REPO_URL,
+        menu = icon(ICON_MENU, "menu-icon"),
+        search_icon = icon(ICON_SEARCH, "search-icon"),
+        to_dark = icon(ICON_DARK, "to-dark"),
+        to_light = icon(ICON_LIGHT, "to-light"),
+        short = &sha[..sha.len().min(10)],
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every token the site's CSS uses exists in the vendored Elanor tokens: an Elanor
+    /// update that renames one fails here instead of silently unstyling the site.
+    #[test]
+    fn tokens_exist() {
+        let tokens = std::fs::read_to_string(repo().join(ELANOR_DIR).join("tokens.css")).unwrap();
+        let svg_style = crate::svg::style("x");
+        for (file, css) in [("style.css", STYLE), ("svg.rs", svg_style.as_str())] {
+            for part in css.split("var(").skip(1) {
+                let name = part.split([',', ')']).next().unwrap().trim();
+                assert!(
+                    tokens.contains(&format!("{name}:")),
+                    "{file} uses {name}, which elanor/tokens.css does not define"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn icons_inline() {
+        let i = icon(ICON_SEARCH, "s");
+        assert!(
+            i.starts_with("<svg class=\"icon s\" aria-hidden=\"true\""),
+            "{i}"
+        );
+        let (sha, brand) = elanor_version();
+        assert_eq!((sha.len(), brand), (40, "earendil"));
+    }
 
     #[test]
     fn summary_lines() {

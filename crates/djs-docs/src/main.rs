@@ -94,6 +94,25 @@ fn load(examples: bool) -> Guide {
         }
         extra.insert(p.to_string(), new);
     }
+    // Hand-drawn diagrams keep their drawing; their stylesheet is the generated one's
+    // (svg::restyle, D2200), so an Elanor update reaches them through regen too.
+    if let Ok(rd) = std::fs::read_dir(dir.join("img")) {
+        let mut names: Vec<String> = rd
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".svg"))
+            .collect();
+        names.sort();
+        for n in names {
+            let old = read(&dir.join("img").join(&n));
+            match svg::restyle(n.trim_end_matches(".svg"), &old) {
+                Ok(new) => {
+                    cx.files.insert(format!("img/{n}"), new);
+                }
+                Err(e) => cx.errors.push(e),
+            }
+        }
+    }
     for (f, svg) in &cx.files {
         if std::fs::read_to_string(dir.join(f)).ok().as_deref() != Some(svg.as_str()) {
             stale.push(f.clone());

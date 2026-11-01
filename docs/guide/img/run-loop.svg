@@ -1,28 +1,48 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" width="760" height="300" role="img" aria-label="How a host drives a run: vm_run returns a status, the host acts on it and runs again">
+<svg class="dg-run-loop" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" width="760" height="300" role="img" aria-label="How a host drives a run: vm_run returns a status, the host acts on it and runs again">
 <title>How a host drives a run: vm_run returns a status, the host acts on it and runs again</title>
 <style>
-  text { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; fill: #1f2328; }
-  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; }
-  .small { font-size: 10.5px; fill: #59636e; }
-  .title { font-weight: 600; font-size: 13px; }
-  .host { fill: #f6f8fa; stroke: #8c959f; }
-  .engine { fill: #ddf4ff; stroke: #54aeff; }
-  .arena { fill: #fff1e5; stroke: #fb8f44; }
-  .cell { fill: #ffffff; stroke: #fb8f44; }
-  .arrow { stroke: #59636e; fill: none; stroke-width: 1.3; marker-end: url(#a); }
-  .head { fill: #59636e; }
+  .dg-run-loop text { font-family: var(--semantic-font-family-ui, "Mallos Serif", Georgia, serif); font-size: 12px; fill: var(--semantic-color-text-primary, #111111); }
+  .dg-run-loop .mono { font-family: var(--semantic-font-family-code, "Commit Mono", ui-monospace, Menlo, monospace); font-size: 11px; }
+  .dg-run-loop .small { font-size: 10.5px; fill: var(--semantic-color-text-secondary, #5e5e5e); }
+  .dg-run-loop .label { font-weight: 600; }
+  .dg-run-loop .title { font-weight: 600; font-size: 13px; }
+  .dg-run-loop .box, .dg-run-loop .host { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-primary, #777777); }
+  .dg-run-loop .hdr, .dg-run-loop .engine { fill: var(--semantic-color-background-fill-secondary-information, #dbe4ea); stroke: var(--semantic-color-border-information, #3380a4); }
+  .dg-run-loop .traced, .dg-run-loop .arena { fill: var(--semantic-color-background-fill-secondary-warning, #f3e0be); stroke: var(--semantic-color-border-warning, #996f00); }
+  .dg-run-loop .tag { fill: var(--semantic-color-background-fill-secondary-positive, #dae6df); stroke: var(--semantic-color-border-positive, #378960); }
+  .dg-run-loop .cell { fill: var(--semantic-color-background-canvas, #f8f8f8); stroke: var(--semantic-color-border-warning, #996f00); }
+  .dg-run-loop .pad { fill: url(#run-loop-hatch); stroke: var(--semantic-color-border-secondary, #e2e2e2); }
+  .dg-run-loop .tail { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-primary, #777777); stroke-dasharray: 4 3; }
+  .dg-run-loop .zero { fill: var(--semantic-color-background-canvas, #f8f8f8); stroke: var(--semantic-color-border-primary, #777777); stroke-dasharray: 4 3; }
+  .dg-run-loop .dead { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-secondary, #e2e2e2); stroke-dasharray: 3 2; }
+  .dg-run-loop .opt { stroke-dasharray: 3 2; }
+  .dg-run-loop .rule { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; }
+  .dg-run-loop .dash { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .dg-run-loop .arrow { stroke: var(--semantic-color-text-secondary, #5e5e5e); fill: none; stroke-width: 1.3; marker-end: url(#run-loop-a); }
+  .dg-run-loop .faint { stroke: var(--semantic-color-border-primary, #777777); fill: none; stroke-width: 1.1; stroke-dasharray: 4 3; marker-end: url(#run-loop-a); }
+  .dg-run-loop .head { fill: var(--semantic-color-text-secondary, #5e5e5e); }
+  .dg-run-loop .hatch { stroke: var(--semantic-color-border-secondary, #e2e2e2); }
   @media (prefers-color-scheme: dark) {
-    text { fill: #e6edf3; }
-    .small { fill: #9198a1; }
-    .host { fill: #161b22; stroke: #6e7681; }
-    .engine { fill: #0c2d6b; stroke: #388bfd; }
-    .arena { fill: #2b1a0a; stroke: #db6d28; }
-    .cell { fill: #0d1117; stroke: #db6d28; }
-    .arrow { stroke: #9198a1; }
-    .head { fill: #9198a1; }
+    .dg-run-loop text { fill: var(--semantic-color-text-primary, #f6f6f6); }
+    .dg-run-loop .small { fill: var(--semantic-color-text-secondary, #ababab); }
+    .dg-run-loop .box, .dg-run-loop .host { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-run-loop .hdr, .dg-run-loop .engine { fill: var(--semantic-color-background-fill-secondary-information, #1e313b); stroke: var(--semantic-color-border-information, #4c9bc1); }
+    .dg-run-loop .traced, .dg-run-loop .arena { fill: var(--semantic-color-background-fill-secondary-warning, #3b2b0c); stroke: var(--semantic-color-border-warning, #b8880c); }
+    .dg-run-loop .tag { fill: var(--semantic-color-background-fill-secondary-positive, #1f3328); stroke: var(--semantic-color-border-positive, #4da578); }
+    .dg-run-loop .cell { fill: var(--semantic-color-background-canvas, #161616); stroke: var(--semantic-color-border-warning, #b8880c); }
+    .dg-run-loop .pad { stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-run-loop .tail { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-run-loop .zero { fill: var(--semantic-color-background-canvas, #161616); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-run-loop .dead { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-run-loop .rule { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-run-loop .dash { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-run-loop .arrow { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-run-loop .faint { stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-run-loop .head { fill: var(--semantic-color-text-secondary, #ababab); }
+    .dg-run-loop .hatch { stroke: var(--semantic-color-border-secondary, #464646); }
   }
 </style>
-<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<defs><pattern id="run-loop-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" class="hatch"/></pattern><marker id="run-loop-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker></defs>
 
 <!-- Start -->
 <rect class="host" x="10" y="120" width="140" height="60" rx="6"/>

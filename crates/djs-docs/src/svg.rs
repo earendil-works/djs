@@ -6,39 +6,185 @@ use std::fmt::Write;
 
 use djs_core::heap::layout::CellLayout;
 
-const STYLE: &str = r#"<style>
-  text { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; fill: #1f2328; }
-  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-  .small { font-size: 10px; fill: #59636e; }
-  .label { font-weight: 600; }
-  .box { fill: #f6f8fa; stroke: #8c959f; }
-  .hdr { fill: #ddf4ff; stroke: #54aeff; }
-  .traced { fill: #fff1e5; stroke: #fb8f44; }
-  .tag { fill: #fbefff; stroke: #c297ff; }
-  .pad { fill: url(#hatch); stroke: #d0d7de; }
-  .tail { fill: #f6f8fa; stroke: #8c959f; stroke-dasharray: 4 3; }
-  .opt { stroke-dasharray: 3 2; }
-  .rule { stroke: #8c959f; }
-  .hatch { stroke: #d0d7de; }
-  @media (prefers-color-scheme: dark) {
-    text { fill: #e6edf3; }
-    .small { fill: #9198a1; }
-    .box, .tail { fill: #161b22; stroke: #6e7681; }
-    .hdr { fill: #0c2d6b; stroke: #388bfd; }
-    .traced { fill: #3d1d00; stroke: #db6d28; }
-    .tag { fill: #2b1a4a; stroke: #a371f7; }
-    .pad { stroke: #30363d; }
-    .rule { stroke: #6e7681; }
-    .hatch { stroke: #30363d; }
-  }
-</style>
-<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" class="hatch"/></pattern></defs>
-"#;
+/// The diagrams' stylesheet, shared by the generated diagrams and the hand-drawn ones in
+/// docs/guide/img (regen rewrites their `<style>` and `<defs>`). Colors are Elanor's
+/// semantic tokens (D2200): inline on the site they follow the page's tokens and its
+/// light/dark toggle; as an `<img>` (GitHub), where no token is defined, the fallback is
+/// the token's resolved value from assets/elanor/colors.tsv. `$[name]` stands for
+/// `--semantic-color-name`.
+const RULES: &[(&str, &str)] = &[
+    (
+        "text",
+        "font-family: var(--semantic-font-family-ui, \"Mallos Serif\", Georgia, serif); font-size: 12px; fill: $[text-primary];",
+    ),
+    (
+        ".mono",
+        "font-family: var(--semantic-font-family-code, \"Commit Mono\", ui-monospace, Menlo, monospace); font-size: 11px;",
+    ),
+    (".small", "font-size: 10.5px; fill: $[text-secondary];"),
+    (".label", "font-weight: 600;"),
+    (".title", "font-weight: 600; font-size: 13px;"),
+    (
+        ".box, .host",
+        "fill: $[background-surface]; stroke: $[border-primary];",
+    ),
+    (
+        ".hdr, .engine",
+        "fill: $[background-fill-secondary-information]; stroke: $[border-information];",
+    ),
+    (
+        ".traced, .arena",
+        "fill: $[background-fill-secondary-warning]; stroke: $[border-warning];",
+    ),
+    (
+        ".tag",
+        "fill: $[background-fill-secondary-positive]; stroke: $[border-positive];",
+    ),
+    (
+        ".cell",
+        "fill: $[background-canvas]; stroke: $[border-warning];",
+    ),
+    (
+        ".pad",
+        "fill: url(#$NAME-hatch); stroke: $[border-secondary];",
+    ),
+    (
+        ".tail",
+        "fill: $[background-surface]; stroke: $[border-primary]; stroke-dasharray: 4 3;",
+    ),
+    (
+        ".zero",
+        "fill: $[background-canvas]; stroke: $[border-primary]; stroke-dasharray: 4 3;",
+    ),
+    (
+        ".dead",
+        "fill: $[background-surface]; stroke: $[border-secondary]; stroke-dasharray: 3 2;",
+    ),
+    (".opt", "stroke-dasharray: 3 2;"),
+    (".rule", "stroke: $[text-secondary]; stroke-width: 1.2;"),
+    (
+        ".dash",
+        "stroke: $[text-secondary]; stroke-width: 1.2; stroke-dasharray: 4 3;",
+    ),
+    (
+        ".arrow",
+        "stroke: $[text-secondary]; fill: none; stroke-width: 1.3; marker-end: url(#$NAME-a);",
+    ),
+    (
+        ".faint",
+        "stroke: $[border-primary]; fill: none; stroke-width: 1.1; stroke-dasharray: 4 3; marker-end: url(#$NAME-a);",
+    ),
+    (".head", "fill: $[text-secondary];"),
+    (".hatch", "stroke: $[border-secondary];"),
+];
 
-fn open(w: u32, h: u32, title: &str) -> String {
+/// `--semantic-color-*` -> (light, dark), resolved by scripts/elanor-update.sh.
+const COLORS: &str = include_str!("../assets/elanor/colors.tsv");
+
+fn color(name: &str, dark: bool) -> String {
+    let var = format!("--semantic-color-{name}");
+    let hex = COLORS
+        .lines()
+        .filter_map(|l| {
+            let mut f = l.split('\t');
+            Some((f.next()?, f.next()?, f.next()?))
+        })
+        .find(|(v, ..)| *v == var)
+        .map(|(_, light, d)| if dark { d } else { light })
+        .unwrap_or_else(|| panic!("{var} is not in assets/elanor/colors.tsv"));
+    format!("var({var}, {hex})")
+}
+
+/// `$[name]` -> the token with its light or dark fallback; `$NAME` -> the diagram's name.
+fn fill(decls: &str, name: &str, dark: bool) -> String {
+    let mut out = String::new();
+    let mut rest = decls;
+    while let Some(i) = rest.find("$[") {
+        out.push_str(&rest[..i]);
+        let end = rest[i..].find(']').expect("$[name]") + i;
+        out.push_str(&color(&rest[i + 2..end], dark));
+        rest = &rest[end + 1..];
+    }
+    out.push_str(rest);
+    out.replace("$NAME", name)
+}
+
+/// The `<style>` and `<defs>` of the diagram `name`. Every selector is scoped to the
+/// diagram's root (`svg.dg-NAME`): inline in a page a `<style>` applies to the whole
+/// document, and the hand-drawn diagrams use the same class names differently than the
+/// page does.
+pub fn style(name: &str) -> String {
+    let scope = |sel: &str| {
+        sel.split(", ")
+            .map(|s| format!(".dg-{name} {s}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mut s = String::from("<style>\n");
+    for (sel, decls) in RULES {
+        let _ = writeln!(s, "  {} {{ {} }}", scope(sel), fill(decls, name, false));
+    }
+    s.push_str("  @media (prefers-color-scheme: dark) {\n");
+    for (sel, decls) in RULES {
+        // Only the colors change.
+        let colors: Vec<&str> = decls
+            .split(';')
+            .map(str::trim)
+            .filter(|d| d.contains("$["))
+            .collect();
+        if !colors.is_empty() {
+            let _ = writeln!(
+                s,
+                "    {} {{ {}; }}",
+                scope(sel),
+                fill(&colors.join("; "), name, true)
+            );
+        }
+    }
+    s.push_str("  }\n</style>\n");
+    let _ = writeln!(
+        s,
+        "<defs><pattern id=\"{name}-hatch\" width=\"6\" height=\"6\" patternUnits=\"userSpaceOnUse\" patternTransform=\"rotate(45)\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"6\" class=\"hatch\"/></pattern>\
+         <marker id=\"{name}-a\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"head\" d=\"M0 0 L10 5 L0 10 z\"/></marker></defs>"
+    );
+    s
+}
+
+fn open(name: &str, w: u32, h: u32, title: &str) -> String {
     format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {w} {h}\" width=\"{w}\" height=\"{h}\" role=\"img\" aria-label=\"{title}\">\n<title>{title}</title>\n{STYLE}"
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" class=\"dg-{name}\" viewBox=\"0 0 {w} {h}\" width=\"{w}\" height=\"{h}\" role=\"img\" aria-label=\"{title}\">\n<title>{title}</title>\n{}",
+        style(name)
     )
+}
+
+/// A hand-drawn diagram (docs/guide/img/NAME.svg) with the current stylesheet: its
+/// root scoped as `dg-NAME`, its `<style>` and `<defs>` replaced. Its body uses the
+/// classes of `RULES`.
+pub fn restyle(name: &str, svg: &str) -> Result<String, String> {
+    let (Some(a), Some(b)) = (svg.find("<style>"), svg.find("</defs>")) else {
+        return Err(format!(
+            "img/{name}.svg: needs a <style>...</style><defs>...</defs> block (any content; regen rewrites it)"
+        ));
+    };
+    let rest = &svg[b + "</defs>".len()..];
+    let rest = rest.strip_prefix('\n').unwrap_or(rest);
+    let head = &svg[..a];
+    let tag_end = head
+        .find('>')
+        .ok_or(format!("img/{name}.svg: no <svg> tag"))?;
+    let tag = &head[..tag_end];
+    let class = format!("class=\"dg-{name}\"");
+    let tag = match tag.find(" class=\"") {
+        Some(i) => {
+            let j = tag[i + 8..]
+                .find('"')
+                .map(|j| i + 8 + j + 1)
+                .unwrap_or(tag.len());
+            format!("{} {class}{}", &tag[..i], &tag[j..])
+        }
+        None => tag.replacen("<svg ", &format!("<svg {class} "), 1),
+    };
+    Ok(format!("{tag}{}{}{rest}", &head[tag_end..], style(name)))
 }
 
 fn rect(s: &mut String, class: &str, x: f32, y: f32, w: f32, h: f32) {
@@ -60,7 +206,12 @@ pub fn value_bits(prefix: u64) -> String {
     let bit = 10.0_f32; // px per bit
     let x0 = 112.0_f32;
     let w = x0 + 64.0 * bit + 16.0;
-    let mut s = open(w as u32, 196, "The two encodings of a 64-bit djs value");
+    let mut s = open(
+        "value-bits",
+        w as u32,
+        196,
+        "The two encodings of a 64-bit djs value",
+    );
     // x of the left edge of bit `b` (bit 63 is leftmost).
     let bx = |b: u32| x0 + (63 - b) as f32 * bit;
     let row = |s: &mut String, y: f32, parts: &[(u32, u32, &str, &str, &str)]| {
@@ -184,6 +335,7 @@ pub fn cell(l: &CellLayout) -> String {
     let h = y0 + rows as f32 * row_h + 52.0;
     let w = x0 + 8.0 * byte + 12.0;
     let mut s = open(
+        &format!("cell-{}", l.name),
         w as u32,
         h as u32,
         &format!("Layout of the {} cell", l.name),

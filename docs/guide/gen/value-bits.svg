@@ -1,32 +1,48 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 768 196" width="768" height="196" role="img" aria-label="The two encodings of a 64-bit djs value">
+<svg xmlns="http://www.w3.org/2000/svg" class="dg-value-bits" viewBox="0 0 768 196" width="768" height="196" role="img" aria-label="The two encodings of a 64-bit djs value">
 <title>The two encodings of a 64-bit djs value</title>
 <style>
-  text { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; fill: #1f2328; }
-  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-  .small { font-size: 10px; fill: #59636e; }
-  .label { font-weight: 600; }
-  .box { fill: #f6f8fa; stroke: #8c959f; }
-  .hdr { fill: #ddf4ff; stroke: #54aeff; }
-  .traced { fill: #fff1e5; stroke: #fb8f44; }
-  .tag { fill: #fbefff; stroke: #c297ff; }
-  .pad { fill: url(#hatch); stroke: #d0d7de; }
-  .tail { fill: #f6f8fa; stroke: #8c959f; stroke-dasharray: 4 3; }
-  .opt { stroke-dasharray: 3 2; }
-  .rule { stroke: #8c959f; }
-  .hatch { stroke: #d0d7de; }
+  .dg-value-bits text { font-family: var(--semantic-font-family-ui, "Mallos Serif", Georgia, serif); font-size: 12px; fill: var(--semantic-color-text-primary, #111111); }
+  .dg-value-bits .mono { font-family: var(--semantic-font-family-code, "Commit Mono", ui-monospace, Menlo, monospace); font-size: 11px; }
+  .dg-value-bits .small { font-size: 10.5px; fill: var(--semantic-color-text-secondary, #5e5e5e); }
+  .dg-value-bits .label { font-weight: 600; }
+  .dg-value-bits .title { font-weight: 600; font-size: 13px; }
+  .dg-value-bits .box, .dg-value-bits .host { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-primary, #777777); }
+  .dg-value-bits .hdr, .dg-value-bits .engine { fill: var(--semantic-color-background-fill-secondary-information, #dbe4ea); stroke: var(--semantic-color-border-information, #3380a4); }
+  .dg-value-bits .traced, .dg-value-bits .arena { fill: var(--semantic-color-background-fill-secondary-warning, #f3e0be); stroke: var(--semantic-color-border-warning, #996f00); }
+  .dg-value-bits .tag { fill: var(--semantic-color-background-fill-secondary-positive, #dae6df); stroke: var(--semantic-color-border-positive, #378960); }
+  .dg-value-bits .cell { fill: var(--semantic-color-background-canvas, #f8f8f8); stroke: var(--semantic-color-border-warning, #996f00); }
+  .dg-value-bits .pad { fill: url(#value-bits-hatch); stroke: var(--semantic-color-border-secondary, #e2e2e2); }
+  .dg-value-bits .tail { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-primary, #777777); stroke-dasharray: 4 3; }
+  .dg-value-bits .zero { fill: var(--semantic-color-background-canvas, #f8f8f8); stroke: var(--semantic-color-border-primary, #777777); stroke-dasharray: 4 3; }
+  .dg-value-bits .dead { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-secondary, #e2e2e2); stroke-dasharray: 3 2; }
+  .dg-value-bits .opt { stroke-dasharray: 3 2; }
+  .dg-value-bits .rule { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; }
+  .dg-value-bits .dash { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .dg-value-bits .arrow { stroke: var(--semantic-color-text-secondary, #5e5e5e); fill: none; stroke-width: 1.3; marker-end: url(#value-bits-a); }
+  .dg-value-bits .faint { stroke: var(--semantic-color-border-primary, #777777); fill: none; stroke-width: 1.1; stroke-dasharray: 4 3; marker-end: url(#value-bits-a); }
+  .dg-value-bits .head { fill: var(--semantic-color-text-secondary, #5e5e5e); }
+  .dg-value-bits .hatch { stroke: var(--semantic-color-border-secondary, #e2e2e2); }
   @media (prefers-color-scheme: dark) {
-    text { fill: #e6edf3; }
-    .small { fill: #9198a1; }
-    .box, .tail { fill: #161b22; stroke: #6e7681; }
-    .hdr { fill: #0c2d6b; stroke: #388bfd; }
-    .traced { fill: #3d1d00; stroke: #db6d28; }
-    .tag { fill: #2b1a4a; stroke: #a371f7; }
-    .pad { stroke: #30363d; }
-    .rule { stroke: #6e7681; }
-    .hatch { stroke: #30363d; }
+    .dg-value-bits text { fill: var(--semantic-color-text-primary, #f6f6f6); }
+    .dg-value-bits .small { fill: var(--semantic-color-text-secondary, #ababab); }
+    .dg-value-bits .box, .dg-value-bits .host { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-value-bits .hdr, .dg-value-bits .engine { fill: var(--semantic-color-background-fill-secondary-information, #1e313b); stroke: var(--semantic-color-border-information, #4c9bc1); }
+    .dg-value-bits .traced, .dg-value-bits .arena { fill: var(--semantic-color-background-fill-secondary-warning, #3b2b0c); stroke: var(--semantic-color-border-warning, #b8880c); }
+    .dg-value-bits .tag { fill: var(--semantic-color-background-fill-secondary-positive, #1f3328); stroke: var(--semantic-color-border-positive, #4da578); }
+    .dg-value-bits .cell { fill: var(--semantic-color-background-canvas, #161616); stroke: var(--semantic-color-border-warning, #b8880c); }
+    .dg-value-bits .pad { stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-value-bits .tail { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-value-bits .zero { fill: var(--semantic-color-background-canvas, #161616); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-value-bits .dead { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-value-bits .rule { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-value-bits .dash { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-value-bits .arrow { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-value-bits .faint { stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-value-bits .head { fill: var(--semantic-color-text-secondary, #ababab); }
+    .dg-value-bits .hatch { stroke: var(--semantic-color-border-secondary, #464646); }
   }
 </style>
-<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" class="hatch"/></pattern></defs>
+<defs><pattern id="value-bits-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" class="hatch"/></pattern><marker id="value-bits-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker></defs>
 <text class="label" x="8" y="46" text-anchor="start">Number</text>
 <text class="small" x="8" y="60" text-anchor="start">(any other bits)</text>
 <rect class="box" x="112" y="28" width="10" height="34" rx="3"/>
