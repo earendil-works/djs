@@ -2068,3 +2068,33 @@ fn function_kinds_have_their_prototypes() {
         ]
     );
 }
+
+#[test]
+fn collect_drops_popped_stack_values() {
+    // A finished call leaves its frame's values above `sp`; `Vm::collect` must not
+    // keep them alive (0043: the base image kept dead templates that way).
+    let mut vm = vm();
+    let src = "function f() { const big = []; for (let i = 0; i < 20000; i++) big.push(i); return big.length } f();";
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("t.js"),
+        )
+        .unwrap();
+    let used = |vm: &Vm| vm.heap().cells().map(|c| c.size as usize).sum::<usize>();
+    let h = vm.heap_mut().new_handle(f).unwrap();
+    vm.collect().unwrap();
+    let before = used(&vm);
+    let f = vm.heap().get_handle(h);
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    assert!(matches!(vm.run(1 << 30), Status::Done(_)));
+    vm.collect().unwrap();
+    // The 20000-element array (160 KB of elements) is gone.
+    assert!(
+        used(&vm) < before + 20_000,
+        "the array survived: {} -> {}",
+        before,
+        used(&vm)
+    );
+}

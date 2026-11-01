@@ -38,6 +38,10 @@ of difftest cases (0016: 6 BigInt literal cases).
   BigInt arms isolated (a slow path, ideally a separate file), and rebase often.
 
 ## Log
+- First, the 0043 follow-up (coordinator): `Vm::collect` clears the value stack above
+  `sp` like the interpreter's safepoint, so an embedder's collection (`vm_collect`) no
+  longer keeps popped values alive; test `collect_drops_popped_stack_values` (fails
+  without the fix: 365 KB -> 589 KB kept).
 
 ## Follow-ups
 

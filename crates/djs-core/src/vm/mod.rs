@@ -620,6 +620,14 @@ impl Vm {
 
     /// Collects garbage now. Raw values held outside the heap are invalid afterwards.
     pub fn collect(&mut self) -> Result<(), HeapError> {
+        // Popped values above `sp` must not keep garbage alive (as at the interpreter's
+        // safepoints): the stack is traced to its full capacity.
+        let i = state::interp(&self.heap);
+        let sp = self.heap.arena().get(i, Interp::SP);
+        let stack = state::stack(&self.heap);
+        for k in sp..self.heap.value_array_capacity(stack) {
+            self.heap.value_array_set(stack, k, Value::UNDEFINED);
+        }
         self.heap.collect().map(|_| ())
     }
 }
