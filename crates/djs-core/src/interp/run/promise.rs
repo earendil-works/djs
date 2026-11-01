@@ -218,6 +218,7 @@ pub(crate) fn perform_then(
         if v.as_object().is_some_and(|o| {
             heap.object_class(o).is_callable()
                 || super::suspend::as_generator(heap, v, super::suspend::ASYNC).is_some()
+                || super::suspend::as_generator(heap, v, super::suspend::ASYNC_GENERATOR).is_some()
         }) {
             v
         } else {

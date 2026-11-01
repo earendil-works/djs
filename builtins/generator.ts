@@ -3,7 +3,10 @@
 // ops generator_start/yield/await/async_return/async_reject suspend and finish frames;
 // these builtins resume them and settle the result promises.
 
-/** GeneratorValidate ( generator, brand ), 27.5.3.2: the state (qjs's messages). */
+/**
+ * GeneratorValidate ( generator, brand ), 27.5.3.2: the state (qjs's messages). States:
+ * 0 at the start, 1 at a yield, 2 executing, 3 completed, 6 at a yield_star.
+ */
 function GeneratorValidate(generator: Value): i32 {
   const state: i32 = GeneratorState(generator);
   if (state < 0) {
@@ -28,8 +31,13 @@ function GeneratorStep(g: Obj, value: Value, mode: i32): Obj {
     GeneratorSetState(g, 3);
     throw e;
   }
-  if (GeneratorState(g) === 1) {
+  const state: i32 = GeneratorState(g);
+  if (state === 1) {
     return CreateIterResultObject(result, false);
+  }
+  // yield_star: the inner iterator's result object as it is.
+  if (state === 6) {
+    return AsObj(result);
   }
   GeneratorSetState(g, 3);
   return CreateIterResultObject(result, true);
@@ -83,8 +91,9 @@ function GeneratorPrototypeToStringTag(): Str {
 }
 
 /**
- * Await ( value ), 27.7.5.3, after the `await` op suspended the frame: subscribes the
- * async state to the promise and returns the function's result promise to whoever
+ * Await ( value ), 27.7.5.3, after the `await` op suspended the frame (of an async
+ * function or an async generator, D1421): subscribes the state to the promise and
+ * returns an async function's result promise to whoever
  * runs it (its caller the first time, the resuming job later). If PromiseResolve
  * throws, the function continues at once with that exception.
  * @intrinsic
@@ -97,7 +106,11 @@ function AsyncAwait(a: Obj, v: Value): Value {
     return GeneratorResume(a, e, 1);
   }
   PerformPromiseThen(AsObj(promise), a, a, undefined);
-  return AsyncFunctionPromise(a);
+  // An async generator's resumer (AsyncGeneratorStep) only looks at its state.
+  if (IsAsyncFunctionState(a)) {
+    return AsyncFunctionPromise(a);
+  }
+  return undefined;
 }
 
 /**
@@ -120,4 +133,34 @@ function AsyncFunctionThrow(a: Obj, e: Value): Value {
   const promise: Obj = AsyncFunctionPromise(a);
   RejectPromise(promise, e);
   return promise;
+}
+
+// ---- The function-kind constructors (27.3.1, 27.7.1, 27.4.1; D1420) ---------------------
+//
+// Like `Function`, they would compile source text, which djs does not do. They exist for
+// the `constructor` links of their prototypes; installing them (InstallIntrinsic) wires
+// those links in Rust.
+
+/**
+ * GeneratorFunction ( ...parameterArgs, bodyArg ), 27.3.1.1: not supported.
+ * @intrinsic
+ */
+function GeneratorFunctionConstructor(...args: Value[]): Value {
+  throw NewTypeError("not supported yet: the GeneratorFunction constructor");
+}
+
+/**
+ * AsyncGeneratorFunction ( ...parameterArgs, bodyArg ), 27.4.1.1: not supported.
+ * @intrinsic
+ */
+function AsyncGeneratorFunctionConstructor(...args: Value[]): Value {
+  throw NewTypeError("not supported yet: the AsyncGeneratorFunction constructor");
+}
+
+/**
+ * AsyncFunction ( ...parameterArgs, bodyArg ), 27.7.1.1: not supported.
+ * @intrinsic
+ */
+function AsyncFunctionConstructor(...args: Value[]): Value {
+  throw NewTypeError("not supported yet: the AsyncFunction constructor");
 }

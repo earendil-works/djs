@@ -634,6 +634,10 @@ ops! {
     /// the resumer. Resumed by `next(x)`: `x false`; by `return(x)`: `x true` (the code
     /// returns `x`, running finally blocks); `throw(e)` throws `e` here.
     Yield yield_(generator: Loc) pop 1 push 2 cost Alloc flags THROWS | CALLS | ALLOC;
+    /// `innerResult -> received isReturn`: `yield` for `yield*` in a sync generator: the
+    /// resumer hands `innerResult` (the inner iterator's result object) on as it is,
+    /// without reading `value` or wrapping it (GeneratorYield ( innerResult )).
+    YieldStar yield_star(generator: Loc) pop 1 push 2 cost Alloc flags THROWS | CALLS | ALLOC;
     /// Async function entry: creates the async state (with the result promise) in local
     /// `state`. The function runs on synchronously.
     AsyncStart async_start(state: Loc) pop 0 push 0 cost Alloc flags ALLOC;

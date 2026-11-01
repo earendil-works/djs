@@ -2023,7 +2023,8 @@ impl<'h> Exec<'h> {
             }
             Op::Debugger | Op::Nop => {}
             Op::GeneratorStart => return self.generator_start(next),
-            Op::Yield => return self.yield_value(next),
+            Op::Yield => return self.yield_value(next, false),
+            Op::YieldStar => return self.yield_value(next, true),
             Op::AsyncStart => self.async_start()?,
             Op::Await => return self.await_value(next),
             Op::AsyncReturn => return self.async_finish(false),
@@ -2090,7 +2091,20 @@ impl<'h> Exec<'h> {
         let a = self.heap.arena();
         let ncap = a.get(t.0, FuncTemplate::CAPTURES) as u32;
         let desc: Ref = a.get(t.0, FuncTemplate::CAPTURE_DESC);
-        let proto = intrinsic_obj(self.heap, Intrinsic::FunctionProto);
+        // [[Prototype]] by the ASYNC/GENERATOR bits, for every kind (D1420).
+        let flags = a.get(t.0, FuncTemplate::FLAGS);
+        let proto = intrinsic_obj(
+            self.heap,
+            match (
+                flags & func_flags::ASYNC != 0,
+                flags & func_flags::GENERATOR != 0,
+            ) {
+                (false, false) => Intrinsic::FunctionProto,
+                (true, false) => Intrinsic::AsyncFunctionProto,
+                (false, true) => Intrinsic::GeneratorFunctionProto,
+                (true, true) => Intrinsic::AsyncGeneratorFunctionProto,
+            },
+        );
         let f = self
             .heap
             .alloc_object(ObjectClass::Function, Some(proto), 1 + ncap)?;
@@ -2133,10 +2147,18 @@ impl<'h> Exec<'h> {
             realm::define_hidden(self.heap, proto, atoms::CONSTRUCTOR, Value::object(f))?;
             let d = PropertyDescriptor::data(Value::object(proto), PropFlags::WRITABLE);
             self.heap.define_own_property(f, atoms::PROTOTYPE, &d)?;
-        } else if flags & (func_flags::ASYNC | func_flags::GENERATOR) == func_flags::GENERATOR {
+        } else if flags & func_flags::GENERATOR != 0 {
             // A generator function's `prototype` is the prototype of its generator
-            // objects (no `constructor`), D1375.
-            let gp = intrinsic_obj(self.heap, Intrinsic::GeneratorProto);
+            // objects (no `constructor`), D1375; async ones inherit from
+            // %AsyncGeneratorPrototype% (D1420).
+            let gp = intrinsic_obj(
+                self.heap,
+                if flags & func_flags::ASYNC != 0 {
+                    Intrinsic::AsyncGeneratorProto
+                } else {
+                    Intrinsic::GeneratorProto
+                },
+            );
             let proto = self.heap.new_object(Some(gp))?;
             let d = PropertyDescriptor::data(Value::object(proto), PropFlags::WRITABLE);
             self.heap.define_own_property(f, atoms::PROTOTYPE, &d)?;

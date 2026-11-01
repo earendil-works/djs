@@ -87,9 +87,20 @@ pub enum Intrinsic {
     /// for the spec's %Name% defaults (SpeciesConstructor and friends): user code can
     /// replace the globals but not these.
     Constructors,
+    /// %GeneratorFunction.prototype%, %AsyncFunction.prototype%,
+    /// %AsyncGeneratorFunction.prototype%: the [[Prototype]] of closures by their
+    /// ASYNC/GENERATOR flags (D1420).
+    GeneratorFunctionProto,
+    AsyncFunctionProto,
+    AsyncGeneratorFunctionProto,
+    /// %AsyncIteratorPrototype%, %AsyncGeneratorPrototype% and
+    /// %AsyncFromSyncIteratorPrototype% (D1421).
+    AsyncIteratorProto,
+    AsyncGeneratorProto,
+    AsyncFromSyncIteratorProto,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::Constructors as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::AsyncFromSyncIteratorProto as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -347,6 +358,57 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
         Intrinsic::GeneratorProto,
         Value::object(generator_proto),
     );
+    let async_iterator_proto = heap.new_object(Some(object_proto))?;
+    set(
+        heap,
+        Intrinsic::AsyncIteratorProto,
+        Value::object(async_iterator_proto),
+    );
+    let async_generator_proto = heap.new_object(Some(async_iterator_proto))?;
+    set(
+        heap,
+        Intrinsic::AsyncGeneratorProto,
+        Value::object(async_generator_proto),
+    );
+    let from_sync = heap.new_object(Some(async_iterator_proto))?;
+    set(
+        heap,
+        Intrinsic::AsyncFromSyncIteratorProto,
+        Value::object(from_sync),
+    );
+    // The function-kind prototypes and their links (27.3.3, 27.4.3, 27.7.3): `prototype`
+    // and `constructor` are configurable but not writable; tags like qjs.
+    let function_proto = intrinsic_obj(heap, Intrinsic::FunctionProto);
+    let tag = |heap: &mut Heap, o: Obj, s: &str| -> Result<(), HeapError> {
+        let v = Value::string(heap.alloc_str(s)?);
+        let d = PropertyDescriptor::data(v, PropFlags::CONFIGURABLE);
+        heap.define_own_property(o, atoms::SYM_TO_STRING_TAG, &d)
+            .map(|_| ())
+    };
+    for (i, name, instances) in [
+        (
+            Intrinsic::GeneratorFunctionProto,
+            "GeneratorFunction",
+            Some(generator_proto),
+        ),
+        (Intrinsic::AsyncFunctionProto, "AsyncFunction", None),
+        (
+            Intrinsic::AsyncGeneratorFunctionProto,
+            "AsyncGeneratorFunction",
+            Some(async_generator_proto),
+        ),
+    ] {
+        let p = heap.new_object(Some(function_proto))?;
+        set(heap, i, Value::object(p));
+        if let Some(instances) = instances {
+            let d = PropertyDescriptor::data(Value::object(instances), PropFlags::CONFIGURABLE);
+            heap.define_own_property(p, atoms::PROTOTYPE, &d)?;
+            let d = PropertyDescriptor::data(Value::object(p), PropFlags::CONFIGURABLE);
+            heap.define_own_property(instances, atoms::CONSTRUCTOR, &d)?;
+        }
+        tag(heap, p, name)?;
+    }
+    tag(heap, async_generator_proto, "AsyncGenerator")?;
     let registry = heap.new_object(None)?;
     set(heap, Intrinsic::SymbolRegistry, Value::object(registry));
     let random = heap.alloc_value_array(2)?;

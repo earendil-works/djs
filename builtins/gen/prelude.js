@@ -1109,6 +1109,296 @@ function ArrayBufferPrototypeToStringTag() {
   return "ArrayBuffer";
 }
 
+// builtins/asyncgen.ts:13
+function AsyncGeneratorRequest(g, type, value) {
+  const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
+  const state = %AsyncGeneratorState(g);
+  if (state < 0) {
+    RejectWithData(promise, %NewTypeError("not an AsyncGenerator object"));
+    return promise;
+  }
+  const gen = %AsObj(g);
+  if (type === 0 && state === 3) {
+    ResolveWithData(promise, %CreateIterResultObject(undefined, true));
+    return promise;
+  }
+  if (type === 1 && (state === 0 || state === 3)) {
+    %GeneratorSetState(gen, 3);
+    RejectWithData(promise, value);
+    return promise;
+  }
+  const request = %NewRecord(3);
+  %RecordSet(request, 0, type);
+  %RecordSet(request, 1, value);
+  %RecordSet(request, 2, promise);
+  %AsyncGeneratorEnqueue(gen, request);
+  if (type === 2 && (state === 0 || state === 3)) {
+    %GeneratorSetState(gen, 5);
+    AsyncGeneratorAwaitReturn(gen);
+  } else if (state === 0 || state === 1) {
+    AsyncGeneratorStep(gen, value, type);
+  }
+  return promise;
+}
+
+// builtins/asyncgen.ts:48 %AsyncGeneratorPrototype%.next
+function AsyncGeneratorPrototypeNext(value) {
+  return AsyncGeneratorRequest(this, 0, value);
+}
+
+// builtins/asyncgen.ts:56 %AsyncGeneratorPrototype%.return
+function AsyncGeneratorPrototypeReturn(value) {
+  return AsyncGeneratorRequest(this, 2, value);
+}
+
+// builtins/asyncgen.ts:64 %AsyncGeneratorPrototype%.throw
+function AsyncGeneratorPrototypeThrow(exception) {
+  return AsyncGeneratorRequest(this, 1, exception);
+}
+
+// builtins/asyncgen.ts:74 %AsyncGeneratorStep
+function AsyncGeneratorStep(g, value, mode) {
+  let v = value;
+  let m = mode;
+  while (true) {
+    let result = undefined;
+    try {
+      result = %GeneratorResume(g, v, m);
+    } catch (e) {
+      %GeneratorSetState(g, 3);
+      AsyncGeneratorCompleteStep(g, 1, e, true);
+      AsyncGeneratorDrainQueue(g);
+      return;
+    }
+    const state = %AsyncGeneratorState(g);
+    if (state === 4) {
+      return;
+    }
+    if (state !== 1) {
+      %GeneratorSetState(g, 3);
+      AsyncGeneratorCompleteStep(g, 0, result, true);
+      AsyncGeneratorDrainQueue(g);
+      return;
+    }
+    %GeneratorSetState(g, 2);
+    AsyncGeneratorCompleteStep(g, 0, result, false);
+    %GeneratorSetState(g, 1);
+    const next = %AsyncGeneratorFirstRequest(g);
+    if (next === undefined) {
+      return;
+    }
+    v = %RecordGet(%AsObj(next), 1);
+    m = %F64ToI32(%AsNumber(%RecordGet(%AsObj(next), 0)));
+  }
+}
+
+// builtins/asyncgen.ts:114
+function AsyncGeneratorCompleteStep(g, type, value, done) {
+  const request = %AsObj(%AsyncGeneratorDequeue(g));
+  const promise = %RecordGet(request, 2);
+  if (type === 1) {
+    RejectWithData(promise, value);
+  } else {
+    ResolveWithData(promise, %CreateIterResultObject(value, done));
+  }
+}
+
+// builtins/asyncgen.ts:125
+function AsyncGeneratorDrainQueue(g) {
+  while (true) {
+    const next = %AsyncGeneratorFirstRequest(g);
+    if (next === undefined) {
+      return;
+    }
+    const type = %AsNumber(%RecordGet(%AsObj(next), 0));
+    if (type === 2) {
+      %GeneratorSetState(g, 5);
+      AsyncGeneratorAwaitReturn(g);
+      return;
+    }
+    if (type === 1) {
+      AsyncGeneratorCompleteStep(g, 1, %RecordGet(%AsObj(next), 1), true);
+    } else {
+      AsyncGeneratorCompleteStep(g, 0, undefined, true);
+    }
+  }
+}
+
+// builtins/asyncgen.ts:146
+function AsyncGeneratorAwaitReturn(g) {
+  const next = %AsObj(%AsyncGeneratorFirstRequest(g));
+  let promise = undefined;
+  try {
+    promise = PromiseResolve(%IntrinsicPromise(), %RecordGet(next, 1));
+  } catch (e) {
+    %GeneratorSetState(g, 3);
+    AsyncGeneratorCompleteStep(g, 1, e, true);
+    AsyncGeneratorDrainQueue(g);
+    return;
+  }
+  %PerformPromiseThen(%AsObj(promise), %NewBuiltinClosure(11, g, 1), %NewBuiltinClosure(12, g, 1), undefined);
+}
+
+// builtins/asyncgen.ts:164 %AsyncGeneratorAwaitReturnFulfilled
+function AsyncGeneratorAwaitReturnFulfilled(value) {
+  const g = %AsObj(this);
+  %GeneratorSetState(g, 3);
+  AsyncGeneratorCompleteStep(g, 0, value, true);
+  AsyncGeneratorDrainQueue(g);
+}
+
+// builtins/asyncgen.ts:175 %AsyncGeneratorAwaitReturnRejected
+function AsyncGeneratorAwaitReturnRejected(reason) {
+  const g = %AsObj(this);
+  %GeneratorSetState(g, 3);
+  AsyncGeneratorCompleteStep(g, 1, reason, true);
+  AsyncGeneratorDrainQueue(g);
+}
+
+// builtins/asyncgen.ts:188 %AsyncIteratorPrototype%[Symbol.asyncIterator]
+function AsyncIteratorPrototypeAsyncIterator() {
+  return this;
+}
+
+// builtins/asyncgen.ts:197 %GetAsyncIterator
+function GetAsyncIterator(obj) {
+  const method = GetMethod(obj, %WellKnownSymbol("asyncIterator"));
+  if (method === undefined) {
+    const syncMethod = GetMethod(obj, %WellKnownSymbol("iterator"));
+    if (syncMethod === undefined) {
+      throw %NewTypeError("not a function");
+    }
+    const syncIterator = GetIteratorFromMethod(obj, syncMethod);
+    return %CreateAsyncFromSyncIterator(syncIterator, %Get(syncIterator, "next"));
+  }
+  return GetIteratorFromMethod(obj, method);
+}
+
+// builtins/asyncgen.ts:217 %AsyncIteratorReturnMethod
+function AsyncIteratorReturnMethod(iterator) {
+  return GetMethod(iterator, "return");
+}
+
+// builtins/asyncgen.ts:227 %AsyncIteratorCloseThrow
+function AsyncIteratorCloseThrow(iterator) {
+  let promise = undefined;
+  try {
+    const method = GetMethod(iterator, "return");
+    if (method === undefined) {
+      return undefined;
+    }
+    promise = PromiseResolve(%IntrinsicPromise(), %Call(method, iterator));
+  } catch (e) {
+    return undefined;
+  }
+  const result = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
+  const ignore = %NewBuiltinClosure(9, undefined, 0);
+  %PerformPromiseThen(%AsObj(promise), ignore, ignore, result);
+  return result;
+}
+
+// builtins/asyncgen.ts:248
+function AsyncFromSyncIteratorContinuation(result, iterator, closeOnRejection) {
+  const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
+  let done = false;
+  let valueWrapper = undefined;
+  try {
+    done = %ToBoolean(%Get(result, "done"));
+    const value = %Get(result, "value");
+    try {
+      valueWrapper = PromiseResolve(%IntrinsicPromise(), value);
+    } catch (e) {
+      if (!done && closeOnRejection) {
+        IteratorCloseThrow(iterator);
+      }
+      throw e;
+    }
+  } catch (e) {
+    RejectWithData(promise, e);
+    return promise;
+  }
+  const onFulfilled = %NewBuiltinClosure(13, done, 1);
+  let onRejected = undefined;
+  if (!done && closeOnRejection) {
+    onRejected = %NewBuiltinClosure(14, iterator, 1);
+  }
+  %PerformPromiseThen(%AsObj(valueWrapper), onFulfilled, onRejected, promise);
+  return promise;
+}
+
+// builtins/asyncgen.ts:280 %AsyncFromSyncIteratorUnwrap
+function AsyncFromSyncIteratorUnwrap(value) {
+  return %CreateIterResultObject(value, %AsBool(this));
+}
+
+// builtins/asyncgen.ts:288 %AsyncFromSyncIteratorCloseThrow
+function AsyncFromSyncIteratorCloseThrow(error) {
+  IteratorCloseThrow(%AsObj(this));
+  throw error;
+}
+
+// builtins/asyncgen.ts:298 %AsyncFromSyncIteratorPrototype%.next
+function AsyncFromSyncIteratorNext(...args) {
+  const o = %AsObj(this);
+  const iterator = %AsObj(%RecordGet(o, 0));
+  let result = undefined;
+  try {
+    result = %CallWithArray(%RecordGet(o, 1), iterator, args);
+    if (!%IsObject(result)) {
+      throw %NewTypeError("iterator must return an object");
+    }
+  } catch (e) {
+    const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
+    RejectWithData(promise, e);
+    return promise;
+  }
+  return AsyncFromSyncIteratorContinuation(%AsObj(result), iterator, true);
+}
+
+// builtins/asyncgen.ts:320 %AsyncFromSyncIteratorPrototype%.return
+function AsyncFromSyncIteratorReturn(...args) {
+  const iterator = %AsObj(%RecordGet(%AsObj(this), 0));
+  const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
+  let result = undefined;
+  try {
+    const method = GetMethod(iterator, "return");
+    if (method === undefined) {
+      ResolveWithData(promise, %CreateIterResultObject(%Get(args, 0), true));
+      return promise;
+    }
+    result = %CallWithArray(method, iterator, args);
+    if (!%IsObject(result)) {
+      throw %NewTypeError("iterator must return an object");
+    }
+  } catch (e) {
+    RejectWithData(promise, e);
+    return promise;
+  }
+  return AsyncFromSyncIteratorContinuation(%AsObj(result), iterator, false);
+}
+
+// builtins/asyncgen.ts:347 %AsyncFromSyncIteratorPrototype%.throw
+function AsyncFromSyncIteratorThrow(...args) {
+  const iterator = %AsObj(%RecordGet(%AsObj(this), 0));
+  const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
+  let result = undefined;
+  try {
+    const method = GetMethod(iterator, "throw");
+    if (method === undefined) {
+      IteratorClose(iterator);
+      throw %NewTypeError("throw is not a method");
+    }
+    result = %CallWithArray(method, iterator, args);
+    if (!%IsObject(result)) {
+      throw %NewTypeError("iterator must return an object");
+    }
+  } catch (e) {
+    RejectWithData(promise, e);
+    return promise;
+  }
+  return AsyncFromSyncIteratorContinuation(%AsObj(result), iterator, true);
+}
+
 // builtins/boolean.ts:7 constructor Boolean
 function BooleanConstructor(value) {
   const b = %ToBoolean(value);
@@ -1782,7 +2072,7 @@ function ThrowTypeError(v) {
   throw %NewTypeError("invalid property access");
 }
 
-// builtins/generator.ts:7
+// builtins/generator.ts:10
 function GeneratorValidate(generator) {
   const state = %GeneratorState(generator);
   if (state < 0) {
@@ -1794,7 +2084,7 @@ function GeneratorValidate(generator) {
   return state;
 }
 
-// builtins/generator.ts:23
+// builtins/generator.ts:26
 function GeneratorStep(g, value, mode) {
   let result = undefined;
   try {
@@ -1803,14 +2093,18 @@ function GeneratorStep(g, value, mode) {
     %GeneratorSetState(g, 3);
     throw e;
   }
-  if (%GeneratorState(g) === 1) {
+  const state = %GeneratorState(g);
+  if (state === 1) {
     return %CreateIterResultObject(result, false);
+  }
+  if (state === 6) {
+    return %AsObj(result);
   }
   %GeneratorSetState(g, 3);
   return %CreateIterResultObject(result, true);
 }
 
-// builtins/generator.ts:42 %GeneratorPrototype%.next
+// builtins/generator.ts:50 %GeneratorPrototype%.next
 function GeneratorPrototypeNext(value) {
   const state = GeneratorValidate(this);
   if (state === 3) {
@@ -1819,7 +2113,7 @@ function GeneratorPrototypeNext(value) {
   return GeneratorStep(%AsObj(this), value, 0);
 }
 
-// builtins/generator.ts:54 %GeneratorPrototype%.return
+// builtins/generator.ts:62 %GeneratorPrototype%.return
 function GeneratorPrototypeReturn(value) {
   const state = GeneratorValidate(this);
   if (state === 0 || state === 3) {
@@ -1829,7 +2123,7 @@ function GeneratorPrototypeReturn(value) {
   return GeneratorStep(%AsObj(this), value, 2);
 }
 
-// builtins/generator.ts:67 %GeneratorPrototype%.throw
+// builtins/generator.ts:75 %GeneratorPrototype%.throw
 function GeneratorPrototypeThrow(exception) {
   const state = GeneratorValidate(this);
   if (state === 0 || state === 3) {
@@ -1839,12 +2133,12 @@ function GeneratorPrototypeThrow(exception) {
   return GeneratorStep(%AsObj(this), exception, 1);
 }
 
-// builtins/generator.ts:81 value %GeneratorPrototype%[Symbol.toStringTag]
+// builtins/generator.ts:89 value %GeneratorPrototype%[Symbol.toStringTag]
 function GeneratorPrototypeToStringTag() {
   return "Generator";
 }
 
-// builtins/generator.ts:92 %AsyncAwait
+// builtins/generator.ts:101 %AsyncAwait
 function AsyncAwait(a, v) {
   let promise = undefined;
   try {
@@ -1853,10 +2147,13 @@ function AsyncAwait(a, v) {
     return %GeneratorResume(a, e, 1);
   }
   %PerformPromiseThen(%AsObj(promise), a, a, undefined);
-  return %AsyncFunctionPromise(a);
+  if (%IsAsyncFunctionState(a)) {
+    return %AsyncFunctionPromise(a);
+  }
+  return undefined;
 }
 
-// builtins/generator.ts:107 %AsyncFunctionReturn
+// builtins/generator.ts:120 %AsyncFunctionReturn
 function AsyncFunctionReturn(a, v) {
   %GeneratorSetState(a, 3);
   const promise = %AsyncFunctionPromise(a);
@@ -1864,12 +2161,27 @@ function AsyncFunctionReturn(a, v) {
   return promise;
 }
 
-// builtins/generator.ts:118 %AsyncFunctionThrow
+// builtins/generator.ts:131 %AsyncFunctionThrow
 function AsyncFunctionThrow(a, e) {
   %GeneratorSetState(a, 3);
   const promise = %AsyncFunctionPromise(a);
   %RejectPromise(promise, e);
   return promise;
+}
+
+// builtins/generator.ts:148 %GeneratorFunctionConstructor
+function GeneratorFunctionConstructor(...args) {
+  throw %NewTypeError("not supported yet: the GeneratorFunction constructor");
+}
+
+// builtins/generator.ts:156 %AsyncGeneratorFunctionConstructor
+function AsyncGeneratorFunctionConstructor(...args) {
+  throw %NewTypeError("not supported yet: the AsyncGeneratorFunction constructor");
+}
+
+// builtins/generator.ts:164 %AsyncFunctionConstructor
+function AsyncFunctionConstructor(...args) {
+  throw %NewTypeError("not supported yet: the AsyncFunction constructor");
 }
 
 // builtins/iter.ts:10 %GetIterator
@@ -3277,6 +3589,10 @@ function PromiseReactionJob(capability, handler, argument, fulfilled) {
     %GeneratorResume(%AsObj(handler), argument, fulfilled ? 0 : 1);
     return;
   }
+  if (%AsyncGeneratorState(handler) >= 0) {
+    AsyncGeneratorStep(%AsObj(handler), argument, fulfilled ? 0 : 1);
+    return;
+  }
   let ok = fulfilled;
   let result = argument;
   if (handler !== undefined) {
@@ -3298,7 +3614,7 @@ function PromiseReactionJob(capability, handler, argument, fulfilled) {
   }
 }
 
-// builtins/promise.ts:240 %PromiseResolveThenableJob
+// builtins/promise.ts:244 %PromiseResolveThenableJob
 function PromiseResolveThenableJob(promise, thenable, then) {
   const r = %NewRecord(2);
   %RecordSet(r, 0, promise);
@@ -3312,7 +3628,7 @@ function PromiseResolveThenableJob(promise, thenable, then) {
   }
 }
 
-// builtins/promise.ts:260 constructor Promise %PromiseConstructor
+// builtins/promise.ts:264 constructor Promise %PromiseConstructor
 function PromiseConstructor(executor) {
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
@@ -3331,12 +3647,12 @@ function PromiseConstructor(executor) {
   return promise;
 }
 
-// builtins/promise.ts:282 get Promise[Symbol.species]
+// builtins/promise.ts:286 get Promise[Symbol.species]
 function PromiseSpecies() {
   return this;
 }
 
-// builtins/promise.ts:287
+// builtins/promise.ts:291
 function PromiseThisConstructor(c) {
   if (!%IsObject(c)) {
     throw %NewTypeError("not an object");
@@ -3344,19 +3660,19 @@ function PromiseThisConstructor(c) {
   return c;
 }
 
-// builtins/promise.ts:298 Promise.resolve
+// builtins/promise.ts:302 Promise.resolve
 function PromiseStaticResolve(x) {
   return PromiseResolve(PromiseThisConstructor(this), x);
 }
 
-// builtins/promise.ts:306 Promise.reject
+// builtins/promise.ts:310 Promise.reject
 function PromiseStaticReject(r) {
   const capability = NewPromiseCapability(PromiseThisConstructor(this));
   RejectCapability(capability, r);
   return CapabilityPromise(capability);
 }
 
-// builtins/promise.ts:318
+// builtins/promise.ts:322
 function GetPromiseResolve(c) {
   const promiseResolve = %Get(%AsObj(c), "resolve");
   if (!%IsCallable(promiseResolve)) {
@@ -3365,14 +3681,14 @@ function GetPromiseResolve(c) {
   return promiseResolve;
 }
 
-// builtins/promise.ts:327
+// builtins/promise.ts:331
 function DecrementRemaining(remaining) {
   const n = %AsNumber(%RecordGet(remaining, 0)) - 1;
   %RecordSet(remaining, 0, n);
   return n;
 }
 
-// builtins/promise.ts:334
+// builtins/promise.ts:338
 function NewElementRecord(index, values, capability, remaining) {
   const r = %NewRecord(5);
   %RecordSet(r, 0, false);
@@ -3383,7 +3699,7 @@ function NewElementRecord(index, values, capability, remaining) {
   return r;
 }
 
-// builtins/promise.ts:349
+// builtins/promise.ts:353
 function SettleElement(data, x, reject) {
   const r = %AsObj(data);
   if (%RecordGet(r, 0) === true) {
@@ -3402,12 +3718,12 @@ function SettleElement(data, x, reject) {
   }
 }
 
-// builtins/promise.ts:371 %PromiseAllResolveElement
+// builtins/promise.ts:375 %PromiseAllResolveElement
 function PromiseAllResolveElement(x) {
   SettleElement(this, x, false);
 }
 
-// builtins/promise.ts:376
+// builtins/promise.ts:380
 function SettledRecord(fulfilled, x) {
   const o = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
   %CreateDataPropertyOrThrow(o, "status", fulfilled ? "fulfilled" : "rejected");
@@ -3415,7 +3731,7 @@ function SettledRecord(fulfilled, x) {
   return o;
 }
 
-// builtins/promise.ts:387 %PromiseAllSettledResolveElement
+// builtins/promise.ts:391 %PromiseAllSettledResolveElement
 function PromiseAllSettledResolveElement(x) {
   if (%RecordGet(%AsObj(this), 0) === true) {
     return;
@@ -3423,7 +3739,7 @@ function PromiseAllSettledResolveElement(x) {
   SettleElement(this, SettledRecord(true, x), false);
 }
 
-// builtins/promise.ts:398 %PromiseAllSettledRejectElement
+// builtins/promise.ts:402 %PromiseAllSettledRejectElement
 function PromiseAllSettledRejectElement(x) {
   if (%RecordGet(%AsObj(this), 0) === true) {
     return;
@@ -3431,12 +3747,12 @@ function PromiseAllSettledRejectElement(x) {
   SettleElement(this, SettledRecord(false, x), false);
 }
 
-// builtins/promise.ts:409 %PromiseAnyRejectElement
+// builtins/promise.ts:413 %PromiseAnyRejectElement
 function PromiseAnyRejectElement(x) {
   SettleElement(this, x, true);
 }
 
-// builtins/promise.ts:414
+// builtins/promise.ts:418
 function NewAggregateError(errors) {
   const e = %ErrorCreate(%RealmIntrinsic("AggregateErrorPrototype"));
   %DefineDataPropertyOrThrow(e, "errors", CreateArrayFromList(errors), 5);
@@ -3444,7 +3760,7 @@ function NewAggregateError(errors) {
   return e;
 }
 
-// builtins/promise.ts:422
+// builtins/promise.ts:426
 function CreateArrayFromList(list) {
   const len = LengthOfArrayLike(list);
   const a = %ArrayCreate(0);
@@ -3454,7 +3770,7 @@ function CreateArrayFromList(list) {
   return a;
 }
 
-// builtins/promise.ts:437
+// builtins/promise.ts:441
 function PerformPromiseCombinator(thisValue, iterable, kind) {
   const c = PromiseThisConstructor(thisValue);
   const capability = NewPromiseCapability(c);
@@ -3527,22 +3843,22 @@ function PerformPromiseCombinator(thisValue, iterable, kind) {
   }
 }
 
-// builtins/promise.ts:516 Promise.all
+// builtins/promise.ts:520 Promise.all
 function PromiseAll(iterable) {
   return PerformPromiseCombinator(this, iterable, 0);
 }
 
-// builtins/promise.ts:524 Promise.allSettled
+// builtins/promise.ts:528 Promise.allSettled
 function PromiseAllSettled(iterable) {
   return PerformPromiseCombinator(this, iterable, 1);
 }
 
-// builtins/promise.ts:532 Promise.any
+// builtins/promise.ts:536 Promise.any
 function PromiseAny(iterable) {
   return PerformPromiseCombinator(this, iterable, 2);
 }
 
-// builtins/promise.ts:541 Promise.try
+// builtins/promise.ts:545 Promise.try
 function PromiseTry(callback, ...args) {
   const c = PromiseThisConstructor(this);
   let result = undefined;
@@ -3556,12 +3872,12 @@ function PromiseTry(callback, ...args) {
   return PromiseResolve(c, result);
 }
 
-// builtins/promise.ts:558 Promise.race
+// builtins/promise.ts:562 Promise.race
 function PromiseRace(iterable) {
   return PerformPromiseCombinator(this, iterable, 3);
 }
 
-// builtins/promise.ts:566 Promise.withResolvers
+// builtins/promise.ts:570 Promise.withResolvers
 function PromiseWithResolvers() {
   const capability = NewPromiseCapability(PromiseThisConstructor(this));
   const o = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
@@ -3571,7 +3887,7 @@ function PromiseWithResolvers() {
   return o;
 }
 
-// builtins/promise.ts:581 Promise.prototype.then
+// builtins/promise.ts:585 Promise.prototype.then
 function PromisePrototypeThen(onFulfilled, onRejected) {
   if (!%IsPromise(this)) {
     throw %NewTypeError("Promise object expected");
@@ -3583,12 +3899,12 @@ function PromisePrototypeThen(onFulfilled, onRejected) {
   return CapabilityPromise(capability);
 }
 
-// builtins/promise.ts:596 Promise.prototype.catch
+// builtins/promise.ts:600 Promise.prototype.catch
 function PromisePrototypeCatch(onRejected) {
   return InvokeThen(this, undefined, onRejected);
 }
 
-// builtins/promise.ts:604 Promise.prototype.finally
+// builtins/promise.ts:608 Promise.prototype.finally
 function PromisePrototypeFinally(onFinally) {
   if (!%IsObject(this)) {
     throw %NewTypeError("not an object");
@@ -3603,7 +3919,7 @@ function PromisePrototypeFinally(onFinally) {
   return InvokeThen(this, %NewBuiltinClosure(7, data, 1), %NewBuiltinClosure(8, data, 1));
 }
 
-// builtins/promise.ts:622 %PromiseThenFinally
+// builtins/promise.ts:626 %PromiseThenFinally
 function PromiseThenFinally(value) {
   const data = %AsObj(this);
   const result = %Call(%RecordGet(data, 0), undefined);
@@ -3611,7 +3927,7 @@ function PromiseThenFinally(value) {
   return InvokeThen(p, %NewBuiltinClosure(9, value, 0), undefined);
 }
 
-// builtins/promise.ts:633 %PromiseCatchFinally
+// builtins/promise.ts:637 %PromiseCatchFinally
 function PromiseCatchFinally(reason) {
   const data = %AsObj(this);
   const result = %Call(%RecordGet(data, 0), undefined);
@@ -3619,22 +3935,22 @@ function PromiseCatchFinally(reason) {
   return InvokeThen(p, %NewBuiltinClosure(10, reason, 0), undefined);
 }
 
-// builtins/promise.ts:644 %PromiseValueThunk
+// builtins/promise.ts:648 %PromiseValueThunk
 function PromiseValueThunk() {
   return this;
 }
 
-// builtins/promise.ts:652 %PromiseThrower
+// builtins/promise.ts:656 %PromiseThrower
 function PromiseThrower() {
   throw this;
 }
 
-// builtins/promise.ts:661 value Promise.prototype[Symbol.toStringTag]
+// builtins/promise.ts:665 value Promise.prototype[Symbol.toStringTag]
 function PromisePrototypeToStringTag() {
   return "Promise";
 }
 
-// builtins/promise.ts:673 %HostCallSettle
+// builtins/promise.ts:677 %HostCallSettle
 function HostCallSettle(promise, ok, value) {
   if (!%PromiseClaimResolve(promise)) {
     return;
@@ -5589,6 +5905,13 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("ArrayBuffer.prototype", "transfer", ArrayBufferPrototypeTransfer, 0);
 %InstallMethod("ArrayBuffer.prototype", "transferToFixedLength", ArrayBufferPrototypeTransferToFixedLength, 0);
 %InstallValue("ArrayBuffer.prototype", %WellKnownSymbol("toStringTag"), ArrayBufferPrototypeToStringTag(), 4);
+%InstallMethod("%AsyncGeneratorPrototype%", "next", AsyncGeneratorPrototypeNext, 1);
+%InstallMethod("%AsyncGeneratorPrototype%", "return", AsyncGeneratorPrototypeReturn, 1);
+%InstallMethod("%AsyncGeneratorPrototype%", "throw", AsyncGeneratorPrototypeThrow, 1);
+%InstallMethod("%AsyncIteratorPrototype%", %WellKnownSymbol("asyncIterator"), AsyncIteratorPrototypeAsyncIterator, 0);
+%InstallMethod("%AsyncFromSyncIteratorPrototype%", "next", AsyncFromSyncIteratorNext, 1);
+%InstallMethod("%AsyncFromSyncIteratorPrototype%", "return", AsyncFromSyncIteratorReturn, 1);
+%InstallMethod("%AsyncFromSyncIteratorPrototype%", "throw", AsyncFromSyncIteratorThrow, 1);
 %InstallMethod("Boolean.prototype", "toString", BooleanPrototypeToString, 0);
 %InstallMethod("Boolean.prototype", "valueOf", BooleanPrototypeValueOf, 0);
 %InstallMethod("Date", "now", DateNowBuiltin, 0);
@@ -5929,6 +6252,14 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("WeakSet.prototype", "delete", WeakSetPrototypeDelete, 1);
 %InstallMethod("WeakSet.prototype", "has", WeakSetPrototypeHas, 1);
 %InstallValue("WeakSet.prototype", %WellKnownSymbol("toStringTag"), WeakSetPrototypeToStringTag(), 4);
+%InstallIntrinsic("AsyncGeneratorStep", AsyncGeneratorStep);
+%InstallIntrinsic("AsyncGeneratorAwaitReturnFulfilled", AsyncGeneratorAwaitReturnFulfilled);
+%InstallIntrinsic("AsyncGeneratorAwaitReturnRejected", AsyncGeneratorAwaitReturnRejected);
+%InstallIntrinsic("GetAsyncIterator", GetAsyncIterator);
+%InstallIntrinsic("AsyncIteratorReturnMethod", AsyncIteratorReturnMethod);
+%InstallIntrinsic("AsyncIteratorCloseThrow", AsyncIteratorCloseThrow);
+%InstallIntrinsic("AsyncFromSyncIteratorUnwrap", AsyncFromSyncIteratorUnwrap);
+%InstallIntrinsic("AsyncFromSyncIteratorCloseThrow", AsyncFromSyncIteratorCloseThrow);
 %InstallIntrinsic("ToPrimitive", ToPrimitive);
 %InstallIntrinsic("ToNumber", ToNumber);
 %InstallIntrinsic("ToString", ToString);
@@ -5937,6 +6268,9 @@ function WeakSetPrototypeToStringTag() {
 %InstallIntrinsic("AsyncAwait", AsyncAwait);
 %InstallIntrinsic("AsyncFunctionReturn", AsyncFunctionReturn);
 %InstallIntrinsic("AsyncFunctionThrow", AsyncFunctionThrow);
+%InstallIntrinsic("GeneratorFunctionConstructor", GeneratorFunctionConstructor);
+%InstallIntrinsic("AsyncGeneratorFunctionConstructor", AsyncGeneratorFunctionConstructor);
+%InstallIntrinsic("AsyncFunctionConstructor", AsyncFunctionConstructor);
 %InstallIntrinsic("GetIterator", GetIterator);
 %InstallIntrinsic("IteratorClose", IteratorClose);
 %InstallIntrinsic("IteratorCloseThrow", IteratorCloseThrow);

@@ -109,7 +109,8 @@ pub enum ObjectClass {
     /// state of an async function call. Slot 0 the state (`interp::run::suspend`), slot
     /// 1 the saved frame (an internal ValueArray) while suspended, slot 2 the pc to
     /// resume at, slot 3 the frame's `hp - bp`, slot 4 the result promise (async), slot
-    /// 5 the kind (0 generator, 1 async function).
+    /// 5 the kind (0 generator, 1 async function, 2 async generator), slot 6 an async
+    /// generator's request queue (D1421).
     Generator = 21,
     /// An ArrayBuffer, a typed array, a DataView (0039, `heap/typed.rs`).
     ArrayBuffer = 22,
@@ -168,7 +169,7 @@ impl ObjectClass {
             ObjectClass::Map | ObjectClass::Set | ObjectClass::WeakMap | ObjectClass::WeakSet => 3,
             ObjectClass::CollectionIterator => 6,
             ObjectClass::Date => 1,
-            ObjectClass::Generator => 6,
+            ObjectClass::Generator => 7,
             ObjectClass::ArrayBuffer => 2,
             ObjectClass::TypedArray => 4,
             ObjectClass::DataView => 3,

@@ -211,6 +211,10 @@ function PromiseReactionJob(capability: Value, handler: Value, argument: Value, 
     GeneratorResume(AsObj(handler), argument, fulfilled ? 0 : 1);
     return;
   }
+  if (AsyncGeneratorState(handler) >= 0) {
+    AsyncGeneratorStep(AsObj(handler), argument, fulfilled ? 0 : 1);
+    return;
+  }
   let ok: boolean = fulfilled;
   let result: Value = argument;
   if (handler !== undefined) {

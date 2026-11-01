@@ -16,8 +16,14 @@
 //! 2  pc       int32: where to resume
 //! 3  hp       int32: hp - bp of the frame
 //! 4  promise  the result promise of an async function; undefined for generators
-//! 5  kind     int32: GENERATOR or ASYNC
+//! 5  kind     int32: GENERATOR, ASYNC or ASYNC_GENERATOR
+//! 6  queue    an async generator's requests (internal ValueArray of Records), D1421
 //! ```
+//!
+//! An `await` suspends with state AWAITING (resumed by a promise job, pushing the
+//! value); a `yield` with SUSPENDED (resumed by a request, pushing `value isReturn`).
+//! Async generators use both: their resumer (builtins/asyncgen.ts) tells them apart by
+//! the state after the frame hands control back.
 //!
 //! `await` and the end of an async function replace the frame with a call of a builtin
 //! (`%AsyncAwait`, `%AsyncFunctionReturn`, `%AsyncFunctionThrow`) with the frame's own
@@ -30,9 +36,14 @@ pub(crate) const START: i32 = 0;
 pub(crate) const SUSPENDED: i32 = 1;
 pub(crate) const EXECUTING: i32 = 2;
 pub(crate) const COMPLETED: i32 = 3;
+pub(crate) const AWAITING: i32 = 4;
+/// Suspended at a `yield_star`: the resumer passes the value on unwrapped. (5 is an
+/// async generator's awaiting-return, kept by builtins/asyncgen.ts.)
+pub(crate) const SUSPENDED_RAW: i32 = 6;
 
 pub(crate) const GENERATOR: i32 = 0;
 pub(crate) const ASYNC: i32 = 1;
+pub(crate) const ASYNC_GENERATOR: i32 = 2;
 
 const STATE: u32 = 0;
 const FRAME: u32 = 1;
@@ -40,6 +51,7 @@ const PC: u32 = 2;
 const HP: u32 = 3;
 const PROMISE: u32 = 4;
 const KIND: u32 = 5;
+pub(crate) const QUEUE: u32 = 6;
 
 const ASYNC_AWAIT: u16 = intrinsics::id("AsyncAwait");
 const ASYNC_FUNCTION_RETURN: u16 = intrinsics::id("AsyncFunctionReturn");
@@ -51,6 +63,11 @@ pub(crate) fn as_generator(heap: &Heap, v: Value, kind: i32) -> Option<Obj> {
         heap.object_class(o) == ObjectClass::Generator
             && heap.object_slot(o, KIND).as_int() == Some(kind)
     })
+}
+
+/// `v` as a Generator object of any of `kinds`.
+fn as_generator_of(heap: &Heap, v: Value, kinds: &[i32]) -> Option<Obj> {
+    kinds.iter().find_map(|&k| as_generator(heap, v, k))
 }
 
 pub(crate) fn state_of(heap: &Heap, g: Obj) -> i32 {
@@ -82,16 +99,55 @@ fn alloc(heap: &mut Heap, proto: Option<Obj>, kind: i32) -> Result<Obj, HeapErro
         (HP, Value::int(0)),
         (PROMISE, Value::UNDEFINED),
         (KIND, Value::int(kind)),
+        (QUEUE, Value::UNDEFINED),
     ] {
         heap.set_object_slot(g, slot, v);
     }
     Ok(g)
 }
 
+/// Appends a request Record to async generator `g`'s queue (D1421).
+pub(crate) fn enqueue_request(heap: &mut Heap, g: Obj, request: Value) -> Result<(), HeapError> {
+    let q = heap.object_slot(g, QUEUE).as_internal().unwrap_or(0);
+    let len = if q == 0 { 0 } else { heap.value_array_len(q) };
+    let q2 = heap.value_array_reserve(q, len + 1)?;
+    heap.value_array_set(q2, len, request);
+    heap.arena_mut().set(q2, ValueArray::LEN, len + 1);
+    heap.set_object_slot(g, QUEUE, Value::internal(q2));
+    Ok(())
+}
+
+/// The oldest request of `g`, or undefined.
+pub(crate) fn first_request(heap: &Heap, g: Obj) -> Value {
+    match heap.object_slot(g, QUEUE).as_internal() {
+        Some(q) if heap.value_array_len(q) > 0 => heap.value_array_get(q, 0),
+        _ => Value::UNDEFINED,
+    }
+}
+
+/// Removes and returns the oldest request of `g` (queues stay short: a shift).
+pub(crate) fn dequeue_request(heap: &mut Heap, g: Obj) -> Value {
+    let Some(q) = heap.object_slot(g, QUEUE).as_internal() else {
+        return Value::UNDEFINED;
+    };
+    let len = heap.value_array_len(q);
+    if len == 0 {
+        return Value::UNDEFINED;
+    }
+    let first = heap.value_array_get(q, 0);
+    for i in 1..len {
+        let v = heap.value_array_get(q, i);
+        heap.value_array_set(q, i - 1, v);
+    }
+    heap.value_array_set(q, len - 1, Value::UNDEFINED);
+    heap.arena_mut().set(q, ValueArray::LEN, len - 1);
+    first
+}
+
 impl Exec<'_> {
     /// The Generator object in local `loc` of the current frame.
-    fn local_generator(&self, loc: u32, kind: i32) -> Result<Obj, Fault> {
-        as_generator(self.heap, self.get(self.lp + loc), kind).ok_or_else(|| {
+    fn local_generator(&self, loc: u32, kinds: &[i32]) -> Result<Obj, Fault> {
+        as_generator_of(self.heap, self.get(self.lp + loc), kinds).ok_or_else(|| {
             Fault::Error(
                 ErrorKind::InternalError,
                 String::from("bad bytecode: no generator state"),
@@ -147,26 +203,39 @@ impl Exec<'_> {
     /// `generator_start loc`.
     pub(super) fn generator_start(&mut self, next: u32) -> Step {
         let loc = self.imm_u16(1);
-        // The prototype: the function's own `prototype` if it is an object (a data
-        // property of generator functions), else %GeneratorPrototype%.
+        // An async generator if the function is also ASYNC (D1421). The prototype: the
+        // function's own `prototype` if it is an object (a data property of generator
+        // functions), else %GeneratorPrototype% / %AsyncGeneratorPrototype%.
         let callee = self.get(self.bp).as_object().expect("frame callee");
+        let flags = self.heap.arena().get(self.template, FuncTemplate::FLAGS);
+        let (kind, fallback) = if flags & func_flags::ASYNC != 0 {
+            (ASYNC_GENERATOR, Intrinsic::AsyncGeneratorProto)
+        } else {
+            (GENERATOR, Intrinsic::GeneratorProto)
+        };
         let proto = self
             .heap
             .get_own_property(callee, crate::heap::atoms::PROTOTYPE)
             .and_then(|p| p.value())
             .and_then(|v| v.as_object())
-            .unwrap_or_else(|| intrinsic_obj(self.heap, Intrinsic::GeneratorProto));
-        let g = alloc(self.heap, Some(proto), GENERATOR)?;
+            .unwrap_or_else(|| intrinsic_obj(self.heap, fallback));
+        let g = alloc(self.heap, Some(proto), kind)?;
         self.set(self.lp + loc, Value::object(g));
         self.suspend_frame(g, START, next)?;
         self.do_return(Value::object(g))
     }
 
     /// `yield loc`.
-    pub(super) fn yield_value(&mut self, next: u32) -> Step {
-        let g = self.local_generator(self.imm_u16(1), GENERATOR)?;
+    pub(super) fn yield_value(&mut self, next: u32, raw: bool) -> Step {
+        let kinds: &[i32] = if raw {
+            &[GENERATOR]
+        } else {
+            &[GENERATOR, ASYNC_GENERATOR]
+        };
+        let g = self.local_generator(self.imm_u16(1), kinds)?;
         let v = self.pop();
-        self.suspend_frame(g, SUSPENDED, next)?;
+        let state = if raw { SUSPENDED_RAW } else { SUSPENDED };
+        self.suspend_frame(g, state, next)?;
         self.do_return(v)
     }
 
@@ -183,15 +252,15 @@ impl Exec<'_> {
 
     /// `await loc`.
     pub(super) fn await_value(&mut self, next: u32) -> Step {
-        let a = self.local_generator(self.imm_u16(1), ASYNC)?;
+        let a = self.local_generator(self.imm_u16(1), &[ASYNC, ASYNC_GENERATOR])?;
         let v = self.pop();
-        self.suspend_frame(a, SUSPENDED, next)?;
+        self.suspend_frame(a, AWAITING, next)?;
         self.tail_call_builtin(ASYNC_AWAIT, [Value::object(a), v])
     }
 
     /// `async_return loc` / `async_reject loc`.
     pub(super) fn async_finish(&mut self, reject: bool) -> Step {
-        let a = self.local_generator(self.imm_u16(1), ASYNC)?;
+        let a = self.local_generator(self.imm_u16(1), &[ASYNC])?;
         let v = self.pop();
         let id = if reject {
             ASYNC_FUNCTION_THROW
@@ -218,10 +287,9 @@ impl Exec<'_> {
         };
         let state = state_of(self.heap, g);
         let saved = self.heap.object_slot(g, FRAME).as_internal();
-        let (Some(arr), START | SUSPENDED) = (saved, state) else {
+        let (Some(arr), START | SUSPENDED | AWAITING | SUSPENDED_RAW) = (saved, state) else {
             return intrinsics::bad_argument("GeneratorResume");
         };
-        let kind = self.heap.object_slot(g, KIND).as_int().unwrap_or(GENERATOR);
         let pc = self.heap.object_slot(g, PC).as_int().unwrap_or(0) as u32;
         let f = self
             .heap
@@ -229,7 +297,7 @@ impl Exec<'_> {
             .as_object()
             .expect("callee");
         let t = self.template_of(f);
-        if state == SUSPENDED && mode == 1 {
+        if state != START && mode == 1 {
             // Thrown at the suspension point: without a handler there, it leaves the
             // activation at once, as if thrown by this intrinsic.
             let handlers = self.heap.arena().get(t, FuncTemplate::HANDLERS);
@@ -276,20 +344,19 @@ impl Exec<'_> {
         self.sp = base + len;
         self.pc = pc;
         self.enter_template(t);
-        if state == SUSPENDED {
-            match (mode, kind) {
-                (1, _) => {
-                    let st = self.throw_value(value, pc - 1);
-                    if st.is_none() {
-                        self.safepoint();
-                    }
-                    return Ok(st);
+        match (state, mode) {
+            (START, _) => {}
+            (_, 1) => {
+                let st = self.throw_value(value, pc - 1);
+                if st.is_none() {
+                    self.safepoint();
                 }
-                (_, ASYNC) => self.push(value),
-                (_, _) => {
-                    self.push(value);
-                    self.push(Value::bool(mode == 2));
-                }
+                return Ok(st);
+            }
+            (AWAITING, _) => self.push(value),
+            _ => {
+                self.push(value);
+                self.push(Value::bool(mode == 2));
             }
         }
         self.safepoint();

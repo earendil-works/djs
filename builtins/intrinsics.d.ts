@@ -588,8 +588,8 @@ declare function NewBuiltinClosure(kind: i32, data: Value, length: i32): Fn;
 // ---- Generators and async functions (0037, D1375) ---------------------------------------
 //
 // A Generator object is a suspendable activation: a generator, or an async function's
-// state. States: 0 suspended at the start, 1 suspended at a yield/await, 2 executing,
-// 3 completed.
+// state. States: 0 suspended at the start, 1 suspended at a yield, 2 executing, 4 at an await,
+// 3 completed, 6 suspended at a yield_star (sync generators), D1421.
 
 /** The state of a generator object (not an async state), or -1 for anything else. @leaf */
 declare function GeneratorState(v: Value): i32;
@@ -608,6 +608,27 @@ declare function GeneratorResume(g: Obj, value: Value, mode: i32): Value;
 declare function IsAsyncFunctionState(v: Value): boolean;
 /** The result promise of an async function call. @leaf */
 declare function AsyncFunctionPromise(a: Obj): Obj;
+
+// ---- Async generators and async iteration (0042, D1421) ---------------------------------
+//
+// Async generator states: GeneratorState's 0-3, 4 awaiting (inside an await), 5 awaiting
+// a return() value (spec "draining-queue"/"awaiting-return"). A request is a Record
+// [type (0 next, 1 throw, 2 return), value, promise].
+
+/** The state of an async generator, or -1 for anything else. @leaf */
+declare function AsyncGeneratorState(v: Value): i32;
+/** Appends a request to the generator's queue. @leaf */
+declare function AsyncGeneratorEnqueue(g: Obj, request: Obj): void;
+/** The oldest request, or undefined. @leaf */
+declare function AsyncGeneratorFirstRequest(g: Obj): Value;
+/** Removes and returns the oldest request (undefined if none). @leaf */
+declare function AsyncGeneratorDequeue(g: Obj): Value;
+/**
+ * CreateAsyncFromSyncIterator ( syncIteratorRecord ), 27.1.6.1: a Record [iterator,
+ * next] with %AsyncFromSyncIteratorPrototype%.
+ * @leaf
+ */
+declare function CreateAsyncFromSyncIterator(iterator: Obj, next: Value): Obj;
 
 // ---- Used by the generated code (crates/djs-bgen/src/emit_js.rs) ------------------------
 

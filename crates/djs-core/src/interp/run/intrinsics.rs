@@ -259,12 +259,17 @@ const GENERATOR_SET_STATE: u16 = id("GeneratorSetState");
 const GENERATOR_RESUME: u16 = id("GeneratorResume");
 const IS_ASYNC_FUNCTION_STATE: u16 = id("IsAsyncFunctionState");
 const ASYNC_FUNCTION_PROMISE: u16 = id("AsyncFunctionPromise");
+const ASYNC_GENERATOR_STATE: u16 = id("AsyncGeneratorState");
+const ASYNC_GENERATOR_ENQUEUE: u16 = id("AsyncGeneratorEnqueue");
+const ASYNC_GENERATOR_FIRST_REQUEST: u16 = id("AsyncGeneratorFirstRequest");
+const ASYNC_GENERATOR_DEQUEUE: u16 = id("AsyncGeneratorDequeue");
+const CREATE_ASYNC_FROM_SYNC_ITERATOR: u16 = id("CreateAsyncFromSyncIterator");
 pub(super) const PROMISE_CONSTRUCTOR: u16 = id("PromiseConstructor");
 const PROMISE_RESOLVE_THENABLE_JOB: u16 = id("PromiseResolveThenableJob");
 
 /// The builtins a `%NewBuiltinClosure(kind, ..)` calls, by kind (D1372; the list in
 /// builtins/intrinsics.d.ts).
-const BUILTIN_CLOSURES: [u16; 11] = [
+const BUILTIN_CLOSURES: [u16; 15] = [
     id("PromiseResolveFunction"),
     id("PromiseRejectFunction"),
     id("GetCapabilitiesExecutor"),
@@ -276,6 +281,29 @@ const BUILTIN_CLOSURES: [u16; 11] = [
     id("PromiseCatchFinally"),
     id("PromiseValueThunk"),
     id("PromiseThrower"),
+    id("AsyncGeneratorAwaitReturnFulfilled"),
+    id("AsyncGeneratorAwaitReturnRejected"),
+    id("AsyncFromSyncIteratorUnwrap"),
+    id("AsyncFromSyncIteratorCloseThrow"),
+];
+
+/// The function-kind constructors, wired to their prototypes when installed (D1420).
+const FUNCTION_KIND_CONSTRUCTORS: [(u16, Intrinsic, &str); 3] = [
+    (
+        id("GeneratorFunctionConstructor"),
+        Intrinsic::GeneratorFunctionProto,
+        "GeneratorFunction",
+    ),
+    (
+        id("AsyncGeneratorFunctionConstructor"),
+        Intrinsic::AsyncGeneratorFunctionProto,
+        "AsyncGeneratorFunction",
+    ),
+    (
+        id("AsyncFunctionConstructor"),
+        Intrinsic::AsyncFunctionProto,
+        "AsyncFunction",
+    ),
 ];
 
 /// The libm intrinsics (D1150): `F64Sin(x)` and friends.
@@ -1465,7 +1493,7 @@ impl Exec<'_> {
                 let g = a0
                     .as_object()
                     .filter(|&o| self.heap.object_class(o) == ObjectClass::Generator);
-                let s = arg(self, 1).as_int().filter(|s| (0..=3).contains(s));
+                let s = arg(self, 1).as_int().filter(|s| (0..=6).contains(s));
                 let (Some(g), Some(s)) = (g, s) else {
                     return bad_argument(info.name);
                 };
@@ -1484,6 +1512,37 @@ impl Exec<'_> {
                 Some(a) => suspend::promise_of(self.heap, a),
                 None => return bad_argument(info.name),
             },
+            ASYNC_GENERATOR_STATE => {
+                match suspend::as_generator(self.heap, a0, suspend::ASYNC_GENERATOR) {
+                    Some(g) => Value::int(suspend::state_of(self.heap, g)),
+                    None => Value::int(-1),
+                }
+            }
+            ASYNC_GENERATOR_ENQUEUE | ASYNC_GENERATOR_FIRST_REQUEST | ASYNC_GENERATOR_DEQUEUE => {
+                let Some(g) = suspend::as_generator(self.heap, a0, suspend::ASYNC_GENERATOR) else {
+                    return bad_argument(info.name);
+                };
+                match id {
+                    ASYNC_GENERATOR_ENQUEUE => {
+                        suspend::enqueue_request(self.heap, g, arg(self, 1))?;
+                        Value::UNDEFINED
+                    }
+                    ASYNC_GENERATOR_FIRST_REQUEST => suspend::first_request(self.heap, g),
+                    _ => suspend::dequeue_request(self.heap, g),
+                }
+            }
+            CREATE_ASYNC_FROM_SYNC_ITERATOR => {
+                if a0.as_object().is_none() {
+                    return bad_argument(info.name);
+                }
+                let proto = intrinsic_obj(self.heap, Intrinsic::AsyncFromSyncIteratorProto);
+                let r = self
+                    .heap
+                    .alloc_object(ObjectClass::Record, Some(proto), 2)?;
+                self.heap.set_object_slot(r, 0, a0);
+                self.heap.set_object_slot(r, 1, arg(self, 1));
+                Value::object(r)
+            }
             NEW_RECORD => {
                 let n = a0.as_int().and_then(|n| u32::try_from(n).ok());
                 let Some(n) = n.filter(|&n| n <= 16) else {
@@ -1542,6 +1601,11 @@ impl Exec<'_> {
                 match intrinsic_id(&name) {
                     Some(i) if intrinsic(i).unwrap().kind == IntrinsicKind::Builtin => {
                         realm::install_intrinsic(self.heap, i, f);
+                        if let Some(&(_, proto, name)) =
+                            FUNCTION_KIND_CONSTRUCTORS.iter().find(|c| c.0 == i)
+                        {
+                            self.wire_function_kind_constructor(f, proto, name)?;
+                        }
                     }
                     _ => return bad_argument(info.name),
                 }
@@ -1670,6 +1734,39 @@ impl Exec<'_> {
 
     /// Flags an installed prelude function; non-constructors lose the `prototype` that
     /// every ordinary function gets (D1310).
+    /// %GeneratorFunction% and friends (D1420): a builtin constructor named `name` with
+    /// [[Prototype]] %Function% and `prototype` = the realm's `proto` (whose
+    /// `constructor` it becomes), both configurable but not writable. Not globals.
+    fn wire_function_kind_constructor(
+        &mut self,
+        f: Value,
+        proto: Intrinsic,
+        name: &str,
+    ) -> Result<(), Fault> {
+        let Some(fo) = f.as_object() else {
+            return bad_argument("InstallIntrinsic");
+        };
+        let p = intrinsic_obj(self.heap, proto);
+        let function = self.heap.atom_str("Function")?;
+        let global = intrinsic_obj(self.heap, Intrinsic::Global);
+        let ctor = self
+            .heap
+            .get_own_property(global, function)
+            .and_then(|p| p.value())
+            .and_then(|v| v.as_object());
+        self.heap.set_prototype_of(fo, ctor);
+        self.heap
+            .remove_own_property_unchecked(fo, atoms::PROTOTYPE);
+        let d = PropertyDescriptor::data(Value::object(p), PropFlags::NONE);
+        self.heap.define_own_property(fo, atoms::PROTOTYPE, &d)?;
+        let d = PropertyDescriptor::data(f, PropFlags::CONFIGURABLE);
+        self.heap.define_own_property(p, atoms::CONSTRUCTOR, &d)?;
+        let n = self.heap.alloc_str(name)?;
+        self.name_and_length(fo, Value::string(n), 1.0)?;
+        self.mark_builtin(fo, OBJ_BUILTIN | OBJ_BUILTIN_CTOR);
+        Ok(())
+    }
+
     fn mark_builtin(&mut self, fo: Obj, flag: u16) {
         let flags = self.heap.cell_flags(fo.offset());
         self.heap.set_cell_flags(fo.offset(), flags | flag);
@@ -1818,6 +1915,9 @@ impl Exec<'_> {
             "%ArrayIteratorPrototype%" => Some(Intrinsic::ArrayIteratorProto),
             "%StringIteratorPrototype%" => Some(Intrinsic::StringIteratorProto),
             "%GeneratorPrototype%" => Some(Intrinsic::GeneratorProto),
+            "%AsyncIteratorPrototype%" => Some(Intrinsic::AsyncIteratorProto),
+            "%AsyncGeneratorPrototype%" => Some(Intrinsic::AsyncGeneratorProto),
+            "%AsyncFromSyncIteratorPrototype%" => Some(Intrinsic::AsyncFromSyncIteratorProto),
             "%MapIteratorPrototype%" => Some(Intrinsic::MapIteratorProto),
             "%SetIteratorPrototype%" => Some(Intrinsic::SetIteratorProto),
             "%TypedArray%" => Some(Intrinsic::TypedArrayCtor),

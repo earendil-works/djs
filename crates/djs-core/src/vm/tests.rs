@@ -1607,6 +1607,10 @@ fn run_with_suspendables(src: &str) -> Outcome {
             ("g", generator_template(&mut vm)),
             ("f", async_template(&mut vm, false)),
             ("h", async_template(&mut vm, true)),
+            ("ag", async_generator_template(&mut vm)),
+            ("gs", yield_star_template(&mut vm)),
+            ("collect", for_await_template(&mut vm)),
+            ("kinds", kinds_template(&mut vm)),
         ] {
             let v = vm.instantiate(t).unwrap();
             vm.define_global(name, v).unwrap();
@@ -1757,4 +1761,300 @@ fn async_entry_awaits_async_host_calls() {
         assert_eq!(vm.display(v), "A!B");
         vm.heap().verify().unwrap();
     }
+}
+
+// ---- Async generators, yield_star, for await, function kinds (0042) ----------------------
+
+use crate::bytecode::template::func_flags;
+
+/// `async function* ag(a) { const x = yield a; yield x + 1; return "end" }`, as 0041
+/// compiles async generators (docs/compiler.md 7.7): the operand of a yield and of a
+/// return is awaited, and a `return(v)` resumption awaits `v` and returns it.
+fn async_generator_template(vm: &mut Vm) -> Ref {
+    let mut f = F::new();
+    f.params = 1;
+    f.locals = 1;
+    f.flags = func_flags::KIND_NORMAL | func_flags::ASYNC | func_flags::GENERATOR;
+    let end = f.string(vm, "end");
+    let ret = f.b.new_label();
+    f.b.generator_start(0);
+    f.b.get_arg(0);
+    for k in 0..2 {
+        if k == 1 {
+            f.b.push_i8(1);
+            f.b.add();
+        }
+        f.b.await_(0);
+        f.b.yield_(0);
+        f.b.jump_if_true(ret);
+    }
+    f.b.drop();
+    f.b.push_const(end);
+    f.b.await_(0);
+    f.b.return_();
+    f.b.place_label(ret);
+    f.b.await_(0);
+    f.b.return_();
+    f.build(vm)
+}
+
+/// A sync generator that passes the result objects of the iterator in its argument on
+/// with `yield_star` (one step of what `yield*` compiles to): `function* gs(it) { let r;
+/// while (!(r = it.next()).done) yield_star r; return r.value }` (ignoring what it
+/// receives).
+fn yield_star_template(vm: &mut Vm) -> Ref {
+    let mut f = F::new();
+    f.params = 1;
+    f.locals = 1;
+    f.flags = func_flags::KIND_NORMAL | func_flags::GENERATOR;
+    let next = vm.heap_mut().atom_str("next").unwrap();
+    let (top, done) = (f.b.new_label(), f.b.new_label());
+    f.b.generator_start(0);
+    f.b.place_label(top);
+    f.b.get_arg(0);
+    f.b.get_method(next);
+    f.b.call(0);
+    f.b.dup();
+    f.b.get_field(crate::heap::atoms::DONE);
+    f.b.jump_if_true(done);
+    f.b.yield_star(0);
+    f.b.drop();
+    f.b.drop();
+    f.b.jump(top);
+    f.b.place_label(done);
+    f.b.get_field(crate::heap::atoms::VALUE);
+    f.b.return_();
+    f.build(vm)
+}
+
+/// `async function collect(it) { const out = []; for await (const v of it) out.push(v);
+/// return out }`, with `break` after `limit` values when given (closing the iterator).
+fn for_await_template(vm: &mut Vm) -> Ref {
+    use crate::bytecode::intrinsics::intrinsic_id;
+    let mut f = F::new();
+    f.params = 2;
+    f.locals = 4; // 0 state, 1 iterator, 2 next, 3 out
+    f.flags = func_flags::KIND_NORMAL | func_flags::ASYNC;
+    let next = vm.heap_mut().atom_str("next").unwrap();
+    let (s, e, h) = (f.b.new_label(), f.b.new_label(), f.b.new_label());
+    let (top, done, brk, no_return) = (
+        f.b.new_label(),
+        f.b.new_label(),
+        f.b.new_label(),
+        f.b.new_label(),
+    );
+    f.b.async_start(0);
+    f.b.place_label(s);
+    f.b.array_from(0);
+    f.b.put_loc(3);
+    f.b.get_arg(0);
+    f.b.call_intrinsic(intrinsic_id("GetAsyncIterator").unwrap(), 1);
+    f.b.put_loc(1);
+    f.b.get_loc(1);
+    f.b.get_field(next);
+    f.b.put_loc(2);
+    f.b.place_label(top);
+    // limit reached? (arguments.length checks are the compiler's business; here
+    // `limit === out.length` with limit undefined never holds)
+    f.b.get_arg(1);
+    f.b.get_loc(3);
+    f.b.get_field(crate::heap::atoms::LENGTH);
+    f.b.strict_eq();
+    f.b.jump_if_true(brk);
+    f.b.get_loc(2);
+    f.b.get_loc(1);
+    f.b.call(0);
+    f.b.await_(0);
+    f.b.iter_check_object();
+    f.b.dup();
+    f.b.get_field(crate::heap::atoms::DONE);
+    f.b.jump_if_true(done);
+    f.b.get_field(crate::heap::atoms::VALUE);
+    f.b.get_loc(3);
+    f.b.swap();
+    f.b.array_push();
+    f.b.drop();
+    f.b.jump(top);
+    // break: AsyncIteratorClose with a normal completion.
+    f.b.place_label(brk);
+    f.b.get_loc(1);
+    f.b.call_intrinsic(intrinsic_id("AsyncIteratorReturnMethod").unwrap(), 1);
+    f.b.dup();
+    f.b.is_undefined();
+    f.b.jump_if_true(no_return);
+    f.b.get_loc(1);
+    f.b.call(0);
+    f.b.await_(0);
+    f.b.iter_check_object();
+    f.b.place_label(no_return);
+    f.b.drop();
+    f.b.get_loc(3);
+    f.b.async_return(0);
+    f.b.place_label(done);
+    f.b.drop();
+    f.b.get_loc(3);
+    f.b.async_return(0);
+    f.b.place_label(e);
+    f.b.place_label(h);
+    f.b.async_reject(0);
+    f.handlers.push((s, e, h, 0));
+    f.build(vm)
+}
+
+/// `function kinds() { return [function(){}, async function(){}, function*(){},
+/// async function*(){}, {*m(){}}.m-like method] }`: closures of each kind, made by
+/// `fclosure`.
+fn kinds_template(vm: &mut Vm) -> Ref {
+    let mut children = Vec::new();
+    for flags in [
+        func_flags::KIND_NORMAL,
+        func_flags::KIND_NORMAL | func_flags::ASYNC,
+        func_flags::KIND_NORMAL | func_flags::GENERATOR,
+        func_flags::KIND_NORMAL | func_flags::ASYNC | func_flags::GENERATOR,
+        func_flags::KIND_METHOD | func_flags::GENERATOR,
+        func_flags::KIND_ARROW | func_flags::ASYNC,
+    ] {
+        let mut c = F::new();
+        c.flags = flags;
+        c.b.return_undef();
+        children.push(c.build(vm));
+    }
+    let mut f = F::new();
+    let n = children.len();
+    f.children = children;
+    for i in 0..n {
+        f.b.fclosure(i as u32);
+    }
+    f.b.array_from(n as u16);
+    f.b.return_();
+    f.build(vm)
+}
+
+#[test]
+fn async_generators_queue_requests() {
+    let out = run_with_suspendables(
+        r#"
+        const log = [];
+        const show = (tag) => (r) => log.push(tag + ":" + r.value + ":" + r.done);
+        const it = ag(Promise.resolve(5));
+        it.next("ignored").then(show("1"));
+        it.next(10).then(show("2"));
+        it.next("x").then(show("3"));
+        it.next().then(show("4"));
+        const it2 = ag(1);
+        it2.next();
+        it2.return(Promise.resolve(42)).then(show("ret"));
+        const it3 = ag(1);
+        it3.return(7).then(show("startret"));
+        it3.next().then(show("after3"));
+        const it4 = ag(1);
+        it4.next();
+        it4.throw(new Error("boom")).catch((e) => log.push("throw:" + e.message));
+        it4.next().then(show("after4"));
+        const it5 = ag(1);
+        it5.throw(new Error("early")).catch((e) => log.push("startthrow:" + e.message));
+        Object.getPrototypeOf(it).next.call({}).catch((e) => log.push(e.name + ": " + e.message));
+        log.push(Object.prototype.toString.call(it) + " " + (it[Symbol.asyncIterator]() === it));
+        let p = Promise.resolve();
+        for (let i = 0; i < 12; i++) p = p.then(() => 0);
+        p.then(() => console.log(log.join(", ")));
+        "#,
+    );
+    // The order qjs gives for the source function.
+    // The order node gives for the source function (`const x = yield a; yield x + 1;
+    // return "end"`). qjs agrees except that it never settles "after3" (a next() queued
+    // behind a return() on a generator that has not started).
+    assert_eq!(
+        out.log,
+        [
+            "[object AsyncGenerator] true, startthrow:early, TypeError: not an AsyncGenerator \
+          object, 1:5:false, startret:7:true, after3:undefined:true, throw:boom, \
+          after4:undefined:true, 2:11:false, ret:42:true, 3:end:true, 4:undefined:true"
+        ]
+    );
+}
+
+#[test]
+fn yield_star_passes_inner_results_through() {
+    let out = run_with_suspendables(
+        r#"
+        const inner = { i: 0, next() { this.i++; return this.i < 3 ? { value: this.i, done: false, extra: "x" } : { value: "r", done: true }; } };
+        const it = gs(inner);
+        const a = it.next();
+        const b = it.next();
+        const c = it.next();
+        const show = (r) => Object.keys(r).map((k) => k + "=" + r[k]).join(" ");
+        console.log([a, b, c].map(show).join(" | "), a === b);
+        "#,
+    );
+    assert_eq!(out.result, "undefined");
+    assert_eq!(
+        out.log,
+        ["value=1 done=false extra=x | value=2 done=false extra=x | value=r done=true false"]
+    );
+}
+
+#[test]
+fn for_await_over_sync_async_and_generator_iterables() {
+    let out = run_with_suspendables(
+        r#"
+        const log = [];
+        collect([1, Promise.resolve(2), 3]).then((v) => log.push("sync " + v.join()));
+        collect(ag(Promise.resolve(1))).then((v) => log.push("asyncgen " + v.join()));
+        let closed = false;
+        const custom = { [Symbol.asyncIterator]() { let i = 0; return {
+          next() { i++; return Promise.resolve({ value: i * 10, done: i > 3 }); },
+          return() { closed = true; return { done: true }; } }; } };
+        collect(custom, 2).then((v) => log.push("custom " + v.join() + " closed " + closed));
+        collect([Promise.reject(new Error("bad")), 2]).catch((e) => log.push("rejected " + e.message));
+        collect(1).catch((e) => log.push(e.name + ": " + e.message));
+        let p = Promise.resolve();
+        for (let i = 0; i < 20; i++) p = p.then(() => 0);
+        p.then(() => console.log(log.join(", ")));
+        "#,
+    );
+    // The order qjs and node give for the source function.
+    assert_eq!(
+        out.log,
+        [
+            "TypeError: not a function, rejected bad, custom 10,20 closed true, asyncgen 1,NaN, \
+          sync 1,2,3"
+        ]
+    );
+}
+
+#[test]
+fn function_kinds_have_their_prototypes() {
+    let out = run_with_suspendables(
+        r#"
+        const [plain, af, gf, agf, gm, arrow] = kinds();
+        const P = Object.getPrototypeOf;
+        const GF = P(gf), AF = P(af), AGF = P(agf);
+        const r = [
+          P(plain) === Function.prototype, AF !== Function.prototype, P(AF) === Function.prototype,
+          P(gm) === GF, P(arrow) === AF,
+          GF.prototype === P(gf.prototype), P(gm.prototype) === GF.prototype,
+          AGF.prototype === P(agf.prototype), P(AGF.prototype) === P(P(AGF.prototype)) ? "x" : "ok",
+          "prototype" in af, "prototype" in arrow,
+          GF[Symbol.toStringTag], AF[Symbol.toStringTag], AGF[Symbol.toStringTag], AGF.prototype[Symbol.toStringTag],
+          GF.constructor.name, AF.constructor.name, AGF.constructor.name, GF.constructor.length,
+          P(GF.constructor) === Function, GF.constructor.prototype === GF,
+          Object.getOwnPropertyNames(GF).sort().join("/"), Object.getOwnPropertyNames(AF).join("/"),
+          Object.entries(Object.getOwnPropertyDescriptor(GF, "prototype")).filter((e) => e[0] !== "value").join("/"),
+        ];
+        try { new GF.constructor("yield 1") } catch (e) { r.push(e.name + ": " + e.message) }
+        console.log(r.join(", "));
+        "#,
+    );
+    assert_eq!(out.result, "undefined");
+    assert_eq!(
+        out.log,
+        [
+            "true, true, true, true, true, true, true, true, ok, false, false, GeneratorFunction, \
+          AsyncFunction, AsyncGeneratorFunction, AsyncGenerator, GeneratorFunction, \
+          AsyncFunction, AsyncGeneratorFunction, 1, true, true, constructor/prototype, \
+          constructor, writable,false/enumerable,false/configurable,true, \
+          TypeError: not supported yet: the GeneratorFunction constructor"
+        ]
+    );
 }
