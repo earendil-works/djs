@@ -1042,6 +1042,67 @@ global, compiles to a TDZ read (when needed) followed by `throw_const_assign`.
   The scope is also entered before the right side, which sees the bindings in their
   TDZ (`for (let x of x)` is a ReferenceError); their `init_end` is the end of the head.
 
+### 5.10 Peepholes and loop layout (0086, D1860)
+
+The parser emits every construct in its general form and in source order; three
+places make the code shorter.
+
+**Loop rotation** (compiler/stmt.rs). `while` and C-style `for` loops test at the
+bottom, so an iteration takes one conditional jump:
+
+```
+while (c) s           jump L_cont; L_body: s; L_cont: c; jump_if_true L_body; L_break:
+for (i; c; u) s       i; jump L_test; L_body: s; L_cont: u; drop; L_test: c;
+                      jump_if_true L_body; L_break:
+for (i; ; u) s        i; L_body: s; L_cont: u; drop; jump L_body; L_break:
+```
+
+The parser still emits the parts in source order (test, update, body) and then moves
+the byte ranges (`CodeBuf::rotate` on phase-1 code, `Parser::rotate_code` for the line
+entries). Phase-1 code refers to labels, never to positions, so only the jump fixups
+and the line table move along; each moved block starts with the line entry in effect
+where it was emitted, so error positions do not change.
+
+**Phase-1 peepholes** (compiler/peephole.rs), before the re-emit, on consecutive
+instructions (a `label` instruction breaks every match), until nothing changes:
+
+| phase-1 code | becomes |
+| --- | --- |
+| `name_set x; drop` | `name_put x` (assignment statements) |
+| `insertN; [inc/dec/to_numeric]; put_field/put_elem/...; drop` | without the `insertN` and the `drop` (`o.c = v;`, `o.c += v;`, `o.c++;`) |
+| `dup; inc/dec; name_put x; drop` | `inc/dec; name_put x` (`x++;`) |
+| `to_numeric; inc/dec` | `inc/dec` (they take ToNumeric themselves) |
+| `not; jump_if_false L` | `jump_if_true L` (and the reverse) |
+| `push_true; jump_if_true L` | `jump L`; `push_true; jump_if_false L`: nothing (`while (true)`) |
+| `jump_if_x L; jump M; L:` | `jump_if_!x M; L:` (`if (c) break;`) |
+| `jump L` with `L:` right after | nothing |
+
+Jump threading: a jump to a `jump` takes its target, a `jump` to a `return` /
+`return_undef` is that return (`return` never throws, so its `try` region does not
+matter), and `dup; jump_if_x L; drop` with `L: jump_if_y M` (the value `&&` / `||`
+keeps for a condition) is `jump_if_x M` when x = y, else `jump_if_x` to a new label
+after the second test (it would fall through). Labels may be created, so `simplify`
+returns the new label count.
+
+**Re-emit fusions** (compiler/resolve.rs), which need the storage:
+
+| phase-1 code | becomes |
+| --- | --- |
+| `name_get x; inc/dec; name_put x` on an unchecked local | `inc_loc x` / `dec_loc x` (`name_set`: then `get_loc x`) |
+| `name_put x` / `name_init x; name_get x` on an unchecked local | `set_loc x` (not when an `inc_loc` follows) |
+| `name_get undefined` (the global) `; strict_eq` | `is_undefined`; `strict_ne; jump_if_x` → `is_undefined; jump_if_!x` |
+
+The line entries of removed instructions apply to the next kept one; a fused
+instruction takes the entry of the instruction whose errors it reports (`inc_loc`: the
+`inc`).
+
+`inc_loc` / `dec_loc` change a local in place. An int32 stays on the fast path;
+another primitive converts inline (a Symbol throws); an object calls `%ToNumeric` into
+the local with a `Retry` continuation (7.3), so the instruction runs again on the
+number. The conversion is atomic: if it throws, the local still holds the object, and
+nothing can observe the local in between (it is not captured). `i += 1` stays `get_loc;
+push_i8 1; add; put_loc`: `+` on a string concatenates.
+
 ## 6. Function templates and heap cells
 
 0005 (heap) and 0009 (copying GC, handles) have landed. These are sketches in their
@@ -1184,6 +1245,8 @@ op through a fixed continuation kind in the callee's header:
 | `DiscardResult` | drop it (setters) |
 | `ConstructResult` | if not an object, use the frame's `this` (and check derived-ctor rules) |
 | `Entry` | the bottom frame of a `vm_call`: `run` returns `Done(value)` |
+| `Replace(slot)` | store it in the caller's stack slot, resume after the instruction (`get_method` through a getter) |
+| `Retry(slot)` | store it in the slot and run the instruction again (an operand replaced by its primitive, D1280; `inc_loc`'s `%ToNumeric`). The caller's `try` regions and line are the instruction's own (D1861) |
 
 Examples:
 - `get_field` finds an accessor: pop `obj`, push `[getter, obj]`, call with
@@ -1694,7 +1757,8 @@ L_else:
 L_end:
 ```
 
-(A later peephole pass can turn `&&` in a condition into direct jumps.)
+Since 0086 the peepholes turn the `dup; jump_if_false L1; drop` into `jump_if_false
+L_else` (5.10).
 
 ### 9.3 `try`/`finally` with `return`
 

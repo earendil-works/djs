@@ -3748,3 +3748,38 @@ image). The live session would stay untouched, but the resumed one would differ 
 the same out-of-memory edge case, and every snapshot would pay a second restore.
 Cost: `snapshot()` 0.05–0.1 → 0.4 ms; `resumeVm` of a waiting session 1.5 → 0.8 ms
 (half the bytes to verify).
+## D1860: Loop rotation and peepholes in the compiler; inc_loc/dec_loc; fast_more
+date: 2026-11-05 · by: lexer · issue: 0086
+- `while` and C-style `for` loops test at the bottom (one conditional jump per
+  iteration). The parser keeps emitting in source order and then moves the phase-1
+  byte ranges: phase-1 code refers to labels only, so just the fixups and the line
+  entries move (docs/compiler.md 5.10).
+- Peepholes run on phase-1 code before the re-emit (compiler/peephole.rs: the drops of
+  expression statements, jump threading, `&&`/`||` in conditions, `not` before a jump)
+  and in the re-emit where they need the storage (`inc_loc`/`dec_loc`, put+get as
+  `set_loc`, `=== undefined` as `is_undefined`). They match consecutive instructions
+  only, so no jump can land inside a match.
+- New ops `inc_loc`/`dec_loc` (`i++;`, `++i` on an unchecked, uncaptured local). Not for
+  `i += 1`, which concatenates on a string. An object local takes `%ToNumeric` into the
+  local and re-executes (D1861); the conversion either completes or leaves the local
+  alone.
+- More simple ops (constants, `push_const`, `special_object` this, swap/dup2/nip/insert2,
+  captures and Boxes, `not`, `strict_eq`/`strict_ne`, `is_undefined`/`is_nullish`, int
+  `%` and bitops) run on `fast_more`, an out-of-line function the run loop tries after
+  `fast_step`. As arms of `fast_step` itself they made the hottest ops slower in wasm
+  (tight +6%, prop1 +5%: D1352's register allocation), after it they cost only the ops
+  that take the general path (props +3%, a loop of slow ops).
+- Fuel per iteration drops with the instruction count (D1633: fuel is not semantics).
+- wasm (wmeasure, instructions vs 5459e97): tight -38%, loop -35%, call1 -22%, prop1
+  -33%, calls -17%, forof -10%, arrays -9%, props -8%, strbuild -5%, pi-like -4%,
+  jsonh/json +1%; executed bytecodes pi-like -9.5%, tight/loop -50%/-41%. wasm +9 KB.
+
+## D1861: The Retry continuation
+date: 2026-11-05 · by: lexer · issue: 0086
+The slow paths that replace an operand and run the instruction again (`%ToPrimitive`,
+`%ToNumber`/`%ToBigInt`/`%ToNumeric` converters) return through `Continuation::Retry(slot)`
+instead of `Replace(slot)`. Both store the result in the slot; `Retry` resumes at the
+instruction itself, so the caller's handler-table key and stack-trace line are `ret_pc`,
+not `ret_pc - 1` (the end of the previous instruction). Before, a throwing conversion in
+the first instruction of a `try` block escaped the block: `try { r++ } catch {}` with an
+object `r` once `r++` is the single `inc_loc`.

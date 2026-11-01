@@ -133,10 +133,10 @@ pub mod prof {
 
 R = "crates/djs-core/src/interp/run.rs"
 patch(R, "pub(crate) struct Exec<'h> {", PROF + "\npub(crate) struct Exec<'h> {")
-patch(R, "            if self.fast_step() {\n                continue;\n            }",
+patch(R, "            if self.fast_step() || self.fast_more() {\n                continue;\n            }",
       "            let prof_k = prof::kind(self);\n"
       "            let prof_b = if prof_k < 2 { self.byte(self.pc) } else { 0 };\n"
-      "            if self.fast_step() {\n                prof::count(prof_k, true, prof_b);\n                continue;\n            }\n"
+      "            if self.fast_step() || self.fast_more() {\n                prof::count(prof_k, true, prof_b);\n                continue;\n            }\n"
       "            prof::count(prof_k, false, prof_b);")
 patch(R, "    fn push_frame(&mut self, t: u32, base: u32, argc: u32, cont: Continuation, ret_pc: u32) {\n",
       "    fn push_frame(&mut self, t: u32, base: u32, argc: u32, cont: Continuation, ret_pc: u32) {\n        prof::inc(&prof::FRAMES, 1);\n        prof::fn_call(self.heap, t);\n")
