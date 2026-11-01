@@ -3603,3 +3603,48 @@ final collection. A mismatch names which one differs. The raw comparison catches
 garbage that depends on where a run stopped (a suspension record, a collection at
 another instruction), which the collected comparison cannot see. GC stress stays
 output-only (D1720). The native-vs-wasm check already compared raw images at each slice.
+
+## D1801: Dense-array leaves for the element loops of Array builtins
+date: 2026-11-03 · by: infra · issue: 0080
+A present element in an Array's dense storage is an own default-attribute data property,
+so HasProperty and Get of it run no user code. Leaves in `interp/run/dense.rs` run whole
+element loops when every element they touch is such an element and the loop's other
+steps cannot run user code either: `ArraySearchDense` (indexOf / lastIndexOf / includes,
+strict equality or SameValueZero), `ArraySliceDense` (the copy into a species result
+that accepts plain appends), `ArrayJoinDense` (primitives other than symbols),
+`ArrayPushDense` (push(v) as a plain append, through `set_element_fast`),
+`ArrayCanPopDense`/`ArrayPopDense` (heap `array_pop_dense`: only dense elements, writable
+length, no index properties on the prototype chain), `EnumerableOwnDataProperties`
+(Object.values/entries without enumerable accessors, no Proxy or other exotic
+[[GetOwnProperty]] that runs code) and `TypedArraySetFromDense` (typed arrays from dense
+arrays of primitives of the content type; the constructor uses an array of Numbers with
+original iteration directly as the iterated list). Each declines with nothing changed
+and the builtin's general loop runs; reads done before declining had no effect. Pure
+checks come before the first mutation; where a store helper checks the conditions
+(`set_element_fast`), its first call does and declines with nothing changed. The bgen
+behavior stand-ins decline, so the general loops keep their qjs comparison.
+
+## D1802: Iterable consumers step without result objects
+date: 2026-11-03 · by: infra · issue: 0080
+`%IteratorFastReady(it, next)` (pure: the D1800 conditions, and the value is at hand) and
+`%IteratorFastValue(it, next)` let the builtins that consume iterables (IterableToList,
+Array.from's iterator path, the Map/Set/WeakMap/WeakSet constructors, Promise
+combinators, Object.fromEntries, groupBy, array spread's general path, destructuring
+rest) skip `next` and its result object per element; otherwise they call `next`. Map and
+Set Iterators with their original `next` (now `@intrinsic`) also step in `iter_next`
+(`collection::iterator_step_value`). The Map/Set constructors call `CollectionSet`
+directly while the adder is the installed Map.prototype.set / Set.prototype.add
+(`%IsOriginalCollectionAdder`) on the new collection, which is what that call does.
+
+## D1803: bgen: try/finally and constructors in `@native`
+date: 2026-11-03 · by: infra · issue: 0080
+The Rust backend copies a finally block onto each way out of its try body: the normal
+end, an exception (a handler region of its own that rethrows from its slot after the
+copy), and each `return` (value parked in a slot), `break` and `continue` that leaves it
+(loops record the finally depth at entry). Each copy is lowered in the try region outside
+it, so an exception in a finally block goes outward. `try/catch/finally` is
+`try { try/catch } finally`. Constructors needed nothing at runtime (construct_call
+marks the native frame and stores new.target as for bytecode); the bgen guard is gone.
+Set and Map constructors, GetPrototypeFromConstructor and AddEntriesFromIterable are
+`@native` (and the latter two `@intrinsic`); no shipped `@native` uses try/finally yet,
+so it is covered by the golden fixture (Fin) and the checker test.
