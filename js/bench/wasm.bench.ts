@@ -8,6 +8,9 @@
 //   node js/bench/wire.bench.ts <dir>      (writes the datasets)
 //   scripts/build-wasm.sh
 //   node js/bench/wasm.bench.ts <dir>
+//
+// With `--tsv`, prints `name<TAB>value<TAB>unit` lines instead (djs-bench's wasm group).
+// The datasets are `<name>.json` files; djs-bench writes its own.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -48,6 +51,7 @@ function time<S>(setup: () => S, f: (s: S) => void, teardown: (s: S) => void = (
 }
 
 const dir = process.argv[2];
+const tsv = process.argv.includes("--tsv");
 if (!dir) throw new Error("usage: wasm.bench.ts <dir from wire.bench.ts>");
 const path = defaultWasmPath();
 const bytes = readFileSync(typeof path === "string" ? path : fileURLToPath(path));
@@ -78,6 +82,26 @@ function jsonIn(value: unknown): number {
 const names = ["10k-objects", "1mib-string", "1mib-text-unicode", "tool-results", "500k-numbers"];
 const inbound: string[] = [];
 const outbound: string[] = [];
+const rows: string[] = [];
+const row = (name: string, ms: number) => rows.push(`wasm/${name}\t${ms.toFixed(4)}\tms`);
+
+// Startup: a new VM (realm built from scratch) and a new instance, in ns.
+{
+  const ns = (f: () => void) => {
+    const runs: number[] = [];
+    for (let i = 0; i < 210; i++) {
+      const t = performance.now();
+      f();
+      if (i >= 10) runs.push(performance.now() - t);
+    }
+    runs.sort((a, b) => a - b);
+    return runs[runs.length >> 1] * 1e6;
+  };
+  const module = new WebAssembly.Module(bytes);
+  rows.push(`wasm/instantiate\t${ns(() => new WebAssembly.Instance(module, {})).toFixed(0)}\tns/op`);
+  rows.push(`wasm/vm_new\t${ns(() => x.vm_free(x.vm_new(0))).toFixed(0)}\tns/op`);
+}
+
 for (const name of names) {
   const value = JSON.parse(readFileSync(join(dir, name + ".json"), "utf8"));
   const wireLen = encodeIn(value);
@@ -96,6 +120,8 @@ for (const name of names) {
   const tParse = time(fresh, (vm) => {
     if (x.vm_parse_json(vm, jsonLen) === 0) throw new Error("parse failed");
   }, free);
+  row(`decode ${name}`, tDecode);
+  row(`parse_json ${name}`, tParse);
   inbound.push(
     `| ${name} | ${tEncode.toFixed(2)} | ${tStringify.toFixed(2)} | ${tDecode.toFixed(2)} | ${tParse.toFixed(2)} | ` +
       `**${(tEncode + tDecode).toFixed(2)}** | ${(tStringify + tParse).toFixed(2)} |`,
@@ -115,10 +141,16 @@ for (const name of names) {
   const sh = x.vm_json_stringify(vm, h);
   const sb = bits(vm, sh);
   const tJson = time(() => 0, () => void JSON.parse(readValue(arena(vm), sb) as string));
+  row(`readValue ${name}`, tRead);
+  row(`json_stringify ${name}`, tStr);
   outbound.push(
     `| ${name} | **${tRead.toFixed(2)}** | ${tStr.toFixed(2)} | ${tJson.toFixed(2)} | ${(tStr + tJson).toFixed(2)} |`,
   );
   x.vm_free(vm);
+}
+if (tsv) {
+  console.log(rows.join("\n"));
+  process.exit(0);
 }
 console.log("| dataset | encode | stringify + encodeInto | decode | parse_json | wire total | JSON total |");
 console.log("| --- | ---: | ---: | ---: | ---: | ---: | ---: |");

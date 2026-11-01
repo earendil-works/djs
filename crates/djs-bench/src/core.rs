@@ -469,3 +469,48 @@ fn collect_bench(r: &mut Runner, name: &str, h: &mut Heap) {
         h.collect().unwrap();
     });
 }
+
+// ---- wire ----------------------------------------------------------------------------------
+
+/// The boundary datasets (0018/0021) natively, in ms:
+/// - `wire/decode`: the inbound wire format;
+/// - `wire/parse_utf8`: the same data as JSON, the inbound alternative;
+/// - `wire/stringify`: `stringify_fast` of the decoded value, which the VM would do without
+///   the direct-read reader (the reader itself is host code; see the wasm group).
+pub fn wire(r: &mut Runner) {
+    use djs_core::wire::{DecodeOptions, decode};
+    if !r.wants("wire/") {
+        return;
+    }
+    for (name, data) in crate::data::datasets(r.config.quick) {
+        let wire = data.to_wire();
+        let json = data.to_json();
+        drop(data);
+        let h = std::cell::RefCell::new(Heap::new().unwrap());
+        // Collect (untimed) before every sample, so each decode starts from the same heap.
+        let collect = || {
+            h.borrow_mut().collect().unwrap();
+        };
+        r.time_with_setup(&format!("wire/decode {name}"), collect, || {
+            black_box(decode(&mut h.borrow_mut(), &wire, &DecodeOptions::default()).unwrap());
+        });
+        r.time_with_setup(&format!("wire/parse_utf8 {name}"), collect, || {
+            let v = parse_utf8(
+                &mut h.borrow_mut(),
+                json.as_bytes(),
+                &ParseOptions::default(),
+            );
+            black_box(v.unwrap());
+        });
+        let hv = {
+            let mut h = h.borrow_mut();
+            let v = decode(&mut h, &wire, &DecodeOptions::default()).unwrap();
+            h.new_handle(v).unwrap()
+        };
+        r.time_with_setup(&format!("wire/stringify {name}"), collect, || {
+            let mut h = h.borrow_mut();
+            let v = h.get_handle(hv);
+            black_box(stringify_fast(&mut h, v, &[]).unwrap().unwrap());
+        });
+    }
+}

@@ -182,6 +182,20 @@ impl Runner {
         }
     }
 
+    /// Like `time` (ms per call), with `setup` run untimed before every call of `f`.
+    pub fn time_with_setup(&mut self, name: &str, setup: impl FnMut(), f: impl FnMut()) {
+        if let Some(samples) = self.sample(name, setup, f) {
+            let ms = |d: Duration| d.as_secs_f64() * 1e3;
+            self.push(
+                name,
+                Unit::Ms,
+                ms(median(&samples)),
+                ms(samples[0]),
+                samples.len(),
+            );
+        }
+    }
+
     /// Records a value that is not a timing (sizes), or a timing measured elsewhere.
     pub fn value(&mut self, name: &str, unit: Unit, value: f64) {
         if self.wants(name) {

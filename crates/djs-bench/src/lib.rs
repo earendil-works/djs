@@ -6,10 +6,12 @@
 //! or `r.value` for each result, and add it to `GROUPS`.
 
 pub mod core;
+pub mod data;
 pub mod engine;
 pub mod runner;
 pub mod scores;
 pub mod size;
+pub mod wasm;
 
 use runner::Runner;
 
@@ -23,8 +25,10 @@ pub const GROUPS: &[(&str, Group)] = &[
     ("regexp", core::regexp),
     ("json", core::json),
     ("gc", core::gc),
+    ("wire", core::wire),
     ("engine", engine::engine),
     ("size", size::size),
+    ("wasm", wasm::wasm),
 ];
 
 /// Runs every group (results are filtered by name inside the runner).
@@ -58,6 +62,8 @@ mod tests {
             "json/parse",
             "json/stringify",
             "gc/",
+            "wire/decode",
+            "wire/stringify",
         ] {
             assert!(
                 names.iter().any(|n| n.starts_with(prefix)),
