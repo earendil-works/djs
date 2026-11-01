@@ -2112,3 +2112,63 @@ interp/run/late.rs, at the end of the intrinsic fallback chain.
 Where qjs deviates from the spec, djs follows the spec and node: qjs closes the iterator
 before reduce's "empty iterator" TypeError and closes an exhausted inner iterator of
 flatMap (vm/tests.rs `iterator_helpers_follow_the_spec_where_qjs_differs`).
+## D1490: pi codemode on djs: an adapter for pi's `startVm` contract, pi's prelude unmodified
+date: 2026-11-01 · by: infra · issue: 0049
+js/pi/vm.ts implements pi's VM-session contract (`startVm`/`VmSession`, the messages of pi's
+protocol.ts) on djs, so pi swaps one module and keeps its launchers, host and prelude.
+It works on heap handles (js/pi/engine.ts) rather than the Sandbox, because pi calls
+the prelude's `settle`/`run`/`stalled` many times. The bridge is a sync host function,
+not an async one: pi's prelude makes its own promises and settles them in `settle`, as on
+QuickJS, and `vm_run` drains the job queue (D1370), so pi's `drain()` is one run plus
+`stalled()`. The prelude and the script are compiled as async bodies (`return <expr>`),
+since djs Scripts have no completion value; the script keeps pi's one-line prefix, so
+line numbers match. An interrupt (`shouldInterrupt` after a fuel slice) is `vm_abort`
+plus a `crash`. That is the same outcome as QuickJS's uncatchable interrupt.
+
+## D1491: djs-wasm exports for embedders: file names, random seed, build hash
+date: 2026-11-01 · by: infra · issue: 0049
+Additive, ABI version unchanged: `vm_compile_file` (`vm_compile` with the file name
+for stack traces; pi checks `codemode.js:2`, and the prelude drops frames by its file
+name), `vm_set_random_seed(vm, lo, hi)` (a new VM's `Math.random` has a fixed default
+seed, so a host needs it for real randomness and for seeded replays), and
+`djs_build_hash()` (`BUILD_HASH`, which identifies the engine build in pi's deterministic
+fingerprint).
+
+## D1492: pi adapter: 10,000 fuel per interrupt poll
+date: 2026-11-01 · by: infra · issue: 0049
+pi's interrupt budgets count interrupt-handler polls. With 10,000 fuel between polls, a
+tight loop polls about as often per second as pi's quickjs VM (34,000/s vs 32,000/s), so
+a budget means the same CPU time. 100,000 made `while (true) {}` with pi's test budget run
+for 6 s instead of 0.6 s. djs charges fuel for allocation and builtin work, which QuickJS
+does not count, so such code stops much sooner on djs: a bound, not a regression. pi's
+prelude takes about 120 polls (QuickJS: 4). Measured with work/scratch/0049/pollrate.ts;
+numbers in docs/host.md.
+
+## D1493: pi adapter: deterministic `Math.random` matches quickjs-wasi
+date: 2026-11-01 · by: infra · issue: 0049
+djs's `Math.random` is QuickJS's xorshift64* (D1314). pi's quickjs VM
+ends up seeded with `seed + 1` (its first clock read) and one value drawn while the
+context is created. The adapter therefore sets djs's state to one xorshift step after
+`seed + 1`, and the same seed gives the same numbers on both engines; pi's pinned test
+values pass. Non-deterministic runs seed from `crypto.getRandomValues`.
+
+## D1494: pi adapter: quickjs-wasi's host globals in JS, before the prelude
+date: 2026-11-01 · by: infra · issue: 0049
+quickjs-wasi gives scripts `performance`, `queueMicrotask`, `atob` and `btoa`, and pi's
+deterministic tests use `performance.now()`. The adapter defines them in a small JS
+prelude (as `codemode-prelude.js`, so pi's prelude drops their stack frames) before pi's
+prelude, whose lockdown then freezes them. `performance.now()` is `Date.now() - origin`
+on the VM clock, with the origin set per run (deterministic: `startedAt`). Language
+builtins that djs lacks (encodeURI, WeakRef, Iterator, ...) are not polyfilled. They are
+engine follow-ups.
+
+## D1495: pi adapter: reuse the VM image taken after the prelude
+date: 2026-11-01 · by: infra · issue: 0049
+Running pi's prelude (its lockdown) is about 90% of a djs start (9 of 10 ms). The
+adapter caches the image taken right after the prelude, per compiled module, keyed by
+everything the prelude reads (prelude text, tools, globals, store, heap limit; at most 16
+entries, keys under 64 KB). A start with the same inputs restores the image (0.6 ms;
+`Vm::from_bytes` verifies it) and then sets only the seed and `performance`'s origin.
+A start then takes 0.5 ms, against 3.2 ms on quickjs-wasi. The handles of the prelude's
+functions are part of the image (handles survive images, heap/handle.rs). Off with
+`reuseImages: false`.
