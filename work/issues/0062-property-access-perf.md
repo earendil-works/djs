@@ -1,7 +1,7 @@
 # 0062: Property access performance: shapes / inline caches (design first)
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0062-property-access-perf
 depends-on: 0060
 touches: docs/ (a design note first), then crates/djs-core/src/heap/ (object layout), crates/djs-core/src/interp/ (caches in the dispatch loop), crates/djs-core/src/bytecode/ (cache slots per instruction, if needed), js/src/layout.generated.ts + js/src/reader.ts (if the object layout changes), crates/djs-bench/
