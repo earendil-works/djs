@@ -1,7 +1,7 @@
 # 0110: pi-like's remaining hot spots: string search, allocation, flatten, dense element access in natives
 
-status: open
-agent: -
+status: in-progress
+agent: perf
 branch: issue/0110-library-hot-spots
 depends-on: 0107
 guide: - (tell the coordinator if the builtins or interpreter chapters need updates)
