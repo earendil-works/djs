@@ -234,8 +234,6 @@ built-ins/Array/prototype/sort/comparefn-nonfunction-call-throws.js: parse: Unsu
 built-ins/Array/prototype/sort/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/sort/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/sort/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/Array/prototype/sort/stability-2048-elements.js: TypeError: not a function
-built-ins/Array/prototype/sort/stability-513-elements.js: TypeError: not a function
 built-ins/Array/prototype/splice/15.4.4.12-9-c-ii-1.js: parse: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/splice/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Array/prototype/splice/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
@@ -741,7 +739,6 @@ built-ins/Number/prototype/toPrecision/length.js: harness propertyHelper.js: Uns
 built-ins/Number/prototype/toPrecision/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Number/prototype/toPrecision/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Number/prototype/toString/S15.7.4.2_A4_T03.js: ReferenceError: 'Date' is not defined
-built-ins/Number/prototype/toString/a-z.js: TypeError: not a function
 built-ins/Number/prototype/toString/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Number/prototype/toString/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Number/prototype/toString/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
@@ -1892,24 +1889,10 @@ built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-237.js: parse: Unsupported:
 built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-241.js: parse: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-245.js: parse: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-4.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-61.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-63.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-64.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-65.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-66.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-67.js: TypeError: cannot read property 'value' of undefined
 built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-68.js: TypeError: cannot read property 'value' of undefined
 built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-69.js: TypeError: cannot read property 'value' of undefined
 built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-70.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-71.js: TypeError: cannot read property 'value' of undefined
 built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-72.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-73.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-75.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-77.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-79.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-80.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-81.js: TypeError: cannot read property 'value' of undefined
-built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-82.js: TypeError: cannot read property 'value' of undefined
 built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-9.js: TypeError: cannot read property 'value' of undefined
 built-ins/Object/getOwnPropertyDescriptor/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/Object/getOwnPropertyDescriptor/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
@@ -2701,29 +2684,10 @@ built-ins/Promise/withResolvers/result.js: harness propertyHelper.js: Unsupporte
 built-ins/String/S15.5.5.1_A2.js: parse: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/S15.5.5.1_A3.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/S15.5.5.1_A4_T2.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/fromCharCode/S15.5.3.2_A1.js: Test262Error: #1: typeof String.fromCharCode === "function". Actual: typeof String.fromCharCode ===undefined
-built-ins/String/fromCharCode/S15.5.3.2_A2.js: TypeError: not a function
-built-ins/String/fromCharCode/S15.5.3.2_A3_T1.js: TypeError: not a function
-built-ins/String/fromCharCode/S15.5.3.2_A3_T2.js: TypeError: not a function
-built-ins/String/fromCharCode/S9.7_A1.js: TypeError: not a function
-built-ins/String/fromCharCode/S9.7_A2.1.js: TypeError: not a function
-built-ins/String/fromCharCode/S9.7_A2.2.js: TypeError: not a function
-built-ins/String/fromCharCode/S9.7_A3.1_T1.js: TypeError: not a function
-built-ins/String/fromCharCode/S9.7_A3.1_T2.js: TypeError: not a function
-built-ins/String/fromCharCode/S9.7_A3.1_T3.js: TypeError: not a function
-built-ins/String/fromCharCode/S9.7_A3.1_T4.js: TypeError: not a function
-built-ins/String/fromCharCode/S9.7_A3.2_T1.js: TypeError: not a function
 built-ins/String/fromCharCode/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/fromCharCode/touint16-tonumber-throws-valueof.js: Test262Error: ToNumber throws when its argument's ToPrimitive step calls a throwing valueOf, and String.fromCharCode must propagate it. Expected a Test262Error…
-built-ins/String/fromCodePoint/argument-is-not-integer.js: Test262Error: Expected a RangeError but got a TypeError
-built-ins/String/fromCodePoint/argument-not-coercible.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/fromCodePoint/arguments-is-empty.js: TypeError: not a function
 built-ins/String/fromCodePoint/fromCodePoint.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/fromCodePoint/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/fromCodePoint/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/fromCodePoint/number-is-out-of-range.js: Test262Error: Expected a RangeError but got a TypeError
-built-ins/String/fromCodePoint/return-string-value.js: TypeError: not a function
-built-ins/String/fromCodePoint/to-number-conversions.js: TypeError: not a function
 built-ins/String/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/numeric-properties.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
@@ -2734,210 +2698,43 @@ built-ins/String/prototype/Symbol.iterator/length.js: harness propertyHelper.js:
 built-ins/String/prototype/Symbol.iterator/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/Symbol.iterator/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/Symbol.iterator/this-val-to-str-err.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/at/index-argument-tointeger.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/at/index-non-numeric-argument-tointeger-invalid.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/at/index-non-numeric-argument-tointeger.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
 built-ins/String/prototype/at/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/at/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/at/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/at/return-abrupt-from-this.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/at/returns-code-unit.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/at/returns-item-relative-index.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/at/returns-item.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/at/returns-undefined-for-out-of-range-index.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
 built-ins/String/prototype/charAt/S15.5.4.4_A10.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/charAt/S15.5.4.4_A11.js: TypeError: cannot read property 'hasOwnProperty' of undefined
-built-ins/String/prototype/charAt/S15.5.4.4_A1_T1.js: TypeError: not a function
-built-ins/String/prototype/charAt/S15.5.4.4_A1_T10.js: TypeError: not a function
-built-ins/String/prototype/charAt/S15.5.4.4_A1_T2.js: TypeError: not a function
-built-ins/String/prototype/charAt/S15.5.4.4_A1_T4.js: TypeError: not a function
-built-ins/String/prototype/charAt/S15.5.4.4_A1_T5.js: TypeError: not a function
-built-ins/String/prototype/charAt/S15.5.4.4_A1_T6.js: TypeError: not a function
-built-ins/String/prototype/charAt/S15.5.4.4_A1_T7.js: TypeError: not a function
-built-ins/String/prototype/charAt/S15.5.4.4_A1_T8.js: TypeError: not a function
-built-ins/String/prototype/charAt/S15.5.4.4_A1_T9.js: TypeError: not a function
-built-ins/String/prototype/charAt/S15.5.4.4_A2.js: TypeError: not a function
-built-ins/String/prototype/charAt/S15.5.4.4_A3.js: TypeError: not a function
-built-ins/String/prototype/charAt/S15.5.4.4_A4_T1.js: TypeError: not a function
-built-ins/String/prototype/charAt/S15.5.4.4_A4_T2.js: TypeError: not a function
-built-ins/String/prototype/charAt/S15.5.4.4_A4_T3.js: TypeError: not a function
-built-ins/String/prototype/charAt/S15.5.4.4_A5.js: Test262Error: #1.1: Exception === 'intostring'. Actual: exception ===TypeError: not a function
-built-ins/String/prototype/charAt/S15.5.4.4_A6.js: TypeError: cannot read property 'prototype' of undefined
 built-ins/String/prototype/charAt/S15.5.4.4_A8.js: parse: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/charAt/S15.5.4.4_A9.js: TypeError: cannot read property 'hasOwnProperty' of undefined
-built-ins/String/prototype/charAt/S9.4_A1.js: TypeError: not a function
-built-ins/String/prototype/charAt/S9.4_A2.js: TypeError: not a function
 built-ins/String/prototype/charAt/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/charAt/pos-coerce-string.js: TypeError: not a function
-built-ins/String/prototype/charAt/pos-rounding.js: TypeError: not a function
-built-ins/String/prototype/charAt/this-value-not-obj-coercible.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
 built-ins/String/prototype/charCodeAt/S15.5.4.5_A10.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/charCodeAt/S15.5.4.5_A11.js: TypeError: cannot read property 'hasOwnProperty' of undefined
-built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T1.js: TypeError: not a function
-built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T10.js: TypeError: not a function
-built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T2.js: TypeError: not a function
-built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T4.js: TypeError: not a function
-built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T5.js: TypeError: not a function
-built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T6.js: TypeError: not a function
-built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T7.js: TypeError: not a function
-built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T8.js: TypeError: not a function
-built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T9.js: TypeError: not a function
-built-ins/String/prototype/charCodeAt/S15.5.4.5_A2.js: TypeError: not a function
-built-ins/String/prototype/charCodeAt/S15.5.4.5_A3.js: TypeError: not a function
-built-ins/String/prototype/charCodeAt/S15.5.4.5_A4.js: Test262Error: #1.1: Exception === 'intostring'. Actual: exception ===TypeError: not a function
-built-ins/String/prototype/charCodeAt/S15.5.4.5_A6.js: TypeError: cannot read property 'prototype' of undefined
 built-ins/String/prototype/charCodeAt/S15.5.4.5_A8.js: parse: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/charCodeAt/S15.5.4.5_A9.js: TypeError: cannot read property 'hasOwnProperty' of undefined
 built-ins/String/prototype/charCodeAt/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/charCodeAt/pos-coerce-string.js: TypeError: not a function
-built-ins/String/prototype/charCodeAt/pos-rounding.js: TypeError: not a function
-built-ins/String/prototype/charCodeAt/this-value-not-obj-coercible.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
 built-ins/String/prototype/codePointAt/codePointAt.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/codePointAt/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/codePointAt/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/codePointAt/return-abrupt-from-object-pos-to-integer.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/codePointAt/return-abrupt-from-this.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/codePointAt/return-code-unit-coerced-position.js: TypeError: not a function
-built-ins/String/prototype/codePointAt/return-first-code-unit.js: TypeError: not a function
-built-ins/String/prototype/codePointAt/return-single-code-unit.js: TypeError: not a function
-built-ins/String/prototype/codePointAt/return-utf16-decode.js: TypeError: not a function
-built-ins/String/prototype/codePointAt/returns-undefined-on-position-equal-or-more-than-size.js: TypeError: not a function
-built-ins/String/prototype/codePointAt/returns-undefined-on-position-less-than-zero.js: TypeError: not a function
 built-ins/String/prototype/concat/S15.5.4.6_A10.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/concat/S15.5.4.6_A11.js: TypeError: cannot read property 'hasOwnProperty' of undefined
-built-ins/String/prototype/concat/S15.5.4.6_A1_T1.js: TypeError: not a function
-built-ins/String/prototype/concat/S15.5.4.6_A1_T10.js: TypeError: not a function
-built-ins/String/prototype/concat/S15.5.4.6_A1_T2.js: TypeError: not a function
-built-ins/String/prototype/concat/S15.5.4.6_A1_T4.js: TypeError: not a function
-built-ins/String/prototype/concat/S15.5.4.6_A1_T5.js: TypeError: not a function
-built-ins/String/prototype/concat/S15.5.4.6_A1_T6.js: TypeError: not a function
-built-ins/String/prototype/concat/S15.5.4.6_A1_T7.js: TypeError: not a function
-built-ins/String/prototype/concat/S15.5.4.6_A1_T8.js: TypeError: not a function
-built-ins/String/prototype/concat/S15.5.4.6_A1_T9.js: TypeError: not a function
-built-ins/String/prototype/concat/S15.5.4.6_A2.js: TypeError: not a function
-built-ins/String/prototype/concat/S15.5.4.6_A3.js: TypeError: not a function
-built-ins/String/prototype/concat/S15.5.4.6_A4_T1.js: TypeError: not a function
-built-ins/String/prototype/concat/S15.5.4.6_A4_T2.js: Test262Error: #1: e === "intostring". Actual: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/concat/S15.5.4.6_A6.js: TypeError: cannot read property 'prototype' of undefined
 built-ins/String/prototype/concat/S15.5.4.6_A8.js: parse: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/concat/S15.5.4.6_A9.js: TypeError: cannot read property 'hasOwnProperty' of undefined
 built-ins/String/prototype/concat/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/concat/this-value-not-obj-coercible.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/endsWith/String.prototype.endsWith_Fail.js: TypeError: not a function
-built-ins/String/prototype/endsWith/String.prototype.endsWith_Fail_2.js: TypeError: not a function
-built-ins/String/prototype/endsWith/String.prototype.endsWith_Success.js: TypeError: not a function
-built-ins/String/prototype/endsWith/String.prototype.endsWith_Success_2.js: TypeError: not a function
-built-ins/String/prototype/endsWith/String.prototype.endsWith_Success_3.js: TypeError: not a function
-built-ins/String/prototype/endsWith/String.prototype.endsWith_Success_4.js: TypeError: not a function
-built-ins/String/prototype/endsWith/coerced-values-of-position.js: TypeError: not a function
 built-ins/String/prototype/endsWith/endsWith.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/endsWith/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/endsWith/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/endsWith/return-abrupt-from-position.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/endsWith/return-abrupt-from-searchstring.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/endsWith/return-abrupt-from-this.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/endsWith/return-false-if-search-start-is-less-than-zero.js: TypeError: not a function
-built-ins/String/prototype/endsWith/return-true-if-searchstring-is-empty.js: TypeError: not a function
-built-ins/String/prototype/endsWith/searchstring-found-with-position.js: TypeError: not a function
-built-ins/String/prototype/endsWith/searchstring-found-without-position.js: TypeError: not a function
 built-ins/String/prototype/endsWith/searchstring-is-regexp-throws.js: parse: Unsupported: regular expressions are not supported yet
-built-ins/String/prototype/endsWith/searchstring-not-found-with-position.js: TypeError: not a function
-built-ins/String/prototype/endsWith/searchstring-not-found-without-position.js: TypeError: not a function
-built-ins/String/prototype/includes/String.prototype.includes_FailBadLocation.js: TypeError: not a function
-built-ins/String/prototype/includes/String.prototype.includes_FailLocation.js: TypeError: not a function
-built-ins/String/prototype/includes/String.prototype.includes_FailMissingLetter.js: TypeError: not a function
-built-ins/String/prototype/includes/String.prototype.includes_Success.js: TypeError: not a function
-built-ins/String/prototype/includes/String.prototype.includes_SuccessNoLocation.js: TypeError: not a function
-built-ins/String/prototype/includes/String.prototype.includes_lengthProp.js: TypeError: cannot read property 'length' of undefined
-built-ins/String/prototype/includes/coerced-values-of-position.js: TypeError: not a function
 built-ins/String/prototype/includes/includes.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/includes/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/includes/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/includes/return-abrupt-from-position.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/includes/return-abrupt-from-searchstring.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/includes/return-abrupt-from-this.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/includes/return-false-with-out-of-bounds-position.js: TypeError: not a function
-built-ins/String/prototype/includes/return-true-if-searchstring-is-empty.js: TypeError: not a function
-built-ins/String/prototype/includes/searchstring-found-with-position.js: TypeError: not a function
-built-ins/String/prototype/includes/searchstring-found-without-position.js: TypeError: not a function
 built-ins/String/prototype/includes/searchstring-is-regexp-throws.js: parse: Unsupported: regular expressions are not supported yet
-built-ins/String/prototype/includes/searchstring-not-found-with-position.js: TypeError: not a function
-built-ins/String/prototype/includes/searchstring-not-found-without-position.js: TypeError: not a function
 built-ins/String/prototype/indexOf/S15.5.4.7_A10.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/indexOf/S15.5.4.7_A11.js: TypeError: cannot read property 'hasOwnProperty' of undefined
-built-ins/String/prototype/indexOf/S15.5.4.7_A1_T1.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A1_T10.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A1_T2.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A1_T4.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A1_T5.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A1_T6.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A1_T7.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A1_T8.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A1_T9.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A2_T1.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A2_T2.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A2_T3.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A2_T4.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A3_T1.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A3_T3.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A4_T1.js: Test262Error: #1.1: Exception === "intointeger". Actual: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A4_T2.js: Test262Error: #1.1: Exception === "intointeger". Actual: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A4_T3.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A4_T4.js: Test262Error: #1.1: Exception === "intostr". Actual: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A4_T5.js: Test262Error: #1.1: Exception === "intostr". Actual: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A5_T1.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A5_T2.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A5_T3.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A5_T4.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A5_T5.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A5_T6.js: TypeError: not a function
-built-ins/String/prototype/indexOf/S15.5.4.7_A6.js: TypeError: cannot read property 'prototype' of undefined
 built-ins/String/prototype/indexOf/S15.5.4.7_A8.js: parse: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/indexOf/S15.5.4.7_A9.js: TypeError: cannot read property 'hasOwnProperty' of undefined
 built-ins/String/prototype/indexOf/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/indexOf/position-tointeger.js: TypeError: not a function
-built-ins/String/prototype/indexOf/searchstring-tostring.js: TypeError: not a function
-built-ins/String/prototype/indexOf/this-value-not-obj-coercible.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
 built-ins/String/prototype/isWellFormed/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/isWellFormed/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/isWellFormed/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/isWellFormed/return-abrupt-from-this.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/isWellFormed/returns-boolean.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
 built-ins/String/prototype/isWellFormed/to-string-primitive.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/String/prototype/isWellFormed/to-string.js: Test262Error: coerces the receiver to a string Expected a Test262Error but got a TypeError
 built-ins/String/prototype/lastIndexOf/S15.5.4.8_A10.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A11.js: TypeError: cannot read property 'hasOwnProperty' of undefined
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T1.js: TypeError: not a function
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T10.js: TypeError: not a function
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T2.js: TypeError: not a function
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T4.js: TypeError: not a function
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T5.js: TypeError: not a function
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T6.js: TypeError: not a function
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T7.js: TypeError: not a function
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T8.js: TypeError: not a function
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T9.js: TypeError: not a function
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A4_T1.js: Test262Error: #1.1: Exception === "intointeger". Actual: TypeError: not a function
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A4_T2.js: Test262Error: #1.1: Exception === "intointeger". Actual: TypeError: not a function
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A4_T3.js: TypeError: not a function
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A4_T4.js: Test262Error: #1.1: Exception === "intostr". Actual: TypeError: not a function
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A4_T5.js: Test262Error: #1.1: Exception === "intostr". Actual: TypeError: not a function
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A6.js: TypeError: cannot read property 'prototype' of undefined
 built-ins/String/prototype/lastIndexOf/S15.5.4.8_A8.js: parse: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/lastIndexOf/S15.5.4.8_A9.js: TypeError: cannot read property 'hasOwnProperty' of undefined
 built-ins/String/prototype/lastIndexOf/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/lastIndexOf/not-a-substring.js: TypeError: not a function
-built-ins/String/prototype/lastIndexOf/this-value-not-obj-coercible.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/localeCompare/15.5.4.9_3.js: TypeError: not a function
-built-ins/String/prototype/localeCompare/15.5.4.9_CE.js: TypeError: not a function
+built-ins/String/prototype/localeCompare/15.5.4.9_CE.js: Test262Error: String.prototype.localeCompare considers ö (\u006f\u0308) ≠ ö (\u00f6).
 built-ins/String/prototype/localeCompare/S15.5.4.9_A10.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/localeCompare/S15.5.4.9_A11.js: TypeError: cannot read property 'hasOwnProperty' of undefined
-built-ins/String/prototype/localeCompare/S15.5.4.9_A1_T1.js: TypeError: not a function
-built-ins/String/prototype/localeCompare/S15.5.4.9_A1_T2.js: TypeError: not a function
-built-ins/String/prototype/localeCompare/S15.5.4.9_A6.js: TypeError: cannot read property 'prototype' of undefined
 built-ins/String/prototype/localeCompare/S15.5.4.9_A8.js: parse: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/localeCompare/S15.5.4.9_A9.js: TypeError: cannot read property 'hasOwnProperty' of undefined
 built-ins/String/prototype/localeCompare/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/localeCompare/this-value-not-obj-coercible.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
 built-ins/String/prototype/match/S15.5.4.10_A1_T10.js: TypeError: not a function
 built-ins/String/prototype/match/S15.5.4.10_A1_T11.js: Test262Error: #1.1: Exception === "intostr". Actual: TypeError: not a function
 built-ins/String/prototype/match/S15.5.4.10_A1_T12.js: Test262Error: #1.1: Exception === "intostr". Actual: TypeError: not a function
@@ -2975,46 +2772,21 @@ built-ins/String/prototype/match/name.js: harness propertyHelper.js: Unsupported
 built-ins/String/prototype/match/this-val-bool.js: TypeError: not a function
 built-ins/String/prototype/match/this-val-obj.js: TypeError: not a function
 built-ins/String/prototype/match/this-value-not-obj-coercible.js: parse: Unsupported: regular expressions are not supported yet
-built-ins/String/prototype/normalize/form-is-not-valid-throws.js: Test262Error: Expected a RangeError but got a TypeError
 built-ins/String/prototype/normalize/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/normalize/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/normalize/normalize.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/normalize/return-abrupt-from-form.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/normalize/return-abrupt-from-this.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/normalize/return-normalized-string-from-coerced-form.js: TypeError: not a function
-built-ins/String/prototype/normalize/return-normalized-string-using-default-parameter.js: TypeError: not a function
-built-ins/String/prototype/normalize/return-normalized-string.js: TypeError: not a function
-built-ins/String/prototype/padEnd/exception-not-object-coercible.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/padEnd/fill-string-empty.js: TypeError: not a function
-built-ins/String/prototype/padEnd/fill-string-non-strings.js: TypeError: not a function
-built-ins/String/prototype/padEnd/fill-string-omitted.js: TypeError: not a function
+built-ins/String/prototype/normalize/return-normalized-string-from-coerced-form.js: TypeError: not supported yet: normalize of this string (no Unicode normalization tables)
+built-ins/String/prototype/normalize/return-normalized-string-using-default-parameter.js: TypeError: not supported yet: normalize of this string (no Unicode normalization tables)
+built-ins/String/prototype/normalize/return-normalized-string.js: TypeError: not supported yet: normalize of this string (no Unicode normalization tables)
 built-ins/String/prototype/padEnd/function-length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/padEnd/function-name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/padEnd/function-property-descriptor.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/padEnd/max-length-not-greater-than-string.js: TypeError: not a function
-built-ins/String/prototype/padEnd/normal-operation.js: TypeError: not a function
-built-ins/String/prototype/padEnd/observable-operations.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/padStart/exception-not-object-coercible.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/padStart/fill-string-empty.js: TypeError: not a function
-built-ins/String/prototype/padStart/fill-string-non-strings.js: TypeError: not a function
-built-ins/String/prototype/padStart/fill-string-omitted.js: TypeError: not a function
 built-ins/String/prototype/padStart/function-length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/padStart/function-name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/padStart/function-property-descriptor.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/padStart/max-length-not-greater-than-string.js: TypeError: not a function
-built-ins/String/prototype/padStart/normal-operation.js: TypeError: not a function
-built-ins/String/prototype/padStart/observable-operations.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/repeat/count-coerced-to-zero-returns-empty-string.js: TypeError: not a function
-built-ins/String/prototype/repeat/count-is-infinity-throws.js: Test262Error: Expected a RangeError but got a TypeError
-built-ins/String/prototype/repeat/count-is-zero-returns-empty-string.js: TypeError: not a function
-built-ins/String/prototype/repeat/count-less-than-zero-throws.js: Test262Error: Expected a RangeError but got a TypeError
-built-ins/String/prototype/repeat/empty-string-returns-empty.js: TypeError: not a function
 built-ins/String/prototype/repeat/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/repeat/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/repeat/repeat-string-n-times.js: TypeError: not a function
 built-ins/String/prototype/repeat/repeat.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/repeat/return-abrupt-from-count.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/repeat/return-abrupt-from-this.js: Test262Error: Expected a Test262Error but got a TypeError
 built-ins/String/prototype/replace/S15.5.4.11_A1_T1.js: TypeError: not a function
 built-ins/String/prototype/replace/S15.5.4.11_A1_T10.js: TypeError: not a function
 built-ins/String/prototype/replace/S15.5.4.11_A1_T11.js: Test262Error: #1.1: Exception === "insearchValue". Actual: TypeError: not a function
@@ -3107,38 +2879,8 @@ built-ins/String/prototype/search/S15.5.4.12_A9.js: TypeError: cannot read prope
 built-ins/String/prototype/search/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/search/this-value-not-obj-coercible.js: parse: Unsupported: regular expressions are not supported yet
 built-ins/String/prototype/slice/S15.5.4.13_A10.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/slice/S15.5.4.13_A11.js: TypeError: cannot read property 'hasOwnProperty' of undefined
-built-ins/String/prototype/slice/S15.5.4.13_A1_T1.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A1_T10.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A1_T11.js: Test262Error: #1.1: Exception === "instart". Actual: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A1_T12.js: Test262Error: #1.1: Exception === "instart". Actual: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A1_T13.js: Test262Error: #1.1: Exception === "inend". Actual: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A1_T14.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A1_T15.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A1_T2.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A1_T4.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A1_T6.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A1_T7.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A1_T8.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A1_T9.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A2_T1.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A2_T2.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A2_T3.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A2_T4.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A2_T5.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A2_T6.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A2_T7.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A2_T8.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A2_T9.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A3_T1.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A3_T2.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A3_T3.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A3_T4.js: TypeError: not a function
-built-ins/String/prototype/slice/S15.5.4.13_A6.js: TypeError: cannot read property 'prototype' of undefined
 built-ins/String/prototype/slice/S15.5.4.13_A8.js: parse: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/slice/S15.5.4.13_A9.js: TypeError: cannot read property 'hasOwnProperty' of undefined
 built-ins/String/prototype/slice/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/slice/this-value-not-obj-coercible.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
 built-ins/String/prototype/split/argument-is-new-reg-exp-and-instance-is-string-hello.js: ReferenceError: 'RegExp' is not defined
 built-ins/String/prototype/split/argument-is-null-and-instance-is-function-call-that-returned-string.js: TypeError: not a function
 built-ins/String/prototype/split/argument-is-reg-exp-a-z-and-instance-is-string-abc.js: ReferenceError: 'RegExp' is not defined
@@ -3246,335 +2988,50 @@ built-ins/String/prototype/split/this-value-not-obj-coercible.js: Test262Error: 
 built-ins/String/prototype/split/transferred-to-custom.js: TypeError: not a function
 built-ins/String/prototype/split/transferred-to-number-separator-override-tostring-returns-regexp.js: parse: Unsupported: regular expressions are not supported yet
 built-ins/String/prototype/split/valueOf-is-called-for-limit-argument.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/startsWith/coerced-values-of-position.js: TypeError: not a function
 built-ins/String/prototype/startsWith/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/startsWith/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/startsWith/out-of-bounds-position.js: TypeError: not a function
-built-ins/String/prototype/startsWith/return-abrupt-from-position.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/startsWith/return-abrupt-from-searchstring.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/startsWith/return-abrupt-from-this.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/prototype/startsWith/return-true-if-searchstring-is-empty.js: TypeError: not a function
-built-ins/String/prototype/startsWith/searchstring-found-with-position.js: TypeError: not a function
-built-ins/String/prototype/startsWith/searchstring-found-without-position.js: TypeError: not a function
 built-ins/String/prototype/startsWith/searchstring-is-regexp-throws.js: parse: Unsupported: regular expressions are not supported yet
-built-ins/String/prototype/startsWith/searchstring-not-found-with-position.js: TypeError: not a function
-built-ins/String/prototype/startsWith/searchstring-not-found-without-position.js: TypeError: not a function
 built-ins/String/prototype/startsWith/startsWith.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/substring/S15.5.4.15_A10.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/substring/S15.5.4.15_A11.js: TypeError: cannot read property 'hasOwnProperty' of undefined
-built-ins/String/prototype/substring/S15.5.4.15_A1_T1.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A1_T10.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A1_T11.js: Test262Error: #1.1: Exception === "instart". Actual: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A1_T12.js: Test262Error: #1.1: Exception ==="instart". Actual: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A1_T13.js: Test262Error: #1.1: Exception === "inend". Actual: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A1_T14.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A1_T15.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A1_T2.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A1_T4.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A1_T6.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A1_T7.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A1_T8.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A1_T9.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A2_T1.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A2_T10.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A2_T2.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A2_T3.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A2_T4.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A2_T5.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A2_T6.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A2_T7.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A2_T8.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A2_T9.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A3_T1.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A3_T10.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A3_T11.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A3_T2.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A3_T3.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A3_T4.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A3_T5.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A3_T6.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A3_T7.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A3_T8.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A3_T9.js: TypeError: not a function
-built-ins/String/prototype/substring/S15.5.4.15_A6.js: TypeError: cannot read property 'prototype' of undefined
 built-ins/String/prototype/substring/S15.5.4.15_A8.js: parse: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/substring/S15.5.4.15_A9.js: TypeError: cannot read property 'hasOwnProperty' of undefined
 built-ins/String/prototype/substring/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/substring/this-value-not-obj-coercible.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/toLocaleLowerCase/Final_Sigma_U180E.js: TypeError: not a function
 built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A10.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A11.js: TypeError: cannot read property 'hasOwnProperty' of undefined
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T1.js: TypeError: not a function
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T10.js: TypeError: not a function
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T11.js: Test262Error: #1.1: Exception === "intostr". Actual: TypeError: not a function
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T12.js: Test262Error: #1.1: Exception === "intostr". Actual: TypeError: not a function
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T13.js: TypeError: not a function
 built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T14.js: ReferenceError: 'RegExp' is not defined
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T2.js: TypeError: not a function
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T4.js: TypeError: not a function
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T5.js: TypeError: not a function
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T6.js: TypeError: not a function
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T7.js: TypeError: not a function
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T8.js: TypeError: not a function
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T9.js: TypeError: not a function
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A2_T1.js: TypeError: not a function
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A6.js: TypeError: cannot read property 'prototype' of undefined
 built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A8.js: parse: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A9.js: TypeError: cannot read property 'hasOwnProperty' of undefined
 built-ins/String/prototype/toLocaleLowerCase/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/toLocaleLowerCase/special_casing.js: TypeError: not a function
-built-ins/String/prototype/toLocaleLowerCase/special_casing_conditional.js: TypeError: not a function
-built-ins/String/prototype/toLocaleLowerCase/supplementary_plane.js: TypeError: not a function
-built-ins/String/prototype/toLocaleLowerCase/this-value-not-obj-coercible.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
 built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A10.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A11.js: TypeError: cannot read property 'hasOwnProperty' of undefined
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T1.js: TypeError: not a function
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T10.js: TypeError: not a function
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T11.js: Test262Error: #1.1: Exception === "intostr". Actual: TypeError: not a function
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T12.js: Test262Error: #1.1: Exception === "intostr". Actual: TypeError: not a function
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T13.js: TypeError: not a function
 built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T14.js: ReferenceError: 'RegExp' is not defined
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T2.js: TypeError: not a function
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T4.js: TypeError: not a function
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T5.js: TypeError: not a function
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T6.js: TypeError: not a function
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T7.js: TypeError: not a function
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T8.js: TypeError: not a function
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T9.js: TypeError: not a function
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A2_T1.js: TypeError: not a function
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A6.js: TypeError: cannot read property 'prototype' of undefined
 built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A8.js: parse: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A9.js: TypeError: cannot read property 'hasOwnProperty' of undefined
 built-ins/String/prototype/toLocaleUpperCase/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/toLocaleUpperCase/special_casing.js: TypeError: not a function
-built-ins/String/prototype/toLocaleUpperCase/supplementary_plane.js: TypeError: not a function
-built-ins/String/prototype/toLocaleUpperCase/this-value-not-obj-coercible.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/toLowerCase/Final_Sigma_U180E.js: TypeError: not a function
 built-ins/String/prototype/toLowerCase/S15.5.4.16_A10.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A11.js: TypeError: cannot read property 'hasOwnProperty' of undefined
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T1.js: TypeError: not a function
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T10.js: TypeError: not a function
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T11.js: Test262Error: #1.1: Exception === "intostr". Actual: TypeError: not a function
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T12.js: Test262Error: #1.1: Exception === "intostr". Actual: TypeError: not a function
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T13.js: TypeError: not a function
 built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T14.js: ReferenceError: 'RegExp' is not defined
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T2.js: TypeError: not a function
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T4.js: TypeError: not a function
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T5.js: TypeError: not a function
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T6.js: TypeError: not a function
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T7.js: TypeError: not a function
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T8.js: TypeError: not a function
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T9.js: TypeError: not a function
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A2_T1.js: TypeError: not a function
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A6.js: TypeError: cannot read property 'prototype' of undefined
 built-ins/String/prototype/toLowerCase/S15.5.4.16_A8.js: parse: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/toLowerCase/S15.5.4.16_A9.js: TypeError: cannot read property 'hasOwnProperty' of undefined
 built-ins/String/prototype/toLowerCase/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/toLowerCase/special_casing.js: TypeError: not a function
-built-ins/String/prototype/toLowerCase/special_casing_conditional.js: TypeError: not a function
-built-ins/String/prototype/toLowerCase/supplementary_plane.js: TypeError: not a function
-built-ins/String/prototype/toLowerCase/this-value-not-obj-coercible.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
 built-ins/String/prototype/toString/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/toString/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/toString/string-object.js: TypeError: not a function
 built-ins/String/prototype/toUpperCase/S15.5.4.18_A10.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A11.js: TypeError: cannot read property 'hasOwnProperty' of undefined
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T1.js: TypeError: not a function
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T10.js: TypeError: not a function
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T11.js: Test262Error: #1.1: Exception === "intostr". Actual: TypeError: not a function
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T12.js: Test262Error: #1.1: Exception === "intostr". Actual: TypeError: not a function
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T13.js: TypeError: not a function
 built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T14.js: ReferenceError: 'RegExp' is not defined
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T2.js: TypeError: not a function
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T4.js: TypeError: not a function
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T5.js: TypeError: not a function
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T6.js: TypeError: not a function
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T7.js: TypeError: not a function
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T8.js: TypeError: not a function
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T9.js: TypeError: not a function
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A2_T1.js: TypeError: not a function
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A6.js: TypeError: cannot read property 'prototype' of undefined
 built-ins/String/prototype/toUpperCase/S15.5.4.18_A8.js: parse: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/toUpperCase/S15.5.4.18_A9.js: TypeError: cannot read property 'hasOwnProperty' of undefined
 built-ins/String/prototype/toUpperCase/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/toUpperCase/special_casing.js: TypeError: not a function
-built-ins/String/prototype/toUpperCase/supplementary_plane.js: TypeError: not a function
-built-ins/String/prototype/toUpperCase/this-value-not-obj-coercible.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
 built-ins/String/prototype/toWellFormed/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/toWellFormed/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/toWellFormed/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/toWellFormed/return-abrupt-from-this.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/toWellFormed/returns-well-formed-string.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
 built-ins/String/prototype/toWellFormed/to-string-primitive.js: parse: Unsupported: BigInt literals are not supported yet
-built-ins/String/prototype/toWellFormed/to-string.js: Test262Error: coerces the receiver to a string Expected a Test262Error but got a TypeError
-built-ins/String/prototype/trim/15.5.4.20-0-1.js: Test262Error: typeof(f) Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/trim/15.5.4.20-0-2.js: TypeError: cannot read property 'length' of undefined
-built-ins/String/prototype/trim/15.5.4.20-1-3.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-1-4.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-1-5.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-1-6.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-1-7.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-1-8.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-1-9.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-2-1.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-10.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-11.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-12.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-13.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-14.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-15.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-16.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-17.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-18.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-19.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-2.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-20.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-21.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-22.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-23.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-24.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-25.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-26.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-27.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-28.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-29.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-3.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-30.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-31.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-32.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-33.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-34.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-35.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-36.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-37.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-38.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-39.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-4.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-40.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-41.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-42.js: Test262Error: valueOfAccessed !== true
-built-ins/String/prototype/trim/15.5.4.20-2-43.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-44.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-2-45.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-2-46.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-47.js: TypeError: cannot read property 'call' of undefined
 built-ins/String/prototype/trim/15.5.4.20-2-49.js: parse: Unsupported: regular expressions are not supported yet
-built-ins/String/prototype/trim/15.5.4.20-2-5.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-50.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-51.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-6.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-7.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-8.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-2-9.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trim/15.5.4.20-3-1.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-3-10.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-3-11.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-3-12.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-3-13.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-3-14.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-3-2.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-3-3.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-3-4.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-3-5.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-3-6.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-3-7.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-3-8.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-3-9.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-1.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-10.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-11.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-12.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-13.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-14.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-16.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-18.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-19.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-2.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-20.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-21.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-22.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-24.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-27.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-28.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-29.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-3.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-30.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-32.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-34.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-35.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-36.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-37.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-38.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-39.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-4.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-40.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-41.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-42.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-43.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-44.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-45.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-46.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-47.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-48.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-49.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-5.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-50.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-51.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-52.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-53.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-54.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-55.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-56.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-57.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-58.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-59.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-6.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-60.js: TypeError: not a function
-built-ins/String/prototype/trim/15.5.4.20-4-8.js: TypeError: not a function
 built-ins/String/prototype/trim/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/trim/u180e.js: TypeError: not a function
 built-ins/String/prototype/trimEnd/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/trimEnd/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/trimEnd/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/trimEnd/this-value-boolean.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trimEnd/this-value-line-terminator.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trimEnd/this-value-not-obj-coercible.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/trimEnd/this-value-number.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trimEnd/this-value-symbol-typeerror.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/trimEnd/this-value-whitespace.js: TypeError: cannot read property 'call' of undefined
 built-ins/String/prototype/trimStart/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/trimStart/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/trimStart/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/prototype/trimStart/this-value-boolean.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trimStart/this-value-line-terminator.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trimStart/this-value-not-obj-coercible.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/trimStart/this-value-number.js: TypeError: cannot read property 'call' of undefined
-built-ins/String/prototype/trimStart/this-value-symbol-typeerror.js: Test262Error: Expected SameValue(«"undefined"», «"function"») to be true
-built-ins/String/prototype/trimStart/this-value-whitespace.js: TypeError: cannot read property 'call' of undefined
 built-ins/String/prototype/valueOf/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/prototype/valueOf/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/raw/length.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/raw/name.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/String/raw/raw.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/String/raw/return-empty-string-from-empty-array-length.js: TypeError: not a function
-built-ins/String/raw/return-empty-string-if-length-is-negative-infinity.js: TypeError: not a function
-built-ins/String/raw/return-empty-string-if-length-is-not-defined.js: TypeError: not a function
-built-ins/String/raw/return-empty-string-if-length-is-undefined.js: TypeError: not a function
-built-ins/String/raw/return-empty-string-if-length-is-zero-NaN.js: TypeError: not a function
-built-ins/String/raw/return-empty-string-if-length-is-zero-boolean.js: TypeError: not a function
-built-ins/String/raw/return-empty-string-if-length-is-zero-null.js: TypeError: not a function
-built-ins/String/raw/return-empty-string-if-length-is-zero-or-less-number.js: TypeError: not a function
-built-ins/String/raw/return-empty-string-if-length-is-zero-or-less-string.js: TypeError: not a function
 built-ins/String/raw/return-the-string-value-from-template.js: parse: Unsupported: tagged templates are not supported yet
-built-ins/String/raw/return-the-string-value.js: TypeError: not a function
-built-ins/String/raw/returns-abrupt-from-next-key-toString.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/raw/returns-abrupt-from-next-key.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/raw/returns-abrupt-from-substitution.js: Test262Error: Expected a Test262Error but got a TypeError
 built-ins/String/raw/special-characters.js: parse: Unsupported: tagged templates are not supported yet
-built-ins/String/raw/substitutions-are-appended-on-same-index.js: TypeError: not a function
-built-ins/String/raw/substitutions-are-limited-to-template-raw-length.js: TypeError: not a function
-built-ins/String/raw/template-length-throws.js: Test262Error: Expected a Test262Error but got a TypeError
-built-ins/String/raw/template-raw-throws.js: Test262Error: Expected a Test262Error but got a TypeError
 built-ins/String/raw/template-substitutions-are-appended-on-same-index.js: parse: Unsupported: tagged templates are not supported yet
 built-ins/String/raw/zero-literal-segments.js: parse: Unsupported: tagged templates are not supported yet
 built-ins/StringIteratorPrototype/ancestry.js: TypeError: not a function
@@ -3629,7 +3086,7 @@ built-ins/decodeURI/S15.1.3.1_A1.9_T1.js: Test262Error: #00F0-00F7
 built-ins/decodeURI/S15.1.3.1_A1.9_T2.js: Test262Error: #00F0-00F7
 built-ins/decodeURI/S15.1.3.1_A1.9_T3.js: Test262Error: #00F0-00F7
 built-ins/decodeURI/S15.1.3.1_A2.1_T1.js: Test262Error: #0000 throws
-built-ins/decodeURI/S15.1.3.1_A2.2_T1.js: TypeError: not a function
+built-ins/decodeURI/S15.1.3.1_A2.2_T1.js: ReferenceError: 'decodeURI' is not defined
 built-ins/decodeURI/S15.1.3.1_A2.3_T1.js: ReferenceError: 'decodeURI' is not defined
 built-ins/decodeURI/S15.1.3.1_A2.4_T1.js: ReferenceError: 'decodeURI' is not defined
 built-ins/decodeURI/S15.1.3.1_A2.5_T1.js: ReferenceError: 'decodeURI' is not defined
@@ -3683,7 +3140,7 @@ built-ins/decodeURIComponent/S15.1.3.2_A1.9_T1.js: Test262Error: #00F0-00F7
 built-ins/decodeURIComponent/S15.1.3.2_A1.9_T2.js: Test262Error: #00F0-00F7
 built-ins/decodeURIComponent/S15.1.3.2_A1.9_T3.js: Test262Error: #00F0-00F7
 built-ins/decodeURIComponent/S15.1.3.2_A2.1_T1.js: Test262Error: #0000 throws
-built-ins/decodeURIComponent/S15.1.3.2_A2.2_T1.js: TypeError: not a function
+built-ins/decodeURIComponent/S15.1.3.2_A2.2_T1.js: ReferenceError: 'decodeURIComponent' is not defined
 built-ins/decodeURIComponent/S15.1.3.2_A2.3_T1.js: ReferenceError: 'decodeURIComponent' is not defined
 built-ins/decodeURIComponent/S15.1.3.2_A2.4_T1.js: ReferenceError: 'decodeURIComponent' is not defined
 built-ins/decodeURIComponent/S15.1.3.2_A2.5_T1.js: ReferenceError: 'decodeURIComponent' is not defined
@@ -3710,12 +3167,12 @@ built-ins/encodeURI/S15.1.3.3_A1.1_T2.js: Test262Error: #DC00-DFFF
 built-ins/encodeURI/S15.1.3.3_A1.2_T1.js: Test262Error: #D800-DBFF
 built-ins/encodeURI/S15.1.3.3_A1.2_T2.js: Test262Error: #D800-DBFF
 built-ins/encodeURI/S15.1.3.3_A1.3_T1.js: Test262Error: #D800-DBFF
-built-ins/encodeURI/S15.1.3.3_A2.1_T1.js: TypeError: not a function
-built-ins/encodeURI/S15.1.3.3_A2.2_T1.js: TypeError: not a function
-built-ins/encodeURI/S15.1.3.3_A2.3_T1.js: TypeError: not a function
-built-ins/encodeURI/S15.1.3.3_A2.4_T1.js: TypeError: not a function
-built-ins/encodeURI/S15.1.3.3_A2.4_T2.js: TypeError: not a function
-built-ins/encodeURI/S15.1.3.3_A2.5_T1.js: TypeError: not a function
+built-ins/encodeURI/S15.1.3.3_A2.1_T1.js: ReferenceError: 'encodeURI' is not defined
+built-ins/encodeURI/S15.1.3.3_A2.2_T1.js: ReferenceError: 'encodeURI' is not defined
+built-ins/encodeURI/S15.1.3.3_A2.3_T1.js: ReferenceError: 'encodeURI' is not defined
+built-ins/encodeURI/S15.1.3.3_A2.4_T1.js: ReferenceError: 'encodeURI' is not defined
+built-ins/encodeURI/S15.1.3.3_A2.4_T2.js: ReferenceError: 'encodeURI' is not defined
+built-ins/encodeURI/S15.1.3.3_A2.5_T1.js: ReferenceError: 'encodeURI' is not defined
 built-ins/encodeURI/S15.1.3.3_A3.1_T1.js: ReferenceError: 'encodeURI' is not defined
 built-ins/encodeURI/S15.1.3.3_A3.2_T1.js: ReferenceError: 'encodeURI' is not defined
 built-ins/encodeURI/S15.1.3.3_A3.2_T2.js: ReferenceError: 'encodeURI' is not defined
@@ -3740,12 +3197,12 @@ built-ins/encodeURIComponent/S15.1.3.4_A1.1_T2.js: Test262Error: #DC00-DFFF
 built-ins/encodeURIComponent/S15.1.3.4_A1.2_T1.js: Test262Error: #D800-DBFF
 built-ins/encodeURIComponent/S15.1.3.4_A1.2_T2.js: Test262Error: #D800-DBFF
 built-ins/encodeURIComponent/S15.1.3.4_A1.3_T1.js: Test262Error: #D800-DBFF
-built-ins/encodeURIComponent/S15.1.3.4_A2.1_T1.js: TypeError: not a function
-built-ins/encodeURIComponent/S15.1.3.4_A2.2_T1.js: TypeError: not a function
-built-ins/encodeURIComponent/S15.1.3.4_A2.3_T1.js: TypeError: not a function
-built-ins/encodeURIComponent/S15.1.3.4_A2.4_T1.js: TypeError: not a function
-built-ins/encodeURIComponent/S15.1.3.4_A2.4_T2.js: TypeError: not a function
-built-ins/encodeURIComponent/S15.1.3.4_A2.5_T1.js: TypeError: not a function
+built-ins/encodeURIComponent/S15.1.3.4_A2.1_T1.js: ReferenceError: 'encodeURIComponent' is not defined
+built-ins/encodeURIComponent/S15.1.3.4_A2.2_T1.js: ReferenceError: 'encodeURIComponent' is not defined
+built-ins/encodeURIComponent/S15.1.3.4_A2.3_T1.js: ReferenceError: 'encodeURIComponent' is not defined
+built-ins/encodeURIComponent/S15.1.3.4_A2.4_T1.js: ReferenceError: 'encodeURIComponent' is not defined
+built-ins/encodeURIComponent/S15.1.3.4_A2.4_T2.js: ReferenceError: 'encodeURIComponent' is not defined
+built-ins/encodeURIComponent/S15.1.3.4_A2.5_T1.js: ReferenceError: 'encodeURIComponent' is not defined
 built-ins/encodeURIComponent/S15.1.3.4_A3.1_T1.js: ReferenceError: 'encodeURIComponent' is not defined
 built-ins/encodeURIComponent/S15.1.3.4_A3.2_T1.js: ReferenceError: 'encodeURIComponent' is not defined
 built-ins/encodeURIComponent/S15.1.3.4_A3.2_T2.js: ReferenceError: 'encodeURIComponent' is not defined
@@ -3777,17 +3234,14 @@ built-ins/global/global-object.js: ReferenceError: 'Date' is not defined
 built-ins/global/property-descriptor.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/isFinite/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/isNaN/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/parseFloat/S15.1.2.3_A6.js: TypeError: not a function
 built-ins/parseFloat/S15.1.2.3_A7.5.js: parse: Unsupported: for-in and for-of loops are not supported yet
 built-ins/parseFloat/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
-built-ins/parseInt/S15.1.2.2_A8.js: TypeError: not a function
 built-ins/parseInt/S15.1.2.2_A9.5.js: parse: Unsupported: for-in and for-of loops are not supported yet
 built-ins/parseInt/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 built-ins/undefined/S15.1.1.3_A4.js: parse: Unsupported: for-in and for-of loops are not supported yet
 built-ins/undefined/prop-desc.js: harness propertyHelper.js: Unsupported: for-in and for-of loops are not supported yet
 harness/assert-notsamevalue-tostring.js: parse: Unsupported: async functions are not supported yet
 harness/assert-samevalue-tostring.js: parse: Unsupported: async functions are not supported yet
-harness/assert-samevalue-zeros.js: TypeError: not a function
 harness/assert-tostring.js: parse: Unsupported: async functions are not supported yet
 harness/assertRelativeDateMs.js: ReferenceError: 'Date' is not defined
 harness/asyncHelpers-asyncTest-returns-undefined.js: parse: Unsupported: async functions are not supported yet
@@ -3806,7 +3260,6 @@ harness/asyncHelpers-throwsAsync-null.js: parse: Unsupported: async functions ar
 harness/asyncHelpers-throwsAsync-primitive.js: parse: Unsupported: async functions are not supported yet
 harness/asyncHelpers-throwsAsync-resolved-error.js: parse: Unsupported: async functions are not supported yet
 harness/asyncHelpers-throwsAsync-single-arg.js: parse: Unsupported: async functions are not supported yet
-harness/compare-array-symbol.js: TypeError: not a function
 harness/deepEqual-array.js: harness deepEqual.js: Unsupported: regular expressions are not supported yet
 harness/deepEqual-circular.js: harness deepEqual.js: Unsupported: regular expressions are not supported yet
 harness/deepEqual-deep.js: harness deepEqual.js: Unsupported: regular expressions are not supported yet
@@ -7017,10 +6470,9 @@ language/expressions/prefix-decrement/S11.4.5_A6_T3.js: Test262Error: Expected t
 language/expressions/prefix-increment/S11.4.4_A6_T1.js: Test262Error: Expected a TypeError but got a Test262Error
 language/expressions/prefix-increment/S11.4.4_A6_T2.js: Test262Error: Expected a TypeError but got a Test262Error
 language/expressions/prefix-increment/S11.4.4_A6_T3.js: Test262Error: Expected true but got false
-language/expressions/property-accessors/S11.2.1_A3_T3.js: TypeError: not a function
 language/expressions/property-accessors/S11.2.1_A4_T1.js: Test262Error: #29: typeof this.Date !== "undefined"
 language/expressions/property-accessors/S11.2.1_A4_T3.js: Test262Error: #1: typeof Function.prototype === "function". Actual: object
-language/expressions/property-accessors/S11.2.1_A4_T5.js: Test262Error: #3: typeof String.fromCharCode === "function". Actual: undefined
+language/expressions/property-accessors/S11.2.1_A4_T5.js: Test262Error: #19: typeof String.prototype.split === "function". Actual: undefined
 language/expressions/property-accessors/S11.2.1_A4_T9.js: ReferenceError: 'Date' is not defined
 language/expressions/right-shift/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
 language/expressions/subtraction/order-of-evaluation.js: Test262Error: ?ToNumeric(lhs) throws. Expected a TypeError but got a Test262Error
@@ -7230,21 +6682,9 @@ language/line-terminators/invalid-regexp-lf.js: expected parse SyntaxError, got 
 language/line-terminators/invalid-regexp-ls.js: expected parse SyntaxError, got parse Unsupported: regular expressions are not supported yet
 language/line-terminators/invalid-regexp-ps.js: expected parse SyntaxError, got parse Unsupported: regular expressions are not supported yet
 language/literals/null/S7.8.1_A1_T2.js: ReferenceError: 'RegExp' is not defined
-language/literals/string/S7.8.4_A4.1_T1.js: TypeError: not a function
-language/literals/string/S7.8.4_A4.1_T2.js: TypeError: not a function
-language/literals/string/S7.8.4_A4.2_T1.js: TypeError: not a function
-language/literals/string/S7.8.4_A4.2_T3.js: TypeError: not a function
-language/literals/string/S7.8.4_A4.2_T5.js: TypeError: not a function
-language/literals/string/S7.8.4_A4.2_T7.js: TypeError: not a function
-language/literals/string/S7.8.4_A5.1_T1.js: TypeError: not a function
-language/literals/string/S7.8.4_A6.1_T1.js: TypeError: not a function
-language/literals/string/S7.8.4_A6.3_T1.js: TypeError: not a function
-language/literals/string/S7.8.4_A7.1_T1.js: TypeError: not a function
-language/literals/string/S7.8.4_A7.3_T1.js: TypeError: not a function
 language/rest-parameters/array-pattern.js: parse: Unsupported: destructuring parameters are not supported yet
 language/rest-parameters/object-pattern.js: parse: Unsupported: destructuring parameters are not supported yet
 language/rest-parameters/with-new-target.js: parse: Unsupported: classes are not supported yet
-language/source-text/6.1.js: TypeError: not a function
 language/statementList/block-regexp-literal-flags.js: parse: Unsupported: regular expressions are not supported yet
 language/statementList/block-regexp-literal.js: parse: Unsupported: regular expressions are not supported yet
 language/statementList/block-with-statment-regexp-literal-flags.js: parse: Unsupported: regular expressions are not supported yet

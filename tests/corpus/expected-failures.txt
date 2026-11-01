@@ -5,7 +5,6 @@ codemode/script-style.js: throws SyntaxError: await is not supported yet
 codemode/store.js: throws ReferenceError: 'Date' is not defined
 codemode/tool-failure.js: throws SyntaxError: await is not supported yet
 codemode/tools.js: throws SyntaxError: await is not supported yet
-console/arrays.js: throws TypeError: not a function
 console/collections.js: throws SyntaxError: regular expressions are not supported yet
 console/cycles.js: throws SyntaxError: BigInt literals are not supported yet
 console/cyclic-array.js: line 2: expected `=== throw`, got `<djs: String(array)>`
@@ -15,7 +14,6 @@ console/levels-and-text.js: throws SyntaxError: BigInt literals are not supporte
 console/numbers-in-json.js: line 4: expected `[1,"s",false]`, got `<djs: JSON.stringify needs the slow path (Slow)>`
 console/objects.js: line 5: expected `{"n":null,"k":1}`, got `<djs: JSON.stringify needs the slow path (Slow)>`
 console/primitives.js: throws SyntaxError: BigInt literals are not supported yet
-console/strings.js: throws TypeError: not a function
 console/tojson.js: throws ReferenceError: 'Date' is not defined
 dquickts/builtin/test_base64.js: throws SyntaxError: for-in and for-of loops are not supported yet
 dquickts/builtin/test_date.js: throws ReferenceError: 'Date' is not defined
@@ -24,7 +22,7 @@ dquickts/builtin/test_generator.js: throws SyntaxError: generators are not suppo
 dquickts/builtin/test_json.js: throws ReferenceError: 'JSON' is not defined
 dquickts/builtin/test_map.js: throws SyntaxError: BigInt literals are not supported yet
 dquickts/builtin/test_math.js: throws TypeError: not a function
-dquickts/builtin/test_rope.js: throws TypeError: not a function
+dquickts/builtin/test_rope.js: timeout: no result within 10.0s
 dquickts/builtin/test_typed_array.js: throws ReferenceError: 'Uint8Array' is not defined
 dquickts/language/test_class.js: throws SyntaxError: classes are not supported yet
 dquickts/language/test_constructor.js: throws SyntaxError: generators are not supported yet

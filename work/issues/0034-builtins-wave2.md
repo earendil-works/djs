@@ -77,7 +77,22 @@ the 0031 leftovers.
   (qjs 0.04 s); the interpreter's call path dominates (3.4M plain calls 0.6 s vs qjs
   0.06 s). shift on a dense 3,000-element queue went from 1.1 s to instant.
 
+### Part 2: String
+- Part 1 merged: main ..b5ad87c.
+- String (D1342): all of String.prototype except num's six regex methods and
+  [Symbol.iterator] (iterators), plus substr/trimLeft/trimRight, fromCharCode,
+  fromCodePoint, raw. Leaves in builtins/string.rs on flat views. localeCompare as qjs
+  (code point difference, no Intl, no NFC). normalize without tables: identity for
+  strings that need no tables, else TypeError "not supported yet" (3 test262 tests).
+- behavior.js compares every method with qjs on 10 subjects (proxy-free, wrapper,
+  toPrimitive objects): no mismatches. difftest builtins/string-methods.js (stress OK).
+- Results: test262 String 161 → 687 / 1,040; the rest is num's regex methods (135),
+  propertyHelper's for-in (96), regex literals (70), tagged templates, normalize.
+  built-ins 5,809, language 4,046, harness 45. difftest 82 / 173.
+
 ## Follow-ups
+- Unicode normalization tables (NFC/NFD/NFKC/NFKD): size them (qjs's libunicode has
+  them) and decide; localeCompare should then compare NFC forms like qjs.
 - Interpreter: `arr.length = v` with a non-Number v (ToNumber/ToUint32 in the set path),
   3 test262 tests.
 - Interpreter call speed (3.4M calls 0.6 s vs qjs 0.06 s) bounds every builtin-language

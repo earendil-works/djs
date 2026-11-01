@@ -1214,3 +1214,23 @@ cannot be observed:
 Builtin-language loops run at interpreter speed: 200k elements sorted with a comparator
 take 1.8 s (qjs 0.04 s); a user loop of 3.4M calls is 0.6 s vs 0.06 s, so the call path
 is the bottleneck, not the sort.
+
+## D1342: String builtins and their leaves
+date: 2026-11-01 · by: infra · issue: 0034
+builtins/string.ts implements String.prototype (except match, matchAll, replace,
+replaceAll, search, split: num's, 0033) plus substr/trimLeft/trimRight (Annex B; the
+trim aliases are the same functions), String.fromCharCode, fromCodePoint and raw. The
+work is in leaves in crates/djs-core/src/builtins/string.rs that read the flat view of a
+string (one rope flatten, then one-byte or two-byte units in place): substring (a
+one-byte source copies bytes; results narrow to one byte when they can), indexOf /
+lastIndexOf (a plain scan), case mapping (an ASCII fast path that returns the same
+string when nothing changes; else the full SpecialCasing mappings of 0011 with
+Final_Sigma, no language rules, so toLocale*Case are the same), trim, well-formedness,
+repeat (doubling with rope concatenation), fromCharCode/fromCodePoint.
+`localeCompare` is QuickJS's without Intl: the difference of the first differing code
+points (qjs normalizes to NFC first). `normalize` has no Unicode normalization tables
+yet: it returns strings that are already normalized without them (all code units below
+U+0300 for NFC, below U+00A0 for the other forms) and throws a TypeError ("not supported
+yet") for anything else; the tables are a follow-up. IsRegExp looks only at
+Symbol.match until RegExp objects exist (RegExp.prototype has @@match, so regexps
+answer true). `String.prototype[Symbol.iterator]` waits for the iterator intrinsics.
