@@ -1,7 +1,7 @@
 # 0035: Interpreter call-path performance
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0035-interp-call-perf
 depends-on: 0030 (parts 1-3 merged)
 touches: crates/djs-core/src/interp/, crates/djs-core/src/vm/ (internal only), crates/djs-bench/ (benchmarks)
