@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0033 | JSON + RegExp builtins, regex literals | num | .worktrees/0033-json-regexp-builtins |
+| 0050 | RegExp completion (\p{}, compact loops, caching, promotion) | num | .worktrees/0050-regexp-completion |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0049 | pi codemode adapter + pi's tests on djs (read-only pi-private) | infra | .worktrees/0049-pi-codemode-adapter |
 | 0048 | P3 TypeScript (type skipper, enums/namespaces, strip-types oracle) | lexer | .worktrees/0048-typescript |
@@ -39,6 +39,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0042 | Async generator runtime, function kinds, host rejections | 6e3c965 (agent heap) |
 | 0037 | P2 Promises, jobs, async host calls, suspendable frames | bd6f974 (agent heap; 3 parts) |
 | 0036 | P1-6 Destructuring + tagged templates | 234fd3c (agent lexer; +~1,940 test262) |
+| 0033 | JSON + RegExp builtins, regex literals | 8b5ccfb (agent num; active 32,303 / 32,718) |
 | 0040 | P1-7 Classes | 2d08a6c (agent lexer; test262 active 97.1%) |
 | 0044 | djs runs the shared difftest prelude | a214890 (agent infra; difftest ratchet 52 -> 38) |
 | 0045 | Proxy | 7427f4f (agent infra; Proxy 352/375; ~5,000 behavior cases vs qjs) |
@@ -102,6 +103,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 2026-11-01 (0041 done) | 62 expected failures | 18,833 / 24,120 (78.1%) |
 | 2026-11-01 (D011: generators + async iteration promoted, +8,213 tests) | | 22,605 / 32,333 (69.9%) |
 | 2026-11-01 (0040 classes done) | 52 expected failures | 31,791 / 32,718 (97.1%) |
+| 2026-11-01 (0044 + 0033 done) | 38 expected failures (before 0033) | 32,303 / 32,718 (98.7%) |
 
 ## Id reservations (in flight; check main for the authoritative list)
 
