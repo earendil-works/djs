@@ -223,3 +223,30 @@ V8 and SpiderMonkey; the spec allows either. Results differ from qjs only for in
 than 38 significant digits that are within 10^-38 (relative) of a halfway point. For parseInt
 with a radix that is neither 10 nor a power of two (where the spec allows approximation) djs
 matches qjs exactly: about 128 bits of leading digits, the rest truncated.
+
+## D1090: Copying collector
+date: 2026-11-01 · by: heap · issue: 0009
+`Heap::collect` is a Cheney copy into a fresh arena, called only explicitly at a safepoint.
+Allocation never collects; it sets `gc_pending` once the arena reaches the threshold
+`live + min(max(live, 256 KiB), (cap - live) / 2)`. That is twice the live size, but
+collections come sooner near the cap. The threshold is policy, kept outside the arena and
+recomputed on restore. The to-space is reserved up front with the full from-space size,
+which bounds live data. If the host refuses, `collect` returns `OutOfMemory` with the heap
+untouched; after that nothing can fail. The arena cap is not exceeded by the to-space, but
+host memory peaks at about twice the arena during a collection. Forwarding sets
+`gc_bits::FORWARDED` and writes the new offset into the first payload word; every cell
+kind is at least 16 bytes (asserted). References to flattened ropes are short-circuited to
+the flat string; unflattened ropes are not flattened. The result is breadth-first from the
+roots in slot order, so the layout is a function of the graph: collecting twice gives
+identical bytes. Nothing is keyed by arena offsets (atom index: content hash; property
+index: atom id), so no table is rehashed. Tracing comes only from the `Value`/`Ref` field
+types in `cells.rs`, so new cell kinds are collected automatically.
+
+## D1091: Handle table
+date: 2026-11-01 · by: heap · issue: 0009
+`Roots::HANDLES` points to a `HandleTable` cell: `LEN`, `FREE` (free list head,
+`index + 1`), `LIVE`, and a tail of 16-byte `HandleSlot { VALUE, NEXT }` records
+(`NEXT = u32::MAX` marks a live slot). `Handle(u32)` is the slot index, stable across
+collections and snapshots. `new_handle` / `get_handle` / `set_handle` / `drop_handle`;
+using a dropped handle panics. Handles (and the arena roots) are the only references
+that survive `collect`; raw `Obj`/`Str`/`Sym`/`Value`s held in Rust are stale afterwards.
