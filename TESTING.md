@@ -248,6 +248,28 @@ corpus.
   for byte on a large TS corpus (for example TypeScript's own sources). This tests erasure
   without any TS runtime test suite.
 
+### How to run the strip-types oracle
+
+```sh
+djs strip-types file.ts               # the source with its types blanked
+scripts/strip-types/oracle.sh         # the full comparison (fetches on first use)
+scripts/strip-types/update-cases.sh   # regenerate tests/strip-types/*.js
+```
+
+`scripts/strip-types/fetch.sh` installs ts-blank-space 0.9.0 with TypeScript 5.9.3 (npm)
+and extracts TypeScript 5.9.3's `src/` and `tests/cases/conformance/` into
+`vendor/strip-types` of the primary checkout. The oracle runs ts-blank-space once over
+every `.ts` file (not `.d.ts`), skipping files TypeScript reports syntax errors for and
+files ts-blank-space cannot erase (enums, namespaces with values, parameter properties,
+`<T>x`), then `djs strip-types --compare` over the rest. Every file djs accepts must
+match byte for byte; the files djs rejects are listed by message (decorators, `using`,
+`accessor`, and the conformance tests' deliberate errors that TypeScript only reports in
+its checker, such as `with` or duplicate parameters). In strip mode the parser also
+accepts module syntax (`import`/`export`), since the corpus is modules. The gate runs
+the small curated set in `tests/strip-types/` (compiler test `ts_strip_corpus`).
+
+At 0048: 4053/4802 compared files match, 0 differ, 749 are djs syntax errors.
+
 ## The gate
 
 `scripts/gate.sh` must pass before anything merges into `main`: fmt, clippy, unit tests,
