@@ -660,6 +660,15 @@ function preludeImageOf(module: WebAssembly.Module, prelude: string, data: VmSta
 }
 
 /**
+ * pi's prelude image for `prelude` and the start data `data` (tools, globals, store, heap
+ * limit, deterministic mode): the reference image of the session snapshots those inputs
+ * start (D2262). For tools that read snapshots, such as `djs heap --reference`.
+ */
+export function preludeImage(module: WebAssembly.Module, prelude: string, data: VmStartData): Uint8Array {
+  return preludeImageOf(module, prelude, data, { wasm: module, post: () => {}, shouldInterrupt: () => false }).image;
+}
+
+/**
  * Continues a session from `VmSession.snapshot()` in a new instance of the djs build that
  * wrote it. A snapshot compressed against pi's prelude image needs that image: one this
  * process has (a session with the same inputs started here), or `options.prelude` and

@@ -14,19 +14,51 @@ use djs_core::heap::{CellKind, ObjectClass};
 use djs_core::interp::RunState;
 use djs_core::value::Value;
 
+use super::Input;
 use super::diff::{Diff, Status};
-use super::graph::{Graph, NONE, has_field};
-use super::input::{Dump, kb, reference_name};
+use super::graph::{Graph, has_field};
 use super::json::J;
+use crate::container::reference_name;
 
+/// One section of the report: `key` names it in `--only` and the JSON output.
 pub struct Section {
+    pub key: String,
     pub title: String,
     pub text: String,
     pub json: J,
 }
 
 pub struct Options {
+    /// Rows per list.
     pub top: usize,
+    /// The sections to compute, by key; all when `None`.
+    pub only: Option<Vec<String>>,
+}
+
+impl Options {
+    pub fn wants(&self, key: &str) -> bool {
+        self.only
+            .as_ref()
+            .is_none_or(|o| o.iter().any(|k| k == key))
+    }
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Options {
+            top: 10,
+            only: None,
+        }
+    }
+}
+
+fn section(key: &str, title: impl Into<String>, text: String, json: J) -> Section {
+    Section {
+        key: key.into(),
+        title: title.into(),
+        text,
+        json,
+    }
 }
 
 // ---- Text helpers ----------------------------------------------------------------------
@@ -78,6 +110,10 @@ fn pct(part: u64, whole: u64) -> String {
     }
 }
 
+pub fn kb(n: usize) -> String {
+    format!("{:.1}", n as f64 / 1024.0)
+}
+
 fn kbu(n: u64) -> String {
     kb(n as usize)
 }
@@ -123,7 +159,8 @@ impl Tally {
 
 // ---- Sections ---------------------------------------------------------------------------
 
-pub fn overview(path: &str, dump: &Dump, g: &Graph, collected: Option<u32>) -> Section {
+pub fn overview(input: &Input, g: &Graph, collected: Option<u32>) -> Section {
+    let path = input.name;
     let a = g.heap.arena();
     let len = a.len() as u64;
     let build: u32 = a.get(0, Roots::BUILD);
@@ -146,10 +183,10 @@ pub fn overview(path: &str, dump: &Dump, g: &Graph, collected: Option<u32>) -> S
     let mut t = String::new();
     t.push_str(&format!(
         "  file: {path} ({} KB): {}\n",
-        kb(dump.file_len),
-        dump.format
+        kb(input.file_len),
+        input.format
     ));
-    if let Some(c) = &dump.container {
+    if let Some(c) = &input.header {
         t.push_str(&format!(
             "  container: build {:08x}, reference {} {:016x} ({} KB)\n",
             c.build,
@@ -158,7 +195,7 @@ pub fn overview(path: &str, dump: &Dump, g: &Graph, collected: Option<u32>) -> S
             kb(c.reference_len as usize)
         ));
     }
-    if let Some(m) = &dump.meta {
+    if let Some(m) = &input.meta {
         let short: String = m.chars().take(200).collect();
         t.push_str(&format!(
             "  metadata: {short}{}\n",
@@ -192,11 +229,11 @@ pub fn overview(path: &str, dump: &Dump, g: &Graph, collected: Option<u32>) -> S
     ));
     let json = J::obj(vec![
         ("file", path.into()),
-        ("format", dump.format.clone().into()),
-        ("file_bytes", dump.file_len.into()),
+        ("format", input.format.clone().into()),
+        ("file_bytes", input.file_len.into()),
         (
             "container",
-            match &dump.container {
+            match &input.header {
                 Some(c) => J::obj(vec![
                     ("app", c.app_name().into()),
                     (
@@ -215,7 +252,7 @@ pub fn overview(path: &str, dump: &Dump, g: &Graph, collected: Option<u32>) -> S
                 None => J::Null,
             },
         ),
-        ("meta", dump.meta.clone().into()),
+        ("meta", input.meta.clone().into()),
         ("image_bytes", len.into()),
         ("cells", g.cells.len().into()),
         ("build", format!("{build:08x}").into()),
@@ -227,11 +264,7 @@ pub fn overview(path: &str, dump: &Dump, g: &Graph, collected: Option<u32>) -> S
         ("old_cells", old_cells.into()),
         ("old_bytes", old_bytes.into()),
     ]);
-    Section {
-        title: "summary".into(),
-        text: t,
-        json,
-    }
+    section("summary", "summary", t, json)
 }
 
 pub fn kinds(g: &Graph) -> Section {
@@ -299,11 +332,7 @@ pub fn kinds(g: &Graph) -> Section {
         ),
         ("classes", classes.json()),
     ]);
-    Section {
-        title: "cells by kind and class".into(),
-        text: t,
-        json,
-    }
+    section("kinds", "cells by kind and class", t, json)
 }
 
 pub fn diff_section(name: &str, rg: &Graph, g: &Graph, d: &Diff, o: &Options) -> Section {
@@ -510,11 +539,7 @@ pub fn diff_section(name: &str, rg: &Graph, g: &Graph, d: &Diff, o: &Options) ->
             ),
         ),
     ]);
-    Section {
-        title: format!("diff against {name}"),
-        text: t,
-        json,
-    }
+    section("diff", format!("diff against {name}"), t, json)
 }
 
 pub fn largest(g: &Graph, o: &Options) -> Section {
@@ -571,11 +596,7 @@ pub fn largest(g: &Graph, o: &Options) -> Section {
             J::Arr(by_retained.iter().take(o.top).map(|&i| item(i)).collect()),
         ),
     ]);
-    Section {
-        title: "largest".into(),
-        text: t,
-        json,
-    }
+    section("largest", "largest cells and retained sizes", t, json)
 }
 
 pub fn strings(g: &Graph, o: &Options) -> Section {
@@ -712,11 +733,7 @@ pub fn strings(g: &Graph, o: &Options) -> Section {
             ),
         ),
     ]);
-    Section {
-        title: "strings".into(),
-        text: t,
-        json,
-    }
+    section("strings", "strings", t, json)
 }
 
 pub fn shapes(g: &Graph, o: &Options) -> Section {
@@ -815,11 +832,7 @@ pub fn shapes(g: &Graph, o: &Options) -> Section {
             ),
         ),
     ]);
-    Section {
-        title: "shapes".into(),
-        text: t,
-        json,
-    }
+    section("shapes", "shapes", t, json)
 }
 
 pub fn functions(g: &Graph, o: &Options) -> Section {
@@ -957,11 +970,7 @@ pub fn functions(g: &Graph, o: &Options) -> Section {
         ),
         ("builtin_closures", builtins.json()),
     ]);
-    Section {
-        title: "functions".into(),
-        text: t,
-        json,
-    }
+    section("functions", "functions and bytecode", t, json)
 }
 
 /// What a waiting VM holds: its run state, queued work, pending host calls, promises and
@@ -970,11 +979,12 @@ pub fn session(g: &Graph, o: &Options) -> Section {
     let a = g.heap.arena();
     let interp: Ref = a.get(0, Roots::INTERP);
     let Some(it) = interp.get() else {
-        return Section {
-            title: "session".into(),
-            text: "  no interpreter state\n".into(),
-            json: J::Null,
-        };
+        return section(
+            "session",
+            "session: what the VM holds while it waits",
+            "  no interpreter state\n".into(),
+            J::Null,
+        );
     };
     let state = RunState::from_u32(a.get(it, Interp::STATE));
     let sp: u32 = a.get(it, Interp::SP);
@@ -1064,7 +1074,8 @@ pub fn session(g: &Graph, o: &Options) -> Section {
                         Some((l, col)) => format!("{script}:{l}:{col}"),
                         None => script,
                     };
-                    activations.push((kind, st, name, at, slots, g.path(i as u32)));
+                    let locals = g.frame_locals(c.offset);
+                    activations.push((kind, st, name, at, slots, g.path(i as u32), locals));
                 }
                 _ => {}
             },
@@ -1103,7 +1114,7 @@ pub fn session(g: &Graph, o: &Options) -> Section {
         let rows: Vec<Vec<String>> = activations
             .iter()
             .take(o.top.max(20))
-            .map(|(k, s, n, at, slots, p)| {
+            .map(|(k, s, n, at, slots, p, _)| {
                 vec![
                     k.to_string(),
                     s.to_string(),
@@ -1118,6 +1129,12 @@ pub fn session(g: &Graph, o: &Options) -> Section {
             &["kind", "state", "function", "at", "slots", "path"],
             &rows,
         ));
+        for (_, _, n, at, _, _, locals) in activations.iter().take(o.top.max(20)) {
+            if !locals.is_empty() {
+                let l: Vec<String> = locals.iter().map(|(k, v)| format!("{k} = {v}")).collect();
+                t.push_str(&format!("  {n} at {at} holds: {}\n", l.join(", ")));
+            }
+        }
     }
     let json = J::obj(vec![
         ("run_state", format!("{state:?}").into()),
@@ -1157,7 +1174,7 @@ pub fn session(g: &Graph, o: &Options) -> Section {
             J::Arr(
                 activations
                     .iter()
-                    .map(|(k, s, n, at, slots, p)| {
+                    .map(|(k, s, n, at, slots, p, locals)| {
                         J::obj(vec![
                             ("kind", (*k).into()),
                             ("state", (*s).into()),
@@ -1165,16 +1182,25 @@ pub fn session(g: &Graph, o: &Options) -> Section {
                             ("at", at.clone().into()),
                             ("frame_slots", (*slots).into()),
                             ("path", p.clone().into()),
+                            (
+                                "locals",
+                                J::Obj(
+                                    locals
+                                        .iter()
+                                        .map(|(k, v)| (k.clone(), v.clone().into()))
+                                        .collect(),
+                                ),
+                            ),
                         ])
                     })
                     .collect(),
             ),
         ),
     ]);
-    let _ = NONE;
-    Section {
-        title: "session".into(),
-        text: t,
+    section(
+        "session",
+        "session: what the VM holds while it waits",
+        t,
         json,
-    }
+    )
 }

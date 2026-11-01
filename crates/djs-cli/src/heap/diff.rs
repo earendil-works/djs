@@ -84,6 +84,45 @@ fn compatible(rg: &Graph, r: u32, hg: &Graph, h: u32) -> bool {
     }
 }
 
+/// The pairs of targets of two matched cells: slot by slot, except a shape's transition
+/// list, whose children are sorted by key, so one inserted transition shifts the rest:
+/// those pair by the key and flags they add.
+fn children(rg: &Graph, r: u32, hg: &Graph, h: u32) -> Vec<(u32, u32)> {
+    let targets = |g: &Graph, c: u32| -> Vec<Option<u32>> {
+        slots(g, g.cell(c).offset)
+            .into_iter()
+            .map(|s| g.heap.slot_target(s).and_then(|t| g.index(t)))
+            .collect()
+    };
+    let (rs, hs) = (targets(rg, r), targets(hg, h));
+    let shapes = |g: &Graph, ts: &[Option<u32>]| {
+        g.cell(if std::ptr::eq(g, rg) { r } else { h }).kind == CellKind::RefArray
+            && ts
+                .iter()
+                .flatten()
+                .all(|&t| g.cell(t).kind == CellKind::Shape)
+    };
+    if shapes(rg, &rs) && shapes(hg, &hs) {
+        let sig = |g: &Graph, t: u32| g.shape_signature(g.cell(t).offset);
+        let mut out = Vec::new();
+        for &ht in hs.iter().flatten() {
+            let want = sig(hg, ht);
+            if let Some(&rt) = rs
+                .iter()
+                .flatten()
+                .find(|&&rt| want.is_some() && sig(rg, rt) == want)
+            {
+                out.push((rt, ht));
+            }
+        }
+        return out;
+    }
+    rs.into_iter()
+        .zip(hs)
+        .filter_map(|(a, b)| Some((a?, b?)))
+        .collect()
+}
+
 pub fn diff(rg: &Graph, hg: &Graph) -> Diff {
     let n = hg.cells.len();
     let mut img_to_ref = vec![NONE; n];
@@ -92,15 +131,7 @@ pub fn diff(rg: &Graph, hg: &Graph) -> Diff {
     ref_to_img[0] = 0;
     let mut queue = VecDeque::from([(0u32, 0u32)]);
     while let Some((r, h)) = queue.pop_front() {
-        let rs = slots(rg, rg.cell(r).offset);
-        let hs = slots(hg, hg.cell(h).offset);
-        for (a, b) in rs.iter().zip(hs.iter()) {
-            let (Some(rt), Some(ht)) = (
-                rg.heap.slot_target(*a).and_then(|t| rg.index(t)),
-                hg.heap.slot_target(*b).and_then(|t| hg.index(t)),
-            ) else {
-                continue;
-            };
+        for (rt, ht) in children(rg, r, hg, h) {
             if ref_to_img[rt as usize] != NONE || img_to_ref[ht as usize] != NONE {
                 continue;
             }

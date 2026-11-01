@@ -148,9 +148,23 @@ interface Point {
   idle: number;
   image: Uint8Array;
   container: number;
+  /** The snapshot container itself, for `djs heap`. */
+  bytes: Uint8Array;
   snapshotMs: number;
   resumeMs: number;
   plainResumeMs: number;
+}
+
+/** The cases' start data: `djs heap` needs it to rebuild their prelude image (start.json). */
+function startData(code: string) {
+  return {
+    code,
+    tools: TOOLS.map((name) => ({ name, jsName: name, description: `The ${name} tool.` })),
+    globals: [],
+    memoryLimitBytes: undefined,
+    store: {},
+    deterministic: { startedAt: 1_762_000_000_000, seed: 42 },
+  };
 }
 
 /** Runs one case; at every idle point snapshot(), then continue on resumeVm(bytes). */
@@ -188,7 +202,7 @@ async function runCase(code: string): Promise<{ points: Point[]; end: WorkerToHo
     const resumeMs = performance.now() - t;
     session.dispose();
     session = resumed;
-    points.push({ idle: points.length, image: img, container: bytes.length, snapshotMs, resumeMs, plainResumeMs });
+    points.push({ idle: points.length, image: img, container: bytes.length, bytes, snapshotMs, resumeMs, plainResumeMs });
     const call = queue.shift()!;
     const r = tool(call.name, call.args === undefined ? {} : JSON.parse(call.args));
     seq++;
@@ -204,14 +218,7 @@ async function runCase(code: string): Promise<{ points: Point[]; end: WorkerToHo
   session = await startVm({
     ...hooks,
     prelude: PRELUDE_SOURCE,
-    data: {
-      code,
-      tools: TOOLS.map((name) => ({ name, jsName: name, description: `The ${name} tool.` })),
-      globals: [],
-      memoryLimitBytes: undefined,
-      store: {},
-      deterministic: { startedAt: 1_762_000_000_000, seed: 42 },
-    },
+    data: startData(code),
   });
   const end = await ended;
   session.dispose();
@@ -255,11 +262,12 @@ for (const path of cases) {
   const f = (k: keyof Point) => points.map((p) => p[k] as number);
   const imgs = points.map((p) => p.image.length);
   report += `| ${name} | ${points.length} | ${kb(med(imgs))} / ${kb(Math.max(...imgs))} | ${kb(med(f("container")))} / ${kb(Math.max(...f("container")))} | ${ms(med(f("snapshotMs")))} / ${ms(Math.max(...f("snapshotMs")))} | ${ms(med(f("resumeMs")))} / ${ms(Math.max(...f("resumeMs")))} | ${ms(med(f("plainResumeMs")))} |\n`;
-  writeFileSync(join(out, `${name}.points.json`), JSON.stringify(points.map(({ image, ...p }) => ({ ...p, image: image.length }))));
+  writeFileSync(join(out, `${name}.points.json`), JSON.stringify(points.map(({ image, bytes, ...p }) => ({ ...p, image: image.length }))));
   writeFileSync(join(out, `${name}-last.img`), points[points.length - 1].image);
   const maxAt = imgs.indexOf(Math.max(...imgs));
   for (const i of [...new Set([0, maxAt, points.length - 1])]) {
     const img = points[i].image;
+    writeFileSync(join(out, `${name}-${i}.djsn`), points[i].bytes);
     sweeps += `\n${name} idle ${i}: image ${kb(img.length)} KB, container ${kb(points[i].container)} KB\n`;
     sweeps += "| dictionary | level | window | size KB | compress ms | decompress ms |\n| --- | ---: | --- | ---: | ---: | ---: |\n";
     for (const [dname, dict] of [["prelude image", preludeImage], ["base image", base], ["none", undefined]] as const) {
@@ -295,5 +303,6 @@ for (const [label, setup] of [
 }
 report += `\nprelude image ${kb(preludeImage!.length)} KB\n${sweeps}`;
 writeFileSync(join(out, "prelude.img"), preludeImage!);
+writeFileSync(join(out, "start.json"), JSON.stringify(startData("")));
 writeFileSync(join(out, "wasm-report.md"), report);
 console.log(report);

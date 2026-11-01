@@ -2,6 +2,7 @@
 
 use std::fmt::Write;
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum J {
     Null,
     Bool(bool),
@@ -126,5 +127,43 @@ impl From<bool> for J {
 impl<T: Into<J>> From<Option<T>> for J {
     fn from(o: Option<T>) -> J {
         o.map_or(J::Null, Into::into)
+    }
+}
+
+#[cfg(test)]
+impl J {
+    /// The value at a path of object keys and array indexes (tests).
+    pub fn at(&self, path: &[&str]) -> &J {
+        let mut cur = self;
+        for p in path {
+            cur = match cur {
+                J::Obj(fields) => fields
+                    .iter()
+                    .find(|(k, _)| k == p)
+                    .map(|(_, v)| v)
+                    .unwrap_or(&J::Null),
+                J::Arr(items) => p
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|i| items.get(i))
+                    .unwrap_or(&J::Null),
+                _ => &J::Null,
+            };
+        }
+        cur
+    }
+
+    pub fn num(&self) -> f64 {
+        match self {
+            J::Num(n) => *n,
+            _ => f64::NAN,
+        }
+    }
+
+    pub fn str(&self) -> &str {
+        match self {
+            J::Str(s) => s,
+            _ => "",
+        }
     }
 }

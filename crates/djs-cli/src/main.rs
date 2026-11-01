@@ -1,3 +1,4 @@
+mod container;
 mod disasm;
 mod heap;
 mod repl;

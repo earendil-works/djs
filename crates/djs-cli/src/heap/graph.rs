@@ -12,6 +12,9 @@ use djs_core::heap::cells::{
 use djs_core::heap::layout::{CellLayout, Ref};
 use djs_core::heap::walk::{CellInfo, Slot};
 use djs_core::heap::{Atom, CellKind, Heap, ObjectClass};
+// The frame record: callee, this, arguments, this header, locals, operands
+// (docs/compiler.md 7.1); a suspended activation keeps a copy of it.
+use djs_core::interp::frame::HEADER;
 use djs_core::value::{Str, Value, tag};
 
 pub const NONE: u32 = u32::MAX;
@@ -366,6 +369,24 @@ impl<'h> Graph<'h> {
         (1 + 2 * i < n).then(|| a.read::<u32>(U32Array::DATA.at(d, 1 + 2 * i)))
     }
 
+    /// What tells a shape from its siblings: its property count and its last
+    /// descriptor's key and flags.
+    pub fn shape_signature(&self, shape: u32) -> Option<(u32, u32, u32)> {
+        let a = self.heap.arena();
+        let count: u32 = a.get(shape, Shape::COUNT);
+        let descs: Ref = a.get(shape, Shape::DESCS);
+        let d = descs.get()?;
+        let n: u32 = a.get(d, U32Array::LEN);
+        let at = 1 + 2 * count.checked_sub(1)?;
+        (at + 1 < n).then(|| {
+            (
+                count,
+                a.read::<u32>(U32Array::DATA.at(d, at)),
+                a.read::<u32>(U32Array::DATA.at(d, at + 1)),
+            )
+        })
+    }
+
     /// The keys of a shape, in order.
     pub fn shape_keys(&self, shape: u32) -> Vec<u32> {
         let count: u32 = self.heap.arena().get(shape, Shape::COUNT);
@@ -530,20 +551,77 @@ impl<'h> Graph<'h> {
                 "<this>".to_string()
             } else if k < hp {
                 format!("<arg{}>", k - 2)
-            } else if k < hp + 5 {
+            } else if k < hp + HEADER {
                 continue;
-            } else if k < hp + 5 + locals {
-                let j = (k - hp - 5) as usize;
+            } else if k < hp + HEADER + locals {
+                let j = (k - hp - HEADER) as usize;
                 match names.get(j) {
                     Some(n) if !n.is_empty() => format!("<frame>.{n}"),
                     _ => format!("<frame>.local{j}"),
                 }
             } else {
-                format!("<frame>.operand{}", k - hp - 5 - locals)
+                format!("<frame>.operand{}", k - hp - HEADER - locals)
             };
             out.push((label, t));
         }
         out
+    }
+
+    /// The named locals of a suspended activation's frame and what they hold.
+    pub fn frame_locals(&self, generator: u32) -> Vec<(String, String)> {
+        let a = self.heap.arena();
+        let frame: Value = a.read(Object::SLOTS.at(generator, 1));
+        let Some(fr) = frame.ref_offset() else {
+            return Vec::new();
+        };
+        let hp = a
+            .read::<Value>(Object::SLOTS.at(generator, 3))
+            .as_int()
+            .unwrap_or(0) as u32;
+        let len: u32 = a.get(fr, ValueArray::LEN);
+        let callee: Value = a.read(ValueArray::VALUES.at(fr, 0));
+        let Some(t) = callee
+            .as_object()
+            .and_then(|f| self.closure_template(f.offset()))
+        else {
+            return Vec::new();
+        };
+        let locals = a.get::<u16>(t, FuncTemplate::LOCALS) as u32;
+        let names = self.template_names(t);
+        (0..locals)
+            .filter(|j| hp + HEADER + j < len)
+            .filter_map(|j| {
+                let name = names.get(j as usize)?;
+                if name.is_empty() || name.starts_with('<') {
+                    return None;
+                }
+                let v: Value = a.read(ValueArray::VALUES.at(fr, hp + HEADER + j));
+                Some((name.clone(), self.describe(v)))
+            })
+            .collect()
+    }
+
+    /// A short description of a value: `undefined`, `42`, `"text"`, `Array`, ...
+    pub fn describe(&self, v: Value) -> String {
+        use djs_core::value::Kind;
+        match v.kind() {
+            Kind::Uninitialized => "<uninitialized>".into(),
+            Kind::Number => v.as_number().map(|n| n.to_string()).unwrap_or_default(),
+            Kind::Bool => format!("{}", v.as_bool().unwrap_or(false)),
+            Kind::String => self.string_preview(v.ref_offset().unwrap_or(0), 24),
+            Kind::Object => {
+                let o = v.as_object().unwrap().offset();
+                match self.class(o) {
+                    Some(ObjectClass::Function) => match self.closure_template(o) {
+                        Some(t) => format!("function {}", self.template_name(t)),
+                        None => "function".into(),
+                    },
+                    Some(c) => format!("{c:?}"),
+                    None => "object".into(),
+                }
+            }
+            k => format!("{k:?}").to_lowercase(),
+        }
     }
 
     /// The label of the reference at `rel` bytes into cell `c`.
@@ -603,6 +681,23 @@ impl<'h> Graph<'h> {
             CellKind::BoxCell => String::new(),
             CellKind::Realm => match tail {
                 Some((i, _)) => format!("%intrinsic{i}"),
+                None => generic(),
+            },
+            // A shape's transitions: the child by the key it adds.
+            CellKind::RefArray => match tail {
+                Some((i, _)) => {
+                    let t: Ref = a.read(c.offset + rel);
+                    match t
+                        .get()
+                        .filter(|&t| self.heap.cell_kind(t) == CellKind::Shape)
+                        .and_then(|t| self.shape_signature(t))
+                    {
+                        Some((_, key, _)) => {
+                            format!("{{{}}}", self.key_label(key).trim_start_matches('.'))
+                        }
+                        None => format!("[{i}]"),
+                    }
+                }
                 None => generic(),
             },
             CellKind::HandleTable => match tail {
