@@ -1,7 +1,7 @@
 # 0030: P1-5 runtime: for-in ops, array iterators, symbol-keyed installation
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0030-p1-iteration-runtime
 depends-on: 0028 (done), 0029 (for the .d.ts declarations and the iteration ops)
 touches: crates/djs-core/src/interp/, crates/djs-core/src/vm/, crates/djs-core/src/heap/ (additive)
