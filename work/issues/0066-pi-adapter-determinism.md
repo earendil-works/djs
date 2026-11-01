@@ -1,7 +1,7 @@
 # 0066: pi adapter determinism fixes
 
-status: open
-agent: -
+status: in-progress
+agent: determinism
 branch: issue/0066-pi-adapter-determinism
 depends-on: -
 touches: js/pi/, js/test/, docs/host.md
