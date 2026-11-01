@@ -822,7 +822,15 @@ impl<'a> FnChecker<'a> {
                 self.expect_type(c, Type::Bool, "condition");
                 let at = self.expr(a);
                 let bt = self.expr(b);
-                if assignable(at, bt) {
+                if let (Type::IntLit(a), Type::IntLit(b)) = (at, bt) {
+                    // Two integer literals adapt where used: keep the one that limits the
+                    // target most (a negative one for u32, else the larger).
+                    Type::IntLit(if a.min(b) < 0.0 { a.min(b) } else { a.max(b) })
+                } else if let (Type::IntLit(_) | Type::NumLit, Type::IntLit(_) | Type::NumLit) =
+                    (at, bt)
+                {
+                    Type::NumLit
+                } else if assignable(at, bt) {
                     bt
                 } else if assignable(bt, at) {
                     at

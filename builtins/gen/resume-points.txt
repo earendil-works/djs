@@ -51,6 +51,315 @@ ArrayPrototypePush: reentrant (Array.prototype.push)
   builtins/array.ts:202:5  Set (intrinsic)
   builtins/array.ts:205:3  Set (intrinsic)
 
+RelativeIndex: reentrant
+  builtins/array.ts:219:20  ToIntegerOrInfinity (builtin)
+
+RequireCallable: leaf
+
+CheckLength: leaf
+
+ArrayCreateChecked: leaf
+
+ArrayOf: reentrant (Array.of)
+  builtins/array.ts:257:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:258:40  Construct (intrinsic)
+  builtins/array.ts:260:37  Get (intrinsic)
+  builtins/array.ts:260:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:262:3  Set (intrinsic)
+
+ArrayFrom: reentrant (Array.from)
+  builtins/array.ts:276:32  GetMethod (builtin)
+  builtins/array.ts:285:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:288:20  Construct (intrinsic)
+  builtins/array.ts:288:38  Construct (intrinsic)
+  builtins/array.ts:291:27  Get (intrinsic)
+  builtins/array.ts:292:42  Call (intrinsic)
+  builtins/array.ts:293:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:295:3  Set (intrinsic)
+
+ArraySpecies: leaf (get Array[Symbol.species])
+
+ArrayPrototypeAt: reentrant (Array.prototype.at)
+  builtins/array.ts:315:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:316:20  ToIntegerOrInfinity (builtin)
+  builtins/array.ts:321:10  Get (intrinsic)
+
+ArrayPrototypeLastIndexOf: reentrant (Array.prototype.lastIndexOf)
+  builtins/array.ts:330:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:335:7  LengthOfArrayLike (builtin)
+  builtins/array.ts:336:29  Get (intrinsic)
+  builtins/array.ts:336:9  ToIntegerOrInfinity (builtin)
+  builtins/array.ts:348:9  HasProperty (intrinsic)
+  builtins/array.ts:349:11  Get (intrinsic)
+
+FindViaPredicate: reentrant
+  builtins/array.ts:365:27  Get (intrinsic)
+  builtins/array.ts:366:19  Call (intrinsic)
+
+ArrayPrototypeFind: reentrant (Array.prototype.find)
+  builtins/array.ts:382:30  LengthOfArrayLike (builtin)
+  builtins/array.ts:382:10  FindViaPredicate (builtin)
+
+ArrayPrototypeFindIndex: reentrant (Array.prototype.findIndex)
+  builtins/array.ts:391:30  LengthOfArrayLike (builtin)
+  builtins/array.ts:391:10  FindViaPredicate (builtin)
+
+ArrayPrototypeFindLast: reentrant (Array.prototype.findLast)
+  builtins/array.ts:400:30  LengthOfArrayLike (builtin)
+  builtins/array.ts:400:10  FindViaPredicate (builtin)
+
+ArrayPrototypeFindLastIndex: reentrant (Array.prototype.findLastIndex)
+  builtins/array.ts:409:30  LengthOfArrayLike (builtin)
+  builtins/array.ts:409:10  FindViaPredicate (builtin)
+
+EveryOrSome: reentrant
+  builtins/array.ts:414:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:417:9  HasProperty (intrinsic)
+  builtins/array.ts:418:62  Get (intrinsic)
+  builtins/array.ts:418:36  Call (intrinsic)
+
+ArrayPrototypeEvery: reentrant (Array.prototype.every)
+  builtins/array.ts:432:10  EveryOrSome (builtin)
+
+ArrayPrototypeSome: reentrant (Array.prototype.some)
+  builtins/array.ts:440:10  EveryOrSome (builtin)
+
+ArrayPrototypeFilter: reentrant (Array.prototype.filter)
+  builtins/array.ts:449:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:451:18  ArraySpeciesCreate (builtin)
+  builtins/array.ts:454:9  HasProperty (intrinsic)
+  builtins/array.ts:455:29  Get (intrinsic)
+  builtins/array.ts:456:21  Call (intrinsic)
+  builtins/array.ts:457:9  CreateDataPropertyOrThrow (intrinsic)
+
+Reduce: reentrant
+  builtins/array.ts:467:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:471:7  LengthOfArrayLike (builtin)
+  builtins/array.ts:472:19  Get (intrinsic)
+  builtins/array.ts:477:11  HasProperty (intrinsic)
+  builtins/array.ts:478:23  Get (intrinsic)
+  builtins/array.ts:489:9  HasProperty (intrinsic)
+  builtins/array.ts:490:62  Get (intrinsic)
+  builtins/array.ts:490:21  Call (intrinsic)
+
+ArrayPrototypeReduce: reentrant (Array.prototype.reduce)
+  builtins/array.ts:502:10  Reduce (builtin)
+
+ArrayPrototypeReduceRight: reentrant (Array.prototype.reduceRight)
+  builtins/array.ts:511:10  Reduce (builtin)
+
+IsConcatSpreadable: reentrant
+  builtins/array.ts:521:29  Get (intrinsic)
+
+ArrayPrototypeConcat: reentrant (Array.prototype.concat)
+  builtins/array.ts:535:18  ArraySpeciesCreate (builtin)
+  builtins/array.ts:537:22  LengthOfArrayLike (builtin)
+  builtins/array.ts:539:34  Get (intrinsic)
+  builtins/array.ts:540:9  IsConcatSpreadable (builtin)
+  builtins/array.ts:542:24  LengthOfArrayLike (builtin)
+  builtins/array.ts:545:13  HasProperty (intrinsic)
+  builtins/array.ts:546:43  Get (intrinsic)
+  builtins/array.ts:546:11  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:552:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:556:3  Set (intrinsic)
+
+ArrayPrototypeSlice: reentrant (Array.prototype.slice)
+  builtins/array.ts:566:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:567:18  RelativeIndex (builtin)
+  builtins/array.ts:568:20  RelativeIndex (builtin)
+  builtins/array.ts:570:18  ArraySpeciesCreate (builtin)
+  builtins/array.ts:573:9  HasProperty (intrinsic)
+  builtins/array.ts:574:39  Get (intrinsic)
+  builtins/array.ts:574:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:578:3  Set (intrinsic)
+
+ArrayPrototypeSplice: reentrant (Array.prototype.splice)
+  builtins/array.ts:590:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:591:25  LengthOfArrayLike (builtin)
+  builtins/array.ts:592:42  Get (intrinsic)
+  builtins/array.ts:592:28  RelativeIndex (builtin)
+  builtins/array.ts:598:41  Get (intrinsic)
+  builtins/array.ts:598:21  ToIntegerOrInfinity (builtin)
+  builtins/array.ts:605:18  ArraySpeciesCreate (builtin)
+  builtins/array.ts:608:9  HasProperty (intrinsic)
+  builtins/array.ts:609:39  Get (intrinsic)
+  builtins/array.ts:609:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:612:3  Set (intrinsic)
+  builtins/array.ts:613:3  MoveElements (builtin)
+  builtins/array.ts:615:29  Get (intrinsic)
+  builtins/array.ts:615:5  Set (intrinsic)
+  builtins/array.ts:617:3  Set (intrinsic)
+
+MoveElements: reentrant
+  builtins/array.ts:631:11  HasProperty (intrinsic)
+  builtins/array.ts:632:20  Get (intrinsic)
+  builtins/array.ts:632:9  Set (intrinsic)
+  builtins/array.ts:634:9  DeletePropertyOrThrow (intrinsic)
+  builtins/array.ts:638:7  DeletePropertyOrThrow (intrinsic)
+  builtins/array.ts:644:11  HasProperty (intrinsic)
+  builtins/array.ts:645:20  Get (intrinsic)
+  builtins/array.ts:645:9  Set (intrinsic)
+  builtins/array.ts:647:9  DeletePropertyOrThrow (intrinsic)
+
+ArrayPrototypeCopyWithin: reentrant (Array.prototype.copyWithin)
+  builtins/array.ts:659:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:660:17  RelativeIndex (builtin)
+  builtins/array.ts:661:19  RelativeIndex (builtin)
+  builtins/array.ts:662:20  RelativeIndex (builtin)
+  builtins/array.ts:671:9  HasProperty (intrinsic)
+  builtins/array.ts:672:18  Get (intrinsic)
+  builtins/array.ts:672:7  Set (intrinsic)
+  builtins/array.ts:674:7  DeletePropertyOrThrow (intrinsic)
+
+ArrayPrototypeFill: reentrant (Array.prototype.fill)
+  builtins/array.ts:689:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:690:18  RelativeIndex (builtin)
+  builtins/array.ts:691:20  RelativeIndex (builtin)
+  builtins/array.ts:693:5  Set (intrinsic)
+
+ArrayPrototypeReverse: reentrant (Array.prototype.reverse)
+  builtins/array.ts:704:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:708:34  HasProperty (intrinsic)
+  builtins/array.ts:711:20  Get (intrinsic)
+  builtins/array.ts:713:34  HasProperty (intrinsic)
+  builtins/array.ts:716:20  Get (intrinsic)
+  builtins/array.ts:719:7  Set (intrinsic)
+  builtins/array.ts:721:7  DeletePropertyOrThrow (intrinsic)
+  builtins/array.ts:724:7  Set (intrinsic)
+  builtins/array.ts:726:7  DeletePropertyOrThrow (intrinsic)
+
+ArrayPrototypePop: reentrant (Array.prototype.pop)
+  builtins/array.ts:738:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:740:5  Set (intrinsic)
+  builtins/array.ts:744:26  Get (intrinsic)
+  builtins/array.ts:745:3  DeletePropertyOrThrow (intrinsic)
+  builtins/array.ts:746:3  Set (intrinsic)
+
+ArrayPrototypeShift: reentrant (Array.prototype.shift)
+  builtins/array.ts:756:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:758:5  Set (intrinsic)
+  builtins/array.ts:761:24  Get (intrinsic)
+  builtins/array.ts:762:3  MoveElements (builtin)
+  builtins/array.ts:763:3  Set (intrinsic)
+
+ArrayPrototypeUnshift: reentrant (Array.prototype.unshift)
+  builtins/array.ts:774:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:775:25  LengthOfArrayLike (builtin)
+  builtins/array.ts:778:5  MoveElements (builtin)
+  builtins/array.ts:780:17  Get (intrinsic)
+  builtins/array.ts:780:7  Set (intrinsic)
+  builtins/array.ts:783:3  Set (intrinsic)
+
+FlattenIntoArray: reentrant
+  builtins/array.ts:791:9  HasProperty (intrinsic)
+  builtins/array.ts:792:28  Get (intrinsic)
+  builtins/array.ts:794:19  Call (intrinsic)
+  builtins/array.ts:798:51  LengthOfArrayLike (builtin)
+  builtins/array.ts:798:23  FlattenIntoArray (builtin)
+  builtins/array.ts:801:9  CreateDataPropertyOrThrow (intrinsic)
+
+ArrayPrototypeFlat: reentrant (Array.prototype.flat)
+  builtins/array.ts:815:26  LengthOfArrayLike (builtin)
+  builtins/array.ts:818:16  ToIntegerOrInfinity (builtin)
+  builtins/array.ts:823:18  ArraySpeciesCreate (builtin)
+  builtins/array.ts:824:3  FlattenIntoArray (builtin)
+
+ArrayPrototypeFlatMap: reentrant (Array.prototype.flatMap)
+  builtins/array.ts:834:26  LengthOfArrayLike (builtin)
+  builtins/array.ts:836:18  ArraySpeciesCreate (builtin)
+  builtins/array.ts:837:3  FlattenIntoArray (builtin)
+
+SortCompare: reentrant
+  builtins/array.ts:852:29  Call (intrinsic)
+  builtins/array.ts:852:20  ToNumber (builtin)
+  builtins/array.ts:855:19  ToString (builtin)
+  builtins/array.ts:856:29  ToString (builtin)
+
+SortList: reentrant
+  builtins/array.ts:877:48  Get (intrinsic)
+  builtins/array.ts:877:61  Get (intrinsic)
+  builtins/array.ts:877:36  SortCompare (builtin)
+  builtins/array.ts:878:45  Get (intrinsic)
+  builtins/array.ts:878:11  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:881:45  Get (intrinsic)
+  builtins/array.ts:881:11  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:893:42  Get (intrinsic)
+  builtins/array.ts:893:7  CreateDataPropertyOrThrow (intrinsic)
+
+CollectPresent: reentrant
+  builtins/array.ts:903:23  HasProperty (intrinsic)
+  builtins/array.ts:904:43  Get (intrinsic)
+  builtins/array.ts:904:7  CreateDataPropertyOrThrow (intrinsic)
+
+ArrayPrototypeSort: reentrant (Array.prototype.sort)
+  builtins/array.ts:920:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:921:22  CollectPresent (builtin)
+  builtins/array.ts:922:18  LengthOfArrayLike (builtin)
+  builtins/array.ts:923:3  SortList (builtin)
+  builtins/array.ts:925:15  Get (intrinsic)
+  builtins/array.ts:925:5  Set (intrinsic)
+  builtins/array.ts:929:5  DeletePropertyOrThrow (intrinsic)
+
+ArrayPrototypeToSorted: reentrant (Array.prototype.toSorted)
+  builtins/array.ts:943:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:945:22  CollectPresent (builtin)
+  builtins/array.ts:946:3  SortList (builtin)
+
+ArrayPrototypeToReversed: reentrant (Array.prototype.toReversed)
+  builtins/array.ts:958:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:961:37  Get (intrinsic)
+  builtins/array.ts:961:5  CreateDataPropertyOrThrow (intrinsic)
+
+ArrayPrototypeToSpliced: reentrant (Array.prototype.toSpliced)
+  builtins/array.ts:973:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:974:25  LengthOfArrayLike (builtin)
+  builtins/array.ts:975:42  Get (intrinsic)
+  builtins/array.ts:975:28  RelativeIndex (builtin)
+  builtins/array.ts:981:41  Get (intrinsic)
+  builtins/array.ts:981:21  ToIntegerOrInfinity (builtin)
+  builtins/array.ts:992:37  Get (intrinsic)
+  builtins/array.ts:992:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:995:37  Get (intrinsic)
+  builtins/array.ts:995:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:999:37  Get (intrinsic)
+  builtins/array.ts:999:5  CreateDataPropertyOrThrow (intrinsic)
+
+ArrayPrototypeWith: reentrant (Array.prototype.with)
+  builtins/array.ts:1011:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:1012:20  ToIntegerOrInfinity (builtin)
+  builtins/array.ts:1019:60  Get (intrinsic)
+  builtins/array.ts:1019:5  CreateDataPropertyOrThrow (intrinsic)
+
+ArrayPrototypeToString: reentrant (Array.prototype.toString)
+  builtins/array.ts:1032:23  Get (intrinsic)
+  builtins/array.ts:1034:12  Call (intrinsic)
+  builtins/array.ts:1036:10  ObjectToString (builtin)
+
+ArrayPrototypeToLocaleString: reentrant (Array.prototype.toLocaleString)
+  builtins/array.ts:1045:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:1051:32  Get (intrinsic)
+  builtins/array.ts:1053:26  GetV (intrinsic)
+  builtins/array.ts:1053:21  Call (intrinsic)
+  builtins/array.ts:1053:12  ToString (builtin)
+
+ArrayPrototypeUnscopables: reentrant (value Array.prototype[Symbol.unscopables])
+  builtins/array.ts:1066:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1067:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1068:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1069:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1070:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1071:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1072:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1073:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1074:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1075:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1076:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1077:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1078:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1079:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1080:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1081:3  CreateDataPropertyOrThrow (intrinsic)
+
 BooleanConstructor: reentrant (constructor Boolean)
   builtins/boolean.ts:12:27  GetPrototypeFromConstructor (builtin)
 
@@ -485,11 +794,14 @@ ObjectHasOwn: reentrant (Object.hasOwn)
 ObjectIs: leaf (Object.is)
 
 ObjectPrototypeToString: reentrant (Object.prototype.toString)
-  builtins/object.ts:425:22  Get (intrinsic)
+  builtins/object.ts:418:10  ObjectToString (builtin)
+
+ObjectToString: reentrant
+  builtins/object.ts:430:22  Get (intrinsic)
 
 ObjectPrototypeToLocaleString: reentrant (Object.prototype.toLocaleString)
-  builtins/object.ts:437:15  GetV (intrinsic)
-  builtins/object.ts:437:10  Call (intrinsic)
+  builtins/object.ts:442:15  GetV (intrinsic)
+  builtins/object.ts:442:10  Call (intrinsic)
 
 ObjectPrototypeValueOf: leaf (Object.prototype.valueOf)
 

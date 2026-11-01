@@ -175,6 +175,743 @@ function ArrayPrototypePush(...items) {
   return len;
 }
 
+// builtins/array.ts:215
+function RelativeIndex(v, len, dflt) {
+  if (v === undefined) {
+    return dflt;
+  }
+  const rel = ToIntegerOrInfinity(v);
+  if (rel < 0) {
+    const k = len + rel;
+    return k < 0 ? 0 : k;
+  }
+  return rel < len ? rel : len;
+}
+
+// builtins/array.ts:228
+function RequireCallable(f) {
+  if (!%IsCallable(f)) {
+    throw %NewTypeError("not a function");
+  }
+  return %AsFn(f);
+}
+
+// builtins/array.ts:236
+function CheckLength(len) {
+  if (len > 9007199254740991) {
+    throw %NewTypeError("Array loo long");
+  }
+}
+
+// builtins/array.ts:243
+function ArrayCreateChecked(len) {
+  if (len > 4294967295) {
+    throw %NewRangeError("invalid array length");
+  }
+  return %ArrayCreate(len);
+}
+
+// builtins/array.ts:256 Array.of
+function ArrayOf(...items) {
+  const len = LengthOfArrayLike(items);
+  const a = %IsConstructor(this) ? %Construct(this, len) : %ArrayCreate(len);
+  for (let k = 0; k < len; k++) {
+    %CreateDataPropertyOrThrow(a, k, %Get(items, k));
+  }
+  %Set(a, "length", len);
+  return a;
+}
+
+// builtins/array.ts:271 Array.from
+function ArrayFrom(items, mapfn, thisArg) {
+  const mapping = mapfn !== undefined;
+  if (mapping && !%IsCallable(mapfn)) {
+    throw %NewTypeError("not a function");
+  }
+  const usingIterator = GetMethod(items, %WellKnownSymbol("iterator"));
+  if (usingIterator !== undefined && !%IsArray(items) && !%IsString(items)) {
+    throw %NewTypeError("not supported yet: Array.from of an iterable");
+  }
+  const iterable = usingIterator !== undefined;
+  const arrayLike = %IsString(items) ? %StringCodePoints(%AsStr(items)) : %ToObject(items);
+  const len = LengthOfArrayLike(arrayLike);
+  let a = %ArrayCreate(iterable ? 0 : len);
+  if (%IsConstructor(this)) {
+    a = iterable ? %Construct(this) : %Construct(this, len);
+  }
+  for (let k = 0; k < len; k++) {
+    const kValue = %Get(arrayLike, k);
+    const mappedValue = mapping ? %Call(mapfn, thisArg, kValue, k) : kValue;
+    %CreateDataPropertyOrThrow(a, k, mappedValue);
+  }
+  %Set(a, "length", len);
+  return a;
+}
+
+// builtins/array.ts:303 get Array[Symbol.species]
+function ArraySpecies() {
+  return this;
+}
+
+// builtins/array.ts:313 Array.prototype.at
+function ArrayPrototypeAt(index) {
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  const rel = ToIntegerOrInfinity(index);
+  const k = rel >= 0 ? rel : len + rel;
+  if (k < 0 || k >= len) {
+    return undefined;
+  }
+  return %Get(o, k);
+}
+
+// builtins/array.ts:328 Array.prototype.lastIndexOf
+function ArrayPrototypeLastIndexOf(searchElement, ...rest) {
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  if (len === 0) {
+    return -1;
+  }
+  let n = len - 1;
+  if (LengthOfArrayLike(rest) > 0) {
+    n = ToIntegerOrInfinity(%Get(rest, 0));
+  }
+  let k = 0;
+  if (n === -1 / 0) {
+    return -1;
+  }
+  if (n >= 0) {
+    k = n < len - 1 ? n : len - 1;
+  } else {
+    k = len + n;
+  }
+  for (; k >= 0; k--) {
+    if (%HasProperty(o, k)) {
+      if (%Get(o, k) === searchElement) {
+        return k;
+      }
+    }
+  }
+  return -1;
+}
+
+// builtins/array.ts:361
+function FindViaPredicate(o, len, fromEnd, predicate, thisArg, wantIndex) {
+  RequireCallable(predicate);
+  for (let i = 0; i < len; i++) {
+    const k = fromEnd ? len - 1 - i : i;
+    const kValue = %Get(o, k);
+    if (%ToBoolean(%Call(predicate, thisArg, kValue, k, o))) {
+      return wantIndex ? k : kValue;
+    }
+  }
+  if (wantIndex) {
+    return -1;
+  }
+  return undefined;
+}
+
+// builtins/array.ts:380 Array.prototype.find
+function ArrayPrototypeFind(predicate, thisArg) {
+  const o = %ToObject(this);
+  return FindViaPredicate(o, LengthOfArrayLike(o), false, predicate, thisArg, false);
+}
+
+// builtins/array.ts:389 Array.prototype.findIndex
+function ArrayPrototypeFindIndex(predicate, thisArg) {
+  const o = %ToObject(this);
+  return FindViaPredicate(o, LengthOfArrayLike(o), false, predicate, thisArg, true);
+}
+
+// builtins/array.ts:398 Array.prototype.findLast
+function ArrayPrototypeFindLast(predicate, thisArg) {
+  const o = %ToObject(this);
+  return FindViaPredicate(o, LengthOfArrayLike(o), true, predicate, thisArg, false);
+}
+
+// builtins/array.ts:407 Array.prototype.findLastIndex
+function ArrayPrototypeFindLastIndex(predicate, thisArg) {
+  const o = %ToObject(this);
+  return FindViaPredicate(o, LengthOfArrayLike(o), true, predicate, thisArg, true);
+}
+
+// builtins/array.ts:413
+function EveryOrSome(o, callbackfn, thisArg, wantAll) {
+  const len = LengthOfArrayLike(o);
+  RequireCallable(callbackfn);
+  for (let k = 0; k < len; k++) {
+    if (%HasProperty(o, k)) {
+      const r = %ToBoolean(%Call(callbackfn, thisArg, %Get(o, k), k, o));
+      if (r !== wantAll) {
+        return r;
+      }
+    }
+  }
+  return wantAll;
+}
+
+// builtins/array.ts:431 Array.prototype.every
+function ArrayPrototypeEvery(callbackfn, thisArg) {
+  return EveryOrSome(%ToObject(this), callbackfn, thisArg, true);
+}
+
+// builtins/array.ts:439 Array.prototype.some
+function ArrayPrototypeSome(callbackfn, thisArg) {
+  return EveryOrSome(%ToObject(this), callbackfn, thisArg, false);
+}
+
+// builtins/array.ts:447 Array.prototype.filter
+function ArrayPrototypeFilter(callbackfn, thisArg) {
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  RequireCallable(callbackfn);
+  const a = ArraySpeciesCreate(o, 0);
+  let to = 0;
+  for (let k = 0; k < len; k++) {
+    if (%HasProperty(o, k)) {
+      const kValue = %Get(o, k);
+      if (%ToBoolean(%Call(callbackfn, thisArg, kValue, k, o))) {
+        %CreateDataPropertyOrThrow(a, to, kValue);
+        to++;
+      }
+    }
+  }
+  return a;
+}
+
+// builtins/array.ts:466
+function Reduce(o, callbackfn, rest, fromEnd) {
+  const len = LengthOfArrayLike(o);
+  RequireCallable(callbackfn);
+  let i = 0;
+  let accumulator = undefined;
+  if (LengthOfArrayLike(rest) > 0) {
+    accumulator = %Get(rest, 0);
+  } else {
+    let found = false;
+    while (!found && i < len) {
+      const k = fromEnd ? len - 1 - i : i;
+      if (%HasProperty(o, k)) {
+        accumulator = %Get(o, k);
+        found = true;
+      }
+      i++;
+    }
+    if (!found) {
+      throw %NewTypeError("empty array");
+    }
+  }
+  for (; i < len; i++) {
+    const k = fromEnd ? len - 1 - i : i;
+    if (%HasProperty(o, k)) {
+      accumulator = %Call(callbackfn, undefined, accumulator, %Get(o, k), k, o);
+    }
+  }
+  return accumulator;
+}
+
+// builtins/array.ts:501 Array.prototype.reduce
+function ArrayPrototypeReduce(callbackfn, ...rest) {
+  return Reduce(%ToObject(this), callbackfn, rest, false);
+}
+
+// builtins/array.ts:510 Array.prototype.reduceRight
+function ArrayPrototypeReduceRight(callbackfn, ...rest) {
+  return Reduce(%ToObject(this), callbackfn, rest, true);
+}
+
+// builtins/array.ts:517
+function IsConcatSpreadable(o) {
+  if (!%IsObject(o)) {
+    return false;
+  }
+  const spreadable = %Get(%AsObj(o), %WellKnownSymbol("isConcatSpreadable"));
+  if (spreadable !== undefined) {
+    return %ToBoolean(spreadable);
+  }
+  return %IsArray(o);
+}
+
+// builtins/array.ts:533 Array.prototype.concat
+function ArrayPrototypeConcat(...items) {
+  const o = %ToObject(this);
+  const a = ArraySpeciesCreate(o, 0);
+  let n = 0;
+  const count = LengthOfArrayLike(items);
+  for (let i = -1; i < count; i++) {
+    const e = i < 0 ? o : %Get(items, i);
+    if (IsConcatSpreadable(e)) {
+      const eo = %AsObj(e);
+      const len = LengthOfArrayLike(eo);
+      CheckLength(n + len);
+      for (let k = 0; k < len; k++) {
+        if (%HasProperty(eo, k)) {
+          %CreateDataPropertyOrThrow(a, n, %Get(eo, k));
+        }
+        n++;
+      }
+    } else {
+      CheckLength(n + 1);
+      %CreateDataPropertyOrThrow(a, n, e);
+      n++;
+    }
+  }
+  %Set(a, "length", n);
+  return a;
+}
+
+// builtins/array.ts:564 Array.prototype.slice
+function ArrayPrototypeSlice(start, end) {
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  const k = RelativeIndex(start, len, 0);
+  const fin = RelativeIndex(end, len, len);
+  const count = fin > k ? fin - k : 0;
+  const a = ArraySpeciesCreate(o, count);
+  let n = 0;
+  for (let i = k; i < fin; i++) {
+    if (%HasProperty(o, i)) {
+      %CreateDataPropertyOrThrow(a, n, %Get(o, i));
+    }
+    n++;
+  }
+  %Set(a, "length", n);
+  return a;
+}
+
+// builtins/array.ts:588 Array.prototype.splice
+function ArrayPrototypeSplice(...args) {
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  const argCount = LengthOfArrayLike(args);
+  const actualStart = RelativeIndex(%Get(args, 0), len, 0);
+  const itemCount = argCount > 2 ? argCount - 2 : 0;
+  let actualDeleteCount = 0;
+  if (argCount === 1) {
+    actualDeleteCount = len - actualStart;
+  } else if (argCount > 1) {
+    const dc = ToIntegerOrInfinity(%Get(args, 1));
+    actualDeleteCount = dc < 0 ? 0 : dc;
+    if (actualDeleteCount > len - actualStart) {
+      actualDeleteCount = len - actualStart;
+    }
+  }
+  CheckLength(len + itemCount - actualDeleteCount);
+  const a = ArraySpeciesCreate(o, actualDeleteCount);
+  for (let k = 0; k < actualDeleteCount; k++) {
+    const from = actualStart + k;
+    if (%HasProperty(o, from)) {
+      %CreateDataPropertyOrThrow(a, k, %Get(o, from));
+    }
+  }
+  %Set(a, "length", actualDeleteCount);
+  MoveElements(o, len, actualStart, actualDeleteCount, itemCount);
+  for (let k = 0; k < itemCount; k++) {
+    %Set(o, actualStart + k, %Get(args, k + 2));
+  }
+  %Set(o, "length", len - actualDeleteCount + itemCount);
+  return a;
+}
+
+// builtins/array.ts:626
+function MoveElements(o, len, start, deleteCount, itemCount) {
+  if (itemCount < deleteCount) {
+    for (let k = start; k < len - deleteCount; k++) {
+      const from = k + deleteCount;
+      const to = k + itemCount;
+      if (%HasProperty(o, from)) {
+        %Set(o, to, %Get(o, from));
+      } else {
+        %DeletePropertyOrThrow(o, to);
+      }
+    }
+    for (let k = len; k > len - deleteCount + itemCount; k--) {
+      %DeletePropertyOrThrow(o, k - 1);
+    }
+  } else if (itemCount > deleteCount) {
+    for (let k = len - deleteCount; k > start; k--) {
+      const from = k + deleteCount - 1;
+      const to = k + itemCount - 1;
+      if (%HasProperty(o, from)) {
+        %Set(o, to, %Get(o, from));
+      } else {
+        %DeletePropertyOrThrow(o, to);
+      }
+    }
+  }
+}
+
+// builtins/array.ts:657 Array.prototype.copyWithin
+function ArrayPrototypeCopyWithin(target, start, end) {
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  let to = RelativeIndex(target, len, 0);
+  let from = RelativeIndex(start, len, 0);
+  const fin = RelativeIndex(end, len, len);
+  let count = fin - from < len - to ? fin - from : len - to;
+  let direction = 1;
+  if (from < to && to < from + count) {
+    direction = -1;
+    from = from + count - 1;
+    to = to + count - 1;
+  }
+  while (count > 0) {
+    if (%HasProperty(o, from)) {
+      %Set(o, to, %Get(o, from));
+    } else {
+      %DeletePropertyOrThrow(o, to);
+    }
+    from += direction;
+    to += direction;
+    count--;
+  }
+  return o;
+}
+
+// builtins/array.ts:687 Array.prototype.fill
+function ArrayPrototypeFill(value, start, end) {
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  const k = RelativeIndex(start, len, 0);
+  const fin = RelativeIndex(end, len, len);
+  for (let i = k; i < fin; i++) {
+    %Set(o, i, value);
+  }
+  return o;
+}
+
+// builtins/array.ts:702 Array.prototype.reverse
+function ArrayPrototypeReverse() {
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  const middle = %F64Floor(len / 2);
+  for (let lower = 0; lower < middle; lower++) {
+    const upper = len - lower - 1;
+    const lowerExists = %HasProperty(o, lower);
+    let lowerValue = undefined;
+    if (lowerExists) {
+      lowerValue = %Get(o, lower);
+    }
+    const upperExists = %HasProperty(o, upper);
+    let upperValue = undefined;
+    if (upperExists) {
+      upperValue = %Get(o, upper);
+    }
+    if (upperExists) {
+      %Set(o, lower, upperValue);
+    } else if (lowerExists) {
+      %DeletePropertyOrThrow(o, lower);
+    }
+    if (lowerExists) {
+      %Set(o, upper, lowerValue);
+    } else if (upperExists) {
+      %DeletePropertyOrThrow(o, upper);
+    }
+  }
+  return o;
+}
+
+// builtins/array.ts:736 Array.prototype.pop
+function ArrayPrototypePop() {
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  if (len === 0) {
+    %Set(o, "length", 0);
+    return undefined;
+  }
+  const index = len - 1;
+  const element = %Get(o, index);
+  %DeletePropertyOrThrow(o, index);
+  %Set(o, "length", index);
+  return element;
+}
+
+// builtins/array.ts:754 Array.prototype.shift
+function ArrayPrototypeShift() {
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  if (len === 0) {
+    %Set(o, "length", 0);
+    return undefined;
+  }
+  const first = %Get(o, 0);
+  MoveElements(o, len, 0, 1, 0);
+  %Set(o, "length", len - 1);
+  return first;
+}
+
+// builtins/array.ts:772 Array.prototype.unshift
+function ArrayPrototypeUnshift(...items) {
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  const argCount = LengthOfArrayLike(items);
+  if (argCount > 0) {
+    CheckLength(len + argCount);
+    MoveElements(o, len, 0, 0, argCount);
+    for (let j = 0; j < argCount; j++) {
+      %Set(o, j, %Get(items, j));
+    }
+  }
+  %Set(o, "length", len + argCount);
+  return len + argCount;
+}
+
+// builtins/array.ts:788
+function FlattenIntoArray(target, source, sourceLen, start, depth, mapper, thisArg) {
+  let targetIndex = start;
+  for (let sourceIndex = 0; sourceIndex < sourceLen; sourceIndex++) {
+    if (%HasProperty(source, sourceIndex)) {
+      let element = %Get(source, sourceIndex);
+      if (mapper !== undefined) {
+        element = %Call(mapper, thisArg, element, sourceIndex, source);
+      }
+      if (depth > 0 && %IsArray(element)) {
+        const e = %AsObj(element);
+        targetIndex = FlattenIntoArray(target, e, LengthOfArrayLike(e), targetIndex, depth - 1, undefined, undefined);
+      } else {
+        CheckLength(targetIndex + 1);
+        %CreateDataPropertyOrThrow(target, targetIndex, element);
+        targetIndex++;
+      }
+    }
+  }
+  return targetIndex;
+}
+
+// builtins/array.ts:813 Array.prototype.flat
+function ArrayPrototypeFlat(depth) {
+  const o = %ToObject(this);
+  const sourceLen = LengthOfArrayLike(o);
+  let depthNum = 1;
+  if (depth !== undefined) {
+    depthNum = ToIntegerOrInfinity(depth);
+    if (depthNum < 0) {
+      depthNum = 0;
+    }
+  }
+  const a = ArraySpeciesCreate(o, 0);
+  FlattenIntoArray(a, o, sourceLen, 0, depthNum, undefined, undefined);
+  return a;
+}
+
+// builtins/array.ts:832 Array.prototype.flatMap
+function ArrayPrototypeFlatMap(mapperFunction, thisArg) {
+  const o = %ToObject(this);
+  const sourceLen = LengthOfArrayLike(o);
+  RequireCallable(mapperFunction);
+  const a = ArraySpeciesCreate(o, 0);
+  FlattenIntoArray(a, o, sourceLen, 0, 1, mapperFunction, thisArg);
+  return a;
+}
+
+// builtins/array.ts:844
+function SortCompare(x, y, comparefn) {
+  if (x === undefined) {
+    return y === undefined ? 0 : 1;
+  }
+  if (y === undefined) {
+    return -1;
+  }
+  if (comparefn !== undefined) {
+    const v = ToNumber(%Call(comparefn, undefined, x, y));
+    return v !== v ? 0 : v;
+  }
+  const xs = ToString(x);
+  return %CompareStrings(xs, ToString(y));
+}
+
+// builtins/array.ts:863
+function SortList(list, n, comparefn) {
+  if (comparefn === undefined && %SortPrimitives(list)) {
+    return;
+  }
+  let src = list;
+  let dst = %ArrayCreate(n);
+  let width = 1;
+  while (width < n) {
+    for (let lo = 0; lo < n; lo += 2 * width) {
+      const mid = lo + width < n ? lo + width : n;
+      const hi = lo + 2 * width < n ? lo + 2 * width : n;
+      let i = lo;
+      let j = mid;
+      for (let k = lo; k < hi; k++) {
+        if (i < mid && (j >= hi || SortCompare(%Get(src, i), %Get(src, j), comparefn) <= 0)) {
+          %CreateDataPropertyOrThrow(dst, k, %Get(src, i));
+          i++;
+        } else {
+          %CreateDataPropertyOrThrow(dst, k, %Get(src, j));
+          j++;
+        }
+      }
+    }
+    const t = src;
+    src = dst;
+    dst = t;
+    width = width * 2;
+  }
+  if (src !== list) {
+    for (let k = 0; k < n; k++) {
+      %CreateDataPropertyOrThrow(list, k, %Get(src, k));
+    }
+  }
+}
+
+// builtins/array.ts:899
+function CollectPresent(o, len, skipHoles) {
+  const items = %ArrayCreate(0);
+  let n = 0;
+  for (let k = 0; k < len; k++) {
+    if (!skipHoles || %HasProperty(o, k)) {
+      %CreateDataPropertyOrThrow(items, n, %Get(o, k));
+      n++;
+    }
+  }
+  return items;
+}
+
+// builtins/array.ts:915 Array.prototype.sort
+function ArrayPrototypeSort(comparefn) {
+  if (comparefn !== undefined && !%IsCallable(comparefn)) {
+    throw %NewTypeError("not a function");
+  }
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  const items = CollectPresent(o, len, true);
+  const n = LengthOfArrayLike(items);
+  SortList(items, n, comparefn);
+  for (let k = 0; k < n; k++) {
+    %Set(o, k, %Get(items, k));
+  }
+  for (let k = n; k < len; k++) {
+    %DeletePropertyOrThrow(o, k);
+  }
+  return o;
+}
+
+// builtins/array.ts:938 Array.prototype.toSorted
+function ArrayPrototypeToSorted(comparefn) {
+  if (comparefn !== undefined && !%IsCallable(comparefn)) {
+    throw %NewTypeError("not a function");
+  }
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  ArrayCreateChecked(0 + len);
+  const items = CollectPresent(o, len, false);
+  SortList(items, len, comparefn);
+  return items;
+}
+
+// builtins/array.ts:956 Array.prototype.toReversed
+function ArrayPrototypeToReversed() {
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  const a = ArrayCreateChecked(len);
+  for (let k = 0; k < len; k++) {
+    %CreateDataPropertyOrThrow(a, k, %Get(o, len - k - 1));
+  }
+  return a;
+}
+
+// builtins/array.ts:971 Array.prototype.toSpliced
+function ArrayPrototypeToSpliced(...args) {
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  const argCount = LengthOfArrayLike(args);
+  const actualStart = RelativeIndex(%Get(args, 0), len, 0);
+  const insertCount = argCount > 2 ? argCount - 2 : 0;
+  let actualSkipCount = 0;
+  if (argCount === 1) {
+    actualSkipCount = len - actualStart;
+  } else if (argCount > 1) {
+    const sc = ToIntegerOrInfinity(%Get(args, 1));
+    actualSkipCount = sc < 0 ? 0 : sc;
+    if (actualSkipCount > len - actualStart) {
+      actualSkipCount = len - actualStart;
+    }
+  }
+  const newLen = len + insertCount - actualSkipCount;
+  CheckLength(newLen);
+  const a = ArrayCreateChecked(newLen);
+  let i = 0;
+  for (; i < actualStart; i++) {
+    %CreateDataPropertyOrThrow(a, i, %Get(o, i));
+  }
+  for (let k = 0; k < insertCount; k++) {
+    %CreateDataPropertyOrThrow(a, i, %Get(args, k + 2));
+    i++;
+  }
+  for (let r = actualStart + actualSkipCount; r < len; r++) {
+    %CreateDataPropertyOrThrow(a, i, %Get(o, r));
+    i++;
+  }
+  return a;
+}
+
+// builtins/array.ts:1009 Array.prototype.with
+function ArrayPrototypeWith(index, value) {
+  const o = %ToObject(this);
+  const len = LengthOfArrayLike(o);
+  const rel = ToIntegerOrInfinity(index);
+  const actual = rel >= 0 ? rel : len + rel;
+  if (actual >= len || actual < 0) {
+    throw %NewRangeError("invalid array index: " + %NumberToString(actual, 10));
+  }
+  const a = ArrayCreateChecked(len);
+  for (let k = 0; k < len; k++) {
+    %CreateDataPropertyOrThrow(a, k, k === actual ? value : %Get(o, k));
+  }
+  return a;
+}
+
+// builtins/array.ts:1030 Array.prototype.toString
+function ArrayPrototypeToString() {
+  const array = %ToObject(this);
+  const func = %Get(array, "join");
+  if (%IsCallable(func)) {
+    return %Call(func, array);
+  }
+  return ObjectToString(array);
+}
+
+// builtins/array.ts:1043 Array.prototype.toLocaleString
+function ArrayPrototypeToLocaleString() {
+  const array = %ToObject(this);
+  const len = LengthOfArrayLike(array);
+  let r = "";
+  for (let k = 0; k < len; k++) {
+    if (k > 0) {
+      r += ",";
+    }
+    const nextElement = %Get(array, k);
+    if (nextElement !== undefined && nextElement !== null) {
+      r += ToString(%Call(%GetV(nextElement, "toLocaleString"), nextElement));
+    }
+  }
+  return r;
+}
+
+// builtins/array.ts:1064 value Array.prototype[Symbol.unscopables]
+function ArrayPrototypeUnscopables() {
+  const u = %ObjectCreate(null);
+  %CreateDataPropertyOrThrow(u, "at", true);
+  %CreateDataPropertyOrThrow(u, "copyWithin", true);
+  %CreateDataPropertyOrThrow(u, "entries", true);
+  %CreateDataPropertyOrThrow(u, "fill", true);
+  %CreateDataPropertyOrThrow(u, "find", true);
+  %CreateDataPropertyOrThrow(u, "findIndex", true);
+  %CreateDataPropertyOrThrow(u, "findLast", true);
+  %CreateDataPropertyOrThrow(u, "findLastIndex", true);
+  %CreateDataPropertyOrThrow(u, "flat", true);
+  %CreateDataPropertyOrThrow(u, "flatMap", true);
+  %CreateDataPropertyOrThrow(u, "includes", true);
+  %CreateDataPropertyOrThrow(u, "keys", true);
+  %CreateDataPropertyOrThrow(u, "toReversed", true);
+  %CreateDataPropertyOrThrow(u, "toSorted", true);
+  %CreateDataPropertyOrThrow(u, "toSpliced", true);
+  %CreateDataPropertyOrThrow(u, "values", true);
+  return u;
+}
+
 // builtins/boolean.ts:7 constructor Boolean
 function BooleanConstructor(value) {
   const b = %ToBoolean(value);
@@ -1270,13 +2007,18 @@ function ObjectIs(value1, value2) {
 
 // builtins/object.ts:417 Object.prototype.toString
 function ObjectPrototypeToString() {
-  if (this === undefined) {
+  return ObjectToString(this);
+}
+
+// builtins/object.ts:422
+function ObjectToString(v) {
+  if (v === undefined) {
     return "[object Undefined]";
   }
-  if (this === null) {
+  if (v === null) {
     return "[object Null]";
   }
-  const o = %ToObject(this);
+  const o = %ToObject(v);
   const tag = %Get(o, %WellKnownSymbol("toStringTag"));
   if (%IsString(tag)) {
     return "[object " + %AsStr(tag) + "]";
@@ -1284,17 +2026,17 @@ function ObjectPrototypeToString() {
   return "[object " + %ObjectClassTag(o) + "]";
 }
 
-// builtins/object.ts:436 Object.prototype.toLocaleString
+// builtins/object.ts:441 Object.prototype.toLocaleString
 function ObjectPrototypeToLocaleString() {
   return %Call(%GetV(this, "toString"), this);
 }
 
-// builtins/object.ts:444 Object.prototype.valueOf
+// builtins/object.ts:449 Object.prototype.valueOf
 function ObjectPrototypeValueOf() {
   return %ToObject(this);
 }
 
-// builtins/object.ts:452 Object.prototype.isPrototypeOf
+// builtins/object.ts:457 Object.prototype.isPrototypeOf
 function ObjectPrototypeIsPrototypeOf(v) {
   if (!%IsObject(v)) {
     return false;
@@ -1495,6 +2237,39 @@ function SymbolUnscopables() {
 %InstallMethod("Array.prototype", "includes", ArrayPrototypeIncludes, 1);
 %InstallMethod("Array", "isArray", ArrayIsArray, 1);
 %InstallMethod("Array.prototype", "push", ArrayPrototypePush, 1);
+%InstallMethod("Array", "of", ArrayOf, 0);
+%InstallMethod("Array", "from", ArrayFrom, 1);
+%InstallAccessor("Array", %WellKnownSymbol("species"), ArraySpecies, false);
+%InstallMethod("Array.prototype", "at", ArrayPrototypeAt, 1);
+%InstallMethod("Array.prototype", "lastIndexOf", ArrayPrototypeLastIndexOf, 1);
+%InstallMethod("Array.prototype", "find", ArrayPrototypeFind, 1);
+%InstallMethod("Array.prototype", "findIndex", ArrayPrototypeFindIndex, 1);
+%InstallMethod("Array.prototype", "findLast", ArrayPrototypeFindLast, 1);
+%InstallMethod("Array.prototype", "findLastIndex", ArrayPrototypeFindLastIndex, 1);
+%InstallMethod("Array.prototype", "every", ArrayPrototypeEvery, 1);
+%InstallMethod("Array.prototype", "some", ArrayPrototypeSome, 1);
+%InstallMethod("Array.prototype", "filter", ArrayPrototypeFilter, 1);
+%InstallMethod("Array.prototype", "reduce", ArrayPrototypeReduce, 1);
+%InstallMethod("Array.prototype", "reduceRight", ArrayPrototypeReduceRight, 1);
+%InstallMethod("Array.prototype", "concat", ArrayPrototypeConcat, 1);
+%InstallMethod("Array.prototype", "slice", ArrayPrototypeSlice, 2);
+%InstallMethod("Array.prototype", "splice", ArrayPrototypeSplice, 2);
+%InstallMethod("Array.prototype", "copyWithin", ArrayPrototypeCopyWithin, 2);
+%InstallMethod("Array.prototype", "fill", ArrayPrototypeFill, 1);
+%InstallMethod("Array.prototype", "reverse", ArrayPrototypeReverse, 0);
+%InstallMethod("Array.prototype", "pop", ArrayPrototypePop, 0);
+%InstallMethod("Array.prototype", "shift", ArrayPrototypeShift, 0);
+%InstallMethod("Array.prototype", "unshift", ArrayPrototypeUnshift, 1);
+%InstallMethod("Array.prototype", "flat", ArrayPrototypeFlat, 0);
+%InstallMethod("Array.prototype", "flatMap", ArrayPrototypeFlatMap, 1);
+%InstallMethod("Array.prototype", "sort", ArrayPrototypeSort, 1);
+%InstallMethod("Array.prototype", "toSorted", ArrayPrototypeToSorted, 1);
+%InstallMethod("Array.prototype", "toReversed", ArrayPrototypeToReversed, 0);
+%InstallMethod("Array.prototype", "toSpliced", ArrayPrototypeToSpliced, 2);
+%InstallMethod("Array.prototype", "with", ArrayPrototypeWith, 2);
+%InstallMethod("Array.prototype", "toString", ArrayPrototypeToString, 0);
+%InstallMethod("Array.prototype", "toLocaleString", ArrayPrototypeToLocaleString, 0);
+%InstallValue("Array.prototype", %WellKnownSymbol("unscopables"), ArrayPrototypeUnscopables(), 4);
 %InstallMethod("Boolean.prototype", "toString", BooleanPrototypeToString, 0);
 %InstallMethod("Boolean.prototype", "valueOf", BooleanPrototypeValueOf, 0);
 %InstallMethod("Error.prototype", "toString", ErrorPrototypeToString, 0);

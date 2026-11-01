@@ -204,6 +204,19 @@ declare function FunctionToString(f: Value): Str;
 declare function NumberPow(base: f64, exponent: f64): f64;
 /** SymbolDescriptiveString ( sym ): `Symbol(description)`. @leaf */
 declare function SymbolDescriptiveString(s: Sym): Str;
+/**
+ * Compares two strings by code units (IsLessThan for strings): -1, 0 or 1. Also
+ * localeCompare's order (no Intl). @leaf
+ */
+declare function CompareStrings(a: Str, b: Str): f64;
+/** The code points of s as an array of strings (the string iterator's values). @leaf */
+declare function StringCodePoints(s: Str): Obj;
+/**
+ * Sorts the dense array `list` in place by SortCompare without a comparefn (undefined
+ * last, then ToString order; stable) if every element is a primitive other than a
+ * symbol. Returns false, leaving it unchanged, otherwise. @leaf
+ */
+declare function SortPrimitives(list: Obj): boolean;
 /** A new symbol; the description is a string or undefined. @leaf */
 declare function NewSymbol(description: Value): Sym;
 /** [[Description]] of a symbol: a string or undefined. @leaf */

@@ -7,7 +7,7 @@
 //! push exactly one call frame whose result completes them.
 
 use super::*;
-use crate::builtins::{function, number, object};
+use crate::builtins::{array, function, number, object, string};
 use crate::bytecode::intrinsics::{INTRINSICS, IntrinsicKind, intrinsic, intrinsic_id};
 use crate::heap::cells::flags::{OBJ_BUILTIN, OBJ_BUILTIN_CTOR};
 use crate::heap::{ObjectClass, atoms};
@@ -137,6 +137,9 @@ const F64_SQRT: u16 = id("F64Sqrt");
 const F64_TAN: u16 = id("F64Tan");
 const F64_TANH: u16 = id("F64Tanh");
 const F64_TRUNC: u16 = id("F64Trunc");
+const COMPARE_STRINGS: u16 = id("CompareStrings");
+const STRING_CODE_POINTS: u16 = id("StringCodePoints");
+const SORT_PRIMITIVES: u16 = id("SortPrimitives");
 const INSTALL_CONSTRUCTOR: u16 = id("InstallConstructor");
 const INSTALL_ACCESSOR: u16 = id("InstallAccessor");
 const INSTALL_VALUE: u16 = id("InstallValue");
@@ -547,6 +550,18 @@ impl Exec<'_> {
                 conv::number(number::to_uint32(a0.as_number().unwrap_or(f64::NAN)) as f64)
             }
             MATH_RANDOM => Value::number(number::random(self.heap)),
+            COMPARE_STRINGS => match (a0.as_string(), arg(self, 1).as_string()) {
+                (Some(a), Some(b)) => conv::number(string::compare(self.heap, a, b)),
+                _ => return bad_argument(info.name),
+            },
+            STRING_CODE_POINTS => match a0.as_string() {
+                Some(s) => Value::object(string::code_points(self.heap, s)?),
+                None => return bad_argument(info.name),
+            },
+            SORT_PRIMITIVES => match a0.as_object() {
+                Some(o) => Value::bool(array::sort_primitives(self.heap, o)?),
+                None => return bad_argument(info.name),
+            },
             REALM_INTRINSIC => {
                 let name = a0
                     .as_string()

@@ -179,6 +179,18 @@ const I = {
   NumberToInt32: (n) => n | 0,
   NumberToUint32: (n) => n >>> 0,
   MathRandom: () => 0.5,
+  CompareStrings: (a, b) => (check(typeof a === "string" && typeof b === "string", "CompareStrings"), a < b ? -1 : a > b ? 1 : 0),
+  StringCodePoints: (s) => [...s],
+  SortPrimitives: (list) => {
+    check(Array.isArray(list), "SortPrimitives");
+    if (list.some((v) => isObject(v) || typeof v === "symbol")) return false;
+    const undef = list.filter((v) => v === undefined).length;
+    const keyed = list.filter((v) => v !== undefined).map((v) => [String(v), v]);
+    keyed.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    const out = keyed.map((p) => p[1]).concat(new Array(undef).fill(undefined));
+    for (let i = 0; i < out.length; i++) list[i] = out[i];
+    return true;
+  },
 };
 for (const name of ["abs", "acos", "acosh", "asin", "asinh", "atan", "atanh", "atan2", "cbrt", "hypot", "ceil", "clz32", "cos", "cosh", "exp", "expm1", "floor", "fround", "imul", "log", "log1p", "log10", "log2", "round", "sign", "sin", "sinh", "sqrt", "tan", "tanh", "trunc"]) {
   I["F64" + name[0].toUpperCase() + name.slice(1)] = (x, y) => {
@@ -208,6 +220,10 @@ function show(v, seen = new Set()) {
   return tag + "{" + keys.join(",") + "}";
 }
 
+// Methods whose spec steps use Get where qjs probes with HasProperty first and skips the
+// Get of a missing element (JS_TryGetPropertyInt64): their trap logs are not compared,
+// only the results.
+let ignoreHas = false;
 function outcome(fn) {
   const log = [];
   let result;
@@ -216,7 +232,8 @@ function outcome(fn) {
   } catch (e) {
     result = "throw " + (isObject(e) ? e.constructor.name + ": " + e.message : show(e));
   }
-  return log.join(" ") + " => " + result;
+  const shown = ignoreHas ? [] : log;
+  return shown.join(" ") + " => " + result;
 }
 
 // A proxy around `target` that logs has/get/defineProperty traps.
@@ -644,5 +661,95 @@ for (const v of [new C0(), {}, 5, Object.create(C0.prototype)]) {
   same("Function.prototype[Symbol.hasInstance]", Function.prototype[Symbol.hasInstance], (f) => f.call(C0, v));
   same("Function.prototype[Symbol.hasInstance]", Function.prototype[Symbol.hasInstance], (f) => f.call({}, v));
 }
+
+// ---- 0034: Array ------------------------------------------------------------------------
+
+const arrayMethods = {
+  at: [[0], [-1], [5], ["1"], [-Infinity]],
+  lastIndexOf: [[1], [3, -2], [2, 100], [undefined], [NaN], [1, -Infinity]],
+  find: [[(v) => v === 2], [(v) => false], [5]],
+  findIndex: [[(v) => v === 2], [(v) => false]],
+  findLast: [[(v, k) => k < 2], [(v) => false]],
+  findLastIndex: [[(v, k) => k < 2], [(v) => false]],
+  every: [[(v) => v !== 3], [(v) => true], ["no"]],
+  some: [[(v) => v === 3], [(v) => false]],
+  filter: [[(v, k) => k % 2 === 0], [(v) => true], [null]],
+  reduce: [[(a, b) => String(a) + "|" + String(b)], [(a, b) => a + 1, 10], [5]],
+  reduceRight: [[(a, b) => String(a) + "|" + String(b)], [(a, b) => a + 1, 10]],
+  concat: [[], [[9, 8]], [9, [7, [6]]], [{ length: 1, 0: "x", [Symbol.isConcatSpreadable]: true }], ["s"]],
+  slice: [[], [1], [-2], [1, -1], [5, 1], ["1", "3"], [undefined, 2], [-Infinity, Infinity]],
+  splice: [[], [1], [1, 1], [0, 0, "a", "b"], [-1, 5, "z"], [undefined], [1, undefined], [10, 1, "q"]],
+  copyWithin: [[0, 1], [1, 0], [0, 1, 2], [-1, 0], [0, -2, -1]],
+  fill: [[0], [7, 1], [7, -2, -1], [7, 5]],
+  reverse: [[]],
+  pop: [[]],
+  shift: [[]],
+  unshift: [[], ["a"], ["a", "b"]],
+  flat: [[], [0], [Infinity], [-1]],
+  flatMap: [[(v) => [v, [v]]], [(v) => v], [3]],
+  sort: [[], [(a, b) => b - a], [(a, b) => 0], [(a, b) => (String(a) < String(b) ? -1 : 1)], [5]],
+  toSorted: [[], [(a, b) => b - a], [5]],
+  toReversed: [[]],
+  toSpliced: [[], [1], [1, 1], [0, 0, "a"], [-1, 5, "z"], [undefined]],
+  with: [[0, "w"], [-1, "w"], [10, "w"], [-10, "w"]],
+  toString: [[]],
+  toLocaleString: [[]],
+  forEach: [[(v) => v]],
+  map: [[(v, k) => k]],
+  push: [[1, 2]],
+  join: [["-"]],
+};
+// sort: qjs writes back only the elements that moved, the spec writes all of them, so
+// the logged proxies and the read-only String object differ.
+const sortSkip = new Set([8, 9, 10]);
+for (const name of Object.keys(arrayMethods)) {
+  const native = AP[name];
+  ignoreHas = ["at", "toSorted", "toReversed", "toSpliced", "with"].includes(name);
+  for (let i = 0; i < nSubjects; i++) {
+    if (name === "sort" && sortSkip.has(i)) continue;
+    for (const args of arrayMethods[name]) {
+      same("Array.prototype." + name, native, (f, log) => {
+        const o = subjects(log)[i];
+        return [f.apply(o, args), o];
+      });
+    }
+  }
+  same("Array.prototype." + name, native, (f) => f.call(null));
+  same("Array.prototype." + name, native, () => installed["Array.prototype." + name].length === native.length);
+}
+ignoreHas = false;
+// Mixed-type sorts: the leaf path (primitives) and the generic one (objects).
+for (const list of [
+  [3, 1, 2],
+  [10, 9, 1, "1", "a", true, null, undefined, NaN, -0, 0],
+  [undefined, , 3, undefined, 1],
+  [{ toString: () => "b" }, "a", { valueOf: () => 1, toString: () => "c" }],
+  ["b", "a", "B", "\u00e9", "e"],
+  [Symbol("x")],
+  [Symbol("x"), 1],
+]) {
+  same("Array.prototype.sort", AP.sort, (f) => f.call(list.slice()));
+  same("Array.prototype.toSorted", AP.toSorted, (f) => f.call(list.slice()));
+}
+// Stability with a comparator that ties.
+same("Array.prototype.sort", AP.sort, (f) => {
+  const a = [];
+  for (let i = 0; i < 50; i++) a.push({ k: i % 3, i });
+  return f.call(a, (x, y) => x.k - y.k).map((e) => e.i).join(",");
+});
+same("Array.prototype.splice", AP.splice, (f) => f.call({ length: 2 ** 53 - 1 }, 0, 0, 1));
+same("Array.prototype.unshift", AP.unshift, (f) => f.call({ length: 2 ** 53 - 1 }, 1));
+same("Array.prototype.concat", AP.concat, (f) => f.call(1, 2));
+same("Array.prototype.toReversed", AP.toReversed, (f) => f.call({ length: 2 ** 32 }));
+same("Array.prototype.with", AP.with, (f) => f.call({ length: 2 ** 32 }, 0, 1));
+same("Array.prototype.flat", AP.flat, (f) => f.call([1, [2, [3, [4]]]], 2));
+for (const args of [[[1, 2]], [{ length: 2, 0: "a" }], ["abc"], ["a\ud83d\ude00b"], [[1, 2], (v, k) => v * k], [null], [[1], 5], [{ length: -1 }]]) {
+  same("Array.from", Array.from, (f) => f(...args));
+  same("Array.from", Array.from, (f) => f.call(Object, ...args));
+}
+same("Array.of", Array.of, (f) => f(1, 2, 3));
+same("Array.of", Array.of, (f) => f.call(Object, 1, 2));
+same("Array.of", Array.of, (f) => f.call(undefined, 1));
+same("get Array.Symbol(Symbol.species)", Object.getOwnPropertyDescriptor(Array, Symbol.species).get, (f) => f.call(5));
 
 console.log("ok " + count + (failures ? " (" + failures + " mismatches)" : ""));

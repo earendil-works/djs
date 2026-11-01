@@ -415,13 +415,18 @@ function ObjectIs(value1: Value, value2: Value): boolean {
  * @builtin Object.prototype.toString
  */
 function ObjectPrototypeToString(this: Value): Str {
-  if (this === undefined) {
+  return ObjectToString(this);
+}
+
+/** The steps of Object.prototype.toString, for builtins that call it. */
+function ObjectToString(v: Value): Str {
+  if (v === undefined) {
     return "[object Undefined]";
   }
-  if (this === null) {
+  if (v === null) {
     return "[object Null]";
   }
-  const o: Obj = ToObject(this);
+  const o: Obj = ToObject(v);
   const tag: Value = Get(o, WellKnownSymbol("toStringTag"));
   if (IsString(tag)) {
     return "[object " + AsStr(tag) + "]";
