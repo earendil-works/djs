@@ -279,14 +279,18 @@ impl CodeBuf<Final> {
 impl CodeBuf<Phase1> {
     /// Moves the code in `mid..end` in front of `start..mid` (loop rotation, 0086).
     /// Phase-1 code refers to labels, not positions, so only the jump fixups move along.
-    /// Nothing before `end` can be truncated afterwards.
+    /// Nothing before `end` can be truncated afterwards, so the fixups need not stay
+    /// sorted: `truncate_last` only pops the ones of instructions emitted later.
     pub fn rotate(&mut self, start: u32, mid: u32, end: u32) {
         debug_assert!(start <= mid && mid <= end && end as usize <= self.code.len());
-        self.code[start as usize..end as usize].rotate_left((mid - start) as usize);
+        let (start, mid, end) = (start as usize, mid as usize, end as usize);
+        // (A copy, not `rotate_left`: less code in the wasm build.)
+        let moved = self.code[mid..end].to_vec();
+        self.code.copy_within(start..mid, start + moved.len());
+        self.code[start..start + moved.len()].copy_from_slice(&moved);
         for f in &mut self.fixups {
-            *f = rotated(*f, start, mid, end);
+            *f = rotated(*f, start as u32, mid as u32, end as u32);
         }
-        self.fixups.sort_unstable();
         self.last = None;
     }
 
@@ -311,7 +315,7 @@ impl CodeBuf<Phase1> {
 
 /// Where position `p` goes when [`CodeBuf::rotate`] moves `mid..end` in front of
 /// `start..mid`.
-pub fn rotated(p: u32, start: u32, mid: u32, end: u32) -> u32 {
+fn rotated(p: u32, start: u32, mid: u32, end: u32) -> u32 {
     if p < start || p >= end {
         p
     } else if p < mid {

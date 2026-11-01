@@ -598,20 +598,28 @@ impl<'a, 'h> Parser<'a, 'h> {
             return;
         }
         self.f.code.rotate(start, mid, end);
-        let lines = &mut self.f.lines;
-        let at = |pc: u32| lines.iter().rev().find(|l| l.0 <= pc).map(|l| l.1);
-        let exact = |pc: u32| lines.iter().any(|l| l.0 == pc);
-        let mut extra = alloc::vec::Vec::new();
-        for (old, new) in [(start, start + (end - mid)), (mid, start), (end, end)] {
-            if let Some(pos) = at(old).filter(|_| !exact(old)) {
-                extra.push((new, pos));
+        // The entries are sorted by pc: before `start`, the moved `start..mid` and
+        // `mid..end`, the rest. Each block starts with the entry in effect where it
+        // started (unless it has its own), and so does the code after `end`.
+        let old = core::mem::take(&mut self.f.lines);
+        let at = |pc: u32| old.iter().rev().find(|l| l.0 <= pc).map(|l| l.1);
+        let range = |a: u32, b: u32| old.iter().filter(move |l| l.0 >= a && l.0 < b);
+        let mut lines = alloc::vec::Vec::with_capacity(old.len() + 3);
+        lines.extend(old.iter().filter(|l| l.0 < start));
+        let shift_b = mid - start;
+        let shift_a = end - mid;
+        for (a, b, new_start) in [(mid, end, start), (start, mid, start + shift_a)] {
+            if let Some(pos) = at(a).filter(|_| !old.iter().any(|l| l.0 == a)) {
+                lines.push((new_start, pos));
             }
+            let shift = |pc: u32| if a == mid { pc - shift_b } else { pc + shift_a };
+            lines.extend(range(a, b).map(|l| (shift(l.0), l.1)));
         }
-        for l in lines.iter_mut() {
-            l.0 = crate::bytecode::rotated(l.0, start, mid, end);
+        if let Some(pos) = at(end).filter(|_| !old.iter().any(|l| l.0 == end)) {
+            lines.push((end, pos));
         }
-        lines.extend(extra);
-        lines.sort_by_key(|l| l.0);
+        lines.extend(old.iter().filter(|l| l.0 >= end));
+        self.f.lines = lines;
     }
 
     /// Removes the last instruction (lvalue conversion, docs/compiler.md 3.7).

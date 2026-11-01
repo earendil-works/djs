@@ -11,7 +11,7 @@
 //! Each kept instruction keeps its phase-1 `pc`, so the line table entries of removed
 //! instructions apply to the next kept one, as they would have.
 
-use alloc::collections::BTreeMap;
+use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::bytecode::{Insn, Label, Op};
@@ -48,22 +48,24 @@ pub(super) fn simplify(mut code: Vec<Insn>) -> Vec<Insn> {
 /// to the update of a loop).
 fn thread_jumps(code: &mut [Insn]) -> bool {
     let mut changed = false;
-    // The first instruction after each label, if it is a `jump`: its target.
-    let mut next_jump: BTreeMap<u32, Label> = BTreeMap::new();
-    let mut pending: Vec<u32> = Vec::new();
-    for insn in code.iter() {
+    // For each label id: the target of the `jump` right after it, if there is one.
+    const NONE: u32 = u32::MAX;
+    let labels = code.iter().filter(|i| i.op == Op::Label).map(|i| i.imm(0));
+    let mut next_jump = vec![NONE; labels.max().map_or(0, |m| m as usize + 1)];
+    let mut pending = 0;
+    for (k, insn) in code.iter().enumerate() {
         if insn.op == Op::Label {
-            pending.push(insn.imm(0));
+            pending += 1;
             continue;
         }
         if insn.op == Op::Jump
             && let Some(t) = insn.label()
         {
-            for &l in &pending {
-                next_jump.insert(l, t);
+            for l in &code[k - pending..k] {
+                next_jump[l.imm(0) as usize] = t.0;
             }
         }
-        pending.clear();
+        pending = 0;
     }
     for insn in code.iter_mut() {
         if !matches!(insn.op, Op::Jump | Op::JumpIfFalse | Op::JumpIfTrue) {
@@ -72,8 +74,8 @@ fn thread_jumps(code: &mut [Insn]) -> bool {
         let Some(mut t) = insn.label() else { continue };
         // A cycle of jumps (`for (;;) {}` after rotation) stops after a few steps.
         for _ in 0..8 {
-            match next_jump.get(&t.0) {
-                Some(&n) if n != t => t = n,
+            match next_jump.get(t.0 as usize) {
+                Some(&n) if n != NONE && n != t.0 => t = Label(n),
                 _ => break,
             }
         }

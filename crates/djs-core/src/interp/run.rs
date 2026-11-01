@@ -1044,7 +1044,7 @@ impl<'h> Exec<'h> {
                 }
                 return Status::OutOfFuel;
             }
-            if self.fast_step() {
+            if self.fast_step() || self.fast_more() {
                 continue;
             }
             let pc0 = self.pc;
@@ -1274,29 +1274,6 @@ impl<'h> Exec<'h> {
             fast::CALL_INTRINSIC => return self.fast_intrinsic(),
             fast::GET_ELEM | fast::GET_ELEM2 | fast::PUT_ELEM => return self.fast_elem(sp0),
             fast::GET_FIELD | fast::GET_METHOD | fast::PUT_FIELD => return self.fast_field(sp0),
-            fast::NULL
-            | fast::PUSH_TRUE
-            | fast::PUSH_FALSE
-            | fast::PUSH_CONST
-            | fast::SPECIAL_OBJECT
-            | fast::SWAP
-            | fast::DUP2
-            | fast::NIP
-            | fast::INSERT2
-            | fast::GET_CAP
-            | fast::GET_CAP_CHK
-            | fast::PUT_CAP
-            | fast::GET_BOX
-            | fast::PUT_BOX
-            | fast::NOT
-            | fast::STRICT_EQ
-            | fast::STRICT_NE
-            | fast::MOD
-            | fast::BAND
-            | fast::BOR
-            | fast::BXOR
-            | fast::SHL
-            | fast::SAR => return self.fast_more(sp0),
             _ => return false,
         }
         true
@@ -1395,11 +1372,16 @@ impl<'h> Exec<'h> {
         true
     }
 
-    /// The less frequent simple ops of `fast_step` (0086), out of line so that they leave
-    /// the register allocation of the hot loop alone (D1352). Same contract: false, with
-    /// nothing changed, when the general path is needed.
+    /// More simple ops (0086), tried after `fast_step` and out of line: as arms of
+    /// `fast_step` they cost the hottest ops more than they saved (D1352's register
+    /// allocation). Same contract: false, with nothing changed, when the general path
+    /// is needed.
     #[inline(never)]
-    fn fast_more(&mut self, sp0: u32) -> bool {
+    fn fast_more(&mut self) -> bool {
+        if self.pc >= self.code_len {
+            return false;
+        }
+        let sp0 = self.sp;
         match self.byte(self.pc) {
             fast::NULL => {
                 self.push(Value::NULL);

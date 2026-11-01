@@ -28,7 +28,7 @@ pub mod template;
 #[cfg(test)]
 mod tests;
 
-pub use code::{Code, CodeBuf, CodeError, Final, Label, Phase1, Phase1Code, rotated};
+pub use code::{Code, CodeBuf, CodeError, Final, Label, Phase1, Phase1Code};
 pub use decode::{DecodeError, Insn, insns};
 pub use disasm::{DisasmContext, disasm};
 pub use handlers::{Handler, HandlerTable, encode_handlers};
