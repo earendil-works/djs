@@ -6,8 +6,12 @@
 
 use alloc::vec::Vec;
 
-use super::cells::{Header, Str8, Str16, U32Array, ValueArray};
+use super::cells::{
+    AtomTable, Header, Object, PropTable, Roots, Rope, Str8, Str16, Symbol, U32Array, ValueArray,
+    flags,
+};
 use super::layout::{FieldTy, Ref};
+use super::object::ObjectClass;
 use super::{CellKind, Heap};
 use crate::value::{Value, tag};
 
@@ -44,6 +48,11 @@ pub enum VerifyError {
     BadValue { slot: u32 },
     /// A traced slot points somewhere that is not the start of a cell of a fitting kind.
     BadRef { slot: u32, target: u32 },
+    /// A cell breaks an invariant of its kind (a ref field to the wrong kind of cell, an
+    /// inconsistent rope, an out-of-range count, an unknown object class).
+    Invalid { offset: u32 },
+    /// The prototype chain through the object at `offset` is cyclic.
+    ProtoCycle { offset: u32 },
 }
 
 /// Iterator over all cells, in address order. Panics on a malformed header; use
@@ -201,6 +210,127 @@ impl Heap {
             });
             if let Some(e) = err {
                 return Err(e);
+            }
+        }
+        for &(cell, kind) in &starts {
+            if !self.cell_invariants(cell, kind, &kind_at) {
+                return Err(VerifyError::Invalid { offset: cell });
+            }
+        }
+        self.check_proto_cycles(&starts)
+    }
+
+    /// Kind-specific invariants that the rest of the heap code relies on to terminate:
+    /// ref fields point at the right kind of cell, counts fit, and rope lengths strictly
+    /// decrease towards the leaves (so ropes cannot be cyclic).
+    fn cell_invariants(
+        &self,
+        cell: u32,
+        kind: CellKind,
+        kind_at: &impl Fn(u32) -> Option<CellKind>,
+    ) -> bool {
+        let a = self.arena();
+        // A ref field: null allowed or not, and the kinds it may point at.
+        let fits = |r: Ref, nullable: bool, kinds: &[CellKind]| match r.get() {
+            None => nullable,
+            Some(t) => kind_at(t).is_some_and(|k| kinds.contains(&k)),
+        };
+        let is_str = |k: Option<CellKind>| {
+            matches!(k, Some(CellKind::Str8 | CellKind::Str16 | CellKind::Rope))
+        };
+        let pow2 = |r: Ref| self.u32_array_len(r.0).is_power_of_two();
+        match kind {
+            CellKind::Roots => fits(a.get(cell, Roots::ATOMS), false, &[CellKind::AtomTable]),
+            CellKind::AtomTable => {
+                let index = a.get(cell, AtomTable::INDEX);
+                fits(
+                    a.get(cell, AtomTable::ENTRIES),
+                    false,
+                    &[CellKind::ValueArray],
+                ) && fits(index, false, &[CellKind::U32Array])
+                    && pow2(index)
+            }
+            CellKind::Object => {
+                let class = ObjectClass::from_u32(a.get(cell, Object::CLASS));
+                class.is_some_and(|c| {
+                    Object::LAYOUT.tail_capacity(self.cell_size(cell)) >= c.slots()
+                }) && fits(a.get(cell, Object::PROTO), true, &[CellKind::Object])
+                    && fits(a.get(cell, Object::PROPS), true, &[CellKind::PropTable])
+                    && fits(a.get(cell, Object::ELEMENTS), true, &[CellKind::ValueArray])
+            }
+            CellKind::PropTable => {
+                let count = a.get(cell, PropTable::COUNT);
+                let index = a.get(cell, PropTable::INDEX);
+                count <= PropTable::LAYOUT.tail_capacity(self.cell_size(cell))
+                    && a.get(cell, PropTable::DELETED) <= count
+                    && fits(index, true, &[CellKind::U32Array])
+                    && (index.is_null() || (pow2(index) && self.u32_array_len(index.0) > count))
+            }
+            CellKind::Rope => {
+                let len = a.get(cell, Rope::LEN);
+                let (left, right) = (a.get(cell, Rope::LEFT), a.get(cell, Rope::RIGHT));
+                let fl = self.cell_flags(cell);
+                let two = fl & flags::ROPE_TWO_BYTE != 0;
+                if fl & flags::ROPE_FLATTENED != 0 {
+                    let k = left.get().and_then(kind_at);
+                    let flat = matches!(k, Some(CellKind::Str8 | CellKind::Str16));
+                    flat && right.is_null()
+                        && a.get(left.0, Str8::LEN) == len
+                        && (k == Some(CellKind::Str16)) == two
+                } else {
+                    let (kl, kr) = (left.get().and_then(kind_at), right.get().and_then(kind_at));
+                    if !is_str(kl) || !is_str(kr) {
+                        return false;
+                    }
+                    let (ll, lr) = (a.get(left.0, Str8::LEN), a.get(right.0, Str8::LEN));
+                    let two_of = |off: u32, k: Option<CellKind>| match k {
+                        Some(CellKind::Str16) => true,
+                        Some(CellKind::Rope) => self.cell_flags(off) & flags::ROPE_TWO_BYTE != 0,
+                        _ => false,
+                    };
+                    ll > 0
+                        && lr > 0
+                        && ll.checked_add(lr) == Some(len)
+                        && two == (two_of(left.0, kl) || two_of(right.0, kr))
+                }
+            }
+            CellKind::Symbol => {
+                let d: Value = a.get(cell, Symbol::DESCRIPTION);
+                d.is_undefined() || d.as_string().is_some()
+            }
+            _ => true,
+        }
+    }
+
+    /// Prototype chains must end in null.
+    fn check_proto_cycles(&self, starts: &[(u32, CellKind)]) -> Result<(), VerifyError> {
+        let objects: Vec<u32> = starts
+            .iter()
+            .filter(|&&(_, k)| k == CellKind::Object)
+            .map(|&(o, _)| o)
+            .collect();
+        // 0 = unvisited, 1 = on the current path, 2 = known to reach null.
+        let mut state = alloc::vec![0u8; objects.len()];
+        let mut path = Vec::new();
+        for start in 0..objects.len() {
+            let mut cur = Some(start);
+            while let Some(i) = cur {
+                match state[i] {
+                    2 => break,
+                    1 => return Err(VerifyError::ProtoCycle { offset: objects[i] }),
+                    _ => {}
+                }
+                state[i] = 1;
+                path.push(i);
+                // Already checked: PROTO is null or an object cell.
+                cur = self
+                    .arena()
+                    .get(objects[i], Object::PROTO)
+                    .get()
+                    .and_then(|p| objects.binary_search(&p).ok());
+            }
+            for i in path.drain(..) {
+                state[i] = 2;
             }
         }
         Ok(())

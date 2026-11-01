@@ -477,20 +477,11 @@ impl Heap {
         if index == 0 {
             return (0..count).find(|&i| self.entry_key(t, i) == key);
         }
-        let mask = self.u32_array_len(index) - 1;
-        let mut b = key_hash(key) & mask;
-        loop {
-            match self.u32_array_get(index, b) {
-                0 => return None,
-                TOMBSTONE => {}
-                e => {
-                    if self.entry_key(t, e - 1) == key {
-                        return Some(e - 1);
-                    }
-                }
-            }
-            b = (b + 1) & mask;
-        }
+        self.probe(index, key_hash(key), |_, e| match e {
+            0 => Some(None),
+            TOMBSTONE => None,
+            e => (self.entry_key(t, e - 1) == key).then_some(Some(e - 1)),
+        })
     }
 
     fn read_entry(&self, t: u32, i: u32) -> Property {
@@ -547,16 +538,12 @@ impl Heap {
     fn build_index(&mut self, t: u32) -> Result<(), HeapError> {
         let buckets = (self.table_capacity(t) * 2).next_power_of_two();
         let index = self.alloc_u32_array(buckets)?;
-        let mask = buckets - 1;
         for i in 0..self.arena().get(t, PropTable::COUNT) {
             let key = self.entry_key(t, i);
             if key.is_null() {
                 continue;
             }
-            let mut b = key_hash(key) & mask;
-            while self.u32_array_get(index, b) != 0 {
-                b = (b + 1) & mask;
-            }
+            let b = self.probe_empty(index, key_hash(key));
             self.u32_array_set(index, b, i + 1);
         }
         self.arena_mut().set(t, PropTable::INDEX, Ref(index));
@@ -608,14 +595,9 @@ impl Heap {
         self.write_entry(t, count, key, p);
         self.arena_mut().set(t, PropTable::COUNT, count + 1);
         if index != 0 {
-            let mask = self.u32_array_len(index) - 1;
-            let mut b = key_hash(key) & mask;
-            loop {
-                match self.u32_array_get(index, b) {
-                    0 | TOMBSTONE => break,
-                    _ => b = (b + 1) & mask,
-                }
-            }
+            let b = self.probe(index, key_hash(key), |b, v| {
+                matches!(v, 0 | TOMBSTONE).then_some(b)
+            });
             self.u32_array_set(index, b, count + 1);
         }
         Ok(())
@@ -639,11 +621,7 @@ impl Heap {
             return;
         }
         let key = self.entry_key(t, i);
-        let mask = self.u32_array_len(index) - 1;
-        let mut b = key_hash(key) & mask;
-        while self.u32_array_get(index, b) != i + 1 {
-            b = (b + 1) & mask;
-        }
+        let b = self.probe(index, key_hash(key), |b, v| (v == i + 1).then_some(b));
         self.u32_array_set(index, b, TOMBSTONE);
         self.arena_mut().zero(PropTable::ENTRIES.at(t, i), esize);
         let deleted = self.arena().get(t, PropTable::DELETED);

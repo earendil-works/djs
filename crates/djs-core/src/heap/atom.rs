@@ -342,32 +342,22 @@ impl Heap {
     /// Finds a string atom by hash and content.
     fn find_string_atom(&self, hash: u32, eq: impl Fn(&Heap, Str) -> bool) -> Option<Atom> {
         let index = self.arena().get(self.atom_table(), AtomTable::INDEX).0;
-        let mask = self.u32_array_len(index) - 1;
         let entries = self.atom_entries();
-        let mut i = hash & mask;
-        loop {
-            let idx = self.u32_array_get(index, i);
+        self.probe(index, hash, |_, idx| {
             if idx == 0 {
-                return None;
+                return Some(None);
             }
             let s = self
                 .value_array_get(entries, idx)
                 .as_string()
                 .expect("string atom");
-            if self.str_hash_uncached(s) == hash && eq(self, s) {
-                return Some(Atom(idx));
-            }
-            i = (i + 1) & mask;
-        }
+            (self.str_hash_uncached(s) == hash && eq(self, s)).then_some(Some(Atom(idx)))
+        })
     }
 
     fn index_insert(&mut self, index: u32, hash: u32, atom_index: u32) {
-        let mask = self.u32_array_len(index) - 1;
-        let mut i = hash & mask;
-        while self.u32_array_get(index, i) != 0 {
-            i = (i + 1) & mask;
-        }
-        self.u32_array_set(index, i, atom_index);
+        let b = self.probe_empty(index, hash);
+        self.u32_array_set(index, b, atom_index);
     }
 
     /// Adds the flat string `s` (not yet interned, hash cached) as a new string atom.

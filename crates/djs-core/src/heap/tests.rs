@@ -997,8 +997,13 @@ fn walker_visits_every_cell() {
         .map(|c| (c.offset, c.kind))
         .collect();
     assert_eq!(walked, allocated);
-    // Zeroed cells are valid: lengths 0, no references.
-    h.verify().unwrap();
+    // Zeroed cells are safe to trace: no references. (They are not all semantically valid,
+    // e.g. a rope without children, so `verify` would reject some of them; no safepoint
+    // can see a cell between allocation and initialization.)
+    for &(off, _) in &allocated {
+        assert!(h.cell_refs(off).is_empty());
+    }
+    let mut h = heap();
 
     // The whole arena is covered, starting with the roots.
     build_sample(&mut h);
@@ -1127,6 +1132,33 @@ fn image_validation() {
     assert!(matches!(
         Heap::from_bytes(bad, DEFAULT_LIMIT),
         Err(LoadError::Corrupt(VerifyError::BadValue { .. }))
+    ));
+
+    // A rope that contains itself.
+    let mut h2 = heap();
+    let x = s(&mut h2, &"x".repeat(40));
+    let r = h2.concat(x, x).unwrap();
+    h2.set_realm(Value::string(r));
+    h2.verify().unwrap();
+    let mut bad = h2.bytes().to_vec();
+    let left = (r.0 + cells::Rope::LEFT.offset) as usize;
+    bad[left..left + 4].copy_from_slice(&r.0.to_le_bytes());
+    assert_eq!(
+        Heap::from_bytes(bad, DEFAULT_LIMIT).err(),
+        Some(LoadError::Corrupt(VerifyError::Invalid { offset: r.0 }))
+    );
+
+    // A prototype cycle.
+    let mut h3 = heap();
+    let p = h3.new_object(None).unwrap();
+    let o = h3.new_object(Some(p)).unwrap();
+    h3.set_realm(Value::object(o));
+    let mut bad = h3.bytes().to_vec();
+    let proto = (p.0 + cells::Object::PROTO.offset) as usize;
+    bad[proto..proto + 4].copy_from_slice(&o.0.to_le_bytes());
+    assert!(matches!(
+        Heap::from_bytes(bad, DEFAULT_LIMIT),
+        Err(LoadError::Corrupt(VerifyError::ProtoCycle { .. }))
     ));
 
     // Random corruption never panics the verifier.

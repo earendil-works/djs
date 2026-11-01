@@ -80,6 +80,34 @@ impl Heap {
         self.arena().read(U32Array::DATA.at(arr, i))
     }
 
+    /// Linear probing over the hash index `index` (a [`U32Array`] whose length is a power
+    /// of two), starting at bucket `hash & mask`: calls `f(bucket, value)` until it returns
+    /// `Some`. Panics after visiting every bucket, which only a corrupted heap can cause,
+    /// so a probe never loops forever.
+    pub(crate) fn probe<R>(
+        &self,
+        index: u32,
+        hash: u32,
+        mut f: impl FnMut(u32, u32) -> Option<R>,
+    ) -> R {
+        let len = self.u32_array_len(index);
+        assert!(len.is_power_of_two(), "hash index length {len}");
+        let mask = len - 1;
+        let mut b = hash & mask;
+        for _ in 0..len {
+            if let Some(r) = f(b, self.u32_array_get(index, b)) {
+                return r;
+            }
+            b = (b + 1) & mask;
+        }
+        panic!("hash index {index} is full");
+    }
+
+    /// The first empty bucket (value 0) for `hash`.
+    pub(crate) fn probe_empty(&self, index: u32, hash: u32) -> u32 {
+        self.probe(index, hash, |b, v| (v == 0).then_some(b))
+    }
+
     #[inline]
     pub(crate) fn u32_array_set(&mut self, arr: u32, i: u32, v: u32) {
         debug_assert!(i < self.u32_array_len(arr));
