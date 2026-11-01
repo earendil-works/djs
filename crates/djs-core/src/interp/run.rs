@@ -96,6 +96,8 @@ mod fast {
     pub const RETURN: u8 = Op::Return as u8;
     pub const RETURN_UNDEF: u8 = Op::ReturnUndef as u8;
     pub const CALL_INTRINSIC: u8 = Op::CallIntrinsic as u8;
+    pub const GET_ELEM: u8 = Op::GetElem as u8;
+    pub const PUT_ELEM: u8 = Op::PutElem as u8;
 }
 
 type Step = Result<Option<Status>, Fault>;
@@ -809,6 +811,7 @@ impl<'h> Exec<'h> {
             fast::RETURN => return self.fast_return(Op::Return),
             fast::RETURN_UNDEF => return self.fast_return(Op::ReturnUndef),
             fast::CALL_INTRINSIC => return self.fast_intrinsic(),
+            fast::GET_ELEM | fast::PUT_ELEM => return self.fast_elem(sp0),
             _ => return false,
         }
         true
@@ -891,6 +894,36 @@ impl<'h> Exec<'h> {
         self.sp -= 1;
         self.set(self.sp - 1, v);
         self.advance(op, sp0);
+        true
+    }
+
+    /// `get_elem` / `put_elem` on an existing dense element with an int key: no key
+    /// conversion (D1280), no getter or setter, no growth.
+    #[inline(never)]
+    fn fast_elem(&mut self, sp0: u32) -> bool {
+        let put = self.byte(self.pc) == fast::PUT_ELEM;
+        let k = if put { 1 } else { 0 };
+        let (o, key) = (self.top(k + 1), self.top(k));
+        let Some((obj, i)) = o
+            .as_object()
+            .zip(key.as_int().and_then(|i| u32::try_from(i).ok()))
+        else {
+            return false;
+        };
+        let Some(old) = self.heap.get_element_fast(obj, i) else {
+            return false;
+        };
+        if put {
+            if !matches!(self.heap.set_element_fast(obj, i, self.top(0)), Ok(true)) {
+                return false;
+            }
+            self.sp -= 3;
+            self.advance(Op::PutElem, sp0);
+        } else {
+            self.sp -= 1;
+            self.set(self.sp - 1, old);
+            self.advance(Op::GetElem, sp0);
+        }
         true
     }
 
