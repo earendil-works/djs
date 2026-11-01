@@ -58,6 +58,10 @@ Notes for the coordinator (the main agent), learned the hard way.
   lock. Sub-agents never push (AGENTS.md).
 
 ## Docs
+- Owner rule (0115): the guide is self-contained. No references to ARCH.md, TESTING.md,
+  docs/*.md or work/ as explanations, no bare goal numbers ("G2"); decisions are
+  explained in words and linked only to a page inside the site; source links go to the
+  published GitHub source. `djs-docs check` enforces it once 0115 lands.
 - The owner chose djs-docs (0103, option A). When writing an issue, name the guide pages
   (docs/guide/) it affects, and check at merge time that the agent updated them and that
   `djs-docs check` passes in the gate.
