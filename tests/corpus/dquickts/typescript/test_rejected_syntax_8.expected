@@ -1,0 +1,2 @@
+=== throw
+SyntaxError: const enum member initializers must be constant expressions

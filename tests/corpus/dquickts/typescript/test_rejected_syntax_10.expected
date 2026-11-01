@@ -1,0 +1,2 @@
+=== throw
+SyntaxError: an ambient function cannot have a body

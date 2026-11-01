@@ -115,6 +115,15 @@ pub fn discover(root: &Path, filters: &[String]) -> Result<Vec<Case>, String> {
         });
     }
     cases.sort_by(|a, b| a.name.cmp(&b.name));
+    let mut seen = std::collections::HashMap::new();
+    for c in &cases {
+        if let Some(other) = seen.insert(&c.expected_file, &c.name) {
+            return Err(format!(
+                "{other} and {} would share one .expected file",
+                c.name
+            ));
+        }
+    }
     Ok(cases)
 }
 

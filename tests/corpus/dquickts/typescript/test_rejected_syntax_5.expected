@@ -1,0 +1,2 @@
+=== throw
+SyntaxError: parameter decorators are only supported with experimentalDecorators

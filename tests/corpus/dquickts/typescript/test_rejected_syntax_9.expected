@@ -1,0 +1,2 @@
+=== throw
+SyntaxError: enum member must have initializer

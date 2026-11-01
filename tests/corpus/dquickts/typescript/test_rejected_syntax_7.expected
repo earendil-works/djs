@@ -1,0 +1,2 @@
+=== throw
+SyntaxError: 'import ... = require()' is not supported (no CommonJS modules), use 'import ... from'
