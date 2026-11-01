@@ -10,7 +10,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 | 0097 | Finish the later group (immutable ArrayBuffer, inventory) | infra | .worktrees/infra |
 | 0096 | Compiler structural speedups (0092 follow-ups) | lexer | .worktrees/lexer |
-| 0083 | Shapes: parts 1-2 merged (641984c5, D1831); part 3 (addition caches, proto caches) next | heap | .worktrees/heap |
+| 0098 | Base image + shapes code size (0083 part 4) | heap | .worktrees/heap |
 | 0093 | Run-loop state in locals + compact call protocol (design first) | perf | .worktrees/perf |
 
 ## Open (ready)
@@ -79,6 +79,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0090 | Natives retry, resizable TA, JSON slow path | dee4dc9b (agent infra; JSON with a Date 18.1G -> 1.2G wasm instr) |
 | 0080 | for-of/iteration fast paths + natives wave 2 | fd5a6d1 (agent infra; for-of 5,433 -> 738 instr/elem) |
 | 0063 | D015 + bgen Rust backend v1 (35 natives) | 9f662b7 (agent infra; higher-order 6.8x -> 2.3x qjs; +80 KB code) |
+| 0083 | Shapes (parts 1-3) | 9e7bcfd5 (agent heap; D1831-D1832; objects -27..-33% bytes; literals/ctors ~3x faster) |
 | 0069 | Host OOM status | 893495f (agent heap; D1690) |
 | 0070 | Collect-and-retry at a failing allocation | 42b7fc5 (agent heap; D1700; natives not yet) |
 | 0062 | Property access ICs (part 1) | 5671e8c (agent heap; global read 10.4 -> 1.3 ns; props -14..-18%) |
