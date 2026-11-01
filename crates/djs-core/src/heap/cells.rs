@@ -67,6 +67,9 @@ pub mod flags {
     pub const OBJ_INDEXED_PROPS: u16 = 2;
     /// Array: `length` is not writable.
     pub const OBJ_LENGTH_READONLY: u16 = 4;
+    /// Function: a builtin method installed by the prelude (`%InstallMethod`). Stack
+    /// traces show its frames as `at name (native)`; other prelude frames are hidden.
+    pub const OBJ_BUILTIN: u16 = 8;
 }
 
 /// `"DJS\0"` little-endian, in [`Roots::MAGIC`].

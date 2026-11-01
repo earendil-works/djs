@@ -9,6 +9,7 @@ use super::*;
 use crate::bytecode::template::{TemplateParts, alloc_template};
 use crate::bytecode::{CodeBuf, Handler, Label};
 use crate::heap::{Atom, PropFlags, PropertyDescriptor};
+use crate::interp::run::STACK_TRACE_LIMIT;
 
 const LOG: u32 = 1;
 
@@ -849,4 +850,45 @@ fn abort_returns_to_idle() {
     let spin = vm.heap().get_handle(hs);
     vm.call(spin, Value::UNDEFINED, &[]).unwrap();
     assert_eq!(vm.run(10), Status::OutOfFuel);
+}
+
+/// Runs a Script through the compiler, collecting console.log output.
+fn run_js(src: &str) -> Outcome {
+    let mut vm = vm();
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("t.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    finish(vm, 1 << 40, false).1
+}
+
+#[test]
+fn error_stack_traces() {
+    // Positions checked against qjs.
+    let out = run_js(
+        "function inner(x) { return x.y.z; }\n\
+         const arrow = () => { const r = inner({}); return r; };\n\
+         function outer() { const r = arrow(); return r; }\n\
+         try { outer(); } catch (e) { console.log(e.stack); }\n\
+         try { null.x } catch (e) { console.log(e.stack); }\n\
+         const anon = function () { return nope; };\n\
+         try { anon(); } catch (e) { console.log(e.stack); }\n\
+         function deep(n) { if (n === 0) return null.x; const r = deep(n - 1); return r; }\n\
+         try { deep(20); } catch (e) { console.log(e.stack); }\n",
+    );
+    assert_eq!(
+        out.log[0],
+        "    at inner (t.js:1:31)\n    at arrow (t.js:2:38)\n    at outer (t.js:3:35)\n    at <eval> (t.js:4:12)\n"
+    );
+    assert_eq!(out.log[1], "    at <eval> (t.js:5:11)\n");
+    assert_eq!(
+        out.log[2],
+        "    at anon (t.js:6:35)\n    at <eval> (t.js:7:11)\n"
+    );
+    let deep = &out.log[3];
+    assert_eq!(deep.lines().count(), STACK_TRACE_LIMIT as usize, "{deep}");
 }

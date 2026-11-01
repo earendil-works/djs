@@ -164,6 +164,9 @@ pub fn run_main(
             Status::Threw(e) => {
                 let msg = vm.display(e);
                 let _ = writeln!(err, "Uncaught {msg}");
+                if let Some(stack) = vm.error_stack(e) {
+                    let _ = write!(err, "{stack}");
+                }
                 return 1;
             }
             Status::OutOfFuel => {

@@ -220,7 +220,7 @@ impl Vm {
         match r {
             Ok(_) => ex.flush(),
             Err(fault) => {
-                let exc = ex.fault_value(fault);
+                let exc = ex.fault_value(fault, None);
                 ex.set_sp(0);
                 ex.flush();
                 state::set_result(&mut self.heap, exc);
@@ -329,6 +329,17 @@ impl Vm {
     /// as `Name: message`, everything else as JSON with a `String()`-like fallback.
     pub fn display(&mut self, v: Value) -> String {
         format::display(&mut self.heap, v)
+    }
+
+    /// The `stack` of an Error object (own data property), if it has one.
+    pub fn error_stack(&self, v: Value) -> Option<String> {
+        let o = v.as_object()?;
+        let s = self
+            .heap
+            .get_own_property(o, atoms::STACK)?
+            .value()?
+            .as_string()?;
+        Some(self.heap.str_to_string(s))
     }
 
     /// Collects garbage now. Raw values held outside the heap are invalid afterwards.

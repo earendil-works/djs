@@ -25,9 +25,12 @@ pub enum Intrinsic {
     /// A preallocated `InternalError: out of memory`, thrown when even the error object
     /// cannot be allocated.
     OutOfMemoryError,
+    /// The prelude's `Script` cell (an internal reference), or `undefined`: its frames
+    /// are builtins in stack traces.
+    PreludeScript,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::OutOfMemoryError as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::PreludeScript as u32 + 1;
 
 /// The native error types the VM throws itself.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
