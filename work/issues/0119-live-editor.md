@@ -1,7 +1,7 @@
 # 0119: Live examples as a real live editor with syntax highlighting
 
-status: open
-agent: -
+status: in-progress
+agent: docs
 branch: issue/0119-live-editor
 depends-on: 0114, 0115
 guide: all pages with live examples (the widget only; no prose changes needed)
