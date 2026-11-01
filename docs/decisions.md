@@ -3648,3 +3648,73 @@ marks the native frame and stores new.target as for bytecode); the bgen guard is
 Set and Map constructors, GetPrototypeFromConstructor and AddEntriesFromIterable are
 `@native` (and the latter two `@intrinsic`); no shipped `@native` uses try/finally yet,
 so it is covered by the golden fixture (Fin) and the checker test.
+
+## D1780: A block ASCII check in wasm32
+date: 2026-11-03 · by: num · issue: 0078
+Source: 0077's side finding. `<[u8]>::is_ascii` runs at 8–9 GB/s in wasm32 under node.
+`heap::string::is_ascii` instead ORs 32-byte blocks as four u64 words and tests them once
+per block: 37–46 GB/s from 1 KiB up, and about the same as std below 64 bytes. It is used
+wherever the hot paths asked `is_ascii`: wire's ASCII strings, `Heap::alloc_str`,
+`atom_str`'s hash and `str_eq_str`.
+
+Natively the standard version is faster (SIMD: 12 ns against 18–24 ns per KiB), so
+`is_ascii` picks the block version only on `target_arch = "wasm32"`. The block version is
+tested on every target (`heap::tests::block_ascii_check`).
+
+## D1781: Wire decode validates UTF-8 while transcoding
+date: 2026-11-03 · by: num · issue: 0078
+A non-ASCII wire string used to be read twice: once by `str::from_utf8` to validate it,
+and once by `transcode` to turn it into Latin-1 or UTF-16. `transcode` now validates
+strictly as it goes, applying `from_utf8`'s rules:
+- no overlong forms;
+- no surrogates;
+- nothing above U+10FFFF;
+- no truncated or stray continuation bytes.
+
+It returns `Ok`, `InvalidUtf8` or `WrongLength`. The error messages stay the same: when
+the units run out, the rest of the input decides whether the error is "invalid UTF-8" or
+"string lengths do not match", as the two-pass order did. Keys (short) still go through
+`from_utf8`. `wire::tests::transcode_matches_from_utf8` compares the verdict and the units
+with `from_utf8` plus UTF-16 counting on 200k random byte strings, each at three
+lengths. The string cell is now allocated before validation ends, so an invalid string
+leaves a garbage cell, and a heap at its cap reports out of memory before invalid UTF-8.
+
+Effect on decode:
+
+| string | wasm, before → after | native, before → after |
+| --- | ---: | ---: |
+| 1 MB mixed (wasip1 bench) | 1.70–1.95 → 1.04–1.09 ms | 1.76–1.83 → 1.18–1.35 ms |
+| 1 MB Latin-1 (wasip1 bench) | 2.8–3.2 → 1.9 ms | ≈ −10–20% |
+
+`setGlobal` in djs-wasm: mixed 3.53 → 2.70 ms, Latin-1 3.65 → 2.62 ms, 4 MiB ASCII
+1.74 → 1.35 ms (the last from D1780).
+
+## D1782: `short_decimal` gives up early on full-precision numbers
+date: 2026-11-03 · by: num · issue: 0078
+D1262's fast path tried every k from 1 to 8 before it gave up on a number that has no
+short form, such as `Math.random()` or most computed values. That cost 12–29 ns per
+failure (0077).
+
+Now one test comes first. When `tol8 = ulp(a)·1e8 < 1/4` and `a·1e8 < 2^53`, it computes
+`a·1e8`. If that product is more than `2·tol8` away from its nearest integer, no k ≤ 8 can
+round-trip, and Ryu takes over.
+
+Why the test is sound: a short form `m/10^k` that round-trips lies within `ulp/2` of `a`,
+so `m·10^(8-k)` is within `tol8/2` of the exact `a·1e8`. The product's rounding adds less
+than `tol8`, so `a·1e8` stays within 1.5·`tol8` of that integer, which is then also its
+nearest one. The test can only cost speed: Ryu prints the same digits.
+`num::format::tests::short_decimal_early_exit_loses_nothing` compares the new path with
+the old loop on 3M inputs (1.6M of them short).
+
+Effect of `to_string`:
+
+| input | wasm, before → after | native, before → after |
+| --- | ---: | ---: |
+| `Math.random()` | 157–174 → 120–124 ns | 60–71 → 57–66 ns |
+| random bits | 180–194 → 146 ns | |
+| short decimals | unchanged | unchanged |
+
+In djs-wasm, `JSON.stringify` of 3 × 100k random floats went from 276 to 251 ms.
+
+djs-wasm for D1780–D1782 together: +118 bytes (+34 gzip). A port of zmij's core (0077's
+optional item) is not done; it remains a follow-up.
