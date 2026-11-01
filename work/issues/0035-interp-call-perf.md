@@ -109,6 +109,12 @@ properties.
     `call_intrinsic` / the non-fast call path);
   - wasm numbers;
   - `scripts/bench.sh --record` and the ratios.
+- Part 1 merge (after the 0030 interlude; rebased onto 9f35b6f): steps 1 and 2, i.e.
+  the inlining, the int32 fast paths, and D1350 `fast_step` with call/return.
+  - Full checks: workspace tests, e2e in plain/suspend/gc, difftest stress identical
+    with no new failures, test262 active with no new failures and no stale entries.
+  - Status stays in-progress: props, sort and map still to do, plus wasm numbers and
+    `bench.sh --record`.
 
 ## Follow-ups
 
