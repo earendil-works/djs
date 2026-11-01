@@ -104,7 +104,7 @@ On builtin functions (JSDoc):
   machine in `crates/djs-core/src/builtins/gen/natives.rs`, which `scripts/bgen.sh`
   writes too. A reentrant builtin it calls must be `@intrinsic`, unless it is a small
   internal helper that bgen inlines (D1632); leaf builtins it calls become Rust
-  functions. Not yet: `try`/`finally`, `@constructor`. Each one adds wasm size
+  functions. `try`/`finally` and `@constructor` work too (D1803). Each one adds wasm size
   (`scripts/native-sizes.sh`): tag a builtin only when a benchmark shows it is hot.
   `--backend bytecode` (djs run, djs-difftest, djs-test262) runs the bytecode instead;
   both must behave the same.
@@ -113,9 +113,11 @@ On builtin functions (JSDoc):
   `crates/djs-core/src/builtins/fast.rs` (D1850). With the native backend a call runs it
   first; it either returns the builtin's result or declines and the builtin runs. The
   entry must mirror this source step by step and accept only arguments for which nothing
-  observable can happen (primitives, leaf reads); every throwing case declines. Keep the
-  two in sync; `tests/corpus/builtins/fast-paths.js` checks them against qjs, and the
-  bytecode-backend run tests the TS path.
+  observable can happen (primitives, leaf reads); every throwing case declines, and so
+  does reaching the heap cap: an entry allocates before it changes anything, or makes
+  only stores the builtin repeats (D1910). Keep the two in sync;
+  `tests/corpus/builtins/fast-paths.js` and `fast-entries-array.js` check them against
+  qjs, and the bytecode-backend run tests the TS path.
 
 On intrinsics in `intrinsics.d.ts`, exactly one of:
 
