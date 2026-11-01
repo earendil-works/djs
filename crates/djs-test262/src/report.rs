@@ -36,12 +36,13 @@ impl Tally {
     }
 }
 
+/// Pass rate rounded down to tenths, so 100.0% means that everything passed.
 fn pct(pass: usize, ran: usize) -> String {
     if ran == 0 {
-        String::new()
-    } else {
-        format!("{:.1}%", pass as f64 * 100.0 / ran as f64)
+        return String::new();
     }
+    let tenths = pass * 1000 / ran;
+    format!("{}.{}%", tenths / 10, tenths % 10)
 }
 
 /// Renders a Markdown table; numeric-looking columns are right-aligned.
@@ -205,6 +206,14 @@ mod tests {
         assert_eq!(dir_key("built-ins/Array/from/x.js", 2), "built-ins/Array");
         assert_eq!(dir_key("built-ins/Array/x.js", 5), "built-ins/Array");
         assert_eq!(dir_key("harness/x.js", 2), "harness");
+    }
+
+    #[test]
+    fn percentages() {
+        assert_eq!(pct(2679, 2680), "99.9%");
+        assert_eq!(pct(5, 5), "100.0%");
+        assert_eq!(pct(0, 3), "0.0%");
+        assert_eq!(pct(0, 0), "");
     }
 
     #[test]
