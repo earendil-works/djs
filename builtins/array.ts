@@ -1058,8 +1058,9 @@ function ArrayPrototypeWith(this: Value, index: Value, value: Value): Obj {
 // ---- Conversions ------------------------------------------------------------------------
 
 /**
- * Array.prototype.toString ( ), 23.1.3.36.
+ * Array.prototype.toString ( ), 23.1.3.36 (also %TypedArray%.prototype.toString, 23.2.3.32).
  * @builtin Array.prototype.toString
+ * @builtin %TypedArray%.prototype.toString
  */
 function ArrayPrototypeToString(this: Value): Value {
   const array: Obj = ToObject(this);

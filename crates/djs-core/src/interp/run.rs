@@ -2456,6 +2456,8 @@ impl<'h> Exec<'h> {
                     return type_error("object is not extensible");
                 }
             }
+            // A typed array on the chain without that element: nothing is written.
+            None if self.heap.typed_array_set_stops(o, key) => {}
             None => {
                 if !self.heap.create_data_property(o, key, v)? {
                     return type_error("object is not extensible");
@@ -2959,10 +2961,15 @@ impl<'h> Exec<'h> {
             }
         }
         let proto_source = new_target.and_then(|v| v.as_object()).unwrap_or(fo);
+        // A builtin constructor makes its own object (GetPrototypeFromConstructor in the
+        // builtin, which may run a `prototype` getter): `this` is not read (0039).
+        let builtin =
+            self.heap.cell_flags(fo.offset()) & crate::heap::cells::flags::OBJ_BUILTIN != 0;
         let proto = match self
             .heap
             .find_property(proto_source, crate::heap::atoms::PROTOTYPE)
         {
+            _ if builtin => None,
             Some((_, Property::Data { value, .. })) => value.as_object(),
             None => None,
             Some(_) => return type_error("not supported yet: getter for 'prototype'"),

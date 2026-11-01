@@ -87,6 +87,7 @@ const BUFFER_TRANSFER: u16 = id("BufferTransfer");
 const BUFFER_COPY: u16 = id("BufferCopy");
 const IS_TYPED_ARRAY: u16 = id("IsTypedArray");
 const IS_DATA_VIEW: u16 = id("IsDataView");
+const SORT_NUMBERS: u16 = id("SortNumbers");
 const REALM_CONSTRUCTOR: u16 = id("RealmConstructor");
 const TYPED_ARRAY_CREATE: u16 = id("TypedArrayCreate");
 const TYPED_ARRAY_FIELD: u16 = id("TypedArrayField");
@@ -1216,6 +1217,13 @@ impl Exec<'_> {
                 typed::buffer_copy(self.heap, src, from, dst, to, count);
                 Value::UNDEFINED
             }
+            SORT_NUMBERS => match a0.as_object() {
+                Some(o) => {
+                    array::sort_numbers(self.heap, o)?;
+                    Value::UNDEFINED
+                }
+                None => return bad_argument(info.name),
+            },
             IS_DATA_VIEW => Value::bool(
                 a0.as_object()
                     .is_some_and(|o| self.heap.object_class(o) == ObjectClass::DataView),
@@ -1682,6 +1690,18 @@ impl Exec<'_> {
         v: Value,
         receiver: Value,
     ) -> Result<Result<bool, Value>, Fault> {
+        // A typed array receiving its own numeric key writes the element (the value was
+        // converted by the builtin); an invalid index elsewhere on the chain is a no-op.
+        if self.heap.is_typed_array(o)
+            && receiver.as_object() == Some(o)
+            && self.heap.canonical_numeric_index(key).is_some()
+        {
+            self.heap.ta_numeric_set(o, key, v);
+            return Ok(Ok(true));
+        }
+        if self.heap.find_property(o, key).is_none() && self.heap.typed_array_set_stops(o, key) {
+            return Ok(Ok(true));
+        }
         match self.heap.find_property(o, key) {
             Some((_, Property::Accessor { setter, .. })) => {
                 return Ok(if setter.is_undefined() {

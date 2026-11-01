@@ -45,3 +45,30 @@ pub(crate) fn sort_primitives(heap: &mut Heap, list: Obj) -> Result<bool, Fault>
     }
     Ok(true)
 }
+
+/// `%SortNumbers(list)`: a typed array's default sort (23.2.3.30 with no comparator):
+/// numeric, -0 before +0, NaN last; stable.
+pub(crate) fn sort_numbers(heap: &mut Heap, list: Obj) -> Result<(), Fault> {
+    let n = heap.array_length(list);
+    let mut values: Vec<f64> = (0..n)
+        .map(|i| {
+            heap.get_element_fast(list, i)
+                .and_then(|v| v.as_number())
+                .unwrap_or(f64::NAN)
+        })
+        .collect();
+    values.sort_by(|a, b| {
+        use core::cmp::Ordering::*;
+        match (a.is_nan(), b.is_nan()) {
+            (true, true) => Equal,
+            (true, false) => Greater,
+            (false, true) => Less,
+            _ if a == b && *a == 0.0 => a.is_sign_negative().cmp(&b.is_sign_negative()).reverse(),
+            _ => a.partial_cmp(b).unwrap_or(Equal),
+        }
+    });
+    for (i, x) in values.into_iter().enumerate() {
+        heap.set_element_fast(list, i as u32, crate::interp::conv::number(x))?;
+    }
+    Ok(())
+}

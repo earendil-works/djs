@@ -112,7 +112,9 @@ function ArrayIteratorPrototypeNext(this: Value): Obj {
   }
   const o: Obj = AsObj(target);
   const index: f64 = ArrayIteratorIndex(this);
-  const len: f64 = LengthOfArrayLike(o);
+  // A typed array: its own length, and a TypeError once detached or out of bounds
+  // (23.1.5.1 step 2.b.ii).
+  const len: f64 = IsTypedArray(o) ? TALength(ValidateTypedArray(o)) : LengthOfArrayLike(o);
   if (index >= len) {
     ArrayIteratorFinish(this);
     return CreateIterResultObject(undefined, true);

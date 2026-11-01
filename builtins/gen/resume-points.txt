@@ -338,20 +338,19 @@ ArrayPrototypeWith: reentrant (Array.prototype.with)
   builtins/array.ts:1053:60  Get (intrinsic)
   builtins/array.ts:1053:5  CreateDataPropertyOrThrow (intrinsic)
 
-ArrayPrototypeToString: reentrant (Array.prototype.toString)
-  builtins/array.ts:1066:23  Get (intrinsic)
-  builtins/array.ts:1068:12  Call (intrinsic)
-  builtins/array.ts:1070:10  ObjectToString (builtin)
+ArrayPrototypeToString: reentrant (Array.prototype.toString, %TypedArray%.prototype.toString)
+  builtins/array.ts:1067:23  Get (intrinsic)
+  builtins/array.ts:1069:12  Call (intrinsic)
+  builtins/array.ts:1071:10  ObjectToString (builtin)
 
 ArrayPrototypeToLocaleString: reentrant (Array.prototype.toLocaleString)
-  builtins/array.ts:1079:20  LengthOfArrayLike (builtin)
-  builtins/array.ts:1085:32  Get (intrinsic)
-  builtins/array.ts:1087:26  GetV (intrinsic)
-  builtins/array.ts:1087:21  Call (intrinsic)
-  builtins/array.ts:1087:12  ToString (builtin)
+  builtins/array.ts:1080:20  LengthOfArrayLike (builtin)
+  builtins/array.ts:1086:32  Get (intrinsic)
+  builtins/array.ts:1088:26  GetV (intrinsic)
+  builtins/array.ts:1088:21  Call (intrinsic)
+  builtins/array.ts:1088:12  ToString (builtin)
 
 ArrayPrototypeUnscopables: reentrant (value Array.prototype[Symbol.unscopables])
-  builtins/array.ts:1100:3  CreateDataPropertyOrThrow (intrinsic)
   builtins/array.ts:1101:3  CreateDataPropertyOrThrow (intrinsic)
   builtins/array.ts:1102:3  CreateDataPropertyOrThrow (intrinsic)
   builtins/array.ts:1103:3  CreateDataPropertyOrThrow (intrinsic)
@@ -367,6 +366,7 @@ ArrayPrototypeUnscopables: reentrant (value Array.prototype[Symbol.unscopables])
   builtins/array.ts:1113:3  CreateDataPropertyOrThrow (intrinsic)
   builtins/array.ts:1114:3  CreateDataPropertyOrThrow (intrinsic)
   builtins/array.ts:1115:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1116:3  CreateDataPropertyOrThrow (intrinsic)
 
 ToIndex: reentrant
   builtins/arraybuffer.ts:5:18  ToIntegerOrInfinity (builtin)
@@ -828,8 +828,8 @@ ArrayPrototypeKeys: leaf (Array.prototype.keys)
 ArrayPrototypeEntries: leaf (Array.prototype.entries)
 
 ArrayIteratorPrototypeNext: reentrant (%ArrayIteratorPrototype%.next, %ArrayIteratorPrototypeNext)
-  builtins/iter.ts:115:20  LengthOfArrayLike (builtin)
-  builtins/iter.ts:125:24  Get (intrinsic)
+  builtins/iter.ts:117:72  LengthOfArrayLike (builtin)
+  builtins/iter.ts:127:24  Get (intrinsic)
 
 IteratorPrototypeIterator: leaf (%IteratorPrototype%[Symbol.iterator])
 
@@ -1251,76 +1251,80 @@ ToPropertyDescriptor: reentrant
   builtins/object.ts:53:5  CreateDataPropertyOrThrow (intrinsic)
 
 DefineOwnProperty: reentrant
-  builtins/object.ts:67:22  Get (intrinsic)
-  builtins/object.ts:68:25  ToNumber (builtin)
-  builtins/object.ts:69:28  ToNumber (builtin)
-  builtins/object.ts:76:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:69:59  IsCanonicalNumericKey (builtin)
+  builtins/object.ts:70:26  Get (intrinsic)
+  builtins/object.ts:76:16  ToNumber (builtin)
+  builtins/object.ts:76:7  TASet (builtin)
+  builtins/object.ts:81:22  Get (intrinsic)
+  builtins/object.ts:82:25  ToNumber (builtin)
+  builtins/object.ts:83:28  ToNumber (builtin)
+  builtins/object.ts:90:5  CreateDataPropertyOrThrow (intrinsic)
 
 DefinePropertyOrThrow: reentrant
-  builtins/object.ts:83:8  DefineOwnProperty (builtin)
+  builtins/object.ts:97:8  DefineOwnProperty (builtin)
 
 ObjectDefineProperty: reentrant (Object.defineProperty)
-  builtins/object.ts:99:22  ToPropertyKey (builtin)
-  builtins/object.ts:100:21  ToPropertyDescriptor (builtin)
-  builtins/object.ts:101:3  DefinePropertyOrThrow (builtin)
+  builtins/object.ts:113:22  ToPropertyKey (builtin)
+  builtins/object.ts:114:21  ToPropertyDescriptor (builtin)
+  builtins/object.ts:115:3  DefinePropertyOrThrow (builtin)
 
 ObjectGetOwnPropertyDescriptor: reentrant (Object.getOwnPropertyDescriptor)
-  builtins/object.ts:111:22  ToPropertyKey (builtin)
+  builtins/object.ts:125:22  ToPropertyKey (builtin)
 
 ObjectGetOwnPropertyNames: leaf (Object.getOwnPropertyNames)
 
 ObjectPrototypeHasOwnProperty: reentrant (Object.prototype.hasOwnProperty)
-  builtins/object.ts:128:22  ToPropertyKey (builtin)
+  builtins/object.ts:142:22  ToPropertyKey (builtin)
 
 ObjectPrototypePropertyIsEnumerable: reentrant (Object.prototype.propertyIsEnumerable)
-  builtins/object.ts:137:22  ToPropertyKey (builtin)
+  builtins/object.ts:151:22  ToPropertyKey (builtin)
 
 ObjectGetPrototypeOf: leaf (Object.getPrototypeOf)
 
 ObjectSetPrototypeOf: leaf (Object.setPrototypeOf)
 
 ObjectCreateBuiltin: reentrant (Object.create)
-  builtins/object.ts:186:5  ObjectDefinePropertiesHelper (builtin)
+  builtins/object.ts:200:5  ObjectDefinePropertiesHelper (builtin)
 
 ObjectDefinePropertiesHelper: reentrant
-  builtins/object.ts:195:18  LengthOfArrayLike (builtin)
-  builtins/object.ts:201:24  Get (intrinsic)
-  builtins/object.ts:204:30  Get (intrinsic)
-  builtins/object.ts:205:7  CreateDataPropertyOrThrow (intrinsic)
-  builtins/object.ts:206:47  ToPropertyDescriptor (builtin)
-  builtins/object.ts:206:7  CreateDataPropertyOrThrow (intrinsic)
-  builtins/object.ts:211:30  Get (intrinsic)
-  builtins/object.ts:211:54  Get (intrinsic)
-  builtins/object.ts:211:5  DefinePropertyOrThrow (builtin)
+  builtins/object.ts:209:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:215:24  Get (intrinsic)
+  builtins/object.ts:218:30  Get (intrinsic)
+  builtins/object.ts:219:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:220:47  ToPropertyDescriptor (builtin)
+  builtins/object.ts:220:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:225:30  Get (intrinsic)
+  builtins/object.ts:225:54  Get (intrinsic)
+  builtins/object.ts:225:5  DefinePropertyOrThrow (builtin)
 
 ObjectDefineProperties: reentrant (Object.defineProperties)
-  builtins/object.ts:224:10  ObjectDefinePropertiesHelper (builtin)
+  builtins/object.ts:238:10  ObjectDefinePropertiesHelper (builtin)
 
 EnumerableOwnProperties: reentrant
-  builtins/object.ts:236:18  LengthOfArrayLike (builtin)
-  builtins/object.ts:240:24  Get (intrinsic)
-  builtins/object.ts:243:28  Get (intrinsic)
-  builtins/object.ts:245:9  CreateDataPropertyOrThrow (intrinsic)
-  builtins/object.ts:248:9  CreateDataPropertyOrThrow (intrinsic)
-  builtins/object.ts:249:9  CreateDataPropertyOrThrow (intrinsic)
-  builtins/object.ts:250:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:250:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:254:24  Get (intrinsic)
+  builtins/object.ts:257:28  Get (intrinsic)
+  builtins/object.ts:259:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:262:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:263:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:264:9  CreateDataPropertyOrThrow (intrinsic)
 
 ObjectKeys: reentrant (Object.keys)
-  builtins/object.ts:263:10  EnumerableOwnProperties (builtin)
+  builtins/object.ts:277:10  EnumerableOwnProperties (builtin)
 
 ObjectValues: reentrant (Object.values)
-  builtins/object.ts:271:10  EnumerableOwnProperties (builtin)
+  builtins/object.ts:285:10  EnumerableOwnProperties (builtin)
 
 ObjectEntries: reentrant (Object.entries)
-  builtins/object.ts:279:10  EnumerableOwnProperties (builtin)
+  builtins/object.ts:293:10  EnumerableOwnProperties (builtin)
 
 ObjectAssign: reentrant (Object.assign)
-  builtins/object.ts:289:18  LengthOfArrayLike (builtin)
-  builtins/object.ts:291:31  Get (intrinsic)
-  builtins/object.ts:295:26  LengthOfArrayLike (builtin)
-  builtins/object.ts:297:28  Get (intrinsic)
-  builtins/object.ts:300:24  Get (intrinsic)
-  builtins/object.ts:300:11  Set (intrinsic)
+  builtins/object.ts:303:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:305:31  Get (intrinsic)
+  builtins/object.ts:309:26  LengthOfArrayLike (builtin)
+  builtins/object.ts:311:28  Get (intrinsic)
+  builtins/object.ts:314:24  Get (intrinsic)
+  builtins/object.ts:314:11  Set (intrinsic)
 
 ObjectFreeze: leaf (Object.freeze)
 
@@ -1337,24 +1341,24 @@ ObjectIsExtensible: leaf (Object.isExtensible)
 ObjectGetOwnPropertySymbols: leaf (Object.getOwnPropertySymbols)
 
 ObjectGetOwnPropertyDescriptors: reentrant (Object.getOwnPropertyDescriptors)
-  builtins/object.ts:389:18  LengthOfArrayLike (builtin)
-  builtins/object.ts:392:24  Get (intrinsic)
-  builtins/object.ts:395:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/object.ts:403:18  LengthOfArrayLike (builtin)
+  builtins/object.ts:406:24  Get (intrinsic)
+  builtins/object.ts:409:7  CreateDataPropertyOrThrow (intrinsic)
 
 ObjectHasOwn: reentrant (Object.hasOwn)
-  builtins/object.ts:407:30  ToPropertyKey (builtin)
+  builtins/object.ts:421:30  ToPropertyKey (builtin)
 
 ObjectIs: leaf (Object.is)
 
 ObjectPrototypeToString: reentrant (Object.prototype.toString)
-  builtins/object.ts:423:10  ObjectToString (builtin)
+  builtins/object.ts:437:10  ObjectToString (builtin)
 
 ObjectToString: reentrant
-  builtins/object.ts:435:22  Get (intrinsic)
+  builtins/object.ts:449:22  Get (intrinsic)
 
 ObjectPrototypeToLocaleString: reentrant (Object.prototype.toLocaleString)
-  builtins/object.ts:447:15  GetV (intrinsic)
-  builtins/object.ts:447:10  Call (intrinsic)
+  builtins/object.ts:461:15  GetV (intrinsic)
+  builtins/object.ts:461:10  Call (intrinsic)
 
 ObjectPrototypeValueOf: leaf (Object.prototype.valueOf)
 
@@ -1599,7 +1603,12 @@ ReflectSet: reentrant (Reflect.set)
   builtins/reflect.ts:160:22  ToPropertyKey (builtin)
   builtins/reflect.ts:161:27  LengthOfArrayLike (builtin)
   builtins/reflect.ts:161:57  Get (intrinsic)
-  builtins/reflect.ts:162:10  SetWithReceiver (intrinsic)
+  builtins/reflect.ts:164:49  IsCanonicalNumericKey (builtin)
+  builtins/reflect.ts:165:36  ToNumber (builtin)
+  builtins/reflect.ts:165:12  SetWithReceiver (intrinsic)
+  builtins/reflect.ts:167:10  SetWithReceiver (intrinsic)
+
+ReachesReceiver: leaf
 
 ReflectSetPrototypeOf: leaf (Reflect.setPrototypeOf)
 
@@ -1981,17 +1990,18 @@ TypedArrayFromValues: reentrant
   builtins/typedarray.ts:144:25  ToNumber (builtin)
 
 TypedArrayConstruct: reentrant
-  builtins/typedarray.ts:155:22  GetPrototypeFromConstructor (builtin)
-  builtins/typedarray.ts:156:18  LengthOfArrayLike (builtin)
-  builtins/typedarray.ts:157:32  Get (intrinsic)
-  builtins/typedarray.ts:159:52  ToIndex (builtin)
-  builtins/typedarray.ts:175:59  Get (intrinsic)
-  builtins/typedarray.ts:175:93  Get (intrinsic)
-  builtins/typedarray.ts:175:12  TypedArrayFromBuffer (builtin)
-  builtins/typedarray.ts:177:32  GetMethod (builtin)
-  builtins/typedarray.ts:180:25  ArrayFromIterator (builtin)
-  builtins/typedarray.ts:181:12  TypedArrayFromValues (builtin)
-  builtins/typedarray.ts:183:10  TypedArrayFromValues (builtin)
+  builtins/typedarray.ts:155:18  LengthOfArrayLike (builtin)
+  builtins/typedarray.ts:156:32  Get (intrinsic)
+  builtins/typedarray.ts:159:32  ToIndex (builtin)
+  builtins/typedarray.ts:160:45  GetPrototypeFromConstructor (builtin)
+  builtins/typedarray.ts:162:22  GetPrototypeFromConstructor (builtin)
+  builtins/typedarray.ts:177:59  Get (intrinsic)
+  builtins/typedarray.ts:177:93  Get (intrinsic)
+  builtins/typedarray.ts:177:12  TypedArrayFromBuffer (builtin)
+  builtins/typedarray.ts:179:32  GetMethod (builtin)
+  builtins/typedarray.ts:182:25  ArrayFromIterator (builtin)
+  builtins/typedarray.ts:183:12  TypedArrayFromValues (builtin)
+  builtins/typedarray.ts:185:10  TypedArrayFromValues (builtin)
 
 BufferInfoOrUndefined: leaf
 
@@ -2000,26 +2010,26 @@ TypedArrayAbstract: leaf (constructor %TypedArray%)
 TypedArraySpecies: leaf (get %TypedArray%[Symbol.species])
 
 TypedArrayCreateWithLength: reentrant
-  builtins/typedarray.ts:214:24  Construct (intrinsic)
+  builtins/typedarray.ts:216:24  Construct (intrinsic)
 
 TypedArraySpeciesCreate: reentrant
-  builtins/typedarray.ts:227:20  SpeciesConstructor (builtin)
-  builtins/typedarray.ts:228:10  TypedArrayCreateWithLength (builtin)
+  builtins/typedarray.ts:229:20  SpeciesConstructor (builtin)
+  builtins/typedarray.ts:230:10  TypedArrayCreateWithLength (builtin)
 
 TypedArrayFrom: reentrant (%TypedArray%.from)
-  builtins/typedarray.ts:243:32  GetMethod (builtin)
-  builtins/typedarray.ts:246:14  ArrayFromIterator (builtin)
-  builtins/typedarray.ts:250:20  LengthOfArrayLike (builtin)
-  builtins/typedarray.ts:251:23  TypedArrayCreateWithLength (builtin)
-  builtins/typedarray.ts:253:27  Get (intrinsic)
-  builtins/typedarray.ts:254:37  Call (intrinsic)
-  builtins/typedarray.ts:255:5  Set (intrinsic)
+  builtins/typedarray.ts:245:32  GetMethod (builtin)
+  builtins/typedarray.ts:248:14  ArrayFromIterator (builtin)
+  builtins/typedarray.ts:252:20  LengthOfArrayLike (builtin)
+  builtins/typedarray.ts:253:23  TypedArrayCreateWithLength (builtin)
+  builtins/typedarray.ts:255:27  Get (intrinsic)
+  builtins/typedarray.ts:256:37  Call (intrinsic)
+  builtins/typedarray.ts:257:5  TASet (builtin)
 
 TypedArrayOf: reentrant (%TypedArray%.of)
-  builtins/typedarray.ts:268:20  LengthOfArrayLike (builtin)
-  builtins/typedarray.ts:269:23  TypedArrayCreateWithLength (builtin)
-  builtins/typedarray.ts:271:20  Get (intrinsic)
-  builtins/typedarray.ts:271:5  Set (intrinsic)
+  builtins/typedarray.ts:270:20  LengthOfArrayLike (builtin)
+  builtins/typedarray.ts:271:23  TypedArrayCreateWithLength (builtin)
+  builtins/typedarray.ts:273:22  Get (intrinsic)
+  builtins/typedarray.ts:273:5  TASet (builtin)
 
 TypedArrayPrototypeBuffer: leaf (get %TypedArray%.prototype.buffer)
 
@@ -2032,156 +2042,267 @@ TypedArrayPrototypeLength: leaf (get %TypedArray%.prototype.length)
 TypedArrayPrototypeToStringTag: leaf (get %TypedArray%.prototype[Symbol.toStringTag])
 
 TypedArrayPrototypeSet: reentrant (%TypedArray%.prototype.set)
-  builtins/typedarray.ts:326:29  ToIntegerOrInfinity (builtin)
-  builtins/typedarray.ts:350:26  LengthOfArrayLike (builtin)
-  builtins/typedarray.ts:355:33  Get (intrinsic)
-  builtins/typedarray.ts:355:24  ToNumber (builtin)
+  builtins/typedarray.ts:328:29  ToIntegerOrInfinity (builtin)
+  builtins/typedarray.ts:352:26  LengthOfArrayLike (builtin)
+  builtins/typedarray.ts:357:33  Get (intrinsic)
+  builtins/typedarray.ts:357:24  ToNumber (builtin)
 
 TypedArrayPrototypeSubarray: reentrant (%TypedArray%.prototype.subarray)
-  builtins/typedarray.ts:371:27  RelativeIndex (builtin)
-  builtins/typedarray.ts:374:20  SpeciesConstructor (builtin)
-  builtins/typedarray.ts:377:15  Construct (intrinsic)
-  builtins/typedarray.ts:379:27  RelativeIndex (builtin)
-  builtins/typedarray.ts:381:15  Construct (intrinsic)
+  builtins/typedarray.ts:373:27  RelativeIndex (builtin)
+  builtins/typedarray.ts:376:20  SpeciesConstructor (builtin)
+  builtins/typedarray.ts:379:15  Construct (intrinsic)
+  builtins/typedarray.ts:381:27  RelativeIndex (builtin)
+  builtins/typedarray.ts:383:15  Construct (intrinsic)
 
 TypedArrayPrototypeSlice: reentrant (%TypedArray%.prototype.slice)
-  builtins/typedarray.ts:394:27  RelativeIndex (builtin)
-  builtins/typedarray.ts:395:25  RelativeIndex (builtin)
-  builtins/typedarray.ts:397:18  TypedArraySpeciesCreate (builtin)
-  builtins/typedarray.ts:409:9  Set (intrinsic)
+  builtins/typedarray.ts:396:27  RelativeIndex (builtin)
+  builtins/typedarray.ts:397:25  RelativeIndex (builtin)
+  builtins/typedarray.ts:399:18  TypedArraySpeciesCreate (builtin)
+  builtins/typedarray.ts:419:9  TASet (builtin)
 
 TypedArrayPrototypeFill: reentrant (%TypedArray%.prototype.fill)
-  builtins/typedarray.ts:423:18  ToNumber (builtin)
-  builtins/typedarray.ts:424:18  RelativeIndex (builtin)
-  builtins/typedarray.ts:425:20  RelativeIndex (builtin)
+  builtins/typedarray.ts:433:18  ToNumber (builtin)
+  builtins/typedarray.ts:434:18  RelativeIndex (builtin)
+  builtins/typedarray.ts:435:20  RelativeIndex (builtin)
 
 ValidateUint8Array: leaf
 
 GetOptionsObject: leaf
 
 Base64Alphabet: reentrant
-  builtins/typedarray.ts:463:27  Get (intrinsic)
+  builtins/typedarray.ts:473:27  Get (intrinsic)
 
 LastChunkHandling: reentrant
-  builtins/typedarray.ts:478:20  Get (intrinsic)
+  builtins/typedarray.ts:488:20  Get (intrinsic)
 
 Uint8ArrayFromRecord: reentrant
-  builtins/typedarray.ts:493:28  Get (intrinsic)
+  builtins/typedarray.ts:503:28  Get (intrinsic)
 
 Uint8ArrayFromBase64: reentrant (Uint8Array.fromBase64)
-  builtins/typedarray.ts:507:24  Base64Alphabet (builtin)
-  builtins/typedarray.ts:508:21  LastChunkHandling (builtin)
-  builtins/typedarray.ts:510:14  Get (intrinsic)
-  builtins/typedarray.ts:513:10  Uint8ArrayFromRecord (builtin)
+  builtins/typedarray.ts:517:24  Base64Alphabet (builtin)
+  builtins/typedarray.ts:518:21  LastChunkHandling (builtin)
+  builtins/typedarray.ts:520:14  Get (intrinsic)
+  builtins/typedarray.ts:523:10  Uint8ArrayFromRecord (builtin)
 
 Uint8ArrayFromHex: reentrant (Uint8Array.fromHex)
-  builtins/typedarray.ts:525:14  Get (intrinsic)
-  builtins/typedarray.ts:528:10  Uint8ArrayFromRecord (builtin)
+  builtins/typedarray.ts:535:14  Get (intrinsic)
+  builtins/typedarray.ts:538:10  Uint8ArrayFromRecord (builtin)
 
 Uint8ArrayPrototypeToBase64: reentrant (Uint8Array.prototype.toBase64)
-  builtins/typedarray.ts:538:24  Base64Alphabet (builtin)
-  builtins/typedarray.ts:541:22  Get (intrinsic)
+  builtins/typedarray.ts:548:24  Base64Alphabet (builtin)
+  builtins/typedarray.ts:551:22  Get (intrinsic)
 
 Uint8ArrayPrototypeToHex: leaf (Uint8Array.prototype.toHex)
 
 WriteDecoded: reentrant
-  builtins/typedarray.ts:556:28  Get (intrinsic)
-  builtins/typedarray.ts:559:14  Get (intrinsic)
-  builtins/typedarray.ts:563:45  Get (intrinsic)
-  builtins/typedarray.ts:563:3  CreateDataPropertyOrThrow (intrinsic)
-  builtins/typedarray.ts:564:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/typedarray.ts:566:28  Get (intrinsic)
+  builtins/typedarray.ts:569:14  Get (intrinsic)
+  builtins/typedarray.ts:573:45  Get (intrinsic)
+  builtins/typedarray.ts:573:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/typedarray.ts:574:3  CreateDataPropertyOrThrow (intrinsic)
 
 Uint8ArrayPrototypeSetFromBase64: reentrant (Uint8Array.prototype.setFromBase64)
-  builtins/typedarray.ts:578:24  Base64Alphabet (builtin)
-  builtins/typedarray.ts:579:21  LastChunkHandling (builtin)
-  builtins/typedarray.ts:584:10  WriteDecoded (builtin)
+  builtins/typedarray.ts:588:24  Base64Alphabet (builtin)
+  builtins/typedarray.ts:589:21  LastChunkHandling (builtin)
+  builtins/typedarray.ts:594:10  WriteDecoded (builtin)
 
 Uint8ArrayPrototypeSetFromHex: reentrant (Uint8Array.prototype.setFromHex)
-  builtins/typedarray.ts:600:10  WriteDecoded (builtin)
+  builtins/typedarray.ts:610:10  WriteDecoded (builtin)
 
 Int8ArrayConstructor: reentrant (constructor Int8Array)
-  builtins/typedarray.ts:610:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:620:10  TypedArrayConstruct (builtin)
 
 Int8ArrayBytesPerElement: leaf (value Int8Array.BYTES_PER_ELEMENT)
 
 Int8ArrayPrototypeBytesPerElement: leaf (value Int8Array.prototype.BYTES_PER_ELEMENT)
 
 Uint8ArrayConstructor: reentrant (constructor Uint8Array)
-  builtins/typedarray.ts:636:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:646:10  TypedArrayConstruct (builtin)
 
 Uint8ArrayBytesPerElement: leaf (value Uint8Array.BYTES_PER_ELEMENT)
 
 Uint8ArrayPrototypeBytesPerElement: leaf (value Uint8Array.prototype.BYTES_PER_ELEMENT)
 
 Uint8ClampedArrayConstructor: reentrant (constructor Uint8ClampedArray)
-  builtins/typedarray.ts:662:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:672:10  TypedArrayConstruct (builtin)
 
 Uint8ClampedArrayBytesPerElement: leaf (value Uint8ClampedArray.BYTES_PER_ELEMENT)
 
 Uint8ClampedArrayPrototypeBytesPerElement: leaf (value Uint8ClampedArray.prototype.BYTES_PER_ELEMENT)
 
 Int16ArrayConstructor: reentrant (constructor Int16Array)
-  builtins/typedarray.ts:688:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:698:10  TypedArrayConstruct (builtin)
 
 Int16ArrayBytesPerElement: leaf (value Int16Array.BYTES_PER_ELEMENT)
 
 Int16ArrayPrototypeBytesPerElement: leaf (value Int16Array.prototype.BYTES_PER_ELEMENT)
 
 Uint16ArrayConstructor: reentrant (constructor Uint16Array)
-  builtins/typedarray.ts:714:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:724:10  TypedArrayConstruct (builtin)
 
 Uint16ArrayBytesPerElement: leaf (value Uint16Array.BYTES_PER_ELEMENT)
 
 Uint16ArrayPrototypeBytesPerElement: leaf (value Uint16Array.prototype.BYTES_PER_ELEMENT)
 
 Int32ArrayConstructor: reentrant (constructor Int32Array)
-  builtins/typedarray.ts:740:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:750:10  TypedArrayConstruct (builtin)
 
 Int32ArrayBytesPerElement: leaf (value Int32Array.BYTES_PER_ELEMENT)
 
 Int32ArrayPrototypeBytesPerElement: leaf (value Int32Array.prototype.BYTES_PER_ELEMENT)
 
 Uint32ArrayConstructor: reentrant (constructor Uint32Array)
-  builtins/typedarray.ts:766:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:776:10  TypedArrayConstruct (builtin)
 
 Uint32ArrayBytesPerElement: leaf (value Uint32Array.BYTES_PER_ELEMENT)
 
 Uint32ArrayPrototypeBytesPerElement: leaf (value Uint32Array.prototype.BYTES_PER_ELEMENT)
 
 Float16ArrayConstructor: reentrant (constructor Float16Array)
-  builtins/typedarray.ts:792:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:802:10  TypedArrayConstruct (builtin)
 
 Float16ArrayBytesPerElement: leaf (value Float16Array.BYTES_PER_ELEMENT)
 
 Float16ArrayPrototypeBytesPerElement: leaf (value Float16Array.prototype.BYTES_PER_ELEMENT)
 
 Float32ArrayConstructor: reentrant (constructor Float32Array)
-  builtins/typedarray.ts:818:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:828:10  TypedArrayConstruct (builtin)
 
 Float32ArrayBytesPerElement: leaf (value Float32Array.BYTES_PER_ELEMENT)
 
 Float32ArrayPrototypeBytesPerElement: leaf (value Float32Array.prototype.BYTES_PER_ELEMENT)
 
 Float64ArrayConstructor: reentrant (constructor Float64Array)
-  builtins/typedarray.ts:844:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:854:10  TypedArrayConstruct (builtin)
 
 Float64ArrayBytesPerElement: leaf (value Float64Array.BYTES_PER_ELEMENT)
 
 Float64ArrayPrototypeBytesPerElement: leaf (value Float64Array.prototype.BYTES_PER_ELEMENT)
 
 BigInt64ArrayConstructor: reentrant (constructor BigInt64Array)
-  builtins/typedarray.ts:870:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:880:10  TypedArrayConstruct (builtin)
 
 BigInt64ArrayBytesPerElement: leaf (value BigInt64Array.BYTES_PER_ELEMENT)
 
 BigInt64ArrayPrototypeBytesPerElement: leaf (value BigInt64Array.prototype.BYTES_PER_ELEMENT)
 
 BigUint64ArrayConstructor: reentrant (constructor BigUint64Array)
-  builtins/typedarray.ts:896:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:906:10  TypedArrayConstruct (builtin)
 
 BigUint64ArrayBytesPerElement: leaf (value BigUint64Array.BYTES_PER_ELEMENT)
 
 BigUint64ArrayPrototypeBytesPerElement: leaf (value BigUint64Array.prototype.BYTES_PER_ELEMENT)
+
+TypedArrayPrototypeAt: reentrant (%TypedArray%.prototype.at)
+  builtins/typedarray.ts:935:20  ToIntegerOrInfinity (builtin)
+
+TypedArrayPrototypeCopyWithin: reentrant (%TypedArray%.prototype.copyWithin)
+  builtins/typedarray.ts:950:19  RelativeIndex (builtin)
+  builtins/typedarray.ts:951:21  RelativeIndex (builtin)
+  builtins/typedarray.ts:952:20  RelativeIndex (builtin)
+
+TypedArrayPrototypeEntries: leaf (%TypedArray%.prototype.entries)
+
+TypedArrayPrototypeKeys: leaf (%TypedArray%.prototype.keys)
+
+TypedArrayPrototypeValues: leaf (%TypedArray%.prototype.values, %TypedArray%.prototype[Symbol.iterator])
+
+TAEveryOrSome: reentrant
+  builtins/typedarray.ts:1003:34  Call (intrinsic)
+
+TypedArrayPrototypeEvery: reentrant (%TypedArray%.prototype.every)
+  builtins/typedarray.ts:1016:10  TAEveryOrSome (builtin)
+
+TypedArrayPrototypeSome: reentrant (%TypedArray%.prototype.some)
+  builtins/typedarray.ts:1024:10  TAEveryOrSome (builtin)
+
+TypedArrayPrototypeFilter: reentrant (%TypedArray%.prototype.filter)
+  builtins/typedarray.ts:1039:19  Call (intrinsic)
+  builtins/typedarray.ts:1040:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/typedarray.ts:1044:18  TypedArraySpeciesCreate (builtin)
+  builtins/typedarray.ts:1046:17  Get (intrinsic)
+  builtins/typedarray.ts:1046:5  TASet (builtin)
+
+TAFind: reentrant
+  builtins/typedarray.ts:1059:19  Call (intrinsic)
+
+TypedArrayPrototypeFind: reentrant (%TypedArray%.prototype.find)
+  builtins/typedarray.ts:1074:10  TAFind (builtin)
+
+TypedArrayPrototypeFindIndex: reentrant (%TypedArray%.prototype.findIndex)
+  builtins/typedarray.ts:1082:10  TAFind (builtin)
+
+TypedArrayPrototypeFindLast: reentrant (%TypedArray%.prototype.findLast)
+  builtins/typedarray.ts:1090:10  TAFind (builtin)
+
+TypedArrayPrototypeFindLastIndex: reentrant (%TypedArray%.prototype.findLastIndex)
+  builtins/typedarray.ts:1098:10  TAFind (builtin)
+
+TypedArrayPrototypeForEach: reentrant (%TypedArray%.prototype.forEach)
+  builtins/typedarray.ts:1110:5  Call (intrinsic)
+
+TypedArrayPrototypeIncludes: reentrant (%TypedArray%.prototype.includes)
+  builtins/typedarray.ts:1124:16  ToIntegerOrInfinity (builtin)
+
+TypedArrayPrototypeIndexOf: reentrant (%TypedArray%.prototype.indexOf)
+  builtins/typedarray.ts:1152:16  ToIntegerOrInfinity (builtin)
+
+TypedArrayPrototypeLastIndexOf: reentrant (%TypedArray%.prototype.lastIndexOf)
+  builtins/typedarray.ts:1183:7  LengthOfArrayLike (builtin)
+  builtins/typedarray.ts:1184:29  Get (intrinsic)
+  builtins/typedarray.ts:1184:9  ToIntegerOrInfinity (builtin)
+
+TypedArrayPrototypeJoin: reentrant (%TypedArray%.prototype.join)
+  builtins/typedarray.ts:1208:11  ToString (builtin)
+  builtins/typedarray.ts:1217:12  ToString (builtin)
+
+TypedArrayPrototypeMap: reentrant (%TypedArray%.prototype.map)
+  builtins/typedarray.ts:1231:18  TypedArraySpeciesCreate (builtin)
+  builtins/typedarray.ts:1233:27  Call (intrinsic)
+  builtins/typedarray.ts:1234:5  TASet (builtin)
+
+TAReduce: reentrant
+  builtins/typedarray.ts:1245:7  LengthOfArrayLike (builtin)
+  builtins/typedarray.ts:1246:19  Get (intrinsic)
+  builtins/typedarray.ts:1256:19  Call (intrinsic)
+
+TypedArrayPrototypeReduce: reentrant (%TypedArray%.prototype.reduce)
+  builtins/typedarray.ts:1267:10  TAReduce (builtin)
+
+TypedArrayPrototypeReduceRight: reentrant (%TypedArray%.prototype.reduceRight)
+  builtins/typedarray.ts:1276:10  TAReduce (builtin)
+
+TypedArrayPrototypeReverse: leaf (%TypedArray%.prototype.reverse)
+
+TASortedList: reentrant
+  builtins/typedarray.ts:1300:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/typedarray.ts:1305:5  SortList (builtin)
+
+TypedArrayPrototypeSort: reentrant (%TypedArray%.prototype.sort)
+  builtins/typedarray.ts:1320:21  TASortedList (builtin)
+  builtins/typedarray.ts:1322:43  Get (intrinsic)
+
+TypedArrayPrototypeToSorted: reentrant (%TypedArray%.prototype.toSorted)
+  builtins/typedarray.ts:1338:21  TASortedList (builtin)
+  builtins/typedarray.ts:1340:43  Get (intrinsic)
+
+TypedArrayPrototypeToReversed: leaf (%TypedArray%.prototype.toReversed)
+
+TypedArrayPrototypeWith: reentrant (%TypedArray%.prototype.with)
+  builtins/typedarray.ts:1366:20  ToIntegerOrInfinity (builtin)
+  builtins/typedarray.ts:1368:18  ToNumber (builtin)
+
+TypedArrayPrototypeToLocaleString: reentrant (%TypedArray%.prototype.toLocaleString)
+  builtins/typedarray.ts:1393:26  GetV (intrinsic)
+  builtins/typedarray.ts:1393:21  Call (intrinsic)
+  builtins/typedarray.ts:1393:12  ToString (builtin)
+
+IsCanonicalNumericKey: reentrant
+  builtins/typedarray.ts:1408:35  ToNumber (builtin)
+  builtins/typedarray.ts:1408:26  ToString (builtin)
+
+TASet: reentrant
+  builtins/typedarray.ts:1417:23  ToNumber (builtin)
 
 ThisWeakMap: leaf
 

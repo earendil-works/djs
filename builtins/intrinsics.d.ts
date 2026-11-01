@@ -292,6 +292,11 @@ declare function BufferResize(b: Obj, byteLength: f64): void;
 declare function BufferTransfer(b: Obj, byteLength: f64, max: Value): Obj;
 /** Copies count bytes from src at from to dst at to (memmove). @leaf */
 declare function BufferCopy(src: Obj, from: f64, dst: Obj, to: f64, count: f64): void;
+/**
+ * Sorts a dense array of Numbers numerically in place (a typed array's default order:
+ * -0 before +0, NaN last; stable). @leaf
+ */
+declare function SortNumbers(list: Obj): void;
 /** Whether v is a DataView. @leaf */
 declare function IsDataView(v: Value): boolean;
 /** The constructor installed as `name` (the realm's %Name%, whatever the global is now). @leaf */

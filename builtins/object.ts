@@ -63,6 +63,20 @@ function ToPropertyDescriptor(attributes: Value): Obj {
  * through ArraySetLength's conversions first (10.4.2.4).
  */
 function DefineOwnProperty(o: Obj, key: Value, desc: Obj): boolean {
+  // A typed array element converts its value with ToNumber (user code) after the
+  // descriptor checks (IntegerIndexedDefineOwnProperty, 10.4.5.3); the leaf only takes
+  // Numbers.
+  if (IsTypedArray(o) && HasOwnProperty(desc, "value") && IsCanonicalNumericKey(key)) {
+    const value: Value = Get(desc, "value");
+    if (!IsNumber(value)) {
+      DeleteProperty(desc, "value");
+      if (!DefineOwnPropertyFromRecord(o, key, desc)) {
+        return false;
+      }
+      TASet(o, ToNumber(key), value);
+      return true;
+    }
+  }
   if (IsArray(o) && key === "length" && HasOwnProperty(desc, "value")) {
     const v: Value = Get(desc, "value");
     const newLen: f64 = ToNumber(v);

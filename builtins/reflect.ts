@@ -159,7 +159,40 @@ function ReflectSet(target: Value, propertyKey: Value, v: Value, ...rest: Value[
   const o: Obj = ReflectTarget(target);
   const key: Value = ToPropertyKey(propertyKey);
   const receiver: Value = LengthOfArrayLike(rest) > 0 ? Get(rest, 0) : o;
+  // A typed array's own element: TypedArraySetElement converts the value first (10.4.5.5),
+  // which may run user code; the leaf only writes Numbers.
+  if (IsTypedArray(receiver) && !IsNumber(v) && IsCanonicalNumericKey(key) && ReachesReceiver(o, key, AsObj(receiver))) {
+    return SetWithReceiver(o, key, ToNumber(v), receiver);
+  }
   return SetWithReceiver(o, key, v, receiver);
+}
+
+/**
+ * Whether [[Set]] of the numeric `key` from o ends in a conversion of the value for the
+ * typed array `receiver`: its own [[Set]] (TypedArraySetElement) or its
+ * [[DefineOwnProperty]] of an existing element after OrdinarySet found a writable data
+ * property (10.4.5.5, 10.1.9.2). Setters and failures see the value unconverted.
+ */
+function ReachesReceiver(o: Obj, key: Value, receiver: Obj): boolean {
+  let cur: Value = o;
+  while (cur !== null) {
+    const c: Obj = AsObj(cur);
+    if (c === receiver) {
+      return true;
+    }
+    const attrs: i32 = OwnPropertyAttributes(c, key);
+    if (IsTypedArray(c) && attrs < 0) {
+      return false;
+    }
+    if (attrs >= 0) {
+      if ((attrs & 8) !== 0 || (attrs & 1) === 0) {
+        return false;
+      }
+      break;
+    }
+    cur = GetPrototypeOf(c);
+  }
+  return OwnPropertyAttributes(receiver, key) >= 0;
 }
 
 /**

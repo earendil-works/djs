@@ -78,7 +78,7 @@ function ValidateTypedArray(v: Value): Obj {
   TypedArrayField(v, 0);
   const o: Obj = AsObj(v);
   if (TAOutOfBounds(o)) {
-    throw NewTypeError("ArrayBuffer is detached");
+    throw NewTypeError("ArrayBuffer is detached or resized");
   }
   return o;
 }
@@ -152,16 +152,18 @@ function TypedArrayConstruct(newTarget: Value, kind: i32, args: Obj): Obj {
     throw NewTypeError("must be called with new");
   }
   RequireNumberKind(kind);
-  const proto: Obj = GetPrototypeFromConstructor(newTarget, KindName(kind) + "Prototype");
   const n: f64 = LengthOfArrayLike(args);
   const first: Value = n > 0 ? Get(args, 0) : undefined;
   if (!IsObject(first)) {
-    return AllocateTypedArrayOfLength(kind, proto, ToIndex(first));
+    // ToIndex comes before the prototype lookup here (23.2.5.1 step 6.b).
+    const elementLength: f64 = ToIndex(first);
+    return AllocateTypedArrayOfLength(kind, GetPrototypeFromConstructor(newTarget, KindName(kind) + "Prototype"), elementLength);
   }
+  const proto: Obj = GetPrototypeFromConstructor(newTarget, KindName(kind) + "Prototype");
   const src: Obj = AsObj(first);
   if (IsTypedArray(src)) {
     if (TAOutOfBounds(src)) {
-      throw NewTypeError("ArrayBuffer is detached");
+      throw NewTypeError("ArrayBuffer is detached or resized");
     }
     if ((KindOf(src) >= 10) !== (kind >= 10)) {
       throw NewTypeError("cannot mix BigInt and other types");
@@ -252,7 +254,7 @@ function TypedArrayFrom(this: Value, source: Value, mapfn?: Value, thisArg?: Val
   for (let k: f64 = 0; k < len; k++) {
     const kValue: Value = Get(values, k);
     const mapped: Value = mapping ? Call(mapfn, thisArg, kValue, k) : kValue;
-    Set(target, k, mapped);
+    TASet(target, k, mapped);
   }
   return target;
 }
@@ -268,7 +270,7 @@ function TypedArrayOf(this: Value, ...items: Value[]): Obj {
   const len: f64 = LengthOfArrayLike(items);
   const target: Obj = TypedArrayCreateWithLength(this, len);
   for (let k: f64 = 0; k < len; k++) {
-    Set(target, k, Get(items, k));
+    TASet(target, k, Get(items, k));
   }
   return target;
 }
@@ -334,7 +336,7 @@ function TypedArrayPrototypeSet(this: Value, source: Value, offset?: Value): voi
   if (IsTypedArray(source)) {
     const src: Obj = AsObj(source);
     if (TAOutOfBounds(src)) {
-      throw NewTypeError("ArrayBuffer is detached");
+      throw NewTypeError("ArrayBuffer is detached or resized");
     }
     const srcLength: f64 = TALength(src);
     if (targetOffset === 1 / 0 || srcLength + targetOffset > targetLength) {
@@ -397,16 +399,24 @@ function TypedArrayPrototypeSlice(this: Value, start: Value, end: Value): Obj {
   const a: Obj = TypedArraySpeciesCreate(o, count);
   if (count > 0) {
     if (TAOutOfBounds(o)) {
-      throw NewTypeError("ArrayBuffer is detached");
+      throw NewTypeError("ArrayBuffer is detached or resized");
     }
     const len: f64 = TALength(o);
     const fin: f64 = endIndex < len ? endIndex : len;
     const n: f64 = fin > startIndex ? fin - startIndex : 0;
-    if (KindOf(a) === KindOf(o)) {
+    if (n === 0) {
+      // A shrunk buffer: nothing left to copy.
+    } else if (KindOf(a) === KindOf(o) && TypedArrayField(a, 0) === TypedArrayField(o, 0)) {
+      // The same buffer: the spec copies byte by byte, forwards (23.2.3.27 step 14.g),
+      // so an overlap repeats the first elements; elements are aligned, so per element.
+      for (let k: f64 = 0; k < n; k++) {
+        TypedArraySet(a, k, ToNumberPrimitive(TypedArrayGet(o, startIndex + k)));
+      }
+    } else if (KindOf(a) === KindOf(o)) {
       TypedArrayCopy(o, startIndex, a, 0, n);
     } else {
       for (let k: f64 = 0; k < n; k++) {
-        Set(a, k, TypedArrayGet(o, startIndex + k));
+        TASet(a, k, TypedArrayGet(o, startIndex + k));
       }
     }
   }
@@ -911,3 +921,499 @@ function BigUint64ArrayBytesPerElement(): f64 {
 function BigUint64ArrayPrototypeBytesPerElement(): f64 {
   return 8;
 }
+
+// ---- The rest of %TypedArray%.prototype (23.2.3) -----------------------------------------
+// Like Array.prototype's, over the validated length; there are no holes.
+
+/**
+ * %TypedArray%.prototype.at ( index ), 23.2.3.1.
+ * @builtin %TypedArray%.prototype.at
+ */
+function TypedArrayPrototypeAt(this: Value, index: Value): Value {
+  const o: Obj = ValidateTypedArray(this);
+  const len: f64 = TALength(o);
+  const rel: f64 = ToIntegerOrInfinity(index);
+  const k: f64 = rel >= 0 ? rel : len + rel;
+  if (k < 0 || k >= len) {
+    return undefined;
+  }
+  return TypedArrayGet(o, k);
+}
+
+/**
+ * %TypedArray%.prototype.copyWithin ( target, start [ , end ] ), 23.2.3.6.
+ * @builtin %TypedArray%.prototype.copyWithin
+ */
+function TypedArrayPrototypeCopyWithin(this: Value, target: Value, start: Value, end?: Value): Obj {
+  const o: Obj = ValidateTypedArray(this);
+  const len: f64 = TALength(o);
+  const to: f64 = RelativeIndex(target, len, 0);
+  const from: f64 = RelativeIndex(start, len, 0);
+  const fin: f64 = RelativeIndex(end, len, len);
+  let count: f64 = fin - from < len - to ? fin - from : len - to;
+  if (count > 0) {
+    if (TAOutOfBounds(o)) {
+      throw NewTypeError("ArrayBuffer is detached or resized");
+    }
+    const len2: f64 = TALength(o);
+    // A shrunk buffer bounds the copy (23.2.3.6 step 17).
+    if (from + count > len2) {
+      count = len2 - from;
+    }
+    if (to + count > len2) {
+      count = len2 - to;
+    }
+    if (count > 0) {
+      TypedArrayCopy(o, from, o, to, count);
+    }
+  }
+  return o;
+}
+
+/**
+ * %TypedArray%.prototype.entries ( ), 23.2.3.7.
+ * @builtin %TypedArray%.prototype.entries
+ */
+function TypedArrayPrototypeEntries(this: Value): Obj {
+  return CreateArrayIterator(ValidateTypedArray(this), 2);
+}
+
+/**
+ * %TypedArray%.prototype.keys ( ), 23.2.3.19.
+ * @builtin %TypedArray%.prototype.keys
+ */
+function TypedArrayPrototypeKeys(this: Value): Obj {
+  return CreateArrayIterator(ValidateTypedArray(this), 0);
+}
+
+/**
+ * %TypedArray%.prototype.values ( ), 23.2.3.35; also [ %Symbol.iterator% ].
+ * @builtin %TypedArray%.prototype.values
+ * @builtin %TypedArray%.prototype[Symbol.iterator]
+ */
+function TypedArrayPrototypeValues(this: Value): Obj {
+  return CreateArrayIterator(ValidateTypedArray(this), 1);
+}
+
+/** every (`wantAll`) and some over a typed array. */
+function TAEveryOrSome(o: Obj, callbackfn: Value, thisArg: Value, wantAll: boolean): boolean {
+  const len: f64 = TALength(o);
+  RequireCallable(callbackfn);
+  for (let k: f64 = 0; k < len; k++) {
+    const r: boolean = ToBoolean(Call(callbackfn, thisArg, TypedArrayGet(o, k), k, o));
+    if (r !== wantAll) {
+      return r;
+    }
+  }
+  return wantAll;
+}
+
+/**
+ * %TypedArray%.prototype.every ( callbackfn [ , thisArg ] ), 23.2.3.8.
+ * @builtin %TypedArray%.prototype.every
+ */
+function TypedArrayPrototypeEvery(this: Value, callbackfn: Value, thisArg?: Value): boolean {
+  return TAEveryOrSome(ValidateTypedArray(this), callbackfn, thisArg, true);
+}
+
+/**
+ * %TypedArray%.prototype.some ( callbackfn [ , thisArg ] ), 23.2.3.29.
+ * @builtin %TypedArray%.prototype.some
+ */
+function TypedArrayPrototypeSome(this: Value, callbackfn: Value, thisArg?: Value): boolean {
+  return TAEveryOrSome(ValidateTypedArray(this), callbackfn, thisArg, false);
+}
+
+/**
+ * %TypedArray%.prototype.filter ( callbackfn [ , thisArg ] ), 23.2.3.10.
+ * @builtin %TypedArray%.prototype.filter
+ */
+function TypedArrayPrototypeFilter(this: Value, callbackfn: Value, thisArg?: Value): Obj {
+  const o: Obj = ValidateTypedArray(this);
+  const len: f64 = TALength(o);
+  RequireCallable(callbackfn);
+  const kept: Obj = ArrayCreate(0);
+  let captured: f64 = 0;
+  for (let k: f64 = 0; k < len; k++) {
+    const kValue: Value = TypedArrayGet(o, k);
+    if (ToBoolean(Call(callbackfn, thisArg, kValue, k, o))) {
+      CreateDataPropertyOrThrow(kept, captured, kValue);
+      captured++;
+    }
+  }
+  const a: Obj = TypedArraySpeciesCreate(o, captured);
+  for (let n: f64 = 0; n < captured; n++) {
+    TASet(a, n, Get(kept, n));
+  }
+  return a;
+}
+
+/** The find family over a typed array. */
+function TAFind(thisValue: Value, predicate: Value, thisArg: Value, fromEnd: boolean, wantIndex: boolean): Value {
+  const o: Obj = ValidateTypedArray(thisValue);
+  const len: f64 = TALength(o);
+  RequireCallable(predicate);
+  for (let i: f64 = 0; i < len; i++) {
+    const k: f64 = fromEnd ? len - 1 - i : i;
+    const kValue: Value = TypedArrayGet(o, k);
+    if (ToBoolean(Call(predicate, thisArg, kValue, k, o))) {
+      return wantIndex ? k : kValue;
+    }
+  }
+  if (wantIndex) {
+    return -1;
+  }
+  return undefined;
+}
+
+/**
+ * %TypedArray%.prototype.find ( predicate [ , thisArg ] ), 23.2.3.11.
+ * @builtin %TypedArray%.prototype.find
+ */
+function TypedArrayPrototypeFind(this: Value, predicate: Value, thisArg?: Value): Value {
+  return TAFind(this, predicate, thisArg, false, false);
+}
+
+/**
+ * %TypedArray%.prototype.findIndex ( predicate [ , thisArg ] ), 23.2.3.12.
+ * @builtin %TypedArray%.prototype.findIndex
+ */
+function TypedArrayPrototypeFindIndex(this: Value, predicate: Value, thisArg?: Value): Value {
+  return TAFind(this, predicate, thisArg, false, true);
+}
+
+/**
+ * %TypedArray%.prototype.findLast ( predicate [ , thisArg ] ), 23.2.3.13.
+ * @builtin %TypedArray%.prototype.findLast
+ */
+function TypedArrayPrototypeFindLast(this: Value, predicate: Value, thisArg?: Value): Value {
+  return TAFind(this, predicate, thisArg, true, false);
+}
+
+/**
+ * %TypedArray%.prototype.findLastIndex ( predicate [ , thisArg ] ), 23.2.3.14.
+ * @builtin %TypedArray%.prototype.findLastIndex
+ */
+function TypedArrayPrototypeFindLastIndex(this: Value, predicate: Value, thisArg?: Value): Value {
+  return TAFind(this, predicate, thisArg, true, true);
+}
+
+/**
+ * %TypedArray%.prototype.forEach ( callbackfn [ , thisArg ] ), 23.2.3.15.
+ * @builtin %TypedArray%.prototype.forEach
+ */
+function TypedArrayPrototypeForEach(this: Value, callbackfn: Value, thisArg?: Value): void {
+  const o: Obj = ValidateTypedArray(this);
+  const len: f64 = TALength(o);
+  RequireCallable(callbackfn);
+  for (let k: f64 = 0; k < len; k++) {
+    Call(callbackfn, thisArg, TypedArrayGet(o, k), k, o);
+  }
+}
+
+/**
+ * %TypedArray%.prototype.includes ( searchElement [ , fromIndex ] ), 23.2.3.16.
+ * @builtin %TypedArray%.prototype.includes
+ */
+function TypedArrayPrototypeIncludes(this: Value, searchElement: Value, fromIndex?: Value): boolean {
+  const o: Obj = ValidateTypedArray(this);
+  const len: f64 = TALength(o);
+  if (len === 0) {
+    return false;
+  }
+  let n: f64 = ToIntegerOrInfinity(fromIndex);
+  if (n === 1 / 0) {
+    return false;
+  }
+  if (n < 0) {
+    n = len + n;
+    if (n < 0) {
+      n = 0;
+    }
+  }
+  for (let k: f64 = n; k < len; k++) {
+    if (SameValueZero(TypedArrayGet(o, k), searchElement)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * %TypedArray%.prototype.indexOf ( searchElement [ , fromIndex ] ), 23.2.3.17.
+ * @builtin %TypedArray%.prototype.indexOf
+ */
+function TypedArrayPrototypeIndexOf(this: Value, searchElement: Value, fromIndex?: Value): f64 {
+  const o: Obj = ValidateTypedArray(this);
+  const len: f64 = TALength(o);
+  if (len === 0) {
+    return -1;
+  }
+  let n: f64 = ToIntegerOrInfinity(fromIndex);
+  if (n === 1 / 0) {
+    return -1;
+  }
+  if (n < 0) {
+    n = len + n;
+    if (n < 0) {
+      n = 0;
+    }
+  }
+  for (let k: f64 = n; k < len; k++) {
+    // A shrunk buffer: missing elements are not present (HasProperty is false).
+    const v: Value = TypedArrayGet(o, k);
+    if (v !== undefined && v === searchElement) {
+      return k;
+    }
+  }
+  return -1;
+}
+
+/**
+ * %TypedArray%.prototype.lastIndexOf ( searchElement [ , fromIndex ] ), 23.2.3.20.
+ * @builtin %TypedArray%.prototype.lastIndexOf
+ */
+function TypedArrayPrototypeLastIndexOf(this: Value, searchElement: Value, ...rest: Value[]): f64 {
+  const o: Obj = ValidateTypedArray(this);
+  const len: f64 = TALength(o);
+  if (len === 0) {
+    return -1;
+  }
+  let n: f64 = len - 1;
+  if (LengthOfArrayLike(rest) > 0) {
+    n = ToIntegerOrInfinity(Get(rest, 0));
+  }
+  if (n === -1 / 0) {
+    return -1;
+  }
+  let k: f64 = n >= 0 ? (n < len - 1 ? n : len - 1) : len + n;
+  for (; k >= 0; k--) {
+    const v: Value = TypedArrayGet(o, k);
+    if (v !== undefined && v === searchElement) {
+      return k;
+    }
+  }
+  return -1;
+}
+
+/**
+ * %TypedArray%.prototype.join ( separator ), 23.2.3.18.
+ * @builtin %TypedArray%.prototype.join
+ */
+function TypedArrayPrototypeJoin(this: Value, separator: Value): Str {
+  const o: Obj = ValidateTypedArray(this);
+  const len: f64 = TALength(o);
+  let sep: Str = ",";
+  if (separator !== undefined) {
+    sep = ToString(separator);
+  }
+  let r: Str = "";
+  for (let k: f64 = 0; k < len; k++) {
+    if (k > 0) {
+      r += sep;
+    }
+    const element: Value = TypedArrayGet(o, k);
+    if (element !== undefined) {
+      r += ToString(element);
+    }
+  }
+  return r;
+}
+
+/**
+ * %TypedArray%.prototype.map ( callbackfn [ , thisArg ] ), 23.2.3.22.
+ * @builtin %TypedArray%.prototype.map
+ */
+function TypedArrayPrototypeMap(this: Value, callbackfn: Value, thisArg?: Value): Obj {
+  const o: Obj = ValidateTypedArray(this);
+  const len: f64 = TALength(o);
+  RequireCallable(callbackfn);
+  const a: Obj = TypedArraySpeciesCreate(o, len);
+  for (let k: f64 = 0; k < len; k++) {
+    const mapped: Value = Call(callbackfn, thisArg, TypedArrayGet(o, k), k, o);
+    TASet(a, k, mapped);
+  }
+  return a;
+}
+
+/** reduce and reduceRight over a typed array. */
+function TAReduce(o: Obj, callbackfn: Value, rest: Obj, fromEnd: boolean): Value {
+  const len: f64 = TALength(o);
+  RequireCallable(callbackfn);
+  let i: f64 = 0;
+  let accumulator: Value = undefined;
+  if (LengthOfArrayLike(rest) > 0) {
+    accumulator = Get(rest, 0);
+  } else {
+    if (len === 0) {
+      throw NewTypeError("empty array");
+    }
+    accumulator = TypedArrayGet(o, fromEnd ? len - 1 : 0);
+    i = 1;
+  }
+  for (; i < len; i++) {
+    const k: f64 = fromEnd ? len - 1 - i : i;
+    accumulator = Call(callbackfn, undefined, accumulator, TypedArrayGet(o, k), k, o);
+  }
+  return accumulator;
+}
+
+/**
+ * %TypedArray%.prototype.reduce ( callbackfn [ , initialValue ] ), 23.2.3.23.
+ * @builtin %TypedArray%.prototype.reduce
+ * @length 1
+ */
+function TypedArrayPrototypeReduce(this: Value, callbackfn: Value, ...rest: Value[]): Value {
+  return TAReduce(ValidateTypedArray(this), callbackfn, rest, false);
+}
+
+/**
+ * %TypedArray%.prototype.reduceRight ( callbackfn [ , initialValue ] ), 23.2.3.24.
+ * @builtin %TypedArray%.prototype.reduceRight
+ * @length 1
+ */
+function TypedArrayPrototypeReduceRight(this: Value, callbackfn: Value, ...rest: Value[]): Value {
+  return TAReduce(ValidateTypedArray(this), callbackfn, rest, true);
+}
+
+/**
+ * %TypedArray%.prototype.reverse ( ), 23.2.3.25.
+ * @builtin %TypedArray%.prototype.reverse
+ */
+function TypedArrayPrototypeReverse(this: Value): Obj {
+  const o: Obj = ValidateTypedArray(this);
+  const len: f64 = TALength(o);
+  for (let lower: f64 = 0; lower < F64Floor(len / 2); lower++) {
+    const upper: f64 = len - lower - 1;
+    const lv: Value = TypedArrayGet(o, lower);
+    const uv: Value = TypedArrayGet(o, upper);
+    TypedArraySet(o, lower, ToNumberPrimitive(uv));
+    TypedArraySet(o, upper, ToNumberPrimitive(lv));
+  }
+  return o;
+}
+
+/** The elements of a typed array sorted with comparefn (or numerically), as a list. */
+function TASortedList(o: Obj, len: f64, comparefn: Value): Obj {
+  const list: Obj = ArrayCreate(0);
+  for (let k: f64 = 0; k < len; k++) {
+    CreateDataPropertyOrThrow(list, k, TypedArrayGet(o, k));
+  }
+  if (comparefn === undefined) {
+    SortNumbers(list);
+  } else {
+    SortList(list, len, comparefn);
+  }
+  return list;
+}
+
+/**
+ * %TypedArray%.prototype.sort ( comparefn ), 23.2.3.30.
+ * @builtin %TypedArray%.prototype.sort
+ */
+function TypedArrayPrototypeSort(this: Value, comparefn: Value): Obj {
+  if (comparefn !== undefined && !IsCallable(comparefn)) {
+    throw NewTypeError("not a function");
+  }
+  const o: Obj = ValidateTypedArray(this);
+  const len: f64 = TALength(o);
+  const list: Obj = TASortedList(o, len, comparefn);
+  for (let k: f64 = 0; k < len; k++) {
+    TypedArraySet(o, k, ToNumberPrimitive(Get(list, k)));
+  }
+  return o;
+}
+
+/**
+ * %TypedArray%.prototype.toSorted ( comparefn ), 23.2.3.34.
+ * @builtin %TypedArray%.prototype.toSorted
+ */
+function TypedArrayPrototypeToSorted(this: Value, comparefn: Value): Obj {
+  if (comparefn !== undefined && !IsCallable(comparefn)) {
+    throw NewTypeError("not a function");
+  }
+  const o: Obj = ValidateTypedArray(this);
+  const len: f64 = TALength(o);
+  const a: Obj = AllocateTypedArrayOfLength(KindOf(o), TypedArrayKindProto(KindOf(o)), len);
+  const list: Obj = TASortedList(o, len, comparefn);
+  for (let k: f64 = 0; k < len; k++) {
+    TypedArraySet(a, k, ToNumberPrimitive(Get(list, k)));
+  }
+  return a;
+}
+
+/**
+ * %TypedArray%.prototype.toReversed ( ), 23.2.3.33.
+ * @builtin %TypedArray%.prototype.toReversed
+ */
+function TypedArrayPrototypeToReversed(this: Value): Obj {
+  const o: Obj = ValidateTypedArray(this);
+  const len: f64 = TALength(o);
+  const a: Obj = AllocateTypedArrayOfLength(KindOf(o), TypedArrayKindProto(KindOf(o)), len);
+  for (let k: f64 = 0; k < len; k++) {
+    TypedArraySet(a, k, ToNumberPrimitive(TypedArrayGet(o, len - k - 1)));
+  }
+  return a;
+}
+
+/**
+ * %TypedArray%.prototype.with ( index, value ), 23.2.3.36.
+ * @builtin %TypedArray%.prototype.with
+ */
+function TypedArrayPrototypeWith(this: Value, index: Value, value: Value): Obj {
+  const o: Obj = ValidateTypedArray(this);
+  const len: f64 = TALength(o);
+  const rel: f64 = ToIntegerOrInfinity(index);
+  const actual: f64 = rel >= 0 ? rel : len + rel;
+  const n: f64 = ToNumber(value);
+  if (!(actual >= 0 && actual < TALength(o))) {
+    throw NewRangeError("invalid array index");
+  }
+  const a: Obj = AllocateTypedArrayOfLength(KindOf(o), TypedArrayKindProto(KindOf(o)), len);
+  for (let k: f64 = 0; k < len; k++) {
+    TypedArraySet(a, k, k === actual ? n : ToNumberPrimitive(TypedArrayGet(o, k)));
+  }
+  return a;
+}
+
+/**
+ * %TypedArray%.prototype.toLocaleString ( [ reserved1 [ , reserved2 ] ] ), 23.2.3.32.
+ * @builtin %TypedArray%.prototype.toLocaleString
+ */
+function TypedArrayPrototypeToLocaleString(this: Value): Str {
+  const o: Obj = ValidateTypedArray(this);
+  const len: f64 = TALength(o);
+  let r: Str = "";
+  for (let k: f64 = 0; k < len; k++) {
+    if (k > 0) {
+      r += ",";
+    }
+    const v: Value = TypedArrayGet(o, k);
+    if (v !== undefined) {
+      r += ToString(Call(GetV(v, "toLocaleString"), v));
+    }
+  }
+  return r;
+}
+
+/** CanonicalNumericIndexString (7.1.21) is not undefined: `key` names an element slot. */
+function IsCanonicalNumericKey(key: Value): boolean {
+  // ToPropertyKey gives integer keys as Numbers.
+  if (IsNumber(key)) {
+    return true;
+  }
+  if (!IsString(key)) {
+    return false;
+  }
+  return key === "-0" || ToString(ToNumber(key)) === key;
+}
+
+/**
+ * TypedArraySetElement ( O, index, value ), 10.4.5.16, for builtins' Set(A, k, v, true)
+ * on a typed array: the value is converted first (user code), then written if the index
+ * is still valid.
+ */
+function TASet(o: Obj, k: f64, v: Value): void {
+  TypedArraySet(o, k, ToNumber(v));
+}
+

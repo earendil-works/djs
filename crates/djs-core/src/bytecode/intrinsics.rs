@@ -140,6 +140,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("BufferResize", L, 2, false),
     i("BufferTransfer", L, 3, false),
     i("BufferCopy", L, 5, false),
+    i("SortNumbers", L, 1, false),
     i("IsDataView", L, 1, false),
     i("RealmConstructor", L, 1, false),
     i("IsTypedArray", L, 1, false),

@@ -414,6 +414,11 @@ const I = {
   StrNormalize: (s, f) => s.normalize(["NFC", "NFD", "NFKC", "NFKD"][f]),
   CompareStrings: (a, b) => (check(typeof a === "string" && typeof b === "string", "CompareStrings"), a < b ? -1 : a > b ? 1 : 0),
   StringCodePoints: (s) => [...s],
+  SortNumbers: (list) => {
+    check(Array.isArray(list) && list.every((v) => typeof v === "number"), "SortNumbers");
+    const out = Float64Array.from(list).sort();
+    for (let i = 0; i < out.length; i++) list[i] = out[i];
+  },
   SortPrimitives: (list) => {
     check(Array.isArray(list), "SortPrimitives");
     if (list.some((v) => isObject(v) || typeof v === "symbol")) return false;
@@ -1335,6 +1340,49 @@ for (const name of ["set", "subarray", "slice", "fill"]) {
     same("%TypedArray%.prototype." + name, TAP[name], (f) => { const t = new Uint8Array([1, 2, 3, 4]); const r = f.call(t, ...args); return [r === undefined ? "u" : Array.from(r), Array.from(t)]; });
   }
   same("%TypedArray%.prototype." + name, TAP[name], (f) => f.call([1, 2]));
+}
+const taCases = [
+  ["at", [[0], [-1], [9], ["1"]]],
+  ["copyWithin", [[0, 2], [1, 0, 2], [-1, 0], [0, 1, -1]]],
+  ["every", [[(v) => v > 0], [(v) => v > 1]]],
+  ["some", [[(v) => v > 3], [(v, i, a) => a !== undefined && i === 9]]],
+  ["filter", [[(v) => v % 2], [() => false]]],
+  ["find", [[(v) => v > 1], [(v) => v > 9]]],
+  ["findIndex", [[(v) => v > 1], [(v) => v > 9]]],
+  ["findLast", [[(v) => v < 4], [(v) => v > 9]]],
+  ["findLastIndex", [[(v) => v < 4], [(v) => v > 9]]],
+  ["includes", [[3], [3, 3], [9], [1, -10]]],
+  ["indexOf", [[3], [3, 3], [9], [1, -10], ["3"]]],
+  ["lastIndexOf", [[3], [3, 1], [9], [1, -10], [4, -1]]],
+  ["join", [[], ["-"], [undefined]]],
+  ["map", [[(v, i) => v * i], [(v) => v + 0.5]]],
+  ["reduce", [[(a, b) => a + b], [(a, b) => a + "," + b, "s"]]],
+  ["reduceRight", [[(a, b) => a + b], [(a, b) => a + "," + b, "s"]]],
+  ["reverse", [[]]],
+  ["sort", [[], [(a, b) => b - a]]],
+  ["toSorted", [[], [(a, b) => b - a]]],
+  ["toReversed", [[]]],
+  ["with", [[0, 9], [-1, 7], [9, 1]]],
+  ["toLocaleString", [[]]],
+];
+for (const [name, argss] of taCases) {
+  for (const args of argss) {
+    same("%TypedArray%.prototype." + name, TAP[name], (f) => {
+      const t = new Int16Array([3, 1, 4, 1, 5]);
+      const r = f.call(t, ...args);
+      return [ArrayBuffer.isView(r) ? Array.from(r) : r, Array.from(t)];
+    });
+  }
+  same("%TypedArray%.prototype." + name, TAP[name], (f) => f.call([1, 2], () => 0));
+}
+for (const t of [new Float64Array([3, -0, 0, NaN, -Infinity, 1]), new Uint8Array([]), new Float32Array([0.5])]) {
+  same("%TypedArray%.prototype.sort", TAP.sort, (f) => Array.from(f.call(t.slice())).map((v) => Object.is(v, -0) ? "-0" : v));
+  same("%TypedArray%.prototype.includes", TAP.includes, (f) => [f.call(t, NaN), f.call(t, 0)]);
+  same("%TypedArray%.prototype.indexOf", TAP.indexOf, (f) => [f.call(t, NaN), f.call(t, 0)]);
+}
+for (const name of ["entries", "keys", "values"]) {
+  same("%TypedArray%.prototype." + name, TAP[name], (f) => [...f.call(new Uint8Array([7, 8]))]);
+  same("%TypedArray%.prototype." + name, TAP[name], (f) => f.call([1]));
 }
 same("%TypedArray%.from", Object.getPrototypeOf(Int8Array).from, (f) => Array.from(f.call(Int16Array, [1, 2, 70000], (v) => v * 2)));
 same("%TypedArray%.of", Object.getPrototypeOf(Int8Array).of, (f) => Array.from(f.call(Uint8Array, 1, 2, 300)));

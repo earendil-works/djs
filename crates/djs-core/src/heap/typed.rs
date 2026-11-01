@@ -456,6 +456,26 @@ impl Heap {
         })
     }
 
+    /// Whether [[Set]] of `key` on `o` stops at a typed array on its prototype chain that
+    /// has no such element (an invalid numeric index): it then succeeds without writing
+    /// (10.4.5.5). Call it after the lookup found nothing.
+    pub fn typed_array_set_stops(&self, o: Obj, key: Atom) -> bool {
+        if self.canonical_numeric_index(key).is_none() {
+            return false;
+        }
+        let mut cur = Some(o);
+        while let Some(c) = cur {
+            if self.object_class(c) == ObjectClass::TypedArray {
+                return true;
+            }
+            if self.has_own_property(c, key) {
+                return false;
+            }
+            cur = self.get_prototype_of(c);
+        }
+        false
+    }
+
     /// The integer keys of a typed array (0 .. length), for [[OwnPropertyKeys]].
     pub(crate) fn ta_keys(&self, o: Obj) -> alloc::vec::Vec<Atom> {
         let len = self.ta_length(o).unwrap_or(0);
