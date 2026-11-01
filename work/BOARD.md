@@ -67,7 +67,9 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
   namespaces, parameter properties.
 - P4: snapshot/restore API, deltas, old generation.
 - P5: regex engine, generators, Map/Set/WeakMap, Symbol, iterators, typed arrays, …
-- Perf track: the bgen Rust backend, benchmarks.
+- Perf track: the bgen Rust backend, benchmarks. **Interpreter call path is ~10x slower
+  than qjs** (0034: 3.4M plain JS calls 0.6 s vs 0.06 s; sort with comparator 30x): the
+  next perf lever, likely for heap after 0030.
 
 ## Scores
 
