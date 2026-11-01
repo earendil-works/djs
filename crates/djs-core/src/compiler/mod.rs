@@ -36,6 +36,7 @@ mod tests;
 mod ts_tests;
 
 use alloc::borrow::Cow;
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
@@ -138,25 +139,41 @@ impl fmt::Display for CompileError {
     }
 }
 
-/// The parser's internal error, positioned in the source.
+/// The parser's internal error, positioned in the source. Boxed so that a `PResult<T>`
+/// with a small `T` is returned in registers: with the 16-byte error inline, each of the
+/// compiler's ~800 `?` copied the result through memory (~27 KB of wasm, D1572).
 #[derive(Clone, Debug)]
-pub(super) enum PErr {
+pub(super) struct PErr(Box<PErrKind>);
+
+#[derive(Clone, Debug)]
+pub(super) enum PErrKind {
     Syntax { pos: u32, msg: Cow<'static, str> },
     Oom,
 }
 
+impl PErr {
+    #[cold]
+    #[inline(never)]
+    pub(super) fn syntax(pos: u32, msg: Cow<'static, str>) -> PErr {
+        PErr(Box::new(PErrKind::Syntax { pos, msg }))
+    }
+
+    #[cold]
+    #[inline(never)]
+    pub(super) fn oom() -> PErr {
+        PErr(Box::new(PErrKind::Oom))
+    }
+}
+
 impl From<LexError> for PErr {
     fn from(e: LexError) -> Self {
-        PErr::Syntax {
-            pos: e.pos,
-            msg: Cow::Borrowed(e.message),
-        }
+        PErr::syntax(e.pos, Cow::Borrowed(e.message))
     }
 }
 
 impl From<HeapError> for PErr {
     fn from(_: HeapError) -> Self {
-        PErr::Oom
+        PErr::oom()
     }
 }
 
@@ -242,9 +259,9 @@ pub fn strip_types(
 }
 
 fn error_at(src: &[u8], e: PErr) -> CompileError {
-    let (kind, pos, message) = match e {
-        PErr::Syntax { pos, msg } => (CompileErrorKind::Syntax, pos, String::from(msg)),
-        PErr::Oom => (
+    let (kind, pos, message) = match *e.0 {
+        PErrKind::Syntax { pos, msg } => (CompileErrorKind::Syntax, pos, String::from(msg)),
+        PErrKind::Oom => (
             CompileErrorKind::OutOfMemory,
             0,
             String::from("out of memory"),

@@ -65,10 +65,7 @@ struct Resolved {
 }
 
 pub(super) fn internal(what: &str) -> PErr {
-    PErr::Syntax {
-        pos: 0,
-        msg: Cow::Owned(format!("internal compiler error: {what}")),
-    }
+    PErr::syntax(0, Cow::Owned(format!("internal compiler error: {what}")))
 }
 
 /// Resolves all functions of the unit and writes their templates. `funcs` is indexed
@@ -97,10 +94,7 @@ pub(super) fn finish(
     let storages: Vec<(Vec<Storage>, Vec<Atom>)> = funcs.iter().map(assign_storage).collect();
     for (s, _) in &storages {
         if s.len() > u16::MAX as usize {
-            return Err(PErr::Syntax {
-                pos: 0,
-                msg: Cow::Borrowed("too many local variables"),
-            });
+            return Err(PErr::syntax(0, Cow::Borrowed("too many local variables")));
         }
     }
 
@@ -703,7 +697,7 @@ fn emit_function(
         src_end: f.src_end,
     };
     alloc_template(heap, &parts).map_err(|e| match e {
-        TemplateError::Heap(_) => PErr::Oom,
+        TemplateError::Heap(_) => PErr::oom(),
         e => internal(&format!("{e:?}")),
     })
 }

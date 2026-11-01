@@ -163,10 +163,7 @@ impl Checkpoint<'_> {
 }
 
 pub(super) fn syntax<T>(pos: u32, msg: impl Into<Cow<'static, str>>) -> PResult<T> {
-    Err(PErr::Syntax {
-        pos,
-        msg: msg.into(),
-    })
+    Err(PErr::syntax(pos, msg.into()))
 }
 
 impl<'a, 'h> Parser<'a, 'h> {

@@ -2673,3 +2673,11 @@ per-opcode emitters (`#[inline]`) call them from hundreds of compiler sites, and
 them inlined every site carried a `Vec::push`/`extend_from_slice` (length check, grow
 call, store): code 779,856 -> 743,536 in wasm. Emitting is a small part of compile time
 (lexing and parsing dominate), see 0057 for the compile-throughput check.
+
+## D1572: The compiler's internal error is boxed
+date: 2026-11-03 · by: bloat · issue: 0057
+`PErr` is `struct PErr(Box<PErrKind>)` (`Syntax { pos, msg } | Oom`), built by the cold
+`PErr::syntax` / `PErr::oom`. With the 16-byte enum inline, every `PResult<T>` was
+returned through memory and each `?` (~800 in the compiler) copied it out and tested a
+tag in memory; boxed, `PResult<()>` is one i32. Code 743,536 -> 712,176 in wasm. An
+error costs one allocation, once per failed compile.
