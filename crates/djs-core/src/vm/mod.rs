@@ -581,6 +581,15 @@ impl Vm {
         })
     }
 
+    /// Marks a promise handled (as a `then` would, D1423): its rejection is not reported
+    /// by `take_unhandled_rejections`. For an embedder that consumes the outcome itself,
+    /// such as an async body's result promise. No-op for other values.
+    pub fn mark_promise_handled(&mut self, v: Value) {
+        if let Some(p) = run::promise::as_promise(&self.heap, v) {
+            run::promise::mark_handled(&mut self.heap, p);
+        }
+    }
+
     /// The reasons of the promises that were rejected without a handler and still have
     /// none (HostPromiseRejectionTracker, D1373), oldest first; they are forgotten. Check
     /// after `run` returns `Done`, `Threw` or `Idle` (the job queue is empty then), the way

@@ -28,6 +28,7 @@ const sb = await Sandbox.create({
   maxFuel: 1e9,                  // per run; default unlimited
   now: Date.now,                 // the VM's clock (ms), a function or a fixed time; default Date.now
   timeZoneOffset: 0,             // minutes east of UTC; default: the host's current offset
+  unhandledRejections: "warn",   // or "throw", or "collect" (sb.takeUnhandledRejections())
 });
 sb.run("return readFile(path).length", { path: "README.md" });   // codemode function body
 await sb.runAsync("return await fetchJson(url)", { url });       // host functions may return promises
@@ -64,6 +65,13 @@ sb.dispose();
   Sandbox sets `Date.now()` from `opts.now` (default `Date.now`; a number fixes it, for
   replays) and the local time zone from `opts.timeZoneOffset` (minutes east of UTC, no
   DST; default the host's offset at that time). Without a host clock `Date.now()` is 0.
+- Unhandled rejections (D1423): promises rejected with no handler once the VM's job queue
+  is empty (after the run, and whenever it waits on async host calls), as qjs reports
+  them. `unhandledRejections: "warn"` (default) calls `console.warn("Possibly unhandled
+  promise rejection:", "TypeError: x")`; `"throw"` fails the run with a `threw` error
+  `Possibly unhandled promise rejection: TypeError: x`; `"collect"` keeps the reasons (host
+  values) for `takeUnhandledRejections()`. A rejected result promise is the run's error,
+  not an unhandled rejection.
 - A promise as the result is unwrapped: its value, or `threw` with its reason; a promise
   that can never settle is a `threw` error.
 - `defineFunction(name, f)`, `defineAsyncFunction(name, f)` and `setGlobal(name, value)`
@@ -135,7 +143,8 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_host_call_info(vm, call_id) -> argc` | `vm_host_call` for any pending call (async ones) |
 | `vm_new_host_calls(vm) -> n` | out = the ids (u32) of the async calls made since the last check |
 | `vm_resolve_host_call(vm, call_id, ok, value) -> 0/-1` | return (`ok` 1) or throw (`ok` 0) `value`; for an async call, fulfill or reject its promise (in a job) |
-| `vm_promise_state(vm, h) -> state` | 0 not a promise, 1 pending, 2 fulfilled, 3 rejected; settled: out = a handle (u32) to the result |
+| `vm_promise_state(vm, h) -> state` | 0 not a promise, 1 pending, 2 fulfilled, 3 rejected; settled: out = a handle (u32) to the result, and the promise counts as handled |
+| `vm_take_unhandled_rejections(vm) -> n` | out = handles (u32) to the reasons of promises rejected with no handler, oldest first (D1423) |
 | `djs_panic_ptr()`, `djs_panic_len()` | the last panic message, after a trap |
 | `djs_debug_panic()` | trap on purpose (tests) |
 
@@ -156,8 +165,9 @@ A run, as the Sandbox does it:
 
 `vm_run` runs the microtask queue too (D1370): after the entry call returns, it runs the
 promise jobs, and DONE comes only once the queue is empty and no async host call is
-pending. An uncaught exception is THREW at once. `Vm::take_unhandled_rejections` (not yet
-exported) lists rejected promises nobody handled, as qjs reports them.
+pending. An uncaught exception is THREW at once. `vm_take_unhandled_rejections` lists
+rejected promises nobody handled, as qjs reports them; check it after DONE, THREW or
+IDLE.
 
 The raw value bits from `vm_host_call` and `vm_handle_bits` stay valid until the next
 `vm_run` or collection (the GC moves objects). Read them right away.
@@ -236,4 +246,4 @@ host code and runs at the same speed.
   …) were not there yet. The tests stick to what works.
 - **Async.** Concurrent host calls need `asyncFunctions` (sync `functions` still run one
   at a time). Until the compiler supports `async`/`await` (0037 defines the runtime), code
-  chains with `.then`. Unhandled rejections are not reported to the host yet.
+  chains with `.then`.

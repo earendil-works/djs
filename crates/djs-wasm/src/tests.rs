@@ -291,3 +291,21 @@ fn host_clock() {
     assert_eq!(display(vm, r), "2022-03-01T23:30:00.000Z 1");
     vm_free(vm);
 }
+
+#[test]
+fn unhandled_rejections() {
+    let vm = vm_new(0);
+    let f = compile_body(
+        vm,
+        "",
+        "Promise.reject(1); const p = Promise.reject(2); p.catch(() => {}); Promise.reject(new TypeError('t')); return 0",
+    );
+    call(vm, f, &[]);
+    assert_eq!(vm_run(vm, 1_000_000), status::DONE);
+    assert_eq!(vm_take_unhandled_rejections(vm), 2);
+    let hs = out_words();
+    assert_eq!(display(vm, hs[0]), "1");
+    assert_eq!(display(vm, hs[1]), "TypeError: t");
+    assert_eq!(vm_take_unhandled_rejections(vm), 0);
+    vm_free(vm);
+}

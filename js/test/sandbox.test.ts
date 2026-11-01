@@ -167,6 +167,28 @@ test("the clock and time zone come from the host", async () => {
   for (const s of [sb, fixed, ticking]) s.dispose();
 });
 
+test("unhandled rejections", async () => {
+  const c = collect();
+  const src = "Promise.reject(new TypeError('lost')); Promise.reject(2).catch(() => {}); return 1";
+  const warn = await Sandbox.create({ console: c.console });
+  assert.equal(warn.run(src), 1);
+  assert.deepEqual(c.lines, ["warn Possibly unhandled promise rejection: TypeError: lost"]);
+  // A rejected result is the run's error, not also an unhandled rejection.
+  assert.throws(() => warn.run("return Promise.reject(new RangeError('result'))"), /RangeError: result/);
+  assert.equal(c.lines.length, 1);
+  const thrower = await Sandbox.create({ unhandledRejections: "throw" });
+  assert.throws(
+    () => thrower.run(src),
+    (e: unknown) => e instanceof SandboxError && e.kind === "threw" && e.message === "Possibly unhandled promise rejection: TypeError: lost",
+  );
+  assert.equal(thrower.run("return 'usable'"), "usable");
+  const collector = await Sandbox.create({ unhandledRejections: "collect" });
+  collector.run("Promise.reject(3); Promise.reject('four')");
+  assert.deepEqual(collector.takeUnhandledRejections(), [3, "four"]);
+  assert.deepEqual(collector.takeUnhandledRejections(), []);
+  for (const s of [warn, thrower, collector]) s.dispose();
+});
+
 test("syntax errors", async () => {
   const sb = await Sandbox.create();
   assert.throws(() => sb.run("return )"), (e: unknown) => e instanceof SandboxError && e.kind === "syntax");

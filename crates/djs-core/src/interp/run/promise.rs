@@ -287,6 +287,18 @@ fn track_rejection(heap: &mut Heap, p: Obj) -> Result<(), HeapError> {
 }
 
 /// HostPromiseRejectionTracker ( promise, "handle" ).
+/// Sets [[PromiseIsHandled]] as a `then` would, without adding a reaction: the embedder
+/// takes care of the outcome (D1423).
+pub(crate) fn mark_handled(heap: &mut Heap, p: Obj) {
+    let f = flags(heap, p);
+    if f & FLAG_HANDLED == 0 {
+        if state_of(heap, p) == REJECTED {
+            untrack_rejection(heap, p);
+        }
+        set_flags(heap, p, f | FLAG_HANDLED);
+    }
+}
+
 fn untrack_rejection(heap: &mut Heap, p: Obj) {
     let i = state::interp(heap);
     let r = heap.arena().get::<Ref>(i, Interp::REJECTIONS).0;

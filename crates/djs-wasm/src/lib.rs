@@ -678,9 +678,25 @@ pub extern "C" fn vm_new_host_calls(vm: u32) -> u32 {
     })
 }
 
+/// The reasons of the promises rejected without a handler since the last call (D1373,
+/// D1423): writes a handle (u32) per reason to the out buffer, oldest first, and returns
+/// how many. The host frees them. Check after DONE, THREW or IDLE, as qjs does after its
+/// job queue ran.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_take_unhandled_rejections(vm: u32) -> u32 {
+    with(|s| {
+        let slot = s.slot(vm);
+        let reasons = slot.vm.take_unhandled_rejections();
+        let handles: Vec<u32> = reasons.into_iter().map(|r| slot.handle(r)).collect();
+        s.set_out_words(&handles);
+        handles.len() as u32
+    })
+}
+
 /// The state of the promise `h` (a handle): 0 not a promise, 1 pending, 2 fulfilled, 3
 /// rejected. When settled, the out buffer holds a handle (u32) to its result, which the
-/// host frees.
+/// host frees, and the promise counts as handled (`Vm::mark_promise_handled`): the host
+/// consumes its outcome, so a rejection is not also an unhandled one.
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_promise_state(vm: u32, h: u32) -> u32 {
     with(|s| {
@@ -692,6 +708,9 @@ pub extern "C" fn vm_promise_state(vm: u32, h: u32) -> u32 {
             Some(Some(Ok(r))) => (2, Some(r)),
             Some(Some(Err(r))) => (3, Some(r)),
         };
+        if result.is_some() {
+            slot.vm.mark_promise_handled(v);
+        }
         let words: Vec<u32> = result.map(|r| slot.handle(r)).into_iter().collect();
         s.set_out_words(&words);
         code

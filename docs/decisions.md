@@ -1710,3 +1710,11 @@ Not done:
 - The reviver's third argument `{ source }` and `JSON.rawJSON`/`isRawJSON`
   (json-parse-with-source, test262 "later" group).
 - BigInt.
+## D1423: Unhandled rejections reach the host; reading a result promise handles it
+date: 2026-11-01 · by: heap · issue: 0042
+`vm_take_unhandled_rejections` exports D1373's tracker. The Sandbox checks it whenever the
+job queue is empty (DONE, and IDLE before waiting on async host calls) and, per
+`unhandledRejections`, warns through its console (default), fails the run (`throw`), or
+collects the reasons (`collect`). Settled `vm_promise_state` (and
+`Vm::mark_promise_handled`) marks the promise handled, as a `then` would: an embedder that
+consumes an async body's result promise must not see its rejection reported twice.

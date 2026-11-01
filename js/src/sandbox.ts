@@ -47,6 +47,14 @@ export interface SandboxOptions {
    * host's current offset. Set before every fuel slice.
    */
   timeZoneOffset?: number;
+  /**
+   * Promises rejected with no handler once the VM's job queue ran empty (as qjs reports
+   * them, D1423; a rejected result promise does not count): `"warn"` (default) passes
+   * each reason (its display form, `TypeError: x`) to `console.warn`,
+   * `"throw"` fails the run with a `threw` SandboxError, `"collect"` keeps them for
+   * `takeUnhandledRejections()`.
+   */
+  unhandledRejections?: "warn" | "throw" | "collect";
 }
 
 export type SandboxErrorKind = "threw" | "syntax" | "fuel" | "trap" | "memory" | "misuse";
@@ -104,6 +112,7 @@ interface Exports {
   vm_host_call_info(vm: number, callId: number): number;
   vm_new_host_calls(vm: number): number;
   vm_promise_state(vm: number, h: number): number;
+  vm_take_unhandled_rejections(vm: number): number;
   vm_resolve_host_call(vm: number, callId: number, ok: number, value: number): number;
   vm_abort(vm: number): void;
   vm_set_now(vm: number, ms: number): void;
@@ -164,6 +173,8 @@ export class Sandbox {
   private readonly fnNames: string[] = [];
   private readonly fns = new Map<number, HostFunction>();
   private readonly atomCache: (string | undefined)[] = [];
+  private readonly rejections: unknown[] = [];
+  private readonly cons: ConsoleLike;
   private dead: string | null = null;
 
   /** A new sandbox; loads (and caches) the default module unless `opts.module` is given. */
@@ -216,6 +227,7 @@ export class Sandbox {
     this.vm = vm;
     this.opts = opts;
     const cons = opts.console ?? (globalThis.console as ConsoleLike);
+    this.cons = cons;
     const builtins: Record<string, HostFunction> = {};
     for (const m of CONSOLE_METHODS) builtins[`console.${m}`] = (...a) => cons[m](...a);
     if (snapshot !== undefined) {
@@ -540,6 +552,7 @@ export class Sandbox {
           return { value, message, threw };
         });
         if (threw) throw new SandboxError("threw", message, value);
+        this.checkRejections();
         return value;
       }
       if (st === STATUS_OUT_OF_FUEL) {
@@ -551,6 +564,7 @@ export class Sandbox {
         continue;
       }
       if (st === STATUS_IDLE) {
+        this.checkRejections();
         if (finished.length > 0) continue;
         if (inflight.size === 0) return undefined; // nothing was called
         // Only async host calls are left: wait for one of them.
@@ -576,6 +590,39 @@ export class Sandbox {
         result = e;
       }
       this.complete(callId, ok, result);
+    }
+  }
+
+  /**
+   * The unhandled rejections collected so far (`unhandledRejections: "collect"`), as host
+   * values; forgets them.
+   */
+  takeUnhandledRejections(): unknown[] {
+    return this.rejections.splice(0);
+  }
+
+  /** Reports the VM's unhandled rejections per `opts.unhandledRejections` (D1423). */
+  private checkRejections(): void {
+    const reasons = this.guard(() => {
+      const x = this.x;
+      const n = x.vm_take_unhandled_rejections(this.vm);
+      const handles = outWords(x, n);
+      return handles.map((h) => {
+        const value = this.readHandle(h);
+        const message = this.display(h);
+        x.vm_handle_free(this.vm, h);
+        return { value, message };
+      });
+    });
+    if (reasons.length === 0) return;
+    const mode = this.opts.unhandledRejections ?? "warn";
+    if (mode === "throw") {
+      const first = reasons[0];
+      throw new SandboxError("threw", `Possibly unhandled promise rejection: ${first.message}`, first.value);
+    }
+    for (const r of reasons) {
+      if (mode === "collect") this.rejections.push(r.value);
+      else this.cons.warn("Possibly unhandled promise rejection:", r.message);
     }
   }
 
