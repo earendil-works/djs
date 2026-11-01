@@ -6,7 +6,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-libm = "0.2.16"
+# Pinned: Math results depend on the version, which is hashed into BUILD_HASH (D1750).
+libm = "=0.2.16"
 
 [features]
 default = ["regexp-unicode-props", "unicode-normalization"]
@@ -14,7 +15,7 @@ default = ["regexp-unicode-props", "unicode-normalization"]
 # (D1500). Without it they are a SyntaxError (D1112).
 regexp-unicode-props = []
 # String.prototype.normalize for every string, and localeCompare normalizing to NFC like
-# qjs: about 48 KB of tables (D1760). Without it normalize throws for strings that would
+# qjs: about 38 KB (20 KB gzipped) of wasm (D1760). Without it normalize throws for strings that would
 # need them, and localeCompare compares code points.
 unicode-normalization = []
 

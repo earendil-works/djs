@@ -151,7 +151,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_resolve_host_call_at(vm, call_id, ok, value, now: f64) -> 0/-1` | the same, and `Date` reads `now` (ms) from when the result is applied: a virtual clock per result (D1670) |
 | `vm_promise_state(vm, h) -> state` | 0 not a promise, 1 pending, 2 fulfilled, 3 rejected; settled: out = a handle (u32) to the result, and the promise counts as handled |
 | `vm_take_unhandled_rejections(vm) -> n` | out = handles (u32) to the reasons of promises rejected with no handler, oldest first (D1423) |
-| `djs_build_hash() -> u32` | the build hash of VM images: identifies the engine build (0049) |
+| `djs_build_hash() -> u32` | the build hash of VM images: identifies the engine build (0049), including its sources, cargo features and libm version (D1750) |
 | `djs_panic_ptr()`, `djs_panic_len()` | the last panic message, after a trap |
 | `djs_debug_panic()` | trap on purpose (tests) |
 

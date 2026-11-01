@@ -36,7 +36,8 @@ const HOST_CALL_REPORTED: u32 = 1;
 /// The generated prelude (`builtins/gen/prelude.js`, D1172).
 const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude.js");
 
-// `SOURCE_HASH`: the library's non-test sources and the prelude (build.rs, D1330).
+// `SOURCE_HASH`: the library's non-test sources and the prelude (build.rs, D1330), the
+// enabled cargo features and the libm version (`BUILD_INPUTS`, D1750).
 include!(concat!(env!("OUT_DIR"), "/source_hash.rs"));
 
 /// The build hash of VM images (D1320, D1330): the heap layout (with the well-known

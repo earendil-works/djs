@@ -3013,3 +3013,35 @@ withdraws them.
 clock `Date` reads from when the result is applied (for the parked sync call: right
 away). A host gets a virtual clock per result without stepping the VM between results.
 `Vm::abort` drops the inbox with the jobs.
+
+## D1750: The build hash covers features and libm; canonical f32/f16 NaN
+date: 2026-11-03 · by: num · issue: 0075
+From 0055's G8/G9 (P9). `BUILD_HASH` (D1330) changes whenever behavior can change.
+
+**Build identity.** `crates/djs-core/build.rs` adds the following to `SOURCE_HASH`, after the
+sources and the prelude:
+- the enabled cargo features of djs-core, sorted, without `default`. Without
+  `regexp-unicode-props`, `\p{..}` is a SyntaxError; without `unicode-normalization`,
+  `normalize` throws;
+- the `libm` version, because Math results come from it.
+
+`libm` is now pinned with `=` in djs-core's Cargo.toml, so the version that build.rs reads
+there is the one that gets compiled, even when another workspace builds djs-core. A bump
+is a deliberate edit, and it changes the hash. The inputs are also exported as
+`vm::BUILD_INPUTS` (e.g. `["feature regexp-unicode-props", "feature
+unicode-normalization", "libm 0.2.16"]`). A test checks that list against `cfg!(feature)`
+and against Cargo.lock.
+
+**Float NaN.** Converting f64 to f32 with `as f32` compiles to `f32.demote_f64` on wasm,
+and the wasm spec leaves the NaN bits of that instruction nondeterministic (likewise
+`promote`). The bits are observable through a Uint8Array over a Float32Array's buffer.
+Three places used to rely on that conversion: Float32 elements (typed arrays and DataView
+`setFloat32`), `Math.fround` and Float32 decode. They now go through
+`heap::typed::{f64_to_f32_bits, f32_bits_to_f64}`, which handle NaN explicitly:
+- writing a Float32 element gives `0x7fc00000`, as in qjs and V8;
+- reading one gives `f64::NAN`.
+
+Float16 NaN no longer takes the sign of its input and is always `0x7e00`, which is what
+V8 writes. qjs writes `0x7c01`, but the spec leaves the bits implementation-defined, and
+djs already wrote `0x7e00` for every canonical NaN. Observable behavior is unchanged on
+every platform measured in 0055. The change makes it hold by construction on wasm too.

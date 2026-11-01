@@ -168,7 +168,8 @@ pub fn f64_to_f16_bits(x: f64) -> u16 {
     let exp = ((bits >> 52) & 0x7FF) as i32;
     let mant = bits & ((1u64 << 52) - 1);
     if exp == 0x7FF {
-        return sign | 0x7C00 | if mant != 0 { 0x200 } else { 0 };
+        // NaN is the canonical quiet NaN 0x7e00, without the sign (D1750).
+        return if mant != 0 { 0x7E00 } else { sign | 0x7C00 };
     }
     let round = |m: u64, shift: u32| {
         let q = m >> shift;
@@ -214,6 +215,28 @@ pub fn f16_bits_to_f64(h: u16) -> f64 {
     }
 }
 
+/// The canonical binary32 quiet NaN (`0x7fc00000`), what qjs and V8 write.
+const F32_CANONICAL_NAN: u32 = 0x7FC0_0000;
+
+/// Number → binary32 for Float32 elements and `Math.fround` (D1750). NaN is written as
+/// the canonical quiet NaN explicitly: the f64 → f32 demotion `as f32` compiles to
+/// `f32.demote_f64` on wasm, whose NaN result bits the wasm spec leaves
+/// nondeterministic, and the bits are observable through a Uint8Array over the buffer.
+pub fn f64_to_f32_bits(n: f64) -> u32 {
+    if n.is_nan() {
+        F32_CANONICAL_NAN
+    } else {
+        (n as f32).to_bits()
+    }
+}
+
+/// binary32 → Number. NaN comes out as `f64::NAN` (`f64.promote_f32` has the same
+/// nondeterministic NaN bits as demotion).
+pub fn f32_bits_to_f64(b: u32) -> f64 {
+    let f = f32::from_bits(b);
+    if f.is_nan() { f64::NAN } else { f as f64 }
+}
+
 /// Encodes Number `n` as an element of `kind` (little endian), into `out[..size]`.
 pub fn encode(kind: Kind, n: f64, out: &mut [u8; 8]) {
     use Kind::*;
@@ -223,7 +246,7 @@ pub fn encode(kind: Kind, n: f64, out: &mut [u8; 8]) {
         Int16 | Uint16 => out[..2].copy_from_slice(&(to_int_bits(n) as u16).to_le_bytes()),
         Int32 | Uint32 => out[..4].copy_from_slice(&(to_int_bits(n) as u32).to_le_bytes()),
         Float16 => out[..2].copy_from_slice(&f64_to_f16_bits(n).to_le_bytes()),
-        Float32 => out[..4].copy_from_slice(&(n as f32).to_le_bytes()),
+        Float32 => out[..4].copy_from_slice(&f64_to_f32_bits(n).to_le_bytes()),
         Float64 => out[..8].copy_from_slice(&n.to_le_bytes()),
         BigInt64 | BigUint64 => out[..8].copy_from_slice(&to_int_bits(n).to_le_bytes()),
     }
@@ -240,7 +263,7 @@ pub fn decode(kind: Kind, b: &[u8]) -> f64 {
         Int32 => i32::from_le_bytes([b[0], b[1], b[2], b[3]]) as f64,
         Uint32 => u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as f64,
         Float16 => f16_bits_to_f64(u16::from_le_bytes([b[0], b[1]])),
-        Float32 => f32::from_le_bytes([b[0], b[1], b[2], b[3]]) as f64,
+        Float32 => f32_bits_to_f64(u32::from_le_bytes([b[0], b[1], b[2], b[3]])),
         Float64 => f64::from_le_bytes(b[..8].try_into().unwrap()),
         BigInt64 => i64::from_le_bytes(b[..8].try_into().unwrap()) as f64,
         BigUint64 => u64::from_le_bytes(b[..8].try_into().unwrap()) as f64,

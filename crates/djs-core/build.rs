@@ -6,6 +6,12 @@
 //!
 //! Test files (`*tests.rs`) are left out, so editing a test does not rebuild the library
 //! and the base snapshot. Line endings are normalized, so a CRLF checkout hashes the same.
+//!
+//! Behavior also depends on things outside the sources (D1750): the enabled cargo
+//! features (`\p{..}` is a SyntaxError without `regexp-unicode-props`) and the `libm`
+//! version (Math results). Both are hashed too, and listed in `BUILD_INPUTS`. `libm` is
+//! pinned with `=` in Cargo.toml, so the version read from there is the one compiled
+//! (`vm::tests` checks it against Cargo.lock).
 
 use std::path::{Path, PathBuf};
 
@@ -40,6 +46,34 @@ fn fnv(mut h: u32, bytes: &[u8]) -> u32 {
     h
 }
 
+/// The exact `libm` requirement (`libm = "=X.Y.Z"`) from Cargo.toml.
+fn libm_version(manifest: &str) -> String {
+    for line in manifest.lines() {
+        if let Some(rest) = line.trim().strip_prefix("libm") {
+            let req = rest.trim().trim_start_matches('=').trim().trim_matches('"');
+            let version = req
+                .strip_prefix('=')
+                .expect("libm must be pinned with `=` in Cargo.toml (D1750)");
+            return version.to_string();
+        }
+    }
+    panic!("no libm dependency in Cargo.toml");
+}
+
+/// The enabled features of this crate, sorted, without `default` (which only names
+/// others).
+fn features() -> Vec<String> {
+    let mut out: Vec<String> = std::env::vars()
+        .filter_map(|(k, _)| {
+            k.strip_prefix("CARGO_FEATURE_")
+                .map(|f| f.to_lowercase().replace('_', "-"))
+        })
+        .filter(|f| f != "default")
+        .collect();
+    out.sort();
+    out
+}
+
 fn main() {
     let root = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let mut files = Vec::new();
@@ -56,11 +90,29 @@ fn main() {
         h = fnv(h, &std::fs::read(f).expect("cannot read a source file"));
         h = fnv(h, &[0]);
     }
+    // Cargo reruns the script when the features change; Cargo.toml holds the libm pin.
+    println!("cargo:rerun-if-changed=Cargo.toml");
+    let manifest = std::fs::read_to_string(root.join("Cargo.toml")).expect("Cargo.toml");
+    let mut inputs: Vec<String> = features()
+        .into_iter()
+        .map(|f| format!("feature {f}"))
+        .collect();
+    inputs.push(format!("libm {}", libm_version(&manifest)));
+    for input in &inputs {
+        h = fnv(h, input.as_bytes());
+        h = fnv(h, &[0]);
+    }
     println!("cargo:rerun-if-changed=build.rs");
     let out = PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("source_hash.rs");
+    let list: String = inputs.iter().map(|i| format!("{i:?}, ")).collect();
     std::fs::write(
         out,
-        format!("/// See `build.rs`.\npub const SOURCE_HASH: u32 = {h:#010x};\n"),
+        format!(
+            "/// See `build.rs`.\npub const SOURCE_HASH: u32 = {h:#010x};\n\
+             /// What `SOURCE_HASH` covers besides the sources and the prelude: the enabled\n\
+             /// cargo features and the libm version (build.rs, D1750).\n\
+             pub const BUILD_INPUTS: &[&str] = &[{list}];\n"
+        ),
     )
     .expect("cannot write source_hash.rs");
 }

@@ -1212,3 +1212,41 @@ fn out_of_memory_leaves_heap_valid() {
     }
     assert_eq!(Heap::with_limit(64).err(), Some(HeapError::OutOfMemory));
 }
+
+/// D1750: Float32 and Float16 elements and `Math.fround` write the canonical quiet NaN
+/// whatever the input NaN's bits, and finite values round as before.
+#[test]
+fn float_nan_encoding_is_canonical() {
+    use super::typed::{Kind, decode, encode, f32_bits_to_f64, f64_to_f32_bits};
+    for bits in [
+        0x7FF8_0000_0000_0000u64,
+        0xFFF8_0000_0000_0000,
+        0x7FF0_0000_0000_0001,
+        0x7FFF_FFFF_FFFF_FFFF,
+        0xFFF4_0000_DEAD_BEEF,
+    ] {
+        let n = f64::from_bits(bits);
+        assert_eq!(f64_to_f32_bits(n), 0x7FC0_0000, "{bits:#x}");
+        let mut out = [0u8; 8];
+        encode(Kind::Float32, n, &mut out);
+        assert_eq!(out[..4], [0x00, 0x00, 0xC0, 0x7F], "{bits:#x}");
+        encode(Kind::Float16, n, &mut out);
+        assert_eq!(out[..2], [0x00, 0x7E], "{bits:#x}");
+    }
+    for bits in [0x7FC0_0000u32, 0xFFC0_0001, 0x7F80_0001, 0xFFFF_FFFF] {
+        assert_eq!(
+            f32_bits_to_f64(bits).to_bits(),
+            f64::NAN.to_bits(),
+            "{bits:#x}"
+        );
+        assert_eq!(
+            decode(Kind::Float32, &bits.to_le_bytes()).to_bits(),
+            f64::NAN.to_bits()
+        );
+    }
+    assert_eq!(f64_to_f32_bits(1.0 / 3.0), (1.0f32 / 3.0).to_bits());
+    assert_eq!(f64_to_f32_bits(-0.0), 0x8000_0000);
+    assert_eq!(f64_to_f32_bits(f64::INFINITY), 0x7F80_0000);
+    assert_eq!(f64_to_f32_bits(1e300), 0x7F80_0000);
+    assert_eq!(f32_bits_to_f64(0x3EAA_AAAB), (1.0f32 / 3.0) as f64);
+}

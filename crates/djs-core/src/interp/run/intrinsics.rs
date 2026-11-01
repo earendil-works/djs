@@ -377,7 +377,7 @@ fn math_leaf(id: u16, x: f64, y: f64) -> Option<f64> {
         F64_EXP => libm::exp(x),
         F64_EXPM1 => libm::expm1(x),
         F64_FLOOR => libm::floor(x),
-        F64_FROUND => x as f32 as f64,
+        F64_FROUND => crate::heap::typed::f32_bits_to_f64(crate::heap::typed::f64_to_f32_bits(x)),
         F64_IMUL => (number::to_uint32(x).wrapping_mul(number::to_uint32(y)) as i32) as f64,
         F64_LOG => libm::log(x),
         F64_LOG1P => libm::log1p(x),
