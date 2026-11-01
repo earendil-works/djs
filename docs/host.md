@@ -308,17 +308,16 @@ benefit. The in-thread and remote launchers benefit as they are.
 swaps `src/runtime/vm.ts` for a three-line wrapper around js/pi/vm.ts and `src/wasm.ts` for
 the djs-wasm loader, and runs pi's installed vitest on the copy. node_modules are symlinks
 and vite's cache stays in the copy, so nothing is written to pi-private. The run writes
-`report.md` with pass/fail per test and the failure messages. At pi d65de9db942d: **215 of
-226 pass** after 0059 (204 in 0049, 213 after 0054). 0054 fixed the stack overflow test,
-0050's regexp work the two large-image tests, and 0051 plus the adapter's deterministic
-mode the WeakRef test. Declarations, source, portable and worker-lifetime pass
-completely; sandbox 144/153; deterministic 28/30.
+`report.md` with pass/fail per test and the failure messages. At pi d65de9db942d: **221 of
+226 pass** after 0058 and 0066 (204 in 0049, 213 after 0054, 215 after 0059). 0054 fixed the
+stack overflow test, 0050's regexp work the two large-image tests, 0051 plus the adapter's
+deterministic mode the WeakRef test, and 0058 the eval (completion value) and dynamic
+import (a runtime rejection) tests. Declarations, source, portable and worker-lifetime
+pass completely; sandbox 150/153; deterministic 28/30.
 Each failing test fails on every backend it runs on (worker, inline, remote):
 
 | test | why |
 | --- | --- |
-| keeps eval and Function inside the VM | the constructors work (0059), but `eval("typeof process")` returns `undefined`: eval returns the Script's completion value, which arrives with 0058 |
-| rejects dynamic import | `import()` is a compile-time SyntaxError, so the whole script fails instead of the `await import()` rejecting |
 | ignores patches to built-ins and built-in globals | djs is always strict (ARCH). Assigning to a frozen built-in throws a TypeError where sloppy QuickJS ignores it. The protection itself works: the prelude's JSON and promises are intact |
 | reports the fingerprint … | the test matches `/^quickjs-wasi /`. Inherent: a different engine must have a different fingerprint |
 
