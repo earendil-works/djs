@@ -11,7 +11,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0063 | D015 sloppy this + bgen Rust backend v1 | infra | .worktrees/infra |
 | 0053 | Dev-flow test fixes (no-stress, e2e parallel, DJS_JOBS, qjs cache) | devflow | .worktrees/devflow |
 | 0065 | accessor + decorators (TC39, then TS legacy) | lexer | .worktrees/lexer |
-| 0062 | Property access performance (shapes/ICs: design first) | heap | .worktrees/heap |
+| 0069 | Host OOM is not a JS OOM (then 0070 GC-and-retry) | heap | .worktrees/heap |
 | 0068 | Deterministic mode for VM and Sandbox | determinism | .worktrees/determinism |
 
 ## Open (ready)
@@ -24,7 +24,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | depends-on |
 | --- | --- | --- |
 | 0078 | Leaf quick wins from 0077 (ASCII check, UTF-8 in transcode, short_decimal) | num, after 0075 |
-| 0069 | Running out of host memory is not a JS out-of-memory error | - |
 | 0070 | Collect and retry at a failing allocation | 0069 |
 | 0072 | Determinism checks in the gate, part 2 (part 1 done: 6ab3968) | 0071 |
 | 0073 | Replay journal and image hash | 0067 (done) |
@@ -63,6 +62,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0067 | Host inbox (async host results as macrotasks) | 7988b76 (agent determinism; D1670) |
 | 0066 | pi adapter determinism fixes | 6c523da (agent determinism; equal polls cold/warm; pi suite 221/226) |
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
+| 0062 | Property access ICs (part 1) | 5671e8c (agent heap; global read 10.4 -> 1.3 ns; props -14..-18%) |
 | 0060 | Out-of-memory recovery | b7c83a8 (agent heap; D1600 reserve, D1601 GC threshold in image) |
 | 0056 | String/regex hot paths | 6d24f26 (agent num; test262 active run 250 -> 90 CPU-s, 61 -> 17 s wall) |
 | 0051 | Remaining builtins | df48233 (agent heap; all promoted features 100%) |
@@ -112,6 +112,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
   namespaces, parameter properties.
 - P4: snapshot/restore API, deltas, old generation.
 - P5: regex engine, generators, Map/Set/WeakMap, Symbol, iterators, typed arrays, …
+- Perf track: shapes + 0052 S2 (docs/objects.md; after 0063). A one-codegen-unit LTO
+  profile for `bench.sh --record` (D1620: default release layouts vary +-15%).
 - Perf track: the bgen Rust backend, benchmarks. **Interpreter call path is ~10x slower
   than qjs** (0034: 3.4M plain JS calls 0.6 s vs 0.06 s; sort with comparator 30x): the
   next perf lever, likely for heap after 0030.
