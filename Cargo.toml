@@ -19,3 +19,9 @@ lto = true
 codegen-units = 1
 panic = "abort"
 debug = 0
+
+# The engine is exercised heavily in debug test runs (e2e suspension mode reloads and
+# verifies the heap image at every stop; gc-stress copies all live cells per safepoint).
+# opt-level 1 keeps debug assertions and overflow checks but makes those runs ~14x faster.
+[profile.dev.package.djs-core]
+opt-level = 1

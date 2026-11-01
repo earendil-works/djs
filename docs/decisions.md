@@ -1175,3 +1175,10 @@ symbol keys (a symbol method is named `[description]`). `@attributes` also appli
 `none` means all false). One function may be several accessor halves
 (`%ThrowTypeError%` is Function.prototype's `caller` and `arguments` getter and setter);
 the first install names it.
+
+## D010: djs-core at opt-level 1 in the dev profile
+date: 2026-11-01 · by: coordinator · issue: 0034
+Debug test runs exercise the engine heavily: the e2e suspension mode reloads and verifies
+the heap image at every stop, and gc-stress copies all live cells at every safepoint. At
+opt-level 0 the e2e test took ~48 s; at opt-level 1 it takes ~3.4 s (measured by infra).
+Debug assertions and overflow checks stay on. The whole gate now runs in ~46 s.
