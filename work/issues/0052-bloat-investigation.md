@@ -1,7 +1,7 @@
 # 0052: Code bloat investigation (report only)
 
-status: open
-agent: -
+status: in-progress
+agent: bloat
 branch: issue/0052-bloat-investigation
 depends-on: -
 touches: work/issues/0052-bloat-investigation.md (the report), work/scratch/0052/ (measurements), scripts/ (new analysis scripts only, no changes to existing ones). No changes to code or Cargo.toml.
