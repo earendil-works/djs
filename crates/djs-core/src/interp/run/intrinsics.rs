@@ -260,6 +260,7 @@ pub(super) const COPY_DATA_PROPERTIES: u16 = id("CopyDataProperties");
 /// spread skips the iterator protocol while they are in place.
 pub(super) const ARRAY_PROTOTYPE_VALUES: u16 = id("ArrayPrototypeValues");
 pub(super) const THROW_TYPE_ERROR: u16 = id("ThrowTypeError");
+pub(super) const ARRAY_SET_LENGTH: u16 = id("ArraySetLength");
 pub(super) const ARRAY_ITERATOR_NEXT: u16 = id("ArrayIteratorPrototypeNext");
 pub(super) const STRING_PROTOTYPE_ITERATOR: u16 = id("StringPrototypeIterator");
 pub(super) const STRING_ITERATOR_NEXT: u16 = id("StringIteratorPrototypeNext");
@@ -364,6 +365,8 @@ enum SetStep {
     Proxy(Obj),
     /// `%ProxySetOnReceiver(receiver, key, v)`: the receiver is a proxy.
     Receiver(Obj),
+    /// `%ArraySetLength(array, v, false)`: an array's `length` set to an object.
+    ArrayLength(Obj),
 }
 
 /// The libm intrinsics (D1150): `F64Sin(x)` and friends.
@@ -1609,6 +1612,12 @@ impl Exec<'_> {
                             Continuation::PushResult,
                         );
                     }
+                    SetStep::ArrayLength(a) => {
+                        self.sp = base;
+                        self.pc = next;
+                        let args = [Value::object(a), v, Value::FALSE];
+                        return self.call_prelude(ARRAY_SET_LENGTH, &args, Continuation::PushResult);
+                    }
                 }
             }
             DELETE_PROPERTY => {
@@ -1965,6 +1974,13 @@ impl Exec<'_> {
             Some(Property::Accessor { .. }) => false,
             Some(Property::Data { flags, .. }) if !flags.writable() => false,
             Some(_) => {
+                let mut v = v;
+                if key == atoms::LENGTH && self.heap.object_class(r) == ObjectClass::Array {
+                    match self.array_length_value(v)? {
+                        Some(len) => v = len,
+                        None => return Ok(SetStep::ArrayLength(r)),
+                    }
+                }
                 let d = PropertyDescriptor {
                     value: Some(v),
                     ..Default::default()

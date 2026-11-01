@@ -943,6 +943,25 @@ function ArrayPrototypeUnscopables() {
   return u;
 }
 
+// builtins/array.ts:1160 %ArraySetLength
+function ArraySetLength(a, v, strict) {
+  const newLen = ToNumber(v);
+  const numberLen = ToNumber(v);
+  if (!(newLen >= 0 && newLen <= 4294967295 && %ToIntegerOrInfinityNumber(newLen) === newLen)) {
+    throw %NewRangeError("invalid array length");
+  }
+  if (newLen !== numberLen) {
+    throw %NewRangeError("invalid array length");
+  }
+  const desc = %ObjectCreate(null);
+  %CreateDataPropertyOrThrow(desc, "value", newLen);
+  const ok = %DefineOwnPropertyFromRecord(a, "length", desc);
+  if (!ok && strict) {
+    throw %NewTypeError("'length' is read-only");
+  }
+  return ok;
+}
+
 // builtins/arraybuffer.ts:4
 function ToIndex(v) {
   const i = ToIntegerOrInfinity(v);
@@ -11461,6 +11480,7 @@ function FinalizationRegistryCleanupJob(r) {
 %InstallIntrinsic("Reduce", Reduce);
 %InstallIntrinsic("SortList", SortList);
 %InstallIntrinsic("CollectPresent", CollectPresent);
+%InstallIntrinsic("ArraySetLength", ArraySetLength);
 %InstallIntrinsic("AsyncGeneratorStep", AsyncGeneratorStep);
 %InstallIntrinsic("AsyncGeneratorAwaitReturnFulfilled", AsyncGeneratorAwaitReturnFulfilled);
 %InstallIntrinsic("AsyncGeneratorAwaitReturnRejected", AsyncGeneratorAwaitReturnRejected);

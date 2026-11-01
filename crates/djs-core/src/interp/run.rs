@@ -2985,6 +2985,27 @@ impl<'h> Exec<'h> {
     }
 
     /// [[Set]] with receiver `o` for `o v` (the top `n` operands are consumed).
+    /// ArraySetLength's conversions of a new `length` that is not a Number (10.4.2.4):
+    /// the Number, a RangeError, or `None` for an object, whose conversions run user code
+    /// (`%ArraySetLength`).
+    pub(super) fn array_length_value(&mut self, v: Value) -> Result<Option<Value>, Fault> {
+        if v.is_number() {
+            return Ok(Some(v));
+        }
+        if v.as_object().is_some() {
+            return Ok(None);
+        }
+        // A primitive converts without user code (a Symbol or BigInt throws).
+        let number = conv::to_number(self.heap, v)?;
+        if crate::builtins::number::to_uint32(number) as f64 != number {
+            return Err(Fault::error(
+                ErrorKind::RangeError,
+                String::from("invalid array length"),
+            ));
+        }
+        Ok(Some(Value::number(number)))
+    }
+
     fn set_property(&mut self, o: Obj, key: Atom, v: Value, n: u32) -> Step {
         if self.heap.set_own_data_value(o, key, v) {
             self.sp -= n;
@@ -3025,6 +3046,23 @@ impl<'h> Exec<'h> {
                     return readonly(self.heap);
                 }
                 if holder == o {
+                    let mut v = v;
+                    if key == crate::heap::atoms::LENGTH
+                        && self.heap.object_class(o) == ObjectClass::Array
+                    {
+                        match self.array_length_value(v)? {
+                            Some(len) => v = len,
+                            None => {
+                                self.sp -= n;
+                                let args = [Value::object(o), v, Value::TRUE];
+                                return self.call_prelude(
+                                    intrinsics::ARRAY_SET_LENGTH,
+                                    &args,
+                                    Continuation::DiscardResult,
+                                );
+                            }
+                        }
+                    }
                     let d = PropertyDescriptor {
                         value: Some(v),
                         ..Default::default()

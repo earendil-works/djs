@@ -1149,3 +1149,29 @@ function ArrayPrototypeUnscopables(): Obj {
   CreateDataPropertyOrThrow(u, "values", true);
   return u;
 }
+
+/**
+ * [[Set]] of an Array's `length` to an object (OrdinarySetWithOwnDescriptor then
+ * ArraySetLength, 10.4.2.4): both conversions (ToUint32 and ToNumber, each calling
+ * ToPrimitive), then the definition, which may now be rejected (a non-writable
+ * `length`). With `strict`, a rejection is a TypeError; else the result says it.
+ * @intrinsic
+ */
+function ArraySetLength(a: Obj, v: Value, strict: boolean): boolean {
+  // ToUint32(v) and ToNumber(v): equal only for a Number that is a valid length.
+  const newLen: f64 = ToNumber(v);
+  const numberLen: f64 = ToNumber(v);
+  if (!(newLen >= 0 && newLen <= 4294967295 && ToIntegerOrInfinityNumber(newLen) === newLen)) {
+    throw NewRangeError("invalid array length");
+  }
+  if (newLen !== numberLen) {
+    throw NewRangeError("invalid array length");
+  }
+  const desc: Obj = ObjectCreate(null);
+  CreateDataPropertyOrThrow(desc, "value", newLen);
+  const ok: boolean = DefineOwnPropertyFromRecord(a, "length", desc);
+  if (!ok && strict) {
+    throw NewTypeError("'length' is read-only");
+  }
+  return ok;
+}

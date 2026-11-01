@@ -369,6 +369,12 @@ ArrayPrototypeUnscopables: reentrant (value Array.prototype[Symbol.unscopables])
   builtins/array.ts:1148:3  CreateDataPropertyOrThrow (intrinsic)
   builtins/array.ts:1149:3  CreateDataPropertyOrThrow (intrinsic)
 
+ArraySetLength: reentrant (%ArraySetLength)
+  builtins/array.ts:1162:23  ToNumber (builtin)
+  builtins/array.ts:1163:26  ToNumber (builtin)
+  builtins/array.ts:1171:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/array.ts:1172:23  DefineOwnPropertyFromRecord (intrinsic)
+
 ToIndex: reentrant
   builtins/arraybuffer.ts:5:18  ToIntegerOrInfinity (builtin)
 

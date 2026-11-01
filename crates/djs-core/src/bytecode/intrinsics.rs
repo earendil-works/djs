@@ -336,6 +336,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("Reduce", B, 4, false),
     i("SortList", B, 3, false),
     i("CollectPresent", B, 3, false),
+    i("ArraySetLength", B, 3, false),
     i("AsyncGeneratorStep", B, 3, false),
     i("AsyncGeneratorAwaitReturnFulfilled", B, 1, false),
     i("AsyncGeneratorAwaitReturnRejected", B, 1, false),
