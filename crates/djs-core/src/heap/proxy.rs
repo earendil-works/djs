@@ -68,15 +68,15 @@ impl Heap {
         }
     }
 
-    /// IsArray ( argument ), 7.2.2, through proxies: `Err(())` for a revoked proxy
-    /// (a TypeError).
-    pub fn is_array(&self, o: Obj) -> Result<bool, ()> {
+    /// IsArray ( argument ), 7.2.2, through proxies: `None` for a revoked proxy (a
+    /// TypeError).
+    pub fn is_array(&self, o: Obj) -> Option<bool> {
         let mut o = o;
         loop {
             match self.object_class(o) {
-                ObjectClass::Array => return Ok(true),
-                ObjectClass::Proxy => o = self.proxy_target(o).ok_or(())?,
-                _ => return Ok(false),
+                ObjectClass::Array => return Some(true),
+                ObjectClass::Proxy => o = self.proxy_target(o)?,
+                _ => return Some(false),
             }
         }
     }

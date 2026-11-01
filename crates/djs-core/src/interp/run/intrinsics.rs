@@ -412,8 +412,8 @@ impl Exec<'_> {
             IS_CONSTRUCTOR => Value::bool(a0.as_object().is_some_and(|o| self.is_constructor(o))),
             IS_ARRAY => match a0.as_object().map(|o| self.heap.is_array(o)) {
                 None => Value::FALSE,
-                Some(Ok(b)) => Value::bool(b),
-                Some(Err(())) => return type_error("revoked proxy"),
+                Some(Some(b)) => Value::bool(b),
+                Some(None) => return type_error("revoked proxy"),
             },
             IS_STRING => Value::bool(a0.as_string().is_some()),
             IS_NUMBER => Value::bool(a0.is_number()),
@@ -641,12 +641,12 @@ impl Exec<'_> {
                     IS_EXTENSIBLE => Value::bool(self.heap.is_extensible(o)),
                     _ => {
                         let tag = match self.heap.is_array(o) {
-                            Err(()) => return type_error("revoked proxy"),
-                            Ok(true) => "Array",
-                            Ok(false) if self.heap.is_proxy(o) && self.heap.is_callable(o) => {
+                            None => return type_error("revoked proxy"),
+                            Some(true) => "Array",
+                            Some(false) if self.heap.is_proxy(o) && self.heap.is_callable(o) => {
                                 "Function"
                             }
-                            Ok(false) => object::class_tag(self.heap, o),
+                            Some(false) => object::class_tag(self.heap, o),
                         };
                         Value::string(self.heap.alloc_str(tag)?)
                     }
