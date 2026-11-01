@@ -781,13 +781,17 @@ parent, so this visits children before parents (QuickJS does the same in
 | function declaration at function-body level | function scope | at function entry, in source order (a later duplicate wins), before any other code |
 | function declaration in a block | the block (strict: lexical, no Annex B) | at block entry (`enter_scope`) |
 | `let`, `const`, `class` | their block | TDZ until their declaration runs |
-| parameters | `Params` scope | by the call (simple params) or by the parameter prologue in order (non-simple: TDZ between them, `function f(a = b, b)` throws) |
+| parameters | the function scope | by the call (simple lists: they stay in argument slots, or a Box if captured) or by the parameter code in order (non-simple lists: locals copied from the argument slots with defaults applied, `rest` for `...r`, TDZ between them, `function f(a = b, b)` throws) |
 | `catch (e)` | `Catch` scope | by the handler |
-| named function expression name | its own scope between the parent and the function | immutable: assignment is TypeError `'f' is read-only` |
+| named function expression name | its own scope outside the function scope (`special_object ACTIVE_FUNCTION`) | immutable: assignment is TypeError `'f' is read-only` |
 
-Functions with parameter expressions and a body `var` named like a parameter get a
-separate var scope initialized from the parameter (spec FunctionDeclarationInstantiation
-step 28). That is a P1 detail for the functions issue.
+As implemented (0024): with a non-simple parameter list, the parameter code runs in the
+phase-1 code before the body's `enter_scope`, so body-level function declarations are
+created after the defaults have run. Simplification: a body `var` named like a parameter
+shares the parameter's binding even with parameter expressions. The spec gives it a
+separate var scope initialized from the parameter (FunctionDeclarationInstantiation
+step 28). The difference is only observable when a closure in a default captures the
+parameter and the body reassigns the `var`.
 
 ### 5.6 TDZ checks and their elision
 
@@ -811,7 +815,10 @@ rules for accesses in their own function.
 ### 5.7 `this`, `arguments`, `new.target`, `super`
 
 These are pseudo-bindings (`VarKind::This`, ...) declared in every non-arrow function
-scope, created only if referenced, like QuickJS. Arrow functions do not declare them,
+scope, created only if referenced, like QuickJS. As implemented (0024), they are found by
+name: `this`, `arguments` and `new.target`. `new.target` is not an identifier, so it cannot
+collide with a user binding. A reference from an arrow declares the binding in the
+innermost non-arrow function, and resolution then turns it into a capture. Arrow functions do not declare them,
 so a reference inside an arrow resolves outward and becomes an ordinary capture. That
 handles arrows' lexical `this` with no special case.
 
@@ -848,7 +855,9 @@ global, compiles to a TDZ read (when needed) followed by `throw_const_assign`.
 
 - `for (let i = 0; ...; i++)`: if `i` is captured, emit `rebox loc` after the init and
   at the start of each iteration's update (CreatePerIterationEnvironment). If it is
-  not captured, nothing is emitted, since a plain local needs no copy.
+  not captured, nothing is emitted, since a plain local needs no copy. The parser emits
+  the phase-1 pseudo-op `iter_scope s` at those two points, and the re-emit turns it into
+  `rebox` for each captured binding of the `for` scope (0024).
 - `for (const x of xs)` / `for (let k in o)`: the binding's scope is entered inside
   the loop, so `enter_scope` makes a fresh Box per iteration when it is captured.
 
@@ -923,7 +932,10 @@ property name) follows qjs and is tuned against the oracle by the difftests.
 
 A function object is an object cell (class Function) with `SLOTS[0]` = its template
 and `SLOTS[1..=CAPTURES]` = the Box references. `prototype`, `name` and `length`
-are ordinary properties (or lazily materialized, a 0006 choice).
+are ordinary properties. The interpreter's `fclosure` creates them from the template:
+`NAME`, `LENGTH`, and `prototype` for `KIND_NORMAL` (D1240). The compiler sets `NAME` by
+NamedEvaluation where the name is static (`let f = () => 1`, `f = function () {}`,
+`{ f: () => 1 }`, `(f = () => 1) =>` defaults).
 
 **Request to 0005 / coordinator:** object `SLOTS` hold `Value`s, but templates and
 Boxes are not JS values. Proposal: a reference tag for internal cells (for example

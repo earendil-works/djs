@@ -709,3 +709,24 @@ operators including optional chains and logical assignment, calls and `new`, `if
 "<construct> not supported yet". Reference-ness is tracked by an `Expr` kind returned
 from the expression parser (not by inspecting the bytecode), so `(0, o.m)()` correctly
 calls with `this` = undefined. The depth limit is 1000, pinned by a 1 MiB-stack test.
+
+## D1240: Function objects get name, length and prototype from their template
+date: 2026-11-01 · by: lexer · issue: 0024
+The compiler emits no code for function object properties. `fclosure` (the interpreter)
+defines `length` (`FuncTemplate::LENGTH`, the parameters before the first default or
+rest) and `name` (`NAME`, "" when null). Both are {writable: false, enumerable: false,
+configurable: true}. For `KIND_NORMAL` functions it also defines `prototype`, a new object
+with a non-enumerable `constructor`. Arrows (`KIND_ARROW`) have no prototype and are not
+constructors. The compiler fills in `NAME` statically, by NamedEvaluation of anonymous
+functions and arrows in declarators, simple assignments, object literal properties and
+parameter defaults. `PARAMS` excludes a rest parameter.
+
+## D1241: Parameters and per-iteration bindings
+date: 2026-11-01 · by: lexer · issue: 0024
+Simple parameter lists keep parameters in their argument slots; a captured parameter is
+copied into a Box in the prologue. Once a default or a rest parameter appears, all
+parameters become locals, initialized in order by the phase-1 code (`get_arg`, the
+default under `is_undefined`, the new `rest index` op for `...r`), with TDZ between
+them. `for (let ...)` loops emit the phase-1 pseudo-op `iter_scope s` after the init and
+before each update. The resolver turns it into `rebox` for each captured binding of the
+scope, and into nothing otherwise.
