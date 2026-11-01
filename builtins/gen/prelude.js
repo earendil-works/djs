@@ -1531,6 +1531,244 @@ function GetPrototypeFromConstructor(newTarget, fallback) {
   return %RealmIntrinsic(fallback);
 }
 
+// builtins/dataview.ts:6
+function DVOutOfBounds(view) {
+  const buffer = %DataViewField(view, 0);
+  if (%AsBool(%BufferInfo(buffer, 3))) {
+    return true;
+  }
+  const bufferByteLength = %AsNumber(%BufferInfo(buffer, 0));
+  const start = %AsNumber(%DataViewField(view, 1));
+  const length = %AsNumber(%DataViewField(view, 2));
+  const end = length < 0 ? bufferByteLength : start + length;
+  return start > bufferByteLength || end > bufferByteLength;
+}
+
+// builtins/dataview.ts:19
+function DVByteLength(view) {
+  const length = %AsNumber(%DataViewField(view, 2));
+  if (length >= 0) {
+    return length;
+  }
+  return %AsNumber(%BufferInfo(%DataViewField(view, 0), 0)) - %AsNumber(%DataViewField(view, 1));
+}
+
+// builtins/dataview.ts:32 constructor DataView
+function DataViewConstructor(buffer, byteOffset, byteLength) {
+  if (new.target === undefined) {
+    throw %NewTypeError("must be called with new");
+  }
+  %BufferInfo(buffer, 0);
+  const b = %AsObj(buffer);
+  const offset = ToIndex(byteOffset);
+  if (%AsBool(%BufferInfo(b, 3))) {
+    throw %NewTypeError("ArrayBuffer is detached");
+  }
+  let bufferByteLength = %AsNumber(%BufferInfo(b, 0));
+  if (offset > bufferByteLength) {
+    throw %NewRangeError("invalid byteOffset");
+  }
+  const tracking = byteLength === undefined && %AsBool(%BufferInfo(b, 2));
+  let viewByteLength = -1;
+  if (byteLength === undefined) {
+    if (!tracking) {
+      viewByteLength = bufferByteLength - offset;
+    }
+  } else {
+    viewByteLength = ToIndex(byteLength);
+    if (offset + viewByteLength > bufferByteLength) {
+      throw %NewRangeError("invalid byteLength");
+    }
+  }
+  const proto = GetPrototypeFromConstructor(new.target, "DataViewPrototype");
+  if (%AsBool(%BufferInfo(b, 3))) {
+    throw %NewTypeError("ArrayBuffer is detached");
+  }
+  bufferByteLength = %AsNumber(%BufferInfo(b, 0));
+  if (offset > bufferByteLength) {
+    throw %NewRangeError("invalid byteOffset");
+  }
+  if (byteLength !== undefined && offset + viewByteLength > bufferByteLength) {
+    throw %NewRangeError("invalid byteLength");
+  }
+  return %DataViewCreate(proto, b, offset, viewByteLength);
+}
+
+// builtins/dataview.ts:77 get DataView.prototype.buffer
+function DataViewPrototypeBuffer() {
+  return %DataViewField(this, 0);
+}
+
+// builtins/dataview.ts:85 get DataView.prototype.byteLength
+function DataViewPrototypeByteLength() {
+  %DataViewField(this, 0);
+  const view = %AsObj(this);
+  if (DVOutOfBounds(view)) {
+    throw %NewTypeError("ArrayBuffer is detached or resized");
+  }
+  return DVByteLength(view);
+}
+
+// builtins/dataview.ts:98 get DataView.prototype.byteOffset
+function DataViewPrototypeByteOffset() {
+  %DataViewField(this, 0);
+  const view = %AsObj(this);
+  if (DVOutOfBounds(view)) {
+    throw %NewTypeError("ArrayBuffer is detached or resized");
+  }
+  return %AsNumber(%DataViewField(view, 1));
+}
+
+// builtins/dataview.ts:112 value DataView.prototype[Symbol.toStringTag]
+function DataViewPrototypeToStringTag() {
+  return "DataView";
+}
+
+// builtins/dataview.ts:117
+function DVByteIndex(view, getIndex, kind) {
+  if (DVOutOfBounds(view)) {
+    if (%AsBool(%BufferInfo(%DataViewField(view, 0), 3))) {
+      throw %NewTypeError("ArrayBuffer is detached");
+    }
+    throw %NewTypeError("ArrayBuffer is detached or resized");
+  }
+  if (getIndex + ElementSize(kind) > DVByteLength(view)) {
+    throw %NewRangeError("out of bound");
+  }
+  return getIndex + %AsNumber(%DataViewField(view, 1));
+}
+
+// builtins/dataview.ts:131
+function GetViewValue(view, requestIndex, isLittleEndian, kind) {
+  %DataViewField(view, 0);
+  const getIndex = ToIndex(requestIndex);
+  const little = %ToBoolean(isLittleEndian);
+  RequireNumberKind(kind);
+  const v = %AsObj(view);
+  return %DataViewGet(v, DVByteIndex(v, getIndex, kind), kind, little);
+}
+
+// builtins/dataview.ts:141
+function SetViewValue(view, requestIndex, isLittleEndian, kind, value) {
+  %DataViewField(view, 0);
+  const getIndex = ToIndex(requestIndex);
+  RequireNumberKind(kind);
+  const n = ToNumber(value);
+  const little = %ToBoolean(isLittleEndian);
+  const v = %AsObj(view);
+  %DataViewSet(v, DVByteIndex(v, getIndex, kind), kind, n, little);
+}
+
+// builtins/dataview.ts:155 DataView.prototype.getInt8
+function DataViewPrototypeGetInt8(byteOffset) {
+  return GetViewValue(this, byteOffset, false, 0);
+}
+
+// builtins/dataview.ts:163 DataView.prototype.getUint8
+function DataViewPrototypeGetUint8(byteOffset) {
+  return GetViewValue(this, byteOffset, false, 1);
+}
+
+// builtins/dataview.ts:171 DataView.prototype.getInt16
+function DataViewPrototypeGetInt16(byteOffset, littleEndian) {
+  return GetViewValue(this, byteOffset, littleEndian, 3);
+}
+
+// builtins/dataview.ts:179 DataView.prototype.getUint16
+function DataViewPrototypeGetUint16(byteOffset, littleEndian) {
+  return GetViewValue(this, byteOffset, littleEndian, 4);
+}
+
+// builtins/dataview.ts:187 DataView.prototype.getInt32
+function DataViewPrototypeGetInt32(byteOffset, littleEndian) {
+  return GetViewValue(this, byteOffset, littleEndian, 5);
+}
+
+// builtins/dataview.ts:195 DataView.prototype.getUint32
+function DataViewPrototypeGetUint32(byteOffset, littleEndian) {
+  return GetViewValue(this, byteOffset, littleEndian, 6);
+}
+
+// builtins/dataview.ts:203 DataView.prototype.getBigInt64
+function DataViewPrototypeGetBigInt64(byteOffset, littleEndian) {
+  return GetViewValue(this, byteOffset, littleEndian, 10);
+}
+
+// builtins/dataview.ts:211 DataView.prototype.getBigUint64
+function DataViewPrototypeGetBigUint64(byteOffset, littleEndian) {
+  return GetViewValue(this, byteOffset, littleEndian, 11);
+}
+
+// builtins/dataview.ts:219 DataView.prototype.getFloat16
+function DataViewPrototypeGetFloat16(byteOffset, littleEndian) {
+  return GetViewValue(this, byteOffset, littleEndian, 7);
+}
+
+// builtins/dataview.ts:227 DataView.prototype.getFloat32
+function DataViewPrototypeGetFloat32(byteOffset, littleEndian) {
+  return GetViewValue(this, byteOffset, littleEndian, 8);
+}
+
+// builtins/dataview.ts:235 DataView.prototype.getFloat64
+function DataViewPrototypeGetFloat64(byteOffset, littleEndian) {
+  return GetViewValue(this, byteOffset, littleEndian, 9);
+}
+
+// builtins/dataview.ts:243 DataView.prototype.setInt8
+function DataViewPrototypeSetInt8(byteOffset, value) {
+  SetViewValue(this, byteOffset, false, 0, value);
+}
+
+// builtins/dataview.ts:251 DataView.prototype.setUint8
+function DataViewPrototypeSetUint8(byteOffset, value) {
+  SetViewValue(this, byteOffset, false, 1, value);
+}
+
+// builtins/dataview.ts:259 DataView.prototype.setInt16
+function DataViewPrototypeSetInt16(byteOffset, value, littleEndian) {
+  SetViewValue(this, byteOffset, littleEndian, 3, value);
+}
+
+// builtins/dataview.ts:267 DataView.prototype.setUint16
+function DataViewPrototypeSetUint16(byteOffset, value, littleEndian) {
+  SetViewValue(this, byteOffset, littleEndian, 4, value);
+}
+
+// builtins/dataview.ts:275 DataView.prototype.setInt32
+function DataViewPrototypeSetInt32(byteOffset, value, littleEndian) {
+  SetViewValue(this, byteOffset, littleEndian, 5, value);
+}
+
+// builtins/dataview.ts:283 DataView.prototype.setUint32
+function DataViewPrototypeSetUint32(byteOffset, value, littleEndian) {
+  SetViewValue(this, byteOffset, littleEndian, 6, value);
+}
+
+// builtins/dataview.ts:291 DataView.prototype.setBigInt64
+function DataViewPrototypeSetBigInt64(byteOffset, value, littleEndian) {
+  SetViewValue(this, byteOffset, littleEndian, 10, value);
+}
+
+// builtins/dataview.ts:299 DataView.prototype.setBigUint64
+function DataViewPrototypeSetBigUint64(byteOffset, value, littleEndian) {
+  SetViewValue(this, byteOffset, littleEndian, 11, value);
+}
+
+// builtins/dataview.ts:307 DataView.prototype.setFloat16
+function DataViewPrototypeSetFloat16(byteOffset, value, littleEndian) {
+  SetViewValue(this, byteOffset, littleEndian, 7, value);
+}
+
+// builtins/dataview.ts:315 DataView.prototype.setFloat32
+function DataViewPrototypeSetFloat32(byteOffset, value, littleEndian) {
+  SetViewValue(this, byteOffset, littleEndian, 8, value);
+}
+
+// builtins/dataview.ts:323 DataView.prototype.setFloat64
+function DataViewPrototypeSetFloat64(byteOffset, value, littleEndian) {
+  SetViewValue(this, byteOffset, littleEndian, 9, value);
+}
+
 // builtins/date.ts:6
 function DateValueFromArgs(args) {
   const n = LengthOfArrayLike(args);
@@ -6502,6 +6740,7 @@ function WeakSetPrototypeToStringTag() {
 %InstallConstructor("globalThis", "Array", ArrayConstructor, 1, undefined);
 %InstallConstructor("globalThis", "ArrayBuffer", ArrayBufferConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Boolean", BooleanConstructor, 1, undefined);
+%InstallConstructor("globalThis", "DataView", DataViewConstructor, 1, undefined);
 %InstallConstructor("globalThis", "Date", DateConstructor, 7, undefined);
 %InstallConstructor("globalThis", "Error", ErrorConstructor, 1, undefined);
 %InstallConstructor("globalThis", "EvalError", EvalErrorConstructor, 1, "Error");
@@ -6603,6 +6842,32 @@ function WeakSetPrototypeToStringTag() {
 %InstallMethod("%AsyncFromSyncIteratorPrototype%", "throw", AsyncFromSyncIteratorThrow, 1);
 %InstallMethod("Boolean.prototype", "toString", BooleanPrototypeToString, 0);
 %InstallMethod("Boolean.prototype", "valueOf", BooleanPrototypeValueOf, 0);
+%InstallAccessor("DataView.prototype", "buffer", DataViewPrototypeBuffer, false);
+%InstallAccessor("DataView.prototype", "byteLength", DataViewPrototypeByteLength, false);
+%InstallAccessor("DataView.prototype", "byteOffset", DataViewPrototypeByteOffset, false);
+%InstallValue("DataView.prototype", %WellKnownSymbol("toStringTag"), DataViewPrototypeToStringTag(), 4);
+%InstallMethod("DataView.prototype", "getInt8", DataViewPrototypeGetInt8, 1);
+%InstallMethod("DataView.prototype", "getUint8", DataViewPrototypeGetUint8, 1);
+%InstallMethod("DataView.prototype", "getInt16", DataViewPrototypeGetInt16, 1);
+%InstallMethod("DataView.prototype", "getUint16", DataViewPrototypeGetUint16, 1);
+%InstallMethod("DataView.prototype", "getInt32", DataViewPrototypeGetInt32, 1);
+%InstallMethod("DataView.prototype", "getUint32", DataViewPrototypeGetUint32, 1);
+%InstallMethod("DataView.prototype", "getBigInt64", DataViewPrototypeGetBigInt64, 1);
+%InstallMethod("DataView.prototype", "getBigUint64", DataViewPrototypeGetBigUint64, 1);
+%InstallMethod("DataView.prototype", "getFloat16", DataViewPrototypeGetFloat16, 1);
+%InstallMethod("DataView.prototype", "getFloat32", DataViewPrototypeGetFloat32, 1);
+%InstallMethod("DataView.prototype", "getFloat64", DataViewPrototypeGetFloat64, 1);
+%InstallMethod("DataView.prototype", "setInt8", DataViewPrototypeSetInt8, 2);
+%InstallMethod("DataView.prototype", "setUint8", DataViewPrototypeSetUint8, 2);
+%InstallMethod("DataView.prototype", "setInt16", DataViewPrototypeSetInt16, 2);
+%InstallMethod("DataView.prototype", "setUint16", DataViewPrototypeSetUint16, 2);
+%InstallMethod("DataView.prototype", "setInt32", DataViewPrototypeSetInt32, 2);
+%InstallMethod("DataView.prototype", "setUint32", DataViewPrototypeSetUint32, 2);
+%InstallMethod("DataView.prototype", "setBigInt64", DataViewPrototypeSetBigInt64, 2);
+%InstallMethod("DataView.prototype", "setBigUint64", DataViewPrototypeSetBigUint64, 2);
+%InstallMethod("DataView.prototype", "setFloat16", DataViewPrototypeSetFloat16, 2);
+%InstallMethod("DataView.prototype", "setFloat32", DataViewPrototypeSetFloat32, 2);
+%InstallMethod("DataView.prototype", "setFloat64", DataViewPrototypeSetFloat64, 2);
 %InstallMethod("Date", "now", DateNowBuiltin, 0);
 %InstallMethod("Date", "parse", DateParseBuiltin, 1);
 %InstallMethod("Date", "UTC", DateUTC, 7);

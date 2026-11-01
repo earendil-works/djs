@@ -87,6 +87,10 @@ const BUFFER_TRANSFER: u16 = id("BufferTransfer");
 const BUFFER_COPY: u16 = id("BufferCopy");
 const IS_TYPED_ARRAY: u16 = id("IsTypedArray");
 const IS_DATA_VIEW: u16 = id("IsDataView");
+const DATA_VIEW_CREATE: u16 = id("DataViewCreate");
+const DATA_VIEW_FIELD: u16 = id("DataViewField");
+const DATA_VIEW_GET: u16 = id("DataViewGet");
+const DATA_VIEW_SET: u16 = id("DataViewSet");
 const SORT_NUMBERS: u16 = id("SortNumbers");
 const REALM_CONSTRUCTOR: u16 = id("RealmConstructor");
 const TYPED_ARRAY_CREATE: u16 = id("TypedArrayCreate");
@@ -1224,6 +1228,38 @@ impl Exec<'_> {
                 }
                 None => return bad_argument(info.name),
             },
+            DATA_VIEW_CREATE => {
+                let (Some(proto), Some(buffer)) = (a0.as_object(), arg(self, 1).as_object()) else {
+                    return bad_argument(info.name);
+                };
+                let off = arg(self, 2).as_number().unwrap_or(0.0);
+                let len = arg(self, 3).as_number().unwrap_or(-1.0);
+                Value::object(typed::data_view_create(self.heap, proto, buffer, off, len)?)
+            }
+            DATA_VIEW_FIELD => {
+                let o = typed::as_data_view(self.heap, a0)?;
+                let field = arg(self, 1).as_int().unwrap_or(0).clamp(0, 2);
+                self.heap.object_slot(o, field as u32)
+            }
+            DATA_VIEW_GET | DATA_VIEW_SET => {
+                let o = typed::as_data_view(self.heap, a0)?;
+                let at = arg(self, 1).as_number().unwrap_or(-1.0);
+                let Some(kind) = arg(self, 2)
+                    .as_int()
+                    .and_then(crate::heap::typed::Kind::from_i32)
+                else {
+                    return bad_argument(info.name);
+                };
+                if id == DATA_VIEW_GET {
+                    let little = arg(self, 3) == Value::TRUE;
+                    Value::number(typed::view_get(self.heap, o, at, kind, little))
+                } else {
+                    let n = arg(self, 3).as_number().unwrap_or(f64::NAN);
+                    let little = arg(self, 4) == Value::TRUE;
+                    typed::view_set(self.heap, o, at, kind, n, little);
+                    Value::UNDEFINED
+                }
+            }
             IS_DATA_VIEW => Value::bool(
                 a0.as_object()
                     .is_some_and(|o| self.heap.object_class(o) == ObjectClass::DataView),

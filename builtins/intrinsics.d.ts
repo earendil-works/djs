@@ -297,6 +297,17 @@ declare function BufferCopy(src: Obj, from: f64, dst: Obj, to: f64, count: f64):
  * -0 before +0, NaN last; stable). @leaf
  */
 declare function SortNumbers(list: Obj): void;
+/** A DataView over buffer (byteLength -1: length-tracking). @leaf */
+declare function DataViewCreate(proto: Obj, buffer: Obj, byteOffset: f64, byteLength: f64): Obj;
+/**
+ * A slot of a DataView: 0 buffer, 1 byteOffset, 2 byteLength (-1: length-tracking).
+ * TypeError "DataView object expected" for anything else. @leaf
+ */
+declare function DataViewField(v: Value, field: i32): Value;
+/** The element of kind at byte `at` of the view's buffer (bounds checked by the caller). @leaf */
+declare function DataViewGet(view: Obj, at: f64, kind: i32, little: boolean): f64;
+/** Writes Number n as kind at byte `at` of the view's buffer. @leaf */
+declare function DataViewSet(view: Obj, at: f64, kind: i32, n: f64, little: boolean): void;
 /** Whether v is a DataView. @leaf */
 declare function IsDataView(v: Value): boolean;
 /** The constructor installed as `name` (the realm's %Name%, whatever the global is now). @leaf */

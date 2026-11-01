@@ -6,6 +6,8 @@
 const installed = {};
 const TA_CTORS = [Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, Float16Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array];
 const TA_PROTO = Object.getPrototypeOf(Int8Array.prototype);
+const DV_NAMES = ["Int8", "Uint8", "Uint8", "Int16", "Uint16", "Int32", "Uint32", "Float16", "Float32", "Float64", "BigInt64", "BigUint64"];
+const dataViews = new WeakMap();
 function taKind(v) {
   const tag = Object.getOwnPropertyDescriptor(TA_PROTO, Symbol.toStringTag).get.call(v);
   return tag === undefined ? -1 : TA_CTORS.findIndex((C) => C.name === tag);
@@ -356,6 +358,21 @@ const I = {
   BufferTransfer: (b, len, max) => (max === undefined ? ArrayBuffer.prototype.transferToFixedLength.call(b, len) : ArrayBuffer.prototype.transfer.call(b, len)),
   BufferCopy: (src, from, dst, to, count) => new Uint8Array(dst, to, count).set(new Uint8Array(src, from, count)),
   IsTypedArray: (v) => taKind(v) >= 0,
+  DataViewCreate: (proto, buffer, off, len) => {
+    const v = Object.setPrototypeOf(len < 0 ? new DataView(buffer, off) : new DataView(buffer, off, len), proto);
+    dataViews.set(v, [buffer, off, len]);
+    return v;
+  },
+  DataViewField: (v, f) => {
+    const st = dataViews.get(v);
+    if (!st) throw new TypeError("DataView object expected");
+    return st[f];
+  },
+  DataViewGet: (v, at, kind, little) => new DataView(dataViews.get(v)[0])["get" + DV_NAMES[kind]](at, little),
+  DataViewSet: (v, at, kind, n, little) => {
+    check(typeof n === "number", "DataViewSet");
+    new DataView(dataViews.get(v)[0])["set" + DV_NAMES[kind]](at, n, little);
+  },
   IsDataView: (v) => {
     try {
       Object.getOwnPropertyDescriptor(DataView.prototype, "buffer").get.call(v);
@@ -1326,6 +1343,25 @@ for (const n of [undefined, 2, 8, -1]) {
   same("ArrayBuffer.prototype.resize", ABP.resize, (f) => { const b = new ArrayBuffer(4, { maxByteLength: 6 }); f.call(b, n); return b.byteLength; });
 }
 same("ArrayBuffer.prototype.resize", ABP.resize, (f) => f.call(new ArrayBuffer(4), 2));
+const DVC = installed["globalThis.DataView"].f;
+for (const args of [[new ArrayBuffer(8)], [new ArrayBuffer(8), 2], [new ArrayBuffer(8), 2, 4], [new ArrayBuffer(8), 9], [new ArrayBuffer(8), 4, 5], [new ArrayBuffer(8, { maxByteLength: 16 }), 4], [{}], [new ArrayBuffer(8), -1]]) {
+  same("globalThis.DataView", DataView, (f) => { const v = Reflect.construct(f, args); return [v.byteOffset, v.byteLength]; });
+}
+same("globalThis.DataView", DataView, (f) => f(new ArrayBuffer(1)));
+for (const name of ["Int8", "Uint8", "Int16", "Uint16", "Int32", "Uint32", "Float16", "Float32", "Float64"]) {
+  for (const [at, little] of [[0, false], [1, true], [4, undefined], [7, true], [-1, false], [1.5, 1], ["2", 0]]) {
+    same("DataView.prototype.get" + name, DataView.prototype["get" + name], (f) => {
+      const v = Reflect.construct(DVC, [new Uint8Array([1, 0x80, 0xff, 3, 0x3c, 5, 0x7f, 0xfe]).buffer]);
+      return f.call(v, at, little);
+    });
+    same("DataView.prototype.set" + name, DataView.prototype["set" + name], (f) => {
+      const v = Reflect.construct(DVC, [new ArrayBuffer(8), 1]);
+      f.call(v, at, -1.5e3, little);
+      return Array.from(new Uint8Array(v.buffer));
+    });
+  }
+  same("DataView.prototype.get" + name, DataView.prototype["get" + name], (f) => f.call(new Uint8Array(8), 0));
+}
 same("ArrayBuffer.isView", ArrayBuffer.isView, (f) => [f(new Uint8Array(1)), f(new DataView(new ArrayBuffer(1))), f(new ArrayBuffer(1)), f([])]);
 for (let k = 0; k < 10; k++) {
   const name = TA_CTORS[k].name;

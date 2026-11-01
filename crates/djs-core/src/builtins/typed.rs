@@ -5,7 +5,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::heap::cells::Bytes;
-use crate::heap::typed::Kind;
+use crate::heap::typed::{self, Kind};
 use crate::heap::{CellKind, Heap, ObjectClass};
 use crate::interp::conv::{Fault, type_error};
 use crate::interp::{ErrorKind, Intrinsic, realm};
@@ -459,4 +459,78 @@ pub(crate) fn kind_proto(kind: Kind) -> Intrinsic {
         Kind::BigInt64 => Intrinsic::BigInt64ArrayProto,
         Kind::BigUint64 => Intrinsic::BigUint64ArrayProto,
     }
+}
+
+// ---- DataView ----------------------------------------------------------------------------
+
+/// The DataView `v`, TypeError "DataView object expected" otherwise.
+pub(crate) fn as_data_view(heap: &Heap, v: Value) -> Result<Obj, Fault> {
+    match v.as_object() {
+        Some(o) if heap.object_class(o) == ObjectClass::DataView => Ok(o),
+        _ => type_error("DataView object expected"),
+    }
+}
+
+/// A DataView over `buffer`: slot 0 the buffer, 1 the byte offset, 2 the byte length
+/// (-1: length-tracking).
+pub(crate) fn data_view_create(
+    heap: &mut Heap,
+    proto: Obj,
+    buffer: Obj,
+    byte_offset: f64,
+    byte_length: f64,
+) -> Result<Obj, Fault> {
+    let o = heap.alloc_object(ObjectClass::DataView, Some(proto), 3)?;
+    heap.set_object_slot(o, 0, Value::object(buffer));
+    heap.set_object_slot(o, 1, Value::number(byte_offset));
+    heap.set_object_slot(o, 2, Value::number(byte_length));
+    Ok(o)
+}
+
+/// GetValueFromBuffer for a DataView: the element of `kind` at byte `at` of the view's
+/// buffer (absolute), `little` endian or not. The caller checked the bounds; a stale
+/// index reads NaN instead of panicking.
+pub(crate) fn view_get(heap: &Heap, view: Obj, at: f64, kind: Kind, little: bool) -> f64 {
+    let size = kind.size() as usize;
+    let Some(range) = view_range(heap, view, at, size) else {
+        return f64::NAN;
+    };
+    let buffer = heap
+        .object_slot(view, 0)
+        .as_object()
+        .expect("DataView buffer");
+    let mut b = [0u8; 8];
+    b[..size].copy_from_slice(&heap.buffer_data(buffer)[range]);
+    if !little {
+        b[..size].reverse();
+    }
+    typed::decode(kind, &b[..size])
+}
+
+/// SetValueInBuffer for a DataView (see `view_get`); out of range writes nothing.
+pub(crate) fn view_set(heap: &mut Heap, view: Obj, at: f64, kind: Kind, n: f64, little: bool) {
+    let size = kind.size() as usize;
+    let Some(range) = view_range(heap, view, at, size) else {
+        return;
+    };
+    let buffer = heap
+        .object_slot(view, 0)
+        .as_object()
+        .expect("DataView buffer");
+    let mut b = [0u8; 8];
+    typed::encode(kind, n, &mut b);
+    if !little {
+        b[..size].reverse();
+    }
+    heap.buffer_data_mut(buffer)[range].copy_from_slice(&b[..size]);
+}
+
+fn view_range(heap: &Heap, view: Obj, at: f64, size: usize) -> Option<core::ops::Range<usize>> {
+    let buffer = heap.object_slot(view, 0).as_object()?;
+    heap.buffer_bytes(buffer)?;
+    if !(at >= 0.0 && at == libm::trunc(at)) {
+        return None;
+    }
+    let start = at as usize;
+    (start + size <= heap.buffer_len(buffer) as usize).then_some(start..start + size)
 }

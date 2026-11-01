@@ -549,6 +549,98 @@ ToPropertyKey: reentrant (%ToPropertyKey)
 GetPrototypeFromConstructor: reentrant
   builtins/conversion.ts:118:24  Get (intrinsic)
 
+DVOutOfBounds: leaf
+
+DVByteLength: leaf
+
+DataViewConstructor: reentrant (constructor DataView)
+  builtins/dataview.ts:38:23  ToIndex (builtin)
+  builtins/dataview.ts:53:22  ToIndex (builtin)
+  builtins/dataview.ts:58:22  GetPrototypeFromConstructor (builtin)
+
+DataViewPrototypeBuffer: leaf (get DataView.prototype.buffer)
+
+DataViewPrototypeByteLength: leaf (get DataView.prototype.byteLength)
+
+DataViewPrototypeByteOffset: leaf (get DataView.prototype.byteOffset)
+
+DataViewPrototypeToStringTag: leaf (value DataView.prototype[Symbol.toStringTag])
+
+DVByteIndex: leaf
+
+GetViewValue: reentrant
+  builtins/dataview.ts:133:25  ToIndex (builtin)
+
+SetViewValue: reentrant
+  builtins/dataview.ts:143:25  ToIndex (builtin)
+  builtins/dataview.ts:145:18  ToNumber (builtin)
+
+DataViewPrototypeGetInt8: reentrant (DataView.prototype.getInt8)
+  builtins/dataview.ts:156:10  GetViewValue (builtin)
+
+DataViewPrototypeGetUint8: reentrant (DataView.prototype.getUint8)
+  builtins/dataview.ts:164:10  GetViewValue (builtin)
+
+DataViewPrototypeGetInt16: reentrant (DataView.prototype.getInt16)
+  builtins/dataview.ts:172:10  GetViewValue (builtin)
+
+DataViewPrototypeGetUint16: reentrant (DataView.prototype.getUint16)
+  builtins/dataview.ts:180:10  GetViewValue (builtin)
+
+DataViewPrototypeGetInt32: reentrant (DataView.prototype.getInt32)
+  builtins/dataview.ts:188:10  GetViewValue (builtin)
+
+DataViewPrototypeGetUint32: reentrant (DataView.prototype.getUint32)
+  builtins/dataview.ts:196:10  GetViewValue (builtin)
+
+DataViewPrototypeGetBigInt64: reentrant (DataView.prototype.getBigInt64)
+  builtins/dataview.ts:204:10  GetViewValue (builtin)
+
+DataViewPrototypeGetBigUint64: reentrant (DataView.prototype.getBigUint64)
+  builtins/dataview.ts:212:10  GetViewValue (builtin)
+
+DataViewPrototypeGetFloat16: reentrant (DataView.prototype.getFloat16)
+  builtins/dataview.ts:220:10  GetViewValue (builtin)
+
+DataViewPrototypeGetFloat32: reentrant (DataView.prototype.getFloat32)
+  builtins/dataview.ts:228:10  GetViewValue (builtin)
+
+DataViewPrototypeGetFloat64: reentrant (DataView.prototype.getFloat64)
+  builtins/dataview.ts:236:10  GetViewValue (builtin)
+
+DataViewPrototypeSetInt8: reentrant (DataView.prototype.setInt8)
+  builtins/dataview.ts:244:3  SetViewValue (builtin)
+
+DataViewPrototypeSetUint8: reentrant (DataView.prototype.setUint8)
+  builtins/dataview.ts:252:3  SetViewValue (builtin)
+
+DataViewPrototypeSetInt16: reentrant (DataView.prototype.setInt16)
+  builtins/dataview.ts:260:3  SetViewValue (builtin)
+
+DataViewPrototypeSetUint16: reentrant (DataView.prototype.setUint16)
+  builtins/dataview.ts:268:3  SetViewValue (builtin)
+
+DataViewPrototypeSetInt32: reentrant (DataView.prototype.setInt32)
+  builtins/dataview.ts:276:3  SetViewValue (builtin)
+
+DataViewPrototypeSetUint32: reentrant (DataView.prototype.setUint32)
+  builtins/dataview.ts:284:3  SetViewValue (builtin)
+
+DataViewPrototypeSetBigInt64: reentrant (DataView.prototype.setBigInt64)
+  builtins/dataview.ts:292:3  SetViewValue (builtin)
+
+DataViewPrototypeSetBigUint64: reentrant (DataView.prototype.setBigUint64)
+  builtins/dataview.ts:300:3  SetViewValue (builtin)
+
+DataViewPrototypeSetFloat16: reentrant (DataView.prototype.setFloat16)
+  builtins/dataview.ts:308:3  SetViewValue (builtin)
+
+DataViewPrototypeSetFloat32: reentrant (DataView.prototype.setFloat32)
+  builtins/dataview.ts:316:3  SetViewValue (builtin)
+
+DataViewPrototypeSetFloat64: reentrant (DataView.prototype.setFloat64)
+  builtins/dataview.ts:324:3  SetViewValue (builtin)
+
 DateValueFromArgs: reentrant
   builtins/date.ts:7:18  LengthOfArrayLike (builtin)
   builtins/date.ts:12:26  Get (intrinsic)

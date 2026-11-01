@@ -21,3 +21,15 @@ for (const f of [() => new ArrayBuffer(-1), () => ArrayBuffer(1), () => new Uint
   try { console.log(f()); } catch (e) { console.log(String(e)); }
 }
 const o = { valueOf() { return 42; } }; u[0] = o; console.log(u[0]); try { u[0] = Symbol(); } catch (e) { console.log(String(e)); }
+
+// %TypedArray%.prototype methods
+const a = new Int16Array([5, -3, 7, 0, 7]);
+console.log(a.at(-1), a.indexOf(7), a.lastIndexOf(7), a.includes(-3), a.join("|"), a.find((v) => v > 5), a.findIndex((v) => v > 5), a.findLast((v) => v > 5), a.findLastIndex((v) => v < 0));
+console.log(Array.from(a.map((v) => v * 2)), Array.from(a.filter((v) => v > 0)), a.reduce((x, y) => x + y), a.reduceRight((x, y) => x + "," + y, "s"), a.every((v) => v > -5), a.some((v) => v > 6));
+console.log(Array.from(a.toReversed()), Array.from(a.toSorted()), Array.from(a.with(1, 99)), Array.from(a.slice().reverse()), Array.from(new Uint8Array([1, 2, 3, 4, 5]).copyWithin(0, 3)));
+console.log([...a.keys()], [...a.values()], [...a.entries()].length, [...a], String(a), a.toLocaleString(), a.toString === Array.prototype.toString);
+const seen = []; a.forEach((v, i) => seen.push(v + "@" + i)); console.log(seen.join(" "));
+for (const f of [() => Object.getPrototypeOf(Int8Array.prototype).map.call([], (x) => x), () => new Uint8Array(2).map(5), () => new Uint8Array(0).reduce((x, y) => x), () => { const u = new Uint8Array(2); u.buffer.transfer(); return u.join(); }, () => new Uint8Array(2).with(5, 1)]) {
+  try { console.log(f()); } catch (e) { console.log(String(e)); }
+}
+console.log(Array.from(new Float64Array([3, -0, 0, NaN, -Infinity, 1]).sort()).map((v) => (Object.is(v, -0) ? "-0" : String(v))).join(" "));
