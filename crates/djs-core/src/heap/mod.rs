@@ -239,7 +239,7 @@ impl Heap {
         };
         heap.apply_reserve();
         if heap.arena.len() >= Roots::LAYOUT.min_size {
-            heap.arena.reserve_target();
+            heap.arena.reserve_total(capacity_target(heap.gc_threshold));
         }
         heap
     }
@@ -283,7 +283,7 @@ impl Heap {
     /// Sets the GC threshold, in the roots cell too (D1601).
     pub(crate) fn set_gc_threshold(&mut self, t: u32) {
         self.gc_threshold = t;
-        self.arena.set_target(capacity_target(t));
+        self.arena.set_target(t);
         if self.arena.len() >= Roots::LAYOUT.min_size {
             self.arena.set(0, Roots::GC_THRESHOLD, t);
         }

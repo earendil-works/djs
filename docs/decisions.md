@@ -4363,39 +4363,52 @@ settles, the result is a null-prototype object with the same keys
 reject the returned promise. With 0097, test262's later group is empty (D1970, D1971,
 this, and Symbol.unscopables, whose tests passed already).
 
-## D1990: Arena capacity is the GC threshold plus a slack
+## D1990: A restored arena reserves its GC threshold plus a slack
 date: 2026-11-03 · by: num · issue: 0099
 The cold-start peak of a pi VM (3.81 MiB) was not the collection after the prelude. It
 came from an ordinary collection inside the prelude run:
-1. The arena crossed its threshold. It was sized exactly to the threshold (D1870,
-   D1942), and allocation went on until the next safepoint.
+1. The arena crossed its threshold. It was sized exactly to the threshold (D1942), and
+   allocation went on until the next safepoint.
 2. That overshoot reallocated the whole arena. In dlmalloc a reallocation is a move,
    so the old block was left behind as a hole.
 3. The collection then allocated its to-space on top of both.
 
-Now the arena's capacity target is `t + max(64 KiB, t/16)` for a threshold `t`
-(`capacity_target`), and `restore_capacity` uses the same. Only capacity changes, so
-images, GC points and determinism stay the same.
+A heap made from the base or restored from an image now reserves
+`t + max(64 KiB, t/16)` for its threshold `t` (`capacity_target`), and
+`restore_capacity` (`djs_image_staging`) uses the same. The overshoot then fits without
+a move. Only capacity changes, so images, GC points and determinism stay the same.
 
-| | before | after |
-| --- | ---: | ---: |
-| pi cold start, `return 1` | 3.81 MiB | 2.81 MiB |
-| warm start | 2.13 MiB | 2.06 MiB (with D1991) |
-| `Sandbox` creation | 1.69 MiB | 1.75 MiB |
-| pi cold start, tool-heavy script | 3.81 MiB | 4.06 MiB |
-| `vm_new` | 47–58 µs | 47–53 µs |
+Two variants were compared on the pi bench (peak wasm memory, MiB, two runs each, same
+in both):
+- **slack everywhere:** the growth target after every collection gets the slack too;
+- **slack at restore:** only the base or restored arena does. This is the one taken.
 
-The tool-heavy cold start got worse only through where dlmalloc happens to place the
-blocks. The in-run collection now runs before the arena grew, so its to-space is smaller
-and the later growth moves the arena once more. The slack itself costs 64 KiB.
+| case | before (0094) | slack everywhere | slack at restore (taken) |
+| --- | ---: | ---: | ---: |
+| warm, `return 1` | 2.13 | 2.06 | 2.06 |
+| warm, tool-heavy | 2.13 | 2.06 | 2.06 |
+| cold, `return 1` | 3.81 | 2.81 | 2.81 |
+| cold, tool-heavy | 3.81 | 4.06 | 4.00 |
+| `Sandbox` creation | 1.69 | 1.75 | 1.75 |
 
-Measured and rejected (dlmalloc never returns memory, and its realloc grows a block in
-place only if the top chunk already has room):
+The warm numbers include D1991. Neither variant avoids the cold tool-heavy regression,
+and it comes from where dlmalloc happens to place the blocks:
+- The in-run collection now runs before the arena has grown, so the to-space it leaves
+  as the arena is smaller (the from-space's length).
+- The script's later growth then moves that arena once more. The freed from-space is too
+  small to take it, and dlmalloc never returns memory.
+
+Taken: slack at restore. It is never worse than slack everywhere and keeps no extra
+capacity after collections. `vm_new` (39–40 µs) and warm-start times are unchanged.
+
+Measured and rejected (dlmalloc's realloc grows a block in place only if the top chunk
+already has room):
 - a to-space sized for the next threshold: 5.5 MiB;
 - reserving the new target right after the from-space is freed: 4.0 MiB.
 
 The rest of the cold peak is Cheney itself: from-space plus to-space, about twice the
-live data. Only an in-place (sliding) collector removes that (see 0099's follow-ups).
+live data, plus holes from the moves. Removing that needs an in-place (sliding)
+collector, a design question for the GC owner (0099's Result).
 
 ## D1991: `verify` keeps cell starts in a bitmap
 date: 2026-11-03 · by: num · issue: 0099
