@@ -60,6 +60,11 @@ impl Insn {
         Insn { op, pc, imms }
     }
 
+    /// An instruction from already normalized immediates (as `raw` left them).
+    pub(crate) fn from_parts(op: Op, pc: u32, imms: [u32; 2]) -> Insn {
+        Insn { op, pc, imms }
+    }
+
     /// An instruction without immediates (`return` in place of a jump to one).
     pub fn bare(op: Op, pc: u32) -> Insn {
         debug_assert!(op.info().imms.is_empty());

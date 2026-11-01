@@ -79,12 +79,28 @@ impl Code {
     }
 }
 
-/// Finished phase-1 code: the instructions, decoded (0096: phase-1 code is never
-/// stored as bytes, the re-emit reads the instructions directly). An instruction's `pc`
-/// is its index.
+/// A stored phase-1 instruction: the opcode and its raw immediates, 9 bytes (0096:
+/// phase-1 code is never encoded as bytes, the re-emit reads the instructions; the
+/// whole unit's phase-1 code stays alive until resolution, so it is packed).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(C, packed)]
+pub struct P1 {
+    a: u32,
+    b: u32,
+    op: Op,
+}
+
+impl P1 {
+    /// The instruction, with `pc` = its index.
+    pub fn insn(self, index: u32) -> Insn {
+        Insn::from_parts(self.op, index, [self.a, self.b])
+    }
+}
+
+/// Finished phase-1 code. An instruction's `pc` is its index.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Phase1Code {
-    pub insns: Vec<Insn>,
+    pub insns: Vec<P1>,
     /// Number of labels; pass it to [`CodeBuf::with_labels`] for the re-emit.
     pub label_count: u32,
 }
@@ -94,7 +110,8 @@ impl Phase1Code {
     /// tests.
     pub fn bytes(&self) -> Vec<u8> {
         let mut out = Vec::new();
-        for insn in &self.insns {
+        for (i, p) in self.insns.iter().enumerate() {
+            let insn = p.insn(i as u32);
             out.push(insn.op as u8);
             for (i, &k) in insn.op.info().imms.iter().enumerate() {
                 out.extend_from_slice(&insn.imm(i).to_le_bytes()[..k.width() as usize]);
@@ -109,7 +126,7 @@ pub struct CodeBuf<M: LabelMode = Final> {
     /// Final mode: the code.
     code: Vec<u8>,
     /// Phase-1 mode: the instructions (`pc` = index).
-    insns: Vec<Insn>,
+    insns: Vec<P1>,
     /// Final: label positions (`UNPLACED` until placed). Phase 1: 0/1 placed flags.
     labels: Vec<u32>,
     /// Positions of `Target` immediates, which hold the label id (until `finish` patches
@@ -228,7 +245,7 @@ impl<M: LabelMode> CodeBuf<M> {
     pub fn last_insn(&self) -> Option<Insn> {
         let start = self.last?;
         if M::SYMBOLIC {
-            return self.insns.get(start as usize).copied();
+            return self.insns.get(start as usize).map(|p| p.insn(start));
         }
         decode(&self.code, start).ok()
     }
@@ -276,7 +293,11 @@ impl<M: LabelMode> CodeBuf<M> {
                 self.fail(CodeError::UnknownLabel(l));
             }
             self.last = Some(insn.pc);
-            self.insns.push(insn);
+            self.insns.push(P1 {
+                a: insn.imm(0),
+                b: insn.imm(1),
+                op,
+            });
             return;
         }
         let start = self.code.len() as u32;
@@ -343,9 +364,6 @@ impl CodeBuf<Phase1> {
         let moved = self.insns[mid..end].to_vec();
         self.insns.copy_within(start..mid, start + moved.len());
         self.insns[start..start + moved.len()].copy_from_slice(&moved);
-        for (i, insn) in self.insns[start..end].iter_mut().enumerate() {
-            insn.pc = (start + i) as u32;
-        }
         self.last = None;
     }
 
@@ -354,7 +372,7 @@ impl CodeBuf<Phase1> {
         if let Some(e) = self.error {
             return Err(e);
         }
-        for l in self.insns.iter().filter_map(|i| i.label()) {
+        for l in self.insns.iter().filter_map(|p| p.insn(0).label()) {
             if self.labels[l.0 as usize] == 0 {
                 return Err(CodeError::UnplacedLabel(l));
             }

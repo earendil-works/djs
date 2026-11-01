@@ -101,7 +101,8 @@ fn every_op_round_trips() {
     }
     buf.place_label(label);
     let code = buf.finish().unwrap();
-    for (i, (insn, e)) in code.insns.iter().zip(&expected).enumerate() {
+    for (i, (p, e)) in code.insns.iter().zip(&expected).enumerate() {
+        let insn = p.insn(i as u32);
         assert_eq!(
             (insn.op, insn.pc, insn.imm(0), insn.imm(1)),
             (e.op, i as u32, e.imm(0), e.imm(1))
@@ -280,7 +281,8 @@ fn phase1_reemit() {
     assert!(check_stack(&p1_bytes, &[]).is_err());
 
     let mut out = CodeBuf::with_labels(p1.label_count);
-    for &insn in &p1.insns {
+    for (i, p) in p1.insns.iter().enumerate() {
+        let insn = p.insn(i as u32);
         match insn.op {
             Op::Label => out.place_label(Label(insn.imm(0))),
             Op::NameGet => out.get_loc(0),

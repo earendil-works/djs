@@ -363,7 +363,11 @@ fn emit_function(
         }
     }
 
-    let all = core::mem::take(&mut phase1.insns);
+    let all: Vec<crate::bytecode::Insn> = core::mem::take(&mut phase1.insns)
+        .into_iter()
+        .enumerate()
+        .map(|(i, p)| p.insn(i as u32))
+        .collect();
     let estimate = all.len() * 3;
     let mut label_count = phase1.label_count;
     let all = super::peephole::simplify(all, &mut label_count);
