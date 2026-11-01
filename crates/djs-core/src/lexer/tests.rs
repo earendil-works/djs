@@ -1657,3 +1657,123 @@ fn lex_whole(src: &[u8]) -> usize {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------
+// Robustness: random inputs built from interesting fragments must never panic, and
+// every successfully scanned token must cook consistently.
+
+#[test]
+fn random_inputs_do_not_panic() {
+    const FRAGMENTS: &[&[u8]] = &[
+        b"a",
+        b"if",
+        b"let",
+        b"\\u0061",
+        b"\\u{62}",
+        b"\\u",
+        b"\\",
+        b"#",
+        b"#x",
+        b"0",
+        b"1",
+        b"0x",
+        b"0b1",
+        b"_",
+        b".",
+        b"e",
+        b"n",
+        b"'",
+        b"\"",
+        b"`",
+        b"${",
+        b"}",
+        b"{",
+        b"/",
+        b"*",
+        b"/*",
+        b"*/",
+        b"//",
+        b"\n",
+        b"\r",
+        b"\r\n",
+        b" ",
+        b"\t",
+        b"\\x4",
+        b"\\0",
+        b"\\8",
+        b"[",
+        b"]",
+        b"(",
+        b")",
+        b">",
+        b"=",
+        b"?",
+        b"?.",
+        b"!",
+        b"<",
+        b"-",
+        "é".as_bytes(),
+        "😀".as_bytes(),
+        "\u{2028}".as_bytes(),
+        "\u{A0}".as_bytes(),
+        "\u{FEFF}".as_bytes(),
+        b"\xFF",
+        b"\xE2\x80",
+        b"\x00",
+        b"g",
+        b"u",
+        b"v",
+    ];
+    let mut seed: u64 = 0x9E37_79B9_7F4A_7C15;
+    let mut rand = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed
+    };
+    let mut src = Vec::new();
+    let mut tokens = 0;
+    for _ in 0..50_000 {
+        src.clear();
+        for _ in 0..(rand() % 12) {
+            src.extend_from_slice(FRAGMENTS[(rand() % FRAGMENTS.len() as u64) as usize]);
+        }
+        let Ok(mut d) = Driver::new(&src) else {
+            continue;
+        };
+        for _ in 0..100 {
+            let Ok(tok) = d.next() else { break };
+            tokens += 1;
+            assert!(tok.start <= tok.end && tok.end as usize <= src.len());
+            assert!(d.lx.pos() >= tok.end);
+            let lx = d.lx;
+            match tok.kind {
+                Eof => break,
+                k if k.is_identifier_name() || k == PrivateName => {
+                    let mut buf = Vec::new();
+                    let name = lx.ident_value(&tok, &mut buf);
+                    assert!(core::str::from_utf8(name).is_ok());
+                }
+                String => {
+                    lx.cook_string(&tok, &mut Vec::new());
+                }
+                NoSubstTemplate | TemplateHead | TemplateMiddle | TemplateTail => {
+                    let cooked = lx.cook_template(&tok, &mut Vec::new());
+                    assert_eq!(cooked.is_err(), tok.has_flag(Token::INVALID_ESCAPE));
+                    lx.template_raw(&tok, &mut Vec::new());
+                }
+                Number | BigInt => {
+                    let lit = lx.number_literal(&tok);
+                    assert!(!lit.digits.is_empty());
+                }
+                Regex => {
+                    let (body, flags) = lx.regex_parts(&tok);
+                    assert!(body.end < flags.start || body.is_empty());
+                }
+                _ => {}
+            }
+        }
+    }
+    // Make sure the inputs are not all rejected immediately.
+    assert!(tokens > 50_000, "{tokens}");
+}
