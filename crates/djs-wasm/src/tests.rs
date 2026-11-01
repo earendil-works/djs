@@ -320,6 +320,33 @@ fn host_results_with_a_clock() {
     vm_free(vm);
 }
 
+/// D1680: the weak-reference modes.
+#[test]
+fn weak_ref_modes() {
+    for (mode, want) in [
+        (0, "function,1"),
+        (1, "function,1"),
+        (2, "undefined,undefined"),
+    ] {
+        let vm = vm_new(0);
+        assert_eq!(vm_set_weak_refs(vm, mode), 0);
+        let f = compile_body(
+            vm,
+            "",
+            "return [typeof WeakRef, typeof WeakRef === 'function' ? new WeakRef({ a: 1 }).deref().a : undefined].join()",
+        );
+        call(vm, f, &[]);
+        let st = vm_run(vm, 1_000_000);
+        let (ok, r) = outcome(vm, st);
+        assert!(ok);
+        assert_eq!(display(vm, r), want, "mode {mode}");
+        vm_free(vm);
+    }
+    let vm = vm_new(0);
+    assert_eq!(vm_set_weak_refs(vm, 3), -1);
+    vm_free(vm);
+}
+
 #[test]
 fn host_clock() {
     let vm = vm_new(0);

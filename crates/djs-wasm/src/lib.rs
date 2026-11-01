@@ -672,6 +672,28 @@ pub extern "C" fn vm_set_now(vm: u32, ms: f64) {
     with(|s| s.slot(vm).vm.set_now(ms))
 }
 
+/// What WeakRef and FinalizationRegistry do (`Vm::set_weak_refs`, D1680): 0 collected
+/// (weak, the default), 1 strong (no collection is observable), 2 absent (the globals are
+/// deleted). Set it on a new VM, before running code. Returns 0, or -1 for a bad mode or
+/// a full heap.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_set_weak_refs(vm: u32, mode: u32) -> i32 {
+    use djs_core::vm::WeakRefs;
+    let mode = match mode {
+        0 => WeakRefs::Collected,
+        1 => WeakRefs::Strong,
+        2 => WeakRefs::Absent,
+        _ => return -1,
+    };
+    with(|s| {
+        if s.slot(vm).vm.set_weak_refs(mode).is_ok() {
+            0
+        } else {
+            -1
+        }
+    })
+}
+
 /// Reseeds `Math.random` with the 64-bit seed `hi << 32 | lo` (`Vm::set_random_seed`; 0
 /// is the fixed default). A new VM starts with the default seed, so a host that wants
 /// real randomness passes one from its own source; a replay passes a fixed one (0049).
