@@ -1,7 +1,7 @@
 # 0126: Size: run-length Unicode tables, panics without formatting
 
-status: open
-agent: -
+status: in-progress
+agent: bloat
 branch: issue/0126-size-tables-panics
 depends-on: 0123
 guide: docs/guide/regexp.md / strings pages if they describe the tables (check)
