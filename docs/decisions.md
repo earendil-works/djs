@@ -4556,3 +4556,20 @@ dropped. The qjs driver now loads the prelude with `std.loadScript`, so its fram
 its path and differ from the case's `<evalScript>`; no other transcript changes (the
 whole corpus still passes under qjs). The wrappers put different prefixes on line 1, and
 line 1 of such a case is always its directive comment.
+## D2030: The guide: Markdown in docs/guide, our own generator, generated parts checked in
+date: 2026-11-03 · by: docs · issue: 0103
+The human-facing guide lives in `docs/guide/` as CommonMark + GFM tables, ordered by an
+mdBook-style SUMMARY.md, and is built by `crates/djs-docs` (owner's choice among own
+generator, mdBook + preprocessor, GitHub-only Markdown; 0103 has the comparison). Parts
+that derive from the code are generated regions (`<!-- gen:... -->`) and SVGs in
+`docs/guide/gen/`, written by `djs-docs regen` from djs-core's tables (`LAYOUTS`, `OPS`,
+`INTRINSICS`, `EXPORTED_TAGS`), the decision log and the compiler/VM themselves, and
+checked in, so the Markdown reads the same on GitHub; scripts/regen.sh rewrites them
+after a rebase. Example output (`gen:run`) is the exception: it is a doc-test, so the
+gate's `djs-docs check` fails on a change instead of regenerating it (`regen --examples`
+accepts it). `check` also renders every page and rejects broken links, unknown decision
+IDs, opcodes and cell kinds. The site (`djs-docs build`, not in the gate) embeds live
+examples that run on djs-wasm through `@djs/host` (`Sandbox.heapView`/`collect` were
+added for its heap view). New dependency: pulldown-cmark (with memchr, unicase, bitflags,
+pulldown-cmark-escape) in the djs-docs tool crate only; no tool needs installing.
+Keeping the prose true is a process rule (AGENTS.md "Keeping the guide current").

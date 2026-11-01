@@ -37,6 +37,32 @@ test("the module is compiled once", async () => {
   b.dispose();
 });
 
+test("heapView walks the arena; collect frees garbage", async () => {
+  const sb = await Sandbox.create();
+  // Every cell starts with its kind (u8) and its size (u32 at +4), back to back.
+  const walk = () => {
+    const h = sb.heapView();
+    const dv = new DataView(h.buffer, h.byteOffset, h.byteLength);
+    let cells = 0;
+    let off = 0;
+    while (off + 8 <= h.length) {
+      const size = dv.getUint32(off + 4, true);
+      if (size === 0) break;
+      off += size;
+      cells++;
+    }
+    assert.equal(off, h.length);
+    return cells;
+  };
+  const before = walk();
+  sb.run("globalThis.keep = []; for (let i = 0; i < 1000; i++) { const g = { i }; if (i % 100 === 0) keep.push(g); }");
+  assert.ok(walk() > before + 900);
+  assert.equal(sb.collect(), true);
+  assert.ok(walk() < before + 100);
+  assert.equal(sb.run("return keep.length"), 10);
+  sb.dispose();
+});
+
 test("the synchronous constructor", async () => {
   const module = await loadModule();
   const sb = new Sandbox({ module });

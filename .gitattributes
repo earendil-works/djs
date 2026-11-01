@@ -8,6 +8,10 @@ builtins/gen/prelude.js merge=djs-generated
 builtins/gen/resume-points.txt merge=djs-generated
 js/src/layout.generated.ts merge=djs-generated
 crates/djs-core/src/bytecode/intrinsics.rs merge=djs-intrinsics
+# The guide's generated diagrams and fully generated reference pages (D2030;
+# scripts/regen.sh always rewrites them).
+docs/guide/gen/** merge=djs-generated
+docs/guide/ref-*.md merge=djs-generated
 # Line lists where both sides usually add different lines: keep both. A duplicate or
 # stale ratchet entry is harmless (the gate reports stale entries; the next --update
 # rewrites the file), and a bad intrinsics.d.ts union fails the gate's bgen check.

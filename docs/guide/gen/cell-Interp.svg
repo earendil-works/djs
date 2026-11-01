@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 566" width="580" height="566" role="img" aria-label="Layout of the Interp cell">
+<title>Layout of the Interp cell</title>
+<style>
+  text { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; fill: #1f2328; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .small { font-size: 10px; fill: #59636e; }
+  .label { font-weight: 600; }
+  .box { fill: #f6f8fa; stroke: #8c959f; }
+  .hdr { fill: #ddf4ff; stroke: #54aeff; }
+  .traced { fill: #fff1e5; stroke: #fb8f44; }
+  .tag { fill: #fbefff; stroke: #c297ff; }
+  .pad { fill: url(#hatch); stroke: #d0d7de; }
+  .tail { fill: #f6f8fa; stroke: #8c959f; stroke-dasharray: 4 3; }
+  .opt { stroke-dasharray: 3 2; }
+  .rule { stroke: #8c959f; }
+  .hatch { stroke: #d0d7de; }
+  @media (prefers-color-scheme: dark) {
+    text { fill: #e6edf3; }
+    .small { fill: #9198a1; }
+    .box, .tail { fill: #161b22; stroke: #6e7681; }
+    .hdr { fill: #0c2d6b; stroke: #388bfd; }
+    .traced { fill: #3d1d00; stroke: #db6d28; }
+    .tag { fill: #2b1a4a; stroke: #a371f7; }
+    .pad { stroke: #30363d; }
+    .rule { stroke: #6e7681; }
+    .hatch { stroke: #30363d; }
+  }
+</style>
+<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" class="hatch"/></pattern></defs>
+<text class="small mono" x="88" y="22" text-anchor="middle">+0</text>
+<text class="small mono" x="152" y="22" text-anchor="middle">+1</text>
+<text class="small mono" x="216" y="22" text-anchor="middle">+2</text>
+<text class="small mono" x="280" y="22" text-anchor="middle">+3</text>
+<text class="small mono" x="344" y="22" text-anchor="middle">+4</text>
+<text class="small mono" x="408" y="22" text-anchor="middle">+5</text>
+<text class="small mono" x="472" y="22" text-anchor="middle">+6</text>
+<text class="small mono" x="536" y="22" text-anchor="middle">+7</text>
+<text class="small mono" x="48" y="55" text-anchor="end">0</text>
+<text class="small mono" x="48" y="99" text-anchor="end">8</text>
+<text class="small mono" x="48" y="143" text-anchor="end">16</text>
+<text class="small mono" x="48" y="187" text-anchor="end">24</text>
+<text class="small mono" x="48" y="231" text-anchor="end">32</text>
+<text class="small mono" x="48" y="275" text-anchor="end">40</text>
+<text class="small mono" x="48" y="319" text-anchor="end">48</text>
+<text class="small mono" x="48" y="363" text-anchor="end">56</text>
+<text class="small mono" x="48" y="407" text-anchor="end">64</text>
+<text class="small mono" x="48" y="451" text-anchor="end">72</text>
+<text class="small mono" x="48" y="495" text-anchor="end">80</text>
+<rect class="hdr" x="57" y="31" width="62" height="40" rx="3"/>
+<text class="mono" x="88" y="48" text-anchor="middle">KIND</text>
+<text class="small" x="88" y="62" text-anchor="middle">u8</text>
+<rect class="hdr" x="121" y="31" width="62" height="40" rx="3"/>
+<text class="mono" x="152" y="48" text-anchor="middle">GC</text>
+<text class="small" x="152" y="62" text-anchor="middle">u8</text>
+<rect class="hdr" x="185" y="31" width="126" height="40" rx="3"/>
+<text class="mono" x="248" y="48" text-anchor="middle">FLAGS</text>
+<text class="small" x="248" y="62" text-anchor="middle">u16</text>
+<rect class="hdr" x="313" y="31" width="254" height="40" rx="3"/>
+<text class="mono" x="440" y="48" text-anchor="middle">SIZE</text>
+<text class="small" x="440" y="62" text-anchor="middle">u32</text>
+<rect class="box" x="57" y="75" width="254" height="40" rx="3"/>
+<text class="mono" x="184" y="92" text-anchor="middle">STATE</text>
+<text class="small" x="184" y="106" text-anchor="middle">u32</text>
+<rect class="box" x="313" y="75" width="254" height="40" rx="3"/>
+<text class="mono" x="440" y="92" text-anchor="middle">BP</text>
+<text class="small" x="440" y="106" text-anchor="middle">u32</text>
+<rect class="box" x="57" y="119" width="254" height="40" rx="3"/>
+<text class="mono" x="184" y="136" text-anchor="middle">HP</text>
+<text class="small" x="184" y="150" text-anchor="middle">u32</text>
+<rect class="box" x="313" y="119" width="254" height="40" rx="3"/>
+<text class="mono" x="440" y="136" text-anchor="middle">SP</text>
+<text class="small" x="440" y="150" text-anchor="middle">u32</text>
+<rect class="box" x="57" y="163" width="254" height="40" rx="3"/>
+<text class="mono" x="184" y="180" text-anchor="middle">PC</text>
+<text class="small" x="184" y="194" text-anchor="middle">u32</text>
+<rect class="box" x="313" y="163" width="254" height="40" rx="3"/>
+<text class="mono" x="440" y="180" text-anchor="middle">HOST_CALL</text>
+<text class="small" x="440" y="194" text-anchor="middle">u32</text>
+<rect class="box" x="57" y="207" width="254" height="40" rx="3"/>
+<text class="mono" x="184" y="224" text-anchor="middle">NEXT_CALL_ID</text>
+<text class="small" x="184" y="238" text-anchor="middle">u32</text>
+<rect class="box" x="313" y="207" width="254" height="40" rx="3"/>
+<text class="mono" x="440" y="224" text-anchor="middle">FLAGS</text>
+<text class="small" x="440" y="238" text-anchor="middle">u32</text>
+<rect class="traced" x="57" y="251" width="510" height="40" rx="3"/>
+<text class="mono" x="312" y="268" text-anchor="middle">RESULT</text>
+<text class="small" x="312" y="282" text-anchor="middle">Value</text>
+<rect class="box" x="57" y="295" width="254" height="40" rx="3"/>
+<text class="mono" x="184" y="312" text-anchor="middle">OUTCOME</text>
+<text class="small" x="184" y="326" text-anchor="middle">u32</text>
+<rect class="box" x="313" y="295" width="254" height="40" rx="3"/>
+<text class="mono" x="440" y="312" text-anchor="middle">JOB_HEAD</text>
+<text class="small" x="440" y="326" text-anchor="middle">u32</text>
+<rect class="traced" x="57" y="339" width="510" height="40" rx="3"/>
+<text class="mono" x="312" y="356" text-anchor="middle">THROW</text>
+<text class="small" x="312" y="370" text-anchor="middle">Value</text>
+<rect class="traced" x="57" y="383" width="254" height="40" rx="3"/>
+<text class="mono" x="184" y="400" text-anchor="middle">REJECTIONS</text>
+<text class="small" x="184" y="414" text-anchor="middle">Ref</text>
+<rect class="box" x="313" y="383" width="254" height="40" rx="3"/>
+<text class="mono" x="440" y="400" text-anchor="middle">REPORTED</text>
+<text class="small" x="440" y="414" text-anchor="middle">u32</text>
+<rect class="traced" x="57" y="427" width="254" height="40" rx="3"/>
+<text class="mono" x="184" y="444" text-anchor="middle">INBOX</text>
+<text class="small" x="184" y="458" text-anchor="middle">Ref</text>
+<rect class="box" x="313" y="427" width="254" height="40" rx="3"/>
+<text class="mono" x="440" y="444" text-anchor="middle">INBOX_HEAD</text>
+<text class="small" x="440" y="458" text-anchor="middle">u32</text>
+<rect class="traced" x="57" y="471" width="510" height="40" rx="3"/>
+<text class="mono" x="312" y="488" text-anchor="middle">FUEL_DEBT</text>
+<text class="small" x="312" y="502" text-anchor="middle">Value</text>
+<rect class="hdr" x="56" y="540" width="14" height="12" rx="3"/>
+<text class="small" x="76" y="550" text-anchor="start">header</text>
+<rect class="traced" x="129.6" y="540" width="14" height="12" rx="3"/>
+<text class="small" x="149.6" y="550" text-anchor="start">traced by the GC (Value, Ref)</text>
+<rect class="box" x="332" y="540" width="14" height="12" rx="3"/>
+<text class="small" x="352" y="550" text-anchor="start">plain data</text>
+<rect class="pad" x="428" y="540" width="14" height="12" rx="3"/>
+<text class="small" x="448" y="550" text-anchor="start">padding</text>
+</svg>

@@ -1,0 +1,213 @@
+//! `djs-docs`: the guide in docs/guide (0103, D2030).
+//!
+//! ```text
+//! djs-docs check               generated regions and diagrams fresh, examples' output
+//!                              unchanged, links and references valid; renders every page
+//! djs-docs regen [--examples]  rewrite the generated regions and diagrams in place;
+//!                              --examples also rewrites example output (`gen:run`)
+//! djs-docs build [--out DIR] [--wasm FILE]
+//!                              the static site (default target/docs-site), with live
+//!                              examples on djs-wasm (default: the `wasm` profile build)
+//! ```
+//!
+//! The guide's pages are listed in docs/guide/SUMMARY.md (mdBook's format).
+
+mod highlight;
+mod regions;
+mod render;
+mod run;
+mod site;
+mod svg;
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
+
+const USAGE: &str = "usage: djs-docs check | regen [--examples] | build [--out DIR] [--wasm FILE]";
+
+pub fn repo() -> PathBuf {
+    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    p.canonicalize().unwrap_or(p)
+}
+
+fn read(p: &Path) -> String {
+    std::fs::read_to_string(p).unwrap_or_else(|e| panic!("{}: {e}", p.display()))
+}
+
+/// The guide after regeneration (in memory).
+pub struct Guide {
+    pub dir: PathBuf,
+    pub summary: Vec<site::Entry>,
+    /// Page -> regenerated source.
+    pub pages: BTreeMap<String, String>,
+    pub cx: regions::Ctx,
+    /// Pages and diagrams whose checked-in text differs from the regenerated one.
+    pub stale: Vec<String>,
+    /// Diagrams in gen/ that nothing generates any more.
+    pub orphans: Vec<String>,
+    pub decisions_md: String,
+}
+
+fn load(examples: bool) -> Guide {
+    let root = repo();
+    let dir = root.join("docs/guide");
+    let src = regions::Sources {
+        decisions_md: read(&root.join("docs/decisions.md")),
+        ops_rs: read(&root.join("crates/djs-core/src/bytecode/ops.rs")),
+        intrinsics_dts: read(&root.join("builtins/intrinsics.d.ts")),
+    };
+    let mut cx = regions::Ctx::new(&src, examples);
+    let summary = site::summary(&read(&dir.join("SUMMARY.md")));
+    let mut pages = BTreeMap::new();
+    let mut stale = Vec::new();
+    for e in &summary {
+        let Some(p) = &e.path else { continue };
+        let path = dir.join(p);
+        let Ok(old) = std::fs::read_to_string(&path) else {
+            cx.errors.push(format!("SUMMARY.md: {p} does not exist"));
+            continue;
+        };
+        let new = regions::regen(p, &old, &mut cx);
+        if new != old {
+            stale.push(p.clone());
+        }
+        pages.insert(p.clone(), new);
+    }
+    for (f, svg) in &cx.files {
+        if std::fs::read_to_string(dir.join(f)).ok().as_deref() != Some(svg.as_str()) {
+            stale.push(f.clone());
+        }
+    }
+    let mut orphans = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(dir.join("gen")) {
+        for e in rd.flatten() {
+            let f = format!("gen/{}", e.file_name().to_string_lossy());
+            if !cx.files.contains_key(&f) {
+                orphans.push(f);
+            }
+        }
+    }
+    orphans.sort();
+    Guide {
+        dir,
+        summary,
+        pages,
+        cx,
+        stale,
+        orphans,
+        decisions_md: src.decisions_md,
+    }
+}
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let Some(cmd) = args.first() else {
+        eprintln!("{USAGE}");
+        return ExitCode::from(2);
+    };
+    let flag = |name: &str| args.iter().any(|a| a == name);
+    let opt = |name: &str| {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1))
+            .cloned()
+    };
+    match cmd.as_str() {
+        "check" => {
+            let mut g = load(false);
+            // Render every page too: missing diagrams, broken links, unknown decisions.
+            let _ = site::render_all(&mut g);
+            let mut bad = false;
+            for s in &g.stale {
+                eprintln!("djs-docs: stale: docs/guide/{s}");
+                bad = true;
+            }
+            for s in &g.orphans {
+                eprintln!("djs-docs: no longer generated: docs/guide/{s}");
+                bad = true;
+            }
+            if bad {
+                eprintln!("  run `cargo run -p djs-docs -- regen` (scripts/regen.sh does it too)");
+            }
+            for p in &g.cx.changed_examples {
+                eprintln!("djs-docs: an example's output changed: docs/guide/{p}");
+                bad = true;
+            }
+            if !g.cx.changed_examples.is_empty() {
+                eprintln!(
+                    "  if the new output is right, accept it with `cargo run -p djs-docs -- regen --examples`\n  \
+                     and check that the page's text still says the right thing"
+                );
+            }
+            for e in &g.cx.errors {
+                eprintln!("djs-docs: {e}");
+                bad = true;
+            }
+            if bad {
+                return ExitCode::FAILURE;
+            }
+            println!(
+                "djs-docs: {} pages, {} diagrams: ok",
+                g.pages.len(),
+                g.cx.files.len()
+            );
+        }
+        "regen" => {
+            let g = load(flag("--examples"));
+            for p in &g.stale {
+                let text = g
+                    .pages
+                    .get(p)
+                    .or_else(|| g.cx.files.get(p))
+                    .expect("generated");
+                std::fs::create_dir_all(g.dir.join(p).parent().expect("parent")).expect("mkdir");
+                std::fs::write(g.dir.join(p), text).expect("write");
+                println!("djs-docs: rewrote docs/guide/{p}");
+            }
+            for o in &g.orphans {
+                std::fs::remove_file(g.dir.join(o)).expect("remove");
+                println!("djs-docs: removed docs/guide/{o}");
+            }
+            for p in &g.cx.changed_examples {
+                println!(
+                    "djs-docs: kept the old example output in docs/guide/{p} (accept with --examples)"
+                );
+            }
+            if !g.cx.errors.is_empty() {
+                for e in &g.cx.errors {
+                    eprintln!("djs-docs: {e}");
+                }
+                return ExitCode::FAILURE;
+            }
+        }
+        "build" => {
+            let out = opt("--out")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| repo().join("target/docs-site"));
+            let wasm = opt("--wasm")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| repo().join("target/wasm32-unknown-unknown/wasm/djs_wasm.wasm"));
+            let mut g = load(false);
+            if let Err(e) = site::build(&mut g, &out, &wasm) {
+                eprintln!("djs-docs: {e}");
+                return ExitCode::FAILURE;
+            }
+            for e in &g.cx.errors {
+                eprintln!("djs-docs: {e}");
+            }
+            if !g.cx.errors.is_empty() {
+                return ExitCode::FAILURE;
+            }
+        }
+        _ => {
+            eprintln!("{USAGE}");
+            return ExitCode::from(2);
+        }
+    }
+    ExitCode::SUCCESS
+}
+
+/// Pages known to the guide (for link checks).
+pub fn page_set(g: &Guide) -> BTreeSet<String> {
+    g.pages.keys().cloned().collect()
+}

@@ -1,9 +1,10 @@
 # 0103: Human-facing documentation: format proposal first, then the docs
 
-status: in-progress (phase 1 done: proposal awaiting the owner's choice)
+status: in-progress (phase 2: tooling and first chapters landing; chapters in parts)
 agent: docs
 branch: issue/0103-docs
 depends-on: -
+guide: all of docs/guide
 touches: phase 1: work/issues/0103-human-documentation.md (the proposal), work/scratch/0103/ (prototypes). Phase 2 (after the owner's decision): a new docs site source directory, its build tooling, generated reference content.
 
 ## Goal
@@ -45,7 +46,9 @@ Questions for the proposal:
       (the same content, e.g. "Values and NaN-boxing" with a generated layout diagram),
       the trade-offs, and a recommendation. Send it to the coordinator; **don't build the
       docs before the owner has chosen**.
-- [ ] Phase 2 (after the decision): the tooling, then the documentation itself in parts.
+- [x] Phase 2 part 1: the tooling (djs-docs, gate, regen, AGENTS.md), introduction,
+      values, reference pages.
+- [ ] Phase 2, further parts: the remaining tour chapters (SUMMARY.md drafts).
 
 ## Log
 
@@ -61,6 +64,20 @@ Questions for the proposal:
 - The doc-test check earned its keep at once: the example output I wrote by hand was
   wrong (`-0` prints as `-0`, a BigInt as `100…0n`) and `check` failed until regen.
 - Prototypes: `work/scratch/0103/` (gitignored; README.md there lists everything).
+- Owner chose option A and asked for agents to keep the docs current via the
+  coordinator. Phase 2 part 1: `crates/djs-docs` (check/regen/build), `docs/guide/` with
+  SUMMARY.md, introduction.md and values.md, and generated reference pages for
+  opcodes (with the `///` docs read from ops.rs: no wasm cost), cell layouts and
+  intrinsics (docs from intrinsics.d.ts). `check` in gate.sh, `regen` in regen.sh,
+  `.gitattributes` treats gen/ and ref-*.md as generated. AGENTS.md "Keeping the guide
+  current" plus the coordinator's `guide:` field. D2030.
+- Examples are codemode async bodies now (as in the live widget and in pi), run with a
+  50-fuel suspend/restore cycle; `gen:run` output only changes with `--examples`, so a
+  behavior change fails the gate instead of silently updating the page.
+- `Sandbox.heapView()` and `Sandbox.collect()` (js/src/sandbox.ts, tested) replace the
+  prototype's reach into private fields.
+- D1980 (optional trailing fields) showed up after the rebase: the cell diagrams draw
+  fields past `min_size` dashed, with an "optional" legend.
 
 ## Proposal
 
@@ -186,3 +203,13 @@ Open questions for the owner:
    ops.rs or the macro can emit a separate, docs-only table. Which one?
 
 ## Result
+
+## Follow-ups
+
+- Live bytecode for edited examples: a `djs_disasm` export behind a docs-only feature
+  of djs-wasm (the Bytecode tab now shows the build-time listing of the original).
+- Search on the site (a JSON index and a little JS), if wanted.
+- Publishing: a GitHub Pages workflow running `djs-docs build` (the owner sets it up;
+  agents do not push).
+- Generated status numbers (test262 and corpus counts, wasm size, bench scores) for an
+  introduction or status page.

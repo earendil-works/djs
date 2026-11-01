@@ -139,6 +139,7 @@ crates/djs-cli       the `djs` command
 crates/djs-test262   the test262 runner
 crates/djs-difftest  the differential corpus runner
 crates/djs-bench     benchmarks
+crates/djs-docs      the guide's generator and checker (docs/guide)
 builtins/            the builtins in the TypeScript subset (builtins/README.md)
 js/                  the host package: Sandbox, wire encoder, heap reader, pi adapter
 tests/               corpus, test262 lists, benchmarks, pi fixtures
@@ -149,6 +150,10 @@ work/                issues, board and process
 
 ## Documentation
 
+- **docs/guide/**: *How djs works*, the guide for humans: the design and its trade-offs,
+  with live examples. `cargo run -p djs-docs -- build` writes the site to
+  `target/docs-site/` (live examples need `scripts/build-wasm.sh` first; serve the
+  directory over HTTP for them).
 - **ARCH.md**: the architecture: goals, the arena, values and heap, compiler,
   interpreter, builtins, host interface, snapshots, and what was planned but replaced.
 - **TESTING.md**: test262, the differential corpus, stress modes, known differences, the

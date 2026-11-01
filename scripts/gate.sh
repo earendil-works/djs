@@ -53,6 +53,9 @@ cargo clippy -p djs-core -p djs-wasm --target wasm32-unknown-unknown --release -
 # Additional gate steps registered by issues go below this line.
 step "builtins/gen is up to date (0017)"
 ./scripts/bgen.sh --check
+# 0103: the guide's generated regions and diagrams are fresh, its examples print what
+# they printed, its links and decision IDs resolve (D2030).
+step "guide (docs/guide)"; cargo run --quiet -p djs-docs -- check
 
 # 0018: the host-side JS package (node >= 22.6 for type stripping), and the wire format
 # across languages: node encodes a corpus, djs decodes it.

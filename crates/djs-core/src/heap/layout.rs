@@ -661,8 +661,9 @@ impl FieldTy {
     }
 }
 
-/// The value tags, by name, for the export. A test checks that every valid tag is listed.
-const EXPORTED_TAGS: &[(&str, u16)] = {
+/// The value tags, by name, for the export (and djs-docs). A test checks that every valid
+/// tag is listed.
+pub const EXPORTED_TAGS: &[(&str, u16)] = {
     use crate::value::tag::*;
     &[
         ("UNDEFINED", UNDEFINED),

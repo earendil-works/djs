@@ -87,6 +87,24 @@ Rules:
   something outside them, say so in the log and keep the change minimal: other agents may
   be working there in parallel.
 
+## Keeping the guide current
+
+`docs/guide/` is the human-facing explanation of djs: how it works and why (D2030,
+`docs/guide/README.md` for how to write it). It must stay true as the code changes:
+
+- If your change alters what a guide page says (the issue's `guide:` field names the
+  pages; otherwise skim `docs/guide/SUMMARY.md`), update that page's prose on your
+  branch. Prose is not checked by any tool, so this is on you; say in the issue log which
+  pages you updated, or that none were affected.
+- Never edit generated regions (`<!-- gen:... -->` ... `<!-- /gen -->`), `docs/guide/gen/`
+  or `docs/guide/ref-*.md` by hand: `cargo run -q -p djs-docs -- regen` rewrites them,
+  and merge-to-main does it after the rebase (scripts/regen.sh).
+- `cargo run -q -p djs-docs -- check` (part of the gate) fails on stale generated parts,
+  broken links, unknown decision IDs, and an example whose output changed. If the new
+  output is right, accept it with `regen --examples` and reread the text around it.
+- If a change makes a whole chapter wrong or calls for a new one, do not rewrite it as a
+  side job: list it under `## Follow-ups`; the coordinator schedules it.
+
 ## Testing while iterating
 
 The gate runs once, inside `scripts/merge-to-main.sh`. Don't run `scripts/gate.sh` yourself
@@ -121,7 +139,10 @@ before merging; while iterating, run only what your change can break (0047, D012
 ## Coordinator
 
 The coordinator (the main agent) owns `work/BOARD.md`, creates issues and worktrees,
-assigns agents, reviews merged work and keeps ARCH/TESTING/decisions coherent. It works
+assigns agents, reviews merged work and keeps ARCH/TESTING/decisions and the guide
+coherent. Every issue names the guide pages it can affect (`guide:`, or `-`); after a
+merge the coordinator checks that those pages still read true and turns larger guide
+updates into issues of their own. It works
 directly on `main` only for coordination files (issues, board, docs) and commits right
 away, so `main` is never left dirty. It commits through `scripts/with-merge-lock.sh`, so
 that main never moves while an agent is between rebase and fast-forward.

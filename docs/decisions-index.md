@@ -19,6 +19,7 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
 - D1790: The gate's runners decide timeouts by fuel, not by the wall clock
 - D1200: Tests that run subprocesses use generous timeouts
 - D1344: djs-bgen's behavior test has a timeout
+- D2030: The guide: Markdown in docs/guide, our own generator, generated parts checked in
 
 ## Testing: test262
 

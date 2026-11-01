@@ -500,6 +500,21 @@ export class Sandbox {
     return out;
   }
 
+  /**
+   * The VM's arena: a view into wasm memory, valid until the next call into the sandbox
+   * (the arena may move when it grows). For inspecting the heap with `LAYOUT` (the docs'
+   * live examples walk it cell by cell).
+   */
+  heapView(): Uint8Array {
+    this.alive();
+    return this.arena();
+  }
+
+  /** Collects garbage now. False if the heap could not reserve the to-space. */
+  collect(): boolean {
+    return this.guard(() => this.x.vm_collect(this.vm) === 0);
+  }
+
   /** The arena's current size in bytes. */
   get heapSize(): number {
     this.alive();
