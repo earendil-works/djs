@@ -124,6 +124,16 @@ the 0031 leftovers.
 - Results: test262 Array 2,461, String 688, Object 1,891, AggregateError 9 / 19;
   built-ins 5,877, language 4,077, harness 45. difftest 85 / 176.
 
+### After part 5: gate time
+- Part 5 merged: main ..7181e8c. Its merge took 15 min: the gate's difftest stress step
+  ran 911 s, all in `dquickts/builtin/test_rope.js`, which now runs (String.fromCharCode)
+  and did charCodeAt over a 100k-deep rope without flattening (quadratic). Fixed: the
+  string leaves flatten once (cached in the rope); plain run 0.4 s in debug, and the case
+  passes now. Its stress runs are still slow, and the stress timeout was only checked
+  between 10M-fuel slices: D1347 (GC stress in 20k slices; a stressed run that only
+  times out is reported, not failed). Gate: 1:43 at the start of 0034 (before D010),
+  15:40 after part 5, 60 s now.
+
 ## Follow-ups
 - Unicode normalization tables (NFC/NFD/NFKC/NFKD): size them (qjs's libunicode has
   them) and decide; localeCompare should then compare NFC forms like qjs.
