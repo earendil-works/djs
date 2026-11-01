@@ -1392,3 +1392,268 @@ fn snippet() {
     assert!(toks[0].is_contextual(Kw::Async));
     assert!(toks[0].newline_before());
 }
+
+// ---------------------------------------------------------------------------------
+// test262 corpus and throughput (ignored: they need vendor/test262 and take a while).
+
+/// A rough stand-in for the parser's regex-vs-division decision: `/` starts a regex
+/// unless the previous token ends an expression. `)` ends one unless it closes the
+/// head of `if`/`while`/`for`/`with`; `}` is assumed to close a block.
+struct Driver<'a> {
+    lx: Lexer<'a>,
+    prev: Option<Token>,
+    parens: Vec<bool>,
+    last_paren_was_head: bool,
+    templates: Vec<usize>,
+    depth: usize,
+}
+
+impl<'a> Driver<'a> {
+    fn new(src: &'a [u8]) -> Result<Self, LexError> {
+        Ok(Driver {
+            lx: Lexer::new(src)?,
+            prev: None,
+            parens: Vec::new(),
+            last_paren_was_head: false,
+            templates: Vec::new(),
+            depth: 0,
+        })
+    }
+
+    fn regex_allowed(&self) -> bool {
+        let Some(prev) = self.prev else { return true };
+        match prev.kind {
+            Ident => matches!(prev.kw, Kw::Yield | Kw::Await) && !prev.has_escape(),
+            RParen => self.last_paren_was_head,
+            Number | BigInt | String | NoSubstTemplate | TemplateTail | Regex | PrivateName
+            | RBracket | This | Super | True | False | Null => false,
+            PlusPlus | MinusMinus => false,
+            _ => true,
+        }
+    }
+
+    fn next(&mut self) -> Result<Token, LexError> {
+        let mut tok = self.lx.next_token()?;
+        match tok.kind {
+            Slash | SlashAssign if self.regex_allowed() => tok = self.lx.rescan_as_regex(tok)?,
+            Gt => tok = self.lx.rescan_greater(tok),
+            LBrace => self.depth += 1,
+            RBrace if self.templates.last() == Some(&self.depth) => {
+                tok = self.lx.rescan_template_continuation(tok)?;
+                if tok.kind == TemplateTail {
+                    self.templates.pop();
+                }
+            }
+            RBrace => self.depth = self.depth.saturating_sub(1),
+            TemplateHead => self.templates.push(self.depth),
+            LParen => {
+                let head = self
+                    .prev
+                    .is_some_and(|p| matches!(p.kind, If | While | For | With));
+                self.parens.push(head);
+            }
+            RParen => self.last_paren_was_head = self.parens.pop().unwrap_or(false),
+            _ => {}
+        }
+        self.prev = Some(tok);
+        Ok(tok)
+    }
+}
+
+/// Lexes `src` completely with the driver; returns the number of tokens.
+fn lex_with_driver(src: &[u8]) -> Result<usize, LexError> {
+    let mut d = Driver::new(src)?;
+    let mut n = 0;
+    while d.next()?.kind != Eof {
+        n += 1;
+    }
+    Ok(n)
+}
+
+fn test262_dir() -> Option<std::path::PathBuf> {
+    if let Some(dir) = std::env::var_os("DJS_TEST262") {
+        return Some(dir.into());
+    }
+    let out = std::process::Command::new("git")
+        .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .ok()?;
+    let common = std::path::PathBuf::from(std::string::String::from_utf8(out.stdout).ok()?.trim());
+    let dir = common.parent()?.join("vendor/test262");
+    dir.is_dir().then_some(dir)
+}
+
+fn collect_js(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_js(&path, out);
+        } else if path.extension().is_some_and(|e| e == "js") {
+            out.push(path);
+        }
+    }
+}
+
+/// Lexes every file in test262's `test/` and `harness/` directories. Must not panic.
+/// Lexing errors are expected in negative tests and sloppy-mode tests; the remaining
+/// ones are listed (they come from the driver's regex heuristic, or are real bugs).
+#[test]
+#[ignore]
+fn lex_test262() {
+    let Some(root) = test262_dir() else {
+        std::println!("vendor/test262 not found; skipping");
+        return;
+    };
+    let mut files = Vec::new();
+    collect_js(&root.join("test"), &mut files);
+    collect_js(&root.join("harness"), &mut files);
+    files.sort();
+    assert!(!files.is_empty());
+    let (mut ok, mut negative, mut sloppy, mut unexpected) = (0, 0, 0, Vec::new());
+    for path in &files {
+        let src = std::fs::read(path).unwrap();
+        // Must not panic, whatever the outcome.
+        let result = std::panic::catch_unwind(|| lex_with_driver(&src));
+        let Ok(result) = result else {
+            panic!("lexer panicked on {}", path.display());
+        };
+        let Err(e) = result else {
+            ok += 1;
+            continue;
+        };
+        let text = std::string::String::from_utf8_lossy(&src);
+        if text.contains("negative:") {
+            negative += 1;
+            if !text.contains("phase: parse") {
+                let rel = path.strip_prefix(&root).unwrap_or(path);
+                unexpected.push(format!(
+                    "{}:{}: {} (not a parse-phase negative)",
+                    rel.display(),
+                    e.pos,
+                    e.message
+                ));
+            }
+        } else if text.contains("noStrict") || text.contains("flags: [raw]") {
+            sloppy += 1;
+            if std::env::var_os("DJS_LEX_LIST_NEGATIVE").is_some() {
+                std::println!("sloppy error: {}: {}", path.display(), e.message);
+            }
+        } else {
+            let rel = path.strip_prefix(&root).unwrap_or(path);
+            unexpected.push(format!("{}:{}: {}", rel.display(), e.pos, e.message));
+        }
+    }
+    // Optional: list negative tests in lexical directories that lex without error, to
+    // review by hand (most are parser-level errors).
+    if std::env::var_os("DJS_LEX_LIST_NEGATIVE").is_some() {
+        for path in &files {
+            let src = std::fs::read(path).unwrap();
+            let text = std::string::String::from_utf8_lossy(&src);
+            if text.contains("negative:") && lex_with_driver(&src).is_ok() {
+                std::println!(
+                    "negative ok: {}",
+                    path.strip_prefix(&root).unwrap_or(path).display()
+                );
+            }
+        }
+    }
+    std::println!(
+        "{} files: {ok} ok, {negative} negative with errors, {sloppy} sloppy with errors, {} unexpected",
+        files.len(),
+        unexpected.len()
+    );
+    for u in &unexpected {
+        std::println!("  {u}");
+    }
+    // Where the driver's heuristic guesses wrong (`{...} / 1` is a division).
+    const HEURISTIC: &[&str] = &[
+        "test/language/expressions/division/S11.5.2_A2.2_T1.js",
+        "test/language/expressions/division/S11.5.2_A3_T1.5.js",
+        "test/language/expressions/division/bigint-toprimitive.js",
+        "test/language/expressions/division/bigint-wrapped-values.js",
+    ];
+    unexpected.retain(|u| !HEURISTIC.iter().any(|h| u.starts_with(h)));
+    assert!(unexpected.is_empty(), "unexpected lexing errors");
+}
+
+/// Throughput (run with `--release --ignored`). Lexes the files listed in
+/// `DJS_LEX_BENCH` (separated by `:`) one by one, or else all of test262 concatenated.
+#[test]
+#[ignore]
+fn lex_throughput() {
+    let inputs: Vec<(std::string::String, Vec<u8>)> = match std::env::var("DJS_LEX_BENCH") {
+        Ok(list) => list
+            .split(':')
+            .map(|p| (p.into(), std::fs::read(p).unwrap()))
+            .collect(),
+        Err(_) => {
+            let Some(root) = test262_dir() else {
+                std::println!("vendor/test262 not found; skipping");
+                return;
+            };
+            let mut files = Vec::new();
+            collect_js(&root.join("test"), &mut files);
+            files.sort();
+            // Only files that lex cleanly, so the measurement covers whole files.
+            let mut corpus = Vec::new();
+            for path in &files {
+                let src = std::fs::read(path).unwrap();
+                if lex_with_driver(&src).is_ok() {
+                    corpus.extend_from_slice(&src);
+                    corpus.push(b'\n');
+                }
+            }
+            vec![("test262 (concatenated)".into(), corpus)]
+        }
+    };
+    for (name, src) in &inputs {
+        let mut tokens = 0;
+        let iters = 10;
+        let start = std::time::Instant::now();
+        for _ in 0..iters {
+            tokens += lex_whole(src);
+        }
+        let secs = start.elapsed().as_secs_f64();
+        let mb = (src.len() * iters) as f64 / 1e6;
+        std::println!(
+            "{name}: {:.1} MB, {} tokens: {:.0} MB/s, {:.1} ns/token",
+            src.len() as f64 / 1e6,
+            tokens / iters,
+            mb / secs,
+            secs * 1e9 / tokens as f64
+        );
+    }
+}
+
+/// Lexes a concatenation of files, resynchronizing after errors (concatenation can
+/// break the regex heuristic across file boundaries).
+fn lex_whole(src: &[u8]) -> usize {
+    let mut n = 0;
+    let mut errors = 0;
+    let mut d = Driver::new(src).unwrap();
+    loop {
+        match d.next() {
+            Ok(t) if t.kind == Eof => {
+                if errors > 0 {
+                    std::println!("({errors} lexing errors, resynchronized)");
+                }
+                return n;
+            }
+            Ok(_) => n += 1,
+            Err(e) => {
+                errors += 1;
+                // Skip to the next line.
+                let mut p = e.pos as usize + 1;
+                while p < src.len() && src[p] != b'\n' {
+                    p += 1;
+                }
+                d.lx.pos = p as u32;
+                d.templates.clear();
+            }
+        }
+    }
+}
