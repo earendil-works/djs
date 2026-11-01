@@ -479,7 +479,7 @@ CaseFolding.txt and SpecialCasing.txt (Unicode 17.0.0, D1031): simple upper and 
 mappings as runs of equal delta with stride 1 or 2 (203 and 185 runs, 8 bytes each), simple
 case folding as 28 exception runs over lowercase, unconditional multi-character upper (102)
 and lower (1) mappings as `[u16; 4]`, and `Cased` (156 ranges) and `Case_Ignorable` (459)
-for Final_Sigma. About 7.6 KB in total; the regex engine uses about 4 KB of it. ASCII is
+for Final_Sigma. About 6.6 KB in total; the regex engine uses about 4.1 KB of it. ASCII is
 handled in code. Context and language dependent mappings are left to callers (Final_Sigma
 is a String.prototype.toLowerCase rule). `unicode::case` exposes the lookups and in-order
 iteration over mapped code points.
