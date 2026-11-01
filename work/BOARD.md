@@ -7,7 +7,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
-| 0139 | Base image straight into the VM's arena (-0.31 MiB/instance) | heap | .worktrees/heap |
 | 0137 | Callback cost from natives without size growth | perf | .worktrees/perf |
 
 ## Open (ready)
@@ -79,6 +78,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0139 | Base image becomes the first VM's arena (D2060) | 91a406d0 (agent heap; -0.31 MiB per Sandbox/pi instance) |
 | 0138 | Shared read-only builtin segment: design study (not built) | 5d66ef74 (agent heap; docs/shared-segment.md: don't build now; lazy variant 6-7 weeks) |
 | 0136 | Base layout stability: growable cells last, atom growth 1.25x (D2057, D2058) | c4993afa (agent heap; empty Sandbox snapshot 15.7 -> 0.8 KB, REPL dump 16 -> 0.8 KB) |
 | 0129 | pi-like hot spots: JSON word scans, slice/join, CreateDataProperty (D2300-D2302) | 7c631680 (agent perf; pi-like -12.7%, 0.94x quickjs-wasi) |
