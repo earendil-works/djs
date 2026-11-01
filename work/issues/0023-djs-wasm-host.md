@@ -1,7 +1,7 @@
 # 0023: djs-wasm and the JS host package (Sandbox API)
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0023-djs-wasm-host
 depends-on: 0015, 0018, 0021
 touches: crates/djs-wasm/, js/ (host API alongside wire.ts/reader.ts), tests/bench/size (point it at djs-wasm), docs/wire.md or a new docs/host.md
