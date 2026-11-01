@@ -93,7 +93,7 @@ djs/
 ```
 
 The generated Rust is checked in so that it is reviewable in diffs and the normal build
-does not depend on the builtin compiler. `cargo xtask bgen` regenerates it, and CI checks
+does not depend on the builtin compiler. `scripts/bgen.sh` regenerates it, and the gate checks
 that it is up to date.
 
 Dependencies should stay near zero to keep the wasm small and compile times short. Likely
@@ -267,9 +267,10 @@ suspension stress mode runs every corpus case with each backend.
 The subset:
 
 - Explicit types: `Value`, `Obj`, `Str`, `Sym`, `Fn`, and the numeric types `i32`, `u32`,
-  `f64` (branded `number` types in `intrinsics.d.ts`, so tsc checks them too). Numeric
-  semantics must agree between the backends. Integer arithmetic is checked, and bgen
-  rejects operations whose JS and Rust meanings differ.
+  `f64` (branded `number` types in `intrinsics.d.ts`; tsc catches mixing `i32` and `u32`, and
+  bgen is the authority on the full numeric rules, D1171). Numeric semantics must agree
+  between the backends. Integer arithmetic is checked, and bgen rejects operations whose
+  JS and Rust meanings differ.
 - Intrinsics are declared in `intrinsics.d.ts` and tagged either `@leaf` (a plain Rust call
   that may throw but never runs JS) or `@reentrant` (may run user code). A call to a
   reentrant intrinsic, a user function or another reentrant builtin is a **resume point**.
