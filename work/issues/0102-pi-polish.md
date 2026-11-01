@@ -1,7 +1,7 @@
 # 0102: pi polish: rerun pi's suite, Error.captureStackTrace, REPL follow-ups
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0102-pi-polish
 depends-on: 0097
 touches: js/pi/, js/test/, builtins/error.ts + crates/djs-core/src/builtins/ (captureStackTrace), crates/djs-cli/src/repl* (REPL follow-ups), docs/host.md, docs/cli.md
