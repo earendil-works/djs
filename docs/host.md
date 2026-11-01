@@ -21,6 +21,7 @@ import { Sandbox, loadModule } from "@djs/host";
 
 const sb = await Sandbox.create({
   functions: { readFile: (p) => fs.readFileSync(p as string, "utf8") },
+  asyncFunctions: { fetchJson: (url) => fetch(url as string).then((r) => r.json()) },
   console: myConsole,            // receives console.log/info/warn/error; default: console
   memoryLimit: 64 << 20,         // heap cap in bytes; default 4 GiB
   fuelSlice: 1_000_000,          // fuel per vm_run, i.e. how often the host gets control
@@ -48,10 +49,19 @@ sb.dispose();
   the wire format). A thrown host error is thrown in the VM at the call, as an Error of the
   same kind (TypeError, RangeError, otherwise Error) with the same message. A return value
   the wire format cannot carry (a function, a cycle) becomes such an error too.
-- `run` needs synchronous host functions; a promise is a TypeError in the VM.
-  `runAsync` awaits it while the VM stays parked at the call. Calls are sequential, one
-  outstanding host call at a time (see Gaps).
-- `defineFunction(name, f)` and `setGlobal(name, value)` add globals between runs.
+- `functions` are *sync* host functions: a call parks the VM until it returns. `run` needs
+  them to return synchronously (a promise is a TypeError in the VM); `runAsync` awaits a
+  promise while the VM stays parked at the call.
+- `asyncFunctions` are *async* host functions (D1374): a call returns a promise in the VM
+  at once and the script goes on, so several calls are outstanding together (`Promise.all`
+  over tools). `runAsync` starts each call as soon as `vm_run` returns, and when only
+  pending calls are left (IDLE) awaits whichever settles first, passes its result back and
+  runs on. The function may return a value or a promise (`run` accepts only values). A
+  rejection or a thrown error rejects the VM promise with an Error of the same kind.
+- A promise as the result is unwrapped: its value, or `threw` with its reason; a promise
+  that can never settle is a `threw` error.
+- `defineFunction(name, f)`, `defineAsyncFunction(name, f)` and `setGlobal(name, value)`
+  add globals between runs.
 - Errors are `SandboxError` with a `kind`:
   - `threw`: an uncaught exception in the VM. `message` is the display form (`TypeError: x`);
     `value` is the value as read.
@@ -100,6 +110,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_compile(vm, goal, params_len, src_len) -> h` | compile staging: `params_len` bytes of `\n`-separated parameter names (goal 1, async body) then the source; goal 0 is a Script |
 | `vm_global(vm) -> h`, `vm_new_object(vm) -> h` | objects |
 | `vm_new_host_function(vm, fn_id, name_len) -> h` | a function that parks the VM with `fn_id` |
+| `vm_new_async_host_function(vm, fn_id, name_len) -> h` | a function that returns a promise and adds a pending call (D1374) |
 | `vm_define(vm, obj, name_len, value) -> 0/-1` | define a non-enumerable property (name in staging) |
 | `vm_decode_wire(vm, len) -> h` | decode wire data from staging (docs/wire.md) |
 | `vm_parse_json(vm, len) -> h` | parse UTF-8 JSON text from staging (`JSON.parse`) |
@@ -113,7 +124,10 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_abort(vm)` | abandon the current call (out of fuel or parked): the VM is idle and usable again |
 | `vm_result(vm) -> h` | the DONE/THREW value, once |
 | `vm_host_call(vm) -> argc` | out = `[call_id, fn_id, this lo, hi, (arg lo, hi)*]` |
-| `vm_resolve_host_call(vm, call_id, ok, value) -> 0/-1` | return (`ok` 1) or throw (`ok` 0) `value` |
+| `vm_host_call_info(vm, call_id) -> argc` | `vm_host_call` for any pending call (async ones) |
+| `vm_new_host_calls(vm) -> n` | out = the ids (u32) of the async calls made since the last check |
+| `vm_resolve_host_call(vm, call_id, ok, value) -> 0/-1` | return (`ok` 1) or throw (`ok` 0) `value`; for an async call, fulfill or reject its promise (in a job) |
+| `vm_promise_state(vm, h) -> state` | 0 not a promise, 1 pending, 2 fulfilled, 3 rejected; settled: out = a handle (u32) to the result |
 | `djs_panic_ptr()`, `djs_panic_len()` | the last panic message, after a trap |
 | `djs_debug_panic()` | trap on purpose (tests) |
 
@@ -125,7 +139,17 @@ A run, as the Sandbox does it:
    - HOST_CALL: `vm_host_call`, read the arguments with the reader, call the host function,
      then encode the result and `vm_decode_wire` it, or make it an error with
      `vm_new_error`; then `vm_resolve_host_call`;
-   - DONE / THREW: `vm_result`, read the value, free the handle.
+   - IDLE: only async host calls are pending (or nothing was called): wait for one,
+     then `vm_resolve_host_call` it and run again;
+   - DONE / THREW: `vm_result`, read the value, free the handle (a promise result:
+     `vm_promise_state`).
+
+   After every `vm_run`, `vm_new_host_calls` lists the async calls to start.
+
+`vm_run` runs the microtask queue too (D1370): after the entry call returns, it runs the
+promise jobs, and DONE comes only once the queue is empty and no async host call is
+pending. An uncaught exception is THREW at once. `Vm::take_unhandled_rejections` (not yet
+exported) lists rejected promises nobody handled, as qjs reports them.
 
 The raw value bits from `vm_host_call` and `vm_handle_bits` stay valid until the next
 `vm_run` or collection (the GC moves objects). Read them right away.
@@ -202,7 +226,6 @@ host code and runs at the same speed.
 - **Builtins and statements.** What JS runs depends on the compiler and the builtins on
   main. When this was written, `try`, functions and most builtins (`Array.prototype.push`,
   …) were not there yet. The tests stick to what works.
-- **Async.** One host call is outstanding at a time. `runAsync` awaits a promise while the
-  VM is parked, so `Promise.all([f(), g()])` in the sandbox runs the calls one after the
-  other. Concurrent host calls need the VM's pending call table and async functions (later
-  phases). The ABI already has call ids for that.
+- **Async.** Concurrent host calls need `asyncFunctions` (sync `functions` still run one
+  at a time). Until the compiler supports `async`/`await` (0037 defines the runtime), code
+  chains with `.then`. Unhandled rejections are not reported to the host yet.

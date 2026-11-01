@@ -1104,8 +1104,9 @@ registers with `pc` after the call instruction, records the `call_id` in the
 parked exactly as for a JS call that has not returned yet.
 `vm_resolve_host_call(call_id, Ok(v))` pushes `v` (as `PushResult` would). `Err(e)`
 throws `e` at the call instruction (handler lookup with `pc - 1`). The next `run`
-continues. Async host functions (P2) instead return a promise immediately and never
-park.
+continues. Async host functions (D1374) instead return a promise immediately and never
+park: the call goes into the same table with its promise, the embedder reads it with
+`Vm::new_host_calls`, and `resolve_host_call` queues a job that settles the promise.
 
 ### 7.6 Fuel and safepoints
 

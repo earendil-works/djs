@@ -1506,3 +1506,17 @@ carry; a host that cares updates the offset. The algorithms are QuickJS's
 builtins/date.rs, so formatting (toString's `GMT+hhmm` without a zone name, the
 toLocale* formats without Intl) and the accepted parse formats match qjs. The difftest
 and e2e oracles run qjs with `TZ=UTC` to match the default offset.
+## D1374: Async host functions: a promise plus an entry in the pending host call table
+date: 2026-11-01 · by: heap · issue: 0037
+A HostFunction with the header flag `OBJ_HOST_ASYNC` (`Vm::new_async_host_function`,
+`vm_new_async_host_function`) does not park: the call allocates a pending Promise, adds
+`{id, fn, args, this, promise}` to the pending host call table (`HostCall::PROMISE`) and
+pushes the promise as the call's result. The embedder lists new calls after every `run`
+(`Vm::new_host_calls`, a reported bit in `HostCall::FLAGS`; `pending_host_calls` lists
+all, for re-issuing after a restore) and completes them with `resolve_host_call` in any
+VM state: that removes the entry and queues a `%HostCallSettle` job, which resolves the
+promise like a resolve function (thenables adopted) or rejects it. Settling through a
+job, not directly, keeps the resolution spec-exact (a `then` getter is user code) and the
+order of completions FIFO. While calls are pending and no job is queued, `run` returns
+`Idle` (D1370). Everything is heap state, so a VM with pending calls and queued jobs
+snapshots and restores like any other. Sync host functions are unchanged.
