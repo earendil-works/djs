@@ -1,7 +1,7 @@
 # 0061: In-place string append, JSON.parse source text access
 
-status: open
-agent: -
+status: in-progress
+agent: num
 branch: issue/0061-string-append-json-source
 depends-on: 0056
 touches: crates/djs-core/src/heap/string.rs (+ cells.rs for a string-builder cell kind, additive; coordinate the id), crates/djs-core/src/heap/gc.rs (only to trace or compact the new cell), crates/djs-core/src/interp/ (the `+=` / concat fast path only), crates/djs-core/src/json/ + builtins/json.ts (source text access), js/src/layout.generated.ts (regenerated), tests/test262.toml (promote json-parse-with-source), ratchets
