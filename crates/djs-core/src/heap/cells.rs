@@ -313,8 +313,9 @@ cells! {
         HOST_CALL: u32 = 28,
         /// The next host call id to hand out.
         NEXT_CALL_ID: u32 = 32,
-        /// Reserved, 0.
-        RESERVED: u32 = 36,
+        /// `interp::state` flags of the parked host call (its continuation, whether it
+        /// was the entry callee).
+        FLAGS: u32 = 36,
         /// The completion value (`Done`) or the exception (`Threw`, or pending to be
         /// thrown at the parked call).
         RESULT: Value = 40,

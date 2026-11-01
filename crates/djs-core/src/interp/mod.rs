@@ -11,10 +11,13 @@
 //!
 //! So a suspended VM can be copied byte for byte into a fresh heap and resumed there.
 
+pub(crate) mod conv;
 pub mod frame;
 pub mod realm;
+pub(crate) mod run;
 pub mod state;
 
 pub use frame::Continuation;
-pub use realm::{ErrorKind, Intrinsic};
+pub use realm::{ErrorKind, Intrinsic, error_summary, intrinsic, new_error};
+pub use run::{ExecOptions, Status};
 pub use state::RunState;
