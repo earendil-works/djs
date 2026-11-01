@@ -1770,3 +1770,10 @@ AsyncGeneratorFunction, AsyncGeneratorPrototype, AsyncIteratorPrototype,
 AsyncFromSyncIteratorPrototype}` and the features `generators`, `async-iteration`,
 `Symbol.asyncIterator` move from later to active. Active went from 18,833 / 24,120 to
 22,605 / 32,333 (+8,213 tests, +3,772 passing).
+## D1430: Privileged code keeps no line tables or local names
+date: 2026-11-01 · by: heap · issue: 0043
+The prelude's templates have no line table and no local-name table (`NAMES`): prelude
+frames are hidden from stack traces or shown as `at name (native)`, and builtins hit no
+TDZ errors, so neither is ever read. This saves 55 KB of the 458 KB base image (line
+tables 38 KB, names 17 KB). A TDZ error inside privileged code would say `variable is
+not initialized`.

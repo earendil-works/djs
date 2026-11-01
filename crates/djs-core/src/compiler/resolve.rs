@@ -126,7 +126,10 @@ pub(super) fn finish(
             parent_storage,
             &templates,
             atom_undefined,
-            &line_table,
+            // Privileged code (the prelude) keeps no line tables or local names: its
+            // frames show as `(native)` or not at all in stack traces, and it has no
+            // TDZ errors to name (D1430).
+            (!opts.privileged).then_some(&line_table),
             src,
             script,
         )?;
@@ -305,7 +308,7 @@ fn emit_function(
     parent_storage: Option<&Vec<Storage>>,
     templates: &[Ref],
     atom_undefined: Atom,
-    line_table: &LineTable,
+    line_table: Option<&LineTable>,
     src: &[u8],
     script: Ref,
 ) -> PResult<Ref> {
@@ -510,14 +513,19 @@ fn emit_function(
         });
     }
     let children: Vec<Ref> = f.children.iter().map(|&c| templates[c as usize]).collect();
-    let mut lt = LineTableBuilder::new();
-    for (pc, pos) in lines {
-        let (line, col) = line_table.line_col(src, pos);
-        lt.add(pc, line, col);
-    }
-    let line_bytes = lt.finish();
-    let mut all_names = names.clone();
-    all_names.extend_from_slice(&f.capture_names);
+    let (line_bytes, all_names) = match line_table {
+        Some(line_table) => {
+            let mut lt = LineTableBuilder::new();
+            for (pc, pos) in lines {
+                let (line, col) = line_table.line_col(src, pos);
+                lt.add(pc, line, col);
+            }
+            let mut all_names = names.clone();
+            all_names.extend_from_slice(&f.capture_names);
+            (lt.finish(), all_names)
+        }
+        None => (Vec::new(), Vec::new()),
+    };
     let kind = match f.kind {
         FuncKind::Script => func_flags::KIND_SCRIPT,
         FuncKind::AsyncBody => func_flags::KIND_ASYNC_BODY,

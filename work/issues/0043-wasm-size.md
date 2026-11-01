@@ -60,6 +60,8 @@ Date, typed arrays, …), and the code is about 590 KB.
   (599 x 72), line tables 38 KB, ValueArray 27 KB (value stack 8 KB, atom entries 16 KB
   for 1251 atoms), Function objects 25 KB, U32Array 22 KB (atom index 16 KB), local names
   17 KB, constant pools 11 KB, capture descriptors 8 KB. 60.6% of the bytes are zero.
+- R1 (D1430) privileged code without line tables and local names: base 457,952 ->
+  403,056 (-54,896); stripped 1,127,850 -> 1,072,960; gzip 343,719 -> 320,112.
 
 ## Follow-ups
 
