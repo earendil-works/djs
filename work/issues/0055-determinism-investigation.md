@@ -98,16 +98,23 @@ microtask queue (pi's deterministic mode delivers results in a fixed order; see 
   from after the rebase unless marked "before 0060".
 - Told heap (during 0051) that weak-ref cleanup needs a host-controlled mode; D1513's
   `finalization_after_gc` flag is that.
+- Rebased again onto main 02b41d0 (after infra's 0059). 0059 already deletes
+  `WeakRef`/`FinalizationRegistry` in deterministic pi runs (`HOST_GLOBALS`, js/pi/vm.ts)
+  and adds the mode to the prelude-image cache key. So gap 3 is done for pi, and
+  proposed issue 1 shrinks to the poll accounting, the `HOST_GLOBALS` hash in the
+  fingerprint, and one stale docs row. Re-checked: the poll gap is still there (676 cold vs
+  540 warm), and so is the Sandbox interleaving.
 
 ## Findings
 
 ### Summary, ranked by importance for codemode
 
-1. **pi adapter: cold and warm starts poll a different number of times.** pi's inline and
+1. **pi adapter: cold and warm starts poll a different number of times.** (Still open
+   after 0059: 676 vs 540.) pi's inline and
    remote launchers count `shouldInterrupt` polls over the whole execution, and the djs
    adapter also polls while it runs the prelude. A start that reuses the prelude image
    skips those polls: 678 polls cold vs 540 warm for the same deterministic run
-   (`pi_polls.ts`). A budget between those numbers times out on one and not the other.
+   (`pi_polls.ts`, before 0059). A budget between those numbers times out on one and not the other.
    A deterministic replay after a restart is a cold start, while the original run was
    probably warm. Trivial fix in js/pi.
 2. **Async host call results are applied wherever the host happens to resolve them.**
@@ -124,8 +131,10 @@ microtask queue (pi's deterministic mode delivers results in a fixed order; see 
    the Sandbox) is affected.
 3. **WeakRef/FinalizationRegistry exist now (D1513), and pi's deterministic contract
    says they are absent.** quickjs-wasi's deterministic mode removes them
-   (`Intrinsics.ALL & ~WEAK_REF`), and pi's test checks it. The adapter does not delete
-   them yet, and its prelude-image cache key does not include the mode. In djs they are
+   (`Intrinsics.ALL & ~WEAK_REF`), and pi's test checks it. **Done for pi by 0059**: the
+   adapter deletes both in deterministic runs and keys its saved images by the mode.
+   Still open outside pi: a VM-level deterministic option (absent or strong weak refs,
+   and `Vm::collect` by the host not clearing them). In djs they are
    deterministic under slicing and restore (`js/weakref.js`: same output for every
    slice, every restore, and even gc-stress for that case). They are still observable
    through the memory limit (the threshold depends on the cap), through gc-stress, and
@@ -222,7 +231,8 @@ Legend: **D** already deterministic; **H** deterministic given host inputs; **G*
 | Native vs wasm vs x86-64 images | D | byte-identical raw and collected images for `general_body.js` (with GC) and `floats_body.js` |
 | Raw value bits seen by the host | G10 | differ between schedules |
 | Build identity | **G8** | features and libm not in `BUILD_HASH` |
-| pi: polls during the prelude | **G1** | 678 vs 540 |
+| pi: polls during the prelude | **G1** | 676 vs 540 (after 0059) |
+| pi: WeakRef in deterministic runs | D (since 0059) | deleted in `HOST_GLOBALS`, image key includes the mode |
 | pi: snapshot/resume | D (since D1601) | `pi_resume.ts`: identical images at every call, uninterrupted vs `resumeVm` at every call (before 0060 they differed) |
 
 ### Design proposals
@@ -317,10 +327,10 @@ holds):
   outputs and collected hashes (after P4, raw hashes).
 
 **P8. pi adapter.** Don't count polls while the prelude runs (call the hooks' poller only
-after `started`, or poll the prelude with a private no-op). In deterministic mode,
-delete `WeakRef`/`FinalizationRegistry` in `HOST_GLOBALS` (before the lockdown) and add
-the mode to the image-cache key. Hash `HOST_GLOBALS` into the fingerprint next to the
-prelude hash. Update docs/host.md (the WeakRef rows are now stale).
+after `started`, or poll the prelude with a private no-op). Hash `HOST_GLOBALS` into the
+fingerprint next to the prelude hash. Already done by 0059: deleting
+`WeakRef`/`FinalizationRegistry` in deterministic runs and keying images by the mode.
+Remaining docs: host.md's "deterministic" row still says djs "has no WeakRef at all".
 
 **P9. Build identity.** Fold enabled cargo features and the `libm` version (from
 `Cargo.lock`, read in build.rs) into `SOURCE_HASH`/`BUILD_HASH`, so a fingerprint or
@@ -328,14 +338,14 @@ image never claims the same engine for different behavior.
 
 ## Proposed issues
 
-1. **pi adapter determinism fixes** (P8). Goal: deterministic pi runs behave the same on
-   cold and warm starts and match pi's deterministic contract now that WeakRef exists.
-   Acceptance: `scripts/determinism/pi_polls.ts` reports the same poll count cold and
-   warm (as a js/test case); in deterministic mode `typeof WeakRef ===
-   "undefined"` and the same for FinalizationRegistry, while non-deterministic runs have
-   them; images are cached per mode; the fingerprint includes a hash of `HOST_GLOBALS`;
-   pi's "runs in UTC … without WeakRef" test passes in `js/pi/pi-tests.ts`; docs/host.md
-   updated. Touches js/pi, js/test, docs/host.md. Depends on: none.
+1. **pi adapter determinism fixes** (P8; the WeakRef part landed with 0059). Goal:
+   deterministic pi runs behave the same on cold and warm starts, whether or not the
+   prelude image is reused. Acceptance: a js/test case (from
+   `scripts/determinism/pi_polls.ts`) gets the same `shouldInterrupt` poll count, and the
+   same budget-exhaustion outcome at a budget between the old counts, for a cold start, a
+   cache-filling start and a warm start; the fingerprint includes a hash of `HOST_GLOBALS`;
+   docs/host.md's "deterministic" row and the interrupt-budget notes are updated. Touches
+   js/pi, js/test, docs/host.md. Depends on: none.
 2. **Async host results as macrotasks: the host inbox** (P1). Goal: an async host call's
    effect depends only on the order of results, not on when the host resolves them.
    Acceptance: `async_interleave.js` prints the same for eager and idle delivery at
@@ -404,8 +414,8 @@ part 1, 4 and 10 in parallel; then 3, 5 and 6; 8 last; 9 whenever.
 
 ## Follow-ups
 
-- docs/host.md "pi codemode" still says djs has no WeakRef (rows "deterministic" and
-  "runs in UTC …"): stale since D1513. Proposed issue 1 covers it.
+- docs/host.md "pi codemode", the "deterministic" row, still says djs "has no WeakRef
+  at all" (stale since D1513 and 0059). Proposed issue 1 covers it.
 - ARCH "Nondeterminism" could name the inbox contract (P1) and the deterministic mode
   (P2) once they land.
 
@@ -418,4 +428,5 @@ Headline: native arm64, x86-64 and wasm builds are already byte-identical in ima
 and fuel. Since 0060, snapshot/restore and slicing no longer change GC points or OOM
 outcomes. The remaining JS-visible gaps are async host-result delivery timing (the
 Sandbox's output depends on `fuelSlice`), the pi adapter's cold/warm poll difference,
-WeakRef in pi's deterministic mode, and host-allocator OOMs that look like limit OOMs.
+and host-allocator OOMs that look like limit OOMs. WeakRef in pi's deterministic mode
+was closed by 0059.
