@@ -262,7 +262,9 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
     let (run_tests, other): (Vec<TestCase>, Vec<TestCase>) =
         all.into_iter().partition(|t| selected[t.group]);
     if run_tests.is_empty() {
-        return Err("no tests selected".into());
+        return Err(
+            "no tests selected (the matching tests are in skip groups; see --group)".into(),
+        );
     }
     let opts = runner::Options {
         jobs: args.jobs,

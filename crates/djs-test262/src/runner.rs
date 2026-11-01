@@ -3,7 +3,7 @@
 use std::io::{IsTerminal, Write};
 use std::time::{Duration, Instant};
 
-use crate::engine::{Engine, Job, RunResult, Verdict, judge};
+use crate::engine::{Engine, Job, RunResult, Status, Verdict, judge};
 use crate::par;
 use crate::suite::{Suite, TestCase};
 
@@ -60,7 +60,17 @@ fn prepare_and_run(
         timeout: opts.timeout,
         memory_limit: opts.memory_limit,
     };
-    Ok(engine.run(&job))
+    // An engine bug must fail one test, not abort the whole run (worker panics would
+    // propagate out of the thread scope).
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| engine.run(&job)));
+    Ok(result.unwrap_or_else(|panic| {
+        let msg = panic
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| panic.downcast_ref::<String>().cloned())
+            .unwrap_or_default();
+        RunResult::new(Status::Crash(format!("engine panicked: {msg}")))
+    }))
 }
 
 /// Runs `tests` and returns their outcomes in the same order.
