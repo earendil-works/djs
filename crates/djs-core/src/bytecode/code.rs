@@ -218,19 +218,24 @@ impl<M: LabelMode> CodeBuf<M> {
     /// values is the smallest call site (0092).
     #[inline(never)]
     pub(super) fn encode(&mut self, op: Op, a: u32, b: u32) {
-        self.last = Some(self.code.len() as u32);
-        self.code.push(op as u8);
+        let start = self.code.len() as u32;
+        self.last = Some(start);
+        // The instruction in a local buffer, then one append.
+        let mut bytes = [0u8; 9];
+        bytes[0] = op as u8;
+        let mut p = 1;
         for (i, &kind) in op.info().imms.iter().enumerate() {
             let v = if i == 0 { a } else { b };
             if kind == ImmKind::Target {
                 if (v as usize) >= self.labels.len() {
                     self.fail(CodeError::UnknownLabel(Label(v)));
                 }
-                self.fixups.push(self.code.len() as u32);
+                self.fixups.push(start + p as u32);
             }
-            self.code
-                .extend_from_slice(&v.to_le_bytes()[..kind.width() as usize]);
+            bytes[p..p + 4].copy_from_slice(&v.to_le_bytes());
+            p += kind.width() as usize;
         }
+        self.code.extend_from_slice(&bytes[..p]);
     }
 
     fn fail(&mut self, e: CodeError) {
