@@ -252,22 +252,18 @@ impl Parser<'_, '_> {
                     return self.parse_arrow(no_in, hint).map(Some);
                 }
                 if tok.is_contextual(Kw::Async) && !next.newline_before() {
-                    match next.kind {
-                        TokenKind::Function => {
-                            return self.unsupported(tok.start, "async functions are");
-                        }
-                        TokenKind::Ident => {
-                            return self.unsupported(tok.start, "async arrow functions are");
-                        }
+                    let arrow = match next.kind {
+                        // `async x => ...`
+                        TokenKind::Ident => true,
                         TokenKind::LParen => {
                             let mut lx = self.lx;
-                            if let Ok(open) = lx.next_token()
-                                && super::scan::is_arrow_head(lx, open)
-                            {
-                                return self.unsupported(tok.start, "async arrow functions are");
-                            }
+                            matches!(lx.next_token(), Ok(open) if super::scan::is_arrow_head(lx, open))
                         }
-                        _ => {}
+                        _ => false,
+                    };
+                    if arrow {
+                        self.name_hint = None;
+                        return self.parse_arrow(no_in, hint).map(Some);
                     }
                 }
             }
@@ -534,10 +530,14 @@ impl Parser<'_, '_> {
                 // An UpdateExpression, not a UnaryExpression: `++a ** 2` is valid.
                 return Ok((Expr::Value, false));
             }
-            TokenKind::Ident
-                if tok.is_contextual(Kw::Await) && self.f.kind == FuncKind::AsyncBody =>
-            {
-                return self.unsupported(tok.start, "await is");
+            TokenKind::Ident if tok.is_contextual(Kw::Await) && self.f.is_async => {
+                if self.f.in_params {
+                    return syntax(tok.start, "await in default expression");
+                }
+                self.next()?;
+                self.parse_unary()?;
+                self.mark(tok.start);
+                self.code().await_(0);
             }
             _ => return Ok((self.parse_postfix(delete_operand)?, false)),
         }
@@ -885,6 +885,11 @@ impl Parser<'_, '_> {
             TokenKind::Slash | TokenKind::SlashAssign => {
                 self.unsupported(tok.start, "regular expressions are")
             }
+            TokenKind::Ident if self.at_async_function() => {
+                let hint = self.take_name_hint(tok.start);
+                self.next()?;
+                self.parse_function_expression(hint, tok.start, true)
+            }
             TokenKind::Ident => self.parse_ident_ref(),
             TokenKind::This => {
                 let r = self.this_ref(tok.start);
@@ -931,7 +936,7 @@ impl Parser<'_, '_> {
             TokenKind::LBrace => self.parse_object(),
             TokenKind::Function => {
                 let hint = self.take_name_hint(tok.start);
-                self.parse_function_expression(hint)
+                self.parse_function_expression(hint, tok.start, false)
             }
             TokenKind::Class => self.unsupported(tok.start, "classes are"),
             TokenKind::PrivateName => self.unsupported(tok.start, "private names are"),
@@ -1229,22 +1234,24 @@ impl Parser<'_, '_> {
     }
 
     fn parse_property(&mut self, tok: crate::lexer::Token, seen_proto: &mut bool) -> PResult<()> {
-        // `get`/`set`/`async` are prefixes only when a property name follows.
+        // `get`/`set`/`async` are prefixes only when a property name follows (for
+        // `async`, on the same line).
         let prefix = if matches!(tok.kw, Kw::Get | Kw::Set | Kw::Async)
             && tok.kind == TokenKind::Ident
             && !tok.has_escape()
         {
-            let next = self.peek().kind;
-            let starts = next.is_identifier_name()
+            let next = self.peek();
+            let starts = (next.kind.is_identifier_name()
                 || matches!(
-                    next,
+                    next.kind,
                     TokenKind::String
                         | TokenKind::Number
                         | TokenKind::BigInt
                         | TokenKind::LBracket
                         | TokenKind::PrivateName
                         | TokenKind::Star
-                );
+                ))
+                && !(tok.kw == Kw::Async && next.newline_before());
             if starts {
                 self.next()?;
                 Some(tok.kw)
@@ -1254,12 +1261,16 @@ impl Parser<'_, '_> {
         } else {
             None
         };
-        if prefix == Some(Kw::Async) {
-            return self.unsupported(tok.start, "async methods are");
-        }
-        if self.is(TokenKind::Star) {
-            return self.unsupported(self.tok.start, "generators are");
-        }
+        let is_async = prefix == Some(Kw::Async);
+        let prefix = prefix.filter(|&p| p != Kw::Async);
+        let is_gen = if prefix.is_none() {
+            self.eat(TokenKind::Star)?
+        } else {
+            if self.is(TokenKind::Star) {
+                return syntax(self.tok.start, "invalid property name");
+            }
+            false
+        };
         if self.is(TokenKind::PrivateName) {
             return syntax(self.tok.start, "invalid property name");
         }
@@ -1280,7 +1291,7 @@ impl Parser<'_, '_> {
                 }
                 None => Atom::NULL,
             };
-            let child = self.parse_method_function(kind, name, tok.start)?;
+            let child = self.parse_method_function(kind, name, tok.start, (false, false))?;
             self.code().fclosure(child);
             match (key, kind) {
                 (Some(a), FuncKind::Getter) => self.code().define_getter(a),
@@ -1296,12 +1307,20 @@ impl Parser<'_, '_> {
             }
             return Ok(());
         }
+        if (is_async || is_gen) && !self.is(TokenKind::LParen) {
+            return syntax(self.tok.start, "invalid property name");
+        }
         match self.tok.kind {
             TokenKind::LParen => {
                 let child = self.parse_method_function(
                     FuncKind::Method,
                     key.unwrap_or(Atom::NULL),
-                    key_tok.start,
+                    if is_async || is_gen {
+                        tok.start
+                    } else {
+                        key_tok.start
+                    },
+                    (is_async, is_gen),
                 )?;
                 self.code().fclosure(child);
                 match key {
@@ -1353,8 +1372,8 @@ impl Parser<'_, '_> {
                 if key_tok.is_escaped_reserved() || key_tok.kw.is_strict_reserved() {
                     return syntax(key_tok.start, "invalid property name");
                 }
-                if key_tok.is_contextual(Kw::Await) && self.f.kind == FuncKind::AsyncBody {
-                    return self.unsupported(key_tok.start, "await is");
+                if key_tok.is_contextual(Kw::Await) && self.f.is_async {
+                    return syntax(self.tok.start, "expecting ':'");
                 }
                 let a = key.unwrap_or(Atom::NULL);
                 if key_tok.kw == Kw::Arguments {

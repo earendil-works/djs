@@ -90,9 +90,16 @@ fn run_case(src: &str, name: &str, mode: Mode) -> String {
         stops += 1;
         let status = vm.run(fuel);
         match status {
-            Status::Done(_) => {
+            Status::Done(v) => {
+                let rejections = vm.take_unhandled_rejections();
+                // A body is an async function (D008): gen-expected.sh catches its
+                // rejected promise and prints `Uncaught <reason>`.
+                if body && let Some(Some(Err(e))) = vm.promise_state(v) {
+                    out += &format!("Uncaught {}\n", vm.display(e));
+                    break;
+                }
                 // qjs reports these on stderr, and gen-expected.sh keeps its first line.
-                if let Some(&r) = vm.take_unhandled_rejections().first() {
+                if let Some(&r) = rejections.first() {
                     out += &format!(
                         "Uncaught Possibly unhandled promise rejection: {}\n",
                         vm.display(r)

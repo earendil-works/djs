@@ -176,12 +176,16 @@ impl<'a, 'h> Parser<'a, 'h> {
 
     /// Parses the whole source and builds the templates.
     pub fn compile(mut self) -> PResult<Ref> {
+        if self.f.kind == FuncKind::AsyncBody {
+            self.start_flavor((true, false))?;
+        }
         self.code().enter_scope(BODY_SCOPE as u16);
         while self.tok.kind != TokenKind::Eof {
             self.parse_statement_list_item()?;
         }
         self.code().leave_scope(BODY_SCOPE as u16);
-        self.code().return_undef();
+        self.emit_return_undef();
+        self.end_async_region();
         let top = core::mem::replace(&mut self.f, FuncState::new(0, FuncKind::Script, None));
         self.done[0] = Some(top);
         let funcs = core::mem::take(&mut self.done)
@@ -212,6 +216,7 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// Finishes the current function and returns to its parent. Returns the child
     /// index for `fclosure`.
     pub fn end_function(&mut self) -> PResult<u32> {
+        self.end_async_region();
         let s = self
             .stack
             .pop()
@@ -506,7 +511,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         if tok.kind != TokenKind::Ident
             || tok.is_escaped_reserved()
             || tok.kw.is_strict_reserved()
-            || (tok.kw == Kw::Await && self.f.kind == FuncKind::AsyncBody)
+            || (tok.kw == Kw::Await && self.f.is_async)
         {
             return syntax(tok.start, "variable name expected");
         }

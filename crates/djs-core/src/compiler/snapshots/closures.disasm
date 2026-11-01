@@ -1,48 +1,52 @@
-function 0 <anonymous>: params=2 locals=6 stack=4 captures=0
-    0  undefined
-    1  new_box_init loc4 (isEven)
-    4  undefined
-    5  new_box_init loc5 (isOdd)
-    8  fclosure child0
-   13  put_loc loc0 (counter)
-   16  fclosure child2
-   21  put_loc loc3 (outer)
-   24  fclosure child3
-   29  put_box loc4 (isEven)
-   32  fclosure child4
-   37  put_box loc5 (isOdd)
-   40  array_from 0
-   43  put_loc loc1 (fns)
-   46  new_box loc2 (i)
-   49  push_i8 0
-   51  put_box loc2 (i)
-   54  rebox loc2 (i)
-   57  get_box loc2 (i)  ; 8:17
-   60  push_i8 3
-   62  lt  ; 8:19
-   63  jump_if_false -> 110
-   68  jump -> 91
-   73  rebox loc2 (i)
-   76  get_box loc2 (i)  ; 8:24
-   79  to_numeric
-   80  dup
-   81  inc  ; 8:25
-   82  put_box loc2 (i)  ; 8:24
-   85  drop
-   86  jump -> 57
-   91  get_loc loc1 (fns)  ; 8:29
-   94  get_box loc2 (i)  ; 8:33
-   97  fclosure child1  ; 8:32
-  102  insert3
-  103  put_elem
-  104  drop
-  105  jump -> 73
-  110  get_box loc4 (isEven)  ; 15:1
-  113  undefined
-  114  push_i8 4
-  116  call 1  ; 15:7
-  119  drop
-  120  return_undef
+function 0 <anonymous>: params=2 locals=7 stack=4 captures=0
+  handler [3, 127) -> 127 depth 0
+    0  async_start loc0 (<state>)
+    3  undefined
+    4  new_box_init loc5 (isEven)
+    7  undefined
+    8  new_box_init loc6 (isOdd)
+   11  fclosure child0
+   16  put_loc loc1 (counter)
+   19  fclosure child2
+   24  put_loc loc4 (outer)
+   27  fclosure child3
+   32  put_box loc5 (isEven)
+   35  fclosure child4
+   40  put_box loc6 (isOdd)
+   43  array_from 0
+   46  put_loc loc2 (fns)
+   49  new_box loc3 (i)
+   52  push_i8 0
+   54  put_box loc3 (i)
+   57  rebox loc3 (i)
+   60  get_box loc3 (i)  ; 8:17
+   63  push_i8 3
+   65  lt  ; 8:19
+   66  jump_if_false -> 113
+   71  jump -> 94
+   76  rebox loc3 (i)
+   79  get_box loc3 (i)  ; 8:24
+   82  to_numeric
+   83  dup
+   84  inc  ; 8:25
+   85  put_box loc3 (i)  ; 8:24
+   88  drop
+   89  jump -> 60
+   94  get_loc loc2 (fns)  ; 8:29
+   97  get_box loc3 (i)  ; 8:33
+  100  fclosure child1  ; 8:32
+  105  insert3
+  106  put_elem
+  107  drop
+  108  jump -> 76
+  113  get_box loc5 (isEven)  ; 15:1
+  116  undefined
+  117  push_i8 4
+  119  call 1  ; 15:7
+  122  drop
+  123  undefined
+  124  async_return loc0 (<state>)
+  127  async_reject loc0 (<state>)
 function 0.0 counter: params=0 locals=1 stack=1 captures=0
     0  new_box loc0 (n)
     3  push_i8 0

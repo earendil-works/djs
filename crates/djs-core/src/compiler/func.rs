@@ -56,6 +56,9 @@ pub(super) enum VarKind {
     FuncName,
     /// A `catch (e)` parameter, initialized by the handler.
     CatchParam,
+    /// A compiler-internal local that no source name can reach (the generator or async
+    /// state object of `generator_start`/`async_start`, docs/compiler.md 7.7).
+    Internal,
 }
 
 impl VarKind {
@@ -190,6 +193,16 @@ pub(super) struct FuncState {
     pub arguments_var: Option<VarId>,
     pub new_target_var: Option<VarId>,
     pub func_name_var: Option<VarId>,
+    /// `async` function (or the codemode body): `await` is an operator.
+    pub is_async: bool,
+    /// Generator function: `yield` is an operator.
+    pub is_generator: bool,
+    /// The local holding the generator/async state (docs/compiler.md 7.7).
+    pub state_var: Option<VarId>,
+    /// Parsing the formal parameters: `await`/`yield` expressions are errors there.
+    pub in_params: bool,
+    /// Async functions: the start of the region whose exceptions reject the promise.
+    pub async_region: Option<crate::bytecode::Label>,
     /// Source span (for `Function.prototype.toString`, D009).
     pub src_start: u32,
     pub src_end: u32,
@@ -231,6 +244,11 @@ impl FuncState {
             arguments_var: None,
             new_target_var: None,
             func_name_var: None,
+            is_async: false,
+            is_generator: false,
+            state_var: None,
+            in_params: false,
+            async_region: None,
             src_start: 0,
             src_end: 0,
         }

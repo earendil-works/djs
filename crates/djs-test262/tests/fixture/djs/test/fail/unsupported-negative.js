@@ -5,4 +5,4 @@ negative:
   type: SyntaxError
 ---*/
 $DONOTEVALUATE();
-function* g() {}
+x = import("m");

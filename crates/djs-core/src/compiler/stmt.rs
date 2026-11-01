@@ -18,7 +18,12 @@ impl Parser<'_, '_> {
             TokenKind::Ident if self.tok.is_contextual(Kw::Let) => {
                 self.parse_lexical_declaration(VarKind::Let)
             }
-            TokenKind::Function => self.parse_function_declaration(),
+            TokenKind::Function => self.parse_function_declaration(self.tok.start, false),
+            TokenKind::Ident if self.at_async_function() => {
+                let start = self.tok.start;
+                self.next()?;
+                self.parse_function_declaration(start, true)
+            }
             TokenKind::Class => self.unsupported(self.tok.start, "classes are"),
             _ => self.parse_statement(),
         }
@@ -69,6 +74,10 @@ impl Parser<'_, '_> {
                 "lexical declarations can't appear in single-statement context",
             ),
             TokenKind::Function => syntax(
+                tok.start,
+                "function declarations can't appear in single-statement context",
+            ),
+            TokenKind::Ident if self.at_async_function() => syntax(
                 tok.start,
                 "function declarations can't appear in single-statement context",
             ),
@@ -490,6 +499,15 @@ impl Parser<'_, '_> {
         cur
     }
 
+    /// `async function` (no line break after `async`).
+    pub(super) fn at_async_function(&self) -> bool {
+        if !self.tok.is_contextual(Kw::Async) {
+            return false;
+        }
+        let next = self.peek();
+        next.kind == TokenKind::Function && !next.newline_before()
+    }
+
     fn has_unwind(&self) -> bool {
         self.blocks
             .iter()
@@ -507,15 +525,20 @@ impl Parser<'_, '_> {
             || self.is(TokenKind::Eof)
             || self.tok.newline_before();
         if bare && !self.has_unwind() {
-            self.code().return_undef();
+            self.emit_return_undef();
         } else {
             if bare {
                 self.code().undefined();
             } else {
                 self.parse_expr(false)?;
+                if self.f.is_async && self.f.is_generator {
+                    // An async generator awaits the operand of `return`.
+                    self.mark(pos);
+                    self.code().await_(0);
+                }
             }
             self.emit_unwind(0, true);
-            self.code().return_();
+            self.emit_return_value();
         }
         self.expect_semicolon()
     }

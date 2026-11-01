@@ -3,7 +3,7 @@
 
 use super::PResult;
 use super::expr::Expr;
-use super::func::{BODY_SCOPE, FuncKind, ScopeKind, VarKind};
+use super::func::{BODY_SCOPE, FuncKind, HandlerLabels, ScopeKind, VarKind};
 use super::parser::{Parser, syntax};
 use super::pattern::Binding;
 use crate::heap::Atom;
@@ -19,39 +19,49 @@ impl Parser<'_, '_> {
         self.binding_name()
     }
 
-    /// `function name(params) { body }` as a declaration (hoisted).
-    pub(super) fn parse_function_declaration(&mut self) -> PResult<()> {
-        let start = self.tok.start;
+    /// `function name(params) { body }` as a declaration (hoisted), with the current
+    /// token at `function`. `start` is the `async` keyword of an async function.
+    pub(super) fn parse_function_declaration(&mut self, start: u32, is_async: bool) -> PResult<()> {
         self.next()?;
-        if self.is(TokenKind::Star) {
-            return self.unsupported(start, "generators are");
-        }
+        let is_gen = self.eat(TokenKind::Star)?;
         if !self.is(TokenKind::Ident) {
             return syntax(self.tok.start, "function name expected");
         }
         let pos = self.tok.start;
         let name = self.function_binding_name("invalid function name in strict code")?;
         self.next()?;
-        let child = self.parse_function_rest(FuncKind::Normal, name, start, false)?;
+        let flavor = (is_async, is_gen);
+        let child = self.parse_function_rest(FuncKind::Normal, name, start, false, flavor)?;
         self.declare_function(name, child, pos)
     }
 
-    /// A function expression in primary position. `hint` names an anonymous one
-    /// (`let f = function () {}`).
-    pub(super) fn parse_function_expression(&mut self, hint: Atom) -> PResult<Expr> {
-        let start = self.tok.start;
+    /// A function expression in primary position, with the current token at
+    /// `function`. `hint` names an anonymous one (`let f = function () {}`); `start` is
+    /// the `async` keyword of an async function.
+    pub(super) fn parse_function_expression(
+        &mut self,
+        hint: Atom,
+        start: u32,
+        is_async: bool,
+    ) -> PResult<Expr> {
         self.next()?;
-        if self.is(TokenKind::Star) {
-            return self.unsupported(start, "generators are");
-        }
+        let is_gen = self.eat(TokenKind::Star)?;
         let (name, own) = if self.is(TokenKind::Ident) {
+            // The name of an async or generator expression is bound inside it, where
+            // `await`/`yield` are operators.
+            if (is_async && self.tok.is_contextual(Kw::Await))
+                || (is_gen && self.tok.kw == Kw::Yield)
+            {
+                return syntax(self.tok.start, "function name expected");
+            }
             let n = self.function_binding_name("invalid function name in strict code")?;
             self.next()?;
             (n, true)
         } else {
             (hint, false)
         };
-        let child = self.parse_function_rest(FuncKind::Normal, name, start, own)?;
+        let flavor = (is_async, is_gen);
+        let child = self.parse_function_rest(FuncKind::Normal, name, start, own, flavor)?;
         self.code().fclosure(child);
         if !own {
             self.last_anon_fn = Some((start, self.prev_end));
@@ -60,15 +70,18 @@ impl Parser<'_, '_> {
     }
 
     /// A method, getter or setter of an object literal: parameters and body after the
-    /// key. Getters take no parameters, setters exactly one.
+    /// key. Getters take no parameters, setters exactly one. `flavor` is (async,
+    /// generator).
     pub(super) fn parse_method_function(
         &mut self,
         kind: FuncKind,
         name: Atom,
         start: u32,
+        flavor: (bool, bool),
     ) -> PResult<u32> {
         self.enter()?;
         self.begin_function(kind)?;
+        self.start_flavor(flavor)?;
         self.f.name = name;
         self.f.src_start = start;
         self.expect(TokenKind::LParen, "(")?;
@@ -98,9 +111,11 @@ impl Parser<'_, '_> {
         name: Atom,
         start: u32,
         self_binding: bool,
+        flavor: (bool, bool),
     ) -> PResult<u32> {
         self.enter()?;
         self.begin_function(kind)?;
+        self.start_flavor(flavor)?;
         self.f.name = name;
         self.f.src_start = start;
         if self_binding {
@@ -126,6 +141,13 @@ impl Parser<'_, '_> {
     /// appears, every parameter becomes a local initialized in order, with TDZ between
     /// them (docs/compiler.md 5.5).
     pub(super) fn parse_params(&mut self) -> PResult<()> {
+        self.f.in_params = true;
+        self.parse_params_inner()?;
+        self.f.in_params = false;
+        Ok(())
+    }
+
+    fn parse_params_inner(&mut self) -> PResult<()> {
         let close = TokenKind::RParen;
         let mut seen_default = false;
         while !self.is(close) {
@@ -140,7 +162,9 @@ impl Parser<'_, '_> {
                 }
                 continue;
             }
-            if self.tok.kind != TokenKind::Ident {
+            if self.tok.kind != TokenKind::Ident
+                || (self.f.is_async && self.tok.is_contextual(Kw::Await))
+            {
                 return syntax(self.tok.start, "missing formal parameter");
             }
             let pos = self.tok.start;
@@ -249,6 +273,10 @@ impl Parser<'_, '_> {
     /// `{ body }` of a function: the directive prologue, then the statements.
     pub(super) fn parse_function_body(&mut self) -> PResult<()> {
         self.expect(TokenKind::LBrace, "{")?;
+        if self.f.is_generator {
+            // After the parameters: their errors throw at the call (docs/compiler.md 7.7).
+            self.code().generator_start(0);
+        }
         self.code().enter_scope(BODY_SCOPE as u16);
         // Directive prologue: everything is strict already, but `"use strict"` with
         // non-simple parameters is an error.
@@ -286,19 +314,88 @@ impl Parser<'_, '_> {
         }
         self.next()?;
         self.code().leave_scope(BODY_SCOPE as u16);
-        self.code().return_undef();
+        self.emit_return_undef();
         Ok(())
     }
 
+    /// Makes the current (just begun) function async and/or a generator: its state
+    /// local, and for async functions `async_start` and the start of the region whose
+    /// exceptions reject the promise (docs/compiler.md 7.7; closed by
+    /// [`Parser::end_async_region`]).
+    pub(super) fn start_flavor(&mut self, (is_async, is_gen): (bool, bool)) -> PResult<()> {
+        self.f.is_async = is_async;
+        self.f.is_generator = is_gen;
+        if !is_async && !is_gen {
+            return Ok(());
+        }
+        let atom = self.heap.atom_str("<state>")?;
+        let v = self.f.add_var(atom, VarKind::Internal, BODY_SCOPE);
+        self.f.state_var = Some(v);
+        if is_async && !is_gen {
+            self.code().async_start(0);
+            let l = self.new_label();
+            self.place(l);
+            self.f.async_region = Some(l);
+        }
+        Ok(())
+    }
+
+    /// Ends an async function's body: the catch-all handler that rejects the promise.
+    /// It is the outermost region, so it goes last.
+    pub(super) fn end_async_region(&mut self) {
+        let Some(start) = self.f.async_region.take() else {
+            return;
+        };
+        let end = self.new_label();
+        self.place(end);
+        self.code().async_reject(0);
+        self.f.handlers.push(HandlerLabels {
+            start,
+            end,
+            target: end,
+            depth: 0,
+            depth_from: None,
+        });
+    }
+
+    /// Returns the value on top of the stack (after any finally blocks ran).
+    pub(super) fn emit_return_value(&mut self) {
+        if self.f.is_async && !self.f.is_generator {
+            self.code().async_return(0);
+        } else {
+            self.code().return_();
+        }
+    }
+
+    /// Returns `undefined`.
+    pub(super) fn emit_return_undef(&mut self) {
+        if self.f.is_async && !self.f.is_generator {
+            self.code().undefined();
+            self.code().async_return(0);
+        } else {
+            self.code().return_undef();
+        }
+    }
+
     /// An arrow function, with the current token at its parameters (an identifier or
-    /// `(`). The caller checked that `=>` follows.
+    /// `(`) or at `async`. The caller checked that `=>` follows (for `async x`, that an
+    /// identifier follows).
     pub(super) fn parse_arrow(&mut self, no_in: bool, hint: Atom) -> PResult<Expr> {
         let start = self.tok.start;
+        let is_async =
+            self.tok.is_contextual(Kw::Async) && !matches!(self.peek().kind, TokenKind::Arrow);
+        if is_async {
+            self.next()?;
+        }
         self.enter()?;
         self.begin_function(FuncKind::Arrow)?;
+        self.start_flavor((is_async, false))?;
         self.f.name = hint;
         self.f.src_start = start;
         if self.is(TokenKind::Ident) {
+            if is_async && self.tok.is_contextual(Kw::Await) {
+                return syntax(self.tok.start, "missing formal parameter");
+            }
             let name = self.function_binding_name("invalid argument name in strict code")?;
             self.next()?;
             let v = self.declare_param(name, self.tok.start)?;
@@ -317,7 +414,7 @@ impl Parser<'_, '_> {
         } else {
             self.code().enter_scope(BODY_SCOPE as u16);
             self.parse_assign(no_in)?;
-            self.code().return_();
+            self.emit_return_value();
             self.code().leave_scope(BODY_SCOPE as u16);
         }
         self.f.src_end = self.prev_end;

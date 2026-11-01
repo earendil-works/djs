@@ -37,7 +37,7 @@ const FAILURES: &[(&str, &str)] = &[
     ("fail/timeout.js", "timeout: the fuel budget is used up"),
     (
         "fail/unsupported-negative.js",
-        "expected parse SyntaxError, got parse Unsupported: generators are not supported yet",
+        "expected parse SyntaxError, got parse Unsupported: import() is not supported yet",
     ),
 ];
 

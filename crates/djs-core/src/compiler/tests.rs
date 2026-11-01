@@ -303,13 +303,6 @@ fn errors() {
             8,
         ),
         ("function () {}", "function name expected", 1, 10),
-        ("function* g() {}", "generators are not supported yet", 1, 1),
-        (
-            "let f = function* () {}",
-            "generators are not supported yet",
-            1,
-            9,
-        ),
         (
             "function f() { x\n=> 1 }",
             "unexpected token in expression: '=>'",
@@ -382,18 +375,6 @@ fn errors() {
             7,
         ),
         // Not supported yet.
-        (
-            "async function f() {}",
-            "async functions are not supported yet",
-            1,
-            1,
-        ),
-        (
-            "async x => 1",
-            "async arrow functions are not supported yet",
-            1,
-            1,
-        ),
         ("class A {}", "classes are not supported yet", 1, 1),
         // Destructuring (0036); messages and positions as qjs.
         (
@@ -584,17 +565,9 @@ fn errors() {
             33,
         ),
         ("({ m() { super.x } })", "super is not supported yet", 1, 10),
-        (
-            "({ async m() {} })",
-            "async methods are not supported yet",
-            1,
-            4,
-        ),
-        ("({ *g() {} })", "generators are not supported yet", 1, 4),
         ("({ #x: 1 })", "invalid property name", 1, 4),
         ("({ get #x() {} })", "invalid property name", 1, 8),
         ("1n", "BigInt literals are not supported yet", 1, 1),
-        ("// goal: body\nawait x", "await is not supported yet", 2, 1),
     ];
     let mut bad = Vec::new();
     for &(src, msg, line, col) in cases {
@@ -837,9 +810,15 @@ fn run_body(src: &str) -> String {
     let mut out = String::new();
     loop {
         match vm.run(1_000_000) {
+            // The body is an async function: its result is a promise (D008).
             Status::Done(v) => {
-                let s = vm.display(v);
-                out.push_str(&alloc::format!("=> {s}"));
+                let line = match vm.promise_state(v) {
+                    Some(Some(Ok(r))) => alloc::format!("=> {}", vm.display(r)),
+                    Some(Some(Err(e))) => alloc::format!("throw {}", vm.display(e)),
+                    Some(None) => String::from("pending"),
+                    None => alloc::format!("=> {}", vm.display(v)),
+                };
+                out.push_str(&line);
                 return out;
             }
             Status::Threw(e) => {

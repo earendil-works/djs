@@ -452,6 +452,27 @@ fn emit_function(
                     }
                 }
             }
+            // The generator/async state local (docs/compiler.md 7.7): phase-1 code holds
+            // a placeholder.
+            Op::GeneratorStart
+            | Op::Yield
+            | Op::AsyncStart
+            | Op::Await
+            | Op::AsyncReturn
+            | Op::AsyncReject => {
+                let slot = match f.state_var.map(|v| storage[v as usize]) {
+                    Some(Storage::Local(s)) => s,
+                    _ => return Err(internal("state op without a state local")),
+                };
+                match insn.op {
+                    Op::GeneratorStart => out.generator_start(slot),
+                    Op::Yield => out.yield_(slot),
+                    Op::AsyncStart => out.async_start(slot),
+                    Op::Await => out.await_(slot),
+                    Op::AsyncReturn => out.async_return(slot),
+                    _ => out.async_reject(slot),
+                }
+            }
             Op::LeaveScope => {}
             Op::Label => out.place_label(Label(insn.imm(0))),
             _ => out.emit_insn(&insn),
@@ -497,15 +518,22 @@ fn emit_function(
     let line_bytes = lt.finish();
     let mut all_names = names.clone();
     all_names.extend_from_slice(&f.capture_names);
-    let flags = match f.kind {
+    let kind = match f.kind {
         FuncKind::Script => func_flags::KIND_SCRIPT,
-        FuncKind::AsyncBody => func_flags::KIND_ASYNC_BODY | func_flags::ASYNC,
+        FuncKind::AsyncBody => func_flags::KIND_ASYNC_BODY,
         FuncKind::Normal => func_flags::KIND_NORMAL,
         FuncKind::Arrow => func_flags::KIND_ARROW,
         FuncKind::Method => func_flags::KIND_METHOD,
         FuncKind::Getter => func_flags::KIND_GETTER,
         FuncKind::Setter => func_flags::KIND_SETTER,
     };
+    let mut flags = kind;
+    if f.is_async {
+        flags |= func_flags::ASYNC;
+    }
+    if f.is_generator {
+        flags |= func_flags::GENERATOR;
+    }
     let params = f.param_count - u16::from(f.rest.is_some());
     let parts = TemplateParts {
         flags,

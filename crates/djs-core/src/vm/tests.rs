@@ -1046,7 +1046,13 @@ fn eval(vm: &mut Vm, src: &str) -> String {
     let this = Value::object(vm.global());
     vm.call(f, this, &[]).unwrap();
     match vm.run(1 << 30) {
-        Status::Done(v) => vm.display(v),
+        // The body's promise (an async function, D008).
+        Status::Done(v) => match vm.promise_state(v) {
+            Some(Some(Ok(r))) => vm.display(r),
+            Some(Some(Err(e))) => panic!("rejected: {}", vm.display(e)),
+            Some(None) => panic!("pending"),
+            None => vm.display(v),
+        },
         Status::Threw(e) => panic!("threw: {}", vm.display(e)),
         s => panic!("{s:?}"),
     }
@@ -1294,7 +1300,11 @@ fn vm_call_never_collects() {
         vm.heap().cell_kind(f.as_object().unwrap().offset()),
         crate::heap::CellKind::Object
     );
-    assert_eq!(vm.run(1 << 20), Status::Done(Value::int(2)));
+    // The body is async (D008): its result is a fulfilled promise.
+    let Status::Done(p) = vm.run(1 << 20) else {
+        panic!("not done")
+    };
+    assert_eq!(vm.promise_state(p), Some(Some(Ok(Value::int(2)))));
     assert!(
         vm.heap().arena().len() < len,
         "run collects at its first safepoint"
