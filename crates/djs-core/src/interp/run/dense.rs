@@ -140,7 +140,8 @@ impl Exec<'_> {
         true
     }
 
-    /// `%ArrayPushDense(o, v)`.
+    /// `%ArrayPushDense(o, v)`. Inline: push's hot path (D2255).
+    #[inline]
     pub(super) fn array_push_dense(&mut self, o: Obj, v: Value) -> Result<f64, Fault> {
         Ok(dense::push(self.heap, o, v)?.map_or(-1.0, f64::from))
     }

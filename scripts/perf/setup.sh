@@ -12,7 +12,7 @@ cd "$root"
 CARGO_TARGET_DIR="$out/target" CARGO_PROFILE_RELEASE_LTO=fat CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 \
   cargo build --release -p djs-cli
 CARGO_TARGET_DIR="$out/target" CARGO_PROFILE_WASM_STRIP=debuginfo \
-  cargo build -p djs-wasm --target wasm32-unknown-unknown --profile wasm
+  scripts/with-wasm-env.sh cargo build -p djs-wasm --target wasm32-unknown-unknown --profile wasm
 dsymutil "$out/target/release/djs" -o "$out/djs.dSYM"
 "$(xcrun --find llvm-objdump)" -d --no-show-raw-insn "$out/target/release/djs" | grep -E "^\s*1[0-9a-f]+:" > "$out/all.s"
 wasm-objdump -d "$out/target/wasm32-unknown-unknown/wasm/djs_wasm.wasm" > "$out/wasm.dis" 2>/dev/null || true

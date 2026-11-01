@@ -277,7 +277,6 @@ function StringPrototypeSubstring(this: Value, start: Value, end: Value): Str {
 /**
  * String.prototype.substr ( start, length ), B.2.2.1.
  * @builtin String.prototype.substr
- * @fast
  */
 function StringPrototypeSubstr(this: Value, start: Value, length: Value): Str {
   const s: Str = ThisToString(this);

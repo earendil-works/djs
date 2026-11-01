@@ -9,6 +9,7 @@
 #   checkout) ends up in the module (D2331); any RUSTFLAGS of the caller come after.
 #   rustc applies the last matching remap, so the catch-all for $HOME comes first; the
 #   rust-src path maps to /rustc/<commit>, as the precompiled std's own paths are.
+# - `-Cllvm-args=-inline-threshold=40` (D2255): less inlining, for size.
 # - `-Zlocation-detail=none` with RUSTC_BOOTSTRAP=1 (D2333): the one place where djs
 #   uses an unstable rustc flag. It drops the file/line/column of panic locations from the
 #   module. DJS_STABLE_ONLY=1 turns it off; the module then builds on plain stable.
@@ -22,6 +23,9 @@ flags=(
   "--remap-path-prefix=$cargo_home=/cargo"
   "--remap-path-prefix=$sysroot/lib/rustlib/src/rust=/rustc/$commit"
   "--remap-path-prefix=$root=/djs"
+  # A lower inlining threshold than opt-level s's: -3.2 KB gzip for +0.4% instructions
+  # on pi-like, json and calls (D2255).
+  "-Cllvm-args=-inline-threshold=40"
 )
 if [ "${DJS_STABLE_ONLY:-}" != 1 ]; then
   flags+=("-Zlocation-detail=none")

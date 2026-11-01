@@ -500,6 +500,19 @@ Each failing test fails on every backend it runs on (worker, inline, remote):
 | ignores patches to built-ins and built-in globals | djs is always strict (ARCH). Assigning to a frozen built-in throws a TypeError where sloppy QuickJS ignores it. The protection itself works: the prelude's JSON and promises are intact |
 | reports the fingerprint … | the test matches `/^quickjs-wasi /`. Inherent: a different engine must have a different fingerprint |
 
+**Since 0116 (re-run at 0127): 215 of 226.** The six worker-lifetime "process lifetime"
+tests fail too (Node and Bun × abort, timeout, close), because the fast search finished
+their workload. Their fixture (`test/fixtures/worker-process-exit.ts`) cancels a script
+that is meant to run long, `'a'.repeat(300000).indexOf('a'.repeat(10000) + 'b')`.
+Byte-at-a-time search made that quadratic, and seconds long. The one-byte search tests
+the needle's first and last byte together (D2250), so it rejects every position at once
+and the script completes in microseconds, before the cancel: "The script completed
+instead of being cancelled". Cancellation itself works. The same fixture with a busy loop
+(`let x = 0; for (;;) { x++; }`) is aborted, timed out and closed in 0.2–0.3 s on Node
+and on Bun, with the process exiting right after, as the tests require. These six are
+known and explained, not regressions; they pass again if pi's fixture uses a workload
+that is slow on every engine.
+
 ### What differs for scripts
 
 Besides the failures above:

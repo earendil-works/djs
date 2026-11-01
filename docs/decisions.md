@@ -5596,3 +5596,44 @@ check through an explicit normalize("NFD"/"NFKC"/"NFKD") on text beyond Latin-1,
 per-code-point decomposition lookup costs nothing that matters. −3.6 KB raw, −1.0 KB
 gzip. A unit test checks every code point: the quick check never says Yes for one that a
 form changes.
+## D2255: The shipped module inlines less (`-inline-threshold=40`), with hot helpers marked
+date: 2026-11-03 · by: perf · issue: 0127
+scripts/wasm-build-env.sh adds `-Cllvm-args=-inline-threshold=40` to the shipped
+module's flags (opt-level s's default threshold is higher). Native builds are unchanged.
+
+Measured on the shipped module:
+
+| inline threshold | gzip | cost |
+| ---: | ---: | --- |
+| 40 | −3.2 KB | pi-like, json, calls +0.4% |
+| 15 | −4.1 KB | pi-like +2% |
+
+At 40 alone, push/pop slowed by 2–4%: helpers on @fast push/pop and frame entry went out
+of line. They are now `#[inline]`:
+- `Heap::object_slot_count`, `array_length` and `dense_len` (heap/object.rs);
+- `Exec::array_push_dense`;
+- `Continuation::to_flags`;
+- intrinsics' `decline_oom`.
+
+With those, the 22 workloads are all at or below main, by 0.4–9%, on a loaded machine
+(pi-like −1.7%, pushpop −4.4%; work/scratch/0127/wm-n7.txt). The module is 2.8 KB gzip
+smaller than main (472.0 → 469.2 KB together with D2256).
+
+## D2256: The URI functions and String.prototype.substr run their builtins (no @fast)
+date: 2026-11-03 · by: perf · issue: 0127
+They are rare in JS generally (the URI functions) or legacy (`substr`, Annex B), and no
+workload or codemode script uses them. Their @fast entries go; the bytecode builtins
+call the same Rust (`UriEncode`/`UriDecode`) or are a few lines.
+
+Measured natively, per call:
+
+| call | with @fast | bytecode | cost |
+| --- | ---: | ---: | --- |
+| `substr` | 1.6k | 5.3k | 3.3x |
+| `encodeURIComponent` | | | +32% |
+| `decodeURIComponent` | | | +38% |
+
+`toLocaleLowerCase`/`toLocaleUpperCase` keep their entries: they share their code with
+`toLowerCase`/`toUpperCase`, so dropping them saves nothing. The everyday string entries
+(charAt, charCodeAt, fromCharCode, codePointAt, repeat, lastIndexOf, replaceAll,
+trimStart, fill) stay.

@@ -9493,7 +9493,7 @@ function StringPrototypeSubstring(start, end) {
   return a < b ? %StrSubstring(s, a, b) : %StrSubstring(s, b, a);
 }
 
-// builtins/string.ts:282 String.prototype.substr
+// builtins/string.ts:281 String.prototype.substr
 function StringPrototypeSubstr(start, length) {
   const s = ThisToString(this);
   const size = StrLen(s);
@@ -9512,7 +9512,7 @@ function StringPrototypeSubstr(start, length) {
   return %StrSubstring(s, intStart, intEnd);
 }
 
-// builtins/string.ts:305 String.prototype.concat
+// builtins/string.ts:304 String.prototype.concat
 function StringPrototypeConcat(...args) {
   let r = ThisToString(this);
   const n = LengthOfArrayLike(args);
@@ -9522,7 +9522,7 @@ function StringPrototypeConcat(...args) {
   return r;
 }
 
-// builtins/string.ts:319 String.prototype.repeat
+// builtins/string.ts:318 String.prototype.repeat
 function StringPrototypeRepeat(count) {
   const s = ThisToString(this);
   const n = ToIntegerOrInfinity(count);
@@ -9535,7 +9535,7 @@ function StringPrototypeRepeat(count) {
   return %StrRepeat(s, n);
 }
 
-// builtins/string.ts:332
+// builtins/string.ts:331
 function StringPad(s, maxLength, fillString, atStart) {
   const intMaxLength = ToLength(maxLength);
   const stringLength = StrLen(s);
@@ -9552,62 +9552,62 @@ function StringPad(s, maxLength, fillString, atStart) {
   return atStart ? truncated + s : s + truncated;
 }
 
-// builtins/string.ts:353 String.prototype.padEnd
+// builtins/string.ts:352 String.prototype.padEnd
 function StringPrototypePadEnd(maxLength, fillString) {
   return StringPad(ThisToString(this), maxLength, fillString, false);
 }
 
-// builtins/string.ts:362 String.prototype.padStart
+// builtins/string.ts:361 String.prototype.padStart
 function StringPrototypePadStart(maxLength, fillString) {
   return StringPad(ThisToString(this), maxLength, fillString, true);
 }
 
-// builtins/string.ts:373 String.prototype.toLowerCase
+// builtins/string.ts:372 String.prototype.toLowerCase
 function StringPrototypeToLowerCase() {
   return %StrToCase(ThisToString(this), false);
 }
 
-// builtins/string.ts:382 String.prototype.toUpperCase
+// builtins/string.ts:381 String.prototype.toUpperCase
 function StringPrototypeToUpperCase() {
   return %StrToCase(ThisToString(this), true);
 }
 
-// builtins/string.ts:391 String.prototype.toLocaleLowerCase
+// builtins/string.ts:390 String.prototype.toLocaleLowerCase
 function StringPrototypeToLocaleLowerCase() {
   return %StrToCase(ThisToString(this), false);
 }
 
-// builtins/string.ts:400 String.prototype.toLocaleUpperCase
+// builtins/string.ts:399 String.prototype.toLocaleUpperCase
 function StringPrototypeToLocaleUpperCase() {
   return %StrToCase(ThisToString(this), true);
 }
 
-// builtins/string.ts:409 String.prototype.trim
+// builtins/string.ts:408 String.prototype.trim
 function StringPrototypeTrim() {
   return %StrTrim(ThisToString(this), 0);
 }
 
-// builtins/string.ts:419 String.prototype.trimStart String.prototype.trimLeft
+// builtins/string.ts:418 String.prototype.trimStart String.prototype.trimLeft
 function StringPrototypeTrimStart() {
   return %StrTrim(ThisToString(this), 1);
 }
 
-// builtins/string.ts:429 String.prototype.trimEnd String.prototype.trimRight
+// builtins/string.ts:428 String.prototype.trimEnd String.prototype.trimRight
 function StringPrototypeTrimEnd() {
   return %StrTrim(ThisToString(this), 2);
 }
 
-// builtins/string.ts:437 String.prototype.isWellFormed
+// builtins/string.ts:436 String.prototype.isWellFormed
 function StringPrototypeIsWellFormed() {
   return %StrIsWellFormed(ThisToString(this));
 }
 
-// builtins/string.ts:445 String.prototype.toWellFormed
+// builtins/string.ts:444 String.prototype.toWellFormed
 function StringPrototypeToWellFormed() {
   return %StrToWellFormed(ThisToString(this));
 }
 
-// builtins/string.ts:454 String.prototype.normalize
+// builtins/string.ts:453 String.prototype.normalize
 function StringPrototypeNormalize(form) {
   const s = ThisToString(this);
   let f = "NFC";
@@ -9633,13 +9633,13 @@ function StringPrototypeNormalize(form) {
   return %AsStr(r);
 }
 
-// builtins/string.ts:487 String.fromCharCode
+// builtins/string.ts:486 String.fromCharCode
 function StringFromCharCode(...codeUnits) {
   CoerceNumbers(codeUnits);
   return %StrFromCodeUnits(codeUnits);
 }
 
-// builtins/string.ts:497 String.fromCodePoint
+// builtins/string.ts:496 String.fromCodePoint
 function StringFromCodePoint(...codePoints) {
   if (%AllCodePoints(codePoints)) {
     return %StrFromCodePoints(codePoints);
@@ -9656,7 +9656,7 @@ function StringFromCodePoint(...codePoints) {
   return %StrFromCodePoints(codePoints);
 }
 
-// builtins/string.ts:518 String.raw
+// builtins/string.ts:517 String.raw
 function StringRaw(template, ...substitutions) {
   const cooked = %ToObject(template);
   const literals = %ToObject(%Get(cooked, "raw"));
@@ -10968,32 +10968,32 @@ function TASet(o, k, v) {
   %TypedArraySet(o, k, ToElementValue(o, v));
 }
 
-// builtins/uri.ts:9 decodeURI
+// builtins/uri.ts:8 decodeURI
 function GlobalDecodeURI(encodedURI) {
   return %UriDecode(ToString(encodedURI), false);
 }
 
-// builtins/uri.ts:18 decodeURIComponent
+// builtins/uri.ts:16 decodeURIComponent
 function GlobalDecodeURIComponent(encodedURIComponent) {
   return %UriDecode(ToString(encodedURIComponent), true);
 }
 
-// builtins/uri.ts:27 encodeURI
+// builtins/uri.ts:24 encodeURI
 function GlobalEncodeURI(uri) {
   return %UriEncode(ToString(uri), false);
 }
 
-// builtins/uri.ts:36 encodeURIComponent
+// builtins/uri.ts:32 encodeURIComponent
 function GlobalEncodeURIComponent(uriComponent) {
   return %UriEncode(ToString(uriComponent), true);
 }
 
-// builtins/uri.ts:44 escape
+// builtins/uri.ts:40 escape
 function GlobalEscape(string) {
   return %StrEscape(ToString(string));
 }
 
-// builtins/uri.ts:52 unescape
+// builtins/uri.ts:48 unescape
 function GlobalUnescape(string) {
   return %StrUnescape(ToString(string));
 }
@@ -12296,7 +12296,6 @@ function GlobalAtob(...args) {
 %MarkFast(StringPrototypeEndsWith);
 %MarkFast(StringPrototypeSlice);
 %MarkFast(StringPrototypeSubstring);
-%MarkFast(StringPrototypeSubstr);
 %MarkFast(StringPrototypeRepeat);
 %MarkFast(StringPrototypePadEnd);
 %MarkFast(StringPrototypePadStart);
@@ -12308,8 +12307,4 @@ function GlobalAtob(...args) {
 %MarkFast(StringPrototypeTrimStart);
 %MarkFast(StringPrototypeTrimEnd);
 %MarkFast(StringFromCharCode);
-%MarkFast(GlobalDecodeURI);
-%MarkFast(GlobalDecodeURIComponent);
-%MarkFast(GlobalEncodeURI);
-%MarkFast(GlobalEncodeURIComponent);
 })();

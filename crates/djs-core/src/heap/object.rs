@@ -597,6 +597,7 @@ impl Heap {
     }
 
     /// Number of internal slots.
+    #[inline]
     pub fn object_slot_count(&self, o: Obj) -> u32 {
         Object::LAYOUT.tail_capacity(self.cell_size(o.0))
     }
@@ -693,6 +694,7 @@ impl Heap {
     // ---------------------------------------------------------------- arrays
 
     /// The `length` of an array.
+    #[inline]
     pub fn array_length(&self, o: Obj) -> u32 {
         debug_assert_eq!(self.object_class(o), ObjectClass::Array);
         let n = self.object_slot(o, 0).as_number().unwrap_or(0.0);
@@ -714,6 +716,7 @@ impl Heap {
     }
 
     /// The dense length (0 without elements).
+    #[inline]
     pub fn dense_len(&self, o: Obj) -> u32 {
         match self.elements(o) {
             0 => 0,

@@ -441,6 +441,7 @@ fn index_key(k: Value) -> Option<u32> {
 /// A dense leaf (0080) that reaches the heap cap declines instead (its partial work, if
 /// any, is plain stores the general loop repeats): the loop's own allocations then fail
 /// at instructions that collect and retry (D1700).
+#[inline]
 fn decline_oom<T>(r: Result<T, Fault>, decline: T) -> Result<T, Fault> {
     match r {
         Err(f) if f.is_out_of_memory() => Ok(decline),

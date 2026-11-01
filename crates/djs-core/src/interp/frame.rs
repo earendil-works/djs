@@ -77,7 +77,8 @@ impl Continuation {
         }
     }
 
-    /// The `flags` encoding (a non-negative int32).
+    /// The `flags` encoding (a non-negative int32). Inline: every frame push (D2255).
+    #[inline]
     pub const fn to_flags(self) -> i32 {
         match self {
             Continuation::PushResult => 0,

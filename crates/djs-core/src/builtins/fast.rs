@@ -94,7 +94,6 @@ pub(crate) static FAST: &[FastFn] = &[
     f("StringPrototypeEndsWith", ends_with),
     f("StringPrototypeSlice", slice),
     f("StringPrototypeSubstring", substring),
-    f("StringPrototypeSubstr", substr),
     f("StringPrototypeCharAt", char_at),
     f("StringPrototypeCharCodeAt", char_code_at),
     f("StringPrototypeCodePointAt", code_point_at),
@@ -150,12 +149,8 @@ pub(crate) static FAST: &[FastFn] = &[
     f("ArrayPrototypeSlice", array_slice),
     f("ArrayPrototypeJoin", array_join),
     f("ArrayPrototypeFill", array_fill),
-    // ---- String.fromCharCode and the URI functions (0091) ----
+    // ---- String.fromCharCode (0091; the URI functions run their builtins, D2256) ----
     f("StringFromCharCode", from_char_code),
-    f("GlobalDecodeURI", decode_uri),
-    f("GlobalDecodeURIComponent", decode_uri_component),
-    f("GlobalEncodeURI", encode_uri),
-    f("GlobalEncodeURIComponent", encode_uri_component),
 ];
 
 // ---- argument helpers ----------------------------------------------------------------
@@ -456,28 +451,6 @@ fn substring(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
     let (a, b) = (clamp(a, n), clamp(b, n));
     let (lo, hi) = if a < b { (a, b) } else { (b, a) };
     some_str(string::substring(heap, s, lo as u32, hi as u32)?)
-}
-
-fn substr(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
-    let Some(s) = this_str(heap, this)? else {
-        return Ok(None);
-    };
-    let size = len(heap, s);
-    let Some(start) = relative(heap, arg(args, 0), size, 0.0)? else {
-        return Ok(None);
-    };
-    let length = match arg(args, 1) {
-        v if v.is_undefined() => size,
-        v => match int_arg(heap, v)? {
-            Some(l) => l,
-            None => return Ok(None),
-        },
-    };
-    let end = (start + length).min(size);
-    if start >= end {
-        return empty(heap);
-    }
-    some_str(string::substring(heap, s, start as u32, end as u32)?)
 }
 
 /// The code unit index of charAt/charCodeAt/codePointAt: `None` declines, `Some(None)`
@@ -1183,7 +1156,7 @@ fn array_fill(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
     Ok(Some(this))
 }
 
-// ---- String.fromCharCode, the URI functions (0091) ------------------------------------
+// ---- String.fromCharCode (0091) -----------------------------------------------------
 
 /// String.fromCharCode ( ...codeUnits ) of primitives (ToUint16 of ToNumber).
 fn from_char_code(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
@@ -1201,36 +1174,4 @@ fn from_char_code(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
         heap.alloc_utf16(&units)?
     };
     some_str(s)
-}
-
-/// The URI functions of a primitive: a malformed URI declines (the builtin throws).
-fn uri(heap: &mut Heap, v: Value, f: fn(&mut Heap, Str) -> Result<Str, Fault>) -> Fast {
-    match str(heap, v)? {
-        Some(s) => Ok(Some(Value::string(f(heap, s)?))),
-        None => Ok(None),
-    }
-}
-
-fn decode_uri(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
-    uri(heap, arg(args, 0), |h, s| {
-        crate::builtins::uri::decode(h, s, false)
-    })
-}
-
-fn decode_uri_component(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
-    uri(heap, arg(args, 0), |h, s| {
-        crate::builtins::uri::decode(h, s, true)
-    })
-}
-
-fn encode_uri(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
-    uri(heap, arg(args, 0), |h, s| {
-        crate::builtins::uri::encode(h, s, false)
-    })
-}
-
-fn encode_uri_component(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
-    uri(heap, arg(args, 0), |h, s| {
-        crate::builtins::uri::encode(h, s, true)
-    })
 }
