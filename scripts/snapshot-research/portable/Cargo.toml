@@ -1,0 +1,22 @@
+[package]
+name = "portable"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Not part of the workspace or the gate (as snaplab and scripts/determinism/probe). The
+# same sources build against an older djs tree: copy this directory to the same place in
+# a `git archive` of the older commit (see README.md).
+[workspace]
+
+[dependencies]
+djs-core = { path = "../../../crates/djs-core" }
+djs-prelude = { path = "../../../crates/djs-prelude" }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[features]
+# Build against the older tree (README.md): its builtin record layouts.
+old = []
+
+[profile.dev.package.djs-core]
+opt-level = 1
