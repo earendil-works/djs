@@ -59,6 +59,68 @@ size ceiling (state the exchange rate in each decision).
 - [ ] Guide pages updated.
 
 ## Log
+### Plan (measured on main 2e784f25, base 325,008 B / 5,852 cells)
+Tools: work/scratch/0151 (fnsizes, ophist, classify.py; a copy of the tree that keeps
+template names to join cells to sources).
+
+**Where the bytes are.** The 874 builtin functions are 237 KB of the 325 (73%); the tail
+(atom table entries 15.6 KB + intern index 16.4 KB, stack, global table) ~40 KB; prototype
+and namespace property tables ~20 KB; strings 29 KB. Per function, 139 KB is fixed
+overhead (object 32 B + 8 per capture, name/length PropValues 32 B, template 56 B, cell
+headers of code/pool/capture descriptor) and 96 KB payload (86 KB bytecode).
+
+**Classification (874):**
+| | fns | bytes | code |
+| --- | ---: | ---: | ---: |
+| visible (own registry path) | 539 | 143 KB | 43 KB |
+| installed intrinsics (%intrinsic:) | 112 | 32 KB | 15 KB |
+| internal helpers (capture-only) | 223 | 62 KB | 28 KB |
+| leaf (never run user code) | 223 | 39 KB | 7.7 KB |
+| reentrant | 651 | 198 KB | 78 KB |
+| thin: one `return %I(args)` / `return F(args)`, args plain or coerced | 214 | 37 KB | 4.5 KB |
+| complex leaf | 134 | 25 KB | 6 KB |
+| complex reentrant | 526 | 175 KB | 75 KB |
+
+Typed arrays are already one implementation: %TypedArray%.prototype has one function per
+method; the 12 constructors are 28-byte calls of TypedArrayConstruct(kind). The family's
+44 KB is 137 functions × ~180 B of per-function overhead plus 16 KB bytecode, so sharing
+code there saves ~2 KB; the per-function costs are the lever.
+
+**Levers, measured potential (per VM):**
+1. L6, no closures in builtin code: calls between prelude functions go through IIFE boxes
+   (257 BoxCells 4.1 KB), capture descriptors (652, 14.0 KB) and capture slots in the
+   function objects (11.0 KB); 1,580 calls are `get_cap; undefined; args; call`. A
+   privileged `call_builtin idx argc` / `get_builtin idx` over one prelude function table
+   (2 KB): **−27 KB cells, −5 KB code.**
+2. L4, denser bytecode: 86 KB in 31,100 instructions; operands are 2–4 bytes wide but
+   7,749/7,749 locals, all args/caps/argcs, 3,470/3,552 intrinsic ids, 1,076/1,076
+   consts and 2,074/2,291 jumps fit 8 bits. Narrow operands with wide forms −30 KB
+   (0127 measured 99 → 70 KB), implied intrinsic arity −3.5 KB, 1-byte forms for
+   loc/arg 0–3 ~−8 KB, 762 dead `return_undef` after return/throw: **−40 KB.**
+3. L3, compact functions and templates: the code cells' headers and padding 13.6 KB, 394
+   pool cells 13.5 KB for 901 entries (one deduped pool: −8 KB), privileged templates
+   carry unused NAME/CHILDREN/IC/CAPTURE_DESC (56 → ~32 B: −20 KB), name/length of 489
+   functions in 32-byte PropValues (from the template until first changed: −15.6 KB):
+   **−50 KB**, the last two the riskiest (call path, property layer).
+4. L2, direct native binding for the 214 thin builtins (a function object naming an
+   existing intrinsic/builtin with an argument map and constants, QuickJS's magic; no
+   new Rust per builtin): −25 KB today, **−11 KB after L3/L6**. Covers DataView get/set,
+   the TypedArray constructors, every/some (lever 1).
+5. L1 rest (shared families with magic): **−3..−5 KB**.
+6. L5, frozen dictionaries (81 PropTables 14 KB + 15 hash indexes 6 KB): **−5..−8 KB.**
+7. Optional trade: the 134 complex leaf builtins to Rust through bgen (no state machine
+   needed): **−16 KB per VM for ~+12 KB gzip** (estimate, to be measured).
+
+**Projection:** 325 → ~295 (L6) → ~255 (L4) → ~205 (L3) → ~190 (L2/L1) → ~182 (L5) →
+~166 (L7) KB, before 0150 (strings, atom table: the 32 KB atom tail is its area).
+Under 100 KB with every builtin kept needs the 75 KB of reentrant bytecode out of the
+VM. Natives that can suspend cost ~2 KB wasm each (D2020: 26 KB raw for 13), so 526
+of them are not a trade. Running builtin bytecode from module memory instead of the
+arena drops the raw base by ~90 KB but the instance's memory only by the coded copy
+(data segments are per instance, D2252), so I do not count it as a saving.
+
+**Order:** L6 → L4 → L3 (code/pool cells, then templates, then name/length) → L2+L1 →
+L5 → L7 if accepted. Each its own branch and decision; measurements per landing.
 
 ## Follow-ups
 
