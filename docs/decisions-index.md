@@ -374,3 +374,118 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
   and D1831 (shapes).
 - D1783 appears twice in the log with two titles (fast paths for appends, strict equality
   and insert2/3; `put_elem` appends): both are the same decision.
+
+## Not yet sorted by topic
+
+Decisions recorded since the index was last sorted, in log order. Move them into their
+topics when the index is next reorganized.
+
+- D1920: Compiler throughput and size in wasm (0092)
+- D1832: Addition caches and receiver-shape proofs; 5-word cache slots
+- D017: Note on duplicated decision id D1783
+- D1940: Where a pi VM's baseline wasm memory goes
+- D1941: A 256 KiB wasm stack; the parser's deep paths fit it
+- D1942: Restored arenas reserve their target up front; `djs_image_staging`
+- D1930: The tier-0 loop keeps the interpreter state in locals
+- D1931: Calls and returns in the tier-0 loop: the same frames, block access
+- D1960: Phase-1 code as packed instructions; identifier atom cache (0096)
+- D1970: Immutable ArrayBuffers
+- D1971: Error.prototype.stack is an accessor
+- D1972: Promise.allKeyed and Promise.allSettledKeyed
+- D1990: A restored arena reserves its GC threshold plus a slack
+- D1991: `verify` keeps cell starts in a bitmap
+- D2010: Error.captureStackTrace
+- D2011: REPL completion reads the heap; `.step` pauses between fuel slices
+- D1980: Privileged templates without debug fields (optional trailing fields)
+- D1981: The atom index stays at load ≤ 1/2 (measured)
+- D2020: `@fast` builtins are not also `@native`, except Array.prototype.push
+- D2021: The number parsers have one instance; two-byte input is narrowed
+- D2030: Error.stackTraceLimit as in qjs
+- D2031: Call positions follow qjs: tail calls at the `return`, `new` after the callee
+- D2032: `difftest: stacks` compares stack frames
+- D2000: Typed locals of native builtins live in Rust variables, written through
+- D2050: Error.prepareStackTrace and CallSite objects, as qjs has them
+- D2051: SyntaxErrors from dynamic code start their stack at `<input>:line:col`
+- D2052: A constructor's `prototype` is its last own property
+- D2070: NamedEvaluation names only a function that is the whole initializer
+- D2071: Syntax messages at the end of input and in dynamic functions follow qjs
+- D2072: Constructor statics and namespace members in qjs's order
+- D2060: Natives call plain closures by writing the frame in place
+- D2150: Prototype objects in qjs's property order
+- D2090: Fused dense HasProperty + Get in natives; one-pass string search and in-arena joins
+- D2200: The guide's site uses Elanor, vendored from its published packages
+- D018: Adopt mark-compact for in-VM collections
+- D019: Snapshots: compact images now
+- D020: The size budget is gzip relative to quickjs-wasi
+- D021: pi integration deferred; codemode corpus harvested with redaction
+- D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
+- D2280: The harvested codemode corpus
+- D2281: Redaction of harvested scripts: arguments scrubbed, unknown words renamed
+- D2250: JSON without per-key allocations, escapes by runs; two-byte filter in one-byte search
+- D2260: Snapshots are compact containers: collected, zstd against a reference, pinned to the build
+- D2261: Snapshot compression runs in the host: node's zstd at level 3; none without it
+- D2262: pi's prelude image is the reference of the adapter's snapshots and is recomputable
+- D2263: Sandbox.bytes() collects first
+- D2282: Difftest ratchet reasons are an excerpt around the first difference
+- D2283: Harvested cases with structured tool results
+- D2284: Extra redaction for structured-result harvests
+- D2041: An old region that minor collections neither trace nor move
+- D2042: Full collections do not promote; only seal points make cells old
+- D2043: pi's later cold starts size the arena for the sealed prelude heap
+- D2044: No card table and write barrier (old-generation phase 2) for now
+- D2251: The base image is ordered by cell kind
+- D2252: The wasm module ships the base image coded; hosts decode it once per module
+- D2331: The shipped module is built with remapped source paths
+- D2332: djs-wasm is no_std on wasm32, with a panic handler that never formats
+- D2333: The shipped module drops panic locations (-Zlocation-detail=none, the one unstable flag)
+- D2253: The base image drops the prelude's internal names
+- D2254: `@native` only where benchmarks or real codemode pay
+- D2045: The first collection after a canonical image is full
+- D2046: No aging promotion
+- D2047: Arena growth policies that did not help
+- D2048: Peak memory is compared as a distribution over perturbed runs
+- D2334: Unicode property tables coded by structure
+- D2335: Only NFC keeps quick-check tables; the other forms' checks follow from the decompositions
+- D2255: The shipped module inlines less (`-inline-threshold=40`), with hot helpers marked
+- D2256: The URI functions and String.prototype.substr run their builtins (no @fast)
+- D2336: Debug details of internal failures only outside the shipped module
+- D2337: The decomposition stream in two parts with per-position prediction
+- D2338: Primary composites are derived at run time and cached per heap
+- D2053: A page allocator under dlmalloc in djs-wasm: huge blocks grow in place
+- D2054: VMs from the base keep their initial arena room; json's +0.6 MiB is accepted
+- D2339: Messages and formatted strings without core::fmt
+- D2264: `djs heap` analyzes dumps through djs-core's heap code; djs-cli reads and writes snapshot containers
+- D2055: The old-region walk uses per-kind slot plans
+- D2056: The collection threshold stays at twice the live size
+- D2340: Heap views show the program's own cells apart from the base realm
+- D2340: Heap views show the program's own cells apart from the base realm; REPL dumps are containers
+- D2300: JSON strings: quoting jumps to the first byte to escape; parsing skips plain words after an escape
+- D2301: slice, join, split and CreateDataPropertyOrThrow on plain arrays in one step
+- D2302: Size trade: +1.4 KB gzip for pi-like −12.7%
+- D2057: The cells a VM replaces first sit at the end of base and sealed images
+- D2058: The size ceiling rises by 600 B for stable snapshot layouts
+- D2060: The base is decoded or injected straight into the first VM's arena
+- D2303: Callback loops in one intrinsic, with a reused frame (`%EachDense`, the `Each` continuation)
+- D2350: The portable-snapshot prototype lives outside the workspace and builds against older trees
+- D2351: A snapshot importer never holds cell offsets across a VM run
+- D022: Frozen builtins as a runtime VM option, plus an immutable builtin prefix
+- D2062: `Roots::BASE_END` marks the builtin prefix
+- D2371: The builtin registry: stable ids by spec path, append-only, gate-checked
+- D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
+- D2304: Frozen builtins: gates in the property layer, the override fix in [[Set]]
+- D2064: Collections never move or free the builtin prefix
+- D2065: A debug write barrier below BASE_END, armed by frozen builtins or one option
+- D2066: Session images: the roots cell, a canonical prefix diff and the session region
+- D023: Notes superseding parts of D2304 after 0147
+- D024: No compatibility with unreleased formats
+- D2400: One snapshot container format, session images only
+- D2067: Builtin result shapes and the engine's queues are in the base; the ceiling rises 720 B
+- D2410: The harvester reads p2 session databases from a read-only copy
+- D2430: The base image stores each flat string once
+- D2431: A two-level atom table: the base's atoms in the prefix, a VM's own in the tail
+- D2432: `djs heap` shows the session's own part by default
+- D2440: Prelude functions live in a realm table, not in captured Boxes
+- D2305: Keys iterators step over holes; `%IteratorFastDrain` takes keys and values runs in one step
+- D2306: Array.from(arrayLike, mapfn) runs through `%EachDense`
+- D2307: Callback builtins on short arrays: no `%EachDense` for an empty array, and its call outside `step`
+- D2510: No wasm JIT; ahead-of-time wasm for builtins stays `@native`
