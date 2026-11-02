@@ -179,11 +179,11 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
         }
         if matches!(mode, Mode::Suspend) {
             let o = vm.options();
-            vm = Vm::from_bytes(vm.bytes().to_vec(), o).unwrap();
+            vm = Vm::from_bytes(vm.image().to_vec(), o).unwrap();
         }
     }
     vm.heap().verify().unwrap();
-    let raw = fnv64(vm.bytes());
+    let raw = fnv64(vm.image());
     (out, Some((raw, vm.canonical_hash().unwrap())))
 }
 

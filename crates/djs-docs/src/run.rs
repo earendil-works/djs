@@ -49,7 +49,7 @@ pub fn run(src: &str) -> String {
             Status::OutOfFuel => {
                 spent += SLICE;
                 let o = vm.options();
-                vm = Vm::from_bytes(vm.bytes().to_vec(), o).expect("a valid heap image");
+                vm = Vm::from_bytes(vm.image().to_vec(), o).expect("a valid heap image");
             }
             Status::Threw(e) => {
                 out.push_str(&format!("Uncaught {}\n", vm.display(e)));

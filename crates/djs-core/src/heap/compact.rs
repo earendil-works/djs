@@ -15,7 +15,7 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 
 /// The value stack of an image: room for a few frames; `run` grows it on demand.
-const IMAGE_STACK: u32 = 256;
+pub(crate) const IMAGE_STACK: u32 = 256;
 
 impl Heap {
     /// Shrinks property tables, the atom table's entries and the value stack (of an idle

@@ -31,7 +31,7 @@ fn eval(vm: &mut Vm, src: &str) -> String {
             Status::Threw(v) => return alloc::format!("throw {}", vm.display(v)),
             Status::OutOfFuel => {
                 let opts = vm.options();
-                *vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();
+                *vm = Vm::from_bytes(vm.image().to_vec(), opts).unwrap();
             }
             s => panic!("{s:?}"),
         }
@@ -163,7 +163,7 @@ fn frozen_builtins_on_a_base_image() {
     // The mode is part of the image; collections keep the boundary.
     vm.collect().unwrap();
     vm.collect_canonical().unwrap();
-    let mut vm = Vm::from_bytes(vm.bytes().to_vec(), VmOptions::default()).unwrap();
+    let mut vm = Vm::from_bytes(vm.image().to_vec(), VmOptions::default()).unwrap();
     assert!(vm.frozen_builtins());
     check(&mut vm, FROZEN);
     // The same base without the option is ordinary.

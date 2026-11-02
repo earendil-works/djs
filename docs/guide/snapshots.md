@@ -18,8 +18,8 @@ cost.
 
 ## An image is the arena
 
-`Vm::bytes()` (`vm_arena_ptr` and `vm_arena_len` in wasm) is the image: the arena from
-offset 0 to its end. It can be taken whenever `run` has returned: after `Done`, while
+`Vm::image()` (in wasm `vm_arena_ptr` and `vm_arena_len`, read after a collection) is the
+image: the arena from offset 0 to its end. It can be taken whenever `run` has returned: after `Done`, while
 `OutOfFuel` in the middle of a loop, while parked on a host call, while idle with ten
 tools pending. Nothing is serialized, because nothing needs to be:
 
@@ -55,7 +55,16 @@ console.log(tagged.join(" "), [...seen.values()].join(""));
 Taking an image right after a full collection makes it small: no garbage, the live cells
 packed in their allocation order ([the garbage collector](gc.md)). Embedders collect
 before they keep an image (D1890). The stress tests also compare raw images taken at
-arbitrary stops, which must be identical too (D1725). The base image is made with the
+arbitrary stops, which must be identical too (D1725).
+
+An image holds nothing a run merely left behind (D2308). The interpreter leaves popped
+values in the value stack's slots above the stack pointer and overwrites them later;
+`Vm::image()` zeroes them, and so does every collection before it traces the stack. A
+stack left behind when the interpreter grows it gets its dead slots zeroed too. So two
+runs with the same history give the same image bytes whether or not, and wherever, they
+were stopped and restored. A collection the embedder asks for also shrinks a stack that
+grew for a deep recursion back to what it holds: after 2,000 nested calls a pi
+session's stack had 32K slots (256 KB) that every later session image carried. The base image is made with the
 copying collector instead, so its layout depends only on the object graph, not on how the
 prelude allocated.
 
@@ -363,7 +372,7 @@ of the call it waits on, and the container is 2.1 KB.
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2057 D2063 D2066 D2067 D024 D2400 D2058 D2043 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 -->
+<!-- gen:decisions D2040 D2041 D2057 D2063 D2066 D2067 D024 D2400 D2058 D2043 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 D2308 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2057: The cells a VM replaces first sit at the end of base and sealed images
@@ -395,4 +404,5 @@ Decisions on this page:
 - D2261: Snapshot compression runs in the host: node's zstd at level 3; none without it
 - D2262: pi's prelude image is the reference of the adapter's snapshots and is recomputable
 - D2264: `djs heap` analyzes dumps through djs-core's heap code; djs-cli reads and writes snapshot containers
+- D2308: Images hold no dead value-stack slots; embedder collections shrink a grown stack
 <!-- /gen -->

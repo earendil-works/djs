@@ -116,7 +116,7 @@ fn finish(mut vm: Vm, fuel: u64, suspend: bool) -> (Vm, Outcome) {
             Status::OutOfFuel => {
                 if suspend {
                     let opts = vm.options();
-                    vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();
+                    vm = Vm::from_bytes(vm.image().to_vec(), opts).unwrap();
                 }
             }
             Status::HostCall { call_id, fn_id } => {
@@ -126,7 +126,7 @@ fn finish(mut vm: Vm, fuel: u64, suspend: bool) -> (Vm, Outcome) {
                 log.push(line.join(" "));
                 if suspend {
                     let opts = vm.options();
-                    vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();
+                    vm = Vm::from_bytes(vm.image().to_vec(), opts).unwrap();
                 }
                 vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
             }
@@ -1108,7 +1108,7 @@ fn strong_weak_refs(stress_registrations: u32) {
         assert_eq!(out.log, ["true true"], "gc_stress {gc_stress}");
         // The mode is in the image.
         let opts = vm.options();
-        vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();
+        vm = Vm::from_bytes(vm.image().to_vec(), opts).unwrap();
         assert!(vm.heap().weak_refs_strong());
         let (mut vm, out) = run_script(
             vm,
@@ -1311,7 +1311,7 @@ fn to_primitive_through_a_host_valueof() {
                 assert_eq!(vm.host_call(call_id).unwrap().this, o_now);
                 // Through an image round trip, for good measure.
                 let opts = vm.options();
-                vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();
+                vm = Vm::from_bytes(vm.image().to_vec(), opts).unwrap();
                 vm.resolve_host_call(call_id, Ok(Value::int(10))).unwrap();
             }
             Status::HostCall { call_id, .. } => {
@@ -2051,7 +2051,7 @@ fn async_entry_awaits_async_host_calls() {
             }
             if suspend {
                 let o = vm.options();
-                vm = Vm::from_bytes(vm.bytes().to_vec(), o).unwrap();
+                vm = Vm::from_bytes(vm.image().to_vec(), o).unwrap();
             }
         };
         let Some(Some(Ok(v))) = vm.promise_state(result) else {
@@ -2912,7 +2912,7 @@ fn run_inbox(src: &str, fuel: u64, suspend: bool, delivery: Delivery, clock: boo
         }
         if suspend {
             let opts = vm.options();
-            vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();
+            vm = Vm::from_bytes(vm.image().to_vec(), opts).unwrap();
         }
     }
 }
@@ -3189,7 +3189,7 @@ fn shapes_do_not_depend_on_collection_points() {
                     }
                     if suspend {
                         let opts = vm.options();
-                        vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();
+                        vm = Vm::from_bytes(vm.image().to_vec(), opts).unwrap();
                     }
                 }
                 s => panic!("{s:?}"),
@@ -3427,7 +3427,7 @@ fn budget_stops_at_the_same_point(
                 assert_eq!(vm.run(slice), Status::OutOfFuel);
                 if suspend {
                     let opts = vm.options();
-                    vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();
+                    vm = Vm::from_bytes(vm.image().to_vec(), opts).unwrap();
                 }
             }
             states.push((vm.canonical_hash().unwrap(), vm.backtrace()));
@@ -3577,7 +3577,7 @@ fn image_trace(src: &str, exec: ExecOptions, fuel: u64, suspend: bool) -> Vec<St
         }
         if suspend {
             let opts = vm.options();
-            vm = Vm::from_bytes(vm.bytes().to_vec(), opts).unwrap();
+            vm = Vm::from_bytes(vm.image().to_vec(), opts).unwrap();
         }
     }
 }
@@ -3726,6 +3726,9 @@ fn seal_puts_the_first_grown_cells_last() {
         &mut v,
         "globalThis.m = new Map([[1, 1]]); globalThis.it = m.keys(); it.next(); return 0",
     );
+    // A VM from `Vm::new` has a 1024-slot stack, which a full collection would shrink
+    // (D2308), moving what lies after it; a VM from the base starts with 256 slots.
+    v.collect().unwrap();
     v.seal().unwrap();
     let a = v.heap().arena();
     let atoms: crate::heap::Ref = a.get(0, crate::heap::cells::Roots::ATOMS);
@@ -3992,4 +3995,99 @@ fn the_atom_table_has_two_levels() {
     let mut back = Vm::from_session(&s, &base, VmOptions::default()).unwrap();
     let f = back.heap_mut().atom_str("fresh_atom_7").unwrap();
     assert_eq!(f, fresh[7]);
+}
+
+/// D2308: images hold nothing above the stack pointer, equal states give equal images
+/// however the run was sliced, and the embedder's collections shrink a stack that grew.
+#[test]
+fn images_have_nothing_above_sp() {
+    use crate::heap::cells::{Interp, Roots};
+    let src = "function deep(n) { return n === 0 ? [1, 2, 3].map((x) => x * 2).length : 1 + deep(n - 1); }\n\
+               let t = 0; for (let i = 0; i < 40; i++) t += deep(300) + JSON.stringify({ i }).length; t";
+    // The dead slots above `sp` of an image, and its stack's capacity.
+    let dead = |image: &[u8]| -> (u32, u32) {
+        let h = Heap::from_bytes(image.to_vec(), crate::heap::DEFAULT_LIMIT).unwrap();
+        let sp: u32 = h.arena().get(state::interp(&h), Interp::SP);
+        let s: crate::heap::Ref = h.arena().get(0, Roots::STACK);
+        let cap = h.value_array_capacity(s.0);
+        let n = (sp..cap)
+            .filter(|&k| h.value_array_get(s.0, k).to_bits() != 0)
+            .count() as u32;
+        (n, cap)
+    };
+    let start = |vm: &mut Vm| {
+        let f = vm
+            .compile(
+                src.as_bytes(),
+                &crate::compiler::CompileOptions::script("t.js"),
+            )
+            .unwrap();
+        let this = Value::object(vm.global());
+        vm.call(f, this, &[]).unwrap();
+    };
+    let mut b = Vm::new(VmOptions::default()).unwrap();
+    b.prepare_base_image().unwrap();
+    let base = b.bytes().to_vec();
+    let vm = || Vm::from_base(&base, VmOptions::default()).unwrap();
+    // Uninterrupted.
+    let mut whole = vm();
+    start(&mut whole);
+    assert!(matches!(whole.run(u64::MAX), Status::Done(_)));
+    assert!(
+        dead(whole.bytes()).0 > 0,
+        "the test must leave dead values (raw arena)"
+    );
+    assert_eq!(dead(whole.image()).0, 0);
+    // Sliced, restored from its image at every stop, checked there.
+    let mut sliced = vm();
+    start(&mut sliced);
+    let mut stops = 0;
+    loop {
+        match sliced.run(997) {
+            Status::Done(_) => break,
+            Status::OutOfFuel => {
+                stops += 1;
+                assert_eq!(dead(sliced.image()).0, 0);
+                let session = sliced.session_bytes(&base).unwrap();
+                let raw = super::session::expand_session(&session, &base).unwrap();
+                assert_eq!(dead(&raw).0, 0);
+                let o = sliced.options();
+                sliced = Vm::from_bytes(sliced.image().to_vec(), o).unwrap();
+            }
+            s => panic!("{s:?}"),
+        }
+    }
+    assert!(stops > 10, "{stops} stops");
+    let (x, y) = (whole.image().to_vec(), sliced.image().to_vec());
+    let diff: Vec<usize> = (0..x.len().min(y.len()))
+        .filter(|&i| x[i] != y[i])
+        .collect();
+    assert!(
+        x.len() == y.len() && diff.is_empty(),
+        "{} vs {} bytes, {} differ, first {:?}",
+        x.len(),
+        y.len(),
+        diff.len(),
+        &diff[..diff.len().min(8)]
+    );
+    assert_eq!(
+        whole.canonical_hash().unwrap(),
+        sliced.canonical_hash().unwrap()
+    );
+    // The recursion grew the stack; the embedder's collection shrinks it again.
+    let grown = dead(whole.image()).1;
+    assert!(grown >= 1024, "{grown}");
+    whole.collect().unwrap();
+    assert_eq!(dead(whole.image()), (0, crate::heap::IMAGE_STACK));
+    // And the VM runs on: a deeper recursion grows it again.
+    let f = whole
+        .compile(
+            b"deep(900)",
+            &crate::compiler::CompileOptions::script("u.js"),
+        )
+        .unwrap();
+    let this = Value::object(whole.global());
+    whole.call(f, this, &[]).unwrap();
+    assert!(matches!(whole.run(u64::MAX), Status::Done(_)));
+    assert!(dead(whole.image()).1 >= 2048);
 }

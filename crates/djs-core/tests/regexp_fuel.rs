@@ -40,7 +40,7 @@ fn run_sliced_every(src: &str, fuel: u64, restore_every: u64) -> (String, u64) {
                 stops += 1;
                 if restore_every != 0 && stops % restore_every == 1 % restore_every {
                     let o = vm.options();
-                    vm = Vm::from_bytes(vm.bytes().to_vec(), o).unwrap();
+                    vm = Vm::from_bytes(vm.image().to_vec(), o).unwrap();
                 }
             }
             other => panic!("unexpected {other:?}"),

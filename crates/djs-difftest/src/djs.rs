@@ -88,7 +88,7 @@ impl Engine for Djs {
         let image = if self.image && !matches!(done, Done::Timeout | Done::Crash(_)) {
             // The raw image, and the graph's canonical hash (D1730, 0101): what a final
             // collection used to compare, without depending on the collector's layout.
-            let raw = fnv64(s.vm.bytes());
+            let raw = fnv64(s.vm.image());
             s.vm.canonical_hash().ok().map(|h| (raw, h))
         } else {
             None
@@ -294,7 +294,7 @@ impl Session {
                     }
                     if self.suspend {
                         let o = self.vm.options();
-                        self.vm = Vm::from_bytes(self.vm.bytes().to_vec(), o)
+                        self.vm = Vm::from_bytes(self.vm.image().to_vec(), o)
                             .map_err(|e| format!("Vm::from_bytes: {e:?}"))?;
                     }
                 }

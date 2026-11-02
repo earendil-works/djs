@@ -232,7 +232,7 @@ pub fn run_main(
             Status::OutOfFuel => {
                 // Everything is in the heap: continue in a fresh VM built from the image.
                 let o = vm.options();
-                vm = Vm::from_bytes(vm.bytes().to_vec(), o).expect("valid heap image");
+                vm = Vm::from_bytes(vm.image().to_vec(), o).expect("valid heap image");
             }
             Status::HostCall { call_id, fn_id } => {
                 let info = vm.host_call(call_id).expect("parked call");

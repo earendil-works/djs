@@ -491,7 +491,7 @@ impl Repl {
                         let at = bt.lines().next().unwrap_or("").trim();
                         println!("[suspended, {used} fuel] {at}");
                         let opts = self.vm.options();
-                        self.vm = Vm::from_bytes(self.vm.bytes().to_vec(), opts)
+                        self.vm = Vm::from_bytes(self.vm.image().to_vec(), opts)
                             .expect("a valid heap image");
                     }
                 }
@@ -801,7 +801,7 @@ impl Repl {
             println!("collection failed: {e:?}");
             return;
         }
-        let image = self.vm.bytes().to_vec();
+        let image = self.vm.image().to_vec();
         let bytes = if raw {
             image.clone()
         } else {

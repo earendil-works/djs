@@ -359,8 +359,20 @@ impl Vm {
         Ok(Vm { heap, opts })
     }
 
-    /// The complete VM image.
+    /// The arena as it is: the complete VM state, including dead value-stack slots above
+    /// the stack pointer that the next instructions overwrite. For images use
+    /// [`Vm::image`].
     pub fn bytes(&self) -> &[u8] {
+        self.heap.bytes()
+    }
+
+    /// The VM image (D2308): [`Vm::bytes`] with the value-stack slots above the stack
+    /// pointer cleared, so that an image holds nothing a run left behind there and equal
+    /// states give equal images however they were sliced. The slots are dead: the
+    /// interpreter writes before it reads them, and every collection clears them before it
+    /// traces the stack, so clearing them here changes nothing the VM does afterwards.
+    pub fn image(&mut self) -> &[u8] {
+        tidy_stack(&mut self.heap, false);
         self.heap.bytes()
     }
 
@@ -368,8 +380,8 @@ impl Vm {
     /// with every VM of the build, given that prefix's image `base` (the base snapshot).
     /// Only the roots cell, the prefix words a script changed and the cells from
     /// `Roots::BASE_END` on.
-    pub fn session_bytes(&self, base: &[u8]) -> Result<Vec<u8>, session::SessionError> {
-        session::session_image(self.bytes(), base)
+    pub fn session_bytes(&mut self, base: &[u8]) -> Result<Vec<u8>, session::SessionError> {
+        session::session_image(self.image(), base)
     }
 
     /// Restores a VM from [`Vm::session_bytes`] and the same base. Verified like
@@ -835,7 +847,6 @@ impl Vm {
     /// collections while scripts run leave it alone. For the end of the embedder's setup
     /// (pi calls it after its prelude).
     pub fn seal(&mut self) -> Result<(), HeapError> {
-        // The cells the session grows first go to the end of the sealed image (D2057).
         let g = self.global();
         self.heap.move_to_end(g)?;
         self.collect_as(Collection::Seal)
@@ -978,12 +989,9 @@ impl Vm {
     fn collect_heap(heap: &mut Heap, how: Collection) -> Result<(), HeapError> {
         // Popped values above `sp` must not keep garbage alive (as at the interpreter's
         // safepoints): the stack is traced to its full capacity.
-        let i = state::interp(heap);
-        let sp = heap.arena().get(i, Interp::SP);
-        let stack = state::stack(heap);
-        for k in sp..heap.value_array_capacity(stack) {
-            heap.value_array_set(stack, k, Value::UNDEFINED);
-        }
+        // Not shrunk for a seal: a new stack would land after the cells it moved to the
+        // end (D2057).
+        tidy_stack(heap, !matches!(how, Collection::Seal));
         match how {
             Collection::Full => heap.collect(),
             Collection::Seal => heap.seal(),
@@ -1013,6 +1021,23 @@ impl Vm {
     pub fn schedule_finalization_cleanup(&mut self) -> Result<usize, HeapError> {
         crate::interp::run::late::schedule_finalization_cleanup(&mut self.heap)
     }
+}
+
+/// The value stack in an image (D2308): zeroes the slots above the stack pointer, as a
+/// fresh stack has them (a zero word is the Number +0, which holds no reference). With
+/// `shrink` (before a full collection the embedder asks for), a stack that grew for
+/// a deep recursion, whose capacity every later image would carry (32K slots, 256 KB,
+/// after 2,000 nested calls), also moves its live slots to a stack of `max(256, 2 * sp)`
+/// slots when that is at most half of it; the old one is garbage. Only between runs (no interpreter holds the stack's offset), so it costs a run
+/// nothing, and the interpreter grows it again on demand.
+#[inline]
+fn tidy_stack(heap: &mut Heap, shrink: bool) {
+    let sp = heap.arena().get(state::interp(heap), Interp::SP);
+    let cap = heap.value_array_capacity(state::stack(heap));
+    let keep = crate::heap::IMAGE_STACK.max(2 * sp);
+    let cap = if shrink && cap >= 2 * keep { keep } else { cap };
+    // A failed allocation keeps the old stack, its dead slots zeroed.
+    let _ = state::move_stack(heap, sp, cap);
 }
 
 /// FNV-1a, 64 bits.

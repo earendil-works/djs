@@ -38,6 +38,7 @@ pub mod bigint;
 pub mod cells;
 pub mod collection;
 mod compact;
+pub(crate) use compact::IMAGE_STACK;
 mod compactor;
 mod fail;
 mod frozen;

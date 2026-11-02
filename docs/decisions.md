@@ -6702,3 +6702,62 @@ allowance is today's prefix, 288,160 B (the base image is 296,184 B with its per
 tail), so collections come exactly as before; it can be retuned on its own. Heaps
 without a prefix keep the old rule; `restore_capacity`, which sees only an image length,
 counts the whole image as live.
+## D2308: Images hold no dead value-stack slots; embedder collections shrink a grown stack
+date: 2026-11-09 · by: perf · issue: 0155
+- **Dead slots:** the interpreter leaves popped values above `sp`. They are dead: it
+  writes them before it reads them, and every collection clears them before it traces
+  the stack. They are now zeroed:
+  - in `Vm::image()`, the image writer for native hosts. `Vm::bytes()` stays the raw
+    arena. The suspend round trips of the CLI, the REPL, difftest and the tests, and
+    `session_bytes`, use `image()`;
+  - in every embedder collection (`collect_heap`), which before set them to undefined.
+    Zero is the Number +0, as a fresh stack has them, and the memset is smaller code;
+  - in the old stack that growing leaves behind as garbage (`state::move_stack`).
+    Without that, an uncollected image of equal histories differed across slicings in
+    that garbage cell: a test of an uninterrupted run against one restored from
+    `image()` every 997 fuel differed in 36 bytes.
+- **No runtime cost:** the zeroing runs only when an image is taken, before a host
+  collection and when the stack grows (a cold path).
+- **wasm:** `vm_arena_ptr` is also the host's view for reading values, so it doesn't
+  clear. The JS hosts take images only after `vm_collect`/`vm_seal` (Sandbox.bytes, pi's
+  snapshot and prelude image), and those zero the dead slots.
+- **Shrinking:** a stack grown for a deep recursion kept its capacity forever, and every
+  later image carried it. Full and canonical embedder collections (not seals: the new
+  stack would land after the cells a seal moves to the end, D2057) now move the live
+  slots to a stack of max(256, 2·sp) slots when that is at most half the current one.
+  The interpreter grows it again on demand.
+  - Known gap: a stack that grew before a seal is old, and the first full collection
+    after the seal frees it, shifting what follows once.
+- **Measured** (session images, containers zstd against the base or prelude image):
+  - pi session idle after `deep(2000)`: session image 459,976 → 199,880 B; container
+    41,070 → 41,076 B.
+  - pi session idle, plain: 200,024 B both ways; container 41,077 → 41,072 B.
+  - REPL after `deep(300)`: raw image 597,600 → 566,880 B, session image 309,560 →
+    278,840 B, container 37,329 → 37,405 B.
+  - Containers barely change: zstd already squeezed the dead slots.
+- **Other dead scratch:** none found. `djs heap` on a REPL snapshot and pi idle
+  snapshots shows the stack as the only per-VM cell larger than its content; the job
+  queue, the inbox and the rejections lists are small.
+- **Size:** +91 B gzip.
+
+## D2309: instr.py patches by checked anchors and splits user code from bytecode builtins
+date: 2026-11-09 · by: perf · issue: 0155
+scripts/perf/instr.py (the instrumented engine copy, 0081) broke silently twice: an
+anchor that moved made a patch not apply, or apply in a dead place, so counters read zero
+(the run_hot loop was never counted after 0107).
+- **Anchors:** every patch is anchored on exact text that must occur a given number of
+  times. Every mismatch is reported together, with the closest lines, and the script
+  exits non-zero.
+- **Counting:** the counters sit in one generated module (`prof.rs`) and are hooked at
+  stable points:
+  - the tier-0 loop's opcode decode and `step_once`;
+  - frame pushes, native state arms, `call_intrinsic`;
+  - `alloc_cell`, `after_collect`, and the entry of each collector.
+- **Kind split:** a template's `PRIVILEGED` flag splits bytecodes into user code and
+  bytecode builtins, per path (run_hot / step), per opcode and per function. Builtins are
+  named by their registry paths (D2371).
+- **Time split:** a sampling thread reads a "what runs now" word every 50 µs (user
+  bytecode, bytecode builtins with the leaf intrinsics they call, `@native` builtins,
+  collections).
+- **Self-test:** `--self-test` builds, runs a script that must move every counter, and
+  fails on any zero.

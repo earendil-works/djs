@@ -62,10 +62,10 @@ fn run(src: &str, slice: u64, restore: bool) -> (String, Vec<u8>, u64) {
         }
         if restore {
             let o = vm.options();
-            vm = Vm::from_bytes(vm.bytes().to_vec(), o).unwrap();
+            vm = Vm::from_bytes(vm.image().to_vec(), o).unwrap();
         }
     }
-    (out, vm.bytes().to_vec(), fuel)
+    (out, vm.image().to_vec(), fuel)
 }
 
 /// Every schedule of the script at `path` against all the fuel at once: the same
