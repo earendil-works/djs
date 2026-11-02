@@ -50,13 +50,35 @@ pub enum ImmKind {
     /// A jump target: a label id in phase-1 code, an `i32` offset relative to the end of
     /// the instruction in final code. Always the last immediate.
     Target,
+    // One-byte forms of the kinds above, in the short ops (D2443). The emitter picks
+    // a short op when its operand fits; `wide` names the kind it narrows.
+    /// A local slot index below 256.
+    Loc8,
+    /// An argument slot index below 256.
+    Arg8,
+    /// A constant pool index below 256.
+    Const8,
+    /// An intrinsic id below 256.
+    Intrinsic8,
+    /// A prelude function table slot below 256.
+    Builtin8,
+    /// A jump offset in `-128..=127` (final code only: `CodeBuf::finish` shortens
+    /// jumps).
+    Target8,
 }
 
 impl ImmKind {
     /// Encoded width in bytes.
     pub const fn width(self) -> u8 {
         match self {
-            ImmKind::U8 | ImmKind::I8 => 1,
+            ImmKind::U8
+            | ImmKind::I8
+            | ImmKind::Loc8
+            | ImmKind::Arg8
+            | ImmKind::Const8
+            | ImmKind::Intrinsic8
+            | ImmKind::Builtin8
+            | ImmKind::Target8 => 1,
             ImmKind::Count
             | ImmKind::Loc
             | ImmKind::Arg
@@ -78,7 +100,29 @@ impl ImmKind {
 
     /// Whether the raw value is sign-extended when decoded.
     pub const fn is_signed(self) -> bool {
-        matches!(self, ImmKind::I8 | ImmKind::I32 | ImmKind::Target)
+        matches!(
+            self,
+            ImmKind::I8 | ImmKind::I32 | ImmKind::Target | ImmKind::Target8
+        )
+    }
+
+    /// The kind a one-byte kind narrows (itself for the others): what the operand
+    /// means.
+    pub const fn wide(self) -> ImmKind {
+        match self {
+            ImmKind::Loc8 => ImmKind::Loc,
+            ImmKind::Arg8 => ImmKind::Arg,
+            ImmKind::Const8 => ImmKind::Const,
+            ImmKind::Intrinsic8 => ImmKind::Intrinsic,
+            ImmKind::Builtin8 => ImmKind::Builtin,
+            ImmKind::Target8 => ImmKind::Target,
+            k => k,
+        }
+    }
+
+    /// A jump target (either width).
+    pub const fn is_target(self) -> bool {
+        matches!(self, ImmKind::Target | ImmKind::Target8)
     }
 }
 
@@ -125,6 +169,12 @@ plain_imm! {
     LabelId: Label => |v| v.0;
     Atom: AtomId => |v| v.id();
     Target: Label => |v| v.0;
+    Loc8: u8 => |v| v as u32;
+    Arg8: u8 => |v| v as u32;
+    Const8: u8 => |v| v as u32;
+    Intrinsic8: u8 => |v| v as u32;
+    Builtin8: u8 => |v| v as u32;
+    Target8: Label => |v| v.0;
 }
 
 // The table's `ImmKind`s and the marker types must agree on the width.

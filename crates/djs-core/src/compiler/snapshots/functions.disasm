@@ -7,57 +7,54 @@ function 0 <anonymous>: params=0 locals=1 stack=2 captures=0
    29  fclosure child4
    34  put_global "late" ic2
    41  undefined
-   42  put_loc loc0 (<completion>)
-   45  fclosure child1
-   50  init_global_lex "g"
-   55  fclosure child2
-   60  init_global_lex "h"
-   65  fclosure child5
-   70  init_global_lex "named"
-   75  object
-   76  fclosure child6
-   81  define_field "m" ic3
-   88  fclosure child7
-   93  define_field "a" ic4
-  100  put_global "obj" ic5  ; 8:5
-  107  get_global "f" ic6  ; 9:5
-  114  push_i8 1
-  116  construct 1  ; 9:6
-  119  put_loc loc0 (<completion>)
-  122  get_loc loc0 (<completion>)
-  125  return
+   42  put_loc0 (<completion>)
+   43  fclosure child1
+   48  init_global_lex "g"
+   53  fclosure child2
+   58  init_global_lex "h"
+   63  fclosure child5
+   68  init_global_lex "named"
+   73  object
+   74  fclosure child6
+   79  define_field "m" ic3
+   86  fclosure child7
+   91  define_field "a" ic4
+   98  put_global "obj" ic5  ; 8:5
+  105  get_global "f" ic6  ; 9:5
+  112  push1
+  113  construct 1  ; 9:6
+  116  put_loc0 (<completion>)
+  117  get_loc0 (<completion>)
+  118  return
 function 0.0 f: params=2 locals=3 stack=2 captures=0
-    0  get_arg arg0
-    3  put_loc loc0 (a)
-    6  get_arg arg1
-    9  dup
-   10  is_undefined
-   11  jump_if_false -> 23
-   16  drop
-   17  get_loc loc0 (a)  ; 2:19
-   20  push_i8 1
-   22  add  ; 2:21
-   23  put_loc loc1 (b)
-   26  rest arg2
-   29  put_loc loc2 (rest)
-   32  get_loc loc0 (a)  ; 2:44
-   35  get_loc loc1 (b)  ; 2:48
-   38  add  ; 2:46
-   39  get_loc loc2 (rest)  ; 2:52
-   42  get_field "length" ic0  ; 2:56
-   49  add  ; 2:50
-   50  return
-   51  return_undef
+    0  get_arg0
+    1  put_loc0 (a)
+    2  get_arg1
+    3  dup
+    4  is_undefined
+    5  jump_if_false8 -> 11
+    7  drop
+    8  get_loc0 (a)  ; 2:19
+    9  push1
+   10  add  ; 2:21
+   11  put_loc1 (b)
+   12  rest arg2
+   15  put_loc2 (rest)
+   16  get_loc0 (a)  ; 2:44
+   17  get_loc1 (b)  ; 2:48
+   18  add  ; 2:46
+   19  get_loc2 (rest)  ; 2:52
+   20  get_field "length" ic0  ; 2:56
+   27  add  ; 2:50
+   28  return
 function 0.1 g: params=0 locals=1 stack=1 captures=0
     0  special_object 4
-    2  put_loc loc0 (this)
-    5  get_loc loc0 (this)  ; 3:32
-    8  return
-    9  return_undef
+    2  put_loc0 (this)
+    3  get_loc0 (this)  ; 3:32
+    4  return
 function 0.2 h: params=1 locals=0 stack=1 captures=0
     0  get_global "arguments" ic0  ; 4:27
     7  return
-    8  return_undef
 function 0.3 k: params=0 locals=4 stack=2 captures=0
     0  special_object 4
     2  new_box_init loc1 (this)
@@ -66,11 +63,10 @@ function 0.3 k: params=0 locals=4 stack=2 captures=0
    10  special_object 1
    12  new_box_init loc3 (new.target)
    15  fclosure child0
-   20  set_loc loc0 (arrow)  ; 5:74
-   23  undefined
-   24  call 0  ; 5:67
-   27  return
-   28  return_undef
+   20  set_loc0 (arrow)  ; 5:74
+   21  undefined
+   22  call0  ; 5:67
+   23  return
 function 0.3.0 arrow: params=0 locals=0 stack=3 captures=3
     0  get_cap cap0 (this)  ; 5:37
     3  get_cap cap1 (arguments)  ; 5:43
@@ -79,38 +75,36 @@ function 0.3.0 arrow: params=0 locals=0 stack=3 captures=3
    12  return
 function 0.4 late: params=2 locals=2 stack=2 captures=0
     0  set_loc_uninit loc1 (b)
-    3  get_arg arg0
-    6  dup
-    7  is_undefined
-    8  jump_if_false -> 17
-   13  drop
-   14  get_loc_chk loc1 (b)  ; 6:19
-   17  put_loc loc0 (a)
-   20  get_arg arg1
-   23  put_loc loc1 (b)
-   26  return_undef
+    3  get_arg0
+    4  dup
+    5  is_undefined
+    6  jump_if_false8 -> 12
+    8  drop
+    9  get_loc_chk loc1 (b)  ; 6:19
+   12  put_loc0 (a)
+   13  get_arg1
+   14  put_loc1 (b)
+   15  return_undef
 function 0.5 self: params=1 locals=1 stack=4 captures=0
     0  special_object 3
-    2  put_loc loc0 (self)
-    5  get_arg arg0  ; 7:39
-    8  jump_if_false -> 27
-   13  get_loc loc0 (self)  ; 7:43
-   16  undefined
-   17  get_arg arg0  ; 7:48
-   20  push_i8 1
-   22  sub  ; 7:50
-   23  call 1  ; 7:47
-   26  return
-   27  push_i8 0
-   29  return
-   30  return_undef
+    2  put_loc0 (self)
+    3  get_arg0  ; 7:39
+    4  jump_if_false8 -> 13
+    6  get_loc0 (self)  ; 7:43
+    7  undefined
+    8  get_arg0  ; 7:48
+    9  push1
+   10  sub  ; 7:50
+   11  call1  ; 7:47
+   12  return
+   13  push0
+   14  return
 function 0.6 m: params=0 locals=1 stack=1 captures=0
     0  special_object 4
-    2  put_loc loc0 (this)
-    5  get_loc loc0 (this)  ; 8:37
-    8  get_field "v" ic0  ; 8:41
-   15  return
-   16  return_undef
+    2  put_loc0 (this)
+    3  get_loc0 (this)  ; 8:37
+    4  get_field "v" ic0  ; 8:41
+   11  return
 function 0.7 a: params=0 locals=0 stack=1 captures=0
-    0  push_i8 1
-    2  return
+    0  push1
+    1  return

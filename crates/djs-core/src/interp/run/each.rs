@@ -63,11 +63,24 @@ impl Exec<'_> {
     /// changed), else what `step_once` returns.
     #[inline(never)]
     pub(super) fn each_dense_decline(&mut self) -> Option<Option<Status>> {
-        if self.pc >= self.code_len || self.imm_u16(1) as u16 != EACH_DENSE {
+        if self.pc >= self.code_len {
             return None;
         }
-        let argc = self.imm_u16(3);
-        let info = &crate::bytecode::OPS[Op::CallIntrinsic as usize];
+        // `call_intrinsic id, argc` or its short form (D2443).
+        let (op, id, argc) = if self.byte(self.pc) == super::fast::CALL_INTRINSIC8 {
+            let id = self.byte(self.pc + 1) as u16;
+            (
+                Op::CallIntrinsic8,
+                id,
+                crate::bytecode::decode::arity(id as u32),
+            )
+        } else {
+            (Op::CallIntrinsic, self.imm_u16(1) as u16, self.imm_u16(3))
+        };
+        if id != EACH_DENSE {
+            return None;
+        }
+        let info = &crate::bytecode::OPS[op as usize];
         self.fuel -= info.cost.fuel() as i64;
         let (pc0, next) = (self.pc, self.pc + info.size as u32);
         Some(match self.each_dense(self.sp - argc, next) {

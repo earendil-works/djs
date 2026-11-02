@@ -1904,8 +1904,9 @@ fn prelude_functions_use_the_table() {
     let text = disasm_template(&heap, t);
     assert!(text.contains("put_builtin b0 2"), "{text}");
     assert!(text.contains("put_builtin b1 2"), "{text}");
-    assert!(text.contains("get_builtin b0"), "{text}");
-    assert!(text.contains("get_builtin b1"), "{text}");
+    // Called with `this` undefined: `get_builtin; undefined` in one (D2443).
+    assert!(text.contains("get_builtin_callee8 b0"), "{text}");
+    assert!(text.contains("get_builtin_callee8 b1"), "{text}");
     for op in ["get_cap", "new_box", "put_box"] {
         assert!(!text.contains(op), "{op} in {text}");
     }
@@ -2942,7 +2943,14 @@ fn ops_of_f(src: &str) -> Vec<String> {
     body.lines()
         .skip(1)
         .filter(|l| !l.trim_start().starts_with("handler"))
-        .filter_map(|l| l.split_whitespace().nth(1).map(String::from))
+        .filter_map(|l| l.split_whitespace().nth(1))
+        // The wide names: short forms are an encoding (D2443), not a peephole.
+        .map(
+            |n| match crate::bytecode::Op::ALL.iter().find(|o| o.name() == n) {
+                Some(o) => String::from(o.wide().name()),
+                None => String::from(n),
+            },
+        )
         .collect()
 }
 
@@ -3003,7 +3011,6 @@ fn peepholes() {
                 "jump_if_true",
                 "get_loc",
                 "return",
-                "return_undef",
             ],
         ),
         (
@@ -3040,20 +3047,12 @@ fn peepholes() {
                 "return",
                 "push_i8",
                 "return",
-                "return_undef",
             ],
         ),
         // A stored value used right away.
         (
             "function f(g) { const p = g(); return p; }",
-            &[
-                "get_arg",
-                "undefined",
-                "call",
-                "set_loc",
-                "return",
-                "return_undef",
-            ],
+            &["get_arg", "undefined", "call", "set_loc", "return"],
         ),
     ];
     let mut bad = Vec::new();

@@ -77,7 +77,13 @@ fn line(out: &mut String, insn: &Insn, cx: &DisasmContext<'_>) {
     let _ = write!(out, "{:>5}  {}", insn.pc, info.name);
     for (i, &kind) in info.imms.iter().enumerate() {
         out.push(' ');
-        operand(out, insn, i, kind, cx);
+        operand(out, insn, i, kind.wide(), cx);
+    }
+    // `get_loc2 (x)`: the name of an implied local.
+    if let Some(n) = insn.op.implied()
+        && insn.op.wide().info().imms == [ImmKind::Loc]
+    {
+        let _ = name(out, cx, n as usize, n < cx.locals as u32);
     }
 }
 
@@ -144,6 +150,8 @@ fn operand(out: &mut String, insn: &Insn, i: usize, kind: ImmKind, cx: &DisasmCo
             Some(t) => write!(out, "-> {t}"),
             None => write!(out, "-> ?"),
         },
+        // (`line` passes the wide kind.)
+        _ => write!(out, "{raw}"),
     };
 }
 

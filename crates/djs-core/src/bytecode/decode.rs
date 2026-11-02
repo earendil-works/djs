@@ -2,7 +2,6 @@
 //! the interpreter.
 
 use super::code::Label;
-use super::imm::ImmKind;
 use super::ops::{OP_COUNT, OPS, Op, OpInfo};
 use crate::heap::Atom;
 
@@ -131,7 +130,9 @@ impl Insn {
     /// The number of values popped (resolving `pop + imm` for calls and counts).
     pub fn pops(&self) -> u32 {
         let info = self.info();
-        info.pop as u32 + info.pop_imm.map_or(0, |k| self.imms[k as usize])
+        info.pop as u32
+            + info.pop_imm.map_or(0, |k| self.imms[k as usize])
+            + info.pop_arity.map_or(0, |k| arity(self.imms[k as usize]))
     }
 
     pub fn pushes(&self) -> u32 {
@@ -141,14 +142,25 @@ impl Insn {
 
     fn target_index(&self) -> Option<usize> {
         let imms = self.info().imms;
-        (imms.last() == Some(&ImmKind::Target)).then(|| imms.len() - 1)
+        imms.last()
+            .is_some_and(|k| k.is_target())
+            .then(|| imms.len() - 1)
     }
+}
+
+/// The declared parameters of intrinsic `id` (`call_intrinsic8`'s argument count; 0
+/// for an unknown id, which the interpreter rejects).
+#[inline]
+pub fn arity(id: u32) -> u32 {
+    super::intrinsics::INTRINSICS
+        .get(id as usize)
+        .map_or(0, |i| i.params as u32)
 }
 
 /// Per opcode, how its immediates decode (0092: one table load instead of walking
 /// `OpInfo::imms`): bits 0-3 and 4-7 describe immediate 0 and 1 (0 none, 1 u8, 2 i8,
 /// 3 u16, 4 u32/i32).
-const LAYOUT: [u8; OP_COUNT] = {
+pub(crate) const LAYOUT: [u8; OP_COUNT] = {
     let mut t = [0u8; OP_COUNT];
     let mut i = 0;
     while i < OP_COUNT {

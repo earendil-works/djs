@@ -9,197 +9,195 @@ function 0 <anonymous>: params=0 locals=1 stack=1 captures=0
    41  fclosure child4
    46  put_global "agen" ic3
    53  undefined
-   54  put_loc loc0 (<completion>)
-   57  fclosure child1
-   62  init_global_lex "h"
-   67  get_loc loc0 (<completion>)
-   70  return
+   54  put_loc0 (<completion>)
+   55  fclosure child1
+   60  init_global_lex "h"
+   65  get_loc0 (<completion>)
+   66  return
 function 0.0 f: params=1 locals=2 stack=4 captures=0
-  handler [19, 44) -> 56 depth 0
-  handler [3, 79) -> 79 depth 0
+  handler [11, 32) -> 41 depth 0
+  handler [3, 62) -> 62 depth 0
     0  async_start loc0 (<state>)
-    3  get_arg arg0
-    6  dup
-    7  is_undefined
-    8  jump_if_false -> 16
-   13  drop
-   14  push_i8 1
-   16  put_loc loc1 (a)
-   19  get_global "g" ic0  ; 5:18
-   26  undefined
-   27  get_loc loc1 (a)  ; 5:20
-   30  call 1  ; 5:19
-   33  await loc0 (<state>)  ; 5:12
-   36  gosub -> 62
-   41  async_return loc0 (<state>)
-   44  undefined
-   45  gosub -> 62
-   50  drop
-   51  jump -> 75
-   56  gosub -> 62
-   61  throw
-   62  get_global "log" ic1  ; 7:5
-   69  undefined
-   70  call 0  ; 7:8
-   73  drop
-   74  ret
-   75  undefined
-   76  async_return loc0 (<state>)
-   79  async_reject loc0 (<state>)
+    3  get_arg0
+    4  dup
+    5  is_undefined
+    6  jump_if_false8 -> 10
+    8  drop
+    9  push1
+   10  put_loc1 (a)
+   11  get_global "g" ic0  ; 5:18
+   18  undefined
+   19  get_loc1 (a)  ; 5:20
+   20  call1  ; 5:19
+   21  await loc0 (<state>)  ; 5:12
+   24  gosub -> 47
+   29  async_return loc0 (<state>)
+   32  undefined
+   33  gosub -> 47
+   38  drop
+   39  jump8 -> 58
+   41  gosub -> 47
+   46  throw
+   47  get_global "log" ic1  ; 7:5
+   54  undefined
+   55  call0  ; 7:8
+   56  drop
+   57  ret
+   58  undefined
+   59  async_return loc0 (<state>)
+   62  async_reject loc0 (<state>)
 function 0.1 h: params=1 locals=1 stack=2 captures=0
-  handler [3, 16) -> 16 depth 0
+  handler [3, 12) -> 12 depth 0
     0  async_start loc0 (<state>)
-    3  get_arg arg0  ; 11:24
-    6  get_arg arg0  ; 11:35
-    9  await loc0 (<state>)  ; 11:29
-   12  add  ; 11:26
-   13  async_return loc0 (<state>)
-   16  async_reject loc0 (<state>)
+    3  get_arg0  ; 11:24
+    4  get_arg0  ; 11:35
+    5  await loc0 (<state>)  ; 11:29
+    8  add  ; 11:26
+    9  async_return loc0 (<state>)
+   12  async_reject loc0 (<state>)
 function 0.2 gen: params=1 locals=3 stack=3 captures=0
-  handler [32, 33) -> 33 depth 0
-    0  get_arg arg0
-    3  dup
-    4  is_undefined
-    5  jump_if_false -> 13
-   10  drop
-   11  push_i8 0
-   13  put_loc loc1 (n)
-   16  generator_start loc0 (<state>)
-   19  push_i8 1
-   21  get_loc loc1 (n)  ; 15:24
-   24  yield loc0 (<state>)  ; 15:18
-   27  jump_if_false -> 34
-   32  throw
-   33  return
-   34  add  ; 15:15
-   35  set_loc loc2 (r)  ; 16:10
-   38  return
-   39  return_undef
+  handler [18, 19) -> 19 depth 0
+    0  get_arg0
+    1  dup
+    2  is_undefined
+    3  jump_if_false8 -> 7
+    5  drop
+    6  push0
+    7  put_loc1 (n)
+    8  generator_start loc0 (<state>)
+   11  push1
+   12  get_loc1 (n)  ; 15:24
+   13  yield loc0 (<state>)  ; 15:18
+   16  jump_if_false8 -> 20
+   18  throw
+   19  return
+   20  add  ; 15:15
+   21  set_loc2 (r)  ; 16:10
+   22  return
 function 0.3 deleg: params=1 locals=1 stack=5 captures=0
-  handler [101, 102) -> 102 depth 0
-  handler [96, 97) -> 97 depth 0
-  handler [42, 45) -> 103 depth 2
+  handler [83, 84) -> 84 depth 0
+  handler [78, 79) -> 79 depth 0
+  handler [35, 38) -> 85 depth 2
     0  generator_start loc0 (<state>)
-    3  get_arg arg0  ; 20:17
-    6  call_intrinsic %GetIterator 1  ; 20:10
-   11  dup
-   12  get_field "next" ic0
-   19  undefined
-   20  pick 1
-   22  pick 3
-   24  rot3l
-   25  call 1
-   28  iter_check_object
-   29  dup
-   30  get_field "done" ic1
-   37  jump_if_true -> 152
-   42  yield_star loc0 (<state>)
-   45  jump_if_false -> 20
-   50  pick 2
-   52  get_field "return" ic2
+    3  get_arg0  ; 20:17
+    4  call_intrinsic %GetIterator 1  ; 20:10
+    9  dup
+   10  get_field "next" ic0
+   17  undefined
+   18  pick 1
+   20  pick 3
+   22  rot3l
+   23  call1
+   24  iter_check_object
+   25  dup
+   26  get_field "done" ic1
+   33  jump_if_true8 -> 120
+   35  yield_star loc0 (<state>)
+   38  jump_if_false8 -> 18
+   40  pick 2
+   42  get_field "return" ic2
+   49  dup
+   50  is_nullish
+   51  jump_if_true8 -> 80
+   53  swap
+   54  pick 3
+   56  swap
+   57  call1
+   58  iter_check_object
    59  dup
-   60  is_nullish
-   61  jump_if_true -> 98
-   66  swap
-   67  pick 3
-   69  swap
-   70  call 1
-   73  iter_check_object
-   74  dup
-   75  get_field "done" ic3
-   82  jump_if_false -> 42
-   87  get_field "value" ic4
-   94  nip
-   95  nip
-   96  throw
-   97  return
-   98  drop
-   99  nip
-  100  nip
-  101  throw
-  102  return
-  103  pick 2
-  105  get_field "throw" ic5
-  112  dup
-  113  is_nullish
-  114  jump_if_true -> 132
-  119  swap
-  120  pick 3
-  122  swap
-  123  call 1
-  126  iter_check_object
-  127  jump -> 29
-  132  drop
-  133  drop
-  134  drop
-  135  call_intrinsic %IteratorClose 1
-  140  drop
-  141  push_const #0 ("iterator does not have a throw method")
-  146  call_intrinsic %NewTypeError 1
-  151  throw
-  152  get_field "value" ic6
-  159  nip
-  160  nip
-  161  return
-  162  return_undef
+   60  get_field "done" ic3
+   67  jump_if_false8 -> 35
+   69  get_field "value" ic4
+   76  nip
+   77  nip
+   78  throw
+   79  return
+   80  drop
+   81  nip
+   82  nip
+   83  throw
+   84  return
+   85  pick 2
+   87  get_field "throw" ic5
+   94  dup
+   95  is_nullish
+   96  jump_if_true8 -> 106
+   98  swap
+   99  pick 3
+  101  swap
+  102  call1
+  103  iter_check_object
+  104  jump8 -> 25
+  106  drop
+  107  drop
+  108  drop
+  109  call_intrinsic %IteratorClose 1
+  114  drop
+  115  push_const8 #0 ("iterator does not have a throw method")
+  117  call_intrinsic8 %NewTypeError
+  119  throw
+  120  get_field "value" ic6
+  127  nip
+  128  nip
+  129  return
 function 0.4 agen: params=1 locals=2 stack=6 captures=0
-  handler [63, 64) -> 64 depth 2
-  handler [43, 74) -> 24 depth 2
+  handler [51, 52) -> 52 depth 2
+  handler [38, 62) -> 19 depth 2
     0  generator_start loc0 (<state>)
-    3  get_arg arg0  ; 24:25
-    6  call_intrinsic %GetAsyncIterator 1  ; 24:3
-   11  dup
-   12  get_field "next" ic0
-   19  jump -> 74
-   24  nip
-   25  swap
-   26  call_intrinsic %AsyncIteratorCloseThrow 1
-   31  await loc0 (<state>)
-   34  drop
-   35  throw
-   36  get_field "value" ic1
-   43  put_loc loc1 (x)  ; 24:20
-   46  get_loc loc1 (x)  ; 24:35
-   49  await loc0 (<state>)  ; 24:29
-   52  yield loc0 (<state>)
-   55  jump_if_false -> 73
-   60  await loc0 (<state>)
-   63  throw
-   64  rot3r
-   65  gosub -> 104
-   70  drop
-   71  drop
-   72  return
-   73  drop
-   74  dup2  ; 24:3
-   75  swap
-   76  call 0
-   79  await loc0 (<state>)
-   82  iter_check_object
-   83  dup
-   84  get_field "done" ic2
-   91  jump_if_false -> 36
-   96  drop
-   97  drop
-   98  drop
-   99  jump -> 139
-  104  rot3r
-  105  drop
-  106  dup
-  107  dup
-  108  call_intrinsic %AsyncIteratorReturnMethod 1
-  113  dup
-  114  is_undefined
-  115  jump_if_true -> 134
-  120  swap
-  121  call 0
-  124  await loc0 (<state>)
-  127  iter_check_object
-  128  drop
-  129  jump -> 136
-  134  drop
-  135  drop
-  136  undefined
-  137  rot3l
-  138  ret
-  139  return_undef
+    3  get_arg0  ; 24:25
+    4  call_intrinsic %GetAsyncIterator 1  ; 24:3
+    9  dup
+   10  get_field "next" ic0
+   17  jump8 -> 62
+   19  nip
+   20  swap
+   21  call_intrinsic %AsyncIteratorCloseThrow 1
+   26  await loc0 (<state>)
+   29  drop
+   30  throw
+   31  get_field "value" ic1
+   38  put_loc1 (x)  ; 24:20
+   39  get_loc1 (x)  ; 24:35
+   40  await loc0 (<state>)  ; 24:29
+   43  yield loc0 (<state>)
+   46  jump_if_false8 -> 61
+   48  await loc0 (<state>)
+   51  throw
+   52  rot3r
+   53  gosub -> 84
+   58  drop
+   59  drop
+   60  return
+   61  drop
+   62  dup2  ; 24:3
+   63  swap
+   64  call0
+   65  await loc0 (<state>)
+   68  iter_check_object
+   69  dup
+   70  get_field "done" ic2
+   77  jump_if_false8 -> 31
+   79  drop
+   80  drop
+   81  drop
+   82  jump8 -> 111
+   84  rot3r
+   85  drop
+   86  dup
+   87  dup
+   88  call_intrinsic %AsyncIteratorReturnMethod 1
+   93  dup
+   94  is_undefined
+   95  jump_if_true8 -> 106
+   97  swap
+   98  call0
+   99  await loc0 (<state>)
+  102  iter_check_object
+  103  drop
+  104  jump8 -> 108
+  106  drop
+  107  drop
+  108  undefined
+  109  rot3l
+  110  ret
+  111  return_undef

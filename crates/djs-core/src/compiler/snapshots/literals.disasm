@@ -1,94 +1,94 @@
 function 0 <anonymous>: params=0 locals=2 stack=17 captures=0
     0  global_decls #12 let "n" "s" "t" "k" "holes" "o"
     5  special_object 4
-    7  put_loc loc1 (this)
-   10  undefined
-   11  put_loc loc0 (<completion>)
-   14  push_i8 0
-   16  push_i8 1
-   18  push_i8 1
-   20  neg  ; 2:16
-   21  push_i8 127
-   23  push_i32 128
-   28  push_i32 129
-   33  neg  ; 2:30
-   34  push_i32 2147483647
-   39  push_const #0 (2147483648)
-   44  push_const #1 (1.5)
-   49  push_const #2 (0.1)
-   54  push_i8 0
-   56  neg  ; 2:70
-   57  push_i8 31
-   59  push_i8 5
-   61  push_i8 15
-   63  push_i32 1000000
-   68  push_const #3 (1e+21)
-   73  push_const #1 (1.5)
-   78  array_from 17
-   81  init_global_lex "n"
-   86  push_const #4 ("a")
-   91  push_const #4 ("a")
-   96  push_const #5 ("\n\té")
-  101  push_const #6 ("😀")
-  106  push_const #7 ("")
-  111  push_const #4 ("a")
-  116  array_from 6
-  119  init_global_lex "s"
-  124  push_const #8 ("plain")
-  129  push_const #9 ("x")
-  134  get_global "n" ic0  ; 4:23
-  141  to_string  ; 4:21
-  142  push_const #10 ("y")
-  147  concat 3
-  150  get_global "s" ic1  ; 4:32
-  157  to_string  ; 4:30
-  158  get_global "n" ic2  ; 4:40
-  165  to_string  ; 4:38
-  166  get_global "s" ic3  ; 4:44
-  173  to_string  ; 4:42
-  174  concat 2
-  177  push_const #7 ("")
-  182  push_const #11 ("aA")
-  187  array_from 6
-  190  init_global_lex "t"
-  195  null
-  196  push_true
-  197  push_false
-  198  undefined  ; 5:29
-  199  get_loc loc1 (this)  ; 5:40
-  202  array_from 5
-  205  init_global_lex "k"
-  210  array_from 0
-  213  array_hole
-  214  push_i8 1
-  216  array_push
-  217  array_hole
-  218  push_i8 2
-  220  array_push
-  221  get_global "s" ic4  ; 6:27
-  228  array_spread
-  229  push_i8 3
-  231  array_push
-  232  init_global_lex "holes"
-  237  object
-  238  push_i8 1
-  240  define_field "a" ic5
-  247  push_i8 2
-  249  define_field "b c" ic6
-  256  push_i8 3
-  258  define_field "3" ic7
-  265  push_i8 4
-  267  define_field "1.5" ic8
-  274  get_global "k" ic9  ; 7:42
-  281  to_propkey
-  282  push_i8 5
-  284  define_elem
-  285  get_global "n" ic10  ; 7:49
-  292  define_field "n" ic11
-  299  get_global "s" ic12  ; 7:55
-  306  copy_data_props 0
-  308  push_i8 6
-  310  define_field "if" ic13
-  317  init_global_lex "o"
-  322  get_loc loc0 (<completion>)
-  325  return
+    7  put_loc1 (this)
+    8  undefined
+    9  put_loc0 (<completion>)
+   10  push0
+   11  push1
+   12  push1
+   13  neg  ; 2:16
+   14  push_i8 127
+   16  push_i32 128
+   21  push_i32 129
+   26  neg  ; 2:30
+   27  push_i32 2147483647
+   32  push_const8 #0 (2147483648)
+   34  push_const8 #1 (1.5)
+   36  push_const8 #2 (0.1)
+   38  push0
+   39  neg  ; 2:70
+   40  push_i8 31
+   42  push_i8 5
+   44  push_i8 15
+   46  push_i32 1000000
+   51  push_const8 #3 (1e+21)
+   53  push_const8 #1 (1.5)
+   55  array_from 17
+   58  init_global_lex "n"
+   63  push_const8 #4 ("a")
+   65  push_const8 #4 ("a")
+   67  push_const8 #5 ("\n\té")
+   69  push_const8 #6 ("😀")
+   71  push_const8 #7 ("")
+   73  push_const8 #4 ("a")
+   75  array_from 6
+   78  init_global_lex "s"
+   83  push_const8 #8 ("plain")
+   85  push_const8 #9 ("x")
+   87  get_global "n" ic0  ; 4:23
+   94  to_string  ; 4:21
+   95  push_const8 #10 ("y")
+   97  concat 3
+  100  get_global "s" ic1  ; 4:32
+  107  to_string  ; 4:30
+  108  get_global "n" ic2  ; 4:40
+  115  to_string  ; 4:38
+  116  get_global "s" ic3  ; 4:44
+  123  to_string  ; 4:42
+  124  concat 2
+  127  push_const8 #7 ("")
+  129  push_const8 #11 ("aA")
+  131  array_from 6
+  134  init_global_lex "t"
+  139  null
+  140  push_true
+  141  push_false
+  142  undefined  ; 5:29
+  143  get_loc1 (this)  ; 5:40
+  144  array_from 5
+  147  init_global_lex "k"
+  152  array_from 0
+  155  array_hole
+  156  push1
+  157  array_push
+  158  array_hole
+  159  push2
+  160  array_push
+  161  get_global "s" ic4  ; 6:27
+  168  array_spread
+  169  push3
+  170  array_push
+  171  init_global_lex "holes"
+  176  object
+  177  push1
+  178  define_field "a" ic5
+  185  push2
+  186  define_field "b c" ic6
+  193  push3
+  194  define_field "3" ic7
+  201  push_i8 4
+  203  define_field "1.5" ic8
+  210  get_global "k" ic9  ; 7:42
+  217  to_propkey
+  218  push_i8 5
+  220  define_elem
+  221  get_global "n" ic10  ; 7:49
+  228  define_field "n" ic11
+  235  get_global "s" ic12  ; 7:55
+  242  copy_data_props 0
+  244  push_i8 6
+  246  define_field "if" ic13
+  253  init_global_lex "o"
+  258  get_loc0 (<completion>)
+  259  return

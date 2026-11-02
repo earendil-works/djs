@@ -72,8 +72,13 @@ fn sample_imm(kind: ImmKind, label: Label) -> u32 {
         | ImmKind::Builtin
         | ImmKind::Cache => 0xBEEF,
         ImmKind::Const | ImmKind::Child | ImmKind::NameRef => 0x1234_5678,
-        ImmKind::LabelId | ImmKind::Target => label.0,
+        ImmKind::LabelId | ImmKind::Target | ImmKind::Target8 => label.0,
         ImmKind::Atom => 7,
+        ImmKind::Loc8
+        | ImmKind::Arg8
+        | ImmKind::Const8
+        | ImmKind::Intrinsic8
+        | ImmKind::Builtin8 => 0xEF,
     }
 }
 
@@ -162,7 +167,8 @@ fn typed_emitters() {
     assert_eq!(v[1].imm_i32(0), i32::MIN);
     assert_eq!((v[2].op, v[2].imm(0)), (Op::GetLoc, 65535));
     assert_eq!(v[3].atom(0), Atom::from_id(42));
-    assert_eq!((v[4].op, v[4].pops(), v[4].pushes()), (Op::Call, 4, 1));
+    // `call 2` in its short form (D2443).
+    assert_eq!((v[4].op, v[4].pops(), v[4].pushes()), (Op::Call2, 4, 1));
     assert_eq!((v[5].imm(0), v[5].imm(1), v[5].pops()), (9, 4, 4));
     assert_eq!(v[6].op, Op::Return);
     // Raw readers agree with the decoder.
@@ -203,24 +209,116 @@ fn forward_and_backward_jumps() {
     let top = b.new_label();
     let end = b.new_label();
     b.place_label(top); // 0
-    b.get_loc(0); // 0..3
-    b.jump_if_false(end); // 3..8
-    b.nop(); // 8
-    b.jump(top); // 9..14
-    b.place_label(end); // 14
+    b.get_loc(300); // 0..3
+    b.jump_if_false(end); // 3..8, shortened to 3..5
+    b.nop(); // 8 -> 5
+    b.jump(top); // 9..14 -> 6..8
+    b.place_label(end); // 14 -> 8
     b.return_undef();
     let code = b.finish().unwrap();
     assert_eq!(code.label_pos(top), Some(0));
-    assert_eq!(code.label_pos(end), Some(14));
+    assert_eq!(code.label_pos(end), Some(8));
+    assert_eq!(code.map_pos(8), 5);
+    assert_eq!(code.map_pos(14), 8);
     let v: Vec<Insn> = insns(&code.code).map(|r| r.unwrap()).collect();
-    assert_eq!(v[1].jump_target(), Some(14));
-    assert_eq!(v[1].imm_i32(0), 6); // relative to the end of the instruction
+    assert_eq!(v[1].op, Op::JumpIfFalse8);
+    assert_eq!(v[1].jump_target(), Some(8));
+    assert_eq!(v[1].imm_i32(0), 3); // relative to the end of the instruction
+    assert_eq!(v[3].op, Op::Jump8);
     assert_eq!(v[3].jump_target(), Some(0));
-    assert_eq!(v[3].imm_i32(0), -14);
+    assert_eq!(v[3].imm_i32(0), -8);
     assert_eq!(check_stack(&code.code, &[]), Ok(1));
     let text = disasm(&code.code, &DisasmContext::default());
-    assert!(text.contains("jump_if_false -> 14"), "{text}");
-    assert!(text.contains("jump -> 0"), "{text}");
+    assert!(text.contains("jump_if_false8 -> 8"), "{text}");
+    assert!(text.contains("jump8 -> 0"), "{text}");
+}
+
+#[test]
+fn jumps_stay_wide_when_far() {
+    // A forward jump over 125 bytes fits a byte only once the jump inside the span
+    // is short: the fixpoint shortens both. One over more stays wide.
+    let mut b = CodeBuf::new();
+    let (far, near, back) = (b.new_label(), b.new_label(), b.new_label());
+    b.place_label(back);
+    b.jump(far); // 0..5 -> 0..2
+    b.jump(near); // 5..10 -> 2..4
+    for _ in 0..124 {
+        b.nop();
+    }
+    b.place_label(near); // 134 -> 128
+    b.jump(back); // backward over 128 + 2: stays wide
+    b.place_label(far); // 139 -> 133
+    b.return_undef();
+    let code = b.finish().unwrap();
+    let v: Vec<Insn> = insns(&code.code).map(|r| r.unwrap()).collect();
+    assert_eq!(v[0].op, Op::Jump);
+    assert_eq!(v[1].op, Op::Jump8);
+    assert_eq!(v[1].jump_target(), code.label_pos(near));
+    let last = &v[v.len() - 2];
+    assert_eq!(last.op, Op::Jump);
+    assert_eq!(last.jump_target(), Some(0));
+    assert_eq!(v[0].jump_target(), code.label_pos(far));
+    assert_eq!(code.code.len() as u32, code.label_pos(far).unwrap() + 1);
+}
+
+#[test]
+fn short_forms() {
+    // The emitter picks the short form when the operand fits (D2443).
+    let mut b = CodeBuf::new();
+    b.get_loc(2);
+    b.get_loc(200);
+    b.put_loc(3);
+    b.set_loc(4);
+    b.get_arg(1);
+    b.push_const(255);
+    b.push_const(256);
+    b.get_builtin(7);
+    b.undefined();
+    b.get_builtin(300);
+    b.undefined();
+    let is_object = intrinsics::const_id("IsObject");
+    b.call_intrinsic(is_object, 1);
+    // Above 256: wide.
+    let get_iterator = intrinsics::const_id("GetIterator");
+    b.call_intrinsic(get_iterator, 1);
+    b.call(1);
+    let code = b.finish().unwrap().code;
+    let v: Vec<(Op, u32)> = insns(&code)
+        .map(|r| r.unwrap())
+        .map(|i| {
+            (
+                i.op,
+                if i.info().imms.is_empty() {
+                    0
+                } else {
+                    i.imm(0)
+                },
+            )
+        })
+        .collect();
+    assert_eq!(
+        v,
+        [
+            (Op::GetLoc2, 0),
+            (Op::GetLoc8, 200),
+            (Op::PutLoc3, 0),
+            (Op::SetLoc8, 4),
+            (Op::GetArg1, 0),
+            (Op::PushConst8, 255),
+            (Op::PushConst, 256),
+            (Op::GetBuiltinCallee8, 7),
+            (Op::GetBuiltin, 300),
+            (Op::Undefined, 0),
+            (Op::CallIntrinsic8, is_object as u32),
+            (Op::CallIntrinsic, get_iterator as u32),
+            (Op::Call1, 0),
+        ]
+    );
+    let ci = insns(&code).nth(10).unwrap().unwrap();
+    assert_eq!(ci.pops(), 1);
+    for op in Op::ALL {
+        assert_eq!(op.wide().wide(), op.wide(), "{}", op.name());
+    }
 }
 
 #[test]
@@ -296,11 +394,11 @@ fn phase1_reemit() {
     assert_eq!(
         ops,
         [
-            Op::GetLoc,
-            Op::JumpIfFalse,
-            Op::PushI8,
-            Op::Jump,
-            Op::PushI8,
+            Op::GetLoc0,
+            Op::JumpIfFalse8,
+            Op::Push1,
+            Op::Jump8,
+            Op::Push2,
             Op::Return
         ]
     );
@@ -312,7 +410,7 @@ fn phase1_reemit() {
 #[test]
 fn truncate_last() {
     let mut b = CodeBuf::new();
-    b.get_loc(0);
+    b.get_loc(300);
     b.get_field(Atom::from_id(3), 0);
     let last = b.last_insn().unwrap();
     assert_eq!((last.op, last.atom(0)), (Op::GetField, Atom::from_id(3)));
@@ -548,13 +646,14 @@ fn stack_bad() {
         b.push_i32(5);
         b.return_();
     });
-    c[1..5].copy_from_slice(&1i32.to_le_bytes());
+    // (`jump8` at 0..2, `push_i32` at 2..7.)
+    c[1] = 1;
     assert_eq!(
         check_stack(&c, &[]),
-        Err(StackError::BadTarget { pc: 0, target: 6 })
+        Err(StackError::BadTarget { pc: 0, target: 3 })
     );
     // And outside the code.
-    c[1..5].copy_from_slice(&1000i32.to_le_bytes());
+    c[1] = 100;
     assert!(matches!(
         check_stack(&c, &[]),
         Err(StackError::BadTarget { .. })
@@ -790,16 +889,16 @@ fn template_cells() {
     let consts = [Value::string(hi), Value::number(1.5)];
     let handlers = [Handler {
         start: 0,
-        end: 5,
+        end: 4,
         // The exception lands where the stack holds one value: the `return`.
-        target: 30,
+        target: 20,
         depth: 0,
     }];
     let name = heap.alloc_str("test.js").unwrap();
     let script = alloc_script(&mut heap, name, None).unwrap();
     let mut lines = LineTableBuilder::new();
     lines.add(0, 1, 1);
-    lines.add(11, 1, 9);
+    lines.add(4, 1, 9);
     let lines = lines.finish();
     let parent = alloc_template(
         &mut heap,
@@ -819,7 +918,7 @@ fn template_cells() {
     let a = heap.arena();
     let children = a.get(parent.0, FuncTemplate::CHILDREN);
     let line_bytes = bytes_of(&heap, a.get(parent.0, FuncTemplate::LINES));
-    assert_eq!(lookup_line(line_bytes, 12), Some((1, 9)));
+    assert_eq!(lookup_line(line_bytes, 5), Some((1, 9)));
     assert_eq!(a.get(parent.0, FuncTemplate::SCRIPT), script);
 
     assert_eq!(bytes_of(&heap, Ref::NULL), &[] as &[u8]);
@@ -829,16 +928,16 @@ fn template_cells() {
     let text = disasm_template(&heap, parent);
     let expect = [
         "function 0 <anonymous>: params=0 locals=1 stack=2 captures=0",
-        "  handler [0, 5) -> 30 depth 0",
-        "    0  push_const #0 (\"hi\")  ; 1:1",
-        "    5  put_loc loc0 (x)",
-        "    8  get_loc loc0 (x)",
-        "   11  get_field \"length\" ic0  ; 1:9",
-        "   18  push_const #1 (1.5)",
-        "   23  add",
-        "   24  fclosure child0",
-        "   29  drop",
-        "   30  return",
+        "  handler [0, 4) -> 20 depth 0",
+        "    0  push_const8 #0 (\"hi\")  ; 1:1",
+        "    2  put_loc0 (x)",
+        "    3  get_loc0 (x)",
+        "    4  get_field \"length\" ic0  ; 1:9",
+        "   11  push_const8 #1 (1.5)",
+        "   13  add",
+        "   14  fclosure child0",
+        "   19  drop",
+        "   20  return",
         "function 0.0 f: params=0 locals=0 stack=1 captures=0",
         "    0  push_i8 7",
         "    2  return",
@@ -892,5 +991,5 @@ fn disasm_without_heap() {
     let text: String = disasm(&code, &DisasmContext::default());
     assert!(text.contains("get_field atom#5"), "{text}");
     assert!(text.contains("get_cap cap1\n"), "{text}");
-    assert!(text.contains("push_const #3\n"), "{text}");
+    assert!(text.contains("push_const8 #3\n"), "{text}");
 }

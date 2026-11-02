@@ -181,6 +181,9 @@ pub struct OpInfo {
     /// Values popped (plus the value of immediate `pop_imm`, if set).
     pub pop: u8,
     pub pop_imm: Option<u8>,
+    /// Also pops the declared parameters of the intrinsic in immediate `pop_arity`
+    /// (`call_intrinsic8`, whose argument count is the intrinsic's arity).
+    pub pop_arity: Option<u8>,
     /// Values pushed (plus the value of immediate `push_imm`, if set).
     pub push: u8,
     pub push_imm: Option<u8>,
@@ -204,7 +207,7 @@ macro_rules! ops {
     ($(
         $(#[$doc:meta])*
         $name:ident $method:ident ( $( $iname:ident : $ikind:ident ),* )
-            pop $pop:literal $( + imm $pidx:literal )?
+            pop $pop:literal $( + imm $pidx:literal )? $( arity $aidx:literal )?
             push $push:literal $( + imm $qidx:literal )?
             cost $cost:ident
             $( flags $( $flag:ident )|+ )? ;
@@ -227,6 +230,7 @@ macro_rules! ops {
                 size: 1 $( + ImmKind::$ikind.width() )*,
                 pop: $pop,
                 pop_imm: opt_u8!($( $pidx )?),
+                pop_arity: opt_u8!($( $aidx )?),
                 push: $push,
                 push_imm: opt_u8!($( $qidx )?),
                 cost: CostClass::$cost,
@@ -733,6 +737,158 @@ ops! {
     Debugger debugger() pop 0 push 0 cost Free;
     /// No operation.
     Nop nop() pop 0 push 0 cost Free;
+
+    // ---- Short forms (D2443) ----------------------------------------------------------
+    //
+    // The final-code emitter replaces an instruction by its short form when the operand
+    // fits ([`short_form`]); `CodeBuf::finish` shortens jumps. Each behaves exactly as
+    // its wide form ([`Op::wide`]).
+
+    /// `get_loc 0`
+    GetLoc0 get_loc0() pop 0 push 1 cost Basic;
+    /// `get_loc 1`
+    GetLoc1 get_loc1() pop 0 push 1 cost Basic;
+    /// `get_loc 2`
+    GetLoc2 get_loc2() pop 0 push 1 cost Basic;
+    /// `get_loc 3`
+    GetLoc3 get_loc3() pop 0 push 1 cost Basic;
+    /// `put_loc 0`
+    PutLoc0 put_loc0() pop 1 push 0 cost Basic;
+    /// `put_loc 1`
+    PutLoc1 put_loc1() pop 1 push 0 cost Basic;
+    /// `put_loc 2`
+    PutLoc2 put_loc2() pop 1 push 0 cost Basic;
+    /// `put_loc 3`
+    PutLoc3 put_loc3() pop 1 push 0 cost Basic;
+    /// `get_arg 0`
+    GetArg0 get_arg0() pop 0 push 1 cost Basic;
+    /// `get_arg 1`
+    GetArg1 get_arg1() pop 0 push 1 cost Basic;
+    /// `get_arg 2`
+    GetArg2 get_arg2() pop 0 push 1 cost Basic;
+    /// `get_arg 3`
+    GetArg3 get_arg3() pop 0 push 1 cost Basic;
+    /// `set_loc 0`
+    SetLoc0 set_loc0() pop 1 push 1 cost Basic;
+    /// `set_loc 1`
+    SetLoc1 set_loc1() pop 1 push 1 cost Basic;
+    /// `set_loc 2`
+    SetLoc2 set_loc2() pop 1 push 1 cost Basic;
+    /// `set_loc 3`
+    SetLoc3 set_loc3() pop 1 push 1 cost Basic;
+    /// `push_i8 0`
+    Push0 push0() pop 0 push 1 cost Basic;
+    /// `push_i8 1`
+    Push1 push1() pop 0 push 1 cost Basic;
+    /// `push_i8 2`
+    Push2 push2() pop 0 push 1 cost Basic;
+    /// `push_i8 3`
+    Push3 push3() pop 0 push 1 cost Basic;
+    /// `call 0`
+    Call0 call0() pop 2 push 1 cost Call flags THROWS | CALLS | ALLOC;
+    /// `call 1`
+    Call1 call1() pop 3 push 1 cost Call flags THROWS | CALLS | ALLOC;
+    /// `call 2`
+    Call2 call2() pop 4 push 1 cost Call flags THROWS | CALLS | ALLOC;
+    /// `call 3`
+    Call3 call3() pop 5 push 1 cost Call flags THROWS | CALLS | ALLOC;
+    /// `get_loc` of a local below 256.
+    GetLoc8 get_loc8(loc: Loc8) pop 0 push 1 cost Basic;
+    /// `put_loc` of a local below 256.
+    PutLoc8 put_loc8(loc: Loc8) pop 1 push 0 cost Basic;
+    /// `set_loc` of a local below 256.
+    SetLoc8 set_loc8(loc: Loc8) pop 1 push 1 cost Basic;
+    /// `get_arg` of an argument below 256.
+    GetArg8 get_arg8(arg: Arg8) pop 0 push 1 cost Basic;
+    /// `push_const` of a constant below 256.
+    PushConst8 push_const8(idx: Const8) pop 0 push 1 cost Basic;
+    /// `a1 .. an -> r`: `call_intrinsic id, n` of an intrinsic below 256 with a fixed
+    /// arity `n` (its declared parameters: privileged calls pass exactly those).
+    CallIntrinsic8 call_intrinsic8(id: Intrinsic8) pop 0 arity 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
+    /// `-> f undefined`: `get_builtin idx; undefined`, a prelude function as the callee
+    /// of a call with `this` undefined.
+    GetBuiltinCallee8 get_builtin_callee8(idx: Builtin8) pop 0 push 2 cost Basic;
+    /// `jump` with an 8-bit offset.
+    Jump8 jump8(target: Target8) pop 0 push 0 cost Basic flags JUMP;
+    /// `jump_if_false` with an 8-bit offset.
+    JumpIfFalse8 jump_if_false8(target: Target8) pop 1 push 0 cost Basic flags BRANCH;
+    /// `jump_if_true` with an 8-bit offset.
+    JumpIfTrue8 jump_if_true8(target: Target8) pop 1 push 0 cost Basic flags BRANCH;
+}
+
+impl Op {
+    /// The instruction a short form stands for (itself for the others;
+    /// `get_builtin_callee8`, two instructions, too).
+    pub const fn wide(self) -> Op {
+        match self {
+            Op::GetLoc0 | Op::GetLoc1 | Op::GetLoc2 | Op::GetLoc3 | Op::GetLoc8 => Op::GetLoc,
+            Op::PutLoc0 | Op::PutLoc1 | Op::PutLoc2 | Op::PutLoc3 | Op::PutLoc8 => Op::PutLoc,
+            Op::GetArg0 | Op::GetArg1 | Op::GetArg2 | Op::GetArg3 | Op::GetArg8 => Op::GetArg,
+            Op::Call0 | Op::Call1 | Op::Call2 | Op::Call3 => Op::Call,
+            Op::SetLoc0 | Op::SetLoc1 | Op::SetLoc2 | Op::SetLoc3 | Op::SetLoc8 => Op::SetLoc,
+            Op::Push0 | Op::Push1 | Op::Push2 | Op::Push3 => Op::PushI8,
+            Op::PushConst8 => Op::PushConst,
+            Op::CallIntrinsic8 => Op::CallIntrinsic,
+            Op::Jump8 => Op::Jump,
+            Op::JumpIfFalse8 => Op::JumpIfFalse,
+            Op::JumpIfTrue8 => Op::JumpIfTrue,
+            op => op,
+        }
+    }
+
+    /// The operand of a form without immediates (`get_loc2`: 2).
+    pub const fn implied(self) -> Option<u32> {
+        Some(match self {
+            Op::GetLoc0 | Op::PutLoc0 | Op::SetLoc0 | Op::GetArg0 | Op::Push0 | Op::Call0 => 0,
+            Op::GetLoc1 | Op::PutLoc1 | Op::SetLoc1 | Op::GetArg1 | Op::Push1 | Op::Call1 => 1,
+            Op::GetLoc2 | Op::PutLoc2 | Op::SetLoc2 | Op::GetArg2 | Op::Push2 | Op::Call2 => 2,
+            Op::GetLoc3 | Op::PutLoc3 | Op::SetLoc3 | Op::GetArg3 | Op::Push3 | Op::Call3 => 3,
+            _ => return None,
+        })
+    }
+
+    /// The short form of a jump (the offset decides whether it fits).
+    pub const fn short_jump(self) -> Option<Op> {
+        match self {
+            Op::Jump => Some(Op::Jump8),
+            Op::JumpIfFalse => Some(Op::JumpIfFalse8),
+            Op::JumpIfTrue => Some(Op::JumpIfTrue8),
+            _ => None,
+        }
+    }
+}
+
+/// The short form of `op` with immediates `a`, `b`, if there is one that encodes them
+/// (D2443); jumps excepted, which `CodeBuf::finish` shortens.
+pub fn short_form(op: Op, a: u32, b: u32) -> Option<Op> {
+    // `[implied 0..4, one byte]`
+    let (implied, narrow) = match op {
+        Op::GetLoc => (Some(Op::GetLoc0), Some(Op::GetLoc8)),
+        Op::PutLoc => (Some(Op::PutLoc0), Some(Op::PutLoc8)),
+        Op::GetArg => (Some(Op::GetArg0), Some(Op::GetArg8)),
+        Op::Call => (Some(Op::Call0), None),
+        Op::SetLoc => (Some(Op::SetLoc0), Some(Op::SetLoc8)),
+        Op::PushI8 => (Some(Op::Push0), None),
+        Op::PushConst => (None, Some(Op::PushConst8)),
+        Op::CallIntrinsic => {
+            let fixed = match super::intrinsics::INTRINSICS.get(a as usize) {
+                Some(i) => !i.variadic && i.params as u32 == b,
+                None => false,
+            };
+            return if a < 256 && fixed {
+                Some(Op::CallIntrinsic8)
+            } else {
+                None
+            };
+        }
+        _ => return None,
+    };
+    if let Some(base) = implied
+        && a < 4
+    {
+        return Op::from_u8(base as u8 + a as u8);
+    }
+    if a < 256 { narrow } else { None }
 }
 
 const _: () = {
@@ -744,7 +900,7 @@ const _: () = {
         let info = &OPS[i];
         let mut j = 0;
         while j < info.imms.len() {
-            if matches!(info.imms[j], ImmKind::Target) {
+            if info.imms[j].is_target() {
                 assert!(
                     j + 1 == info.imms.len(),
                     "Target must be the last immediate"
@@ -758,7 +914,7 @@ const _: () = {
         }
         let jumpy = info.flags & (flags::JUMP | flags::BRANCH | flags::GOSUB) != 0;
         assert!(
-            !jumpy || (info.imms.len() == 1 && matches!(info.imms[0], ImmKind::Target)),
+            !jumpy || (info.imms.len() == 1 && info.imms[0].is_target()),
             "jumps have exactly one Target immediate"
         );
         if let Some(k) = info.pop_imm {
@@ -766,6 +922,23 @@ const _: () = {
         }
         if let Some(k) = info.push_imm {
             assert!((k as usize) < info.imms.len(), "push_imm out of range");
+        }
+        if let Some(k) = info.pop_arity {
+            assert!(
+                matches!(info.imms[k as usize], ImmKind::Intrinsic8),
+                "pop_arity names an intrinsic"
+            );
+        }
+        // A short form behaves as its wide form: the same stack effect (when the wide
+        // form's immediates are implied), cost and flags.
+        let op = Op::ALL[i];
+        let wide = op.wide().info();
+        assert!(wide.cost as u8 == info.cost as u8 && wide.flags == info.flags);
+        if let Some(n) = op.implied() {
+            let n = n as u8;
+            assert!(info.imms.is_empty());
+            assert!(info.pop == wide.pop + if wide.pop_imm.is_some() { n } else { 0 });
+            assert!(info.push == wide.push);
         }
         i += 1;
     }
@@ -803,6 +976,13 @@ pub const fn hash_ops(ops: &[OpInfo]) -> u32 {
         h = mix(
             h,
             match op.pop_imm {
+                Some(k) => k + 1,
+                None => 0,
+            },
+        );
+        h = mix(
+            h,
+            match op.pop_arity {
                 Some(k) => k + 1,
                 None => 0,
             },

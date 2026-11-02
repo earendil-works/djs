@@ -532,16 +532,25 @@ fn emit_function(
         while *li < f.lines.len() && f.lines[*li].0 <= pc {
             let entry = (out.pos(), f.lines[*li].1);
             match lines.last_mut() {
-                Some(last) if last.0 == entry.0 => *last = entry,
+                // (`>`: the emitter may fold an instruction into the previous one,
+                // D2443.)
+                Some(last) if last.0 >= entry.0 => *last = entry,
                 _ => lines.push(entry),
             }
             *li += 1;
         }
     };
     let mut i = 0;
+    // After an instruction without fallthrough, code up to the next label is
+    // unreachable (the `return_undef` after a function's last `return`): not emitted.
+    let mut dead = false;
     while i < all.len() {
         let insn = all[i];
         i += 1;
+        if dead && insn.op != Op::Label {
+            continue;
+        }
+        dead = insn.info().no_fallthrough();
         flush(&out, &mut li, &mut lines, insn.pc);
         match insn.op {
             Op::NameGet | Op::NamePut | Op::NameSet | Op::NameInit | Op::NameTypeof => {
@@ -792,6 +801,9 @@ fn emit_function(
     let code = out
         .finish()
         .map_err(|e| internal(&crate::detail::detail("bytecode", &e)))?;
+    for e in &mut lines {
+        e.0 = code.map_pos(e.0);
+    }
     let mut handlers = Vec::with_capacity(f.handlers.len());
     for h in &f.handlers {
         let pos = |l| {

@@ -24,8 +24,13 @@ impl Exec<'_> {
     /// accepts the arguments: true when it completed. Declining leaves everything
     /// unchanged, and `step` makes the full call.
     #[inline(never)]
-    pub(super) fn fast_leaf_call(&mut self) -> bool {
-        let argc = self.heap.arena().read::<u16>(self.code + self.pc + 1) as u32;
+    pub(super) fn fast_leaf_call(&mut self, op: u8) -> bool {
+        // `call argc` or a short form (`call2`, D2443).
+        let (argc, size) = if op == super::fast::CALL {
+            (self.imm_u16(1), Op::Call.size() as u32)
+        } else {
+            ((op - super::fast::CALL0) as u32, Op::Call0.size() as u32)
+        };
         let base = self.sp - 2 - argc;
         let Some(o) = self.get(base).as_object() else {
             return false;
@@ -39,8 +44,9 @@ impl Exec<'_> {
         {
             return false;
         }
+        // (`call0`..`call3` cost as much as `call`: the table's check.)
         let info = &OPS[Op::Call as usize];
-        let next = self.pc + info.size as u32;
+        let next = self.pc + size;
         match self.try_fast_call(t, base, argc, Continuation::PushResult, next) {
             Ok(true) => {
                 self.fuel -= info.cost.fuel() as i64;

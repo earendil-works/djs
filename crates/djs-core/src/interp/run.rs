@@ -19,7 +19,7 @@ use super::conv::{self, Fault, FaultKind, type_error};
 use super::frame::{self, Continuation, HEADER};
 use super::realm::{self, ErrorKind, Intrinsic, intrinsic, intrinsic_obj};
 use super::state::{self, PARK_ENTRY, RunState, park_flags};
-use crate::bytecode::decode::read_i8;
+use crate::bytecode::decode::{LAYOUT, arity, read_i8};
 use crate::bytecode::global_decls::GlobalDecls;
 use crate::bytecode::template::func_flags;
 use crate::bytecode::template::{bytes_of, ref_array_get};
@@ -186,6 +186,46 @@ mod fast {
     pub const SAR: u8 = Op::Sar as u8;
     pub const IS_UNDEFINED: u8 = Op::IsUndefined as u8;
     pub const IS_NULLISH: u8 = Op::IsNullish as u8;
+    // Short forms (D2443)
+    pub const GET_LOC0: u8 = Op::GetLoc0 as u8;
+    pub const GET_LOC1: u8 = Op::GetLoc1 as u8;
+    pub const GET_LOC2: u8 = Op::GetLoc2 as u8;
+    pub const GET_LOC3: u8 = Op::GetLoc3 as u8;
+    pub const PUT_LOC0: u8 = Op::PutLoc0 as u8;
+    pub const PUT_LOC1: u8 = Op::PutLoc1 as u8;
+    pub const PUT_LOC2: u8 = Op::PutLoc2 as u8;
+    pub const PUT_LOC3: u8 = Op::PutLoc3 as u8;
+    pub const GET_ARG0: u8 = Op::GetArg0 as u8;
+    pub const GET_ARG1: u8 = Op::GetArg1 as u8;
+    pub const GET_ARG2: u8 = Op::GetArg2 as u8;
+    pub const GET_ARG3: u8 = Op::GetArg3 as u8;
+    pub const SET_LOC0: u8 = Op::SetLoc0 as u8;
+    pub const SET_LOC1: u8 = Op::SetLoc1 as u8;
+    pub const SET_LOC2: u8 = Op::SetLoc2 as u8;
+    pub const SET_LOC3: u8 = Op::SetLoc3 as u8;
+    pub const PUSH0: u8 = Op::Push0 as u8;
+    pub const PUSH1: u8 = Op::Push1 as u8;
+    pub const PUSH2: u8 = Op::Push2 as u8;
+    pub const PUSH3: u8 = Op::Push3 as u8;
+    pub const CALL0: u8 = Op::Call0 as u8;
+    pub const CALL1: u8 = Op::Call1 as u8;
+    pub const CALL2: u8 = Op::Call2 as u8;
+    pub const CALL3: u8 = Op::Call3 as u8;
+    pub const GET_LOC8: u8 = Op::GetLoc8 as u8;
+    pub const PUT_LOC8: u8 = Op::PutLoc8 as u8;
+    pub const SET_LOC8: u8 = Op::SetLoc8 as u8;
+    pub const GET_ARG8: u8 = Op::GetArg8 as u8;
+    pub const PUSH_CONST8: u8 = Op::PushConst8 as u8;
+    pub const CALL_INTRINSIC8: u8 = Op::CallIntrinsic8 as u8;
+    pub const GET_BUILTIN_CALLEE8: u8 = Op::GetBuiltinCallee8 as u8;
+    pub const JUMP8: u8 = Op::Jump8 as u8;
+    pub const JUMP_IF_FALSE8: u8 = Op::JumpIfFalse8 as u8;
+    pub const JUMP_IF_TRUE8: u8 = Op::JumpIfTrue8 as u8;
+
+    /// A `call` in any form.
+    pub const fn is_call(op: u8) -> bool {
+        op == CALL || (op >= CALL0 && op <= CALL3)
+    }
 }
 
 /// The instructions `Exec::retry_operands` retries after a collection (D1700), besides
@@ -1050,8 +1090,8 @@ impl<'h> Exec<'h> {
                 // A call of a `@fast` builtin (D1850), outside `fast_step`: its register
                 // allocation is sensitive to every addition (D1352).
                 || (self.pc < self.code_len
-                    && self.byte(self.pc) == fast::CALL
-                    && self.fast_leaf_call())
+                    && fast::is_call(self.byte(self.pc))
+                    && self.fast_leaf_call(self.byte(self.pc)))
             {
                 continue;
             }
@@ -1104,6 +1144,14 @@ impl<'h> Exec<'h> {
                 }
                 argc
             }
+            fast::CALL_INTRINSIC8 => {
+                let id = self.byte(self.pc + 1) as u16;
+                let argc = arity(id as u32);
+                if !retry::retries(id) || argc > 4 {
+                    return false;
+                }
+                argc
+            }
             _ => return false,
         };
         for i in 0..n {
@@ -1139,7 +1187,7 @@ impl<'h> Exec<'h> {
     }
 
     #[inline(always)]
-    fn byte(&self, at: u32) -> u8 {
+    pub(super) fn byte(&self, at: u32) -> u8 {
         // `Arena::read` checks against the backing Vec only (one compare); `pc` is
         // checked against the code length by `step`.
         self.heap.arena().read::<u8>(self.code + at)
@@ -1163,6 +1211,19 @@ impl<'h> Exec<'h> {
     #[inline(always)]
     fn imm_atom(&self) -> Atom {
         Atom::from_id(self.imm_u32(1))
+    }
+
+    /// Immediate 0 of the instruction at `pc`, an `op`, as `decode` reads it, or the
+    /// operand a short form implies (`get_loc2`: 2, D2443).
+    #[inline(always)]
+    pub(super) fn operand(&self, op: Op) -> u32 {
+        match LAYOUT[op as usize] & 0xF {
+            0 => op.implied().unwrap_or(0),
+            1 => self.byte(self.pc + 1) as u32,
+            2 => self.byte(self.pc + 1) as i8 as i32 as u32,
+            3 => self.imm_u16(1),
+            _ => self.imm_u32(1),
+        }
     }
 
     /// Executes one of the hottest simple instructions without building a [`Step`]
@@ -1676,7 +1737,9 @@ impl<'h> Exec<'h> {
                     self.heap.arena().read::<u16>(at) as u32
                 }
             };
-            let pops = info.pop as u32 + info.pop_imm.map_or(0, imm);
+            let pops = info.pop as u32
+                + info.pop_imm.map_or(0, imm)
+                + info.pop_arity.map_or(0, |k| arity(imm(k)));
             let pushes = info.push as u32 + info.push_imm.map_or(0, imm);
             if info.flags & (opflags::JUMP | opflags::BRANCH | opflags::TERM | opflags::GOSUB) == 0
             {
@@ -2579,6 +2642,44 @@ impl<'h> Exec<'h> {
                 let argc = self.imm_u16(3);
                 return self.call_intrinsic(id, argc, next);
             }
+            // The short forms that `step` runs often (a declined intrinsic, call or
+            // branch on a non-boolean) here, the others in `exec_short` (D2443).
+            Op::CallIntrinsic8 => {
+                let id = self.byte(self.pc + 1) as u16;
+                return self.call_intrinsic(id, arity(id as u32), next);
+            }
+            Op::Call0 | Op::Call1 | Op::Call2 | Op::Call3 => {
+                let argc = op as u32 - Op::Call0 as u32;
+                let base = self.sp - 2 - argc;
+                return self.call(base, argc, Continuation::PushResult, next);
+            }
+            Op::GetLoc0
+            | Op::GetLoc1
+            | Op::GetLoc2
+            | Op::GetLoc3
+            | Op::PutLoc0
+            | Op::PutLoc1
+            | Op::PutLoc2
+            | Op::PutLoc3
+            | Op::GetArg0
+            | Op::GetArg1
+            | Op::GetArg2
+            | Op::GetArg3
+            | Op::SetLoc0
+            | Op::SetLoc1
+            | Op::SetLoc2
+            | Op::SetLoc3
+            | Op::Push0
+            | Op::Push1
+            | Op::Push2
+            | Op::Push3
+            | Op::GetLoc8
+            | Op::PutLoc8
+            | Op::SetLoc8
+            | Op::GetArg8
+            | Op::PushConst8
+            | Op::GetBuiltinCallee8
+            | Op::Jump8 => return self.exec_short(op, next),
             Op::RequireObjectCoercible => {
                 if self.top(0).is_nullish() {
                     return type_error("cannot convert to object");
@@ -2737,6 +2838,19 @@ impl<'h> Exec<'h> {
                 }
                 return Ok(None);
             }
+            Op::JumpIfFalse8 | Op::JumpIfTrue8 => {
+                let v = self.pop();
+                let t = conv::to_boolean(self.heap, v);
+                let offset = self.byte(self.pc + 1) as i8;
+                self.pc = next;
+                if t == (op == Op::JumpIfTrue8) {
+                    self.pc = (next as i64 + offset as i64) as u32;
+                    if self.pc < next {
+                        self.safepoint();
+                    }
+                }
+                return Ok(None);
+            }
             Op::Gosub => {
                 self.push(Value::int(next as i32));
                 self.pc = self.jump_target(next);
@@ -2809,6 +2923,76 @@ impl<'h> Exec<'h> {
                 return Err(Fault::error(
                     ErrorKind::InternalError,
                     crate::text::cat!("not supported yet: ", op.name()),
+                ));
+            }
+        }
+        self.pc = next;
+        Ok(None)
+    }
+
+    /// The short forms (D2443), out of line: as arms of `exec` they grew its code,
+    /// which costs every instruction through `step` in the wasm build.
+    #[inline(never)]
+    fn exec_short(&mut self, op: Op, next: u32) -> Step {
+        let i = self.operand(op);
+        match op.wide() {
+            Op::GetLoc => {
+                let v = self.get(self.lp + i);
+                self.push(v);
+            }
+            Op::PutLoc => {
+                let v = self.pop();
+                self.set(self.lp + i, v);
+            }
+            Op::SetLoc => {
+                let v = self.top(0);
+                self.set(self.lp + i, v);
+            }
+            Op::GetArg => {
+                let v = self.get(self.bp + 2 + i);
+                self.push(v);
+            }
+            Op::PushI8 => self.push(Value::int(i as i32)),
+            Op::PushConst => {
+                let v = self.constant(i);
+                self.push(v);
+            }
+            Op::GetBuiltinCallee8 => {
+                let Some(v) = self.prelude_function(i) else {
+                    return Err(Fault::error(
+                        ErrorKind::InternalError,
+                        String::from("bad bytecode: get_builtin out of range"),
+                    ));
+                };
+                self.push(v);
+                self.push(Value::UNDEFINED);
+            }
+            Op::Call => {
+                let base = self.sp - 2 - i;
+                return self.call(base, i, Continuation::PushResult, next);
+            }
+            Op::CallIntrinsic => return self.call_intrinsic(i as u16, arity(i), next),
+            Op::Jump | Op::JumpIfFalse | Op::JumpIfTrue => {
+                let taken = match op.wide() {
+                    Op::Jump => true,
+                    o => {
+                        let v = self.pop();
+                        conv::to_boolean(self.heap, v) == (o == Op::JumpIfTrue)
+                    }
+                };
+                self.pc = next;
+                if taken {
+                    self.pc = (next as i64 + i as i32 as i64) as u32;
+                    if self.pc < next {
+                        self.safepoint();
+                    }
+                }
+                return Ok(None);
+            }
+            _ => {
+                return Err(Fault::error(
+                    ErrorKind::InternalError,
+                    crate::text::cat!("bad bytecode: ", op.name()),
                 ));
             }
         }

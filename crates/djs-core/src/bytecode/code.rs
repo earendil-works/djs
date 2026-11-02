@@ -16,8 +16,7 @@ use alloc::vec::Vec;
 use core::marker::PhantomData;
 
 use super::decode::{Insn, decode};
-use super::imm::ImmKind;
-use super::ops::Op;
+use super::ops::{Op, short_form};
 
 /// A jump target, created by [`CodeBuf::new_label`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
@@ -67,7 +66,13 @@ pub struct Code {
     pub code: Vec<u8>,
     /// Position of every label (`u32::MAX` if never placed and never used).
     pub labels: Vec<u32>,
+    /// Where `finish` shortened a jump, as positions in the code as emitted
+    /// (ascending): [`Code::map_pos`] moves other positions recorded while emitting.
+    shortened: Vec<u32>,
 }
+
+/// Bytes a shortened jump saves (`jump` 5 -> `jump8` 2).
+const JUMP_SAVING: u32 = 3;
 
 impl Code {
     /// The position of a placed label.
@@ -77,6 +82,18 @@ impl Code {
             .copied()
             .filter(|&p| p != UNPLACED)
     }
+
+    /// The final position of an instruction boundary recorded as `pos` (`pos()`)
+    /// while emitting.
+    pub fn map_pos(&self, pos: u32) -> u32 {
+        map_pos(&self.shortened, pos)
+    }
+}
+
+/// `pos` after the jumps starting at `shortened` (ascending) lost `JUMP_SAVING` bytes
+/// each.
+fn map_pos(shortened: &[u32], pos: u32) -> u32 {
+    pos - JUMP_SAVING * shortened.partition_point(|&s| s < pos) as u32
 }
 
 /// A stored phase-1 instruction: the opcode and its raw immediates, 9 bytes (0096:
@@ -301,6 +318,21 @@ impl<M: LabelMode> CodeBuf<M> {
             return;
         }
         let start = self.code.len() as u32;
+        // Short forms (D2443): jumps are emitted wide and shortened by `finish`;
+        // `get_builtin idx; undefined` becomes one instruction.
+        let mut op = op.wide();
+        if let Some(s) = short_form(op, a, b) {
+            op = s;
+        } else if op == Op::Undefined
+            && let Some(prev) = self.last
+            && self.code[prev as usize] == Op::GetBuiltin as u8
+            && self.code[prev as usize + 2] == 0
+        {
+            // (`get_builtin idx` with idx < 256: its high byte is 0.)
+            self.code[prev as usize] = Op::GetBuiltinCallee8 as u8;
+            self.code.truncate(prev as usize + 2);
+            return;
+        }
         self.last = Some(start);
         // The instruction in a local buffer, then one append.
         let mut bytes = [0u8; 9];
@@ -308,7 +340,7 @@ impl<M: LabelMode> CodeBuf<M> {
         let mut p = 1;
         for (i, &kind) in op.info().imms.iter().enumerate() {
             let v = if i == 0 { a } else { b };
-            if kind == ImmKind::Target {
+            if kind.is_target() {
                 if (v as usize) >= self.labels.len() {
                     self.fail(CodeError::UnknownLabel(Label(v)));
                 }
@@ -326,28 +358,93 @@ impl<M: LabelMode> CodeBuf<M> {
 }
 
 impl CodeBuf<Final> {
-    /// Resolves the jump targets and returns the code.
-    pub fn finish(mut self) -> Result<Code, CodeError> {
+    /// Resolves the jump targets, shortens the jumps whose offset fits a byte
+    /// (D2443), and returns the code.
+    pub fn finish(self) -> Result<Code, CodeError> {
         if let Some(e) = self.error {
             return Err(e);
         }
         if self.code.len() > i32::MAX as usize {
             return Err(CodeError::TooLarge);
         }
-        for &at in &self.fixups {
+        let CodeBuf {
+            code,
+            mut labels,
+            fixups,
+            ..
+        } = self;
+        // Each fixup: the instruction's start and the target's position, as emitted
+        // (a jump's target is its only immediate, after the opcode byte).
+        let mut jumps = Vec::with_capacity(fixups.len());
+        for &at in &fixups {
             let at = at as usize;
-            let id = u32::from_le_bytes(self.code[at..at + 4].try_into().unwrap_or([0; 4]));
-            let target = self.labels[id as usize];
+            let id = u32::from_le_bytes(code[at..at + 4].try_into().unwrap_or([0; 4]));
+            let target = labels[id as usize];
             if target == UNPLACED {
                 return Err(CodeError::UnplacedLabel(Label(id)));
             }
-            // Relative to the end of the instruction: the target is its last immediate.
-            let rel = target as i64 - (at as i64 + 4);
-            self.code[at..at + 4].copy_from_slice(&(rel as i32).to_le_bytes());
+            jumps.push((at as u32 - 1, target));
+        }
+        // Start with every shortenable jump short and widen the ones whose offset
+        // does not fit, until none changes: widening only moves targets further away,
+        // so this ends.
+        let mut short: Vec<bool> = jumps
+            .iter()
+            .map(|&(start, _)| {
+                Op::from_u8(code[start as usize])
+                    .and_then(Op::short_jump)
+                    .is_some()
+            })
+            .collect();
+        let mut shortened: Vec<u32> = Vec::new();
+        loop {
+            shortened.clear();
+            shortened.extend(jumps.iter().zip(&short).filter(|j| *j.1).map(|j| j.0.0));
+            let mut changed = false;
+            for (&(start, target), s) in jumps.iter().zip(short.iter_mut()) {
+                if *s {
+                    let end = map_pos(&shortened, start) + 2;
+                    let rel = map_pos(&shortened, target) as i64 - end as i64;
+                    if i8::try_from(rel).is_err() {
+                        *s = false;
+                        changed = true;
+                    }
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+        // The code with the final offsets.
+        let mut out = Vec::with_capacity(code.len() - JUMP_SAVING as usize * shortened.len());
+        let mut from = 0usize;
+        for (&(start, target), &s) in jumps.iter().zip(&short) {
+            let start_us = start as usize;
+            out.extend_from_slice(&code[from..start_us]);
+            let new_target = map_pos(&shortened, target) as i64;
+            let op = Op::from_u8(code[start_us]).unwrap_or(Op::Nop);
+            match op.short_jump() {
+                Some(short_op) if s => {
+                    let rel = new_target - (out.len() as i64 + 2);
+                    out.push(short_op as u8);
+                    out.push(rel as i8 as u8);
+                }
+                _ => {
+                    let rel = new_target - (out.len() as i64 + 5);
+                    out.push(code[start_us]);
+                    out.extend_from_slice(&(rel as i32).to_le_bytes());
+                }
+            }
+            from = start_us + 5;
+        }
+        out.extend_from_slice(&code[from..]);
+        for l in labels.iter_mut().filter(|l| **l != UNPLACED) {
+            *l = map_pos(&shortened, *l);
         }
         Ok(Code {
-            code: self.code,
-            labels: self.labels,
+            code: out,
+            labels,
+            shortened,
         })
     }
 }
