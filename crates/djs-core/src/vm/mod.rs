@@ -830,27 +830,34 @@ impl Vm {
     /// Readies a collected realm for the builtin prefix (D2063): what a VM would write
     /// lazily into base cells is written now, and the cells a VM writes are listed for
     /// the image's tail (above `BASE_END`), in their order there.
-    /// - String hashes are computed, and every object that is a prototype is marked as
-    ///   one (D1621), so neither is written later.
+    /// - String hashes are computed, and every builtin object is marked as a prototype
+    ///   (D1621), so neither is written later.
     /// - The root shape is dropped from the roots: a VM grows its own shape tree from a
     ///   root of its own (created on first use), and the builtins' shapes keep theirs.
-    /// - The tail: Map/Set tables, the realm and its random state, the global object and
-    ///   its property table, the global lexical record, `Symbol.for`'s registry, the atom
-    ///   table, the interpreter cell and the value stack.
+    /// - The tail: the realm and its random state, the global object, the global lexical
+    ///   record and `Symbol.for`'s registry with their property tables, Map/Set tables,
+    ///   the atom table, the host call table, the interpreter cell and the value stack.
     fn prepare_prefix(&mut self) -> Result<Vec<u32>, HeapError> {
         use crate::heap::cells::{Object, Realm, Roots};
         let cells: Vec<(u32, crate::heap::CellKind)> =
             self.heap.cells().map(|c| (c.offset, c.kind)).collect();
+        // The objects the tail takes (below) are a VM's own, not prototypes.
+        let realm = realm::realm(&self.heap);
+        let lex: Ref = self.heap.arena().get(realm, Realm::GLOBAL_LEX);
+        let registry = realm::intrinsic(&self.heap, Intrinsic::SymbolRegistry)
+            .as_object()
+            .map_or(0, |o| o.0);
+        let own = [self.global().0, lex.0, registry];
         for &(c, kind) in &cells {
             match kind {
                 crate::heap::CellKind::Str8 | crate::heap::CellKind::Str16 => {
                     self.heap.str_hash(crate::value::Str(c));
                 }
-                crate::heap::CellKind::Object => {
-                    let p: Ref = self.heap.arena().get(c, Object::PROTO);
-                    if let Some(p) = p.get() {
-                        self.heap.mark_proto(Obj(p));
-                    }
+                // Any builtin can end up on a prototype chain (a class extending one, an
+                // object created from one): all are marked now rather than when an
+                // inline cache first caches through them.
+                crate::heap::CellKind::Object if !own.contains(&c) => {
+                    self.heap.mark_proto(Obj(c));
                 }
                 _ => {}
             }
@@ -865,12 +872,8 @@ impl Vm {
             .map(|e| h.first_grown_target(e))
             .filter(|&t| t != 0)
             .collect();
-        let realm = realm::realm(h);
-        let lex: Ref = a.get(realm, Realm::GLOBAL_LEX);
-        let obj = |v: Value| v.as_object().map_or(0, |o| o.0);
         let internal = |v: Value| v.as_internal().unwrap_or(0);
         let global = self.global().0;
-        let registry = obj(realm::intrinsic(h, Intrinsic::SymbolRegistry));
         let mut front = alloc::vec![
             realm,
             internal(realm::intrinsic(h, Intrinsic::RandomState)),
@@ -888,10 +891,11 @@ impl Vm {
         let atoms: Ref = a.get(0, Roots::ATOMS);
         let interp: Ref = a.get(0, Roots::INTERP);
         let stack: Ref = a.get(0, Roots::STACK);
+        let calls: Ref = a.get(0, Roots::HOST_CALLS);
         let at = tail.len().saturating_sub(2);
         tail.insert(at, atoms.0);
         front.append(&mut tail);
-        front.extend_from_slice(&[interp.0, stack.0]);
+        front.extend_from_slice(&[calls.0, interp.0, stack.0]);
         let mut seen = alloc::collections::BTreeSet::new();
         front.retain(|&c| c != 0 && seen.insert(c));
         Ok(front)

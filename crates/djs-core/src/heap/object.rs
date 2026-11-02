@@ -658,7 +658,12 @@ impl Heap {
 
     fn set_obj_flag(&mut self, o: Obj, flag: u16, on: bool) {
         let f = self.cell_flags(o.0);
-        self.set_cell_flags(o.0, if on { f | flag } else { f & !flag });
+        let n = if on { f | flag } else { f & !flag };
+        // Not written when unchanged: a builtin's header stays as the prefix has it
+        // (D2063).
+        if n != f {
+            self.set_cell_flags(o.0, n);
+        }
     }
 
     pub fn get_prototype_of(&self, o: Obj) -> Option<Obj> {
