@@ -1,7 +1,7 @@
 # 0145: Stable, append-only builtin registry
 
-status: open
-agent: -
+status: in-progress
+agent: bloat
 branch: issue/0145-builtin-registry
 depends-on: 0143, 0144
 guide: docs/guide/builtins.md (a short section), snapshots.md if exports use it
