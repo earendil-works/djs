@@ -74,7 +74,10 @@ pub fn opts() -> VmOptions {
         ..VmOptions::default()
     };
     // GOLDI_LIMIT: another memory limit, to check whether images depend on it.
-    if let Some(l) = std::env::var("GOLDI_LIMIT").ok().and_then(|v| v.parse().ok()) {
+    if let Some(l) = std::env::var("GOLDI_LIMIT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+    {
         o.memory_limit = l;
     }
     o

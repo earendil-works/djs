@@ -1,4 +1,4 @@
-# Snapshot design measurements (issues 0088, 0117, 0133, 0140, 0141)
+# Snapshot design measurements (issues 0088, 0117, 0133, 0140, 0141, 0142)
 
 Two tools on the same six cases (`cases/`), neither part of the workspace or the gate (like
 `scripts/determinism/probe`):
@@ -29,7 +29,10 @@ And two for portable snapshots (docs/portable-snapshots.md, 0141):
   at the idle points of the harvested corpus (`harvest`, `import-all`). Standalone like
   snaplab; it builds unchanged in a `git archive` of an older commit (copy the directory
   to the same place, build with `--features old`). docs/portable-snapshots.md has the
-  commands and the results.
+  commands and the results. 0142 added pi sessions with layered references and tier-2
+  transfers across pi prelude versions (`goldi-*`, `factor-prelude.py`, `refs.py`;
+  docs/goldilocks-snapshots.md), and `churn-tiers.py` (which merges break which kind of
+  snapshot, per issue and per release window).
 
 ```sh
 scripts/snapshot-research/run.sh [out-dir] [case.js ...]                # snaplab

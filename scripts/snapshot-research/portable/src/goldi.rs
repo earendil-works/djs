@@ -28,12 +28,27 @@ pub fn realistic_inputs() -> Inputs {
                  pattern grep for a regular expression returns matching lines with their numbers";
     let mut tools = vec![];
     for (i, t) in crate::pitools::TOOLS.iter().enumerate() {
-        let desc: String = words.split(' ').cycle().skip(i * 3).take(40 + 5 * i).collect::<Vec<_>>().join(" ");
-        tools.push(format!(r#"{{"name":"{t}","jsName":"{t}","description":"{desc}"}}"#));
+        let desc: String = words
+            .split(' ')
+            .cycle()
+            .skip(i * 3)
+            .take(40 + 5 * i)
+            .collect::<Vec<_>>()
+            .join(" ");
+        tools.push(format!(
+            r#"{{"name":"{t}","jsName":"{t}","description":"{desc}"}}"#
+        ));
     }
-    for t in ["mcp__issues__create", "mcp__issues__comment", "mcp__browser__open", "mcp__browser__shot"] {
+    for t in [
+        "mcp__issues__create",
+        "mcp__issues__comment",
+        "mcp__browser__open",
+        "mcp__browser__shot",
+    ] {
         let js = t.replace("__", "_");
-        tools.push(format!(r#"{{"name":"{t}","jsName":"{js}","description":"{words}"}}"#));
+        tools.push(format!(
+            r#"{{"name":"{t}","jsName":"{js}","description":"{words}"}}"#
+        ));
     }
     let globals = r#"[{"name":"searchTools","spread":true},{"name":"describeTool","spread":false},{"name":"models.getAvailableOfType","spread":false},{"name":"models.classify","spread":true},{"name":"subagent","spread":false},{"name":"fetchUrl","spread":false}]"#;
     let mut store = String::from("{");
@@ -41,7 +56,15 @@ pub fn realistic_inputs() -> Inputs {
         if k > 0 {
             store.push(',');
         }
-        let _ = write!(store, r#""key{k}":"{{\"ids\":[{}],\"note\":\"summary {k}\"}}""#, (0..40).map(|i| (i * 7919 + k) % 10007).map(|n| n.to_string()).collect::<Vec<_>>().join(","));
+        let _ = write!(
+            store,
+            r#""key{k}":"{{\"ids\":[{}],\"note\":\"summary {k}\"}}""#,
+            (0..40)
+                .map(|i| (i * 7919 + k) % 10007)
+                .map(|n| n.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
     }
     store.push('}');
     Inputs {
@@ -77,7 +100,9 @@ fn sealed(mut s: pi::Session) -> (pi::Session, Vec<u8>) {
 /// idle point.
 fn drive(mut s: pi::Session, code: &str, mut at_idle: impl FnMut(usize, &[u8])) -> pi::Session {
     s.start(code, 42);
-    let mut tools = Tools { failed_page2: false };
+    let mut tools = Tools {
+        failed_page2: false,
+    };
     let mut now = T0;
     let mut k = 0;
     while s.ev.done.is_none() && !s.ev.calls.is_empty() {
@@ -101,7 +126,11 @@ pub fn images(args: &[String]) {
     for (vname, inputs) in [("small", small_inputs()), ("realistic", realistic_inputs())] {
         let dir = format!("{out}/{vname}");
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(format!("{dir}/inputs.json"), format!("{}\n{}\n{}\n", inputs.tools, inputs.globals, inputs.store)).unwrap();
+        std::fs::write(
+            format!("{dir}/inputs.json"),
+            format!("{}\n{}\n{}\n", inputs.tools, inputs.globals, inputs.store),
+        )
+        .unwrap();
         let _ = writeln!(
             times,
             "{vname}: tools JSON {} B, globals {} B, store {} B",
@@ -118,7 +147,12 @@ pub fn images(args: &[String]) {
         let (stage1_s, stage1) = sealed(pi::Session::stage1(&factored, true));
         let t_stage1 = t.elapsed();
         let base = djs_prelude::new_vm(pi::opts()).unwrap().bytes().to_vec();
-        for (n, b) in [("exact", &exact), ("empty", &empty), ("stage1", &stage1), ("base", &base)] {
+        for (n, b) in [
+            ("exact", &exact),
+            ("empty", &empty),
+            ("stage1", &stage1),
+            ("base", &base),
+        ] {
             std::fs::write(format!("{dir}/{n}.img"), b).unwrap();
         }
         // Start costs: restore a reference image (verified), plus `configure` when layered.
@@ -152,7 +186,11 @@ pub fn images(args: &[String]) {
         );
         drop(exact_s);
         for case in &args[3..] {
-            let name = std::path::Path::new(case).file_stem().unwrap().to_string_lossy().to_string();
+            let name = std::path::Path::new(case)
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .to_string();
             let code = std::fs::read_to_string(case).unwrap();
             let today = pi::Session::from_image(&exact, &{
                 // handles: as prepared
@@ -170,7 +208,10 @@ pub fn images(args: &[String]) {
                 std::fs::write(format!("{dir}/{name}-layered-{k}.img"), img).unwrap();
             });
             let same = a.ev.output == b.ev.output && a.ev.done == b.ev.done;
-            let _ = writeln!(times, "  {name}: today and layered give the same output and result: {same}");
+            let _ = writeln!(
+                times,
+                "  {name}: today and layered give the same output and result: {same}"
+            );
         }
     }
     std::fs::write(format!("{out}/times.txt"), &times).unwrap();
@@ -192,13 +233,24 @@ use crate::import::{Importer, collect_templates};
 /// The prelude state the snapshot carries by name: what pi's prelude would hand out
 /// through a `state()`/`restore()` pair. Emulated here by the prelude's top-level binding
 /// names; a field the prelude does not have is skipped (and defaults on import).
-const SCALARS: &[&str] = &["nextId", "finished", "outputChars", "outputItems", "storedChars"];
+const SCALARS: &[&str] = &[
+    "nextId",
+    "finished",
+    "outputChars",
+    "outputItems",
+    "storedChars",
+];
 const MAPS: &[&str] = &["stored", "writes"];
 
 fn prelude_roots(s: &pi::Session) -> Vec<Value> {
     let h = s.vm.heap();
     let g = s.vm.global();
-    let mut roots = vec![h.get_handle(s.api), h.get_handle(s.settle), h.get_handle(s.run), h.get_handle(s.stalled)];
+    let mut roots = vec![
+        h.get_handle(s.api),
+        h.get_handle(s.settle),
+        h.get_handle(s.run),
+        h.get_handle(s.stalled),
+    ];
     for k in h.own_keys(g) {
         if let Some(p) = h.get_own_property(g, k).and_then(|p| p.value()) {
             roots.push(p);
@@ -213,7 +265,12 @@ fn user_source(code: &str) -> String {
 
 /// Exports a waiting pi session by meaning: the script's own state as a graph, builtins
 /// and the prelude's objects by path, pending calls by id, the prelude's state by name.
-pub fn export_pi(s: &mut pi::Session, code: &str, inputs: &Inputs, failed_page2: bool) -> Result<J, Vec<String>> {
+pub fn export_pi(
+    s: &mut pi::Session,
+    code: &str,
+    inputs: &Inputs,
+    failed_page2: bool,
+) -> Result<J, Vec<String>> {
     s.vm.collect().unwrap();
     let vm = &s.vm;
     let heap = vm.heap();
@@ -261,9 +318,14 @@ pub fn export_pi(s: &mut pi::Session, code: &str, inputs: &Inputs, failed_page2:
             .filter(|r| heap.object_class(*r) == djs_core::heap::ObjectClass::BuiltinClosure)
             .map(|r| heap.object_slot(r, 1));
         let Some(promise) = promise else {
-            return Err(vec!["a pending entry without a promise resolve function".into()]);
+            return Err(vec![
+                "a pending entry without a promise resolve function".into(),
+            ]);
         };
-        let call = s.ev.calls.iter().find(|c| Some(c.id as f64) == k.as_number());
+        let call =
+            s.ev.calls
+                .iter()
+                .find(|c| Some(c.id as f64) == k.as_number());
         let pv = ex.value(promise);
         pending.push(json!({"id": k.as_number(), "promise": pv,
             "name": call.map(|c| c.name.clone()), "args": call.and_then(|c| c.args.clone())}));
@@ -285,7 +347,11 @@ pub fn export_pi(s: &mut pi::Session, code: &str, inputs: &Inputs, failed_page2:
         e.dedup();
         return Err(e);
     }
-    let build = format!("{:08x}", heap.arena().get::<u32>(0, djs_core::heap::cells::Roots::BUILD));
+    let build = format!(
+        "{:08x}",
+        heap.arena()
+            .get::<u32>(0, djs_core::heap::cells::Roots::BUILD)
+    );
     Ok(json!({
         "format": "djs-goldilocks-prototype/1",
         "exportedBy": build,
@@ -314,14 +380,18 @@ pub fn import_pi(snap: &J, prelude: &str) -> Result<(pi::Session, bool), String>
     for name in snap["interface"].as_array().unwrap() {
         let path = format!("globalThis/{}", name.as_str().unwrap());
         if resolve_prelude(s.vm.heap_mut(), &path).is_none_or(|v| v.is_undefined()) {
-            return Err(format!("this prelude does not define {path}, which the session's did"));
+            return Err(format!(
+                "this prelude does not define {path}, which the session's did"
+            ));
         }
     }
     // The script's code, compiled again; nothing of it runs.
     let src = snap["script"].as_str().unwrap();
-    let f = s
-        .vm
-        .compile(src.as_bytes(), &djs_core::compiler::CompileOptions::async_body("codemode.js", &[]))
+    let f =
+        s.vm.compile(
+            src.as_bytes(),
+            &djs_core::compiler::CompileOptions::async_body("codemode.js", &[]),
+        )
         .map_err(|e| e.message)?;
     let mut templates = HashMap::new();
     let root = closure_template(s.vm.heap(), f.as_object().unwrap()).unwrap();
@@ -330,7 +400,10 @@ pub fn import_pi(snap: &J, prelude: &str) -> Result<(pi::Session, bool), String>
     let mut imp = Importer {
         templates,
         cells: vec![0; nodes.len()],
-        kinds: nodes.iter().map(|n| n["t"].as_str().unwrap_or("?").to_string()).collect(),
+        kinds: nodes
+            .iter()
+            .map(|n| n["t"].as_str().unwrap_or("?").to_string())
+            .collect(),
     };
     // Pending calls: fresh promises registered in the new prelude's map (what an
     // `adopt(id)` in pi's prelude would do), standing in for the old ones. Running the VM
@@ -344,7 +417,12 @@ pub fn import_pi(snap: &J, prelude: &str) -> Result<(pi::Session, bool), String>
         s.vm.heap_mut().new_handle(pm).unwrap()
     };
     let adopt_src = "return (pending, id) => new Promise((resolve, reject) => pending.set(id, { resolve, reject }))";
-    let adopt = s.vm.compile(adopt_src.as_bytes(), &djs_core::compiler::CompileOptions::async_body("adopt.js", &[])).unwrap();
+    let adopt =
+        s.vm.compile(
+            adopt_src.as_bytes(),
+            &djs_core::compiler::CompileOptions::async_body("adopt.js", &[]),
+        )
+        .unwrap();
     let adopt = s.evaluate_pub(adopt)?;
     let mut calls = Vec::new();
     let mut adopted = Vec::new();
@@ -353,7 +431,9 @@ pub fn import_pi(snap: &J, prelude: &str) -> Result<(pi::Session, bool), String>
         let pm = s.vm.heap().get_handle(pm_handle);
         let a = s.vm.heap().get_handle(adopt);
         let h = s.invoke(a, Value::UNDEFINED, &[pm, Value::number(id)])?;
-        let node = p["promise"]["ref"].as_u64().ok_or("pending promise is not a node")? as usize;
+        let node = p["promise"]["ref"]
+            .as_u64()
+            .ok_or("pending promise is not a node")? as usize;
         adopted.push((node, h));
         calls.push(pi::Call {
             id: id as u32,
@@ -361,7 +441,12 @@ pub fn import_pi(snap: &J, prelude: &str) -> Result<(pi::Session, bool), String>
             args: p["args"].as_str().map(|a| a.to_string()),
         });
     }
-    let thunk = s.vm.compile(b"return (p) => () => p", &djs_core::compiler::CompileOptions::async_body("adopt.js", &[])).unwrap();
+    let thunk =
+        s.vm.compile(
+            b"return (p) => () => p",
+            &djs_core::compiler::CompileOptions::async_body("adopt.js", &[]),
+        )
+        .unwrap();
     let thunk = s.evaluate_pub(thunk)?;
     // No more runs until the graph is built and held by handles.
     for (node, h) in &adopted {
@@ -378,11 +463,15 @@ pub fn import_pi(snap: &J, prelude: &str) -> Result<(pi::Session, bool), String>
         if MAPS.contains(&name.as_str()) {
             let m: Value = s.vm.heap().arena().get(b, BoxCell::VALUE);
             let m = m.as_object().unwrap();
-            s.vm.heap_mut().collection_clear(m).map_err(|e| format!("{e:?}"))?;
+            s.vm.heap_mut()
+                .collection_clear(m)
+                .map_err(|e| format!("{e:?}"))?;
             for e in j.as_array().unwrap() {
                 let k = imp.value(s.vm.heap_mut(), &e[0])?;
                 let v = imp.value(s.vm.heap_mut(), &e[1])?;
-                s.vm.heap_mut().collection_set(m, k, v).map_err(|e| format!("{e:?}"))?;
+                s.vm.heap_mut()
+                    .collection_set(m, k, v)
+                    .map_err(|e| format!("{e:?}"))?;
             }
         } else {
             let v = imp.value(s.vm.heap_mut(), j)?;
@@ -393,7 +482,11 @@ pub fn import_pi(snap: &J, prelude: &str) -> Result<(pi::Session, bool), String>
     // function it gets and attaches its handlers to the promise that function returns.
     let held: Vec<_> = run_subscribed
         .iter()
-        .map(|&c| s.vm.heap_mut().new_handle(Value::object(obj_at(c))).unwrap())
+        .map(|&c| {
+            s.vm.heap_mut()
+                .new_handle(Value::object(obj_at(c)))
+                .unwrap()
+        })
         .collect();
     for h in held {
         let p = s.vm.heap().get_handle(h);
@@ -405,13 +498,21 @@ pub fn import_pi(snap: &J, prelude: &str) -> Result<(pi::Session, bool), String>
         s.invoke(run, api, &[fv])?;
     }
     if std::env::var("GOLDI_TIME").is_ok() {
-        eprintln!("import: prelude run {t_prelude:?}, the rest {:?}", t0.elapsed() - t_prelude);
+        eprintln!(
+            "import: prelude run {t_prelude:?}, the rest {:?}",
+            t0.elapsed() - t_prelude
+        );
     }
     let host = &snap["host"];
     s.now = host["now"].as_f64().unwrap();
     s.ev.calls = calls;
     s.ev.issued = host["issued"].as_u64().unwrap() as u32;
-    s.ev.output = host["output"].as_array().unwrap().iter().map(|o| o.as_str().unwrap().to_string()).collect();
+    s.ev.output = host["output"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|o| o.as_str().unwrap().to_string())
+        .collect();
     Ok((s, host["failedPage2"].as_bool().unwrap_or(false)))
 }
 
@@ -447,7 +548,11 @@ pub fn tier2(args: &[String]) {
     let mut sizes = Vec::new();
     let (mut t_export, mut t_import) = (std::time::Duration::ZERO, std::time::Duration::ZERO);
     for case in &args[2..] {
-        let name = std::path::Path::new(case).file_stem().unwrap().to_string_lossy().to_string();
+        let name = std::path::Path::new(case)
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
         let code = std::fs::read_to_string(case).unwrap();
         let whole = |p: &str| {
             let s = pi::Session::prepare_with(p, &inputs, T0);
@@ -464,7 +569,9 @@ pub fn tier2(args: &[String]) {
         loop {
             let mut s = pi::Session::prepare_with(&p_export, &inputs, T0);
             s.start(&code, 42);
-            let mut tools = Tools { failed_page2: false };
+            let mut tools = Tools {
+                failed_page2: false,
+            };
             let mut now = T0;
             for _ in 0..k {
                 if s.ev.done.is_some() || s.ev.calls.is_empty() {
@@ -607,17 +714,23 @@ pub fn reloc(args: &[String]) {
                     let info = insn.info();
                     for k in info.imms {
                         if *k == djs_core::bytecode::ImmKind::Atom {
-                            *targets.entry("atom id in session bytecode".into()).or_default() += 1;
+                            *targets
+                                .entry("atom id in session bytecode".into())
+                                .or_default() += 1;
                         }
                     }
                     if info.name == "call_intrinsic" {
-                        *targets.entry("intrinsic id in session bytecode".into()).or_default() += 1;
+                        *targets
+                            .entry("intrinsic id in session bytecode".into())
+                            .or_default() += 1;
                     }
                     pc = insn.next_pc();
                 }
             }
             if c.kind == CellKind::Shape {
-                *targets.entry("atom id in a session shape".into()).or_default() += 1;
+                *targets
+                    .entry("atom id in a session shape".into())
+                    .or_default() += 1;
             }
             h.trace_cell(c.offset, |slot| {
                 let Some(t) = h.slot_target(slot) else { return };
@@ -648,13 +761,16 @@ pub fn reloc(args: &[String]) {
             kinds.values().map(|v| v.0).sum::<u32>()
         );
         let mut ks: Vec<_> = kinds.into_iter().collect();
-        ks.sort_by(|a, b| b.1 .1.cmp(&a.1 .1));
+        ks.sort_by(|a, b| b.1.1.cmp(&a.1.1));
         for (k, (n, b)) in ks.iter().take(12) {
             println!("  {k:24} {n:6} cells {b:8} B");
         }
         println!("  references from session cells into the reference (count / distinct targets):");
         for (k, n) in &targets {
-            let d = distinct.get(k).map(|d| d.len().to_string()).unwrap_or("-".into());
+            let d = distinct
+                .get(k)
+                .map(|d| d.len().to_string())
+                .unwrap_or("-".into());
             println!("    {k:40} {n:6} / {d}");
         }
     }

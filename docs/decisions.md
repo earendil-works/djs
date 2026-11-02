@@ -6162,3 +6162,14 @@ built there (`--features old` selects that tree's one changed record schema). Th
 design it supports, docs/portable-snapshots.md, is a proposal; images stay build-pinned
 (D2260) and replay remains the planned cross-version record (0140) until the owner
 decides.
+
+## D2351: A snapshot importer never holds cell offsets across a VM run
+date: 2026-11-02 · by: portable · issue: 0142
+Rebuilding state in a VM sometimes needs JavaScript to run (re-issuing host calls, a
+prelude's `adopt(id)`, subscribing `run` again), and a run can reach a safepoint that
+collects and moves cells. The 0142 prototype crashed in three of six cases until every
+cell it obtained before or between runs was held by a handle and turned into an offset
+only after the last run; building the graph itself allocates but never collects (ARCH
+"Allocation never collects"). 0141's importer had the same latent bug in its host-call
+re-issue loop (fixed). Any engine-side importer follows the same order: runs first,
+offsets after, then build without running.

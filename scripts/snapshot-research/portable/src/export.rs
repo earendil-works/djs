@@ -246,7 +246,8 @@ impl<'a> Exporter<'a> {
                         .arena()
                         .get(t.off, djs_core::heap::cells::FuncTemplate::NAME);
                     let name = h.atom_name(djs_core::heap::Atom::from_id(name));
-                    self.errors.push(format!("an unnamed prelude function ({name})"));
+                    self.errors
+                        .push(format!("an unnamed prelude function ({name})"));
                 }
                 let mut captures = Vec::new();
                 for i in 0..t.captures {
@@ -383,7 +384,10 @@ impl<'a> Exporter<'a> {
         let t = template_info(h, f.template);
         if self.prelude_script.as_deref() == Some(t.script.as_str()) {
             // Tier 2 restores onto a fresh prelude run, which has no such frame.
-            self.errors.push(format!("a prelude function is suspended (at {}..{})", t.span.0, t.span.1));
+            self.errors.push(format!(
+                "a prelude function is suspended (at {}..{})",
+                t.span.0, t.span.1
+            ));
         }
         let (await_pc, site) = t
             .awaits()
@@ -453,7 +457,9 @@ impl<'a> Exporter<'a> {
 
     /// An unnamed closure of the prelude's script: `api.run`'s handlers.
     fn is_prelude_run_handler(&self, f: Value) -> bool {
-        let Some(script) = &self.prelude_script else { return false };
+        let Some(script) = &self.prelude_script else {
+            return false;
+        };
         let Some(o) = f.as_object() else { return false };
         if self.prelude.contains_key(&o.offset()) {
             return false;

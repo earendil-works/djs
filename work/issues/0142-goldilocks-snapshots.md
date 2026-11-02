@@ -1,6 +1,6 @@
 # 0142: Goldilocks snapshots: minimal, and a chance to survive djs/prelude/globals changes
 
-status: in-progress
+status: done
 agent: portable
 branch: issue/0142-goldilocks-snapshots
 depends-on: 0117, 0136, 0140, 0141
@@ -55,6 +55,52 @@ module size, and phases. Be concrete and short; the owner wants a decision basis
 
 ## Log
 
+- Read js/pi/vm.ts (preludeKey, prepare, startVm, resumeVm) and pi's prelude
+  (pi-private packages/codemode/src/runtime/prelude-source.ts, read-only; identical to
+  tests/pi/prelude-source.ts), its protocol (VmStartData) and its git history (8 commits,
+  2026-09-29 .. 10-12).
+- Extended the 0141 crate (scripts/snapshot-research/portable): pi.rs (snaplab's pi
+  session, now with tools/globals/store inputs and a factored-prelude path), pitools.rs
+  (snaplab's fake tools), goldi.rs (`goldi-images`, `goldi-tier2`, `goldi-import-all`,
+  `goldi-reloc`), factor-prelude.py (pi's prelude split into stage 1 + configure),
+  refs.py, churn-tiers.py.
+- Layered reference: memory limit does not change the image (removed from the key);
+  the unmodified prelude with empty inputs as reference costs +15 KB; the factored
+  prelude +1.6/+3.8 KB (small/realistic inputs). Found two causes of moved cells: handles
+  dropped after the reference was sealed (dead cells inside the reference), and growing
+  shape transition lists (warmed in stage 1; engine follow-up).
+- Tier 2 for pi: prelude objects by path (Proxy `<target>`), pending calls by id with
+  `adopt` emulated, prelude state by binding name, `run` re-subscription, interface
+  check, refusal of suspended prelude frames. 133/144 same build (agent-loop refused:
+  async generator); all 8 pi prelude versions onto the current and back; djs 1b6c2098
+  (rebuilt in work/scratch/0142/old) <-> today with first/current preludes: 133/133.
+- Importer GC bug (D2351): offsets held across VM runs moved; fixed with handles, also in
+  0141's import.rs.
+- Relocation option: measured references from session cells into the reference and the
+  changed reference cells; churn per tier and per release window.
+- Used 0143's numbers (registry, engine-level lockdown) per the coordinator.
+- Wrote docs/goldilocks-snapshots.md. No engine changes; guide unaffected (snapshots.md
+  describes what is built).
+
 ## Follow-ups
 
+- Adapter: drop the memory limit from `preludeKey` (images do not depend on it).
+- pi-private: split the prelude factory into stage 1 + `configure`; later add
+  `state()`/`restore()`/`adopt(id)` and keep "no awaits in prelude code".
+- djs-core: `Vm::seal` puts shape transition lists last (as D2057 does for the global
+  table), so per-session shapes do not move the reference.
+- Tier 2 in djs-core with 0143's builtin registry (0141's phase 1 plus pi naming);
+  async generators if ever needed.
+
 ## Result
+
+docs/goldilocks-snapshots.md: layered references (the reference keyed only by build +
+prelude version, per-run inputs carried by the session for +1.6–3.8 KB), tier 1 = today's
+image delta, tier 2 = by-meaning export of session-owned state restored onto a fresh
+prelude run (prototyped: survives every pi prelude version in history and a 406-commit
+djs jump, same size as today's deltas, import 3.0 ms native or ~0.7 ms with a cached
+stage-1 image or engine lockdown), what pi must keep (global names, settle/run/stalled,
+no prelude awaits, a state/restore/adopt contract; interface unchanged in its history),
+churn numbers, and an explicit evaluation of image-with-symbolic-relocations (few
+relocations, but it freezes layouts/opcodes/atoms: survives 8% of 10-issue releases
+during development). Phases A (days), B (with 0143 steps 1–2), C (3–4 weeks).

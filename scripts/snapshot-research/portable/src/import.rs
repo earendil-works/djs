@@ -242,7 +242,11 @@ pub fn import(snap: &J) -> Result<Session, String> {
 /// Builds the snapshot's nodes in `vm` (cells already assigned in `imp.cells` are kept):
 /// a cell for every node, then their contents. Returns the promises whose reactions
 /// included the prelude's `run` subscription (tier 2, 0142).
-pub fn build(imp: &mut Importer, vm: &mut djs_core::vm::Vm, nodes: &[J]) -> Result<Vec<u32>, String> {
+pub fn build(
+    imp: &mut Importer,
+    vm: &mut djs_core::vm::Vm,
+    nodes: &[J],
+) -> Result<Vec<u32>, String> {
     let mut run_subscribed = Vec::new();
     let heap = vm.heap_mut();
     let fproto = intrinsic(heap, Intrinsic::FunctionProto).as_object();

@@ -458,8 +458,14 @@ pub fn captured_bindings(heap: &Heap, roots: &[Value]) -> HashMap<String, u32> {
         if let Some(t) = closure_template(heap, o) {
             let info = template_info(heap, t);
             for i in 0..info.captures {
-                let Some(b) = heap.object_slot(o, 1 + i).as_internal() else { continue };
-                let name = info.names.get((info.locals + i) as usize).cloned().unwrap_or_default();
+                let Some(b) = heap.object_slot(o, 1 + i).as_internal() else {
+                    continue;
+                };
+                let name = info
+                    .names
+                    .get((info.locals + i) as usize)
+                    .cloned()
+                    .unwrap_or_default();
                 out.entry(name).or_insert(b);
                 let inner: Value = heap.arena().get(b, djs_core::heap::cells::BoxCell::VALUE);
                 queue.push_back(inner);
@@ -468,7 +474,10 @@ pub fn captured_bindings(heap: &Heap, roots: &[Value]) -> HashMap<String, u32> {
         // Methods of objects (the api, console, the guard's handler).
         for k in heap.own_keys(o) {
             if let Some(Property::Data { value, .. }) = heap.get_own_property(o, k) {
-                if value.as_object().is_some_and(|f| heap.object_class(f) == ObjectClass::Function) {
+                if value
+                    .as_object()
+                    .is_some_and(|f| heap.object_class(f) == ObjectClass::Function)
+                {
                     queue.push_back(value);
                 }
             }
