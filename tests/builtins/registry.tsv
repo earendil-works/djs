@@ -737,229 +737,229 @@
 732	value	%intrinsic:CopyDataPropertiesExcluding%
 733	value	%intrinsic:TypedArraySetElementSlow%
 734	value	%intrinsic:FinalizationRegistryCleanupJob%
-735	value	AggregateError~0
-736	value	AggregateError~1
-737	value	ArrayBuffer~0
-738	value	ArrayBuffer~1
-739	value	BigInt64Array~0
-740	value	DOMException~1
-741	value	DOMException~2
-742	value	Date~0
-743	value	Function~0
-744	value	Proxy~0
-745	value	RegExp~0
-746	value	Set~2
-747	value	atob~2
-748	value	isFinite~0
-749	value	Array.from~0
-750	value	Array.from~1
-751	value	Array.fromAsync~0
-752	value	Error.captureStackTrace~0
-753	value	Iterator.from~0
-754	value	Iterator.from~1
-755	value	Iterator.from~2
-756	value	Iterator.zip~0
-757	value	Iterator.zip~2
-758	value	Iterator.zip~3
-759	value	Iterator.zip~4
-760	value	Iterator.zip~7
-761	value	JSON.parse~1
-762	value	JSON.stringify~0
-763	value	Math.hypot~0
-764	value	Object.create~0
-765	value	Object.defineProperty~1
-766	value	Object.defineProperty~2
-767	value	Object.entries~0
-768	value	Object.groupBy~0
-769	value	Object.setPrototypeOf~0
-770	value	Promise.all~0
-771	value	Promise.allKeyed~0
-772	value	Promise.reject~0
-773	value	Promise.reject~1
-774	value	Promise.reject~2
-775	value	Promise.reject~3
-776	value	Promise.resolve~0
-777	value	Promise.withResolvers~3
-778	value	Promise.withResolvers~4
-779	value	Reflect.apply~0
-780	value	Reflect.construct~0
-781	value	Reflect.defineProperty~0
-782	value	Reflect.defineProperty~3
-783	value	Reflect.set~3
-784	value	Reflect.set~4
-785	value	Reflect.set~5
-786	value	Reflect.set~6
-787	value	Reflect.set~7
-788	value	Uint8Array.fromBase64~0
-789	value	Uint8Array.fromBase64~1
-790	value	Uint8Array.fromBase64~2
-791	value	Uint8Array.fromBase64~3
-792	value	Array.prototype.at~1
-793	value	Array.prototype.concat~2
-794	value	Array.prototype.concat~3
-795	value	Array.prototype.copyWithin~1
-796	value	Array.prototype.flat~3
-797	value	Array.prototype.flatMap~1
-798	value	Array.prototype.includes~2
-799	value	Array.prototype.shift~1
-800	value	Array.prototype.toReversed~1
-801	value	Array.prototype.toString~0
-802	value	ArrayBuffer.prototype.resize~0
-803	value	ArrayBuffer.prototype.resize~2
-804	value	ArrayBuffer.prototype.slice~2
-805	value	ArrayBuffer.prototype.slice~4
-806	value	ArrayBuffer.prototype.transfer~0
-807	value	AsyncDisposableStack.prototype.adopt~0
-808	value	AsyncDisposableStack.prototype.adopt~1
-809	value	AsyncDisposableStack.prototype.disposeAsync~2
-810	value	AsyncDisposableStack.prototype.move~0
-811	value	AsyncDisposableStack.prototype.use~0
-812	value	BigInt.prototype.toLocaleString~0
-813	value	Boolean.prototype.toString~0
-814	value	get DOMException.prototype.code~0
-815	value	DataView.prototype.getBigInt64~0
-816	value	DataView.prototype.getFloat16~0
-817	value	DataView.prototype.setBigInt64~0
-818	value	get DataView.prototype.byteLength~0
-819	value	get DataView.prototype.byteLength~1
-820	value	Date.prototype.setDate~0
-821	value	Date.prototype.setTime~1
-822	value	Date.prototype[Symbol.toPrimitive]~0
-823	value	DisposableStack.prototype.dispose~1
-824	value	DisposableStack.prototype.dispose~2
-825	value	get Error.prototype.stack~0
-826	value	Iterator.prototype.chunks~0
-827	value	Iterator.prototype.chunks~1
-828	value	Iterator.prototype.chunks~2
-829	value	Iterator.prototype.drop~2
-830	value	Iterator.prototype.every~0
-831	value	Iterator.prototype.filter~1
-832	value	set Iterator.prototype.constructor~0
-833	value	Map.prototype.clear~0
-834	value	Map.prototype.getOrInsertComputed~1
-835	value	Number.prototype.toExponential~0
-836	value	Promise.prototype.catch~0
-837	value	RegExp.prototype.exec~1
-838	value	RegExp.prototype.test~2
-839	value	RegExp.prototype.toString~0
-840	value	RegExp.prototype[Symbol.matchAll]~4
-841	value	RegExp.prototype[Symbol.match]~4
-842	value	RegExp.prototype[Symbol.match]~5
-843	value	RegExp.prototype[Symbol.replace]~2
-844	value	RegExp.prototype[Symbol.replace]~9
-845	value	RegExp.prototype[Symbol.split]~7
-846	value	get RegExp.prototype.dotAll~0
-847	value	Set.prototype.add~0
-848	value	Set.prototype.difference~1
-849	value	Set.prototype.difference~2
-850	value	Set.prototype.difference~3
-851	value	Set.prototype.difference~4
-852	value	Set.prototype.difference~5
-853	value	Set.prototype.difference~6
-854	value	String.prototype.at~0
-855	value	String.prototype.endsWith~4
-856	value	String.prototype.match~0
-857	value	String.prototype.match~3
-858	value	String.prototype.match~4
-859	value	String.prototype.matchAll~1
-860	value	String.prototype.padEnd~0
-861	value	String.prototype.replace~3
-862	value	String.prototype.toString~0
-863	value	Symbol.prototype.toString~0
-864	value	Uint8Array.prototype.setFromBase64~0
-865	value	Uint8Array.prototype.setFromBase64~1
-866	value	Uint8Array.prototype.setFromBase64~5
-867	value	Uint8Array.prototype.setFromBase64~6
-868	value	Uint8Array.prototype.setFromBase64~7
-869	value	WeakMap.prototype.delete~0
-870	value	WeakSet.prototype.add~0
-871	value	%ArrayIteratorPrototype%.next~1
-872	value	%GeneratorPrototype%.next~0
-873	value	%GeneratorPrototype%.next~1
-874	value	%TypedArray%.from~3
-875	value	%TypedArray%.from~4
-876	value	%TypedArrayPrototype%.every~0
-877	value	%TypedArrayPrototype%.filter~3
-878	value	%TypedArrayPrototype%.find~0
-879	value	%TypedArrayPrototype%.reduce~0
-880	value	%TypedArrayPrototype%.set~4
-881	value	%TypedArrayPrototype%.set~5
-882	value	%TypedArrayPrototype%.sort~3
-883	value	%TypedArrayPrototype%.subarray~2
-884	value	%TypedArrayPrototype%.subarray~5
-885	value	%TypedArrayPrototype%.toReversed~2
-886	value	%AsyncGeneratorPrototype%.next~0
-887	value	%AsyncFromSyncIteratorPrototype%.next~0
-888	value	%AsyncFromSyncIteratorPrototype%.next~1
-889	value	%AsyncFromSyncIteratorPrototype%.return~1
-890	value	%IteratorHelperPrototype%.next~0
-891	value	%IteratorHelperPrototype%.next~1
-892	value	%IteratorHelperPrototype%.return~3
-893	value	%intrinsic:SortList%~0
-894	value	%intrinsic:AsyncGeneratorStep%~0
-895	value	%intrinsic:AsyncGeneratorStep%~1
-896	value	%intrinsic:GetAsyncIterator%~1
-897	value	%intrinsic:ApplyDecorators%~0
-898	value	%intrinsic:ApplyDecorators%~2
-899	value	%intrinsic:ApplyDecorators%~3
-900	value	%intrinsic:ApplyDecorators%~4
-901	value	%intrinsic:ApplyDecorators%~5
-902	value	%intrinsic:ApplyDecorators%~6
-903	value	%intrinsic:ApplyLegacyDecorators%~1
-904	value	%intrinsic:AsyncDisposeFulfilled%~0
-905	value	%intrinsic:FromAsyncFulfilled%~0
-906	value	%intrinsic:FromAsyncFulfilled%~1
-907	value	%intrinsic:FromAsyncFulfilled%~2
-908	value	%intrinsic:FromAsyncFulfilled%~3
-909	value	%intrinsic:FromAsyncRejected%~0
-910	value	%intrinsic:PromiseReactionJob%~1
-911	value	%intrinsic:PromiseAllResolveElement%~0
-912	value	%intrinsic:PromiseAllSettledResolveElement%~1
-913	value	%intrinsic:ProxyGetPrototypeOf%~0
-914	value	%intrinsic:ProxyGetOwnPropertyDescriptorObject%~0
-915	value	%intrinsic:ProxyGetOwnPropertyDescriptorObject%~1
-916	value	%intrinsic:ProxyOwnPropertyAttributes%~0
-917	value	%intrinsic:ProxyDefineOwnPropertyFromRecord%~3
-918	value	%intrinsic:ProxyDefineOwnPropertyFromRecord%~4
-919	value	%intrinsic:ProxyDefineOwnPropertyFromRecord%~5
-920	value	%intrinsic:ProxyDefineOwnPropertyFromRecord%~6
-921	value	%intrinsic:ProxyDefineDataPropertyOrThrow%~1
-922	value	%intrinsic:ProxyGet%~4
-923	value	%intrinsic:ProxyOwnPropertyKeys%~0
-924	value	%intrinsic:ForInStep%~1
-925	value	AggregateError~0~2
-926	value	BigInt64Array~0~8
-927	value	BigInt64Array~0~9
-928	value	BigInt64Array~0~11
-929	value	Date~0~1
-930	value	Array.fromAsync~0~2
-931	value	Array.fromAsync~0~4
-932	value	JSON.parse~1~1
-933	value	JSON.stringify~0~2
-934	value	Promise.all~0~2
-935	value	Promise.all~0~9
-936	value	Promise.all~0~10
-937	value	Promise.all~0~13
-938	value	Promise.allKeyed~0~9
-939	value	AsyncDisposableStack.prototype.disposeAsync~2~2
-940	value	DataView.prototype.getBigInt64~0~1
-941	value	RegExp.prototype.test~2~0
-942	value	%AsyncGeneratorPrototype%.next~0~2
-943	value	%AsyncFromSyncIteratorPrototype%.next~0~0
-944	value	%IteratorHelperPrototype%.next~1~0
-945	value	%IteratorHelperPrototype%.next~1~1
-946	value	%IteratorHelperPrototype%.next~1~3
-947	value	%IteratorHelperPrototype%.next~1~4
-948	value	%IteratorHelperPrototype%.next~1~6
-949	value	%IteratorHelperPrototype%.next~1~7
-950	value	%IteratorHelperPrototype%.next~1~8
-951	value	%intrinsic:ApplyDecorators%~2~0
-952	value	%intrinsic:FromAsyncFulfilled%~0~3
-953	value	%intrinsic:ProxyGetOwnPropertyDescriptorObject%~0~4
-954	value	%intrinsic:ProxyOwnPropertyKeys%~0~4
-955	value	Promise.all~0~10~0
-956	value	%IteratorHelperPrototype%.next~1~1~3
-957	value	%IteratorHelperPrototype%.next~1~8~3
+735	value	AggregateError~0	removed: D2440: prelude functions are named by the prelude function table
+736	value	AggregateError~1	removed: D2440: prelude functions are named by the prelude function table
+737	value	ArrayBuffer~0	removed: D2440: prelude functions are named by the prelude function table
+738	value	ArrayBuffer~1	removed: D2440: prelude functions are named by the prelude function table
+739	value	BigInt64Array~0	removed: D2440: prelude functions are named by the prelude function table
+740	value	DOMException~1	removed: D2440: prelude functions are named by the prelude function table
+741	value	DOMException~2	removed: D2440: prelude functions are named by the prelude function table
+742	value	Date~0	removed: D2440: prelude functions are named by the prelude function table
+743	value	Function~0	removed: D2440: prelude functions are named by the prelude function table
+744	value	Proxy~0	removed: D2440: prelude functions are named by the prelude function table
+745	value	RegExp~0	removed: D2440: prelude functions are named by the prelude function table
+746	value	Set~2	removed: D2440: prelude functions are named by the prelude function table
+747	value	atob~2	removed: D2440: prelude functions are named by the prelude function table
+748	value	isFinite~0	removed: D2440: prelude functions are named by the prelude function table
+749	value	Array.from~0	removed: D2440: prelude functions are named by the prelude function table
+750	value	Array.from~1	removed: D2440: prelude functions are named by the prelude function table
+751	value	Array.fromAsync~0	removed: D2440: prelude functions are named by the prelude function table
+752	value	Error.captureStackTrace~0	removed: D2440: prelude functions are named by the prelude function table
+753	value	Iterator.from~0	removed: D2440: prelude functions are named by the prelude function table
+754	value	Iterator.from~1	removed: D2440: prelude functions are named by the prelude function table
+755	value	Iterator.from~2	removed: D2440: prelude functions are named by the prelude function table
+756	value	Iterator.zip~0	removed: D2440: prelude functions are named by the prelude function table
+757	value	Iterator.zip~2	removed: D2440: prelude functions are named by the prelude function table
+758	value	Iterator.zip~3	removed: D2440: prelude functions are named by the prelude function table
+759	value	Iterator.zip~4	removed: D2440: prelude functions are named by the prelude function table
+760	value	Iterator.zip~7	removed: D2440: prelude functions are named by the prelude function table
+761	value	JSON.parse~1	removed: D2440: prelude functions are named by the prelude function table
+762	value	JSON.stringify~0	removed: D2440: prelude functions are named by the prelude function table
+763	value	Math.hypot~0	removed: D2440: prelude functions are named by the prelude function table
+764	value	Object.create~0	removed: D2440: prelude functions are named by the prelude function table
+765	value	Object.defineProperty~1	removed: D2440: prelude functions are named by the prelude function table
+766	value	Object.defineProperty~2	removed: D2440: prelude functions are named by the prelude function table
+767	value	Object.entries~0	removed: D2440: prelude functions are named by the prelude function table
+768	value	Object.groupBy~0	removed: D2440: prelude functions are named by the prelude function table
+769	value	Object.setPrototypeOf~0	removed: D2440: prelude functions are named by the prelude function table
+770	value	Promise.all~0	removed: D2440: prelude functions are named by the prelude function table
+771	value	Promise.allKeyed~0	removed: D2440: prelude functions are named by the prelude function table
+772	value	Promise.reject~0	removed: D2440: prelude functions are named by the prelude function table
+773	value	Promise.reject~1	removed: D2440: prelude functions are named by the prelude function table
+774	value	Promise.reject~2	removed: D2440: prelude functions are named by the prelude function table
+775	value	Promise.reject~3	removed: D2440: prelude functions are named by the prelude function table
+776	value	Promise.resolve~0	removed: D2440: prelude functions are named by the prelude function table
+777	value	Promise.withResolvers~3	removed: D2440: prelude functions are named by the prelude function table
+778	value	Promise.withResolvers~4	removed: D2440: prelude functions are named by the prelude function table
+779	value	Reflect.apply~0	removed: D2440: prelude functions are named by the prelude function table
+780	value	Reflect.construct~0	removed: D2440: prelude functions are named by the prelude function table
+781	value	Reflect.defineProperty~0	removed: D2440: prelude functions are named by the prelude function table
+782	value	Reflect.defineProperty~3	removed: D2440: prelude functions are named by the prelude function table
+783	value	Reflect.set~3	removed: D2440: prelude functions are named by the prelude function table
+784	value	Reflect.set~4	removed: D2440: prelude functions are named by the prelude function table
+785	value	Reflect.set~5	removed: D2440: prelude functions are named by the prelude function table
+786	value	Reflect.set~6	removed: D2440: prelude functions are named by the prelude function table
+787	value	Reflect.set~7	removed: D2440: prelude functions are named by the prelude function table
+788	value	Uint8Array.fromBase64~0	removed: D2440: prelude functions are named by the prelude function table
+789	value	Uint8Array.fromBase64~1	removed: D2440: prelude functions are named by the prelude function table
+790	value	Uint8Array.fromBase64~2	removed: D2440: prelude functions are named by the prelude function table
+791	value	Uint8Array.fromBase64~3	removed: D2440: prelude functions are named by the prelude function table
+792	value	Array.prototype.at~1	removed: D2440: prelude functions are named by the prelude function table
+793	value	Array.prototype.concat~2	removed: D2440: prelude functions are named by the prelude function table
+794	value	Array.prototype.concat~3	removed: D2440: prelude functions are named by the prelude function table
+795	value	Array.prototype.copyWithin~1	removed: D2440: prelude functions are named by the prelude function table
+796	value	Array.prototype.flat~3	removed: D2440: prelude functions are named by the prelude function table
+797	value	Array.prototype.flatMap~1	removed: D2440: prelude functions are named by the prelude function table
+798	value	Array.prototype.includes~2	removed: D2440: prelude functions are named by the prelude function table
+799	value	Array.prototype.shift~1	removed: D2440: prelude functions are named by the prelude function table
+800	value	Array.prototype.toReversed~1	removed: D2440: prelude functions are named by the prelude function table
+801	value	Array.prototype.toString~0	removed: D2440: prelude functions are named by the prelude function table
+802	value	ArrayBuffer.prototype.resize~0	removed: D2440: prelude functions are named by the prelude function table
+803	value	ArrayBuffer.prototype.resize~2	removed: D2440: prelude functions are named by the prelude function table
+804	value	ArrayBuffer.prototype.slice~2	removed: D2440: prelude functions are named by the prelude function table
+805	value	ArrayBuffer.prototype.slice~4	removed: D2440: prelude functions are named by the prelude function table
+806	value	ArrayBuffer.prototype.transfer~0	removed: D2440: prelude functions are named by the prelude function table
+807	value	AsyncDisposableStack.prototype.adopt~0	removed: D2440: prelude functions are named by the prelude function table
+808	value	AsyncDisposableStack.prototype.adopt~1	removed: D2440: prelude functions are named by the prelude function table
+809	value	AsyncDisposableStack.prototype.disposeAsync~2	removed: D2440: prelude functions are named by the prelude function table
+810	value	AsyncDisposableStack.prototype.move~0	removed: D2440: prelude functions are named by the prelude function table
+811	value	AsyncDisposableStack.prototype.use~0	removed: D2440: prelude functions are named by the prelude function table
+812	value	BigInt.prototype.toLocaleString~0	removed: D2440: prelude functions are named by the prelude function table
+813	value	Boolean.prototype.toString~0	removed: D2440: prelude functions are named by the prelude function table
+814	value	get DOMException.prototype.code~0	removed: D2440: prelude functions are named by the prelude function table
+815	value	DataView.prototype.getBigInt64~0	removed: D2440: prelude functions are named by the prelude function table
+816	value	DataView.prototype.getFloat16~0	removed: D2440: prelude functions are named by the prelude function table
+817	value	DataView.prototype.setBigInt64~0	removed: D2440: prelude functions are named by the prelude function table
+818	value	get DataView.prototype.byteLength~0	removed: D2440: prelude functions are named by the prelude function table
+819	value	get DataView.prototype.byteLength~1	removed: D2440: prelude functions are named by the prelude function table
+820	value	Date.prototype.setDate~0	removed: D2440: prelude functions are named by the prelude function table
+821	value	Date.prototype.setTime~1	removed: D2440: prelude functions are named by the prelude function table
+822	value	Date.prototype[Symbol.toPrimitive]~0	removed: D2440: prelude functions are named by the prelude function table
+823	value	DisposableStack.prototype.dispose~1	removed: D2440: prelude functions are named by the prelude function table
+824	value	DisposableStack.prototype.dispose~2	removed: D2440: prelude functions are named by the prelude function table
+825	value	get Error.prototype.stack~0	removed: D2440: prelude functions are named by the prelude function table
+826	value	Iterator.prototype.chunks~0	removed: D2440: prelude functions are named by the prelude function table
+827	value	Iterator.prototype.chunks~1	removed: D2440: prelude functions are named by the prelude function table
+828	value	Iterator.prototype.chunks~2	removed: D2440: prelude functions are named by the prelude function table
+829	value	Iterator.prototype.drop~2	removed: D2440: prelude functions are named by the prelude function table
+830	value	Iterator.prototype.every~0	removed: D2440: prelude functions are named by the prelude function table
+831	value	Iterator.prototype.filter~1	removed: D2440: prelude functions are named by the prelude function table
+832	value	set Iterator.prototype.constructor~0	removed: D2440: prelude functions are named by the prelude function table
+833	value	Map.prototype.clear~0	removed: D2440: prelude functions are named by the prelude function table
+834	value	Map.prototype.getOrInsertComputed~1	removed: D2440: prelude functions are named by the prelude function table
+835	value	Number.prototype.toExponential~0	removed: D2440: prelude functions are named by the prelude function table
+836	value	Promise.prototype.catch~0	removed: D2440: prelude functions are named by the prelude function table
+837	value	RegExp.prototype.exec~1	removed: D2440: prelude functions are named by the prelude function table
+838	value	RegExp.prototype.test~2	removed: D2440: prelude functions are named by the prelude function table
+839	value	RegExp.prototype.toString~0	removed: D2440: prelude functions are named by the prelude function table
+840	value	RegExp.prototype[Symbol.matchAll]~4	removed: D2440: prelude functions are named by the prelude function table
+841	value	RegExp.prototype[Symbol.match]~4	removed: D2440: prelude functions are named by the prelude function table
+842	value	RegExp.prototype[Symbol.match]~5	removed: D2440: prelude functions are named by the prelude function table
+843	value	RegExp.prototype[Symbol.replace]~2	removed: D2440: prelude functions are named by the prelude function table
+844	value	RegExp.prototype[Symbol.replace]~9	removed: D2440: prelude functions are named by the prelude function table
+845	value	RegExp.prototype[Symbol.split]~7	removed: D2440: prelude functions are named by the prelude function table
+846	value	get RegExp.prototype.dotAll~0	removed: D2440: prelude functions are named by the prelude function table
+847	value	Set.prototype.add~0	removed: D2440: prelude functions are named by the prelude function table
+848	value	Set.prototype.difference~1	removed: D2440: prelude functions are named by the prelude function table
+849	value	Set.prototype.difference~2	removed: D2440: prelude functions are named by the prelude function table
+850	value	Set.prototype.difference~3	removed: D2440: prelude functions are named by the prelude function table
+851	value	Set.prototype.difference~4	removed: D2440: prelude functions are named by the prelude function table
+852	value	Set.prototype.difference~5	removed: D2440: prelude functions are named by the prelude function table
+853	value	Set.prototype.difference~6	removed: D2440: prelude functions are named by the prelude function table
+854	value	String.prototype.at~0	removed: D2440: prelude functions are named by the prelude function table
+855	value	String.prototype.endsWith~4	removed: D2440: prelude functions are named by the prelude function table
+856	value	String.prototype.match~0	removed: D2440: prelude functions are named by the prelude function table
+857	value	String.prototype.match~3	removed: D2440: prelude functions are named by the prelude function table
+858	value	String.prototype.match~4	removed: D2440: prelude functions are named by the prelude function table
+859	value	String.prototype.matchAll~1	removed: D2440: prelude functions are named by the prelude function table
+860	value	String.prototype.padEnd~0	removed: D2440: prelude functions are named by the prelude function table
+861	value	String.prototype.replace~3	removed: D2440: prelude functions are named by the prelude function table
+862	value	String.prototype.toString~0	removed: D2440: prelude functions are named by the prelude function table
+863	value	Symbol.prototype.toString~0	removed: D2440: prelude functions are named by the prelude function table
+864	value	Uint8Array.prototype.setFromBase64~0	removed: D2440: prelude functions are named by the prelude function table
+865	value	Uint8Array.prototype.setFromBase64~1	removed: D2440: prelude functions are named by the prelude function table
+866	value	Uint8Array.prototype.setFromBase64~5	removed: D2440: prelude functions are named by the prelude function table
+867	value	Uint8Array.prototype.setFromBase64~6	removed: D2440: prelude functions are named by the prelude function table
+868	value	Uint8Array.prototype.setFromBase64~7	removed: D2440: prelude functions are named by the prelude function table
+869	value	WeakMap.prototype.delete~0	removed: D2440: prelude functions are named by the prelude function table
+870	value	WeakSet.prototype.add~0	removed: D2440: prelude functions are named by the prelude function table
+871	value	%ArrayIteratorPrototype%.next~1	removed: D2440: prelude functions are named by the prelude function table
+872	value	%GeneratorPrototype%.next~0	removed: D2440: prelude functions are named by the prelude function table
+873	value	%GeneratorPrototype%.next~1	removed: D2440: prelude functions are named by the prelude function table
+874	value	%TypedArray%.from~3	removed: D2440: prelude functions are named by the prelude function table
+875	value	%TypedArray%.from~4	removed: D2440: prelude functions are named by the prelude function table
+876	value	%TypedArrayPrototype%.every~0	removed: D2440: prelude functions are named by the prelude function table
+877	value	%TypedArrayPrototype%.filter~3	removed: D2440: prelude functions are named by the prelude function table
+878	value	%TypedArrayPrototype%.find~0	removed: D2440: prelude functions are named by the prelude function table
+879	value	%TypedArrayPrototype%.reduce~0	removed: D2440: prelude functions are named by the prelude function table
+880	value	%TypedArrayPrototype%.set~4	removed: D2440: prelude functions are named by the prelude function table
+881	value	%TypedArrayPrototype%.set~5	removed: D2440: prelude functions are named by the prelude function table
+882	value	%TypedArrayPrototype%.sort~3	removed: D2440: prelude functions are named by the prelude function table
+883	value	%TypedArrayPrototype%.subarray~2	removed: D2440: prelude functions are named by the prelude function table
+884	value	%TypedArrayPrototype%.subarray~5	removed: D2440: prelude functions are named by the prelude function table
+885	value	%TypedArrayPrototype%.toReversed~2	removed: D2440: prelude functions are named by the prelude function table
+886	value	%AsyncGeneratorPrototype%.next~0	removed: D2440: prelude functions are named by the prelude function table
+887	value	%AsyncFromSyncIteratorPrototype%.next~0	removed: D2440: prelude functions are named by the prelude function table
+888	value	%AsyncFromSyncIteratorPrototype%.next~1	removed: D2440: prelude functions are named by the prelude function table
+889	value	%AsyncFromSyncIteratorPrototype%.return~1	removed: D2440: prelude functions are named by the prelude function table
+890	value	%IteratorHelperPrototype%.next~0	removed: D2440: prelude functions are named by the prelude function table
+891	value	%IteratorHelperPrototype%.next~1	removed: D2440: prelude functions are named by the prelude function table
+892	value	%IteratorHelperPrototype%.return~3	removed: D2440: prelude functions are named by the prelude function table
+893	value	%intrinsic:SortList%~0	removed: D2440: prelude functions are named by the prelude function table
+894	value	%intrinsic:AsyncGeneratorStep%~0	removed: D2440: prelude functions are named by the prelude function table
+895	value	%intrinsic:AsyncGeneratorStep%~1	removed: D2440: prelude functions are named by the prelude function table
+896	value	%intrinsic:GetAsyncIterator%~1	removed: D2440: prelude functions are named by the prelude function table
+897	value	%intrinsic:ApplyDecorators%~0	removed: D2440: prelude functions are named by the prelude function table
+898	value	%intrinsic:ApplyDecorators%~2	removed: D2440: prelude functions are named by the prelude function table
+899	value	%intrinsic:ApplyDecorators%~3	removed: D2440: prelude functions are named by the prelude function table
+900	value	%intrinsic:ApplyDecorators%~4	removed: D2440: prelude functions are named by the prelude function table
+901	value	%intrinsic:ApplyDecorators%~5	removed: D2440: prelude functions are named by the prelude function table
+902	value	%intrinsic:ApplyDecorators%~6	removed: D2440: prelude functions are named by the prelude function table
+903	value	%intrinsic:ApplyLegacyDecorators%~1	removed: D2440: prelude functions are named by the prelude function table
+904	value	%intrinsic:AsyncDisposeFulfilled%~0	removed: D2440: prelude functions are named by the prelude function table
+905	value	%intrinsic:FromAsyncFulfilled%~0	removed: D2440: prelude functions are named by the prelude function table
+906	value	%intrinsic:FromAsyncFulfilled%~1	removed: D2440: prelude functions are named by the prelude function table
+907	value	%intrinsic:FromAsyncFulfilled%~2	removed: D2440: prelude functions are named by the prelude function table
+908	value	%intrinsic:FromAsyncFulfilled%~3	removed: D2440: prelude functions are named by the prelude function table
+909	value	%intrinsic:FromAsyncRejected%~0	removed: D2440: prelude functions are named by the prelude function table
+910	value	%intrinsic:PromiseReactionJob%~1	removed: D2440: prelude functions are named by the prelude function table
+911	value	%intrinsic:PromiseAllResolveElement%~0	removed: D2440: prelude functions are named by the prelude function table
+912	value	%intrinsic:PromiseAllSettledResolveElement%~1	removed: D2440: prelude functions are named by the prelude function table
+913	value	%intrinsic:ProxyGetPrototypeOf%~0	removed: D2440: prelude functions are named by the prelude function table
+914	value	%intrinsic:ProxyGetOwnPropertyDescriptorObject%~0	removed: D2440: prelude functions are named by the prelude function table
+915	value	%intrinsic:ProxyGetOwnPropertyDescriptorObject%~1	removed: D2440: prelude functions are named by the prelude function table
+916	value	%intrinsic:ProxyOwnPropertyAttributes%~0	removed: D2440: prelude functions are named by the prelude function table
+917	value	%intrinsic:ProxyDefineOwnPropertyFromRecord%~3	removed: D2440: prelude functions are named by the prelude function table
+918	value	%intrinsic:ProxyDefineOwnPropertyFromRecord%~4	removed: D2440: prelude functions are named by the prelude function table
+919	value	%intrinsic:ProxyDefineOwnPropertyFromRecord%~5	removed: D2440: prelude functions are named by the prelude function table
+920	value	%intrinsic:ProxyDefineOwnPropertyFromRecord%~6	removed: D2440: prelude functions are named by the prelude function table
+921	value	%intrinsic:ProxyDefineDataPropertyOrThrow%~1	removed: D2440: prelude functions are named by the prelude function table
+922	value	%intrinsic:ProxyGet%~4	removed: D2440: prelude functions are named by the prelude function table
+923	value	%intrinsic:ProxyOwnPropertyKeys%~0	removed: D2440: prelude functions are named by the prelude function table
+924	value	%intrinsic:ForInStep%~1	removed: D2440: prelude functions are named by the prelude function table
+925	value	AggregateError~0~2	removed: D2440: prelude functions are named by the prelude function table
+926	value	BigInt64Array~0~8	removed: D2440: prelude functions are named by the prelude function table
+927	value	BigInt64Array~0~9	removed: D2440: prelude functions are named by the prelude function table
+928	value	BigInt64Array~0~11	removed: D2440: prelude functions are named by the prelude function table
+929	value	Date~0~1	removed: D2440: prelude functions are named by the prelude function table
+930	value	Array.fromAsync~0~2	removed: D2440: prelude functions are named by the prelude function table
+931	value	Array.fromAsync~0~4	removed: D2440: prelude functions are named by the prelude function table
+932	value	JSON.parse~1~1	removed: D2440: prelude functions are named by the prelude function table
+933	value	JSON.stringify~0~2	removed: D2440: prelude functions are named by the prelude function table
+934	value	Promise.all~0~2	removed: D2440: prelude functions are named by the prelude function table
+935	value	Promise.all~0~9	removed: D2440: prelude functions are named by the prelude function table
+936	value	Promise.all~0~10	removed: D2440: prelude functions are named by the prelude function table
+937	value	Promise.all~0~13	removed: D2440: prelude functions are named by the prelude function table
+938	value	Promise.allKeyed~0~9	removed: D2440: prelude functions are named by the prelude function table
+939	value	AsyncDisposableStack.prototype.disposeAsync~2~2	removed: D2440: prelude functions are named by the prelude function table
+940	value	DataView.prototype.getBigInt64~0~1	removed: D2440: prelude functions are named by the prelude function table
+941	value	RegExp.prototype.test~2~0	removed: D2440: prelude functions are named by the prelude function table
+942	value	%AsyncGeneratorPrototype%.next~0~2	removed: D2440: prelude functions are named by the prelude function table
+943	value	%AsyncFromSyncIteratorPrototype%.next~0~0	removed: D2440: prelude functions are named by the prelude function table
+944	value	%IteratorHelperPrototype%.next~1~0	removed: D2440: prelude functions are named by the prelude function table
+945	value	%IteratorHelperPrototype%.next~1~1	removed: D2440: prelude functions are named by the prelude function table
+946	value	%IteratorHelperPrototype%.next~1~3	removed: D2440: prelude functions are named by the prelude function table
+947	value	%IteratorHelperPrototype%.next~1~4	removed: D2440: prelude functions are named by the prelude function table
+948	value	%IteratorHelperPrototype%.next~1~6	removed: D2440: prelude functions are named by the prelude function table
+949	value	%IteratorHelperPrototype%.next~1~7	removed: D2440: prelude functions are named by the prelude function table
+950	value	%IteratorHelperPrototype%.next~1~8	removed: D2440: prelude functions are named by the prelude function table
+951	value	%intrinsic:ApplyDecorators%~2~0	removed: D2440: prelude functions are named by the prelude function table
+952	value	%intrinsic:FromAsyncFulfilled%~0~3	removed: D2440: prelude functions are named by the prelude function table
+953	value	%intrinsic:ProxyGetOwnPropertyDescriptorObject%~0~4	removed: D2440: prelude functions are named by the prelude function table
+954	value	%intrinsic:ProxyOwnPropertyKeys%~0~4	removed: D2440: prelude functions are named by the prelude function table
+955	value	Promise.all~0~10~0	removed: D2440: prelude functions are named by the prelude function table
+956	value	%IteratorHelperPrototype%.next~1~1~3	removed: D2440: prelude functions are named by the prelude function table
+957	value	%IteratorHelperPrototype%.next~1~8~3	removed: D2440: prelude functions are named by the prelude function table
 958	intrinsic	IsObject
 959	intrinsic	IsCallable
 960	intrinsic	IsConstructor
@@ -1411,3 +1411,227 @@
 1406	intrinsic	CopyDataPropertiesExcluding
 1407	intrinsic	TypedArraySetElementSlow
 1408	intrinsic	FinalizationRegistryCleanupJob
+1409	value	%prelude:SameValueZero%
+1410	value	%prelude:RelativeIndex%
+1411	value	%prelude:RequireCallable%
+1412	value	%prelude:CheckLength%
+1413	value	%prelude:ArrayCreateChecked%
+1414	value	%prelude:IsConcatSpreadable%
+1415	value	%prelude:MoveElements%
+1416	value	%prelude:FlattenIntoArray%
+1417	value	%prelude:SortCompareDefined%
+1418	value	%prelude:ToIndex%
+1419	value	%prelude:ThisArrayBuffer%
+1420	value	%prelude:AllocateArrayBuffer%
+1421	value	%prelude:IsImmutableBuffer%
+1422	value	%prelude:IsDetached%
+1423	value	%prelude:BufferLength%
+1424	value	%prelude:ArrayBufferCopyAndDetach%
+1425	value	%prelude:AsyncGeneratorRequest%
+1426	value	%prelude:AsyncGeneratorCompleteStep%
+1427	value	%prelude:AsyncGeneratorDrainQueue%
+1428	value	%prelude:AsyncGeneratorAwaitReturn%
+1429	value	%prelude:AsyncFromSyncIteratorContinuation%
+1430	value	%prelude:ThisBigIntValue%
+1431	value	%prelude:ThisBooleanValue%
+1432	value	%prelude:OrdinaryToPrimitive%
+1433	value	%prelude:GetMethod%
+1434	value	%prelude:ToIntegerOrInfinity%
+1435	value	%prelude:ToLength%
+1436	value	%prelude:DVOutOfBounds%
+1437	value	%prelude:DVByteLength%
+1438	value	%prelude:DVByteIndex%
+1439	value	%prelude:GetViewValue%
+1440	value	%prelude:GetViewElement%
+1441	value	%prelude:SetViewValue%
+1442	value	%prelude:DateValueFromArgs%
+1443	value	%prelude:IsDateObject%
+1444	value	%prelude:TimeClip%
+1445	value	%prelude:DateSetter%
+1446	value	%prelude:DecoratorKindName%
+1447	value	%prelude:DecoratorPush%
+1448	value	%prelude:DecoratorNewAccess%
+1449	value	%prelude:DecoratorNewContext%
+1450	value	%prelude:DecoratorCheckResult%
+1451	value	%prelude:DecoratorAccessorFn%
+1452	value	%prelude:DecoratorDefine%
+1453	value	%prelude:DecoratorReflectFn%
+1454	value	%prelude:NewSuppressedError%
+1455	value	%prelude:PendingDisposableStack%
+1456	value	%prelude:AddResource%
+1457	value	%prelude:AddDisposableValue%
+1458	value	%prelude:CallDisposeMethod%
+1459	value	%prelude:DisposableStackMove%
+1460	value	%prelude:AsyncDisposeError%
+1461	value	%prelude:AsyncDisposeAwait%
+1462	value	%prelude:AsyncDisposeContinue%
+1463	value	%prelude:InstallErrorCause%
+1464	value	%prelude:FinishStack%
+1465	value	%prelude:FinishErrorStack%
+1466	value	%prelude:RecordStack%
+1467	value	%prelude:ErrorConstruct%
+1468	value	%prelude:CreateDynamicFunction%
+1469	value	%prelude:FromAsyncStart%
+1470	value	%prelude:FromAsyncAwait%
+1471	value	%prelude:FromAsyncReject%
+1472	value	%prelude:FromAsyncIteratorNext%
+1473	value	%prelude:FromAsyncClose%
+1474	value	%prelude:FromAsyncIteratorResult%
+1475	value	%prelude:FromAsyncIteratorStore%
+1476	value	%prelude:FromAsyncArrayLikeNext%
+1477	value	%prelude:FromAsyncArrayLikeValue%
+1478	value	%prelude:CreateListFromArrayLike%
+1479	value	%prelude:OrdinaryHasInstance%
+1480	value	%prelude:GeneratorValidate%
+1481	value	%prelude:GeneratorStep%
+1482	value	%prelude:GetIteratorFromMethod%
+1483	value	%prelude:IteratorNextResult%
+1484	value	%prelude:IterableToList%
+1485	value	%prelude:ArrayFromIterator%
+1486	value	%prelude:GroupByProperty%
+1487	value	%prelude:HelperState%
+1488	value	%prelude:GetIteratorDirectNext%
+1489	value	%prelude:IteratorStepResult%
+1490	value	%prelude:GetIteratorFlattenable%
+1491	value	%prelude:ThisIteratorObject%
+1492	value	%prelude:HelperCallable%
+1493	value	%prelude:HelperLimit%
+1494	value	%prelude:NewIteratorHelper%
+1495	value	%prelude:HelperYield%
+1496	value	%prelude:HelperCallFunction%
+1497	value	%prelude:IteratorHelperStep%
+1498	value	%prelude:ArrayPrefixCopy%
+1499	value	%prelude:ChunksStep%
+1500	value	%prelude:WindowsStep%
+1501	value	%prelude:IteratorCloseAll%
+1502	value	%prelude:ZipStep%
+1503	value	%prelude:ZipAnyOpen%
+1504	value	%prelude:FlatMapStep%
+1505	value	%prelude:ConcatStep%
+1506	value	%prelude:IteratorHelperReturnAtYield%
+1507	value	%prelude:IteratorConsume%
+1508	value	%prelude:SetterThatIgnoresPrototypeProperties%
+1509	value	%prelude:ChunkingSize%
+1510	value	%prelude:ZipOptions%
+1511	value	%prelude:ZipAddIterator%
+1512	value	%prelude:ZipCreate%
+1513	value	%prelude:InternalizeJSONProperty%
+1514	value	%prelude:InternalizeJSONMember%
+1515	value	%prelude:JSONPropertyList%
+1516	value	%prelude:JSONListIncludes%
+1517	value	%prelude:ThisMap%
+1518	value	%prelude:CanonicalizeKeyedCollectionKey%
+1519	value	%prelude:CoerceNumbers%
+1520	value	%prelude:ThisNumberValue%
+1521	value	%prelude:IsFiniteNumber%
+1522	value	%prelude:ToPropertyDescriptor%
+1523	value	%prelude:DefineOwnProperty%
+1524	value	%prelude:DefinePropertyOrThrow%
+1525	value	%prelude:SetPrototypeOrThrow%
+1526	value	%prelude:ObjectDefinePropertiesHelper%
+1527	value	%prelude:EnumerableOwnProperties%
+1528	value	%prelude:ObjectToString%
+1529	value	%prelude:ClaimResolution%
+1530	value	%prelude:ResolveWithData%
+1531	value	%prelude:RejectWithData%
+1532	value	%prelude:CapabilityPromise%
+1533	value	%prelude:ResolveCapability%
+1534	value	%prelude:RejectCapability%
+1535	value	%prelude:CapabilityResolveFunction%
+1536	value	%prelude:CapabilityRejectFunction%
+1537	value	%prelude:NewPromiseCapability%
+1538	value	%prelude:PromiseResolve%
+1539	value	%prelude:SpeciesConstructor%
+1540	value	%prelude:InvokeThen%
+1541	value	%prelude:PromiseThisConstructor%
+1542	value	%prelude:GetPromiseResolve%
+1543	value	%prelude:DecrementRemaining%
+1544	value	%prelude:NewElementRecord%
+1545	value	%prelude:SettleElement%
+1546	value	%prelude:KeyedResult%
+1547	value	%prelude:PerformPromiseKeyed%
+1548	value	%prelude:SettledRecord%
+1549	value	%prelude:NewAggregateError%
+1550	value	%prelude:CreateArrayFromList%
+1551	value	%prelude:PerformPromiseCombinator%
+1552	value	%prelude:ProxyCreate%
+1553	value	%prelude:TrapKey%
+1554	value	%prelude:ProxyTrap%
+1555	value	%prelude:DescFlag%
+1556	value	%prelude:IsAccessorDescriptor%
+1557	value	%prelude:IsDataDescriptor%
+1558	value	%prelude:CompletePropertyDescriptor%
+1559	value	%prelude:IsCompatiblePropertyDescriptor%
+1560	value	%prelude:FromPropertyDescriptor%
+1561	value	%prelude:DescriptorAttributes%
+1562	value	%prelude:ListIncludes%
+1563	value	%prelude:ProxyGetOwnProperty%
+1564	value	%prelude:DataDescriptorRecord%
+1565	value	%prelude:ProxyOwnKeys%
+1566	value	%prelude:StrikeKey%
+1567	value	%prelude:RequireConstructor%
+1568	value	%prelude:ReflectTarget%
+1569	value	%prelude:ReachesReceiver%
+1570	value	%prelude:ThisRegExpObject%
+1571	value	%prelude:RegExpFlagGetter%
+1572	value	%prelude:RegExpBuiltinExec%
+1573	value	%prelude:RegExpExec%
+1574	value	%prelude:AdvanceStringIndex%
+1575	value	%prelude:FlagsInclude%
+1576	value	%prelude:MatchString%
+1577	value	%prelude:AdvanceAfterEmptyMatch%
+1578	value	%prelude:GetSubstitution%
+1579	value	%prelude:ThisSet%
+1580	value	%prelude:GetSetRecord%
+1581	value	%prelude:RecordSize%
+1582	value	%prelude:RecordHas%
+1583	value	%prelude:RecordKeys%
+1584	value	%prelude:SetCopy%
+1585	value	%prelude:KeysNext%
+1586	value	%prelude:RequireThisCoercible%
+1587	value	%prelude:InvokeSymbol%
+1588	value	%prelude:RequireGlobalFlag%
+1589	value	%prelude:RegExpFromPattern%
+1590	value	%prelude:StringReplacement%
+1591	value	%prelude:ThisStringValue%
+1592	value	%prelude:StrLen%
+1593	value	%prelude:ThisToString%
+1594	value	%prelude:IsRegExp%
+1595	value	%prelude:ClampPosition%
+1596	value	%prelude:StringPad%
+1597	value	%prelude:ThisSymbolValue%
+1598	value	%prelude:ElementSize%
+1599	value	%prelude:KindName%
+1600	value	%prelude:KindOf%
+1601	value	%prelude:TALength%
+1602	value	%prelude:TAOutOfBounds%
+1603	value	%prelude:ValidateTypedArray%
+1604	value	%prelude:SameContentType%
+1605	value	%prelude:ToElementValue%
+1606	value	%prelude:IsElementValue%
+1607	value	%prelude:AllocateTypedArrayOfLength%
+1608	value	%prelude:TypedArrayFromBuffer%
+1609	value	%prelude:TypedArrayFromValues%
+1610	value	%prelude:TypedArrayConstruct%
+1611	value	%prelude:BufferInfoOrUndefined%
+1612	value	%prelude:RequireMutableTypedArray%
+1613	value	%prelude:TypedArrayCreateWithLength%
+1614	value	%prelude:TypedArraySpeciesCreate%
+1615	value	%prelude:ValidateUint8Array%
+1616	value	%prelude:GetOptionsObject%
+1617	value	%prelude:Base64Alphabet%
+1618	value	%prelude:LastChunkHandling%
+1619	value	%prelude:Uint8ArrayFromRecord%
+1620	value	%prelude:WriteDecoded%
+1621	value	%prelude:TAEveryOrSome%
+1622	value	%prelude:TAFind%
+1623	value	%prelude:TAReduce%
+1624	value	%prelude:TASortedList%
+1625	value	%prelude:IsCanonicalNumericKey%
+1626	value	%prelude:TASet%
+1627	value	%prelude:ThisWeakMap%
+1628	value	%prelude:ThisWeakSet%
+1629	value	%prelude:DOMExceptionPrototypeObject%
+1630	value	%prelude:NewDOMException%
+1631	value	%prelude:DOMExceptionThisField%
+1632	value	%prelude:DOMExceptionEnumerable%

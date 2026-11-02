@@ -161,6 +161,8 @@ mod fast {
     pub const NIP: u8 = Op::Nip as u8;
     pub const INSERT2: u8 = Op::Insert2 as u8;
     pub const GET_CAP: u8 = Op::GetCap as u8;
+    // (0151)
+    pub const GET_BUILTIN: u8 = Op::GetBuiltin as u8;
     pub const GET_CAP_CHK: u8 = Op::GetCapChk as u8;
     pub const PUT_CAP: u8 = Op::PutCap as u8;
     pub const GET_BOX: u8 = Op::GetBox as u8;
@@ -1466,6 +1468,13 @@ impl<'h> Exec<'h> {
                 // (`get_cap_chk` has the same size and cost.)
                 self.advance(Op::GetCap, sp0);
             }
+            fast::GET_BUILTIN => {
+                let Some(v) = self.prelude_function(self.imm_u16(1)) else {
+                    return false;
+                };
+                self.push(v);
+                self.advance(Op::GetBuiltin, sp0);
+            }
             fast::PUT_CAP => {
                 let b = self.capture(self.imm_u16(1));
                 let v = self.pop();
@@ -1737,6 +1746,13 @@ impl<'h> Exec<'h> {
     }
 
     /// The Box of capture `i` of the current closure.
+    /// Entry `i` of the prelude function table (`get_builtin`, D2440).
+    #[inline(always)]
+    fn prelude_function(&self, i: u32) -> Option<Value> {
+        let t = intrinsic(self.heap, Intrinsic::PreludeFunctions).as_internal()?;
+        (i < self.heap.value_array_len(t)).then(|| self.heap.value_array_get(t, i))
+    }
+
     fn capture(&self, i: u32) -> Value {
         let f = self.get(self.bp).as_object().unwrap();
         self.heap.object_slot(f, 1 + i)
@@ -2070,6 +2086,34 @@ impl<'h> Exec<'h> {
                     return self.uninitialized(self.locals() + i);
                 }
                 self.push(v);
+            }
+            Op::GetBuiltin => {
+                let Some(v) = self.prelude_function(self.imm_u16(1)) else {
+                    return Err(Fault::error(
+                        ErrorKind::InternalError,
+                        String::from("bad bytecode: get_builtin out of range"),
+                    ));
+                };
+                self.push(v);
+            }
+            Op::PutBuiltin => {
+                let (i, len) = (self.imm_u16(1), self.imm_u16(3));
+                let mut t = intrinsic(self.heap, Intrinsic::PreludeFunctions);
+                if t.as_internal().is_none() {
+                    let a = self.heap.alloc_value_array(len)?;
+                    self.heap.arena_mut().set(a, ValueArray::LEN, len);
+                    t = Value::internal(a);
+                    crate::interp::realm::set_intrinsic(self.heap, Intrinsic::PreludeFunctions, t);
+                }
+                let t = t.as_internal().unwrap();
+                if i >= self.heap.value_array_len(t) {
+                    return Err(Fault::error(
+                        ErrorKind::InternalError,
+                        String::from("bad bytecode: put_builtin out of range"),
+                    ));
+                }
+                let v = self.pop();
+                self.heap.value_array_set(t, i, v);
             }
             Op::PutCap | Op::SetCap | Op::PutCapChk | Op::SetCapChk => {
                 let i = self.imm_u16(1);

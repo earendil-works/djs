@@ -1887,6 +1887,52 @@ fn prelude_compiles() {
     assert_eq!(e.kind, CompileErrorKind::Syntax);
 }
 
+/// Prelude functions that others refer to live in the realm's prelude function table
+/// (D2440): `get_builtin`/`put_builtin`, no captures or Boxes.
+#[test]
+fn prelude_functions_use_the_table() {
+    let src = "(function () {\n\
+        function A(x) { return x; }\n\
+        function B(x) { return A(x) + C(x); }\n\
+        function C(x) { return %IsObject(x); }\n\
+        function D() { return 1; }\n\
+        %IsObject(D);\n\
+    })();";
+    let mut heap = Heap::new().unwrap();
+    let opts = CompileOptions::privileged_script("p.js");
+    let t = compile(&mut heap, src.as_bytes(), &opts).unwrap_or_else(|e| panic!("{e}"));
+    let text = disasm_template(&heap, t);
+    assert!(text.contains("put_builtin b0 2"), "{text}");
+    assert!(text.contains("put_builtin b1 2"), "{text}");
+    assert!(text.contains("get_builtin b0"), "{text}");
+    assert!(text.contains("get_builtin b1"), "{text}");
+    for op in ["get_cap", "new_box", "put_box"] {
+        assert!(!text.contains(op), "{op} in {text}");
+    }
+    let names = prelude_function_names(&mut heap, src.as_bytes(), &opts).unwrap();
+    let names: Vec<String> = names.iter().map(|&a| heap.atom_name(a)).collect();
+    assert_eq!(names, ["A", "C"]);
+    // Ordinary code and functions declared deeper keep their closures.
+    let nested = "(function () { function O() { function I() { return 1; } return () => I(); } %IsObject(O); })();";
+    let t = compile(&mut heap, nested.as_bytes(), &opts).unwrap();
+    let text = disasm_template(&heap, t);
+    assert!(
+        text.contains("get_cap") && !text.contains("builtin"),
+        "{text}"
+    );
+    let e = compile(
+        &mut heap,
+        b"(function () { function A() {} function B() { A = 1; } %IsObject(B); })();",
+        &opts,
+    )
+    .unwrap_err();
+    assert!(
+        e.message.contains("assignment to a prelude function"),
+        "{}",
+        e.message
+    );
+}
+
 #[test]
 fn privileged_errors() {
     let cases: &[(&str, &str)] = &[

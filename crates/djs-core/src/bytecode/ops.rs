@@ -459,6 +459,12 @@ ops! {
     PutCapChk put_cap_chk(cap: Cap) pop 1 push 0 cost Basic flags THROWS;
     /// `v -> v` with a TDZ check.
     SetCapChk set_cap_chk(cap: Cap) pop 1 push 1 cost Basic flags THROWS;
+    /// `-> f`: entry `idx` of the realm's prelude function table (privileged code: a
+    /// prelude function another one refers to, D2440).
+    GetBuiltin get_builtin(idx: Builtin) pop 0 push 1 cost Basic;
+    /// `f ->`: stores entry `idx` of the prelude function table, which has `len` entries
+    /// (allocated by the first store).
+    PutBuiltin put_builtin(idx: Builtin, len: Count) pop 1 push 0 cost Alloc flags ALLOC;
 
     // ---- Globals ---------------------------------------------------------------------
 

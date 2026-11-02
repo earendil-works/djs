@@ -25,10 +25,11 @@
 use super::{Exec, fast};
 use crate::bytecode::special;
 use crate::bytecode::{OPS, Op};
-use crate::heap::cells::{Bytes, FuncTemplate, Header, Object, ValueArray};
+use crate::heap::cells::{Bytes, FuncTemplate, Header, Object, Realm, Roots, ValueArray};
 use crate::heap::{Atom, ObjectClass, atoms};
 use crate::interp::conv;
 use crate::interp::frame::{self, Continuation, HEADER};
+use crate::interp::realm::Intrinsic;
 use crate::value::Value;
 
 /// Backward jumps before `run_hot` returns to the run loop anyway: V8 tiers wasm code up
@@ -538,6 +539,21 @@ impl Exec<'_> {
                         fast::GET_ARG => {
                             push!(ld(b, slot!(bp + 2 + imm16)));
                             next!(Op::GetArg);
+                        }
+                        fast::GET_BUILTIN => {
+                            // The realm's prelude function table (D2440).
+                            let Some(r) = ld(b, Roots::REALM.offset).as_internal() else {
+                                break Exit::Decline(op);
+                            };
+                            let at = Realm::INTRINSICS.at(r, Intrinsic::PreludeFunctions as u32);
+                            let Some(t) = ld(b, at).as_internal() else {
+                                break Exit::Decline(op);
+                            };
+                            if imm16 >= ld32(b, t + ValueArray::LEN.offset) {
+                                break Exit::Decline(op);
+                            }
+                            push!(ld(b, ValueArray::VALUES.at(t, imm16)));
+                            next!(Op::GetBuiltin);
                         }
                         fast::GET_CAP
                         | fast::GET_CAP_CHK

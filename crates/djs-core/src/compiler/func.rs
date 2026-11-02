@@ -125,6 +125,9 @@ pub(super) struct Var {
     pub param: u16,
     /// Some inner function refers to it: it lives in a Box.
     pub captured: bool,
+    /// A prelude function another function refers to: it lives in the realm's prelude
+    /// function table (privileged code, D2440).
+    pub builtin: bool,
     /// Referenced at all (for the pseudo-bindings, which cost prologue code).
     pub used: bool,
     /// The TypeScript enum or namespace this binding holds (const enum folding).
@@ -451,6 +454,7 @@ impl FuncState {
             global: false,
             param: 0,
             captured: false,
+            builtin: false,
             used: false,
             ts_decl: None,
         });

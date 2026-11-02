@@ -145,6 +145,9 @@ pub(super) struct Parser<'a, 'h> {
     pub spec: u32,
     /// The erased type ranges, for `strip_types` (`None`: not recorded).
     pub erased: Option<Erased>,
+    /// When set, `finish_unit` fills it with the names of the prelude function table's
+    /// slots, in slot order (privileged code, D2440).
+    pub builtin_names: Option<Vec<crate::heap::Atom>>,
     /// The next assignment expression is the `b` of `a ? b : c` (TypeScript arrows with
     /// return types, compiler/ts.rs).
     pub after_q: bool,
@@ -316,6 +319,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             ts: opts.typescript,
             spec: 0,
             erased: None,
+            builtin_names: None,
             after_q: false,
             ts_decls: Vec::new(),
             ts_type_only: false,
@@ -347,7 +351,7 @@ impl<'a, 'h> Parser<'a, 'h> {
 
     /// Parses the whole source and builds the templates. Also returns the erased type
     /// ranges if they were recorded.
-    pub fn compile(mut self) -> PResult<(Ref, Option<Erased>)> {
+    pub fn compile(mut self) -> PResult<(Ref, Option<Erased>, Option<Vec<crate::heap::Atom>>)> {
         if self.f.kind == FuncKind::AsyncBody {
             self.start_flavor((true, false))?;
         }
@@ -373,7 +377,9 @@ impl<'a, 'h> Parser<'a, 'h> {
 
     /// Finishes the unit after its top-level code: resolves every function into
     /// templates (also used by `compile_dynamic`, compiler/dynamic.rs).
-    pub(super) fn finish_unit(mut self) -> PResult<(Ref, Option<Erased>)> {
+    pub(super) fn finish_unit(
+        mut self,
+    ) -> PResult<(Ref, Option<Erased>, Option<Vec<crate::heap::Atom>>)> {
         self.end_async_region();
         let top = core::mem::replace(&mut self.f, FuncState::new(0, FuncKind::Script, None));
         self.done[0] = Some(top);
@@ -382,6 +388,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             .map(|f| f.ok_or_else(|| super::resolve::internal("unfinished function")))
             .collect::<PResult<Vec<_>>>()?;
         let erased = self.erased.take();
+        let mut names = self.builtin_names.take();
         let t = super::resolve::finish(
             self.heap,
             self.src,
@@ -389,8 +396,9 @@ impl<'a, 'h> Parser<'a, 'h> {
             self.atom_undefined,
             funcs,
             &self.ts_decls,
+            names.as_mut(),
         )?;
-        Ok((t, erased))
+        Ok((t, erased, names))
     }
 
     // ---- Functions ----------------------------------------------------------------

@@ -236,7 +236,24 @@ pub fn compile(
     opts: &CompileOptions<'_>,
 ) -> Result<Ref, CompileError> {
     let result = parser::Parser::new(heap, src, opts).and_then(|p| p.compile());
-    result.map(|(t, _)| t).map_err(|e| error_at(src, e))
+    result.map(|(t, ..)| t).map_err(|e| error_at(src, e))
+}
+
+/// The names of the prelude function table's slots (D2440), in slot order, for
+/// privileged source `src`: the prelude functions that others refer to. The registry
+/// names them by these (vm/registry.rs). Compiles into `heap`.
+pub fn prelude_function_names(
+    heap: &mut Heap,
+    src: &[u8],
+    opts: &CompileOptions<'_>,
+) -> Result<Vec<crate::heap::Atom>, CompileError> {
+    let result = parser::Parser::new(heap, src, opts).and_then(|mut p| {
+        p.builtin_names = Some(Vec::new());
+        p.compile()
+    });
+    result
+        .map(|(.., names)| names.unwrap_or_default())
+        .map_err(|e| error_at(src, e))
 }
 
 /// The kinds of CreateDynamicFunction (20.2.1.1.1).
@@ -304,7 +321,7 @@ pub fn strip_types(
         p.strip = true;
         p.compile()
     });
-    let (_, ranges) = result.map_err(|e| error_at(src, e))?;
+    let (_, ranges, _) = result.map_err(|e| error_at(src, e))?;
     Ok(ts::blank(src, ranges.unwrap_or_default()))
 }
 

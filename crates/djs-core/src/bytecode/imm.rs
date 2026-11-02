@@ -31,6 +31,8 @@ pub enum ImmKind {
     Scope,
     /// An intrinsic id (privileged code).
     Intrinsic,
+    /// A slot of the realm's prelude function table (privileged code, D2440).
+    Builtin,
     /// An inline cache slot of the function (D1620): emitted as 0, numbered in code
     /// order by `alloc_template`; [`NO_CACHE`](super::template::NO_CACHE) when the
     /// function has too many.
@@ -62,6 +64,7 @@ impl ImmKind {
             | ImmKind::Argc
             | ImmKind::Scope
             | ImmKind::Intrinsic
+            | ImmKind::Builtin
             | ImmKind::Cache => 2,
             ImmKind::I32
             | ImmKind::Const
@@ -114,6 +117,7 @@ plain_imm! {
     Argc: u16 => |v| v as u32;
     Scope: u16 => |v| v as u32;
     Intrinsic: u16 => |v| v as u32;
+    Builtin: u16 => |v| v as u32;
     Cache: u16 => |v| v as u32;
     Const: u32 => |v| v;
     Child: u32 => |v| v;

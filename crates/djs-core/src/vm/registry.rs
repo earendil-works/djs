@@ -11,13 +11,12 @@
 //! base realm, the way the spec writes intrinsics without the `%`s:
 //! - roots: `globalThis`; a global's name (`Array`); a realm intrinsic that no global reaches
 //!   (`%ArrayIteratorPrototype%`, `%TypedArray%`); a prelude function registered for an
-//!   intrinsic (`%intrinsic:PromiseResolve%`);
+//!   intrinsic (`%intrinsic:PromiseResolve%`); a prelude function in the realm's prelude
+//!   function table, by its source name (`%prelude:LengthOfArrayLike%`, D2440): the
+//!   internal functions builtins call and no property reaches;
 //! - segments: `.key` for identifier keys, `["key"]` for others, `[Symbol.iterator]` for
 //!   well-known symbol keys, `.[[Prototype]]`;
-//! - accessor functions are prefixed `get ` or `set ` (`get Map.prototype.size`);
-//! - `~N` is the value of a closure's capture N: the prelude's internal functions that
-//!   builtins capture and no property reaches (`Array.prototype.map~2`). These paths change
-//!   when the builtin's code changes; the old entry is then tombstoned and a new one added.
+//! - accessor functions are prefixed `get ` or `set ` (`get Map.prototype.size`).
 //!
 //! An *intrinsic* entry names an entry of the intrinsics table (bytecode/intrinsics.rs) by
 //! its name: the kinds of builtin closures (`PromiseResolveFunction`-like records hold an
@@ -33,8 +32,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use crate::bytecode::intrinsics::INTRINSICS;
-use crate::heap::cells::BoxCell;
-use crate::heap::{Atom, CellKind, Heap, ObjectClass, Property};
+use crate::heap::{Atom, Heap, Property};
 use crate::interp::realm::{Intrinsic, installed_intrinsic, intrinsic};
 use crate::value::{Obj, Value};
 
@@ -408,10 +406,9 @@ pub fn canonical_names(heap: &Heap) -> Vec<(u32, String)> {
     walk(heap, installed, false, &mut seen, &mut out);
     let named = out.clone();
     walk(heap, named, true, &mut seen, &mut out);
-    // Last, the prelude's internal functions that builtins capture (`~N`: the value of
-    // capture N), which no property reaches.
-    let named = out.clone();
-    walk_captures(heap, named, &mut seen, &mut out);
+    // Last, the prelude's internal functions, which no property reaches (and what their
+    // properties lead to).
+    walk(heap, prelude_functions(heap), true, &mut seen, &mut out);
     out.into_iter()
         .filter_map(|(v, p)| Some((cell_of(v)?, p)))
         .collect()
@@ -445,49 +442,29 @@ fn walk(
     }
 }
 
-/// Breadth-first over captures (and the properties of what they lead to).
-fn walk_captures(
-    heap: &Heap,
-    roots: Vec<(Value, String)>,
-    seen: &mut BTreeSet<u32>,
-    out: &mut Vec<(Value, String)>,
-) {
-    let mut queue: VecDeque<(Value, String, bool)> =
-        roots.into_iter().map(|(v, p)| (v, p, true)).collect();
-    while let Some((v, path, root)) = queue.pop_front() {
-        let Some(c) = cell_of(v) else { continue };
-        if seen.insert(c) {
-            out.push((v, path.clone()));
-        } else if !root {
-            continue;
-        }
-        let Some(o) = v.as_object() else { continue };
-        for (i, child) in captures(heap, o) {
-            queue.push_back((child, format!("{path}~{i}"), false));
-        }
-        // An accessor's path names the accessor function; captures may follow it, other
-        // segments may not.
-        if path.starts_with("get ") || path.starts_with("set ") {
-            continue;
-        }
-        for (seg, child, expand) in edges(heap, o, true) {
-            if expand {
-                queue.push_back((child, child_path(&path, &seg), false));
-            }
-        }
-    }
-}
-
-/// The captured values of a closure: (capture index, value).
-fn captures(heap: &Heap, o: Obj) -> Vec<(u32, Value)> {
-    if heap.object_class(o) != ObjectClass::Function {
+/// The prelude function table's entries (D2440) with their paths, `%prelude:Name%`. The
+/// names are the source names of this build's prelude, which the compiler gives in slot
+/// order; a heap of another build may hold other functions there.
+fn prelude_functions(heap: &Heap) -> Vec<(Value, String)> {
+    let Some(t) = intrinsic(heap, Intrinsic::PreludeFunctions).as_internal() else {
         return Vec::new();
-    }
-    (1..heap.object_slot_count(o))
-        .filter_map(|i| {
-            let b = heap.object_slot(o, i).as_internal()?;
-            (heap.cell_kind(b) == CellKind::BoxCell)
-                .then(|| (i - 1, heap.arena().get(b, BoxCell::VALUE)))
+    };
+    let Ok(mut scratch) = Heap::new() else {
+        return Vec::new();
+    };
+    let opts = crate::compiler::CompileOptions::privileged_script("<prelude>");
+    let Ok(names) =
+        crate::compiler::prelude_function_names(&mut scratch, super::PRELUDE.as_bytes(), &opts)
+    else {
+        return Vec::new();
+    };
+    names
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| (i as u32) < heap.value_array_len(t))
+        .map(|(i, &n)| {
+            let v = heap.value_array_get(t, i as u32);
+            (v, format!("%prelude:{}%", scratch.atom_name(n)))
         })
         .collect()
 }
@@ -584,6 +561,9 @@ impl<'h> Resolver<'h> {
                 roots.insert(format!("%intrinsic:{}%", info.name), v);
             }
         }
+        for (v, path) in prelude_functions(heap) {
+            roots.insert(path, v);
+        }
         Resolver {
             heap,
             roots,
@@ -626,10 +606,8 @@ impl<'h> Resolver<'h> {
             segs.push(seg);
             rest_iter = tail;
         }
-        // The accessor prefix belongs to the last property segment (captures may follow).
-        let accessor_at = segs
-            .iter()
-            .rposition(|s| !s.starts_with('~') && *s != ".[[Prototype]]");
+        // The accessor prefix belongs to the last property segment.
+        let accessor_at = segs.iter().rposition(|s| *s != ".[[Prototype]]");
         let mut cur = match self.roots.get(root) {
             Some(v) => *v,
             None => {
@@ -640,11 +618,6 @@ impl<'h> Resolver<'h> {
         };
         for (n, seg) in segs.into_iter().enumerate() {
             let o = cur.as_object()?;
-            if let Some(n) = seg.strip_prefix('~') {
-                let n: u32 = n.parse().ok()?;
-                cur = captures(self.heap, o).into_iter().find(|c| c.0 == n)?.1;
-                continue;
-            }
             if seg == ".[[Prototype]]" {
                 cur = Value::object(self.heap.get_prototype_of(o)?);
                 continue;
@@ -666,7 +639,7 @@ fn split_root(path: &str) -> (&str, &str) {
     {
         return path.split_at(end + 2);
     }
-    let end = path.find(['.', '[', '~']).unwrap_or(path.len());
+    let end = path.find(['.', '[']).unwrap_or(path.len());
     path.split_at(end)
 }
 
@@ -676,7 +649,7 @@ fn split_segment(rest: &str) -> Option<(&str, &str)> {
         return Some(rest.split_at(".[[Prototype]]".len()));
     }
     if let Some(r) = rest.strip_prefix('.') {
-        let end = r.find(['.', '[', '~']).unwrap_or(r.len());
+        let end = r.find(['.', '[']).unwrap_or(r.len());
         return Some(rest.split_at(end + 1));
     }
     if rest.starts_with("[\"") {
@@ -694,10 +667,6 @@ fn split_segment(rest: &str) -> Option<(&str, &str)> {
     }
     if rest.starts_with('[') {
         let end = rest.find(']')?;
-        return Some(rest.split_at(end + 1));
-    }
-    if let Some(r) = rest.strip_prefix('~') {
-        let end = r.find(['.', '[', '~']).unwrap_or(r.len());
         return Some(rest.split_at(end + 1));
     }
     None

@@ -128,9 +128,13 @@ pub enum Intrinsic {
     /// An int bumped whenever a Script declares a global lexical binding: global
     /// inline caches of global object properties check it (D1620).
     GlobalLexEpoch,
+    /// The prelude function table (D2440): an internal ValueArray of the prelude's
+    /// functions that other prelude functions refer to (`get_builtin`), or undefined
+    /// before the prelude runs.
+    PreludeFunctions,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::GlobalLexEpoch as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::PreludeFunctions as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the

@@ -1,4 +1,5 @@
 use super::*;
+use crate::heap::CellKind;
 use crate::vm::{Vm, VmOptions};
 
 /// A VM like the base image: the prelude compiled, then collected and laid out.

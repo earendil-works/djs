@@ -69,6 +69,7 @@ fn sample_imm(kind: ImmKind, label: Label) -> u32 {
         | ImmKind::Cap
         | ImmKind::Scope
         | ImmKind::Intrinsic
+        | ImmKind::Builtin
         | ImmKind::Cache => 0xBEEF,
         ImmKind::Const | ImmKind::Child | ImmKind::NameRef => 0x1234_5678,
         ImmKind::LabelId | ImmKind::Target => label.0,

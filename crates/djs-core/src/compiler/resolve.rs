@@ -37,6 +37,12 @@ enum Storage {
     Arg(u16),
     /// Script top-level declarations.
     Global,
+    /// A prelude function in the realm's prelude function table, which has `len` entries
+    /// (D2440).
+    Builtin {
+        idx: u16,
+        len: u16,
+    },
 }
 
 /// What a name reference resolved to.
@@ -44,10 +50,17 @@ enum Storage {
 enum Target {
     Var(VarId),
     Capture(u16),
+    /// A prelude function of function `func` (`Storage::Builtin`), from an inner one.
+    Builtin {
+        func: u32,
+        var: VarId,
+    },
     Global,
     /// A member of a TypeScript enum or namespace (compiler/ts_decl.rs): a property of
     /// the object that reference `.0` (to the closure's parameter) loads.
     Member(u32),
+    /// Slot `.0` of the prelude function table (a resolved `Builtin`).
+    Slot(u16),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -79,6 +92,7 @@ pub(super) fn finish(
     atom_undefined: Atom,
     mut funcs: Vec<FuncState>,
     decls: &[TsDecl],
+    builtin_names: Option<&mut Vec<Atom>>,
 ) -> PResult<Ref> {
     // 1. Classify references, children first. (Member references add a reference to
     // their namespace parameter, classified in turn.)
@@ -86,17 +100,46 @@ pub(super) fn finish(
     for id in (0..funcs.len()).rev() {
         let mut r = 0;
         while r < funcs[id].refs.len() {
-            let res = classify(&mut funcs, id, r, decls);
+            let res = classify(&mut funcs, id, r, decls, opts.privileged);
             resolved[id].push(res);
             r += 1;
         }
     }
 
     // 2. Storage.
-    let storages: Vec<(Vec<Storage>, Vec<Atom>)> = funcs.iter().map(assign_storage).collect();
+    let builtins = funcs
+        .iter()
+        .flat_map(|f| f.vars.iter())
+        .filter(|v| v.builtin)
+        .count();
+    let builtins = u16::try_from(builtins).map_err(|_| internal("too many prelude functions"))?;
+    let mut next_builtin = 0;
+    let storages: Vec<(Vec<Storage>, Vec<Atom>)> = funcs
+        .iter()
+        .map(|f| assign_storage(f, &mut next_builtin, builtins))
+        .collect();
     for (s, _) in &storages {
         if s.len() > u16::MAX as usize {
             return Err(PErr::syntax(0, Cow::Borrowed("too many local variables")));
+        }
+    }
+    if let Some(names) = builtin_names {
+        names.clear();
+        for (f, (s, _)) in funcs.iter().zip(&storages) {
+            for (v, st) in f.vars.iter().zip(s) {
+                if let Storage::Builtin { .. } = st {
+                    names.push(v.name);
+                }
+            }
+        }
+    }
+    // References to another function's prelude function name its table slot.
+    for res in resolved.iter_mut().flatten() {
+        if let Target::Builtin { func, var } = res.target {
+            match storages[func as usize].0[var as usize] {
+                Storage::Builtin { idx, .. } => res.target = Target::Slot(idx),
+                _ => return Err(internal("prelude function without a table slot")),
+            }
         }
     }
 
@@ -150,7 +193,13 @@ pub(super) fn finish(
 
 /// Classifies reference `r` of function `id`, walking into enclosing functions for
 /// free names (adding capture slots on the way).
-fn classify(funcs: &mut [FuncState], id: usize, r: usize, decls: &[TsDecl]) -> Resolved {
+fn classify(
+    funcs: &mut [FuncState],
+    id: usize,
+    r: usize,
+    decls: &[TsDecl],
+    privileged: bool,
+) -> Resolved {
     let nr = funcs[id].refs[r];
     // A member of the namespace of function `f`'s closure: a property of its
     // parameter, reached from the reference's own scope.
@@ -223,8 +272,29 @@ fn classify(funcs: &mut [FuncState], id: usize, r: usize, decls: &[TsDecl]) -> R
                 };
             }
             let decl = var.ts_decl;
-            var.captured = true;
             var.used = true;
+            // A function declared at the top of the prelude's wrapper function (a child
+            // of the Script, run once): its closure is made once, so the realm's table
+            // holds it instead of a Box every caller captures (D2440).
+            if privileged
+                && var.kind == VarKind::Func
+                && funcs[pf].parent.is_some_and(|(p, _)| p == 0)
+            {
+                let var = &mut funcs[pf].vars[v as usize];
+                var.builtin = true;
+                return Resolved {
+                    target: Target::Builtin {
+                        func: pf as u32,
+                        var: v,
+                    },
+                    immutable: false,
+                    check: false,
+                    lexical: false,
+                    decl,
+                };
+            }
+            let var = &mut funcs[pf].vars[v as usize];
+            var.captured = true;
             let immutable = var.kind.is_immutable();
             // Closures may run at any time: lexical bindings are always checked
             // through captures (and parameters of non-simple lists, whose defaults can
@@ -269,14 +339,25 @@ fn needs_check(f: &FuncState, v: VarId, pos: u32) -> bool {
     pos < var.init_end || f.scopes[var.scope as usize].kind == ScopeKind::Switch
 }
 
-/// Storage for every binding of `f`, and the local slot names.
-fn assign_storage(f: &FuncState) -> (Vec<Storage>, Vec<Atom>) {
+/// Storage for every binding of `f`, and the local slot names. Prelude functions
+/// (`Var::builtin`) take the next of the `builtins` table slots.
+fn assign_storage(
+    f: &FuncState,
+    next_builtin: &mut u16,
+    builtins: u16,
+) -> (Vec<Storage>, Vec<Atom>) {
     let mut storage = Vec::with_capacity(f.vars.len());
     let mut names = Vec::new();
     for v in &f.vars {
         let pseudo = v.kind.is_pseudo();
         storage.push(if v.global {
             Storage::Global
+        } else if v.builtin {
+            *next_builtin += 1;
+            Storage::Builtin {
+                idx: *next_builtin - 1,
+                len: builtins,
+            }
         } else if pseudo && !v.used {
             Storage::None
         } else if v.kind == VarKind::Param && f.simple_params && !v.captured {
@@ -337,6 +418,7 @@ fn emit_init(out: &mut CodeBuf, storage: Storage, atom: Atom, lexical: bool) {
         Storage::Global if lexical => out.init_global_lex(atom),
         Storage::Global => out.put_global(atom, 0),
         Storage::None => out.drop(),
+        Storage::Builtin { idx, len } => out.put_builtin(idx, len),
     }
 }
 
@@ -576,6 +658,11 @@ fn emit_function(
                         }
                     }
                     continue;
+                }
+                if matches!(insn.op, Op::NamePut | Op::NameSet | Op::NameInit)
+                    && builtin_slot(storage, resolved[r]).is_some()
+                {
+                    return Err(internal("assignment to a prelude function"));
                 }
                 emit_name(
                     &mut out,
@@ -843,6 +930,18 @@ fn fold_const_enum<'d>(
     None
 }
 
+/// The prelude function table slot of a reference, if it resolved to one.
+fn builtin_slot(storage: &[Storage], res: Resolved) -> Option<u16> {
+    match res.target {
+        Target::Slot(i) => Some(i),
+        Target::Var(v) => match storage[v as usize] {
+            Storage::Builtin { idx, .. } => Some(idx),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 /// The local slot of a reference that resolved to a local without a TDZ check.
 fn unchecked_local(storage: &[Storage], res: Resolved) -> Option<u16> {
     match res.target {
@@ -883,6 +982,7 @@ fn emit_name(
         Box(u16),
         Arg(u16),
         Cap(u16),
+        Builtin(u16),
         Global,
     }
     let at = match res.target {
@@ -890,11 +990,13 @@ fn emit_name(
             Storage::Local(s) => At::Loc(s),
             Storage::Box(s) => At::Box(s),
             Storage::Arg(a) => At::Arg(a),
+            Storage::Builtin { idx, .. } => At::Builtin(idx),
             Storage::Global | Storage::None => At::Global,
         },
         Target::Capture(c) => At::Cap(c),
-        // Handled by the caller (a property access).
-        Target::Global | Target::Member(_) => At::Global,
+        Target::Slot(i) => At::Builtin(i),
+        // Handled by the caller (a property access); `Builtin` is resolved to `Slot`.
+        Target::Global | Target::Member(_) | Target::Builtin { .. } => At::Global,
     };
     let lexical = res.lexical;
     let chk = res.check;
@@ -907,6 +1009,7 @@ fn emit_name(
         At::Arg(a) => out.get_arg(a),
         At::Cap(c) if chk => out.get_cap_chk(c),
         At::Cap(c) => out.get_cap(c),
+        At::Builtin(i) => out.get_builtin(i),
         At::Global => {
             // The global `undefined` is non-writable and non-configurable.
             if atom == atom_undefined && matches!(res.target, Target::Global) {
@@ -964,6 +1067,8 @@ fn emit_name(
                     }
                     out.put_global(atom, 0);
                 }
+                // Rejected by the caller (prelude functions are never assigned).
+                At::Builtin(_) => out.nop(),
             }
         }
         Op::NameInit => match at {
@@ -973,6 +1078,7 @@ fn emit_name(
             At::Cap(c) => out.put_cap(c),
             At::Global if lexical => out.init_global_lex(atom),
             At::Global => out.put_global(atom, 0),
+            At::Builtin(_) => out.nop(),
         },
         _ => out.nop(),
     }
