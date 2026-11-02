@@ -3907,3 +3907,41 @@ fn touching_builtins_in_any_order_leaves_the_same_session() {
     assert_eq!(a, c, "neither does which builtins were used");
     assert_eq!(ha, hc);
 }
+
+/// D2430: the base image stores each flat string once, in the atom table's cell when it
+/// is an atom: a builtin's `name` shares the cell of its key.
+#[test]
+fn base_strings_are_stored_once() {
+    use crate::heap::CellKind;
+    use crate::heap::cells::{Header, Str8};
+    let base = prefixed_base();
+    let mut vm = Vm::from_base(&base, VmOptions::default()).unwrap();
+    let h = vm.heap();
+    let a = h.arena();
+    let mut seen = alloc::collections::BTreeMap::new();
+    for c in h.cells() {
+        if matches!(c.kind, CellKind::Str8 | CellKind::Str16) && c.offset < h.base_end() {
+            let key = (
+                c.kind as u8,
+                a.get::<u32>(c.offset, Str8::LEN),
+                a.slice(c.offset + 16, c.size - 16).to_vec(),
+            );
+            assert_eq!(a.get::<u16>(c.offset, Header::FLAGS), 0);
+            if let Some(prev) = seen.insert(key, c.offset) {
+                panic!("strings at {prev} and {} are equal", c.offset);
+            }
+        }
+    }
+    let h = vm.heap_mut();
+    let map = h.atom_str("map").unwrap();
+    let key = h.atom_string(map).unwrap();
+    let array = h.atom_str("Array").unwrap();
+    let prototype = h.atom_str("prototype").unwrap();
+    let name = h.atom_str("name").unwrap();
+    let g = vm.global();
+    let h = vm.heap();
+    let get = |o: crate::value::Obj, k| h.get_own_property(o, k).unwrap().value().unwrap();
+    let proto = get(get(g, array).as_object().unwrap(), prototype);
+    let f = get(proto.as_object().unwrap(), map);
+    assert_eq!(get(f.as_object().unwrap(), name).as_string(), Some(key));
+}

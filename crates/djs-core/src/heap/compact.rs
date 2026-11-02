@@ -65,6 +65,12 @@ impl Heap {
     ///
     /// The cells at the offsets in `last` go after all others, in that order (D2057): the
     /// ones a VM made from the image replaces first.
+    ///
+    /// Equal flat strings become one cell (D2430): a builtin's `name`, a constant in a
+    /// template's pool and the atom table often hold the same string in separate cells.
+    /// Strings are immutable and compared by content, so sharing one is unobservable. The
+    /// atom table's copy is the one kept (it sorts first among equals); the image gets
+    /// shorter by the copies dropped. Strings in `last` and append buffers are left alone.
     pub fn order_for_image(&mut self, last: &[u32]) -> Result<(), HeapError> {
         use super::cells::{Header, Str8};
         use super::walk::{Slot, for_each_slot};
@@ -82,6 +88,14 @@ impl Heap {
         };
         let is_str = |k: CellKind| matches!(k, CellKind::Str8 | CellKind::Str16);
         let rank = |c: &super::walk::CellInfo| last.iter().position(|&o| o == c.offset);
+        let str_len = |c: &super::walk::CellInfo| a.get(c.offset, Str8::LEN);
+        // The atom table's strings, to keep their cells among equal strings.
+        let entries: Ref = a.get(self.atom_table(), super::cells::AtomTable::ENTRIES);
+        let mut atoms: Vec<u32> = (0..self.value_array_len(entries.0))
+            .filter_map(|i| self.value_array_get(entries.0, i).as_string().map(|s| s.0))
+            .collect();
+        atoms.sort_unstable();
+        let not_atom = |c: &super::walk::CellInfo| atoms.binary_search(&c.offset).is_err();
         let mut order: Vec<usize> = (1..cells.len()).collect();
         order.sort_by(|&x, &y| {
             let (cx, cy) = (&cells[x], &cells[y]);
@@ -91,24 +105,59 @@ impl Heap {
                 .then_with(|| (cx.kind as u8).cmp(&(cy.kind as u8)))
                 .then_with(|| {
                     if is_str(cx.kind) {
-                        data(cx).cmp(data(cy)).then(cx.offset.cmp(&cy.offset))
+                        data(cx)
+                            .cmp(data(cy))
+                            .then(str_len(cx).cmp(&str_len(cy)))
+                            .then(not_atom(cx).cmp(&not_atom(cy)))
+                            .then(cx.offset.cmp(&cy.offset))
                     } else {
                         cx.offset.cmp(&cy.offset)
                     }
                 })
         });
         order.insert(0, 0);
+        // A string that equals the one before it in `order` (D2430): same kind, length and
+        // content, neither in `last` nor an append buffer.
+        let shareable = |c: &super::walk::CellInfo| {
+            is_str(c.kind) && a.get(c.offset, Header::FLAGS) == 0 && rank(c).is_none()
+        };
+        let mut dropped = alloc::vec![false; cells.len()];
+        for w in order.windows(2) {
+            let (p, c) = (&cells[w[0]], &cells[w[1]]);
+            dropped[w[1]] = shareable(p)
+                && shareable(c)
+                && p.kind == c.kind
+                && str_len(p) == str_len(c)
+                && data(p) == data(c);
+        }
         // New offsets, by old cell index (cells are in address order: binary search).
         let mut new_at = alloc::vec![0u32; cells.len()];
         let mut bytes = alloc::vec![0u8; a.len() as usize];
         let mut at = 0u32;
+        let mut kept = 0;
         for &i in &order {
             let c = &cells[i];
+            if dropped[i] {
+                // Its run of equal strings started with a kept cell.
+                new_at[i] = new_at[kept];
+                continue;
+            }
+            kept = i;
             new_at[i] = at;
             bytes[at as usize..(at + c.size) as usize].copy_from_slice(a.slice(c.offset, c.size));
             at += c.size;
         }
-        assert_eq!(at, a.len(), "order_for_image: cells do not cover the arena");
+        let dropped_bytes: u32 = (0..cells.len())
+            .filter(|&i| dropped[i])
+            .map(|i| cells[i].size)
+            .sum();
+        assert_eq!(
+            at + dropped_bytes,
+            a.len(),
+            "order_for_image: cells do not cover the arena"
+        );
+        bytes.truncate(at as usize);
+        let old_len = a.len();
         let moved = |old: u32| -> u32 {
             match cells.binary_search_by_key(&old, |c| c.offset) {
                 Ok(i) => new_at[i],
@@ -119,6 +168,9 @@ impl Heap {
         let mut arena = super::Arena::from_bytes(bytes, limit);
         let mut collections = Vec::new();
         for &i in &order {
+            if dropped[i] {
+                continue;
+            }
             let (c, off) = (&cells[i], new_at[i]);
             if c.kind == CellKind::FuncTemplate {
                 // (Before its IC ref is updated: the slots are cleared where they are.)
@@ -156,6 +208,13 @@ impl Heap {
         self.arena = arena;
         for o in collections {
             self.collection_rehash(Obj(o));
+        }
+        if at < old_len {
+            // As a collection that left `at` bytes would.
+            if self.arena.get(0, Roots::OLD_END) == old_len {
+                self.arena.set(0, Roots::OLD_END, at);
+            }
+            self.set_gc_threshold(super::gc::next_threshold(at, self.arena.limit()));
         }
         Ok(())
     }
