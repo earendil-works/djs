@@ -308,7 +308,9 @@ pub fn import_pi(snap: &J, prelude: &str) -> Result<(pi::Session, bool), String>
         globals: inp["globals"].as_str().unwrap().into(),
         store: inp["store"].as_str().unwrap().into(),
     };
+    let t0 = Instant::now();
     let mut s = pi::Session::prepare_with(prelude, &inputs, T0);
+    let t_prelude = t0.elapsed();
     for name in snap["interface"].as_array().unwrap() {
         let path = format!("globalThis/{}", name.as_str().unwrap());
         if resolve_prelude(s.vm.heap_mut(), &path).is_none_or(|v| v.is_undefined()) {
@@ -401,6 +403,9 @@ pub fn import_pi(snap: &J, prelude: &str) -> Result<(pi::Session, bool), String>
         let run = s.vm.heap().get_handle(s.run);
         let api = s.vm.heap().get_handle(s.api);
         s.invoke(run, api, &[fv])?;
+    }
+    if std::env::var("GOLDI_TIME").is_ok() {
+        eprintln!("import: prelude run {t_prelude:?}, the rest {:?}", t0.elapsed() - t_prelude);
     }
     let host = &snap["host"];
     s.now = host["now"].as_f64().unwrap();
@@ -556,5 +561,101 @@ pub fn import_all(args: &[String]) {
     println!("snapshots {n}: same transcript as the exporting build's run {same}");
     for f in fails.iter().take(10) {
         println!("  {f}");
+    }
+}
+
+/// portable goldi-reloc IMAGE...: for session images taken from a sealed prelude image
+/// (`goldi-images`' `*-today-K.img`), what an "image with symbolic relocations" would have
+/// to carry: the session's own cells (above `OLD_END`) by kind, and their references into
+/// the reference (the prelude image) by target: builtins by path, prelude objects by path,
+/// and engine-internal cells (shapes, templates, the realm...) that have no name.
+#[cfg(not(feature = "old"))]
+pub fn reloc(args: &[String]) {
+    use djs_core::heap::cells::Roots;
+    use djs_core::heap::{CellKind, ObjectClass};
+    use std::collections::BTreeMap;
+    for path in args {
+        let bytes = std::fs::read(path).unwrap();
+        let vm = Vm::from_bytes(bytes, pi::opts()).unwrap();
+        let h = vm.heap();
+        let old_end: u32 = h.arena().get(0, Roots::OLD_END);
+        let mut ex = Exporter::new(&vm);
+        ex.prelude = prelude_names(h, &ex.builtins);
+        let (builtins, prelude) = (ex.builtins.clone(), ex.prelude.clone());
+        let mut kinds: BTreeMap<String, (u32, u32)> = BTreeMap::new();
+        let mut targets: BTreeMap<String, u32> = BTreeMap::new();
+        let mut distinct: BTreeMap<String, std::collections::BTreeSet<u32>> = BTreeMap::new();
+        for c in h.cells() {
+            if c.offset < old_end {
+                continue;
+            }
+            let name = if c.kind == CellKind::Object {
+                format!("Object/{:?}", h.object_class(obj_at(c.offset)))
+            } else {
+                format!("{:?}", c.kind)
+            };
+            let e = kinds.entry(name).or_default();
+            e.0 += 1;
+            e.1 += c.size;
+            if c.kind == CellKind::FuncTemplate {
+                // Numbers in the session's own bytecode that name things of the build:
+                // atom ids and intrinsic ids.
+                let t = template_info(h, c.offset);
+                let mut pc = 0u32;
+                while (pc as usize) < t.code.len() {
+                    let insn = djs_core::bytecode::decode::decode(&t.code, pc).unwrap();
+                    let info = insn.info();
+                    for k in info.imms {
+                        if *k == djs_core::bytecode::ImmKind::Atom {
+                            *targets.entry("atom id in session bytecode".into()).or_default() += 1;
+                        }
+                    }
+                    if info.name == "call_intrinsic" {
+                        *targets.entry("intrinsic id in session bytecode".into()).or_default() += 1;
+                    }
+                    pc = insn.next_pc();
+                }
+            }
+            if c.kind == CellKind::Shape {
+                *targets.entry("atom id in a session shape".into()).or_default() += 1;
+            }
+            h.trace_cell(c.offset, |slot| {
+                let Some(t) = h.slot_target(slot) else { return };
+                if t >= old_end {
+                    return;
+                }
+                let class = if h.cell_kind(t) == CellKind::Object {
+                    if builtins.contains_key(&t) {
+                        "builtin object (by path)".to_string()
+                    } else if prelude.contains_key(&t) {
+                        "prelude object (by path)".to_string()
+                    } else {
+                        format!("unnamed object {:?}", h.object_class(obj_at(t)))
+                    }
+                } else {
+                    format!("engine cell {:?}", h.cell_kind(t))
+                };
+                *targets.entry(class.clone()).or_default() += 1;
+                distinct.entry(class).or_default().insert(t);
+            });
+        }
+        let _ = ObjectClass::Ordinary;
+        let young: u32 = kinds.values().map(|v| v.1).sum();
+        println!(
+            "== {path}: image {} B, reference part {old_end} B, session cells {} B in {} cells",
+            h.arena().len(),
+            young,
+            kinds.values().map(|v| v.0).sum::<u32>()
+        );
+        let mut ks: Vec<_> = kinds.into_iter().collect();
+        ks.sort_by(|a, b| b.1 .1.cmp(&a.1 .1));
+        for (k, (n, b)) in ks.iter().take(12) {
+            println!("  {k:24} {n:6} cells {b:8} B");
+        }
+        println!("  references from session cells into the reference (count / distinct targets):");
+        for (k, n) in &targets {
+            let d = distinct.get(k).map(|d| d.len().to_string()).unwrap_or("-".into());
+            println!("    {k:40} {n:6} / {d}");
+        }
     }
 }
