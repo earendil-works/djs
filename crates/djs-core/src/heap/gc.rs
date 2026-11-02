@@ -196,7 +196,8 @@ impl Heap {
         if core::mem::take(&mut self.fail_next_gc_reserve) {
             return Err(HeapError::HostOutOfMemory);
         }
-        let (before, after, old) = self.mark_compact(self.base_end())?;
+        let base = self.base_end();
+        let (before, after, old) = self.without_barrier(|h| h.mark_compact(base))?;
         self.set_old_region(old, 0);
         self.after_collect(after);
         Ok(GcStats { before, after })
@@ -239,7 +240,7 @@ impl Heap {
             return Err(HeapError::HostOutOfMemory);
         }
         let old = self.old_end();
-        let (before, after, _) = self.mark_compact(old)?;
+        let (before, after, _) = self.without_barrier(|h| h.mark_compact(old))?;
         let minors = self.arena.get(0, Roots::MINORS);
         self.set_old_region(old, minors + 1);
         self.after_collect(after);
@@ -379,6 +380,8 @@ impl Heap {
         // The old from-space goes back to the allocator. Keeping it as the next to-space
         // was measured and rejected (D1870): in wasm a freed from-space also serves the
         // Rust allocations between collections, and pinning it raised peak memory.
+        // The barrier stays armed: the prefix was copied as it is (checked below).
+        to.set_trap_end(self.arena.trap_end());
         self.arena = to;
         // Canonical images are sealed (the base image's old region is all of it), and
         // their bytes do not depend on where the old region ended (D1730). The first
@@ -393,6 +396,7 @@ impl Heap {
         for o in collections {
             self.collection_rehash(crate::value::Obj(o));
         }
+        self.check_prefix();
         Ok(GcStats { before, after })
     }
 }

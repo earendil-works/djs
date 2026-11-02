@@ -403,6 +403,26 @@ So when reading a ratio:
 Compare djs builds with each other (same baseline) for decisions. Use the quickjs-wasi
 ratio as the user-visible figure, a process that runs one script.
 
+## The prefix write barrier (D2065)
+
+The builtin prefix (the base image's cells below `Roots::BASE_END`, D022) must not change
+in a VM with frozen builtins, and in no VM unless a script changes a builtin itself. Debug
+builds check that with a barrier: armed, any write below `BASE_END` (past the roots cell)
+panics, in `Arena::write` and its siblings, and a comparison of the whole prefix after
+every `Vm::run` and collection catches the writes through raw slices (the interpreter's
+hot loop). Release builds have no barrier.
+
+One switch arms it, `VmOptions::prefix_barrier` (`Heap::force_prefix_barrier`), and frozen
+builtins (D2304) arm it always. Armed in the gate:
+- every VM with frozen builtins (`vm/frozen_tests.rs`, and any suite that turns the mode
+  on);
+- difftest's `codemode/` and `codemode-harvest/` areas (`ARMED_AREAS` in
+  crates/djs-difftest/src/djs.rs), in every mode the gate runs them (plain, suspension,
+  GC stress, determinism).
+
+Not armed: the rest of the corpus, e2e and test262, whose cases change builtins on purpose
+(`defineProperty` on prototypes, Proxy and BigInt tests).
+
 ## Peak memory claims (D2048)
 
 Peak wasm memory (`wasm memory` in `scripts/perf/wasm-run.ts`) is deterministic for one

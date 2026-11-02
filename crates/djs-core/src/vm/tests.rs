@@ -3750,3 +3750,43 @@ fn seal_puts_the_first_grown_cells_last() {
     let same = x.iter().zip(&y).filter(|(a, b)| a == b).count();
     assert!(same * 100 > x.len() * 90, "{same} of {} words", x.len());
 }
+
+/// The prefix write barrier (D2065): armed, a write into the builtin prefix panics in
+/// debug builds; a VM's own cells (globals, the stack, atoms) are above the prefix.
+#[test]
+#[cfg(debug_assertions)]
+fn the_armed_barrier_traps_prefix_writes() {
+    extern crate std;
+    let mut base = Vm::new(VmOptions::default()).unwrap();
+    base.prepare_base_image().unwrap();
+    let base = base.bytes().to_vec();
+    let armed = VmOptions {
+        prefix_barrier: true,
+        ..VmOptions::default()
+    };
+    // Ordinary work, a new global and new atoms: nothing below BASE_END is written.
+    let mut vm = Vm::from_base(&base, armed).unwrap();
+    assert!(vm.heap().prefix_barrier_armed());
+    assert_eq!(
+        eval(
+            &mut vm,
+            "globalThis.g = { fresh_atom_1: [1, 2].map(x => x + 1) }; let s = new Set([g]); \
+             return g.fresh_atom_1.join() + Symbol.for('k').toString() + s.size"
+        ),
+        "2,3Symbol(k)1"
+    );
+    vm.collect().unwrap();
+    vm.collect_canonical().unwrap();
+    // Changing a builtin writes the prefix.
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        eval(&mut vm, "Array.prototype.extra = 1; return 1")
+    }));
+    assert!(r.is_err(), "a write into the prefix must panic when armed");
+    // Unarmed (the default), the same write is fine.
+    let mut vm = Vm::from_base(&base, VmOptions::default()).unwrap();
+    assert!(!vm.heap().prefix_barrier_armed());
+    assert_eq!(
+        eval(&mut vm, "Array.prototype.extra = 1; return [].extra"),
+        "1"
+    );
+}

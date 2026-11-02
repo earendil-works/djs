@@ -142,6 +142,11 @@ struct Session {
     suspend: bool,
 }
 
+/// The corpus areas whose cases never change builtins, run with the prefix write barrier
+/// armed (D2065, TESTING.md): in debug builds a write into the builtin prefix fails the
+/// case. Other areas change builtins on purpose (spec tests of `defineProperty`, Proxy).
+pub const ARMED_AREAS: &[&str] = &["codemode/", "codemode-harvest/"];
+
 impl Djs {
     fn session(&self, job: &Job<'_>) -> Result<Session, String> {
         let opts = VmOptions {
@@ -154,6 +159,7 @@ impl Djs {
                 native_builtins: !self.bytecode_builtins,
                 ..ExecOptions::default()
             },
+            prefix_barrier: ARMED_AREAS.iter().any(|a| job.name.starts_with(a)),
             ..VmOptions::default()
         };
         let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;

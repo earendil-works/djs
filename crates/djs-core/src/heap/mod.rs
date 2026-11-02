@@ -183,6 +183,12 @@ pub struct Heap {
     /// for the VM's lifetime (D2338). Not part of the image.
     #[cfg(feature = "unicode-normalization")]
     pub(crate) compositions: crate::unicode::normalize::Compositions,
+    /// The prefix as it was when the barrier was armed (debug builds, D2065): what
+    /// [`Heap::check_prefix`] compares against, for writes that bypass `Arena::write`.
+    #[cfg(debug_assertions)]
+    prefix_copy: Option<alloc::vec::Vec<u8>>,
+    /// The barrier is armed without frozen builtins (`VmOptions::prefix_barrier`).
+    barrier_forced: bool,
     /// Test hook: make the next collection fail to reserve its to-space.
     #[cfg(test)]
     pub(crate) fail_next_gc_reserve: bool,
@@ -262,6 +268,9 @@ impl Heap {
             frozen_end: 0,
             #[cfg(feature = "unicode-normalization")]
             compositions: Default::default(),
+            #[cfg(debug_assertions)]
+            prefix_copy: None,
+            barrier_forced: false,
             #[cfg(test)]
             fail_next_gc_reserve: false,
             #[cfg(test)]
@@ -397,6 +406,69 @@ impl Heap {
             self.refresh_frozen();
             self.gc_pending = self.arena.len() >= self.gc_threshold;
         }
+    }
+
+    /// Arms the prefix write barrier (D2065) for a VM without frozen builtins, whose
+    /// scripts are known not to change builtins (test suites); with frozen builtins it is
+    /// always armed. In debug builds an armed barrier makes any write into the builtin
+    /// prefix (the cells below `Roots::BASE_END`, past the roots cell) panic: `Arena::write`
+    /// and its siblings check each write, and [`Heap::check_prefix`] compares the whole
+    /// prefix for the paths that write through raw slices (the interpreter's hot loop).
+    /// Release builds have no barrier.
+    pub fn force_prefix_barrier(&mut self, on: bool) {
+        self.barrier_forced = on;
+        self.refresh_barrier();
+    }
+
+    /// Arms or disarms the barrier as the mode asks: on with frozen builtins or when forced,
+    /// if there is a prefix. Arming takes the copy `check_prefix` compares against.
+    pub(crate) fn refresh_barrier(&mut self) {
+        if self.arena.len() < Roots::LAYOUT.min_size {
+            return;
+        }
+        let end = self.base_end();
+        let want = if (self.frozen_builtins() || self.barrier_forced) && end > 0 {
+            end
+        } else {
+            0
+        };
+        if want == self.arena.trap_end() {
+            return;
+        }
+        self.arena.set_trap_end(want);
+        #[cfg(debug_assertions)]
+        {
+            self.prefix_copy = (want > 0).then(|| self.arena.bytes()[..want as usize].to_vec());
+        }
+    }
+
+    /// Whether the prefix write barrier is armed.
+    pub fn prefix_barrier_armed(&self) -> bool {
+        self.arena.trap_end() != 0
+    }
+
+    /// Debug builds with the barrier armed: panics if any byte of the prefix (past the
+    /// roots cell) differs from what it was when the barrier was armed (D2065).
+    pub fn check_prefix(&self) {
+        #[cfg(debug_assertions)]
+        if let Some(copy) = &self.prefix_copy {
+            let from = cells::Roots::LAYOUT.min_size as usize;
+            let now = &self.arena.bytes()[from..copy.len()];
+            if let Some(i) = now.iter().zip(&copy[from..]).position(|(a, b)| a != b) {
+                panic!("the builtin prefix changed at {} (D2065)", from + i);
+            }
+        }
+    }
+
+    /// Runs `f` (a collection) with the barrier suspended: collections set and clear mark
+    /// bits in the prefix's headers. The prefix must be as it was afterwards.
+    pub(crate) fn without_barrier<T>(&mut self, f: impl FnOnce(&mut Heap) -> T) -> T {
+        let end = self.arena.trap_end();
+        self.arena.set_trap_end(0);
+        let r = f(self);
+        self.arena.set_trap_end(end);
+        self.check_prefix();
+        r
     }
 
     /// The arena bytes: a complete, position-independent image of the heap.

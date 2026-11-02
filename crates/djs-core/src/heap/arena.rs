@@ -26,6 +26,10 @@ pub struct Arena {
     /// The heap sets it to the GC threshold, so the Vec's doubling does not overshoot the
     /// size the next collection starts at (D1870).
     target: u32,
+    /// The prefix write barrier (D2065): in debug builds, a write below this offset (and
+    /// past the roots cell) panics. 0: off. Not part of the image.
+    #[cfg(debug_assertions)]
+    trap_end: u32,
 }
 
 #[cfg(test)]
@@ -50,6 +54,8 @@ impl Arena {
             len: 0,
             limit: clamp_limit(limit),
             target: 0,
+            #[cfg(debug_assertions)]
+            trap_end: 0,
         }
     }
 
@@ -65,6 +71,8 @@ impl Arena {
             len: 0,
             limit: clamp_limit(limit),
             target: 0,
+            #[cfg(debug_assertions)]
+            trap_end: 0,
         })
     }
 
@@ -105,6 +113,8 @@ impl Arena {
             bytes,
             limit: clamp_limit(limit),
             target: 0,
+            #[cfg(debug_assertions)]
+            trap_end: 0,
         }
     }
 
@@ -282,8 +292,38 @@ impl Arena {
         T::read(&self.bytes, off as usize)
     }
 
+    /// Arms the prefix write barrier up to `end` (0 disarms; debug builds only, D2065).
+    pub(crate) fn set_trap_end(&mut self, end: u32) {
+        #[cfg(debug_assertions)]
+        {
+            self.trap_end = end;
+        }
+        let _ = end;
+    }
+
+    /// The armed barrier's end (0: off; always 0 in release builds).
+    pub(crate) fn trap_end(&self) -> u32 {
+        #[cfg(debug_assertions)]
+        {
+            self.trap_end
+        }
+        #[cfg(not(debug_assertions))]
+        0
+    }
+
+    /// The barrier (debug builds): `len` bytes written at `off`.
+    #[inline(always)]
+    fn barrier(&self, off: u32, len: u32) {
+        #[cfg(debug_assertions)]
+        if off < self.trap_end && off + len > super::cells::Roots::LAYOUT.min_size {
+            prefix_write(off);
+        }
+        let _ = (off, len);
+    }
+
     #[inline(always)]
     pub fn write<T: FieldType>(&mut self, off: u32, v: T) {
+        self.barrier(off, T::TY.size() as u32);
         debug_assert!(
             off as usize + T::TY.size() as usize <= self.len as usize,
             "write past the arena end"
@@ -318,6 +358,7 @@ impl Arena {
 
     #[inline]
     pub fn slice_mut(&mut self, off: u32, len: u32) -> &mut [u8] {
+        self.barrier(off, len);
         &mut self.bytes[..self.len as usize][off as usize..off as usize + len as usize]
     }
 
@@ -325,6 +366,7 @@ impl Arena {
     /// writable. Used to copy from older cells into a freshly allocated one.
     #[inline]
     pub fn split_mut(&mut self, at: u32) -> (&[u8], &mut [u8]) {
+        self.barrier(at, 1);
         let (a, b) = self.bytes[..self.len as usize].split_at_mut(at as usize);
         (a, b)
     }
@@ -332,6 +374,7 @@ impl Arena {
     /// Copies `len` bytes from `src` to `dst` (the ranges may overlap).
     #[inline]
     pub fn copy_within(&mut self, src: u32, len: u32, dst: u32) {
+        self.barrier(dst, len);
         let s = src as usize;
         self.bytes[..self.len as usize].copy_within(s..s + len as usize, dst as usize);
     }
@@ -544,4 +587,12 @@ mod tests {
         assert_eq!(b.alloc(u32::MAX - 3), Err(HeapError::OutOfMemory));
         assert_eq!(b.len(), 0);
     }
+}
+
+/// A write below the armed prefix barrier's end: an engine bug (D2065).
+#[cfg(debug_assertions)]
+#[cold]
+#[inline(never)]
+fn prefix_write(off: u32) -> ! {
+    panic!("write into the builtin prefix at {off} (D2065)")
 }

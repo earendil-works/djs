@@ -7,13 +7,13 @@
 //! shape counts, realm slots) is written as before: only the JS-visible property
 //! operations of `object.rs` consult [`Heap::frozen`].
 //!
-//! Exempt: the per-VM objects in the prefix (until 0147 moves them above it): the global
-//! object, the global lexical record and the hidden registries of `FROZEN_EXEMPT` in
-//! interp/realm.rs.
+//! No object is exempt: the per-VM objects (the global object, the global lexical record,
+//! `Symbol.for`'s registry) live above the prefix (D2063). With the mode on, the prefix
+//! write barrier (D2065) is armed in debug builds.
 
 use super::Heap;
-use super::cells::{self, Realm, Roots};
-use crate::value::{Obj, Value};
+use super::cells::{self, Roots};
+use crate::value::Obj;
 
 impl Heap {
     /// Whether the frozen-builtins mode is on (part of the image).
@@ -43,27 +43,14 @@ impl Heap {
         } else {
             0
         };
+        self.refresh_barrier();
     }
 
-    /// Whether `o` is a frozen builtin: in the prefix with the mode on, and not exempt.
+    /// Whether `o` is a frozen builtin: in the prefix with the mode on. The per-VM
+    /// objects (the global object, the global lexical record, the `Symbol.for` registry)
+    /// are above the prefix (D2063), so there are no exemptions.
     #[inline(always)]
     pub fn frozen(&self, o: Obj) -> bool {
-        o.0 < self.frozen_end && self.frozen_in_prefix(o)
-    }
-
-    /// [`Heap::frozen`] for an object below the boundary: false for the exempt per-VM
-    /// objects.
-    #[inline(never)]
-    fn frozen_in_prefix(&self, o: Obj) -> bool {
-        debug_assert_eq!(self.frozen_end, self.arena.get(0, Roots::BASE_END));
-        let Some(r) = self.realm().as_internal() else {
-            return true;
-        };
-        let lex: super::Ref = self.arena.get(r, Realm::GLOBAL_LEX);
-        o.0 != lex.0
-            && crate::interp::realm::FROZEN_EXEMPT.iter().all(|&i| {
-                let v: Value = self.arena.read(Realm::INTRINSICS.at(r, i as u32));
-                v.as_object() != Some(o)
-            })
+        o.0 < self.frozen_end
     }
 }

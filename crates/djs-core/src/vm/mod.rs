@@ -98,6 +98,11 @@ pub struct VmOptions {
     /// override fix of SES and Node's `--frozen-intrinsics`). The global object stays
     /// ordinary. Applied by `Vm::new` and `from_base`; a restored image keeps its mode.
     pub frozen_builtins: bool,
+    /// Arms the prefix write barrier (D2065) without frozen builtins: in debug builds, a
+    /// write into the builtin prefix panics. For test suites whose scripts never change
+    /// builtins (TESTING.md lists them); frozen builtins arm it anyway. Not part of the
+    /// image: applied at creation and restore. Release builds ignore it.
+    pub prefix_barrier: bool,
 }
 
 impl Default for VmOptions {
@@ -109,6 +114,7 @@ impl Default for VmOptions {
             random_seed: crate::builtins::number::DEFAULT_RANDOM_SEED,
             weak_refs: WeakRefs::Collected,
             frozen_builtins: false,
+            prefix_barrier: false,
         }
     }
 }
@@ -169,15 +175,14 @@ impl Vm {
         }
         vm.set_weak_refs(opts.weak_refs)?;
         if opts.frozen_builtins {
-            // Without a base image, everything made at creation is the builtin prefix.
+            // Without a base image, the realm is made into one: the builtin prefix with
+            // the per-VM cells above it (D2063).
             if vm.heap.base_end() == 0 {
-                let len = vm.heap.arena().len();
-                vm.heap
-                    .arena_mut()
-                    .set(0, crate::heap::cells::Roots::BASE_END, len);
+                vm.prepare_base_image()?;
             }
             vm.heap.set_frozen_builtins(true);
         }
+        vm.heap.force_prefix_barrier(opts.prefix_barrier);
         Ok(vm)
     }
 
@@ -297,6 +302,7 @@ impl Vm {
         crate::builtins::number::set_seed(&mut self.heap, seed);
         self.set_weak_refs(self.opts.weak_refs)?;
         self.heap.set_frozen_builtins(self.opts.frozen_builtins);
+        self.heap.force_prefix_barrier(self.opts.prefix_barrier);
         Ok(())
     }
 
@@ -344,10 +350,11 @@ impl Vm {
         Ok(())
     }
 
-    fn over(heap: Heap, opts: VmOptions) -> Result<Vm, LoadError> {
+    fn over(mut heap: Heap, opts: VmOptions) -> Result<Vm, LoadError> {
         if state::interp(&heap) == 0 || heap.realm().as_internal().is_none() {
             return Err(LoadError::BadHeader);
         }
+        heap.force_prefix_barrier(opts.prefix_barrier);
         Ok(Vm { heap, opts })
     }
 
@@ -627,6 +634,8 @@ impl Vm {
 
     /// A run that ran out of host memory abandons the call (D1690).
     fn after_run(&mut self, st: Status) -> Status {
+        // Debug builds with the barrier armed: the hot loop writes through a raw slice.
+        self.heap.check_prefix();
         if st == Status::HostOutOfMemory {
             self.abort();
         }
@@ -820,12 +829,8 @@ impl Vm {
     /// as a function of its object graph alone. For images that should not depend on how
     /// they were built (the base image, 0101).
     ///
-    /// With frozen builtins (D2304) this is a full collection: a copying layout has no
-    /// builtin prefix, and the mode needs one.
+    /// The builtin prefix stays as it is (D2064).
     pub fn collect_canonical(&mut self) -> Result<(), HeapError> {
-        if self.heap.frozen_builtins() {
-            return self.collect_as(Collection::Full);
-        }
         self.collect_as(Collection::Canonical)
     }
 
