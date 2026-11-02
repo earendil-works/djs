@@ -1,6 +1,6 @@
 # 0144: Frozen, lazily created builtins outside the session heap (design + prototype)
 
-status: in-progress
+status: done
 agent: heap
 branch: issue/0144-frozen-lazy-builtins
 depends-on: 0138, 0141, 0142, 0143
@@ -59,7 +59,35 @@ A VM mode (pi's build) where:
 docs/frozen-builtins.md with the design, prototype numbers, and the plan.
 
 ## Log
+- Read 0141/0142/0143 and 0138. Prototypes on a scratch branch, patches in
+  work/scratch/0144:
+  - dual address space: every heap read and hot load dispatches on offsets ≥ 2^31;
+    +3.3% (pi-like) to +6.2% (json) wasm instructions, +11.8 KB code;
+  - frozen base: pi's lockdown walk with `Object.freeze` at base build; 369.5 KB /
+    6,981 cells, +47 KB from dictionary conversions;
+  - override-mistake fix in `ordinary_set` and `set_property`, gated on the holder being
+    in the frozen base; semantics checked;
+  - pi prelude without lockdown on the frozen base: start 3.1 → 0.48 ms, sealed image
+    479.9 KB / 8,330 → 422.4 KB / 7,556;
+  - write audit over the 300 harvested cases: every write into the base, attributed
+    (stack, interp/roots, atom index, string hashes, prototype flags, 3 shapes, the
+    global table, one realm slot; no code or function writes).
+- The Array family was not prototyped lazily by id: the dual-space cost and the order
+  argument settle it (docs/frozen-builtins.md §1, §6).
+- docs/frozen-builtins.md: design (immutable frozen prefix, session region only),
+  numbers, revised plan.
 
 ## Follow-ups
+- Owner decisions: the frozen module for pi (phase 1), pi dropping `lockdown()`
+  (pi-private), phase 2's immutable prefix.
+- Phase 0 (builtin registry) stays as in 0143 step 1.
 
 ## Result
+docs/frozen-builtins.md. Builtins frozen from birth with the override fix work; pi's
+start drops from 3.1 to ~0.5 ms and its start image from 480 KB to ~375 KB (est.,
+born-frozen). "Outside the arena" as a second address space costs +3.3–6.2% on every
+heap read, so builtins stay in an immutable, build-fixed prefix of each arena. Snapshots,
+`canonical_hash` and determinism cover only the session region above it, which makes
+creation order irrelevant by construction. Laziness is dropped. The plan replaces 0143's
+steps 2–4 and 0138: registry (1 week), frozen module (2–3 weeks), immutable prefix
+(3–4 weeks).
