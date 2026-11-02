@@ -19,23 +19,29 @@ use crate::heapx::*;
 use crate::roles::labels_at;
 use crate::session::{Session, new_vm};
 
+type FnKey = (String, u32, u32);
+
 pub struct Importer {
-    templates: HashMap<(u32, u32), TemplateInfo>,
+    templates: HashMap<FnKey, TemplateInfo>,
     cells: Vec<u32>,
     kinds: Vec<String>,
 }
 
-fn collect_templates(heap: &Heap, t: u32, out: &mut HashMap<(u32, u32), TemplateInfo>) {
+fn collect_templates(heap: &Heap, t: u32, out: &mut HashMap<FnKey, TemplateInfo>) {
     let info = template_info(heap, t);
     let children = info.children.clone();
-    out.insert(info.span, info);
+    out.insert((info.script.clone(), info.span.0, info.span.1), info);
     for c in children {
         collect_templates(heap, c, out);
     }
 }
 
-fn span_of(j: &J) -> (u32, u32) {
-    (j["start"].as_u64().unwrap() as u32, j["end"].as_u64().unwrap() as u32)
+fn span_of(j: &J) -> FnKey {
+    (
+        j["script"].as_str().unwrap().to_string(),
+        j["start"].as_u64().unwrap() as u32,
+        j["end"].as_u64().unwrap() as u32,
+    )
 }
 
 impl Importer {
@@ -103,15 +109,24 @@ impl Importer {
 
 /// Imports a snapshot into a new session of this build.
 pub fn import(snap: &J) -> Result<Session, String> {
-    let source = snap["source"].as_str().unwrap();
     let mut vm = new_vm();
-    // The code: compiled again from the source, by this build's compiler.
-    let main = vm
-        .compile(source.as_bytes(), &CompileOptions::async_body("script.js", &[]))
-        .map_err(|e| e.message)?;
+    // The code: every script compiled again from its source by this build's compiler.
+    // Nothing runs: the state comes from the snapshot.
     let mut templates = HashMap::new();
-    let root = closure_template(vm.heap(), main.as_object().unwrap()).unwrap();
-    collect_templates(vm.heap(), root, &mut templates);
+    let mut scripts = Vec::new();
+    for sc in snap["scripts"].as_array().unwrap() {
+        let name = sc["name"].as_str().unwrap();
+        let source = sc["source"].as_str().unwrap();
+        let opts = if name == "script.js" {
+            CompileOptions::async_body(name, &[])
+        } else {
+            CompileOptions::script(name)
+        };
+        let main = vm.compile(source.as_bytes(), &opts).map_err(|e| e.message)?;
+        let root = closure_template(vm.heap(), main.as_object().unwrap()).unwrap();
+        collect_templates(vm.heap(), root, &mut templates);
+        scripts.push((name.to_string(), source.to_string()));
+    }
 
     let nodes = snap["nodes"].as_array().unwrap();
     let mut imp = Importer {
@@ -126,24 +141,26 @@ pub fn import(snap: &J) -> Result<Session, String> {
     // The pending calls are issued again: the host still owns them (same sequence
     // numbers); the VM gets fresh call ids and promises, which become the snapshot's
     // pending promise nodes.
-    let tool = vm
-        .heap_mut()
-        .atom_str("tool")
-        .map_err(|e| format!("{e:?}"))?;
-    let tool = vm
-        .heap()
-        .get_own_property(vm.global(), tool)
-        .and_then(|p| p.value())
-        .ok_or("no tool")?;
     let mut pending = Vec::new();
     for p in snap["pending"].as_array().unwrap() {
-        let args: Vec<Value> = p["args"]
+        let fname = p["fn"].as_str().unwrap();
+        let key = vm.heap_mut().atom_str(fname).map_err(|e| format!("{e:?}"))?;
+        let f = vm
+            .heap()
+            .get_own_property(vm.global(), key)
+            .and_then(|p| p.value())
+            .ok_or(format!("no host function {fname}"))?;
+        let texts: Vec<String> = p["args"]
             .as_array()
             .unwrap()
             .iter()
-            .map(|a| Value::string(vm.heap_mut().alloc_str(a.as_str().unwrap()).unwrap()))
+            .map(|a| a.as_str().unwrap().to_string())
             .collect();
-        vm.call(tool, Value::UNDEFINED, &args).map_err(|e| format!("{e:?}"))?;
+        let args: Vec<Value> = texts
+            .iter()
+            .map(|a| Value::string(vm.heap_mut().alloc_str(a).unwrap()))
+            .collect();
+        vm.call(f, Value::UNDEFINED, &args).map_err(|e| format!("{e:?}"))?;
         vm.run(1_000_000);
         let ids = vm.new_host_calls();
         let id = *ids.last().ok_or("no host call")?;
@@ -154,12 +171,20 @@ pub fn import(snap: &J) -> Result<Session, String> {
             .1;
         let node = p["promise"]["ref"].as_u64().ok_or("pending promise is not a node")? as usize;
         imp.cells[node] = promise.offset();
-        pending.push((
-            id,
-            p["seq"].as_u64().unwrap() as u32,
-            p["args"][0].as_str().unwrap().to_string(),
-            p["args"][1].as_str().unwrap().to_string(),
-        ));
+        pending.push((id, p["seq"].as_u64().unwrap() as u32, fname.to_string(), texts));
+    }
+    // The embedder's functions, registered again by id.
+    for (i, n) in nodes.iter().enumerate() {
+        if n["t"] == "host-function" {
+            let id = n["id"].as_u64().unwrap() as u32;
+            let f = if n["async"].as_bool().unwrap() {
+                vm.new_async_host_function(id, "")
+            } else {
+                vm.new_host_function(id, "")
+            }
+            .map_err(|e| format!("{e:?}"))?;
+            imp.cells[i] = f.as_object().unwrap().offset();
+        }
     }
 
     let heap = vm.heap_mut();
@@ -181,6 +206,12 @@ pub fn import(snap: &J) -> Result<Session, String> {
                 o(heap, class, class.slots())
             }
             "array" => heap.new_array(None, 0).map(|o| o.offset()),
+            "collection" => {
+                let class = if n["class"] == "Map" { ObjectClass::Map } else { ObjectClass::Set };
+                let p = intrinsic(heap, Intrinsic::ObjectProto).as_object().unwrap();
+                heap.collection_new(class, p).map(|o| o.offset())
+            }
+            "date" => o(heap, ObjectClass::Date, 1),
             "closure" => {
                 let span = span_of(&n["fn"]);
                 let t = imp
@@ -190,6 +221,7 @@ pub fn import(snap: &J) -> Result<Session, String> {
                 o(heap, ObjectClass::Function, 1 + t.captures)
             }
             "builtin-closure" => o(heap, ObjectClass::BuiltinClosure, 2),
+            "bound" => o(heap, ObjectClass::BoundFunction, 3),
             "record" => {
                 let schema = n["schema"].as_str().unwrap();
                 let fields = record_fields(schema);
@@ -223,7 +255,50 @@ pub fn import(snap: &J) -> Result<Session, String> {
             heap.set_prototype_of(o, p);
         }
         match t {
-            "object" => imp.define_props(heap, o, &n["props"])?,
+            "object" => {
+                imp.define_props(heap, o, &n["props"])?;
+                if let Some(stack) = n.get("stack").and_then(|s| s.as_str()) {
+                    // The trace as text: an own `stack`, which error_stack prefers.
+                    let k = heap.atom_str("stack").map_err(|e| format!("{e:?}"))?;
+                    let v = Value::string(heap.alloc_str(stack).map_err(|e| format!("{e:?}"))?);
+                    let d = PropertyDescriptor::data(v, PropFlags::new(true, false, true));
+                    heap.define_own_property(o, k, &d).map_err(|e| format!("{e:?}"))?;
+                }
+            }
+            "host-function" => {
+                // Recreated with its own `name` and `length`: replaced by the snapshot's.
+                for key in ["name", "length"] {
+                    let k = heap.atom_str(key).map_err(|e| format!("{e:?}"))?;
+                    heap.delete_own_property(o, k);
+                }
+                imp.define_props(heap, o, &n["props"])?;
+            }
+            "collection" => {
+                for e in n["entries"].as_array().unwrap() {
+                    let k = imp.value(heap, &e[0])?;
+                    let v = match e.get(1) {
+                        Some(j) => imp.value(heap, j)?,
+                        None => Value::TRUE,
+                    };
+                    heap.collection_set(o, k, v).map_err(|e| format!("{e:?}"))?;
+                }
+                imp.define_props(heap, o, &n["props"])?;
+            }
+            "bound" => {
+                for (k, f) in ["target", "this", "args"].iter().enumerate() {
+                    let v = imp.value(heap, &n[*f])?;
+                    heap.set_object_slot(o, k as u32, v);
+                }
+                imp.define_props(heap, o, &n["props"])?;
+            }
+            "date" => {
+                let t = match &n["time"] {
+                    J::Number(x) => x.as_f64().unwrap(),
+                    _ => f64::NAN,
+                };
+                heap.set_object_slot(o, 0, Value::number(t));
+                imp.define_props(heap, o, &n["props"])?;
+            }
             "array" => {
                 let mut values = Vec::new();
                 for e in n["elements"].as_array().unwrap() {
@@ -322,9 +397,21 @@ pub fn import(snap: &J) -> Result<Session, String> {
             "async" => import_activation(&imp, heap, o, n)?,
             _ => unreachable!(),
         }
+        if n["extensible"] == J::Bool(false) {
+            let f = heap.cell_flags(cell);
+            heap.set_cell_flags(cell, f & !djs_core::heap::cells::flags::OBJ_EXTENSIBLE);
+        }
     }
 
+    let g = vm.global();
+    imp.define_props(vm.heap_mut(), g, &snap["globals"])?;
     let mut s = Session::with_vm(vm);
+    s.scripts = scripts;
+    for (name, j) in snap["roots"].as_object().unwrap() {
+        let v = imp.value(s.vm.heap_mut(), j)?;
+        let h = s.vm.heap_mut().new_handle(v).map_err(|e| format!("{e:?}"))?;
+        s.roots.push((name.clone(), h));
+    }
     s.pending = pending;
     s.issued = snap["issued"].as_u64().unwrap() as u32;
     s.output = snap["output"]
@@ -333,6 +420,7 @@ pub fn import(snap: &J) -> Result<Session, String> {
         .iter()
         .map(|v| v.as_str().unwrap().to_string())
         .collect();
+    s.finished = None;
     Ok(s)
 }
 

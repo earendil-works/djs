@@ -60,6 +60,7 @@ pub struct TemplateInfo {
     pub captures: u32,
     pub names: Vec<String>,
     pub span: (u32, u32),
+    pub script: String,
     pub code: Vec<u8>,
     pub lines: Vec<u8>,
     pub handlers: Vec<djs_core::bytecode::Handler>,
@@ -86,6 +87,15 @@ pub fn template_info(heap: &Heap, t: u32) -> TemplateInfo {
         (a.get(t, FuncTemplate::SRC_START), a.get(t, FuncTemplate::SRC_END))
     } else {
         (0, 0)
+    };
+    let script = if has_field(heap, t, FuncTemplate::SCRIPT.offset) {
+        let s: Ref = a.get(t, FuncTemplate::SCRIPT);
+        s.get()
+            .and_then(|s| a.get::<Ref>(s, Script::NAME).get())
+            .map(|n| heap.str_to_string(str_at(n)))
+            .unwrap_or_default()
+    } else {
+        String::new()
     };
     let lines = if has_field(heap, t, FuncTemplate::LINES.offset) {
         bytes_of(heap, a.get(t, FuncTemplate::LINES)).to_vec()
@@ -116,6 +126,7 @@ pub fn template_info(heap: &Heap, t: u32) -> TemplateInfo {
         captures: a.get::<u16>(t, FuncTemplate::CAPTURES) as u32,
         names,
         span,
+        script,
         code: bytes_of(heap, a.get(t, FuncTemplate::CODE)).to_vec(),
         lines,
         handlers,
@@ -196,6 +207,16 @@ impl Frame {
 /// Both sides of a transfer compute them on their own realm; the importer resolves a
 /// name by walking it, so a new builtin elsewhere does not change an old name's meaning.
 pub fn builtin_paths(heap: &Heap) -> HashMap<u32, String> {
+    builtin_paths_in(heap, None)
+}
+
+/// [`builtin_paths`] of a session's heap, keeping only the objects that a fresh realm
+/// (`reference`: path -> class) has at the same path: what a script or a prelude added to
+/// the global object is state, not a builtin.
+pub fn builtin_paths_in(
+    heap: &Heap,
+    reference: Option<&HashMap<String, ObjectClass>>,
+) -> HashMap<u32, String> {
     let mut paths: HashMap<u32, String> = HashMap::new();
     let mut queue = VecDeque::new();
     let global = intrinsic(heap, Intrinsic::Global).as_object().unwrap();
@@ -241,6 +262,11 @@ pub fn builtin_paths(heap: &Heap) -> HashMap<u32, String> {
                 continue;
             }
             let p = format!("{path}/{k}");
+            if let Some(r) = reference
+                && r.get(&p) != Some(&heap.object_class(t))
+            {
+                continue;
+            }
             paths.insert(t.offset(), p.clone());
             queue.push_back((t, p, depth + 1));
         }

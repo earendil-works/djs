@@ -16,6 +16,7 @@ use crate::roles::labels_at;
 use crate::session::Session;
 
 pub struct Exporter<'a> {
+    vm: &'a djs_core::vm::Vm,
     heap: &'a Heap,
     builtins: HashMap<u32, String>,
     ids: HashMap<u32, usize>,
@@ -53,10 +54,19 @@ fn num(n: f64) -> J {
 }
 
 impl<'a> Exporter<'a> {
-    pub fn new(heap: &'a Heap) -> Self {
+    pub fn new(vm: &'a djs_core::vm::Vm) -> Self {
+        let heap = vm.heap();
         Exporter {
+            vm,
             heap,
-            builtins: builtin_paths(heap),
+            builtins: {
+                let fresh = crate::session::new_vm();
+                let reference: HashMap<String, ObjectClass> = builtin_paths(fresh.heap())
+                    .into_iter()
+                    .map(|(o, p)| (p, fresh.heap().object_class(obj_at(o))))
+                    .collect();
+                builtin_paths_in(heap, Some(&reference))
+            },
             ids: HashMap::new(),
             nodes: Vec::new(),
             queue: VecDeque::new(),
@@ -141,7 +151,7 @@ impl<'a> Exporter<'a> {
     }
 
     fn function_id(&self, t: &TemplateInfo) -> J {
-        json!({"start": t.span.0, "end": t.span.1})
+        json!({"script": t.script, "start": t.span.0, "end": t.span.1})
     }
 
     fn record(&mut self, cell: u32) -> J {
@@ -175,12 +185,11 @@ impl<'a> Exporter<'a> {
         let h = self.heap;
         let o = obj_at(cell);
         let class = h.object_class(o);
-        let extensible = true;
         match class {
-            ObjectClass::Ordinary | ObjectClass::Error => {
+            ObjectClass::Ordinary => {
                 let proto = self.proto(o);
                 let props = self.props(o, false);
-                json!({"t": "object", "class": format!("{class:?}"), "proto": proto, "props": props, "extensible": extensible})
+                json!({"t": "object", "class": format!("{class:?}"), "proto": proto, "props": props})
             }
             ObjectClass::Array => {
                 let proto = self.proto(o);
@@ -264,6 +273,50 @@ impl<'a> Exporter<'a> {
                 json!({"t": "array-iterator", "target": target, "index": index, "kind": kind})
             }
             ObjectClass::Generator => self.activation(o),
+            ObjectClass::BoundFunction => {
+                let target = self.value(h.object_slot(o, 0));
+                let this = self.value(h.object_slot(o, 1));
+                let args = self.value(h.object_slot(o, 2));
+                let proto = self.proto(o);
+                let props = self.props(o, false);
+                json!({"t": "bound", "target": target, "this": this, "args": args, "proto": proto, "props": props})
+            }
+            ObjectClass::HostFunction => {
+                // The embedder's function: re-registered by id on import.
+                let id = h.object_slot(o, 0).as_int().unwrap_or(-1);
+                let is_async = h.cell_flags(cell) & djs_core::heap::cells::flags::OBJ_HOST_ASYNC != 0;
+                let props = self.props(o, false);
+                json!({"t": "host-function", "id": id, "async": is_async, "props": props})
+            }
+            ObjectClass::Map | ObjectClass::Set => {
+                // The entries in insertion order; the hash index is rebuilt on import.
+                let mut out = Vec::new();
+                for (k, v) in h.collection_entries_list(o) {
+                    let kv = self.value(k);
+                    if class == ObjectClass::Map {
+                        let vv = self.value(v);
+                        out.push(json!([kv, vv]));
+                    } else {
+                        out.push(json!([kv]));
+                    }
+                }
+                let proto = self.proto(o);
+                let props = self.props(o, false);
+                json!({"t": "collection", "class": format!("{class:?}"), "entries": out, "proto": proto, "props": props})
+            }
+            ObjectClass::Error => {
+                // The recorded trace names pcs of this build: exported as its text.
+                let stack = self.vm.error_stack(Value::object(o));
+                let proto = self.proto(o);
+                let props = self.props(o, false);
+                json!({"t": "object", "class": "Error", "proto": proto, "props": props, "stack": stack})
+            }
+            ObjectClass::Date => {
+                let tv = num(h.object_slot(o, 0).as_number().unwrap_or(f64::NAN));
+                let proto = self.proto(o);
+                let props = self.props(o, false);
+                json!({"t": "date", "time": tv, "proto": proto, "props": props})
+            }
             c => {
                 self.errors.push(format!("an object of class {c:?}"));
                 json!({"t": "unsupported", "class": format!("{c:?}")})
@@ -353,27 +406,69 @@ impl<'a> Exporter<'a> {
                     json!({"t": "unsupported"})
                 }
             };
+            let mut node = node;
+            if h.cell_kind(cell) == djs_core::heap::CellKind::Object
+                && h.cell_flags(cell) & djs_core::heap::cells::flags::OBJ_EXTENSIBLE == 0
+                && let Some(m) = node.as_object_mut()
+            {
+                m.insert("extensible".into(), json!(false));
+            }
             self.nodes[i] = node;
         }
     }
 }
 
 /// Exports a waiting session. Fails on anything the format cannot name.
-pub fn export(s: &mut Session, source: &str) -> Result<J, Vec<String>> {
+pub fn export(s: &mut Session) -> Result<J, Vec<String>> {
+    if !s.waiting() {
+        return Err(vec!["not waiting on the host".into()]);
+    }
     s.vm.collect().expect("collect");
     let build = format!("{:08x}", s.vm.heap().arena().get::<u32>(0, djs_core::heap::cells::Roots::BUILD));
     let heap = s.vm.heap();
-    let mut ex = Exporter::new(heap);
+    let mut ex = Exporter::new(&s.vm);
     let promises = pending_promises(heap);
     let mut pending = Vec::new();
-    for (id, seq, name, arg) in &s.pending {
+    for (id, seq, name, args) in &s.pending {
         let p = promises
             .iter()
             .find(|(c, _)| c == id)
             .map(|(_, p)| *p)
             .expect("a pending promise");
         let pv = ex.value(Value::object(p));
-        pending.push(json!({"seq": seq, "fn": "tool", "args": [name, arg], "promise": pv}));
+        pending.push(json!({"seq": seq, "fn": name, "args": args, "promise": pv}));
+    }
+    // The global object is a builtin, but scripts and preludes add to it: its own
+    // properties that a fresh realm does not have (or holds another value under) are a
+    // patch. Other builtins changed by the session would need the same (pi's lockdown).
+    let fresh = crate::session::new_vm();
+    let mut globals = Vec::new();
+    let g = s.vm.global();
+    for k in heap.own_keys(g) {
+        let name = heap.atom_name(k);
+        let Some(p) = heap.get_own_property(g, k) else { continue };
+        let fresh_has = {
+            let fh = fresh.heap();
+            fh.own_keys(fresh.global()).iter().any(|fk| fh.atom_name(*fk) == name)
+        };
+        let builtin_value = match p {
+            Property::Data { value, .. } => {
+                value.as_object().is_none_or(|o| ex.builtins.contains_key(&o.offset()))
+            }
+            _ => true,
+        };
+        if fresh_has && builtin_value {
+            continue;
+        }
+        if let Property::Data { value, flags } = p {
+            let v = ex.value(value);
+            globals.push(json!([name, flags.bits(), v]));
+        }
+    }
+    let mut roots = serde_json::Map::new();
+    for (name, h) in &s.roots {
+        let v = heap.get_handle(*h);
+        roots.insert(name.clone(), ex.value(v));
     }
     ex.drain();
     if !ex.errors.is_empty() {
@@ -382,7 +477,9 @@ pub fn export(s: &mut Session, source: &str) -> Result<J, Vec<String>> {
     Ok(json!({
         "format": "djs-portable-prototype/1",
         "exportedBy": build,
-        "source": source,
+        "scripts": s.scripts.iter().map(|(n, src)| json!({"name": n, "source": src})).collect::<Vec<_>>(),
+        "roots": roots,
+        "globals": globals,
         "issued": s.issued,
         "output": s.output,
         "pending": pending,

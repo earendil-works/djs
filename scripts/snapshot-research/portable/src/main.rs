@@ -6,7 +6,8 @@
 //! portable export SCRIPT K OUT.json   deliver K tool results, export the waiting VM
 //! portable import IN.json             import, deliver the rest, print the output
 //! portable roundtrip SCRIPT...        export and import at every idle point, same build
-//! portable sites CASE...              the suspended frames of harvest cases at idle points
+//! portable harvest [...] CASE...       export/import at the idle points of harvested cases
+//! portable import-all DIR             import snapshots saved by `harvest --save DIR`
 
 mod export;
 mod heapx;
@@ -43,7 +44,7 @@ fn main() {
             for _ in 0..k {
                 s.deliver_one();
             }
-            match export::export(&mut s, &src) {
+            match export::export(&mut s) {
                 Ok(j) => {
                     let text = serde_json::to_string_pretty(&j).unwrap();
                     std::fs::write(&args[3], &text).unwrap();
@@ -92,7 +93,7 @@ fn main() {
                     if s.finished.is_some() {
                         break;
                     }
-                    let got = export::export(&mut s, &src)
+                    let got = export::export(&mut s)
                         .map_err(|e| format!("export: {e:?}"))
                         .and_then(|j| {
                             let text = serde_json::to_string(&j).unwrap();
@@ -117,7 +118,8 @@ fn main() {
                 }
             }
         }
-        Some("sites") => sites::main(&args[1..]),
+        Some("harvest") => sites::main(&args[1..]),
+        Some("import-all") => sites::import_all(&args[1]),
         _ => {
             eprintln!("usage: portable run|export|import|roundtrip|sites ...");
             std::process::exit(2);
