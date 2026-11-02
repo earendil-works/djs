@@ -160,11 +160,16 @@ mod wasm {
 /// A buffer with the capacity a VM's arena starts with (`Heap::restore_capacity` at the
 /// default cap), for the base to be decoded into when a VM needs it at once.
 fn base_buffer() -> Vec<u8> {
-    let cap = djs_core::heap::Heap::restore_capacity(
+    Vec::with_capacity(base_capacity())
+}
+
+/// [`base_buffer`]'s capacity.
+fn base_capacity() -> usize {
+    djs_core::heap::Heap::restore_capacity(
         djs_prelude::base_len(),
+        djs_prelude::BASE_END,
         djs_core::heap::DEFAULT_LIMIT,
-    );
-    Vec::with_capacity(cap)
+    )
 }
 
 /// The base snapshot (D1321), decoded now unless the instance holds it (D2252), and its
@@ -174,9 +179,21 @@ fn base_ptr() -> usize {
     // against it) does not hold the arena's room.
     BASE.with(|b| {
         b.borrow_mut()
-            .get_or_insert_with(djs_prelude::unpack_base)
+            .get_or_insert_with(|| {
+                djs_prelude::unpack_base_with_capacity(page_block(djs_prelude::base_len()))
+            })
             .as_ptr() as usize
     })
+}
+
+/// At least the page allocator's huge-block size: a base smaller than that would live in
+/// dlmalloc's memory, and when a VM takes it as its arena and reserves room, it moves
+/// to pages and leaves its old block in dlmalloc's segment for good (0151).
+fn page_block(len: usize) -> usize {
+    #[cfg(target_arch = "wasm32")]
+    return len.max(allocator::pages::HUGE);
+    #[cfg(not(target_arch = "wasm32"))]
+    len
 }
 
 /// The base snapshot as a buffer for a new VM's arena (D2060). The first VM of an
@@ -187,7 +204,7 @@ fn take_base() -> Vec<u8> {
     if !BASE_TAKEN.with(|t| t.replace(true)) {
         return BASE
             .with(|b| b.borrow_mut().take())
-            .unwrap_or_else(|| djs_prelude::unpack_base_into(base_buffer()));
+            .unwrap_or_else(|| djs_prelude::unpack_base_with_capacity(base_capacity()));
     }
     base_ptr();
     BASE.with(|b| {
@@ -431,8 +448,11 @@ pub extern "C" fn djs_base_inject_ptr(len: usize) -> usize {
     if BASE.with(|b| b.borrow().is_some()) || len != djs_prelude::base_len() {
         return 0;
     }
-    // The next `vm_new` takes it as its arena (D2060).
-    let mut buf = vec![0u8; len];
+    // The next `vm_new` takes it as its arena (D2060): with the arena's capacity, or
+    // reserving that moves it, and a base below the page allocator's `HUGE` leaves its
+    // first block behind in dlmalloc's memory (0151).
+    let mut buf = base_buffer();
+    buf.resize(len, 0);
     let p = buf.as_mut_ptr() as usize;
     INJECTED.with(|i| *i.borrow_mut() = Some(buf));
     p
@@ -471,7 +491,12 @@ pub extern "C" fn djs_base_len() -> usize {
 /// more and leaves the staging block behind as a hole (D1942).
 #[unsafe(no_mangle)]
 pub extern "C" fn djs_image_staging(len: usize, memory_limit: u32) -> usize {
-    let cap = djs_core::heap::Heap::restore_capacity(len, options(memory_limit).memory_limit);
+    // (Images of this module's VMs share the base's prefix.)
+    let cap = djs_core::heap::Heap::restore_capacity(
+        len,
+        djs_prelude::BASE_END,
+        options(memory_limit).memory_limit,
+    );
     with(|s| {
         if s.staging.capacity() < cap {
             // Free the old buffer first, so the new one can take its place.

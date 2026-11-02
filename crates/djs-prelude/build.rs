@@ -45,6 +45,12 @@ fn main() {
     }
     let dir = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     std::fs::write(dir.join("base.img"), &image).expect("cannot write the base image");
+    let base_end = djs_core::heap::Heap::image_base_end(&image);
+    std::fs::write(
+        dir.join("base_end.rs"),
+        format!("/// The base image's builtin prefix (`Roots::BASE_END`).\npub const BASE_END: u32 = {base_end};\n"),
+    )
+    .expect("cannot write the base's prefix length");
     if std::env::var_os("CARGO_FEATURE_REGISTRY").is_some() {
         registry_offsets(&vm, &dir);
     }

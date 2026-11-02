@@ -19,6 +19,8 @@ pub mod registry;
 use djs_core::heap::{HeapError, LoadError};
 use djs_core::vm::{Vm, VmOptions};
 
+include!(concat!(env!("OUT_DIR"), "/base_end.rs"));
+
 /// The base image (`Vm::bytes` of a fresh, collected VM of this build).
 #[cfg(feature = "raw")]
 pub static BASE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/base.img"));
@@ -31,15 +33,15 @@ pub static BASE_PACKED: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/base.l
 /// The base image, decoded from [`BASE_PACKED`].
 #[cfg(feature = "packed")]
 pub fn unpack_base() -> alloc::vec::Vec<u8> {
-    unpack_base_into(alloc::vec::Vec::new())
+    unpack_base_with_capacity(0)
 }
 
-/// [`unpack_base`] into `out` (cleared first), keeping its capacity: a buffer sized for
-/// the arena it will become (D2060).
+/// [`unpack_base`] into a buffer of at least `capacity` bytes: one sized for the arena it
+/// will become (D2060).
 #[cfg(feature = "packed")]
-pub fn unpack_base_into(out: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8> {
+pub fn unpack_base_with_capacity(capacity: usize) -> alloc::vec::Vec<u8> {
     // Coded and decoded by this build's build.rs: a failure is a build bug.
-    djs_lzrc::decode_into(BASE_PACKED, usize::MAX, out)
+    djs_lzrc::decode_with_capacity(BASE_PACKED, usize::MAX, capacity)
         .unwrap_or_else(|e| panic!("the embedded base snapshot does not decode: {e:?}"))
 }
 

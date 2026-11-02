@@ -238,8 +238,12 @@ fn index_key(k: Value) -> Option<u32> {
 /// Why the inner loop stopped.
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum Exit {
-    /// The next instruction (this opcode) needs the general path, or fuel ran out.
+    /// The next instruction (this opcode) needs the general path.
     Decline(u8),
+    /// Fuel ran out, or the frame has no bytecode left (a native frame): the general
+    /// path. (Not `Decline(0)`: that payload made LLVM set the opcode's local at the
+    /// loop head, two more instructions per instruction in V8's baseline code, D2443.)
+    General,
     /// A safepoint completed with a collection wanted: run it now.
     Safepoint,
     /// `hot_backedges` backward jumps: return to the run loop (V8 tier-up).
@@ -366,10 +370,10 @@ impl Exec<'_> {
                 }
                 loop {
                     if fuel <= 0 || ip >= end {
-                        break Exit::Decline(0);
+                        break Exit::General;
                     }
                     let Some(w) = word(b, ip) else {
-                        break Exit::Decline(0);
+                        break Exit::General;
                     };
                     let sp0 = sp;
                     let mut op = w as u8;
@@ -1141,30 +1145,25 @@ impl Exec<'_> {
                         // The short forms (D2443), after the others and one arm
                         // each: in the wasm build, merged arms and ranges (a second
                         // dispatch) cost the other instructions measurably.
-                        fast::GET_LOC0 => get_loc!(0, Op::GetLoc0),
-                        fast::GET_LOC1 => get_loc!(1, Op::GetLoc1),
-                        fast::GET_LOC2 => get_loc!(2, Op::GetLoc2),
-                        fast::GET_LOC3 => get_loc!(3, Op::GetLoc3),
+                        fast::GET_LOC0 | fast::GET_LOC1 | fast::GET_LOC2 | fast::GET_LOC3 => {
+                            get_loc!((op - fast::GET_LOC0) as u32, Op::GetLoc0)
+                        }
                         fast::GET_LOC8 => get_loc!(imm16!() & 0xFF, Op::GetLoc8),
-                        fast::PUT_LOC0 => put_loc!(0, Op::PutLoc0),
-                        fast::PUT_LOC1 => put_loc!(1, Op::PutLoc1),
-                        fast::PUT_LOC2 => put_loc!(2, Op::PutLoc2),
-                        fast::PUT_LOC3 => put_loc!(3, Op::PutLoc3),
+                        fast::PUT_LOC0 | fast::PUT_LOC1 | fast::PUT_LOC2 | fast::PUT_LOC3 => {
+                            put_loc!((op - fast::PUT_LOC0) as u32, Op::PutLoc0)
+                        }
                         fast::PUT_LOC8 => put_loc!(imm16!() & 0xFF, Op::PutLoc8),
-                        fast::SET_LOC0 => set_loc!(0, Op::SetLoc0),
-                        fast::SET_LOC1 => set_loc!(1, Op::SetLoc1),
-                        fast::SET_LOC2 => set_loc!(2, Op::SetLoc2),
-                        fast::SET_LOC3 => set_loc!(3, Op::SetLoc3),
+                        fast::SET_LOC0 | fast::SET_LOC1 | fast::SET_LOC2 | fast::SET_LOC3 => {
+                            set_loc!((op - fast::SET_LOC0) as u32, Op::SetLoc0)
+                        }
                         fast::SET_LOC8 => set_loc!(imm16!() & 0xFF, Op::SetLoc8),
-                        fast::GET_ARG0 => get_arg!(0, Op::GetArg0),
-                        fast::GET_ARG1 => get_arg!(1, Op::GetArg1),
-                        fast::GET_ARG2 => get_arg!(2, Op::GetArg2),
-                        fast::GET_ARG3 => get_arg!(3, Op::GetArg3),
+                        fast::GET_ARG0 | fast::GET_ARG1 | fast::GET_ARG2 | fast::GET_ARG3 => {
+                            get_arg!((op - fast::GET_ARG0) as u32, Op::GetArg0)
+                        }
                         fast::GET_ARG8 => get_arg!(imm16!() & 0xFF, Op::GetArg8),
-                        fast::PUSH0 => push_int!(0, Op::Push0),
-                        fast::PUSH1 => push_int!(1, Op::Push1),
-                        fast::PUSH2 => push_int!(2, Op::Push2),
-                        fast::PUSH3 => push_int!(3, Op::Push3),
+                        fast::PUSH0 | fast::PUSH1 | fast::PUSH2 | fast::PUSH3 => {
+                            push_int!((op - fast::PUSH0) as i32, Op::Push0)
+                        }
                         fast::PUSH_CONST8 => {
                             assert!(consts != 0, "no constant pool");
                             push!(ld(b, ValueArray::VALUES.at(consts, imm16!() & 0xFF)));
@@ -1213,7 +1212,11 @@ impl Exec<'_> {
                 }
                 Exit::Safepoint => self.safepoint(),
                 Exit::Budget => return None,
-                Exit::Decline(op) => {
+                Exit::Decline(_) | Exit::General => {
+                    let op = match exit {
+                        Exit::Decline(op) => op,
+                        _ => 0,
+                    };
                     if self.fuel <= 0 {
                         return None;
                     }

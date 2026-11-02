@@ -237,11 +237,17 @@ pub fn matches(packed: &[u8], bytes: &[u8]) -> bool {
 
 /// Decodes `packed`, refusing outputs longer than `limit`.
 pub fn decode(packed: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
-    decode_into(packed, limit, Vec::new())
+    decode_with_capacity(packed, limit, 0)
 }
 
-/// [`decode`] into `out` (cleared first), keeping its capacity if it is enough.
-pub fn decode_into(packed: &[u8], limit: usize, mut out: Vec<u8>) -> Result<Vec<u8>, Error> {
+/// [`decode`] into a buffer of at least `capacity` bytes, allocated after the decoder's
+/// own tables: a buffer that is to grow then ends the allocations (a wasm host's page
+/// allocator grows it in place).
+pub fn decode_with_capacity(
+    packed: &[u8],
+    limit: usize,
+    capacity: usize,
+) -> Result<Vec<u8>, Error> {
     let (n, hash) = header(packed).ok_or(Error::Header)?;
     if n > limit {
         return Err(Error::Header);
@@ -258,8 +264,7 @@ pub fn decode_into(packed: &[u8], limit: usize, mut out: Vec<u8>) -> Result<Vec<
         d.code = (d.code << 8) | d.byte()? as u32;
     }
     let mut m = Model::new();
-    out.clear();
-    out.reserve_exact(n);
+    let mut out = Vec::with_capacity(n.max(capacity));
     let mut reps = [1u32; 4];
     let mut st = ST_LIT;
     while out.len() < n {

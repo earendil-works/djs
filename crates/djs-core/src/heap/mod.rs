@@ -248,15 +248,24 @@ impl Heap {
         Ok(heap)
     }
 
-    /// The arena capacity a heap restored from an image of `image_len` bytes reserves
-    /// (D1942): at most this, so a host can stage the image in a buffer that becomes the
-    /// arena without growing again (`djs_image_staging`).
-    pub fn restore_capacity(image_len: usize, limit: usize) -> usize {
+    /// The arena capacity a heap restored from an image of `image_len` bytes, `base_end`
+    /// of them its builtin prefix ([`Heap::image_base_end`]), reserves (D1942): at most
+    /// this, so a host can stage the image in a buffer that becomes the arena without
+    /// growing again (`djs_image_staging`). The prefix must be the image's, or the
+    /// first threshold (D2442) is past the capacity and the arena grows at once.
+    pub fn restore_capacity(image_len: usize, base_end: u32, limit: usize) -> usize {
         let hard = (limit.min(arena::MAX_ARENA as usize) as u32) & !7;
         let len = u32::try_from(image_len).unwrap_or(u32::MAX);
-        // (The prefix is not known here: counted as live data, a little more room.)
-        let t = gc::next_threshold(len, 0, hard - reserve_for(hard));
+        let t = gc::next_threshold(len, base_end.min(len), hard - reserve_for(hard));
         (capacity_target(t) as usize).max(image_len)
+    }
+
+    /// The builtin prefix (`Roots::BASE_END`) of a heap image: 0 without one.
+    pub fn image_base_end(image: &[u8]) -> u32 {
+        let at = Roots::BASE_END.offset as usize;
+        image
+            .get(at..at + 4)
+            .map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
     }
 
     fn over(arena: Arena) -> Heap {

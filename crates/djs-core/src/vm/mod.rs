@@ -268,6 +268,7 @@ impl Vm {
         bytes
             .try_reserve_exact(Heap::restore_capacity(
                 base.len().max(live),
+                Heap::image_base_end(base),
                 opts.memory_limit,
             ))
             .map_err(|_| LoadError::TooLarge)?;
@@ -283,7 +284,11 @@ impl Vm {
         live: usize,
     ) -> Result<Vm, LoadError> {
         Vm::check_image(&bytes)?;
-        let cap = Heap::restore_capacity(bytes.len().max(live), opts.memory_limit);
+        let cap = Heap::restore_capacity(
+            bytes.len().max(live),
+            Heap::image_base_end(&bytes),
+            opts.memory_limit,
+        );
         bytes
             .try_reserve_exact(cap.saturating_sub(bytes.len()))
             .map_err(|_| LoadError::TooLarge)?;
