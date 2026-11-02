@@ -152,8 +152,7 @@ pub fn diff(rg: &Graph, hg: &Graph) -> Diff {
     // Cells of the builtin prefix never move (D2064): pair those the walk did not reach
     // (garbage a script left in the prefix, kept there) by offset.
     let base = hg.heap.base_end().min(rg.heap.base_end());
-    for h in 0..n {
-        let hc = hg.cells[h];
+    for (h, hc) in hg.cells.iter().enumerate() {
         if hc.offset >= base || img_to_ref[h] != NONE {
             continue;
         }
