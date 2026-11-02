@@ -324,8 +324,6 @@ impl Exec<'_> {
     /// loop stops there), the run stops (`Some`), or `hot_backedges` backward jumps or
     /// general-path instructions went by (`None`, for V8's tier-up).
     #[inline(never)]
-    // (`heap_call!` reads the opcode again also where nothing uses it after.)
-    #[allow(unused_assignments)]
     pub(super) fn run_hot(&mut self) -> Option<super::Status> {
         let mut budget = self.opts.hot_backedges;
         let slow_call_flags = self.slow_call_flags;
@@ -351,6 +349,15 @@ impl Exec<'_> {
             let exit = {
                 let mut collect = self.opts.gc_stress || self.heap.gc_pending();
                 let mut b: &mut [u8] = self.heap.arena_mut().hot_bytes();
+                // Ends the slice for a leaf heap call (`$e`), then takes it back.
+                macro_rules! heap_call {
+                    ($e:expr) => {{
+                        let r = $e;
+                        collect = self.opts.gc_stress || self.heap.gc_pending();
+                        b = self.heap.arena_mut().hot_bytes();
+                        r
+                    }};
+                }
                 macro_rules! slot {
                     ($i:expr) => {
                         vals + 8 * ($i)
@@ -365,13 +372,13 @@ impl Exec<'_> {
                     };
                     let sp0 = sp;
                     let mut op = w as u8;
-                    // Ends the slice for a leaf heap call (`$e`), then takes it back.
-                    // The opcode is read again after it (D2441).
-                    macro_rules! heap_call {
+                    // `heap_call!` for the arms of several opcodes: the opcode is read
+                    // again after the call. Kept across it, V8 spills it where it is
+                    // defined, for every instruction (D2441); single-opcode arms name
+                    // their opcode instead.
+                    macro_rules! heap_call_op {
                         ($e:expr) => {{
-                            let r = $e;
-                            collect = self.opts.gc_stress || self.heap.gc_pending();
-                            b = self.heap.arena_mut().hot_bytes();
+                            let r = heap_call!($e);
                             op = b[ip as usize];
                             r
                         }};
@@ -821,7 +828,7 @@ impl Exec<'_> {
                                 _ if (a.as_string().is_some() && c.as_string().is_some())
                                     || (a.as_bigint().is_some() && c.as_bigint().is_some()) =>
                                 {
-                                    heap_call!(conv::strict_equals(self.heap, a, c))
+                                    heap_call_op!(conv::strict_equals(self.heap, a, c))
                                 }
                                 _ => false,
                             };
@@ -879,7 +886,7 @@ impl Exec<'_> {
                             } else {
                                 (top!(0), Value::UNDEFINED)
                             };
-                            let Some(r) = heap_call!(self.field_hit(op, key, ic, o, v)) else {
+                            let Some(r) = heap_call_op!(self.field_hit(op, key, ic, o, v)) else {
                                 break Exit::Decline(op);
                             };
                             match op {
@@ -910,7 +917,7 @@ impl Exec<'_> {
                             } else {
                                 (top!(1), top!(0), Value::UNDEFINED)
                             };
-                            let Some(r) = heap_call!(self.elem_hit(put, o, key, v)) else {
+                            let Some(r) = heap_call_op!(self.elem_hit(put, o, key, v)) else {
                                 break Exit::Decline(op);
                             };
                             match op {
@@ -932,7 +939,7 @@ impl Exec<'_> {
                         fast::ITER_NEXT => {
                             let (it, f) = (top!(1), top!(0));
                             let Some(v) = heap_call!(self.iter_next_hit(it, f)) else {
-                                break Exit::Decline(op);
+                                break Exit::Decline(fast::ITER_NEXT);
                             };
                             sp -= 1;
                             st(b, slot!(sp - 1), v);
@@ -952,7 +959,7 @@ impl Exec<'_> {
                                     *x = ld(b, slot!(base + k as u32));
                                 }
                                 let Some(v) = heap_call!(self.intrinsic_hit(id, argc, a)) else {
-                                    break Exit::Decline(op);
+                                    break Exit::Decline(fast::CALL_INTRINSIC);
                                 };
                                 sp = base;
                                 push!(v);
@@ -964,7 +971,7 @@ impl Exec<'_> {
                         // The global caches (D1620); the misses run `step`.
                         GET_GLOBAL | GET_GLOBAL_TYPEOF => {
                             let (key, ic) = (Atom::from_id(imm32!()), (w >> 40) as u16 as u32);
-                            let Some(v) = heap_call!(self.ic_global_get(key, ic)) else {
+                            let Some(v) = heap_call_op!(self.ic_global_get(key, ic)) else {
                                 break Exit::Decline(op);
                             };
                             push!(v);
@@ -978,7 +985,7 @@ impl Exec<'_> {
                             let (key, ic) = (Atom::from_id(imm32!()), (w >> 40) as u16 as u32);
                             let v = top!(0);
                             if !heap_call!(self.ic_global_put(key, ic, v)) {
-                                break Exit::Decline(op);
+                                break Exit::Decline(PUT_GLOBAL);
                             }
                             sp -= 1;
                             next!(Op::PutGlobal);

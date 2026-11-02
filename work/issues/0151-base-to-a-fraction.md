@@ -143,9 +143,11 @@ Found while measuring L4, landed before it on the coordinator's call.
   stored `w >> 8`/the u16 immediate and the opcode to the stack in the dispatch block,
   so on every instruction, because arms kept them across heap calls. Immediates are now
   extracted in the arms, `heap_call!` re-reads the opcode, `iter_next` re-reads its
-  offset: no spill. wasm vs main (n=5): loop −4.5%, tight −4.0%, calls −2.8%, call1
-  −2.6%, prop1 −2.6%, props −1.5%, foreach/forof −1.1..−1.2%, others ±0.5% (the two
-  +1% at n=5, indexof and json-date, are ±0.2% at n=9). Native loop −2.5%, calls −2.2%.
+  offset (`heap_call_op!` only in multi-opcode arms, constants in `Decline` elsewhere):
+  no spill. wasm vs main (n=5): loop −7.5%, tight −7.2%, prop1 −5.4%, calls/call1
+  −4.9%, arrays −3.2%, forof −2.7%, foreach/props −2.4%, others −1.0..+0.6%. Native
+  loop −2.5%, calls −2.2%. Module gzip +215 B (ceiling raised to 455,100, D2441; L4
+  lowers it).
   Tools: work/scratch/0151/tf.sh (named build + TurboFan dispatch), variant.sh.
 - **D2442:** `next_threshold` counted the builtin prefix in its growth term, so a smaller
   base meant more collections (L4's −46 KB: json +1.4%, pi-like +1.3% natively, from

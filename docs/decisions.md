@@ -6677,14 +6677,18 @@ date: 2026-11-10 · by: bloat · issue: 0151
 the opcode for `Exit::Decline` after heap calls. V8's TurboFan spills a value at its
 definition when any path keeps it across a call, so every instruction stored two or three
 values to the stack (TurboFan arm64 code of the dispatch, `--print-wasm-code`). Now the
-arms extract their immediates themselves (`imm16!`/`imm32!`), `heap_call!` reads the
-opcode again after the call, and `iter_next` reads its offset again after its step; the
-dispatch has no spill. Measured against main (wasm instructions, n=5): loop −4.5%,
-tight −4.0%, calls −2.8%, call1 −2.6%, prop1 −2.6%, props −1.5%, foreach −1.2%, the
-others within ±0.5% (indexof, json-date re-run at n=9: ±0.2%); natively loop −2.5%,
-calls −2.2%. The rule for later arms: a value computed for every instruction must not
-live across a heap call in any arm. Check the dispatch block in V8's code after changes
-to the loop.
+arms extract their immediates themselves (`imm16!`/`imm32!`); the arms of several
+opcodes read the opcode again after a heap call (`heap_call_op!`), single-opcode arms
+name their opcode in `Exit::Decline`, and `iter_next` reads its offset again after its
+step; the dispatch has no spill. Measured against main (wasm instructions, n=5): loop
+−7.5%, tight −7.2%, prop1 −5.4%, call1 −4.9%, calls −4.9%, arrays −3.2%, forof −2.7%,
+foreach −2.4%, props −2.4%, pushpop −1.9%, the others −1.0..+0.6%; natively loop −2.5%,
+calls −2.2%. The module's gzip grows by 215 B (454,785 → 455,000), over the ceiling
+(454,863): raised to 455,100 for this, to be lowered by 0151's L4 (whose smaller base
+shrinks the module). The rule for later arms: a value computed for every instruction
+must not live across a heap call in any arm. Check the dispatch block in V8's code after
+changes to the loop (0151's work/scratch tf.sh: a named build, `node
+--print-wasm-code-function-index`).
 
 ## D2442: GC growth counts the builtin prefix as a fixed allowance
 date: 2026-11-10 · by: bloat · issue: 0151
