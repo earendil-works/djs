@@ -1,7 +1,7 @@
 # 0154: Slow spots found by pico's benchmarks
 
-status: open
-agent: -
+status: in-progress
+agent: perf
 branch: issue/0154-slow-spots
 depends-on: 0137, 0152
 guide: -
