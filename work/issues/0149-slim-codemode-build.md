@@ -1,7 +1,7 @@
 # 0149: A trimmed-down djs for codemode: minimal globals, flag or build? (research)
 
-status: open
-agent: -
+status: in-progress
+agent: slim
 branch: issue/0149-slim-codemode
 depends-on: 0130, 0144, 0145, 0146, 0147
 guide: -
