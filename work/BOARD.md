@@ -7,7 +7,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0153 | A JIT that emits wasm (research) | jit | .worktrees/jit |
-| 0152 | Lessons from pico (research) | pico | .worktrees/pico |
+| 0154 | Slow spots from pico benchmarks (keys over holes, Array.from, tiny callbacks) | perf | .worktrees/perf |
 | 0151 | Shrink the base heap to a fraction (no removals) | bloat | .worktrees/bloat |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 
@@ -80,6 +80,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0152 | Lessons from pico (research) | 60fafe0a (agent pico; docs/lessons-from-pico.md) |
 | 0150 | Base string dedup, two-level atom table, analyzer session view (D2430-D2432) | eb57178a (agent strings; fresh REPL session image 34.6 -> 11.5 KB raw) |
 | 0149 | Slim codemode build (research) | 9d3a9c8c (agent slim; docs/slim-codemode.md: slim cargo feature + second module, 399.6 KB gz prototype, 1.39x) |
 | 0148 | Single snapshot format (D2400); builtin-created shapes pre-created (D2067) | de5efbcf (agent heap; builtins add nothing to the session region in any order; +648 B, props +1.4%) |
