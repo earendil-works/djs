@@ -1,6 +1,6 @@
 # 0156: Architecture audit: are we carrying bloat from design missteps? (research)
 
-status: in-progress
+status: done
 agent: audit
 branch: issue/0156-bloat-audit
 depends-on: -
@@ -57,7 +57,44 @@ editing compiler/interp; perf (0155) fixes the profiler and image stack slots: d
 code on main; experiments in scratch builds only.
 
 ## Log
+- Built shipped and name/link-map/DWARF variants of main 40ad9290: 454.8 KB gz = code 343.5,
+  coded image 51.5, Unicode 32.3, other data 21. Areas (areas.py), data by symbol (new
+  scripts/size/datamap.py), lines (wasm-dwarf-lines.py: 34.7% inlined library code;
+  Vec/RawVec 100 KB raw, Result 56 KB, arena accessors 43 KB).
+- Variants (scripts/size/variant.sh): no @native −10.6 KB gz, no @fast −8.3, no run_hot
+  −6.7, all three −26.8 (new patches/onepath.py); no bounds −11.8; opt z −27.4;
+  #[optimize(size)] on all of djs-core −25.8 but on the cold modules only −4.2 (new
+  patches/optsize.py); Unicode off −34.5; 0149's slim A on today's main −52.2; stacked
+  slim + one path + no bounds 363.3, + opt z 342.2 (−24.7%).
+- Memory: a fresh Sandbox is 19 pages = stack 4 + data 3 + arena 11 (295 KiB base +
+  409 KiB reserved headroom: 2x base threshold + 64 KiB) + dlmalloc 1; RSS ~700–720 KiB,
+  same as quickjs-wasi (21 pages). Prototype (reserve base + 1 page, 128 KiB stack): 12
+  pages at start, but growing runs end 1–4 pages higher because dlmalloc pages land after
+  the arena (needs the allocator to keep the arena on top). New
+  scripts/size/sandbox-memory.ts.
+- Wrote docs/architecture-bloat-audit.md. Guide: no pages affected. No decisions.
 
 ## Follow-ups
+- Codemode module (0149's slim A as a cargo feature): −52 KB gz measured on today's main.
+- Unchecked arena accessors behind the image verifier (needs a decision on `unsafe`):
+  −11.8 KB gz.
+- Re-benchmark each `@native`/`@fast` twin on the codemode corpus; drop those under
+  ~1.3x (ceiling −18.9 KB gz). Keep `run_hot`.
+- `Fault` as a zero-sized type with the pending error in the VM, and a niche in
+  `Value`/refs, so `Result`s return in one register (est. −5–10 KB gz; prototype one
+  module first to measure).
+- Memory: reserve the base + a page at `vm_new` with the page allocator keeping the
+  arena at the end of memory (dlmalloc pages below it); 128 KiB shadow stack with a lower
+  parser nesting cap; the coded base out of linear memory (passive segment or custom
+  section). 19 → ~11 pages per fresh Sandbox.
 
 ## Result
+docs/architecture-bloat-audit.md. djs is not a reduced engine (same surface as QuickJS
+plus TypeScript, suspension, snapshots, speed tiers); no large architectural misstep:
+every duplicate path together is −26.8 KB gz (5.9%), each with measured speed. The gap to
+QuickJS is Rust density (~90 KB gz, unchanged since 0123), builtins in two languages
+(~42) and features (~34 − 8). Half (227 KB) is 0.79x quickjs-wasi and not reachable by
+trimming; all measured structural cuts stacked reach 342 KB. Plan: codemode module,
+unchecked accessors, twins only where they pay, niche Results, memory reservation →
+~365–375 KB gz at little speed cost and ~0.69 MiB per fresh Sandbox. New analysis
+scripts: scripts/size/datamap.py, sandbox-memory.ts, patches/onepath.py, patches/optsize.py.
