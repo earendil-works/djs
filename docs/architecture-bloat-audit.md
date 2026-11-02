@@ -20,8 +20,9 @@ The owner asked:
   and it adds TypeScript, suspension anywhere, snapshots, fuel, determinism, the wire
   format and two speed tiers. What it leaves out (sloppy mode, `with`, direct `eval`,
   modules, Annex B; Intl and Temporal, which QuickJS lacks too) is worth under 10 KB gz
-  of QuickJS's code. What it adds is about 45 KB gz, before its speed tiers (27 KB). So "half of a full engine" would
-  have had to come from a smaller language, and the language isn't smaller.
+  of QuickJS's code. What it adds is about 45 KB gz, before its speed tiers (27 KB).
+  So "half of a full engine" would have had to come from a smaller language, and the
+  language isn't smaller.
 - **No big architectural misstep is hiding.** Every duplicate path was removed in a
   variant build and measured:
   - the second interpreter loop: −6.7 KB gz;
@@ -32,7 +33,7 @@ The owner asked:
   Each one buys measured speed. The other duplicates are smaller still: the JSON
   parser's three input widths (~3.5 KB), the second collector (~1.3 KB), duplicate
   monomorphized copies (≤ 5 KB), panic and format code (~3 KB). Removing every
-  duplicate would leave the module at ~94% of today's size.
+  duplicate would leave the module at ~93% of today's size.
 - **Where the bytes are.** Today: **454.8 KB gz**. That is code 343.5 KB, the coded
   realm image 51.5 KB, Unicode tables 32.3 KB and other data 21 KB. Code is 75% of the
   module and 80% of the gap to quickjs-wasi (286.6 KB). Against QuickJS (the dquickts
@@ -53,8 +54,9 @@ The owner asked:
 
   Together they give **342.2 KB (−24.7%)**. The remaining ~115 KB would need the realm
   image out of the module, TypeScript on the host, C-style Rust throughout, and a
-  language cut beyond the slim set. That is a different engine. A realistic floor for
-  this design is ~0.6–0.65x of today.
+  language cut beyond the slim set. That is a different engine. The realistic floor for
+  this design is ~0.8x of today without a speed loss (section 8), ~0.75x with opt-level
+  z.
 - **Memory is not bloated relative to QuickJS:**
 
   | | wasm memory | resident (RSS) |
@@ -79,8 +81,8 @@ The owner asked:
      in `Value`, est. −5–10 KB;
   5. the memory changes: −8 pages per VM.
 
-  Together, ~365–375 KB gz (1.28–1.31x quickjs-wasi) at little speed loss. Global opt-level z is not
-  worth its 30–70% more instructions.
+  Together, ~365–375 KB gz (1.28–1.31x quickjs-wasi) at little speed loss. Global
+  opt-level z is not worth its 30–70% more instructions.
 
 ## 1. Where the bytes are
 
@@ -339,8 +341,9 @@ candidates, none of them a trim:
 | C-style Rust in compiler and runtime | −20–40 | out-of-line buffer and error helpers, the niche-`Result` change, no iterator chains: a rewrite of ~350 KB of raw code |
 | a smaller language than slim A | −10–30 | e.g. drop regexp lookbehind/named groups/v flag, async generators, class private methods, the second JSON width |
 
-Even the optimistic ends add up to only ~230–250 KB, and only at full opt-level z (−30–70%
-speed) and with features gone. Half the module means a smaller engine for a smaller
+Together they land between ~215 KB (every optimistic end) and ~270 KB, and only on top of
+opt-level z (+30–70% instructions), with the image's speed or startup and more features
+gone. Half the module means a smaller engine for a smaller
 language. **The realistic floor for this design and feature set is ~340–365 KB
 (0.75–0.8x of today)**, most of it reachable without a speed loss.
 
