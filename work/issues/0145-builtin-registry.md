@@ -1,6 +1,6 @@
 # 0145: Stable, append-only builtin registry
 
-status: in-progress
+status: done
 agent: bloat
 branch: issue/0145-builtin-registry
 depends-on: 0143, 0144
@@ -17,10 +17,10 @@ change or get reused; removed builtins are tombstoned. The gate fails if a build
 or drops an id without a tombstone.
 
 ## Acceptance criteria
-- [ ] Registry generated from the base image build, committed, append-only check in the gate.
-- [ ] API: id -> cell (in this build's base image) and cell -> id, spec path <-> id; used
+- [x] Registry generated from the base image build, committed, append-only check in the gate.
+- [x] API: id -> cell (in this build's base image) and cell -> id, spec path <-> id; used
       by `djs heap` to print builtin references by path.
-- [ ] Unit tests; docs (TESTING.md for the gate check, guide section).
+- [x] Unit tests; docs (TESTING.md for the gate check, guide section).
 
 ## Log
 - djs_core::vm::registry (new file in vm/, plus `pub mod registry;`; perf and heap told via
@@ -40,5 +40,20 @@ or drops an id without a tombstone.
 - Docs: D2371, TESTING.md "Builtin registry", guide builtins.md section, docs/cli.md.
 
 ## Follow-ups
+- Exports (0142 tier 2, relocations) can name builtins by registry id now; the portable
+  prototype (scripts/snapshot-research/portable) still uses its own path walk.
+- With 0147's immutable prefix, `djs_prelude::registry::base_offset` names prefix cells
+  exactly; `djs heap` could then label by offset instead of resolving paths.
+- pi's lockdown turns overridable data properties into accessors, so in a pi heap those
+  builtins resolve only under `get `/`set ` paths; moot once pi drops its lockdown (D022).
 
 ## Result
+tests/builtins/registry.tsv: 1,409 stable ids (958 builtin objects/functions/symbols by
+spec-style path, 451 intrinsics by name), append-only with tombstones (D2371).
+`scripts/registry-update.sh [reason]` appends and tombstones; a djs-prelude test fails
+when the registry is out of date; the gate step `scripts/registry.py check main` fails on
+renumbering or dropping; union merges are renumbered by scripts/regen.sh. API:
+djs_core::vm::registry (paths, resolve on any heap via `name_cells`, check, update) and
+djs_prelude::registry (feature `registry`, not in djs-wasm: path/id/intrinsic lookups and
+base-image offsets computed at build). `djs heap` prints builtins as `%Array.prototype.map%`.
+Docs: TESTING.md, guide builtins.md, docs/cli.md. Module size unchanged.

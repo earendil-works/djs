@@ -420,8 +420,8 @@ is worse than main if its distribution is, not if one run is.
 `scripts/gate.sh` must pass before anything merges into `main` (`scripts/merge-to-main.sh`
 runs it in the shared gate worktree after rebasing, D1792). Its steps: fmt; clippy
 (workspace, and wasm32 release for djs-core and djs-wasm); the workspace's unit and
-integration tests; the no_std wasm32 build of djs-core; `scripts/bgen.sh --check`; the
-djs-wasm build and the JS host package's tests (`node --test js/test/*.test.ts`); native
+integration tests; the no_std wasm32 build of djs-core; `scripts/bgen.sh --check`; the builtin registry's append-only check
+(`scripts/registry.py check main`); the djs-wasm build and the JS host package's tests (`node --test js/test/*.test.ts`); native
 versus wasm heap images (`scripts/determinism/native-vs-wasm.sh`); the wire and reader
 cross-language checks; difftest on djs with the ratchet, suspension, GC stress and
 heap-image determinism; difftest with the bytecode backend; and the test262 active group
