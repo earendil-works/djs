@@ -402,6 +402,16 @@ tried per case:
 | collected image at the same points | median 368 KB (NEW), 455 KB (OLD) |
 | time, native dev build (opt-level 1) | export 3.6–3.7 ms median, of which ~3 ms are two walks of a realm for builtin paths (1.5 ms each: the fresh realm's and the session's), which a table of builtin names in the engine replaces; the rest ~0.6 ms. Import 0.75–0.8 ms |
 
+Refusals, checked by hand:
+- A session holding a suspended sync generator is refused at export: "an activation of
+  kind 0 in state 1", plus the generator prototype's methods, which no builtin path in
+  the prototype reaches.
+- A snapshot whose operand roles were swapped is refused at import: "operand roles
+  differ at (6, 12): snapshot [iterator, iterator.next, this, callee:push], this build
+  [iterator, iterator.next, callee:push, this]".
+- A snapshot whose script source was edited by one space is refused: "no function at
+  (script.js, 0, 387) in this build". A real format checks the source hash first.
+
 Snapshot node counts over all of them:
 - 33,664 objects, 29,959 closures, 27,312 boxes, 11,294 promises, 5,206 async
   activations;
