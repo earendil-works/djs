@@ -121,7 +121,26 @@ cells a session replaces first to the end of the heap: Map and Set tables, the r
 transitions, the global object's property table and the atom table. Their dead copies
 then drop out at the end of the old region instead of shifting it (D2057).
 
-**Full collections** still trace everything. They run every 16th time, when a minor
+**The builtin prefix** sits below B and below anything an embedder seals. It is the
+part of the base image that holds the builtins (D2063), and no collection moves or frees
+it (D2064). A full collection walks it the way a minor one walks the old region, since
+its fields can point at newer cells: the walk counts them as roots, and the prefix's
+cells themselves are not marked and never slide. So every VM keeps the builtins at the
+offsets the base gave them, and its images share those bytes with the base. In debug
+builds a write barrier can check that nothing writes there: every arena write below the
+prefix's end panics, and after every run and collection the prefix is compared with a
+copy (D2065). The gate arms it for the codemode corpora, where no script has a reason to
+change a builtin.
+
+> **Trade-off.** Never freeing the prefix. A script that reshapes a builtin (adds a
+> property to `Array.prototype`, redefines one with `defineProperty`) gives it new
+> storage, and the old storage stays in the prefix, dead, for the VM's life. pi's
+> lockdown, which redefines about 500 builtins, leaves 16.5 KB that way in every session.
+> In return a full collection does not mark and slide the base (1.5% fewer instructions
+> on a pi-like workload), and the prefix's bytes stay those of the base. With frozen
+> builtins nothing in the prefix can change, so nothing is left behind.
+
+**Full collections** still trace everything above the prefix. They run every 16th time, when a minor
 collection left more than half the memory cap in use, whenever the embedder asks
 (`Vm::collect`), and with no old region at all (B = 0). The first collection of a VM
 made from the base image is full too (D2045). The VM's setup kills some base cells
@@ -202,6 +221,10 @@ arena unless it already was, and the field is rewritten with the new offset. A c
 cell gets the `FORWARDED` bit in its old header and its new offset in its old first
 payload word, which is why every cell kind has at least one. When the scan catches up
 with the copy point, everything reachable has been copied, and the old arena is dropped.
+
+A heap with a builtin prefix keeps it: the copy starts with the prefix's bytes as they
+are, and the cells above it are copied as described, with the prefix's fields rewritten
+like those of any copied cell (D2064).
 
 The order is breadth-first from the roots, in field order, so the layout depends only
 on the object graph, not on the order in which cells were allocated. djs uses it where
@@ -335,10 +358,13 @@ not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D16
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2057 D2042 D2044 D2055 D2056 D2045 D2046 D2047 D2048 D2053 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 -->
+<!-- gen:decisions D2040 D2041 D2057 D2063 D2064 D2065 D2042 D2044 D2055 D2056 D2045 D2046 D2047 D2048 D2053 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2057: The cells a VM replaces first sit at the end of base and sealed images
+- D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
+- D2064: Collections never move or free the builtin prefix
+- D2065: A debug write barrier below BASE_END, armed by frozen builtins or one option
 - D2042: Full collections do not promote; only seal points make cells old
 - D2044: No card table and write barrier (old-generation phase 2) for now
 - D2055: The old-region walk uses per-kind slot plans

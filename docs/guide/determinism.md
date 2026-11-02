@@ -95,6 +95,14 @@ parts of the engine exists to keep it:
   object graph alone, the canonical hash collects a copy breadth-first (D1090). The copy
   also ends up with the whole heap as its old region, so the hash does not depend on
   where a VM's old region ended.
+- **Builtins leave no trace.** Calling a builtin never writes into the builtin prefix,
+  the part of the heap every VM of a build starts with (D2063): no cached string hash,
+  no flag set on first use, no shape transition added to a builtin's shape. Two runs that
+  call different builtins, in any order, leave the same prefix. Objects the builtins
+  *create* are another matter: an iterator result or a RegExp match result gets its
+  shape in the session's part of the heap the first time one is made, and shapes are
+  never freed. Two runs that use Map iteration and RegExp matching in opposite orders lay
+  those shapes out in opposite orders (D2066).
 - **Nothing depends on addresses or timing.** Map and Set rehash after every collection
   instead of hashing by a per-object id that would vary, and shape transitions are
   strong so that the shape tree does not depend on when collections ran (D1831; [Cells,
@@ -138,7 +146,9 @@ To check that two runs agree, a host compares **canonical hashes** (D1730):
 `vm_canonical_hash` is a 64-bit FNV-1a hash of the image a copying collection leaves,
 computed on a copy so that the VM itself is not touched. The copying collector lays the
 heap out breadth-first from the roots, so garbage, the order of allocation and the moment
-of the last collection do not affect it: it identifies the object graph.
+of the last collection do not affect it: it identifies the object graph. The builtin
+prefix is hashed as it is: the same bytes in every VM of the build, unless a script
+changed a builtin.
 
 On top of that, a deterministic `Sandbox` can record a run as a **journal**: the start
 (engine build, code, parameters, hash), every sync call and its outcome, every async
@@ -213,9 +223,11 @@ Some things are deliberately outside the guarantee:
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D1314 D1383 D1670 D1680 D1690 D1090 D1601 D1710 D1740 D1831 D1730 D1720 D1725 D1750 D1633 -->
+<!-- gen:decisions D2040 D2041 D2063 D2066 D1314 D1383 D1670 D1680 D1690 D1090 D1601 D1710 D1740 D1831 D1730 D1720 D1725 D1750 D1633 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
+- D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
+- D2066: Session images: the roots cell, a canonical prefix diff and the session region
 - D1314: Math.random
 - D1383: Date reads the host's clock and a fixed local offset
 - D1670: Async host results are macrotasks: the host inbox

@@ -72,6 +72,14 @@ console.log(rows.length, "rows,", text.length, "characters");
 ```
 <!-- /gen -->
 
+Those base cells come in two parts. The first, the **builtin prefix**, holds the builtin
+objects, their code and their names. Nothing a script does through the builtins writes
+there, no collection moves or frees it, and every VM of a build starts with the same bytes
+in it (D2063, D2064). So a snapshot can leave it out
+([Snapshots](snapshots.md#compact-snapshots)). After it comes a short **tail** of the
+cells every VM writes: the realm record, the global object, the atom table, the value
+stack.
+
 Offset 0 doubles as "null", because nothing ever refers to the roots cell. The all-zero
 bit pattern is also a valid "nothing" for every traced field: as a `Value` it is the
 number `+0`, and as a `Ref` it is null. Freshly zeroed memory is therefore always safe
@@ -201,7 +209,9 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 
 Decisions on this page:
 
-<!-- gen:decisions D2053 D1051 D1052 D1261 D1151 D1091 D1870 D1600 D1690 D1700 D1056 D1573 -->
+<!-- gen:decisions D2063 D2064 D2053 D1051 D1052 D1261 D1151 D1091 D1870 D1600 D1690 D1700 D1056 D1573 -->
+- D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
+- D2064: Collections never move or free the builtin prefix
 - D2053: A page allocator under dlmalloc in djs-wasm: huge blocks grow in place
 - D1051: Arena and cell header
 - D1052: Layout description macro

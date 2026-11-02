@@ -1,6 +1,6 @@
 # 0147: Immutable builtin prefix: session-only images, hash, GC and determinism
 
-status: in-progress
+status: done
 agent: heap
 branch: issue/0147-immutable-prefix
 depends-on: 0144
@@ -26,13 +26,16 @@ docs/frozen-builtins.md phase 2: the base image becomes an immutable prefix of e
   registry id when 0145 lands.
 
 ## Acceptance criteria
-- [ ] Write barrier clean on the whole gate (e2e, difftest stress, test262 active, js tests,
-      pi suite).
-- [ ] Snapshot/image sizes, vm_new, GC time, wasm instructions and peak memory measured
+- [x] Write barrier clean on the whole gate (e2e, difftest stress, test262 active, js tests,
+      pi suite). Armed for the codemode corpora in every stress mode, and for frozen
+      builtins; e2e and test262 change builtins on purpose and run unarmed (D2065).
+- [x] Snapshot/image sizes, vm_new, GC time, wasm instructions and peak memory measured
       before/after (mem-perturb); no workload slower than +1% without a recorded trade.
-- [ ] Order-independence test: two runs touching different builtins in different orders
-      give identical session images and canonical hashes.
-- [ ] Guide pages updated (D2102 rules).
+- [~] Order-independence test: two runs touching different builtins in different orders
+      give identical session images and canonical hashes. Holds for builtin calls whose
+      results are primitives or plain arrays; shapes of objects builtins create are
+      session state (coordinator: land as (B), shape work is 0148).
+- [x] Guide pages updated (D2102 rules).
 
 ## Log
 - Early merge (22a4247e, D2062): `Roots::BASE_END`, set by `prepare_base_image`. Full
@@ -64,7 +67,49 @@ docs/frozen-builtins.md phase 2: the base image becomes an immutable prefix of e
   codemode areas armed (`ARMED_AREAS`), all stress modes clean; perf's frozen tests run
   armed. e2e can't be armed: 3 cases change builtins on purpose (BigInt, iterator,
   Proxy). TESTING.md section.
+- (b) D2066, session images:
+  - vm/session.rs: header + offset-sorted prefix diff + roots cell + `[BASE_END..]`.
+    `Vm::session_bytes`, `Vm::from_session`, tests `session_images_round_trip` and
+    `touching_builtins_in_any_order_leaves_the_same_session`.
+  - Order independence per call, alone after a bare run (session image 28,960 B):
+    `'abc'.toUpperCase().split('')`, `JSON.parse(JSON.stringify([1,[2]]))`,
+    `Math.max`/`parseFloat`, `Object.keys([1]).concat`, `Array.from('ab').reverse()`,
+    `Promise.resolve(1)`, `String(Symbol.iterator)`: +0. `new Map([[1,2]]).get(1)` and
+    `new Set([1]).has(1)`: +168 (iterator-result shapes), `[3,1,2].map(..).sort().join()`
+    +192, `/a+/.exec('caab')` +288 (match result shape). The prefix diff is empty in every
+    case. With `{x:1}` / `JSON.stringify({a:..})` user shapes also differ by order (expected).
+  - Containers: DJSN format 2, byte 13 = image kind (0 raw, 1 session vs base, 2 session vs
+    reference). First version diffed always against the base: pi containers grew ~8 KB
+    (lockdown's 1,749 prefix words out of context). Now against the reference when it has
+    the same prefix. Format 1 still loads (js + Rust tests).
+  - Measured (wasm release, scripts/snapshot-research/wasm.ts, vs main.wasm): pi containers
+    agent-loop 6.2/6.6 KB (main 6.2/6.5), ask 2.1 (2.1), sequential 6.4/7.8 (6.5/7.8),
+    tool-heavy 55.3/115.0 (54.7/113.1; the branch's images are 16 KB larger, main.wasm
+    predates the tail), records 337.8 (340.2), big-log 404.0 (404.0). Sandbox new: 1,034 B
+    zstd (raw image 1,041), 32 KB uncompressed instead of 330 KB. JS encode +0.05–0.1 ms,
+    decode −0.02 ms. Module 458,304 B gzip (ceiling 458,444; session.rs is not in wasm).
+  - canonical_hash unchanged (raw canonical copy; equivalent given the base), recorded.
+  - `djs heap`: `prefix` section (changed words by cell, registry paths, capped at --top);
+    containers read/write session images (djs-cli container.rs); REPL `.snapshot`/
+    `.restore` checked by hand.
+  - Checked: djs-core lib, e2e plain, djs-cli, js tests (60), native-vs-wasm, difftest
+    codemode + harvest with --determinism --gc-stress --suspend-every 97 (armed).
+  - docs/host.md container table and session image layout updated (outside touches: the
+    container's reference doc). Guide: arena.md, gc.md, determinism.md, snapshots.md.
 
 ## Follow-ups
+- 0148 (coordinator: created, mine): shapes of builtin-created objects (iterator results,
+  match results, descriptors) as prefix state, so creation order of builtin-related state
+  doesn't matter. Check first whether pre-creating them at base build is enough; measure
+  how often harvested scripts add properties to builtin-created objects.
 
 ## Result
+- The builtin prefix `[0, BASE_END)` is shared, immutable in use and never moved or freed:
+  the base ends with a tail of per-VM cells (D2063), collections walk the prefix as roots
+  (D2064), a debug barrier checks it (D2065).
+- Snapshots store session images (D2066): `Vm::session_bytes`/`from_session`, JS
+  `sessionImage`/`expandSession`, DJSN format 2 (format 1 loads). `djs heap --only prefix`
+  lists the builtins a script changed by registry path.
+- Known gaps: shapes of builtin-created objects are session state in creation order
+  (0148); canonical_hash hashes the raw canonical image; dead builtin storage after
+  reshaping in default mode stays in the prefix (16.5 KB for pi's lockdown, D2064).

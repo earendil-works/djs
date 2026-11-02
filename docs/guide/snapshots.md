@@ -110,6 +110,17 @@ built). That copy **is** startup: about 40 µs in wasm (D1990), most of it the c
 the base's bytes. The whole base is the new VM's old region, so the collections while a
 script runs don't trace it again.
 
+The base ends with a **tail**: the cells every VM writes, put last on purpose (D2063).
+They are the realm record, `Math.random`'s state, the global object, the global lexical
+scope, `Symbol.for`'s registry, Map and Set tables, the atom table, the host call table,
+the interpreter state and the value stack, about 25 KB. Everything before the tail is
+the **builtin prefix**, which no VM writes to while builtins are merely used. The
+builtins' objects are marked as prototypes when the base is built, not when a cache
+first goes through them. Strings in the prefix don't cache their hashes. Each VM grows
+its own tree of shapes, so its objects never add transitions to a builtin's shape. No
+collection moves or frees the prefix ([the garbage collector](gc.md)), so the same bytes
+stay at the same offsets in every VM of the build.
+
 Because it ships in every wasm module and is copied into every VM, the base has been put
 on a diet:
 
@@ -172,7 +183,7 @@ left is what the script did:
 | a pi session waiting on a tool | 478–500 KB | 2–8 KB |
 | a pi session holding 60 files it read | 660–842 KB | 57–110 KB |
 | a pi session holding a 1.5 MB log | 2.2 MB | 404 KB |
-| a new sandbox | 322 KB | 0.8 KB |
+| a new sandbox | 32 KB (322 KB raw) | 1.0 KB |
 
 Against the base image instead of pi's prelude image, the waiting session is about 51
 KB, and with the copying collector the heap used before, it was 40 KB: one word in eight
@@ -193,11 +204,24 @@ image an embedder seals itself, like pi's prelude image. A dead copy then moves 
 before it. The atom table also grows by a quarter rather than doubling, so a fresh VM's
 image carries 11 KB fewer empty slots.
 
+What a snapshot stores is a **session image** (D2066): the image without the builtin
+prefix, since the module (or the reference) already has it. It holds the `Roots` cell,
+the prefix words that differ from the base, as offset and value pairs in ascending order,
+and the heap from the prefix's end on. A script that leaves the builtins alone has no
+such words. The format is a function of the image and the base alone, so equal images
+give equal session images. Restoring puts the image back together from the base, after
+checking a hash of the base's prefix. Compressed against the reference, this changes
+little, because the dictionary already made the prefix almost free. But an uncompressed
+snapshot of a new sandbox is 32 KB instead of 322 KB. pi's lockdown changes about 1,700
+words of the prefix, which pi's prelude image holds in place. So the prefix words are
+taken against the reference when it has the same prefix, and against the base only
+otherwise; as a diff against the base, those words cost 8 KB in every container.
+
 A snapshot is a small container: a 40-byte header, the host's own metadata (the
 `Sandbox`'s host function names, the adapter's session state) as JSON, and the image,
 compressed or not. The header names everything a restore depends on: the engine build,
-which reference (the base, or pi's prelude image) with its hash and length, and the
-compression. A restore checks them in that order before it touches the image, and stops
+which reference (the base, or pi's prelude image) with its hash and length, the
+compression, and whether the image is a session image and against what. A restore checks them in that order before it touches the image, and stops
 with a message that says what is wrong: a snapshot of another engine build ("snapshot
 from djs build X; this module is build Y"), a reference this host does not have or that
 differs, a damaged frame (zstd's checksum). A host that has to restore snapshots of an
@@ -220,10 +244,11 @@ start data, refusing data that make a different image.
 > no zstd that takes a dictionary, so there snapshots are written uncompressed unless the
 > page brings its own codec.
 
-> **Trade-off.** Whole compressed images over deltas. A delta format would have to track
-> which cells changed since the reference and encode them on its own. Compressing the
-> whole image against the reference gets the same result without any of that, because
-> the collector keeps the reference's cells in place. The cost: every snapshot reads and
+> **Trade-off.** Whole compressed images over deltas, past the builtin prefix. A delta
+> format would have to track which cells changed since the reference and encode them on
+> its own. Compressing the whole image against the reference gets the same result
+> without any of that, because the collector keeps the reference's cells in place. Only
+> the prefix, which never moves, is stored as a word diff. The cost: every snapshot reads and
 > compresses the whole image (1 to 8 ms), and the size depends on that layout property.
 > A change that grows a cell near the start of the reference moves everything after it,
 > and the snapshot grows from a few KB to tens of KB.
@@ -245,6 +270,8 @@ From that it reports:
 - a summary: live and garbage bytes, the old region and the young one;
 - cells and bytes per cell kind and per object class;
 - a diff against the reference image;
+- the builtins a script changed: the words of the builtin prefix that differ from this
+  build's base, by cell, named by their builtin paths (`%Array.prototype%`, `%Math%`);
 - the largest cells, and the largest *retained* sizes: what a cell keeps alive on its
   own, from the dominator tree of the object graph;
 - strings (duplicated contents, the largest), shapes (the most common key lists),
@@ -301,6 +328,8 @@ of the call it waits on, and the container is 2.1 KB.
   for the base image.
 - [`crates/djs-prelude/build.rs`](../../crates/djs-prelude/build.rs): how the base
   snapshot is made.
+- [`crates/djs-core/src/vm/session.rs`](../../crates/djs-core/src/vm/session.rs): session
+  images.
 - [`js/src/snapshot.ts`](../../js/src/snapshot.ts): the snapshot container, its checks and
   the zstd codec; [`js/pi/vm.ts`](../../js/pi/vm.ts): the adapter's prelude images,
   `snapshot()` and `resumeVm()`.
@@ -310,10 +339,12 @@ of the call it waits on, and the container is 2.1 KB.
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2057 D2058 D2043 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 -->
+<!-- gen:decisions D2040 D2041 D2057 D2063 D2066 D2058 D2043 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2057: The cells a VM replaces first sit at the end of base and sealed images
+- D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
+- D2066: Session images: the roots cell, a canonical prefix diff and the session region
 - D2058: The size ceiling rises by 600 B for stable snapshot layouts
 - D2043: pi's later cold starts size the arena for the sealed prelude heap
 - D1091: Handle table
