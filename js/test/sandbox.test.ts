@@ -248,6 +248,24 @@ test("deterministic mode and random seeds (D1680)", async () => {
   sb.dispose();
 });
 
+test("frozenBuiltins (D2304): builtins behave as frozen, with the override fix", async () => {
+  const code = `
+    const o = {}; o.toString = () => "own";
+    let r; try { Math.PI = 3; r = "assigned"; } catch (e) { r = e.constructor.name; }
+    return [Object.isFrozen(Array.prototype), String(o), r, Object.isExtensible(globalThis)].join();
+  `;
+  const sb = await Sandbox.create({ frozenBuiltins: true });
+  assert.equal(sb.run(code), "true,own,TypeError,true");
+  // The mode is part of the snapshot.
+  const restored = await Sandbox.fromBytes(sb.bytes());
+  assert.equal(restored.run(code), "true,own,TypeError,true");
+  sb.dispose();
+  restored.dispose();
+  const plain = await Sandbox.create({});
+  assert.equal(plain.run(code), "false,own,TypeError,true");
+  plain.dispose();
+});
+
 test("journals: record, replay, divergence (D1730)", async () => {
   const code = `
     const a = tool("a", 30), b = tool("b", 10);

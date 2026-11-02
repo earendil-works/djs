@@ -6268,3 +6268,51 @@ puts the tail last (`order_for_image`) and sets `BASE_END` where it starts.
   - a djs-prelude test checks that no prefix cell references the tail.
 - **Measured:** wasm instructions within ±0.5% except props −1.2%. Module +60 B gzip. The
   base keeps its size; the tail is 25 KB of it.
+
+## D2304: Frozen builtins: gates in the property layer, the override fix in [[Set]]
+date: 2026-11-08 · by: perf · issue: 0146
+D022's runtime option, `VmOptions::frozen_builtins` (wasm `vm_new_with` flag 1, Sandbox
+and js/pi `frozenBuiltins`).
+- **State:** the `Roots::FLAGS` bit `ROOT_FROZEN_BUILTINS` (part of the image, so a
+  restored VM keeps its mode) and `Roots::BASE_END` (D2062). The heap caches the boundary
+  (`frozen_end`: BASE_END with the bit, else 0) and refreshes it on load, after every
+  collection and in `release_top`. `Heap::frozen(o)` is `o < frozen_end` plus, below the
+  boundary only, the exemptions; flag off it is one compare against 0.
+- **Exempt:** per-VM objects in the prefix: the global object, the global lexical record,
+  the `Symbol.for` registry and the constructors table (`realm::FROZEN_EXEMPT`), until
+  0147 moves them out. The global object stays fully ordinary (its builtin bindings are
+  writable and configurable, as in the spec and under SES's lockdown).
+- **Gates, all in heap/object.rs:** `is_extensible` false; `prevent_extensions` true
+  without a write; `read_loc` (so `get_own_property`, `lookup_property` and everything
+  above) reports data properties non-writable and every property non-configurable;
+  `define_own_property` validates against that view and never writes; `delete_own_property`
+  fails for existing keys; the fast writers (`prop_set_value`, `shaped_set`,
+  `shaped_add`, `set_own_data_value`, `set_element_fast`, `create_element_fast`,
+  `array_splice_dense`, `array_can_pop_dense`) decline. `shaped_set` needs its own check:
+  an inline cache keyed on a shape can be filled by a session object that shares a
+  frozen builtin's shape. `set_prototype_of` follows from `is_extensible`. Internal state
+  (object slots, header bits, realm slots, collections) is written as before.
+- **Override fix:** in `ordinary_set`, `set_property` and the `super.x = v` path, an
+  inherited non-writable data property whose holder is frozen and not the receiver does
+  not stop the assignment: the receiver gets an own data property (CreateDataProperty).
+  Assigning to the builtin itself, accessors without setters, proxies, `defineProperty`
+  and ordinary frozen objects keep the spec's behavior. This is SES's override taming for
+  every property, and a deviation from the spec (test262 expects the TypeError), which is
+  why the mode is opt-in.
+- **Private names:** adding a private field or method to a frozen builtin throws (it is
+  not extensible), as the stage-3 "non-extensible applies to private" proposal has it.
+- **Collections:** a canonical (Cheney) collection has no prefix, so `Vm::collect_canonical`
+  is a full collection with the mode on. `Vm::new` with the option and no base sets
+  BASE_END to everything made at creation.
+- **Cost (wasm instructions, 22 workloads):** flag off +0.0 to +0.5% against main
+  (pushpop's two modes aside), flag on within +0.0 to +0.8% of flag off (props +0.8%:
+  global stores take the exemption check). +521 bytes gzip.
+- **Known limits:** `Error.stackTraceLimit` and `Error.prepareStackTrace` are frozen with
+  `Error` (pi does not set them); a builtin is frozen by where it lives, so the mode needs
+  a base prefix (no effect on a heap without BASE_END).
+- **pi:** its prelude without the lockdown on the mode starts in 0.40 ms instead of
+  2.8–3.1 ms (native, release), and its sealed image is 375.6 KB / 6,362 cells instead of
+  479.9 KB / 8,330 (the base is 322.4 KB). pi's prelude *with* its lockdown still runs on
+  the mode: its walk finds no writable, configurable property to convert and only freezes
+  the global object's bindings, but costs 2.1 ms and leaves 418.3 KB. pi gets the gain by
+  turning the option on and dropping the lockdown (pi-private, later).

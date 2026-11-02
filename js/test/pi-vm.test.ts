@@ -23,6 +23,8 @@ interface Options {
   onMessage?: (message: WorkerToHostMessage, session: VmSession) => void;
   /** Leave calls to these tools unanswered. */
   hold?: string[];
+  frozenBuiltins?: boolean;
+  prelude?: string;
 }
 
 interface Outcome {
@@ -62,8 +64,9 @@ function start(code: string, options: Options = {}) {
   };
   const ready = startVm({
     wasm,
-    prelude: PRELUDE_SOURCE,
+    prelude: options.prelude ?? PRELUDE_SOURCE,
     interruptBudget: options.interruptBudget,
+    frozenBuiltins: options.frozenBuiltins,
     data: {
       code,
       tools: Object.keys(tools).map((name) => ({ name, jsName: name, description: `the ${name} tool` })),
@@ -488,4 +491,32 @@ return [r, more];`;
   // a script that made none (they differ by the source text and `kept`).
   const small = await once("return await tools.echo(1)", "continue");
   assert.ok(continued.size - small.size < 16 * 1024, `${continued.size} vs ${small.size} bytes`);
+});
+
+/** pi's prelude without its lockdown: what it would run on frozen builtins (D2304). */
+function withoutLockdown(prelude: string): string {
+  const start = prelude.indexOf("\t(function lockdown() {");
+  const close = "\n\t})();";
+  const end = prelude.indexOf(close, start);
+  assert.ok(start > 0 && end > start, "the prelude's lockdown");
+  return prelude.slice(0, start) + prelude.slice(end + close.length);
+}
+
+test("pi: frozen builtins without the prelude's lockdown (D2304)", async () => {
+  const code = `
+    class E extends Error { constructor(m) { super(m); this.name = "E"; } }
+    const o = {}; o.toString = () => "own";
+    let added; try { Array.prototype.extra = 1; added = "added"; } catch (e) { added = e.constructor.name; }
+    globalThis.mine = 1;
+    return [String(new E("x")), String(o), added, Object.isFrozen(Array.prototype), Object.isFrozen(globalThis), mine,
+      typeof Object.getOwnPropertyDescriptor(Object.prototype, "toString").value];
+  `;
+  const prelude = withoutLockdown(PRELUDE_SOURCE);
+  const frozen = value(await run(code, { frozenBuiltins: true, prelude }));
+  assert.deepEqual(frozen, ["E: x", "own", "TypeError", true, false, 1, "function"]);
+  // The lockdown gives the same answers, except that its override accessors replace the data
+  // properties.
+  assert.deepEqual(value(await run(code)), ["E: x", "own", "TypeError", true, false, 1, "undefined"]);
+  // Without either, builtins are ordinary.
+  assert.deepEqual(value(await run(code, { prelude })), ["E: x", "own", "added", false, false, 1, "function"]);
 });

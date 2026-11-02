@@ -122,6 +122,11 @@ pub const ROOT_RESERVE_OPEN: u32 = 1;
 /// whenever it runs, is observable.
 pub const ROOT_WEAK_STRONG: u32 = 2;
 
+/// `Roots::FLAGS`: frozen builtins (D2304): the objects of the builtin prefix
+/// (`Roots::BASE_END`) behave as frozen, and [[Set]] overrides their inherited read-only
+/// properties on other receivers.
+pub const ROOT_FROZEN_BUILTINS: u32 = 4;
+
 records! {
     /// One property in a [`PropTable`]. For a data property `VALUE` is the value and
     /// `SETTER` is unused (0). For an accessor `VALUE` is the getter and `SETTER` the
@@ -177,7 +182,8 @@ cells! {
         /// instruction table and intrinsic ids, D1320), 0 for a bare heap. Images hold
         /// bytecode, so they load only into the same build.
         BUILD: u32 = 48,
-        /// Heap state bits: [`ROOT_RESERVE_OPEN`] (D1600), [`ROOT_WEAK_STRONG`] (D1680).
+        /// Heap state bits: [`ROOT_RESERVE_OPEN`] (D1600), [`ROOT_WEAK_STRONG`] (D1680),
+        /// [`ROOT_FROZEN_BUILTINS`] (D2304).
         FLAGS: u32 = 52,
         /// The arena size at which the next collection is requested (D1601: part of the
         /// image, so a restored VM collects at the same points). 0 for a fresh heap.

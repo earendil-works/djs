@@ -717,13 +717,17 @@ impl Heap {
     }
 
     pub fn is_extensible(&self, o: Obj) -> bool {
-        self.obj_flags(o) & OBJ_EXTENSIBLE != 0
+        self.obj_flags(o) & OBJ_EXTENSIBLE != 0 && !self.frozen(o)
     }
 
     /// [[PreventExtensions]]: false for a typed array whose length can change (a view
     /// of a resizable buffer, 10.4.5.3 / IsTypedArrayFixedLength), which stays
     /// extensible.
     pub fn prevent_extensions(&mut self, o: Obj) -> bool {
+        // A frozen builtin is not extensible already (D2304): nothing to write.
+        if self.frozen(o) {
+            return true;
+        }
         if self.object_class(o) == ObjectClass::TypedArray && !self.ta_fixed_length(o) {
             return false;
         }
@@ -830,7 +834,7 @@ impl Heap {
         delete: u32,
         insert: u32,
     ) -> Result<bool, HeapError> {
-        if self.object_class(o) != ObjectClass::Array {
+        if self.object_class(o) != ObjectClass::Array || self.frozen(o) {
             return Ok(false);
         }
         let f = self.obj_flags(o);
@@ -880,6 +884,9 @@ impl Heap {
     }
 
     pub fn set_element_fast(&mut self, o: Obj, i: u32, v: Value) -> Result<bool, HeapError> {
+        if self.frozen(o) {
+            return Ok(false);
+        }
         let el = self.elements(o);
         let len = if el == 0 { 0 } else { self.value_array_len(el) };
         if i < len && !self.value_array_get(el, i).is_hole() {
@@ -940,6 +947,9 @@ impl Heap {
         v: Value,
     ) -> Result<bool, HeapError> {
         debug_assert_eq!(self.object_class(o), ObjectClass::Array);
+        if self.frozen(o) {
+            return Ok(false);
+        }
         let el = self.elements(o);
         let len = if el == 0 { 0 } else { self.value_array_len(el) };
         if i < len && !self.value_array_get(el, i).is_hole() {
@@ -1083,6 +1093,9 @@ impl Heap {
     /// nothing changed otherwise.
     #[inline]
     fn prop_set_value(&mut self, o: Obj, i: u32, v: Value) -> bool {
+        if self.frozen(o) {
+            return false;
+        }
         let p = self.props(o);
         let (fl, at) = if self.is_dictionary(o) {
             let e = PropTable::ENTRIES.at(p, i);
@@ -1460,7 +1473,7 @@ impl Heap {
     #[inline]
     pub fn shaped_add(&mut self, o: Obj, old: u32, new: u32, v: Value) -> bool {
         let f = self.obj_flags(o);
-        if f & (OBJ_DICTIONARY | OBJ_IS_PROTO) != 0 || f & OBJ_EXTENSIBLE == 0 {
+        if f & (OBJ_DICTIONARY | OBJ_IS_PROTO) != 0 || f & OBJ_EXTENSIBLE == 0 || self.frozen(o) {
             return false;
         }
         let p = self.props(o);
@@ -1516,6 +1529,10 @@ impl Heap {
     /// shape that the slot is a writable data property.
     #[inline(always)]
     pub fn shaped_set(&mut self, o: Obj, shape: u32, slot: u32, value: Value) -> bool {
+        // A frozen builtin can share its shape with a session object (D2304).
+        if self.frozen(o) {
+            return false;
+        }
         let Some(v) = self.values_if_shape(o, shape) else {
             return false;
         };
@@ -1682,6 +1699,25 @@ impl Heap {
     }
 
     fn read_loc(&self, o: Obj, loc: Loc) -> Option<Property> {
+        let p = self.read_loc_stored(o, loc)?;
+        if !self.frozen(o) {
+            return Some(p);
+        }
+        // A frozen builtin's properties read as non-writable and non-configurable (D2304).
+        let e = p.flags().enumerable();
+        Some(match p {
+            Property::Data { value, .. } => Property::data(value, PropFlags::new(false, e, false)),
+            Property::Accessor { getter, setter, .. } => Property::Accessor {
+                getter,
+                setter,
+                flags: PropFlags::new(false, e, false),
+            },
+        })
+    }
+
+    /// [`Heap::read_loc`] as stored.
+    #[inline(always)]
+    fn read_loc_stored(&self, o: Obj, loc: Loc) -> Option<Property> {
         match loc {
             Loc::None => None,
             Loc::Dense(i) => Some(Property::data(
@@ -1715,6 +1751,9 @@ impl Heap {
                 self.ta_numeric_set(o, key, v);
                 return true;
             }
+            return false;
+        }
+        if self.frozen(o) {
             return false;
         }
         match self.find_own(o, key) {
@@ -1980,6 +2019,15 @@ impl Heap {
         key: Atom,
         d: &PropertyDescriptor,
     ) -> Result<bool, HeapError> {
+        if self.frozen(o) {
+            // ValidateAndApplyPropertyDescriptor against the frozen view (D2304): what it
+            // accepts changes nothing, so nothing is written.
+            let current = self.get_own_property(o, key);
+            return Ok(!matches!(
+                self.validate_descriptor(current, false, d),
+                Outcome::Reject
+            ));
+        }
         if self.object_class(o) == ObjectClass::TypedArray
             && let Some(n) = self.canonical_numeric_index(key)
         {
@@ -2171,6 +2219,7 @@ impl Heap {
     /// Whether [`Heap::array_pop_dense`] applies to `o`.
     pub fn array_can_pop_dense(&self, o: Obj) -> bool {
         if self.object_class(o) != ObjectClass::Array
+            || self.frozen(o)
             || self.obj_flags(o) & (OBJ_INDEXED_PROPS | OBJ_LENGTH_READONLY) != 0
         {
             return false;
@@ -2195,6 +2244,10 @@ impl Heap {
     /// object becomes a dictionary), so this can fail with `OutOfMemory`, with nothing
     /// changed.
     pub fn delete_own_property(&mut self, o: Obj, key: Atom) -> Result<bool, HeapError> {
+        // A frozen builtin's properties are non-configurable (D2304).
+        if self.frozen(o) {
+            return Ok(!self.has_own_property(o, key));
+        }
         if self.object_class(o) == ObjectClass::TypedArray
             && let Some(r) = self.ta_numeric_get(o, key)
         {

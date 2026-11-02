@@ -2210,7 +2210,13 @@ impl Exec<'_> {
                     SetStep::Setter(setter)
                 });
             }
-            Lookup::Found(_, Property::Data { flags, .. }) if !flags.writable() => {
+            // The override fix (D2304): an inherited read-only property of a frozen
+            // builtin does not stop the assignment; the receiver gets its own property.
+            Lookup::Found(holder, Property::Data { flags, .. })
+                if !flags.writable()
+                    && !(self.heap.frozen(holder)
+                        && receiver.as_object().is_some_and(|r| r != holder)) =>
+            {
                 return Ok(SetStep::Done(false));
             }
             _ => {}

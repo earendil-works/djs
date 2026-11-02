@@ -439,7 +439,11 @@ impl Exec<'_> {
                 self.sp -= n;
                 return self.call_accessor(setter, this, Some(v));
             }
-            Some((_, Property::Data { flags, .. })) if !flags.writable() => {
+            // The override fix (D2304): see `ordinary_set`.
+            Some((holder, Property::Data { flags, .. }))
+                if !flags.writable()
+                    && !(self.heap.frozen(holder) && this.as_object() != Some(holder)) =>
+            {
                 return read_only(self.heap);
             }
             _ => {}

@@ -315,8 +315,63 @@ heap analyzer prints builtins by their registry paths (`%Array.prototype.map%`).
 > tombstone and the helper a new entry. Those helpers never escape to scripts, so an
 > export rarely needs them.
 
+## Frozen builtins
+
+Codemode hosts usually want builtins that a script cannot change: a script that patches
+`Array.prototype.map` would change what every later call means, and in a VM that lives
+across snapshots the patch would live on too. The usual answer is a lockdown at startup,
+in the style of SES: walk every builtin, `Object.freeze` it, and replace the commonly
+overridden properties with accessor pairs. In djs that walk turns hundreds of compact
+objects into property dictionaries and adds hundreds of accessor closures, and pi's
+prelude spent most of its 3 ms startup doing it.
+
+djs offers the same result as an option at VM creation: `frozen_builtins` in
+[`VmOptions`](../../crates/djs-core/src/vm/mod.rs), `frozenBuiltins` in the Sandbox and
+the pi adapter, flag 1 of `vm_new_with` in wasm (D2304). Nothing is frozen. Every VM's
+arena starts with a copy of the base image, so the builtins sit below a known offset,
+the end of that prefix. With the option on, the property operations treat every object
+below it as frozen: it is not extensible, its properties read as non-writable and
+non-configurable, and every write, addition, deletion or redefinition fails, with a
+`TypeError` in strict code and `false` from `Reflect`. `Object.isFrozen(Array.prototype)`
+is true. The global object stays ordinary, so scripts can still define globals.
+
+```js
+"use strict";
+class NotFound extends Error {
+  constructor(m) { super(m); this.name = "NotFound"; }  // an own property
+}
+const o = {};
+o.toString = () => "own";                               // an own property
+Array.prototype.extra = 1;                              // TypeError: not extensible
+```
+
+The first two assignments show the *override mistake* of a frozen prototype chain. The
+spec lets an inherited read-only property stop an assignment to a different object, so
+under `Object.freeze` both lines would throw. The option fixes that the way SES and Node's
+`--frozen-intrinsics` do: when the read-only property belongs to a frozen builtin that is
+not the receiver, the assignment defines an own property on the receiver instead. The
+builtin's properties stay data properties; no accessors appear in their descriptors.
+
+The check is a compare of the object's offset against the prefix end, which is 0 with
+the option off, so the default costs one compare on each property write and stays
+spec-conformant. Engine-internal state in those objects (internal slots, header bits) is
+written as before; only the JavaScript-visible property operations look at the check.
+The mode is part of the image: a restored VM keeps it.
+
+> **Trade-off.** A region check over freezing the objects. Freezing at startup costs
+> time and memory in every VM and rewrites the base; marking frozen objects in their
+> headers would need a different base image per mode. The region check keeps one base for
+> both modes and freezes nothing. The cost: the override fix is a deliberate deviation
+> from the spec (test262 expects the `TypeError`), so the mode is opt-in, and a builtin is
+> frozen by where it lives, which only works while the prefix stays where it is (a full
+> collection moves its end along with the cells; a copying collection is replaced by a
+> full one in this mode).
+
 ## Where to look
 
+- [`crates/djs-core/src/heap/frozen.rs`](../../crates/djs-core/src/heap/frozen.rs): the
+  frozen-builtins check; its gates are in `heap/object.rs`, the override fix in
+  `ordinary_set` (`interp/run/intrinsics.rs`).
 - `builtins/*.ts` and [builtins/intrinsics.d.ts](../../builtins/intrinsics.d.ts): the
   sources and the intrinsic declarations ([reference](ref-intrinsics.md)).
 - [`crates/djs-bgen/`](../../crates/djs-bgen/): the parser, checker, resume-point
@@ -333,7 +388,7 @@ heap analyzer prints builtins by their registry paths (`%Array.prototype.map%`).
 
 Decisions on this page:
 
-<!-- gen:decisions D1170 D1171 D1172 D1270 D1310 D1321 D1430 D1631 D1632 D1633 D1634 D1635 D1801 D1850 D1900 D1910 D2000 D2020 D2060 D2090 D2371 -->
+<!-- gen:decisions D1170 D1171 D1172 D1270 D1310 D1321 D1430 D1631 D1632 D1633 D1634 D1635 D1801 D1850 D1900 D1910 D2000 D2020 D2060 D2090 D2304 D2371 -->
 - D1170: djs-bgen is Rust with its own parser for the subset
 - D1171: Builtin subset rules
 - D1172: Generated prelude format and installation
@@ -354,5 +409,6 @@ Decisions on this page:
 - D2020: `@fast` builtins are not also `@native`, except Array.prototype.push
 - D2060: The base is decoded or injected straight into the first VM's arena
 - D2090: Fused dense HasProperty + Get in natives; one-pass string search and in-arena joins
+- D2304: Frozen builtins: gates in the property layer, the override fix in [[Set]]
 - D2371: The builtin registry: stable ids by spec path, append-only, gate-checked
 <!-- /gen -->

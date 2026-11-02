@@ -562,6 +562,32 @@ pub extern "C" fn vm_new_reserved(memory_limit: u32, live: u32) -> u32 {
     ))
 }
 
+/// `vm_new_with`'s flag: frozen builtins (`VmOptions::frozen_builtins`, D2304).
+pub const VM_FROZEN_BUILTINS: u32 = 1;
+
+/// Like `vm_new_reserved`, with creation options in `flags`: [`VM_FROZEN_BUILTINS`].
+/// Returns 0 with the reason in the out buffer for an unknown flag.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_new_with(memory_limit: u32, live: u32, flags: u32) -> u32 {
+    if flags & !VM_FROZEN_BUILTINS != 0 {
+        return with(|s| {
+            s.set_out(b"unknown vm_new_with flags");
+            0
+        });
+    }
+    let opts = VmOptions {
+        frozen_builtins: flags & VM_FROZEN_BUILTINS != 0,
+        ..options(memory_limit)
+    };
+    add_new_vm(djs_prelude::new_vm_owned(take_base(), opts, live as usize))
+}
+
+/// Whether the builtins of `vm` are frozen (`vm_new_with`, D2304): 1 or 0.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_frozen_builtins(vm: u32) -> u32 {
+    with(|s| s.slot(vm).vm.frozen_builtins() as u32)
+}
+
 /// Like `vm_new`, but builds the realm and compiles the prelude instead of copying the
 /// base (about 150x slower). For checking the base against the realm built in wasm; only
 /// with the `compiled-prelude` feature.

@@ -89,6 +89,13 @@ export interface VmHooks {
   /** Accepted for pi's interface; djs keeps frames in its heap, not on the host stack. */
   maxStackSize?: number;
   /**
+   * Frozen builtins (djs's `frozenBuiltins` VM option, D2304): the builtins behave as frozen,
+   * and assigning over an inherited builtin property defines an own one (as after a
+   * lockdown). Default false. Part of the prelude image's key: a resumed session keeps the
+   * mode it started with, and `resumeVm` needs the same value to recompute its prelude image.
+   */
+  frozenBuiltins?: boolean;
+  /**
    * zstd for `snapshot()` and `resumeVm()` (D2260): node's built-in one by default; `null`
    * writes uncompressed snapshots.
    */
@@ -487,7 +494,7 @@ function preludeReference(entry: PreludeImage): Reference {
 }
 
 /** Everything the prelude image depends on, besides the engine build. */
-function preludeKey(prelude: string, data: VmStartData): string {
+function preludeKey(prelude: string, data: VmStartData, frozenBuiltins = false): string {
   return JSON.stringify([
     prelude,
     data.tools,
@@ -495,6 +502,7 @@ function preludeKey(prelude: string, data: VmStartData): string {
     data.store,
     data.memoryLimitBytes ?? null,
     data.deterministic !== undefined,
+    ...(frozenBuiltins ? ["frozen builtins"] : []),
   ]);
 }
 
@@ -555,11 +563,12 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
   const { data, post, prelude } = options;
   const module = options.wasm as WebAssembly.Module;
   const deterministic = data.deterministic;
-  const key = preludeKey(prelude, data);
+  const frozen = options.frozenBuiltins === true;
+  const key = preludeKey(prelude, data, frozen);
   const cached = options.reuseImages === false ? undefined : imageCache.get(module)?.get(key);
   const engine = cached
     ? Engine.restore(module, cached.image, data.memoryLimitBytes)
-    : Engine.create(module, data.memoryLimitBytes, sealedSize);
+    : Engine.create(module, data.memoryLimitBytes, sealedSize, frozen);
   const state: SessionState = {
     api: 0,
     settle: 0,
@@ -607,7 +616,7 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
       const fuel = options.fuelPerPoll ?? FUEL_PER_POLL;
       post({
         type: "started",
-        fingerprint: `djs ${engine.buildHash}, prelude ${fnv1a(prelude)}, host ${HOST_GLOBALS_HASH}, deterministic ${DETERMINISTIC_VERSION}, fuel per poll ${fuel}, heap ${data.memoryLimitBytes ?? "none"}, budget ${budget}`,
+        fingerprint: `djs ${engine.buildHash}, prelude ${fnv1a(prelude)}, host ${HOST_GLOBALS_HASH}, deterministic ${DETERMINISTIC_VERSION}, fuel per poll ${fuel}, heap ${data.memoryLimitBytes ?? "none"}, budget ${budget}${frozen ? ", frozen builtins" : ""}`,
       });
     }
 
@@ -632,10 +641,11 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
 
 /** The prelude image of `prelude` and `data`: a cached one, or computed in a fresh VM. */
 function preludeImageOf(module: WebAssembly.Module, prelude: string, data: VmStartData, hooks: VmHooks): PreludeImage {
-  const key = preludeKey(prelude, data);
+  const frozen = hooks.frozenBuiltins === true;
+  const key = preludeKey(prelude, data, frozen);
   const cached = imageCache.get(module)?.get(key);
   if (cached) return cached;
-  const engine = Engine.create(module, data.memoryLimitBytes);
+  const engine = Engine.create(module, data.memoryLimitBytes, 0, frozen);
   try {
     const session = new Session(engine, { wasm: module, post: () => {}, shouldInterrupt: () => false }, {
       api: 0,

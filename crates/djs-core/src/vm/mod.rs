@@ -91,6 +91,13 @@ pub struct VmOptions {
     /// WeakRef and FinalizationRegistry (D1680). Applied by `Vm::new` and `from_base`; a
     /// restored image keeps what it had (the mode is heap state).
     pub weak_refs: WeakRefs,
+    /// Frozen builtins (D022, D2304): the builtin objects of the base image behave as
+    /// frozen (writes refused, descriptors non-writable and non-configurable, not
+    /// extensible), and an assignment that meets one of their read-only properties on
+    /// another object's prototype chain defines an own property on that object (the
+    /// override fix of SES and Node's `--frozen-intrinsics`). The global object stays
+    /// ordinary. Applied by `Vm::new` and `from_base`; a restored image keeps its mode.
+    pub frozen_builtins: bool,
 }
 
 impl Default for VmOptions {
@@ -101,6 +108,7 @@ impl Default for VmOptions {
             prelude: true,
             random_seed: crate::builtins::number::DEFAULT_RANDOM_SEED,
             weak_refs: WeakRefs::Collected,
+            frozen_builtins: false,
         }
     }
 }
@@ -160,6 +168,16 @@ impl Vm {
             vm.install_prelude()?;
         }
         vm.set_weak_refs(opts.weak_refs)?;
+        if opts.frozen_builtins {
+            // Without a base image, everything made at creation is the builtin prefix.
+            if vm.heap.base_end() == 0 {
+                let len = vm.heap.arena().len();
+                vm.heap
+                    .arena_mut()
+                    .set(0, crate::heap::cells::Roots::BASE_END, len);
+            }
+            vm.heap.set_frozen_builtins(true);
+        }
         Ok(vm)
     }
 
@@ -277,7 +295,14 @@ impl Vm {
     fn after_copy(&mut self) -> Result<(), HeapError> {
         let seed = self.opts.random_seed;
         crate::builtins::number::set_seed(&mut self.heap, seed);
-        self.set_weak_refs(self.opts.weak_refs)
+        self.set_weak_refs(self.opts.weak_refs)?;
+        self.heap.set_frozen_builtins(self.opts.frozen_builtins);
+        Ok(())
+    }
+
+    /// Whether the builtins are frozen ([`VmOptions::frozen_builtins`], D2304).
+    pub fn frozen_builtins(&self) -> bool {
+        self.heap.frozen_builtins()
     }
 
     /// Sets what WeakRef and FinalizationRegistry do (D1680); set it before running code.
@@ -794,7 +819,13 @@ impl Vm {
     /// [`Vm::collect`] by copying (Cheney, `Heap::collect_canonical`): the heap comes out
     /// as a function of its object graph alone. For images that should not depend on how
     /// they were built (the base image, 0101).
+    ///
+    /// With frozen builtins (D2304) this is a full collection: a copying layout has no
+    /// builtin prefix, and the mode needs one.
     pub fn collect_canonical(&mut self) -> Result<(), HeapError> {
+        if self.heap.frozen_builtins() {
+            return self.collect_as(Collection::Full);
+        }
         self.collect_as(Collection::Canonical)
     }
 
@@ -948,5 +979,7 @@ fn fnv64(bytes: &[u8]) -> u64 {
     h
 }
 
+#[cfg(test)]
+mod frozen_tests;
 #[cfg(test)]
 mod tests;

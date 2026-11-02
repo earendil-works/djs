@@ -9,6 +9,16 @@ use crate::heap::{
 };
 use crate::value::{Obj, Value};
 
+/// The intrinsics that are per-VM objects in the builtin prefix, exempt from the
+/// frozen-builtins mode (D2304): the global object, and the hidden registries the engine
+/// changes with property operations at run time. (The global lexical record, also
+/// exempt, is a realm field.)
+pub(crate) const FROZEN_EXEMPT: [Intrinsic; 3] = [
+    Intrinsic::Global,
+    Intrinsic::SymbolRegistry,
+    Intrinsic::Constructors,
+];
+
 /// Intrinsics, by index into `Realm::INTRINSICS`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u32)]

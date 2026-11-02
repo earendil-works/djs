@@ -3340,7 +3340,8 @@ impl<'h> Exec<'h> {
                 return self.call_accessor(setter, Value::object(o), Some(v));
             }
             Some((holder, Property::Data { flags, .. })) => {
-                if !flags.writable() {
+                // The override fix (D2304): see `ordinary_set`.
+                if !flags.writable() && (holder == o || !self.heap.frozen(holder)) {
                     return readonly(self.heap);
                 }
                 if holder == o {

@@ -88,6 +88,16 @@ export interface SandboxOptions {
    */
   weakRefs?: "collected" | "strong" | "absent";
   /**
+   * Frozen builtins (D2304): the builtin objects (prototypes, constructors, `Math`, ...)
+   * behave as frozen: writes to them fail (a TypeError in strict code), their properties
+   * read as non-writable and non-configurable, and `Object.isFrozen` is true. Assigning
+   * over an inherited builtin property (`obj.toString = f`, `this.name = ...` in an Error
+   * subclass) defines an own property instead of failing, as after SES's lockdown.
+   * `globalThis` stays ordinary. Default false (the spec's behavior); a restored sandbox
+   * keeps the mode it was created with.
+   */
+  frozenBuiltins?: boolean;
+  /**
    * Run deterministically (D1680): with the same code, parameters and results in the same
    * order, a run does the same thing every time. `Math.random` is seeded from `seed`, the
    * time zone is UTC, weak references are strong (unless `weakRefs` says otherwise), and
@@ -174,6 +184,8 @@ const STATUS_HOST_CALL = 3;
 const STATUS_IDLE = 4;
 const STATUS_HOST_OUT_OF_MEMORY = 5;
 const ABI_VERSION = 1;
+/** `vm_new_with`'s flag: frozen builtins (D2304). */
+const VM_FROZEN_BUILTINS = 1;
 const CONSOLE_METHODS = ["log", "info", "warn", "error"] as const;
 
 interface Exports {
@@ -188,6 +200,8 @@ interface Exports {
   djs_panic_len(): number;
   djs_debug_panic(): void;
   vm_new(memoryLimit: number): number;
+  /** Since 0146 (D2304); older modules lack it. */
+  vm_new_with?(memoryLimit: number, live: number, flags: number): number;
   vm_from_bytes(len: number, memoryLimit: number): number;
   vm_free(vm: number): void;
   vm_arena_ptr(vm: number): number;
@@ -354,7 +368,10 @@ export class Sandbox {
       // (D2060).
       provideBase(module, x);
       rememberBase(module, x);
-      vm = x.vm_new(opts.memoryLimit ?? 0);
+      if (opts.frozenBuiltins) {
+        if (!x.vm_new_with) throw new SandboxError("misuse", "the djs-wasm module has no frozenBuiltins (vm_new_with)");
+        vm = x.vm_new_with(opts.memoryLimit ?? 0, 0, VM_FROZEN_BUILTINS);
+      } else vm = x.vm_new(opts.memoryLimit ?? 0);
       if (vm === 0) throw new SandboxError("memory", "memory limit too small for the realm");
     } else {
       const { meta, image } = unpackSnapshot(snapshot, module, x, opts.snapshotCodec);

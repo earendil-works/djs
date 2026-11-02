@@ -40,6 +40,7 @@ pub mod collection;
 mod compact;
 mod compactor;
 mod fail;
+mod frozen;
 pub mod gc;
 pub mod handle;
 pub mod layout;
@@ -174,6 +175,10 @@ pub struct Heap {
     /// out-of-memory reserve is closed, and `hard_limit` while it is open (D1600).
     hard_limit: u32,
     reserve: u32,
+    /// The frozen-builtins mode's boundary (D2304): `Roots::BASE_END` while the mode is
+    /// on, else 0. A copy kept current by `refresh_frozen`, so that the check on every
+    /// property write is one compare.
+    frozen_end: u32,
     /// The primary composites of Unicode normalization, derived on first use and kept
     /// for the VM's lifetime (D2338). Not part of the image.
     #[cfg(feature = "unicode-normalization")]
@@ -254,6 +259,7 @@ impl Heap {
             gc_pending: false,
             hard_limit,
             reserve: reserve_for(hard_limit),
+            frozen_end: 0,
             #[cfg(feature = "unicode-normalization")]
             compositions: Default::default(),
             #[cfg(test)]
@@ -265,6 +271,7 @@ impl Heap {
         if heap.arena.len() >= Roots::LAYOUT.min_size {
             heap.arena.reserve_total(capacity_target(heap.gc_threshold));
         }
+        heap.refresh_frozen();
         heap
     }
 
@@ -387,6 +394,7 @@ impl Heap {
                     self.arena.set(0, f, start);
                 }
             }
+            self.refresh_frozen();
             self.gc_pending = self.arena.len() >= self.gc_threshold;
         }
     }

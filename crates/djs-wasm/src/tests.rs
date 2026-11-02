@@ -558,3 +558,27 @@ fn vms_take_the_decoded_base_as_their_arena() {
         }
     });
 }
+
+/// D2304: `vm_new_with`'s frozen builtins, and the flag-less default.
+#[test]
+fn frozen_builtins_flag() {
+    let src = "'use strict'; const o = {}; o.toString = () => 'own'; \
+               let r; try { Array.prototype.x = 1; r = 'added'; } catch (e) { r = e.constructor.name; } \
+               return [Object.isFrozen(Array.prototype), String(o), r].join()";
+    for (flags, want) in [
+        (0, "false,own,added"),
+        (VM_FROZEN_BUILTINS, "true,own,TypeError"),
+    ] {
+        let vm = vm_new_with(0, 0, flags);
+        assert_ne!(vm, 0);
+        assert_eq!(vm_frozen_builtins(vm), flags);
+        let f = compile_body(vm, "", src);
+        call(vm, f, &[]);
+        let st = vm_run(vm, 1_000_000);
+        let (ok, r) = outcome(vm, st);
+        assert!(ok);
+        assert_eq!(display(vm, r), want, "flags {flags}");
+        vm_free(vm);
+    }
+    assert_eq!(vm_new_with(0, 0, 2), 0);
+}

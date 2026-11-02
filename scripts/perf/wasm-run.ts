@@ -21,7 +21,9 @@ for (const name of process.argv.slice(2)) {
   const times: number[] = [];
   let mem = 0;
   for (let i = 0; i < (once ? 1 : reps + 1); i++) {
-    const sb = new Sandbox({ module, fuelSlice: Number(process.env.FUEL ?? 10000) } as never);
+    // FROZEN=1: frozen builtins (D2304).
+    const frozenBuiltins = process.env.FROZEN === "1";
+    const sb = new Sandbox({ module, fuelSlice: Number(process.env.FUEL ?? 10000), ...(frozenBuiltins ? { frozenBuiltins } : {}) } as never);
     const t = performance.now();
     try {
       sb.run(code);

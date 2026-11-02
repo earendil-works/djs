@@ -31,6 +31,7 @@ const sb = await Sandbox.create({
   unhandledRejections: "warn",   // or "throw", or "collect" (sb.takeUnhandledRejections())
   randomSeed: 42n,               // Math.random's 64-bit seed; default: from crypto.getRandomValues
   weakRefs: "collected",         // or "strong", or "absent" (D1680)
+  frozenBuiltins: false,         // builtins behave as frozen, with the override fix (D2304)
   deterministic: { startedAt, seed }, // repeatable runs (D1680): see below
 });
 sb.run("return readFile(path).length", { path: "README.md" });   // codemode function body
@@ -264,6 +265,8 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | export | does |
 | --- | --- |
 | `vm_new(limit) -> vm` | a new VM: a copy of the base snapshot (D1321); `limit` = heap cap in bytes, 0 = default |
+| `vm_new_with(limit, live, flags) -> vm` | `vm_new` with creation flags; `live` = the heap size to reserve room for (0: none, as `vm_new_reserved`). Flags: 1 = frozen builtins (D2304); 0 with a message for an unknown flag |
+| `vm_frozen_builtins(vm) -> 0/1` | whether the VM's builtins are frozen (part of the image) |
 | `vm_new_compiled(limit) -> vm` | builds the realm and compiles the prelude instead (only with the `compiled-prelude` feature; tests) |
 | `vm_from_bytes(len, limit) -> vm` | restore the image in staging (takes the staging buffer over) |
 | `vm_free(vm)` | drop the VM |

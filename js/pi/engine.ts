@@ -16,6 +16,8 @@ export const STATUS_IDLE = 4;
 /** The host could not provide memory below the cap (D1690); the call is abandoned. */
 export const STATUS_HOST_OUT_OF_MEMORY = 5;
 const ABI_VERSION = 1;
+/** `vm_new_with`'s flag: frozen builtins (D2304). */
+const VM_FROZEN_BUILTINS = 1;
 
 interface Exports {
   memory: WebAssembly.Memory;
@@ -36,6 +38,8 @@ interface Exports {
   vm_collect(vm: number): number;
   vm_seal(vm: number): number;
   vm_new_reserved?(memoryLimit: number, live: number): number;
+  /** Since 0146 (D2304); older modules lack it. */
+  vm_new_with?(memoryLimit: number, live: number, flags: number): number;
   vm_compile_file(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
   vm_new_host_function(vm: number, fnId: number, nameLen: number): number;
   vm_decode_wire(vm: number, len: number): number;
@@ -100,14 +104,19 @@ export class Engine {
    * threshold): growing later would move it and leave the old block behind as a hole in
    * wasm memory.
    */
-  static create(module: WebAssembly.Module, memoryLimit: number | undefined, live = 0): Engine {
+  static create(module: WebAssembly.Module, memoryLimit: number | undefined, live = 0, frozenBuiltins = false): Engine {
     const x = instantiate(module);
     // The module's base, decoded once by its first instance, not by each (D2252), and
     // kept for later instances before the VM takes this instance's bytes as its arena
     // (D2060).
     provideBase(module, x);
     rememberBase(module, x);
-    const vm = x.vm_new_reserved ? x.vm_new_reserved(memoryLimit ?? 0, live) : x.vm_new(memoryLimit ?? 0);
+    let vm: number;
+    if (frozenBuiltins) {
+      // Frozen builtins (D2304): an option at creation.
+      if (!x.vm_new_with) throw new Error("The djs-wasm module is too old for frozenBuiltins (no vm_new_with)");
+      vm = x.vm_new_with(memoryLimit ?? 0, live, VM_FROZEN_BUILTINS);
+    } else vm = x.vm_new_reserved ? x.vm_new_reserved(memoryLimit ?? 0, live) : x.vm_new(memoryLimit ?? 0);
     if (vm === 0) throw new Error(`Cannot create a djs VM: ${outText(x) || "memory limit too small"}`);
     return new Engine(module, x, vm);
   }
