@@ -871,6 +871,10 @@ impl Vm {
         for keys in image::BUILTIN_RESULT_SHAPES {
             self.heap.precreate_shapes(keys)?;
         }
+        // (Interned before the tables are shrunk: `drop_internal_names` keeps them.)
+        for name in image::ENGINE_ATOMS {
+            self.heap.atom_str(name)?;
+        }
         crate::interp::run::promise::preallocate_queues(&mut self.heap)?;
         self.heap.compact_for_image()?;
         // Without the prelude's internal names (D2253).

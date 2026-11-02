@@ -147,15 +147,6 @@ pub(super) const BUILTIN_RESULT_SHAPES: &[&[(&str, u32)]] = {
 };
 
 /// Names the engine interns while it runs, whatever the script (D2067): the realm's
-/// `Error` hooks read when an error is made, and the names every compilation interns.
-const ENGINE_ATOMS: &[&str] = &[
-    "prepareStackTrace",
-    "stackTraceLimit",
-    "undefined",
-    "this",
-    "arguments",
-    "new.target",
-    "<home>",
-    "<active>",
-    "<completion>",
-];
+/// `Error` hooks, read when an error is made. (The names every compilation interns are
+/// interned by a session's first compilation, before anything else it does.)
+pub(super) const ENGINE_ATOMS: &[&str] = &["prepareStackTrace", "stackTraceLimit"];
