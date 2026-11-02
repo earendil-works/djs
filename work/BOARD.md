@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0155 | Fix instr.py profiler; no stale stack values in images | perf | .worktrees/perf |
 | 0151 | Shrink the base heap to a fraction (no removals) | bloat | .worktrees/bloat |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 
@@ -79,6 +78,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0155 | instr.py fixed + user/builtin split (D2309); no stale stack slots in images (D2308) | f1095c99 (agent perf; pi-like: 47% user bytecode, 39% builtins, 12% GC) |
 | 0156 | Architecture bloat audit (research) | 4f53e325 (agent audit; docs/architecture-bloat-audit.md: no big misstep; floor ~0.75-0.8x; memory on par with qjs) |
 | 0157 | Pages deploy retry | b7233a0f (agent pages) |
 | 0153 | Wasm JIT study (D2510: not now) | b6fd22ff (agent jit; docs/wasm-jit.md; prototype 3-8x after TurboFan, but scripts too short) |
