@@ -50,6 +50,9 @@ const U32_DATA = cells.U32Array.tail.offset;
 const VA_LEN = cells.ValueArray.fields.LEN.offset;
 const VA_VALUES = cells.ValueArray.tail.offset;
 const ATOMS_ENTRIES = cells.AtomTable.fields.ENTRIES.offset;
+// Two levels in a VM from the base image (D2431): the base's atoms, then the VM's own.
+const ATOMS_BASE_ENTRIES = cells.AtomTable.fields.BASE_ENTRIES.offset;
+const ATOMS_BASE_COUNT = cells.AtomTable.fields.BASE_COUNT.offset;
 const P_ENUMERABLE = LAYOUT.propFlags.ENUMERABLE;
 const P_ACCESSOR = LAYOUT.propFlags.ACCESSOR;
 const A_INT = LAYOUT.atom.intBit;
@@ -235,6 +238,8 @@ class Reader {
   buf: NodeBuffer | null;
   atoms: (string | undefined)[];
   atomEntries: number;
+  atomBaseEntries: number;
+  atomBaseCount: number;
   /** Offsets of the containers being read (cycle detection). */
   stack: number[] = [];
   depth = 0;
@@ -254,6 +259,8 @@ class Reader {
     this.atoms = atoms;
     const table = this.view.getUint32(ROOTS_ATOMS, true);
     this.atomEntries = table === 0 ? 0 : this.view.getUint32(table + ATOMS_ENTRIES, true);
+    this.atomBaseEntries = table === 0 ? 0 : this.view.getUint32(table + ATOMS_BASE_ENTRIES, true);
+    this.atomBaseCount = table === 0 ? 0 : this.view.getUint32(table + ATOMS_BASE_COUNT, true);
   }
 
   /** The value stored at arena offset `off`. */
@@ -395,7 +402,10 @@ class Reader {
     const index = atom & A_INDEX;
     let s = this.atoms[index];
     if (s === undefined) {
-      const slot = this.atomEntries + VA_VALUES + 8 * index;
+      const n = this.atomBaseCount;
+      const slot = index < n
+        ? this.atomBaseEntries + VA_VALUES + 8 * index
+        : this.atomEntries + VA_VALUES + 8 * (index - n);
       s = this.string(this.view.getUint32(slot, true));
       this.atoms[index] = s;
     }
