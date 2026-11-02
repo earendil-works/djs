@@ -1,7 +1,7 @@
 # 0155: Fix the instruction profiler; no stale stack values in images
 
-status: open
-agent: -
+status: in-progress
+agent: perf
 branch: issue/0155-profiler-stack
 depends-on: 0153
 guide: docs/guide/snapshots.md / determinism.md if image content rules change
