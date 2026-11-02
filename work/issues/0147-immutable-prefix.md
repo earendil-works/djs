@@ -1,7 +1,7 @@
 # 0147: Immutable builtin prefix: session-only images, hash, GC and determinism
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0147-immutable-prefix
 depends-on: 0144
 guide: docs/guide/gc.md, snapshots.md, determinism.md, arena.md
