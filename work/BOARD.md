@@ -18,6 +18,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| 0148 | Order-independent shapes for builtin-created objects | 0147 (heap next) |
 
 ## Done
 
