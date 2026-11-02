@@ -1,6 +1,6 @@
 # 0152: What can djs learn from pico? (research)
 
-status: in-progress
+status: done
 agent: pico
 branch: issue/0152-lessons-from-pico
 depends-on: -
@@ -43,7 +43,39 @@ docs/lessons-from-pico.md. Don't copy large parts of pico's text; summarize and 
 sections.
 
 ## Log
+- Read pico's whole site (tour, reference, appendix) from the text extraction (folded to
+  lines in work/scratch/0152/pico-folded.txt), and ARCH.md, the guide's snapshot,
+  suspension, gc, heap and host chapters, and the reports (empty-heap, frozen-builtins,
+  goldilocks/portable snapshots, size-vs-quickjs, slim-codemode) plus 0151's plan on the
+  bloat branch.
+- Checked pico's benchmarks: built djs-wasm (`wasm` profile) at 7d684dbb into
+  work/scratch/0152/target, rewrote pico's compute cases from their descriptions
+  (work/scratch/0152/w) and ran them through scripts/perf/wasm-run.ts and
+  qjs-wasm-run.mjs. Found `[...Array(n).keys()]` 26x quickjs-wasi (D1800's iter_next
+  declines on holes for keys iterators too), `Array.from({length}, f)` 2.9x, and
+  map/reduce on tiny arrays 2x (0137's follow-up). pico's djs image number (336 KB) is a
+  raw arena from before D2066/D2431; a new sandbox is 11.7 KB uncompressed, 1.2 KB zstd
+  (work/scratch/0152/snap.ts).
+- Wrote docs/lessons-from-pico.md. No decisions needed; guide: none affected.
 
 ## Follow-ups
+1. Keys iterators over holes in `iter_plan` (and `Array.from({length}, f)`): 26x / 2.9x
+   vs quickjs-wasi. Small.
+2. Callback builtins on 0-2-element arrays (0137's follow-up), with pico's 9b shape as
+   the benchmark (1.95x).
+3. For 0151: one cell per function (code inline in the template), thin internal helpers
+   compiled to direct intrinsic calls and dropped, 8-bit operands with an escape, static
+   calls (report 2.2).
+4. Design: sliced strings + result buffers + external results in snapshots (2.3, 2.8).
+5. Run-table session images for codec-free hosts (2.4).
+6. Seeded hashing for a VM's own atoms and Map/Set (2.5).
+7. Owner decision: image compatibility keyed by tables and base, not the source hash (2.6).
+8. Experiment: fuel at safepoints only (2.7).
+9. Watch: the fresh-instance call_indirect deopt under node 26 / V8 14.6.
+10. Wasm benchmarks on x86-64 too.
 
 ## Result
+docs/lessons-from-pico.md: pico compared with djs area by area (values and cells,
+memory, compiler and bytecode, interpreter and fuel, host calls, images, JIT, testing),
+eight ranked lessons with effort and the djs code they touch, what does not transfer and
+why, and a check of pico's benchmark numbers against current djs. No engine change.
