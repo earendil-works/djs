@@ -322,6 +322,12 @@ impl Heap {
         }
     }
 
+    /// Sets the GC threshold from the live size as a collection would (`next_threshold`).
+    pub fn reset_gc_threshold(&mut self) {
+        let t = gc::next_threshold(self.arena.len(), self.base_end(), self.arena.limit());
+        self.set_gc_threshold(t);
+    }
+
     /// Sets the GC threshold, in the roots cell too (D1601).
     pub(crate) fn set_gc_threshold(&mut self, t: u32) {
         self.gc_threshold = t;

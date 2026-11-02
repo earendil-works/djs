@@ -902,6 +902,9 @@ impl Vm {
         self.heap
             .arena_mut()
             .set(0, crate::heap::cells::Roots::BASE_END, len - tail_bytes);
+        // The stored threshold by the prefix rule (D2442), now that there is a prefix:
+        // a VM's first collection comes after as much growth as later ones.
+        self.heap.reset_gc_threshold();
         Ok(())
     }
 
