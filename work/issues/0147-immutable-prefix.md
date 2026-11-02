@@ -35,6 +35,22 @@ docs/frozen-builtins.md phase 2: the base image becomes an immutable prefix of e
 - [ ] Guide pages updated (D2102 rules).
 
 ## Log
+- Early merge (22a4247e, D2062): `Roots::BASE_END`, set by `prepare_base_image`. Full
+  collections forward it like `OLD_END`, minor ones leave it alone, Cheney sets it to 0.
+  Reported to the coordinator for 0146.
+- Tail of per-VM cells (D2063), using 0144's write audit (re-run with
+  `WATCH = BASE_END`):
+  - first pass: header flags (IS_PROTO set by caches on prototypes not yet used as
+    protos at build) and the host call table (Roots.HOST_CALLS) were still written;
+  - then all builtin objects are marked at build, flags are written only on change, and
+    host calls go in the tail;
+  - result: 0 prefix writes over 300 harvested cases plus the codemode corpus (until
+    the first collection).
+- String hashes: precomputing them cost +1.6 KB gzip (incompressible), so prefix strings
+  just don't cache them.
+- Checked: djs-core, prelude and wasm tests, e2e plain, js tests, native-vs-wasm, difftest
+  codemode/console/builtins with all stress modes, test262 Object/Array/Symbol.
+- Instructions vs main: ±0.5%, props −1.2%; module +60 B gzip.
 
 ## Follow-ups
 

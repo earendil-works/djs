@@ -830,8 +830,8 @@ impl Vm {
     /// Readies a collected realm for the builtin prefix (D2063): what a VM would write
     /// lazily into base cells is written now, and the cells a VM writes are listed for
     /// the image's tail (above `BASE_END`), in their order there.
-    /// - String hashes are computed, and every builtin object is marked as a prototype
-    ///   (D1621), so neither is written later.
+    /// - Every builtin object is marked as a prototype (D1621), so that is not written
+    ///   later. (String hashes are not cached in the prefix: `Heap::str_hash`.)
     /// - The root shape is dropped from the roots: a VM grows its own shape tree from a
     ///   root of its own (created on first use), and the builtins' shapes keep theirs.
     /// - The tail: the realm and its random state, the global object, the global lexical
@@ -850,9 +850,6 @@ impl Vm {
         let own = [self.global().0, lex.0, registry];
         for &(c, kind) in &cells {
             match kind {
-                crate::heap::CellKind::Str8 | crate::heap::CellKind::Str16 => {
-                    self.heap.str_hash(crate::value::Str(c));
-                }
                 // Any builtin can end up on a prototype chain (a class extending one, an
                 // object created from one): all are marked now rather than when an
                 // inline cache first caches through them.

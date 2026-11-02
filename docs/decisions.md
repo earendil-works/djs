@@ -6236,3 +6236,35 @@ stable id in tests/builtins/registry.tsv (D022 phase 0, docs/frozen-builtins.md)
   `Array.prototype.map` gets its function named so, and pi's lockdown turns some data
   properties into accessors, which then resolve under `get `/`set ` only. With the
   immutable prefix (D022, 0147) the base offset table names prefix cells exactly.
+
+## D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
+date: 2026-11-08 · by: heap · issue: 0147
+The second step of D022's immutable prefix. `BASE_END` (D2062) now splits the base image
+into the builtin prefix and a **tail** of the cells a VM writes. `Vm::prepare_base_image`
+puts the tail last (`order_for_image`) and sets `BASE_END` where it starts.
+- **The tail**, in order:
+  1. the realm and `Math.random`'s state;
+  2. the global object;
+  3. the global lexical record and `Symbol.for`'s registry, with their property storage;
+  4. Map/Set tables (D2057);
+  5. the global object's property table and index;
+  6. the atom table cell, its index and its entries;
+  7. the host call table, the interpreter cell, the value stack.
+- **Nothing is written lazily into the prefix:**
+  - Every builtin object is marked `OBJ_IS_PROTO` at build (D1621), instead of when an
+    inline cache first caches through it. The tail's own objects are not marked: adding
+    a global must not bump the prototype epoch.
+  - Header flags are written only when they change.
+  - String hashes are not cached for strings below `BASE_END`. They are recomputed
+    instead: the few hashed at run time are cheaper than 3.6 KB of incompressible hashes
+    in the module's coded base (+1.6 KB gzip, measured).
+- **Root shape:** `Roots::ROOT_SHAPE` is cleared in the image. A VM grows its own shape tree
+  from a root created on first use. The builtins' shapes keep the old root, so session
+  objects never extend a builtin's transition list or descriptor array.
+- **Checked:**
+  - a write counter over the arena and hot-loop stores below `BASE_END` (roots cell
+    excluded), run over all 300 harvested codemode cases and the codemode corpus,
+    counted 0 writes. Before, it counted 1.2 M writes into 280 words;
+  - a djs-prelude test checks that no prefix cell references the tail.
+- **Measured:** wasm instructions within ±0.5% except props −1.2%. Module +60 B gzip. The
+  base keeps its size; the tail is 25 KB of it.

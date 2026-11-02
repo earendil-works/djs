@@ -912,7 +912,12 @@ impl Heap {
             return cached;
         }
         let h = self.str_hash_uncached(s);
-        self.arena_mut().set(s.0, Str8::HASH, h);
+        // Not cached in the builtin prefix (D2063), which no VM writes: its few strings
+        // hashed at run time are hashed again (cheaper than 3.6 KB of incompressible
+        // hashes in the module's base).
+        if s.0 >= self.base_end() {
+            self.arena_mut().set(s.0, Str8::HASH, h);
+        }
         h
     }
 
