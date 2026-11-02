@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0142 | Goldilocks snapshots: minimal + survive updates | portable | .worktrees/portable |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 
 ## Open (ready)
@@ -78,6 +77,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0142 | Goldilocks snapshots (research) | e979b0ee (agent portable; docs/goldilocks-snapshots.md: layered reference + two tiers) |
 | 0143 | Why a fresh heap is 300 KB (research) | 89a615a3 (agent bloat; docs/empty-heap.md: lazy builtins -> ~10 KB fresh VM, 8-11 weeks) |
 | 0141 | Portable snapshots: design + cross-build prototype (D2350) | ff288fa1 (agent portable; docs/portable-snapshots.md; 1,057/1,057 corpus idle points transfer across 406 commits) |
 | 0140 | Snapshots across djs versions (research) | 8b50738b (agent snapshot; docs/snapshot-versioning.md: journal as durable record, snapshot as same-build fast path) |
