@@ -1,7 +1,7 @@
 # 0152: What can djs learn from pico? (research)
 
-status: open
-agent: -
+status: in-progress
+agent: pico
 branch: issue/0152-lessons-from-pico
 depends-on: -
 guide: -
