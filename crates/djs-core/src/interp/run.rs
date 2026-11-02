@@ -430,15 +430,7 @@ impl<'h> Exec<'h> {
         let new_cap = top
             .max(cap.saturating_mul(2))
             .min(self.opts.max_stack.max(top));
-        let new = state::alloc_stack(self.heap, new_cap)?;
-        let a = self.heap.arena_mut();
-        a.copy_within(
-            ValueArray::VALUES.at(self.stack, 0),
-            self.sp * 8,
-            ValueArray::VALUES.at(new, 0),
-        );
-        a.set(0, Roots::STACK, Ref(new));
-        self.stack = new;
+        self.stack = state::move_stack(self.heap, self.sp, new_cap)?;
         Ok(())
     }
 

@@ -130,6 +130,31 @@ pub(crate) fn alloc_stack(heap: &mut Heap, cap: u32) -> Result<u32, HeapError> {
     Ok(s)
 }
 
+/// Zeroes the value stack's dead slots (`sp` on, D2308) and, unless `cap` is its
+/// capacity, moves the live ones to a new stack of `cap` slots, which becomes the VM's;
+/// returns the stack. Zeroed, the dead slots of an image, and of an old stack left behind
+/// as garbage, do not depend on when images were taken. Growing (`ensure`), images and
+/// the embedder's collections (`vm::tidy_stack`) share it.
+#[inline(never)]
+pub(crate) fn move_stack(heap: &mut Heap, sp: u32, cap: u32) -> Result<u32, HeapError> {
+    let old = stack(heap);
+    let old_cap = heap.value_array_capacity(old);
+    heap.arena_mut()
+        .zero(ValueArray::VALUES.at(old, sp), 8 * (old_cap - sp));
+    if cap == old_cap {
+        return Ok(old);
+    }
+    let new = alloc_stack(heap, cap)?;
+    let a = heap.arena_mut();
+    a.copy_within(
+        ValueArray::VALUES.at(old, 0),
+        sp * 8,
+        ValueArray::VALUES.at(new, 0),
+    );
+    a.set(0, Roots::STACK, Ref(new));
+    Ok(new)
+}
+
 /// Creates the `Interp` cell, the value stack and the host call table.
 pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     let i = heap.alloc_cell(CellKind::Interp, Interp::LAYOUT.min_size)?;
