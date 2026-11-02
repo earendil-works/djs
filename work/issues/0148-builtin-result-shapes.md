@@ -1,7 +1,7 @@
 # 0148: Order-independent shapes for objects that builtins create
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0148-builtin-result-shapes
 depends-on: 0147
 guide: docs/guide/determinism.md, snapshots.md (the session-image guarantee)
