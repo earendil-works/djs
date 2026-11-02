@@ -17,6 +17,7 @@
 
 mod format;
 mod image;
+pub mod registry;
 
 use alloc::string::String;
 use alloc::vec::Vec;

@@ -13,6 +13,9 @@
 
 extern crate alloc;
 
+#[cfg(feature = "registry")]
+pub mod registry;
+
 use djs_core::heap::{HeapError, LoadError};
 use djs_core::vm::{Vm, VmOptions};
 

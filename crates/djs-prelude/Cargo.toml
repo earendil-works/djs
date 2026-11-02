@@ -7,12 +7,15 @@ publish.workspace = true
 description = "The base snapshot: djs-core's realm with the prelude installed, made at build time (D1321)."
 
 [features]
-default = ["raw"]
+default = ["raw", "registry"]
 # `BASE`, the image as it is: native builds (copied per VM with no decode).
 raw = []
 # `BASE_PACKED`, the image coded with djs-lzrc (D2252): djs-wasm, where the module's size
 # counts (D020); `unpack_base` decodes it once.
 packed = ["dep:djs-lzrc"]
+# The builtin registry (D2371, tests/builtins/registry.tsv) with this build's base offsets:
+# tools and native hosts. Off in djs-wasm, whose size counts.
+registry = []
 
 [dependencies]
 djs-core = { path = "../djs-core" }
