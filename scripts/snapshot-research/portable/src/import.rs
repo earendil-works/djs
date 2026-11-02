@@ -22,12 +22,12 @@ use crate::session::{Session, new_vm};
 type FnKey = (String, u32, u32);
 
 pub struct Importer {
-    templates: HashMap<FnKey, TemplateInfo>,
-    cells: Vec<u32>,
-    kinds: Vec<String>,
+    pub templates: HashMap<FnKey, TemplateInfo>,
+    pub cells: Vec<u32>,
+    pub kinds: Vec<String>,
 }
 
-fn collect_templates(heap: &Heap, t: u32, out: &mut HashMap<FnKey, TemplateInfo>) {
+pub fn collect_templates(heap: &Heap, t: u32, out: &mut HashMap<FnKey, TemplateInfo>) {
     let info = template_info(heap, t);
     let children = info.children.clone();
     out.insert((info.script.clone(), info.span.0, info.span.1), info);
@@ -45,7 +45,7 @@ fn span_of(j: &J) -> FnKey {
 }
 
 impl Importer {
-    fn value(&self, heap: &mut Heap, j: &J) -> Result<Value, String> {
+    pub fn value(&self, heap: &mut Heap, j: &J) -> Result<Value, String> {
         Ok(match j {
             J::Null => Value::NULL,
             J::Bool(b) => Value::bool(*b),
@@ -68,6 +68,9 @@ impl Importer {
                 } else if let Some(p) = m.get("builtin") {
                     let p = p.as_str().unwrap();
                     resolve_builtin(heap, p).ok_or(format!("no builtin {p} in this build"))?
+                } else if let Some(p) = m.get("prelude") {
+                    let p = p.as_str().unwrap();
+                    resolve_prelude(heap, p).ok_or(format!("the prelude has no {p}"))?
                 } else if let Some(r) = m.get("ref") {
                     let i = r.as_u64().unwrap() as usize;
                     let c = self.cells[i];
@@ -144,6 +147,7 @@ pub fn import(snap: &J) -> Result<Session, String> {
     // numbers); the VM gets fresh call ids and promises, which become the snapshot's
     // pending promise nodes.
     let mut pending = Vec::new();
+    let mut reissued = Vec::new();
     for p in snap["pending"].as_array().unwrap() {
         let fname = p["fn"].as_str().unwrap();
         let key = vm
@@ -178,13 +182,22 @@ pub fn import(snap: &J) -> Result<Session, String> {
         let node = p["promise"]["ref"]
             .as_u64()
             .ok_or("pending promise is not a node")? as usize;
-        imp.cells[node] = promise.offset();
+        // Held by a handle: the next run may collect and move it.
+        let h = vm
+            .heap_mut()
+            .new_handle(Value::object(promise))
+            .map_err(|e| format!("{e:?}"))?;
+        reissued.push((node, h));
         pending.push((
             id,
             p["seq"].as_u64().unwrap() as u32,
             fname.to_string(),
             texts,
         ));
+    }
+    for (node, h) in reissued {
+        imp.cells[node] = vm.heap().get_handle(h).as_object().unwrap().offset();
+        vm.heap_mut().drop_handle(h);
     }
     // The embedder's functions, registered again by id.
     for (i, n) in nodes.iter().enumerate() {
@@ -200,6 +213,37 @@ pub fn import(snap: &J) -> Result<Session, String> {
         }
     }
 
+    let nodes = nodes.to_vec();
+    build(&mut imp, &mut vm, &nodes)?;
+    let g = vm.global();
+    imp.define_props(vm.heap_mut(), g, &snap["globals"])?;
+    let mut s = Session::with_vm(vm);
+    s.scripts = scripts;
+    for (name, j) in snap["roots"].as_object().unwrap() {
+        let v = imp.value(s.vm.heap_mut(), j)?;
+        let h =
+            s.vm.heap_mut()
+                .new_handle(v)
+                .map_err(|e| format!("{e:?}"))?;
+        s.roots.push((name.clone(), h));
+    }
+    s.pending = pending;
+    s.issued = snap["issued"].as_u64().unwrap() as u32;
+    s.output = snap["output"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    s.finished = None;
+    Ok(s)
+}
+
+/// Builds the snapshot's nodes in `vm` (cells already assigned in `imp.cells` are kept):
+/// a cell for every node, then their contents. Returns the promises whose reactions
+/// included the prelude's `run` subscription (tier 2, 0142).
+pub fn build(imp: &mut Importer, vm: &mut djs_core::vm::Vm, nodes: &[J]) -> Result<Vec<u32>, String> {
+    let mut run_subscribed = Vec::new();
     let heap = vm.heap_mut();
     let fproto = intrinsic(heap, Intrinsic::FunctionProto).as_object();
     // Pass 1: a cell for every node.
@@ -398,6 +442,10 @@ pub fn import(snap: &J) -> Result<Session, String> {
                     | (n["alreadyResolved"].as_bool().unwrap() as i32) << 1;
                 let mut triples = Vec::new();
                 for r in n["reactions"].as_array().unwrap() {
+                    if r.get("preludeRun").is_some() {
+                        run_subscribed.push(cell);
+                        continue;
+                    }
                     triples.push(imp.value(heap, &r["capability"])?);
                     triples.push(imp.value(heap, &r["onFulfilled"])?);
                     triples.push(imp.value(heap, &r["onRejected"])?);
@@ -430,28 +478,7 @@ pub fn import(snap: &J) -> Result<Session, String> {
         }
     }
 
-    let g = vm.global();
-    imp.define_props(vm.heap_mut(), g, &snap["globals"])?;
-    let mut s = Session::with_vm(vm);
-    s.scripts = scripts;
-    for (name, j) in snap["roots"].as_object().unwrap() {
-        let v = imp.value(s.vm.heap_mut(), j)?;
-        let h =
-            s.vm.heap_mut()
-                .new_handle(v)
-                .map_err(|e| format!("{e:?}"))?;
-        s.roots.push((name.clone(), h));
-    }
-    s.pending = pending;
-    s.issued = snap["issued"].as_u64().unwrap() as u32;
-    s.output = snap["output"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap().to_string())
-        .collect();
-    s.finished = None;
-    Ok(s)
+    Ok(run_subscribed)
 }
 
 fn import_activation(imp: &Importer, heap: &mut Heap, g: Obj, n: &J) -> Result<(), String> {
@@ -504,7 +531,7 @@ fn import_activation(imp: &Importer, heap: &mut Heap, g: Obj, n: &J) -> Result<(
         let name = t.names.get(i as usize).cloned().unwrap_or_default();
         let v = if name == "<state>" {
             Value::object(g)
-        } else if name.is_empty() || name.starts_with('<') {
+        } else if name.is_empty() || (name.starts_with('<') && !bindings.contains_key(&name)) {
             Value::UNDEFINED
         } else {
             let k = seen.entry(name.clone()).or_insert(0);

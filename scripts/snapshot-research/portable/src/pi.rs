@@ -143,6 +143,11 @@ impl Session {
         }
     }
 
+    /// `evaluate` for other modules: calls a compiled body, its result.
+    pub fn evaluate_pub(&mut self, f: Value) -> Result<Handle, String> {
+        self.evaluate(f, &[])
+    }
+
     fn evaluate(&mut self, f: Value, args: &[Value]) -> Result<Handle, String> {
         let p = self.invoke(f, Value::UNDEFINED, args)?;
         let pv = self.get(p);

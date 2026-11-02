@@ -356,3 +356,123 @@ pub fn elements_of(heap: &Heap, o: Obj) -> u32 {
     let r: Ref = heap.arena().get(o.offset(), Object::ELEMENTS);
     r.get().unwrap_or(0)
 }
+
+/// Tier 2 (0142): the objects a prelude made, named by their path from the global object
+/// (`globalThis/tools/<target>/read` for a tool through pi's Proxy), skipping builtins.
+pub fn prelude_names(heap: &Heap, builtins: &HashMap<u32, String>) -> HashMap<u32, String> {
+    let mut names: HashMap<u32, String> = HashMap::new();
+    let mut queue = VecDeque::new();
+    let global = intrinsic(heap, Intrinsic::Global).as_object().unwrap();
+    queue.push_back((global, String::from("globalThis"), 0));
+    while let Some((o, path, depth)) = queue.pop_front() {
+        if depth >= 4 {
+            continue;
+        }
+        let mut edges: Vec<(String, Value)> = Vec::new();
+        if heap.object_class(o) == ObjectClass::Proxy {
+            if let Some(t) = heap.proxy_target(o) {
+                edges.push(("<target>".into(), Value::object(t)));
+            }
+            if let Some(t) = heap.proxy_handler(o) {
+                edges.push(("<handler>".into(), Value::object(t)));
+            }
+        } else {
+            for k in heap.own_keys(o) {
+                if heap.atom_symbol(k).is_some() {
+                    continue;
+                }
+                let name = heap.atom_name(k);
+                match heap.get_own_property(o, k) {
+                    Some(Property::Data { value, .. }) => edges.push((name, value)),
+                    Some(Property::Accessor { getter, setter, .. }) => {
+                        edges.push((format!("get {name}"), getter));
+                        edges.push((format!("set {name}"), setter));
+                    }
+                    None => {}
+                }
+            }
+        }
+        edges.sort_by(|a, b| a.0.cmp(&b.0));
+        for (k, v) in edges {
+            let Some(t) = v.as_object() else { continue };
+            if builtins.contains_key(&t.offset()) || names.contains_key(&t.offset()) {
+                continue;
+            }
+            let p = format!("{path}/{k}");
+            names.insert(t.offset(), p.clone());
+            queue.push_back((t, p, depth + 1));
+        }
+    }
+    names
+}
+
+/// Resolves a prelude path on this heap (as `resolve_builtin`, with `<target>` and
+/// `<handler>` for proxies).
+pub fn resolve_prelude(heap: &mut Heap, path: &str) -> Option<Value> {
+    let mut parts = path.split('/');
+    if parts.next() != Some("globalThis") {
+        return None;
+    }
+    let mut cur = intrinsic(heap, Intrinsic::Global);
+    for part in parts {
+        let o = cur.as_object()?;
+        cur = match part {
+            "<target>" => Value::object(heap.proxy_target(o)?),
+            "<handler>" => Value::object(heap.proxy_handler(o)?),
+            _ => {
+                let (which, key) = match part.split_once(' ') {
+                    Some(("get", k)) => (1, k),
+                    Some(("set", k)) => (2, k),
+                    _ => (0, part),
+                };
+                let atom = heap.atom_str(key).ok()?;
+                match (heap.get_own_property(o, atom)?, which) {
+                    (Property::Data { value, .. }, 0) => value,
+                    (Property::Accessor { getter, .. }, 1) => getter,
+                    (Property::Accessor { setter, .. }, 2) => setter,
+                    _ => return None,
+                }
+            }
+        };
+    }
+    Some(cur)
+}
+
+/// The prelude's top-level bindings that its closures capture, by name -> Box cell:
+/// reached from the closures among `roots`, through captured closures.
+pub fn captured_bindings(heap: &Heap, roots: &[Value]) -> HashMap<String, u32> {
+    let mut out: HashMap<String, u32> = HashMap::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut queue: VecDeque<Value> = roots.iter().copied().collect();
+    while let Some(v) = queue.pop_front() {
+        let Some(o) = v.as_object() else { continue };
+        if !seen.insert(o.offset()) {
+            continue;
+        }
+        if heap.object_class(o) == ObjectClass::Proxy {
+            if let Some(t) = heap.proxy_handler(o) {
+                queue.push_back(Value::object(t));
+            }
+            continue;
+        }
+        if let Some(t) = closure_template(heap, o) {
+            let info = template_info(heap, t);
+            for i in 0..info.captures {
+                let Some(b) = heap.object_slot(o, 1 + i).as_internal() else { continue };
+                let name = info.names.get((info.locals + i) as usize).cloned().unwrap_or_default();
+                out.entry(name).or_insert(b);
+                let inner: Value = heap.arena().get(b, djs_core::heap::cells::BoxCell::VALUE);
+                queue.push_back(inner);
+            }
+        }
+        // Methods of objects (the api, console, the guard's handler).
+        for k in heap.own_keys(o) {
+            if let Some(Property::Data { value, .. }) = heap.get_own_property(o, k) {
+                if value.as_object().is_some_and(|f| heap.object_class(f) == ObjectClass::Function) {
+                    queue.push_back(value);
+                }
+            }
+        }
+    }
+    out
+}

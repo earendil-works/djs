@@ -137,6 +137,7 @@ fn main() {
             );
         }
         Some("goldi-images") => goldi::images(&args[1..]),
+        Some("goldi-tier2") => goldi::tier2(&args[1..]),
         Some("harvest") => sites::main(&args[1..]),
         Some("import-all") => sites::import_all(&args[1], args.get(2).map(|s| s.as_str())),
         _ => {

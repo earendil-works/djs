@@ -18,13 +18,17 @@ use crate::session::Session;
 pub struct Exporter<'a> {
     vm: &'a djs_core::vm::Vm,
     heap: &'a Heap,
-    builtins: HashMap<u32, String>,
+    pub builtins: HashMap<u32, String>,
     ids: HashMap<u32, usize>,
     nodes: Vec<J>,
     queue: VecDeque<(u32, usize)>,
     /// Record cells by the schema their referrer implies.
     record_schema: HashMap<u32, &'static str>,
     pub errors: Vec<String>,
+    /// Tier 2 (0142): objects of the prelude world, named by path; and the prelude's
+    /// script name, whose unnamed closures may not travel.
+    pub prelude: HashMap<u32, String>,
+    pub prelude_script: Option<String>,
 }
 
 /// Field names of the builtin records a codemode session holds. These are djs's own
@@ -84,6 +88,8 @@ impl<'a> Exporter<'a> {
             queue: VecDeque::new(),
             record_schema: HashMap::new(),
             errors: Vec::new(),
+            prelude: HashMap::new(),
+            prelude_script: None,
         }
     }
 
@@ -112,6 +118,9 @@ impl<'a> Exporter<'a> {
                 let o = v.as_object().unwrap();
                 if let Some(p) = self.builtins.get(&o.offset()) {
                     return json!({"builtin": p});
+                }
+                if let Some(p) = self.prelude.get(&o.offset()) {
+                    return json!({"prelude": p});
                 }
                 self.node(o.offset())
             }
@@ -232,6 +241,13 @@ impl<'a> Exporter<'a> {
                     self.errors
                         .push(format!("an unnamed builtin function ({name})"));
                 }
+                if self.prelude_script.as_deref() == Some(t.script.as_str()) {
+                    let name: u32 = h
+                        .arena()
+                        .get(t.off, djs_core::heap::cells::FuncTemplate::NAME);
+                    let name = h.atom_name(djs_core::heap::Atom::from_id(name));
+                    self.errors.push(format!("an unnamed prelude function ({name})"));
+                }
                 let mut captures = Vec::new();
                 for i in 0..t.captures {
                     let name = t
@@ -279,6 +295,12 @@ impl<'a> Exporter<'a> {
                         let cap = va_get(h, r, 3 * k);
                         let f = va_get(h, r, 3 * k + 1);
                         let rj = va_get(h, r, 3 * k + 2);
+                        if self.is_prelude_run_handler(f) {
+                            // The prelude's `run` subscribed to the script's result: the
+                            // importer subscribes the new prelude's `run` again.
+                            reactions.push(json!({"preludeRun": true}));
+                            continue;
+                        }
                         let (cap, f, rj) = (self.value(cap), self.value(f), self.value(rj));
                         reactions
                             .push(json!({"capability": cap, "onFulfilled": f, "onRejected": rj}));
@@ -381,13 +403,14 @@ impl<'a> Exporter<'a> {
             if name == "<state>" {
                 continue;
             }
-            if name.is_empty() || name.starts_with('<') {
+            if name.is_empty() {
                 if !v.is_undefined() {
-                    self.errors
-                        .push(format!("hidden local {name:?} holds a value"));
+                    self.errors.push("an unnamed local holds a value".into());
                 }
                 continue;
             }
+            // Hidden locals the compiler names by source order (`<fields 0>`: a class's
+            // field initializer) travel like bindings.
             let k = seen.entry(name.clone()).or_insert(0);
             let key = if *k == 0 {
                 name.clone()
@@ -424,7 +447,22 @@ impl<'a> Exporter<'a> {
                "operands": operands, "promise": promise})
     }
 
-    fn drain(&mut self) {
+    /// An unnamed closure of the prelude's script: `api.run`'s handlers.
+    fn is_prelude_run_handler(&self, f: Value) -> bool {
+        let Some(script) = &self.prelude_script else { return false };
+        let Some(o) = f.as_object() else { return false };
+        if self.prelude.contains_key(&o.offset()) {
+            return false;
+        }
+        closure_template(self.heap, o)
+            .is_some_and(|t| &template_info(self.heap, t).script == script)
+    }
+
+    pub fn into_nodes(self) -> Vec<J> {
+        self.nodes
+    }
+
+    pub fn drain(&mut self) {
         while let Some((cell, i)) = self.queue.pop_front() {
             let h = self.heap;
             let node = match h.cell_kind(cell) {
