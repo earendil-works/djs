@@ -741,9 +741,10 @@ pub fn strings(g: &Graph, o: &Options, scope: &Scope) -> Section {
     let (mut flat, mut flat_bytes, mut two, mut ropes, mut rope_bytes, mut units) =
         (0u64, 0u64, 0u64, 0u64, 0u64, 0u64);
     let (mut rest, mut rest_bytes) = (0u64, 0u64);
-    // Equal contents over the whole image: (copies in scope, copies outside, size, a
-    // copy in scope).
-    let mut groups: HashMap<(CellKind, u32, &[u8]), (u64, u64, u32, u32)> = HashMap::new();
+    // Equal contents (kind, length, data) over the whole image: (copies in scope, copies
+    // outside, size, a copy in scope).
+    type Content<'a> = (CellKind, u32, &'a [u8]);
+    let mut groups: HashMap<Content, (u64, u64, u32, u32)> = HashMap::new();
     let mut flats: Vec<u32> = Vec::new();
     for (i, c) in g.cells.iter().enumerate() {
         if !g.live[i] {
