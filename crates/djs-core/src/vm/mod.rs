@@ -18,6 +18,7 @@
 mod format;
 mod image;
 pub mod registry;
+pub mod session;
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -361,6 +362,21 @@ impl Vm {
     /// The complete VM image.
     pub fn bytes(&self) -> &[u8] {
         self.heap.bytes()
+    }
+
+    /// The VM's session image (D2066): the image without the builtin prefix it shares
+    /// with every VM of the build, given that prefix's image `base` (the base snapshot).
+    /// Only the roots cell, the prefix words a script changed and the cells from
+    /// `Roots::BASE_END` on.
+    pub fn session_bytes(&self, base: &[u8]) -> Result<Vec<u8>, session::SessionError> {
+        session::session_image(self.bytes(), base)
+    }
+
+    /// Restores a VM from [`Vm::session_bytes`] and the same base. Verified like
+    /// [`Vm::from_bytes`].
+    pub fn from_session(session: &[u8], base: &[u8], opts: VmOptions) -> Result<Vm, LoadError> {
+        let raw = session::expand_session(session, base).map_err(|_| LoadError::BadHeader)?;
+        Vm::from_bytes(raw, opts)
     }
 
     pub fn heap(&self) -> &Heap {

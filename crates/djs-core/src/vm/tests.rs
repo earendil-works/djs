@@ -3790,3 +3790,97 @@ fn the_armed_barrier_traps_prefix_writes() {
         "1"
     );
 }
+
+/// A base image as the build makes it (prefix and tail, D2063).
+fn prefixed_base() -> Vec<u8> {
+    static BASE: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    extern crate std;
+    BASE.get_or_init(|| {
+        let mut v = Vm::new(VmOptions::default()).unwrap();
+        v.prepare_base_image().unwrap();
+        v.bytes().to_vec()
+    })
+    .clone()
+}
+
+#[test]
+fn session_images_round_trip() {
+    // D2066: a session image holds the roots cell, the changed prefix words and the
+    // session region; with the base it restores the same VM.
+    use crate::vm::session::{SessionError, expand_session, session_diff};
+    let base = prefixed_base();
+    let mut vm = Vm::from_base(&base, VmOptions::default()).unwrap();
+    assert_eq!(eval(&mut vm, "globalThis.kept = [1, 2, 3]; return 1"), "1");
+    vm.collect().unwrap();
+    let s = vm.session_bytes(&base).unwrap();
+    assert!(session_diff(&s).unwrap().is_empty(), "nothing changed a builtin");
+    assert!(s.len() < vm.bytes().len() - (vm.heap().base_end() as usize) + 200);
+    assert_eq!(expand_session(&s, &base).unwrap(), vm.bytes());
+    let mut back = Vm::from_session(&s, &base, VmOptions::default()).unwrap();
+    assert_eq!(eval(&mut back, "return kept.join()"), "1,2,3");
+    // A script that changes a builtin: its words travel in the diff, in offset order.
+    assert_eq!(eval(&mut vm, "Array.prototype.extra = 7; return 1"), "1");
+    vm.collect().unwrap();
+    let s = vm.session_bytes(&base).unwrap();
+    let d = session_diff(&s).unwrap();
+    assert!(!d.is_empty());
+    assert!(d.windows(2).all(|w| w[0].0 < w[1].0));
+    let mut back = Vm::from_session(&s, &base, VmOptions::default()).unwrap();
+    assert_eq!(eval(&mut back, "return [].extra"), "7");
+    // Equal raw images give equal session images.
+    let raw = vm.bytes().to_vec();
+    assert_eq!(
+        crate::vm::session::session_image(&raw, &base).unwrap(),
+        s,
+        "a function of the raw image and the base"
+    );
+    // Another base is refused.
+    let mut other = base.clone();
+    other[200] ^= 1;
+    assert_eq!(expand_session(&s, &other), Err(SessionError::BaseMismatch));
+    assert_eq!(
+        crate::vm::session::session_image(vm.bytes(), &other[..100]),
+        Err(SessionError::BaseMismatch)
+    );
+}
+
+#[test]
+fn touching_builtins_in_any_order_leaves_the_same_session() {
+    // D022: builtins are never created or written at run time, so two runs that use
+    // different builtins in different orders, and keep nothing, leave identical session
+    // images and canonical hashes. Armed, the barrier also checks the prefix (D2065).
+    let base = prefixed_base();
+    let opts = VmOptions {
+        prefix_barrier: true,
+        ..VmOptions::default()
+    };
+    let run = |calls: &[&str]| {
+        let mut vm = Vm::from_base(&base, opts).unwrap();
+        for c in calls {
+            let src = alloc::format!("{c}; return undefined");
+            assert_eq!(eval(&mut vm, &src), "undefined");
+        }
+        vm.collect().unwrap();
+        (vm.session_bytes(&base).unwrap(), vm.canonical_hash().unwrap())
+    };
+    // Calls whose results are primitives or plain arrays. (Objects that builtins create
+    // with properties, iterator results and match results, get session shapes in the
+    // order they are first created: that is session state, D2066.)
+    let calls = [
+        "'abc'.toUpperCase().split('')",
+        "JSON.parse(JSON.stringify([1, [2]]))",
+        "Math.max(1, 2) + Number.parseFloat('1.5')",
+        "Object.keys([1]).concat([1])",
+        "Array.from('ab').reverse()",
+        "String(Symbol.iterator) + typeof Array.prototype.map",
+    ];
+    let mut reversed = calls;
+    reversed.reverse();
+    let (a, ha) = run(&calls);
+    let (b, hb) = run(&reversed);
+    let (c, hc) = run(&calls[..2]);
+    assert_eq!(a, b, "the order of first use changes nothing");
+    assert_eq!(ha, hb);
+    assert_eq!(a, c, "neither does which builtins were used");
+    assert_eq!(ha, hc);
+}
