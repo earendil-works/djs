@@ -323,7 +323,7 @@ impl Arena {
 
     #[inline(always)]
     pub fn write<T: FieldType>(&mut self, off: u32, v: T) {
-        self.barrier(off, T::TY.size() as u32);
+        self.barrier(off, T::TY.size());
         debug_assert!(
             off as usize + T::TY.size() as usize <= self.len as usize,
             "write past the arena end"
@@ -407,6 +407,14 @@ fn zero_to(bytes: &mut Vec<u8>, len: usize) {
 
 fn clamp_limit(limit: usize) -> u32 {
     (limit.min(MAX_ARENA as usize) as u32) & !7
+}
+
+/// A write below the armed prefix barrier's end: an engine bug (D2065).
+#[cfg(debug_assertions)]
+#[cold]
+#[inline(never)]
+fn prefix_write(off: u32) -> ! {
+    panic!("write into the builtin prefix at {off} (D2065)")
 }
 
 #[cfg(test)]
@@ -587,12 +595,4 @@ mod tests {
         assert_eq!(b.alloc(u32::MAX - 3), Err(HeapError::OutOfMemory));
         assert_eq!(b.len(), 0);
     }
-}
-
-/// A write below the armed prefix barrier's end: an engine bug (D2065).
-#[cfg(debug_assertions)]
-#[cold]
-#[inline(never)]
-fn prefix_write(off: u32) -> ! {
-    panic!("write into the builtin prefix at {off} (D2065)")
 }
