@@ -88,6 +88,9 @@ docs/frozen-builtins.md phase 2: the base image becomes an immutable prefix of e
     predates the tail), records 337.8 (340.2), big-log 404.0 (404.0). Sandbox new: 1,034 B
     zstd (raw image 1,041), 32 KB uncompressed instead of 330 KB. JS encode +0.05–0.1 ms,
     decode −0.02 ms. Module 458,304 B gzip (ceiling 458,444; session.rs is not in wasm).
+  - Peak memory, mem-perturb (24 runs, all 23 workloads), main before D2063 (09dfb743)
+    vs the branch: means equal within 0.1 MiB (props 2.13 → 2.20, strings 11.82 → 11.78,
+    json-replacer 4.69 → 4.49, pi-like 2.66 → 2.66).
   - canonical_hash unchanged (raw canonical copy; equivalent given the base), recorded.
   - `djs heap`: `prefix` section (changed words by cell, registry paths, capped at --top);
     containers read/write session images (djs-cli container.rs); REPL `.snapshot`/
