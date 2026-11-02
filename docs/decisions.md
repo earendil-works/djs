@@ -6432,3 +6432,20 @@ image and container formats (and ABI exports) are changed in place: no version b
 for compatibility, no readers for older formats (DJSN format 1, DJSS, DJPI, raw images in
 containers where the session image replaces them), no deprecated exports kept. A format
 still carries a version field so a mismatch fails clearly. Revisit at the first release.
+
+## D2400: One snapshot container format, session images only
+date: 2026-11-09 · by: heap · issue: 0148
+D024 applied to the snapshot files of D2260 and D2066:
+- **Container:** `"DJSN"` version 2 is the only one read. Any other version fails with
+  "snapshot container format N; this host reads format 2". The number stays at 2 rather
+  than going back to 1, so containers written before session images (version 1, raw
+  images) fail at the version check instead of deeper.
+- **Gone:** the readers of version 1 and of `"DJSS"` (Sandbox) and `"DJPI"` (pi), in
+  js/src/snapshot.ts, the Sandbox, js/pi and djs-cli; and raw images inside containers.
+- **Byte 13** says only what the session image's prefix words are against: 0 the module's
+  base image, 1 the container's reference (`AGAINST_BASE`, `AGAINST_REFERENCE`). Writers
+  refuse an image without the base's prefix (a VM not made from the base).
+- **Kept:** djs-cli reads a bare raw image (`Vm::bytes`, the REPL's `.snapshot --raw`,
+  reference files) or a bare session image as `djs heap` input: those are the image
+  itself, not an older container. `baseReference` requires the base exports (every
+  module has them).

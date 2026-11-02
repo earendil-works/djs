@@ -1,21 +1,19 @@
 //! Snapshot files in Rust: the snapshot container (`DJSN`, D2260; layout in docs/host.md
-//! "Snapshots", written by js/src/snapshot.ts), the formats before it (`DJSS` of the
-//! Sandbox, `DJPI` of the pi adapter) and raw heap images (`Vm::bytes`), read and written
-//! the way the JS host does (D2264).
+//! "Snapshots", written by js/src/snapshot.ts), session images and raw heap images
+//! (`Vm::bytes`), read and written the way the JS host does (D2264). There is one container
+//! format; any other version is refused (D024).
 //!
-//! A container's image is a zstd frame compressed with a *reference image* as a
-//! raw-content dictionary: this build's base snapshot, or pi's prelude image, which the
-//! reader has to be given.
+//! A container holds a session image (D2066), as a zstd frame compressed with a *reference
+//! image* as a raw-content dictionary: this build's base snapshot, or pi's prelude image,
+//! which the reader has to be given.
 
 use djs_core::heap::CellKind;
 use djs_core::heap::cells::{MAGIC, Roots};
 use djs_core::vm::session;
 
-/// "DJSN", "DJSS", "DJPI", little-endian.
+/// "DJSN", little-endian.
 pub const CONTAINER_MAGIC: u32 = 0x4e53_4a44;
-const SANDBOX_V1_MAGIC: u32 = 0x5353_4a44;
-const PI_V1_MAGIC: u32 = 0x4950_4a44;
-/// Format 2 (D2066) adds the image kind (byte 13); format 1 (raw images) still reads.
+/// The container's version (js/src/snapshot.ts `SNAPSHOT_FORMAT`).
 pub const FORMAT: u16 = 2;
 const HEADER: usize = 40;
 
@@ -31,11 +29,10 @@ pub const REFERENCE_BASE: u8 = 1;
 /// pi's prelude image: the session's VM right after pi's prelude, sealed.
 pub const REFERENCE_PI_PRELUDE: u8 = 2;
 
-/// The container's image (byte 13): a raw image, or a session image (D2066) whose
-/// prefix words are against the build's base image, or against the container's reference.
-pub const IMAGE_RAW: u8 = 0;
-pub const IMAGE_SESSION: u8 = 1;
-pub const IMAGE_SESSION_REFERENCE: u8 = 2;
+/// What the session image's prefix words are against (byte 13): the build's base image,
+/// or the container's reference.
+pub const AGAINST_BASE: u8 = 0;
+pub const AGAINST_REFERENCE: u8 = 1;
 
 pub const COMPRESSION_NONE: u8 = 0;
 pub const COMPRESSION_ZSTD: u8 = 1;
@@ -56,8 +53,8 @@ pub struct Header {
     pub reference_len: u32,
     pub image_len: u32,
     pub payload_len: u32,
-    /// [`IMAGE_RAW`] or [`IMAGE_SESSION`].
-    pub image_kind: u8,
+    /// [`AGAINST_BASE`] or [`AGAINST_REFERENCE`].
+    pub against: u8,
 }
 
 /// How a snapshot file was stored.
@@ -66,10 +63,6 @@ pub enum Format {
     RawImage,
     /// A session image (D2066) on its own.
     SessionImage,
-    /// The Sandbox's format before the container.
-    SandboxV1,
-    /// The pi adapter's format before the container.
-    PiV1,
     Container,
 }
 
@@ -103,16 +96,9 @@ impl Snapshot {
         match (self.format, &self.header) {
             (Format::RawImage, _) => "raw image".into(),
             (Format::SessionImage, _) => "session image".into(),
-            (Format::SandboxV1, _) => "DJSS snapshot before the container (sandbox)".into(),
-            (Format::PiV1, _) => "DJPI snapshot before the container (pi session)".into(),
             (Format::Container, Some(h)) => format!(
-                "DJSN container ({}{}, {})",
+                "DJSN container ({}, {})",
                 h.app_name(),
-                if h.image_kind != IMAGE_RAW {
-                    ", session image"
-                } else {
-                    ""
-                },
                 if h.compression == COMPRESSION_ZSTD {
                     format!("zstd against {}", reference_name(h.reference_kind))
                 } else {
@@ -179,30 +165,8 @@ pub fn read(bytes: &[u8], reference: Option<&[u8]>) -> Result<Snapshot, String> 
             reference: None,
         });
     }
-    let magic = u32_at(bytes, 0).ok_or("not a heap image or snapshot: too short")?;
-    if magic == SANDBOX_V1_MAGIC || magic == PI_V1_MAGIC {
-        let version = u32_at(bytes, 4).ok_or("truncated snapshot")?;
-        if version != 1 {
-            return Err(format!("unknown snapshot version {version}"));
-        }
-        let meta_len = u32_at(bytes, 8).ok_or("truncated snapshot")? as usize;
-        let meta = bytes.get(12..12 + meta_len).ok_or("truncated snapshot")?;
-        return Ok(Snapshot {
-            format: if magic == SANDBOX_V1_MAGIC {
-                Format::SandboxV1
-            } else {
-                Format::PiV1
-            },
-            header: None,
-            meta: Some(String::from_utf8_lossy(meta).into_owned()),
-            image: bytes[12 + meta_len..].to_vec(),
-            reference: None,
-        });
-    }
-    if magic != CONTAINER_MAGIC {
-        return Err(
-            "not a heap image or snapshot (no image roots, no DJSN/DJSS/DJPI magic)".into(),
-        );
+    if u32_at(bytes, 0) != Some(CONTAINER_MAGIC) {
+        return Err("not a heap image or snapshot (no image roots, no DJSs/DJSN magic)".into());
     }
     let (h, meta, payload) = read_header(bytes)?;
     let (image, reference) = match h.compression {
@@ -224,16 +188,15 @@ pub fn read(bytes: &[u8], reference: Option<&[u8]>) -> Result<Snapshot, String> 
         }
         n => return Err(format!("unknown snapshot compression {n}")),
     };
-    let image = match h.image_kind {
-        IMAGE_RAW => image,
-        IMAGE_SESSION => expand(&image, djs_prelude::BASE)?,
-        IMAGE_SESSION_REFERENCE => expand(
+    let image = match h.against {
+        AGAINST_BASE => expand(&image, djs_prelude::BASE)?,
+        AGAINST_REFERENCE => expand(
             &image,
             reference
                 .as_deref()
                 .ok_or("corrupt snapshot: no reference")?,
         )?,
-        n => return Err(format!("unknown snapshot image kind {n}")),
+        n => return Err(format!("corrupt snapshot: unknown prefix base {n}")),
     };
     Ok(Snapshot {
         format: Format::Container,
@@ -264,9 +227,9 @@ pub fn read_header(bytes: &[u8]) -> Result<(Header, String, &[u8]), String> {
         .get(4..6)
         .map(|b| u16::from_le_bytes([b[0], b[1]]))
         .ok_or("truncated snapshot")?;
-    if format != FORMAT && format != 1 {
+    if format != FORMAT {
         return Err(format!(
-            "snapshot container format {format}; this djs reads formats 1 and {FORMAT}"
+            "snapshot container format {format}; this djs reads format {FORMAT}"
         ));
     }
     if bytes.len() < HEADER {
@@ -282,7 +245,7 @@ pub fn read_header(bytes: &[u8]) -> Result<(Header, String, &[u8]), String> {
         reference_len: word(24),
         image_len: word(28),
         payload_len: word(36),
-        image_kind: if format >= 2 { bytes[13] } else { IMAGE_RAW },
+        against: bytes[13],
     };
     let meta_len = word(32) as usize;
     if bytes.len() != HEADER + meta_len + h.payload_len as usize {
@@ -337,8 +300,9 @@ pub fn image_of(bytes: &[u8]) -> Result<Vec<u8>, String> {
     Ok(s.image)
 }
 
-/// A container as js/src/snapshot.ts writes it: `image` compressed with zstd at `level`
-/// against `reference` (kind, bytes), or stored as it is without one.
+/// A container as js/src/snapshot.ts writes it: the session image of `image` (a VM made
+/// from this build's base), compressed with zstd at `level` against `reference` (kind,
+/// bytes), or stored as it is without one.
 pub fn write(
     app: u8,
     build: u32,
@@ -349,14 +313,19 @@ pub fn write(
 ) -> Result<Vec<u8>, String> {
     // The image's own part only (D2066): its prefix words against the reference if that
     // has the same prefix (it holds them in place), else against this build's base.
-    let (kind, session) = match reference.and_then(|r| session::session_image(image, r.1).ok()) {
-        Some(s) => (IMAGE_SESSION_REFERENCE, Some(s)),
-        None => match session::session_image(image, djs_prelude::BASE).ok() {
-            Some(s) => (IMAGE_SESSION, Some(s)),
-            None => (IMAGE_RAW, None),
-        },
+    let (against, image) = match reference.and_then(|r| session::session_image(image, r.1).ok()) {
+        Some(s) => (AGAINST_REFERENCE, s),
+        None => (
+            AGAINST_BASE,
+            session::session_image(image, djs_prelude::BASE).map_err(|e| {
+                format!(
+                    "the image is not one of a VM made from this build's base: {}",
+                    e.text()
+                )
+            })?,
+        ),
     };
-    let image = session.as_deref().unwrap_or(image);
+    let image = image.as_slice();
     let payload = match reference {
         Some((_, r)) => compress(image, r, level).map_err(|e| format!("zstd: {e}"))?,
         None => image.to_vec(),
@@ -372,7 +341,7 @@ pub fn write(
     });
     out.extend_from_slice(&build.to_le_bytes());
     out.push(reference.map_or(REFERENCE_NONE, |r| r.0));
-    out.push(kind);
+    out.push(against);
     out.extend_from_slice(&[0, 0]);
     let hash = reference.map_or(0, |r| fnv1a64(r.1));
     out.extend_from_slice(&(hash as u32).to_le_bytes());
@@ -449,7 +418,7 @@ mod tests {
                 APP_SANDBOX,
                 COMPRESSION_ZSTD,
                 REFERENCE_BASE,
-                IMAGE_SESSION_REFERENCE
+                AGAINST_REFERENCE
             )
         );
         // The stored image is the session image (D2066), made against this build's base.
@@ -460,29 +429,27 @@ mod tests {
         assert_eq!(s.image, img);
         assert_eq!(s.meta.as_deref(), Some(meta));
         assert_eq!(s.header.unwrap().reference_hash, fnv1a64(base));
-        // Uncompressed, and the older formats.
+        // Uncompressed: the session image against the base.
         let plain = write(APP_PI_SESSION, 7, "{}", &img, None, DEFAULT_LEVEL).unwrap();
+        assert_eq!(plain[13], AGAINST_BASE);
         let s = read(&plain, None).unwrap();
         assert_eq!((s.image == img, s.header.unwrap().build), (true, 7));
-        // Format 1: the same header without the image kind, a raw image.
-        let mut v1 = plain[..HEADER].to_vec();
-        v1[4] = 1;
-        v1[13] = 0;
-        v1[28..32].copy_from_slice(&(img.len() as u32).to_le_bytes());
-        v1[36..40].copy_from_slice(&(img.len() as u32).to_le_bytes());
-        v1.extend_from_slice(b"{}");
-        v1.extend_from_slice(&img);
-        assert_eq!(read(&v1, None).unwrap().image, img);
-        // A session image on its own reads too.
+        // A session image or a raw image on its own reads too.
+        assert_eq!(read(&session, None).unwrap().format, Format::SessionImage);
         assert_eq!(read(&session, None).unwrap().image, img);
-        let mut old = b"DJSS".to_vec();
-        old.extend_from_slice(&1u32.to_le_bytes());
-        old.extend_from_slice(&2u32.to_le_bytes());
-        old.extend_from_slice(b"{}");
-        old.extend_from_slice(&img);
-        let s = read(&old, None).unwrap();
-        assert_eq!((s.format, s.image == img), (Format::SandboxV1, true));
         assert_eq!(read(&img, None).unwrap().format, Format::RawImage);
+        // Another container version is refused (D024).
+        let mut other = plain.clone();
+        other[4] = 1;
+        assert!(
+            read(&other, None)
+                .unwrap_err()
+                .contains("snapshot container format 1; this djs reads format 2")
+        );
+        // An image without the base's prefix makes no container.
+        let mut bare = djs_core::vm::Vm::new(djs_core::vm::VmOptions::default()).unwrap();
+        bare.collect().unwrap();
+        assert!(write(APP_REPL, 7, "{}", bare.bytes(), None, DEFAULT_LEVEL).is_err());
     }
 
     #[test]

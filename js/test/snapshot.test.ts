@@ -13,12 +13,10 @@ import {
   APP_SANDBOX,
   COMPRESSION_NONE,
   COMPRESSION_ZSTD,
+  AGAINST_BASE,
+  AGAINST_REFERENCE,
   baseReference,
-  encodeSnapshot,
   expandSession,
-  IMAGE_RAW,
-  IMAGE_SESSION,
-  IMAGE_SESSION_REFERENCE,
   readSnapshotHeader,
   REFERENCE_BASE,
   REFERENCE_PI_PRELUDE,
@@ -33,25 +31,10 @@ const path = defaultWasmPath();
 /** A second compile of the same module: a process that has none of this one's prelude images. */
 const freshModule = () => WebAssembly.compile(readFileSync(typeof path === "string" ? path : fileURLToPath(path)));
 
-const header = (bytes: Uint8Array): SnapshotHeader => readSnapshotHeader(bytes)!;
+const header = (bytes: Uint8Array): SnapshotHeader => readSnapshotHeader(bytes);
 /** The module's base image (D2066): what a session image is completed with. */
-const base = () => baseReference(wasm, new WebAssembly.Instance(wasm, {}).exports as never)!.bytes;
-/** A container's image as a raw image (the formats before the container held those). */
-const rawImage = (h: SnapshotHeader) => (h.imageKind === IMAGE_RAW ? h.payload : expandSession(h.payload, base()));
+const base = () => baseReference(wasm, new WebAssembly.Instance(wasm, {}).exports as never).bytes;
 const add = (a: unknown, b: unknown) => (a as number) + (b as number);
-
-/** A snapshot in the format before the container, from a container's metadata and image. */
-function legacy(magic: number, meta: unknown, image: Uint8Array): Uint8Array {
-  const m = new TextEncoder().encode(JSON.stringify(meta));
-  const out = new Uint8Array(12 + m.length + image.length);
-  const view = new DataView(out.buffer);
-  view.setUint32(0, magic, true);
-  view.setUint32(4, 1, true);
-  view.setUint32(8, m.length, true);
-  out.set(m, 12);
-  out.set(image, 12 + m.length);
-  return out;
-}
 
 test("sandbox: bytes() is a compressed container that restores", async () => {
   const sb = await Sandbox.create({ functions: { add } });
@@ -62,7 +45,7 @@ test("sandbox: bytes() is a compressed container that restores", async () => {
   assert.equal(h.app, APP_SANDBOX);
   assert.equal(h.compression, COMPRESSION_ZSTD);
   assert.equal(h.referenceKind, REFERENCE_BASE);
-  assert.equal(h.imageKind, IMAGE_SESSION_REFERENCE);
+  assert.equal(h.against, AGAINST_REFERENCE);
   assert.equal(header(plain).compression, COMPRESSION_NONE);
   // Most of the image is the base realm, which the reference supplies.
   assert.ok(zstd.length * 5 < plain.length, `${zstd.length} vs ${plain.length} bytes`);
@@ -105,7 +88,7 @@ test("sandbox: another build, another reference and damage are refused", async (
 test("sandbox: bytes() stores the session image, not the builtin prefix (D2066)", async () => {
   const sb = await Sandbox.create({ functions: { add } });
   const h = header(sb.bytes({ compression: "none" }));
-  assert.equal(h.imageKind, IMAGE_SESSION);
+  assert.equal(h.against, AGAINST_BASE);
   const raw = expandSession(h.payload, base());
   // A fresh sandbox: the roots cell, no changed prefix word, and the per-VM tail.
   assert.equal(new DataView(h.payload.buffer, h.payload.byteOffset).getUint32(28, true), 0);
@@ -117,24 +100,12 @@ test("sandbox: bytes() stores the session image, not the builtin prefix (D2066)"
   const back = await Sandbox.fromBytes(sb.bytes(), { functions: { add } });
   assert.equal(back.run("return add([].extra, 1)"), 42);
   back.dispose();
-  // A format 1 container (a raw image, before session images) still loads.
-  const v1 = encodeSnapshot({ app: APP_SANDBOX, build: h2.build, meta: h2.meta, image: expandSession(h2.payload, base()), codec: null });
-  new DataView(v1.buffer).setUint16(4, 1, true);
-  const old = await Sandbox.fromBytes(v1, { functions: { add } });
-  assert.equal(old.run("return [].extra"), 41);
-  old.dispose();
+  // Another container version, or no container, is refused (D024).
+  const other = sb.bytes();
+  new DataView(other.buffer).setUint16(4, 1, true);
+  await assert.rejects(Sandbox.fromBytes(other, { functions: { add } }), /snapshot container format 1; this host reads format 2/);
+  await assert.rejects(Sandbox.fromBytes(raw, { functions: { add } }), /not a djs snapshot/);
   sb.dispose();
-});
-
-test("sandbox: the format before the container still loads", async () => {
-  const sb = await Sandbox.create({ functions: { add } });
-  sb.setGlobal("config", { n: 41 });
-  const h = header(sb.bytes({ compression: "none" }));
-  sb.dispose();
-  const old = legacy(0x53534a44 /* "DJSS" */, h.meta, rawImage(h));
-  const back = await Sandbox.fromBytes(old, { functions: { add } });
-  assert.equal(back.run("return add(config.n, 1)"), 42);
-  back.dispose();
 });
 
 // ---- pi sessions ---------------------------------------------------------------------
@@ -216,7 +187,7 @@ test("pi: snapshot() is compressed against the prelude image and resumes", async
   const h = header(resumed.snapshots[0]);
   assert.equal(h.referenceKind, REFERENCE_PI_PRELUDE);
   // Its prefix words are against the prelude image, which holds what pi's prelude changed (D2066).
-  assert.equal(h.imageKind, IMAGE_SESSION_REFERENCE);
+  assert.equal(h.against, AGAINST_REFERENCE);
   assert.equal(h.compression, COMPRESSION_ZSTD);
   // A waiting session is mostly its prelude image.
   assert.ok(resumed.snapshots[0].length < 64 * 1024, `${resumed.snapshots[0].length} bytes`);
@@ -254,7 +225,7 @@ test("pi: without prelude images, snapshots use the base image", async () => {
   assert.equal(header(resumed.snapshots[0]).referenceKind, REFERENCE_BASE);
 });
 
-test("pi: the format before the container still loads; another build is refused", async () => {
+test("pi: uncompressed snapshots resume; another build is refused", async () => {
   const reference = await piRun();
   const resumed = await piRun({
     at: 2,
@@ -262,7 +233,9 @@ test("pi: the format before the container still loads; another build is refused"
     resume: (bytes, hooks) => {
       const h = header(bytes);
       assert.equal(h.compression, COMPRESSION_NONE);
-      return resumeVm(legacy(0x49504a44 /* "DJPI" */, h.meta, rawImage(h)), hooks);
+      // Without a reference the prefix words are against the base: the prelude's lockdown.
+      assert.equal(h.against, AGAINST_BASE);
+      return resumeVm(bytes, hooks);
     },
   });
   assert.deepEqual(resumed.messages, reference.messages);

@@ -1,4 +1,4 @@
-//! `djs heap`: what is in a heap dump (a raw image, an older snapshot, a snapshot
+//! `djs heap`: what is in a heap dump (a raw image, a session image, a snapshot
 //! container). Every section reads the image through djs-core's own heap code: the image
 //! is verified on load, the walker and the layout table decide what a reference is and
 //! what a field is called, so the tool cannot drift from the engine (D2264).
@@ -21,8 +21,8 @@ use self::json::J;
 pub use self::report::{Options, Section};
 
 const USAGE: &str = "usage: djs heap [--json] [--top N] [--reference FILE] [--diff FILE|base|none] [--only SECTIONS] <dump>\n\
-  <dump>       a heap image (the REPL's `.snapshot`, Vm::bytes), a snapshot container\n\
-               (Sandbox.bytes(), pi's snapshot()) or an older DJSS/DJPI snapshot\n\
+  <dump>       a heap image (the REPL's `.snapshot --raw`, Vm::bytes), a session image or\n\
+               a snapshot container (Sandbox.bytes(), pi's snapshot(), `.snapshot`)\n\
   --reference  the image a container is compressed against, if it is not this build's\n\
                base: pi's prelude image (node scripts/heap/reference.ts pi-prelude ...)\n\
   --diff       compare with this image instead of the container's reference (the\n\

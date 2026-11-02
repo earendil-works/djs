@@ -218,14 +218,16 @@ taken against the reference when it has the same prefix, and against the base on
 otherwise; as a diff against the base, those words cost 8 KB in every container.
 
 A snapshot is a small container: a 40-byte header, the host's own metadata (the
-`Sandbox`'s host function names, the adapter's session state) as JSON, and the image,
-compressed or not. The header names everything a restore depends on: the engine build,
-which reference (the base, or pi's prelude image) with its hash and length, the
-compression, and whether the image is a session image and against what. A restore checks them in that order before it touches the image, and stops
-with a message that says what is wrong: a snapshot of another engine build ("snapshot
-from djs build X; this module is build Y"), a reference this host does not have or that
-differs, a damaged frame (zstd's checksum). A host that has to restore snapshots of an
-older build has to keep that build.
+`Sandbox`'s host function names, the adapter's session state) as JSON, and the session
+image, compressed or not. The header names everything a restore depends on: the
+container's version, the engine build, which reference (the base, or pi's prelude image)
+with its hash and length, the compression, and what the prefix words are against. A
+restore checks them in that order before it touches the image, and stops with a message
+that says what is wrong: another container version, a snapshot of another engine build
+("snapshot from djs build X; this module is build Y"), a reference this host does not
+have or that differs, a damaged frame (zstd's checksum). There is one container format,
+and nothing reads older ones: djs has not been released, so its formats change in place
+(D024, D2400). A host that has to restore snapshots of an older build has to keep that build.
 
 For pi's prelude image to be a reference, it has to come out the same in every process
 that computes it. Only one input was not under control: the clock, which the adapter sets
@@ -256,8 +258,8 @@ start data, refusing data that make a different image.
 ## Inspecting a heap
 
 What is in an image, and why is a snapshot the size it is? `djs heap` answers both
-(D2264). It reads a raw image (what the REPL's `.snapshot` writes), a snapshot container
-or an older snapshot, decompressing a container with its reference: this build's base
+(D2264). It reads a raw image (what the REPL's `.snapshot --raw` writes), a session image
+or a snapshot container, decompressing a container with its reference: this build's base
 when the hashes match, or a reference given as a file, which
 [`scripts/heap/reference.ts`](../../scripts/heap/reference.ts) writes for a module's base
 or for pi's prelude image of a session's start data.
@@ -339,12 +341,14 @@ of the call it waits on, and the container is 2.1 KB.
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2057 D2063 D2066 D2058 D2043 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 -->
+<!-- gen:decisions D2040 D2041 D2057 D2063 D2066 D024 D2400 D2058 D2043 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2057: The cells a VM replaces first sit at the end of base and sealed images
 - D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
 - D2066: Session images: the roots cell, a canonical prefix diff and the session region
+- D024: No compatibility with unreleased formats
+- D2400: One snapshot container format, session images only
 - D2058: The size ceiling rises by 600 B for stable snapshot layouts
 - D2043: pi's later cold starts size the arena for the sealed prelude heap
 - D1091: Handle table

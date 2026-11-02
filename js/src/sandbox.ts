@@ -8,7 +8,6 @@ import {
   baseReference,
   checkSnapshot,
   encodeSnapshot,
-  IMAGE_RAW,
   provideBase,
   readSnapshotHeader,
   REFERENCE_BASE,
@@ -236,9 +235,9 @@ interface Exports {
   vm_resolve_host_call_at(vm: number, callId: number, ok: number, value: number, now: number): number;
   vm_canonical_hash(vm: number): number;
   djs_build_hash(): number;
-  /** Since 0117 (D2260); older modules lack them and write uncompressed snapshots. */
-  djs_base_ptr?(): number;
-  djs_base_len?(): number;
+  /** The base snapshot (D2260); the inject exports only with the base coded (D2252). */
+  djs_base_ptr(): number;
+  djs_base_len(): number;
   djs_base_inject_ptr?(len: number): number;
   djs_base_inject?(): number;
 }
@@ -287,10 +286,7 @@ export function loadModule(location: string | URL = defaultWasmPath()): Promise<
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
-/** The sandbox snapshot format before the container (D2260): magic, version 1, meta, image. */
-const SNAPSHOT_MAGIC_V1 = 0x53534a44; // "DJSS"
-
-/** The metadata and image of a sandbox snapshot: a container, or the older "DJSS" format. */
+/** The metadata and image of a sandbox snapshot container. */
 function unpackSnapshot(
   snapshot: Uint8Array,
   module: WebAssembly.Module,
@@ -299,24 +295,15 @@ function unpackSnapshot(
 ): { meta: { functions: string[]; clock?: number }; image: Uint8Array } {
   try {
     const header = readSnapshotHeader(snapshot);
-    if (header !== undefined) {
-      checkSnapshot(header, APP_SANDBOX, x.djs_build_hash());
-      const reference = header.referenceKind === REFERENCE_BASE ? baseReference(module, x) : undefined;
-      // A session image (D2066) is completed with the module's base image.
-      const base = header.imageKind === IMAGE_RAW ? undefined : baseReference(module, x);
-      return { meta: header.meta as { functions: string[]; clock?: number }, image: snapshotImage(header, reference, codec, base) };
-    }
+    checkSnapshot(header, APP_SANDBOX, x.djs_build_hash());
+    // The base completes the session image (D2066), and it is the only reference.
+    const base = baseReference(module, x);
+    const reference = header.referenceKind === REFERENCE_BASE ? base : undefined;
+    return { meta: header.meta as { functions: string[]; clock?: number }, image: snapshotImage(header, reference, codec, base) };
   } catch (e) {
     if (e instanceof SnapshotError) throw new SandboxError("misuse", e.message);
     throw e;
   }
-  const view = new DataView(snapshot.buffer, snapshot.byteOffset, snapshot.byteLength);
-  if (snapshot.length < 12 || view.getUint32(0, true) !== SNAPSHOT_MAGIC_V1 || view.getUint32(4, true) !== 1) {
-    throw new SandboxError("misuse", "not a sandbox snapshot");
-  }
-  const metaLen = view.getUint32(8, true);
-  const meta = JSON.parse(textDecoder.decode(snapshot.subarray(12, 12 + metaLen)));
-  return { meta, image: snapshot.subarray(12 + metaLen) };
 }
 
 export class Sandbox {

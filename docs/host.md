@@ -173,23 +173,23 @@ the session started from (D2262). Little-endian:
 | offset | size | field |
 | ---: | ---: | --- |
 | 0 | 4 | magic `"DJSN"` (`0x4e534a44`) |
-| 4 | 2 | format version, 2 (D2066; format 1, without byte 13, still loads) |
+| 4 | 2 | format version, 2: any other version is refused (D024) |
 | 6 | 1 | app, which says what the metadata is: 1 Sandbox, 2 pi session, 3 the djs REPL (`{}`) |
 | 7 | 1 | compression: 0 none, 1 zstd |
 | 8 | 4 | the engine build hash (`djs_build_hash`) |
 | 12 | 1 | the reference: 0 none, 1 the base image, 2 pi's prelude image |
-| 13 | 1 | the image: 0 a raw image, 1 a session image against the base image, 2 a session image against the reference |
+| 13 | 1 | what the session image's prefix words are against: 0 the base image, 1 the reference |
 | 14 | 2 | reserved, 0 |
 | 16 | 8 | the reference's FNV-1a 64, low word first; 0 without one |
 | 24 | 4 | the reference's length in bytes |
-| 28 | 4 | the stored image's length (the session image's, for one) |
+| 28 | 4 | the session image's length |
 | 32 | 4 | the metadata's length |
 | 36 | 4 | the payload's length |
-| 40 | | the metadata (UTF-8 JSON), then the payload: the image as is, or one zstd frame with a content checksum, compressed with the reference as a raw-content dictionary |
+| 40 | | the metadata (UTF-8 JSON), then the payload: the session image as is, or one zstd frame with a content checksum, compressed with the reference as a raw-content dictionary |
 
-The stored image is a *session image* (D2066) when the VM has a builtin prefix
-(`Roots::BASE_END`, every VM restored from the module's base): what the base does not
-already hold. Little-endian:
+The stored image is a *session image* (D2066): what the base does not already hold of a VM
+made from the module's base (its builtin prefix ends at `Roots::BASE_END`). A writer
+refuses an image without that prefix. Little-endian:
 
 | offset | size | field |
 | ---: | ---: | --- |
@@ -229,9 +229,6 @@ uncompressed, and a compressed one cannot be read. `snapshotCodec` (SandboxOptio
 VmHooks) plugs in any zstd that takes raw-content dictionaries (a wasm build such as
 zstd-rs interoperates with node's), `null` never compresses, and
 `bytes({ compression: "none" })` skips it for one snapshot.
-
-The formats before the container still load: the Sandbox's `"DJSS"` and the adapter's
-`"DJPI"`, version 1 (u32 LE magic, version, metadata length, the metadata, the raw image).
 
 Measured on the `wasm` profile with node 25 (`scripts/snapshot-research/wasm.ts`: six pi
 codemode cases, a snapshot and a resume at each of their 144 idle points; medians, max

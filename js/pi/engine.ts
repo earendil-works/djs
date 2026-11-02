@@ -57,9 +57,9 @@ interface Exports {
   vm_set_time_zone_offset(vm: number, minutes: number): void;
   vm_set_random_seed(vm: number, lo: number, hi: number): void;
   vm_set_weak_refs(vm: number, mode: number): number;
-  /** Since 0117 (D2260); older modules lack them and write uncompressed snapshots. */
-  djs_base_ptr?(): number;
-  djs_base_len?(): number;
+  /** The base snapshot (D2260); the inject exports only with the base coded (D2252). */
+  djs_base_ptr(): number;
+  djs_base_len(): number;
   djs_base_inject_ptr?(len: number): number;
   djs_base_inject?(): number;
 }
@@ -81,7 +81,7 @@ export function instanceBuild(i: Instance): number {
 }
 
 /** The base snapshot of the instance's module, as a snapshot reference (D2260). */
-export function instanceBase(i: Instance): Reference | undefined {
+export function instanceBase(i: Instance): Reference {
   return baseReference(i.module, i.exports);
 }
 
@@ -148,8 +148,8 @@ export class Engine {
     return this.x.djs_build_hash();
   }
 
-  /** The module's base snapshot as a snapshot reference (D2260); undefined for old modules. */
-  baseReference(): Reference | undefined {
+  /** The module's base snapshot as a snapshot reference (D2260). */
+  baseReference(): Reference {
     return baseReference(this.module, this.x);
   }
 

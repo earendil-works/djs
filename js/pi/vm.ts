@@ -34,7 +34,6 @@ import {
   APP_PI_SESSION,
   checkSnapshot,
   encodeSnapshot,
-  IMAGE_RAW,
   fnv1a64,
   readSnapshotHeader,
   type Reference,
@@ -136,9 +135,6 @@ export const FUEL_PER_POLL = 10_000;
  */
 const DETERMINISTIC_VERSION = 2;
 
-/** The session snapshot format before the container (D2260), still read by `resumeVm`. */
-const SNAPSHOT_MAGIC = 0x49504a44; // "DJPI"
-const SNAPSHOT_VERSION = 1;
 const BRIDGE_FN = 1;
 const SCRIPT_PREFIX = "return (async (tools, console) => {";
 
@@ -689,7 +685,6 @@ export function preludeImage(module: WebAssembly.Module, prelude: string, data: 
  */
 export function resumeVm(snapshot: Uint8Array, options: ResumeOptions): VmSession {
   const header = readSnapshotHeader(snapshot);
-  if (header === undefined) return resumeV1(snapshot, options);
   const module = options.wasm as WebAssembly.Module;
   const into = instance(module);
   checkSnapshot(header, APP_PI_SESSION, instanceBuild(into));
@@ -715,24 +710,11 @@ export function resumeVm(snapshot: Uint8Array, options: ResumeOptions): VmSessio
     }
     reference = preludeReference(prelude);
   }
-  const base = header.imageKind === IMAGE_RAW ? undefined : instanceBase(into);
-  const image = snapshotImage(header, reference, options.snapshotCodec, base);
+  const image = snapshotImage(header, reference, options.snapshotCodec, instanceBase(into));
   const state = header.meta as SessionState;
   const session = new Session(Engine.restore(module, image, state.memoryLimit, into), options, state);
   session.prelude = prelude;
   return session;
-}
-
-/** A session snapshot in the format before the container: "DJPI", version 1, state, image. */
-function resumeV1(snapshot: Uint8Array, hooks: VmHooks): VmSession {
-  const view = new DataView(snapshot.buffer, snapshot.byteOffset, snapshot.byteLength);
-  if (snapshot.length < 12 || view.getUint32(0, true) !== SNAPSHOT_MAGIC || view.getUint32(4, true) !== SNAPSHOT_VERSION) {
-    throw new SnapshotError("not a pi codemode session snapshot");
-  }
-  const headerLength = view.getUint32(8, true);
-  const state = JSON.parse(new TextDecoder().decode(snapshot.subarray(12, 12 + headerLength))) as SessionState;
-  const engine = Engine.restore(hooks.wasm as WebAssembly.Module, snapshot.subarray(12 + headerLength), state.memoryLimit);
-  return new Session(engine, hooks, state);
 }
 
 function compileOrThrow(engine: Engine, file: string, params: string[], src: string): number {

@@ -30,7 +30,7 @@ let image: Uint8Array;
 let out: string;
 if (what === "base") {
   const x = instance(module);
-  image = baseReference(module, x.exports)!.bytes;
+  image = baseReference(module, x.exports).bytes;
   out = opt("-o") ?? "base.img";
 } else if (what === "pi-prelude") {
   const data = opt("--data");

@@ -10,7 +10,7 @@
 
 /** "DJSN", little-endian. */
 export const SNAPSHOT_MAGIC = 0x4e534a44;
-/** Format 2 (D2066) adds the image kind (byte 13); format 1 containers still load. */
+/** The container's version: a container of any other version is refused (D024). */
 export const SNAPSHOT_FORMAT = 2;
 const HEADER = 40;
 
@@ -25,14 +25,15 @@ export const REFERENCE_BASE = 1;
 /** pi's prelude image: the session's VM right after pi's prelude, collected. */
 export const REFERENCE_PI_PRELUDE = 2;
 
-/** What the container's image is (byte 13, format 2). */
-export const IMAGE_RAW = 0;
-/** A session image (D2066): the roots cell, the words of the builtin prefix that differ
- * from the module's base image, and the heap above the prefix. */
-export const IMAGE_SESSION = 1;
-/** A session image whose prefix words are against the container's reference instead (pi's
- * prelude image already holds the builtins pi's prelude changed). */
-export const IMAGE_SESSION_REFERENCE = 2;
+/**
+ * What the session image's prefix words are against (byte 13). The image is a session
+ * image (D2066): the roots cell, the words of the builtin prefix that differ, and the heap
+ * above the prefix.
+ */
+export const AGAINST_BASE = 0;
+/** Against the container's reference (pi's prelude image already holds the builtins pi's
+ * prelude changed). */
+export const AGAINST_REFERENCE = 1;
 
 export const COMPRESSION_NONE = 0;
 export const COMPRESSION_ZSTD = 1;
@@ -76,8 +77,8 @@ export interface SnapshotHeader {
   referenceHash: string;
   referenceLength: number;
   imageLength: number;
-  /** `IMAGE_RAW`, `IMAGE_SESSION` or `IMAGE_SESSION_REFERENCE`. */
-  imageKind: number;
+  /** `AGAINST_BASE` or `AGAINST_REFERENCE`. */
+  against: number;
   meta: unknown;
   payload: Uint8Array;
 }
@@ -144,16 +145,14 @@ const references = new WeakMap<object, Reference>();
 
 /**
  * The base snapshot of the module that `exports` belong to, as a reference (a copy, hashed
- * once per module). Undefined for a module without `djs_base_ptr` (older than the
- * container): its snapshots are written uncompressed.
+ * once per module).
  */
 export function baseReference(
   module: object,
-  exports: { memory: WebAssembly.Memory; djs_base_ptr?(): number; djs_base_len?(): number },
-): Reference | undefined {
+  exports: { memory: WebAssembly.Memory; djs_base_ptr(): number; djs_base_len(): number },
+): Reference {
   let ref = references.get(module);
   if (ref === undefined) {
-    if (exports.djs_base_ptr === undefined || exports.djs_base_len === undefined) return undefined;
     // The pointer first: an instance decodes its base at the first use (D2252), which may
     // grow (and detach) its memory buffer.
     const at = exports.djs_base_ptr();
@@ -167,8 +166,8 @@ export function baseReference(
 /** The exports of an instance that `provideBase` and `rememberBase` use. */
 export interface BaseExports {
   memory: WebAssembly.Memory;
-  djs_base_ptr?(): number;
-  djs_base_len?(): number;
+  djs_base_ptr(): number;
+  djs_base_len(): number;
   djs_base_inject_ptr?(len: number): number;
   djs_base_inject?(): number;
 }
@@ -179,8 +178,8 @@ export interface BaseExports {
  * (a few ms) unless the host provides it. Call right after instantiating, before anything
  * that creates a VM or reads the base; and `rememberBase` once a VM exists, so that later
  * instances get it. The instance checks the bytes (length and hash) and decodes its own if
- * they are refused. Returns whether the instance took them; false for a module without the
- * exports (older, or with the base uncoded) or before an instance remembered the base.
+ * they are refused. Returns whether the instance took them; false for a module with the base
+ * uncoded (no inject exports) or before an instance remembered the base.
  */
 export function provideBase(module: object, exports: BaseExports): boolean {
   const ref = references.get(module);
@@ -322,11 +321,11 @@ export interface EncodeOptions {
   /** Compress against it. Without one, or without a codec, the image is stored as is. */
   reference?: Reference;
   /**
-   * The module's base image: the image is stored as a session image (D2066) if it has a
-   * builtin prefix, its prefix words against the reference when it has the same prefix
-   * (it then holds them in place, as the dictionary), else against the base.
+   * The module's base image. The image is stored as a session image (D2066): its prefix
+   * words against the reference when that has the same prefix (it then holds them in
+   * place, as the dictionary), else against the base.
    */
-  base?: Reference;
+  base: Reference;
   /** `nodeZstd()` by default; `null` stores the image uncompressed. */
   codec?: SnapshotCodec | null;
   level?: number;
@@ -336,17 +335,13 @@ export interface EncodeOptions {
 export function encodeSnapshot(o: EncodeOptions): Uint8Array {
   const codec = o.codec === undefined ? nodeZstd() : o.codec;
   const ref = codec === null ? undefined : o.reference;
-  let kind = IMAGE_RAW;
-  let session: Uint8Array | undefined;
-  if (o.base !== undefined) {
-    session = ref === undefined ? undefined : sessionImage(o.image, ref.bytes);
-    if (session !== undefined) kind = IMAGE_SESSION_REFERENCE;
-    else {
-      session = sessionImage(o.image, o.base.bytes);
-      if (session !== undefined) kind = IMAGE_SESSION;
-    }
+  let against = AGAINST_REFERENCE;
+  let image = ref === undefined ? undefined : sessionImage(o.image, ref.bytes);
+  if (image === undefined) {
+    against = AGAINST_BASE;
+    image = sessionImage(o.image, o.base.bytes);
   }
-  const image = session ?? o.image;
+  if (image === undefined) throw new SnapshotError("the image is not one of a VM made from this module's base image");
   const payload = ref === undefined ? image : codec!.compress(image, ref.bytes, o.level ?? DEFAULT_ZSTD_LEVEL);
   const meta = new TextEncoder().encode(JSON.stringify(o.meta));
   const out = new Uint8Array(HEADER + meta.length + payload.length);
@@ -357,7 +352,7 @@ export function encodeSnapshot(o: EncodeOptions): Uint8Array {
   view.setUint8(7, ref === undefined ? COMPRESSION_NONE : COMPRESSION_ZSTD);
   view.setUint32(8, o.build >>> 0, true);
   view.setUint8(12, ref?.kind ?? REFERENCE_NONE);
-  view.setUint8(13, kind);
+  view.setUint8(13, against);
   const hash = ref?.hash ?? "0".repeat(16);
   view.setUint32(16, parseInt(hash.slice(8), 16), true);
   view.setUint32(20, parseInt(hash.slice(0, 8), 16), true);
@@ -370,13 +365,12 @@ export function encodeSnapshot(o: EncodeOptions): Uint8Array {
   return out;
 }
 
-/** The header of a container, or undefined if `bytes` is not one (an older format). */
-export function readSnapshotHeader(bytes: Uint8Array): SnapshotHeader | undefined {
-  if (bytes.length < 8) return undefined;
+/** The header of a container (throws `SnapshotError` if `bytes` is not one). */
+export function readSnapshotHeader(bytes: Uint8Array): SnapshotHeader {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (view.getUint32(0, true) !== SNAPSHOT_MAGIC) return undefined;
+  if (bytes.length < 8 || view.getUint32(0, true) !== SNAPSHOT_MAGIC) throw new SnapshotError("not a djs snapshot");
   const format = view.getUint16(4, true);
-  if (format !== SNAPSHOT_FORMAT && format !== 1) {
+  if (format !== SNAPSHOT_FORMAT) {
     throw new SnapshotError(`snapshot container format ${format}; this host reads format ${SNAPSHOT_FORMAT}`);
   }
   if (bytes.length < HEADER) throw new SnapshotError("truncated snapshot");
@@ -399,7 +393,7 @@ export function readSnapshotHeader(bytes: Uint8Array): SnapshotHeader | undefine
     referenceHash: hex(view.getUint32(20, true)) + hex(view.getUint32(16, true)),
     referenceLength: view.getUint32(24, true),
     imageLength: view.getUint32(28, true),
-    imageKind: format >= 2 ? view.getUint8(13) : IMAGE_RAW,
+    against: view.getUint8(13),
     meta,
     payload: bytes.subarray(HEADER + metaLength),
   };
@@ -437,21 +431,19 @@ export function snapshotImage(
   header: SnapshotHeader,
   reference: Reference | undefined,
   codec: SnapshotCodec | null | undefined,
-  base?: Reference,
+  base: Reference,
 ): Uint8Array {
   const image = storedImage(header, reference, codec);
-  if (header.imageKind === IMAGE_RAW) return image;
   // storedImage checked the reference: a session image against it is compressed with it.
-  if (header.imageKind === IMAGE_SESSION_REFERENCE) {
+  if (header.against === AGAINST_REFERENCE) {
     if (header.compression !== COMPRESSION_ZSTD || reference === undefined) throw new SnapshotError("corrupt snapshot: no reference");
     return expandSession(image, reference.bytes);
   }
-  if (header.imageKind !== IMAGE_SESSION) throw new SnapshotError(`unknown snapshot image kind ${header.imageKind}`);
-  if (base === undefined) throw new SnapshotError("the snapshot is a session image, and this host does not have the module's base image");
+  if (header.against !== AGAINST_BASE) throw new SnapshotError(`corrupt snapshot: unknown prefix base ${header.against}`);
   return expandSession(image, base.bytes);
 }
 
-/** The image as the container stores it (raw or a session image), decompressed. */
+/** The session image as the container stores it, decompressed. */
 function storedImage(
   header: SnapshotHeader,
   reference: Reference | undefined,

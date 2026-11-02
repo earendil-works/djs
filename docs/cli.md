@@ -21,14 +21,15 @@ REPL.
 ## `djs heap`
 
 What is in a heap dump (D2264): a raw image (`.snapshot --raw` of the REPL, `Vm::bytes`), a
-snapshot container (`Sandbox.bytes()`, pi's `snapshot()`, D2260) or an older DJSS/DJPI
-snapshot. Sections (`--only summary,kinds,...` picks some; `--json` prints one object with
+session image (D2066) or a snapshot container (`Sandbox.bytes()`, pi's `snapshot()`, the
+REPL's `.snapshot`, D2260). Sections (`--only summary,kinds,...` picks some; `--json` prints one object with
 a key per section):
 
 | section | shows |
 | --- | --- |
 | `summary` | format, build, image size, live vs garbage (and what a collection leaves), old region (`OLD_END`) vs young |
 | `kinds` | cells and bytes per cell kind (garbage, old) and per object class |
+| `prefix` | the words of the builtin prefix that differ from this build's base, by cell and builtin path (`%Array.prototype%`): the builtins a script changed (D2066) |
 | `diff` | against the reference image: unchanged cells in place or moved, changed, new (grouped into subtrees with their path and the new bytes only they keep alive), gone; how much of the image sits at the reference's offsets. This is what a snapshot compressed against the reference costs |
 | `largest` | the largest cells and the largest retained sizes (dominator tree), with paths like `globalThis.cache[3].body` |
 | `strings` | flat strings and ropes, duplicated contents, the largest strings |

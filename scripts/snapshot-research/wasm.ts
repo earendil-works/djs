@@ -150,7 +150,8 @@ Engine.prototype.image = function (this: Engine) {
 };
 
 const wasm = await loadModule();
-const base = instanceBase(instance(wasm))!.bytes;
+const baseRef = instanceBase(instance(wasm));
+const base = baseRef.bytes;
 
 interface Point {
   idle: number;
@@ -200,8 +201,8 @@ async function runCase(code: string): Promise<{ points: Point[]; end: WorkerToHo
     const snapshotMs = performance.now() - t;
     const img = lastImage!;
     // The same image in an uncompressed container, for the restore baseline.
-    const header = readSnapshotHeader(bytes)!;
-    const plain = encodeSnapshot({ app: APP_PI_SESSION, build: header.build, meta: header.meta, image: img, codec: null });
+    const header = readSnapshotHeader(bytes);
+    const plain = encodeSnapshot({ app: APP_PI_SESSION, build: header.build, meta: header.meta, image: img, base: baseRef, codec: null });
     t = performance.now();
     resumeVm(plain, hooks).dispose();
     const plainResumeMs = performance.now() - t;
@@ -306,7 +307,7 @@ for (const [label, setup] of [
   const bytesMs = times(() => sb.bytes());
   const restoreMs = times(() => new Sandbox({ module: wasm }, z).dispose());
   const plainMs = times(() => new Sandbox({ module: wasm }, plain).dispose());
-  report += `| ${label} | ${kb(readSnapshotHeader(plain)!.imageLength)} | ${kb(z.length)} | ${ms(bytesMs)} | ${ms(restoreMs)} | ${ms(plainMs)} |\n`;
+  report += `| ${label} | ${kb(readSnapshotHeader(plain).imageLength)} | ${kb(z.length)} | ${ms(bytesMs)} | ${ms(restoreMs)} | ${ms(plainMs)} |\n`;
   sb.dispose();
 }
 report += `\nprelude image ${kb(preludeImage!.length)} KB\n${sweeps}`;

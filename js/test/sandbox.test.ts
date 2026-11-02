@@ -407,7 +407,7 @@ test("snapshots", async () => {
   assert.equal(restored.run("console.log(config.greeting); return add(config.n, 5)"), -3);
   assert.deepEqual(c2.lines, ["hello"]);
   await assert.rejects(Sandbox.fromBytes(snap), /snapshot needs host function add/);
-  await assert.rejects(Sandbox.fromBytes(new Uint8Array(20)), /not a sandbox snapshot/);
+  await assert.rejects(Sandbox.fromBytes(new Uint8Array(20)), /not a djs snapshot/);
   // A damaged image is refused (the heap verifies images on load). Uncompressed, so the
   // damage reaches the image: the container is 40 bytes of header, the metadata, the image.
   const broken = uncompressed(restored);
