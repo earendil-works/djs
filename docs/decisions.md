@@ -6173,3 +6173,13 @@ only after the last run; building the graph itself allocates but never collects 
 "Allocation never collects"). 0141's importer had the same latent bug in its host-call
 re-issue loop (fixed). Any engine-side importer follows the same order: runs first,
 offsets after, then build without running.
+
+## D022: Frozen builtins as a runtime VM option, plus an immutable builtin prefix
+date: 2026-11-02 · by: owner · issue: 0145, 0146, 0147
+After docs/frozen-builtins.md (0144): frozen builtins become a VM option at creation
+(region-based: builtin objects below the prefix boundary behave as frozen, with the
+override fix), not a separate build profile; the default stays spec-conformant. The base
+image becomes an immutable prefix of every arena, and images, snapshots, canonical_hash,
+collections and determinism cover only the session region. A stable, append-only builtin
+registry names builtins across builds. All three phases run in parallel. pi-private is
+not changed now (pi dropping its lockdown comes later).

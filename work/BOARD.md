@@ -6,6 +6,9 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0145 | Stable append-only builtin registry | bloat | .worktrees/bloat |
+| 0146 | Frozen-intrinsics VM option (region-based, override fix) | perf | .worktrees/perf |
+| 0147 | Immutable builtin prefix: session-only images/hash/GC | heap | .worktrees/heap |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 
 ## Open (ready)

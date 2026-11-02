@@ -1,0 +1,29 @@
+# 0145: Stable, append-only builtin registry
+
+status: open
+agent: -
+branch: issue/0145-builtin-registry
+depends-on: 0143, 0144
+guide: docs/guide/builtins.md (a short section), snapshots.md if exports use it
+touches: crates/djs-prelude/ (registry generation at base build), crates/djs-core/src/vm/ or builtins/ (lookup API: id <-> cell, id <-> spec path), tests/ (a committed registry file + gate check), scripts/; coordinate: perf (0146) and heap (0147) work in heap/, interp/, vm/
+
+## Goal
+Owner-approved plan (docs/frozen-builtins.md phase 0, docs/empty-heap.md step 1): every
+builtin object and function reachable from the realm (and the internal intrinsics/closure
+kinds that exports must name, docs/goldilocks-snapshots.md) gets a stable id keyed by its
+spec path (`%Array.prototype.map%`, `%Promise%`, internal: `%PromiseResolveFunction%`...).
+The table is committed (e.g. tests/builtins/registry.tsv) and **append-only**: ids never
+change or get reused; removed builtins are tombstoned. The gate fails if a build renumbers
+or drops an id without a tombstone.
+
+## Acceptance criteria
+- [ ] Registry generated from the base image build, committed, append-only check in the gate.
+- [ ] API: id -> cell (in this build's base image) and cell -> id, spec path <-> id; used
+      by `djs heap` to print builtin references by path.
+- [ ] Unit tests; docs (TESTING.md for the gate check, guide section).
+
+## Log
+
+## Follow-ups
+
+## Result
