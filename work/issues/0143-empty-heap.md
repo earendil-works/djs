@@ -1,7 +1,7 @@
 # 0143: Why is a fresh heap 300 KB? Towards a nearly empty heap (lazy / out-of-heap builtins)
 
-status: open
-agent: -
+status: in-progress
+agent: bloat
 branch: issue/0143-empty-heap
 depends-on: 0135, 0136, 0138, 0139
 guide: - (later)
