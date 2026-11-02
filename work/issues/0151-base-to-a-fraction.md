@@ -128,8 +128,8 @@ L5 → L7 if accepted. Each its own branch and decision; measurements per landin
   slots remain in the base. Ops in step, fast_step, run_hot.
 - Registry: `%prelude:Name%` (names from `compiler::prelude_function_names`); 223 `~N`
   entries tombstoned (they were D2371's fragile paths), 224 added.
-- Base 325,008 → 298,240 B, 5,852 → 4,948 cells; module gzip 458,966 → 453,628 (ceiling
-  lowered to 454,652); vm_new 3.77 → 3.42 µs; wasm instructions ±0.8% (n=5/9); session
+- Base (after 0150) 322,720 → 295,952 B, 5,752 → 4,848 cells; module gzip 459,027 →
+  453,853 (ceiling lowered to 454,863); vm_new 3.77 → 3.42 µs; wasm instructions ±0.8% (n=5/9); session
   images unaffected (prefix not stored).
 - Guide: builtins.md (prelude paragraph, registry paths). ARCH.md's "closures capture
   boxed cells" stays true for user code; proposed note: privileged prelude functions

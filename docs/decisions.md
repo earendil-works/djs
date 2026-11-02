@@ -6594,8 +6594,9 @@ change after the prelude ran.
   tombstones and their functions new entries: they were the fragile paths of D2371, and
   the new names stay as long as a helper keeps its source name. djs-cli's binary keeps the
   prelude source for this (+400 KB native, not in djs-wasm).
-- **Measured** (base-families): base 325,008 → 298,240 B (−26.8 KB, −8.2%), cells 5,852 →
-  4,948; module gzip 458,966 → 453,628 (−5.3 KB; the ceiling is lowered to 454,652);
+- **Measured** (base-families, on main after 0150): base 322,720 → 295,952 B (−26.8 KB,
+  −8.3%), cells 5,752 → 4,848; module gzip 459,027 → 453,853 (−5.2 KB; the ceiling is
+  lowered to 454,863);
   vm_new from base 3.77 → 3.42 µs. Bytecode is the same size (`get_builtin` is 3 bytes
   like `get_cap`). Wasm instructions (n=5, the outliers again at n=9) within ±0.8% on
   all 22 workloads; natively within ±0.7% except pushpop +1.8%, which never runs

@@ -4,4 +4,4 @@
 # (lowered with --update, raised only by a recorded decision; last raised: D2067).
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 quickjs_wasi_gzip	286655
-ceiling_gzip	454652
+ceiling_gzip	454863
