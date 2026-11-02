@@ -565,7 +565,7 @@ fn gc_pending_follows_the_threshold() {
     assert!(!h.gc_pending());
     assert_eq!(
         h.gc_threshold(),
-        gc::next_threshold(h.arena().len(), h.arena().limit())
+        gc::next_threshold(h.arena().len(), h.base_end(), h.arena().limit())
     );
 }
 

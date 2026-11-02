@@ -213,7 +213,11 @@ impl Heap {
             if self.arena.get(0, Roots::OLD_END) == old_len {
                 self.arena.set(0, Roots::OLD_END, at);
             }
-            self.set_gc_threshold(super::gc::next_threshold(at, self.arena.limit()));
+            self.set_gc_threshold(super::gc::next_threshold(
+                at,
+                self.base_end(),
+                self.arena.limit(),
+            ));
         }
         Ok(())
     }

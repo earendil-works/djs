@@ -253,7 +253,8 @@ impl Heap {
     pub fn restore_capacity(image_len: usize, limit: usize) -> usize {
         let hard = (limit.min(arena::MAX_ARENA as usize) as u32) & !7;
         let len = u32::try_from(image_len).unwrap_or(u32::MAX);
-        let t = gc::next_threshold(len, hard - reserve_for(hard));
+        // (The prefix is not known here: counted as live data, a little more room.)
+        let t = gc::next_threshold(len, 0, hard - reserve_for(hard));
         (capacity_target(t) as usize).max(image_len)
     }
 
@@ -301,7 +302,7 @@ impl Heap {
         self.arena.set_limit(limit);
         // A restored image keeps the threshold it had (the same collection points as
         // without the snapshot), unless it is beyond what this cap allows.
-        let fresh = gc::next_threshold(self.arena.len(), self.arena.limit());
+        let fresh = gc::next_threshold(self.arena.len(), self.base_end(), self.arena.limit());
         let stored = self.stored_gc_threshold();
         let t = if stored == 0 {
             fresh
@@ -367,7 +368,7 @@ impl Heap {
             self.arena
                 .set(0, Roots::FLAGS, f & !cells::ROOT_RESERVE_OPEN);
             self.arena.set_limit(self.hard_limit - self.reserve);
-            let t = gc::next_threshold(self.arena.len(), self.arena.limit());
+            let t = gc::next_threshold(self.arena.len(), self.base_end(), self.arena.limit());
             self.set_gc_threshold(t);
         }
     }

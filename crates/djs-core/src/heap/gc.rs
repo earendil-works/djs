@@ -73,13 +73,27 @@ pub struct GcStats {
     pub after: u32,
 }
 
+/// What a builtin prefix counts for in [`next_threshold`]'s growth, whatever its size
+/// (D2442): the prefix is immutable and never collected, so its size should not set how
+/// often the session's data is collected. The value is the prefix of the base image
+/// when the rule came in (`Roots::BASE_END` 288,160 B), so collections came as often as
+/// before; retune it on its own.
+pub const BASE_ALLOWANCE: u32 = 288_160;
+
 /// The arena size at which the next collection is requested, for `live` bytes after a
-/// collection: twice the live size (at least [`MIN_GROWTH`] more), but never more than half
-/// of the remaining headroom below `limit`. Close to the cap, collections get more
-/// frequent instead of running into `OutOfMemory`.
-pub fn next_threshold(live: u32, limit: u32) -> u32 {
+/// collection, `base` of them the builtin prefix (`Roots::BASE_END`, 0 without one): as
+/// much growth as live data (at least [`MIN_GROWTH`]), the prefix counted as
+/// [`BASE_ALLOWANCE`], but never more than half of the remaining headroom below `limit`.
+/// Close to the cap, collections get more frequent instead of running into
+/// `OutOfMemory`.
+pub fn next_threshold(live: u32, base: u32, limit: u32) -> u32 {
     let headroom = limit.saturating_sub(live);
-    let growth = live.max(MIN_GROWTH);
+    let counted = if base > 0 {
+        live.saturating_sub(base) + BASE_ALLOWANCE
+    } else {
+        live
+    };
+    let growth = counted.max(MIN_GROWTH);
     if growth > headroom / 2 {
         return live + headroom / 2;
     }
@@ -249,6 +263,10 @@ impl Heap {
 
     /// The end of the builtin prefix (`Roots::BASE_END`, D022): 0 without one.
     pub fn base_end(&self) -> u32 {
+        // (0 too while the arena has no roots cell yet: a heap being set up.)
+        if self.arena.len() < Roots::BASE_END.offset + 4 {
+            return 0;
+        }
         self.arena.get(0, Roots::BASE_END)
     }
 
@@ -265,7 +283,7 @@ impl Heap {
     /// The threshold, the pending flag, the reserve and the capacity after a collection.
     fn after_collect(&mut self, after: u32) {
         self.refresh_frozen();
-        self.set_gc_threshold(next_threshold(after, self.arena.limit()));
+        self.set_gc_threshold(next_threshold(after, self.base_end(), self.arena.limit()));
         self.gc_pending = false;
         self.maybe_close_reserve();
         // A to-space sized for a mostly-garbage heap gives the excess back (in wasm to the
@@ -409,13 +427,22 @@ mod tests {
     #[test]
     fn thresholds() {
         let big = arena::MAX_ARENA;
-        assert_eq!(next_threshold(0, big), MIN_GROWTH);
-        assert_eq!(next_threshold(1 << 20, big), 2 << 20);
+        assert_eq!(next_threshold(0, 0, big), MIN_GROWTH);
+        assert_eq!(next_threshold(1 << 20, 0, big), 2 << 20);
         // Rounded up to whole 64 KiB pages (D1870).
-        assert_eq!(next_threshold(300_000, big), 655_360);
+        assert_eq!(next_threshold(300_000, 0, big), 655_360);
         // Near the cap: half the headroom.
-        assert_eq!(next_threshold(900, 1000), 950);
-        assert_eq!(next_threshold(1000, 1000), 1000);
-        assert_eq!(next_threshold(2000, 1000), 2000);
+        assert_eq!(next_threshold(900, 0, 1000), 950);
+        assert_eq!(next_threshold(1000, 0, 1000), 1000);
+        assert_eq!(next_threshold(2000, 0, 1000), 2000);
+        // A prefix counts as BASE_ALLOWANCE (D2442): at that size as before; a smaller
+        // one leaves the growth as it was.
+        let a = BASE_ALLOWANCE;
+        assert_eq!(
+            next_threshold(a + 100_000, a, big),
+            next_threshold(a + 100_000, 0, big)
+        );
+        let small = next_threshold(100_000 + 100_000, 100_000, big);
+        assert!(small >= 200_000 + a + 100_000, "{small}");
     }
 }
