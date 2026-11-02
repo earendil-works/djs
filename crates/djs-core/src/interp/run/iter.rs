@@ -10,7 +10,8 @@
 //!
 //! The fast step covers the cases where the original `next` runs no user code either:
 //! a present dense element of an Array (holes and anything beyond take the real `next`,
-//! whose `Get` may reach the prototype chain or a getter), an in-bounds Number element
+//! whose `Get` may reach the prototype chain or a getter; a keys iterator, which reads no
+//! element, takes every index below the length), an in-bounds Number element
 //! of a typed array, and a code point of a string. The last step (`done`) also takes
 //! the real `next`, which finishes the iterator and allocates the one final result.
 
@@ -19,6 +20,7 @@ use super::intrinsics::{
     id,
 };
 use super::*;
+use crate::builtins::dense::index;
 use crate::builtins::{collection, string};
 use crate::heap::{Lookup, atoms};
 use crate::value::Str;
@@ -193,6 +195,59 @@ impl Exec<'_> {
         matches!(self.iter_plan(it, f), Plan::Str(..) | Plan::Elem(..))
     }
 
+    /// `%IteratorFastDrain(it, next, arr, n)` (D2305): the steps `iter_fast_next` would
+    /// take one by one for a keys or values Array Iterator over an Array or typed array,
+    /// each stored as CreateDataProperty of `arr` at `n`, `n + 1`, ..., in one call, up to
+    /// the iterator's end or the first element the real `next` must read (a hole). Stops
+    /// early where the store is not a plain dense one (`create_element_fast`), and does
+    /// nothing when `arr` is the iterated array (each step re-reads its length). Returns
+    /// the next `n`. No user code runs in between, so the batch is unobservable; the
+    /// iterator advances by what was stored, after the stores (an allocation failure in
+    /// between leaves it where it was, and the retry stores the same values again).
+    pub(super) fn iter_fast_drain(
+        &mut self,
+        it: Value,
+        f: Value,
+        arr: Value,
+        n: f64,
+    ) -> Result<f64, Fault> {
+        let Plan::Elem(it, _, i, kind @ 0..=1) = self.iter_plan(it, f) else {
+            return Ok(n);
+        };
+        let target = self.heap.object_slot(it, 0).as_object();
+        let (Some(arr), Some(o), Some(n0)) = (arr.as_object(), target, index(n)) else {
+            return Ok(n);
+        };
+        if arr == o || self.heap.object_class(arr) != ObjectClass::Array {
+            return Ok(n);
+        }
+        let len = match self.heap.object_class(o) {
+            ObjectClass::Array => self.heap.array_length(o),
+            _ => self.heap.ta_length(o).unwrap_or(0),
+        };
+        // Below 2^32 - 1, the largest array index.
+        let len = len.min(i.saturating_add(u32::MAX - 1 - n0));
+        let mut k = i;
+        while k < len {
+            let v = if kind == 0 {
+                conv::number(f64::from(k))
+            } else {
+                match self.heap.get_element_fast(o, k) {
+                    Some(v) => v,
+                    None => break,
+                }
+            };
+            if !self.heap.create_element_fast(arr, n0 + (k - i), v)? {
+                break;
+            }
+            k += 1;
+        }
+        self.heap.set_object_slot(it, 1, conv::number(f64::from(k)));
+        // One unit per four elements, as the dense leaves charge.
+        self.fuel -= i64::from((k - i) / 4);
+        Ok(f64::from(n0 + (k - i)))
+    }
+
     /// What the next step of `it` with `next` method `f` does, without doing it.
     fn iter_plan(&self, it: Value, f: Value) -> Plan {
         let Some(it) = it.as_object() else {
@@ -242,6 +297,11 @@ impl Exec<'_> {
         };
         if i >= len {
             return Plan::Done(it);
+        }
+        // A keys iterator never reads the element (23.1.5.1 step 6.c.ii), so holes don't
+        // matter to it: `[...Array(n).keys()]` (D2305).
+        if kind == 0 {
+            return Plan::Elem(it, Value::UNDEFINED, i, 0);
         }
         // A hole or a non-dense element may reach a getter or the prototype chain, and
         // a BigInt element allocates: the real `next` reads those.

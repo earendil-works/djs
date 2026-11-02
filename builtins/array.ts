@@ -40,7 +40,8 @@ function ArrayPrototypeForEach(this: Value, callbackfn: Value, thisArg?: Value):
     throw NewTypeError("not a function");
   }
   // The dense part in one intrinsic (0137), then the spec's loop from where it stopped.
-  for (let k: f64 = EachDense(0, o, 0, len, callbackfn, thisArg, undefined); k < len; k++) {
+  // An empty array skips the intrinsic: it costs an exit from the tier-0 loop (D2307).
+  for (let k: f64 = len > 0 ? EachDense(0, o, 0, len, callbackfn, thisArg, undefined) : 0; k < len; k++) {
     if (HasProperty(o, k)) {
       Call(callbackfn, thisArg, Get(o, k), k, o);
     }
@@ -58,7 +59,7 @@ function ArrayPrototypeMap(this: Value, callbackfn: Value, thisArg?: Value): Obj
     throw NewTypeError("not a function");
   }
   const a: Obj = ArraySpeciesCreate(o, len);
-  for (let k: f64 = EachDense(1, o, 0, len, callbackfn, thisArg, a); k < len; k++) {
+  for (let k: f64 = len > 0 ? EachDense(1, o, 0, len, callbackfn, thisArg, a) : 0; k < len; k++) {
     if (HasProperty(o, k)) {
       const kValue: Value = Get(o, k);
       const mappedValue: Value = Call(callbackfn, thisArg, kValue, k, o);
@@ -324,7 +325,10 @@ function ArrayFrom(this: Value, items: Value, mapfn?: Value, thisArg?: Value): O
   if (IsConstructor(this)) {
     a = iterable ? Construct(this) : Construct(this, len);
   }
-  for (let k: f64 = 0; k < len; k++) {
+  // With a mapping function, the elements whose Get observes nothing in one callback
+  // frame (D2306).
+  const start: f64 = mapping && len > 0 ? EachDense(8, arrayLike, 0, len, mapfn, thisArg, a) : 0;
+  for (let k: f64 = start; k < len; k++) {
     const kValue: Value = Get(arrayLike, k);
     const mappedValue: Value = mapping ? Call(mapfn, thisArg, kValue, k) : kValue;
     CreateDataPropertyOrThrow(a, k, mappedValue);
@@ -407,7 +411,7 @@ function FindViaPredicate(o: Obj, len: f64, fromEnd: boolean, predicate: Value, 
     throw NewTypeError("not a function");
   }
   let i: f64 = 0;
-  if (!fromEnd) {
+  if (!fromEnd && len > 0) {
     // The dense part (0137): -1 - k when the result at k decided, o[k] in the box.
     const box: Obj = ArrayCreate(0);
     i = EachDense(wantIndex ? 6 : 5, o, 0, len, predicate, thisArg, box);
@@ -474,7 +478,7 @@ function EveryOrSome(o: Obj, callbackfn: Value, thisArg: Value, wantAll: boolean
     throw NewTypeError("not a function");
   }
   // The dense part (0137): -1 - k when the result at k decided.
-  let k: f64 = EachDense(wantAll ? 4 : 3, o, 0, len, callbackfn, thisArg, undefined);
+  let k: f64 = len > 0 ? EachDense(wantAll ? 4 : 3, o, 0, len, callbackfn, thisArg, undefined) : 0;
   if (k < 0) {
     return !wantAll;
   }
@@ -517,7 +521,7 @@ function ArrayPrototypeFilter(this: Value, callbackfn: Value, thisArg?: Value): 
   }
   const a: Obj = ArraySpeciesCreate(o, 0);
   // The dense part (0137) keeps elements in the fresh `a`: its length counts them.
-  let k: f64 = EachDense(2, o, 0, len, callbackfn, thisArg, a);
+  let k: f64 = len > 0 ? EachDense(2, o, 0, len, callbackfn, thisArg, a) : 0;
   let to: f64 = k > 0 ? LengthOfArrayLike(a) : 0;
   for (; k < len; k++) {
     if (HasProperty(o, k)) {

@@ -12,7 +12,8 @@ function ArraySpread(arr: Obj, src: Value): Obj {
   let n: f64 = LengthOfArrayLike(arr);
   while (true) {
     // Without a result object where that is unobservable (D1800): arrays with holes,
-    // typed arrays, `arr.entries()`.
+    // typed arrays, `arr.entries()`; keys and values runs in one step (D2305).
+    n = IteratorFastDrain(iterator, next, arr, n);
     if (IteratorFastReady(iterator, next)) {
       CreateDataPropertyOrThrow(arr, n, IteratorFastValue(iterator, next));
     } else {

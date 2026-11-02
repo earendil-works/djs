@@ -1063,8 +1063,18 @@ impl Exec<'_> {
                     if self.fuel <= 0 {
                         return None;
                     }
-                    // A call of a `@fast` builtin (D1850), else the general path.
-                    if !(op == fast::CALL && self.pc < self.code_len && self.fast_leaf_call()) {
+                    // A call of a `@fast` builtin (D1850) or `%EachDense` (D2307), else the
+                    // general path.
+                    if op == fast::CALL_INTRINSIC
+                        && let Some(r) = self.each_dense_decline()
+                    {
+                        if let Some(st) = r {
+                            return Some(st);
+                        }
+                    } else if !(op == fast::CALL
+                        && self.pc < self.code_len
+                        && self.fast_leaf_call())
+                    {
                         if let Some(st) = self.step_once() {
                             return Some(st);
                         }

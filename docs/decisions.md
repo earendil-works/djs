@@ -6601,3 +6601,58 @@ change after the prelude ran.
   like `get_cap`). Wasm instructions (n=5, the outliers again at n=9) within ±0.8% on
   all 22 workloads; natively within ±0.7% except pushpop +1.8%, which never runs
   `get_builtin` (the same binary without the `run_hot` arm measures the same: layout).
+
+## D2305: Keys iterators step over holes; `%IteratorFastDrain` takes keys and values runs in one step
+date: 2026-11-09 · by: perf · issue: 0154
+- **Holes:** D1800's fast step (`iter_plan`) declined on a hole for every Array Iterator
+  kind. A keys iterator never reads the element (23.1.5.1), so it now produces `i` for every
+  `i` below the length. `[...Array(n).keys()]` no longer takes the real `next` and a result
+  object per element.
+- **Runs:** the new leaf `%IteratorFastDrain(iterator, next, arr, n)` stores what the fast
+  step would give, one CreateDataProperty per value into the Array `arr` from `n`, in one
+  call: keys iterators to the end, values iterators up to the first hole, over Arrays and
+  typed arrays. It stops where a store is not a plain dense one (`create_element_fast`),
+  does nothing when `arr` is the iterated array (each step re-reads the length), and
+  advances the iterator after the stores, so an allocation failure in between repeats the
+  same stores. Fuel: one unit per four values, as the dense leaves charge. Used at the top
+  of the loops of `%ArraySpread`, IterableToList, `%IteratorRest` and Array.from's
+  iterable path without a mapping function.
+- **Measured** (wasm, n = 1M, median of 5): `[...Array(n).keys()]` 593 → 44 ms, and
+  `Array.from(Array(n).keys())` 642 → 45 ms, against quickjs-wasi's 55 and 54.
+
+## D2306: Array.from(arrayLike, mapfn) runs through `%EachDense`
+date: 2026-11-09 · by: perf · issue: 0154
+Mode 8 of `%EachDense` is Array.from's mapping loop over an array-like. Its element k is
+read live before each call. It is `o`'s dense element, or else the data property or
+absence (undefined) found along a prototype chain of ordinary objects, Arrays and
+functions. Anything else (an accessor, a proxy, another exotic object, an index past the
+int atoms) hands the rest to the builtin's own loop. The callback gets two arguments
+(`kValue, k`), and its result is stored into `a` at k as in map. The read sits outside the
+per-element path of the other modes (`plain_get_index` out of line, after the dense
+read): inlined, it cost forEach and higher-order 1–1.4%. `Array.from({length: 1M}, f)`:
+168 → 101 ms, against quickjs-wasi's 80.
+
+## D2307: Callback builtins on short arrays: no `%EachDense` for an empty array, and its call outside `step`
+date: 2026-11-09 · by: perf · issue: 0154
+- **The cost:** an exit from the tier-0 loop through `step_once`, `step` and
+  `call_intrinsic` costs about 2.3k wasm instructions, roughly three plain calls. A `@fast`
+  call's exit (`fast_leaf_call`) is cheap.
+- **What changed:**
+  - forEach, map, filter, some, every, find, findIndex and Array.from skip `%EachDense`
+    when the length is 0;
+  - `run_hot`'s `Decline` exit runs a `call_intrinsic` of `%EachDense` itself
+    (`each_dense_decline`), with `step`'s fuel, `next` and fault handling, without the way
+    through `step`.
+- **Measured** (wasm instructions per call): forEach on [] 5.5k → 3.2k, map on [] 9.1k →
+  6.8k, map on [x] 11.8k → 11.0k, filter on [] 10.6k → 7.1k, reduce on [x] 14.0k → 13.0k
+  (quickjs-wasi: 1.6k, 5.0k, 6.6k, 5.0k, 2.5k).
+- **Tried and dropped:**
+  - answering `@fast` builtin intrinsics in `intrinsic_hit`: privileged code calls them as
+    closures, never through `call_intrinsic`;
+  - running `@fast` calls inside `call_closure` without leaving `run_hot`: every workload
+    was 0.5–2% slower (code layout), and the exit it saves is cheap.
+- **What remains:** pico's tree case (children arrays summed with map/reduce) went from
+  700 to 665 ms, against quickjs-wasi's 310. About a fifth of it is the collector tracing
+  the live tree (QuickJS counts references). The rest is the bytecode builtins' own
+  instructions per call: frame, ToObject, LengthOfArrayLike, the species check and the
+  callback frame. For reduce add the rest-parameter array and a second frame.

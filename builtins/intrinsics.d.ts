@@ -499,7 +499,11 @@ declare function ArraySliceDense(o: Obj, k: f64, fin: f64, a: Obj): boolean;
  * - 5 find: a truthy result decides, and o[k] goes to element 0 of the Array `a`;
  * - 6 findIndex: a truthy result decides;
  * - 7 reduce: calls `f(acc, o[k], k, o)` (`thisArg` undefined), with the accumulator as
- *   element 0 of the Array `a`, which gets the result.
+ *   element 0 of the Array `a`, which gets the result;
+ * - 8 Array.from of an array-like: calls `f(o[k], k)` and does
+ *   CreateDataPropertyOrThrow(a, k, result); `o` is any ordinary object (or array or
+ *   function) whose element k, along its prototype chain, is a data property or absent
+ *   (undefined), so Get observes nothing (D2306).
  * One frame for `f`, entered again per element. Returns the k the builtin's own loop goes
  * on from (`len`: done; `k` itself when `f` is not a plain closure or `a` is not as
  * required), or -1 - k when the result at k decided. @reentrant
@@ -736,6 +740,14 @@ declare function HasOriginalIteration(v: Value): boolean;
 declare function IteratorFastReady(iterator: Obj, next: Value): boolean;
 /** The next value of an iterator `IteratorFastReady` accepts (it advances). @leaf */
 declare function IteratorFastValue(iterator: Obj, next: Value): Value;
+/**
+ * The values `IteratorFastValue` would give one by one for a keys or values Array
+ * Iterator, stored with CreateDataPropertyOrThrow into the Array `arr` at n, n + 1, ...
+ * in one step, while they are plain dense stores (D2305): the next n. Stops before a
+ * value only `next` can read (a hole), at the end (the next step finishes the iterator)
+ * and where a store is not plain; gives n back unchanged for anything else. @leaf
+ */
+declare function IteratorFastDrain(iterator: Obj, next: Value, arr: Obj, n: f64): f64;
 /** CreateIterResultObject ( value, done ), 7.4.14. @leaf */
 declare function CreateIterResultObject(value: Value, done: boolean): Obj;
 /** A new Array [a, b]. @leaf */

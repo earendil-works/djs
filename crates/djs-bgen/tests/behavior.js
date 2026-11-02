@@ -438,6 +438,7 @@ const I = {
   ArrayJoinDense: (o, len, sep) => undefined,
   EnumerableOwnDataProperties: (o, kind) => undefined,
   IteratorFastReady: (it, next) => false,
+  IteratorFastDrain: (it, next, arr, n) => n,
   IsOriginalCollectionAdder: (adder, kind) => false,
   TypedArraySetFromDense: (o, values) => false,
   // No direct paths in the stand-ins: always the iterator protocol.

@@ -29,7 +29,9 @@ function IterableToList(items: Value): Obj {
   const list: Obj = ArrayCreate(0);
   let n: f64 = 0;
   while (true) {
-    // Without a result object where that is unobservable (D1800).
+    // Without a result object where that is unobservable (D1800), keys and values runs
+    // in one step (D2305).
+    n = IteratorFastDrain(iterator, next, list, n);
     if (IteratorFastReady(iterator, next)) {
       CreateDataPropertyOrThrow(list, n, IteratorFastValue(iterator, next));
     } else {
@@ -56,6 +58,10 @@ function ArrayFromIterator(a: Obj, items: Value, method: Value, mapfn: Value, th
       const error: Obj = NewTypeError("Array loo long");
       IteratorCloseThrow(iterator);
       throw error;
+    }
+    if (mapfn === undefined) {
+      // Keys and values runs in one step (D2305).
+      k = IteratorFastDrain(iterator, next, a, k);
     }
     // Without a result object where that is unobservable (D1800).
     let nextValue: Value = undefined;

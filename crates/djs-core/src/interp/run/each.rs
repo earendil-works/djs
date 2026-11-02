@@ -13,6 +13,8 @@
 use super::*;
 use crate::builtins::dense::index;
 
+const EACH_DENSE: u16 = super::intrinsics::id("EachDense");
+
 /// The loop state below the callback's frame.
 const STATE: u32 = 8;
 const MODE: u32 = 0;
@@ -33,6 +35,8 @@ const EVERY: i32 = 4;
 const FIND: i32 = 5;
 const FIND_INDEX: i32 = 6;
 const REDUCE: i32 = 7;
+/// Array.from's mapping loop over an array-like (D2306).
+const FROM: i32 = 8;
 
 impl Exec<'_> {
     /// `%EachDense(mode, o, k, len, f, thisArg, a)` from `call_intrinsic`: the arguments
@@ -51,6 +55,25 @@ impl Exec<'_> {
         self.push(k);
         self.pc = next;
         Ok(None)
+    }
+
+    /// The tier-0 loop's exit at a `call_intrinsic` (D2307): `%EachDense` runs here, as
+    /// `step` would run it (its fuel, its `next`, a fault thrown at its pc), without the
+    /// way through `step` and `call_intrinsic`. `None` for any other intrinsic (nothing
+    /// changed), else what `step_once` returns.
+    #[inline(never)]
+    pub(super) fn each_dense_decline(&mut self) -> Option<Option<Status>> {
+        if self.pc >= self.code_len || self.imm_u16(1) as u16 != EACH_DENSE {
+            return None;
+        }
+        let argc = self.imm_u16(3);
+        let info = &crate::bytecode::OPS[Op::CallIntrinsic as usize];
+        self.fuel -= info.cost.fuel() as i64;
+        let (pc0, next) = (self.pc, self.pc + info.size as u32);
+        Some(match self.each_dense(self.sp - argc, next) {
+            Ok(st) => st,
+            Err(f) => self.throw_fault(f, pc0),
+        })
     }
 
     /// Whether the loop can run at all: a known mode over an Array and a plain closure
@@ -77,10 +100,14 @@ impl Exec<'_> {
                 .as_object()
                 .filter(|&o| self.is_class(o, ObjectClass::Array))
         };
+        let mode = self.get(base + MODE).as_int().unwrap_or(-1);
+        if mode == FROM {
+            return array(A).is_some() && self.get(base + O).as_object().is_some();
+        }
         let (Some(o), a) = (array(O), array(A)) else {
             return false;
         };
-        match self.get(base + MODE).as_int().unwrap_or(-1) {
+        match mode {
             FOR_EACH | SOME | EVERY | FIND_INDEX => true,
             MAP | FIND => a.is_some(),
             FILTER => a.is_some() && crate::builtins::fast::plain_species(self.heap, o),
@@ -89,24 +116,58 @@ impl Exec<'_> {
         }
     }
 
-    /// Element `k` of the loop's array if it is below `len` and present in the dense store.
+    /// Element `k` of the loop's array if it is below `len` and present in the dense store
+    /// (for Array.from, Get of it if that observes nothing).
     fn each_element(&self, base: u32, k: u32) -> Option<Value> {
         let len = self.get(base + LEN).as_number()?;
         if f64::from(k) >= len {
             return None;
         }
-        self.heap
-            .get_element_fast(self.get(base + O).as_object()?, k)
+        let o = self.get(base + O).as_object()?;
+        // The array modes' element first: the per-element path.
+        if let Some(v) = self.heap.get_element_fast(o, k) {
+            return Some(v);
+        }
+        if self.get(base + MODE).as_int() == Some(FROM) {
+            return self.plain_get_index(o, k);
+        }
+        None
+    }
+
+    /// `o[k]`, not in `o`'s dense store, when that Get runs no user code and reads no exotic element: every object on
+    /// the chain up to the holder is ordinary, an Array or a function, and the holder's
+    /// property is a data property (undefined when no object has one).
+    #[inline(never)]
+    fn plain_get_index(&self, o: Obj, k: u32) -> Option<Value> {
+        let key = Atom::int(k)?;
+        let mut c = Some(o);
+        while let Some(q) = c {
+            if !matches!(
+                self.heap.object_class(q),
+                ObjectClass::Ordinary | ObjectClass::Array | ObjectClass::Function
+            ) {
+                return None;
+            }
+            match self.heap.get_own_property(q, key) {
+                Some(Property::Data { value, .. }) => return Some(value),
+                Some(Property::Accessor { .. }) => return None,
+                None => c = self.heap.get_prototype_of(q),
+            }
+        }
+        Some(Value::UNDEFINED)
     }
 
     /// The callback's arguments for element `k` (`x`, already in KVALUE): `x, k, o`, for
     /// reduce `accumulator, x, k, o`. The count is the second value.
     fn each_args(&self, base: u32, kv: Value) -> ([Value; 4], u32) {
         let (x, o) = (self.get(base + KVALUE), self.get(base + O));
-        if self.get(base + MODE).as_int() == Some(REDUCE) {
+        let mode = self.get(base + MODE).as_int();
+        if mode == Some(REDUCE) {
             let a = self.get(base + A).as_object();
             let acc = a.and_then(|a| self.heap.get_element_fast(a, 0));
             ([acc.unwrap_or(Value::UNDEFINED), x, kv, o], 4)
+        } else if mode == Some(FROM) {
+            ([x, kv, Value::UNDEFINED, Value::UNDEFINED], 2)
         } else {
             ([x, kv, o, Value::UNDEFINED], 3)
         }
@@ -195,7 +256,7 @@ impl Exec<'_> {
         // NEW_TARGET undefined, undefined locals (the callee, `this` and the rest of the
         // header are never written).
         let (bp, hp, lp) = (self.bp, self.hp, self.lp);
-        let (args, argc) = if mode == REDUCE {
+        let (args, argc) = if mode == REDUCE || mode == FROM {
             self.each_args(base, kv)
         } else {
             ([x, kv, self.get(base + O), Value::UNDEFINED], 3)
@@ -236,9 +297,9 @@ impl Exec<'_> {
     /// collects and is tried once more (D1900).
     fn each_complete(&mut self, base: u32, v: Value) -> Result<bool, Fault> {
         let mode = self.get(base + MODE).as_int().unwrap_or(FOR_EACH);
-        let truthy = mode != MAP && mode != REDUCE && conv::to_boolean(self.heap, v);
+        let truthy = !matches!(mode, MAP | REDUCE | FROM) && conv::to_boolean(self.heap, v);
         let (stop, store) = match mode {
-            MAP | REDUCE => {
+            MAP | REDUCE | FROM => {
                 self.set(base + KVALUE, v);
                 (false, true)
             }
@@ -254,7 +315,7 @@ impl Exec<'_> {
         let put = |ex: &mut Self| {
             let a = ex.get(base + A).as_object().expect("each: a");
             let i = match mode {
-                MAP => ex.each_k(base),
+                MAP | FROM => ex.each_k(base),
                 FILTER => ex.heap.array_length(a),
                 _ => 0,
             };

@@ -244,6 +244,7 @@ const ARRAY_SLICE_DENSE: u16 = id("ArraySliceDense");
 const EACH_DENSE: u16 = id("EachDense");
 const ARRAY_JOIN_DENSE: u16 = id("ArrayJoinDense");
 const ITERATOR_FAST_READY: u16 = id("IteratorFastReady");
+const ITERATOR_FAST_DRAIN: u16 = id("IteratorFastDrain");
 const IS_ORIGINAL_COLLECTION_ADDER: u16 = id("IsOriginalCollectionAdder");
 const MAP_PROTOTYPE_SET: u16 = id("MapPrototypeSet");
 const SET_PROTOTYPE_ADD: u16 = id("SetPrototypeAdd");
@@ -1116,6 +1117,10 @@ impl Exec<'_> {
                 Value::bool(a0 == realm::installed_intrinsic(self.heap, original))
             }
             ITERATOR_FAST_READY => Value::bool(self.iter_fast_ready(a0, arg(self, 1))),
+            ITERATOR_FAST_DRAIN => {
+                let n = arg(self, 3).as_number().unwrap_or(-1.0);
+                conv::number(self.iter_fast_drain(a0, arg(self, 1), arg(self, 2), n)?)
+            }
             ITERATOR_FAST_VALUE => match self.iter_fast_next(a0, arg(self, 1))? {
                 super::iter::FastStep::Value(v) => v,
                 _ => return bad_argument(info.name),

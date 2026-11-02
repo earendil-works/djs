@@ -201,7 +201,10 @@ and `reduce` are bytecode builtins. Their dense part is one intrinsic, `%EachDen
 native state machine runs per element, and the builtin's own spec loop takes over at the
 first hole, proxy or other array. That made these builtins about twice as fast per
 element as their native versions, and dropping them from the Rust backend left the
-module smaller.
+module smaller. `Array.from(arrayLike, f)` uses the same loop, reading each element of
+the array-like where that reads only data properties (D2306). Calls on short arrays pay
+mostly fixed costs: an empty array skips the intrinsic, and the intrinsic starts without
+the interpreter's general instruction path (D2307).
 
 Two rules keep this safe:
 
@@ -401,7 +404,7 @@ The mode is part of the image: a restored VM keeps it.
 
 Decisions on this page:
 
-<!-- gen:decisions D1170 D1171 D1172 D1270 D1310 D1321 D1430 D1631 D1632 D1633 D1634 D1635 D1801 D1850 D1900 D1910 D2000 D2020 D2060 D2090 D2304 D2371 D2440 -->
+<!-- gen:decisions D1170 D1171 D1172 D1270 D1310 D1321 D1430 D1631 D1632 D1633 D1634 D1635 D1801 D1850 D1900 D1910 D2000 D2020 D2060 D2090 D2304 D2306 D2307 D2371 D2440 -->
 - D1170: djs-bgen is Rust with its own parser for the subset
 - D1171: Builtin subset rules
 - D1172: Generated prelude format and installation
@@ -423,6 +426,8 @@ Decisions on this page:
 - D2060: The base is decoded or injected straight into the first VM's arena
 - D2090: Fused dense HasProperty + Get in natives; one-pass string search and in-arena joins
 - D2304: Frozen builtins: gates in the property layer, the override fix in [[Set]]
+- D2306: Array.from(arrayLike, mapfn) runs through `%EachDense`
+- D2307: Callback builtins on short arrays: no `%EachDense` for an empty array, and its call outside `step`
 - D2371: The builtin registry: stable ids by spec path, append-only, gate-checked
 - D2440: Prelude functions live in a realm table, not in captured Boxes
 <!-- /gen -->

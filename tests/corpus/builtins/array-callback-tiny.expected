@@ -1,0 +1,17 @@
+0 [[],[],false,true,null,-1,0,null,null,1] 0
+1 [[7],[7],true,true,7,0,7,null,7,8] 8
+2 [[7,8],[7,8],true,true,7,0,15,null,8,16] 12
+map TypeError
+filter TypeError
+forEach TypeError
+some TypeError
+every TypeError
+find TypeError
+findIndex TypeError
+reduce TypeError empty array
+true true true
+first
+758
+[1,2]
+[] [0]
+=== completed

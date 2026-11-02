@@ -17,7 +17,7 @@ repository's front page shows the same numbers.
   failures are listed with reasons in `tests/test262/expected-failures.txt`; dquickts'
   qjs fails 4 active tests under the same runner.
 - The differential corpus (codemode scripts, console and result formatting, error
-  messages, TypeScript, dquickts' own tests): **532 of 543** cases match qjs; 6 known
+  messages, TypeScript, dquickts' own tests): **535 of 546** cases match qjs; 6 known
   failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
 - pi's codemode test suite on djs: 221 of 226 tests pass (measured at 2026-11-01).
 <!-- /gen -->
@@ -66,12 +66,12 @@ Module sizes measured at d780463b0d, 2026-11-01.
 | --- | ---: |
 | opcodes ([reference](ref-opcodes.md)) | 180 |
 | cell kinds ([reference](ref-cells.md)) | 24 |
-| intrinsics ([reference](ref-intrinsics.md)) | 451 |
+| intrinsics ([reference](ref-intrinsics.md)) | 452 |
 | builtins in `builtins/*.ts` | 455 |
 | of them `@native` (also compiled to Rust) | 10 |
 | of them `@fast` (a Rust leaf entry) | 72 |
-| difftest corpus cases | 543 |
-| base snapshot, bytes | 295,952 |
+| difftest corpus cases | 546 |
+| base snapshot, bytes | 296,184 |
 <!-- /gen -->
 
 Decisions on this page:

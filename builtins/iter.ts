@@ -62,7 +62,9 @@ function IteratorRest(iterator: Obj, next: Value): Obj {
   const arr: Obj = ArrayCreate(0);
   let n: f64 = 0;
   while (true) {
-    // Without a result object where that is unobservable (D1800).
+    // Without a result object where that is unobservable (D1800), keys and values runs
+    // in one step (D2305).
+    n = IteratorFastDrain(iterator, next, arr, n);
     if (IteratorFastReady(iterator, next)) {
       CreateDataPropertyOrThrow(arr, n, IteratorFastValue(iterator, next));
     } else {

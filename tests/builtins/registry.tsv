@@ -1635,3 +1635,4 @@
 1630	value	%prelude:NewDOMException%
 1631	value	%prelude:DOMExceptionThisField%
 1632	value	%prelude:DOMExceptionEnumerable%
+1633	intrinsic	IteratorFastDrain

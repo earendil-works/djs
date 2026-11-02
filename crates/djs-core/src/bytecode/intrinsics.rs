@@ -277,6 +277,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("HasOriginalIteration", L, 1, false),
     i("IteratorFastReady", L, 2, false),
     i("IteratorFastValue", L, 2, false),
+    i("IteratorFastDrain", L, 4, false),
     i("CreateIterResultObject", L, 2, false),
     i("CreateArrayFromPair", L, 2, false),
     i("PromiseCreate", L, 1, false),
