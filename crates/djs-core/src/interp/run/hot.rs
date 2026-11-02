@@ -324,6 +324,8 @@ impl Exec<'_> {
     /// loop stops there), the run stops (`Some`), or `hot_backedges` backward jumps or
     /// general-path instructions went by (`None`, for V8's tier-up).
     #[inline(never)]
+    // (`heap_call!` reads the opcode again also where nothing uses it after.)
+    #[allow(unused_assignments)]
     pub(super) fn run_hot(&mut self) -> Option<super::Status> {
         let mut budget = self.opts.hot_backedges;
         let slow_call_flags = self.slow_call_flags;
@@ -349,15 +351,6 @@ impl Exec<'_> {
             let exit = {
                 let mut collect = self.opts.gc_stress || self.heap.gc_pending();
                 let mut b: &mut [u8] = self.heap.arena_mut().hot_bytes();
-                // Ends the slice for a leaf heap call (`$e`), then takes it back.
-                macro_rules! heap_call {
-                    ($e:expr) => {{
-                        let r = $e;
-                        collect = self.opts.gc_stress || self.heap.gc_pending();
-                        b = self.heap.arena_mut().hot_bytes();
-                        r
-                    }};
-                }
                 macro_rules! slot {
                     ($i:expr) => {
                         vals + 8 * ($i)
@@ -371,9 +364,29 @@ impl Exec<'_> {
                         break Exit::Decline(0);
                     };
                     let sp0 = sp;
-                    let op = w as u8;
-                    let imm16 = (w >> 8) as u16 as u32;
-                    let imm32 = (w >> 8) as u32;
+                    let mut op = w as u8;
+                    // Ends the slice for a leaf heap call (`$e`), then takes it back.
+                    // The opcode is read again after it (D2441).
+                    macro_rules! heap_call {
+                        ($e:expr) => {{
+                            let r = $e;
+                            collect = self.opts.gc_stress || self.heap.gc_pending();
+                            b = self.heap.arena_mut().hot_bytes();
+                            op = b[ip as usize];
+                            r
+                        }};
+                    }
+                    // The immediates, extracted in the arms that use them (D2441).
+                    macro_rules! imm16 {
+                        () => {
+                            (w >> 8) as u16 as u32
+                        };
+                    }
+                    macro_rules! imm32 {
+                        () => {
+                            (w >> 8) as u32
+                        };
+                    }
                     // Charges `op` (constants per arm) and advances past it.
                     macro_rules! next {
                         ($op:expr) => {{
@@ -403,14 +416,18 @@ impl Exec<'_> {
                     // A jump to `ip + size + offset` charged as `$op`; a backward one is a
                     // safepoint and counts against the budget.
                     macro_rules! jump {
-                        ($op:expr, $taken:expr) => {{
+                        ($op:expr, $taken:expr) => {
+                            jump!($op, $taken, imm32!() as i32)
+                        };
+                        ($op:expr, $taken:expr, $offset:expr) => {{
                             let info = &OPS[$op as usize];
                             fuel -= info.cost.fuel() as i64;
                             let next = ip + info.size as u32;
                             if !$taken {
                                 ip = next;
                             } else {
-                                ip = (next as i64 + imm32 as i32 as i64) as u32;
+                                let offset: i32 = $offset;
+                                ip = (next as i64 + offset as i64) as u32;
                                 if ip < next {
                                     if collect {
                                         break Exit::Safepoint;
@@ -522,22 +539,22 @@ impl Exec<'_> {
                     }
                     match op {
                         fast::GET_LOC => {
-                            push!(ld(b, slot!(lp + imm16)));
+                            push!(ld(b, slot!(lp + imm16!())));
                             next!(Op::GetLoc);
                         }
                         fast::PUT_LOC => {
                             sp -= 1;
                             let v = ld(b, slot!(sp));
-                            st(b, slot!(lp + imm16), v);
+                            st(b, slot!(lp + imm16!()), v);
                             next!(Op::PutLoc);
                         }
                         fast::SET_LOC => {
                             let v = top!(0);
-                            st(b, slot!(lp + imm16), v);
+                            st(b, slot!(lp + imm16!()), v);
                             next!(Op::SetLoc);
                         }
                         fast::GET_ARG => {
-                            push!(ld(b, slot!(bp + 2 + imm16)));
+                            push!(ld(b, slot!(bp + 2 + imm16!())));
                             next!(Op::GetArg);
                         }
                         fast::GET_BUILTIN => {
@@ -549,10 +566,10 @@ impl Exec<'_> {
                             let Some(t) = ld(b, at).as_internal() else {
                                 break Exit::Decline(op);
                             };
-                            if imm16 >= ld32(b, t + ValueArray::LEN.offset) {
+                            if imm16!() >= ld32(b, t + ValueArray::LEN.offset) {
                                 break Exit::Decline(op);
                             }
-                            push!(ld(b, ValueArray::VALUES.at(t, imm16)));
+                            push!(ld(b, ValueArray::VALUES.at(t, imm16!())));
                             next!(Op::GetBuiltin);
                         }
                         fast::GET_CAP
@@ -576,13 +593,13 @@ impl Exec<'_> {
                                     | fast::SET_BOX
                                     | fast::SET_BOX_CHK
                             ) {
-                                ld(b, slot!(lp + imm16))
+                                ld(b, slot!(lp + imm16!()))
                             } else {
                                 // The Box in slot 1 + i of the closure (stack[bp]).
                                 let Some(f) = ld(b, slot!(bp)).as_object() else {
                                     break Exit::Decline(op);
                                 };
-                                ld(b, object_slot(b, f.offset(), 1 + imm16))
+                                ld(b, object_slot(b, f.offset(), 1 + imm16!()))
                             };
                             let at = bx.as_internal().expect("a Box")
                                 + crate::heap::cells::BoxCell::VALUE.offset;
@@ -622,16 +639,16 @@ impl Exec<'_> {
                             next!(op);
                         }
                         fast::PUSH_I8 => {
-                            push!(Value::int(imm32 as u8 as i8 as i32));
+                            push!(Value::int(imm32!() as u8 as i8 as i32));
                             next!(Op::PushI8);
                         }
                         fast::PUSH_I32 => {
-                            push!(Value::int(imm32 as i32));
+                            push!(Value::int(imm32!() as i32));
                             next!(Op::PushI32);
                         }
                         fast::PUSH_CONST => {
                             assert!(consts != 0, "no constant pool");
-                            push!(ld(b, ValueArray::VALUES.at(consts, imm32)));
+                            push!(ld(b, ValueArray::VALUES.at(consts, imm32!())));
                             next!(Op::PushConst);
                         }
                         fast::UNDEFINED => {
@@ -651,7 +668,7 @@ impl Exec<'_> {
                             next!(Op::PushFalse);
                         }
                         fast::SPECIAL_OBJECT => {
-                            if imm32 as u8 != special::THIS {
+                            if imm32!() as u8 != special::THIS {
                                 break Exit::Decline(op);
                             }
                             push!(ld(b, slot!(bp + 1)));
@@ -707,7 +724,7 @@ impl Exec<'_> {
                         }
                         fast::INC_LOC | fast::DEC_LOC => {
                             let d = if op == fast::INC_LOC { 1 } else { -1 };
-                            let at = slot!(lp + imm16);
+                            let at = slot!(lp + imm16!());
                             let Some(i) = ld(b, at).as_int().and_then(|i| i.checked_add(d)) else {
                                 break Exit::Decline(op);
                             };
@@ -855,7 +872,7 @@ impl Exec<'_> {
                         | fast::GET_METHOD
                         | fast::PUT_FIELD
                         | fast::DEFINE_FIELD => {
-                            let key = Atom::from_id(imm32);
+                            let key = Atom::from_id(imm32!());
                             let ic = (w >> 40) as u16 as u32;
                             let (o, v) = if op == fast::PUT_FIELD || op == fast::DEFINE_FIELD {
                                 (top!(1), top!(0))
@@ -919,10 +936,12 @@ impl Exec<'_> {
                             };
                             sp -= 1;
                             st(b, slot!(sp - 1), v);
-                            jump!(Op::IterNext, true)
+                            // (The offset read again: `w` kept across the call is
+                            // spilled for every instruction, D2441.)
+                            jump!(Op::IterNext, true, ld32(b, ip + 1) as i32)
                         }
                         fast::CALL_INTRINSIC => {
-                            let (id, argc) = (imm16 as u16, (w >> 24) as u16 as u32);
+                            let (id, argc) = (imm16!() as u16, (w >> 24) as u16 as u32);
                             let base = sp - argc;
                             if id == CALL && argc >= 2 {
                                 // `f this a1 .. an`, as in `call_intrinsic`.
@@ -944,7 +963,7 @@ impl Exec<'_> {
                         }
                         // The global caches (D1620); the misses run `step`.
                         GET_GLOBAL | GET_GLOBAL_TYPEOF => {
-                            let (key, ic) = (Atom::from_id(imm32), (w >> 40) as u16 as u32);
+                            let (key, ic) = (Atom::from_id(imm32!()), (w >> 40) as u16 as u32);
                             let Some(v) = heap_call!(self.ic_global_get(key, ic)) else {
                                 break Exit::Decline(op);
                             };
@@ -956,7 +975,7 @@ impl Exec<'_> {
                             });
                         }
                         PUT_GLOBAL => {
-                            let (key, ic) = (Atom::from_id(imm32), (w >> 40) as u16 as u32);
+                            let (key, ic) = (Atom::from_id(imm32!()), (w >> 40) as u16 as u32);
                             let v = top!(0);
                             if !heap_call!(self.ic_global_put(key, ic, v)) {
                                 break Exit::Decline(op);
@@ -965,7 +984,7 @@ impl Exec<'_> {
                             next!(Op::PutGlobal);
                         }
                         fast::CALL => {
-                            let argc = imm16;
+                            let argc = imm16!();
                             call_closure!(Op::Call, sp - 2 - argc, argc);
                         }
                         fast::RETURN | fast::RETURN_UNDEF => {
