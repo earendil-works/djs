@@ -119,7 +119,10 @@ pub struct Tools {
 // entropy of real data: synthetic repetitive text compresses unrealistically well.
 
 fn load_corpus() -> (Vec<(String, String)>, Vec<String>, Vec<String>) {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    // GOLDI_CORPUS_ROOT: another tree's files, so that two builds see the same results.
+    let root = std::env::var("GOLDI_CORPUS_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.."));
     let mut files = vec![];
     let mut stack = vec![root.join("crates/djs-core/src")];
     while let Some(d) = stack.pop() {

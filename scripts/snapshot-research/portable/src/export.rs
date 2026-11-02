@@ -381,6 +381,10 @@ impl<'a> Exporter<'a> {
         }
         let f = frame_of(h, g).expect("a saved frame");
         let t = template_info(h, f.template);
+        if self.prelude_script.as_deref() == Some(t.script.as_str()) {
+            // Tier 2 restores onto a fresh prelude run, which has no such frame.
+            self.errors.push(format!("a prelude function is suspended (at {}..{})", t.span.0, t.span.1));
+        }
         let (await_pc, site) = t
             .awaits()
             .into_iter()

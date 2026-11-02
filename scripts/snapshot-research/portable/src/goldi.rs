@@ -64,7 +64,11 @@ fn empty_inputs() -> Inputs {
 }
 
 fn sealed(mut s: pi::Session) -> (pi::Session, Vec<u8>) {
+    // Older trees (before D2041) have no seal: a collection is the closest.
+    #[cfg(not(feature = "old"))]
     s.vm.seal().unwrap();
+    #[cfg(feature = "old")]
+    s.vm.collect().unwrap();
     let img = s.vm.bytes().to_vec();
     (s, img)
 }
@@ -264,9 +268,20 @@ pub fn export_pi(s: &mut pi::Session, code: &str, inputs: &Inputs, failed_page2:
         pending.push(json!({"id": k.as_number(), "promise": pv,
             "name": call.map(|c| c.name.clone()), "args": call.and_then(|c| c.args.clone())}));
     }
+    // The prelude interface the script was started against: the global names the prelude
+    // defined. The rest of the script may use any of them, so an importing prelude must
+    // still define them all (checked on import).
+    let mut interface: Vec<String> = ex
+        .prelude
+        .values()
+        .filter(|p| p.matches('/').count() == 1)
+        .map(|p| p.trim_start_matches("globalThis/").to_string())
+        .collect();
+    interface.sort();
     ex.drain();
     if !ex.errors.is_empty() {
         let mut e = ex.errors.clone();
+        e.sort();
         e.dedup();
         return Err(e);
     }
@@ -277,6 +292,7 @@ pub fn export_pi(s: &mut pi::Session, code: &str, inputs: &Inputs, failed_page2:
         "script": user_source(code),
         "inputs": {"tools": inputs.tools, "globals": inputs.globals, "store": inputs.store},
         "preludeState": state,
+        "interface": interface,
         "pending": pending,
         "host": {"now": s.now, "output": s.ev.output, "issued": s.ev.issued, "failedPage2": failed_page2},
         "nodes": ex.into_nodes(),
@@ -293,6 +309,12 @@ pub fn import_pi(snap: &J, prelude: &str) -> Result<(pi::Session, bool), String>
         store: inp["store"].as_str().unwrap().into(),
     };
     let mut s = pi::Session::prepare_with(prelude, &inputs, T0);
+    for name in snap["interface"].as_array().unwrap() {
+        let path = format!("globalThis/{}", name.as_str().unwrap());
+        if resolve_prelude(s.vm.heap_mut(), &path).is_none_or(|v| v.is_undefined()) {
+            return Err(format!("this prelude does not define {path}, which the session's did"));
+        }
+    }
     // The script's code, compiled again; nothing of it runs.
     let src = snap["script"].as_str().unwrap();
     let f = s
@@ -497,6 +519,42 @@ pub fn tier2(args: &[String]) {
         t_import / n.max(1)
     );
     for f in fails.iter().take(15) {
+        println!("  {f}");
+    }
+}
+
+/// portable goldi-import-all IMPORT_PRELUDE DIR: imports every snapshot `goldi-tier2 --save`
+/// wrote (possibly by another build and prelude) and compares with the saved transcript.
+pub fn import_all(args: &[String]) {
+    let prelude = std::fs::read_to_string(&args[0]).unwrap();
+    let dir = &args[1];
+    let mut files: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "json"))
+        .collect();
+    files.sort();
+    let (mut n, mut same) = (0, 0);
+    let mut fails = Vec::new();
+    for f in files {
+        n += 1;
+        let stem = f.file_stem().unwrap().to_string_lossy().to_string();
+        let case = stem.split('@').next().unwrap().to_string();
+        let want = std::fs::read_to_string(format!("{dir}/{case}.transcript")).unwrap();
+        let snap: J = serde_json::from_str(&std::fs::read_to_string(&f).unwrap()).unwrap();
+        match import_pi(&snap, &prelude) {
+            Ok((s, f2)) => {
+                if finish(s, f2) == want {
+                    same += 1;
+                } else {
+                    fails.push(format!("{stem}: transcript differs"));
+                }
+            }
+            Err(e) => fails.push(format!("{stem}: {e}")),
+        }
+    }
+    println!("snapshots {n}: same transcript as the exporting build's run {same}");
+    for f in fails.iter().take(10) {
         println!("  {f}");
     }
 }
