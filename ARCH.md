@@ -323,7 +323,8 @@ loop {
 - **Generators and async functions:** on `yield`/`await`, the frame's slice of the value
   stack is copied into a heap generator/async object (D1375). Resuming copies it back.
   Closures capture boxed cells, chosen by the resolution pass, so frames never need to
-  outlive their stack slot.
+  outlive their stack slot. Privileged prelude functions refer to each other through the
+  realm's prelude function table (`get_builtin`/`put_builtin`, D2440), not through boxes.
 - **Promises and jobs:** the microtask queue is a heap structure (D1370, D1371). Running a
   job means pushing a frame. Results of async host calls wait in the host inbox and are
   applied one at a time when the job queue is empty (D1670).
