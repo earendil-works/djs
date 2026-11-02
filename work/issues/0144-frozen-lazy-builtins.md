@@ -1,7 +1,7 @@
 # 0144: Frozen, lazily created builtins outside the session heap (design + prototype)
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0144-frozen-lazy-builtins
 depends-on: 0138, 0141, 0142, 0143
 guide: - (later)
