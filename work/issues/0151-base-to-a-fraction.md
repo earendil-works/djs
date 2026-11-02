@@ -121,6 +121,21 @@ arena drops the raw base by ~90 KB but the instance's memory only by the coded c
 
 **Order:** L6 → L4 → L3 (code/pool cells, then templates, then name/length) → L2+L1 →
 L5 → L7 if accepted. Each its own branch and decision; measurements per landing.
+### L6: prelude functions in a realm table (branch issue/0151-closures, D2440)
+- Compiler (privileged): top-level prelude function declarations referred to by other
+  functions get `Storage::Builtin`; `get_builtin`/`put_builtin` over
+  `Intrinsic::PreludeFunctions` (257 slots). No Boxes, capture descriptors or capture
+  slots remain in the base. Ops in step, fast_step, run_hot.
+- Registry: `%prelude:Name%` (names from `compiler::prelude_function_names`); 223 `~N`
+  entries tombstoned (they were D2371's fragile paths), 224 added.
+- Base 325,008 → 298,240 B, 5,852 → 4,948 cells; module gzip 458,966 → 453,628 (ceiling
+  lowered to 454,652); vm_new 3.77 → 3.42 µs; wasm instructions ±0.8% (n=5/9); session
+  images unaffected (prefix not stored).
+- Guide: builtins.md (prelude paragraph, registry paths). ARCH.md's "closures capture
+  boxed cells" stays true for user code; proposed note: privileged prelude functions
+  refer to each other through the realm's table (D2440).
+- 0150 landed: atom renumbering (1,460 holes, 11.7 KB/VM) joins L3/L4 (the remap touches
+  templates, bytecode immediates, pools, shapes).
 
 ## Follow-ups
 

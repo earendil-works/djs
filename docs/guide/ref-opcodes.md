@@ -75,116 +75,118 @@ with them.
 | `get_cap_chk` | 63 | Cap | 3 | 0 → 1 | Basic | `-> v` with a TDZ check. |
 | `put_cap_chk` | 64 | Cap | 3 | 1 → 0 | Basic | `v ->` with a TDZ check. |
 | `set_cap_chk` | 65 | Cap | 3 | 1 → 1 | Basic | `v -> v` with a TDZ check. |
-| `get_global` | 66 | Atom, Cache | 7 | 0 → 1 | Access | `-> v`: global lexical record, then the global object; ReferenceError if missing. |
-| `get_global_typeof` | 67 | Atom, Cache | 7 | 0 → 1 | Access | `-> v`: like `get_global`, but `undefined` if missing (`typeof`). |
-| `put_global` | 68 | Atom, Cache | 7 | 1 → 0 | Access | `v ->`: ReferenceError if missing, TypeError for a global const. |
-| `init_global_lex` | 69 | Atom | 5 | 1 → 0 | Access | `v ->`: initialize a Script top-level let/const/class. |
-| `global_decls` | 70 | Const | 5 | 0 → 0 | Access | Script GlobalDeclarationInstantiation from the declaration list in constant `idx`. |
-| `throw_const_assign` | 71 | Atom | 5 | 0 → 0 | Basic | TypeError `'x' is read-only`. |
-| `get_field` | 72 | Atom, Cache | 7 | 1 → 1 | Access | `obj -> v` |
-| `get_method` | 73 | Atom, Cache | 7 | 1 → 2 | Access | `obj -> f obj`: callee and `this` for a method call. |
-| `put_field` | 74 | Atom, Cache | 7 | 2 → 0 | Access | `obj v ->` |
-| `get_elem` | 75 | – | 1 | 2 → 1 | Access | `obj key -> v` |
-| `get_elem2` | 76 | – | 1 | 2 → 3 | Access | `obj key -> obj key' v`: `get_elem` keeping the reference for a compound assignment or update, with `key'` = ToPrimitive(key) (one conversion for the get and the put, after the RequireObjectCoercible of `obj`). |
-| `to_propkey` | 77 | – | 1 | 1 → 1 | Basic | `key -> key'`: ToPrimitive(key, string) now, for a computed key whose definition comes after other code (`{ [k]: v }`: ToPropertyKey before `v`). Primitives stay. |
-| `get_elem_method` | 78 | – | 1 | 2 → 2 | Access | `obj key -> f obj` |
-| `put_elem` | 79 | – | 1 | 3 → 0 | Access | `obj key v ->` |
-| `define_field` | 80 | Atom, Cache | 7 | 2 → 1 | Access | `obj v -> obj`: CreateDataProperty (literals). |
-| `define_elem` | 81 | – | 1 | 3 → 1 | Access | `obj key v -> obj`: computed keys. |
-| `define_getter` | 82 | Atom | 5 | 2 → 1 | Access | `obj f -> obj` |
-| `define_setter` | 83 | Atom | 5 | 2 → 1 | Access | `obj f -> obj` |
-| `define_getter_elem` | 84 | – | 1 | 3 → 1 | Access | `obj key f -> obj` |
-| `define_setter_elem` | 85 | – | 1 | 3 → 1 | Access | `obj key f -> obj` |
-| `define_method` | 86 | Atom | 5 | 2 → 1 | Access | `obj f -> obj`: also sets the home object. |
-| `define_method_elem` | 87 | – | 1 | 3 → 1 | Access | `obj key f -> obj` |
-| `set_proto` | 88 | – | 1 | 2 → 1 | Basic | `obj v -> obj`: a literal `__proto__: v` sets the prototype when `v` is an object or null (other values are ignored). |
-| `set_function_name` | 89 | U8 | 2 | 2 → 2 | Basic | `key f -> key f`: SetFunctionName(f, ToPropertyKey(key), prefix) for an anonymous function under a computed key (`prefix`: 0 none, 1 "get", 2 "set"). |
-| `copy_data_props` | 90 | U8 | 2 | 2 → 1 | Access | `obj src -> obj`: object spread / rest (flags select the variant). |
-| `delete` | 91 | – | 1 | 2 → 1 | Access | `obj key -> bool` |
-| `in` | 92 | – | 1 | 2 → 1 | Access | `key obj -> bool` |
-| `private_symbol` | 93 | Atom, U8 | 6 | 0 → 1 | Alloc | `-> sym`: a new private name (a private symbol described `#x`). `flags`: `heap::cells::flags::SYM_PRIVATE_METHOD` (a method or accessor) and `SYM_PRIVATE_READONLY` (no setter). |
-| `get_private_field` | 94 | – | 1 | 2 → 1 | Access | `obj sym -> v`: `obj.#x` (own properties only, never a proxy trap; a getter is called). |
-| `put_private_field` | 95 | – | 1 | 3 → 0 | Access | `obj sym v ->`: `obj.#x = v` (a setter is called). |
-| `define_private_field` | 96 | U8 | 2 | 3 → 1 | Access | `obj sym v -> obj`: adds a private field (`kind` 0) or method (1), ignoring extensibility; TypeError if `obj` has it already. |
-| `define_private_accessor` | 97 | – | 1 | 4 → 1 | Access | `obj sym getter setter -> obj`: adds a private accessor (`undefined` for a missing half). |
-| `private_in` | 98 | – | 1 | 2 → 1 | Access | `sym obj -> bool`: `#x in obj`. |
-| `get_super` | 99 | – | 1 | 1 → 1 | Access | `o -> o.[[GetPrototypeOf]]()`: the base of a super property (from the home object), or the super constructor (from the active function). |
-| `get_super_field` | 100 | Atom | 5 | 2 → 1 | Access | `this base -> v`: `super.x`, base.[[Get]](x, this). |
-| `put_super_field` | 101 | Atom | 5 | 3 → 0 | Access | `this base v ->`: `super.x = v`, base.[[Set]](x, v, this). |
-| `get_super_elem` | 102 | – | 1 | 3 → 1 | Access | `this base key -> v` |
-| `put_super_elem` | 103 | – | 1 | 4 → 0 | Access | `this base key v ->` |
-| `set_home_object` | 104 | – | 1 | 2 → 2 | Basic | `home f -> home f`: sets the home object of `f` (class field initializers). |
-| `define_class` | 105 | U8 | 2 | 3 → 2 | Alloc | `parent protoParent ctor -> ctor proto`: ClassDefinitionEvaluation's prototype and constructor setup. `flags` bit 0: there is a heritage (`parent` and `protoParent`, checked by %ClassHeritage, are used; otherwise ignored). |
-| `define_class_method` | 106 | Atom, U8 | 6 | 2 → 1 | Access | `obj f -> obj`: a class method (`kind` 0), getter (1) or setter (2): non-enumerable, and sets the home object. |
-| `define_class_method_elem` | 107 | U8 | 2 | 3 → 1 | Access | `obj key f -> obj` |
-| `define_class_field` | 108 | – | 1 | 3 → 1 | Access | `obj key v -> obj`: a public class field (CreateDataPropertyOrThrow). |
-| `require_object_coercible` | 109 | – | 1 | 1 → 1 | Basic | `v -> v`: TypeError for `null`/`undefined` (destructuring). |
-| `neg` | 110 | – | 1 | 1 → 1 | Basic | `a -> -a` |
-| `plus` | 111 | – | 1 | 1 → 1 | Basic | `a -> +a` (ToNumber) |
-| `bnot` | 112 | – | 1 | 1 → 1 | Basic | `a -> ~a` |
-| `not` | 113 | – | 1 | 1 → 1 | Basic | `a -> !a` |
-| `typeof` | 114 | – | 1 | 1 → 1 | Basic | `a -> typeof a` |
-| `inc` | 115 | – | 1 | 1 → 1 | Basic | `a -> a + 1` (numeric) |
-| `dec` | 116 | – | 1 | 1 → 1 | Basic | `a -> a - 1` (numeric) |
-| `to_numeric` | 117 | – | 1 | 1 → 1 | Basic | `a -> ToNumeric(a)` (postfix `++`/`--`) |
-| `to_string` | 118 | – | 1 | 1 → 1 | Basic | `a -> ToString(a)` (template substitutions) |
-| `add` | 119 | – | 1 | 2 → 1 | Basic | `a b -> a + b` |
-| `sub` | 120 | – | 1 | 2 → 1 | Basic | `a b -> a - b` |
-| `mul` | 121 | – | 1 | 2 → 1 | Basic | `a b -> a * b` |
-| `div` | 122 | – | 1 | 2 → 1 | Basic | `a b -> a / b` |
-| `mod` | 123 | – | 1 | 2 → 1 | Basic | `a b -> a % b` |
-| `pow` | 124 | – | 1 | 2 → 1 | Basic | `a b -> a ** b` |
-| `shl` | 125 | – | 1 | 2 → 1 | Basic | `a b -> a << b` |
-| `sar` | 126 | – | 1 | 2 → 1 | Basic | `a b -> a >> b` |
-| `shr` | 127 | – | 1 | 2 → 1 | Basic | `a b -> a >>> b` |
-| `band` | 128 | – | 1 | 2 → 1 | Basic | `a b -> a & b` |
-| `bor` | 129 | – | 1 | 2 → 1 | Basic | `a b -> a \| b` |
-| `bxor` | 130 | – | 1 | 2 → 1 | Basic | `a b -> a ^ b` |
-| `lt` | 131 | – | 1 | 2 → 1 | Basic | `a b -> a < b` |
-| `le` | 132 | – | 1 | 2 → 1 | Basic | `a b -> a <= b` |
-| `gt` | 133 | – | 1 | 2 → 1 | Basic | `a b -> a > b` |
-| `ge` | 134 | – | 1 | 2 → 1 | Basic | `a b -> a >= b` |
-| `eq` | 135 | – | 1 | 2 → 1 | Basic | `a b -> a == b` |
-| `ne` | 136 | – | 1 | 2 → 1 | Basic | `a b -> a != b` |
-| `strict_eq` | 137 | – | 1 | 2 → 1 | Basic | `a b -> a === b` |
-| `strict_ne` | 138 | – | 1 | 2 → 1 | Basic | `a b -> a !== b` |
-| `instanceof` | 139 | – | 1 | 2 → 1 | Access | `a b -> a instanceof b` |
-| `is_nullish` | 140 | – | 1 | 1 → 1 | Basic | `v -> v is null or undefined` |
-| `is_undefined` | 141 | – | 1 | 1 → 1 | Basic | `v -> v === undefined` |
-| `concat` | 142 | Count | 3 | imm0 → 1 | Alloc | `s1 .. sn -> s`: join template literal parts in one allocation. |
-| `jump` | 143 | Target | 5 | 0 → 0 | Basic | Unconditional jump. |
-| `jump_if_false` | 144 | Target | 5 | 1 → 0 | Basic | `v ->`: jump if ToBoolean(v) is false. |
-| `jump_if_true` | 145 | Target | 5 | 1 → 0 | Basic | `v ->`: jump if ToBoolean(v) is true. |
-| `gosub` | 146 | Target | 5 | 0 → 1 | Basic | `-> ret`: push the return address (an int32) and jump (enter a `finally`). |
-| `ret` | 147 | – | 1 | 1 → 0 | Basic | `ret ->`: jump to the popped return address. |
-| `throw` | 148 | – | 1 | 1 → 0 | Basic | `v ->`: throw `v`. |
-| `return` | 149 | – | 1 | 1 → 0 | Basic | `v ->`: return `v`. |
-| `return_undef` | 150 | – | 1 | 0 → 0 | Basic | Return `undefined`. |
-| `call` | 151 | Argc | 3 | 2+imm0 → 1 | Call | `f this a1 .. an -> r` |
-| `construct` | 152 | Argc | 3 | 1+imm0 → 1 | Call | `f a1 .. an -> r`: `new f(...)`, new.target = f. |
-| `call_spread` | 153 | – | 1 | 3 → 1 | Call | `f this args -> r`: call with an argument array (spread). |
-| `construct_spread` | 154 | – | 1 | 2 → 1 | Call | `f args -> r` |
-| `super_call` | 155 | Argc | 3 | 2+imm0 → 1 | Call | `f a1 .. an newTarget -> r`: `super(...)` in a derived constructor: constructs `f` (the super constructor) with that new.target. |
-| `super_call_spread` | 156 | – | 1 | 3 → 1 | Call | `f args newTarget -> r`: `super(...args)` with an argument array (spread). |
-| `call_intrinsic` | 157 | Intrinsic, Argc | 5 | imm1 → 1 | Call | `a1 .. an -> r`: privileged code only. |
-| `generator_start` | 158 | Loc | 3 | 0 → 0 | Alloc | Generator function entry: creates the generator object, stores it in local `generator`, suspends the frame (to resume at the next instruction) and returns the object to the caller. |
-| `yield` | 159 | Loc | 3 | 1 → 2 | Alloc | `v -> received isReturn`: suspends the generator in local `generator`, handing `v` to the resumer. Resumed by `next(x)`: `x false`; by `return(x)`: `x true` (the code returns `x`, running finally blocks); `throw(e)` throws `e` here. |
-| `yield_star` | 160 | Loc | 3 | 1 → 2 | Alloc | `innerResult -> received isReturn`: `yield` for `yield*` in a sync generator: the resumer hands `innerResult` (the inner iterator's result object) on as it is, without reading `value` or wrapping it (GeneratorYield ( innerResult )). |
-| `async_start` | 161 | Loc | 3 | 0 → 0 | Alloc | Async function entry: creates the async state (with the result promise) in local `state`. The function runs on synchronously. |
-| `await` | 162 | Loc | 3 | 1 → 1 | Alloc | `v -> result`: suspends the async function of local `state` until `v` settles, then pushes its value or throws its reason here. The first await returns the result promise to the caller. |
-| `async_return` | 163 | Loc | 3 | 1 → 0 | Call | `v ->`: return from an async function: resolves the result promise with `v` and returns the promise. |
-| `async_reject` | 164 | Loc | 3 | 1 → 0 | Call | `e ->`: an exception leaves an async function: rejects the result promise with `e` and returns the promise (the target of the body's catch-all handler). |
-| `get_iterator` | 165 | – | 1 | 1 → 1 | Access | `obj -> iterator` |
-| `iter_next` | 166 | Target | 5 | 2 → 1 | Call | `it next -> r`: `r = next.call(it)`, an iterator result. When `next` is the original `next` of an Array or String Iterator and that step runs no user code, `r` is the next value itself and the instruction jumps (no result object, D1800). |
-| `iter_check_object` | 167 | – | 1 | 1 → 1 | Basic | `v -> v`: TypeError if `v` is not an object (iterator results). |
-| `iterator_close` | 168 | – | 1 | 1 → 0 | Access | `iterator ->`: call `iterator.return()` if present. |
-| `for_in_start` | 169 | – | 1 | 1 → 1 | Alloc | `obj -> for-in iterator` (a snapshot of the enumerable keys) |
-| `for_in_next` | 170 | – | 1 | 1 → 3 | Access | `it -> it key done` |
-| `check_ctor` | 171 | – | 1 | 0 → 0 | Basic | TypeError if a class constructor is called without `new`. |
-| `check_this` | 172 | – | 1 | 1 → 1 | Basic | `v -> v`: a derived constructor's `this`: ReferenceError while uninitialized (`undefined`, before `super()`). |
-| `check_this_uninit` | 173 | – | 1 | 1 → 0 | Basic | `v ->`: before `super()` binds `this`: ReferenceError if it is bound already. |
-| `check_ctor_return` | 174 | – | 1 | 1 → 1 | Basic | `v -> v`: a derived constructor's return value: TypeError unless an object or `undefined`. |
-| `throw_error` | 175 | Atom, U8 | 6 | 0 → 0 | Basic | Throws a new error with message `atom`; `kind` 0: TypeError, 1: ReferenceError. |
-| `debugger` | 176 | – | 1 | 0 → 0 | Free | `debugger` (no effect). |
-| `nop` | 177 | – | 1 | 0 → 0 | Free | No operation. |
+| `get_builtin` | 66 | Builtin | 3 | 0 → 1 | Basic | `-> f`: entry `idx` of the realm's prelude function table (privileged code: a prelude function another one refers to, D2440). |
+| `put_builtin` | 67 | Builtin, Count | 5 | 1 → 0 | Alloc | `f ->`: stores entry `idx` of the prelude function table, which has `len` entries (allocated by the first store). |
+| `get_global` | 68 | Atom, Cache | 7 | 0 → 1 | Access | `-> v`: global lexical record, then the global object; ReferenceError if missing. |
+| `get_global_typeof` | 69 | Atom, Cache | 7 | 0 → 1 | Access | `-> v`: like `get_global`, but `undefined` if missing (`typeof`). |
+| `put_global` | 70 | Atom, Cache | 7 | 1 → 0 | Access | `v ->`: ReferenceError if missing, TypeError for a global const. |
+| `init_global_lex` | 71 | Atom | 5 | 1 → 0 | Access | `v ->`: initialize a Script top-level let/const/class. |
+| `global_decls` | 72 | Const | 5 | 0 → 0 | Access | Script GlobalDeclarationInstantiation from the declaration list in constant `idx`. |
+| `throw_const_assign` | 73 | Atom | 5 | 0 → 0 | Basic | TypeError `'x' is read-only`. |
+| `get_field` | 74 | Atom, Cache | 7 | 1 → 1 | Access | `obj -> v` |
+| `get_method` | 75 | Atom, Cache | 7 | 1 → 2 | Access | `obj -> f obj`: callee and `this` for a method call. |
+| `put_field` | 76 | Atom, Cache | 7 | 2 → 0 | Access | `obj v ->` |
+| `get_elem` | 77 | – | 1 | 2 → 1 | Access | `obj key -> v` |
+| `get_elem2` | 78 | – | 1 | 2 → 3 | Access | `obj key -> obj key' v`: `get_elem` keeping the reference for a compound assignment or update, with `key'` = ToPrimitive(key) (one conversion for the get and the put, after the RequireObjectCoercible of `obj`). |
+| `to_propkey` | 79 | – | 1 | 1 → 1 | Basic | `key -> key'`: ToPrimitive(key, string) now, for a computed key whose definition comes after other code (`{ [k]: v }`: ToPropertyKey before `v`). Primitives stay. |
+| `get_elem_method` | 80 | – | 1 | 2 → 2 | Access | `obj key -> f obj` |
+| `put_elem` | 81 | – | 1 | 3 → 0 | Access | `obj key v ->` |
+| `define_field` | 82 | Atom, Cache | 7 | 2 → 1 | Access | `obj v -> obj`: CreateDataProperty (literals). |
+| `define_elem` | 83 | – | 1 | 3 → 1 | Access | `obj key v -> obj`: computed keys. |
+| `define_getter` | 84 | Atom | 5 | 2 → 1 | Access | `obj f -> obj` |
+| `define_setter` | 85 | Atom | 5 | 2 → 1 | Access | `obj f -> obj` |
+| `define_getter_elem` | 86 | – | 1 | 3 → 1 | Access | `obj key f -> obj` |
+| `define_setter_elem` | 87 | – | 1 | 3 → 1 | Access | `obj key f -> obj` |
+| `define_method` | 88 | Atom | 5 | 2 → 1 | Access | `obj f -> obj`: also sets the home object. |
+| `define_method_elem` | 89 | – | 1 | 3 → 1 | Access | `obj key f -> obj` |
+| `set_proto` | 90 | – | 1 | 2 → 1 | Basic | `obj v -> obj`: a literal `__proto__: v` sets the prototype when `v` is an object or null (other values are ignored). |
+| `set_function_name` | 91 | U8 | 2 | 2 → 2 | Basic | `key f -> key f`: SetFunctionName(f, ToPropertyKey(key), prefix) for an anonymous function under a computed key (`prefix`: 0 none, 1 "get", 2 "set"). |
+| `copy_data_props` | 92 | U8 | 2 | 2 → 1 | Access | `obj src -> obj`: object spread / rest (flags select the variant). |
+| `delete` | 93 | – | 1 | 2 → 1 | Access | `obj key -> bool` |
+| `in` | 94 | – | 1 | 2 → 1 | Access | `key obj -> bool` |
+| `private_symbol` | 95 | Atom, U8 | 6 | 0 → 1 | Alloc | `-> sym`: a new private name (a private symbol described `#x`). `flags`: `heap::cells::flags::SYM_PRIVATE_METHOD` (a method or accessor) and `SYM_PRIVATE_READONLY` (no setter). |
+| `get_private_field` | 96 | – | 1 | 2 → 1 | Access | `obj sym -> v`: `obj.#x` (own properties only, never a proxy trap; a getter is called). |
+| `put_private_field` | 97 | – | 1 | 3 → 0 | Access | `obj sym v ->`: `obj.#x = v` (a setter is called). |
+| `define_private_field` | 98 | U8 | 2 | 3 → 1 | Access | `obj sym v -> obj`: adds a private field (`kind` 0) or method (1), ignoring extensibility; TypeError if `obj` has it already. |
+| `define_private_accessor` | 99 | – | 1 | 4 → 1 | Access | `obj sym getter setter -> obj`: adds a private accessor (`undefined` for a missing half). |
+| `private_in` | 100 | – | 1 | 2 → 1 | Access | `sym obj -> bool`: `#x in obj`. |
+| `get_super` | 101 | – | 1 | 1 → 1 | Access | `o -> o.[[GetPrototypeOf]]()`: the base of a super property (from the home object), or the super constructor (from the active function). |
+| `get_super_field` | 102 | Atom | 5 | 2 → 1 | Access | `this base -> v`: `super.x`, base.[[Get]](x, this). |
+| `put_super_field` | 103 | Atom | 5 | 3 → 0 | Access | `this base v ->`: `super.x = v`, base.[[Set]](x, v, this). |
+| `get_super_elem` | 104 | – | 1 | 3 → 1 | Access | `this base key -> v` |
+| `put_super_elem` | 105 | – | 1 | 4 → 0 | Access | `this base key v ->` |
+| `set_home_object` | 106 | – | 1 | 2 → 2 | Basic | `home f -> home f`: sets the home object of `f` (class field initializers). |
+| `define_class` | 107 | U8 | 2 | 3 → 2 | Alloc | `parent protoParent ctor -> ctor proto`: ClassDefinitionEvaluation's prototype and constructor setup. `flags` bit 0: there is a heritage (`parent` and `protoParent`, checked by %ClassHeritage, are used; otherwise ignored). |
+| `define_class_method` | 108 | Atom, U8 | 6 | 2 → 1 | Access | `obj f -> obj`: a class method (`kind` 0), getter (1) or setter (2): non-enumerable, and sets the home object. |
+| `define_class_method_elem` | 109 | U8 | 2 | 3 → 1 | Access | `obj key f -> obj` |
+| `define_class_field` | 110 | – | 1 | 3 → 1 | Access | `obj key v -> obj`: a public class field (CreateDataPropertyOrThrow). |
+| `require_object_coercible` | 111 | – | 1 | 1 → 1 | Basic | `v -> v`: TypeError for `null`/`undefined` (destructuring). |
+| `neg` | 112 | – | 1 | 1 → 1 | Basic | `a -> -a` |
+| `plus` | 113 | – | 1 | 1 → 1 | Basic | `a -> +a` (ToNumber) |
+| `bnot` | 114 | – | 1 | 1 → 1 | Basic | `a -> ~a` |
+| `not` | 115 | – | 1 | 1 → 1 | Basic | `a -> !a` |
+| `typeof` | 116 | – | 1 | 1 → 1 | Basic | `a -> typeof a` |
+| `inc` | 117 | – | 1 | 1 → 1 | Basic | `a -> a + 1` (numeric) |
+| `dec` | 118 | – | 1 | 1 → 1 | Basic | `a -> a - 1` (numeric) |
+| `to_numeric` | 119 | – | 1 | 1 → 1 | Basic | `a -> ToNumeric(a)` (postfix `++`/`--`) |
+| `to_string` | 120 | – | 1 | 1 → 1 | Basic | `a -> ToString(a)` (template substitutions) |
+| `add` | 121 | – | 1 | 2 → 1 | Basic | `a b -> a + b` |
+| `sub` | 122 | – | 1 | 2 → 1 | Basic | `a b -> a - b` |
+| `mul` | 123 | – | 1 | 2 → 1 | Basic | `a b -> a * b` |
+| `div` | 124 | – | 1 | 2 → 1 | Basic | `a b -> a / b` |
+| `mod` | 125 | – | 1 | 2 → 1 | Basic | `a b -> a % b` |
+| `pow` | 126 | – | 1 | 2 → 1 | Basic | `a b -> a ** b` |
+| `shl` | 127 | – | 1 | 2 → 1 | Basic | `a b -> a << b` |
+| `sar` | 128 | – | 1 | 2 → 1 | Basic | `a b -> a >> b` |
+| `shr` | 129 | – | 1 | 2 → 1 | Basic | `a b -> a >>> b` |
+| `band` | 130 | – | 1 | 2 → 1 | Basic | `a b -> a & b` |
+| `bor` | 131 | – | 1 | 2 → 1 | Basic | `a b -> a \| b` |
+| `bxor` | 132 | – | 1 | 2 → 1 | Basic | `a b -> a ^ b` |
+| `lt` | 133 | – | 1 | 2 → 1 | Basic | `a b -> a < b` |
+| `le` | 134 | – | 1 | 2 → 1 | Basic | `a b -> a <= b` |
+| `gt` | 135 | – | 1 | 2 → 1 | Basic | `a b -> a > b` |
+| `ge` | 136 | – | 1 | 2 → 1 | Basic | `a b -> a >= b` |
+| `eq` | 137 | – | 1 | 2 → 1 | Basic | `a b -> a == b` |
+| `ne` | 138 | – | 1 | 2 → 1 | Basic | `a b -> a != b` |
+| `strict_eq` | 139 | – | 1 | 2 → 1 | Basic | `a b -> a === b` |
+| `strict_ne` | 140 | – | 1 | 2 → 1 | Basic | `a b -> a !== b` |
+| `instanceof` | 141 | – | 1 | 2 → 1 | Access | `a b -> a instanceof b` |
+| `is_nullish` | 142 | – | 1 | 1 → 1 | Basic | `v -> v is null or undefined` |
+| `is_undefined` | 143 | – | 1 | 1 → 1 | Basic | `v -> v === undefined` |
+| `concat` | 144 | Count | 3 | imm0 → 1 | Alloc | `s1 .. sn -> s`: join template literal parts in one allocation. |
+| `jump` | 145 | Target | 5 | 0 → 0 | Basic | Unconditional jump. |
+| `jump_if_false` | 146 | Target | 5 | 1 → 0 | Basic | `v ->`: jump if ToBoolean(v) is false. |
+| `jump_if_true` | 147 | Target | 5 | 1 → 0 | Basic | `v ->`: jump if ToBoolean(v) is true. |
+| `gosub` | 148 | Target | 5 | 0 → 1 | Basic | `-> ret`: push the return address (an int32) and jump (enter a `finally`). |
+| `ret` | 149 | – | 1 | 1 → 0 | Basic | `ret ->`: jump to the popped return address. |
+| `throw` | 150 | – | 1 | 1 → 0 | Basic | `v ->`: throw `v`. |
+| `return` | 151 | – | 1 | 1 → 0 | Basic | `v ->`: return `v`. |
+| `return_undef` | 152 | – | 1 | 0 → 0 | Basic | Return `undefined`. |
+| `call` | 153 | Argc | 3 | 2+imm0 → 1 | Call | `f this a1 .. an -> r` |
+| `construct` | 154 | Argc | 3 | 1+imm0 → 1 | Call | `f a1 .. an -> r`: `new f(...)`, new.target = f. |
+| `call_spread` | 155 | – | 1 | 3 → 1 | Call | `f this args -> r`: call with an argument array (spread). |
+| `construct_spread` | 156 | – | 1 | 2 → 1 | Call | `f args -> r` |
+| `super_call` | 157 | Argc | 3 | 2+imm0 → 1 | Call | `f a1 .. an newTarget -> r`: `super(...)` in a derived constructor: constructs `f` (the super constructor) with that new.target. |
+| `super_call_spread` | 158 | – | 1 | 3 → 1 | Call | `f args newTarget -> r`: `super(...args)` with an argument array (spread). |
+| `call_intrinsic` | 159 | Intrinsic, Argc | 5 | imm1 → 1 | Call | `a1 .. an -> r`: privileged code only. |
+| `generator_start` | 160 | Loc | 3 | 0 → 0 | Alloc | Generator function entry: creates the generator object, stores it in local `generator`, suspends the frame (to resume at the next instruction) and returns the object to the caller. |
+| `yield` | 161 | Loc | 3 | 1 → 2 | Alloc | `v -> received isReturn`: suspends the generator in local `generator`, handing `v` to the resumer. Resumed by `next(x)`: `x false`; by `return(x)`: `x true` (the code returns `x`, running finally blocks); `throw(e)` throws `e` here. |
+| `yield_star` | 162 | Loc | 3 | 1 → 2 | Alloc | `innerResult -> received isReturn`: `yield` for `yield*` in a sync generator: the resumer hands `innerResult` (the inner iterator's result object) on as it is, without reading `value` or wrapping it (GeneratorYield ( innerResult )). |
+| `async_start` | 163 | Loc | 3 | 0 → 0 | Alloc | Async function entry: creates the async state (with the result promise) in local `state`. The function runs on synchronously. |
+| `await` | 164 | Loc | 3 | 1 → 1 | Alloc | `v -> result`: suspends the async function of local `state` until `v` settles, then pushes its value or throws its reason here. The first await returns the result promise to the caller. |
+| `async_return` | 165 | Loc | 3 | 1 → 0 | Call | `v ->`: return from an async function: resolves the result promise with `v` and returns the promise. |
+| `async_reject` | 166 | Loc | 3 | 1 → 0 | Call | `e ->`: an exception leaves an async function: rejects the result promise with `e` and returns the promise (the target of the body's catch-all handler). |
+| `get_iterator` | 167 | – | 1 | 1 → 1 | Access | `obj -> iterator` |
+| `iter_next` | 168 | Target | 5 | 2 → 1 | Call | `it next -> r`: `r = next.call(it)`, an iterator result. When `next` is the original `next` of an Array or String Iterator and that step runs no user code, `r` is the next value itself and the instruction jumps (no result object, D1800). |
+| `iter_check_object` | 169 | – | 1 | 1 → 1 | Basic | `v -> v`: TypeError if `v` is not an object (iterator results). |
+| `iterator_close` | 170 | – | 1 | 1 → 0 | Access | `iterator ->`: call `iterator.return()` if present. |
+| `for_in_start` | 171 | – | 1 | 1 → 1 | Alloc | `obj -> for-in iterator` (a snapshot of the enumerable keys) |
+| `for_in_next` | 172 | – | 1 | 1 → 3 | Access | `it -> it key done` |
+| `check_ctor` | 173 | – | 1 | 0 → 0 | Basic | TypeError if a class constructor is called without `new`. |
+| `check_this` | 174 | – | 1 | 1 → 1 | Basic | `v -> v`: a derived constructor's `this`: ReferenceError while uninitialized (`undefined`, before `super()`). |
+| `check_this_uninit` | 175 | – | 1 | 1 → 0 | Basic | `v ->`: before `super()` binds `this`: ReferenceError if it is bound already. |
+| `check_ctor_return` | 176 | – | 1 | 1 → 1 | Basic | `v -> v`: a derived constructor's return value: TypeError unless an object or `undefined`. |
+| `throw_error` | 177 | Atom, U8 | 6 | 0 → 0 | Basic | Throws a new error with message `atom`; `kind` 0: TypeError, 1: ReferenceError. |
+| `debugger` | 178 | – | 1 | 0 → 0 | Free | `debugger` (no effect). |
+| `nop` | 179 | – | 1 | 0 → 0 | Free | No operation. |
 <!-- /gen -->

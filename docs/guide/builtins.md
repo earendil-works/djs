@@ -129,13 +129,24 @@ mode*, the only mode in which `%Name(...)` compiles: to the `call_intrinsic` opc
 <!-- gen:ops call_intrinsic -->
 | opcode | byte | immediates | size | pop → push | cost | description |
 | --- | ---: | --- | ---: | --- | --- | --- |
-| `call_intrinsic` | 157 | Intrinsic, Argc | 5 | imm1 → 1 | Call | `a1 .. an -> r`: privileged code only. |
+| `call_intrinsic` | 159 | Intrinsic, Argc | 5 | imm1 → 1 | Call | `a1 .. an -> r`: privileged code only. |
 <!-- /gen -->
 
 The prelude runs once, when the base snapshot is built (D1321). Every VM starts as a
 copy of that image, with all builtins installed and compiled, so no VM ever compiles the
 prelude. Privileged templates keep no line tables or local names, which saves space in
 that image (D1430, D1980).
+
+The prelude is one wrapper function that declares every builtin as a function inside
+it. A builtin that calls another one, such as a helper like `LengthOfArrayLike`, would
+normally capture that name the way any closure captures a variable of its enclosing
+function: a Box cell per captured function, a capture descriptor per caller and a slot
+per capture in every caller's function object. Privileged code does without them
+(D2440). The compiler gives each top-level prelude function that another one refers to
+a slot in one table of the realm, and references compile to `get_builtin` (read the
+slot) instead of `get_cap`; the wrapper fills the table once with `put_builtin`. That
+took 27 KB off every VM, about a twelfth of the base image. User code never sees the
+table, and its closures work as before.
 
 **The Rust backend** is opt-in. A builtin tagged `@native` (ten of them: `push`, `sort`
 and its merge, `JSON.stringify`'s slow path, promise reaction jobs, ...) is also
@@ -284,15 +295,16 @@ realm, and every intrinsic, has a stable id there, keyed by a path in the spec's
 431   value      get Map.prototype.size
 538   value      %ArrayIteratorPrototype%
 690   value      %intrinsic:PromiseResolveFunction%   (the prelude function behind it)
-735   value      AggregateError~0                     (a prelude helper a builtin captures)
+1409  value      %prelude:SameValueZero%              (a prelude helper builtins call)
 1349  intrinsic  PromiseResolveFunction               (the intrinsic, by name)
 ```
 
 A path walks from `globalThis`, a global, a realm intrinsic that no global reaches
-(`%TypedArray%`) or a prelude function registered for an intrinsic
-(`%intrinsic:Name%`), through properties (`.key`, `[Symbol.iterator]`), `.[[Prototype]]`
-and captures (`~N`). A new builtin gets the first path a breadth-first walk finds, so the
-paths read like the spec wherever the spec has a name.
+(`%TypedArray%`), a prelude function registered for an intrinsic (`%intrinsic:Name%`) or
+a helper in the realm's prelude function table, by its source name (`%prelude:Name%`),
+through properties (`.key`, `[Symbol.iterator]`) and `.[[Prototype]]`. A new builtin gets
+the first path a breadth-first walk finds, so the paths read like the spec wherever the
+spec has a name.
 
 The table is a committed file,
 [tests/builtins/registry.tsv](../../tests/builtins/registry.tsv), and it only grows:
@@ -310,10 +322,11 @@ for any other heap the paths are resolved on that heap
 heap analyzer prints builtins by their registry paths (`%Array.prototype.map%`).
 
 > **Trade-off.** Paths rather than generated names: a path is what a reader recognizes and
-> what the spec prints, and it is checked by resolving it. A capture path (`~N`) is the
-> weak spot: it changes when the builtin's code changes, and then the entry becomes a
-> tombstone and the helper a new entry. Those helpers never escape to scripts, so an
-> export rarely needs them.
+> what the spec prints, and it is checked by resolving it. Helpers that no property
+> reaches are named by their source name in the prelude (`%prelude:Name%`), which stays
+> the same while the helper keeps its name. They used to be named by the capture that
+> reached them, a path that changed with the calling builtin's code; those entries are
+> tombstones now (D2440).
 
 ## Frozen builtins
 
@@ -388,7 +401,7 @@ The mode is part of the image: a restored VM keeps it.
 
 Decisions on this page:
 
-<!-- gen:decisions D1170 D1171 D1172 D1270 D1310 D1321 D1430 D1631 D1632 D1633 D1634 D1635 D1801 D1850 D1900 D1910 D2000 D2020 D2060 D2090 D2304 D2371 -->
+<!-- gen:decisions D1170 D1171 D1172 D1270 D1310 D1321 D1430 D1631 D1632 D1633 D1634 D1635 D1801 D1850 D1900 D1910 D2000 D2020 D2060 D2090 D2304 D2371 D2440 -->
 - D1170: djs-bgen is Rust with its own parser for the subset
 - D1171: Builtin subset rules
 - D1172: Generated prelude format and installation
@@ -411,4 +424,5 @@ Decisions on this page:
 - D2090: Fused dense HasProperty + Get in natives; one-pass string search and in-arena joins
 - D2304: Frozen builtins: gates in the property layer, the override fix in [[Set]]
 - D2371: The builtin registry: stable ids by spec path, append-only, gate-checked
+- D2440: Prelude functions live in a realm table, not in captured Boxes
 <!-- /gen -->

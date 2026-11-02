@@ -6569,3 +6569,34 @@ gives the whole image as before.
   the words both cells have plus the nonzero new words, instead of the whole cell:
   `<atoms><entries>` had shown 19,536 of 19,536 bytes differing.
 - The summary gives the session image's size (`session_image_bytes`, `base_end`).
+
+## D2440: Prelude functions live in a realm table, not in captured Boxes
+date: 2026-11-10 · by: bloat · issue: 0151
+The prelude is one wrapper function whose top-level function declarations are the
+builtins and their helpers. A builtin that called another one captured it like any
+closure: the wrapper kept the callee in a Box, each caller had a capture descriptor and a
+capture slot per callee in its function object. In the base that was 257 Boxes (4.1 KB),
+652 capture descriptors (14.0 KB) and 11.0 KB of capture slots, for values that never
+change after the prelude ran.
+- **Compiler, privileged mode only:** a function declared at the top of a function that
+  the Script itself contains (the prelude's wrapper, which runs once) and referred to from
+  an inner function gets a slot of the realm's *prelude function table* instead of a Box
+  (`Storage::Builtin`). References compile to `get_builtin idx` (in the wrapper too), the
+  declaration's hoisting to `put_builtin idx, len` (the first store allocates the table).
+  Assigning such a binding is an internal compiler error; bgen's subset has no such
+  assignment. Functions declared deeper and all user code keep their closures.
+- **Realm:** `Intrinsic::PreludeFunctions` holds the table (an internal ValueArray of 257
+  entries, 2.1 KB, in the prefix). `get_builtin` is in `step`, `fast_step` and `run_hot`
+  (three loads, like `get_cap`).
+- **Registry:** the helpers are named by their source name, `%prelude:Name%`. The compiler
+  gives the slot order (`compiler::prelude_function_names`); the registry compiles the
+  prelude source into a scratch heap to get it. The 223 capture paths (`X~N`) are
+  tombstones and their functions new entries: they were the fragile paths of D2371, and
+  the new names stay as long as a helper keeps its source name. djs-cli's binary keeps the
+  prelude source for this (+400 KB native, not in djs-wasm).
+- **Measured** (base-families): base 325,008 → 298,240 B (−26.8 KB, −8.2%), cells 5,852 →
+  4,948; module gzip 458,966 → 453,628 (−5.3 KB; the ceiling is lowered to 454,652);
+  vm_new from base 3.77 → 3.42 µs. Bytecode is the same size (`get_builtin` is 3 bytes
+  like `get_cap`). Wasm instructions (n=5, the outliers again at n=9) within ±0.8% on
+  all 22 workloads; natively within ±0.7% except pushpop +1.8%, which never runs
+  `get_builtin` (the same binary without the `run_hot` arm measures the same: layout).

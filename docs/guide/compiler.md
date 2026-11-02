@@ -81,8 +81,8 @@ lists every instruction; this page uses a handful:
 | --- | ---: | --- | ---: | --- | --- | --- |
 | `get_loc` | 39 | Loc | 3 | 0 → 1 | Basic | `-> v` |
 | `put_loc` | 40 | Loc | 3 | 1 → 0 | Basic | `v ->` |
-| `mul` | 121 | – | 1 | 2 → 1 | Basic | `a b -> a * b` |
-| `sub` | 120 | – | 1 | 2 → 1 | Basic | `a b -> a - b` |
+| `mul` | 123 | – | 1 | 2 → 1 | Basic | `a b -> a * b` |
+| `sub` | 122 | – | 1 | 2 → 1 | Basic | `a b -> a - b` |
 | `new_box` | 57 | Loc | 3 | 0 → 0 | Alloc | `loc = new Box(uninitialized)` |
 | `get_box` | 51 | Loc | 3 | 0 → 1 | Basic | `-> v`: the value of the Box in local `loc`. |
 | `put_box` | 52 | Loc | 3 | 1 → 0 | Basic | `v ->` |
