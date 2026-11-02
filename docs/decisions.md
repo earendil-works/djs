@@ -6486,3 +6486,13 @@ session region.
     delete. A variant with only `{value, done}` pre-created measured at main's level. A
     one-entry transition cache outside the image cut it to +0.8% but cost +334 B gzip of
     code, so it is not in; a cheaper delete transition is a follow-up.
+
+## D2410: The harvester reads p2 session databases from a read-only copy
+date: 2026-11-09 · by: slim · issue: 0149
+p2 keeps sessions as SQLite databases (`~/.pi/p2/sessions/<id>.sqlite`, pi-durable's
+schema; the pi messages are in the `entries` records' `model` field). extract.py reads
+`*.sqlite` next to JSONL sessions, opened read-only (`mode=ro`), from a copy in
+work/scratch (database plus `-wal`/`-shm`) so the live files are never opened by the tools.
+Source ids of such runs start with `p2-`. Only `~/.pi/p2/sessions` is in scope: the rest of
+`~/.pi/p2` holds credentials and keys and is never read. Outputs follow D021/D2281: counts
+and names in reports, raw data in work/scratch only.
