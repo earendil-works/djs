@@ -101,7 +101,9 @@ Every symbol gets an atom too, so every property key is an atom and comparing ke
 collector moves the strings they stand for, and they can be written straight into
 bytecode as immediates. Well-known names (`length`, `prototype`, `Symbol.iterator`) have
 fixed ids generated from a list in `heap/atom.rs`, so the interpreter and the builtins
-refer to them as constants.
+refer to them as constants. In a VM made from the base image the table has two levels:
+the base's atoms with their hash index in the builtin prefix, never written, and the
+VM's own after them, in a small list and index of its own (D2431).
 
 > **Trade-off.** Atoms are never freed. A script that creates millions of distinct keys
 > (`obj["k" + i]`) grows the atom table for the life of the VM. Codemode VMs live for

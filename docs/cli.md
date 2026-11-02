@@ -5,7 +5,7 @@ cargo run -p djs-cli -- run [--body] [--ts] [--experimental-decorators] [--emit-
     [--gc-stress] [--suspend-every N] [--backend bytecode|native] file.js
 cargo run -p djs-cli -- disasm [--body] file.js
 cargo run -p djs-cli -- heap [--json] [--top N] [--only SECTIONS] [--diff FILE|base|none]
-    [--reference FILE] dump
+    [--reference FILE] [--all] dump
 cargo run -p djs-cli -- strip-types file.ts
 cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history]
 ```
@@ -27,15 +27,22 @@ a key per section):
 
 | section | shows |
 | --- | --- |
-| `summary` | format, build, image size, live vs garbage (and what a collection leaves), old region (`OLD_END`) vs young |
+| `summary` | format, build, image size, live vs garbage (and what a collection leaves), old region (`OLD_END`) vs young, the session image's size (what a container stores before compression, D2066) |
 | `kinds` | cells and bytes per cell kind (garbage, old) and per object class |
 | `prefix` | the words of the builtin prefix that differ from this build's base, by cell and builtin path (`%Array.prototype%`): the builtins a script changed (D2066) |
-| `diff` | against the reference image: unchanged cells in place or moved, changed, new (grouped into subtrees with their path and the new bytes only they keep alive), gone; how much of the image sits at the reference's offsets. This is what a snapshot compressed against the reference costs |
-| `largest` | the largest cells and the largest retained sizes (dominator tree), with paths like `globalThis.cache[3].body` |
+| `diff` | against the reference image: unchanged cells in place or moved, changed, new (grouped into subtrees with their path and the new bytes only they keep alive), gone; how much of the image sits at the reference's offsets. This is what a snapshot compressed against the reference costs. A changed cell counts its differing words; a regrown one compares over the words both have, plus its nonzero new words |
+| `largest` | the largest cells and the largest retained sizes (dominator tree), with paths like `globalThis.cache[3].body`; in the session view, retained sizes count the session's cells only |
 | `strings` | flat strings and ropes, duplicated contents, the largest strings |
 | `shapes` | shapes, objects with a shape or in dictionary mode, the most common key lists |
 | `functions` | templates and bytecode per script, closures, builtin closures by intrinsic, boxes |
 | `session` | run state, queued jobs, the inbox, pending host calls, promises, suspended async functions and generators with their locals |
+
+`largest`, `strings`, `shapes` and `functions` describe the session's own part when there
+is a reference: the cells new or changed against it (D2432). Each starts with one line of
+the reference's totals (`unchanged from the reference: ...`); `--all` shows the whole
+image instead, as does `--diff none`. In the session view, a string the reference already
+holds counts whole as an extra copy. In JSON these sections carry `scope` (`session` or
+`all`) and, in the session view, `reference_part` with the totals.
 
 The diff compares with a container's reference by default, or with this build's base
 for a raw image of this build; `--diff FILE` picks another image, `--diff none` skips it.

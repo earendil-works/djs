@@ -144,8 +144,8 @@ change a builtin.
 collection left more than half the memory cap in use, whenever the embedder asks
 (`Vm::collect`), and with no old region at all (B = 0). The first collection of a VM
 made from the base image is full too (D2045). The VM's setup kills some base cells
-right away; the atom table's entries, for one, are replaced as soon as a script adds an
-atom. If those dead cells stayed for sixteen collections, they would shift every later
+right away; the list of the VM's own atoms, for one, is replaced once a script adds more
+atoms than the base left room for. If those dead cells stayed for sixteen collections, they would shift every later
 threshold. A full collection keeps the old
 region's live cells and drops its dead ones: B shrinks to the live bytes below it, but it
 never grows.

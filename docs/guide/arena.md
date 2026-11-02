@@ -77,8 +77,8 @@ objects, their code and their names. Nothing a script does through the builtins 
 there, no collection moves or frees it, and every VM of a build starts with the same bytes
 in it (D2063, D2064). So a snapshot can leave it out
 ([Snapshots](snapshots.md#compact-snapshots)). After it comes a short **tail** of the
-cells every VM writes: the realm record, the global object, the atom table, the value
-stack.
+cells every VM writes: the realm record, the global object, the atoms the VM adds (the
+base's own atoms stay in the prefix), the value stack.
 
 Offset 0 doubles as "null", because nothing ever refers to the roots cell. The all-zero
 bit pattern is also a valid "nothing" for every traced field: as a `Value` it is the

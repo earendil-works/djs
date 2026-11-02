@@ -6496,3 +6496,76 @@ work/scratch (database plus `-wal`/`-shm`) so the live files are never opened by
 Source ids of such runs start with `p2-`. Only `~/.pi/p2/sessions` is in scope: the rest of
 `~/.pi/p2` holds credentials and keys and is never read. Outputs follow D021/D2281: counts
 and names in reports, raw data in work/scratch only.
+## D2430: The base image stores each flat string once
+date: 2026-11-09 · by: strings · issue: 0150
+`Heap::order_for_image` (the base build's last step, D2251) merges equal flat strings
+(same kind, length and code units) into one cell and rewrites every reference to the
+others.
+- **Where the copies came from** (`djs heap` on a fresh REPL: 97 contents stored more
+  than once, 2.9 KB): a builtin's `name` property, allocated per function (`"get
+  [Symbol.species]"` seven times, `"map"` next to the atom `map`), constants in the
+  templates' pools (`"enumerable"`, `"lastIndex"`) and the Error classes' `name` on both the
+  constructor and the prototype, next to the atom table's copy.
+- **Which copy stays:** the atom table's, else the first. Equal strings sort next to each
+  other (content, then length, then atom copy first), so the kind grouping (D2251), the
+  first-grown cells last (D2057) and the tail after `BASE_END` (D2063) keep their order.
+  Strings in the tail and append buffers are left alone. The image shrinks by the copies;
+  `OLD_END` and the GC threshold follow.
+- **Why it is safe:** strings are immutable primitives compared by content, and nothing
+  depends on two equal strings being different cells (no prefix string caches its hash,
+  D2063).
+- **Measured:** base 325,008 → 322,168 B, 5,852 → 5,750 cells; module 458,952 → 458,640 B
+  gzip on its own.
+
+## D2431: A two-level atom table: the base's atoms in the prefix, a VM's own in the tail
+date: 2026-11-09 · by: strings · issue: 0150
+**Why:** the base shrank the atom entries to their length (0043), and 1,460 of the 1,952
+slots are holes left by D2253's dropped names. The array sat in the tail, so a session's
+first new atom copied all of it into a cell 25% bigger (19.5 KB), and every session image
+stored those 15–20 KB.
+- **Layout:** `AtomTable` gains `BASE_ENTRIES`, `BASE_INDEX` (refs) and `BASE_COUNT`
+  (`len(BASE_ENTRIES)`, read on every lookup) at 20, 24 and 28; the cell stays 32 bytes.
+  `ENTRIES`/`INDEX`/`STRINGS` describe the atoms from `BASE_COUNT` on. A heap without a
+  base has null base fields and a count of 0 and works as before. The verifier checks
+  both levels.
+- **Build:** `prepare_base_image` calls `Heap::split_atom_table(32)` after dropping the
+  internal names: the entries and index become the base's and go to the builtin prefix
+  (never written), and the tail gets an empty list with room for 32 atoms
+  (`image::SESSION_ATOMS`) and a 64-bucket index.
+- **Lookup:** `atom_entry` picks the level by index. Interning probes the VM's own index
+  first and then the base's: a string is in one of them, the VM's index is small and its
+  strings have cached hashes, while a miss among the base's strings hashes them again
+  (D2063). One probe loop serves both levels.
+- **Not done: compacting the holes.** Renumbering the base's atoms would take the holes
+  out of the prefix (11.7 KB raw per VM, little in the coded module), but atom ids are
+  stored untyped in many places: property tables, shape descriptors (sorted), template
+  names and debug names, bytecode immediates, `global_decls` lists in the constant pools,
+  and inline caches. Missing one would be a wrong-key bug. With the entries in the prefix
+  they no longer cost session images, so it is a follow-up.
+- **Measured:** base 322,168 → 322,720 B (+552, the room), the tail 27,160 → 8,016 B;
+  a fresh REPL's raw session image 34,568 → 11,472 B, its container 1,177 → 1,096 B.
+  An almost empty session changes the atom cells only where it adds (48 of 272 bytes of
+  entries). Module 458,640 → 459,013 B gzip (+373: the base's coded image −335, code
+  +~800 B raw: two levels in intern, `atom_str`, `atom_utf16`, `atom_entry`, verify),
+  so 458,952 → 459,013 against main; the ceiling stays. vm_new 3.81 → 3.76 µs. Native
+  instructions on the perf workloads: props +0.6%, push-pop +0.8%, json/jsonh +0.2%,
+  json-date −4.6%, json-text −2.5%, the rest within ±0.3%; wasm within run-to-run noise
+  (indexof ±1.5% between runs of the same module, json-date −2.9%, pi-like −1.5%). A
+  dynamic `eq` in the probe saved ~270 B gzip but cost 60 instructions per intern (props
+  +1.6%), so the probe stays generic.
+
+## D2432: `djs heap` shows the session's own part by default
+date: 2026-11-09 · by: strings · issue: 0150
+With a reference to compare with, the `largest`, `strings`, `shapes` and `functions`
+sections describe the cells that are new or changed against it; `--all` (or `--diff none`)
+gives the whole image as before.
+- Each starts with a line naming the view and one of the reference's totals
+  (`unchanged from the reference: 809 flat strings, 25.4 KB`). JSON: `scope`
+  (`session`/`all`) and `reference_part`.
+- Retained sizes in the session view count only the session's cells a cell alone keeps
+  alive. Duplicated strings: equal contents over the whole image; a session copy of a
+  string the reference holds counts whole.
+- The diff's differing words of a cell that changed size (a regrown table) compare over
+  the words both cells have plus the nonzero new words, instead of the whole cell:
+  `<atoms><entries>` had shown 19,536 of 19,536 bytes differing.
+- The summary gives the session image's size (`session_image_bytes`, `base_end`).

@@ -112,10 +112,11 @@ script runs don't trace it again.
 
 The base ends with a **tail**: the cells every VM writes, put last on purpose (D2063).
 They are the realm record, `Math.random`'s state, the global object, the global lexical
-scope, `Symbol.for`'s registry, Map and Set tables, the atom table, the host call table,
-the interpreter state and the value stack, the queues for promise jobs, host results and
-unhandled rejections, and the VM's own shape tree, already holding the shapes of the
-objects builtins create (D2067), about 28 KB. Everything before the tail is
+scope, `Symbol.for`'s registry, Map and Set tables, the atom table's cell with room for
+the atoms the VM adds, the host call table, the interpreter state and the value stack,
+the queues for promise jobs, host results and unhandled rejections, and the VM's own
+shape tree, already holding the shapes of the objects builtins create (D2067), about
+8 KB. Everything before the tail is
 the **builtin prefix**, which no VM writes to while builtins are merely used. The
 builtins' objects are marked as prototypes when the base is built, not when a cache
 first goes through them. Strings in the prefix don't cache their hashes. Each VM grows
@@ -128,11 +129,15 @@ on a diet:
 
 - property tables, the atom table and the value stack are shrunk to their used size
   before the final collection (D1431);
+- equal strings are stored once: a builtin's `name`, a constant in a function's pool and
+  the atom table often held the same string in separate cells, and strings can't be told
+  apart by where they live, so the base keeps the atom table's copy and points the
+  others at it (D2430);
 - the prelude keeps no source text (D1340), no line tables or local names (D1430), and
   its internal helper closures get no `length`, `name` or `prototype` (D1433);
 - shapes replaced private property tables for small objects (D1831).
 
-It is about 398 KB today. Building it twice gives the same bytes, and the base built
+It is about 315 KB today. Building it twice gives the same bytes, and the base built
 natively is byte for byte the realm that djs-wasm builds inside wasm32, which a test
 checks, so nothing in it depends on the platform.
 
@@ -195,16 +200,21 @@ stayed in place. Compressing a waiting session takes about 1.2 ms, and restoring
 One more thing keeps the reference's cells in place: where its growable cells sit (D2057).
 A session's first steps replace a few cells of the reference outright. Defining a
 sandbox's `console` grows the global object's property table, which is exactly full in
-the base. The first new string a script interns copies the atom table's list of entries
-(15 KB in the base), and the first calls through pi grow the prelude's Map of pending
-calls. The grown copies go to the young end, and the next full collection drops the old
+the base, and the first calls through pi grow the prelude's Map of pending calls. The grown copies go to the young end, and the next full collection drops the old
 ones. If those sat in the middle of the reference, everything after them would slide
 down. A new sandbox's snapshot was 16 KB that way: only a fifth of the image lined up
 with the base, and the moved cells cost the compressor the references they hold to
 other moved cells. So the base image puts those cells last, and so does `Vm::seal` for an
 image an embedder seals itself, like pi's prelude image. A dead copy then moves nothing
-before it. The atom table also grows by a quarter rather than doubling, so a fresh VM's
-image carries 11 KB fewer empty slots.
+before it.
+
+The atom table is split for the same reason (D2431). The base's atoms, about 1,950
+entries (many of them empty, names the base no longer needs) and their hash index, sit
+in the builtin prefix and are never written. The atoms a VM adds go to a second, small
+list and index in the tail, with room for 32 before they grow, and interning looks in
+the VM's own index first. So a session's first atoms change only the words they add,
+and the session image no longer carries the base's 15 KB of entries: a fresh REPL's
+session image went from 34.6 to 11.5 KB.
 
 What a snapshot stores is a **session image** (D2066): the image without the builtin
 prefix, since the module (or the reference) already has it. It holds the `Roots` cell,
@@ -271,7 +281,8 @@ verified as a restore would verify it, the walker and the layout table say which
 are references and what they are called, and liveness follows the collector's rules.
 From that it reports:
 
-- a summary: live and garbage bytes, the old region and the young one;
+- a summary: live and garbage bytes, the old region and the young one, and the size of
+  the session image a snapshot would store before compression;
 - cells and bytes per cell kind and per object class;
 - a diff against the reference image;
 - the builtins a script changed: the words of the builtin prefix that differ from this
@@ -282,6 +293,13 @@ From that it reports:
   templates and bytecode per script, closures;
 - what a waiting VM holds: queued jobs, pending host calls, promises, and the suspended
   async functions and generators with their locals by name.
+
+An almost empty session is still more than 300 KB of image, nearly all of it the base. So
+when there is a reference to compare with, the largest cells, strings, shapes and
+functions describe only the session's own part: the cells that are new or changed
+against the reference (D2432). The reference's part is one line of totals, and `--all`
+lists the whole image. Without that, a fresh REPL looked as if it held 900 strings and
+874 functions, all of them the base's.
 
 Every cell gets a path from the roots that reads like JavaScript where the heap allows,
 built from the shapes' keys, the elements' indexes, the templates' recorded names of
@@ -294,7 +312,9 @@ breadth-first walk from both roots pairs the targets of the same field. Immutabl
 (strings, bytecode) pair only with the same content, and a shape's list of transitions
 pairs its children by the key they add, since one inserted transition shifts the rest.
 Then every cell of the image is the reference's own, in place or moved, a changed one,
-or new, and the new ones are grouped into the subtrees that keep them alive. For a pi
+or new, and the new ones are grouped into the subtrees that keep them alive. A changed
+cell counts the words that differ; one that grew into a bigger cell (a regrown table)
+compares over the words both have, and its new words count where they are not zero. For a pi
 session waiting on its second tool call:
 
 ```text
