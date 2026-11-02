@@ -363,9 +363,9 @@ The mode is part of the image: a restored VM keeps it.
 > headers would need a different base image per mode. The region check keeps one base for
 > both modes and freezes nothing. The cost: the override fix is a deliberate deviation
 > from the spec (test262 expects the `TypeError`), so the mode is opt-in, and a builtin is
-> frozen by where it lives, which only works while the prefix stays where it is (a full
-> collection moves its end along with the cells; a copying collection is replaced by a
-> full one in this mode).
+> frozen by where it lives, which only works because the prefix never moves: collections
+> leave every cell below its end in place, and the per-VM objects that must stay
+> writable, such as the global object, live above it (D2064).
 
 ## Where to look
 

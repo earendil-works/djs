@@ -6416,3 +6416,11 @@ leaves it out.
   those shapes in the base is follow-up work.
 - **Analyzer:** `djs heap` has a `prefix` section: the changed prefix words against this
   build's base, by cell, named by registry path (`%Array.prototype%`, `%Math%`).
+
+## D023: Notes superseding parts of D2304 after 0147
+date: 2026-11-02 · by: coordinator · issue: 0146, 0147
+D2304's "Exempt" and "Collections" points no longer hold: 0147 moved the per-VM objects
+(global object, global lexical record, Symbol.for registry, constructors table) above
+BASE_END (D2063), so `realm::FROZEN_EXEMPT` is gone and frozen means `o < frozen_end`; and
+collections never move or free prefix cells (D2064), so `collect_canonical` no longer falls
+back to a full collection in frozen mode.
