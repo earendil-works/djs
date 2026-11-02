@@ -1,6 +1,6 @@
 # 0143: Why is a fresh heap 300 KB? Towards a nearly empty heap (lazy / out-of-heap builtins)
 
-status: in-progress
+status: done
 agent: bloat
 branch: issue/0143-empty-heap
 depends-on: 0135, 0136, 0138, 0139
@@ -61,7 +61,29 @@ docs/empty-heap.md, with numbers and a recommended plan. Coordinate with the por
 from the snapshot side: share findings via the coordinator.
 
 ## Log
+- Accounting tool: crates/djs-prelude/examples/base-families.rs (family by reachability
+  and installed-intrinsic name, part by role; `--touched DIR` for the runtime data). Outside
+  `touches:` (djs-prelude examples, next to image-size.rs), an example only.
+- Runtime data: scripts/size/patches/touch.py instruments a scratch copy (prop_read and
+  enter_template marks, difftest dumps offsets); the 300 harvested cases ran one process
+  each (295 pass, 5 known ratchet failures), plus the corpus prelude alone.
+- pi: reference.ts pi-prelude with two tools, diffed against the base with `djs heap`.
+- No engine change; nothing on main but the report, the example and the patch script.
 
 ## Follow-ups
+- Prototype one lazy family (Array.prototype as a lazy holder) to measure materialization
+  time and the flag test before committing to step 4.
+- pi-private: engine-level lockdown needs pi's prelude to drop its lockdown walk (owner).
+- Share section 7 of docs/empty-heap.md with the portable agent (0142).
 
 ## Result
+docs/empty-heap.md. A fresh VM is 322 KB / 5,770 cells: 217 KB are the 874 builtin
+functions (code 60%), ~48 KB atoms and names, 36 KB property storage. 300 harvested runs
+touch 105 of the 874 functions together, 26 per run (median); object-by-object lazy
+materialization would build ~17 KB per run. 127 KB of families are never touched. pi's
+lockdown adds 156 KB / 2,600 cells (471 KB per session) and would defeat laziness unless
+it moves into the engine. Plan: stable builtin registry (1 wk) → engine-level lockdown
+(1–2 wk, pi −120 KB) → static builtin atoms (2 wk, −48 KB) → lazy realm with lazy code
+copy (4–6 wk): fresh VM ~100 cells / ~10 KB, pi start ~30–60 KB. Stable ids as a runtime
+representation: not recommended (3–4 months, second object model); take the registry and
+use it for export-time portability (0141/0142).
