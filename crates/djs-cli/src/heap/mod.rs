@@ -27,7 +27,7 @@ const USAGE: &str = "usage: djs heap [--json] [--top N] [--reference FILE] [--di
                base: pi's prelude image (node scripts/heap/reference.ts pi-prelude ...)\n\
   --diff       compare with this image instead of the container's reference (the\n\
                default; this build's base for a raw image of this build), or not at all\n\
-  --only       some of: summary,kinds,diff,largest,strings,shapes,functions,session\n\
+  --only       some of: summary,kinds,diff,prefix,largest,strings,shapes,functions,session\n\
   --top N      rows per list (default 10)\n\
   --json       one JSON object, a key per section";
 
@@ -217,6 +217,13 @@ pub fn analyze(
         let rg = Graph::new(&rheap);
         let d = diff::diff(&rg, &g);
         out.push(report::diff_section(name, &rg, &g, &d, o));
+    }
+    // The builtin prefix against this build's base (D2066), for an image of this build.
+    if o.wants("prefix")
+        && let Ok(s) = djs_core::vm::session::session_image(image, djs_prelude::BASE)
+        && let Ok(d) = djs_core::vm::session::session_diff(&s)
+    {
+        out.push(report::prefix(&g, &d));
     }
     if o.wants("largest") {
         out.push(report::largest(&g, o));

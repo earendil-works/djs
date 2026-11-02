@@ -75,7 +75,8 @@ fn u64_at(b: &[u8], at: usize) -> Option<u64> {
 /// The prefix end, build hash and roots cell size of a raw image (or of the base).
 fn prefix_of(image: &[u8]) -> Option<(u32, u32, u32)> {
     let roots = Roots::LAYOUT.min_size as usize;
-    if image.len() < roots || image[Header::KIND.offset as usize] != crate::heap::CellKind::Roots as u8
+    if image.len() < roots
+        || image[Header::KIND.offset as usize] != crate::heap::CellKind::Roots as u8
     {
         return None;
     }

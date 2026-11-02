@@ -3813,7 +3813,10 @@ fn session_images_round_trip() {
     assert_eq!(eval(&mut vm, "globalThis.kept = [1, 2, 3]; return 1"), "1");
     vm.collect().unwrap();
     let s = vm.session_bytes(&base).unwrap();
-    assert!(session_diff(&s).unwrap().is_empty(), "nothing changed a builtin");
+    assert!(
+        session_diff(&s).unwrap().is_empty(),
+        "nothing changed a builtin"
+    );
     assert!(s.len() < vm.bytes().len() - (vm.heap().base_end() as usize) + 200);
     assert_eq!(expand_session(&s, &base).unwrap(), vm.bytes());
     let mut back = Vm::from_session(&s, &base, VmOptions::default()).unwrap();
@@ -3861,7 +3864,10 @@ fn touching_builtins_in_any_order_leaves_the_same_session() {
             assert_eq!(eval(&mut vm, &src), "undefined");
         }
         vm.collect().unwrap();
-        (vm.session_bytes(&base).unwrap(), vm.canonical_hash().unwrap())
+        (
+            vm.session_bytes(&base).unwrap(),
+            vm.canonical_hash().unwrap(),
+        )
     };
     // Calls whose results are primitives or plain arrays. (Objects that builtins create
     // with properties, iterator results and match results, get session shapes in the

@@ -1216,3 +1216,64 @@ pub fn session(g: &Graph, o: &Options) -> Section {
         json,
     )
 }
+
+/// The words of the builtin prefix this image changes against its base (D2066): which
+/// builtins a script changed (none with frozen builtins). Cells are named by their path
+/// from the builtin registry's names (D2371): `%Math%` for Math's property table.
+pub fn prefix(g: &Graph, diff: &[(u32, u64)]) -> Section {
+    // (cell offset) -> words
+    let mut cells: Vec<(u32, u32)> = Vec::new();
+    for &(o, _) in diff {
+        let i = match g.cells.binary_search_by_key(&o, |c| c.offset) {
+            Ok(i) => i,
+            Err(i) => i - 1,
+        };
+        let c = g.cells[i].offset;
+        match cells.last_mut() {
+            Some((last, n)) if *last == c => *n += 1,
+            _ => cells.push((c, 1)),
+        }
+    }
+    let rows: Vec<(String, String, u32)> = cells
+        .iter()
+        .map(|&(c, n)| {
+            let i = g.index(c).unwrap();
+            let kind = g.cell(i).kind.layout().name.to_string();
+            (kind, g.path(i), n)
+        })
+        .collect();
+    let mut text = if diff.is_empty() {
+        "  the builtin prefix is the base's: no builtin was changed\n".to_string()
+    } else {
+        format!(
+            "  {} words of the builtin prefix differ from the base, in {} cells\n",
+            diff.len(),
+            cells.len()
+        )
+    };
+    if !rows.is_empty() {
+        let shown: Vec<Vec<String>> = rows
+            .iter()
+            .map(|(k, p, n)| vec![n.to_string(), k.clone(), p.clone()])
+            .collect();
+        text.push_str(&table(&["words", "kind", "path"], &shown));
+    }
+    let json = J::obj(vec![
+        ("words", (diff.len() as u64).into()),
+        (
+            "cells",
+            J::Arr(
+                rows.iter()
+                    .map(|(k, p, n)| {
+                        J::obj(vec![
+                            ("kind", k.as_str().into()),
+                            ("path", p.as_str().into()),
+                            ("words", (*n as u64).into()),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+    ]);
+    section("prefix", "the builtin prefix against the base", text, json)
+}

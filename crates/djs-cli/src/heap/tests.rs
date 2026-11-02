@@ -162,6 +162,30 @@ fn a_container_reads_like_its_image() {
     );
     let all = super::to_json(&r);
     assert!(all.contains("\"summary\"") && all.contains("\"session\""));
+    // The container holds the session image (D2066), and nothing of the prefix changed.
+    let (h, _, _) = container::read_header(&c).unwrap();
+    assert_eq!(h.image_kind, container::IMAGE_SESSION);
+    assert_eq!(json(&r, "prefix").at(&["words"]).num(), 0.0);
+}
+
+#[test]
+fn the_prefix_section_names_the_changed_builtins() {
+    let mut vm = sandbox();
+    run_body(
+        &mut vm,
+        "Array.prototype.extra = 1; Math.max = Math.min; JSON.tag = 'x'; return 1",
+    );
+    vm.collect().unwrap();
+    let r = report(&mut vm);
+    let p = json(&r, "prefix");
+    assert!(p.at(&["words"]).num() > 0.0);
+    let text = super::to_text(&r);
+    for name in ["%Array.prototype%", "%Math%", "%JSON%"] {
+        assert!(
+            text.lines().any(|l| l.trim_end().ends_with(name)),
+            "{name} in\n{text}"
+        );
+    }
 }
 
 // ---- A pi session waiting on a tool ------------------------------------------------------
