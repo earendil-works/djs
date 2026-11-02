@@ -137,6 +137,22 @@ L5 → L7 if accepted. Each its own branch and decision; measurements per landin
 - 0150 landed: atom renumbering (1,460 holes, 11.7 KB/VM) joins L3/L4 (the remap touches
   templates, bytecode immediates, pools, shapes).
 
+### Dispatch spills and the GC allowance (branch issue/0151-dispatch, D2441, D2442)
+Found while measuring L4, landed before it on the coordinator's call.
+- **D2441:** V8's TurboFan code for `run_hot` (`node --print-wasm-code-function-index`)
+  stored `w >> 8`/the u16 immediate and the opcode to the stack in the dispatch block,
+  so on every instruction, because arms kept them across heap calls. Immediates are now
+  extracted in the arms, `heap_call!` re-reads the opcode, `iter_next` re-reads its
+  offset: no spill. wasm vs main (n=5): loop −4.5%, tight −4.0%, calls −2.8%, call1
+  −2.6%, prop1 −2.6%, props −1.5%, foreach/forof −1.1..−1.2%, others ±0.5% (the two
+  +1% at n=5, indexof and json-date, are ±0.2% at n=9). Native loop −2.5%, calls −2.2%.
+  Tools: work/scratch/0151/tf.sh (named build + TurboFan dispatch), variant.sh.
+- **D2442:** `next_threshold` counted the builtin prefix in its growth term, so a smaller
+  base meant more collections (L4's −46 KB: json +1.4%, pi-like +1.3% natively, from
+  collections alone). The prefix now counts as `BASE_ALLOWANCE` = 288,160 B (today's
+  `BASE_END`), so nothing changes on main and later base cuts keep GC frequency.
+- Guide: interpreter.md (the spill rule), gc.md (the allowance).
+
 ## Follow-ups
 
 ## Result

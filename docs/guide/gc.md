@@ -243,9 +243,14 @@ call, a return, a backward jump, a state transition of a native builtin
 live size:
 
 ```rust
-pub fn next_threshold(live: u32, limit: u32) -> u32 {
+pub fn next_threshold(live: u32, base: u32, limit: u32) -> u32 {
     let headroom = limit.saturating_sub(live);
-    let growth = live.max(MIN_GROWTH);
+    let counted = if base > 0 {
+        live.saturating_sub(base) + BASE_ALLOWANCE
+    } else {
+        live
+    };
+    let growth = counted.max(MIN_GROWTH);
     if growth > headroom / 2 {
         return live + headroom / 2;
     }
@@ -261,7 +266,10 @@ pub fn next_threshold(live: u32, limit: u32) -> u32 {
 
 That is: let the heap grow to twice its live size (at least 256 KiB more), rounded up to
 whole wasm pages, but never by more than half of what is left below the cap, so that
-collections come more often as memory gets tight. The arena's backing store stops
+collections come more often as memory gets tight. The builtin prefix, which is never
+collected, counts as a fixed allowance (`BASE_ALLOWANCE`, the size it had when the rule
+came in) instead of its real size: making the base smaller should not make collections
+more frequent (D2442). The arena's backing store stops
 growing at the threshold, since wasm memory never shrinks and the peak is what a run
 costs (D1870).
 
@@ -358,7 +366,7 @@ not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D16
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2057 D2063 D2064 D2065 D2042 D2044 D2055 D2056 D2045 D2046 D2047 D2048 D2053 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 -->
+<!-- gen:decisions D2040 D2041 D2057 D2063 D2064 D2065 D2042 D2044 D2055 D2056 D2045 D2046 D2047 D2048 D2053 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 D2442 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2057: The cells a VM replaces first sit at the end of base and sealed images
@@ -393,4 +401,5 @@ Decisions on this page:
 - D1690: Running out of host memory is not a JS out-of-memory error
 - D1831: Shapes with strong transitions and a per-heap shape budget
 - D1054: Atom representation; symbols are atoms
+- D2442: GC growth counts the builtin prefix as a fixed allowance
 <!-- /gen -->

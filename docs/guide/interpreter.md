@@ -257,7 +257,11 @@ one in front of it:
 
 Every one of these was measured, in wasm under V8, before it was kept: the register
 allocation of a dispatch loop is fragile, and an extra arm can make the hottest
-instructions slower (D1352).
+instructions slower (D1352). One rule came out of reading V8's machine code for the
+loop: nothing computed for every instruction (the instruction word, an immediate, the
+opcode) may stay alive across a heap call in any arm. V8 spills such a value where it is
+defined, so every instruction would pay a store. The arms therefore extract their own
+immediates and read the opcode again after a call (D2441).
 
 ## Where to look
 
@@ -271,7 +275,7 @@ instructions slower (D1352).
 
 Decisions on this page:
 
-<!-- gen:decisions D1151 D1086 D013 D1085 D1280 D1861 D1084 D1250 D1282 D1930 D1931 D1631 D1632 D2060 D1620 D1621 D1800 D1352 -->
+<!-- gen:decisions D1151 D1086 D013 D1085 D1280 D1861 D1084 D1250 D1282 D1930 D1931 D1631 D1632 D2060 D1620 D1621 D1800 D1352 D2441 -->
 - D1151: Interpreter state in the arena
 - D1086: Frame records in the index-addressed value stack
 - D013: Stack overflow is a RangeError
@@ -290,4 +294,5 @@ Decisions on this page:
 - D1621: Prototype property caches: a receiver-prototype offset, an epoch, and GC clearing
 - D1800: iter_next: iteration steps without result objects
 - D1352: more fast paths: leaf intrinsics, floats, dense elements, own-property writes
+- D2441: The hot loop's dispatch keeps no per-instruction values across calls
 <!-- /gen -->
