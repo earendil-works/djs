@@ -39,6 +39,8 @@ meant to replace QuickJS in pi's codemode. Read these before you start any work:
 - No `unsafe` in `djs-core` unless a decision records why. Heap access is bounds checked.
 - Prefer plain, direct code. Comments explain *why*. Keep modules focused; no speculative
   abstraction.
+- djs is unreleased (D024): change formats and ABI in place; don't keep readers or
+  exports for older versions.
 - Every feature comes with tests. Unit tests sit next to the code; JS behavior tests go in
   `tests/` (see TESTING.md).
 

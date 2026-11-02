@@ -6424,3 +6424,11 @@ D2304's "Exempt" and "Collections" points no longer hold: 0147 moved the per-VM 
 BASE_END (D2063), so `realm::FROZEN_EXEMPT` is gone and frozen means `o < frozen_end`; and
 collections never move or free prefix cells (D2064), so `collect_canonical` no longer falls
 back to a full collection in frozen mode.
+
+## D024: No compatibility with unreleased formats
+date: 2026-11-02 · by: owner · issue: -
+djs has never been released, so there is nothing old to stay compatible with. Snapshot,
+image and container formats (and ABI exports) are changed in place: no version bumps
+for compatibility, no readers for older formats (DJSN format 1, DJSS, DJPI, raw images in
+containers where the session image replaces them), no deprecated exports kept. A format
+still carries a version field so a mismatch fails clearly. Revisit at the first release.
