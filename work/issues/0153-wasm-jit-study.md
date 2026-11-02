@@ -1,7 +1,7 @@
 # 0153: A JIT that emits wasm: performance and fit (research)
 
-status: open
-agent: -
+status: in-progress
+agent: jit
 branch: issue/0153-wasm-jit-study
 depends-on: -
 guide: -
