@@ -113,7 +113,9 @@ script runs don't trace it again.
 The base ends with a **tail**: the cells every VM writes, put last on purpose (D2063).
 They are the realm record, `Math.random`'s state, the global object, the global lexical
 scope, `Symbol.for`'s registry, Map and Set tables, the atom table, the host call table,
-the interpreter state and the value stack, about 25 KB. Everything before the tail is
+the interpreter state and the value stack, the queues for promise jobs, host results and
+unhandled rejections, and the VM's own shape tree, already holding the shapes of the
+objects builtins create (D2067), about 28 KB. Everything before the tail is
 the **builtin prefix**, which no VM writes to while builtins are merely used. The
 builtins' objects are marked as prototypes when the base is built, not when a cache
 first goes through them. Strings in the prefix don't cache their hashes. Each VM grows
@@ -341,12 +343,13 @@ of the call it waits on, and the container is 2.1 KB.
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2057 D2063 D2066 D024 D2400 D2058 D2043 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 -->
+<!-- gen:decisions D2040 D2041 D2057 D2063 D2066 D2067 D024 D2400 D2058 D2043 D1091 D1890 D1725 D1052 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2057: The cells a VM replaces first sit at the end of base and sealed images
 - D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
 - D2066: Session images: the roots cell, a canonical prefix diff and the session region
+- D2067: Builtin result shapes and the engine's queues are in the base; the ceiling rises 720 B
 - D024: No compatibility with unreleased formats
 - D2400: One snapshot container format, session images only
 - D2058: The size ceiling rises by 600 B for stable snapshot layouts

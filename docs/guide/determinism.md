@@ -98,11 +98,15 @@ parts of the engine exists to keep it:
 - **Builtins leave no trace.** Calling a builtin never writes into the builtin prefix,
   the part of the heap every VM of a build starts with (D2063): no cached string hash,
   no flag set on first use, no shape transition added to a builtin's shape. Two runs that
-  call different builtins, in any order, leave the same prefix. Objects the builtins
-  *create* are another matter: an iterator result or a RegExp match result gets its
-  shape in the session's part of the heap the first time one is made, and shapes are
-  never freed. Two runs that use Map iteration and RegExp matching in opposite orders lay
-  those shapes out in opposite orders (D2066).
+  call different builtins, in any order, leave the same prefix (D2066). Nor do they leave
+  anything in the session's part of the heap. The shapes of the objects builtins create
+  (iterator results, RegExp match results, property descriptors, functions and their
+  prototypes, errors) are already in each VM's shape tree when it starts, and so are the
+  engine's queues for promise jobs, host results and unhandled rejections (D2067). Two
+  runs that use Map iteration and RegExp matching in opposite orders, and keep nothing,
+  leave the same image. What stays the script's own is what its source and data name:
+  its identifiers, its object literals' keys, results keyed by data such as
+  `Object.groupBy`, and a property it adds to an object a builtin made.
 - **Nothing depends on addresses or timing.** Map and Set rehash after every collection
   instead of hashing by a per-object id that would vary, and shape transitions are
   strong so that the shape tree does not depend on when collections ran (D1831; [Cells,
@@ -223,11 +227,12 @@ Some things are deliberately outside the guarantee:
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2063 D2066 D1314 D1383 D1670 D1680 D1690 D1090 D1601 D1710 D1740 D1831 D1730 D1720 D1725 D1750 D1633 -->
+<!-- gen:decisions D2040 D2041 D2063 D2066 D2067 D1314 D1383 D1670 D1680 D1690 D1090 D1601 D1710 D1740 D1831 D1730 D1720 D1725 D1750 D1633 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
 - D2066: Session images: the roots cell, a canonical prefix diff and the session region
+- D2067: Builtin result shapes and the engine's queues are in the base; the ceiling rises 720 B
 - D1314: Math.random
 - D1383: Date reads the host's clock and a fixed local offset
 - D1670: Async host results are macrotasks: the host inbox

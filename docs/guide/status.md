@@ -55,7 +55,7 @@ Machine instructions per workload (`scripts/perf/w/`), measured at d780463b0d,
 
 <!-- gen:status size -->
 `djs_wasm.wasm` is 1,471 KB (525 KB gzip, 423 KB brotli): 901 KB of code and 566 KB of
-data, of which 322 KB is the base snapshot (the initialized realm with all builtins).
+data, of which 325 KB is the base snapshot (the initialized realm with all builtins).
 Module sizes measured at d780463b0d, 2026-11-01.
 <!-- /gen -->
 
@@ -71,7 +71,7 @@ Module sizes measured at d780463b0d, 2026-11-01.
 | of them `@native` (also compiled to Rust) | 10 |
 | of them `@fast` (a Rust leaf entry) | 72 |
 | difftest corpus cases | 543 |
-| base snapshot, bytes | 322,376 |
+| base snapshot, bytes | 325,008 |
 <!-- /gen -->
 
 Decisions on this page:

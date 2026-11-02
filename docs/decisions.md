@@ -6449,3 +6449,40 @@ D024 applied to the snapshot files of D2260 and D2066:
   reference files) or a bare session image as `djs heap` input: those are the image
   itself, not an older container. `baseReference` requires the base exports (every
   module has them).
+
+## D2067: Builtin result shapes and the engine's queues are in the base; the ceiling rises 720 B
+date: 2026-11-09 · by: heap · issue: 0148
+Completes D2066's order independence: using builtins, in any order, adds nothing to the
+session region.
+- **Shapes:** `prepare_base_image` gives every VM its own root shape (D2063) with the
+  shapes of the objects builtins and the engine create already in its tree
+  (`vm::image::BUILTIN_RESULT_SHAPES`, from a survey of builtin calls): iterator results,
+  RegExp match results with `groups`/`indices`, data and accessor descriptors, function
+  `length`/`name`/`prototype` (writable and not), `constructor`, RegExp `lastIndex`,
+  Error `message`/`cause`/`errors`, `Promise.allSettled` results, `Promise.withResolvers`,
+  `Proxy.revocable`, template `raw`. The tree goes to the base's tail (writable, above
+  `BASE_END`), so a script extending such an object adds its transition there, as for its
+  own objects, and nothing needs a side table: in the harvested and codemode corpora 2 of
+  310 cases extend a pre-created shape at all. The chains come from the builtin set: a
+  build with fewer builtin families (the slim codemode build, 0149) would pre-create
+  fewer, and a new builtin that returns objects with named properties adds its chain.
+- **Queues:** the job queue (8 jobs), the host inbox (4 results) and the unhandled
+  rejection list (8) are allocated in the tail, their slots `undefined`, and are emptied
+  instead of dropped (`clear_jobs`, `take_rejections`, ...). Their first use no longer
+  places a cell in the session region at a time that depends on the script.
+- **Names:** `prepareStackTrace` and `stackTraceLimit`, which making an error interns, are
+  kept in the base (interned before the tables are shrunk). Names a compilation interns
+  (`<home>`, identifiers, `<fields N>`) remain the script's own.
+- **Still session state:** results keyed by data (`getOwnPropertyDescriptors(x)`,
+  `Object.groupBy`, `JSON.parse`, regex group names), the FinalizationRegistry list (rare
+  in codemode), and queues that grow past their base capacity.
+- **Trades, recorded:**
+  - module +648 B gzip (458,304 → 458,952): shapes 221 B, descriptor arrays 160 B,
+    transition arrays 101 B, names ~130 B, queues 82 B, code 73 B; the base +2.8 KB raw,
+    per VM too. The ceiling in tests/scores/size.tsv rises by 720 B to 459,164.
+  - props +1.4% wasm instructions (10 runs × 2; noise ±0.7%; the rest within ±0.9%,
+    pi-like +0.1%): the root shape has 13 more children, and `shape_without` (a delete in
+    the middle of a shape-mode object) binary-searches the root's transitions on every
+    delete. A variant with only `{value, done}` pre-created measured at main's level. A
+    one-entry transition cache outside the image cut it to +0.8% but cost +334 B gzip of
+    code, so it is not in; a cheaper delete transition is a follow-up.
