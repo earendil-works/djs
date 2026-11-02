@@ -119,7 +119,7 @@ fn main() {
             }
         }
         Some("harvest") => sites::main(&args[1..]),
-        Some("import-all") => sites::import_all(&args[1]),
+        Some("import-all") => sites::import_all(&args[1], args.get(2).map(|s| s.as_str())),
         _ => {
             eprintln!("usage: portable run|export|import|roundtrip|sites ...");
             std::process::exit(2);

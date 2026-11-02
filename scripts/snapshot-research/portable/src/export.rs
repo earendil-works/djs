@@ -37,6 +37,7 @@ pub fn record_fields(schema: &str) -> &'static [&'static str] {
         }
         "PromiseElement" => &["alreadyCalled", "index", "values", "capability", "remaining", "keys"],
         "Counter" => &["count"],
+        "Finally" => &["onFinally", "constructor"],
         _ => &[],
     }
 }
@@ -209,10 +210,12 @@ impl<'a> Exporter<'a> {
             }
             ObjectClass::Function => {
                 let t = template_info(h, closure_template(h, o).unwrap());
-                if t.lines.is_empty() {
+                if t.script.is_empty() {
                     // Privileged code (the prelude) is part of the engine: it must be
                     // named by path, never carried.
-                    self.errors.push("an unnamed builtin function".into());
+                    let name: u32 = h.arena().get(t.off, djs_core::heap::cells::FuncTemplate::NAME);
+                    let name = h.atom_name(djs_core::heap::Atom::from_id(name));
+                    self.errors.push(format!("an unnamed builtin function ({name})"));
                 }
                 let mut captures = Vec::new();
                 for i in 0..t.captures {
@@ -235,11 +238,18 @@ impl<'a> Exporter<'a> {
                     .map(|i| i.name)
                     .unwrap_or("?");
                 let data = h.object_slot(o, 1);
-                if let Some(d) = data.as_object()
+                // The schema of the closure's data record follows from its kind.
+                let schema = match name {
+                    n if n.starts_with("PromiseAll") || n == "PromiseAnyRejectElement" => {
+                        Some("PromiseElement")
+                    }
+                    "PromiseThenFinally" | "PromiseCatchFinally" => Some("Finally"),
+                    _ => None,
+                };
+                if let (Some(d), Some(schema)) = (data.as_object(), schema)
                     && h.object_class(d) == ObjectClass::Record
-                    && name.starts_with("PromiseAll")
                 {
-                    self.record_schema.insert(d.offset(), "PromiseElement");
+                    self.record_schema.insert(d.offset(), schema);
                 }
                 let data = self.value(data);
                 let props = self.props(o, false);

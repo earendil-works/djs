@@ -37,6 +37,9 @@ struct Totals {
     idle_worst: BTreeMap<String, u32>,
     cases_all_ok: u32,
     sizes: Vec<usize>,
+    export_us: Vec<u128>,
+    import_us: Vec<u128>,
+    image_bytes: Vec<usize>,
 }
 
 fn bump(m: &mut BTreeMap<String, u32>, k: &str) {
@@ -110,7 +113,10 @@ pub fn main(args: &[String]) {
                 continue;
             }
             t.idle += 1;
-            let snap = match export(&mut s) {
+            let t0 = std::time::Instant::now();
+            let exported = export(&mut s);
+            let dt = t0.elapsed().as_micros();
+            let snap = match exported {
                 Ok(j) => j,
                 Err(e) => {
                     all_ok = false;
@@ -124,6 +130,8 @@ pub fn main(args: &[String]) {
                 }
             };
             t.exported += 1;
+            t.export_us.push(dt);
+            t.image_bytes.push(s.vm.bytes().len());
             let text_json = serde_json::to_string(&snap).unwrap();
             t.sizes.push(text_json.len());
             if let Some(dir) = &save {
@@ -167,7 +175,10 @@ pub fn main(args: &[String]) {
                 }
             }
             bump(&mut t.idle_worst, &worst);
-            match import(&snap) {
+            let t0 = std::time::Instant::now();
+            let imported = import(&snap);
+            t.import_us.push(t0.elapsed().as_micros());
+            match imported {
                 Ok(mut r) => {
                     t.imported += 1;
                     r.run();
@@ -209,6 +220,17 @@ pub fn main(args: &[String]) {
         t.idle, t.exported, t.imported, t.same
     );
     println!("snapshot JSON size: median {med} B, max {max_size} B");
+    let med_of = |v: &mut Vec<u128>| {
+        v.sort();
+        v.get(v.len() / 2).copied().unwrap_or(0)
+    };
+    t.image_bytes.sort();
+    println!(
+        "collected image at the same points: median {} B; export median {} us, import median {} us (native dev build, both include building a fresh realm)",
+        t.image_bytes.get(t.image_bytes.len() / 2).copied().unwrap_or(0),
+        med_of(&mut t.export_us),
+        med_of(&mut t.import_us)
+    );
     println!("refusals and differences:");
     for (k, v) in &t.refusals {
         println!("  {v:5}  {k}");
@@ -232,7 +254,7 @@ pub fn main(args: &[String]) {
 
 /// Imports every snapshot a `harvest --save DIR` run wrote (possibly by another build)
 /// and compares the finished transcript with the saved one.
-pub fn import_all(dir: &str) {
+pub fn import_all(dir: &str, also: Option<&str>) {
     let mut entries: Vec<_> = std::fs::read_dir(dir)
         .unwrap()
         .filter_map(|e| e.ok())
@@ -240,7 +262,7 @@ pub fn import_all(dir: &str) {
         .filter(|p| p.extension().is_some_and(|x| x == "json"))
         .collect();
     entries.sort();
-    let (mut n, mut ok, mut same) = (0, 0, 0);
+    let (mut n, mut ok, mut same, mut same_as_importer) = (0, 0, 0, 0);
     let mut refusals: BTreeMap<String, u32> = BTreeMap::new();
     let mut differs = Vec::new();
     for p in entries {
@@ -254,8 +276,13 @@ pub fn import_all(dir: &str) {
                 ok += 1;
                 r.run();
                 r.run_to_end();
-                if transcript(&r) == want {
+                let got = transcript(&r);
+                let theirs = also
+                    .and_then(|d| std::fs::read_to_string(format!("{d}/{case}.transcript")).ok());
+                if got == want {
                     same += 1;
+                } else if theirs.as_deref() == Some(got.as_str()) {
+                    same_as_importer += 1;
                 } else {
                     differs.push(stem);
                 }
@@ -263,7 +290,12 @@ pub fn import_all(dir: &str) {
             Err(e) => bump(&mut refusals, &reason(&e)),
         }
     }
-    println!("snapshots {n}: imported {ok}, same transcript as the exporting build's run {same}");
+    println!(
+        "snapshots {n}: imported {ok}; transcript as the exporting build's run: {same}, \
+         as this build's own run (where the builds behave differently): {same_as_importer}, \
+         neither: {}",
+        differs.len()
+    );
     for (k, v) in refusals {
         println!("  refused {v:5}  {k}");
     }
