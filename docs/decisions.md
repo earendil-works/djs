@@ -6316,3 +6316,50 @@ and js/pi `frozenBuiltins`).
   the mode: its walk finds no writable, configurable property to convert and only freezes
   the global object's bindings, but costs 2.1 ms and leaves 418.3 KB. pi gets the gain by
   turning the option on and dropping the lockdown (pi-private, later).
+
+## D2064: Collections never move or free the builtin prefix
+date: 2026-11-08 · by: heap · issue: 0147
+Below `Roots::BASE_END`, cells keep their offsets for the VM's whole life.
+- **Full collections** (`Heap::collect`) are `mark_compact(BASE_END)`. The prefix is
+  walked like an old region (D2041, D2055): its slots are roots, and its cells are
+  neither marked nor moved. Everything above it is collected and compacted, pi's sealed
+  region included. `BASE_END` no longer changes after `prepare_base_image` (D2062's
+  forwarding is gone).
+- **Canonical collections** (Cheney, `collect_canonical`) copy the prefix as it is, then
+  lay out the cells above it breadth-first from the roots. Keys in the prefix count as
+  live for ephemerons. `BASE_END` is kept, so a canonical image of a VM is still a VM of
+  the same base, and `canonical_hash` covers the prefix as it is (the same bytes in
+  every VM unless a script changed a builtin) plus the canonical session region. A heap
+  without a prefix (base 0) is laid out from the roots as before.
+- **Frozen builtins:** `Vm::collect_canonical` no longer falls back to a full collection
+  (D2304's workaround), and `realm::FROZEN_EXEMPT` is gone: the per-VM objects are above
+  the prefix (D2063). `Vm::new` with frozen builtins makes its realm into a base image
+  first (`prepare_base_image`), so it has the same prefix and tail as a VM from the base.
+- **Trade, default mode only:** a builtin that a script changes in ways that replace its
+  storage (adding properties, `defineProperty`) leaves its old storage in the prefix,
+  where it is never freed. The same holds for anything only that dead storage reaches.
+  This is bounded by how much scripts reshape builtins. With frozen builtins nothing in
+  the prefix changes.
+- **Measured:** wasm instructions pi-like −1.5%, arrays −0.8%, json −1.1%, the rest ±0.5%
+  (full collections no longer mark and slide the base). Module −20 B gzip.
+
+## D2065: A debug write barrier below BASE_END, armed by frozen builtins or one option
+date: 2026-11-08 · by: heap · issue: 0147
+In debug builds, an armed barrier panics on any write into the builtin prefix (below
+`Roots::BASE_END`, past the roots cell).
+- **The checks:** `Arena::write`, `slice_mut`, `copy_within` and `split_mut` check each
+  write. `Heap::check_prefix` compares the whole prefix with its copy from when the
+  barrier was armed. That runs after every `Vm::run` and every collection, for writes
+  through raw slices (the hot loop). Collections run with the per-write check
+  suspended: they flag and clear header bits.
+- **Arming:** frozen builtins (`Roots::FLAGS` `ROOT_FROZEN_BUILTINS`, D2304) always arm
+  it. Otherwise one switch does: `VmOptions::prefix_barrier` (`Heap::force_prefix_barrier`).
+  It is not image state: it is applied at creation and restore.
+- **Release builds** carry only the field and a no-op: no check, no copy.
+- **Armed in the gate** (TESTING.md "The prefix write barrier"):
+  - perf's vm/frozen_tests.rs, and any VM with frozen builtins;
+  - difftest's `codemode/` and `codemode-harvest/` areas in every mode the gate runs
+    them.
+
+  e2e, test262 and the rest of the corpus change builtins on purpose, so they run
+  unarmed.

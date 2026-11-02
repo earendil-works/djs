@@ -51,6 +51,19 @@ docs/frozen-builtins.md phase 2: the base image becomes an immutable prefix of e
 - Checked: djs-core, prelude and wasm tests, e2e plain, js tests, native-vs-wasm, difftest
   codemode/console/builtins with all stress modes, test262 Object/Array/Symbol.
 - Instructions vs main: ±0.5%, props −1.2%; module +60 B gzip.
+- Coordinator approved (a) armed barrier, (b) prefix diff in images, (c) fixed prefix.
+- (c) D2064:
+  - full collections = `mark_compact(BASE_END)`, the prefix walked as old;
+  - Cheney copies the prefix verbatim and keeps BASE_END;
+  - removed perf's `FROZEN_EXEMPT` and the `collect_canonical` fallback;
+  - `Vm::new` + frozen runs `prepare_base_image`;
+  - test `collections_never_move_the_prefix`;
+  - pi-like −1.5% instructions.
+- (a) D2065: debug barrier (per-write in Arena + whole-prefix compare after runs and
+  collections). Armed by ROOT_FROZEN_BUILTINS or `VmOptions::prefix_barrier`; difftest
+  codemode areas armed (`ARMED_AREAS`), all stress modes clean; perf's frozen tests run
+  armed. e2e can't be armed: 3 cases change builtins on purpose (BigInt, iterator,
+  Proxy). TESTING.md section.
 
 ## Follow-ups
 
