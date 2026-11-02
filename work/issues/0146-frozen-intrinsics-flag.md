@@ -1,7 +1,7 @@
 # 0146: Frozen-intrinsics VM option (region-based), with the override fix
 
-status: open
-agent: -
+status: in-progress
+agent: perf
 branch: issue/0146-frozen-intrinsics
 depends-on: 0144, 0147 (BASE_END root, landed first by heap)
 guide: docs/guide/ (a new section on the frozen mode in builtins.md or determinism.md)
