@@ -815,20 +815,86 @@ impl Vm {
         // Without the prelude's internal names (D2253).
         image::drop_internal_names(&mut self.heap)?;
         self.collect_canonical()?;
+        let tail = self.prepare_prefix()?;
+        let tail_bytes: u32 = tail.iter().map(|&c| self.heap.cell_size(c)).sum();
+        self.heap.order_for_image(&tail)?;
+        // The image is the builtin prefix of every VM made from it (D022), then the
+        // per-VM cells: `BASE_END` is where they start.
+        let len = self.heap.arena().len();
+        self.heap
+            .arena_mut()
+            .set(0, crate::heap::cells::Roots::BASE_END, len - tail_bytes);
+        Ok(())
+    }
+
+    /// Readies a collected realm for the builtin prefix (D2063): what a VM would write
+    /// lazily into base cells is written now, and the cells a VM writes are listed for
+    /// the image's tail (above `BASE_END`), in their order there.
+    /// - String hashes are computed, and every object that is a prototype is marked as
+    ///   one (D1621), so neither is written later.
+    /// - The root shape is dropped from the roots: a VM grows its own shape tree from a
+    ///   root of its own (created on first use), and the builtins' shapes keep theirs.
+    /// - The tail: Map/Set tables, the realm and its random state, the global object and
+    ///   its property table, the global lexical record, `Symbol.for`'s registry, the atom
+    ///   table, the interpreter cell and the value stack.
+    fn prepare_prefix(&mut self) -> Result<Vec<u32>, HeapError> {
+        use crate::heap::cells::{Object, Realm, Roots};
+        let cells: Vec<(u32, crate::heap::CellKind)> =
+            self.heap.cells().map(|c| (c.offset, c.kind)).collect();
+        for &(c, kind) in &cells {
+            match kind {
+                crate::heap::CellKind::Str8 | crate::heap::CellKind::Str16 => {
+                    self.heap.str_hash(crate::value::Str(c));
+                }
+                crate::heap::CellKind::Object => {
+                    let p: Ref = self.heap.arena().get(c, Object::PROTO);
+                    if let Some(p) = p.get() {
+                        self.heap.mark_proto(Obj(p));
+                    }
+                }
+                _ => {}
+            }
+        }
+        self.heap.arena_mut().set(0, Roots::ROOT_SHAPE, Ref(0));
         let h = &self.heap;
-        let last: Vec<u32> = h
+        let a = h.arena();
+        // (The root shape is cleared above: its transitions stay with the builtins.)
+        let mut tail: Vec<u32> = h
             .first_grown(self.global())
             .into_iter()
             .map(|e| h.first_grown_target(e))
             .filter(|&t| t != 0)
             .collect();
-        self.heap.order_for_image(&last)?;
-        // The whole image is the builtin prefix of every VM made from it (D022).
-        let len = self.heap.arena().len();
-        self.heap
-            .arena_mut()
-            .set(0, crate::heap::cells::Roots::BASE_END, len);
-        Ok(())
+        let realm = realm::realm(h);
+        let lex: Ref = a.get(realm, Realm::GLOBAL_LEX);
+        let obj = |v: Value| v.as_object().map_or(0, |o| o.0);
+        let internal = |v: Value| v.as_internal().unwrap_or(0);
+        let global = self.global().0;
+        let registry = obj(realm::intrinsic(h, Intrinsic::SymbolRegistry));
+        let mut front = alloc::vec![
+            realm,
+            internal(realm::intrinsic(h, Intrinsic::RandomState)),
+            global,
+            lex.0,
+            registry,
+        ];
+        for o in [lex.0, registry] {
+            if o != 0 {
+                let p: Ref = a.get(o, Object::PROPS);
+                front.push(p.0);
+            }
+        }
+        // The atom table's cell goes with its entries and index (last in `tail`).
+        let atoms: Ref = a.get(0, Roots::ATOMS);
+        let interp: Ref = a.get(0, Roots::INTERP);
+        let stack: Ref = a.get(0, Roots::STACK);
+        let at = tail.len().saturating_sub(2);
+        tail.insert(at, atoms.0);
+        front.append(&mut tail);
+        front.extend_from_slice(&[interp.0, stack.0]);
+        let mut seen = alloc::collections::BTreeSet::new();
+        front.retain(|&c| c != 0 && seen.insert(c));
+        Ok(front)
     }
 
     /// A collection of `heap` alone (no finalization scheduling).

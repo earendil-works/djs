@@ -123,6 +123,31 @@ mod tests {
         );
     }
 
+    /// The builtin prefix references nothing above it (D2063): the per-VM cells of the
+    /// tail are reached only from the roots cell and from each other.
+    #[test]
+    fn the_prefix_references_only_itself() {
+        use djs_core::heap::walk::{Slot, for_each_slot};
+        use djs_core::heap::{Heap, Ref};
+        let h = Heap::from_bytes_trusted(BASE.to_vec(), usize::MAX).unwrap();
+        let end = h.base_end();
+        assert!(end > 0 && end < BASE.len() as u32);
+        let a = h.arena();
+        let mut out = Vec::new();
+        for c in h.cells().filter(|c| c.offset > 0 && c.offset < end) {
+            for_each_slot(c.kind, c.offset, c.size, |s| {
+                let t = match s {
+                    Slot::Value(s) => a.read::<djs_core::value::Value>(s).ref_offset(),
+                    Slot::Ref(s) => a.read::<Ref>(s).get(),
+                };
+                if t.is_some_and(|t| t >= end) {
+                    out.push((c.kind, c.offset));
+                }
+            });
+        }
+        assert!(out.is_empty(), "prefix cells referencing the tail: {out:?}");
+    }
+
     /// The embedded base passes full verification.
     #[test]
     fn verifies() {
