@@ -1,6 +1,6 @@
 # 0149: A trimmed-down djs for codemode: minimal globals, flag or build? (research)
 
-status: in-progress
+status: done
 agent: slim
 branch: issue/0149-slim-codemode
 depends-on: 0130, 0144, 0145, 0146, 0147
@@ -55,7 +55,33 @@ just a flag, and the impact on the wasm binding."
 docs/slim-codemode.md.
 
 ## Log
+- Extended scripts/harvest/extract.py to read p2's SQLite session databases (pi-durable
+  `entries`; D2410), from a read-only copy in work/scratch/0149. 2,757 agent-store + 25 p2
+  executions, 2,687 distinct scripts. Nothing else under ~/.pi/p2 opened.
+- New scripts/harvest/members.py: usage per global and member, joined with the registry
+  and the touch build's per-case counts.
+- Dynamic: 0143's touch.py on a scratch copy + a `touched-names` example (registry
+  paths); 310 codemode cases.
+- Prototypes (scratch): slim_patch.py prunes families from the base before
+  prepare_base_image; leaf arms aliased away; decorator/`using` syntax cut. Measured
+  main 458,952 gz → A full 399,605 (−59.3 KB), B full 395,626. Base 325,008 → 238,712 B.
+  Prototype A passes all 310 codemode cases as main does, and runs pi's lockdown-free
+  prelude; pi's lockdown needs Int8Array.
+- A run-time flag can't free the prefix (D2064): pruning a VM from the base keeps the
+  image at 324,872 B; deriving from Vm::new costs ~10 ms native.
+- Guide pages: none affected (research; no engine change).
 
 ## Follow-ups
+- Ship pi's module without the Unicode cargo features (−34.5 KB gz); pi-private: frozen
+  builtins on, lockdown off.
+- `slim` cargo feature phase 1 (image + leaves + syntax, clear "not available in
+  codemode" errors, second wasm build, surface test, corpora and pi tests on it).
+- Phase 2: BigInt and typed arrays out of the engine core; filtered test262 for slim.
 
 ## Result
+docs/slim-codemode.md: usage by global and member over both session stores, the proposed
+tiers (drop: typed arrays/ArrayBuffer/DataView, Iterator helpers, BigInt, WeakRef/
+FinalizationRegistry, DisposableStack/`using`, decorators, the Unicode features; Proxy and
+Reflect only with a pi change), measured prototype sizes, flag vs build (a build: a `slim`
+cargo feature and a second module), binding impact and a phased recommendation.
+scripts/harvest: extract.py reads p2 databases, members.py. D2410.

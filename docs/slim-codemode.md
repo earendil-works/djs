@@ -109,7 +109,7 @@ The owner asked:
     Each row of the `entries` table holds a JSON record whose `model` field carries the
     pi messages (assistant tool calls, tool results with `details.calls`), the same
     shapes as a JSONL session.
-  - extract.py reads both. It opens copies of the databases (with their WAL files) in
+  - extract.py reads both (D2410). It opens copies of the databases (with their WAL files) in
     work/scratch read-only and touches nothing else under ~/.pi/p2.
   - Raw extracts stay in work/scratch/0149; this report has names, counts and dates
     only.
