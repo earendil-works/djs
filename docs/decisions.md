@@ -6368,3 +6368,51 @@ In debug builds, an armed barrier panics on any write into the builtin prefix (b
 
   e2e, test262 and the rest of the corpus change builtins on purpose, so they run
   unarmed.
+
+## D2066: Session images: the roots cell, a canonical prefix diff and the session region
+date: 2026-11-09 · by: heap · issue: 0147
+The last step of D022's immutable prefix. A VM made from the base shares its builtin
+prefix (`[0, BASE_END)`, D2062–D2064) with every other VM of the build, so a stored image
+leaves it out.
+- **Format** (`vm::session`, `"DJSs"`, format 1), little-endian:
+  - header: magic, format, build hash, `BASE_END`, FNV-1a 64 of the base's bytes
+    `0..BASE_END`, the roots cell's size, n;
+  - n u32 offsets of the prefix words (past the roots cell) that differ from the base,
+    ascending, padded to 8 bytes; their n u64 values;
+  - the roots cell, then the image from `BASE_END` on.
+
+  It is a pure function of the raw image and the base, so equal images give equal session
+  images: the diff is canonical. `session_image`, `expand_session` (checks the build,
+  `BASE_END`, the roots size and the prefix hash, then the offsets: in range, aligned,
+  ascending), `session_diff`; `Vm::session_bytes(base)`, `Vm::from_session`.
+  js/src/snapshot.ts has the same functions (`sessionImage`, `expandSession`).
+- **Containers:** `"DJSN"` format 2 adds byte 13, the image kind: 0 raw, 1 a session
+  image against the module's base image, 2 one against the container's reference.
+  Writers (js/src/snapshot.ts `encodeSnapshot({ base })`, djs-cli `container::write`)
+  take the reference when it has the same prefix, else the base, else store the raw
+  image. Against pi's prelude image the diff is what the session changed since the
+  prelude. As a diff against the base, the 1,749 words (660 cells) pi's lockdown changes
+  cost 8 KB per container, though the dictionary holds them in place. Format 1
+  containers and the formats before the container still load; other formats fail with
+  "snapshot container format N".
+- **Sizes (measured):** compressed containers are unchanged within 2% (the dictionary
+  already made the prefix free): a new Sandbox 1,034 B, pi sessions waiting on a tool
+  2.1–6.6 KB. Uncompressed ones lose the prefix: a new Sandbox 32 KB instead of 330 KB.
+  An unchanged builtin costs nothing, a changed word 12 bytes. JS encode +0.05–0.1 ms
+  (one pass over the prefix as 32-bit words; the base's prefix hash is cached).
+- **canonical_hash** stays FNV-1a over the canonical copy's raw image. Given the base, the
+  raw image and the session image determine each other, and the canonical collection
+  leaves the prefix as it is (D2064). Hashing the session image would need the base in
+  the VM.
+- **Order independence, what holds:** calling builtins leaves no trace in the prefix: no
+  prefix writes (D2063) and an empty diff. Calls that return primitives or plain arrays
+  leave the same session image whatever order they ran in (test
+  `touching_builtins_in_any_order_leaves_the_same_session`).
+- **What doesn't, yet:** objects that builtins *create* with named properties (iterator
+  results, RegExp match results, property descriptors) get their shapes in the session
+  region, in the order they are first created, and shapes are never freed (D1831). So
+  `new Map(...)` (+168 B) and `/a/.exec()` (+288 B) leave shapes behind, and two runs
+  using them in opposite orders lay the session region out differently. Pre-creating
+  those shapes in the base is follow-up work.
+- **Analyzer:** `djs heap` has a `prefix` section: the changed prefix words against this
+  build's base, by cell, named by registry path (`%Array.prototype%`, `%Math%`).

@@ -1220,7 +1220,7 @@ pub fn session(g: &Graph, o: &Options) -> Section {
 /// The words of the builtin prefix this image changes against its base (D2066): which
 /// builtins a script changed (none with frozen builtins). Cells are named by their path
 /// from the builtin registry's names (D2371): `%Math%` for Math's property table.
-pub fn prefix(g: &Graph, diff: &[(u32, u64)]) -> Section {
+pub fn prefix(g: &Graph, diff: &[(u32, u64)], o: &Options) -> Section {
     // (cell offset) -> words
     let mut cells: Vec<(u32, u32)> = Vec::new();
     for &(o, _) in diff {
@@ -1245,18 +1245,25 @@ pub fn prefix(g: &Graph, diff: &[(u32, u64)]) -> Section {
     let mut text = if diff.is_empty() {
         "  the builtin prefix is the base's: no builtin was changed\n".to_string()
     } else {
+        let n =
+            |k: usize, one: &str, many: &str| format!("{k} {}", if k == 1 { one } else { many });
         format!(
-            "  {} words of the builtin prefix differ from the base, in {} cells\n",
-            diff.len(),
-            cells.len()
+            "  {} of the builtin prefix {} from the base, in {}\n",
+            n(diff.len(), "word", "words"),
+            if diff.len() == 1 { "differs" } else { "differ" },
+            n(cells.len(), "cell", "cells")
         )
     };
     if !rows.is_empty() {
         let shown: Vec<Vec<String>> = rows
             .iter()
+            .take(o.top)
             .map(|(k, p, n)| vec![n.to_string(), k.clone(), p.clone()])
             .collect();
         text.push_str(&table(&["words", "kind", "path"], &shown));
+        if rows.len() > o.top {
+            text.push_str(&format!("  ... and {} more cells\n", rows.len() - o.top));
+        }
     }
     let json = J::obj(vec![
         ("words", (diff.len() as u64).into()),

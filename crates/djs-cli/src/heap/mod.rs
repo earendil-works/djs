@@ -223,7 +223,7 @@ pub fn analyze(
         && let Ok(s) = djs_core::vm::session::session_image(image, djs_prelude::BASE)
         && let Ok(d) = djs_core::vm::session::session_diff(&s)
     {
-        out.push(report::prefix(&g, &d));
+        out.push(report::prefix(&g, &d, o));
     }
     if o.wants("largest") {
         out.push(report::largest(&g, o));

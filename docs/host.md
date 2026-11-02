@@ -173,18 +173,41 @@ the session started from (D2262). Little-endian:
 | offset | size | field |
 | ---: | ---: | --- |
 | 0 | 4 | magic `"DJSN"` (`0x4e534a44`) |
-| 4 | 2 | format version, 1 |
+| 4 | 2 | format version, 2 (D2066; format 1, without byte 13, still loads) |
 | 6 | 1 | app, which says what the metadata is: 1 Sandbox, 2 pi session, 3 the djs REPL (`{}`) |
 | 7 | 1 | compression: 0 none, 1 zstd |
 | 8 | 4 | the engine build hash (`djs_build_hash`) |
 | 12 | 1 | the reference: 0 none, 1 the base image, 2 pi's prelude image |
-| 13 | 3 | reserved, 0 |
+| 13 | 1 | the image: 0 a raw image, 1 a session image against the base image, 2 a session image against the reference |
+| 14 | 2 | reserved, 0 |
 | 16 | 8 | the reference's FNV-1a 64, low word first; 0 without one |
 | 24 | 4 | the reference's length in bytes |
-| 28 | 4 | the image's length |
+| 28 | 4 | the stored image's length (the session image's, for one) |
 | 32 | 4 | the metadata's length |
 | 36 | 4 | the payload's length |
 | 40 | | the metadata (UTF-8 JSON), then the payload: the image as is, or one zstd frame with a content checksum, compressed with the reference as a raw-content dictionary |
+
+The stored image is a *session image* (D2066) when the VM has a builtin prefix
+(`Roots::BASE_END`, every VM restored from the module's base): what the base does not
+already hold. Little-endian:
+
+| offset | size | field |
+| ---: | ---: | --- |
+| 0 | 4 | magic `"DJSs"` (`0x73534a44`) |
+| 4 | 4 | format, 1 |
+| 8 | 4 | the engine build hash |
+| 12 | 4 | `BASE_END`, the prefix's end |
+| 16 | 8 | FNV-1a 64 of the base's bytes `0..BASE_END` |
+| 24 | 4 | the roots cell's size |
+| 28 | 4 | n, the changed prefix words |
+| 32 | | n u32 offsets, ascending (padded to 8 bytes); n u64 values; the roots cell; the image from `BASE_END` on |
+
+The prefix words are taken against the container's reference when it has the same prefix
+(the base image, or pi's prelude image, which already holds the builtins pi's prelude
+changed: as a diff against the base they would cost about 8 KB per container), else
+against the base image. A VM that leaves its builtins alone has none. The reader puts the
+image back together from the base or the reference (`expandSession`,
+`vm::session::expand_session`) and checks that it is the one the image was made against.
 
 A reader checks, in this order, and stops at the first problem with a clear message (a
 `misuse` SandboxError; a `SnapshotError` from `resumeVm`):
@@ -195,7 +218,8 @@ A reader checks, in this order, and stops at the first problem with a clear mess
    snapshots of older builds has to keep those builds (an engine registry: not built);
 4. the reference: kind, hash and length ("compressed against the base image X; this
    host's is Y");
-5. zstd's checksum ("corrupt snapshot"), then the image's verification (`Vm::from_bytes`).
+5. zstd's checksum ("corrupt snapshot"); a session image's prefix hash ("made against
+   another base image"); then the image's verification (`Vm::from_bytes`).
 
 Compression runs in the host (D2261): `nodeZstd()` uses node's built-in zstd
 (`node:zlib`, node 22.15 and 23.8 on), found through `process.getBuiltinModule`, so the
