@@ -1,7 +1,7 @@
 # 0151: Shrink the base heap to a fraction, without removing anything
 
-status: open
-agent: -
+status: in-progress
+agent: bloat
 branch: issue/0151-base-fraction (one branch per landing: issue/0151-<step>)
 depends-on: 0143, 0145, 0147, 0148, 0150
 guide: docs/guide/builtins.md, bytecode.md, arena.md (as mechanisms change)
