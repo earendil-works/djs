@@ -6656,3 +6656,17 @@ date: 2026-11-09 · by: perf · issue: 0154
   the live tree (QuickJS counts references). The rest is the bytecode builtins' own
   instructions per call: frame, ToObject, LengthOfArrayLike, the species check and the
   callback frame. For reduce add the rest-parameter array and a second frame.
+## D2510: No wasm JIT; ahead-of-time wasm for builtins stays `@native`
+date: 2026-11-02 · by: jit · issue: 0153
+djs does not build a JIT that emits wasm (docs/wasm-jit.md). A baseline template JIT of
+djs bytecode fits the model: it exits only at instruction boundaries, checks fuel once per
+block exactly, and writes back at every exit, so suspension, fuel, the moving collector
+and images hold, with the interpreter as an exact oracle. The prototype measured 3.2–4.5x
+over the interpreter on loops and calls once V8 has optimized the code (TurboFan), but
+0.7–1.8x on Liftoff code, a break-even of about 0.2–0.5 ms of interpreted time per hot
+function, and 0.3–2 ms of TurboFan compile per function. Harvested codemode scripts run
+0.12 ms (median) in total, and the heavy workloads spend most of their time in leaf Rust
+(pi-like: 12% in `run_hot`). Builtins keep their ahead-of-time path, `@native` (bgen's
+Rust backend), justified per builtin by measurement (D1634). Revisit a baseline JIT only
+for compute-heavy uses (> 10 ms of interpreted time in hot functions), and a bgen wasm
+backend in a side module only if the module budget blocks measured `@native` wins.

@@ -1,6 +1,6 @@
 # 0153: A JIT that emits wasm: performance and fit (research)
 
-status: in-progress
+status: done
 agent: jit
 branch: issue/0153-wasm-jit-study
 depends-on: -
@@ -56,7 +56,45 @@ whether it makes sense for our setup."
 docs/wasm-jit.md with the prototype numbers.
 
 ## Log
+- Read ARCH (G5, interpreter, builtins, fuel), TESTING (instruction ratios), the guide's
+  interpreter/builtins pages, scripts/perf, pico's "The JIT" chapter and benchmarks, and
+  docs/lessons-from-pico.md (0152).
+- Profiles: node --cpu-prof of the wasm workloads, bucketed (work/scratch/0153/prof).
+  pi-like: run_hot 12%, interpreter total 22%; calls 94%; json 3%.
+- Real scripts: the 300 codemode-harvest scripts in djs-wasm: median 0.12 ms / ~3,000
+  fuel, p99 1.4 ms / ~95,000 (work/scratch/0153/harvest).
+- @native vs bytecode backend: pi-like 0.09 vs 0.30 s natively (the existing AOT path).
+- Prototype (work/scratch/0153/proto, kept on branch scratch/0153-wasm-jit-proto): a
+  template compiler for 26 opcodes of real djs bytecode (parsed from `djs disasm`), in a
+  miniature of djs's memory model, with block-batched exact fuel, exits at instruction
+  boundaries, write-back, nested compiled calls and re-entry at block leaders. The
+  interpreter oracle passes 60/60 runs (5 programs x slices 7/97/1000/1e9 x 3 variants);
+  two injected bugs are caught.
+- Numbers: TurboFan code 3.2-4.5x djs's interpreter on loops/calls (7.9x on a simplified
+  property cache), exact fuel 4-14%, Liftoff-only 0.7-1.8x; V8 compile: lazy module
+  ~0.03 ms + Liftoff 0.01-0.04 ms per function, TurboFan 0.3-1.9 ms per function
+  (0.5-1 ms/KB), 1.4 MB function: TurboFan zone OOM; break-even 10^4-10^5 iterations.
+- instr.py (scripts/perf) no longer patches gc.rs (mark_compact is wrapped in
+  without_barrier now); a fixed copy in scratch built, but its fast-path counters no
+  longer match run_hot either, so its user/prelude split was not used.
+- Wrote docs/wasm-jit.md and D2510 (no JIT; AOT stays @native). No guide pages affected
+  (guide: -). The bytecode-encoding change of 0151 (L4) does not affect the prototype (it
+  reads the disassembly) and would only touch a real JIT's decoder.
 
 ## Follow-ups
+- scripts/perf/instr.py is stale: its gc.rs patch fails (mark_compact now runs inside
+  `without_barrier`) and its fast-path counters show 0 prelude bytecodes / 100% slow
+  path, so the run_hot patch no longer matches either.
+- If images should ever be compared byte for byte across execution modes (a JIT, or any
+  tier that keeps operands out of memory), suspension or the image writer must clear the
+  value-stack slots above `sp` (safepoint_collect already does before a collection).
+- docs/decisions-index.md: D2510 belongs under "Interpreter" or "The builtin language".
 
 ## Result
+docs/wasm-jit.md: options (AOT builtins via @native / a bgen wasm backend / runtime
+template JIT / optimizing tier), the fit with suspend-anywhere, fuel, the moving
+collector, snapshots, no_std/no-unsafe, the ABI and V8, profiles of the workloads and
+the harvest corpus, the prototype with its oracle, speed, compile-cost and break-even
+numbers, costs, and the recommendation: no JIT now (D2510); AOT for builtins stays
+`@native`, justified per builtin. Prototype: branch scratch/0153-wasm-jit-proto
+(work/scratch/0153/proto), not merged.
