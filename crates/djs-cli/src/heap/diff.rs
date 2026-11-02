@@ -245,7 +245,9 @@ fn same_bytes(rg: &Graph, hg: &Graph, off: u32, size: u32) -> bool {
 
 /// 8-byte words in which image cell `h` differs from reference cell `r`: references
 /// compare through the matching, everything else byte for byte (the GC byte of the
-/// header aside). A cell of another size differs everywhere.
+/// header aside). A cell that changed its size (a table or array regrown in a new cell)
+/// compares over the words both have, its header included; past the reference's end its
+/// nonzero words differ (unused capacity is zero).
 fn differing_words(
     rg: &Graph,
     r: u32,
@@ -255,9 +257,7 @@ fn differing_words(
     hsize: u32,
     img_to_ref: &[u32],
 ) -> u32 {
-    if rsize != hsize {
-        return hsize / 8;
-    }
+    let common = rsize.min(hsize) as usize;
     let rb = rg.heap.arena().slice(r, rsize);
     let hb = hg.heap.arena().slice(h, hsize);
     let mut masked = vec![false; hsize as usize];
@@ -270,6 +270,9 @@ fn differing_words(
         let (pb, _) = slot_pos(*b);
         let rel = (pb - h) as usize;
         debug_assert_eq!((pa - r) as usize, rel);
+        if rel + w as usize > common {
+            break;
+        }
         masked[rel..rel + w as usize].fill(true);
         let rt = rg.heap.slot_target(*a).and_then(|t| rg.index(t));
         let ht = hg.heap.slot_target(*b).and_then(|t| hg.index(t));
@@ -283,7 +286,12 @@ fn differing_words(
         }
     }
     for i in 0..hsize as usize {
-        if !masked[i] && rb[i] != hb[i] {
+        let differs = if i < common {
+            !masked[i] && rb[i] != hb[i]
+        } else {
+            hb[i] != 0
+        };
+        if differs {
             words.insert(i / 8);
         }
     }

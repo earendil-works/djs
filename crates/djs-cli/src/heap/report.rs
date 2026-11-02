@@ -33,6 +33,9 @@ pub struct Options {
     pub top: usize,
     /// The sections to compute, by key; all when `None`.
     pub only: Option<Vec<String>>,
+    /// The strings, largest, shapes and functions sections over the whole image instead
+    /// of the session's own part (`--all`, D2432).
+    pub all: bool,
 }
 
 impl Options {
@@ -48,7 +51,73 @@ impl Default for Options {
         Options {
             top: 10,
             only: None,
+            all: false,
         }
+    }
+}
+
+/// The cells the strings, largest, shapes and functions sections describe (D2432): the
+/// session's own part, the cells new or changed against the reference, or the whole
+/// image (`--all`, or no reference to compare with). The rest, the reference's part, is
+/// one line of totals.
+pub struct Scope {
+    /// Per cell index: in the session's part. `None` for the whole image.
+    pub own: Option<Vec<bool>>,
+    /// The reference's name, as in the diff section.
+    pub reference: String,
+}
+
+impl Scope {
+    pub fn whole() -> Scope {
+        Scope {
+            own: None,
+            reference: String::new(),
+        }
+    }
+
+    fn has(&self, i: usize) -> bool {
+        self.own.as_ref().is_none_or(|o| o[i])
+    }
+
+    fn is_session(&self) -> bool {
+        self.own.is_some()
+    }
+
+    /// The section's first line in the session view; empty for the whole image.
+    fn intro(&self) -> String {
+        if self.is_session() {
+            format!(
+                "  the session's own part: cells new or changed against {} (--all for the whole image)\n",
+                self.reference
+            )
+        } else {
+            String::new()
+        }
+    }
+
+    /// The line of the reference's totals in the session view; empty for the whole image.
+    fn rest(&self, what: String) -> String {
+        if self.is_session() {
+            format!("  unchanged from the reference: {what}\n")
+        } else {
+            String::new()
+        }
+    }
+
+    /// `scope` and, in the session view, `reference_part` for a section's JSON.
+    fn json(&self, mut fields: Vec<(&'static str, J)>, rest: J) -> J {
+        fields.insert(
+            0,
+            (
+                "scope",
+                if self.is_session() { "session" } else { "all" }.into(),
+            ),
+        );
+        fields.push((
+            "reference_part",
+            if self.is_session() { rest } else { J::Null },
+        ));
+        J::obj(fields)
     }
 }
 
@@ -159,7 +228,12 @@ impl Tally {
 
 // ---- Sections ---------------------------------------------------------------------------
 
-pub fn overview(input: &Input, g: &Graph, collected: Option<u32>) -> Section {
+pub fn overview(
+    input: &Input,
+    g: &Graph,
+    collected: Option<u32>,
+    session_bytes: Option<usize>,
+) -> Section {
     let path = input.name;
     let a = g.heap.arena();
     let len = a.len() as u64;
@@ -227,6 +301,14 @@ pub fn overview(input: &Input, g: &Graph, collected: Option<u32>) -> Section {
         kbu(len - old_bytes),
         g.cells.len() as u64 - old_cells
     ));
+    let base_end = g.heap.base_end();
+    if let Some(n) = session_bytes {
+        t.push_str(&format!(
+            "  session image: {n} bytes ({} KB): the builtin prefix's changed words, the roots cell and the {} KB from BASE_END {base_end} on\n",
+            kb(n),
+            kbu(len - base_end as u64)
+        ));
+    }
     let json = J::obj(vec![
         ("file", path.into()),
         ("format", input.format.clone().into()),
@@ -263,6 +345,8 @@ pub fn overview(input: &Input, g: &Graph, collected: Option<u32>) -> Section {
         ("old_end", old_end.into()),
         ("old_cells", old_cells.into()),
         ("old_bytes", old_bytes.into()),
+        ("base_end", base_end.into()),
+        ("session_image_bytes", session_bytes.into()),
     ]);
     section("summary", "summary", t, json)
 }
@@ -554,13 +638,40 @@ pub fn diff_section(name: &str, rg: &Graph, g: &Graph, d: &Diff, o: &Options) ->
     section("diff", format!("diff against {name}"), t, json)
 }
 
-pub fn largest(g: &Graph, o: &Options) -> Section {
-    let mut by_size: Vec<u32> = (0..g.cells.len() as u32).collect();
+pub fn largest(g: &Graph, o: &Options, scope: &Scope) -> Section {
+    let n = g.cells.len();
+    let mut by_size: Vec<u32> = (0..n as u32).filter(|&i| scope.has(i as usize)).collect();
     by_size.sort_by_key(|&i| std::cmp::Reverse(g.cell(i).size));
-    let mut by_retained: Vec<u32> = (1..g.cells.len() as u32)
-        .filter(|&i| g.live[i as usize])
+    // Retained sizes, in the session view of the session's bytes only: what a cell keeps
+    // alive of the session's part on its own (through any cells, base ones included).
+    let retained: Vec<u64> = if scope.is_session() {
+        let mut r: Vec<u64> = (0..n)
+            .map(|i| {
+                if scope.has(i) && g.live[i] {
+                    g.cells[i].size as u64
+                } else {
+                    0
+                }
+            })
+            .collect();
+        for &v in g.rpo[1..].iter().rev() {
+            r[g.idom[v as usize] as usize] += r[v as usize];
+        }
+        r
+    } else {
+        g.retained.clone()
+    };
+    let mut by_retained: Vec<u32> = (1..n as u32)
+        .filter(|&i| g.live[i as usize] && scope.has(i as usize) && retained[i as usize] > 0)
         .collect();
-    by_retained.sort_by(|&a, &b| g.retained[b as usize].cmp(&g.retained[a as usize]));
+    by_retained.sort_by(|&a, &b| retained[b as usize].cmp(&retained[a as usize]));
+    let (mut rest_cells, mut rest_bytes) = (0u64, 0u64);
+    for (i, c) in g.cells.iter().enumerate() {
+        if !scope.has(i) {
+            rest_cells += 1;
+            rest_bytes += c.size as u64;
+        }
+    }
     let what = |i: u32| {
         let c = g.cell(i);
         if matches!(c.kind, CellKind::Str8 | CellKind::Str16) {
@@ -569,20 +680,28 @@ pub fn largest(g: &Graph, o: &Options) -> Section {
             g.path(i)
         }
     };
-    let mut t = String::from("  largest cells:\n");
+    let mut t = scope.intro();
+    t.push_str(&scope.rest(format!("{rest_cells} cells, {} KB", kbu(rest_bytes))));
+    t.push_str("  largest cells:\n");
     let rows: Vec<Vec<String>> = by_size
         .iter()
         .take(o.top)
         .map(|&i| vec![kbu(g.cell(i).size as u64), g.kind_name(i), what(i)])
         .collect();
     t.push_str(&table(&["KB", "kind", "path"], &rows));
-    t.push_str("\n  largest retained sizes (the cell and everything only it keeps alive):\n");
+    if scope.is_session() {
+        t.push_str(
+            "\n  largest retained sizes (the session's cells that a cell alone keeps alive, itself included):\n",
+        );
+    } else {
+        t.push_str("\n  largest retained sizes (the cell and everything only it keeps alive):\n");
+    }
     let rows: Vec<Vec<String>> = by_retained
         .iter()
         .take(o.top)
         .map(|&i| {
             vec![
-                kbu(g.retained[i as usize]),
+                kbu(retained[i as usize]),
                 kbu(g.cell(i).size as u64),
                 g.kind_name(i),
                 g.path(i),
@@ -593,83 +712,118 @@ pub fn largest(g: &Graph, o: &Options) -> Section {
     let item = |i: u32| {
         J::obj(vec![
             ("size", g.cell(i).size.into()),
-            ("retained", g.retained[i as usize].into()),
+            ("retained", retained[i as usize].into()),
             ("kind", g.kind_name(i).into()),
             ("path", g.path(i).into()),
         ])
     };
-    let json = J::obj(vec![
-        (
-            "largest",
-            J::Arr(by_size.iter().take(o.top).map(|&i| item(i)).collect()),
-        ),
-        (
-            "retained",
-            J::Arr(by_retained.iter().take(o.top).map(|&i| item(i)).collect()),
-        ),
-    ]);
+    let json = scope.json(
+        vec![
+            (
+                "largest",
+                J::Arr(by_size.iter().take(o.top).map(|&i| item(i)).collect()),
+            ),
+            (
+                "retained",
+                J::Arr(by_retained.iter().take(o.top).map(|&i| item(i)).collect()),
+            ),
+        ],
+        J::obj(vec![
+            ("cells", rest_cells.into()),
+            ("bytes", rest_bytes.into()),
+        ]),
+    );
     section("largest", "largest cells and retained sizes", t, json)
 }
 
-pub fn strings(g: &Graph, o: &Options) -> Section {
+pub fn strings(g: &Graph, o: &Options, scope: &Scope) -> Section {
     let a = g.heap.arena();
     let (mut flat, mut flat_bytes, mut two, mut ropes, mut rope_bytes, mut units) =
         (0u64, 0u64, 0u64, 0u64, 0u64, 0u64);
-    let mut groups: HashMap<(CellKind, &[u8]), (u64, u32, u32)> = HashMap::new();
+    let (mut rest, mut rest_bytes) = (0u64, 0u64);
+    // Equal contents over the whole image: (copies in scope, copies outside, size, a
+    // copy in scope).
+    let mut groups: HashMap<(CellKind, u32, &[u8]), (u64, u64, u32, u32)> = HashMap::new();
     let mut flats: Vec<u32> = Vec::new();
     for (i, c) in g.cells.iter().enumerate() {
         if !g.live[i] {
             continue;
         }
+        let ours = scope.has(i);
         match c.kind {
             CellKind::Str8 | CellKind::Str16 => {
-                flat += 1;
-                flat_bytes += c.size as u64;
-                flats.push(i as u32);
                 let n: u32 = if c.kind == CellKind::Str8 {
                     a.get(c.offset, Str8::LEN)
                 } else {
                     a.get(c.offset, Str16::LEN)
                 };
+                let data = a.slice(c.offset + 16, c.size - 16);
+                let e = groups
+                    .entry((c.kind, n, data))
+                    .or_insert((0, 0, c.size, i as u32));
+                if !ours {
+                    e.1 += 1;
+                    rest += 1;
+                    rest_bytes += c.size as u64;
+                    continue;
+                }
+                if e.0 == 0 {
+                    e.3 = i as u32;
+                }
+                e.0 += 1;
+                flat += 1;
+                flat_bytes += c.size as u64;
+                flats.push(i as u32);
                 units += n as u64;
                 if c.kind == CellKind::Str16 {
                     two += 1;
                 }
-                let data = a.slice(c.offset + 16, c.size - 16);
-                let e = groups
-                    .entry((c.kind, data))
-                    .or_insert((0, c.size, i as u32));
-                e.0 += 1;
             }
-            CellKind::Rope => {
+            CellKind::Rope if ours => {
                 ropes += 1;
                 rope_bytes += c.size as u64;
             }
             _ => {}
         }
     }
-    let mut dups: Vec<(u64, u32, u32)> = groups.values().filter(|e| e.0 > 1).copied().collect();
-    dups.sort_by_key(|x| std::cmp::Reverse((x.0 - 1) * x.1 as u64));
-    let wasted: u64 = dups.iter().map(|e| (e.0 - 1) * e.1 as u64).sum();
-    flats.sort_by_key(|&i| std::cmp::Reverse(g.cell(i).size));
-    let mut t = format!(
+    // A content stored more than once: the extra copies in scope (all of them when the
+    // reference's part has one).
+    let mut dups: Vec<(u64, u64, u32, u32)> = groups
+        .values()
+        .filter(|e| e.0 > 0 && e.0 + e.1 > 1)
+        .map(|&(ours, theirs, size, i)| {
+            let extra = if theirs > 0 { ours } else { ours - 1 };
+            (ours + theirs, extra, size, i)
+        })
+        .collect();
+    dups.sort_by_key(|x| (std::cmp::Reverse(x.1 * x.2 as u64), x.3));
+    let wasted: u64 = dups.iter().map(|e| e.1 * e.2 as u64).sum();
+    flats.sort_by_key(|&i| (std::cmp::Reverse(g.cell(i).size), i));
+    let mut t = scope.intro();
+    t.push_str(&scope.rest(format!("{rest} flat strings, {} KB", kbu(rest_bytes))));
+    t.push_str(&format!(
         "  {flat} flat strings ({} two-byte), {} KB, {units} code units; {ropes} ropes, {} KB\n  \
-         {} contents stored more than once, {} KB in the extra copies\n",
+         {} contents stored more than once, {} KB in the extra copies{}\n",
         two,
         kbu(flat_bytes),
         kbu(rope_bytes),
         dups.len(),
-        kbu(wasted)
-    );
+        kbu(wasted),
+        if scope.is_session() {
+            " (copies of the reference's strings count whole)"
+        } else {
+            ""
+        }
+    ));
     if !dups.is_empty() {
         t.push_str("\n  most wasteful duplicates:\n");
         let rows: Vec<Vec<String>> = dups
             .iter()
             .take(o.top)
-            .map(|&(n, size, i)| {
+            .map(|&(n, extra, size, i)| {
                 vec![
                     n.to_string(),
-                    kbu((n - 1) * size as u64),
+                    kbu(extra * size as u64),
                     g.string_preview(g.cell(i).offset, 60),
                 ]
             })
@@ -688,73 +842,84 @@ pub fn strings(g: &Graph, o: &Options) -> Section {
         })
         .collect();
     t.push_str(&table(&["KB", "where"], &rows));
-    let json = J::obj(vec![
-        ("flat", flat.into()),
-        ("two_byte", two.into()),
-        ("flat_bytes", flat_bytes.into()),
-        ("code_units", units.into()),
-        ("ropes", ropes.into()),
-        ("rope_bytes", rope_bytes.into()),
-        ("duplicated_contents", dups.len().into()),
-        ("duplicate_bytes", wasted.into()),
-        (
-            "duplicates",
-            J::Arr(
-                dups.iter()
-                    .take(o.top)
-                    .map(|&(n, size, i)| {
-                        J::obj(vec![
-                            ("copies", n.into()),
-                            ("size", size.into()),
-                            (
-                                "string",
-                                g.heap
-                                    .str_to_string(super::graph::str_at(g.cell(i).offset))
-                                    .chars()
-                                    .take(200)
-                                    .collect::<String>()
-                                    .into(),
-                            ),
-                        ])
-                    })
-                    .collect(),
+    let full = |i: u32| -> J {
+        g.heap
+            .str_to_string(super::graph::str_at(g.cell(i).offset))
+            .chars()
+            .take(200)
+            .collect::<String>()
+            .into()
+    };
+    let json = scope.json(
+        vec![
+            ("flat", flat.into()),
+            ("two_byte", two.into()),
+            ("flat_bytes", flat_bytes.into()),
+            ("code_units", units.into()),
+            ("ropes", ropes.into()),
+            ("rope_bytes", rope_bytes.into()),
+            ("duplicated_contents", dups.len().into()),
+            ("duplicate_bytes", wasted.into()),
+            (
+                "duplicates",
+                J::Arr(
+                    dups.iter()
+                        .take(o.top)
+                        .map(|&(n, extra, size, i)| {
+                            J::obj(vec![
+                                ("copies", n.into()),
+                                ("extra_copies", extra.into()),
+                                ("size", size.into()),
+                                ("string", full(i)),
+                            ])
+                        })
+                        .collect(),
+                ),
             ),
-        ),
-        (
-            "largest",
-            J::Arr(
-                flats
-                    .iter()
-                    .take(o.top)
-                    .map(|&i| {
-                        J::obj(vec![
-                            ("size", g.cell(i).size.into()),
-                            (
-                                "preview",
-                                g.heap
-                                    .str_to_string(super::graph::str_at(g.cell(i).offset))
-                                    .chars()
-                                    .take(200)
-                                    .collect::<String>()
-                                    .into(),
-                            ),
-                            ("path", g.path(i).into()),
-                        ])
-                    })
-                    .collect(),
+            (
+                "largest",
+                J::Arr(
+                    flats
+                        .iter()
+                        .take(o.top)
+                        .map(|&i| {
+                            J::obj(vec![
+                                ("size", g.cell(i).size.into()),
+                                ("preview", full(i)),
+                                ("path", g.path(i).into()),
+                            ])
+                        })
+                        .collect(),
+                ),
             ),
-        ),
-    ]);
+        ],
+        J::obj(vec![
+            ("flat", rest.into()),
+            ("flat_bytes", rest_bytes.into()),
+        ]),
+    );
     section("strings", "strings", t, json)
 }
 
-pub fn shapes(g: &Graph, o: &Options) -> Section {
+pub fn shapes(g: &Graph, o: &Options, scope: &Scope) -> Section {
     let a = g.heap.arena();
     let (mut shapes, mut shape_bytes) = (0u64, 0u64);
     let (mut shaped, mut dict, mut bare) = (0u64, 0u64, 0u64);
     let mut per_shape: HashMap<u32, u64> = HashMap::new();
+    let (mut rest_shapes, mut rest_bytes, mut rest_objects) = (0u64, 0u64, 0u64);
     for (i, c) in g.cells.iter().enumerate() {
         if !g.live[i] {
+            continue;
+        }
+        if !scope.has(i) {
+            match c.kind {
+                CellKind::Shape => {
+                    rest_shapes += 1;
+                    rest_bytes += c.size as u64;
+                }
+                CellKind::Object => rest_objects += 1,
+                _ => {}
+            }
             continue;
         }
         match c.kind {
@@ -797,70 +962,97 @@ pub fn shapes(g: &Graph, o: &Options) -> Section {
         }
         out
     };
-    let mut t = format!(
+    let mut t = scope.intro();
+    t.push_str(&scope.rest(format!(
+        "{rest_shapes} shapes ({} KB), {rest_objects} objects",
+        kbu(rest_bytes)
+    )));
+    t.push_str(&format!(
         "  {shapes} shapes ({} KB), {} of them shared by several objects\n  \
          objects: {shaped} with a shape, {dict} in dictionary mode, {bare} without properties\n\n",
         kbu(shape_bytes),
         shared
-    );
+    ));
     let rows: Vec<Vec<String>> = common
         .iter()
         .take(o.top)
         .map(|&(s, n)| vec![n.to_string(), keys(s)])
         .collect();
     t.push_str(&table(&["objects", "keys"], &rows));
-    let json = J::obj(vec![
-        ("shapes", shapes.into()),
-        ("shape_bytes", shape_bytes.into()),
-        ("shared_shapes", shared.into()),
-        ("objects_with_shape", shaped.into()),
-        ("objects_in_dictionary_mode", dict.into()),
-        ("objects_without_properties", bare.into()),
-        (
-            "common",
-            J::Arr(
-                common
-                    .iter()
-                    .take(o.top)
-                    .map(|&(s, n)| {
-                        J::obj(vec![
-                            ("objects", n.into()),
-                            (
-                                "keys",
-                                J::Arr(
-                                    g.shape_keys(s)
-                                        .into_iter()
-                                        .map(|k| {
-                                            g.heap
-                                                .atom_name(djs_core::heap::Atom::from_id(k))
-                                                .into()
-                                        })
-                                        .collect(),
+    let json = scope.json(
+        vec![
+            ("shapes", shapes.into()),
+            ("shape_bytes", shape_bytes.into()),
+            ("shared_shapes", shared.into()),
+            ("objects_with_shape", shaped.into()),
+            ("objects_in_dictionary_mode", dict.into()),
+            ("objects_without_properties", bare.into()),
+            (
+                "common",
+                J::Arr(
+                    common
+                        .iter()
+                        .take(o.top)
+                        .map(|&(s, n)| {
+                            J::obj(vec![
+                                ("objects", n.into()),
+                                (
+                                    "keys",
+                                    J::Arr(
+                                        g.shape_keys(s)
+                                            .into_iter()
+                                            .map(|k| {
+                                                g.heap
+                                                    .atom_name(djs_core::heap::Atom::from_id(k))
+                                                    .into()
+                                            })
+                                            .collect(),
+                                    ),
                                 ),
-                            ),
-                        ])
-                    })
-                    .collect(),
+                            ])
+                        })
+                        .collect(),
+                ),
             ),
-        ),
-    ]);
+        ],
+        J::obj(vec![
+            ("shapes", rest_shapes.into()),
+            ("shape_bytes", rest_bytes.into()),
+            ("objects", rest_objects.into()),
+        ]),
+    );
     section("shapes", "shapes", t, json)
 }
 
-pub fn functions(g: &Graph, o: &Options) -> Section {
+pub fn functions(g: &Graph, o: &Options, scope: &Scope) -> Section {
     let a = g.heap.arena();
     // Templates by script: count, the template cells and their parts, bytecode alone.
     let mut scripts: HashMap<String, [u64; 4]> = HashMap::new();
     let mut closures: HashMap<String, u64> = HashMap::new();
     let mut builtins = Tally::default();
     let (mut hosts, mut boxes, mut box_bytes) = (0u64, 0u64, 0u64);
+    // The reference's part: templates with their parts, closures.
+    let mut rest: HashMap<String, [u64; 4]> = HashMap::new();
+    let mut rest_closures = 0u64;
     for (i, c) in g.cells.iter().enumerate() {
         if !g.live[i] {
             continue;
         }
+        let ours = scope.has(i);
         match c.kind {
+            CellKind::Object if !ours => {
+                if g.class(c.offset) == Some(ObjectClass::Function) {
+                    rest_closures += 1;
+                }
+                continue;
+            }
+            CellKind::BoxCell if !ours => continue,
             CellKind::FuncTemplate => {
-                let e = scripts.entry(g.template_script(c.offset)).or_default();
+                let e = if ours {
+                    scripts.entry(g.template_script(c.offset)).or_default()
+                } else {
+                    rest.entry(String::new()).or_default()
+                };
                 e[0] += 1;
                 e[1] += c.size as u64;
                 for f in [
@@ -921,7 +1113,14 @@ pub fn functions(g: &Graph, o: &Options) -> Section {
     let total: [u64; 4] = rows.iter().fold([0; 4], |acc, (_, v)| {
         [acc[0] + v[0], acc[1] + v[1], acc[2] + v[2], acc[3] + v[3]]
     });
-    let mut t = format!(
+    let r = rest.get("").copied().unwrap_or_default();
+    let mut t = scope.intro();
+    t.push_str(&scope.rest(format!(
+        "{} templates, {} KB with their parts; {rest_closures} closures",
+        r[0],
+        kbu(r[1])
+    )));
+    t += &format!(
         "  {} templates, {} KB with their parts ({} KB of bytecode); {} closures; {} boxes ({} KB) of captured variables; {} host functions\n\n",
         total[0],
         kbu(total[1]),
@@ -943,10 +1142,12 @@ pub fn functions(g: &Graph, o: &Options) -> Section {
             ]
         })
         .collect();
-    t.push_str(&table(
-        &["script", "templates", "KB", "bytecode KB", "closures"],
-        &trows,
-    ));
+    if !trows.is_empty() {
+        t.push_str(&table(
+            &["script", "templates", "KB", "bytecode KB", "closures"],
+            &trows,
+        ));
+    }
     let b = builtins.sorted();
     if !b.is_empty() {
         t.push_str("\n  builtin closures (promise resolvers, Promise.all elements, ...):\n");
@@ -957,31 +1158,38 @@ pub fn functions(g: &Graph, o: &Options) -> Section {
             .collect();
         t.push_str(&table(&["intrinsic", "closures"], &brows));
     }
-    let json = J::obj(vec![
-        ("templates", total[0].into()),
-        ("template_bytes", total[1].into()),
-        ("bytecode_bytes", total[2].into()),
-        ("closures", total[3].into()),
-        ("boxes", boxes.into()),
-        ("host_functions", hosts.into()),
-        (
-            "scripts",
-            J::Arr(
-                rows.iter()
-                    .map(|(s, v)| {
-                        J::obj(vec![
-                            ("script", s.clone().into()),
-                            ("templates", v[0].into()),
-                            ("bytes", v[1].into()),
-                            ("bytecode_bytes", v[2].into()),
-                            ("closures", v[3].into()),
-                        ])
-                    })
-                    .collect(),
+    let json = scope.json(
+        vec![
+            ("templates", total[0].into()),
+            ("template_bytes", total[1].into()),
+            ("bytecode_bytes", total[2].into()),
+            ("closures", total[3].into()),
+            ("boxes", boxes.into()),
+            ("host_functions", hosts.into()),
+            (
+                "scripts",
+                J::Arr(
+                    rows.iter()
+                        .map(|(s, v)| {
+                            J::obj(vec![
+                                ("script", s.clone().into()),
+                                ("templates", v[0].into()),
+                                ("bytes", v[1].into()),
+                                ("bytecode_bytes", v[2].into()),
+                                ("closures", v[3].into()),
+                            ])
+                        })
+                        .collect(),
+                ),
             ),
-        ),
-        ("builtin_closures", builtins.json()),
-    ]);
+            ("builtin_closures", builtins.json()),
+        ],
+        J::obj(vec![
+            ("templates", r[0].into()),
+            ("template_bytes", r[1].into()),
+            ("closures", rest_closures.into()),
+        ]),
+    );
     section("functions", "functions and bytecode", t, json)
 }
 

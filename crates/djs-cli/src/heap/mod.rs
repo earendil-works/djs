@@ -20,7 +20,7 @@ use self::graph::Graph;
 use self::json::J;
 pub use self::report::{Options, Section};
 
-const USAGE: &str = "usage: djs heap [--json] [--top N] [--reference FILE] [--diff FILE|base|none] [--only SECTIONS] <dump>\n\
+const USAGE: &str = "usage: djs heap [--json] [--top N] [--reference FILE] [--diff FILE|base|none] [--only SECTIONS] [--all] <dump>\n\
   <dump>       a heap image (the REPL's `.snapshot --raw`, Vm::bytes), a session image or\n\
                a snapshot container (Sandbox.bytes(), pi's snapshot(), `.snapshot`)\n\
   --reference  the image a container is compressed against, if it is not this build's\n\
@@ -28,6 +28,8 @@ const USAGE: &str = "usage: djs heap [--json] [--top N] [--reference FILE] [--di
   --diff       compare with this image instead of the container's reference (the\n\
                default; this build's base for a raw image of this build), or not at all\n\
   --only       some of: summary,kinds,diff,prefix,largest,strings,shapes,functions,session\n\
+  --all        largest, strings, shapes and functions over the whole image, not only the\n\
+               session's own part (the cells new or changed against the reference)\n\
   --top N      rows per list (default 10)\n\
   --json       one JSON object, a key per section";
 
@@ -47,6 +49,7 @@ fn limit(len: usize) -> usize {
 
 pub fn main(args: &[String]) -> i32 {
     let mut json = false;
+    let mut all = false;
     let mut top = 10;
     let mut reference: Option<String> = None;
     let mut diff: Option<String> = None;
@@ -58,6 +61,10 @@ pub fn main(args: &[String]) -> i32 {
         let r = match a.as_str() {
             "--json" => {
                 json = true;
+                Ok(())
+            }
+            "--all" => {
+                all = true;
                 Ok(())
             }
             "--top" => value("--top").and_then(|v| {
@@ -85,7 +92,7 @@ pub fn main(args: &[String]) -> i32 {
         eprintln!("{USAGE}");
         return 2;
     };
-    let opts = Options { top, only };
+    let opts = Options { top, only, all };
     match run(&path, reference.as_deref(), diff.as_deref(), &opts) {
         Ok(sections) => {
             if json {
@@ -203,39 +210,61 @@ pub fn analyze(
 ) -> Result<Vec<Section>, String> {
     let heap = load(image, "the image")?;
     let g = Graph::new(&heap);
+    // The session image against this build's base (D2066), for an image of this build.
+    let session = djs_core::vm::session::session_image(image, djs_prelude::BASE).ok();
     let mut out = Vec::new();
     if o.wants("summary") {
-        out.push(report::overview(input, &g, collected_len(image, &g)));
+        out.push(report::overview(
+            input,
+            &g,
+            collected_len(image, &g),
+            session.as_ref().map(Vec::len),
+        ));
     }
     if o.wants("kinds") {
         out.push(report::kinds(&g));
     }
-    if o.wants("diff")
-        && let Some((name, bytes)) = reference
+    let scoped = ["largest", "strings", "shapes", "functions"]
+        .iter()
+        .any(|k| o.wants(k));
+    let mut scope = report::Scope::whole();
+    if let Some((name, bytes)) = reference
+        && (o.wants("diff") || (scoped && !o.all))
     {
         let rheap = load(bytes, "the reference image")?;
         let rg = Graph::new(&rheap);
         let d = diff::diff(&rg, &g);
-        out.push(report::diff_section(name, &rg, &g, &d, o));
+        if o.wants("diff") {
+            out.push(report::diff_section(name, &rg, &g, &d, o));
+        }
+        if !o.all {
+            // The session's own part (D2432).
+            scope.own = Some(
+                d.status
+                    .iter()
+                    .map(|s| matches!(s, diff::Status::New | diff::Status::Changed))
+                    .collect(),
+            );
+            scope.reference = name.to_string();
+        }
     }
-    // The builtin prefix against this build's base (D2066), for an image of this build.
     if o.wants("prefix")
-        && let Ok(s) = djs_core::vm::session::session_image(image, djs_prelude::BASE)
-        && let Ok(d) = djs_core::vm::session::session_diff(&s)
+        && let Some(s) = &session
+        && let Ok(d) = djs_core::vm::session::session_diff(s)
     {
         out.push(report::prefix(&g, &d, o));
     }
     if o.wants("largest") {
-        out.push(report::largest(&g, o));
+        out.push(report::largest(&g, o, &scope));
     }
     if o.wants("strings") {
-        out.push(report::strings(&g, o));
+        out.push(report::strings(&g, o, &scope));
     }
     if o.wants("shapes") {
-        out.push(report::shapes(&g, o));
+        out.push(report::shapes(&g, o, &scope));
     }
     if o.wants("functions") {
-        out.push(report::functions(&g, o));
+        out.push(report::functions(&g, o, &scope));
     }
     if o.wants("session") {
         out.push(report::session(&g, o));

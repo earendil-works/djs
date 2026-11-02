@@ -92,7 +92,7 @@ fn data_shows_up_with_its_path_strings_and_shape() {
     assert!(d.at(&["new_subtrees", "0", "cells"]).num() >= 600.0);
     assert_eq!(
         json(&r, "shapes")
-            .at(&["common", "1", "keys"])
+            .at(&["common", "0", "keys"])
             .at(&["0"])
             .str(),
         "id"
@@ -318,4 +318,76 @@ fn a_pi_session_waiting_on_a_tool() {
         json(&r2, "summary").at(&["container", "reference"]).str(),
         "pi's prelude image"
     );
+}
+
+/// D2432: the strings, largest, shapes and functions sections show the session's own
+/// part by default, with the reference's part as totals; `--all` the whole image.
+#[test]
+fn sections_show_the_session_part_unless_all() {
+    let mut vm = sandbox();
+    let st = run_body(
+        &mut vm,
+        "globalThis.kept = { label: 'only here' }; return 1",
+    );
+    assert!(matches!(st, Status::Done(_)), "{st:?}");
+    vm.collect().unwrap();
+    let base = Some(("the base image", djs_prelude::BASE));
+    let own = analyze_image(vm.bytes(), base, &Options::default()).unwrap();
+    let all = analyze_image(
+        vm.bytes(),
+        base,
+        &Options {
+            all: true,
+            ..Options::default()
+        },
+    )
+    .unwrap();
+    let (s, a) = (json(&own, "strings"), json(&all, "strings"));
+    assert_eq!(s.at(&["scope"]).str(), "session");
+    assert_eq!(a.at(&["scope"]).str(), "all");
+    let (n, rest, total) = (
+        s.at(&["flat"]).num(),
+        s.at(&["reference_part", "flat"]).num(),
+        a.at(&["flat"]).num(),
+    );
+    assert!(n > 0.0 && n < 40.0, "{n} session strings");
+    assert_eq!(n + rest, total);
+    assert!(
+        json(&own, "strings")
+            .at(&["largest"])
+            .arr()
+            .iter()
+            .any(|x| x.at(&["preview"]).str() == "only here")
+    );
+    // The base's templates are the reference's part; the session has none of its own
+    // closures but the body's.
+    let f = json(&own, "functions");
+    assert!(f.at(&["templates"]).num() < 5.0);
+    assert!(f.at(&["reference_part", "templates"]).num() > 500.0);
+    assert!(json(&all, "functions").at(&["templates"]).num() > 500.0);
+    let l = json(&own, "largest");
+    assert!(l.at(&["largest", "0", "size"]).num() < 8192.0);
+}
+
+/// D2431, D2432: a session's atoms go to the tail's own entries; one that adds more than
+/// their room regrows that cell, and the diff counts only the words that differ.
+#[test]
+fn a_regrown_atom_table_differs_only_where_it_changed() {
+    let mut vm = sandbox();
+    let st = run_body(
+        &mut vm,
+        "for (let i = 0; i < 40; i++) globalThis['fresh_' + i] = i; return 1",
+    );
+    assert!(matches!(st, Status::Done(_)), "{st:?}");
+    let r = report(&mut vm);
+    let changed = json(&r, "diff").at(&["most_changed"]).arr();
+    let entries = changed
+        .iter()
+        .find(|c| c.at(&["path"]).str() == "<atoms><entries>")
+        .expect("the session's atom entries changed");
+    let (differing, size) = (
+        entries.at(&["differing_bytes"]).num(),
+        entries.at(&["size"]).num(),
+    );
+    assert!(differing < size, "{differing} of {size} bytes");
 }
