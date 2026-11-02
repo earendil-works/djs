@@ -32,10 +32,21 @@ pub struct Exporter<'a> {
 pub fn record_fields(schema: &str) -> &'static [&'static str] {
     match schema {
         // Before Promise.allKeyed (D1972) the element record had no `keys`.
-        "PromiseElement" if cfg!(feature = "old") => {
-            &["alreadyCalled", "index", "values", "capability", "remaining"]
-        }
-        "PromiseElement" => &["alreadyCalled", "index", "values", "capability", "remaining", "keys"],
+        "PromiseElement" if cfg!(feature = "old") => &[
+            "alreadyCalled",
+            "index",
+            "values",
+            "capability",
+            "remaining",
+        ],
+        "PromiseElement" => &[
+            "alreadyCalled",
+            "index",
+            "values",
+            "capability",
+            "remaining",
+            "keys",
+        ],
         "Counter" => &["count"],
         "Finally" => &["onFinally", "constructor"],
         _ => &[],
@@ -167,7 +178,8 @@ impl<'a> Exporter<'a> {
         let mut fields = serde_json::Map::new();
         for i in 0..n {
             let Some(name) = names.get(i as usize) else {
-                self.errors.push(format!("record {schema}: slot {i} has no name"));
+                self.errors
+                    .push(format!("record {schema}: slot {i} has no name"));
                 continue;
             };
             let v = h.object_slot(o, i);
@@ -213,9 +225,12 @@ impl<'a> Exporter<'a> {
                 if t.script.is_empty() {
                     // Privileged code (the prelude) is part of the engine: it must be
                     // named by path, never carried.
-                    let name: u32 = h.arena().get(t.off, djs_core::heap::cells::FuncTemplate::NAME);
+                    let name: u32 = h
+                        .arena()
+                        .get(t.off, djs_core::heap::cells::FuncTemplate::NAME);
                     let name = h.atom_name(djs_core::heap::Atom::from_id(name));
-                    self.errors.push(format!("an unnamed builtin function ({name})"));
+                    self.errors
+                        .push(format!("an unnamed builtin function ({name})"));
                 }
                 let mut captures = Vec::new();
                 for i in 0..t.captures {
@@ -233,10 +248,7 @@ impl<'a> Exporter<'a> {
             }
             ObjectClass::BuiltinClosure => {
                 let id = h.object_slot(o, 0).as_int().unwrap_or(-1);
-                let name = INTRINSICS
-                    .get(id as usize)
-                    .map(|i| i.name)
-                    .unwrap_or("?");
+                let name = INTRINSICS.get(id as usize).map(|i| i.name).unwrap_or("?");
                 let data = h.object_slot(o, 1);
                 // The schema of the closure's data record follows from its kind.
                 let schema = match name {
@@ -268,7 +280,8 @@ impl<'a> Exporter<'a> {
                         let f = va_get(h, r, 3 * k + 1);
                         let rj = va_get(h, r, 3 * k + 2);
                         let (cap, f, rj) = (self.value(cap), self.value(f), self.value(rj));
-                        reactions.push(json!({"capability": cap, "onFulfilled": f, "onRejected": rj}));
+                        reactions
+                            .push(json!({"capability": cap, "onFulfilled": f, "onRejected": rj}));
                     }
                 }
                 let proto = self.proto(o);
@@ -294,7 +307,8 @@ impl<'a> Exporter<'a> {
             ObjectClass::HostFunction => {
                 // The embedder's function: re-registered by id on import.
                 let id = h.object_slot(o, 0).as_int().unwrap_or(-1);
-                let is_async = h.cell_flags(cell) & djs_core::heap::cells::flags::OBJ_HOST_ASYNC != 0;
+                let is_async =
+                    h.cell_flags(cell) & djs_core::heap::cells::flags::OBJ_HOST_ASYNC != 0;
                 let props = self.props(o, false);
                 json!({"t": "host-function", "id": id, "async": is_async, "props": props})
             }
@@ -369,12 +383,17 @@ impl<'a> Exporter<'a> {
             }
             if name.is_empty() || name.starts_with('<') {
                 if !v.is_undefined() {
-                    self.errors.push(format!("hidden local {name:?} holds a value"));
+                    self.errors
+                        .push(format!("hidden local {name:?} holds a value"));
                 }
                 continue;
             }
             let k = seen.entry(name.clone()).or_insert(0);
-            let key = if *k == 0 { name.clone() } else { format!("{name}#{k}") };
+            let key = if *k == 0 {
+                name.clone()
+            } else {
+                format!("{name}#{k}")
+            };
             *k += 1;
             bindings.push(json!([key, self.value(v)]));
         }
@@ -398,7 +417,8 @@ impl<'a> Exporter<'a> {
         let promise = self.value(h.object_slot(g, G_PROMISE));
         let fid = self.function_id(&t);
         // `_build`: this build's own coordinates, for the report only; import ignores them.
-        let build = json!({"pc": f.pc, "frame": f.values.len(), "locals": t.locals, "code": t.code.len()});
+        let build =
+            json!({"pc": f.pc, "frame": f.values.len(), "locals": t.locals, "code": t.code.len()});
         json!({"t": "async", "_build": build, "fn": fid, "callee": callee, "site": {"line": site.0, "col": site.1},
                "this": this, "argc": argc, "args": args, "bindings": bindings,
                "operands": operands, "promise": promise})
@@ -436,7 +456,12 @@ pub fn export(s: &mut Session) -> Result<J, Vec<String>> {
         return Err(vec!["not waiting on the host".into()]);
     }
     s.vm.collect().expect("collect");
-    let build = format!("{:08x}", s.vm.heap().arena().get::<u32>(0, djs_core::heap::cells::Roots::BUILD));
+    let build = format!(
+        "{:08x}",
+        s.vm.heap()
+            .arena()
+            .get::<u32>(0, djs_core::heap::cells::Roots::BUILD)
+    );
     let heap = s.vm.heap();
     let mut ex = Exporter::new(&s.vm);
     let promises = pending_promises(heap);
@@ -458,15 +483,19 @@ pub fn export(s: &mut Session) -> Result<J, Vec<String>> {
     let g = s.vm.global();
     for k in heap.own_keys(g) {
         let name = heap.atom_name(k);
-        let Some(p) = heap.get_own_property(g, k) else { continue };
+        let Some(p) = heap.get_own_property(g, k) else {
+            continue;
+        };
         let fresh_has = {
             let fh = fresh.heap();
-            fh.own_keys(fresh.global()).iter().any(|fk| fh.atom_name(*fk) == name)
+            fh.own_keys(fresh.global())
+                .iter()
+                .any(|fk| fh.atom_name(*fk) == name)
         };
         let builtin_value = match p {
-            Property::Data { value, .. } => {
-                value.as_object().is_none_or(|o| ex.builtins.contains_key(&o.offset()))
-            }
+            Property::Data { value, .. } => value
+                .as_object()
+                .is_none_or(|o| ex.builtins.contains_key(&o.offset())),
             _ => true,
         };
         if fresh_has && builtin_value {

@@ -122,7 +122,9 @@ pub fn import(snap: &J) -> Result<Session, String> {
         } else {
             CompileOptions::script(name)
         };
-        let main = vm.compile(source.as_bytes(), &opts).map_err(|e| e.message)?;
+        let main = vm
+            .compile(source.as_bytes(), &opts)
+            .map_err(|e| e.message)?;
         let root = closure_template(vm.heap(), main.as_object().unwrap()).unwrap();
         collect_templates(vm.heap(), root, &mut templates);
         scripts.push((name.to_string(), source.to_string()));
@@ -144,7 +146,10 @@ pub fn import(snap: &J) -> Result<Session, String> {
     let mut pending = Vec::new();
     for p in snap["pending"].as_array().unwrap() {
         let fname = p["fn"].as_str().unwrap();
-        let key = vm.heap_mut().atom_str(fname).map_err(|e| format!("{e:?}"))?;
+        let key = vm
+            .heap_mut()
+            .atom_str(fname)
+            .map_err(|e| format!("{e:?}"))?;
         let f = vm
             .heap()
             .get_own_property(vm.global(), key)
@@ -160,7 +165,8 @@ pub fn import(snap: &J) -> Result<Session, String> {
             .iter()
             .map(|a| Value::string(vm.heap_mut().alloc_str(a).unwrap()))
             .collect();
-        vm.call(f, Value::UNDEFINED, &args).map_err(|e| format!("{e:?}"))?;
+        vm.call(f, Value::UNDEFINED, &args)
+            .map_err(|e| format!("{e:?}"))?;
         vm.run(1_000_000);
         let ids = vm.new_host_calls();
         let id = *ids.last().ok_or("no host call")?;
@@ -169,9 +175,16 @@ pub fn import(snap: &J) -> Result<Session, String> {
             .find(|(c, _)| *c == id)
             .unwrap()
             .1;
-        let node = p["promise"]["ref"].as_u64().ok_or("pending promise is not a node")? as usize;
+        let node = p["promise"]["ref"]
+            .as_u64()
+            .ok_or("pending promise is not a node")? as usize;
         imp.cells[node] = promise.offset();
-        pending.push((id, p["seq"].as_u64().unwrap() as u32, fname.to_string(), texts));
+        pending.push((
+            id,
+            p["seq"].as_u64().unwrap() as u32,
+            fname.to_string(),
+            texts,
+        ));
     }
     // The embedder's functions, registered again by id.
     for (i, n) in nodes.iter().enumerate() {
@@ -207,7 +220,11 @@ pub fn import(snap: &J) -> Result<Session, String> {
             }
             "array" => heap.new_array(None, 0).map(|o| o.offset()),
             "collection" => {
-                let class = if n["class"] == "Map" { ObjectClass::Map } else { ObjectClass::Set };
+                let class = if n["class"] == "Map" {
+                    ObjectClass::Map
+                } else {
+                    ObjectClass::Set
+                };
                 let p = intrinsic(heap, Intrinsic::ObjectProto).as_object().unwrap();
                 heap.collection_new(class, p).map(|o| o.offset())
             }
@@ -262,14 +279,16 @@ pub fn import(snap: &J) -> Result<Session, String> {
                     let k = heap.atom_str("stack").map_err(|e| format!("{e:?}"))?;
                     let v = Value::string(heap.alloc_str(stack).map_err(|e| format!("{e:?}"))?);
                     let d = PropertyDescriptor::data(v, PropFlags::new(true, false, true));
-                    heap.define_own_property(o, k, &d).map_err(|e| format!("{e:?}"))?;
+                    heap.define_own_property(o, k, &d)
+                        .map_err(|e| format!("{e:?}"))?;
                 }
             }
             "host-function" => {
                 // Recreated with its own `name` and `length`: replaced by the snapshot's.
                 for key in ["name", "length"] {
                     let k = heap.atom_str(key).map_err(|e| format!("{e:?}"))?;
-                    heap.delete_own_property(o, k);
+                    // (A Result here, a bool in older trees.)
+                    let _ = heap.delete_own_property(o, k);
                 }
                 imp.define_props(heap, o, &n["props"])?;
             }
@@ -305,7 +324,9 @@ pub fn import(snap: &J) -> Result<Session, String> {
                     values.push(imp.value(heap, e)?);
                 }
                 // Dense elements, written as an array of this build would hold them.
-                let tmp = heap.new_array_from_values(None, &values).map_err(|e| format!("{e:?}"))?;
+                let tmp = heap
+                    .new_array_from_values(None, &values)
+                    .map_err(|e| format!("{e:?}"))?;
                 let el: Ref = heap.arena().get(tmp.offset(), Object::ELEMENTS);
                 heap.arena_mut().set(o.offset(), Object::ELEMENTS, el);
                 heap.set_object_slot(o, 0, Value::number(values.len() as f64));
@@ -323,9 +344,9 @@ pub fn import(snap: &J) -> Result<Session, String> {
                     .collect();
                 for k in 0..tinfo.captures {
                     let name = tinfo.names[(tinfo.locals + k) as usize].clone();
-                    let j = caps
-                        .get(name.as_str())
-                        .ok_or(format!("closure {span:?}: no capture {name} in the snapshot"))?;
+                    let j = caps.get(name.as_str()).ok_or(format!(
+                        "closure {span:?}: no capture {name} in the snapshot"
+                    ))?;
                     let v = imp.value(heap, j)?;
                     heap.set_object_slot(o, 1 + k, v);
                 }
@@ -342,7 +363,10 @@ pub fn import(snap: &J) -> Result<Session, String> {
                     .ok_or(format!("no intrinsic {name} in this build"))?;
                 heap.set_object_slot(o, 0, Value::int(id as i32));
                 if std::env::var("PORTABLE_DEBUG").is_ok() {
-                    eprintln!("builtin closure {name}: exporter id {} -> here {id}", n["_build"]["id"]);
+                    eprintln!(
+                        "builtin closure {name}: exporter id {} -> here {id}",
+                        n["_build"]["id"]
+                    );
                 }
                 let d = imp.value(heap, &n["data"])?;
                 heap.set_object_slot(o, 1, d);
@@ -412,7 +436,10 @@ pub fn import(snap: &J) -> Result<Session, String> {
     s.scripts = scripts;
     for (name, j) in snap["roots"].as_object().unwrap() {
         let v = imp.value(s.vm.heap_mut(), j)?;
-        let h = s.vm.heap_mut().new_handle(v).map_err(|e| format!("{e:?}"))?;
+        let h =
+            s.vm.heap_mut()
+                .new_handle(v)
+                .map_err(|e| format!("{e:?}"))?;
         s.roots.push((name.clone(), h));
     }
     s.pending = pending;
@@ -481,7 +508,11 @@ fn import_activation(imp: &Importer, heap: &mut Heap, g: Obj, n: &J) -> Result<(
             Value::UNDEFINED
         } else {
             let k = seen.entry(name.clone()).or_insert(0);
-            let key = if *k == 0 { name.clone() } else { format!("{name}#{k}") };
+            let key = if *k == 0 {
+                name.clone()
+            } else {
+                format!("{name}#{k}")
+            };
             *k += 1;
             let j = bindings
                 .remove(&key)
@@ -511,9 +542,20 @@ fn import_activation(imp: &Importer, heap: &mut Heap, g: Obj, n: &J) -> Result<(
     if std::env::var("PORTABLE_DEBUG").is_ok() {
         eprintln!(
             "activation {}:{}-{} await at {}:{}: exporter pc {} frame {} locals {} code {} B -> here pc {} frame {} locals {} code {} B, roles {:?}",
-            span.0, span.1, span.2, site.0, site.1,
-            n["_build"]["pc"], n["_build"]["frame"], n["_build"]["locals"], n["_build"]["code"],
-            resume_pc, frame.len(), t.locals, t.code.len(), roles
+            span.0,
+            span.1,
+            span.2,
+            site.0,
+            site.1,
+            n["_build"]["pc"],
+            n["_build"]["frame"],
+            n["_build"]["locals"],
+            n["_build"]["code"],
+            resume_pc,
+            frame.len(),
+            t.locals,
+            t.code.len(),
+            roles
         );
     }
     let arr = va_new(heap, &frame);

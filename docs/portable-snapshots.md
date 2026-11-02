@@ -648,8 +648,8 @@ node scripts/snapshot-research/await-sites.mjs --jsonl ../../work/scratch/0130/e
 (cd scripts/snapshot-research/portable && cargo build --offline)
 target/debug/portable roundtrip scripts/snapshot-research/portable/cases/*.js
 target/debug/portable harvest --sources OUT/src tests/corpus/codemode-harvest/*.js   # wrapped sources
-node scripts/snapshot-research/await-sites.mjs --files OUT/src/*.js --sites OUT/sites-raw.json
-#   (rename the keys to CASE:line:col, as in the issue log)
+node scripts/snapshot-research/await-sites.mjs --files OUT/src/*.js --sites OUT/sites.json \
+    --acorn PATH/TO/node_modules/acorn
 target/debug/portable harvest --sites OUT/sites.json --save OUT/new tests/corpus/codemode-harvest/*.js
 # an older build: the same crate in a git archive of the older commit
 git archive 1b6c2098 | tar -x -C OLD && mkdir -p OLD/scripts/snapshot-research

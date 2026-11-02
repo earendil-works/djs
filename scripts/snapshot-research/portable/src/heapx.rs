@@ -84,7 +84,10 @@ pub fn template_info(heap: &Heap, t: u32) -> TemplateInfo {
         Vec::new()
     };
     let span = if has_field(heap, t, FuncTemplate::SRC_END.offset) {
-        (a.get(t, FuncTemplate::SRC_START), a.get(t, FuncTemplate::SRC_END))
+        (
+            a.get(t, FuncTemplate::SRC_START),
+            a.get(t, FuncTemplate::SRC_END),
+        )
     } else {
         (0, 0)
     };
@@ -134,17 +137,6 @@ pub fn template_info(heap: &Heap, t: u32) -> TemplateInfo {
     }
 }
 
-/// The source text of a template's script.
-pub fn template_source(heap: &Heap, t: u32) -> Option<String> {
-    let a = heap.arena();
-    if !has_field(heap, t, FuncTemplate::SCRIPT.offset) {
-        return None;
-    }
-    let s: Ref = a.get(t, FuncTemplate::SCRIPT);
-    let src: Ref = a.get(s.get()?, Script::SOURCE);
-    Some(heap.str_to_string(str_at(src.get()?)))
-}
-
 impl TemplateInfo {
     /// Every `await` of the code: (pc of the await, its line:col, the pc after it).
     pub fn awaits(&self) -> Vec<(u32, (u32, u32), u32)> {
@@ -164,7 +156,6 @@ impl TemplateInfo {
 
 /// A suspended frame, read from a Generator object.
 pub struct Frame {
-    pub activation: Obj,
     pub callee: Obj,
     pub template: u32,
     pub pc: u32,
@@ -179,7 +170,6 @@ pub fn frame_of(heap: &Heap, g: Obj) -> Option<Frame> {
     let callee = values.first()?.as_object()?;
     let template = closure_template(heap, callee)?;
     Some(Frame {
-        activation: g,
         callee,
         template,
         pc: heap.object_slot(g, G_PC).as_int()? as u32,
@@ -335,7 +325,6 @@ pub fn pending_promises(heap: &Heap) -> Vec<(u32, Obj)> {
 
 #[allow(dead_code)]
 pub fn object_slot_count(heap: &Heap, o: Obj) -> u32 {
-    let _ = Object::SLOTS;
     heap.object_slot_count(o)
 }
 
@@ -355,7 +344,8 @@ pub fn va_new(heap: &mut Heap, values: &[Value]) -> u32 {
         .alloc_cell(djs_core::heap::CellKind::ValueArray, size)
         .expect("oom");
     for (i, v) in values.iter().enumerate() {
-        heap.arena_mut().write(ValueArray::VALUES.at(arr, i as u32), *v);
+        heap.arena_mut()
+            .write(ValueArray::VALUES.at(arr, i as u32), *v);
     }
     heap.arena_mut().set(arr, ValueArray::LEN, n);
     arr

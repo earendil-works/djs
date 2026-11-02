@@ -68,12 +68,29 @@ pub fn main(args: &[String]) {
             _ => cases.push(a.clone()),
         }
     }
+    // await-sites.mjs keys sites by `path/to/CASE.js:line:col`; here by `CASE:line:col`.
     let sites: J = sites_path
-        .map(|p| serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap())
+        .map(|p| {
+            let raw: J = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+            let mut m = serde_json::Map::new();
+            for (k, v) in raw.as_object().unwrap() {
+                let mut parts = k.rsplitn(3, ':');
+                let (col, line, file) = (parts.next(), parts.next(), parts.next());
+                if let (Some(c), Some(l), Some(f)) = (col, line, file) {
+                    let stem = Path::new(f).file_stem().unwrap().to_string_lossy();
+                    m.insert(format!("{stem}:{l}:{c}"), v.clone());
+                }
+            }
+            J::Object(m)
+        })
         .unwrap_or(json!({}));
     let mut t = Totals::default();
     for path in &cases {
-        let name = Path::new(path).file_stem().unwrap().to_string_lossy().to_string();
+        let name = Path::new(path)
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
         let text = std::fs::read_to_string(path).unwrap();
         let (src, harness_line) = case_source(&text);
         if let Some(dir) = &sources {
@@ -189,8 +206,22 @@ pub fn main(args: &[String]) {
                         all_ok = false;
                         if std::env::var("PORTABLE_DEBUG").is_ok() {
                             let got = transcript(&r);
-                            let i = got.chars().zip(want.chars()).take_while(|(a, b)| a == b).count();
-                            eprintln!("{name}@{k}: differs at {i}:\n got  {:?}\n want {:?}", got.chars().skip(i.saturating_sub(40)).take(160).collect::<String>(), want.chars().skip(i.saturating_sub(40)).take(160).collect::<String>());
+                            let i = got
+                                .chars()
+                                .zip(want.chars())
+                                .take_while(|(a, b)| a == b)
+                                .count();
+                            eprintln!(
+                                "{name}@{k}: differs at {i}:\n got  {:?}\n want {:?}",
+                                got.chars()
+                                    .skip(i.saturating_sub(40))
+                                    .take(160)
+                                    .collect::<String>(),
+                                want.chars()
+                                    .skip(i.saturating_sub(40))
+                                    .take(160)
+                                    .collect::<String>()
+                            );
                         }
                         bump(&mut t.refusals, "continued: transcript differs");
                     }
@@ -227,7 +258,10 @@ pub fn main(args: &[String]) {
     t.image_bytes.sort();
     println!(
         "collected image at the same points: median {} B; export median {} us, import median {} us (native dev build, both include building a fresh realm)",
-        t.image_bytes.get(t.image_bytes.len() / 2).copied().unwrap_or(0),
+        t.image_bytes
+            .get(t.image_bytes.len() / 2)
+            .copied()
+            .unwrap_or(0),
         med_of(&mut t.export_us),
         med_of(&mut t.import_us)
     );

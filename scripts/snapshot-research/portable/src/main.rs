@@ -24,7 +24,10 @@ fn report(s: &Session) -> String {
         out += o;
         out.push('\n');
     }
-    out += &format!("[{}]\n", s.finished.clone().unwrap_or("not finished".into()));
+    out += &format!(
+        "[{}]\n",
+        s.finished.clone().unwrap_or("not finished".into())
+    );
     out
 }
 
@@ -125,7 +128,10 @@ fn main() {
             let t1 = t0.elapsed();
             let t0 = std::time::Instant::now();
             let _ = session::new_vm();
-            println!("builtin paths: {n} objects in {t1:?}; a fresh realm in {:?}", t0.elapsed());
+            println!(
+                "builtin paths: {n} objects in {t1:?}; a fresh realm in {:?}",
+                t0.elapsed()
+            );
         }
         Some("harvest") => sites::main(&args[1..]),
         Some("import-all") => sites::import_all(&args[1], args.get(2).map(|s| s.as_str())),

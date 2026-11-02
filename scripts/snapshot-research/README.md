@@ -1,4 +1,4 @@
-# Snapshot design measurements (issues 0088, 0117, 0133, 0140)
+# Snapshot design measurements (issues 0088, 0117, 0133, 0140, 0141)
 
 Two tools on the same six cases (`cases/`), neither part of the workspace or the gate (like
 `scripts/determinism/probe`):
@@ -17,6 +17,19 @@ Two more for snapshots across djs versions (docs/snapshot-versioning.md):
 - `upgrade.ts OLD [OUT]`: a Sandbox and a pi session suspended on an older build (OLD, a
   `git archive` of an older commit with its djs-wasm built) and restored on this one:
   refused; restored with the old build (an engine registry); replayed on this build.
+
+And two for portable snapshots (docs/portable-snapshots.md, 0141):
+
+- `await-sites.mjs`: classifies every `await` of codemode scripts by what a portable
+  snapshot would have to describe there (bindings only, a for-of iterator, held
+  expression operands by role, finally/switch state), from an ECMAScript AST (acorn,
+  passed with `--acorn`). On the private extraction it prints counts only.
+- `portable/`: the prototype. A waiting session exported as an engine-independent graph
+  by one build and imported by another (`export`, `import`, `roundtrip`), and the same
+  at the idle points of the harvested corpus (`harvest`, `import-all`). Standalone like
+  snaplab; it builds unchanged in a `git archive` of an older commit (copy the directory
+  to the same place, build with `--features old`). docs/portable-snapshots.md has the
+  commands and the results.
 
 ```sh
 scripts/snapshot-research/run.sh [out-dir] [case.js ...]                # snaplab

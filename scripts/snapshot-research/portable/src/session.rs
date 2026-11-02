@@ -46,7 +46,11 @@ pub fn new_vm() -> Vm {
     let mut vm = djs_prelude::new_vm(VmOptions::default()).expect("vm");
     vm.set_now(1_700_000_000_000.0);
     vm.set_time_zone_offset(0);
-    for (id, name, is_async) in [(TOOL, "tool", true), (EMIT, "emit", false), (TICK, "__tick", true)] {
+    for (id, name, is_async) in [
+        (TOOL, "tool", true),
+        (EMIT, "emit", false),
+        (TICK, "__tick", true),
+    ] {
         let f = if is_async {
             vm.new_async_host_function(id, name)
         } else {
@@ -96,7 +100,10 @@ impl Session {
     pub fn start(source: &str) -> Session {
         let mut vm = new_vm();
         let main = vm
-            .compile(source.as_bytes(), &CompileOptions::async_body("script.js", &[]))
+            .compile(
+                source.as_bytes(),
+                &CompileOptions::async_body("script.js", &[]),
+            )
             .unwrap_or_else(|e| panic!("compile: {} at {}:{}", e.message, e.line, e.col));
         vm.call(main, Value::UNDEFINED, &[]).expect("call");
         let mut s = Session::with_vm(vm);
@@ -108,28 +115,34 @@ impl Session {
     pub fn start_case(case: &str) -> Result<Session, String> {
         let vm = new_vm();
         let mut s = Session::with_vm(vm);
-        let prelude = s
-            .vm
-            .compile(PRELUDE.as_bytes(), &CompileOptions::script("prelude.js"))
-            .map_err(|e| e.message)?;
+        let prelude =
+            s.vm.compile(PRELUDE.as_bytes(), &CompileOptions::script("prelude.js"))
+                .map_err(|e| e.message)?;
         let global = Value::object(s.vm.global());
         let setup = s.call_sync(prelude, global, &[])?;
         let host = s.vm.new_object().map_err(|e| format!("{e:?}"))?;
         for (id, name) in [(OUTPUT, "output"), (DONE, "done")] {
-            let f = s.vm.new_host_function(id, name).map_err(|e| format!("{e:?}"))?;
+            let f =
+                s.vm.new_host_function(id, name)
+                    .map_err(|e| format!("{e:?}"))?;
             s.vm.define(host, name, f).map_err(|e| format!("{e:?}"))?;
         }
         let api = s.call_sync(setup, Value::UNDEFINED, &[Value::object(host)])?;
-        let api = s.vm.heap_mut().new_handle(api).map_err(|e| format!("{e:?}"))?;
+        let api =
+            s.vm.heap_mut()
+                .new_handle(api)
+                .map_err(|e| format!("{e:?}"))?;
         s.roots.push(("api".into(), api));
         let (src, _) = case_source(case);
-        let script = s
-            .vm
-            .compile(src.as_bytes(), &CompileOptions::script("case.js"))
-            .map_err(|e| format!("compile: {}", e.message))?;
+        let script =
+            s.vm.compile(src.as_bytes(), &CompileOptions::script("case.js"))
+                .map_err(|e| format!("compile: {}", e.message))?;
         let global = Value::object(s.vm.global());
         let f = s.call_sync(script, global, &[])?;
-        s.scripts = vec![("prelude.js".into(), PRELUDE.into()), ("case.js".into(), src)];
+        s.scripts = vec![
+            ("prelude.js".into(), PRELUDE.into()),
+            ("case.js".into(), src),
+        ];
         let run = s.api_method("run")?;
         let api = s.vm.heap().get_handle(api);
         s.vm.call(run, api, &[f]).map_err(|e| format!("{e:?}"))?;
@@ -151,9 +164,17 @@ impl Session {
     }
 
     fn api_method(&mut self, name: &str) -> Result<Value, String> {
-        let (_, h) = self.roots.iter().find(|(n, _)| n == "api").ok_or("no api")?;
+        let (_, h) = self
+            .roots
+            .iter()
+            .find(|(n, _)| n == "api")
+            .ok_or("no api")?;
         let api = self.vm.heap().get_handle(*h).as_object().ok_or("api")?;
-        let key = self.vm.heap_mut().atom_str(name).map_err(|e| format!("{e:?}"))?;
+        let key = self
+            .vm
+            .heap_mut()
+            .atom_str(name)
+            .map_err(|e| format!("{e:?}"))?;
         self.vm
             .heap()
             .find_property(api, key)
