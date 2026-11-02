@@ -1,7 +1,7 @@
 # 0142: Goldilocks snapshots: minimal, and a chance to survive djs/prelude/globals changes
 
-status: open
-agent: -
+status: in-progress
+agent: portable
 branch: issue/0142-goldilocks-snapshots
 depends-on: 0117, 0136, 0140, 0141
 guide: docs/guide/snapshots.md (later, if adopted)
