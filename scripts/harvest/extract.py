@@ -7,7 +7,13 @@ and whether the run failed. Session data is private: OUT must stay in
 work/scratch/0118/ (gitignored), and nothing here prints session content.
 
     scripts/harvest/extract.py [SESSIONS_DIR] OUT
+
+SESSIONS_DIR may also hold p2 session databases (`*.sqlite`, the p2 app's
+~/.pi/p2/sessions, pi-durable's schema; 0149). Copy them first (with their -wal/-shm
+files) to work/scratch/: they are opened read-only, and only their `entries` table is
+read. Nothing else under ~/.pi/p2 may be opened (credentials and keys live there).
 """
+import datetime
 import hashlib
 import json
 import os
@@ -18,8 +24,46 @@ import sys
 def session_files(root):
     for dirpath, _, names in os.walk(root):
         for name in names:
-            if name.endswith(".jsonl"):
+            if name.endswith(".jsonl") or name.endswith(".sqlite"):
                 yield os.path.join(dirpath, name)
+
+
+def p2_messages(path):
+    """The messages of a p2 session database (pi-durable's `entries`: one record per
+    entry, its messages under `model`), in commit order per conversation, as the
+    (entry, message) pairs a pi JSONL session gives."""
+    import sqlite3
+
+    db = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
+    try:
+        rows = db.execute("SELECT record FROM entries ORDER BY conversation_id, id").fetchall()
+    finally:
+        db.close()
+    for (record,) in rows:
+        try:
+            entry = json.loads(record)
+        except ValueError:
+            continue
+        if entry.get("kind") not in ("pi.assistant", "pi.tool-result"):
+            continue
+        for m in entry.get("model") or []:
+            if isinstance(m, dict):
+                ts = m.get("timestamp")
+                if isinstance(ts, (int, float)):
+                    ts = datetime.datetime.fromtimestamp(ts / 1000, datetime.timezone.utc).isoformat()
+                yield {"timestamp": ts}, m
+
+
+def jsonl_messages(path):
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if '"codemode' not in line:
+                continue
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue
+            yield entry, entry.get("message") or {}
 
 
 LOAD_KEY_RE = re.compile(r"""\bload\(\s*(["'])((?:(?!\1)[^\\])*)\1\s*\)""")
@@ -79,59 +123,52 @@ def executions(path):
     pending = {}
     decls = {}
     store = {}
-    with open(path, encoding="utf-8", errors="replace") as f:
-        for line in f:
-            if '"codemode' not in line:
+    messages = p2_messages(path) if path.endswith(".sqlite") else jsonl_messages(path)
+    for entry, m in messages:
+        if entry.get("type") == "custom" and entry.get("customType") == "codemode-store":
+            data = entry.get("data") or {}
+            for k in data.get("delete") or []:
+                store.pop(k, None)
+            for k, v in (data.get("set") or {}).items():
+                store[k] = v
+            continue
+        # Declarations come with the tools (the codemode tool's catalog, and each
+        # tool's own sample) and from describeTool() output in earlier scripts.
+        for tool in m.get("toolsAdded") or []:
+            if isinstance(tool, dict):
+                decls.update(declarations(tool.get("description") or ""))
+        if m.get("role") == "toolResult" and m.get("toolName") == "codemode":
+            for c in m.get("content") or []:
+                if isinstance(c, dict) and isinstance(c.get("text"), str) and "): Promise<" in c["text"]:
+                    decls.update(declarations(c["text"]))
+        if m.get("role") == "assistant":
+            for c in m.get("content") or []:
+                if isinstance(c, dict) and c.get("type") == "toolCall" and c.get("name") == "codemode":
+                    code = (c.get("arguments") or {}).get("code")
+                    if isinstance(code, str):
+                        pending[c.get("id")] = code
+        elif m.get("role") == "toolResult" and m.get("toolName") == "codemode":
+            code = pending.pop(m.get("toolCallId"), None)
+            if code is None:
                 continue
-            try:
-                entry = json.loads(line)
-            except ValueError:
-                continue
-            if entry.get("type") == "custom" and entry.get("customType") == "codemode-store":
-                data = entry.get("data") or {}
-                for k in data.get("delete") or []:
-                    store.pop(k, None)
-                for k, v in (data.get("set") or {}).items():
-                    store[k] = v
-                continue
-            m = entry.get("message") or {}
-            # Declarations come with the tools (the codemode tool's catalog, and each
-            # tool's own sample) and from describeTool() output in earlier scripts.
-            for tool in m.get("toolsAdded") or []:
-                if isinstance(tool, dict):
-                    decls.update(declarations(tool.get("description") or ""))
-            if m.get("role") == "toolResult" and m.get("toolName") == "codemode":
-                for c in m.get("content") or []:
-                    if isinstance(c, dict) and isinstance(c.get("text"), str) and "): Promise<" in c["text"]:
-                        decls.update(declarations(c["text"]))
-            if m.get("role") == "assistant":
-                for c in m.get("content") or []:
-                    if isinstance(c, dict) and c.get("type") == "toolCall" and c.get("name") == "codemode":
-                        code = (c.get("arguments") or {}).get("code")
-                        if isinstance(code, str):
-                            pending[c.get("id")] = code
-            elif m.get("role") == "toolResult" and m.get("toolName") == "codemode":
-                code = pending.pop(m.get("toolCallId"), None)
-                if code is None:
-                    continue
-                details = m.get("details") or {}
-                calls = []
-                for c in details.get("calls") or []:
-                    args = c.get("args")
-                    if not isinstance(args, str):
-                        args = json.dumps(args)
-                    calls.append({"name": c.get("name"), "status": c.get("status"), "args": args})
-                called = {toident(c["name"] or "") for c in calls}
-                loads = {k: store[k] for _, k in LOAD_KEY_RE.findall(code) if k in store}
-                yield {
-                    "code": code,
-                    "calls": calls,
-                    "isError": bool(m.get("isError")),
-                    "decls": {k: v for k, v in decls.items() if k in called},
-                    "loads": loads,
-                    # When the run finished (the result entry's time), for usage over time.
-                    "timestamp": entry.get("timestamp") or m.get("timestamp"),
-                }
+            details = m.get("details") or {}
+            calls = []
+            for c in details.get("calls") or []:
+                args = c.get("args")
+                if not isinstance(args, str):
+                    args = json.dumps(args)
+                calls.append({"name": c.get("name"), "status": c.get("status"), "args": args})
+            called = {toident(c["name"] or "") for c in calls}
+            loads = {k: store[k] for _, k in LOAD_KEY_RE.findall(code) if k in store}
+            yield {
+                "code": code,
+                "calls": calls,
+                "isError": bool(m.get("isError")),
+                "decls": {k: v for k, v in decls.items() if k in called},
+                "loads": loads,
+                # When the run finished (the result entry's time), for usage over time.
+                "timestamp": entry.get("timestamp") or m.get("timestamp"),
+            }
 
 
 def toident(name):
@@ -152,9 +189,11 @@ def main():
             n_files += 1
             # A cheap pre-filter: most session files never ran codemode.
             with open(path, "rb") as f:
-                if b'"codemode"' not in f.read():
+                if not path.endswith(".sqlite") and b'"codemode"' not in f.read():
                     continue
             session = hashlib.sha256(path.encode()).hexdigest()[:12]
+            if path.endswith(".sqlite"):
+                session = "p2-" + session
             for i, run in enumerate(executions(path)):
                 run["source"] = f"{session}:{i}"
                 out.write(json.dumps(run) + "\n")
