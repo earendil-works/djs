@@ -27,9 +27,12 @@ export const REFERENCE_PI_PRELUDE = 2;
 
 /** What the container's image is (byte 13, format 2). */
 export const IMAGE_RAW = 0;
-/** A session image (D2066): the roots cell, the changed words of the builtin prefix, and
- * the heap above it. Restoring it needs the module's base image. */
+/** A session image (D2066): the roots cell, the words of the builtin prefix that differ
+ * from the module's base image, and the heap above the prefix. */
 export const IMAGE_SESSION = 1;
+/** A session image whose prefix words are against the container's reference instead (pi's
+ * prelude image already holds the builtins pi's prelude changed). */
+export const IMAGE_SESSION_REFERENCE = 2;
 
 export const COMPRESSION_NONE = 0;
 export const COMPRESSION_ZSTD = 1;
@@ -73,7 +76,7 @@ export interface SnapshotHeader {
   referenceHash: string;
   referenceLength: number;
   imageLength: number;
-  /** `IMAGE_RAW` or `IMAGE_SESSION`. */
+  /** `IMAGE_RAW`, `IMAGE_SESSION` or `IMAGE_SESSION_REFERENCE`. */
   imageKind: number;
   meta: unknown;
   payload: Uint8Array;
@@ -205,6 +208,23 @@ const ROOTS_SIZE_AT = 4;
 const ROOTS_BUILD_AT = 48;
 const ROOTS_BASE_END_AT = 80;
 
+/** FNV-1a 64 of a base image's prefix, by base: hashing 300 KB in JS takes a millisecond. */
+const prefixHashes = new WeakMap<Uint8Array, string>();
+function prefixHash(base: Uint8Array, end: number): string {
+  let h = prefixHashes.get(base);
+  if (h === undefined) {
+    h = fnv1a64(base.subarray(0, end));
+    prefixHashes.set(base, h);
+  }
+  return h;
+}
+
+/** The image as 32-bit words (a copy only if it is not 4-aligned). */
+function words(b: Uint8Array): Uint32Array {
+  const a = b.byteOffset % 4 === 0 ? b : b.slice();
+  return new Uint32Array(a.buffer, a.byteOffset, a.byteLength >>> 2);
+}
+
 function prefixOf(image: Uint8Array): { end: number; build: number; roots: number } | undefined {
   if (image.length < 88 || image[0] !== 1) return undefined;
   const v = new DataView(image.buffer, image.byteOffset, image.byteLength);
@@ -225,11 +245,11 @@ export function sessionImage(image: Uint8Array, base: Uint8Array): Uint8Array | 
   if (p === undefined || p.end === 0 || b === undefined || b.end !== p.end || b.build !== p.build || b.roots !== p.roots) {
     return undefined;
   }
-  const iv = new DataView(image.buffer, image.byteOffset, image.byteLength);
-  const bv = new DataView(base.buffer, base.byteOffset, base.byteLength);
+  const iw = words(image.subarray(0, p.end));
+  const bw = words(base.subarray(0, p.end));
   const diff: number[] = [];
-  for (let o = p.roots; o < p.end; o += 8) {
-    if (iv.getUint32(o, true) !== bv.getUint32(o, true) || iv.getUint32(o + 4, true) !== bv.getUint32(o + 4, true)) diff.push(o);
+  for (let w = p.roots >>> 2; w < p.end >>> 2; w += 2) {
+    if (iw[w] !== bw[w] || iw[w + 1] !== bw[w + 1]) diff.push(w << 2);
   }
   const n = diff.length;
   const pad = (4 * n) % 8;
@@ -240,7 +260,7 @@ export function sessionImage(image: Uint8Array, base: Uint8Array): Uint8Array | 
   v.setUint32(4, SESSION_FORMAT, true);
   v.setUint32(8, p.build, true);
   v.setUint32(12, p.end, true);
-  const h = fnv1a64(base.subarray(0, p.end));
+  const h = prefixHash(base, p.end);
   v.setUint32(16, parseInt(h.slice(8), 16), true);
   v.setUint32(20, parseInt(h.slice(0, 8), 16), true);
   v.setUint32(24, p.roots, true);
@@ -272,7 +292,7 @@ export function expandSession(session: Uint8Array, base: Uint8Array): Uint8Array
   const roots = v.getUint32(24, true);
   const n = v.getUint32(28, true);
   const b = prefixOf(base);
-  if (b === undefined || b.end !== end || b.build !== build || b.roots !== roots || fnv1a64(base.subarray(0, end)) !== hash) {
+  if (b === undefined || b.end !== end || b.build !== build || b.roots !== roots || prefixHash(base, end) !== hash) {
     throw new SnapshotError("the session image was made against another base image");
   }
   const values = 32 + 4 * n + ((4 * n) % 8);
@@ -302,8 +322,9 @@ export interface EncodeOptions {
   /** Compress against it. Without one, or without a codec, the image is stored as is. */
   reference?: Reference;
   /**
-   * The module's base image: the image is stored as a session image against it (D2066)
-   * if it has a builtin prefix. Restoring then needs the same base.
+   * The module's base image: the image is stored as a session image (D2066) if it has a
+   * builtin prefix, its prefix words against the reference when it has the same prefix
+   * (it then holds them in place, as the dictionary), else against the base.
    */
   base?: Reference;
   /** `nodeZstd()` by default; `null` stores the image uncompressed. */
@@ -315,7 +336,16 @@ export interface EncodeOptions {
 export function encodeSnapshot(o: EncodeOptions): Uint8Array {
   const codec = o.codec === undefined ? nodeZstd() : o.codec;
   const ref = codec === null ? undefined : o.reference;
-  const session = o.base === undefined ? undefined : sessionImage(o.image, o.base.bytes);
+  let kind = IMAGE_RAW;
+  let session: Uint8Array | undefined;
+  if (o.base !== undefined) {
+    session = ref === undefined ? undefined : sessionImage(o.image, ref.bytes);
+    if (session !== undefined) kind = IMAGE_SESSION_REFERENCE;
+    else {
+      session = sessionImage(o.image, o.base.bytes);
+      if (session !== undefined) kind = IMAGE_SESSION;
+    }
+  }
   const image = session ?? o.image;
   const payload = ref === undefined ? image : codec!.compress(image, ref.bytes, o.level ?? DEFAULT_ZSTD_LEVEL);
   const meta = new TextEncoder().encode(JSON.stringify(o.meta));
@@ -327,7 +357,7 @@ export function encodeSnapshot(o: EncodeOptions): Uint8Array {
   view.setUint8(7, ref === undefined ? COMPRESSION_NONE : COMPRESSION_ZSTD);
   view.setUint32(8, o.build >>> 0, true);
   view.setUint8(12, ref?.kind ?? REFERENCE_NONE);
-  view.setUint8(13, session === undefined ? IMAGE_RAW : IMAGE_SESSION);
+  view.setUint8(13, kind);
   const hash = ref?.hash ?? "0".repeat(16);
   view.setUint32(16, parseInt(hash.slice(8), 16), true);
   view.setUint32(20, parseInt(hash.slice(0, 8), 16), true);
@@ -411,6 +441,11 @@ export function snapshotImage(
 ): Uint8Array {
   const image = storedImage(header, reference, codec);
   if (header.imageKind === IMAGE_RAW) return image;
+  // storedImage checked the reference: a session image against it is compressed with it.
+  if (header.imageKind === IMAGE_SESSION_REFERENCE) {
+    if (header.compression !== COMPRESSION_ZSTD || reference === undefined) throw new SnapshotError("corrupt snapshot: no reference");
+    return expandSession(image, reference.bytes);
+  }
   if (header.imageKind !== IMAGE_SESSION) throw new SnapshotError(`unknown snapshot image kind ${header.imageKind}`);
   if (base === undefined) throw new SnapshotError("the snapshot is a session image, and this host does not have the module's base image");
   return expandSession(image, base.bytes);

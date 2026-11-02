@@ -8,7 +8,7 @@ import {
   baseReference,
   checkSnapshot,
   encodeSnapshot,
-  IMAGE_SESSION,
+  IMAGE_RAW,
   provideBase,
   readSnapshotHeader,
   REFERENCE_BASE,
@@ -303,7 +303,7 @@ function unpackSnapshot(
       checkSnapshot(header, APP_SANDBOX, x.djs_build_hash());
       const reference = header.referenceKind === REFERENCE_BASE ? baseReference(module, x) : undefined;
       // A session image (D2066) is completed with the module's base image.
-      const base = header.imageKind === IMAGE_SESSION ? baseReference(module, x) : undefined;
+      const base = header.imageKind === IMAGE_RAW ? undefined : baseReference(module, x);
       return { meta: header.meta as { functions: string[]; clock?: number }, image: snapshotImage(header, reference, codec, base) };
     }
   } catch (e) {

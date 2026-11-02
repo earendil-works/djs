@@ -31,10 +31,11 @@ pub const REFERENCE_BASE: u8 = 1;
 /// pi's prelude image: the session's VM right after pi's prelude, sealed.
 pub const REFERENCE_PI_PRELUDE: u8 = 2;
 
-/// The container's image (byte 13): a raw image, or a session image (D2066) that the
-/// build's base image completes.
+/// The container's image (byte 13): a raw image, or a session image (D2066) whose
+/// prefix words are against the build's base image, or against the container's reference.
 pub const IMAGE_RAW: u8 = 0;
 pub const IMAGE_SESSION: u8 = 1;
+pub const IMAGE_SESSION_REFERENCE: u8 = 2;
 
 pub const COMPRESSION_NONE: u8 = 0;
 pub const COMPRESSION_ZSTD: u8 = 1;
@@ -107,7 +108,7 @@ impl Snapshot {
             (Format::Container, Some(h)) => format!(
                 "DJSN container ({}{}, {})",
                 h.app_name(),
-                if h.image_kind == IMAGE_SESSION {
+                if h.image_kind != IMAGE_RAW {
                     ", session image"
                 } else {
                     ""
@@ -165,7 +166,11 @@ pub fn read(bytes: &[u8], reference: Option<&[u8]>) -> Result<Snapshot, String> 
         });
     }
     if session::is_session_image(bytes) {
-        let image = expand(bytes)?;
+        let base = match reference {
+            Some(r) => image_of(r)?,
+            None => djs_prelude::BASE.to_vec(),
+        };
+        let image = expand(bytes, &base)?;
         return Ok(Snapshot {
             format: Format::SessionImage,
             header: None,
@@ -219,10 +224,16 @@ pub fn read(bytes: &[u8], reference: Option<&[u8]>) -> Result<Snapshot, String> 
         }
         n => return Err(format!("unknown snapshot compression {n}")),
     };
-    let image = if h.image_kind == IMAGE_SESSION {
-        expand(&image)?
-    } else {
-        image
+    let image = match h.image_kind {
+        IMAGE_RAW => image,
+        IMAGE_SESSION => expand(&image, djs_prelude::BASE)?,
+        IMAGE_SESSION_REFERENCE => expand(
+            &image,
+            reference
+                .as_deref()
+                .ok_or("corrupt snapshot: no reference")?,
+        )?,
+        n => return Err(format!("unknown snapshot image kind {n}")),
     };
     Ok(Snapshot {
         format: Format::Container,
@@ -233,11 +244,11 @@ pub fn read(bytes: &[u8], reference: Option<&[u8]>) -> Result<Snapshot, String> 
     })
 }
 
-/// A session image completed with this build's base image.
-fn expand(s: &[u8]) -> Result<Vec<u8>, String> {
-    let raw = session::expand_session(s, djs_prelude::BASE).map_err(|e| match e {
+/// A session image completed with its base (this build's base image, or a reference).
+fn expand(s: &[u8], base: &[u8]) -> Result<Vec<u8>, String> {
+    let raw = session::expand_session(s, base).map_err(|e| match e {
         session::SessionError::BaseMismatch => {
-            "the session image was made against another base image (another djs build)".to_string()
+            "the session image was made against another base image".to_string()
         }
         e => format!("corrupt snapshot: {}", e.text()),
     })?;
@@ -336,8 +347,15 @@ pub fn write(
     reference: Option<(u8, &[u8])>,
     level: i32,
 ) -> Result<Vec<u8>, String> {
-    // The image's own part only (D2066), when this build's base is its base.
-    let session = session::session_image(image, djs_prelude::BASE).ok();
+    // The image's own part only (D2066): its prefix words against the reference if that
+    // has the same prefix (it holds them in place), else against this build's base.
+    let (kind, session) = match reference.and_then(|r| session::session_image(image, r.1).ok()) {
+        Some(s) => (IMAGE_SESSION_REFERENCE, Some(s)),
+        None => match session::session_image(image, djs_prelude::BASE).ok() {
+            Some(s) => (IMAGE_SESSION, Some(s)),
+            None => (IMAGE_RAW, None),
+        },
+    };
     let image = session.as_deref().unwrap_or(image);
     let payload = match reference {
         Some((_, r)) => compress(image, r, level).map_err(|e| format!("zstd: {e}"))?,
@@ -354,11 +372,7 @@ pub fn write(
     });
     out.extend_from_slice(&build.to_le_bytes());
     out.push(reference.map_or(REFERENCE_NONE, |r| r.0));
-    out.push(if session.is_some() {
-        IMAGE_SESSION
-    } else {
-        IMAGE_RAW
-    });
+    out.push(kind);
     out.extend_from_slice(&[0, 0]);
     let hash = reference.map_or(0, |r| fnv1a64(r.1));
     out.extend_from_slice(&(hash as u32).to_le_bytes());
@@ -431,7 +445,12 @@ mod tests {
         assert_eq!(u16::from_le_bytes([z[4], z[5]]), FORMAT);
         assert_eq!(
             (z[6], z[7], z[12], z[13]),
-            (APP_SANDBOX, COMPRESSION_ZSTD, REFERENCE_BASE, IMAGE_SESSION)
+            (
+                APP_SANDBOX,
+                COMPRESSION_ZSTD,
+                REFERENCE_BASE,
+                IMAGE_SESSION_REFERENCE
+            )
         );
         // The stored image is the session image (D2066), made against this build's base.
         let session = session::session_image(&img, base).unwrap();

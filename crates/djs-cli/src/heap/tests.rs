@@ -164,7 +164,7 @@ fn a_container_reads_like_its_image() {
     assert!(all.contains("\"summary\"") && all.contains("\"session\""));
     // The container holds the session image (D2066), and nothing of the prefix changed.
     let (h, _, _) = container::read_header(&c).unwrap();
-    assert_eq!(h.image_kind, container::IMAGE_SESSION);
+    assert_eq!(h.image_kind, container::IMAGE_SESSION_REFERENCE);
     assert_eq!(json(&r, "prefix").at(&["words"]).num(), 0.0);
 }
 

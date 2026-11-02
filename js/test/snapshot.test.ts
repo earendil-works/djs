@@ -16,7 +16,9 @@ import {
   baseReference,
   encodeSnapshot,
   expandSession,
+  IMAGE_RAW,
   IMAGE_SESSION,
+  IMAGE_SESSION_REFERENCE,
   readSnapshotHeader,
   REFERENCE_BASE,
   REFERENCE_PI_PRELUDE,
@@ -35,7 +37,7 @@ const header = (bytes: Uint8Array): SnapshotHeader => readSnapshotHeader(bytes)!
 /** The module's base image (D2066): what a session image is completed with. */
 const base = () => baseReference(wasm, new WebAssembly.Instance(wasm, {}).exports as never)!.bytes;
 /** A container's image as a raw image (the formats before the container held those). */
-const rawImage = (h: SnapshotHeader) => (h.imageKind === IMAGE_SESSION ? expandSession(h.payload, base()) : h.payload);
+const rawImage = (h: SnapshotHeader) => (h.imageKind === IMAGE_RAW ? h.payload : expandSession(h.payload, base()));
 const add = (a: unknown, b: unknown) => (a as number) + (b as number);
 
 /** A snapshot in the format before the container, from a container's metadata and image. */
@@ -60,6 +62,7 @@ test("sandbox: bytes() is a compressed container that restores", async () => {
   assert.equal(h.app, APP_SANDBOX);
   assert.equal(h.compression, COMPRESSION_ZSTD);
   assert.equal(h.referenceKind, REFERENCE_BASE);
+  assert.equal(h.imageKind, IMAGE_SESSION_REFERENCE);
   assert.equal(header(plain).compression, COMPRESSION_NONE);
   // Most of the image is the base realm, which the reference supplies.
   assert.ok(zstd.length * 5 < plain.length, `${zstd.length} vs ${plain.length} bytes`);
@@ -212,6 +215,8 @@ test("pi: snapshot() is compressed against the prelude image and resumes", async
   assert.deepEqual(resumed.messages, reference.messages);
   const h = header(resumed.snapshots[0]);
   assert.equal(h.referenceKind, REFERENCE_PI_PRELUDE);
+  // Its prefix words are against the prelude image, which holds what pi's prelude changed (D2066).
+  assert.equal(h.imageKind, IMAGE_SESSION_REFERENCE);
   assert.equal(h.compression, COMPRESSION_ZSTD);
   // A waiting session is mostly its prelude image.
   assert.ok(resumed.snapshots[0].length < 64 * 1024, `${resumed.snapshots[0].length} bytes`);

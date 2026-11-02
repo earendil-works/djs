@@ -34,7 +34,7 @@ import {
   APP_PI_SESSION,
   checkSnapshot,
   encodeSnapshot,
-  IMAGE_SESSION,
+  IMAGE_RAW,
   fnv1a64,
   readSnapshotHeader,
   type Reference,
@@ -715,7 +715,7 @@ export function resumeVm(snapshot: Uint8Array, options: ResumeOptions): VmSessio
     }
     reference = preludeReference(prelude);
   }
-  const base = header.imageKind === IMAGE_SESSION ? instanceBase(into) : undefined;
+  const base = header.imageKind === IMAGE_RAW ? undefined : instanceBase(into);
   const image = snapshotImage(header, reference, options.snapshotCodec, base);
   const state = header.meta as SessionState;
   const session = new Session(Engine.restore(module, image, state.memoryLimit, into), options, state);
