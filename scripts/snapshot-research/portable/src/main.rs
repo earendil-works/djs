@@ -10,8 +10,11 @@
 //! portable import-all DIR             import snapshots saved by `harvest --save DIR`
 
 mod export;
+mod goldi;
 mod heapx;
 mod import;
+mod pi;
+mod pitools;
 mod roles;
 mod session;
 mod sites;
@@ -133,6 +136,7 @@ fn main() {
                 t0.elapsed()
             );
         }
+        Some("goldi-images") => goldi::images(&args[1..]),
         Some("harvest") => sites::main(&args[1..]),
         Some("import-all") => sites::import_all(&args[1], args.get(2).map(|s| s.as_str())),
         _ => {
