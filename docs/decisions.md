@@ -6152,3 +6152,13 @@ The native-API inlining trade (D2302's numbers), re-measured on top of this:
 
 With the callback loops out of the natives, the trade no longer pays; I recommend
 dropping it.
+
+## D2350: The portable-snapshot prototype lives outside the workspace and builds against older trees
+date: 2026-11-02 · by: portable · issue: 0141
+`scripts/snapshot-research/portable` is a standalone crate (like snaplab), not part of the
+workspace or the gate, using only djs-core's public heap API. To measure a transfer
+between builds, the same sources are copied into a `git archive` of the older commit and
+built there (`--features old` selects that tree's one changed record schema). The
+design it supports, docs/portable-snapshots.md, is a proposal; images stay build-pinned
+(D2260) and replay remains the planned cross-version record (0140) until the owner
+decides.
