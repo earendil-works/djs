@@ -1,7 +1,7 @@
 # 0150: Deduplicate base strings; analyzer shows the session's own part; atom entries diff
 
-status: open
-agent: -
+status: in-progress
+agent: strings
 branch: issue/0150-base-strings
 depends-on: 0133, 0147, 0148
 guide: docs/guide/snapshots.md ("Inspecting a heap"), arena.md if base content numbers change
