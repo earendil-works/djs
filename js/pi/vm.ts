@@ -34,6 +34,7 @@ import {
   APP_PI_SESSION,
   checkSnapshot,
   encodeSnapshot,
+  IMAGE_SESSION,
   fnv1a64,
   readSnapshotHeader,
   type Reference,
@@ -309,6 +310,8 @@ class Session implements VmSession {
       image: this.engine.image(),
       // The prelude image is most of the session's heap; without one, the base image.
       reference: this.prelude ? preludeReference(this.prelude) : this.engine.baseReference(),
+      // The session's own part of the heap: no builtin prefix (D2066).
+      base: this.engine.baseReference(),
       codec: this.hooks.snapshotCodec,
     });
   }
@@ -712,7 +715,8 @@ export function resumeVm(snapshot: Uint8Array, options: ResumeOptions): VmSessio
     }
     reference = preludeReference(prelude);
   }
-  const image = snapshotImage(header, reference, options.snapshotCodec);
+  const base = header.imageKind === IMAGE_SESSION ? instanceBase(into) : undefined;
+  const image = snapshotImage(header, reference, options.snapshotCodec, base);
   const state = header.meta as SessionState;
   const session = new Session(Engine.restore(module, image, state.memoryLimit, into), options, state);
   session.prelude = prelude;

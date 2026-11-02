@@ -411,8 +411,13 @@ test("snapshots", async () => {
   // A damaged image is refused (the heap verifies images on load). Uncompressed, so the
   // damage reaches the image: the container is 40 bytes of header, the metadata, the image.
   const broken = uncompressed(restored);
-  const meta = new DataView(broken.buffer).getUint32(32, true);
-  broken[40 + meta + 12] ^= 0xff; // Roots.VERSION
+  const view = new DataView(broken.buffer);
+  const meta = view.getUint32(32, true);
+  // A session image (D2066): its roots cell follows the 32-byte header and the prefix diff
+  // (n words: 4 + 8 bytes each, offsets padded to 8).
+  const image = 40 + meta;
+  const n = view.getUint32(image + 28, true);
+  broken[image + 32 + 12 * n + ((4 * n) % 8) + 12] ^= 0xff; // Roots.VERSION
   await assert.rejects(Sandbox.fromBytes(broken, { functions: { add: () => 0 } }), /cannot restore the VM image/);
   restored.dispose();
 });

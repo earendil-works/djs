@@ -10,7 +10,8 @@
 
 /** "DJSN", little-endian. */
 export const SNAPSHOT_MAGIC = 0x4e534a44;
-export const SNAPSHOT_FORMAT = 1;
+/** Format 2 (D2066) adds the image kind (byte 13); format 1 containers still load. */
+export const SNAPSHOT_FORMAT = 2;
 const HEADER = 40;
 
 /** Who wrote a snapshot: what its metadata means. */
@@ -23,6 +24,12 @@ export const REFERENCE_NONE = 0;
 export const REFERENCE_BASE = 1;
 /** pi's prelude image: the session's VM right after pi's prelude, collected. */
 export const REFERENCE_PI_PRELUDE = 2;
+
+/** What the container's image is (byte 13, format 2). */
+export const IMAGE_RAW = 0;
+/** A session image (D2066): the roots cell, the changed words of the builtin prefix, and
+ * the heap above it. Restoring it needs the module's base image. */
+export const IMAGE_SESSION = 1;
 
 export const COMPRESSION_NONE = 0;
 export const COMPRESSION_ZSTD = 1;
@@ -66,6 +73,8 @@ export interface SnapshotHeader {
   referenceHash: string;
   referenceLength: number;
   imageLength: number;
+  /** `IMAGE_RAW` or `IMAGE_SESSION`. */
+  imageKind: number;
   meta: unknown;
   payload: Uint8Array;
 }
@@ -186,6 +195,104 @@ export function rememberBase(module: object, exports: BaseExports): void {
   baseReference(module, exports);
 }
 
+// ---- Session images (D2066, crates/djs-core/src/vm/session.rs) ----------------------
+
+/** "DJSs", little-endian. */
+const SESSION_MAGIC = 0x73534a44;
+const SESSION_FORMAT = 1;
+/** Roots fields read from an image: the roots cell's size (header), BUILD, BASE_END. */
+const ROOTS_SIZE_AT = 4;
+const ROOTS_BUILD_AT = 48;
+const ROOTS_BASE_END_AT = 80;
+
+function prefixOf(image: Uint8Array): { end: number; build: number; roots: number } | undefined {
+  if (image.length < 88 || image[0] !== 1) return undefined;
+  const v = new DataView(image.buffer, image.byteOffset, image.byteLength);
+  const roots = v.getUint32(ROOTS_SIZE_AT, true);
+  const end = v.getUint32(ROOTS_BASE_END_AT, true);
+  if (end > image.length || roots > end) return undefined;
+  return { end, build: v.getUint32(ROOTS_BUILD_AT, true), roots };
+}
+
+/**
+ * The session image of a raw VM image against its module's base image, or undefined if
+ * the image has no builtin prefix or another base: the same bytes as Rust's
+ * `vm::session::session_image`.
+ */
+export function sessionImage(image: Uint8Array, base: Uint8Array): Uint8Array | undefined {
+  const p = prefixOf(image);
+  const b = prefixOf(base);
+  if (p === undefined || p.end === 0 || b === undefined || b.end !== p.end || b.build !== p.build || b.roots !== p.roots) {
+    return undefined;
+  }
+  const iv = new DataView(image.buffer, image.byteOffset, image.byteLength);
+  const bv = new DataView(base.buffer, base.byteOffset, base.byteLength);
+  const diff: number[] = [];
+  for (let o = p.roots; o < p.end; o += 8) {
+    if (iv.getUint32(o, true) !== bv.getUint32(o, true) || iv.getUint32(o + 4, true) !== bv.getUint32(o + 4, true)) diff.push(o);
+  }
+  const n = diff.length;
+  const pad = (4 * n) % 8;
+  const rest = image.length - p.end;
+  const out = new Uint8Array(32 + 4 * n + pad + 8 * n + p.roots + rest);
+  const v = new DataView(out.buffer);
+  v.setUint32(0, SESSION_MAGIC, true);
+  v.setUint32(4, SESSION_FORMAT, true);
+  v.setUint32(8, p.build, true);
+  v.setUint32(12, p.end, true);
+  const h = fnv1a64(base.subarray(0, p.end));
+  v.setUint32(16, parseInt(h.slice(8), 16), true);
+  v.setUint32(20, parseInt(h.slice(0, 8), 16), true);
+  v.setUint32(24, p.roots, true);
+  v.setUint32(28, n, true);
+  let at = 32;
+  for (const o of diff) {
+    v.setUint32(at, o, true);
+    at += 4;
+  }
+  at += pad;
+  for (const o of diff) {
+    out.set(image.subarray(o, o + 8), at);
+    at += 8;
+  }
+  out.set(image.subarray(0, p.roots), at);
+  out.set(image.subarray(p.end), at + p.roots);
+  return out;
+}
+
+/** The raw image a session image stands for, given its base (throws `SnapshotError`). */
+export function expandSession(session: Uint8Array, base: Uint8Array): Uint8Array {
+  const v = new DataView(session.buffer, session.byteOffset, session.byteLength);
+  if (session.length < 32 || v.getUint32(0, true) !== SESSION_MAGIC || v.getUint32(4, true) !== SESSION_FORMAT) {
+    throw new SnapshotError("corrupt snapshot: not a session image of this format");
+  }
+  const build = v.getUint32(8, true);
+  const end = v.getUint32(12, true);
+  const hash = v.getUint32(20, true).toString(16).padStart(8, "0") + v.getUint32(16, true).toString(16).padStart(8, "0");
+  const roots = v.getUint32(24, true);
+  const n = v.getUint32(28, true);
+  const b = prefixOf(base);
+  if (b === undefined || b.end !== end || b.build !== build || b.roots !== roots || fnv1a64(base.subarray(0, end)) !== hash) {
+    throw new SnapshotError("the session image was made against another base image");
+  }
+  const values = 32 + 4 * n + ((4 * n) % 8);
+  const rootsAt = values + 8 * n;
+  if (session.length < rootsAt + roots) throw new SnapshotError("truncated snapshot");
+  const rest = session.subarray(rootsAt + roots);
+  const out = new Uint8Array(end + rest.length);
+  out.set(session.subarray(rootsAt, rootsAt + roots), 0);
+  out.set(base.subarray(roots, end), roots);
+  out.set(rest, end);
+  let last = 0;
+  for (let i = 0; i < n; i++) {
+    const o = v.getUint32(32 + 4 * i, true);
+    if (o < roots || o >= end || o % 8 !== 0 || (i > 0 && o <= last)) throw new SnapshotError("corrupt snapshot: bad prefix diff");
+    last = o;
+    out.set(session.subarray(values + 8 * i, values + 8 * i + 8), o);
+  }
+  return out;
+}
+
 export interface EncodeOptions {
   app: number;
   build: number;
@@ -194,6 +301,11 @@ export interface EncodeOptions {
   image: Uint8Array;
   /** Compress against it. Without one, or without a codec, the image is stored as is. */
   reference?: Reference;
+  /**
+   * The module's base image: the image is stored as a session image against it (D2066)
+   * if it has a builtin prefix. Restoring then needs the same base.
+   */
+  base?: Reference;
   /** `nodeZstd()` by default; `null` stores the image uncompressed. */
   codec?: SnapshotCodec | null;
   level?: number;
@@ -203,7 +315,9 @@ export interface EncodeOptions {
 export function encodeSnapshot(o: EncodeOptions): Uint8Array {
   const codec = o.codec === undefined ? nodeZstd() : o.codec;
   const ref = codec === null ? undefined : o.reference;
-  const payload = ref === undefined ? o.image : codec!.compress(o.image, ref.bytes, o.level ?? DEFAULT_ZSTD_LEVEL);
+  const session = o.base === undefined ? undefined : sessionImage(o.image, o.base.bytes);
+  const image = session ?? o.image;
+  const payload = ref === undefined ? image : codec!.compress(image, ref.bytes, o.level ?? DEFAULT_ZSTD_LEVEL);
   const meta = new TextEncoder().encode(JSON.stringify(o.meta));
   const out = new Uint8Array(HEADER + meta.length + payload.length);
   const view = new DataView(out.buffer);
@@ -213,11 +327,12 @@ export function encodeSnapshot(o: EncodeOptions): Uint8Array {
   view.setUint8(7, ref === undefined ? COMPRESSION_NONE : COMPRESSION_ZSTD);
   view.setUint32(8, o.build >>> 0, true);
   view.setUint8(12, ref?.kind ?? REFERENCE_NONE);
+  view.setUint8(13, session === undefined ? IMAGE_RAW : IMAGE_SESSION);
   const hash = ref?.hash ?? "0".repeat(16);
   view.setUint32(16, parseInt(hash.slice(8), 16), true);
   view.setUint32(20, parseInt(hash.slice(0, 8), 16), true);
   view.setUint32(24, ref?.bytes.length ?? 0, true);
-  view.setUint32(28, o.image.length, true);
+  view.setUint32(28, image.length, true);
   view.setUint32(32, meta.length, true);
   view.setUint32(36, payload.length, true);
   out.set(meta, HEADER);
@@ -231,7 +346,7 @@ export function readSnapshotHeader(bytes: Uint8Array): SnapshotHeader | undefine
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (view.getUint32(0, true) !== SNAPSHOT_MAGIC) return undefined;
   const format = view.getUint16(4, true);
-  if (format !== SNAPSHOT_FORMAT) {
+  if (format !== SNAPSHOT_FORMAT && format !== 1) {
     throw new SnapshotError(`snapshot container format ${format}; this host reads format ${SNAPSHOT_FORMAT}`);
   }
   if (bytes.length < HEADER) throw new SnapshotError("truncated snapshot");
@@ -254,6 +369,7 @@ export function readSnapshotHeader(bytes: Uint8Array): SnapshotHeader | undefine
     referenceHash: hex(view.getUint32(20, true)) + hex(view.getUint32(16, true)),
     referenceLength: view.getUint32(24, true),
     imageLength: view.getUint32(28, true),
+    imageKind: format >= 2 ? view.getUint8(13) : IMAGE_RAW,
     meta,
     payload: bytes.subarray(HEADER + metaLength),
   };
@@ -288,6 +404,20 @@ export function checkSnapshot(header: SnapshotHeader, app: number, build: number
  * host has it (the caller looks it up by kind and hash).
  */
 export function snapshotImage(
+  header: SnapshotHeader,
+  reference: Reference | undefined,
+  codec: SnapshotCodec | null | undefined,
+  base?: Reference,
+): Uint8Array {
+  const image = storedImage(header, reference, codec);
+  if (header.imageKind === IMAGE_RAW) return image;
+  if (header.imageKind !== IMAGE_SESSION) throw new SnapshotError(`unknown snapshot image kind ${header.imageKind}`);
+  if (base === undefined) throw new SnapshotError("the snapshot is a session image, and this host does not have the module's base image");
+  return expandSession(image, base.bytes);
+}
+
+/** The image as the container stores it (raw or a session image), decompressed. */
+function storedImage(
   header: SnapshotHeader,
   reference: Reference | undefined,
   codec: SnapshotCodec | null | undefined,

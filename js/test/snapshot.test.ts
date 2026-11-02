@@ -13,6 +13,10 @@ import {
   APP_SANDBOX,
   COMPRESSION_NONE,
   COMPRESSION_ZSTD,
+  baseReference,
+  encodeSnapshot,
+  expandSession,
+  IMAGE_SESSION,
   readSnapshotHeader,
   REFERENCE_BASE,
   REFERENCE_PI_PRELUDE,
@@ -28,6 +32,10 @@ const path = defaultWasmPath();
 const freshModule = () => WebAssembly.compile(readFileSync(typeof path === "string" ? path : fileURLToPath(path)));
 
 const header = (bytes: Uint8Array): SnapshotHeader => readSnapshotHeader(bytes)!;
+/** The module's base image (D2066): what a session image is completed with. */
+const base = () => baseReference(wasm, new WebAssembly.Instance(wasm, {}).exports as never)!.bytes;
+/** A container's image as a raw image (the formats before the container held those). */
+const rawImage = (h: SnapshotHeader) => (h.imageKind === IMAGE_SESSION ? expandSession(h.payload, base()) : h.payload);
 const add = (a: unknown, b: unknown) => (a as number) + (b as number);
 
 /** A snapshot in the format before the container, from a container's metadata and image. */
@@ -91,12 +99,36 @@ test("sandbox: another build, another reference and damage are refused", async (
   await assert.rejects(Sandbox.fromBytes(bytes.subarray(0, 100), { functions: { add } }), /truncated snapshot/);
 });
 
+test("sandbox: bytes() stores the session image, not the builtin prefix (D2066)", async () => {
+  const sb = await Sandbox.create({ functions: { add } });
+  const h = header(sb.bytes({ compression: "none" }));
+  assert.equal(h.imageKind, IMAGE_SESSION);
+  const raw = expandSession(h.payload, base());
+  // A fresh sandbox: the roots cell, no changed prefix word, and the per-VM tail.
+  assert.equal(new DataView(h.payload.buffer, h.payload.byteOffset).getUint32(28, true), 0);
+  assert.ok(h.payload.length * 8 < raw.length, `${h.payload.length} of ${raw.length} bytes`);
+  // Changing a builtin puts its words in the diff, and they come back.
+  sb.run("Array.prototype.extra = 41; return 1");
+  const h2 = header(sb.bytes({ compression: "none" }));
+  assert.ok(new DataView(h2.payload.buffer, h2.payload.byteOffset).getUint32(28, true) > 0);
+  const back = await Sandbox.fromBytes(sb.bytes(), { functions: { add } });
+  assert.equal(back.run("return add([].extra, 1)"), 42);
+  back.dispose();
+  // A format 1 container (a raw image, before session images) still loads.
+  const v1 = encodeSnapshot({ app: APP_SANDBOX, build: h2.build, meta: h2.meta, image: expandSession(h2.payload, base()), codec: null });
+  new DataView(v1.buffer).setUint16(4, 1, true);
+  const old = await Sandbox.fromBytes(v1, { functions: { add } });
+  assert.equal(old.run("return [].extra"), 41);
+  old.dispose();
+  sb.dispose();
+});
+
 test("sandbox: the format before the container still loads", async () => {
   const sb = await Sandbox.create({ functions: { add } });
   sb.setGlobal("config", { n: 41 });
   const h = header(sb.bytes({ compression: "none" }));
   sb.dispose();
-  const old = legacy(0x53534a44 /* "DJSS" */, h.meta, h.payload);
+  const old = legacy(0x53534a44 /* "DJSS" */, h.meta, rawImage(h));
   const back = await Sandbox.fromBytes(old, { functions: { add } });
   assert.equal(back.run("return add(config.n, 1)"), 42);
   back.dispose();
@@ -225,7 +257,7 @@ test("pi: the format before the container still loads; another build is refused"
     resume: (bytes, hooks) => {
       const h = header(bytes);
       assert.equal(h.compression, COMPRESSION_NONE);
-      return resumeVm(legacy(0x49504a44 /* "DJPI" */, h.meta, h.payload), hooks);
+      return resumeVm(legacy(0x49504a44 /* "DJPI" */, h.meta, rawImage(h)), hooks);
     },
   });
   assert.deepEqual(resumed.messages, reference.messages);

@@ -8,6 +8,7 @@ import {
   baseReference,
   checkSnapshot,
   encodeSnapshot,
+  IMAGE_SESSION,
   provideBase,
   readSnapshotHeader,
   REFERENCE_BASE,
@@ -301,7 +302,9 @@ function unpackSnapshot(
     if (header !== undefined) {
       checkSnapshot(header, APP_SANDBOX, x.djs_build_hash());
       const reference = header.referenceKind === REFERENCE_BASE ? baseReference(module, x) : undefined;
-      return { meta: header.meta as { functions: string[]; clock?: number }, image: snapshotImage(header, reference, codec) };
+      // A session image (D2066) is completed with the module's base image.
+      const base = header.imageKind === IMAGE_SESSION ? baseReference(module, x) : undefined;
+      return { meta: header.meta as { functions: string[]; clock?: number }, image: snapshotImage(header, reference, codec, base) };
     }
   } catch (e) {
     if (e instanceof SnapshotError) throw new SandboxError("misuse", e.message);
@@ -582,6 +585,8 @@ export class Sandbox {
       meta: { functions: this.fnNames, clock: this.clock },
       image: this.arena(),
       reference: baseReference(this.module, this.x),
+      // Only the sandbox's own part of the heap (D2066).
+      base: baseReference(this.module, this.x),
       codec: opts.compression === "none" ? null : this.opts.snapshotCodec,
       level: opts.level,
     });
