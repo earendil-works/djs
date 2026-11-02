@@ -6670,3 +6670,31 @@ function, and 0.3–2 ms of TurboFan compile per function. Harvested codemode sc
 Rust backend), justified per builtin by measurement (D1634). Revisit a baseline JIT only
 for compute-heavy uses (> 10 ms of interpreted time in hot functions), and a bgen wasm
 backend in a side module only if the module budget blocks measured `@native` wins.
+
+## D2441: The hot loop's dispatch keeps no per-instruction values across calls
+date: 2026-11-10 · by: bloat · issue: 0151
+`run_hot` extracted the immediates (`w >> 8` as u16 and u32) before its `match` and kept
+the opcode for `Exit::Decline` after heap calls. V8's TurboFan spills a value at its
+definition when any path keeps it across a call, so every instruction stored two or three
+values to the stack (TurboFan arm64 code of the dispatch, `--print-wasm-code`). Now the
+arms extract their immediates themselves (`imm16!`/`imm32!`), `heap_call!` reads the
+opcode again after the call, and `iter_next` reads its offset again after its step; the
+dispatch has no spill. Measured against main (wasm instructions, n=5): loop −4.5%,
+tight −4.0%, calls −2.8%, call1 −2.6%, prop1 −2.6%, props −1.5%, foreach −1.2%, the
+others within ±0.5% (indexof, json-date re-run at n=9: ±0.2%); natively loop −2.5%,
+calls −2.2%. The rule for later arms: a value computed for every instruction must not
+live across a heap call in any arm. Check the dispatch block in V8's code after changes
+to the loop.
+
+## D2442: GC growth counts the builtin prefix as a fixed allowance
+date: 2026-11-10 · by: bloat · issue: 0151
+`next_threshold` grew the arena by as much as the live data before the next collection,
+and the live data included the builtin prefix (D2064), which is immutable and never
+collected. Every byte cut from the base therefore made collections more frequent (0151:
+−46 KB of base cost json +1.4% and pi-like +1.3% natively in collections alone). Now the
+prefix counts as `gc::BASE_ALLOWANCE` whatever its size: the growth is the session's
+live data (above `Roots::BASE_END`) plus the allowance, at least `MIN_GROWTH`. The
+allowance is today's prefix, 288,160 B (the base image is 296,184 B with its per-VM
+tail), so collections come exactly as before; it can be retuned on its own. Heaps
+without a prefix keep the old rule; `restore_capacity`, which sees only an image length,
+counts the whole image as live.
