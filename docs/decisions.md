@@ -6183,3 +6183,22 @@ image becomes an immutable prefix of every arena, and images, snapshots, canonic
 collections and determinism cover only the session region. A stable, append-only builtin
 registry names builtins across builds. All three phases run in parallel. pi-private is
 not changed now (pi dropping its lockdown comes later).
+
+## D2062: `Roots::BASE_END` marks the builtin prefix
+date: 2026-11-08 · by: heap · issue: 0147
+The first step of D022's immutable prefix, merged early for 0146.
+- **The field:** `Roots::BASE_END` (offset 80; Roots' minimum size is 88) is the end of the
+  base image in a VM's arena.
+  - `Vm::prepare_base_image` sets it to the image's length, so every VM made from the
+    base (`vm_new`, restored images) starts with it.
+  - 0 in a heap without a base (`Heap::new`, `Vm::new` before `prepare_base_image`, the
+    canonical copy).
+  - `Heap::base_end()` reads it.
+- **Distinct from `OLD_END`,** which also covers what an embedder sealed (pi's prelude,
+  D2041).
+- **Until the prefix is immutable** (0147's later steps), full collections forward it
+  like `OLD_END`, to the live bytes below it, so it stays a cell boundary that separates
+  base cells from session cells. Minor collections leave it alone. Canonical (Cheney)
+  collections set it to 0.
+- **Checks:** `Heap::verify` requires a cell boundary. `release_top` lowers it like
+  `OLD_END`.

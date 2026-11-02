@@ -821,7 +821,13 @@ impl Vm {
             .map(|e| h.first_grown_target(e))
             .filter(|&t| t != 0)
             .collect();
-        self.heap.order_for_image(&last)
+        self.heap.order_for_image(&last)?;
+        // The whole image is the builtin prefix of every VM made from it (D022).
+        let len = self.heap.arena().len();
+        self.heap
+            .arena_mut()
+            .set(0, crate::heap::cells::Roots::BASE_END, len);
+        Ok(())
     }
 
     /// A collection of `heap` alone (no finalization scheduling).

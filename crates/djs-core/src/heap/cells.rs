@@ -199,6 +199,11 @@ cells! {
         /// Minor collections since the last full one: the schedule of full collections
         /// (`gc::FULL_EVERY`), in the image so that a restored VM collects the same way.
         MINORS: u32 = 76,
+        /// The end of the builtin prefix (D022, 0147): the base image's cells, the same
+        /// offsets in every VM of a build. Set by `Vm::prepare_base_image` to the image's
+        /// length; 0 in a heap without one. Distinct from `OLD_END`, which also covers
+        /// what an embedder sealed (pi's prelude).
+        BASE_END: u32 = 80,
     };
 
     /// A flat one-byte (Latin-1) string. Holds only strings with every code unit <= 0xFF;
@@ -563,7 +568,7 @@ mod tests {
         assert_eq!(Rope::LAYOUT.min_size, 24);
         assert_eq!(Symbol::LAYOUT.min_size, 24);
         assert_eq!(Object::LAYOUT.min_size, 24);
-        assert_eq!(Roots::LAYOUT.min_size, 80);
+        assert_eq!(Roots::LAYOUT.min_size, 88);
         assert_eq!(Shape::LAYOUT.min_size, 24);
         assert_eq!(PropValues::VALUES.cell_size(4), Some(48));
         let t = PropTable::LAYOUT.tail.unwrap();

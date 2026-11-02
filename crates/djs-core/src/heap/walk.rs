@@ -54,7 +54,7 @@ pub enum VerifyError {
     Invalid { offset: u32 },
     /// The prototype chain through the object at `offset` is cyclic.
     ProtoCycle { offset: u32 },
-    /// `Roots::OLD_END` is not a cell boundary within the arena.
+    /// `Roots::OLD_END` or `Roots::BASE_END` is not a cell boundary within the arena.
     OldEnd { offset: u32 },
 }
 
@@ -168,6 +168,11 @@ impl Heap {
         let old = a.get(0, super::cells::Roots::OLD_END);
         if old != end && !is_start(&starts, old) {
             return Err(VerifyError::OldEnd { offset: old });
+        }
+        // So does the builtin prefix (D022), when there is one.
+        let base = a.get(0, super::cells::Roots::BASE_END);
+        if base != 0 && base != end && !is_start(&starts, base) {
+            return Err(VerifyError::OldEnd { offset: base });
         }
         let kind_at =
             |t: u32| -> Option<CellKind> { is_start(&starts, t).then(|| self.cell_kind(t)) };

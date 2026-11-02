@@ -237,6 +237,11 @@ impl Heap {
         Ok(GcStats { before, after })
     }
 
+    /// The end of the builtin prefix (`Roots::BASE_END`, D022): 0 without one.
+    pub fn base_end(&self) -> u32 {
+        self.arena.get(0, Roots::BASE_END)
+    }
+
     /// The end of the old region (`Roots::OLD_END`).
     pub fn old_end(&self) -> u32 {
         self.arena.get(0, Roots::OLD_END)
@@ -362,6 +367,8 @@ impl Heap {
         // cells right away (the atom table grows with the first compiled script), and
         // until a full collection drops them they shift every later threshold.
         self.set_old_region(after, FULL_EVERY - 1);
+        // A breadth-first layout has no prefix: `prepare_base_image` sets it afterwards.
+        self.arena.set(0, Roots::BASE_END, 0);
         self.after_collect(after);
         for o in collections {
             self.collection_rehash(crate::value::Obj(o));

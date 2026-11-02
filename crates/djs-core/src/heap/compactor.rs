@@ -658,6 +658,7 @@ impl Heap {
     pub(super) fn mark_compact(&mut self, old: u32) -> Result<(u32, u32, u32), HeapError> {
         let before = self.arena.len();
         let old_end = self.arena.get(0, super::cells::Roots::OLD_END);
+        let base_end = self.arena.get(0, super::cells::Roots::BASE_END);
         debug_assert!(old <= before);
         let blocks = (before - old).div_ceil(BLOCK) as usize;
         let mut live: Vec<u64> = Vec::new();
@@ -713,10 +714,20 @@ impl Heap {
         let after = sum;
         // The live bytes below the old region's end (a cell boundary, maybe of a dead
         // cell): its end after the slide.
-        let old_end = if old_end >= before {
-            after
+        let slid = |b: u32| {
+            if b >= before {
+                after
+            } else {
+                live.forward(&table, b.max(old))
+            }
+        };
+        let old_end = slid(old_end);
+        // The prefix's end moves with what is live below it, until 0147 makes the prefix
+        // immutable; a minor collection (`old` ≥ it) leaves it alone.
+        let base_end = if base_end <= old {
+            base_end
         } else {
-            live.forward(&table, old_end.max(old))
+            slid(base_end)
         };
         // Nothing below the first dead word moves (usually the base image's cells).
         let dense = live.next_dead(old).min(before);
@@ -839,6 +850,7 @@ impl Heap {
                 c += size;
             }
         }
+        self.arena.set(0, super::cells::Roots::BASE_END, base_end);
         Ok((before, after, old_end))
     }
 }

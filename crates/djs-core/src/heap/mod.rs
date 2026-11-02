@@ -382,8 +382,10 @@ impl Heap {
             self.arena.truncate(start);
             // A full collection between the two runs made the record old: the old region
             // must not end past the arena.
-            if self.arena.get(0, Roots::OLD_END) > start {
-                self.arena.set(0, Roots::OLD_END, start);
+            for f in [Roots::OLD_END, Roots::BASE_END] {
+                if self.arena.get(0, f) > start {
+                    self.arena.set(0, f, start);
+                }
             }
             self.gc_pending = self.arena.len() >= self.gc_threshold;
         }

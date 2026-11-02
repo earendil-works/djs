@@ -1296,3 +1296,40 @@ fn the_first_collection_after_a_canonical_image_is_full() {
     assert_eq!(h.arena().get(0, Roots::MINORS), 1, "then minor");
     h.verify().unwrap();
 }
+
+#[test]
+fn the_prefix_end_follows_full_collections() {
+    // D022 (0147): BASE_END is a cell boundary that full collections forward with the
+    // live cells below it, minor ones leave alone, and canonical ones clear.
+    let mut h = Heap::new().unwrap();
+    let hs = build_random(&mut h, 5, 300, None);
+    let o = h.new_object(None).unwrap();
+    for i in 0..3 {
+        let k = h.atom_str(&format!("q{i}")).unwrap();
+        h.create_data_property(o, k, Value::int(i)).unwrap();
+    }
+    let ho = h.new_handle(Value::object(o)).unwrap();
+    h.seal().unwrap();
+    let end = h.arena().len();
+    h.arena_mut().set(0, Roots::BASE_END, end);
+    assert_eq!(h.base_end(), end);
+    // Garbage below the prefix end: the old object's storage dies when it grows.
+    let o = h.get_handle(ho).as_object().unwrap();
+    for i in 0..40 {
+        let k = h.atom_str(&format!("p{i}")).unwrap();
+        h.create_data_property(o, k, Value::int(i)).unwrap();
+    }
+    h.collect_minor().unwrap();
+    assert_eq!(h.base_end(), end, "minor: unchanged");
+    h.collect().unwrap();
+    assert!(
+        h.base_end() < end && h.base_end() <= h.old_end(),
+        "{} {end} {}",
+        h.base_end(),
+        h.old_end()
+    );
+    h.verify().unwrap();
+    h.collect_canonical().unwrap();
+    assert_eq!(h.base_end(), 0);
+    let _ = hs;
+}
