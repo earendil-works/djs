@@ -35,6 +35,8 @@ pub struct Graph<'h> {
     pub rpo: Vec<u32>,
     /// Breadth-first path tree: the parent and the label of the edge from it.
     parent: Vec<(u32, String)>,
+    /// Registry ids of the builtins (D2371), by cell index.
+    pub builtin: Vec<Option<u32>>,
 }
 
 /// A string reference to the string cell at `off` (`Str` has no public constructor).
@@ -62,6 +64,7 @@ impl<'h> Graph<'h> {
             retained: vec![0; cells.len()],
             rpo: Vec::new(),
             parent: vec![(NONE, String::new()); cells.len()],
+            builtin: vec![None; cells.len()],
             cells,
         };
         let pairs = g.strong_edges();
@@ -250,10 +253,26 @@ impl<'h> Graph<'h> {
         self.rpo = rpo;
     }
 
-    /// The breadth-first path tree from the names a reader knows: `globalThis`, the global
-    /// lexical scope, the embedder's handles, then everything else from the roots cell.
+    /// The breadth-first path tree from the names a reader knows: the builtins by their
+    /// registry paths (`%Array.prototype.map%`, D2371), `globalThis`, the global lexical
+    /// scope, the embedder's handles, then everything else from the roots cell.
     fn paths(&mut self) {
         let mut queue = VecDeque::new();
+        let registry = djs_prelude::registry::registry();
+        for (cell, id) in registry.name_cells(self.heap) {
+            let Some(i) = self.index(cell) else { continue };
+            let path = &registry.entries[id as usize].path;
+            let label = if path == "globalThis" || path.starts_with('%') {
+                path.clone()
+            } else {
+                format!("%{path}%")
+            };
+            self.builtin[i as usize] = Some(id);
+            if i != 0 && self.parent[i as usize].0 == NONE {
+                self.parent[i as usize] = (i, label);
+                queue.push_back(i);
+            }
+        }
         let seed = |g: &mut Graph, i: Option<u32>, label: String, queue: &mut VecDeque<u32>| {
             if let Some(i) = i
                 && g.parent[i as usize].0 == NONE

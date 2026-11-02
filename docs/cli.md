@@ -46,7 +46,9 @@ data (tools, globals, store, memory limit, deterministic mode;
 scripts/snapshot-research/wasm.ts writes its cases' as `start.json`). Then `djs heap
 --reference prelude.img session.djsn`.
 
-Paths read like JavaScript where the heap allows: `.name` for properties (from the
+Builtins are named by their registry paths (D2371, tests/builtins/registry.tsv):
+`%Array.prototype.map%`, `%get Map.prototype.size%`, `%ArrayIteratorPrototype%.next`;
+`globalThis` is the global object. Paths read like JavaScript where the heap allows: `.name` for properties (from the
 object's shape or table), `[i]` for elements, `~name` for captured variables, `<frame>.x`
 for a suspended function's locals, `<proto>`, `handle[n]` for the embedder's handles,
 and the layout's field names in brackets for internal cells (`<atoms><entries>`).

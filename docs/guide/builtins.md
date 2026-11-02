@@ -269,6 +269,52 @@ true
 > gate's bytecode-backend run, which never takes them, keeps testing the TypeScript
 > path.
 
+## Names that outlive a build: the builtin registry
+
+Offsets, intrinsic ids and the base image's layout change from build to build: a new
+builtin shifts every cell after it. Something that must name a builtin across builds
+(a snapshot exported by meaning, a heap dump read by a newer tool) names it by its
+*registry* entry instead (D2371). Every builtin object, function and symbol of the base
+realm, and every intrinsic, has a stable id there, keyed by a path in the spec's style:
+
+```text
+0     value      globalThis
+2     value      Array
+267   value      Array.prototype.map
+431   value      get Map.prototype.size
+538   value      %ArrayIteratorPrototype%
+690   value      %intrinsic:PromiseResolveFunction%   (the prelude function behind it)
+735   value      AggregateError~0                     (a prelude helper a builtin captures)
+1349  intrinsic  PromiseResolveFunction               (the intrinsic, by name)
+```
+
+A path walks from `globalThis`, a global, a realm intrinsic that no global reaches
+(`%TypedArray%`) or a prelude function registered for an intrinsic
+(`%intrinsic:Name%`), through properties (`.key`, `[Symbol.iterator]`), `.[[Prototype]]`
+and captures (`~N`). A new builtin gets the first path a breadth-first walk finds, so the
+paths read like the spec wherever the spec has a name.
+
+The table is a committed file,
+[tests/builtins/registry.tsv](../../tests/builtins/registry.tsv), and it only grows:
+- an id is never renumbered or reused;
+- a builtin that goes away keeps its line, marked removed: a tombstone;
+- a builtin reached by a second path keeps its first id (the paths are aliases).
+
+`scripts/registry-update.sh` appends new builtins and tombstones removed ones. Tests fail
+when a builtin has no entry or an entry no longer resolves, and the gate fails when a line
+of main's table is renumbered or dropped. At build time the base image gets a table from
+ids to cell offsets
+([crates/djs-prelude/src/registry.rs](../../crates/djs-prelude/src/registry.rs)), and
+for any other heap the paths are resolved on that heap
+([crates/djs-core/src/vm/registry.rs](../../crates/djs-core/src/vm/registry.rs)): the
+heap analyzer prints builtins by their registry paths (`%Array.prototype.map%`).
+
+> **Trade-off.** Paths rather than generated names: a path is what a reader recognizes and
+> what the spec prints, and it is checked by resolving it. A capture path (`~N`) is the
+> weak spot: it changes when the builtin's code changes, and then the entry becomes a
+> tombstone and the helper a new entry. Those helpers never escape to scripts, so an
+> export rarely needs them.
+
 ## Where to look
 
 - `builtins/*.ts` and [builtins/intrinsics.d.ts](../../builtins/intrinsics.d.ts): the
@@ -282,10 +328,12 @@ true
   native frames;
   [`crates/djs-core/src/builtins/fast.rs`](../../crates/djs-core/src/builtins/fast.rs)
   and `builtins/dense.rs`: the `@fast` entries and dense leaves.
+- [`crates/djs-core/src/vm/registry.rs`](../../crates/djs-core/src/vm/registry.rs) and
+  [tests/builtins/registry.tsv](../../tests/builtins/registry.tsv): the builtin registry.
 
 Decisions on this page:
 
-<!-- gen:decisions D1170 D1171 D1172 D1270 D1310 D1321 D1430 D1631 D1632 D1633 D1634 D1635 D1801 D1850 D1900 D1910 D2000 D2020 D2060 D2090 -->
+<!-- gen:decisions D1170 D1171 D1172 D1270 D1310 D1321 D1430 D1631 D1632 D1633 D1634 D1635 D1801 D1850 D1900 D1910 D2000 D2020 D2060 D2090 D2371 -->
 - D1170: djs-bgen is Rust with its own parser for the subset
 - D1171: Builtin subset rules
 - D1172: Generated prelude format and installation
@@ -306,4 +354,5 @@ Decisions on this page:
 - D2020: `@fast` builtins are not also `@native`, except Array.prototype.push
 - D2060: The base is decoded or injected straight into the first VM's arena
 - D2090: Fused dense HasProperty + Get in natives; one-pass string search and in-arena joins
+- D2371: The builtin registry: stable ids by spec path, append-only, gate-checked
 <!-- /gen -->

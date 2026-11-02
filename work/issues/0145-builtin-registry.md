@@ -23,6 +23,21 @@ or drops an id without a tombstone.
 - [ ] Unit tests; docs (TESTING.md for the gate check, guide section).
 
 ## Log
+- djs_core::vm::registry (new file in vm/, plus `pub mod registry;`; perf and heap told via
+  the coordinator): the file format, spec-style paths (globals, realm roots, registered
+  prelude functions, `[[Prototype]]`, captures `~N`), canonical naming by staged
+  breadth-first walks, resolving paths on any heap, `check`, `update` (append, tombstone).
+- djs-prelude: feature `registry` (default; off in djs-wasm, no module size change),
+  build.rs computes base offsets per id, `registry` module API, `registry` example
+  (update/check), integration test.
+- tests/builtins/registry.tsv: 1,409 entries: 958 values (globals 535, realm roots and
+  registered prelude functions, 220 captured helpers) and 451 intrinsics. Unnamed: two
+  realm-internal objects (global lexical record, registries), per-VM state.
+- Gate: `scripts/registry.py check main` (append-only), union merge + `registry.py merge`
+  and the update in scripts/regen.sh; tested on a scratch repository (append, tombstone,
+  drop, union-merged tails).
+- `djs heap` seeds its path tree with registry paths (`%Array.prototype.map%`).
+- Docs: D2371, TESTING.md "Builtin registry", guide builtins.md section, docs/cli.md.
 
 ## Follow-ups
 

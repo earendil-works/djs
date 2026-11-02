@@ -18,3 +18,6 @@ docs/guide/ref-*.md merge=djs-generated
 builtins/intrinsics.d.ts merge=union
 tests/test262/expected-failures.txt merge=union
 tests/corpus/expected-failures.txt merge=union
+# The builtin registry is append-only (D2371): both sides' appended lines are kept, and
+# scripts/regen.sh (`scripts/registry.py merge`) renumbers the merged tail.
+tests/builtins/registry.tsv merge=union

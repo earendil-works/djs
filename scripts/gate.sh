@@ -66,6 +66,7 @@ step "builtins/gen is up to date (0017)"
 ./scripts/bgen.sh --check
 # 0103: the guide's generated regions and diagrams are fresh, its examples print what
 # they printed, its links and decision IDs resolve (D2100).
+step "builtin registry is append-only (D2371)"; python3 scripts/registry.py check main
 step "guide (docs/guide)"; cargo run --quiet -p djs-docs -- check
 
 # 0018: the host-side JS package (node >= 22.6 for type stripping), and the wire format

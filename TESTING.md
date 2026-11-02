@@ -429,6 +429,22 @@ against its ratchet; and the size budget (below). It prints the slowest unit and
 tests. Issues that add a test
 suite also add it to the gate; agents do not run the gate's steps by hand (AGENTS.md).
 
+### Builtin registry (D2371)
+
+tests/builtins/registry.tsv gives every builtin object, function and symbol and every
+intrinsic a stable id, keyed by a spec-style path. Two checks keep it honest:
+- `cargo test -p djs-prelude` (registry test): every builtin and intrinsic of this build
+  has a live entry, and every live entry still resolves. When it fails after adding or
+  removing builtins, run `scripts/registry-update.sh [reason]` and commit the file (new
+  builtins are appended; removed ones become tombstones with the reason).
+- The gate step `scripts/registry.py check main`: the file is append-only against main.
+  No line of main's table may be renumbered, dropped or rewritten, except that a live
+  entry may gain a tombstone.
+
+The file merges with git's union driver; scripts/regen.sh (run by merge-to-main after the
+rebase) renumbers a merged tail after main's entries and runs the update, so two branches
+that both appended need no hand resolution.
+
 ### Size budget (D020)
 
 The shipped module (`scripts/build-wasm.sh`: profile `wasm`, stripped) must stay within

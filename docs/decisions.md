@@ -6202,3 +6202,37 @@ The first step of D022's immutable prefix, merged early for 0146.
   collections set it to 0.
 - **Checks:** `Heap::verify` requires a cell boundary. `release_top` lowers it like
   `OLD_END`.
+## D2371: The builtin registry: stable ids by spec path, append-only, gate-checked
+date: 2026-11-07 · by: bloat · issue: 0145
+Every builtin object, function and symbol of the base realm and every intrinsic has a
+stable id in tests/builtins/registry.tsv (D022 phase 0, docs/frozen-builtins.md):
+- **Keys:** `value` entries are paths in the spec's style from `globalThis`, a global,
+  a realm intrinsic no global reaches (`%TypedArray%`, `%ArrayIteratorPrototype%`) or a
+  prelude function registered for an intrinsic (`%intrinsic:Name%`), through properties
+  (`.key`, `["key"]`, `[Symbol.iterator]`), `get `/`set ` for accessors, `.[[Prototype]]`
+  and closure captures (`~N`, for the 220 prelude helpers that builtins capture and no
+  property reaches). `intrinsic` entries name the intrinsics table by name: the kinds of
+  builtin closures and the operands of `call_intrinsic`. New builtins get the first path a
+  breadth-first walk finds (globals by property, then realm roots, then registered prelude
+  functions, then `[[Prototype]]` links, then captures; keys sorted), so the spec's names
+  win. Only two realm-internal objects (the global lexical record and the registries,
+  per-VM state) have none, and a test says so.
+- **Append-only:** ids are 0, 1, 2, ... in file order and never change; a builtin that goes
+  away keeps its line with `removed: <reason>`; a second path to a named object is an
+  alias (the object keeps its lowest id). `scripts/registry-update.sh` appends and
+  tombstones (`cargo run -p djs-prelude --example registry -- update|check`).
+- **Checks:** a djs-prelude test fails when a builtin or intrinsic has no live entry or a
+  live entry no longer resolves; `scripts/registry.py check main` (a gate step) fails when
+  a line of main's table is renumbered, dropped or rewritten. The file merges with git's
+  union driver, and scripts/regen.sh (`scripts/registry.py merge`, then the update)
+  renumbers a merged tail after main's entries.
+- **API:** djs_core::vm::registry (format, paths, `check`, `update`, `name_cells(heap)`:
+  resolves the paths on any heap); djs_prelude::registry (feature `registry`, on except in
+  djs-wasm): the committed table, `path`, `id_of_path`, `id_of_intrinsic`, and
+  `base_offset`/`id_of_base_offset` from a table build.rs computes on the base image.
+  `djs heap` names builtins by their registry paths (`%Array.prototype.map%`).
+- **Limits:** capture paths change with the builtin's code (tombstone and re-add). A path
+  resolved on a session heap follows whatever is there: a script that replaced
+  `Array.prototype.map` gets its function named so, and pi's lockdown turns some data
+  properties into accessors, which then resolve under `get `/`set ` only. With the
+  immutable prefix (D022, 0147) the base offset table names prefix cells exactly.
