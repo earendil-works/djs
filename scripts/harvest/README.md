@@ -81,3 +81,18 @@ show (labels, sloppy-only tokens). `--summary` prints per-feature counts (script
 sessions, first and last date) and marks the features pi's prelude uses itself. The
 results are in docs/codemode-feature-usage.md. Its output holds feature keys and hashes,
 no script text, and stays in work/scratch/ like everything derived from sessions.
+
+## p2 sessions and builtin members (0149)
+
+The p2 app keeps each session in a SQLite database (`~/.pi/p2/sessions/<id>.sqlite`,
+pi-durable's schema: messages in the `entries` table's records). `extract.py` reads
+`*.sqlite` files next to JSONL sessions and tags their source ids `p2-`. Copy the
+databases (with their `-wal`/`-shm` files) into work/scratch/ first and point extract.py
+at the copy: it opens them read-only. Nothing else under ~/.pi/p2 is in scope: that
+directory also holds credentials and keys.
+
+`members.py FEATURES.jsonl [--touched TOUCHED.tsv] [--families]` joins features.py's
+output with the builtin registry (tests/builtins/registry.tsv): per global, which statics
+and prototype members scripts name (prototype members by name only, so an upper bound)
+and, with --touched, how many corpus runs touched each one (0143's touch build, named by
+registry path). The results are in docs/slim-codemode.md.
