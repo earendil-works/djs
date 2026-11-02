@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0147 | Immutable builtin prefix: session-only images/hash/GC | heap | .worktrees/heap |
+| 0148 | Order-independent shapes for builtin-created objects | heap | .worktrees/heap |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 
 ## Open (ready)
@@ -18,7 +18,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0148 | Order-independent shapes for builtin-created objects | 0147 (heap next) |
 
 ## Done
 
@@ -79,6 +78,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0147 | Immutable builtin prefix, session images (D2062-D2066) | ae8771c7 (agent heap; prefix write barrier; DJSN format 2; empty Sandbox 1 KB; builtin-created shapes still order-dependent -> 0148) |
 | 0146 | Frozen-builtins VM option (D2304) | af8497bb (agent perf; flag on <=0.8%; pi start w/o lockdown 3 ms -> 0.40 ms, 480 -> 376 KB) |
 | 0145 | Stable append-only builtin registry (D2371) | 09dfb743 (agent bloat; 1,409 entries; gate check; module size unchanged) |
 | 0144 | Frozen builtins: design + prototype (research) | e919a0a1 (agent heap; docs/frozen-builtins.md: immutable frozen prefix, no laziness; separate space +3-6%) |
