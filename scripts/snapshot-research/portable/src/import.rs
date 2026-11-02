@@ -341,6 +341,9 @@ pub fn import(snap: &J) -> Result<Session, String> {
                     .position(|i| i.name == name)
                     .ok_or(format!("no intrinsic {name} in this build"))?;
                 heap.set_object_slot(o, 0, Value::int(id as i32));
+                if std::env::var("PORTABLE_DEBUG").is_ok() {
+                    eprintln!("builtin closure {name}: exporter id {} -> here {id}", n["_build"]["id"]);
+                }
                 let d = imp.value(heap, &n["data"])?;
                 heap.set_object_slot(o, 1, d);
                 heap.set_prototype_of(o, fproto);
@@ -504,6 +507,14 @@ fn import_activation(imp: &Importer, heap: &mut Heap, g: Obj, n: &J) -> Result<(
     }
     for o in ops {
         frame.push(imp.value(heap, &o[1])?);
+    }
+    if std::env::var("PORTABLE_DEBUG").is_ok() {
+        eprintln!(
+            "activation {}:{}-{} await at {}:{}: exporter pc {} frame {} locals {} code {} B -> here pc {} frame {} locals {} code {} B, roles {:?}",
+            span.0, span.1, span.2, site.0, site.1,
+            n["_build"]["pc"], n["_build"]["frame"], n["_build"]["locals"], n["_build"]["code"],
+            resume_pc, frame.len(), t.locals, t.code.len(), roles
+        );
     }
     let arr = va_new(heap, &frame);
     let promise = imp.value(heap, &n["promise"])?;

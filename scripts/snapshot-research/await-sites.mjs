@@ -198,7 +198,7 @@ function sitesOf(code) {
   return out;
 }
 
-const totals = { scripts: 0, parseErrors: 0, awaits: 0, cat: {}, roles: {}, stmt: {}, depth: {}, scriptWorst: {}, nested: 0 };
+const totals = { scripts: 0, parseErrors: 0, awaits: 0, cat: {}, roles: {}, roleSets: {}, stmt: {}, depth: {}, scriptWorst: {}, nested: 0 };
 const bump = (o, k, n = 1) => (o[k] = (o[k] ?? 0) + n);
 const order = ["none", "A", "B", "C", "D"];
 const siteTable = {};
@@ -218,6 +218,7 @@ function account(name, code) {
     bump(totals.cat, s.cat);
     if (!s.inBody) totals.nested++;
     for (const r of new Set(s.held)) bump(totals.roles, r);
+    if (s.held.length) bump(totals.roleSets, [...new Set(s.held)].sort().join(" + "));
     for (const r of new Set(s.statement)) bump(totals.stmt, r);
     bump(totals.depth, Math.min(s.held.length, 6));
     if (order.indexOf(s.cat) > order.indexOf(worst)) worst = s.cat;
@@ -250,6 +251,8 @@ console.log("scripts by their worst await site:");
 for (const c of order) console.log(`  ${c}: ${pct(totals.scriptWorst[c] ?? 0, totals.scripts - totals.parseErrors)}`);
 console.log("expression roles (await sites holding at least one):");
 for (const [k, v] of Object.entries(totals.roles).sort((a, b) => b[1] - a[1])) console.log(`  ${k}: ${pct(v, totals.awaits)}`);
+console.log("held role sets (await sites):");
+for (const [k, v] of Object.entries(totals.roleSets).sort((a, b) => b[1] - a[1]).slice(0, 12)) console.log(`  ${k}: ${pct(v, totals.awaits)}`);
 console.log("statement state:");
 for (const [k, v] of Object.entries(totals.stmt).sort((a, b) => b[1] - a[1])) console.log(`  ${k}: ${pct(v, totals.awaits)}`);
 console.log("held expression operands per await (6 = 6 or more):");

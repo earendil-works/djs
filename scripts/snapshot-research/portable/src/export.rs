@@ -253,7 +253,7 @@ impl<'a> Exporter<'a> {
                 }
                 let data = self.value(data);
                 let props = self.props(o, false);
-                json!({"t": "builtin-closure", "intrinsic": name, "data": data, "props": props})
+                json!({"t": "builtin-closure", "_build": {"id": id}, "intrinsic": name, "data": data, "props": props})
             }
             ObjectClass::Record => self.record(cell),
             ObjectClass::Promise => {
@@ -397,7 +397,9 @@ impl<'a> Exporter<'a> {
             .collect();
         let promise = self.value(h.object_slot(g, G_PROMISE));
         let fid = self.function_id(&t);
-        json!({"t": "async", "fn": fid, "callee": callee, "site": {"line": site.0, "col": site.1},
+        // `_build`: this build's own coordinates, for the report only; import ignores them.
+        let build = json!({"pc": f.pc, "frame": f.values.len(), "locals": t.locals, "code": t.code.len()});
+        json!({"t": "async", "_build": build, "fn": fid, "callee": callee, "site": {"line": site.0, "col": site.1},
                "this": this, "argc": argc, "args": args, "bindings": bindings,
                "operands": operands, "promise": promise})
     }

@@ -118,6 +118,15 @@ fn main() {
                 }
             }
         }
+        Some("paths-time") => {
+            let vm = session::new_vm();
+            let t0 = std::time::Instant::now();
+            let n = heapx::builtin_paths(vm.heap()).len();
+            let t1 = t0.elapsed();
+            let t0 = std::time::Instant::now();
+            let _ = session::new_vm();
+            println!("builtin paths: {n} objects in {t1:?}; a fresh realm in {:?}", t0.elapsed());
+        }
         Some("harvest") => sites::main(&args[1..]),
         Some("import-all") => sites::import_all(&args[1], args.get(2).map(|s| s.as_str())),
         _ => {
