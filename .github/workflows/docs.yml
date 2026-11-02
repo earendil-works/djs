@@ -1,7 +1,8 @@
 # Publishes the guide (docs/guide, D2100) to GitHub Pages: `djs-docs build` renders the
 # pages and the decision log, and copies djs-wasm and the host package (types stripped by
 # node) for the live examples. The gate already runs `djs-docs check` before anything
-# reaches main, so this only builds and deploys.
+# reaches main, so this only builds and deploys. The deploy step is retried once after a
+# short wait: deploy-pages can fail transiently ("Failed to get ID Token … socket hang up").
 name: docs
 
 on:
@@ -49,7 +50,15 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.retry.outputs.page_url }}
     steps:
+      # The first attempt may fail transiently; the job then fails only if the retry does.
       - id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Wait before retrying
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 30
+      - id: retry
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
