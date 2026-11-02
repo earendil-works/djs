@@ -1,7 +1,7 @@
 # 0156: Architecture audit: are we carrying bloat from design missteps? (research)
 
-status: open
-agent: -
+status: in-progress
+agent: audit
 branch: issue/0156-bloat-audit
 depends-on: -
 guide: -
