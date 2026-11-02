@@ -149,6 +149,22 @@ pub fn diff(rg: &Graph, hg: &Graph) -> Diff {
             queue.push_back((rt, ht));
         }
     }
+    // Cells of the builtin prefix never move (D2064): pair those the walk did not reach
+    // (garbage a script left in the prefix, kept there) by offset.
+    let base = hg.heap.base_end().min(rg.heap.base_end());
+    for h in 0..n {
+        let hc = hg.cells[h];
+        if hc.offset >= base || img_to_ref[h] != NONE {
+            continue;
+        }
+        if let Ok(r) = rg.cells.binary_search_by_key(&hc.offset, |c| c.offset) {
+            let rc = rg.cells[r];
+            if ref_to_img[r] == NONE && rc.kind == hc.kind && rc.size == hc.size {
+                ref_to_img[r] = h as u32;
+                img_to_ref[h] = r as u32;
+            }
+        }
+    }
     let mut status = vec![Status::New; n];
     let mut moved_words = vec![0u32; n];
     let mut changed_words = vec![0u32; n];

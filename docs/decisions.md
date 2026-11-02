@@ -6340,6 +6340,11 @@ Below `Roots::BASE_END`, cells keep their offsets for the VM's whole life.
   where it is never freed. The same holds for anything only that dead storage reaches.
   This is bounded by how much scripts reshape builtins. With frozen builtins nothing in
   the prefix changes.
+  - Measured: pi's JS lockdown reshapes ~500 builtins and leaves 16.5 KB of dead
+    PropValues in the prefix of every pi session. Before, the full collection at its
+    seal freed them.
+  - `djs heap --diff` pairs such unreachable prefix cells by offset, since they never
+    move, so they are not reported as new and gone.
 - **Measured:** wasm instructions pi-like −1.5%, arrays −0.8%, json −1.1%, the rest ±0.5%
   (full collections no longer mark and slide the base). Module −20 B gzip.
 
