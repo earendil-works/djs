@@ -324,23 +324,16 @@ impl Heap {
         self.arena().get(self.atom_table(), AtomTable::ENTRIES).0
     }
 
-    /// The base image's entries (D2431) and their number (0 without a base).
+    /// The number of the base image's atoms (D2431), the first index of a VM's own; 0
+    /// without a base.
     #[inline]
-    fn atom_base(&self) -> (u32, u32) {
-        let base = self
-            .arena()
-            .get(self.atom_table(), AtomTable::BASE_ENTRIES)
-            .0;
-        if base == 0 {
-            (0, 0)
-        } else {
-            (base, self.value_array_len(base))
-        }
+    fn atom_base_count(&self) -> u32 {
+        self.arena().get(self.atom_table(), AtomTable::BASE_COUNT)
     }
 
     /// Number of atom table entries (string and symbol atoms; slot 0 included).
     pub fn atom_count(&self) -> u32 {
-        self.atom_base().1 + self.value_array_len(self.atom_entries())
+        self.atom_base_count() + self.value_array_len(self.atom_entries())
     }
 
     /// The table entry of a string or symbol atom.
@@ -353,11 +346,11 @@ impl Heap {
     }
 
     /// The table entry at atom index `i`, from the base's entries or the VM's own.
-    #[inline]
     pub(super) fn atom_entry_at(&self, i: u32) -> Option<Value> {
-        let (base, n) = self.atom_base();
+        let table = self.atom_table();
+        let n: u32 = self.arena().get(table, AtomTable::BASE_COUNT);
         let (arr, k) = if i < n {
-            (base, i)
+            (self.arena().get::<Ref>(table, AtomTable::BASE_ENTRIES).0, i)
         } else {
             (self.atom_entries(), i - n)
         };
@@ -369,7 +362,7 @@ impl Heap {
         let table = self.atom_table();
         let entries = self.atom_entries();
         let len = self.value_array_len(entries);
-        let first = self.atom_base().1;
+        let first = self.atom_base_count();
         if first + len > INDEX_MASK {
             return Err(HeapError::OutOfMemory);
         }
@@ -387,12 +380,18 @@ impl Heap {
         Ok(first + len)
     }
 
-    /// Finds a string atom by hash and content: among the base's atoms, then the VM's own.
+    /// Finds a string atom by hash and content: among the VM's own atoms, then the base's
+    /// (D2431). A string is in one of the two, so the order only matters for speed: the
+    /// VM's own index is small and its strings have cached hashes, while a miss among the
+    /// base's strings would hash them again (their hashes are not cached, D2063).
     fn find_string_atom(&self, hash: u32, eq: impl Fn(&Heap, Str) -> bool) -> Option<Atom> {
         let table = self.atom_table();
-        let (base, n) = self.atom_base();
-        let find = |index: u32, entries: u32, first: u32| {
-            self.probe(index, hash, |_, idx| {
+        let a = self.arena();
+        let mut index = a.get::<Ref>(table, AtomTable::INDEX).0;
+        let mut entries = a.get::<Ref>(table, AtomTable::ENTRIES).0;
+        let mut first: u32 = a.get(table, AtomTable::BASE_COUNT);
+        loop {
+            let found = self.probe(index, hash, |_, idx| {
                 if idx == 0 {
                     return Some(None);
                 }
@@ -401,16 +400,15 @@ impl Heap {
                     .as_string()
                     .expect("string atom");
                 (self.str_hash_uncached(s) == hash && eq(self, s)).then_some(Some(Atom(idx)))
-            })
-        };
-        if base != 0 {
-            let index = self.arena().get(table, AtomTable::BASE_INDEX).0;
-            if let Some(a) = find(index, base, 0) {
-                return Some(a);
+            });
+            // Without a base, or after the base's index: no more levels.
+            if found.is_some() || first == 0 {
+                return found;
             }
+            index = a.get::<Ref>(table, AtomTable::BASE_INDEX).0;
+            entries = a.get::<Ref>(table, AtomTable::BASE_ENTRIES).0;
+            first = 0;
         }
-        let index = self.arena().get(table, AtomTable::INDEX).0;
-        find(index, self.atom_entries(), n)
     }
 
     fn index_insert(&mut self, index: u32, hash: u32, atom_index: u32) {
@@ -428,7 +426,7 @@ impl Heap {
         if strings * 2 > self.u32_array_len(index) {
             let new = self.alloc_u32_array(self.u32_array_len(index) * 2)?;
             let entries = self.atom_entries();
-            let first = self.atom_base().1;
+            let first = self.atom_base_count();
             for i in 0..self.value_array_len(entries) {
                 if let Some(t) = self.value_array_get(entries, i).as_string() {
                     let h = self.str_hash_uncached(t);
@@ -451,7 +449,7 @@ impl Heap {
     /// refers to a forgotten atom, which interns again as a new id if it is needed later.
     /// Returns the number forgotten.
     pub(crate) fn forget_string_atoms(&mut self, keep: &[bool]) -> Result<u32, HeapError> {
-        assert_eq!(self.atom_base().0, 0, "the atom table is split already");
+        assert_eq!(self.atom_base_count(), 0, "the atom table is split already");
         let table = self.atom_table();
         let entries = self.atom_entries();
         let n = self.value_array_len(entries);
@@ -489,8 +487,9 @@ impl Heap {
     /// adds go to new arrays with room for `room` of them, which the image puts in its
     /// tail. Only for the base image's build.
     pub(crate) fn split_atom_table(&mut self, room: u32) -> Result<(), HeapError> {
-        assert_eq!(self.atom_base().0, 0, "the atom table is split already");
+        assert_eq!(self.atom_base_count(), 0, "the atom table is split already");
         let table = self.atom_table();
+        let count = self.atom_count();
         let entries = self.alloc_value_array(room.max(1))?;
         let index = self.alloc_u32_array((2 * room).next_power_of_two().max(8))?;
         let a = self.arena_mut();
@@ -502,6 +501,7 @@ impl Heap {
         a.set(table, AtomTable::ENTRIES, Ref(entries));
         a.set(table, AtomTable::INDEX, Ref(index));
         a.set(table, AtomTable::STRINGS, 0);
+        a.set(table, AtomTable::BASE_COUNT, count);
         Ok(())
     }
 

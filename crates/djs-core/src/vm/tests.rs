@@ -3945,3 +3945,51 @@ fn base_strings_are_stored_once() {
     let f = get(proto.as_object().unwrap(), map);
     assert_eq!(get(f.as_object().unwrap(), name).as_string(), Some(key));
 }
+
+/// D2431: in a VM from the base, the base's atoms are in the builtin prefix and the VM's
+/// own go to small arrays in the tail; interning finds both and a session image carries
+/// only the VM's own.
+#[test]
+fn the_atom_table_has_two_levels() {
+    use crate::heap::Ref;
+    use crate::heap::cells::{AtomTable, Roots};
+    let base = prefixed_base();
+    let mut vm = Vm::from_base(&base, VmOptions::default()).unwrap();
+    let h = vm.heap();
+    let a = h.arena();
+    let table: Ref = a.get(0, Roots::ATOMS);
+    let count: u32 = a.get(table.0, AtomTable::BASE_COUNT);
+    let field = |f| a.get::<Ref>(table.0, f).0;
+    assert!(count > 1000, "{count} base atoms");
+    for f in [AtomTable::BASE_ENTRIES, AtomTable::BASE_INDEX] {
+        assert!(field(f) != 0 && field(f) < h.base_end());
+    }
+    for f in [AtomTable::ENTRIES, AtomTable::INDEX] {
+        assert!(field(f) >= h.base_end());
+    }
+    assert!(table.0 >= h.base_end());
+    let before = h.atom_count();
+    assert_eq!(before, count);
+    let h = vm.heap_mut();
+    let map = h.atom_str("map").unwrap();
+    assert!(map.id() < count);
+    let fresh: alloc::vec::Vec<_> = (0..50)
+        .map(|i| h.atom_str(&alloc::format!("fresh_atom_{i}")).unwrap())
+        .collect();
+    assert_eq!(fresh[0].id(), count);
+    assert_eq!(h.atom_count(), count + 50);
+    // Found again (past a regrowth of the VM's arrays), with their strings.
+    for (i, &f) in fresh.iter().enumerate() {
+        assert_eq!(h.atom_str(&alloc::format!("fresh_atom_{i}")).unwrap(), f);
+        assert_eq!(h.atom_name(f), alloc::format!("fresh_atom_{i}"));
+    }
+    assert_eq!(h.atom_str("map").unwrap(), map);
+    assert_eq!(h.atom_name(map), "map");
+    // The session image holds the VM's atoms, not the base's 15 KB of entries.
+    vm.collect().unwrap();
+    let s = vm.session_bytes(&base).unwrap();
+    assert!(s.len() < 16 * 1024, "{} bytes", s.len());
+    let mut back = Vm::from_session(&s, &base, VmOptions::default()).unwrap();
+    let f = back.heap_mut().atom_str("fresh_atom_7").unwrap();
+    assert_eq!(f, fresh[7]);
+}

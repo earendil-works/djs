@@ -282,18 +282,26 @@ impl Heap {
             }
             CellKind::AtomTable => {
                 let index = a.get(cell, AtomTable::INDEX);
+                // Without a base: no base index, no base entries, a count of 0.
                 let base: Ref = a.get(cell, AtomTable::BASE_INDEX);
-                let base_entries: Ref = a.get(cell, AtomTable::BASE_ENTRIES);
+                let entries: Ref = a.get(cell, AtomTable::BASE_ENTRIES);
+                let count: u32 = a.get(cell, AtomTable::BASE_COUNT);
                 fits(
                     a.get(cell, AtomTable::ENTRIES),
                     false,
                     &[CellKind::ValueArray],
                 ) && fits(index, false, &[CellKind::U32Array])
                     && pow2(index)
-                    && fits(base_entries, true, &[CellKind::ValueArray])
-                    && fits(base, true, &[CellKind::U32Array])
-                    && (base.is_null() == base_entries.is_null())
-                    && (base.is_null() || pow2(base))
+                    && match (base.get(), entries.get()) {
+                        (None, None) => count == 0,
+                        (Some(_), Some(e)) => {
+                            fits(base, false, &[CellKind::U32Array])
+                                && pow2(base)
+                                && fits(entries, false, &[CellKind::ValueArray])
+                                && self.value_array_len(e) == count
+                        }
+                        _ => false,
+                    }
             }
             CellKind::Object => {
                 let class = ObjectClass::from_u32(a.get(cell, Object::CLASS));

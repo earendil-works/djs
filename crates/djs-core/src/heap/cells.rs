@@ -311,6 +311,9 @@ cells! {
         BASE_ENTRIES: Ref = 20,
         /// The intern index of `BASE_ENTRIES`' strings; null without a base.
         BASE_INDEX: Ref = 24,
+        /// `len(BASE_ENTRIES)`, the first atom index of `ENTRIES` (0 without a base): read
+        /// on every lookup, so it is kept here rather than behind a second reference.
+        BASE_COUNT: u32 = 28,
     };
 
     /// The host handle table: values held by the embedder or by Rust code across a
