@@ -146,6 +146,10 @@ pub(super) const BUILTIN_RESULT_SHAPES: &[&[(&str, u32)]] = {
     ]
 };
 
+/// Room for a VM's own atoms in the base image's tail (D2431): a session adding up to
+/// this many writes them in place (a fresh REPL adds about 16).
+pub(super) const SESSION_ATOMS: u32 = 32;
+
 /// Names the engine interns while it runs, whatever the script (D2067): the realm's
 /// `Error` hooks, read when an error is made. (The names every compilation interns are
 /// interned by a session's first compilation, before anything else it does.)

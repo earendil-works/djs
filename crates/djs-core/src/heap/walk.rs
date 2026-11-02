@@ -282,12 +282,18 @@ impl Heap {
             }
             CellKind::AtomTable => {
                 let index = a.get(cell, AtomTable::INDEX);
+                let base: Ref = a.get(cell, AtomTable::BASE_INDEX);
+                let base_entries: Ref = a.get(cell, AtomTable::BASE_ENTRIES);
                 fits(
                     a.get(cell, AtomTable::ENTRIES),
                     false,
                     &[CellKind::ValueArray],
                 ) && fits(index, false, &[CellKind::U32Array])
                     && pow2(index)
+                    && fits(base_entries, true, &[CellKind::ValueArray])
+                    && fits(base, true, &[CellKind::U32Array])
+                    && (base.is_null() == base_entries.is_null())
+                    && (base.is_null() || pow2(base))
             }
             CellKind::Object => {
                 let class = ObjectClass::from_u32(a.get(cell, Object::CLASS));

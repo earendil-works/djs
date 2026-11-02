@@ -90,9 +90,8 @@ impl Heap {
         let rank = |c: &super::walk::CellInfo| last.iter().position(|&o| o == c.offset);
         let str_len = |c: &super::walk::CellInfo| a.get(c.offset, Str8::LEN);
         // The atom table's strings, to keep their cells among equal strings.
-        let entries: Ref = a.get(self.atom_table(), super::cells::AtomTable::ENTRIES);
-        let mut atoms: Vec<u32> = (0..self.value_array_len(entries.0))
-            .filter_map(|i| self.value_array_get(entries.0, i).as_string().map(|s| s.0))
+        let mut atoms: Vec<u32> = (1..self.atom_count())
+            .filter_map(|i| self.atom_entry_at(i)?.as_string().map(|s| s.0))
             .collect();
         atoms.sort_unstable();
         let not_atom = |c: &super::walk::CellInfo| atoms.binary_search(&c.offset).is_err();

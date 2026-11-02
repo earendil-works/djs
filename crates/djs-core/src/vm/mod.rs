@@ -879,6 +879,8 @@ impl Vm {
         self.heap.compact_for_image()?;
         // Without the prelude's internal names (D2253).
         image::drop_internal_names(&mut self.heap)?;
+        // The base's atoms go to the prefix, a VM's own to the tail (D2431).
+        self.heap.split_atom_table(image::SESSION_ATOMS)?;
         self.collect_canonical()?;
         let tail = self.prepare_prefix()?;
         let tail_bytes: u32 = tail.iter().map(|&c| self.heap.cell_size(c)).sum();

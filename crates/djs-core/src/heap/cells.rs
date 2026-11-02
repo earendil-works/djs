@@ -293,14 +293,24 @@ cells! {
         LEN: u32 = 8,
     } tail DATA: [u32] = 12;
 
-    /// The atom table: atom index -> string or symbol, plus the intern hash index.
+    /// The atom table: atom index -> string or symbol, plus the intern hash index. In two
+    /// levels in a VM made from a base image (D2431): the base's atoms in `BASE_ENTRIES`
+    /// and `BASE_INDEX`, in the builtin prefix and never written, and the VM's own after
+    /// them in `ENTRIES` and `INDEX`, above it.
     10 => AtomTable {
-        /// Number of string atoms (for the index load factor).
+        /// Number of string atoms in `ENTRIES` (for `INDEX`'s load factor).
         STRINGS: u32 = 8,
-        /// [`ValueArray`] indexed by atom index; slot 0 is unused.
+        /// [`ValueArray`] of the atoms from index `len(BASE_ENTRIES)` on (from 0 without
+        /// a base; slot 0, the null atom, is unused).
         ENTRIES: Ref = 12,
-        /// [`U32Array`] of buckets holding string atom indexes (0 = empty).
+        /// [`U32Array`] of buckets holding the atom indexes of `ENTRIES`' strings
+        /// (0 = empty).
         INDEX: Ref = 16,
+        /// The base image's entries, atom indexes `0..len` (slot 0 unused); null
+        /// without a base.
+        BASE_ENTRIES: Ref = 20,
+        /// The intern index of `BASE_ENTRIES`' strings; null without a base.
+        BASE_INDEX: Ref = 24,
     };
 
     /// The host handle table: values held by the embedder or by Rust code across a
