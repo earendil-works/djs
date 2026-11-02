@@ -863,6 +863,15 @@ impl Vm {
     /// by copying so that the image depends on its graph alone (0101), then its cells
     /// ordered by kind for the module's gzip (D2251).
     pub fn prepare_base_image(&mut self) -> Result<(), HeapError> {
+        // A VM's own shape tree (D2063), with the shapes of the objects builtins create
+        // already in it (D2067): the builtins' shapes keep the prelude's root.
+        self.heap
+            .arena_mut()
+            .set(0, crate::heap::cells::Roots::ROOT_SHAPE, Ref(0));
+        for keys in image::BUILTIN_RESULT_SHAPES {
+            self.heap.precreate_shapes(keys)?;
+        }
+        crate::interp::run::promise::preallocate_queues(&mut self.heap)?;
         self.heap.compact_for_image()?;
         // Without the prelude's internal names (D2253).
         image::drop_internal_names(&mut self.heap)?;
@@ -884,11 +893,12 @@ impl Vm {
     /// the image's tail (above `BASE_END`), in their order there.
     /// - Every builtin object is marked as a prototype (D1621), so that is not written
     ///   later. (String hashes are not cached in the prefix: `Heap::str_hash`.)
-    /// - The root shape is dropped from the roots: a VM grows its own shape tree from a
-    ///   root of its own (created on first use), and the builtins' shapes keep theirs.
+    /// - The root shape is the VM's own (`prepare_base_image` replaced it), and its tree
+    ///   goes to the tail: scripts extend it.
     /// - The tail: the realm and its random state, the global object, the global lexical
     ///   record and `Symbol.for`'s registry with their property tables, Map/Set tables,
-    ///   the atom table, the host call table, the interpreter cell and the value stack.
+    ///   the atom table, the host call table, the job queue (allocated now, D2067), the
+    ///   interpreter cell, the value stack and the VM's shape tree.
     fn prepare_prefix(&mut self) -> Result<Vec<u32>, HeapError> {
         use crate::heap::cells::{Object, Realm, Roots};
         let cells: Vec<(u32, crate::heap::CellKind)> =
@@ -911,10 +921,8 @@ impl Vm {
                 _ => {}
             }
         }
-        self.heap.arena_mut().set(0, Roots::ROOT_SHAPE, Ref(0));
         let h = &self.heap;
         let a = h.arena();
-        // (The root shape is cleared above: its transitions stay with the builtins.)
         let mut tail: Vec<u32> = h
             .first_grown(self.global())
             .into_iter()
@@ -940,11 +948,21 @@ impl Vm {
         let atoms: Ref = a.get(0, Roots::ATOMS);
         let interp: Ref = a.get(0, Roots::INTERP);
         let stack: Ref = a.get(0, Roots::STACK);
+        let jobs: Ref = a.get(0, Roots::JOBS);
+        let queues = [
+            jobs.0,
+            a.get::<Ref>(interp.0, crate::heap::cells::Interp::INBOX).0,
+            a.get::<Ref>(interp.0, crate::heap::cells::Interp::REJECTIONS)
+                .0,
+        ];
         let calls: Ref = a.get(0, Roots::HOST_CALLS);
         let at = tail.len().saturating_sub(2);
         tail.insert(at, atoms.0);
         front.append(&mut tail);
-        front.extend_from_slice(&[calls.0, interp.0, stack.0]);
+        front.extend(h.root_shape_tree());
+        front.push(calls.0);
+        front.extend_from_slice(&queues);
+        front.extend_from_slice(&[interp.0, stack.0]);
         let mut seen = alloc::collections::BTreeSet::new();
         front.retain(|&c| c != 0 && seen.insert(c));
         Ok(front)

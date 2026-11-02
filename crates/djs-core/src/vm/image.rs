@@ -30,6 +30,11 @@ pub(super) fn drop_internal_names(heap: &mut Heap) -> Result<u32, HeapError> {
             heap.arena_mut().set(t, FuncTemplate::NAME, 0u32);
         }
     }
+    // The names the engine interns at run time (D2067), so that using it interns none.
+    let mut engine = vec![];
+    for name in ENGINE_ATOMS {
+        engine.push(heap.atom_str(name)?.id());
+    }
     let mut keep = vec![false; heap.atom_count() as usize];
     let mut mark = |id: u32| {
         // String and symbol atoms (integer atoms have bit 31): their table index.
@@ -39,6 +44,9 @@ pub(super) fn drop_internal_names(heap: &mut Heap) -> Result<u32, HeapError> {
             *k = true;
         }
     };
+    for id in engine {
+        mark(id);
+    }
     let a = heap.arena();
     for c in heap.cells() {
         let at = c.offset;
@@ -87,3 +95,67 @@ pub(super) fn drop_internal_names(heap: &mut Heap) -> Result<u32, HeapError> {
     }
     heap.forget_string_atoms(&keep)
 }
+
+/// The shapes of the objects that builtins and the engine create with named properties,
+/// as key chains with their stored flags (D2067). The base has them in every VM's shape
+/// tree, so using a builtin adds no shape, whatever the order. From a survey of builtin
+/// calls (0148): iterator results; RegExp match results and their `indices`; property
+/// descriptors; functions, classes and their prototypes; RegExp objects; errors;
+/// `Promise.allSettled`, `Promise.withResolvers` and `Proxy.revocable` results; template
+/// objects.
+pub(super) const BUILTIN_RESULT_SHAPES: &[&[(&str, u32)]] = {
+    const W: u32 = 1;
+    const ALL: u32 = 7;
+    const WC: u32 = 5;
+    const C: u32 = 4;
+    &[
+        &[("value", ALL), ("done", ALL)],
+        &[
+            ("index", ALL),
+            ("input", ALL),
+            ("groups", ALL),
+            ("indices", ALL),
+        ],
+        &[("groups", ALL)],
+        &[
+            ("value", ALL),
+            ("writable", ALL),
+            ("enumerable", ALL),
+            ("configurable", ALL),
+        ],
+        &[
+            ("get", ALL),
+            ("set", ALL),
+            ("enumerable", ALL),
+            ("configurable", ALL),
+        ],
+        &[("length", C), ("name", C), ("prototype", W)],
+        &[("length", C), ("name", C), ("prototype", 0)],
+        &[("constructor", WC)],
+        &[("lastIndex", W)],
+        &[("message", WC), ("cause", WC)],
+        &[("message", WC), ("errors", WC)],
+        &[("message", WC), ("cause", WC), ("errors", WC)],
+        &[("cause", WC)],
+        &[("errors", WC)],
+        &[("status", ALL), ("value", ALL)],
+        &[("status", ALL), ("reason", ALL)],
+        &[("promise", ALL), ("resolve", ALL), ("reject", ALL)],
+        &[("proxy", ALL), ("revoke", ALL)],
+        &[("raw", 0)],
+    ]
+};
+
+/// Names the engine interns while it runs, whatever the script (D2067): the realm's
+/// `Error` hooks read when an error is made, and the names every compilation interns.
+const ENGINE_ATOMS: &[&str] = &[
+    "prepareStackTrace",
+    "stackTraceLimit",
+    "undefined",
+    "this",
+    "arguments",
+    "new.target",
+    "<home>",
+    "<active>",
+    "<completion>",
+];

@@ -47,6 +47,49 @@ impl Heap {
         Ok(s)
     }
 
+    /// Creates the shapes of the chain `keys` (key, stored flags) from the root shape, as
+    /// adding those properties in that order to an empty object would (D2067).
+    pub(crate) fn precreate_shapes(&mut self, keys: &[(&str, u32)]) -> Result<(), HeapError> {
+        let mut s = self.root_shape()?;
+        for &(k, flags) in keys {
+            let key = self.atom_str(k)?;
+            s = self
+                .shape_child(s, key, flags)?
+                .ok_or(HeapError::OutOfMemory)?;
+        }
+        Ok(())
+    }
+
+    /// The cells of the tree under the root shape: each shape, then its descriptors and
+    /// transitions, depth-first in transition order. Empty without a root shape.
+    pub(crate) fn root_shape_tree(&self) -> alloc::vec::Vec<u32> {
+        let mut out = alloc::vec::Vec::new();
+        let mut stack: alloc::vec::Vec<u32> = self
+            .arena()
+            .get::<Ref>(0, Roots::ROOT_SHAPE)
+            .get()
+            .into_iter()
+            .collect();
+        while let Some(s) = stack.pop() {
+            out.push(s);
+            let a = self.arena();
+            if let Some(d) = a.get::<Ref>(s, Shape::DESCS).get() {
+                out.push(d);
+            }
+            if let Some(t) = a.get::<Ref>(s, Shape::TRANSITIONS).get() {
+                out.push(t);
+                let len = a.get(t, RefArray::LEN);
+                for i in (0..len).rev() {
+                    stack.push(a.read::<Ref>(RefArray::REFS.at(t, i)).0);
+                }
+            }
+        }
+        // Descriptors are shared along a chain.
+        let mut seen = alloc::collections::BTreeSet::new();
+        out.retain(|&c| seen.insert(c));
+        out
+    }
+
     #[inline]
     pub(super) fn shape_count(&self, s: u32) -> u32 {
         self.arena().get(s, Shape::COUNT)

@@ -162,9 +162,55 @@ pub(crate) fn dequeue(heap: &mut Heap) -> Option<[Value; JOB_SIZE as usize]> {
     Some(job)
 }
 
+/// Room in the base image's queues (D2067): the job queue (jobs), the host inbox
+/// (results) and the unhandled rejections. A VM's first uses need no new cell, so when
+/// they come does not move the session's cells, and the queues are emptied, never
+/// dropped.
+const BASE_JOBS: u32 = 8;
+const BASE_INBOX: u32 = 4;
+const BASE_REJECTIONS: u32 = 8;
+
+/// Gives the heap its empty queues (the base image's), their slots `undefined` as a
+/// taken entry leaves them, so that a used queue and an unused one are the same bytes.
+pub(crate) fn preallocate_queues(heap: &mut Heap) -> Result<(), HeapError> {
+    let alloc = |heap: &mut Heap, cap: u32| -> Result<u32, HeapError> {
+        let q = heap.alloc_value_array(cap)?;
+        for k in 0..cap {
+            heap.arena_mut()
+                .write(ValueArray::VALUES.at(q, k), Value::UNDEFINED);
+        }
+        Ok(q)
+    };
+    if jobs(heap) == 0 {
+        let q = alloc(heap, BASE_JOBS * JOB_SIZE)?;
+        heap.arena_mut().set(0, Roots::JOBS, Ref(q));
+    }
+    for (field, cap) in [
+        (Interp::INBOX, BASE_INBOX * INBOX_SIZE),
+        (Interp::REJECTIONS, BASE_REJECTIONS),
+    ] {
+        if heap.arena().get::<Ref>(state::interp(heap), field).0 == 0 {
+            let q = alloc(heap, cap)?;
+            let i = state::interp(heap);
+            heap.arena_mut().set(i, field, Ref(q));
+        }
+    }
+    Ok(())
+}
+
+/// Empties the value array `q` (if any), keeping its cell.
+fn empty(heap: &mut Heap, q: u32) {
+    if q != 0 {
+        for k in 0..heap.value_array_len(q) {
+            heap.value_array_set(q, k, Value::UNDEFINED);
+        }
+        heap.arena_mut().set(q, ValueArray::LEN, 0);
+    }
+}
+
 /// Drops every queued job (`Vm::abort`).
 pub(crate) fn clear_jobs(heap: &mut Heap) {
-    heap.arena_mut().set(0, Roots::JOBS, Ref(0));
+    empty(heap, jobs(heap));
     let i = state::interp(heap);
     heap.arena_mut().set(i, Interp::JOB_HEAD, 0);
 }
@@ -375,7 +421,8 @@ pub(crate) fn has_inbox(heap: &Heap) -> bool {
 /// Drops the host inbox (`Vm::abort`).
 pub(crate) fn clear_inbox(heap: &mut Heap) {
     let i = state::interp(heap);
-    heap.arena_mut().set(i, Interp::INBOX, Ref(0));
+    let q = heap.arena().get::<Ref>(i, Interp::INBOX).0;
+    empty(heap, q);
     heap.arena_mut().set(i, Interp::INBOX_HEAD, 0);
 }
 
@@ -443,7 +490,7 @@ pub(crate) fn take_rejections(heap: &mut Heap) -> Vec<Obj> {
     let out = (0..heap.value_array_len(r))
         .filter_map(|k| heap.value_array_get(r, k).as_object())
         .collect();
-    heap.arena_mut().set(i, Interp::REJECTIONS, Ref(0));
+    empty(heap, r);
     heap.arena_mut().set(i, Interp::REPORTED, 0);
     out
 }
@@ -461,6 +508,7 @@ pub(crate) fn rejection_checkpoint(heap: &mut Heap) {
 /// Forgets the tracked rejections (`Vm::abort`).
 pub(crate) fn clear_rejections(heap: &mut Heap) {
     let i = state::interp(heap);
-    heap.arena_mut().set(i, Interp::REJECTIONS, Ref(0));
+    let r = heap.arena().get::<Ref>(i, Interp::REJECTIONS).0;
+    empty(heap, r);
     heap.arena_mut().set(i, Interp::REPORTED, 0);
 }

@@ -3869,16 +3869,33 @@ fn touching_builtins_in_any_order_leaves_the_same_session() {
             vm.canonical_hash().unwrap(),
         )
     };
-    // Calls whose results are primitives or plain arrays. (Objects that builtins create
-    // with properties, iterator results and match results, get session shapes in the
-    // order they are first created: that is session state, D2066.)
+    // The objects builtins create find their shapes in the base (D2067), and the engine's
+    // queues are there too. (No identifiers, object literals with keys, group names or
+    // classes: their names and shapes come from the script's source. Neither results
+    // keyed by the data, as `getOwnPropertyDescriptors(Map.prototype)`.)
     let calls = [
         "'abc'.toUpperCase().split('')",
         "JSON.parse(JSON.stringify([1, [2]]))",
+        "new Map([[1, 2]]).forEach(() => 0)",
+        "[...new Set([1, 2]).values()].length",
         "Math.max(1, 2) + Number.parseFloat('1.5')",
+        "/a+/.exec('caab')",
+        "'caab'.match(/a/g)",
+        "[...'aab'.matchAll(/(a)/dg)]",
+        "Object.getOwnPropertyDescriptor(Math, 'PI')",
+        "Object.getOwnPropertyDescriptor(Map.prototype, 'size')",
+        "[1, 2].entries().next()",
+        "[3, 1, 2].map(() => 0).sort()",
         "Object.keys([1]).concat([1])",
         "Array.from('ab').reverse()",
         "String(Symbol.iterator) + typeof Array.prototype.map",
+        "await Promise.allSettled([Promise.resolve(1), Promise.reject(2)])",
+        "await Promise.all([1, Promise.resolve(2)])",
+        "Promise.withResolvers()",
+        "Proxy.revocable({}, {}).revoke()",
+        "new AggregateError([], 'x').errors",
+        "(function* () { yield 1 })().next()",
+        "String.raw`a${1}`",
     ];
     let mut reversed = calls;
     reversed.reverse();
