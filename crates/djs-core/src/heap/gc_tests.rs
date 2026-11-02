@@ -1298,9 +1298,9 @@ fn the_first_collection_after_a_canonical_image_is_full() {
 }
 
 #[test]
-fn the_prefix_end_follows_full_collections() {
-    // D022 (0147): BASE_END is a cell boundary that full collections forward with the
-    // live cells below it, minor ones leave alone, and canonical ones clear.
+fn collections_never_move_the_prefix() {
+    // D2064: below BASE_END nothing moves or is freed, in full, minor and canonical
+    // collections; dead cells there stay (retained), live cells above it are collected.
     let mut h = Heap::new().unwrap();
     let hs = build_random(&mut h, 5, 300, None);
     let o = h.new_object(None).unwrap();
@@ -1312,24 +1312,34 @@ fn the_prefix_end_follows_full_collections() {
     h.seal().unwrap();
     let end = h.arena().len();
     h.arena_mut().set(0, Roots::BASE_END, end);
-    assert_eq!(h.base_end(), end);
+    let prefix = h.bytes()[88..end as usize].to_vec();
     // Garbage below the prefix end: the old object's storage dies when it grows.
     let o = h.get_handle(ho).as_object().unwrap();
     for i in 0..40 {
         let k = h.atom_str(&format!("p{i}")).unwrap();
         h.create_data_property(o, k, Value::int(i)).unwrap();
     }
+    let changed = |h: &Heap| {
+        h.bytes()[88..end as usize]
+            .chunks(8)
+            .zip(prefix.chunks(8))
+            .filter(|(a, b)| a != b)
+            .count()
+    };
+    let written = changed(&h);
     h.collect_minor().unwrap();
-    assert_eq!(h.base_end(), end, "minor: unchanged");
     h.collect().unwrap();
-    assert!(
-        h.base_end() < end && h.base_end() <= h.old_end(),
-        "{} {end} {}",
-        h.base_end(),
-        h.old_end()
+    assert_eq!(h.base_end(), end);
+    assert_eq!(
+        changed(&h),
+        written,
+        "only the words the mutation wrote differ"
     );
     h.verify().unwrap();
+    let d = dump(&h, &hs);
     h.collect_canonical().unwrap();
-    assert_eq!(h.base_end(), 0);
-    let _ = hs;
+    assert_eq!(h.base_end(), end);
+    assert_eq!(changed(&h), written);
+    assert_eq!(dump(&h, &hs), d);
+    h.verify().unwrap();
 }

@@ -96,12 +96,12 @@ pub fn next_threshold(live: u32, limit: u32) -> u32 {
 const PAGE: u64 = 64 * 1024;
 
 /// Forwards one traced slot of a to-space cell, rewriting it with the new offset.
-fn trace(from: &mut Arena, to: &mut Arena, slot: Slot) {
+fn trace(from: &mut Arena, to: &mut Arena, base: u32, slot: Slot) {
     match slot {
         Slot::Value(s) => {
             let v: Value = to.read(s);
             if let Some(t) = v.ref_offset() {
-                let n = forward(from, to, t);
+                let n = forward(from, to, t, base);
                 let bits = (v.to_bits() & !0xFFFF_FFFF) | n as u64;
                 to.write(s, Value::from_raw(bits));
             }
@@ -109,7 +109,7 @@ fn trace(from: &mut Arena, to: &mut Arena, slot: Slot) {
         Slot::Ref(s) => {
             let r: Ref = to.read(s);
             if let Some(t) = r.get() {
-                let n = forward(from, to, t);
+                let n = forward(from, to, t, base);
                 to.write(s, Ref(n));
             }
         }
@@ -142,11 +142,18 @@ fn is_forwarded(from: &Arena, off: u32) -> bool {
 }
 
 /// Returns the new offset of the from-space cell at `off`, copying it if needed.
-fn forward(from: &mut Arena, to: &mut Arena, mut off: u32) -> u32 {
+fn forward(from: &mut Arena, to: &mut Arena, mut off: u32, base: u32) -> u32 {
+    // The builtin prefix stays where it is (copied before the scan).
+    if off < base {
+        return off;
+    }
     if from.get(off, Header::KIND) == CellKind::Rope as u8
         && from.get(off, Header::FLAGS) & flags::ROPE_FLATTENED != 0
     {
         off = from.get(off, Rope::LEFT).0;
+        if off < base {
+            return off;
+        }
     }
     if from.get(off, Header::GC) & gc_bits::FORWARDED != 0 {
         return from.read::<u32>(off + FORWARD);
@@ -178,8 +185,10 @@ impl Heap {
     /// and `Value` held outside the heap is invalid afterwards; keep [`Handle`]s instead.
     ///
     /// The surviving cells keep their address order; the old region (`Roots::OLD_END`,
-    /// D2041) shrinks to its live cells. On `Err(HostOutOfMemory)` (the host could not
-    /// provide the side tables) the heap is unchanged.
+    /// D2041) shrinks to its live cells. The builtin prefix below `Roots::BASE_END`
+    /// (D022, D2064) is never moved or freed: its cells are walked like an old region's,
+    /// and everything above it is collected. On `Err(HostOutOfMemory)` (the host could
+    /// not provide the side tables) the heap is unchanged.
     ///
     /// [`Handle`]: super::Handle
     pub fn collect(&mut self) -> Result<GcStats, HeapError> {
@@ -187,7 +196,7 @@ impl Heap {
         if core::mem::take(&mut self.fail_next_gc_reserve) {
             return Err(HeapError::HostOutOfMemory);
         }
-        let (before, after, old) = self.mark_compact(0)?;
+        let (before, after, old) = self.mark_compact(self.base_end())?;
         self.set_old_region(old, 0);
         self.after_collect(after);
         Ok(GcStats { before, after })
@@ -278,9 +287,18 @@ impl Heap {
             return Err(HeapError::HostOutOfMemory);
         }
         let mut to = Arena::with_capacity(before as usize, self.arena.limit() as usize)?;
+        let base = self.base_end();
         let from = &mut self.arena;
-        let roots = forward(from, &mut to, 0);
-        debug_assert_eq!(roots, 0);
+        // The builtin prefix (D2064) is copied as it is, at the same offsets: only the
+        // cells above it are laid out breadth-first. Without one, the roots cell starts
+        // the copy.
+        if base > 0 {
+            to.alloc_init(base, 0, from.slice(0, base))
+                .expect("to-space is reserved for the whole from-space");
+        } else {
+            let roots = forward(from, &mut to, 0, 0);
+            debug_assert_eq!(roots, 0);
+        }
         // Ephemeron tables (WeakMap/WeakSet entries) in to-space, with a flag per pair:
         // done once its key turned out live and the pair was forwarded.
         let mut ephemerons: Vec<(u32, Vec<bool>)> = Vec::new();
@@ -313,7 +331,7 @@ impl Heap {
                 {
                     collections.push(scan);
                 }
-                walk::for_each_slot(kind, scan, size, |slot| trace(from, &mut to, slot));
+                walk::for_each_slot(kind, scan, size, |slot| trace(from, &mut to, base, slot));
                 if kind == CellKind::FuncTemplate {
                     clear_offset_caches(&mut to, scan);
                 }
@@ -334,11 +352,11 @@ impl Heap {
                         *d = true;
                         continue;
                     };
-                    if !is_forwarded(from, t) {
+                    if t >= base && !is_forwarded(from, t) {
                         continue;
                     }
-                    trace(from, &mut to, Slot::Value(ks));
-                    trace(from, &mut to, Slot::Value(ks + 8));
+                    trace(from, &mut to, base, Slot::Value(ks));
+                    trace(from, &mut to, base, Slot::Value(ks + 8));
                     *d = true;
                     progress = true;
                 }
@@ -368,8 +386,9 @@ impl Heap {
         // cells right away (the atom table grows with the first compiled script), and
         // until a full collection drops them they shift every later threshold.
         self.set_old_region(after, FULL_EVERY - 1);
-        // A breadth-first layout has no prefix: `prepare_base_image` sets it afterwards.
-        self.arena.set(0, Roots::BASE_END, 0);
+        // The prefix is where it was (a heap without one gets one from
+        // `prepare_base_image`).
+        self.arena.set(0, Roots::BASE_END, base);
         self.after_collect(after);
         for o in collections {
             self.collection_rehash(crate::value::Obj(o));
