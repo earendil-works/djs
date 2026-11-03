@@ -5,13 +5,22 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use super::cells::AtomTable;
-use super::string::hash_units;
 use super::*;
 use crate::value::Value;
 
-/// One step of the fixed hash's state (`StrHasher::write`).
+/// One step of the fixed multiply-rotate hash djs used before D2433 (FxHash-style).
 fn step(s: u32, u: u8) -> u32 {
     (s.rotate_left(5) ^ u as u32).wrapping_mul(0x9E37_79B9)
+}
+
+/// That hash of an ASCII string: the steps, then the murmur3 avalanche.
+fn fixed_hash(k: &str) -> u32 {
+    let mut h = k.bytes().fold(0, step);
+    h ^= h >> 16;
+    h = h.wrapping_mul(0x85EB_CA6B);
+    h ^= h >> 13;
+    h = h.wrapping_mul(0xC2B2_AE35);
+    h ^ (h >> 16)
 }
 
 /// `2^blocks` printable ASCII strings with the same fixed hash: each block is a pair of
@@ -77,8 +86,8 @@ fn longest_probe(h: &Heap, index: u32, hash_of: impl Fn(u32) -> u32) -> u32 {
 fn colliding_keys_spread_out_under_the_keyed_hash() {
     let keys = colliding_keys(11);
     assert_eq!(keys.len(), 2048);
-    let fixed = hash_units(keys[0].encode_utf16());
-    assert!(keys.iter().all(|k| hash_units(k.encode_utf16()) == fixed));
+    let fixed = fixed_hash(&keys[0]);
+    assert!(keys.iter().all(|k| fixed_hash(k) == fixed));
     let mut h = Heap::new().unwrap();
     // As the VM's own atoms (a heap without a base has one level, the VM's).
     let atoms: Vec<Atom> = keys.iter().map(|k| h.atom_str(k).unwrap()).collect();

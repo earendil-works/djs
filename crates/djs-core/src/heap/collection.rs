@@ -206,6 +206,10 @@ impl Heap {
     /// keys should be flat (the caller flattens them) so their hash is cheap.
     pub fn collection_set(&mut self, o: Obj, key: Value, value: Value) -> Result<(), HeapError> {
         let key = normalize_key(key);
+        if let Some(s) = key.as_string() {
+            // Cached in the string (D2433): later lookups with it skip the keyed hash.
+            self.str_hash(s);
+        }
         let base = self.entries_base(o);
         if let Some(n) = self.collection_find(o, key) {
             let entries = self.collection_entries(o);
@@ -319,6 +323,7 @@ impl Heap {
     /// Rebuilds the index in place (same size, no allocation) from the entries, and
     /// recounts the live entries. `collect` calls it for every collection it copied,
     /// since object and symbol keys hash by offset.
+    #[inline(never)]
     pub(crate) fn collection_rehash(&mut self, o: Obj) {
         let entries = self.collection_entries(o);
         let base = self.entries_base(o);

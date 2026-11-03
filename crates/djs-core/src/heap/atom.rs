@@ -27,7 +27,7 @@ use core::fmt;
 
 use super::cells::{AtomTable, Roots, Symbol, ValueArray};
 use super::layout::Ref;
-use super::string::{KeyedHasher, StrHasher, hash_units};
+use super::string::{BASE_HASH_KEY, StrView, hash_latin1_with, hash_units_with};
 use super::{CellKind, Heap, HeapError};
 use crate::value::{Str, Sym, Value};
 
@@ -286,6 +286,15 @@ fn format_u32(n: u32, buf: &mut [u8; 10]) -> &[u8] {
     }
 }
 
+/// What an atom lookup looks for: a heap string or code units.
+#[derive(Clone, Copy)]
+enum Needle<'a> {
+    Str(Str),
+    /// Latin-1 (here: ASCII) code units.
+    Latin1(&'a [u8]),
+    Units(&'a [u16]),
+}
+
 impl Heap {
     /// Creates the atom table and interns the well-known atoms and symbols.
     pub(crate) fn init_atoms(&mut self) -> Result<(), HeapError> {
@@ -346,6 +355,7 @@ impl Heap {
     }
 
     /// The table entry at atom index `i`, from the base's entries or the VM's own.
+    #[inline]
     pub(super) fn atom_entry_at(&self, i: u32) -> Option<Value> {
         let table = self.atom_table();
         let n: u32 = self.arena().get(table, AtomTable::BASE_COUNT);
@@ -381,15 +391,10 @@ impl Heap {
     }
 
     /// Finds a string atom among the VM's own atoms by its keyed hash (D2433), then among
-    /// the base's by its fixed hash (D2431), computed only if needed. A string is in one
+    /// the base's by its base hash (D2431), computed only if needed. A string is in one
     /// of the two levels; the VM's own goes first since its index is small and its strings
     /// cache their hashes.
-    fn find_string_atom(
-        &self,
-        hash: u32,
-        base_hash: impl FnOnce(&Heap) -> u32,
-        eq: impl Fn(&Heap, Str) -> bool,
-    ) -> Option<Atom> {
+    fn find_string_atom(&self, hash: u32, key: Needle) -> Option<Atom> {
         let table = self.atom_table();
         let a = self.arena();
         let found = self.find_in_level(
@@ -397,44 +402,91 @@ impl Heap {
             a.get::<Ref>(table, AtomTable::ENTRIES).0,
             a.get(table, AtomTable::BASE_COUNT),
             hash,
-            Heap::str_hash_uncached,
-            &eq,
+            false,
+            key,
         );
-        let base: Ref = a.get(table, AtomTable::BASE_INDEX);
-        if found.is_some() || base.is_null() {
+        if found.is_some() {
             return found;
         }
-        self.find_in_level(
-            base.0,
-            a.get::<Ref>(table, AtomTable::BASE_ENTRIES).0,
-            0,
-            base_hash(self),
-            Heap::str_hash_base,
-            &eq,
-        )
+        self.find_base_atom(key)
     }
 
-    /// Probes one level's index (`first`: the atom index of its entry 0).
-    #[inline(always)]
+    /// Finds a string atom among the base's atoms alone, by the base hash.
+    fn find_base_atom(&self, key: Needle) -> Option<Atom> {
+        let table = self.atom_table();
+        let a = self.arena();
+        let base: Ref = a.get(table, AtomTable::BASE_INDEX);
+        if base.is_null() {
+            return None;
+        }
+        let hash = match key {
+            Needle::Str(s) => self.str_hash_base(s),
+            Needle::Latin1(b) => hash_latin1_with(BASE_HASH_KEY, b),
+            Needle::Units(u) => hash_units_with(BASE_HASH_KEY, u),
+        };
+        let entries = a.get::<Ref>(table, AtomTable::BASE_ENTRIES).0;
+        self.find_in_level(base.0, entries, 0, hash, true, key)
+    }
+
+    /// Probes one level's index (`first`: the atom index of its entry 0; `fixed`: by the
+    /// base hash, else the keyed one).
     fn find_in_level(
         &self,
         index: u32,
         entries: u32,
         first: u32,
         hash: u32,
-        hash_of: fn(&Heap, Str) -> u32,
-        eq: &impl Fn(&Heap, Str) -> bool,
+        fixed: bool,
+        key: Needle,
     ) -> Option<Atom> {
-        self.probe(index, hash, |_, idx| {
+        // (The probe loop written out: `Heap::probe` here stayed a call.)
+        let len = self.u32_array_len(index);
+        if !len.is_power_of_two() {
+            super::fail::bad_hash_index(index, len);
+        }
+        let mask = len - 1;
+        let base = self.base_end();
+        let mut b = hash & mask;
+        for _ in 0..len {
+            let idx = self.u32_array_get(index, b);
             if idx == 0 {
-                return Some(None);
+                return None;
             }
             let s = self
                 .value_array_get(entries, idx - first)
                 .as_string()
                 .expect("string atom");
-            (hash_of(self, s) == hash && eq(self, s)).then_some(Some(Atom(idx)))
-        })
+            // The atom's own string (an atom turned back into a key, `push_atom`).
+            if matches!(key, Needle::Str(t) if t == s) {
+                return Some(Atom(idx));
+            }
+            // The cached hash is the one wanted when the string is on that level's side of
+            // the prefix's end (D2433), as the VM's own atoms and the base's are.
+            let cached: u32 = self.arena().get(s.0, super::cells::Str8::HASH);
+            let h = if cached != 0 && (s.0 < base) == fixed {
+                cached
+            } else if fixed {
+                self.str_hash_base(s)
+            } else {
+                self.str_hash_uncached(s)
+            };
+            if h == hash && self.needle_eq(s, key) {
+                return Some(Atom(idx));
+            }
+            b = (b + 1) & mask;
+        }
+        super::fail::bad_hash_index(index, len)
+    }
+
+    fn needle_eq(&self, s: Str, key: Needle) -> bool {
+        match key {
+            Needle::Str(t) => self.str_eq(s, t),
+            Needle::Latin1(b) => matches!(self.str_view(s), Some(StrView::Latin1(x)) if x == b),
+            Needle::Units(u) => match self.str_view(s) {
+                Some(v) => v.len() == u.len() && v.units().eq(u.iter().copied()),
+                None => false,
+            },
+        }
     }
 
     /// Rebuilds the VM's own atom index under the current hash key (`set_hash_key`).
@@ -464,9 +516,12 @@ impl Heap {
         let table = self.atom_table();
         let strings = self.arena().get(table, AtomTable::STRINGS) + 1;
         let mut index = self.arena().get(table, AtomTable::INDEX).0;
-        // Keep the load factor at or below 1/2. Grow before pushing the entry so a failed
-        // allocation leaves the table unchanged.
-        if strings * 2 > self.u32_array_len(index) {
+        // Keep the load factor at or below 1/4 while the index is small, 1/2 past 1024
+        // buckets (D2433): every lookup of a base atom's name misses here first, and a
+        // miss walks to an empty bucket; a big table (pi's prelude) stays compact. Grow
+        // before pushing the entry so a failed allocation leaves the table unchanged.
+        let len = self.u32_array_len(index);
+        if strings * if len < 1024 { 4 } else { 2 } > len {
             let new = self.alloc_u32_array(self.u32_array_len(index) * 2)?;
             let entries = self.atom_entries();
             let first = self.atom_base_count();
@@ -534,8 +589,8 @@ impl Heap {
         let table = self.atom_table();
         let count = self.atom_count();
         let entries = self.alloc_value_array(room.max(1))?;
-        let index = self.alloc_u32_array((2 * room).next_power_of_two().max(8))?;
-        // The base's index by the fixed hash (D2433): the same in every VM of the build.
+        let index = self.alloc_u32_array((4 * room).next_power_of_two().max(8))?;
+        // The base's index by the base hash (D2433): the same in every VM of the build.
         let base_index: Ref = self.arena().get(table, AtomTable::INDEX);
         let base: Ref = self.arena().get(table, AtomTable::ENTRIES);
         for b in 0..self.u32_array_len(base_index.0) {
@@ -565,12 +620,25 @@ impl Heap {
         {
             return Ok(a);
         }
-        let hash = self.str_hash(s);
-        if let Some(a) = self.find_string_atom(hash, |h| h.str_hash_base(s), |h, t| h.str_eq(s, t))
+        // A string of the builtin prefix is most likely a base atom's own (a builtin's
+        // name, a constant of the prelude): its fixed hash is cached and its keyed one is
+        // not, so it looks among the base's atoms first.
+        let s = self.resolve_str(s);
+        if s.0 < self.base_end()
+            && let Some(a) = self.find_base_atom(Needle::Str(s))
         {
             return Ok(a);
         }
-        let flat = self.flatten(s)?;
+        let hash = self.str_hash(s);
+        if let Some(a) = self.find_string_atom(hash, Needle::Str(s)) {
+            return Ok(a);
+        }
+        let mut flat = self.flatten(s)?;
+        if flat.0 < self.base_end() {
+            // The VM's own atoms are strings above the prefix, which cache their keyed
+            // hash (D2433): a prefix string would be hashed again at every lookup.
+            flat = self.copy_flat(flat)?;
+        }
         self.str_hash(flat);
         self.add_string_atom(flat, hash)
     }
@@ -591,26 +659,15 @@ impl Heap {
         {
             return Ok(a);
         }
-        let ascii = super::string::is_ascii(t.as_bytes());
-        let hash = if ascii {
-            let mut h = KeyedHasher::new(self.hash_key());
-            h.write_latin1(t.as_bytes());
-            h.finish()
+        let units: alloc::vec::Vec<u16>;
+        let (hash, key) = if super::string::is_ascii(t.as_bytes()) {
+            let b = t.as_bytes();
+            (self.keyed_hash_latin1(b), Needle::Latin1(b))
         } else {
-            self.keyed_hash_units(t.encode_utf16())
+            units = t.encode_utf16().collect();
+            (self.keyed_hash_units(&units), Needle::Units(&units))
         };
-        let base_hash = |_: &Heap| {
-            if ascii {
-                let mut h = StrHasher::new();
-                for b in t.bytes() {
-                    h.write(b as u16);
-                }
-                h.finish()
-            } else {
-                hash_units(t.encode_utf16())
-            }
-        };
-        if let Some(a) = self.find_string_atom(hash, base_hash, |h, s| h.str_eq_str(s, t)) {
+        if let Some(a) = self.find_string_atom(hash, key) {
             return Ok(a);
         }
         let s = self.alloc_str(t)?;
@@ -626,13 +683,8 @@ impl Heap {
         {
             return Ok(a);
         }
-        let hash = self.keyed_hash_units(units.iter().copied());
-        let base_hash = |_: &Heap| hash_units(units.iter().copied());
-        let found = self.find_string_atom(hash, base_hash, |h, s| match h.str_view(s) {
-            Some(v) => v.len() == units.len() && v.units().eq(units.iter().copied()),
-            None => false,
-        });
-        if let Some(a) = found {
+        let hash = self.keyed_hash_units(units);
+        if let Some(a) = self.find_string_atom(hash, Needle::Units(units)) {
             return Ok(a);
         }
         let s = self.alloc_utf16(units)?;

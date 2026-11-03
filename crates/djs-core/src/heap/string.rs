@@ -131,46 +131,13 @@ impl Iterator for Units<'_> {
     }
 }
 
-/// The fixed string hash of the base image's atom index (D2433): an FxHash-style
-/// multiply-rotate over code units, finished with the murmur3 avalanche. It is defined on
-/// code units, so it does not depend on the string's representation (width, rope shape).
-/// Never 0, because 0 marks "not computed". The strings of the builtin prefix cache it;
-/// everything else a VM hashes uses [`KeyedHasher`].
-#[derive(Clone, Copy)]
-pub struct StrHasher(u32);
-
-impl StrHasher {
-    pub const fn new() -> StrHasher {
-        StrHasher(0)
-    }
-
-    #[inline]
-    pub fn write(&mut self, unit: u16) {
-        self.0 = (self.0.rotate_left(5) ^ unit as u32).wrapping_mul(0x9E37_79B9);
-    }
-
-    pub fn finish(self) -> u32 {
-        let mut h = self.0;
-        h ^= h >> 16;
-        h = h.wrapping_mul(0x85EB_CA6B);
-        h ^= h >> 13;
-        h = h.wrapping_mul(0xC2B2_AE35);
-        h ^= h >> 16;
-        if h == 0 { 1 } else { h }
-    }
-}
-
-impl Default for StrHasher {
-    fn default() -> Self {
-        StrHasher::new()
-    }
-}
-
-/// The keyed hash of a VM's own strings, atoms and Map/Set keys (D2433): SipHash-1-3 over
-/// code units, four to a 64-bit word, under a key from `Roots::HASH_KEY`. Without the key,
-/// keys can't be built to collide, as they can for a fixed hash; a collision flood (crafted
-/// JSON keys, Map keys) would make lookups quadratic. Like [`StrHasher`] it is defined on
-/// code units and never 0.
+/// The string hash (D2433): SipHash-1-3 over code units, four to a 64-bit word. A VM's own
+/// strings, atoms and Map/Set keys hash under the key in `Roots::HASH_KEY`: without it,
+/// keys can't be built to collide, as they could for the fixed multiply-rotate hash used
+/// before, and a collision flood (crafted JSON keys, Map keys) can't make lookups
+/// quadratic. The base image's atom index hashes under [`BASE_HASH_KEY`], the same in
+/// every VM of the build. Defined on code units, so it does not depend on the string's
+/// representation (width, rope shape), and never 0, because 0 marks "not computed".
 #[derive(Clone, Copy)]
 pub struct KeyedHasher {
     v: [u64; 4],
@@ -210,7 +177,9 @@ impl KeyedHasher {
         v[2] = v[2].rotate_left(32);
     }
 
-    #[inline(always)]
+    // Out of line, as `finish64`: the hash is used in many places, and SipHash's rounds
+    // inlined into each cost KBs of module.
+    #[inline(never)]
     fn compress(&mut self, m: u64) {
         self.v[3] ^= m;
         Self::round(&mut self.v);
@@ -228,28 +197,30 @@ impl KeyedHasher {
         }
     }
 
-    /// Latin-1 code units, four at a time when the hasher is at a word boundary.
-    #[inline]
-    pub fn write_latin1(&mut self, bytes: &[u8]) {
-        let mut rest = bytes;
-        if self.n & 3 == 0 {
-            let (chunks, tail) = bytes.as_chunks::<4>();
-            for c in chunks {
-                let w =
-                    c[0] as u64 | (c[1] as u64) << 16 | (c[2] as u64) << 32 | (c[3] as u64) << 48;
-                self.compress(w);
-            }
-            self.n = self.n.wrapping_add((bytes.len() & !3) as u32);
-            rest = tail;
+    /// Code units as UTF-16LE bytes (a two-byte string's data).
+    fn write_utf16le(&mut self, bytes: &[u8]) {
+        for p in bytes.as_chunks::<2>().0 {
+            self.write(u16::from_le_bytes(*p));
         }
-        for &b in rest {
-            self.write(b as u16);
+    }
+
+    pub fn write_units(&mut self, units: &[u16]) {
+        for &u in units {
+            self.write(u);
+        }
+    }
+
+    #[inline(never)]
+    pub fn write_view(&mut self, v: StrView) {
+        match v {
+            StrView::Latin1(b) => b.iter().for_each(|&u| self.write(u as u16)),
+            StrView::Utf16(b) => self.write_utf16le(b),
         }
     }
 
     /// The 64-bit hash: the last units with the unit count in the top 16 bits (at most
     /// three units are left, 48 bits), then SipHash's finalization.
-    #[inline]
+    #[inline(never)]
     fn finish64(mut self) -> u64 {
         let m = self.word | ((self.n as u64 & 0xFFFF) << 48);
         self.compress(m);
@@ -268,8 +239,12 @@ impl KeyedHasher {
     }
 }
 
+/// The key of the base image's atom index and of the hashes the builtin prefix's strings
+/// cache (D2433).
+pub const BASE_HASH_KEY: u64 = 0;
+
 /// The keyed hash of one 64-bit word (Map/Set keys that are not strings, D2433).
-#[inline]
+#[inline(never)]
 pub fn keyed_u64(key: u64, x: u64) -> u32 {
     let mut h = KeyedHasher::new(key);
     h.compress(x);
@@ -277,13 +252,27 @@ pub fn keyed_u64(key: u64, x: u64) -> u32 {
     h.finish()
 }
 
+/// The hash of Latin-1 code units under `key`.
+#[inline(never)]
+pub fn hash_latin1_with(key: u64, bytes: &[u8]) -> u32 {
+    let mut h = KeyedHasher::new(key);
+    h.write_view(StrView::Latin1(bytes));
+    h.finish()
+}
+
+/// The hash of code units under `key`.
+#[inline(never)]
+pub fn hash_units_with(key: u64, units: &[u16]) -> u32 {
+    let mut h = KeyedHasher::new(key);
+    h.write_units(units);
+    h.finish()
+}
+
 /// The hash key for a `Math.random` seed (D2433): one-way, so the key is not the generator's
 /// state, which a script can read back from its numbers.
 pub fn hash_key_for_seed(seed: u64) -> u64 {
-    let mut h = KeyedHasher::new(0x243F_6A88_85A3_08D3);
-    h.compress(seed);
-    h.n = 4;
-    h.finish64()
+    (keyed_u64(0x243F_6A88_85A3_08D3, seed) as u64) << 32
+        | keyed_u64(0x1319_8A2E_0370_7344, seed) as u64
 }
 
 /// Whether every byte is ASCII. In wasm32, `<[u8]>::is_ascii` runs at 8–9 GB/s in node,
@@ -321,15 +310,6 @@ pub(crate) fn is_ascii_blocks(bytes: &[u8]) -> bool {
         acc |= b as u64;
     }
     acc & HIGH == 0
-}
-
-/// Hashes a sequence of code units.
-pub fn hash_units(units: impl Iterator<Item = u16>) -> u32 {
-    let mut h = StrHasher::new();
-    for u in units {
-        h.write(u);
-    }
-    h.finish()
 }
 
 /// Iterator over the flat pieces of a string, in order, without flattening it.
@@ -416,6 +396,16 @@ impl Heap {
 
     /// Allocates a flat string cell for `len` code units, with `LEN` set and the data
     /// zeroed.
+    /// A new flat string with the code units of the flat string `s`.
+    pub(crate) fn copy_flat(&mut self, s: Str) -> Result<Str, HeapError> {
+        let (len, two) = (self.str_len(s), self.str_is_two_byte(s));
+        let dst = self.alloc_flat(len, two)?;
+        let n = if two { 2 * len } else { len };
+        self.arena_mut()
+            .copy_within(Str8::DATA.at(s.0, 0), n, Str8::DATA.at(dst, 0));
+        Ok(Str(dst))
+    }
+
     fn alloc_flat(&mut self, len: u32, two_byte: bool) -> Result<u32, HeapError> {
         if len > MAX_LEN {
             return Err(HeapError::StringTooLong);
@@ -1040,7 +1030,7 @@ impl Heap {
 
     /// The keyed hash of a string ([`KeyedHasher`], D2433): what the VM's own atom index,
     /// Map/Set and string equality use. Cached in strings above the builtin prefix; the
-    /// prefix, which no VM writes, caches the fixed hash instead ([`Heap::str_hash_base`]).
+    /// prefix, which no VM writes, caches the base hash instead ([`Heap::str_hash_base`]).
     pub fn str_hash(&mut self, s: Str) -> u32 {
         let s = self.resolve_str(s);
         if s.0 < self.base_end() {
@@ -1068,26 +1058,32 @@ impl Heap {
     }
 
     /// The keyed hash of code units given as such.
-    pub fn keyed_hash_units(&self, units: impl Iterator<Item = u16>) -> u32 {
-        let mut h = KeyedHasher::new(self.hash_key());
-        for u in units {
-            h.write(u);
-        }
-        h.finish()
+    pub fn keyed_hash_units(&self, units: &[u16]) -> u32 {
+        hash_units_with(self.hash_key(), units)
+    }
+
+    /// The keyed hash of Latin-1 code units.
+    pub fn keyed_hash_latin1(&self, bytes: &[u8]) -> u32 {
+        hash_latin1_with(self.hash_key(), bytes)
     }
 
     fn keyed_content_hash(&self, s: Str) -> u32 {
-        let mut h = KeyedHasher::new(self.hash_key());
+        self.content_hash_with(s, self.hash_key())
+    }
+
+    #[inline(never)]
+    fn content_hash_with(&self, s: Str, key: u64) -> u32 {
+        let mut h = KeyedHasher::new(key);
         match self.str_view(s) {
-            Some(StrView::Latin1(b)) => h.write_latin1(b),
-            Some(v) => v.units().for_each(|u| h.write(u)),
-            None => self.str_units(s).for_each(|u| h.write(u)),
+            Some(v) => h.write_view(v),
+            None => self.str_chunks(s).for_each(|v| h.write_view(v)),
         }
         h.finish()
     }
 
-    /// The fixed hash of a string ([`StrHasher`]): the base image's atom index (D2433).
-    /// Cached in the builtin prefix's strings (the base's atoms), computed for others.
+    /// The base hash of a string (under [`BASE_HASH_KEY`]): the base image's atom index
+    /// (D2433). Cached in the builtin prefix's strings (the base's atoms), computed for
+    /// others.
     pub fn str_hash_base(&self, s: Str) -> u32 {
         let s = self.resolve_str(s);
         if s.0 < self.base_end() {
@@ -1096,24 +1092,10 @@ impl Heap {
                 return cached;
             }
         }
-        self.fixed_content_hash(s)
+        self.content_hash_with(s, BASE_HASH_KEY)
     }
 
-    fn fixed_content_hash(&self, s: Str) -> u32 {
-        match self.str_view(s) {
-            Some(StrView::Latin1(b)) => {
-                let mut h = StrHasher::new();
-                for &c in b {
-                    h.write(c as u16);
-                }
-                h.finish()
-            }
-            Some(v) => hash_units(v.units()),
-            None => hash_units(self.str_units(s)),
-        }
-    }
-
-    /// Makes the builtin prefix's cached string hashes the fixed ones (D2433), for the
+    /// Makes the builtin prefix's cached string hashes the base ones (D2433), for the
     /// base image's build: the building VM cached keyed hashes before `BASE_END` existed.
     pub(crate) fn prefix_hashes_to_base(&mut self) {
         let base = self.base_end();
@@ -1125,7 +1107,7 @@ impl Heap {
             .collect();
         for c in strings {
             if self.arena().get(c, Str8::HASH) != 0 {
-                let h = self.fixed_content_hash(Str(c));
+                let h = self.content_hash_with(Str(c), BASE_HASH_KEY);
                 self.arena_mut().set(c, Str8::HASH, h);
             }
         }
@@ -1134,39 +1116,39 @@ impl Heap {
     /// Replaces the keyed hash's key (D2433): the strings above the prefix forget their
     /// cached hashes, and the VM's own atom index and every Map/Set index are rebuilt
     /// under the new key (insertion order is the entries' order, which stays). No-op for
-    /// the key in use. The prefix is not written: its strings cache the fixed hash.
+    /// the key in use. The prefix is not written: its strings cache the base hash.
+    #[inline(never)]
     pub(crate) fn set_hash_key(&mut self, key: u64) {
+        use super::ObjectClass;
         if key == self.hash_key() {
             return;
         }
         self.arena_mut().set(0, super::cells::Roots::HASH_KEY, key);
         let base = self.base_end();
-        let cells: Vec<(u32, CellKind)> = self.cells().map(|c| (c.offset, c.kind)).collect();
-        let mut collections = Vec::new();
-        for (c, kind) in cells {
-            match kind {
-                CellKind::Str8 | CellKind::Str16 | CellKind::Rope if c >= base => {
-                    if self.arena().get(c, Str8::HASH) != 0 {
-                        self.arena_mut().set(c, Str8::HASH, 0);
-                    }
-                }
-                CellKind::Object
-                    if matches!(
-                        self.object_class(Obj(c)),
-                        super::ObjectClass::Map
-                            | super::ObjectClass::Set
-                            | super::ObjectClass::WeakMap
-                            | super::ObjectClass::WeakSet
-                    ) =>
+        // Two walks over the cells (headers only, nothing moves): every cached hash goes
+        // before any index is rebuilt with the new key.
+        for pass in 0..2 {
+            let mut c = 0;
+            while c < self.arena().len() {
+                let h: u64 = self.arena().read(c);
+                let kind = h as u8;
+                let string = kind == CellKind::Str8 as u8
+                    || kind == CellKind::Str16 as u8
+                    || kind == CellKind::Rope as u8;
+                if pass == 0 && string && c >= base {
+                    self.arena_mut().set(c, Str8::HASH, 0);
+                } else if pass == 1
+                    && kind == CellKind::Object as u8
+                    && (ObjectClass::Map as u32..=ObjectClass::WeakSet as u32)
+                        .contains(&self.arena().get(c, super::cells::Object::CLASS))
                 {
-                    collections.push(c);
+                    self.collection_rehash(Obj(c));
                 }
-                _ => {}
+                c += (h >> 32) as u32;
             }
-        }
-        self.rekey_atoms();
-        for c in collections {
-            self.collection_rehash(Obj(c));
+            if pass == 0 {
+                self.rekey_atoms();
+            }
         }
     }
 
@@ -1188,7 +1170,7 @@ impl Heap {
             self.arena().get(a.0, Str8::HASH),
             self.arena().get(b.0, Str8::HASH),
         );
-        // The prefix caches the fixed hash, the rest the keyed one (D2433).
+        // The prefix caches the base hash, the rest the keyed one (D2433).
         let base = self.base_end();
         if ha != 0 && hb != 0 && ha != hb && (a.0 >= base) == (b.0 >= base) {
             return false;

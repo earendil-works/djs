@@ -97,6 +97,11 @@ pub(crate) fn set_seed(heap: &mut Heap, seed: u64) {
     heap.set_hash_key(crate::heap::string::hash_key_for_seed(seed));
 }
 
+/// Stores a seed for `Math.random` alone; the hash key stays (`Vm::set_math_random_seed`).
+pub(crate) fn set_math_seed(heap: &mut Heap, seed: u64) {
+    store_state(heap, if seed == 0 { DEFAULT_RANDOM_SEED } else { seed });
+}
+
 fn store_state(heap: &mut Heap, s: u64) {
     // The state is two int32 halves in an internal array: heap data, so it survives
     // snapshots and is the same in every copy.

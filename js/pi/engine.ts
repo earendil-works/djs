@@ -58,6 +58,7 @@ interface Exports {
   vm_set_now(vm: number, ms: number): void;
   vm_set_time_zone_offset(vm: number, minutes: number): void;
   vm_set_random_seed(vm: number, lo: number, hi: number): void;
+  vm_set_math_random_seed(vm: number, lo: number, hi: number): void;
   vm_set_weak_refs(vm: number, mode: number): number;
   /** The base snapshot (D2260); the inject exports only with the base coded (D2252). */
   djs_base_ptr(): number;
@@ -192,8 +193,14 @@ export class Engine {
     if (this.trap(() => this.x.vm_set_weak_refs(this.vm, mode)) !== 0) throw new Error("vm_set_weak_refs failed");
   }
 
+  /** Seeds `Math.random` and keys the VM's string hash from the seed (D2433). */
   setRandomSeed(lo: number, hi: number): void {
     this.x.vm_set_random_seed(this.vm, lo >>> 0, hi >>> 0);
+  }
+
+  /** Seeds `Math.random` alone; the hash key stays. */
+  setMathRandomSeed(lo: number, hi: number): void {
+    this.x.vm_set_math_random_seed(this.vm, lo >>> 0, hi >>> 0);
   }
 
   /** A handle to a copy of a host value (sent through the wire format); 0 for undefined. */

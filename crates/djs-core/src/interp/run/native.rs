@@ -657,6 +657,10 @@ impl Exec<'_> {
             "string" => atoms::STRING,
             "number" => atoms::NUMBER,
             "default" => atoms::DEFAULT,
+            // Property keys of the JSON natives (`GetV(value, "toJSON")`): a new string
+            // would be hashed twice per lookup with the keyed hash (D2433).
+            "toJSON" => atoms::TO_JSON,
+            "rawJSON" => atoms::RAW_JSON,
             _ => return Ok(Value::string(self.heap.alloc_str(s)?)),
         };
         Ok(self.heap.atom_to_value(atom)?)

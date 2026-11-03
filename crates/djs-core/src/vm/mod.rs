@@ -573,9 +573,17 @@ impl Vm {
     }
 
     /// Reseeds `Math.random` (see `VmOptions::random_seed`). The state lives in the
-    /// heap, so a snapshot continues the same sequence.
+    /// heap, so a snapshot continues the same sequence. The key of the VM's string hash
+    /// follows the seed (D2433): changing it rehashes the VM's own atoms and Map/Set
+    /// tables, which costs time and, against a reference image, snapshot size.
     pub fn set_random_seed(&mut self, seed: u64) {
         crate::builtins::number::set_seed(&mut self.heap, seed);
+    }
+
+    /// Reseeds `Math.random` alone, keeping the hash key: for an embedder that keyed the
+    /// VM once (pi keys its prelude image and reseeds every session from it, D2433).
+    pub fn set_math_random_seed(&mut self, seed: u64) {
+        crate::builtins::number::set_math_seed(&mut self.heap, seed);
     }
 
     pub fn new_error(&mut self, kind: ErrorKind, message: &str) -> Result<Value, HeapError> {

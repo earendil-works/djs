@@ -1178,6 +1178,17 @@ pub extern "C" fn vm_set_random_seed(vm: u32, lo: u32, hi: u32) {
     })
 }
 
+/// Reseeds `Math.random` alone with `hi << 32 | lo`, keeping the hash key
+/// (`Vm::set_math_random_seed`, D2433).
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_set_math_random_seed(vm: u32, lo: u32, hi: u32) {
+    with(|s| {
+        s.slot(vm)
+            .vm
+            .set_math_random_seed((u64::from(hi) << 32) | u64::from(lo))
+    })
+}
+
 /// Sets the local time zone as a fixed offset in minutes east of UTC
 /// (`Vm::set_time_zone_offset`; 0, UTC, by default).
 #[unsafe(no_mangle)]

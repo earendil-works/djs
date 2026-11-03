@@ -582,6 +582,11 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
     let prepared = cached?.prepared;
     session.prelude = cached;
     if (!prepared) {
+      // Outside deterministic mode the hash key (D2433) is chosen once, before the
+      // prelude: its image and every session restored from it keep that key, and each
+      // session only reseeds Math.random (rekeying would rehash the prelude's atoms and
+      // tables in every session, ~1 KB more per snapshot).
+      if (!deterministic) engine.setRandomSeed(...entropy());
       prepared = prepare(session, engine, prelude, data);
       // Every cold start collects after the prelude (D1890), cached or not: the prelude
       // image then holds only live cells, and cold and warm starts go on from the same heap.
@@ -603,8 +608,9 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
       // first clock read) and draws once while creating the context, so starting djs one step
       // after seed + 1 gives the same numbers on both engines.
       const seed = xorshift(BigInt(deterministic.seed) + 1n);
+      // Keys the hash from the seed too (D2433): same seed, same layout, cold or warm.
       engine.setRandomSeed(Number(seed & 0xffffffffn), Number(seed >> 32n));
-    } else engine.setRandomSeed(...entropy());
+    } else engine.setMathRandomSeed(...entropy());
     const origin = engine.value(state.clock ? state.clock.startedAt : Date.now());
     engine.free(session.invoke(prepared.setOrigin, 0, [origin]));
     engine.free(origin);
