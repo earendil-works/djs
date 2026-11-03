@@ -7359,3 +7359,26 @@ spill and the allocation-error path at every site. `crate::buf::vec_with_capacit
 `#[inline(never)]` function per element type; 60 sites use it (all but run.rs and the
 template, which 0151 is editing). Module −1.3 KB gz (442.1 → 440.8), the 15 perf
 workloads within −2.1 to +0.5% (an allocation is a call anyway). New code uses it.
+## D2552: reduce by argument count, its accumulator in the dense loop's state
+date: 2026-11-03 · by: speed · issue: 0162
+`%ArgumentCount()` (a leaf, also in the tier-0 loop's intrinsic hits) is the calling
+frame's argument count before padding. `Array.prototype.reduce` and `reduceRight` take
+`initialValue?` as a plain parameter and test `ArgumentCount() < 2`, instead of a
+`...rest` array per call, and each runs in its own frame (the shared `Reduce` helper and
+its second frame are gone; reduceRight has no dense part, as before). `%EachDense` mode 7
+takes the starting accumulator as `thisArg` and keeps the running one in that state slot
+(the callback's `this` is undefined, as the spec's); each result also goes to element 0
+of a box Array, which reduce reads when the returned k is past its starting k. The box is
+`ArrayCreate(0)`, also a tier-0 hit, made only for a non-empty array. wasm instructions
+against main (wmeasure.py, n=5): tiny-reduce0 −46%, reduce1 −25%, reduce2 −23%,
+tree-children (pico's 9b) −11%; the other 26 workloads within ±0.8% (json-date +0.8% at
+n=7, noise level); size −70 B gzip.
+
+Not done, measured: handling the callback's return on short arrays inside `run_hot`
+(0154's follow-up). A wasm CPU profile of tree-children after this change puts all of the
+`%EachDense` machinery (each_return, each_complete, each_element, each_finish,
+each_dense) at ~5%, so moving it into the hot loop would save at most 2–3% for a copy of
+`each_return`'s logic in hot.rs. The same profile: run_hot 26%, the collector 26%
+(marking and compacting the live tree), closure creation ~6–8% (fclosure through `step`,
+then `function_properties`' two define_own_property calls), species and ArrayCreate's
+`length` define in `map`'s fixed cost.

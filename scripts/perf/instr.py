@@ -225,7 +225,7 @@ patch(R, "    pub(super) fn step_once(&mut self) -> Option<Status> {\n",
       f"        {P}::step(self.heap, self.template, (self.pc < self.code_len).then(|| self.byte(self.pc)), self.pc);\n")
 patch(R, "        let (params, locals) = (th.params, th.locals);\n", f"        {P}::frame(self.heap, t);\n")
 # Every op of the tier-0 loop, with its frame's template.
-patch("crates/djs-core/src/interp/run/hot.rs", "                    let op = w as u8;\n",
+patch("crates/djs-core/src/interp/run/hot.rs", "                    let mut op = w as u8;\n",
       f"                    {P}::hot(b, self.template, op, ip - code);\n")
 N = "crates/djs-core/src/interp/run/native.rs"
 patch(N, "        let idx = self.heap.arena().get(t, FuncTemplate::NATIVE);\n",

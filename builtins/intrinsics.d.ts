@@ -47,6 +47,12 @@ declare function IsNumber(v: Value): boolean;
 declare function IsSymbol(v: Value): boolean;
 /** @leaf */
 declare function IsBoolean(v: Value): boolean;
+/**
+ * How many arguments the calling builtin got (its frame's count, before padding), for an
+ * optional parameter whose absence differs from undefined (reduce's initialValue)
+ * without a rest array. @leaf
+ */
+declare function ArgumentCount(): i32;
 
 // ---- Casts (an internal error if the value has another type; test first) ------------
 
@@ -498,8 +504,9 @@ declare function ArraySliceDense(o: Obj, k: f64, fin: f64, a: Obj): boolean;
  * - 3 some, 4 every: a truthy (some) or falsy (every) result decides;
  * - 5 find: a truthy result decides, and o[k] goes to element 0 of the Array `a`;
  * - 6 findIndex: a truthy result decides;
- * - 7 reduce: calls `f(acc, o[k], k, o)` (`thisArg` undefined), with the accumulator as
- *   element 0 of the Array `a`, which gets the result;
+ * - 7 reduce: calls `f(acc, o[k], k, o)` with `this` undefined; the accumulator starts as
+ *   `thisArg`, and each result goes to element 0 of the Array `a` (so `a` holds the
+ *   accumulator once the returned k is past the starting one);
  * - 8 Array.from of an array-like: calls `f(o[k], k)` and does
  *   CreateDataPropertyOrThrow(a, k, result); `o` is any ordinary object (or array or
  *   function) whose element k, along its prototype chain, is a data property or absent

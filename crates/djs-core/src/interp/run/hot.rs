@@ -47,6 +47,8 @@ const IS_CALLABLE: u16 = super::intrinsics::id("IsCallable");
 const GET: u16 = super::intrinsics::id("Get");
 const CREATE_DATA_PROPERTY_OR_THROW: u16 = super::intrinsics::id("CreateDataPropertyOrThrow");
 const CALL: u16 = super::intrinsics::id("Call");
+const ARRAY_CREATE: u16 = super::intrinsics::id("ArrayCreate");
+const ARGUMENT_COUNT: u16 = super::intrinsics::id("ArgumentCount");
 
 const GET_GLOBAL: u8 = Op::GetGlobal as u8;
 const GET_GLOBAL_TYPEOF: u8 = Op::GetGlobalTypeof as u8;
@@ -293,6 +295,12 @@ impl Exec<'_> {
             (AS_OBJ, 1) | (TO_OBJECT, 1) if a[0].as_object().is_some() => a[0],
             // The callback builtins' checks (0137).
             (IS_CALLABLE, 1) => Value::bool(self.is_callable(a[0])),
+            // Reduce's optional initialValue and its box (0162).
+            (ARGUMENT_COUNT, 0) => Value::int(self.header_int(frame::ARGC) as i32),
+            (ARRAY_CREATE, 1) if a[0] == Value::int(0) => {
+                let proto = crate::interp::realm::intrinsic_obj(self.heap, Intrinsic::ArrayProto);
+                Value::object(self.heap.new_array(Some(proto), 0).ok()?)
+            }
             (GET, 2) => {
                 let o = a[0]
                     .as_object()

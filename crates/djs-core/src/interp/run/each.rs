@@ -92,8 +92,8 @@ impl Exec<'_> {
     /// Whether the loop can run at all: a known mode over an Array and a plain closure
     /// (as `n_call_closure` takes). `a`, where a mode stores, must be an Array, whose
     /// CreateDataProperty runs no user code: for filter a fresh one (a plain species),
-    /// so that its length is the count of the elements kept; for reduce a box with the
-    /// accumulator as element 0.
+    /// so that its length is the count of the elements kept; for reduce the box that gets
+    /// the accumulator as element 0 (which starts in THIS).
     fn each_ok(&self, base: u32) -> bool {
         let Some(f) = self.get(base + F).as_object() else {
             return false;
@@ -124,7 +124,7 @@ impl Exec<'_> {
             FOR_EACH | SOME | EVERY | FIND_INDEX => true,
             MAP | FIND => a.is_some(),
             FILTER => a.is_some() && crate::builtins::fast::plain_species(self.heap, o),
-            REDUCE => a.is_some_and(|a| self.heap.get_element_fast(a, 0).is_some()),
+            REDUCE => a.is_some(),
             _ => false,
         }
     }
@@ -176,9 +176,8 @@ impl Exec<'_> {
         let (x, o) = (self.get(base + KVALUE), self.get(base + O));
         let mode = self.get(base + MODE).as_int();
         if mode == Some(REDUCE) {
-            let a = self.get(base + A).as_object();
-            let acc = a.and_then(|a| self.heap.get_element_fast(a, 0));
-            ([acc.unwrap_or(Value::UNDEFINED), x, kv, o], 4)
+            // The accumulator is THIS (the callback's `this` is undefined).
+            ([self.get(base + THIS), x, kv, o], 4)
         } else if mode == Some(FROM) {
             ([x, kv, Value::UNDEFINED, Value::UNDEFINED], 2)
         } else {
@@ -197,7 +196,12 @@ impl Exec<'_> {
         let (args, argc) = self.each_args(base, kv);
         self.ensure(cb + 2 + argc)?;
         self.set(cb, self.get(base + F));
-        self.set(cb + 1, self.get(base + THIS));
+        let this = if self.get(base + MODE).as_int() == Some(REDUCE) {
+            Value::UNDEFINED
+        } else {
+            self.get(base + THIS)
+        };
+        self.set(cb + 1, this);
         for i in 0..argc {
             self.set(cb + 2 + i, args[i as usize]);
         }
@@ -314,6 +318,9 @@ impl Exec<'_> {
         let (stop, store) = match mode {
             MAP | REDUCE | FROM => {
                 self.set(base + KVALUE, v);
+                if mode == REDUCE {
+                    self.set(base + THIS, v);
+                }
                 (false, true)
             }
             FILTER => (false, truthy),

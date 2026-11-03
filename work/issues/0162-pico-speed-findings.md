@@ -39,6 +39,21 @@ bench and pico's rewritten cases (work/scratch/0152, 0154/w). No workload slower
   djs-wasm `strings_written_in_place`, js sandbox test for the in-place and wire cases.
   Guide: host.md ("Values in") updated; docs/host.md export table.
 
+- Item 1 (D2552): `%ArgumentCount` leaf; reduce/reduceRight take `initialValue?` and run
+  in one frame each; `%EachDense` mode 7 keeps the accumulator in its THIS slot, a box
+  only for non-empty arrays (ArrayCreate(0) and ArgumentCount are tier-0 hits). A first
+  version with `ArrayCreate(0)` + CreateDataPropertyOrThrow for the box was +7–9% on
+  reduce1/2 (two general-path exits): dropped. vs main: tiny-reduce0 −46%, reduce1 −25%,
+  reduce2 −23%, tree-children −11%; 26 other workloads within ±0.8%; size −70 B gz.
+  Corpus: builtins/array-reduce-args.js (qjs expected; --suspend-every 1, gc-stress,
+  determinism OK). test262 Array/prototype/reduce{,Right}: 514/514.
+- scripts/perf/instr.py: its run_hot anchor moved with D2443 (`let mut op`), fixed.
+- Tree profile (wasm cpu-prof after D2552): run_hot 26%, collector 26%, Each machinery
+  ~5%, closure creation 6–8%, map's species/ArrayCreate fixed cost. Coordinator: skip the
+  run_hot callback-return change (≤2–3%, recorded in D2552); closure creation goes to
+  bloat (0151 L3 step 3); species/ArrayCreate tweaks in builtins/fast.rs after 0159.
+- Guide: builtins.md (`%EachDense` paragraph: reduce's accumulator and ArgumentCount).
+
 ## Follow-ups
 
 ## Result

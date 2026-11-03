@@ -533,41 +533,40 @@ function ArrayPrototypeFilter(this: Value, callbackfn: Value, thisArg?: Value): 
 }
 
 /**
- * reduce and reduceRight (`fromEnd`), 23.1.3.24-25.
- * @intrinsic
+ * Array.prototype.reduce ( callbackfn [ , initialValue ] ), 23.1.3.24. One frame, no rest
+ * array: initialValue by ArgumentCount (0162).
+ * @builtin Array.prototype.reduce
+ * @length 1
  */
-function Reduce(o: Obj, callbackfn: Value, rest: Obj, fromEnd: boolean): Value {
+function ArrayPrototypeReduce(this: Value, callbackfn: Value, initialValue?: Value): Value {
+  const o: Obj = ToObject(this);
   const len: f64 = LengthOfArrayLike(o);
   if (!IsCallable(callbackfn)) {
     throw NewTypeError("not a function");
   }
-  let i: f64 = 0;
-  let accumulator: Value = undefined;
-  if (LengthOfArrayLike(rest) > 0) {
-    accumulator = Get(rest, 0);
-  } else {
-    let found: boolean = false;
-    while (!found && i < len) {
-      const k: f64 = fromEnd ? len - 1 - i : i;
-      if (HasProperty(o, k)) {
-        accumulator = Get(o, k);
-        found = true;
-      }
-      i++;
+  let k: f64 = 0;
+  let accumulator: Value = initialValue;
+  if (ArgumentCount() < 2) {
+    while (k < len && !HasProperty(o, k)) {
+      k++;
     }
-    if (!found) {
+    if (k >= len) {
       throw NewTypeError("empty array");
     }
+    accumulator = Get(o, k);
+    k++;
   }
-  if (!fromEnd && i < len) {
-    // The dense part (0137). The accumulator goes in and out as element 0 of `rest`,
-    // the caller's fresh rest-parameter array.
-    CreateDataPropertyOrThrow(rest, 0, accumulator);
-    i = EachDense(7, o, i, len, callbackfn, undefined, rest);
-    accumulator = Get(rest, 0);
+  if (k < len) {
+    // The dense part (0137): the accumulator goes in as thisArg and comes out as
+    // element 0 of the box once a step ran.
+    const box: Obj = ArrayCreate(0);
+    const next: f64 = EachDense(7, o, k, len, callbackfn, accumulator, box);
+    if (next > k) {
+      accumulator = Get(box, 0);
+    }
+    k = next;
   }
-  for (; i < len; i++) {
-    const k: f64 = fromEnd ? len - 1 - i : i;
+  for (; k < len; k++) {
     if (HasProperty(o, k)) {
       accumulator = Call(callbackfn, undefined, accumulator, Get(o, k), k, o);
     }
@@ -576,21 +575,34 @@ function Reduce(o: Obj, callbackfn: Value, rest: Obj, fromEnd: boolean): Value {
 }
 
 /**
- * Array.prototype.reduce ( callbackfn [ , initialValue ] ), 23.1.3.24.
- * @builtin Array.prototype.reduce
- * @length 1
- */
-function ArrayPrototypeReduce(this: Value, callbackfn: Value, ...rest: Value[]): Value {
-  return Reduce(ToObject(this), callbackfn, rest, false);
-}
-
-/**
  * Array.prototype.reduceRight ( callbackfn [ , initialValue ] ), 23.1.3.25.
  * @builtin Array.prototype.reduceRight
  * @length 1
  */
-function ArrayPrototypeReduceRight(this: Value, callbackfn: Value, ...rest: Value[]): Value {
-  return Reduce(ToObject(this), callbackfn, rest, true);
+function ArrayPrototypeReduceRight(this: Value, callbackfn: Value, initialValue?: Value): Value {
+  const o: Obj = ToObject(this);
+  const len: f64 = LengthOfArrayLike(o);
+  if (!IsCallable(callbackfn)) {
+    throw NewTypeError("not a function");
+  }
+  let k: f64 = len - 1;
+  let accumulator: Value = initialValue;
+  if (ArgumentCount() < 2) {
+    while (k >= 0 && !HasProperty(o, k)) {
+      k--;
+    }
+    if (k < 0) {
+      throw NewTypeError("empty array");
+    }
+    accumulator = Get(o, k);
+    k--;
+  }
+  for (; k >= 0; k--) {
+    if (HasProperty(o, k)) {
+      accumulator = Call(callbackfn, undefined, accumulator, Get(o, k), k, o);
+    }
+  }
+  return accumulator;
 }
 
 // ---- Copies and concatenation -----------------------------------------------------------

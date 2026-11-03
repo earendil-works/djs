@@ -204,7 +204,11 @@ element as their native versions, and dropping them from the Rust backend left t
 module smaller. `Array.from(arrayLike, f)` uses the same loop, reading each element of
 the array-like where that reads only data properties (D2306). Calls on short arrays pay
 mostly fixed costs: an empty array skips the intrinsic, and the intrinsic starts without
-the interpreter's general instruction path (D2307).
+the interpreter's general instruction path (D2307). `reduce` keeps its running
+accumulator in the loop's own state rather than in an array, and learns whether
+`initialValue` was passed from its frame's argument count (`%ArgumentCount`) instead of
+a rest parameter, so a call allocates nothing for an empty array and runs in one frame
+(D2552).
 
 Two rules keep this safe:
 

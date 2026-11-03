@@ -33,6 +33,7 @@ const IS_STRING: u16 = id("IsString");
 const IS_NUMBER: u16 = id("IsNumber");
 const IS_SYMBOL: u16 = id("IsSymbol");
 const IS_BOOLEAN: u16 = id("IsBoolean");
+const ARGUMENT_COUNT: u16 = id("ArgumentCount");
 const AS_OBJ: u16 = id("AsObj");
 const AS_FN: u16 = id("AsFn");
 const AS_STR: u16 = id("AsStr");
@@ -509,6 +510,7 @@ impl Exec<'_> {
             IS_NUMBER => Value::bool(a0.is_number()),
             IS_SYMBOL => Value::bool(a0.as_symbol().is_some()),
             IS_BOOLEAN => Value::bool(a0.as_bool().is_some()),
+            ARGUMENT_COUNT => Value::int(self.header_int(frame::ARGC) as i32),
             AS_OBJ if a0.as_object().is_some() => a0,
             AS_FN if self.is_callable(a0) => a0,
             AS_STR if a0.as_string().is_some() => a0,

@@ -628,7 +628,7 @@
 623	value	%intrinsic:ArraySpeciesCreate%
 624	value	%intrinsic:FindViaPredicate%
 625	value	%intrinsic:EveryOrSome%
-626	value	%intrinsic:Reduce%
+626	value	%intrinsic:Reduce%	removed: removed
 627	value	%intrinsic:SortList%
 628	value	%intrinsic:CollectPresent%
 629	value	%intrinsic:ArraySetLength%
@@ -1273,7 +1273,7 @@
 1268	intrinsic	ArraySpecies
 1269	intrinsic	FindViaPredicate
 1270	intrinsic	EveryOrSome
-1271	intrinsic	Reduce
+1271	intrinsic	Reduce	removed: removed
 1272	intrinsic	SortList
 1273	intrinsic	CollectPresent
 1274	intrinsic	ArraySetLength
@@ -1636,3 +1636,4 @@
 1631	value	%prelude:DOMExceptionThisField%
 1632	value	%prelude:DOMExceptionEnumerable%
 1633	intrinsic	IteratorFastDrain
+1634	intrinsic	ArgumentCount
