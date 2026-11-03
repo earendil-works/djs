@@ -4,7 +4,7 @@
 // heap handles directly. Handles are GC roots and survive collections and snapshots; raw
 // values do not (docs/host.md "The ABI").
 
-import { encode } from "../src/wire.ts";
+import { IN_PLACE_MIN, encode, stringInPlace } from "../src/wire.ts";
 import { readValue } from "../src/reader.ts";
 import { baseReference, provideBase, type Reference, rememberBase } from "../src/snapshot.ts";
 
@@ -43,6 +43,8 @@ interface Exports {
   vm_compile_file(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
   vm_new_host_function(vm: number, fnId: number, nameLen: number): number;
   vm_decode_wire(vm: number, len: number): number;
+  /** Since 0162 (D2551); older modules lack it. */
+  vm_string_reserve?(vm: number, len: number): number;
   vm_handle_bits(vm: number, h: number): void;
   vm_handle_free(vm: number, h: number): void;
   vm_display(vm: number, h: number): number;
@@ -202,6 +204,10 @@ export class Engine {
   value(v: unknown): number {
     if (v === undefined) return 0;
     const bytes = encode(v);
+    if (typeof v === "string" && v.length >= IN_PLACE_MIN) {
+      const h = this.trap(() => stringInPlace(this.x, this.vm, v, bytes));
+      if (h !== 0) return h;
+    }
     this.stage(bytes);
     const h = this.trap(() => this.x.vm_decode_wire(this.vm, bytes.length));
     if (h === 0) throw new Error(`Cannot pass a value into the VM: ${outText(this.x)}`);

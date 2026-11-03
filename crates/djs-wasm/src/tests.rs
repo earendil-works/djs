@@ -233,6 +233,36 @@ fn json_in_and_out() {
 }
 
 #[test]
+fn strings_written_in_place() {
+    let vm = vm_new(0);
+    let text = format!("{{\"k\": \"{}\"}}", "x".repeat(3000));
+    let h = vm_string_reserve(vm, text.len() as u32);
+    assert_ne!(h, 0);
+    // The host's view: vm_arena_ptr + the value's offset + the data offset.
+    vm_handle_bits(vm, h);
+    let off = out_words()[0] + 16;
+    with(|s| {
+        let a = s.slot(vm).vm.heap_mut().arena_mut();
+        a.slice_mut(off, text.len() as u32)
+            .copy_from_slice(text.as_bytes());
+    });
+    // Survives a collection; reads, hashes and parses like any string.
+    assert_eq!(vm_collect(vm), 0);
+    let f = compile_body(
+        vm,
+        "s",
+        "const o = {[s]: 1}; return [s.length, JSON.parse(s).k.length, o[s.slice(0)], s === '' + s].join()",
+    );
+    call(vm, f, &[h]);
+    let st = vm_run(vm, 1_000_000);
+    let (ok, r) = outcome(vm, st);
+    assert!(ok, "{}", display(vm, r));
+    assert_eq!(display(vm, r), format!("{},3000,1,true", text.len()));
+    assert_eq!(vm_string_reserve(vm, u32::MAX), 0);
+    vm_free(vm);
+}
+
+#[test]
 fn abort_after_out_of_fuel() {
     let vm = vm_new(0);
     let f = compile_body(vm, "", "for (;;) {}");

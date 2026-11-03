@@ -1,7 +1,7 @@
 // The Sandbox API: loads djs-wasm (docs/host.md) and runs code in a djs VM. Values go in
 // through the wire format (wire.ts) and come out through direct heap reads (reader.ts).
 
-import { encode } from "./wire.ts";
+import { IN_PLACE_MIN, encode, stringInPlace } from "./wire.ts";
 import { Opaque, readValue } from "./reader.ts";
 import {
   APP_SANDBOX,
@@ -214,6 +214,8 @@ interface Exports {
   vm_new_async_host_function(vm: number, fnId: number, nameLen: number): number;
   vm_define(vm: number, obj: number, nameLen: number, value: number): number;
   vm_decode_wire(vm: number, len: number): number;
+  /** Since 0162 (D2551); older modules lack it. */
+  vm_string_reserve?(vm: number, len: number): number;
   vm_new_error(vm: number, kind: number, msgLen: number): number;
   vm_handle_bits(vm: number, h: number): void;
   vm_handle_free(vm: number, h: number): void;
@@ -677,6 +679,10 @@ export class Sandbox {
   private toHandle(v: unknown): number {
     if (v === undefined) return 0;
     const bytes = encode(v);
+    if (typeof v === "string" && v.length >= IN_PLACE_MIN) {
+      const h = stringInPlace(this.x, this.vm, v, bytes);
+      if (h !== 0) return h;
+    }
     this.stage(bytes);
     return this.check(this.x.vm_decode_wire(this.vm, bytes.length), "memory");
   }

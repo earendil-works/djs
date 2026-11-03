@@ -31,7 +31,7 @@ use crate::interp::realm::{self, Intrinsic, define_hidden, intrinsic_obj};
 use crate::interp::run::{self, Exec};
 use crate::interp::{Continuation, state};
 pub use crate::interp::{ErrorKind, ExecOptions, RunState, Status};
-use crate::value::{Obj, Value};
+use crate::value::{Obj, Str, Value};
 
 /// `HostCall::FLAGS`: returned by `Vm::new_host_calls` already.
 const HOST_CALL_REPORTED: u32 = 1;
@@ -580,6 +580,15 @@ impl Vm {
 
     pub fn new_error(&mut self, kind: ErrorKind, message: &str) -> Result<Value, HeapError> {
         realm::new_error(&mut self.heap, kind, message)
+    }
+
+    /// A one-byte string of `len` zero units for the embedder to fill in place (0162,
+    /// D2551): its code units are the `len` bytes at arena offset
+    /// [`Heap::str_data_offset`], one Latin-1 unit per byte, and the embedder fills them
+    /// before anything else allocates (which may move the arena). Saves a large host string
+    /// the staging copy and the transcode.
+    pub fn reserve_string(&mut self, len: u32) -> Result<Str, HeapError> {
+        self.heap.alloc_str_uninit(len, false)
     }
 
     /// Starts a call of `f`: pushes the entry frame (or parks on a host function). `run`

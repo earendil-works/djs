@@ -467,3 +467,17 @@ test("a trap is a clean error and kills the sandbox", async () => {
   assert.equal(other.run("return 7"), 7);
   other.dispose();
 });
+
+test("large host strings land in the heap in place when ASCII (D2551), others through the wire", async () => {
+  const ascii = '{"k": "' + "abc".repeat(200_000) + '"}';
+  const cases = [ascii, "x".repeat(1023), "y".repeat(1024), "é".repeat(5000), "a".repeat(3000) + "\u2014", "b".repeat(2000) + "\ud800"];
+  const sb = await Sandbox.create({ functions: { get: (i: unknown) => cases[i as number] }, asyncFunctions: { later: async (i: unknown) => cases[i as number] } });
+  for (let i = 0; i < cases.length; i++) {
+    const s = cases[i];
+    const r = (await sb.runAsync(`const a = get(${i}), b = await later(${i}); return [a === b, a.length, a.charCodeAt(a.length - 1), a.slice(1, 4), ({[a]: 7})[b]]`, { p: s })) as unknown[];
+    assert.deepEqual(r, [true, s.length, s.charCodeAt(s.length - 1), s.slice(1, 4), 7], `case ${i}`);
+    assert.equal(sb.run("return p === p.slice(0) && p.length", { p: s }), s.length);
+  }
+  assert.equal(sb.run(`return JSON.parse(get(0)).k.length`), 600_000);
+  sb.dispose();
+});

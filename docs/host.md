@@ -300,6 +300,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_new_async_host_function(vm, fn_id, name_len) -> h` | a function that returns a promise and adds a pending call (D1374) |
 | `vm_define(vm, obj, name_len, value) -> 0/-1` | define a non-enumerable property (name in staging) |
 | `vm_decode_wire(vm, len) -> h` | decode wire data from staging (docs/wire.md) |
+| `vm_string_reserve(vm, len) -> h` | a new one-byte string of `len` zero units, whose `len` data bytes (at `vm_arena_ptr` + the value's offset from `vm_handle_bits` + 16) the host fills, one Latin-1 unit per byte (ASCII UTF-8 as is), before anything allocates (D2551) |
 | `vm_parse_json(vm, len) -> h` | parse UTF-8 JSON text from staging (`JSON.parse`) |
 | `vm_json_stringify(vm, h) -> h` | `JSON.stringify` of plain data as a heap string |
 | `vm_new_error(vm, kind, msg_len) -> h` | kind 0 Error, 1 TypeError, 2 RangeError, 3 ReferenceError, 4 SyntaxError, 5 InternalError |
@@ -335,7 +336,8 @@ A run, as the Sandbox does it:
 2. loop on `vm_run(slice)`:
    - OUT_OF_FUEL: continue, or give up;
    - HOST_CALL: `vm_host_call`, read the arguments with the reader, call the host function,
-     then encode the result and `vm_decode_wire` it, or make it an error with
+     then encode the result and `vm_decode_wire` it (a large ASCII string:
+     `vm_string_reserve` and copy its bytes there), or make it an error with
      `vm_new_error`; then `vm_resolve_host_call`;
    - IDLE: only async host calls are pending (or nothing was called): wait for one,
      then `vm_resolve_host_call` it and run again;

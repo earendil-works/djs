@@ -104,6 +104,16 @@ every cell at its final size in one pass and transcodes UTF-8 to the VM's one-by
 two-byte strings natively. The format is validated as it is decoded: malformed input is
 an error, never a corrupt heap.
 
+A large string on its own skips the staging buffer when it is ASCII, which is the common
+case for a tool result that pi passes as JSON text (D2551). The encoder's output already
+shows it: the UTF-8 is exactly as long as the string. The host then asks the VM for an
+empty one-byte string of that length (`vm_string_reserve`), gets the address of its
+characters, and copies the encoded bytes straight there. That saves the staging copy and
+the transcode, and the staging buffer, which would otherwise keep the size of the
+largest result for the life of the instance, does not grow: a 10 MiB result costs a
+sandbox 11.4 instead of 21.4 MiB of wasm memory. Any other string goes through the
+wire, so text with a single non-ASCII character pays nothing for the attempt.
+
 > **Trade-off.** A binary format over JSON. Measured end to end in wasm, it beats
 > `JSON.stringify` plus `JSON.parse` by 1.4x on objects up to 9x on one large string (a
 > large string becomes two memory copies instead of an escaping serializer and a

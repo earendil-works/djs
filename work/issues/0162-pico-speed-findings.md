@@ -25,6 +25,19 @@ bench and pico's rewritten cases (work/scratch/0152, 0154/w). No workload slower
 +1%; size ratchet respected or trades recorded.
 
 ## Log
+- Scratch: work/scratch/0162 (wbuild.sh builds the perf wasm into a file; hoststr.ts times
+  host string results; fuel-safepoint.diff the item 2 experiment; fuel2.txt its numbers).
+- Item 2 (D2550): experiment build charging fuel only at calls, returns and taken backward
+  jumps in run_hot. ≤7% fewer wasm instructions on interpreter-bound loops (loop, tight,
+  prop1), 2–4% on calls/arrays/foreach, ~0 on pi-like, JSON, strings. Coordinator: not now
+  (it would change G5 and every fuel count); recorded with the full table.
+- Item 3 (D2551): `vm_string_reserve` + `stringInPlace` (js/src/wire.ts) for host strings
+  ≥ 1024 units whose wire encoding shows ASCII: copied from the wire bytes straight into
+  the reserved Str8, no staging, no transcode. 10 MiB result: 21.4 → 11.4 MiB wasm memory,
+  ~1.5–2x faster; non-ASCII unchanged (encoding into the reservation first cost them
+  +0.7 ms/MiB and +1.3 MiB, dropped). Size +69 B gzip (455,571, ceiling 455,600). Tests:
+  djs-wasm `strings_written_in_place`, js sandbox test for the in-place and wire cases.
+  Guide: host.md ("Values in") updated; docs/host.md export table.
 
 ## Follow-ups
 

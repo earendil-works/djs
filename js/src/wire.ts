@@ -1,6 +1,8 @@
 // The inbound wire format encoder: host JS value -> bytes for djs' `wire::decode`.
 // Format specification: docs/wire.md (version 1).
 
+import { LAYOUT } from "./layout.generated.ts";
+
 export const VERSION = 1;
 
 export const Tag = {
@@ -324,4 +326,54 @@ export function encode(value: unknown, buffer?: Uint8Array): Uint8Array {
     throw err;
   }
   return e.buf.subarray(0, e.pos);
+}
+
+/** Host strings from this length on go into the heap with `stringInPlace` (D2551). */
+export const IN_PLACE_MIN = 1024;
+
+/** The exports `stringInPlace` uses (djs-wasm; optional: older modules lack them). */
+export interface InPlaceExports {
+  memory: WebAssembly.Memory;
+  djs_out_ptr(): number;
+  vm_arena_ptr(vm: number): number;
+  vm_handle_bits(vm: number, h: number): void;
+  vm_string_reserve?(vm: number, len: number): number;
+}
+
+/** Where a one-byte string cell's code units start. */
+const STR8_DATA = LAYOUT.cells.Str8.tail!.offset;
+
+/** The varint at `buf[at]`: its value and the offset after it. */
+function readVarint(buf: Uint8Array, at: number): [number, number] {
+  let v = 0;
+  for (let shift = 0; ; shift += 7) {
+    const b = buf[at++];
+    v += (b & 0x7f) * 2 ** shift;
+    if (b < 0x80) return [v, at];
+  }
+}
+
+/**
+ * A handle to string `s` (`wire`, its `encode`d bytes) copied from the wire bytes straight
+ * into a reserved heap string when it is ASCII (D2551): no staging copy and no transcode,
+ * and the staging buffer does not grow to the string's size. 0 when it is not ASCII
+ * (the UTF-8 is longer than `s`), the module lacks the exports, or the reservation
+ * failed: then stage `wire` as usual. Deciding from the encoding costs non-ASCII strings
+ * nothing; encoding straight into the reservation (one copy fewer for ASCII) made them
+ * pay a reservation, a second encoding and a second arena growth (D2551).
+ */
+export function stringInPlace(x: InPlaceExports, vm: number, s: string, wire: Uint8Array): number {
+  if (!x.vm_string_reserve || wire[4] !== Tag.STR_UTF8) return 0;
+  const n = s.length;
+  const [units, lenAt] = readVarint(wire, 5);
+  const [bytes, data] = readVarint(wire, lenAt);
+  if (units !== n || bytes !== n) return 0;
+  const h = x.vm_string_reserve(vm, n);
+  if (h === 0) return 0;
+  // The string's offset is its value's low word; views after the calls (memory may grow).
+  x.vm_handle_bits(vm, h);
+  const cell = new DataView(x.memory.buffer, x.djs_out_ptr(), 4).getUint32(0, true);
+  const at = x.vm_arena_ptr(vm) + cell + STR8_DATA;
+  new Uint8Array(x.memory.buffer, at, n).set(wire.subarray(data, data + n));
+  return h;
 }

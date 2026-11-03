@@ -961,6 +961,23 @@ pub extern "C" fn vm_json_stringify(vm: u32, h: u32) -> u32 {
     })
 }
 
+/// A handle to a new one-byte string of `len` zero code units for the host to fill in
+/// place (D2551), or 0 if the heap is full or `len` too long. Its data is the `len` bytes
+/// at `vm_arena_ptr` + the string's offset (`vm_handle_bits`' low word) + 16, one
+/// Latin-1 unit per byte (an ASCII string's UTF-8 as is); the host fills them before its
+/// next call into the module. A large host string so skips the staging copy and the
+/// transcode.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_string_reserve(vm: u32, len: u32) -> u32 {
+    with(|s| {
+        let slot = s.slot(vm);
+        match slot.vm.reserve_string(len) {
+            Ok(str) => slot.handle(Value::string(str)),
+            Err(_) => 0,
+        }
+    })
+}
+
 /// A handle to a new Error of `kind` (0 Error, 1 TypeError, 2 RangeError, 3
 /// ReferenceError, 4 SyntaxError, 5 InternalError) with message staging[0..msg_len].
 #[unsafe(no_mangle)]

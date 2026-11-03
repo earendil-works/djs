@@ -6871,3 +6871,23 @@ nothing on codemode-like, JSON or builtin-heavy work. Adopting it would change G
 straight-line block (bounded by the function's code size) later", change every fuel
 count and every stress-mode stop point (suspend every 97), and need `step` and `run_hot`
 to charge alike. Not worth that now; kept as an option for the owner.
+
+## D2551: Large ASCII host strings are copied straight into a reserved heap string
+date: 2026-11-03 · by: speed · issue: 0162
+`vm_string_reserve(vm, len)` allocates a one-byte string of `len` zero units and returns
+a handle to it; the host finds its data from `vm_arena_ptr`, the value's offset
+(`vm_handle_bits`) and the layout's Str8 data offset, and fills it before anything
+allocates. (Returning the address in the out buffer cost 40 more bytes gzip, past the
+size ceiling; this costs +69.) `stringInPlace` (js/src/wire.ts) uses it from the
+Sandbox's and pi engine's host values: for a string of at least 1024 units whose wire
+encoding is STR_UTF8 with as many bytes as units (ASCII), it copies those bytes into the
+reservation instead of staging the wire bytes for `vm_decode_wire`. The staging buffer no
+longer grows to the largest result (it stays allocated for the instance's life), and the
+transcode goes. Measured (Sandbox, async host function, a fresh instance per run): a 10
+MiB result 21.4 → 11.4 MiB wasm memory and 3.2–5 → 2.1–2.9 ms; 1 MiB 3.4 → 2.4 MiB and
+0.6–0.85 → 0.43–0.55 ms; 64 KiB 1.3 → 1.1 MiB; non-ASCII strings unchanged. Encoding
+straight into the reservation with `encodeInto` (one copy fewer) was tried first: a
+non-ASCII string then paid a reservation, a second encoding and a second arena growth (1
+MiB with one em dash: 1.85 → 2.55 ms, 4.4 → 5.7 MiB); deciding from the wire encoding
+costs it nothing. Two-byte strings and strings inside objects keep the wire path; pico's
+result buffer with slices (lesson 3) is the larger step.
