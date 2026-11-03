@@ -1,0 +1,5 @@
+{"glob": [{"value": ["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"]}],
+ "read": [{"args": [{"path": "src/a.ts"}], "value": "TODO\nx\nTODO"},
+          {"args": [{"path": "src/b.ts"}], "value": "none"},
+          {"args": [{"path": "src/c.ts"}], "value": "// TODO"},
+          {"args": [{"path": "src/d.ts"}], "value": ""}]}

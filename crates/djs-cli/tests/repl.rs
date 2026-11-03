@@ -304,3 +304,76 @@ fn stepping() {
          stepping: off\n45\n",
     );
 }
+
+// ---- tools and waiting inputs (0174). Call ids are the VM's host call ids: reading a
+// tool name for the first time makes the function through a host call of its own.
+
+#[test]
+fn tools_wait_and_resolve() {
+    check(
+        "const r = await tools.read({ path: 'a.ts' })\n.pending\nr\n.resolve 2 \"export const x = 1;\"\nr.length\n.pending\n",
+        "[waiting] #2 tools.read({\"path\":\"a.ts\"})\n\
+         #2 tools.read({\"path\":\"a.ts\"})  input 1, at repl:1:11\n\
+         undefined\n19\nno open calls\n",
+    );
+    // An expression input prints its value when it settles; the prompt does not wait.
+    check(
+        "await tools.add(1, 2)\n'meanwhile'\n.resolve 2 3\n",
+        "[waiting] #2 tools.add(1, 2)\n'meanwhile'\n[input 1] 3\n",
+    );
+    // A rejection, and an input waiting on calls made before it.
+    check(
+        "const p = tools.x()\nawait p\n.reject 2 no such thing\n.reject 2 again\n",
+        "[waiting] #2 tools.x()\n[input 2 waiting]\n[input 2] Uncaught Error: no such thing\n\
+         no open call #2 (.pending lists them)\n",
+    );
+    // Results go through the inbox: reactions run in order.
+    check(
+        "tools.a().then(v => console.log('a', v)); tools.b().then(v => console.log('b', v)); 0\n.resolve 4 'B'\n.resolve 4 \"B\"\n.resolve 2 [1]\n",
+        "[waiting] #2 tools.a()\n[waiting] #4 tools.b()\n0\nnot JSON: SyntaxError: unexpected token: ''' at <input>:1:1\nb B\na [ 1 ]\n",
+    );
+}
+
+#[test]
+fn backtraces_of_waiting_activations() {
+    let out = repl(
+        "async function todos(path, [first], ...rest) { const body = await tools.read({path}); return body.length }\n\
+         const all = Promise.all([todos('x', [1]), todos('y', [2], 3)])\n\
+         await all\n.bt 3\n.bt all\n.bt 9\n.resolve 2 \"ab\"\n.resolve 3 \"cde\"\nawait all\n.bt all\n",
+    );
+    let expected = "[waiting] #2 tools.read({\"path\":\"x\"})\n\
+        [waiting] #3 tools.read({\"path\":\"y\"})\n\
+        [input 3 waiting]\n\
+        #3 tools.read({\"path\":\"y\"})\n  async function todos at repl:1:61\n    path = 'y', first = 2, rest = [ 3 ], body = undefined\n  async <eval> at repl:1:10 (input 3)\n";
+    assert!(out.starts_with(expected), "{out}");
+    assert!(
+        out.contains("    path = 'x', first = 1, rest = [], body = undefined\n"),
+        "{out}"
+    );
+    assert!(out.contains("no open call #9 (.pending lists them)\n[input 3] [ 2, 3 ]\n[ 2, 3 ]\nno suspended activations\n"), "{out}");
+}
+
+#[test]
+fn answers_file() {
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let path = format!("{dir}/repl-answers-{}.json", std::process::id());
+    std::fs::write(
+        &path,
+        r#"{"read": [{"args": [{"path": "a"}], "value": "A"}, {"value": {"n": 1}}],
+            "fail": [{"error": "boom"}]}"#,
+    )
+    .unwrap();
+    let out = repl_with(
+        &["--tools", &path],
+        "await tools.read({path: 'a'})\nawait tools.read({path: 'b'})\nawait tools.fail()\nconst p = Promise.all([tools.read({path: 'a'}), tools.glob()])\n.pending\n",
+    );
+    std::fs::remove_file(&path).unwrap();
+    assert_eq!(
+        out,
+        "[answered] #2 tools.read({\"path\":\"a\"})\n'A'\n\
+         [answered] #3 tools.read({\"path\":\"b\"})\n{ n: 1 }\n\
+         [answered] #5 tools.fail()\nUncaught Error: boom\n\
+         [answered] #6 tools.read({\"path\":\"a\"})\n[waiting] #8 tools.glob()\n\
+         #8 tools.glob()  input 4\n"
+    );
+}

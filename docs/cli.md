@@ -2,12 +2,12 @@
 
 ```sh
 cargo run -p djs-cli -- run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
-    [--gc-stress] [--suspend-every N] [--backend bytecode|native] file.js
+    [--gc-stress] [--suspend-every N] [--backend bytecode|native] [--tools answers.json] file.js
 cargo run -p djs-cli -- disasm [--body] file.js
 cargo run -p djs-cli -- heap [--json] [--top N] [--only SECTIONS] [--diff FILE|base|none]
     [--reference FILE] [--all] dump
 cargo run -p djs-cli -- strip-types file.ts
-cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history]
+cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history] [--tools answers.json]
 ```
 
 `run` runs a Script (or, with `--body`, a codemode async body) and serves `console.log`;
@@ -15,8 +15,14 @@ cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history]
 TypeScript's legacy decorators (D1651). `--backend` runs the `@native` builtins as their
 generated Rust state machines (`native`, the default) or as bytecode (D1635).
 `disasm` prints the bytecode. `strip-types` erases TypeScript types like ts-blank-space
-(TESTING.md). `heap` analyzes a heap dump (below). This file documents `heap` and the
-REPL.
+(TESTING.md). `heap` analyzes a heap dump (below). This file documents `heap`, the
+REPL and tools.
+
+`run --tools answers.json` defines a global `tools` (and passes it as `tools` to a
+`--body`) whose calls are async host calls (below), answered from the file: whenever the
+run is idle (no jobs, only tool calls open), the oldest open call the file has an answer
+for gets it, then the run continues. A call the file has no answer for ends the run with
+`djs: no answer for #4 tools.read({"path":"x"})` on stderr and exit code 1.
 
 ## `djs heap`
 
@@ -101,6 +107,57 @@ suspending every 300 fuel
 | `.dump <file\|-> [names]` | write the session's globals (or the named ones, plus the globals their functions read) as a JavaScript dump (docs/functions-as-code.md): functions as their source text, closures that share variables made by one factory, data as literals and constructor calls, binary data as base64, builtins referenced by name and changed builtins as code. Live values (a pending promise, a suspended generator, a Proxy, a class) are refused with their path. `-` prints it |
 | `.restore <file>` | replace the VM with one restored from a container (any app; decompressed with this build's base) or a raw image. It must come from the same build (the build hash is checked). Images from `djs repl` and `djs run` both work: `console` is host function 1 in both. A file starting with `// djs-dump` is a dump instead: a fresh VM runs it, from any build |
 | `.clear` | a fresh VM |
+| `.pending` | the open tool calls: `#2 tools.read({"path":"a.ts"})  input 1, at repl:1:11`, with the input (or `.resolve`/answer) that made the call and where the innermost activation waiting on it stopped |
+| `.resolve <id> <json>` | answers call `#id` with a JSON value (`null` without one), then runs what that unblocks |
+| `.reject <id> <message>` | answers call `#id` with `new Error(message)` |
+| `.bt <id\|all>` | the suspended activations waiting on call `#id`, innermost first, through other activations, `then` reactions and `Promise.all`-style combinators; or every suspended activation (after a collection). Each with where it stopped and its named bindings: parameters (named from the function's source) and locals |
+
+### Tools and waiting inputs
+
+The REPL defines a global `tools` (0174, D2600). `tools.<name>(...args)` is an async host
+call: it returns a promise at once and the call stays open until it is answered, by hand
+with `.resolve`/`.reject`, or from `--tools answers.json`. An input that waits on a call
+does not block the prompt: the open calls print as `[waiting] #2 tools.read(...)` (or
+`[input 3 waiting]` when it waits on calls made earlier), later inputs run, and when the
+input settles its value prints as `[input 1] value` (an expression input; a statement
+prints nothing) or `[input 1] Uncaught ...`.
+
+```text
+> const r = await tools.read({ path: "a.ts" })
+[waiting] #2 tools.read({"path":"a.ts"})
+> .pending
+#2 tools.read({"path":"a.ts"})  input 1, at repl:1:11
+> .resolve 2 "export const x = 1;"
+> r.length
+19
+```
+
+Call ids are the VM's host call ids, which count every host call: the first read of a
+tool name makes its function through a host call of its own (`tools` is a Proxy that
+creates an async host function per name and keeps it), and `console.log` calls count
+too. Answers are applied through the VM's inbox, one macrotask each, so the order of
+answers is what the script sees. With `--tools`, answered calls print as
+`[answered] #2 tools.read(...)`. `.restore`, `.clear` and a dump forget the waiting
+inputs; the calls a restored image still has open are listed.
+
+**The answers file** (D2601) maps tool names to lists of answers, each `{"value": v}` or
+`{"error": "message"}`, optionally with `"args": [...]`:
+
+```json
+{
+  "glob": [{ "value": ["src/a.ts", "src/b.ts"] }],
+  "read": [
+    { "args": [{ "path": "src/a.ts" }], "value": "// TODO" },
+    { "value": "" },
+    { "error": "ENOENT" }
+  ]
+}
+```
+
+A call gets the first entry whose `args` equal its arguments as JSON (object keys in any
+order); such an entry answers every matching call. Otherwise it gets the next entry
+without `args`, in order, and the last one repeats. Entries with `args` give the same
+answers however the calls are ordered or split across runs.
 
 ### Input
 

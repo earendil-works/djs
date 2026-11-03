@@ -7855,3 +7855,26 @@ The two engines can now differ only for a case whose output depends on a tool an
 racing other promise jobs; no corpus case does. The runner reports idle points per case
 (`--idle-points`; at 0173 1,194 in 294 of the 549 cases, 1,164 in 288 harvested ones),
 and a stress variant must pass as many idle points as the plain run.
+## D2600: The CLI's `tools`: a Proxy that makes one async host function per name
+date: 2026-11-03 · by: repl · issue: 0174
+`djs repl` (always) and `djs run --tools` define a global `tools`. It is a Proxy over an
+object of made functions: reading a new name calls a sync host function (`make`, id 2)
+that creates an async host function (D1374) with the next id from 16 and that name, and
+the Proxy keeps it (`then` and symbols give `undefined`, so `await tools` is harmless). So
+an open call is an ordinary pending async host call with its own function: `.pending`
+and a later format 2 dump name it `tools.read`, and ids and names live in the heap, so
+the REPL reads them back after a restore. The alternative, one generic `call(name, args)`
+host function, would have put the tool's name into the arguments of every pending call.
+The cost: making a function is a host call, so call ids count it (the first read of a
+name takes an id). The REPL's waiting inputs need the input's result when `run` stops
+`Idle` with calls open; `Vm::outcome()` (additive) gives the entry call's value then.
+
+## D2601: Scripted tool answers: by arguments, else in order
+date: 2026-11-03 · by: repl · issue: 0174
+`--tools answers.json` maps tool names to lists of `{"value"}`/`{"error"}` entries,
+optionally with `"args"`. A call takes the first entry whose `args` equal its arguments
+as JSON (reusable), else the next entry without `args` (the last repeats). Answers are
+delivered one at a time, at idle points (no jobs, only tool calls open), oldest open call
+first, so every answered call is an idle point: the points `--dump-after K` counts.
+Answering by arguments keeps a run split by a dump and `resume` answering the same way as
+an uninterrupted one, with no record of what was consumed.
