@@ -39,6 +39,8 @@ CASES = [
 def run(cmd, env=None):
     r = subprocess.run(["/usr/bin/time", "-l"] + cmd, capture_output=True, text=True, timeout=900,
                        env=dict(os.environ, **(env or {})), cwd=here)
+    if r.returncode != 0:
+        raise SystemExit(f"perelem.py: run failed (exit {r.returncode}): {' '.join(cmd)}\n{r.stderr[-1500:]}")
     return int(re.search(r"(\d+)\s+instructions retired", r.stderr).group(1))
 def prog(body, n):
     return f"const a = []; for (let i = 0; i < {n}; i++) a.push(i); let t = 0;\nfor (let r = 0; r < {R}; r++) {{ {body} }}\nreturn t;"

@@ -25,13 +25,9 @@ for (const name of process.argv.slice(2)) {
     const frozenBuiltins = process.env.FROZEN === "1";
     const sb = new Sandbox({ module, fuelSlice: Number(process.env.FUEL ?? 10000), ...(frozenBuiltins ? { frozenBuiltins } : {}) } as never);
     const t = performance.now();
-    try {
-      sb.run(code);
-    } catch (e) {
-      // An A/B run of an older build against this checkout's reader: the run itself
-      // finished, only reading its result failed.
-      if ((e as Error).name !== "LayoutMismatch") throw e;
-    }
+    // A failure, including a LayoutMismatch of a build measured with another checkout's
+    // reader, fails the run (wmeasure.py: X.wasm@SRCROOT gives a build its own reader).
+    sb.run(code);
     const dt = performance.now() - t;
     mem = (sb as any).x.memory.buffer.byteLength;
     sb.dispose();

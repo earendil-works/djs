@@ -26,6 +26,8 @@ def qfile(name):
 def run(cmd):
     r = subprocess.run(["/usr/bin/time", "-l"] + cmd, capture_output=True, text=True, timeout=600)
     e = r.stderr
+    if r.returncode != 0:
+        raise SystemExit(f"measure.py: run failed (exit {r.returncode}): {' '.join(cmd)}\n{e[-1500:]}")
     ins = int(re.search(r"(\d+)\s+instructions retired", e).group(1))
     cyc = int(re.search(r"(\d+)\s+cycles elapsed", e).group(1))
     user = float(re.search(r"([\d.]+) user", e).group(1))
