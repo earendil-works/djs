@@ -201,6 +201,34 @@ Found while measuring L4, landed before it on the coordinator's call.
 - Guide: compiler.md (template layout paragraph); docs/compiler.md 6.1 sketch updated;
   ref-cells regenerated.
 
+### L3 step 3: lazy `length`/`name` of closures (branch issue/0151-fnprops, D2445)
+- Done before step 2 because speed's profile of pico's tree benchmark put closure
+  creation (`function_properties`: two defines and shape searches per closure) at 6-8%.
+- Two header flags (`OBJ_LAZY_LENGTH`/`_NAME`) on Function objects: the properties come
+  from the template (`LENGTH`, `NAME` atom) until changed. `find_own` → `Loc::LazyLength`/
+  `LazyName` (an out-of-line `unstored_loc` beside the array `length`), own keys list them
+  first, delete clears the flag, any accepted change materializes both at the front
+  (`materialize_lazy`: dictionary, entries shifted, index renumbered in place, no
+  allocation after the checks). ICs: `exotic_own` covers a function's `length`/`name`;
+  `shaped_add` refuses lazy objects.
+- User closures: lazy unless the name is an integer atom. Builtins: at base build
+  (`image::lazy_builtin_props`), closures with the installed `length`/`name` first, a name
+  that is already an atom, and an unshared template; `func_flags::LAZY_NAME` keeps the
+  name through `drop_internal_names`. Interning the 59 other names ("get size", ...)
+  grew the atom index 4 KB, so they stay stored.
+- Order independence: `BUILTIN_RESULT_SHAPES` now precreates `prototype` alone (W and
+  non-writable) and `length, name` (builtin/bound closures).
+- Base 231,960 → 217,608 B (−14.4 KB; property storage 37,088 → 22,528); vm_new 18 → 17
+  pages; module gzip +652 B (444,537 → 445,189). tree-children −11.9% cold, −14% warm;
+  other workloads noise (warm ±1%, pi-like −0.7%). Peak memory −0.1 MiB on most.
+- New corpus case language/function-lazy-props.js (expected from qjs): reads, deletes,
+  redefinitions, freeze/seal, class statics, computed/numeric/symbol names, builtins,
+  inherited reads through IC sites, for-in shadowing, bind, spread.
+- Compat: `pub mod flags` and `func_flags` are RECORDS_HASH regions, so images change key
+  without a COMPAT_VERSION bump.
+- Guide: heap.md (lazy closure properties paragraph), snapshots.md (base diet item, base
+  size 315 → 218 KB).
+
 ## Follow-ups
 - GC thresholds are rounded to 64 KB pages from offset 0, so collection points depend on
   the base's size (json-date's extra collection under L4). Rounding relative to
@@ -208,5 +236,11 @@ Found while measuring L4, landed before it on the coordinator's call.
   shrinks further.
 - Native `run_hot` got slower with L4's arms (loop +4.6%, calls +5.4%, prop1 +6.7%);
   not shipped, but tools and native hosts use it.
+
+- An ordinary function's `prototype` object is still created with every closure
+  (`function_properties`); a lazy `prototype` would make `function` expressions as cheap
+  as arrows.
+- 59 builtins keep stored `name`s that are not atoms ("get size", "[Symbol.iterator]");
+  a template field for a non-atom name string would take them too.
 
 ## Result
