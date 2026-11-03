@@ -565,3 +565,7 @@ topics when the index is next reorganized.
 - D2631: The dump exports carry the host's function names both ways; changed in place
 - D2632: Dotted host function names make a namespace object
 - D2620: A codemode body's frame is an async function's
+- D2633: A dump names the run's result without a handle; `vm_outcome` removed
+- D2634: `run`, `runAsync` and `replay` are built on the host-driven run
+- D2635: Both dumper packagings, chosen by the host; the image moves between modules
+- D2621: A class's hidden bindings in a waiting frame are dead; private names are the class's

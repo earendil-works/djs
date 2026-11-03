@@ -6,9 +6,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0175 | Sandbox run API (rest), wasm packaging | example | .worktrees/example |
-| 0178 | Continuation dumps across builds: golden fixtures, two-commit check | portable | .worktrees/portable |
-| 0174b | --explain follow-ups (any host name, real file name); todos --body every-K test after the captured-param fix | repl | .worktrees/repl |
+| 0176 | pi's future shape: prelude-next, adapter mode, dumps (D2565) | example | .worktrees/example |
+| 0182 | Dump preamble out: $dump.builtin/advance as loader primitives (registry paths); computed class keys refused or by value | portable | .worktrees/portable |
 
 ## Open (ready)
 
@@ -19,7 +18,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0176 | pi's future shape: prelude-next, adapter mode, dumps (D2565) | 0175 |
 | 0177 | Retire heap images as persistence; packaging decided; guide | 0176 |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
 | - | Vec push_out/with_capacity in bloat's files (~1 KB); scratch buffers for Vec drops (few KB) | 0151 L3 |
@@ -84,6 +82,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0178 | Dumps across builds: golden fixtures, two-commit check (D2619); exporter fixes D2617-D2621 | 4ee8c2c2 (agent portable) |
+| 0175 | Sandbox run API on host-driven runs (D2633-D2635); packaging B (dump module) | 7f380233 (agent example; dumper +96.8 KB gz) |
 | 0174 | REPL/CLI: tools, waiting inputs, .dump/.restore/.dump-every, run --dump-after, resume (D2600-D2604) | 242f8294 (agent repl) |
 | 0179 | examples/sleep-dump: dump while a host tool sleeps, restart, continue; Sandbox begin/resume (D2630-D2632) | 19fe4b71 (agent example) |
 | 0180 | Dumps without comments: "djs-dump 2"; directive (D2640), djs resume --explain (D2641) | dd98ec06 (agent nocomment) |
