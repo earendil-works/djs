@@ -58,4 +58,14 @@ Dumps are the persistence format (D2560); before images are retired (0177):
 - for-await-close golden program (work/scratch/0184/for-await-close.src.js) waits for
   finally: its awaits sit in an async generator's finally block.
 
+- finally (D2627): roles `finally.value` / `finally.return(i)` (the i-th subroutine of the
+  function, recorded by `Parser::subroutine`); resolve.rs records each `gosub`'s position
+  and the map gives every site its subroutines' return pcs (`Site::returns`); dumps write
+  the address as the gosub's index, the loader maps it back. The for-await close
+  subroutine now consumes the iterator before its await (`v ret`): same roles. Case tests:
+  `switch.discriminant` twice. Promise value thunks / throwers in flight (kind 9/10: the
+  AsyncIteratorCloseThrow `ignore` handler, finally's thunks) written as arrows: a throw
+  out of a for await over an async generator whose finally awaits refused before.
+  Goldens finally (15 dumps) and for-await-close (3); both in delegation_round_trips.
+
 ## Result

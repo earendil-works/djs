@@ -8563,3 +8563,24 @@ names, half the time), and the VM keeps the table after its first dump (with the
 length; another base is walked again): a VM's next dumps cost 0.05 ms natively for an
 empty session. Packaging B makes a fresh dump-module VM per dump, so it gets only the
 faster walk unless the host keeps that instance between dumps.
+
+## D2627: Subroutine return addresses in dumps are gosub indexes; case tests keep their discriminant
+date: 2026-11-04 · by: portable · issue: 0184
+A finally block, and a for-await's close subroutine entered by `break`/`continue`/`return`
+through the loop, run as subroutines: `gosub` pushes the pc after it, and in the block the
+stack holds the value the block carries (`undefined`, the exception or the return value)
+and that return address. Suspension maps describe them as roles `finally.value` and
+`finally.return`. A pc is this build's, so a dump writes the return address as the index
+of its `gosub` among those that enter the subroutine, in emission order (the map's
+`Site::returns` lists the pcs; the loader maps the index back and refuses one it does not
+have). Emission order follows the source (jumps out of the try block as they appear, the
+normal exits, the exception path last); a compiler that orders them differently bumps
+`COMPAT_VERSION`. The close subroutine of a for-await no longer keeps the iterator under
+its await (`v ret it` became `v ret`, closing consumes it): its stack is the two roles
+only. A `switch`'s case test keeps the discriminant twice (`dup`, then compared): role
+`switch.discriminant`, written twice. The thunks of `Promise.prototype.finally` and the
+handler AsyncIteratorClose of a throw puts on `return()`'s promise (`PromiseValueThunk`,
+`PromiseThrower`) are written as arrows (`() => (v)`, `() => { throw v; }`) where they
+react in flight. Still refused: a finally's saved completion value (Script and eval code,
+which do not suspend) and closing a for-await iterator on the return path of a resumed
+generator (`return(v)` at a yield).

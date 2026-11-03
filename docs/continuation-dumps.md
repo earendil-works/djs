@@ -280,8 +280,13 @@ passes, say, its run's promise as "run").
   holds is made again with its entries. A `for await` over a sync iterable gets the
   dump's own async-from-sync iterator (`$dump.fromSync`, which steps the same way: the
   object is never visible to user code). Proxies are `new Proxy(target, handler)`.
-- **Still refused, with their path:** sites the maps call unsupported (`finally`, `using`,
-  destructuring, `yield*`, closing an async iterator), for-in loops, revoked Proxies,
+- **Subroutines:** a finally block (and a for-await's close when `break`, `continue` or
+  `return` leaves the loop) runs as a subroutine whose stack holds the value it carries
+  and a return address; the dump writes the address as the index of the `gosub` that
+  entered it (`["finally.return", 2]`), which the loader maps to its own pc (D2627).
+- **Still refused, with their path:** sites the maps call unsupported (`using`,
+  destructuring, closing a for-await's iterator on a generator's `return(v)` path),
+  for-in loops, revoked Proxies,
   iterator helpers and RegExp string iterators, weak collections, a generator object
   with another prototype or own properties, keyed combinators (`allKeyed`), an async
   generator awaiting a `return()` value, then-reactions on promises of other
