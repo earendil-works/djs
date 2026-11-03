@@ -1,7 +1,7 @@
 # 0176: pi's future shape: prelude-next, adapter mode, dumps
 
-status: open
-agent: -
+status: in-progress
+agent: example
 branch: issue/0176-pi-future-shape
 depends-on: 0175
 touches: tests/pi/prelude-next.ts (new), js/pi/, js/test/pi-vm.test.ts, docs/host.md
