@@ -67,13 +67,12 @@ var legacy = { [tag]: 'tagged', big: 12345678901234567890n };
 Array.prototype.last = function () { return this[this.length - 1]; };
 ```
 
-dumps as (format 2, helpers shortened; the dump has no comments, the `/* ... */` are this
-page's):
+dumps as (format 2; `$dump.random`, `$dump.bytes` and `$dump.builtin` are the loader's
+primitives, D2622):
 
 ```js
 "djs-dump 2";
-$dump.bytes = (s) => { /* base64 -> ArrayBuffer with atob */ };
-$dump.builtin = (path) => { /* resolves "%ArrayIteratorPrototype%", "get Map.prototype.size", ... */ };
+$dump.random(1584364053, 1036713493);
 $dump.s1 = (() => {
   let n = 41;
   return { inc: () => ++n, get: () => n };
@@ -97,7 +96,7 @@ $dump.n3.parent = graph;
 Object.freeze(frozen);
 ```
 
-The order says what the comments of version 1 said: helpers, then the roots (with the
+The order says what the comments of version 1 said: the random state, then the roots (with the
 factories and named objects they need before them), then the builtins the session
 changed, then the links that close cycles and the attributes. Version 1 (the fixture)
 starts with the comment `// djs-dump 1: 12 bindings (...)`, makes its own
@@ -107,8 +106,8 @@ same text with section comments.
 The roots are top-level declarations of the Script, as the session had them: the global
 lexical record's bindings as `let`/`const`, the global object's own properties as `var`
 (or the function declaration itself, when its text declares that name). `$dump` is a
-temporary namespace for the helpers and for objects that are referenced twice or sit on a
-cycle; in format 2 the loader passes it in and removes it when the load ends.
+temporary namespace for objects that are referenced twice or sit on a cycle; in format 2
+the loader passes it in, with its primitives, and removes it when the load ends.
 
 ## How a dump is written
 
@@ -129,8 +128,8 @@ from it, so a cell below the base's end is a builtin and its path is the one the
 gives it, even if the session assigned it to a global of its own. A path made of
 identifiers and property keys (`Array.prototype.map`, `Symbol.iterator`) is an expression;
 the others (`%TypedArray%`, `get Map.prototype.size`, `Int8Array.[[Prototype]]`) are passed
-to `$dump.builtin`, which knows an expression for each realm root that has no global
-(`Object.getPrototypeOf([][Symbol.iterator]())` for `%ArrayIteratorPrototype%`). Internal
+to `$dump.builtin`, a loader primitive that resolves the path on the loading VM's base
+builtins (D2622). Internal
 values of builtins (a prelude helper reached through a capture, `%intrinsic:...%`) are
 refused: they are not part of the language, and their identity is not something a later
 build can promise.
@@ -154,7 +153,7 @@ builtins (D2304) the prefix cannot change and this step is skipped.
 - Arrays with holes and extra properties; Map and Set by their entries (entries that close a
   cycle are added afterwards, all of them in order); Date, RegExp (literal, or `new
   RegExp` when the source would not survive as a literal), wrappers (`Object(1)`),
-  settled promises (`Promise.resolve(v)`, a rejected one through a helper that marks it
+  settled promises (`Promise.resolve(v)`, a rejected one through `$dump.rejected`, which marks it
   handled), errors (`new TypeError(msg)` plus the `stack` the error had), bound functions
   (`f.bind(this, ...args)`).
 - Symbols: well-known ones are builtins (`Symbol.iterator`), registered ones
@@ -279,6 +278,7 @@ Everything below fails the dump with one line per value, `path: reason`:
 | --- | --- |
 | a host function the host does not name (`DumpOptions::host_fn_name`) | the host owns it |
 | a decorated class | its decorators would run again at load |
+| a class member or object literal method with a computed key other than a literal or a well-known symbol (`[k]() {}`, `[k] = 1`) | the key would be evaluated again where the dump writes the text (D2623) |
 | a class whose heritage is an expression (`extends mixin(Base)`) | only a name or a path is bound to the parent (see "Classes") |
 | a function that uses a class's private names outside the class text (a closure a method returned) | only the class's text makes its private scope |
 | a private field of a class the dump does not hold, or whose code never uses the name | the loader finds private names through the recreated class's code |
@@ -349,8 +349,9 @@ compiles (it has to pick the grammar). Version 1 dumps start with the comment
 the comment header of builds before 0180 is not a dump). **Format 2** (D2581), what this build
 writes, is a Script run by `Vm::load_dump` with a `$dump` the loader passes in: a global
 property (not writable, not enumerable) holding an ordinary object with the loader's
-primitives (`private` today; `resume`, `cell`, `pending`, `handle` and `TDZ` with
-continuation dumps), removed when the load ends. The dump adds its helpers to it. The
+primitives (read-only: `private`, the continuation primitives and the former helpers
+`builtin`, `bytes`, `fn`, `keep`, ..., D2622), removed when the load ends. The dump adds
+only its locations to it. The
 primitives are host functions served only by the loader's run loop: a format 2 dump run
 as an ordinary Script has no `$dump` and fails on its first line. Format 2 promises what
 version 1 does, for the bindings it holds.

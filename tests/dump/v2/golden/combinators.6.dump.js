@@ -1,9 +1,5 @@
 "djs-dump 2";
-$dump.rejected = (e) => {
-  const p = Promise.reject(e);
-  p.catch(() => {});
-  return p;
-};
+$dump.random(2135587861, -1640531527);
 $dump.p1 = $dump.pending(6, "later", ["ok"]);
 $dump.p2 = $dump.pending(7, "later", ["fast"]);
 async function main() {

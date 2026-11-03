@@ -1,4 +1,5 @@
 "djs-dump 2";
+$dump.random(2135587861, -1640531527);
 $dump.p1 = $dump.pending(2, "later", [3]);
 async function main() {
   const k = "z";

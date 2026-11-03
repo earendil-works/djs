@@ -229,6 +229,8 @@ mod maps {
     pub(in crate::compiler) struct Recorder {
         pub roles: Vec<Role>,
         pub sites: Vec<SiteRec>,
+        /// The computed property keys this function evaluates (`[` to `]`).
+        pub computed_keys: Vec<(u32, u32)>,
     }
 
     /// A site as the parser saw it.
@@ -295,6 +297,11 @@ mod maps {
         pub start: u32,
         pub end: u32,
         pub sites: Vec<Site>,
+        /// The source spans (`[` to `]`) of the computed property keys its code
+        /// evaluates: of its object literals, of the classes it defines, of its
+        /// destructuring patterns. A dump that writes a class or method by its text
+        /// evaluates such a key again (D2623).
+        pub computed_keys: Vec<(u32, u32)>,
     }
 
     impl FunctionMap {
@@ -518,6 +525,7 @@ mod maps {
             start: f.src_start,
             end: f.src_end,
             sites,
+            computed_keys: rec.computed_keys.clone(),
         }
     }
 }

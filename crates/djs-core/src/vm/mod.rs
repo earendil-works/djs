@@ -21,6 +21,8 @@ pub mod dump;
 #[cfg(feature = "dump")]
 pub mod dump_load;
 #[cfg(feature = "dump")]
+mod dump_prims;
+#[cfg(feature = "dump")]
 mod dump_resume;
 mod format;
 mod image;

@@ -1,4 +1,5 @@
 "djs-dump 2";
+$dump.random(2135587861, -1640531527);
 $dump.p1 = $dump.pending(2, "later", [["a", "b"]]);
 $dump.a2 = $dump.resume(async function (tools, console) {
 // A codemode body (pi's Sandbox): tools and console are its parameters.

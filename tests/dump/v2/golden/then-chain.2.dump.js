@@ -1,4 +1,5 @@
 "djs-dump 2";
+$dump.random(2135587861, -1640531527);
 $dump.n1 = new Error("boom");
 $dump.p2 = $dump.pending(2, "later", [$dump.n1, true]);
 const log = ["fin"];

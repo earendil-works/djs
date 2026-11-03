@@ -1860,6 +1860,10 @@ impl Parser<'_, '_> {
                 self.next()?;
                 self.parse_assign(false)?;
                 self.expect(TokenKind::RBracket, "]")?;
+                #[cfg(feature = "dump")]
+                if let Some(r) = self.f.smap.as_mut() {
+                    r.computed_keys.push((tok.start, self.prev_end));
+                }
                 Ok(None)
             }
             TokenKind::String => {

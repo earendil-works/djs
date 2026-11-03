@@ -1,4 +1,5 @@
 "djs-dump 2";
+$dump.random(2135587861, -1640531527);
 $dump.p1 = $dump.pending(1, "later", ["go"]);
 $dump.p2 = new Promise((res, rej) => { $dump.r3 = [res, rej]; });
 let keep = { res: $dump.r3[0], rej: $dump.r3[1] };

@@ -5,8 +5,8 @@
 //!   `$dump` and run as they are.
 //! - **Format 2** dumps (first statement the directive `"djs-dump 2";`, D2640) get `$dump` from the loader: a global property
 //!   (not writable, not enumerable, configurable) holding an ordinary object with the
-//!   loader's primitives, removed again when the load ends. The dump adds its helpers to
-//!   it. The primitives are host functions with ids the loader reserves, served only by
+//!   loader's primitives (read-only, D2622; the helpers in dump_prims.rs), removed again
+//!   when the load ends. The dump adds its locations (`$dump.p1`) to it. The primitives are host functions with ids the loader reserves, served only by
 //!   the loader's run loop: a dump run as an ordinary Script has no `$dump`, and a
 //!   primitive that escaped the load parks the VM on a host call its embedder does not
 //!   know.
@@ -118,6 +118,16 @@ const PENDING: u32 = PRIVATE + 3;
 const HANDLE: u32 = PRIVATE + 4;
 const ISSUED: u32 = PRIVATE + 5;
 const HOST: u32 = PRIVATE + 6;
+const BUILTIN: u32 = PRIVATE + 7;
+const ADVANCE: u32 = PRIVATE + 8;
+const FROM_SYNC: u32 = PRIVATE + 9;
+const CLOSE_THROW: u32 = PRIVATE + 10;
+const SPENT: u32 = PRIVATE + 11;
+const REJECTED: u32 = PRIVATE + 12;
+const BYTES: u32 = PRIVATE + 13;
+const FN: u32 = PRIVATE + 14;
+const KEEP: u32 = PRIVATE + 15;
+const RANDOM: u32 = PRIVATE + 16;
 /// The ids of the primitives' own calls while a dump loads: above every id a dump's open
 /// call may have, so the two never meet.
 const LOADER_CALL_IDS: u32 = 0x8000_0000;
@@ -129,6 +139,16 @@ const PRIMITIVES: &[(&str, u32)] = &[
     ("handle", HANDLE),
     ("issued", ISSUED),
     ("host", HOST),
+    ("builtin", BUILTIN),
+    ("advance", ADVANCE),
+    ("fromSync", FROM_SYNC),
+    ("closeThrow", CLOSE_THROW),
+    ("spent", SPENT),
+    ("rejected", REJECTED),
+    ("bytes", BYTES),
+    ("fn", FN),
+    ("keep", KEEP),
+    ("random", RANDOM),
 ];
 
 /// How a dump is compiled: a Script, TypeScript when its header says so
@@ -313,9 +333,13 @@ impl Vm {
     /// Defines the global `$dump` with the loader's primitives.
     fn install_loader(&mut self) -> Result<(), crate::heap::HeapError> {
         let o = self.new_object()?;
+        // Read-only: a dump calls the primitives and defines nothing of its own on
+        // `$dump` but the locations it fills (D2622).
         for &(name, id) in PRIMITIVES {
             let f = self.new_host_function(id, name)?;
-            self.define(o, name, f)?;
+            let k = self.heap.atom_str(name)?;
+            let d = PropertyDescriptor::data(f, PropFlags::NONE);
+            self.heap.define_own_property(o, k, &d)?;
         }
         let tdz = self.heap.alloc_object(ObjectClass::Record, None, 1)?;
         self.heap.set_object_slot(tdz, 0, Value::UNINITIALIZED);
@@ -360,6 +384,17 @@ impl Vm {
                         PENDING => self.primitive_pending(&args, opts, load),
                         HANDLE => self.primitive_handle(&args, load),
                         HOST => self.primitive_host(&args, opts),
+                        BUILTIN => self.primitive_builtin(&args),
+                        ADVANCE => self.primitive_advance(&args),
+                        FROM_SYNC => self.primitive_from_sync(&args),
+                        CLOSE_THROW => self.primitive_close_throw(&args),
+                        SPENT => self.primitive_spent(&args),
+                        REJECTED => self.primitive_rejected(&args),
+                        #[cfg(feature = "full")]
+                        BYTES => self.primitive_bytes(&args),
+                        FN => self.primitive_fn(&args),
+                        KEEP => self.primitive_keep(&args),
+                        RANDOM => self.primitive_random(&args),
                         // (A positive int32: below LOADER_CALL_IDS.)
                         ISSUED => match args.first().and_then(|v| v.as_int()) {
                             Some(n) if n > 0 => {

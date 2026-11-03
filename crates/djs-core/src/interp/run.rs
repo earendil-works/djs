@@ -109,7 +109,7 @@ mod proxy;
 mod stack;
 pub(crate) mod suspend;
 #[cfg(feature = "dump")]
-pub(crate) use intrinsics::builtin_closure_kind;
+pub(crate) use intrinsics::{builtin_closure_kind, new_builtin_closure};
 
 /// The opcodes `Exec::fast_step` handles, as bytes for its `match`.
 mod fast {

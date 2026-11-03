@@ -1,8 +1,5 @@
 "djs-dump 2";
-$dump.advance = (it, n) => {
-  for (let i = 0; i < n; i++) it.next();
-  return it;
-};
+$dump.random(2135587861, -1640531527);
 $dump.p1 = $dump.pending(1, "later", [0]);
 async function main() {
   const ai = [1, 2, 3].values(); ai.next();

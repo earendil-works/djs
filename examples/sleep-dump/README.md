@@ -76,7 +76,7 @@ In one process (`run.sh`); `[vm]` lines are the script's `console.log`:
   [vm] first sleeps 5000 ms
 host: call #2 tools.sleep(5000): timer armed, 5000 ms left
 host: the VM is idle, waiting on tools.sleep(5000); dumping it
-host: the dump (3159 bytes):
+host: the dump (1308 bytes):
   | ... (the dump below)
 host: loaded the dump into a new sandbox; open calls: #2 tools.sleep(5000)
 host: call #2 tools.sleep(5000): timer armed, 4958 ms left
@@ -97,7 +97,7 @@ With `--restart` the halves are two node processes, and the dump travels as a fi
   [vm] first sleeps 5000 ms
 host: call #2 tools.sleep(5000): timer armed, 5000 ms left
 host: the VM is idle, waiting on tools.sleep(5000); dumping it
-host: wrote examples/sleep-dump/out/sleep.dump.js (3159 bytes) and host.json; exiting
+host: wrote examples/sleep-dump/out/sleep.dump.js (1308 bytes) and host.json; exiting
 --- node sleep-dump.ts resume (process 2)
 host: loaded the dump into a new sandbox; open calls: #2 tools.sleep(5000)
 host: call #2 tools.sleep(5000): timer armed, 4792 ms left
@@ -109,44 +109,12 @@ host: the run returned ["first: slept 5000 ms","second: slept 5000 ms"]
 
 ### The dump
 
-`out/sleep.dump.js`, as written (only `t0`, a clock reading, differs between runs):
+`out/sleep.dump.js`, as written (only `t0`, a clock reading, and the `Math.random` state,
+from the sandbox's seed, differ between runs):
 
 ```js
 "djs-dump 2";
-$dump.advance = (it, n) => {
-  for (let i = 0; i < n; i++) it.next();
-  return it;
-};
-$dump.builtin = (path) => {
-  const roots = {
-    IteratorPrototype: () => Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]())),
-    ArrayIteratorPrototype: () => Object.getPrototypeOf([][Symbol.iterator]()),
-    StringIteratorPrototype: () => Object.getPrototypeOf(''[Symbol.iterator]()),
-    MapIteratorPrototype: () => Object.getPrototypeOf(new Map().entries()),
-    SetIteratorPrototype: () => Object.getPrototypeOf(new Set().values()),
-    RegExpStringIteratorPrototype: () => Object.getPrototypeOf(/./[Symbol.matchAll]('')),
-    GeneratorFunction: () => (function* () {}).constructor,
-    GeneratorPrototype: () => Object.getPrototypeOf(function* () {}).prototype,
-    AsyncFunction: () => (async function () {}).constructor,
-    AsyncGeneratorFunction: () => (async function* () {}).constructor,
-    AsyncGeneratorPrototype: () => Object.getPrototypeOf(async function* () {}).prototype,
-    TypedArray: () => Object.getPrototypeOf(Int8Array),
-    TypedArrayPrototype: () => Object.getPrototypeOf(Int8Array.prototype),
-    ThrowTypeError: () => Object.getOwnPropertyDescriptor(Function.prototype, 'caller').get,
-  };
-  const [, acc, root, rest] = /^(get |set )?(%\w+%|[\w$]+)(.*)$/.exec(path);
-  let v = root[0] === "%" ? roots[root.slice(1, -1)]() : globalThis[root];
-  const segs = rest.match(/\.\[\[Prototype\]\]|\.[\w$]+|\["(?:[^"\\]|\\.)*"\]|\[Symbol\.\w+\]/g) || [];
-  segs.forEach((s, i) => {
-    if (s === ".[[Prototype]]") return void (v = Object.getPrototypeOf(v));
-    const key = s[0] === "." ? s.slice(1) : s.startsWith("[Symbol.") ? Symbol[s.slice(8, -1)] : JSON.parse(s.slice(1, -1));
-    if (acc && i === segs.length - 1) {
-      const d = Object.getOwnPropertyDescriptor(v, key);
-      v = acc === "get " ? d.get : d.set;
-    } else v = v[key];
-  });
-  return v;
-};
+$dump.random(-1641497997, 2047772101);
 $dump.p1 = $dump.pending(2, "tools.sleep", [5000]);
 $dump.n2 = async function step(label, ms) {
   console.log(label, "sleeps", ms, "ms");
@@ -171,7 +139,7 @@ for (const label of ["first", "second"]) {
 console.log("done after at least", Date.now() - t0 >= 2 * ms ? 2 * ms : "(less than!)", "ms:", results.join(", "));
 return results;
 
-}, { at: "await#1", awaiting: $dump.a3, args: [5000], bindings: { ms: 5000, step: $dump.n2, t0: 1793738478154, results: $dump.n4, label: "first" }, operands: [["call.callee", Array.prototype.push], ["call.this", $dump.n4]], loops: [{ kind: "for-of", iterator: $dump.i5, next: $dump.builtin("%ArrayIteratorPrototype%.next") }] });
+}, { at: "await#1", awaiting: $dump.a3, args: [5000], bindings: { ms: 5000, step: $dump.n2, t0: 1793745323813, results: $dump.n4, label: "first" }, operands: [["call.callee", Array.prototype.push], ["call.this", $dump.n4]], loops: [{ kind: "for-of", iterator: $dump.i5, next: $dump.builtin("%ArrayIteratorPrototype%.next") }] });
 $dump.handle("run", $dump.a6);
 ```
 
@@ -181,9 +149,12 @@ function it runs as, verbatim, resumed at its first `await` (`await#1`, the one 
 `results.push(await step(label, ms))`). It awaits `a3`, the activation of `step("first",
 5000)` at its own first `await`, which awaits `p1`, the open host call. `n4` is the
 `results` array, shared by the binding and the half-done call's `this`; `i5` is the
-loop's iterator, made again and advanced once. `$dump.advance` and `$dump.builtin` are
-helpers every dump defines; `$dump.builtin` finds builtins by name (here the array
-iterator's `next`), so none is written as code.
+loop's iterator, made again and advanced once. The first line after the header sets
+`Math.random`'s state, so the resumed run continues its sequence. Everything named
+`$dump.*` that is called is the loader's: `$dump.advance` steps the new iterator and
+`$dump.builtin` finds a builtin by its registry path (here the array iterator's `next`),
+so a dump defines no helpers of its own and holds only the run's data, its functions and
+these calls.
 
 ### What the dump holds, explained
 
@@ -195,11 +166,11 @@ file) and its bindings:
 $ cargo run -q -p djs-cli -- resume --explain examples/sleep-dump/out/sleep.dump.js
 examples/sleep-dump/out/sleep.dump.js: format 2; 1 open call, 2 suspended activations; handles: run
 #2 tools.sleep(5000)
-  async function step at dump.js:39:13
+  async function step at examples/sleep-dump/out/sleep.dump.js:6:13
       const r = await tools.sleep(ms);
                 ^
     label = 'first', ms = 5000, r = undefined
-  async function <anonymous> at dump.js:55:16 (run)
+  async function <anonymous> at examples/sleep-dump/out/sleep.dump.js:22:16 (run)
       results.push(await step(label, ms));
                    ^
     ms = 5000, step = [AsyncFunction: step], t0 = 1793738494362, results = [], label = 'first'

@@ -1,4 +1,5 @@
 "djs-dump 2";
+$dump.random(2135587861, -1640531527);
 $dump.p1 = $dump.pending(2, "later", [0]);
 var g = function* g(a) { const x = yield a; yield x + 1; };
 var ag = async function* ag() { yield await later("q1"); yield "q2"; };

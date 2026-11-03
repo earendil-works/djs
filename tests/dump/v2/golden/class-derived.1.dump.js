@@ -1,10 +1,5 @@
 "djs-dump 2";
-$dump.keep = (o, keys) => {
-  for (const k of Reflect.ownKeys(o)) {
-    if (!["length", "name", "prototype", "constructor"].includes(k) && !keys.includes(k)) delete o[k];
-  }
-  for (const k of keys) if (!Object.prototype.hasOwnProperty.call(o, k)) throw new TypeError("the class does not make " + String(k));
-};
+$dump.random(2135587861, -1640531527);
 $dump.p1 = $dump.pending(1, "later", ["woof"]);
 class Animal {
   constructor(name) { this.name = name; }

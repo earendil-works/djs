@@ -1,4 +1,5 @@
 "djs-dump 2";
+$dump.random(2135587861, -1640531527);
 $dump.p1 = $dump.pending(3, "later", [0]);
 async function twice(x) { return later(x * 2); }
 async function args() { await later(arguments.length); return [...arguments].join("/"); }

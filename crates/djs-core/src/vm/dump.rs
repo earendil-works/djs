@@ -288,8 +288,6 @@ enum Named {
     Loader,
     /// Not at all: an internal value of a builtin (refused).
     Internal,
-    /// Not at all: under a realm root the loader has no expression for (refused).
-    Unreachable,
 }
 
 struct Builtin {
@@ -365,136 +363,11 @@ impl Index {
     }
 }
 
-/// The helpers a dump defines on `$dump` when it uses them.
-const H_BYTES: u16 = 1;
-const H_FN: u16 = 2;
-const H_REJECTED: u16 = 4;
-const H_BUILTIN: u16 = 8;
-const H_KEEP: u16 = 16;
-const H_ADVANCE: u16 = 32;
-const H_SPENT: u16 = 64;
-const H_FROM_SYNC: u16 = 128;
-
 /// A node that is not in flight (`Node::fl`).
 const NO_FLIGHT: usize = usize::MAX;
 
 #[path = "dump_flight.rs"]
 mod flight;
-
-const HELPERS: &[(u16, &str)] = &[
-    (
-        H_BYTES,
-        "$dump.bytes = (s) => {\n  const b = atob(s), u = new Uint8Array(b.length);\n  \
-         for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);\n  return u.buffer;\n};\n",
-    ),
-    (
-        H_FN,
-        "$dump.fn = (o) => {\n  const d = Object.getOwnPropertyDescriptor(o, Reflect.ownKeys(o)[0]);\n  \
-         return d.value || d.get || d.set;\n};\n",
-    ),
-    (
-        H_REJECTED,
-        "$dump.rejected = (e) => {\n  const p = Promise.reject(e);\n  p.catch(() => {});\n  return p;\n};\n",
-    ),
-    (
-        H_ADVANCE,
-        "$dump.advance = (it, n) => {\n  for (let i = 0; i < n; i++) it.next();\n  return it;\n};\n",
-    ),
-    (
-        H_SPENT,
-        "$dump.spent = () => {\n  let f;\n  new Promise((res, rej) => (f = [res, rej]));\n  f[0]();\n  return f;\n};\n",
-    ),
-    (
-        H_FROM_SYNC,
-        "$dump.closeIt = (it) => {\n  try {\n    const m = it.return;\n    if (m !== undefined && m !== null) m.call(it);\n  } catch {}\n};\n\
-$dump.closeThrow = (it) => (e) => {\n  $dump.closeIt(it);\n  throw e;\n};\n\
-$dump.fromSync = (it, next) => {\n  \
-const step = (r, close) => {\n    \
-if (Object(r) !== r) return Promise.reject(new TypeError(\"iterator must return an object\"));\n    \
-let done, wrapper;\n    try {\n      done = !!r.done;\n      const value = r.value;\n      \
-try {\n        wrapper = Promise.resolve(value);\n      } catch (e) {\n        if (!done && close) $dump.closeIt(it);\n        throw e;\n      }\n    \
-} catch (e) {\n      return Promise.reject(e);\n    }\n    \
-return wrapper.then((v) => ({ value: v, done }), !done && close ? $dump.closeThrow(it) : undefined);\n  };\n  \
-const call = (f, args, close) => {\n    let r;\n    try {\n      r = f.apply(it, args);\n    } catch (e) {\n      return Promise.reject(e);\n    }\n    return step(r, close);\n  };\n  \
-return {\n    next(...args) {\n      return call(next, args, true);\n    },\n    \
-return(...args) {\n      let m;\n      try {\n        m = it.return;\n      } catch (e) {\n        return Promise.reject(e);\n      }\n      \
-if (m === undefined || m === null) return Promise.resolve({ value: args[0], done: true });\n      return call(m, args, false);\n    },\n    \
-throw(...args) {\n      let m;\n      try {\n        m = it.throw;\n      } catch (e) {\n        return Promise.reject(e);\n      }\n      \
-if (m === undefined || m === null) {\n        $dump.closeIt(it);\n        return Promise.reject(new TypeError(\"throw is not a method\"));\n      }\n      \
-return call(m, args, true);\n    },\n  };\n};\n",
-    ),
-    (
-        H_KEEP,
-        "$dump.keep = (o, keys) => {\n  for (const k of Reflect.ownKeys(o)) {\n    \
-         if (![\"length\", \"name\", \"prototype\", \"constructor\"].includes(k) && !keys.includes(k)) delete o[k];\n  }\n  \
-         for (const k of keys) if (!Object.prototype.hasOwnProperty.call(o, k)) throw new TypeError(\"the class does not make \" + String(k));\n};\n",
-    ),
-];
-
-/// The realm objects `$dump.builtin` can reach without a global path, with the
-/// expression that does.
-const LOADER_ROOTS: &[(&str, &str)] = &[
-    (
-        "IteratorPrototype",
-        "Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]()))",
-    ),
-    (
-        "ArrayIteratorPrototype",
-        "Object.getPrototypeOf([][Symbol.iterator]())",
-    ),
-    (
-        "StringIteratorPrototype",
-        "Object.getPrototypeOf(''[Symbol.iterator]())",
-    ),
-    (
-        "MapIteratorPrototype",
-        "Object.getPrototypeOf(new Map().entries())",
-    ),
-    (
-        "SetIteratorPrototype",
-        "Object.getPrototypeOf(new Set().values())",
-    ),
-    (
-        "RegExpStringIteratorPrototype",
-        "Object.getPrototypeOf(/./[Symbol.matchAll](''))",
-    ),
-    ("GeneratorFunction", "(function* () {}).constructor"),
-    (
-        "GeneratorPrototype",
-        "Object.getPrototypeOf(function* () {}).prototype",
-    ),
-    ("AsyncFunction", "(async function () {}).constructor"),
-    (
-        "AsyncGeneratorFunction",
-        "(async function* () {}).constructor",
-    ),
-    (
-        "AsyncGeneratorPrototype",
-        "Object.getPrototypeOf(async function* () {}).prototype",
-    ),
-    ("TypedArray", "Object.getPrototypeOf(Int8Array)"),
-    (
-        "TypedArrayPrototype",
-        "Object.getPrototypeOf(Int8Array.prototype)",
-    ),
-    (
-        "ThrowTypeError",
-        "Object.getOwnPropertyDescriptor(Function.prototype, 'caller').get",
-    ),
-];
-
-/// `$dump.builtin(path)`: resolves a canonical builtin path (D2371) at load time. The
-/// realm roots go between these two parts.
-const LOADER_HEAD: &str = "$dump.builtin = (path) => {\n  const roots = {\n";
-const LOADER_TAIL: &str = "  };\n  \
-     const [, acc, root, rest] = /^(get |set )?(%\\w+%|[\\w$]+)(.*)$/.exec(path);\n  \
-     let v = root[0] === \"%\" ? roots[root.slice(1, -1)]() : globalThis[root];\n  \
-     const segs = rest.match(/\\.\\[\\[Prototype\\]\\]|\\.[\\w$]+|\\[\"(?:[^\"\\\\]|\\\\.)*\"\\]|\\[Symbol\\.\\w+\\]/g) || [];\n  \
-     segs.forEach((s, i) => {\n    \
-     if (s === \".[[Prototype]]\") return void (v = Object.getPrototypeOf(v));\n    \
-     const key = s[0] === \".\" ? s.slice(1) : s.startsWith(\"[Symbol.\") ? Symbol[s.slice(8, -1)] : JSON.parse(s.slice(1, -1));\n    \
-     if (acc && i === segs.length - 1) {\n      const d = Object.getOwnPropertyDescriptor(v, key);\n      v = acc === \"get \" ? d.get : d.set;\n    } else v = v[key];\n  });\n  \
-     return v;\n};\n";
 
 const RESERVED: &[&str] = &[
     "break",
@@ -705,12 +578,6 @@ fn named(path: &str) -> Named {
     if path.contains('~') || p.starts_with("%intrinsic:") {
         return Named::Internal;
     }
-    if let Some(r) = p.strip_prefix('%') {
-        let r = r.split('%').next().unwrap_or_default();
-        if !LOADER_ROOTS.iter().any(|(n, _)| *n == r) {
-            return Named::Unreachable;
-        }
-    }
     if p.len() != path.len() || p.starts_with('%') || has(p, "[[") {
         Named::Loader
     } else {
@@ -764,7 +631,6 @@ struct Dumper<'a> {
     /// Objects being written as data (`render`): promises made by activations or
     /// reactions are patched into them instead (dump_flight.rs `make`).
     data_depth: u32,
-    helpers: u16,
     /// Whether the text uses the `$dump` namespace.
     ns: bool,
     next: u32,
@@ -811,7 +677,6 @@ impl<'a> Dumper<'a> {
             finals: Vec::new(),
             fl: flight::Flight::new(opts.host_fn_name),
             data_depth: 0,
-            helpers: 0,
             ns: false,
             next: 0,
             depth: 0,
@@ -1036,7 +901,6 @@ impl<'a> Dumper<'a> {
             return b.path.clone();
         }
         let e = cat!("$dump.builtin(", quote(&b.path), ")");
-        self.helpers |= H_BUILTIN;
         self.ns = true;
         e
     }
@@ -1125,7 +989,6 @@ impl<'a> Dumper<'a> {
                 let why = match b.named {
                     Named::Path | Named::Loader => return None,
                     Named::Internal => "a builtin's internal value (",
-                    Named::Unreachable => "a builtin the loader cannot name (",
                 };
                 let why = cat!(why, b.path, ")");
                 self.refuse(path(), &why);
@@ -1470,6 +1333,15 @@ impl<'a> Dumper<'a> {
             kind,
             func_flags::KIND_CLASS_CTOR | func_flags::KIND_DERIVED_CTOR
         );
+        if (class
+            || matches!(
+                kind,
+                func_flags::KIND_METHOD | func_flags::KIND_GETTER | func_flags::KIND_SETTER
+            ))
+            && src.contains('[')
+        {
+            self.computed_keys(&path, o);
+        }
         if class {
             if src.contains('@') {
                 return self.refuse(path, "a decorated class (its decorators would run again)");
@@ -1558,6 +1430,54 @@ impl<'a> Dumper<'a> {
             // (A codemode body is made with `Function.prototype` and only its run holds
             // it: the function the dump writes for it is an async function's.)
             self.refuse(path, "a function with another prototype");
+        }
+    }
+
+    /// The computed keys in the text the dump writes for class or method `o` that its
+    /// enclosing code evaluated (a class's member keys, an object literal method's key):
+    /// the dump evaluates them again, where other bindings are in scope. Only keys whose
+    /// value cannot differ pass: literals and well-known symbols (D2623).
+    fn computed_keys(&mut self, path: &str, o: Obj) {
+        let h = self.h;
+        let t = h.closure_template(o);
+        let info = template::debug_info(h, t);
+        let (a, b) = (info.src_start, info.src_end);
+        let Some(src) = info
+            .script
+            .get()
+            .and_then(|s| {
+                h.arena()
+                    .get::<Ref>(s, crate::heap::cells::Script::SOURCE)
+                    .get()
+            })
+            .map(|s| h.str_to_string(crate::value::Str(s)))
+        else {
+            return;
+        };
+        let symbol_shadowed = self.globals.iter().any(|g| g.name == "Symbol");
+        let Some(maps) = self.script_maps(t) else {
+            return self.refuse(
+                path.into(),
+                "a class or method whose script cannot be compiled again",
+            );
+        };
+        let mut bad: Vec<String> = Vec::new();
+        for m in maps {
+            if m.start >= a && m.end <= b {
+                continue;
+            }
+            for &(ks, ke) in &m.computed_keys {
+                if ks >= a && ke <= b {
+                    let key = src.get(ks as usize..ke as usize).unwrap_or_default();
+                    if !stable_key(key, symbol_shadowed) && !bad.iter().any(|k| k == key) {
+                        bad.push_out(String::from(key));
+                    }
+                }
+            }
+        }
+        for k in bad {
+            let why = cat!("a computed key ", k, " that the dump would evaluate again");
+            self.refuse(path.into(), &why);
         }
     }
 
@@ -1984,20 +1904,9 @@ impl<'a> Dumper<'a> {
         }
         let mut s = String::from(if self.ts.get() { HEADER_TS } else { HEADER });
         s.push('\n');
-        if self.helpers != 0 {
-            for (bit, text) in HELPERS {
-                if self.helpers & bit != 0 {
-                    s.push_str(text);
-                }
-            }
-            if self.helpers & H_BUILTIN != 0 {
-                s.push_str(LOADER_HEAD);
-                for (name, e) in LOADER_ROOTS {
-                    cat_to!(&mut s, "    ", *name, ": () => ", *e, ",\n");
-                }
-                s.push_str(LOADER_TAIL);
-            }
-        }
+        // `Math.random`'s state: the resumed run continues the sequence (D2624).
+        let (lo, hi) = crate::builtins::number::random_state(self.h);
+        cat_to!(&mut s, "$dump.random(", lo, ", ", hi, ");\n");
         for l in &self.out {
             cat_to!(&mut s, l, '\n');
         }
@@ -3097,7 +3006,6 @@ impl<'a> Dumper<'a> {
             ));
         }
         // What the class's evaluation makes, and nothing else: members deleted since go.
-        self.helpers |= H_KEEP;
         for (i, holder) in [String::from(loc), proto_loc.clone()].iter().enumerate() {
             let mut list = String::new();
             for (j, k) in kept[i].iter().enumerate() {
@@ -3221,7 +3129,6 @@ impl<'a> Dumper<'a> {
     fn fn_expr(&mut self, n: usize, src: &str) -> String {
         match self.fn_kind(n) {
             func_flags::KIND_METHOD | func_flags::KIND_GETTER | func_flags::KIND_SETTER => {
-                self.helpers |= H_FN;
                 self.ns = true;
                 cat!("$dump.fn({ ", src, " })")
             }
@@ -3461,7 +3368,6 @@ impl<'a> Dumper<'a> {
                 if state == crate::interp::run::promise::FULFILLED {
                     cat!("Promise.resolve(", r, ")")
                 } else {
-                    self.helpers |= H_REJECTED;
                     self.ns = true;
                     cat!("$dump.rejected(", r, ")")
                 }
@@ -3486,7 +3392,6 @@ impl<'a> Dumper<'a> {
             }
             #[cfg(feature = "full")]
             ObjectClass::ArrayBuffer => {
-                self.helpers |= H_BYTES;
                 self.ns = true;
                 cat!("$dump.bytes(\"", base64(h.buffer_data(o)), "\")")
             }
@@ -4062,6 +3967,55 @@ pub(super) fn fn_text(h: &Heap, f: Obj) -> Option<String> {
         src,
         "\n}"
     ))
+}
+
+/// Whether computed key `[...]` has the same value wherever it is evaluated: a string or
+/// number literal, or a well-known symbol (`Symbol.iterator`, unless a global hides
+/// `Symbol`).
+fn stable_key(key: &str, symbol_shadowed: bool) -> bool {
+    let inner = key
+        .strip_prefix('[')
+        .and_then(|k| k.strip_suffix(']'))
+        .unwrap_or_default()
+        .trim();
+    let quoted = |q: char| {
+        inner.len() >= 2
+            && inner.starts_with(q)
+            && inner.ends_with(q)
+            && !inner[1..inner.len() - 1].contains([q, '\\', '\n'])
+    };
+    if quoted('"') || quoted('\'') {
+        return true;
+    }
+    if !inner.is_empty()
+        && inner
+            .bytes()
+            .all(|c| c.is_ascii_digit() || matches!(c, b'.' | b'_' | b'e' | b'x' | b'b' | b'o'))
+        && inner.as_bytes()[0].is_ascii_digit()
+    {
+        return true;
+    }
+    const WELL_KNOWN: &[&str] = &[
+        "asyncIterator",
+        "hasInstance",
+        "isConcatSpreadable",
+        "iterator",
+        "match",
+        "matchAll",
+        "replace",
+        "search",
+        "species",
+        "split",
+        "toPrimitive",
+        "toStringTag",
+        "unscopables",
+        "dispose",
+        "asyncDispose",
+    ];
+    !symbol_shadowed
+        && inner
+            .strip_prefix("Symbol.")
+            .is_some_and(|n| WELL_KNOWN.contains(&n))
 }
 
 /// A function's text position: its script and source span.

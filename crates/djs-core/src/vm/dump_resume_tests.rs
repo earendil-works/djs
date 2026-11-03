@@ -1239,3 +1239,94 @@ fn a_private_name_operand_is_the_class_s() {
 fn marks_of(src: &str) -> usize {
     (1..).find(|&k| body_dump(src, k).1.is_none()).unwrap() - 1
 }
+
+/// A class's or object literal method's computed key is evaluated again where the dump
+/// writes its text: refused unless its value cannot differ (D2623; 0182).
+#[test]
+fn computed_keys_evaluated_again_are_refused() {
+    for (src, why) in [
+        (
+            "const k = \"kk\"; class C { [k] = 2; } const c = new C(); later(1).then(() => print(c.kk, new C().kk));",
+            "C: a computed key [k] that the dump would evaluate again",
+        ),
+        (
+            "function mk() { const k = \"kk\"; return class C { [k]() { return 2; } }; } const C = mk(); later(1).then(() => print(new C().kk()));",
+            "C: a computed key [k] that the dump would evaluate again",
+        ),
+        (
+            "function mk() { const k = \"kk\"; return { [k]() { return 2; } }; } const o = mk(); later(1).then(() => print(o.kk()));",
+            "o.kk: a computed key [k] that the dump would evaluate again",
+        ),
+    ] {
+        let e = dump_at(src, 1).unwrap_err();
+        assert!(e.contains(why), "{src}: {e}");
+    }
+    // Literal keys and well-known symbols; a computed key inside a method body is the
+    // method's own.
+    let src = "class C { [Symbol.iterator]() { return [1][Symbol.iterator](); } [\"a b\"]() { return 3; } [0] = 1;\n\
+               m() { const o = { [x]: 1 }; return o; } }\n\
+               const x = 'q'; const c = new C(); later(1).then(() => print([...c].join(), c['a b'](), JSON.stringify(c.m()), c[0]));";
+    assert_eq!(dump_at(src, 1).unwrap().0, ["1 3 {\"q\":1} 1"]);
+}
+
+/// The run of `src` dumped at every idle point and continued in a fresh VM that loaded
+/// the dump, dump after dump (as `--dump-every-idle`): its lines.
+fn chained(src: &str) -> Vec<String> {
+    let mut vm = new_vm();
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("src.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    let mut lines = Vec::new();
+    for _ in 0..1000 {
+        match vm.run(1_000_000_000) {
+            Status::HostCall { call_id, .. } => {
+                let args = vm.host_call(call_id).unwrap().args;
+                let parts: Vec<String> = args.iter().map(|&v| vm.display(v)).collect();
+                lines.push(parts.join(" "));
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::Idle | Status::Done(_) => {
+                if vm.pending_host_calls().is_empty() {
+                    return lines;
+                }
+                let opts = super::dump::DumpOptions {
+                    base: base(),
+                    host: &["console", "tools", "print", "later"],
+                    host_fn_name: &host_fn_name,
+                    ..Default::default()
+                };
+                let text = vm
+                    .dump(&opts, None)
+                    .unwrap_or_else(|e| panic!("{}", e.message()));
+                vm = new_vm();
+                let loaded = load(&mut vm, &text).unwrap_or_else(|e| panic!("{e}\n{text}"));
+                for (_, h) in &loaded.handles {
+                    vm.heap_mut().drop_handle(*h);
+                }
+                let id = *vm.pending_host_calls().iter().min().unwrap();
+                settle(&mut vm, id);
+            }
+            s => panic!("{s:?}"),
+        }
+    }
+    panic!("runaway: {lines:?}");
+}
+
+/// `Math.random`'s state goes with the dump: a resumed run continues the sequence
+/// (0176's repro, D2624); iterators stepped by `$dump.advance` dump again as they were
+/// (two awaits per iteration: dumped again before the loop steps them).
+#[test]
+fn dumps_carry_the_random_state_and_iterators_again() {
+    for src in [
+        "async function main() { const a = Math.random(); await later(1); const b = Math.random(); await later(2); print(a, b, Math.random()); }\nmain();",
+        "async function main() { const s = new Set([1, 2, 3]).values(); s.next(); for (const [k, v] of [[\"a\", 1], [\"b\", 2], [\"c\", 3]]) print(k, await later(v), await later(v + 1), s.next().value); for (const c of \"h\\u00e9\\u{1F600}x\") print(await later(c)); }\nmain();",
+    ] {
+        let (want, _) = run_program(src);
+        assert_eq!(chained(src), want, "{src}");
+    }
+}

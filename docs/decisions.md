@@ -8356,3 +8356,58 @@ assignment threw); it is now `$dump.private(C, "#x")`, a two-argument form of th
 primitive that returns class `C`'s private name, and refused when the dump does not hold
 the class. Known gap (a follow-up): a class's computed member keys are evaluated again
 where the dump writes its text, which reads other bindings than the original did.
+
+## D2622: Format 2 dumps carry no helper code; the helpers are loader primitives
+date: 2026-11-04 · by: portable · issue: 0182
+The owner asked why a dump starts with "all these roots": the exporter wrote JavaScript
+helpers into every dump that used them, `$dump.builtin` with its table of fourteen realm
+roots and a path parser, `$dump.advance`, `$dump.fromSync` (a JavaScript async-from-sync
+iterator), `$dump.keep`, `$dump.bytes`, `$dump.fn`, `$dump.rejected`, `$dump.spent`.
+Format 2 dumps only load through `Vm::load_dump`, which passes `$dump` in, so these are
+now loader primitives (vm/dump_prims.rs) and a dump holds only its data, its functions
+and `$dump.*` calls. `$dump.builtin(path)` resolves a registry path (D2371) on the
+loading VM and must reach a base builtin, else it is an error; `$dump.advance(it, n)`
+steps array, string, Map and Set iterators in Rust (no `length` or element getter runs;
+the index is kept as an int, as `next` keeps it, which a second dump reads);
+`$dump.fromSync`/`$dump.closeThrow` make the engine's own async-from-sync iterator and
+its handler, so a resumed `for await` dumps again like the original; `$dump.spent(k)`
+replaces `$dump.spent()[k]`. The primitives are read-only properties of `$dump`: a dump
+cannot redefine them, and defines nothing there but the locations it fills. Dumps of the
+corpus shrink (the goldens from 87 to 46 KB, the sleep example from 3,159 to 1,308
+bytes).
+
+## D2623: Computed keys the dump would evaluate again are refused
+date: 2026-11-04 · by: portable · issue: 0182
+A class's text holds its member keys, and an object literal method's text its key, so
+the dump evaluates `[k]` again where it writes the text, with other bindings in scope: a
+ReferenceError at load, or silently another key. The parser now records, in each
+function's suspension map, the computed keys its code evaluates (`computed_keys`, spans
+from `[` to `]`; `suspension_maps` keeps functions that have keys but no sites). For a
+class or method it writes by text, the exporter refuses every key inside that text that
+an enclosing function evaluates, unless its value cannot differ: a string or number
+literal, or a well-known symbol (`Symbol.iterator`, unless a user global named `Symbol`
+exists). Keys evaluated inside the written function (a literal in a method body, a
+destructuring pattern in its parameters) are its own and run again when it does.
+Rejected: writing the keys by value (the class text is verbatim: rewriting it changes
+`toString` and the functions' texts the checker and the maps go by).
+
+## D2624: A dump carries Math.random's state
+date: 2026-11-04 · by: portable · issue: 0182
+The xorshift state of `Math.random` (the realm's RandomState) was not in a format 2
+dump, so a resumed run restarted the loading VM's sequence (0176: the same number before
+and after a dump). Every dump now writes it first, `$dump.random(lo, hi)` (the two int32
+halves as the VM keeps them), and the loader sets it; resume continues the sequence
+exactly. Only the math state is set: the per-VM string hash key (D2433, derived from the
+seed when a VM is seeded) stays the loading VM's. Nothing observable depends on it
+(iteration orders are insertion orders; the key only spreads hash tables).
+
+## D2625: The golden dumps are rewritten for D2622 and D2624
+date: 2026-11-04 · by: portable · issue: 0182
+Under D2619's rule: the golden format 2 dumps (tests/dump/v2/golden/) were written by
+0178's exporter with helper code and without the random state. The format changed in
+place (D024, unreleased): helper definitions are now refused by the read-only primitives,
+and the new dumps lead with `$dump.random`. All 59 were rewritten by `write_golden_dumps`
+from the same programs; apart from the helpers and the new first line their text is
+unchanged (checked line by line). New programs: spent.src.js (`$dump.spent`), bytes.src.js
+(`$dump.bytes`) and random.src.js (the sequence continues). tests/dump/v2/steps.dump.js
+lost its helper definitions the same way.

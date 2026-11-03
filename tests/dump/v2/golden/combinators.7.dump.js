@@ -1,4 +1,5 @@
 "djs-dump 2";
+$dump.random(2135587861, -1640531527);
 $dump.p1 = $dump.pending(7, "later", ["fast"]);
 async function main() {
   const all = Promise.all([1, later(2), later(3)]);

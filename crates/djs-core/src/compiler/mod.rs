@@ -280,7 +280,7 @@ pub fn compile(
 }
 
 /// The suspension maps (D2563, compiler/smap.rs) of every function of `src` that has an
-/// `await` or `yield`, in source order: compiles `src` again with recording on (into
+/// `await` or `yield` or evaluates a computed property key (D2623), in source order: compiles `src` again with recording on (into
 /// `heap`; the templates are garbage). The maps describe frames of this build's code for
 /// the same source and options.
 #[cfg(feature = "dump")]
@@ -291,7 +291,11 @@ pub fn suspension_maps(
 ) -> Result<Vec<smap::FunctionMap>, CompileError> {
     let result = parser::Parser::new(heap, src, opts).and_then(|p| p.compile_maps());
     result
-        .map(|(_, maps)| maps.into_iter().filter(|m| !m.sites.is_empty()).collect())
+        .map(|(_, maps)| {
+            maps.into_iter()
+                .filter(|m| !m.sites.is_empty() || !m.computed_keys.is_empty())
+                .collect()
+        })
         .map_err(|e| error_at(src, e))
 }
 

@@ -102,6 +102,16 @@ pub(crate) fn set_math_seed(heap: &mut Heap, seed: u64) {
     store_state(heap, if seed == 0 { DEFAULT_RANDOM_SEED } else { seed });
 }
 
+/// The `Math.random` state as its two int32 halves (low, high), for dumps (D2624).
+#[cfg(feature = "dump")]
+pub(crate) fn random_state(heap: &Heap) -> (i32, i32) {
+    let a = realm::intrinsic(heap, Intrinsic::RandomState)
+        .as_internal()
+        .expect("random state");
+    let half = |i| heap.value_array_get(a, i).as_int().unwrap_or(0);
+    (half(0), half(1))
+}
+
 fn store_state(heap: &mut Heap, s: u64) {
     // The state is two int32 halves in an internal array: heap data, so it survives
     // snapshots and is the same in every copy.

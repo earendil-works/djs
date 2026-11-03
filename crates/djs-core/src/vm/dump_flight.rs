@@ -248,7 +248,7 @@ impl Dumper<'_> {
 
     /// The suspension maps of the script of template `t`, compiled again in the scratch
     /// heap with the options it was compiled with.
-    fn script_maps(&mut self, t: u32) -> Option<&[FunctionMap]> {
+    pub(super) fn script_maps(&mut self, t: u32) -> Option<&[FunctionMap]> {
         let h = self.h;
         let script = template::debug_info(h, t).script.get()?;
         let i = match self.fl.maps.iter().position(|m| m.0 == script) {
@@ -874,7 +874,6 @@ impl Dumper<'_> {
             let p = self.nodes[n].path.clone();
             self.refuse(p, "a for-await over an iterator on a reference cycle");
         }
-        self.helpers |= H_FROM_SYNC;
         let name = self.fresh("i");
         self.line(
             cat!(name, " = $dump.fromSync(", it, ", ", next, ");"),
@@ -894,7 +893,6 @@ impl Dumper<'_> {
         }
         if kind == FROM_SYNC_CLOSE {
             let it = self.expr(data, None, None);
-            self.helpers |= H_FROM_SYNC;
             return cat!("$dump.closeThrow(", it, ")");
         }
         if kind != RESOLVE && kind != REJECT {
@@ -922,9 +920,8 @@ impl Dumper<'_> {
             }
             // The promise settled: calling them does nothing.
             None => {
-                self.helpers |= H_SPENT;
                 self.ns = true;
-                cat!("$dump.spent()[", kind, "]")
+                cat!("$dump.spent(", kind, ")")
             }
         }
     }
@@ -971,7 +968,6 @@ impl Dumper<'_> {
         }
         let mut e = cat!(method, ".call(", t, ")");
         if steps > 0 {
-            self.helpers |= H_ADVANCE;
             e = cat!("$dump.advance(", e, ", ", steps, ")");
         }
         let name = self.fresh("i");
@@ -999,7 +995,6 @@ impl Dumper<'_> {
         };
         let e = match h.collection_iterator_position(o) {
             None => {
-                self.helpers |= H_ADVANCE;
                 cat!(
                     "$dump.advance(",
                     class,
@@ -1041,7 +1036,6 @@ impl Dumper<'_> {
                 }
                 let mut e = cat!(class, ".prototype.", method, ".call(", t, ")");
                 if live > 0 {
-                    self.helpers |= H_ADVANCE;
                     e = cat!("$dump.advance(", e, ", ", live, ")");
                 }
                 e
@@ -1307,7 +1301,6 @@ impl Dumper<'_> {
                 .and_then(|p| p.value())
         };
         let rejected = |d: &mut Self, e: Value| {
-            d.helpers |= H_REJECTED;
             d.ns = true;
             let r = d.expr(e, None, None);
             cat!("$dump.rejected(", r, ")")

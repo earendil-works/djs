@@ -1,4 +1,5 @@
 "djs-dump 2";
+$dump.random(2135587861, -1640531527);
 $dump.n1 = new Error("x");
 $dump.p2 = $dump.pending(5, "later", [$dump.n1, true]);
 $dump.p3 = $dump.pending(6, "later", ["ok"]);

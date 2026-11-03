@@ -340,6 +340,31 @@ pub(crate) fn builtin_closure_kind(
     BUILTIN_CLOSURES.iter().position(|&b| i32::from(b) == id)
 }
 
+/// `%NewBuiltinClosure(kind, data, length)`: a builtin closure of kind `kind` (its index
+/// in `BUILTIN_CLOSURES`) holding `data`; `None` for an unknown kind. Also the dump
+/// loader's (0182).
+pub(crate) fn new_builtin_closure(
+    heap: &mut crate::heap::Heap,
+    kind: usize,
+    data: Value,
+    length: i32,
+) -> Result<Option<crate::value::Obj>, crate::heap::HeapError> {
+    let Some(&target) = BUILTIN_CLOSURES.get(kind) else {
+        return Ok(None);
+    };
+    let proto = intrinsic_obj(heap, Intrinsic::FunctionProto);
+    let f = heap.alloc_object(ObjectClass::BuiltinClosure, Some(proto), 2)?;
+    heap.set_object_slot(f, 0, Value::int(i32::from(target)));
+    heap.set_object_slot(f, 1, data);
+    let ro = PropFlags::CONFIGURABLE;
+    let d = PropertyDescriptor::data(Value::int(length), ro);
+    heap.define_own_property(f, atoms::LENGTH, &d)?;
+    let empty = Value::string(heap.atom_string(atoms::EMPTY)?);
+    let d = PropertyDescriptor::data(empty, ro);
+    heap.define_own_property(f, atoms::NAME, &d)?;
+    Ok(Some(f))
+}
+
 const BUILTIN_CLOSURES: [u16; 25] = [
     id("PromiseResolveFunction"),
     id("PromiseRejectFunction"),
@@ -2010,23 +2035,13 @@ impl Exec<'_> {
             }
             NEW_BUILTIN_CLOSURE => {
                 let kind = a0.as_int().and_then(|k| usize::try_from(k).ok());
-                let target = kind.and_then(|k| BUILTIN_CLOSURES.get(k).copied());
-                let (Some(target), Some(length)) = (target, arg(self, 2).as_int()) else {
+                let (Some(kind), Some(length)) = (kind, arg(self, 2).as_int()) else {
                     return bad_argument(info.name);
                 };
-                let proto = intrinsic_obj(self.heap, Intrinsic::FunctionProto);
-                let f = self
-                    .heap
-                    .alloc_object(ObjectClass::BuiltinClosure, Some(proto), 2)?;
-                self.heap.set_object_slot(f, 0, Value::int(target as i32));
-                self.heap.set_object_slot(f, 1, arg(self, 1));
-                let ro = PropFlags::CONFIGURABLE;
-                let d = PropertyDescriptor::data(Value::int(length), ro);
-                self.heap.define_own_property(f, atoms::LENGTH, &d)?;
-                let empty = Value::string(self.heap.atom_string(atoms::EMPTY)?);
-                let d = PropertyDescriptor::data(empty, ro);
-                self.heap.define_own_property(f, atoms::NAME, &d)?;
-                Value::object(f)
+                match new_builtin_closure(self.heap, kind, arg(self, 1), length)? {
+                    Some(f) => Value::object(f),
+                    None => return bad_argument(info.name),
+                }
             }
             MARK_NATIVE => {
                 self.mark_native(a0, arg(self, 1))?;

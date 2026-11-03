@@ -1,4 +1,5 @@
 "djs-dump 2";
+$dump.random(2135587861, -1640531527);
 $dump.p1 = $dump.pending(1, "later", ["x"]);
 async function main() { const t = { x: 9 }; return t[await later("x")]; }
 $dump.n2 = { x: 9 };

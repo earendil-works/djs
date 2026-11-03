@@ -70,7 +70,7 @@ between them. Its dump (tests/dump/v2/plan.dump.js loads a version of it):
 
 ```js
 "djs-dump 2";
-$dump.builtin = (path) => { /* as in version 1 */ };
+$dump.random(1584364053, 1036713493);
 $dump.files = ["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"];
 $dump.report = [[2, 0]];
 $dump.batches = [["src/a.ts", "src/b.ts"], ["src/c.ts", "src/d.ts"]];
@@ -181,7 +181,7 @@ slices) is unchanged.
 
 Plain JavaScript writes the data, the closures (version 1's factories), classes,
 settled promises, re-enacted builtin state and promise reactions (`.then` calls in their
-original order). The loader adds only:
+original order). The loader adds:
 
 | primitive | what |
 | --- | --- |
@@ -193,6 +193,19 @@ original order). The loader adds only:
 | `$dump.private(C, "#x")` | the private name `#x` of class `C` itself, for a frame that holds it as a value (D2621) |
 | `$dump.TDZ` | a binding before its declaration ran |
 | `$dump.issued(n)` | the id of the host's next call (0171) |
+| `$dump.builtin(path)` | the base builtin at a registry path (D2371): `%ArrayIteratorPrototype%.next`, `get Map.prototype.size`; an unknown path is an error (D2622) |
+| `$dump.advance(it, n)` | a fresh array, string, Map or Set iterator stepped `n` times, running no user code |
+| `$dump.fromSync(it, next)`, `$dump.closeThrow(it)` | an async-from-sync iterator over `it` and its close-and-rethrow handler, the engine's own |
+| `$dump.spent(k)` | a resolve (0) or reject (1) function whose promise has settled |
+| `$dump.rejected(e)` | a promise rejected with `e`, already handled |
+| `$dump.bytes(base64)` | an ArrayBuffer |
+| `$dump.fn({ m() {} })` | the method, getter or setter of a one-member literal |
+| `$dump.keep(o, keys)` | deletes the members a class's evaluation made that the class no longer has; every key must be there |
+| `$dump.random(lo, hi)` | `Math.random`'s state (D2624) |
+
+The primitives are read-only, and a dump defines nothing on `$dump` but the locations it
+fills (`$dump.p1`, `$dump.a3`): no helper code (D2622, the owner's call: the text holds
+the run's data, its functions and these calls).
 
 `resume` compiles nothing new: `fn` was made from its verbatim source by the dump. It
 compares the given bindings, operand roles and loops with this build's suspension map at
@@ -275,12 +288,19 @@ passes, say, its run's promise as "run").
   compiles the wrapper's maps too and refuses a body whose frame differs there (code
   that reads `arguments`, a global in a body); the report still points into the body
   (D2617).
+- **Computed keys:** a class's member keys and an object literal method's key are part of
+  the text the dump writes, so they would be evaluated again where the dump writes it.
+  The exporter finds them in the suspension maps of the script (the keys each function
+  evaluates) and refuses them unless their value cannot differ: string and number
+  literals and well-known symbols (`[Symbol.iterator]`) pass (D2623).
+- **`Math.random`:** its state is written first (`$dump.random`), so a resumed run
+  continues the sequence; the loading VM keeps its own hash key (D2433), which nothing
+  observable depends on (D2624).
 - **Classes in a waiting frame:** the frame's hidden bindings of a class it declared
   (`<fields N>`, `<key N>`, private methods' closures, decorator state) are dead after the
   class statement and written as `undefined`; the class comes from its text. A private
   name a frame holds (its `#x` binding, the key operand of `this.#x += await v`) is the
-  class's, `$dump.private(C, "#x")` (D2621). Still wrong: computed member keys
-  (`[k] = 1`, `[k]() {}`) are evaluated again where the dump writes the class.
+  class's, `$dump.private(C, "#x")` (D2621).
 - **Host names:** a script's own global lexical binding with a host global's name
   (`const tools = ...`) hides the host's property and is dumped like any binding; the
   checker refuses a free name that would read the host's (or the base's) global after

@@ -1,8 +1,5 @@
 "djs-dump 2";
-$dump.fn = (o) => {
-  const d = Object.getOwnPropertyDescriptor(o, Reflect.ownKeys(o)[0]);
-  return d.value || d.get || d.set;
-};
+$dump.random(2135587861, -1640531527);
 $dump.p1 = $dump.pending(1, "later", [3]);
 $dump.n2 = $dump.fn({ f(a, b) { return a + "|" + JSON.stringify(b); } });
 const o = { f: $dump.n2 };
