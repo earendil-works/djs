@@ -44,5 +44,18 @@ Dumps are the persistence format (D2560); before images are retired (0177):
   1.17, sequential 2.13 -> 0.74; B sequential 2.40 -> 1.80, corpus p50/p90 dump 3.50/5.98
   -> 1.84/3.65 ms (B makes a fresh dump-module VM per dump: only the faster walk). Docs:
   hosts compress dump text (continuation-dumps.md).
+- yield*: `Loop::Star` (roles `yield*.iterator`, `yield*.next`, written in `loops` with
+  kind "yield*"), SiteKind::YieldStarAwait (`yield*.await#N`) split from the yields
+  (`yield*#N`); a sync generator at `yield_star` is SUSPENDED_RAW (exporter accepts it,
+  loader sets it); fromSync handling extended to Loop::Star. Golden yield-star.src.js
+  (10 dumps), test delegation_round_trips (every idle point + chained). Smap pins
+  re-pinned (generators.smap), smap_tests CONSTRUCTS gained yield* cases.
+- Closing an async iterator: emit_async_close_normal(site, hide: Option<usize>): break
+  and yield*'s no-throw close describe their stack (loop roles hidden); the close
+  subroutine path (`v ret it`, a return address) stays unsupported. A throw out of a
+  for await body: `Role::Exception` below the close's await. Corpus pins: no "closing
+  an async iterator" left; unsupported now 19 using + 1 destructuring.
+- for-await-close golden program (work/scratch/0184/for-await-close.src.js) waits for
+  finally: its awaits sit in an async generator's finally block.
 
 ## Result
