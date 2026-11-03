@@ -144,7 +144,7 @@ follows, and whose tail of value slots it scans:
 
 These diagrams are drawn from `LAYOUTS`, the table the `cells!` macro generates (D1052).
 The same table drives the collector's tracing, the image verifier (D1056), the layout
-hash in every image's build hash, and the host's reader (`js/src/layout.generated.ts`,
+hash in every image's dependency descriptor, and the host's reader (`js/src/layout.generated.ts`,
 D1210).
 
 ## How the host reads a value

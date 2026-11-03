@@ -621,12 +621,15 @@ objects up to 9x on one big string inbound, and the reader by 3x to 130x outboun
 
 ### Snapshots (G4)
 
-- **Format:** an image is the arena bytes after a compacting GC; the roots, the heap
-  format version and the **build hash** live in the arena's root cell (D1320). The build
-  hash covers the opcode table, the native and intrinsic tables, the layout constants,
-  djs-core's sources, features and libm (D1330, D1750), so an image loads only into the
-  same build, like dquickts. Images are verified when loaded (D1056). Everything is
-  little-endian, which matches wasm and the usual native targets.
+- **Format:** an image is the arena bytes after a compacting GC; the roots and the
+  image's **dependency descriptor** live in the arena's root cell (D026, D2265): hashes
+  of the cell layouts, the opcode and intrinsic tables and the internal id tables
+  (D2266), the image feature set (D2267) and a hand-bumped compatibility version (D2268).
+  An image loads into any build with the same descriptor; a snapshot container also
+  names its base image's builtin prefix. (Until D026 an image was keyed on the engine
+  build hash of D1320/D1330/D1750, which still identifies the build for journals.)
+  Images are verified when loaded (D1056). Everything is little-endian, which matches
+  wasm and the usual native targets.
 - **Base snapshot:** the initialized realm and the precompiled builtins (about 400 KB,
   compacted before it is collected, D1431). djs-prelude produces it at build time and it
   is embedded in the wasm. `vm_new` copies it into the arena; that copy *is* startup

@@ -205,9 +205,11 @@ Some things are deliberately outside the guarantee:
   and call, and the same builtin as bytecode charges per instruction. Results are the
   same, fuel counts are not, so the backend is part of the engine's identity (D1633).
   djs-wasm always uses the Rust backend.
-- **Other builds.** Images and journals are tied to the build hash, which covers the
-  engine's sources, features and the `libm` version (D1750). A different build may run
-  the same script in a different number of steps.
+- **Other builds.** Journals are tied to the build hash, which covers the engine's
+  sources, features and the `libm` version (D1750): a different build may run the same
+  script in a different number of steps. Images are tied only to what they depend on
+  ([snapshots](snapshots.md#what-an-image-depends-on), D2265), so a VM restored into
+  another build goes on with that build's code.
 - **The clock in the default mode.** Without `deterministic`, the Sandbox sets the clock
   before every fuel slice, so what `Date.now()` returns depends on timing, as it does in
   any engine.
@@ -227,7 +229,7 @@ Some things are deliberately outside the guarantee:
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2063 D2066 D2067 D1314 D1383 D1670 D1680 D1690 D1090 D1601 D1710 D1740 D1831 D1730 D1720 D1725 D1750 D1633 -->
+<!-- gen:decisions D2040 D2041 D2063 D2066 D2067 D1314 D1383 D1670 D1680 D1690 D1090 D1601 D1710 D1740 D1831 D1730 D1720 D1725 D1750 D1633 D2265 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
@@ -248,4 +250,5 @@ Decisions on this page:
 - D1725: The determinism checks compare raw images too
 - D1750: The build hash covers features and libm; canonical f32/f16 NaN
 - D1633: Fuel per transition; the backend is part of the engine's identity
+- D2265: Images carry a dependency descriptor; loading and containers check it, not the build hash
 <!-- /gen -->

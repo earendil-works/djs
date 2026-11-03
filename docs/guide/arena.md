@@ -41,8 +41,10 @@ from it:
 
 A few fields are not references but small pieces of VM state that must survive a
 snapshot: the GC threshold (D1601), the inline cache epoch (D1621), the shape budget
-(D1831). `BUILD` is the hash of the build that wrote the image, so an image never loads
-into an engine that would read its bytecode differently (D1320).
+(D1831). `COMPAT`, `OPS`, `INTRINSICS`, `RECORDS` and `FEATURES` are, with `VERSION`,
+the image's dependency descriptor: hashes of the tables whose numbers the image holds,
+so an image never loads into an engine that would read its bytecode or its records
+differently ([snapshots](snapshots.md#what-an-image-depends-on), D2265).
 
 ## Cells, back to back
 
@@ -217,7 +219,7 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 
 Decisions on this page:
 
-<!-- gen:decisions D2063 D2064 D2053 D1051 D1052 D1261 D1151 D1091 D1870 D1600 D1690 D1700 D1056 D1573 D2520 -->
+<!-- gen:decisions D2063 D2064 D2053 D1051 D1052 D1261 D1151 D1091 D1870 D1600 D1690 D1700 D1056 D1573 D2520 D2265 -->
 - D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
 - D2064: Collections never move or free the builtin prefix
 - D2053: A page allocator under dlmalloc in djs-wasm: huge blocks grow in place
@@ -233,4 +235,5 @@ Decisions on this page:
 - D1056: Heap images are verified on load
 - D1573: Arena out-of-bounds panics carry no offsets in release builds
 - D2520: Arena access: one u64 compare by default, an optional unchecked `unsafe-heap` build
+- D2265: Images carry a dependency descriptor; loading and containers check it, not the build hash
 <!-- /gen -->

@@ -237,7 +237,8 @@ by little-endian immediates (local slots, atom ids, constant indexes, relative j
 offsets). The instruction set is declared once, in the `ops!` table in
 `bytecode/ops.rs`, with each instruction's immediates, stack effect, fuel cost and flags
 (D1082, D1130). The emitter, the decoder, the disassembler, the stack-depth checker, the
-build hash and the [opcode reference](ref-opcodes.md) are all generated from that table.
+opcode hash that images are checked against and the [opcode reference](ref-opcodes.md)
+are all generated from that table.
 
 There are no general superinstructions. What the compiler does instead is a small set of
 layout changes and peepholes over the phase-1 code (D1860):

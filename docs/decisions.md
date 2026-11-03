@@ -7128,3 +7128,60 @@ Per twin (alone off; workloads where it has calls; `–`: no calls in any worklo
 | SerializeJSONObject | @native | 2363 | 910 | +0.00% | -0.04% | json-replacer +3.0% | 11 | yes |
 | SerializeJSONArray | @native | 1401 | 539 | +0.00% | -0.00% | json-replacer +1.4% | 2 | yes |
 | PromiseReactionJob | @native | 2495 | 961 | +0.00% | -0.18% | – +0.0% | 2187 | no |
+## D2265: Images carry a dependency descriptor; loading and containers check it, not the build hash
+date: 2026-11-03 · by: snapshot · issue: 0164
+D026 made concrete. The roots cell holds six u32 (`vm::ImageDeps`): the layout hash
+(`Roots::VERSION`), the feature set (`FEATURES`, D2267), the hand-bumped
+`vm::COMPAT_VERSION` (`COMPAT`, at the old `BUILD` offset 48), `OPS_HASH` (`OPS`),
+`INTRINSICS_HASH` (`INTRINSICS`) and `RECORDS_HASH` (`RECORDS`, D2266); `Vm::new` writes
+them. `Vm::check_image` compares them in that order (the layout first: the other fields
+are read at its offsets) and refuses with `LoadError::Incompatible { dep, found,
+expected }` (replaces `BuildMismatch`), naming the component: "the image is from a djs
+with another opcode table (image: X; this build: Y)". The snapshot container is format 3
+(the header changes, D024): the six words at 8..32 and the FNV-1a 64 of the base image's
+builtin prefix at 32, reference fields from 40, header 68 bytes; js/src/snapshot.ts and
+djs-cli's container compare them with the module's base image (its roots and prefix hash)
+before decompressing, and the message names the component ("another base image" for the
+prefix; features by name). Session images are format 2: offset 8 holds `ImageDeps::hash`
+of the base instead of the build hash. `vm::BUILD_HASH` stays as the engine's identity
+(`djs_build_hash`, Sandbox journals, pi's fingerprint): journals replay step by step and
+need the exact build; images only need the numbering. The descriptor guards numbering,
+not meaning: semantic changes need a `COMPAT_VERSION` bump (D2268). Measured on main's
+history (`churn.py --deps`, docs/snapshot-versioning.md): a raw image survives 51% of
+merges instead of 31%, a container (descriptor and base prefix) 57% instead of 40% where
+every base image was built.
+
+## D2266: RECORDS_HASH: the id tables images store numbers of, read from the sources
+date: 2026-11-03 · by: snapshot · issue: 0164
+djs-core's build script hashes the regions `crates/djs-core/compat_inputs.rs` lists (the
+same file is `include!`d by `vm::compat_tests`): the items `ObjectClass`, `impl PropFlags`,
+`cells::flags`, typed array `Kind`, `Continuation` and its impl, realm `Intrinsic`,
+`RunState`, `func_flags`, `capture_desc`, `global_decls`, value `tag`, the `FAST` table,
+the whole generated `natives.rs` (a suspended native frame stores its state machine's
+state), and every top-level `const` of src/heap/, src/interp/, src/builtins/, src/regexp/,
+value.rs and bytecode/{template,handlers,lines}.rs, except intrinsic ids by name
+(`= id("Name")`, which `INTRINSICS_HASH` covers). Text with comments and whitespace removed
+(string and char literals kept), so doc edits and formatting keep the hash and a changed
+number, a new entry or a renamed constant change it; a region that is not found fails the
+build. Reading sources rather than meanings is conservative: some changes refuse images
+that would still load (a tuning constant), and what a slot means in code is the
+compatibility version's job. Alternative: hash only hand-listed tables (misses the record
+slot constants, which change with every new internal record).
+
+## D2267: Cargo features are classified as image features or image-neutral
+date: 2026-11-03 · by: snapshot · issue: 0164
+`compat_inputs.rs` `IMAGE_FEATURES` (`full`, `regexp-unicode-props`,
+`unicode-normalization`; append only) are bits of `vm::FEATURES` (`Roots::FEATURES`):
+a slim image in a full build is refused as "another feature set (image: full, ...; this
+build: ...)". `IMAGE_NEUTRAL_FEATURES` (`default`, `unicode`: umbrellas; `unsafe-heap`:
+heap access, not contents) change no image. A feature in neither list fails djs-core's
+build, so each new one is classified. The JS host mirrors the names (`FEATURE_NAMES`,
+checked against the file by snapshot.test.ts).
+
+## D2268: When to bump COMPAT_VERSION
+date: 2026-11-03 · by: snapshot · issue: 0164
+`vm::COMPAT_VERSION` (1) is bumped by hand, in the change that needs it, when an image
+written before the change would load (every hash equal) but be read differently after it.
+The guideline is TESTING.md "Snapshot compatibility"; AGENTS.md points to it. A reviewer
+asks for it like for a test: a forgotten bump lets an old image restore into an engine that
+misreads it, which the verifier only catches when the structure breaks.

@@ -41,6 +41,9 @@ meant to replace QuickJS in pi's codemode. Read these before you start any work:
   abstraction.
 - djs is unreleased (D024): change formats and ABI in place; don't keep readers or
   exports for older versions.
+- Images are keyed on their dependency descriptor (D2265), not the build. A change that
+  keeps every table's numbering but alters what a stored slot, record or encoding means
+  bumps `vm::COMPAT_VERSION` (TESTING.md "Snapshot compatibility" says when).
 - Every feature comes with tests. Unit tests sit next to the code; JS behavior tests go in
   `tests/` (see TESTING.md).
 

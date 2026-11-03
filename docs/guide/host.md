@@ -211,7 +211,8 @@ What the adapter adds over QuickJS:
   session while it waits for a tool, which QuickJS cannot do. The image is compressed
   against the prelude image the session started from, so a waiting session takes a few
   KB; another process can rebuild that prelude image from the session's inputs to
-  restore it ([snapshots](snapshots.md), D2262). pi uses deterministic replay for
+  restore it, also on a newer djs whose image dependencies are unchanged
+  ([snapshots](snapshots.md), D2262, D2265). pi uses deterministic replay for
   durability today; snapshots would be an alternative.
 
 pi's own test suite runs against djs through this adapter (`node js/pi/pi-tests.ts`):
@@ -235,7 +236,7 @@ that expects QuickJS's fingerprint.
 
 Decisions on this page:
 
-<!-- gen:decisions D2060 D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 -->
+<!-- gen:decisions D2060 D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 D2265 -->
 - D2060: The base is decoded or injected straight into the first VM's arena
 - D1180: Inbound wire format, version 1
 - D1210: Exported heap layout drives the host-side reader
@@ -252,4 +253,5 @@ Decisions on this page:
 - D1740: Fuel overshoot carries to the next run; a suspended intrinsic is charged once
 - D1890: pi adapter: snapshot() and the prelude image collect first
 - D2262: pi's prelude image is the reference of the adapter's snapshots and is recomputable
+- D2265: Images carry a dependency descriptor; loading and containers check it, not the build hash
 <!-- /gen -->

@@ -25,8 +25,8 @@ code uses (`arena.get(cell, Str8::LEN)`), compile-time checks of the layout, and
 - the garbage collector and the image verifier: a field declared as `Value` or `Ref` is
   traced, and that is the whole trace description, so a new cell kind is collected
   correctly the moment it is declared;
-- the layout hash, which is part of every image's build hash, so changing a layout
-  invalidates old images instead of misreading them;
+- the layout hash, which is part of every image's dependency descriptor, so changing a
+  layout invalidates old images instead of misreading them;
 - the host's reader, generated as `js/src/layout.generated.ts` (D1210);
 - the diagrams in this guide and in the [cell layouts reference](ref-cells.md).
 
