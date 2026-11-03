@@ -1,6 +1,6 @@
 # 0165: Tool results stored once: sliced strings over result buffers
 
-status: in-progress
+status: done
 agent: heap
 branch: issue/0165-result-buffers
 depends-on: 0152, 0158, 0162 item 3 (D2551)
@@ -161,3 +161,18 @@ bytes?
   the copy-out's peak (21.3 MiB on that case).
 
 ## Result
+Stopped after step 1 (coordinator): steps 2 (result buffers) and 3 (external results in
+snapshots) stay follow-ups; step 2 pays off only with step 3, which needs pi to keep or
+re-encode result bytes (the owner's call).
+- **Landed (D2542):** the `Slice` string kind over flat one-byte parents; substring,
+  split, regexp matches and JSON.parse make slices (≥ 32 units of strings ≥ 256);
+  readers read them in place (`Heap::contiguous`), `flatten` copies once; full
+  collections copy out slices that pin a parent (< 1/4 covered, ≥ 4096 units) and drop
+  the parent in the same collection; canonical images write slices flat.
+- **Effect:** log-5mb arena 12.0 → 7.2 MiB, peak 20.1 → 17.3; its waiting snapshot 11.7
+  → 6.9 MiB raw, 1.75 → 0.98 zstd; JSON.parse snapshot 4.45 → 2.39 MiB; pi tool-heavy
+  warm 24 → 20 pages; perf workloads and pi times unchanged.
+- **Cost:** +1,956 B gzip (slim +2,233), recorded as a trade; ceilings raised.
+- **Known gaps:** two-byte parents are not sliced; a parent covered ≥ 1/4 stays whole
+  (the "snippets" case, follow-up above); tool results are still stored in full in
+  snapshots (step 3).
