@@ -478,6 +478,43 @@ missed one lets an old image restore into an engine that misreads it. A new carg
 feature of djs-core must be classified in compat_inputs.rs (D2267); the build fails
 until it is.
 
+## Dumps across builds (0178, D2560, D2619)
+
+Images are tied to a build's tables; continuation dumps (format 2,
+docs/continuation-dumps.md) are not: every later build must load a format 2 dump and
+continue the run, or refuse it with a reason. Two checks hold that promise:
+
+- **Golden dumps** (every gate run, `vm::dump_resume_tests::golden_dumps_load_and_finish`):
+  tests/dump/v2/golden/ has small programs (`NAME.src.js` Scripts, `NAME.body.js`
+  codemode bodies) and the dumps the exporter wrote of them at every idle point,
+  `NAME.K.dump.js` (K in the name: dumps have no comments). Each dump is loaded into the
+  test host (`later`, `print`, `tools`, `console`), the `later` results are delivered,
+  and the program's output up to idle point K plus the loaded run's must equal the
+  uninterrupted run's, plainly and under GC stress in slices of 97 fuel. One program per
+  operand role sequence (call, spread call, new, member, super member, object, array,
+  binary, assignment, template, nested), loop kind (for-of over array/Map/generator,
+  for-await over a sync iterable and an async generator, nested loops), re-enactment
+  (then/catch/finally, held resolving functions, the combinators, iterators,
+  generators, activations: a returned promise, `arguments`, shared cells), class case
+  (fields, private members, static block, accessor; derived with `super`; a class from
+  a factory) and the codemode body. **A golden dump is never rewritten to make a build
+  pass** (D2619): changing or deleting one needs a decision that says why the old dump
+  may stop loading (the format changed incompatibly, which D024 allows while djs is
+  unreleased). New programs get their dumps with `DJS_GOLDEN_WRITE=1 cargo test -p
+  djs-core --lib write_golden_dumps -- --ignored`, which writes only programs that have
+  none.
+- **Two commits** (periodic, by hand: after a change to the exporter, the loader, the
+  suspension maps or the compiler's lowering of async code, and before a release):
+  `scripts/dumps-across-builds.sh OLD_COMMIT` builds scripts/dumpx/main.rs against `git
+  archive OLD_COMMIT` and against the working tree (in target/dumpx/), exports a dump at
+  every idle point of `codemode` and `codemode-harvest` with the old build (with the
+  transcript so far and the whole run), and imports, finishes and compares each one with
+  the new build; exit 1 if one does not load or finishes differently. About 30 s
+  wall-clock. The old commit must have 0180's marker (`"djs-dump 2";`, dd98ec06 or
+  later): older dumps start with a comment line that this format no longer reads.
+  Results: 23835fa9 -> 59ca2f38 and dd98ec06 -> 92f0c484: 1,194 dumps, all finished the
+  same, none refused.
+
 ## Peak memory claims (D2048)
 
 Peak wasm memory (`wasm memory` in `scripts/perf/wasm-run.ts`) is deterministic for one

@@ -8235,3 +8235,20 @@ is the load's). Host globals are `console`, `tools`, `print`, `later`; host func
 named by `Tools::call_name`. Dumps are detected by the loader's `dump_format`, not a
 prefix match. Rejected: wrapping `--body` scripts as an arrow in a Script so their top
 level can be dumped; the exporter learns async-body functions instead (core fix).
+
+## D2619: Golden format 2 dumps change only with a decision
+date: 2026-11-04 · by: portable · issue: 0178
+tests/dump/v2/golden/ holds dumps the exporter wrote of small programs, one per operand
+role sequence, loop kind, re-enactment and class case plus a codemode body, at every
+idle point (`NAME.K.dump.js`), and every gate run loads them and finishes the runs
+(`golden_dumps_load_and_finish`). They stand for the dumps hosts keep (D2560): a build
+that cannot load one would strand them. So, as for format 1's fixture, a golden dump is
+never regenerated to make a build pass; changing or removing one needs a decision that
+says why dumps of that shape may stop loading (while djs is unreleased, D024 allows an
+incompatible format change, which then rewrites all of them in the same change). Adding
+programs is free; their dumps are written by `write_golden_dumps` (ignored,
+`DJS_GOLDEN_WRITE=1`), which never touches a program that has dumps. The exporter-only
+round trip (`exporter_round_trips_at_every_idle_point`) stays the check of today's
+exporter; the goldens check today's loader against yesterday's exporter. The
+across-builds script (scripts/dumps-across-builds.sh) is run by hand, not by the gate:
+it builds a second tree (about 30 s).

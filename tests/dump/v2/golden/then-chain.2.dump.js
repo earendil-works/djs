@@ -1,0 +1,12 @@
+"djs-dump 2";
+$dump.n1 = new Error("boom");
+$dump.p2 = $dump.pending(2, "later", [$dump.n1, true]);
+const log = ["fin"];
+const p = Promise.resolve(1);
+const a = Promise.resolve(2);
+const b = Promise.resolve(10);
+$dump.p3 = Promise.prototype.then.call($dump.p2, undefined, (e) => "caught " + e.message);
+const c = $dump.p3;
+$dump.p4 = Promise.all([2, 10, $dump.p3]);
+$dump.p5 = Promise.prototype.then.call($dump.p4, (r) => print(r.join(), log.join()), undefined);
+Object.defineProperty($dump.n1, "stack", { value: "    at <eval> (src.js:6:26)\n", writable: true, configurable: true });

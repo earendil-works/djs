@@ -1,0 +1,17 @@
+"djs-dump 2";
+$dump.p1 = $dump.pending(1, "later", [1]);
+$dump.n2 = new Error("boom");
+$dump.p3 = $dump.pending(2, "later", [$dump.n2, true]);
+const log = [];
+const p = $dump.p1;
+$dump.p4 = Promise.prototype.then.call($dump.p1, (v) => v + 1, undefined);
+$dump.p5 = Promise.prototype.then.call($dump.p4, undefined, () => "never");
+$dump.p6 = Promise.prototype.finally.call($dump.p5, () => log.push("fin"));
+const a = $dump.p6;
+$dump.p7 = Promise.prototype.then.call($dump.p1, (v) => v * 10, undefined);
+const b = $dump.p7;
+$dump.p8 = Promise.prototype.then.call($dump.p3, undefined, (e) => "caught " + e.message);
+const c = $dump.p8;
+$dump.p9 = Promise.all([$dump.p6, $dump.p7, $dump.p8]);
+$dump.p10 = Promise.prototype.then.call($dump.p9, (r) => print(r.join(), log.join()), undefined);
+Object.defineProperty($dump.n2, "stack", { value: "    at <eval> (src.js:6:26)\n", writable: true, configurable: true });

@@ -686,7 +686,12 @@ const BODY: &str = "console.log(\"start\");\nlet n = 0;\nfor (const f of await t
 
 /// A VM with the codemode host's `tools` and `console` (made by host code).
 fn body_host_vm() -> Vm {
-    let mut vm = new_vm();
+    body_host_vm_with(false)
+}
+
+/// ... collecting at every safepoint with `stress`.
+fn body_host_vm_with(stress: bool) -> Vm {
+    let mut vm = new_vm_with(stress);
     run_value(
         &mut vm,
         "globalThis.tools = { list: () => later([\"a\", \"b\"]), read: (f) => later(f + f) };\n\
@@ -732,9 +737,13 @@ fn body_dump(src: &str, k: usize) -> (Vec<String>, Option<Result<super::dump::Du
             }
             Status::Idle | Status::Done(_) => {
                 // The run's promise (`Idle` after the call returned, while it waits).
-                run.get_or_insert(state::result(&vm.heap));
+                if run.is_none() {
+                    // Held by a handle: nothing else does once the run is over.
+                    let v = state::result(&vm.heap);
+                    run = Some(vm.heap_mut().new_handle(v).unwrap());
+                }
                 let Some(&id) = vm.pending_host_calls().iter().min() else {
-                    let r = vm.promise_state(run.unwrap());
+                    let r = vm.promise_state(vm.heap().get_handle(run.unwrap()));
                     let r = r.flatten().map(|r| r.map(|v| vm.display(v)));
                     lines.push(alloc::format!("run {r:?}"));
                     return (lines, None);
@@ -752,7 +761,7 @@ fn body_dump(src: &str, k: usize) -> (Vec<String>, Option<Result<super::dump::Du
             s => panic!("{s:?}"),
         }
     }
-    let handles = [("run", run.unwrap())];
+    let handles = [("run", vm.heap().get_handle(run.unwrap()))];
     let opts = super::dump::DumpOptions {
         base: base(),
         host: &["console", "tools", "print", "later"],
@@ -839,4 +848,270 @@ fn a_codemode_body_that_differs_as_a_function_is_refused() {
     drive(&mut vm, &mut lines, &mut Vec::new(), None);
     assert_eq!(lines, want[..want.len() - 1]);
     assert_eq!(want, ["true", "run Some(Ok(\"5\"))"]);
+}
+
+// ------------------------------------------------------------------ golden dumps (0178)
+//
+// tests/dump/v2/golden/: small programs (`NAME.src.js` Scripts, `NAME.body.js` codemode
+// bodies) and the dumps the exporter wrote of them, `NAME.K.dump.js` at idle point K.
+// Every later build must load them and finish the run as the program does (D2560); a
+// golden dump changes only with a decision (D2642). The host is `body_host_vm`'s: `later`,
+// `print`, `tools`, `console`. Write the dumps of a new program (never over existing
+// ones) with `DJS_GOLDEN_WRITE=1 cargo test -p djs-core --lib write_golden_dumps --
+// --ignored`.
+
+const GOLDEN_HOST: &[&str] = &["console", "tools", "print", "later"];
+
+fn golden_dir() -> std::path::PathBuf {
+    fixture_dir().join("golden")
+}
+
+/// The golden programs: name, whether it is a codemode body, source.
+fn golden_programs() -> Vec<(String, bool, String)> {
+    let mut out = Vec::new();
+    for e in std::fs::read_dir(golden_dir()).unwrap() {
+        let file = e.unwrap().file_name().into_string().unwrap();
+        let (name, body) = match (file.strip_suffix(".src.js"), file.strip_suffix(".body.js")) {
+            (Some(n), _) => (n, false),
+            (_, Some(n)) => (n, true),
+            _ => continue,
+        };
+        let src = std::fs::read_to_string(golden_dir().join(&file)).unwrap();
+        out.push((String::from(name), body, src));
+    }
+    out.sort();
+    out
+}
+
+/// The golden dumps: program name, idle point, file name.
+fn golden_dumps() -> Vec<(String, usize, String)> {
+    let mut out = Vec::new();
+    for e in std::fs::read_dir(golden_dir()).unwrap() {
+        let file = e.unwrap().file_name().into_string().unwrap();
+        let Some(stem) = file.strip_suffix(".dump.js") else {
+            continue;
+        };
+        let (name, k) = stem.rsplit_once('.').unwrap();
+        out.push((String::from(name), k.parse().unwrap(), file));
+    }
+    out.sort();
+    out
+}
+
+/// Starts golden program `src` in a host VM: a Script, or a body called with the host's
+/// `tools` and `console`.
+fn golden_start(src: &str, body: bool) -> Vm {
+    let mut vm = body_host_vm();
+    let g = vm.global();
+    if body {
+        let f = vm
+            .compile(
+                src.as_bytes(),
+                &crate::compiler::CompileOptions::async_body("body.js", &["tools", "console"]),
+            )
+            .unwrap();
+        let args = ["tools", "console"].map(|n| {
+            let k = vm.heap_mut().atom_str(n).unwrap();
+            vm.heap().get_own_property(g, k).unwrap().value().unwrap()
+        });
+        vm.call(f, Value::object(g), &args).unwrap();
+    } else {
+        let f = vm
+            .compile(
+                src.as_bytes(),
+                &crate::compiler::CompileOptions::script("src.js"),
+            )
+            .unwrap_or_else(|e| panic!("{} at {}:{}", e.message, e.line, e.col));
+        vm.call(f, Value::object(g), &[]).unwrap();
+    }
+    vm
+}
+
+/// Runs to idle point `k` (true) or to the end, as `drive` does. `run` is the run's
+/// promise; with `entry`, the entry call's result at the first stop (a body's promise).
+/// At the end, the promise's state is a line of its own.
+fn golden_drive(
+    vm: &mut Vm,
+    k: usize,
+    entry: bool,
+    run: &mut Option<crate::heap::Handle>,
+    lines: &mut Vec<String>,
+    marks: &mut Vec<usize>,
+    slice: Option<u64>,
+) -> bool {
+    loop {
+        match vm.run(slice.unwrap_or(1_000_000_000)) {
+            Status::OutOfFuel if slice.is_some() => {}
+            Status::HostCall { call_id, fn_id } => {
+                assert_eq!(fn_id, PRINT, "unexpected host call");
+                let args = vm.host_call(call_id).unwrap().args;
+                let parts: Vec<String> = args.iter().map(|&v| vm.display(v)).collect();
+                lines.push(parts.join(" "));
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::Idle | Status::Done(_) => {
+                if entry && run.is_none() {
+                    let v = state::result(&vm.heap);
+                    *run = Some(vm.heap_mut().new_handle(v).unwrap());
+                }
+                let Some(&id) = vm.pending_host_calls().iter().min() else {
+                    break;
+                };
+                marks.push(lines.len());
+                if marks.len() == k {
+                    return true;
+                }
+                settle(vm, id);
+            }
+            Status::Threw(e) => {
+                let m = vm.display(e);
+                lines.push(alloc::format!("threw {m}"));
+                break;
+            }
+            s => panic!("{s:?}"),
+        }
+    }
+    for r in vm.take_unhandled_rejections() {
+        let m = vm.display(r);
+        lines.push(alloc::format!("unhandled {m}"));
+    }
+    let v = run.map_or(Value::UNDEFINED, |h| vm.heap().get_handle(h));
+    if let Some(r) = vm.promise_state(v) {
+        let r = r.map(|r| r.map(|v| vm.display(v)));
+        lines.push(alloc::format!("run {r:?}"));
+    }
+    false
+}
+
+/// A golden program's uninterrupted run: its lines and idle marks.
+fn golden_run(src: &str, body: bool) -> (Vec<String>, Vec<usize>) {
+    let mut vm = golden_start(src, body);
+    let (mut lines, mut marks) = (Vec::new(), Vec::new());
+    golden_drive(
+        &mut vm,
+        usize::MAX,
+        body,
+        &mut None,
+        &mut lines,
+        &mut marks,
+        None,
+    );
+    (lines, marks)
+}
+
+/// Loads golden dump `text` and finishes the run: the lines it prints.
+fn golden_continue(text: &str, stress: bool) -> Result<Vec<String>, String> {
+    let mut vm = body_host_vm_with(stress);
+    let loaded = load(&mut vm, text)?;
+    let mut run = loaded
+        .handles
+        .iter()
+        .find(|(n, _)| n == "run")
+        .map(|(_, h)| *h);
+    let (mut lines, mut marks) = (Vec::new(), Vec::new());
+    golden_drive(
+        &mut vm,
+        usize::MAX,
+        false,
+        &mut run,
+        &mut lines,
+        &mut marks,
+        stress.then_some(97),
+    );
+    Ok(lines)
+}
+
+/// Every golden dump loads and finishes as its program does, also under GC stress and
+/// in slices; every program has a dump.
+#[test]
+fn golden_dumps_load_and_finish() {
+    let programs = golden_programs();
+    let dumps = golden_dumps();
+    let mut failed = Vec::new();
+    for (name, _, _) in &programs {
+        if !dumps.iter().any(|d| d.0 == *name) {
+            failed.push(alloc::format!("{name}: no dump"));
+        }
+    }
+    for (name, k, file) in &dumps {
+        let Some((_, body, src)) = programs.iter().find(|p| p.0 == *name) else {
+            failed.push(alloc::format!("{file}: no program {name}"));
+            continue;
+        };
+        let text = std::fs::read_to_string(golden_dir().join(file)).unwrap();
+        let (want, marks) = golden_run(src, *body);
+        if *k == 1 && std::env::var("DJS_DUMP_SHOW").is_ok_and(|v| v == "golden") {
+            std::println!("{name}: {} idle points, {want:?}", marks.len());
+        }
+        if !text.starts_with("\"djs-dump 2\";\n") {
+            failed.push(alloc::format!("{file}: not a format 2 dump"));
+            continue;
+        }
+        if *k == 0 || *k > marks.len() {
+            failed.push(alloc::format!(
+                "{file}: {name} has {} idle points",
+                marks.len()
+            ));
+            continue;
+        }
+        for stress in [false, true] {
+            match golden_continue(&text, stress) {
+                Ok(after) => {
+                    let mut got = want[..marks[k - 1]].to_vec();
+                    got.extend(after);
+                    if got != want {
+                        failed.push(alloc::format!(
+                            "{file} (stress {stress}): {got:?}\n  want {want:?}"
+                        ));
+                    }
+                }
+                Err(e) => failed.push(alloc::format!("{file}: {e}")),
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// Writes the dumps of the golden programs that have none, at every idle point.
+#[test]
+#[ignore]
+fn write_golden_dumps() {
+    assert!(
+        std::env::var_os("DJS_GOLDEN_WRITE").is_some(),
+        "DJS_GOLDEN_WRITE=1 writes golden dumps"
+    );
+    let dumps = golden_dumps();
+    for (name, body, src) in golden_programs() {
+        if dumps.iter().any(|d| d.0 == name) {
+            continue;
+        }
+        let (_, marks) = golden_run(&src, body);
+        for k in 1..=marks.len() {
+            let mut vm = golden_start(&src, body);
+            let mut run = None;
+            assert!(golden_drive(
+                &mut vm,
+                k,
+                body,
+                &mut run,
+                &mut Vec::new(),
+                &mut Vec::new(),
+                None
+            ));
+            let run = run.map_or(Value::UNDEFINED, |h| vm.heap().get_handle(h));
+            let handles = [("run", run)];
+            let opts = super::dump::DumpOptions {
+                base: base(),
+                host: GOLDEN_HOST,
+                host_fn_name: &host_fn_name,
+                handles: if body { &handles } else { &[] },
+            };
+            let text = vm
+                .dump(&opts, None)
+                .unwrap_or_else(|e| panic!("{name} @{k}: {}", e.message()));
+            let file = golden_dir().join(alloc::format!("{name}.{k}.dump.js"));
+            std::fs::write(&file, text).unwrap();
+            std::println!("wrote {}", file.display());
+        }
+    }
 }
