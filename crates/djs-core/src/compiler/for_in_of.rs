@@ -282,10 +282,13 @@ impl<'a> Parser<'a, '_> {
                 // A promise that always fulfills (errors from `return()` are dropped).
                 let close = intrinsic_id("AsyncIteratorCloseThrow").expect("intrinsic");
                 self.code().call_intrinsic(close, 1);
-                // In the close handler: the exception under the promise, not described yet.
-                self.roles_push(&[Role::Unsupported("closing an async iterator")]);
+                // In the close handler: the body's exception under the promise, the loop's
+                // `it next` consumed.
+                let kept = self.roles_take(2);
+                self.roles_push(&[Role::Exception]);
                 self.site(SiteKind::ForAwaitClose, for_pos);
                 self.roles_pop(1);
+                self.roles_push(&kept);
                 self.code().await_(0);
             } else {
                 let close = intrinsic_id("IteratorCloseThrow").expect("%IteratorCloseThrow");
@@ -444,7 +447,8 @@ impl<'a> Parser<'a, '_> {
                 self.code().dup();
                 self.mark(for_pos);
                 if is_await {
-                    self.emit_async_close_normal((SiteKind::ForAwaitClose, for_pos));
+                    // (`v ret it`: a subroutine's return address is on the stack.)
+                    self.emit_async_close_normal((SiteKind::ForAwaitClose, for_pos), None);
                     self.code().undefined();
                 } else {
                     self.code().call_intrinsic(close, 1);
@@ -458,7 +462,7 @@ impl<'a> Parser<'a, '_> {
                 self.code().drop();
                 self.mark(for_pos);
                 if is_await {
-                    self.emit_async_close_normal((SiteKind::ForAwaitClose, for_pos));
+                    self.emit_async_close_normal((SiteKind::ForAwaitClose, for_pos), Some(2));
                 } else {
                     self.code().call_intrinsic(close, 1);
                     self.code().drop();

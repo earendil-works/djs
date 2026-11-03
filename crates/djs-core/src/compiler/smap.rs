@@ -91,6 +91,9 @@ pub enum Role {
     /// and for-await, its `next` method.
     LoopIterator(Loop),
     LoopNext(Loop),
+    /// The exception a `for await` rethrows after closing its iterator (the loop's body
+    /// threw).
+    Exception,
     /// Values of a construct that is not described yet (`switch`, `finally`, `using`,
     /// destructuring, `yield*`, class definitions): the site is unsupported.
     Unsupported(&'static str),
@@ -125,6 +128,7 @@ impl fmt::Display for Role {
             Role::IntrinsicArg(i) => write!(f, "intrinsic.arg[{i}]"),
             Role::LoopIterator(l) => write!(f, "{}.iterator", l.name()),
             Role::LoopNext(l) => write!(f, "{}.next", l.name()),
+            Role::Exception => f.write_str("exception"),
             Role::Unsupported(c) => write!(f, "unsupported:{c}"),
         }
     }
@@ -168,6 +172,7 @@ impl Role {
             Role::LoopNext(Loop::In) => ("for-in.next", None),
             Role::LoopNext(Loop::Await) => ("for-await.next", None),
             Role::LoopNext(Loop::Star) => ("yield*.next", None),
+            Role::Exception => ("exception", None),
             Role::Unsupported(_) => ("unsupported", None),
         }
     }
@@ -559,6 +564,19 @@ impl super::parser::Parser<'_, '_> {
         }
     }
 
+    /// Takes the top `n` roles off (values the code consumed for a while), for
+    /// `roles_push` to put back.
+    #[inline]
+    pub(super) fn roles_take(&mut self, n: usize) -> alloc::vec::Vec<Role> {
+        match &mut self.f.smap {
+            Some(r) => {
+                let at = r.roles.len().saturating_sub(n);
+                r.roles.split_off(at)
+            }
+            None => alloc::vec::Vec::new(),
+        }
+    }
+
     /// Replaces the top `n` roles by `rs` (an `array_from` collapsing its elements).
     #[inline]
     pub(super) fn roles_replace(&mut self, n: usize, rs: &[Role]) {
@@ -592,6 +610,10 @@ impl super::parser::Parser<'_, '_> {
     pub(super) fn roles_pop(&mut self, _n: usize) {}
     #[inline(always)]
     pub(super) fn roles_replace(&mut self, _n: usize, _rs: &[Role]) {}
+    #[inline(always)]
+    pub(super) fn roles_take(&mut self, _n: usize) -> alloc::vec::Vec<Role> {
+        alloc::vec::Vec::new()
+    }
     #[inline(always)]
     pub(super) fn site(&mut self, _kind: SiteKind, _pos: u32) {}
 }

@@ -4,7 +4,7 @@ function <anonymous> @1..1424
   await#1 @578 (23:15) pc 56: - (out: loc11)
   await#2 @689 (25:12) pc 107: - (out: loc11)
   await#3 @814 (28:3) pc 136: - (out: loc11)
-  for-await.close#1 @1193 (41:1) pc 208: unsupported closing an async iterator
+  for-await.close#1 @1193 (41:1) pc 208: exception
   for-await.next#1 @1193 (41:1) pc 248: for-await.iterator for-await.next
   await#4 @1308 (43:17) pc 331: - (out: loc11)
 function fetchAll @141..319

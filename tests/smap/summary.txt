@@ -14,13 +14,14 @@ sites 1063
    11 yield.return
 
 ## described, by operand roles
-  708 -
+  712 -
   208 call.callee call.this
    21 for-of.iterator for-of.next
    21 yield*.iterator yield*.next
    18 call.callee call.this object.literal
    12 for-of.iterator for-of.next call.callee call.this
     9 for-of.iterator for-of.next call.callee call.this object.literal
+    8 exception
     8 for-await.iterator for-await.next
     7 call.callee call.this call.callee call.this
     3 binary.left
@@ -37,6 +38,5 @@ sites 1063
     1 object.literal
 
 ## unsupported
-   12 closing an async iterator
     1 destructuring
    19 using

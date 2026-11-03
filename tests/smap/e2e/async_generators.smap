@@ -11,7 +11,7 @@ function deleg @394..521
   yield*.await#1 @38 (19:13) pc 62: yield*.iterator yield*.next
   yield*.await#2 @38 (19:13) pc 104: yield*.iterator yield*.next
   yield*.await#3 @38 (19:13) pc 112: yield*.iterator yield*.next
-  yield*.await#4 @38 (19:13) pc 158: unsupported closing an async iterator
+  yield*.await#4 @38 (19:13) pc 158: -
   yield*.await#5 @50 (19:25) pc 36: yield*.iterator yield*.next
   yield*.await#6 @50 (19:25) pc 83: yield*.iterator yield*.next
   yield*.await#7 @50 (19:25) pc 137: yield*.iterator yield*.next
@@ -19,20 +19,20 @@ function deleg @394..521
   yield*.await#8 @76 (21:3) pc 270: yield*.iterator yield*.next
   yield*.await#9 @76 (21:3) pc 312: yield*.iterator yield*.next
   yield*.await#10 @76 (21:3) pc 320: yield*.iterator yield*.next
-  yield*.await#11 @76 (21:3) pc 366: unsupported closing an async iterator
+  yield*.await#11 @76 (21:3) pc 366: -
   yield*.await#12 @112 (21:39) pc 244: yield*.iterator yield*.next
   yield*.await#13 @112 (21:39) pc 291: yield*.iterator yield*.next
   yield*.await#14 @112 (21:39) pc 345: yield*.iterator yield*.next
   return.await#1 @116 (22:3) pc 392: -
 function main @522..1409
   loc0 <state>, loc1 x@43, loc2 x@93, loc3 x@161, loc4 it@0, loc5 it2@0, loc6 thrower@0, loc7 x@651, loc9 o@0, loc10 x@839
-  for-await.close#1 @26 (25:3) pc 45: unsupported closing an async iterator (out: loc2 loc3 loc7 loc10)
+  for-await.close#1 @26 (25:3) pc 45: exception (out: loc2 loc3 loc7 loc10)
   for-await.next#1 @26 (25:3) pc 81: for-await.iterator for-await.next (out: loc2 loc3 loc7 loc10)
-  for-await.close#2 @76 (26:3) pc 140: unsupported closing an async iterator (out: loc1 loc3 loc7 loc10)
+  for-await.close#2 @76 (26:3) pc 140: exception (out: loc1 loc3 loc7 loc10)
   for-await.next#2 @76 (26:3) pc 176: for-await.iterator for-await.next (out: loc1 loc3 loc7 loc10)
-  for-await.close#3 @144 (27:3) pc 226: unsupported closing an async iterator (out: loc1 loc2 loc7 loc10)
+  for-await.close#3 @144 (27:3) pc 226: exception (out: loc1 loc2 loc7 loc10)
   for-await.next#3 @144 (27:3) pc 267: for-await.iterator for-await.next (out: loc1 loc2 loc7 loc10)
-  for-await.close#4 @144 (27:3) pc 299: unsupported closing an async iterator (out: loc1 loc2 loc7 loc10)
+  for-await.close#4 @144 (27:3) pc 299: - (out: loc1 loc2 loc7 loc10)
   await#1 @261 (32:14) pc 351: call.callee call.this call.callee call.this (out: loc1 loc2 loc3 loc7 loc10)
   await#2 @293 (33:14) pc 391: call.callee call.this call.callee call.this (out: loc1 loc2 loc3 loc7 loc10)
   await#3 @328 (34:14) pc 431: call.callee call.this call.callee call.this (out: loc1 loc2 loc3 loc7 loc10)
@@ -41,9 +41,9 @@ function main @522..1409
   await#6 @427 (37:14) pc 545: call.callee call.this call.callee call.this (out: loc1 loc2 loc3 loc7 loc10)
   await#7 @469 (39:3) pc 572: - (out: loc1 loc2 loc3 loc7 loc10)
   await#8 @500 (40:14) pc 625: call.callee call.this call.callee call.this (out: loc1 loc2 loc3 loc7 loc10)
-  for-await.close#5 @634 (46:5) pc 657: unsupported closing an async iterator (out: loc1 loc2 loc3 loc10)
+  for-await.close#5 @634 (46:5) pc 657: exception (out: loc1 loc2 loc3 loc10)
   for-await.next#4 @634 (46:5) pc 695: for-await.iterator for-await.next (out: loc1 loc2 loc3 loc10)
-  for-await.close#6 @822 (51:3) pc 798: unsupported closing an async iterator (out: loc1 loc2 loc3 loc7)
+  for-await.close#6 @822 (51:3) pc 798: exception (out: loc1 loc2 loc3 loc7)
   for-await.next#5 @822 (51:3) pc 833: for-await.iterator for-await.next (out: loc1 loc2 loc3 loc7)
 function thrower @1067..1143
   loc0 <state>

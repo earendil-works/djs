@@ -143,7 +143,7 @@ const LOOPS: &[(&str, &[&str])] = &[
     (
         "for await (const x of xs) await x;",
         &[
-            "for-await.close#1 !closing an async iterator",
+            "for-await.close#1 exception",
             "for-await.next#1 for-await.iterator for-await.next",
             "await#1 for-await.iterator for-await.next",
         ],
@@ -170,7 +170,7 @@ const LOOPS: &[(&str, &[&str])] = &[
             "yield*.await#1 yield*.iterator yield*.next",
             "yield*.await#2 yield*.iterator yield*.next",
             "yield*.await#3 yield*.iterator yield*.next",
-            "yield*.await#4 !closing an async iterator",
+            "yield*.await#4 -",
             "yield*.await#5 yield*.iterator yield*.next",
             "yield*.await#6 yield*.iterator yield*.next",
             "yield*.await#7 yield*.iterator yield*.next",
