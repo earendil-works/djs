@@ -29,7 +29,14 @@ fn base() -> &'static [u8] {
 
 /// A fresh VM with `later` and `print`.
 fn new_vm() -> Vm {
-    let mut vm = Vm::from_base(base(), VmOptions::default()).unwrap();
+    new_vm_with(false)
+}
+
+/// ... collecting at every safepoint with `stress`.
+fn new_vm_with(stress: bool) -> Vm {
+    let mut opts = VmOptions::default();
+    opts.exec.gc_stress = stress;
+    let mut vm = Vm::from_base(base(), opts).unwrap();
     let later = vm.new_async_host_function(LATER, "later").unwrap();
     vm.define_global("later", later).unwrap();
     let print = vm.new_host_function(PRINT, "print").unwrap();
@@ -43,12 +50,14 @@ fn host_fn(name: &str) -> Option<u32> {
 
 /// Runs the VM to its end, settling `later` calls at idle points (oldest first).
 /// `marks[k]` is the number of lines printed when idle point k+1 was reached.
-fn drive(vm: &mut Vm, lines: &mut Vec<String>, marks: &mut Vec<usize>) {
+/// With `slice`, `run` gets that much fuel at a time.
+fn drive(vm: &mut Vm, lines: &mut Vec<String>, marks: &mut Vec<usize>, slice: Option<u64>) {
     let mut rounds = 0;
     loop {
         rounds += 1;
-        assert!(rounds < 10_000, "runaway");
-        match vm.run(1_000_000_000) {
+        assert!(rounds < 1_000_000, "runaway");
+        match vm.run(slice.unwrap_or(1_000_000_000)) {
+            Status::OutOfFuel if slice.is_some() => {}
             Status::HostCall { call_id, fn_id } => {
                 assert_eq!(fn_id, PRINT, "unexpected host call");
                 let args = vm.host_call(call_id).unwrap().args;
@@ -99,7 +108,7 @@ fn run_program(src: &str) -> (Vec<String>, Vec<usize>) {
     let this = Value::object(vm.global());
     vm.call(f, this, &[]).unwrap();
     let (mut lines, mut marks) = (Vec::new(), Vec::new());
-    drive(&mut vm, &mut lines, &mut marks);
+    drive(&mut vm, &mut lines, &mut marks, None);
     (lines, marks)
 }
 
@@ -111,12 +120,41 @@ fn load(vm: &mut Vm, text: &str) -> Result<Loaded, String> {
     vm.load_dump(text, &opts).map_err(|e| e.message())
 }
 
-/// Loads `dump` and runs it to the end: the lines it prints.
-fn continue_dump(text: &str) -> (Loaded, Vec<String>) {
-    let mut vm = new_vm();
+/// Runs a Script in an idle VM: its completion value.
+fn run_value(vm: &mut Vm, src: &str) -> String {
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("check.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    match vm.run(1_000_000) {
+        Status::Done(v) => vm.display(v),
+        // (Idle: the dump's calls are open.)
+        Status::Idle => match vm.outcome() {
+            Some(Ok(v)) => vm.display(v),
+            o => panic!("{o:?}"),
+        },
+        s => panic!("{s:?}"),
+    }
+}
+
+/// Loads `dump` and runs it to the end: the lines it prints. `stress`: collecting at every
+/// safepoint, in slices of 97 fuel.
+fn continue_dump(text: &str, stress: bool) -> (Loaded, Vec<String>) {
+    let mut vm = new_vm_with(stress);
     let loaded = load(&mut vm, text).unwrap_or_else(|e| panic!("{e}"));
+    // Idle, waiting on the dump's calls, which the host knows already.
+    assert!(vm.new_host_calls().is_empty());
+    let mut open = vm.pending_host_calls();
+    open.sort_unstable();
+    let ids: Vec<u32> = loaded.calls.iter().map(|c| c.id).collect();
+    assert_eq!(open, ids);
+    assert_eq!(run_value(&mut vm, "typeof $dump"), "undefined");
     let (mut lines, mut marks) = (Vec::new(), Vec::new());
-    drive(&mut vm, &mut lines, &mut marks);
+    drive(&mut vm, &mut lines, &mut marks, stress.then_some(97));
     for (_, h) in &loaded.handles {
         vm.heap_mut().drop_handle(*h);
     }
@@ -146,10 +184,12 @@ fn fixture(name: &str) -> Loaded {
         "{name}: {} idle points",
         marks.len()
     );
-    let (loaded, after) = continue_dump(&dump);
+    let (loaded, after) = continue_dump(&dump, false);
     let mut got: Vec<String> = want[..marks[k - 1]].to_vec();
     got.extend(after);
     assert_eq!(got, want, "{name}");
+    let (_, stressed) = continue_dump(&dump, true);
+    assert_eq!(stressed, got[marks[k - 1]..], "{name} under stress");
     if std::env::var_os("DJS_DUMP_SHOW").is_some() {
         std::println!(
             "{name}: idle point {k} of {}, {} lines after it:",
@@ -208,6 +248,22 @@ fn nested_loops() {
 #[test]
 fn cells_in_their_tdz() {
     fixture("cells");
+}
+
+#[test]
+fn role_names_are_the_maps() {
+    use crate::compiler::{Loop, Role};
+    for r in [
+        Role::CallCallee,
+        Role::CallArg(3),
+        Role::ArrayElement(0),
+        Role::TemplatePart(12),
+        Role::LoopIterator(Loop::Await),
+        Role::LoopNext(Loop::Of),
+        Role::SuperBase,
+    ] {
+        assert_eq!(super::dump_resume::role_name(r), alloc::format!("{r}"));
+    }
 }
 
 /// Loads a format 2 dump made of a few functions and `tail`; the reason it is refused.

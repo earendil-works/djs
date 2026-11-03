@@ -96,8 +96,9 @@ impl Vm {
         Ok(out)
     }
 
-    /// The site `at` of closure `f`, from the dump's suspension maps.
-    fn resume_site(&mut self, f: Obj, at: &str, load: &mut Load) -> Result<Site, String> {
+    /// The site `at` of closure `f` in the dump's suspension maps: the indexes of its map
+    /// and of the site in it.
+    fn resume_site(&mut self, f: Obj, at: &str, load: &mut Load) -> Result<(usize, usize), String> {
         let t = self.heap.closure_template(f);
         let info = debug_info(&self.heap, t);
         let script = self.heap.get_handle(load.script).as_object().map(|s| {
@@ -116,21 +117,20 @@ impl Vm {
             .map_err(|e| cat!("$dump.resume: ", e.message))?;
             load.maps = Some(maps);
         }
-        let map = load
-            .maps
+        let maps = load.maps.as_deref().unwrap_or_default();
+        let mi = maps
             .iter()
-            .flatten()
-            .find(|m| m.start == info.src_start && m.end == info.src_end)
+            .position(|m| m.start == info.src_start && m.end == info.src_end)
             .ok_or("$dump.resume: the function has no suspension sites")?;
-        let site = map
+        let si = maps[mi]
             .sites
             .iter()
-            .find(|s| s.name == at)
-            .ok_or_else(|| cat!("$dump.resume: ", map.name, " has no site ", at))?;
-        if let Some(u) = &site.unsupported {
+            .position(|s| s.name == at)
+            .ok_or_else(|| cat!("$dump.resume: ", maps[mi].name, " has no site ", at))?;
+        if let Some(u) = &maps[mi].sites[si].unsupported {
             return Err(cat!("$dump.resume: ", at, " cannot be resumed: ", u));
         }
-        Ok(site.clone())
+        Ok((mi, si))
     }
 
     /// `$dump.resume(fn, description)`: the activation's result promise (an async
@@ -171,7 +171,8 @@ impl Vm {
             queue,
         ] = self.resume_desc(args.get(1).copied().unwrap_or(Value::UNDEFINED))?;
         let at = string_arg(&self.heap, at, "$dump.resume: at")?;
-        let site = self.resume_site(f, &at, load)?;
+        let (mi, si) = self.resume_site(f, &at, load)?;
+        let site = &load.maps.as_deref().unwrap_or_default()[mi].sites[si];
         if site.args.len() != params || site.locals.len() != n_locals {
             return Err(cat!(
                 "$dump.resume: the map of ",
@@ -281,7 +282,7 @@ impl Vm {
         if let Some(b) = given_bindings.iter().find(|b| !b.used) {
             return Err(cat!("$dump.resume: ", at, " has no binding ", b.key));
         }
-        self.resume_operands(&site, operands, loops, &mut frame)?;
+        self.resume_operands(site, operands, loops, &mut frame)?;
         let state = if at_yield {
             suspend::SUSPENDED
         } else {

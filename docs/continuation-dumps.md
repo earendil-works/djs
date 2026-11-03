@@ -65,7 +65,7 @@ text(`${report.flat().reduce((a, b) => a + b, 0)} TODOs in ${seen.size} files`);
 stopped in the second batch: `src/c.ts` was read and counted, the read of `src/d.ts`
 (host call 5) is open. Two activations are suspended (the run, inside `report.push(await
 …)`, and `todos("src/d.ts")`, inside `tools.read`), with a half-finished `Promise.all`
-between them. Its dump (the exact syntax is 0171/0172's to settle):
+between them. Its dump (tests/dump/v2/plan.dump.js loads a version of it):
 
 ```js
 // djs-dump 2: a suspended run. 2 activations, 1 pending host call.
@@ -146,9 +146,9 @@ $dump.run = $dump.resume($dump.f1, {
     report: $dump.report,
     batch: $dump.batches[1],
   },
-  // Evaluated before the await, named by role; the loader puts them where this build's
-  // compiler keeps them.
-  operands: { "call.this": $dump.report, "call.callee": Array.prototype.push },
+    // Evaluated before the await, named by role, bottom first; the loader puts them where
+  // this build's compiler keeps them.
+  operands: [["call.callee", Array.prototype.push], ["call.this", $dump.report]],
   loops: [{ kind: "for-of", iterator: $dump.it1,
             next: $dump.builtin("%ArrayIteratorPrototype%.next") }],
 });
@@ -185,12 +185,36 @@ original order). The loader adds only:
 | `$dump.handle(name, value)` | a named handle for the host (the run's promise, a REPL input) |
 | `$dump.private(obj, C, "#x", value)` | a private field (or brand) of the class `C` the dump recreated |
 | `$dump.TDZ` | a binding before its declaration ran |
+| `$dump.issued(n)` | the id of the host's next call (0171) |
 
 `resume` compiles nothing new: `fn` was made from its verbatim source by the dump. It
 compares the given bindings, operand roles and loops with this build's suspension map at
 `at` and refuses on any difference. The primitives are privileged builtins reachable only
 through the `$dump` the loader passes in; a dump run as an ordinary Script has none of
 them.
+
+As built (0171, D2583–D2585):
+
+- `resume(fn, {at, awaiting, this, args, bindings, operands, loops, queue})`. `fn` must
+  be made by the dump's own text: the loader compiles that text again with recording on,
+  so the map's slots and resume pc are those of `fn`'s code. `bindings` names every
+  binding in scope at the site (`name`, or `name@scope` with the declaring scope's
+  offset when two of a name are in scope) and nothing else; hidden locals are made by the
+  loader (`<state>`, `this`, `new.target`, `<active>`, `<home>`) or given in `bindings`
+  (`arguments`). `operands` is a list of `[role, value]` pairs bottom first (roles
+  repeat: nested calls), `loops` a list of `{kind, iterator, next}` outermost first
+  (for-in loops are refused for now: their iterator is internal), `queue` an async
+  generator's requests `{type: "next"|"throw"|"return", value, promise}` with pending
+  promises the dump made. Unknown keys, a missing or extra binding, operand, loop or
+  queue entry, a non-promise `awaiting` at an await or any `awaiting` at a yield, and an
+  unsupported site refuse the load with the reason.
+- A captured binding gets a new Box, or the Box of a `$dump.cell(() => x)` (also in its
+  TDZ, when the cell is taken before the declaration runs); `$dump.TDZ` and cells are
+  values only `resume` takes.
+- `pending(id, name, args)`: the host maps `name` to its function id
+  (`LoadOptions::host_fn`; an unknown name refuses). `issued(n)`: the id the host's next
+  call gets (else one past the largest open id). `handle(name, v)`: a heap handle the host
+  gets back. `Vm::load_dump` returns the open calls and the handles; the VM is idle.
 
 ### Re-enactment
 

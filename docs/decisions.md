@@ -7984,3 +7984,53 @@ Residual: computed keys and heritage paths are evaluated again at load. Cost on 
 `dump` feature (default wasm build + `dump`): 479,059 -> 491,966 B gzip (+12.9 KB with the
 loader). Coverage: no harvested case and 10 of the 2,627 private scripts define classes;
 9 of those dump, load and compare equal.
+
+## D2583: The format 2 promise, concretely
+date: 2026-11-04 · by: portable · issue: 0171
+What D2560 promises for format 2 (`// djs-dump 2`), as the loader makes it checkable: a
+format 2 dump is a Script whose only privileged operations are the calls of `$dump`'s
+primitives (`private`, `resume`, `cell`, `pending`, `handle`, `issued`, and the value
+`TDZ`) with the argument shapes of docs/continuation-dumps.md. Every primitive checks what
+it is given against this build (the suspension maps of D2563, the class's private names)
+and throws a TypeError with the reason on any difference, which fails the load: a later
+build loads the dump and continues, or refuses it; it never fills a slot it cannot name.
+After the Script and the jobs it queued the VM is idle and `Vm::load_dump` returns its
+open calls and the handles. Golden fixtures (tests/dump/v2/*.src.js with a hand-written
+`*.dump.js` at an idle point) load in every gate run, and their continued output must
+equal the uninterrupted run's; a change that makes one refuse is a format decision.
+
+## D2584: `$dump.resume` builds the frame from the map of the dump's own text
+date: 2026-11-04 · by: portable · issue: 0171
+`resume(fn, {at, awaiting, this, args, bindings, operands, loops, queue})` takes the
+suspension maps by compiling the dump's text again (once per load, with recording on) and
+the map whose span is `fn`'s; `fn` must come from that text (same script), so slots and
+the resume pc are exactly those of `fn`'s code, and the exporter and the loader only share
+names. The frame is what a suspension saves (callee, `this`, arguments padded to the
+parameter count, a header with `argc`, locals, operands), in a Generator object made as
+`generator_start`/`async_start` make it, AWAITING at an await (subscribed to `awaiting`
+with the activation as handler, as `%AsyncAwait` does) or SUSPENDED at a yield. Bindings
+are matched by name, or `name@scope` when shadowed; hidden locals are made by the loader
+(`<state>`, `this`, `new.target`, `<active>`, `<home>`) or given (`arguments`); a binding
+a closure captures lives in a Box, so the map's sites now say which locals hold one
+(`Site::boxed`, from the compiler's storage; the pins are unchanged), and `$dump.cell(() =>
+x)` hands the Box of the one variable an arrow captures to `resume`, also in its TDZ.
+Operands are `[role, value]` pairs bottom first (an object cannot repeat `call.callee` for
+nested calls), loops `{kind, iterator, next}` outermost first. Refused for now: for-in
+loops (the key iterator is internal), and every site the map calls unsupported (finally,
+using, destructuring, yield*). Cost on the `dump` module (default wasm build + `dump`,
+gzip -9): 498,277 -> 507,534 B (+9.3 KB, +25 KB raw, the loader proper; the recording
+compiler was in it already); the default and slim modules are unchanged (everything is
+behind the feature).
+
+## D2585: A load's open calls, handles and call ids
+date: 2026-11-04 · by: portable · issue: 0171
+`$dump.pending(id, name, args)` adds an async host call with the host's own id and a fresh
+promise; the host maps `name` to its function id through `LoadOptions::host_fn` (an
+unknown name refuses), so a dump names calls the way the host knows them (`tools.read`),
+not by build-local ids; the call is marked reported (`new_host_calls` does not return it
+again). The primitives are host calls themselves: while a dump loads their ids come from
+0x8000_0000 up, above every id a dump may name (positive int32s), and afterwards the
+counter is set to `$dump.issued(n)` if given, else to what it was before the load, and
+never at or below an open call's id. `$dump.handle(name, v)` makes a heap handle;
+`Vm::load_dump` returns `Loaded { calls: [OpenCall {id, fn_id, name}], handles: [(name,
+Handle)] }` and the host drops the handles.
