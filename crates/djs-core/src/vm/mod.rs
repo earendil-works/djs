@@ -1073,4 +1073,6 @@ fn fnv64(bytes: &[u8]) -> u64 {
 #[cfg(test)]
 mod frozen_tests;
 #[cfg(test)]
+mod slim_tests;
+#[cfg(test)]
 mod tests;

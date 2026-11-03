@@ -56,6 +56,10 @@ fn canonical_names_resolve_to_their_cells() {
         "%ArrayIteratorPrototype%",
         "%TypedArray%",
     ] {
+        // The slim build has no typed arrays (D2411).
+        if p == "%TypedArray%" && !crate::FULL {
+            continue;
+        }
         assert!(paths.contains(&p), "{p} missing");
     }
 }
@@ -130,7 +134,9 @@ fn parse_rejects_renumbering_and_duplicates() {
 
 /// Every object and symbol of the base realm has a name, except the realm's own state
 /// (the global lexical record, the registries), which no builtin exposes and which is
-/// per VM rather than a builtin.
+/// per VM rather than a builtin. In the slim build (D2411) also the well-known symbols of
+/// the families it leaves out (`Symbol.dispose`, ...): the engine has them, no builtin
+/// exposes them.
 #[test]
 fn unnamed_base_cells_are_realm_state() {
     let vm = vm();
@@ -138,6 +144,9 @@ fn unnamed_base_cells_are_realm_state() {
     let named: BTreeSet<u32> = canonical_names(heap).into_iter().map(|(c, _)| c).collect();
     for c in heap.cells() {
         if !matches!(c.kind, CellKind::Object | CellKind::Symbol) || named.contains(&c.offset) {
+            continue;
+        }
+        if !crate::FULL && c.kind == CellKind::Symbol {
             continue;
         }
         let from: Vec<CellKind> = heap
