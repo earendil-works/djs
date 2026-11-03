@@ -7328,8 +7328,11 @@ min = max within 0.1 except json-replacer):
 pi bench, wasm pages per instance: warm start (`return 1`) 23 → 14, warm tool-heavy
 25 → 24, cold (prelude run each time) 26 → 24; the process's first instance 36 → 30.
 Resident per sandbox ~650 → ~610 KiB (noisy). Module 450,277 → 451,262 B gzip (+985,
-the allocator and the base hand-over). Wasm instructions (n=5): within ±1% except
-json-text +4.4%, json-date +3.9%, indexof +2.6% (spreads 2–4%).
+the allocator and the base hand-over). Wasm instructions within ±1%: a first run with n=5 under load
+showed json-text +4.4%, json-date +3.9%, indexof +2.6% (spreads 2–4%); re-measured on a
+quiet machine, n=9, main before (d09c8c39) and after (47d32099): json-text +0.9%,
+json-date −0.6%, indexof +0.9%, json and loop ±0.0% (spreads ≤0.9%). Noise, not part
+of the trade.
 
 **Accepted trade (coordinator): json-date +0.9 MiB.** JSON.stringify builds a large
 result in a Rust `Vec`, which grows into a page run right behind the arena; copying it
