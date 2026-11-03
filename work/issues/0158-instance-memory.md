@@ -1,6 +1,6 @@
 # 0158: Instance memory: smaller reservation, arena at the end, smaller stack, base outside memory
 
-status: in-progress
+status: done
 agent: heap
 branch: issue/0158-instance-memory
 depends-on: 0128, 0139, 0151 (L4 landed)
@@ -32,6 +32,56 @@ scripts/size/sandbox-memory.ts; no workload's peak worse beyond noise.
     getters, a 300k-deep list through the GC, regexps, sort, async recursion, toString,
     flat): identical results at 256 and 128 KiB.
 
+- Stack: MAX_DEPTH 1000 -> 650 (all constructs reach the limit's SyntaxError at 128 KiB
+  with 10–12% spare, debug and release identical); test262 language/ and the difftest
+  ratchet unchanged. The release module also needed the regexp parser's limit lowered
+  255 -> 201 (243 nested capture groups / 236 lookaheads trapped at 128 KiB in release
+  only; test262 S15.10.2.8_A3_T15 needs 200 groups). D2540.
+- Allocator: a page log (scratch build, work/scratch/0158/allocator-with-log.rs) showed
+  every growing workload moving its arena once at 10 pages, blocked by dlmalloc's first
+  segment or the 2-page segment a collection's side tables need. Variants tried and
+  their numbers are in D2541 (gaps, forced early move, finer growth, dlmalloc release /
+  trim, prime sizes, no medium runs). Taken: dlmalloc primed with 2 pages, 16–256 KiB
+  blocks as page runs when dlmalloc would have to grow, room behind the top block for a
+  growing buffer, lean start capacity (image + 1 page; the size hint keeps the old
+  capacity so pi's cold start stays at 24 pages).
+- Coded base: custom section `djs_base`; with `#[used]` or `include_bytes!` the bytes
+  stayed in the data segment too, a `pub` static array without `#[used]` leaves them out.
+  New export `djs_base_coded_ptr`, ABI 2, `provideCodedBase` in js/src/snapshot.ts; raw
+  hosts updated (abidrive.mjs, js/bench/wasm.bench.ts, sandbox.bench.ts).
+- Coordinator accepted json-date 4.3 -> 5.2 MiB as a trade (D2541).
+- Guide pages updated: arena.md (starts small, kept at the end), gc.md (what blocks the
+  arena, trade-off), host.md (coded base as a custom section, 11 pages); docs/host.md
+  export table, docs/compiler.md 2.4.
+- Shared files touched with the coordinator's OK: djs-core vm/mod.rs (two call sites,
+  `Heap::start_capacity`), heap/mod.rs, compiler/parser.rs, compiler/tests.rs,
+  regexp/parser.rs (MAX_DEPTH only).
+
 ## Follow-ups
+- JSON.stringify holds its whole result in a Rust `Vec` while the arena grows to copy it
+  in (json-date +0.9 MiB, D2541): write large results straight into a heap string.
+- `djs-wasm` test `base_equals_a_compiled_realm` (`--features compiled-prelude`, not in
+  the gate) fails on main too: the base's bytes differ from a realm compiled natively in
+  the test process.
+- A stack overflow in wasm (deeper than the parser limits allow, e.g. a future recursive
+  path) surfaces as a raw `RuntimeError: memory access out of bounds`, not a
+  SandboxError "trap": hosts could map it.
+- The page log used for this issue could become a cargo feature of djs-wasm for future
+  memory work (kept out to stay small).
 
 ## Result
+- Fresh Sandbox 18 -> 11 wasm pages (704 KiB): 128 KiB stack (D2540), dlmalloc's 2
+  pages below a base-plus-one-page arena, coded base out of linear memory (D2541).
+- Peak memory (mem-perturb n=24, mean MiB, main -> branch): small runs 1.10 -> 0.70,
+  pi-like 2.40 -> 1.60, push-pop 2.00 -> 1.19, foreach/forof 4.70 -> 3.80, json-indent
+  5.40 -> 4.70, json-replacer 5.34 -> 4.66, json 6.20 -> 5.80, jsonh 5.80 -> 5.40,
+  arrays 13.7 -> 13.1, higher-order 14.9 -> 14.3, strbuild 15.8 -> 15.3, strings 12.2 ->
+  12.0, props/json-text 1.3 -> 1.2; json-date 4.3 -> 5.2 (accepted trade).
+- pi bench pages per instance: warm start 23 -> 14, warm tool-heavy 25 -> 24, cold 26 ->
+  24. Resident per sandbox ~650 -> ~610 KiB.
+- Module +985 B gzip (451,262; ceiling 455,600). Instructions within ±1% except
+  json-text +4.4%, json-date +3.9%, indexof +2.6% (spreads 2–4%).
+- Hosts must hand over the `djs_base` section (`provideCodedBase`, or `provideBase` /
+  `baseReference` which call it); ABI version 2.
+- Nesting limits: ~215 nested parentheses/arrays/objects, ~70 classes, 645 blocks; 200
+  nested regexp groups.
