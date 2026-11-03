@@ -68,4 +68,25 @@ Dumps are the persistence format (D2560); before images are retired (0177):
   out of a for await over an async generator whose finally awaits refused before.
   Goldens finally (15 dumps) and for-await-close (3); both in delegation_round_trips.
 
+- using (D2628): `using.record` under the statements; the await-using disposal's site
+  `using.record finally.value finally.return using.record`; `$dump.using(resources,
+  state)` written once per Record (exporter marks the node from the role). Golden using
+  (11 dumps).
+- Destructuring (D2628): `pattern.source/excluded/key/next/iterator`, targets' assignment
+  roles, `assign.value` for an assignment pattern expression. Corpus pins: no unsupported
+  site left (summary.txt). Golden destructuring (10).
+- for-in (D2628): `$dump.forIn(o, keys left)` in `loops` (`{kind: "for-in", iterator}`);
+  `given()` now only takes 1-slot Records (cells must be BoxCells). Proxy for-in refused.
+  Golden for-in (8).
+- RegExp String Iterators (`$dump.regexpIterator`) and iterator helpers
+  (`$dump.iteratorHelper(slots)`). Golden iterator-helpers (10). Found and fixed: an array
+  with named properties held once by a frame was written inline with location-less
+  patches (`simple()` let arrays with named keys through).
+- Kept refused: sites inside a class definition (class built from text), closing a
+  for-await iterator on a resumed generator's `return(v)` path. Docs:
+  continuation-dumps.md (primitives table, statements in flight, still refused),
+  functions-as-code.md refusal table. Guide: not affected (no page covers dumps' roles).
+- Note: `cargo clippy -p djs-core --no-default-features --features dump` fails on main
+  too (`base64` unused in slim); not in the gate.
+
 ## Result
