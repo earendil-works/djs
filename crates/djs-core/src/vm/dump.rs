@@ -241,6 +241,8 @@ struct Node {
     fl: usize,
     /// A box an activation's frame holds: its scope group's factory hands out its cell.
     frame_box: bool,
+    /// The resource Record of `using` declarations a frame holds (`using.record`).
+    using_record: bool,
 }
 
 /// Where a class member sits: `C.m`, `C.prototype.m`, an accessor's function, the
@@ -1042,6 +1044,7 @@ impl<'a> Dumper<'a> {
             privates: Vec::new(),
             fl: NO_FLIGHT,
             frame_box: false,
+            using_record: false,
         });
         Some(n)
     }

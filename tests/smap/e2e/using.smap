@@ -1,7 +1,7 @@
 function g @1493..1564
   loc0 <state>, loc1 a@0
-  yield#1 @46 (68:5) pc 32: unsupported using
-  yield#2 @59 (69:5) pc 46: unsupported using
+  yield#1 @46 (68:5) pc 32: using.record
+  yield#2 @59 (69:5) pc 46: using.record
 function at @3109..3478
   arg0 name@0, arg1 f@0
   loc0 <state>, loc1 ticking@0, loc2 ticks@0, loc3 r@0
@@ -22,31 +22,31 @@ function <anonymous> @3480..5137
   await#9 @1412 (230:3) pc 182: -
 function <anonymous> @3514..3665
   loc0 <state>, loc1 a@0, loc2 b@0, loc3 c@0, loc4 n@0
-  await-using#1 @151 (183:4) pc 149: unsupported using
+  await-using#1 @151 (183:4) pc 149: using.record finally.value finally.return using.record
 function <anonymous> @3689..3840
   loc0 <state>, loc1 a@0, loc2 b@0, loc3 c@0
-  await-using#1 @151 (189:4) pc 127: unsupported using
+  await-using#1 @151 (189:4) pc 127: using.record finally.value finally.return using.record
 function <anonymous> @3867..3982
   loc0 <state>, loc1 n@26, loc2 u@26
-  await-using#1 @91 (194:6) pc 89: unsupported using
+  await-using#1 @91 (194:6) pc 89: using.record finally.value finally.return using.record
 function <anonymous> @4014..4098
   loc0 <state>, loc1 s@0, loc2 n@0
-  await-using#1 @84 (201:4) pc 91: unsupported using
+  await-using#1 @84 (201:4) pc 91: using.record finally.value finally.return using.record
 function <anonymous> @4129..4231
   loc0 <state>, loc1 n@26
-  await-using#1 @98 (206:6) pc 84: unsupported using
+  await-using#1 @98 (206:6) pc 84: using.record finally.value finally.return using.record
 function <anonymous> @4258..4501
   loc0 <state>, loc1 x@35, loc2 y@110, loc3 h@167
-  await-using#1 @88 (209:75) pc 136: unsupported using (out: loc2 loc3)
+  await-using#1 @88 (209:75) pc 136: for-of.iterator for-of.next using.record finally.value finally.return using.record (out: loc2 loc3)
   for-await.close#1 @93 (210:5) pc 211: exception (out: loc1 loc3)
   for-await.next#1 @93 (210:5) pc 292: for-await.iterator for-await.next (out: loc1 loc3)
-  await-using#2 @219 (211:74) pc 413: unsupported using (out: loc1 loc2)
+  await-using#2 @219 (211:74) pc 413: using.record finally.value finally.return using.record (out: loc1 loc2)
 function <anonymous> @4527..4709
   loc0 <state>, loc1 x@0
-  await-using#1 @182 (221:4) pc 83: unsupported using
+  await-using#1 @182 (221:4) pc 83: using.record finally.value finally.return using.record
 function <anonymous> @4738..4887
   loc0 <state>, loc1 x@0
-  await-using#1 @149 (229:4) pc 101: unsupported using
+  await-using#1 @149 (229:4) pc 101: using.record finally.value finally.return using.record
 function <anonymous> @4920..5133
   loc0 <state>, loc1 g@0, loc2 v@131
   for-await.close#1 @114 (236:5) pc 37: exception
@@ -54,10 +54,10 @@ function <anonymous> @4920..5133
   for-await.close#2 @114 (236:5) pc 107: -
 function g @4938..5029
   loc0 <state>, loc1 a@0
-  yield.await#1 @62 (233:7) pc 32: unsupported using
-  yield#1 @62 (233:7) pc 35: unsupported using
-  yield.return#1 @62 (233:7) pc 40: unsupported using
-  yield.await#2 @77 (234:7) pc 52: unsupported using
-  yield#2 @77 (234:7) pc 55: unsupported using
-  yield.return#2 @77 (234:7) pc 60: unsupported using
-  await-using#1 @91 (235:6) pc 111: unsupported using
+  yield.await#1 @62 (233:7) pc 32: using.record
+  yield#1 @62 (233:7) pc 35: using.record
+  yield.return#1 @62 (233:7) pc 40: using.record
+  yield.await#2 @77 (234:7) pc 52: using.record
+  yield#2 @77 (234:7) pc 55: using.record
+  yield.return#2 @77 (234:7) pc 60: using.record
+  await-using#1 @91 (235:6) pc 111: using.record finally.value finally.return using.record

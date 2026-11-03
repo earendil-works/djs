@@ -408,6 +408,15 @@ fn resume_refuses_what_the_map_does_not_have() {
             "(() => { let x, y; $dump.cell(() => [x, y]); })();",
             "capture exactly one variable",
         ),
+        ("$dump.using({});", "the resources are not an array"),
+        (
+            "$dump.using([1, 2, 7]);",
+            "not [value, method, kind] triples",
+        ),
+        ("$dump.using([], { next: 1 });", "a bad next"),
+        ("$dump.using([], { hasError: 1 });", "a bad hasError"),
+        ("$dump.using([], { other: 1 });", "unknown key other"),
+        ("$dump.using([1, 2, 0], { next: 0, hasError: false });", ""),
         ("$dump.pending(1, 'later', []);", "call 1 is open already"),
         (
             "$dump.pending(2, 'tools.read', []);",
@@ -1343,7 +1352,7 @@ fn dumps_carry_the_random_state_and_iterators_again() {
 /// The new golden programs' every idle point, dumped once and dumped in a chain.
 #[test]
 fn delegation_round_trips() {
-    for name in ["yield-star", "for-await-close", "finally"] {
+    for name in ["yield-star", "for-await-close", "finally", "using"] {
         let src =
             std::fs::read_to_string(golden_dir().join(alloc::format!("{name}.src.js"))).unwrap();
         let (want, marks) = run_program(&src);

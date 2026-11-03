@@ -26,6 +26,7 @@ use super::*;
 use crate::compiler::{CompileOptions, FunctionMap, Loop, Role, Site, SiteKind, Slot};
 use crate::heap::cells::{HostCall, Script};
 use crate::interp::run::{builtin_closure_kind, promise, suspend};
+use crate::vm::dump_prims::{USING_FIELDS, USING_SLOTS};
 
 /// Builtin closure kinds (`NewBuiltinClosure`, interp/run/intrinsics.rs).
 const RESOLVE: usize = 0;
@@ -392,9 +393,26 @@ impl Dumper<'_> {
                     // The dump's own iterator brings its `next`.
                     continue;
                 }
-                self.edge(n, v, || {
+                let e = self.edge(n, v, || {
                     cat!(path, "<", super::super::dump_resume::role_name(*role), ">")
                 });
+                if *role == Role::UsingRecord
+                    && let Some(e) = e
+                {
+                    let ok = v.as_object().is_some_and(|o| {
+                        h.object_class(o) == ObjectClass::Record
+                            && h.get_prototype_of(o).is_none()
+                            && h.object_slot_count(o) == USING_SLOTS
+                    });
+                    if ok {
+                        self.nodes[e].using_record = true;
+                    } else {
+                        self.refuse(
+                            path.clone(),
+                            "a using declaration's record of another shape",
+                        );
+                    }
+                }
             }
             if s.kind == suspend::ASYNC {
                 self.edge(n, s.promise, || cat!(path, "<promise>"));
@@ -868,6 +886,7 @@ impl Dumper<'_> {
             ObjectClass::ArrayIterator => self.iterator_expr(n, o),
             ObjectClass::CollectionIterator => self.collection_iterator_expr(n, o),
             ObjectClass::Record if self.is_from_sync(o) => self.async_from_sync_expr(n, o),
+            ObjectClass::Record if self.nodes[n].using_record => self.using_expr(n, o),
             _ => {
                 let p = self.nodes[n].path.clone();
                 self.refuse(p, "internal: a promise builtin's record as a value");
@@ -905,6 +924,46 @@ impl Dumper<'_> {
             cat!(name, " = $dump.fromSync(", it, ", ", next, ");"),
             before,
         );
+        self.nodes[n].loc = name.clone();
+        self.nodes[n].state = State::Done;
+        name
+    }
+
+    /// The resource Record of `using` declarations: `$dump.using(resources, state)`, the
+    /// state's slots by name where they hold something.
+    fn using_expr(&mut self, n: usize, o: Obj) -> String {
+        if self.nodes[n].state == State::Done {
+            return self.nodes[n].loc.clone();
+        }
+        if self.nodes[n].state == State::Busy {
+            return String::new();
+        }
+        self.nodes[n].state = State::Busy;
+        let h = self.h;
+        let before = self.fns_read.get();
+        let res = self.expr(h.object_slot(o, 2), None, None);
+        let mut fields = Vec::new();
+        let mut cycle = res.is_empty();
+        for (k, slot) in USING_FIELDS {
+            let v = h.object_slot(o, slot);
+            if v.is_undefined() {
+                continue;
+            }
+            let e = self.expr(v, None, None);
+            cycle |= e.is_empty();
+            fields.push_out(cat!(k, ": ", e));
+        }
+        if cycle {
+            let p = self.nodes[n].path.clone();
+            self.refuse(p, "a using declaration's record on a reference cycle");
+        }
+        let name = self.fresh("u");
+        let state = if fields.is_empty() {
+            String::new()
+        } else {
+            cat!(", { ", join(&fields, ", "), " }")
+        };
+        self.line(cat!(name, " = $dump.using(", res, state, ");"), before);
         self.nodes[n].loc = name.clone();
         self.nodes[n].state = State::Done;
         name

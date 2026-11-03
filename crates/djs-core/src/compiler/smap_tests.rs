@@ -221,15 +221,29 @@ const STATEMENTS: &[(&str, &[&str])] = &[
     ),
 ];
 
+/// `using` keeps its resource Record below the statements; the disposal is a subroutine.
+const USING: &[(&str, &[&str])] = &[
+    (
+        "{ await using r = open(); await r.x; }",
+        &[
+            "await#1 using.record",
+            "await-using#1 using.record finally.value finally.return using.record",
+        ],
+    ),
+    (
+        "for (await using r of rs) { f(await r); }",
+        &[
+            "await#1 for-of.iterator for-of.next using.record call.callee call.this",
+            "await-using#1 for-of.iterator for-of.next using.record finally.value finally.return using.record",
+        ],
+    ),
+];
+
 /// Constructs whose operands are not described yet: never mislabeled.
 const UNSUPPORTED: &[(&str, &[&str])] = &[
     ("const { a = await b } = o;", &["await#1 !destructuring"]),
     ("const [x] = await y;", &["await#1 -"]),
     ("class C { [await k]() {} }", &["await#1 !class"]),
-    (
-        "{ await using r = open(); await r.x; }",
-        &["await#1 !using", "await-using#1 !using"],
-    ),
 ];
 
 fn check(table: &[(&str, &[&str])]) {
@@ -256,6 +270,11 @@ fn loop_records() {
 #[test]
 fn statements() {
     check(STATEMENTS);
+}
+
+#[test]
+fn using_records() {
+    check(USING);
 }
 
 #[test]

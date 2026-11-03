@@ -91,6 +91,9 @@ pub enum Role {
     /// and for-await, its `next` method.
     LoopIterator(Loop),
     LoopNext(Loop),
+    /// A statement list's `using` declarations: the resource Record its disposal reads,
+    /// below its statements.
+    UsingRecord,
     /// `switch (d) { case t: … }`: the discriminant, twice (kept and compared) while a
     /// case test is evaluated.
     SwitchDiscriminant,
@@ -105,7 +108,7 @@ pub enum Role {
     /// (recorder order), which is not part of the role's name.
     FinallyValue,
     FinallyReturn(u16),
-    /// Values of a construct that is not described yet (`using`, destructuring, class
+    /// Values of a construct that is not described yet (destructuring, class
     /// definitions): the site is unsupported.
     Unsupported(&'static str),
 }
@@ -140,6 +143,7 @@ impl fmt::Display for Role {
             Role::LoopIterator(l) => write!(f, "{}.iterator", l.name()),
             Role::LoopNext(l) => write!(f, "{}.next", l.name()),
             Role::SwitchDiscriminant => f.write_str("switch.discriminant"),
+            Role::UsingRecord => f.write_str("using.record"),
             Role::Exception => f.write_str("exception"),
             Role::FinallyValue => f.write_str("finally.value"),
             Role::FinallyReturn(_) => f.write_str("finally.return"),
@@ -187,6 +191,7 @@ impl Role {
             Role::LoopNext(Loop::Await) => ("for-await.next", None),
             Role::LoopNext(Loop::Star) => ("yield*.next", None),
             Role::SwitchDiscriminant => ("switch.discriminant", None),
+            Role::UsingRecord => ("using.record", None),
             Role::Exception => ("exception", None),
             Role::FinallyValue => ("finally.value", None),
             Role::FinallyReturn(_) => ("finally.return", None),

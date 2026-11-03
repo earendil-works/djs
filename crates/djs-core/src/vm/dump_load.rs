@@ -128,6 +128,7 @@ const BYTES: u32 = PRIVATE + 13;
 const FN: u32 = PRIVATE + 14;
 const KEEP: u32 = PRIVATE + 15;
 const RANDOM: u32 = PRIVATE + 16;
+const USING: u32 = PRIVATE + 17;
 /// The ids of the primitives' own calls while a dump loads: above every id a dump's open
 /// call may have, so the two never meet.
 const LOADER_CALL_IDS: u32 = 0x8000_0000;
@@ -149,6 +150,7 @@ const PRIMITIVES: &[(&str, u32)] = &[
     ("fn", FN),
     ("keep", KEEP),
     ("random", RANDOM),
+    ("using", USING),
 ];
 
 /// How a dump is compiled: a Script, TypeScript when its header says so
@@ -395,6 +397,7 @@ impl Vm {
                         FN => self.primitive_fn(&args),
                         KEEP => self.primitive_keep(&args),
                         RANDOM => self.primitive_random(&args),
+                        USING => self.primitive_using(&args),
                         // (A positive int32: below LOADER_CALL_IDS.)
                         ISSUED => match args.first().and_then(|v| v.as_int()) {
                             Some(n) if n > 0 => {

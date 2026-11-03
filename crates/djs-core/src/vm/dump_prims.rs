@@ -14,6 +14,7 @@
 //! | `fn(o)` | the method, getter or setter of a one-member object literal |
 //! | `keep(o, keys)` | deletes the own properties a class's evaluation made that it no longer has |
 //! | `random(lo, hi)` | sets `Math.random`'s state (the hash key stays the VM's, D2624) |
+//! | `using(resources, state)` | the resource Record of a statement list's `using` declarations |
 //!
 //! Stepping an iterator here runs no user code (no `length` getter, no element getter):
 //! the original run did that already.
@@ -22,7 +23,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use super::Vm;
-use super::dump_load::array_arg;
+use super::dump_load::{array_arg, entries_arg};
 use crate::heap::{Atom, ObjectClass, Property, atoms};
 use crate::interp::realm::{Intrinsic, intrinsic_obj};
 use crate::interp::run::{new_builtin_closure, promise};
@@ -32,6 +33,21 @@ use crate::value::Value;
 const STRING_KIND: i32 = 3;
 /// `AsyncFromSyncIteratorCloseThrow`'s index among the builtin closures.
 const FROM_SYNC_CLOSE: usize = 14;
+
+/// The resource Record of `using` declarations (builtins/disposable.ts `UsingCreate`):
+/// its slot count, and the slots `$dump.using` names in its state (slot 2 is the
+/// resources, an Array of `[value, method, kind]` triples).
+pub(super) const USING_SLOTS: u32 = 11;
+pub(super) const USING_FIELDS: [(&str, u32); 8] = [
+    ("error", 3),
+    ("hasError", 4),
+    ("needsAwait", 5),
+    ("hasAwaited", 6),
+    ("next", 7),
+    ("value", 8),
+    ("pending", 9),
+    ("hasPending", 10),
+];
 
 fn oom(e: crate::heap::HeapError) -> String {
     String::from(e.as_str())
@@ -165,6 +181,51 @@ impl Vm {
             .map_err(oom)?
             .ok_or("$dump.closeThrow: internal")?;
         Ok(Value::object(f))
+    }
+
+    /// `$dump.using(resources, state)`: a `using` resource Record. The disposal code
+    /// trusts its shape, so it is checked: triples with kinds 0-4, booleans, an index.
+    pub(super) fn primitive_using(&mut self, args: &[Value]) -> Result<Value, String> {
+        let what = "$dump.using";
+        let res = args.first().copied().unwrap_or(Value::UNDEFINED);
+        let a = res
+            .as_object()
+            .filter(|&o| self.heap.object_class(o) == ObjectClass::Array)
+            .ok_or("$dump.using: the resources are not an array")?;
+        let items = array_arg(&self.heap, res, what)?;
+        let kind_ok = |v: &Value| v.as_int().is_some_and(|k| (0..=4).contains(&k));
+        if items.len() % 3 != 0 || !items.chunks(3).all(|t| kind_ok(&t[2])) {
+            return Err("$dump.using: the resources are not [value, method, kind] triples".into());
+        }
+        let r = self
+            .heap
+            .alloc_object(ObjectClass::Record, None, USING_SLOTS)
+            .map_err(oom)?;
+        for i in 0..USING_SLOTS {
+            self.heap.set_object_slot(r, i, Value::UNDEFINED);
+        }
+        self.heap.set_object_slot(r, 2, Value::object(a));
+        let state = args.get(1).copied().unwrap_or(Value::UNDEFINED);
+        for (k, v) in entries_arg(&self.heap, state, what)? {
+            let slot = USING_FIELDS
+                .iter()
+                .find(|f| f.0 == k)
+                .map(|f| f.1)
+                .ok_or_else(|| cat!("$dump.using: unknown key ", k))?;
+            let ok = match slot {
+                4 | 5 | 6 | 10 => v.as_bool().is_some(),
+                // The next triple's index, -3 past the first.
+                7 => v
+                    .as_int()
+                    .is_some_and(|i| i >= -3 && i % 3 == 0 && i64::from(i) < items.len() as i64),
+                _ => true,
+            };
+            if !ok {
+                return Err(cat!("$dump.using: a bad ", k));
+            }
+            self.heap.set_object_slot(r, slot, v);
+        }
+        Ok(Value::object(r))
     }
 
     /// A resolving function whose resolution is claimed already: calling it does
