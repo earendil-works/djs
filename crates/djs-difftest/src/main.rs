@@ -34,6 +34,8 @@ options:
   --backend B         djs only: run the @native builtins as `native` code (default)
                       or as `bytecode` (both must behave the same, 0063)
   --clusters          group the failures by the first line of what went wrong
+  --idle-points       djs only: list the idle points (tool results delivered by
+                      `host.later`, D2590) per case; the total is always printed
   --qjs PATH          qjs binary (default: $DJS_QJS, else ~/Development/dquickts/qjs)
   --update            rewrite .expected files from qjs (never from djs)
   --ratchet           compare failures with tests/corpus/expected-failures.txt;
@@ -71,6 +73,7 @@ struct Args {
     determinism: bool,
     bytecode_builtins: bool,
     clusters: bool,
+    idle_points: bool,
 }
 
 fn workspace_root() -> PathBuf {
@@ -111,6 +114,7 @@ fn parse_args() -> Result<Args, String> {
         determinism: false,
         bytecode_builtins: false,
         clusters: false,
+        idle_points: false,
     };
     let mut it = std::env::args().skip(1);
     while let Some(a) = it.next() {
@@ -171,6 +175,7 @@ fn parse_args() -> Result<Args, String> {
                 other => return Err(format!("--backend: native or bytecode, not `{other}`")),
             },
             "--clusters" => args.clusters = true,
+            "--idle-points" => args.idle_points = true,
             "-q" | "--quiet" => args.quiet = true,
             // `run` is accepted for symmetry with djs-test262.
             "run" if args.filters.is_empty() => {}
@@ -195,6 +200,42 @@ fn parse_args() -> Result<Args, String> {
         return Err("--update records the oracle; it only works with --engine qjs".into());
     }
     Ok(args)
+}
+
+/// The idle points (D2590): a total line per area, and with `list` one line per case
+/// that has any. Empty for engines without idle points.
+fn idle_report(cases: &[Case], outcomes: &[Outcome], list: bool) -> String {
+    let mut areas: BTreeMap<&str, (u32, usize, usize)> = BTreeMap::new();
+    let mut lines = String::new();
+    for (c, o) in cases.iter().zip(outcomes) {
+        let Some(n) = o.idle_points else { continue };
+        let e = areas.entry(c.area()).or_default();
+        e.0 += n;
+        e.1 += 1;
+        if n > 0 {
+            e.2 += 1;
+            if list {
+                lines += &format!("  {n:>5}  {}\n", c.name);
+            }
+        }
+    }
+    if areas.is_empty() {
+        return String::new();
+    }
+    let (total, with) = areas
+        .values()
+        .fold((0, 0), |(t, w), &(n, _, k)| (t + n, w + k));
+    let per_area: Vec<String> = areas
+        .iter()
+        .filter(|(_, (n, _, _))| *n > 0)
+        .map(|(a, (n, _, k))| format!("{a} {n} in {k}"))
+        .collect();
+    let mut s = format!(
+        "\nidle points: {total} in {with} cases ({})\n",
+        per_area.join(", ")
+    );
+    s += &lines;
+    s
 }
 
 fn main() -> ExitCode {
@@ -277,6 +318,7 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         elapsed.as_secs_f64()
     );
     print!("{}", summary(&cases, &outcomes));
+    print!("{}", idle_report(&cases, &outcomes, args.idle_points));
 
     let failures: Vec<(&Case, &str, &str)> = cases
         .iter()

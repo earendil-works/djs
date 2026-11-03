@@ -36,7 +36,14 @@ for (const name of ["print", "scriptArgs", "__loadScript", "execArgv", "argv0", 
 }
 
 let done = false;
+const promiseResolve = Promise.resolve.bind(Promise);
+const promiseReject = Promise.reject.bind(Promise);
 const host = {
+  // djs settles this at the next idle point (an async host call, 0173, D2590); here the
+  // job queue is all there is.
+  later(value, rejected) {
+    return rejected ? promiseReject(value) : promiseResolve(value);
+  },
   output(text) {
     line("\x01OUT " + stringify(text));
   },

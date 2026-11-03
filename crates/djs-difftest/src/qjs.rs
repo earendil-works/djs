@@ -42,6 +42,7 @@ impl Engine for Qjs {
             output: Vec::new(),
             done: Done::Crash(msg),
             image: None,
+            idle_points: None,
         };
         let mut cmd = Command::new(&self.binary);
         // Local time is UTC on both engines (djs has no host offset here, D1383).
@@ -144,6 +145,7 @@ fn parse_output(
         output,
         done,
         image: None,
+        idle_points: None,
     }
 }
 

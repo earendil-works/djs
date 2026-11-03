@@ -1,7 +1,9 @@
 //! The `djs` engine: djs in-process, a fresh `Vm` per case, running the shared prelude
 //! (tests/corpus/prelude.js) exactly as the qjs engine does (D1100, D1440): the prelude
 //! is evaluated as a strict Script, its setup function gets a `host` object whose
-//! `output` and `done` are the only host functions, and the case, compiled as the body
+//! `output` and `done` are the only sync host functions and `later` the only async one
+//! (D2590: every `later(value, rejected)` call stays pending until the run is idle, then
+//! the oldest is settled with its value, one per idle point), and the case, compiled as the body
 //! of the arrow `async (tools, console) => {...}` in a Script (D008), goes through
 //! `api.run`. Once nothing is
 //! left to run and the case has not finished, `api.stalled()` reports it, as the qjs
@@ -33,6 +35,7 @@ const STRESS_SLICE: u64 = 20_000;
 /// The host functions of the prelude's `host` object.
 const OUTPUT: u32 = 0;
 const DONE: u32 = 1;
+const LATER: u32 = 2;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Djs {
@@ -75,6 +78,7 @@ impl Engine for Djs {
                     output: Vec::new(),
                     done: Done::Crash(msg),
                     image: None,
+                    idle_points: None,
                 };
             }
         };
@@ -97,6 +101,7 @@ impl Engine for Djs {
             output: s.output,
             done,
             image,
+            idle_points: Some(s.idle_points),
         }
     }
 }
@@ -133,6 +138,8 @@ struct Session {
     /// What the prelude reported through `host.output` and `host.done`.
     output: Vec<String>,
     done: Option<Done>,
+    /// The idle points the case passed: `host.later` calls delivered.
+    idle_points: u32,
     /// Fuel per `run`, the budget and what was used of it, the wall-clock start.
     slice: u64,
     budget: u64,
@@ -174,6 +181,7 @@ impl Djs {
             vm,
             output: Vec::new(),
             done: None,
+            idle_points: 0,
             slice: self.suspend_every.unwrap_or(plain_slice).min(budget.max(1)),
             budget,
             used: 0,
@@ -198,11 +206,13 @@ impl Session {
         let global = Value::object(self.vm.global());
         let setup = self.call(prelude, global, &[], "the prelude")?;
         let host = self.vm.new_object().map_err(|e| format!("{e:?}"))?;
-        for (id, name) in [(OUTPUT, "output"), (DONE, "done")] {
-            let f = self
-                .vm
-                .new_host_function(id, name)
-                .map_err(|e| format!("{e:?}"))?;
+        for (id, name) in [(OUTPUT, "output"), (DONE, "done"), (LATER, "later")] {
+            let f = if id == LATER {
+                self.vm.new_async_host_function(id, name)
+            } else {
+                self.vm.new_host_function(id, name)
+            }
+            .map_err(|e| format!("{e:?}"))?;
             self.vm
                 .define(host, name, f)
                 .map_err(|e| format!("{e:?}"))?;
@@ -284,8 +294,25 @@ impl Session {
                     return Err(Stop::Crash(format!("{what}: out of host memory")));
                 }
                 Status::Idle => {
-                    // The prelude makes no async host calls.
-                    return Err(Stop::Crash(format!("{what}: idle with pending host calls")));
+                    // An idle point: no job, no frame, only `host.later` calls pending.
+                    // The oldest gets its argument back (D2590).
+                    let pending = self.vm.pending_host_calls();
+                    let &call_id = pending
+                        .first()
+                        .ok_or_else(|| format!("{what}: idle with nothing pending"))?;
+                    let info = self.vm.host_call(call_id).ok_or("host call vanished")?;
+                    if info.fn_id != LATER {
+                        return Err(Stop::Crash(format!(
+                            "{what}: async host call to function {}",
+                            info.fn_id
+                        )));
+                    }
+                    let v = info.args.first().copied().unwrap_or(Value::UNDEFINED);
+                    let rejected = info.args.get(1) == Some(&Value::TRUE);
+                    self.idle_points += 1;
+                    self.vm
+                        .resolve_host_call(call_id, if rejected { Err(v) } else { Ok(v) })
+                        .map_err(|e| format!("resolve_host_call: {e:?}"))?;
                 }
                 Status::OutOfFuel => {
                     self.used = self.used.saturating_add(self.slice);

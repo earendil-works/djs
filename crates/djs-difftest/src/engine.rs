@@ -50,6 +50,9 @@ pub struct RunResult {
     /// djs with `--determinism`: hashes of the final heap image, as left and after a
     /// collection (D1720, D1725).
     pub image: Option<(u64, u64)>,
+    /// djs: the idle points the run passed, i.e. the `host.later` calls it delivered
+    /// (D2590). None for engines without them.
+    pub idle_points: Option<u32>,
 }
 
 pub trait Engine: Sync {
@@ -158,18 +161,21 @@ mod tests {
             ],
             done: Done::Return("{\"v\":1}".into()),
             image: None,
+            idle_points: None,
         };
         assert_eq!(transcript(&r, None), "a\nError: x\n=== return\n{\"v\":1}\n");
         let r = RunResult {
             output: vec![],
             done: Done::Throw("TypeError: no\n    at <eval>".into()),
             image: None,
+            idle_points: None,
         };
         assert_eq!(transcript(&r, None), "=== throw\nTypeError: no\n");
         let r = RunResult {
             output: vec!["".into()],
             done: Done::Completed,
             image: None,
+            idle_points: None,
         };
         assert_eq!(transcript(&r, None), "\n=== completed\n");
     }

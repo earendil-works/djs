@@ -6,13 +6,22 @@
 // and docs/decisions.md (D1100).
 //
 // Left out on purpose: pi's lockdown (freezing every built-in) and the Proxy that guards
-// `tools`; `image()`; store size limits. The fake `tools` resolve through promise jobs only,
-// so a script that awaits anything else can never settle (reported like pi does).
+// `tools`; `image()`; store size limits. The fake `tools` answer through `host.later`, so a
+// script that awaits anything else can never settle (reported like pi does).
 //
 // The prelude evaluates to `(host) => api`. The engine glue passes
 //   host.output(text)        one output item (console.* or text())
 //   host.done(kind, text)    kind: "completed" (no value), "return" (the value as the
 //                            model sees it) or "throw" (the error text); called once
+//   host.later(value, rejected)
+//                            a promise of `value` (rejected with it if `rejected`): in djs
+//                            an async host call that the runner settles at the next idle
+//                            point, one per idle point in call order, so every tool call
+//                            is an idle point like a real tool's (0173, D2590); under qjs
+//                            `Promise.resolve(value)` or `Promise.reject(value)`. A host
+//                            without it gets those too.
+// The global `later` (not enumerable) is host.later, for cases that bring their own fake
+// tools (the harvested ones).
 // and calls api.run(fn) with the compiled case (`async (tools, console) => {...}`), and
 // api.stalled()
 // once nothing is left to run.
@@ -29,6 +38,9 @@
   const StringCtor = String;
   const output = host.output;
   const hostDone = host.done;
+  const promiseReject = Promise.reject.bind(Promise);
+  const later =
+    typeof host.later === "function" ? host.later : (value, rejected) => (rejected ? promiseReject(value) : promiseResolve(value));
   // Thrown by exit() to unwind the script after it already reported success.
   const EXIT = Object.freeze({});
   let finished = false;
@@ -129,7 +141,7 @@
       } catch (error) {
         return Promise.reject(error);
       }
-      return promiseThen.call(promiseResolve(json), impl);
+      return promiseThen.call(later(json), impl);
     };
   }
   Object.freeze(tools);
@@ -172,6 +184,7 @@
   ]) {
     Object.defineProperty(globalThis, name, { value, writable: true, enumerable: true, configurable: true });
   }
+  Object.defineProperty(globalThis, "later", { value: later, writable: true, enumerable: false, configurable: true });
 
   return {
     run(fn) {

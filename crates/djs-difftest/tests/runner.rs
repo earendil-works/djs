@@ -127,6 +127,7 @@ impl Engine for Echo {
             output: vec![job.source.trim().to_string()],
             done: Done::Completed,
             image: None,
+            idle_points: None,
         }
     }
 }
@@ -224,6 +225,12 @@ const GLUE_CASES: &[(&str, &str)] = &[
         "console.log({toJSON() { return \"j\"; }}, new Proxy({a: 1}, {}));\ntext({get g() { return 1; }});\nreturn [new Date(0)];",
     ),
     ("stalled.js", "await new Promise(() => {});"),
+    // `later` (D2590): settled at idle points in call order, after every job; a tool
+    // call waiting on another tool's answer. djs only: qjs settles at once (below).
+    (
+        "later.js",
+        "const log = [];\nconst a = later(1).then((v) => log.push(\"a\" + v));\nconst b = later(new Error(\"no\"), true).catch((e) => log.push(e.message));\nawait Promise.resolve().then(() => log.push(\"job\"));\nawait Promise.all([a, b]);\nlog.push(await tools.echo(await tools.echo(2)));\nreturn log;",
+    ),
 ];
 
 fn glue_corpus(name: &str) -> (PathBuf, Vec<case::Case>) {
@@ -258,6 +265,15 @@ fn djs_glue_matches_qjs() {
     );
     assert_eq!(by_name("fail.js").transcript, "=== throw\nError: denied\n");
     assert_eq!(by_name("fuel.js").done, Some(Done::Timeout));
+    // Every `later` call (the tools' too) is one idle point.
+    assert_eq!(by_name("tools.js").idle_points, Some(1));
+    assert_eq!(by_name("fail.js").idle_points, Some(1));
+    assert_eq!(by_name("stalled.js").idle_points, Some(0));
+    assert_eq!(by_name("later.js").idle_points, Some(4));
+    assert_eq!(
+        by_name("later.js").transcript,
+        "=== return\n[\"job\",\"a1\",\"no\",2]\n"
+    );
 
     let qjs = Qjs::default_binary();
     if !qjs.is_file() {
@@ -268,7 +284,10 @@ fn djs_glue_matches_qjs() {
     let mut problems = Vec::new();
     for (i, c) in cases.iter().enumerate() {
         let name = c.name.trim_start_matches("area/");
-        if GLUE_CASES.iter().any(|(n, _)| *n == name)
+        // later.js shows where the engines differ on purpose: under qjs `later` is
+        // Promise.resolve, so its reactions run before a job queued after them.
+        if name != "later.js"
+            && GLUE_CASES.iter().any(|(n, _)| *n == name)
             && qjs_out[i].transcript != djs_out[i].transcript
         {
             problems.push(format!(
@@ -323,6 +342,7 @@ fn djs_stress_variants_agree() {
                 output: vec!["lie".into()],
                 done: Done::Completed,
                 image: None,
+                idle_points: None,
             }
         }
     }
@@ -370,6 +390,7 @@ fn djs_stress_variants_agree() {
                 output: Vec::new(),
                 done: Done::Timeout,
                 image: None,
+                idle_points: None,
             }
         }
     }

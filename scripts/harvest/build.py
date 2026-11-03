@@ -10,6 +10,7 @@ what needs a human look. Tool results are not in the sessions; every case gets s
 results of the recorded calls' kinds.
 
     scripts/harvest/build.py EXTRACT OUTDIR [--count N] [--max-len CHARS]
+    scripts/harvest/build.py --refresh DIR    # rewrite the committed cases' fakes (0173)
 
 Nothing from the sessions is printed. Review every case before committing it.
 """
@@ -430,16 +431,21 @@ def synthetic_result(call, rng):
 CASE_TEMPLATE = """\
 // Harvested pi codemode script (0118, D2280), redacted (see REDACTION.md). Tool results
 // are synthetic: the sessions do not record them. Each fake tool answers the calls in
-// the order the script made them, like the recorded run; a failed call rejects.
+// the order the script made them, like the recorded run; a failed call rejects. Every
+// answer comes through the prelude's `later` (0173, D2590): in djs a host call that is
+// answered at the next idle point, like a real tool's; under qjs Promise.resolve/reject.
 const results = {results};
 const fake = Object.create(null);
 for (const name of Object.keys(results)) {{
   const queue = results[name];
-  fake[name] = async (args) => {{
-    JSON.stringify(args);
+  fake[name] = (args) => {{
+    try {{
+      JSON.stringify(args);
+    }} catch (error) {{
+      return later(error, true);
+    }}
     const r = queue.length > 0 ? queue.shift() : {{ ok: true, value: "" }};
-    if (!r.ok) throw new Error(r.value);
-    return r.value;
+    return r.ok ? later(r.value) : later(new Error(r.value), true);
   }};
 }}
 {extra}return await (async (tools{params}) => {{
@@ -450,36 +456,50 @@ for (const name of Object.keys(results)) {{
 # The fakes of pi's codemode globals (0121, D2283): `models` answers from the arguments the
 # script passes (the questions it asks), `image` shows a placeholder, `load` returns the
 # script's own stored values first, then synthetic values shaped like the recorded ones.
+# `models` calls are host calls in pi, so they answer through `later` too (D2590).
 MODELS_FAKE = """\
+const answer = (f) => {
+  try {
+    return later(f());
+  } catch (error) {
+    return later(error, true);
+  }
+};
+const modelsOfType = (type, provider) =>
+  [1, 2].map((i) => ({ type, provider: provider ?? "synthetic", id: "model-" + i, name: "Model " + i, api: "synthetic", input: ["text"] }));
 const fakeModels = {
-  async getModelsOfType(type, provider) {
-    return [1, 2].map((i) => ({ type, provider: provider ?? "synthetic", id: "model-" + i, name: "Model " + i, api: "synthetic", input: ["text"] }));
+  getModelsOfType(type, provider) {
+    return answer(() => modelsOfType(type, provider));
   },
-  async getAvailableOfType(type, provider) {
-    return this.getModelsOfType(type, provider);
+  getAvailableOfType(type, provider) {
+    return answer(() => modelsOfType(type, provider));
   },
-  async getModelOfType(type, provider, id) {
-    return { type, provider, id, name: id, api: "synthetic", input: ["text", "image"] };
+  getModelOfType(type, provider, id) {
+    return answer(() => ({ type, provider, id, name: id, api: "synthetic", input: ["text", "image"] }));
   },
-  async classify(model, context) {
-    JSON.stringify(context);
-    const answers = {};
-    for (const [id, q] of Object.entries(context.questions ?? {})) {
-      if (q.type === "choice") {
-        const labels = Object.keys(q.criteria ?? {});
-        const probabilities = Object.fromEntries(labels.map((l, i) => [l, i === 0 ? 0.7 : 0.3 / Math.max(1, labels.length - 1)]));
-        answers[id] = { type: "choice", choice: labels[0], probabilities, confidence: 0.7 };
-      } else if (q.type === "score") {
-        answers[id] = { type: "score", score: Math.min(1, (q.criteria ?? []).length - 1), confidence: 0.6 };
-      } else {
-        answers[id] = { type: "bool", probability: 0.65 };
+  classify(model, context) {
+    return answer(() => {
+      JSON.stringify(context);
+      const answers = {};
+      for (const [id, q] of Object.entries(context.questions ?? {})) {
+        if (q.type === "choice") {
+          const labels = Object.keys(q.criteria ?? {});
+          const probabilities = Object.fromEntries(labels.map((l, i) => [l, i === 0 ? 0.7 : 0.3 / Math.max(1, labels.length - 1)]));
+          answers[id] = { type: "choice", choice: labels[0], probabilities, confidence: 0.7 };
+        } else if (q.type === "score") {
+          answers[id] = { type: "score", score: Math.min(1, (q.criteria ?? []).length - 1), confidence: 0.6 };
+        } else {
+          answers[id] = { type: "bool", probability: 0.65 };
+        }
       }
-    }
-    return { provider: model?.provider, model: model?.id, answers, stopReason: "stop" };
+      return { provider: model?.provider, model: model?.id, answers, stopReason: "stop" };
+    });
   },
-  async generateImages(model, context) {
-    JSON.stringify(context);
-    return { provider: model?.provider, model: model?.id, output: [{ type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" }], stopReason: "stop" };
+  generateImages(model, context) {
+    return answer(() => {
+      JSON.stringify(context);
+      return { provider: model?.provider, model: model?.id, output: [{ type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" }], stopReason: "stop" };
+    });
   },
 };
 """
@@ -495,6 +515,51 @@ const fakeLoad = (key) => {{
   return key in stored ? JSON.parse(JSON.stringify(stored[key])) : undefined;
 }};
 """
+
+
+def render(results, code, models, image, stored):
+    """A case from its parts: the fake tools' answers (JSON text), the redacted script,
+    which fakes of pi's globals it needs and the stored values for `load` (JSON text)."""
+    extra, params, args = "", "", ""
+    if models:
+        extra += MODELS_FAKE
+        params += ", models"
+        args += ", fakeModels"
+    if image:
+        extra += IMAGE_FAKE
+        params += ", image"
+        args += ", fakeImage"
+    if stored is not None:
+        extra += LOAD_FAKE.format(stored=stored)
+        params += ", load"
+        args += ", fakeLoad"
+    return CASE_TEMPLATE.format(results=results, code=code, extra=extra, params=params, args=args)
+
+
+def refresh(directory):
+    """Rewrites the harness of every case in `directory` with this build of the
+    templates, keeping each case's answers, script and stored values (0173): the cases
+    need no new selection or review when only the fakes change."""
+    n = 0
+    for name in sorted(os.listdir(directory)):
+        if not re.fullmatch(r"h\d{3}-.*\.js", name):
+            continue
+        path = os.path.join(directory, name)
+        src = open(path).read()
+        results = src[src.index("const results = ") + len("const results = "):src.index(";\nconst fake = ")]
+        head = re.search(r"^return await \(async \(tools((?:, \w+)*)\) => \{\n", src, re.M)
+        tail = src.rindex("\n})(fake")
+        code = src[head.end():tail]
+        params = head.group(1)
+        stored = None
+        if ", load" in params:
+            stored = src[src.index("const stored = ") + len("const stored = "):src.index(";\nconst realLoad")]
+        body = render(results, code, ", models" in params, ", image" in params, stored)
+        if body != src:
+            with open(path, "w") as f:
+                f.write(body)
+            n += 1
+    print(f"refresh: rewrote {n} cases", file=sys.stderr)
 
 
 def bash_is_structured(run):
@@ -556,6 +621,9 @@ def shape_key(code):
 
 
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == "--refresh":
+        refresh(sys.argv[2])
+        return
     ap = argparse.ArgumentParser()
     ap.add_argument("extract")
     ap.add_argument("outdir")
@@ -668,25 +736,16 @@ def main():
                 t = synth.parse(r["decls"][toident(name)])
                 results[key].append({"ok": True, "value": synth.value(t, rng, red.anon)})
                 shapes.add("structured")
-        extra, params, args = "", "", ""
-        if re.search(r"\bmodels\.", code):
-            extra += MODELS_FAKE
-            params += ", models"
-            args += ", fakeModels"
-        if re.search(r"\bimage\(", code):
-            extra += IMAGE_FAKE
-            params += ", image"
-            args += ", fakeImage"
+        use_models = bool(re.search(r"\bmodels\.", code))
+        use_image = bool(re.search(r"\bimage\(", code))
+        if use_image:
             shapes.add("image")
+        stored = None
         if r.get("loads") and re.search(r"\bload\(", code):
             stored = {literal_key(red, k): synth.like(v, rng, red.anon) for k, v in r["loads"].items()}
-            extra += LOAD_FAKE.format(stored=json.dumps(stored, indent=1))
-            params += ", load"
-            args += ", fakeLoad"
             shapes.add("load")
-        body = CASE_TEMPLATE.format(
-            results=json.dumps(dict(results), indent=1), code=code, extra=extra, params=params, args=args
-        )
+        body = render(json.dumps(dict(results), indent=1), code, use_models, use_image,
+                      None if stored is None else json.dumps(stored, indent=1))
         name = f"{case_id}-{'-'.join(sorted(shapes)) or 'no-tools'}.js"
         with open(os.path.join(opts.outdir, name), "w") as f:
             f.write(body)

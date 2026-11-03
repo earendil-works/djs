@@ -57,6 +57,8 @@ pub struct Outcome {
     pub done: Option<Done>,
     pub elapsed: Duration,
     pub stress: Vec<StressMismatch>,
+    /// djs: the idle points the plain run passed (D2590).
+    pub idle_points: Option<u32>,
 }
 
 pub fn run_one(
@@ -76,6 +78,7 @@ pub fn run_one(
             done: None,
             elapsed: start.elapsed(),
             stress: Vec::new(),
+            idle_points: None,
         };
     }
     // One clock reading per case, shared by the main run and its stress variants.
@@ -131,7 +134,17 @@ pub fn run_one(
             stress_timeout,
         );
         let t = transcript(&r, stacks);
-        if t == actual {
+        if t == actual
+            && let (Some(a), Some(b)) = (result.idle_points, r.idle_points)
+            && a != b
+        {
+            // Suspension and collection must not move a tool result to another idle point.
+            stress.push(StressMismatch {
+                label: label.clone(),
+                reason: format!("the same transcript, but {b} idle points instead of {a}"),
+                diff: String::new(),
+            });
+        } else if t == actual {
             // `--determinism`: the same heap image, raw and by canonical hash (D1720, D1725,
             // D2040). A variant that collects on another policy (GC stress) does not hash
             // its image.
@@ -176,6 +189,7 @@ pub fn run_one(
         done: Some(result.done),
         elapsed: start.elapsed(),
         stress,
+        idle_points: result.idle_points,
     }
 }
 
@@ -217,6 +231,7 @@ fn execute(
                         output: Vec::new(),
                         done: Done::Crash(format!("engine panicked: {msg}")),
                         image: None,
+                        idle_points: None,
                     }
                 })
         }
@@ -224,6 +239,7 @@ fn execute(
             output: Vec::new(),
             done: Done::Crash(format!("cannot read case: {e}")),
             image: None,
+            idle_points: None,
         },
     }
 }
