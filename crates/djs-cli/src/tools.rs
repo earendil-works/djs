@@ -6,6 +6,7 @@
 //! host function `make`, which creates an async host function with a fresh id and that
 //! name; the Proxy keeps it. So a tool's id and name live in the heap, and survive images.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use djs_core::compiler::CompileOptions;
@@ -55,15 +56,16 @@ pub fn install(vm: &mut Vm) {
 /// The tools of a VM by id, and the scripted answers.
 #[derive(Default)]
 pub struct Tools {
-    /// Names by `fn_id - TOOL_BASE`.
-    names: Vec<String>,
+    /// Names by `fn_id - TOOL_BASE`. A cell: a dump's loader asks for ids through a
+    /// shared reference ([`Tools::id_for_call_name`]).
+    names: RefCell<Vec<String>>,
     answers: Option<Answers>,
 }
 
 impl Tools {
     pub fn with_answers(answers: Option<Answers>) -> Tools {
         Tools {
-            names: Vec::new(),
+            names: RefCell::new(Vec::new()),
             answers,
         }
     }
@@ -81,17 +83,47 @@ impl Tools {
             .and_then(|v| v.as_string())
             .map(|s| vm.heap().str_to_string(s))
             .unwrap_or_default();
-        let id = TOOL_BASE + self.names.len() as u32;
-        self.names.push(name.clone());
+        let id = self.id_for(&name);
         let f = vm.new_async_host_function(id, &name).expect("oom");
         vm.resolve_host_call(call_id, Ok(f))
             .expect("parked on this call");
     }
 
+    /// The id of the tool `name`: the one it has (made before, or registered by a loaded
+    /// dump's open call), else the next free one. A restored session and new calls of
+    /// the same tool agree on it.
+    pub fn id_for(&self, name: &str) -> u32 {
+        let mut names = self.names.borrow_mut();
+        let i = match names.iter().position(|n| n == name) {
+            Some(i) => i,
+            None => {
+                names.push(name.to_string());
+                names.len() - 1
+            }
+        };
+        TOOL_BASE + i as u32
+    }
+
+    /// The host function id for a call name a dump names (`tools.read`, 0171's
+    /// `LoadOptions::host_fn`); `None` for a name that is not a tool.
+    // Wired to `Vm::load_dump` once 0171 lands.
+    #[allow(dead_code)]
+    pub fn id_for_call_name(&self, call_name: &str) -> Option<u32> {
+        let name = call_name.strip_prefix("tools.")?;
+        (!name.is_empty()).then(|| self.id_for(name))
+    }
+
+    /// The call name of a tool's host function id (`tools.read`), for a dump's exporter.
+    pub fn call_name(&self, fn_id: u32) -> Option<String> {
+        let i = fn_id.checked_sub(TOOL_BASE)? as usize;
+        self.names.borrow().get(i).map(|n| format!("tools.{n}"))
+    }
+
     /// Reads the tools back from the heap (after a restore): the functions the Proxy
     /// keeps, with their ids.
     pub fn rescan(&mut self, vm: &mut Vm) {
-        self.names.clear();
+        let names = self.names.get_mut();
+        names.clear();
         let Ok(key) = vm.heap_mut().atom_str("tools") else {
             return;
         };
@@ -120,22 +152,17 @@ impl Tools {
                 continue;
             };
             let i = i as usize;
-            if self.names.len() <= i {
-                self.names.resize(i + 1, String::from("?"));
+            if names.len() <= i {
+                names.resize(i + 1, String::from("?"));
             }
-            self.names[i] = heap.atom_name(k);
+            names[i] = heap.atom_name(k);
         }
     }
 
     /// `tools.read`, or `host function 3` for another id.
     pub fn name(&self, fn_id: u32) -> String {
-        match fn_id
-            .checked_sub(TOOL_BASE)
-            .and_then(|i| self.names.get(i as usize))
-        {
-            Some(n) => format!("tools.{n}"),
-            None => format!("host function {fn_id}"),
-        }
+        self.call_name(fn_id)
+            .unwrap_or_else(|| format!("host function {fn_id}"))
     }
 
     /// `tools.read({"path":"a.ts"})`: the call's name and its arguments as JSON.
@@ -150,11 +177,7 @@ impl Tools {
     /// The scripted answer for the pending call `call_id`, if the answers file has one.
     pub fn answer(&mut self, vm: &mut Vm, call_id: u32) -> Option<Result<Value, Value>> {
         let info = vm.host_call(call_id)?;
-        let name = info
-            .fn_id
-            .checked_sub(TOOL_BASE)
-            .and_then(|i| self.names.get(i as usize))?
-            .clone();
+        let name = self.call_name(info.fn_id)?["tools.".len()..].to_string();
         let parts: Vec<String> = info.args.iter().map(|&a| to_json(vm, a)).collect();
         let args = J::parse(&format!("[{}]", parts.join(","))).ok();
         let entry = self.answers.as_mut()?.pick(&name, args.as_ref())?;
@@ -460,6 +483,19 @@ mod tests {
         );
         assert!(J::parse("[1,]").is_err());
         assert!(J::parse("{} x").is_err());
+    }
+
+    #[test]
+    fn ids_by_name() {
+        let t = Tools::default();
+        assert_eq!(t.id_for_call_name("tools.read"), Some(TOOL_BASE));
+        assert_eq!(t.id_for("glob"), TOOL_BASE + 1);
+        assert_eq!(t.id_for("read"), TOOL_BASE);
+        assert_eq!(t.id_for_call_name("console.log"), None);
+        assert_eq!(t.id_for_call_name("tools."), None);
+        assert_eq!(t.call_name(TOOL_BASE + 1).as_deref(), Some("tools.glob"));
+        assert_eq!(t.call_name(TOOL_BASE + 2), None);
+        assert_eq!(t.call_name(1), None);
     }
 
     #[test]

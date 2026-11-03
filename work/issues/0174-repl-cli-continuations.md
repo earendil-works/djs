@@ -41,6 +41,10 @@ Make suspension visible and testable by hand (docs/continuation-dumps.md "REPL")
   answers_file), tests/run.rs (todos script with answers, plain/--suspend-every/
   --gc-stress; missing answer). A tools transcript is identical under --gc-stress and
   .suspend-every 50. Guide: no page affected.
+- Merged the tools part (main a54e0504). Prepared for 0171's `LoadOptions::host_fn`:
+  `Tools::id_for(name)` (a name keeps its id; `make` reuses it), `id_for_call_name`
+  (`tools.read` → id, None for other names) and the inverse `call_name(fn_id)` for 0172's
+  exporter; names in a RefCell since `host_fn` is a `&dyn Fn`.
 - Waiting for 0171 for the dump part (.dump format 2, .restore of waiting inputs,
   .dump-every, run --dump-after/--dump-every-idle, resume).
 
