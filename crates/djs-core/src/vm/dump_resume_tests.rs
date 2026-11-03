@@ -490,6 +490,7 @@ fn exporter_round_trips_at_every_idle_point() {
         "cells",
         "steps",
         "reenact",
+        "cycles",
     ] {
         let src =
             std::fs::read_to_string(fixture_dir().join(alloc::format!("{name}.src.js"))).unwrap();

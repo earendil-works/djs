@@ -716,6 +716,9 @@ struct Dumper<'a> {
     finals: Vec<String>,
     /// What is in flight: open calls, pending promises, activations (dump_flight.rs).
     fl: flight::Flight<'a>,
+    /// Objects being written as data (`render`): promises made by activations or
+    /// reactions are patched into them instead (dump_flight.rs `make`).
+    data_depth: u32,
     helpers: u16,
     /// Whether the text uses the `$dump` namespace.
     ns: bool,
@@ -761,6 +764,7 @@ impl<'a> Dumper<'a> {
             patches: Vec::new(),
             finals: Vec::new(),
             fl: flight::Flight::new(opts.host_fn_name),
+            data_depth: 0,
             helpers: 0,
             ns: false,
             next: 0,
@@ -3197,7 +3201,9 @@ impl<'a> Dumper<'a> {
             }
         } else {
             let o = v.as_object().expect("an object");
+            self.data_depth += 1;
             let e = self.render_object(n, o, &loc, ctx_name);
+            self.data_depth -= 1;
             if !self.is_class_node(n) {
                 self.private_patches_of(o, &loc);
             }

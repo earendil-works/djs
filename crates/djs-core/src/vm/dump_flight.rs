@@ -975,6 +975,19 @@ impl Dumper<'_> {
         if self.fl.pends[p].busy {
             return String::new();
         }
+        if self.data_depth > 0
+            && matches!(
+                self.fl.pends[p].creator,
+                Creator::Act(_) | Creator::Then(..) | Creator::Combo(_)
+            )
+        {
+            // Data holds it: the activation or reaction that makes it may need that data
+            // first. The data gets the promise by a patch at the end; the promise is made
+            // with what makes it (at the latest when its awaited promise's reactions are
+            // written).
+            self.reserve(n, "p");
+            return String::new();
+        }
         self.fl.pends[p].busy = true;
         let before = self.fns_read.get();
         match self.fl.pends[p].creator {
@@ -988,7 +1001,7 @@ impl Dumper<'_> {
                         "an open call whose arguments are on a reference cycle",
                     );
                 }
-                let name = self.fresh("p");
+                let name = self.reserve(n, "p");
                 let Call { id, name: f, .. } = &self.fl.calls[c];
                 let l = cat!(
                     name,
@@ -1013,7 +1026,7 @@ impl Dumper<'_> {
                 self.emit_combo(c);
             }
             Creator::Resolvers => {
-                let name = self.fresh("p");
+                let name = self.reserve(n, "p");
                 let r = self.fresh("r");
                 self.line(
                     cat!(
@@ -1028,15 +1041,25 @@ impl Dumper<'_> {
                 self.made(p, name);
             }
             Creator::Unknown => {
-                let name = self.fresh("p");
+                let name = self.reserve(n, "p");
                 self.line(cat!(name, " = new Promise(() => {});"), before);
                 self.made(p, name);
             }
         }
         self.fl.pends[p].busy = false;
         if !self.fl.pends[p].made {
-            let path = self.nodes[n].path.clone();
-            self.refuse(path, "a promise the dump cannot make in order");
+            // Its maker is being written further up (a reference cycle): the caller
+            // patches the reference in later, or refuses.
+            return String::new();
+        }
+        self.nodes[n].loc.clone()
+    }
+
+    /// The location of node `n`, chosen now if it has none yet (so that patches can name
+    /// a value that is made later).
+    fn reserve(&mut self, n: usize, prefix: &str) -> String {
+        if self.nodes[n].loc.is_empty() {
+            self.nodes[n].loc = self.fresh(prefix);
         }
         self.nodes[n].loc.clone()
     }
@@ -1121,7 +1144,7 @@ impl Dumper<'_> {
         self.react_upto(q, j);
         match self.pend_of(cap) {
             Some(d) if !self.fl.pends[d].made => {
-                let name = self.fresh("p");
+                let name = self.reserve(self.fl.pends[d].node, "p");
                 self.line(cat!(name, " = ", call, ";"), before);
                 self.made(d, name);
             }
@@ -1172,7 +1195,7 @@ impl Dumper<'_> {
         }
         match self.pend_of(self.fl.combos[c].cap) {
             Some(d) if !self.fl.pends[d].made => {
-                let name = self.fresh("p");
+                let name = self.reserve(self.fl.pends[d].node, "p");
                 self.line(cat!(name, " = ", call, ";"), before);
                 self.made(d, name);
             }
@@ -1396,7 +1419,10 @@ impl Dumper<'_> {
         if let Some((q, j)) = awaiting {
             self.react_upto(q, j);
         }
-        let name = self.fresh("a");
+        let name = match self.pend_of(self.fl.acts[a].s.promise) {
+            Some(p) if kind == suspend::ASYNC => self.reserve(self.fl.pends[p].node, "a"),
+            _ => self.reserve(n, "a"),
+        };
         let comment = fv(0)
             .as_object()
             .map(|f| self.site_comment(f, &site))
@@ -1491,7 +1517,7 @@ impl Dumper<'_> {
                 ")"
             )
         };
-        let name = self.fresh("a");
+        let name = self.reserve(n, "a");
         let comment = if state == suspend::START {
             "// a generator that has not started\n"
         } else {

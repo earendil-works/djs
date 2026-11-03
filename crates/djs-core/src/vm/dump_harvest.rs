@@ -514,3 +514,278 @@ fn extract_coverage() {
         true,
     );
 }
+
+// ---- Continuations (0172): a dump at every idle point ---------------------------------
+
+const LATER: u32 = 2;
+
+#[derive(Default)]
+struct IdleStats {
+    cases: usize,
+    with_idle: usize,
+    idle: usize,
+    dumped: usize,
+    loaded: usize,
+    same: usize,
+    differ: usize,
+    /// Idle points by the first refusal reason.
+    refusals: BTreeMap<String, usize>,
+    load_errors: BTreeMap<String, usize>,
+}
+
+fn host_fn_name(id: u32) -> Option<String> {
+    match id {
+        OUTPUT => Some("output".into()),
+        DONE => Some("done".into()),
+        LATER => Some("later".into()),
+        _ => None,
+    }
+}
+
+fn host_fn(name: &str) -> Option<u32> {
+    match name {
+        "output" => Some(OUTPUT),
+        "done" => Some(DONE),
+        "later" => Some(LATER),
+        _ => None,
+    }
+}
+
+/// Runs `f` to the end as the difftest's djs engine does: output and done recorded,
+/// `later` calls settled at idle points, oldest first; with `dump`, every idle point is
+/// dumped and the run continues in a fresh VM that loaded the dump (`api` moves along).
+fn idle_call(
+    vm: &mut Vm,
+    api: &mut crate::heap::Handle,
+    f: Value,
+    this: Value,
+    args: &[Value],
+    out: &mut Vec<String>,
+    dump: Option<&mut IdleStats>,
+) -> Result<Value, String> {
+    let mut dump = dump;
+    vm.call(f, this, args).map_err(|e| format!("{e:?}"))?;
+    let mut slices = 0;
+    loop {
+        match vm.run(10_000_000) {
+            Status::Done(v) => return Ok(v),
+            Status::Threw(e) => return Err(format!("threw {}", vm.display(e))),
+            Status::OutOfFuel => {
+                slices += 1;
+                if slices > 100 {
+                    return Err("out of fuel".into());
+                }
+            }
+            Status::HostCall { call_id, fn_id } => {
+                let info = vm.host_call(call_id).ok_or("no call")?;
+                let s = |v: Value| {
+                    v.as_string()
+                        .map(|t| vm.heap().str_to_string(t))
+                        .unwrap_or_default()
+                };
+                match fn_id {
+                    OUTPUT => out.push(s(info.args[0])),
+                    DONE => out.push(format!("=== {} {}", s(info.args[0]), s(info.args[1]))),
+                    _ => return Err("unknown host function".into()),
+                }
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED))
+                    .map_err(|e| format!("{e:?}"))?;
+            }
+            Status::Idle => {
+                if let Some(st) = dump.as_deref_mut() {
+                    st.idle += 1;
+                    let apiv = vm.heap().get_handle(*api);
+                    let handles = [("api", apiv)];
+                    let opts = DumpOptions {
+                        base: base(),
+                        host_fn_name: &host_fn_name,
+                        handles: &handles,
+                        ..Default::default()
+                    };
+                    match vm.dump(&opts, None) {
+                        Err(e) => {
+                            let first = e.0.first().cloned().unwrap_or_default();
+                            let why = first.split_once(": ").map_or(first.as_str(), |(_, w)| w);
+                            let why = why.split(" (").next().unwrap_or(why).to_string();
+                            *st.refusals.entry(why).or_default() += 1;
+                        }
+                        Ok(text) => {
+                            st.dumped += 1;
+                            let mut b = Vm::from_base(base(), VmOptions::default()).unwrap();
+                            let load = super::dump_load::LoadOptions {
+                                host_fn: &host_fn,
+                                ..Default::default()
+                            };
+                            match b.load_dump(&text, &load) {
+                                Ok(l) => {
+                                    st.loaded += 1;
+                                    *api = l.handles.iter().find(|h| h.0 == "api").unwrap().1;
+                                    *vm = b;
+                                }
+                                Err(e) => {
+                                    let m = e.message();
+                                    let m =
+                                        m.split([':', '\n']).take(2).collect::<Vec<_>>().join(":");
+                                    *st.load_errors.entry(m).or_default() += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                let Some(&id) = vm.pending_host_calls().iter().min() else {
+                    return Err("idle with nothing pending".into());
+                };
+                let info = vm.host_call(id).ok_or("no call")?;
+                let v = info.args.first().copied().unwrap_or(Value::UNDEFINED);
+                let rejected = info.args.get(1) == Some(&Value::TRUE);
+                vm.resolve_host_call(id, if rejected { Err(v) } else { Ok(v) })
+                    .map_err(|e| format!("{e:?}"))?;
+            }
+            s => return Err(format!("{s:?}")),
+        }
+    }
+}
+
+/// A case's transcript as the difftest's djs engine makes it; with `dump`, through a dump
+/// at every idle point.
+fn idle_run(
+    prelude: &str,
+    case: &str,
+    dump: Option<&mut IdleStats>,
+) -> Result<Vec<String>, String> {
+    let mut vm = Vm::from_base(base(), VmOptions::default()).unwrap();
+    let mut out = Vec::new();
+    let p = vm
+        .compile(prelude.as_bytes(), &CompileOptions::script("prelude.js"))
+        .map_err(|e| e.message)?;
+    let g = Value::object(vm.global());
+    let mut none = vm.heap_mut().new_handle(Value::UNDEFINED).unwrap();
+    let setup = idle_call(&mut vm, &mut none, p, g, &[], &mut out, None)?;
+    let host = vm.new_object().map_err(|e| format!("{e:?}"))?;
+    for (id, name) in [(OUTPUT, "output"), (DONE, "done"), (LATER, "later")] {
+        let f = if id == LATER {
+            vm.new_async_host_function(id, name)
+        } else {
+            vm.new_host_function(id, name)
+        }
+        .map_err(|e| format!("{e:?}"))?;
+        vm.define(host, name, f).map_err(|e| format!("{e:?}"))?;
+    }
+    let apiv = idle_call(
+        &mut vm,
+        &mut none,
+        setup,
+        Value::UNDEFINED,
+        &[Value::object(host)],
+        &mut out,
+        None,
+    )?;
+    let mut api = vm
+        .heap_mut()
+        .new_handle(apiv)
+        .map_err(|e| format!("{e:?}"))?;
+    let src = format!("(async (tools, console) => {{{case}\n}})");
+    let script = vm
+        .compile(src.as_bytes(), &CompileOptions::script("case.js"))
+        .map_err(|e| e.message)?;
+    let g = Value::object(vm.global());
+    let f = idle_call(&mut vm, &mut api, script, g, &[], &mut out, None)?;
+    let apiv = vm.heap().get_handle(api);
+    let run = get(&mut vm, apiv.as_object().unwrap(), "run");
+    idle_call(&mut vm, &mut api, run, apiv, &[f], &mut out, dump)?;
+    let apiv = vm.heap().get_handle(api);
+    let stalled = get(&mut vm, apiv.as_object().unwrap(), "stalled");
+    idle_call(&mut vm, &mut api, stalled, apiv, &[], &mut out, None)?;
+    // Stack frames name the dump's script after a load: compared without them, as the
+    // difftest does.
+    Ok(out
+        .into_iter()
+        .map(|o| {
+            o.lines()
+                .filter(|l| !l.trim_start().starts_with("at "))
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .collect())
+}
+
+/// Counts over `cases`: idle points, dumps, loads, transcripts equal to the plain run's,
+/// refusal reasons by idle point.
+fn idle_coverage(cases: impl Iterator<Item = String>) {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus");
+    let prelude = std::fs::read_to_string(root.join("prelude.js")).unwrap();
+    let mut st = IdleStats::default();
+    for case in cases {
+        st.cases += 1;
+        let Ok(want) = idle_run(&prelude, &case, None) else {
+            continue;
+        };
+        let before = st.idle;
+        let got = idle_run(&prelude, &case, Some(&mut st));
+        if st.idle > before {
+            st.with_idle += 1;
+            if got.as_ref() == Ok(&want) {
+                st.same += 1;
+            } else {
+                st.differ += 1;
+            }
+        }
+    }
+    std::println!(
+        "cases: {}, with idle points: {}, idle points: {}, dumped: {}, loaded: {}",
+        st.cases,
+        st.with_idle,
+        st.idle,
+        st.dumped,
+        st.loaded
+    );
+    std::println!(
+        "cases with idle points whose transcript equals the plain run's: {}, differ: {}",
+        st.same,
+        st.differ
+    );
+    std::println!("refusals (idle points, first reason): {:?}", st.refusals);
+    std::println!("load errors: {:?}", st.load_errors);
+}
+
+/// `DJS_HARVEST=1 cargo test -p djs-core --lib vm::dump_harvest::idle -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn idle_harvest_coverage() {
+    if std::env::var_os("DJS_HARVEST").is_none() {
+        return;
+    }
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus");
+    let mut files: Vec<_> = std::fs::read_dir(root.join("codemode-harvest"))
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "js"))
+        .collect();
+    files.sort();
+    idle_coverage(
+        files
+            .into_iter()
+            .map(|f| std::fs::read_to_string(&f).unwrap()),
+    );
+}
+
+/// The same over private cases (`DJS_EXTRACT_DIR=dir`, made by `scripts/harvest/build.py`
+/// so that their fakes answer through `later`): counts only.
+#[test]
+#[ignore]
+fn idle_extract_coverage() {
+    let Some(dir) = std::env::var_os("DJS_EXTRACT_DIR") else {
+        return;
+    };
+    let mut files: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "js"))
+        .collect();
+    files.sort();
+    idle_coverage(
+        files
+            .into_iter()
+            .map(|f| std::fs::read_to_string(&f).unwrap()),
+    );
+}
