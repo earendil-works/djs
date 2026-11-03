@@ -363,6 +363,10 @@ impl Dumper<'_> {
                     _ => continue,
                 };
                 let v = fp(lp + i);
+                if v.is_uninitialized() {
+                    // A binding in its TDZ: written as `$dump.TDZ` (`slot_expr`).
+                    continue;
+                }
                 // A box's path ends in `~name`: its factory's variable.
                 let sep = if v.as_internal().is_some() { "~" } else { "." };
                 if let Some(b) = self.edge(n, v, || cat!(path, sep, name))

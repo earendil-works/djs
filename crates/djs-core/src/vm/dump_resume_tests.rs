@@ -1159,3 +1159,34 @@ fn a_codemode_body_whose_parameter_a_closure_captures() {
         assert_eq!(lines, want, "@{k}");
     }
 }
+
+/// `const r = await ...` while the await is pending: a slot the compiler keeps in its
+/// TDZ (code reads it before the declaration) is `$dump.TDZ`, a captured one a cell in
+/// its TDZ; a slot it does not (no read can come first) holds undefined, which nothing
+/// can observe. 0179's question; the TDZ slot was refused as "an internal value".
+#[test]
+fn bindings_in_their_tdz_at_an_await() {
+    for (src, want) in [
+        (
+            "async function main() { try { const r = (await later(1)) + r; print(r); } catch (e) { print(e.name); } }\nmain();",
+            "bindings: { r: $dump.TDZ }",
+        ),
+        (
+            "let get; later(2).then(() => print(get()));\nasync function main() { get = () => { try { return r; } catch (e) { return e.name; } }; const r = await later(1); print(r); }\nmain();",
+            "r: $dump.s",
+        ),
+        (
+            "async function main() { for (let i = 0; i < 2; i++) { if (i) { try { print(r); } catch (e) { print(e.name); } } const r = await later(i); } }\nmain();",
+            "bindings: { i: 0, r: $dump.TDZ }",
+        ),
+        (
+            "async function main() { const r = await later(1); print(r); }\nmain();",
+            "bindings: { r: undefined }",
+        ),
+    ] {
+        let (got, text) = dump_at(src, 1).unwrap_or_else(|e| panic!("{src}: {e}"));
+        assert_eq!(got, run_program(src).0, "{src}");
+        assert!(got[0] == "ReferenceError" || got[0] == "1", "{got:?}");
+        assert!(text.contains(want), "{src}\n{text}");
+    }
+}

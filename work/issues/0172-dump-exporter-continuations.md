@@ -105,6 +105,12 @@ fresh VM, continue, same transcript.
   before its parameters now (D2620); tests a_codemode_body_whose_parameter_a_closure_captures
   (the repro's maps equal, a run dumped at both idle points) and djs-cli's
   dump_after_every_idle_point with todos.js --body; using_body.smap re-pinned.
+- example (0179): `const r = await ...` pending wrote `r: undefined`. Checked: that is a
+  slot the compiler leaves without TDZ because no read can precede the declaration
+  (unobservable); a captured `r` is a cell in its TDZ. The real bug was the other case:
+  a slot the compiler keeps in its TDZ (`const r = (await x) + r`, a loop reading `r`
+  before its declaration) was refused as "an internal value"; now `$dump.TDZ`. Test
+  bindings_in_their_tdz_at_an_await.
 
 ## Follow-ups
 - for-in loops in activations; sites the maps call unsupported (finally, using,
