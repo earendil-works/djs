@@ -5,7 +5,7 @@
 //! limit and `.suspend-every`. With stdin not a terminal it reads lines without prompts
 //! or editing (line mode, for tests and pipes).
 
-mod activations;
+pub mod activations;
 mod complete;
 mod input;
 mod inspect;
@@ -789,15 +789,7 @@ impl Repl {
                 .find(|(p, _)| *p == a.promise)
                 .map(|(_, n)| format!(" ({n})"))
                 .unwrap_or_default();
-            println!("  {} at {}{input}", a.what, a.at);
-            if !a.bindings.is_empty() {
-                let b: Vec<String> = a
-                    .bindings
-                    .iter()
-                    .map(|(k, v)| format!("{k} = {v}"))
-                    .collect();
-                println!("    {}", b.join(", "));
-            }
+            print!("{}", a.describe(&input));
         };
         if arg == "all" {
             let all = activations::all(self.vm.heap());
@@ -976,7 +968,7 @@ impl Repl {
             ".dump" if !arg.is_empty() => self.dump(arg),
             ".dump-every" => println!(".dump-every: {NEEDS_EXPORTER}"),
             ".restore" if !arg.is_empty() => match std::fs::read(arg) {
-                Ok(bytes) if bytes.starts_with(b"// djs-dump ") => {
+                Ok(bytes) if crate::run::is_dump(&bytes) => {
                     let src = String::from_utf8_lossy(&bytes).into_owned();
                     self.restore_dump(arg, &src);
                 }

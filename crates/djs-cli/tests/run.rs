@@ -114,6 +114,41 @@ fn resume_with_tools() {
     assert!(r.2.contains("not a djs dump"), "{}", r.2);
 }
 
+/// `djs resume --explain` (D2641): where a dump's activations stopped, in the dump, since
+/// the dump has no comments; it answers nothing.
+#[test]
+fn explain_a_dump() {
+    let dump = format!("{DIR}/reads.dump.js");
+    assert_eq!(
+        djs_cmd(&["resume", "--explain", &dump]),
+        (
+            0,
+            format!(
+                "{dump}: format 2; 1 open call, 1 suspended activation; handles: run\n\
+                 #2 tools.read({{\"path\":\"a\"}})\n\
+                 \x20 async function main at dump.js:3:13 (run)\n\
+                 \x20     const a = await tools.read({{ path: \"a\" }});\n\
+                 \x20               ^\n\
+                 \x20   a = <uninitialized>, b = <uninitialized>\n"
+            ),
+            String::new()
+        )
+    );
+    let generator = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/dump/v2/generator.dump.js"
+    );
+    let (code, out, err) = djs_cmd(&["resume", "--explain", generator]);
+    assert_eq!((code, err.as_str()), (0, ""));
+    assert!(
+        out.contains("not waiting on a call:\n  generator counter at dump.js:"),
+        "{out}"
+    );
+    let r = djs_cmd(&["resume", "--explain", &format!("{DIR}/reads.src.js")]);
+    assert_eq!(r.0, 2);
+    assert!(r.2.contains("not a djs dump"), "{}", r.2);
+}
+
 #[test]
 fn dumping_needs_the_exporter() {
     let src = format!("{DIR}/reads.src.js");

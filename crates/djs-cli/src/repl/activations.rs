@@ -26,6 +26,9 @@ pub struct Activation {
     pub what: String,
     /// `repl:3:22`, where it stopped.
     pub at: String,
+    /// The source line it stopped in and the column (from 1, in characters) of the
+    /// `await`/`yield`, when the script's source is known.
+    pub source: Option<(String, u32)>,
     /// The named bindings and their values, printed.
     pub bindings: Vec<(String, String)>,
 }
@@ -82,10 +85,23 @@ pub fn activation(heap: &Heap, g: Obj) -> Option<Activation> {
         .and_then(|n| ref_value(djs_core::value::tag::STRING, n)?.as_string())
         .map(|n| heap.str_to_string(n))
         .unwrap_or_else(|| String::from("?"));
-    let at = match djs_core::bytecode::lookup_line(bytes_of(heap, info.lines), pc.saturating_sub(1))
-    {
+    let pos = djs_core::bytecode::lookup_line(bytes_of(heap, info.lines), pc.saturating_sub(1));
+    let at = match pos {
         Some((l, c)) => format!("{file}:{l}:{c}"),
         None => file,
+    };
+    let script_text = info.script.get().and_then(|s| {
+        let src = a
+            .get::<djs_core::heap::Ref>(s, djs_core::heap::cells::Script::SOURCE)
+            .get()?;
+        Some(heap.str_to_string(ref_value(djs_core::value::tag::STRING, src)?.as_string()?))
+    });
+    let source = match (pos, &script_text) {
+        (Some((l, c)), Some(text)) => text
+            .lines()
+            .nth((l as usize).saturating_sub(1))
+            .map(|line| (String::from(line.trim_end()), c)),
+        _ => None,
     };
     let names: Vec<String> = info
         .names
@@ -100,16 +116,11 @@ pub fn activation(heap: &Heap, g: Obj) -> Option<Activation> {
     let locals = u32::from(a.get::<u16>(t, FuncTemplate::LOCALS));
     let mut bindings = Vec::new();
     // Parameters are arguments (slots 2..), named from the function's source text.
-    let source = info.script.get().and_then(|s| {
-        let src = a
-            .get::<djs_core::heap::Ref>(s, djs_core::heap::cells::Script::SOURCE)
-            .get()?;
-        let text = heap.str_to_string(ref_value(djs_core::value::tag::STRING, src)?.as_string()?);
-        text.get(info.src_start as usize..info.src_end as usize)
-            .map(String::from)
-    });
+    let fn_text = script_text
+        .as_deref()
+        .and_then(|text| text.get(info.src_start as usize..info.src_end as usize));
     let params = u32::from(a.get::<u16>(t, FuncTemplate::PARAMS));
-    let names_of_params = source.as_deref().map(param_names).unwrap_or_default();
+    let names_of_params = fn_text.map(param_names).unwrap_or_default();
     // A parameter copied into a local (a non-simple parameter list) shows once, as the
     // local; destructured ones show as the names they bind.
     let local_names = &names[..(locals as usize).min(names.len())];
@@ -141,8 +152,44 @@ pub fn activation(heap: &Heap, g: Obj) -> Option<Activation> {
         promise: heap.object_slot(g, PROMISE),
         what: format!("{kind} {name}{state}"),
         at,
+        source,
         bindings,
     })
+}
+
+impl Activation {
+    /// For `.bt` and `djs resume --explain`: what it is and where it stopped (`label`
+    /// names the input or handle whose promise it is), the source line with a caret
+    /// under the `await`/`yield`, and the bindings, indented by two spaces.
+    pub fn describe(&self, label: &str) -> String {
+        let mut out = format!("  {} at {}{label}\n", self.what, self.at);
+        if let Some((line, col)) = &self.source {
+            // The line without its indentation, the caret under the same character.
+            let indent = line.chars().take_while(|c| c.is_whitespace()).count();
+            let col = (*col as usize).saturating_sub(1).max(indent);
+            let caret: String = line
+                .chars()
+                .take(col)
+                .skip(indent)
+                .map(|c| if c == '\t' { '\t' } else { ' ' })
+                .collect();
+            // At most 120 characters of the line, and the caret only if it falls in them.
+            let line: String = line.trim_start().chars().take(120).collect();
+            out.push_str(&format!("      {line}\n"));
+            if caret.chars().count() < 120 {
+                out.push_str(&format!("      {caret}^\n"));
+            }
+        }
+        if !self.bindings.is_empty() {
+            let b: Vec<String> = self
+                .bindings
+                .iter()
+                .map(|(k, v)| format!("{k} = {v}"))
+                .collect();
+            out.push_str(&format!("    {}\n", b.join(", ")));
+        }
+        out
+    }
 }
 
 /// The parameter names of a function's source text: `None` for a destructured one.

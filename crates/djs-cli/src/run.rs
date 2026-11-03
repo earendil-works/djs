@@ -36,10 +36,12 @@ const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\
   --dump-after K     write a format 2 dump at idle point K and stop (needs 0172)\n\
   --dump-every-idle  dump and reload at every idle point (needs 0172)";
 
-const RESUME_USAGE: &str = "usage: djs resume [--tools answers.json] [--gc-stress] [--suspend-every N]\n\
-                [--backend B] <dump.js>\n\
-  loads a dump (`// djs-dump 1` or `2`) into a fresh VM and runs it to its end, answering\n\
-  open calls as `djs run` does";
+const RESUME_USAGE: &str = "usage: djs resume [--explain] [--tools answers.json] [--gc-stress]\n\
+                [--suspend-every N] [--backend B] <dump.js>\n\
+  loads a dump (format 2, `\"djs-dump 2\";`, or version 1) into a fresh VM and runs it\n\
+  to its end, answering open calls as `djs run` does\n\
+  --explain          only load it, print its open calls and suspended activations (where\n\
+                     each stopped in the dump, with the source line), and exit";
 
 /// What format 2 dumps of a running session still need.
 const NEEDS_EXPORTER: &str = "djs: dumping a waiting run needs the format 2 exporter (issue 0172), \
@@ -59,6 +61,7 @@ fn command(args: &[String], resume: bool) -> i32 {
     let mut opts = RunOptions::default();
     let mut path = None;
     let mut tools = Tools::default();
+    let mut explain = false;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -70,6 +73,7 @@ fn command(args: &[String], resume: bool) -> i32 {
                 opts.emit_decorator_metadata = true;
             }
             "--gc-stress" => opts.gc_stress = true,
+            "--explain" if resume => explain = true,
             "--dump-after" | "--dump-every-idle" if !resume => {
                 eprintln!("{NEEDS_EXPORTER}");
                 return 2;
@@ -129,6 +133,16 @@ fn command(args: &[String], resume: bool) -> i32 {
     let stderr = std::io::stderr();
     if resume {
         let text = String::from_utf8_lossy(&src);
+        if explain {
+            return explain_dump(
+                &text,
+                &path,
+                &opts,
+                &mut tools,
+                &mut stdout.lock(),
+                &mut stderr.lock(),
+            );
+        }
         return resume_dump(
             &text,
             &path,
@@ -207,6 +221,13 @@ pub fn run_source(
     run_main(vm, main, &args, opts, tools, out, err)
 }
 
+/// Whether a file is a dump rather than a heap image: it starts with the format marker,
+/// `"djs-dump N";` (D2640) or version 1's `// djs-dump 1` (any version: the loader says
+/// which it cannot load).
+pub fn is_dump(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"\"djs-dump ") || bytes.starts_with(b"// djs-dump ")
+}
+
 /// Loads a dump into a fresh VM and runs it to its end (D2603); exit codes as `run`.
 pub fn resume_dump(
     text: &str,
@@ -234,6 +255,98 @@ pub fn resume_dump(
         vm.heap_mut().drop_handle(h);
     }
     drive(vm, opts, tools, out, err)
+}
+
+/// `djs resume --explain` (D2641): what a dump holds in flight, for a reader, since the
+/// dump itself has no comments. Loads it into a fresh VM (a dump is code: this runs it,
+/// as `resume` does), then lists the open calls with the activations waiting on them and
+/// the other suspended activations, each with where it stopped in the dump
+/// (`dump.js:LINE:COL`), the line and a caret, and its bindings. Answers nothing.
+pub fn explain_dump(
+    text: &str,
+    filename: &str,
+    opts: &RunOptions,
+    tools: &mut Tools,
+    out: &mut impl Write,
+    err: &mut impl Write,
+) -> i32 {
+    use crate::repl::activations;
+    let mut vm = new_vm(opts);
+    let host_fn = |name: &str| tools.id_for_call_name(name);
+    let lopts = djs_core::vm::dump_load::LoadOptions {
+        host_fn: &host_fn,
+        ..Default::default()
+    };
+    let loaded = match vm.load_dump(text, &lopts) {
+        Ok(l) => l,
+        Err(e) => {
+            let _ = writeln!(err, "djs: cannot load {filename}: {}", e.message());
+            return 2;
+        }
+    };
+    // Dead activations would be listed too; the handles keep the host's values alive.
+    let _ = vm.collect();
+    let format = djs_core::vm::dump_load::dump_format(text).unwrap_or("?");
+    let ts = if text.starts_with("\"djs-dump 2 typescript\";") {
+        ", TypeScript"
+    } else {
+        ""
+    };
+    let handles: Vec<(Value, String)> = loaded
+        .handles
+        .iter()
+        .map(|(n, h)| (vm.heap().get_handle(*h), n.clone()))
+        .collect();
+    let all = activations::all(vm.heap());
+    let plural =
+        |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+    let mut s = format!(
+        "{filename}: format {format}{ts}; {}, {}",
+        plural(loaded.calls.len(), "open call", "open calls"),
+        plural(all.len(), "suspended activation", "suspended activations"),
+    );
+    if !handles.is_empty() {
+        let names: Vec<&str> = handles.iter().map(|(_, n)| n.as_str()).collect();
+        s.push_str(&format!("; handles: {}", names.join(", ")));
+    }
+    s.push('\n');
+    let label = |a: &activations::Activation| {
+        handles
+            .iter()
+            .find(|(p, _)| *p == a.promise)
+            .map(|(_, n)| format!(" ({n})"))
+            .unwrap_or_default()
+    };
+    let mut shown: Vec<String> = Vec::new();
+    for c in &loaded.calls {
+        s.push_str(&format!("#{} {}\n", c.id, tools.describe(&mut vm, c.id)));
+        let heap = vm.heap();
+        let waiting = activations::call_promise(heap, c.id)
+            .map(|p| activations::waiting_on(heap, p))
+            .unwrap_or_default();
+        for a in waiting
+            .iter()
+            .filter_map(|&g| activations::activation(heap, g))
+        {
+            let d = a.describe(&label(&a));
+            s.push_str(&d);
+            shown.push(d);
+        }
+    }
+    let rest: Vec<String> = all
+        .iter()
+        .map(|a| a.describe(&label(a)))
+        .filter(|d| !shown.contains(d))
+        .collect();
+    if !rest.is_empty() {
+        s.push_str("not waiting on a call:\n");
+        rest.iter().for_each(|d| s.push_str(d));
+    }
+    for (_, h) in loaded.handles {
+        vm.heap_mut().drop_handle(h);
+    }
+    let _ = out.write_all(s.as_bytes());
+    0
 }
 
 /// Host function ids registered by `djs run`.

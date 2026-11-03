@@ -344,7 +344,10 @@ fn backtraces_of_waiting_activations() {
     let expected = "[waiting] #2 tools.read({\"path\":\"x\"})\n\
         [waiting] #3 tools.read({\"path\":\"y\"})\n\
         [input 3 waiting]\n\
-        #3 tools.read({\"path\":\"y\"})\n  async function todos at repl:1:61\n    path = 'y', first = 2, rest = [ 3 ], body = undefined\n  async <eval> at repl:1:10 (input 3)\n";
+        #3 tools.read({\"path\":\"y\"})\n  async function todos at repl:1:61\n\
+        \x20     async function todos(path, [first], ...rest) { const body = await tools.read({path}); return body.length }\n\
+        \x20                                                                 ^\n\
+        \x20   path = 'y', first = 2, rest = [ 3 ], body = undefined\n  async <eval> at repl:1:10 (input 3)\n";
     assert!(out.starts_with(expected), "{out}");
     assert!(
         out.contains("    path = 'x', first = 1, rest = [], body = undefined\n"),
@@ -390,10 +393,16 @@ fn restore_a_waiting_dump() {
         &format!(
             "loaded {dir}/reads.dump.js into a fresh VM\n\
              waiting: #2 tools.read({{\"path\":\"a\"}})\n\
-             #2 tools.read({{\"path\":\"a\"}})  the dump, at dump.js:4:13\n\
-             #2 tools.read({{\"path\":\"a\"}})\n  async function main at dump.js:4:13 (run)\n    a = <uninitialized>, b = <uninitialized>\n\
+             #2 tools.read({{\"path\":\"a\"}})  the dump, at dump.js:3:13\n\
+             #2 tools.read({{\"path\":\"a\"}})\n  async function main at dump.js:3:13 (run)\n\
+             \x20     const a = await tools.read({{ path: \"a\" }});\n\
+             \x20               ^\n\
+             \x20   a = <uninitialized>, b = <uninitialized>\n\
              [waiting] #4 tools.read({{\"path\":\"b\"}})\n\
-             \x20 async function main at dump.js:5:13 (run)\n    a = 'AA', b = <uninitialized>\n\
+             \x20 async function main at dump.js:4:13 (run)\n\
+             \x20     const b = await tools.read({{ path: \"b\" }});\n\
+             \x20               ^\n\
+             \x20   a = 'AA', b = <uninitialized>\n\
              AABBB\ntotal 5\n[run] 5\nno open calls\n"
         ),
     );
