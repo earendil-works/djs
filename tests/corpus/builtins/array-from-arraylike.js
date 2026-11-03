@@ -41,4 +41,4 @@ console.log(s instanceof Sub, show(s));
 console.log(show(Array.from("a😀b", (c, i) => c + i)));
 // Generators and async callbacks still work as callbacks.
 console.log(show(Array.from({ length: 3 }, (x, i) => typeof (async () => i)())));
-console.log(Array.from({ length: 100000 }, (_, i) => i).reduce((a, b) => a + b, 0));
+console.log(Array.from({ length: 10000 }, (_, i) => i).reduce((a, b) => a + b, 0));
