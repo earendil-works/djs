@@ -6829,3 +6829,29 @@ differs, a snapshot is compatible when the things it actually depends on are unc
 the image/cell formats (layout hash), the opcode and intrinsic tables, the builtin prefix
 (base hash), the snapshot container format, plus a hand-bumped compatibility version for
 semantic changes those hashes can't see (docs/lessons-from-pico.md lesson 6).
+
+## D2520: Arena access: one u64 compare by default, an optional unchecked `unsafe-heap` build
+date: 2026-11-09 · by: audit · issue: 0161
+Every arena field access goes through `heap/layout/access.rs`. The default checks
+`off + N <= len` once, in `u64` so it cannot wrap on wasm32; LLVM then proves the slice
+access in range and drops the two compares a `bytes.get(off..)` + `first_chunk` costs.
+Module −5.2 KB gz (455.5 → 450.3), wasm instructions −0 to −4% on the perf workloads,
+no `unsafe`. The cargo feature `unsafe-heap` (djs-core, passed through by djs-wasm; off by
+default, not shipped) reads and writes without a check, with debug assertions; it is
+the only `unsafe` in djs-core (lib.rs forbids it otherwise, and denies it outside that
+module with the feature). It gives 443.1 KB gz and −8 to −15% instructions, but +2–3% on
+call-heavy and tight loops (run_hot's register allocation). It is sound only for images
+the engine produced: `Heap::verify` makes structure safe, but after it "heap code may still
+panic on semantically odd data" (D1056), and those panics become undefined behavior inside
+the instance. So a host may enable it only with trusted image storage. The feature is not
+a build input of `SOURCE_HASH` (it changes no result or image), so the base built without
+it loads into a build with it. The gate runs a verifier fuzz test and e2e with the
+feature, and the difftest corpus in release with suspension and GC stress.
+Measured and rejected for the safe build: masking with a power-of-two capacity (LLVM
+cannot relate the mask to the slice length, so the check stays: larger code); reads that
+return zero instead of panicking (larger: an else arm per site instead of one shared
+panic); one check per 256-byte window shared by a cell's fields (merges in heap
+functions, but the inliner spends the savings: −0.2 KB net); `core::arch::wasm32::
+unreachable` instead of the panic (+2.2 KB); `#[inline]` instead of `#[inline(always)]`
+(no change). Per-cell views (`&[u8; N]` taken once, fields at constant offsets) remain the
+way to close the rest of the gap, at call sites.

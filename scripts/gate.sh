@@ -98,6 +98,15 @@ step "difftest on djs, bytecode backend (0063)"
 cargo run --quiet -p djs-difftest -- --engine djs --backend bytecode --ratchet --quiet --no-diff > target/difftest-djs-bytecode.log \
   || { cat target/difftest-djs-bytecode.log; exit 1; }
 grep -E '^ratchet:' target/difftest-djs-bytecode.log
+# 0161: the unchecked accessor build (D2520). The verifier against corrupt images and e2e
+# (debug: the accessors assert their bounds), then the corpus in release, where they
+# really do not check, with suspension and GC stress.
+step "unsafe-heap build (D2520)"
+cargo test -p djs-core --features unsafe-heap --quiet --test verify_fuzz --test e2e
+cargo run --quiet --release -p djs-difftest --features djs-core/unsafe-heap -- --engine djs --ratchet \
+  --suspend-every 97 --gc-stress --quiet --no-diff > target/difftest-unsafe.log \
+  || { cat target/difftest-unsafe.log; exit 1; }
+grep -E '^(stress|ratchet):' target/difftest-unsafe.log
 step "test262 on djs: the active group against the ratchet (0007)"
 ./scripts/fetch-test262.sh > /dev/null
 cargo run --quiet -p djs-test262 -- run --engine djs --group active --quiet --slowest 10 \
