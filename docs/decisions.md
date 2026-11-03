@@ -8302,3 +8302,26 @@ declaring its parameters, so a body's frame is laid out exactly like the functio
 (`tests/smap/e2e/using_body.smap` shows the swap). No `COMPAT_VERSION` bump: a frame
 saved in an image stays read by the bytecode compiled with it. Rejected: matching slots
 by name in the exporter (two layouts to keep apart, for no gain).
+## D2633: A dump names the run's result without a handle; `vm_outcome` removed
+date: 2026-11-03 · by: example · issue: 0175
+Supersedes D2630's `vm_outcome`. A run the sandbox started keeps no handle to its result
+promise while it waits: `vm_dump`'s handle 0 (`0:run`) names the entry call's outcome
+(`Vm::outcome`) directly, and DONE reads `vm_result` as before. Holding a handle across
+idle points changed the handle table, so a run recorded with a journal no longer hashed
+like its replay; now `Run.dump()` leaves the heap byte for byte as it was, and a recorded
+run can be dumped and still replays. A resumed run's result is the handle its dump named
+`run` (its entry call was the dump's Script).
+
+## D2634: `run`, `runAsync` and `replay` are built on the host-driven run
+date: 2026-11-03 · by: example · issue: 0175
+One loop (`drive`) runs a run to its next idle point or its end, and lists new async
+calls; a host-driven run (`begin`) returns there. `run`/`runAsync`/`replay` add, through
+two hooks, what they did before: call each async host function as soon as the script
+calls it, pass the results that came in back before every fuel slice (not only at idle
+points, so a host's I/O overlaps the script's work and the inbox order is what it was),
+and at an idle point wait for the next result (replay: take it from the journal). Journals
+record the same entries; `begin(code, params, { journal })` records a host-driven run
+(its `settle`s in order, a check at every idle point), which `replay` runs like a
+`runAsync` journal. Every run, host-driven or not, makes the sandbox refuse another until
+it ends (a host function that called `run` while `runAsync` waited used to start a second
+call over the first).

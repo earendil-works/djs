@@ -129,3 +129,27 @@ test("a host-driven run records a journal that replay runs", async () => {
   assert.deepEqual(replayed, run.value);
   assert.deepEqual((run.value as unknown[]).slice(0, 4), ["A", "B", "AB!", 2]);
 });
+
+test("dumping a recorded run leaves its state alone: the journal still replays", async () => {
+  const module = await loadModule();
+  const opts = { module, console: capture().console, deterministic: { startedAt: 1, seed: 1 }, now: 2, asyncFunctions: { "tools.get": () => 0 } };
+  const journal: JournalEntry[] = [];
+  const sb = new Sandbox(opts);
+  const run = sb.begin("const a = await tools.get(1); return a + (await tools.get(2));", {}, { journal });
+  const before = sb.canonicalHash();
+  const text = run.dump();
+  assert.equal(sb.canonicalHash(), before);
+  run.settle(run.calls[0].id, { ok: true, value: 10 });
+  await run.advance();
+  run.settle(run.calls[0].id, { ok: true, value: 5 });
+  await run.advance();
+  assert.equal(run.value, 15);
+  assert.equal(await new Sandbox(opts).replay(journal), 15);
+  // And the dump continues elsewhere.
+  const { run: again } = await Sandbox.resume(text, opts);
+  again.settle(again.calls[0].id, { ok: true, value: 1 });
+  await again.advance();
+  again.settle(again.calls[0].id, { ok: true, value: 2 });
+  await again.advance();
+  assert.equal(again.value, 3);
+});

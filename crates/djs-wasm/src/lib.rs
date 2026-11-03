@@ -928,7 +928,7 @@ pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32) -> i
 /// host's function names in id order, tab-separated (`DumpOptions::host_fn_name`: open
 /// calls and host functions held as values are written by name); the values to name for
 /// the host, `handle:name`, tab-separated (`DumpOptions::handles`, written as
-/// `$dump.handle(name, v)`). 0: the dump is in out; 1: refused, the reasons in out (one
+/// `$dump.handle(name, v)`; handle 0: the entry call's outcome, `Vm::outcome`, D2633). 0: the dump is in out; 1: refused, the reasons in out (one
 /// per line); 2: no base image (inject it first).
 #[cfg(feature = "dump")]
 #[unsafe(no_mangle)]
@@ -952,7 +952,14 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
             .split('\t')
             .filter_map(|e| {
                 let (h, name) = e.split_once(':')?;
-                Some((name, slot.value(h.parse().ok()?)))
+                let v = match h.parse().ok()? {
+                    // The entry call's outcome, without making a handle for it.
+                    0 => match slot.vm.outcome()? {
+                        Ok(v) | Err(v) => v,
+                    },
+                    h => slot.value(h),
+                };
+                Some((name, v))
             })
             .collect();
         let r = BASE.with(|b| {
@@ -1327,30 +1334,6 @@ pub extern "C" fn vm_abort(vm: u32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_result(vm: u32) -> u32 {
     with(|s| core::mem::take(&mut s.slot(vm).result))
-}
-
-/// A new handle (the host frees it) to the entry call's outcome while no frame is active
-/// (`Vm::outcome`): also at IDLE, after the call returned while async host calls are
-/// pending, which is where a host takes an async body's result promise to wait on or to
-/// name in a dump (0179). Unlike `vm_result` it can be taken any number of times. 0 if
-/// there is none (a frame is active, or nothing was called); out[0] = 1 if the call
-/// threw, else 0.
-#[unsafe(no_mangle)]
-pub extern "C" fn vm_outcome(vm: u32) -> u32 {
-    with(|s| {
-        let slot = s.slot(vm);
-        let Some(r) = slot.vm.outcome() else {
-            s.set_out_words(&[0]);
-            return 0;
-        };
-        let (v, threw) = match r {
-            Ok(v) => (v, 0),
-            Err(e) => (e, 1),
-        };
-        let h = slot.handle(v);
-        s.set_out_words(&[threw]);
-        h
-    })
 }
 
 /// Describes the parked host call: writes `[call_id, fn_id, this_lo, this_hi, (arg_lo,

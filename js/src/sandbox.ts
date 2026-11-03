@@ -243,8 +243,6 @@ interface Exports {
   vm_new_with?(memoryLimit: number, live: number, flags: number): number;
   vm_dump?(vm: number, len: number): number;
   vm_load_dump?(vm: number, namesLen: number, len: number): number;
-  /** Since 0179. */
-  vm_outcome?(vm: number): number;
   vm_from_bytes(len: number, memoryLimit: number): number;
   vm_free(vm: number): void;
   vm_arena_ptr(vm: number): number;
@@ -359,11 +357,10 @@ interface RunCore {
   /** The open async calls, oldest first, until their results are delivered. */
   open: Map<number, OpenCall>;
   /**
-   * A handle to the run's result promise once known (0: not yet), freed at the end. Taken
-   * at the first idle point when `keepResult` (a dump names it), else DONE's value is used.
+   * A resumed run's result promise, the handle its dump named `run` (freed at the end);
+   * 0 for a run this sandbox started, whose result is the entry call's outcome.
    */
   result: number;
-  keepResult: boolean;
   /** Fuel used so far: `maxFuel` is per run, across all its steps. */
   used: number;
   /** A new async call (`runAsync`: call the host function now). */
@@ -491,7 +488,7 @@ export class Sandbox {
       const result = handles.get("run") ?? 0;
       for (const [name, h] of handles) if (name !== "run") sandbox.x.vm_handle_free(sandbox.vm, h);
       if (result === 0) throw new SandboxError("misuse", "the dump holds no run (no handle named run)");
-      const run = sandbox.startRun(calls, result, true).run;
+      const run = sandbox.startRun(calls, result).run;
       return { sandbox, run };
     } catch (e) {
       sandbox.dispose();
@@ -664,7 +661,7 @@ export class Sandbox {
   begin(code: string, params: Record<string, unknown> = {}, opts: BeginOptions = {}): Run {
     this.beginJournal(code, params, opts);
     this.start(code, params, false, opts.filename);
-    const core = this.startRun([], 0, true);
+    const core = this.startRun([], 0);
     try {
       core.run.end(this.step(core, false).next().value as RunEnd);
     } catch (e) {
@@ -676,15 +673,11 @@ export class Sandbox {
     return core.run;
   }
 
-  /**
-   * Makes a run, waiting on `calls`, with its result promise `result`; `keepResult`: a
-   * host-driven run, whose result promise is kept for `dump`.
-   */
-  private startRun(calls: OpenCall[], result: number, keepResult: boolean): RunCore & { run: Run } {
+  /** Makes a run, waiting on `calls`, with its result promise `result` (0: the entry call's). */
+  private startRun(calls: OpenCall[], result: number): RunCore & { run: Run } {
     const core: RunCore & { run: Run } = {
       open: new Map(calls.map((c) => [c.id, c])),
       result,
-      keepResult,
       used: 0,
       run: undefined as unknown as Run,
       advance: async () => {
@@ -751,7 +744,7 @@ export class Sandbox {
     // Async host calls being served, and those that finished but are not passed back yet.
     const inflight = new Map<number, Promise<void>>();
     const finished: { callId: number; ok: boolean; value: unknown }[] = [];
-    const core = this.startRun([], 0, false);
+    const core = this.startRun([], 0);
     core.beforeSlice = () => {
       for (const { callId, ok, value } of finished.splice(0)) {
         inflight.delete(callId);
@@ -821,7 +814,11 @@ export class Sandbox {
     }
   }
 
-  /** `Run.dump()`: the waiting run as a format 2 dump, its result promise named "run". */
+  /**
+   * `Run.dump()`: the waiting run as a format 2 dump, its result promise named "run" (handle
+   * 0: the entry call's outcome, which takes no handle, so a dump leaves the heap as it
+   * was and a journal's later checks still replay).
+   */
   private dumpRun(core: RunCore): string {
     return this.dumpText([], [["run", core.result]]);
   }
@@ -1223,8 +1220,7 @@ export class Sandbox {
         const outcome = this.guard(() => {
           let h = x.vm_result(vm);
           if (run.result !== 0) {
-            // The run's result promise, taken at an idle point (or named by its dump): a
-            // loaded run's entry call was the dump's Script.
+            // A resumed run's result promise: its entry call was the dump's Script.
             x.vm_handle_free(vm, h);
             h = run.result;
             run.result = 0;
@@ -1271,7 +1267,6 @@ export class Sandbox {
       }
       if (st === STATUS_IDLE) {
         this.checkRejections();
-        if (run.keepResult && run.result === 0) run.result = this.guard(() => this.outcomeHandle());
         return IDLE;
       }
       if (st !== STATUS_HOST_CALL) return undefined;
@@ -1316,13 +1311,6 @@ export class Sandbox {
    */
   takeUnhandledRejections(): unknown[] {
     return this.rejections.splice(0);
-  }
-
-  /** A handle to the entry call's outcome (an async body's promise) at an idle point. */
-  private outcomeHandle(): number {
-    const x = this.x;
-    if (!x.vm_outcome) throw new SandboxError("misuse", "the djs-wasm module has no vm_outcome");
-    return this.check(x.vm_outcome(this.vm), "memory");
   }
 
   /** Reports the VM's unhandled rejections per `opts.unhandledRejections` (D1423). */

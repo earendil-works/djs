@@ -387,8 +387,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_set_random_seed(vm, lo, hi)` | reseed `Math.random` (xorshift64*, as QuickJS) with `hi << 32 \| lo`; a new VM has a fixed default seed (0049) |
 | `vm_abort(vm)` | abandon the current call (out of fuel or parked): the VM is idle and usable again |
 | `vm_result(vm) -> h` | the DONE/THREW value, once |
-| `vm_outcome(vm) -> h` | the entry call's outcome while no frame is active, also at IDLE (an async body's promise); any number of times; out[0] = 1 if it threw; 0 if none |
-| `vm_dump(vm, len) -> 0/1/2` | (feature `dump`) a format 2 dump of the idle VM in out. Staging, four lines: host globals and names to dump (comma-separated), the host's function names in id order and the values to name as `handle:name` (tab-separated). 1: refused, reasons in out; 2: no base image (D2631) |
+| `vm_dump(vm, len) -> 0/1/2` | (feature `dump`) a format 2 dump of the idle VM in out. Staging, four lines: host globals and names to dump (comma-separated), the host's function names in id order and the values to name as `handle:name` (tab-separated; handle 0 names the entry call's outcome). 1: refused, reasons in out; 2: no base image (D2631) |
 | `vm_load_dump(vm, names_len, len) -> 0/1` | (feature `dump`) loads the dump after `names_len` bytes of host function names (`\n`-separated, id order). 0: out = u32 `n_calls, n_handles, (call_id, fn_id)*, (handle, name_len)*`, then the handles' names; 1: refused, the reason in out (D2631) |
 | `vm_host_call(vm) -> argc` | out = `[call_id, fn_id, this lo, hi, (arg lo, hi)*]` |
 | `vm_host_call_info(vm, call_id) -> argc` | `vm_host_call` for any pending call (async ones) |
