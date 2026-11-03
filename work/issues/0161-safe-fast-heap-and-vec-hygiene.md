@@ -1,6 +1,6 @@
 # 0161: Heap access that is safe and as cheap as unsafe; Vec/container hygiene
 
-status: in-progress
+status: done
 agent: audit
 branch: issue/0161-heap-access
 depends-on: 0156
@@ -71,7 +71,39 @@ grow/drop sites so it doesn't regress. Measure bytes per change; no workload slo
   832-byte FuncState (parse_arrow's frame 64 → 864 bytes): push_out now asserts values of
   at most 16 words at compile time.
 - `Vec::with_capacity` out of line (D2522): 60 sites, −1.3 KB gz, workloads −2.1..+0.5%.
+- Final merge: size ceilings lowered to measured + ~1 KB (full 441,661 → 442,685; slim
+  376,465 → 377,489), vec-sites baseline refreshed (grow 174, drop 1,040, with_capacity
+  148, reserve 167, alloc_error 214). Guide: docs/guide/arena.md updated (part 1).
 
 ## Follow-ups
+- push_out / vec_with_capacity in the files 0151 L3 is editing, after L3 lands (redo with
+  scripts/size/vec-sites.py --check; est. ~1 KB gz): interp/run.rs (Vec pushes among its
+  110 `.push(`, most are Exec::push), vm/mod.rs 7, vm/image.rs 2, heap/walk.rs 2,
+  heap/cells.rs, heap/atom.rs, heap/compact.rs and bytecode/template.rs 1 each (+1
+  with_capacity in template.rs). Leave hot.rs, json/, builtins/dense.rs,
+  bytecode/code.rs and compiler/resolve.rs inline unless a measurement says otherwise.
+- Drop sites: 1,040 inlined Vec drops, each spilling the Vec to the shadow stack for
+  `RawVecInner::deallocate`. Per-function work: VM-owned scratch buffers instead of
+  temporaries in the top functions (resolve::emit_function 70 glue sites,
+  Exec::json_regexp_intrinsic 49, Exec::call_intrinsic 30, Parser::finish_unit 26,
+  CodeBuf::finish 23), and fewer String temporaries in error paths. Est. a few KB gz.
+- The rest of the safe/unsafe gap (~7 KB gz) is one compare per access at ~1,650 sites;
+  per-cell views (`&[u8; N]` taken once, fields at constant offsets) at multi-field
+  call sites are the remaining lever (D2520).
 
 ## Result
+- **Part 1 (D2520).** Every arena access goes through heap/layout/access.rs. Safe default:
+  one u64 compare (−5.2 KB gz, wasm instructions −0 to −4%, no unsafe). `unsafe-heap`
+  feature (djs-core, djs-wasm; off, not shipped): unchecked with debug assertions, the
+  only `unsafe` in djs-core (lib.rs forbids it otherwise), sound only for images the
+  engine made; −12.4 KB gz vs the old checks, −8 to −15% instructions but +2–3% on
+  calls/tight. Not in SOURCE_HASH. Gate: verifier fuzz test (tests/verify_fuzz.rs) + e2e
+  with the feature, difftest corpus in release with suspension and GC stress. Masking,
+  non-panicking reads, a shared per-cell window, `wasm32::unreachable` and `#[inline]`
+  were measured and rejected (none beat the u64 compare).
+- **Part 2.** `PushOut::push_out` at 343 non-hot sites (D2521, −3.2 KB gz; values ≤ 16 words,
+  a compile-time check) and `buf::vec_with_capacity` at 60 sites (D2522, −1.3 KB gz);
+  workloads within noise. scripts/size/vec-sites.py reports inlined push/drop/
+  with_capacity/reserve/alloc-error sites per function against scripts/size/vec-sites.txt
+  (`--check` fails on >2% growth of a kind).
+- Total about −9.7 KB gz; size ceilings lowered (full 442,685, slim 377,489).

@@ -1,5 +1,5 @@
 # scripts/size/vec-sites.py --update: inlined container glue of the shipped code (D2521)
-total	grow	172
+total	grow	174
 total	drop	1040
 total	with_capacity	148
 total	reserve	167
@@ -408,7 +408,7 @@ total	alloc_error	214
 2	<djs_core::heap::Heap>::from_bytes
 2	<djs_core::heap::Heap>::from_bytes_trusted
 8	<djs_core::heap::Heap>::mark_compact
-3	<djs_core::heap::Heap>::ordinary_own_keys
+5	<djs_core::heap::Heap>::ordinary_own_keys
 2	<djs_core::heap::Heap>::str_array_index
 2	<djs_core::heap::Heap>::truncate_elements
 1	<djs_core::heap::Heap>::verify
