@@ -1,9 +1,9 @@
-function <anonymous> @1..11543
+function <anonymous> @1..12093
   arg0 tools@0, arg1 console@0
-  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 fakeModels@0, loc6 stored@0, loc7 realLoad@0, loc8 fakeLoad@0
-  await#1 @9814 (179:8) pc 804: -
-function <anonymous> @9822..11510
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 answer@0, loc6 modelsOfType@0, loc7 fakeModels@0, loc8 stored@0, loc9 realLoad@0, loc10 fakeLoad@0
+  await#1 @10364 (197:8) pc 826: -
+function <anonymous> @10372..12060
   arg0 tools@0, arg1 argument 1, arg2 load@0
   loc0 <state>, loc1 models@0, loc2 q@0, loc3 model@0, loc4 issues@0, loc5 off@1134, loc6 qap@1169, loc8 probe@0, loc9 pr@0
-  await#1 @1181 (197:15) pc 212: -
-  await#2 @1429 (202:12) pc 391: - (out: loc5 loc6)
+  await#1 @1181 (215:15) pc 212: -
+  await#2 @1429 (220:12) pc 391: - (out: loc5 loc6)

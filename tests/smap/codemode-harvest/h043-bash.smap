@@ -1,12 +1,12 @@
-function <anonymous> @1..3036
+function <anonymous> @1..3294
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
-  await#1 @2319 (34:8) pc 200: -
-function <anonymous> @2327..3025
+  await#1 @2577 (39:8) pc 200: -
+function <anonymous> @2585..3283
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 cmds@0, loc3 res@0
-  await#1 @543 (41:13) pc 92: -
-function <anonymous> @2913..2997
+  await#1 @543 (46:13) pc 92: -
+function <anonymous> @3171..3255
   arg0 argument 0
   loc0 <state>, loc1 k@0, loc2 c@0
-  await#1 @33 (41:89) pc 144: binary.left
+  await#1 @33 (46:89) pc 144: binary.left

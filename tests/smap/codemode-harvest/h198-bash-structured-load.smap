@@ -1,8 +1,8 @@
-function <anonymous> @1..20475
+function <anonymous> @1..20733
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc5 stored@0, loc6 realLoad@0, loc7 fakeLoad@0
-  await#1 @19443 (595:8) pc 3828: -
-function <anonymous> @19451..20454
+  await#1 @19701 (600:8) pc 3828: -
+function <anonymous> @19709..20712
   arg0 tools@0, arg1 load@0
   loc0 <state>, loc1 entries@0
-  await#1 @31 (596:7) pc 42: call.callee call.this
+  await#1 @31 (601:7) pc 42: call.callee call.this

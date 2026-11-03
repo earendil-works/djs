@@ -1,10 +1,10 @@
-function <anonymous> @1..2591
+function <anonymous> @1..2849
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
-  await#1 @1283 (38:8) pc 226: -
-function <anonymous> @1291..2580
+  await#1 @1541 (43:8) pc 226: -
+function <anonymous> @1549..2838
   arg0 tools@0
   loc0 <state>, loc1 s@0, loc2 old@0
-  await#1 @27 (39:9) pc 41: -
-  await#2 @1097 (51:1) pc 113: -
-  await#3 @1163 (52:9) pc 148: -
+  await#1 @27 (44:9) pc 41: -
+  await#2 @1097 (56:1) pc 113: -
+  await#3 @1163 (57:9) pc 148: -

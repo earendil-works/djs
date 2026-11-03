@@ -1,12 +1,12 @@
-function <anonymous> @1..3042
+function <anonymous> @1..3300
   arg0 tools@0, arg1 argument 1
   loc0 <state>, loc1 console@0, loc2 results@0, loc3 fake@0
-  await#1 @2074 (34:8) pc 207: -
-function <anonymous> @2082..3031
+  await#1 @2332 (39:8) pc 207: -
+function <anonymous> @2340..3289
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 cmds@0, loc3 out@0
-  await#1 @763 (42:1) pc 99: -
-function <anonymous> @2888..2970
+  await#1 @763 (47:1) pc 99: -
+function <anonymous> @3146..3228
   arg0 argument 0
   loc0 <state>, loc1 k@0, loc2 c@0
-  await#1 @29 (42:73) pc 139: assign.object assign.key
+  await#1 @29 (47:73) pc 139: assign.object assign.key

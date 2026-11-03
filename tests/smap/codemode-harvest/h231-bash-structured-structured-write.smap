@@ -1,15 +1,15 @@
-function <anonymous> @1..7256
+function <anonymous> @1..7514
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
-  await#1 @5566 (198:8) pc 1039: -
-function <anonymous> @5574..7245
+  await#1 @5824 (203:8) pc 1039: -
+function <anonymous> @5832..7503
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 prompts@0, loc3 results@0
-  await#1 @897 (205:1) pc 43: -
-  await#2 @966 (206:17) pc 76: -
-function <anonymous> @6577..7160
+  await#1 @897 (210:1) pc 43: -
+  await#2 @966 (211:17) pc 76: -
+function <anonymous> @6835..7418
   arg0 prompt@0, arg1 i@0
   loc0 <state>, loc1 r@0, loc2 res@0, loc3 rul@0, loc4 b64@0, loc5 out@0
-  await#1 @35 (207:13) pc 34: -
-  await#2 @221 (211:3) pc 122: -
-  await#3 @306 (212:15) pc 186: -
+  await#1 @35 (212:13) pc 34: -
+  await#2 @221 (216:3) pc 122: -
+  await#3 @306 (217:15) pc 186: -

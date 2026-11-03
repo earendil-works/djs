@@ -1,9 +1,9 @@
-function <anonymous> @1..3543
+function <anonymous> @1..3801
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
-  await#1 @2930 (175:8) pc 808: -
-function <anonymous> @2938..3532
+  await#1 @3188 (180:8) pc 808: -
+function <anonymous> @3196..3790
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 gori@0, loc3 list@0, loc4 results@0
-  await#1 @32 (176:14) pc 25: -
-  await#2 @155 (178:17) pc 89: -
+  await#1 @32 (181:14) pc 25: -
+  await#2 @155 (183:17) pc 89: -

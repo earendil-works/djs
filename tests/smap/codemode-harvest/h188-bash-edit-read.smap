@@ -1,12 +1,12 @@
-function <anonymous> @1..5003
+function <anonymous> @1..5261
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
-  await#1 @3348 (58:8) pc 310: -
-function <anonymous> @3356..4992
+  await#1 @3606 (63:8) pc 310: -
+function <anonymous> @3614..5250
   arg0 tools@0
   loc0 <state>, loc1 offset@29, loc2 path@61, loc3 content@61, loc4 path@374
-  await#1 @118 (61:16) pc 101: for-of.iterator for-of.next (out: loc4)
-  await#2 @489 (65:126) pc 317: for-of.iterator for-of.next call.callee call.this object.literal (out: loc1 loc2 loc3)
-  await#3 @541 (66:6) pc 405: call.callee call.this (out: loc1 loc2 loc3 loc4)
-  await#4 @696 (67:6) pc 466: call.callee call.this (out: loc1 loc2 loc3 loc4)
-  await#5 @1239 (68:6) pc 510: call.callee call.this (out: loc1 loc2 loc3 loc4)
+  await#1 @118 (66:16) pc 101: for-of.iterator for-of.next (out: loc4)
+  await#2 @489 (70:126) pc 317: for-of.iterator for-of.next call.callee call.this object.literal (out: loc1 loc2 loc3)
+  await#3 @541 (71:6) pc 405: call.callee call.this (out: loc1 loc2 loc3 loc4)
+  await#4 @696 (72:6) pc 466: call.callee call.this (out: loc1 loc2 loc3 loc4)
+  await#5 @1239 (73:6) pc 510: call.callee call.this (out: loc1 loc2 loc3 loc4)

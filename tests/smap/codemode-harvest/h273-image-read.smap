@@ -1,8 +1,8 @@
-function <anonymous> @1..1720
+function <anonymous> @1..1978
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc5 fakeImage@0
-  await#1 @1469 (27:8) pc 173: -
-function <anonymous> @1477..1698
+  await#1 @1727 (32:8) pc 173: -
+function <anonymous> @1735..1956
   arg0 tools@0, arg1 image@0
   loc0 <state>, loc1 d@37, loc2 r@51
-  await#1 @61 (28:36) pc 85: for-of.iterator for-of.next
+  await#1 @61 (33:36) pc 85: for-of.iterator for-of.next

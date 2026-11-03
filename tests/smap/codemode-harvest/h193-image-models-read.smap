@@ -1,9 +1,9 @@
-function <anonymous> @1..4274
+function <anonymous> @1..4824
   arg0 tools@0, arg1 console@0
-  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 fakeModels@0, loc6 fakeImage@0
-  await#1 @2322 (54:8) pc 210: -
-function <anonymous> @2330..4240
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 answer@0, loc6 modelsOfType@0, loc7 fakeModels@0, loc8 fakeImage@0
+  await#1 @2872 (72:8) pc 232: -
+function <anonymous> @2880..4790
   arg0 tools@0, arg1 argument 1, arg2 image@0
   loc0 <state>, loc1 models@0, loc2 pick@0, loc3 bird@0, loc4 base@0, loc5 prompts@0, loc6 res@0
-  await#1 @105 (56:14) pc 57: -
-  await#2 @1631 (65:13) pc 120: -
+  await#1 @105 (74:14) pc 57: -
+  await#2 @1631 (83:13) pc 120: -

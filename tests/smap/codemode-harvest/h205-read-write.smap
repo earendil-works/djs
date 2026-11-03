@@ -1,9 +1,9 @@
-function <anonymous> @1..1876
+function <anonymous> @1..2134
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
-  await#1 @1217 (32:8) pc 192: -
-function <anonymous> @1225..1865
+  await#1 @1475 (37:8) pc 192: -
+function <anonymous> @1483..2123
   arg0 tools@0
   loc0 <state>, loc1 path@0, loc2 parts@0, loc3 stripNote@0, loc4 source@0, loc5 shadow@0
-  await#1 @82 (34:13) pc 107: -
-  await#2 @580 (39:6) pc 246: call.callee call.this
+  await#1 @82 (39:13) pc 107: -
+  await#2 @580 (44:6) pc 246: call.callee call.this

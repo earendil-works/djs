@@ -1,9 +1,9 @@
-function <anonymous> @1..3605
+function <anonymous> @1..3863
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
-  await#1 @3102 (184:8) pc 838: -
-function <anonymous> @3110..3594
+  await#1 @3360 (189:8) pc 838: -
+function <anonymous> @3368..3852
   arg0 tools@0
   loc0 <state>, loc1 fisi@0, loc2 list@0, loc3 out@0, loc4 o@166, loc5 p@181
-  await#1 @32 (185:14) pc 16: - (out: loc4 loc5)
-  await#2 @191 (189:13) pc 134: for-of.iterator for-of.next
+  await#1 @32 (190:14) pc 16: - (out: loc4 loc5)
+  await#2 @191 (194:13) pc 134: for-of.iterator for-of.next

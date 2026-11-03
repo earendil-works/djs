@@ -1,12 +1,12 @@
-function <anonymous> @1..2172
+function <anonymous> @1..2430
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
-  await#1 @1919 (34:8) pc 200: -
-function <anonymous> @1927..2161
+  await#1 @2177 (39:8) pc 200: -
+function <anonymous> @2185..2419
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 paths@0
-  await#1 @137 (36:1) pc 51: -
-function <anonymous> @2099..2156
+  await#1 @137 (41:1) pc 51: -
+function <anonymous> @2357..2414
   arg0 path@0
   loc0 <state>
-  await#1 @31 (36:67) pc 43: call.callee call.this object.literal
+  await#1 @31 (41:67) pc 43: call.callee call.this object.literal

@@ -1,15 +1,15 @@
-function <anonymous> @1..6618
+function <anonymous> @1..7168
   arg0 tools@0, arg1 argument 1
-  loc0 <state>, loc1 console@0, loc2 results@0, loc3 fake@0, loc6 fakeModels@0
-  await#1 @5133 (99:8) pc 422: -
-function <anonymous> @5141..6595
+  loc0 <state>, loc1 console@0, loc2 results@0, loc3 fake@0, loc6 answer@0, loc7 modelsOfType@0, loc8 fakeModels@0
+  await#1 @5683 (117:8) pc 444: -
+function <anonymous> @5691..7145
   arg0 argument 0, arg1 argument 1
   loc0 <state>, loc1 tools@0, loc2 models@0, loc3 avail@0, loc4 qop@0, loc5 ls@0, loc6 paths@0, loc7 files@0, loc8 results@0
-  await#1 @41 (100:15) pc 33: -
-  await#2 @246 (103:12) pc 122: -
-  await#3 @402 (105:15) pc 186: -
-  await#4 @558 (106:17) pc 221: -
-function <anonymous> @5571..5679
+  await#1 @41 (118:15) pc 33: -
+  await#2 @246 (121:12) pc 122: -
+  await#3 @402 (123:15) pc 186: -
+  await#4 @558 (124:17) pc 221: -
+function <anonymous> @6121..6229
   arg0 p@0
   loc0 <state>
-  await#1 @33 (105:76) pc 51: object.literal
+  await#1 @33 (123:76) pc 51: object.literal

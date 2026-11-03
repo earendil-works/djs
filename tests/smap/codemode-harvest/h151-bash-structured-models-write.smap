@@ -1,12 +1,12 @@
-function <anonymous> @1..16573
+function <anonymous> @1..17123
   arg0 tools@0, arg1 console@0
-  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 fakeModels@0
-  await#1 @14659 (283:8) pc 1357: -
-function <anonymous> @14667..16550
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 answer@0, loc6 modelsOfType@0, loc7 fakeModels@0
+  await#1 @15209 (301:8) pc 1379: -
+function <anonymous> @15217..17100
   arg0 tools@0, arg1 argument 1
   loc0 <state>, loc1 models@0, loc2 total@0, loc3 done@0, loc4 model@0, loc5 criteria@0, loc6 q@0, loc7 t0@0, loc8 errs@0, loc9 n@0, loc10 start@972, loc11 chunk@1016, loc12 all@1016, loc13 rows@1016, loc14 i@1288, loc15 batch@1318, loc16 res@1318
-  await#1 @51 (284:25) pc 46: call.callee call.this (out: loc10 loc11 loc12 loc13 loc14 loc15 loc16)
-  await#2 @144 (285:24) pc 93: call.callee call.this (out: loc10 loc11 loc12 loc13 loc14 loc15 loc16)
-  await#3 @1031 (298:18) pc 306: - (out: loc14 loc15 loc16)
-  await#4 @1367 (303:17) pc 444: -
-  await#5 @1689 (306:3) pc 555: - (out: loc14 loc15 loc16)
+  await#1 @51 (302:25) pc 46: call.callee call.this (out: loc10 loc11 loc12 loc13 loc14 loc15 loc16)
+  await#2 @144 (303:24) pc 93: call.callee call.this (out: loc10 loc11 loc12 loc13 loc14 loc15 loc16)
+  await#3 @1031 (316:18) pc 306: - (out: loc14 loc15 loc16)
+  await#4 @1367 (321:17) pc 444: -
+  await#5 @1689 (324:3) pc 555: - (out: loc14 loc15 loc16)
