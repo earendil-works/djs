@@ -1,14 +1,14 @@
 # Functions as code: dumps
 
-Status: built (issue 0167). `Vm::dump` in djs-core (feature `dump`), the REPL's `.dump`
-and `.restore`, a djs-wasm export (feature `dump`, off by default) behind
-`Sandbox.dump`/`Sandbox.load`, and a TypeScript prototype of the same dumper over the heap
-bytes (js/proto) for comparison. Decisions: D2352 (wasm size), D2353 (the format and its
-promise), D2354 (which dumper a wasm host uses).
+Status: built (issues 0167, 0168, 0170). `Vm::dump` and `Vm::load_dump` in djs-core
+(feature `dump`), the REPL's `.dump` and `.restore`, djs-wasm exports (feature `dump`,
+off by default) behind `Sandbox.dump`/`Sandbox.load`. Decisions: D2352 (wasm size), D2353
+(version 1 and its promise), D2355 (the checker), D2580-D2582 (the loader, format 2,
+classes). The TypeScript prototype of 0167 was removed (D2564).
 
-Next: format 2, continuation dumps, which also carry suspended activations and replace heap
-images as persistence; the TypeScript dumper is dropped (D2560-D2565,
-docs/continuation-dumps.md).
+Dumps are now **format 2**: a Script that `Vm::load_dump` runs with a `$dump` object the
+loader passes in (D2581). Version 1 dumps still load (as plain Scripts). Continuation dumps
+(docs/continuation-dumps.md) add suspended activations to format 2.
 
 The owner's question: a harness builds functions in one session and wants them back later,
 "even after weeks, where heap snapshots are potentially no longer usable", with captured
@@ -226,6 +226,43 @@ not in scope where the dump writes the function`). The check costs a compile of 
 dump (djs compiles about 30 MB/s natively), so mostly the size of the functions and
 factories written.
 
+### Classes
+
+A class is its verbatim source text (`Function.prototype.toString` of a class is the
+whole class), written where a function would be: in place when it captures nothing, else
+in the factory of its scope group. Its constructor, methods, accessors, field initializers
+and private methods are one text and so one scope: they join one group, and only the
+class gets a key; the members get their locations from it (`$dump.s1.A.prototype.m`,
+`Object.getOwnPropertyDescriptor($dump.s1.A.prototype, "x").get`). After the text the dump
+writes what the class's evaluation does not make (D2582):
+
+- `$dump.keep(C, [keys])` and `$dump.keep(C.prototype, [keys])`: deletes members deleted
+  since the definition, and throws if the text no longer makes a member (a computed key
+  that evaluates to something else);
+- static fields and properties added since, with `Object.defineProperty` (attributes
+  kept); the name, if the text gives another one; changed prototypes; freezing;
+- private fields and brands through the loader's `$dump.private(obj, C, "#x", value)`
+  (without a value: a private method or accessor), against the class the dump recreated,
+  whose private names are new symbols.
+
+While a dump loads, a class's static initializer installs its static private methods but
+runs no static field initializer and no static block (D2580): their effects are already
+in the dumped state, and running them again would repeat them (`static {
+registry.push(this) }`). The dump restores the static fields' current values instead.
+
+A derived class's heritage is bound to the parent it has now:
+`((Base) => class Child extends Base {...})($dump.s2.Base)`, so the text stays verbatim
+and `extends` evaluates to the right class wherever the parent is; a builtin parent named
+by the same path (`extends Map`) needs no binding. Instances are objects with the class's
+prototype (`{ __proto__: $dump.s1.A.prototype, x: 1 }`) plus their private state;
+instances of builtin subclasses are the builtin (`new Map(...)`, an array, `new
+Error(...)`, a settled promise) with their prototype set afterwards. Methods that use
+`super` in object literals are written in their home object's literal.
+
+What a class's evaluation still runs at load: its computed keys and its heritage path.
+Keys with side effects (`[counter++]()`) would run again; such classes are rare and the
+checker cannot see it.
+
 ### What is refused
 
 Everything below fails the dump with one line per value, `path: reason`:
@@ -236,8 +273,11 @@ Everything below fails the dump with one line per value, `path: reason`:
 | a suspended generator or async function | an activation, not a value (images and journals keep those) |
 | a Proxy | its behavior is its handler's code at every operation |
 | a host function the host does not re-bind by name | the host owns it |
-| a class, a method that uses `super` | not written yet: a class needs its whole body and its static state; a `super` method its home object |
-| an object with private fields | `#x` cannot be set from outside the class |
+| a decorated class | its decorators would run again at load |
+| a class whose heritage is an expression (`extends mixin(Base)`) | only a name or a path is bound to the parent (see "Classes") |
+| a function that uses a class's private names outside the class text (a closure a method returned) | only the class's text makes its private scope |
+| a private field of a class the dump does not hold, or whose code never uses the name | the loader finds private names through the recreated class's code |
+| a method that uses `super` written outside its object literal | its home object is the literal it is written in |
 | a binding in its TDZ, or a closure over one | there is no value to write |
 | a captured `this`, `arguments` or `new.target` | not a variable a factory can declare |
 | a builtin's internal value, a builtin with no name | see "Builtins" |
@@ -280,9 +320,12 @@ the image while the build lasts, the dump for later builds, for review, and for 
   (docs/cli.md).
 - **djs-wasm / JS:** `vm_dump` (feature `dump`, off by default, D2352);
   `Sandbox.dump(names?)` passes `console` and the sandbox's host functions as the host
-  names, and `Sandbox.load(text)` runs a dump as a Script (not journaled). The prototype
-  `dumpHeap(sandbox.heapView(), { base, host, names })` in js/proto/dump.ts does the same
-  from the host side.
+  names; `vm_load_dump` behind `Sandbox.load(text)` loads one (not journaled).
+- **Loading:** `Vm::load_dump(text, &LoadOptions { fuel })` runs a dump in this VM (meant
+  to be fresh): format 2 with the loader's `$dump`, version 1 as a plain Script, any other
+  version refused; then the jobs it queued. `Err(LoadError)` says why: not a dump, an
+  unknown format, a compile error, an exception, a host call that is not a loader
+  primitive, fuel, memory.
 
 **Selecting what to persist.** A harness decides by name. The simplest rule for codemode
 is to dump the bindings a script left at its top level (the body's locals, through
@@ -293,7 +336,16 @@ out; the closure walk brings along whatever the named functions need.
 
 ## Format version and the compatibility promise
 
-The first line, `// djs-dump 1`, names the format. Version 1 means: a Script that only uses
+The first line, `// djs-dump N`, names the format. **Format 2** (D2581), what this build
+writes, is a Script run by `Vm::load_dump` with a `$dump` the loader passes in: a global
+property (not writable, not enumerable) holding an ordinary object with the loader's
+primitives (`private` today; `resume`, `cell`, `pending`, `handle` and `TDZ` with
+continuation dumps), removed when the load ends. The dump adds its helpers to it. The
+primitives are host functions served only by the loader's run loop: a format 2 dump run
+as an ordinary Script has no `$dump` and fails on its first line. Format 2 promises what
+version 1 does, for the bindings it holds.
+
+Version 1 means: a Script that only uses
 the language, the standard builtins and the helpers it defines on `$dump`, builtins
 referenced by D2371 paths, and the conventions above. **The promise: every later djs
 loads a version 1 dump and recreates the same bindings.** It needs no reader to keep
@@ -351,6 +403,9 @@ functions and their state:
    loaded like any other.
 
 ## Rust or TypeScript
+
+Superseded: one dumper, in Rust (D2564); the TypeScript prototype was removed in 0170.
+What 0167 measured:
 
 Two implementations of the same algorithm exist, and both write the same text (7 of the 8
 round-trip cases byte for byte, the other differs only in the order of its roots; the

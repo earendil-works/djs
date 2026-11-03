@@ -37,6 +37,13 @@ persisted.
 
 ## What a format 2 dump looks like
 
+Format 2 is defined as **a Script run by `Vm::load_dump` with the `$dump` the loader
+passes in** (D2581, 0170): every dump this build writes has the header `// djs-dump 2`,
+also when it holds only values; activations are what continuation dumps add to it. The
+loader defines `$dump` as a global property (not writable, not enumerable) holding the
+primitives as host functions only its run loop serves, removes it when the load ends, and
+still runs version 1 dumps as plain Scripts.
+
 A codemode turn:
 
 ```js

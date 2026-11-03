@@ -7923,3 +7923,64 @@ instrumented is reported, never mislabeled.
   codemode-harvest,e2e}/*.smap (a slot table per function, one line per site with its roles
   and the slots out of scope there) and tests/smap/summary.txt (sites by kind, by role
   sequence, unsupported); `DJS_UPDATE_SMAPS=1` accepts a change.
+## D2580: While a dump loads, static initializers skip static fields and blocks
+date: 2026-11-04 · by: portable · issue: 0170
+A dump writes a class as its verbatim text, so loading evaluates the class again; its static
+field initializers and static blocks would run a second time (`static { registry.push(this)
+}` pushes twice) although their effects are already in the dumped state. The compiler now
+ends a class's static initializer's private-method installation with `jump_if_loading`
+(a new branch op) to the initializer's return: while `Vm::load_dump` runs (`Heap::
+loading_dump`, a transient flag, never in an image) static private methods and accessors
+are installed, static fields and blocks are not; the dump restores the static fields'
+values itself (D2582). Outside a load the op falls through. Measured on the default wasm
+module: 443,460 -> 443,581 B gzip (+121; +187 raw: the op handler and two emission sites);
+one more instruction (1 fuel) per class definition with static elements; the class bytecode
+snapshot changed, and OPS_HASH with it (images key on it). Rejected: skipping the
+initializer's call (static private methods would then be missing, and their closures live
+only in the initializer's hidden bindings), and re-running statics in an empty scope
+(silent double effects on builtins and the host).
+
+## D2581: Format 2 is a Script run by `Vm::load_dump` with the loader's `$dump`
+date: 2026-11-04 · by: portable · issue: 0170
+`Vm::load_dump(text, &LoadOptions { fuel })` reads the header: `// djs-dump 1` runs as a
+plain Script (version 1 makes its own `$dump`, D2353; tests/dump/v1.js keeps loading),
+`// djs-dump 2` gets the loader's `$dump`, other versions are refused. The `$dump` handover:
+a global property (not writable, not enumerable, configurable) holding an ordinary object
+with the primitives (`private` now; 0171 adds `resume`, `cell`, `pending`, `handle`,
+`TDZ`), defined before the Script runs and deleted after it and the jobs it queued; the
+dump adds its helpers (`$dump.bytes`, `$dump.keep`, ...) to it and no longer deletes it.
+The primitives are host functions with ids the loader reserves (0xFFFF_FF00 and up,
+which embedders must not use), served only by the loader's own run loop: a dump run as an
+ordinary Script has no `$dump` at all, a primitive that escapes the load parks the VM on
+a host call its embedder does not know, and a dump that calls any other host function
+fails the load. Every dump the dumper writes is format 2. Exposed as djs-wasm's
+`vm_load_dump` (feature `dump`), `Sandbox.load` and the REPL's `.restore`. Rejected: wrapping
+the dump in a function with a `$dump` parameter (its top-level declarations would no longer
+be globals) and a global lexical binding (removing one is not a JavaScript operation).
+
+## D2582: Classes and private fields in dumps
+date: 2026-11-04 · by: portable · issue: 0170
+A class is written as its verbatim text where a function would be (in place, or in its
+scope group's factory). Its constructor, methods, accessors, field initializers and private
+methods join one scope group, since one text makes them; members are found after discovery
+as the closures of methods, getters and setters (by kind) whose text lies inside the
+class's and that sit on the class or its prototype, plus the hidden closures they hold
+(`<fields N>`, `<#m>`), and get their locations from the class. After the text: a
+`$dump.keep(holder, keys)` helper per class and prototype (deletes members deleted since,
+throws if the text no longer makes a member), static fields and later properties by
+`Object.defineProperty`, the name, prototypes, freezing. A derived class's heritage path is
+bound to the parent it has now by an arrow parameter
+(`((Base) => class C extends Base {...})(parent)`), refused if the class's code uses a
+variable of that name, skipped when the parent is the builtin of that path; heritage
+expressions other than a name or a path are refused, as are decorated classes. Private
+fields and brands go through `$dump.private(obj, C, "#x"[, value])`: the loader finds the
+recreated class's private symbol, and a private method's or accessor's closures, through
+the variables named `#x` and `<#x>`/`<get #x>`/`<set #x>` that the class's closures capture
+(a private name no closure captures can no longer be read; such fields are refused).
+Static private methods are installed by the class's evaluation (D2580). Functions that use
+a class's private scope but are not made by its text (a closure a method returned) are
+refused; methods that use `super` are written in their home object's literal or refused.
+Residual: computed keys and heritage paths are evaluated again at load. Cost on the
+`dump` feature (default wasm build + `dump`): 479,059 -> 491,966 B gzip (+12.9 KB with the
+loader). Coverage: no harvested case and 10 of the 2,627 private scripts define classes;
+9 of those dump, load and compare equal.
