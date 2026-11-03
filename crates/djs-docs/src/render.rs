@@ -317,7 +317,7 @@ fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
         tab("out", "Output", true),
         tab("bytecode", "Bytecode", false),
         tab("heap", "Heap", false),
-        tab("snapshot", "Suspend &amp; snapshot", false),
+        tab("suspend", "Suspend", false),
         pane("pre", "out", false, &esc(&out_text)),
         pane("pre", "bytecode", true, &esc(&disasm)),
         pane(
@@ -328,9 +328,9 @@ fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
         ),
         pane(
             "div",
-            "snapshot",
+            "suspend",
             true,
-            "<p class=\"muted\">Run the example to see it suspend and snapshot.</p>"
+            "<p class=\"muted\">Run the example to see it suspend.</p>"
         ),
     )
 }

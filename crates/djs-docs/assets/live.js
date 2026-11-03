@@ -366,21 +366,12 @@ async function run(ex) {
       keep.collect();
       pane("heap").innerHTML = heapHtml(before, walk(keep, l, before.len));
     };
-    const t1 = performance.now();
-    const image = sb.bytes();
-    const t2 = performance.now();
-    const quiet = () => {};
-    const restored = await Sandbox.fromBytes(image, { module, console: { log: quiet, info: quiet, warn: quiet, error: quiet } });
-    const t3 = performance.now();
-    const check = restored.run("return typeof console.log");
-    pane("snapshot").innerHTML =
+    pane("suspend").innerHTML =
       `<p>The run took <b>${ms.toFixed(2)} ms</b> in <b>${slices}</b> fuel slices of ${FUEL_SLICE} units: ` +
       `the VM returned control to this page ${Math.max(0, slices - 1)} times between two instructions and resumed where it stopped. ` +
-      `Nothing of the run was on the Rust stack in between; it is all in the arena.</p>` +
-      `<p>Snapshot: <code>sb.bytes()</code> is <b>${kb(image.length)}</b> (the arena plus a small header), taken in ${(t2 - t1).toFixed(2)} ms. ` +
-      `Restored into a fresh wasm instance with <code>Sandbox.fromBytes</code> in ${(t3 - t2).toFixed(2)} ms; ` +
-      `the restored VM runs (<code>typeof console.log</code> → ${check}).</p>`;
-    restored.dispose();
+      `Nothing of the run was on the Rust stack in between; it is all in the arena (${kb(sb.heapSize)}).</p>` +
+      `<p>That is how a host suspends a run inside its process. To keep a run beyond the process, a host waits for it to be idle ` +
+      `(only waiting on its tool calls) and writes it as a continuation dump: JavaScript that recreates it in a later djs.</p>`;
     ex.sandbox?.dispose();
     ex.sandbox = sb;
     setStatus(failure ? (failure.text.startsWith("SyntaxError") ? "did not compile" : "threw") : `ran in ${ms.toFixed(1)} ms`);
