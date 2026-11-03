@@ -73,6 +73,32 @@ define reusable functions), the refusal list, and sizes. No engine changes.
   (no BTreeMap / sort / format! on the dump path; heap tables, insertion order,
   crate::text builder D2339) and prototype a host-side TS dumper over js/src/reader.ts to
   compare (coverage, speed, JS code size), recommend one in the doc.
+- Shrunk the Rust dumper: one open-addressing `Index` (cell offset / atom id -> tagged
+  u32: builtin, host value, node, root box) instead of BTreeMaps; graph insertion order
+  (deterministic, no sort); text through `crate::text` (`cat!`, no format!/join); helpers
+  as a bitmask; `$dump` use tracked by a flag (no substring scans); no str slicing (its
+  panic path pulled core::fmt Debug + Unicode tables); registry naming walk with a bitset
+  instead of BTreeSet, `crate::sort`, `cat!`. wasm full: 443,477 gz without dump,
+  476,621 with (+33.1 KB gz, +95 KB raw; was +58 KB gz). What is left is the dumper's own
+  code (render/drain ~14 KB raw each) and ~5 KB raw of std (split, trim, memrchr).
+  Fixed on the way: a unique symbol key written twice (literal + attribute patch) made two
+  symbols; dump_values roots registered as boxes before visiting (order no longer
+  matters); `$dump.builtin` missing when only a builtin patch used it.
+- Speed (native release, 10k records + Map): 54 -> 40 ms (paths and `at` locations only
+  for reference values, well-known atoms instead of atom_name comparisons, base atoms by
+  id: the VM's atom table starts with the base's).
+- `Sandbox.load` ignored nothing: it read the Script's completion value, and a dump ending
+  in `data.self = data;` threw "cyclic value". It now appends `void 0;`.
+- TS prototype js/proto/dump.ts (+ realm.generated.ts, compare.ts): the same algorithm
+  over the heap bytes. All 9 Rust cases pass in both (6 give byte-identical text; the
+  others differ only in root order, from the TS source scan). Big heap (N records with
+  nested objects, dates, shared Map, 100-member team cycle, N/10 counters, N*4-byte
+  buffer), release wasm vs node 25: N=1k 12.9 vs 8.2 ms, 10k 99 vs 52 ms, 50k 508 vs
+  255 ms, identical 9.7 MB output; TS builtin names 2.7 ms once per base (cached).
+  TS size: 40.2 KB min / 13.7 KB gz (+ layout table 2.0 KB gz shared with the reader).
+  It needs engine facts the layout table does not export (func flags, intrinsic
+  numbering, class slots, lazy fn props, collection/regexp encodings); finds the globals
+  a function reads by scanning its source (over-approximation); loses Error `stack`.
 
 ## Follow-ups
 
