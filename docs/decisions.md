@@ -8553,3 +8553,13 @@ tertiary one. The token package now ships an ISC license, vendored as
 Elanor's preview builds still expire after 30 days, but a maintainer can now keep a main
 build permanently as `main-<12 hex>`, and releases get permanent `vX.Y.Z` labels. Nothing
 is on public npm yet, so the vendored copy stays.
+
+## D2626: A dump's builtin names are walked once per VM, and walked faster
+date: 2026-11-04 · by: portable · issue: 0184
+Every `Vm::dump` named the base's builtins by walking the realm (`registry::reachable_names`):
+0.8 ms of a 0.8 ms small dump natively, about 2-3 ms in wasm (0184's measurements). The
+walk now skips edges to cells it has named already before making their paths (the same
+names, half the time), and the VM keeps the table after its first dump (with the base's
+length; another base is walked again): a VM's next dumps cost 0.05 ms natively for an
+empty session. Packaging B makes a fresh dump-module VM per dump, so it gets only the
+faster walk unless the host keeps that instance between dumps.

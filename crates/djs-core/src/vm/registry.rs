@@ -415,7 +415,7 @@ fn names(heap: &Heap, prelude: impl FnOnce(&Heap) -> Vec<(Value, String)>) -> Ve
     // and last what only `[[Prototype]]` links reach from any of them.
     let mut globals = Vec::new();
     if let Some(g) = global.as_object() {
-        for (seg, v, _) in edges(heap, g, false) {
+        for (seg, v, _) in edges(heap, g, false, None) {
             // A global's path is its name; keys that aren't identifiers keep `globalThis`.
             let p = child_path("globalThis", &seg);
             let p = match p.strip_prefix("globalThis.") {
@@ -456,6 +456,13 @@ fn names(heap: &Heap, prelude: impl FnOnce(&Heap) -> Vec<(Value, String)>) -> Ve
 struct Seen(Vec<u64>);
 
 impl Seen {
+    fn contains(&self, cell: u32) -> bool {
+        let w = (cell / 8) as usize;
+        self.0
+            .get(w / 64)
+            .is_some_and(|x| x & (1u64 << (w % 64)) != 0)
+    }
+
     /// Marks `cell`; whether it was new.
     fn insert(&mut self, cell: u32) -> bool {
         let w = (cell / 8) as usize;
@@ -495,7 +502,10 @@ fn walk(
         let Some(o) = v.as_object().filter(|_| expand) else {
             continue;
         };
-        for (seg, child, child_expand) in edges(heap, o, proto) {
+        // Children seen already are skipped when popped (only roots are walked again), so
+        // they are left out here, before their paths are made: most edges of the later
+        // passes lead to named builtins (0184: this halved a dump's fixed cost).
+        for (seg, child, child_expand) in edges(heap, o, proto, Some(seen)) {
             queue.push_out((child, child_path(&path, &seg), child_expand, false));
         }
     }
@@ -542,24 +552,40 @@ fn child_path(path: &str, seg: &str) -> String {
 /// The outgoing edges of `o` that lead to heap values: (segment, value, whether to walk on
 /// from it). Accessor segments carry their `get `/`set ` prefix; their functions are not
 /// walked (a path can only name them as a whole).
-fn edges(heap: &Heap, o: Obj, proto: bool) -> Vec<(String, Value, bool)> {
+/// With `seen`, only the edges to cells not seen yet.
+fn edges(heap: &Heap, o: Obj, proto: bool, seen: Option<&Seen>) -> Vec<(String, Value, bool)> {
+    let new = |v: Value| cell_of(v).is_some_and(|c| seen.is_none_or(|s| !s.contains(c)));
     let mut out: Vec<(String, Value, bool)> = Vec::new();
     for k in heap.own_keys(o) {
+        let (a, b) = match heap.get_own_property(o, k) {
+            Some(Property::Data { value, .. }) => (value, Value::UNDEFINED),
+            Some(Property::Accessor { getter, setter, .. }) => (getter, setter),
+            None => continue,
+        };
+        if !new(a) && !new(b) {
+            continue;
+        }
         let Some(seg) = segment(heap, k) else {
             continue;
         };
         match heap.get_own_property(o, k) {
             Some(Property::Data { value, .. }) => out.push_out((seg, value, true)),
             Some(Property::Accessor { getter, setter, .. }) => {
-                out.push_out((cat!("get ", seg), getter, false));
-                out.push_out((cat!("set ", seg), setter, false));
+                if new(getter) {
+                    out.push_out((cat!("get ", seg), getter, false));
+                }
+                if new(setter) {
+                    out.push_out((cat!("set ", seg), setter, false));
+                }
             }
             None => {}
         }
     }
-    out.retain(|(_, v, _)| cell_of(*v).is_some());
     crate::sort::sort_by(&mut out, |a, b| a.0 < b.0);
-    if proto && let Some(p) = heap.get_prototype_of(o) {
+    if proto
+        && let Some(p) = heap.get_prototype_of(o)
+        && new(Value::object(p))
+    {
         out.push_out((String::from(".[[Prototype]]"), Value::object(p), true));
     }
     out

@@ -682,11 +682,28 @@ impl<'a> Dumper<'a> {
             depth: 0,
             visited: 0,
         };
-        for (cell, path) in super::registry::reachable_names(&base) {
+        // Once per VM: the walk is most of a small dump's cost (D2626).
+        let fresh;
+        let names: &[(u32, String)] = match vm
+            .base_names
+            .get_or_init(|| (opts.base.len(), super::registry::reachable_names(&base)))
+        {
+            (len, names) if *len == opts.base.len() => names,
+            _ => {
+                fresh = super::registry::reachable_names(&base);
+                &fresh
+            }
+        };
+        for (cell, path) in names {
+            let cell = *cell;
             if cell < base_end {
-                let named = named(&path);
+                let named = named(path);
                 d.cells.insert(key(cell), BUILTIN | d.builtins.len() as u32);
-                d.builtins.push_out(Builtin { cell, path, named });
+                d.builtins.push_out(Builtin {
+                    cell,
+                    path: path.clone(),
+                    named,
+                });
             }
         }
         if let Some(bg) = intrinsic(&base, Intrinsic::Global).as_object() {

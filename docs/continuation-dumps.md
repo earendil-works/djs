@@ -203,6 +203,10 @@ original order). The loader adds:
 | `$dump.keep(o, keys)` | deletes the members a class's evaluation made that the class no longer has; every key must be there |
 | `$dump.random(lo, hi)` | `Math.random`'s state (D2624) |
 
+Hosts store and send dump text compressed (zstd level 3, no dictionary: a third of an
+image container for typical pi sessions, about equal for data-heavy ones, 0184); the format
+itself stays a plain Script, uncompressed.
+
 The primitives are read-only, and a dump defines nothing on `$dump` but the locations it
 fills (`$dump.p1`, `$dump.a3`): no helper code (D2622, the owner's call: the text holds
 the run's data, its functions and these calls).

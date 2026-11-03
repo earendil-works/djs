@@ -173,6 +173,10 @@ enum Collection {
 pub struct Vm {
     heap: Heap,
     opts: VmOptions,
+    /// The base image's builtins by canonical path, for dumps: computed by the first
+    /// `dump` and kept, with the length of the base it was computed on (D2626).
+    #[cfg(feature = "dump")]
+    base_names: core::cell::OnceCell<(usize, Vec<(u32, String)>)>,
 }
 
 impl Vm {
@@ -181,7 +185,12 @@ impl Vm {
         IMAGE_DEPS.write(&mut heap);
         state::init(&mut heap)?;
         realm::init(&mut heap)?;
-        let mut vm = Vm { heap, opts };
+        let mut vm = Vm {
+            heap,
+            opts,
+            #[cfg(feature = "dump")]
+            base_names: Default::default(),
+        };
         crate::builtins::number::set_seed(&mut vm.heap, opts.random_seed);
         if opts.prelude {
             vm.install_prelude()?;
@@ -388,7 +397,12 @@ impl Vm {
             return Err(LoadError::BadHeader);
         }
         heap.force_prefix_barrier(opts.prefix_barrier);
-        Ok(Vm { heap, opts })
+        Ok(Vm {
+            heap,
+            opts,
+            #[cfg(feature = "dump")]
+            base_names: Default::default(),
+        })
     }
 
     /// The arena as it is: the complete VM state, including dead value-stack slots above
