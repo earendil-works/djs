@@ -124,6 +124,40 @@ right defaults to start with? Is one-byte parents only acceptable? Should step 2
 speed? Is the external mode (3) wanted now or later, given pi would need to keep result
 bytes?
 
+### Step 1: slices (D2542), merged on its own
+- Coordinator: go with the defaults as named constants, one-byte parents only; follow
+  0163's hashing rules (rebased onto it: `set_hash_key` clears slices too, hashes go over
+  views); step 2 after step 1 (speed2 no longer extends D2551 to strings in objects); step
+  3 later, as a follow-up.
+- Built: the `Slice` kind (cells.rs 22), readers in heap/string.rs, `contiguous` where a
+  view is enough, `flatten` turning a slice into a flattened rope, producers (substring,
+  fast split, JSON.parse), the collector's weak parent rule with copy-out and a second
+  pass, the canonical copy writing slices flat, verify, the JS reader, layout regenerated.
+- Measured: work/scratch/0165/cases.ts (log-1mb/5mb, log-wait, snippets, parse, pmap,
+  records) against main and seven constant variants; mem-perturb n=8 on all workloads
+  (unchanged); wasm instructions n=5 (noise ±1.5% between runs on the same builds),
+  native n=5 within ±1%; pi bench (tool-heavy warm 24 → 20 pages, times unchanged).
+  Numbers in D2542.
+- Size: +1,956 B gzip, slim +2,233: recorded as a trade in D2542, ceilings raised
+  (tests/scores/size.tsv). A sort of the slices by parent cost +4.4 KB and was replaced.
+- Shared files touched: heap/cells.rs, string.rs, walk.rs, compactor.rs, gc.rs, mod.rs
+  (test module), builtins/string.rs, builtins/fast.rs, builtins/number.rs,
+  interp/conv.rs, interp/run/{intrinsics,iter,json_regexp}.rs, json/parse.rs,
+  json/stringify.rs (two `flatten` → `contiguous`), js/src/reader.ts.
+- Guide: heap.md (Strings: the Slice kind), gc.md (slices and the strings they keep;
+  canonical copy). Tests: heap/slice_tests.rs, a sandbox test (slices to the host and
+  through snapshots).
+
 ## Follow-ups
+- Step 3, external results in snapshots (later; needs the owner's call on pi keeping or
+  re-encoding result bytes). Estimate: session image format (a flag on result buffers and
+  an external table of call id, offset, length, FNV-1a 64), restore asking the host for
+  payloads and checking hashes, `Sandbox.bytes({ externalResults })` /
+  `fromBytes(..., { results })`, the Sandbox keeping result bytes per call id: about a
+  week, +~1 KB gzip. The log-wait snapshot would go from 6.9 MiB raw / 0.98 zstd to about
+  2 MiB / 0.3.
+- The snapshot of "snippets" keeps a parent its slices cover 40% of (5.0 MiB against
+  main's 1.9): if pi sessions show such cases, lower `SLICE_KEEP_SHARE` to 2 and look at
+  the copy-out's peak (21.3 MiB on that case).
 
 ## Result

@@ -960,7 +960,8 @@ impl<'a, 'o> Parser<'a, 'o> {
         if s.len == 0 {
             return Ok(Value::string(self.heap.atom_string(atoms::EMPTY)?));
         }
-        if let Some((parent, base)) = self.slices
+        if E == LATIN1
+            && let Some((parent, base)) = self.slices
             && !s.escaped
             && s.len >= crate::heap::string::SLICE_MIN_LEN
         {

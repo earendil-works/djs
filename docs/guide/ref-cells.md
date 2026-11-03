@@ -22,6 +22,10 @@ table.
 
 ![The Rope cell](gen/cell-Rope.svg)
 
+## Slice (kind 22)
+
+![The Slice cell](gen/cell-Slice.svg)
+
 ## Symbol (kind 5)
 
 ![The Symbol cell](gen/cell-Symbol.svg)

@@ -81,12 +81,39 @@ console.log(ascii.length, wide.length, out.length, out.slice(-10).trim());
 ```
 <!-- /gen -->
 
-> **Trade-off.** Two widths and ropes over one UTF-16 representation. A single
+A fourth kind keeps tool results from being stored twice. A codemode script typically
+reads a log or a file and cuts it up: `text.split("\n")`, `line.slice(a, b)`,
+`JSON.parse(text)`. Each piece used to be a copy, so a 5 MB log split into lines held
+10 MB. A **`Slice`** is instead the units `[OFF, OFF + LEN)` of a flat one-byte string,
+in a 24-byte cell (D2542):
+
+<!-- gen:cell Slice -->
+![The Slice cell](gen/cell-Slice.svg)
+
+<!-- /gen -->
+
+- substrings, `split`'s pieces, regular expression matches and JSON.parse's string
+  values become slices when they have at least 32 units and the string they come from
+  has at least 256; shorter ones are copied, which is cheap and keeps nothing alive. A
+  slice of a slice reads the same parent;
+- every reader that only needs the units reads them in place (as it does an append
+  rope's), so a slice costs nothing to use. Flattening it, which an atom (a property
+  key) or a Map key needs, copies the units once and turns the cell into a flattened
+  rope in place;
+- only one-byte parents are sliced: a slice of a two-byte string could hold only narrow
+  units, and equal strings must have equal widths.
+
+On the log-splitting case the heap drops from 12.0 to 7.2 MiB, and a snapshot of it from
+11.7 to 6.9 MiB. A slice keeps its whole parent alive, so a short piece of a huge text
+could pin the text: [the collector](gc.md) copies such slices out.
+
+> **Trade-off.** Two widths, ropes and slices over one UTF-16 representation. A single
 > representation would make every string operation simpler. But Latin-1 halves the
 > memory of almost every string a codemode script sees, and the host reads a `Str8` with
-> a cheap byte-to-char decode. Ropes make `+=` O(1). The cost is code: every string
-> operation handles three kinds (and the append flags), and the hash is computed over
-> code units so that it does not depend on the representation.
+> a cheap byte-to-char decode. Ropes make `+=` O(1), and slices make cutting a text up
+> free. The cost is code: every string operation handles four kinds (and the append
+> flags), and the hash is computed over code units so that it does not depend on the
+> representation.
 
 ## Atoms: property keys as integers
 
@@ -279,7 +306,7 @@ helo
 
 Decisions on this page:
 
-<!-- gen:decisions D1052 D1053 D1610 D1871 D1054 D1055 D1830 D1831 D1621 D1390 D1381 D1382 D1513 D2445 -->
+<!-- gen:decisions D1052 D1053 D1610 D1871 D1054 D1055 D1830 D1831 D1621 D1390 D1381 D1382 D1513 D2445 D2542 -->
 - D1052: Layout description macro
 - D1053: String representation
 - D1610: Append ropes: `s += x` writes into a growable buffer
@@ -294,4 +321,5 @@ Decisions on this page:
 - D1382: WeakMap and WeakSet are ephemerons in the Cheney collector
 - D1513: WeakRef and FinalizationRegistry on ephemeron tables; cleanup jobs after a collection
 - D2445: A closure's length and name come from its template until changed
+- D2542: Slices: substrings that share a one-byte parent, copied out when they pin it
 <!-- /gen -->

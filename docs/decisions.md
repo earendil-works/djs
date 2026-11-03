@@ -7440,3 +7440,65 @@ them as JSON keys, computed property names or Map keys would spend quadratic tim
 - **Not done:** the collision test covers strings; keys built against SipHash need the
   key. Atom ids and the base keep their layout.
 
+
+## D2542: Slices: substrings that share a one-byte parent, copied out when they pin it
+date: 2026-11-09 · by: heap · issue: 0165
+Step 1 of 0165 (docs/lessons-from-pico.md 2.3). A new string cell kind `Slice` (22;
+24 B: `LEN` and `HASH` where every string kind has them, `PARENT: Ref`, `OFF: u32`) is
+the units `[OFF, OFF + LEN)` of a flat `Str8` (never an append buffer, never a slice).
+- **Made by** `builtins::string::substring` (slice, substring, substr, trim, regexp
+  matches and captures, the general split path), the fast one-byte `split`, and
+  `json::parse` for string values without escapes (one-byte input only). Thresholds are
+  constants in heap/string.rs: `SLICE_MIN_LEN` = 32 units and `SLICE_PARENT_MIN_LEN` = 256
+  units of the string cut; a slice of a slice points at the root parent. Ropes are not
+  sliced (split and the intrinsics flatten first).
+- **Read** in place: `str_view`, `str_view_flat`, `str_chunks`, `char_code_at`, the
+  concat leaf writers and `alloc_latin1_pieces` handle the kind, and `Heap::contiguous`
+  (one kind read) replaces `flatten` where a reader only needs a view (regexp exec, the
+  string intrinsics, iteration, JSON.stringify's quoting, number parsing, `indexOf`'s
+  needle). `flatten` copies a slice once and turns the cell into a flattened `Rope` in
+  place (the field offsets match), which atoms (`intern`), Map/Set keys and
+  `str_data_offset` users get. `set_hash_key` clears slices' cached hashes (D2433); the
+  hash goes over the units through the views, so it equals a copy's.
+- **Collector**: a full collection marks a slice without its parent; after the mark, two
+  walks over the marked slices sum, in each unreached parent's `HASH` field
+  (`gc_bits::COUNTED`), the units its slices cover. A parent of at least
+  `SLICE_KEEP_LEN` = 4096 units covered less than `1/SLICE_KEEP_SHARE` = 1/4 is kept for
+  this collection and its slices flagged (`SLICE_DETACH`); right after it, each flagged
+  slice is flattened, and a second mark-compact drops the parents (so a snapshot right
+  after a collection does not carry them). Minor collections keep parents. The Cheney
+  copy writes a slice as a flat `Str8`, so canonical images and hashes do not depend on
+  slices (its to-space is uncapped for that).
+- **Images**: `verify` checks `PARENT` is a `Str8` and the range fits; the JS reader reads
+  slices; js/src/layout.generated.ts regenerated. The layout hash changes by itself.
+
+Measured (work/scratch/0165/cases.ts, Sandbox with async host functions, against main):
+
+| case | main | slices |
+| --- | --- | --- |
+| log-5mb: 5 MB log, `split("\n")`, filter | arena 12.0, peak 20.1 MiB | arena 7.2, peak 17.3 |
+| log-1mb | arena 2.6, peak 4.4 | arena 1.6, peak 4.3 |
+| log-wait: log-5mb's state in a snapshot | 11.70 MiB raw, 1.75 zstd | 6.89 raw, 0.98 zstd |
+| parse: JSON.parse of 2,000 records with 1 KB bodies, snapshot | 4.45 raw, 0.05 zstd | 2.39 raw, 0.04 zstd |
+| pmap-200, records | unchanged (no cutting) | |
+| pi bench tool-heavy, warm (wasm pages) | 24 | 20 |
+
+The perf workloads' peaks (mem-perturb n=8) are unchanged, and so are the pi bench
+times. Instructions in wasm moved −1.4% to +2.8% between repeated runs on the same
+builds (V8's code generation for the interpreter); natively (`djs run`, n=5) strings
+−0.1%, push-pop +0.3%, json-date −0.9%.
+
+Sweep of the constants (cases above; the workloads do not cut long strings): slices of
+16 or 64 units, parents of 64 or 1024 units, and shares of 1/2, 1/4, 1/8 gave the same
+numbers on log, pmap, parse and records. The share matters where slices pin a parent:
+"snippets" (100 × 60 units of one 5 MB log and 100 × 20,000 of another, logs dropped)
+snapshots at 1.93 MiB on main, 5.03 with 1/4 or 1/8 (the second log is 40% covered, so
+kept), 1.93 with 1/2, whose peak rose from 11.1 to 21.3 MiB while copying 2 MB out. The
+defaults stay as the coordinator set them.
+
+**Size (trade, coordinator):** +1,956 B gzip (442,260 → 444,216; the module's ceiling
+raised to 444,500) and slim +2,233 (377,381 → 379,614; ceiling 379,900): the kind in the
+readers, the collector's walks, the canonical copy, JSON.parse's slicing. The parts
+measured and dropped to get there: a sort-and-group of the slices by parent (+4.4 KB
+gzip; the `COUNTED` bit and the parent's `HASH` field do it without a table), slicing
+concatenation ropes (+0.2 KB), a separate unslice path (merged into `flatten`).

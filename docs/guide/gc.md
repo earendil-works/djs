@@ -225,6 +225,32 @@ A run's peak still depends a little on placement, so a memory claim about the co
 compares distributions over many slightly perturbed runs, never one run per build
 (D2048).
 
+### Slices and the strings they keep
+
+A [slice](heap.md#strings) reads its units from its parent string, so it keeps the
+parent alive. That is what makes it cheap, and also its risk: 100 snippets of 60
+characters cut from a 5 MB log would keep the 5 MB. A full collection therefore treats a
+slice's reference to its parent as weak while it marks (D2542):
+
+1. Marking does not follow a slice to its parent.
+2. After the mark, a walk over the marked slices sums, for each parent that nothing
+   else reached, the units its slices cover.
+3. A parent of at least 4,096 units that its slices cover less than a quarter of is
+   still kept for this collection, since its slices read it, but each of its slices is
+   flagged. Every other parent is marked and stays.
+4. Right after the collection, each flagged slice gets a copy of its units and becomes a
+   flattened rope in place, and a second pass of the collector drops the parents. A
+   snapshot taken right after a collection does not carry them.
+
+The rule depends only on the heap at the collection, so it is as deterministic as the
+collection points. Minor collections keep every parent.
+
+> **Trade-off.** Up to three quarters of a parent stay alive for the slices that cover
+> the rest. A lower share would copy more and keep less: with "half", a snapshot of two
+> logs each cut into pieces dropped from 5.0 to 1.9 MiB, but the peak during the copy
+> rose from 11.1 to 21.3 MiB. The quarter is a first setting, a constant in the
+> collector.
+
 ## Copying, for canonical layouts
 
 The copying collector reserves a new arena as large as the old one's used part, copies
@@ -247,7 +273,9 @@ The order is breadth-first from the roots, in field order, so the layout depends
 on the object graph, not on the order in which cells were allocated. djs uses it where
 that matters:
 - the **canonical hash** collects a copy of the heap this way and hashes the result, so
-  two VMs with the same graph have the same hash whatever their history;
+  two VMs with the same graph have the same hash whatever their history. A slice comes
+  out as the flat string it reads, so the hash does not depend on which strings are
+  slices either;
 - the **base image** is made this way, so it doesn't depend on how the prelude
   allocated.
 
@@ -383,7 +411,7 @@ not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D16
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2057 D2063 D2064 D2065 D2042 D2044 D2055 D2056 D2045 D2046 D2047 D2048 D2053 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 D2442 D2541 -->
+<!-- gen:decisions D2040 D2041 D2057 D2063 D2064 D2065 D2042 D2044 D2055 D2056 D2045 D2046 D2047 D2048 D2053 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 D2442 D2541 D2542 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2057: The cells a VM replaces first sit at the end of base and sealed images
@@ -420,4 +448,5 @@ Decisions on this page:
 - D1054: Atom representation; symbols are atoms
 - D2442: GC growth counts the builtin prefix as a fixed allowance
 - D2541: Instance memory: the arena kept at memory's end, lean start capacity, the coded base outside memory
+- D2542: Slices: substrings that share a one-byte parent, copied out when they pin it
 <!-- /gen -->
