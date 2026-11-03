@@ -7547,8 +7547,8 @@ the limit's SyntaxError at 211 for every regexp construct.
 ## D2553: JSON.stringify builds a large result in its heap string
 date: 2026-11-03 · by: speed2 · issue: 0162
 The fast path's output buffer no longer holds the whole result. At a check point (after
-a primitive, a Date, a container's opening and, new, its closing) a buffer of 4096 units
-or more moves into the result's heap string and starts again
+a primitive, a Date or a container's opening) a buffer of 4096 units or more moves into
+the result's heap string and starts again
 (`Ser::spill`): appended in place while that string is still the arena's last cell
 (`Heap::append_last_latin1`: the cell grows at the frontier, the units are written once),
 else as a new piece; several pieces are joined into a rope at the end. 0116's objection
@@ -7564,8 +7564,10 @@ Peak wasm memory (mem-perturb, 12 runs, mean MiB, main → now): json-date 5.14 
 4.23 → 4.02, an 8 MB result of 80,000 records 34.2 → 25.9; json-indent, json-text,
 pi-like, strings and a 4 MB string unchanged. Wasm instructions (default tiering, n = 5,
 outliers re-run at n = 9) within ±0.8% on every workload and pico case; json-big −1.6%,
-the pi bench −0.3%. Natively, json and json-text +0.1%. Size with D2554: +185 B gzip,
-slim within its ceiling.
+the pi bench −0.3%. Natively, json and json-text +0.1%. Size: within both ceilings
+(slim 4 B under) after trimming: the first version was +890 B gzip; a check point at
+each closing bracket (bounding a long run of them) and the out-of-line `Buf::alloc` went
+for the last bytes, so a run of closing brackets stays in the buffer as before.
 
 Measured and dropped:
 - Long strings quoted in 4096-unit parts with check points between them (a pair kept

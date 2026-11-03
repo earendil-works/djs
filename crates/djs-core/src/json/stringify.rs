@@ -16,7 +16,8 @@
 //! into the result's heap string at the next check point and starts again (D2553): a
 //! large result is built in the arena, where it ends up, no Rust copy of it is alive while
 //! the arena grows to take it, and the string length limit and the memory cap apply as it
-//! grows.
+//! grows. (Closing brackets and their indentation are not check points: a run of them
+//! stays in the buffer until the next value or the end, as before.)
 
 use alloc::vec::Vec;
 
@@ -133,9 +134,8 @@ pub fn stringify_fast_at(
     }
     s.spill()?;
     // Usually one piece; a rope of them when something else was allocated in between.
-    let mut pieces = s.out.pieces.iter();
-    let mut str = *pieces.next().expect("spilled");
-    for &p in pieces {
+    let mut str = s.out.pieces[0];
+    for &p in &s.out.pieces[1..] {
         str = s.heap.concat(str, p)?;
     }
     Ok(Some(str))
@@ -166,8 +166,7 @@ enum Buf {
 }
 
 impl Buf {
-    /// A heap string of the buffer's units (one copy for the three callers).
-    #[inline(never)]
+    /// A heap string of the buffer's units.
     fn alloc(&self, heap: &mut Heap) -> Result<Str, HeapError> {
         match self {
             Buf::Narrow(b) => heap.alloc_latin1(b),
@@ -732,8 +731,7 @@ impl Ser<'_, '_> {
         Ok(())
     }
 
-    /// Closes a container (its bracket is written), a check point.
-    fn pop(&mut self) -> Result<(), StringifyError> {
+    fn pop(&mut self) {
         let f = self.stack.pop().unwrap();
         if self.stack.len() >= LINEAR_CYCLE_CHECK
             && let Ok(i) = self.deep.binary_search(&f.obj().offset())
@@ -745,7 +743,6 @@ impl Ser<'_, '_> {
             debug_assert_eq!(self.keys.len(), end);
             self.keys.truncate(start);
         }
-        self.check()
     }
 
     /// Array element `i` ([[Get]]), or `Slow` if that would call a getter.
@@ -821,7 +818,7 @@ impl Ser<'_, '_> {
                             self.newline(depth - 1);
                         }
                         self.out.byte(b'}');
-                        self.pop()?;
+                        self.pop();
                         continue;
                     }
                     self.stack[top] = Frame::Plain {
@@ -859,7 +856,7 @@ impl Ser<'_, '_> {
                             self.newline(depth - 1);
                         }
                         self.out.byte(b'}');
-                        self.pop()?;
+                        self.pop();
                         continue;
                     }
                     let key = self.keys[next];
@@ -906,7 +903,7 @@ impl Ser<'_, '_> {
                             self.newline(depth - 1);
                         }
                         self.out.byte(b']');
-                        self.pop()?;
+                        self.pop();
                         continue;
                     }
                     self.stack[top] = Frame::Arr {

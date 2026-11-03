@@ -69,7 +69,8 @@ bench and pico's rewritten cases (work/scratch/0152, 0154/w). No workload slower
   memory: json-date 5.14 → 3.50 MiB, json/jsonh −0.4, json-replacer −0.2, an 8 MB result
   34.2 → 25.9; instructions ±0.8%, pi bench −0.3%. Size: the first version (long strings
   in parts, in-place two-byte appends, the room check kept) was +890 B gz, over the
-  ceiling; trimmed to +273 (+185 with D2554), within both ceilings. Long-string parts
+  ceiling; trimmed to +273 (+185 with D2554). After the next rebase the slim build was
+  6 B over: the closing-bracket check point went too (slim 4 B under its ceiling). Long-string parts
   also made a 4 MB `repeat` string peak higher (13.9 → 15.8 MiB): dropped with them.
   Corpus: builtins/json-stringify-large.js (qjs expected; stress, determinism and
   --suspend-every 1 OK); unit test json::tests::stringify_large_output_spills_into_the_heap.
