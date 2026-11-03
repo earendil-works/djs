@@ -8,7 +8,9 @@ classes). The TypeScript prototype of 0167 was removed (D2564).
 
 Dumps are now **format 2**: a Script that `Vm::load_dump` runs with a `$dump` object the
 loader passes in (D2581). Version 1 dumps still load (as plain Scripts). Continuation dumps
-(docs/continuation-dumps.md) add suspended activations to format 2.
+(docs/continuation-dumps.md) add suspended activations to format 2. Since 0180 a dump has
+no comments: its first statement is the directive `"djs-dump 2";` (D2640), and what the
+comments used to explain is `djs resume --explain`'s job (D2641).
 
 The owner's question: a harness builds functions in one session and wants them back later,
 "even after weeks, where heap snapshots are potentially no longer usable", with captured
@@ -47,7 +49,7 @@ readable.
 
 ## What a dump looks like
 
-The committed fixture `tests/dump/v1.js`, from this session:
+This session (the committed fixture `tests/dump/v1.js` is its version 1 dump):
 
 ```js
 function makeCounter(start) { let n = start; return { inc: () => ++n, get: () => n }; }
@@ -65,16 +67,13 @@ var legacy = { [tag]: 'tagged', big: 12345678901234567890n };
 Array.prototype.last = function () { return this[this.length - 1]; };
 ```
 
-is (helpers shortened):
+dumps as (format 2, helpers shortened; the dump has no comments, the `/* ... */` are this
+page's):
 
 ```js
-// djs-dump 1: 12 bindings (counter, bytes, small, key, index, graph, frozen, tag, re, iterProto, legacy, makeCounter).
-// Run it as a Script to recreate them (djs REPL: .restore FILE). Builtins are
-// referenced by name, never written.
-globalThis.$dump = {};
+"djs-dump 2";
 $dump.bytes = (s) => { /* base64 -> ArrayBuffer with atob */ };
 $dump.builtin = (path) => { /* resolves "%ArrayIteratorPrototype%", "get Map.prototype.size", ... */ };
-// inc, get sharing n
 $dump.s1 = (() => {
   let n = 41;
   return { inc: () => ++n, get: () => n };
@@ -93,19 +92,23 @@ const re = /ab+c/gi;
 const iterProto = $dump.builtin("%ArrayIteratorPrototype%");
 var legacy = { big: 12345678901234567890n, [tag]: "tagged" };
 function makeCounter(start) { let n = start; return { inc: () => ++n, get: () => n }; }
-// Builtins the session changed.
 Array.prototype.last = function () { return this[this.length - 1]; };
-// Links that close cycles, and attributes.
 $dump.n3.parent = graph;
 Object.freeze(frozen);
-void delete globalThis.$dump;
 ```
+
+The order says what the comments of version 1 said: helpers, then the roots (with the
+factories and named objects they need before them), then the builtins the session
+changed, then the links that close cycles and the attributes. Version 1 (the fixture)
+starts with the comment `// djs-dump 1: 12 bindings (...)`, makes its own
+`globalThis.$dump = {}` and ends with `void delete globalThis.$dump;`; otherwise it is the
+same text with section comments.
 
 The roots are top-level declarations of the Script, as the session had them: the global
 lexical record's bindings as `let`/`const`, the global object's own properties as `var`
 (or the function declaration itself, when its text declares that name). `$dump` is a
 temporary namespace for the helpers and for objects that are referenced twice or sit on a
-cycle; it is deleted at the end, and a dump that needs none of it has none.
+cycle; in format 2 the loader passes it in and removes it when the load ends.
 
 ## How a dump is written
 
@@ -169,7 +172,6 @@ Closures that capture variables are made by a **factory per group**, where a gro
 closures that share captured variables, transitively:
 
 ```js
-// add, all sharing state, api
 $dump.s1 = (() => {
   let state = $dump.n2;
   let api;
@@ -298,8 +300,8 @@ takes the scripts' time again, and a replayed session diverges where the engine 
 behavior; in exchange it can recreate everything, frames included. A dump needs neither
 the tools nor the time and only holds values, which is what "functions to use again
 later" means. Provenance belongs next to the dump, not in it: the host can store the ids
-of the turns that defined each binding in its metadata (below), or append the defining
-script as a comment for a reader, at the cost of the dump's size.
+of the turns that defined each binding in its metadata (below), or keep the defining
+scripts next to the dump for a reader. The dump itself carries no comments (D2641).
 
 ## Images are the fast path, dumps the durable form
 
@@ -339,7 +341,12 @@ out; the closure walk brings along whatever the named functions need.
 
 ## Format version and the compatibility promise
 
-The first line, `// djs-dump N`, names the format. **Format 2** (D2581), what this build
+The first statement, the directive `"djs-dump 2";` (`"djs-dump 2 typescript";` when the
+dump holds functions of TypeScript scripts, D2615), names the format (D2640): a directive
+is not a comment, does nothing when the Script runs, and the loader reads it before it
+compiles (it has to pick the grammar). Version 1 dumps start with the comment
+`// djs-dump 1`, which the loader still reads (only for version 1: a format 2 dump with
+the comment header of builds before 0180 is not a dump). **Format 2** (D2581), what this build
 writes, is a Script run by `Vm::load_dump` with a `$dump` the loader passes in: a global
 property (not writable, not enumerable) holding an ordinary object with the loader's
 primitives (`private` today; `resume`, `cell`, `pending`, `handle` and `TDZ` with

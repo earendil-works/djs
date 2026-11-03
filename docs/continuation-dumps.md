@@ -38,8 +38,9 @@ persisted.
 ## What a format 2 dump looks like
 
 Format 2 is defined as **a Script run by `Vm::load_dump` with the `$dump` the loader
-passes in** (D2581, 0170): every dump this build writes has the header `// djs-dump 2`,
-also when it holds only values; activations are what continuation dumps add to it. The
+passes in** (D2581, 0170): every dump this build writes starts with the directive
+`"djs-dump 2";` (D2640; before 0180 the comment `// djs-dump 2`), also when it holds only
+values; activations are what continuation dumps add to it. The
 loader defines `$dump` as a global property (not writable, not enumerable) holding the
 primitives as host functions only its run loop serves, removes it when the load ends, and
 still runs version 1 dumps as plain Scripts.
@@ -68,19 +69,11 @@ stopped in the second batch: `src/c.ts` was read and counted, the read of `src/d
 between them. Its dump (tests/dump/v2/plan.dump.js loads a version of it):
 
 ```js
-// djs-dump 2: a suspended run. 2 activations, 1 pending host call.
-// Stopped idle: no jobs, no frames. Host calls issued 5, delivered 4.
-// $dump comes from the loader with resume, cell, pending, handle, private and TDZ,
-// which exist only while this Script runs. Everything else is plain JavaScript.
+"djs-dump 2";
 $dump.builtin = (path) => { /* as in version 1 */ };
-
-// ---- Data
 $dump.files = ["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"];
 $dump.report = [[2, 0]];
 $dump.batches = [["src/a.ts", "src/b.ts"], ["src/c.ts", "src/d.ts"]];
-
-// ---- Closures: todos shares `seen` with the run's frame, so the factory hands out the
-// variable's cell too.
 $dump.s1 = (() => {
   let seen = new Map([["src/a.ts", 2], ["src/b.ts", 0], ["src/c.ts", 1]]);
   async function todos(path) {
@@ -91,9 +84,6 @@ $dump.s1 = (() => {
   }
   return { todos, $cells: { seen: $dump.cell(() => seen) } };
 })();
-
-// ---- The run's function: the turn's script as the host compiled it (never called; it
-// supplies the code for the activation below).
 $dump.f1 = async function () {
   const files = await tools.glob({ pattern: "src/*.ts" });
   const seen = new Map();
@@ -104,57 +94,73 @@ $dump.f1 = async function () {
   }
   text(`${report.flat().reduce((a, b) => a + b, 0)} TODOs in ${seen.size} files`);
 };
-
-// ---- In flight
-// The for-of's iterator, past the first batch: advancing an array iterator runs no user
-// code, so doing it again gives exactly the same state.
 $dump.it1 = $dump.batches[Symbol.iterator]();
 $dump.it1.next();
 $dump.it1.next();
-
-// Host call 5, issued before the dump. On load the host decides: deliver a recorded
-// result, issue it again, or reject it.
 $dump.p5 = $dump.pending(5, "tools.read", [{ path: "src/d.ts" }]);
-
-// todos("src/d.ts"), called by batch.map, so with (element, index, array).
 $dump.a2 = $dump.resume($dump.s1.todos, {
   at: "await#1",
-  //   const body = await tools.read({ path });
-  //                ^
   awaiting: $dump.p5,
   this: undefined,
   args: ["src/d.ts", 1, $dump.batches[1]],
   bindings: { path: "src/d.ts", body: $dump.TDZ, n: $dump.TDZ },
-}); // -> the activation's result promise
-
-// Promise.all over the second batch: element 0 (src/c.ts) resolved to 1. A plain 1 in its
-// place gives the same record.
+});
 $dump.p6 = Promise.all([1, $dump.a2]);
-
-// The run, in the second iteration of the for-of.
 $dump.run = $dump.resume($dump.f1, {
   at: "await#2",
-  //     report.push(await Promise.all(batch.map(todos)));
-  //                 ^
   awaiting: $dump.p6,
   this: undefined,
   args: [],
   bindings: {
     files: $dump.files,
-    seen: $dump.s1.$cells.seen,   // the same cell todos captures
+    seen: $dump.s1.$cells.seen,
     todos: $dump.s1.todos,
     report: $dump.report,
     batch: $dump.batches[1],
   },
-    // Evaluated before the await, named by role, bottom first; the loader puts them where
-  // this build's compiler keeps them.
   operands: [["call.callee", Array.prototype.push], ["call.this", $dump.report]],
   loops: [{ kind: "for-of", iterator: $dump.it1,
             next: $dump.builtin("%ArrayIteratorPrototype%.next") }],
 });
+$dump.handle("run", $dump.run);
+```
 
-$dump.handle("run", $dump.run); // the host's handle on the run's result
-void delete globalThis.$dump;
+The dump has no comments (D2641; the `/* … */` are this page's shortening). Read top to
+bottom:
+
+- The directive `"djs-dump 2";` names the format (D2640). `$dump` comes from the loader
+  with `resume`, `cell`, `pending`, `handle`, `private` and `TDZ`, which exist only while
+  the Script runs; everything else is plain JavaScript.
+- Data, then the closures: `todos` shares `seen` with the run's frame, so its factory
+  hands out the variable's cell too (`$cells.seen`), which the run's bindings take, so
+  the frame and the closure share one variable again.
+- `$dump.f1` is the turn's script as the host compiled it: never called, it supplies the
+  code for the run's activation.
+- The for-of's iterator, past the first batch: advancing an array iterator runs no user
+  code, so doing it again gives exactly the same state.
+- Host call 5, issued before the dump. On load the host decides: deliver a recorded
+  result, issue it again, or reject it.
+- `todos("src/d.ts")`, called by `batch.map`, so with (element, index, array); its
+  `resume` returns the activation's result promise. `Promise.all` over the second batch
+  has element 0 (`src/c.ts`) resolved to 1: a plain 1 in its place gives the same record.
+- The run, in the second iteration of the for-of. `operands` are the values evaluated
+  before the await, named by role, bottom first; the loader puts them where this build's
+  compiler keeps them. `$dump.handle` gives the host its handle on the run's result.
+
+Where each activation stopped is what `djs resume --explain` prints, for the file at
+hand (tests/dump/v2/plan.dump.js, this example with `later` as the tools' transport):
+
+```text
+tests/dump/v2/plan.dump.js: format 2; 1 open call, 2 suspended activations; handles: run
+#5 later("TODO four\nok\nTODO five")
+  async function todos at dump.js:19:18
+      const body = await tools.read({ path });
+                   ^
+    path = 'src/d.ts', body = <uninitialized>, n = <uninitialized>
+  async function main at dump.js:38:17 (run)
+      report.push(await Promise.all(batch.map(todos)));
+                  ^
+    files = [ 'src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts' ], seen = Map(3) { … }, todos = [AsyncFunction: todos], report = [ [ 2, 0 ] ], batch = [ 'src/c.ts', 'src/d.ts' ]
 ```
 
 Loading runs it as a Script, drains the job queue (here the `Promise.all` job that fills
@@ -246,8 +252,8 @@ passes, say, its run's promise as "run").
   `arguments` object if the function has one, operands by role, loops as `{kind,
   iterator, next}`, an async generator's request queue. Bindings that closures share are
   handed over as `$dump.cell`s from their factory (`$cN` keys). The dump's text has no
-  comments about them (the owner's call: comments leave the format, 0180);
-  `Vm::dump_report` returns, per resumed activation, its location in the dump, the
+  comments (the owner's call, D2641: `djs resume --explain` shows where each activation
+  stopped, in the dump); `Vm::dump_report` returns, per resumed activation, its location in the dump, the
   function, the site, and the site's file, line, column and source line. Generators that
   have not started are called again (their parameters must run no code); finished ones
   are made finished.
@@ -263,7 +269,7 @@ passes, say, its run's promise as "run").
   generator awaiting a `return()` value, then-reactions on promises of other
   constructors.
 - **TypeScript:** a dump that writes a function of a TypeScript script says so in its
-  first line (`// djs-dump 2 typescript`) and is compiled as TypeScript (D2615).
+  directive (`"djs-dump 2 typescript";`) and is compiled as TypeScript (D2615).
 - **Not carried:** the VM's clock and `Math.random`'s state are the host's to set again;
   unhandled-rejection bookkeeping of promises the session has not looked at yet.
 

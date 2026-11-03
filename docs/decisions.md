@@ -8158,3 +8158,38 @@ open_calls, pending_promises }` gives a host or a reader where each resumed acti
 stopped (`Vm::dump` is its text). This replaces 0172's first take, a comment block with a
 caret above every `$dump.resume`, and its "In flight" header line.
 
+
+## D2640: The dump format marker is the directive `"djs-dump 2";`
+date: 2026-11-04 · by: nocomment · issue: 0180
+Dumps have no comments (D2641), so the format marker cannot be the comment `// djs-dump
+2` either. A format 2 dump's first statement is the directive prologue `"djs-dump 2";`
+(`"djs-dump 2 typescript";` for D2615's TypeScript dumps), on the first line. The loader
+reads it as text before it compiles (it has to pick the grammar), so a marker the dump
+evaluates, `$dump.version(2)`, would still need the text check plus a primitive that
+repeats it; a directive is inert when the Script runs (an unknown directive does
+nothing), and a format 2 dump run as a plain Script still fails at its first `$dump`.
+The version number stays 2: only the marker's spelling changed. Version 1 dumps keep
+their comment `// djs-dump 1` and still load (D2353, tests/dump/v1.js); the comment form
+of any other version is "not a djs dump", including format 2 dumps of builds before 0180
+(D024: nothing was promised across builds for format 2 before 0178). `djs repl`'s
+`.restore`, `djs resume` and `Sandbox.load` take a file for a dump when it starts with
+either marker. Rejected: `$dump.version(2)` (above), a new version number (nothing
+semantic changed), `void "..."` or a global (not inert).
+
+## D2641: Dumps carry no comments; `djs resume --explain` explains them
+date: 2026-11-04 · by: nocomment · issue: 0180
+The owner's call: the JavaScript dump format has no comments. The exporter no longer
+writes the header lines (bindings, how to load, host globals), the section comments
+("Builtins the session changed.", "Links that close cycles, and attributes.") or the
+`<names> sharing <vars>` line above each factory; with D2616 that is every comment it
+wrote. The order of the text says what the sections said (helpers, roots, builtin
+patches, cycle links and attributes). Only the functions' own source text can contain
+comments. For a reader, `djs resume --explain dump.js` (CLI only: no djs-core API and no
+wasm size) loads the dump into a fresh VM and prints its open calls, the activations
+waiting on each and the other suspended ones, each with where it stopped in the dump
+(`dump.js:LINE:COL`), the source line with a caret under the `await`/`yield`, and its
+bindings; the REPL's `.bt` prints the same caret lines. Positions are in the dump, the
+file the reader has. Hosts that write dumps get the original positions from
+`Vm::dump_report` (D2616). The hand-written fixtures in tests/dump/v2 lost their
+comments too: the test names each one's idle point, and its program's header comment
+says what the dump holds there.
