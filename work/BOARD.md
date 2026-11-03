@@ -6,6 +6,10 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0158 | Instance memory: reservation, arena at end, stack, base outside | heap | .worktrees/heap |
+| 0159 | Re-benchmark @native/@fast twins | perf | .worktrees/perf |
+| 0160 | Slim build as additive features (+ unicode feature) | slim | .worktrees/slim |
+| 0161 | Safe-as-unsafe heap access; Vec hygiene | audit | .worktrees/audit |
 | 0151 | Shrink the base heap to a fraction (no removals) | bloat | .worktrees/bloat |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 
