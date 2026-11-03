@@ -407,10 +407,10 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// Starts parsing a nested function: `f` becomes the new function.
     pub fn begin_function(&mut self, kind: FuncKind) -> PResult<()> {
         let id = self.done.len() as FuncId;
-        self.done.push_out(None);
+        self.done.push(None);
         let child = FuncState::new(id, kind, Some((self.f.id, self.scope)));
         let parent = core::mem::replace(&mut self.f, child);
-        self.stack.push_out(Suspended {
+        self.stack.push(Suspended {
             f: parent,
             scope: self.scope,
             blocks: core::mem::take(&mut self.blocks),
@@ -481,7 +481,7 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// current one again, with the current function suspended as its parent.
     pub fn resume_function(&mut self, f: FuncState) {
         let parent = core::mem::replace(&mut self.f, f);
-        self.stack.push_out(Suspended {
+        self.stack.push(Suspended {
             f: parent,
             scope: self.scope,
             blocks: core::mem::take(&mut self.blocks),

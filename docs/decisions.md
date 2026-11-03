@@ -7199,7 +7199,11 @@ the template, run.rs and hot.rs), which may follow in a separate merge. Measured
 −3.2 KB gz (450.3 → 447.0); wasm instructions within ±1.3% on the 15 perf workloads, all
 but one lower; compile instructions −0.9 to +0.6% (the noise of wcompile is ~1%). All
 pushes out of line would be −4.8 KB gz but +1.0–1.7% on json, json-text and pushpop and
-+1% compile. New code uses `push_out` unless the push is in a measured hot loop;
++1% compile. `push_out` takes values of at most 16 words (a compile-time assertion): a large value
+passed to a call is built in the caller's frame first, which grew `parse_arrow`'s debug
+frame from 64 to 864 bytes and overflowed the stack budget of js/test/nesting.test.ts
+(D1941); an inline `push` builds it in place. New code uses `push_out` unless the push is
+in a measured hot loop or the value is large;
 `scripts/size/vec-sites.py --check scripts/size/vec-sites.txt` reports inlined pushes,
 drops, `with_capacity`, `reserve` and allocation-error paths per function against the
 baseline.
