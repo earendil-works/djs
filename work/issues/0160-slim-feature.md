@@ -1,6 +1,6 @@
 # 0160: The slim codemode build as additive cargo features
 
-status: in-progress
+status: done
 agent: slim
 branch: issue/0160-slim-feature
 depends-on: 0149
@@ -33,7 +33,41 @@ unicode."
   the feature set.
 
 ## Log
+- Feature names: proposed `full` + `unicode`; the owner confirmed `full` (D025).
+- bgen writes gen/prelude-slim.js: files with a `// @slim-omit` line and builtins tagged
+  `@slim-omit` are left out, as are kept installs onto omitted constructors; calls from kept
+  builtins into omitted ones are listed in its header (all behind `IsTypedArray`).
+  ToNumeric moved to conversion.ts (the interpreter needs it in every build).
+- djs-core: `FULL` const guards (40 leaf arms, `Value::kind`/`as_bigint`, wire bytes),
+  "not available in this build" errors (ReferenceError via `realm::ABSENT_GLOBALS`,
+  SyntaxError for BigInt literals, decorators, `using`), realm leaves the families'
+  prototypes undefined. Guarding `ObjectClass::from_u32` saved nothing: not in.
+- Features forwarded through djs-prelude/-wasm/-difftest/-test262/-cli; djs-prelude asserts
+  the base's build hash equals the library's (a build-dependency resolves features apart);
+  umbrella `unicode` not in SOURCE_HASH.
+- Registry: tests/builtins/registry-slim.txt (289 ids), `check_build`, resolver fallback so
+  `Iterator.prototype` keeps its id (D2412).
+- D2067 shapes: no chain belongs only to the omitted families; list unchanged.
+- Gate (D2413): slim wasm build beside the size build; slim native unit tests
+  (`vm::slim_tests` in both builds, frozen, registry), codemode corpora with stress, test262
+  with tests/test262-slim.toml + expected-failures-slim.txt (120), pi's tests on
+  djs-slim.wasm without lockdown (`pi-tests.ts --no-lockdown --expected`, 19 expected of
+  226; 11 also fail on full), `slim_ceiling_gzip` 391,873.
+- Sizes: full 455,468 gz (main 455,502); slim 390,849 gz (1.36x quickjs-wasi); base image
+  250,544 B / 4,848 cells → slim 180,552 B / 3,495.
+- Guide: docs/guide/builtins.md "Two builds: full and slim"; also TESTING.md, docs/host.md.
 
 ## Follow-ups
+- Deeper slim cuts not done (est. a few KB gz): typed-array element paths and weak-reference
+  handling in heap/ (other agents' area; `from_u32` guarding didn't help), decorator/`using`
+  emitter code still linked behind the parser cut.
+- pi-private: run djs-slim.wasm with `frozenBuiltins` and the prelude without `lockdown()`.
+- The 0149 optional members (newest proposals, Annex B) stay in both builds; decide later.
 
 ## Result
+`full` and `unicode` (default on) in djs-core and forwarded by every dependent crate;
+`--no-default-features` is the slim build, `scripts/build-wasm.sh --slim` writes
+target/djs-slim.wasm (390.8 KB gz vs 455.5 KB). Dropped names give "not available in this
+build"; the registry lists the slim build's absent ids; the gate builds, size-checks and tests
+the slim module (unit tests, codemode corpora, filtered test262, pi's tests without lockdown).
+D2411–D2413.
