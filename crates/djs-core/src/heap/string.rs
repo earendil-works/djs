@@ -233,14 +233,14 @@ impl KeyedHasher {
     pub fn write_latin1(&mut self, bytes: &[u8]) {
         let mut rest = bytes;
         if self.n & 3 == 0 {
-            let mut chunks = bytes.chunks_exact(4);
-            for c in &mut chunks {
+            let (chunks, tail) = bytes.as_chunks::<4>();
+            for c in chunks {
                 let w =
                     c[0] as u64 | (c[1] as u64) << 16 | (c[2] as u64) << 32 | (c[3] as u64) << 48;
                 self.compress(w);
             }
             self.n = self.n.wrapping_add((bytes.len() & !3) as u32);
-            rest = chunks.remainder();
+            rest = tail;
         }
         for &b in rest {
             self.write(b as u16);
