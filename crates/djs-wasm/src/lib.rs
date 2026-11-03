@@ -969,18 +969,46 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
     })
 }
 
-/// Loads the dump staging[0..len] (UTF-8) into the VM with `Vm::load_dump` (0170, D2581):
-/// version 1 as a plain Script, format 2 with the loader's `$dump`. 0: loaded; 1: not
-/// loaded, the reason in out.
+/// Loads a dump into the VM with `Vm::load_dump` (0170, D2581): version 1 as a plain
+/// Script, format 2 with the loader's `$dump`. staging[0..names_len] names the host's
+/// functions, `\n`-separated, the i-th (from 0) having id i + 1: the loader maps an open
+/// call's name (`$dump.pending(id, "sleep", args)`) to its id with it (0179). The dump's
+/// UTF-8 text follows, `len` bytes. 0: loaded, out = what the load returned (`Loaded`):
+/// u32 words `n_calls, n_handles, (call_id, fn_id) * n_calls, (handle, name_len) *
+/// n_handles`, then the handles' names, UTF-8, one after another. The handles are the
+/// host's to free. 1: not loaded, the reason in out.
 #[cfg(feature = "dump")]
 #[unsafe(no_mangle)]
-pub extern "C" fn vm_load_dump(vm: u32, len: usize) -> i32 {
+pub extern "C" fn vm_load_dump(vm: u32, names_len: usize, len: usize) -> i32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
-        let text = staged_str(staging, 0, len).to_owned();
-        let opts = djs_core::vm::dump_load::LoadOptions::default();
+        let names = staged_str(staging, 0, names_len).to_owned();
+        let text = staged_str(staging, names_len, len).to_owned();
+        let host_fn = |name: &str| {
+            names
+                .split('\n')
+                .position(|n| !n.is_empty() && n == name)
+                .map(|i| i as u32 + 1)
+        };
+        let opts = djs_core::vm::dump_load::LoadOptions {
+            host_fn: &host_fn,
+            ..Default::default()
+        };
         match slot.vm.load_dump(&text, &opts) {
-            Ok(_) => 0,
+            Ok(loaded) => {
+                let mut words = vec![loaded.calls.len() as u32, loaded.handles.len() as u32];
+                for c in &loaded.calls {
+                    words.extend([c.id, c.fn_id]);
+                }
+                let mut text = Vec::new();
+                for (name, h) in &loaded.handles {
+                    words.extend([h.index() + 1, name.len() as u32]);
+                    text.extend_from_slice(name.as_bytes());
+                }
+                s.set_out_words(&words);
+                s.out.extend_from_slice(&text);
+                0
+            }
             Err(e) => {
                 s.set_out(e.message().as_bytes());
                 1
@@ -1280,6 +1308,30 @@ pub extern "C" fn vm_abort(vm: u32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_result(vm: u32) -> u32 {
     with(|s| core::mem::take(&mut s.slot(vm).result))
+}
+
+/// A new handle (the host frees it) to the entry call's outcome while no frame is active
+/// (`Vm::outcome`): also at IDLE, after the call returned while async host calls are
+/// pending, which is where a host takes an async body's result promise to wait on or to
+/// name in a dump (0179). Unlike `vm_result` it can be taken any number of times. 0 if
+/// there is none (a frame is active, or nothing was called); out[0] = 1 if the call
+/// threw, else 0.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_outcome(vm: u32) -> u32 {
+    with(|s| {
+        let slot = s.slot(vm);
+        let Some(r) = slot.vm.outcome() else {
+            s.set_out_words(&[0]);
+            return 0;
+        };
+        let (v, threw) = match r {
+            Ok(v) => (v, 0),
+            Err(e) => (e, 1),
+        };
+        let h = slot.handle(v);
+        s.set_out_words(&[threw]);
+        h
+    })
 }
 
 /// Describes the parked host call: writes `[call_id, fn_id, this_lo, this_hi, (arg_lo,
