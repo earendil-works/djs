@@ -530,3 +530,10 @@ topics when the index is next reorganized.
 - D2353: Dumps are Scripts: format version 1 and the promise that later builds load it
 - D2354: A wasm host dumps from the heap bytes in TypeScript; the Rust dumper is the reference
 - D2355: A dump is checked by compiling it: every function keeps the bindings it read
+- D2560: A waiting session persists as a continuation dump; heap images stay inside a process
+- D2561: Dumps are taken only at idle points
+- D2562: In-flight builtin state is re-enacted; a few privileged loader primitives
+- D2563: The compiler's suspension maps are a pinned contract
+- D2564: One dumper, in Rust; the TypeScript dumper is dropped
+- D2565: djs builds pi's future prelude shape in its own adapter first
+- D2590: Corpus tool calls are idle points: `host.later`
