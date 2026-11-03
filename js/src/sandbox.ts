@@ -204,6 +204,7 @@ interface Exports {
   vm_new(memoryLimit: number): number;
   /** Since 0146 (D2304); older modules lack it. */
   vm_new_with?(memoryLimit: number, live: number, flags: number): number;
+  vm_dump?(vm: number, len: number): number;
   vm_from_bytes(len: number, memoryLimit: number): number;
   vm_free(vm: number): void;
   vm_arena_ptr(vm: number): number;
@@ -478,6 +479,45 @@ export class Sandbox {
   }
 
   /**
+   * The VM's global bindings (or the ones in `names`) as JavaScript that recreates them
+   * when `load`ed into another sandbox, also of a later djs (docs/functions-as-code.md):
+   * functions as their source text, closures and data as code, builtins by name. The
+   * host's functions and `console` are not written: the loading sandbox provides them
+   * under the same names. Throws a "misuse" error listing every value that cannot be
+   * written, by its path (a pending promise, a Proxy, a class, ...).
+   */
+  dump(names: string[] = []): string {
+    const x = this.x;
+    if (!x.vm_dump) throw new SandboxError("misuse", "the djs-wasm module has no dump (vm_dump)");
+    const host = new Set(["console"]);
+    for (const n of this.fnNames) host.add(n.split(".")[0]);
+    const len = this.stageText(`${[...host].join(",")}\n${names.join(",")}`);
+    let r = this.guard(() => x.vm_dump!(this.vm, len));
+    if (r === 2) {
+      provideBase(this.module, x);
+      r = this.guard(() => x.vm_dump!(this.vm, this.stageText(`${[...host].join(",")}\n${names.join(",")}`)));
+    }
+    if (r !== 0) throw new SandboxError("misuse", r === 1 ? `cannot dump:\n${outText(x)}` : "no base image");
+    return outText(x);
+  }
+
+  /**
+   * Runs a dump (the text of `dump()`) as a Script: its bindings become globals of this
+   * sandbox. A dump is code: load only dumps you trust, into a fresh sandbox (with
+   * `frozenBuiltins` the dump cannot change builtins). Not recorded in a journal.
+   */
+  load(dump: string): void {
+    if (!dump.startsWith("// djs-dump ")) throw new SandboxError("misuse", "not a djs dump");
+    this.start(dump, {}, true);
+    try {
+      this.drive(false).next();
+    } catch (e) {
+      this.abandon(e);
+      throw e;
+    }
+  }
+
+  /**
    * Like `run`, but awaits host functions that return promises: a sync one keeps the VM
    * parked meanwhile, async ones run concurrently while the script goes on.
    */
@@ -711,7 +751,7 @@ export class Sandbox {
   }
 
   /** Compiles `code` and starts the call; returns nothing (the VM holds the call). */
-  private start(code: string, params: Record<string, unknown>): void {
+  private start(code: string, params: Record<string, unknown>, script = false): void {
     this.guard(() => {
       const x = this.x;
       const vm = this.vm;
@@ -724,8 +764,9 @@ export class Sandbox {
       both.set(src, head.length);
       this.stage(both);
       const o = this.opts;
-      const goal =
-        1 |
+      const goal = script
+        ? 0
+        : 1 |
         (o.typescript ? 2 : 0) |
         (o.experimentalDecorators || o.emitDecoratorMetadata ? 4 : 0) |
         (o.emitDecoratorMetadata ? 8 : 0);

@@ -920,6 +920,43 @@ pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32) -> i
     })
 }
 
+/// Writes the VM's global bindings as JavaScript that recreates them (`Vm::dump`, 0167,
+/// docs/functions-as-code.md) to the out buffer. staging[0..len] is UTF-8: the names of
+/// the globals the host defines (re-bound by name, never written), a newline, the names
+/// to dump (none: all of the VM's own), each list comma-separated. 0: the dump is in out;
+/// 1: refused, the reasons in out (one per line); 2: no base image (inject it first).
+#[cfg(feature = "dump")]
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
+    if base_ptr() == 0 {
+        return 2;
+    }
+    with(|s| {
+        let (slot, staging) = s.vm_and_staging(vm);
+        let text = staged_str(staging, 0, len).to_owned();
+        let (host, names) = text.split_once('\n').unwrap_or((&text, ""));
+        let host: Vec<&str> = host.split(',').filter(|n| !n.is_empty()).collect();
+        let names: Vec<&str> = names.split(',').filter(|n| !n.is_empty()).collect();
+        let r = BASE.with(|b| {
+            let b = b.borrow();
+            let base = b.as_deref()?;
+            let opts = djs_core::vm::dump::DumpOptions { base, host: &host };
+            Some(slot.vm.dump(&opts, (!names.is_empty()).then_some(names.as_slice())))
+        });
+        match r {
+            Some(Ok(t)) => {
+                s.set_out(t.as_bytes());
+                0
+            }
+            Some(Err(e)) => {
+                s.set_out(e.0.join("\n").as_bytes());
+                1
+            }
+            None => 2,
+        }
+    })
+}
+
 /// Decodes the wire buffer staging[0..len] (docs/wire.md) into a handle. 0 on error, with
 /// the reason in the out buffer.
 #[unsafe(no_mangle)]
