@@ -183,6 +183,16 @@ fn every_operand_role() {
     assert_eq!(l.calls.len(), 17);
 }
 
+#[test]
+fn generator_at_a_yield() {
+    fixture("generator");
+}
+
+#[test]
+fn async_generators() {
+    fixture("asyncgen");
+}
+
 /// Prints the suspension maps of a file, for writing fixtures by hand:
 /// `DJS_SMAP=tests/dump/v2/x.src.js cargo test -p djs-core --lib show_maps -- --ignored --nocapture`.
 #[test]
