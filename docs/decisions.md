@@ -6851,7 +6851,7 @@ Measured and rejected for the safe build: masking with a power-of-two capacity (
 cannot relate the mask to the slice length, so the check stays: larger code); reads that
 return zero instead of panicking (larger: an else arm per site instead of one shared
 panic); one check per 256-byte window shared by a cell's fields (merges in heap
-functions, but the inliner spends the savings: −0.2 KB net); `core::arch::wasm32::
+functions, but the inliner spends the savings: −1.1 KB raw, +0.2 KB gz); `core::arch::wasm32::
 unreachable` instead of the panic (+2.2 KB); `#[inline]` instead of `#[inline(always)]`
 (no change). Per-cell views (`&[u8; N]` taken once, fields at constant offsets) remain the
 way to close the rest of the gap, at call sites.

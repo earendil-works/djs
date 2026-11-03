@@ -168,9 +168,9 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 2. **The host can read values in place.** A tool result that the script turned into an
    array of objects is read by walking cells in wasm memory, with a reader generated
    from the same layout table (D1210).
-3. **Bugs trap instead of corrupting memory.** Every access is bounds-checked slice
-   indexing, with no `unsafe`. A bad offset from a VM bug or a corrupt image is a panic
-   (a wasm trap) or a corrupt JS heap, never undefined behavior in the host.
+3. **Bugs trap instead of corrupting memory.** Every access is bounds-checked, with no
+   `unsafe`. A bad offset from a VM bug or a corrupt image is a panic (a wasm trap) or a
+   corrupt JS heap, never undefined behavior in the host.
 4. **The heap can move.** The collector compacts the arena by sliding live cells down,
    and the arena can be reallocated, without any reference outside it going stale: the embedder
    holds values through handles (D1091), slot numbers in a table inside the arena, never
@@ -186,11 +186,16 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 > verifier and the stress tests have to catch, not the compiler.
 
 > **Trade-off.** Bounds checks on every access. In wasm, every load is already checked
-> against linear memory, so the arena's checks are a second check (D016). They cost an
-> add and a compare per field access. Hoisting them to one check per cell or frame is an
-> open performance item; skipping them would need `unsafe` and a decision of its own.
-> Release builds keep the checks but drop the offsets from the panic message, which
-> saved code size at the about 1,300 inlined access sites (D1573).
+> against linear memory, so the arena's checks are a second check (D016). Each costs one
+> compare: `offset + size <= length`, done in 64-bit arithmetic so it cannot wrap, which
+> lets the compiler drop the slice's own checks behind it (D2520). Release builds keep
+> the checks but drop the offsets from the panic message, which saved code size at the
+> about 1,600 inlined access sites (D1573). An optional build (the `unsafe-heap` cargo
+> feature, off by default) skips them: about 7 KB of gzipped module and up to 15% of the
+> instructions. It is safe only for images the engine made itself, because the verifier
+> guarantees structure but not every semantic invariant that the checked build would
+> otherwise catch with a trap. All of its `unsafe` sits in one small module, and the merge
+> checks run it next to the default build.
 
 > **Trade-off.** `u32` offsets limit an arena to 4 GiB. That is the whole wasm32 address
 > space anyway, and a codemode VM is capped far below it. If larger arenas ever matter,
@@ -200,6 +205,9 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 
 - [`crates/djs-core/src/heap/arena.rs`](../../crates/djs-core/src/heap/arena.rs): the
   byte buffer, the zeroed frontier, the cap.
+- [`crates/djs-core/src/heap/layout/access.rs`](../../crates/djs-core/src/heap/layout/access.rs):
+  the one place every field read and write goes through, checked or (with
+  `unsafe-heap`) not.
 - [`crates/djs-core/src/heap/mod.rs`](../../crates/djs-core/src/heap/mod.rs): `Heap`,
   allocation, the conventions every heap function follows.
 - [`crates/djs-core/src/heap/cells.rs`](../../crates/djs-core/src/heap/cells.rs): the
@@ -209,7 +217,7 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 
 Decisions on this page:
 
-<!-- gen:decisions D2063 D2064 D2053 D1051 D1052 D1261 D1151 D1091 D1870 D1600 D1690 D1700 D1056 D1573 -->
+<!-- gen:decisions D2063 D2064 D2053 D1051 D1052 D1261 D1151 D1091 D1870 D1600 D1690 D1700 D1056 D1573 D2520 -->
 - D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
 - D2064: Collections never move or free the builtin prefix
 - D2053: A page allocator under dlmalloc in djs-wasm: huge blocks grow in place
@@ -224,4 +232,5 @@ Decisions on this page:
 - D1700: A failing allocation collects and retries its instruction once
 - D1056: Heap images are verified on load
 - D1573: Arena out-of-bounds panics carry no offsets in release builds
+- D2520: Arena access: one u64 compare by default, an optional unchecked `unsafe-heap` build
 <!-- /gen -->
