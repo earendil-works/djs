@@ -6761,3 +6761,56 @@ anchor that moved made a patch not apply, or apply in a dead place, so counters 
   collections).
 - **Self-test:** `--self-test` builds, runs a script that must move every counter, and
   fails on any zero.
+
+## D2443: Short opcode forms and shortened jumps, a recorded trade
+date: 2026-11-10 · by: bloat · issue: 0151
+The final-code emitter replaces the most frequent instructions by short forms when the
+operand fits (`ops::short_form`): `get_loc0..3`, `put_loc0..3`, `set_loc0..3`,
+`get_arg0..3`, `push0..3`, `call0..3` (operand in the opcode), one-byte forms of
+`get_loc`/`put_loc`/`set_loc`/`get_arg`/`push_const`, `call_intrinsic8` (an intrinsic
+below 256 with a fixed arity: the argument count is its declared parameters, which the
+compiler already enforces), and `get_builtin_callee8` (`get_builtin; undefined`).
+`CodeBuf::finish` shortens jumps whose offset fits a byte (`jump8`, `jump_if_*8`; start
+short, widen until stable) and maps labels and line positions (`Code::map_pos`); the
+re-emit drops code after a terminator up to the next label. Each short form behaves as its
+wide form (`Op::wide`; same cost, flags and stack effect, checked at compile time). The
+hot loop has one arm per short form, merged with the wide arm where that arm is large
+(`call`/`call_intrinsic`: a second copy of `intrinsic_hit` lengthened V8's tier-up);
+`exec` runs `call_intrinsic8`, `call0..3` and `jump_if_*8` itself, the rest in
+`exec_short`. Phase-1 code and the compiler's passes see only wide forms.
+- **Bought:** base 296,184 → 250,544 B (−45.6 KB per VM, −15%; bytecode 86.0 → 42.3
+  KB, every builtin kept); a wasm instance after `vm_new` 19 → 18 pages; peak memory
+  (mem-perturb n=6, MiB) pi-like 2.4 → 2.4, json 6.3 → 6.2, higher-order 15.0 → 14.9,
+  arrays 13.8 → 13.7, strings 12.4 → 12.2, indexof and calls 1.2 → 1.1, strbuild 15.6 →
+  15.8, json-date 3.8 → 4.3; pi bench warm start 0.43 → 0.41 ms, cold 5.04 → 4.99 ms,
+  tool-heavy warm 3.06 → 2.87 ms, cold 7.30 → 7.22 ms.
+- **Paid:** module gzip +377 B (455,006 → 455,383; ceiling raised to 455,400); wasm
+  instructions against main with D2441 (n=5): loop −1.4%, tight −1.1%, forof −0.1%,
+  higher-order +0.2%, json-replacer +0.5%, call1 +0.6%, arrays +0.7%, json-indent +0.7%,
+  foreach +0.8%, strbuild +0.9%, push-pop +0.9%, jsonh +1.0%, calls +1.2%, props +1.2%,
+  pi-like +1.3%, json-text/json/strings/prop1 +1.5%, indexof +2.7%, pushpop +3.9%
+  (spread 1.6), json-date +4.8%. Natively run_hot is slower (loop +4.6%, calls +5.4%,
+  prop1 +6.7%; not shipped).
+- **Why the remainder is not steady state:** warm (repeated runs in one process) prop1
+  and indexof are equal (2284 vs 2284, 400 vs 403 M per run); with `--no-liftoff` prop1
+  is −2.9%. The once-only excess is V8's Liftoff phase before `run_hot` tiers up (a
+  constant: prop1 at 1x/2x/4x iterations +62/+50/+45 M). json-date runs 4 collections
+  instead of 3 in wasm: D2442 keeps the growth per cycle, but thresholds round to whole
+  pages from offset 0, so a 46 KB smaller live size shifts the collection points, and a
+  run with three or four collections can tip either way. Builds that differ only by a few
+  `exec` arms moved single workloads by ±2% (V8 codegen of `run_hot`/`step_once`).
+Accepted as a trade (coordinator): the per-VM saving and the faster pi bench against
+first-run and GC-phase costs, with main 1–7% faster from D2441.
+
+Three fixes found on the way, each worth having on its own:
+- **+3 pages per wasm instance (djs-wasm):** a base below the page allocator's `HUGE`
+  (256 KiB) was a dlmalloc block; the first VM's reserve moved the arena out of it and
+  dlmalloc kept the hole. The base is now decoded (`lzrc::decode_with_capacity`, after the
+  decoder's tables, so the buffer can grow in place) or injected into a page-backed
+  buffer with the arena's capacity.
+- **D2442 at load:** the base image stores its first threshold by the prefix rule, and
+  `Heap::restore_capacity` takes the image's prefix (`djs_prelude::BASE_END` in wasm), so
+  the first threshold is no longer past the arena's capacity.
+- **`run_hot`'s fuel and end exits** are `Exit::General`, not `Decline(0)`: that payload
+  made LLVM write the opcode's local at every loop head (two instructions per
+  instruction in V8's baseline code).

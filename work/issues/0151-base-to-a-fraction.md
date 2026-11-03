@@ -155,6 +155,34 @@ Found while measuring L4, landed before it on the coordinator's call.
   `BASE_END`), so nothing changes on main and later base cuts keep GC frequency.
 - Guide: interpreter.md (the spill rule), gc.md (the allowance).
 
+### L4: short opcode forms (branch issue/0151-bytecode, D2443, recorded trade)
+- Short forms picked by the final-code emitter (`ops::short_form`), jumps shortened in
+  `CodeBuf::finish` (relaxation, `Code::map_pos` for lines), dead code after
+  terminators dropped in the re-emit. 33 new ops (OP_COUNT 214). Interpreter: hot arms
+  per short form (implied forms one arm per family; call/call_intrinsic merged with the
+  wide arm), `exec` arms for call_intrinsic8/call0-3/jump_if_*8, `exec_short` for the
+  rest; `fast_leaf_call(op)`, `each_dense_decline` read either form.
+- Base 296,184 → 250,544 B (−45.6 KB); bytecode 86.0 → 42.3 KB; cells 4,848 unchanged.
+  Instance after vm_new 19 → 18 pages. Module gzip +377 B (ceiling 455,400, D2443).
+- wasm instructions vs main (with D2441): −1.4..+1.5% on most, indexof +2.7% (first run
+  only: warm equal, --no-liftoff −0.3%), pushpop +3.9% (spread 1.6), json-date +4.8%
+  (one more collection in wasm: page-rounded thresholds, phase). Natively run_hot slower
+  (loop +4.6%, calls +5.4%, prop1 +6.7%). Accepted as a trade by the coordinator.
+- Fixed on the way: djs-wasm base buffers below `HUGE` left +3 pages per instance
+  (decoded/injected page-backed now, `lzrc::decode_with_capacity`); the base's stored
+  threshold and `restore_capacity` follow D2442; `Exit::General` instead of
+  `Decline(0)` (an opcode-local write per loop iteration in V8's baseline code).
+- Analysis tools: work/scratch/0151/tf.sh (TurboFan dispatch), variant.sh/nvariant.sh,
+  memstep.ts (pages per step), gcw.ts (wasm collection counts with a scratch export).
+- Guide: compiler.md (short forms paragraph); generated examples in interpreter.md,
+  suspension.md, values.md, compiler.md and ref-opcodes regenerated.
+
 ## Follow-ups
+- GC thresholds are rounded to 64 KB pages from offset 0, so collection points depend on
+  the base's size (json-date's extra collection under L4). Rounding relative to
+  `BASE_END`, or not rounding the growth term, would remove such phase flips as the base
+  shrinks further.
+- Native `run_hot` got slower with L4's arms (loop +4.6%, calls +5.4%, prop1 +6.7%);
+  not shipped, but tools and native hosts use it.
 
 ## Result

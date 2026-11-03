@@ -95,17 +95,17 @@ let a = 1, b = 1000000, c = 2.5;
 <!-- gen:disasm -->
 ```text
 function 0 <anonymous>: params=2 locals=4 stack=1 captures=0
-  handler [3, 28) -> 28 depth 0
+  handler [3, 18) -> 18 depth 0
     0  async_start loc0 (<state>)
-    3  push_i8 1
-    5  put_loc loc1 (a)
-    8  push_i32 1000000
-   13  put_loc loc2 (b)
-   16  push_const #0 (2.5)
-   21  put_loc loc3 (c)
-   24  undefined
-   25  async_return loc0 (<state>)
-   28  async_reject loc0 (<state>)
+    3  push1
+    4  put_loc1 (a)
+    5  push_i32 1000000
+   10  put_loc2 (b)
+   11  push_const8 #0 (2.5)
+   13  put_loc3 (c)
+   14  undefined
+   15  async_return loc0 (<state>)
+   18  async_reject loc0 (<state>)
 ```
 <!-- /gen -->
 

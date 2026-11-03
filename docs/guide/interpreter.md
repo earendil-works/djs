@@ -170,33 +170,31 @@ return log;
 <!-- gen:disasm -->
 ```text
 function 0 <anonymous>: params=2 locals=2 stack=5 captures=0
-  handler [9, 28) -> 40 depth 0
-  handler [3, 76) -> 76 depth 0
+  handler [7, 19) -> 28 depth 0
+  handler [3, 51) -> 51 depth 0
     0  async_start loc0 (<state>)
     3  array_from 0
-    6  put_loc loc1 (log)
-    9  get_loc loc1 (log)  ; 3:3
-   12  get_method "push" ic0  ; 3:6
-   19  push_const #0 ("try")
-   24  call 1  ; 3:11
-   27  drop
-   28  undefined
-   29  gosub -> 46
-   34  drop
-   35  jump -> 66
-   40  gosub -> 46
-   45  throw
-   46  get_loc loc1 (log)  ; 5:3
-   49  get_method "push" ic1  ; 5:6
-   56  push_const #1 ("finally")
-   61  call 1  ; 5:11
-   64  drop
-   65  ret
-   66  get_loc loc1 (log)  ; 7:8
-   69  async_return loc0 (<state>)
-   72  undefined
-   73  async_return loc0 (<state>)
-   76  async_reject loc0 (<state>)
+    6  put_loc1 (log)
+    7  get_loc1 (log)  ; 3:3
+    8  get_method "push" ic0  ; 3:6
+   15  push_const8 #0 ("try")
+   17  call1  ; 3:11
+   18  drop
+   19  undefined
+   20  gosub -> 34
+   25  drop
+   26  jump8 -> 47
+   28  gosub -> 34
+   33  throw
+   34  get_loc1 (log)  ; 5:3
+   35  get_method "push" ic1  ; 5:6
+   42  push_const8 #1 ("finally")
+   44  call1  ; 5:11
+   45  drop
+   46  ret
+   47  get_loc1 (log)  ; 7:8
+   48  async_return loc0 (<state>)
+   51  async_reject loc0 (<state>)
 ```
 <!-- /gen -->
 

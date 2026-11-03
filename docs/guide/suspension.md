@@ -144,33 +144,29 @@ return twice(Promise.resolve(21));
 <!-- gen:disasm -->
 ```text
 function 0 <anonymous>: params=2 locals=2 stack=5 captures=0
-  handler [3, 44) -> 44 depth 0
+  handler [3, 32) -> 32 depth 0
     0  async_start loc0 (<state>)
     3  fclosure child0
-    8  put_loc loc1 (twice)
-   11  get_loc loc1 (twice)  ; 5:8
-   14  undefined
-   15  get_global "Promise" ic0  ; 5:14
-   22  get_method "resolve" ic1  ; 5:21
-   29  push_i8 21
-   31  call 1  ; 5:29
-   34  call 1  ; 5:13
-   37  async_return loc0 (<state>)
-   40  undefined
-   41  async_return loc0 (<state>)
-   44  async_reject loc0 (<state>)
+    8  put_loc1 (twice)
+    9  get_loc1 (twice)  ; 5:8
+   10  undefined
+   11  get_global "Promise" ic0  ; 5:14
+   18  get_method "resolve" ic1  ; 5:21
+   25  push_i8 21
+   27  call1  ; 5:29
+   28  call1  ; 5:13
+   29  async_return loc0 (<state>)
+   32  async_reject loc0 (<state>)
 function 0.0 twice: params=1 locals=2 stack=2 captures=0
-  handler [3, 22) -> 22 depth 0
+  handler [3, 13) -> 13 depth 0
     0  async_start loc0 (<state>)
-    3  get_arg arg0  ; 2:19
-    6  await loc0 (<state>)  ; 2:13
-    9  set_loc loc1 (x)  ; 3:10
-   12  push_i8 2
-   14  mul  ; 3:12
-   15  async_return loc0 (<state>)
-   18  undefined
-   19  async_return loc0 (<state>)
-   22  async_reject loc0 (<state>)
+    3  get_arg0  ; 2:19
+    4  await loc0 (<state>)  ; 2:13
+    7  set_loc1 (x)  ; 3:10
+    8  push2
+    9  mul  ; 3:12
+   10  async_return loc0 (<state>)
+   13  async_reject loc0 (<state>)
 ```
 <!-- /gen -->
 

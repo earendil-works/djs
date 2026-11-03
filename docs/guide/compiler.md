@@ -50,23 +50,21 @@ return price * qty - discount;
 <!-- gen:disasm -->
 ```text
 function 0 <anonymous>: params=2 locals=4 stack=2 captures=0
-  handler [3, 36) -> 36 depth 0
+  handler [3, 19) -> 19 depth 0
     0  async_start loc0 (<state>)
     3  push_i8 12
-    5  put_loc loc1 (price)
-    8  push_i8 3
-   10  put_loc loc2 (qty)
-   13  push_i8 5
-   15  put_loc loc3 (discount)
-   18  get_loc loc1 (price)  ; 2:8
-   21  get_loc loc2 (qty)  ; 2:16
-   24  mul  ; 2:14
-   25  get_loc loc3 (discount)  ; 2:22
-   28  sub  ; 2:20
-   29  async_return loc0 (<state>)
-   32  undefined
-   33  async_return loc0 (<state>)
-   36  async_reject loc0 (<state>)
+    5  put_loc1 (price)
+    6  push3
+    7  put_loc2 (qty)
+    8  push_i8 5
+   10  put_loc3 (discount)
+   11  get_loc1 (price)  ; 2:8
+   12  get_loc2 (qty)  ; 2:16
+   13  mul  ; 2:14
+   14  get_loc3 (discount)  ; 2:22
+   15  sub  ; 2:20
+   16  async_return loc0 (<state>)
+   19  async_reject loc0 (<state>)
 ```
 <!-- /gen -->
 
@@ -163,25 +161,23 @@ return count;
 <!-- gen:disasm -->
 ```text
 function 0 <anonymous>: params=2 locals=3 stack=2 captures=0
-  handler [3, 42) -> 42 depth 0
+  handler [3, 29) -> 29 depth 0
     0  async_start loc0 (<state>)
     3  new_box loc1 (count)
-    6  push_i8 0
-    8  put_box loc1 (count)
-   11  fclosure child0
-   16  set_loc loc2 (bump)  ; 3:1
-   19  undefined
-   20  call 0  ; 3:5
-   23  drop
-   24  get_loc loc2 (bump)  ; 3:9
-   27  undefined
-   28  call 0  ; 3:13
-   31  drop
-   32  get_box loc1 (count)  ; 4:8
-   35  async_return loc0 (<state>)
-   38  undefined
-   39  async_return loc0 (<state>)
-   42  async_reject loc0 (<state>)
+    6  push0
+    7  put_box loc1 (count)
+   10  fclosure child0
+   15  set_loc2 (bump)  ; 3:1
+   16  undefined
+   17  call0  ; 3:5
+   18  drop
+   19  get_loc2 (bump)  ; 3:9
+   20  undefined
+   21  call0  ; 3:13
+   22  drop
+   23  get_box loc1 (count)  ; 4:8
+   26  async_return loc0 (<state>)
+   29  async_reject loc0 (<state>)
 function 0.0 bump: params=0 locals=0 stack=1 captures=1
     0  get_cap_chk cap0 (count)  ; 2:22
     3  inc  ; 2:27
@@ -244,6 +240,18 @@ layout changes and peepholes over the phase-1 code (D1860):
 - jumps to jumps are threaded, `not` before a conditional jump flips the jump, a store
   followed by a load of the same local becomes `set_loc`.
 
+The final code is then made **short** (D2443). Most operands are small: locals, arguments
+and constant indexes below 256, calls with up to three arguments, jumps of a few dozen
+bytes. So the most frequent instructions have short forms that the emitter picks when
+the operand fits. `get_loc2` has the operand in its opcode, `get_loc8 12` has a
+one-byte operand, `call_intrinsic8` takes its argument count from the intrinsic's
+declared arity, and `get_builtin_callee8` is `get_builtin; undefined` in two bytes.
+Jumps are emitted with 4-byte offsets, and the last step shortens every jump whose
+offset fits a byte, repeating until no shortened jump pushes another out of range. Code
+after a `return`, `throw` or `jump` up to the next label is dropped. This halved the
+builtins' bytecode (86 to 42 KB per VM); each short form runs exactly like its wide
+form, and big functions simply keep the wide ones.
+
 ```js
 let sum = 0;
 for (let i = 0; i < 10; i++) sum += i;
@@ -253,37 +261,37 @@ console.log(sum);
 <!-- gen:disasm -->
 ```text
 function 0 <anonymous>: params=2 locals=3 stack=3 captures=0
-  handler [3, 63) -> 63 depth 0
+  handler [3, 37) -> 37 depth 0
     0  async_start loc0 (<state>)
-    3  push_i8 0
-    5  put_loc loc1 (sum)
-    8  push_i8 0
-   10  put_loc loc2 (i)
-   13  jump -> 31
-   18  get_loc loc1 (sum)  ; 2:30
-   21  get_loc loc2 (i)  ; 2:37
-   24  add  ; 2:34
-   25  put_loc loc1 (sum)  ; 2:30
-   28  inc_loc loc2 (i)  ; 2:26
-   31  get_loc loc2 (i)  ; 2:17
-   34  push_i8 10
-   36  lt  ; 2:19
-   37  jump_if_true -> 18  ; 2:30
-   42  get_arg arg1  ; 3:1
-   45  get_method "log" ic0  ; 3:8
-   52  get_loc loc1 (sum)  ; 3:13
-   55  call 1  ; 3:12
-   58  drop
-   59  undefined
-   60  async_return loc0 (<state>)
-   63  async_reject loc0 (<state>)
+    3  push0
+    4  put_loc1 (sum)
+    5  push0
+    6  put_loc2 (i)
+    7  jump8 -> 16
+    9  get_loc1 (sum)  ; 2:30
+   10  get_loc2 (i)  ; 2:37
+   11  add  ; 2:34
+   12  put_loc1 (sum)  ; 2:30
+   13  inc_loc loc2 (i)  ; 2:26
+   16  get_loc2 (i)  ; 2:17
+   17  push_i8 10
+   19  lt  ; 2:19
+   20  jump_if_true8 -> 9  ; 2:30
+   22  get_arg1  ; 3:1
+   23  get_method "log" ic0  ; 3:8
+   30  get_loc1 (sum)  ; 3:13
+   31  call1  ; 3:12
+   32  drop
+   33  undefined
+   34  async_return loc0 (<state>)
+   37  async_reject loc0 (<state>)
 ```
 <!-- /gen -->
 
 The loop is entered with one jump to the condition at the bottom; every iteration after
 that is the body, `inc_loc`, the comparison and one backward conditional jump. Two more
 details show up here: `console` is the codemode body's second parameter
-(`get_arg arg1`), and `get_method "log" ic0` carries the number of its inline cache slot
+(`get_arg1`), and `get_method "log" ic0` carries the number of its inline cache slot
 (D1620). Measured in wasm, rotation, the peepholes and the matching interpreter fast
 paths cut the instructions executed by the tightest benchmark loops by 35 to 38%.
 
@@ -324,7 +332,7 @@ REPL (D004, D1581).
 
 Decisions on this page:
 
-<!-- gen:decisions D1080 D1360 D1081 D1083 D1082 D1130 D1131 D1860 D1620 D1480 D1481 D1482 D008 D1582 -->
+<!-- gen:decisions D1080 D1360 D1081 D1083 D1082 D1130 D1131 D1860 D1620 D1480 D1481 D1482 D008 D1582 D2443 -->
 - D1080: Speculative parsing never emits bytecode
 - D1360: destructuring patterns are parsed after their value (deferred patterns)
 - D1081: Name resolution runs once per compilation unit, children first
@@ -339,4 +347,5 @@ Decisions on this page:
 - D1482: Enums and namespaces are closures; their members resolve after parsing
 - D008: Codemode top level is a function body
 - D1582: `import()` without modules: compiled, rejected in a job
+- D2443: Short opcode forms and shortened jumps, a recorded trade
 <!-- /gen -->

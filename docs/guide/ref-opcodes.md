@@ -189,4 +189,38 @@ with them.
 | `throw_error` | 177 | Atom, U8 | 6 | 0 → 0 | Basic | Throws a new error with message `atom`; `kind` 0: TypeError, 1: ReferenceError. |
 | `debugger` | 178 | – | 1 | 0 → 0 | Free | `debugger` (no effect). |
 | `nop` | 179 | – | 1 | 0 → 0 | Free | No operation. |
+| `get_loc0` | 180 | – | 1 | 0 → 1 | Basic | `get_loc 0` |
+| `get_loc1` | 181 | – | 1 | 0 → 1 | Basic | `get_loc 1` |
+| `get_loc2` | 182 | – | 1 | 0 → 1 | Basic | `get_loc 2` |
+| `get_loc3` | 183 | – | 1 | 0 → 1 | Basic | `get_loc 3` |
+| `put_loc0` | 184 | – | 1 | 1 → 0 | Basic | `put_loc 0` |
+| `put_loc1` | 185 | – | 1 | 1 → 0 | Basic | `put_loc 1` |
+| `put_loc2` | 186 | – | 1 | 1 → 0 | Basic | `put_loc 2` |
+| `put_loc3` | 187 | – | 1 | 1 → 0 | Basic | `put_loc 3` |
+| `get_arg0` | 188 | – | 1 | 0 → 1 | Basic | `get_arg 0` |
+| `get_arg1` | 189 | – | 1 | 0 → 1 | Basic | `get_arg 1` |
+| `get_arg2` | 190 | – | 1 | 0 → 1 | Basic | `get_arg 2` |
+| `get_arg3` | 191 | – | 1 | 0 → 1 | Basic | `get_arg 3` |
+| `set_loc0` | 192 | – | 1 | 1 → 1 | Basic | `set_loc 0` |
+| `set_loc1` | 193 | – | 1 | 1 → 1 | Basic | `set_loc 1` |
+| `set_loc2` | 194 | – | 1 | 1 → 1 | Basic | `set_loc 2` |
+| `set_loc3` | 195 | – | 1 | 1 → 1 | Basic | `set_loc 3` |
+| `push0` | 196 | – | 1 | 0 → 1 | Basic | `push_i8 0` |
+| `push1` | 197 | – | 1 | 0 → 1 | Basic | `push_i8 1` |
+| `push2` | 198 | – | 1 | 0 → 1 | Basic | `push_i8 2` |
+| `push3` | 199 | – | 1 | 0 → 1 | Basic | `push_i8 3` |
+| `call0` | 200 | – | 1 | 2 → 1 | Call | `call 0` |
+| `call1` | 201 | – | 1 | 3 → 1 | Call | `call 1` |
+| `call2` | 202 | – | 1 | 4 → 1 | Call | `call 2` |
+| `call3` | 203 | – | 1 | 5 → 1 | Call | `call 3` |
+| `get_loc8` | 204 | Loc8 | 2 | 0 → 1 | Basic | `get_loc` of a local below 256. |
+| `put_loc8` | 205 | Loc8 | 2 | 1 → 0 | Basic | `put_loc` of a local below 256. |
+| `set_loc8` | 206 | Loc8 | 2 | 1 → 1 | Basic | `set_loc` of a local below 256. |
+| `get_arg8` | 207 | Arg8 | 2 | 0 → 1 | Basic | `get_arg` of an argument below 256. |
+| `push_const8` | 208 | Const8 | 2 | 0 → 1 | Basic | `push_const` of a constant below 256. |
+| `call_intrinsic8` | 209 | Intrinsic8 | 2 | 0 → 1 | Call | `a1 .. an -> r`: `call_intrinsic id, n` of an intrinsic below 256 with a fixed arity `n` (its declared parameters: privileged calls pass exactly those). |
+| `get_builtin_callee8` | 210 | Builtin8 | 2 | 0 → 2 | Basic | `-> f undefined`: `get_builtin idx; undefined`, a prelude function as the callee of a call with `this` undefined. |
+| `jump8` | 211 | Target8 | 2 | 0 → 0 | Basic | `jump` with an 8-bit offset. |
+| `jump_if_false8` | 212 | Target8 | 2 | 1 → 0 | Basic | `jump_if_false` with an 8-bit offset. |
+| `jump_if_true8` | 213 | Target8 | 2 | 1 → 0 | Basic | `jump_if_true` with an 8-bit offset. |
 <!-- /gen -->
