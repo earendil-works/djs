@@ -510,3 +510,7 @@ topics when the index is next reorganized.
 - D2268: When to bump COMPAT_VERSION
 - D2521: Vec pushes out of line outside the hot loops (`PushOut::push_out`)
 - D2445: A closure's length and name come from its template until changed
+- D2540: A 128 KiB wasm stack; parser nesting limit 550
+- D2541: Instance memory: the arena kept at memory's end, lean start capacity, the coded base outside memory
+- D2522: `Vec::with_capacity` out of line (`buf::vec_with_capacity`)
+- D2552: reduce by argument count, its accumulator in the dense loop's state

@@ -9,7 +9,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0162 | Act on pico's speed findings (tree, fuel rule, results into heap strings) | speed | .worktrees/speed |
 | 0163 | Seeded hashing for VM atoms and Map/Set | strings | .worktrees/strings |
 | 0165 | Tool results stored once (sliced strings over result buffers) | heap | .worktrees/heap |
-| 0161 | Safe-as-unsafe heap access; Vec hygiene | audit | .worktrees/audit |
 | 0151 | Shrink the base heap to a fraction (no removals) | bloat | .worktrees/bloat |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 
@@ -22,6 +21,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| - | Vec push_out/with_capacity in bloat's files (~1 KB); scratch buffers for Vec drops (few KB) | 0151 L3 |
+| - | Re-check parser MAX_DEPTH 550 after D2521's 16-word push_out limit | - |
 | - | Codec-free session images for browsers (pico lesson 4) | - |
 
 ## Done
@@ -83,6 +84,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0161 | Safe heap access (D2520), unsafe-heap feature, Vec hygiene (D2521, D2522) | c169e192 (agent audit; -9.7 KB gz; module 441.8 KB) |
 | 0158 | Instance memory: fresh Sandbox 18 -> 11 pages (D2540, D2541) | 47d32099 (agent heap; 128 KiB stack, MAX_DEPTH 550, coded base outside memory, ABI 2) |
 | 0164 | Image compatibility by dependency descriptor (D2265-D2268) | cb43e070 (agent snapshot; container format 3) |
 | 0159 | Twin re-benchmark: 54 @fast + 2 @native dropped (D2310); wmeasure fails loudly | ec8042f5 (agent perf; full 445.1 KB, slim 379.3 KB) |
