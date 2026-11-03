@@ -408,6 +408,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_display(vm, h) -> len` | out = the value as `djs run`'s console.log shows it |
 | `vm_call(vm, f, this, argc) -> 0/-1` | start a call; argument handles as u32 LE in staging |
 | `vm_run(vm, fuel) -> status` | 0 DONE, 1 THREW, 2 OUT_OF_FUEL, 3 HOST_CALL, 4 IDLE, 5 HOST_OUT_OF_MEMORY (the host could not back the heap below its cap; the call is abandoned and the VM is idle, D1690) |
+| `vm_fuel_used(vm) -> u32` | the fuel the last `vm_run` used (saturated): a host that polls by fuel counts it across sync host calls (D2653) |
 | `vm_set_now(vm, ms: f64)` | the clock `Date` reads, ms since the epoch (D1383); set it before every `vm_run` |
 | `vm_set_time_zone_offset(vm, minutes)` | the local time zone, minutes east of UTC (default 0) |
 | `vm_canonical_hash(vm) -> 0/-1` | out = the canonical hash (u32 lo, hi) of the VM's state, computed on a collected copy (D1730) |
