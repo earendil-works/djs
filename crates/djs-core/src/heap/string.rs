@@ -473,56 +473,20 @@ impl Heap {
         self.alloc_flat(len, two_byte).map(Str)
     }
 
-    /// Appends `n` code units to the flat string `s` in place, if `s` is the arena's last
-    /// cell: its cell grows by what the units need and `write` fills them (one byte per
-    /// unit for a one-byte `s`, little-endian pairs otherwise). Only for a string under
-    /// construction that nothing references yet (JSON.stringify's large output, D2553):
-    /// it builds the result where it ends up, without a copy of the whole outside the
-    /// arena. Returns false, changing nothing, when something was allocated after `s`.
-    pub(crate) fn append_last_str(
-        &mut self,
-        s: Str,
-        n: u32,
-        write: impl FnOnce(&mut [u8]),
-    ) -> Result<bool, HeapError> {
-        let size = self.cell_size(s.0);
-        if s.0 + size != self.arena.len() {
-            return Ok(false);
-        }
-        let len = self.str_len(s);
-        let new_len = len.checked_add(n).filter(|&l| l <= MAX_LEN);
-        let two_byte = self.cell_kind(s.0) == CellKind::Str16;
-        let width = if two_byte { 2 } else { 1 };
-        let new_size = new_len
-            .and_then(|l| {
-                if two_byte {
-                    Str16::DATA.cell_size(l)
-                } else {
-                    Str8::DATA.cell_size(l)
-                }
-            })
-            .ok_or(HeapError::StringTooLong)?;
-        if new_size > size {
-            self.arena.alloc(new_size - size)?;
-            if self.arena.len() >= self.gc_threshold {
-                self.gc_pending = true;
-            }
-            self.arena.set(s.0, Header::SIZE, new_size);
-        }
-        self.arena.set(s.0, Str8::LEN, len + n);
-        let at = Self::str_data_offset(s) + len * width;
-        write(self.arena.slice_mut(at, n * width));
-        Ok(true)
-    }
-
-    /// [`Heap::append_last_str`] for one-byte units into a one-byte `s`, written once
-    /// (past the arena's zeroed frontier they are appended, not zeroed and then copied).
+    /// Appends the one-byte units `data` to the one-byte flat string `s` in place, if `s`
+    /// is the arena's last cell: its cell grows by what they need. Only for a string under
+    /// construction that nothing references yet (JSON.stringify's large output, D2553): it
+    /// builds the result where it ends up, without a copy of the whole outside the arena.
+    /// The units are written once (past the arena's zeroed frontier they are appended, not
+    /// zeroed and then copied). Returns false, changing nothing, when something was
+    /// allocated after `s`.
     pub(crate) fn append_last_latin1(&mut self, s: Str, data: &[u8]) -> Result<bool, HeapError> {
         let size = self.cell_size(s.0);
         let end = s.0 + size;
         if end != self.arena.len() {
             return Ok(false);
         }
+        debug_assert_eq!(self.cell_kind(s.0), CellKind::Str8);
         let len = self.str_len(s);
         let n = data.len() as u32;
         let new_size = len

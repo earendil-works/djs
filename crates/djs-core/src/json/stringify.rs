@@ -12,12 +12,11 @@
 //! final.
 //!
 //! The output goes into a growable one-byte buffer that switches to two-byte the first
-//! time a code unit above 0xFF is written. Its size is checked against the string length
-//! limit and the heap's remaining room (the result has to fit there anyway), so transient
-//! memory stays bounded by the memory cap. Past [`SPILL_AT`] bytes the buffer is moved into
-//! the result's heap string at each check point and starts again (D2553): a large result is
-//! built in the arena, where it ends up, and no Rust copy of it is alive while the arena
-//! grows to take it.
+//! time a code unit above 0xFF is written. Past [`SPILL_AT`] units the buffer is moved
+//! into the result's heap string at the next check point and starts again (D2553): a
+//! large result is built in the arena, where it ends up, no Rust copy of it is alive while
+//! the arena grows to take it, and the string length limit and the memory cap apply as it
+//! grows.
 
 use alloc::vec::Vec;
 
@@ -25,7 +24,6 @@ use super::DEFAULT_MAX_DEPTH;
 use crate::bytecode::intrinsics::const_id;
 use crate::heap::{
     Atom, Heap, HeapError, Lookup, ObjectClass, PropFlags, Property, StrView, atoms,
-    string::MAX_LEN,
 };
 use crate::num;
 use crate::value::{Kind, Obj, Str, Value};
@@ -108,21 +106,12 @@ pub fn stringify_fast_at(
     to_json: bool,
     list: Option<&[Atom]>,
 ) -> Result<Option<Str>, StringifyError> {
-    let limit = {
-        let a = heap.arena();
-        // The result cell needs a 16-byte header plus the data.
-        let room = (a.limit() - a.len()).saturating_sub(16) as usize;
-        (MAX_LEN as usize, room)
-    };
     let mut s = Ser {
         heap,
         out: Out {
             // (Most results are a few hundred bytes: no growth through 8, 16, ... 128.)
             buf: Buf::Narrow(crate::buf::vec_with_capacity(256)),
             pieces: Vec::new(),
-            spilled: 0,
-            max_len: limit.0,
-            room: limit.1,
         },
         gap,
         outer,
@@ -140,11 +129,7 @@ pub fn stringify_fast_at(
         return Ok(None);
     }
     if s.out.pieces.is_empty() {
-        let str = match s.out.buf {
-            Buf::Narrow(b) => s.heap.alloc_latin1(&b)?,
-            Buf::Wide(w) => s.heap.alloc_utf16(&w)?,
-        };
-        return Ok(Some(str));
+        return Ok(Some(s.out.buf.alloc(s.heap)?));
     }
     s.spill()?;
     // Usually one piece; a rope of them when something else was allocated in between.
@@ -156,7 +141,8 @@ pub fn stringify_fast_at(
     Ok(Some(str))
 }
 
-/// The buffered output, in bytes, at which a check point moves it into the heap (D2553).
+/// The buffered output, in code units, at which a check point moves it into the heap
+/// (D2553).
 /// The buffer then stays below the size that goes to page runs of its own instead of the
 /// allocator's segments.
 pub(super) const SPILL_AT: usize = 4096;
@@ -169,15 +155,9 @@ pub fn quote(heap: &mut Heap, s: Str) -> Result<Str, HeapError> {
     let mut out = Out {
         buf: Buf::Narrow(crate::buf::vec_with_capacity(view.len() + 2)),
         pieces: Vec::new(),
-        spilled: 0,
-        max_len: usize::MAX,
-        room: usize::MAX,
     };
     out.quote(view);
-    match out.buf {
-        Buf::Narrow(b) => heap.alloc_latin1(&b),
-        Buf::Wide(w) => heap.alloc_utf16(&w),
-    }
+    out.buf.alloc(heap)
 }
 
 enum Buf {
@@ -185,37 +165,25 @@ enum Buf {
     Wide(Vec<u16>),
 }
 
+impl Buf {
+    /// A heap string of the buffer's units (one copy for the three callers).
+    #[inline(never)]
+    fn alloc(&self, heap: &mut Heap) -> Result<Str, HeapError> {
+        match self {
+            Buf::Narrow(b) => heap.alloc_latin1(b),
+            Buf::Wide(w) => heap.alloc_utf16(w),
+        }
+    }
+}
+
 struct Out {
     buf: Buf,
     /// The output moved into the heap so far: flat strings, in order, each of the
     /// buffer's width when it was started (see [`Ser::spill`]).
     pieces: Vec<Str>,
-    /// Their total length in code units.
-    spilled: usize,
-    max_len: usize,
-    room: usize,
 }
 
 impl Out {
-    /// Fails once the result could no longer become a heap string.
-    #[inline]
-    fn check(&self) -> Result<(), StringifyError> {
-        let (len, bytes) = match &self.buf {
-            Buf::Narrow(b) => (b.len(), b.len()),
-            Buf::Wide(w) => (w.len(), w.len() * 2),
-        };
-        // (The spilled part counted as one byte per unit: the room check bounds transient
-        // memory, and the heap's own limit backs it.)
-        let (len, bytes) = (len + self.spilled, bytes + self.spilled);
-        if len > self.max_len {
-            Err(StringifyError::Heap(HeapError::StringTooLong))
-        } else if bytes > self.room {
-            Err(StringifyError::Heap(HeapError::OutOfMemory))
-        } else {
-            Ok(())
-        }
-    }
-
     /// Appends Latin-1 (or ASCII) bytes.
     #[inline]
     fn latin1(&mut self, s: &[u8]) {
@@ -305,12 +273,6 @@ impl Out {
             o.reserve(v.len() + v.len() / 16 + 2);
         }
         self.byte(b'"');
-        self.quote_body(v);
-        self.byte(b'"');
-    }
-
-    /// QuoteJSONString without the quotes.
-    fn quote_body(&mut self, v: StrView<'_>) {
         match v {
             StrView::Latin1(b) => {
                 let mut run = 0;
@@ -370,6 +332,7 @@ impl Out {
                 self.wide_run(&units[run..]);
             }
         }
+        self.byte(b'"');
     }
 }
 
@@ -591,16 +554,15 @@ impl Ser<'_, '_> {
         Some(Class::Date(t))
     }
 
-    /// A check point: moves a buffer past [`SPILL_AT`] into the heap, failing once the
-    /// result could no longer become a heap string. (Below that the buffer is small and
-    /// the result's own allocation does the checks.)
+    /// A check point: moves a buffer past [`SPILL_AT`] into the heap, where the string
+    /// length limit and the memory cap apply. The buffer itself stays small.
     #[inline]
     fn check(&mut self) -> Result<(), StringifyError> {
-        let bytes = match &self.out.buf {
+        let units = match &self.out.buf {
             Buf::Narrow(b) => b.len(),
-            Buf::Wide(w) => w.len() * 2,
+            Buf::Wide(w) => w.len(),
         };
-        if bytes >= SPILL_AT {
+        if units >= SPILL_AT {
             self.spill()?;
         }
         Ok(())
@@ -610,32 +572,14 @@ impl Ser<'_, '_> {
     /// still the arena's last cell and has the buffer's width, else as a new piece.
     #[inline(never)]
     fn spill(&mut self) -> Result<(), StringifyError> {
-        self.out.check()?;
-        let n = match &self.out.buf {
-            Buf::Narrow(b) => b.len(),
-            Buf::Wide(w) => w.len(),
-        };
-        let wide = matches!(self.out.buf, Buf::Wide(_));
-        let last = self.out.pieces.last().copied();
-        let appended = match last {
-            Some(p) if self.heap.str_is_two_byte(p) == wide => match &self.out.buf {
-                Buf::Narrow(b) => self.heap.append_last_latin1(p, b)?,
-                Buf::Wide(w) => self.heap.append_last_str(p, n as u32, |d| {
-                    for (pair, u) in d.as_chunks_mut::<2>().0.iter_mut().zip(w) {
-                        *pair = u.to_le_bytes();
-                    }
-                })?,
-            },
+        let appended = match (&self.out.buf, self.out.pieces.last()) {
+            (Buf::Narrow(b), Some(&p)) => self.heap.append_last_latin1(p, b)?,
             _ => false,
         };
         if !appended {
-            let piece = match &self.out.buf {
-                Buf::Narrow(b) => self.heap.alloc_latin1(b)?,
-                Buf::Wide(w) => self.heap.alloc_utf16(w)?,
-            };
+            let piece = self.out.buf.alloc(self.heap)?;
             self.out.pieces.push(piece);
         }
-        self.out.spilled += n;
         match &mut self.out.buf {
             Buf::Narrow(b) => b.clear(),
             Buf::Wide(w) => w.clear(),
@@ -669,37 +613,8 @@ impl Ser<'_, '_> {
             self.out.latin1(b"null");
         } else if let Some(s) = v.as_string() {
             let flat = self.heap.contiguous(s)?;
-            let len = self.heap.str_len(flat) as usize;
-            if len <= SPILL_AT {
-                let view = self.heap.str_view(flat).expect("flat");
-                self.out.quote(view);
-            } else {
-                // A long string goes out in parts with check points between them, so
-                // that the buffer never holds all of it (D2553).
-                self.out.byte(b'"');
-                let mut at = 0;
-                while at < len {
-                    let view = self.heap.str_view(flat).expect("flat");
-                    let mut end = (at + SPILL_AT).min(len);
-                    let part = match view {
-                        StrView::Latin1(b) => StrView::Latin1(&b[at..end]),
-                        StrView::Utf16(b) => {
-                            // A surrogate pair stays in one part (a lone half is escaped).
-                            if end < len
-                                && (0xD800..=0xDBFF)
-                                    .contains(&u16::from_le_bytes([b[2 * end - 2], b[2 * end - 1]]))
-                            {
-                                end += 1;
-                            }
-                            StrView::Utf16(&b[2 * at..2 * end])
-                        }
-                    };
-                    self.out.quote_body(part);
-                    at = end;
-                    self.check()?;
-                }
-                self.out.byte(b'"');
-            }
+            let view = self.heap.str_view(flat).expect("flat");
+            self.out.quote(view);
         }
         self.check()
     }
@@ -817,7 +732,8 @@ impl Ser<'_, '_> {
         Ok(())
     }
 
-    fn pop(&mut self) {
+    /// Closes a container (its bracket is written), a check point.
+    fn pop(&mut self) -> Result<(), StringifyError> {
         let f = self.stack.pop().unwrap();
         if self.stack.len() >= LINEAR_CYCLE_CHECK
             && let Ok(i) = self.deep.binary_search(&f.obj().offset())
@@ -829,6 +745,7 @@ impl Ser<'_, '_> {
             debug_assert_eq!(self.keys.len(), end);
             self.keys.truncate(start);
         }
+        self.check()
     }
 
     /// Array element `i` ([[Get]]), or `Slow` if that would call a getter.
@@ -904,7 +821,7 @@ impl Ser<'_, '_> {
                             self.newline(depth - 1);
                         }
                         self.out.byte(b'}');
-                        self.pop();
+                        self.pop()?;
                         continue;
                     }
                     self.stack[top] = Frame::Plain {
@@ -942,7 +859,7 @@ impl Ser<'_, '_> {
                             self.newline(depth - 1);
                         }
                         self.out.byte(b'}');
-                        self.pop();
+                        self.pop()?;
                         continue;
                     }
                     let key = self.keys[next];
@@ -989,7 +906,7 @@ impl Ser<'_, '_> {
                             self.newline(depth - 1);
                         }
                         self.out.byte(b']');
-                        self.pop();
+                        self.pop()?;
                         continue;
                     }
                     self.stack[top] = Frame::Arr {

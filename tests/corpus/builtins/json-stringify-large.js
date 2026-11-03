@@ -1,7 +1,7 @@
 // JSON.stringify results past 4 KB (D2553): the output moves into the result string at
-// check points, long strings go out in parts, and a rope's flattening in between starts a
-// new piece. Printed as lengths, slices around the joins and a parse round trip (no
-// per-unit loops in JS: the case runs under --suspend-every 1).
+// check points; a rope's flattening in between, or two-byte output, starts a new piece.
+// Printed as lengths, slices around the joins and a parse round trip (no per-unit loops
+// in JS: the case runs under --suspend-every 1).
 function show(label, s) {
   const back = JSON.stringify(JSON.parse(s)) === s;
   console.log(label, s.length, back, JSON.stringify(s.slice(4090, 4110)), JSON.stringify(s.slice(8186, 8200)), JSON.stringify(s.slice(-24)));
@@ -13,7 +13,7 @@ show("rows indented", JSON.stringify(rows.slice(0, 150), null, 2));
 // A wide unit after the output was already moved out (narrow first, then wide).
 const late = rows.slice(0, 150).concat(["caf\u00e9 \u4e2d\u6587 \ud83d\ude00"]);
 show("widens late", JSON.stringify(late));
-// Long strings: escapes, a surrogate pair across the 4096-unit split, a lone half.
+// Long strings: escapes, a surrogate pair around unit 4096, a lone half.
 const long = "a\"b\\c\n".repeat(1500);
 show("long", JSON.stringify({ long }));
 const pair = "x".repeat(4095) + "\ud83d\ude00" + "y".repeat(5000) + "\ud800" + "z";

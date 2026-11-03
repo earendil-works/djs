@@ -476,8 +476,8 @@ fn stringify_two_byte_runs() {
 
 /// Output past the spill size is moved into the heap at check points (D2553): compare
 /// large results with the independent quoter, for narrow output, output that widens after
-/// spilling, long strings split into parts (a surrogate pair across a split stays whole),
-/// and ropes, whose flattening allocates between spills (the result is then a rope).
+/// spilling (two-byte pieces), long strings, and ropes, whose flattening allocates between
+/// spills (the result is then a rope).
 #[test]
 fn stringify_large_output_spills_into_the_heap() {
     let mut h = Heap::new().unwrap();
