@@ -806,6 +806,19 @@ impl Vm {
         Ok(())
     }
 
+    /// How the entry call ended, while no frame is active: its return value (`Ok`) or
+    /// exception (`Err`). `run` hands it out with `Done`/`Threw`, but also returns `Idle`
+    /// after the call returned while async host calls are pending; the next `call`
+    /// replaces it (0174: a REPL input's promise).
+    pub fn outcome(&self) -> Option<Result<Value, Value>> {
+        let v = state::result(&self.heap);
+        match self.state() {
+            RunState::Done => Some(Ok(v)),
+            RunState::Threw => Some(Err(v)),
+            _ => None,
+        }
+    }
+
     /// The state of a Promise: `None` if `v` is not a promise, `Some(None)` while it is
     /// pending, else its result (`Ok` fulfilled, `Err` rejected). For hosts whose entry
     /// function returns a promise (an async body).

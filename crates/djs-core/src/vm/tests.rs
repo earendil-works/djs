@@ -4153,3 +4153,24 @@ fn the_hash_key_follows_the_seed() {
     a.collect().unwrap();
     a.heap().verify().unwrap();
 }
+
+#[test]
+fn outcome_while_idle() {
+    // 0174: the entry call's value is readable when `run` stops `Idle` on a pending call.
+    let mut vm = vm_with(VmOptions::default());
+    let tool = vm.new_async_host_function(TOOL, "tool").unwrap();
+    vm.define_global("tool", tool).unwrap();
+    assert_eq!(vm.outcome(), None);
+    let opts = crate::compiler::CompileOptions::script("t.js");
+    let f = vm.compile(b"tool(1); 41 + 1", &opts).unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    assert_eq!(vm.run(u64::MAX), Status::Idle);
+    assert_eq!(vm.outcome(), Some(Ok(Value::int(42))));
+    let f = vm.compile(b"throw 7", &opts).unwrap();
+    vm.call(f, this, &[]).unwrap();
+    assert_eq!(vm.outcome(), None);
+    // An exception is `Threw` at once, even with a call pending.
+    assert_eq!(vm.run(u64::MAX), Status::Threw(Value::int(7)));
+    assert_eq!(vm.outcome(), Some(Err(Value::int(7))));
+}
