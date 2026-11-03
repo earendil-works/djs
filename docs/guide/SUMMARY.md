@@ -9,7 +9,7 @@
 - [The interpreter: frames in the heap](interpreter.md)
 - [Suspending anywhere: fuel and host calls](suspension.md)
 - [The garbage collector](gc.md)
-- [Snapshots and images](snapshots.md)
+- [Images and continuation dumps](snapshots.md)
 - [Builtins: the TypeScript subset and the leaf rule](builtins.md)
 - [Determinism](determinism.md)
 - [The host interface: wire in, reader out](host.md)

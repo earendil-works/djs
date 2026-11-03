@@ -41,7 +41,7 @@ Such scripts have a particular profile, and each part of it became a design goal
 | Receives tool results: long strings, arrays of similar objects, base64 images | Get data in and out with as little copying and conversion as possible | [cheap data passing](goals.md#cheap-data-passing) |
 | Runs for milliseconds, once, then is thrown away | Start in microseconds; compile fast; keep the wasm module small | [fast startup in wasm](goals.md#fast-startup-in-wasm) |
 | Is written fresh every time | Compile in one pass, straight to bytecode | [no syntax tree](goals.md#no-syntax-tree) |
-| Waits for tools that may take minutes | Save the whole VM while it waits, restore it elsewhere | [snapshots](goals.md#snapshots) |
+| Waits for tools that may take minutes | Write the run out while it waits, continue it elsewhere, also in a later djs | [persistence](goals.md#persistence) |
 | Must not hog the host, may loop forever, may be cancelled | Stop between any two instructions and resume later, even inside a `map` callback or a getter | [suspend anywhere](goals.md#suspend-anywhere) |
 
 The goals are in priority order, and the next chapter, [what djs optimizes
@@ -63,7 +63,7 @@ and pi's tests expect them.
   frames, the promise job queue, the pending tool calls. Values refer to each other by
   `u32` offsets, never by pointers, so the arena can move, be copied and be read from
   the outside.
-- The **garbage collector** compacts the arena in place, which keeps snapshots small and
+- The **garbage collector** compacts the arena in place, which keeps images small and
   makes the heap image of a program a deterministic function of the program.
 - The **builtins** (`Array.prototype.map`, `JSON.parse`, ...) are written in a strict
   subset of TypeScript and compiled twice: to bytecode that ships in the base snapshot,
@@ -80,7 +80,7 @@ things left out on purpose; [the non-goals](goals.md#non-goals) lists them and w
 ## How to read this guide
 
 The tour goes from the bottom up: the arena and values, cells and objects, the compiler,
-the interpreter, suspension, the collector, snapshots, the builtins, determinism, and
+the interpreter, suspension, the collector, images and dumps, the builtins, determinism, and
 the host interface. Each chapter explains its **trade-offs**: what the design costs, and
 the alternatives that were not taken. The chapters explain each decision where it
 matters; the decision's ID (D1050) links to its entry in the [decision

@@ -75,7 +75,7 @@ The fuel slice is how the host keeps control. A slice of a million fuel takes a 
 milliseconds of work (about 3 ms on a tight loop, measured through the pi adapter); a
 long leaf operation can overshoot its slice, and the overshoot is charged to the next
 one (D1740). Between slices the host can check a deadline, cancel the run with
-`vm_abort`, or take a snapshot of a run that waits for a slow tool (the goal to [suspend
+`vm_abort`, or simply leave the run where it stopped (the goal to [suspend
 anywhere](goals.md#suspend-anywhere)). `vm_run` also runs the promise job queue to empty
 (D1370), so DONE means the script and everything it started have finished. One more
 status ends a run without an error from the script: HOST_OUT_OF_MEMORY, when the host
@@ -95,7 +95,6 @@ const sb = await Sandbox.create({
 });
 sb.run("return readFile(path).length", { path: "README.md" });
 await sb.runAsync("return await fetchJson(url)", { url });
-const snap = sb.bytes(); // the VM image, compressed, plus the names of the host functions
 ```
 
 ## Values in: the wire format
@@ -165,8 +164,8 @@ kinds:
 
 - A **sync host function** (`vm_new_host_function`) parks the VM. `vm_run` returns
   HOST_CALL, the host reads the arguments with the reader, calls the function, sends the
-  result in through the wire format and resolves the call. While the VM is parked the
-  host may also snapshot it: the pending call is part of the image.
+  result in through the wire format and resolves the call. The pending call is part of
+  the heap, like everything else.
 - An **async host function** (`vm_new_async_host_function`, D1374) returns a promise in
   the VM at once, and the script goes on. Several calls can be outstanding together, as
   in `Promise.all(files.map(readFile))`. When nothing but pending calls is left,
@@ -194,7 +193,7 @@ at every idle point (D1730). [Determinism](determinism.md) covers this in depth.
 > callbacks by the time `vm_resolve_host_call` returns.
 
 > **Trade-off.** Sync host functions park the whole VM. That keeps them simple to
-> implement and to snapshot (a parked call is just a pending entry in the heap), but
+> implement and to suspend (a parked call is just a pending entry in the heap), but
 > only one can be outstanding at a time. Scripts that call tools concurrently need async
 > host functions.
 
@@ -217,23 +216,27 @@ What the adapter adds over QuickJS:
   budget, so cold and warm starts behave the same (D1660). A restore is a copy plus a
   check: a script starts in about 1 ms instead of 7 ms, against about 4 ms on
   quickjs-wasi.
-- **Snapshots of a waiting session.** `snapshot()` and `resumeVm()` save and restore a
-  session while it waits for a tool, which QuickJS cannot do. The image is compressed
-  against the prelude image the session started from, so a waiting session takes a few
-  KB; another process can rebuild that prelude image from the session's inputs to
-  restore it, also on a newer djs whose image dependencies are unchanged
-  ([snapshots](snapshots.md), D2262, D2265). pi uses deterministic replay for
-  durability today; snapshots would be an alternative.
+- **Sessions persisted as dumps, in the shape pi should adopt.** pi's prelude keeps its
+  own in-flight state (a map of pending calls, the store's writes, reactions on the
+  script's promise), which a dump would have to write as prelude internals. A variant of
+  the prelude without any of it runs in the adapter's *next* mode (D2650): tools are the
+  engine's async host calls, the script's promise and the store belong to the adapter,
+  and frozen builtins replace pi's lockdown (D2652). A waiting session is then written as
+  a dump plus the adapter's state, and resumed in a new instance, process or djs by
+  running the prelude again and loading the dump. pi uses deterministic replay for
+  durability today; dumps are the alternative it would adopt.
 
 pi's own test suite runs against djs through this adapter (`node js/pi/pi-tests.ts`):
-221 of its 226 tests pass. The rest come from djs being always strict and from a test
-that expects QuickJS's fingerprint.
+215 of its 226 tests pass, the same ones in the next mode and with a dump and a resume
+at every idle point (D2651). The rest come from djs being always strict, from a test that
+expects QuickJS's fingerprint, and from a workload pi's tests use to cancel scripts,
+which finishes on djs before the cancel.
 
 > **Trade-off.** Implementing pi's existing VM contract over designing a new one around
 > djs. pi can adopt djs behind a flag by swapping one module, and its tests run
 > unchanged. The cost: the adapter carries pi's protocol (a sync `bridge` function,
 > polling between fuel slices instead of an interrupt handler), and the benefits djs
-> could offer beyond QuickJS, such as snapshots of waiting sessions, are extras that pi
+> could offer beyond QuickJS, such as persisting waiting sessions, are extras that pi
 > would have to opt into.
 
 ### Persisting a run that waits
@@ -254,6 +257,33 @@ pending answer: those are the host's, and the host keeps and re-arms them from t
 calls the load reports. [`examples/sleep-dump/`](../../examples/sleep-dump/) does this
 with a tool that sleeps five seconds on the host side.
 
+The protocol from the host's side, in order:
+
+1. `begin(code, params)` runs to the first idle point; `run.calls` lists the open calls
+   (an id, the host function's name, the arguments). The host starts the work for each.
+2. As results come in, `settle(id, outcome)` hands each one to the VM, and `advance()`
+   runs to the next idle point, which may have new calls, or to the end.
+3. Whenever the run is idle, `dump()` writes it out. The host stores the text, compressed
+   (below), together with whatever state of its own the open calls need.
+4. Later, `Sandbox.resume(text, options)` makes a sandbox with the same host functions by
+   name, loads the dump and returns the run with its open calls. For each, the host
+   decides: deliver a result it recorded, issue the call again, or reject it.
+
+A dump is plain JavaScript and stays plain: the host compresses it when it stores it,
+with zstd at level 3, which node has built in (D2703). Over a corpus of 300 real codemode
+scripts, a dump at an idle point is 6 KB raw and under 2 KB compressed at the median, and
+a session holding a large log a few hundred KB. Any zstd reads it back, and any later
+djs loads it.
+
+The dumper is about 300 KB of code (108 KB compressed) that only hosts which persist runs
+need, so the
+shipped module leaves it out (D2704). Such a host loads a second module, the same build
+with the dumper, and passes it to the sandbox: dumping copies the VM's image into an
+instance of that module and writes the dump there; loading does the reverse, and the
+sandbox keeps that instance for its next dumps (D2701). The image never leaves the
+process, so neither module verifies it cell by cell, only that it was made by the same
+build's tables.
+
 ## Where to look
 
 - [`crates/djs-wasm/src/lib.rs`](../../crates/djs-wasm/src/lib.rs): the exports.
@@ -264,7 +294,7 @@ with a tool that sleeps five seconds on the host side.
 
 Decisions on this page:
 
-<!-- gen:decisions D2060 D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 D2265 D2541 D2543 D2630 -->
+<!-- gen:decisions D2060 D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 D2265 D2541 D2543 D2630 D2650 D2651 D2652 D2700 D2701 D2703 D2704 -->
 - D2060: The base is decoded or injected straight into the first VM's arena
 - D1180: Inbound wire format, version 1
 - D1210: Exported heap layout drives the host-side reader
@@ -285,4 +315,11 @@ Decisions on this page:
 - D2541: Instance memory: the arena kept at memory's end, lean start capacity, the coded base outside memory
 - D2543: A wasm stack overflow is reported as one
 - D2630: Host-driven Sandbox runs, the first piece of the Sandbox run API
+- D2650: pi's future shape in the adapter: prelude-next, `next` mode, session dumps
+- D2651: `dumpEveryIdle`: the next mode's stress mode
+- D2652: prelude-next has no lockdown; the next mode has frozen builtins
+- D2700: Heap images are no longer a persistence format; what was removed
+- D2701: The dump module's instance and VM are kept between dumps
+- D2703: Hosts store dump text compressed with zstd; the format stays a plain Script
+- D2704: Packaging B: the shipped module has no dumper, hosts that persist load the dump module
 <!-- /gen -->

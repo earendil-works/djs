@@ -11,14 +11,14 @@ ends.
 > random seed and the behavior of weak references are inputs the host sets, and results
 > of host calls take effect in the order they were delivered, never when they arrived.
 > Given the same inputs in the same order, a run does the same thing and leaves
-> byte-identical heap images, however it was sliced, snapshotted or compiled. The gate
+> byte-identical heap images, however it was sliced, restored from images or compiled. The gate
 > checks that, and a canonical hash and run journals let hosts check it too.
 
 ## Why it matters
 
 The tour so far has made two promises. A run can stop between any two instructions and
 continue from an image ([Suspending anywhere](suspension.md),
-[Snapshots](snapshots.md)), and the host hands it inputs and reads results without the
+[images](snapshots.md)), and the host hands it inputs and reads results without the
 VM doing any I/O ([The host interface](host.md)). Determinism is what makes those
 promises useful:
 
@@ -143,8 +143,8 @@ host's entropy, and weak references are collected. With
   move it.
 
 With a fixed clock as well, the same code, parameters and results in the same order do
-the same thing on every run, with any fuel slice, and across snapshots (the clock is in
-the snapshot).
+the same thing on every run, with any fuel slice, and across restores from images (the
+clock is in the heap). A continuation dump keeps `Math.random`'s sequence too (D2624).
 
 ## Canonical hashes and journals
 
@@ -165,7 +165,7 @@ recorded order, and compares the hashes along the way. A difference is a `diverg
 error that says where. Because results are macrotasks, a replay passes through every
 recorded idle state even if the recording got several results at once.
 
-> **Trade-off.** Journals of inputs, checked by hashes, over replaying from snapshots
+> **Trade-off.** Journals of inputs, checked by hashes, over replaying from saved states
 > alone. A journal is small, independent of the image format, and says exactly where a
 > replay went wrong. The cost: a replay re-executes everything, and it must run on the
 > same engine build, because a different build may legitimately do the same thing in
@@ -210,8 +210,9 @@ Some things are deliberately outside the guarantee:
 - **Other builds.** Journals are tied to the build hash, which covers the engine's
   sources, features and the `libm` version (D1750): a different build may run the same
   script in a different number of steps. Images are tied only to what they depend on
-  ([snapshots](snapshots.md#what-an-image-depends-on), D2265), so a VM restored into
-  another build goes on with that build's code.
+  ([images](snapshots.md#what-an-image-depends-on), D2265), so a VM restored into
+  another build goes on with that build's code; that happens only inside a process now
+  (the dump module), since runs persist as dumps.
 - **The clock in the default mode.** Without `deterministic`, the Sandbox sets the clock
   before every fuel slice, so what `Date.now()` returns depends on timing, as it does in
   any engine.

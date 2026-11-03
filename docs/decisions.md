@@ -8462,3 +8462,69 @@ interrupt poll and hung an in-thread VM. The new export `vm_fuel_used` (the last
 `vm_run`'s fuel, from `Vm::run_metered`) lets the adapter carry the fuel left across host
 calls and poll once a poll's worth is used. Scripts without sync host calls poll exactly
 as before; others poll at other points, so DETERMINISTIC_VERSION is 3.
+
+## D2700: Heap images are no longer a persistence format; what was removed
+date: 2026-11-04 · by: example · issue: 0177
+D2560 made continuation dumps the way a waiting run persists; 0177 removed what only
+served images as persistence. Superseded and removed: the snapshot container (D2260, the
+`DJSN` format and its checks, D2400), host-side compression against a reference image
+(D2261; reference images as such, D2262's role as a snapshot reference, though pi's
+prelude image stays and stays deterministic), session images (D2066), `Sandbox.bytes()`
+and `Sandbox.fromBytes()` (D2263), pi's `snapshot()` and `resumeVm()` (D1890's snapshot
+part), the REPL's `.snapshot` and restoring images with `.restore` (D2340's containers),
+`djs heap` reading containers and session images, its `--reference` option and
+scripts/heap/reference.ts (D2264's container part), djs-cli's zstd dependency, and the
+research scripts that measured containers. Kept: the base image (D1321), pi's prelude
+image cache (D1495), `Vm::image`/`Vm::from_bytes` for the stress and determinism checks
+and the docs examples, `djs heap` on raw images (the REPL's new `.image` writes one), and
+images as the transport to the dump module (D2635). Verification (D1056): `Vm::from_bytes`
+still verifies every cell, for the tools and stress modes, which use it as a heap check;
+djs-wasm's `vm_from_bytes` now loads with `Vm::from_bytes_trusted` (header and dependency
+descriptor only), since every image it loads was made in the same process, so the
+shipped module no longer carries the verifier (1,038,666 -> 1,029,026 bytes, 444.0 ->
+440.5 KB gzip). The dependency descriptor (D2265) stays: it guards the transport between
+two modules and the stress modes.
+
+## D2701: The dump module's instance and VM are kept between dumps
+date: 2026-11-04 · by: example · issue: 0177
+With `dumpModule`, a Sandbox made a fresh dump-module sandbox per dump (D2635), paying an
+instance and whatever the dumper derives per VM (its builtin name table, D2626) every
+time. It now keeps one dump-module sandbox for its lifetime and loads each image into the
+same VM with the new export `vm_replace_image` (`Vm::replace_image`: the image replaces
+the VM's heap, the VM's own state outside the heap stays). Measured at 0177 on the
+harvested corpus, packaging B's dump and resume p50 are 2.8 and 0.9 ms, level with
+packaging A (0184's run with a fresh instance per dump measured 3.5 and 1.3 ms, at
+another machine load); D2626, once on main, makes later dumps of a kept VM cheaper still.
+
+## D2702: The Sandbox's `maxFuel` counts fuel across sync host calls
+date: 2026-11-04 · by: example · issue: 0177
+As in pi's adapter (D2653): `Sandbox.drive` adds `vm_fuel_used` after every `vm_run`, not
+a whole slice at OUT_OF_FUEL only, and checks the budget at host calls too. A loop of
+sync host calls (`for (;;) f()`) used to restart every slice with full fuel and never ran
+out; it now fails with `fuel` like any other loop.
+
+## D2703: Hosts store dump text compressed with zstd; the format stays a plain Script
+date: 2026-11-04 · by: example · issue: 0177
+A format 2 dump is not wrapped in a container: hosts compress the text when they store it,
+with zstd at level 3 (node's `zlib.zstdCompressSync`), and decompress it before
+`Sandbox.resume`. Measured (0184's dump-costs, the harvested corpus's 1,063 idle points):
+6.1 KB raw and 1.7 KB compressed at the median, 17 KB at p99; a third of the image
+containers' size (5.1 KB median), with no dictionary or reference image to keep, and
+readable by any zstd and any later djs. Level 19 saves a fifth to a quarter more on
+megabyte dumps (big-log 394 -> 299 KB) at a much slower compression; the host may choose
+it for archives. pi's `{ dump, state }` is JSON and compresses the same way. Rejected: a
+djs container with a header and compression inside the engine or package (a second
+format to version, and a codec in the module).
+
+## D2704: Packaging B: the shipped module has no dumper, hosts that persist load the dump module
+date: 2026-11-04 · by: example · issue: 0177
+Confirms D2564's lean. Measured after 0177's removal (`wasm` profile): the module without
+the dumper is 1,029,026 bytes, 440.5 KB gzip; with it (`djs-dump.wasm`) 1,332,899 bytes,
+548.9 KB gzip, +108 KB gzip (+24.6%), which A would add to every host, also the ones that
+never persist a run (pi's in-thread and worker launchers start a module per execution).
+With the dump-module VM kept between dumps (D2701), B's dump and resume times are level
+with A's (corpus p50 2.8 / 0.9 ms; cases within noise), so B costs only a second module
+to ship and an image copy per dump. The size ceiling stays on the main module and was
+lowered after the removal (444,500 -> 441,522; slim 379,900 -> 376,679). Hosts get the
+dump module from `scripts/build-wasm.sh --dump`; a module built with the `dump` feature
+still works alone as `module` (A) where one file matters more than size.

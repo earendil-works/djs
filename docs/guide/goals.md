@@ -7,8 +7,8 @@ a list of non-goals complete the picture. The other chapters refer to the goals 
 names used here.
 
 > **In short.** In priority order: **cheap data passing** between the sandbox and its
-> host, **fast startup in wasm**, compiling with **no syntax tree**, **snapshots** of
-> the whole VM, and the ability to **suspend anywhere**. Under all of them: wasm32 is
+> host, **fast startup in wasm**, compiling with **no syntax tree**, **persistence** of a
+> waiting run, and the ability to **suspend anywhere**. Under all of them: wasm32 is
 > the target that counts, and behavior matches QuickJS.
 
 ## Cheap data passing
@@ -31,7 +31,7 @@ compiling the script) is pure latency, and a large wasm module costs download an
 compile time in the host.
 
 djs meets it by shipping its initialized realm as a prebuilt image, so creating a VM is
-a copy ([snapshots](snapshots.md)), by compiling in one pass (next goal), and by
+a copy ([images](snapshots.md#the-base-snapshot)), by compiling in one pass (next goal), and by
 counting every kilobyte of the module, which is why most builtins are bytecode rather
 than Rust ([builtins](builtins.md)).
 
@@ -43,22 +43,26 @@ syntax tree first. That keeps compilation fast and its memory small, at the pric
 parser that must settle every ambiguity before it emits code ([the
 compiler](compiler.md)).
 
-## Snapshots
+## Persistence
 
-A script may wait minutes for a tool, or a person. The host should be able to save the
-whole VM while it waits (heap, stacks, pending promise jobs, pending tool calls),
-release the memory, and continue later, possibly in another process.
+A script may wait minutes for a tool, or a person. The host should be able to write the
+run out while it waits (its data, the functions stopped at their `await`s, the promises
+between them, the open tool calls), release the memory, and continue later, in another
+process or after an upgrade of djs.
 
-djs meets it by keeping all of its state in one byte array without pointers, so that a
-snapshot is a copy of that array ([the arena](arena.md), [snapshots](snapshots.md)), and
-by making the copy compact and canonical ([the garbage collector](gc.md)).
+djs meets it at **idle points**, where a run only waits for its tools: there it writes the
+run as a continuation dump, a JavaScript program that recreates it, which any later djs
+loads and continues or refuses with a reason ([suspension](suspension.md#persisting-a-waiting-run),
+[images and dumps](snapshots.md)). Inside one process a copy of the arena does the same
+job for any stop ([the arena](arena.md)), but such an image is tied to the engine build's
+numbering, so it is not what a run is kept in.
 
 ## Suspend anywhere
 
 The host must keep control: a script may loop forever, must not hog the thread that runs
 it, and may be cancelled. Execution therefore has to be able to stop between any two
 instructions, also inside a `map` callback, a getter, a `toString` call or a promise
-job, and continue later, or be snapshotted at that point.
+job, and continue later in the same process.
 
 djs meets it with an interpreter that never keeps JavaScript state on the Rust stack
 ([the interpreter](interpreter.md)), with fuel as the unit of work ([suspending

@@ -1,12 +1,14 @@
 # Suspending anywhere: fuel and host calls
 
 A codemode script may loop forever by mistake, wait minutes for a tool, or be cancelled.
-The host must be able to take control back at any moment, and, while the script waits,
-to save it and continue it later somewhere else. The goal to [suspend
+The host must be able to take control back at any moment. The goal to [suspend
 anywhere](goals.md#suspend-anywhere) is that execution can stop **between any two
 instructions**: in the middle of a `map` callback, inside a getter, in a promise job,
-three generators deep. This chapter shows what stops a run, what a stop looks like, and
-how generators, async functions and builtins fit in.
+three generators deep, and continue later in the same process. Keeping a run beyond the
+process is a different, narrower thing: it happens only while the run waits for its
+tools ([persistence](goals.md#persistence), at the end of this chapter). This chapter
+shows what stops a run, what a stop looks like, and how generators, async functions and
+builtins fit in.
 
 > **In short.** `run` executes until its fuel is used up, a sync host function is
 > called, or there is nothing left to do, and then returns a status. Because the
@@ -24,18 +26,18 @@ The host calls `run` with an amount of fuel. It returns one of:
 | --- | --- | --- |
 | `Done(v)` | the call returned and nothing is left: no jobs, no pending async host calls | reads `v` |
 | `Threw(e)` | an uncaught exception, of the call or of a job | reads `e` |
-| `OutOfFuel` | the fuel ran out at an instruction boundary | runs again, or snapshots, or gives up |
+| `OutOfFuel` | the fuel ran out at an instruction boundary | runs again later, or gives up |
 | `HostCall` | a sync host function was called; the VM is parked on it | handles it, resolves it, runs again |
 | `Idle` | nothing to run, but async host calls are pending | delivers a result, runs again |
 | `HostOutOfMemory` | the host allocator refused memory (D1690) | discards the call; the VM is still usable |
 
 In every case, the interpreter's registers have been written to the `Interp` cell, and
-the arena is a complete description of the VM (D1151). A snapshot is a copy of it;
-resuming in a fresh VM restored from that copy continues exactly where the old one
-stopped. The examples in this guide show it: every output on these pages was produced by
-a VM that was stopped every 50 units of fuel, copied into an image, and restored into a
-new VM before it continued. On the docs site, the *Suspend & snapshot* tab of a live
-example does this in your browser and shows the slices.
+the arena is a complete description of the VM (D1151). Copying it gives an image, and
+a fresh VM restored from that image inside the same process continues exactly where the
+old one stopped. The examples in this guide show it: every output on these pages was
+produced by a VM that was stopped every 50 units of fuel, copied into an image, and
+restored into a new VM before it continued. On the docs site, the *Suspend* tab of a
+live example shows the slices of a run in your browser.
 
 ```js live
 const words = ["fuel", "frames", "arena", "image"];
@@ -119,9 +121,29 @@ continues. The host collects new calls after each `run`. Their results go into a
 empty, like I/O callbacks in an event loop (D1374, D1670). So what a script does depends
 on the order of the results, never on when they arrived relative to the fuel slices.
 
-Both kinds are heap state, so a VM that waits for ten tools snapshots like any other.
-After a restore, the host decides whether to issue the calls again or to deliver
-recorded results. [The host interface](host.md) has the protocol from the host's side.
+Both kinds are heap state, so a VM that waits for ten tools is as complete a description
+of the run as any other stop. [The host interface](host.md) has the protocol from the
+host's side.
+
+## Persisting a waiting run
+
+Suspension is free inside a process, but an image does not survive the process well: it
+holds the engine's own numbering (cell layouts, opcodes, internal ids), so it restores
+only into a djs that numbers everything the same way, and about half of the merges to djs
+so far changed some of that numbering ([images](snapshots.md#what-an-image-depends-on)). A run that waits
+minutes for a tool or a person must survive restarts and upgrades. So persistence is
+something else: a **continuation dump**, the run written out as a JavaScript program
+that recreates it, which any later djs either loads and continues or refuses with a
+reason (D2560).
+
+A dump is taken only at an **idle point** (D2561): when `run` returned `Idle`, waiting on
+async host calls with no jobs queued and no frame on the stack. There, every suspended
+piece of the run is an async function or generator stopped at an `await` or `yield`,
+which the compiler can describe by name (the bindings in scope, the values held for the
+expression under way, the loops around it). A run that is computing in the middle of an
+instruction sequence has no such description; a host that must persist it gives it fuel
+to reach an idle point, or reruns it from its last tool result, which determinism makes
+safe. [Images and dumps](snapshots.md) shows what a dump holds.
 
 ## Generators and async functions
 
@@ -232,11 +254,14 @@ bounded by their input and charge fuel for it.
   [`run/promise.rs`](../../crates/djs-core/src/interp/run/promise.rs): jobs, host calls
   and the inbox.
 - [`crates/djs-core/src/vm/mod.rs`](../../crates/djs-core/src/vm/mod.rs): the embedder's
-  API (`run`, `resolve_host_call`, images).
+  API (`run`, `resolve_host_call`, images);
+  [`vm/dump.rs`](../../crates/djs-core/src/vm/dump.rs) and
+  [`vm/dump_load.rs`](../../crates/djs-core/src/vm/dump_load.rs): writing and loading
+  continuation dumps.
 
 Decisions on this page:
 
-<!-- gen:decisions D1151 D1152 D1690 D1711 D1633 D1740 D1712 D1492 D1710 D1720 D1374 D1670 D1370 D1375 D1083 D1631 D1632 D1332 -->
+<!-- gen:decisions D1151 D1152 D1690 D1711 D1633 D1740 D1712 D1492 D1710 D1720 D1374 D1670 D1370 D1375 D1083 D1631 D1632 D1332 D2560 D2561 -->
 - D1151: Interpreter state in the arena
 - D1152: Host call protocol and fuel semantics
 - D1690: Running out of host memory is not a JS out-of-memory error
@@ -255,4 +280,6 @@ Decisions on this page:
 - D1631: Native frames are ordinary frame records with a header bit
 - D1632: The bgen Rust backend: states are basic blocks, calls go through call_intrinsic
 - D1332: RegExp objects, suspendable matching and regex literals
+- D2560: A waiting session persists as a continuation dump; heap images stay inside a process
+- D2561: Dumps are taken only at idle points
 <!-- /gen -->

@@ -1,21 +1,27 @@
-# Snapshots and images
+# Images and continuation dumps
 
 A codemode script that waits for a tool may wait for minutes, or for a human. Keeping a
-VM in memory all that time is wasteful, and a process restart would lose it. The goal of
-[snapshots](goals.md#snapshots) is that the whole VM can be saved at any point and
-continued later, in another process. After the previous chapters, there is not much left
-to explain: the state is one byte array without pointers. This chapter covers what an
-image is, how one is loaded safely, the one image every VM starts from, and what images
-cost.
+VM in memory all that time is wasteful, and a process restart or an upgrade of djs would
+lose it. The goal of [persistence](goals.md#persistence) is that such a run can be
+written out while it waits and continued later, in another process and on a later djs.
+djs has two ways to capture a VM. An **image** is the arena's bytes: exact, instant, and
+tied to the numbering of the engine that made it, so djs uses images only inside a
+process. A **continuation dump** is the run written as a JavaScript program that
+recreates it: taken only while the run waits for its tools, and readable by any later
+djs. This chapter covers both: what an image is and how it is checked, the one image
+every VM starts from, why images stopped being the way runs are persisted, and what a
+dump holds and costs.
 
 > **In short.** An image is the arena's bytes. Taking one is a copy; restoring one is a
 > check and a copy, with no fixups. An image loads into any build of djs that numbers
 > things the way the image does: its roots carry a hash of every table whose numbers it
-> holds, and loading compares them before it verifies the image cell by cell. Every VM starts as a copy of the
-> **base snapshot**, an image of the initialized realm with all builtins compiled, made
-> at build time, which is why creating a VM takes microseconds. A stored snapshot is the
-> collected image compressed against an image both sides can rebuild, such as the base
-> snapshot: a session waiting on a tool takes a few KB instead of half a megabyte.
+> holds. Every VM starts as a copy of the **base snapshot**, an image of the initialized
+> realm with all builtins compiled, made at build time, which is why creating a VM takes
+> microseconds. Images also carry pi's prelude between starts, the stress tests' stops
+> and a VM between two wasm modules, all inside one process. To persist a run, djs
+> writes a **continuation dump** at an idle point: a Script that rebuilds the run's data,
+> its functions stopped at their `await`s and its open tool calls, which every later djs
+> loads or refuses with a reason. Compressed, a waiting run's dump is a couple of KB.
 
 ## An image is the arena
 
@@ -32,8 +38,8 @@ tools pending. Nothing is serialized, because nothing needs to be:
 - native code is referred to by index (builtins) or by host-assigned id (host
   functions), and the embedder's handles are slots in a table in the arena (D1091).
 
-Restoring is `Vm::from_bytes`: check the header, verify the cells, copy the bytes into a
-fresh arena, and continue. The host registers its host functions again under the same
+Restoring is `Vm::from_bytes`: check the header, verify the cells (in the tools and the
+stress tests; see below), copy the bytes into a fresh arena, and continue. The host registers its host functions again under the same
 ids, and its handles are still valid, because they were slot numbers all along.
 
 ```js live
@@ -65,7 +71,7 @@ stack left behind when the interpreter grows it gets its dead slots zeroed too. 
 runs with the same history give the same image bytes whether or not, and wherever, they
 were stopped and restored. A collection the embedder asks for also shrinks a stack that
 grew for a deep recursion back to what it holds: after 2,000 nested calls a pi
-session's stack had 32K slots (256 KB) that every later session image carried. The base image is made with the
+session's stack had 32K slots (256 KB) that every later image of it carried. The base image is made with the
 copying collector instead, so its layout depends only on the object graph, not on how the
 prelude allocated.
 
@@ -119,28 +125,22 @@ it. It changed in seven of ten merges to djs so far, the descriptor in half.
 
 After the descriptor, `from_bytes` **verifies** the image (D1056): it walks every cell,
 checks every traced field (a valid value pointing at the start of a cell of a fitting
-kind), the invariants of each kind, and that prototype chains and ropes are acyclic. A
-corrupt image is an error at load time. One that slipped past could still only cause a
-panic (a trap) or a wrong result, never undefined behavior, because every access is
-bounds-checked.
+kind), the invariants of each kind, and that prototype chains and ropes are acyclic. The
+stress tests and `djs heap` load images that way, which makes every restore a check of
+the heap. The wasm module does not: the only images it loads were made in the same
+process (the transport to the dump module, pi's prelude images), so it checks the header
+and the descriptor and leaves the verifier out of the shipped code (D2700). A bad image
+could still only cause a panic (a trap) or a wrong result, never undefined behavior,
+because every access is bounds-checked.
 
-> **Trade-off.** Raw images over a versioned serialization format, and hashes of the
-> tables they use over the build's identity. Images cost no code to write or read and
-> restore in a copy, and they capture everything, including frames in the middle of a
-> builtin. The descriptor lets them survive the many engine changes that number nothing
-> differently. What it guards is the numbering, not the meaning: a change that keeps
-> every table but reads a slot differently needs the hand-bumped version, and forgetting
-> it lets an old image restore into an engine that misreads it (the verifier catches
-> broken structure, not changed meanings). Reading the sources is conservative the other
-> way: a renamed constant refuses images that would have worked. A VM saved before a
-> deploy that does change a dependency cannot resume on the new engine, unless the host
-> keeps the old engine around to finish it. What survives any upgrade instead is a
-> journal of the run's external inputs, which a new engine replays (D1730, see [the host
-> interface](host.md)); djs records such journals, but has not made them its durable
-> format. For the bindings of an idle session there is also a dump: the globals written
-> as a JavaScript program (functions as their source text, closures by small factories
-> that keep shared variables shared, data as literals, builtins by name) that any later
-> build runs to recreate them, values only, never frames (D2353).
+> **Trade-off.** Raw images over a serialization format, inside a process. Images cost no
+> code to write or read and restore in a copy, and they capture everything, including
+> frames in the middle of a builtin, which is exactly what the base, pi's prelude images
+> and the stress tests need. The descriptor lets them survive the many engine changes
+> that number nothing differently, but what it guards is the numbering, not the meaning:
+> a change that keeps every table but reads a slot differently needs the hand-bumped
+> version. For a run that has to outlive the engine build, that is not enough, and
+> images are not used for it (below).
 
 ## The base snapshot
 
@@ -204,146 +204,137 @@ checks, so nothing in it depends on the platform.
 
 ## Images in practice
 
-pi's adapter uses images in two places (D1495, D1890):
+Images stay the engine's in-process mechanism:
 
-- **The prelude image.** pi runs its own prelude (helpers, a lockdown that freezes about
-  700 objects) before every script. The adapter seals the heap right after it (a full
-  collection that makes everything live old) and keeps the image, keyed by everything
-  the prelude saw. It restores the image for the next script with the same inputs; a
-  start then takes about a millisecond instead of several.
+- **The base** is copied into every new VM (above).
+- **pi's prelude image.** pi runs its own prelude (helpers, a lockdown that freezes
+  about 700 objects) before every script. The adapter seals the heap right after it (a
+  full collection that makes everything live old) and keeps the image, keyed by
+  everything the prelude saw (D1495, D1890). It restores the image for the next script
+  with the same inputs; a start then takes about a millisecond instead of several. The
+  prelude runs with the clock at zero in UTC, so the image is a function of its inputs
+  alone (D2262).
   - A start that does run the prelude creates its VM with room for the heap size the
     last sealed prelude left (D2043). Growing the arena while the prelude runs would move
     it, and in wasm its old block stays behind as a hole: the hint lowers such a start's
     peak memory from 3.0 to 2.25 MiB.
-- **Waiting sessions.** `snapshot()` collects the session and takes its image while it
-  waits for a tool; `resumeVm()` continues it, possibly in another process. The `Sandbox`
-  does the same with `bytes()` and `fromBytes()`.
+- **The stress tests and the determinism checks** stop a run every few instructions,
+  restore it from its image and compare images byte for byte ([determinism](determinism.md)).
+- **The dump module.** A host that persists runs keeps the dumper in a second wasm
+  module (below); the VM's image is what travels between the two instances.
 
-## Compact snapshots
+## Why images are not the persistence format
 
-A collected image of a session waiting on a tool is about 490 KB. Nearly all of it is
-the base realm and pi's prelude, which neither the script nor its tools touched. Storing
-it as it is wastes space; general-purpose compression gets it to about 135 KB, still
-mostly the realm.
+For a while, images were also how a waiting run was saved. A collected image of a pi
+session waiting on a tool is about 490 KB, nearly all of it the base realm and pi's
+prelude, so a saved run was compressed with zstd against an image both sides could
+rebuild (the base, or pi's prelude image). Because collections slide cells down in their
+allocation order, 99% of such a session's words sat at the same offset as in that
+reference, and a waiting session took 2 to 8 KB (D2260).
 
-The realm does not have to be stored at all, because both sides can rebuild it. The base
-snapshot is fixed by the engine build, and ships inside the module. pi's prelude image is
-fixed by the build and the prelude's inputs: the prelude source, the tool list, the
-globals, the store, the memory limit. So a snapshot is compressed with zstd using such a
-**reference image** as its dictionary, and stores only a description of the reference
-(D2260).
+What sank it was durability, not size. An image restores only into a djs whose layouts,
+opcodes, intrinsics and internal ids number everything as the image does, and about half
+of the merges to djs changed one of them. A run saved before an upgrade could not
+resume after it, unless the host kept the old engine around. A dump says what the run
+*means* instead of how one build laid it out, and that survives (D2560). So containers,
+session images and reference compression were removed (D2700), and the 2 to 8 KB turned
+out not to be the best one could do: a compressed dump of the same waiting session is
+smaller still.
 
-That works far better than one might expect, because of how the heap is collected. A
-collection slides the live cells down in their allocation order ([the garbage
-collector](gc.md)), so the cells a session inherited from its reference stay exactly where
-they were: in a session waiting on a tool, 99% of the image's words sit at the same
-offset as in the prelude image. zstd encodes all of that as one long match, and what is
-left is what the script did:
+## Continuation dumps
 
-| a snapshot of | image | compressed against the reference |
-| --- | ---: | ---: |
-| a pi session waiting on a tool | 478–500 KB | 2–8 KB |
-| a pi session holding 60 files it read | 660–842 KB | 57–110 KB |
-| a pi session holding a 1.5 MB log | 2.2 MB | 404 KB |
-| a new sandbox | 32 KB (322 KB raw) | 1.0 KB |
+A dump is taken at an **idle point** only: `run` returned `Idle`, no frame is on the
+stack and no job is queued, and the run waits for its tool calls (D2561). There, every
+piece of the run in progress is a function stopped at an `await` or `yield`, which the
+compiler can describe by name. A run of this script, stopped while its second read is
+open:
 
-Against the base image instead of pi's prelude image, the waiting session is about 51
-KB, and with the copying collector the heap used before, it was 40 KB: one word in eight
-stayed in place. Compressing a waiting session takes about 1.2 ms, and restoring costs
-0.1 to 0.3 ms more than an uncompressed image.
+```js
+const notes = [];
+for (const path of ["a.md", "b.md"]) {
+  notes.push(await tools.read({ path }));
+}
+return notes.join("\n");
+```
 
-One more thing keeps the reference's cells in place: where its growable cells sit (D2057).
-A session's first steps replace a few cells of the reference outright. Defining a
-sandbox's `console` grows the global object's property table, which is exactly full in
-the base, and the first calls through pi grow the prelude's Map of pending calls. The grown copies go to the young end, and the next full collection drops the old
-ones. If those sat in the middle of the reference, everything after them would slide
-down. A new sandbox's snapshot was 16 KB that way: only a fifth of the image lined up
-with the base, and the moved cells cost the compressor the references they hold to
-other moved cells. So the base image puts those cells last, and so does `Vm::seal` for an
-image an embedder seals itself, like pi's prelude image. A dead copy then moves nothing
-before it.
+is this dump:
 
-The atom table is split for the same reason (D2431). The base's atoms, about 490
-entries, and their hash index sit in the builtin prefix and are never written. The atoms a VM adds go to a second, small
-list and index in the tail, with room for 32 before they grow, and interning looks in
-the VM's own index first. So a session's first atoms change only the words they add,
-and the session image no longer carries the base's entries (15 KB at the time): a fresh REPL's
-session image went from 34.6 to 11.5 KB.
+```js
+"djs-dump 2";
+$dump.random(225857282, 2061952981);
+$dump.p1 = $dump.pending(2, "tools.read", [{ path: "b.md" }]);
+$dump.n2 = ["# A"];
+$dump.i3 = $dump.advance(Array.prototype.values.call(["a.md", "b.md"]), 2);
+$dump.a4 = $dump.resume(async function () {
+const notes = [];
+for (const path of ["a.md", "b.md"]) {
+  notes.push(await tools.read({ path }));
+}
+return notes.join("\n");
+}, { at: "await#1", awaiting: $dump.p1, bindings: { notes: $dump.n2, path: "b.md" }, operands: [["call.callee", Array.prototype.push], ["call.this", $dump.n2]], loops: [{ kind: "for-of", iterator: $dump.i3, next: $dump.builtin("%ArrayIteratorPrototype%.next") }] });
+$dump.handle("run", $dump.a4);
+```
 
-What a snapshot stores is a **session image** (D2066): the image without the builtin
-prefix, since the module (or the reference) already has it. It holds the `Roots` cell,
-the prefix words that differ from the base, as offset and value pairs in ascending order,
-and the heap from the prefix's end on. A script that leaves the builtins alone has no
-such words. The format is a function of the image and the base alone, so equal images
-give equal session images. Restoring puts the image back together from the base, after
-checking a hash of the base's prefix. Compressed against the reference, this changes
-little, because the dictionary already made the prefix almost free. But an uncompressed
-snapshot of a new sandbox is 32 KB instead of 322 KB. pi's lockdown changes about 1,700
-words of the prefix, which pi's prelude image holds in place. So the prefix words are
-taken against the reference when it has the same prefix, and against the base only
-otherwise; as a diff against the base, those words cost 8 KB in every container.
+It is a plain Script, run by the loader with a few privileged primitives on `$dump` that
+exist only while it loads (D2562):
 
-A snapshot is a small container: a 68-byte header, the host's own metadata (the
-`Sandbox`'s host function names, the adapter's session state) as JSON, and the session
-image, compressed or not. The header names everything a restore depends on: the
-container's version, the image's dependency descriptor and the hash of the base image's
-builtin prefix (the session image is a diff against it), which reference (the base, or
-pi's prelude image) with its hash and length, the compression, and what the prefix words
-are against. A restore compares them with the module's own base image, in that order,
-before it touches the image, and stops with a message that says what is wrong: another
-container version, a snapshot that needs another component ("the snapshot is from a djs
-with another opcode table (snapshot: X; this module: Y)") or another base image, a
-reference this host does not have or that differs, a damaged frame (zstd's checksum). So
-a snapshot restores into a newer module when the merges in between left its descriptor
-and its base image alone: over djs's history so far, close to half of the merges did,
-where under a third left the build hash alone. There is one container format, and nothing reads older ones: djs has not been
-released, so its formats change in place (D024, D2400). A host that has to restore
-snapshots whose dependencies changed has to keep the build that wrote them.
+- data is written as literals and the calls that make it; builtins are referred to by
+  name, never written;
+- `$dump.pending` recreates the open tool call with the id the host knows it by, and the
+  host's name for the function;
+- `$dump.resume` builds the suspended activation of the script's function (its source,
+  verbatim) at its first `await`, with its bindings, the values computed before the
+  `await` (here the half-done `notes.push(` call: its function and `this`) and the loop
+  around it;
+- the loop's iterator is made again and advanced with the same calls that put it there:
+  in-flight builtin state is re-enacted, not described by the engine's internal layout;
+- `$dump.random` restores `Math.random`'s sequence, and `$dump.handle` gives the host the
+  run's result promise back.
 
-For pi's prelude image to be a reference, it has to come out the same in every process
-that computes it. Only one input was not under control: the clock, which the adapter sets
-before every slice of work. So the prelude runs with the clock at zero, in UTC; nothing
-in it reads the time, and each run sets its own clock before the script starts (D2262).
-Two processes then build the same image byte for byte. `resumeVm` finds the reference
-among the prelude images of its process, or recomputes it from the session's prelude and
-start data, refusing data that make a different image.
+`resume` compares what the dump says with what this build's compiler records at that
+`await` (its **suspension map**: which bindings are live, which values are held, which
+loops are open, D2563) and refuses on any difference. So a later djs either continues the
+run exactly or refuses it with a reason; it never misreads it (D2560). Golden dumps
+written by older builds are loaded by every gate run.
 
-> **Trade-off.** Compressing in the host, not in the engine. node has zstd built in, so
-> the adapter and the `Sandbox` use it, at level 3 (D2261). Higher levels save little on
-> a waiting session and a fifth on one holding megabytes, at up to a hundred times the
-> time, which is too long while a script waits. A pure-Rust zstd compiled into the module
-> was measured too: the same sizes, as fast on small snapshots and up to twice as slow on
-> large ones, and 57 KB more of gzipped module. The cost of keeping it out: a browser has
-> no zstd that takes a dictionary, so there snapshots are written uncompressed unless the
-> page brings its own codec.
+What happens to the open calls is the host's decision, made after the load: deliver a
+result it recorded, issue the call again, or reject it. Timers and requests in flight are
+host state, and the host keeps them beside the dump.
 
-> **Trade-off.** Whole compressed images over deltas, past the builtin prefix. A delta
-> format would have to track which cells changed since the reference and encode them on
-> its own. Compressing the whole image against the reference gets the same result
-> without any of that, because the collector keeps the reference's cells in place. Only
-> the prefix, which never moves, is stored as a word diff. The cost: every snapshot reads and
-> compresses the whole image (1 to 8 ms), and the size depends on that layout property.
-> A change that grows a cell near the start of the reference moves everything after it,
-> and the snapshot grows from a few KB to tens of KB.
+**What a dump costs.** Over 300 real codemode scripts and their 1,063 idle points, a
+dump is 6 KB of text at the median and 17 KB compressed at p99; with zstd at level 3,
+which hosts apply when they store it, the median is 1.7 KB, a third of what the image
+containers took (D2703). A session holding a 1.8 MB log dumps to 1.8 MB of text and
+394 KB compressed. Writing a dump takes about 3 ms at the median in wasm and loading one
+about 1 ms.
+
+> **Trade-off.** Dumps over images for persistence. A dump survives every change to the
+> engine that keeps the meaning of the script's code, it is readable, and it is smaller
+> once compressed. The costs: it exists only at idle points, so a run that is computing
+> cannot be persisted (it reaches an idle point or reruns, which determinism makes safe);
+> the exporter has to know how to re-enact every kind of in-flight builtin state, and
+> refuses what it cannot write (a weak collection, a revoked Proxy) with its path; and a
+> dump is code, so a host loads only dumps it wrote.
+
+> **Trade-off.** The dumper in a second module (D2704). Writing and loading dumps is
+> about 300 KB of code, a quarter of the module, that only hosts which persist runs
+> need. So the shipped module leaves it out, and such a host loads the dump module next
+> to it and moves the VM's image into it to dump, and back after a load. Keeping that
+> instance between dumps makes both packagings equally fast; the cost is a second module
+> to ship and load, and a copy of the image per dump.
 
 ## Inspecting a heap
 
-What is in an image, and why is a snapshot the size it is? `djs heap` answers both
-(D2264). It reads a raw image (what the REPL's `.snapshot --raw` writes), a session image
-or a snapshot container, decompressing a container with its reference: this build's base
-when the hashes match, or a reference given as a file, which
-[`scripts/heap/reference.ts`](../../scripts/heap/reference.ts) writes for a module's base
-or for pi's prelude image of a session's start data.
+What is in an image, and why is a heap as large as it is? `djs heap` answers both
+(D2264). It reads a raw image (what the REPL's `.image` writes) through the engine's own
+heap code, never its own parser: the image is verified as a restore would verify it, the
+walker and the layout table say which fields are references and what they are called,
+and liveness follows the collector's rules. From that it reports:
 
-It reads the image through the engine's own heap code, never its own parser: the image is
-verified as a restore would verify it, the walker and the layout table say which fields
-are references and what they are called, and liveness follows the collector's rules.
-From that it reports:
-
-- a summary: live and garbage bytes, the old region and the young one, and the size of
-  the session image a snapshot would store before compression;
+- a summary: live and garbage bytes, the old region and the young one, and the VM's own
+  part past the base;
 - cells and bytes per cell kind and per object class;
-- a diff against the reference image;
+- a diff against a reference image, by default this build's base;
 - the builtins a script changed: the words of the builtin prefix that differ from this
   build's base, by cell, named by their builtin paths (`%Array.prototype%`, `%Math%`);
 - the largest cells, and the largest *retained* sizes: what a cell keeps alive on its
@@ -353,47 +344,45 @@ From that it reports:
 - what a waiting VM holds: queued jobs, pending host calls, promises, and the suspended
   async functions and generators with their locals by name.
 
-An almost empty session is still more than 300 KB of image, nearly all of it the base. So
+An almost empty session is still about 200 KB of image, nearly all of it the base. So
 when there is a reference to compare with, the largest cells, strings, shapes and
 functions describe only the session's own part: the cells that are new or changed
 against the reference (D2432). The reference's part is one line of totals, and `--all`
-lists the whole image. Without that, a fresh REPL looked as if it held 900 strings and
-874 functions, all of them the base's.
+lists the whole image.
 
 Every cell gets a path from the roots that reads like JavaScript where the heap allows,
 built from the shapes' keys, the elements' indexes, the templates' recorded names of
 captured variables and locals, and the layout's field names for everything internal:
 `globalThis.cache[3].body`, `handle[1]~pending`, `<atoms><entries>`.
 
-The diff is what explains a snapshot's size. Cells have no identity but their offset,
-and a collection moves them, so the tool matches the two images structurally: a
-breadth-first walk from both roots pairs the targets of the same field. Immutable cells
-(strings, bytecode) pair only with the same content, and a shape's list of transitions
-pairs its children by the key they add, since one inserted transition shifts the rest.
-Then every cell of the image is the reference's own, in place or moved, a changed one,
-or new, and the new ones are grouped into the subtrees that keep them alive. A changed
-cell counts the words that differ; one that grew into a bigger cell (a regrown table)
-compares over the words both have, and its new words count where they are not zero. For a pi
-session waiting on its second tool call:
+The diff explains what a session added. Cells have no identity but their offset, and a
+collection moves them, so the tool matches the two images structurally: a breadth-first
+walk from both roots pairs the targets of the same field. Immutable cells (strings,
+bytecode) pair only with the same content, and a shape's list of transitions pairs its
+children by the key they add, since one inserted transition shifts the rest. Then every
+cell of the image is the reference's own, in place or moved, a changed one, or new, and
+the new ones are grouped into the subtrees that keep them alive. A changed cell counts
+the words that differ; one that grew into a bigger cell (a regrown table) compares over
+the words both have, and its new words count where they are not zero. For a REPL session
+that made 50 small objects:
 
 ```text
-== diff against pi's prelude image
-  against pi's prelude image (484.3 KB): 98.9% of the image's 8-byte words are the
-  reference's at the same offset; cells line up for the first 484.2 KB (99.0%)
+== diff against the base image
+  against the base image (182.0 KB): 91.1% of the image's 8-byte words are the
+  reference's at the same offset; cells line up for the first 175.1 KB (90.8%)
   cells                             count     KB  differing KB
-  unchanged, in place                8415  443.9
-  unchanged, moved                      0    0.0           0.0
-  changed                              21   40.3           0.5
-  new                                  78    4.7           4.7
-  gone (the reference's, not here)      1    0.1
+  unchanged, in place                3014  174.4
+  unchanged, moved                     76    4.3           0.6
+  changed                              10    5.9           1.3
+  new                                 244    8.3           8.3
+  gone (the reference's, not here)      0    0.0
 
   largest new subtrees (new cells and the new cells only they keep alive):
-  KB   cells             kind  path
-  3.2     47  Object/Ordinary  handle[1]~pending<entries>[5]
+  KB   cells                 kind  path
+  5.2    152         Object/Array  globalThis.notes
+  0.9     20         Object/Proxy  globalThis.tools
+  0.6     17      Object/Ordinary  globalThis.console
 ```
-
-The 4.7 KB of new cells are nearly all the script itself, kept alive through the promise
-of the call it waits on, and the container is 2.1 KB.
 
 > **Trade-off.** Structural matching over offsets. Comparing the two images offset by
 > offset would be simpler, but it would call every cell after the first one that moved
@@ -414,27 +403,21 @@ of the call it waits on, and the container is 2.1 KB.
   for the base image.
 - [`crates/djs-prelude/build.rs`](../../crates/djs-prelude/build.rs): how the base
   snapshot is made.
-- [`crates/djs-core/src/vm/session.rs`](../../crates/djs-core/src/vm/session.rs): session
-  images.
-- [`js/src/snapshot.ts`](../../js/src/snapshot.ts): the snapshot container, its checks and
-  the zstd codec; [`js/pi/vm.ts`](../../js/pi/vm.ts): the adapter's prelude images,
-  `snapshot()` and `resumeVm()`.
-- [`crates/djs-cli/src/heap/`](../../crates/djs-cli/src/heap/): `djs heap`, the analyzer;
-  [`crates/djs-cli/src/container.rs`](../../crates/djs-cli/src/container.rs): the
-  container in Rust.
+- [`crates/djs-core/src/vm/dump.rs`](../../crates/djs-core/src/vm/dump.rs): the
+  exporter; [`vm/dump_load.rs`](../../crates/djs-core/src/vm/dump_load.rs): the loader
+  and its primitives; [`tests/dump/v2/`](../../tests/dump/v2/): golden dumps.
+- [`js/src/sandbox.ts`](../../js/src/sandbox.ts): `begin`, `Run.dump` and
+  `Sandbox.resume`, and the dump module; [`js/pi/vm.ts`](../../js/pi/vm.ts): the
+  adapter's prelude images and its dumps of pi sessions.
+- [`crates/djs-cli/src/heap/`](../../crates/djs-cli/src/heap/): `djs heap`, the analyzer.
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2057 D2063 D2066 D2067 D024 D2400 D2058 D2043 D1091 D1890 D1725 D1052 D026 D2265 D2266 D2267 D2268 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 D2308 D2445 D2446 D2447 -->
+<!-- gen:decisions D2040 D2041 D2063 D2067 D2043 D1091 D1890 D1725 D1052 D026 D2265 D2266 D2267 D2268 D1320 D1330 D1750 D1056 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2262 D2264 D2308 D2445 D2446 D2447 D2560 D2561 D2562 D2563 D2700 D2703 D2704 D2432 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
-- D2057: The cells a VM replaces first sit at the end of base and sealed images
 - D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
-- D2066: Session images: the roots cell, a canonical prefix diff and the session region
 - D2067: Builtin result shapes and the engine's queues are in the base; the ceiling rises 720 B
-- D024: No compatibility with unreleased formats
-- D2400: One snapshot container format, session images only
-- D2058: The size ceiling rises by 600 B for stable snapshot layouts
 - D2043: pi's later cold starts size the arena for the sealed prelude heap
 - D1091: Handle table
 - D1890: pi adapter: snapshot() and the prelude image collect first
@@ -449,7 +432,6 @@ Decisions on this page:
 - D1330: The build hash includes a hash of djs-core's sources
 - D1750: The build hash covers features and libm; canonical f32/f16 NaN
 - D1056: Heap images are verified on load
-- D1730: Canonical hash and run journals
 - D1321: The base snapshot (djs-prelude)
 - D1431: The base image is compacted before it is collected
 - D1340: The prelude keeps no source text
@@ -459,11 +441,18 @@ Decisions on this page:
 - D1990: A restored arena reserves its GC threshold plus a slack
 - D1495: pi adapter: reuse the VM image taken after the prelude
 - D2260: Snapshots are compact containers: collected, zstd against a reference, pinned to the build
-- D2261: Snapshot compression runs in the host: node's zstd at level 3; none without it
 - D2262: pi's prelude image is the reference of the adapter's snapshots and is recomputable
 - D2264: `djs heap` analyzes dumps through djs-core's heap code; djs-cli reads and writes snapshot containers
 - D2308: Images hold no dead value-stack slots; embedder collections shrink a grown stack
 - D2445: A closure's length and name come from its template until changed
 - D2446: One constant pool per compilation unit
 - D2447: The base's atoms are renumbered without gaps
+- D2560: A waiting session persists as a continuation dump; heap images stay inside a process
+- D2561: Dumps are taken only at idle points
+- D2562: In-flight builtin state is re-enacted; a few privileged loader primitives
+- D2563: The compiler's suspension maps are a pinned contract
+- D2700: Heap images are no longer a persistence format; what was removed
+- D2703: Hosts store dump text compressed with zstd; the format stays a plain Script
+- D2704: Packaging B: the shipped module has no dumper, hosts that persist load the dump module
+- D2432: `djs heap` shows the session's own part by default
 <!-- /gen -->

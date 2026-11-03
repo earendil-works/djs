@@ -384,7 +384,7 @@ depend on the suspension maps (D2563) and on the re-enactments staying exact. Go
 format 2 fixtures are loaded by every gate run; a periodic check exports with an old
 commit and imports with the new one (0178).
 
-### One dumper, packaging open (D2564)
+### One dumper; packaging B (D2564, D2704)
 
 The exporter and the loader are Rust in djs-core. A TypeScript copy would have to repeat
 every role, re-enactment and class case, kept byte-identical by a gate check, and would
@@ -400,7 +400,11 @@ regardless. For wasm hosts two packagings use the same code:
   take its image, continue in the small module. The feature is image-neutral (D2352), so
   both modules read each other's images. The main module grows by nothing.
 
-0177 measures both after the image persistence code is gone; the plan leans to B.
+0177 measured both after the image persistence code was gone and chose B (D2704): the
+shipped module has no dumper (1,029,026 bytes, 440.5 KB gzip), the dump module is
+1,332,899 bytes, 548.9 KB gzip, and with the dump-module VM kept between dumps (D2701) B
+dumps and resumes as fast as A (corpus p50 2.8 / 0.9 ms). Hosts store dumps zstd-compressed
+(D2703).
 
 Both are built and tested since 0175 (D2635): `scripts/build-wasm.sh --dump` writes
 `djs-dump.wasm`, and the Sandbox takes it as `dumpModule` beside a dumper-less `module`.

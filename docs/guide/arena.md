@@ -9,8 +9,8 @@ how memory in it is handed out, and why the rest of the design depends on it.
 > **In short.** Everything a VM knows lives in one growable `Vec<u8>` addressed by `u32`
 > offsets: objects, strings, bytecode, the value stack, frames, the job queue, pending
 > host calls. Memory is handed out by bumping an offset, and allocation never collects.
-> Because there are no pointers in the bytes, copying the arena is a snapshot, the host
-> can read it, and a bad offset traps instead of corrupting memory.
+> Because there are no pointers in the bytes, copying the arena is a complete image of
+> the VM, the host can read it, and a bad offset traps instead of corrupting memory.
 
 ## Everything, in one place
 
@@ -77,8 +77,8 @@ console.log(rows.length, "rows,", text.length, "characters");
 Those base cells come in two parts. The first, the **builtin prefix**, holds the builtin
 objects, their code and their names. Nothing a script does through the builtins writes
 there, no collection moves or frees it, and every VM of a build starts with the same bytes
-in it (D2063, D2064). So a snapshot can leave it out
-([Snapshots](snapshots.md#compact-snapshots)). After it comes a short **tail** of the
+in it (D2063, D2064), which keeps the cells of every VM's start in place across
+collections ([images](snapshots.md#the-base-snapshot)). After it comes a short **tail** of the
 cells every VM writes: the realm record, the global object, the atoms the VM adds (the
 base's own atoms stay in the prefix), the value stack.
 
@@ -172,9 +172,10 @@ which wasm hosts do anyway, since linear memory itself can grow.
 Every reference in the arena is a `u32` offset from its start: in a [value](values.md)
 the payload, in a `Ref` field the whole word. This one rule buys four things:
 
-1. **Snapshots are a copy.** After a compacting collection, the arena bytes *are* the
-   VM. There is no serializer to write or keep in sync with the object model, and a
-   restore is a copy, a check (D1056) and nothing else: no fixups, because there is
+1. **An image is a copy.** After a compacting collection, the arena bytes *are* the
+   VM. Creating a VM from the base image, suspending one in the stress tests or moving
+   one between two wasm modules needs no serializer to keep in sync with the object
+   model: a restore is a copy, a check and nothing else, with no fixups, because there is
    nothing to fix up.
 2. **The host can read values in place.** A tool result that the script turned into an
    array of objects is read by walking cells in wasm memory, with a reader generated
@@ -190,9 +191,9 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 > **Trade-off.** One arena of offsets over Rust-managed objects. The model for djs's
 > execution side, piccolo, keeps JavaScript objects as Rust allocations behind `Gc`
 > pointers (`gc-arena`), with the borrow checker guarding them. That gives type safety
-> for free, but the host cannot read such a heap and a snapshot needs a full graph
-> serializer: the goals of [cheap data passing](goals.md#cheap-data-passing) and
-> [snapshots](goals.md#snapshots) again. djs gives up typed references: a cell offset is
+> for free, but the host cannot read such a heap, and suspending or copying a VM needs a
+> full graph serializer: the goals of [cheap data passing](goals.md#cheap-data-passing)
+> and [suspending anywhere](goals.md#suspend-anywhere) again. djs gives up typed references: a cell offset is
 > a number, and code that reads the wrong field of the wrong cell is a logic bug the
 > verifier and the stress tests have to catch, not the compiler.
 

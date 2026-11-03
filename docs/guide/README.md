@@ -13,7 +13,7 @@ document they don't have:
   builtins/README.md or work/ is written in the page (or another guide page). Never
   mention or link those files, or issue numbers (`0088`); say what was found instead.
 - **Goals by name.** The goals are explained in goals.md. Refer to one by its name and
-  link its section (`[snapshots](goals.md#snapshots)`), never by number ("G4").
+  link its section (`[persistence](goals.md#persistence)`), never by number ("G4").
 - **Decisions in words.** State what was decided and why. The ID (D1050) may follow as a
   citation: on the site it links to the decision log page, which is part of the site.
 - **Source as source.** Pages may point at code, as links to repository files
