@@ -236,6 +236,24 @@ that expects QuickJS's fingerprint.
 > could offer beyond QuickJS, such as snapshots of waiting sessions, are extras that pi
 > would have to opt into.
 
+### Persisting a run that waits
+
+An async call can take longer than the process that made it should live: a tool that
+waits for a person, or a host that restarts. While a run waits only on async calls, the
+VM is idle: no frame on the stack, no job queued. The Sandbox lets the host drive such a
+run itself (D2630): `begin` runs the script to its first idle point and lists the open
+calls instead of calling the functions, the host answers each with `settle` and moves
+on with `advance`, and while the run is idle `dump` writes it out as JavaScript: its
+data, the async functions stopped at their `await`s, the open calls by the host's names
+for them, and the run's result promise. `Sandbox.resume` loads that text in a new
+sandbox, perhaps in another process, and the run waits on the same calls with the same
+ids, ready for their results.
+
+What is not in the VM is not in the dump. A timer, a request in flight, a person's
+pending answer: those are the host's, and the host keeps and re-arms them from the open
+calls the load reports. [`examples/sleep-dump/`](../../examples/sleep-dump/) does this
+with a tool that sleeps five seconds on the host side.
+
 ## Where to look
 
 - [`crates/djs-wasm/src/lib.rs`](../../crates/djs-wasm/src/lib.rs): the exports.
@@ -246,7 +264,7 @@ that expects QuickJS's fingerprint.
 
 Decisions on this page:
 
-<!-- gen:decisions D2060 D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 D2265 D2541 D2543 -->
+<!-- gen:decisions D2060 D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 D2265 D2541 D2543 D2630 -->
 - D2060: The base is decoded or injected straight into the first VM's arena
 - D1180: Inbound wire format, version 1
 - D1210: Exported heap layout drives the host-side reader
@@ -266,4 +284,5 @@ Decisions on this page:
 - D2265: Images carry a dependency descriptor; loading and containers check it, not the build hash
 - D2541: Instance memory: the arena kept at memory's end, lean start capacity, the coded base outside memory
 - D2543: A wasm stack overflow is reported as one
+- D2630: Host-driven Sandbox runs, the first piece of the Sandbox run API
 <!-- /gen -->

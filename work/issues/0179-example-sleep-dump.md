@@ -70,6 +70,14 @@ Build exactly what's needed, in the shape docs/continuation-dumps.md "Sandbox AP
   `filename` ("sleep.js"). Dumps carry no comments (0180); the example will print the
   clean dump plus nocomment's explanation of the suspended sites once that exists; the
   test asserts structure, not comment text.
+- After 0172: vm_dump passes the name table (`host_fn_name`) and the `handle:name` pairs
+  (`handles`) to the exporter. Run.dump() then refused the run's own activation: a
+  codemode body (Goal::AsyncBody) has no source text. With the body wrapped as a real
+  async function (scratch only) the exporter writes the whole scenario. Coordinator's
+  call: portable gives AsyncBody functions source text (a separate merge); 0179 waits.
+- The Sandbox no longer checks the dump marker itself (nocomment, 0180, changes it): the
+  loader refuses non-dumps. docs/host.md: host-driven runs and the dump exports; guide
+  docs/guide/host.md: "Persisting a run that waits", pointing at the example.
 - Decisions D2630 (host-driven runs) and D2631 (dump exports' staging; no ABI bump, as
   the coordinator agreed).
 
