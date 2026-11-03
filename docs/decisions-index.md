@@ -573,3 +573,7 @@ topics when the index is next reorganized.
 - D2623: Computed keys the dump would evaluate again are refused
 - D2624: A dump carries Math.random's state
 - D2625: The golden dumps are rewritten for D2622 and D2624
+- D2650: pi's future shape in the adapter: prelude-next, `next` mode, session dumps
+- D2651: `dumpEveryIdle`: the next mode's stress mode
+- D2652: prelude-next has no lockdown; the next mode has frozen builtins
+- D2653: The pi adapter counts fuel across sync host calls
