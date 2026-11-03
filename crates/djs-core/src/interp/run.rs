@@ -2825,6 +2825,14 @@ impl<'h> Exec<'h> {
                 }
                 return Ok(None);
             }
+            Op::JumpIfLoading => {
+                self.pc = if self.heap.loading_dump {
+                    self.jump_target(next)
+                } else {
+                    next
+                };
+                return Ok(None);
+            }
             Op::JumpIfFalse8 | Op::JumpIfTrue8 => {
                 let v = self.pop();
                 let t = conv::to_boolean(self.heap, v);

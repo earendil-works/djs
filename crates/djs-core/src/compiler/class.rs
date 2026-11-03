@@ -374,6 +374,9 @@ impl Parser<'_, '_> {
         let methods = core::mem::take(&mut b.stat_methods);
         if let Some(init) = b.stat.take() {
             let child = self.finish_init(init, &methods, None)?;
+            // While a dump loads, the class's static state comes from the dump (D2580).
+            let loaded = self.new_label();
+            self.code().jump_if_loading(loaded);
             if b.state.is_some() {
                 // `this` is the new class, the home object the class.
                 self.code().swap();
@@ -392,6 +395,7 @@ impl Parser<'_, '_> {
                 self.code().call(0);
                 self.code().drop();
             }
+            self.place(loaded);
         } else if b.state.is_some() {
             self.code().nip();
         }

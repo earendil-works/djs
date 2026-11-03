@@ -470,3 +470,49 @@ fn closures_capturing_closures() {
         "[h(3), h2(1), h3()].join()",
     );
 }
+
+#[test]
+fn zz_debug_classes() {
+    let mut a = new_vm();
+    run(&mut a, "function mk(tag) { class A { #x = 1; static #s = 2; static count = 0; #m() { return this.#x; } get v() { return this.#m() + tag; } static make() { return new A(); } } return A; }\n\
+                 var A = mk('t'); var B = class extends A { foo() { return super.v; } }; var o = { m() { return super.toString; } }; var a = new A();");
+    fn show(h: &Heap, label: &str, v: Value, depth: u32) {
+        let Some(ob) = v.as_object() else { return };
+        let cls = h.object_class(ob);
+        std::println!("{label}: {cls:?}");
+        if cls == crate::heap::ObjectClass::Function {
+            let t = h.closure_template(ob);
+            let ar = h.arena();
+            let flags = ar.get::<u16>(t, crate::heap::cells::FuncTemplate::FLAGS);
+            let caps = ar.get::<u16>(t, crate::heap::cells::FuncTemplate::CAPTURES);
+            let locals = ar.get::<u16>(t, crate::heap::cells::FuncTemplate::LOCALS) as usize;
+            let names = super::dump::template_names_pub(h, t);
+            let src = crate::builtins::function::source_slice(h, ob).unwrap_or_default();
+            std::println!("  flags {flags:#x} kind {} caps {caps} src {:?}", flags & 15, &src[..src.len().min(60)]);
+            for i in 0..u32::from(caps) + u32::from(flags & 64 != 0) {
+                let s = h.object_slot(ob, i);
+                std::println!("  cap {i} {:?} {:?}", names.get(locals + i as usize), s.kind());
+                if depth > 0 && let Some(b) = s.as_internal() {
+                    let inner: Value = h.arena().get(b, crate::heap::cells::BoxCell::VALUE);
+                    show(h, &alloc::format!("{label}~{:?}", names.get(locals + i as usize)), inner, depth - 1);
+                }
+            }
+        }
+        for k in h.own_keys(ob) {
+            std::println!("  key {}", h.atom_name(k));
+        }
+        for (k, p) in h.private_entries(ob) {
+            std::println!("  private {} {:?}", h.atom_name(k), p.value().map(|v| v.kind()));
+        }
+    }
+    for name in ["A", "B", "o", "a"] {
+        let v = run_value(&mut a, name);
+        show(&a.heap, name, v, 2);
+    }
+    let v = run_value(&mut a, "A.prototype");
+    show(&a.heap, "A.prototype", v, 0);
+    for m in ["Object.getOwnPropertyDescriptor(A.prototype, 'v').get", "B.prototype.foo", "o.m", "A.make"] {
+        let v = run_value(&mut a, m);
+        show(&a.heap, m, v, 1);
+    }
+}

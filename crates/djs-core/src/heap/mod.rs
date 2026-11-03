@@ -200,6 +200,9 @@ pub struct Heap {
     prefix_copy: Option<alloc::vec::Vec<u8>>,
     /// The barrier is armed without frozen builtins (`VmOptions::prefix_barrier`).
     barrier_forced: bool,
+    /// A dump is loading (`Vm::load_dump`): `jump_if_loading` jumps, so classes skip
+    /// their static initializers (D2580). Transient, never in an image.
+    pub(crate) loading_dump: bool,
     /// Test hook: make the next collection fail to reserve its to-space.
     #[cfg(test)]
     pub(crate) fail_next_gc_reserve: bool,
@@ -308,6 +311,7 @@ impl Heap {
             hard_limit,
             reserve: reserve_for(hard_limit),
             frozen_end: 0,
+            loading_dump: false,
             #[cfg(feature = "unicode-normalization")]
             compositions: Default::default(),
             #[cfg(debug_assertions)]

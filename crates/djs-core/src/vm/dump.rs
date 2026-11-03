@@ -2859,6 +2859,11 @@ fn captured_value(h: &Heap, f: Obj, name: &str) -> Option<Value> {
         .map(|b| a.get(b, BoxCell::VALUE))
 }
 
+#[cfg(test)]
+pub(super) fn template_names_pub(h: &Heap, t: u32) -> Vec<String> {
+    template_names(h, t)
+}
+
 /// The names of a template's locals and then its captures (its debug info).
 fn template_names(h: &Heap, t: u32) -> Vec<String> {
     let a = h.arena();
