@@ -1052,8 +1052,12 @@ impl Heap {
     /// `s` itself if its units lie in one piece (`str_view` reads it in place: a flat
     /// cell, an append rope, a slice), else its flat form. For readers that need a view
     /// but no flat cell: unlike [`Heap::flatten`], a slice is not copied.
+    #[inline]
     pub fn contiguous(&mut self, s: Str) -> Result<Str, HeapError> {
-        if self.str_view(s).is_some() {
+        // (One kind read for flat strings and slices, as `flatten` has for flat ones.)
+        if self.arena().get(s.0, Header::KIND) != CellKind::Rope as u8
+            || self.append_rope_buffer(s).is_some()
+        {
             return Ok(s);
         }
         self.flatten(s)
