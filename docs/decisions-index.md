@@ -529,3 +529,4 @@ topics when the index is next reorganized.
 - D2352: djs-wasm leaves the dumper out by default (+32.4 KB gzip)
 - D2353: Dumps are Scripts: format version 1 and the promise that later builds load it
 - D2354: A wasm host dumps from the heap bytes in TypeScript; the Rust dumper is the reference
+- D2355: A dump is checked by compiling it: every function keeps the bindings it read
