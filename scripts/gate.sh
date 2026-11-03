@@ -94,8 +94,8 @@ DJS_WIRE_CROSS="$wire_dir" DJS_READER_DIR="$heap_dir" \
   cargo test -p djs-core --quiet reader_images -- --ignored
 node js/test/reader-cross.ts "$wire_dir" "$heap_dir"
 rm -rf "$wire_dir" "$heap_dir"
-step "difftest on djs: ratchet, plus suspension and GC stress (0016), heap images (0072)"
-cargo run --quiet -p djs-difftest -- --engine djs --ratchet --suspend-every 97 --gc-stress --determinism --quiet --no-diff > target/difftest-djs.log \
+step "difftest on djs: ratchet, plus suspension and GC stress (0016), heap images (0072), a dump at every idle point (0172)"
+cargo run --quiet -p djs-difftest -- --engine djs --ratchet --suspend-every 97 --gc-stress --determinism --dump-every-idle --quiet --no-diff > target/difftest-djs.log \
   || { cat target/difftest-djs.log; exit 1; }
 grep -E '^(stress|ratchet):' target/difftest-djs.log
 # 0063: the same corpus with the @native builtins as bytecode; both backends must pass.

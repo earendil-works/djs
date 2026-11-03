@@ -228,7 +228,15 @@ pub(super) fn finish(
             _ => None,
         };
         let params = if opts.goal == super::Goal::AsyncBody && !opts.params.is_empty() {
-            Some(heap.alloc_str(&opts.params.join(","))?)
+            // (Not `join`: its generic copy is a kilobyte of wasm.)
+            let mut joined = alloc::string::String::new();
+            for (i, p) in opts.params.iter().enumerate() {
+                if i > 0 {
+                    joined.push(',');
+                }
+                joined.push_str(p);
+            }
+            Some(heap.alloc_str(&joined)?)
         } else {
             None
         };

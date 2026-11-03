@@ -257,8 +257,8 @@ $D --update-ratchet                  # rewrite tests/corpus/expected-failures.tx
 scripts/difftest-import-dquickts.py  # re-split the dquickts tests (then --update dquickts)
 
 $D --engine djs --clusters           # djs in-process; failures grouped by error
-$D --engine djs --ratchet --suspend-every 97 --gc-stress --determinism   # what the gate runs
-                                     # (--suspend-every 97 also runs 1009)
+$D --engine djs --ratchet --suspend-every 97 --gc-stress --determinism --dump-every-idle
+                                     # what the gate runs (--suspend-every 97 also runs 1009)
 $D --engine djs --backend bytecode --ratchet               # the gate, too (0063)
 $D --engine djs --update-ratchet     # after fixing cases: rewrite expected-failures.txt
 $D --engine djs --idle-points codemode   # the idle points per case (the total always prints)
@@ -275,10 +275,19 @@ every case a second (third) time; a transcript that differs from the plain djs r
 hard failure, separate from the oracle comparison and the ratchet (D1161). Stressed runs
 get three times the case's time limit, and a stressed run that still times out is a
 failure too: mark such a case `no-stress` with the measured reason (D1530).
+`--dump-every-idle` (0172, D2610) dumps the VM at every idle point as a format 2 dump
+(docs/continuation-dumps.md: the session's globals, the prelude's state, open calls,
+pending promises, suspended activations, with the prelude's `api` as a handle), loads it
+into a fresh VM and continues there; the transcript must equal the plain run's, and a
+dump that is refused fails the case (a crash with the reason). Only `codemode` and
+`codemode-harvest` have idle points (1,194 at 0172); the leg costs about 15 CPU-s in a
+debug build.
 `--determinism` adds a second suspension slice (1009) and requires the suspended runs to
 leave the same heap image as the plain run, both the raw image and its canonical hash
 (the graph alone, computed by a copying collection of a copy; D1720, D1725, D2040). The e2e
-test compares its plain and suspension modes the same way, and
+test compares its plain and suspension modes the same way (its fourth mode, dump, dumps
+every case's final state, loads it and dumps again: the second round must reproduce
+itself; `DJS_E2E_MODE=dump`; refusals are counted, not failures), and
 `scripts/determinism/native-vs-wasm.sh` compares native and wasm builds image for image
 and stop for stop (both in the gate).
 
@@ -489,8 +498,8 @@ runs it in the shared gate worktree after rebasing, D1792). Its steps: fmt; clip
 integration tests; the no_std wasm32 build of djs-core; `scripts/bgen.sh --check`; the builtin registry's append-only check
 (`scripts/registry.py check main`); the djs-wasm build and the JS host package's tests (`node --test js/test/*.test.ts`); native
 versus wasm heap images (`scripts/determinism/native-vs-wasm.sh`); the wire and reader
-cross-language checks; difftest on djs with the ratchet, suspension, GC stress and
-heap-image determinism; difftest with the bytecode backend; and the test262 active group
+cross-language checks; difftest on djs with the ratchet, suspension, GC stress,
+heap-image determinism and a dump at every idle point; difftest with the bytecode backend; and the test262 active group
 against its ratchet; the slim build's own legs (below); and the size budget (below). It
 prints the slowest unit and test262 tests. Issues that add a test
 suite also add it to the gate; agents do not run the gate's steps by hand (AGENTS.md).

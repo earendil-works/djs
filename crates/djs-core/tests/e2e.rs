@@ -18,7 +18,7 @@
 //! Cases run in parallel (`DJS_JOBS` threads, else one per CPU). Each run has a fuel
 //! budget and a time limit: a case that loops forever fails its plain run within seconds
 //! (and then skips the stress modes) instead of hanging the test.
-//! 4. dump (`DJS_E2E_MODE=dump` only, 0172): the plain run, then a format 2 dump of the
+//! 4. dump (0172): the plain run, then a format 2 dump of the
 //!    finished VM (its globals and whatever is still in flight), loaded into a fresh VM
 //!    and dumped again: the second dump must be the first. The cases have no idle points
 //!    before their end (their awaits settle through jobs), so this checks the exporter
@@ -279,7 +279,7 @@ fn e2e_cases() {
         Ok("suspend") => (false, vec![Mode::Suspend]),
         Ok("gc") => (false, vec![Mode::GcStress]),
         Ok("dump") => (false, vec![Mode::Dump]),
-        _ => (true, vec![Mode::GcStress, Mode::Suspend]),
+        _ => (true, vec![Mode::GcStress, Mode::Suspend, Mode::Dump]),
     };
     let mut failures = Vec::new();
     // The image hash of each case's plain and suspension runs (D1720).

@@ -760,7 +760,7 @@ impl Dumper<'_> {
             ObjectClass::BuiltinClosure => self.closure_expr(i),
             ObjectClass::ArrayIterator => self.iterator_expr(n, o),
             ObjectClass::CollectionIterator => self.collection_iterator_expr(n, o),
-            ObjectClass::Record if self.is_from_sync(o) => self.from_sync_expr(n, o),
+            ObjectClass::Record if self.is_from_sync(o) => self.async_from_sync_expr(n, o),
             _ => {
                 let p = self.nodes[n].path.clone();
                 self.refuse(p, "internal: a promise builtin's record as a value");
@@ -780,7 +780,7 @@ impl Dumper<'_> {
 
     /// An async-from-sync iterator: the dump's own, `$dump.fromSync(it, next)`, which steps
     /// the same way (the object is never visible to user code).
-    fn from_sync_expr(&mut self, n: usize, o: Obj) -> String {
+    fn async_from_sync_expr(&mut self, n: usize, o: Obj) -> String {
         if self.nodes[n].state == State::Done {
             return self.nodes[n].loc.clone();
         }

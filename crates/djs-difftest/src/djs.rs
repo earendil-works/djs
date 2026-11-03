@@ -156,6 +156,7 @@ struct Session {
     suspend: bool,
     /// Dump at every idle point (`dump_every_idle`): the options of a fresh VM and the
     /// clock to set in it.
+    #[cfg_attr(not(feature = "dump"), allow(dead_code))]
     dump: Option<(VmOptions, f64)>,
     /// The prelude's api object.
     api: Option<Handle>,
