@@ -540,3 +540,6 @@ topics when the index is next reorganized.
 - D2600: The CLI's `tools`: a Proxy that makes one async host function per name
 - D2601: Scripted tool answers: by arguments, else in order
 - D2570: Suspension maps from a role stack the parser keeps
+- D2580: While a dump loads, static initializers skip static fields and blocks
+- D2581: Format 2 is a Script run by `Vm::load_dump` with the loader's `$dump`
+- D2582: Classes and private fields in dumps
