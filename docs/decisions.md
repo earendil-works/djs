@@ -8411,3 +8411,49 @@ from the same programs; apart from the helpers and the new first line their text
 unchanged (checked line by line). New programs: spent.src.js (`$dump.spent`), bytes.src.js
 (`$dump.bytes`) and random.src.js (the sequence continues). tests/dump/v2/steps.dump.js
 lost its helper definitions the same way.
+## D2650: pi's future shape in the adapter: prelude-next, `next` mode, session dumps
+date: 2026-11-03 · by: example · issue: 0176
+tests/pi/prelude-next.ts is pi's prelude with no in-flight state: tools and globals call
+the adapter's async host function `call(kind, name, argsJson)` (so an open call is
+`$dump.pending`), and the body's promise, `finished`, the output counters and the store
+(contents and writes) are the adapter's. The sync bridge answers `output`/`store`/`load`
+with nothing, a limit's message (the same text pi's prelude throws) or the stored JSON.
+Results are decoded and errors made by prelude functions (`decode`, `failure`), and the
+body's outcome is encoded by `encode`/`describe`, which the adapter calls while async
+calls may be pending: their return value comes from the new export `vm_outcome` (the
+entry call's outcome while no frame is active, also at IDLE). One visible difference: the
+adapter reports `done` once the job queue has run empty, so output that a job queued
+before the body settled still counts (pi posts `done` from a reaction, first). js/pi/vm.ts
+runs it with `shape: "next"`; `dumpSession()` returns `{ dump, state }` (JSON: the format 2
+dump with the prelude's globals as host globals and the body's promise as handle `run`,
+plus the adapter's state), `resumeFromDump` reruns the host globals and the prelude (or
+restores the prelude image), loads the dump and restores the state, and `openCalls()`
+lists what waits, for the host's policy (deliver a recorded result, issue again, reject).
+pi's own prelude and mode are unchanged.
+
+## D2651: `dumpEveryIdle`: the next mode's stress mode
+date: 2026-11-03 · by: example · issue: 0176
+With `dumpEveryIdle`, a next-mode session dumps itself at every idle point where a call is
+open and continues in a new instance of the module resumed from the dump, invisibly to
+pi's host. pi's suite (`node js/pi/pi-tests.ts --next --dump-every-idle`) and every
+pi-vm.test.ts test run that way, as `--dump-every-idle` does for the difftest corpus.
+
+## D2652: prelude-next has no lockdown; the next mode has frozen builtins
+date: 2026-11-03 · by: example · issue: 0176
+pi's lockdown replaces builtin data properties by accessors whose functions live in the
+prelude: builtin state a dump cannot write (the exporter refuses them) and the rerun
+prelude could not recreate in place. Frozen builtins (D2304) do the same job inside the
+VM, are part of its creation options, and leave no patches to write. pi's suite fails the
+same 11 tests with pi's prelude, with it minus the lockdown on frozen builtins, and with
+prelude-next. The adapter's own `performance` global is now frozen in every mode, as the
+lockdown left it.
+
+## D2653: The pi adapter counts fuel across sync host calls
+date: 2026-11-03 · by: example · issue: 0176
+A `vm_run` that parks on a sync host call returned before its fuel ran out, and the next
+slice started with full fuel, so a loop of sync host calls (`while (true)
+tools.echo(1)` in pi's mode, `while (true) load(k)` in the next mode) never reached an
+interrupt poll and hung an in-thread VM. The new export `vm_fuel_used` (the last
+`vm_run`'s fuel, from `Vm::run_metered`) lets the adapter carry the fuel left across host
+calls and poll once a poll's worth is used. Scripts without sync host calls poll exactly
+as before; others poll at other points, so DETERMINISTIC_VERSION is 3.

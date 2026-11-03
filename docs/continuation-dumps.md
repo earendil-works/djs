@@ -402,6 +402,13 @@ regardless. For wasm hosts two packagings use the same code:
 
 0177 measures both after the image persistence code is gone; the plan leans to B.
 
+Both are built and tested since 0175 (D2635): `scripts/build-wasm.sh --dump` writes
+`djs-dump.wasm`, and the Sandbox takes it as `dumpModule` beside a dumper-less `module`.
+Measured then (`wasm` profile): the module without the dumper is 1,038,040 bytes, 443.8 KB
+gzip; with it 1,312,145 bytes, 540.6 KB gzip (+274 KB raw, +96.8 KB gzip, +22%). B costs
+0–1 ms per dump or resume over A (the image copies), at 2.4–6.5 ms for a dump or resume of
+a run holding 10 to 1000 records (docs/host.md).
+
 ### pi's future shape (D2565)
 
 pi's prelude (tests/pi/prelude-source.ts) keeps a `pending` Map of resolve/reject

@@ -12,3 +12,8 @@ Refresh with
 and update the commit above (`git -C ~/Development/pi-private rev-parse HEAD`). pi's own
 tests run against the adapter with `node js/pi/pi-tests.ts`, which copies them fresh each
 time (docs/host.md "pi codemode").
+
+`prelude-next.ts` is not a copy: it is pi's prelude changed into the shape pi should move
+to on djs (D2565, D2650), with every difference listed at its top. js/pi/vm.ts runs it in
+its `next` mode (`shape: "next"`). When `prelude-source.ts` is refreshed, carry pi's
+changes over into it.

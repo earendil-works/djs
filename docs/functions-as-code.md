@@ -415,8 +415,9 @@ functions and their state:
 
 ## Rust or TypeScript
 
-Superseded: one dumper, in Rust (D2564); the TypeScript prototype was removed in 0170.
-What 0167 measured:
+Superseded: one dumper, in Rust (D2564); the TypeScript prototype (js/proto/dump.ts) and
+its comparison script were removed in 0170. What 0167 measured, kept as the record of the
+decision:
 
 Two implementations of the same algorithm exist, and both write the same text (7 of the 8
 round-trip cases byte for byte, the other differs only in the order of its roots; the
@@ -490,14 +491,13 @@ written by its factory) as its only check.
 - Sizes (wasm `full` build, gzip -9): 443,468 without the dumper, 479,077 with it.
 
 Run: `cargo test -p djs-core --lib vm::dump_tests`; coverage
-`DJS_HARVEST=1 cargo test -p djs-core --lib vm::dump_harvest -- --ignored --nocapture`;
-the comparison `DJS_WASM=<module with vm_dump> node js/proto/compare.ts [--big N]`.
+`DJS_HARVEST=1 cargo test -p djs-core --lib vm::dump_harvest -- --ignored --nocapture`.
 
 ## Open
 
 - Classes (the body and its static state, private fields through the class's own code).
 - Large buffers as side blobs by hash; dumps that share data.
-- The TypeScript dumper's three steps above, and wiring it under `Sandbox.dump` when the
-  module has no `vm_dump`.
+- (Done differently: a module without `vm_dump` dumps through the dump module,
+  `SandboxOptions.dumpModule`, D2635.)
 - A `persist(name)` convention in pi's prelude and the host's storage of dumps and their
   metadata.

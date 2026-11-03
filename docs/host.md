@@ -613,7 +613,7 @@ but pi keeps the prelude's `settle`/`run`/`stalled` alive across calls).
 | QuickJS polls `interruptHandler` while it runs; true throws an uncatchable error | `shouldInterrupt` is polled after every fuel slice (`fuelPerPoll`, default 10,000) of the script's work, not while the host globals and the prelude run (D1660: a start that reuses a prelude image skips that work, so a budget means the same on cold and warm starts). True → `vm_abort` and a `crash`, which pi's launchers turn into `timeout` or `aborted` as before |
 | deterministic: WASI clocks read virtual time, `random_get` a PRNG, UTC, no WeakRef | `vm_set_now(clock.now)` before every slice, time zone 0, `vm_set_random_seed`. djs reads no clock or entropy of its own (ARCH "Nondeterminism"). In deterministic runs the VM deletes `WeakRef` and `FinalizationRegistry` (`vm_set_weak_refs`, D1680) before the prelude's lockdown |
 | `Math.random` seeded by QuickJS from its first clock read (seed + 1), one draw used up while creating the context | djs's `Math.random` is the same xorshift64*, so the adapter seeds it one step after seed + 1. **The same seed gives the same numbers on both engines**; pi's pinned values pass |
-| fingerprint `quickjs-wasi X, quickjs Y, prelude H, deterministic 1, stack S, heap M, budget B` | `djs <build hash>, prelude H, host G, deterministic 2, fuel per poll F, heap M, budget B` (`djs_build_hash`; G hashes the adapter's own globals, D1660; the adapter's version is 2 since it collects after the prelude, D1890) |
+| fingerprint `quickjs-wasi X, quickjs Y, prelude H, deterministic 1, stack S, heap M, budget B` | `djs <build hash>, prelude H, host G, deterministic 3, fuel per poll F, heap M, budget B` (`djs_build_hash`; G hashes the adapter's own globals, D1660; the adapter's version is 2 since it collects after the prelude, D1890, and 3 since the fuel between polls counts across sync host calls, D2653) |
 | quickjs-wasi's host global `performance` (`queueMicrotask` is native since 0059, `atob`, `btoa` and `DOMException` since 0084) | defined by the adapter in JS before the prelude, so the lockdown freezes it too. `performance.now()` counts from the run's start on the VM clock (deterministic: from `startedAt`, as on quickjs) |
 | no snapshots: durability by deterministic replay | `snapshot()` / `resumeVm()` in addition: the session's state and its VM image in the snapshot container ("Snapshots"), taken while the script waits. The session collects first (D1890), and the image is compressed against the prelude image the session started from (D2262): 2–9 KB for a session waiting on a tool (489–503 KB as an image). `resumeVm` finds that prelude image in the process, or recomputes it from `prelude` and `data` (the session's start data); a session started with `reuseImages: false` is compressed against the base image. A resumed session continues with no replay (tested against an uninterrupted run, with the same messages and interrupt polls) |
 
@@ -687,6 +687,56 @@ Besides the failures above:
 - **Memory limit.** djs caps its arena. Running out is a catchable
   `InternalError: out of memory`, as on QuickJS. With a limit of 256 KB or less, `startVm`
   rejects because the VM cannot be created; 512 KB is enough for pi's prelude.
+
+### The shape pi should adopt: prelude-next and continuation dumps (D2565, D2650)
+
+pi's prelude keeps the run's in-flight state itself: a `pending` map of resolve/reject
+functions per call, `nextId`, `finished`, the output counters, the store's contents and
+writes, and `then` reactions on the body's promise. A snapshot of the whole heap carries
+that along, but a continuation dump, which writes the run as JavaScript, would have to
+write the prelude's internals too. tests/pi/prelude-next.ts is pi's prelude changed so
+that it keeps none of it (the changes are listed at its top):
+
+- tools and globals are engine async host calls: `tools.x(args)` serializes as before and
+  returns the promise of the adapter's async host function `call(kind, name, argsJson)`.
+  An open call is engine state, and a dump writes it as `$dump.pending(id, "call",
+  [kind, name, argsJson])`. The adapter numbers the calls for pi's protocol;
+- the body's promise is the adapter's (a handle), and so are `finished`, the output
+  counters and the store. `bridge("output" | "store" | "load", ...)` answer: nothing, a
+  limit's message, or the stored JSON. When the body settles the adapter calls the
+  prelude's `encode`/`describe` and posts `done`; results are decoded by `decode`/`failure`;
+- no lockdown: the VM has frozen builtins (D2304, D2652), which do the lockdown's job (pi's
+  suite fails the same tests either way); the lockdown's accessors on builtins were
+  prelude state a dump cannot recreate.
+
+The adapter runs it with `startVm({ ..., prelude: PRELUDE_NEXT, shape: "next" })`; pi's
+messages and launchers stay as they are. A waiting session persists as a dump:
+
+```ts
+const saved = session.dumpSession();       // { dump: "\"djs-dump 2\"; ...", state: { ... } }: JSON
+// ... a restart ...
+const resumed = resumeFromDump(saved, { wasm, prelude: PRELUDE_NEXT, data, post, shouldInterrupt });
+resumed.openCalls();                       // the calls still waiting, as pi's call messages
+resumed.deliver({ type: "result", id, ok: true, payload, seq, now });
+```
+
+`dumpSession()` writes the VM as a format 2 dump (the script's functions, data, suspended
+activations and open calls; the prelude's globals are host globals, written by name) and
+the adapter's state beside it. `resumeFromDump` runs the host globals and prelude-next
+again (deterministic, D2262; or restores the prelude image), loads the dump and restores
+the adapter's state. The open calls are not posted again: the host delivers a recorded
+result, issues the call again, or rejects it. The module needs the dumper (the `dump`
+feature). `dumpEveryIdle: true` dumps and resumes in a new instance at every idle point
+(D2651); pi's suite passes the same in all three modes (`node js/pi/pi-tests.ts`,
+`--next`, `--next --dump-every-idle`: 215 of 226 at 0176, the same 11 failures as
+above), and js/test/pi-vm.test.ts runs every adapter test in each and the open-call
+policies through a real dump. Not yet: a dump does not carry `Math.random`'s state, so a
+resumed deterministic run restarts its sequence (0182).
+
+What pi would change to adopt it: take prelude-next's changes into its prelude (they are
+small and engine-neutral except the async host function), let the engine own call ids
+and the body's promise, and persist sessions as `{ dump, state }` instead of replaying
+results after a restart.
 
 ### What pi would change to run on djs behind a flag
 
