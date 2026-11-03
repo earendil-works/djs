@@ -23,10 +23,11 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use super::*;
+use crate::builtins::regexp;
 use crate::compiler::{CompileOptions, FunctionMap, Loop, Role, Site, SiteKind, Slot};
 use crate::heap::cells::{HostCall, Script};
 use crate::interp::run::{builtin_closure_kind, promise, suspend};
-use crate::vm::dump_prims::{USING_FIELDS, USING_SLOTS};
+use crate::vm::dump_prims::{USING_FIELDS, USING_SLOTS, helper_proto};
 
 /// Builtin closure kinds (`NewBuiltinClosure`, interp/run/intrinsics.rs).
 const RESOLVE: usize = 0;
@@ -649,6 +650,23 @@ impl Dumper<'_> {
         let path = self.nodes[n].path.clone();
         if h.object_class(o) == ObjectClass::ArrayIterator {
             self.edge(n, h.object_slot(o, 0), || cat!(path, "<target>"));
+        } else if h.object_class(o) == ObjectClass::IteratorHelper {
+            for i in 0..h.object_slot_count(o) {
+                self.edge(n, h.object_slot(o, i), || cat!(path, "<slot ", i, ">"));
+            }
+            if h.get_prototype_of(o).map(Value::object) != Some(helper_proto(h, o)) {
+                self.refuse(path.clone(), "an iterator with another prototype");
+            }
+        } else if h.object_class(o) == ObjectClass::RegExpStringIterator {
+            // (Its string is a primitive.)
+            self.edge(n, h.object_slot(o, regexp::IT_REGEXP), || {
+                cat!(path, "<regexp>")
+            });
+            if h.get_prototype_of(o).map(Value::object)
+                != Some(intrinsic(h, Intrinsic::RegExpStringIteratorProto))
+            {
+                self.refuse(path.clone(), "an iterator with another prototype");
+            }
         } else if let Some((entries, _)) = h.collection_iterator_position(o) {
             // (Written again if only the iterator holds the collection.)
             for (i, (k, v)) in h.collection_entries_of(entries).into_iter().enumerate() {
@@ -909,6 +927,8 @@ impl Dumper<'_> {
             ObjectClass::BuiltinClosure => self.closure_expr(i),
             ObjectClass::ArrayIterator => self.iterator_expr(n, o),
             ObjectClass::CollectionIterator => self.collection_iterator_expr(n, o),
+            ObjectClass::RegExpStringIterator => self.regexp_iterator_expr(n, o),
+            ObjectClass::IteratorHelper => self.helper_expr(n, o),
             ObjectClass::Record if self.is_from_sync(o) => self.async_from_sync_expr(n, o),
             ObjectClass::Record if self.nodes[n].using_record => self.using_expr(n, o),
             _ => {
@@ -1096,6 +1116,75 @@ impl Dumper<'_> {
         }
         let name = self.fresh("i");
         self.line(cat!(name, " = ", e, ";"), before);
+        self.nodes[n].loc = name.clone();
+        self.nodes[n].state = State::Done;
+        name
+    }
+
+    /// An iterator helper (`map`, `take`, `Iterator.from`'s wrapper, `concat`, `zip`, …):
+    /// `$dump.iteratorHelper([slots])`, its state machine's slots as they are
+    /// (builtins/iterator.ts).
+    fn helper_expr(&mut self, n: usize, o: Obj) -> String {
+        if self.nodes[n].state == State::Done {
+            return self.nodes[n].loc.clone();
+        }
+        if self.nodes[n].state == State::Busy {
+            return String::new();
+        }
+        self.nodes[n].state = State::Busy;
+        let h = self.h;
+        let before = self.fns_read.get();
+        let slots: Vec<String> = (0..h.object_slot_count(o))
+            .map(|i| self.expr(h.object_slot(o, i), None, None))
+            .collect();
+        if slots.iter().any(String::is_empty) {
+            let p = self.nodes[n].path.clone();
+            self.refuse(p, "an iterator helper on a reference cycle");
+        }
+        let name = self.fresh("i");
+        self.line(
+            cat!(name, " = $dump.iteratorHelper([", join(&slots, ", "), "]);"),
+            before,
+        );
+        self.nodes[n].loc = name.clone();
+        self.nodes[n].state = State::Done;
+        name
+    }
+
+    /// A RegExp String Iterator (`matchAll`): `$dump.regexpIterator(re, s, flags)` over
+    /// the regexp it made (with its `lastIndex`), the string, its global, unicode and
+    /// done bits.
+    fn regexp_iterator_expr(&mut self, n: usize, o: Obj) -> String {
+        if self.nodes[n].state == State::Done {
+            return self.nodes[n].loc.clone();
+        }
+        if self.nodes[n].state == State::Busy {
+            return String::new();
+        }
+        self.nodes[n].state = State::Busy;
+        let h = self.h;
+        let before = self.fns_read.get();
+        let re = self.expr(h.object_slot(o, regexp::IT_REGEXP), None, None);
+        let s = self.expr(h.object_slot(o, regexp::IT_STRING), None, None);
+        let flags = h.object_slot(o, regexp::IT_FLAGS).as_int().unwrap_or(0);
+        if re.is_empty() {
+            let p = self.nodes[n].path.clone();
+            self.refuse(p, "a RegExp String Iterator on a reference cycle");
+        }
+        let name = self.fresh("i");
+        self.line(
+            cat!(
+                name,
+                " = $dump.regexpIterator(",
+                re,
+                ", ",
+                s,
+                ", ",
+                flags,
+                ");"
+            ),
+            before,
+        );
         self.nodes[n].loc = name.clone();
         self.nodes[n].state = State::Done;
         name

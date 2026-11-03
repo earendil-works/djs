@@ -1306,9 +1306,10 @@ impl<'a> Dumper<'a> {
                     self.edge(n, v, || cat!(path, "<", i, ">"));
                 }
             }
-            ObjectClass::ArrayIterator | ObjectClass::CollectionIterator => {
-                self.visit_iterator(n, o)
-            }
+            ObjectClass::ArrayIterator
+            | ObjectClass::CollectionIterator
+            | ObjectClass::RegExpStringIterator
+            | ObjectClass::IteratorHelper => self.visit_iterator(n, o),
             ObjectClass::Arguments => {
                 let len = self.arguments_len(o);
                 match len {
@@ -2388,7 +2389,18 @@ impl<'a> Dumper<'a> {
         let class = h.object_class(o);
         match class {
             ObjectClass::Ordinary | ObjectClass::Array => {
+                // An array literal has only its dense elements: other keys are patches.
+                let dense = (class == ObjectClass::Array).then(|| {
+                    let el: Ref = h.arena().get(o.offset(), ObjectCell::ELEMENTS);
+                    el.get().map_or(0, |el| h.value_array_len(el))
+                });
                 h.own_keys(o).into_iter().all(|k| {
+                    if let Some(dense) = dense
+                        && k != atoms::LENGTH
+                        && h.atom_array_index(k).is_none_or(|i| i >= dense)
+                    {
+                        return false;
+                    }
                     let Some(Property::Data { value, flags }) = h.get_own_property(o, k) else {
                         return false;
                     };

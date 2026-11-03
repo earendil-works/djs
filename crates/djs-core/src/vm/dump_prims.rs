@@ -16,6 +16,8 @@
 //! | `random(lo, hi)` | sets `Math.random`'s state (the hash key stays the VM's, D2624) |
 //! | `using(resources, state)` | the resource Record of a statement list's `using` declarations |
 //! | `forIn(o, keys)` | a for-in loop's key iterator over `o` with `keys` left to visit |
+//! | `iteratorHelper(slots)` | an iterator helper with its state machine's slots (builtins/iterator.ts) |
+//! | `regexpIterator(re, s, flags)` | `matchAll`'s iterator: `re` (its clone) over `s`, flags 1 global, 2 unicode, 4 done |
 //!
 //! Stepping an iterator here runs no user code (no `length` getter, no element getter):
 //! the original run did that already.
@@ -49,6 +51,16 @@ pub(super) const USING_FIELDS: [(&str, u32); 8] = [
     ("pending", 9),
     ("hasPending", 10),
 ];
+
+/// The prototype an iterator helper is made with: %WrapForValidIteratorPrototype% for
+/// `Iterator.from`'s wrapper (kind 0), else %IteratorHelperPrototype%.
+pub(super) fn helper_proto(h: &crate::heap::Heap, o: crate::value::Obj) -> Value {
+    if h.object_slot(o, 0).as_int() == Some(0) {
+        Value::object(intrinsic_obj(h, Intrinsic::WrapForValidIteratorProto))
+    } else {
+        Value::object(intrinsic_obj(h, Intrinsic::IteratorHelperProto))
+    }
+}
 
 /// The key iterator `$dump.forIn` made, from its wrapper.
 pub(super) fn for_in_iterator(heap: &crate::heap::Heap, v: Value) -> Option<Value> {
@@ -240,6 +252,56 @@ impl Vm {
             self.heap.set_object_slot(r, slot, v);
         }
         Ok(Value::object(r))
+    }
+
+    /// `$dump.iteratorHelper([kind, state, ...])`: the builtins step it from its slots;
+    /// a slot of the wrong type makes a step fail with an internal error, never more.
+    pub(super) fn primitive_iterator_helper(&mut self, args: &[Value]) -> Result<Value, String> {
+        let slots = array_arg(
+            &self.heap,
+            args.first().copied().unwrap_or(Value::UNDEFINED),
+            "$dump.iteratorHelper",
+        )?;
+        let n = ObjectClass::IteratorHelper.slots();
+        let kind = slots
+            .first()
+            .and_then(|v| v.as_int())
+            .filter(|k| (0..=9).contains(k));
+        let state = slots
+            .get(1)
+            .and_then(|v| v.as_int())
+            .filter(|s| (0..=3).contains(s));
+        if !crate::FULL || slots.len() != n as usize || kind.is_none() || state.is_none() {
+            return Err("$dump.iteratorHelper: not the slots of an iterator helper".into());
+        }
+        let proto = if kind == Some(0) {
+            Intrinsic::WrapForValidIteratorProto
+        } else {
+            Intrinsic::IteratorHelperProto
+        };
+        let proto = intrinsic_obj(&self.heap, proto);
+        let o = self
+            .heap
+            .alloc_object(ObjectClass::IteratorHelper, Some(proto), n)
+            .map_err(oom)?;
+        for (i, v) in slots.into_iter().enumerate() {
+            self.heap.set_object_slot(o, i as u32, v);
+        }
+        Ok(Value::object(o))
+    }
+
+    pub(super) fn primitive_regexp_iterator(&mut self, args: &[Value]) -> Result<Value, String> {
+        let arg = |i: usize| args.get(i).copied().unwrap_or(Value::UNDEFINED);
+        let (Some(r), Some(s), Some(flags)) = (
+            arg(0).as_object(),
+            arg(1).as_string(),
+            arg(2).as_int().filter(|f| (0..8).contains(f)),
+        ) else {
+            return Err("$dump.regexpIterator: not (an object, a string, flags 0-7)".into());
+        };
+        let it = crate::builtins::regexp::string_iterator(&mut self.heap, r, s, flags)
+            .map_err(|_| String::from("$dump.regexpIterator: out of memory"))?;
+        Ok(Value::object(it))
     }
 
     /// `$dump.forIn(o, keys)`: a for-in loop's key iterator (interp/run.rs

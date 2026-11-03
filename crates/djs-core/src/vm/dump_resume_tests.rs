@@ -408,6 +408,22 @@ fn resume_refuses_what_the_map_does_not_have() {
             "(() => { let x, y; $dump.cell(() => [x, y]); })();",
             "capture exactly one variable",
         ),
+        (
+            "$dump.iteratorHelper([1, 0]);",
+            "not the slots of an iterator helper",
+        ),
+        (
+            "$dump.iteratorHelper([12, 0, 0, 0, 0, 0, 0, 0]);",
+            "not the slots of an iterator helper",
+        ),
+        (
+            "$dump.regexpIterator(/a/g, 1, 0);",
+            "not (an object, a string, flags 0-7)",
+        ),
+        (
+            "$dump.regexpIterator(/a/g, 'a', 9);",
+            "not (an object, a string, flags 0-7)",
+        ),
         ("$dump.forIn(1, []);", "not an object or undefined"),
         ("$dump.forIn(undefined, [1]);", "a key that is not a string"),
         ("$dump.using({});", "the resources are not an array"),
@@ -1368,6 +1384,8 @@ fn delegation_round_trips() {
         "finally",
         "using",
         "destructuring",
+        "for-in",
+        "iterator-helpers",
     ] {
         let src =
             std::fs::read_to_string(golden_dir().join(alloc::format!("{name}.src.js"))).unwrap();
@@ -1379,4 +1397,14 @@ fn delegation_round_trips() {
         }
         assert_eq!(chained(&src), want, "{name} chained");
     }
+}
+
+/// An array with named properties is not a literal alone: it gets a location for its
+/// patches even where a frame holds it once.
+#[test]
+fn a_frame_holds_an_array_with_named_properties() {
+    let src =
+        "async function main() { const a = [1]; a.x = 2; print(await later(1), a.x); }\nmain();";
+    let (got, _) = dump_at(src, 1).unwrap();
+    assert_eq!(got, ["1 2"]);
 }

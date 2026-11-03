@@ -130,6 +130,8 @@ const KEEP: u32 = PRIVATE + 15;
 const RANDOM: u32 = PRIVATE + 16;
 const USING: u32 = PRIVATE + 17;
 const FOR_IN: u32 = PRIVATE + 18;
+const REGEXP_ITERATOR: u32 = PRIVATE + 19;
+const ITERATOR_HELPER: u32 = PRIVATE + 20;
 /// The ids of the primitives' own calls while a dump loads: above every id a dump's open
 /// call may have, so the two never meet.
 const LOADER_CALL_IDS: u32 = 0x8000_0000;
@@ -153,6 +155,8 @@ const PRIMITIVES: &[(&str, u32)] = &[
     ("random", RANDOM),
     ("using", USING),
     ("forIn", FOR_IN),
+    ("regexpIterator", REGEXP_ITERATOR),
+    ("iteratorHelper", ITERATOR_HELPER),
 ];
 
 /// How a dump is compiled: a Script, TypeScript when its header says so
@@ -403,6 +407,8 @@ impl Vm {
                         RANDOM => self.primitive_random(&args),
                         USING => self.primitive_using(&args),
                         FOR_IN => self.primitive_for_in(&args),
+                        REGEXP_ITERATOR => self.primitive_regexp_iterator(&args),
+                        ITERATOR_HELPER => self.primitive_iterator_helper(&args),
                         // (A positive int32: below LOADER_CALL_IDS.)
                         ISSUED => match args.first().and_then(|v| v.as_int()) {
                             Some(n) if n > 0 => {
