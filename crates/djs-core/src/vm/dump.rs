@@ -902,7 +902,9 @@ impl<'a> Dumper<'a> {
 
     fn global_binding(&mut self, k: Atom, value: Value, decl: Decl) {
         let name = self.h.atom_name(k);
-        if self.host_names.contains(&name.as_str()) {
+        // A host name on the global object is the host's; a lexical binding of that
+        // name is the script's own and hides the host's property, so it is dumped.
+        if decl == Decl::Var && self.host_names.contains(&name.as_str()) {
             self.host_values(value, name, 0);
         } else if name != "$dump" && self.global_atoms.get(key(k.id())).is_none() {
             // A lexical binding shadows a global object property of the same name.
@@ -915,6 +917,19 @@ impl<'a> Dumper<'a> {
                 root: None,
             });
         }
+    }
+
+    /// Whether `v` is the host's global `name` (what the name reads after the dump).
+    fn is_host_value(&self, v: Option<Value>, name: &str) -> bool {
+        let (h, g) = (self.h, self.vm.global());
+        self.host_names.contains(&name)
+            && v.is_some()
+            && h.own_keys(g)
+                .into_iter()
+                .find(|&k| h.atom_symbol(k).is_none() && h.atom_name(k) == name)
+                .and_then(|k| h.get_own_property(g, k))
+                .and_then(|p| p.value())
+                == v
     }
 
     fn host_values(&mut self, v: Value, expr: String, depth: u32) {
@@ -2119,7 +2134,7 @@ impl<'a> Dumper<'a> {
                     let value = captured_value(h, o, c);
                     let ok = new.captures.contains(c)
                         || (new.globals.contains(c)
-                            && (self.host_names.contains(&c.as_str())
+                            && (self.is_host_value(value, c)
                                 || self
                                     .roots
                                     .iter()
@@ -2140,9 +2155,14 @@ impl<'a> Dumper<'a> {
                             "`, which a variable of the dump hides"
                         ));
                     } else if !self.roots.iter().any(|r| r.name == *g)
-                        && !self.host_names.contains(&g.as_str())
-                        && !self.base_globals.contains(g)
-                        && self.globals.iter().any(|u| u.name == *g)
+                        && self.globals.iter().any(|u| {
+                            // A lexical binding hides the host's and the base's globals:
+                            // without it, the name would read theirs after the dump.
+                            u.name == *g
+                                && (u.decl != Decl::Var
+                                    || !self.host_names.contains(&g.as_str())
+                                        && !self.base_globals.contains(g))
+                        })
                     {
                         why.push_out(cat!(
                             "reads the global `",
@@ -4132,6 +4152,27 @@ mod check_tests {
         assert_eq!(
             r,
             ["getStuff: reads the global `foo`, which the dump does not hold"]
+        );
+    }
+
+    /// A script's own binding with a host name hides the host's global: dropping it
+    /// would make its readers read the host's after the dump (0174's `const tools`).
+    #[test]
+    fn a_script_binding_with_a_host_name_is_dumped() {
+        let setup = "const console = \"mine\"; function f() { return console; }\n\
+                     function mk(console) { return () => console; } const g = mk(1);";
+        let missing = "function f() { return console; }\n";
+        assert_eq!(
+            check(setup, &["f"], &["console"], missing),
+            ["f: reads the global `console`, which the dump does not hold"]
+        );
+        let ok = "const console = \"mine\";\nfunction f() { return console; }\n";
+        assert_eq!(check(setup, &["f"], &[], ok), Vec::<String>::new());
+        // A captured variable read as the host's global: only with the host's value.
+        let r = check(setup, &["g"], &[], "const g = () => console;\n");
+        assert_eq!(
+            r,
+            ["g: captures `console`, which is not in scope where the dump writes the function"]
         );
     }
 

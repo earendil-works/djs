@@ -460,10 +460,11 @@ fn dump_at(src: &str, k: usize) -> Result<(Vec<String>, String), String> {
             s => panic!("{s:?}"),
         }
     }
-    // `later` and `print` are host globals, as for `djs resume` (0174).
+    // `later` and `print` are host globals, as for `djs resume` (0174); `console` and
+    // `tools` too, as for a codemode host: plan.src.js's own `const tools` shadows it.
     let opts = super::dump::DumpOptions {
         base: base(),
-        host: &["later", "print"],
+        host: &["console", "tools", "print", "later"],
         host_fn_name: &host_fn_name,
         ..Default::default()
     };
