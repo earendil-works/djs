@@ -1,7 +1,7 @@
 # 0161: Heap access that is safe and as cheap as unsafe; Vec/container hygiene
 
-status: open
-agent: -
+status: in-progress
+agent: audit
 branch: issue/0161-heap-access
 depends-on: 0156
 guide: docs/guide/arena.md (how heap access is checked)
