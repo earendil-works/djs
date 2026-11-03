@@ -8252,3 +8252,29 @@ round trip (`exporter_round_trips_at_every_idle_point`) stays the check of today
 exporter; the goldens check today's loader against yesterday's exporter. The
 across-builds script (scripts/dumps-across-builds.sh) is run by hand, not by the gate:
 it builds a second tree (about 30 s).
+## D2630: Host-driven Sandbox runs, the first piece of the Sandbox run API
+date: 2026-11-03 · by: example · issue: 0179
+`sandbox.begin(code, params)` returns a `Run` (`state`, `calls`, `value`, `error`,
+`settle(id, {ok, value})`, `advance()`, `dump()`) and `Sandbox.resume(dump, opts)` returns
+`{ sandbox, run }`: the shape docs/continuation-dumps.md plans for 0175, of which 0179
+builds what its example needs (no journals, no packaging). A host-driven run never calls
+async host functions: it lists them in `run.calls` and the host settles them, so a call
+can outlive the sandbox or process that made it; sync host functions are called as in
+`run`. The sandbox runs nothing else while a run is in progress. The run's result is its
+async body's promise, taken at the first idle point with the new export `vm_outcome`
+(the entry call's outcome while no frame is active, also at IDLE; repeatable, unlike
+`vm_result`) and named `run` for the dump; `resume` takes it back from the load's handle
+`run` (refusing a dump without one), and DONE reads that promise instead of `vm_result`,
+since a loaded VM's entry call was the dump's Script.
+
+## D2631: The dump exports carry the host's function names both ways; changed in place
+date: 2026-11-03 · by: example · issue: 0179
+`vm_load_dump(vm, names_len, len)` stages the sandbox's host function names in id order
+(`\n`-separated) before the dump: they give `LoadOptions::host_fn` (an open call's or a
+host function's name to its id). On success out holds what the load returned: u32
+`n_calls, n_handles, (call_id, fn_id)*, (handle, name_len)*`, then the handles' names;
+the host frees the handles. `vm_dump`'s staging adds two lines to the host globals and
+names: the same name table (tab-separated, id order; `DumpOptions::host_fn_name`) and the
+values to name (`handle:name`, tab-separated; `DumpOptions::handles`). The signatures
+change in place without an ABI version bump (D024): the dump exports are optional,
+behind djs-wasm's `dump` feature, and only the Sandbox of the same package calls them.

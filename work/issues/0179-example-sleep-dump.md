@@ -63,5 +63,7 @@ Build exactly what's needed, in the shape docs/continuation-dumps.md "Sandbox AP
 - examples/sleep-dump: sleep-dump.ts (in-process, `--restart` two processes, `start`/
   `resume` halves), run.sh (builds the dump-enabled debug module), README skeleton;
   js/test/sleep-dump.test.ts (fails until the exporter).
+- Decisions D2630 (host-driven runs) and D2631 (dump exports' staging; no ABI bump, as
+  the coordinator agreed).
 
 ## Result
