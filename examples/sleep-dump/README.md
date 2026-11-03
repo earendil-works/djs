@@ -71,8 +71,10 @@ call 2 to `sleep(5000)` is open, nothing more. What happens to it is the host's 
 
 - **re-arm it** (this example): the host keeps when each call is due (`out/host.json` in
   the two-process mode, a plain object in one process) and re-arms the timer for the time
-  left, from the open-call list `Sandbox.resume` returns (`run.calls`). Without that record
-  it could start a fresh 5 s from the arguments;
+  left, from the open-call list `Sandbox.resume` returns (`run.calls`: the calls the
+  loader recreated, which `Vm::load_dump` reports as `Loaded.calls`, with the function
+  named by the host and the arguments read back from the VM). Without that record it
+  could start a fresh 5 s from the arguments;
 - **deliver a recorded result**, if the call finished while the VM was gone;
 - **issue it again**, for a call without side effects;
 - **reject it** (`settle(id, { ok: false, value: new Error("interrupted") })`): the
