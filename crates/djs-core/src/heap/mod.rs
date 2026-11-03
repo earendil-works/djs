@@ -632,3 +632,5 @@ mod append_tests;
 mod hash_tests;
 #[cfg(test)]
 mod shape_tests;
+#[cfg(test)]
+mod slice_tests;

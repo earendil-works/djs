@@ -68,6 +68,9 @@ pub mod flags {
     /// may be written in place. Only append ropes' `LEFT` fields reference it; freezing
     /// clears the flag, after which it is an ordinary flat string.
     pub const STR_APPEND_BUF: u16 = 1;
+    /// Slice: a full collection found its parent kept alive by little else than slices;
+    /// the slice gets a copy of its units right after the collection (D2542).
+    pub const SLICE_DETACH: u16 = 1;
     /// Object: new properties may be added.
     pub const OBJ_EXTENSIBLE: u16 = 1;
     /// Object: the property table holds array-index keys (or the class has exotic
@@ -263,6 +266,22 @@ cells! {
         LEFT: Ref = 16,
         /// The right string; null once flattened.
         RIGHT: Ref = 20,
+    };
+
+    /// A slice (D2542): the code units `[OFF, OFF + LEN)` of `PARENT`, a flat one-byte
+    /// string (never an append buffer, never another slice). Made instead of a copy for
+    /// long substrings of long strings; flattening copies it and turns the cell into a
+    /// flattened [`Rope`] in place (same size and field offsets). Header flag:
+    /// [`flags::SLICE_DETACH`].
+    22 => Slice {
+        /// Length in code units.
+        LEN: u32 = 8,
+        /// Cached string hash; 0 means not computed yet.
+        HASH: u32 = 12,
+        /// The string the units are read from.
+        PARENT: Ref = 16,
+        /// The first unit's index in `PARENT`.
+        OFF: u32 = 20,
     };
 
     /// A symbol. Every symbol is also an atom, so it can be a property key.

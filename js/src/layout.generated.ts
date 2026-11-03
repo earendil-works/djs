@@ -2,7 +2,7 @@
 // Regenerate: DJS_UPDATE_LAYOUT=1 cargo test -p djs-core layout_generated
 
 export const LAYOUT = {
-  "layoutHash": 1521157941,
+  "layoutHash": 595954183,
   "magic": 5458500,
   "headerSize": 8,
   "header": { "KIND": 0, "GC": 1, "FLAGS": 2, "SIZE": 4 },
@@ -88,6 +88,17 @@ export const LAYOUT = {
         "HASH": { "offset": 12, "type": "u32" },
         "LEFT": { "offset": 16, "type": "Ref" },
         "RIGHT": { "offset": 20, "type": "Ref" }
+      },
+      "tail": null
+    },
+    "Slice": {
+      "kind": 22,
+      "minSize": 24,
+      "fields": {
+        "LEN": { "offset": 8, "type": "u32" },
+        "HASH": { "offset": 12, "type": "u32" },
+        "PARENT": { "offset": 16, "type": "Ref" },
+        "OFF": { "offset": 20, "type": "u32" }
       },
       "tail": null
     },

@@ -144,7 +144,7 @@ pub fn stringify_fast_at(
 /// QuoteJSONString ( value ), 25.5.2.3, of a string, without a serializer's setup
 /// (the full algorithm quotes every key and string through this).
 pub fn quote(heap: &mut Heap, s: Str) -> Result<Str, HeapError> {
-    let flat = heap.flatten(s)?;
+    let flat = heap.contiguous(s)?;
     let view = heap.str_view(flat).expect("flat");
     let mut out = Out {
         buf: Buf::Narrow(crate::buf::vec_with_capacity(view.len() + 2)),
@@ -581,7 +581,7 @@ impl Ser<'_, '_> {
         } else if v.is_null() {
             self.out.latin1(b"null");
         } else if let Some(s) = v.as_string() {
-            let flat = self.heap.flatten(s)?;
+            let flat = self.heap.contiguous(s)?;
             let view = self.heap.str_view(flat).expect("flat");
             self.out.quote(view);
         }

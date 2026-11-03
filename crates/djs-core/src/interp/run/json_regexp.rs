@@ -397,7 +397,7 @@ impl Exec<'_> {
         let flags = re::flags(self.heap, r);
         let g_or_y = flags.contains(Flags::GLOBAL) || flags.contains(Flags::STICKY);
         let last = if g_or_y { last } else { 0.0 };
-        let flat = self.heap.flatten(s)?;
+        let flat = self.heap.contiguous(s)?;
         let len = self.heap.str_len(flat) as f64;
         let v = if last > len {
             if g_or_y {
@@ -509,7 +509,7 @@ impl Exec<'_> {
             return bad_argument(name);
         };
         let lim = lim as u32;
-        let flat = self.heap.flatten(s)?;
+        let flat = self.heap.contiguous(s)?;
         let size = self.heap.str_len(flat) as usize;
         let prog = re::program(self.heap, r);
         let unicode = prog.flags().unicode_mode();
@@ -606,7 +606,7 @@ impl Exec<'_> {
         ) else {
             return bad_argument(name);
         };
-        let flat = self.heap.flatten(s)?;
+        let flat = self.heap.contiguous(s)?;
         let size = self.heap.str_len(flat) as usize;
         let template = self.heap.str_to_utf16(t);
         let prog = re::program(self.heap, r);

@@ -136,7 +136,7 @@ impl Exec<'_> {
                 FastStep::Done
             }
             Plan::Str(it, s, i) => {
-                let s = self.heap.flatten(s)?;
+                let s = self.heap.contiguous(s)?;
                 let n = match string::code_point_at(self.heap, s, i) {
                     Some(c) if c >= 65536.0 => 2,
                     _ => 1,

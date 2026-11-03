@@ -17,6 +17,10 @@ const HDR_FLAGS = LAYOUT.header.FLAGS;
 const K_STR8 = cells.Str8.kind;
 const K_STR16 = cells.Str16.kind;
 const K_ROPE = cells.Rope.kind;
+const K_SLICE = cells.Slice.kind;
+const SLICE_LEN = cells.Slice.fields.LEN.offset;
+const SLICE_PARENT = cells.Slice.fields.PARENT.offset;
+const SLICE_OFF = cells.Slice.fields.OFF.offset;
 const STR8_LEN = cells.Str8.fields.LEN.offset;
 const STR8_DATA = cells.Str8.tail.offset;
 const STR16_LEN = cells.Str16.fields.LEN.offset;
@@ -324,6 +328,12 @@ class Reader {
     if (kind === K_ROPE) {
       if (this.view.getUint16(off + HDR_FLAGS, true) & ROPE_APPEND) return this.appendRope(off);
       return this.rope(off);
+    }
+    if (kind === K_SLICE) {
+      // Units [OFF, OFF + LEN) of a flat one-byte string (D2542).
+      const parent = this.view.getUint32(off + SLICE_PARENT, true);
+      const at = parent + STR8_DATA + this.view.getUint32(off + SLICE_OFF, true);
+      return this.latin1(at, this.view.getUint32(off + SLICE_LEN, true));
     }
     throw new Error(`djs heap: cell ${off} is not a string`);
   }

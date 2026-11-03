@@ -34,7 +34,7 @@ use crate::PushOut;
 use alloc::vec::Vec;
 
 use super::arena::Arena;
-use super::cells::{EphemeronArray, Header, Object, Rope, flags, gc_bits};
+use super::cells::{EphemeronArray, Header, Object, Rope, Slice, Str8, flags, gc_bits};
 use super::layout::Ref;
 use super::object::ObjectClass;
 use super::walk::{self, Slot};
@@ -180,6 +180,15 @@ const fn plans() -> [SlotPlan; KINDS] {
 /// Bytes per block of the forwarding table: one `u64` of the bitmap.
 const BLOCK: u32 = 512;
 
+/// A full collection keeps a slice's parent that nothing but slices reaches only if the
+/// slices cover at least a `1/SLICE_KEEP_SHARE` of it, or it is shorter than
+/// [`SLICE_KEEP_LEN`] units; otherwise the slices get copies of their units and the
+/// parent dies (D2542). A short slice of a big string then does not keep the string.
+pub(crate) const SLICE_KEEP_SHARE: u64 = 4;
+
+/// See [`SLICE_KEEP_SHARE`].
+pub(crate) const SLICE_KEEP_LEN: u32 = 4096;
+
 struct Marker<'a> {
     arena: &'a mut Arena,
     /// The end of the old region: 0 for a full collection. Cells below it are live and
@@ -197,6 +206,11 @@ struct Marker<'a> {
     ephemerons: u32,
     /// Ephemeron tables in the old region (found by the old walk).
     old_ephemerons: u32,
+    /// A full collection: a slice's parent is not marked through the slice, but decided
+    /// on after the mark (`resolve_slices`, D2542).
+    weak_slices: bool,
+    /// Slices marked with their parent left to `resolve_slices`.
+    slices: u32,
     /// The old walk's finds for the update pass: slots holding a young reference (a
     /// `Value` slot, or a `Ref` slot with [`REMEMBER_REF`]) and old collections to
     /// rehash ([`REMEMBER_REHASH`]). Valid only while `remembered_ok`.
@@ -261,6 +275,11 @@ impl Marker<'_> {
             self.ephemerons += 1;
             return off;
         }
+        if kind == CellKind::Slice as u8 && self.weak_slices {
+            // Its parent waits for `resolve_slices`.
+            self.slices += 1;
+            return off;
+        }
         if is_leaf(kind) {
             // No traced slots: nothing to push.
             return off;
@@ -307,11 +326,55 @@ impl Marker<'_> {
     fn trace(&mut self, cell: u32) {
         let kb = self.arena.get(cell, Header::KIND);
         let kind = CellKind::from_u8(kb).unwrap_or_else(|| super::fail::bad_cell_kind(kb, cell));
-        if kind == CellKind::EphemeronArray {
+        if kind == CellKind::EphemeronArray || (kind == CellKind::Slice && self.weak_slices) {
             return;
         }
         let size = self.arena.get(cell, Header::SIZE);
         walk::for_each_slot(kind, cell, size, |slot| self.mark_slot(slot));
+    }
+
+    /// After the mark of a full collection: keeps each slice's parent that nothing else
+    /// reached if its slices cover enough of it ([`SLICE_KEEP_SHARE`]); otherwise keeps it
+    /// for this collection only and flags its slices (`SLICE_DETACH`) for a copy right
+    /// after it. Returns the flagged slices. Without memory for the bookkeeping every
+    /// parent is kept, as in a minor collection.
+    fn resolve_slices(&mut self) -> Vec<u32> {
+        let mut found: Vec<(u32, u32)> = Vec::new();
+        let mut detach: Vec<u32> = Vec::new();
+        let room = found.try_reserve_exact(self.slices as usize).is_ok()
+            && detach.try_reserve_exact(self.slices as usize).is_ok();
+        let mut at = self.live.next_live(self.old);
+        while let Some(c) = at {
+            let h: u64 = self.arena.read(c);
+            if h as u8 == CellKind::Slice as u8 {
+                let p = self.arena.get(c, Slice::PARENT).0;
+                if !room {
+                    self.mark(p);
+                } else if !self.is_marked(p) {
+                    found.push_out((p, c));
+                }
+            }
+            at = self.live.next_live(c + (h >> 32) as u32);
+        }
+        found.sort_unstable();
+        for group in found.chunk_by(|a, b| a.0 == b.0) {
+            let p = group[0].0;
+            let len = self.arena.get(p, Str8::LEN);
+            let covered: u64 = group
+                .iter()
+                .map(|&(_, c)| u64::from(self.arena.get(c, Slice::LEN)))
+                .sum();
+            // This collection keeps the parent either way: its slices still read it.
+            self.mark(p);
+            if len >= SLICE_KEEP_LEN && covered * SLICE_KEEP_SHARE < u64::from(len) {
+                for &(_, c) in group {
+                    let f = self.arena.get(c, Header::FLAGS);
+                    self.arena.set(c, Header::FLAGS, f | flags::SLICE_DETACH);
+                    detach.push_out(c);
+                }
+            }
+        }
+        detach
     }
 
     fn drain(&mut self) {
@@ -656,7 +719,11 @@ impl Heap {
     ///
     /// Returns the arena sizes before and after, and where the old region ends now: the
     /// live bytes below its old end (in a minor collection, its end).
-    pub(super) fn mark_compact(&mut self, old: u32) -> Result<(u32, u32, u32), HeapError> {
+    pub(super) fn mark_compact(
+        &mut self,
+        old: u32,
+        full: bool,
+    ) -> Result<(u32, u32, u32, Vec<u32>), HeapError> {
         let before = self.arena.len();
         let old_end = self.arena.get(0, super::cells::Roots::OLD_END);
         let base_end = self.arena.get(0, super::cells::Roots::BASE_END);
@@ -689,6 +756,8 @@ impl Heap {
             cap: stack_cap(before),
             ephemerons: 0,
             old_ephemerons: 0,
+            weak_slices: full,
+            slices: 0,
             remembered,
             remembered_ok: true,
         };
@@ -701,6 +770,12 @@ impl Heap {
         if m.ephemerons + m.old_ephemerons > 0 {
             m.clear_dead_pairs();
         }
+        // (Strings are not ephemeron keys, so slices are resolved after the fixpoint.)
+        let mut detach = if m.slices > 0 {
+            m.resolve_slices()
+        } else {
+            Vec::new()
+        };
         let (live, remembered, remembered_ok, old_ephemerons) =
             (m.live, m.remembered, m.remembered_ok, m.old_ephemerons);
         // Reused to remember the Map/Set objects (new offsets) for the rehash.
@@ -713,6 +788,9 @@ impl Heap {
             sum += 8 * w.count_ones();
         }
         let after = sum;
+        for d in &mut detach {
+            *d = live.forward(&table, *d);
+        }
         // The live bytes below the old region's end (a cell boundary, maybe of a dead
         // cell): its end after the slide.
         let slid = |b: u32| {
@@ -852,7 +930,7 @@ impl Heap {
             }
         }
         self.arena.set(0, super::cells::Roots::BASE_END, base_end);
-        Ok((before, after, old_end))
+        Ok((before, after, old_end, detach))
     }
 }
 

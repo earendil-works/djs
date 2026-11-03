@@ -8,8 +8,8 @@ use alloc::vec::Vec;
 
 use super::cells::{
     AtomTable, BigInt, EphemeronArray, FuncInfo, FuncTemplate, HANDLE_LIVE, HandleSlot,
-    HandleTable, Header, Object, PropTable, PropValues, RefArray, Roots, Rope, Shape, Str8, Str16,
-    Symbol, U32Array, ValueArray, flags,
+    HandleTable, Header, Object, PropTable, PropValues, RefArray, Roots, Rope, Shape, Slice, Str8,
+    Str16, Symbol, U32Array, ValueArray, flags,
 };
 use super::layout::{FieldTy, Ref};
 use super::object::ObjectClass;
@@ -262,7 +262,10 @@ impl Heap {
             Some(t) => kind_at(t).is_some_and(|k| kinds.contains(&k)),
         };
         let is_str = |k: Option<CellKind>| {
-            matches!(k, Some(CellKind::Str8 | CellKind::Str16 | CellKind::Rope))
+            matches!(
+                k,
+                Some(CellKind::Str8 | CellKind::Str16 | CellKind::Rope | CellKind::Slice)
+            )
         };
         let pow2 = |r: Ref| self.u32_array_len(r.0).is_power_of_two();
         match kind {
@@ -420,6 +423,14 @@ impl Heap {
                         && two == (two_of(left.0, kl) || two_of(right.0, kr))
                 }
             }
+            // Units of a flat one-byte string (D2542).
+            CellKind::Slice => {
+                let parent = a.get(cell, Slice::PARENT);
+                fits(parent, false, &[CellKind::Str8])
+                    && a.get(cell, Slice::OFF)
+                        .checked_add(a.get(cell, Slice::LEN))
+                        .is_some_and(|end| end <= a.get(parent.0, Str8::LEN))
+            }
             // Normalized: no high zero limb, zero is not negative.
             CellKind::BigInt => {
                 let len = a.get(cell, BigInt::LEN);
@@ -552,7 +563,7 @@ fn ref_fits(tag: Option<u16>, kind: Option<CellKind>) -> bool {
         (tag, kind),
         (
             Some(tag::STRING),
-            Some(CellKind::Str8 | CellKind::Str16 | CellKind::Rope)
+            Some(CellKind::Str8 | CellKind::Str16 | CellKind::Rope | CellKind::Slice)
         ) | (Some(tag::OBJECT), Some(CellKind::Object))
             | (Some(tag::SYMBOL), Some(CellKind::Symbol))
             | (Some(tag::BIGINT), Some(CellKind::BigInt))
@@ -564,6 +575,7 @@ fn ref_fits(tag: Option<u16>, kind: Option<CellKind>) -> bool {
                     | CellKind::Str8
                     | CellKind::Str16
                     | CellKind::Rope
+                    | CellKind::Slice
                     | CellKind::Object
                     | CellKind::Symbol
                     | CellKind::BigInt

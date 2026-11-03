@@ -271,7 +271,7 @@ fn char_code_at(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
         None => None,
         Some(None) => Some(Value::NAN),
         Some(Some(i)) => {
-            let s = heap.flatten(s)?;
+            let s = heap.contiguous(s)?;
             Some(Value::int(heap.char_code_at(s, i).unwrap_or(0) as i32))
         }
     })

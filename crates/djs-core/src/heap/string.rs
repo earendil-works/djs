@@ -27,7 +27,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 
-use super::cells::{Header, Rope, Str8, Str16, flags};
+use super::cells::{Header, Rope, Slice, Str8, Str16, flags};
 use super::layout::Ref;
 use super::{CellKind, Heap, HeapError};
 use crate::value::{Obj, Str};
@@ -52,6 +52,21 @@ const _: () =
 const _: () =
     assert!(Str8::HASH.offset == Str16::HASH.offset && Str8::HASH.offset == Rope::HASH.offset);
 const _: () = assert!(Str8::DATA.offset == Str16::DATA.offset);
+const _: () =
+    assert!(Slice::LEN.offset == Rope::LEN.offset && Slice::HASH.offset == Rope::HASH.offset);
+// Flattening turns a slice into a flattened rope in place: `PARENT` becomes `LEFT` (the
+// copy) and `OFF` becomes the null `RIGHT`.
+const _: () =
+    assert!(Slice::PARENT.offset == Rope::LEFT.offset && Slice::OFF.offset == Rope::RIGHT.offset);
+const _: () = assert!(Slice::LAYOUT.min_size == Rope::LAYOUT.min_size);
+
+/// A substring of at least this many code units is a [`Slice`] of its string instead of a
+/// copy (D2542): a 24-byte cell instead of 16 bytes plus the units.
+pub const SLICE_MIN_LEN: u32 = 32;
+
+/// Only strings of at least this many code units are sliced: substrings of short strings
+/// are copied, which costs little and keeps no parent alive.
+pub const SLICE_PARENT_MIN_LEN: u32 = 256;
 
 /// A borrowed view of a flat string's code units.
 #[derive(Clone, Copy, Debug)]
@@ -332,6 +347,10 @@ impl<'a> Iterator for Chunks<'a> {
                     }
                 }
                 CellKind::Rope => self.heap.push_children(off, &mut self.stack),
+                CellKind::Slice => {
+                    let (parent, start) = self.heap.slice_parts(off);
+                    return Some(self.heap.range_view(parent, start, len));
+                }
                 k => super::fail::not_a_string(k, off),
             }
         }
@@ -366,6 +385,32 @@ impl Heap {
     fn push_children(&self, off: u32, stack: &mut Vec<(u32, u32)>) {
         let (kids, n) = self.children(off);
         stack.extend(kids[..n].iter().rev());
+    }
+
+    /// The parent and the first unit's index of the slice `off`.
+    #[inline]
+    fn slice_parts(&self, off: u32) -> (u32, u32) {
+        let a = self.arena();
+        (a.get(off, Slice::PARENT).0, a.get(off, Slice::OFF))
+    }
+
+    /// Units `[start, start + len)` of the flat one-byte cell `off` (a slice's parent).
+    fn range_view(&self, off: u32, start: u32, len: u32) -> StrView<'_> {
+        StrView::Latin1(self.arena().slice(off + Str8::DATA.offset + start, len))
+    }
+
+    /// Where the units of the leaf `cell` (a flat cell or a slice) start in the arena, and
+    /// whether it is two-byte.
+    fn leaf_data(&self, cell: u32) -> (u32, bool) {
+        match self.cell_kind(cell) {
+            CellKind::Str8 => (cell + Str8::DATA.offset, false),
+            CellKind::Str16 => (cell + Str16::DATA.offset, true),
+            CellKind::Slice => {
+                let (parent, start) = self.slice_parts(cell);
+                (parent + Str8::DATA.offset + start, false)
+            }
+            k => super::fail::not_a_string(k, cell),
+        }
     }
 
     /// The first `len` code units of the flat cell `off`.
@@ -447,8 +492,8 @@ impl Heap {
     }
 
     /// A one-byte string of the pieces `s[a .. b)`, copied within the arena once (no
-    /// bounce through a Rust buffer, 0110). Each piece must be flat or an append rope
-    /// (`str_view_flat` first) and one-byte; `total` is the sum of the lengths.
+    /// bounce through a Rust buffer, 0110). Each piece must be flat, an append rope or a
+    /// slice (`str_view_flat` first) and one-byte; `total` is the sum of the lengths.
     pub fn alloc_latin1_pieces(
         &mut self,
         pieces: &[(Str, u32, u32)],
@@ -457,24 +502,28 @@ impl Heap {
         let dst = self.alloc_flat(total, false)?;
         let mut at = dst + Str8::DATA.offset;
         for &(s, a, b) in pieces {
-            // A flat one-byte cell from one kind read (most pieces); else the rope cases.
-            let cell = if self.arena().get(s.0, Header::KIND) == CellKind::Str8 as u8 {
-                s.0
+            // A flat one-byte cell from one kind read (most pieces); else the rope and
+            // slice cases.
+            let (cell, from) = if self.arena().get(s.0, Header::KIND) == CellKind::Str8 as u8 {
+                (s.0, 0)
             } else {
                 let s = self.resolve_str(s);
-                let cell = self.append_rope_buffer(s).unwrap_or(s.0);
+                let (cell, from) = match self.cell_kind(s.0) {
+                    CellKind::Slice => self.slice_parts(s.0),
+                    _ => (self.append_rope_buffer(s).unwrap_or(s.0), 0),
+                };
                 assert!(
                     self.cell_kind(cell) == CellKind::Str8,
                     "alloc_latin1_pieces: not a flat one-byte piece"
                 );
-                cell
+                (cell, from)
             };
             assert!(
-                a <= b && b <= self.str_len(Str(cell)),
+                a <= b && from + b <= self.str_len(Str(cell)),
                 "alloc_latin1_pieces: piece out of range"
             );
             self.arena_mut()
-                .copy_within(cell + Str8::DATA.offset + a, b - a, at);
+                .copy_within(cell + Str8::DATA.offset + from + a, b - a, at);
             at += b - a;
         }
         Ok(Str(dst))
@@ -605,7 +654,7 @@ impl Heap {
     /// Whether the string (flat or rope) has a code unit above 0xFF.
     pub fn str_is_two_byte(&self, s: Str) -> bool {
         match self.cell_kind(s.0) {
-            CellKind::Str8 => false,
+            CellKind::Str8 | CellKind::Slice => false,
             CellKind::Str16 => true,
             CellKind::Rope => self.cell_flags(s.0) & flags::ROPE_TWO_BYTE != 0,
             k => super::fail::not_a_string(k, s.0),
@@ -638,8 +687,8 @@ impl Heap {
         self.prefix_view(s.0, self.str_len(s))
     }
 
-    /// The code units of `s` if it is flat (a flattened rope or an append rope too), else
-    /// `None`.
+    /// The code units of `s` if they lie in one piece (a flat cell, a flattened rope, an
+    /// append rope or a slice), else `None`.
     pub fn str_view(&self, s: Str) -> Option<StrView<'_>> {
         if let Some(v) = self.flat_fast(s) {
             return Some(v);
@@ -650,12 +699,16 @@ impl Heap {
         }
         match self.cell_kind(s.0) {
             CellKind::Rope => None,
+            CellKind::Slice => {
+                let (parent, start) = self.slice_parts(s.0);
+                Some(self.range_view(parent, start, self.str_len(s)))
+            }
             _ => Some(self.flat_view(s)),
         }
     }
 
     /// The code units of `s`, flattening it first if it is a concatenation rope. An append
-    /// rope is read in place (no copy, and its buffer stays appendable).
+    /// rope and a slice are read in place (no copy; the buffer stays appendable).
     pub fn str_view_flat(&mut self, s: Str) -> Result<StrView<'_>, HeapError> {
         // (Two lookups: the borrow checker does not let the first one's view escape.)
         if self.flat_fast(s).is_some() {
@@ -664,6 +717,10 @@ impl Heap {
         let s = self.resolve_str(s);
         if let Some(buf) = self.append_rope_buffer(s) {
             return Ok(self.prefix_view(buf, self.str_len(s)));
+        }
+        if self.cell_kind(s.0) == CellKind::Slice {
+            let (parent, start) = self.slice_parts(s.0);
+            return Ok(self.range_view(parent, start, self.str_len(s)));
         }
         let f = self.flatten(s)?;
         Ok(self.flat_view(f))
@@ -694,6 +751,14 @@ impl Heap {
         loop {
             match self.cell_kind(s.0) {
                 CellKind::Str8 | CellKind::Str16 => return Some(self.flat_view(s).get(i as usize)),
+                CellKind::Slice => {
+                    let (parent, start) = self.slice_parts(s.0);
+                    return Some(
+                        self.arena()
+                            .read::<u8>(parent + Str8::DATA.offset + start + i)
+                            as u16,
+                    );
+                }
                 _ => {
                     let a = self.arena();
                     if self.cell_flags(s.0) & flags::ROPE_APPEND != 0 {
@@ -770,8 +835,17 @@ impl Heap {
         for &(leaf, len) in leaves {
             let leaf = leaf as usize;
             let len = len as usize;
-            let data = leaf + Str8::DATA.offset as usize;
             let leaf_two = src[leaf] == CellKind::Str16 as u8;
+            let data = if src[leaf] == CellKind::Slice as u8 {
+                // A slice's parent is older than the slice, so below `dst` too.
+                let word = |at: usize| u32::from_le_bytes(src[at..at + 4].try_into().unwrap());
+                let parent = word(leaf + Slice::PARENT.offset as usize) as usize;
+                parent
+                    + Str8::DATA.offset as usize
+                    + word(leaf + Slice::OFF.offset as usize) as usize
+            } else {
+                leaf + Str8::DATA.offset as usize
+            };
             match (leaf_two, two_byte) {
                 (false, false) => {
                     out[pos..pos + len].copy_from_slice(&src[data..data + len]);
@@ -860,9 +934,8 @@ impl Heap {
     /// Copies the first `len` units of the flat cell `src` into the buffer `buf` at unit
     /// `at` (widening when needed; anywhere in the arena).
     fn copy_piece(&mut self, src: u32, len: u32, buf: u32, at: u32) {
-        let src_two = self.cell_kind(src) == CellKind::Str16;
+        let (from, src_two) = self.leaf_data(src);
         let wide = self.cell_kind(buf) == CellKind::Str16;
-        let from = src + Str8::DATA.offset;
         let a = self.arena_mut();
         match (src_two, wide) {
             (false, false) => a.copy_within(from, len, buf + Str8::DATA.offset + at),
@@ -930,7 +1003,11 @@ impl Heap {
     /// whole buffer hands out the buffer itself, frozen first (from then on it may be
     /// referenced directly, so it is never written again); a shorter one is copied.
     pub fn flatten(&mut self, s: Str) -> Result<Str, HeapError> {
-        if self.arena().get(s.0, Header::KIND) != CellKind::Rope as u8 {
+        let k = self.arena().get(s.0, Header::KIND);
+        if k == CellKind::Slice as u8 {
+            return self.unslice(s);
+        }
+        if k != CellKind::Rope as u8 {
             // Flat already (a flat cell's kind is checked where it is read).
             return Ok(s);
         }
@@ -969,6 +1046,69 @@ impl Heap {
         let f = self.cell_flags(s.0);
         self.set_cell_flags(s.0, (f & !flags::ROPE_APPEND) | flags::ROPE_FLATTENED);
         Ok(Str(dst))
+    }
+
+    /// Copies the slice `s` into a flat cell and turns `s` into a flattened rope over it,
+    /// in place: later reads of `s` find the copy, and the parent is no longer kept.
+    pub(crate) fn unslice(&mut self, s: Str) -> Result<Str, HeapError> {
+        let len = self.str_len(s);
+        let dst = self.alloc_flat(len, false)?;
+        let (from, _) = self.leaf_data(s.0);
+        let a = self.arena_mut();
+        a.copy_within(from, len, dst + Str8::DATA.offset);
+        let hash = a.get(s.0, Slice::HASH);
+        a.set(dst, Str8::HASH, hash);
+        a.set(s.0, Header::KIND, CellKind::Rope as u8);
+        a.set(s.0, Rope::LEFT, Ref(dst));
+        a.set(s.0, Rope::RIGHT, Ref::NULL);
+        self.set_cell_flags(s.0, flags::ROPE_FLATTENED);
+        Ok(Str(dst))
+    }
+
+    /// `s` itself if its units lie in one piece (`str_view` reads it in place: a flat
+    /// cell, an append rope, a slice), else its flat form. For readers that need a view
+    /// but no flat cell: unlike [`Heap::flatten`], a slice is not copied.
+    pub fn contiguous(&mut self, s: Str) -> Result<Str, HeapError> {
+        if self.str_view(s).is_some() {
+            return Ok(s);
+        }
+        self.flatten(s)
+    }
+
+    /// A string of the units `s[start .. end)` that shares `s`'s units instead of
+    /// copying them (D2542), when that pays: at least [`SLICE_MIN_LEN`] units of a
+    /// one-byte string of at least [`SLICE_PARENT_MIN_LEN`]. `None` otherwise (the caller
+    /// copies). A slice of a slice points at the same parent.
+    pub fn substring_slice(
+        &mut self,
+        s: Str,
+        start: u32,
+        end: u32,
+    ) -> Result<Option<Str>, HeapError> {
+        if end - start < SLICE_MIN_LEN || self.str_len(s) < SLICE_PARENT_MIN_LEN {
+            return Ok(None);
+        }
+        let mut s = self.resolve_str(s);
+        let (parent, base) = match self.cell_kind(s.0) {
+            CellKind::Str8 if self.cell_flags(s.0) & flags::STR_APPEND_BUF == 0 => (s.0, 0),
+            CellKind::Slice => self.slice_parts(s.0),
+            CellKind::Rope if !self.str_is_two_byte(s) => {
+                // A concatenation (or an append rope): its flat form is the parent (a
+                // whole append buffer is frozen by `flatten` and used as is).
+                s = self.flatten(s)?;
+                (s.0, 0)
+            }
+            _ => return Ok(None),
+        };
+        if self.cell_kind(parent) != CellKind::Str8 {
+            return Ok(None);
+        }
+        let c = self.alloc_cell(CellKind::Slice, Slice::LAYOUT.min_size)?;
+        let a = self.arena_mut();
+        a.set(c, Slice::LEN, end - start);
+        a.set(c, Slice::PARENT, Ref(parent));
+        a.set(c, Slice::OFF, base + start);
+        Ok(Some(Str(c)))
     }
 
     /// Concatenates two strings. Results shorter than [`ROPE_MIN_LEN`] are flat copies;
@@ -1134,7 +1274,8 @@ impl Heap {
                 let kind = h as u8;
                 let string = kind == CellKind::Str8 as u8
                     || kind == CellKind::Str16 as u8
-                    || kind == CellKind::Rope as u8;
+                    || kind == CellKind::Rope as u8
+                    || kind == CellKind::Slice as u8;
                 if pass == 0 && string && c >= base {
                     self.arena_mut().set(c, Str8::HASH, 0);
                 } else if pass == 1

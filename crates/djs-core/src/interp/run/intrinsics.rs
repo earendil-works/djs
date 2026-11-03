@@ -994,7 +994,7 @@ impl Exec<'_> {
                 let (Some(s), Some(i)) = (a0.as_string(), arg(self, 1).as_number()) else {
                     return bad_argument(info.name);
                 };
-                let s = self.heap.flatten(s)?;
+                let s = self.heap.contiguous(s)?;
                 let i = i as u32;
                 let n = match string::code_point_at(self.heap, s, i) {
                     Some(c) if c >= 65536.0 => 2,
@@ -1160,7 +1160,7 @@ impl Exec<'_> {
                 };
                 // A rope is flattened once (the result is cached in the rope), so a loop
                 // of charCodeAt over a built-up string is not quadratic in its depth.
-                let s = self.heap.flatten(s)?;
+                let s = self.heap.contiguous(s)?;
                 // Integral, non-negative Number arguments (the builtins clamp them).
                 let idx = |v: Value| {
                     v.as_number()

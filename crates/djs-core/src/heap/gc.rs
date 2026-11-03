@@ -45,10 +45,10 @@
 //! [`Roots`]: super::cells::Roots
 use crate::PushOut;
 
-use super::arena::Arena;
+use super::arena::{self, Arena};
 use alloc::vec::Vec;
 
-use super::cells::{EphemeronArray, Header, Object, Roots, Rope, flags, gc_bits};
+use super::cells::{EphemeronArray, Header, Object, Roots, Rope, Slice, Str8, flags, gc_bits};
 use super::layout::Ref;
 use super::object::ObjectClass;
 use super::walk::{self, Slot};
@@ -173,10 +173,34 @@ fn forward(from: &mut Arena, to: &mut Arena, mut off: u32, base: u32) -> u32 {
     if from.get(off, Header::GC) & gc_bits::FORWARDED != 0 {
         return from.read::<u32>(off + FORWARD);
     }
+    if from.get(off, Header::KIND) == CellKind::Slice as u8 {
+        return forward_slice(from, to, off);
+    }
     let size = from.get(off, Header::SIZE);
     let new = to
         .alloc_init(size, 0, from.slice(off, size))
         .expect("to-space is reserved for the whole from-space");
+    from.set(off, Header::GC, gc_bits::FORWARDED);
+    from.write::<u32>(off + FORWARD, new);
+    new
+}
+
+/// A slice comes out of a canonical copy as the flat string it reads (D2542): the image,
+/// and so the canonical hash, does not depend on which strings are slices.
+fn forward_slice(from: &mut Arena, to: &mut Arena, off: u32) -> u32 {
+    let len = from.get(off, Slice::LEN);
+    let size = Str8::DATA
+        .cell_size(len)
+        .expect("a slice's length fits a flat string");
+    let parent = from.get(off, Slice::PARENT).0;
+    let data = parent + Str8::DATA.offset + from.get(off, Slice::OFF);
+    let new = to
+        .alloc_init(size, Str8::DATA.offset, from.slice(data, len))
+        .expect("the canonical to-space has no cap below the largest arena");
+    to.set(new, Header::KIND, CellKind::Str8 as u8);
+    to.set(new, Header::SIZE, size);
+    to.set(new, Str8::LEN, len);
+    to.set(new, Str8::HASH, from.get(off, Slice::HASH));
     from.set(off, Header::GC, gc_bits::FORWARDED);
     from.write::<u32>(off + FORWARD, new);
     new
@@ -212,9 +236,18 @@ impl Heap {
             return Err(HeapError::HostOutOfMemory);
         }
         let base = self.base_end();
-        let (before, after, old) = self.without_barrier(|h| h.mark_compact(base))?;
+        let (before, after, old, detach) = self.without_barrier(|h| h.mark_compact(base, true))?;
         self.set_old_region(old, 0);
         self.after_collect(after);
+        // Slices whose parent only they kept get their own units now (D2542); the parent
+        // dies at the next full collection. Without room a slice stays as it is.
+        for s in detach {
+            let s = crate::value::Str(s);
+            if self.unslice(s).is_err() {
+                let f = self.cell_flags(s.0);
+                self.set_cell_flags(s.0, f & !flags::SLICE_DETACH);
+            }
+        }
         Ok(GcStats { before, after })
     }
 
@@ -255,7 +288,7 @@ impl Heap {
             return Err(HeapError::HostOutOfMemory);
         }
         let old = self.old_end();
-        let (before, after, _) = self.without_barrier(|h| h.mark_compact(old))?;
+        let (before, after, _, _) = self.without_barrier(|h| h.mark_compact(old, false))?;
         let minors = self.arena.get(0, Roots::MINORS);
         self.set_old_region(old, minors + 1);
         self.after_collect(after);
@@ -306,7 +339,9 @@ impl Heap {
         if core::mem::take(&mut self.fail_next_gc_reserve) {
             return Err(HeapError::HostOutOfMemory);
         }
-        let mut to = Arena::with_capacity(before as usize, self.arena.limit() as usize)?;
+        // Uncapped: slices come out as flat strings, so the copy can outgrow the heap.
+        let limit = self.arena.limit();
+        let mut to = Arena::with_capacity(before as usize, arena::MAX_ARENA as usize)?;
         let base = self.base_end();
         let from = &mut self.arena;
         // The builtin prefix (D2064) is copied as it is, at the same offsets: only the
@@ -401,6 +436,7 @@ impl Heap {
         // Rust allocations between collections, and pinning it raised peak memory.
         // The barrier stays armed: the prefix was copied as it is (checked below).
         to.set_trap_end(self.arena.trap_end());
+        to.set_limit(limit);
         self.arena = to;
         // Canonical images are sealed (the base image's old region is all of it), and
         // their bytes do not depend on where the old region ended (D1730). The first

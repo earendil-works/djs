@@ -55,6 +55,9 @@ pub(crate) fn substring(heap: &mut Heap, s: Str, start: u32, end: u32) -> Result
     if start >= end {
         return Ok(heap.alloc_latin1(&[])?);
     }
+    if let Some(slice) = heap.substring_slice(s, start, end)? {
+        return Ok(slice);
+    }
     join(heap, &mut [(s, start, end)])
 }
 
@@ -166,7 +169,7 @@ pub(crate) fn index_of(
 ) -> Result<f64, Fault> {
     // Both flat, then both read in place (0110: no copy of the needle).
     heap.str_view_flat(s)?;
-    let search = heap.flatten(search)?;
+    let search = heap.contiguous(search)?;
     let from = from as usize;
     if !last
         && let (Some(StrView::Latin1(h)), Some(StrView::Latin1(t))) =
