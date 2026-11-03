@@ -1,7 +1,7 @@
 # 0158: Instance memory: smaller reservation, arena at the end, smaller stack, base outside memory
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0158-instance-memory
 depends-on: 0128, 0139, 0151 (L4 landed)
 guide: docs/guide/arena.md, gc.md, host.md as affected
