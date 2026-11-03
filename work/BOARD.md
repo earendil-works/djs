@@ -6,6 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0167 | Persist functions and closures as readable code (design + prototype) | portable | .worktrees/portable |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 
 ## Open (ready)
@@ -18,7 +19,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | depends-on |
 | --- | --- | --- |
 | - | Vec push_out/with_capacity in bloat's files (~1 KB); scratch buffers for Vec drops (few KB) | 0151 L3 |
-| - | Result buffers + snapshots referencing tool results (0165 steps 2-3) | owner: pi keeps result bytes? |
+| - | Result buffers + snapshots referencing tool results (0165 steps 2-3) | pi adopting snapshots as a fast path (pi has no snapshots; replay + NestedCallDoc keep results) |
 | - | Codec-free session images for browsers (pico lesson 4) | - |
 
 ## Done
