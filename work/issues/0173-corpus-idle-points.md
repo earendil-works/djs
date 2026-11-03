@@ -1,7 +1,7 @@
 # 0173: Idle points in the difftest corpus (`host.later`)
 
-status: open
-agent: -
+status: in-progress
+agent: infra
 branch: issue/0173-corpus-idle-points
 depends-on: -
 touches: tests/corpus/prelude.js, scripts/harvest/ (the importer's fake tools) and the regenerated tests/corpus/codemode-harvest, crates/djs-difftest (djs and qjs glue), TESTING.md
