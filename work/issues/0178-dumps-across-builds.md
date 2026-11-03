@@ -1,7 +1,7 @@
 # 0178: Continuation dumps across builds
 
-status: open
-agent: -
+status: in-progress
+agent: portable
 branch: issue/0178-dumps-across-builds
 depends-on: 0172
 touches: tests/dump/v2/, crates/djs-core/src/vm/dump_tests.rs, scripts/ (the two-commit check), TESTING.md
