@@ -530,12 +530,12 @@ fn prelude_functions(heap: &Heap) -> Vec<(Value, String)> {
 
 /// `path` followed by `seg`; an accessor segment's `get `/`set ` goes to the front.
 fn child_path(path: &str, seg: &str) -> String {
-    match seg
-        .strip_prefix("get ")
-        .or_else(|| seg.strip_prefix("set "))
-    {
-        Some(rest) => cat!(&seg[..3], " ", path, rest),
-        None => cat!(path, seg),
+    if let Some(rest) = seg.strip_prefix("get ") {
+        cat!("get ", path, rest)
+    } else if let Some(rest) = seg.strip_prefix("set ") {
+        cat!("set ", path, rest)
+    } else {
+        cat!(path, seg)
     }
 }
 

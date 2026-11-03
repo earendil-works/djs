@@ -952,7 +952,12 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
                 0
             }
             Some(Err(e)) => {
-                s.set_out(e.0.join("\n").as_bytes());
+                let mut lines = String::new();
+                for r in &e.0 {
+                    lines.push_str(r);
+                    lines.push('\n');
+                }
+                s.set_out(lines.as_bytes());
                 1
             }
             None => 2,

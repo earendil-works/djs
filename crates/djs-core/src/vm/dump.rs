@@ -531,7 +531,7 @@ fn declared_name(kind: u32, src: &str) -> Option<&str> {
         return None;
     }
     let end = s.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))?;
-    Some(&s[..end]).filter(|n| !n.is_empty())
+    s.get(..end).filter(|n| !n.is_empty())
 }
 
 /// The heap cell of an object, symbol or internal value.
@@ -552,7 +552,7 @@ fn named(path: &str) -> Named {
         return Named::Internal;
     }
     if let Some(r) = p.strip_prefix('%') {
-        let r = &r[..r.find('%').unwrap_or(r.len())];
+        let r = r.split('%').next().unwrap_or_default();
         if !LOADER_ROOTS.iter().any(|(n, _)| *n == r) {
             return Named::Unreachable;
         }
@@ -1859,7 +1859,7 @@ impl<'a> Dumper<'a> {
         let mut taken: Vec<String> = Vec::new();
         for &b in &boxes {
             let p = &self.nodes[b].path;
-            let name = String::from(&p[p.rfind('~').map_or(0, |i| i + 1)..]);
+            let name = String::from(p.rsplit('~').next().unwrap_or_default());
             if taken.contains(&name) {
                 let path = p.clone();
                 self.refuse(
