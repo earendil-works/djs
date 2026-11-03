@@ -1,7 +1,7 @@
 # 0163: Seeded hashing for VM atoms and Map/Set
 
-status: open
-agent: -
+status: in-progress
+agent: strings
 branch: issue/0163-seeded-hashing
 depends-on: 0150
 guide: docs/guide/determinism.md, strings or collections pages as affected
