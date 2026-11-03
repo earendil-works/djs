@@ -37,6 +37,14 @@ state that is dropped when `compile` returns. A template holds the bytecode, the
 constant pool, the line and handler tables and the child templates, so compiled code is
 part of the heap and of every snapshot.
 
+The template is laid out for the builtins, which are most of the templates in every
+heap (D2444). The bytecode, the capture descriptors and the handler table sit inline at
+the end of the template cell, so a call finds its code at a fixed offset from the
+template and no separate code cell pays a header and padding. Everything a builtin never
+has, the child templates and the debug info (script, source span, line table, local
+names), lives in a separate info cell that a builtin's template does not point to: a
+builtin's template is 48 bytes plus its code.
+
 ## Emitting while parsing
 
 Expressions are parsed by precedence climbing, and each operator is emitted after its
@@ -332,7 +340,7 @@ REPL (D004, D1581).
 
 Decisions on this page:
 
-<!-- gen:decisions D1080 D1360 D1081 D1083 D1082 D1130 D1131 D1860 D1620 D1480 D1481 D1482 D008 D1582 D2443 -->
+<!-- gen:decisions D1080 D1360 D1081 D1083 D1082 D1130 D1131 D1860 D1620 D1480 D1481 D1482 D008 D1582 D2443 D2444 -->
 - D1080: Speculative parsing never emits bytecode
 - D1360: destructuring patterns are parsed after their value (deferred patterns)
 - D1081: Name resolution runs once per compilation unit, children first
@@ -348,4 +356,5 @@ Decisions on this page:
 - D008: Codemode top level is a function body
 - D1582: `import()` without modules: compiled, rejected in a job
 - D2443: Short opcode forms and shortened jumps, a recorded trade
+- D2444: Code inline in the template, the rest of a user function in FuncInfo
 <!-- /gen -->

@@ -1,4 +1,4 @@
-//! Heap helpers for compiled code cells (`FuncTemplate`, `FuncInfo`, `Bytes`, `RefArray`) and the
+//! Heap helpers for compiled code cells (`FuncTemplate`, `FuncInfo`, `Bytes`) and the
 //! template disassembler. The cell layouts live in `heap/cells.rs`.
 
 use alloc::string::String;
@@ -8,9 +8,7 @@ use core::fmt::Write;
 use super::disasm::{DisasmContext, disasm};
 use super::handlers::{Handler, HandlerTable, encode_handlers};
 use super::stack::{StackError, StackScratch, check_stack_in};
-use crate::heap::cells::{
-    Bytes, CellKind, FuncInfo, FuncTemplate, RefArray, Script, U32Array, ValueArray,
-};
+use crate::heap::cells::{Bytes, CellKind, FuncInfo, FuncTemplate, Script, U32Array, ValueArray};
 use crate::heap::{Atom, Heap, HeapError, Ref};
 use crate::value::{Str, Value};
 
@@ -65,7 +63,7 @@ pub struct TemplateParts<'a> {
     pub params: u16,
     pub length: u16,
     pub locals: u16,
-    /// Capture descriptors (`FuncTemplate::CAPTURE_DESC`), one per capture.
+    /// Capture descriptors (`ops::capture_desc`), one per capture.
     pub captures: &'a [u32],
     /// Final code (labels resolved).
     pub code: &'a [u8],
@@ -366,33 +364,6 @@ pub fn bytes_of(heap: &Heap, r: Ref) -> &[u8] {
             heap.arena().slice(Bytes::DATA.at(off, 0), len)
         }
     }
-}
-
-/// Allocates a `RefArray` holding `refs`.
-pub fn alloc_ref_array(heap: &mut Heap, refs: &[Ref]) -> Result<Ref, HeapError> {
-    let len = u32::try_from(refs.len()).map_err(|_| HeapError::OutOfMemory)?;
-    let size = RefArray::REFS
-        .cell_size(len)
-        .ok_or(HeapError::OutOfMemory)?;
-    let off = heap.alloc_cell(CellKind::RefArray, size)?;
-    let a = heap.arena_mut();
-    a.set(off, RefArray::LEN, len);
-    for (i, &r) in refs.iter().enumerate() {
-        a.write(RefArray::REFS.at(off, i as u32), r);
-    }
-    Ok(Ref(off))
-}
-
-/// Entry `i` of a `RefArray` (`None` for null arrays and out of range).
-pub fn ref_array_get(heap: &Heap, r: Ref, i: u32) -> Option<Ref> {
-    let off = r.get()?;
-    debug_assert_eq!(heap.cell_kind(off), CellKind::RefArray);
-    (i < heap.arena().get(off, RefArray::LEN)).then(|| heap.arena().read(RefArray::REFS.at(off, i)))
-}
-
-pub fn ref_array_len(heap: &Heap, r: Ref) -> u32 {
-    r.get()
-        .map_or(0, |off| heap.arena().get(off, RefArray::LEN))
 }
 
 fn value_array(heap: &Heap, r: Ref) -> Vec<Value> {

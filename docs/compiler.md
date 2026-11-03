@@ -934,7 +934,7 @@ parent, so this visits children before parents (QuickJS does the same in
    - Function entry gets a prologue: boxes for captured params, `this`, `arguments`
      (`special_object` + store), and `var`s.
 4. Jump fixups (4.3), stack depth (4.4), line table and handler table remap, then
-   write the template cell (6.1). Children were written first, so `CHILDREN` can
+   write the template cell (6.1). Children were written first, so its `FuncInfo` can
    refer to them.
 
 `name_*` resolution table:
@@ -953,7 +953,8 @@ parent, so this visits children before parents (QuickJS does the same in
 ### 5.4 Captures
 
 - An inner function's capture list is `[Capture]`, `Local(var_slot_in_parent)` or
-  `Outer(capture_idx_in_parent)`. It goes into the template (`CAPTURE_DESC`).
+  `Outer(capture_idx_in_parent)`. It goes into the template (the capture descriptors
+  after its code, D2444).
 - `fclosure child` builds the closure: for each entry it copies the Box reference from
   the parent frame's local slot (`Local`) or from the parent closure's captures
   (`Outer`) into the new function object (6.3).
@@ -1144,9 +1145,9 @@ for the whole compilation.
 
 ```rust
 cells! {
-    /// Immutable compiled function (one per source function). As built (0098, D1980):
-    /// the debug fields from LINES on are optional, so a privileged (prelude) template
-    /// is 56 bytes and others 80.
+    /// Immutable compiled function (one per source function). As built (0151, D2444):
+    /// code, capture descriptors and handlers inline; children and the debug info in a
+    /// FuncInfo, which privileged (prelude) templates do not have. 48 bytes + code.
     FuncTemplate {
         FLAGS: u32 = 8,        // kind (4 bits), async, generator, simple_params,
                                // uses_arguments, uses_this, class_ctor, derived, ...
@@ -1157,27 +1158,30 @@ cells! {
         STACK: u16 = 22,       // max operand depth (4.4)
         CAPTURES: u16 = 24,
         IC_COUNT: u16 = 26,    // inline cache sites (D1620)
-        CODE: Ref = 28,        // Bytes: final bytecode
+        CODE_LEN: u32 = 28,    // bytecode length at the start of DATA
         CONSTS: Ref = 32,      // ValueArray: numbers, strings, template-object caches; or null
-        CHILDREN: Ref = 36,    // RefArray of FuncTemplate; or null
-        CAPTURE_DESC: Ref = 40,// U32Array: bit 31 = Outer, low bits = slot/index; or null
-        HANDLERS: Ref = 44,    // Bytes: 16-byte (start, end, handler, depth) records; or null
-        IC: Ref = 48,          // U32Array: the inline cache slots; or null
-        NATIVE: u16 = 52,      // @native builtin index (0063)
-        FAST: u16 = 54,        // @fast builtin index (D1850)
-        // optional (absent from privileged templates):
-        LINES: Ref = 56,       // Bytes: line table (6.2)
-        SCRIPT: Ref = 60,      // Script
-        SRC_START: u32 = 64,   // source span of the function (Function.prototype.toString, D009)
-        SRC_END: u32 = 68,
-        NAMES: Ref = 72,       // U32Array of atoms: locals, then captures (TDZ messages,
+        IC: Ref = 36,          // U32Array: the inline cache slots; or null
+        INFO: Ref = 40,        // FuncInfo; or null
+        NATIVE: u16 = 44,      // @native builtin index (0063)
+        FAST: u16 = 46,        // @fast builtin index (D1850)
+    } tail DATA: [u8] = 48;    // code, then CAPTURES capture descriptors (u32: bit 31 =
+                               // Outer, low bits = slot/index), then 16-byte (start, end,
+                               // handler, depth) handler records to the end of the cell
+    /// What privileged templates never have.
+    FuncInfo {
+        SCRIPT: Ref = 8,       // Script
+        SRC_START: u32 = 12,   // source span of the function (Function.prototype.toString, D009)
+        SRC_END: u32 = 16,
+        LINES: Ref = 20,       // Bytes: line table (6.2)
+        NAMES: Ref = 24,       // U32Array of atoms: locals, then captures (TDZ messages,
                                // disassembler, debugger)
-    } min 56;
+        CHILD_COUNT: u32 = 28,
+    } tail CHILDREN: [Ref] = 32; // FuncTemplate
     /// One per compiled source: name for stack traces, optionally the source text.
     Script { NAME: Ref = 8 /* Str */, SOURCE: Ref = 12 /* Str or null */ };
     /// A captured binding (`BoxCell` in code, so it does not shadow `alloc::boxed::Box`).
     BoxCell { VALUE: Value = 8 };
-    /// Raw bytes, not traced (bytecode, line tables).
+    /// Raw bytes, not traced (line tables).
     Bytes { LEN: u32 = 8 } tail DATA: [u8] = 12;
     /// Traced references to non-JS cells.
     RefArray { LEN: u32 = 8 } tail REFS: [Ref] = 12;
@@ -1186,7 +1190,7 @@ cells! {
 
 Constant pool: `CONSTS` holds JS Values only (numbers that are not int32 or i8, strings
 deduplicated per function during compilation, later BigInts). Atoms are immediates,
-not constants. Child templates are in `CHILDREN`, so the constant pool never holds a
+not constants. Child templates are in `FuncInfo::CHILDREN`, so the constant pool never holds a
 non-JS reference. A tagged-template site owns a `CONSTS` slot that starts
 `undefined` and caches the template object on first evaluation (spec: one object per
 site). This is a mutation of the constant pool, which snapshots capture like

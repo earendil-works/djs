@@ -23,7 +23,7 @@ pub struct DisasmContext<'a> {
     pub heap: Option<&'a Heap>,
     /// The constant pool.
     pub consts: &'a [Value],
-    /// Local names, then capture names (`FuncTemplate::NAMES`).
+    /// Local names, then capture names (`FuncInfo::NAMES`).
     pub names: &'a [Atom],
     /// How many of `names` are locals.
     pub locals: usize,

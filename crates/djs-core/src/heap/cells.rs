@@ -391,7 +391,7 @@ cells! {
         LEN: u32 = 8,
     } tail DATA: [u8] = 12;
 
-    /// References to cells that are not JS values (child templates).
+    /// References to cells that are not JS values (shape transitions).
     16 => RefArray {
         /// Entries in use.
         LEN: u32 = 8,

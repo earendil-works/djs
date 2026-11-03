@@ -6965,3 +6965,28 @@ target/slim:
 Its size has its own ratchet, `slim_ceiling_gzip` in tests/scores/size.tsv
 (`budget.py --slim`), without the 1.5x budget it is under by design. The rest of the gate
 runs the full build only.
+## D2444: Code inline in the template, the rest of a user function in FuncInfo
+date: 2026-11-03 · by: bloat · issue: 0151
+A `FuncTemplate` holds its bytecode, its capture descriptors and its handler table inline,
+in a `DATA` tail: `CODE_LEN` bytes of code at offset 48, then `CAPTURES` u32 descriptors,
+then the 16-byte handler records, which fill the rest of the cell (the cell's padding is
+shorter than a record, so `(size - 48 - CODE_LEN - 4 * CAPTURES) / 16` is the count and no
+field is needed). The child templates and the debug info (script, source span, line table,
+local names) move to a new `FuncInfo` cell (kind 21, `CHILDREN` an inline `Ref` tail),
+referenced by `FuncTemplate::INFO`; a privileged template has none (no debug info, D1980,
+and in the base no children), so a builtin's template is 48 bytes plus its code. This
+replaces D1980's optional trailing fields: a tail and size-dependent optional fields
+cannot share a cell, and the layout macro's `min` support is gone with them.
+
+The interpreter's code register becomes `template + 48` and `code_len` a field of the
+template head, one load fewer per call and return than the `CODE` reference to a `Bytes`
+cell. `fclosure` reads its child through `INFO` (one load more, beside an allocation).
+- **Bought:** base 250,544 → 231,960 B (−18.6 KB per VM, −7.4%; cells 4,848 → 3,916: the
+  875 code cells and 57 handler `Bytes` cells are gone), every builtin kept; module gzip
+  455,516 → 454,604 (−912 B). User functions get smaller too (one `FuncInfo` replaces the
+  32 optional bytes, the code cell, the children `RefArray` and the descriptor array).
+- **Neutral:** wasm instructions against main (n=3, all 22 workloads) −2.7%..+1%, except
+  pushpop +2.9% and indexof +1.0%, both noise on re-measure (n=7: −1.9% and +0.0%; warm
+  per-run 3878 vs 3896 and 400 vs 400 M). Peak memory (mem-perturb n=6) equal, strbuild
+  15.8 → 15.4 and json-date 4.3 → 3.7–4.3 MiB. A wasm instance after `vm_new` stays at 18
+  pages.

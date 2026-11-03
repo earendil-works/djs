@@ -70,6 +70,10 @@ table.
 
 ![The RefArray cell](gen/cell-RefArray.svg)
 
+## FuncInfo (kind 21)
+
+![The FuncInfo cell](gen/cell-FuncInfo.svg)
+
 ## Interp (kind 17)
 
 ![The Interp cell](gen/cell-Interp.svg)

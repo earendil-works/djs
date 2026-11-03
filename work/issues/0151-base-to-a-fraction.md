@@ -177,6 +177,30 @@ Found while measuring L4, landed before it on the coordinator's call.
 - Guide: compiler.md (short forms paragraph); generated examples in interpreter.md,
   suspension.md, values.md, compiler.md and ref-opcodes regenerated.
 
+### L3 step 1: code inline in the template (branch issue/0151-templates, D2444)
+- Base 0151 measurement on main f9331057: 875 templates × 56 B, 875 code `Bytes` cells
+  (40,627 B of code, 13,605 B of headers and padding), 57 handler cells; in the base no
+  template has a name (dropped), children, capture descriptors or an IC.
+- `FuncTemplate` is 48 B + `DATA` tail: code (`CODE_LEN`), capture descriptors, handler
+  records to the end of the cell (count from the size). Children and debug info in a new
+  `FuncInfo` (kind 21) behind `INFO`, null for privileged templates (a few run-time
+  privileged templates have children). The layout macro's `min` (D1980's optional
+  trailing fields) is gone. Readers: `template::{code, capture_desc, handlers, child,
+  child_count, debug_info}`; interpreter `code = t + 48`, `code_len` in the template
+  head.
+- Base 250,544 → 231,960 B (−18.6 KB), cells 4,848 → 3,916. Module gzip 455,516 →
+  454,604. wasm instructions within noise (n=3 all workloads −2.7..+1%; outliers
+  re-measured n=7 and warm). Memory equal or lower; vm_new still 18 pages.
+- Measuring across a layout change: the main build needs its own JS reader
+  (LayoutMismatch otherwise, and wmeasure ignored the failure): work/scratch/0151/
+  wmeasure3.py/wq3.sh take `WASM@SRCROOT` and fail on errors; warm.sh likewise;
+  mem-perturb.sh has `--root`.
+- `seal_puts_the_first_grown_cells_last` asserted a share (90%) of unchanged words; the
+  changed words are the same 4,113 as on main, the image is smaller (89.5%): threshold
+  88% with a comment.
+- Guide: compiler.md (template layout paragraph); docs/compiler.md 6.1 sketch updated;
+  ref-cells regenerated.
+
 ## Follow-ups
 - GC thresholds are rounded to 64 KB pages from offset 0, so collection points depend on
   the base's size (json-date's extra collection under L4). Rounding relative to

@@ -3,7 +3,8 @@
 //! One 16-byte record per `try` region, four little-endian `u32`s: `start`, `end`,
 //! `target`, `depth`. Records are in innermost-first order (the compiler appends a
 //! region when its `try` block closes), so the first record covering a pc is the
-//! innermost. Stored in a `Bytes` cell (`FuncTemplate::HANDLERS`) and read in place.
+//! innermost. Stored at the end of the template cell (`template::handlers`, D2444) and read
+//! in place.
 
 use alloc::vec::Vec;
 

@@ -118,8 +118,8 @@ pub mod global_decls {
     }
 }
 
-/// `FuncTemplate::CAPTURE_DESC` words (docs/compiler.md 5.4): where `fclosure` takes each
-/// capture's Box from.
+/// Capture descriptor words (docs/compiler.md 5.4; after the code in `FuncTemplate::DATA`):
+/// where `fclosure` takes each capture's Box from.
 pub mod capture_desc {
     /// Set: from the creating closure's captures; clear: from a local slot of the
     /// creating frame.

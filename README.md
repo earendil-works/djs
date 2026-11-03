@@ -81,7 +81,7 @@ remaining gap (work/issues/0081-perf-anatomy.md).
 
 <!-- gen:status size -->
 `djs_wasm.wasm` is 1,471 KB (525 KB gzip, 423 KB brotli): 901 KB of code and 566 KB of
-data, of which 251 KB is the base snapshot (the initialized realm with all builtins).
+data, of which 232 KB is the base snapshot (the initialized realm with all builtins).
 Module sizes measured at d780463b0d, 2026-11-01.
 <!-- /gen -->
 
