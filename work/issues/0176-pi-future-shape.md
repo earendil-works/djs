@@ -25,6 +25,29 @@ continuation dumps. pi itself is not changed.
 
 ## Log
 
+- tests/pi/prelude-next.ts (D2650, D2652): pi's prelude with tools as calls of an async
+  host function `call(kind, name, argsJson)`, the body's promise/`finished`/output
+  counters/store in the adapter, `decode`/`failure`/`encode`/`describe` helpers, and no
+  lockdown (frozen builtins instead: the lockdown's accessors on builtins cannot be
+  dumped; pi's suite without lockdown on frozen builtins fails the same 11 as baseline).
+- js/pi/vm.ts `shape: "next"`: calls numbered for pi by the adapter, results decoded in
+  the VM, `done` reported once the queue ran empty, stall detection by status. Calling
+  prelude functions while async calls are pending needs their return value at IDLE:
+  `vm_outcome` is back (removed in 0175 as unused). `dumpSession()` -> `{ dump, state }`,
+  `resumeFromDump()`, `openCalls()`, `dumpEveryIdle` (D2651).
+- Found while running pi's suite in-thread: a loop of sync host calls never polls
+  `shouldInterrupt` (each `vm_run` returned at the host call with fuel left, and the next
+  got full fuel), so `while (true) tools.echo(1)` hung pi's mode too. `vm_fuel_used` +
+  fuel carried across host calls (D2653), DETERMINISTIC_VERSION 3.
+- pi's suite (release module): pi mode 215/226, `--next` 215/226, `--next
+  --dump-every-idle` 215/226 (djs-dump.wasm), the same 11 failures each.
+- pi-vm.test.ts runs every test in pi, next and next+dumpEveryIdle (the lockdown test is
+  skipped in next), plus a dump/resume test with the three open-call policies and a todo
+  for Math.random's state (portable, 0182).
+- Docs: docs/host.md "The shape pi should adopt", the fingerprint row, the new exports;
+  continuation-dumps.md's measured packaging sizes; functions-as-code.md without the
+  js/proto comparison.
+
 ## Follow-ups
 
 ## Result
