@@ -196,14 +196,29 @@ fn dump_after_every_idle_point() {
     let answers = format!("{DIR}/reads.json");
     let n = every_idle_point(&format!("{DIR}/reads.src.js"), &["--tools", &answers]);
     assert_eq!(n, 2);
+    // A codemode body suspended in its own top level (D2617).
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let body = format!("{dir}/dump-body-{}.js", std::process::id());
+    std::fs::write(
+        &body,
+        "const files = await tools.glob({});\n\
+         const seen = [];\n\
+         for (const f of files) {\n  seen.push((await tools.read({ path: f })).length);\n}\n\
+         console.log(seen.join(','));\n",
+    )
+    .unwrap();
+    let answers = format!("{DIR}/todos.json");
+    let n = every_idle_point(&body, &["--body", "--tools", &answers]);
+    std::fs::remove_file(&body).unwrap();
+    assert_eq!(n, 5);
+    // TODO(0174): todos.js --body too, once a body parameter captured by a closure
+    // (`tools` in `todos`) dumps (reported to portable: D2617 refuses it).
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/dump/v2");
     let mut total = 0;
     for e in std::fs::read_dir(dir).unwrap() {
         let path = e.unwrap().path();
         let p = path.to_str().unwrap();
-        // plan.src.js declares its own `const tools`, which the exporter leaves out as
-        // a host global (reported to 0172).
-        if !p.ends_with(".src.js") || p.ends_with("/plan.src.js") {
+        if !p.ends_with(".src.js") {
             continue;
         }
         total += every_idle_point(p, &[]);

@@ -1,6 +1,6 @@
 # 0174: REPL and CLI: tools, waiting inputs, continuation dumps
 
-status: in-progress
+status: done
 agent: repl
 branch: issue/0174-repl-continuations
 depends-on: 0171 (the tools and pending-call part can land before it)
@@ -19,7 +19,7 @@ Make suspension visible and testable by hand (docs/continuation-dumps.md "REPL")
       and open calls; `.dump-every [on|off]` dumps and reloads at every idle point.
 - [x] `djs run --tools answers.json --dump-after K out.js`, `djs resume out.js --tools
       answers.json`, `djs run --dump-every-idle`.
-- [ ] Line-mode transcripts in crates/djs-cli/tests/repl.rs for each command; a CLI test that
+- [x] Line-mode transcripts in crates/djs-cli/tests/repl.rs for each command; a CLI test that
       runs `--dump-after K` / `resume` for every K of a few scripts and compares with the
       uninterrupted run. docs/cli.md updated.
 - [x] `.snapshot` stays until 0177.
@@ -76,7 +76,36 @@ Make suspension visible and testable by hand (docs/continuation-dumps.md "REPL")
   --dump-after K` / `--dump-every-idle`, and the every-K dump/resume CLI test.
 - Earlier note: waiting for 0171 for the dump part (.dump format 2, .restore of waiting inputs,
   .dump-every, run --dump-after/--dump-every-idle, resume).
+- Portable's fixes landed (D2617 async bodies, D2618 host-named script bindings): plan.src.js
+  back in the every-K test (5 idle points); a `--body` script suspended in its own top
+  level (a for-of over tool calls, 5 idle points) added; REPL await inputs round-trip
+  (`.dump`/`.restore`, `.dump-every`). Fixes: restored inputs keep their kind through the
+  handle name (`input N (value)` for expression inputs), new inputs are numbered after
+  restored ones (a collision made the second dump throw "two handles named input 2"),
+  and `.dump-every` skips the idle point while an await input's declarations run (the
+  REPL held a handle to the body there: a reload panicked with "dropped handle").
+  Found: a body parameter captured by a closure is refused by the exporter (reported).
+  Guide: no page affected.
 
 ## Follow-ups
+- tests/run.rs `dump_after_every_idle_point`: add `tests/run/todos.js --body` once the
+  exporter dumps a codemode body whose parameter is captured by a closure (`tools` in
+  `todos`): refused today (D2617, reported to portable via the coordinator).
 
 ## Result
+- `tools` in the REPL and in `djs run`/`resume`: a Proxy that makes one async host
+  function per name (D2600); `--tools answers.json` answers by arguments, else in order
+  (D2601); `later(v, rejected)` and `print` as host globals (D2602).
+- REPL: waiting inputs (the prompt does not block; `[input N] value` when they settle),
+  `.pending`, `.resolve`, `.reject`, `.bt <id|all>` (activations, bindings, carets from
+  0180), `.dump` in format 2 with the waiting inputs as handles, `.restore` of a dump's
+  waiting run and open calls (D2603), `.dump-every [on|off]`. `.snapshot` stays.
+- CLI: `djs run --tools F --dump-after K OUT file.js`, `djs resume OUT --tools F`,
+  `djs run --dump-every-idle` (D2604; idle points numbered by answers).
+- Tests: tests/repl.rs transcripts for every command; tests/run.rs `--dump-after K` /
+  `resume` at every idle point of reads.src.js, a `--body` script and every
+  tests/dump/v2 program, equal to the uninterrupted run, and `--dump-every-idle`.
+- `Vm::outcome()` (additive) for the REPL's waiting inputs.
+Known gaps: a codemode body whose parameter a closure captures is refused by the exporter
+(todos.js; follow-up above); the REPL's expression wrapper shifts columns on line 1 as
+before.

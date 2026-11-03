@@ -172,6 +172,39 @@ struct Waiting {
     unwrap: bool,
 }
 
+impl Waiting {
+    /// Its name as a dump's handle: the label, and for an input whose value prints when
+    /// it settles (an expression input, `[value]`) ` (value)` after it (D2604), so a
+    /// restore prints it the same way. Other handles (a dump's `run`) print their value.
+    fn handle_name(&self) -> String {
+        if self.label.starts_with("input ") && self.show {
+            format!("{} (value)", self.label)
+        } else {
+            self.label.clone()
+        }
+    }
+
+    fn from_handle_name(name: String, promise: Handle) -> Waiting {
+        if let Some(label) = name.strip_suffix(" (value)")
+            && label.starts_with("input ")
+        {
+            return Waiting {
+                label: label.to_string(),
+                promise,
+                show: true,
+                unwrap: true,
+            };
+        }
+        let input = name.starts_with("input ");
+        Waiting {
+            label: name,
+            promise,
+            show: !input,
+            unwrap: false,
+        }
+    }
+}
+
 /// How a run ended.
 enum Outcome {
     Done(Value),
@@ -211,6 +244,8 @@ struct Repl {
     dump_every: bool,
     /// The running input's result after `.dump-every` reloaded the VM.
     entry_override: Option<Handle>,
+    /// A handle outside the waiting inputs is held: `.dump-every` must not replace the VM.
+    hold_vm: bool,
 }
 
 impl Repl {
@@ -237,6 +272,7 @@ impl Repl {
             announced: false,
             dump_every: false,
             entry_override: None,
+            hold_vm: false,
         }
     }
 
@@ -462,10 +498,13 @@ impl Repl {
             }
             Plan::Await(declare, body) => {
                 let h = self.vm.heap_mut().new_handle(body).expect("out of memory");
+                // `h` lives in this VM: no `.dump-every` reload while the declarations run.
+                self.hold_vm = true;
                 let ok = match declare {
                     Some(d) => matches!(self.report(d), Outcome::Done(_)),
                     None => true,
                 };
+                self.hold_vm = false;
                 let body = self.vm.heap().get_handle(h);
                 self.vm.heap_mut().drop_handle(h);
                 if ok {
@@ -591,7 +630,8 @@ impl Repl {
                 Status::Done(_) | Status::Threw(_) => break Outcome::Done(Value::UNDEFINED),
                 Status::Idle => {
                     self.note_new_calls();
-                    if self.dump_every && !self.vm.pending_host_calls().is_empty() {
+                    if self.dump_every && !self.hold_vm && !self.vm.pending_host_calls().is_empty()
+                    {
                         match self.dump_and_reload(entry) {
                             Ok(n) => println!("[dumped {n} bytes]"),
                             Err(e) => {
@@ -1080,7 +1120,7 @@ impl Repl {
         let mut out: Vec<(String, Value)> = self
             .waiting
             .iter()
-            .map(|w| (w.label.clone(), self.vm.heap().get_handle(w.promise)))
+            .map(|w| (w.handle_name(), self.vm.heap().get_handle(w.promise)))
             .collect();
         out.extend(entry.map(|v| (String::from(ENTRY), v)));
         out
@@ -1107,7 +1147,7 @@ impl Repl {
         self.vm = vm;
         let mut kept = Vec::new();
         for mut w in std::mem::take(&mut self.waiting) {
-            if let Some(h) = crate::dumps::take_handle(&mut loaded.handles, &w.label) {
+            if let Some(h) = crate::dumps::take_handle(&mut loaded.handles, &w.handle_name()) {
                 w.promise = h;
                 kept.push(w);
             }
@@ -1135,7 +1175,17 @@ impl Repl {
             }
         };
         println!("loaded {arg} into a fresh VM");
-        self.inputs = 0;
+        // New inputs are numbered after the restored ones (`input 3`), so labels stay
+        // unique handle names for later dumps.
+        self.inputs = loaded
+            .handles
+            .iter()
+            .filter_map(|(n, _)| {
+                let n = n.strip_prefix("input ")?;
+                n.strip_suffix(" (value)").unwrap_or(n).parse::<u32>().ok()
+            })
+            .max()
+            .unwrap_or(0);
         for c in &loaded.calls {
             self.origins.insert(c.id, String::from("the dump"));
         }
@@ -1144,12 +1194,7 @@ impl Repl {
             match self.vm.promise_state(v) {
                 Some(None) => {
                     self.vm.mark_promise_handled(v);
-                    self.waiting.push(Waiting {
-                        label: name,
-                        promise: h,
-                        show: true,
-                        unwrap: false,
-                    });
+                    self.waiting.push(Waiting::from_handle_name(name, h));
                 }
                 _ => {
                     println!("[{name}] {}", inspect::inspect(self.vm.heap(), v));

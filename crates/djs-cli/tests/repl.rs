@@ -476,3 +476,54 @@ fn dump_a_waiting_session() {
     assert!(out.contains("a weak collection"), "{out}");
     assert!(out.contains("dumping at every idle point: off\n"), "{out}");
 }
+
+#[test]
+fn dump_waiting_await_inputs() {
+    // Inputs suspended in their own top-level `await` (async bodies, D2617) dump and
+    // restore; an expression input still prints its value when it settles, a statement
+    // does not, and new inputs are numbered after the restored ones.
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let dump = format!("{dir}/repl-await-{}.js", std::process::id());
+    let out = repl(&format!(
+        "const r = await tools.read({{path: 'a'}})\nawait tools.read({{path: 'b'}})\n\
+         .dump {dump}\n.clear\n.restore {dump}\nawait tools.read({{path: 'c'}})\n.pending\n\
+         .resolve 3 \"bee\"\n.resolve 2 \"hello\"\nr\n.dump-every on\n\
+         const x = await tools.read({{path: 'd'}})\n.resolve 5 \"c!\"\n.resolve 6 \"dee\"\nx\n"
+    ));
+    std::fs::remove_file(&dump).unwrap();
+    let lines: Vec<&str> = out
+        .lines()
+        .filter(|l| !(l.starts_with("[dumped ") && l.ends_with(" bytes]")))
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "[waiting] #2 tools.read({\"path\":\"a\"})",
+            "[waiting] #3 tools.read({\"path\":\"b\"})",
+            &format!(
+                "wrote {} bytes to {dump} (2 activations, 2 pending calls)",
+                out.split("wrote ")
+                    .nth(1)
+                    .unwrap()
+                    .split(' ')
+                    .next()
+                    .unwrap()
+            ),
+            "a fresh VM",
+            &format!("loaded {dump} into a fresh VM"),
+            "waiting: #2 tools.read({\"path\":\"a\"})",
+            "waiting: #3 tools.read({\"path\":\"b\"})",
+            "[waiting] #5 tools.read({\"path\":\"c\"})",
+            "#2 tools.read({\"path\":\"a\"})  the dump, at dump.js:6:11",
+            "#3 tools.read({\"path\":\"b\"})  the dump, at dump.js:9:10",
+            "#5 tools.read({\"path\":\"c\"})  input 3, at repl:1:10",
+            "[input 2] 'bee'",
+            "'hello'",
+            "dumping at every idle point: on",
+            "[waiting] #6 tools.read({\"path\":\"d\"})",
+            "[input 3] 'c!'",
+            "'dee'",
+        ]
+    );
+    assert!(out.matches("[dumped ").count() >= 2, "{out}");
+}

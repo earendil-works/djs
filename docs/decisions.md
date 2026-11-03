@@ -8222,6 +8222,7 @@ would read the host's or the base's global after it, and accepts a captured vari
 written where it reads a host global only when it holds that global's current value
 (it accepted any host name before). Found by 0174 (plan.src.js resumed into the host's
 `tools.read`).
+
 ## D2604: Dump commands in the CLI: idle points numbered by answers
 date: 2026-11-04 · by: repl · issue: 0174
 An idle point of `djs run`/`resume` is a stop with only host calls open, before the run

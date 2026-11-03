@@ -63,9 +63,10 @@ refusal (`cannot dump:` and one `path: reason` line per value). `run --dump-ever
 dumps at every idle point and continues in a fresh VM that loaded the dump. An async
 body's promise (`--body`) is the dump's handle `run`.
 
-Not yet: a run suspended in the top level of a `--body` script (its own `await`s) is
-refused ("a function without source text") until the exporter writes async-body
-functions (portable's core fix); suspensions inside functions dump.
+A `--body` script suspended in its own top level dumps as the async function it runs as
+(D2617). Known gap: a body whose parameter (`tools`, `console`) a closure captures is
+refused ("a codemode body whose frame at await#1 differs from the async function the dump
+writes for it"), reported to the exporter.
 
 ## `djs heap`
 
@@ -215,8 +216,11 @@ wrote 596 bytes to s.js (1 activation, 1 pending call)
 ```
 
 `.dump-every on` does this at every idle point and continues in the loaded copy, as
-`.suspend-every` does with images. An input suspended in its own top-level `await`
-(compiled as an async body) cannot be dumped yet (see `run --dump-after`).
+`.suspend-every` does with images. Inputs suspended in their own top-level `await`
+dump too. A waiting expression input is the handle `input N (value)` and a statement
+input `input N`, so a restore prints them as before; inputs typed after a restore are
+numbered after the restored ones. While an input's declarations run (the first part of a
+top-level-await input), `.dump-every` skips that idle point.
 
 **The answers file** (D2601) maps tool names to lists of answers, each `{"value": v}` or
 `{"error": "message"}`, optionally with `"args": [...]`:
