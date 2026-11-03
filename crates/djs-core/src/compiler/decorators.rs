@@ -139,6 +139,10 @@ fn intrinsic(name: &str) -> u16 {
 impl Parser<'_, '_> {
     /// One or more decorators at `@`: pushes the array of decorator and receiver pairs.
     pub(super) fn parse_decorators(&mut self) -> PResult<()> {
+        // The slim build has no decorators (D2411).
+        if !crate::FULL {
+            return syntax(self.tok.start, "decorators are not available in this build");
+        }
         let mut n: u32 = 0;
         while self.is(TokenKind::At) {
             self.parse_decorator(true)?;
@@ -546,6 +550,10 @@ impl Parser<'_, '_> {
     /// Legacy decorators at `@`: their expressions go into `thunk` (a new one if
     /// `None`).
     pub(super) fn parse_legacy_decorators(&mut self, thunk: Option<Thunk>) -> PResult<Thunk> {
+        // The slim build has no decorators (D2411).
+        if !crate::FULL {
+            return syntax(self.tok.start, "decorators are not available in this build");
+        }
         let mut t = match thunk {
             Some(t) => t,
             None => self.new_thunk(self.tok.start)?,
@@ -563,6 +571,10 @@ impl Parser<'_, '_> {
     /// modifiers): `__param(index, dec)` decorators of the method, in its thunk. Only
     /// class methods and constructors with legacy decorators have `dp`.
     pub(super) fn parse_param_decorators(&mut self, dp: Option<&mut DecParams>) -> PResult<()> {
+        // The slim build has no decorators (D2411).
+        if !crate::FULL {
+            return syntax(self.tok.start, "decorators are not available in this build");
+        }
         let Some(dp) = dp else {
             if self.strip {
                 // ts-blank-space keeps them, types included.

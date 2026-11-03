@@ -197,6 +197,13 @@ impl Parser<'_, '_> {
     /// The bindings after `using`: identifiers with initializers (`no_in` in a `for`
     /// head). The Record is right under each value.
     pub(super) fn parse_using_bindings(&mut self, is_await: bool, no_in: bool) -> PResult<()> {
+        // The slim build has no `using` (D2411).
+        if !crate::FULL {
+            return syntax(
+                self.tok.start,
+                "`using` declarations are not available in this build",
+            );
+        }
         loop {
             if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
                 return syntax(

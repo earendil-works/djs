@@ -7,6 +7,7 @@
 
 use super::intrinsics::{bad_argument, id};
 use super::*;
+use crate::FULL;
 use crate::bigint::{self, BigInt};
 
 const TO_BIGINT_PRIMITIVE: u16 = id("ToBigIntPrimitive");
@@ -161,8 +162,8 @@ impl Exec<'_> {
         let a0 = arg(self, 0);
         let v = match id {
             IS_BIGINT => Value::bool(a0.as_bigint().is_some()),
-            TO_BIGINT_PRIMITIVE => self.bigint_of_primitive(a0)?,
-            NUMBER_TO_BIGINT => {
+            TO_BIGINT_PRIMITIVE if FULL => self.bigint_of_primitive(a0)?,
+            NUMBER_TO_BIGINT if FULL => {
                 let Some(n) = a0.as_number() else {
                     return bad_argument(name);
                 };
@@ -178,7 +179,7 @@ impl Exec<'_> {
                 }
                 self.heap.alloc_bigint(&BigInt::from_f64(n))?
             }
-            BIGINT_TO_STRING => {
+            BIGINT_TO_STRING if FULL => {
                 let (Some(_), Some(radix)) = (a0.as_bigint(), arg(self, 1).as_int()) else {
                     return bad_argument(name);
                 };
@@ -187,7 +188,7 @@ impl Exec<'_> {
                 let s = x.to_string_radix(radix as u32);
                 Value::string(self.heap.alloc_latin1(s.as_bytes())?)
             }
-            BIGINT_AS_INT_N | BIGINT_AS_UINT_N => {
+            BIGINT_AS_INT_N | BIGINT_AS_UINT_N if FULL => {
                 let (Some(bits), Some(_)) = (arg(self, 0).as_number(), arg(self, 1).as_bigint())
                 else {
                     return bad_argument(name);

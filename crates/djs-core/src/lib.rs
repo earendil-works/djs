@@ -9,6 +9,12 @@
 
 extern crate alloc;
 
+/// Whether this build has every builtin family; without the `full` feature it is the slim
+/// build (D2411, docs/slim-codemode.md). A constant rather than `#[cfg]` where code is
+/// cut, so that both builds type-check the same code and the optimizer drops what the
+/// slim one can't reach.
+pub const FULL: bool = cfg!(feature = "full");
+
 pub mod bigint;
 pub(crate) mod builtins;
 pub mod bytecode;

@@ -2203,12 +2203,7 @@ impl<'h> Exec<'h> {
                 }
                 let g = intrinsic_obj(self.heap, Intrinsic::Global);
                 match self.heap.find_property(g, key) {
-                    None if op == Op::GetGlobal => {
-                        return Err(Fault::error(
-                            ErrorKind::ReferenceError,
-                            crate::text::cat!("'", self.heap.atom_name(key), "' is not defined"),
-                        ));
-                    }
+                    None if op == Op::GetGlobal => return Err(undefined_global(self.heap, key)),
                     None => self.push(Value::UNDEFINED),
                     Some((h, Property::Data { value, .. })) => {
                         if h == g {
@@ -2252,10 +2247,7 @@ impl<'h> Exec<'h> {
                 }
                 let g = intrinsic_obj(self.heap, Intrinsic::Global);
                 if !self.heap.has_property(g, key) {
-                    return Err(Fault::error(
-                        ErrorKind::ReferenceError,
-                        crate::text::cat!("'", self.heap.atom_name(key), "' is not defined"),
-                    ));
+                    return Err(undefined_global(self.heap, key));
                 }
                 // The cache is filled for the next store if this one is a plain write.
                 if matches!(
@@ -4411,5 +4403,24 @@ pub(crate) fn parked(heap: &Heap) -> (Continuation, bool) {
     (
         Continuation::from_flags((f & !PARK_ENTRY) as i32),
         f & PARK_ENTRY != 0,
+    )
+}
+
+/// The ReferenceError for a global that doesn't exist. The slim build names the globals
+/// of the families it leaves out (D2411), so that a script (or the model that wrote it)
+/// sees why, instead of a typo-like message.
+#[cold]
+#[inline(never)]
+fn undefined_global(heap: &Heap, key: Atom) -> Fault {
+    let name = heap.atom_name(key);
+    if !crate::FULL && realm::ABSENT_GLOBALS.contains(&name.as_str()) {
+        return Fault::error(
+            ErrorKind::ReferenceError,
+            crate::text::cat!("'", name, "' is not available in this build"),
+        );
+    }
+    Fault::error(
+        ErrorKind::ReferenceError,
+        crate::text::cat!("'", name, "' is not defined"),
     )
 }

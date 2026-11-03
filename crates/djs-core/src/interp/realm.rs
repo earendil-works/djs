@@ -9,6 +9,32 @@ use crate::heap::{
 };
 use crate::value::{Obj, Value};
 
+/// The globals of the builtin families the slim build leaves out (D2411): their
+/// ReferenceError says so.
+pub(crate) const ABSENT_GLOBALS: &[&str] = &[
+    "ArrayBuffer",
+    "AsyncDisposableStack",
+    "BigInt",
+    "BigInt64Array",
+    "BigUint64Array",
+    "DataView",
+    "DisposableStack",
+    "FinalizationRegistry",
+    "Float16Array",
+    "Float32Array",
+    "Float64Array",
+    "Int16Array",
+    "Int32Array",
+    "Int8Array",
+    "Iterator",
+    "SuppressedError",
+    "Uint16Array",
+    "Uint32Array",
+    "Uint8Array",
+    "Uint8ClampedArray",
+    "WeakRef",
+];
+
 /// Intrinsics, by index into `Realm::INTRINSICS`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u32)]

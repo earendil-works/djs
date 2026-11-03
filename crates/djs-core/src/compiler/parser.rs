@@ -861,6 +861,10 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// The value of the current BigInt literal token (D1460: a constant).
     pub fn bigint_literal(&mut self) -> PResult<crate::bigint::BigInt> {
         let tok = self.tok;
+        // The slim build has no BigInt (D2411).
+        if !crate::FULL {
+            return syntax(tok.start, "BigInt literals are not available in this build");
+        }
         let lit = self.lx.number_literal(&tok);
         let mut digits = Vec::new();
         crate::lexer::strip_separators(lit.digits, &mut digits);

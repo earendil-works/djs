@@ -6,6 +6,7 @@
 
 use super::intrinsics::{bad_argument, id};
 use super::*;
+use crate::FULL;
 
 const CREATE_ITERATOR_HELPER: u16 = id("CreateIteratorHelper");
 const THIS_ITERATOR_HELPER: u16 = id("ThisIteratorHelper");
@@ -90,7 +91,7 @@ impl Exec<'_> {
         };
         let a0 = arg(self, 0);
         let v = match id {
-            CREATE_ITERATOR_HELPER => {
+            CREATE_ITERATOR_HELPER if FULL => {
                 let Some(kind) = a0.as_int() else {
                     return bad_argument(name);
                 };
@@ -112,7 +113,7 @@ impl Exec<'_> {
                 }
                 Value::object(o)
             }
-            THIS_ITERATOR_HELPER => {
+            THIS_ITERATOR_HELPER if FULL => {
                 let wrap = arg(self, 1) == Value::TRUE;
                 let ok = a0.as_object().is_some_and(|o| {
                     self.heap.object_class(o) == ObjectClass::IteratorHelper
@@ -128,7 +129,7 @@ impl Exec<'_> {
                 }
                 a0
             }
-            DISPOSABLE_STACK_CREATE => {
+            DISPOSABLE_STACK_CREATE if FULL => {
                 let Some(proto) = a0.as_object() else {
                     return bad_argument(name);
                 };
@@ -144,7 +145,7 @@ impl Exec<'_> {
                 self.heap.set_object_slot(o, 2, Value::object(resources));
                 Value::object(o)
             }
-            WEAK_REF_CREATE => {
+            WEAK_REF_CREATE if FULL => {
                 let Some(proto) = a0.as_object() else {
                     return bad_argument(name);
                 };
@@ -153,7 +154,7 @@ impl Exec<'_> {
                 add_kept_object(self.heap, target)?;
                 Value::object(o)
             }
-            WEAK_REF_DEREF => {
+            WEAK_REF_DEREF if FULL => {
                 let o = a0
                     .as_object()
                     .filter(|&o| self.heap.object_class(o) == ObjectClass::WeakRef);
@@ -168,7 +169,7 @@ impl Exec<'_> {
                     None => Value::UNDEFINED,
                 }
             }
-            FINALIZATION_REGISTRY_CREATE => {
+            FINALIZATION_REGISTRY_CREATE if FULL => {
                 let Some(proto) = a0.as_object() else {
                     return bad_argument(name);
                 };
@@ -180,7 +181,7 @@ impl Exec<'_> {
                 realm::set_intrinsic(self.heap, Intrinsic::Registries, Value::internal(list));
                 Value::object(r)
             }
-            THIS_FINALIZATION_REGISTRY => {
+            THIS_FINALIZATION_REGISTRY if FULL => {
                 let ok = a0.as_object().is_some_and(|o| {
                     self.heap.object_class(o) == ObjectClass::FinalizationRegistry
                 });
@@ -193,7 +194,9 @@ impl Exec<'_> {
             | FINALIZATION_REGISTRY_UNREGISTER
             | FINALIZATION_REGISTRY_NEXT_DEAD
             | FINALIZATION_REGISTRY_TAKE
-            | FINALIZATION_REGISTRY_SET_QUEUED => {
+            | FINALIZATION_REGISTRY_SET_QUEUED
+                if FULL =>
+            {
                 let r = a0
                     .as_object()
                     .filter(|&o| self.heap.object_class(o) == ObjectClass::FinalizationRegistry);
@@ -230,7 +233,7 @@ impl Exec<'_> {
                     }
                 }
             }
-            THIS_DISPOSABLE_STACK => {
+            THIS_DISPOSABLE_STACK if FULL => {
                 let is_async = arg(self, 1) == Value::TRUE;
                 let ok = a0.as_object().is_some_and(|o| {
                     self.heap.object_class(o) == ObjectClass::DisposableStack
@@ -245,6 +248,14 @@ impl Exec<'_> {
                     return type_error(msg);
                 }
                 a0
+            }
+            // The slim build's arms of the families it leaves out end here too (D2411);
+            // its prelude never calls them.
+            _ if !FULL => {
+                return Err(Fault::error(
+                    ErrorKind::InternalError,
+                    crate::text::cat!("%", name, " is not available in this build"),
+                ));
             }
             _ => {
                 return Err(Fault::error(
