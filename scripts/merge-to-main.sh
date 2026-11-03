@@ -50,14 +50,9 @@ log_merge() {
 
 lock="$main_root/work/scratch/merge.lock"
 mkdir -p "$main_root/work/scratch"
-waited=0
-until mkdir "$lock" 2>/dev/null; do
-  if [ $waited -eq 0 ]; then echo "merge-to-main: waiting for merge lock ($lock)"; fi
-  waited=$((waited + 1))
-  if [ $waited -gt 360 ]; then echo "merge-to-main: lock held for 30+ minutes; ask the coordinator" >&2; exit 1; fi
-  sleep 5
-done
-echo "$branch $(date)" > "$lock/owner"
+# shellcheck source=merge-lock.sh
+source "$(dirname "$0")/merge-lock.sh"
+take_merge_lock "$lock" "$branch" 360 || exit 1
 t_lock=$(date +%s); t_rebased=$t_lock; t_gated=$t_lock; outcome=failed-rebase
 trap 'log_merge; rm -rf "$lock"' EXIT
 

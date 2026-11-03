@@ -7,12 +7,8 @@ set -euo pipefail
 main_root=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
 lock="$main_root/work/scratch/merge.lock"
 mkdir -p "$main_root/work/scratch"
-waited=0
-until mkdir "$lock" 2>/dev/null; do
-  waited=$((waited + 1))
-  if [ $waited -gt 720 ]; then echo "with-merge-lock: lock held for 60+ minutes" >&2; exit 1; fi
-  sleep 5
-done
-echo "coordinator $(date)" > "$lock/owner"
+# shellcheck source=merge-lock.sh
+source "$(dirname "$0")/merge-lock.sh"
+take_merge_lock "$lock" coordinator 720 || exit 1
 trap 'rm -rf "$lock"' EXIT
 "$@"
