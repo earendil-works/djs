@@ -1,7 +1,7 @@
 # 0183: The gate in seconds
 
-status: open
-agent: -
+status: in-progress
+agent: gate-speed
 branch: issue/0183-gate-in-seconds
 depends-on: -
 guide: docs/guide/testing.md (how the gate works) if it describes the gate's steps
