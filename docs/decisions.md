@@ -7147,9 +7147,10 @@ of the base instead of the build hash. `vm::BUILD_HASH` stays as the engine's id
 (`djs_build_hash`, Sandbox journals, pi's fingerprint): journals replay step by step and
 need the exact build; images only need the numbering. The descriptor guards numbering,
 not meaning: semantic changes need a `COMPAT_VERSION` bump (D2268). Measured on main's
-history (`churn.py --deps`, docs/snapshot-versioning.md): a raw image survives 51% of
-merges instead of 31%, a container (descriptor and base prefix) 57% instead of 40% where
-every base image was built.
+history (`churn.py --deps`, docs/snapshot-versioning.md "Since D026"): a raw image
+survives 51% of merges instead of 30%; a container, which also needs the same base image,
+47% instead of 31% (the 129 merges whose base images were all built), 60% instead of 47%
+over the last 30.
 
 ## D2266: RECORDS_HASH: the id tables images store numbers of, read from the sources
 date: 2026-11-03 · by: snapshot · issue: 0164

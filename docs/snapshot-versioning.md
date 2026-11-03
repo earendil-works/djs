@@ -9,6 +9,47 @@ D2264), and the base layout work (0136).
 The owner's question: *how can snapshots be made stable if the builtins are no longer in
 the snapshots? What happens if a new version of djs is released?*
 
+## Since D026 (issue 0164)
+
+The owner decided (D026) that a snapshot is keyed on what it depends on, not on the
+engine build hash; 0164 built it (D2265–D2268). An image's roots cell carries a
+dependency descriptor: the layout hash, the image feature set, a hand-bumped
+`COMPAT_VERSION`, the opcode and intrinsic table hashes and `RECORDS_HASH` (the id tables
+and record slot constants, read from the sources). A container (format 3) carries the
+descriptor and the base image's builtin prefix hash instead of the build hash, and a
+refusal names the component that differs. The build hash stays for what needs the exact
+build: Sandbox journals and pi's fingerprint.
+
+How often each changed, per issue on main up to 7074117e (`churn.py --deps --until=7074117e`
+with the base image built at every merge since djs-prelude exists, `base-churn.sh`):
+
+| | all 158 issues | the 129 with every base image built | the last 30 |
+| --- | ---: | ---: | ---: |
+| engine build hash (what images were keyed on) | 110 | 89 | 16 |
+| cell layout | 24 | 18 | 2 |
+| image features | 3 | 3 | 1 |
+| opcode table | 13 | 10 | 1 |
+| intrinsic table | 35 | 32 | 3 |
+| internal id tables | 67 | 55 | 10 |
+| base image prefix (content without the roots cell) | – | 54 | 9 |
+| **an old snapshot survives:** under the build hash | 48 (30%) | 40 (31%) | 14 (47%) |
+| a raw image under the descriptor | 80 (51%) | 66 (51%) | 19 (63%) |
+| a container (descriptor and base prefix) | – | 61 (47%) | 18 (60%) |
+
+So a snapshot survives about one and a half times as many merges as before: half of
+them for raw images, a little less for containers, whose base image must also be the
+same. The internal id tables are the component that changes most; 42 of its 55 changes (in
+the middle column) came with a changed base image or table anyway, and some of the other
+13 are constants that do not matter to images (a GC tuning constant, a visibility
+change): the source reading is conservative on purpose. The intrinsic table is the next, since an insertion renumbers
+every later id (the 307 moved ids below).
+
+Not covered by the descriptor and still checked by hash: a pi session snapshot compressed
+against pi's prelude image needs that image to come out byte for byte the same on the new
+build, which any change to the compiler, the builtins pi's prelude touches or the
+collector can break. That was not measured. The rest of this report predates D026; read
+"the build hash" in it as what images were keyed on until then.
+
 ## The short answer
 
 - **A djs snapshot has never been stable across builds, with or without the builtins in
@@ -319,6 +360,10 @@ and compute-heavy enough that replay is too slow, and pinning to a build is unac
 
 - `python3 scripts/snapshot-research/churn.py [OLD NEW]`: the churn table; with two
   commits also the intrinsic ids that moved between them.
+- `python3 scripts/snapshot-research/churn.py --deps [--until=REV] BASE.tsv...`: the
+  table of "Since D026"; `scripts/snapshot-research/base-churn.sh $(python3
+  scripts/snapshot-research/churn.py --base-revs) > BASE.tsv` builds the base image at
+  each merge for it (about 25 s each, an hour for all of main).
 - `node scripts/snapshot-research/upgrade.ts OLD [OUT]`: the demonstration (OLD: a
   `git archive` of an older commit with its djs-wasm built); OUT gets the base images,
   pi's prelude images, the snapshots and the decompressed session image.

@@ -115,8 +115,7 @@ The engine's **build hash**, of everything that can change behavior (the layout,
 and intrinsic tables, djs-core's sources and generated prelude, the enabled features and
 the `libm` version: D1320, D1330, D1750), still exists. It identifies the exact build,
 which is what a run journal needs to replay step by step, but images are not keyed on
-it. It changed in about two of three merges to djs so far; the descriptor in about half
-as many.
+it. It changed in seven of ten merges to djs so far, the descriptor in half.
 
 After the descriptor, `from_bytes` **verifies** the image (D1056): it walks every cell,
 checks every traced field (a valid value pointing at the start of a cell of a fitting
@@ -287,8 +286,8 @@ container version, a snapshot that needs another component ("the snapshot is fro
 with another opcode table (snapshot: X; this module: Y)") or another base image, a
 reference this host does not have or that differs, a damaged frame (zstd's checksum). So
 a snapshot restores into a newer module when the merges in between left its descriptor
-and its base image alone, which over djs's history so far is somewhat more than half of
-them. There is one container format, and nothing reads older ones: djs has not been
+and its base image alone: over djs's history so far, close to half of the merges did,
+where under a third left the build hash alone. There is one container format, and nothing reads older ones: djs has not been
 released, so its formats change in place (D024, D2400). A host that has to restore
 snapshots whose dependencies changed has to keep the build that wrote them.
 

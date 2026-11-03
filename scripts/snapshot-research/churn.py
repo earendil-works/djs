@@ -44,7 +44,7 @@ def table(sel, title):
     for name, pred in inputs.items():
         hit = [k for k in sel if any(pred(f) for f in issues[k]["files"])]
         print(f"  {name}: {len(hit)} of {n} ({100*len(hit)/n:.0f}%)")
-if "--deps" not in sys.argv:
+if not sys.argv[1:2] or not sys.argv[1].startswith("--"):
     table(keys, "all issues on main")
     table(keys[-30:], "the last 30 issues")
     print("\nissue count", len(keys), "first", keys[0], "last", keys[-1])
@@ -64,14 +64,17 @@ if len(sys.argv) == 3 and sys.argv[1] != "--deps":
 
 # ---- D026 (0164): which merges change an image's dependency descriptor --------------------
 #
-# `churn.py --deps [BASE_TSV...]`: for every merge on main (a run of commits with one "NNNN:"
-# prefix), whether each descriptor component changed, from the sources at the run's last
+# `churn.py --deps [BASE_TSV...]`: for every merge on main (a run of commits with one
+# "NNNN:" prefix), whether each descriptor component changed, from the sources at the run's
+# last
 # commit: the cell layout (heap/cells.rs `records!`/`cells!`, heap/atom.rs `well_known!`),
 # the opcode table (`ops!`), the intrinsic table (`INTRINSICS`), the internal id tables (the
 # regions of crates/djs-core/compat_inputs.rs, cut the same way as build.rs does) and the
 # image features (djs-core's [features]). The base image prefix comes from BASE_TSV
 # (scripts/snapshot-research/base-churn.sh: the base image built at each merge, hashed
-# without its roots cell) where it has the merge; elsewhere it is unknown.
+# without its roots cell) where it has the merge; elsewhere it is unknown. The text hashes
+# approximate the build's: layout and ops count a changed doc-free macro body, features the
+# default build's features. `churn.py --base-revs` lists the merges for base-churn.sh.
 
 def _strip(src):
     out, i, n = [], 0, len(src)
@@ -205,11 +208,26 @@ def _regions():
         regs.append((path, "item" if kind.startswith("Item") else ("all" if kind == "All" else "consts"), start))
     return regs
 
+def _default_features(section):
+    """The features a default build enables: `default` and what it names, recursively."""
+    table = {m.group(1): re.findall(r'"([a-z0-9-]+)"', m.group(2))
+             for m in re.finditer(r'^([a-z][a-z0-9-]*)\s*=\s*\[([^\]]*)\]', section, re.M)}
+    on, todo = set(), list(table.get("default", []))
+    while todo:
+        f = todo.pop()
+        if f not in on and "/" not in f:
+            on.add(f)
+            todo += table.get(f, [])
+    return on
+
+# `--until=REV`: main's history up to REV (the numbers in docs/snapshot-versioning.md).
+UNTIL = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--until=")), "main")
+
 def deps_churn(base_tsv):
     import hashlib
     root = "crates/djs-core/"
     regs = _regions()
-    log = subprocess.run(["git", "log", "--reverse", "--format=@@%H %s", "--name-only", "main"], capture_output=True, text=True).stdout
+    log = subprocess.run(["git", "log", "--reverse", "--format=@@%H %s", "--name-only", UNTIL], capture_output=True, text=True).stdout
     runs = []
     for line in log.splitlines():
         if line.startswith("@@"):
@@ -268,7 +286,7 @@ def deps_churn(base_tsv):
         feats = feats[:feats.find("\n[", 1)] if "\n[" in feats[1:] else feats
         return {
             "layout": H([g("src/heap/cells.rs", "item", "records! {"), g("src/heap/cells.rs", "item", "cells! {"), g("src/heap/atom.rs", "item", "well_known! {")]),
-            "features": H(sorted(re.findall(r"^([a-z][a-z0-9-]*)\s*=", feats, re.M))),
+            "features": H(sorted(_default_features(feats))),
             "ops": H([g("src/bytecode/ops.rs", "item", "ops! {")]),
             "intrinsics": H([g("src/bytecode/intrinsics.rs", "item", "pub const INTRINSICS: &[IntrinsicInfo]")]),
             "records": H(rec),
@@ -353,4 +371,22 @@ def deps_report(rows):
             print(f"  {r['issue']} {r['commit']}: build{'*' if r['build'] else ' '} {' '.join(ch) or '-'}")
 
 if len(sys.argv) >= 2 and sys.argv[1] == "--deps":
-    deps_report(deps_churn(sys.argv[2:]))
+    deps_report(deps_churn([a for a in sys.argv[2:] if not a.startswith("--")]))
+if len(sys.argv) >= 2 and sys.argv[1] == "--base-revs":
+    # The merges that may change the base image: for base-churn.sh.
+    log = subprocess.run(["git", "log", "--reverse", "--format=@@%h %s", "--name-only", "main"], capture_output=True, text=True).stdout
+    runs = []
+    for line in log.splitlines():
+        if line.startswith("@@"):
+            h, subj = (line[2:].split(" ", 1) + [""])[:2]
+            m = re.match(r"(\d{4}):", subj)
+            k = m.group(1) if m else "----"
+            if runs and runs[-1][0] == k:
+                runs[-1][1] = h
+            else:
+                runs.append([k, h, False])
+        elif line.strip():
+            f = line.strip()
+            runs[-1][2] |= ((f.startswith("crates/djs-core/") and f.endswith(".rs") and not f.endswith("tests.rs"))
+                            or f.startswith("builtins/gen/") or f.startswith("crates/djs-prelude/") or f == "crates/djs-core/Cargo.toml")
+    print(" ".join(h for _, h, rel in runs if rel))

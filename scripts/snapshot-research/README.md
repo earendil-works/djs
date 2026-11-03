@@ -14,6 +14,11 @@ Two more for snapshots across djs versions (docs/snapshot-versioning.md):
 - `churn.py [OLD NEW]`: how many merged issues touched each input of a snapshot (build
   hash, layouts, opcodes, intrinsics, builtins, base image layout, pi adapter, container);
   with two commits, also which intrinsic ids moved between them.
+- `churn.py --deps [--until=REV] BASE.tsv...` (0164): per merge, which component of an
+  image's dependency descriptor (D2265) changed, from the sources, and with
+  `base-churn.sh` (the base image built at each merge, `churn.py --base-revs` lists them)
+  whether the builtin prefix did; how many merges an old snapshot survives under the
+  descriptor and under the build hash.
 - `upgrade.ts OLD [OUT]`: a Sandbox and a pi session suspended on an older build (OLD, a
   `git archive` of an older commit with its djs-wasm built) and restored on this one:
   refused; restored with the old build (an engine registry); replayed on this build.
