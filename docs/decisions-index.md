@@ -515,3 +515,7 @@ topics when the index is next reorganized.
 - D2522: `Vec::with_capacity` out of line (`buf::vec_with_capacity`)
 - D2552: reduce by argument count, its accumulator in the dense loop's state
 - D2433: Keyed string hashing for the VM's own atoms and Map/Set
+- D2542: Slices: substrings that share a one-byte parent, copied out when they pin it
+- D2543: A wasm stack overflow is reported as one
+- D2544: GC thresholds count their pages from the prefix's end
+- D2545: Nesting limits re-measured: parser 550 stays, regexp 212
