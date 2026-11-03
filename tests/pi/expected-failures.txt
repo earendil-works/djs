@@ -1,0 +1,19 @@
+# pi's codemode tests (pi-private packages/codemode/test) expected to fail on the full
+# module: in pi's mode, and the same ones in the adapter's next mode (D2650), with and
+# without --dump-every-idle (js/pi/pi-tests.ts --expected). The gate fails on any other.
+# - deterministic "reports the fingerprint": pi's test expects quickjs-wasi's fingerprint;
+# - "ignores patches to built-ins and built-in globals": djs is always strict, so writes to
+#   frozen builtins throw where sloppy QuickJS ignores them;
+# - process lifetime: the fixture's workload completes on djs before the cancel
+#   (docs/host.md "pi's own tests on djs").
+'Bun' process lifetime settles abort promptly with a real worker
+'Bun' process lifetime settles close promptly with a real worker
+'Bun' process lifetime settles timeout promptly with a real worker
+'Node' process lifetime exits promptly after abort with a real worker
+'Node' process lifetime exits promptly after close with a real worker
+'Node' process lifetime exits promptly after timeout with a real worker
+deterministic runs (remote) reports the fingerprint before any call and the calls issued after each result
+deterministic runs (worker) reports the fingerprint before any call and the calls issued after each result
+inline backend escape hatches ignores patches to built-ins and built-in globals
+remote backend escape hatches ignores patches to built-ins and built-in globals
+worker backend escape hatches ignores patches to built-ins and built-in globals

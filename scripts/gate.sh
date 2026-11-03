@@ -154,6 +154,12 @@ step "size budget (D020)"
 wait "$size_pid" || { cat "$size_log"; exit 1; }
 python3 scripts/size/budget.py target/size/wasm32-unknown-unknown/wasm/djs_wasm.wasm
 python3 scripts/size/budget.py "$slim_wasm" --slim
+# 0176: pi's tests in the adapter's next mode (prelude-next, D2650) on the release module.
+step "pi's tests in the next mode (D2650)"
+DJS_WASM="$PWD/target/size/wasm32-unknown-unknown/wasm/djs_wasm.wasm" node js/pi/pi-tests.ts --next \
+  --out target/pi-codemode-next --expected tests/pi/expected-failures.txt > target/pi-next.log 2>&1 \
+  || { cat target/pi-next.log; exit 1; }
+grep -E '^pi tests:' target/pi-next.log
 step END
 cpu; printf 'total\t%s\t%s\n' $(($(date +%s) - gate_start)) "$cpu_s" >> "$step_log"
 echo "gate: OK"

@@ -8420,8 +8420,10 @@ the adapter's async host function `call(kind, name, argsJson)` (so an open call 
 with nothing, a limit's message (the same text pi's prelude throws) or the stored JSON.
 Results are decoded and errors made by prelude functions (`decode`, `failure`), and the
 body's outcome is encoded by `encode`/`describe`, which the adapter calls while async
-calls may be pending: their return value comes from the new export `vm_outcome` (the
-entry call's outcome while no frame is active, also at IDLE). One visible difference: the
+calls may be pending: `vm_run` then returns IDLE, not DONE, and `vm_result` has nothing, so
+their return value comes from the export `vm_outcome` (the entry call's outcome while no
+frame is active, also at IDLE). D2633 removed it when the Sandbox stopped needing it; it
+is back for this host, which calls VM functions between results. One visible difference: the
 adapter reports `done` once the job queue has run empty, so output that a job queued
 before the body settled still counts (pi posts `done` from a reaction, first). js/pi/vm.ts
 runs it with `shape: "next"`; `dumpSession()` returns `{ dump, state }` (JSON: the format 2
@@ -8437,6 +8439,9 @@ With `dumpEveryIdle`, a next-mode session dumps itself at every idle point where
 open and continues in a new instance of the module resumed from the dump, invisibly to
 pi's host. pi's suite (`node js/pi/pi-tests.ts --next --dump-every-idle`) and every
 pi-vm.test.ts test run that way, as `--dump-every-idle` does for the difftest corpus.
+Every merge's gate runs pi's suite in the next mode on its release module (tests/pi/
+expected-failures.txt); the dump-every-idle run needs a release module with the dumper
+(one more LTO build), so it is `scripts/pi-dump-every-idle.sh`, for the gate's full run.
 
 ## D2652: prelude-next has no lockdown; the next mode has frozen builtins
 date: 2026-11-03 · by: example · issue: 0176

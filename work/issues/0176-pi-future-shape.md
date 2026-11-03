@@ -44,6 +44,9 @@ continuation dumps. pi itself is not changed.
 - pi-vm.test.ts runs every test in pi, next and next+dumpEveryIdle (the lockdown test is
   skipped in next), plus a dump/resume test with the three open-call policies and a todo
   for Math.random's state (portable, 0182).
+- Gate (coordinator's call): every merge runs pi's suite with `--next` on target/size
+  (tests/pi/expected-failures.txt: the 11 baseline failures); `--next --dump-every-idle`
+  is scripts/pi-dump-every-idle.sh (builds target/djs-dump.wasm), for the gate's full run.
 - Docs: docs/host.md "The shape pi should adopt", the fingerprint row, the new exports;
   continuation-dumps.md's measured packaging sizes; functions-as-code.md without the
   js/proto comparison.
