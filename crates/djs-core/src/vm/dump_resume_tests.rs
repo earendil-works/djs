@@ -258,6 +258,11 @@ fn nested_loops() {
 }
 
 #[test]
+fn an_exported_dump_stays_loadable() {
+    fixture("steps");
+}
+
+#[test]
 fn cells_in_their_tdz() {
     fixture("cells");
 }
@@ -480,6 +485,7 @@ fn exporter_round_trips_at_every_idle_point() {
         "combinators",
         "loops",
         "cells",
+        "steps",
     ] {
         let src =
             std::fs::read_to_string(fixture_dir().join(alloc::format!("{name}.src.js"))).unwrap();
@@ -487,6 +493,11 @@ fn exporter_round_trips_at_every_idle_point() {
         for k in 1..=marks.len() {
             match dump_at(&src, k) {
                 Ok((got, text)) => {
+                    if std::env::var("DJS_DUMP_SHOW")
+                        .is_ok_and(|v| v == alloc::format!("{name}@{k}"))
+                    {
+                        std::println!("{text}");
+                    }
                     if got != want {
                         failed.push(alloc::format!(
                             "{name} @{k}: {got:?}\n  want {want:?}\n{text}"

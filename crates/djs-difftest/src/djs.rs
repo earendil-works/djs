@@ -11,6 +11,8 @@
 //!
 //! Stress variants: `suspend_every` runs N fuel at a time and continues each slice in a
 //! fresh VM restored from the heap image; `gc_stress` collects at every safepoint.
+//! `dump_every_idle` (0172) dumps the VM at every idle point (a format 2 dump, with the
+//! prelude's `api` as a handle) and continues in a fresh VM that loaded the dump.
 //! Their transcripts must equal the plain run's (checked by the runner).
 
 use std::time::{Duration, Instant};
@@ -47,6 +49,8 @@ pub struct Djs {
     pub image: bool,
     /// Run the `@native` builtins as bytecode (`--backend bytecode`, 0063).
     pub bytecode_builtins: bool,
+    /// Dump at every idle point and continue in a fresh VM that loaded the dump.
+    pub dump_every_idle: bool,
 }
 
 impl Djs {
@@ -60,6 +64,9 @@ impl Djs {
         }
         if self.bytecode_builtins {
             s += " --backend bytecode";
+        }
+        if self.dump_every_idle {
+            s += " --dump-every-idle";
         }
         s
     }
@@ -147,6 +154,11 @@ struct Session {
     start: Instant,
     timeout: Duration,
     suspend: bool,
+    /// Dump at every idle point (`dump_every_idle`): the options of a fresh VM and the
+    /// clock to set in it.
+    dump: Option<(VmOptions, f64)>,
+    /// The prelude's api object.
+    api: Option<Handle>,
 }
 
 /// The corpus areas whose cases never change builtins, run with the prefix write barrier
@@ -170,6 +182,10 @@ impl Djs {
             ..VmOptions::default()
         };
         let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;
+        #[cfg(not(feature = "dump"))]
+        if self.dump_every_idle {
+            return Err("--dump-every-idle needs the `dump` feature".into());
+        }
         // The wall clock, read once per case, in UTC (D1383); the qjs engine runs with
         // TZ=UTC to match.
         vm.set_now(job.now);
@@ -188,6 +204,8 @@ impl Djs {
             start: Instant::now(),
             timeout: job.timeout,
             suspend: self.suspend_every.is_some(),
+            dump: self.dump_every_idle.then_some((opts, job.now)),
+            api: None,
         })
     }
 }
@@ -223,6 +241,7 @@ impl Session {
             .heap_mut()
             .new_handle(api)
             .map_err(|e| format!("{e:?}"))?;
+        self.api = Some(api);
 
         // The case, as the qjs driver builds it: a strict Script evaluating the arrow
         // `async (tools, console) => {...}` (D008), so `this` is the global object. The
@@ -241,7 +260,7 @@ impl Session {
                 // (Read again: the global object moves when the heap is collected.)
                 let global = Value::object(self.vm.global());
                 let f = self.call(script, global, &[], "the case script")?;
-                self.call_api(api, "run", &[f])?;
+                self.call_api("run", &[f])?;
             }
             // The qjs driver hands a function that throws the SyntaxError to api.run,
             // which reports it as the uncaught error.
@@ -253,13 +272,14 @@ impl Session {
         }
         // Nothing is left to run (the job queue is empty and no host call is pending).
         if self.done.is_none() {
-            self.call_api(api, "stalled", &[])?;
+            self.call_api("stalled", &[])?;
         }
         Ok(())
     }
 
     /// Calls the method `name` of the prelude's api object to completion.
-    fn call_api(&mut self, api: Handle, name: &str, args: &[Value]) -> Result<(), Stop> {
+    fn call_api(&mut self, name: &str, args: &[Value]) -> Result<(), Stop> {
+        let api = self.api.ok_or("no api")?;
         let api = self.vm.heap().get_handle(api);
         let o = api.as_object().ok_or("api is not an object")?;
         let key = self
@@ -274,6 +294,60 @@ impl Session {
             .and_then(|(_, p)| p.value())
             .ok_or_else(|| format!("api.{name} is missing"))?;
         self.call(f, api, args, name)?;
+        Ok(())
+    }
+
+    /// Dumps the idle VM and replaces it by a fresh VM that loaded the dump.
+    #[cfg(feature = "dump")]
+    fn dump_and_load(&mut self) -> Result<(), Stop> {
+        use djs_core::vm::dump::DumpOptions;
+        use djs_core::vm::dump_load::LoadOptions;
+        let (opts, now) = self.dump.ok_or("no dump options")?;
+        let api = self.vm.heap().get_handle(self.api.ok_or("no api")?);
+        let handles = [("api", api)];
+        let text = self
+            .vm
+            .dump(
+                &DumpOptions {
+                    base: djs_prelude::BASE,
+                    host_fn_name: &host_fn_name,
+                    handles: &handles,
+                    ..DumpOptions::default()
+                },
+                None,
+            )
+            .map_err(|e| {
+                format!(
+                    "dump at idle point {}: {}",
+                    self.idle_points + 1,
+                    e.message()
+                )
+            })?;
+        let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;
+        vm.set_now(now);
+        let loaded = vm
+            .load_dump(
+                &text,
+                &LoadOptions {
+                    host_fn: &host_fn,
+                    ..LoadOptions::default()
+                },
+            )
+            .map_err(|e| {
+                format!(
+                    "load at idle point {}: {}\n{text}",
+                    self.idle_points + 1,
+                    e.message()
+                )
+            })?;
+        let api = loaded
+            .handles
+            .iter()
+            .find(|h| h.0 == "api")
+            .map(|h| h.1)
+            .ok_or("the dump lost the api handle")?;
+        self.vm = vm;
+        self.api = Some(api);
         Ok(())
     }
 
@@ -296,9 +370,14 @@ impl Session {
                 Status::Idle => {
                     // An idle point: no job, no frame, only `host.later` calls pending.
                     // The oldest gets its argument back (D2590).
+                    #[cfg(feature = "dump")]
+                    if self.dump.is_some() {
+                        self.dump_and_load()?;
+                    }
                     let pending = self.vm.pending_host_calls();
                     let &call_id = pending
-                        .first()
+                        .iter()
+                        .min()
                         .ok_or_else(|| format!("{what}: idle with nothing pending"))?;
                     let info = self.vm.host_call(call_id).ok_or("host call vanished")?;
                     if info.fn_id != LATER {
@@ -356,5 +435,26 @@ impl Session {
                 }
             }
         }
+    }
+}
+
+/// The host's names of its functions, for dumps (0172).
+#[cfg(feature = "dump")]
+fn host_fn_name(id: u32) -> Option<String> {
+    match id {
+        OUTPUT => Some("output".into()),
+        DONE => Some("done".into()),
+        LATER => Some("later".into()),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "dump")]
+fn host_fn(name: &str) -> Option<u32> {
+    match name {
+        "output" => Some(OUTPUT),
+        "done" => Some(DONE),
+        "later" => Some(LATER),
+        _ => None,
     }
 }

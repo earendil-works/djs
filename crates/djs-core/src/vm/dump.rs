@@ -2476,40 +2476,136 @@ impl<'a> Dumper<'a> {
                 .get(d.nodes[b].v.as_internal().expect("a box"), BoxCell::VALUE)
         };
         // The boxes' variable names (their paths end in `~name`).
-        let mut box_names: Vec<String> = Vec::new();
-        let mut taken: Vec<String> = Vec::new();
-        for &b in &boxes {
-            let p = &self.nodes[b].path;
-            let name = String::from(p.rsplit('~').next().unwrap_or_default());
-            if taken.contains(&name) {
-                let path = p.clone();
-                self.refuse(
-                    path,
-                    "two captured variables of the same name in one scope group",
-                );
+        let box_names: Vec<String> = boxes
+            .iter()
+            .map(|&b| String::from(self.nodes[b].path.rsplit('~').next().unwrap_or_default()))
+            .collect();
+        let dup = |name: &str| box_names.iter().filter(|n| *n == name).count() > 1;
+
+        // Scopes. A variable's name must be unique where it is declared; variables of the
+        // same name (a loop's per-iteration bindings captured by several closures) go into
+        // nested factories, one per set of closures that capture them. Those sets must
+        // nest (or be disjoint), as scopes do.
+        let all: Vec<usize> = closures.iter().chain(&members).copied().collect();
+        let caps: Vec<Vec<usize>> = boxes
+            .iter()
+            .map(|&b| {
+                all.iter()
+                    .copied()
+                    .filter(|&c| self.nodes[c].edges.contains(&b))
+                    .collect()
+            })
+            .collect();
+        // The nested scopes: the closure sets of duplicated names. Scope 0 is the factory.
+        let mut sets: Vec<Vec<usize>> = alloc::vec![Vec::new()];
+        for (bi, s) in caps.iter().enumerate() {
+            if dup(&box_names[bi]) && !sets[1..].contains(s) {
+                sets.push_out(s.clone());
             }
-            taken.push_out(name.clone());
-            box_names.push_out(name);
         }
-        // Each closure's home: a box of the group that holds it under its name, else a
-        // key of the returned object.
+        let subset = |a: &[usize], b: &[usize]| a.iter().all(|x| b.contains(x));
+        for i in 1..sets.len() {
+            for j in 1..sets.len() {
+                let (a, b) = (&sets[i], &sets[j]);
+                if i != j && a.iter().any(|x| b.contains(x)) && !subset(a, b) && !subset(b, a) {
+                    let p = self.nodes[boxes[0]].path.clone();
+                    self.refuse(p, "closures that share variables in crossing ways");
+                }
+            }
+        }
+        // A scope's parent: the smallest other scope that contains it.
+        let parent: Vec<usize> = (0..sets.len())
+            .map(|i| {
+                if i == 0 {
+                    return usize::MAX;
+                }
+                (1..sets.len())
+                    .filter(|&j| j != i && subset(&sets[i], &sets[j]))
+                    .min_by_key(|&j| sets[j].len())
+                    .unwrap_or(0)
+            })
+            .collect();
+        let depth = |mut s: usize| {
+            let mut d = 0;
+            while s != 0 {
+                s = parent[s];
+                d += 1;
+            }
+            d
+        };
+        // The deepest scope whose closures include all of `of`.
+        let deepest = |of: &[usize]| -> usize {
+            (1..sets.len())
+                .filter(|&k| !of.is_empty() && subset(of, &sets[k]))
+                .max_by_key(|&k| depth(k))
+                .unwrap_or(0)
+        };
+        let box_scope: Vec<usize> = (0..boxes.len())
+            .map(|bi| {
+                if dup(&box_names[bi]) {
+                    sets.iter().position(|s| *s == caps[bi]).unwrap_or(0)
+                } else {
+                    deepest(&caps[bi])
+                }
+            })
+            .collect();
+        for s in 0..sets.len() {
+            for (i, &si) in box_scope.iter().enumerate() {
+                if si == s
+                    && box_scope[..i]
+                        .iter()
+                        .zip(&box_names)
+                        .any(|(&sj, n)| sj == s && *n == box_names[i])
+                {
+                    let p = self.nodes[boxes[i]].path.clone();
+                    self.refuse(p, "two captured variables of the same name in one scope");
+                }
+            }
+        }
+        let fn_scope: Vec<usize> = closures.iter().map(|&c| deepest(&[c])).collect();
+        for &m in &members {
+            if deepest(&[m]) != 0 {
+                let p = self.nodes[m].path.clone();
+                self.refuse(p, "a class in a nested scope of shared variables");
+            }
+        }
+        // `s` is `a` or inside it.
+        let within = |mut s: usize, a: usize| loop {
+            if s == a {
+                return true;
+            }
+            if s == 0 {
+                return false;
+            }
+            s = parent[s];
+        };
+
+        // Each closure's home: a box of the group that holds it under its name (where all
+        // the variables it captures are in scope), else a key of the returned object.
         let mut home: Vec<Option<usize>> = alloc::vec![None; closures.len()];
         for (bi, &b) in boxes.iter().enumerate() {
             if let Some(c) = self.node_of(box_value(self, b))
                 && let Some(j) = closures.iter().position(|&x| x == c)
                 && home[j].is_none()
+                && boxes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, bb)| self.nodes[c].edges.contains(bb))
+                    .all(|(k, _)| within(box_scope[bi], box_scope[k]))
             {
                 home[j] = Some(bi);
             }
         }
+        // Keys: unique in the group.
+        let mut taken: Vec<String> = box_names.iter().filter(|n| !dup(n)).cloned().collect();
         let mut keys: Vec<String> = Vec::new();
         for (j, &c) in closures.iter().enumerate() {
             let key = match home[j] {
-                Some(bi) => box_names[bi].clone(),
-                None => {
+                Some(bi) if !dup(&box_names[bi]) => box_names[bi].clone(),
+                _ => {
                     let fname = self.fn_name(c);
                     let rname = self.nodes[c].root.map(|r| self.roots[r].name.clone());
-                    if is_ident(&fname) && !taken.contains(&fname) {
+                    if home[j].is_none() && is_ident(&fname) && !taken.contains(&fname) {
                         fname
                     } else if let Some(r) = rname.filter(|r| is_ident(r) && !taken.contains(r)) {
                         r
@@ -2529,12 +2625,10 @@ impl<'a> Dumper<'a> {
         for &b in &boxes {
             self.nodes[b].state = State::Busy;
         }
-        let mut text = cat!(
-            "// ",
-            join(&keys, ", "),
-            " sharing ",
-            join(&box_names, ", ")
-        );
+        let mut text = cat!("// ", join(&keys, ", "), " sharing ");
+        for (i, n) in box_names.iter().enumerate() {
+            cat_to!(&mut text, if i > 0 { ", " } else { "" }, n);
+        }
         cat_to!(&mut text, "\n", loc, " = (() => {\n");
         // Classes first, a parent before its subclasses: their texts only read the
         // group's variables when their methods run.
@@ -2555,6 +2649,10 @@ impl<'a> Dumper<'a> {
         let mut locals: Vec<String> = alloc::vec![String::new(); closures.len()];
         for &j in &classes {
             let c = closures[j];
+            if fn_scope[j] != 0 {
+                let p = self.nodes[c].path.clone();
+                self.refuse(p, "a class in a nested scope of shared variables");
+            }
             locals[j] = match home[j] {
                 Some(bi) => box_names[bi].clone(),
                 None => cat!("$c", c),
@@ -2572,100 +2670,142 @@ impl<'a> Dumper<'a> {
             // which must stay as it was.
             cat_to!(&mut text, "  ", line, '\n');
         }
-        let mut sets: Vec<(usize, Value)> = Vec::new();
-        // Variables in their TDZ: declared after the factory's `return`, so never
-        // initialized.
-        let mut tdz: Vec<String> = Vec::new();
-        for (bi, &b) in boxes.iter().enumerate() {
-            let name = &box_names[bi];
-            let inner = box_value(self, b);
-            if inner.is_uninitialized() {
-                tdz.push_out(cat!("let ", name, ";"));
-                continue;
+        // The scopes, innermost first: each is the body of a factory of its own whose
+        // returned object its parent spreads into its own.
+        let mut order: Vec<usize> = (0..sets.len()).collect();
+        crate::sort::sort_by(&mut order, |&a, &b| depth(a) > depth(b));
+        let mut bodies: Vec<String> = alloc::vec![String::new(); sets.len()];
+        let mut set_fns: Vec<(String, Vec<(usize, Value)>)> = Vec::new();
+        for &s in &order {
+            let mut body = String::new();
+            let mut sets_here: Vec<(usize, Value)> = Vec::new();
+            let mut tdz: Vec<String> = Vec::new();
+            for (k, &child) in parent.iter().enumerate() {
+                if child == s && k != 0 {
+                    cat_to!(
+                        &mut body,
+                        "const $s",
+                        k,
+                        " = (() => {\n",
+                        bodies[k],
+                        "})();\n"
+                    );
+                }
             }
-            let c = self.node_of(inner);
-            let at_home = c.and_then(|c| closures.iter().position(|&x| x == c));
-            let line = match (c, at_home) {
-                (Some(c), Some(j)) if home[j] == Some(bi) => {
-                    if self.is_class_node(c) {
-                        continue;
+            for (bi, &b) in boxes.iter().enumerate() {
+                if box_scope[bi] != s {
+                    continue;
+                }
+                let name = &box_names[bi];
+                let inner = box_value(self, b);
+                if inner.is_uninitialized() {
+                    // In its TDZ: declared after the factory's `return`, so never
+                    // initialized.
+                    tdz.push_out(cat!("let ", name, ";"));
+                    continue;
+                }
+                let c = self.node_of(inner);
+                let at_home = c.and_then(|c| closures.iter().position(|&x| x == c));
+                let line = match (c, at_home) {
+                    (Some(c), Some(j)) if home[j] == Some(bi) => {
+                        if self.is_class_node(c) {
+                            continue;
+                        }
+                        let src = self.fn_source(c).unwrap_or_default();
+                        if declared_name(self.fn_kind(c), &src) == Some(name.as_str()) {
+                            src
+                        } else {
+                            let e = self.fn_expr(c, &src);
+                            cat!("let ", name, " = ", e, ";")
+                        }
                     }
-                    let src = self.fn_source(c).unwrap_or_default();
-                    if declared_name(self.fn_kind(c), &src) == Some(name.as_str()) {
-                        src
-                    } else {
-                        let e = self.fn_expr(c, &src);
+                    (Some(c), _) if self.nodes[c].state == State::Busy => {
+                        sets_here.push_out((bi, inner));
+                        cat!("let ", name, ";")
+                    }
+                    _ => {
+                        let e = self.expr(inner, None, Some(name));
+                        if e == *name {
+                            // A captured `tools` that holds the host's `tools`: the
+                            // closures read the global (`let tools = tools;` would be a TDZ
+                            // error).
+                            continue;
+                        }
                         cat!("let ", name, " = ", e, ";")
                     }
+                };
+                // Only the first line is indented: the rest belongs to a function's
+                // text, which must stay as it was.
+                cat_to!(&mut body, "  ", line, '\n');
+            }
+            let mut ret: Vec<String> = Vec::new();
+            for (k, &child) in parent.iter().enumerate() {
+                if child == s && k != 0 {
+                    ret.push_out(cat!("...$s", k));
                 }
-                (Some(c), _) if self.nodes[c].state == State::Busy => {
-                    sets.push_out((bi, inner));
-                    cat!("let ", name, ";")
+            }
+            for (j, &c) in closures.iter().enumerate() {
+                if fn_scope[j] != s && home[j].is_none_or(|bi| box_scope[bi] != s) {
+                    continue;
                 }
-                _ => {
-                    let e = self.expr(inner, None, Some(name));
-                    if e == *name {
-                        // A captured `tools` that holds the host's `tools`: the closures
-                        // read the global (`let tools = tools;` would be a TDZ error).
-                        continue;
+                if home[j].is_some_and(|bi| box_scope[bi] != s) {
+                    continue;
+                }
+                let key = &keys[j];
+                if let Some(bi) = home[j] {
+                    if *key == box_names[bi] {
+                        ret.push_out(key.clone());
+                    } else {
+                        ret.push_out(cat!(key, ": ", box_names[bi]));
                     }
-                    cat!("let ", name, " = ", e, ";")
-                }
-            };
-            // Only the first line is indented: the rest belongs to a function's text,
-            // which must stay as it was.
-            cat_to!(&mut text, "  ", line, '\n');
-        }
-        let mut ret: Vec<String> = Vec::new();
-        for (j, &c) in closures.iter().enumerate() {
-            let key = &keys[j];
-            if home[j].is_some() {
-                ret.push_out(key.clone());
-            } else if self.is_class_node(c) {
-                ret.push_out(cat!(key, ": ", locals[j]));
-            } else {
-                let src = self.fn_source(c).unwrap_or_default();
-                if self.method_text(c, key, func_flags::KIND_METHOD) {
-                    ret.push_out(src);
+                } else if self.is_class_node(c) {
+                    ret.push_out(cat!(key, ": ", locals[j]));
                 } else {
-                    let e = self.fn_expr(c, &src);
-                    ret.push_out(cat!(key, ": ", e));
+                    let src = self.fn_source(c).unwrap_or_default();
+                    if self.method_text(c, key, func_flags::KIND_METHOD) {
+                        ret.push_out(src);
+                    } else {
+                        let e = self.fn_expr(c, &src);
+                        ret.push_out(cat!(key, ": ", e));
+                    }
                 }
             }
-        }
-        // The cells of the variables an activation's frame shares with the closures.
-        let cells: Vec<String> = boxes
-            .iter()
-            .enumerate()
-            .filter(|(_, b)| self.nodes[**b].frame_box)
-            .map(|(bi, _)| cat!(box_names[bi], ": $dump.cell(() => ", box_names[bi], ")"))
-            .collect();
-        if !cells.is_empty() {
-            ret.push_out(cat!("$cells: { ", join(&cells, ", "), " }"));
-        }
-        if !sets.is_empty() {
-            let mut s = String::from("$set(v) { ({ ");
-            for (i, (bi, _)) in sets.iter().enumerate() {
-                cat_to!(&mut s, if i > 0 { ", " } else { "" }, box_names[*bi]);
+            // The cells of the variables an activation's frame shares with the closures.
+            for (bi, &b) in boxes.iter().enumerate() {
+                if box_scope[bi] == s && self.nodes[b].frame_box {
+                    ret.push_out(cat!("$c", b, ": $dump.cell(() => ", box_names[bi], ")"));
+                }
             }
-            s.push_str(" } = v); }");
-            ret.push_out(s);
+            if !sets_here.is_empty() {
+                let f = if s == 0 {
+                    String::from("$set")
+                } else {
+                    cat!("$set", s)
+                };
+                let mut t = cat!(f, "(v) { ({ ");
+                for (i, (bi, _)) in sets_here.iter().enumerate() {
+                    cat_to!(&mut t, if i > 0 { ", " } else { "" }, box_names[*bi]);
+                }
+                t.push_str(" } = v); }");
+                ret.push_out(t);
+                set_fns.push_out((f, sets_here));
+            }
+            cat_to!(&mut body, "  return { ", join(&ret, ", "), " };\n");
+            for l in &tdz {
+                cat_to!(&mut body, "  ", l, '\n');
+            }
+            bodies[s] = body;
         }
-        cat_to!(&mut text, "  return { ", join(&ret, ", "), " };\n");
-        for l in &tdz {
-            cat_to!(&mut text, "  ", l, '\n');
-        }
+        text.push_str(&bodies[0]);
         text.push_str("})();");
-        for (bi, &b) in boxes.iter().enumerate() {
-            if self.nodes[b].frame_box {
-                self.nodes[b].loc = cat!(loc, ".$cells.", box_names[bi]);
-            }
-        }
         self.out.push_out(text);
         self.skeleton.push_out(None);
         self.class_locals.clear();
         for &b in &boxes {
             self.nodes[b].state = State::Done;
+            if self.nodes[b].frame_box {
+                self.nodes[b].loc = cat!(loc, ".$c", b);
+            }
         }
         for (j, &c) in closures.iter().enumerate() {
             self.nodes[c].state = State::Done;
@@ -2677,14 +2817,14 @@ impl<'a> Dumper<'a> {
             }
         }
         self.groups[g].state = State::Done;
-        if !sets.is_empty() {
+        for (f, sets) in set_fns {
             let mut fields = Vec::new();
             for (bi, v) in sets {
                 let e = self.expr_or_loc(v);
                 fields.push_out(cat!(box_names[bi], ": ", e));
             }
             self.patches
-                .push_out(cat!(loc, ".$set({ ", join(&fields, ", "), " });"));
+                .push_out(cat!(loc, ".", f, "({ ", join(&fields, ", "), " });"));
         }
     }
 

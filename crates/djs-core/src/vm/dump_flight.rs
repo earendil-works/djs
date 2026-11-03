@@ -1302,8 +1302,13 @@ impl Dumper<'_> {
             self.react_upto(q, j);
         }
         let name = self.fresh("a");
+        let comment = fv(0)
+            .as_object()
+            .map(|f| self.site_comment(f, &site))
+            .unwrap_or_default();
         self.line(
             cat!(
+                comment,
                 name,
                 " = $dump.resume(",
                 fe,
@@ -1392,11 +1397,69 @@ impl Dumper<'_> {
             )
         };
         let name = self.fresh("a");
-        self.line(cat!(name, " = ", e, ";"), before);
+        let comment = if state == suspend::START {
+            "// a generator that has not started\n"
+        } else {
+            "// a finished generator\n"
+        };
+        self.line(cat!(comment, name, " = ", e, ";"), before);
         self.nodes[n].loc = name.clone();
         self.nodes[n].state = State::Done;
         self.fl.acts[a].state = State::Done;
         name
+    }
+
+    /// Where an activation stopped, for the reader: its function, the site, and the
+    /// source line with a caret under the `await`/`yield`. Comments only.
+    fn site_comment(&self, f: Obj, site: &Site) -> String {
+        let h = self.h;
+        let t = h.closure_template(f);
+        let info = template::debug_info(h, t);
+        let a = h.arena();
+        let text = |r: Ref| r.get().map(|s| h.str_to_string(crate::value::Str(s)));
+        let script = info.script.get();
+        let src = script.and_then(|s| text(a.get::<Ref>(s, Script::SOURCE)));
+        let file = script
+            .and_then(|s| text(a.get::<Ref>(s, Script::NAME)))
+            .unwrap_or_default();
+        let fname = h.atom_name(Atom::from_id(a.get::<u32>(t, FuncTemplate::NAME)));
+        let fname = if fname.is_empty() {
+            String::from("<anonymous>")
+        } else {
+            fname
+        };
+        let mut out = cat!("// ", fname, ", at ", site.name);
+        let Some(src) = src else {
+            out.push_str(":\n");
+            return out;
+        };
+        let at = (info.src_start + site.pos) as usize;
+        let start = src
+            .get(..at)
+            .and_then(|b| b.rfind('\n'))
+            .map_or(0, |i| i + 1);
+        let end = src
+            .get(at..)
+            .and_then(|r| r.find('\n'))
+            .map_or(src.len(), |i| at + i);
+        let line_no = src.get(..at).map_or(0, |b| b.matches('\n').count()) + 1;
+        let before = src.get(start..at).unwrap_or_default();
+        let col = before.chars().count() + 1;
+        cat_to!(&mut out, " (", file, ":", line_no, ":", col, "):\n");
+        let line: String = src
+            .get(start..end)
+            .unwrap_or_default()
+            .chars()
+            .take(120)
+            .collect();
+        let caret: String = before
+            .chars()
+            .map(|c| if c == '\t' { '\t' } else { ' ' })
+            .collect();
+        if col <= 120 {
+            cat_to!(&mut out, "//   ", line.trim_end(), "\n//   ", caret, "^\n");
+        }
+        out
     }
 
     /// A frame slot's value: `$dump.TDZ`, a Box's cell when closures share it, else the
