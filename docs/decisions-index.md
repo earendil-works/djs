@@ -509,3 +509,4 @@ topics when the index is next reorganized.
 - D2267: Cargo features are classified as image features or image-neutral
 - D2268: When to bump COMPAT_VERSION
 - D2521: Vec pushes out of line outside the hot loops (`PushOut::push_out`)
+- D2445: A closure's length and name come from its template until changed

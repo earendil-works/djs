@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0164 | Image compatibility by dependencies (D026) | snapshot | .worktrees/snapshot |
 | 0162 | Act on pico's speed findings (tree, fuel rule, results into heap strings) | speed | .worktrees/speed |
 | 0163 | Seeded hashing for VM atoms and Map/Set | strings | .worktrees/strings |
 | 0158 | Instance memory: reservation, arena at end, stack, base outside | heap | .worktrees/heap |
@@ -85,6 +84,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0164 | Image compatibility by dependency descriptor (D2265-D2268) | cb43e070 (agent snapshot; container format 3) |
 | 0159 | Twin re-benchmark: 54 @fast + 2 @native dropped (D2310); wmeasure fails loudly | ec8042f5 (agent perf; full 445.1 KB, slim 379.3 KB) |
 | 0160 | Slim build: full + unicode features (D2411-D2413, D025) | 7074117e (agent slim; full 450.4 KB 1.57x, slim 385.8 KB 1.35x; gate legs) |
 | 0155 | instr.py fixed + user/builtin split (D2309); no stale stack slots in images (D2308) | f1095c99 (agent perf; pi-like: 47% user bytecode, 39% builtins, 12% GC) |
