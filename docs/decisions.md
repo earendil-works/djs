@@ -7773,3 +7773,67 @@ global, a builtin global). Otherwise the dump is refused with the function's pat
 dump that does not compile. It needs no JS parser of its own (the engine's compiler
 resolves the names) and costs a compile of the cut-down dump plus ~6 KB raw (~3 KB gzip)
 in the wasm module. Functions of identical text and free names are compared once.
+
+## D2560: A waiting session persists as a continuation dump; heap images stay inside a process
+date: 2026-11-03 · by: coordinator (owner direction) · issue: 0169
+Persistence is a format 2 dump (docs/continuation-dumps.md): a Script, like version 1
+(D2353), that also recreates suspended activations, open host calls and in-flight promises.
+Every later djs loads it and continues the run, or refuses it with a reason; it never
+misreads. Heap images remain for what stays within one process: the base image, pi's
+prelude image as a startup cache (D1495), the stress and determinism checks (D1720), and the
+transport between module variants (D2564). Snapshot containers, session images, reference
+compression and the APIs on them (`.snapshot`, `Sandbox.bytes`/`fromBytes`, pi's
+`snapshot`/`resumeVm`) are retired by 0177 once dumps cover the harvested corpus; this
+supersedes D2260, D2261, D2262, D2066, D2400 and D1890 as persistence formats from then on.
+The owner's reason: images do not work as pi's persistence (tied to the build, opaque), and
+codemode needs a form that survives upgrades. ARCH's G4 and G5 are restated accordingly.
+
+## D2561: Dumps are taken only at idle points
+date: 2026-11-03 · by: coordinator (owner direction) · issue: 0169
+A dump is taken when the VM is idle: no queued jobs, no frames on the stack, no parked sync
+host call. So fuel debt, native frames and half-run instructions never need a portable form.
+The owner's reason: only externally visible effects matter, and those are tool calls, at
+which a run is idle anyway; whatever ran since the last result reruns deterministically
+(D1720). A host that must persist a computing run gives it fuel to reach an idle point, or
+kills it. Suspending anywhere within a process (fuel slices) is unchanged.
+
+## D2562: In-flight builtin state is re-enacted; a few privileged loader primitives
+date: 2026-11-03 · by: coordinator · issue: 0171
+A format 2 dump writes in-flight builtin state as the public calls that recreate it, where the
+spec makes the result indistinguishable: promise combinators called again with settled
+elements' values, reactions added again in order, iterators made and advanced. What plain
+JavaScript cannot express goes through primitives the loader passes in on `$dump`, absent from
+an ordinary Script: `resume` (a suspended activation at a named site), `cell` (a captured
+variable's cell), `pending` (an open host call), `handle`, `private` (private fields and
+brands) and `TDZ`. Rejected: describing builtin records by versioned schemas (0141), which
+needs a schema per closure kind and record and a migration per change.
+
+## D2563: The compiler's suspension maps are a pinned contract
+date: 2026-11-03 · by: coordinator · issue: 0169
+Each `await`/`yield` is named by kind and ordinal in its function's text (`await#2`), and the
+compiler describes it on demand by compiling again: the live bindings (name and declaring
+scope, hidden locals by stable name), the operand roles below the awaited value
+(docs/portable-snapshots.md §3.5, emitted by the compiler where it emits the construct) and the
+enclosing loops with their iterator records. A test pins the maps of every await in the corpus
+and the e2e async tests; a diff is accepted only as a decision (older dumps stopped there
+refuse, or a mapping is added).
+
+## D2564: One dumper, in Rust; the TypeScript dumper is dropped
+date: 2026-11-03 · by: coordinator (owner agreed) · issue: 0175
+Supersedes D2354. With continuations a second dumper would repeat every role, re-enactment
+and class case under a byte-identity check, and read generator frames, reaction lists and the
+host call table; suspension maps come from the compiler in wasm anyway, and the CLI and REPL
+need the Rust dumper. js/proto/dump.ts is retired. For wasm hosts the same code ships either
+in the main module (feature `dump` on, the size ceiling raised) or in a second module of the
+same build that the host loads to persist and resume, with images as the transport inside the
+process (the feature is image-neutral, D2352). 0177 measures both after the image persistence
+code is gone; the plan leans to the second module.
+
+## D2565: djs builds pi's future prelude shape in its own adapter first
+date: 2026-11-03 · by: coordinator (owner direction) · issue: 0176
+pi's prelude keeps in-flight state (pending resolve/reject per call id, `nextId`, `finished`,
+store writes, `run()`'s reactions) that a dump would have to carry. The target shape: tools
+are engine async host functions (D1374), the body's promise is a host handle, `finished` and
+the writes live in the host, so the prelude holds no in-flight state and is rerun on load
+(D2262). djs builds it as tests/pi/prelude-next.ts and an adapter mode, with pi's suite run
+against both; tests/pi/prelude-source.ts stays verbatim. pi itself is not changed yet.

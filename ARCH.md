@@ -23,12 +23,14 @@ In priority order. Each design decision below should be traceable to one of thes
   from source text to running in well under a millisecond plus its own runtime. The wasm
   binary should be small.
 - **G3. No AST.** A single-pass compiler goes from tokens to bytecode, like QuickJS.
-- **G4. Snapshots** of the whole VM state (heap, stacks, pending jobs, pending host calls), and
-  incremental snapshots against a base.
+- **G4. Persistence.** A session waiting on host calls (its data, functions, suspended
+  activations, open calls) can be written as a continuation dump and continued by any later
+  build, or refused with a reason (D2560, D2561, docs/continuation-dumps.md). Inside a
+  process the whole VM is a heap image (startup from the base image, stress checks).
 - **G5. Suspend anywhere.** Execution can stop between any two bytecode instructions,
   including inside getters, `toString` calls, `Array.prototype.map` callbacks, promise jobs,
-  generators and async functions. The suspended state can then be snapshotted and resumed in
-  another process.
+  generators and async functions, and continue later in the same process. Across processes
+  a run continues from its idle points (D2561).
 
 Non-goals for now: Intl, Temporal, `SharedArrayBuffer`/Atomics, workers, sloppy mode,
 `with`, direct `eval`, ES modules (`import()` compiles and rejects, D1582), a JIT, and full
@@ -51,8 +53,9 @@ djs-core uses no BTree collections and no core slice sorts, for code size (D1432
 
 Each goal follows from this:
 
-- **G4:** a snapshot is a compacting GC followed by a copy of the arena bytes and a small
-  header. There is no per-object serializer to write or keep in sync.
+- **G4:** within a process, a snapshot is a compacting GC followed by a copy of the arena
+  bytes and a small header. The durable form, the continuation dump, is written by walking
+  that same heap (D2560).
 - **G5:** the interpreter never recurses on the Rust stack for JS calls. Every frame is in
   the arena, so returning from `run()` at any instruction boundary leaves a complete,
   resumable state.
@@ -620,6 +623,10 @@ the numbers): the wire format beats `JSON.stringify` + `JSON.parse` in wasm by 1
 objects up to 9x on one big string inbound, and the reader by 3x to 130x outbound.
 
 ### Snapshots (G4)
+
+Persistence is moving to continuation dumps (D2560, docs/continuation-dumps.md): what
+follows describes images, which stay for use inside a process; the containers and session
+images built on them are retired by 0177.
 
 - **Format:** an image is the arena bytes after a compacting GC; the roots and the
   image's **dependency descriptor** live in the arena's root cell (D026, D2265): hashes

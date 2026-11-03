@@ -6,6 +6,10 @@ and `.restore`, a djs-wasm export (feature `dump`, off by default) behind
 bytes (js/proto) for comparison. Decisions: D2352 (wasm size), D2353 (the format and its
 promise), D2354 (which dumper a wasm host uses).
 
+Next: format 2, continuation dumps, which also carry suspended activations and replace heap
+images as persistence; the TypeScript dumper is dropped (D2560-D2565,
+docs/continuation-dumps.md).
+
 The owner's question: a harness builds functions in one session and wants them back later,
 "even after weeks, where heap snapshots are potentially no longer usable", with captured
 state that is often data pulled by codemode and sometimes binary, and the persisted form

@@ -12,15 +12,24 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on | touches |
 | --- | --- | --- | --- |
+| 0169 | Suspension maps in the compiler, pinned (D2563) | - | compiler/ (side table), pin test |
+| 0170 | Classes and private fields in dumps; the loader's privileged `$dump` | - | vm/dump*.rs, Vm::load_dump, djs-wasm, sandbox load |
+| 0173 | Idle points in the difftest corpus (`host.later`) | - | tests/corpus/prelude.js, scripts/harvest, djs-difftest glue |
 
 ## Open (blocked on dependencies)
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| - | TS dumper out of prototype (layout constants, bytecode global reads, both dumpers equal in gate); classes; blob buffers; persist() convention for pi | owner (0167 follow-ups) |
+| 0171 | Loader: suspended activations, open calls, handles; hand-written format 2 fixtures | 0169, 0170 |
+| 0172 | Exporter: continuations, re-enactment; `--dump-every-idle` in the gate | 0171, 0173 |
+| 0174 | REPL and CLI: tools, waiting inputs, continuation dumps, `run --dump-after`/`resume` | 0171 (tools part earlier) |
+| 0175 | Sandbox run API (`begin`/`settle`/`advance`/`dump`/`resume`), wasm packagings | 0172 |
+| 0176 | pi's future shape: prelude-next, adapter mode, dumps (D2565) | 0175 |
+| 0177 | Retire heap images as persistence; packaging decided; guide | 0176 |
+| 0178 | Continuation dumps across builds: golden fixtures, two-commit check | 0172 |
+| - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
 | - | Vec push_out/with_capacity in bloat's files (~1 KB); scratch buffers for Vec drops (few KB) | 0151 L3 |
-| - | Result buffers + snapshots referencing tool results (0165 steps 2-3) | pi adopting snapshots as a fast path (pi has no snapshots; replay + NestedCallDoc keep results) |
-| - | Codec-free session images for browsers (pico lesson 4) | - |
+| - | Result buffers + snapshots referencing tool results (0165 steps 2-3) | dropped with image persistence (D2560); revisit for dumps |
 
 ## Done
 

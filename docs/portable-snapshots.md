@@ -1,6 +1,9 @@
 # Portable snapshots: VM state that survives a djs upgrade
 
-Status: research report (issue 0141), for the owner. Nothing here is decided or built in
+Status: research report (issue 0141), for the owner. Since adopted in adapted form:
+continuation dumps (docs/continuation-dumps.md, D2560-D2565) take this design's idle-point
+export, site naming and operand roles, write it as a Script, and re-enact builtin state
+instead of describing it by schema. The original report follows; nothing in it was built in
 the engine. The prototype and every number below are reproducible with the commands at
 the end. It takes the opposite stance from docs/snapshot-versioning.md (0140), which
 recommends journal replay and rejects migration and logical snapshots: here we assume
