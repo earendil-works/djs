@@ -941,7 +941,10 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
             let b = b.borrow();
             let base = b.as_deref()?;
             let opts = djs_core::vm::dump::DumpOptions { base, host: &host };
-            Some(slot.vm.dump(&opts, (!names.is_empty()).then_some(names.as_slice())))
+            Some(
+                slot.vm
+                    .dump(&opts, (!names.is_empty()).then_some(names.as_slice())),
+            )
         });
         match r {
             Some(Ok(t)) => {

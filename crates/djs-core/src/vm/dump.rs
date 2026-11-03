@@ -406,7 +406,7 @@ impl<'a> Dumper<'a> {
         let base = Heap::from_bytes_trusted(opts.base.to_vec(), opts.base.len() * 2)
             .map_err(|_| refuse("the base image does not load"))?;
         let mut builtins = BTreeMap::new();
-        for (cell, path) in super::registry::canonical_names(&base) {
+        for (cell, path) in super::registry::reachable_names(&base) {
             if cell < base_end {
                 builtins.insert(cell, path);
             }

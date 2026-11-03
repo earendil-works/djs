@@ -59,6 +59,21 @@ define reusable functions), the refusal list, and sizes. No engine changes.
   text, no identifier rewriting); captured values that close a cycle are set after the
   data through the factory's `$set`.
 
+- Built: `crates/djs-core/src/vm/dump.rs` (`Vm::dump(opts, names)`, `Vm::dump_values`,
+  `DumpOptions { base, host }`, `DumpError`, `HEADER = "// djs-dump 1"`), feature `dump`
+  (default in djs-core, IMAGE_NEUTRAL, left out of SOURCE_HASH's feature list in build.rs);
+  tests `vm/dump_tests.rs` (8 round trips + refusals, `DJS_DUMP_SHOW=1` prints the dumps);
+  REPL `.dump <file|-> [names]`, `.restore` runs a dump in a fresh VM (djs-cli enables
+  djs-core/dump); djs-wasm `vm_dump` (feature `dump`, NOT default: +58 KB gzip measured
+  443,590 -> 501,768; the gate's debug wasm build adds it); js `Sandbox.dump(names)` /
+  `load(text)` (Script goal), js/test/dumpload.test.ts.
+- `registry::reachable_names` = canonical_names without the prelude-functions pass: that
+  pass compiles the prelude source and linked ~66 KB gzip (prelude text) into wasm.
+- Coordinator (after the size report): keep dump off in djs-wasm; shrink the Rust dumper
+  (no BTreeMap / sort / format! on the dump path; heap tables, insertion order,
+  crate::text builder D2339) and prototype a host-side TS dumper over js/src/reader.ts to
+  compare (coverage, speed, JS code size), recommend one in the doc.
+
 ## Follow-ups
 
 ## Result

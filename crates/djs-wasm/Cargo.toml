@@ -11,7 +11,7 @@ description = "The wasm32 export layer over djs-core's Vm (docs/host.md)."
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["full", "unicode", "dump"]
+default = ["full", "unicode"]
 # djs-core's features (D2411); without `full` this is the slim module
 # (`scripts/build-wasm.sh --slim`, djs-slim.wasm).
 full = ["djs-prelude/full"]
@@ -26,7 +26,8 @@ alloc-stats = []
 # Exports `djs_disasm` (bytecode listings) for the docs site's live examples (0113).
 # Off by default: the shipping module does not carry the disassembler.
 docs = []
-# Exports `vm_dump` (`Vm::dump`, 0167): a VM's bindings written as JavaScript.
+# Exports `vm_dump` (`Vm::dump`, 0167): a VM's bindings written as JavaScript. Off by
+# default: it costs the module 58 KB gzip (D2352); the gate's debug build turns it on.
 dump = ["djs-core/dump"]
 # Unchecked arena field access in djs-core (D2520); off in the shipped module.
 unsafe-heap = ["djs-core/unsafe-heap"]

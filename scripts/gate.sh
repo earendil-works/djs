@@ -78,7 +78,7 @@ step "guide (docs/guide)"; cargo run --quiet -p djs-docs -- check
 # across languages: node encodes a corpus, djs decodes it.
 # 0023: djs-wasm, which the js tests (sandbox.test.ts) load. A debug build is enough.
 step "djs-wasm"
-cargo build -p djs-wasm --target wasm32-unknown-unknown --features compiled-prelude --quiet
+cargo build -p djs-wasm --target wasm32-unknown-unknown --features compiled-prelude,dump --quiet
 export DJS_WASM="$PWD/target/wasm32-unknown-unknown/debug/djs_wasm.wasm"
 step "js tests"; node --test js/test/*.test.ts
 # 0072: native and wasm builds leave byte-identical heap images and spend the same fuel.

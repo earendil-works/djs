@@ -390,6 +390,17 @@ pub const REALM_ROOTS: &[(Intrinsic, &str)] = &[
 /// Every builtin object and symbol a walk from the roots reaches, each with its canonical
 /// path (the first path breadth-first, keys in sorted order), in walk order.
 pub fn canonical_names(heap: &Heap) -> Vec<(u32, String)> {
+    names(heap, prelude_functions)
+}
+
+/// [`canonical_names`] without the last pass (the prelude's internal functions, whose
+/// names need the prelude's source compiled): the same paths for everything else. For
+/// `Vm::dump`, which refuses those functions anyway and should not link the prelude source.
+pub fn reachable_names(heap: &Heap) -> Vec<(u32, String)> {
+    names(heap, |_| Vec::new())
+}
+
+fn names(heap: &Heap, prelude: impl FnOnce(&Heap) -> Vec<(Value, String)>) -> Vec<(u32, String)> {
     let mut seen: BTreeSet<u32> = BTreeSet::new();
     let mut out: Vec<(Value, String)> = Vec::new();
     let global = intrinsic(heap, Intrinsic::Global);
@@ -434,7 +445,7 @@ pub fn canonical_names(heap: &Heap) -> Vec<(u32, String)> {
     walk(heap, named, true, &mut seen, &mut out);
     // Last, the prelude's internal functions, which no property reaches (and what their
     // properties lead to).
-    walk(heap, prelude_functions(heap), true, &mut seen, &mut out);
+    walk(heap, prelude(heap), true, &mut seen, &mut out);
     out.into_iter()
         .filter_map(|(v, p)| Some((cell_of(v)?, p)))
         .collect()
