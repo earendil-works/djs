@@ -985,7 +985,8 @@ class Dumper {
     root.state = BUSY;
     const n = this.nodeOf(root.value);
     let line: string;
-    if (n >= 0 && this.nodes[n].root === r && this.nodes[n].state === NEW) {
+    // A closure of a scope group is made by its factory (`expr` emits it), 0168.
+    if (n >= 0 && this.nodes[n].root === r && this.nodes[n].state === NEW && this.nodes[n].group < 0) {
       this.nodes[n].loc = root.name;
       const src = this.freeClosure(n) ? this.h.source(payOf(this.nodes[n].v)) : null;
       if (src !== null && declaredName(this.fnKind(n), src) === root.name) {
@@ -1158,7 +1159,8 @@ class Dumper {
       if (bi !== undefined) key = boxNames[bi];
       else {
         const f = this.fnName(c);
-        key = isIdent(f) && !taken.has(f) ? f : `$f${c}`;
+        const r = this.nodes[c].root >= 0 ? this.roots[this.nodes[c].root].name : "";
+        key = isIdent(f) && !taken.has(f) ? f : isIdent(r) && !taken.has(r) ? r : `$f${c}`;
       }
       taken.add(key);
       this.nodes[c].loc = `${loc}.${key}`;
@@ -1246,6 +1248,7 @@ class Dumper {
       case CL.Ordinary: return this.literal(o, loc);
       case CL.Array: return this.array(o, loc);
       case CL.Function: {
+        if (this.nodes[n].group >= 0) this.refuse(this.nodes[n].path, "internal: a closure written outside its factory");
         const r = this.fnExpr(n, this.fnSource(n));
         this.fnPatches(n, ctx);
         return r;

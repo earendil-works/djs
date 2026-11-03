@@ -267,7 +267,9 @@ fn big_dump_timing() {
         &mut a,
         "const users = [];\n\
          for (let i = 0; i < 10000; i++) users.push({ id: i, name: 'user' + i, tags: ['a', 'b' + (i % 7)], score: i * 1.5, meta: { created: new Date(i * 1000), active: i % 3 === 0 } });\n\
-         const byId = new Map(users.map((u) => [u.id, u]));",
+         const byId = new Map(users.map((u) => [u.id, u]));\n\
+         function makeCounter(start) { let n = start; return { inc: () => ++n, get: () => n }; }\n\
+         const counters = []; for (let i = 0; i < 1000; i++) counters.push(makeCounter(i));",
     );
     let t = std::time::Instant::now();
     let names = super::registry::reachable_names(
@@ -365,4 +367,106 @@ fn captured_host_values_read_the_global() {
     run(&mut b, "globalThis.tools = { read: (p) => 'host ' + p };");
     run(&mut b, &text);
     assert_eq!(run(&mut b, "lib.go('x')"), "host x", "{text}");
+}
+
+/// Runs `lines` one Script each (as the REPL does) or all as one Script, dumps every
+/// binding, loads the dump into a fresh VM and compares `check` there.
+fn closure_case(lines: &[&str], check: &str) {
+    for one_script in [true, false] {
+        let mut a = new_vm();
+        if one_script {
+            let r = run(&mut a, &lines.join("\n"));
+            assert!(
+                !r.starts_with("throw") && !r.starts_with("compile"),
+                "setup: {r}"
+            );
+        } else {
+            for l in lines {
+                let r = run(&mut a, l);
+                assert!(
+                    !r.starts_with("throw") && !r.starts_with("compile"),
+                    "{l}: {r}"
+                );
+            }
+        }
+        let text = dump(&a, None).unwrap_or_else(|e| panic!("{}", e.message()));
+        if std::env::var_os("DJS_DUMP_SHOW").is_some() {
+            std::println!("{text}");
+        }
+        let want = run(&mut a, check);
+        let mut b = new_vm();
+        let loaded = run(&mut b, &text);
+        assert!(!loaded.starts_with("throw"), "load: {loaded}\n{text}");
+        assert_eq!(run(&mut b, check), want, "one script: {one_script}\n{text}");
+    }
+}
+
+#[test]
+fn closure_over_a_parameter() {
+    // The owner's report (0168): `blah2` came out as `() => a`.
+    closure_case(
+        &[
+            "let foo = [1,2,3,4];",
+            "let x = this;",
+            "function getStuff() { return [foo, x]; }",
+            "function blah(a) { return () => a }",
+            "const blah2 = blah(2);",
+        ],
+        "[blah2(), getStuff()[0].join(), getStuff()[1] === globalThis, blah(5)(), blah2.name].join()",
+    );
+}
+
+#[test]
+fn closures_over_locals_and_nested_scopes() {
+    closure_case(
+        &[
+            "function mk() { let v = 10; const w = v * 2; return () => v + w; }",
+            "const f = mk();",
+            "function outer(x) { return function mid(y) { return (z) => x + y + z; }; }",
+            "const mid = outer(1); const g = mid(2);",
+            "let blockFn; { let hidden = 5; blockFn = () => hidden++; } blockFn();",
+        ],
+        "[f(), g(3), mid(10)(100), blockFn(), blockFn(), g.name, mid.name].join()",
+    );
+}
+
+#[test]
+fn closures_from_loops_with_let() {
+    closure_case(
+        &[
+            "const fs = [];",
+            "for (let i = 0; i < 3; i++) fs.push(() => i * 10);",
+            "const counters = [1, 2].map((start) => { let n = start; return () => ++n; });",
+            "counters[1]();",
+        ],
+        "[fs.map((f) => f()).join(), counters[0](), counters[1](), counters[1]()].join()",
+    );
+}
+
+#[test]
+fn closures_sharing_a_binding() {
+    closure_case(
+        &[
+            "function pair() { let n = 0; return [() => ++n, () => n]; }",
+            "const [inc, get] = pair();",
+            "inc();",
+            "const box = { inc, get };",
+        ],
+        "[inc(), get(), box.inc(), get(), box.get === get].join()",
+    );
+}
+
+#[test]
+fn closures_capturing_closures() {
+    closure_case(
+        &[
+            "function mk() { const helper = (x) => x * 2; return (y) => helper(y) + 1; }",
+            "const h = mk();",
+            "function mk2(k) { function twice(x) { return k(k(x)); } return (y) => twice(y); }",
+            "const h2 = mk2(h);",
+            "function chain() { let a = 1; const f1 = () => a; const f2 = () => f1() + 1; return () => f2() + f1(); }",
+            "const h3 = chain();",
+        ],
+        "[h(3), h2(1), h3()].join()",
+    );
 }

@@ -136,6 +136,8 @@ struct Root {
     decl: Decl,
     value: Value,
     state: State,
+    /// A captured variable's box (`dump_values`): closures over it read the root.
+    boxed: bool,
 }
 
 /// A user global (a binding of the global lexical record, or a property of the global
@@ -573,6 +575,8 @@ struct Dumper<'a> {
     builtins: Vec<Builtin>,
     host_exprs: Vec<String>,
     host_names: Vec<&'a str>,
+    /// The global object's properties on the base: the builtin globals.
+    base_globals: Vec<String>,
     globals: Vec<Global>,
     /// `globals` by atom id.
     global_atoms: Index,
@@ -585,6 +589,14 @@ struct Dumper<'a> {
     /// Builtin properties the session changed: (holder expression, key, new property).
     builtin_patches: Vec<(String, Atom, Option<Property>)>,
     out: Vec<String>,
+    /// Per line of `out`, what the checker compiles instead when the line writes no
+    /// function: `let name;` for a root, nothing for a `$dump` object (`None`: the line).
+    skeleton: Vec<Option<String>>,
+    /// Functions whose source was read so far (an over-count: a line that read none
+    /// writes none).
+    fns_read: core::cell::Cell<u32>,
+    /// The base heap: the checker compiles the dump into it.
+    scratch: Option<Heap>,
     patches: Vec<String>,
     finals: Vec<String>,
     helpers: u8,
@@ -603,7 +615,8 @@ impl<'a> Dumper<'a> {
         if base_end == 0 || opts.base.len() < base_end as usize {
             return Err(refuse("the VM was not made from this base image"));
         }
-        let base = Heap::from_bytes_trusted(opts.base.to_vec(), opts.base.len() * 2)
+        // A private copy, kept for the checker to compile the dump into.
+        let base = Heap::from_bytes_trusted(opts.base.to_vec(), crate::heap::DEFAULT_LIMIT)
             .map_err(|_| refuse("the base image does not load"))?;
         let mut d = Dumper {
             vm,
@@ -613,6 +626,7 @@ impl<'a> Dumper<'a> {
             builtins: Vec::new(),
             host_exprs: Vec::new(),
             host_names: opts.host.to_vec(),
+            base_globals: Vec::new(),
             globals: Vec::new(),
             global_atoms: Index::default(),
             roots: Vec::new(),
@@ -622,6 +636,9 @@ impl<'a> Dumper<'a> {
             refusals: Vec::new(),
             builtin_patches: Vec::new(),
             out: Vec::new(),
+            skeleton: Vec::new(),
+            fns_read: core::cell::Cell::new(0),
+            scratch: None,
             patches: Vec::new(),
             finals: Vec::new(),
             helpers: 0,
@@ -637,8 +654,16 @@ impl<'a> Dumper<'a> {
                 d.builtins.push_out(Builtin { cell, path, named });
             }
         }
+        if let Some(bg) = intrinsic(&base, Intrinsic::Global).as_object() {
+            d.base_globals = base
+                .own_keys(bg)
+                .into_iter()
+                .map(|k| base.atom_name(k))
+                .collect();
+        }
         d.read_globals(&base);
         d.read_patches(&base);
+        d.scratch = Some(base);
         Ok(d)
     }
 
@@ -867,6 +892,9 @@ impl<'a> Dumper<'a> {
             None => v,
         };
         self.push_root(name.into(), decl, value);
+        if let Some(r) = self.roots.last_mut() {
+            r.boxed = v.as_internal().is_some();
+        }
         self.drain();
     }
 
@@ -885,6 +913,7 @@ impl<'a> Dumper<'a> {
             decl,
             value,
             state: State::New,
+            boxed: false,
         });
     }
 
@@ -1291,20 +1320,7 @@ impl<'a> Dumper<'a> {
     }
 
     fn template_names(&self, t: u32) -> Vec<String> {
-        let a = self.h.arena();
-        let names = template::debug_info(self.h, t).names;
-        match names.get() {
-            Some(n) => {
-                let len: u32 = a.get(n, U32Array::LEN);
-                (0..len)
-                    .map(|i| {
-                        self.h
-                            .atom_name(Atom::from_id(a.read::<u32>(U32Array::DATA.at(n, i))))
-                    })
-                    .collect()
-            }
-            None => Vec::new(),
-        }
+        template_names(self.h, t)
     }
 
     /// Adds the user globals template `t` (and its children) reads or writes by name
@@ -1541,7 +1557,157 @@ impl<'a> Dumper<'a> {
         if self.ns {
             s.push_str("void delete globalThis.$dump;\n");
         }
+        // The checker compiles the dump with the lines that write no function cut down to
+        // the names they declare: their data cannot change what a name resolves to.
+        let mut skeleton = String::new();
+        for (l, sk) in self.out.iter().zip(&self.skeleton) {
+            cat_to!(&mut skeleton, sk.as_deref().unwrap_or(l), '\n');
+        }
+        for l in builtin_lines
+            .iter()
+            .chain(&self.patches)
+            .chain(&self.finals)
+        {
+            cat_to!(&mut skeleton, l, '\n');
+        }
+        self.check(&skeleton);
+        if !self.refusals.is_empty() {
+            return Err(DumpError(self.refusals));
+        }
         Ok(s)
+    }
+
+    /// The checker (0168): compiles the finished dump and compares every function it
+    /// writes with the original. A name the original captured must be captured in the
+    /// dump too (a variable of its factory) or be a root that holds that variable's box;
+    /// a global the original read must stay a global (no factory variable hides it) and
+    /// exist after loading if it existed before (a root, a host global, a builtin global).
+    /// Anything else would load as a function that reads another binding than it did, so
+    /// the dump is refused instead.
+    fn check(&mut self, text: &str) {
+        let h = self.h;
+        let fns: Vec<usize> = (0..self.nodes.len())
+            .filter(|&n| {
+                self.nodes[n].state == State::Done
+                    && self.nodes[n]
+                        .v
+                        .as_object()
+                        .is_some_and(|o| h.object_class(o) == ObjectClass::Function)
+            })
+            .collect();
+        if fns.is_empty() {
+            return;
+        }
+        let compiled = self.scratch.take().map(|mut scratch| {
+            let opts = crate::compiler::CompileOptions::script("dump.js");
+            let r = crate::compiler::compile(&mut scratch, text.as_bytes(), &opts);
+            (scratch, r)
+        });
+        let (scratch, t) = match compiled {
+            Some((scratch, Ok(t))) => match t.get() {
+                Some(t) => (scratch, t),
+                None => return self.refuse("the dump".into(), "does not compile"),
+            },
+            Some((_, Err(e))) => {
+                let why = cat!("does not compile: ", e.message);
+                return self.refuse("the dump".into(), &why);
+            }
+            None => return self.refuse("the dump".into(), "no memory to check it"),
+        };
+        // Every function of the dump, by the hash of its text.
+        let mut by_text = Index::default();
+        let mut written: Vec<(u32, u32, FreeNames, u32)> = Vec::new();
+        let mut stack = alloc::vec![t];
+        while let Some(t) = stack.pop() {
+            let info = template::debug_info(&scratch, t);
+            let (a, b) = (info.src_start, info.src_end);
+            if let Some(src) = text.get(a as usize..b as usize) {
+                let key = hash_text(src);
+                let names = free_names(&scratch, t);
+                let first = by_text.get(key).unwrap_or(u32::MAX);
+                // One entry per text and free names: a thousand closures of one factory
+                // function are one entry.
+                let mut at = first;
+                let mut seen = false;
+                while let Some((a2, b2, n2, next)) = written.get(at as usize) {
+                    if n2.captures == names.captures
+                        && n2.globals == names.globals
+                        && text.get(*a2 as usize..*b2 as usize) == Some(src)
+                    {
+                        seen = true;
+                        break;
+                    }
+                    at = *next;
+                }
+                if !seen {
+                    by_text.insert(key, written.len() as u32);
+                    written.push_out((a, b, names, first));
+                }
+            }
+            for i in 0..template::child_count(&scratch, t) {
+                if let Some(c) = template::child(&scratch, t, i).and_then(|r| r.get()) {
+                    stack.push_out(c);
+                }
+            }
+        }
+        for n in fns {
+            let o = self.nodes[n].v.as_object().expect("a function");
+            let Some(src) = self.fn_source(n) else {
+                continue;
+            };
+            let orig = free_names(h, h.closure_template(o));
+            let path = self.nodes[n].path.clone();
+            let mut at = by_text.get(hash_text(&src)).unwrap_or(u32::MAX);
+            let mut found = false;
+            while let Some(&(a, b, ref new, next)) = written.get(at as usize) {
+                at = next;
+                if text.get(a as usize..b as usize) != Some(src.as_str()) {
+                    continue;
+                }
+                found = true;
+                for c in &orig.captures {
+                    // Or read as a global: a root holding the variable's box, or a root
+                    // or the host's global of the same name holding its current value
+                    // (the factory leaves such a variable to the global).
+                    let value = captured_value(h, o, c);
+                    let ok = new.captures.contains(c)
+                        || (new.globals.contains(c)
+                            && (self.host_names.contains(&c.as_str())
+                                || self
+                                    .roots
+                                    .iter()
+                                    .any(|r| r.name == *c && (r.boxed || Some(r.value) == value))));
+                    if !ok {
+                        let why = cat!(
+                            "captures `",
+                            c,
+                            "`, which is not in scope where the dump writes the function"
+                        );
+                        self.refuse(path.clone(), &why);
+                    }
+                }
+                for g in &orig.globals {
+                    if new.captures.contains(g) {
+                        let why = cat!(
+                            "reads the global `",
+                            g,
+                            "`, which a variable of the dump hides"
+                        );
+                        self.refuse(path.clone(), &why);
+                    } else if !self.roots.iter().any(|r| r.name == *g)
+                        && !self.host_names.contains(&g.as_str())
+                        && !self.base_globals.contains(g)
+                        && self.globals.iter().any(|u| u.name == *g)
+                    {
+                        let why = cat!("reads the global `", g, "`, which the dump does not hold");
+                        self.refuse(path.clone(), &why);
+                    }
+                }
+            }
+            if !found {
+                self.refuse(path, "internal: the function's text is not in the dump");
+            }
+        }
     }
 
     fn fresh(&mut self, prefix: &str) -> String {
@@ -1614,6 +1780,7 @@ impl<'a> Dumper<'a> {
             return;
         }
         self.roots[r].state = State::Busy;
+        let fns_before = self.fns_read.get();
         let name = self.roots[r].name.clone();
         let value = self.roots[r].value;
         let kw = match self.roots[r].decl {
@@ -1622,7 +1789,14 @@ impl<'a> Dumper<'a> {
             Decl::Var => "var ",
         };
         let line = match self.node_of(value) {
-            Some(n) if self.nodes[n].root == Some(r) && self.nodes[n].state == State::New => {
+            // A closure of a scope group is made by its group's factory (`expr` emits it);
+            // only free values are written in place (0168: a root that was itself a
+            // closure over a parameter came out as its bare text).
+            Some(n)
+                if self.nodes[n].root == Some(r)
+                    && self.nodes[n].state == State::New
+                    && self.nodes[n].group == usize::MAX =>
+            {
                 self.nodes[n].loc = name.clone();
                 if self.free_closure(n)
                     && let Some(src) = self.fn_source(n)
@@ -1649,6 +1823,8 @@ impl<'a> Dumper<'a> {
             }
         };
         self.out.push_out(line);
+        self.skeleton
+            .push_out((self.fns_read.get() == fns_before).then(|| cat!("let ", name, ";")));
         self.roots[r].state = State::Done;
     }
 
@@ -1674,6 +1850,7 @@ impl<'a> Dumper<'a> {
     }
 
     fn fn_source(&self, n: usize) -> Option<String> {
+        self.fns_read.set(self.fns_read.get() + 1);
         crate::builtins::function::source_slice(self.h, self.nodes[n].v.as_object()?)
     }
 
@@ -1727,8 +1904,11 @@ impl<'a> Dumper<'a> {
             return e;
         }
         let name = self.fresh("n");
+        let fns_before = self.fns_read.get();
         let e = self.render(n, Some(&name), None);
         self.out.push_out(cat!(name, " = ", e, ";"));
+        self.skeleton
+            .push_out((self.fns_read.get() == fns_before).then(String::new));
         name
     }
 
@@ -1897,8 +2077,11 @@ impl<'a> Dumper<'a> {
                 Some(bi) => box_names[bi].clone(),
                 None => {
                     let fname = self.fn_name(c);
+                    let rname = self.nodes[c].root.map(|r| self.roots[r].name.clone());
                     if is_ident(&fname) && !taken.contains(&fname) {
                         fname
+                    } else if let Some(r) = rname.filter(|r| is_ident(r) && !taken.contains(r)) {
+                        r
                     } else {
                         cat!("$f", c)
                     }
@@ -1978,6 +2161,7 @@ impl<'a> Dumper<'a> {
         }
         cat_to!(&mut text, "  return { ", join(&ret, ", "), " };\n})();");
         self.out.push_out(text);
+        self.skeleton.push_out(None);
         for &b in &boxes {
             self.nodes[b].state = State::Done;
         }
@@ -2052,6 +2236,11 @@ impl<'a> Dumper<'a> {
             ObjectClass::Ordinary => return self.literal(o, loc),
             ObjectClass::Array => return self.array(o, loc),
             ObjectClass::Function => {
+                if self.nodes[n].group != usize::MAX {
+                    // Its captured variables exist only in its group's factory.
+                    let p = self.nodes[n].path.clone();
+                    self.refuse(p, "internal: a closure written outside its factory");
+                }
                 let src = self.fn_source(n).unwrap_or_default();
                 let e = self.fn_expr(n, &src);
                 self.fn_patches(n, ctx_name);
@@ -2611,5 +2800,174 @@ fn same_property(h: &Heap, p: &Property, base: &Heap, bp: &Property) -> bool {
             },
         ) => f == g && same(*a, *c) && same(*b, *d),
         _ => false,
+    }
+}
+
+/// The free names of a function template: the variables it captures (its own and its
+/// nested functions' from outside it) and the globals it or a nested function reads or
+/// writes by name.
+struct FreeNames {
+    captures: Vec<String>,
+    globals: Vec<String>,
+}
+
+fn free_names(h: &Heap, t: u32) -> FreeNames {
+    let a = h.arena();
+    let names = template_names(h, t);
+    let locals = usize::from(a.get::<u16>(t, FuncTemplate::LOCALS));
+    let captures = usize::from(a.get::<u16>(t, FuncTemplate::CAPTURES));
+    let captures = names
+        .iter()
+        .skip(locals)
+        .take(captures)
+        .filter(|n| is_ident(n))
+        .cloned()
+        .collect();
+    let mut globals = Vec::new();
+    let mut stack = alloc::vec![t];
+    while let Some(t) = stack.pop() {
+        for insn in crate::bytecode::insns(template::code(h, t)).flatten() {
+            if matches!(
+                insn.info().name,
+                "get_global" | "get_global_typeof" | "put_global"
+            ) {
+                let g = h.atom_name(insn.atom(0));
+                if !globals.contains(&g) {
+                    globals.push_out(g);
+                }
+            }
+        }
+        for i in 0..template::child_count(h, t) {
+            if let Some(c) = template::child(h, t, i).and_then(|r| r.get()) {
+                stack.push_out(c);
+            }
+        }
+    }
+    FreeNames { captures, globals }
+}
+
+/// The current value of closure `f`'s captured variable `name`.
+fn captured_value(h: &Heap, f: Obj, name: &str) -> Option<Value> {
+    let t = h.closure_template(f);
+    let a = h.arena();
+    let locals = usize::from(a.get::<u16>(t, FuncTemplate::LOCALS));
+    let captures = u32::from(a.get::<u16>(t, FuncTemplate::CAPTURES));
+    let names = template_names(h, t);
+    (0..captures)
+        .find(|&i| names.get(locals + i as usize).is_some_and(|n| n == name))
+        .and_then(|i| h.object_slot(f, i).as_internal())
+        .map(|b| a.get(b, BoxCell::VALUE))
+}
+
+/// The names of a template's locals and then its captures (its debug info).
+fn template_names(h: &Heap, t: u32) -> Vec<String> {
+    let a = h.arena();
+    match template::debug_info(h, t).names.get() {
+        Some(n) => {
+            let len: u32 = a.get(n, U32Array::LEN);
+            (0..len)
+                .map(|i| h.atom_name(Atom::from_id(a.read::<u32>(U32Array::DATA.at(n, i)))))
+                .collect()
+        }
+        None => Vec::new(),
+    }
+}
+
+/// FNV-1a of a function's text (an [`Index`] key; 0 is the empty key).
+fn hash_text(s: &str) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in s.bytes() {
+        h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+    }
+    h | 1
+}
+
+/// The checker against texts the dumper must never write (0168).
+#[cfg(test)]
+mod check_tests {
+    extern crate std;
+    use super::*;
+    use crate::vm::{Status, VmOptions};
+
+    fn base() -> &'static [u8] {
+        static BASE: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+        BASE.get_or_init(|| {
+            let mut v = Vm::new(VmOptions::default()).unwrap();
+            v.prepare_base_image().unwrap();
+            v.bytes().to_vec()
+        })
+    }
+
+    /// The refusals of checking `text` as the dump of `names` after `setup`.
+    fn check(setup: &str, names: &[&str], drop_roots: &[&str], text: &str) -> Vec<String> {
+        let mut vm = Vm::from_base(base(), VmOptions::default()).unwrap();
+        let f = vm
+            .compile(
+                setup.as_bytes(),
+                &crate::compiler::CompileOptions::script("t.js"),
+            )
+            .unwrap();
+        let g = Value::object(vm.global());
+        vm.call(f, g, &[]).unwrap();
+        assert!(matches!(vm.run(u64::MAX), Status::Done(_)));
+        let opts = DumpOptions {
+            base: base(),
+            host: &["console"],
+        };
+        let mut d = Dumper::new(&vm, &opts).unwrap();
+        for n in names {
+            let g = d.globals.iter().position(|g| g.name == *n).unwrap();
+            d.add_global_root(g);
+        }
+        d.analyze();
+        for n in &mut d.nodes {
+            n.state = State::Done;
+        }
+        d.roots.retain(|r| !drop_roots.contains(&r.name.as_str()));
+        d.check(text);
+        d.refusals
+    }
+
+    const SETUP: &str = "let foo = [1]; function getStuff() { return foo; }\n\
+                         function blah(a) { return () => a } const blah2 = blah(2);";
+
+    #[test]
+    fn a_closure_outside_its_factory_is_refused() {
+        // What 0168's dumper wrote.
+        let r = check(SETUP, &["blah2"], &[], "const blah2 = () => a;\n");
+        assert_eq!(
+            r,
+            ["blah2: captures `a`, which is not in scope where the dump writes the function"]
+        );
+        let ok = "globalThis.$dump = {};\n$dump.s1 = (() => { let a = 2; return { blah2: () => a }; })();\n\
+                  const blah2 = $dump.s1.blah2;\n";
+        assert_eq!(check(SETUP, &["blah2"], &[], ok), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_global_hidden_or_missing_is_refused() {
+        let hidden = "let foo = [1];\nconst getStuff = (() => { let foo = 0; return function getStuff() { return foo; }; })();\n";
+        let r = check(SETUP, &["getStuff"], &[], hidden);
+        assert_eq!(
+            r,
+            ["getStuff: reads the global `foo`, which a variable of the dump hides"]
+        );
+        let missing = "function getStuff() { return foo; }\n";
+        let r = check(SETUP, &["getStuff"], &["foo"], missing);
+        assert_eq!(
+            r,
+            ["getStuff: reads the global `foo`, which the dump does not hold"]
+        );
+    }
+
+    #[test]
+    fn a_dump_that_does_not_compile_is_refused() {
+        let r = check(
+            SETUP,
+            &["getStuff"],
+            &[],
+            "function getStuff() { return foo;\n",
+        );
+        assert!(r[0].starts_with("the dump: does not compile"), "{r:?}");
     }
 }

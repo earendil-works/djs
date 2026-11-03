@@ -9,7 +9,9 @@ import { dumpHeap, DumpRefused, HEADER } from "./dump.ts";
 
 interface Case {
   name: string;
-  setup: string;
+  setup?: string;
+  /** Inputs run one Script each (REPL-style) and, joined, as one Script. */
+  lines?: string[];
   names?: string[];
   /** A body returning what both VMs must agree on. */
   check?: string;
@@ -72,6 +74,39 @@ const CASES: Case[] = [
     check: "const ks = Object.getOwnPropertySymbols(o);\nreturn [ks.length, ks[0].description, o[ks[0]], o.propertyIsEnumerable(ks[0])].join()",
   },
   {
+    name: "closure over a parameter",
+    lines: ["let foo = [1,2,3,4];", "let x = this;", "function getStuff() { return [foo, x]; }",
+      "function blah(a) { return () => a }", "const blah2 = blah(2);"],
+    check: "return [blah2(), getStuff()[0].join(), getStuff()[1] === globalThis, blah(5)(), blah2.name].join()",
+  },
+  {
+    name: "locals and nested scopes",
+    lines: ["function mk() { let v = 10; const w = v * 2; return () => v + w; }", "const f = mk();",
+      "function outer(x) { return function mid(y) { return (z) => x + y + z; }; }", "const mid = outer(1); const g = mid(2);",
+      "let blockFn; { let hidden = 5; blockFn = () => hidden++; } blockFn();"],
+    check: "return [f(), g(3), mid(10)(100), blockFn(), blockFn(), g.name, mid.name].join()",
+  },
+  {
+    name: "loops with let",
+    lines: ["const fs = [];", "for (let i = 0; i < 3; i++) fs.push(() => i * 10);",
+      "const counters = [1, 2].map((start) => { let n = start; return () => ++n; });", "counters[1]();"],
+    check: "return [fs.map((f) => f()).join(), counters[0](), counters[1](), counters[1]()].join()",
+  },
+  {
+    name: "closures sharing a binding",
+    lines: ["function pair() { let n = 0; return [() => ++n, () => n]; }", "const [inc, get] = pair();", "inc();",
+      "const box = { inc, get };"],
+    check: "return [inc(), get(), box.inc(), get(), box.get === get].join()",
+  },
+  {
+    name: "closures capturing closures",
+    lines: ["function mk() { const helper = (x) => x * 2; return (y) => helper(y) + 1; }", "const h = mk();",
+      "function mk2(k) { function twice(x) { return k(k(x)); } return (y) => twice(y); }", "const h2 = mk2(h);",
+      "function chain() { let a = 1; const f1 = () => a; const f2 = () => f1() + 1; return () => f2() + f1(); }",
+      "const h3 = chain();"],
+    check: "return [h(3), h2(1), h3()].join()",
+  },
+  {
     name: "refusals",
     setup: "const p = new Promise(() => {});\nfunction* g() { yield 1; } const it = g(); it.next();\n" +
       "const px = { inner: new Proxy({}, {}) };\nclass A {} const a = new A();",
@@ -129,24 +164,31 @@ function verify(text: string | undefined, check: string, want: unknown): string 
 
 const args = process.argv.slice(2);
 let ok = true;
+const runs: [Case, string, string[]][] = [];
 for (const c of CASES) {
+  if (c.lines) {
+    runs.push([c, `${c.name} (one script)`, [c.lines.join("\n")]]);
+    runs.push([c, `${c.name} (lines)`, c.lines]);
+  } else runs.push([c, c.name, [c.setup!]]);
+}
+for (const [c, label, inputs] of runs) {
   const a = sandbox();
-  load(a, c.setup);
+  for (const input of inputs) load(a, input);
   const rust = attempt(() => a.dump(c.names ?? []));
   const ts = attempt(() => tsDump(a, c.names));
   if (c.refused) {
     const r = c.refused.map((w) => [rust.error?.includes(w) ?? false, ts.error?.includes(w) ?? false]);
     const line = (i: number): string => (r.every((x) => x[i]) ? "ok" : "missing refusals");
-    console.log(`${c.name.padEnd(28)} rust: ${line(0)}  ts: ${line(1)}`);
+    console.log(`${label.padEnd(44)} rust: ${line(0)}  ts: ${line(1)}`);
     ok &&= r.every((x) => x[0]);
     continue;
   }
   const want = a.run(c.check!);
   const rv = verify(rust.text, c.check!, want);
   const tv = verify(ts.text, c.check!, want);
-  console.log(`${c.name.padEnd(28)} rust: ${rv}  ts: ${tv}${rust.text === ts.text ? "  (same text)" : ""}`);
+  console.log(`${label.padEnd(44)} rust: ${rv}  ts: ${tv}${rust.text === ts.text ? "  (same text)" : ""}`);
   if (tv !== "ok" && args.includes("--show")) console.log(ts.text ?? ts.error);
-  ok &&= rv === "ok";
+  ok &&= rv === "ok" && tv === "ok";
 }
 
 const bigAt = args.indexOf("--big");
