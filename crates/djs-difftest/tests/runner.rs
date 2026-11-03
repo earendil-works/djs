@@ -39,6 +39,7 @@ fn opts(is_djs: bool) -> Options {
         progress: false,
         is_djs,
         stress: Vec::new(),
+        times: None,
     }
 }
 

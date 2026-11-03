@@ -54,6 +54,8 @@ options:
                       as in pi's codemode; 0 means no limit)
   -j, --jobs N        worker threads (default: $DJS_JOBS, else the number of CPUs)
   --corpus DIR        corpus root (default: tests/corpus)
+  --times FILE        start the runs that took longest in FILE first, then rewrite FILE
+                      with this run's times (the gate keeps one per leg)
   -q, --quiet         no progress line
 ";
 
@@ -70,6 +72,7 @@ struct Args {
     memory_limit: Option<u64>,
     jobs: usize,
     corpus: PathBuf,
+    times: Option<PathBuf>,
     quiet: bool,
     suspend_every: Option<u64>,
     gc_stress: bool,
@@ -112,6 +115,7 @@ fn parse_args() -> Result<Args, String> {
         memory_limit: Some(256 << 20),
         jobs: djs_test262::par::default_jobs(),
         corpus,
+        times: None,
         quiet: false,
         suspend_every: None,
         gc_stress: false,
@@ -163,6 +167,7 @@ fn parse_args() -> Result<Args, String> {
                     .max(1);
             }
             "--corpus" => args.corpus = value(&a)?.into(),
+            "--times" => args.times = Some(value(&a)?.into()),
             "--suspend-every" => {
                 let v = value(&a)?;
                 let n = v
@@ -305,6 +310,7 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         progress: !args.quiet,
         is_djs: args.engine == "djs",
         stress: stress_variants(args),
+        times: args.times.clone(),
     };
     let prelude = args.corpus.join("prelude.js");
     let start = Instant::now();

@@ -3649,15 +3649,29 @@ fn hot_loop_is_invisible() {
         (1 << 40, true, HOT, false),
         (61, true, 1, true),
     ];
-    for &(fuel, gc_stress, backedges, suspend) in cases {
-        let exec = |hot_loop| ExecOptions {
-            gc_stress,
-            hot_loop,
-            hot_backedges: backedges,
-            ..Default::default()
-        };
-        let with = image_trace(src, exec(true), fuel, suspend);
-        let without = image_trace(src, exec(false), fuel, suspend);
+    // The 16 runs on threads of their own: one after another they took half a minute,
+    // the slowest test of the gate (0183).
+    extern crate std;
+    let traces: Vec<(Vec<String>, Vec<String>)> = std::thread::scope(|s| {
+        let runs: Vec<_> = cases
+            .iter()
+            .map(|&(fuel, gc_stress, backedges, suspend)| {
+                let exec = move |hot_loop| ExecOptions {
+                    gc_stress,
+                    hot_loop,
+                    hot_backedges: backedges,
+                    ..Default::default()
+                };
+                let with = s.spawn(move || image_trace(src, exec(true), fuel, suspend));
+                let without = s.spawn(move || image_trace(src, exec(false), fuel, suspend));
+                (with, without)
+            })
+            .collect();
+        runs.into_iter()
+            .map(|(a, b)| (a.join().unwrap(), b.join().unwrap()))
+            .collect()
+    });
+    for (&(fuel, gc_stress, backedges, _), (with, without)) in cases.iter().zip(traces) {
         assert!(with.len() > 2, "the program ran: {with:?}");
         assert_eq!(
             with, without,

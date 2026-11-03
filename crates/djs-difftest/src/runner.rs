@@ -23,6 +23,9 @@ pub struct Options {
     /// their transcripts must equal the main run's (a hard failure, independent of the
     /// `.expected` comparison).
     pub stress: Vec<(String, Box<dyn Engine>)>,
+    /// Each run's time, read to start the slowest runs first and rewritten after the run
+    /// (`--times`, 0183).
+    pub times: Option<std::path::PathBuf>,
 }
 
 /// Stressed runs get this many times the case's time limit: a stress mode is several
@@ -61,35 +64,15 @@ pub struct Outcome {
     pub idle_points: Option<u32>,
 }
 
-pub fn run_one(
-    engine: &dyn Engine,
+/// The plain run's verdict: its transcript against `.expected`.
+fn verdict(
     case: &Case,
-    prelude_file: &Path,
-    prelude: &str,
+    result: &RunResult,
     opts: &Options,
-) -> Outcome {
-    let start = Instant::now();
-    if opts.is_djs
-        && let Some(reason) = &case.meta.skip_djs
-    {
-        return Outcome {
-            verdict: Verdict::Skipped(reason.clone()),
-            transcript: String::new(),
-            done: None,
-            elapsed: start.elapsed(),
-            stress: Vec::new(),
-            idle_points: None,
-        };
-    }
-    // One clock reading per case, shared by the main run and its stress variants.
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as f64)
-        .unwrap_or(0.0);
-    let timeout = case.meta.timeout.unwrap_or(opts.timeout);
-    let result = execute(engine, case, prelude_file, prelude, opts, now, timeout);
+    timeout: Duration,
+) -> (Verdict, String) {
     let stacks = case.meta.stacks.then_some(case.name.as_str());
-    let actual = transcript(&result, stacks);
+    let actual = transcript(result, stacks);
     let verdict = match fs::read_to_string(&case.expected_file) {
         Ok(expected) => {
             let mut expected = crate::engine::normalize(&expected, stacks);
@@ -116,80 +99,68 @@ pub fn run_one(
             diff: String::new(),
         },
     };
-    let mut stress = Vec::new();
-    let variants = if case.meta.no_stress.is_some() {
-        &[][..]
-    } else {
-        &opts.stress[..]
-    };
-    let stress_timeout = timeout * STRESS_TIMEOUT_FACTOR;
-    for (label, variant) in variants {
-        let r = execute(
-            variant.as_ref(),
-            case,
-            prelude_file,
-            prelude,
-            opts,
-            now,
-            stress_timeout,
-        );
-        let t = transcript(&r, stacks);
-        if t == actual
-            && let (Some(a), Some(b)) = (result.idle_points, r.idle_points)
+    (verdict, actual)
+}
+
+/// A stress variant's run against the plain run's transcript, idle points and image.
+fn compare_stress(
+    case: &Case,
+    label: &str,
+    plain: &RunResult,
+    actual: &str,
+    r: &RunResult,
+    stress_timeout: Duration,
+) -> Option<StressMismatch> {
+    let stacks = case.meta.stacks.then_some(case.name.as_str());
+    let t = transcript(r, stacks);
+    if t == actual
+        && let (Some(a), Some(b)) = (plain.idle_points, r.idle_points)
+        && a != b
+    {
+        // Suspension and collection must not move a tool result to another idle point.
+        Some(StressMismatch {
+            label: label.to_string(),
+            reason: format!("the same transcript, but {b} idle points instead of {a}"),
+            diff: String::new(),
+        })
+    } else if t == actual {
+        // `--determinism`: the same heap image, raw and by canonical hash (D1720, D1725,
+        // D2040). A variant that collects on another policy (GC stress) does not hash
+        // its image.
+        if let (Some(a), Some(b)) = (plain.image, r.image)
             && a != b
         {
-            // Suspension and collection must not move a tool result to another idle point.
-            stress.push(StressMismatch {
-                label: label.clone(),
-                reason: format!("the same transcript, but {b} idle points instead of {a}"),
+            let which = if a.1 != b.1 {
+                "canonical hash"
+            } else {
+                "as left (raw)"
+            };
+            Some(StressMismatch {
+                label: label.to_string(),
+                reason: format!(
+                    "the same transcript, but the heap image {which} differs ({:016x}/{:016x} vs {:016x}/{:016x})",
+                    a.0, a.1, b.0, b.1
+                ),
                 diff: String::new(),
-            });
-        } else if t == actual {
-            // `--determinism`: the same heap image, raw and by canonical hash (D1720, D1725,
-            // D2040). A variant that collects on another policy (GC stress) does not hash
-            // its image.
-            if let (Some(a), Some(b)) = (result.image, r.image)
-                && a != b
-            {
-                let which = if a.1 != b.1 {
-                    "canonical hash"
-                } else {
-                    "as left (raw)"
-                };
-                stress.push(StressMismatch {
-                    label: label.clone(),
-                    reason: format!(
-                        "the same transcript, but the heap image {which} differs ({:016x}/{:016x} vs {:016x}/{:016x})",
-                        a.0, a.1, b.0, b.1
-                    ),
-                    diff: String::new(),
-                });
-            }
+            })
         } else {
-            let timed_out =
-                matches!(r.done, Done::Timeout) && !matches!(result.done, Done::Timeout);
-            stress.push(StressMismatch {
-                label: label.clone(),
-                reason: if timed_out {
-                    format!(
-                        "timed out after {:.0}s (mark it `difftest: no-stress <reason>` if it \
-                         cannot finish under stress)",
-                        stress_timeout.as_secs_f64()
-                    )
-                } else {
-                    diff::first_difference(&actual, &t)
-                },
-                diff: diff::line_diff(&actual, &t, 3),
-            });
+            None
         }
-    }
-    Outcome {
-        verdict,
-        transcript: actual,
-        done: Some(result.done),
-        elapsed: start.elapsed(),
-        stress,
-        idle_points: result.idle_points,
+    } else {
+        let timed_out = matches!(r.done, Done::Timeout) && !matches!(plain.done, Done::Timeout);
+        Some(StressMismatch {
+            label: label.to_string(),
+            reason: if timed_out {
+                format!(
+                    "timed out after {:.0}s (mark it `difftest: no-stress <reason>` if it \
+                     cannot finish under stress)",
+                    stress_timeout.as_secs_f64()
+                )
+            } else {
+                diff::first_difference(actual, &t)
+            },
+            diff: diff::line_diff(actual, &t, 3),
+        })
     }
 }
 
@@ -287,6 +258,32 @@ fn engine_failure(done: &Done, timeout: Duration) -> Option<String> {
     }
 }
 
+/// One unit of work: a case's plain run (`variant: None`) or one of its stress variants.
+/// Variants are tasks of their own, so a slow case's five runs spread over the workers
+/// instead of running one after another on one of them (0183).
+#[derive(Clone, Copy)]
+struct Task {
+    case: usize,
+    variant: Option<usize>,
+}
+
+/// The key of a task in a times file: the case and the run's label.
+fn task_key(cases: &[Case], opts: &Options, t: Task) -> String {
+    let label = t.variant.map_or("plain", |v| opts.stress[v].0.as_str());
+    format!("{}\t{label}", cases[t.case].name)
+}
+
+/// `secs<TAB>case<TAB>label` lines of an earlier run (missing or unreadable: none).
+fn read_times(path: &Path) -> std::collections::HashMap<String, f64> {
+    let text = fs::read_to_string(path).unwrap_or_default();
+    text.lines()
+        .filter_map(|l| {
+            let (secs, key) = l.split_once('\t')?;
+            Some((key.to_string(), secs.parse().ok()?))
+        })
+        .collect()
+}
+
 /// Runs `cases` and returns their outcomes in the same order.
 pub fn run_all(
     engine: &dyn Engine,
@@ -296,21 +293,72 @@ pub fn run_all(
 ) -> Result<Vec<Outcome>, String> {
     let prelude =
         fs::read_to_string(prelude_file).map_err(|e| format!("{}: {e}", prelude_file.display()))?;
+    let mut tasks = Vec::new();
+    let mut remaining = vec![0usize; cases.len()];
+    for (i, case) in cases.iter().enumerate() {
+        if opts.is_djs && case.meta.skip_djs.is_some() {
+            continue;
+        }
+        tasks.push(Task {
+            case: i,
+            variant: None,
+        });
+        if case.meta.no_stress.is_none() {
+            tasks.extend((0..opts.stress.len()).map(|v| Task {
+                case: i,
+                variant: Some(v),
+            }));
+        }
+        remaining[i] = 1 + if case.meta.no_stress.is_none() {
+            opts.stress.len()
+        } else {
+            0
+        };
+    }
+    // Longest first by the last run's times (new tasks first: they may be slow), so the
+    // run does not end waiting for one slow task started last.
+    if let Some(path) = &opts.times {
+        let times = read_times(path);
+        let cost = |t: &Task| {
+            times
+                .get(&task_key(cases, opts, *t))
+                .copied()
+                .unwrap_or(f64::INFINITY)
+        };
+        tasks.sort_by(|a, b| cost(b).total_cmp(&cost(a)));
+    }
+    // One clock reading, shared by every run: a case's stress variants see the time its
+    // plain run saw.
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(0.0);
     let total = cases.len();
     let show = opts.progress && std::io::stderr().is_terminal();
-    let mut failed = 0;
+    let mut done = cases.len() - remaining.iter().filter(|&&n| n > 0).count();
     let mut last = Instant::now();
-    let outcomes = djs_test262::par::map_with_progress(
-        cases.iter().collect(),
+    let results = djs_test262::par::map_with_progress(
+        tasks.clone(),
         opts.jobs,
-        |c: &Case| run_one(engine, c, prelude_file, &prelude, opts),
-        |done, o: &Outcome| {
-            if matches!(o.verdict, Verdict::Fail { .. }) {
-                failed += 1;
+        |t: Task| {
+            let case = &cases[t.case];
+            let base = case.meta.timeout.unwrap_or(opts.timeout);
+            let (e, timeout) = match t.variant {
+                None => (engine, base),
+                Some(v) => (opts.stress[v].1.as_ref(), base * STRESS_TIMEOUT_FACTOR),
+            };
+            let start = Instant::now();
+            let r = execute(e, case, prelude_file, &prelude, opts, now, timeout);
+            (t.case, start.elapsed(), r)
+        },
+        |_, (case, _, _)| {
+            remaining[*case] -= 1;
+            if remaining[*case] == 0 {
+                done += 1;
             }
             if show && (done == total || last.elapsed() >= Duration::from_millis(200)) {
                 last = Instant::now();
-                eprint!("\r\x1b[K[{done}/{total}] {failed} failed");
+                eprint!("\r\x1b[K[{done}/{total}]");
                 let _ = std::io::stderr().flush();
             }
         },
@@ -318,5 +366,76 @@ pub fn run_all(
     if show {
         eprint!("\r\x1b[K");
     }
-    Ok(outcomes)
+    if let Some(path) = &opts.times {
+        let mut out = String::new();
+        for (t, (_, elapsed, _)) in tasks.iter().zip(&results) {
+            out.push_str(&format!(
+                "{:.3}\t{}\n",
+                elapsed.as_secs_f64(),
+                task_key(cases, opts, *t)
+            ));
+        }
+        let _ = fs::write(path, out);
+    }
+    // Back to cases: each plain run with its variants' runs, in variant order.
+    let mut runs: Vec<(Option<RunResult>, Vec<Option<RunResult>>, Duration)> = cases
+        .iter()
+        .map(|_| {
+            (
+                None,
+                (0..opts.stress.len()).map(|_| None).collect(),
+                Duration::ZERO,
+            )
+        })
+        .collect();
+    for (t, (_, elapsed, r)) in tasks.into_iter().zip(results) {
+        let slot = &mut runs[t.case];
+        slot.2 += elapsed;
+        match t.variant {
+            None => slot.0 = Some(r),
+            Some(v) => slot.1[v] = Some(r),
+        }
+    }
+    Ok(cases
+        .iter()
+        .zip(runs)
+        .map(|(case, (plain, variants, elapsed))| {
+            let Some(plain) = plain else {
+                let reason = case.meta.skip_djs.clone().unwrap_or_default();
+                return Outcome {
+                    verdict: Verdict::Skipped(reason),
+                    transcript: String::new(),
+                    done: None,
+                    elapsed,
+                    stress: Vec::new(),
+                    idle_points: None,
+                };
+            };
+            let timeout = case.meta.timeout.unwrap_or(opts.timeout);
+            let (verdict, actual) = verdict(case, &plain, opts, timeout);
+            let stress = variants
+                .iter()
+                .zip(&opts.stress)
+                .filter_map(|(r, (label, _))| {
+                    let r = r.as_ref()?;
+                    compare_stress(
+                        case,
+                        label,
+                        &plain,
+                        &actual,
+                        r,
+                        timeout * STRESS_TIMEOUT_FACTOR,
+                    )
+                })
+                .collect();
+            Outcome {
+                verdict,
+                transcript: actual,
+                done: Some(plain.done),
+                elapsed,
+                stress,
+                idle_points: plain.idle_points,
+            }
+        })
+        .collect())
 }
