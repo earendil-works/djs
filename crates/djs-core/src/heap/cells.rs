@@ -226,6 +226,11 @@ cells! {
         RECORDS: u32 = 92,
         /// The descriptor's feature set (`vm::FEATURES`, D2267).
         FEATURES: u32 = 96,
+        /// The key of the VM's keyed string hash (D2433): the hash of the strings, atoms
+        /// and Map/Set keys of the VM's own (above `BASE_END`), so that keys crafted to
+        /// collide under a known hash don't. Derived from the `Math.random` seed
+        /// (`Vm::set_random_seed`); a restored image keeps its own.
+        HASH_KEY: u64 = 104,
     };
 
     /// A flat one-byte (Latin-1) string. Holds only strings with every code unit <= 0xFF;
@@ -609,7 +614,7 @@ mod tests {
         assert_eq!(Rope::LAYOUT.min_size, 24);
         assert_eq!(Symbol::LAYOUT.min_size, 24);
         assert_eq!(Object::LAYOUT.min_size, 24);
-        assert_eq!(Roots::LAYOUT.min_size, 104);
+        assert_eq!(Roots::LAYOUT.min_size, 112);
         assert_eq!(Shape::LAYOUT.min_size, 24);
         assert_eq!(PropValues::VALUES.cell_size(4), Some(48));
         let t = PropTable::LAYOUT.tail.unwrap();

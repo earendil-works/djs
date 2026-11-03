@@ -36,13 +36,6 @@ const MAP_BASE: u32 = 2;
 const FORWARD: u32 = 0;
 const REMOVED: u32 = 1;
 
-fn mix(mut h: u64) -> u32 {
-    h ^= h >> 33;
-    h = h.wrapping_mul(0xFF51_AFD7_ED55_8CCD);
-    h ^= h >> 33;
-    h as u32
-}
-
 /// SameValueZero's canonical form of a key: -0 becomes +0, every NaN the same NaN, and
 /// integral doubles in int range the int form.
 pub fn normalize_key(v: Value) -> Value {
@@ -100,11 +93,11 @@ impl Heap {
         }
     }
 
-    fn collection_entries(&self, o: Obj) -> u32 {
+    pub(super) fn collection_entries(&self, o: Obj) -> u32 {
         self.object_slot(o, ENTRIES).as_internal().expect("entries")
     }
 
-    fn collection_index(&self, o: Obj) -> u32 {
+    pub(super) fn collection_index(&self, o: Obj) -> u32 {
         self.object_slot(o, INDEX).as_internal().expect("index")
     }
 
@@ -118,19 +111,21 @@ impl Heap {
         self.object_slot(o, LIVE).as_int().unwrap_or(0) as u32
     }
 
-    /// The hash of a normalized key. Strings and BigInts hash by content; objects and symbols by
-    /// offset (rebuilt after every collection).
-    fn key_hash(&self, k: Value) -> u32 {
+    /// The hash of a normalized key, keyed by the VM's hash key (D2433), so crafted keys
+    /// don't collide. Strings and BigInts hash by content; objects and symbols by offset
+    /// (rebuilt after every collection).
+    pub(super) fn key_hash(&self, k: Value) -> u32 {
         if let Some(s) = k.as_string() {
             return self.str_hash_uncached(s);
         }
+        let key = self.hash_key();
         if let Some(n) = k.as_number() {
-            return mix(n.to_bits());
+            return super::string::keyed_u64(key, n.to_bits());
         }
         if k.as_bigint().is_some() {
-            return mix(self.bigint_hash(k));
+            return super::string::keyed_u64(key, self.bigint_hash(k));
         }
-        mix(k.to_bits())
+        super::string::keyed_u64(key, k.to_bits())
     }
 
     fn keys_equal(&self, a: Value, b: Value) -> bool {
@@ -146,7 +141,7 @@ impl Heap {
         a == b
     }
 
-    fn coll_key(&self, entries: u32, base: u32, n: u32) -> Value {
+    pub(super) fn coll_key(&self, entries: u32, base: u32, n: u32) -> Value {
         self.value_array_get(entries, base + 2 * n)
     }
 
@@ -343,7 +338,10 @@ impl Heap {
             self.u32_array_set(index, b, n + 1);
             live += 1;
         }
-        self.set_object_slot(o, LIVE, Value::int(live));
+        // (Unchanged after a rekey: a Map object of the builtin prefix is not written.)
+        if self.object_slot(o, LIVE) != Value::int(live) {
+            self.set_object_slot(o, LIVE, Value::int(live));
+        }
     }
 
     /// `m.delete(key)`.

@@ -4110,3 +4110,44 @@ fn images_have_nothing_above_sp() {
     assert!(matches!(whole.run(u64::MAX), Status::Done(_)));
     assert!(dead(whole.image()).1 >= 2048);
 }
+
+/// D2433: the keyed hash comes from the seed. The same seed gives the same image, another
+/// seed the same results in another layout, and reseeding mid-session keeps Maps, Sets
+/// and atoms working, in insertion order.
+#[test]
+fn the_hash_key_follows_the_seed() {
+    let base = prefixed_base();
+    let script = "globalThis.m = new Map(); globalThis.o = {}; \
+                  for (let i = 0; i < 200; i++) { m.set('k' + i, i); m.set(i * 1.5, -i); o['p' + i] = i; } \
+                  globalThis.s = new Set(['x', 'y', 'z']); \
+                  return [m.get('k7'), m.get(15), o.p9, [...s].join(''), [...m.keys()].slice(0, 4).join()].join()";
+    let run = |seed: u64| {
+        let opts = VmOptions {
+            random_seed: seed,
+            ..VmOptions::default()
+        };
+        let mut vm = Vm::from_base(&base, opts).unwrap();
+        let out = eval(&mut vm, script);
+        vm.collect().unwrap();
+        (vm, out)
+    };
+    let (mut a, out_a) = run(7);
+    let (b, out_b) = run(7);
+    let (c, out_c) = run(8);
+    assert_eq!(out_a, "7,-10,9,xyz,k0,0,k1,1.5");
+    assert_eq!((&out_a, &out_b), (&out_c, &out_c));
+    assert_eq!(a.bytes(), b.bytes(), "same seed, same image");
+    assert_ne!(a.bytes(), c.bytes(), "another seed, another layout");
+    assert_ne!(a.heap().hash_key(), c.heap().hash_key());
+    a.set_random_seed(12345);
+    assert_eq!(
+        eval(
+            &mut a,
+            "return [m.get('k199'), m.get(298.5), o.p150, s.has('y'), [...m.keys()].slice(0, 4).join(), \
+             ('p' + 42) in o].join()"
+        ),
+        "199,-199,150,true,k0,0,k1,1.5,true"
+    );
+    a.collect().unwrap();
+    a.heap().verify().unwrap();
+}

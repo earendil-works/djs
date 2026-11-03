@@ -27,7 +27,7 @@ use core::fmt;
 
 use super::cells::{AtomTable, Roots, Symbol, ValueArray};
 use super::layout::Ref;
-use super::string::{StrHasher, hash_units};
+use super::string::{KeyedHasher, StrHasher, hash_units};
 use super::{CellKind, Heap, HeapError};
 use crate::value::{Str, Sym, Value};
 
@@ -380,34 +380,77 @@ impl Heap {
         Ok(first + len)
     }
 
-    /// Finds a string atom by hash and content: among the VM's own atoms, then the base's
-    /// (D2431). A string is in one of the two, so the order only matters for speed: the
-    /// VM's own index is small and its strings have cached hashes, while a miss among the
-    /// base's strings would hash them again (their hashes are not cached, D2063).
-    fn find_string_atom(&self, hash: u32, eq: impl Fn(&Heap, Str) -> bool) -> Option<Atom> {
+    /// Finds a string atom among the VM's own atoms by its keyed hash (D2433), then among
+    /// the base's by its fixed hash (D2431), computed only if needed. A string is in one
+    /// of the two levels; the VM's own goes first since its index is small and its strings
+    /// cache their hashes.
+    fn find_string_atom(
+        &self,
+        hash: u32,
+        base_hash: impl FnOnce(&Heap) -> u32,
+        eq: impl Fn(&Heap, Str) -> bool,
+    ) -> Option<Atom> {
         let table = self.atom_table();
         let a = self.arena();
-        let mut index = a.get::<Ref>(table, AtomTable::INDEX).0;
-        let mut entries = a.get::<Ref>(table, AtomTable::ENTRIES).0;
-        let mut first: u32 = a.get(table, AtomTable::BASE_COUNT);
-        loop {
-            let found = self.probe(index, hash, |_, idx| {
-                if idx == 0 {
-                    return Some(None);
-                }
-                let s = self
-                    .value_array_get(entries, idx - first)
-                    .as_string()
-                    .expect("string atom");
-                (self.str_hash_uncached(s) == hash && eq(self, s)).then_some(Some(Atom(idx)))
-            });
-            // Without a base, or after the base's index: no more levels.
-            if found.is_some() || first == 0 {
-                return found;
+        let found = self.find_in_level(
+            a.get::<Ref>(table, AtomTable::INDEX).0,
+            a.get::<Ref>(table, AtomTable::ENTRIES).0,
+            a.get(table, AtomTable::BASE_COUNT),
+            hash,
+            Heap::str_hash_uncached,
+            &eq,
+        );
+        let base: Ref = a.get(table, AtomTable::BASE_INDEX);
+        if found.is_some() || base.is_null() {
+            return found;
+        }
+        self.find_in_level(
+            base.0,
+            a.get::<Ref>(table, AtomTable::BASE_ENTRIES).0,
+            0,
+            base_hash(self),
+            Heap::str_hash_base,
+            &eq,
+        )
+    }
+
+    /// Probes one level's index (`first`: the atom index of its entry 0).
+    #[inline(always)]
+    fn find_in_level(
+        &self,
+        index: u32,
+        entries: u32,
+        first: u32,
+        hash: u32,
+        hash_of: fn(&Heap, Str) -> u32,
+        eq: &impl Fn(&Heap, Str) -> bool,
+    ) -> Option<Atom> {
+        self.probe(index, hash, |_, idx| {
+            if idx == 0 {
+                return Some(None);
             }
-            index = a.get::<Ref>(table, AtomTable::BASE_INDEX).0;
-            entries = a.get::<Ref>(table, AtomTable::BASE_ENTRIES).0;
-            first = 0;
+            let s = self
+                .value_array_get(entries, idx - first)
+                .as_string()
+                .expect("string atom");
+            (hash_of(self, s) == hash && eq(self, s)).then_some(Some(Atom(idx)))
+        })
+    }
+
+    /// Rebuilds the VM's own atom index under the current hash key (`set_hash_key`).
+    pub(super) fn rekey_atoms(&mut self) {
+        let table = self.atom_table();
+        let index = self.arena().get::<Ref>(table, AtomTable::INDEX).0;
+        for b in 0..self.u32_array_len(index) {
+            self.u32_array_set(index, b, 0);
+        }
+        let entries = self.atom_entries();
+        let first = self.atom_base_count();
+        for i in 0..self.value_array_len(entries) {
+            if let Some(t) = self.value_array_get(entries, i).as_string() {
+                let h = self.str_hash(t);
+                self.index_insert(index, h, first + i);
+            }
         }
     }
 
@@ -492,9 +535,19 @@ impl Heap {
         let count = self.atom_count();
         let entries = self.alloc_value_array(room.max(1))?;
         let index = self.alloc_u32_array((2 * room).next_power_of_two().max(8))?;
+        // The base's index by the fixed hash (D2433): the same in every VM of the build.
+        let base_index: Ref = self.arena().get(table, AtomTable::INDEX);
+        let base: Ref = self.arena().get(table, AtomTable::ENTRIES);
+        for b in 0..self.u32_array_len(base_index.0) {
+            self.u32_array_set(base_index.0, b, 0);
+        }
+        for i in 1..count {
+            if let Some(t) = self.value_array_get(base.0, i).as_string() {
+                let h = self.str_hash_base(t);
+                self.index_insert(base_index.0, h, i);
+            }
+        }
         let a = self.arena_mut();
-        let base: Ref = a.get(table, AtomTable::ENTRIES);
-        let base_index: Ref = a.get(table, AtomTable::INDEX);
         a.set(entries, ValueArray::LEN, 0);
         a.set(table, AtomTable::BASE_ENTRIES, base);
         a.set(table, AtomTable::BASE_INDEX, base_index);
@@ -513,7 +566,8 @@ impl Heap {
             return Ok(a);
         }
         let hash = self.str_hash(s);
-        if let Some(a) = self.find_string_atom(hash, |h, t| h.str_eq(s, t)) {
+        if let Some(a) = self.find_string_atom(hash, |h| h.str_hash_base(s), |h, t| h.str_eq(s, t))
+        {
             return Ok(a);
         }
         let flat = self.flatten(s)?;
@@ -537,16 +591,26 @@ impl Heap {
         {
             return Ok(a);
         }
-        let hash = if super::string::is_ascii(t.as_bytes()) {
-            let mut h = StrHasher::new();
-            for b in t.bytes() {
-                h.write(b as u16);
-            }
+        let ascii = super::string::is_ascii(t.as_bytes());
+        let hash = if ascii {
+            let mut h = KeyedHasher::new(self.hash_key());
+            h.write_latin1(t.as_bytes());
             h.finish()
         } else {
-            hash_units(t.encode_utf16())
+            self.keyed_hash_units(t.encode_utf16())
         };
-        if let Some(a) = self.find_string_atom(hash, |h, s| h.str_eq_str(s, t)) {
+        let base_hash = |_: &Heap| {
+            if ascii {
+                let mut h = StrHasher::new();
+                for b in t.bytes() {
+                    h.write(b as u16);
+                }
+                h.finish()
+            } else {
+                hash_units(t.encode_utf16())
+            }
+        };
+        if let Some(a) = self.find_string_atom(hash, base_hash, |h, s| h.str_eq_str(s, t)) {
             return Ok(a);
         }
         let s = self.alloc_str(t)?;
@@ -562,8 +626,9 @@ impl Heap {
         {
             return Ok(a);
         }
-        let hash = hash_units(units.iter().copied());
-        let found = self.find_string_atom(hash, |h, s| match h.str_view(s) {
+        let hash = self.keyed_hash_units(units.iter().copied());
+        let base_hash = |_: &Heap| hash_units(units.iter().copied());
+        let found = self.find_string_atom(hash, base_hash, |h, s| match h.str_view(s) {
             Some(v) => v.len() == units.len() && v.units().eq(units.iter().copied()),
             None => false,
         });

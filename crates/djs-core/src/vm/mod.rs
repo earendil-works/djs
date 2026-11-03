@@ -919,6 +919,8 @@ impl Vm {
         self.heap
             .arena_mut()
             .set(0, crate::heap::cells::Roots::BASE_END, len - tail_bytes);
+        // The prefix's strings cache the fixed hash, not the building VM's keyed one (D2433).
+        self.heap.prefix_hashes_to_base();
         // The stored threshold by the prefix rule (D2442), now that there is a prefix:
         // a VM's first collection comes after as much growth as later ones.
         self.heap.reset_gc_threshold();

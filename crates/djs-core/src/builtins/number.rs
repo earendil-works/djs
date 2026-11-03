@@ -88,10 +88,13 @@ pub(crate) fn sign(x: f64) -> f64 {
 /// with `Vm::set_random_seed`).
 pub const DEFAULT_RANDOM_SEED: u64 = 0x9E37_79B9_7F4A_7C15;
 
-/// Stores a seed in the realm (zero is not a valid xorshift state).
+/// Stores a seed in the realm (zero is not a valid xorshift state), and keys the VM's
+/// string hash from it (D2433): a host that seeds from entropy gets a secret key, one in
+/// deterministic mode the same layout for the same seed.
 pub(crate) fn set_seed(heap: &mut Heap, seed: u64) {
     let seed = if seed == 0 { DEFAULT_RANDOM_SEED } else { seed };
     store_state(heap, seed);
+    heap.set_hash_key(crate::heap::string::hash_key_for_seed(seed));
 }
 
 fn store_state(heap: &mut Heap, s: u64) {
