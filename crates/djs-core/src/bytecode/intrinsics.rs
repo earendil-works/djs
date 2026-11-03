@@ -539,11 +539,14 @@ pub fn intrinsic(id: u16) -> Option<&'static IntrinsicInfo> {
 }
 
 /// FNV-1a over the table (names, kinds, arities, order).
-pub const INTRINSICS_HASH: u32 = {
+pub const INTRINSICS_HASH: u32 = hash_intrinsics(INTRINSICS);
+
+/// FNV-1a over an intrinsic table: names, kinds, parameter counts and order.
+pub const fn hash_intrinsics(table: &[IntrinsicInfo]) -> u32 {
     let mut h: u32 = 0x811c_9dc5;
     let mut k = 0;
-    while k < INTRINSICS.len() {
-        let e = &INTRINSICS[k];
+    while k < table.len() {
+        let e = &table[k];
         let n = e.name.as_bytes();
         let mut j = 0;
         while j < n.len() {
@@ -559,7 +562,7 @@ pub const INTRINSICS_HASH: u32 = {
         k += 1;
     }
     h
-};
+}
 
 const _: () = assert!(INTRINSICS.len() <= u16::MAX as usize);
 

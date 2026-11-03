@@ -12,8 +12,18 @@
 //! version (Math results). Both are hashed too, and listed in `BUILD_INPUTS`. `libm` is
 //! pinned with `=` in Cargo.toml, so the version read from there is the one compiled
 //! (`vm::tests` checks it against Cargo.lock).
+//!
+//! It also computes two components of an image's dependency descriptor (`vm::ImageDeps`,
+//! D2265), which unlike `SOURCE_HASH` key image compatibility: `RECORDS_HASH` (D2266), the
+//! id tables and slot conventions images store numbers of (the regions `compat_inputs.rs`
+//! lists, with comments and whitespace removed), and `FEATURES` (D2267), the mask of the
+//! enabled features that change images.
 
 use std::path::{Path, PathBuf};
+
+mod compat_inputs {
+    include!("compat_inputs.rs");
+}
 
 fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
     let mut entries: Vec<_> = std::fs::read_dir(dir)
@@ -65,14 +75,22 @@ fn libm_version(manifest: &str) -> String {
 /// result or image (D2520): the base snapshot, built by a host build without it, loads into
 /// a build with it, and images move freely between the two.
 fn features() -> Vec<String> {
+    enabled_features()
+        .into_iter()
+        // `default` and `unicode` only name others (D2411): a build that turns on the
+        // same effective features through other names hashes the same.
+        .filter(|f| f != "default" && f != "unicode" && f != "unsafe-heap")
+        .collect()
+}
+
+/// Every enabled feature of this crate, sorted (umbrellas too): what `compat_inputs.rs`
+/// classifies, so that no feature escapes the classification (D2267).
+fn enabled_features() -> Vec<String> {
     let mut out: Vec<String> = std::env::vars()
         .filter_map(|(k, _)| {
             k.strip_prefix("CARGO_FEATURE_")
                 .map(|f| f.to_lowercase().replace('_', "-"))
         })
-        // `default` and `unicode` only name others (D2411): a build that turns on the
-        // same effective features through other names hashes the same.
-        .filter(|f| f != "default" && f != "unicode" && f != "unsafe-heap")
         .collect();
     out.sort();
     out
@@ -108,7 +126,26 @@ fn main() {
         h = fnv(h, &[0]);
     }
     println!("cargo:rerun-if-changed=build.rs");
-    let out = PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("source_hash.rs");
+    println!("cargo:rerun-if-changed=compat_inputs.rs");
+    let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+    let records = compat_inputs::records_hash(&root)
+        .unwrap_or_else(|e| panic!("compat_inputs.rs: a region is missing: {e}"));
+    let mask =
+        compat_inputs::feature_mask(&enabled_features()).unwrap_or_else(|e| panic!("{e}"));
+    std::fs::write(
+        out_dir.join("image_deps.rs"),
+        format!(
+            "/// See `build.rs` and `compat_inputs.rs` (D2266).\n\
+             pub const RECORDS_HASH: u32 = {records:#010x};\n\
+             /// The enabled `IMAGE_FEATURES`, by bit (D2267).\n\
+             pub const FEATURES: u32 = {mask:#x};\n\
+             /// `FEATURES` bit names (`compat_inputs.rs`).\n\
+             pub const FEATURE_NAMES: &[&str] = &{names:?};\n",
+            names = compat_inputs::IMAGE_FEATURES
+        ),
+    )
+    .expect("cannot write image_deps.rs");
+    let out = out_dir.join("source_hash.rs");
     let list: String = inputs.iter().map(|i| format!("{i:?}, ")).collect();
     std::fs::write(
         out,

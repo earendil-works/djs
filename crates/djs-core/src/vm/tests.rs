@@ -1376,34 +1376,42 @@ fn from_base_gives_independent_vms() {
 }
 
 #[test]
-fn images_carry_the_build_hash() {
+fn images_carry_their_dependency_descriptor() {
+    // D2265: compat_tests checks the components; here the load paths refuse.
     let vm = Vm::new(VmOptions::default()).unwrap();
-    let at = crate::heap::cells::Roots::BUILD.offset as usize;
-    assert_eq!(vm.bytes()[at..at + 4], BUILD_HASH.to_le_bytes());
+    let at = crate::heap::cells::Roots::OPS.offset as usize;
+    assert_eq!(
+        vm.bytes()[at..at + 4],
+        crate::bytecode::OPS_HASH.to_le_bytes()
+    );
     let mut other = vm.bytes().to_vec();
     other[at] ^= 1;
-    let expected = BUILD_HASH;
+    let expected = crate::bytecode::OPS_HASH;
     let found = expected ^ 1;
-    assert_eq!(
+    let dep = ImageDep::Ops;
+    for r in [
         Vm::from_bytes(other.clone(), VmOptions::default()).err(),
-        Some(LoadError::BuildMismatch { found, expected })
-    );
-    assert_eq!(
         Vm::from_base(&other, VmOptions::default()).err(),
-        Some(LoadError::BuildMismatch { found, expected })
-    );
-    let msg = alloc::format!("{}", LoadError::BuildMismatch { found, expected });
-    assert!(msg.contains("another djs build"), "{msg}");
+    ] {
+        assert_eq!(
+            r,
+            Some(LoadError::Incompatible {
+                dep,
+                found,
+                expected
+            })
+        );
+    }
     // Not an image at all.
     assert_eq!(
         Vm::from_base(b"not an image", VmOptions::default()).err(),
         Some(LoadError::BadHeader)
     );
-    // A bare heap (no VM) has no build hash.
+    // A bare heap (no VM) has the layout hash but no descriptor otherwise.
     let bare = crate::heap::Heap::new().unwrap();
     assert!(matches!(
         Vm::from_bytes(bare.bytes().to_vec(), VmOptions::default()),
-        Err(LoadError::BuildMismatch { found: 0, .. })
+        Err(LoadError::Incompatible { found: 0, .. })
     ));
 }
 

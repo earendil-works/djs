@@ -178,10 +178,10 @@ cells! {
         /// The [`Interp`] cell: interpreter registers and run state. Null until a VM
         /// exists.
         INTERP: Ref = 44,
-        /// The build hash of the VM that made the image (`vm::BUILD_HASH`: layout,
-        /// instruction table and intrinsic ids, D1320), 0 for a bare heap. Images hold
-        /// bytecode, so they load only into the same build.
-        BUILD: u32 = 48,
+        /// The image's dependency descriptor (D2265, `vm::ImageDeps`), 0 for a bare
+        /// heap: the compatibility version (`vm::COMPAT_VERSION`). With `VERSION`,
+        /// `FEATURES`, `OPS`, `INTRINSICS` and `RECORDS`, what an image must match to load.
+        COMPAT: u32 = 48,
         /// Heap state bits: [`ROOT_RESERVE_OPEN`] (D1600), [`ROOT_WEAK_STRONG`] (D1680),
         /// [`ROOT_FROZEN_BUILTINS`] (D2304).
         FLAGS: u32 = 52,
@@ -210,6 +210,14 @@ cells! {
         /// length; 0 in a heap without one. Distinct from `OLD_END`, which also covers
         /// what an embedder sealed (pi's prelude).
         BASE_END: u32 = 80,
+        /// The descriptor's instruction table hash (`bytecode::OPS_HASH`).
+        OPS: u32 = 84,
+        /// The descriptor's intrinsic table hash (`bytecode::intrinsics::INTRINSICS_HASH`).
+        INTRINSICS: u32 = 88,
+        /// The descriptor's hash of the internal id tables (`vm::RECORDS_HASH`, D2266).
+        RECORDS: u32 = 92,
+        /// The descriptor's feature set (`vm::FEATURES`, D2267).
+        FEATURES: u32 = 96,
     };
 
     /// A flat one-byte (Latin-1) string. Holds only strings with every code unit <= 0xFF;
@@ -558,7 +566,8 @@ const _: () = {
 };
 
 /// Hash of the layout table and the well-known atom list. Stored in [`Roots::VERSION`];
-/// part of the snapshot build hash.
+/// the layout component of an image's dependency descriptor (D2265) and part of the
+/// build hash.
 pub const LAYOUT_HASH: u32 =
     super::layout::hash_layouts(LAYOUTS, super::atom::WELL_KNOWN_NAMES_FOR_HASH);
 
@@ -592,7 +601,7 @@ mod tests {
         assert_eq!(Rope::LAYOUT.min_size, 24);
         assert_eq!(Symbol::LAYOUT.min_size, 24);
         assert_eq!(Object::LAYOUT.min_size, 24);
-        assert_eq!(Roots::LAYOUT.min_size, 88);
+        assert_eq!(Roots::LAYOUT.min_size, 104);
         assert_eq!(Shape::LAYOUT.min_size, 24);
         assert_eq!(PropValues::VALUES.cell_size(4), Some(48));
         let t = PropTable::LAYOUT.tail.unwrap();

@@ -19,7 +19,7 @@
 //! | --- | --- |
 //! | 0 | magic `"DJSs"` |
 //! | 4 | format ([`SESSION_FORMAT`]) |
-//! | 8 | build hash (`Roots::BUILD`) |
+//! | 8 | the base's dependency descriptor, hashed (`ImageDeps::hash`, D2265) |
 //! | 12 | `BASE_END` |
 //! | 16 | FNV-1a 64 of the base's prefix (`base[..BASE_END]`) |
 //! | 24 | the roots cell's size |
@@ -38,8 +38,9 @@ use crate::heap::cells::{Header, Roots};
 
 /// `"DJSs"`, little-endian.
 pub const SESSION_MAGIC: u32 = u32::from_le_bytes(*b"DJSs");
-/// The session image format version.
-pub const SESSION_FORMAT: u32 = 1;
+/// The session image format version (2: the descriptor hash at 8 instead of the build
+/// hash, D2265).
+pub const SESSION_FORMAT: u32 = 2;
 const HEADER: usize = 32;
 
 /// Why a session image cannot be made or expanded.
@@ -49,8 +50,8 @@ pub enum SessionError {
     BadHeader,
     /// The raw image has no builtin prefix (`Roots::BASE_END` 0).
     NoPrefix,
-    /// The base is not this image's base: another build, another prefix end, or other
-    /// bytes than the image was made against.
+    /// The base is not this image's base: another dependency descriptor, another prefix
+    /// end, or other bytes than the image was made against.
     BaseMismatch,
 }
 
@@ -72,7 +73,7 @@ fn u64_at(b: &[u8], at: usize) -> Option<u64> {
     Some(u64::from_le_bytes(b.get(at..at + 8)?.try_into().ok()?))
 }
 
-/// The prefix end, build hash and roots cell size of a raw image (or of the base).
+/// The prefix end, descriptor hash and roots cell size of a raw image (or of the base).
 fn prefix_of(image: &[u8]) -> Option<(u32, u32, u32)> {
     let roots = Roots::LAYOUT.min_size as usize;
     if image.len() < roots
@@ -82,18 +83,25 @@ fn prefix_of(image: &[u8]) -> Option<(u32, u32, u32)> {
     }
     let size = u32_at(image, Header::SIZE.offset as usize)?;
     let end = u32_at(image, Roots::BASE_END.offset as usize)?;
-    let build = u32_at(image, Roots::BUILD.offset as usize)?;
-    (end as usize <= image.len() && size as usize <= end as usize).then_some((end, build, size))
+    let deps = super::ImageDeps::of(image)?.hash();
+    (end as usize <= image.len() && size as usize <= end as usize).then_some((end, deps, size))
+}
+
+/// FNV-1a 64 of an image's builtin prefix (`image[..Roots::BASE_END]`): the prefix hash a
+/// session image (and a snapshot container) records of its base. None without a prefix.
+pub fn prefix_hash(image: &[u8]) -> Option<u64> {
+    let (end, _, _) = prefix_of(image)?;
+    (end != 0).then(|| super::fnv64(&image[..end as usize]))
 }
 
 /// The session image of the raw image `image`, against its base `base` (the image every VM
 /// of the build starts from).
 pub fn session_image(image: &[u8], base: &[u8]) -> Result<Vec<u8>, SessionError> {
-    let (end, build, roots) = prefix_of(image).ok_or(SessionError::BadHeader)?;
+    let (end, deps, roots) = prefix_of(image).ok_or(SessionError::BadHeader)?;
     if end == 0 {
         return Err(SessionError::NoPrefix);
     }
-    if prefix_of(base) != Some((end, build, roots)) || base.len() < end as usize {
+    if prefix_of(base) != Some((end, deps, roots)) || base.len() < end as usize {
         return Err(SessionError::BaseMismatch);
     }
     let (from, to) = (roots as usize, end as usize);
@@ -122,7 +130,7 @@ pub fn session_image(image: &[u8], base: &[u8]) -> Result<Vec<u8>, SessionError>
     let mut out = Vec::with_capacity(HEADER + 12 * n + pad + roots as usize + image.len() - to);
     out.extend_from_slice(&SESSION_MAGIC.to_le_bytes());
     out.extend_from_slice(&SESSION_FORMAT.to_le_bytes());
-    out.extend_from_slice(&build.to_le_bytes());
+    out.extend_from_slice(&deps.to_le_bytes());
     out.extend_from_slice(&end.to_le_bytes());
     out.extend_from_slice(&super::fnv64(&base[..to]).to_le_bytes());
     out.extend_from_slice(&roots.to_le_bytes());
@@ -179,11 +187,11 @@ fn parts(s: &[u8]) -> Result<(usize, usize, usize, usize), SessionError> {
 pub fn expand_session(session: &[u8], base: &[u8]) -> Result<Vec<u8>, SessionError> {
     let bad = SessionError::BadHeader;
     let (n, offsets, values, roots_at) = parts(session)?;
-    let build = u32_at(session, 8).ok_or(bad)?;
+    let deps = u32_at(session, 8).ok_or(bad)?;
     let end = u32_at(session, 12).ok_or(bad)?;
     let hash = u64_at(session, 16).ok_or(bad)?;
     let roots = u32_at(session, 24).ok_or(bad)?;
-    if prefix_of(base) != Some((end, build, roots))
+    if prefix_of(base) != Some((end, deps, roots))
         || base.len() < end as usize
         || super::fnv64(&base[..end as usize]) != hash
     {
