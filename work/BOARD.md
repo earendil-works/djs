@@ -6,6 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0184 | Remaining dump refusals; dump size and load time vs images | portable | .worktrees/portable |
 | 0183 | The gate in seconds | gate-speed | .worktrees/gate-speed |
 | 0176 | pi's future shape: prelude-next, adapter mode, dumps (D2565) | example | .worktrees/example |
 
