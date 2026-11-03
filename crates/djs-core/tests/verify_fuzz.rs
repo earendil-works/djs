@@ -24,7 +24,9 @@ fn image() -> Vec<u8> {
         ];
         let d = {}; for (let i = 0; i < 40; i++) d["k" + i] = i; delete d.k3; keep.push(d);
     "#;
-    let f = vm.compile(src, &djs_core::compiler::CompileOptions::script("fuzz")).unwrap();
+    let f = vm
+        .compile(src, &djs_core::compiler::CompileOptions::script("fuzz"))
+        .unwrap();
     let g = Value::object(vm.global());
     vm.call(f, g, &[]).unwrap();
     assert!(matches!(vm.run(10_000_000), Status::Done(_)));
@@ -84,9 +86,15 @@ fn verify_never_panics_on_corrupt_images() {
             Err(_) => rejected += 1,
         }
     }
-    eprintln!("verify fuzz: {n} bytes, {} cells, accepted {accepted}, rejected {rejected}", starts.len());
+    eprintln!(
+        "verify fuzz: {n} bytes, {} cells, accepted {accepted}, rejected {rejected}",
+        starts.len()
+    );
     // Both outcomes must occur, or the mutations test nothing.
-    assert!(accepted > 0 && rejected > 0, "accepted {accepted}, rejected {rejected}");
+    assert!(
+        accepted > 0 && rejected > 0,
+        "accepted {accepted}, rejected {rejected}"
+    );
     // Truncated images.
     for cut in [0, 7, 8, 64, n / 2, n - 8, n - 1] {
         let _ = Heap::from_bytes(good[..cut].to_vec(), usize::MAX);
